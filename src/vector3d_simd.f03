@@ -1,9 +1,7 @@
 module m_vector3d_simd
   use m_vector3d, only: vector3d
   type, extends(vector3d) :: vector3d_simd
-     real, allocatable :: u(:,:,:)
-     real, allocatable :: v(:,:,:)
-     real, allocatable :: w(:,:,:)
+     real, allocatable :: data(:,:,:, 3)
    contains
      procedure, public :: transport
      procedure, public :: div
@@ -61,16 +59,48 @@ contains
   subroutine transport(self, rslt)
     class(vector3d_simd), intent(in) :: self
     class(vector3d), intent(inout) :: rslt
+    real, pointer :: u(:, :, :), u_dir(:, :, :)
 
+    u_dir => self%data(:, :, :, 1)
     select type (rslt)
     type is (vector3d_simd)
-       rslt%u = self%u + 1.
-       rslt%v = self%v + 1.
-       rslt%w = self%w + 1.
+       components: do l = 1, size(self%data, 4)
+          u => self%data(:, :, :, l)
+          rslt%data(:, :, :, l) = transport_dir(u, u_dir)
+       end do components
     class default
        error stop
     end select
   end subroutine transport
+
+  pure function transport_dir(u, u_dir)
+    real, intent(in) :: u(:, :, :)
+    real, intent(in) :: u_dir(:, :, :)
+    real :: transport_dir(size(u))
+
+    layers: do k = 1, size(u, 3)
+       call diff(u(:, :, k), du)
+       call diff2(u(:, :, k), d2u)
+       do j = 1, size(u, 2)
+          !$omp simd
+          do i = 1, size(u, 1)
+             u2(i, j) = u(i, j, k) * u_dir(i, j, k)
+          end do
+          !$omp end simd
+       end do
+       call diff(du2, u2)
+       reshape(transport_dir, shape(u))
+       do j = 1, size(u, 2)
+          !$omp simd
+          do i = 1, size(u, 1)
+             rslt%u(i, j, k) = -0.5 * &
+                  (u(i, j, k) * du(i, j) + du2(i, j)) &
+                  & + xnu * d2u(i, j)
+          !$omp end simd
+          end do
+       end do
+    end do layers
+  end function transport_dir
 
   subroutine div(self, rslt)
     class(vector3d_simd), intent(in) :: self
