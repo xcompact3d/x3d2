@@ -102,6 +102,40 @@ contains
     end do layers
   end function transport_dir
 
+  subroutine diff(self, f, df)
+    class(vector3d_simd), intent(in) :: self
+    real, intent(in) :: f(:, :)
+    real, intent(out) :: df(:, :)
+    integer, parameter :: n = size(f, 2)
+    type(stencil), pointer :: s
+    !$omp simd
+      do i = 1, size(f, 1)
+         s => self%stencils(1)
+         du(i, 1) = dot_product(s%coeffs, u(i, s%nodes + 1))
+         s => self%stencils(2)
+         du(i, 2) = dot_product(s%coeffs, u(i, s%nodes + 2))
+      end do
+      !$omp end simd
+      s => self%stencils(3)
+      do j = 3, n - 2
+         !$omp simd
+         do i = 1, size(f, 1)
+            du(i, j) = dot_product(s%coeffs, u(i, s%nodes + j))
+         end do
+         !$omp end simd
+      end do
+      !$omp simd
+      do i = 1, size(f, 1)
+         s => self%stencils(4)
+         du(i, n - 1) = dot_product(s%coeffs, u(i, s%nodes + n - 1))
+         s => self%stencils(5)
+         du(i, n) = dot_product(s%coeffs, u(i, s%nodes + n))
+      end do
+      !$omp end simd
+
+      call self%thomas_solver%solve(du, df)
+  end subroutine diff
+
   subroutine div(self, rslt)
     class(vector3d_simd), intent(in) :: self
     class(vector3d), intent(inout) :: rslt

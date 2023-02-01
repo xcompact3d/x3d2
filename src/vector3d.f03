@@ -1,7 +1,10 @@
 module m_vector3d
+  use m_tridiagsolv, only: tridiagsolv
   type, abstract :: vector3d
      character(len=:), allocatable :: name
      integer :: rankid, nranks
+     type(stencil) :: stencils(5)
+     class(tridiagsolv), pointer :: thomas_solver
    contains
      procedure(field_op), deferred :: transport
      procedure(field_op), deferred :: div
