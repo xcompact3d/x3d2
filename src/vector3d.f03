@@ -3,7 +3,9 @@ module m_vector3d
   type, abstract :: vector3d
      character(len=:), allocatable :: name
      integer :: rankid, nranks
-     type(stencil) :: stencils(5)
+     type(stencil) :: bulk_stencil(2)
+     type(stencil) :: left_stencils(2, 2)
+     type(stencil) :: right_stencils(2, 2)
      class(tridiagsolv), pointer :: thomas_solver
    contains
      procedure(field_op), deferred :: transport

@@ -1,7 +1,10 @@
 module m_vector3d_simd
   use m_vector3d, only: vector3d
+  use m_diffengine, only: diffengine
+
   type, extends(vector3d) :: vector3d_simd
      real, allocatable :: data(:,:,:, 3)
+     type(diffengine) :: diffeng
    contains
      procedure, public :: transport
      procedure, public :: div
@@ -40,9 +43,17 @@ contains
     end if
   end subroutine ensure_work_arrays
 
-  type(vector3d_simd) function construct(name, dims)
+  type(vector3d_simd) function construct(name, dims, &
+       & bulk_stencil, left_stencils, right_stencils)
+
     character(*), intent(in) :: name
     integer, intent(in) :: dims(3)
+    type(stencil), intent(in) :: bulk_stencil(2)
+    type(stencil), optional, intent(in) :: left_stencils(2, 2), &
+         & right_stencils(2, 2)
+
+    integer :: i, n
+    real, allocatable :: lower_diag(:), upper_diag(:)
 
     call ensure_work_arrays(dims)
 
@@ -54,6 +65,9 @@ contains
     allocate(construct%w(dims(1), dims(2), dims(3)))
 
     construct%name = name
+
+    n = dims(2)
+
   end function construct
 
   subroutine transport(self, rslt)
@@ -79,8 +93,8 @@ contains
     real :: transport_dir(size(u))
 
     layers: do k = 1, size(u, 3)
-       call diff(u(:, :, k), du)
-       call diff2(u(:, :, k), d2u)
+       call diffeng%diff(u(:, :, k), du)
+       call diffeng2%diff(u(:, :, k), d2u)
        do j = 1, size(u, 2)
           !$omp simd
           do i = 1, size(u, 1)
@@ -88,7 +102,7 @@ contains
           end do
           !$omp end simd
        end do
-       call diff(du2, u2)
+       call diffeng%diff(du2, u2)
        reshape(transport_dir, shape(u))
        do j = 1, size(u, 2)
           !$omp simd
@@ -101,40 +115,6 @@ contains
        end do
     end do layers
   end function transport_dir
-
-  subroutine diff(self, f, df)
-    class(vector3d_simd), intent(in) :: self
-    real, intent(in) :: f(:, :)
-    real, intent(out) :: df(:, :)
-    integer, parameter :: n = size(f, 2)
-    type(stencil), pointer :: s
-    !$omp simd
-      do i = 1, size(f, 1)
-         s => self%stencils(1)
-         du(i, 1) = dot_product(s%coeffs, u(i, s%nodes + 1))
-         s => self%stencils(2)
-         du(i, 2) = dot_product(s%coeffs, u(i, s%nodes + 2))
-      end do
-      !$omp end simd
-      s => self%stencils(3)
-      do j = 3, n - 2
-         !$omp simd
-         do i = 1, size(f, 1)
-            du(i, j) = dot_product(s%coeffs, u(i, s%nodes + j))
-         end do
-         !$omp end simd
-      end do
-      !$omp simd
-      do i = 1, size(f, 1)
-         s => self%stencils(4)
-         du(i, n - 1) = dot_product(s%coeffs, u(i, s%nodes + n - 1))
-         s => self%stencils(5)
-         du(i, n) = dot_product(s%coeffs, u(i, s%nodes + n))
-      end do
-      !$omp end simd
-
-      call self%thomas_solver%solve(du, df)
-  end subroutine diff
 
   subroutine div(self, rslt)
     class(vector3d_simd), intent(in) :: self
