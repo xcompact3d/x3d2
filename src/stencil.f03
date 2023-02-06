@@ -1,6 +1,7 @@
 module m_stencil
   implicit none
   type :: stencil
+     integer :: order
      integer, allocatable :: nodes(:)
      real, allocatable :: coeffs(:)
      real :: lower, upper
@@ -53,6 +54,9 @@ contains
          & coeffs = coeffs, &
          & lower = self%lower, upper = self%upper &
          & )
+    if (self%order == 2) then
+       flip = flip * (- 1.)
+    end if
   end function flip
 
   pure elemental real function get_upper(self)
