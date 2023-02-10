@@ -1,21 +1,17 @@
-program test_allocator
+subroutine test_allocator(allocator, allpass)
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_allocator
+  use m_allocator, only: allocator_t, memblock_t
 
   implicit none
 
-  logical :: allpass
-  integer, parameter :: dims(3) = [8, 8, 8]
-  integer, allocatable :: l(:)
-  class(allocator_t), allocatable :: allocator
+  class(allocator_t), intent(inout) :: allocator
+  logical, intent(out) :: allpass
   class(memblock_t), pointer :: ptr1, ptr2, ptr3
+  integer, allocatable :: l(:)
 
-
-  allocator = allocator_t(dims)
 
   allpass = .true.
-
 
   ! Get the list of ids for free blocks.  By default there are none
   ! and returned list is [0].
@@ -70,4 +66,4 @@ program test_allocator
 
   call allocator%destroy()
 
-end program test_allocator
+end subroutine test_allocator
