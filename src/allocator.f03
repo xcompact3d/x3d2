@@ -18,10 +18,6 @@ module m_allocator
      real, allocatable :: data(:, :, :)
      integer :: refcount = 0
      integer :: id
-   contains
-     !> final procedures are called whenever type instance is passed
-     !> as intent(out) or deallocated.
-     final :: deallocate_memblocks_data
   end type memblock_t
 
   interface memblock_t
@@ -96,11 +92,6 @@ contains
        self%id = self%id - 1
     end do
   end subroutine destroy
-
-  subroutine deallocate_memblocks_data(obj)
-    type(memblock_t), intent(inout) :: obj
-    deallocate(obj%data)
-  end subroutine deallocate_memblocks_data
 
   function get_block_ids(self)
     class(allocator_t), intent(inout) :: self
