@@ -58,7 +58,7 @@ contains
     !> Example
     !>     f%data => get_memory_block()
     class(allocator_t), intent(inout) :: self
-    type(memblock_t), pointer :: handle
+    class(memblock_t), pointer :: handle
     class(memblock_t), allocatable, target :: ptr
     ! If we're about to allocate the last block, extend the pool
     ! first.
