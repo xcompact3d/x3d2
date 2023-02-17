@@ -33,7 +33,7 @@ contains
 
     n = size(low) + 1
     ! Allocate solver's coefficient arrays.
-    allocate(solver%fwd(n), solver%bwd(n), solver%updiag(n))
+    allocate(solver%fwd(n), solver%bwd(n))
     solver%updiag = up
     ! Allocate extra temp arrays for readability.  These only live
     ! within this the function scop.
