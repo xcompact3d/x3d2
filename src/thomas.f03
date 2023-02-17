@@ -3,7 +3,7 @@ module m_tridiagsolv
 
   type :: tridiagsolv
      private
-     real, allocatable :: low(:), up(:), diag(:)
+     real, allocatable :: fwd(:), bwd(:), updiag(:)
    contains
      procedure, public :: solve
   end type tridiagsolv
@@ -17,31 +17,35 @@ module m_tridiagsolv
 
   ! Storage array for intermediate result
   real, allocatable :: m_d
+  interface tridiagsolv
+     module procedure construct
+  end interface tridiagsolv
 
 contains
 
-  subroutine ensure_work_arrays(n)
-    integer, intent(in) :: n
-    if(.not. allocated(m_a)) then
-       allocate(m_a(n), m_b(n), m_c(n))
-       return
-    end if
-    if(n > size(m_d)) m_d = reshape(m_d, [n])
-
-  end subroutine ensure_work_arrays
-
-  function construct(low, up, n) result(solver)
+  function construct(low, up) result(solver)
     type(tridiagsolv) :: solver
-    real :: low(:), up(:)
-    integer, intent(in) :: n
-    integer :: i
-    solver%n = n
-    solver%up = up
-    solver%low = low
-    solver%diag = [ &
-         & (1. - low(i) * up(i - 1), i = 2, n) &
-         & ]
-    call ensure_work_arrays(n)
+    real, intent(in) :: low(:), up(:)
+    real, allocatable :: fwd(:), i_bwd(:)
+    integer :: i, n
+
+    n = size(low) + 1
+    ! Allocate solver's coefficient arrays.
+    allocate(solver%fwd(n), solver%bwd(n), solver%updiag(n))
+    solver%updiag = up
+    ! Allocate extra temp arrays for readability.  These only live
+    ! within this the function scop.
+    allocate(fwd(n), i_bwd(n))
+
+    i_bwd = 1. ! Initialise bwd array to diagonal.
+
+    !i_bwd is the /inverse/ of the coefficients for the bwd step.
+    do i = 2, n
+       fwd(i) = low(i - 1) / i_bwd(i - 1)
+       i_bwd(i) = i_bwd(i) - up(i - 1) * fwd(i)
+    end do
+    solver%fwd = fwd
+    solver%bwd = 1. / i_bwd
   end function construct
 
   function construct_periodic(low, up, n, SZ) result(solver)
@@ -71,26 +75,29 @@ contains
     class(tridiagsolv), intent(in) :: self
     real, intent(in) :: f(:, :)
     real, intent(out) :: df(:, :)
-    integer :: i, n
+    integer :: i, j, n
 
-    if (self%n /= size(f, 2)) error stop
-    do j = 2, self%n
+    df = f
+    n = size(self%fwd)
+    if (size(f, 2) /= n) error stop
+    do j = 2, n
        !$omp simd
-       do i = 1, size(u, 1)
-          m_f(j) = f(i, j) - self%low(j) * f(i, j-1)
+       do i = 1, size(f, 1)
+          df(i, j) = df(i, j) - df(i, j-1) * self%fwd(j)
        end do
        !$omp end simd
     end do
     !$omp simd
     do i = 1, size(f, 1)
-       df(i, n) = m_f(n) / self%diag(n)
+       df(i, n) = df(i, n) * self%bwd(n)
     end do
     !$omp end simd
 
-    do j = self%n-1, 1, -1
+    do j = n-1, 1, -1
        !$omp simd
        do i = 1, size(f, 1)
-          df(i, j) = (m_f(j) - self%up(j) * df(i, j+1)) / self%diag(i)
+          df(i, j) = (df(i, j) - df(i, j+1) * self%updiag(j)) &
+               & * self%bwd(j)
        end do
        !$omp end simd
     end do
