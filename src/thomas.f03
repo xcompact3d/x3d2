@@ -9,17 +9,19 @@ module m_tridiagsolv
   end type tridiagsolv
 
   type, extends(tridiagsolv) :: periodic_tridiagsolv
-     real, parameter :: gamma = 1.
-     real, allocatable :: q(:, :)
+     real :: gamma = - 1.
+     real, allocatable :: q(:)
    contains
      procedure, public :: solve => solve_periodic
   end type periodic_tridiagsolv
 
-  ! Storage array for intermediate result
-  real, allocatable :: m_d
   interface tridiagsolv
      module procedure construct
   end interface tridiagsolv
+
+  interface periodic_tridiagsolv
+     module procedure construct_periodic
+  end interface periodic_tridiagsolv
 
 contains
 
@@ -48,27 +50,29 @@ contains
     solver%bwd = 1. / i_bwd
   end function construct
 
-  function construct_periodic(low, up, n, SZ) result(solver)
-    real, intent(in) :: low, up
-    integer, intent(in) :: n, SZ
-    real :: u(n), u_vec(SZ, n)
-    integer :: i
-    solver%n = n
-    solver%up = [(up, i = 1, n)]
-    solver%low = [(low, i = 1, n)]
-    solver%diag = [ &
-         & 1. - solver%gamma, &
-         & (1., i = 2, n - 1), &
-         & 1. - (up * low) / solver%gamma &
-         & ]
-    u = [solver%gamma, (0., i=2, n-1), up]
-    ! SZ = 4, n =8
-    ! u_vec(1, :) = gamma 0 0 0 0 0 0 up
-    ! u_vec(2, :) = gamma 0 0 0 0 0 0 up
-    ! u_vec(3, :) = gamma 0 0 0 0 0 0 up
-    ! u_vec(4, :) = gamma 0 0 0 0 0 0 up
-    u_vec = transpose(reshape(u, [n, SZ], pad = u))
-    solver%q = solver%tridiagsolv%solve(u_vec)
+  function construct_periodic(low, up) result(solver)
+    real, intent(in) :: low(:), up(:)
+    type(periodic_tridiagsolv) :: solver
+
+    real, allocatable :: u(:), u_vec(:, :), q_vec(:,:)
+    real, allocatable :: uu(:)
+    integer :: i, n
+    n = size(low) + 1
+    ! Runs non-periodic (base type) constructor which sets up forward
+    ! and backward coefficient arrays.
+    solver%tridiagsolv = tridiagsolv(low, up)
+    ! q member array is used in the Sermann-Morrison formula
+
+    ! solve() method expects a rank 2 array of shape (SZ X n) as
+    ! input, where SZ is the number of pencils in the pencil group.
+    ! Therefore artificially work a temp array u_vec and q_vec of rank
+    ! 2.
+    allocate(u(n), u_vec(1, n), q_vec(1, n))
+    u = [solver%gamma, (0., i=2, n-1), up(1)]
+    u_vec = transpose(reshape(u, [n, 1], pad = u))
+    uu = u_vec(1, :)
+    call solver%tridiagsolv%solve(u_vec, q_vec)
+    solver%q = q_vec(1, :)
   end function construct_periodic
 
   pure subroutine solve(self, f, df)
@@ -108,15 +112,23 @@ contains
     real, intent(in) :: f(:, :)
     real, intent(out) :: df(:, :)
     real :: y(size(f, 1), size(f, 2))
+    integer :: i, n
+    real :: alpha
 
-    y = self%tridiagsolve%solve(u)
-    associate ( low => self%low, n => self%n )
-      !$omp simd
-      do i = 1, size(f, 1)
-         df(i, :) = y(i, :) - ((y(i, 1) - low * y(i, n)) &
-              & / (1. + q(i, 1) - low * q(i, n))) * q
-      end do
-      !$omp end simd
-    end associate
+    call self%tridiagsolv%solve(f, y)
+
+    n = size(f, 2)
+    alpha = self%updiag(1)
+    select type (self)
+    type is (periodic_tridiagsolv)
+       !$omp simd
+       do i = 1, size(f, 1)
+          df(i, :) = y(i, :) - ((y(i, 1) - alpha * y(i, n)) &
+               & / (1. + self%q(1) - alpha * self%q(n))) * self%q
+       end do
+       !$omp end simd
+    class default
+       error stop
+    end select
   end subroutine solve_periodic
 end module m_tridiagsolv
