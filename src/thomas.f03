@@ -40,6 +40,8 @@ contains
     allocate(fwd(n), i_bwd(n))
 
     i_bwd = 1. ! Initialise bwd array to diagonal.
+    i_bwd(n) = 1. + up(1) * up(1)
+    i_bwd(1) = 2.
 
     !i_bwd is the /inverse/ of the coefficients for the bwd step.
     do i = 2, n

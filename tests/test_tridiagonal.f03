@@ -18,7 +18,7 @@ program test_tridiagonal
 
   allpass = .true.
 
-  ! Solve for x in
+  ! DIRICHLET BOUNDARY CONDITIONS - Solve for x in
 
   ! 1    2.   0     0     0     0         x1    0
   ! 0.25 1    0.25  0     0     0         x2    1
@@ -50,9 +50,39 @@ program test_tridiagonal
 
   if (.not. all(abs(df - expected_vec) < tol)) then
      allpass = .false.
-     write(stderr, '(a)') 'Tridiagonal system is solved correctly... failed'
+     write(stderr, '(a)') 'Tridiagonal system is solved correctly (DIRICHLET)... failed'
   else
-     write(stderr, '(a)') 'Tridiagonal system is solved correctly... passed'
+     write(stderr, '(a)') 'Tridiagonal system is solved correctly (DIRICHLET)... passed'
   end if
+  deallocate(solver)
 
+  ! PERIODIC BOUNDARY CONDITIONS - Solve for x in
+
+  ! 1    0.33 0     0     0     0.33      x1    0
+  ! 0.33 1    0.33  0     0     0         x2    1
+  ! 0    0.33 1     0.33  0     0     X   x3  = 2
+  ! 0    0    0.33  1     0.33  0         x4    3
+  ! 0    0    0     0.33  1     0.33      x5    2
+  ! 0.33 0    0     0     0.33  1         x6    1
+
+  expected = [-0.375, 0.375, 2.25, 1.875, 1.125, 0.75]
+  expected_vec(1, :) = expected
+  expected_vec(2, :) = expected
+
+  low = [(1. / 3., i = 1, 5)]
+  up = [(1. / 3., i = 1, 5)]
+  allocate(periodic_tridiagsolv::solver)
+  solver = periodic_tridiagsolv(low, up)
+
+  f(1, :) = [0., 1., 3., 3., 2., 1.]
+  f(2, :) = [0., 1., 3., 3., 2., 1.]
+  call solver%solve(f, df)
+
+  if (.not. all(abs(df - expected_vec) < tol)) then
+     allpass = .false.
+     write(stderr, '(a)') 'Tridiagonal system is solved correctly (PERIODIC)... failed'
+  else
+     write(stderr, '(a)') 'Tridiagonal system is solved correctly (PERIODIC)... passed'
+  end if
+  
 end program test_tridiagonal
