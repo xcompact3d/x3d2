@@ -25,9 +25,10 @@ module m_tridiagsolv
 
 contains
 
-  function construct(low, up) result(solver)
+  function construct(low, up, diag) result(solver)
     type(tridiagsolv) :: solver
     real, intent(in) :: low(:), up(:)
+    real, optional, intent(in) :: diag(:)
     real, allocatable :: fwd(:), i_bwd(:)
     integer :: i, n
 
@@ -39,9 +40,13 @@ contains
     ! within this the function scop.
     allocate(fwd(n), i_bwd(n))
 
-    i_bwd = 1. ! Initialise bwd array to diagonal.
-    i_bwd(n) = 1. + up(1) * up(1)
-    i_bwd(1) = 2.
+    ! Initialise bwd array to diagonal.  The default behavior is to
+    ! work with a tridiag array with 1s on the main diagonal.
+    if (present(diag)) then
+       i_bwd = diag
+    else
+       i_bwd = 1.
+    end if
 
     !i_bwd is the /inverse/ of the coefficients for the bwd step.
     do i = 2, n
@@ -58,11 +63,16 @@ contains
 
     real, allocatable :: u(:), u_vec(:, :), q_vec(:,:)
     real, allocatable :: uu(:)
+    real, allocatable :: diag(:)
     integer :: i, n
     n = size(low) + 1
     ! Runs non-periodic (base type) constructor which sets up forward
     ! and backward coefficient arrays.
-    solver%tridiagsolv = tridiagsolv(low, up)
+    diag = [2., &
+         & (1., i = 2, n - 1), &
+         & 1. + up(1) * up(1) &
+         & ]
+    solver%tridiagsolv = tridiagsolv(low, up, diag=diag)
     ! q member array is used in the Sermann-Morrison formula
 
     ! solve() method expects a rank 2 array of shape (SZ X n) as
