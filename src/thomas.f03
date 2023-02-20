@@ -62,7 +62,6 @@ contains
     type(periodic_tridiagsolv) :: solver
 
     real, allocatable :: u(:), u_vec(:, :), q_vec(:,:)
-    real, allocatable :: uu(:)
     real, allocatable :: diag(:)
     integer :: i, n
     n = size(low) + 1
@@ -82,7 +81,6 @@ contains
     allocate(u(n), u_vec(1, n), q_vec(1, n))
     u = [solver%gamma, (0., i=2, n-1), up(1)]
     u_vec = transpose(reshape(u, [n, 1], pad = u))
-    uu = u_vec(1, :)
     call solver%tridiagsolv%solve(u_vec, q_vec)
     solver%q = q_vec(1, :)
   end function construct_periodic
