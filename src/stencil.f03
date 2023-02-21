@@ -36,6 +36,7 @@ contains
     nodes = self%nodes
     coeffs = self%coeffs
     stencil_mul_real = stencil( &
+         & order = self%order, &
          & nodes = nodes, &
          & coeffs = a * coeffs, &
          & lower = self%lower, upper = self%upper &
@@ -50,6 +51,7 @@ contains
     nodes = self%nodes
     coeffs = self%coeffs
     flip = stencil( &
+         & order = self%order, &
          & nodes = - nodes, &
          & coeffs = coeffs, &
          & lower = self%lower, upper = self%upper &
