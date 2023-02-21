@@ -83,7 +83,7 @@ contains
     !> final (see def of memblock_t type) procedures and therefore
     !> deallocation of the block's storage space.
     class(allocator_t), intent(inout) :: self
-    class(memblock_t), pointer :: current
+    type(memblock_t), pointer :: current
     do
        if(.not. associated(self%first)) exit
        current => self%first
