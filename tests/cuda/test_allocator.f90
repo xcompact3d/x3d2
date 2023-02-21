@@ -1,7 +1,8 @@
-program test_allocator
+program test_allocator_cuda
   use iso_fortran_env, only: stderr => error_unit
 
   use m_allocator, only: allocator_t, memblock_t
+  use m_allocator, only: cudaallocator_t
 
   implicit none
 
@@ -11,7 +12,7 @@ program test_allocator
   class(memblock_t), pointer :: ptr1, ptr2, ptr3
   integer, allocatable :: l(:)
 
-  allocator = allocator_t(dims)
+  allocator = cudaallocator_t(dims)
 
   allpass = .true.
 
@@ -67,4 +68,4 @@ program test_allocator
   end if
 
   call allocator%destroy()
-end program test_allocator
+end program test_allocator_cuda
