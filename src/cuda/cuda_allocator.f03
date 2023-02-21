@@ -35,7 +35,7 @@ contains
     class(memblock_t), pointer :: ptr
     allocate(newblock)
     self%id = self%id + 1
-    newblock = cudamemblock_t(self%dims, next, id=self%id + 1)
+    newblock = cudamemblock_t(self%dims, next, id=self%id)
     ptr => newblock
   end function create_cuda_block
 
