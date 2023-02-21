@@ -33,7 +33,7 @@ contains
          & )
 
     dirichlet(1, 1) = stencil( &
-X         & order = 1, &
+         & order = 1, &
          & nodes = [0, 1, 2, 3], &
          & coeffs = [-5. / 2., 2., 0.5, 0.], &
          & lower = 0., upper = 2. &

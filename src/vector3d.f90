@@ -1,5 +1,10 @@
 module m_vector3d
+  use m_stencil, only: stencil
   use m_tridiagsolv, only: tridiagsolv
+
+  implicit none
+
+
   type, abstract :: vector3d
      character(len=:), allocatable :: name
      integer :: rankid, nranks
