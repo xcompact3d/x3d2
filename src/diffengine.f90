@@ -16,24 +16,25 @@ module m_diffengine
 
 contains
 
-  function diffengine_constructor(bulk_sten, n, order, left_sten, right_sten) &
+  function diffengine_constructor(bulk_key, n, order, left_key, right_key) &
        & result(diffengine)
-    character(*), intent(in) :: bulk_sten
-    character(*), optional :: left_sten, right_sten
+    character(*), intent(in) :: bulk_key
+    character(*), optional :: left_key, right_key
     integer, intent(in) :: n, order
 
     type(stencil) :: bulk_stencil
     type(stencil) :: :: left_stencils(2), right_stencils(2)
 
 
-    diffengine%bulk_stencil = get_stencil(1, order)
+    diffengine%bulk_stencil = get_stencil(buld_key, order)
 
-    if (present(bulk_sten) .and. present(right_sten)) then
+    if (present(bulk_key) .and. present(right_key)) then
        is_periodic = .false.
-       diffengine%left_stencils = get_boundary_stencils(1, order)
-       diffengine%right_stencils = get_boundary_stencils(1, order, right=.true.)
-    else if ((.not. present(left_stencil)) .and. &
-         &   (.not. present(right_stencil)) then
+       diffengine%left_stencils = get_boundary_stencils(left_key, order)
+       diffengine%right_stencils = get_boundary_stencils(right_key, &
+            & order, right=.true.)
+    else if ((.not. present(left_key)) .and. &
+         &   (.not. present(right_key)) then
        is_periodic = .true.
     else
        error stop "Both left and right boundary types must be specified."

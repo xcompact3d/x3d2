@@ -2,11 +2,6 @@ module m_stencil_definitions
   use m_stencil, only: stencil
   implicit none
 
-  enum, bind(c)
-     enumerator :: ecompact6
-     enumerator :: edirichlet
-  end enum
-
   type(stencil) :: dirichlet(2, 2)
   type(stencil) :: compact6(2)
 
@@ -60,13 +55,14 @@ contains
   end subroutine init_stencils
 
   pure function get_stencil(key, order) result(s)
-    integer, intent(in) :: key, order
+    integer, intent(in) :: order
+    character(*), intent(in) :: key
     type(stencil) :: s
     if (.not. any([1, 2] == order)) then
        error stop "order must be 1 or 2"
     end if
 
-    if (key == ecompact6) then
+    if (key == "compact6") then
        s = compact6(order)
     else
        error stop "Unknown key"
@@ -74,13 +70,14 @@ contains
   end function get_stencil
 
   pure function get_boundary_stencils(key, order, side) result(s)
-    integer, intent(in) :: key, order
+    integer, intent(in) :: order
+    character(*), intent(in) :: key
     character(*), optional, intent(in) :: side
     type(stencil) :: s(2)
     if (.not. any([1, 2] == order)) then
        error stop "order must be 1 or 2"
     end if
-    if (key == edirichlet) then
+    if (key == "dirichlet") then
        s = dirichlet(:, order)
     else
        error stop "Unknown key"
