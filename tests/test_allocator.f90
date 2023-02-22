@@ -67,4 +67,10 @@ program test_allocator
   end if
 
   call allocator%destroy()
+
+  if (allpass) then
+     write(stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
+  else
+     error stop 'SOME TESTS FAILED.'
+  end if
 end program test_allocator

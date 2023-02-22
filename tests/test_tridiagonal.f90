@@ -84,5 +84,10 @@ program test_tridiagonal
   else
      write(stderr, '(a)') 'Tridiagonal system is solved correctly (PERIODIC)... passed'
   end if
-  
+
+  if (allpass) then
+     write(stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
+  else
+     error stop 'SOME TESTS FAILED.'
+  end if
 end program test_tridiagonal
