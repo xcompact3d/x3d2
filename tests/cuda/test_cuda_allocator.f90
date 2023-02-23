@@ -2,7 +2,7 @@ program test_allocator_cuda
   use iso_fortran_env, only: stderr => error_unit
 
   use m_allocator, only: allocator_t, memblock_t
-  use m_allocator, only: cudaallocator_t
+  use m_cudaallocator, only: cudaallocator_t
 
   implicit none
 
