@@ -8,7 +8,12 @@ set(CUDASRC
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
   list(APPEND SRC ${CUDASRC})
-  target_compile_options(x3d2 "-cuda")
 endif()
 
 add_library(x3d2 STATIC ${SRC})
+target_include_directories(x3d2 INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
+
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+  target_compile_options(x3d2 PRIVATE "-cuda")
+  target_link_options(x3d2 INTERFACE "-cuda")
+endif()
