@@ -56,7 +56,7 @@ contains
     stencils_defined = .true.
   end subroutine define_stencils
 
-  pure function get_stencil(key, order) result(s)
+  function get_stencil(key, order) result(s)
     integer, intent(in) :: order
     character(*), intent(in) :: key
     type(stencil) :: s
@@ -74,7 +74,10 @@ contains
     end if
   end function get_stencil
 
-  pure function get_boundary_stencils(key, order, side) result(s)
+  !! Need another function because boundary stencils are made of two
+  !! components, so the function returns a type(stencil) array of size
+  !! 2.
+  function get_boundary_stencils(key, order, side) result(s)
     integer, intent(in) :: order
     character(*), intent(in) :: key
     character(*), optional, intent(in) :: side
