@@ -2,13 +2,14 @@ module m_stencil_definitions
   use m_stencil, only: stencil
   implicit none
 
-  type(stencil) :: dirichlet(2, 2)
-  type(stencil) :: compact6(2)
+  type(stencil), private :: dirichlet(2, 2)
+  type(stencil), private :: compact6(2)
+  logical :: stencils_defined = .false.
 
 
 contains
 
-  subroutine init_stencils()
+  subroutine define_stencils()
     compact6(1) = stencil( &
          & order = 1, &
          & nodes = [-2, -1, 1, 2], &
@@ -52,12 +53,16 @@ contains
          & coeffs = [6. / 5., -12. / 5., 6. / 5., 0.], &
          & lower = 1. / 10., upper = 1. / 10. &
          & )
-  end subroutine init_stencils
+    stencils_defined = .true.
+  end subroutine define_stencils
 
   pure function get_stencil(key, order) result(s)
     integer, intent(in) :: order
     character(*), intent(in) :: key
     type(stencil) :: s
+    if (.not. stencils_defined) then
+       call define_stencils()
+    endif
     if (.not. any([1, 2] == order)) then
        error stop "order must be 1 or 2"
     end if
@@ -74,6 +79,9 @@ contains
     character(*), intent(in) :: key
     character(*), optional, intent(in) :: side
     type(stencil) :: s(2)
+    if (.not. stencils_defined) then
+       call define_stencils()
+    endif
     if (.not. any([1, 2] == order)) then
        error stop "order must be 1 or 2"
     end if
