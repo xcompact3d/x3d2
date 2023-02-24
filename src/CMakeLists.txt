@@ -1,6 +1,8 @@
 set(SRC
   allocator.f90
   thomas.f90
+  stencil.f90
+  stencil_definitions.f90
 )
 set(CUDASRC
   cuda/cuda_allocator.f90
