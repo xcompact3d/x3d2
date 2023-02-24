@@ -77,10 +77,10 @@ contains
   !! Need another function because boundary stencils are made of two
   !! components, so the function returns a type(stencil) array of size
   !! 2.
-  function get_boundary_stencils(key, order, side) result(s)
-    integer, intent(in) :: order
+  function get_boundary_stencils(key, order, right) result(s)
     character(*), intent(in) :: key
-    character(*), optional, intent(in) :: side
+    integer, intent(in) :: order
+    logical, optional, intent(in) :: right
     type(stencil) :: s(2)
     if (.not. stencils_defined) then
        call define_stencils()
@@ -93,7 +93,7 @@ contains
     else
        error stop "Unknown key"
     end if
-    if (side == "right") then
+    if (present(right) .and. right) then
        s = s%flip()
     end if
   end function get_boundary_stencils
