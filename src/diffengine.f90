@@ -28,8 +28,7 @@ contains
     type(diffengine_t) :: diffengine
     integer :: i
     logical :: is_periodic
-    real :: lower_diag(length), upper_diag(length)
-
+    real, allocatable :: lower_diag(:), upper_diag(:)
 
     diffengine%bulk_stencil = get_stencil(bulk_key, order)
 
@@ -48,8 +47,8 @@ contains
     end if
 
     if (is_periodic) then
-       upper_diag = [(diffengine%bulk_stencil%get_upper(), i = 1, length)]
-       lower_diag = [(diffengine%bulk_stencil%get_lower(), i = 1, length)]
+       upper_diag = [(diffengine%bulk_stencil%get_upper(), i = 1, length - 2)]
+       lower_diag = [(diffengine%bulk_stencil%get_lower(), i = 1, length - 2)]
        diffengine%tomsolv = periodic_tridiagsolv(lower_diag, upper_diag)
     else
        associate(left => diffengine%left_stencils, &
@@ -72,6 +71,8 @@ contains
        if (size(lower_diag) /= length) then
           error stop "lower-diag has the wrong size"
        end if
+       upper_diag = upper_diag(1:(length-1))
+       lower_diag = lower_diag(2:length)
        diffengine%tomsolv = tridiagsolv(lower_diag, upper_diag)
     end if
 
