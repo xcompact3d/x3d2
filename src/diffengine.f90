@@ -68,39 +68,53 @@ contains
   end function diffengine_constructor
 
 
-  subroutine diff(self, f, df)
-    class(diffengine), intent(in) :: self
+  subroutine diff(self, f, df, dx)
+    class(diffengine_t), intent(in) :: self
     real, intent(in) :: f(:, :)
+    real, intent(in) :: dx
     real, intent(out) :: df(:, :)
-    integer, parameter :: n = size(f, 2)
-    type(stencil), pointer :: s
+    integer :: i ! Loop counter
+    integer :: pos ! current position along differentiation axis
+    integer :: n ! Size of the differentiation pencil
+    integer, allocatable :: lnodes_1(:), lnodes_2(:)
+    integer, allocatable :: rnodes_1(:), rnodes_2(:)
+
+    n = size(f, 2)
+
+    pos = 1
+    lnodes_1 = modulo(self%left_stencils(1)%nodes + (pos - 1), n) + 1
+    pos = 2
+    lnodes_2 = modulo(self%left_stencils(2)%nodes + (pos - 1), n) + 2
     !$omp simd
     do i = 1, size(f, 1)
-       s => self%left_stencils(1)
-       du(i, 1) = dot_product(s%coeffs, u(i, s%nodes + 1))
-       s => self%stencils(2)
-       du(i, 2) = dot_product(s%coeffs, u(i, s%nodes + 2))
+       df(i, 1) = dot_product(self%left_stencils(1)%coeffs, f(i, lnodes_1))
+       df(i, 2) = dot_product(self%left_stencils(2)%coeffs, f(i, lnodes_2))
     end do
 
     !$omp end simd
-    s => self%bulk_stencil
-    do j = 3, n - 2
+    do pos = 3, n - 2
        !$omp simd
        do i = 1, size(f, 1)
-          du(i, j) = dot_product(s%coeffs, u(i, s%nodes + j))
+          df(i, pos) = dot_product(self%bulk_stencil%coeffs, &
+               & f(i, self%bulk_stencil%nodes + pos))
        end do
        !$omp end simd
     end do
+
+    pos = n - 1
+    rnodes_1 = modulo(self%right_stencils(1)%nodes + (pos - 1), n) + 1
+    pos = n
+    rnodes_2 = modulo(self%right_stencils(2)%nodes + (pos - 1), n) + 2
     !$omp simd
     do i = 1, size(f, 1)
-       s => self%stencils(1)
-       du(i, n - 1) = dot_product(s%coeffs, u(i, s%nodes + n - 1))
-       s => self%stencils(2)
-       du(i, n) = dot_product(s%coeffs, u(i, s%nodes + n))
+       df(i, n - 1) = dot_product(self%right_stencils(1)%coeffs, f(i, rnodes_1))
+       df(i, n) = dot_product(self%right_stencils(2)%coeffs, f(i, rnodes_2))
     end do
     !$omp end simd
 
-    call self%tomsolv%solve(du, df)
+    df = df / dx
+
+    call self%tomsolv%solve(df, df)
   end subroutine diff
 
   pure function reverse(x)
