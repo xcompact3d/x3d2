@@ -93,9 +93,9 @@ contains
     n = size(f, 2)
 
     pos = 1
-    lnodes_1 = modulo(self%left_stencils(1)%nodes + (pos - 1), n) + 1
+    lnodes_1 = modulo(self%left_stencils(1)%nodes + (pos - 1), n - 1) + 1
     pos = 2
-    lnodes_2 = modulo(self%left_stencils(2)%nodes + (pos - 1), n) + 2
+    lnodes_2 = modulo(self%left_stencils(2)%nodes + (pos - 1), n - 1) + 1
     !$omp simd
     do i = 1, size(f, 1)
        df(i, 1) = dot_product(self%left_stencils(1)%coeffs, f(i, lnodes_1))
@@ -113,9 +113,9 @@ contains
     end do
 
     pos = n - 1
-    rnodes_1 = modulo(self%right_stencils(1)%nodes + (pos - 1), n) + 1
+    rnodes_1 = modulo(self%right_stencils(1)%nodes + (pos - 1), n - 1) + 1
     pos = n
-    rnodes_2 = modulo(self%right_stencils(2)%nodes + (pos - 1), n) + 2
+    rnodes_2 = modulo(self%right_stencils(2)%nodes + (pos - 1), n - 1) + 1
     !$omp simd
     do i = 1, size(f, 1)
        df(i, n - 1) = dot_product(self%right_stencils(1)%coeffs, f(i, rnodes_1))
