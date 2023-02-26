@@ -10,10 +10,11 @@ program test_tridiagonal
   integer :: i
   real :: low(5)
   real :: up(5)
-  real :: f(2, 6), df(2, 6), expected_vec(2, 6)
-  real :: expected(6)
+  real, allocatable :: f(:, :), df(:, :), expected_vec(:, :)
+  real, allocatable :: expected(:)
 
   real, parameter :: tol = 0.0001
+  integer, parameter :: SZ = 2
   logical :: allpass
 
   allpass = .true.
@@ -28,6 +29,9 @@ program test_tridiagonal
   ! 0    0    0     0     2     1         x6    1
 
 
+  allocate(expected_vec(SZ, 6))
+  allocate(f(SZ, 6))
+  allocate(df(SZ, 6))
   ! Solution computed with numpy.linalg.solve()
   expected = [ &
        & -1.71428, &
@@ -55,6 +59,7 @@ program test_tridiagonal
      write(stderr, '(a)') 'Tridiagonal system is solved correctly (DIRICHLET)... passed'
   end if
   deallocate(solver)
+  deallocate(expected_vec, f, df)
 
   ! PERIODIC BOUNDARY CONDITIONS - Solve for x in
 
@@ -65,7 +70,10 @@ program test_tridiagonal
   ! 0    0    0     0.33  1     0.33      x5    2
   ! 0.33 0    0     0     0.33  1         x6    1
 
-  expected = [-0.375, 0.375, 2.25, 1.875, 1.125, 0.75]
+  allocate(expected_vec(SZ, 7))
+  allocate(f(SZ, 7))
+  allocate(df(SZ, 7))
+  expected = [-0.375, 0.375, 2.25, 1.875, 1.125, 0.75, -0.375]
   expected_vec(1, :) = expected
   expected_vec(2, :) = expected
 
@@ -74,8 +82,8 @@ program test_tridiagonal
   allocate(periodic_tridiagsolv::solver)
   solver = periodic_tridiagsolv(low, up)
 
-  f(1, :) = [0., 1., 3., 3., 2., 1.]
-  f(2, :) = [0., 1., 3., 3., 2., 1.]
+  f(1, :) = [0., 1., 3., 3., 2., 1., 0.]
+  f(2, :) = [0., 1., 3., 3., 2., 1., 0.]
   call solver%solve(f, df)
 
   if (.not. all(abs(df - expected_vec) < tol)) then

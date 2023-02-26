@@ -121,24 +121,29 @@ contains
     class(periodic_tridiagsolv), intent(in) :: self
     real, intent(in) :: f(:, :)
     real, intent(out) :: df(:, :)
-    real :: y(size(f, 1), size(f, 2))
-    integer :: i, n
+    real :: y(size(f, 1), size(f, 2) - 1)
+    integer :: i, m
     real :: alpha
 
-    call self%tridiagsolv%solve(f, y)
+    !! In the periodic case the first element of the differentiation
+    !! pencil (f(1)) is the same as the last (f(n)).  Alhtough we have
+    !! n data, the effective domain size if n - 1.
+    m = size(f, 2) - 1
+    call self%tridiagsolv%solve(f(:, 1:m), y)
 
-    n = size(f, 2)
     alpha = self%updiag(1)
     select type (self)
     type is (periodic_tridiagsolv)
        !$omp simd
        do i = 1, size(f, 1)
-          df(i, :) = y(i, :) - ((y(i, 1) - alpha * y(i, n)) &
-               & / (1. + self%q(1) - alpha * self%q(n))) * self%q
+          df(i, 1:m) = y(i, :) - ((y(i, 1) - alpha * y(i, m)) &
+               & / (1. + self%q(1) - alpha * self%q(m))) * self%q
        end do
        !$omp end simd
     class default
        error stop
     end select
+    !! And don't forget to enforce periocity
+    df(:, size(df, 2)) = df(:, 1)
   end subroutine solve_periodic
 end module m_tridiagsolv
