@@ -3,6 +3,7 @@ set(SRC
   thomas.f90
   stencil.f90
   stencil_definitions.f90
+  diffengine.f90
 )
 set(CUDASRC
   cuda/cuda_allocator.f90

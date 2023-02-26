@@ -2,6 +2,7 @@ set(TESTSRC
   test_allocator.f90
   test_tridiagonal.f90
   test_stencil.f90
+  test_diffengine.f90
 )
 set(CUDATESTSRC
   cuda/test_cuda_allocator.f90
