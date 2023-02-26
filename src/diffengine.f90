@@ -26,7 +26,7 @@ contains
     character(*), optional :: left_key, right_key
     integer, intent(in) :: length, order
     type(diffengine_t) :: diffengine
-    integer :: i, n
+    integer :: i
     logical :: is_periodic
     real :: lower_diag(length), upper_diag(length)
 
@@ -52,16 +52,26 @@ contains
        lower_diag = [(diffengine%bulk_stencil%get_lower(), i = 1, length)]
        diffengine%tomsolv = periodic_tridiagsolv(lower_diag, upper_diag)
     else
-       upper_diag = [ &
-            & diffengine%left_stencils%get_upper(), &
-            & (diffengine%bulk_stencil%get_upper(), i= 3, length - 2), &
-            & reverse(diffengine%right_stencils%get_upper()) &
-            ]
-       lower_diag = [ &
-            & diffengine%left_stencils%get_upper(), &
-            & (diffengine%bulk_stencil%get_lower(), i = 3, n), &
-            & reverse(diffengine%right_stencils%get_upper()) &
-            ]
+       associate(left => diffengine%left_stencils, &
+            right => diffengine%right_stencils, &
+            bulk => diffengine%bulk_stencil)
+         upper_diag = [ &
+              & left%get_upper(), &
+              & (bulk%get_upper(), i=size(left), length - size(right)), &
+              & reverse(right%get_upper()) &
+              ]
+         lower_diag = [ &
+              & left%get_upper(), &
+              & (bulk%get_lower(), i = size(left), length - size(right)), &
+              & reverse(right%get_upper()) &
+              ]
+       end associate
+       if (size(upper_diag) /= length) then
+          error stop "upper-diag has the wrong size"
+       end if
+       if (size(lower_diag) /= length) then
+          error stop "lower-diag has the wrong size"
+       end if
        diffengine%tomsolv = tridiagsolv(lower_diag, upper_diag)
     end if
 
