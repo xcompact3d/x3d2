@@ -3,7 +3,7 @@ module m_allocator
 
   type :: allocator_t
      integer :: dims(3)
-     integer :: id = 0
+     integer :: next_id = 0
      class(memblock_t), pointer :: first => null()
    contains
      procedure :: get_block
@@ -42,7 +42,7 @@ contains
     type(memblock_t), pointer, intent(in) :: next
     type(memblock_t), pointer :: newblock
     class(memblock_t), pointer :: ptr
-    self%id = self%id + 1
+    self%next_id = self%next_id + 1
     allocate(newblock)
     newblock = memblock_t([8, 8, 8], next, id=self%id)
     ptr => newblock
@@ -89,7 +89,7 @@ contains
        current => self%first
        self%first => self%first%next
        deallocate(current)
-       self%id = self%id - 1
+       self%next_id = self%next_id - 1
     end do
   end subroutine destroy
 
