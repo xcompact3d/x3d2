@@ -44,7 +44,7 @@ contains
     class(memblock_t), pointer :: ptr
     self%next_id = self%next_id + 1
     allocate(newblock)
-    newblock = memblock_t([8, 8, 8], next, id=self%id)
+    newblock = memblock_t(self%dims, next, id=self%next_id)
     ptr => newblock
   end function create_block
 
