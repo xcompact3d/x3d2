@@ -1,6 +1,8 @@
 #!/bin/sh
 
-# Get the list of all staged files filtering out deleted files.
-staged_files=$(git diff --name-only --staged --diff-filter=d)
+# Get the list of all staged files ending in .f90, filtering out
+# deleted files.
+staged_files=$(git diff --name-only --staged --diff-filter=d \
+		   | grep .f90$)
 fprettify --config .fprettify.ini $staged_files
 git add $staged_files
