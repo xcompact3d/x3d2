@@ -1,5 +1,6 @@
 #!/bin/sh
 
-staged_files=$(git diff --name-only --staged)
+# Get the list of all staged files filtering out deleted files.
+staged_files=$(git diff --name-only --staged --diff-filter=d)
 fprettify --config .fprettify.ini $staged_files
 git add $staged_files
