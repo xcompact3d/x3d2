@@ -1,0 +1,61 @@
+#!/bin/env python
+
+# A Python 3 script that reads a file and validates it against the
+# conventional commit specification (v1.0.0).
+#
+# https://www.conventionalcommits.org/en/1.0.0
+#
+# Usage: commit-msg msg.txt
+#
+# This scripts aborts with error code 1 in the following situations:
+# - Commit header does not comply to the conventional commit format.
+# - Commit header length is > 50 characters long.
+# - Second line of commit message is not blank.
+# - Body of commit message contains one or more lines that are longer
+#   than 72 characters.
+
+import re
+import sys
+
+
+def check_commit_header_fmt(header_line):
+    """Check that header line complies with conventional commit header format:
+    <type>[optional scope]: <description>
+
+    Process exits with error code 1 if not.
+
+    Returns
+    -------
+    None
+    """
+    ccommit_types = ["fix", "feat", "build", "chore",
+                     "ci", "docs", "style", "refactor", "perf", "test"]
+    type_re = "|".join(ccommit_types)
+    ccommit_header_re = r"^(%s)(\(\w+\))?!?:\s\w+" % type_re
+    if (not re.match(ccommit_header_re, header_line)):
+        msg = ("[POLICY] Commit header line must comply"
+               "with the conventional commit format:\n\n"
+               "    <type>[optional scope]: <description>\n\n"
+               "See https://www.conventionalcommits.org")
+        print(msg)
+        sys.exit(1)
+
+
+input_stream = open(sys.argv[1], "r")
+lines = input_stream.readlines()
+
+check_commit_header_fmt(lines[0])
+if (len(lines[0]) > 68):
+    print("[POLICY] Commit header line is longer than 50 characters")
+    sys.exit(1)
+
+if(len(lines) >= 2):
+    if (lines[1] not in ("\n", "\r\n")):
+        print("[POLICY] Second line of commit message must be left blank")
+        sys.exit(1)
+commit_body = lines[2:] if(len(lines) > 2) else []
+for i, line in enumerate(commit_body):
+    if(len(line) > 72):
+        print("[POLICY] Line %d of commit message is too long " % (i + 3),
+              "(> 72 characters).")
+        sys.exit(1)
