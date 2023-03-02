@@ -2,7 +2,7 @@ Fortran style guide
 ===================
 
 Basic formatting
-----------
+----------------
 
 Identation, whitespaces and line length are enforced by `fprettify`.
 Project settings are defined in the `.fprettify.ini` located at the
