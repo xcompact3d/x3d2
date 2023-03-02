@@ -17,6 +17,9 @@
 import re
 import sys
 
+MAX_COMMIT_HEADER_LEN = 68
+MAX_COMMIT_BODY_LINE_LEN = 72
+
 
 def check_commit_header_fmt(header_line):
     """Check that header line complies with conventional commit header format:
@@ -32,7 +35,7 @@ def check_commit_header_fmt(header_line):
                      "ci", "docs", "style", "refactor", "perf", "test"]
     type_re = "|".join(ccommit_types)
     ccommit_header_re = r"^(%s)(\(\w+\))?!?:\s\w+" % type_re
-    if (not re.match(ccommit_header_re, header_line)):
+    if not re.match(ccommit_header_re, header_line):
         msg = ("[POLICY] Commit header line must comply"
                "with the conventional commit format:\n\n"
                "    <type>[optional scope]: <description>\n\n"
@@ -41,21 +44,23 @@ def check_commit_header_fmt(header_line):
         sys.exit(1)
 
 
-input_stream = open(sys.argv[1], "r")
-lines = input_stream.readlines()
+if __name__ == "__main__":
+    with open(sys.argv[1], "r") as f:
+        lines = f.readlines()
 
-check_commit_header_fmt(lines[0])
-if (len(lines[0]) > 68):
-    print("[POLICY] Commit header line is longer than 50 characters")
-    sys.exit(1)
+    check_commit_header_fmt(lines[0])
+    if len(lines[0]) > MAX_COMMIT_HEADER_LEN:
+        print("[POLICY] Commit header line is longer than",
+              "%s characters", MAX_COMMIT_HEADER_LEN)
+        sys.exit(1)
 
-if(len(lines) >= 2):
-    if (lines[1] not in ("\n", "\r\n")):
-        print("[POLICY] Second line of commit message must be left blank")
-        sys.exit(1)
-commit_body = lines[2:] if(len(lines) > 2) else []
-for i, line in enumerate(commit_body):
-    if(len(line) > 72):
-        print("[POLICY] Line %d of commit message is too long " % (i + 3),
-              "(> 72 characters).")
-        sys.exit(1)
+    if len(lines) >= 2:
+        if (lines[1] not in ("\n", "\r\n")):
+            print("[POLICY] Second line of commit message must be left blank")
+            sys.exit(1)
+    commit_body = lines[2:] if(len(lines) > 2) else []
+    for i, line in enumerate(commit_body):
+        if len(line) > MAX_COMMIT_BODY_LINE_LEN:
+            print("[POLICY] Line %d of commit message is too long " % (i + 3),
+                  "(> %s characters)." % MAX_COMMIT_BODY_LINE_LEN)
+            sys.exit(1)
