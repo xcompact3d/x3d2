@@ -15,10 +15,7 @@ author = 'Xcompact3D team'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = [
-'sphinxfortran.fortran_domain',
-'sphinxfortran.fortran_autodoc'
-]
+extensions = []
 
 templates_path = ['_templates']
 exclude_patterns = []
