@@ -28,6 +28,7 @@ pick an existing issue to work on or to create a new one.
 
    contribution_workflow
    tooling
+   dev_environment
    build
    contributing_guidelines
    style
