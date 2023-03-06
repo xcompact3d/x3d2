@@ -39,3 +39,42 @@ prototyping until an issue has been opened. In fact, prototyping is
 often helpful to write the content of the issue.  On the other hand,
 do open an issue before commiting to a particular design or
 implementation.
+
+Format commits accordingly
+--------------------------
+
+Commits messages are formatted according to the conventional commits
+specification (v1.0.0).  Commit messages must respect the following
+structure::
+
+  <type>[optional scope]: <description>
+
+  [optional body]
+
+where `<type>` is one of `fix`, `feat`, `build`, `chore`, `ci`,
+`docs`, `style`, `refactor`, `perf` or `test`.
+
+Breaking changes are specified by adding an `!` before the colon `:`. Example::
+
+  fix(allocator)!: Return 1D arrays as data blocks
+
+  This is a breaking change because e.g. the allocator used to
+  return 3D data blocks.
+
+In addition, commit message header lines must not contain more than 68
+characters.  Lines in the commit message body cannot exceed 72
+characters.
+
+.. note::
+
+   Commit messages in x3d2 do not use footers as specified in the
+   conventional commit specs.  You are welcome to use footers in your
+   commit messages, but know that they hold no special place in the
+   commit format policy.
+
+A Git hook is provided to prevent you from registering non-conformant
+commit messages. See setting up your development environment.
+
+Fortran code formatting
+-----------------------
+
