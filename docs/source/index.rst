@@ -16,6 +16,7 @@ version 2.0.  This project is a rewrite of Xcompact3d leading to
 .. toctree::
    :hidden:
 
+   report_a_bug
    developer/index
 
 Indices and tables
