@@ -120,9 +120,38 @@ Example
          real, intent(in) :: sq_size
          ! ...
       end function create_square_default_color
-      
-   
-       
 
-   
-	  
+.. _in-code-docs:
+
+In-code documentation
+---------------------
+
+The body of modules, public types, public procedures and public
+type-bound methods MUST be preceded of one or more documentation
+paragraphs.  Optionally, the body of private symbols MAY be
+preceded by documentation paragraph.
+
+Procedure dummy arguments, interface components and type-bound
+procedures declarations MAY be documented using an inline comment
+either on the same line directly following the statement (using the
+docmark `!!`) or on the line directly above the statement (using the
+predocmark `!>`).
+
+x3d2 uses `ford <https://forddocs.readthedocs.io/en/latest/>`_ to
+extract in-code documentation and generate HTML pages.  The syntax for
+in-code documentation follows ford's syntax for comments. See
+`(ford)Writing documentation
+<https://forddocs.readthedocs.io/en/latest/user_guide/writing_documentation.html>`_
+
+.. code:: fortran
+
+   subroutine add(a, b, c)
+       !! This is the first paragraph of the procedures
+       !! documentation.  Note that it starts with TWO !.
+       real, intent(in) :: a, b !! Optional documentation for dummy argument.
+       real, intent(out) :: c !! The result of a + b
+
+       ! The line below is a regular comment.
+       ! Make use of the well-known the addition algorithm.
+       c = a + b
+   end subroutine
