@@ -32,5 +32,6 @@ pick an existing issue to work on or to create a new one.
    build
    contributing_guidelines
    style
+   writing_docs
 
 
