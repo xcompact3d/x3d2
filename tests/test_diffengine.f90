@@ -23,9 +23,9 @@ program test_diffengine
   ! First derivative with periodic boundary conditions
   expected = [(cos((i-1)*dx), i=1,n)]
   expected_vec = transpose(reshape(expected, [n, SZ], pad = expected))
-  diffeng = diffengine_t("compact6", length=n, order=1)
+  diffeng = diffengine_t("compact6", length=n, order=1, dx=dx)
   allocate(df, source=f_vec)
-  call diffeng%diff(f_vec, df, dx)
+  call diffeng%diff(f_vec, df)
   if (.not. all(abs(df - expected_vec) < tol)) then
      allpass = .false.
      write(stderr, '(a)') 'First derivatives (periodic) are computed correctly... failed'

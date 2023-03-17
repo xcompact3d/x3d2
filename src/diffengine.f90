@@ -10,6 +10,7 @@ module m_diffengine
      type(stencil) :: left_stencils(2)
      type(stencil) :: right_stencils(2)
      class(tridiagsolv), allocatable :: tomsolv
+     real :: dx
    contains
      procedure, public :: diff
   end type diffengine_t
@@ -20,15 +21,18 @@ module m_diffengine
 
 contains
 
-  function diffengine_constructor(bulk_key, length, order, left_key, right_key) &
+  function diffengine_constructor(bulk_key, length, order, dx, left_key, right_key) &
        & result(diffengine)
     character(*), intent(in) :: bulk_key
     character(*), optional :: left_key, right_key
     integer, intent(in) :: length, order
+    real, intent(in) :: dx
     type(diffengine_t) :: diffengine
     integer :: i
     logical :: is_periodic
     real, allocatable :: lower_diag(:), upper_diag(:)
+
+    diffengine%dx = dx
 
     diffengine%bulk_stencil = get_stencil(bulk_key, order)
 
@@ -83,10 +87,9 @@ contains
   end function diffengine_constructor
 
 
-  subroutine diff(self, f, df, dx)
+  subroutine diff(self, f, df)
     class(diffengine_t), intent(in) :: self
     real, intent(in) :: f(:, :)
-    real, intent(in) :: dx
     real, intent(out) :: df(:, :)
     integer :: i ! Loop counter
     integer :: pos ! current position along differentiation axis
@@ -127,7 +130,7 @@ contains
     end do
     !$omp end simd
 
-    df = df / dx
+    df = df / self%dx
 
     call self%tomsolv%solve(df, df)
   end subroutine diff
