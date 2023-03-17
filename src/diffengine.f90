@@ -46,6 +46,10 @@ contains
        error stop "Both left and right boundary types must be specified."
     end if
 
+    ! In the periodic case the first element of the differentiation
+    ! pencil (f(1)) is the same as the last (f(n)).  Alhtough we have
+    ! n data, the effective domain size if n - 1.
+    ! See periodic_tridiagsolv%solve_periodic (thomas.f90)
     if (is_periodic) then
        upper_diag = [(diffengine%bulk_stencil%get_upper(), i = 1, length - 2)]
        lower_diag = [(diffengine%bulk_stencil%get_lower(), i = 1, length - 2)]

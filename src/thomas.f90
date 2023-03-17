@@ -1,7 +1,58 @@
 module m_tridiagsolv
+  !! This module provides access to derived types containing data and
+  !! functionality to solve triadiagonal or quasi-triadiagonal system
+  !! of equations.
+  !!
+  !! Derived type [[m_tridiagsolv(module):tridiagsolv(type)]] is used
+  !! to solve a pure triadiagonal system for a specific set of
+  !! coefficients.  The type is instantiated by passing the lower,
+  !! upper and central diagonals.  The system can then been solved for
+  !! arbitrary right-hand vectors by colling the
+  !! [[m_tridiagsolv(module):solve(subroutine)]] type-bound procedure.
+  !!
+  !! Derived type [[m_tridiagsolv(module):periodic_tridiagsolv(type)]]
+  !! plays a role similar to
+  !! [[m_tridiagsolv(module):tridiagsolv(type)]] for
+  !! quasi-triadiagonal system typical of configurations with periodic
+  !! boundary conditions.
   implicit none
 
   type :: tridiagsolv
+     !! Tridiagonal solver for a particular tridiagonal coefficient
+     !! matrix.  The solution is computed using the TMDA (or Thomas)
+     !! algorithm, see
+     !! [(Wikipedia)Tridiagonal matrix algorithm](https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm).
+     !!
+     !! A solver can be created by passing the lower, central and
+     !! upper diagonals to the type constructor, see
+     !! [[m_tridiagsolv(module):construct(function)]].
+     !!
+     !! ```f90
+     !! real :: low(7), up(7)
+     !! real :: diag(8)
+     !!
+     !! diag = 1.
+     !! call random_number(low)
+     !! call random_number(up)
+     !!
+     !! thomas_solver = tridiagsolv(low, up, diag)
+     !! ```
+     !!
+     !! The tridiagonal system can then be solved for a collection of
+     !! M arbitrary right-hand-side vectors using the `solve`
+     !! type-bound procedure.  This collection is passed as a
+     !! two-dimensional array of shape `M * size(diag)`, that is the
+     !! right-hand side vectors represented along the second
+     !! dimension.
+     !!
+     !! ```f90
+     !! ! Solve for M right-hand side vectors at once.
+     !! integer, parameter :: M = 4
+     !! real :: rhs(M, 8), solution(M, 8)
+     !! call random_number(rhs)
+     !!
+     !! thomas_solver%solve(rhs, solution)
+     !! ```
      private
      real, allocatable :: fwd(:), bwd(:), updiag(:)
    contains
@@ -9,7 +60,39 @@ module m_tridiagsolv
   end type tridiagsolv
 
   type, extends(tridiagsolv) :: periodic_tridiagsolv
+     !! Solver for a quasi-tridiagonal tridiagonal coefficient matrix
+     !! originating from periodic boundary conditions.
+     !!
+     !! ```
+     !! b1  c1  0   0    0   a1
+     !! a2  b2  c2  0    0   0
+     !! 0   a3  b3  c3   0   0
+     !! 0   0   a4  b4  c4   0
+     !! 0   0   0   a5  b5   c5
+     !! c6   0   0  0   a6   b6
+     !! ```
+     !!
+     !! The solution is computed using a modified TMDA (or Thomas)
+     !! algorithm using the Shermann-Morrison formula, see
+     !! https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm#Variant
+     !!
+     !! A solver is created in the same way as the full tridiagonal
+     !! case, by passing the lower, central and upper diagonals to the
+     !! type constructor,
+     !! see [[m_tridiagsolv(module):construct_periodic(function)]].
+     !!
+     !!  ```
+     !!  real :: low(7), up(7)
+     !!  real :: diag(8)
+     !!
+     !!  diag = 1.
+     !!  call random_number(low)
+     !!  call random_number(up)
+     !!
+     !!  thomas_solver = tridiagsolv(low, up, diag)
+     !! ```
      real :: gamma = - 1.
+     !> Helper vector, solution to intermediate system A' * q = u
      real, allocatable :: q(:)
    contains
      procedure, public :: solve => solve_periodic
@@ -86,11 +169,19 @@ contains
   end function construct_periodic
 
   pure subroutine solve(self, f, df)
+    !! Solve the tridiagonal system associated to the
+    !! [[m_tridiagsolv(module):tridiagsolv(type)]] instance.
+    !!
+    !! The system is solved for a collection of M right-hand side
+    !! vectors, arranged into a two-dimensional array of shape M X N,
+    !! where N is the size of the system.
     class(tridiagsolv), intent(in) :: self
     real, intent(in) :: f(:, :)
+    !> Solutions
     real, intent(out) :: df(:, :)
     integer :: i, j, n
 
+    ! TODO: Overwrite f in place and get rid of df array.
     df = f
     n = size(self%fwd)
     if (size(f, 2) /= n) error stop
@@ -118,6 +209,13 @@ contains
   end subroutine solve
 
   pure subroutine solve_periodic(self, f, df)
+    !! Solve the tridiagonal system associated to the
+    !! [[m_tridiagsolv(module):periodic_tridiagsolv(type)]]
+    !! instance.
+    !!
+    !! The system is solved for a collection of M right-hand side
+    !! vectors, arranged into a two-dimensional array of shape M X N,
+    !! where N is the size of the system.
     class(periodic_tridiagsolv), intent(in) :: self
     real, intent(in) :: f(:, :)
     real, intent(out) :: df(:, :)
@@ -125,9 +223,9 @@ contains
     integer :: i, m
     real :: alpha
 
-    !! In the periodic case the first element of the differentiation
-    !! pencil (f(1)) is the same as the last (f(n)).  Alhtough we have
-    !! n data, the effective domain size if n - 1.
+    ! In the periodic case the first element of the differentiation
+    ! pencil (f(1)) is the same as the last (f(n)).  Alhtough we have
+    ! n data, the effective domain size if n - 1.
     m = size(f, 2) - 1
     call self%tridiagsolv%solve(f(:, 1:m), y)
 
