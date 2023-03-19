@@ -59,11 +59,13 @@ contains
     real, intent(in) :: u(:, :, :)
     real, intent(in) :: u_dir(:, :, :)
     real, intent(out) :: rslt(:, :, :)
+    real, allocatable, dimension(:, :) :: du, d2u, usq, dusq
 
-    du => self%allocator%get_block()
-    d2u => self%allocator%get_block()
-    u2 => self%allocator%get_block()
-    du2 => self%allocator%get_block()
+    SZ = size(rslt, 1)
+    n = size(rslt, 2)
+
+    allocate(du(SZ, n), d2u(SZ, n))
+    allocate(usq(SZ, n), dusq(SZ, n))
 
     layers: do k = 1, size(u, 3)
        call diffeng%diff(u(:, :, k), du%data)
