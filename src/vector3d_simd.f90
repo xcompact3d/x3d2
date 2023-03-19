@@ -10,7 +10,6 @@ module m_vector3d_simd
    contains
      procedure, public :: transport
      procedure, public :: div
-     procedure, public :: u => get_component_ptr
   end type vector3d_simd
 
   interface vector3d_simd
@@ -36,20 +35,6 @@ contains
     blockptr3 => self%allocator%get_block()
   end function make_vector3d_simd
 
-  function get_component_ptr(self, i) result(ptr)
-    class(vector3d_simd), intent(in) :: self
-    integer, intent(in) :: i
-    real, pointer :: ptr(:, :, :)
-
-    select case(i)
-    case (1)
-       ptr => u1%data
-    case (2)
-       ptr => u2%data
-    case (3)
-       ptr => u3%data
-    end select
-  end function get_component_ptr
 
   pure function transport(self)
     class(vector3d_simd), intent(in) :: self

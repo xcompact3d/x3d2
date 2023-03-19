@@ -15,6 +15,7 @@ module m_vector3d
    contains
      procedure(field_op), deferred :: transport
      procedure(field_op), deferred :: div
+     procedure, public :: u => get_component_ptr
   end type vector3d
 
   abstract interface
@@ -24,4 +25,21 @@ module m_vector3d
        class(vector3d), intent(inout) :: rslt
      end subroutine field_op
   end interface
+
+contains
+
+    function get_component_ptr(self, i) result(ptr)
+    class(vector3d), intent(in) :: self
+    integer, intent(in) :: i
+    real, pointer :: ptr(:, :, :)
+
+    select case(i)
+    case (1)
+       ptr => self%u1%data
+    case (2)
+       ptr => self%u2%data
+    case (3)
+       ptr => self%u3%data
+    end select
+  end function get_component_ptr
 end module m_vector3d
