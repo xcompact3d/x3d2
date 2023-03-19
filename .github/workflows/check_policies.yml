@@ -5,10 +5,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          # Checkout with full history, not just latest revision.
+          fetch-depth: 0
       - uses: actions/setup-python@v4
       - run: |
-          bash .github/workflows/check-commit-messages.sh \
-            ${{ github.event.before }}..${{ github.event.after }}
+          bash .github/workflows/check_commit_messages.sh \
+            ${{ github.event.before }} ${{ github.event.after }}
   check-formatting:
     runs-on: ubuntu-latest
     steps:
