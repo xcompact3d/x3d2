@@ -17,6 +17,7 @@ version 2.0.  This project is a rewrite of Xcompact3d leading to
    :hidden:
 
    report_a_bug
+   internals/index
    developer/index
 
 Indices and tables
