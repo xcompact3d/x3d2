@@ -38,18 +38,12 @@ contains
   function transport(self)
     class(vector3d_simd), intent(in) :: self
     class(vector3d), allocatable :: transport
-    allocate(vector3d_simd::transport)
-    transport = vector3d_simd( &
+    transport = vector3d_simd(&
          & self%allocator, self%diffeng, self%diffeng2 &
          & )
-    select type (transport)
-    type is (vector3d_simd)
-       call self%transport_dir(1, transport%u(1))
-       call self%transport_dir(2, transport%u(2))
-       call self%transport_dir(3, transport%u(3))
-    class default
-       error stop
-    end select
+    call self%transport_dir(1, transport%u(1))
+    call self%transport_dir(2, transport%u(2))
+    call self%transport_dir(3, transport%u(3))
   end function transport
 
   subroutine transport_dir(self, dim, rslt)
@@ -90,16 +84,16 @@ contains
       end do layers
     end associate
   end subroutine transport_dir
-    class(vector3d_simd), intent(in) :: self
-    class(vector3d), intent(inout) :: rslt
 
-    select type (rslt)
-    type is (vector3d_simd)
-       rslt%u = self%u + 1.
-       rslt%v = self%v + 1.
-       rslt%w = self%w + 1.
-    class default
-       error stop
-    end select
-  end subroutine div
+  function div(self) result(rslt)
+    class(vector3d_simd), intent(in) :: self
+    class(vector3d), allocatable :: rslt
+    allocate(vector3d_simd::rslt)
+    rslt = vector3d_simd( &
+         & self%allocator, self%diffeng, self%diffeng2 &
+         & )
+    rslt%u(1) = self%u(1) + 1.
+    rslt%u(2) = self%u(2) + 1.
+    rslt%u(3) = self%u(3) + 1.
+  end function div
 end module m_vector3d_simd
