@@ -30,35 +30,34 @@ contains
     self%diffeng = diffeng
     self%diffeng2 = diffeng2
 
-    blockptr1 => self%allocator%get_block()
-    blockptr2 => self%allocator%get_block()
-    blockptr3 => self%allocator%get_block()
+    self%u1 => self%allocator%get_block()
+    self%u2 => self%allocator%get_block()
+    self%u3 => self%allocator%get_block()
   end function make_vector3d_simd
 
-
-  pure function transport(self)
+  function transport(self)
     class(vector3d_simd), intent(in) :: self
     class(vector3d), allocatable :: transport
     allocate(vector3d_simd::transport)
-    transport = vector3d_simd(&
+    transport = vector3d_simd( &
          & self%allocator, self%diffeng, self%diffeng2 &
          & )
-    tranport%set_storage()
-    select type (tranport)
+    select type (transport)
     type is (vector3d_simd)
-       call self%transport_dir(self%u(1), transport%u(1))
-       call self%transport_dir(self%u(2), transport%u(2))
-       call self%transport_dir(self%u(3), transport%u(3))
+       call self%transport_dir(1, transport%u(1))
+       call self%transport_dir(2, transport%u(2))
+       call self%transport_dir(3, transport%u(3))
     class default
        error stop
     end select
   end function transport
 
-  pure subroutine transport_dir(self, u, u_dir, rslt)
+  subroutine transport_dir(self, dim, rslt)
     class(vector3d_simd), intent(in) :: self
-    real, intent(in) :: u(:, :, :)
-    real, intent(in) :: u_dir(:, :, :)
+    integer, intent(in) :: dim
     real, intent(out) :: rslt(:, :, :)
+    integer :: i, j, k, SZ, n
+
     real, allocatable, dimension(:, :) :: du, d2u, usq, dusq
 
     SZ = size(rslt, 1)
@@ -67,36 +66,30 @@ contains
     allocate(du(SZ, n), d2u(SZ, n))
     allocate(usq(SZ, n), dusq(SZ, n))
 
-    layers: do k = 1, size(u, 3)
-       call diffeng%diff(u(:, :, k), du%data)
-       call diffeng2%diff(u(:, :, k), d2u%data)
-       do j = 1, size(u, 2)
-          !$omp simd
-          do i = 1, size(u, 1)
-             u2%data(i, j) = u(i, j, k) * u_dir(i, j, k)
-          end do
-          !$omp end simd
-       end do
-       call diffeng%diff(du2%data, u2%data)
-       reshape(transport_dir, shape(u))
-       do j = 1, size(u, 2)
-          !$omp simd
-          do i = 1, size(u, 1)
-             rslt(i, j, k) = -0.5 * &
-                  (u(i, j, k) * du%data(i, j) + du2%data(i, j)) &
-                  & + xnu * d2u%data(i, j)
-          !$omp end simd
-          end do
-       end do
-    end do layers
-
-    call self%allocator%release_block(du)
-    call self%allocator%release_block(d2u)
-    call self%allocator%release_block(u2)
-    call self%allocator%release_block(du2)
-  end function transport_dir
-
-  subroutine div(self, rslt)
+    associate(u => self%u(dim), u_dir => self%u(1))
+      layers: do k = 1, size(u, 3)
+         call self%diffeng%diff(u(:, :, k), du)
+         call self%diffeng2%diff(u(:, :, k), d2u)
+         do j = 1, size(u, 2)
+            !$omp simd
+            do i = 1, size(u, 1)
+               usq(i, j) = u(i, j, k) * u_dir(i, j, k)
+            end do
+            !$omp end simd
+         end do
+         call self%diffeng%diff(dusq, usq)
+         do j = 1, size(u, 2)
+            !$omp simd
+            do i = 1, size(u, 1)
+               rslt(i, j, k) = -0.5 * &
+                    (u(i, j, k) * du(i, j) + dusq(i, j)) &
+                    & + self%xnu * d2u(i, j)
+               !$omp end simd
+            end do
+         end do
+      end do layers
+    end associate
+  end subroutine transport_dir
     class(vector3d_simd), intent(in) :: self
     class(vector3d), intent(inout) :: rslt
 
