@@ -45,13 +45,21 @@ def check_commit_header_fmt(header_line):
 
 
 if __name__ == "__main__":
-    with open(sys.argv[1], "r") as f:
-        lines = f.readlines()
+    if not sys.stdin.isatty():
+        lines = sys.stdin.readlines()
+    else:
+        try:
+            input_filename = sys.argv[1]
+        except IndexError:
+            raise IndexError("Missing filename")
+        else:
+            with open(input_filename, "r") as f:
+                lines = f.readlines()
 
     check_commit_header_fmt(lines[0])
     if len(lines[0]) > MAX_COMMIT_HEADER_LEN:
         print("[POLICY] Commit header line is longer than",
-              "%s characters", MAX_COMMIT_HEADER_LEN)
+              "%s characters." % MAX_COMMIT_HEADER_LEN)
         sys.exit(1)
 
     if len(lines) >= 2:
