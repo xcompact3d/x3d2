@@ -4,27 +4,32 @@ module m_vector3d_simd
 
   use m_allocator, only: allocator_t, memblock_t
   use m_vector3d, only: vector3d
-  use m_diffengine, only: diffengine
+  use m_diffengine, only: diffengine_t
+
+  implicit none
 
   type, extends(vector3d) :: vector3d_simd
-     integer :: dims(3)
-     type(allocator_t), pointer :: allocator
-     type(memblock_t), pointer :: u1, u2, u3
+     private
+     type(diffengine_t) :: diffeng, diffeng2
    contains
      procedure, public :: transport
+     procedure, public :: transport_dir
      procedure, public :: div
   end type vector3d_simd
 
   interface vector3d_simd
-     module procedure construct
+     module procedure make_vector3d_simd
   end interface vector3d_simd
 
 contains
 
   function make_vector3d_simd(allocator, diffeng, diffeng2) result(self)
     type(allocator_t), pointer, intent(in) :: allocator
-    type(diffengine), intent(in) :: diffeng, diffeng2
+    type(diffengine_t), intent(in) :: diffeng, diffeng2
     type(vector3d_simd) :: self
+    integer :: SZ, n
+
+    integer :: errcode
 
     call mpi_comm_rank(MPI_COMM_WORLD, self%rankid, errcode)
     call mpi_comm_size(MPI_COMM_WORLD, self%nranks, errcode)
