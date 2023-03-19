@@ -1,0 +1,20 @@
+name: check-policies
+on: [push]
+jobs:
+  check-commit-messages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+      - run: |
+          bash .github/workflows/check-commit-messages.sh \
+            $GITHUB_BASE_REF..$GITHUB_REF
+  check-formatting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v3
+      - run: pip install fprettify
+      - run: test -z "$($FPRETTIFY_COMMAND)"
+        env:
+          FPRETTIFY_COMMAND: fprettify --config .fprettify.ini --diff --recursive src
