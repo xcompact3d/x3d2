@@ -1,4 +1,7 @@
 module m_vector3d_simd
+
+  use mpi
+
   use m_allocator, only: allocator_t, memblock_t
   use m_vector3d, only: vector3d
   use m_diffengine, only: diffengine
