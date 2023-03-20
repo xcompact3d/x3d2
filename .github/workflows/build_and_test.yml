@@ -7,12 +7,39 @@ jobs:
   unit-tests:
     runs-on: ubuntu-20.04
     steps:
+
     - uses: actions/checkout@v3
+
+    # We don't want to build openmpi each time this workflow is
+    # run. Setup caching of OpenMPI after it is built and installed.
+    # See "Caching dependencies to speed up workflows" on the GH
+    # actions docs.
+    - name: Cache OpenMPI
+      id: cache-openmpi
+      uses: actions/cache@v2
+      with:
+        path: openmpi-4.1.5/installed
+        key: openmpi-4.1.5
+
     - name: Display GCC version number
       run: gcc --version
+
+    - name: Build openmpi
+      if: steps.cache-openmpi.outputs.cache-hit != 'true'
+      run: |
+        wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-$OMPI_VERSION.tar.gz
+        tar -xf openmpi-$OMPI_VERSION.tar.gz
+        cd openmpi-$OMPI_VERSION/ && mkdir installed
+        ./configure --prefix=$(pwd)/installed
+        make all install
+      env:
+        OMPI_VERSION: 4.1.5
+
     - name: Configure build
       run: cmake -S . -B build
+
     - name: Build tests
       run: make -C build
+
     - name: Run the tests
       run: make -C build test
