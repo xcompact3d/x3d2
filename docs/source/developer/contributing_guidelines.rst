@@ -10,9 +10,9 @@ In a nutshell
 
 - For any contribution not covered by an existing issue, **open an issue
   first**.
-- Respect the commit format. (Install the git hook!)
+- Respect the commit format.  (:ref:`Install the git hook! <devenv-setup>`).
 - Only commit changes formatted with `fprettify`, using the project's
-  configuration.  (Install the git hook!)
+  configuration.  (:ref:`Install the git hook! <devenv-setup>`).
 - Strive to contribute **small and focused Pull Requests with detailed
   descriptions**.
 - Add (a) unit test(s) covering a new feature, or (a) regression
@@ -39,6 +39,8 @@ prototyping until an issue has been opened. In fact, prototyping is
 often helpful to write the content of the issue.  On the other hand,
 do open an issue before commiting to a particular design or
 implementation.
+
+.. _commit-formatting:
 
 Format commits accordingly
 --------------------------

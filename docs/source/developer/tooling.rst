@@ -1,3 +1,5 @@
+.. _tooling:
+
 Required tools
 ==============
 

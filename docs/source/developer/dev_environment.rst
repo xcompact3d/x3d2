@@ -1,8 +1,10 @@
+.. _devenv-setup:
+
 Setting up for development
 ==========================
 
 0. To begin with, make sure you have the right tools installed by going
-   through tooling.
+   through the :ref:`required tooling <tooling>`.
 
 1. Download the x3d2 repository from GitHub::
 
@@ -16,6 +18,7 @@ Setting up for development
    configuration::
 
      $ cp githooks/pre-commit .git/hooks/
+     $ chmod +x .git/hooks/pre-commit
 
    This Git hook will cause the automatic formatting of all fortran
    files staged in your commit, using `fprettify`.
@@ -24,7 +27,9 @@ Setting up for development
    configuration::
 
      $ cp githooks/commit-msg .git/hooks/
+     $ chmod +x .git/hooks/commit-msg
 
    This Git hook will automatically check your commit message against
    the commit message format, based on the conventional commits
-   specification. See ???
+   specification. See :ref:`the contribution guidelines
+   <commit-formatting>`.
