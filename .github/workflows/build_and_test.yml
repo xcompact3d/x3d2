@@ -1,0 +1,18 @@
+name: Run unit tests
+
+on:
+  push:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v3
+    - name: Display GCC version number
+      run: gcc --version
+    - name: Configure build
+      run: cmake -S . -B build
+    - name: Build tests
+      run: make -C build
+    - name: Run the tests
+      run: make -C build test
