@@ -22,7 +22,7 @@ jobs:
         git config user.name 'github-action'
         git config user.email 'github-action'
         ghp-import -m 'Update sphinx docs' --push \
-          --branch gh-pages docs/build/html
+          --branch gh-pages docs/build/html --no-jekyll
     - name: Build API docs with ford
       run: ford $FORD_CFG -o $FORD_OUTPUT_DIR
       env:
@@ -31,7 +31,7 @@ jobs:
     - name: Deploy api-docs
       run: |
         ghp-import -m 'Update API docs' --prefix $PUBLISH_DIR \
-          --push --branch gh-pages $FORD_OUTPUT_DIR
+          --push --branch gh-pages $FORD_OUTPUT_DIR --no-jekyll
       env:
         PUBLISH_DIR: api/
         FORD_OUTPUT_DIR: api-docs
