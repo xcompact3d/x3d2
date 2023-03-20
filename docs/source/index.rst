@@ -3,9 +3,6 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to x3d2's documentation!
-================================
-
 **x3d2** is the current codename for what is to become Xcompact3d
 version 2.0.  This project is a rewrite of Xcompact3d leading to
 
@@ -13,16 +10,12 @@ version 2.0.  This project is a rewrite of Xcompact3d leading to
 - Support for NVIDIA GPU accelerators (using CUDA Fortran).
 - Improved modularity and testability.
 
+Contents:
+
 .. toctree::
-   :hidden:
+   :maxdepth: 2
 
    report_a_bug
    internals/index
    developer/index
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+   API reference <https://xcompact3d.github.io/x3d2/api>

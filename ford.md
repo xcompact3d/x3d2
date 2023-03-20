@@ -1,6 +1,6 @@
 ---
 project: x3d2
-author: Thibault Lestang
+author: Xcompact3d team
 exclude: cuda_allocator.f90
 exclude: vector3d_cuda.f90
 exclude: vector3d_simd.f90

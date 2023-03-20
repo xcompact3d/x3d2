@@ -1,5 +1,5 @@
-Contributing
-============
+Contributing guidelines
+=======================
 
 x3d2 is a collaborative project, open to all.  In order to enable
 effective collaboration, however, we ask that your contribution(s)

@@ -1,12 +1,15 @@
-Required tooling
-================
+Required tools
+==============
 
 To contribute to x3d2 you need a few things on your toolbelt
 
-.. contents::
+- A Fortran 2003 compiler (e.g. gfortran)
+- The `NVIDA HPC Fortran compiler <https://developer.nvidia.com/hpc-compilers>`_ [optional]
+- The CMake build system
+- The fprettify auto-formatter
+- The FORD and Sphinx documentation generators.
 
-
-The above tools can all be installed via you rdistribution's package
+The above tools can all be installed via you distribution's package
 manager or the Python package pamanger `pip`.
 
 .. note::

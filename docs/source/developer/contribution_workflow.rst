@@ -1,5 +1,5 @@
-x3d2 contribution process
-==========================
+Overview of the contribution process
+====================================
 
 The graph below illustrates the general process for contributing code
 changes to x3d2:
