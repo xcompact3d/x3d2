@@ -1,8 +1,18 @@
 #!/bin/sh
 
+FMT_CMD=fprettify --config .fprettify.ini --diff
 # Get the list of all staged files ending in .f90, filtering out
 # deleted files.
 staged_files=$(git diff --name-only --staged --diff-filter=d \
 		   | grep .f90$)
-fprettify --config .fprettify.ini $staged_files
-git add $staged_files
+for file in $staged_files
+do
+    if [ -n "$($FMT_CMD $file)" ]; then
+
+	echo "[POLICY] Fortran source file $file does not comply" \
+	     "with formatting standard.  You can fix this with:"
+	echo "    fprettify -c .fprettify.ini $file"
+	exit 1
+    fi
+done
+
