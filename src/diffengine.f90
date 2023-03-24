@@ -1,4 +1,7 @@
 module m_diffengine
+  !! This module defines the diffengine_t derived type representing a
+  !! diffentiation engine for a given set of spatial stencils (both at
+  !! the boundaries and in the bulk of the domain).
    use m_tridiagsolv, only: tridiagsolv, periodic_tridiagsolv
    use m_stencil, only: stencil
    use m_stencil_definitions, only: get_boundary_stencils, get_stencil
@@ -6,6 +9,35 @@ module m_diffengine
    implicit none
 
    type :: diffengine_t
+      !! Concrete derived type representing a diffenrentiation engine.
+      !! The purpose of a differentiation engine is to make available
+      !! a procedure `diff` performing differentiation along a data
+      !! array, accoring to a set of boundary and bulk differentiation
+      !! stencils:
+      !!
+      !! L - L - O - O - O - O - O - O - O - O - R - R
+      !!
+      !! where 'L' represent the two left side boundary points and 'R'
+      !! the two right side boundary points.
+      !!
+      !! A differentiation engine is instanciated through the custom
+      !! type constructor [[m_diffengine:diffengine_constructor]]:
+      !!
+      !! ```
+      !! diffengine = diffengine_t(bulk_key, length, order, dx, &
+      !!                  & left_key, right_key)
+      ! ```
+      !!
+      !! where bulk_key, left_key, and right_key are character strings
+      !! specifying the stencil type. Example are "compact6" or
+      !! "dirichlet".
+      !!
+      !! Both the `left_key` and `right_key` parameters are optional.
+      !! If they are omitted, the derivation domain is assumed to be
+      !! periodic, i.e.
+      !!
+      !! O - O - O - O - O - O - O - O - O - O - O - O
+      !!
       type(stencil) :: bulk_stencil
       type(stencil) :: left_stencils(2)
       type(stencil) :: right_stencils(2)
@@ -23,9 +55,19 @@ contains
 
    function diffengine_constructor(bulk_key, length, order, dx, &
         & left_key, right_key) result(diffengine)
+      !> Stencil key for bulk points, can be one of `"compact6"`.
       character(*), intent(in) :: bulk_key
-      character(*), optional :: left_key, right_key
-      integer, intent(in) :: length, order
+      !> Stencil key for left boundary points, can be one of
+      !> `"dirichlet"`.
+      character(*), optional :: left_key
+      !> Stencil key for right boundary points, can be one of
+      !> `"dirichlet"`.
+      character(*), optional :: right_key
+      !> Length of the derivation domain
+      integer, intent(in) :: length
+      !> Differentiation order, can be either `1` or `2`.
+      integer, intent(in) :: order
+      !> Mesh step size
       real, intent(in) :: dx
       type(diffengine_t) :: diffengine
       integer :: i
@@ -87,8 +129,24 @@ contains
    end function diffengine_constructor
 
    subroutine diff(self, f, df)
+     !! Compute derivatives along the second dimension of an input 2D
+     !! array using compact finite-differences stencils. The stencils
+     !! are first applied before computing the solution by solving the
+     !! associated tridiagonal systems.
+     !!
+     !!              -->
+     !!               _
+     !! O - O - O - | O | - O - O - O - O - O - O - O - O
+     !! O - O - O - | O | - O - O - O - O - O - O - O - O
+     !! O - O - O - | O | - O - O - O - O - O - O - O - O
+     !! O - O - O - | O | - O - O - O - O - O - O - O - O
+     !!               -
+     !!
       class(diffengine_t), intent(in) :: self
+      !> Input array.  Size along second dimension should be equal to
+      !> the `allocator_t` instance `length` component.
       real, intent(in) :: f(:, :)
+      !> Output array. Shape is identical to the input array's.
       real, intent(out) :: df(:, :)
       integer :: i ! Loop counter
       integer :: pos ! current position along differentiation axis
