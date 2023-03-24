@@ -10,3 +10,4 @@ implemented.
    :maxdepth: 1
 
    momentum_rhs_calculation.rst
+   allocator.rst
