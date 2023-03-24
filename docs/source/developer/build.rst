@@ -6,7 +6,8 @@ yet to be built.  However, currently implemented functionality is
 covered by unit tests, which you can build and run on you development
 machine.
 
-To build x3d2, you will need git, a fortran compiler and CMake.
+To build x3d2, you will need git, a fortran compiler and CMake, see
+ref:`tooling`.
 
 Start by configuring the build directory:
 
@@ -14,7 +15,20 @@ Start by configuring the build directory:
 
    $ cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 
-Then, the tests can be built and run as follows:
+To configure the build with the NVIDIA Fortran compiler, you can set
+the `FC` environment variable to the compiler executable.  If you
+specify an relative path, it must be present in your current `PATH`.
+
+.. code-block:: console
+
+   $ FC=nvfortran cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+
+Setting the Fortran compiler to the NVIDIA Fortran compiler will
+automatically include the CUDA Fortran source files into the build
+tree, which are ignored by default.
+
+Once the build directory is configured, the tests can be built and run
+as follows:
 
 .. code-block:: console
 
