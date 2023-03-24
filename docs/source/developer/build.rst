@@ -7,7 +7,7 @@ covered by unit tests, which you can build and run on you development
 machine.
 
 To build x3d2, you will need git, a fortran compiler and CMake, see
-ref:`tooling`.
+:ref:`tooling`.
 
 Start by configuring the build directory:
 

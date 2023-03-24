@@ -7,10 +7,11 @@ of space.
 
 Data slabs (instances of the derived type `slab_t`) hold a pointer to
 an `allocator_t` instance that is responsible for the allocation and
-dispatching of memory blocks to data slabs.  Whenever data slabs are
-no longer required, the associated memory blocks can be release to the
-allocator, ready to be dispatched to other slabs or objects who might
-need them.
+dispatching of memory blocks to data slabs. See `(API)allocator_t
+<https://xcompact3d.github.io/x3d2/api/type/allocator_t.html>`_. Whenever
+data slabs are no longer required, the associated memory blocks can be
+released to the allocator, ready to be dispatched to other slabs or
+objects who might need them.
 
 An instance of `allocator_t` maintains a linked list of memory blocks,
 which each element in the list labelled with a unique identifier:
@@ -26,9 +27,12 @@ which each element in the list labelled with a unique identifier:
        memblock1 -> memblock2 -> memblock3;
   }
 
-Each memory block is an instance of the `memblock_t` derived type,
-which in addition to its integer identifier, holds a 3D data array
-and a pointer to the next block in the list.
+Each memory block is an instance of the `memblock_t` derived type
+(`(API)memblock_t
+<https://xcompact3d.github.io/x3d2/api/type/memblock_t.html>`_).  In
+addition to its integer identifier, a instance of the `memblock_t`
+type holds a 3D data array and a pointer to the next block in the
+list.
 
 All memory blocks in an allocator's list have the same size.  An
 allocator can be created by passing in the dimension of the memory
