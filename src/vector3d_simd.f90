@@ -1,32 +1,32 @@
-module m_vector3d_simd
+module m_slab_cpu
 
    use mpi
 
    use m_allocator, only: allocator_t, memblock_t
-   use m_vector3d, only: vector3d
+   use m_slab, only: slab
    use m_diffengine, only: diffengine_t
 
    implicit none
 
-   type, extends(vector3d) :: vector3d_simd
+   type, extends(slab) :: slab_cpu_t
       private
       type(diffengine_t) :: diffeng, diffeng2
    contains
       procedure, public :: transport
       procedure, public :: transport_dir
       procedure, public :: div
-   end type vector3d_simd
+   end type slab_cpu_t
 
-   interface vector3d_simd
-      module procedure make_vector3d_simd
-   end interface vector3d_simd
+   interface slab_cpu_t
+      module procedure make_slab_cpu_t
+   end interface slab_cpu_t
 
 contains
 
-   function make_vector3d_simd(allocator, diffeng, diffeng2) result(self)
+   function make_slab_cpu(allocator, diffeng, diffeng2) result(self)
       type(allocator_t), pointer, intent(in) :: allocator
       type(diffengine_t), intent(in) :: diffeng, diffeng2
-      type(vector3d_simd) :: self
+      type(slab_cpu_t) :: self
       integer :: SZ, n
 
       integer :: errcode
@@ -41,12 +41,12 @@ contains
       self%u1 => self%allocator%get_block()
       self%u2 => self%allocator%get_block()
       self%u3 => self%allocator%get_block()
-   end function make_vector3d_simd
+   end function make_slab_cpu
 
    function transport(self)
-      class(vector3d_simd), intent(in) :: self
+      class(slab_cpu_t), intent(in) :: self
       class(vector3d), allocatable :: transport
-      transport = vector3d_simd(&
+      transport = slab_cpu_t(&
            & self%allocator, self%diffeng, self%diffeng2 &
            & )
       call self%transport_dir(1, transport%u(1))
@@ -55,7 +55,7 @@ contains
    end function transport
 
    subroutine transport_dir(self, dim, rslt)
-      class(vector3d_simd), intent(in) :: self
+      class(slab_cpu_t), intent(in) :: self
       integer, intent(in) :: dim
       real, intent(out) :: rslt(:, :, :)
       integer :: i, j, k, SZ, n
@@ -94,14 +94,14 @@ contains
    end subroutine transport_dir
 
    function div(self) result(rslt)
-      class(vector3d_simd), intent(in) :: self
+      class(slab_cpu_t), intent(in) :: self
       class(vector3d), allocatable :: rslt
-      allocate (vector3d_simd :: rslt)
-      rslt = vector3d_simd( &
+      allocate (slab_cpu_t :: rslt)
+      rslt = slab_cpu_t( &
            & self%allocator, self%diffeng, self%diffeng2 &
            & )
       rslt%u(1) = self%u(1) + 1.
       rslt%u(2) = self%u(2) + 1.
       rslt%u(3) = self%u(3) + 1.
    end function div
-end module m_vector3d_simd
+end module m_slab_cpu

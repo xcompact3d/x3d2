@@ -1,9 +1,9 @@
-module m_vector3d_cuda
+module m_slab_cuda
    use m_allocator, only: cudaallocator_t, cudamemblock_t
-   use m_vector3d, only: vector3d
+   use m_slab, only: slab
    use m_diffengine, only: diffengine
 
-   type, extends(vector3d) :: vector3d_cuda
+   type, extends(slab) :: slab_cuda_t
       integer :: dims(3)
       type(cudaallocator_t), pointer :: allocator
       type(cudamemblock_t), pointer :: u1, u2, u3
@@ -11,18 +11,18 @@ module m_vector3d_cuda
       procedure, public :: transport
       procedure, public :: div
       procedure, public :: u => get_component_ptr
-   end type vector3d_cuda
+   end type slab_cuda_t
 
-   interface vector3d_cuda
-      module procedure construct
-   end interface vector3d_cuda
+   interface slab_cuda_t
+      module procedure make_slab_cuda
+   end interface slab_cuda_t
 
 contains
 
-   function make_vector3d_cuda(allocator, diffeng, diffeng2) result(self)
+   function make_slab_cuda(allocator, diffeng, diffeng2) result(self)
       type(cudaallocator_t), pointer, intent(in) :: allocator
       type(diffengine), intent(in) :: diffeng, diffeng2
-      type(vector3d_simd) :: self
+      type(slab_cuda_t) :: self
 
       call mpi_comm_rank(MPI_COMM_WORLD, self%rankid, errcode)
       call mpi_comm_size(MPI_COMM_WORLD, self%nranks, errcode)
@@ -34,10 +34,10 @@ contains
       blockptr1 => self%allocator%get_block()
       blockptr2 => self%allocator%get_block()
       blockptr3 => self%allocator%get_block()
-   end function make_vector3d_cuda
+   end function make_slab_cuda
 
    function get_component_ptr(self, i) result(ptr)
-      class(vector3d_simd), intent(in) :: self
+      class(slab_cuda_t), intent(in) :: self
       integer, intent(in) :: i
       real, pointer :: ptr(:, :, :)
 
@@ -52,10 +52,10 @@ contains
    end function get_component_ptr
 
    pure function transport(self)
-      class(vector3d_simd), intent(in) :: self
-      class(vector3d), allocatable :: transport
+      class(slab_cuda_t), intent(in) :: self
+      class(slab_cuda_t), allocatable :: transport
 
-      allocate (vector3d_cuda :: transport)
+      allocate (slab_cuda_t :: transport)
       transport = cuda_simd(&
            & self%allocator, self%diffeng, self%diffeng2 &
            & )
@@ -64,7 +64,7 @@ contains
       d2u => self%allocator%get_block()
       dud => self%allocator%get_block()
       select type (tranport)
-      type is (vector3d_cuda)
+      type is (slab_cuda_t)
          call transport_dir <  <  < grid, tBlock >  >  > ( &
               & self%u(1), self%u(1), transport%u(1))
          call transport_dir <  <  < grid, tBlock >  >  > ( &
@@ -114,11 +114,11 @@ contains
       end function transport_dir
 
       subroutine div(self, rslt)
-         class(vector3d_simd), intent(in) :: self
-         class(vector3d), intent(inout) :: rslt
+         class(slab_cuda_t), intent(in) :: self
+         class(slab_cuda_t), intent(inout) :: rslt
 
          select type (rslt)
-         type is (vector3d_simd)
+         type is (slab_cuda_t)
             rslt%u = self%u + 1.
             rslt%v = self%v + 1.
             rslt%w = self%w + 1.
@@ -126,4 +126,4 @@ contains
             error stop
          end select
       end subroutine div
-   end module m_vector3d_cuda
+   end module m_slab_cuda
