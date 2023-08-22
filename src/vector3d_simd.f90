@@ -2,7 +2,7 @@ module m_slab_cpu
 
    use mpi
 
-   use m_allocator, only: allocator_t, memblock_t
+   use m_allocator, only: allocator_t, field_t
    use m_slab, only: slab
    use m_diffengine, only: diffengine_t
 

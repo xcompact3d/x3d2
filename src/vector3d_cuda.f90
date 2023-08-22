@@ -1,12 +1,12 @@
 module m_slab_cuda
-   use m_allocator, only: cudaallocator_t, cudamemblock_t
+   use m_allocator, only: cudaallocator_t, cudafield_t
    use m_slab, only: slab
    use m_diffengine, only: diffengine
 
    type, extends(slab) :: slab_cuda_t
       integer :: dims(3)
       type(cudaallocator_t), pointer :: allocator
-      type(cudamemblock_t), pointer :: u1, u2, u3
+      type(cudafield_t), pointer :: u1, u2, u3
    contains
       procedure, public :: transport
       procedure, public :: div

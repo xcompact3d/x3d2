@@ -1,5 +1,5 @@
 module m_cudaallocator
-   use m_allocator, only: allocator_t, memblock_t
+   use m_allocator, only: allocator_t, field_t
    implicit none
 
    type, extends(allocator_t) :: cudaallocator_t
@@ -7,35 +7,35 @@ module m_cudaallocator
       procedure :: create_block => create_cuda_block
    end type cudaallocator_t
 
-   type, extends(memblock_t) :: cudamemblock_t
+   type, extends(field_t) :: cudafield_t
       real, allocatable, device :: data_d(:, :, :)
-   end type cudamemblock_t
+   end type cudafield_t
 
-   interface cudamemblock_t
-      module procedure cuda_memblock_constructor
-   end interface cudamemblock_t
+   interface cudafield_t
+      module procedure cuda_field_constructor
+   end interface cudafield_t
 
 contains
 
-   function cuda_memblock_constructor(dims, next, id) result(m)
+   function cuda_field_constructor(dims, next, id) result(m)
       integer, intent(in) :: dims(3), id
-      type(cudamemblock_t), pointer, intent(in) :: next
-      type(cudamemblock_t) :: m
+      type(cudafield_t), pointer, intent(in) :: next
+      type(cudafield_t) :: m
 
       allocate (m%data_d(dims(1), dims(2), dims(3)))
       m%refcount = 0
       m%next => next
       m%id = id
-   end function cuda_memblock_constructor
+   end function cuda_field_constructor
 
    function create_cuda_block(self, next) result(ptr)
       class(cudaallocator_t), intent(inout) :: self
-      type(cudamemblock_t), pointer, intent(in) :: next
-      type(cudamemblock_t), pointer :: newblock
-      class(memblock_t), pointer :: ptr
+      type(cudafield_t), pointer, intent(in) :: next
+      type(cudafield_t), pointer :: newblock
+      class(field_t), pointer :: ptr
       allocate (newblock)
       self%id = self%id + 1
-      newblock = cudamemblock_t(self%dims, next, id=self%id)
+      newblock = cudafield_t(self%dims, next, id=self%id)
       ptr => newblock
    end function create_cuda_block
 
