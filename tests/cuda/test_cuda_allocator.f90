@@ -1,18 +1,18 @@
 program test_allocator_cuda
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_allocator, only: allocator_t, memblock_t
-  use m_cudaallocator, only: cudaallocator_t
+  use m_allocator, only: allocator_t, field_t
+  use m_cuda_allocator, only: cuda_allocator_t
 
   implicit none
 
   logical :: allpass
   integer, parameter :: dims(3) = [8, 8, 8]
   class(allocator_t), allocatable :: allocator
-  class(memblock_t), pointer :: ptr1, ptr2, ptr3
+  class(field_t), pointer :: ptr1, ptr2, ptr3
   integer, allocatable :: l(:)
 
-  allocator = cudaallocator_t(dims)
+  allocator = cuda_allocator_t(dims)
 
   allpass = .true.
 

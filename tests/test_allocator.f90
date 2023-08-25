@@ -1,14 +1,14 @@
 program test_allocator
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_allocator, only: allocator_t, memblock_t
+  use m_allocator, only: allocator_t, field_t
 
   implicit none
 
   logical :: allpass
   integer, parameter :: dims(3) = [8, 8, 8]
   class(allocator_t), allocatable :: allocator
-  class(memblock_t), pointer :: ptr1, ptr2, ptr3
+  class(field_t), pointer :: ptr1, ptr2, ptr3
   integer, allocatable :: l(:)
 
   allocator = allocator_t(dims)
