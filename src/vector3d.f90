@@ -12,7 +12,8 @@ module m_slab
       class(field_t), pointer :: u1, u2, u3
       real :: xnu
    contains
-      procedure(field_op), deferred :: transport, div
+      procedure(field_op), deferred :: transport
+      procedure(field_op), deferred :: div
       procedure(transport_op), deferred :: transport_dir
       procedure, public :: u => get_component_ptr
    end type slab_t

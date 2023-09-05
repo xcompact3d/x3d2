@@ -34,8 +34,8 @@ contains
       type(cuda_field_t), pointer :: newblock
       class(field_t), pointer :: ptr
       allocate (newblock)
-      self%id = self%id + 1
-      newblock = cuda_field_t(self%dims, next, id=self%id)
+      self%next_id = self%next_id + 1
+      newblock = cuda_field_t(self%dims, next, id=self%next_id)
       ptr => newblock
    end function create_cuda_block
 

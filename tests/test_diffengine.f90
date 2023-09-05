@@ -7,22 +7,29 @@ program test_diffengine
 
   type(diffengine_t) :: diffeng
   integer, parameter :: n = 20
-  integer :: i
-  real, allocatable :: f(:), expected(:)
+  integer :: i, j
   real, allocatable :: f_vec(:, :), expected_vec(:, :), df(:, :)
   real :: dx
-  logical :: allpass
+  logical :: allpass = .true.
   integer, parameter :: SZ = 4
   real, parameter :: tol = 0.01
 
   dx = 2. * acos(-1.) / (n - 1)
-  f = [(sin((i-1)*dx), i=1,n)]
-  f_vec = transpose(reshape(f, [n, SZ], pad = f))
-  allpass = .true.
+  allocate(f_vec(SZ,n))
+  do j = 1, n
+     do i = 1, SZ
+        f_vec(i, j) = sin((j-1)*dx)
+     end do
+  end do
 
   ! First derivative with periodic boundary conditions
-  expected = [(cos((i-1)*dx), i=1,n)]
-  expected_vec = transpose(reshape(expected, [n, SZ], pad = expected))
+  allocate(expected_vec(SZ,n))
+  do j = 1, n
+     do i = 1, SZ
+        expected_vec(i, j) = cos((j-1)*dx)
+     end do
+  end do
+
   diffeng = diffengine_t("compact6", length=n, order=1, dx=dx)
   allocate(df, source=f_vec)
   call diffeng%diff(f_vec, df)

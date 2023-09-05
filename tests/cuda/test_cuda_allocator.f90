@@ -43,7 +43,7 @@ program test_allocator_cuda
   !! Destroy the free list and check that the list is empty again.
   call allocator%destroy()
   l = allocator%get_block_ids()
-  if (size(l) /= 1 .or. l(1) /= 0 .or. allocator%id /=0) then
+  if (size(l) /= 1 .or. l(1) /= 0 .or. allocator%next_id /=0) then
      allpass = .false.
      write(stderr, '(a)') 'Free list is correctly destroyed... failed'
   else

@@ -3,12 +3,12 @@ module m_slab_cpu
    use mpi
 
    use m_allocator, only: allocator_t, field_t
-   use m_slab, only: slab
+   use m_slab, only: slab_t
    use m_diffengine, only: diffengine_t
 
    implicit none
 
-   type, extends(slab) :: slab_cpu_t
+   type, extends(slab_t) :: slab_cpu_t
       private
       type(diffengine_t) :: diffeng, diffeng2
    contains
@@ -18,7 +18,7 @@ module m_slab_cpu
    end type slab_cpu_t
 
    interface slab_cpu_t
-      module procedure make_slab_cpu_t
+      module procedure make_slab_cpu
    end interface slab_cpu_t
 
 contains
@@ -45,7 +45,7 @@ contains
 
    function transport(self)
       class(slab_cpu_t), intent(in) :: self
-      class(vector3d), allocatable :: transport
+      class(slab_t), allocatable :: transport
       transport = slab_cpu_t(&
            & self%allocator, self%diffeng, self%diffeng2 &
            & )
@@ -95,13 +95,13 @@ contains
 
    function div(self) result(rslt)
       class(slab_cpu_t), intent(in) :: self
-      class(vector3d), allocatable :: rslt
+      class(slab_t), allocatable :: rslt
       allocate (slab_cpu_t :: rslt)
       rslt = slab_cpu_t( &
            & self%allocator, self%diffeng, self%diffeng2 &
            & )
-      rslt%u(1) = self%u(1) + 1.
-      rslt%u(2) = self%u(2) + 1.
-      rslt%u(3) = self%u(3) + 1.
+      rslt%u1%data = self%u1%data + 1.
+      rslt%u2%data = self%u2%data + 1.
+      rslt%u3%data = self%u3%data + 1.
    end function div
 end module m_slab_cpu
