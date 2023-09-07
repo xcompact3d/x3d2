@@ -1,7 +1,7 @@
 module m_slab
    use m_stencil, only: stencil
    use m_tridiagsolv, only: tridiagsolv
-   use m_allocator, only: allocator_t, memblock_t
+   use m_allocator, only: allocator_t, field_t
 
    implicit none
 
@@ -9,10 +9,11 @@ module m_slab
       character(len=:), allocatable :: name
       integer :: rankid, nranks
       class(allocator_t), pointer :: allocator
-      class(memblock_t), pointer :: u1, u2, u3
+      class(field_t), pointer :: u1, u2, u3
       real :: xnu
    contains
-      procedure(field_op), deferred :: transport, div
+      procedure(field_op), deferred :: transport
+      procedure(field_op), deferred :: div
       procedure(transport_op), deferred :: transport_dir
       procedure, public :: u => get_component_ptr
    end type slab_t

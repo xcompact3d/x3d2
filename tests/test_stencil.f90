@@ -6,7 +6,7 @@ program test_stencil
 
   implicit none
 
-  logical :: allpass
+  logical :: allpass = .true.
   real, parameter :: tol = 0.001
 
   type(stencil) :: test_stencil_order_1, test_stencil_order_2
