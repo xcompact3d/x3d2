@@ -28,13 +28,15 @@ module m_cuda_backend
       class(derps_t), intent(in) :: xderps, yderps, zderps
       type(cuda_backend_t) :: backend
 
+      ! class level access to the allocator
       backend%allocator => allocator
+      ! class level access to derivative parameters
       backend%xderps => xderps
       backend%yderps => yderps
       backend%zderps => zderps
 
       ! Assign transeq_? into right functions
-      ! The idea is these assignments will be conditional
+      ! The idea is that these assignments will be conditional
       backend%transeq_x => transeq_cuda_dist
       !backend%transeq_x => transeq_cuda_thom
       backend%transeq_y => transeq_cuda_dist
@@ -77,10 +79,12 @@ module m_cuda_backend
 
       ! distder_cuda
 
+      ! get some fields for storing the result
       temp_du_dev => self%allocator%get_block()
       temp_duu_dev => self%allocator%get_block()
       temp_d2u_dev => self%allocator%get_block()
 
+      ! this functions is not yet implemented, but is very similar to the one we have
       call transeq_fused_dist<<<derps%blocks, derps%threads>>>( &
          temp_du_dev, temp_duu_dev, temp_d2u_dev, &
          u, conv, derps%n, self%nu, &
@@ -113,7 +117,8 @@ module m_cuda_backend
          derps%alsai, derps%asi, derps%bsi, derps%csi, derps%dsi &
       )
 
-      ! MPI for the 2x2 systems
+      ! MPI communicaton for the 2x2 systems
+      ! each rank sends and recieves from the next and previous ranks
       call communicate_sendrecv(
          slice_send_du_b, slice_send_du_e, slice_recv_du_b, slice_recv_du_e, &
          derps%n_perp, derps%prev_rank, derps%next_rank, self%MPI_FP_PREC &
@@ -151,7 +156,7 @@ module m_cuda_backend
          derps%n_perp, derps%prev_rank, derps%next_rank, self%MPI_FP_PREC &
       )
 
-      ! dist_substitute
+      ! get the final result doing a one last pass
       call transeq_fused_subs<<<derps%blocks, derps%threads>>>( &
          slice_recv_du_b, slice_recv_du_e, slice_recv_duu_b, slice_recv_duu_e, slice_recv_d2u_b, slice_recv_d2u_e, &
          w, conv, derps%n, self%nu, &
@@ -174,6 +179,9 @@ module m_cuda_backend
    end subroutine transeq_cuda_dist
 
    subroutine transeq_cuda_thom(self, du, duu, d2u, u, v, w, conv, derps)
+      !! Thomas algorithm implementation. So much more easier than the
+      !! distributed algorithm. It is intended to work only on a single rank
+      !! so there is no MPI communication.
       implicit none
 
       class(base_backend_t) :: self
