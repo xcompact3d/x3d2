@@ -6,6 +6,7 @@ set(TESTSRC
 )
 set(CUDATESTSRC
   cuda/test_cuda_allocator.f90
+  cuda/test_cuda_tridiag.f90
 )
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
@@ -16,6 +17,10 @@ foreach(testfile IN LISTS TESTSRC)
   get_filename_component(test_name ${testfile} NAME_WE)
 
   add_executable(${test_name} ${testfile})
+  target_compile_options(${test_name} PRIVATE "-cuda")
+  target_compile_options(${test_name} PRIVATE "-O3")
+  target_compile_options(${test_name} PRIVATE "-fast")
+  target_link_options(${test_name} INTERFACE "-cuda")
   target_link_libraries(${test_name} PRIVATE x3d2)
 
   add_test(NAME ${test_name} COMMAND ${test_name})
