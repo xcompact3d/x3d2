@@ -1,6 +1,6 @@
 module m_base_backend
    use m_allocator, only: allocator_t, field_t
-   use m_common, only derps_t
+   use m_common, only: derps_t
 
    implicit none
 
@@ -37,16 +37,20 @@ module m_base_backend
    contains
       procedure :: transeq
       procedure :: run
-      procedure(transeq_ders), pointer :: transeq_x, transeq_y, transeq_z
-      procedure(transposer), deferred :: trans_x2y, trans_x2z
+      procedure(transeq_ders), deferred :: transeq_x
+      procedure(transeq_ders), deferred :: transeq_y
+      procedure(transeq_ders), deferred :: transeq_z
+      procedure(transposer), deferred :: trans_x2y
+      procedure(transposer), deferred :: trans_x2z
       procedure(sum9into3), deferred :: sum_yzintox
    end type base_backend_t
 
    abstract interface
       subroutine transeq_ders(self, du, duu, d2u, u, v, w, conv, derps)
-         implicit none
          import :: base_backend_t
          import :: field_t
+         import :: derps_t
+         implicit none
 
          class(base_backend_t) :: self
          class(field_t), intent(out) :: du, duu, d2u
@@ -57,9 +61,9 @@ module m_base_backend
 
    abstract interface
       subroutine transposer(self, u_, v_, w_, u, v, w)
-         implicit none
          import :: base_backend_t
          import :: field_t
+         implicit none
 
          class(base_backend_t) :: self
          class(field_t), intent(out) :: u_, v_, w_
@@ -71,6 +75,7 @@ module m_base_backend
       subroutine sum9into3(self, du, dv, dw, du_y, dv_y, dw_y, du_z, dv_z, dw_z)
          import :: base_backend_t
          import :: field_t
+         implicit none
 
          class(base_backend_t) :: self
          class(field_t), intent(inout) :: du, dv, dw
