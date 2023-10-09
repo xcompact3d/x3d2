@@ -186,25 +186,19 @@ contains
       n = size(self%fwd)
       if (size(f, 2) /= n) error stop
       do j = 2, n
-         !$omp simd
          do i = 1, size(f, 1)
             df(i, j) = df(i, j) - df(i, j - 1) * self%fwd(j)
          end do
-         !$omp end simd
       end do
-      !$omp simd
       do i = 1, size(f, 1)
          df(i, n) = df(i, n) * self%bwd(n)
       end do
-      !$omp end simd
 
       do j = n - 1, 1, -1
-         !$omp simd
          do i = 1, size(f, 1)
             df(i, j) = (df(i, j) - df(i, j + 1) * self%updiag(j)) &
                       & * self%bwd(j)
          end do
-         !$omp end simd
       end do
    end subroutine solve
 
@@ -232,12 +226,10 @@ contains
       alpha = self%updiag(1)
       select type (self)
       type is (periodic_tridiagsolv)
-         !$omp simd
          do i = 1, size(f, 1)
             df(i, 1:m) = y(i, :) - ((y(i, 1) - alpha * y(i, m)) &
                  & / (1.+self%q(1) - alpha * self%q(m))) * self%q
          end do
-         !$omp end simd
       class default
          error stop
       end select
