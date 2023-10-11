@@ -194,5 +194,7 @@ program test_cuda_tridiag
       error stop 'SOME TESTS FAILED.'
    end if
 
+   call MPI_Finalize(ierr)
+
 end program test_cuda_tridiag
 
