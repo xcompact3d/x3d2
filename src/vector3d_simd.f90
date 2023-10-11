@@ -86,8 +86,8 @@ contains
                   rslt(i, j, k) = -0.5 * &
                        (u(i, j, k) * du(i, j) + dusq(i, j)) &
                        & + self%xnu * d2u(i, j)
-                  !$omp end simd
                end do
+               !$omp end simd
             end do
          end do layers
       end associate
