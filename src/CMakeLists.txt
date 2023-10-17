@@ -7,7 +7,6 @@ set(SRC
   stencil_definitions.f90
   diffengine.f90
   vector3d.f90
-  vector3d_simd.f90
   omp/common.f90
   omp/kernels_dist.f90
 )
