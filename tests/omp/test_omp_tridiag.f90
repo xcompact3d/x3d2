@@ -18,7 +18,7 @@ program test_dist_tridiag
    real(dp), allocatable, dimension(:,:,:) :: send_b, send_e, &
                                               recv_b, recv_e
 
-   real(dp), allocatable, dimension(:,:) :: coeffs_b, coeffs_e
+   real(dp), allocatable, dimension(:,:) :: coeffs_s, coeffs_e
    real(dp), allocatable, dimension(:) :: coeffs, dist_fr, dist_bc, dist_af, &
                                           dist_sa, dist_sc
 
@@ -62,7 +62,7 @@ program test_dist_tridiag
    end do
 
    ! set up the tridiagonal solver coeffs
-   call der_2_vv(coeffs, coeffs_b, coeffs_e, dist_fr, dist_bc, dist_af, &
+   call der_2_vv(coeffs, coeffs_s, coeffs_e, dist_fr, dist_bc, dist_af, &
                  dist_sa, dist_sc, n_halo, dx2, n, 'periodic')
 
    n_stencil = n_halo*2 + 1
@@ -121,7 +121,7 @@ program test_dist_tridiag
          call der_univ_dist_omp( &
             du(:, :, k), send_b(:, :, k), send_e(:, :, k), u(:, :, k), &
             u_recv_b(:, :, k), u_recv_e(:, :, k), &
-            coeffs_b, coeffs_e, coeffs, n, dist_fr, dist_bc, dist_af &
+            coeffs_s, coeffs_e, coeffs, n, dist_fr, dist_bc, dist_af &
          )
       end do
       !$omp end parallel do

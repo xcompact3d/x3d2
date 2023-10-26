@@ -11,19 +11,19 @@ program test_cuda_tridiag
    implicit none
 
    logical :: allpass = .true.
-   real(dp), allocatable, dimension(:,:,:) :: u, du, u_b, u_e
+   real(dp), allocatable, dimension(:,:,:) :: u, du, u_s, u_e
    real(dp), device, allocatable, dimension(:,:,:) :: u_dev, du_dev
-   real(dp), device, allocatable, dimension(:,:,:) :: u_recv_b_dev, u_recv_e_dev, &
-                                                      u_send_b_dev, u_send_e_dev
+   real(dp), device, allocatable, dimension(:,:,:) :: u_recv_s_dev, u_recv_e_dev, &
+                                                      u_send_s_dev, u_send_e_dev
 
-   real(dp), device, allocatable, dimension(:,:,:) :: send_b_dev, send_e_dev, &
-                                                      recv_b_dev, recv_e_dev
+   real(dp), device, allocatable, dimension(:,:,:) :: send_s_dev, send_e_dev, &
+                                                      recv_s_dev, recv_e_dev
 
-   real(dp), allocatable, dimension(:,:) :: coeffs_b, coeffs_e
+   real(dp), allocatable, dimension(:,:) :: coeffs_s, coeffs_e
    real(dp), allocatable, dimension(:) :: coeffs, dist_fr, dist_bc, dist_af, &
                                           dist_sa, dist_sc
 
-   real(dp), device, allocatable, dimension(:,:) :: coeffs_b_dev, coeffs_e_dev
+   real(dp), device, allocatable, dimension(:,:) :: coeffs_s_dev, coeffs_e_dev
    real(dp), device, allocatable, dimension(:) :: coeffs_dev, &
                                                   dist_fr_dev, dist_bc_dev, &
                                                   dist_af_dev, &
@@ -77,14 +77,14 @@ program test_cuda_tridiag
    u_dev = u
 
    ! set up the tridiagonal solver coeffs
-   call der_2_vv(coeffs, coeffs_b, coeffs_e, dist_fr, dist_bc, dist_af, &
+   call der_2_vv(coeffs, coeffs_s, coeffs_e, dist_fr, dist_bc, dist_af, &
                  dist_sa, dist_sc, n_halo, dx2, n, 'periodic')
 
    n_stencil = n_halo*2 + 1
 
-   allocate(coeffs_b_dev(n_halo, n_stencil), coeffs_e_dev(n_halo, n_stencil))
+   allocate(coeffs_s_dev(n_stencil, n_halo), coeffs_e_dev(n_stencil, n_halo))
    allocate(coeffs_dev(n_stencil))
-   coeffs_b_dev(:, :) = coeffs_b(:, :); coeffs_e_dev(:, :) = coeffs_e(:, :)
+   coeffs_s_dev(:, :) = coeffs_s(:, :); coeffs_e_dev(:, :) = coeffs_e(:, :)
    coeffs_dev(:) = coeffs(:)
 
    allocate(dist_fr_dev(n), dist_bc_dev(n), dist_af_dev(n), &
@@ -94,29 +94,29 @@ program test_cuda_tridiag
    dist_sa_dev(:) = dist_sa(:); dist_sc_dev(:) = dist_sc(:)
 
    ! arrays for exchanging data between ranks
-   allocate(u_send_b_dev(SZ, n_halo, n_block))
+   allocate(u_send_s_dev(SZ, n_halo, n_block))
    allocate(u_send_e_dev(SZ, n_halo, n_block))
-   allocate(u_recv_b_dev(SZ, n_halo, n_block))
+   allocate(u_recv_s_dev(SZ, n_halo, n_block))
    allocate(u_recv_e_dev(SZ, n_halo, n_block))
 
-   allocate(send_b_dev(SZ, 1, n_block), send_e_dev(SZ, 1, n_block))
-   allocate(recv_b_dev(SZ, 1, n_block), recv_e_dev(SZ, 1, n_block))
+   allocate(send_s_dev(SZ, 1, n_block), send_e_dev(SZ, 1, n_block))
+   allocate(recv_s_dev(SZ, 1, n_block), recv_e_dev(SZ, 1, n_block))
 
    blocks = dim3(n_block, 1, 1)
    threads = dim3(SZ, 1, 1)
 
    call cpu_time(tstart)
    do i = 1, n_iters
-      u_send_b_dev(:,:,:) = u_dev(:,1:4,:)
+      u_send_s_dev(:,:,:) = u_dev(:,1:4,:)
       u_send_e_dev(:,:,:) = u_dev(:,n-n_halo+1:n,:)
 
       ! halo exchange
       if (nproc == 1) then
-         u_recv_b_dev = u_send_e_dev
-         u_recv_e_dev = u_send_b_dev
+         u_recv_s_dev = u_send_e_dev
+         u_recv_e_dev = u_send_s_dev
       else
          ! MPI send/recv for multi-rank simulations
-         call MPI_Isend(u_send_b_dev, SZ*n_halo*n_block, &
+         call MPI_Isend(u_send_s_dev, SZ*n_halo*n_block, &
                         MPI_DOUBLE_PRECISION, pprev, tag1, MPI_COMM_WORLD, &
                         mpireq(1), srerr(1))
          call MPI_Irecv(u_recv_e_dev, SZ*n_halo*n_block, &
@@ -125,7 +125,7 @@ program test_cuda_tridiag
          call MPI_Isend(u_send_e_dev, SZ*n_halo*n_block, &
                         MPI_DOUBLE_PRECISION, pnext, tag2, MPI_COMM_WORLD, &
                         mpireq(3), srerr(3))
-         call MPI_Irecv(u_recv_b_dev, SZ*n_halo*n_block, &
+         call MPI_Irecv(u_recv_s_dev, SZ*n_halo*n_block, &
                         MPI_DOUBLE_PRECISION, pprev, tag2, MPI_COMM_WORLD, &
                         mpireq(4), srerr(4))
 
@@ -134,18 +134,18 @@ program test_cuda_tridiag
 
 
       call der_univ_dist<<<blocks, threads>>>( &
-         du_dev, send_b_dev, send_e_dev, u_dev, u_recv_b_dev, u_recv_e_dev, &
-         coeffs_b_dev, coeffs_e_dev, coeffs_dev, &
+         du_dev, send_s_dev, send_e_dev, u_dev, u_recv_s_dev, u_recv_e_dev, &
+         coeffs_s_dev, coeffs_e_dev, coeffs_dev, &
          n, dist_fr_dev, dist_bc_dev, dist_af_dev &
       )
 
       ! halo exchange for 2x2 systems
       if (nproc == 1) then
-         recv_b_dev = send_e_dev
-         recv_e_dev = send_b_dev
+         recv_s_dev = send_e_dev
+         recv_e_dev = send_s_dev
       else
          ! MPI send/recv for multi-rank simulations
-         call MPI_Isend(send_b_dev, SZ*n_block, &
+         call MPI_Isend(send_s_dev, SZ*n_block, &
                         MPI_DOUBLE_PRECISION, pprev, tag1, MPI_COMM_WORLD, &
                         mpireq(1), srerr(1))
          call MPI_Irecv(recv_e_dev, SZ*n_block, &
@@ -154,7 +154,7 @@ program test_cuda_tridiag
          call MPI_Isend(send_e_dev, SZ*n_block, &
                         MPI_DOUBLE_PRECISION, pnext, tag2, MPI_COMM_WORLD, &
                         mpireq(3), srerr(3))
-         call MPI_Irecv(recv_b_dev, SZ*n_block, &
+         call MPI_Irecv(recv_s_dev, SZ*n_block, &
                         MPI_DOUBLE_PRECISION, pprev, tag1, MPI_COMM_WORLD, &
                         mpireq(4), srerr(4))
 
@@ -162,7 +162,7 @@ program test_cuda_tridiag
       end if
 
       call der_univ_subs<<<blocks, threads>>>( &
-         du_dev, recv_b_dev, recv_e_dev, &
+         du_dev, recv_s_dev, recv_e_dev, &
          n, dist_sa_dev, dist_sc_dev &
       )
    end do

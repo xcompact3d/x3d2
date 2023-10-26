@@ -8,16 +8,16 @@ module m_cuda_kernels_dist
 contains
 
    attributes(global) subroutine der_univ_dist( &
-      du, send_u_b, send_u_e, u, u_b, u_e, coeffs_b, coeffs_e, coeffs, n, &
+      du, send_u_s, send_u_e, u, u_s, u_e, coeffs_s, coeffs_e, coeffs, n, &
       ffr, fbc, faf &
       )
       implicit none
 
       ! Arguments
-      real(dp), device, intent(out), dimension(:, :, :) :: du, send_u_b, &
+      real(dp), device, intent(out), dimension(:, :, :) :: du, send_u_s, &
                                                            send_u_e
-      real(dp), device, intent(in), dimension(:, :, :) :: u, u_b, u_e
-      real(dp), device, intent(in), dimension(:, :) :: coeffs_b, coeffs_e
+      real(dp), device, intent(in), dimension(:, :, :) :: u, u_s, u_e
+      real(dp), device, intent(in), dimension(:, :) :: coeffs_s, coeffs_e
       real(dp), device, intent(in), dimension(:) :: coeffs
       integer, value, intent(in) :: n
       real(dp), device, intent(in), dimension(:) :: ffr, fbc, faf
@@ -38,70 +38,102 @@ contains
       c_p1 = coeffs(6); c_p2 = coeffs(7); c_p3 = coeffs(8); c_p4 = coeffs(9)
       last_r = ffr(1)
 
-      du(i, 1, b) = coeffs(1)*u_b(i, 1, b) + coeffs(2)*u_b(i, 2, b) &
-                    + coeffs(3)*u_b(i, 3, b) + coeffs(4)*u_b(i, 4, b) &
-                    + coeffs(5)*u(i, 1, b) &
-                    + coeffs(6)*u(i, 2, b) + coeffs(7)*u(i, 3, b) &
-                    + coeffs(8)*u(i, 4, b) + coeffs(9)*u(i, 5, b)
+      du(i, 1, b) = coeffs_s(1, 1)*u_s(i, 1, b) &
+                    + coeffs_s(2, 1)*u_s(i, 2, b) &
+                    + coeffs_s(3, 1)*u_s(i, 3, b) &
+                    + coeffs_s(4, 1)*u_s(i, 4, b) &
+                    + coeffs_s(5, 1)*u(i, 1, b) &
+                    + coeffs_s(6, 1)*u(i, 2, b) &
+                    + coeffs_s(7, 1)*u(i, 3, b) &
+                    + coeffs_s(8, 1)*u(i, 4, b) &
+                    + coeffs_s(9, 1)*u(i, 5, b)
       du(i, 1, b) = du(i, 1, b)*faf(1)
-      du(i, 2, b) = coeffs(1)*u_b(i, 2, b) + coeffs(2)*u_b(i, 3, b) &
-                    + coeffs(3)*u_b(i, 4, b) + coeffs(4)*u(i, 1, b) &
-                    + coeffs(5)*u(i, 2, b) &
-                    + coeffs(6)*u(i, 3, b) + coeffs(7)*u(i, 4, b) &
-                    + coeffs(8)*u(i, 5, b) + coeffs(9)*u(i, 6, b)
+      du(i, 2, b) = coeffs_s(1, 2)*u_s(i, 2, b) &
+                    + coeffs_s(2, 2)*u_s(i, 3, b) &
+                    + coeffs_s(3, 2)*u_s(i, 4, b) &
+                    + coeffs_s(4, 2)*u(i, 1, b) &
+                    + coeffs_s(5, 2)*u(i, 2, b) &
+                    + coeffs_s(6, 2)*u(i, 3, b) &
+                    + coeffs_s(7, 2)*u(i, 4, b) &
+                    + coeffs_s(8, 2)*u(i, 5, b) &
+                    + coeffs_s(9, 2)*u(i, 6, b)
       du(i, 2, b) = du(i, 2, b)*faf(2)
-      du(i, 3, b) = coeffs(1)*u_b(i, 3, b) + coeffs(2)*u_b(i, 4, b) &
-                    + coeffs(3)*u(i, 1, b) + coeffs(4)*u(i, 2, b) &
-                    + coeffs(5)*u(i, 3, b) &
-                    + coeffs(6)*u(i, 4, b) + coeffs(7)*u(i, 5, b) &
-                    + coeffs(8)*u(i, 6, b) + coeffs(9)*u(i, 7, b)
+      du(i, 3, b) = coeffs_s(1, 3)*u_s(i, 3, b) &
+                    + coeffs_s(2, 3)*u_s(i, 4, b) &
+                    + coeffs_s(3, 3)*u(i, 1, b) &
+                    + coeffs_s(4, 3)*u(i, 2, b) &
+                    + coeffs_s(5, 3)*u(i, 3, b) &
+                    + coeffs_s(6, 3)*u(i, 4, b) &
+                    + coeffs_s(7, 3)*u(i, 5, b) &
+                    + coeffs_s(8, 3)*u(i, 6, b) &
+                    + coeffs_s(9, 3)*u(i, 7, b)
       du(i, 3, b) = ffr(3)*(du(i, 3, b) - faf(3)*du(i, 2, b))
-      du(i, 4, b) = coeffs(1)*u_b(i, 4, b) + coeffs(2)*u(i, 1, b) &
-                    + coeffs(3)*u(i, 2, b) + coeffs(4)*u(i, 3, b) &
-                    + coeffs(5)*u(i, 4, b) &
-                    + coeffs(6)*u(i, 5, b) + coeffs(7)*u(i, 6, b) &
-                    + coeffs(8)*u(i, 7, b) + coeffs(9)*u(i, 8, b)
+      du(i, 4, b) = coeffs_s(1, 4)*u_s(i, 4, b) &
+                    + coeffs_s(2, 4)*u(i, 1, b) &
+                    + coeffs_s(3, 4)*u(i, 2, b) &
+                    + coeffs_s(4, 4)*u(i, 3, b) &
+                    + coeffs_s(5, 4)*u(i, 4, b) &
+                    + coeffs_s(6, 4)*u(i, 5, b) &
+                    + coeffs_s(7, 4)*u(i, 6, b) &
+                    + coeffs_s(8, 4)*u(i, 7, b) &
+                    + coeffs_s(9, 4)*u(i, 8, b)
       du(i, 4, b) = ffr(4)*(du(i, 4, b) - faf(3)*du(i, 3, b))
 
       alpha = faf(5)
 
-      do j = 5, n-4
-         temp_du = c_m4*u(i, j-4, b) + c_m3*u(i, j-3, b) &
-                 + c_m2*u(i, j-2, b) + c_m1*u(i, j-1, b) &
-                 + c_j*u(i, j, b) &
-                 + c_p1*u(i, j+1, b) + c_p2*u(i, j+2, b) &
-                 + c_p3*u(i, j+3, b) + c_p4*u(i, j+4, b)
-         du(i, j, b) = ffr(j)*(temp_du - alpha*du(i, j-1, b))
+      do j = 5, n - 4
+         temp_du = c_m4*u(i, j - 4, b) + c_m3*u(i, j - 3, b) &
+                   + c_m2*u(i, j - 2, b) + c_m1*u(i, j - 1, b) &
+                   + c_j*u(i, j, b) &
+                   + c_p1*u(i, j + 1, b) + c_p2*u(i, j + 2, b) &
+                   + c_p3*u(i, j + 3, b) + c_p4*u(i, j + 4, b)
+         du(i, j, b) = ffr(j)*(temp_du - alpha*du(i, j - 1, b))
       end do
 
-      j = n-3
-      du(i, j, b) = coeffs(1)*u(i, j-4, b) + coeffs(2)*u(i, j-3, b) &
-                  + coeffs(3)*u(i, j-2, b) + coeffs(4)*u(i, j-1, b) &
-                  + coeffs(5)*u(i, j, b) &
-                  + coeffs(6)*u(i, j+1, b) + coeffs(7)*u(i, j+2, b) &
-                  + coeffs(8)*u(i, j+3, b) + coeffs(9)*u_e(i, 1, b)
-      du(i, j, b) = ffr(j)*(du(i, j, b) - faf(j)*du(i, j-1, b))
-      j = n-2
-      du(i, j, b) = coeffs(1)*u(i, j-4, b) + coeffs(2)*u(i, j-3, b) &
-                    + coeffs(3)*u(i, j-2, b) + coeffs(4)*u(i, j-1, b) &
-                    + coeffs(5)*u(i, j, b) &
-                    + coeffs(6)*u(i, j+1, b) + coeffs(7)*u(i, j+2, b) &
-                    + coeffs(8)*u_e(i, 1, b) + coeffs(9)*u_e(i, 2, b)
-      du(i, j, b) = ffr(j)*(du(i, j, b) - faf(j)*du(i, j-1, b))
-      j = n-1
-      du(i, j, b) = coeffs(1)*u(i, j-4, b) + coeffs(2)*u(i, j-3, b) &
-                    + coeffs(3)*u(i, j-2, b) + coeffs(4)*u(i, j-1, b) &
-                    + coeffs(5)*u(i, j, b) &
-                    + coeffs(6)*u(i, j+1, b) + coeffs(7)*u_e(i, 1, b) &
-                    + coeffs(8)*u_e(i, 2, b) + coeffs(9)*u_e(i, 3, b)
-      du(i, j, b) = ffr(j)*(du(i, j, b) - faf(j)*du(i, j-1, b))
+      j = n - 3
+      du(i, j, b) = coeffs_e(1, 1)*u(i, j - 4, b) &
+                    + coeffs_e(2, 1)*u(i, j - 3, b) &
+                    + coeffs_e(3, 1)*u(i, j - 2, b) &
+                    + coeffs_e(4, 1)*u(i, j - 1, b) &
+                    + coeffs_e(5, 1)*u(i, j, b) &
+                    + coeffs_e(6, 1)*u(i, j + 1, b) &
+                    + coeffs_e(7, 1)*u(i, j + 2, b) &
+                    + coeffs_e(8, 1)*u(i, j + 3, b) &
+                    + coeffs_e(9, 1)*u_e(i, 1, b)
+      du(i, j, b) = ffr(j)*(du(i, j, b) - faf(j)*du(i, j - 1, b))
+      j = n - 2
+      du(i, j, b) = coeffs_e(1, 2)*u(i, j - 4, b) &
+                    + coeffs_e(2, 2)*u(i, j - 3, b) &
+                    + coeffs_e(3, 2)*u(i, j - 2, b) &
+                    + coeffs_e(4, 2)*u(i, j - 1, b) &
+                    + coeffs_e(5, 2)*u(i, j, b) &
+                    + coeffs_e(6, 2)*u(i, j + 1, b) &
+                    + coeffs_e(7, 2)*u(i, j + 2, b) &
+                    + coeffs_e(8, 2)*u_e(i, 1, b) &
+                    + coeffs_e(9, 2)*u_e(i, 2, b)
+      du(i, j, b) = ffr(j)*(du(i, j, b) - faf(j)*du(i, j - 1, b))
+      j = n - 1
+      du(i, j, b) = coeffs_e(1, 3)*u(i, j - 4, b) &
+                    + coeffs_e(2, 3)*u(i, j - 3, b) &
+                    + coeffs_e(3, 3)*u(i, j - 2, b) &
+                    + coeffs_e(4, 3)*u(i, j - 1, b) &
+                    + coeffs_e(5, 3)*u(i, j, b) &
+                    + coeffs_e(6, 3)*u(i, j + 1, b) &
+                    + coeffs_e(7, 3)*u_e(i, 1, b) &
+                    + coeffs_e(8, 3)*u_e(i, 2, b) &
+                    + coeffs_e(9, 3)*u_e(i, 3, b)
+      du(i, j, b) = ffr(j)*(du(i, j, b) - faf(j)*du(i, j - 1, b))
       j = n
-      du(i, j, b) = coeffs(1)*u(i, j-4, b) + coeffs(2)*u(i, j-3, b) &
-                    + coeffs(3)*u(i, j-2, b) + coeffs(4)*u(i, j-1, b) &
-                    + coeffs(5)*u(i, j, b) &
-                    + coeffs(6)*u_e(i, 1, b) + coeffs(7)*u_e(i, 2, b) &
-                    + coeffs(8)*u_e(i, 3, b) + coeffs(9)*u_e(i, 4, b)
-      du(i, j, b) = ffr(j)*(du(i, j, b) - faf(j)*du(i, j-1, b))
+      du(i, j, b) = coeffs_e(1, 4)*u(i, j - 4, b) &
+                    + coeffs_e(2, 4)*u(i, j - 3, b) &
+                    + coeffs_e(3, 4)*u(i, j - 2, b) &
+                    + coeffs_e(4, 4)*u(i, j - 1, b) &
+                    + coeffs_e(5, 4)*u(i, j, b) &
+                    + coeffs_e(6, 4)*u_e(i, 1, b) &
+                    + coeffs_e(7, 4)*u_e(i, 2, b) &
+                    + coeffs_e(8, 4)*u_e(i, 3, b) &
+                    + coeffs_e(9, 4)*u_e(i, 4, b)
+      du(i, j, b) = ffr(j)*(du(i, j, b) - faf(j)*du(i, j - 1, b))
 
       send_u_e(i, 1, b) = du(i, n, b)
 
@@ -110,17 +142,17 @@ contains
          du(i, j, b) = du(i, j, b) - fbc(j)*du(i, j + 1, b)
       end do
       du(i, 1, b) = last_r*(du(i, 1, b) - fbc(1)*du(i, 2, b))
-      send_u_b(i, 1, b) = du(i, 1, b)
+      send_u_s(i, 1, b) = du(i, 1, b)
 
    end subroutine der_univ_dist
 
-   attributes(global) subroutine der_univ_subs(du, recv_u_b, recv_u_e, &
+   attributes(global) subroutine der_univ_subs(du, recv_u_s, recv_u_e, &
                                                n, dist_sa, dist_sc)
       implicit none
 
       ! Arguments
       real(dp), device, intent(out), dimension(:, :, :) :: du
-      real(dp), device, intent(in), dimension(:, :, :) :: recv_u_b, recv_u_e
+      real(dp), device, intent(in), dimension(:, :, :) :: recv_u_s, recv_u_e
       real(dp), device, intent(in), dimension(:) :: dist_sa, dist_sc
       integer, value, intent(in) :: n
 
@@ -135,13 +167,11 @@ contains
       ur = dist_sc(n)
       recp = 1._dp/(1._dp - ur*bl)
 
-      !du(i, 1, b) = recp*(du(i, 1, b) - bl*recv_u_b(i, 1, b))
-      !du(i, n, b) = recp*(du(i, n, b) - ur*recv_u_e(i, 1, b))
-      du_1 = recp*(du(i, 1, b) - bl*recv_u_b(i, 1, b))
+      du_1 = recp*(du(i, 1, b) - bl*recv_u_s(i, 1, b))
       du_n = recp*(du(i, n, b) - ur*recv_u_e(i, 1, b))
 
       du(i, 1, b) = du_1
-      do j = 2, n-1
+      do j = 2, n - 1
          du(i, j, b) = (du(i, j, b) - dist_sa(j)*du_1 - dist_sc(j)*du_n)
       end do
       du(i, n, b) = du_n

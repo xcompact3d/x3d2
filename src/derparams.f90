@@ -9,14 +9,14 @@ contains
       implicit none
    end subroutine der_1_vv
 
-   subroutine der_2_vv(coeffs, coeffs_b, coeffs_e, &
+   subroutine der_2_vv(coeffs, coeffs_s, coeffs_e, &
                        dist_fr, dist_bc, dist_af, dist_sa, dist_sc, &
                        n_halo, dx2, n, bcond)
       implicit none
 
       real(dp), allocatable, dimension(:), intent(out) :: coeffs, &
          dist_fr, dist_bc, dist_af, dist_sa, dist_sc
-      real(dp), allocatable, dimension(:,:), intent(out) :: coeffs_b, coeffs_e
+      real(dp), allocatable, dimension(:,:), intent(out) :: coeffs_s, coeffs_e
       integer, intent(out) :: n_halo
       real(dp), intent(in) :: dx2
       integer, intent(in) :: n
@@ -44,11 +44,11 @@ contains
       select case (bcond)
       case ('periodic')
          dist_sa(:) = alfa; dist_sc(:) = alfa; dist_b(:) = 1._dp
-         allocate(coeffs_b(n_halo, n_stencil))
-         allocate(coeffs_e(n_halo, n_stencil))
+         allocate(coeffs_s(n_stencil, n_halo))
+         allocate(coeffs_e(n_stencil, n_halo))
          do i = 1, n_halo
-            coeffs_b(i,:) = coeffs(:)
-            coeffs_e(i,:) = coeffs(:)
+            coeffs_s(:, i) = coeffs(:)
+            coeffs_e(:, i) = coeffs(:)
          end do
       case default
          print*, 'Boundary condition is not recognized :', bcond
