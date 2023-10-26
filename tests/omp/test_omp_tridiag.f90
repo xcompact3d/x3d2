@@ -19,7 +19,7 @@ program test_dist_tridiag
                                               recv_b, recv_e
 
    real(dp), allocatable, dimension(:,:) :: coeffs_b, coeffs_e
-   real(dp), allocatable, dimension(:) :: coeffs, dist_fr, dist_bc, &
+   real(dp), allocatable, dimension(:) :: coeffs, dist_fr, dist_bc, dist_af, &
                                           dist_sa, dist_sc
 
    integer :: n, n_block, i, j, k, n_halo, n_stencil, n_iters, iters
@@ -28,7 +28,7 @@ program test_dist_tridiag
    integer, allocatable :: srerr(:), mpireq(:)
    integer :: ierr, ndevs, devnum, memClockRt, memBusWidth
 
-   real(dp) :: dx, dx2, alfa, norm_du, tol = 1d-8, tstart, tend
+   real(dp) :: dx, dx2, norm_du, tol = 1d-8, tstart, tend
    real(dp) :: achievedBW, deviceBW
 
    call MPI_Init(ierr)
@@ -62,8 +62,8 @@ program test_dist_tridiag
    end do
 
    ! set up the tridiagonal solver coeffs
-   call der_2_vv(coeffs, coeffs_b, coeffs_e, dist_fr, dist_bc, &
-                 dist_sa, dist_sc, n_halo, alfa, dx2, n, 'periodic')
+   call der_2_vv(coeffs, coeffs_b, coeffs_e, dist_fr, dist_bc, dist_af, &
+                 dist_sa, dist_sc, n_halo, dx2, n, 'periodic')
 
    n_stencil = n_halo*2 + 1
 
@@ -121,7 +121,7 @@ program test_dist_tridiag
          call der_univ_dist_omp( &
             du(:, :, k), send_b(:, :, k), send_e(:, :, k), u(:, :, k), &
             u_recv_b(:, :, k), u_recv_e(:, :, k), &
-            coeffs_b, coeffs_e, coeffs, n, alfa, dist_fr, dist_bc &
+            coeffs_b, coeffs_e, coeffs, n, dist_fr, dist_bc, dist_af &
          )
       end do
       !$omp end parallel do
@@ -151,7 +151,7 @@ program test_dist_tridiag
       !$omp parallel do
       do k = 1, n_block
          call der_univ_subs_omp(du(:, :, k), recv_b(:, :, k), recv_e(:, :, k), &
-                                n, alfa, dist_sa, dist_sc)
+                                n, dist_sa, dist_sc)
       end do
       !$omp end parallel do
    end do

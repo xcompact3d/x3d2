@@ -10,21 +10,20 @@ contains
    end subroutine der_1_vv
 
    subroutine der_2_vv(coeffs, coeffs_b, coeffs_e, &
-                       dist_fr, dist_bc, dist_sa, dist_sc, &
-                       n_halo, alfa, dx2, n, bcond)
+                       dist_fr, dist_bc, dist_af, dist_sa, dist_sc, &
+                       n_halo, dx2, n, bcond)
       implicit none
 
       real(dp), allocatable, dimension(:), intent(out) :: coeffs, &
-         dist_fr, dist_bc, dist_sa, dist_sc
+         dist_fr, dist_bc, dist_af, dist_sa, dist_sc
       real(dp), allocatable, dimension(:,:), intent(out) :: coeffs_b, coeffs_e
       integer, intent(out) :: n_halo
-      real(dp), intent(out) :: alfa
       real(dp), intent(in) :: dx2
       integer, intent(in) :: n
       character(len=*), intent(in) :: bcond
 
       real(dp), allocatable :: dist_b(:)
-      real(dp) :: asi, bsi, csi, dsi
+      real(dp) :: alfa, asi, bsi, csi, dsi
       integer :: i, n_stencil
 
       allocate(dist_sa(n), dist_sc(n), dist_b(n))
@@ -55,14 +54,16 @@ contains
          print*, 'Boundary condition is not recognized :', bcond
       end select
 
-      call process_dist(dist_fr, dist_bc, dist_sa, dist_sc, dist_b, n)
+      call process_dist(dist_fr, dist_bc, dist_af, dist_sa, dist_sc, dist_b, n)
 
    end subroutine der_2_vv
 
-   subroutine process_dist(dist_fr, dist_bc, dist_sa, dist_sc, dist_b, n)
+   subroutine process_dist(dist_fr, dist_bc, dist_af, &
+                           dist_sa, dist_sc, dist_b, n)
       implicit none
 
-      real(dp), allocatable, dimension(:), intent(out) :: dist_fr, dist_bc
+      real(dp), allocatable, dimension(:), intent(out) :: dist_fr, dist_bc, &
+                                                          dist_af
       real(dp), dimension(:), intent(inout) :: dist_sa, dist_sc, dist_b
       integer, intent(in) :: n
 
@@ -71,7 +72,8 @@ contains
       m = n
       nrank = 0; nproc = 1
 
-      allocate(dist_fr(n), dist_bc(n))
+      ! forward factors, backward factors, and auxiliary factor
+      allocate(dist_fr(n), dist_bc(n), dist_af(n))
 
       do nrank = 0, nproc-1
 
@@ -80,9 +82,11 @@ contains
             dist_sa(i) = dist_sa(i)/dist_b(i)
             dist_sc(i) = dist_sc(i)/dist_b(i)
             dist_bc(i) = dist_sc(i)
+            dist_af(i) = 1._dp/dist_b(i)
          end do
          do i = 3+m*nrank, m+m*nrank
             dist_fr(i) = 1.d0/(dist_b(i)-dist_sa(i)*dist_sc(i-1))
+            dist_af(i) = dist_sa(i)
             dist_sa(i) = -dist_fr(i)*dist_sa(i)*dist_sa(i-1)
             dist_sc(i) = dist_fr(i)*dist_sc(i)
             !dist_bc(i) = dist_sc(i)
@@ -92,7 +96,7 @@ contains
             dist_bc(i) = dist_sc(i)
             dist_sc(i) = -dist_sc(i)*dist_sc(i+1)
          end do
-         ! this is not good
+         ! dist_fr(1) is never used, so store this extra factor instead.
          dist_fr(1+m*nrank) = 1.d0/(1.d0-dist_sc(1+m*nrank)*dist_sa(2+m*nrank))
 
          dist_sa(1+m*nrank) = dist_fr(1+m*nrank)*dist_sa(1+m*nrank)

@@ -20,12 +20,13 @@ program test_cuda_tridiag
                                                       recv_b_dev, recv_e_dev
 
    real(dp), allocatable, dimension(:,:) :: coeffs_b, coeffs_e
-   real(dp), allocatable, dimension(:) :: coeffs, dist_fr, dist_bc, &
+   real(dp), allocatable, dimension(:) :: coeffs, dist_fr, dist_bc, dist_af, &
                                           dist_sa, dist_sc
 
    real(dp), device, allocatable, dimension(:,:) :: coeffs_b_dev, coeffs_e_dev
    real(dp), device, allocatable, dimension(:) :: coeffs_dev, &
                                                   dist_fr_dev, dist_bc_dev, &
+                                                  dist_af_dev, &
                                                   dist_sa_dev, dist_sc_dev
 
    integer :: n, n_block, i, j, k, n_halo, n_stencil, n_iters
@@ -76,8 +77,8 @@ program test_cuda_tridiag
    u_dev = u
 
    ! set up the tridiagonal solver coeffs
-   call der_2_vv(coeffs, coeffs_b, coeffs_e, dist_fr, dist_bc, &
-                 dist_sa, dist_sc, n_halo, alfa, dx2, n, 'periodic')
+   call der_2_vv(coeffs, coeffs_b, coeffs_e, dist_fr, dist_bc, dist_af, &
+                 dist_sa, dist_sc, n_halo, dx2, n, 'periodic')
 
    n_stencil = n_halo*2 + 1
 
@@ -86,8 +87,10 @@ program test_cuda_tridiag
    coeffs_b_dev(:, :) = coeffs_b(:, :); coeffs_e_dev(:, :) = coeffs_e(:, :)
    coeffs_dev(:) = coeffs(:)
 
-   allocate(dist_fr_dev(n), dist_bc_dev(n), dist_sa_dev(n), dist_sc_dev(n))
+   allocate(dist_fr_dev(n), dist_bc_dev(n), dist_af_dev(n), &
+            dist_sa_dev(n), dist_sc_dev(n))
    dist_fr_dev(:) = dist_fr(:); dist_bc_dev(:) = dist_bc(:)
+   dist_af_dev(:) = dist_af(:)
    dist_sa_dev(:) = dist_sa(:); dist_sc_dev(:) = dist_sc(:)
 
    ! arrays for exchanging data between ranks
@@ -133,7 +136,7 @@ program test_cuda_tridiag
       call der_univ_dist<<<blocks, threads>>>( &
          du_dev, send_b_dev, send_e_dev, u_dev, u_recv_b_dev, u_recv_e_dev, &
          coeffs_b_dev, coeffs_e_dev, coeffs_dev, &
-         n, alfa, dist_fr_dev, dist_bc_dev &
+         n, dist_fr_dev, dist_bc_dev, dist_af_dev &
       )
 
       ! halo exchange for 2x2 systems
@@ -160,7 +163,7 @@ program test_cuda_tridiag
 
       call der_univ_subs<<<blocks, threads>>>( &
          du_dev, recv_b_dev, recv_e_dev, &
-         n, alfa, dist_sa_dev, dist_sc_dev &
+         n, dist_sa_dev, dist_sc_dev &
       )
    end do
    call cpu_time(tend)
