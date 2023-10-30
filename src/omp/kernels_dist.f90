@@ -147,34 +147,49 @@ contains
 
       ! Local variables
       integer :: i, j!, b
-      real(dp) :: ur, bl, recp, du_1, du_n
-
-      bl = dist_sa(1)
-      ur = dist_sc(n)
-      recp = 1._dp/(1._dp - ur*bl)
+      real(dp) :: ur, bl, recp, du_s, du_e
 
       !$omp simd
       do i = 1, SZ
-         du_1 = recp*(du(i, 1) - bl*recv_u_s(i, 1))
-         du_n = recp*(du(i, n) - ur*recv_u_e(i, 1))
+         ! A small trick we do here is valid for symmetric Toeplitz matrices.
+         ! In our case our matrices satisfy this criteria in the (5:n-4) region
+         ! and as long as a rank has around at least 20 entries the assumptions
+         ! we make here are perfectly valid.
+
+         ! bl is the bottom left entry in the 2x2 matrix
+         ! ur is the upper right entry in the 2x2 matrix
+
+         ! Start
+         ! At the start we have the 'bl', and assume 'ur'
+         bl = dist_sa(1)
+         ur = dist_sa(1)
+         recp = 1._dp/(1._dp - ur*bl)
+         du_s = recp*(du(i, 1) - bl*recv_u_s(i, 1))
+
+         ! End
+         ! At the end we have the 'ur', and assume 'bl'
+         bl = dist_sc(n)
+         ur = dist_sc(n)
+         recp = 1._dp/(1._dp - ur*bl)
+         du_e = recp*(du(i, n) - ur*recv_u_e(i, 1))
       end do
       !$omp end simd
 
       !$omp simd
       do i = 1, SZ
-         du(i, 1) = du_1
+         du(i, 1) = du_s
       end do
       !$omp end simd
       do j = 2, n - 1
          !$omp simd
          do i = 1, SZ
-            du(i, j) = (du(i, j) - dist_sa(j)*du_1 - dist_sc(j)*du_n)
+            du(i, j) = (du(i, j) - dist_sa(j)*du_s - dist_sc(j)*du_e)
          end do
          !$omp end simd
       end do
       !$omp simd
       do i = 1, SZ
-         du(i, n) = du_n
+         du(i, n) = du_e
       end do
       !$omp end simd
 
