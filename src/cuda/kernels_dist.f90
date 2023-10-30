@@ -158,23 +158,38 @@ contains
 
       ! Local variables
       integer :: i, j, b
-      real(dp) :: ur, bl, recp, du_1, du_n
+      real(dp) :: ur, bl, recp, du_s, du_e
 
       i = threadIdx%x
       b = blockIdx%x
 
+      ! A small trick we do here is valid for symmetric Toeplitz matrices.
+      ! In our case our matrices satisfy this criteria in the (5:n-4) region
+      ! and as long as a rank has around at least 20 entries the assumptions
+      ! we make here are perfectly valid.
+
+      ! bl is the bottom left entry in the 2x2 matrix
+      ! ur is the upper right entry in the 2x2 matrix
+
+      ! Start
+      ! At the start we have the 'bl', and assume 'ur'
       bl = dist_sa(1)
+      ur = dist_sa(1)
+      recp = 1._dp/(1._dp - ur*bl)
+      du_s = recp*(du(i, 1, b) - bl*recv_u_s(i, 1, b))
+
+      ! End
+      ! At the end we have the 'ur', and assume 'bl'
+      bl = dist_sc(n)
       ur = dist_sc(n)
       recp = 1._dp/(1._dp - ur*bl)
+      du_e = recp*(du(i, n, b) - ur*recv_u_e(i, 1, b))
 
-      du_1 = recp*(du(i, 1, b) - bl*recv_u_s(i, 1, b))
-      du_n = recp*(du(i, n, b) - ur*recv_u_e(i, 1, b))
-
-      du(i, 1, b) = du_1
+      du(i, 1, b) = du_s
       do j = 2, n - 1
-         du(i, j, b) = (du(i, j, b) - dist_sa(j)*du_1 - dist_sc(j)*du_n)
+         du(i, j, b) = (du(i, j, b) - dist_sa(j)*du_s - dist_sc(j)*du_e)
       end do
-      du(i, n, b) = du_n
+      du(i, n, b) = du_e
 
    end subroutine der_univ_subs
 
