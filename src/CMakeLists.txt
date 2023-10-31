@@ -1,7 +1,6 @@
 set(SRC
   allocator.f90
   common.f90
-  derparams.f90
   tdsops.f90
   thomas.f90
   stencil.f90
