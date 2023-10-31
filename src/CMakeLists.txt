@@ -1,7 +1,7 @@
 set(SRC
   allocator.f90
   common.f90
-  derparams.f90
+  tdsops.f90
   thomas.f90
   stencil.f90
   stencil_definitions.f90
@@ -14,6 +14,7 @@ set(CUDASRC
   cuda/common.f90
   cuda/cuda_allocator.f90
   cuda/kernels_dist.f90
+  cuda/tdsops.f90
 )
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
