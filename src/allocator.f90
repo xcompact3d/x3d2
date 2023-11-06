@@ -63,6 +63,10 @@ module m_allocator
       module procedure field_constructor
    end interface field_t
 
+   type :: flist_t
+      class(field_t), pointer :: ptr
+   end type flist_t
+
 contains
 
    function field_constructor(dims, next, id) result(m)

@@ -1,6 +1,6 @@
 module m_base_backend
    use m_allocator, only: allocator_t, field_t
-   use m_common, only: derps_t
+   use m_tdsops, only: tdsops_t, dirps_t
 
    implicit none
 
@@ -33,7 +33,7 @@ module m_base_backend
       !! for later use.
       real :: nu
       class(allocator_t), pointer :: allocator
-      class(derps_t), pointer :: xderps, yderps, zderps
+      class(dirps_t), pointer :: xdirps, ydirps, zdirps
    contains
       procedure :: transeq
       procedure :: run
@@ -46,16 +46,16 @@ module m_base_backend
    end type base_backend_t
 
    abstract interface
-      subroutine transeq_ders(self, du, duu, d2u, u, v, w, conv, derps)
+      subroutine transeq_ders(self, du, duu, d2u, u, v, w, dirps)
          import :: base_backend_t
          import :: field_t
-         import :: derps_t
+         import :: dirps_t
          implicit none
 
          class(base_backend_t) :: self
          class(field_t), intent(out) :: du, duu, d2u
-         class(field_t), intent(in) :: u, v, w, conv
-         type(derps_t), intent(in) :: derps
+         class(field_t), intent(in) :: u, v, w
+         type(dirps_t), intent(in) :: dirps
       end subroutine transeq_ders
    end interface
 
@@ -98,7 +98,7 @@ contains
 
       ! call derivatives in x direction. Based on the run time arguments this
       ! executes a distributed algorithm or the Thomas algorithm.
-      call transeq_x(du, dv, dw, u, v, w, u, self%xderps)
+      call self%transeq_x(du, dv, dw, u, v, w, self%xdirps)
 
       ! request fields from the allocator
       u_y => self%allocator%get_block()
@@ -109,9 +109,9 @@ contains
       dw_y => self%allocator%get_block()
 
       ! reorder data from x orientation to y orientation
-      call trans_x2y(u_y, v_y, w_y, u, v, w)
+      call self%trans_x2y(u_y, v_y, w_y, u, v, w)
       ! similar to the x direction, obtain derivatives in y.
-      call transeq_y(du_y, dv_y, dw_y, u_y, v_y, w_y, v_y, self%yderps)
+      call self%transeq_y(dv_y, du_y, dw_y, v_y, u_y, w_y, self%ydirps)
 
       ! we don't need the velocities in y orientation any more, so release
       ! them to open up space.
@@ -130,9 +130,9 @@ contains
       dw_z => self%allocator%get_block()
 
       ! reorder from x to z
-      call trans_x2z(u_z, v_z, w_z, u, v, w)
+      call self%trans_x2z(u_z, v_z, w_z, u, v, w)
       ! get the derivatives in z
-      call transeq_z(du_z, dv_z, dw_z, u_z, v_z, w_z, w_z, self%zderps)
+      call self%transeq_z(dw_z, du_z, dv_z, w_z, u_z, v_z, self%zdirps)
 
       ! there is no need to keep velocities in z orientation around, so release
       call self%allocator%release_block(u_z)
@@ -141,7 +141,7 @@ contains
 
       ! gather all the contributions into the x result array
       ! this function does the data reordering and summations at once.
-      call sumall(du, dv, dw, du_y, dv_y, dw_y, du_z, dv_z, dw_z)
+      call self%sum_yzintox(du, dv, dw, du_y, dv_y, dw_y, du_z, dv_z, dw_z)
 
       ! release all the unnecessary blocks.
       call self%allocator%release_block(du_y)
