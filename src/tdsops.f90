@@ -707,30 +707,51 @@ contains
 
       integer :: i
 
-      ! start the hybrid algorithm
+      ! Ref DOI: 10.1109/MCSE.2021.3130544
+      ! Algorithm 3 in page 4
+      ! First two lines first
       do i = 1, 2
          self%dist_sa(i) = self%dist_sa(i)/dist_b(i)
          self%dist_sc(i) = self%dist_sc(i)/dist_b(i)
          self%dist_bw(i) = self%dist_sc(i)
          self%dist_af(i) = 1._dp/dist_b(i)
       end do
+
+      ! Then the remaining in the forward pass
       do i = 3, self%n
+         ! Algorithm 3 in ref obtains 'r' coeffs on the fly in line 7.
+         ! As we have to solve many RHSs with the same tridiagonal system,
+         ! it is better to do a preprocessing first.
+         ! So lets store 'r' coeff in dist_fw array.
          self%dist_fw(i) = 1._dp/(dist_b(i) &
                                   - self%dist_sa(i)*self%dist_sc(i - 1))
+         ! dist_af is 'a_i' in line 7 of Algorithm 3 in ref.
          self%dist_af(i) = self%dist_sa(i)
+         ! We store a_i^* and c_i^* in dist_sa and dist_sc because
+         ! we need them later in the substitution phase.
          self%dist_sa(i) = -self%dist_fw(i)*self%dist_sa(i) &
                            *self%dist_sa(i - 1)
          self%dist_sc(i) = self%dist_fw(i)*self%dist_sc(i)
       end do
+
+      ! backward pass starting in line 12 of Algorithm 3.
       do i = self%n - 2, 2, -1
          self%dist_sa(i) = self%dist_sa(i) &
                            - self%dist_sc(i)*self%dist_sa(i + 1)
          self%dist_bw(i) = self%dist_sc(i)
          self%dist_sc(i) = -self%dist_sc(i)*self%dist_sc(i + 1)
       end do
-      ! dist_fw(1) is never used, so store this extra factor instead
+
+      ! Line 17 and 18 are tricky
+      ! First we have a new 'r', we need it.
+      ! And for 'r' we need c_0^*...
+      ! Now examine closely, c_0^* is set in line 4 and never overwritten!
+      ! So we can use dist_sc(1) as is in place of c_0^*.
+      ! We need to store this new 'r' somewhere ...
+      ! dist_fw(1) is never used, so store this extra 'r' factor here instead
       self%dist_fw(1) = 1._dp/(1._dp - self%dist_sc(1)*self%dist_sa(2))
 
+      ! Finally Line 19 and 20 in Algorithm 3 in ref.
       self%dist_sa(1) = self%dist_fw(1)*self%dist_sa(1)
       self%dist_sc(1) = -self%dist_fw(1)*self%dist_sc(1)*self%dist_sc(2)
 
