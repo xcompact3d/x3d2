@@ -4,9 +4,10 @@ module m_cuda_backend
    use m_allocator, only: allocator_t, field_t
    use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
    use m_base_backend, only: base_backend_t
-   use m_common, only: dp
+   use m_common, only: dp, globs_t
    use m_cuda_common, only: SZ
    use m_tdsops, only: dirps_t
+   use m_cuda_tdsops, only: cuda_tdsops_t
 
    implicit none
 
@@ -16,6 +17,7 @@ module m_cuda_backend
       real(dp), device, allocatable, dimension(:, :, :) :: &
          u_recv_s_dev, u_recv_e_dev, u_send_s_dev, u_send_e_dev, &
          send_s_dev, send_e_dev, recv_s_dev, recv_e_dev
+      type(dim3) :: xblocks, xthreads, yblocks, ythreads, zblocks, zthreads
     contains
       procedure :: transeq_x => transeq_x_cuda
       procedure :: transeq_y => transeq_y_cuda
@@ -33,11 +35,13 @@ module m_cuda_backend
 
  contains
 
-   function constructor(allocator, xdirps, ydirps, zdirps) result(backend)
+   function constructor(globs, allocator, xdirps, ydirps, zdirps) &
+      result(backend)
       implicit none
 
-      class(allocator_t), target, intent(in) :: allocator
-      class(dirps_t), target, intent(in) :: xdirps, ydirps, zdirps
+      class(globs_t) :: globs
+      class(allocator_t), target, intent(inout) :: allocator
+      class(dirps_t), target, intent(inout) :: xdirps, ydirps, zdirps
       type(cuda_backend_t) :: backend
 
       integer :: n_halo, n_block
@@ -52,6 +56,33 @@ module m_cuda_backend
       backend%ydirps => ydirps
       backend%zdirps => zdirps
       print*, 'assignments done'
+
+      backend%xthreads = dim3(SZ, 1, 1)
+      backend%xblocks = dim3(1, 1, 1)
+
+      allocate(cuda_tdsops_t :: backend%xdirps%der1st)
+      allocate(cuda_tdsops_t :: backend%ydirps%der1st)
+      allocate(cuda_tdsops_t :: backend%zdirps%der1st)
+
+      select type (der1st => backend%xdirps%der1st)
+      type is (cuda_tdsops_t)
+         der1st = cuda_tdsops_t(globs%nx_loc, globs%dx, &
+                                'first-deriv', 'compact6')
+      end select
+      select type (der1st => backend%ydirps%der1st)
+      type is (cuda_tdsops_t)
+         der1st = cuda_tdsops_t(globs%ny_loc, globs%dy, &
+                                'first-deriv', 'compact6')
+      end select
+      select type (der1st => backend%zdirps%der1st)
+      type is (cuda_tdsops_t)
+         der1st = cuda_tdsops_t(globs%nz_loc, globs%dz, &
+                                'first-deriv', 'compact6')
+      end select
+      !print*, backend%ydirps%der1st%coeffs
+
+      print*, 'der1sts assigned'
+
 
       n_halo = 4
       n_block = ydirps%n*zdirps%n/SZ
@@ -75,39 +106,47 @@ module m_cuda_backend
 
    end function constructor
 
-   subroutine transeq_x_cuda(self, du, duu, d2u, u, v, w, dirps)
+   subroutine transeq_x_cuda(self, du, dv, dw, u, v, w, dirps)
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(out) :: du, duu, d2u
+      class(field_t), intent(inout) :: du, dv, dw
       class(field_t), intent(in) :: u, v, w
       type(dirps_t), intent(in) :: dirps
 
-      !call transeq_cuda_dist(du, duu, d2u, u, v, w, dirps)
+      print*, 'transeq_x_cuda'
+      call self%transeq_cuda_dist(du, dv, dw, u, v, w, dirps, &
+                                  self%xthreads, self%xblocks)
 
    end subroutine transeq_x_cuda
 
-   subroutine transeq_y_cuda(self, du, duu, d2u, u, v, w, dirps)
+   subroutine transeq_y_cuda(self, du, dv, dw, u, v, w, dirps)
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(out) :: du, duu, d2u
+      class(field_t), intent(inout) :: du, dv, dw
       class(field_t), intent(in) :: u, v, w
       type(dirps_t), intent(in) :: dirps
 
-      !call transeq_cuda_dist(du, duu, d2u, u, v, w, dirps)
+      print*, 'transeq_y_cuda'
+      ! u, v, w is reordered so that we pass v, u, w
+      call self%transeq_cuda_dist(dv, du, dw, v, u, w, dirps, &
+                                  self%ythreads, self%yblocks)
 
    end subroutine transeq_y_cuda
 
-   subroutine transeq_z_cuda(self, du, duu, d2u, u, v, w, dirps)
+   subroutine transeq_z_cuda(self, du, dv, dw, u, v, w, dirps)
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(out) :: du, duu, d2u
+      class(field_t), intent(inout) :: du, dv, dw
       class(field_t), intent(in) :: u, v, w
       type(dirps_t), intent(in) :: dirps
 
-      !call transeq_cuda_dist(du, duu, d2u, u, v, w, dirps)
+      print*, 'transeq_z_cuda'
+      ! w, u, v is reordered so that we pass w, u, v
+      call self%transeq_cuda_dist(dw, du, dv, w, u, v, dirps, &
+                                  self%zthreads, self%zblocks)
 
    end subroutine transeq_z_cuda
 
@@ -116,16 +155,20 @@ module m_cuda_backend
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(out) :: du, duu, d2u
+      class(field_t), intent(inout) :: du, duu, d2u
       class(field_t), intent(in) :: u, v, w
       type(dirps_t), intent(in) :: dirps
       type(dim3), intent(in) :: blocks, threads
 
-      class(field_t), pointer :: temp_du_dev, temp_duu_dev, temp_d2u_dev, &
-                                 temp_dv_dev, temp_dvu_dev, temp_d2v_dev, &
-                                 temp_dw_dev, temp_dwu_dev, temp_d2w_dev
+      class(field_t), pointer :: temp_du, temp_duu, temp_d2u, &
+                                 temp_dv, temp_dvu, temp_d2v, &
+                                 temp_dw, temp_dwu, temp_d2w
 
+      real, device, pointer, dimension(:, :, :) :: du_dev, duu_dev, d2u_dev, &
+                                                   dv_dev, dvu_dev, d2v_dev, &
+                                                   dw_dev, dwu_dev, d2w_dev
 
+      print*, 'transeq_cuda_dist'
       ! MPI communication for halo data
       ! first slice the halo data
       !call slice_layers<<<blocks, threads>>>(u, buff_send_u_b, buff_send_u_e, derps%n_halo)
@@ -149,44 +192,65 @@ module m_cuda_backend
       ! distder_cuda
 
       ! get some fields for storing the result
-      !select type(self%allocator)
-      !type is (cuda_allocator_t)
-      temp_du_dev => self%allocator%get_block()
-      temp_duu_dev => self%allocator%get_block()
-      temp_d2u_dev => self%allocator%get_block()
-      !end select
+      temp_du => self%allocator%get_block()
+      temp_duu => self%allocator%get_block()
+      temp_d2u => self%allocator%get_block()
+
+      select type(temp_du)
+      type is (cuda_field_t); du_dev => temp_du%data_d
+      end select
+      select type(temp_duu)
+      type is (cuda_field_t); duu_dev => temp_duu%data_d
+      end select
+      select type(temp_d2u)
+      type is (cuda_field_t); d2u_dev => temp_d2u%data_d
+      end select
 
       ! this functions is not yet implemented, but is very similar to the one we have
       !call transeq_fused_dist<<<blocks, threads>>>( &
-      !   temp_du_dev, temp_duu_dev, temp_d2u_dev, &
-      !   u, conv, derps%n, self%nu, &
+      !   du_dev, duu_dev, d2u_dev, &
+      !   u, u, derps%n, self%nu, &
       !   derps%fdist_bc_dev, derps%fdist_fr_dev, derps%sdist_bc_dev, derps%sdist_fr_dev, &
       !   derps%alfai, derps%afi, derps%bfi, &
       !   derps%alsai, derps%asi, derps%bsi, derps%csi, derps%dsi &
       !)
 
-      !select type(allocator)
-      !type is (cuda_allocator_t)
-      temp_dv_dev => self%allocator%get_block()
-      temp_dvu_dev => self%allocator%get_block()
-      temp_d2v_dev => self%allocator%get_block()
-      !end select
+      temp_dv => self%allocator%get_block()
+      temp_dvu => self%allocator%get_block()
+      temp_d2v => self%allocator%get_block()
+
+      select type(temp_dv)
+      type is (cuda_field_t); dv_dev => temp_dv%data_d
+      end select
+      select type(temp_dvu)
+      type is (cuda_field_t); dvu_dev => temp_dvu%data_d
+      end select
+      select type(temp_d2v)
+      type is (cuda_field_t); d2v_dev => temp_d2v%data_d
+      end select
 
       !call transeq_fused_dist<<<blocks, threads>>>( &
-      !   temp_dv_dev, temp_dvu_dev, temp_d2v_dev, &
+      !   temp_dv, temp_dvu, temp_d2v, &
       !   v, conv, derps%n, self%nu, &
       !   derps%fdist_bc_dev, derps%fdist_fr_dev, derps%sdist_bc_dev, derps%sdist_fr_dev, &
       !)
 
-      !select type(allocator)
-      !type is (cuda_allocator_t)
-      temp_dw_dev => self%allocator%get_block()
-      temp_dwu_dev => self%allocator%get_block()
-      temp_d2w_dev => self%allocator%get_block()
-      !end select
+      temp_dw => self%allocator%get_block()
+      temp_dwu => self%allocator%get_block()
+      temp_d2w => self%allocator%get_block()
+
+      select type(temp_dw)
+      type is (cuda_field_t); dw_dev => temp_dw%data_d
+      end select
+      select type(temp_dwu)
+      type is (cuda_field_t); dwu_dev => temp_dwu%data_d
+      end select
+      select type(temp_d2w)
+      type is (cuda_field_t); d2w_dev => temp_d2w%data_d
+      end select
 
       !call transeq_fused_dist<<<blocks, threads>>>( &
-      !   temp_dw_dev, temp_dwu_dev, temp_d2w_dev, &
+      !   temp_dw, temp_dwu, temp_d2w, &
       !   w, conv, derps%n, self%nu, &
       !   derps%fdist_bc_dev, derps%fdist_fr_dev, derps%sdist_bc_dev, derps%sdist_fr_dev, &
       !)
@@ -238,26 +302,26 @@ module m_cuda_backend
       !)
 
       ! Finally release temporary blocks
-      call self%allocator%release_block(temp_du_dev)
-      call self%allocator%release_block(temp_duu_dev)
-      call self%allocator%release_block(temp_d2u_dev)
-      call self%allocator%release_block(temp_dv_dev)
-      call self%allocator%release_block(temp_dvu_dev)
-      call self%allocator%release_block(temp_d2v_dev)
-      call self%allocator%release_block(temp_dw_dev)
-      call self%allocator%release_block(temp_dwu_dev)
-      call self%allocator%release_block(temp_d2w_dev)
+      call self%allocator%release_block(temp_du)
+      call self%allocator%release_block(temp_duu)
+      call self%allocator%release_block(temp_d2u)
+      call self%allocator%release_block(temp_dv)
+      call self%allocator%release_block(temp_dvu)
+      call self%allocator%release_block(temp_d2v)
+      call self%allocator%release_block(temp_dw)
+      call self%allocator%release_block(temp_dwu)
+      call self%allocator%release_block(temp_d2w)
 
    end subroutine transeq_cuda_dist
 
-   subroutine transeq_cuda_thom(self, du, duu, d2u, u, v, w, dirps)
+   subroutine transeq_cuda_thom(self, du, dv, dw, u, v, w, dirps)
       !! Thomas algorithm implementation. So much more easier than the
       !! distributed algorithm. It is intended to work only on a single rank
       !! so there is no MPI communication.
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(out) :: du, duu, d2u
+      class(field_t), intent(inout) :: du, dv, dw
       class(field_t), intent(in) :: u, v, w
       type(dirps_t), intent(in) :: dirps
 
@@ -286,7 +350,7 @@ module m_cuda_backend
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(out) :: u_y, v_y, w_y
+      class(field_t), intent(inout) :: u_y, v_y, w_y
       class(field_t), intent(in) :: u, v, w
 
    end subroutine trans_x2y_cuda
@@ -295,7 +359,7 @@ module m_cuda_backend
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(out) :: u_z, v_z, w_z
+      class(field_t), intent(inout) :: u_z, v_z, w_z
       class(field_t), intent(in) :: u, v, w
 
    end subroutine trans_x2z_cuda
@@ -314,7 +378,7 @@ module m_cuda_backend
 !      implicit none
 !
 !      class(field_t), intent(in) :: arr_send_b, arr_send_e
-!      class(field_t), intent(out) :: arr_send_b, arr_send_e
+!      class(field_t), intent(inout) :: arr_send_b, arr_send_e
 !      integer, intent(in) :: n_size, next, prev, MPI_FP_PREC
 !
 !      integer :: mpireq(4), srerr(4), tag1 = 1234, tag2 = 2341

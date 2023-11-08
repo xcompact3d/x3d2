@@ -66,13 +66,26 @@ contains
 
       class(time_intg_t), intent(in) :: self
       integer, intent(in) :: n_iter
+      integer :: i
 
       print*, 'start run'
-      call self%backend%transeq(self%du, self%dv, self%dw, &
+
+      do i = 1, n_iter
+         call self%backend%transeq(self%du, self%dv, self%dw, &
                                 self%u, self%v, self%w)
 
-      ! time integration
-      print*, 'run'
+         ! time integration
+         !call vecadd(u, v, w, du, dv, dw)
+
+         !! pressure stuff
+         !call self%divergence(u, v, w, udiv)
+         !call self%poisson(udiv, p)
+         !call self%gradient(p, px, py, pz)
+         !! velocity correction
+         !call vecadd(u, v, w, px, py, pz)
+      end do
+
+      print*, 'run end'
 
    end subroutine run
 

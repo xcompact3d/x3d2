@@ -92,7 +92,8 @@ contains
       class(field_t), intent(out) :: du, dv, dw
       class(field_t), intent(in) :: u, v, w
 
-      class(field_t), pointer :: u_y, v_y, w_y, u_z, v_z, w_z, du_y, dv_y, dw_y, du_z, dv_z, dw_z
+      class(field_t), pointer :: u_y, v_y, w_y, u_z, v_z, w_z, &
+                                 du_y, dv_y, dw_y, du_z, dv_z, dw_z
 
       !1/2(nabla u curl u + u nabla u) + nu nablasq u
 
@@ -111,7 +112,7 @@ contains
       ! reorder data from x orientation to y orientation
       call self%trans_x2y(u_y, v_y, w_y, u, v, w)
       ! similar to the x direction, obtain derivatives in y.
-      call self%transeq_y(dv_y, du_y, dw_y, v_y, u_y, w_y, self%ydirps)
+      call self%transeq_y(du_y, dv_y, dw_y, u_y, v_y, w_y, self%ydirps)
 
       ! we don't need the velocities in y orientation any more, so release
       ! them to open up space.
@@ -132,7 +133,7 @@ contains
       ! reorder from x to z
       call self%trans_x2z(u_z, v_z, w_z, u, v, w)
       ! get the derivatives in z
-      call self%transeq_z(dw_z, du_z, dv_z, w_z, u_z, v_z, self%zdirps)
+      call self%transeq_z(du_z, dv_z, dw_z, u_z, v_z, w_z, self%zdirps)
 
       ! there is no need to keep velocities in z orientation around, so release
       call self%allocator%release_block(u_z)
