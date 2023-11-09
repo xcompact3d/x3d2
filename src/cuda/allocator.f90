@@ -1,4 +1,5 @@
 module m_cuda_allocator
+   use m_common, only: dp
    use m_allocator, only: allocator_t, field_t
    use m_common, only: dp
 

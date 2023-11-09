@@ -8,6 +8,7 @@ module m_cuda_backend
    use m_cuda_common, only: SZ
    use m_tdsops, only: dirps_t
    use m_cuda_tdsops, only: cuda_tdsops_t
+   use m_cuda_kernels_dist, only: der_univ_dist, der_univ_subs
 
    implicit none
 
@@ -164,9 +165,13 @@ module m_cuda_backend
                                  temp_dv, temp_dvu, temp_d2v, &
                                  temp_dw, temp_dwu, temp_d2w
 
-      real, device, pointer, dimension(:, :, :) :: du_dev, duu_dev, d2u_dev, &
+      real(dp), device, pointer, dimension(:, :, :) :: du_dev, duu_dev, d2u_dev, &
                                                    dv_dev, dvu_dev, d2v_dev, &
                                                    dw_dev, dwu_dev, d2w_dev
+
+      real(dp), device, pointer, dimension(:, :, :) :: u_dev
+
+      type(cuda_tdsops_t), pointer :: local_der1st
 
       print*, 'transeq_cuda_dist'
       ! MPI communication for halo data
@@ -195,6 +200,7 @@ module m_cuda_backend
       temp_du => self%allocator%get_block()
       temp_duu => self%allocator%get_block()
       temp_d2u => self%allocator%get_block()
+      print*, 'get fields'
 
       select type(temp_du)
       type is (cuda_field_t); du_dev => temp_du%data_d
@@ -205,7 +211,25 @@ module m_cuda_backend
       select type(temp_d2u)
       type is (cuda_field_t); d2u_dev => temp_d2u%data_d
       end select
+      print*, 'set device pointers'
 
+      select type (der1st => dirps%der1st)
+      type is (cuda_tdsops_t)
+         local_der1st => der1st
+      end select
+
+      select type(u)
+      type is (cuda_field_t); u_dev => u%data_d
+      end select
+
+      call der_univ_dist<<<blocks, threads>>>( &
+         du_dev, self%send_s_dev, self%send_e_dev, u_dev, &
+         self%u_recv_s_dev, self%u_recv_e_dev, &
+         local_der1st%coeffs_s_dev, local_der1st%coeffs_e_dev, &
+         local_der1st%coeffs_dev, local_der1st%n, &
+         local_der1st%dist_fw_dev, local_der1st%dist_bw_dev, &
+         local_der1st%dist_af_dev &
+      )
       ! this functions is not yet implemented, but is very similar to the one we have
       !call transeq_fused_dist<<<blocks, threads>>>( &
       !   du_dev, duu_dev, d2u_dev, &
