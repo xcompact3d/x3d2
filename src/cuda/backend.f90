@@ -8,7 +8,7 @@ module m_cuda_backend
    use m_cuda_common, only: SZ
    use m_tdsops, only: dirps_t
    use m_cuda_tdsops, only: cuda_tdsops_t
-   use m_cuda_kernels_dist, only: der_univ_dist, der_univ_subs
+   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
 
    implicit none
 
@@ -17,7 +17,10 @@ module m_cuda_backend
       integer :: MPI_FP_PREC = dp
       real(dp), device, allocatable, dimension(:, :, :) :: &
          u_recv_s_dev, u_recv_e_dev, u_send_s_dev, u_send_e_dev, &
-         send_s_dev, send_e_dev, recv_s_dev, recv_e_dev
+         v_recv_s_dev, v_recv_e_dev, v_send_s_dev, v_send_e_dev, &
+         du_send_s_dev, du_send_e_dev, du_recv_s_dev, du_recv_e_dev, &
+         dud_send_s_dev, dud_send_e_dev, dud_recv_s_dev, dud_recv_e_dev, &
+         d2u_send_s_dev, d2u_send_e_dev, d2u_recv_s_dev, d2u_recv_e_dev
       type(dim3) :: xblocks, xthreads, yblocks, ythreads, zblocks, zthreads
     contains
       procedure :: transeq_x => transeq_x_cuda
@@ -59,11 +62,20 @@ module m_cuda_backend
       print*, 'assignments done'
 
       backend%xthreads = dim3(SZ, 1, 1)
-      backend%xblocks = dim3(1, 1, 1)
+      backend%xblocks = dim3(globs%n_groups_x, 1, 1)
 
       allocate(cuda_tdsops_t :: backend%xdirps%der1st)
       allocate(cuda_tdsops_t :: backend%ydirps%der1st)
       allocate(cuda_tdsops_t :: backend%zdirps%der1st)
+      allocate(cuda_tdsops_t :: backend%xdirps%der1st_sym)
+      allocate(cuda_tdsops_t :: backend%ydirps%der1st_sym)
+      allocate(cuda_tdsops_t :: backend%zdirps%der1st_sym)
+      allocate(cuda_tdsops_t :: backend%xdirps%der2nd)
+      allocate(cuda_tdsops_t :: backend%ydirps%der2nd)
+      allocate(cuda_tdsops_t :: backend%zdirps%der2nd)
+      allocate(cuda_tdsops_t :: backend%xdirps%der2nd_sym)
+      allocate(cuda_tdsops_t :: backend%ydirps%der2nd_sym)
+      allocate(cuda_tdsops_t :: backend%zdirps%der2nd_sym)
 
       select type (der1st => backend%xdirps%der1st)
       type is (cuda_tdsops_t)
@@ -80,6 +92,51 @@ module m_cuda_backend
          der1st = cuda_tdsops_t(globs%nz_loc, globs%dz, &
                                 'first-deriv', 'compact6')
       end select
+      select type (der1st_sym => backend%xdirps%der1st_sym)
+      type is (cuda_tdsops_t)
+         der1st_sym = cuda_tdsops_t(globs%nx_loc, globs%dx, &
+                                    'first-deriv', 'compact6')
+      end select
+      select type (der1st_sym => backend%ydirps%der1st_sym)
+      type is (cuda_tdsops_t)
+         der1st_sym = cuda_tdsops_t(globs%ny_loc, globs%dy, &
+                                    'first-deriv', 'compact6')
+      end select
+      select type (der1st_sym => backend%zdirps%der1st_sym)
+      type is (cuda_tdsops_t)
+         der1st_sym = cuda_tdsops_t(globs%nz_loc, globs%dz, &
+                                    'first-deriv', 'compact6')
+      end select
+      select type (der2nd => backend%xdirps%der2nd)
+      type is (cuda_tdsops_t)
+         der2nd = cuda_tdsops_t(globs%nx_loc, globs%dx, &
+                                'second-deriv', 'compact6')
+      end select
+      select type (der2nd => backend%ydirps%der2nd)
+      type is (cuda_tdsops_t)
+         der2nd = cuda_tdsops_t(globs%nx_loc, globs%dx, &
+                                'second-deriv', 'compact6')
+      end select
+      select type (der2nd => backend%zdirps%der2nd)
+      type is (cuda_tdsops_t)
+         der2nd = cuda_tdsops_t(globs%nx_loc, globs%dx, &
+                                'second-deriv', 'compact6')
+      end select
+      select type (der2nd_sym => backend%xdirps%der2nd_sym)
+      type is (cuda_tdsops_t)
+         der2nd_sym = cuda_tdsops_t(globs%nx_loc, globs%dx, &
+                                    'second-deriv', 'compact6')
+      end select
+      select type (der2nd_sym => backend%ydirps%der2nd_sym)
+      type is (cuda_tdsops_t)
+         der2nd_sym = cuda_tdsops_t(globs%nx_loc, globs%dx, &
+                                    'second-deriv', 'compact6')
+      end select
+      select type (der2nd_sym => backend%zdirps%der2nd_sym)
+      type is (cuda_tdsops_t)
+         der2nd_sym = cuda_tdsops_t(globs%nx_loc, globs%dx, &
+                                    'second-deriv', 'compact6')
+      end select
       !print*, backend%ydirps%der1st%coeffs
 
       print*, 'der1sts assigned'
@@ -92,11 +149,23 @@ module m_cuda_backend
       allocate(backend%u_send_e_dev(SZ, n_halo, n_block))
       allocate(backend%u_recv_s_dev(SZ, n_halo, n_block))
       allocate(backend%u_recv_e_dev(SZ, n_halo, n_block))
+      allocate(backend%v_send_s_dev(SZ, n_halo, n_block))
+      allocate(backend%v_send_e_dev(SZ, n_halo, n_block))
+      allocate(backend%v_recv_s_dev(SZ, n_halo, n_block))
+      allocate(backend%v_recv_e_dev(SZ, n_halo, n_block))
 
-      allocate(backend%send_s_dev(SZ, 1, n_block))
-      allocate(backend%send_e_dev(SZ, 1, n_block))
-      allocate(backend%recv_s_dev(SZ, 1, n_block))
-      allocate(backend%recv_e_dev(SZ, 1, n_block))
+      allocate(backend%du_send_s_dev(SZ, 1, n_block))
+      allocate(backend%du_send_e_dev(SZ, 1, n_block))
+      allocate(backend%du_recv_s_dev(SZ, 1, n_block))
+      allocate(backend%du_recv_e_dev(SZ, 1, n_block))
+      allocate(backend%dud_send_s_dev(SZ, 1, n_block))
+      allocate(backend%dud_send_e_dev(SZ, 1, n_block))
+      allocate(backend%dud_recv_s_dev(SZ, 1, n_block))
+      allocate(backend%dud_recv_e_dev(SZ, 1, n_block))
+      allocate(backend%d2u_send_s_dev(SZ, 1, n_block))
+      allocate(backend%d2u_send_e_dev(SZ, 1, n_block))
+      allocate(backend%d2u_recv_s_dev(SZ, 1, n_block))
+      allocate(backend%d2u_recv_e_dev(SZ, 1, n_block))
 
       ! Assign transeq_? into right functions
       ! The idea is that these assignments will be conditional
@@ -151,12 +220,12 @@ module m_cuda_backend
 
    end subroutine transeq_z_cuda
 
-   subroutine transeq_cuda_dist(self, du, duu, d2u, u, v, w, dirps, &
+   subroutine transeq_cuda_dist(self, du, dv, dw, u, v, w, dirps, &
                                 blocks, threads)
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: du, duu, d2u
+      class(field_t), intent(inout) :: du, dv, dw
       class(field_t), intent(in) :: u, v, w
       type(dirps_t), intent(in) :: dirps
       type(dim3), intent(in) :: blocks, threads
@@ -165,15 +234,34 @@ module m_cuda_backend
                                  temp_dv, temp_dvu, temp_d2v, &
                                  temp_dw, temp_dwu, temp_d2w
 
-      real(dp), device, pointer, dimension(:, :, :) :: du_dev, duu_dev, d2u_dev, &
-                                                   dv_dev, dvu_dev, d2v_dev, &
-                                                   dw_dev, dwu_dev, d2w_dev
+      real(dp), device, pointer, dimension(:, :, :) :: &
+         du_dev, duu_dev, d2u_dev, &
+         dv_dev, dvu_dev, d2v_dev, &
+         dw_dev, dwu_dev, d2w_dev
 
-      real(dp), device, pointer, dimension(:, :, :) :: u_dev
+      real(dp), device, pointer, dimension(:, :, :) :: u_dev, v_dev, w_dev
 
-      type(cuda_tdsops_t), pointer :: local_der1st
+      type(cuda_tdsops_t), pointer :: der1st, der1st_sym, der2nd, der2nd_sym
 
       print*, 'transeq_cuda_dist'
+
+      select type(u); type is (cuda_field_t); u_dev => u%data_d; end select
+      select type(v); type is (cuda_field_t); v_dev => v%data_d; end select
+      select type(w); type is (cuda_field_t); w_dev => w%data_d; end select
+
+      select type (tdsops => dirps%der1st)
+      type is (cuda_tdsops_t); der1st => tdsops
+      end select
+      select type (tdsops => dirps%der1st_sym)
+      type is (cuda_tdsops_t); der1st_sym => tdsops
+      end select
+      select type (tdsops => dirps%der2nd)
+      type is (cuda_tdsops_t); der2nd => tdsops
+      end select
+      select type (tdsops => dirps%der2nd_sym)
+      type is (cuda_tdsops_t); der2nd_sym => tdsops
+      end select
+
       ! MPI communication for halo data
       ! first slice the halo data
       !call slice_layers<<<blocks, threads>>>(u, buff_send_u_b, buff_send_u_e, derps%n_halo)
@@ -213,31 +301,18 @@ module m_cuda_backend
       end select
       print*, 'set device pointers'
 
-      select type (der1st => dirps%der1st)
-      type is (cuda_tdsops_t)
-         local_der1st => der1st
-      end select
-
-      select type(u)
-      type is (cuda_field_t); u_dev => u%data_d
-      end select
-
-      call der_univ_dist<<<blocks, threads>>>( &
-         du_dev, self%send_s_dev, self%send_e_dev, u_dev, &
-         self%u_recv_s_dev, self%u_recv_e_dev, &
-         local_der1st%coeffs_s_dev, local_der1st%coeffs_e_dev, &
-         local_der1st%coeffs_dev, local_der1st%n, &
-         local_der1st%dist_fw_dev, local_der1st%dist_bw_dev, &
-         local_der1st%dist_af_dev &
+      call transeq_3fused_dist<<<blocks, threads>>>( &
+         du_dev, duu_dev, d2u_dev, &
+         self%du_send_s_dev, self%du_send_e_dev, &
+         self%dud_send_s_dev, self%dud_send_e_dev, &
+         self%d2u_send_s_dev, self%d2u_send_e_dev, &
+         u_dev, self%u_recv_s_dev, self%u_recv_e_dev, &
+         v_dev, self%v_recv_s_dev, self%v_recv_e_dev, der1st%n, &
+         der1st%coeffs_s_dev, der1st%coeffs_e_dev, der1st%coeffs_dev, &
+         der1st%dist_fw_dev, der1st%dist_bw_dev, der1st%dist_af_dev, &
+         der2nd%coeffs_s_dev, der2nd%coeffs_e_dev, der2nd%coeffs_dev, &
+         der2nd%dist_fw_dev, der2nd%dist_bw_dev, der2nd%dist_af_dev &
       )
-      ! this functions is not yet implemented, but is very similar to the one we have
-      !call transeq_fused_dist<<<blocks, threads>>>( &
-      !   du_dev, duu_dev, d2u_dev, &
-      !   u, u, derps%n, self%nu, &
-      !   derps%fdist_bc_dev, derps%fdist_fr_dev, derps%sdist_bc_dev, derps%sdist_fr_dev, &
-      !   derps%alfai, derps%afi, derps%bfi, &
-      !   derps%alsai, derps%asi, derps%bsi, derps%csi, derps%dsi &
-      !)
 
       temp_dv => self%allocator%get_block()
       temp_dvu => self%allocator%get_block()

@@ -7,6 +7,7 @@ module m_common
    type :: globs_t
       integer :: nx, ny, nz
       integer :: nx_loc, ny_loc, nz_loc
+      integer :: n_groups_x, n_groups_y, n_groups_z
       real(dp) :: Lx, Ly, Lz
       real(dp) :: dx, dy, dz
       integer :: nproc_x = 1, nproc_y = 1, nproc_z = 1

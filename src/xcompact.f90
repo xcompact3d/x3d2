@@ -21,9 +21,7 @@ program xcompact
 
    type(cuda_allocator_t), target :: cuda_allocator
 
-   cuda_allocator = cuda_allocator_t([SZ, 512, 512*512/SZ])
-   allocator => cuda_allocator
-   print*, 'allocator done'
+   real(dp) :: t_start, t_end
 
    ! read L_x/y/z from the input file
    globs%Lx = 2*pi; globs%Ly = 2*pi; globs%Lz = 2*pi
@@ -39,13 +37,21 @@ program xcompact
    globs%ny_loc = globs%ny/globs%nproc_y
    globs%nz_loc = globs%nz/globs%nproc_z
 
+   globs%n_groups_x = globs%ny_loc*globs%nz_loc/SZ
+   globs%n_groups_y = globs%nx_loc*globs%nz_loc/SZ
+   globs%n_groups_z = globs%nx_loc*globs%ny_loc/SZ
+
    globs%dx = globs%Lx/globs%nx
    globs%dy = globs%Ly/globs%ny
    globs%dz = globs%Lz/globs%nz
 
-   xdirps%n = 512
-   ydirps%n = 512
-   zdirps%n = 512
+   xdirps%n = globs%nx_loc
+   ydirps%n = globs%ny_loc
+   zdirps%n = globs%nz_loc
+
+   cuda_allocator = cuda_allocator_t([SZ, globs%nx_loc, globs%n_groups_x])
+   allocator => cuda_allocator
+   print*, 'allocator done'
 
    cuda_backend = cuda_backend_t(globs, allocator, xdirps, ydirps, zdirps)
    backend => cuda_backend
@@ -61,8 +67,11 @@ program xcompact
    time_integrator = time_intg_t(allocator=allocator, &
                                  backend=backend)
 
+   call cpu_time(t_start)
    print*, 'time integrator done'
-   call time_integrator%run(1)
+   call time_integrator%run(10000)
    print*, 'end'
+   call cpu_time(t_end)
+   print*, 'Time: ', t_end - t_start
 
 end program xcompact

@@ -48,7 +48,7 @@ contains
          constructor%nvars = 3
       end if
 
-      constructor%nolds = 1
+      constructor%nolds = 0
 
       allocate(constructor%olds(constructor%nvars, constructor%nolds))
 
@@ -72,7 +72,7 @@ contains
 
       do i = 1, n_iter
          call self%backend%transeq(self%du, self%dv, self%dw, &
-                                self%u, self%v, self%w)
+                                   self%u, self%v, self%w)
 
          ! time integration
          !call vecadd(u, v, w, du, dv, dw)
