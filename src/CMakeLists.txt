@@ -13,6 +13,7 @@ set(SRC
 set(CUDASRC
   cuda/common.f90
   cuda/cuda_allocator.f90
+  cuda/exec_dist.f90
   cuda/kernels_dist.f90
   cuda/tdsops.f90
 )
