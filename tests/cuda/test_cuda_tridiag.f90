@@ -5,7 +5,8 @@ program test_cuda_tridiag
 
    use m_common, only: dp, pi
    use m_cuda_common, only: SZ
-   use m_cuda_kernels_dist, only: der_univ_dist, der_univ_subs
+   use m_cuda_exec_dist, only: exec_dist_tds_compact
+   use m_cuda_sendrecv, only: sendrecv_fields
    use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
 
    implicit none
@@ -17,7 +18,7 @@ program test_cuda_tridiag
       u_recv_s_dev, u_recv_e_dev, u_send_s_dev, u_send_e_dev
 
    real(dp), device, allocatable, dimension(:, :, :) :: &
-      send_s_dev, send_e_dev, recv_s_dev, recv_e_dev
+      du_send_s_dev, du_send_e_dev, du_recv_s_dev, du_recv_e_dev
 
    type(cuda_tdsops_t) :: tdsops
 
@@ -75,8 +76,8 @@ program test_cuda_tridiag
    allocate(u_recv_s_dev(SZ, n_halo, n_block))
    allocate(u_recv_e_dev(SZ, n_halo, n_block))
 
-   allocate(send_s_dev(SZ, 1, n_block), send_e_dev(SZ, 1, n_block))
-   allocate(recv_s_dev(SZ, 1, n_block), recv_e_dev(SZ, 1, n_block))
+   allocate(du_send_s_dev(SZ, 1, n_block), du_send_e_dev(SZ, 1, n_block))
+   allocate(du_recv_s_dev(SZ, 1, n_block), du_recv_e_dev(SZ, 1, n_block))
 
    ! preprocess the operator and coefficient arrays
    tdsops = cuda_tdsops_init(n, dx_per, operation='second-deriv', &
@@ -91,59 +92,14 @@ program test_cuda_tridiag
       u_send_e_dev(:, :, :) = u_dev(:, n - n_halo + 1:n, :)
 
       ! halo exchange
-      if (nproc == 1) then
-         u_recv_s_dev = u_send_e_dev
-         u_recv_e_dev = u_send_s_dev
-      else
-         ! MPI send/recv for multi-rank simulations
-         call MPI_Isend(u_send_s_dev, SZ*n_halo*n_block, &
-                        MPI_DOUBLE_PRECISION, pprev, tag1, MPI_COMM_WORLD, &
-                        mpireq(1), srerr(1))
-         call MPI_Irecv(u_recv_e_dev, SZ*n_halo*n_block, &
-                        MPI_DOUBLE_PRECISION, pnext, tag1, MPI_COMM_WORLD, &
-                        mpireq(2), srerr(2))
-         call MPI_Isend(u_send_e_dev, SZ*n_halo*n_block, &
-                        MPI_DOUBLE_PRECISION, pnext, tag2, MPI_COMM_WORLD, &
-                        mpireq(3), srerr(3))
-         call MPI_Irecv(u_recv_s_dev, SZ*n_halo*n_block, &
-                        MPI_DOUBLE_PRECISION, pprev, tag2, MPI_COMM_WORLD, &
-                        mpireq(4), srerr(4))
+      call sendrecv_fields(u_recv_s_dev, u_recv_e_dev, &
+                           u_send_s_dev, u_send_e_dev, &
+                           SZ*4*n_block, nproc, pprev, pnext)
 
-         call MPI_Waitall(4, mpireq, MPI_STATUSES_IGNORE, ierr)
-      end if
-
-
-      call der_univ_dist<<<blocks, threads>>>( &
-         du_dev, send_s_dev, send_e_dev, u_dev, u_recv_s_dev, u_recv_e_dev, &
-         tdsops%coeffs_s_dev, tdsops%coeffs_e_dev, tdsops%coeffs_dev, &
-         n, tdsops%dist_fw_dev, tdsops%dist_bw_dev, tdsops%dist_af_dev &
-      )
-
-      ! halo exchange for 2x2 systems
-      if (nproc == 1) then
-         recv_s_dev = send_e_dev
-         recv_e_dev = send_s_dev
-      else
-         ! MPI send/recv for multi-rank simulations
-         call MPI_Isend(send_s_dev, SZ*n_block, &
-                        MPI_DOUBLE_PRECISION, pprev, tag1, MPI_COMM_WORLD, &
-                        mpireq(1), srerr(1))
-         call MPI_Irecv(recv_e_dev, SZ*n_block, &
-                        MPI_DOUBLE_PRECISION, pnext, tag2, MPI_COMM_WORLD, &
-                        mpireq(2), srerr(2))
-         call MPI_Isend(send_e_dev, SZ*n_block, &
-                        MPI_DOUBLE_PRECISION, pnext, tag2, MPI_COMM_WORLD, &
-                        mpireq(3), srerr(3))
-         call MPI_Irecv(recv_s_dev, SZ*n_block, &
-                        MPI_DOUBLE_PRECISION, pprev, tag1, MPI_COMM_WORLD, &
-                        mpireq(4), srerr(4))
-
-         call MPI_Waitall(4, mpireq, MPI_STATUSES_IGNORE, ierr)
-      end if
-
-      call der_univ_subs<<<blocks, threads>>>( &
-         du_dev, recv_s_dev, recv_e_dev, &
-         n, tdsops%dist_sa_dev, tdsops%dist_sc_dev &
+      call exec_dist_tds_compact( &
+         du_dev, u_dev, u_recv_s_dev, u_recv_e_dev, &
+         du_send_s_dev, du_send_e_dev, du_recv_s_dev, du_recv_e_dev, &
+         tdsops, nproc, pprev, pnext, blocks, threads &
       )
    end do
 
