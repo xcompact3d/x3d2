@@ -5,7 +5,8 @@ program test_cuda_tridiag
 
    use m_common, only: dp, pi
    use m_cuda_common, only: SZ
-   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
+   use m_cuda_exec_dist, only: exec_dist_transeq_3fused
+   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
    use m_cuda_tdsops, only: cuda_tdsops_t
 
    implicit none
@@ -119,116 +120,25 @@ program test_cuda_tridiag
       v_send_s_dev(:, :, :) = v_dev(:, 1:4, :)
       v_send_e_dev(:, :, :) = v_dev(:, n - n_halo + 1:n, :)
 
+
       ! halo exchange
-      if (nproc == 1) then
-         u_recv_s_dev = u_send_e_dev
-         u_recv_e_dev = u_send_s_dev
-         v_recv_s_dev = v_send_e_dev
-         v_recv_e_dev = v_send_s_dev
-      else
-         ! MPI send/recv for multi-rank simulations
-         call MPI_Isend(u_send_s_dev, SZ*n_halo*n_block, &
-                        MPI_DOUBLE_PRECISION, pprev, tag1, MPI_COMM_WORLD, &
-                        mpireq(1), srerr(1))
-         call MPI_Irecv(u_recv_e_dev, SZ*n_halo*n_block, &
-                        MPI_DOUBLE_PRECISION, pnext, tag1, MPI_COMM_WORLD, &
-                        mpireq(2), srerr(2))
-         call MPI_Isend(u_send_e_dev, SZ*n_halo*n_block, &
-                        MPI_DOUBLE_PRECISION, pnext, tag2, MPI_COMM_WORLD, &
-                        mpireq(3), srerr(3))
-         call MPI_Irecv(u_recv_s_dev, SZ*n_halo*n_block, &
-                        MPI_DOUBLE_PRECISION, pprev, tag2, MPI_COMM_WORLD, &
-                        mpireq(4), srerr(4))
+      call sendrecv_fields(u_recv_s_dev, u_recv_e_dev, &
+                           u_send_s_dev, u_send_e_dev, &
+                           SZ*4*n_block, nproc, pprev, pnext)
 
-         call MPI_Isend(v_send_s_dev, SZ*n_halo*n_block, &
-                        MPI_DOUBLE_PRECISION, pprev, tag1, MPI_COMM_WORLD, &
-                        mpireq(5), srerr(5))
-         call MPI_Irecv(v_recv_e_dev, SZ*n_halo*n_block, &
-                        MPI_DOUBLE_PRECISION, pnext, tag1, MPI_COMM_WORLD, &
-                        mpireq(6), srerr(6))
-         call MPI_Isend(v_send_e_dev, SZ*n_halo*n_block, &
-                        MPI_DOUBLE_PRECISION, pnext, tag2, MPI_COMM_WORLD, &
-                        mpireq(7), srerr(7))
-         call MPI_Irecv(v_recv_s_dev, SZ*n_halo*n_block, &
-                        MPI_DOUBLE_PRECISION, pprev, tag2, MPI_COMM_WORLD, &
-                        mpireq(8), srerr(8))
+      call sendrecv_fields(v_recv_s_dev, v_recv_e_dev, &
+                           v_send_s_dev, v_send_e_dev, &
+                           SZ*4*n_block, nproc, pprev, pnext)
 
-         call MPI_Waitall(8, mpireq, MPI_STATUSES_IGNORE, ierr)
-      end if
-
-      call transeq_3fused_dist<<<blocks, threads>>>( &
-         du_dev, dud_dev, d2u_dev, &
-         du_send_s_dev, du_send_e_dev, &
-         dud_send_s_dev, dud_send_e_dev, &
-         d2u_send_s_dev, d2u_send_e_dev, &
+      call exec_dist_transeq_3fused( &
+         r_u_dev, &
          u_dev, u_recv_s_dev, u_recv_e_dev, &
-         v_dev, v_recv_s_dev, v_recv_e_dev, n, &
-         der1st%coeffs_s_dev, der1st%coeffs_e_dev, der1st%coeffs_dev, &
-         der1st%dist_fw_dev, der1st%dist_bw_dev, der1st%dist_af_dev, &
-         der2nd%coeffs_s_dev, der2nd%coeffs_e_dev, der2nd%coeffs_dev, &
-         der2nd%dist_fw_dev, der2nd%dist_bw_dev, der2nd%dist_af_dev &
-      )
-
-      ! halo exchange for 2x2 systems
-      if (nproc == 1) then
-         du_recv_s_dev = du_send_e_dev
-         du_recv_e_dev = du_send_s_dev
-         dud_recv_s_dev = dud_send_e_dev
-         dud_recv_e_dev = dud_send_s_dev
-         d2u_recv_s_dev = d2u_send_e_dev
-         d2u_recv_e_dev = d2u_send_s_dev
-      else
-         ! MPI send/recv for multi-rank simulations
-         call MPI_Isend(du_send_s_dev, SZ*n_block, &
-                        MPI_DOUBLE_PRECISION, pprev, tag1, MPI_COMM_WORLD, &
-                        mpireq(1), srerr(1))
-         call MPI_Irecv(du_recv_e_dev, SZ*n_block, &
-                        MPI_DOUBLE_PRECISION, pnext, tag2, MPI_COMM_WORLD, &
-                        mpireq(2), srerr(2))
-         call MPI_Isend(du_send_e_dev, SZ*n_block, &
-                        MPI_DOUBLE_PRECISION, pnext, tag2, MPI_COMM_WORLD, &
-                        mpireq(3), srerr(3))
-         call MPI_Irecv(du_recv_s_dev, SZ*n_block, &
-                        MPI_DOUBLE_PRECISION, pprev, tag1, MPI_COMM_WORLD, &
-                        mpireq(4), srerr(4))
-
-         call MPI_Isend(dud_send_s_dev, SZ*n_block, &
-                        MPI_DOUBLE_PRECISION, pprev, tag1, MPI_COMM_WORLD, &
-                        mpireq(5), srerr(5))
-         call MPI_Irecv(dud_recv_e_dev, SZ*n_block, &
-                        MPI_DOUBLE_PRECISION, pnext, tag2, MPI_COMM_WORLD, &
-                        mpireq(6), srerr(6))
-         call MPI_Isend(dud_send_e_dev, SZ*n_block, &
-                        MPI_DOUBLE_PRECISION, pnext, tag2, MPI_COMM_WORLD, &
-                        mpireq(7), srerr(7))
-         call MPI_Irecv(dud_recv_s_dev, SZ*n_block, &
-                        MPI_DOUBLE_PRECISION, pprev, tag1, MPI_COMM_WORLD, &
-                        mpireq(8), srerr(8))
-
-         call MPI_Isend(d2u_send_s_dev, SZ*n_block, &
-                        MPI_DOUBLE_PRECISION, pprev, tag1, MPI_COMM_WORLD, &
-                        mpireq(9), srerr(9))
-         call MPI_Irecv(d2u_recv_e_dev, SZ*n_block, &
-                        MPI_DOUBLE_PRECISION, pnext, tag2, MPI_COMM_WORLD, &
-                        mpireq(10), srerr(10))
-         call MPI_Isend(d2u_send_e_dev, SZ*n_block, &
-                        MPI_DOUBLE_PRECISION, pnext, tag2, MPI_COMM_WORLD, &
-                        mpireq(11), srerr(11))
-         call MPI_Irecv(d2u_recv_s_dev, SZ*n_block, &
-                        MPI_DOUBLE_PRECISION, pprev, tag1, MPI_COMM_WORLD, &
-                        mpireq(12), srerr(12))
-
-         call MPI_Waitall(12, mpireq, MPI_STATUSES_IGNORE, ierr)
-      end if
-
-      call transeq_3fused_subs<<<blocks, threads>>>( &
-         r_u_dev, v_dev, du_dev, dud_dev, d2u_dev, &
-         du_recv_s_dev, du_recv_e_dev, &
-         dud_recv_s_dev, dud_recv_e_dev, &
-         d2u_recv_s_dev, d2u_recv_e_dev, &
-         der1st%dist_sa_dev, der1st%dist_sc_dev, &
-         der2nd%dist_sa_dev, der2nd%dist_sc_dev, &
-         n, nu &
+         v_dev, v_recv_s_dev, v_recv_e_dev, &
+         du_dev, dud_dev, d2u_dev, &
+         du_send_s_dev, du_send_e_dev, du_recv_s_dev, du_recv_e_dev, &
+         dud_send_s_dev, dud_send_e_dev, dud_recv_s_dev, dud_recv_e_dev, &
+         d2u_send_s_dev, d2u_send_e_dev, d2u_recv_s_dev, d2u_recv_e_dev, &
+         der1st, der2nd, nu, nproc, pprev, pnext, blocks, threads &
       )
    end do
 
