@@ -2,6 +2,7 @@ module m_slab
    use m_stencil, only: stencil
    use m_tridiagsolv, only: tridiagsolv
    use m_allocator, only: allocator_t, field_t
+   use m_common, only: dp
 
    implicit none
 
@@ -37,7 +38,7 @@ contains
    function get_component_ptr(self, i) result(ptr)
       class(slab_t), intent(in) :: self
       integer, intent(in) :: i
-      real, pointer :: ptr(:, :, :)
+      real(dp), pointer :: ptr(:, :, :)
 
       select case (i)
       case (1)

@@ -1,4 +1,6 @@
 module m_allocator
+   use m_common, only: dp
+
    implicit none
 
    type :: allocator_t
@@ -52,7 +54,7 @@ module m_allocator
      !! field.  User code is currently responsible for incrementing
      !! the reference count.
       type(field_t), pointer :: next
-      real, allocatable :: data(:, :, :)
+      real(dp), allocatable :: data(:, :, :)
       integer :: refcount = 0
       integer :: id !! An integer identifying the memory block.
    end type field_t

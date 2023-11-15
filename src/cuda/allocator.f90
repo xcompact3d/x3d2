@@ -1,5 +1,7 @@
 module m_cuda_allocator
    use m_allocator, only: allocator_t, field_t
+   use m_common, only: dp
+
    implicit none
 
    type, extends(allocator_t) :: cuda_allocator_t
@@ -8,7 +10,7 @@ module m_cuda_allocator
    end type cuda_allocator_t
 
    type, extends(field_t) :: cuda_field_t
-      real, allocatable, device :: data_d(:, :, :)
+      real(dp), allocatable, device :: data_d(:, :, :)
    end type cuda_field_t
 
    interface cuda_field_t
