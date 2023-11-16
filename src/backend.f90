@@ -1,5 +1,6 @@
 module m_base_backend
    use m_allocator, only: allocator_t, field_t
+   use m_common, only: dp
    use m_tdsops, only: tdsops_t, dirps_t
 
    implicit none
@@ -31,7 +32,7 @@ module m_base_backend
       !! assignments. Later, when a field is no more required, release_block
       !! method of the allocator can be used to make this field available
       !! for later use.
-      real :: nu
+      real(dp) :: nu
       class(allocator_t), pointer :: allocator
       class(dirps_t), pointer :: xdirps, ydirps, zdirps
    contains

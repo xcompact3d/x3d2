@@ -41,7 +41,7 @@ module m_tdsops
                                       der2nd, der2nd_sym, &
                                       stagder_v2p, stagder_p2v, &
                                       interpl_v2p, interpl_p2v
-      integer :: nrank, nproc, rnext, rprev, n
+      integer :: nrank, nproc, pnext, pprev, n
    end type dirps_t
 
 contains

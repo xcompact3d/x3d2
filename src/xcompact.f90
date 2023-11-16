@@ -1,12 +1,15 @@
 program xcompact
-   use m_base_backend
-   use m_cuda_backend
+   use mpi
+
    use m_allocator
-   use m_cuda_allocator
-   use m_common, only: pi, globs_t
-   use m_cuda_common
+   use m_base_backend
+   use m_common, only: pi, globs_t, set_pprev_pnext
    use m_time_integrator, only: time_intg_t
    use m_tdsops, only: tdsops_t
+
+   use m_cuda_allocator
+   use m_cuda_backend
+   use m_cuda_common, only: SZ
    use m_cuda_tdsops, only: cuda_tdsops_t
 
    implicit none
@@ -22,6 +25,10 @@ program xcompact
    type(cuda_allocator_t), target :: cuda_allocator
 
    real(dp) :: t_start, t_end
+   integer :: nrank, ierr
+
+   call MPI_Init(ierr)
+   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
 
    ! read L_x/y/z from the input file
    globs%Lx = 2*pi; globs%Ly = 2*pi; globs%Lz = 2*pi
@@ -31,6 +38,26 @@ program xcompact
 
    ! set nprocs based on run time arguments
    globs%nproc_x = 1; globs%nproc_y = 1; globs%nproc_z = 1
+
+   ! Lets allow a 1D decomposition for the moment
+   !call MPI_Comm_size(MPI_COMM_WORLD, globs%nproc_x, ierr)
+
+   xdirps%nproc = globs%nproc_x
+   ydirps%nproc = globs%nproc_y
+   zdirps%nproc = globs%nproc_z
+
+   ! Better if we move this somewhere else
+   ! Set the pprev and pnext for each rank
+   call set_pprev_pnext( &
+      xdirps%pprev, xdirps%pnext, &
+      ydirps%pprev, ydirps%pnext, &
+      zdirps%pprev, zdirps%pnext, &
+      xdirps%nproc, ydirps%nproc, zdirps%nproc, nrank &
+   )
+
+   print*, 'nrank:', nrank, 'xprev, xnext:', xdirps%pprev, xdirps%pnext
+   print*, 'nrank:', nrank, 'yprev, ynext:', ydirps%pprev, ydirps%pnext
+   print*, 'nrank:', nrank, 'zprev, znext:', zdirps%pprev, zdirps%pnext
 
    ! lets assume simple cases for now
    globs%nx_loc = globs%nx/globs%nproc_x
@@ -56,6 +83,7 @@ program xcompact
    cuda_backend = cuda_backend_t(globs, allocator, xdirps, ydirps, zdirps)
    backend => cuda_backend
    print*, 'backend done'
+
    ! GPU only
    !allocate(cuda_allocator_t :: allocator)
    !allocate(cuda_backend_t :: backend)
@@ -64,12 +92,13 @@ program xcompact
 
    !allocator = cuda_allocator_t([SZ, 512, 512*512/SZ])
    !backend = cuda_backend_t(allocator, xdirps, ydirps, zdirps)
+
    time_integrator = time_intg_t(allocator=allocator, &
                                  backend=backend)
 
    call cpu_time(t_start)
    print*, 'time integrator done'
-   call time_integrator%run(10000)
+   call time_integrator%run(100)
    print*, 'end'
    call cpu_time(t_end)
    print*, 'Time: ', t_end - t_start

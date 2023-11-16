@@ -2,11 +2,14 @@ module m_cuda_backend
    use cudafor
 
    use m_allocator, only: allocator_t, field_t
-   use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
    use m_base_backend, only: base_backend_t
    use m_common, only: dp, globs_t
-   use m_cuda_common, only: SZ
    use m_tdsops, only: dirps_t
+
+   use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
+   use m_cuda_common, only: SZ
+   use m_cuda_exec_dist, only: exec_dist_transeq_3fused
+   use m_cuda_sendrecv, only: sendrecv_3fields
    use m_cuda_tdsops, only: cuda_tdsops_t
    use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
 
@@ -18,6 +21,7 @@ module m_cuda_backend
       real(dp), device, allocatable, dimension(:, :, :) :: &
          u_recv_s_dev, u_recv_e_dev, u_send_s_dev, u_send_e_dev, &
          v_recv_s_dev, v_recv_e_dev, v_send_s_dev, v_send_e_dev, &
+         w_recv_s_dev, w_recv_e_dev, w_send_s_dev, w_send_e_dev, &
          du_send_s_dev, du_send_e_dev, du_recv_s_dev, du_recv_e_dev, &
          dud_send_s_dev, dud_send_e_dev, dud_recv_s_dev, dud_recv_e_dev, &
          d2u_send_s_dev, d2u_send_e_dev, d2u_recv_s_dev, d2u_recv_e_dev
@@ -52,14 +56,14 @@ module m_cuda_backend
 
       select type(allocator)
       type is (cuda_allocator_t)
-      ! class level access to the allocator
-      backend%allocator => allocator
+         ! class level access to the allocator
+         backend%allocator => allocator
       end select
+
       ! class level access to derivative parameters
       backend%xdirps => xdirps
       backend%ydirps => ydirps
       backend%zdirps => zdirps
-      print*, 'assignments done'
 
       backend%xthreads = dim3(SZ, 1, 1)
       backend%xblocks = dim3(globs%n_groups_x, 1, 1)
@@ -137,10 +141,6 @@ module m_cuda_backend
          der2nd_sym = cuda_tdsops_t(globs%nx_loc, globs%dx, &
                                     'second-deriv', 'compact6')
       end select
-      !print*, backend%ydirps%der1st%coeffs
-
-      print*, 'der1sts assigned'
-
 
       n_halo = 4
       n_block = ydirps%n*zdirps%n/SZ
@@ -153,6 +153,10 @@ module m_cuda_backend
       allocate(backend%v_send_e_dev(SZ, n_halo, n_block))
       allocate(backend%v_recv_s_dev(SZ, n_halo, n_block))
       allocate(backend%v_recv_e_dev(SZ, n_halo, n_block))
+      allocate(backend%w_send_s_dev(SZ, n_halo, n_block))
+      allocate(backend%w_send_e_dev(SZ, n_halo, n_block))
+      allocate(backend%w_recv_s_dev(SZ, n_halo, n_block))
+      allocate(backend%w_recv_e_dev(SZ, n_halo, n_block))
 
       allocate(backend%du_send_s_dev(SZ, 1, n_block))
       allocate(backend%du_send_e_dev(SZ, 1, n_block))
@@ -184,7 +188,6 @@ module m_cuda_backend
       class(field_t), intent(in) :: u, v, w
       type(dirps_t), intent(in) :: dirps
 
-      print*, 'transeq_x_cuda'
       call self%transeq_cuda_dist(du, dv, dw, u, v, w, dirps, &
                                   self%xthreads, self%xblocks)
 
@@ -198,7 +201,6 @@ module m_cuda_backend
       class(field_t), intent(in) :: u, v, w
       type(dirps_t), intent(in) :: dirps
 
-      print*, 'transeq_y_cuda'
       ! u, v, w is reordered so that we pass v, u, w
       call self%transeq_cuda_dist(dv, du, dw, v, u, w, dirps, &
                                   self%ythreads, self%yblocks)
@@ -213,8 +215,7 @@ module m_cuda_backend
       class(field_t), intent(in) :: u, v, w
       type(dirps_t), intent(in) :: dirps
 
-      print*, 'transeq_z_cuda'
-      ! w, u, v is reordered so that we pass w, u, v
+      ! u, v, w is reordered so that we pass w, u, v
       call self%transeq_cuda_dist(dw, du, dv, w, u, v, dirps, &
                                   self%zthreads, self%zblocks)
 
@@ -239,15 +240,18 @@ module m_cuda_backend
          dv_dev, dvu_dev, d2v_dev, &
          dw_dev, dwu_dev, d2w_dev
 
-      real(dp), device, pointer, dimension(:, :, :) :: u_dev, v_dev, w_dev
+      real(dp), device, pointer, dimension(:, :, :) :: u_dev, v_dev, w_dev, &
+                                                       ru_dev, rv_dev, rw_dev
 
       type(cuda_tdsops_t), pointer :: der1st, der1st_sym, der2nd, der2nd_sym
-
-      print*, 'transeq_cuda_dist'
 
       select type(u); type is (cuda_field_t); u_dev => u%data_d; end select
       select type(v); type is (cuda_field_t); v_dev => v%data_d; end select
       select type(w); type is (cuda_field_t); w_dev => w%data_d; end select
+
+      select type(du); type is (cuda_field_t); ru_dev => du%data_d; end select
+      select type(dv); type is (cuda_field_t); rv_dev => dv%data_d; end select
+      select type(dw); type is (cuda_field_t); rw_dev => dw%data_d; end select
 
       select type (tdsops => dirps%der1st)
       type is (cuda_tdsops_t); der1st => tdsops
@@ -262,33 +266,29 @@ module m_cuda_backend
       type is (cuda_tdsops_t); der2nd_sym => tdsops
       end select
 
-      ! MPI communication for halo data
-      ! first slice the halo data
-      !call slice_layers<<<blocks, threads>>>(u, buff_send_u_b, buff_send_u_e, derps%n_halo)
-      !call slice_layers<<<blocks, threads>>>(v, buff_send_v_b, buff_send_v_e, derps%n_halo)
-      !call slice_layers<<<blocks, threads>>>(w, buff_send_w_b, buff_send_w_e, derps%n_halo)
+      ! Copy halo data into buffer arrays
+      !self%u_send_s_dev(:, :, :) = u_dev(:, 1:4, :)
+      !self%u_send_e_dev(:, :, :) = u_dev(:, dirps%n - 3:dirps%n, :)
+      !self%v_send_s_dev(:, :, :) = v_dev(:, 1:4, :)
+      !self%v_send_e_dev(:, :, :) = v_dev(:, dirps%n - 3:dirps%n, :)
+      !self%w_send_s_dev(:, :, :) = w_dev(:, 1:4, :)
+      !self%w_send_e_dev(:, :, :) = w_dev(:, dirps%n - 3:dirps%n, :)
 
-      ! then send/recv halos
-      !call communicate_sendrecv(
-      !   buff_send_u_b, buff_send_u_e, buff_recv_u_b, buff_recv_u_e, &
-      !   derps%n_halo*derps%n_perp, derps%prev_rank, derps%next_rank, self%MPI_FP_PREC &
-      !)
-      !call communicate_sendrecv(
-      !   buff_send_v_b, buff_send_v_e, buff_recv_v_b, buff_recv_v_e, &
-      !   derps%n_halo*derps%n_perp, derps%prev_rank, derps%next_rank, self%MPI_FP_PREC &
-      !)
-      !call communicate_sendrecv(
-      !   buff_send_w_b, buff_send_w_e, buff_recv_w_b, buff_recv_w_e, &
-      !   derps%n_halo*derps%n_perp, derps%prev_rank, derps%next_rank, self%MPI_FP_PREC &
-      !)
-
-      ! distder_cuda
+      ! halo exchange
+      call sendrecv_3fields( &
+         self%u_recv_s_dev, self%u_recv_e_dev, &
+         self%v_recv_s_dev, self%v_recv_e_dev, &
+         self%w_recv_s_dev, self%w_recv_e_dev, &
+         self%u_send_s_dev, self%u_send_e_dev, &
+         self%v_send_s_dev, self%v_send_e_dev, &
+         self%w_send_s_dev, self%w_send_e_dev, &
+         SZ*4*blocks%x, dirps%nproc, dirps%pprev, dirps%pnext &
+      )
 
       ! get some fields for storing the result
       temp_du => self%allocator%get_block()
       temp_duu => self%allocator%get_block()
       temp_d2u => self%allocator%get_block()
-      print*, 'get fields'
 
       select type(temp_du)
       type is (cuda_field_t); du_dev => temp_du%data_d
@@ -299,20 +299,27 @@ module m_cuda_backend
       select type(temp_d2u)
       type is (cuda_field_t); d2u_dev => temp_d2u%data_d
       end select
-      print*, 'set device pointers'
 
-      call transeq_3fused_dist<<<blocks, threads>>>( &
+      call exec_dist_transeq_3fused( &
+         ru_dev, &
+         u_dev, self%u_recv_s_dev, self%u_recv_e_dev, &
+         u_dev, self%u_recv_s_dev, self%u_recv_e_dev, &
          du_dev, duu_dev, d2u_dev, &
          self%du_send_s_dev, self%du_send_e_dev, &
+         self%du_recv_s_dev, self%du_recv_e_dev, &
          self%dud_send_s_dev, self%dud_send_e_dev, &
+         self%dud_recv_s_dev, self%dud_recv_e_dev, &
          self%d2u_send_s_dev, self%d2u_send_e_dev, &
-         u_dev, self%u_recv_s_dev, self%u_recv_e_dev, &
-         v_dev, self%v_recv_s_dev, self%v_recv_e_dev, der1st%n, &
-         der1st%coeffs_s_dev, der1st%coeffs_e_dev, der1st%coeffs_dev, &
-         der1st%dist_fw_dev, der1st%dist_bw_dev, der1st%dist_af_dev, &
-         der2nd%coeffs_s_dev, der2nd%coeffs_e_dev, der2nd%coeffs_dev, &
-         der2nd%dist_fw_dev, der2nd%dist_bw_dev, der2nd%dist_af_dev &
+         self%d2u_recv_s_dev, self%d2u_recv_e_dev, &
+         der1st, der2nd, self%nu, &
+         dirps%nproc, dirps%pprev, dirps%pnext, &
+         blocks, threads &
       )
+
+      ! Release temporary blocks
+      call self%allocator%release_block(temp_du)
+      call self%allocator%release_block(temp_duu)
+      call self%allocator%release_block(temp_d2u)
 
       temp_dv => self%allocator%get_block()
       temp_dvu => self%allocator%get_block()
@@ -328,11 +335,26 @@ module m_cuda_backend
       type is (cuda_field_t); d2v_dev => temp_d2v%data_d
       end select
 
-      !call transeq_fused_dist<<<blocks, threads>>>( &
-      !   temp_dv, temp_dvu, temp_d2v, &
-      !   v, conv, derps%n, self%nu, &
-      !   derps%fdist_bc_dev, derps%fdist_fr_dev, derps%sdist_bc_dev, derps%sdist_fr_dev, &
-      !)
+      call exec_dist_transeq_3fused( &
+         rv_dev, &
+         v_dev, self%v_recv_s_dev, self%v_recv_e_dev, &
+         u_dev, self%u_recv_s_dev, self%u_recv_e_dev, &
+         dv_dev, dvu_dev, d2v_dev, &
+         self%du_send_s_dev, self%du_send_e_dev, &
+         self%du_recv_s_dev, self%du_recv_e_dev, &
+         self%dud_send_s_dev, self%dud_send_e_dev, &
+         self%dud_recv_s_dev, self%dud_recv_e_dev, &
+         self%d2u_send_s_dev, self%d2u_send_e_dev, &
+         self%d2u_recv_s_dev, self%d2u_recv_e_dev, &
+         der1st_sym, der2nd_sym, self%nu, &
+         dirps%nproc, dirps%pprev, dirps%pnext, &
+         blocks, threads &
+      )
+
+      ! Release temporary blocks
+      call self%allocator%release_block(temp_dv)
+      call self%allocator%release_block(temp_dvu)
+      call self%allocator%release_block(temp_d2v)
 
       temp_dw => self%allocator%get_block()
       temp_dwu => self%allocator%get_block()
@@ -348,65 +370,23 @@ module m_cuda_backend
       type is (cuda_field_t); d2w_dev => temp_d2w%data_d
       end select
 
-      !call transeq_fused_dist<<<blocks, threads>>>( &
-      !   temp_dw, temp_dwu, temp_d2w, &
-      !   w, conv, derps%n, self%nu, &
-      !   derps%fdist_bc_dev, derps%fdist_fr_dev, derps%sdist_bc_dev, derps%sdist_fr_dev, &
-      !)
+      call exec_dist_transeq_3fused( &
+         rw_dev, &
+         w_dev, self%w_recv_s_dev, self%w_recv_e_dev, &
+         u_dev, self%u_recv_s_dev, self%u_recv_e_dev, &
+         dw_dev, dwu_dev, d2w_dev, &
+         self%du_send_s_dev, self%du_send_e_dev, &
+         self%du_recv_s_dev, self%du_recv_e_dev, &
+         self%dud_send_s_dev, self%dud_send_e_dev, &
+         self%dud_recv_s_dev, self%dud_recv_e_dev, &
+         self%d2u_send_s_dev, self%d2u_send_e_dev, &
+         self%d2u_recv_s_dev, self%d2u_recv_e_dev, &
+         der1st_sym, der2nd_sym, self%nu, &
+         dirps%nproc, dirps%pprev, dirps%pnext, &
+         blocks, threads &
+      )
 
-      ! MPI communicaton for the 2x2 systems
-      ! each rank sends and recieves from the next and previous ranks
-      !call communicate_sendrecv(
-      !   slice_send_du_b, slice_send_du_e, slice_recv_du_b, slice_recv_du_e, &
-      !   derps%n_perp, derps%prev_rank, derps%next_rank, self%MPI_FP_PREC &
-      !)
-      !call communicate_sendrecv(
-      !   slice_send_duu_b, slice_send_duu_e, slice_recv_duu_b, slice_recv_duu_e, &
-      !   derps%n_perp, derps%prev_rank, derps%next_rank, self%MPI_FP_PREC &
-      !)
-      !call communicate_sendrecv(
-      !   slice_send_d2u_b, slice_send_d2u_e, slice_recv_d2u_b, slice_recv_d2u_e, &
-      !   derps%n_perp, derps%prev_rank, derps%next_rank, self%MPI_FP_PREC &
-      !)
-      !call communicate_sendrecv(
-      !   slice_send_dv_b, slice_send_dv_e, slice_recv_dv_b, slice_recv_dv_e, &
-      !   derps%n_perp, derps%prev_rank, derps%next_rank, self%MPI_FP_PREC &
-      !)
-      !call communicate_sendrecv(
-      !   slice_send_dvu_b, slice_send_dvu_e, slice_recv_dvu_b, slice_recv_dvu_e, &
-      !   derps%n_perp, derps%prev_rank, derps%next_rank, self%MPI_FP_PREC &
-      !)
-      !call communicate_sendrecv(
-      !   slice_send_d2v_b, slice_send_d2v_e, slice_recv_d2v_b, slice_recv_d2v_e, &
-      !   derps%n_perp, derps%prev_rank, derps%next_rank, self%MPI_FP_PREC &
-      !)
-      !call communicate_sendrecv(
-      !   slice_send_dw_b, slice_send_dw_e, slice_recv_dw_b, slice_recv_dw_e, &
-      !   derps%n_perp, derps%prev_rank, derps%next_rank, self%MPI_FP_PREC &
-      !)
-      !call communicate_sendrecv(
-      !   slice_send_dwu_b, slice_send_dwu_e, slice_recv_dwu_b, slice_recv_dwu_e, &
-      !   derps%n_perp, derps%prev_rank, derps%next_rank, self%MPI_FP_PREC &
-      !)
-      !call communicate_sendrecv(
-      !   slice_send_d2w_b, slice_send_d2w_e, slice_recv_d2w_b, slice_recv_d2w_e, &
-      !   derps%n_perp, derps%prev_rank, derps%next_rank, self%MPI_FP_PREC &
-      !)
-
-      ! get the final result doing a one last pass
-      !call transeq_fused_subs<<<blocks, threads>>>( &
-      !   slice_recv_du_b, slice_recv_du_e, slice_recv_duu_b, slice_recv_duu_e, slice_recv_d2u_b, slice_recv_d2u_e, &
-      !   w, conv, derps%n, self%nu, &
-      !   derps%fdist_sa_dev, derps%fdist_sc_dev, derps%sdist_sa_dev, derps%sdist_sc_dev, &
-      !)
-
-      ! Finally release temporary blocks
-      call self%allocator%release_block(temp_du)
-      call self%allocator%release_block(temp_duu)
-      call self%allocator%release_block(temp_d2u)
-      call self%allocator%release_block(temp_dv)
-      call self%allocator%release_block(temp_dvu)
-      call self%allocator%release_block(temp_d2v)
+      ! Release temporary blocks
       call self%allocator%release_block(temp_dw)
       call self%allocator%release_block(temp_dwu)
       call self%allocator%release_block(temp_d2w)
@@ -472,32 +452,6 @@ module m_cuda_backend
       class(field_t), intent(in) :: du_y, dv_y, dw_y, du_z, dv_z, dw_z
 
    end subroutine sum_yzintox_cuda
-
-!   subroutine communicate_sendrecv(arr_send_b, arr_send_e, arr_recv_b, arr_recv_e, n_size, prev, next, MPI_FP_PREC)
-!      implicit none
-!
-!      class(field_t), intent(in) :: arr_send_b, arr_send_e
-!      class(field_t), intent(inout) :: arr_send_b, arr_send_e
-!      integer, intent(in) :: n_size, next, prev, MPI_FP_PREC
-!
-!      integer :: mpireq(4), srerr(4), tag1 = 1234, tag2 = 2341
-!
-!      call MPI_Isend(arr_send_b, n_size, &
-!                     MPI_FP_PREC, prev, tag1, MPI_COMM_WORLD, mpireq(1), &
-!                     srerr(1))
-!      call MPI_Isend(arr_send_e, derps%n_perp, &
-!                     MPI_FP_PREC, next, tag2, MPI_COMM_WORLD, mpireq(2), &
-!                     srerr(2))
-!      call MPI_Irecv(arr_recv_b, derps%n_perp, &
-!                     MPI_FP_PREC, prev, tag2, MPI_COMM_WORLD, mpireq(3), &
-!                     srerr(3))
-!      call MPI_Irecv(arr_recv_e, derps%n_perp, &
-!                     MPI_FP_PREC, next, tag1, MPI_COMM_WORLD, mpireq(4), &
-!                     srerr(4))
-!
-!      call MPI_Waitall(4, mpireq, MPI_STATUSES_IGNORE, ierr)
-!
-!   end subroutine communicate_sendrecv
 
 end module m_cuda_backend
 
