@@ -33,6 +33,8 @@ module m_cuda_backend
       procedure :: trans_x2y => trans_x2y_cuda
       procedure :: trans_x2z => trans_x2z_cuda
       procedure :: sum_yzintox => sum_yzintox_cuda
+      procedure :: set_fields => set_fields_cuda
+      procedure :: get_fields => get_fields_cuda
       procedure :: transeq_cuda_dist
       procedure :: transeq_cuda_thom
    end type cuda_backend_t
@@ -67,6 +69,13 @@ module m_cuda_backend
 
       backend%xthreads = dim3(SZ, 1, 1)
       backend%xblocks = dim3(globs%n_groups_x, 1, 1)
+      backend%ythreads = dim3(SZ, 1, 1)
+      backend%yblocks = dim3(globs%n_groups_y, 1, 1)
+      backend%zthreads = dim3(SZ, 1, 1)
+      backend%zblocks = dim3(globs%n_groups_z, 1, 1)
+      print*, 'x threads blocks', backend%xthreads%x, backend%xblocks%x
+      print*, 'y threads blocks', backend%ythreads%x, backend%yblocks%x
+      print*, 'z threads blocks', backend%zthreads%x, backend%zblocks%x
 
       allocate(cuda_tdsops_t :: backend%xdirps%der1st)
       allocate(cuda_tdsops_t :: backend%ydirps%der1st)
@@ -143,7 +152,7 @@ module m_cuda_backend
       end select
 
       n_halo = 4
-      n_block = ydirps%n*zdirps%n/SZ
+      n_block = globs%n_groups_x
 
       allocate(backend%u_send_s_dev(SZ, n_halo, n_block))
       allocate(backend%u_send_e_dev(SZ, n_halo, n_block))
@@ -170,13 +179,6 @@ module m_cuda_backend
       allocate(backend%d2u_send_e_dev(SZ, 1, n_block))
       allocate(backend%d2u_recv_s_dev(SZ, 1, n_block))
       allocate(backend%d2u_recv_e_dev(SZ, 1, n_block))
-
-      ! Assign transeq_? into right functions
-      ! The idea is that these assignments will be conditional
-      !backend%transeq_x => transeq_cuda_dist
-      !backend%transeq_x => transeq_cuda_thom
-      !backend%transeq_y => transeq_cuda_dist
-      !backend%transeq_z => transeq_cuda_dist
 
    end function constructor
 
@@ -452,6 +454,32 @@ module m_cuda_backend
       class(field_t), intent(in) :: du_y, dv_y, dw_y, du_z, dv_z, dw_z
 
    end subroutine sum_yzintox_cuda
+
+   subroutine set_fields_cuda(self, u, v, w, u_in, v_in, w_in)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      class(field_t), intent(inout) :: u, v, w
+      real(dp), dimension(:, :, :), intent(in) :: u_in, v_in, w_in
+
+      select type(u); type is (cuda_field_t); u%data_d = u_in; end select
+      select type(v); type is (cuda_field_t); v%data_d = v_in; end select
+      select type(w); type is (cuda_field_t); w%data_d = w_in; end select
+
+   end subroutine set_fields_cuda
+
+   subroutine get_fields_cuda(self, u_out, v_out, w_out, u, v, w)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      real(dp), dimension(:, :, :), intent(out) :: u_out, v_out, w_out
+      class(field_t), intent(in) :: u, v, w
+
+      select type(u); type is (cuda_field_t); u_out = u%data_d; end select
+      select type(v); type is (cuda_field_t); v_out = v%data_d; end select
+      select type(w); type is (cuda_field_t); w_out = w%data_d; end select
+
+   end subroutine get_fields_cuda
 
 end module m_cuda_backend
 

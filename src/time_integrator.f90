@@ -1,6 +1,8 @@
 module m_time_integrator
    use m_allocator, only: allocator_t, field_t, flist_t
    use m_base_backend, only: base_backend_t
+   use m_common, only: dp
+
    implicit none
 
    private
@@ -29,7 +31,8 @@ contains
       class(allocator_t), pointer :: allocator
       integer, intent(in), optional :: nvars
 
-      integer :: i, j
+      real(dp), allocatable, dimension(:, :, :) :: u_init, v_init, w_init
+      integer :: i, j, dims(3)
 
       constructor%backend => backend
       constructor%allocator => allocator
@@ -59,13 +62,31 @@ contains
          end do
       end do
 
+      ! Set initial conditions
+      dims(:) = constructor%allocator%dims(:)
+      allocate(u_init(dims(1), dims(2), dims(3)))
+      allocate(v_init(dims(1), dims(2), dims(3)))
+      allocate(w_init(dims(1), dims(2), dims(3)))
+
+      u_init = 0
+      v_init = 0
+      w_init = 0
+
+      call constructor%backend%set_fields( &
+         constructor%u, constructor%v, constructor%w, u_init, v_init, w_init &
+      )
+
+      deallocate(u_init, v_init, w_init)
+
    end function constructor
 
-   subroutine run(self, n_iter)
+   subroutine run(self, n_iter, u_out, v_out, w_out)
       implicit none
 
       class(time_intg_t), intent(in) :: self
       integer, intent(in) :: n_iter
+      real(dp), dimension(:, :, :), intent(inout) :: u_out, v_out, w_out
+
       integer :: i
 
       print*, 'start run'
@@ -86,6 +107,10 @@ contains
       end do
 
       print*, 'run end'
+
+      call self%backend%get_fields( &
+         u_out, v_out, w_out, self%du, self%dv, self%dw &
+      )
 
    end subroutine run
 

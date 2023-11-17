@@ -24,11 +24,20 @@ program xcompact
 
    type(cuda_allocator_t), target :: cuda_allocator
 
+   real(dp), allocatable, dimension(:, :, :) :: u, v, w
+
    real(dp) :: t_start, t_end
-   integer :: nrank, ierr
+   integer :: nrank, nproc, ierr, ndevs, devnum
 
    call MPI_Init(ierr)
    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
+   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+
+   if (nrank == 0) print*, 'Parallel run with', nproc, 'ranks'
+
+   ierr = cudaGetDeviceCount(ndevs)
+   ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robin
+   ierr = cudaGetDevice(devnum)
 
    ! read L_x/y/z from the input file
    globs%Lx = 2*pi; globs%Ly = 2*pi; globs%Lz = 2*pi
@@ -40,7 +49,7 @@ program xcompact
    globs%nproc_x = 1; globs%nproc_y = 1; globs%nproc_z = 1
 
    ! Lets allow a 1D decomposition for the moment
-   !call MPI_Comm_size(MPI_COMM_WORLD, globs%nproc_x, ierr)
+   !globs%nproc_x = nproc
 
    xdirps%nproc = globs%nproc_x
    ydirps%nproc = globs%nproc_y
@@ -83,6 +92,11 @@ program xcompact
    cuda_backend = cuda_backend_t(globs, allocator, xdirps, ydirps, zdirps)
    backend => cuda_backend
    print*, 'backend done'
+   backend%nu = 1._dp
+
+   allocate(u(SZ, globs%nx_loc, globs%n_groups_x))
+   allocate(v(SZ, globs%nx_loc, globs%n_groups_x))
+   allocate(w(SZ, globs%nx_loc, globs%n_groups_x))
 
    ! GPU only
    !allocate(cuda_allocator_t :: allocator)
@@ -93,14 +107,15 @@ program xcompact
    !allocator = cuda_allocator_t([SZ, 512, 512*512/SZ])
    !backend = cuda_backend_t(allocator, xdirps, ydirps, zdirps)
 
-   time_integrator = time_intg_t(allocator=allocator, &
-                                 backend=backend)
+   time_integrator = time_intg_t(allocator=allocator, backend=backend)
 
    call cpu_time(t_start)
    print*, 'time integrator done'
-   call time_integrator%run(100)
+   call time_integrator%run(100, u, v, w)
    print*, 'end'
    call cpu_time(t_end)
    print*, 'Time: ', t_end - t_start
+
+   print*, 'norms', norm2(u), norm2(v), norm2(w)
 
 end program xcompact

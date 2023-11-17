@@ -37,24 +37,25 @@ module m_base_backend
       class(dirps_t), pointer :: xdirps, ydirps, zdirps
    contains
       procedure :: transeq
-      procedure :: run
       procedure(transeq_ders), deferred :: transeq_x
       procedure(transeq_ders), deferred :: transeq_y
       procedure(transeq_ders), deferred :: transeq_z
       procedure(transposer), deferred :: trans_x2y
       procedure(transposer), deferred :: trans_x2z
       procedure(sum9into3), deferred :: sum_yzintox
+      procedure(set_fields), deferred :: set_fields
+      procedure(get_fields), deferred :: get_fields
    end type base_backend_t
 
    abstract interface
-      subroutine transeq_ders(self, du, duu, d2u, u, v, w, dirps)
+      subroutine transeq_ders(self, du, dv, dw, u, v, w, dirps)
          import :: base_backend_t
          import :: field_t
          import :: dirps_t
          implicit none
 
          class(base_backend_t) :: self
-         class(field_t), intent(out) :: du, duu, d2u
+         class(field_t), intent(inout) :: du, dv, dw
          class(field_t), intent(in) :: u, v, w
          type(dirps_t), intent(in) :: dirps
       end subroutine transeq_ders
@@ -67,7 +68,7 @@ module m_base_backend
          implicit none
 
          class(base_backend_t) :: self
-         class(field_t), intent(out) :: u_, v_, w_
+         class(field_t), intent(inout) :: u_, v_, w_
          class(field_t), intent(in) :: u, v, w
       end subroutine transposer
    end interface
@@ -84,13 +85,37 @@ module m_base_backend
       end subroutine sum9into3
    end interface
 
+   abstract interface
+      subroutine set_fields(self, u, v, w, u_in, v_in, w_in)
+         import :: base_backend_t
+         import :: dp
+         import :: field_t
+         implicit none
+
+         class(base_backend_t) :: self
+         class(field_t), intent(inout) :: u, v, w
+         real(dp), dimension(:, :, :), intent(in) :: u_in, v_in, w_in
+      end subroutine set_fields
+
+      subroutine get_fields(self, u_out, v_out, w_out, u, v, w)
+         import :: base_backend_t
+         import :: dp
+         import :: field_t
+         implicit none
+
+         class(base_backend_t) :: self
+         real(dp), dimension(:, :, :), intent(out) :: u_out, v_out, w_out
+         class(field_t), intent(in) :: u, v, w
+      end subroutine get_fields
+   end interface
+
 contains
 
    subroutine transeq(self, du, dv, dw, u, v, w)
       implicit none
 
       class(base_backend_t) :: self
-      class(field_t), intent(out) :: du, dv, dw
+      class(field_t), intent(inout) :: du, dv, dw
       class(field_t), intent(in) :: u, v, w
 
       class(field_t), pointer :: u_y, v_y, w_y, u_z, v_z, w_z, &
@@ -154,28 +179,6 @@ contains
       call self%allocator%release_block(dw_z)
 
    end subroutine transeq
-
-   subroutine run(self)
-      !! This is the main subroutine that will start execution. This may be
-      !! moved to the main program but is here for now.
-      implicit none
-
-      class(base_backend_t) :: self
-      class(field_t), pointer :: u, v, w, du, dv, dw, udiv, p, px, py, pz
-
-      real :: dt, alpha
-
-      ! transport equation
-      call self%transeq(du, dv, dw, u, v, w)
-      ! time integration
-
-      !! pressure stuff
-      !call self%divergence(u, v, w, udiv)
-      !call self%poisson(udiv, p)
-      !call self%gradient(p, px, py, pz)
-      !! velocity correction
-
-   end subroutine run
 
 end module m_base_backend
 
