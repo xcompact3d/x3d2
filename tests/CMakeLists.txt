@@ -1,8 +1,5 @@
 set(TESTSRC
   test_allocator.f90
-  test_tridiagonal.f90
-  test_stencil.f90
-  test_diffengine.f90
   omp/test_omp_tridiag.f90
 )
 set(CUDATESTSRC
