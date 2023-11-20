@@ -2,11 +2,6 @@ set(SRC
   allocator.f90
   common.f90
   tdsops.f90
-  thomas.f90
-  stencil.f90
-  stencil_definitions.f90
-  diffengine.f90
-  vector3d.f90
   omp/common.f90
   omp/kernels_dist.f90
 )
