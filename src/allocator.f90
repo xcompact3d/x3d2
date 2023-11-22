@@ -53,7 +53,7 @@ module m_allocator
      !! `refcount` that counts the number of references to this
      !! field.  User code is currently responsible for incrementing
      !! the reference count.
-      type(field_t), pointer :: next
+      class(field_t), pointer :: next
       real(dp), allocatable :: data(:, :, :)
       integer :: refcount = 0
       integer :: id !! An integer identifying the memory block.
