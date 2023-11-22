@@ -191,7 +191,7 @@ module m_cuda_backend
       type(dirps_t), intent(in) :: dirps
 
       call self%transeq_cuda_dist(du, dv, dw, u, v, w, dirps, &
-                                  self%xthreads, self%xblocks)
+                                  self%xblocks, self%xthreads)
 
    end subroutine transeq_x_cuda
 
@@ -205,7 +205,7 @@ module m_cuda_backend
 
       ! u, v, w is reordered so that we pass v, u, w
       call self%transeq_cuda_dist(dv, du, dw, v, u, w, dirps, &
-                                  self%ythreads, self%yblocks)
+                                  self%yblocks, self%ythreads)
 
    end subroutine transeq_y_cuda
 
@@ -219,7 +219,7 @@ module m_cuda_backend
 
       ! u, v, w is reordered so that we pass w, u, v
       call self%transeq_cuda_dist(dw, du, dv, w, u, v, dirps, &
-                                  self%zthreads, self%zblocks)
+                                  self%zblocks, self%zthreads)
 
    end subroutine transeq_z_cuda
 
