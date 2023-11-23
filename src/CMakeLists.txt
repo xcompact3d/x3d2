@@ -2,6 +2,7 @@ set(SRC
   allocator.f90
   backend.f90
   common.f90
+  solver.f90
   tdsops.f90
   time_integrator.f90
   omp/common.f90

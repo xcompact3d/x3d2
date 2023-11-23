@@ -4,6 +4,7 @@ program xcompact
    use m_allocator
    use m_base_backend
    use m_common, only: pi, globs_t, set_pprev_pnext
+   use m_solver, only: solver_t
    use m_time_integrator, only: time_intg_t
    use m_tdsops, only: tdsops_t
 
@@ -17,6 +18,7 @@ program xcompact
    type(globs_t) :: globs
    class(base_backend_t), pointer :: backend
    class(allocator_t), pointer :: allocator
+   type(solver_t) :: solver
    type(time_intg_t) :: time_integrator
    type(dirps_t) :: xdirps, ydirps, zdirps
 
@@ -87,11 +89,11 @@ program xcompact
 
    cuda_allocator = cuda_allocator_t([SZ, globs%nx_loc, globs%n_groups_x])
    allocator => cuda_allocator
-   print*, 'allocator done'
+   print*, 'allocator instantiated'
 
    cuda_backend = cuda_backend_t(globs, allocator, xdirps, ydirps, zdirps)
    backend => cuda_backend
-   print*, 'backend done'
+   print*, 'backend instantiated'
    backend%nu = 1._dp
 
    allocate(u(SZ, globs%nx_loc, globs%n_groups_x))
@@ -108,12 +110,16 @@ program xcompact
    !backend = cuda_backend_t(allocator, xdirps, ydirps, zdirps)
 
    time_integrator = time_intg_t(allocator=allocator, backend=backend)
+   print*, 'time integrator instantiated'
+   solver = solver_t(backend, time_integrator, xdirps, ydirps, zdirps)
+   print*, 'solver instantiated'
 
    call cpu_time(t_start)
-   print*, 'time integrator done'
-   call time_integrator%run(100, u, v, w)
-   print*, 'end'
+
+   call solver%run(100, u, v, w)
+
    call cpu_time(t_end)
+
    print*, 'Time: ', t_end - t_start
 
    print*, 'norms', norm2(u), norm2(v), norm2(w)

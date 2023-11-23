@@ -12,9 +12,8 @@ module m_time_integrator
       type(flist_t), allocatable :: olds(:,:)
       class(base_backend_t), pointer :: backend
       class(allocator_t), pointer :: allocator
-      class(field_t), pointer :: u, v, w, du, dv, dw
    contains
-      procedure :: run
+      procedure :: step
    end type time_intg_t
 
    interface time_intg_t
@@ -31,19 +30,10 @@ contains
       class(allocator_t), pointer :: allocator
       integer, intent(in), optional :: nvars
 
-      real(dp), allocatable, dimension(:, :, :) :: u_init, v_init, w_init
-      integer :: i, j, dims(3)
+      integer :: i, j
 
       constructor%backend => backend
       constructor%allocator => allocator
-
-      constructor%u => allocator%get_block()
-      constructor%v => allocator%get_block()
-      constructor%w => allocator%get_block()
-
-      constructor%du => allocator%get_block()
-      constructor%dv => allocator%get_block()
-      constructor%dw => allocator%get_block()
 
       if (present(nvars)) then
          constructor%nvars = nvars
@@ -62,57 +52,18 @@ contains
          end do
       end do
 
-      ! Set initial conditions
-      dims(:) = constructor%allocator%dims(:)
-      allocate(u_init(dims(1), dims(2), dims(3)))
-      allocate(v_init(dims(1), dims(2), dims(3)))
-      allocate(w_init(dims(1), dims(2), dims(3)))
-
-      u_init = 0
-      v_init = 0
-      w_init = 0
-
-      call constructor%backend%set_fields( &
-         constructor%u, constructor%v, constructor%w, u_init, v_init, w_init &
-      )
-
-      deallocate(u_init, v_init, w_init)
-
    end function constructor
 
-   subroutine run(self, n_iter, u_out, v_out, w_out)
+   subroutine step(self, u, v, w, du, dv, dw, dt)
       implicit none
 
       class(time_intg_t), intent(in) :: self
-      integer, intent(in) :: n_iter
-      real(dp), dimension(:, :, :), intent(inout) :: u_out, v_out, w_out
+      class(field_t), intent(inout) :: u, v, w
+      class(field_t), intent(in) :: du, dv, dw
 
-      integer :: i
+      real(dp), intent(in) :: dt
 
-      print*, 'start run'
-
-      do i = 1, n_iter
-         call self%backend%transeq(self%du, self%dv, self%dw, &
-                                   self%u, self%v, self%w)
-
-         ! time integration
-         !call vecadd(u, v, w, du, dv, dw)
-
-         !! pressure stuff
-         !call self%divergence(u, v, w, udiv)
-         !call self%poisson(udiv, p)
-         !call self%gradient(p, px, py, pz)
-         !! velocity correction
-         !call vecadd(u, v, w, px, py, pz)
-      end do
-
-      print*, 'run end'
-
-      call self%backend%get_fields( &
-         u_out, v_out, w_out, self%du, self%dv, self%dw &
-      )
-
-   end subroutine run
+   end subroutine step
 
    subroutine adams_bashford_1st(vels, olds, coeffs)
       type(flist_t) :: vels(:), olds(:)
