@@ -32,6 +32,7 @@ module m_base_backend
       procedure(sum9into3), deferred :: sum_yzintox
       procedure(get_fields), deferred :: get_fields
       procedure(set_fields), deferred :: set_fields
+      procedure(alloc_tdsops), deferred :: alloc_tdsops
    end type base_backend_t
 
    abstract interface
@@ -110,6 +111,21 @@ module m_base_backend
          class(field_t), intent(inout) :: u, v, w
          real(dp), dimension(:, :, :), intent(in) :: u_in, v_in, w_in
       end subroutine set_fields
+   end interface
+
+   abstract interface
+      subroutine alloc_tdsops(self, tdsops, n, dx, operation, scheme)
+         import :: base_backend_t
+         import :: dp
+         import :: tdsops_t
+         implicit none
+
+         class(base_backend_t) :: self
+         class(tdsops_t), allocatable, intent(inout) :: tdsops
+         integer, intent(in) :: n
+         real(dp), intent(in) :: dx
+         character(*), intent(in) :: operation, scheme
+      end subroutine alloc_tdsops
    end interface
 
 end module m_base_backend

@@ -1,7 +1,7 @@
 module m_solver
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
-   use m_common, only: dp
+   use m_common, only: dp, globs_t
    use m_tdsops, only: tdsops_t, dirps_t
    use m_time_integrator, only: time_intg_t
 
@@ -52,17 +52,21 @@ module m_solver
    end interface solver_t
 contains
 
-   function init(backend, time_integrator, xdirps, ydirps, zdirps) &
+   function init(backend, time_integrator, xdirps, ydirps, zdirps, globs) &
       result(solver)
       implicit none
 
       class(base_backend_t), target, intent(inout) :: backend
       class(time_intg_t), target, intent(inout) :: time_integrator
       class(dirps_t), target, intent(inout) :: xdirps, ydirps, zdirps
+      class(globs_t), intent(in) :: globs
       type(solver_t) :: solver
 
       real(dp), allocatable, dimension(:, :, :) :: u_init, v_init, w_init
       integer :: dims(3)
+
+      real(dp) :: dx, dy, dz
+      integer :: nx, ny, nz
 
       solver%backend => backend
       solver%time_integrator => time_integrator
@@ -74,10 +78,6 @@ contains
       solver%u => solver%backend%allocator%get_block()
       solver%v => solver%backend%allocator%get_block()
       solver%w => solver%backend%allocator%get_block()
-
-      solver%du => solver%backend%allocator%get_block()
-      solver%dv => solver%backend%allocator%get_block()
-      solver%dw => solver%backend%allocator%get_block()
 
       ! Set initial conditions
       dims(:) = solver%backend%allocator%dims(:)
@@ -94,6 +94,41 @@ contains
       )
 
       deallocate(u_init, v_init, w_init)
+      print*, 'initial conditions are set'
+
+      ! Allocate fields for storing the RHS
+      solver%du => solver%backend%allocator%get_block()
+      solver%dv => solver%backend%allocator%get_block()
+      solver%dw => solver%backend%allocator%get_block()
+
+      nx = globs%nx_loc; ny = globs%ny_loc; nz = globs%nz_loc
+      dx = globs%dx; dy = globs%dy; dz = globs%dz
+
+      ! Allocate and set the tdsops
+      call solver%backend%alloc_tdsops(solver%xdirps%der1st, nx, dx, &
+                                       'first-deriv', 'compact6')
+      call solver%backend%alloc_tdsops(solver%ydirps%der1st, ny, dy, &
+                                       'first-deriv', 'compact6')
+      call solver%backend%alloc_tdsops(solver%zdirps%der1st, nz, dz, &
+                                       'first-deriv', 'compact6')
+      call solver%backend%alloc_tdsops(solver%xdirps%der1st_sym, nx, dx, &
+                                       'first-deriv', 'compact6')
+      call solver%backend%alloc_tdsops(solver%ydirps%der1st_sym, ny, dy, &
+                                       'first-deriv', 'compact6')
+      call solver%backend%alloc_tdsops(solver%zdirps%der1st_sym, nz, dz, &
+                                       'first-deriv', 'compact6')
+      call solver%backend%alloc_tdsops(solver%xdirps%der2nd, nx, dx, &
+                                       'second-deriv', 'compact6')
+      call solver%backend%alloc_tdsops(solver%ydirps%der2nd, ny, dy, &
+                                       'second-deriv', 'compact6')
+      call solver%backend%alloc_tdsops(solver%zdirps%der2nd, nz, dz, &
+                                       'second-deriv', 'compact6')
+      call solver%backend%alloc_tdsops(solver%xdirps%der2nd_sym, nx, dx, &
+                                       'second-deriv', 'compact6')
+      call solver%backend%alloc_tdsops(solver%ydirps%der2nd_sym, ny, dy, &
+                                       'second-deriv', 'compact6')
+      call solver%backend%alloc_tdsops(solver%zdirps%der2nd_sym, nz, dz, &
+                                       'second-deriv', 'compact6')
 
    end function init
 

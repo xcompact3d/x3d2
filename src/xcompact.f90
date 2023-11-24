@@ -91,7 +91,7 @@ program xcompact
    allocator => cuda_allocator
    print*, 'allocator instantiated'
 
-   cuda_backend = cuda_backend_t(globs, allocator, xdirps, ydirps, zdirps)
+   cuda_backend = cuda_backend_t(globs, allocator)
    backend => cuda_backend
    print*, 'backend instantiated'
    backend%nu = 1._dp
@@ -111,7 +111,7 @@ program xcompact
 
    time_integrator = time_intg_t(allocator=allocator, backend=backend)
    print*, 'time integrator instantiated'
-   solver = solver_t(backend, time_integrator, xdirps, ydirps, zdirps)
+   solver = solver_t(backend, time_integrator, xdirps, ydirps, zdirps, globs)
    print*, 'solver instantiated'
 
    call cpu_time(t_start)

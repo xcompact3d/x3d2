@@ -4,7 +4,7 @@ module m_cuda_backend
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
    use m_common, only: dp, globs_t
-   use m_tdsops, only: dirps_t
+   use m_tdsops, only: dirps_t, tdsops_t
 
    use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
    use m_cuda_common, only: SZ
@@ -27,6 +27,7 @@ module m_cuda_backend
          d2u_send_s_dev, d2u_send_e_dev, d2u_recv_s_dev, d2u_recv_e_dev
       type(dim3) :: xblocks, xthreads, yblocks, ythreads, zblocks, zthreads
     contains
+      procedure :: alloc_tdsops => alloc_cuda_tdsops
       procedure :: transeq_x => transeq_x_cuda
       procedure :: transeq_y => transeq_y_cuda
       procedure :: transeq_z => transeq_z_cuda
@@ -45,13 +46,11 @@ module m_cuda_backend
 
  contains
 
-   function constructor(globs, allocator, xdirps, ydirps, zdirps) &
-      result(backend)
+   function constructor(globs, allocator) result(backend)
       implicit none
 
       class(globs_t) :: globs
       class(allocator_t), target, intent(inout) :: allocator
-      class(dirps_t), target, intent(inout) :: xdirps, ydirps, zdirps
       type(cuda_backend_t) :: backend
 
       integer :: n_halo, n_block
@@ -62,11 +61,6 @@ module m_cuda_backend
          backend%allocator => allocator
       end select
 
-      ! class level access to derivative parameters
-      backend%xdirps => xdirps
-      backend%ydirps => ydirps
-      backend%zdirps => zdirps
-
       backend%xthreads = dim3(SZ, 1, 1)
       backend%xblocks = dim3(globs%n_groups_x, 1, 1)
       backend%ythreads = dim3(SZ, 1, 1)
@@ -76,80 +70,6 @@ module m_cuda_backend
       print*, 'x threads blocks', backend%xthreads%x, backend%xblocks%x
       print*, 'y threads blocks', backend%ythreads%x, backend%yblocks%x
       print*, 'z threads blocks', backend%zthreads%x, backend%zblocks%x
-
-      allocate(cuda_tdsops_t :: backend%xdirps%der1st)
-      allocate(cuda_tdsops_t :: backend%ydirps%der1st)
-      allocate(cuda_tdsops_t :: backend%zdirps%der1st)
-      allocate(cuda_tdsops_t :: backend%xdirps%der1st_sym)
-      allocate(cuda_tdsops_t :: backend%ydirps%der1st_sym)
-      allocate(cuda_tdsops_t :: backend%zdirps%der1st_sym)
-      allocate(cuda_tdsops_t :: backend%xdirps%der2nd)
-      allocate(cuda_tdsops_t :: backend%ydirps%der2nd)
-      allocate(cuda_tdsops_t :: backend%zdirps%der2nd)
-      allocate(cuda_tdsops_t :: backend%xdirps%der2nd_sym)
-      allocate(cuda_tdsops_t :: backend%ydirps%der2nd_sym)
-      allocate(cuda_tdsops_t :: backend%zdirps%der2nd_sym)
-
-      select type (der1st => backend%xdirps%der1st)
-      type is (cuda_tdsops_t)
-         der1st = cuda_tdsops_t(globs%nx_loc, globs%dx, &
-                                'first-deriv', 'compact6')
-      end select
-      select type (der1st => backend%ydirps%der1st)
-      type is (cuda_tdsops_t)
-         der1st = cuda_tdsops_t(globs%ny_loc, globs%dy, &
-                                'first-deriv', 'compact6')
-      end select
-      select type (der1st => backend%zdirps%der1st)
-      type is (cuda_tdsops_t)
-         der1st = cuda_tdsops_t(globs%nz_loc, globs%dz, &
-                                'first-deriv', 'compact6')
-      end select
-      select type (der1st_sym => backend%xdirps%der1st_sym)
-      type is (cuda_tdsops_t)
-         der1st_sym = cuda_tdsops_t(globs%nx_loc, globs%dx, &
-                                    'first-deriv', 'compact6')
-      end select
-      select type (der1st_sym => backend%ydirps%der1st_sym)
-      type is (cuda_tdsops_t)
-         der1st_sym = cuda_tdsops_t(globs%ny_loc, globs%dy, &
-                                    'first-deriv', 'compact6')
-      end select
-      select type (der1st_sym => backend%zdirps%der1st_sym)
-      type is (cuda_tdsops_t)
-         der1st_sym = cuda_tdsops_t(globs%nz_loc, globs%dz, &
-                                    'first-deriv', 'compact6')
-      end select
-      select type (der2nd => backend%xdirps%der2nd)
-      type is (cuda_tdsops_t)
-         der2nd = cuda_tdsops_t(globs%nx_loc, globs%dx, &
-                                'second-deriv', 'compact6')
-      end select
-      select type (der2nd => backend%ydirps%der2nd)
-      type is (cuda_tdsops_t)
-         der2nd = cuda_tdsops_t(globs%nx_loc, globs%dx, &
-                                'second-deriv', 'compact6')
-      end select
-      select type (der2nd => backend%zdirps%der2nd)
-      type is (cuda_tdsops_t)
-         der2nd = cuda_tdsops_t(globs%nx_loc, globs%dx, &
-                                'second-deriv', 'compact6')
-      end select
-      select type (der2nd_sym => backend%xdirps%der2nd_sym)
-      type is (cuda_tdsops_t)
-         der2nd_sym = cuda_tdsops_t(globs%nx_loc, globs%dx, &
-                                    'second-deriv', 'compact6')
-      end select
-      select type (der2nd_sym => backend%ydirps%der2nd_sym)
-      type is (cuda_tdsops_t)
-         der2nd_sym = cuda_tdsops_t(globs%nx_loc, globs%dx, &
-                                    'second-deriv', 'compact6')
-      end select
-      select type (der2nd_sym => backend%zdirps%der2nd_sym)
-      type is (cuda_tdsops_t)
-         der2nd_sym = cuda_tdsops_t(globs%nx_loc, globs%dx, &
-                                    'second-deriv', 'compact6')
-      end select
 
       n_halo = 4
       n_block = globs%n_groups_x
@@ -181,6 +101,24 @@ module m_cuda_backend
       allocate(backend%d2u_recv_e_dev(SZ, 1, n_block))
 
    end function constructor
+
+   subroutine alloc_cuda_tdsops(self, tdsops, n, dx, operation, scheme)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      class(tdsops_t), allocatable, intent(inout) :: tdsops
+      integer, intent(in) :: n
+      real(dp), intent(in) :: dx
+      character(*), intent(in) :: operation, scheme
+
+      allocate(cuda_tdsops_t :: tdsops)
+
+      select type (tdsops)
+      type is (cuda_tdsops_t)
+         tdsops = cuda_tdsops_t(n, dx, operation, scheme)
+      end select
+
+   end subroutine alloc_cuda_tdsops
 
    subroutine transeq_x_cuda(self, du, dv, dw, u, v, w, dirps)
       implicit none
