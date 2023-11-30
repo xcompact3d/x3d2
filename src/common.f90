@@ -25,57 +25,49 @@ contains
 
       integer :: i, ix, iy, iz
 
-      ! Set the pprev and pnext for each rank
-      i = 0
-      do iz = 1, znproc
-         do iy = 1, ynproc
-            do ix = 1, xnproc
-               if (nrank == i) then
-                  ! prev and next in x direction
-                  if (ix == 1) then
-                     xprev = i + (xnproc - 1)
-                  else
-                     xprev = i - 1
-                  end if
+      ix = modulo(nrank, xnproc)
+      iy = modulo((nrank - ix)/xnproc, ynproc)
+      iz = (nrank - ix - iy*xnproc)/(xnproc*ynproc)
+      ! nrank == ix + iy*xnproc + iz*xnproc*ynproc
 
-                  if (ix == xnproc) then
-                     xnext = i - (xnproc - 1)
-                  else
-                     xnext = i + 1
-                  end if
+      ! prev and next in x direction
+      if (ix == 0) then
+         xprev = nrank + (xnproc - 1)
+      else
+         xprev = nrank - 1
+      end if
 
-                  ! prev and next in y direction
-                  if (iy == 1) then
-                     yprev = i + (xnproc*(ynproc - 1))
-                  else
-                     yprev = i - xnproc
-                  end if
+      if (ix == xnproc - 1) then
+         xnext = nrank - (xnproc - 1)
+      else
+         xnext = nrank + 1
+      end if
 
-                  if (iy == ynproc) then
-                     ynext = i - (xnproc*(ynproc - 1))
-                  else
-                     ynext = i + xnproc
-                  end if
+      ! prev and next in y direction
+      if (iy == 0) then
+         yprev = nrank + (xnproc*(ynproc - 1))
+      else
+         yprev = nrank - xnproc
+      end if
 
-                  ! prev and next in z direction
-                  if (iz == 1) then
-                     zprev = i + (xnproc*ynproc*(znproc - 1))
-                  else
-                     zprev = i - xnproc*ynproc
-                  end if
+      if (iy == ynproc - 1) then
+         ynext = nrank - (xnproc*(ynproc - 1))
+      else
+         ynext = nrank + xnproc
+      end if
 
-                  if (iz == znproc) then
-                     znext = i - (xnproc*ynproc*(znproc - 1))
-                  else
-                     znext = i + xnproc*ynproc
-                  end if
-               end if
+      ! prev and next in z direction
+      if (iz == 0) then
+         zprev = nrank + (xnproc*ynproc*(znproc - 1))
+      else
+         zprev = nrank - xnproc*ynproc
+      end if
 
-               ! increment rank number for the next one
-               i = i + 1
-            end do
-         end do
-      end do
+      if (iz == znproc - 1) then
+         znext = nrank - (xnproc*ynproc*(znproc - 1))
+      else
+         znext = nrank + xnproc*ynproc
+      end if
 
    end subroutine set_pprev_pnext
 
