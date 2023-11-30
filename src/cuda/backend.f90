@@ -207,12 +207,12 @@ module m_cuda_backend
       end select
 
       ! Copy halo data into buffer arrays
-      !self%u_send_s_dev(:, :, :) = u_dev(:, 1:4, :)
-      !self%u_send_e_dev(:, :, :) = u_dev(:, dirps%n - 3:dirps%n, :)
-      !self%v_send_s_dev(:, :, :) = v_dev(:, 1:4, :)
-      !self%v_send_e_dev(:, :, :) = v_dev(:, dirps%n - 3:dirps%n, :)
-      !self%w_send_s_dev(:, :, :) = w_dev(:, 1:4, :)
-      !self%w_send_e_dev(:, :, :) = w_dev(:, dirps%n - 3:dirps%n, :)
+      call copy_into_buffers(self%u_send_s_dev, self%u_send_e_dev, u_dev, &
+                             dirps%n)
+      call copy_into_buffers(self%v_send_s_dev, self%v_send_e_dev, v_dev, &
+                             dirps%n)
+      call copy_into_buffers(self%w_send_s_dev, self%w_send_e_dev, w_dev, &
+                             dirps%n)
 
       ! halo exchange
       call sendrecv_3fields( &
@@ -392,6 +392,19 @@ module m_cuda_backend
       class(field_t), intent(in) :: du_y, dv_y, dw_y, du_z, dv_z, dw_z
 
    end subroutine sum_yzintox_cuda
+
+   subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n)
+      implicit none
+
+      real(dp), device, dimension(:, :, :), intent(out) :: u_send_s_dev, &
+                                                           u_send_e_dev
+      real(dp), device, dimension(:, :, :), intent(in) :: u_dev
+      integer, intent(in) :: n
+
+      u_send_s_dev(:, :, :) = u_dev(:, 1:4, :)
+      u_send_e_dev(:, :, :) = u_dev(:, n - 3:n, :)
+
+   end subroutine copy_into_buffers
 
    subroutine set_fields_cuda(self, u, v, w, u_in, v_in, w_in)
       implicit none
