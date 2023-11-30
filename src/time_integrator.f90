@@ -5,8 +5,6 @@ module m_time_integrator
 
    implicit none
 
-   private
-
    type :: time_intg_t
       integer :: istep, nsteps, nsubsteps, order, nvars, nolds
       type(flist_t), allocatable :: olds(:,:)

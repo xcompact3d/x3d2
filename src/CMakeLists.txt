@@ -5,6 +5,7 @@ set(SRC
   solver.f90
   tdsops.f90
   time_integrator.f90
+  omp/backend.f90
   omp/common.f90
   omp/kernels_dist.f90
 )
@@ -30,6 +31,7 @@ target_link_libraries(xcompact PRIVATE x3d2)
 
 target_compile_options(x3d2 PRIVATE "-O3")
 target_compile_options(xcompact PRIVATE "-O3")
+target_compile_options(xcompact PRIVATE "-cpp")
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
   target_compile_options(x3d2 PRIVATE "-cuda")
@@ -38,7 +40,6 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
   target_compile_options(xcompact PRIVATE "-cuda")
   target_compile_options(xcompact PRIVATE "-fast")
 
-  target_compile_options(xcompact PRIVATE "-cpp")
   target_compile_options(xcompact PRIVATE "-DCUDA")
   #  target_link_options(xcompact INTERFACE "-cuda")
 endif()

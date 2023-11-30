@@ -14,6 +14,7 @@ program xcompact
    use m_cuda_common, only: SZ
    use m_cuda_tdsops, only: cuda_tdsops_t
 #else
+   use m_omp_backend
    use m_omp_common, only: SZ
 #endif
 
@@ -29,6 +30,9 @@ program xcompact
 #ifdef CUDA
    type(cuda_backend_t), target :: cuda_backend
    type(cuda_allocator_t), target :: cuda_allocator
+#else
+   type(omp_backend_t), target :: omp_backend
+   type(allocator_t), target :: omp_allocator
 #endif
 
    real(dp), allocatable, dimension(:, :, :) :: u, v, w
@@ -98,6 +102,14 @@ program xcompact
    cuda_backend = cuda_backend_t(globs, allocator)
    backend => cuda_backend
    print*, 'CUDA backend instantiated'
+#else
+   omp_allocator = allocator_t([SZ, globs%nx_loc, globs%n_groups_x])
+   allocator => omp_allocator
+   print*, 'OpenMP allocator instantiated'
+
+   omp_backend = omp_backend_t(globs, allocator)
+   backend => omp_backend
+   print*, 'OpenMP backend instantiated'
 #endif
 
    backend%nu = 1._dp
