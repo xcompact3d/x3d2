@@ -8,10 +8,14 @@ program xcompact
    use m_time_integrator, only: time_intg_t
    use m_tdsops, only: tdsops_t
 
+#ifdef CUDA
    use m_cuda_allocator
    use m_cuda_backend
    use m_cuda_common, only: SZ
    use m_cuda_tdsops, only: cuda_tdsops_t
+#else
+   use m_omp_common, only: SZ
+#endif
 
    implicit none
 
@@ -22,8 +26,10 @@ program xcompact
    type(time_intg_t) :: time_integrator
    type(dirps_t) :: xdirps, ydirps, zdirps
 
+#ifdef CUDA
    type(cuda_backend_t), target :: cuda_backend
    type(cuda_allocator_t), target :: cuda_allocator
+#endif
 
    real(dp), allocatable, dimension(:, :, :) :: u, v, w
 
@@ -36,9 +42,11 @@ program xcompact
 
    if (nrank == 0) print*, 'Parallel run with', nproc, 'ranks'
 
+#ifdef CUDA
    ierr = cudaGetDeviceCount(ndevs)
    ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robin
    ierr = cudaGetDevice(devnum)
+#endif
 
    ! read L_x/y/z from the input file
    globs%Lx = 2*pi; globs%Ly = 2*pi; globs%Lz = 2*pi
@@ -82,6 +90,7 @@ program xcompact
    ydirps%n = globs%ny_loc
    zdirps%n = globs%nz_loc
 
+#ifdef CUDA
    cuda_allocator = cuda_allocator_t([SZ, globs%nx_loc, globs%n_groups_x])
    allocator => cuda_allocator
    print*, 'CUDA allocator instantiated'
@@ -89,6 +98,7 @@ program xcompact
    cuda_backend = cuda_backend_t(globs, allocator)
    backend => cuda_backend
    print*, 'CUDA backend instantiated'
+#endif
 
    backend%nu = 1._dp
 
