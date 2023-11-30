@@ -41,12 +41,12 @@ module m_cuda_backend
    end type cuda_backend_t
 
    interface cuda_backend_t
-      module procedure constructor
+      module procedure init
    end interface cuda_backend_t
 
  contains
 
-   function constructor(globs, allocator) result(backend)
+   function init(globs, allocator) result(backend)
       implicit none
 
       class(globs_t) :: globs
@@ -67,9 +67,6 @@ module m_cuda_backend
       backend%yblocks = dim3(globs%n_groups_y, 1, 1)
       backend%zthreads = dim3(SZ, 1, 1)
       backend%zblocks = dim3(globs%n_groups_z, 1, 1)
-      print*, 'x threads blocks', backend%xthreads%x, backend%xblocks%x
-      print*, 'y threads blocks', backend%ythreads%x, backend%yblocks%x
-      print*, 'z threads blocks', backend%zthreads%x, backend%zblocks%x
 
       n_halo = 4
       n_block = globs%n_groups_x
@@ -100,7 +97,7 @@ module m_cuda_backend
       allocate(backend%d2u_recv_s_dev(SZ, 1, n_block))
       allocate(backend%d2u_recv_e_dev(SZ, 1, n_block))
 
-   end function constructor
+   end function init
 
    subroutine alloc_cuda_tdsops(self, tdsops, n, dx, operation, scheme)
       implicit none
@@ -343,25 +340,6 @@ module m_cuda_backend
       class(field_t), intent(inout) :: du, dv, dw
       class(field_t), intent(in) :: u, v, w
       type(dirps_t), intent(in) :: dirps
-
-!      call transeq_fused_thom_pp<<<derps%blocks, derps%threads>>>( &
-!         du, u, conv, derps%ff_dev, derps%fs_dev, derps%fw_dev, derps%fp_dev, &
-!         derps%sf_dev, derps%ss_dev, derps%sw_dev, derps%sp_dev, &
-!         derps%n, self%nu, derps%alfai, derps%alsai, &
-!         derps%afi, derps%bfi, derps%asi, derps%bsi, derps%csi, derps%dsi &
-!      )
-!      call transeq_fused_thom_pp<<<derps%blocks, derps%threads>>>( &
-!         dv, v, conv, derps%ff_dev, derps%fs_dev, derps%fw_dev, derps%fp_dev, &
-!         derps%sf_dev, derps%ss_dev, derps%sw_dev, derps%sp_dev, &
-!         derps%n, self%nu, derps%alfai, derps%alsai, &
-!         derps%afi, derps%bfi, derps%asi, derps%bsi, derps%csi, derps%dsi &
-!      )
-!      call transeq_fused_thom_pp<<<derps%blocks, derps%threads>>>( &
-!         dw, w, conv, derps%ff_dev, derps%fs_dev, derps%fw_dev, derps%fp_dev, &
-!         derps%sf_dev, derps%ss_dev, derps%sw_dev, derps%sp_dev, &
-!         derps%n, self%nu, derps%alfai, derps%alsai, &
-!         derps%afi, derps%bfi, derps%asi, derps%bsi, derps%csi, derps%dsi &
-!      )
 
    end subroutine transeq_cuda_thom
 

@@ -23,7 +23,6 @@ program xcompact
    type(dirps_t) :: xdirps, ydirps, zdirps
 
    type(cuda_backend_t), target :: cuda_backend
-
    type(cuda_allocator_t), target :: cuda_allocator
 
    real(dp), allocatable, dimension(:, :, :) :: u, v, w
@@ -66,10 +65,6 @@ program xcompact
       xdirps%nproc, ydirps%nproc, zdirps%nproc, nrank &
    )
 
-   print*, 'nrank:', nrank, 'xprev, xnext:', xdirps%pprev, xdirps%pnext
-   print*, 'nrank:', nrank, 'yprev, ynext:', ydirps%pprev, ydirps%pnext
-   print*, 'nrank:', nrank, 'zprev, znext:', zdirps%pprev, zdirps%pnext
-
    ! lets assume simple cases for now
    globs%nx_loc = globs%nx/globs%nproc_x
    globs%ny_loc = globs%ny/globs%nproc_y
@@ -89,25 +84,17 @@ program xcompact
 
    cuda_allocator = cuda_allocator_t([SZ, globs%nx_loc, globs%n_groups_x])
    allocator => cuda_allocator
-   print*, 'allocator instantiated'
+   print*, 'CUDA allocator instantiated'
 
    cuda_backend = cuda_backend_t(globs, allocator)
    backend => cuda_backend
-   print*, 'backend instantiated'
+   print*, 'CUDA backend instantiated'
+
    backend%nu = 1._dp
 
    allocate(u(SZ, globs%nx_loc, globs%n_groups_x))
    allocate(v(SZ, globs%nx_loc, globs%n_groups_x))
    allocate(w(SZ, globs%nx_loc, globs%n_groups_x))
-
-   ! GPU only
-   !allocate(cuda_allocator_t :: allocator)
-   !allocate(cuda_backend_t :: backend)
-
-   !cuda_backend = cuda_backend_t(allocator, xdirps, ydirps, zdirps)
-
-   !allocator = cuda_allocator_t([SZ, 512, 512*512/SZ])
-   !backend = cuda_backend_t(allocator, xdirps, ydirps, zdirps)
 
    time_integrator = time_intg_t(allocator=allocator, backend=backend)
    print*, 'time integrator instantiated'
