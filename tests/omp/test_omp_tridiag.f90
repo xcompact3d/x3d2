@@ -6,6 +6,7 @@ program test_omp_tridiag
    use m_common, only: dp, pi
    use m_omp_common, only: SZ
    use m_omp_kernels_dist, only: der_univ_dist_omp, der_univ_subs_omp
+   use m_omp_sendrecv, only: sendrecv_fields
 
    use m_tdsops, only: tdsops_t, tdsops_init
 
@@ -297,28 +298,9 @@ contains
          !$omp end parallel do
 
          ! halo exchange
-         if (nproc == 1) then
-            u_recv_s = u_send_e
-            u_recv_e = u_send_s
-         else
-            ! MPI send/recv for multi-rank simulations
-            call MPI_Isend(u_send_s, SZ*n_halo*n_block, &
-                           MPI_DOUBLE_PRECISION, pprev, tag1, MPI_COMM_WORLD, &
-                           mpireq(1), srerr(1))
-            call MPI_Irecv(u_recv_e, SZ*n_halo*n_block, &
-                           MPI_DOUBLE_PRECISION, pnext, tag1, MPI_COMM_WORLD, &
-                           mpireq(2), srerr(2))
-            call MPI_Isend(u_send_e, SZ*n_halo*n_block, &
-                           MPI_DOUBLE_PRECISION, pnext, tag2, MPI_COMM_WORLD, &
-                           mpireq(3), srerr(3))
-            call MPI_Irecv(u_recv_s, SZ*n_halo*n_block, &
-                           MPI_DOUBLE_PRECISION, pprev, tag2, MPI_COMM_WORLD, &
-                           mpireq(4), srerr(4))
-
-            call MPI_Waitall(4, mpireq, MPI_STATUSES_IGNORE, ierr)
-         end if
-
-
+         call sendrecv_fields(u_recv_s, u_recv_e, u_send_s, u_send_e, &
+                               SZ*n_halo*n_block, nproc, pprev, pnext)
+         
          !$omp parallel do
          do k = 1, n_block
             call der_univ_dist_omp( &
