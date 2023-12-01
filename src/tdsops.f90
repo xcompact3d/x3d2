@@ -36,6 +36,14 @@ module m_tdsops
       module procedure tdsops_init
    end interface tdsops_t
 
+   type :: dirps_t
+      class(tdsops_t), allocatable :: der1st, der1st_sym, &
+                                      der2nd, der2nd_sym, &
+                                      stagder_v2p, stagder_p2v, &
+                                      interpl_v2p, interpl_p2v
+      integer :: nrank, nproc, pnext, pprev, n
+   end type dirps_t
+
 contains
 
    function tdsops_init(n, delta, operation, scheme, n_halo, from_to, &
