@@ -9,6 +9,7 @@ set(SRC
   omp/common.f90
   omp/kernels_dist.f90
   omp/sendrecv.f90
+  omp/exec_dist.f90
 )
 set(CUDASRC
   cuda/backend.f90
