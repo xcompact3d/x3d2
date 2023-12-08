@@ -45,6 +45,7 @@ contains
             tdsops%dist_fw, tdsops%dist_bw, tdsops%dist_af &
             )
       end do
+      !$omp end parallel do
 
       ! halo exchange for 2x2 systems
       call sendrecv_fields(du_recv_s, du_recv_e, du_send_s, du_send_e, &
