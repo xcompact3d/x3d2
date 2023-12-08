@@ -28,14 +28,11 @@ program test_omp_tridiag
    type(tdsops_t) :: tdsops
 
    character(len=20) :: bc_start, bc_end
-   real(dp), allocatable, dimension(:, :) :: coeffs_s, coeffs_e
-   real(dp), allocatable, dimension(:) :: coeffs, dist_fw, dist_bw, dist_af, &
-                                          dist_sa, dist_sc
 
-   integer :: n, n_block, i, j, k, n_halo, n_iters, iters, n_loc
+   integer :: n, n_block, j, n_halo, n_iters, n_loc
    integer :: n_glob
-   integer :: nrank, nproc, pprev, pnext, tag1 = 1234, tag2 = 1234
-   integer :: ierr, ndevs, devnum, memClockRt, memBusWidth
+   integer :: nrank, nproc, pprev, pnext
+   integer :: ierr, memClockRt, memBusWidth
 
    real(dp) :: dx, dx_per, norm_du, tol = 1d-8, tstart, tend
    real(dp) :: achievedBW, deviceBW, achievedBWmax, achievedBWmin
