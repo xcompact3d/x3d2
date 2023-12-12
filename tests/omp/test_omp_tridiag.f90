@@ -219,9 +219,9 @@ program test_omp_tridiag
    if (nrank == 0) then
       if (norm_du > tol) then
          allpass = .false.
-        write (stderr, '(a)') 'Check 2nd ders, hyperviscous, dir-neu... failed'
+         write (stderr, '(a)') 'Check 2nd ders, hyperviscous, dir-neu... failed'
       else
-        write (stderr, '(a)') 'Check 2nd ders, hyperviscous, dir-neu... passed'
+         write (stderr, '(a)') 'Check 2nd ders, hyperviscous, dir-neu... passed'
       end if
    end if
 
