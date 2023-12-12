@@ -8,7 +8,7 @@ module m_omp_kernels_dist
 
 contains
 
-   subroutine der_univ_dist_omp( &
+   subroutine der_univ_dist( &
       du, send_u_s, send_u_e, u, u_s, u_e, coeffs_s, coeffs_e, coeffs, n, &
       ffr, fbc, faf &
       )
@@ -134,9 +134,9 @@ contains
       end do
       !$omp end simd
 
-   end subroutine der_univ_dist_omp
+   end subroutine der_univ_dist
 
-   subroutine der_univ_subs_omp(du, recv_u_s, recv_u_e, n, dist_sa, dist_sc)
+   subroutine der_univ_subs(du, recv_u_s, recv_u_e, n, dist_sa, dist_sc)
       implicit none
 
       ! Arguments
@@ -193,6 +193,6 @@ contains
       end do
       !$omp end simd
 
-   end subroutine der_univ_subs_omp
+   end subroutine der_univ_subs
 
 end module m_omp_kernels_dist
