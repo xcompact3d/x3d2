@@ -83,7 +83,10 @@ module m_omp_backend
 
    end function init
 
-   subroutine alloc_omp_tdsops(self, tdsops, n, dx, operation, scheme)
+   subroutine alloc_omp_tdsops( &
+      self, tdsops, n, dx, operation, scheme, &
+      n_halo, from_to, bc_start, bc_end, sym, c_nu, nu0_nu &
+      )
       implicit none
 
       class(omp_backend_t) :: self
@@ -91,6 +94,10 @@ module m_omp_backend
       integer, intent(in) :: n
       real(dp), intent(in) :: dx
       character(*), intent(in) :: operation, scheme
+      integer, optional, intent(in) :: n_halo
+      character(*), optional, intent(in) :: from_to, bc_start, bc_end
+      logical, optional, intent(in) :: sym
+      real(dp), optional, intent(in) :: c_nu, nu0_nu
 
       allocate(tdsops_t :: tdsops)
 

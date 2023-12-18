@@ -130,6 +130,32 @@ contains
       call solver%backend%alloc_tdsops(solver%zdirps%der2nd_sym, nz, dz, &
                                        'second-deriv', 'compact6')
 
+      call solver%backend%alloc_tdsops(solver%xdirps%interpl_v2p, nx, dx, &
+                                       'interpolate', 'classic', from_to='v2p')
+      call solver%backend%alloc_tdsops(solver%ydirps%interpl_v2p, ny, dy, &
+                                       'interpolate', 'classic', from_to='v2p')
+      call solver%backend%alloc_tdsops(solver%zdirps%interpl_v2p, nz, dz, &
+                                       'interpolate', 'classic', from_to='v2p')
+      call solver%backend%alloc_tdsops(solver%xdirps%interpl_p2v, nx, dx, &
+                                       'interpolate', 'classic', from_to='p2v')
+      call solver%backend%alloc_tdsops(solver%ydirps%interpl_p2v, ny, dy, &
+                                       'interpolate', 'classic', from_to='p2v')
+      call solver%backend%alloc_tdsops(solver%zdirps%interpl_p2v, nz, dz, &
+                                       'interpolate', 'classic', from_to='p2v')
+
+      call solver%backend%alloc_tdsops(solver%xdirps%stagder_v2p, nx, dx, &
+                                       'stag-deriv', 'compact6', from_to='v2p')
+      call solver%backend%alloc_tdsops(solver%ydirps%stagder_v2p, ny, dy, &
+                                       'stag-deriv', 'compact6', from_to='v2p')
+      call solver%backend%alloc_tdsops(solver%zdirps%stagder_v2p, nz, dz, &
+                                       'stag-deriv', 'compact6', from_to='v2p')
+      call solver%backend%alloc_tdsops(solver%xdirps%stagder_p2v, nx, dx, &
+                                       'stag-deriv', 'compact6', from_to='p2v')
+      call solver%backend%alloc_tdsops(solver%ydirps%stagder_p2v, ny, dy, &
+                                       'stag-deriv', 'compact6', from_to='p2v')
+      call solver%backend%alloc_tdsops(solver%zdirps%stagder_p2v, nz, dz, &
+                                       'stag-deriv', 'compact6', from_to='p2v')
+
    end function init
 
    subroutine transeq(self, du, dv, dw, u, v, w)

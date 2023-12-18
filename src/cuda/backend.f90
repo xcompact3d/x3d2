@@ -101,7 +101,10 @@ module m_cuda_backend
 
    end function init
 
-   subroutine alloc_cuda_tdsops(self, tdsops, n, dx, operation, scheme)
+   subroutine alloc_cuda_tdsops( &
+      self, tdsops, n, dx, operation, scheme, &
+      n_halo, from_to, bc_start, bc_end, sym, c_nu, nu0_nu &
+      )
       implicit none
 
       class(cuda_backend_t) :: self
@@ -109,6 +112,10 @@ module m_cuda_backend
       integer, intent(in) :: n
       real(dp), intent(in) :: dx
       character(*), intent(in) :: operation, scheme
+      integer, optional, intent(in) :: n_halo
+      character(*), optional, intent(in) :: from_to, bc_start, bc_end
+      logical, optional, intent(in) :: sym
+      real(dp), optional, intent(in) :: c_nu, nu0_nu
 
       allocate(cuda_tdsops_t :: tdsops)
 
