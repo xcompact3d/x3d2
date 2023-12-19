@@ -23,6 +23,7 @@ module m_omp_backend
       procedure :: transeq_x => transeq_x_omp
       procedure :: transeq_y => transeq_y_omp
       procedure :: transeq_z => transeq_z_omp
+      procedure :: tds_solve => tds_solve_omp
       procedure :: trans_x2y => trans_x2y_omp
       procedure :: trans_x2z => trans_x2z_omp
       procedure :: sum_yzintox => sum_yzintox_omp
@@ -137,6 +138,19 @@ module m_omp_backend
       !call self%transeq_omp_dist(dw, du, dv, w, u, v, dirps)
 
    end subroutine transeq_z_omp
+
+   subroutine tds_solve_omp(self, du, u, dirps, tdsops)
+      implicit none
+
+      class(omp_backend_t) :: self
+      class(field_t), intent(inout) :: du
+      class(field_t), intent(in) :: u
+      type(dirps_t), intent(in) :: dirps
+      class(tdsops_t), intent(in) :: tdsops
+
+      !call self%tds_solve_dist(self, du, u, dirps, tdsops)
+
+   end subroutine tds_solve_omp
 
    subroutine trans_x2y_omp(self, u_, v_, w_, u, v, w)
       implicit none

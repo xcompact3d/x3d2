@@ -8,8 +8,8 @@ module m_cuda_backend
 
    use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
    use m_cuda_common, only: SZ
-   use m_cuda_exec_dist, only: exec_dist_transeq_3fused
-   use m_cuda_sendrecv, only: sendrecv_3fields
+   use m_cuda_exec_dist, only: exec_dist_transeq_3fused, exec_dist_tds_compact
+   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
    use m_cuda_tdsops, only: cuda_tdsops_t
    use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
 
@@ -31,6 +31,7 @@ module m_cuda_backend
       procedure :: transeq_x => transeq_x_cuda
       procedure :: transeq_y => transeq_y_cuda
       procedure :: transeq_z => transeq_z_cuda
+      procedure :: tds_solve => tds_solve_cuda
       procedure :: trans_x2y => trans_x2y_cuda
       procedure :: trans_x2z => trans_x2z_cuda
       procedure :: sum_yzintox => sum_yzintox_cuda
@@ -38,6 +39,7 @@ module m_cuda_backend
       procedure :: get_fields => get_fields_cuda
       procedure :: transeq_cuda_dist
       procedure :: transeq_cuda_thom
+      procedure :: tds_solve_dist
    end type cuda_backend_t
 
    interface cuda_backend_t
@@ -342,6 +344,64 @@ module m_cuda_backend
       type(dirps_t), intent(in) :: dirps
 
    end subroutine transeq_cuda_thom
+
+   subroutine tds_solve_cuda(self, du, u, dirps, tdsops)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      class(field_t), intent(inout) :: du
+      class(field_t), intent(in) :: u
+      type(dirps_t), intent(in) :: dirps
+      class(tdsops_t), intent(in) :: tdsops
+
+      type(dim3) :: blocks, threads
+
+      blocks = dim3(dirps%n_blocks, 1, 1); threads = dim3(SZ, 1, 1)
+
+      call tds_solve_dist(self, du, u, dirps, tdsops, blocks, threads)
+
+   end subroutine tds_solve_cuda
+
+   subroutine tds_solve_dist(self, du, u, dirps, tdsops, blocks, threads)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      class(field_t), intent(inout) :: du
+      class(field_t), intent(in) :: u
+      type(dirps_t), intent(in) :: dirps
+      class(tdsops_t), intent(in) :: tdsops
+      type(dim3), intent(in) :: blocks, threads
+
+      real(dp), device, pointer, dimension(:, :, :) :: du_dev, u_dev
+
+      type(cuda_tdsops_t), pointer :: tdsops_dev
+
+      select type(du); type is (cuda_field_t); du_dev => du%data_d; end select
+      select type(u); type is (cuda_field_t); u_dev => u%data_d; end select
+
+      select type (tdsops)
+      type is (cuda_tdsops_t); tdsops_dev => tdsops
+      end select
+
+      call copy_into_buffers(self%u_send_s_dev, self%u_send_e_dev, u_dev, &
+                             tdsops_dev%n)
+
+      call sendrecv_fields(self%u_recv_s_dev, self%u_recv_e_dev, &
+                           self%u_send_s_dev, self%u_send_e_dev, &
+                           SZ*4*blocks%x, dirps%nproc, &
+                           dirps%pprev, dirps%pnext)
+
+      ! call exec_dist
+      call exec_dist_tds_compact( &
+         du_dev, u_dev, &
+         self%u_recv_s_dev, self%u_recv_e_dev, &
+         self%du_send_s_dev, self%du_send_e_dev, &
+         self%du_recv_s_dev, self%du_recv_e_dev, &
+         tdsops_dev, dirps%nproc, dirps%pprev, dirps%pnext, &
+         blocks, threads &
+      )
+
+   end subroutine tds_solve_dist
 
    subroutine trans_x2y_cuda(self, u_y, v_y, w_y, u, v, w)
       implicit none
