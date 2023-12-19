@@ -44,6 +44,7 @@ module m_solver
       class(time_intg_t), pointer :: time_integrator
    contains
       procedure :: transeq
+      procedure :: divergence
       procedure :: run
    end type solver_t
 
@@ -228,12 +229,106 @@ contains
 
    end subroutine transeq
 
+   subroutine divergence(self, div_u, u, v, w)
+      implicit none
+
+      class(solver_t) :: self
+      class(field_t), intent(inout) :: div_u
+      class(field_t), intent(in) :: u, v, w
+
+      class(field_t), pointer :: du_x, dv_x, dw_x, &
+                                 u_y, v_y, w_y, du_y, dv_y, dw_y, &
+                                 u_z, w_z, du_z, dw_z
+
+      du_x => self%backend%allocator%get_block()
+      dv_x => self%backend%allocator%get_block()
+      dw_x => self%backend%allocator%get_block()
+
+      ! Staggared der for u field in x
+      ! Interpolation for v field in x
+      ! Interpolation for w field in x
+      call self%backend%tds_solve(du_x, u, self%xdirps, &
+                                  self%xdirps%stagder_v2p)
+      call self%backend%tds_solve(dv_x, v, self%xdirps, &
+                                  self%xdirps%interpl_v2p)
+      call self%backend%tds_solve(dw_x, w, self%xdirps, &
+                                  self%xdirps%interpl_v2p)
+
+      ! request fields from the allocator
+      u_y => self%backend%allocator%get_block()
+      v_y => self%backend%allocator%get_block()
+      w_y => self%backend%allocator%get_block()
+
+      ! reorder data from x orientation to y orientation
+      call self%backend%trans_x2y(u_y, v_y, w_y, du_x, dv_x, dw_x)
+
+      call self%backend%allocator%release_block(du_x)
+      call self%backend%allocator%release_block(dv_x)
+      call self%backend%allocator%release_block(dw_x)
+
+      du_y => self%backend%allocator%get_block()
+      dv_y => self%backend%allocator%get_block()
+      dw_y => self%backend%allocator%get_block()
+
+      ! similar to the x direction, obtain derivatives in y.
+      call self%backend%tds_solve(du_y, u_y, self%ydirps, &
+                                  self%ydirps%interpl_v2p)
+      call self%backend%tds_solve(dv_y, v_y, self%ydirps, &
+                                  self%ydirps%stagder_v2p)
+      call self%backend%tds_solve(dw_y, w_y, self%ydirps, &
+                                  self%ydirps%interpl_v2p)
+
+      ! we don't need the velocities in y orientation any more, so release
+      ! them to open up space.
+      ! It is important that this doesn't actually deallocate any memory,
+      ! it just makes the corresponding memory space available for use.
+      call self%backend%allocator%release_block(u_y)
+      call self%backend%allocator%release_block(v_y)
+      call self%backend%allocator%release_block(w_y)
+
+      ! just like in y direction, get some fields for the z derivatives.
+      u_z => self%backend%allocator%get_block()
+      w_z => self%backend%allocator%get_block()
+
+      ! dv_y = dv_y + dw_y
+      ! call vecadd(1, dv_y, 1, dw_y)
+
+      ! reorder from y to z
+      !call self%backend%trans_y2z(u_z, w_z, du_y, dw_y)
+
+      ! release all the unnecessary blocks.
+      call self%backend%allocator%release_block(du_y)
+      call self%backend%allocator%release_block(dv_y)
+      call self%backend%allocator%release_block(dw_y)
+
+      dw_z => self%backend%allocator%get_block()
+
+      ! get the derivatives in z
+      call self%backend%tds_solve(div_u, u_z, self%zdirps, &
+                                  self%zdirps%interpl_v2p)
+      call self%backend%tds_solve(dw_z, w_z, self%zdirps, &
+                                  self%zdirps%stagder_v2p)
+
+      ! div_u = div_u + dw_z
+      !call vecadd(1, div_u, 1, dw_z)
+
+      ! div_u array is in z orientation
+
+      ! there is no need to keep velocities in z orientation around, so release
+      call self%backend%allocator%release_block(u_z)
+      call self%backend%allocator%release_block(w_z)
+      call self%backend%allocator%release_block(dw_z)
+
+   end subroutine divergence
+
    subroutine run(self, n_iter, u_out, v_out, w_out)
       implicit none
 
       class(solver_t), intent(in) :: self
       integer, intent(in) :: n_iter
       real(dp), dimension(:, :, :), intent(inout) :: u_out, v_out, w_out
+
+      class(field_t), pointer :: div_u
 
       integer :: i
 
@@ -246,9 +341,15 @@ contains
          call self%time_integrator%step(self%u, self%v, self%w, &
                                         self%du, self%dv, self%dw, self%dt)
 
-         !! pressure stuff
-         !call self%divergence(udiv, u, v, w)
-         !call self%poisson(p, udiv)
+         ! pressure
+         div_u => self%backend%allocator%get_block()
+
+         call self%divergence(div_u, self%u, self%v, self%w)
+
+         !call self%poisson(p, div_u)
+
+         call self%backend%allocator%release_block(div_u)
+
          !call self%gradient(px, py, pz, p)
 
          !! velocity correction
