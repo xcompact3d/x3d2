@@ -94,6 +94,10 @@ program xcompact
    ydirps%n = globs%ny_loc
    zdirps%n = globs%nz_loc
 
+   xdirps%n_blocks = globs%n_groups_x
+   ydirps%n_blocks = globs%n_groups_y
+   zdirps%n_blocks = globs%n_groups_z
+
 #ifdef CUDA
    cuda_allocator = cuda_allocator_t([SZ, globs%nx_loc, globs%n_groups_x])
    allocator => cuda_allocator

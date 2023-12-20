@@ -27,6 +27,7 @@ module m_base_backend
       procedure(transeq_ders), deferred :: transeq_x
       procedure(transeq_ders), deferred :: transeq_y
       procedure(transeq_ders), deferred :: transeq_z
+      procedure(tds_solve), deferred :: tds_solve
       procedure(transposer), deferred :: trans_x2y
       procedure(transposer), deferred :: trans_x2z
       procedure(sum9into3), deferred :: sum_yzintox
@@ -52,6 +53,27 @@ module m_base_backend
          class(field_t), intent(in) :: u, v, w
          type(dirps_t), intent(in) :: dirps
       end subroutine transeq_ders
+   end interface
+
+   abstract interface
+      subroutine tds_solve(self, du, u, dirps, tdsops)
+         !! transeq equation obtains the derivatives direction by
+         !! direction, and the exact algorithm used to obtain these
+         !! derivatives are decided at runtime. Backend implementations
+         !! are responsible from directing calls to transeq_ders into
+         !! the correct algorithm.
+         import :: base_backend_t
+         import :: field_t
+         import :: dirps_t
+         import :: tdsops_t
+         implicit none
+
+         class(base_backend_t) :: self
+         class(field_t), intent(inout) :: du
+         class(field_t), intent(in) :: u
+         type(dirps_t), intent(in) :: dirps
+         class(tdsops_t), intent(in) :: tdsops
+      end subroutine tds_solve
    end interface
 
    abstract interface
