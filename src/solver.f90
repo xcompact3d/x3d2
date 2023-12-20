@@ -45,6 +45,7 @@ module m_solver
    contains
       procedure :: transeq
       procedure :: divergence
+      procedure :: gradient
       procedure :: run
    end type solver_t
 
@@ -321,6 +322,83 @@ contains
 
    end subroutine divergence
 
+   subroutine gradient(self, dpdx, dpdy, dpdz, pressure)
+      implicit none
+
+      class(solver_t) :: self
+      class(field_t), intent(inout) :: dpdx, dpdy, dpdz
+      class(field_t), intent(in) :: pressure
+
+      class(field_t), pointer :: p_sxy_z, dpdz_sxy_z, &
+                                 p_sxy_y, dpdz_sxy_y, &
+                                 p_sx_y, dpdy_sx_y, dpdz_sx_y, &
+                                 p_sx_x, dpdy_sx_x, dpdz_sx_x
+
+      p_sxy_z => self%backend%allocator%get_block()
+      dpdz_sxy_z => self%backend%allocator%get_block()
+
+      ! Staggared der for pressure field in x
+      ! Interpolation for pressure field in x
+      call self%backend%tds_solve(p_sxy_z, pressure, self%zdirps, &
+                                  self%zdirps%interpl_p2v)
+      call self%backend%tds_solve(dpdz_sxy_z, pressure, self%zdirps, &
+                                  self%zdirps%stagder_p2v)
+
+      ! request fields from the allocator
+      p_sxy_y => self%backend%allocator%get_block()
+      dpdz_sxy_y => self%backend%allocator%get_block()
+
+      ! reorder data from z orientation to y orientation
+      !call self%backend%trans_z2y(p_sxy_y, dpdz_sxy_y, p_sxy_z, dpdz_sxy_z)
+
+      call self%backend%allocator%release_block(p_sxy_z)
+      call self%backend%allocator%release_block(dpdz_sxy_z)
+
+      p_sx_y => self%backend%allocator%get_block()
+      dpdy_sx_y => self%backend%allocator%get_block()
+      dpdz_sx_y => self%backend%allocator%get_block()
+
+      ! similar to the z direction, obtain derivatives in x.
+      call self%backend%tds_solve(p_sx_y, p_sxy_y, self%ydirps, &
+                                  self%ydirps%interpl_p2v)
+      call self%backend%tds_solve(dpdy_sx_y, p_sxy_y, self%ydirps, &
+                                  self%ydirps%stagder_p2v)
+      call self%backend%tds_solve(dpdz_sx_y, dpdz_sxy_y, self%ydirps, &
+                                  self%ydirps%interpl_p2v)
+
+      ! release memory
+      call self%backend%allocator%release_block(p_sxy_y)
+      call self%backend%allocator%release_block(dpdz_sxy_y)
+
+      ! just like in y direction, get some fields for the z derivatives.
+      p_sx_x => self%backend%allocator%get_block()
+      dpdy_sx_x => self%backend%allocator%get_block()
+      dpdz_sx_x => self%backend%allocator%get_block()
+
+      ! reorder from y to x
+      !call self%backend%trans_y2x(p_sx_x, dpdy_sx_x, dpdz_sx_x, &
+      !                            p_sx_y, dpdy_sx_y, dpdz_sx_y)
+
+      ! release all the y directional fields.
+      call self%backend%allocator%release_block(p_sx_y)
+      call self%backend%allocator%release_block(dpdy_sx_y)
+      call self%backend%allocator%release_block(dpdz_sx_y)
+
+      ! get the derivatives in x
+      call self%backend%tds_solve(dpdx, p_sx_x, self%xdirps, &
+                                  self%xdirps%stagder_p2v)
+      call self%backend%tds_solve(dpdy, dpdy_sx_x, self%xdirps, &
+                                  self%xdirps%interpl_v2p)
+      call self%backend%tds_solve(dpdz, dpdz_sx_x, self%xdirps, &
+                                  self%xdirps%interpl_v2p)
+
+      ! release temporary x fields
+      call self%backend%allocator%release_block(p_sx_x)
+      call self%backend%allocator%release_block(dpdy_sx_x)
+      call self%backend%allocator%release_block(dpdz_sx_x)
+
+   end subroutine gradient
+
    subroutine run(self, n_iter, u_out, v_out, w_out)
       implicit none
 
@@ -328,7 +406,7 @@ contains
       integer, intent(in) :: n_iter
       real(dp), dimension(:, :, :), intent(inout) :: u_out, v_out, w_out
 
-      class(field_t), pointer :: div_u
+      class(field_t), pointer :: div_u, pressure, dpdx, dpdy, dpdz
 
       integer :: i
 
@@ -346,14 +424,26 @@ contains
 
          call self%divergence(div_u, self%u, self%v, self%w)
 
-         !call self%poisson(p, div_u)
+         pressure => self%backend%allocator%get_block()
+
+         !call self%poisson(pressure, div_u)
 
          call self%backend%allocator%release_block(div_u)
 
-         !call self%gradient(px, py, pz, p)
+         dpdx => self%backend%allocator%get_block()
+         dpdy => self%backend%allocator%get_block()
+         dpdz => self%backend%allocator%get_block()
+
+         call self%gradient(dpdx, dpdy, dpdz, pressure)
+
+         call self%backend%allocator%release_block(pressure)
 
          !! velocity correction
-         !call self%backend%vec3add(u, v, w, px, py, pz)
+         !call self%backend%vec3add(u, v, w, dpdx, dpdy, dpdz)
+
+         call self%backend%allocator%release_block(dpdx)
+         call self%backend%allocator%release_block(dpdy)
+         call self%backend%allocator%release_block(dpdz)
       end do
 
       print*, 'run end'
