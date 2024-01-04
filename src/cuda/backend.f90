@@ -34,6 +34,9 @@ module m_cuda_backend
       procedure :: tds_solve => tds_solve_cuda
       procedure :: trans_x2y => trans_x2y_cuda
       procedure :: trans_x2z => trans_x2z_cuda
+      procedure :: trans_y2z => trans_y2z_cuda
+      procedure :: trans_z2y => trans_z2y_cuda
+      procedure :: trans_y2x => trans_y2x_cuda
       procedure :: sum_yzintox => sum_yzintox_cuda
       procedure :: set_fields => set_fields_cuda
       procedure :: get_fields => get_fields_cuda
@@ -427,6 +430,33 @@ module m_cuda_backend
       class(field_t), intent(in) :: u, v, w
 
    end subroutine trans_x2z_cuda
+
+   subroutine trans_y2z_cuda(self, u_z, u_y)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      class(field_t), intent(inout) :: u_z
+      class(field_t), intent(in) :: u_y
+
+   end subroutine trans_y2z_cuda
+
+   subroutine trans_z2y_cuda(self, u_y, u_z)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      class(field_t), intent(inout) :: u_y
+      class(field_t), intent(in) :: u_z
+
+   end subroutine trans_z2y_cuda
+
+   subroutine trans_y2x_cuda(self, u_x, u_y)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      class(field_t), intent(inout) :: u_x
+      class(field_t), intent(in) :: u_y
+
+   end subroutine trans_y2x_cuda
 
    subroutine sum_yzintox_cuda(self, du, dv, dw, &
                                du_y, dv_y, dw_y, du_z, dv_z, dw_z)

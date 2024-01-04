@@ -26,6 +26,9 @@ module m_omp_backend
       procedure :: tds_solve => tds_solve_omp
       procedure :: trans_x2y => trans_x2y_omp
       procedure :: trans_x2z => trans_x2z_omp
+      procedure :: trans_y2z => trans_y2z_omp
+      procedure :: trans_z2y => trans_z2y_omp
+      procedure :: trans_y2x => trans_y2x_omp
       procedure :: sum_yzintox => sum_yzintox_omp
       procedure :: set_fields => set_fields_omp
       procedure :: get_fields => get_fields_omp
@@ -176,6 +179,33 @@ module m_omp_backend
       class(field_t), intent(in) :: u, v, w
 
    end subroutine trans_x2z_omp
+
+   subroutine trans_y2z_omp(self, u_z, u_y)
+      implicit none
+
+      class(omp_backend_t) :: self
+      class(field_t), intent(inout) :: u_z
+      class(field_t), intent(in) :: u_y
+
+   end subroutine trans_y2z_omp
+
+   subroutine trans_z2y_omp(self, u_y, u_z)
+      implicit none
+
+      class(omp_backend_t) :: self
+      class(field_t), intent(inout) :: u_y
+      class(field_t), intent(in) :: u_z
+
+   end subroutine trans_z2y_omp
+
+   subroutine trans_y2x_omp(self, u_x, u_y)
+      implicit none
+
+      class(omp_backend_t) :: self
+      class(field_t), intent(inout) :: u_x
+      class(field_t), intent(in) :: u_y
+
+   end subroutine trans_y2x_omp
 
    subroutine sum_yzintox_omp(self, du, dv, dw, &
                                du_y, dv_y, dw_y, du_z, dv_z, dw_z)

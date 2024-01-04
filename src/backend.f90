@@ -30,6 +30,9 @@ module m_base_backend
       procedure(tds_solve), deferred :: tds_solve
       procedure(transposer), deferred :: trans_x2y
       procedure(transposer), deferred :: trans_x2z
+      procedure(trans_d2d), deferred :: trans_y2z
+      procedure(trans_d2d), deferred :: trans_z2y
+      procedure(trans_d2d), deferred :: trans_y2x
       procedure(sum9into3), deferred :: sum_yzintox
       procedure(get_fields), deferred :: get_fields
       procedure(set_fields), deferred :: set_fields
@@ -90,6 +93,20 @@ module m_base_backend
          class(field_t), intent(inout) :: u_, v_, w_
          class(field_t), intent(in) :: u, v, w
       end subroutine transposer
+
+      subroutine trans_d2d(self, u_, u)
+         !! transposer subroutines are straightforward, they rearrange
+         !! data into our specialist data structure so that regardless
+         !! of the direction tridiagonal systems are solved efficiently
+         !! and fast.
+         import :: base_backend_t
+         import :: field_t
+         implicit none
+
+         class(base_backend_t) :: self
+         class(field_t), intent(inout) :: u_
+         class(field_t), intent(in) :: u
+      end subroutine trans_d2d
    end interface
 
    abstract interface

@@ -295,7 +295,8 @@ contains
       ! call vecadd(1, dv_y, 1, dw_y)
 
       ! reorder from y to z
-      !call self%backend%trans_y2z(u_z, w_z, du_y, dw_y)
+      call self%backend%trans_y2z(u_z, du_y)
+      call self%backend%trans_y2z(w_z, dw_y)
 
       ! release all the unnecessary blocks.
       call self%backend%allocator%release_block(du_y)
@@ -349,7 +350,8 @@ contains
       dpdz_sxy_y => self%backend%allocator%get_block()
 
       ! reorder data from z orientation to y orientation
-      !call self%backend%trans_z2y(p_sxy_y, dpdz_sxy_y, p_sxy_z, dpdz_sxy_z)
+      call self%backend%trans_z2y(p_sxy_y, p_sxy_z)
+      call self%backend%trans_z2y(dpdz_sxy_y, dpdz_sxy_z)
 
       call self%backend%allocator%release_block(p_sxy_z)
       call self%backend%allocator%release_block(dpdz_sxy_z)
@@ -376,8 +378,9 @@ contains
       dpdz_sx_x => self%backend%allocator%get_block()
 
       ! reorder from y to x
-      !call self%backend%trans_y2x(p_sx_x, dpdy_sx_x, dpdz_sx_x, &
-      !                            p_sx_y, dpdy_sx_y, dpdz_sx_y)
+      call self%backend%trans_y2x(p_sx_x, p_sx_y)
+      call self%backend%trans_y2x(dpdy_sx_x, dpdy_sx_y)
+      call self%backend%trans_y2x(dpdz_sx_x, dpdz_sx_y)
 
       ! release all the y directional fields.
       call self%backend%allocator%release_block(p_sx_y)
