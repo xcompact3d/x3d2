@@ -30,7 +30,11 @@ module m_base_backend
       procedure(tds_solve), deferred :: tds_solve
       procedure(transposer), deferred :: trans_x2y
       procedure(transposer), deferred :: trans_x2z
+      procedure(trans_d2d), deferred :: trans_y2z
+      procedure(trans_d2d), deferred :: trans_z2y
+      procedure(trans_d2d), deferred :: trans_y2x
       procedure(sum9into3), deferred :: sum_yzintox
+      procedure(vecadd), deferred :: vecadd
       procedure(get_fields), deferred :: get_fields
       procedure(set_fields), deferred :: set_fields
       procedure(alloc_tdsops), deferred :: alloc_tdsops
@@ -90,6 +94,20 @@ module m_base_backend
          class(field_t), intent(inout) :: u_, v_, w_
          class(field_t), intent(in) :: u, v, w
       end subroutine transposer
+
+      subroutine trans_d2d(self, u_, u)
+         !! transposer subroutines are straightforward, they rearrange
+         !! data into our specialist data structure so that regardless
+         !! of the direction tridiagonal systems are solved efficiently
+         !! and fast.
+         import :: base_backend_t
+         import :: field_t
+         implicit none
+
+         class(base_backend_t) :: self
+         class(field_t), intent(inout) :: u_
+         class(field_t), intent(in) :: u
+      end subroutine trans_d2d
    end interface
 
    abstract interface
@@ -104,6 +122,22 @@ module m_base_backend
          class(field_t), intent(inout) :: du, dv, dw
          class(field_t), intent(in) :: du_y, dv_y, dw_y, du_z, dv_z, dw_z
       end subroutine sum9into3
+   end interface
+
+   abstract interface
+      subroutine vecadd(self, a, x, b, y)
+         !! adds two vectors together: y = a*x + b*y
+         import :: base_backend_t
+         import :: dp
+         import :: field_t
+         implicit none
+
+         class(base_backend_t) :: self
+         real(dp), intent(in) :: a
+         class(field_t), intent(in) :: x
+         real(dp), intent(in) :: b
+         class(field_t), intent(inout) :: y
+      end subroutine vecadd
    end interface
 
    abstract interface
@@ -136,7 +170,8 @@ module m_base_backend
    end interface
 
    abstract interface
-      subroutine alloc_tdsops(self, tdsops, n, dx, operation, scheme)
+      subroutine alloc_tdsops(self, tdsops, n, dx, operation, scheme, n_halo, &
+                              from_to, bc_start, bc_end, sym, c_nu, nu0_nu)
          import :: base_backend_t
          import :: dp
          import :: tdsops_t
@@ -147,6 +182,10 @@ module m_base_backend
          integer, intent(in) :: n
          real(dp), intent(in) :: dx
          character(*), intent(in) :: operation, scheme
+         integer, optional, intent(in) :: n_halo
+         character(*), optional, intent(in) :: from_to, bc_start, bc_end
+         logical, optional, intent(in) :: sym
+         real(dp), optional, intent(in) :: c_nu, nu0_nu
       end subroutine alloc_tdsops
    end interface
 

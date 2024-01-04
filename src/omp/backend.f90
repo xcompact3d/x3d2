@@ -26,7 +26,11 @@ module m_omp_backend
       procedure :: tds_solve => tds_solve_omp
       procedure :: trans_x2y => trans_x2y_omp
       procedure :: trans_x2z => trans_x2z_omp
+      procedure :: trans_y2z => trans_y2z_omp
+      procedure :: trans_z2y => trans_z2y_omp
+      procedure :: trans_y2x => trans_y2x_omp
       procedure :: sum_yzintox => sum_yzintox_omp
+      procedure :: vecadd => vecadd_omp
       procedure :: set_fields => set_fields_omp
       procedure :: get_fields => get_fields_omp
    end type omp_backend_t
@@ -83,7 +87,10 @@ module m_omp_backend
 
    end function init
 
-   subroutine alloc_omp_tdsops(self, tdsops, n, dx, operation, scheme)
+   subroutine alloc_omp_tdsops( &
+      self, tdsops, n, dx, operation, scheme, &
+      n_halo, from_to, bc_start, bc_end, sym, c_nu, nu0_nu &
+      )
       implicit none
 
       class(omp_backend_t) :: self
@@ -91,12 +98,17 @@ module m_omp_backend
       integer, intent(in) :: n
       real(dp), intent(in) :: dx
       character(*), intent(in) :: operation, scheme
+      integer, optional, intent(in) :: n_halo
+      character(*), optional, intent(in) :: from_to, bc_start, bc_end
+      logical, optional, intent(in) :: sym
+      real(dp), optional, intent(in) :: c_nu, nu0_nu
 
       allocate(tdsops_t :: tdsops)
 
       select type (tdsops)
       type is (tdsops_t)
-         tdsops = tdsops_t(n, dx, operation, scheme)
+         tdsops = tdsops_t(n, dx, operation, scheme, n_halo, from_to, &
+                           bc_start, bc_end, sym, c_nu, nu0_nu)
       end select
 
    end subroutine alloc_omp_tdsops
@@ -170,6 +182,33 @@ module m_omp_backend
 
    end subroutine trans_x2z_omp
 
+   subroutine trans_y2z_omp(self, u_, u)
+      implicit none
+
+      class(omp_backend_t) :: self
+      class(field_t), intent(inout) :: u_
+      class(field_t), intent(in) :: u
+
+   end subroutine trans_y2z_omp
+
+   subroutine trans_z2y_omp(self, u_, u)
+      implicit none
+
+      class(omp_backend_t) :: self
+      class(field_t), intent(inout) :: u_
+      class(field_t), intent(in) :: u
+
+   end subroutine trans_z2y_omp
+
+   subroutine trans_y2x_omp(self, u_, u)
+      implicit none
+
+      class(omp_backend_t) :: self
+      class(field_t), intent(inout) :: u_
+      class(field_t), intent(in) :: u
+
+   end subroutine trans_y2x_omp
+
    subroutine sum_yzintox_omp(self, du, dv, dw, &
                                du_y, dv_y, dw_y, du_z, dv_z, dw_z)
       implicit none
@@ -179,6 +218,17 @@ module m_omp_backend
       class(field_t), intent(in) :: du_y, dv_y, dw_y, du_z, dv_z, dw_z
 
    end subroutine sum_yzintox_omp
+
+   subroutine vecadd_omp(self, a, x, b, y)
+      implicit none
+
+      class(omp_backend_t) :: self
+      real(dp), intent(in) :: a
+      class(field_t), intent(in) :: x
+      real(dp), intent(in) :: b
+      class(field_t), intent(inout) :: y
+
+   end subroutine vecadd_omp
 
    subroutine copy_into_buffers(u_send_s, u_send_e, u, n)
       implicit none

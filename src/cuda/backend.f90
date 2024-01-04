@@ -34,7 +34,11 @@ module m_cuda_backend
       procedure :: tds_solve => tds_solve_cuda
       procedure :: trans_x2y => trans_x2y_cuda
       procedure :: trans_x2z => trans_x2z_cuda
+      procedure :: trans_y2z => trans_y2z_cuda
+      procedure :: trans_z2y => trans_z2y_cuda
+      procedure :: trans_y2x => trans_y2x_cuda
       procedure :: sum_yzintox => sum_yzintox_cuda
+      procedure :: vecadd => vecadd_cuda
       procedure :: set_fields => set_fields_cuda
       procedure :: get_fields => get_fields_cuda
       procedure :: transeq_cuda_dist
@@ -101,7 +105,10 @@ module m_cuda_backend
 
    end function init
 
-   subroutine alloc_cuda_tdsops(self, tdsops, n, dx, operation, scheme)
+   subroutine alloc_cuda_tdsops( &
+      self, tdsops, n, dx, operation, scheme, &
+      n_halo, from_to, bc_start, bc_end, sym, c_nu, nu0_nu &
+      )
       implicit none
 
       class(cuda_backend_t) :: self
@@ -109,12 +116,17 @@ module m_cuda_backend
       integer, intent(in) :: n
       real(dp), intent(in) :: dx
       character(*), intent(in) :: operation, scheme
+      integer, optional, intent(in) :: n_halo
+      character(*), optional, intent(in) :: from_to, bc_start, bc_end
+      logical, optional, intent(in) :: sym
+      real(dp), optional, intent(in) :: c_nu, nu0_nu
 
       allocate(cuda_tdsops_t :: tdsops)
 
       select type (tdsops)
       type is (cuda_tdsops_t)
-         tdsops = cuda_tdsops_t(n, dx, operation, scheme)
+         tdsops = cuda_tdsops_t(n, dx, operation, scheme, n_halo, from_to, &
+                                bc_start, bc_end, sym, c_nu, nu0_nu)
       end select
 
    end subroutine alloc_cuda_tdsops
@@ -421,6 +433,33 @@ module m_cuda_backend
 
    end subroutine trans_x2z_cuda
 
+   subroutine trans_y2z_cuda(self, u_z, u_y)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      class(field_t), intent(inout) :: u_z
+      class(field_t), intent(in) :: u_y
+
+   end subroutine trans_y2z_cuda
+
+   subroutine trans_z2y_cuda(self, u_y, u_z)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      class(field_t), intent(inout) :: u_y
+      class(field_t), intent(in) :: u_z
+
+   end subroutine trans_z2y_cuda
+
+   subroutine trans_y2x_cuda(self, u_x, u_y)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      class(field_t), intent(inout) :: u_x
+      class(field_t), intent(in) :: u_y
+
+   end subroutine trans_y2x_cuda
+
    subroutine sum_yzintox_cuda(self, du, dv, dw, &
                                du_y, dv_y, dw_y, du_z, dv_z, dw_z)
       implicit none
@@ -430,6 +469,17 @@ module m_cuda_backend
       class(field_t), intent(in) :: du_y, dv_y, dw_y, du_z, dv_z, dw_z
 
    end subroutine sum_yzintox_cuda
+
+   subroutine vecadd_cuda(self, a, x, b, y)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      real(dp), intent(in) :: a
+      class(field_t), intent(in) :: x
+      real(dp), intent(in) :: b
+      class(field_t), intent(inout) :: y
+
+   end subroutine vecadd_cuda
 
    subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n)
       implicit none

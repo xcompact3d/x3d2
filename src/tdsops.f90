@@ -108,7 +108,7 @@ contains
                                c_nu, nu0_nu)
       else if (operation == 'interpolate') then
          call tdsops%interpl_mid(scheme, from_to, bc_start, bc_end, sym)
-      else if (operation == 'staggared-deriv') then
+      else if (operation == 'stag-deriv') then
          call tdsops%stagder_1st(delta, scheme, from_to, bc_start, bc_end, sym)
       else
          error stop 'operation is not defined'
