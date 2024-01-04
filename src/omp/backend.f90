@@ -107,7 +107,8 @@ module m_omp_backend
 
       select type (tdsops)
       type is (tdsops_t)
-         tdsops = tdsops_t(n, dx, operation, scheme)
+         tdsops = tdsops_t(n, dx, operation, scheme, n_halo, from_to, &
+                           bc_start, bc_end, sym, c_nu, nu0_nu)
       end select
 
    end subroutine alloc_omp_tdsops

@@ -125,7 +125,8 @@ module m_cuda_backend
 
       select type (tdsops)
       type is (cuda_tdsops_t)
-         tdsops = cuda_tdsops_t(n, dx, operation, scheme)
+         tdsops = cuda_tdsops_t(n, dx, operation, scheme, n_halo, from_to, &
+                                bc_start, bc_end, sym, c_nu, nu0_nu)
       end select
 
    end subroutine alloc_cuda_tdsops
