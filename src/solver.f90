@@ -338,8 +338,8 @@ contains
       p_sxy_z => self%backend%allocator%get_block()
       dpdz_sxy_z => self%backend%allocator%get_block()
 
-      ! Staggared der for pressure field in x
-      ! Interpolation for pressure field in x
+      ! Staggared der for pressure field in z
+      ! Interpolation for pressure field in z
       call self%backend%tds_solve(p_sxy_z, pressure, self%zdirps, &
                                   self%zdirps%interpl_p2v)
       call self%backend%tds_solve(dpdz_sxy_z, pressure, self%zdirps, &
@@ -360,7 +360,7 @@ contains
       dpdy_sx_y => self%backend%allocator%get_block()
       dpdz_sx_y => self%backend%allocator%get_block()
 
-      ! similar to the z direction, obtain derivatives in x.
+      ! similar to the z direction, obtain derivatives in y.
       call self%backend%tds_solve(p_sx_y, p_sxy_y, self%ydirps, &
                                   self%ydirps%interpl_p2v)
       call self%backend%tds_solve(dpdy_sx_y, p_sxy_y, self%ydirps, &
@@ -372,7 +372,7 @@ contains
       call self%backend%allocator%release_block(p_sxy_y)
       call self%backend%allocator%release_block(dpdz_sxy_y)
 
-      ! just like in y direction, get some fields for the z derivatives.
+      ! just like in y direction, get some fields for the x derivatives.
       p_sx_x => self%backend%allocator%get_block()
       dpdy_sx_x => self%backend%allocator%get_block()
       dpdz_sx_x => self%backend%allocator%get_block()
