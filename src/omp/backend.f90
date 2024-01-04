@@ -182,30 +182,30 @@ module m_omp_backend
 
    end subroutine trans_x2z_omp
 
-   subroutine trans_y2z_omp(self, u_z, u_y)
+   subroutine trans_y2z_omp(self, u_, u)
       implicit none
 
       class(omp_backend_t) :: self
-      class(field_t), intent(inout) :: u_z
-      class(field_t), intent(in) :: u_y
+      class(field_t), intent(inout) :: u_
+      class(field_t), intent(in) :: u
 
    end subroutine trans_y2z_omp
 
-   subroutine trans_z2y_omp(self, u_y, u_z)
+   subroutine trans_z2y_omp(self, u_, u)
       implicit none
 
       class(omp_backend_t) :: self
-      class(field_t), intent(inout) :: u_y
-      class(field_t), intent(in) :: u_z
+      class(field_t), intent(inout) :: u_
+      class(field_t), intent(in) :: u
 
    end subroutine trans_z2y_omp
 
-   subroutine trans_y2x_omp(self, u_x, u_y)
+   subroutine trans_y2x_omp(self, u_, u)
       implicit none
 
       class(omp_backend_t) :: self
-      class(field_t), intent(inout) :: u_x
-      class(field_t), intent(in) :: u_y
+      class(field_t), intent(inout) :: u_
+      class(field_t), intent(in) :: u
 
    end subroutine trans_y2x_omp
 
