@@ -34,6 +34,7 @@ module m_base_backend
       procedure(trans_d2d), deferred :: trans_z2y
       procedure(trans_d2d), deferred :: trans_y2x
       procedure(sum9into3), deferred :: sum_yzintox
+      procedure(vecadd), deferred :: vecadd
       procedure(get_fields), deferred :: get_fields
       procedure(set_fields), deferred :: set_fields
       procedure(alloc_tdsops), deferred :: alloc_tdsops
@@ -121,6 +122,22 @@ module m_base_backend
          class(field_t), intent(inout) :: du, dv, dw
          class(field_t), intent(in) :: du_y, dv_y, dw_y, du_z, dv_z, dw_z
       end subroutine sum9into3
+   end interface
+
+   abstract interface
+      subroutine vecadd(self, a, x, b, y)
+         !! adds two vectors together: y = a*x + b*y
+         import :: base_backend_t
+         import :: dp
+         import :: field_t
+         implicit none
+
+         class(base_backend_t) :: self
+         real(dp), intent(in) :: a
+         class(field_t), intent(in) :: x
+         real(dp), intent(in) :: b
+         class(field_t), intent(inout) :: y
+      end subroutine vecadd
    end interface
 
    abstract interface

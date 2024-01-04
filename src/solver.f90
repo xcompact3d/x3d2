@@ -292,7 +292,7 @@ contains
       w_z => self%backend%allocator%get_block()
 
       ! dv_y = dv_y + dw_y
-      ! call vecadd(1, dv_y, 1, dw_y)
+      call self%backend%vecadd(1._dp, dw_y, 1._dp, dv_y)
 
       ! reorder from y to z
       call self%backend%trans_y2z(u_z, du_y)
@@ -312,7 +312,7 @@ contains
                                   self%zdirps%stagder_v2p)
 
       ! div_u = div_u + dw_z
-      !call vecadd(1, div_u, 1, dw_z)
+      call self%backend%vecadd(1._dp, dw_z, 1._dp, div_u)
 
       ! div_u array is in z orientation
 

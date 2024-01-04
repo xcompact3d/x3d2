@@ -30,6 +30,7 @@ module m_omp_backend
       procedure :: trans_z2y => trans_z2y_omp
       procedure :: trans_y2x => trans_y2x_omp
       procedure :: sum_yzintox => sum_yzintox_omp
+      procedure :: vecadd => vecadd_omp
       procedure :: set_fields => set_fields_omp
       procedure :: get_fields => get_fields_omp
    end type omp_backend_t
@@ -216,6 +217,17 @@ module m_omp_backend
       class(field_t), intent(in) :: du_y, dv_y, dw_y, du_z, dv_z, dw_z
 
    end subroutine sum_yzintox_omp
+
+   subroutine vecadd_omp(self, a, x, b, y)
+      implicit none
+
+      class(omp_backend_t) :: self
+      real(dp), intent(in) :: a
+      class(field_t), intent(in) :: x
+      real(dp), intent(in) :: b
+      class(field_t), intent(inout) :: y
+
+   end subroutine vecadd_omp
 
    subroutine copy_into_buffers(u_send_s, u_send_e, u, n)
       implicit none
