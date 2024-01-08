@@ -21,7 +21,8 @@ set(CUDASRC
   cuda/tdsops.f90
 )
 
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   list(APPEND SRC ${CUDASRC})
 endif()
 
@@ -35,7 +36,8 @@ target_compile_options(x3d2 PRIVATE "-O3")
 target_compile_options(xcompact PRIVATE "-O3")
 target_compile_options(xcompact PRIVATE "-cpp")
 
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   target_compile_options(x3d2 PRIVATE "-cuda")
   target_compile_options(x3d2 PRIVATE "-fast")
   target_link_options(x3d2 INTERFACE "-cuda")

@@ -8,7 +8,8 @@ set(CUDATESTSRC
   cuda/test_cuda_transeq.f90
 )
 
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   foreach(testfile IN LISTS CUDATESTSRC)
     get_filename_component(test_name ${testfile} NAME_WE)
 
