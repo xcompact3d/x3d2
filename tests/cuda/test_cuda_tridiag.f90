@@ -46,7 +46,7 @@ program test_cuda_tridiag
    pnext = modulo(nrank - nproc + 1, nproc)
    pprev = modulo(nrank - 1, nproc)
 
-   n_glob = 512*4
+   n_glob = 512*2
    n = n_glob/nproc
    n_block = 512*512/SZ
    n_iters = 100
