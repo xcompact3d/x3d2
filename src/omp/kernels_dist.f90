@@ -37,29 +37,45 @@ contains
 
       !$omp simd
       do i = 1, SZ
-         du(i, 1) = coeffs_s(1, 1)*u_s(i, 1) + coeffs_s(2, 1)*u_s(i, 2) &
-                    + coeffs_s(3, 1)*u_s(i, 3) + coeffs_s(4, 1)*u_s(i, 4) &
+         du(i, 1) = coeffs_s(1, 1)*u_s(i, 1) &
+                    + coeffs_s(2, 1)*u_s(i, 2) &
+                    + coeffs_s(3, 1)*u_s(i, 3) &
+                    + coeffs_s(4, 1)*u_s(i, 4) &
                     + coeffs_s(5, 1)*u(i, 1) &
-                    + coeffs_s(6, 1)*u(i, 2) + coeffs_s(7, 1)*u(i, 3) &
-                    + coeffs_s(8, 1)*u(i, 4) + coeffs_s(9, 1)*u(i, 5)
+                    + coeffs_s(6, 1)*u(i, 2) &
+                    + coeffs_s(7, 1)*u(i, 3) &
+                    + coeffs_s(8, 1)*u(i, 4) &
+                    + coeffs_s(9, 1)*u(i, 5)
          du(i, 1) = du(i, 1)*faf(1)
-         du(i, 2) = coeffs_s(1, 2)*u_s(i, 2) + coeffs_s(2, 2)*u_s(i, 3) &
-                    + coeffs_s(3, 2)*u_s(i, 4) + coeffs_s(4, 2)*u(i, 1) &
+         du(i, 2) = coeffs_s(1, 2)*u_s(i, 2) &
+                    + coeffs_s(2, 2)*u_s(i, 3) &
+                    + coeffs_s(3, 2)*u_s(i, 4) &
+                    + coeffs_s(4, 2)*u(i, 1) &
                     + coeffs_s(5, 2)*u(i, 2) &
-                    + coeffs_s(6, 2)*u(i, 3) + coeffs_s(7, 2)*u(i, 4) &
-                    + coeffs_s(8, 2)*u(i, 5) + coeffs_s(9, 2)*u(i, 6)
+                    + coeffs_s(6, 2)*u(i, 3) &
+                    + coeffs_s(7, 2)*u(i, 4) &
+                    + coeffs_s(8, 2)*u(i, 5) &
+                    + coeffs_s(9, 2)*u(i, 6)
          du(i, 2) = du(i, 2)*faf(2)
-         du(i, 3) = coeffs_s(1, 3)*u_s(i, 3) + coeffs_s(2, 3)*u_s(i, 4) &
-                    + coeffs_s(3, 3)*u(i, 1) + coeffs_s(4, 3)*u(i, 2) &
+         du(i, 3) = coeffs_s(1, 3)*u_s(i, 3) &
+                    + coeffs_s(2, 3)*u_s(i, 4) &
+                    + coeffs_s(3, 3)*u(i, 1) &
+                    + coeffs_s(4, 3)*u(i, 2) &
                     + coeffs_s(5, 3)*u(i, 3) &
-                    + coeffs_s(6, 3)*u(i, 4) + coeffs_s(7, 3)*u(i, 5) &
-                    + coeffs_s(8, 3)*u(i, 6) + coeffs_s(9, 3)*u(i, 7)
+                    + coeffs_s(6, 3)*u(i, 4) &
+                    + coeffs_s(7, 3)*u(i, 5) &
+                    + coeffs_s(8, 3)*u(i, 6) &
+                    + coeffs_s(9, 3)*u(i, 7)
          du(i, 3) = ffr(3)*(du(i, 3) - faf(3)*du(i, 2))
-         du(i, 4) = coeffs_s(1, 4)*u_s(i, 4) + coeffs_s(2, 4)*u(i, 1) &
-                    + coeffs_s(3, 4)*u(i, 2) + coeffs_s(4, 4)*u(i, 3) &
+         du(i, 4) = coeffs_s(1, 4)*u_s(i, 4) &
+                    + coeffs_s(2, 4)*u(i, 1) &
+                    + coeffs_s(3, 4)*u(i, 2) &
+                    + coeffs_s(4, 4)*u(i, 3) &
                     + coeffs_s(5, 4)*u(i, 4) &
-                    + coeffs_s(6, 4)*u(i, 5) + coeffs_s(7, 4)*u(i, 6) &
-                    + coeffs_s(8, 4)*u(i, 7) + coeffs_s(9, 4)*u(i, 8)
+                    + coeffs_s(6, 4)*u(i, 5) &
+                    + coeffs_s(7, 4)*u(i, 6) &
+                    + coeffs_s(8, 4)*u(i, 7) &
+                    + coeffs_s(9, 4)*u(i, 8)
          du(i, 4) = ffr(4)*(du(i, 4) - faf(4)*du(i, 3))
       end do
       !$omp end simd
@@ -83,32 +99,48 @@ contains
       !$omp simd
       do i = 1, SZ
          j = n - 3
-         du(i, j) = coeffs_e(1, 1)*u(i, j - 4) + coeffs_e(2, 1)*u(i, j - 3) &
-                    + coeffs_e(3, 1)*u(i, j - 2) + coeffs_e(4, 1)*u(i, j - 1) &
+         du(i, j) = coeffs_e(1, 1)*u(i, j - 4) &
+                    + coeffs_e(2, 1)*u(i, j - 3) &
+                    + coeffs_e(3, 1)*u(i, j - 2) &
+                    + coeffs_e(4, 1)*u(i, j - 1) &
                     + coeffs_e(5, 1)*u(i, j) &
-                    + coeffs_e(6, 1)*u(i, j + 1) + coeffs_e(7, 1)*u(i, j + 2) &
-                    + coeffs_e(8, 1)*u(i, j + 3) + coeffs_e(9, 1)*u_e(i, 1)
+                    + coeffs_e(6, 1)*u(i, j + 1) &
+                    + coeffs_e(7, 1)*u(i, j + 2) &
+                    + coeffs_e(8, 1)*u(i, j + 3) &
+                    + coeffs_e(9, 1)*u_e(i, 1)
          du(i, j) = ffr(j)*(du(i, j) - faf(j)*du(i, j - 1))
          j = n - 2
-         du(i, j) = coeffs_e(1, 2)*u(i, j - 4) + coeffs_e(2, 2)*u(i, j - 3) &
-                    + coeffs_e(3, 2)*u(i, j - 2) + coeffs_e(4, 2)*u(i, j - 1) &
+         du(i, j) = coeffs_e(1, 2)*u(i, j - 4) &
+                    + coeffs_e(2, 2)*u(i, j - 3) &
+                    + coeffs_e(3, 2)*u(i, j - 2) &
+                    + coeffs_e(4, 2)*u(i, j - 1) &
                     + coeffs_e(5, 2)*u(i, j) &
-                    + coeffs_e(6, 2)*u(i, j + 1) + coeffs_e(7, 2)*u(i, j + 2) &
-                    + coeffs_e(8, 2)*u_e(i, 1) + coeffs_e(9, 2)*u_e(i, 2)
+                    + coeffs_e(6, 2)*u(i, j + 1) &
+                    + coeffs_e(7, 2)*u(i, j + 2) &
+                    + coeffs_e(8, 2)*u_e(i, 1) &
+                    + coeffs_e(9, 2)*u_e(i, 2)
          du(i, j) = ffr(j)*(du(i, j) - faf(j)*du(i, j - 1))
          j = n - 1
-         du(i, j) = coeffs_e(1, 3)*u(i, j - 4) + coeffs_e(2, 3)*u(i, j - 3) &
-                    + coeffs_e(3, 3)*u(i, j - 2) + coeffs_e(4, 3)*u(i, j - 1) &
+         du(i, j) = coeffs_e(1, 3)*u(i, j - 4) &
+                    + coeffs_e(2, 3)*u(i, j - 3) &
+                    + coeffs_e(3, 3)*u(i, j - 2) &
+                    + coeffs_e(4, 3)*u(i, j - 1) &
                     + coeffs_e(5, 3)*u(i, j) &
-                    + coeffs_e(6, 3)*u(i, j + 1) + coeffs_e(7, 3)*u_e(i, 1) &
-                    + coeffs_e(8, 3)*u_e(i, 2) + coeffs_e(9, 3)*u_e(i, 3)
+                    + coeffs_e(6, 3)*u(i, j + 1) &
+                    + coeffs_e(7, 3)*u_e(i, 1) &
+                    + coeffs_e(8, 3)*u_e(i, 2) &
+                    + coeffs_e(9, 3)*u_e(i, 3)
          du(i, j) = ffr(j)*(du(i, j) - faf(j)*du(i, j - 1))
          j = n
-         du(i, j) = coeffs_e(1, 4)*u(i, j - 4) + coeffs_e(2, 4)*u(i, j - 3) &
-                    + coeffs_e(3, 4)*u(i, j - 2) + coeffs_e(4, 4)*u(i, j - 1) &
+         du(i, j) = coeffs_e(1, 4)*u(i, j - 4) &
+                    + coeffs_e(2, 4)*u(i, j - 3) &
+                    + coeffs_e(3, 4)*u(i, j - 2) &
+                    + coeffs_e(4, 4)*u(i, j - 1) &
                     + coeffs_e(5, 4)*u(i, j) &
-                    + coeffs_e(6, 4)*u_e(i, 1) + coeffs_e(7, 4)*u_e(i, 2) &
-                    + coeffs_e(8, 4)*u_e(i, 3) + coeffs_e(9, 4)*u_e(i, 4)
+                    + coeffs_e(6, 4)*u_e(i, 1) &
+                    + coeffs_e(7, 4)*u_e(i, 2) &
+                    + coeffs_e(8, 4)*u_e(i, 3) &
+                    + coeffs_e(9, 4)*u_e(i, 4)
          du(i, j) = ffr(j)*(du(i, j) - faf(j)*du(i, j - 1))
       end do
       !$omp end simd

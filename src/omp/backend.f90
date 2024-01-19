@@ -3,6 +3,8 @@ module m_omp_backend
    use m_base_backend, only: base_backend_t
    use m_common, only: dp, globs_t
    use m_tdsops, only: dirps_t, tdsops_t
+   use m_omp_exec_dist, only: exec_dist_tds_compact
+   use m_omp_sendrecv, only: sendrecv_fields
 
    use m_omp_common, only: SZ
 
@@ -33,6 +35,7 @@ module m_omp_backend
       procedure :: vecadd => vecadd_omp
       procedure :: set_fields => set_fields_omp
       procedure :: get_fields => get_fields_omp
+      procedure :: transeq_omp_dist
    end type omp_backend_t
 
    interface omp_backend_t
@@ -121,7 +124,7 @@ module m_omp_backend
       class(field_t), intent(in) :: u, v, w
       type(dirps_t), intent(in) :: dirps
 
-      !call self%transeq_omp_dist(du, dv, dw, u, v, w, dirps)
+      call self%transeq_omp_dist(du, dv, dw, u, v, w, dirps)
 
    end subroutine transeq_x_omp
 
@@ -134,7 +137,7 @@ module m_omp_backend
       type(dirps_t), intent(in) :: dirps
 
       ! u, v, w is reordered so that we pass v, u, w
-      !call self%transeq_omp_dist(dv, du, dw, v, u, w, dirps)
+      call self%transeq_omp_dist(dv, du, dw, v, u, w, dirps)
 
    end subroutine transeq_y_omp
 
@@ -147,9 +150,35 @@ module m_omp_backend
       type(dirps_t), intent(in) :: dirps
 
       ! u, v, w is reordered so that we pass w, u, v
-      !call self%transeq_omp_dist(dw, du, dv, w, u, v, dirps)
+      call self%transeq_omp_dist(dw, du, dv, w, u, v, dirps)
 
    end subroutine transeq_z_omp
+
+   subroutine transeq_omp_dist(self, du, dv, dw, u, v, w, dirps)
+      implicit none
+
+      class(omp_backend_t) :: self
+      class(field_t), intent(inout) :: du, dv, dw
+      class(field_t), intent(in) :: u, v, w
+      type(dirps_t), intent(in) :: dirps
+      class(field_t), pointer :: duu, d2u, uu, du_temp
+
+      ! du
+      du_temp => self%allocator%get_block()
+      call tds_solve_omp(self, du_temp, u, dirps, dirps%der1st)
+
+      duu => self%allocator%get_block()
+      uu => self%allocator%get_block()
+      call vecmul_omp(uu, u, u, dirps)
+      call tds_solve_omp(self, duu, uu, dirps, dirps%der1st_sym)
+
+      d2u => self%allocator%get_block()
+      call tds_solve_omp(self, d2u, u, dirps, dirps%der2nd)
+
+
+
+
+   end subroutine transeq_omp_dist
 
    subroutine tds_solve_omp(self, du, u, dirps, tdsops)
       implicit none
@@ -160,9 +189,35 @@ module m_omp_backend
       type(dirps_t), intent(in) :: dirps
       class(tdsops_t), intent(in) :: tdsops
 
-      !call self%tds_solve_dist(self, du, u, dirps, tdsops)
+      call tds_solve_dist(self, du, u, dirps, tdsops)
 
    end subroutine tds_solve_omp
+
+   subroutine tds_solve_dist(self, du, u, dirps, tdsops)
+      implicit none
+
+      class(omp_backend_t) :: self
+      class(field_t), intent(inout) :: du
+      class(field_t), intent(in) :: u
+      type(dirps_t), intent(in) :: dirps
+      class(tdsops_t), intent(in) :: tdsops
+      integer :: n_halo
+
+      ! TODO: don't hardcode n_halo
+      n_halo = 4
+      call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, dirps%n)
+
+      ! halo exchange
+      call sendrecv_fields(self%u_recv_s, self%u_recv_e, self%u_send_s, self%u_send_e, &
+                           SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext)
+
+
+      call exec_dist_tds_compact( &
+      du%data, u%data, self%u_recv_s, self%u_recv_e, self%du_send_s, self%du_send_e, &
+      self%du_recv_s, self%du_recv_e, &
+      tdsops, dirps%nproc, dirps%pprev, dirps%pnext, dirps%n_blocks)
+
+   end subroutine tds_solve_dist
 
    subroutine trans_x2y_omp(self, u_, v_, w_, u, v, w)
       implicit none
@@ -229,6 +284,32 @@ module m_omp_backend
       class(field_t), intent(inout) :: y
 
    end subroutine vecadd_omp
+
+   subroutine vecmul_omp(uv, u, v, dirps)
+      implicit none
+
+      class(field_t), intent(inout) :: uv
+      class(field_t), intent(in) :: u, v
+      type(dirps_t), intent(in) :: dirps
+      integer :: i, j, k
+
+      real(dp), pointer, dimension(:, :, :) :: u_data, v_data, uv_data
+
+      select type(u); type is (field_t); u_data => u%data; end select
+      select type(v); type is (field_t); v_data => v%data; end select
+      select type(uv); type is (field_t); uv_data => uv%data; end select
+
+      do k = 1, dirps%n_blocks
+         do j = 1, dirps%n
+            !$omp simd
+            do i = 1, SZ
+               uv_data(i, j, k) = u_data(i, j, k)*v_data(i, j, k)
+            end do
+            !$omp end simd
+         end do
+      end do
+
+   end subroutine vecmul_omp
 
    subroutine copy_into_buffers(u_send_s, u_send_e, u, n)
       implicit none
