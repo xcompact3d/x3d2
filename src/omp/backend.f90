@@ -194,6 +194,8 @@ module m_omp_backend
 
    end subroutine
 
+   !> Computes RHS_x^v following:
+   ! rhs_x^v = -0.5*(u*dv/dx + duv/dx) + nu*d2v/dx2
    subroutine transeq_dist_component(self, rhs, v, u, tdsops_du, tdsops_dud, tdsops_d2u, dirps)
 
       class(omp_backend_t) :: self
