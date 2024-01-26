@@ -68,7 +68,7 @@ contains
       dud_send_s, dud_send_e, dud_recv_s, dud_recv_e, &
       d2u_send_s, d2u_send_e, d2u_recv_s, d2u_recv_e, &
       u, u_recv_s, u_recv_e, &
-      ud, ud_recv_s, ud_recv_e, &
+      v, v_recv_s, v_recv_e, &
       tdsops_du, tdsops_dud, tdsops_d2u, nu, nproc, pprev, pnext, n_block)
 
       implicit none
@@ -87,17 +87,26 @@ contains
          d2u_send_s, d2u_send_e, d2u_recv_s, d2u_recv_e
 
       real(dp), dimension(:, :, :), intent(in) :: u, u_recv_s, u_recv_e
-      real(dp), dimension(:, :, :), intent(in) :: ud, ud_recv_s, ud_recv_e
+      real(dp), dimension(:, :, :), intent(in) :: v, v_recv_s, v_recv_e
 
       type(tdsops_t), intent(in) :: tdsops_du, tdsops_dud, tdsops_d2u
+
+      real(dp), dimension(:, :), allocatable :: ud, ud_recv_s, ud_recv_e
       real(dp) :: nu
       integer, intent(in) :: nproc, pprev, pnext
       integer, intent(in) :: n_block
 
-      integer :: n_data
-      integer :: k, i, j
+      integer :: n_data, n_halo
+      integer :: k, i, j, n
 
+      ! TODO: don't hardcode n_halo
+      n_halo = 4
+      n = tdsops_d2u%n
       n_data = SZ*n_block
+
+      allocate(ud(SZ, n))
+      allocate(ud_recv_e(SZ, n_halo))
+      allocate(ud_recv_s(SZ, n_halo))
 
       !$omp parallel do
       do k = 1, n_block
@@ -115,9 +124,27 @@ contains
             tdsops_d2u%dist_fw, tdsops_d2u%dist_bw, tdsops_d2u%dist_af &
             )
 
+         ! Handle dud by locally generating u*v
+         do j = 1, n
+            !$omp simd
+            do i = 1, SZ
+               ud(i, j) = u(i, j, k) * v(i, j, k)
+            end do
+            !$omp end simd
+         end do
+
+         do j = 1, n_halo
+            !$omp simd
+            do i = 1, SZ
+               ud_recv_s(i, j) = u_recv_s(i, j, k) * v_recv_s(i, j, k)
+               ud_recv_e(i, j) = u_recv_e(i, j, k) * v_recv_e(i, j, k)
+            end do
+            !$omp end simd
+         end do
+
          call der_univ_dist( &
-            dud(:, :, k), dud_send_s(:, :, k), dud_send_e(:, :, k), ud(:, :, k), &
-            ud_recv_s(:, :, k), ud_recv_e(:, :, k), &
+            dud(:, :, k), dud_send_s(:, :, k), dud_send_e(:, :, k), ud(:, :), &
+            ud_recv_s(:, :), ud_recv_e(:, :), &
             tdsops_dud%coeffs_s, tdsops_dud%coeffs_e, tdsops_dud%coeffs, tdsops_dud%n, &
             tdsops_dud%dist_fw, tdsops_dud%dist_bw, tdsops_dud%dist_af &
             )
@@ -147,7 +174,7 @@ contains
                             d2u_recv_s(:, :, k), d2u_recv_e(:, :, k), &
                             tdsops_d2u%n, tdsops_d2u%dist_sa, tdsops_d2u%dist_sc)
 
-         do j = 1, tdsops_d2u%n
+         do j = 1, n
             !$omp simd
             do i = 1, SZ
                rhs(i, j, k) = -0.5*(u(i, j, k)*du(i, j, k) + dud(i, j, k)) + nu*d2u(i, j, k)

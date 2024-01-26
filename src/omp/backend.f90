@@ -161,14 +161,38 @@ module m_omp_backend
       class(field_t), intent(inout) :: du, dv, dw
       class(field_t), intent(in) :: u, v, w
       type(dirps_t), intent(in) :: dirps
+      integer :: n_halo
+
+      call transeq_halo_exchange(self, u, v, w, dirps)
 
       call transeq_dist_component(self, du, u, u, dirps%der1st, dirps%der1st_sym, dirps%der2nd, dirps)
-
       call transeq_dist_component(self, dv, v, u, dirps%der1st_sym, dirps%der1st, dirps%der2nd_sym, dirps)
-
       call transeq_dist_component(self, dw, w, u, dirps%der1st_sym, dirps%der1st, dirps%der2nd_sym, dirps)
 
    end subroutine transeq_omp_dist
+
+
+   subroutine transeq_halo_exchange(self, u, v, w, dirps)
+      class(omp_backend_t) :: self
+      class(field_t), intent(in) :: u, v, w
+      type(dirps_t), intent(in) :: dirps
+      integer :: n_halo
+
+      ! TODO: don't hardcode n_halo
+      n_halo = 4
+
+      call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, dirps%n)
+      call copy_into_buffers(self%v_send_s, self%v_send_e, v%data, dirps%n)
+      call copy_into_buffers(self%w_send_s, self%w_send_e, w%data, dirps%n)
+
+      call sendrecv_fields(self%u_recv_s, self%u_recv_e, self%u_send_s, self%u_send_e, &
+                           SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext)
+      call sendrecv_fields(self%v_recv_s, self%v_recv_e, self%v_send_s, self%v_send_e, &
+                           SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext)
+      call sendrecv_fields(self%w_recv_s, self%w_recv_e, self%w_send_s, self%w_send_e, &
+                           SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext)
+
+   end subroutine
 
    subroutine transeq_dist_component(self, rhs, v, u, tdsops_du, tdsops_dud, tdsops_d2u, dirps)
 
@@ -181,27 +205,9 @@ module m_omp_backend
       type(dirps_t), intent(in) :: dirps
       class(field_t), pointer :: du, d2u, dud, uv
 
-      integer :: n_halo
-
-      ! TODO: don't hardcode n_halo
-      n_halo = 4
-
       du => self%allocator%get_block()
       dud => self%allocator%get_block()
-      uv => self%allocator%get_block()
-      call vecmul_omp(uv, u, v, dirps)
       d2u => self%allocator%get_block()
-
-      call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, dirps%n)
-      call copy_into_buffers(self%v_send_s, self%v_send_e, uv%data, dirps%n)
-
-      ! halo exchange
-      call sendrecv_fields(self%u_recv_s, self%u_recv_e, self%u_send_s, self%u_send_e, &
-                           SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext)
-
-      call sendrecv_fields(self%v_recv_s, self%v_recv_e, self%v_send_s, self%v_send_e, &
-                           SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext)
-
 
       call exec_dist_transeq_compact(&
          rhs%data, du%data, dud%data, d2u%data, &
@@ -209,13 +215,12 @@ module m_omp_backend
          self%dud_send_s, self%dud_send_e, self%dud_recv_s, self%dud_recv_e, &
          self%d2u_send_s, self%d2u_send_e, self%d2u_recv_s, self%d2u_recv_e, &
          u%data, self%u_recv_s, self%u_recv_e, &
-         uv%data, self%v_recv_s, self%v_recv_e, &
+         v%data, self%v_recv_s, self%v_recv_e, &
          tdsops_du, tdsops_dud, tdsops_d2u, self%nu, &
          dirps%nproc, dirps%pprev, dirps%pnext, dirps%n_blocks)
 
       call self%allocator%release_block(du)
       call self%allocator%release_block(dud)
-      call self%allocator%release_block(uv)
       call self%allocator%release_block(d2u)
 
    end subroutine
