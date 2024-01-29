@@ -185,7 +185,10 @@ contains
       dw_y => self%backend%allocator%get_block()
 
       ! reorder data from x orientation to y orientation
-      call self%backend%trans_x2y(u_y, v_y, w_y, u, v, w)
+      call self%backend%trans_x2y(u_y, u)
+      call self%backend%trans_x2y(v_y, v)
+      call self%backend%trans_x2y(w_y, w)
+
       ! similar to the x direction, obtain derivatives in y.
       call self%backend%transeq_y(du_y, dv_y, dw_y, u_y, v_y, w_y, self%ydirps)
 
@@ -206,7 +209,10 @@ contains
       dw_z => self%backend%allocator%get_block()
 
       ! reorder from x to z
-      call self%backend%trans_x2z(u_z, v_z, w_z, u, v, w)
+      call self%backend%trans_x2z(u_z, u)
+      call self%backend%trans_x2z(v_z, v)
+      call self%backend%trans_x2z(w_z, w)
+
       ! get the derivatives in z
       call self%backend%transeq_z(du_z, dv_z, dw_z, u_z, v_z, w_z, self%zdirps)
 
@@ -261,7 +267,9 @@ contains
       w_y => self%backend%allocator%get_block()
 
       ! reorder data from x orientation to y orientation
-      call self%backend%trans_x2y(u_y, v_y, w_y, du_x, dv_x, dw_x)
+      call self%backend%trans_x2y(u_y, du_x)
+      call self%backend%trans_x2y(v_y, dv_x)
+      call self%backend%trans_x2y(w_y, dw_x)
 
       call self%backend%allocator%release_block(du_x)
       call self%backend%allocator%release_block(dv_x)

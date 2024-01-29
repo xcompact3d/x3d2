@@ -415,21 +415,21 @@ module m_cuda_backend
 
    end subroutine tds_solve_dist
 
-   subroutine trans_x2y_cuda(self, u_y, v_y, w_y, u, v, w)
+   subroutine trans_x2y_cuda(self, u_y, u)
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_y, v_y, w_y
-      class(field_t), intent(in) :: u, v, w
+      class(field_t), intent(inout) :: u_y
+      class(field_t), intent(in) :: u
 
    end subroutine trans_x2y_cuda
 
-   subroutine trans_x2z_cuda(self, u_z, v_z, w_z, u, v, w)
+   subroutine trans_x2z_cuda(self, u_z, u)
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_z, v_z, w_z
-      class(field_t), intent(in) :: u, v, w
+      class(field_t), intent(inout) :: u_z
+      class(field_t), intent(in) :: u
 
    end subroutine trans_x2z_cuda
 

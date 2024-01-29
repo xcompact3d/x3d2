@@ -164,21 +164,21 @@ module m_omp_backend
 
    end subroutine tds_solve_omp
 
-   subroutine trans_x2y_omp(self, u_, v_, w_, u, v, w)
+   subroutine trans_x2y_omp(self, u_, u)
       implicit none
 
       class(omp_backend_t) :: self
-      class(field_t), intent(inout) :: u_, v_, w_
-      class(field_t), intent(in) :: u, v, w
+      class(field_t), intent(inout) :: u_
+      class(field_t), intent(in) :: u
 
    end subroutine trans_x2y_omp
 
-   subroutine trans_x2z_omp(self, u_, v_, w_, u, v, w)
+   subroutine trans_x2z_omp(self, u_, u)
       implicit none
 
       class(omp_backend_t) :: self
-      class(field_t), intent(inout) :: u_, v_, w_
-      class(field_t), intent(in) :: u, v, w
+      class(field_t), intent(inout) :: u_
+      class(field_t), intent(in) :: u
 
    end subroutine trans_x2z_omp
 
