@@ -21,6 +21,7 @@ module m_base_backend
       !! architecture.
 
       real(dp) :: nu
+      integer :: nx_loc, ny_loc, nz_loc
       class(allocator_t), pointer :: allocator
       class(dirps_t), pointer :: xdirps, ydirps, zdirps
    contains

@@ -12,6 +12,8 @@ module m_cuda_backend
    use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
    use m_cuda_tdsops, only: cuda_tdsops_t
    use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
+   use m_cuda_kernels_trans, only: trans_x2y_k, trans_x2z_k, trans_y2x_k, &
+                                   trans_y2z_k, trans_z2y_k
 
    implicit none
 
@@ -73,6 +75,10 @@ module m_cuda_backend
       backend%yblocks = dim3(globs%n_groups_y, 1, 1)
       backend%zthreads = dim3(SZ, 1, 1)
       backend%zblocks = dim3(globs%n_groups_z, 1, 1)
+
+      backend%nx_loc = globs%nx_loc
+      backend%ny_loc = globs%ny_loc
+      backend%nz_loc = globs%nz_loc
 
       n_halo = 4
       n_block = globs%n_groups_x
@@ -422,6 +428,17 @@ module m_cuda_backend
       class(field_t), intent(inout) :: u_y
       class(field_t), intent(in) :: u
 
+      real(dp), device, pointer, dimension(:, :, :) :: u_d, u_y_d
+      type(dim3) :: blocks, threads
+
+      select type(u); type is (cuda_field_t); u_d => u%data_d; end select
+      select type(u_y); type is (cuda_field_t); u_y_d => u_y%data_d; end select
+
+      blocks = dim3(self%nx_loc/SZ, self%nz_loc, self%ny_loc/SZ)
+      threads = dim3(SZ, SZ, 1)
+
+      call trans_x2y_k<<<blocks, threads>>>(u_y_d, u_d, self%nz_loc)
+
    end subroutine trans_x2y_cuda
 
    subroutine trans_x2z_cuda(self, u_z, u)
@@ -430,6 +447,17 @@ module m_cuda_backend
       class(cuda_backend_t) :: self
       class(field_t), intent(inout) :: u_z
       class(field_t), intent(in) :: u
+
+      real(dp), device, pointer, dimension(:, :, :) :: u_d, u_z_d
+      type(dim3) :: blocks, threads
+
+      select type(u); type is (cuda_field_t); u_d => u%data_d; end select
+      select type(u_z); type is (cuda_field_t); u_z_d => u_z%data_d; end select
+
+      blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
+      threads = dim3(SZ, 1, 1)
+
+      call trans_x2z_k<<<blocks, threads>>>(u_z_d, u_d, self%nz_loc)
 
    end subroutine trans_x2z_cuda
 
@@ -440,6 +468,18 @@ module m_cuda_backend
       class(field_t), intent(inout) :: u_z
       class(field_t), intent(in) :: u_y
 
+      real(dp), device, pointer, dimension(:, :, :) :: u_z_d, u_y_d
+      type(dim3) :: blocks, threads
+
+      select type(u_z); type is (cuda_field_t); u_z_d => u_z%data_d; end select
+      select type(u_y); type is (cuda_field_t); u_y_d => u_y%data_d; end select
+
+      blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+      threads = dim3(SZ, SZ, 1)
+
+      call trans_y2z_k<<<blocks, threads>>>(u_z_d, u_y_d, &
+                                            self%nx_loc, self%nz_loc)
+
    end subroutine trans_y2z_cuda
 
    subroutine trans_z2y_cuda(self, u_y, u_z)
@@ -449,6 +489,18 @@ module m_cuda_backend
       class(field_t), intent(inout) :: u_y
       class(field_t), intent(in) :: u_z
 
+      real(dp), device, pointer, dimension(:, :, :) :: u_y_d, u_z_d
+      type(dim3) :: blocks, threads
+
+      select type(u_y); type is (cuda_field_t); u_y_d => u_y%data_d; end select
+      select type(u_z); type is (cuda_field_t); u_z_d => u_z%data_d; end select
+
+      blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+      threads = dim3(SZ, SZ, 1)
+
+      call trans_z2y_k<<<blocks, threads>>>(u_y_d, u_z_d, &
+                                            self%nx_loc, self%nz_loc)
+
    end subroutine trans_z2y_cuda
 
    subroutine trans_y2x_cuda(self, u_x, u_y)
@@ -457,6 +509,17 @@ module m_cuda_backend
       class(cuda_backend_t) :: self
       class(field_t), intent(inout) :: u_x
       class(field_t), intent(in) :: u_y
+
+      real(dp), device, pointer, dimension(:, :, :) :: u_x_d, u_y_d
+      type(dim3) :: blocks, threads
+
+      select type(u_x); type is (cuda_field_t); u_x_d => u_x%data_d; end select
+      select type(u_y); type is (cuda_field_t); u_y_d => u_y%data_d; end select
+
+      blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+      threads = dim3(SZ, SZ, 1)
+
+      call trans_y2x_k<<<blocks, threads>>>(u_x_d, u_y_d, self%nz_loc)
 
    end subroutine trans_y2x_cuda
 
