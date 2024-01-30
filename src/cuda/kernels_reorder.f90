@@ -1,4 +1,4 @@
-module m_cuda_kernels_trans
+module m_cuda_kernels_reorder
    use cudafor
 
    use m_common, only: dp
@@ -6,7 +6,7 @@ module m_cuda_kernels_trans
 
 contains
 
-   attributes(global) subroutine trans_x2y_k(u_y, u_x, nz)
+   attributes(global) subroutine reorder_x2y(u_y, u_x, nz)
       implicit none
 
       real(dp), device, intent(out), dimension(:, :, :) :: u_y
@@ -27,9 +27,9 @@ contains
       ! copy into output array from shared
       u_y(i, j + (b_k - 1)*SZ, b_j + (b_i - 1)*nz) = tile(j, i)
 
-   end subroutine trans_x2y_k
+   end subroutine reorder_x2y
 
-   attributes(global) subroutine trans_x2z_k(u_z, u_x, nz)
+   attributes(global) subroutine reorder_x2z(u_z, u_x, nz)
       implicit none
 
       real(dp), device, intent(out), dimension(:, :, :) :: u_z
@@ -45,9 +45,9 @@ contains
          u_z(i, j, b_i + (b_j - 1)*nx) = u_x(i, b_i, j + (b_j - 1)*nz)
       end do
 
-   end subroutine trans_x2z_k
+   end subroutine reorder_x2z
 
-   attributes(global) subroutine trans_y2x_k(u_x, u_y, nz)
+   attributes(global) subroutine reorder_y2x(u_x, u_y, nz)
       implicit none
 
       real(dp), device, intent(out), dimension(:, :, :) :: u_x
@@ -68,9 +68,9 @@ contains
       ! copy into output array from shared
       u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + b_k) = tile(j, i)
 
-   end subroutine trans_y2x_k
+   end subroutine reorder_y2x
 
-   attributes(global) subroutine trans_y2z_k(u_z, u_y, nx, nz)
+   attributes(global) subroutine reorder_y2z(u_z, u_y, nx, nz)
       implicit none
 
       real(dp), device, intent(out), dimension(:, :, :) :: u_z
@@ -91,9 +91,9 @@ contains
       ! copy into output array from shared
       u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx) = tile(j, i)
 
-   end subroutine trans_y2z_k
+   end subroutine reorder_y2z
 
-   attributes(global) subroutine trans_z2y_k(u_y, u_z, nx, nz)
+   attributes(global) subroutine reorder_z2y(u_y, u_z, nx, nz)
       implicit none
 
       real(dp), device, intent(out), dimension(:, :, :) :: u_y
@@ -114,6 +114,6 @@ contains
       ! copy into output array from shared
       u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k) = tile(j, i)
 
-   end subroutine trans_z2y_k
+   end subroutine reorder_z2y
 
-end module m_cuda_kernels_trans
+end module m_cuda_kernels_reorder

@@ -24,7 +24,7 @@ module m_omp_backend
       procedure :: transeq_y => transeq_y_omp
       procedure :: transeq_z => transeq_z_omp
       procedure :: tds_solve => tds_solve_omp
-      procedure :: trans_d2d => trans_d2d_omp
+      procedure :: reorder => reorder_omp
       procedure :: sum_yzintox => sum_yzintox_omp
       procedure :: vecadd => vecadd_omp
       procedure :: set_fields => set_fields_omp
@@ -160,7 +160,7 @@ module m_omp_backend
 
    end subroutine tds_solve_omp
 
-   subroutine trans_d2d_omp(self, u_, u, direction)
+   subroutine reorder_omp(self, u_, u, direction)
       implicit none
 
       class(omp_backend_t) :: self
@@ -168,7 +168,7 @@ module m_omp_backend
       class(field_t), intent(in) :: u
       integer, intent(in) :: direction
 
-   end subroutine trans_d2d_omp
+   end subroutine reorder_omp
 
    subroutine sum_yzintox_omp(self, du, dv, dw, &
                                du_y, dv_y, dw_y, du_z, dv_z, dw_z)

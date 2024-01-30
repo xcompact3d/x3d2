@@ -29,7 +29,7 @@ module m_base_backend
       procedure(transeq_ders), deferred :: transeq_y
       procedure(transeq_ders), deferred :: transeq_z
       procedure(tds_solve), deferred :: tds_solve
-      procedure(trans_d2d), deferred :: trans_d2d
+      procedure(reorder), deferred :: reorder
       procedure(sum9into3), deferred :: sum_yzintox
       procedure(vecadd), deferred :: vecadd
       procedure(get_fields), deferred :: get_fields
@@ -78,8 +78,8 @@ module m_base_backend
    end interface
 
    abstract interface
-      subroutine trans_d2d(self, u_, u, direction)
-         !! transposer subroutines are straightforward, they rearrange
+      subroutine reorder(self, u_, u, direction)
+         !! reorder subroutines are straightforward, they rearrange
          !! data into our specialist data structure so that regardless
          !! of the direction tridiagonal systems are solved efficiently
          !! and fast.
@@ -91,7 +91,7 @@ module m_base_backend
          class(field_t), intent(inout) :: u_
          class(field_t), intent(in) :: u
          integer, intent(in) :: direction
-      end subroutine trans_d2d
+      end subroutine reorder
    end interface
 
    abstract interface
