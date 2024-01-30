@@ -3,7 +3,7 @@ module m_cuda_backend
 
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
-   use m_common, only: dp, globs_t
+   use m_common, only: dp, globs_t, TRP_X2Y, TRP_X2Z, TRP_Y2X, TRP_Y2Z, TRP_Z2Y
    use m_tdsops, only: dirps_t, tdsops_t
 
    use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
@@ -432,24 +432,24 @@ module m_cuda_backend
       select type(u_i); type is (cuda_field_t); u_i_d => u_i%data_d; end select
 
       select case (direction)
-      case (12) ! x2y
+      case (TRP_X2Y) ! x2y
          blocks = dim3(self%nx_loc/SZ, self%nz_loc, self%ny_loc/SZ)
          threads = dim3(SZ, SZ, 1)
          call trans_x2y_k<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
-      case (13) ! x2z
+      case (TRP_X2Z) ! x2z
          blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
          threads = dim3(SZ, 1, 1)
          call trans_x2z_k<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
-      case (21) ! y2x
+      case (TRP_Y2X) ! y2x
          blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
          threads = dim3(SZ, SZ, 1)
          call trans_y2x_k<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
-      case (23) ! y2z
+      case (TRP_Y2Z) ! y2z
          blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
          threads = dim3(SZ, SZ, 1)
          call trans_y2z_k<<<blocks, threads>>>(u_o_d, u_i_d, &
                                                self%nx_loc, self%nz_loc)
-      case (32) ! z2y
+      case (TRP_Z2Y) ! z2y
          blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
          threads = dim3(SZ, SZ, 1)
 
