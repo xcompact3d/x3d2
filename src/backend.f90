@@ -29,11 +29,7 @@ module m_base_backend
       procedure(transeq_ders), deferred :: transeq_y
       procedure(transeq_ders), deferred :: transeq_z
       procedure(tds_solve), deferred :: tds_solve
-      procedure(trans_d2d), deferred :: trans_x2y
-      procedure(trans_d2d), deferred :: trans_x2z
-      procedure(trans_d2d), deferred :: trans_y2z
-      procedure(trans_d2d), deferred :: trans_z2y
-      procedure(trans_d2d), deferred :: trans_y2x
+      procedure(trans_d2d), deferred :: trans_d2d
       procedure(sum9into3), deferred :: sum_yzintox
       procedure(vecadd), deferred :: vecadd
       procedure(get_fields), deferred :: get_fields
@@ -82,7 +78,7 @@ module m_base_backend
    end interface
 
    abstract interface
-      subroutine trans_d2d(self, u_, u)
+      subroutine trans_d2d(self, u_, u, direction)
          !! transposer subroutines are straightforward, they rearrange
          !! data into our specialist data structure so that regardless
          !! of the direction tridiagonal systems are solved efficiently
@@ -94,6 +90,7 @@ module m_base_backend
          class(base_backend_t) :: self
          class(field_t), intent(inout) :: u_
          class(field_t), intent(in) :: u
+         integer, intent(in) :: direction
       end subroutine trans_d2d
    end interface
 

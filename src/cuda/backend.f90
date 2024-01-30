@@ -34,11 +34,7 @@ module m_cuda_backend
       procedure :: transeq_y => transeq_y_cuda
       procedure :: transeq_z => transeq_z_cuda
       procedure :: tds_solve => tds_solve_cuda
-      procedure :: trans_x2y => trans_x2y_cuda
-      procedure :: trans_x2z => trans_x2z_cuda
-      procedure :: trans_y2z => trans_y2z_cuda
-      procedure :: trans_z2y => trans_z2y_cuda
-      procedure :: trans_y2x => trans_y2x_cuda
+      procedure :: trans_d2d => trans_d2d_cuda
       procedure :: sum_yzintox => sum_yzintox_cuda
       procedure :: vecadd => vecadd_cuda
       procedure :: set_fields => set_fields_cuda
@@ -421,107 +417,50 @@ module m_cuda_backend
 
    end subroutine tds_solve_dist
 
-   subroutine trans_x2y_cuda(self, u_y, u)
+   subroutine trans_d2d_cuda(self, u_o, u_i, direction)
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_y
-      class(field_t), intent(in) :: u
+      class(field_t), intent(inout) :: u_o
+      class(field_t), intent(in) :: u_i
+      integer, intent(in) :: direction
 
-      real(dp), device, pointer, dimension(:, :, :) :: u_d, u_y_d
+      real(dp), device, pointer, dimension(:, :, :) :: u_o_d, u_i_d
       type(dim3) :: blocks, threads
 
-      select type(u); type is (cuda_field_t); u_d => u%data_d; end select
-      select type(u_y); type is (cuda_field_t); u_y_d => u_y%data_d; end select
+      select type(u_o); type is (cuda_field_t); u_o_d => u_o%data_d; end select
+      select type(u_i); type is (cuda_field_t); u_i_d => u_i%data_d; end select
 
-      blocks = dim3(self%nx_loc/SZ, self%nz_loc, self%ny_loc/SZ)
-      threads = dim3(SZ, SZ, 1)
+      select case (direction)
+      case (12) ! x2y
+         blocks = dim3(self%nx_loc/SZ, self%nz_loc, self%ny_loc/SZ)
+         threads = dim3(SZ, SZ, 1)
+         call trans_x2y_k<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      case (13) ! x2z
+         blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
+         threads = dim3(SZ, 1, 1)
+         call trans_x2z_k<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      case (21) ! y2x
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
+         call trans_y2x_k<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      case (23) ! y2z
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
+         call trans_y2z_k<<<blocks, threads>>>(u_o_d, u_i_d, &
+                                               self%nx_loc, self%nz_loc)
+      case (32) ! z2y
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
 
-      call trans_x2y_k<<<blocks, threads>>>(u_y_d, u_d, self%nz_loc)
+         call trans_z2y_k<<<blocks, threads>>>(u_o_d, u_i_d, &
+                                               self%nx_loc, self%nz_loc)
+      case default
+         print *, 'Transpose direction is undefined.'
+         stop
+      end select
 
-   end subroutine trans_x2y_cuda
-
-   subroutine trans_x2z_cuda(self, u_z, u)
-      implicit none
-
-      class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_z
-      class(field_t), intent(in) :: u
-
-      real(dp), device, pointer, dimension(:, :, :) :: u_d, u_z_d
-      type(dim3) :: blocks, threads
-
-      select type(u); type is (cuda_field_t); u_d => u%data_d; end select
-      select type(u_z); type is (cuda_field_t); u_z_d => u_z%data_d; end select
-
-      blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
-      threads = dim3(SZ, 1, 1)
-
-      call trans_x2z_k<<<blocks, threads>>>(u_z_d, u_d, self%nz_loc)
-
-   end subroutine trans_x2z_cuda
-
-   subroutine trans_y2z_cuda(self, u_z, u_y)
-      implicit none
-
-      class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_z
-      class(field_t), intent(in) :: u_y
-
-      real(dp), device, pointer, dimension(:, :, :) :: u_z_d, u_y_d
-      type(dim3) :: blocks, threads
-
-      select type(u_z); type is (cuda_field_t); u_z_d => u_z%data_d; end select
-      select type(u_y); type is (cuda_field_t); u_y_d => u_y%data_d; end select
-
-      blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
-      threads = dim3(SZ, SZ, 1)
-
-      call trans_y2z_k<<<blocks, threads>>>(u_z_d, u_y_d, &
-                                            self%nx_loc, self%nz_loc)
-
-   end subroutine trans_y2z_cuda
-
-   subroutine trans_z2y_cuda(self, u_y, u_z)
-      implicit none
-
-      class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_y
-      class(field_t), intent(in) :: u_z
-
-      real(dp), device, pointer, dimension(:, :, :) :: u_y_d, u_z_d
-      type(dim3) :: blocks, threads
-
-      select type(u_y); type is (cuda_field_t); u_y_d => u_y%data_d; end select
-      select type(u_z); type is (cuda_field_t); u_z_d => u_z%data_d; end select
-
-      blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
-      threads = dim3(SZ, SZ, 1)
-
-      call trans_z2y_k<<<blocks, threads>>>(u_y_d, u_z_d, &
-                                            self%nx_loc, self%nz_loc)
-
-   end subroutine trans_z2y_cuda
-
-   subroutine trans_y2x_cuda(self, u_x, u_y)
-      implicit none
-
-      class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_x
-      class(field_t), intent(in) :: u_y
-
-      real(dp), device, pointer, dimension(:, :, :) :: u_x_d, u_y_d
-      type(dim3) :: blocks, threads
-
-      select type(u_x); type is (cuda_field_t); u_x_d => u_x%data_d; end select
-      select type(u_y); type is (cuda_field_t); u_y_d => u_y%data_d; end select
-
-      blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
-      threads = dim3(SZ, SZ, 1)
-
-      call trans_y2x_k<<<blocks, threads>>>(u_x_d, u_y_d, self%nz_loc)
-
-   end subroutine trans_y2x_cuda
+   end subroutine trans_d2d_cuda
 
    subroutine sum_yzintox_cuda(self, du, dv, dw, &
                                du_y, dv_y, dw_y, du_z, dv_z, dw_z)
