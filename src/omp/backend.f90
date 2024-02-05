@@ -332,32 +332,6 @@ module m_omp_backend
 
    end subroutine vecadd_omp
 
-   subroutine vecmul_omp(uv, u, v, dirps)
-      implicit none
-
-      class(field_t), intent(inout) :: uv
-      class(field_t), intent(in) :: u, v
-      type(dirps_t), intent(in) :: dirps
-      integer :: i, j, k
-
-      real(dp), pointer, dimension(:, :, :) :: u_data, v_data, uv_data
-
-      select type(u); type is (field_t); u_data => u%data; end select
-      select type(v); type is (field_t); v_data => v%data; end select
-      select type(uv); type is (field_t); uv_data => uv%data; end select
-
-      do k = 1, dirps%n_blocks
-         do j = 1, dirps%n
-            !$omp simd
-            do i = 1, SZ
-               uv_data(i, j, k) = u_data(i, j, k)*v_data(i, j, k)
-            end do
-            !$omp end simd
-         end do
-      end do
-
-   end subroutine vecmul_omp
-
    subroutine copy_into_buffers(u_send_s, u_send_e, u, n)
       implicit none
 
