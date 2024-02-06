@@ -1,9 +1,10 @@
 module m_cuda_backend
+   use iso_fortran_env, only: stderr => error_unit
    use cudafor
 
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
-   use m_common, only: dp, globs_t
+   use m_common, only: dp, globs_t, RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2Y
    use m_tdsops, only: dirps_t, tdsops_t
 
    use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
@@ -12,6 +13,8 @@ module m_cuda_backend
    use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
    use m_cuda_tdsops, only: cuda_tdsops_t
    use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
+   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
+                                     reorder_y2z, reorder_z2y
 
    implicit none
 
@@ -32,11 +35,7 @@ module m_cuda_backend
       procedure :: transeq_y => transeq_y_cuda
       procedure :: transeq_z => transeq_z_cuda
       procedure :: tds_solve => tds_solve_cuda
-      procedure :: trans_x2y => trans_x2y_cuda
-      procedure :: trans_x2z => trans_x2z_cuda
-      procedure :: trans_y2z => trans_y2z_cuda
-      procedure :: trans_z2y => trans_z2y_cuda
-      procedure :: trans_y2x => trans_y2x_cuda
+      procedure :: reorder => reorder_cuda
       procedure :: sum_yzintox => sum_yzintox_cuda
       procedure :: vecadd => vecadd_cuda
       procedure :: set_fields => set_fields_cuda
@@ -73,6 +72,10 @@ module m_cuda_backend
       backend%yblocks = dim3(globs%n_groups_y, 1, 1)
       backend%zthreads = dim3(SZ, 1, 1)
       backend%zblocks = dim3(globs%n_groups_z, 1, 1)
+
+      backend%nx_loc = globs%nx_loc
+      backend%ny_loc = globs%ny_loc
+      backend%nz_loc = globs%nz_loc
 
       n_halo = 4
       n_block = globs%n_groups_x
@@ -415,50 +418,48 @@ module m_cuda_backend
 
    end subroutine tds_solve_dist
 
-   subroutine trans_x2y_cuda(self, u_y, v_y, w_y, u, v, w)
+   subroutine reorder_cuda(self, u_o, u_i, direction)
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_y, v_y, w_y
-      class(field_t), intent(in) :: u, v, w
+      class(field_t), intent(inout) :: u_o
+      class(field_t), intent(in) :: u_i
+      integer, intent(in) :: direction
 
-   end subroutine trans_x2y_cuda
+      real(dp), device, pointer, dimension(:, :, :) :: u_o_d, u_i_d
+      type(dim3) :: blocks, threads
 
-   subroutine trans_x2z_cuda(self, u_z, v_z, w_z, u, v, w)
-      implicit none
+      select type(u_o); type is (cuda_field_t); u_o_d => u_o%data_d; end select
+      select type(u_i); type is (cuda_field_t); u_i_d => u_i%data_d; end select
 
-      class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_z, v_z, w_z
-      class(field_t), intent(in) :: u, v, w
+      select case (direction)
+      case (RDR_X2Y) ! x2y
+         blocks = dim3(self%nx_loc/SZ, self%nz_loc, self%ny_loc/SZ)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_x2y<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      case (RDR_X2Z) ! x2z
+         blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
+         threads = dim3(SZ, 1, 1)
+         call reorder_x2z<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      case (RDR_Y2X) ! y2x
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_y2x<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      case (RDR_Y2Z) ! y2z
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_y2z<<<blocks, threads>>>(u_o_d, u_i_d, &
+                                               self%nx_loc, self%nz_loc)
+      case (RDR_Z2Y) ! z2y
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_z2y<<<blocks, threads>>>(u_o_d, u_i_d, &
+                                               self%nx_loc, self%nz_loc)
+      case default
+         error stop 'Reorder direction is undefined.'
+      end select
 
-   end subroutine trans_x2z_cuda
-
-   subroutine trans_y2z_cuda(self, u_z, u_y)
-      implicit none
-
-      class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_z
-      class(field_t), intent(in) :: u_y
-
-   end subroutine trans_y2z_cuda
-
-   subroutine trans_z2y_cuda(self, u_y, u_z)
-      implicit none
-
-      class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_y
-      class(field_t), intent(in) :: u_z
-
-   end subroutine trans_z2y_cuda
-
-   subroutine trans_y2x_cuda(self, u_x, u_y)
-      implicit none
-
-      class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_x
-      class(field_t), intent(in) :: u_y
-
-   end subroutine trans_y2x_cuda
+   end subroutine reorder_cuda
 
    subroutine sum_yzintox_cuda(self, du, dv, dw, &
                                du_y, dv_y, dw_y, du_z, dv_z, dw_z)

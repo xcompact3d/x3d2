@@ -4,6 +4,7 @@ set(TESTSRC
 )
 set(CUDATESTSRC
   cuda/test_cuda_allocator.f90
+  cuda/test_cuda_reorder.f90
   cuda/test_cuda_tridiag.f90
   cuda/test_cuda_transeq.f90
 )

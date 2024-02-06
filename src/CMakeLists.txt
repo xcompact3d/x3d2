@@ -17,6 +17,7 @@ set(CUDASRC
   cuda/allocator.f90
   cuda/exec_dist.f90
   cuda/kernels_dist.f90
+  cuda/kernels_reorder.f90
   cuda/sendrecv.f90
   cuda/tdsops.f90
 )

@@ -21,6 +21,7 @@ module m_base_backend
       !! architecture.
 
       real(dp) :: nu
+      integer :: nx_loc, ny_loc, nz_loc
       class(allocator_t), pointer :: allocator
       class(dirps_t), pointer :: xdirps, ydirps, zdirps
    contains
@@ -28,11 +29,7 @@ module m_base_backend
       procedure(transeq_ders), deferred :: transeq_y
       procedure(transeq_ders), deferred :: transeq_z
       procedure(tds_solve), deferred :: tds_solve
-      procedure(transposer), deferred :: trans_x2y
-      procedure(transposer), deferred :: trans_x2z
-      procedure(trans_d2d), deferred :: trans_y2z
-      procedure(trans_d2d), deferred :: trans_z2y
-      procedure(trans_d2d), deferred :: trans_y2x
+      procedure(reorder), deferred :: reorder
       procedure(sum9into3), deferred :: sum_yzintox
       procedure(vecadd), deferred :: vecadd
       procedure(get_fields), deferred :: get_fields
@@ -81,22 +78,8 @@ module m_base_backend
    end interface
 
    abstract interface
-      subroutine transposer(self, u_, v_, w_, u, v, w)
-         !! transposer subroutines are straightforward, they rearrange
-         !! data into our specialist data structure so that regardless
-         !! of the direction tridiagonal systems are solved efficiently
-         !! and fast.
-         import :: base_backend_t
-         import :: field_t
-         implicit none
-
-         class(base_backend_t) :: self
-         class(field_t), intent(inout) :: u_, v_, w_
-         class(field_t), intent(in) :: u, v, w
-      end subroutine transposer
-
-      subroutine trans_d2d(self, u_, u)
-         !! transposer subroutines are straightforward, they rearrange
+      subroutine reorder(self, u_, u, direction)
+         !! reorder subroutines are straightforward, they rearrange
          !! data into our specialist data structure so that regardless
          !! of the direction tridiagonal systems are solved efficiently
          !! and fast.
@@ -107,7 +90,8 @@ module m_base_backend
          class(base_backend_t) :: self
          class(field_t), intent(inout) :: u_
          class(field_t), intent(in) :: u
-      end subroutine trans_d2d
+         integer, intent(in) :: direction
+      end subroutine reorder
    end interface
 
    abstract interface

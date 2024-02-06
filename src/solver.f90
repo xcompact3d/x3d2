@@ -1,7 +1,7 @@
 module m_solver
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
-   use m_common, only: dp, globs_t
+   use m_common, only: dp, globs_t, RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2Y
    use m_tdsops, only: tdsops_t, dirps_t
    use m_time_integrator, only: time_intg_t
 
@@ -185,7 +185,10 @@ contains
       dw_y => self%backend%allocator%get_block()
 
       ! reorder data from x orientation to y orientation
-      call self%backend%trans_x2y(u_y, v_y, w_y, u, v, w)
+      call self%backend%reorder(u_y, u, RDR_X2Y)
+      call self%backend%reorder(v_y, v, RDR_X2Y)
+      call self%backend%reorder(w_y, w, RDR_X2Y)
+
       ! similar to the x direction, obtain derivatives in y.
       call self%backend%transeq_y(du_y, dv_y, dw_y, u_y, v_y, w_y, self%ydirps)
 
@@ -206,7 +209,10 @@ contains
       dw_z => self%backend%allocator%get_block()
 
       ! reorder from x to z
-      call self%backend%trans_x2z(u_z, v_z, w_z, u, v, w)
+      call self%backend%reorder(u_z, u, RDR_X2Z)
+      call self%backend%reorder(v_z, v, RDR_X2Z)
+      call self%backend%reorder(w_z, w, RDR_X2Z)
+
       ! get the derivatives in z
       call self%backend%transeq_z(du_z, dv_z, dw_z, u_z, v_z, w_z, self%zdirps)
 
@@ -261,7 +267,9 @@ contains
       w_y => self%backend%allocator%get_block()
 
       ! reorder data from x orientation to y orientation
-      call self%backend%trans_x2y(u_y, v_y, w_y, du_x, dv_x, dw_x)
+      call self%backend%reorder(u_y, du_x, RDR_X2Y)
+      call self%backend%reorder(v_y, dv_x, RDR_X2Y)
+      call self%backend%reorder(w_y, dw_x, RDR_X2Y)
 
       call self%backend%allocator%release_block(du_x)
       call self%backend%allocator%release_block(dv_x)
@@ -295,8 +303,8 @@ contains
       call self%backend%vecadd(1._dp, dw_y, 1._dp, dv_y)
 
       ! reorder from y to z
-      call self%backend%trans_y2z(u_z, du_y)
-      call self%backend%trans_y2z(w_z, dw_y)
+      call self%backend%reorder(u_z, du_y, RDR_Y2Z)
+      call self%backend%reorder(w_z, dw_y, RDR_Y2Z)
 
       ! release all the unnecessary blocks.
       call self%backend%allocator%release_block(du_y)
@@ -350,8 +358,8 @@ contains
       dpdz_sxy_y => self%backend%allocator%get_block()
 
       ! reorder data from z orientation to y orientation
-      call self%backend%trans_z2y(p_sxy_y, p_sxy_z)
-      call self%backend%trans_z2y(dpdz_sxy_y, dpdz_sxy_z)
+      call self%backend%reorder(p_sxy_y, p_sxy_z, RDR_Z2Y)
+      call self%backend%reorder(dpdz_sxy_y, dpdz_sxy_z, RDR_Z2Y)
 
       call self%backend%allocator%release_block(p_sxy_z)
       call self%backend%allocator%release_block(dpdz_sxy_z)
@@ -378,9 +386,9 @@ contains
       dpdz_sx_x => self%backend%allocator%get_block()
 
       ! reorder from y to x
-      call self%backend%trans_y2x(p_sx_x, p_sx_y)
-      call self%backend%trans_y2x(dpdy_sx_x, dpdy_sx_y)
-      call self%backend%trans_y2x(dpdz_sx_x, dpdz_sx_y)
+      call self%backend%reorder(p_sx_x, p_sx_y, RDR_Y2X)
+      call self%backend%reorder(dpdy_sx_x, dpdy_sx_y, RDR_Y2X)
+      call self%backend%reorder(dpdz_sx_x, dpdz_sx_y, RDR_Y2X)
 
       ! release all the y directional fields.
       call self%backend%allocator%release_block(p_sx_y)

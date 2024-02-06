@@ -4,6 +4,9 @@ module m_common
    integer, parameter :: dp=kind(0.0d0)
    real(dp), parameter :: pi = 4*atan(1.0_dp)
 
+   integer, parameter :: RDR_X2Y = 12, RDR_X2Z = 13, RDR_Y2X = 21, &
+                         RDR_Y2Z = 23, RDR_Z2Y = 32
+
    type :: globs_t
       integer :: nx, ny, nz
       integer :: nx_loc, ny_loc, nz_loc
