@@ -1,4 +1,5 @@
 module m_cuda_backend
+   use iso_fortran_env, only: stderr => error_unit
    use cudafor
 
    use m_allocator, only: allocator_t, field_t
@@ -452,12 +453,10 @@ module m_cuda_backend
       case (RDR_Z2Y) ! z2y
          blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
          threads = dim3(SZ, SZ, 1)
-
          call reorder_z2y<<<blocks, threads>>>(u_o_d, u_i_d, &
                                                self%nx_loc, self%nz_loc)
       case default
-         print *, 'Transpose direction is undefined.'
-         stop
+         error stop 'Reorder direction is undefined.'
       end select
 
    end subroutine reorder_cuda

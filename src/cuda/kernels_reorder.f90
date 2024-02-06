@@ -36,11 +36,13 @@ contains
       real(dp), device, intent(in), dimension(:, :, :) :: u_x
       integer, value, intent(in) :: nz
 
-      integer :: i, j, b_i, b_j, nx!, nz
+      integer :: i, j, b_i, b_j, nx
 
       i = threadIdx%x; b_i = blockIdx%x; b_j = blockIdx%y
       nx = gridDim%x
 
+      ! Data access pattern for reordering between x and z is quite nice
+      ! thus we don't need to use shared memory for this operation.
       do j = 1, nz
          u_z(i, j, b_i + (b_j - 1)*nx) = u_x(i, b_i, j + (b_j - 1)*nz)
       end do
