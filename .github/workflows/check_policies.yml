@@ -1,5 +1,7 @@
 name: check-policies
-on: [push]
+
+on: [pull_request]
+
 jobs:
   check-commit-messages:
     runs-on: ubuntu-latest
@@ -14,6 +16,7 @@ jobs:
       - run: |
           bash .github/workflows/check_commit_messages.sh \
             ${{ github.event.before }} ${{ github.event.after }}
+
   check-formatting:
     runs-on: ubuntu-latest
     steps:
