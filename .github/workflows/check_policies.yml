@@ -4,21 +4,25 @@ jobs:
   check-commit-messages:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # Checkout with full history, not just latest revision.
           fetch-depth: 0
       - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
       - run: |
           bash .github/workflows/check_commit_messages.sh \
             ${{ github.event.before }} ${{ github.event.after }}
   check-formatting:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
-      - uses: actions/checkout@v3
+        with:
+          python-version: '3.10'
       - run: pip install fprettify
       - run: fprettify --config .fprettify.ini --diff --recursive src
-      - run: if [[ ! -z "$($FPRETTIFY_COMMAND)" ]]; then echo "::warning::Code formatting issues detected"; fi
+      - run: if [[ ! -z "$($FPRETTIFY_COMMAND)" ]]; then echo "::warning::Code formatting issues detected. See log for details."; fi
         env:
           FPRETTIFY_COMMAND: fprettify --config .fprettify.ini --diff --recursive src
