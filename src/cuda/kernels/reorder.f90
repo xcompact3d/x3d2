@@ -118,4 +118,48 @@ contains
 
    end subroutine reorder_z2y
 
+   attributes(global) subroutine sum_yintox(u_x, u_y, nz)
+      implicit none
+
+      real(dp), device, intent(inout), dimension(:, :, :) :: u_x
+      real(dp), device, intent(in), dimension(:, :, :) :: u_y
+      integer, value, intent(in) :: nz
+
+      real(dp), shared :: tile(SZ,SZ)
+      integer :: i, j, b_i, b_j, b_k
+
+      i = threadIdx%x; j = threadIdx%y
+      b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
+
+      ! copy into shared
+      tile(i, j) = u_y(i, (b_j-1)*SZ+j, (b_k)+nz*(b_i-1))
+
+      call syncthreads()
+
+      ! copy into output array from shared
+      u_x(i, (b_i-1)*SZ+j, (b_j-1)*nz+(b_k)) = &
+         u_x(i, (b_i-1)*SZ+j, (b_j-1)*nz+(b_k)) + tile(j, i)
+
+   end subroutine sum_yintox
+
+   attributes(global) subroutine sum_zintox(u_x, u_z, nz)
+      implicit none
+
+      ! Arguments
+      real(dp), device, intent(inout), dimension(:, :, :) :: u_x
+      real(dp), device, intent(in), dimension(:, :, :) :: u_z
+      integer, value, intent(in) :: nz
+
+      integer :: i, j, b_i, b_j, nx
+
+      i = threadIdx%x; b_i = blockIdx%x; b_j = blockIdx%y
+      nx = gridDim%x
+
+      do j = 1, nz
+         u_x(i, b_i, j+(b_j-1)*nz) = u_x(i, b_i, j+(b_j-1)*nz) &
+                                     + u_z(i, j, b_i+(b_j-1)*nx)
+      end do
+
+   end subroutine sum_zintox
+
 end module m_cuda_kernels_reorder
