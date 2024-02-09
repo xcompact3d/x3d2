@@ -162,4 +162,23 @@ contains
 
    end subroutine sum_zintox
 
+   attributes(global) subroutine axpby(n, alpha, x, beta, y)
+      implicit none
+
+      integer, value, intent(in) :: n
+      real(dp), value, intent(in) :: alpha, beta
+      real(dp), device, intent(in), dimension(:, :, :) :: x
+      real(dp), device, intent(inout), dimension(:, :, :) :: y
+
+      integer :: i, j, b
+
+      i = threadIdx%x
+      b = blockIdx%x
+
+      do j = 1, n
+         y(i, j, b) = alpha*x(i, j, b) + beta*y(i, j, b)
+      end do
+
+   end subroutine axpby
+
 end module m_cuda_kernels_reorder
