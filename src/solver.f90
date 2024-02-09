@@ -449,8 +449,10 @@ contains
 
          call self%backend%allocator%release_block(pressure)
 
-         !! velocity correction
-         !call self%backend%vec3add(u, v, w, dpdx, dpdy, dpdz)
+         ! velocity correction
+         call self%backend%vecadd(-1._dp, dpdx, 1._dp, self%u)
+         call self%backend%vecadd(-1._dp, dpdy, 1._dp, self%v)
+         call self%backend%vecadd(-1._dp, dpdz, 1._dp, self%w)
 
          call self%backend%allocator%release_block(dpdx)
          call self%backend%allocator%release_block(dpdy)
