@@ -13,8 +13,9 @@ module m_cuda_backend
    use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
    use m_cuda_tdsops, only: cuda_tdsops_t
    use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
-   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
-                                     reorder_y2z, reorder_z2y
+   use m_cuda_kernels_reorder, only: &
+       reorder_x2y, reorder_x2z, reorder_y2x, reorder_y2z, reorder_z2y, &
+       sum_yintox, sum_zintox
 
    implicit none
 
@@ -467,6 +468,21 @@ module m_cuda_backend
       class(cuda_backend_t) :: self
       class(field_t), intent(inout) :: u
       class(field_t), intent(in) :: u_y, u_z
+
+      real(dp), device, pointer, dimension(:, :, :) :: u_d, u_y_d, u_z_d
+      type(dim3) :: blocks, threads
+
+      select type(u); type is (cuda_field_t); u_d => u%data_d; end select
+      select type(u_y); type is (cuda_field_t); u_y_d => u_y%data_d; end select
+      select type(u_z); type is (cuda_field_t); u_z_d => u_z%data_d; end select
+
+      blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+      threads = dim3(SZ, SZ, 1)
+      call sum_yintox<<<blocks, threads>>>(u_d, u_y_d, self%nz_loc)
+
+      blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
+      threads = dim3(SZ, 1, 1)
+      call sum_zintox<<<blocks, threads>>>(u_d, u_z_d, self%nz_loc)
 
    end subroutine sum_yzintox_cuda
 
