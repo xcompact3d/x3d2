@@ -48,13 +48,13 @@ module m_allocator
    end type allocator_t
 
    type :: field_t
-     !! Memory block type holding both a 3D data field and a pointer
+     !! Memory block type holding both a data field and a pointer
      !! to the next block.  The `field_t` type also holds a integer
      !! `refcount` that counts the number of references to this
      !! field.  User code is currently responsible for incrementing
      !! the reference count.
       class(field_t), pointer :: next
-      real(dp), allocatable :: data(:, :, :)
+      real(dp), allocatable :: data(:)
       integer :: refcount = 0
       integer :: id !! An integer identifying the memory block.
    end type field_t
@@ -74,7 +74,7 @@ contains
       type(field_t), pointer, intent(in) :: next
       type(field_t) :: m
 
-      allocate (m%data(dims(1), dims(2), dims(3)))
+      allocate (m%data(dims(1)*dims(2)*dims(3)))
       m%refcount = 0
       m%next => next
       m%id = id

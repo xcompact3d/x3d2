@@ -10,7 +10,7 @@ module m_cuda_allocator
    end type cuda_allocator_t
 
    type, extends(field_t) :: cuda_field_t
-      real(dp), allocatable, device :: data_d(:, :, :)
+      real(dp), allocatable, device :: data_d(:)
    end type cuda_field_t
 
    interface cuda_field_t
@@ -24,7 +24,7 @@ contains
       type(cuda_field_t), pointer, intent(in) :: next
       type(cuda_field_t) :: m
 
-      allocate (m%data_d(dims(1), dims(2), dims(3)))
+      allocate (m%data_d(dims(1)*dims(2)*dims(3)))
       m%refcount = 0
       m%next => next
       m%id = id
