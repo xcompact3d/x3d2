@@ -30,7 +30,7 @@ module m_base_backend
       procedure(transeq_ders), deferred :: transeq_z
       procedure(tds_solve), deferred :: tds_solve
       procedure(reorder), deferred :: reorder
-      procedure(sum9into3), deferred :: sum_yzintox
+      procedure(sum_yzintox), deferred :: sum_yzintox
       procedure(vecadd), deferred :: vecadd
       procedure(get_fields), deferred :: get_fields
       procedure(set_fields), deferred :: set_fields
@@ -95,7 +95,7 @@ module m_base_backend
    end interface
 
    abstract interface
-      subroutine sum9into3(self, du, dv, dw, du_y, dv_y, dw_y, du_z, dv_z, dw_z)
+      subroutine sum_yzintox(self, u, u_y, u_z)
          !! sum9into3 subroutine combines all the directional velocity
          !! derivatives into the corresponding x directional fields.
          import :: base_backend_t
@@ -103,9 +103,9 @@ module m_base_backend
          implicit none
 
          class(base_backend_t) :: self
-         class(field_t), intent(inout) :: du, dv, dw
-         class(field_t), intent(in) :: du_y, dv_y, dw_y, du_z, dv_z, dw_z
-      end subroutine sum9into3
+         class(field_t), intent(inout) :: u
+         class(field_t), intent(in) :: u_y, u_z
+      end subroutine sum_yzintox
    end interface
 
    abstract interface

@@ -170,13 +170,12 @@ module m_omp_backend
 
    end subroutine reorder_omp
 
-   subroutine sum_yzintox_omp(self, du, dv, dw, &
-                               du_y, dv_y, dw_y, du_z, dv_z, dw_z)
+   subroutine sum_yzintox_omp(self, u, u_y, u_z)
       implicit none
 
       class(omp_backend_t) :: self
-      class(field_t), intent(inout) :: du, dv, dw
-      class(field_t), intent(in) :: du_y, dv_y, dw_y, du_z, dv_z, dw_z
+      class(field_t), intent(inout) :: u
+      class(field_t), intent(in) :: u_y, u_z
 
    end subroutine sum_yzintox_omp
 

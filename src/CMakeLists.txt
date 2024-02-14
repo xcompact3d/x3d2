@@ -12,12 +12,12 @@ set(SRC
   omp/exec_dist.f90
 )
 set(CUDASRC
+  cuda/allocator.f90
   cuda/backend.f90
   cuda/common.f90
-  cuda/allocator.f90
   cuda/exec_dist.f90
-  cuda/kernels_dist.f90
-  cuda/kernels_reorder.f90
+  cuda/kernels/distributed.f90
+  cuda/kernels/reorder.f90
   cuda/sendrecv.f90
   cuda/tdsops.f90
 )

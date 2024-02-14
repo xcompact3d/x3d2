@@ -222,9 +222,9 @@ contains
       call self%backend%allocator%release_block(w_z)
 
       ! gather all the contributions into the x result array
-      ! this function does the data reordering and summations at once.
-      call self%backend%sum_yzintox(du, dv, dw, &
-                                    du_y, dv_y, dw_y, du_z, dv_z, dw_z)
+      call self%backend%sum_yzintox(du, du_y, du_z)
+      call self%backend%sum_yzintox(dv, dv_y, dv_z)
+      call self%backend%sum_yzintox(dw, dw_y, dw_z)
 
       ! release all the unnecessary blocks.
       call self%backend%allocator%release_block(du_y)
@@ -449,8 +449,10 @@ contains
 
          call self%backend%allocator%release_block(pressure)
 
-         !! velocity correction
-         !call self%backend%vec3add(u, v, w, dpdx, dpdy, dpdz)
+         ! velocity correction
+         call self%backend%vecadd(-1._dp, dpdx, 1._dp, self%u)
+         call self%backend%vecadd(-1._dp, dpdy, 1._dp, self%v)
+         call self%backend%vecadd(-1._dp, dpdz, 1._dp, self%w)
 
          call self%backend%allocator%release_block(dpdx)
          call self%backend%allocator%release_block(dpdy)
