@@ -200,6 +200,14 @@ contains
       call self%backend%allocator%release_block(v_y)
       call self%backend%allocator%release_block(w_y)
 
+      call self%backend%sum_yintox(du, du_y)
+      call self%backend%sum_yintox(dv, dv_y)
+      call self%backend%sum_yintox(dw, dw_y)
+
+      call self%backend%allocator%release_block(du_y)
+      call self%backend%allocator%release_block(dv_y)
+      call self%backend%allocator%release_block(dw_y)
+
       ! just like in y direction, get some fields for the z derivatives.
       u_z => self%backend%allocator%get_block()
       v_z => self%backend%allocator%get_block()
@@ -222,14 +230,11 @@ contains
       call self%backend%allocator%release_block(w_z)
 
       ! gather all the contributions into the x result array
-      call self%backend%sum_yzintox(du, du_y, du_z)
-      call self%backend%sum_yzintox(dv, dv_y, dv_z)
-      call self%backend%sum_yzintox(dw, dw_y, dw_z)
+      call self%backend%sum_zintox(du, du_z)
+      call self%backend%sum_zintox(dv, dv_z)
+      call self%backend%sum_zintox(dw, dw_z)
 
       ! release all the unnecessary blocks.
-      call self%backend%allocator%release_block(du_y)
-      call self%backend%allocator%release_block(dv_y)
-      call self%backend%allocator%release_block(dw_y)
       call self%backend%allocator%release_block(du_z)
       call self%backend%allocator%release_block(dv_z)
       call self%backend%allocator%release_block(dw_z)
