@@ -37,7 +37,6 @@ module m_cuda_backend
       procedure :: transeq_z => transeq_z_cuda
       procedure :: tds_solve => tds_solve_cuda
       procedure :: reorder => reorder_cuda
-      procedure :: sum_yzintox => sum_yzintox_cuda
       procedure :: sum_yintox => sum_yintox_cuda
       procedure :: sum_zintox => sum_zintox_cuda
       procedure :: vecadd => vecadd_cuda
@@ -501,30 +500,6 @@ module m_cuda_backend
       call sum_zintox<<<blocks, threads>>>(u_d, u_z_d, self%nz_loc)
 
    end subroutine sum_zintox_cuda
-
-   subroutine sum_yzintox_cuda(self, u, u_y, u_z)
-      implicit none
-
-      class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u
-      class(field_t), intent(in) :: u_y, u_z
-
-      real(dp), device, pointer, dimension(:, :, :) :: u_d, u_y_d, u_z_d
-      type(dim3) :: blocks, threads
-
-      select type(u); type is (cuda_field_t); u_d => u%data_d; end select
-      select type(u_y); type is (cuda_field_t); u_y_d => u_y%data_d; end select
-      select type(u_z); type is (cuda_field_t); u_z_d => u_z%data_d; end select
-
-      blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
-      threads = dim3(SZ, SZ, 1)
-      call sum_yintox<<<blocks, threads>>>(u_d, u_y_d, self%nz_loc)
-
-      blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
-      threads = dim3(SZ, 1, 1)
-      call sum_zintox<<<blocks, threads>>>(u_d, u_z_d, self%nz_loc)
-
-   end subroutine sum_yzintox_cuda
 
    subroutine vecadd_cuda(self, a, x, b, y)
       implicit none
