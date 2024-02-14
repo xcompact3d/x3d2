@@ -26,6 +26,8 @@ module m_omp_backend
       procedure :: tds_solve => tds_solve_omp
       procedure :: reorder => reorder_omp
       procedure :: sum_yzintox => sum_yzintox_omp
+      procedure :: sum_yintox => sum_yintox_omp
+      procedure :: sum_zintox => sum_zintox_omp
       procedure :: vecadd => vecadd_omp
       procedure :: set_fields => set_fields_omp
       procedure :: get_fields => get_fields_omp
@@ -169,6 +171,24 @@ module m_omp_backend
       integer, intent(in) :: direction
 
    end subroutine reorder_omp
+
+   subroutine sum_yintox_omp(self, u, u_)
+      implicit none
+
+      class(omp_backend_t) :: self
+      class(field_t), intent(inout) :: u
+      class(field_t), intent(in) :: u_
+
+   end subroutine sum_yintox_omp
+
+   subroutine sum_zintox_omp(self, u, u_)
+      implicit none
+
+      class(omp_backend_t) :: self
+      class(field_t), intent(inout) :: u
+      class(field_t), intent(in) :: u_
+
+   end subroutine sum_zintox_omp
 
    subroutine sum_yzintox_omp(self, u, u_y, u_z)
       implicit none
