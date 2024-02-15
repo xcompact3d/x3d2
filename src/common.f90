@@ -15,6 +15,7 @@ module m_common
       real(dp) :: dx, dy, dz
       integer :: nproc_x = 1, nproc_y = 1, nproc_z = 1
       character(len=20) :: BC_x_s, BC_x_e, BC_y_s, BC_y_e, BC_z_s, BC_z_e
+      logical :: use_fft
    end type globs_t
 
 contains
