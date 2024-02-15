@@ -106,7 +106,7 @@ program xcompact
    allocator => cuda_allocator
    print*, 'CUDA allocator instantiated'
 
-   cuda_backend = cuda_backend_t(globs, allocator)
+   cuda_backend = cuda_backend_t(globs, allocator, xdirps, ydirps, zdirps)
    backend => cuda_backend
    print*, 'CUDA backend instantiated'
 #else
@@ -114,7 +114,7 @@ program xcompact
    allocator => omp_allocator
    print*, 'OpenMP allocator instantiated'
 
-   omp_backend = omp_backend_t(globs, allocator)
+   omp_backend = omp_backend_t(globs, allocator, xdirps, ydirps, zdirps)
    backend => omp_backend
    print*, 'OpenMP backend instantiated'
 #endif

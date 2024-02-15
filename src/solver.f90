@@ -519,10 +519,14 @@ contains
       class(field_t), intent(in) :: div_u
 
       ! call forward FFT
+      ! output array in spectral space is stored at poisson_fft class
+      call self%backend%poisson_fft%fft_forward(div_u)
 
       ! postprocess
+      call self%backend%poisson_fft%fft_postprocess
 
       ! call backward FFT
+      call self%backend%poisson_fft%fft_backward(pressure)
 
    end subroutine poisson_fft
 
