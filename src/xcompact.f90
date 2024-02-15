@@ -61,6 +61,8 @@ program xcompact
    ! set nprocs based on run time arguments
    globs%nproc_x = 1; globs%nproc_y = 1; globs%nproc_z = 1
 
+   globs%use_fft = .true.
+
    ! Lets allow a 1D decomposition for the moment
    !globs%nproc_x = nproc
 

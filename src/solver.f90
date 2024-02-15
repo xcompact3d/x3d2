@@ -42,6 +42,7 @@ module m_solver
       class(base_backend_t), pointer :: backend
       class(dirps_t), pointer :: xdirps, ydirps, zdirps
       class(time_intg_t), pointer :: time_integrator
+      procedure(poisson_solver), pointer :: poisson => null()
    contains
       procedure :: transeq
       procedure :: divergence
@@ -49,9 +50,22 @@ module m_solver
       procedure :: run
    end type solver_t
 
+   abstract interface
+      subroutine poisson_solver(self, pressure, div_u)
+         import :: solver_t
+         import :: field_t
+         implicit none
+
+         class(solver_t) :: self
+         class(field_t), intent(inout) :: pressure
+         class(field_t), intent(in) :: div_u
+      end subroutine poisson_solver
+   end interface
+
    interface solver_t
       module procedure init
    end interface solver_t
+
 contains
 
    function init(backend, time_integrator, xdirps, ydirps, zdirps, globs) &
@@ -80,6 +94,14 @@ contains
       solver%u => solver%backend%allocator%get_block()
       solver%v => solver%backend%allocator%get_block()
       solver%w => solver%backend%allocator%get_block()
+
+      if (globs%use_fft) then
+         print*, 'Poisson solver: FFT'
+         solver%poisson => poisson_fft
+      else
+         print*, 'Poisson solver: CG'
+         solver%poisson => poisson_cg
+      end if
 
       ! Set initial conditions
       dims(:) = solver%backend%allocator%dims(:)
@@ -410,6 +432,30 @@ contains
 
    end subroutine gradient
 
+   subroutine poisson_fft(self, pressure, div_u)
+      implicit none
+
+      class(solver_t) :: self
+      class(field_t), intent(inout) :: pressure
+      class(field_t), intent(in) :: div_u
+
+      ! call forward FFT
+
+      ! postprocess
+
+      ! call backward FFT
+
+   end subroutine poisson_fft
+
+   subroutine poisson_cg(self, pressure, div_u)
+      implicit none
+
+      class(solver_t) :: self
+      class(field_t), intent(inout) :: pressure
+      class(field_t), intent(in) :: div_u
+
+   end subroutine poisson_cg
+
    subroutine run(self, n_iter, u_out, v_out, w_out)
       implicit none
 
@@ -445,7 +491,7 @@ contains
 
          pressure => self%backend%allocator%get_block()
 
-         !call self%poisson(pressure, div_u)
+         call self%poisson(pressure, div_u)
 
          call self%backend%allocator%release_block(div_u)
 
