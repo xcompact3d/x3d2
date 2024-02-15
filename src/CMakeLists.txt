@@ -2,12 +2,14 @@ set(SRC
   allocator.f90
   backend.f90
   common.f90
+  poisson_fft.f90
   solver.f90
   tdsops.f90
   time_integrator.f90
   omp/backend.f90
   omp/common.f90
   omp/kernels_dist.f90
+  omp/poisson_fft.f90
   omp/sendrecv.f90
   omp/exec_dist.f90
 )
@@ -18,6 +20,7 @@ set(CUDASRC
   cuda/exec_dist.f90
   cuda/kernels/distributed.f90
   cuda/kernels/reorder.f90
+  cuda/poisson_fft.f90
   cuda/sendrecv.f90
   cuda/tdsops.f90
 )
