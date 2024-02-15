@@ -27,6 +27,7 @@ module m_tdsops
                                              dist_sa, dist_sc, & !! back subs.
                                              dist_af !! the auxiliary factors
       real(dp), allocatable :: coeffs(:), coeffs_s(:, :), coeffs_e(:, :)
+      real(dp) :: alpha, a, b, c = 0._dp, d = 0._dp
       integer :: n, n_halo
    contains
       procedure :: deriv_1st, deriv_2nd, interpl_mid, stagder_1st, preprocess
@@ -153,6 +154,9 @@ contains
       case default
          error stop 'scheme is not defined'
       end select
+
+      self%alpha = alpha
+      self%a = afi; self%b = bfi
 
       self%coeffs(:) = [0._dp, 0._dp, -bfi, -afi, &
                         0._dp, &
@@ -320,6 +324,9 @@ contains
       case default
          error stop 'scheme is not defined'
       end select
+
+      self%alpha = alpha
+      self%a = asi; self%b = bsi; self%c = csi; self%d = dsi
 
       self%coeffs(:) = [dsi, csi, bsi, asi, &
                         -2._dp*(asi + bsi + csi + dsi), &
@@ -511,6 +518,9 @@ contains
          error stop 'scheme is not defined'
       end select
 
+      self%alpha = alpha
+      self%a = aici; self%b = bici; self%c = cici; self%d = dici
+
       select case (from_to)
       case ('v2p')
          self%coeffs(:) = [0._dp, dici, cici, bici, &
@@ -632,6 +642,9 @@ contains
       case default
          error stop 'scheme is not defined'
       end select
+
+      self%alpha = alpha
+      self%a = aci; self%b = bci
 
       select case (from_to)
       case ('v2p')
