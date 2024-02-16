@@ -37,7 +37,7 @@ module m_solver
 
       real(dp) :: dt, nu
 
-      class(field_t), pointer :: u, v, w, du, dv, dw
+      class(field_t), pointer :: u, v, w
 
       class(base_backend_t), pointer :: backend
       class(dirps_t), pointer :: xdirps, ydirps, zdirps
@@ -97,11 +97,6 @@ contains
 
       deallocate(u_init, v_init, w_init)
       print*, 'initial conditions are set'
-
-      ! Allocate fields for storing the RHS
-      solver%du => solver%backend%allocator%get_block()
-      solver%dv => solver%backend%allocator%get_block()
-      solver%dw => solver%backend%allocator%get_block()
 
       nx = globs%nx_loc; ny = globs%ny_loc; nz = globs%nz_loc
       dx = globs%dx; dy = globs%dy; dz = globs%dz
@@ -200,6 +195,14 @@ contains
       call self%backend%allocator%release_block(v_y)
       call self%backend%allocator%release_block(w_y)
 
+      call self%backend%sum_yintox(du, du_y)
+      call self%backend%sum_yintox(dv, dv_y)
+      call self%backend%sum_yintox(dw, dw_y)
+
+      call self%backend%allocator%release_block(du_y)
+      call self%backend%allocator%release_block(dv_y)
+      call self%backend%allocator%release_block(dw_y)
+
       ! just like in y direction, get some fields for the z derivatives.
       u_z => self%backend%allocator%get_block()
       v_z => self%backend%allocator%get_block()
@@ -222,14 +225,11 @@ contains
       call self%backend%allocator%release_block(w_z)
 
       ! gather all the contributions into the x result array
-      call self%backend%sum_yzintox(du, du_y, du_z)
-      call self%backend%sum_yzintox(dv, dv_y, dv_z)
-      call self%backend%sum_yzintox(dw, dw_y, dw_z)
+      call self%backend%sum_zintox(du, du_z)
+      call self%backend%sum_zintox(dv, dv_z)
+      call self%backend%sum_zintox(dw, dw_z)
 
       ! release all the unnecessary blocks.
-      call self%backend%allocator%release_block(du_y)
-      call self%backend%allocator%release_block(dv_y)
-      call self%backend%allocator%release_block(dw_y)
       call self%backend%allocator%release_block(du_z)
       call self%backend%allocator%release_block(dv_z)
       call self%backend%allocator%release_block(dw_z)
@@ -417,18 +417,26 @@ contains
       integer, intent(in) :: n_iter
       real(dp), dimension(:, :, :), intent(inout) :: u_out, v_out, w_out
 
-      class(field_t), pointer :: div_u, pressure, dpdx, dpdy, dpdz
+      class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
 
       integer :: i
 
       print*, 'start run'
 
       do i = 1, n_iter
-         call self%transeq(self%du, self%dv, self%dw, self%u, self%v, self%w)
+         du => self%backend%allocator%get_block()
+         dv => self%backend%allocator%get_block()
+         dw => self%backend%allocator%get_block()
+
+         call self%transeq(du, dv, dw, self%u, self%v, self%w)
 
          ! time integration
          call self%time_integrator%step(self%u, self%v, self%w, &
-                                        self%du, self%dv, self%dw, self%dt)
+                                        du, dv, dw, self%dt)
+
+         call self%backend%allocator%release_block(du)
+         call self%backend%allocator%release_block(dv)
+         call self%backend%allocator%release_block(dw)
 
          ! pressure
          div_u => self%backend%allocator%get_block()
@@ -462,7 +470,7 @@ contains
       print*, 'run end'
 
       call self%backend%get_fields( &
-         u_out, v_out, w_out, self%du, self%dv, self%dw &
+         u_out, v_out, w_out, self%u, self%v, self%w &
       )
 
    end subroutine run
