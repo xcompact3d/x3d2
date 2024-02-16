@@ -205,7 +205,7 @@ module m_omp_backend
       class(tdsops_t), intent(in) :: tdsops_dud
       class(tdsops_t), intent(in) :: tdsops_d2u
       type(dirps_t), intent(in) :: dirps
-      class(field_t), pointer :: du, d2u, dud, uv
+      class(field_t), pointer :: du, d2u, dud
 
       du => self%allocator%get_block()
       dud => self%allocator%get_block()
