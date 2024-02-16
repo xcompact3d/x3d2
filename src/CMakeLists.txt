@@ -12,16 +12,18 @@ set(SRC
   omp/exec_dist.f90
 )
 set(CUDASRC
+  cuda/allocator.f90
   cuda/backend.f90
   cuda/common.f90
-  cuda/allocator.f90
   cuda/exec_dist.f90
-  cuda/kernels_dist.f90
+  cuda/kernels/distributed.f90
+  cuda/kernels/reorder.f90
   cuda/sendrecv.f90
   cuda/tdsops.f90
 )
 
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   list(APPEND SRC ${CUDASRC})
 endif()
 
@@ -35,7 +37,8 @@ target_compile_options(x3d2 PRIVATE "-O3")
 target_compile_options(xcompact PRIVATE "-O3")
 target_compile_options(xcompact PRIVATE "-cpp")
 
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   target_compile_options(x3d2 PRIVATE "-cuda")
   target_compile_options(x3d2 PRIVATE "-fast")
   target_link_options(x3d2 INTERFACE "-cuda")

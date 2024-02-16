@@ -6,11 +6,13 @@ set(TESTSRC
 )
 set(CUDATESTSRC
   cuda/test_cuda_allocator.f90
+  cuda/test_cuda_reorder.f90
   cuda/test_cuda_tridiag.f90
   cuda/test_cuda_transeq.f90
 )
 
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   foreach(testfile IN LISTS CUDATESTSRC)
     get_filename_component(test_name ${testfile} NAME_WE)
 

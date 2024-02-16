@@ -21,6 +21,7 @@ module m_base_backend
       !! architecture.
 
       real(dp) :: nu
+      integer :: nx_loc, ny_loc, nz_loc
       class(allocator_t), pointer :: allocator
       class(dirps_t), pointer :: xdirps, ydirps, zdirps
    contains
@@ -28,12 +29,9 @@ module m_base_backend
       procedure(transeq_ders), deferred :: transeq_y
       procedure(transeq_ders), deferred :: transeq_z
       procedure(tds_solve), deferred :: tds_solve
-      procedure(transposer), deferred :: trans_x2y
-      procedure(transposer), deferred :: trans_x2z
-      procedure(trans_d2d), deferred :: trans_y2z
-      procedure(trans_d2d), deferred :: trans_z2y
-      procedure(trans_d2d), deferred :: trans_y2x
-      procedure(sum9into3), deferred :: sum_yzintox
+      procedure(reorder), deferred :: reorder
+      procedure(sum_intox), deferred :: sum_yintox
+      procedure(sum_intox), deferred :: sum_zintox
       procedure(vecadd), deferred :: vecadd
       procedure(get_fields), deferred :: get_fields
       procedure(set_fields), deferred :: set_fields
@@ -81,22 +79,8 @@ module m_base_backend
    end interface
 
    abstract interface
-      subroutine transposer(self, u_, v_, w_, u, v, w)
-         !! transposer subroutines are straightforward, they rearrange
-         !! data into our specialist data structure so that regardless
-         !! of the direction tridiagonal systems are solved efficiently
-         !! and fast.
-         import :: base_backend_t
-         import :: field_t
-         implicit none
-
-         class(base_backend_t) :: self
-         class(field_t), intent(inout) :: u_, v_, w_
-         class(field_t), intent(in) :: u, v, w
-      end subroutine transposer
-
-      subroutine trans_d2d(self, u_, u)
-         !! transposer subroutines are straightforward, they rearrange
+      subroutine reorder(self, u_, u, direction)
+         !! reorder subroutines are straightforward, they rearrange
          !! data into our specialist data structure so that regardless
          !! of the direction tridiagonal systems are solved efficiently
          !! and fast.
@@ -107,11 +91,12 @@ module m_base_backend
          class(base_backend_t) :: self
          class(field_t), intent(inout) :: u_
          class(field_t), intent(in) :: u
-      end subroutine trans_d2d
+         integer, intent(in) :: direction
+      end subroutine reorder
    end interface
 
    abstract interface
-      subroutine sum9into3(self, du, dv, dw, du_y, dv_y, dw_y, du_z, dv_z, dw_z)
+      subroutine sum_intox(self, u, u_)
          !! sum9into3 subroutine combines all the directional velocity
          !! derivatives into the corresponding x directional fields.
          import :: base_backend_t
@@ -119,9 +104,9 @@ module m_base_backend
          implicit none
 
          class(base_backend_t) :: self
-         class(field_t), intent(inout) :: du, dv, dw
-         class(field_t), intent(in) :: du_y, dv_y, dw_y, du_z, dv_z, dw_z
-      end subroutine sum9into3
+         class(field_t), intent(inout) :: u
+         class(field_t), intent(in) :: u_
+      end subroutine sum_intox
    end interface
 
    abstract interface

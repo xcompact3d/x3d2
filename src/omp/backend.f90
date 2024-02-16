@@ -26,12 +26,9 @@ module m_omp_backend
       procedure :: transeq_y => transeq_y_omp
       procedure :: transeq_z => transeq_z_omp
       procedure :: tds_solve => tds_solve_omp
-      procedure :: trans_x2y => trans_x2y_omp
-      procedure :: trans_x2z => trans_x2z_omp
-      procedure :: trans_y2z => trans_y2z_omp
-      procedure :: trans_z2y => trans_z2y_omp
-      procedure :: trans_y2x => trans_y2x_omp
-      procedure :: sum_yzintox => sum_yzintox_omp
+      procedure :: reorder => reorder_omp
+      procedure :: sum_yintox => sum_yintox_omp
+      procedure :: sum_zintox => sum_zintox_omp
       procedure :: vecadd => vecadd_omp
       procedure :: set_fields => set_fields_omp
       procedure :: get_fields => get_fields_omp
@@ -269,60 +266,33 @@ module m_omp_backend
 
    end subroutine tds_solve_dist
 
-   subroutine trans_x2y_omp(self, u_, v_, w_, u, v, w)
-      implicit none
-
-      class(omp_backend_t) :: self
-      class(field_t), intent(inout) :: u_, v_, w_
-      class(field_t), intent(in) :: u, v, w
-
-   end subroutine trans_x2y_omp
-
-   subroutine trans_x2z_omp(self, u_, v_, w_, u, v, w)
-      implicit none
-
-      class(omp_backend_t) :: self
-      class(field_t), intent(inout) :: u_, v_, w_
-      class(field_t), intent(in) :: u, v, w
-
-   end subroutine trans_x2z_omp
-
-   subroutine trans_y2z_omp(self, u_, u)
+   subroutine reorder_omp(self, u_, u, direction)
       implicit none
 
       class(omp_backend_t) :: self
       class(field_t), intent(inout) :: u_
       class(field_t), intent(in) :: u
+      integer, intent(in) :: direction
 
-   end subroutine trans_y2z_omp
+   end subroutine reorder_omp
 
-   subroutine trans_z2y_omp(self, u_, u)
+   subroutine sum_yintox_omp(self, u, u_)
       implicit none
 
       class(omp_backend_t) :: self
-      class(field_t), intent(inout) :: u_
-      class(field_t), intent(in) :: u
+      class(field_t), intent(inout) :: u
+      class(field_t), intent(in) :: u_
 
-   end subroutine trans_z2y_omp
+   end subroutine sum_yintox_omp
 
-   subroutine trans_y2x_omp(self, u_, u)
+   subroutine sum_zintox_omp(self, u, u_)
       implicit none
 
       class(omp_backend_t) :: self
-      class(field_t), intent(inout) :: u_
-      class(field_t), intent(in) :: u
+      class(field_t), intent(inout) :: u
+      class(field_t), intent(in) :: u_
 
-   end subroutine trans_y2x_omp
-
-   subroutine sum_yzintox_omp(self, du, dv, dw, &
-                               du_y, dv_y, dw_y, du_z, dv_z, dw_z)
-      implicit none
-
-      class(omp_backend_t) :: self
-      class(field_t), intent(inout) :: du, dv, dw
-      class(field_t), intent(in) :: du_y, dv_y, dw_y, du_z, dv_z, dw_z
-
-   end subroutine sum_yzintox_omp
+   end subroutine sum_zintox_omp
 
    subroutine vecadd_omp(self, a, x, b, y)
       implicit none

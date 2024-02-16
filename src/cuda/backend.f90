@@ -1,9 +1,10 @@
 module m_cuda_backend
+   use iso_fortran_env, only: stderr => error_unit
    use cudafor
 
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
-   use m_common, only: dp, globs_t
+   use m_common, only: dp, globs_t, RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2Y
    use m_tdsops, only: dirps_t, tdsops_t
 
    use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
@@ -12,6 +13,9 @@ module m_cuda_backend
    use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
    use m_cuda_tdsops, only: cuda_tdsops_t
    use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
+   use m_cuda_kernels_reorder, only: &
+       reorder_x2y, reorder_x2z, reorder_y2x, reorder_y2z, reorder_z2y, &
+       sum_yintox, sum_zintox, axpby
 
    implicit none
 
@@ -32,12 +36,9 @@ module m_cuda_backend
       procedure :: transeq_y => transeq_y_cuda
       procedure :: transeq_z => transeq_z_cuda
       procedure :: tds_solve => tds_solve_cuda
-      procedure :: trans_x2y => trans_x2y_cuda
-      procedure :: trans_x2z => trans_x2z_cuda
-      procedure :: trans_y2z => trans_y2z_cuda
-      procedure :: trans_z2y => trans_z2y_cuda
-      procedure :: trans_y2x => trans_y2x_cuda
-      procedure :: sum_yzintox => sum_yzintox_cuda
+      procedure :: reorder => reorder_cuda
+      procedure :: sum_yintox => sum_yintox_cuda
+      procedure :: sum_zintox => sum_zintox_cuda
       procedure :: vecadd => vecadd_cuda
       procedure :: set_fields => set_fields_cuda
       procedure :: get_fields => get_fields_cuda
@@ -73,6 +74,10 @@ module m_cuda_backend
       backend%yblocks = dim3(globs%n_groups_y, 1, 1)
       backend%zthreads = dim3(SZ, 1, 1)
       backend%zblocks = dim3(globs%n_groups_z, 1, 1)
+
+      backend%nx_loc = globs%nx_loc
+      backend%ny_loc = globs%ny_loc
+      backend%nz_loc = globs%nz_loc
 
       n_halo = 4
       n_block = globs%n_groups_x
@@ -415,60 +420,86 @@ module m_cuda_backend
 
    end subroutine tds_solve_dist
 
-   subroutine trans_x2y_cuda(self, u_y, v_y, w_y, u, v, w)
+   subroutine reorder_cuda(self, u_o, u_i, direction)
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_y, v_y, w_y
-      class(field_t), intent(in) :: u, v, w
+      class(field_t), intent(inout) :: u_o
+      class(field_t), intent(in) :: u_i
+      integer, intent(in) :: direction
 
-   end subroutine trans_x2y_cuda
+      real(dp), device, pointer, dimension(:, :, :) :: u_o_d, u_i_d
+      type(dim3) :: blocks, threads
 
-   subroutine trans_x2z_cuda(self, u_z, v_z, w_z, u, v, w)
+      select type(u_o); type is (cuda_field_t); u_o_d => u_o%data_d; end select
+      select type(u_i); type is (cuda_field_t); u_i_d => u_i%data_d; end select
+
+      select case (direction)
+      case (RDR_X2Y) ! x2y
+         blocks = dim3(self%nx_loc/SZ, self%nz_loc, self%ny_loc/SZ)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_x2y<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      case (RDR_X2Z) ! x2z
+         blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
+         threads = dim3(SZ, 1, 1)
+         call reorder_x2z<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      case (RDR_Y2X) ! y2x
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_y2x<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      case (RDR_Y2Z) ! y2z
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_y2z<<<blocks, threads>>>(u_o_d, u_i_d, &
+                                               self%nx_loc, self%nz_loc)
+      case (RDR_Z2Y) ! z2y
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_z2y<<<blocks, threads>>>(u_o_d, u_i_d, &
+                                               self%nx_loc, self%nz_loc)
+      case default
+         error stop 'Reorder direction is undefined.'
+      end select
+
+   end subroutine reorder_cuda
+
+   subroutine sum_yintox_cuda(self, u, u_y)
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_z, v_z, w_z
-      class(field_t), intent(in) :: u, v, w
-
-   end subroutine trans_x2z_cuda
-
-   subroutine trans_y2z_cuda(self, u_z, u_y)
-      implicit none
-
-      class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_z
+      class(field_t), intent(inout) :: u
       class(field_t), intent(in) :: u_y
 
-   end subroutine trans_y2z_cuda
+      real(dp), device, pointer, dimension(:, :, :) :: u_d, u_y_d
+      type(dim3) :: blocks, threads
 
-   subroutine trans_z2y_cuda(self, u_y, u_z)
+      select type(u); type is (cuda_field_t); u_d => u%data_d; end select
+      select type(u_y); type is (cuda_field_t); u_y_d => u_y%data_d; end select
+
+      blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+      threads = dim3(SZ, SZ, 1)
+      call sum_yintox<<<blocks, threads>>>(u_d, u_y_d, self%nz_loc)
+
+   end subroutine sum_yintox_cuda
+
+   subroutine sum_zintox_cuda(self, u, u_z)
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_y
+      class(field_t), intent(inout) :: u
       class(field_t), intent(in) :: u_z
 
-   end subroutine trans_z2y_cuda
+      real(dp), device, pointer, dimension(:, :, :) :: u_d, u_z_d
+      type(dim3) :: blocks, threads
 
-   subroutine trans_y2x_cuda(self, u_x, u_y)
-      implicit none
+      select type(u); type is (cuda_field_t); u_d => u%data_d; end select
+      select type(u_z); type is (cuda_field_t); u_z_d => u_z%data_d; end select
 
-      class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u_x
-      class(field_t), intent(in) :: u_y
+      blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
+      threads = dim3(SZ, 1, 1)
+      call sum_zintox<<<blocks, threads>>>(u_d, u_z_d, self%nz_loc)
 
-   end subroutine trans_y2x_cuda
-
-   subroutine sum_yzintox_cuda(self, du, dv, dw, &
-                               du_y, dv_y, dw_y, du_z, dv_z, dw_z)
-      implicit none
-
-      class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: du, dv, dw
-      class(field_t), intent(in) :: du_y, dv_y, dw_y, du_z, dv_z, dw_z
-
-   end subroutine sum_yzintox_cuda
+   end subroutine sum_zintox_cuda
 
    subroutine vecadd_cuda(self, a, x, b, y)
       implicit none
@@ -478,6 +509,18 @@ module m_cuda_backend
       class(field_t), intent(in) :: x
       real(dp), intent(in) :: b
       class(field_t), intent(inout) :: y
+
+      real(dp), device, pointer, dimension(:, :, :) :: x_d, y_d
+      type(dim3) :: blocks, threads
+      integer :: nx
+
+      select type(x); type is (cuda_field_t); x_d => x%data_d; end select
+      select type(y); type is (cuda_field_t); y_d => y%data_d; end select
+
+      nx = size(x_d, dim = 2)
+      blocks = dim3(size(x_d, dim = 3), 1, 1)
+      threads = dim3(SZ, 1, 1)
+      call axpby<<<blocks, threads>>>(nx, a, x_d, b, y_d)
 
    end subroutine vecadd_cuda
 

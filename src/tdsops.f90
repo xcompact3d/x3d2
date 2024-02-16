@@ -72,10 +72,11 @@ contains
       integer, intent(in) :: n
       real(dp), intent(in) :: delta
       character(*), intent(in) :: operation, scheme
-      integer, optional, intent(in) :: n_halo
-      character(*), optional, intent(in) :: from_to, bc_start, bc_end
-      logical, optional, intent(in) :: sym
-      real(dp), optional, intent(in) :: c_nu, nu0_nu
+      integer, optional, intent(in) :: n_halo !! Number of halo cells
+      character(*), optional, intent(in) :: from_to !! 'v2p' or 'p2v'
+      character(*), optional, intent(in) :: bc_start, bc_end !! Boundary Cond.
+      logical, optional, intent(in) :: sym !! (==npaire), only for Neumann BCs
+      real(dp), optional, intent(in) :: c_nu, nu0_nu !! params for hypervisc.
 
       integer :: n_stencil
 

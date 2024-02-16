@@ -1,7 +1,7 @@
 module m_solver
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
-   use m_common, only: dp, globs_t
+   use m_common, only: dp, globs_t, RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2Y
    use m_tdsops, only: tdsops_t, dirps_t
    use m_time_integrator, only: time_intg_t
 
@@ -37,7 +37,7 @@ module m_solver
 
       real(dp) :: dt, nu
 
-      class(field_t), pointer :: u, v, w, du, dv, dw
+      class(field_t), pointer :: u, v, w
 
       class(base_backend_t), pointer :: backend
       class(dirps_t), pointer :: xdirps, ydirps, zdirps
@@ -97,11 +97,6 @@ contains
 
       deallocate(u_init, v_init, w_init)
       print*, 'initial conditions are set'
-
-      ! Allocate fields for storing the RHS
-      solver%du => solver%backend%allocator%get_block()
-      solver%dv => solver%backend%allocator%get_block()
-      solver%dw => solver%backend%allocator%get_block()
 
       nx = globs%nx_loc; ny = globs%ny_loc; nz = globs%nz_loc
       dx = globs%dx; dy = globs%dy; dz = globs%dz
@@ -164,7 +159,10 @@ contains
       dw_y => self%backend%allocator%get_block()
 
       ! reorder data from x orientation to y orientation
-      call self%backend%trans_x2y(u_y, v_y, w_y, u, v, w)
+      call self%backend%reorder(u_y, u, RDR_X2Y)
+      call self%backend%reorder(v_y, v, RDR_X2Y)
+      call self%backend%reorder(w_y, w, RDR_X2Y)
+
       ! similar to the x direction, obtain derivatives in y.
       call self%backend%transeq_y(du_y, dv_y, dw_y, u_y, v_y, w_y, self%ydirps)
 
@@ -176,6 +174,14 @@ contains
       call self%backend%allocator%release_block(v_y)
       call self%backend%allocator%release_block(w_y)
 
+      call self%backend%sum_yintox(du, du_y)
+      call self%backend%sum_yintox(dv, dv_y)
+      call self%backend%sum_yintox(dw, dw_y)
+
+      call self%backend%allocator%release_block(du_y)
+      call self%backend%allocator%release_block(dv_y)
+      call self%backend%allocator%release_block(dw_y)
+
       ! just like in y direction, get some fields for the z derivatives.
       u_z => self%backend%allocator%get_block()
       v_z => self%backend%allocator%get_block()
@@ -185,7 +191,10 @@ contains
       dw_z => self%backend%allocator%get_block()
 
       ! reorder from x to z
-      call self%backend%trans_x2z(u_z, v_z, w_z, u, v, w)
+      call self%backend%reorder(u_z, u, RDR_X2Z)
+      call self%backend%reorder(v_z, v, RDR_X2Z)
+      call self%backend%reorder(w_z, w, RDR_X2Z)
+
       ! get the derivatives in z
       call self%backend%transeq_z(du_z, dv_z, dw_z, u_z, v_z, w_z, self%zdirps)
 
@@ -195,14 +204,11 @@ contains
       call self%backend%allocator%release_block(w_z)
 
       ! gather all the contributions into the x result array
-      ! this function does the data reordering and summations at once.
-      call self%backend%sum_yzintox(du, dv, dw, &
-                                    du_y, dv_y, dw_y, du_z, dv_z, dw_z)
+      call self%backend%sum_zintox(du, du_z)
+      call self%backend%sum_zintox(dv, dv_z)
+      call self%backend%sum_zintox(dw, dw_z)
 
       ! release all the unnecessary blocks.
-      call self%backend%allocator%release_block(du_y)
-      call self%backend%allocator%release_block(dv_y)
-      call self%backend%allocator%release_block(dw_y)
       call self%backend%allocator%release_block(du_z)
       call self%backend%allocator%release_block(dv_z)
       call self%backend%allocator%release_block(dw_z)
@@ -240,7 +246,9 @@ contains
       w_y => self%backend%allocator%get_block()
 
       ! reorder data from x orientation to y orientation
-      call self%backend%trans_x2y(u_y, v_y, w_y, du_x, dv_x, dw_x)
+      call self%backend%reorder(u_y, du_x, RDR_X2Y)
+      call self%backend%reorder(v_y, dv_x, RDR_X2Y)
+      call self%backend%reorder(w_y, dw_x, RDR_X2Y)
 
       call self%backend%allocator%release_block(du_x)
       call self%backend%allocator%release_block(dv_x)
@@ -274,8 +282,8 @@ contains
       call self%backend%vecadd(1._dp, dw_y, 1._dp, dv_y)
 
       ! reorder from y to z
-      call self%backend%trans_y2z(u_z, du_y)
-      call self%backend%trans_y2z(w_z, dw_y)
+      call self%backend%reorder(u_z, du_y, RDR_Y2Z)
+      call self%backend%reorder(w_z, dw_y, RDR_Y2Z)
 
       ! release all the unnecessary blocks.
       call self%backend%allocator%release_block(du_y)
@@ -329,8 +337,8 @@ contains
       dpdz_sxy_y => self%backend%allocator%get_block()
 
       ! reorder data from z orientation to y orientation
-      call self%backend%trans_z2y(p_sxy_y, p_sxy_z)
-      call self%backend%trans_z2y(dpdz_sxy_y, dpdz_sxy_z)
+      call self%backend%reorder(p_sxy_y, p_sxy_z, RDR_Z2Y)
+      call self%backend%reorder(dpdz_sxy_y, dpdz_sxy_z, RDR_Z2Y)
 
       call self%backend%allocator%release_block(p_sxy_z)
       call self%backend%allocator%release_block(dpdz_sxy_z)
@@ -357,9 +365,9 @@ contains
       dpdz_sx_x => self%backend%allocator%get_block()
 
       ! reorder from y to x
-      call self%backend%trans_y2x(p_sx_x, p_sx_y)
-      call self%backend%trans_y2x(dpdy_sx_x, dpdy_sx_y)
-      call self%backend%trans_y2x(dpdz_sx_x, dpdz_sx_y)
+      call self%backend%reorder(p_sx_x, p_sx_y, RDR_Y2X)
+      call self%backend%reorder(dpdy_sx_x, dpdy_sx_y, RDR_Y2X)
+      call self%backend%reorder(dpdz_sx_x, dpdz_sx_y, RDR_Y2X)
 
       ! release all the y directional fields.
       call self%backend%allocator%release_block(p_sx_y)
@@ -388,18 +396,26 @@ contains
       integer, intent(in) :: n_iter
       real(dp), dimension(:, :, :), intent(inout) :: u_out, v_out, w_out
 
-      class(field_t), pointer :: div_u, pressure, dpdx, dpdy, dpdz
+      class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
 
       integer :: i
 
       print*, 'start run'
 
       do i = 1, n_iter
-         call self%transeq(self%du, self%dv, self%dw, self%u, self%v, self%w)
+         du => self%backend%allocator%get_block()
+         dv => self%backend%allocator%get_block()
+         dw => self%backend%allocator%get_block()
+
+         call self%transeq(du, dv, dw, self%u, self%v, self%w)
 
          ! time integration
          call self%time_integrator%step(self%u, self%v, self%w, &
-                                        self%du, self%dv, self%dw, self%dt)
+                                        du, dv, dw, self%dt)
+
+         call self%backend%allocator%release_block(du)
+         call self%backend%allocator%release_block(dv)
+         call self%backend%allocator%release_block(dw)
 
          ! pressure
          div_u => self%backend%allocator%get_block()
@@ -420,8 +436,10 @@ contains
 
          call self%backend%allocator%release_block(pressure)
 
-         !! velocity correction
-         !call self%backend%vec3add(u, v, w, dpdx, dpdy, dpdz)
+         ! velocity correction
+         call self%backend%vecadd(-1._dp, dpdx, 1._dp, self%u)
+         call self%backend%vecadd(-1._dp, dpdy, 1._dp, self%v)
+         call self%backend%vecadd(-1._dp, dpdz, 1._dp, self%w)
 
          call self%backend%allocator%release_block(dpdx)
          call self%backend%allocator%release_block(dpdy)
@@ -431,7 +449,7 @@ contains
       print*, 'run end'
 
       call self%backend%get_fields( &
-         u_out, v_out, w_out, self%du, self%dv, self%dw &
+         u_out, v_out, w_out, self%u, self%v, self%w &
       )
 
    end subroutine run
