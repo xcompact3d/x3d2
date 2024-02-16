@@ -192,7 +192,7 @@ module m_omp_backend
       call sendrecv_fields(self%w_recv_s, self%w_recv_e, self%w_send_s, self%w_send_e, &
                            SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext)
 
-   end subroutine
+   end subroutine transeq_halo_exchange
 
    !> Computes RHS_x^v following:
    ! rhs_x^v = -0.5*(u*dv/dx + duv/dx) + nu*d2v/dx2
@@ -225,7 +225,7 @@ module m_omp_backend
       call self%allocator%release_block(dud)
       call self%allocator%release_block(d2u)
 
-   end subroutine
+   end subroutine transeq_dist_component
 
    subroutine tds_solve_omp(self, du, u, dirps, tdsops)
       implicit none
