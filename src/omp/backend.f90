@@ -225,7 +225,7 @@ module m_omp_backend
       call self%allocator%release_block(dud)
       call self%allocator%release_block(d2u)
 
-   end subroutine
+   end subroutine transeq_dist_component
 
    subroutine tds_solve_omp(self, du, u, dirps, tdsops)
       implicit none
