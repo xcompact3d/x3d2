@@ -177,7 +177,7 @@ contains
          do j = 1, n
             !$omp simd
             do i = 1, SZ
-               rhs(i, j, k) = -0.5*(v(i, j, k)*du(i, j, k) + dud(i, j, k)) + nu*d2u(i, j, k)
+               rhs(i, j, k) = -0.5_dp*(v(i, j, k)*du(i, j, k) + dud(i, j, k)) + nu*d2u(i, j, k)
             end do
             !$omp end simd
          end do
