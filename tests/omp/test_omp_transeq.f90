@@ -37,9 +37,9 @@ program test_omp_transeq
    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
 
-   globs%nx = 64
-   globs%ny = 64
-   globs%nz = 64
+   globs%nx = 96
+   globs%ny = 96
+   globs%nz = 96
 
    globs%nx_loc = globs%nx/nproc
    globs%ny_loc = globs%ny/nproc
@@ -79,7 +79,7 @@ program test_omp_transeq
 
    if (nrank == 0) print*, 'Parallel run with', nproc, 'ranks'
 
-   n_glob = globs%nx_loc
+   n_glob = globs%nx
    n = n_glob/nproc
    n_block = xdirps%n_blocks 
 
