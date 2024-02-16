@@ -19,7 +19,7 @@ program test_omp_transeq
 
    integer :: n, n_block, i, j, k
    integer :: n_glob
-   integer :: nrank, nproc, pprev, pnext
+   integer :: nrank, nproc
    integer :: ierr
 
    real(dp) :: dx, dx_per, nu, norm_du, tol = 1d-8, tstart, tend
@@ -110,7 +110,7 @@ program test_omp_transeq
    end do
    w%data(:, :, :) = 0.d0
 
-   call allocate_tdsops(xdirps, globs%nx_loc, globs%dx, omp_backend)
+   call allocate_tdsops(xdirps, globs%nx_loc, dx_per, omp_backend)
 
    call cpu_time(tstart)
    call transeq_x_omp(omp_backend, du, dv, dw, u, v, w, xdirps)
@@ -121,7 +121,7 @@ program test_omp_transeq
    allocate(r_u(SZ, n, n_block))
 
    ! check error
-   r_u = du%data - (-v%data*v%data + 0.5_dp*u%data*u%data - nu*u%data)
+   r_u = dv%data - (-v%data*v%data + 0.5_dp*u%data*u%data - nu*u%data)
    norm_du = norm2(r_u)
    norm_du = norm_du*norm_du/n_glob/n_block/SZ
    call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_DOUBLE_PRECISION, &

@@ -48,7 +48,7 @@ program test_omp_tridiag
 
    n_glob = 1024
    n = n_glob/nproc
-   n_block = 512*512/SZ
+   n_block = 64*64/SZ
    n_iters = 1
 
    allocate (u(SZ, n, n_block), du(SZ, n, n_block))
