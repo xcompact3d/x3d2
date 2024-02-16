@@ -181,9 +181,9 @@ module m_omp_backend
       ! TODO: don't hardcode n_halo
       n_halo = 4
 
-      call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, dirps%n)
-      call copy_into_buffers(self%v_send_s, self%v_send_e, v%data, dirps%n)
-      call copy_into_buffers(self%w_send_s, self%w_send_e, w%data, dirps%n)
+      call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, dirps%n, dirps%n_blocks)
+      call copy_into_buffers(self%v_send_s, self%v_send_e, v%data, dirps%n, dirps%n_blocks)
+      call copy_into_buffers(self%w_send_s, self%w_send_e, w%data, dirps%n, dirps%n_blocks)
 
       call sendrecv_fields(self%u_recv_s, self%u_recv_e, self%u_send_s, self%u_send_e, &
                            SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext)
@@ -252,7 +252,7 @@ module m_omp_backend
 
       ! TODO: don't hardcode n_halo
       n_halo = 4
-      call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, dirps%n)
+      call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, dirps%n, dirps%n_blocks)
 
       ! halo exchange
       call sendrecv_fields(self%u_recv_s, self%u_recv_e, self%u_send_s, self%u_send_e, &
@@ -305,15 +305,28 @@ module m_omp_backend
 
    end subroutine vecadd_omp
 
-   subroutine copy_into_buffers(u_send_s, u_send_e, u, n)
+   subroutine copy_into_buffers(u_send_s, u_send_e, u, n, n_blocks)
       implicit none
 
       real(dp), dimension(:, :, :), intent(out) :: u_send_s, u_send_e
       real(dp), dimension(:, :, :), intent(in) :: u
       integer, intent(in) :: n
+      integer, intent(in) :: n_blocks
+      integer :: i, j, k
+      integer :: n_halo = 4
 
-      u_send_s(:, :, :) = u(:, 1:4, :)
-      u_send_e(:, :, :) = u(:, n - 3:n, :)
+      !$omp parallel do
+      do k=1, n_blocks
+         do j=1, n_halo
+            !$omp simd
+            do i=1, SZ
+               u_send_s(i, j, k) = u(i, j, k)
+               u_send_e(i, j, k) = u(i, n - n_halo + j, k)
+            end do
+            !$omp end simd
+         end do
+      end do
+      !$omp end parallel do
 
    end subroutine copy_into_buffers
 
