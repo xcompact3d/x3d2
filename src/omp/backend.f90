@@ -165,9 +165,12 @@ module m_omp_backend
 
       call transeq_halo_exchange(self, u, v, w, dirps)
 
-      call transeq_dist_component(self, du, u, u, dirps%der1st, dirps%der1st_sym, dirps%der2nd, dirps)
-      call transeq_dist_component(self, dv, v, u, dirps%der1st_sym, dirps%der1st, dirps%der2nd_sym, dirps)
-      call transeq_dist_component(self, dw, w, u, dirps%der1st_sym, dirps%der1st, dirps%der2nd_sym, dirps)
+      call transeq_dist_component(self, du, u, u, &
+            dirps%der1st, dirps%der1st_sym, dirps%der2nd, dirps)
+      call transeq_dist_component(self, dv, v, u, &
+            dirps%der1st_sym, dirps%der1st, dirps%der2nd_sym, dirps)
+      call transeq_dist_component(self, dw, w, u, &
+            dirps%der1st_sym, dirps%der1st, dirps%der2nd_sym, dirps)
 
    end subroutine transeq_omp_dist
 
