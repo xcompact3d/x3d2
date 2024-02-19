@@ -45,6 +45,7 @@ module m_solver
    contains
       procedure :: transeq
       procedure :: divergence_v2p
+      procedure :: divergence_v2v
       procedure :: gradient_p2v
       procedure :: run
    end type solver_t
@@ -309,6 +310,58 @@ contains
       call self%backend%allocator%release_block(dw_z)
 
    end subroutine divergence_v2p
+
+   subroutine divergence_v2v(self, div_u, u, v, w)
+      implicit none
+
+      class(solver_t) :: self
+      class(field_t), intent(inout) :: div_u
+      class(field_t), intent(in) :: u, v, w
+
+      class(field_t), pointer :: v_y, dv_y, w_z, dw_z
+
+      ! obtain du/dx: div_u = du/dx
+      call self%backend%tds_solve(div_u, u, self%xdirps, self%xdirps%der1st)
+
+      ! request a field from the allocator for v in y orientation
+      v_y => self%backend%allocator%get_block()
+
+      ! reorder v from x orientation to y orientation
+      call self%backend%reorder(v_y, v, RDR_X2Y)
+
+      ! request a field for storing the dv/dy
+      dv_y => self%backend%allocator%get_block()
+
+      ! obtain dv/dy
+      call self%backend%tds_solve(dv_y, v_y, self%ydirps, self%ydirps%der1st)
+
+      ! div_u = div_u + dv/dy
+      call self%backend%sum_yintox(div_u, dv_y)
+
+      ! v velocity and dv/dy in y orientation are not required any more
+      call self%backend%allocator%release_block(v_y)
+      call self%backend%allocator%release_block(dv_y)
+
+      ! request a field from the allocator for w in z orientation
+      w_z => self%backend%allocator%get_block()
+
+      ! reorder w from x orientation to z orientation
+      call self%backend%reorder(w_z, w, RDR_X2Z)
+
+      ! request a field for storing the dw/dz
+      dw_z => self%backend%allocator%get_block()
+
+      ! obtain dw/dz
+      call self%backend%tds_solve(dw_z, w_z, self%zdirps, self%zdirps%der1st)
+
+      ! div_u = div_u + dw/dz
+      call self%backend%sum_zintox(div_u, dw_z)
+
+      ! w velocity and dw/dz in z orientation are not required any more
+      call self%backend%allocator%release_block(w_z)
+      call self%backend%allocator%release_block(dw_z)
+
+   end subroutine divergence_v2v
 
    subroutine gradient_p2v(self, dpdx, dpdy, dpdz, pressure)
       implicit none
