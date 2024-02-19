@@ -6,6 +6,8 @@ module m_cuda_poisson_fft
    use m_poisson_fft, only: poisson_fft_t
    use m_tdsops, only: dirps_t
 
+   use m_cuda_common, only: SZ
+
    implicit none
 
    type, extends(poisson_fft_t) :: cuda_poisson_fft_t
@@ -33,9 +35,10 @@ contains
       class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
       type(cuda_poisson_fft_t) :: poisson_fft
+
       integer :: nx, ny, nz
 
-      call poisson_fft%base_init(xdirps, ydirps, zdirps)
+      call poisson_fft%base_init(xdirps, ydirps, zdirps, SZ)
 
       nx = poisson_fft%nx; ny = poisson_fft%ny; nz = poisson_fft%nz
 
