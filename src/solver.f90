@@ -102,58 +102,37 @@ contains
       dx = globs%dx; dy = globs%dy; dz = globs%dz
 
       ! Allocate and set the tdsops
-      call solver%backend%alloc_tdsops(solver%xdirps%der1st, nx, dx, &
-                                       'first-deriv', 'compact6')
-      call solver%backend%alloc_tdsops(solver%ydirps%der1st, ny, dy, &
-                                       'first-deriv', 'compact6')
-      call solver%backend%alloc_tdsops(solver%zdirps%der1st, nz, dz, &
-                                       'first-deriv', 'compact6')
-      call solver%backend%alloc_tdsops(solver%xdirps%der1st_sym, nx, dx, &
-                                       'first-deriv', 'compact6')
-      call solver%backend%alloc_tdsops(solver%ydirps%der1st_sym, ny, dy, &
-                                       'first-deriv', 'compact6')
-      call solver%backend%alloc_tdsops(solver%zdirps%der1st_sym, nz, dz, &
-                                       'first-deriv', 'compact6')
-      call solver%backend%alloc_tdsops(solver%xdirps%der2nd, nx, dx, &
-                                       'second-deriv', 'compact6')
-      call solver%backend%alloc_tdsops(solver%ydirps%der2nd, ny, dy, &
-                                       'second-deriv', 'compact6')
-      call solver%backend%alloc_tdsops(solver%zdirps%der2nd, nz, dz, &
-                                       'second-deriv', 'compact6')
-      call solver%backend%alloc_tdsops(solver%xdirps%der2nd_sym, nx, dx, &
-                                       'second-deriv', 'compact6')
-      call solver%backend%alloc_tdsops(solver%ydirps%der2nd_sym, ny, dy, &
-                                       'second-deriv', 'compact6')
-      call solver%backend%alloc_tdsops(solver%zdirps%der2nd_sym, nz, dz, &
-                                       'second-deriv', 'compact6')
-
-      call solver%backend%alloc_tdsops(solver%xdirps%interpl_v2p, nx, dx, &
-                                       'interpolate', 'classic', from_to='v2p')
-      call solver%backend%alloc_tdsops(solver%ydirps%interpl_v2p, ny, dy, &
-                                       'interpolate', 'classic', from_to='v2p')
-      call solver%backend%alloc_tdsops(solver%zdirps%interpl_v2p, nz, dz, &
-                                       'interpolate', 'classic', from_to='v2p')
-      call solver%backend%alloc_tdsops(solver%xdirps%interpl_p2v, nx, dx, &
-                                       'interpolate', 'classic', from_to='p2v')
-      call solver%backend%alloc_tdsops(solver%ydirps%interpl_p2v, ny, dy, &
-                                       'interpolate', 'classic', from_to='p2v')
-      call solver%backend%alloc_tdsops(solver%zdirps%interpl_p2v, nz, dz, &
-                                       'interpolate', 'classic', from_to='p2v')
-
-      call solver%backend%alloc_tdsops(solver%xdirps%stagder_v2p, nx, dx, &
-                                       'stag-deriv', 'compact6', from_to='v2p')
-      call solver%backend%alloc_tdsops(solver%ydirps%stagder_v2p, ny, dy, &
-                                       'stag-deriv', 'compact6', from_to='v2p')
-      call solver%backend%alloc_tdsops(solver%zdirps%stagder_v2p, nz, dz, &
-                                       'stag-deriv', 'compact6', from_to='v2p')
-      call solver%backend%alloc_tdsops(solver%xdirps%stagder_p2v, nx, dx, &
-                                       'stag-deriv', 'compact6', from_to='p2v')
-      call solver%backend%alloc_tdsops(solver%ydirps%stagder_p2v, ny, dy, &
-                                       'stag-deriv', 'compact6', from_to='p2v')
-      call solver%backend%alloc_tdsops(solver%zdirps%stagder_p2v, nz, dz, &
-                                       'stag-deriv', 'compact6', from_to='p2v')
+      call allocate_tdsops(solver%xdirps, nx, dx, solver%backend)
+      call allocate_tdsops(solver%ydirps, ny, dy, solver%backend)
+      call allocate_tdsops(solver%zdirps, nz, dz, solver%backend)
 
    end function init
+
+   subroutine allocate_tdsops(dirps, nx, dx, backend)
+      class(dirps_t), intent(inout) :: dirps
+      real(dp), intent(in) :: dx
+      integer, intent(in) :: nx
+      class(base_backend_t), intent(in) :: backend
+
+      call backend%alloc_tdsops(dirps%der1st, nx, dx, &
+                                'first-deriv', 'compact6')
+      call backend%alloc_tdsops(dirps%der1st_sym, nx, dx, &
+                                'first-deriv', 'compact6')
+      call backend%alloc_tdsops(dirps%der2nd, nx, dx, &
+                                'second-deriv', 'compact6')
+      call backend%alloc_tdsops(dirps%der2nd_sym, nx, dx, &
+                                'second-deriv', 'compact6')
+      call backend%alloc_tdsops(dirps%interpl_v2p, nx, dx, &
+                                'interpolate', 'classic', from_to='v2p')
+      call backend%alloc_tdsops(dirps%interpl_p2v, nx, dx, &
+                                'interpolate', 'classic', from_to='p2v')
+      call backend%alloc_tdsops(dirps%stagder_v2p, nx, dx, &
+                                'stag-deriv', 'compact6', from_to='v2p')
+      call backend%alloc_tdsops(dirps%stagder_p2v, nx, dx, &
+                                'stag-deriv', 'compact6', from_to='p2v')
+
+
+   end subroutine
 
    subroutine transeq(self, du, dv, dw, u, v, w)
       implicit none

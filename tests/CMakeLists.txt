@@ -1,6 +1,8 @@
 set(TESTSRC
   test_allocator.f90
   omp/test_omp_tridiag.f90
+  omp/test_omp_transeq.f90
+  omp/test_omp_dist_transeq.f90
 )
 set(CUDATESTSRC
   cuda/test_cuda_allocator.f90

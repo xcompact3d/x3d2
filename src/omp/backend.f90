@@ -3,6 +3,8 @@ module m_omp_backend
    use m_base_backend, only: base_backend_t
    use m_common, only: dp, globs_t
    use m_tdsops, only: dirps_t, tdsops_t
+   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
+   use m_omp_sendrecv, only: sendrecv_fields
 
    use m_omp_common, only: SZ
 
@@ -30,6 +32,7 @@ module m_omp_backend
       procedure :: vecadd => vecadd_omp
       procedure :: set_fields => set_fields_omp
       procedure :: get_fields => get_fields_omp
+      procedure :: transeq_omp_dist
    end type omp_backend_t
 
    interface omp_backend_t
@@ -118,7 +121,7 @@ module m_omp_backend
       class(field_t), intent(in) :: u, v, w
       type(dirps_t), intent(in) :: dirps
 
-      !call self%transeq_omp_dist(du, dv, dw, u, v, w, dirps)
+      call self%transeq_omp_dist(du, dv, dw, u, v, w, dirps)
 
    end subroutine transeq_x_omp
 
@@ -131,7 +134,7 @@ module m_omp_backend
       type(dirps_t), intent(in) :: dirps
 
       ! u, v, w is reordered so that we pass v, u, w
-      !call self%transeq_omp_dist(dv, du, dw, v, u, w, dirps)
+      call self%transeq_omp_dist(dv, du, dw, v, u, w, dirps)
 
    end subroutine transeq_y_omp
 
@@ -144,9 +147,85 @@ module m_omp_backend
       type(dirps_t), intent(in) :: dirps
 
       ! u, v, w is reordered so that we pass w, u, v
-      !call self%transeq_omp_dist(dw, du, dv, w, u, v, dirps)
+      call self%transeq_omp_dist(dw, du, dv, w, u, v, dirps)
 
    end subroutine transeq_z_omp
+
+   subroutine transeq_omp_dist(self, du, dv, dw, u, v, w, dirps)
+      implicit none
+
+      class(omp_backend_t) :: self
+      class(field_t), intent(inout) :: du, dv, dw
+      class(field_t), intent(in) :: u, v, w
+      type(dirps_t), intent(in) :: dirps
+      integer :: n_halo
+
+      call transeq_halo_exchange(self, u, v, w, dirps)
+
+      call transeq_dist_component(self, du, u, u, &
+            dirps%der1st, dirps%der1st_sym, dirps%der2nd, dirps)
+      call transeq_dist_component(self, dv, v, u, &
+            dirps%der1st_sym, dirps%der1st, dirps%der2nd_sym, dirps)
+      call transeq_dist_component(self, dw, w, u, &
+            dirps%der1st_sym, dirps%der1st, dirps%der2nd_sym, dirps)
+
+   end subroutine transeq_omp_dist
+
+
+   subroutine transeq_halo_exchange(self, u, v, w, dirps)
+      class(omp_backend_t) :: self
+      class(field_t), intent(in) :: u, v, w
+      type(dirps_t), intent(in) :: dirps
+      integer :: n_halo
+
+      ! TODO: don't hardcode n_halo
+      n_halo = 4
+
+      call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, dirps%n, dirps%n_blocks)
+      call copy_into_buffers(self%v_send_s, self%v_send_e, v%data, dirps%n, dirps%n_blocks)
+      call copy_into_buffers(self%w_send_s, self%w_send_e, w%data, dirps%n, dirps%n_blocks)
+
+      call sendrecv_fields(self%u_recv_s, self%u_recv_e, self%u_send_s, self%u_send_e, &
+                           SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext)
+      call sendrecv_fields(self%v_recv_s, self%v_recv_e, self%v_send_s, self%v_send_e, &
+                           SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext)
+      call sendrecv_fields(self%w_recv_s, self%w_recv_e, self%w_send_s, self%w_send_e, &
+                           SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext)
+
+   end subroutine transeq_halo_exchange
+
+   !> Computes RHS_x^v following:
+   ! rhs_x^v = -0.5*(u*dv/dx + duv/dx) + nu*d2v/dx2
+   subroutine transeq_dist_component(self, rhs, v, u, tdsops_du, tdsops_dud, tdsops_d2u, dirps)
+
+      class(omp_backend_t) :: self
+      class(field_t), intent(inout) :: rhs
+      class(field_t), intent(in) :: u, v
+      class(tdsops_t), intent(in) :: tdsops_du
+      class(tdsops_t), intent(in) :: tdsops_dud
+      class(tdsops_t), intent(in) :: tdsops_d2u
+      type(dirps_t), intent(in) :: dirps
+      class(field_t), pointer :: du, d2u, dud
+
+      du => self%allocator%get_block()
+      dud => self%allocator%get_block()
+      d2u => self%allocator%get_block()
+
+      call exec_dist_transeq_compact(&
+         rhs%data, du%data, dud%data, d2u%data, &
+         self%du_send_s,  self%du_send_e,  self%du_recv_s,  self%du_recv_e, &
+         self%dud_send_s, self%dud_send_e, self%dud_recv_s, self%dud_recv_e, &
+         self%d2u_send_s, self%d2u_send_e, self%d2u_recv_s, self%d2u_recv_e, &
+         u%data, self%u_recv_s, self%u_recv_e, &
+         v%data, self%v_recv_s, self%v_recv_e, &
+         tdsops_du, tdsops_dud, tdsops_d2u, self%nu, &
+         dirps%nproc, dirps%pprev, dirps%pnext, dirps%n_blocks)
+
+      call self%allocator%release_block(du)
+      call self%allocator%release_block(dud)
+      call self%allocator%release_block(d2u)
+
+   end subroutine transeq_dist_component
 
    subroutine tds_solve_omp(self, du, u, dirps, tdsops)
       implicit none
@@ -157,9 +236,35 @@ module m_omp_backend
       type(dirps_t), intent(in) :: dirps
       class(tdsops_t), intent(in) :: tdsops
 
-      !call self%tds_solve_dist(self, du, u, dirps, tdsops)
+      call tds_solve_dist(self, du, u, dirps, tdsops)
 
    end subroutine tds_solve_omp
+
+   subroutine tds_solve_dist(self, du, u, dirps, tdsops)
+      implicit none
+
+      class(omp_backend_t) :: self
+      class(field_t), intent(inout) :: du
+      class(field_t), intent(in) :: u
+      type(dirps_t), intent(in) :: dirps
+      class(tdsops_t), intent(in) :: tdsops
+      integer :: n_halo
+
+      ! TODO: don't hardcode n_halo
+      n_halo = 4
+      call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, dirps%n, dirps%n_blocks)
+
+      ! halo exchange
+      call sendrecv_fields(self%u_recv_s, self%u_recv_e, self%u_send_s, self%u_send_e, &
+                           SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext)
+
+
+      call exec_dist_tds_compact( &
+         du%data, u%data, self%u_recv_s, self%u_recv_e, self%du_send_s, self%du_send_e, &
+         self%du_recv_s, self%du_recv_e, &
+         tdsops, dirps%nproc, dirps%pprev, dirps%pnext, dirps%n_blocks)
+
+   end subroutine tds_solve_dist
 
    subroutine reorder_omp(self, u_, u, direction)
       implicit none
@@ -200,15 +305,28 @@ module m_omp_backend
 
    end subroutine vecadd_omp
 
-   subroutine copy_into_buffers(u_send_s, u_send_e, u, n)
+   subroutine copy_into_buffers(u_send_s, u_send_e, u, n, n_blocks)
       implicit none
 
       real(dp), dimension(:, :, :), intent(out) :: u_send_s, u_send_e
       real(dp), dimension(:, :, :), intent(in) :: u
       integer, intent(in) :: n
+      integer, intent(in) :: n_blocks
+      integer :: i, j, k
+      integer :: n_halo = 4
 
-      u_send_s(:, :, :) = u(:, 1:4, :)
-      u_send_e(:, :, :) = u(:, n - 3:n, :)
+      !$omp parallel do
+      do k=1, n_blocks
+         do j=1, n_halo
+            !$omp simd
+            do i=1, SZ
+               u_send_s(i, j, k) = u(i, j, k)
+               u_send_e(i, j, k) = u(i, n - n_halo + j, k)
+            end do
+            !$omp end simd
+         end do
+      end do
+      !$omp end parallel do
 
    end subroutine copy_into_buffers
 
