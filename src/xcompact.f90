@@ -55,6 +55,7 @@ program xcompact
 
    ! read L_x/y/z from the input file
    globs%Lx = 2*pi; globs%Ly = 2*pi; globs%Lz = 2*pi
+   xdirps%L = globs%Lx; ydirps%L = globs%Ly; zdirps%L = globs%Lz
 
    ! read ns from the input file
    globs%nx = 512; globs%ny = 512; globs%nz = 512
@@ -92,6 +93,8 @@ program xcompact
    globs%dx = globs%Lx/globs%nx
    globs%dy = globs%Ly/globs%ny
    globs%dz = globs%Lz/globs%nz
+
+   xdirps%d = globs%dx; ydirps%d = globs%dy; zdirps%d = globs%dz
 
    xdirps%n = globs%nx_loc
    ydirps%n = globs%ny_loc
