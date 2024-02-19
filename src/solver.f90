@@ -44,7 +44,7 @@ module m_solver
       class(time_intg_t), pointer :: time_integrator
    contains
       procedure :: transeq
-      procedure :: divergence
+      procedure :: divergence_v2p
       procedure :: gradient
       procedure :: run
    end type solver_t
@@ -215,7 +215,7 @@ contains
 
    end subroutine transeq
 
-   subroutine divergence(self, div_u, u, v, w)
+   subroutine divergence_v2p(self, div_u, u, v, w)
       implicit none
 
       class(solver_t) :: self
@@ -308,7 +308,7 @@ contains
       call self%backend%allocator%release_block(w_z)
       call self%backend%allocator%release_block(dw_z)
 
-   end subroutine divergence
+   end subroutine divergence_v2p
 
    subroutine gradient(self, dpdx, dpdy, dpdz, pressure)
       implicit none
@@ -420,7 +420,7 @@ contains
          ! pressure
          div_u => self%backend%allocator%get_block()
 
-         call self%divergence(div_u, self%u, self%v, self%w)
+         call self%divergence_v2p(div_u, self%u, self%v, self%w)
 
          pressure => self%backend%allocator%get_block()
 
