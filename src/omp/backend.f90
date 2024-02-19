@@ -260,9 +260,9 @@ module m_omp_backend
 
 
       call exec_dist_tds_compact( &
-      du%data, u%data, self%u_recv_s, self%u_recv_e, self%du_send_s, self%du_send_e, &
-      self%du_recv_s, self%du_recv_e, &
-      tdsops, dirps%nproc, dirps%pprev, dirps%pnext, dirps%n_blocks)
+         du%data, u%data, self%u_recv_s, self%u_recv_e, self%du_send_s, self%du_send_e, &
+         self%du_recv_s, self%du_recv_e, &
+         tdsops, dirps%nproc, dirps%pprev, dirps%pnext, dirps%n_blocks)
 
    end subroutine tds_solve_dist
 
