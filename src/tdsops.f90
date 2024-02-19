@@ -43,6 +43,7 @@ module m_tdsops
                                       stagder_v2p, stagder_p2v, &
                                       interpl_v2p, interpl_p2v
       integer :: nrank, nproc, pnext, pprev, n, n_blocks
+      real(dp) :: L, d
    end type dirps_t
 
 contains
