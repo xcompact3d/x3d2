@@ -95,14 +95,6 @@ contains
       solver%v => solver%backend%allocator%get_block()
       solver%w => solver%backend%allocator%get_block()
 
-      if (globs%use_fft) then
-         print*, 'Poisson solver: FFT'
-         solver%poisson => poisson_fft
-      else
-         print*, 'Poisson solver: CG'
-         solver%poisson => poisson_cg
-      end if
-
       ! Set initial conditions
       dims(:) = solver%backend%allocator%dims(:)
       allocate(u_init(dims(1), dims(2), dims(3)))
@@ -174,6 +166,15 @@ contains
                                        'stag-deriv', 'compact6', from_to='p2v')
       call solver%backend%alloc_tdsops(solver%zdirps%stagder_p2v, nz, dz, &
                                        'stag-deriv', 'compact6', from_to='p2v')
+
+      if (globs%use_fft) then
+         print*, 'Poisson solver: FFT'
+         call solver%backend%init_poisson_fft(xdirps, ydirps, zdirps)
+         solver%poisson => poisson_fft
+      else
+         print*, 'Poisson solver: CG'
+         solver%poisson => poisson_cg
+      end if
 
    end function init
 
