@@ -97,14 +97,6 @@ contains
       solver%v => solver%backend%allocator%get_block()
       solver%w => solver%backend%allocator%get_block()
 
-      if (globs%use_fft) then
-         print*, 'Poisson solver: FFT'
-         solver%poisson => poisson_fft
-      else
-         print*, 'Poisson solver: CG'
-         solver%poisson => poisson_cg
-      end if
-
       ! Set initial conditions
       dims(:) = solver%backend%allocator%dims(:)
       allocate(u_init(dims(1), dims(2), dims(3)))
@@ -129,6 +121,15 @@ contains
       call allocate_tdsops(solver%xdirps, nx, dx, solver%backend)
       call allocate_tdsops(solver%ydirps, ny, dy, solver%backend)
       call allocate_tdsops(solver%zdirps, nz, dz, solver%backend)
+
+      if (globs%use_fft) then
+         print*, 'Poisson solver: FFT'
+         call solver%backend%init_poisson_fft(xdirps, ydirps, zdirps)
+         solver%poisson => poisson_fft
+      else
+         print*, 'Poisson solver: CG'
+         solver%poisson => poisson_cg
+      end if
 
    end function init
 
