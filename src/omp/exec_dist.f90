@@ -108,7 +108,7 @@ contains
       allocate(ud_recv_e(SZ, n_halo))
       allocate(ud_recv_s(SZ, n_halo))
 
-      !$omp parallel do
+      !$omp parallel do private(ud, ud_recv_e, ud_recv_s)
       do k = 1, n_block
          call der_univ_dist( &
             du(:, :, k), du_send_s(:, :, k), du_send_e(:, :, k), u(:, :, k), &
