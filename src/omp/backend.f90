@@ -34,6 +34,7 @@ module m_omp_backend
       procedure :: scalar_product => scalar_product_omp
       procedure :: set_field => set_field_omp
       procedure :: get_field => get_field_omp
+      procedure :: init_poisson_fft => init_omp_poisson_fft
       procedure :: transeq_omp_dist
    end type omp_backend_t
 
@@ -87,15 +88,6 @@ module m_omp_backend
       allocate(backend%d2u_send_e(SZ, 1, n_block))
       allocate(backend%d2u_recv_s(SZ, 1, n_block))
       allocate(backend%d2u_recv_e(SZ, 1, n_block))
-
-      if (globs%use_fft) then
-         allocate(omp_poisson_fft_t :: backend%poisson_fft)
-
-         select type (poisson_fft => backend%poisson_fft)
-         type is (omp_poisson_fft_t)
-            poisson_fft = omp_poisson_fft_t(xdirps, ydirps, zdirps)
-         end select
-      end if
 
    end function init
 
@@ -372,6 +364,21 @@ module m_omp_backend
       arr = f%data
 
    end subroutine get_field_omp
+
+   subroutine init_omp_poisson_fft(self, xdirps, ydirps, zdirps)
+      implicit none
+
+      class(omp_backend_t) :: self
+      type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+
+      allocate(omp_poisson_fft_t :: self%poisson_fft)
+
+      select type (poisson_fft => self%poisson_fft)
+      type is (omp_poisson_fft_t)
+         poisson_fft = omp_poisson_fft_t(xdirps, ydirps, zdirps)
+      end select
+
+   end subroutine init_omp_poisson_fft
 
 end module m_omp_backend
 

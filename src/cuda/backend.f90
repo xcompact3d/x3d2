@@ -47,6 +47,7 @@ module m_cuda_backend
       procedure :: scalar_product => scalar_product_cuda
       procedure :: set_field => set_field_cuda
       procedure :: get_field => get_field_cuda
+      procedure :: init_poisson_fft => init_cuda_poisson_fft
       procedure :: transeq_cuda_dist
       procedure :: transeq_cuda_thom
       procedure :: tds_solve_dist
@@ -114,15 +115,6 @@ module m_cuda_backend
       allocate(backend%d2u_send_e_dev(SZ, 1, n_block))
       allocate(backend%d2u_recv_s_dev(SZ, 1, n_block))
       allocate(backend%d2u_recv_e_dev(SZ, 1, n_block))
-
-      if (globs%use_fft) then
-         allocate(cuda_poisson_fft_t :: backend%poisson_fft)
-
-         select type (poisson_fft => backend%poisson_fft)
-         type is (cuda_poisson_fft_t)
-            poisson_fft = cuda_poisson_fft_t(xdirps, ydirps, zdirps)
-         end select
-      end if
 
    end function init
 
@@ -612,6 +604,21 @@ module m_cuda_backend
       select type(f); type is (cuda_field_t); arr = f%data_d; end select
 
    end subroutine get_field_cuda
+
+   subroutine init_cuda_poisson_fft(self, xdirps, ydirps, zdirps)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+
+      allocate(cuda_poisson_fft_t :: self%poisson_fft)
+
+      select type (poisson_fft => self%poisson_fft)
+      type is (cuda_poisson_fft_t)
+         poisson_fft = cuda_poisson_fft_t(xdirps, ydirps, zdirps)
+      end select
+
+   end subroutine init_cuda_poisson_fft
 
 end module m_cuda_backend
 

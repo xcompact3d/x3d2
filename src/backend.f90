@@ -39,6 +39,7 @@ module m_base_backend
       procedure(get_field), deferred :: get_field
       procedure(set_field), deferred :: set_field
       procedure(alloc_tdsops), deferred :: alloc_tdsops
+      procedure(init_poisson_fft), deferred :: init_poisson_fft
    end type base_backend_t
 
    abstract interface
@@ -188,6 +189,17 @@ module m_base_backend
          logical, optional, intent(in) :: sym
          real(dp), optional, intent(in) :: c_nu, nu0_nu
       end subroutine alloc_tdsops
+   end interface
+
+   abstract interface
+      subroutine init_poisson_fft(self, xdirps, ydirps, zdirps)
+         import :: base_backend_t
+         import :: dirps_t
+         implicit none
+
+         class(base_backend_t) :: self
+         type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+      end subroutine init_poisson_fft
    end interface
 
 end module m_base_backend
