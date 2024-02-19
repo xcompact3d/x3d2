@@ -45,6 +45,7 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   target_compile_options(x3d2 PRIVATE "-cuda")
   target_compile_options(x3d2 PRIVATE "-fast")
   target_link_options(x3d2 INTERFACE "-cuda")
+  target_link_options(x3d2 INTERFACE "-lcufft")
   target_compile_options(xcompact PRIVATE "-cuda")
   target_compile_options(xcompact PRIVATE "-fast")
 
