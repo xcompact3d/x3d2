@@ -45,7 +45,7 @@ module m_solver
    contains
       procedure :: transeq
       procedure :: divergence_v2p
-      procedure :: gradient
+      procedure :: gradient_p2v
       procedure :: run
    end type solver_t
 
@@ -310,7 +310,7 @@ contains
 
    end subroutine divergence_v2p
 
-   subroutine gradient(self, dpdx, dpdy, dpdz, pressure)
+   subroutine gradient_p2v(self, dpdx, dpdy, dpdz, pressure)
       implicit none
 
       class(solver_t) :: self
@@ -387,7 +387,7 @@ contains
       call self%backend%allocator%release_block(dpdy_sx_x)
       call self%backend%allocator%release_block(dpdz_sx_x)
 
-   end subroutine gradient
+   end subroutine gradient_p2v
 
    subroutine run(self, n_iter, u_out, v_out, w_out)
       implicit none
@@ -432,7 +432,7 @@ contains
          dpdy => self%backend%allocator%get_block()
          dpdz => self%backend%allocator%get_block()
 
-         call self%gradient(dpdx, dpdy, dpdz, pressure)
+         call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
 
          call self%backend%allocator%release_block(pressure)
 
