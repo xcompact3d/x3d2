@@ -37,6 +37,10 @@ module m_tdsops
    end interface tdsops_t
 
    type :: dirps_t
+      !! Directional tridiagonal solver container.
+      !!
+      !! This class contains the preprocessed tridiagonal solvers for operating
+      !! in each coordinate direction.
       class(tdsops_t), allocatable :: der1st, der1st_sym, &
                                       der2nd, der2nd_sym, &
                                       stagder_v2p, stagder_p2v, &
