@@ -24,7 +24,6 @@ contains
 
       ! Local variables
       integer :: i, j!, b
-      integer :: jm2, jm1, jp1, jp2
 
       real(dp) :: c_m4, c_m3, c_m2, c_m1, c_j, c_p1, c_p2, c_p3, c_p4, &
                   temp_du, alpha, last_r

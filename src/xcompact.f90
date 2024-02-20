@@ -30,6 +30,7 @@ program xcompact
 #ifdef CUDA
    type(cuda_backend_t), target :: cuda_backend
    type(cuda_allocator_t), target :: cuda_allocator
+   integer :: ndevs, devnum
 #else
    type(omp_backend_t), target :: omp_backend
    type(allocator_t), target :: omp_allocator
@@ -38,7 +39,7 @@ program xcompact
    real(dp), allocatable, dimension(:, :, :) :: u, v, w
 
    real(dp) :: t_start, t_end
-   integer :: nrank, nproc, ierr, ndevs, devnum
+   integer :: nrank, nproc, ierr
 
    call MPI_Init(ierr)
    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)

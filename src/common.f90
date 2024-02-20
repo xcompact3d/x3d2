@@ -26,7 +26,7 @@ contains
       integer, intent(out) :: xprev, xnext, yprev, ynext, zprev, znext
       integer, intent(in) :: xnproc, ynproc, znproc, nrank
 
-      integer :: i, ix, iy, iz
+      integer :: ix, iy, iz
 
       ix = modulo(nrank, xnproc)
       iy = modulo((nrank - ix)/xnproc, ynproc)
