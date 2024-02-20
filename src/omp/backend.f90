@@ -7,6 +7,7 @@ module m_omp_backend
    use m_omp_sendrecv, only: sendrecv_fields
 
    use m_omp_common, only: SZ
+   use m_omp_poisson_fft, only: omp_poisson_fft_t
 
    implicit none
 
@@ -33,6 +34,7 @@ module m_omp_backend
       procedure :: set_fields => set_fields_omp
       procedure :: get_fields => get_fields_omp
       procedure :: transeq_omp_dist
+      procedure :: init_poisson_fft => init_omp_poisson_fft
    end type omp_backend_t
 
    interface omp_backend_t
@@ -41,11 +43,12 @@ module m_omp_backend
 
  contains
 
-   function init(globs, allocator) result(backend)
+   function init(globs, allocator, xdirps, ydirps, zdirps) result(backend)
       implicit none
 
       class(globs_t) :: globs
       class(allocator_t), target, intent(inout) :: allocator
+      class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
       type(omp_backend_t) :: backend
 
       integer :: n_halo, n_block
@@ -355,6 +358,21 @@ module m_omp_backend
       w_out = w%data
 
    end subroutine get_fields_omp
+
+   subroutine init_omp_poisson_fft(self, xdirps, ydirps, zdirps)
+      implicit none
+
+      class(omp_backend_t) :: self
+      type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+
+      allocate(omp_poisson_fft_t :: self%poisson_fft)
+
+      select type (poisson_fft => self%poisson_fft)
+      type is (omp_poisson_fft_t)
+         poisson_fft = omp_poisson_fft_t(xdirps, ydirps, zdirps)
+      end select
+
+   end subroutine init_omp_poisson_fft
 
 end module m_omp_backend
 

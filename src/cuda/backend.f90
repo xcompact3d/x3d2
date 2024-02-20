@@ -5,11 +5,13 @@ module m_cuda_backend
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
    use m_common, only: dp, globs_t, RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2Y
+   use m_poisson_fft, only: poisson_fft_t
    use m_tdsops, only: dirps_t, tdsops_t
 
    use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
    use m_cuda_common, only: SZ
    use m_cuda_exec_dist, only: exec_dist_transeq_3fused, exec_dist_tds_compact
+   use m_cuda_poisson_fft, only: cuda_poisson_fft_t
    use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
    use m_cuda_tdsops, only: cuda_tdsops_t
    use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
@@ -42,6 +44,7 @@ module m_cuda_backend
       procedure :: vecadd => vecadd_cuda
       procedure :: set_fields => set_fields_cuda
       procedure :: get_fields => get_fields_cuda
+      procedure :: init_poisson_fft => init_cuda_poisson_fft
       procedure :: transeq_cuda_dist
       procedure :: transeq_cuda_thom
       procedure :: tds_solve_dist
@@ -53,13 +56,15 @@ module m_cuda_backend
 
  contains
 
-   function init(globs, allocator) result(backend)
+   function init(globs, allocator, xdirps, ydirps, zdirps) result(backend)
       implicit none
 
       class(globs_t) :: globs
       class(allocator_t), target, intent(inout) :: allocator
+      class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
       type(cuda_backend_t) :: backend
 
+      type(cuda_poisson_fft_t) :: cuda_poisson_fft
       integer :: n_halo, n_block
 
       select type(allocator)
@@ -562,6 +567,21 @@ module m_cuda_backend
       select type(w); type is (cuda_field_t); w_out = w%data_d; end select
 
    end subroutine get_fields_cuda
+
+   subroutine init_cuda_poisson_fft(self, xdirps, ydirps, zdirps)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+
+      allocate(cuda_poisson_fft_t :: self%poisson_fft)
+
+      select type (poisson_fft => self%poisson_fft)
+      type is (cuda_poisson_fft_t)
+         poisson_fft = cuda_poisson_fft_t(xdirps, ydirps, zdirps)
+      end select
+
+   end subroutine init_cuda_poisson_fft
 
 end module m_cuda_backend
 
