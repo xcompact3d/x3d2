@@ -181,4 +181,23 @@ contains
 
    end subroutine axpby
 
+   attributes(global) subroutine buffer_copy(u_send_s, u_send_e, u, n, n_halo)
+      implicit none
+
+      real(dp), device, intent(inout), dimension(:, :, :) :: u_send_s, u_send_e
+      real(dp), device, intent(in), dimension(:, :, :) :: u
+      integer, value, intent(in) :: n, n_halo
+
+      integer :: i, j, b
+
+      i = threadIdx%x
+      b = blockIdx%x
+
+      do j = 1, n_halo
+         u_send_s(i, j, b) = u(i, j, b)
+         u_send_e(i, j, b) = u(i, n - n_halo + j, b)
+      end do
+
+   end subroutine buffer_copy
+
 end module m_cuda_kernels_reorder
