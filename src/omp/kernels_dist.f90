@@ -178,7 +178,8 @@ contains
 
       ! Local variables
       integer :: i, j!, b
-      real(dp) :: ur, bl, recp, du_s, du_e
+      real(dp) :: ur, bl, recp
+      real(dp), dimension(SZ) :: du_s, du_e
 
       !$omp simd
       do i = 1, SZ
@@ -195,32 +196,32 @@ contains
          bl = dist_sa(1)
          ur = dist_sa(1)
          recp = 1._dp/(1._dp - ur*bl)
-         du_s = recp*(du(i, 1) - bl*recv_u_s(i, 1))
+         du_s(i) = recp*(du(i, 1) - bl*recv_u_s(i, 1))
 
          ! End
          ! At the end we have the 'ur', and assume 'bl'
          bl = dist_sc(n)
          ur = dist_sc(n)
          recp = 1._dp/(1._dp - ur*bl)
-         du_e = recp*(du(i, n) - ur*recv_u_e(i, 1))
+         du_e(i) = recp*(du(i, n) - ur*recv_u_e(i, 1))
       end do
       !$omp end simd
 
       !$omp simd
       do i = 1, SZ
-         du(i, 1) = du_s
+         du(i, 1) = du_s(i)
       end do
       !$omp end simd
       do j = 2, n - 1
          !$omp simd
          do i = 1, SZ
-            du(i, j) = (du(i, j) - dist_sa(j)*du_s - dist_sc(j)*du_e)
+            du(i, j) = (du(i, j) - dist_sa(j)*du_s(i) - dist_sc(j)*du_e(i))
          end do
          !$omp end simd
       end do
       !$omp simd
       do i = 1, SZ
-         du(i, n) = du_e
+         du(i, n) = du_e(i)
       end do
       !$omp end simd
 
