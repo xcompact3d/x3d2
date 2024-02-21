@@ -7,6 +7,7 @@ module m_cuda_poisson_fft
    use m_poisson_fft, only: poisson_fft_t
    use m_tdsops, only: dirps_t
 
+   use m_cuda_allocator, only: cuda_field_t
    use m_cuda_common, only: SZ
 
    implicit none
@@ -89,11 +90,34 @@ contains
 
    end function init
 
-   subroutine fft_forward_cuda(self, f_in)
+   subroutine fft_forward_cuda(self, f)
       implicit none
 
       class(cuda_poisson_fft_t) :: self
-      class(field_t), intent(in) :: f_in
+      class(field_t), intent(in) :: f
+
+      real(dp), device, pointer, dimension(:, :, :) :: f_dev
+      integer :: ierrfft
+
+      select type(f); type is (cuda_field_t); f_dev => f%data_d; end select
+
+      ! First reorder f into cartesian-like data structure
+
+      ! Forward FFT transform in z from real to complex
+      ierrfft = cufftExecD2Z(self%planD2Zz, f_dev, self%c_z_dev)
+
+      ! Reorder from z to y
+
+      ! In-place forward FFT in y
+      ierrfft = cufftExecZ2Z(self%planZ2Zy, self%c_y_dev, self%c_y_dev, &
+                             CUFFT_FORWARD)
+
+      ! Reorder from y to x
+
+      ! In-place forward FFT in x
+      ierrfft = cufftExecZ2Z(self%planZ2Zx, self%c_x_dev, self%c_x_dev, &
+                             CUFFT_FORWARD)
+
    end subroutine fft_forward_cuda
 
    subroutine fft_backward_cuda(self, f_out)
