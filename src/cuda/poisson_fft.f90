@@ -39,7 +39,7 @@ contains
 
       type(cuda_poisson_fft_t) :: poisson_fft
 
-      integer :: nx, ny, nz, nx_loc, ny_loc, nz_loc
+      integer :: nx, ny, nz
 
       integer :: ierrfft
       integer(int_ptr_kind()) :: worksize
@@ -47,9 +47,8 @@ contains
       call poisson_fft%base_init(xdirps, ydirps, zdirps, SZ)
 
       nx = poisson_fft%nx; ny = poisson_fft%ny; nz = poisson_fft%nz
-      nx_loc = nx; ny_loc = ny; nz_loc = nz
 
-      allocate (poisson_fft%waves_dev(nx, ny, nz))
+      allocate (poisson_fft%waves_dev(SZ, nx, (ny*(nz/2 + 1))/SZ))
       poisson_fft%waves_dev = poisson_fft%waves
 
       allocate (poisson_fft%ax_dev(nx), poisson_fft%bx_dev(nx))
@@ -63,7 +62,7 @@ contains
       allocate (poisson_fft%c_y_dev(ny, SZ, (nx*(nz/2 + 1))/SZ))
       allocate (poisson_fft%c_z_dev(nz/2 + 1, SZ, nx*ny/SZ))
 
-      ! plans for regular for loop executions in a single stream
+      ! set cufft plans
       ierrfft = cufftCreate(poisson_fft%planD2Zz)
       ierrfft = cufftMakePlanMany(poisson_fft%planD2Zz, 1, nz, &
                                   nz, 1, nz, nz/2+1, 1, nz/2+1, &
