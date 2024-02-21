@@ -120,11 +120,34 @@ contains
 
    end subroutine fft_forward_cuda
 
-   subroutine fft_backward_cuda(self, f_out)
+   subroutine fft_backward_cuda(self, f)
       implicit none
 
       class(cuda_poisson_fft_t) :: self
-      class(field_t), intent(inout) :: f_out
+      class(field_t), intent(inout) :: f
+
+      real(dp), device, pointer, dimension(:, :, :) :: f_dev
+      integer :: ierrfft
+
+      select type(f); type is (cuda_field_t); f_dev => f%data_d; end select
+
+      ! In-place backward FFT in x
+      ierrfft = cufftExecZ2Z(self%planZ2Zx, self%c_x_dev, self%c_x_dev, &
+                             CUFFT_INVERSE)
+
+      ! Reorder from x to y
+
+      ! In-place backward FFT in y
+      ierrfft = cufftExecZ2Z(self%planZ2Zy, self%c_y_dev, self%c_y_dev, &
+                             CUFFT_INVERSE)
+
+      ! Reorder from y to z
+
+      ! Backward FFT transform in z from complex to real
+      ierrfft = cufftExecZ2D(self%planZ2Dz, self%c_z_dev, f_dev)
+
+      ! Finally reorder f back into our specialist data structure
+
    end subroutine fft_backward_cuda
 
    subroutine fft_postprocess_cuda(self)
