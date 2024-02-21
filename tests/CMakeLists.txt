@@ -30,7 +30,6 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   endforeach()
 endif()
 
-
 foreach(testfile IN LISTS TESTSRC)
   get_filename_component(test_name ${testfile} NAME_WE)
 
