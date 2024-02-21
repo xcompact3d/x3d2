@@ -1,5 +1,5 @@
 
-set(CMAKE_CTEST_ARGUMENTS "--output-on-failure")
+set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" CACHE STRING "comma separated list of arguments to pass to ctest")
 
 set(TESTSRC
   test_allocator.f90
