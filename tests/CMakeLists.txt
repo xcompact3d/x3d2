@@ -1,5 +1,6 @@
 
 set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" CACHE STRING "comma separated list of arguments to pass to ctest")
+set(CMAKE_CTEST_NPROCS "4" CACHE STRING "number of process used in tests")
 
 set(TESTSRC
   test_allocator.f90
@@ -46,5 +47,5 @@ foreach(testfile IN LISTS TESTSRC)
   find_package(OpenMP REQUIRED)
   target_link_libraries(${test_name} PRIVATE OpenMP::OpenMP_Fortran)
 
-  add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np 4 ${test_name}")
+  add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${CMAKE_CTEST_NPROCS} ${test_name}")
 endforeach()
