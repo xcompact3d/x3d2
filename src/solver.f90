@@ -46,7 +46,7 @@ module m_solver
       procedure :: transeq
       procedure :: divergence_v2p
       procedure :: gradient_p2v
-      procedure :: curl_v2v
+      procedure :: curl
       procedure :: run
    end type solver_t
 
@@ -390,7 +390,7 @@ contains
 
    end subroutine gradient_p2v
 
-   subroutine curl_v2v(self, o_x, o_y, o_z, u, v, w)
+   subroutine curl(self, o_x, o_y, o_z, u, v, w)
       implicit none
 
       class(solver_t) :: self
@@ -448,7 +448,7 @@ contains
       call self%backend%allocator%release_block(du_z)
       call self%backend%allocator%release_block(dv_z)
 
-   end subroutine curl_v2v
+   end subroutine curl
 
    subroutine run(self, n_iter, u_out, v_out, w_out)
       implicit none
