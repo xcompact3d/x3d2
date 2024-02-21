@@ -36,14 +36,10 @@ target_link_libraries(xcompact PRIVATE x3d2)
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
  
-  target_compile_options(x3d2 PRIVATE "-O3")
-  target_compile_options(xcompact PRIVATE "-O3")
-  target_compile_options(xcompact PRIVATE "-cpp")
-  target_compile_options(x3d2 PRIVATE "-cuda")
-  target_compile_options(x3d2 PRIVATE "-fast")
+  set(CMAKE_Fortran_FLAGS "-cpp -cuda")
+  set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -Mbounds")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
   target_link_options(x3d2 INTERFACE "-cuda")
-  target_compile_options(xcompact PRIVATE "-cuda")
-  target_compile_options(xcompact PRIVATE "-fast")
 
   target_compile_options(xcompact PRIVATE "-DCUDA")
   #  target_link_options(xcompact INTERFACE "-cuda")
