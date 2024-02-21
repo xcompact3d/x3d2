@@ -33,12 +33,12 @@ target_include_directories(x3d2 INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
 add_executable(xcompact xcompact.f90)
 target_link_libraries(xcompact PRIVATE x3d2)
 
-target_compile_options(x3d2 PRIVATE "-O3")
-target_compile_options(xcompact PRIVATE "-O3")
-target_compile_options(xcompact PRIVATE "-cpp")
-
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
+ 
+  target_compile_options(x3d2 PRIVATE "-O3")
+  target_compile_options(xcompact PRIVATE "-O3")
+  target_compile_options(xcompact PRIVATE "-cpp")
   target_compile_options(x3d2 PRIVATE "-cuda")
   target_compile_options(x3d2 PRIVATE "-fast")
   target_link_options(x3d2 INTERFACE "-cuda")
@@ -47,11 +47,10 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
 
   target_compile_options(xcompact PRIVATE "-DCUDA")
   #  target_link_options(xcompact INTERFACE "-cuda")
-endif()
-
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
-  target_compile_options(x3d2 PRIVATE "-ffast-math")
-  target_compile_options(xcompact PRIVATE "-ffast-math")
+elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
+  set(CMAKE_Fortran_FLAGS "-cpp -std=f2008")
+  set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math")
 endif()
 
 find_package(OpenMP REQUIRED)
