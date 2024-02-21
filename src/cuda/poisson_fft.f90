@@ -15,10 +15,12 @@ module m_cuda_poisson_fft
    type, extends(poisson_fft_t) :: cuda_poisson_fft_t
       !! FFT based Poisson solver
       !! It can only handle 1D decompositions along z direction.
-      complex(dp), device, allocatable, dimension(:, :, :) :: &
-         c_x_dev, c_y_dev, c_z_dev, waves_dev
-      complex(dp), device, allocatable, dimension(:) :: ax_dev, bx_dev, &
+      complex(dp), device, pointer, dimension(:) :: c_x_dev, c_y_dev, c_z_dev
+      complex(dp), device, allocatable, dimension(:, :, :) :: waves_dev
+
+      real(dp), device, allocatable, dimension(:) :: ax_dev, bx_dev, &
          ay_dev, by_dev, az_dev, bz_dev
+
       integer :: planD2Zz, planZ2Dz, planZ2Zx, planZ2Zy
    contains
       procedure :: fft_forward => fft_forward_cuda
@@ -58,9 +60,9 @@ contains
       poisson_fft%ay_dev = poisson_fft%ay; poisson_fft%by_dev = poisson_fft%by
       poisson_fft%az_dev = poisson_fft%az; poisson_fft%bz_dev = poisson_fft%bz
 
-      allocate (poisson_fft%c_x_dev(nx, SZ, (ny*(nz/2 + 1))/SZ))
-      allocate (poisson_fft%c_y_dev(ny, SZ, (nx*(nz/2 + 1))/SZ))
-      allocate (poisson_fft%c_z_dev(nz/2 + 1, SZ, nx*ny/SZ))
+      allocate (poisson_fft%c_x_dev(nx*ny*(nz/2 + 1)))
+      allocate (poisson_fft%c_y_dev(nx*ny*(nz/2 + 1)))
+      allocate (poisson_fft%c_z_dev(nx*ny*(nz/2 + 1)))
 
       ! set cufft plans
       ierrfft = cufftCreate(poisson_fft%planD2Zz)
