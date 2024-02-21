@@ -1,3 +1,6 @@
+
+set(CMAKE_CTEST_ARGUMENTS "--output-on-failure")
+
 set(TESTSRC
   test_allocator.f90
   omp/test_omp_tridiag.f90
@@ -27,7 +30,6 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   endforeach()
 endif()
 
-list(APPEND CMAKE_CTEST_ARGUMENTS "--output-on-failure")
 
 foreach(testfile IN LISTS TESTSRC)
   get_filename_component(test_name ${testfile} NAME_WE)
