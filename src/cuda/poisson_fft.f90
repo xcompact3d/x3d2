@@ -9,6 +9,7 @@ module m_cuda_poisson_fft
 
    use m_cuda_allocator, only: cuda_field_t
    use m_cuda_common, only: SZ
+   use m_cuda_complex, only: processfftdiv
 
    implicit none
 
@@ -155,6 +156,25 @@ contains
       implicit none
 
       class(cuda_poisson_fft_t) :: self
+
+      complex(dp), device, dimension(:, :, :), pointer :: c_dev
+      type(dim3) :: blocks, threads
+
+      ! Reshape from cartesian-like to our specialist data structure
+
+      blocks = dim3((self%ny*(self%nz/2 + 1))/SZ, 1 , 1)
+      threads = dim3(SZ, 1, 1)
+
+      c_dev(1:SZ, 1:self%nx, 1:(self%ny*(self%nz/2 + 1))/SZ) => self%c_y_dev
+
+      call processfftdiv<<<blocks, threads>>>( &
+         c_dev, self%waves_dev, self%nx, self%ny, self%nz, &
+         self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
+         self%az_dev, self%bz_dev &
+         )
+
+      ! Reshape from our specialist data structure to cartesian-like
+
    end subroutine fft_postprocess_cuda
 
 end module m_cuda_poisson_fft
