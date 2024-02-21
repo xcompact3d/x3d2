@@ -43,5 +43,5 @@ foreach(testfile IN LISTS TESTSRC)
   find_package(OpenMP REQUIRED)
   target_link_libraries(${test_name} PRIVATE OpenMP::OpenMP_Fortran)
 
-  add_test(NAME ${test_name} COMMAND sh -c "mpirun -np 1 ${test_name}")
+  add_test(NAME ${test_name} COMMAND sh -c "mpirun -np 4 ${test_name}")
 endforeach()
