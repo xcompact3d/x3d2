@@ -105,7 +105,6 @@ contains
     !! ```
       class(allocator_t), intent(inout) :: self
       class(field_t), pointer :: handle
-      class(field_t), allocatable, target :: ptr
       ! If the list is empty, allocate a new block before returning a
       ! pointer to it.
       if (.not. associated(self%first)) then

@@ -43,8 +43,14 @@ jobs:
         echo "$GITHUB_WORKSPACE/openmpi-${OMPI_VERSION}/installed/bin" \
           >> $GITHUB_PATH
 
-    - name: Configure build
-      run: FC=mpif90 cmake -S . -B build
+    - name: Configure Debug build
+      run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+
+    - name: Build with Debug (strict) flags
+      run: make -C build
+      
+    - name: Configure Release build
+      run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
     - name: Build tests
       run: make -C build
