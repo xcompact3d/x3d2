@@ -9,7 +9,9 @@ module m_cuda_poisson_fft
 
    use m_cuda_allocator, only: cuda_field_t
    use m_cuda_common, only: SZ
-   use m_cuda_complex, only: processfftdiv
+   use m_cuda_complex, only: reorder_cmplx_x2y_T, reorder_cmplx_y2x_T, &
+                             reorder_cmplx_y2z_T, reorder_cmplx_z2y_T, &
+                             processfftdiv
 
    implicit none
 
@@ -99,6 +101,10 @@ contains
       class(field_t), intent(in) :: f
 
       real(dp), device, pointer, dimension(:, :, :) :: f_dev
+      complex(dp), device, dimension(:, :, :), pointer :: c_x_ptr, c_y_ptr, &
+                                                          c_z_ptr
+
+      type(dim3) :: blocks, threads
       integer :: ierrfft
 
       select type(f); type is (cuda_field_t); f_dev => f%data_d; end select
@@ -109,12 +115,26 @@ contains
       ierrfft = cufftExecD2Z(self%planD2Zz, f_dev, self%c_z_dev)
 
       ! Reorder from z to y
+      blocks = dim3(self%nz/2/SZ + 1, self%ny/SZ, self%nx)
+      threads = dim3(SZ, SZ, 1)
+      c_y_ptr(1:self%ny, 1:SZ, 1:(self%nx*(self%nz/2 + 1))/SZ) => self%c_y_dev
+      c_z_ptr(1:self%nz/2 + 1, 1:SZ, 1:self%nx*self%ny/SZ) => self%c_z_dev
+
+      call reorder_cmplx_z2y_T<<<blocks, threads>>>(c_y_ptr, c_z_ptr, &
+                                                    self%nx, self%nz/2 + 1)
 
       ! In-place forward FFT in y
       ierrfft = cufftExecZ2Z(self%planZ2Zy, self%c_y_dev, self%c_y_dev, &
                              CUFFT_FORWARD)
 
       ! Reorder from y to x
+      blocks = dim3(self%nx/SZ, self%ny/SZ, self%nz/2 + 1)
+      threads = dim3(SZ, SZ, 1)
+      c_x_ptr(1:self%nx, 1:SZ, 1:(self%ny*(self%nz/2 + 1))/SZ) => self%c_x_dev
+      c_y_ptr(1:self%ny, 1:SZ, 1:(self%nx*(self%nz/2 + 1))/SZ) => self%c_y_dev
+
+      call reorder_cmplx_y2x_T<<<blocks, threads>>>(c_x_ptr, c_y_ptr, &
+                                                    self%nz/2 + 1)
 
       ! In-place forward FFT in x
       ierrfft = cufftExecZ2Z(self%planZ2Zx, self%c_x_dev, self%c_x_dev, &
@@ -129,6 +149,10 @@ contains
       class(field_t), intent(inout) :: f
 
       real(dp), device, pointer, dimension(:, :, :) :: f_dev
+      complex(dp), device, dimension(:, :, :), pointer :: c_x_ptr, c_y_ptr, &
+                                                          c_z_ptr
+
+      type(dim3) :: blocks, threads
       integer :: ierrfft
 
       select type(f); type is (cuda_field_t); f_dev => f%data_d; end select
@@ -138,12 +162,26 @@ contains
                              CUFFT_INVERSE)
 
       ! Reorder from x to y
+      blocks = dim3(self%nx/SZ, self%ny/SZ, self%nz/2 + 1)
+      threads = dim3(SZ, SZ, 1)
+      c_x_ptr(1:self%nx, 1:SZ, 1:(self%ny*(self%nz/2 + 1))/SZ) => self%c_x_dev
+      c_y_ptr(1:self%ny, 1:SZ, 1:(self%nx*(self%nz/2 + 1))/SZ) => self%c_y_dev
+
+      call reorder_cmplx_x2y_T<<<blocks, threads>>>(c_y_ptr, c_x_ptr, &
+                                                    self%nz/2 + 1)
 
       ! In-place backward FFT in y
       ierrfft = cufftExecZ2Z(self%planZ2Zy, self%c_y_dev, self%c_y_dev, &
                              CUFFT_INVERSE)
 
       ! Reorder from y to z
+      blocks = dim3(self%nz/2/SZ + 1, self%ny/SZ, self%nx)
+      threads = dim3(SZ, SZ, 1)
+      c_y_ptr(1:self%ny, 1:SZ, 1:(self%nx*(self%nz/2 + 1))/SZ) => self%c_y_dev
+      c_z_ptr(1:self%nz/2 + 1, 1:SZ, 1:self%nx*self%ny/SZ) => self%c_z_dev
+
+      call reorder_cmplx_y2z_T<<<blocks, threads>>>(c_z_ptr, c_y_ptr, &
+                                                    self%nx, self%nz/2 + 1)
 
       ! Backward FFT transform in z from complex to real
       ierrfft = cufftExecZ2D(self%planZ2Dz, self%c_z_dev, f_dev)
