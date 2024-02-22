@@ -30,7 +30,6 @@ contains
       class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
       type(omp_poisson_fft_t) :: poisson_fft
-      integer :: nx, ny, nz
 
       call poisson_fft%base_init(xdirps, ydirps, zdirps, SZ)
 
