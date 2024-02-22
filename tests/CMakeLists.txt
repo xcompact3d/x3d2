@@ -2,50 +2,33 @@
 set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" CACHE STRING "comma separated list of arguments to pass to ctest")
 set(CMAKE_CTEST_NPROCS "4" CACHE STRING "number of process used in tests")
 
-set(TESTSRC
-  test_allocator.f90
-  omp/test_omp_tridiag.f90
-  omp/test_omp_transeq.f90
-  omp/test_omp_dist_transeq.f90
-)
-set(CUDATESTSRC
-  cuda/test_cuda_allocator.f90
-  cuda/test_cuda_reorder.f90
-  cuda/test_cuda_tridiag.f90
-  cuda/test_cuda_transeq.f90
-)
-
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
-  foreach(testfile IN LISTS CUDATESTSRC)
-    get_filename_component(test_name ${testfile} NAME_WE)
-
-    add_executable(${test_name} ${testfile})
-    target_compile_options(${test_name} PRIVATE "-cuda")
-    target_compile_options(${test_name} PRIVATE "-O3")
-    target_compile_options(${test_name} PRIVATE "-fast")
-    target_link_options(${test_name} INTERFACE "-cuda")
-    target_link_libraries(${test_name} PRIVATE x3d2)
-
-    add_test(NAME ${test_name} COMMAND sh -c "mpirun -np 1 ${test_name}")
-  endforeach()
-endif()
-
-foreach(testfile IN LISTS TESTSRC)
+function(define_test testfile np backend)
   get_filename_component(test_name ${testfile} NAME_WE)
 
   add_executable(${test_name} ${testfile})
 
-  target_compile_options(${test_name} PRIVATE "-O3")
-
-  if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
-    target_compile_options(${test_name} PRIVATE "-ffast-math")
+  if(${backend} STREQUAL cuda)
+    target_link_options(${test_name} INTERFACE "-cuda")
+  else()
+    find_package(OpenMP REQUIRED)
+    target_link_libraries(${test_name} PRIVATE OpenMP::OpenMP_Fortran)
   endif()
-
   target_link_libraries(${test_name} PRIVATE x3d2)
 
-  find_package(OpenMP REQUIRED)
-  target_link_libraries(${test_name} PRIVATE OpenMP::OpenMP_Fortran)
+  add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} ${test_name}")
 
-  add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${CMAKE_CTEST_NPROCS} ${test_name}")
-endforeach()
+endfunction()
+
+define_test(test_allocator.f90 1 omp)
+define_test(omp/test_omp_tridiag.f90 ${CMAKE_CTEST_NPROCS} omp)
+define_test(omp/test_omp_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
+define_test(omp/test_omp_dist_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
+
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
+  define_test(cuda/test_cuda_allocator.f90 1 cuda)
+  define_test(cuda/test_cuda_reorder.f90 1 cuda)
+  define_test(cuda/test_cuda_tridiag.f90 ${CMAKE_CTEST_NPROCS} cuda)
+  define_test(cuda/test_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
+endif()
+
