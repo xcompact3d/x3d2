@@ -25,6 +25,7 @@ jobs:
       with:
         path: openmpi-${{ env.OMPI_VERSION }}/installed
         key: openmpi-${{ env.OMPI_VERSION }}
+        save-always: 'true'
 
     - name: Display GCC version number
       run: gcc --version
@@ -57,3 +58,6 @@ jobs:
 
     - name: Run the tests
       run: make -C build test
+
+    - name: Fail test
+      run: exit 1
