@@ -96,4 +96,119 @@ contains
 
    end subroutine processfftdiv
 
+   attributes(global) subroutine reorder_cmplx_x2y_T(u_y, u_x, nz)
+      implicit none
+
+      complex(dp), device, intent(out), dimension(:, :, :) :: u_y
+      complex(dp), device, intent(in), dimension(:, :, :) :: u_x
+      integer, value, intent(in) :: nz
+
+      complex(dp), shared :: tile(SZ, SZ)
+
+      integer :: i, j, b_i, b_j, b_k
+
+      i = threadIdx%x; j = threadIdx%y
+      b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
+
+      ! copy into shared
+      tile(i, j) = u_x((b_i - 1)*SZ + j, i, b_k + nz*(b_j-1))
+
+      call syncthreads()
+
+      ! copy into output array from shared
+      u_y((b_j - 1)*SZ + j, i, (b_i - 1)*nz + b_k) = tile(j, i)
+
+   end subroutine reorder_cmplx_x2y_T
+
+   attributes(global) subroutine reorder_cmplx_y2x_T(u_x, u_y, nz)
+      implicit none
+
+      complex(dp), device, intent(out), dimension(:, :, :) :: u_x
+      complex(dp), device, intent(in), dimension(:, :, :) :: u_y
+      integer, value, intent(in) :: nz
+
+      complex(dp), shared :: tile(SZ, SZ)
+
+      integer :: i, j, b_i, b_j, b_k
+
+      i = threadIdx%x; j = threadIdx%y
+      b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
+
+      ! copy into shared
+      tile(i, j) = u_y((b_j - 1)*SZ + j, i, b_k + nz*(b_i - 1))
+
+      call syncthreads()
+
+      ! copy into output array from shared
+      u_x((b_i - 1)*SZ + j, i, (b_j - 1)*nz + b_k) = tile(j, i)
+
+   end subroutine reorder_cmplx_y2x_T
+
+   attributes(global) subroutine reorder_cmplx_y2z_T(u_z, u_y, nx, nz)
+      implicit none
+
+      complex(dp), device, intent(out), dimension(:, :, :) :: u_z
+      complex(dp), device, intent(in), dimension(:, :, :) :: u_y
+      integer, value, intent(in) :: nx, nz
+
+      complex(dp), shared :: tile(SZ, SZ)
+
+      integer :: i, j, k, b_i, b_j, b_k, b_x, b_y, b_z
+
+      i = threadIdx%x
+      j = threadIdx%y
+      k = threadIdx%z
+
+      b_x = blockIdx%z
+      b_y = blockIdx%y
+      b_z = blockIdx%x
+
+      ! copy into shared
+      if ( j + (b_z - 1)*SZ <= nz ) &
+         tile(i, j) = u_y(i + (b_y - 1)*SZ, mod(b_x - 1, SZ) + 1, &
+                          j + (b_z - 1)*SZ + ((b_x-1)/SZ)*nz)
+
+      call syncthreads()
+
+      ! copy into output array from shared
+      if ( i + (b_z - 1)*SZ <= nz ) &
+         u_z(i + (b_z - 1)*SZ, j, b_x + (b_y - 1)*nx) = tile(j, i)
+
+   end subroutine reorder_cmplx_y2z_T
+
+   attributes(global) subroutine reorder_cmplx_z2y_T(u_y, u_z, nx, nz)
+      implicit none
+
+      complex(dp), device, intent(out), dimension(:, :, :) :: u_y
+      complex(dp), device, intent(in), dimension(:, :, :) :: u_z
+      integer, value, intent(in) :: nx, nz
+
+      complex(dp), shared :: tile(SZ, SZ)
+
+      integer :: i, j, k, b_i, b_j, b_k, b_x, b_y, b_z
+
+      i = threadIdx%x
+      j = threadIdx%y
+      k = threadIdx%z
+      b_i = blockIdx%x
+      b_j = blockIdx%y
+      b_k = blockIdx%z
+
+      b_x = blockIdx%z
+      b_y = blockIdx%y
+      b_z = blockIdx%x
+
+      ! copy into shared
+      if ( i + (b_z - 1)*SZ <= nz ) &
+         tile(i, j) = u_z(i + (b_z - 1)*SZ, j, b_x + (b_y - 1)*nx)
+
+      call syncthreads()
+
+      ! copy into output array from shared
+      if ( j + (b_z - 1)*SZ <= nz ) &
+         u_y(i + (b_y - 1)*SZ, mod(b_x - 1, SZ)+1, &
+             j + (b_z - 1)*SZ + ((b_x - 1)/SZ)*nz) = tile(j, i)
+
+   end subroutine reorder_cmplx_z2y_T
+
 end module m_cuda_complex
