@@ -224,7 +224,7 @@ contains
 
       class(field_t), pointer :: du_x, dv_x, dw_x, &
                                  u_y, v_y, w_y, du_y, dv_y, dw_y, &
-                                 u_z, w_z, du_z, dw_z
+                                 u_z, w_z, dw_z
 
       du_x => self%backend%allocator%get_block()
       dv_x => self%backend%allocator%get_block()

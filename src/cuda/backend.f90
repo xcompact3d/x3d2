@@ -15,7 +15,7 @@ module m_cuda_backend
    use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
    use m_cuda_kernels_reorder, only: &
        reorder_x2y, reorder_x2z, reorder_y2x, reorder_y2z, reorder_z2y, &
-       sum_yintox, sum_zintox, axpby
+       sum_yintox, sum_zintox, axpby, buffer_copy
 
    implicit none
 
@@ -532,8 +532,13 @@ module m_cuda_backend
       real(dp), device, dimension(:, :, :), intent(in) :: u_dev
       integer, intent(in) :: n
 
-      u_send_s_dev(:, :, :) = u_dev(:, 1:4, :)
-      u_send_e_dev(:, :, :) = u_dev(:, n - 3:n, :)
+      type(dim3) :: blocks, threads
+      integer :: n_halo = 4
+
+      blocks = dim3(size(u_dev, dim = 3), 1, 1)
+      threads = dim3(SZ, 1, 1)
+      call buffer_copy<<<blocks, threads>>>(u_send_s_dev, u_send_e_dev, &
+                                            u_dev, n, n_halo)
 
    end subroutine copy_into_buffers
 
