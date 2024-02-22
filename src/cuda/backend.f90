@@ -57,12 +57,11 @@ module m_cuda_backend
 
  contains
 
-   function init(globs, allocator, xdirps, ydirps, zdirps) result(backend)
+   function init(globs, allocator) result(backend)
       implicit none
 
       class(globs_t) :: globs
       class(allocator_t), target, intent(inout) :: allocator
-      class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
       type(cuda_backend_t) :: backend
 
       type(cuda_poisson_fft_t) :: cuda_poisson_fft
