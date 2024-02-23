@@ -44,8 +44,9 @@ module m_solver
       class(time_intg_t), pointer :: time_integrator
    contains
       procedure :: transeq
-      procedure :: divergence
-      procedure :: gradient
+      procedure :: divergence_v2p
+      procedure :: gradient_p2v
+      procedure :: curl
       procedure :: run
    end type solver_t
 
@@ -215,7 +216,7 @@ contains
 
    end subroutine transeq
 
-   subroutine divergence(self, div_u, u, v, w)
+   subroutine divergence_v2p(self, div_u, u, v, w)
       implicit none
 
       class(solver_t) :: self
@@ -308,9 +309,9 @@ contains
       call self%backend%allocator%release_block(w_z)
       call self%backend%allocator%release_block(dw_z)
 
-   end subroutine divergence
+   end subroutine divergence_v2p
 
-   subroutine gradient(self, dpdx, dpdy, dpdz, pressure)
+   subroutine gradient_p2v(self, dpdx, dpdy, dpdz, pressure)
       implicit none
 
       class(solver_t) :: self
@@ -387,7 +388,67 @@ contains
       call self%backend%allocator%release_block(dpdy_sx_x)
       call self%backend%allocator%release_block(dpdz_sx_x)
 
-   end subroutine gradient
+   end subroutine gradient_p2v
+
+   subroutine curl(self, o_x, o_y, o_z, u, v, w)
+      implicit none
+
+      class(solver_t) :: self
+      class(field_t), intent(inout) :: o_x, o_y, o_z !! omega_x/_y/_z
+      class(field_t), intent(in) :: u, v, w
+
+      class(field_t), pointer :: u_y, w_y, du_y, u_z, v_z, du_z, dv_z
+
+      ! o_x = dw/dy - dv/dz
+      ! o_y = du/dz - dw/dx
+      ! o_z = dv/dx - du/dy
+
+      ! obtain dw/dx, dv/dx and store them directly in omega_y, omega_z
+      call self%backend%tds_solve(o_y, w, self%xdirps, self%xdirps%der1st)
+      call self%backend%tds_solve(o_z, v, self%xdirps, self%xdirps%der1st)
+
+      u_y => self%backend%allocator%get_block()
+      w_y => self%backend%allocator%get_block()
+
+      call self%backend%reorder(u_y, u, RDR_X2Y)
+      call self%backend%reorder(w_y, w, RDR_X2Y)
+
+      du_y => self%backend%allocator%get_block()
+
+      ! obtain du/dy, dw/dy
+      ! store du/dy in a temporary field to add into omega_z later
+      ! dw/dy can be stored directly in omega_x as it is empty
+      call self%backend%tds_solve(du_y, u_y, self%ydirps, self%ydirps%der1st)
+      call self%backend%tds_solve(o_x, w_y, self%ydirps, self%ydirps%der1st)
+
+      call self%backend%allocator%release_block(u_y)
+      call self%backend%allocator%release_block(w_y)
+
+      ! omega_z = dv/dz - du/dy
+      call self%backend%vecadd(-1._dp, du_y, 1._dp, o_z)
+
+      call self%backend%allocator%release_block(du_y)
+
+      u_z => self%backend%allocator%get_block()
+      v_z => self%backend%allocator%get_block()
+      du_z => self%backend%allocator%get_block()
+      dv_z => self%backend%allocator%get_block()
+
+      ! obtain du/dz, dv/dz and store them in temporary fields
+      call self%backend%tds_solve(du_z, u_z, self%zdirps, self%zdirps%der1st)
+      call self%backend%tds_solve(dv_z, v_z, self%zdirps, self%zdirps%der1st)
+
+      ! omega_x = dw/dy - dv/dz
+      call self%backend%vecadd(-1._dp, dv_z, 1._dp, o_x)
+      ! omega_y = du/dz - dw/dx
+      call self%backend%vecadd(1._dp, du_z, -1._dp, o_y)
+
+      call self%backend%allocator%release_block(u_z)
+      call self%backend%allocator%release_block(v_z)
+      call self%backend%allocator%release_block(du_z)
+      call self%backend%allocator%release_block(dv_z)
+
+   end subroutine curl
 
    subroutine run(self, n_iter, u_out, v_out, w_out)
       implicit none
@@ -420,7 +481,7 @@ contains
          ! pressure
          div_u => self%backend%allocator%get_block()
 
-         call self%divergence(div_u, self%u, self%v, self%w)
+         call self%divergence_v2p(div_u, self%u, self%v, self%w)
 
          pressure => self%backend%allocator%get_block()
 
@@ -432,7 +493,7 @@ contains
          dpdy => self%backend%allocator%get_block()
          dpdz => self%backend%allocator%get_block()
 
-         call self%gradient(dpdx, dpdy, dpdz, pressure)
+         call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
 
          call self%backend%allocator%release_block(pressure)
 
