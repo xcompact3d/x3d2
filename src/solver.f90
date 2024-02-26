@@ -379,9 +379,9 @@ contains
       call self%backend%tds_solve(dpdx, p_sx_x, self%xdirps, &
                                   self%xdirps%stagder_p2v)
       call self%backend%tds_solve(dpdy, dpdy_sx_x, self%xdirps, &
-                                  self%xdirps%interpl_v2p)
+                                  self%xdirps%interpl_p2v)
       call self%backend%tds_solve(dpdz, dpdz_sx_x, self%xdirps, &
-                                  self%xdirps%interpl_v2p)
+                                  self%xdirps%interpl_p2v)
 
       ! release temporary x fields
       call self%backend%allocator%release_block(p_sx_x)
