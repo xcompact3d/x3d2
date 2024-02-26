@@ -95,6 +95,24 @@ contains
 
    end subroutine reorder_y2z
 
+   attributes(global) subroutine reorder_z2x(u_x, u_z, nz)
+      implicit none
+
+      real(dp), device, intent(out), dimension(:, :, :) :: u_x
+      real(dp), device, intent(in), dimension(:, :, :) :: u_z
+      integer, value, intent(in) :: nz
+
+      integer :: i, j, b_i, b_j, nx
+
+      i = threadIdx%x; b_i = blockIdx%x; b_j = blockIdx%y
+      nx = gridDim%x
+
+      do j = 1, nz
+         u_x(i, b_i, j + (b_j - 1)*nz) = u_z(i, j, b_i + (b_j - 1)*nx)
+      end do
+
+   end subroutine reorder_z2x
+
    attributes(global) subroutine reorder_z2y(u_y, u_z, nx, nz)
       implicit none
 
