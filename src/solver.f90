@@ -279,8 +279,8 @@ contains
       u_z => self%backend%allocator%get_block()
       w_z => self%backend%allocator%get_block()
 
-      ! dv_y = dv_y + dw_y
-      call self%backend%vecadd(1._dp, dw_y, 1._dp, dv_y)
+      ! du_y = dv_y + du_y
+      call self%backend%vecadd(1._dp, dv_y, 1._dp, du_y)
 
       ! reorder from y to z
       call self%backend%reorder(u_z, du_y, RDR_Y2Z)
