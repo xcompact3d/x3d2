@@ -1,7 +1,8 @@
 module m_solver
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
-   use m_common, only: dp, globs_t, RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2Y
+   use m_common, only: dp, globs_t, &
+                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
    use m_tdsops, only: tdsops_t, dirps_t
    use m_time_integrator, only: time_intg_t
 
@@ -397,56 +398,83 @@ contains
       class(field_t), intent(inout) :: o_x, o_y, o_z !! omega_x/_y/_z
       class(field_t), intent(in) :: u, v, w
 
-      class(field_t), pointer :: u_y, w_y, du_y, u_z, v_z, du_z, dv_z
+      class(field_t), pointer :: u_y, u_z, v_z, w_y, dwdy_y, dvdz_z, dvdz_x, &
+                                 dudz_z, dudz_x, dudy_y, dudy_x
 
       ! o_x = dw/dy - dv/dz
       ! o_y = du/dz - dw/dx
       ! o_z = dv/dx - du/dy
 
-      ! obtain dw/dx, dv/dx and store them directly in omega_y, omega_z
-      call self%backend%tds_solve(o_y, w, self%xdirps, self%xdirps%der1st)
-      call self%backend%tds_solve(o_z, v, self%xdirps, self%xdirps%der1st)
-
-      u_y => self%backend%allocator%get_block()
+      ! omega_x
+      ! dw/dy
       w_y => self%backend%allocator%get_block()
-
-      call self%backend%reorder(u_y, u, RDR_X2Y)
+      dwdy_y => self%backend%allocator%get_block()
       call self%backend%reorder(w_y, w, RDR_X2Y)
+      call self%backend%tds_solve(dwdy_y, w_y, self%ydirps, self%ydirps%der1st)
 
-      du_y => self%backend%allocator%get_block()
+      call self%backend%reorder(o_x, dwdy_y, RDR_Y2X)
 
-      ! obtain du/dy, dw/dy
-      ! store du/dy in a temporary field to add into omega_z later
-      ! dw/dy can be stored directly in omega_x as it is empty
-      call self%backend%tds_solve(du_y, u_y, self%ydirps, self%ydirps%der1st)
-      call self%backend%tds_solve(o_x, w_y, self%ydirps, self%ydirps%der1st)
-
-      call self%backend%allocator%release_block(u_y)
       call self%backend%allocator%release_block(w_y)
+      call self%backend%allocator%release_block(dwdy_y)
 
-      ! omega_z = dv/dz - du/dy
-      call self%backend%vecadd(-1._dp, du_y, 1._dp, o_z)
-
-      call self%backend%allocator%release_block(du_y)
-
-      u_z => self%backend%allocator%get_block()
+      ! dv/dz
       v_z => self%backend%allocator%get_block()
-      du_z => self%backend%allocator%get_block()
-      dv_z => self%backend%allocator%get_block()
+      dvdz_z => self%backend%allocator%get_block()
+      call self%backend%reorder(v_z, v, RDR_X2Z)
+      call self%backend%tds_solve(dvdz_z, v_z, self%zdirps, self%zdirps%der1st)
 
-      ! obtain du/dz, dv/dz and store them in temporary fields
-      call self%backend%tds_solve(du_z, u_z, self%zdirps, self%zdirps%der1st)
-      call self%backend%tds_solve(dv_z, v_z, self%zdirps, self%zdirps%der1st)
+      dvdz_x => self%backend%allocator%get_block()
+      call self%backend%reorder(dvdz_x, dvdz_z, RDR_Z2X)
+
+      call self%backend%allocator%release_block(v_z)
+      call self%backend%allocator%release_block(dvdz_z)
 
       ! omega_x = dw/dy - dv/dz
-      call self%backend%vecadd(-1._dp, dv_z, 1._dp, o_x)
-      ! omega_y = du/dz - dw/dx
-      call self%backend%vecadd(1._dp, du_z, -1._dp, o_y)
+      call self%backend%vecadd(-1._dp, dvdz_x, 1._dp, o_x)
+
+      call self%backend%allocator%release_block(dvdz_x)
+
+      ! omega_y
+      ! du/dz
+      u_z => self%backend%allocator%get_block()
+      dudz_z => self%backend%allocator%get_block()
+      call self%backend%reorder(u_z, u, RDR_X2Z)
+      call self%backend%tds_solve(dudz_z, u_z, self%zdirps, self%zdirps%der1st)
+
+      dudz_x => self%backend%allocator%get_block()
+      call self%backend%reorder(dudz_x, dudz_z, RDR_Z2X)
 
       call self%backend%allocator%release_block(u_z)
-      call self%backend%allocator%release_block(v_z)
-      call self%backend%allocator%release_block(du_z)
-      call self%backend%allocator%release_block(dv_z)
+      call self%backend%allocator%release_block(dudz_z)
+
+      ! dw/dx
+      call self%backend%tds_solve(o_y, w, self%xdirps, self%xdirps%der1st)
+
+      ! omega_y = du/dz - dw/dx
+      call self%backend%vecadd(1._dp, dudz_x, -1._dp, o_y)
+
+      call self%backend%allocator%release_block(dudz_x)
+
+      ! omega_z
+      ! dv/dx
+      call self%backend%tds_solve(o_z, v, self%xdirps, self%xdirps%der1st)
+
+      ! du/dy
+      u_y => self%backend%allocator%get_block()
+      dudy_y => self%backend%allocator%get_block()
+      call self%backend%reorder(u_y, u, RDR_X2Y)
+      call self%backend%tds_solve(dudy_y, u_y, self%ydirps, self%ydirps%der1st)
+
+      dudy_x => self%backend%allocator%get_block()
+      call self%backend%reorder(dudy_x, dudy_y, RDR_Y2X)
+
+      call self%backend%allocator%release_block(u_y)
+      call self%backend%allocator%release_block(dudy_y)
+
+      ! omega_z = dv/dx - du/dy
+      call self%backend%vecadd(-1._dp, dudy_x, 1._dp, o_z)
+
+      call self%backend%allocator%release_block(dudy_x)
 
    end subroutine curl
 
