@@ -6,7 +6,7 @@ program test_cuda_reorder
    use m_common, only: dp
    use m_cuda_common, only: SZ
    use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
-                                     reorder_y2z, reorder_z2y
+                                     reorder_y2z, reorder_z2x, reorder_z2y
 
    implicit none
 
@@ -83,50 +83,46 @@ program test_cuda_reorder
    threads = dim3(SZ, SZ, 1)
    call reorder_y2z<<<blocks, threads>>>(u_o_d, u_temp_d, nx, nz)
 
-   ! store this in host
-   u_o = u_o_d
-
-   ! and zeroize u_o_d again in any case
-   u_o_d = 0
-
-   ! reorder initial random field into z orientation
-   blocks = dim3(nx, ny/SZ, 1)
-   threads = dim3(SZ, 1, 1)
-   call reorder_x2z<<<blocks, threads>>>(u_o_d, u_i_d, nz)
-   u_temp = u_o_d
-
-   ! compare two z oriented fields
-   norm_u = norm2(u_o - u_temp)
-   if (nrank == 0) then
-      if ( norm_u > tol ) then
-         allpass = .false.
-         write(stderr, '(a)') 'Check reorder x2z and y2z... failed'
-      else
-         write(stderr, '(a)') 'Check reorder x2z and y2z... passed'
-      end if
-   end if
+   ! store initial z oriented field
+   u_temp = u_temp_d
 
    ! z oriented field into y
    blocks = dim3(nx/SZ, ny/SZ, nz)
    threads = dim3(SZ, SZ, 1)
    call reorder_z2y<<<blocks, threads>>>(u_temp_d, u_o_d, nx, nz)
 
-   ! zeroize just in case for reusing
-   u_o_d = 0
+   u_o = u_temp_d
 
-   blocks = dim3(nx/SZ, ny/SZ, nz)
-   threads = dim3(SZ, SZ, 1)
-   call reorder_y2x<<<blocks, threads>>>(u_o_d, u_temp_d, nz)
-   u_o = u_o_d
+   ! compare two y oriented fields
+   norm_u = norm2(u_o - u_temp)
+   if (nrank == 0) then
+      if ( norm_u > tol ) then
+         allpass = .false.
+         write(stderr, '(a)') 'Check reorder y2z and y2z... failed'
+      else
+         write(stderr, '(a)') 'Check reorder y2z and y2z... passed'
+      end if
+   end if
 
-   ! and check whether it matches the initial random field
+   ! reorder initial random field into z orientation
+   blocks = dim3(nx, ny/SZ, 1)
+   threads = dim3(SZ, 1, 1)
+   call reorder_x2z<<<blocks, threads>>>(u_o_d, u_i_d, nz)
+
+   ! z oriented field into x
+   blocks = dim3(nx, ny/SZ, 1)
+   threads = dim3(SZ, 1, 1)
+   call reorder_z2x<<<blocks, threads>>>(u_temp_d, u_o_d, nz)
+   u_o = u_temp_d
+
+   ! compare two z oriented fields
    norm_u = norm2(u_o - u_i)
    if (nrank == 0) then
       if ( norm_u > tol ) then
          allpass = .false.
-         write(stderr, '(a)') 'Check reorder z2y and y2x... failed'
+         write(stderr, '(a)') 'Check reorder x2z and z2x... failed'
       else
-         write(stderr, '(a)') 'Check reorder z2y and y2x... passed'
+         write(stderr, '(a)') 'Check reorder x2z and z2x... passed'
       end if
    end if
 
@@ -166,6 +162,16 @@ program test_cuda_reorder
       blocks = dim3(nx/SZ, ny/SZ, nz)
       threads = dim3(SZ, SZ, 1)
       call reorder_y2z<<<blocks, threads>>>(u_o_d, u_i_d, nx, nz)
+   end do
+   call cpu_time(tend)
+
+   call checkperf(tend - tstart, n_iters, ndof, 2._dp)
+
+   call cpu_time(tstart)
+   do i = 1, n_iters
+      blocks = dim3(nx, ny/SZ, 1)
+      threads = dim3(SZ, 1, 1)
+      call reorder_z2x<<<blocks, threads>>>(u_o_d, u_i_d, nz)
    end do
    call cpu_time(tend)
 
