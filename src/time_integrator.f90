@@ -61,6 +61,10 @@ contains
 
       real(dp), intent(in) :: dt
 
+      call self%backend%vecadd(dt, du, 1._dp, u)
+      call self%backend%vecadd(dt, dv, 1._dp, v)
+      call self%backend%vecadd(dt, dw, 1._dp, w)
+
    end subroutine step
 
    subroutine adams_bashford_1st(vels, olds, coeffs)
