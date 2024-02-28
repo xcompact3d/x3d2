@@ -138,4 +138,6 @@ program xcompact
 
    print*, 'norms', norm2(u), norm2(v), norm2(w)
 
+   call MPI_Finalize(ierr)
+
 end program xcompact
