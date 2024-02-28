@@ -137,6 +137,10 @@ contains
    end subroutine
 
    subroutine transeq(self, du, dv, dw, u, v, w)
+      !! Skew-symmetric form of convection-diffusion terms in the
+      !! incompressible Navier-Stokes momemtum equations, excluding
+      !! pressure terms.
+      !! Inputs from velocity grid and outputs to velocity grid.
       implicit none
 
       class(solver_t) :: self
@@ -218,6 +222,8 @@ contains
    end subroutine transeq
 
    subroutine divergence_v2p(self, div_u, u, v, w)
+      !! Divergence of a vector field (u, v, w).
+      !! Inputs from velocity grid and outputs to pressure grid.
       implicit none
 
       class(solver_t) :: self
@@ -313,6 +319,8 @@ contains
    end subroutine divergence_v2p
 
    subroutine gradient_p2v(self, dpdx, dpdy, dpdz, pressure)
+      !! Gradient of a scalar field 'pressure'.
+      !! Inputs from pressure grid and outputs to velocity grid.
       implicit none
 
       class(solver_t) :: self
@@ -392,10 +400,13 @@ contains
    end subroutine gradient_p2v
 
    subroutine curl(self, o_i_hat, o_j_hat, o_k_hat, u, v, w)
+      !! Curl of a vector field (u, v, w).
+      !! Inputs from velocity grid and outputs to velocity grid.
       implicit none
 
       class(solver_t) :: self
-      class(field_t), intent(inout) :: o_i_hat, o_j_hat, o_k_hat !! omega_i/j/k
+      !> Vector components of the output vector field Omega
+      class(field_t), intent(inout) :: o_i_hat, o_j_hat, o_k_hat
       class(field_t), intent(in) :: u, v, w
 
       class(field_t), pointer :: u_y, u_z, v_z, w_y, dwdy_y, dvdz_z, dvdz_x, &
