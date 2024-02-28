@@ -391,28 +391,28 @@ contains
 
    end subroutine gradient_p2v
 
-   subroutine curl(self, o_x, o_y, o_z, u, v, w)
+   subroutine curl(self, o_i_hat, o_j_hat, o_k_hat, u, v, w)
       implicit none
 
       class(solver_t) :: self
-      class(field_t), intent(inout) :: o_x, o_y, o_z !! omega_x/_y/_z
+      class(field_t), intent(inout) :: o_i_hat, o_j_hat, o_k_hat !! omega_i/j/k
       class(field_t), intent(in) :: u, v, w
 
       class(field_t), pointer :: u_y, u_z, v_z, w_y, dwdy_y, dvdz_z, dvdz_x, &
                                  dudz_z, dudz_x, dudy_y, dudy_x
 
-      ! o_x = dw/dy - dv/dz
-      ! o_y = du/dz - dw/dx
-      ! o_z = dv/dx - du/dy
+      ! omega_i_hat = dw/dy - dv/dz
+      ! omega_j_hat = du/dz - dw/dx
+      ! omega_k_hat = dv/dx - du/dy
 
-      ! omega_x
+      ! omega_i_hat
       ! dw/dy
       w_y => self%backend%allocator%get_block()
       dwdy_y => self%backend%allocator%get_block()
       call self%backend%reorder(w_y, w, RDR_X2Y)
       call self%backend%tds_solve(dwdy_y, w_y, self%ydirps, self%ydirps%der1st)
 
-      call self%backend%reorder(o_x, dwdy_y, RDR_Y2X)
+      call self%backend%reorder(o_i_hat, dwdy_y, RDR_Y2X)
 
       call self%backend%allocator%release_block(w_y)
       call self%backend%allocator%release_block(dwdy_y)
@@ -429,12 +429,12 @@ contains
       call self%backend%allocator%release_block(v_z)
       call self%backend%allocator%release_block(dvdz_z)
 
-      ! omega_x = dw/dy - dv/dz
-      call self%backend%vecadd(-1._dp, dvdz_x, 1._dp, o_x)
+      ! omega_i_hat = dw/dy - dv/dz
+      call self%backend%vecadd(-1._dp, dvdz_x, 1._dp, o_i_hat)
 
       call self%backend%allocator%release_block(dvdz_x)
 
-      ! omega_y
+      ! omega_j_hat
       ! du/dz
       u_z => self%backend%allocator%get_block()
       dudz_z => self%backend%allocator%get_block()
@@ -448,16 +448,16 @@ contains
       call self%backend%allocator%release_block(dudz_z)
 
       ! dw/dx
-      call self%backend%tds_solve(o_y, w, self%xdirps, self%xdirps%der1st)
+      call self%backend%tds_solve(o_j_hat, w, self%xdirps, self%xdirps%der1st)
 
-      ! omega_y = du/dz - dw/dx
-      call self%backend%vecadd(1._dp, dudz_x, -1._dp, o_y)
+      ! omega_j_hat = du/dz - dw/dx
+      call self%backend%vecadd(1._dp, dudz_x, -1._dp, o_j_hat)
 
       call self%backend%allocator%release_block(dudz_x)
 
-      ! omega_z
+      ! omega_k_hat
       ! dv/dx
-      call self%backend%tds_solve(o_z, v, self%xdirps, self%xdirps%der1st)
+      call self%backend%tds_solve(o_k_hat, v, self%xdirps, self%xdirps%der1st)
 
       ! du/dy
       u_y => self%backend%allocator%get_block()
@@ -471,8 +471,8 @@ contains
       call self%backend%allocator%release_block(u_y)
       call self%backend%allocator%release_block(dudy_y)
 
-      ! omega_z = dv/dx - du/dy
-      call self%backend%vecadd(-1._dp, dudy_x, 1._dp, o_z)
+      ! omega_k_hat = dv/dx - du/dy
+      call self%backend%vecadd(-1._dp, dudy_x, 1._dp, o_k_hat)
 
       call self%backend%allocator%release_block(dudy_x)
 
