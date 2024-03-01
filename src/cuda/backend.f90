@@ -41,6 +41,7 @@ module m_cuda_backend
       procedure :: sum_yintox => sum_yintox_cuda
       procedure :: sum_zintox => sum_zintox_cuda
       procedure :: vecadd => vecadd_cuda
+      procedure :: scalar_product => scalar_product_cuda
       procedure :: set_fields => set_fields_cuda
       procedure :: get_fields => get_fields_cuda
       procedure :: transeq_cuda_dist
@@ -528,6 +529,15 @@ module m_cuda_backend
       call axpby<<<blocks, threads>>>(nx, a, x_d, b, y_d)
 
    end subroutine vecadd_cuda
+
+   subroutine scalar_product_cuda(self, s, x, y)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      real(dp), intent(out) :: s
+      class(field_t), intent(in) :: x, y
+
+   end subroutine scalar_product_cuda
 
    subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n)
       implicit none

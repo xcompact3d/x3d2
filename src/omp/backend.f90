@@ -30,6 +30,7 @@ module m_omp_backend
       procedure :: sum_yintox => sum_yintox_omp
       procedure :: sum_zintox => sum_zintox_omp
       procedure :: vecadd => vecadd_omp
+      procedure :: scalar_product => scalar_product_omp
       procedure :: set_fields => set_fields_omp
       procedure :: get_fields => get_fields_omp
       procedure :: transeq_omp_dist
@@ -303,6 +304,15 @@ module m_omp_backend
       class(field_t), intent(inout) :: y
 
    end subroutine vecadd_omp
+
+   subroutine scalar_product_omp(self, s, x, y)
+      implicit none
+
+      class(omp_backend_t) :: self
+      real(dp), intent(out) :: s
+      class(field_t), intent(in) :: x, y
+
+   end subroutine scalar_product_omp
 
    subroutine copy_into_buffers(u_send_s, u_send_e, u, n, n_blocks)
       implicit none

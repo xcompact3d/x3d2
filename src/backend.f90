@@ -33,6 +33,7 @@ module m_base_backend
       procedure(sum_intox), deferred :: sum_yintox
       procedure(sum_intox), deferred :: sum_zintox
       procedure(vecadd), deferred :: vecadd
+      procedure(scalar_product), deferred :: scalar_product
       procedure(get_fields), deferred :: get_fields
       procedure(set_fields), deferred :: set_fields
       procedure(alloc_tdsops), deferred :: alloc_tdsops
@@ -123,6 +124,20 @@ module m_base_backend
          real(dp), intent(in) :: b
          class(field_t), intent(inout) :: y
       end subroutine vecadd
+   end interface
+
+   abstract interface
+      subroutine scalar_product(self, s, x, y)
+         !! Calculates the scalar product of two input fields
+         import :: base_backend_t
+         import :: dp
+         import :: field_t
+         implicit none
+
+         class(base_backend_t) :: self
+         real(dp), intent(out) :: s
+         class(field_t), intent(in) :: x, y
+      end subroutine scalar_product
    end interface
 
    abstract interface
