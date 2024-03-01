@@ -42,8 +42,8 @@ module m_cuda_backend
       procedure :: sum_zintox => sum_zintox_cuda
       procedure :: vecadd => vecadd_cuda
       procedure :: scalar_product => scalar_product_cuda
-      procedure :: set_fields => set_fields_cuda
-      procedure :: get_fields => get_fields_cuda
+      procedure :: set_field => set_field_cuda
+      procedure :: get_field => get_field_cuda
       procedure :: transeq_cuda_dist
       procedure :: transeq_cuda_thom
       procedure :: tds_solve_dist
@@ -575,31 +575,27 @@ module m_cuda_backend
 
    end subroutine copy_into_buffers
 
-   subroutine set_fields_cuda(self, u, v, w, u_in, v_in, w_in)
+   subroutine set_field_cuda(self, f, arr)
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u, v, w
-      real(dp), dimension(:, :, :), intent(in) :: u_in, v_in, w_in
+      class(field_t), intent(inout) :: f
+      real(dp), dimension(:, :, :), intent(in) :: arr
 
-      select type(u); type is (cuda_field_t); u%data_d = u_in; end select
-      select type(v); type is (cuda_field_t); v%data_d = v_in; end select
-      select type(w); type is (cuda_field_t); w%data_d = w_in; end select
+      select type(f); type is (cuda_field_t); f%data_d = arr; end select
 
-   end subroutine set_fields_cuda
+   end subroutine set_field_cuda
 
-   subroutine get_fields_cuda(self, u_out, v_out, w_out, u, v, w)
+   subroutine get_field_cuda(self, arr, f)
       implicit none
 
       class(cuda_backend_t) :: self
-      real(dp), dimension(:, :, :), intent(out) :: u_out, v_out, w_out
-      class(field_t), intent(in) :: u, v, w
+      real(dp), dimension(:, :, :), intent(out) :: arr
+      class(field_t), intent(in) :: f
 
-      select type(u); type is (cuda_field_t); u_out = u%data_d; end select
-      select type(v); type is (cuda_field_t); v_out = v%data_d; end select
-      select type(w); type is (cuda_field_t); w_out = w%data_d; end select
+      select type(f); type is (cuda_field_t); arr = f%data_d; end select
 
-   end subroutine get_fields_cuda
+   end subroutine get_field_cuda
 
 end module m_cuda_backend
 
