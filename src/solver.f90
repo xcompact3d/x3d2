@@ -2,7 +2,8 @@ module m_solver
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
    use m_common, only: dp, globs_t, &
-                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
+                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
+                       POISSON_SOLVER_FFT, POISSON_SOLVER_CG
    use m_tdsops, only: tdsops_t, dirps_t
    use m_time_integrator, only: time_intg_t
 
@@ -122,14 +123,15 @@ contains
       call allocate_tdsops(solver%ydirps, ny, dy, solver%backend)
       call allocate_tdsops(solver%zdirps, nz, dz, solver%backend)
 
-      if (globs%use_fft) then
+      select case (globs%poisson_solver_type)
+      case (POISSON_SOLVER_FFT)
          print*, 'Poisson solver: FFT'
          call solver%backend%init_poisson_fft(xdirps, ydirps, zdirps)
          solver%poisson => poisson_fft
-      else
+      case (POISSON_SOLVER_CG)
          print*, 'Poisson solver: CG'
          solver%poisson => poisson_cg
-      end if
+      end select
 
    end function init
 
