@@ -199,6 +199,27 @@ contains
 
    end subroutine axpby
 
+   attributes(global) subroutine scalar_product(s, x, y, n)
+      implicit none
+
+      real(dp), device, intent(inout) :: s
+      real(dp), device, intent(in), dimension(:, :, :) :: x, y
+      integer, value, intent(in) :: n
+
+      real(dp) :: s_pncl !! pencil sum
+      integer :: i, j, b, ierr
+
+      i = threadIdx%x
+      b = blockIdx%x
+
+      s_pncl = 0._dp
+      do j = 1, n
+         s_pncl = s_pncl + x(i, j, b)*y(i, j, b)
+      end do
+      ierr = atomicadd(s, s_pncl)
+
+   end subroutine scalar_product
+
    attributes(global) subroutine buffer_copy(u_send_s, u_send_e, u, n, n_halo)
       implicit none
 
