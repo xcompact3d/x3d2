@@ -61,6 +61,9 @@ program xcompact
    ! read ns from the input file
    globs%nx = 512; globs%ny = 512; globs%nz = 512
 
+   globs%dt = 0.001_dp
+   globs%nu = 1._dp/1600._dp
+
    ! set nprocs based on run time arguments
    globs%nproc_x = 1; globs%nproc_y = 1; globs%nproc_z = 1
 
@@ -122,8 +125,6 @@ program xcompact
    backend => omp_backend
    print*, 'OpenMP backend instantiated'
 #endif
-
-   backend%nu = 1._dp
 
    allocate(u(SZ, globs%nx_loc, globs%n_groups_x))
    allocate(v(SZ, globs%nx_loc, globs%n_groups_x))

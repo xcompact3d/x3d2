@@ -15,6 +15,7 @@ module m_common
       integer :: n_groups_x, n_groups_y, n_groups_z
       real(dp) :: Lx, Ly, Lz
       real(dp) :: dx, dy, dz
+      real(dp) :: nu, dt
       integer :: nproc_x = 1, nproc_y = 1, nproc_z = 1
       character(len=20) :: BC_x_s, BC_x_e, BC_y_s, BC_y_e, BC_z_s, BC_z_e
       integer :: poisson_solver_type
