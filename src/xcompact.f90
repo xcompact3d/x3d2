@@ -3,7 +3,8 @@ program xcompact
 
    use m_allocator
    use m_base_backend
-   use m_common, only: pi, globs_t, set_pprev_pnext
+   use m_common, only: pi, globs_t, set_pprev_pnext, &
+                       POISSON_SOLVER_FFT, POISSON_SOLVER_CG
    use m_solver, only: solver_t
    use m_time_integrator, only: time_intg_t
    use m_tdsops, only: tdsops_t
@@ -63,7 +64,7 @@ program xcompact
    ! set nprocs based on run time arguments
    globs%nproc_x = 1; globs%nproc_y = 1; globs%nproc_z = 1
 
-   globs%use_fft = .true.
+   globs%poisson_solver_type = POISSON_SOLVER_FFT
 
    ! Lets allow a 1D decomposition for the moment
    !globs%nproc_x = nproc
