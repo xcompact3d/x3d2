@@ -24,6 +24,8 @@ module m_cuda_poisson_fft
       real(dp), device, allocatable, dimension(:) :: ax_dev, bx_dev, &
          ay_dev, by_dev, az_dev, bz_dev
 
+      real(dp), device, allocatable, dimension(:, :, :) :: f_tmp
+
       integer :: planD2Zz, planZ2Dz, planZ2Zx, planZ2Zy
    contains
       procedure :: fft_forward => fft_forward_cuda
@@ -66,6 +68,11 @@ contains
       allocate (poisson_fft%c_x_dev(nx*ny*(nz/2 + 1)))
       allocate (poisson_fft%c_y_dev(nx*ny*(nz/2 + 1)))
       allocate (poisson_fft%c_z_dev(nx*ny*(nz/2 + 1)))
+
+      ! We can't currently ask allocator to pass us an array with
+      ! exact shape we want, so we allocate an extra array here.
+      ! This will be removed when allocator is fixed.
+      allocate (poisson_fft%f_tmp(nz, SZ, nx*ny/SZ))
 
       ! set cufft plans
       ierrfft = cufftCreate(poisson_fft%planD2Zz)
@@ -110,9 +117,12 @@ contains
       select type(f); type is (cuda_field_t); f_dev => f%data_d; end select
 
       ! First reorder f into cartesian-like data structure
+      blocks = dim3(self%nz/SZ, self%nx*self%ny/SZ, 1)
+      threads = dim3(SZ, SZ, 1)
+      call reshapeDSF<<<blocks, threads>>>(self%f_tmp, f_dev)
 
       ! Forward FFT transform in z from real to complex
-      ierrfft = cufftExecD2Z(self%planD2Zz, f_dev, self%c_z_dev)
+      ierrfft = cufftExecD2Z(self%planD2Zz, self%f_tmp, self%c_z_dev)
 
       ! Reorder from z to y
       blocks = dim3(self%nz/2/SZ + 1, self%ny/SZ, self%nx)
@@ -184,9 +194,12 @@ contains
                                                     self%nx, self%nz/2 + 1)
 
       ! Backward FFT transform in z from complex to real
-      ierrfft = cufftExecZ2D(self%planZ2Dz, self%c_z_dev, f_dev)
+      ierrfft = cufftExecZ2D(self%planZ2Dz, self%c_z_dev, self%f_tmp)
 
       ! Finally reorder f back into our specialist data structure
+      blocks = dim3(self%nz/SZ, self%nx*self%ny/SZ, 1)
+      threads = dim3(SZ, SZ, 1)
+      call reshapeDSB<<<blocks, threads>>>(f_dev, self%f_tmp)
 
    end subroutine fft_backward_cuda
 
@@ -195,16 +208,21 @@ contains
 
       class(cuda_poisson_fft_t) :: self
 
-      complex(dp), device, dimension(:, :, :), pointer :: c_dev
+      complex(dp), device, dimension(:, :, :), pointer :: c_dev, c_x_ptr
       type(dim3) :: blocks, threads
 
-      ! Reshape from cartesian-like to our specialist data structure
-
-      blocks = dim3((self%ny*(self%nz/2 + 1))/SZ, 1 , 1)
-      threads = dim3(SZ, 1, 1)
-
+      ! Get some complex array pointers with right shape
+      c_x_ptr(1:self%nx, 1:SZ, 1:(self%ny*(self%nz/2 + 1))/SZ) => self%c_x_dev
       c_dev(1:SZ, 1:self%nx, 1:(self%ny*(self%nz/2 + 1))/SZ) => self%c_y_dev
 
+      ! Reshape from cartesian-like to our specialist data structure
+      blocks = dim3(self%nx/SZ, (self%ny*(self%nz/2 + 1))/SZ, 1)
+      threads = dim3(SZ, SZ, 1)
+      call reshapeCDSB<<<blocks, threads>>>(c_dev, c_x_ptr)
+
+      ! Postprocess
+      blocks = dim3((self%ny*(self%nz/2 + 1))/SZ, 1, 1)
+      threads = dim3(SZ, 1, 1)
       call processfftdiv<<<blocks, threads>>>( &
          c_dev, self%waves_dev, self%nx, self%ny, self%nz, &
          self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
@@ -212,6 +230,9 @@ contains
          )
 
       ! Reshape from our specialist data structure to cartesian-like
+      blocks = dim3(self%nx/SZ, (self%ny*(self%nz/2 + 1))/SZ, 1)
+      threads = dim3(SZ, SZ, 1)
+      call reshapeCDSF<<<blocks, threads>>>(c_x_ptr, c_dev)
 
    end subroutine fft_postprocess_cuda
 
