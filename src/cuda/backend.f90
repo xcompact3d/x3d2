@@ -1,6 +1,7 @@
 module m_cuda_backend
    use iso_fortran_env, only: stderr => error_unit
    use cudafor
+   use mpi
 
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
@@ -539,7 +540,7 @@ module m_cuda_backend
       real(dp), device, pointer, dimension(:, :, :) :: x_d, y_d
       real(dp), device, allocatable :: sum_d
       type(dim3) :: blocks, threads
-      integer :: nx
+      integer :: n, ierr
 
       select type(x); type is (cuda_field_t); x_d => x%data_d; end select
       select type(y); type is (cuda_field_t); y_d => y%data_d; end select
@@ -547,12 +548,15 @@ module m_cuda_backend
       allocate (sum_d)
       sum_d = 0._dp
 
-      nx = size(x_d, dim = 2)
+      n = size(x_d, dim = 2)
       blocks = dim3(size(x_d, dim = 3), 1, 1)
       threads = dim3(SZ, 1, 1)
-      call scalar_product<<<blocks, threads>>>(sum_d, x_d, y_d, nx)
+      call scalar_product<<<blocks, threads>>>(sum_d, x_d, y_d, n)
 
       s = sum_d
+
+      call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
+                         MPI_COMM_WORLD, ierr)
 
    end function scalar_product_cuda
 
