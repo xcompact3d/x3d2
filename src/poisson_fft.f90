@@ -55,8 +55,6 @@ contains
       class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
       integer, intent(in) :: sz
 
-      integer :: nx, ny, nz
-
       self%nx = xdirps%n; self%ny = ydirps%n; self%nz = zdirps%n
 
       allocate (self%ax(self%nx), self%bx(self%nx))
@@ -84,7 +82,7 @@ contains
       real(dp) :: w, wp, rlexs, rleys, rlezs, xtt, ytt, ztt, xt1, yt1, zt1
       complex(dp) :: xt2, yt2, zt2, xyzk
 
-      integer :: i, j, k, ka, kb, ix, iy, iz
+      integer :: i, j, ka, kb, ix, iy, iz
 
 
       nx = xdirps%n; ny = ydirps%n; nz = zdirps%n
@@ -156,12 +154,7 @@ contains
          zk2(i) = cmplx(1._dp, 1._dp, kind=dp)*(nz*wp/zdirps%L)**2
       end do
 
-      !do k = !sp%xst(3), sp%xen(3)
-         !do j = sp%xst(2), sp%xen(2)
-      ! kxyz array is in z pencil orientation, with nz=nz/2+1 !!nooo
-      ! kxyz array is in x pencil orientation.
-      !do k = 1, nx*ny/SZ
-      print*, 'set kxyz array'
+      print*, 'set waves array'
       ! TODO: do loop ranges below are valid only for single rank runs
       do ka = 1, nz/2 + 1
          do kb = 1, ny/sz

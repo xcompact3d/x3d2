@@ -161,7 +161,6 @@ module m_omp_backend
       class(field_t), intent(inout) :: du, dv, dw
       class(field_t), intent(in) :: u, v, w
       type(dirps_t), intent(in) :: dirps
-      integer :: n_halo
 
       call transeq_halo_exchange(self, u, v, w, dirps)
 

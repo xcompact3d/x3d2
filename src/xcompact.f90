@@ -3,7 +3,8 @@ program xcompact
 
    use m_allocator
    use m_base_backend
-   use m_common, only: pi, globs_t, set_pprev_pnext
+   use m_common, only: pi, globs_t, set_pprev_pnext, &
+                       POISSON_SOLVER_FFT, POISSON_SOLVER_CG
    use m_solver, only: solver_t
    use m_time_integrator, only: time_intg_t
    use m_tdsops, only: tdsops_t
@@ -30,6 +31,7 @@ program xcompact
 #ifdef CUDA
    type(cuda_backend_t), target :: cuda_backend
    type(cuda_allocator_t), target :: cuda_allocator
+   integer :: ndevs, devnum
 #else
    type(omp_backend_t), target :: omp_backend
    type(allocator_t), target :: omp_allocator
@@ -38,7 +40,7 @@ program xcompact
    real(dp), allocatable, dimension(:, :, :) :: u, v, w
 
    real(dp) :: t_start, t_end
-   integer :: nrank, nproc, ierr, ndevs, devnum
+   integer :: nrank, nproc, ierr
 
    call MPI_Init(ierr)
    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
@@ -59,10 +61,13 @@ program xcompact
    ! read ns from the input file
    globs%nx = 512; globs%ny = 512; globs%nz = 512
 
+   globs%dt = 0.001_dp
+   globs%nu = 1._dp/1600._dp
+
    ! set nprocs based on run time arguments
    globs%nproc_x = 1; globs%nproc_y = 1; globs%nproc_z = 1
 
-   globs%use_fft = .true.
+   globs%poisson_solver_type = POISSON_SOLVER_FFT
 
    ! Lets allow a 1D decomposition for the moment
    !globs%nproc_x = nproc
@@ -121,8 +126,6 @@ program xcompact
    print*, 'OpenMP backend instantiated'
 #endif
 
-   backend%nu = 1._dp
-
    allocate(u(SZ, globs%nx_loc, globs%n_groups_x))
    allocate(v(SZ, globs%nx_loc, globs%n_groups_x))
    allocate(w(SZ, globs%nx_loc, globs%n_groups_x))
@@ -141,5 +144,7 @@ program xcompact
    print*, 'Time: ', t_end - t_start
 
    print*, 'norms', norm2(u), norm2(v), norm2(w)
+
+   call MPI_Finalize(ierr)
 
 end program xcompact

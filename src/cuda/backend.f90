@@ -4,7 +4,8 @@ module m_cuda_backend
 
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
-   use m_common, only: dp, globs_t, RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2Y
+   use m_common, only: dp, globs_t, &
+                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
    use m_poisson_fft, only: poisson_fft_t
    use m_tdsops, only: dirps_t, tdsops_t
 
@@ -16,8 +17,8 @@ module m_cuda_backend
    use m_cuda_tdsops, only: cuda_tdsops_t
    use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
    use m_cuda_kernels_reorder, only: &
-       reorder_x2y, reorder_x2z, reorder_y2x, reorder_y2z, reorder_z2y, &
-       sum_yintox, sum_zintox, axpby
+       reorder_x2y, reorder_x2z, reorder_y2x, reorder_y2z, reorder_z2x, &
+       reorder_z2y, sum_yintox, sum_zintox, axpby, buffer_copy
 
    implicit none
 
@@ -457,6 +458,10 @@ module m_cuda_backend
          threads = dim3(SZ, SZ, 1)
          call reorder_y2z<<<blocks, threads>>>(u_o_d, u_i_d, &
                                                self%nx_loc, self%nz_loc)
+      case (RDR_Z2X) ! z2x
+         blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
+         threads = dim3(SZ, 1, 1)
+         call reorder_z2x<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
       case (RDR_Z2Y) ! z2y
          blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
          threads = dim3(SZ, SZ, 1)
@@ -537,8 +542,13 @@ module m_cuda_backend
       real(dp), device, dimension(:, :, :), intent(in) :: u_dev
       integer, intent(in) :: n
 
-      u_send_s_dev(:, :, :) = u_dev(:, 1:4, :)
-      u_send_e_dev(:, :, :) = u_dev(:, n - 3:n, :)
+      type(dim3) :: blocks, threads
+      integer :: n_halo = 4
+
+      blocks = dim3(size(u_dev, dim = 3), 1, 1)
+      threads = dim3(SZ, 1, 1)
+      call buffer_copy<<<blocks, threads>>>(u_send_s_dev, u_send_e_dev, &
+                                            u_dev, n, n_halo)
 
    end subroutine copy_into_buffers
 

@@ -5,7 +5,9 @@ module m_common
    real(dp), parameter :: pi = 4*atan(1.0_dp)
 
    integer, parameter :: RDR_X2Y = 12, RDR_X2Z = 13, RDR_Y2X = 21, &
-                         RDR_Y2Z = 23, RDR_Z2Y = 32
+                         RDR_Y2Z = 23, RDR_Z2X = 31, RDR_Z2Y = 32
+
+   integer, parameter :: POISSON_SOLVER_FFT = 0, POISSON_SOLVER_CG = 1
 
    type :: globs_t
       integer :: nx, ny, nz
@@ -13,9 +15,10 @@ module m_common
       integer :: n_groups_x, n_groups_y, n_groups_z
       real(dp) :: Lx, Ly, Lz
       real(dp) :: dx, dy, dz
+      real(dp) :: nu, dt
       integer :: nproc_x = 1, nproc_y = 1, nproc_z = 1
       character(len=20) :: BC_x_s, BC_x_e, BC_y_s, BC_y_e, BC_z_s, BC_z_e
-      logical :: use_fft
+      integer :: poisson_solver_type
    end type globs_t
 
 contains
@@ -27,7 +30,7 @@ contains
       integer, intent(out) :: xprev, xnext, yprev, ynext, zprev, znext
       integer, intent(in) :: xnproc, ynproc, znproc, nrank
 
-      integer :: i, ix, iy, iz
+      integer :: ix, iy, iz
 
       ix = modulo(nrank, xnproc)
       iy = modulo((nrank - ix)/xnproc, ynproc)

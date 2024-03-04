@@ -91,9 +91,9 @@ contains
          tdsops%n_halo = n_halo
          if (n_halo /= 4) then
             write (stderr, '("Warning: n_halo is set to ", i2, "be careful! &
-                              The default is 4 and there are quite a few &
-                              places where things are hardcoded assuming &
-                              n_halo is 4.")') n_halo
+                              &The default is 4 and there are quite a few &
+                              &places where things are hardcoded assuming &
+                              &n_halo is 4.")') n_halo
          end if
       else
          tdsops%n_halo = 4
@@ -628,7 +628,7 @@ contains
       logical, optional, intent(in) :: sym
 
       real(dp), allocatable :: dist_b(:)
-      real(dp) :: alpha, aci, bci, cci, dci
+      real(dp) :: alpha, aci, bci
       integer :: i, n, n_halo
 
       if (self%n_halo < 2) error stop 'Staggared deriv require n_halo >= 2'
