@@ -73,6 +73,11 @@ if (${POISSON_SOLVER} STREQUAL "FFT")
   message(STATUS "Using the FFT Poisson solver")
 elseif (${POISSON_SOLVER} STREQUAL "ITER")
   message(STATUS "Using the iterative Poisson solver")
+
+  # Find and link PETSc
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(PETSC REQUIRED IMPORTED_TARGET petsc)
+  target_link_libraries(x3d2 PUBLIC PkgConfig::PETSC)
 else()
   message(FATAL_ERROR "Unrecognised Poisson solver: ${POISSON_SOLVER}")
 endif()
