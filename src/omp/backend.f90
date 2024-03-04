@@ -305,14 +305,15 @@ module m_omp_backend
 
    end subroutine vecadd_omp
 
-   subroutine scalar_product_omp(self, s, x, y)
+   real(dp) function scalar_product_omp(self, x, y) result(s)
       implicit none
 
       class(omp_backend_t) :: self
-      real(dp), intent(out) :: s
       class(field_t), intent(in) :: x, y
 
-   end subroutine scalar_product_omp
+      s = 0._dp
+
+   end function scalar_product_omp
 
    subroutine copy_into_buffers(u_send_s, u_send_e, u, n, n_blocks)
       implicit none

@@ -127,7 +127,7 @@ module m_base_backend
    end interface
 
    abstract interface
-      subroutine scalar_product(self, s, x, y)
+      real(dp) function scalar_product(self, x, y) result(s)
          !! Calculates the scalar product of two input fields
          import :: base_backend_t
          import :: dp
@@ -135,9 +135,8 @@ module m_base_backend
          implicit none
 
          class(base_backend_t) :: self
-         real(dp), intent(out) :: s
          class(field_t), intent(in) :: x, y
-      end subroutine scalar_product
+      end function scalar_product
    end interface
 
    abstract interface

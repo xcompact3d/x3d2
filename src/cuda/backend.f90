@@ -530,11 +530,10 @@ module m_cuda_backend
 
    end subroutine vecadd_cuda
 
-   subroutine scalar_product_cuda(self, s, x, y)
+   real(dp) function scalar_product_cuda(self, x, y) result(s)
       implicit none
 
       class(cuda_backend_t) :: self
-      real(dp), intent(out) :: s
       class(field_t), intent(in) :: x, y
 
       real(dp), device, pointer, dimension(:, :, :) :: x_d, y_d
@@ -555,7 +554,7 @@ module m_cuda_backend
 
       s = sum_d
 
-   end subroutine scalar_product_cuda
+   end function scalar_product_cuda
 
    subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n)
       implicit none
