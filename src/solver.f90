@@ -38,6 +38,7 @@ module m_solver
       !! for later use.
 
       real(dp) :: dt, nu
+      integer :: n_iters, n_output
 
       class(field_t), pointer :: u, v, w
 
@@ -50,6 +51,7 @@ module m_solver
       procedure :: divergence_v2p
       procedure :: gradient_p2v
       procedure :: curl
+      procedure :: output
       procedure :: run
    end type solver_t
 
@@ -104,12 +106,10 @@ contains
       allocate(v_init(dims(1), dims(2), dims(3)))
       allocate(w_init(dims(1), dims(2), dims(3)))
 
-      u_init = 0
-      v_init = 0
-      w_init = 0
-
       solver%dt = globs%dt
       solver%backend%nu = globs%nu
+      solver%n_iters = globs%n_iters
+      solver%n_output = globs%n_output
 
       sz = dims(1)
       nx = globs%nx_loc; ny = globs%ny_loc; nz = globs%nz_loc
@@ -563,20 +563,58 @@ contains
 
    end subroutine poisson_cg
 
-   subroutine run(self, n_iter, u_out, v_out, w_out)
+   subroutine output(self, t, u_out)
       implicit none
 
       class(solver_t), intent(in) :: self
-      integer, intent(in) :: n_iter
+      real(dp), intent(in) :: t
+      real(dp), dimension(:, :, :), intent(inout) :: u_out
+
+      class(field_t), pointer :: du, dv, dw
+      integer :: ngrid
+
+      ngrid = self%xdirps%n*self%ydirps%n*self%zdirps%n
+      print*, 'time = ', t
+
+      du => self%backend%allocator%get_block()
+      dv => self%backend%allocator%get_block()
+      dw => self%backend%allocator%get_block()
+
+      call self%curl(du, dv, dw, self%u, self%v, self%w)
+      print*, 'enstrophy:', 0.5_dp*( &
+         self%backend%scalar_product(du, du) &
+         + self%backend%scalar_product(dv, dv) &
+         + self%backend%scalar_product(dw, dw) &
+         )/ngrid
+
+      call self%backend%allocator%release_block(du)
+      call self%backend%allocator%release_block(dv)
+      call self%backend%allocator%release_block(dw)
+
+      call self%divergence_v2p(du, self%u, self%v, self%w)
+      call self%backend%get_field(u_out, du)
+      print*, 'div u max mean:', maxval(abs(u_out)), sum(abs(u_out))/ngrid
+
+   end subroutine output
+
+   subroutine run(self, u_out, v_out, w_out)
+      implicit none
+
+      class(solver_t), intent(in) :: self
       real(dp), dimension(:, :, :), intent(inout) :: u_out, v_out, w_out
 
       class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
 
+      real(dp) :: t
       integer :: i
+
+      print*, 'initial conditions'
+      t = 0._dp
+      call self%output(t, u_out)
 
       print*, 'start run'
 
-      do i = 1, n_iter
+      do i = 1, self%n_iters
          du => self%backend%allocator%get_block()
          dv => self%backend%allocator%get_block()
          dw => self%backend%allocator%get_block()
@@ -618,6 +656,11 @@ contains
          call self%backend%allocator%release_block(dpdx)
          call self%backend%allocator%release_block(dpdy)
          call self%backend%allocator%release_block(dpdz)
+
+         if ( mod(i, self%n_output) == 0 ) then
+            t = i*self%dt
+            call self%output(t, u_out)
+         end if
       end do
 
       print*, 'run end'

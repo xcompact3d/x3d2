@@ -59,10 +59,12 @@ program xcompact
    xdirps%L = globs%Lx; ydirps%L = globs%Ly; zdirps%L = globs%Lz
 
    ! read ns from the input file
-   globs%nx = 512; globs%ny = 512; globs%nz = 512
+   globs%nx = 256; globs%ny = 256; globs%nz = 256
 
    globs%dt = 0.001_dp
    globs%nu = 1._dp/1600._dp
+   globs%n_iters = 20000
+   globs%n_output = 100
 
    ! set nprocs based on run time arguments
    globs%nproc_x = 1; globs%nproc_y = 1; globs%nproc_z = 1
@@ -137,7 +139,7 @@ program xcompact
 
    call cpu_time(t_start)
 
-   call solver%run(100, u, v, w)
+   call solver%run(u, v, w)
 
    call cpu_time(t_end)
 
