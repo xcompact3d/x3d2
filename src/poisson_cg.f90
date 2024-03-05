@@ -14,8 +14,10 @@ module m_poisson_cg
   !! using PETSc as a backend.
 
   use petsc
-  
+
   use m_cg_types
+
+  use m_allocator, only: field_t
   use m_tdsops, only: dirps_t
   
   implicit none
@@ -69,6 +71,18 @@ module m_poisson_cg
      end subroutine MatShellSetContext
   end interface MatShellSetContext
 
+  interface MatShellGetContext
+     !! Defines the interface to the external (PETSc) function to retrieve application-dependent
+     !! information from the matrix-free operator.
+     subroutine MatShellGetContext(M, ctx, ierr)
+       use petsc
+       use m_cg_types
+       type(tMat) :: M      ! The matrix object
+       type(mat_ctx) :: ctx ! The shell matrix context
+       integer :: ierr
+     end subroutine MatShellGetContext
+  end interface MatShellGetContext
+  
   interface MatShellSetOperation
      !! Defines the interface to the external (PETSc) function to set the matrix-free operator
      !! procedure that evaluates `f = Mx`.
@@ -141,13 +155,13 @@ contains
        
        call MatCreateShell(PETSC_COMM_WORLD, nlocal, nlocal, PETSC_DETERMINE, PETSC_DETERMINE, ctx, M, ierr)
        call MatShellSetContext(M, ctx, ierr) ! Is this necessary?
-       call MatShellSetOperation(M, MATOP_MULT, poissmult, ierr)
+       call MatShellSetOperation(M, MATOP_MULT, poissmult_petsc, ierr)
     end if
     call MatSetUp(M, ierr)
 
   end subroutine create_matrix
   
-  subroutine poissmult(M, x, f, ierr)
+  subroutine poissmult_petsc(M, x, f, ierr)
     !! Computes the action of the Poisson operator, i.e. `f = Mx` where `M` is the discrete
     !! Laplacian.
     type(tMat) :: M ! The operator
@@ -155,6 +169,22 @@ contains
     type(tVec) :: f ! The output vector
     integer :: ierr ! The error code
     
+    type(mat_ctx) :: ctx
+
+    call MatShellGetContext(M, ctx, ierr)
+
+    ! Extract x into a field
+    ! Call poissmult
+    ! Extract field into f
+  end subroutine poissmult_petsc
+
+  subroutine poissmult(x, f)
+    !! Computes the action of the Poisson operator, i.e. `f = Mx` where `M` is the discrete
+    !! Laplacian.
+    class(field_t), intent(in) :: x    ! The input field
+    class(field_t), intent(inout) :: f ! The output field
+
+    ! Compute lapl(x) => f
   end subroutine poissmult
   
 end module m_poisson_cg
