@@ -93,9 +93,9 @@ contains
       v_init = 0
       w_init = 0
 
-      call solver%backend%set_fields( &
-         solver%u, solver%v, solver%w, u_init, v_init, w_init &
-      )
+      call solver%backend%set_field(solver%u, u_init)
+      call solver%backend%set_field(solver%v, v_init)
+      call solver%backend%set_field(solver%w, w_init)
 
       deallocate(u_init, v_init, w_init)
       print*, 'initial conditions are set'
@@ -548,9 +548,9 @@ contains
 
       print*, 'run end'
 
-      call self%backend%get_fields( &
-         u_out, v_out, w_out, self%u, self%v, self%w &
-      )
+      call self%backend%get_field(u_out, self%u)
+      call self%backend%get_field(v_out, self%v)
+      call self%backend%get_field(w_out, self%w)
 
    end subroutine run
 

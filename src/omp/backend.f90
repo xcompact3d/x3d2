@@ -30,8 +30,9 @@ module m_omp_backend
       procedure :: sum_yintox => sum_yintox_omp
       procedure :: sum_zintox => sum_zintox_omp
       procedure :: vecadd => vecadd_omp
-      procedure :: set_fields => set_fields_omp
-      procedure :: get_fields => get_fields_omp
+      procedure :: scalar_product => scalar_product_omp
+      procedure :: set_field => set_field_omp
+      procedure :: get_field => get_field_omp
       procedure :: transeq_omp_dist
    end type omp_backend_t
 
@@ -304,6 +305,16 @@ module m_omp_backend
 
    end subroutine vecadd_omp
 
+   real(dp) function scalar_product_omp(self, x, y) result(s)
+      implicit none
+
+      class(omp_backend_t) :: self
+      class(field_t), intent(in) :: x, y
+
+      s = 0._dp
+
+   end function scalar_product_omp
+
    subroutine copy_into_buffers(u_send_s, u_send_e, u, n, n_blocks)
       implicit none
 
@@ -329,31 +340,27 @@ module m_omp_backend
 
    end subroutine copy_into_buffers
 
-   subroutine set_fields_omp(self, u, v, w, u_in, v_in, w_in)
+   subroutine set_field_omp(self, f, arr)
       implicit none
 
       class(omp_backend_t) :: self
-      class(field_t), intent(inout) :: u, v, w
-      real(dp), dimension(:, :, :), intent(in) :: u_in, v_in, w_in
+      class(field_t), intent(inout) :: f
+      real(dp), dimension(:, :, :), intent(in) :: arr
 
-      u%data = u_in
-      v%data = v_in
-      w%data = w_in
+      f%data = arr
 
-   end subroutine set_fields_omp
+   end subroutine set_field_omp
 
-   subroutine get_fields_omp(self, u_out, v_out, w_out, u, v, w)
+   subroutine get_field_omp(self, arr, f)
       implicit none
 
       class(omp_backend_t) :: self
-      real(dp), dimension(:, :, :), intent(out) :: u_out, v_out, w_out
-      class(field_t), intent(in) :: u, v, w
+      real(dp), dimension(:, :, :), intent(out) :: arr
+      class(field_t), intent(in) :: f
 
-      u_out = u%data
-      v_out = v%data
-      w_out = w%data
+      arr = f%data
 
-   end subroutine get_fields_omp
+   end subroutine get_field_omp
 
 end module m_omp_backend
 
