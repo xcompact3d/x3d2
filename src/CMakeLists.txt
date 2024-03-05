@@ -3,6 +3,7 @@ set(SRC
   backend.f90
   common.f90
   poisson_fft.f90
+  poisson_cg.f90
   solver.f90
   tdsops.f90
   time_integrator.f90
