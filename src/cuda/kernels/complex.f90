@@ -8,7 +8,7 @@ module m_cuda_complex
 
 contains
 
-   attributes(global) subroutine processfftdiv( &
+   attributes(global) subroutine process_spectral_div_u( &
          div, waves, nx, ny, nz, ax, bx, ay, by, az, bz &
          )
       implicit none
@@ -63,8 +63,8 @@ contains
          if ((tmp_r < 1.e-16_dp) .or. (tmp_c < 1.e-16_dp)) then
             div_r = 0._dp; div_c = 0._dp
          else
-            div_r =-div_r/tmp_r
-            div_c =-div_c/tmp_c
+            div_r = -div_r/tmp_r
+            div_c = -div_c/tmp_c
          end if
 
          ! post-process backward
@@ -72,7 +72,7 @@ contains
          tmp_r = div_r
          tmp_c = div_c
          div_r = tmp_r*bz(iz) - tmp_c*az(iz)
-         div_c =-tmp_c*bz(iz) - tmp_r*az(iz)
+         div_c = -tmp_c*bz(iz) - tmp_r*az(iz)
 
          ! post-process in y
          tmp_r = div_r
@@ -86,7 +86,7 @@ contains
          tmp_r = div_r
          tmp_c = div_c
          div_r = tmp_r*bx(ix) + tmp_c*ax(ix)
-         div_c =-tmp_c*bx(ix) + tmp_r*ax(ix)
+         div_c = -tmp_c*bx(ix) + tmp_r*ax(ix)
          if (ix > nx/2 + 1) div_r = -div_r
          if (ix > nx/2 + 1) div_c = -div_c
 
@@ -94,7 +94,7 @@ contains
          div(i, j, b) = cmplx(div_r, div_c, kind=dp)
       end do
 
-   end subroutine processfftdiv
+   end subroutine process_spectral_div_u
 
    attributes(global) subroutine reorder_cmplx_x2y_T(u_y, u_x, nz)
       implicit none

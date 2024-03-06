@@ -22,6 +22,8 @@ module m_omp_poisson_fft
       module procedure init
    end interface omp_poisson_fft_t
 
+   private :: init
+
 contains
 
    function init(xdirps, ydirps, zdirps) result(poisson_fft)
