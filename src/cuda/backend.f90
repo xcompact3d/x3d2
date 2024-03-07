@@ -7,11 +7,13 @@ module m_cuda_backend
    use m_base_backend, only: base_backend_t
    use m_common, only: dp, globs_t, &
                        RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
+   use m_poisson_fft, only: poisson_fft_t
    use m_tdsops, only: dirps_t, tdsops_t
 
    use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
    use m_cuda_common, only: SZ
    use m_cuda_exec_dist, only: exec_dist_transeq_3fused, exec_dist_tds_compact
+   use m_cuda_poisson_fft, only: cuda_poisson_fft_t
    use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
    use m_cuda_tdsops, only: cuda_tdsops_t
    use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
@@ -45,6 +47,7 @@ module m_cuda_backend
       procedure :: scalar_product => scalar_product_cuda
       procedure :: set_field => set_field_cuda
       procedure :: get_field => get_field_cuda
+      procedure :: init_poisson_fft => init_cuda_poisson_fft
       procedure :: transeq_cuda_dist
       procedure :: transeq_cuda_thom
       procedure :: tds_solve_dist
@@ -63,6 +66,7 @@ module m_cuda_backend
       class(allocator_t), target, intent(inout) :: allocator
       type(cuda_backend_t) :: backend
 
+      type(cuda_poisson_fft_t) :: cuda_poisson_fft
       integer :: n_halo, n_block
 
       select type(allocator)
@@ -599,6 +603,21 @@ module m_cuda_backend
       select type(f); type is (cuda_field_t); arr = f%data_d; end select
 
    end subroutine get_field_cuda
+
+   subroutine init_cuda_poisson_fft(self, xdirps, ydirps, zdirps)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+
+      allocate(cuda_poisson_fft_t :: self%poisson_fft)
+
+      select type (poisson_fft => self%poisson_fft)
+      type is (cuda_poisson_fft_t)
+         poisson_fft = cuda_poisson_fft_t(xdirps, ydirps, zdirps)
+      end select
+
+   end subroutine init_cuda_poisson_fft
 
 end module m_cuda_backend
 

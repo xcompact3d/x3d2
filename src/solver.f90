@@ -2,7 +2,8 @@ module m_solver
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
    use m_common, only: dp, globs_t, &
-                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
+                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
+                       POISSON_SOLVER_FFT, POISSON_SOLVER_CG
    use m_tdsops, only: tdsops_t, dirps_t
    use m_time_integrator, only: time_intg_t
 
@@ -37,23 +38,39 @@ module m_solver
       !! for later use.
 
       real(dp) :: dt, nu
+      integer :: n_iters, n_output
 
       class(field_t), pointer :: u, v, w
 
       class(base_backend_t), pointer :: backend
       class(dirps_t), pointer :: xdirps, ydirps, zdirps
       class(time_intg_t), pointer :: time_integrator
+      procedure(poisson_solver), pointer :: poisson => null()
    contains
       procedure :: transeq
       procedure :: divergence_v2p
       procedure :: gradient_p2v
       procedure :: curl
+      procedure :: output
       procedure :: run
    end type solver_t
+
+   abstract interface
+      subroutine poisson_solver(self, pressure, div_u)
+         import :: solver_t
+         import :: field_t
+         implicit none
+
+         class(solver_t) :: self
+         class(field_t), intent(inout) :: pressure
+         class(field_t), intent(in) :: div_u
+      end subroutine poisson_solver
+   end interface
 
    interface solver_t
       module procedure init
    end interface solver_t
+
 contains
 
    function init(backend, time_integrator, xdirps, ydirps, zdirps, globs) &
@@ -69,8 +86,8 @@ contains
       real(dp), allocatable, dimension(:, :, :) :: u_init, v_init, w_init
       integer :: dims(3)
 
-      real(dp) :: dx, dy, dz
-      integer :: nx, ny, nz
+      real(dp) :: x, y, z
+      integer :: nx, ny, nz, i, j, b, ka, kb, ix, iy, iz, sz
 
       solver%backend => backend
       solver%time_integrator => time_integrator
@@ -89,9 +106,31 @@ contains
       allocate(v_init(dims(1), dims(2), dims(3)))
       allocate(w_init(dims(1), dims(2), dims(3)))
 
-      u_init = 0
-      v_init = 0
-      w_init = 0
+      solver%dt = globs%dt
+      solver%backend%nu = globs%nu
+      solver%n_iters = globs%n_iters
+      solver%n_output = globs%n_output
+
+      sz = dims(1)
+      nx = globs%nx_loc; ny = globs%ny_loc; nz = globs%nz_loc
+      do ka = 1, nz
+         do kb = 1, ny/sz
+            do j = 1, nx
+               do i = 1, sz
+                  ! Mapping to ix, iy, iz depends on global group numbering
+                  ix = j; iy = (kb - 1)*sz + i; iz = ka
+                  x = (ix - 1)*globs%dx
+                  y = (iy - 1)*globs%dy
+                  z = (iz - 1)*globs%dz
+
+                  b = ka + (kb - 1)*xdirps%n
+                  u_init(i, j, b) = sin(x)*cos(y)*cos(z)
+                  v_init(i, j, b) =-cos(x)*sin(y)*cos(z)
+                  w_init(i, j, b) = 0
+               end do
+            end do
+         end do
+      end do
 
       call solver%backend%set_field(solver%u, u_init)
       call solver%backend%set_field(solver%v, v_init)
@@ -100,13 +139,20 @@ contains
       deallocate(u_init, v_init, w_init)
       print*, 'initial conditions are set'
 
-      nx = globs%nx_loc; ny = globs%ny_loc; nz = globs%nz_loc
-      dx = globs%dx; dy = globs%dy; dz = globs%dz
-
       ! Allocate and set the tdsops
-      call allocate_tdsops(solver%xdirps, nx, dx, solver%backend)
-      call allocate_tdsops(solver%ydirps, ny, dy, solver%backend)
-      call allocate_tdsops(solver%zdirps, nz, dz, solver%backend)
+      call allocate_tdsops(solver%xdirps, nx, globs%dx, solver%backend)
+      call allocate_tdsops(solver%ydirps, ny, globs%dy, solver%backend)
+      call allocate_tdsops(solver%zdirps, nz, globs%dz, solver%backend)
+
+      select case (globs%poisson_solver_type)
+      case (POISSON_SOLVER_FFT)
+         print*, 'Poisson solver: FFT'
+         call solver%backend%init_poisson_fft(xdirps, ydirps, zdirps)
+         solver%poisson => poisson_fft
+      case (POISSON_SOLVER_CG)
+         print*, 'Poisson solver: CG, not yet implemented'
+         solver%poisson => poisson_cg
+      end select
 
    end function init
 
@@ -489,20 +535,86 @@ contains
 
    end subroutine curl
 
-   subroutine run(self, n_iter, u_out, v_out, w_out)
+   subroutine poisson_fft(self, pressure, div_u)
+      implicit none
+
+      class(solver_t) :: self
+      class(field_t), intent(inout) :: pressure
+      class(field_t), intent(in) :: div_u
+
+      ! call forward FFT
+      ! output array in spectral space is stored at poisson_fft class
+      call self%backend%poisson_fft%fft_forward(div_u)
+
+      ! postprocess
+      call self%backend%poisson_fft%fft_postprocess
+
+      ! call backward FFT
+      call self%backend%poisson_fft%fft_backward(pressure)
+
+   end subroutine poisson_fft
+
+   subroutine poisson_cg(self, pressure, div_u)
+      implicit none
+
+      class(solver_t) :: self
+      class(field_t), intent(inout) :: pressure
+      class(field_t), intent(in) :: div_u
+
+   end subroutine poisson_cg
+
+   subroutine output(self, t, u_out)
       implicit none
 
       class(solver_t), intent(in) :: self
-      integer, intent(in) :: n_iter
+      real(dp), intent(in) :: t
+      real(dp), dimension(:, :, :), intent(inout) :: u_out
+
+      class(field_t), pointer :: du, dv, dw
+      integer :: ngrid
+
+      ngrid = self%xdirps%n*self%ydirps%n*self%zdirps%n
+      print*, 'time = ', t
+
+      du => self%backend%allocator%get_block()
+      dv => self%backend%allocator%get_block()
+      dw => self%backend%allocator%get_block()
+
+      call self%curl(du, dv, dw, self%u, self%v, self%w)
+      print*, 'enstrophy:', 0.5_dp*( &
+         self%backend%scalar_product(du, du) &
+         + self%backend%scalar_product(dv, dv) &
+         + self%backend%scalar_product(dw, dw) &
+         )/ngrid
+
+      call self%backend%allocator%release_block(du)
+      call self%backend%allocator%release_block(dv)
+      call self%backend%allocator%release_block(dw)
+
+      call self%divergence_v2p(du, self%u, self%v, self%w)
+      call self%backend%get_field(u_out, du)
+      print*, 'div u max mean:', maxval(abs(u_out)), sum(abs(u_out))/ngrid
+
+   end subroutine output
+
+   subroutine run(self, u_out, v_out, w_out)
+      implicit none
+
+      class(solver_t), intent(in) :: self
       real(dp), dimension(:, :, :), intent(inout) :: u_out, v_out, w_out
 
       class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
 
+      real(dp) :: t
       integer :: i
+
+      print*, 'initial conditions'
+      t = 0._dp
+      call self%output(t, u_out)
 
       print*, 'start run'
 
-      do i = 1, n_iter
+      do i = 1, self%n_iters
          du => self%backend%allocator%get_block()
          dv => self%backend%allocator%get_block()
          dw => self%backend%allocator%get_block()
@@ -524,7 +636,7 @@ contains
 
          pressure => self%backend%allocator%get_block()
 
-         !call self%poisson(pressure, div_u)
+         call self%poisson(pressure, div_u)
 
          call self%backend%allocator%release_block(div_u)
 
@@ -544,6 +656,11 @@ contains
          call self%backend%allocator%release_block(dpdx)
          call self%backend%allocator%release_block(dpdy)
          call self%backend%allocator%release_block(dpdz)
+
+         if ( mod(i, self%n_output) == 0 ) then
+            t = i*self%dt
+            call self%output(t, u_out)
+         end if
       end do
 
       print*, 'run end'
