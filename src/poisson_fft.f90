@@ -69,6 +69,7 @@ contains
    end subroutine base_init
 
    subroutine waves_set(self, xdirps, ydirps, zdirps, sz)
+      !! Ref. JCP 228 (2009), 5989–6015, Sec 4
       implicit none
 
       class(poisson_fft_t) :: self
@@ -83,7 +84,6 @@ contains
       complex(dp) :: xt2, yt2, zt2, xyzk
 
       integer :: i, j, ka, kb, ix, iy, iz
-
 
       nx = xdirps%n; ny = ydirps%n; nz = zdirps%n
 
@@ -154,13 +154,13 @@ contains
          zk2(i) = cmplx(1._dp, 1._dp, kind=dp)*(nz*wp/zdirps%L)**2
       end do
 
-      print*, 'set waves array'
+      print*, 'waves array is correctly set only for a single rank run'
       ! TODO: do loop ranges below are valid only for single rank runs
       do ka = 1, nz/2 + 1
          do kb = 1, ny/sz
             do j = 1, nx
                do i = 1, sz
-                  ix = j; iy = (kb-1)*sz+i; iz = ka !+ xderps%nspz_st - 1
+                  ix = j; iy = (kb - 1)*sz + i; iz = ka
                   rlexs = real(exs(ix), kind=dp)*xdirps%d
                   rleys = real(eys(iy), kind=dp)*ydirps%d
                   rlezs = real(ezs(iz), kind=dp)*zdirps%d

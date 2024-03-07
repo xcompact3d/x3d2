@@ -11,14 +11,17 @@ module m_cuda_poisson_fft
    use m_cuda_common, only: SZ
    use m_cuda_complex, only: reorder_cmplx_x2y_T, reorder_cmplx_y2x_T, &
                              reorder_cmplx_y2z_T, reorder_cmplx_z2y_T, &
-                             processfftdiv
+                             process_spectral_div_u
 
    implicit none
 
    type, extends(poisson_fft_t) :: cuda_poisson_fft_t
       !! FFT based Poisson solver
       !! It can only handle 1D decompositions along z direction.
+
+      !> Local domain sized arrays to store data in spectral space
       complex(dp), device, pointer, dimension(:) :: c_x_dev, c_y_dev, c_z_dev
+      !> Local domain sized array storing the spectral equivalence constants
       complex(dp), device, allocatable, dimension(:, :, :) :: waves_dev
 
       real(dp), device, allocatable, dimension(:) :: ax_dev, bx_dev, &
@@ -36,6 +39,8 @@ module m_cuda_poisson_fft
    interface cuda_poisson_fft_t
       module procedure init
    end interface cuda_poisson_fft_t
+
+   private :: init
 
 contains
 
@@ -223,7 +228,7 @@ contains
       ! Postprocess
       blocks = dim3((self%ny*(self%nz/2 + 1))/SZ, 1, 1)
       threads = dim3(SZ, 1, 1)
-      call processfftdiv<<<blocks, threads>>>( &
+      call process_spectral_div_u<<<blocks, threads>>>( &
          c_dev, self%waves_dev, self%nx, self%ny, self%nz, &
          self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
          self%az_dev, self%bz_dev &

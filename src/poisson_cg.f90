@@ -23,6 +23,10 @@ module m_poisson_cg
   implicit none
 
   private
+
+  ! XXX: Remove these - they're here to silence the compiler warnings mid-merging
+  public :: init
+  public :: poissmult
   
   type :: poisson_cg_t
      !! Conjugate Gradient based Poisson solver.
