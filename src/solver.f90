@@ -150,7 +150,7 @@ contains
          call solver%backend%init_poisson_fft(xdirps, ydirps, zdirps)
          solver%poisson => poisson_fft
       case (POISSON_SOLVER_CG)
-         print*, 'Poisson solver: CG'
+         print*, 'Poisson solver: CG, not yet implemented'
          solver%poisson => poisson_cg
       end select
 
