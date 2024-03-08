@@ -66,9 +66,6 @@ program xcompact
    globs%n_iters = 20000
    globs%n_output = 100
 
-   globs%dt = 0.001_dp
-   globs%nu = 1._dp/1600._dp
-
    ! set nprocs based on run time arguments
    globs%nproc_x = 1; globs%nproc_y = 1; globs%nproc_z = 1
 
