@@ -72,7 +72,7 @@ program test_omp_transeq
    allocator => omp_allocator
    print*, 'OpenMP allocator instantiated'
 
-   omp_backend = omp_backend_t(globs, allocator, xdirps, ydirps, zdirps)
+   omp_backend = omp_backend_t(globs, allocator)
    backend => omp_backend
    print*, 'OpenMP backend instantiated'
 

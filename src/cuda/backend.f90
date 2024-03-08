@@ -59,12 +59,11 @@ module m_cuda_backend
 
  contains
 
-   function init(globs, allocator, xdirps, ydirps, zdirps) result(backend)
+   function init(globs, allocator) result(backend)
       implicit none
 
       class(globs_t) :: globs
       class(allocator_t), target, intent(inout) :: allocator
-      class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
       type(cuda_backend_t) :: backend
 
       type(cuda_poisson_fft_t) :: cuda_poisson_fft
@@ -604,21 +603,6 @@ module m_cuda_backend
       select type(f); type is (cuda_field_t); arr = f%data_d; end select
 
    end subroutine get_field_cuda
-
-   subroutine init_cuda_poisson_fft(self, xdirps, ydirps, zdirps)
-      implicit none
-
-      class(cuda_backend_t) :: self
-      type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
-
-      allocate(cuda_poisson_fft_t :: self%poisson_fft)
-
-      select type (poisson_fft => self%poisson_fft)
-      type is (cuda_poisson_fft_t)
-         poisson_fft = cuda_poisson_fft_t(xdirps, ydirps, zdirps)
-      end select
-
-   end subroutine init_cuda_poisson_fft
 
    subroutine init_cuda_poisson_fft(self, xdirps, ydirps, zdirps)
       implicit none

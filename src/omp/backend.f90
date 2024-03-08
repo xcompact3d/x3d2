@@ -44,12 +44,11 @@ module m_omp_backend
 
  contains
 
-   function init(globs, allocator, xdirps, ydirps, zdirps) result(backend)
+   function init(globs, allocator) result(backend)
       implicit none
 
       class(globs_t) :: globs
       class(allocator_t), target, intent(inout) :: allocator
-      class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
       type(omp_backend_t) :: backend
 
       integer :: n_halo, n_block
