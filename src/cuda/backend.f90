@@ -1,21 +1,25 @@
 module m_cuda_backend
    use iso_fortran_env, only: stderr => error_unit
    use cudafor
+   use mpi
 
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
-   use m_common, only: dp, globs_t, RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2Y
+   use m_common, only: dp, globs_t, &
+                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
+   use m_poisson_fft, only: poisson_fft_t
    use m_tdsops, only: dirps_t, tdsops_t
 
    use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
    use m_cuda_common, only: SZ
    use m_cuda_exec_dist, only: exec_dist_transeq_3fused, exec_dist_tds_compact
+   use m_cuda_poisson_fft, only: cuda_poisson_fft_t
    use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
    use m_cuda_tdsops, only: cuda_tdsops_t
    use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
    use m_cuda_kernels_reorder, only: &
-       reorder_x2y, reorder_x2z, reorder_y2x, reorder_y2z, reorder_z2y, &
-       sum_yintox, sum_zintox, axpby, buffer_copy
+       reorder_x2y, reorder_x2z, reorder_y2x, reorder_y2z, reorder_z2x, &
+       reorder_z2y, sum_yintox, sum_zintox, scalar_product, axpby, buffer_copy
 
    implicit none
 
@@ -40,8 +44,10 @@ module m_cuda_backend
       procedure :: sum_yintox => sum_yintox_cuda
       procedure :: sum_zintox => sum_zintox_cuda
       procedure :: vecadd => vecadd_cuda
-      procedure :: set_fields => set_fields_cuda
-      procedure :: get_fields => get_fields_cuda
+      procedure :: scalar_product => scalar_product_cuda
+      procedure :: set_field => set_field_cuda
+      procedure :: get_field => get_field_cuda
+      procedure :: init_poisson_fft => init_cuda_poisson_fft
       procedure :: transeq_cuda_dist
       procedure :: transeq_cuda_thom
       procedure :: tds_solve_dist
@@ -60,6 +66,7 @@ module m_cuda_backend
       class(allocator_t), target, intent(inout) :: allocator
       type(cuda_backend_t) :: backend
 
+      type(cuda_poisson_fft_t) :: cuda_poisson_fft
       integer :: n_halo, n_block
 
       select type(allocator)
@@ -452,6 +459,10 @@ module m_cuda_backend
          threads = dim3(SZ, SZ, 1)
          call reorder_y2z<<<blocks, threads>>>(u_o_d, u_i_d, &
                                                self%nx_loc, self%nz_loc)
+      case (RDR_Z2X) ! z2x
+         blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
+         threads = dim3(SZ, 1, 1)
+         call reorder_z2x<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
       case (RDR_Z2Y) ! z2y
          blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
          threads = dim3(SZ, SZ, 1)
@@ -524,6 +535,35 @@ module m_cuda_backend
 
    end subroutine vecadd_cuda
 
+   real(dp) function scalar_product_cuda(self, x, y) result(s)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      class(field_t), intent(in) :: x, y
+
+      real(dp), device, pointer, dimension(:, :, :) :: x_d, y_d
+      real(dp), device, allocatable :: sum_d
+      type(dim3) :: blocks, threads
+      integer :: n, ierr
+
+      select type(x); type is (cuda_field_t); x_d => x%data_d; end select
+      select type(y); type is (cuda_field_t); y_d => y%data_d; end select
+
+      allocate (sum_d)
+      sum_d = 0._dp
+
+      n = size(x_d, dim = 2)
+      blocks = dim3(size(x_d, dim = 3), 1, 1)
+      threads = dim3(SZ, 1, 1)
+      call scalar_product<<<blocks, threads>>>(sum_d, x_d, y_d, n)
+
+      s = sum_d
+
+      call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
+                         MPI_COMM_WORLD, ierr)
+
+   end function scalar_product_cuda
+
    subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n)
       implicit none
 
@@ -542,31 +582,42 @@ module m_cuda_backend
 
    end subroutine copy_into_buffers
 
-   subroutine set_fields_cuda(self, u, v, w, u_in, v_in, w_in)
+   subroutine set_field_cuda(self, f, arr)
       implicit none
 
       class(cuda_backend_t) :: self
-      class(field_t), intent(inout) :: u, v, w
-      real(dp), dimension(:, :, :), intent(in) :: u_in, v_in, w_in
+      class(field_t), intent(inout) :: f
+      real(dp), dimension(:, :, :), intent(in) :: arr
 
-      select type(u); type is (cuda_field_t); u%data_d = u_in; end select
-      select type(v); type is (cuda_field_t); v%data_d = v_in; end select
-      select type(w); type is (cuda_field_t); w%data_d = w_in; end select
+      select type(f); type is (cuda_field_t); f%data_d = arr; end select
 
-   end subroutine set_fields_cuda
+   end subroutine set_field_cuda
 
-   subroutine get_fields_cuda(self, u_out, v_out, w_out, u, v, w)
+   subroutine get_field_cuda(self, arr, f)
       implicit none
 
       class(cuda_backend_t) :: self
-      real(dp), dimension(:, :, :), intent(out) :: u_out, v_out, w_out
-      class(field_t), intent(in) :: u, v, w
+      real(dp), dimension(:, :, :), intent(out) :: arr
+      class(field_t), intent(in) :: f
 
-      select type(u); type is (cuda_field_t); u_out = u%data_d; end select
-      select type(v); type is (cuda_field_t); v_out = v%data_d; end select
-      select type(w); type is (cuda_field_t); w_out = w%data_d; end select
+      select type(f); type is (cuda_field_t); arr = f%data_d; end select
 
-   end subroutine get_fields_cuda
+   end subroutine get_field_cuda
+
+   subroutine init_cuda_poisson_fft(self, xdirps, ydirps, zdirps)
+      implicit none
+
+      class(cuda_backend_t) :: self
+      type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+
+      allocate(cuda_poisson_fft_t :: self%poisson_fft)
+
+      select type (poisson_fft => self%poisson_fft)
+      type is (cuda_poisson_fft_t)
+         poisson_fft = cuda_poisson_fft_t(xdirps, ydirps, zdirps)
+      end select
+
+   end subroutine init_cuda_poisson_fft
 
 end module m_cuda_backend
 

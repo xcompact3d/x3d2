@@ -95,6 +95,24 @@ contains
 
    end subroutine reorder_y2z
 
+   attributes(global) subroutine reorder_z2x(u_x, u_z, nz)
+      implicit none
+
+      real(dp), device, intent(out), dimension(:, :, :) :: u_x
+      real(dp), device, intent(in), dimension(:, :, :) :: u_z
+      integer, value, intent(in) :: nz
+
+      integer :: i, j, b_i, b_j, nx
+
+      i = threadIdx%x; b_i = blockIdx%x; b_j = blockIdx%y
+      nx = gridDim%x
+
+      do j = 1, nz
+         u_x(i, b_i, j + (b_j - 1)*nz) = u_z(i, j, b_i + (b_j - 1)*nx)
+      end do
+
+   end subroutine reorder_z2x
+
    attributes(global) subroutine reorder_z2y(u_y, u_z, nx, nz)
       implicit none
 
@@ -180,6 +198,27 @@ contains
       end do
 
    end subroutine axpby
+
+   attributes(global) subroutine scalar_product(s, x, y, n)
+      implicit none
+
+      real(dp), device, intent(inout) :: s
+      real(dp), device, intent(in), dimension(:, :, :) :: x, y
+      integer, value, intent(in) :: n
+
+      real(dp) :: s_pncl !! pencil sum
+      integer :: i, j, b, ierr
+
+      i = threadIdx%x
+      b = blockIdx%x
+
+      s_pncl = 0._dp
+      do j = 1, n
+         s_pncl = s_pncl + x(i, j, b)*y(i, j, b)
+      end do
+      ierr = atomicadd(s, s_pncl)
+
+   end subroutine scalar_product
 
    attributes(global) subroutine buffer_copy(u_send_s, u_send_e, u, n, n_halo)
       implicit none

@@ -1,6 +1,7 @@
 module m_base_backend
    use m_allocator, only: allocator_t, field_t
    use m_common, only: dp
+   use m_poisson_fft, only: poisson_fft_t
    use m_tdsops, only: tdsops_t, dirps_t
 
    implicit none
@@ -24,6 +25,7 @@ module m_base_backend
       integer :: nx_loc, ny_loc, nz_loc
       class(allocator_t), pointer :: allocator
       class(dirps_t), pointer :: xdirps, ydirps, zdirps
+      class(poisson_fft_t), pointer :: poisson_fft
    contains
       procedure(transeq_ders), deferred :: transeq_x
       procedure(transeq_ders), deferred :: transeq_y
@@ -33,9 +35,11 @@ module m_base_backend
       procedure(sum_intox), deferred :: sum_yintox
       procedure(sum_intox), deferred :: sum_zintox
       procedure(vecadd), deferred :: vecadd
-      procedure(get_fields), deferred :: get_fields
-      procedure(set_fields), deferred :: set_fields
+      procedure(scalar_product), deferred :: scalar_product
+      procedure(get_field), deferred :: get_field
+      procedure(set_field), deferred :: set_field
       procedure(alloc_tdsops), deferred :: alloc_tdsops
+      procedure(init_poisson_fft), deferred :: init_poisson_fft
    end type base_backend_t
 
    abstract interface
@@ -126,7 +130,20 @@ module m_base_backend
    end interface
 
    abstract interface
-      subroutine get_fields(self, u_out, v_out, w_out, u, v, w)
+      real(dp) function scalar_product(self, x, y) result(s)
+         !! Calculates the scalar product of two input fields
+         import :: base_backend_t
+         import :: dp
+         import :: field_t
+         implicit none
+
+         class(base_backend_t) :: self
+         class(field_t), intent(in) :: x, y
+      end function scalar_product
+   end interface
+
+   abstract interface
+      subroutine get_field(self, arr, f)
          !! copy the specialist data structure from device or host back
          !! to a regular 3D data structure.
          import :: base_backend_t
@@ -135,13 +152,13 @@ module m_base_backend
          implicit none
 
          class(base_backend_t) :: self
-         real(dp), dimension(:, :, :), intent(out) :: u_out, v_out, w_out
-         class(field_t), intent(in) :: u, v, w
-      end subroutine get_fields
+         real(dp), dimension(:, :, :), intent(out) :: arr
+         class(field_t), intent(in) :: f
+      end subroutine get_field
 
-      subroutine set_fields(self, u, v, w, u_in, v_in, w_in)
+      subroutine set_field(self, f, arr)
          !! copy the initial condition stored in a regular 3D data
-         !! structure into the specialist data structure arrays on the
+         !! structure into the specialist data structure array on the
          !! device or host.
          import :: base_backend_t
          import :: dp
@@ -149,9 +166,9 @@ module m_base_backend
          implicit none
 
          class(base_backend_t) :: self
-         class(field_t), intent(inout) :: u, v, w
-         real(dp), dimension(:, :, :), intent(in) :: u_in, v_in, w_in
-      end subroutine set_fields
+         class(field_t), intent(inout) :: f
+         real(dp), dimension(:, :, :), intent(in) :: arr
+      end subroutine set_field
    end interface
 
    abstract interface
@@ -172,6 +189,17 @@ module m_base_backend
          logical, optional, intent(in) :: sym
          real(dp), optional, intent(in) :: c_nu, nu0_nu
       end subroutine alloc_tdsops
+   end interface
+
+   abstract interface
+      subroutine init_poisson_fft(self, xdirps, ydirps, zdirps)
+         import :: base_backend_t
+         import :: dirps_t
+         implicit none
+
+         class(base_backend_t) :: self
+         type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+      end subroutine init_poisson_fft
    end interface
 
 end module m_base_backend

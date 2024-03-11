@@ -3,7 +3,8 @@ program xcompact
 
    use m_allocator
    use m_base_backend
-   use m_common, only: pi, globs_t, set_pprev_pnext
+   use m_common, only: pi, globs_t, set_pprev_pnext, &
+                       POISSON_SOLVER_FFT, POISSON_SOLVER_CG
    use m_solver, only: solver_t
    use m_time_integrator, only: time_intg_t
    use m_tdsops, only: tdsops_t
@@ -55,12 +56,20 @@ program xcompact
 
    ! read L_x/y/z from the input file
    globs%Lx = 2*pi; globs%Ly = 2*pi; globs%Lz = 2*pi
+   xdirps%L = globs%Lx; ydirps%L = globs%Ly; zdirps%L = globs%Lz
 
    ! read ns from the input file
-   globs%nx = 512; globs%ny = 512; globs%nz = 512
+   globs%nx = 256; globs%ny = 256; globs%nz = 256
+
+   globs%dt = 0.001_dp
+   globs%nu = 1._dp/1600._dp
+   globs%n_iters = 20000
+   globs%n_output = 100
 
    ! set nprocs based on run time arguments
    globs%nproc_x = 1; globs%nproc_y = 1; globs%nproc_z = 1
+
+   globs%poisson_solver_type = POISSON_SOLVER_FFT
 
    ! Lets allow a 1D decomposition for the moment
    !globs%nproc_x = nproc
@@ -91,6 +100,8 @@ program xcompact
    globs%dy = globs%Ly/globs%ny
    globs%dz = globs%Lz/globs%nz
 
+   xdirps%d = globs%dx; ydirps%d = globs%dy; zdirps%d = globs%dz
+
    xdirps%n = globs%nx_loc
    ydirps%n = globs%ny_loc
    zdirps%n = globs%nz_loc
@@ -117,8 +128,6 @@ program xcompact
    print*, 'OpenMP backend instantiated'
 #endif
 
-   backend%nu = 1._dp
-
    allocate(u(SZ, globs%nx_loc, globs%n_groups_x))
    allocate(v(SZ, globs%nx_loc, globs%n_groups_x))
    allocate(w(SZ, globs%nx_loc, globs%n_groups_x))
@@ -130,12 +139,14 @@ program xcompact
 
    call cpu_time(t_start)
 
-   call solver%run(100, u, v, w)
+   call solver%run(u, v, w)
 
    call cpu_time(t_end)
 
    print*, 'Time: ', t_end - t_start
 
    print*, 'norms', norm2(u), norm2(v), norm2(w)
+
+   call MPI_Finalize(ierr)
 
 end program xcompact

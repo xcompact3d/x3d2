@@ -1,7 +1,9 @@
 module m_solver
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
-   use m_common, only: dp, globs_t, RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2Y
+   use m_common, only: dp, globs_t, &
+                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
+                       POISSON_SOLVER_FFT, POISSON_SOLVER_CG
    use m_tdsops, only: tdsops_t, dirps_t
    use m_time_integrator, only: time_intg_t
 
@@ -36,23 +38,39 @@ module m_solver
       !! for later use.
 
       real(dp) :: dt, nu
+      integer :: n_iters, n_output
 
       class(field_t), pointer :: u, v, w
 
       class(base_backend_t), pointer :: backend
       class(dirps_t), pointer :: xdirps, ydirps, zdirps
       class(time_intg_t), pointer :: time_integrator
+      procedure(poisson_solver), pointer :: poisson => null()
    contains
       procedure :: transeq
       procedure :: divergence_v2p
       procedure :: gradient_p2v
       procedure :: curl
+      procedure :: output
       procedure :: run
    end type solver_t
+
+   abstract interface
+      subroutine poisson_solver(self, pressure, div_u)
+         import :: solver_t
+         import :: field_t
+         implicit none
+
+         class(solver_t) :: self
+         class(field_t), intent(inout) :: pressure
+         class(field_t), intent(in) :: div_u
+      end subroutine poisson_solver
+   end interface
 
    interface solver_t
       module procedure init
    end interface solver_t
+
 contains
 
    function init(backend, time_integrator, xdirps, ydirps, zdirps, globs) &
@@ -68,8 +86,8 @@ contains
       real(dp), allocatable, dimension(:, :, :) :: u_init, v_init, w_init
       integer :: dims(3)
 
-      real(dp) :: dx, dy, dz
-      integer :: nx, ny, nz
+      real(dp) :: x, y, z
+      integer :: nx, ny, nz, i, j, b, ka, kb, ix, iy, iz, sz
 
       solver%backend => backend
       solver%time_integrator => time_integrator
@@ -88,24 +106,53 @@ contains
       allocate(v_init(dims(1), dims(2), dims(3)))
       allocate(w_init(dims(1), dims(2), dims(3)))
 
-      u_init = 0
-      v_init = 0
-      w_init = 0
+      solver%dt = globs%dt
+      solver%backend%nu = globs%nu
+      solver%n_iters = globs%n_iters
+      solver%n_output = globs%n_output
 
-      call solver%backend%set_fields( &
-         solver%u, solver%v, solver%w, u_init, v_init, w_init &
-      )
+      sz = dims(1)
+      nx = globs%nx_loc; ny = globs%ny_loc; nz = globs%nz_loc
+      do ka = 1, nz
+         do kb = 1, ny/sz
+            do j = 1, nx
+               do i = 1, sz
+                  ! Mapping to ix, iy, iz depends on global group numbering
+                  ix = j; iy = (kb - 1)*sz + i; iz = ka
+                  x = (ix - 1)*globs%dx
+                  y = (iy - 1)*globs%dy
+                  z = (iz - 1)*globs%dz
+
+                  b = ka + (kb - 1)*xdirps%n
+                  u_init(i, j, b) = sin(x)*cos(y)*cos(z)
+                  v_init(i, j, b) =-cos(x)*sin(y)*cos(z)
+                  w_init(i, j, b) = 0
+               end do
+            end do
+         end do
+      end do
+
+      call solver%backend%set_field(solver%u, u_init)
+      call solver%backend%set_field(solver%v, v_init)
+      call solver%backend%set_field(solver%w, w_init)
 
       deallocate(u_init, v_init, w_init)
       print*, 'initial conditions are set'
 
-      nx = globs%nx_loc; ny = globs%ny_loc; nz = globs%nz_loc
-      dx = globs%dx; dy = globs%dy; dz = globs%dz
-
       ! Allocate and set the tdsops
-      call allocate_tdsops(solver%xdirps, nx, dx, solver%backend)
-      call allocate_tdsops(solver%ydirps, ny, dy, solver%backend)
-      call allocate_tdsops(solver%zdirps, nz, dz, solver%backend)
+      call allocate_tdsops(solver%xdirps, nx, globs%dx, solver%backend)
+      call allocate_tdsops(solver%ydirps, ny, globs%dy, solver%backend)
+      call allocate_tdsops(solver%zdirps, nz, globs%dz, solver%backend)
+
+      select case (globs%poisson_solver_type)
+      case (POISSON_SOLVER_FFT)
+         print*, 'Poisson solver: FFT'
+         call solver%backend%init_poisson_fft(xdirps, ydirps, zdirps)
+         solver%poisson => poisson_fft
+      case (POISSON_SOLVER_CG)
+         print*, 'Poisson solver: CG, not yet implemented'
+         solver%poisson => poisson_cg
+      end select
 
    end function init
 
@@ -136,6 +183,10 @@ contains
    end subroutine
 
    subroutine transeq(self, du, dv, dw, u, v, w)
+      !! Skew-symmetric form of convection-diffusion terms in the
+      !! incompressible Navier-Stokes momemtum equations, excluding
+      !! pressure terms.
+      !! Inputs from velocity grid and outputs to velocity grid.
       implicit none
 
       class(solver_t) :: self
@@ -217,6 +268,8 @@ contains
    end subroutine transeq
 
    subroutine divergence_v2p(self, div_u, u, v, w)
+      !! Divergence of a vector field (u, v, w).
+      !! Inputs from velocity grid and outputs to pressure grid.
       implicit none
 
       class(solver_t) :: self
@@ -279,8 +332,8 @@ contains
       u_z => self%backend%allocator%get_block()
       w_z => self%backend%allocator%get_block()
 
-      ! dv_y = dv_y + dw_y
-      call self%backend%vecadd(1._dp, dw_y, 1._dp, dv_y)
+      ! du_y = dv_y + du_y
+      call self%backend%vecadd(1._dp, dv_y, 1._dp, du_y)
 
       ! reorder from y to z
       call self%backend%reorder(u_z, du_y, RDR_Y2Z)
@@ -312,6 +365,8 @@ contains
    end subroutine divergence_v2p
 
    subroutine gradient_p2v(self, dpdx, dpdy, dpdz, pressure)
+      !! Gradient of a scalar field 'pressure'.
+      !! Inputs from pressure grid and outputs to velocity grid.
       implicit none
 
       class(solver_t) :: self
@@ -379,9 +434,9 @@ contains
       call self%backend%tds_solve(dpdx, p_sx_x, self%xdirps, &
                                   self%xdirps%stagder_p2v)
       call self%backend%tds_solve(dpdy, dpdy_sx_x, self%xdirps, &
-                                  self%xdirps%interpl_v2p)
+                                  self%xdirps%interpl_p2v)
       call self%backend%tds_solve(dpdz, dpdz_sx_x, self%xdirps, &
-                                  self%xdirps%interpl_v2p)
+                                  self%xdirps%interpl_p2v)
 
       ! release temporary x fields
       call self%backend%allocator%release_block(p_sx_x)
@@ -390,80 +445,176 @@ contains
 
    end subroutine gradient_p2v
 
-   subroutine curl(self, o_x, o_y, o_z, u, v, w)
+   subroutine curl(self, o_i_hat, o_j_hat, o_k_hat, u, v, w)
+      !! Curl of a vector field (u, v, w).
+      !! Inputs from velocity grid and outputs to velocity grid.
       implicit none
 
       class(solver_t) :: self
-      class(field_t), intent(inout) :: o_x, o_y, o_z !! omega_x/_y/_z
+      !> Vector components of the output vector field Omega
+      class(field_t), intent(inout) :: o_i_hat, o_j_hat, o_k_hat
       class(field_t), intent(in) :: u, v, w
 
-      class(field_t), pointer :: u_y, w_y, du_y, u_z, v_z, du_z, dv_z
+      class(field_t), pointer :: u_y, u_z, v_z, w_y, dwdy_y, dvdz_z, dvdz_x, &
+                                 dudz_z, dudz_x, dudy_y, dudy_x
 
-      ! o_x = dw/dy - dv/dz
-      ! o_y = du/dz - dw/dx
-      ! o_z = dv/dx - du/dy
+      ! omega_i_hat = dw/dy - dv/dz
+      ! omega_j_hat = du/dz - dw/dx
+      ! omega_k_hat = dv/dx - du/dy
 
-      ! obtain dw/dx, dv/dx and store them directly in omega_y, omega_z
-      call self%backend%tds_solve(o_y, w, self%xdirps, self%xdirps%der1st)
-      call self%backend%tds_solve(o_z, v, self%xdirps, self%xdirps%der1st)
-
-      u_y => self%backend%allocator%get_block()
+      ! omega_i_hat
+      ! dw/dy
       w_y => self%backend%allocator%get_block()
-
-      call self%backend%reorder(u_y, u, RDR_X2Y)
+      dwdy_y => self%backend%allocator%get_block()
       call self%backend%reorder(w_y, w, RDR_X2Y)
+      call self%backend%tds_solve(dwdy_y, w_y, self%ydirps, self%ydirps%der1st)
 
-      du_y => self%backend%allocator%get_block()
+      call self%backend%reorder(o_i_hat, dwdy_y, RDR_Y2X)
 
-      ! obtain du/dy, dw/dy
-      ! store du/dy in a temporary field to add into omega_z later
-      ! dw/dy can be stored directly in omega_x as it is empty
-      call self%backend%tds_solve(du_y, u_y, self%ydirps, self%ydirps%der1st)
-      call self%backend%tds_solve(o_x, w_y, self%ydirps, self%ydirps%der1st)
-
-      call self%backend%allocator%release_block(u_y)
       call self%backend%allocator%release_block(w_y)
+      call self%backend%allocator%release_block(dwdy_y)
 
-      ! omega_z = dv/dz - du/dy
-      call self%backend%vecadd(-1._dp, du_y, 1._dp, o_z)
-
-      call self%backend%allocator%release_block(du_y)
-
-      u_z => self%backend%allocator%get_block()
+      ! dv/dz
       v_z => self%backend%allocator%get_block()
-      du_z => self%backend%allocator%get_block()
-      dv_z => self%backend%allocator%get_block()
+      dvdz_z => self%backend%allocator%get_block()
+      call self%backend%reorder(v_z, v, RDR_X2Z)
+      call self%backend%tds_solve(dvdz_z, v_z, self%zdirps, self%zdirps%der1st)
 
-      ! obtain du/dz, dv/dz and store them in temporary fields
-      call self%backend%tds_solve(du_z, u_z, self%zdirps, self%zdirps%der1st)
-      call self%backend%tds_solve(dv_z, v_z, self%zdirps, self%zdirps%der1st)
+      dvdz_x => self%backend%allocator%get_block()
+      call self%backend%reorder(dvdz_x, dvdz_z, RDR_Z2X)
 
-      ! omega_x = dw/dy - dv/dz
-      call self%backend%vecadd(-1._dp, dv_z, 1._dp, o_x)
-      ! omega_y = du/dz - dw/dx
-      call self%backend%vecadd(1._dp, du_z, -1._dp, o_y)
+      call self%backend%allocator%release_block(v_z)
+      call self%backend%allocator%release_block(dvdz_z)
+
+      ! omega_i_hat = dw/dy - dv/dz
+      call self%backend%vecadd(-1._dp, dvdz_x, 1._dp, o_i_hat)
+
+      call self%backend%allocator%release_block(dvdz_x)
+
+      ! omega_j_hat
+      ! du/dz
+      u_z => self%backend%allocator%get_block()
+      dudz_z => self%backend%allocator%get_block()
+      call self%backend%reorder(u_z, u, RDR_X2Z)
+      call self%backend%tds_solve(dudz_z, u_z, self%zdirps, self%zdirps%der1st)
+
+      dudz_x => self%backend%allocator%get_block()
+      call self%backend%reorder(dudz_x, dudz_z, RDR_Z2X)
 
       call self%backend%allocator%release_block(u_z)
-      call self%backend%allocator%release_block(v_z)
-      call self%backend%allocator%release_block(du_z)
-      call self%backend%allocator%release_block(dv_z)
+      call self%backend%allocator%release_block(dudz_z)
+
+      ! dw/dx
+      call self%backend%tds_solve(o_j_hat, w, self%xdirps, self%xdirps%der1st)
+
+      ! omega_j_hat = du/dz - dw/dx
+      call self%backend%vecadd(1._dp, dudz_x, -1._dp, o_j_hat)
+
+      call self%backend%allocator%release_block(dudz_x)
+
+      ! omega_k_hat
+      ! dv/dx
+      call self%backend%tds_solve(o_k_hat, v, self%xdirps, self%xdirps%der1st)
+
+      ! du/dy
+      u_y => self%backend%allocator%get_block()
+      dudy_y => self%backend%allocator%get_block()
+      call self%backend%reorder(u_y, u, RDR_X2Y)
+      call self%backend%tds_solve(dudy_y, u_y, self%ydirps, self%ydirps%der1st)
+
+      dudy_x => self%backend%allocator%get_block()
+      call self%backend%reorder(dudy_x, dudy_y, RDR_Y2X)
+
+      call self%backend%allocator%release_block(u_y)
+      call self%backend%allocator%release_block(dudy_y)
+
+      ! omega_k_hat = dv/dx - du/dy
+      call self%backend%vecadd(-1._dp, dudy_x, 1._dp, o_k_hat)
+
+      call self%backend%allocator%release_block(dudy_x)
 
    end subroutine curl
 
-   subroutine run(self, n_iter, u_out, v_out, w_out)
+   subroutine poisson_fft(self, pressure, div_u)
+      implicit none
+
+      class(solver_t) :: self
+      class(field_t), intent(inout) :: pressure
+      class(field_t), intent(in) :: div_u
+
+      ! call forward FFT
+      ! output array in spectral space is stored at poisson_fft class
+      call self%backend%poisson_fft%fft_forward(div_u)
+
+      ! postprocess
+      call self%backend%poisson_fft%fft_postprocess
+
+      ! call backward FFT
+      call self%backend%poisson_fft%fft_backward(pressure)
+
+   end subroutine poisson_fft
+
+   subroutine poisson_cg(self, pressure, div_u)
+      implicit none
+
+      class(solver_t) :: self
+      class(field_t), intent(inout) :: pressure
+      class(field_t), intent(in) :: div_u
+
+   end subroutine poisson_cg
+
+   subroutine output(self, t, u_out)
       implicit none
 
       class(solver_t), intent(in) :: self
-      integer, intent(in) :: n_iter
+      real(dp), intent(in) :: t
+      real(dp), dimension(:, :, :), intent(inout) :: u_out
+
+      class(field_t), pointer :: du, dv, dw
+      integer :: ngrid
+
+      ngrid = self%xdirps%n*self%ydirps%n*self%zdirps%n
+      print*, 'time = ', t
+
+      du => self%backend%allocator%get_block()
+      dv => self%backend%allocator%get_block()
+      dw => self%backend%allocator%get_block()
+
+      call self%curl(du, dv, dw, self%u, self%v, self%w)
+      print*, 'enstrophy:', 0.5_dp*( &
+         self%backend%scalar_product(du, du) &
+         + self%backend%scalar_product(dv, dv) &
+         + self%backend%scalar_product(dw, dw) &
+         )/ngrid
+
+      call self%backend%allocator%release_block(du)
+      call self%backend%allocator%release_block(dv)
+      call self%backend%allocator%release_block(dw)
+
+      call self%divergence_v2p(du, self%u, self%v, self%w)
+      call self%backend%get_field(u_out, du)
+      print*, 'div u max mean:', maxval(abs(u_out)), sum(abs(u_out))/ngrid
+
+   end subroutine output
+
+   subroutine run(self, u_out, v_out, w_out)
+      implicit none
+
+      class(solver_t), intent(in) :: self
       real(dp), dimension(:, :, :), intent(inout) :: u_out, v_out, w_out
 
       class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
 
+      real(dp) :: t
       integer :: i
+
+      print*, 'initial conditions'
+      t = 0._dp
+      call self%output(t, u_out)
 
       print*, 'start run'
 
-      do i = 1, n_iter
+      do i = 1, self%n_iters
          du => self%backend%allocator%get_block()
          dv => self%backend%allocator%get_block()
          dw => self%backend%allocator%get_block()
@@ -485,7 +636,7 @@ contains
 
          pressure => self%backend%allocator%get_block()
 
-         !call self%poisson(pressure, div_u)
+         call self%poisson(pressure, div_u)
 
          call self%backend%allocator%release_block(div_u)
 
@@ -505,13 +656,18 @@ contains
          call self%backend%allocator%release_block(dpdx)
          call self%backend%allocator%release_block(dpdy)
          call self%backend%allocator%release_block(dpdz)
+
+         if ( mod(i, self%n_output) == 0 ) then
+            t = i*self%dt
+            call self%output(t, u_out)
+         end if
       end do
 
       print*, 'run end'
 
-      call self%backend%get_fields( &
-         u_out, v_out, w_out, self%u, self%v, self%w &
-      )
+      call self%backend%get_field(u_out, self%u)
+      call self%backend%get_field(v_out, self%v)
+      call self%backend%get_field(w_out, self%w)
 
    end subroutine run
 
