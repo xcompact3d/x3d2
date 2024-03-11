@@ -111,7 +111,8 @@ program xcompact
    zdirps%n_blocks = globs%n_groups_z
 
 #ifdef CUDA
-   cuda_allocator = cuda_allocator_t([SZ, globs%nx_loc, globs%n_groups_x])
+   cuda_allocator = cuda_allocator_t(globs%nx_loc, globs%ny_loc, &
+                                     globs%nz_loc, SZ)
    allocator => cuda_allocator
    print*, 'CUDA allocator instantiated'
 
@@ -119,7 +120,7 @@ program xcompact
    backend => cuda_backend
    print*, 'CUDA backend instantiated'
 #else
-   omp_allocator = allocator_t([SZ, globs%nx_loc, globs%n_groups_x])
+   omp_allocator = allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, SZ)
    allocator => omp_allocator
    print*, 'OpenMP allocator instantiated'
 

@@ -12,7 +12,7 @@ program test_allocator_cuda
   class(field_t), pointer :: ptr1, ptr2, ptr3
   integer, allocatable :: l(:)
 
-  allocator = cuda_allocator_t(dims)
+  allocator = cuda_allocator_t(dims(1), dims(2), dims(3), 8)
 
   allpass = .true.
 

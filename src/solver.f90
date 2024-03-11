@@ -101,7 +101,7 @@ contains
       solver%w => solver%backend%allocator%get_block()
 
       ! Set initial conditions
-      dims(:) = solver%backend%allocator%dims(:)
+      dims(:) = solver%backend%allocator%xdims(:)
       allocate(u_init(dims(1), dims(2), dims(3)))
       allocate(v_init(dims(1), dims(2), dims(3)))
       allocate(w_init(dims(1), dims(2), dims(3)))

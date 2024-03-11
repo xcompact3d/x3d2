@@ -31,10 +31,14 @@ module m_allocator
      !! [[m_allocator(module):release_block(subroutine)]].  The
      !! released block is then pushed in front of the block list.
 
-      integer :: dims(3)
+      integer :: nx_padded, ny_padded, nz_padded, sz
       !> The id for the next allocated block.  This counter is
       !> incremented each time a new block is allocated.
       integer :: next_id = 0
+      !> Padded dimensions for x, y, and z oriented fields
+      integer :: xdims(3), ydims(3), zdims(3)
+      !> Padded dimensions for natural Cartesian ordering
+      integer :: cdims(3)
       !> The pointer to the first block on the list.  Non associated if
       !> the list is empty
       ! TODO: Rename first to head
@@ -47,6 +51,10 @@ module m_allocator
       procedure :: destroy
    end type allocator_t
 
+   interface allocator_t
+      module procedure allocator_init
+   end interface allocator_t
+
    type :: field_t
      !! Memory block type holding both a data field and a pointer
      !! to the next block.  The `field_t` type also holds a integer
@@ -54,13 +62,14 @@ module m_allocator
      !! field.  User code is currently responsible for incrementing
      !! the reference count.
       class(field_t), pointer :: next
-      real(dp), allocatable :: data(:)
+      real(dp), pointer, private :: p_data(:)
+      real(dp), pointer, contiguous :: data(:, :, :)
       integer :: refcount = 0
       integer :: id !! An integer identifying the memory block.
    end type field_t
 
    interface field_t
-      module procedure field_constructor
+      module procedure field_init
    end interface field_t
 
    type :: flist_t
@@ -69,16 +78,40 @@ module m_allocator
 
 contains
 
-   function field_constructor(dims, next, id) result(m)
-      integer, intent(in) :: dims(3), id
+   function field_init(nx, ny, nz, sz, next, id) result(f)
+      integer, intent(in) :: nx, ny, nz, sz, id
       type(field_t), pointer, intent(in) :: next
-      type(field_t) :: m
+      type(field_t) :: f
 
-      allocate (m%data(dims(1)*dims(2)*dims(3)))
-      m%refcount = 0
-      m%next => next
-      m%id = id
-   end function field_constructor
+      allocate (f%p_data(nx*ny*nz))
+      ! will be removed, bounds remapping will be carried out by get_block.
+      f%data(1:sz, 1:nx, 1:ny*nz/sz) => f%p_data
+      f%refcount = 0
+      f%next => next
+      f%id = id
+   end function field_init
+
+   function allocator_init(nx, ny, nz, sz) result(allocator)
+      integer, intent(in) :: nx, ny, nz, sz
+      type(allocator_t) :: allocator
+
+      integer :: nx_padded, ny_padded, nz_padded
+
+      ! Apply padding based on sz
+      nx_padded = nx
+      ny_padded = ny
+      nz_padded = nz
+
+      allocator%nx_padded = nx_padded
+      allocator%ny_padded = ny_padded
+      allocator%nz_padded = nz_padded
+      allocator%sz = sz
+
+      allocator%xdims = [sz, nx_padded, ny_padded*nz_padded/sz]
+      allocator%ydims = [sz, ny_padded, nx_padded*nz_padded/sz]
+      allocator%zdims = [sz, nz_padded, nx_padded*ny_padded/sz]
+      allocator%cdims = [nx_padded, ny_padded, nz_padded]
+   end function allocator_init
 
    function create_block(self, next) result(ptr)
     !! Allocate memory for a new block and return a pointer to a new
@@ -89,7 +122,8 @@ contains
       class(field_t), pointer :: ptr
       self%next_id = self%next_id + 1
       allocate (newblock)
-      newblock = field_t(self%dims, next, id=self%next_id)
+      newblock = field_t(self%nx_padded, self%ny_padded, self%nz_padded, &
+                         self%sz, next, id=self%next_id)
       ptr => newblock
    end function create_block
 
@@ -115,6 +149,12 @@ contains
       handle => self%first
       self%first => self%first%next ! 2nd block becomes head block
       handle%next => null() ! Detach ex-head block from the block list
+
+      ! Bounds remapping will be carried out by a dedicated function
+      ! here based on the optional ordering get_block is passed
+      ! something like:
+      !handle%data(1:self%xdims(1), 1:self%xdims(2), 1:self%xdims(3)) &
+      !   => handle%p_data
    end function get_block
 
    subroutine release_block(self, handle)

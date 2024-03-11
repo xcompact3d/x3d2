@@ -11,7 +11,7 @@ program test_allocator
   class(field_t), pointer :: ptr1, ptr2, ptr3
   integer, allocatable :: l(:)
 
-  allocator = allocator_t(dims)
+  allocator = allocator_t(dims(1), dims(2), dims(3), 8)
 
   allpass = .true.
 

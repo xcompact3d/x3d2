@@ -68,7 +68,7 @@ program test_omp_transeq
    ydirps%n_blocks = globs%n_groups_y
    zdirps%n_blocks = globs%n_groups_z
 
-   omp_allocator = allocator_t([SZ, globs%nx_loc, globs%n_groups_x])
+   omp_allocator = allocator_t(xdirps%n, ydirps%n, zdirps%n, SZ)
    allocator => omp_allocator
    print*, 'OpenMP allocator instantiated'
 
