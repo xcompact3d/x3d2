@@ -273,43 +273,14 @@ module m_omp_backend
       class(field_t), intent(in) :: u
       integer, intent(in) :: direction
 
-      !! Math for the mapping between our arrays in x, y or z orientation and ijk global mapping
-      !! Hasn't been tested, likely several off-by-1 mistakes
-      !! -------------     
-      !! ijk to x
-      !! x_i = mod(j, SZ) + 1
-      !! x_j = i
-      !! x_k = (ny_loc/SZ)*(k-1) + floor(j/SZ)
-
-      !! x to ijk
-      !! i = x_j
-      !! j = mod(x_k, ny_loc/SZ)*SZ + x_i 
-      !! k = floor(x_k/(ny_loc/SZ))
-      
-      !! -------------     
-      !! ijk to y
-      !! y_i = mod(i, SZ) + 1
-      !! y_j = j
-      !! y_k = (nx_loc/SZ)*(k-1) + floor(i/SZ)
-
-      !! y to ijk
-      !! i = mod(y_k, nx_loc/SZ)*SZ + y_i 
-      !! j = y_j
-      !! k = floor(y_k/(nx_loc/SZ))
-
-
-      !! -------------     
-      !! ijk to z
-      !! z_i = mod(i, SZ) + 1
-      !! z_j = k
-      !! z_k = (nx_loc/SZ)*(k-1) + floor(i/SZ)
-
-      !! z to ijk
-      !! i = mod(z_k, nx_loc/SZ)*SZ + z_i 
-      !! j = floor(z_k/(nx_loc/SZ))
-      !! k = z_j
-
-
+      do k=1,
+         do j=1, 
+            do i=1, 
+               call get_index_reordering(out_i, out_j, out_k, i, j, k, direction)
+               u_(out_i, out_j, out_k) = u(i,j,k)
+            end do
+         end do
+      end do
 
    end subroutine reorder_omp
 

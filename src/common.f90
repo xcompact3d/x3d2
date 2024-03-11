@@ -6,6 +6,7 @@ module m_common
 
    integer, parameter :: RDR_X2Y = 12, RDR_X2Z = 13, RDR_Y2X = 21, &
                          RDR_Y2Z = 23, RDR_Z2Y = 32
+   integer, parameter :: dir_X = 1, dir_Y = 2, dir_Z = 3
 
    type :: globs_t
       integer :: nx, ny, nz
