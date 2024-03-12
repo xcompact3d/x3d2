@@ -16,6 +16,8 @@ module m_cuda_allocator
    type, extends(field_t) :: cuda_field_t
       real(dp), device, pointer, private :: p_data_d(:)
       real(dp), device, pointer, contiguous :: data_d(:, :, :)
+   contains
+      procedure :: set_shape => set_shape_cuda
    end type cuda_field_t
 
    interface cuda_field_t
@@ -30,12 +32,20 @@ contains
       type(cuda_field_t) :: f
 
       allocate (f%p_data_d(nx*ny*nz))
-      ! will be removed, bounds remapping will be carried out by get_block.
-      f%data_d(1:sz, 1:nx, 1:ny*nz/sz) => f%p_data_d
       f%refcount = 0
       f%next => next
       f%id = id
    end function cuda_field_init
+
+   subroutine set_shape_cuda(self, dims)
+      implicit none
+
+      class(cuda_field_t) :: self
+      integer, intent(in) :: dims(3)
+
+      self%data_d(1:dims(1), 1:dims(2), 1:dims(3)) => self%p_data_d
+
+   end subroutine set_shape_cuda
 
    function cuda_allocator_init(nx, ny, nz, sz) result(allocator)
       integer, intent(in) :: nx, ny, nz, sz

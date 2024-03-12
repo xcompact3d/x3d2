@@ -66,6 +66,8 @@ module m_allocator
       real(dp), pointer, contiguous :: data(:, :, :)
       integer :: refcount = 0
       integer :: id !! An integer identifying the memory block.
+   contains
+      procedure :: set_shape
    end type field_t
 
    interface field_t
@@ -84,12 +86,20 @@ contains
       type(field_t) :: f
 
       allocate (f%p_data(nx*ny*nz))
-      ! will be removed, bounds remapping will be carried out by get_block.
-      f%data(1:sz, 1:nx, 1:ny*nz/sz) => f%p_data
       f%refcount = 0
       f%next => next
       f%id = id
    end function field_init
+
+   subroutine set_shape(self, dims)
+      implicit none
+
+      class(field_t) :: self
+      integer, intent(in) :: dims(3)
+
+      self%data(1:dims(1), 1:dims(2), 1:dims(3)) => self%p_data
+
+   end subroutine set_shape
 
    function allocator_init(nx, ny, nz, sz) result(allocator)
       integer, intent(in) :: nx, ny, nz, sz
@@ -127,7 +137,7 @@ contains
       ptr => newblock
    end function create_block
 
-   function get_block(self) result(handle)
+   function get_block(self, dir) result(handle)
     !! Return a pointer to the first available memory block, i.e. the
     !! current head of the block list.  If the list is empty, allocate
     !! a new block with [[m_allocator(module):create_block(function)]]
@@ -139,6 +149,8 @@ contains
     !! ```
       class(allocator_t), intent(inout) :: self
       class(field_t), pointer :: handle
+      integer, optional, intent(in) :: dir
+      integer :: dims(3)
       ! If the list is empty, allocate a new block before returning a
       ! pointer to it.
       if (.not. associated(self%first)) then
@@ -150,11 +162,8 @@ contains
       self%first => self%first%next ! 2nd block becomes head block
       handle%next => null() ! Detach ex-head block from the block list
 
-      ! Bounds remapping will be carried out by a dedicated function
-      ! here based on the optional ordering get_block is passed
-      ! something like:
-      !handle%data(1:self%xdims(1), 1:self%xdims(2), 1:self%xdims(3)) &
-      !   => handle%p_data
+      ! set dims based on dir
+      call handle%set_shape(self%xdims)
    end function get_block
 
    subroutine release_block(self, handle)
