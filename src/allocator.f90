@@ -108,9 +108,9 @@ contains
       integer :: nx_padded, ny_padded, nz_padded
 
       ! Apply padding based on sz
-      nx_padded = nx
-      ny_padded = ny
-      nz_padded = nz
+      nx_padded = nx - 1 + mod(-(nx - 1), sz) + sz
+      ny_padded = ny - 1 + mod(-(ny - 1), sz) + sz
+      nz_padded = nz - 1 + mod(-(nz - 1), sz) + sz
 
       allocator%nx_padded = nx_padded
       allocator%ny_padded = ny_padded
