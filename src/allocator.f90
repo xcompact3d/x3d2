@@ -1,5 +1,5 @@
 module m_allocator
-   use m_common, only: dp
+   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C
 
    implicit none
 
@@ -150,7 +150,7 @@ contains
       class(allocator_t), intent(inout) :: self
       class(field_t), pointer :: handle
       integer, optional, intent(in) :: dir
-      integer :: dims(3)
+      integer :: direction, dims(3)
       ! If the list is empty, allocate a new block before returning a
       ! pointer to it.
       if (.not. associated(self%first)) then
@@ -162,8 +162,27 @@ contains
       self%first => self%first%next ! 2nd block becomes head block
       handle%next => null() ! Detach ex-head block from the block list
 
-      ! set dims based on dir
-      call handle%set_shape(self%xdims)
+      ! If no direction is specified assume DIR_X
+      if (present(dir)) then
+         direction = dir
+      else
+         direction = DIR_X
+      end if
+
+      ! Set dims based on direction
+      select case(direction)
+      case (DIR_X)
+         dims = self%xdims
+      case (DIR_Y)
+         dims = self%ydims
+      case (DIR_Z)
+         dims = self%zdims
+      case (DIR_C)
+         dims = self%cdims
+      end select
+
+      ! Apply bounds remapping based on requested direction
+      call handle%set_shape(dims)
    end function get_block
 
    subroutine release_block(self, handle)
