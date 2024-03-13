@@ -246,7 +246,7 @@ module m_cuda_backend
          self%u_send_s_dev, self%u_send_e_dev, &
          self%v_send_s_dev, self%v_send_e_dev, &
          self%w_send_s_dev, self%w_send_e_dev, &
-         SZ*4*blocks%x, dirps%nproc, dirps%pprev, dirps%pnext &
+         SZ*4*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext &
       )
 
       ! get some fields for storing the result
@@ -413,7 +413,7 @@ module m_cuda_backend
 
       call sendrecv_fields(self%u_recv_s_dev, self%u_recv_e_dev, &
                            self%u_send_s_dev, self%u_send_e_dev, &
-                           SZ*4*blocks%x, dirps%nproc, &
+                           SZ*4*dirps%n_blocks, dirps%nproc, &
                            dirps%pprev, dirps%pnext)
 
       ! call exec_dist
