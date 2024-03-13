@@ -200,13 +200,13 @@ module m_cuda_backend
 
       type(cuda_tdsops_t), pointer :: der1st, der1st_sym, der2nd, der2nd_sym
 
-      select type(u); type is (cuda_field_t); u_dev => u%data_d; end select
-      select type(v); type is (cuda_field_t); v_dev => v%data_d; end select
-      select type(w); type is (cuda_field_t); w_dev => w%data_d; end select
+      call resolve_field_t(u_dev, u)
+      call resolve_field_t(v_dev, v)
+      call resolve_field_t(w_dev, w)
 
-      select type(du); type is (cuda_field_t); du_dev => du%data_d; end select
-      select type(dv); type is (cuda_field_t); dv_dev => dv%data_d; end select
-      select type(dw); type is (cuda_field_t); dw_dev => dw%data_d; end select
+      call resolve_field_t(du_dev, du)
+      call resolve_field_t(dv_dev, dv)
+      call resolve_field_t(dw_dev, dw)
 
       select type (tdsops => dirps%der1st)
       type is (cuda_tdsops_t); der1st => tdsops
@@ -296,15 +296,9 @@ module m_cuda_backend
       temp_dud => self%allocator%get_block()
       temp_d2u => self%allocator%get_block()
 
-      select type(temp_du)
-      type is (cuda_field_t); du_dev => temp_du%data_d
-      end select
-      select type(temp_dud)
-      type is (cuda_field_t); dud_dev => temp_dud%data_d
-      end select
-      select type(temp_d2u)
-      type is (cuda_field_t); d2u_dev => temp_d2u%data_d
-      end select
+      call resolve_field_t(du_dev, temp_du)
+      call resolve_field_t(dud_dev, temp_dud)
+      call resolve_field_t(d2u_dev, temp_d2u)
 
       call exec_dist_transeq_3fused( &
          rhs_dev, &
@@ -378,8 +372,8 @@ module m_cuda_backend
       ! TODO: don't hardcode n_halo
       n_halo = 4
 
-      select type(du); type is (cuda_field_t); du_dev => du%data_d; end select
-      select type(u); type is (cuda_field_t); u_dev => u%data_d; end select
+      call resolve_field_t(du_dev, du)
+      call resolve_field_t(u_dev, u)
 
       select type (tdsops)
       type is (cuda_tdsops_t); tdsops_dev => tdsops
@@ -416,8 +410,8 @@ module m_cuda_backend
       real(dp), device, pointer, dimension(:, :, :) :: u_o_d, u_i_d
       type(dim3) :: blocks, threads
 
-      select type(u_o); type is (cuda_field_t); u_o_d => u_o%data_d; end select
-      select type(u_i); type is (cuda_field_t); u_i_d => u_i%data_d; end select
+      call resolve_field_t(u_o_d, u_o)
+      call resolve_field_t(u_i_d, u_i)
 
       select case (direction)
       case (RDR_X2Y) ! x2y
@@ -462,8 +456,8 @@ module m_cuda_backend
       real(dp), device, pointer, dimension(:, :, :) :: u_d, u_y_d
       type(dim3) :: blocks, threads
 
-      select type(u); type is (cuda_field_t); u_d => u%data_d; end select
-      select type(u_y); type is (cuda_field_t); u_y_d => u_y%data_d; end select
+      call resolve_field_t(u_d, u)
+      call resolve_field_t(u_y_d, u_y)
 
       blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
       threads = dim3(SZ, SZ, 1)
@@ -481,8 +475,8 @@ module m_cuda_backend
       real(dp), device, pointer, dimension(:, :, :) :: u_d, u_z_d
       type(dim3) :: blocks, threads
 
-      select type(u); type is (cuda_field_t); u_d => u%data_d; end select
-      select type(u_z); type is (cuda_field_t); u_z_d => u_z%data_d; end select
+      call resolve_field_t(u_d, u)
+      call resolve_field_t(u_z_d, u_z)
 
       blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
       threads = dim3(SZ, 1, 1)
@@ -503,8 +497,8 @@ module m_cuda_backend
       type(dim3) :: blocks, threads
       integer :: nx
 
-      select type(x); type is (cuda_field_t); x_d => x%data_d; end select
-      select type(y); type is (cuda_field_t); y_d => y%data_d; end select
+      call resolve_field_t(x_d, x)
+      call resolve_field_t(y_d, y)
 
       nx = size(x_d, dim = 2)
       blocks = dim3(size(x_d, dim = 3), 1, 1)
@@ -524,8 +518,8 @@ module m_cuda_backend
       type(dim3) :: blocks, threads
       integer :: n, ierr
 
-      select type(x); type is (cuda_field_t); x_d => x%data_d; end select
-      select type(y); type is (cuda_field_t); y_d => y%data_d; end select
+      call resolve_field_t(x_d, x)
+      call resolve_field_t(y_d, y)
 
       allocate (sum_d)
       sum_d = 0._dp
@@ -596,6 +590,17 @@ module m_cuda_backend
       end select
 
    end subroutine init_cuda_poisson_fft
+
+   subroutine resolve_field_t(u_dev, u)
+      real(dp), device, pointer, dimension(:, :, :), intent(out) :: u_dev
+      class(field_t), intent(in) :: u
+
+      select type(u)
+      type is (cuda_field_t)
+         u_dev => u%data_d
+      end select
+
+   end subroutine resolve_field_t
 
 end module m_cuda_backend
 
