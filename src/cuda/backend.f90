@@ -87,7 +87,8 @@ module m_cuda_backend
       backend%nz_loc = globs%nz_loc
 
       n_halo = 4
-      n_block = globs%n_groups_x
+      ! Buffer size should be big enough for the largest MPI exchange.
+      n_block = max(globs%n_groups_x, globs%n_groups_y, globs%n_groups_z)
 
       allocate(backend%u_send_s_dev(SZ, n_halo, n_block))
       allocate(backend%u_send_e_dev(SZ, n_halo, n_block))
