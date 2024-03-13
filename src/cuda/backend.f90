@@ -286,19 +286,19 @@ module m_cuda_backend
       type(dirps_t), intent(in) :: dirps
       type(dim3), intent(in) :: blocks, threads
 
-      class(field_t), pointer :: temp_du, temp_dud, temp_d2u
+      class(field_t), pointer :: du, dud, d2u
 
       real(dp), device, pointer, dimension(:, :, :) :: &
          du_dev, dud_dev, d2u_dev
 
       ! Get some fields for storing the intermediate results
-      temp_du => self%allocator%get_block()
-      temp_dud => self%allocator%get_block()
-      temp_d2u => self%allocator%get_block()
+      du => self%allocator%get_block()
+      dud => self%allocator%get_block()
+      d2u => self%allocator%get_block()
 
-      call resolve_field_t(du_dev, temp_du)
-      call resolve_field_t(dud_dev, temp_dud)
-      call resolve_field_t(d2u_dev, temp_d2u)
+      call resolve_field_t(du_dev, du)
+      call resolve_field_t(dud_dev, dud)
+      call resolve_field_t(d2u_dev, d2u)
 
       call exec_dist_transeq_3fused( &
          rhs_dev, &
@@ -317,9 +317,9 @@ module m_cuda_backend
          )
 
       ! Release temporary blocks
-      call self%allocator%release_block(temp_du)
-      call self%allocator%release_block(temp_dud)
-      call self%allocator%release_block(temp_d2u)
+      call self%allocator%release_block(du)
+      call self%allocator%release_block(dud)
+      call self%allocator%release_block(d2u)
 
    end subroutine transeq_dist_component
 
