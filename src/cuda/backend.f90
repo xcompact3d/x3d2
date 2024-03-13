@@ -23,6 +23,8 @@ module m_cuda_backend
 
    implicit none
 
+   private :: transeq_halo_exchange, transeq_dist_component
+
    type, extends(base_backend_t) :: cuda_backend_t
       !character(len=*), parameter :: name = 'cuda'
       integer :: MPI_FP_PREC = dp

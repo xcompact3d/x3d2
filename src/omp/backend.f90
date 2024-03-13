@@ -11,6 +11,8 @@ module m_omp_backend
 
    implicit none
 
+   private :: transeq_halo_exchange, transeq_dist_component
+
    type, extends(base_backend_t) :: omp_backend_t
       !character(len=*), parameter :: name = 'omp'
       integer :: MPI_FP_PREC = dp
