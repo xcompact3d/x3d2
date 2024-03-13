@@ -195,17 +195,8 @@ module m_cuda_backend
       type(dirps_t), intent(in) :: dirps
       type(dim3), intent(in) :: blocks, threads
 
-      class(field_t), pointer :: temp_du, temp_duu, temp_d2u, &
-                                 temp_dv, temp_dvu, temp_d2v, &
-                                 temp_dw, temp_dwu, temp_d2w
-
-      real(dp), device, pointer, dimension(:, :, :) :: &
-         du_dev, duu_dev, d2u_dev, &
-         dv_dev, dvu_dev, d2v_dev, &
-         dw_dev, dwu_dev, d2w_dev
-
       real(dp), device, pointer, dimension(:, :, :) :: u_dev, v_dev, w_dev, &
-                                                       ru_dev, rv_dev, rw_dev
+                                                       du_dev, dv_dev, dw_dev
 
       type(cuda_tdsops_t), pointer :: der1st, der1st_sym, der2nd, der2nd_sym
 
@@ -213,9 +204,9 @@ module m_cuda_backend
       select type(v); type is (cuda_field_t); v_dev => v%data_d; end select
       select type(w); type is (cuda_field_t); w_dev => w%data_d; end select
 
-      select type(du); type is (cuda_field_t); ru_dev => du%data_d; end select
-      select type(dv); type is (cuda_field_t); rv_dev => dv%data_d; end select
-      select type(dw); type is (cuda_field_t); rw_dev => dw%data_d; end select
+      select type(du); type is (cuda_field_t); du_dev => du%data_d; end select
+      select type(dv); type is (cuda_field_t); dv_dev => dv%data_d; end select
+      select type(dw); type is (cuda_field_t); dw_dev => dw%data_d; end select
 
       select type (tdsops => dirps%der1st)
       type is (cuda_tdsops_t); der1st => tdsops
@@ -229,6 +220,35 @@ module m_cuda_backend
       select type (tdsops => dirps%der2nd_sym)
       type is (cuda_tdsops_t); der2nd_sym => tdsops
       end select
+
+      call transeq_halo_exchange(self, u_dev, v_dev, w_dev, dirps)
+
+      call transeq_dist_component(self, du_dev, u_dev, u_dev, &
+                                  self%u_recv_s_dev, self%u_recv_e_dev, &
+                                  self%u_recv_s_dev, self%u_recv_e_dev, &
+                                  der1st, der1st_sym, der2nd, dirps, &
+                                  blocks, threads)
+      call transeq_dist_component(self, dv_dev, v_dev, u_dev, &
+                                  self%v_recv_s_dev, self%v_recv_e_dev, &
+                                  self%u_recv_s_dev, self%u_recv_e_dev, &
+                                  der1st_sym, der1st, der2nd_sym, dirps, &
+                                  blocks, threads)
+      call transeq_dist_component(self, dw_dev, w_dev, u_dev, &
+                                  self%w_recv_s_dev, self%w_recv_e_dev, &
+                                  self%u_recv_s_dev, self%u_recv_e_dev, &
+                                  der1st_sym, der1st, der2nd_sym, dirps, &
+                                  blocks, threads)
+
+   end subroutine transeq_cuda_dist
+
+   subroutine transeq_halo_exchange(self, u_dev, v_dev, w_dev, dirps)
+      class(cuda_backend_t) :: self
+      real(dp), device, dimension(:, :, :), intent(in) :: u_dev, v_dev, w_dev
+      type(dirps_t), intent(in) :: dirps
+      integer :: n_halo
+
+      ! TODO: don't hardcode n_halo
+      n_halo = 4
 
       ! Copy halo data into buffer arrays
       call copy_into_buffers(self%u_send_s_dev, self%u_send_e_dev, u_dev, &
@@ -246,116 +266,68 @@ module m_cuda_backend
          self%u_send_s_dev, self%u_send_e_dev, &
          self%v_send_s_dev, self%v_send_e_dev, &
          self%w_send_s_dev, self%w_send_e_dev, &
-         SZ*4*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext &
-      )
+         SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext &
+         )
 
-      ! get some fields for storing the result
+   end subroutine transeq_halo_exchange
+
+   subroutine transeq_dist_component(self, rhs_dev, u_dev, conv_dev, &
+                                     u_recv_s_dev, u_recv_e_dev, &
+                                     conv_recv_s_dev, conv_recv_e_dev, &
+                                     tdsops_du, tdsops_dud, tdsops_d2u, &
+                                     dirps, blocks, threads)
+      class(cuda_backend_t) :: self
+      real(dp), device, dimension(:, :, :), intent(inout) :: rhs_dev
+      real(dp), device, dimension(:, :, :), intent(in) :: u_dev, conv_dev
+      real(dp), device, dimension(:, :, :), intent(in) :: &
+         u_recv_s_dev, u_recv_e_dev, &
+         conv_recv_s_dev, conv_recv_e_dev
+      class(cuda_tdsops_t), intent(in) :: tdsops_du, tdsops_dud, tdsops_d2u
+      type(dirps_t), intent(in) :: dirps
+      type(dim3), intent(in) :: blocks, threads
+
+      class(field_t), pointer :: temp_du, temp_dud, temp_d2u
+
+      real(dp), device, pointer, dimension(:, :, :) :: &
+         du_dev, dud_dev, d2u_dev
+
+      ! Get some fields for storing the intermediate results
       temp_du => self%allocator%get_block()
-      temp_duu => self%allocator%get_block()
+      temp_dud => self%allocator%get_block()
       temp_d2u => self%allocator%get_block()
 
       select type(temp_du)
       type is (cuda_field_t); du_dev => temp_du%data_d
       end select
-      select type(temp_duu)
-      type is (cuda_field_t); duu_dev => temp_duu%data_d
+      select type(temp_dud)
+      type is (cuda_field_t); dud_dev => temp_dud%data_d
       end select
       select type(temp_d2u)
       type is (cuda_field_t); d2u_dev => temp_d2u%data_d
       end select
 
       call exec_dist_transeq_3fused( &
-         ru_dev, &
-         u_dev, self%u_recv_s_dev, self%u_recv_e_dev, &
-         u_dev, self%u_recv_s_dev, self%u_recv_e_dev, &
-         du_dev, duu_dev, d2u_dev, &
+         rhs_dev, &
+         u_dev, u_recv_s_dev, u_recv_e_dev, &
+         conv_dev, conv_recv_s_dev, conv_recv_e_dev, &
+         du_dev, dud_dev, d2u_dev, &
          self%du_send_s_dev, self%du_send_e_dev, &
          self%du_recv_s_dev, self%du_recv_e_dev, &
          self%dud_send_s_dev, self%dud_send_e_dev, &
          self%dud_recv_s_dev, self%dud_recv_e_dev, &
          self%d2u_send_s_dev, self%d2u_send_e_dev, &
          self%d2u_recv_s_dev, self%d2u_recv_e_dev, &
-         der1st, der2nd, self%nu, &
+         tdsops_du, tdsops_d2u, self%nu, &
          dirps%nproc, dirps%pprev, dirps%pnext, &
          blocks, threads &
-      )
+         )
 
       ! Release temporary blocks
       call self%allocator%release_block(temp_du)
-      call self%allocator%release_block(temp_duu)
+      call self%allocator%release_block(temp_dud)
       call self%allocator%release_block(temp_d2u)
 
-      temp_dv => self%allocator%get_block()
-      temp_dvu => self%allocator%get_block()
-      temp_d2v => self%allocator%get_block()
-
-      select type(temp_dv)
-      type is (cuda_field_t); dv_dev => temp_dv%data_d
-      end select
-      select type(temp_dvu)
-      type is (cuda_field_t); dvu_dev => temp_dvu%data_d
-      end select
-      select type(temp_d2v)
-      type is (cuda_field_t); d2v_dev => temp_d2v%data_d
-      end select
-
-      call exec_dist_transeq_3fused( &
-         rv_dev, &
-         v_dev, self%v_recv_s_dev, self%v_recv_e_dev, &
-         u_dev, self%u_recv_s_dev, self%u_recv_e_dev, &
-         dv_dev, dvu_dev, d2v_dev, &
-         self%du_send_s_dev, self%du_send_e_dev, &
-         self%du_recv_s_dev, self%du_recv_e_dev, &
-         self%dud_send_s_dev, self%dud_send_e_dev, &
-         self%dud_recv_s_dev, self%dud_recv_e_dev, &
-         self%d2u_send_s_dev, self%d2u_send_e_dev, &
-         self%d2u_recv_s_dev, self%d2u_recv_e_dev, &
-         der1st_sym, der2nd_sym, self%nu, &
-         dirps%nproc, dirps%pprev, dirps%pnext, &
-         blocks, threads &
-      )
-
-      ! Release temporary blocks
-      call self%allocator%release_block(temp_dv)
-      call self%allocator%release_block(temp_dvu)
-      call self%allocator%release_block(temp_d2v)
-
-      temp_dw => self%allocator%get_block()
-      temp_dwu => self%allocator%get_block()
-      temp_d2w => self%allocator%get_block()
-
-      select type(temp_dw)
-      type is (cuda_field_t); dw_dev => temp_dw%data_d
-      end select
-      select type(temp_dwu)
-      type is (cuda_field_t); dwu_dev => temp_dwu%data_d
-      end select
-      select type(temp_d2w)
-      type is (cuda_field_t); d2w_dev => temp_d2w%data_d
-      end select
-
-      call exec_dist_transeq_3fused( &
-         rw_dev, &
-         w_dev, self%w_recv_s_dev, self%w_recv_e_dev, &
-         u_dev, self%u_recv_s_dev, self%u_recv_e_dev, &
-         dw_dev, dwu_dev, d2w_dev, &
-         self%du_send_s_dev, self%du_send_e_dev, &
-         self%du_recv_s_dev, self%du_recv_e_dev, &
-         self%dud_send_s_dev, self%dud_send_e_dev, &
-         self%dud_recv_s_dev, self%dud_recv_e_dev, &
-         self%d2u_send_s_dev, self%d2u_send_e_dev, &
-         self%d2u_recv_s_dev, self%d2u_recv_e_dev, &
-         der1st_sym, der2nd_sym, self%nu, &
-         dirps%nproc, dirps%pprev, dirps%pnext, &
-         blocks, threads &
-      )
-
-      ! Release temporary blocks
-      call self%allocator%release_block(temp_dw)
-      call self%allocator%release_block(temp_dwu)
-      call self%allocator%release_block(temp_d2w)
-
-   end subroutine transeq_cuda_dist
+   end subroutine transeq_dist_component
 
    subroutine transeq_cuda_thom(self, du, dv, dw, u, v, w, dirps)
       !! Thomas algorithm implementation. So much more easier than the
@@ -401,6 +373,11 @@ module m_cuda_backend
 
       type(cuda_tdsops_t), pointer :: tdsops_dev
 
+      integer :: n_halo
+
+      ! TODO: don't hardcode n_halo
+      n_halo = 4
+
       select type(du); type is (cuda_field_t); du_dev => du%data_d; end select
       select type(u); type is (cuda_field_t); u_dev => u%data_d; end select
 
@@ -413,7 +390,7 @@ module m_cuda_backend
 
       call sendrecv_fields(self%u_recv_s_dev, self%u_recv_e_dev, &
                            self%u_send_s_dev, self%u_send_e_dev, &
-                           SZ*4*dirps%n_blocks, dirps%nproc, &
+                           SZ*n_halo*dirps%n_blocks, dirps%nproc, &
                            dirps%pprev, dirps%pnext)
 
       ! call exec_dist
@@ -424,7 +401,7 @@ module m_cuda_backend
          self%du_recv_s_dev, self%du_recv_e_dev, &
          tdsops_dev, dirps%nproc, dirps%pprev, dirps%pnext, &
          blocks, threads &
-      )
+         )
 
    end subroutine tds_solve_dist
 
