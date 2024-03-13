@@ -276,6 +276,9 @@ module m_cuda_backend
                                      conv_recv_s_dev, conv_recv_e_dev, &
                                      tdsops_du, tdsops_dud, tdsops_d2u, &
                                      dirps, blocks, threads)
+      !! Computes RHS_x^u following:
+      !!
+      !! rhs_x^u = -0.5*(conv*du/dx + d(u*conv)/dx) + nu*d2u/dx2
       class(cuda_backend_t) :: self
       real(dp), device, dimension(:, :, :), intent(inout) :: rhs_dev
       real(dp), device, dimension(:, :, :), intent(in) :: u_dev, conv_dev
