@@ -6,13 +6,15 @@ program test_cuda_reorder
    use m_common, only: dp
    use m_cuda_common, only: SZ
    use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
-                                     reorder_y2z, reorder_z2x, reorder_z2y
+                                     reorder_y2z, reorder_z2x, reorder_z2y, &
+                                     reorder_c2x, reorder_x2c
 
    implicit none
 
    logical :: allpass = .true.
-   real(dp), allocatable, dimension(:, :, :) :: u_i, u_o, u_temp
-   real(dp), device, allocatable, dimension(:, :, :) :: u_i_d, u_o_d, u_temp_d
+   real(dp), allocatable, dimension(:, :, :) :: u_i, u_o, u_temp, u_c
+   real(dp), device, allocatable, dimension(:, :, :) :: u_i_d, u_o_d, &
+                                                        u_temp_d, u_c_d
 
    integer :: n_block, i, n_iters
    integer :: nx, ny, nz, ndof
@@ -45,6 +47,10 @@ program test_cuda_reorder
    allocate (u_temp(SZ, nx, n_block))
    allocate (u_i_d(SZ, nx, n_block), u_o_d(SZ, nx, n_block))
    allocate (u_temp_d(SZ, nx, n_block))
+
+   ! Cartesian order storage
+   allocate (u_c_d(nx, ny, nz))
+   allocate (u_c(nx, ny, nz))
 
    ! set a random field
    call random_number(u_i)
@@ -123,6 +129,29 @@ program test_cuda_reorder
          write(stderr, '(a)') 'Check reorder x2z and z2x... failed'
       else
          write(stderr, '(a)') 'Check reorder x2z and z2x... passed'
+      end if
+   end if
+
+   ! x ordering into Cartesian ordering
+   blocks = dim3(nx/SZ, ny/SZ, nz)
+   threads = dim3(SZ, SZ, 1)
+   call reorder_x2c<<<blocks, threads>>>(u_c_d, u_i_d, nz)
+
+   ! sanitise u_o_d
+   u_o_d = 0
+
+   ! Cartesian ordering back to x ordering
+   call reorder_c2x<<<blocks, threads>>>(u_o_d, u_c_d, nz)
+   u_o = u_o_d
+
+   ! now both u_o and u_i in x ordering, compare them
+   norm_u = norm2(u_o - u_i)
+   if (nrank == 0) then
+      if ( norm_u > tol ) then
+         allpass = .false.
+         write(stderr, '(a)') 'Check reorder x2c and c2x... failed'
+      else
+         write(stderr, '(a)') 'Check reorder x2c and c2x... passed'
       end if
    end if
 
