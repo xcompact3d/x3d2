@@ -7,7 +7,7 @@ module m_ordering
 contains
 
    ! Get cartesian index from dir index
-   pure elemental subroutine get_index_ijk(i, j, k, dir_i, dir_j, dir_k, dir)
+   pure subroutine get_index_ijk(i, j, k, dir_i, dir_j, dir_k, dir)
       integer, intent(out) :: i, j, k
       integer, intent(in) :: dir_i, dir_j, dir_k
       integer, intent(in) :: dir
@@ -30,7 +30,7 @@ contains
    end subroutine get_index_ijk
 
    ! Get directional index from cartesian index
-   pure elemental subroutine get_index_dir(dir_i, dir_j, dir_k, i, j, k, dir)
+   pure subroutine get_index_dir(dir_i, dir_j, dir_k, i, j, k, dir)
       integer, intent(out) :: dir_i, dir_j, dir_k
       integer, intent(in) :: i, j, k
       integer, intent(in) :: dir
@@ -53,7 +53,7 @@ contains
    end subroutine get_index_dir
 
    ! Swap between two sets of directional indices following reorder_dir
-   pure elemental subroutine get_index_reordering(out_i, out_j, out_k, in_i, in_j, in_k, reorder_dir)
+   pure subroutine get_index_reordering(out_i, out_j, out_k, in_i, in_j, in_k, reorder_dir)
       integer, intent(out) :: out_i, out_j, out_k
       integer, intent(in) :: in_i, in_j, in_k
       integer, intent(in) :: reorder_dir
@@ -63,7 +63,7 @@ contains
       select case (dir)
          case (RDR_X2Y)
             dir_in = dir_X
-            dir_out = dir_Z
+            dir_out = dir_Y
          case (RDR_X2Z)
             dir_in = dir_X
             dir_out = dir_Z
