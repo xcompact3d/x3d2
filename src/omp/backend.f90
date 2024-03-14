@@ -1,7 +1,9 @@
 module m_omp_backend
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
-   use m_common, only: dp, globs_t
+   use m_ordering, only: get_index_reordering
+   use m_common, only: dp, globs_t, &
+                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
    use m_tdsops, only: dirps_t, tdsops_t
    use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
    use m_omp_sendrecv, only: sendrecv_fields
@@ -275,12 +277,37 @@ module m_omp_backend
       class(field_t), intent(inout) :: u_
       class(field_t), intent(in) :: u
       integer, intent(in) :: direction
+      integer :: ndir_loc, ndir_groups
+      integer :: i, j, k
+      integer :: out_i, out_j, out_k
 
-      do k=1,
-         do j=1, 
-            do i=1, 
-               call get_index_reordering(out_i, out_j, out_k, i, j, k, direction)
-               u_(out_i, out_j, out_k) = u(i,j,k)
+      select case (direction)
+         case (RDR_X2Y)
+            ndir_loc = self%xdirps%n
+            ndir_groups = self%xdirps%n_blocks
+         case (RDR_X2Z)
+            ndir_loc = self%xdirps%n
+            ndir_groups = self%xdirps%n_blocks
+         case (RDR_Y2X)
+            ndir_loc = self%ydirps%n
+            ndir_groups = self%ydirps%n_blocks
+         case (RDR_Y2Z)
+            ndir_loc = self%ydirps%n
+            ndir_groups = self%ydirps%n_blocks
+         case (RDR_Z2X)
+            ndir_loc = self%zdirps%n
+            ndir_groups = self%zdirps%n_blocks
+         case (RDR_Z2Y)
+            ndir_loc = self%zdirps%n
+            ndir_groups = self%zdirps%n_blocks
+      end select
+
+      do k=1, ndir_groups
+         do j=1, ndir_loc
+            do i=1, SZ
+               call get_index_reordering(out_i, out_j, out_k, i, j, k, direction, &
+                                         SZ, self%nx_loc, self%ny_loc, self%nz_loc)
+               u_%data(out_i, out_j, out_k) = u%data(i,j,k)
             end do
          end do
       end do
