@@ -216,6 +216,24 @@ program test_cuda_reorder
 
    call checkperf(tend - tstart, n_iters, ndof, 2._dp)
 
+   blocks = dim3(nx/SZ, ny/SZ, nz)
+   threads = dim3(SZ, SZ, 1)
+   call cpu_time(tstart)
+   do i = 1, n_iters
+      call reorder_x2c<<<blocks, threads>>>(u_c_d, u_i_d, nz)
+   end do
+   call cpu_time(tend)
+
+   call checkperf(tend - tstart, n_iters, ndof, 2._dp)
+
+   call cpu_time(tstart)
+   do i = 1, n_iters
+      call reorder_c2x<<<blocks, threads>>>(u_o_d, u_c_d, nz)
+   end do
+   call cpu_time(tend)
+
+   call checkperf(tend - tstart, n_iters, ndof, 2._dp)
+
    if (allpass) then
       if (nrank == 0) write(stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
    else
