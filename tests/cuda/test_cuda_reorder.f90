@@ -1,7 +1,6 @@
 program test_cuda_reorder
    use iso_fortran_env, only: stderr => error_unit
    use cudafor
-   use mpi
 
    use m_common, only: dp
    use m_cuda_common, only: SZ
@@ -18,25 +17,10 @@ program test_cuda_reorder
 
    integer :: n_block, i, n_iters
    integer :: nx, ny, nz, ndof
-   integer :: nrank, nproc, pprev, pnext
-   integer :: ierr, ndevs, devnum
 
    type(dim3) :: blocks, threads
    real(dp) :: norm_u, tol = 1d-8, tstart, tend
 
-   call MPI_Init(ierr)
-   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-   if (nrank == 0) print*, 'Parallel run with', nproc, 'ranks'
-
-   ierr = cudaGetDeviceCount(ndevs)
-   ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robin
-   ierr = cudaGetDevice(devnum)
-
-   !print*, 'I am rank', nrank, 'I am running on device', devnum
-   pnext = modulo(nrank - nproc + 1, nproc)
-   pprev = modulo(nrank - 1, nproc)
 
    nx = 512; ny = 512; nz = 512
    n_block = ny*nz/SZ
@@ -72,13 +56,11 @@ program test_cuda_reorder
 
    ! and check whether it matches the initial random field
    norm_u = norm2(u_o - u_i)
-   if (nrank == 0) then
-      if ( norm_u > tol ) then
-         allpass = .false.
-         write(stderr, '(a)') 'Check reorder x2y and y2x... failed'
-      else
-         write(stderr, '(a)') 'Check reorder x2y and y2x... passed'
-      end if
+   if ( norm_u > tol ) then
+      allpass = .false.
+      write(stderr, '(a)') 'Check reorder x2y and y2x... failed'
+   else
+      write(stderr, '(a)') 'Check reorder x2y and y2x... passed'
    end if
 
    ! we reuse u_o_d so zeroize in any case
@@ -101,13 +83,11 @@ program test_cuda_reorder
 
    ! compare two y oriented fields
    norm_u = norm2(u_o - u_temp)
-   if (nrank == 0) then
-      if ( norm_u > tol ) then
-         allpass = .false.
-         write(stderr, '(a)') 'Check reorder y2z and y2z... failed'
-      else
-         write(stderr, '(a)') 'Check reorder y2z and y2z... passed'
-      end if
+   if ( norm_u > tol ) then
+      allpass = .false.
+      write(stderr, '(a)') 'Check reorder y2z and y2z... failed'
+   else
+      write(stderr, '(a)') 'Check reorder y2z and y2z... passed'
    end if
 
    ! reorder initial random field into z orientation
@@ -123,13 +103,11 @@ program test_cuda_reorder
 
    ! compare two z oriented fields
    norm_u = norm2(u_o - u_i)
-   if (nrank == 0) then
-      if ( norm_u > tol ) then
-         allpass = .false.
-         write(stderr, '(a)') 'Check reorder x2z and z2x... failed'
-      else
-         write(stderr, '(a)') 'Check reorder x2z and z2x... passed'
-      end if
+   if ( norm_u > tol ) then
+      allpass = .false.
+      write(stderr, '(a)') 'Check reorder x2z and z2x... failed'
+   else
+      write(stderr, '(a)') 'Check reorder x2z and z2x... passed'
    end if
 
    ! x ordering into Cartesian ordering
@@ -146,13 +124,17 @@ program test_cuda_reorder
 
    ! now both u_o and u_i in x ordering, compare them
    norm_u = norm2(u_o - u_i)
-   if (nrank == 0) then
-      if ( norm_u > tol ) then
-         allpass = .false.
-         write(stderr, '(a)') 'Check reorder x2c and c2x... failed'
-      else
-         write(stderr, '(a)') 'Check reorder x2c and c2x... passed'
-      end if
+   if ( norm_u > tol ) then
+      allpass = .false.
+      write(stderr, '(a)') 'Check reorder x2c and c2x... failed'
+   else
+      write(stderr, '(a)') 'Check reorder x2c and c2x... passed'
+   end if
+
+   if (allpass) then
+      write(stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
+   else
+      error stop 'SOME TESTS FAILED.'
    end if
 
    ! Now the performance checks
@@ -234,14 +216,6 @@ program test_cuda_reorder
 
    call checkperf(tend - tstart, n_iters, ndof, 2._dp)
 
-   if (allpass) then
-      if (nrank == 0) write(stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-   else
-      error stop 'SOME TESTS FAILED.'
-   end if
-
-   call MPI_Finalize(ierr)
-
 contains
 
    subroutine checkperf(t_tot, n_iters, ndof, consumed_bw)
@@ -250,31 +224,22 @@ contains
       real(dp), intent(in) :: t_tot, consumed_bw
       integer, intent(in) :: n_iters, ndof
 
-      real(dp) :: achievedBW, devBW, achievedBWmax, achievedBWmin
+      real(dp) :: achievedBW, devBW
       integer :: ierr, memClockRt, memBusWidth
 
       ! BW utilisation and performance checks
       achievedBW = consumed_bw*n_iters*ndof*dp/t_tot
-      call MPI_Allreduce(achievedBW, achievedBWmax, 1, MPI_DOUBLE_PRECISION, &
-                         MPI_MAX, MPI_COMM_WORLD, ierr)
-      call MPI_Allreduce(achievedBW, achievedBWmin, 1, MPI_DOUBLE_PRECISION, &
-                         MPI_MIN, MPI_COMM_WORLD, ierr)
 
-      if (nrank == 0) then
-         print'(a, f8.3, a)', 'Achieved BW min: ', achievedBWmin/2**30, ' GiB/s'
-         print'(a, f8.3, a)', 'Achieved BW max: ', achievedBWmax/2**30, ' GiB/s'
-      end if
+      print'(a, f8.3, a)', 'Achieved BW: ', achievedBW/2**30, ' GiB/s'
 
       ierr = cudaDeviceGetAttribute(memClockRt, cudaDevAttrMemoryClockRate, 0)
       ierr = cudaDeviceGetAttribute(memBusWidth, &
                                     cudaDevAttrGlobalMemoryBusWidth, 0)
       devBW = 2*memBusWidth/8._dp*memClockRt*1000
 
-      if (nrank == 0) then
-         print'(a, f8.3, a)', 'Device BW:   ', devBW/2**30, ' GiB/s'
-         print'(a, f5.2)', 'Effective BW util min: %', achievedBWmin/devBW*100
-         print'(a, f5.2)', 'Effective BW util max: %', achievedBWmax/devBW*100
-      end if
+      print'(a, f8.3, a)', 'Device BW:   ', devBW/2**30, ' GiB/s'
+      print'(a, f5.2)', 'Effective BW util: %', achievedBW/devBW*100
+
    end subroutine checkperf
 
 end program test_cuda_reorder
