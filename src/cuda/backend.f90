@@ -6,7 +6,8 @@ module m_cuda_backend
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
    use m_common, only: dp, globs_t, &
-                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
+                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
+                       RDR_C2X, RDR_X2C
    use m_poisson_fft, only: poisson_fft_t
    use m_tdsops, only: dirps_t, tdsops_t
 
@@ -450,6 +451,14 @@ module m_cuda_backend
          threads = dim3(SZ, SZ, 1)
          call reorder_z2y<<<blocks, threads>>>(u_o_d, u_i_d, &
                                                self%nx_loc, self%nz_loc)
+      case (RDR_C2X) ! c2x
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_c2x<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      case (RDR_X2C) ! x2c
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_x2c<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
       case default
          error stop 'Reorder direction is undefined.'
       end select
