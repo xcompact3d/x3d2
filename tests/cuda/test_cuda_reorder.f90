@@ -138,66 +138,74 @@ program test_cuda_reorder
    end if
 
    ! Now the performance checks
+
+   print*, 'Performance test: reorder_x2y'
+   blocks = dim3(nx/SZ, nz, ny/SZ)
+   threads = dim3(SZ, SZ, 1)
    call cpu_time(tstart)
    do i = 1, n_iters
-      blocks = dim3(nx/SZ, nz, ny/SZ)
-      threads = dim3(SZ, SZ, 1)
       call reorder_x2y<<<blocks, threads>>>(u_o_d, u_i_d, nz)
    end do
    call cpu_time(tend)
 
    call checkperf(tend - tstart, n_iters, ndof, 2._dp)
 
+   print*, 'Performance test: reorder_x2z'
+   blocks = dim3(nx, ny/SZ, 1)
+   threads = dim3(SZ, 1, 1)
    call cpu_time(tstart)
    do i = 1, n_iters
-      blocks = dim3(nx, ny/SZ, 1)
-      threads = dim3(SZ, 1, 1)
       call reorder_x2z<<<blocks, threads>>>(u_o_d, u_i_d, nz)
    end do
    call cpu_time(tend)
 
    call checkperf(tend - tstart, n_iters, ndof, 2._dp)
 
+   print*, 'Performance test: reorder_y2x'
+   blocks = dim3(nx/SZ, ny/SZ, nz)
+   threads = dim3(SZ, SZ, 1)
    call cpu_time(tstart)
    do i = 1, n_iters
-      blocks = dim3(nx/SZ, ny/SZ, nz)
-      threads = dim3(SZ, SZ, 1)
       call reorder_y2x<<<blocks, threads>>>(u_o_d, u_i_d, nz)
    end do
    call cpu_time(tend)
 
    call checkperf(tend - tstart, n_iters, ndof, 2._dp)
 
+   print*, 'Performance test: reorder_y2z'
+   blocks = dim3(nx/SZ, ny/SZ, nz)
+   threads = dim3(SZ, SZ, 1)
    call cpu_time(tstart)
    do i = 1, n_iters
-      blocks = dim3(nx/SZ, ny/SZ, nz)
-      threads = dim3(SZ, SZ, 1)
       call reorder_y2z<<<blocks, threads>>>(u_o_d, u_i_d, nx, nz)
    end do
    call cpu_time(tend)
 
    call checkperf(tend - tstart, n_iters, ndof, 2._dp)
 
+   print*, 'Performance test: reorder_z2x'
+   blocks = dim3(nx, ny/SZ, 1)
+   threads = dim3(SZ, 1, 1)
    call cpu_time(tstart)
    do i = 1, n_iters
-      blocks = dim3(nx, ny/SZ, 1)
-      threads = dim3(SZ, 1, 1)
       call reorder_z2x<<<blocks, threads>>>(u_o_d, u_i_d, nz)
    end do
    call cpu_time(tend)
 
    call checkperf(tend - tstart, n_iters, ndof, 2._dp)
 
+   print*, 'Performance test: reorder_z2y'
+   blocks = dim3(nx/SZ, ny/SZ, nz)
+   threads = dim3(SZ, SZ, 1)
    call cpu_time(tstart)
    do i = 1, n_iters
-      blocks = dim3(nx/SZ, ny/SZ, nz)
-      threads = dim3(SZ, SZ, 1)
       call reorder_z2y<<<blocks, threads>>>(u_o_d, u_i_d, nx, nz)
    end do
    call cpu_time(tend)
 
    call checkperf(tend - tstart, n_iters, ndof, 2._dp)
 
+   print*, 'Performance test: reorder_x2c'
    blocks = dim3(nx/SZ, ny/SZ, nz)
    threads = dim3(SZ, SZ, 1)
    call cpu_time(tstart)
@@ -208,6 +216,9 @@ program test_cuda_reorder
 
    call checkperf(tend - tstart, n_iters, ndof, 2._dp)
 
+   print*, 'Performance test: reorder_c2x'
+   blocks = dim3(nx/SZ, ny/SZ, nz)
+   threads = dim3(SZ, SZ, 1)
    call cpu_time(tstart)
    do i = 1, n_iters
       call reorder_c2x<<<blocks, threads>>>(u_o_d, u_c_d, nz)
