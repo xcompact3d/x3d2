@@ -8,7 +8,9 @@ program test_reorder
     use m_tdsops, only: dirps_t, tdsops_t
 
     use m_common, only: dp, pi, globs_t, set_pprev_pnext, &
-                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
+                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, dir_X, dir_Y, dir_Z
+
+    use m_ordering, only: get_index_dir, get_index_ijk
 
 #ifdef CUDA
    use m_cuda_common, only: SZ
@@ -24,7 +26,7 @@ program test_reorder
     class(field_t), pointer :: u_x, u_y, u_z, u_x_original
 
     integer :: nrank, nproc
-    integer :: ierr
+    integer :: ierr, i, j, k, i_, j_, k_, i__, j__, k__
 
     real(dp) :: dx, dx_per
 
@@ -98,11 +100,38 @@ program test_reorder
 
     if (nrank == 0) print*, 'Parallel run with', nproc, 'ranks'
 
+   ! Test indexing only
+    do k=1, xdirps%n
+        do j=1, xdirps%n
+            do i=1, xdirps%n
+                call get_index_dir(i_, j_, k_, i, j, k, dir_X, SZ, xdirps%n, xdirps%n, xdirps%n)
+                call get_index_ijk(i__, j__, k__, i_, j_, k_, dir_X, SZ, xdirps%n, xdirps%n, xdirps%n)
+                if (i /= i__ .or. j /= j__ .or. k/= k__) then
+                    print *, "Error in dir X"
+                    allpass = .false.
+                end if
+                call get_index_dir(i_, j_, k_, i, j, k, dir_Y, SZ, xdirps%n, xdirps%n, xdirps%n)
+                call get_index_ijk(i__, j__, k__, i_, j_, k_, dir_Y, SZ, xdirps%n, xdirps%n, xdirps%n)
+                if (i /= i__ .or. j /= j__ .or. k/= k__) then
+                    print *, "Error in dir Y"
+                    allpass = .false.
+                end if
+                call get_index_dir(i_, j_, k_, i, j, k, dir_Z, SZ, xdirps%n, xdirps%n, xdirps%n)
+                call get_index_ijk(i__, j__, k__, i_, j_, k_, dir_Z, SZ, xdirps%n, xdirps%n, xdirps%n)
+                if (i /= i__ .or. j /= j__ .or. k/= k__) then
+                    print *, "Error in dir Z"
+                    allpass = .false.
+                end if
+            end do
+        end do
+    end do
+ 
+
+    ! Test reordering
     u_x => allocator%get_block()
     u_y => allocator%get_block()
     u_z => allocator%get_block()
     u_x_original => allocator%get_block()
-
 
     call random_number(u_x_original%data)
 

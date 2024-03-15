@@ -16,15 +16,15 @@ contains
       select case (dir)
          case (dir_X)
             i = dir_j
-            j = mod(dir_k, ny_loc/SZ)*SZ + dir_i 
-            k = floor(1.0*dir_k/(ny_loc/SZ))
+            j = mod(dir_k -1, ny_loc/SZ)*SZ + dir_i 
+            k = ceiling(1.0*dir_k/(ny_loc/SZ))
          case (dir_Y)
-            i = mod(dir_k, nx_loc/SZ)*SZ + dir_i 
+            i = mod(dir_k -1, nx_loc/SZ)*SZ + dir_i 
             j = dir_j
-            k = floor(1.0*dir_k/(nx_loc/SZ))
+            k = ceiling(1.0*dir_k/(nx_loc/SZ))
          case (dir_Z)
-            i = mod(dir_k, nx_loc/SZ)*SZ + dir_i 
-            j = floor(1.0*dir_k/(nx_loc/SZ))
+            i = mod(dir_k -1, nx_loc/SZ)*SZ + dir_i 
+            j = ceiling(1.0*dir_k/(nx_loc/SZ)) 
             k = dir_j
       end select
 
@@ -39,17 +39,17 @@ contains
       
       select case (dir)
          case (dir_X)
-            dir_i = mod(j, SZ) + 1
+            dir_i = mod(j-1, SZ) + 1
             dir_j = i
-            dir_k = (ny_loc/SZ)*(k-1) + floor(1.0*j/SZ)
+            dir_k = int(ny_loc/SZ)*(k-1) + ceiling(1.0*j/SZ) 
          case (dir_Y)
-            dir_i = mod(i, SZ) + 1
+            dir_i = mod(i-1, SZ) + 1
             dir_j = j
-            dir_k = (nx_loc/SZ)*(k-1) + floor(1.0*i/SZ)
+            dir_k = int(nx_loc/SZ)*(k-1) + ceiling(1.0*i/SZ) 
          case (dir_Z)
-            dir_i = mod(i, SZ) + 1
+            dir_i = mod(i-1, SZ) + 1
             dir_j = k
-            dir_k = (nx_loc/SZ)*(k-1) + floor(1.0*i/SZ)
+            dir_k = int(nx_loc/SZ)*(j-1) + ceiling(1.0*i/SZ) 
       end select
 
    end subroutine get_index_dir
