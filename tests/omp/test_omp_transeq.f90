@@ -121,7 +121,11 @@ program test_omp_transeq
    allocate(r_u(SZ, n, n_block))
 
    ! check error
-   r_u = dv%data - (-v%data*v%data + 0.5_dp*u%data*u%data - nu*u%data)
+   ! dv = -1/2*(u*dv/dx + d(u*v)/dx) + nu*d2v/dx2
+   ! u is sin, v is cos;
+   ! dv = -1/2*(u*(-u) + v*v + u*(-u)) + nu*(-v)
+   !    = u*u - 1/2*v*v - nu*v
+   r_u = dv%data - (u%data*u%data - 0.5_dp*v%data*v%data - nu*v%data)
    norm_du = norm2(r_u)
    norm_du = norm_du*norm_du/n_glob/n_block/SZ
    call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_DOUBLE_PRECISION, &
