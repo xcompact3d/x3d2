@@ -306,7 +306,7 @@ module m_omp_backend
          do j=1, ndir_loc
             do i=1, SZ
                call get_index_reordering(out_i, out_j, out_k, i, j, k, direction, &
-                                         SZ, self%nx_loc, self%ny_loc, self%nz_loc)
+                                         SZ, self%xdirps%n, self%ydirps%n, self%zdirps%n)
                u_%data(out_i, out_j, out_k) = u%data(i,j,k)
             end do
          end do

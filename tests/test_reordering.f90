@@ -5,6 +5,7 @@ program test_reorder
     use m_allocator, only: allocator_t, field_t
     use m_base_backend, only: base_backend_t
     use m_solver, only: allocate_tdsops
+    use m_tdsops, only: dirps_t, tdsops_t
 
     use m_common, only: dp, pi, globs_t, set_pprev_pnext, &
                        RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
@@ -30,6 +31,7 @@ program test_reorder
     type(globs_t) :: globs
     class(base_backend_t), pointer :: backend
     class(allocator_t), pointer :: allocator
+    type(dirps_t), target :: xdirps, ydirps, zdirps
 
 #ifdef CUDA
     type(cuda_backend_t), target :: cuda_backend
@@ -62,6 +64,14 @@ program test_reorder
     globs%n_groups_x = globs%ny_loc*globs%nz_loc/SZ
     globs%n_groups_y = globs%nx_loc*globs%nz_loc/SZ
     globs%n_groups_z = globs%nx_loc*globs%ny_loc/SZ
+
+    xdirps%n = globs%nx_loc
+    ydirps%n = globs%ny_loc
+    zdirps%n = globs%nz_loc
+
+    xdirps%n_blocks = globs%n_groups_x
+    ydirps%n_blocks = globs%n_groups_y
+    zdirps%n_blocks = globs%n_groups_z
  
    
 #ifdef CUDA
@@ -81,6 +91,10 @@ program test_reorder
     backend => omp_backend
     print*, 'OpenMP backend instantiated'
 #endif
+
+    backend%xdirps => xdirps
+    backend%ydirps => ydirps
+    backend%zdirps => zdirps
 
     if (nrank == 0) print*, 'Parallel run with', nproc, 'ranks'
 
