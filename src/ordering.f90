@@ -12,10 +12,10 @@ contains
 
    ! Get cartesian index from application storage directional one
    pure subroutine get_index_ijk(i, j, k, dir_i, dir_j, dir_k, dir, SZ, nx_loc, ny_loc, nz_loc)
-      integer, intent(out) :: i, j, k
-      integer, intent(in) :: dir_i, dir_j, dir_k
-      integer, intent(in) :: dir
-      integer, intent(in) :: SZ, nx_loc, ny_loc, nz_loc
+      integer, intent(out) :: i, j, k                   ! cartesian indices
+      integer, intent(in) :: dir_i, dir_j, dir_k        ! application storage indices
+      integer, intent(in) :: dir                        ! direction of the applicatino storage indices
+      integer, intent(in) :: SZ, nx_loc, ny_loc, nz_loc ! dimensions of the block
       
       select case (dir)
          case (dir_X)
@@ -36,10 +36,10 @@ contains
 
    ! Get application storage directional index from cartesian index
    pure subroutine get_index_dir(dir_i, dir_j, dir_k, i, j, k, dir, SZ, nx_loc, ny_loc, nz_loc)
-      integer, intent(out) :: dir_i, dir_j, dir_k
-      integer, intent(in) :: i, j, k
-      integer, intent(in) :: dir
-      integer, intent(in) :: SZ, nx_loc, ny_loc, nz_loc
+      integer, intent(out) :: dir_i, dir_j, dir_k        ! application storage indices
+      integer, intent(in) :: i, j, k                     ! cartesian indices
+      integer, intent(in) :: dir                        ! direction of the applicatino storage indices
+      integer, intent(in) :: SZ, nx_loc, ny_loc, nz_loc ! dimensions of the block
       
       select case (dir)
          case (dir_X)
@@ -61,11 +61,11 @@ contains
    ! Converts a set of application storage directional index to an other direction. 
    ! The two directions are defined by the reorder_dir variable, RDR_X2Y will go from storage in X to Y etc.
    pure subroutine get_index_reordering(out_i, out_j, out_k, in_i, in_j, in_k, reorder_dir, SZ, nx_loc, ny_loc, nz_loc)
-      integer, intent(out) :: out_i, out_j, out_k
-      integer, intent(in) :: in_i, in_j, in_k
+      integer, intent(out) :: out_i, out_j, out_k         ! new indices in the application storage
+      integer, intent(in) :: in_i, in_j, in_k             ! original indices
       integer, intent(in) :: reorder_dir
       integer, intent(in) :: SZ, nx_loc, ny_loc, nz_loc
-      integer :: i, j, k
+      integer :: i, j, k        ! Intermediary cartesian indices
       integer :: dir_in, dir_out
 
       select case (reorder_dir)
