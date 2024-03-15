@@ -31,7 +31,7 @@ module m_allocator
      !! [[m_allocator(module):release_block(subroutine)]].  The
      !! released block is then pushed in front of the block list.
 
-      integer :: nx_padded, ny_padded, nz_padded, sz
+      integer :: ngrid, sz
       !> The id for the next allocated block.  This counter is
       !> incremented each time a new block is allocated.
       integer :: next_id = 0
@@ -80,12 +80,12 @@ module m_allocator
 
 contains
 
-   function field_init(nx, ny, nz, sz, next, id) result(f)
-      integer, intent(in) :: nx, ny, nz, sz, id
+   function field_init(ngrid, next, id) result(f)
+      integer, intent(in) :: ngrid, id
       type(field_t), pointer, intent(in) :: next
       type(field_t) :: f
 
-      allocate (f%p_data(nx*ny*nz))
+      allocate (f%p_data(ngrid))
       f%refcount = 0
       f%next => next
       f%id = id
@@ -112,9 +112,7 @@ contains
       ny_padded = ny - 1 + mod(-(ny - 1), sz) + sz
       nz_padded = nz - 1 + mod(-(nz - 1), sz) + sz
 
-      allocator%nx_padded = nx_padded
-      allocator%ny_padded = ny_padded
-      allocator%nz_padded = nz_padded
+      allocator%ngrid = nx_padded*ny_padded*nz_padded
       allocator%sz = sz
 
       allocator%xdims = [sz, nx_padded, ny_padded*nz_padded/sz]
@@ -132,8 +130,7 @@ contains
       class(field_t), pointer :: ptr
       self%next_id = self%next_id + 1
       allocate (newblock)
-      newblock = field_t(self%nx_padded, self%ny_padded, self%nz_padded, &
-                         self%sz, next, id=self%next_id)
+      newblock = field_t(self%ngrid, next, id=self%next_id)
       ptr => newblock
    end function create_block
 

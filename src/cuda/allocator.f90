@@ -26,12 +26,12 @@ module m_cuda_allocator
 
 contains
 
-   function cuda_field_init(nx, ny, nz, sz, next, id) result(f)
-      integer, intent(in) :: nx, ny, nz, sz, id
+   function cuda_field_init(ngrid, next, id) result(f)
+      integer, intent(in) :: ngrid, id
       type(cuda_field_t), pointer, intent(in) :: next
       type(cuda_field_t) :: f
 
-      allocate (f%p_data_d(nx*ny*nz))
+      allocate (f%p_data_d(ngrid))
       f%refcount = 0
       f%next => next
       f%id = id
@@ -61,8 +61,7 @@ contains
       class(field_t), pointer :: ptr
       allocate (newblock)
       self%next_id = self%next_id + 1
-      newblock = cuda_field_t(self%nx_padded, self%ny_padded, self%nz_padded, &
-                              self%sz, next, id=self%next_id)
+      newblock = cuda_field_t(self%ngrid, next, id=self%next_id)
       ptr => newblock
    end function create_cuda_block
 
