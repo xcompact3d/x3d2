@@ -101,27 +101,12 @@ program test_reorder
     if (nrank == 0) print*, 'Parallel run with', nproc, 'ranks'
 
    ! Test indexing only
-    do k=1, xdirps%n
-        do j=1, xdirps%n
+    do k=1, zdirps%n
+        do j=1, ydirps%n
             do i=1, xdirps%n
-                call get_index_dir(i_, j_, k_, i, j, k, dir_X, SZ, xdirps%n, xdirps%n, xdirps%n)
-                call get_index_ijk(i__, j__, k__, i_, j_, k_, dir_X, SZ, xdirps%n, xdirps%n, xdirps%n)
-                if (i /= i__ .or. j /= j__ .or. k/= k__) then
-                    print *, "Error in dir X"
-                    allpass = .false.
-                end if
-                call get_index_dir(i_, j_, k_, i, j, k, dir_Y, SZ, xdirps%n, xdirps%n, xdirps%n)
-                call get_index_ijk(i__, j__, k__, i_, j_, k_, dir_Y, SZ, xdirps%n, xdirps%n, xdirps%n)
-                if (i /= i__ .or. j /= j__ .or. k/= k__) then
-                    print *, "Error in dir Y"
-                    allpass = .false.
-                end if
-                call get_index_dir(i_, j_, k_, i, j, k, dir_Z, SZ, xdirps%n, xdirps%n, xdirps%n)
-                call get_index_ijk(i__, j__, k__, i_, j_, k_, dir_Z, SZ, xdirps%n, xdirps%n, xdirps%n)
-                if (i /= i__ .or. j /= j__ .or. k/= k__) then
-                    print *, "Error in dir Z"
-                    allpass = .false.
-                end if
+                call test_index_reversing(allpass, i, j, k, dir_X, SZ, xdirps%n, ydirps%n, zdirps%n)
+                call test_index_reversing(allpass, i, j, k, dir_Y, SZ, xdirps%n, ydirps%n, zdirps%n)
+                call test_index_reversing(allpass, i, j, k, dir_Z, SZ, xdirps%n, ydirps%n, zdirps%n)
             end do
         end do
     end do
@@ -162,6 +147,24 @@ program test_reorder
     call MPI_Finalize(ierr)
 
     contains
+
+    subroutine test_index_reversing(allpass, i, j, k, dir, SZ, nx, ny, nz)
+        logical, intent(inout) :: allpass
+        integer, intent(in) :: i, j, k
+        integer, intent(in) :: dir
+        integer, intent(in) :: SZ, nx, ny, nz
+        integer :: dir_i, dir_j, dir_k    ! indices in the applicatin storage direction
+        integer :: cart_i, cart_j, cart_k ! newly computed indices in the cartesian space
+
+        call get_index_dir(dir_i, dir_j, dir_k, i, j, k, dir, SZ, nx, ny, nz)
+        call get_index_ijk(cart_i, cart_j, cart_k, dir_i, dir_j, dir_k, dir, SZ, nx, ny, nz)
+
+        if (i /= cart_i .or. j /= cart_j .or. k/= cart_k) then
+            print *, "Error in indexing mapping in dir", dir
+            allpass = .false.
+        end if
+
+    end subroutine
 
     subroutine check_reorder(allpass, a, b, message)
         logical, intent(inout) :: allpass
