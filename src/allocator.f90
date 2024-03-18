@@ -1,4 +1,6 @@
 module m_allocator
+   use iso_fortran_env, only: stderr => error_unit
+
    use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C
 
    implicit none
@@ -180,6 +182,8 @@ contains
          dims = self%zdims
       case (DIR_C)
          dims = self%cdims
+      case default
+         error stop 'Undefined direction, allocator cannot provide a shape.'
       end select
 
       ! Apply bounds remapping based on requested direction
