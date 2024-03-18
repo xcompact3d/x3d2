@@ -23,10 +23,11 @@ program test_reorder
     implicit none
 
     logical :: allpass = .true.
-    class(field_t), pointer :: u_x, u_y, u_z, u_x_original
+    class(field_t), pointer :: u_x, u_y, u_z,
+    class(field_t), pointer :: u_x_original, u_y_original, u_z_original
 
     integer :: nrank, nproc
-    integer :: ierr, i, j, k, i_, j_, k_, i__, j__, k__
+    integer :: ierr, i, j, k
 
     real(dp) :: dx, dx_per
 
@@ -126,6 +127,8 @@ program test_reorder
     u_y => allocator%get_block()
     u_z => allocator%get_block()
     u_x_original => allocator%get_block()
+    u_y_original => allocator%get_block()
+    u_z_original => allocator%get_block()
 
     call random_number(u_x_original%data)
 
@@ -184,6 +187,10 @@ program test_reorder
             allpass = .false.
             write(stderr, '(a)') message
         end if
+
+    end subroutine
+
+    subroutine test_zeros(allpass, a, message)
 
     end subroutine
 
