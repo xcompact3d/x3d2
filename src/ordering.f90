@@ -10,8 +10,8 @@ contains
    !!  This set of functions converts indices from this application storage (_dir) to cartesian indices (_ijk)
    !! 
 
-   ! Get cartesian index from application storage directional one
    pure subroutine get_index_ijk(i, j, k, dir_i, dir_j, dir_k, dir, SZ, nx_loc, ny_loc, nz_loc)
+      !! Get cartesian index from application storage directional one
       integer, intent(out) :: i, j, k                   ! cartesian indices
       integer, intent(in) :: dir_i, dir_j, dir_k        ! application storage indices
       integer, intent(in) :: dir                        ! direction of the applicatino storage indices
@@ -34,8 +34,8 @@ contains
 
    end subroutine get_index_ijk
 
-   ! Get application storage directional index from cartesian index
    pure subroutine get_index_dir(dir_i, dir_j, dir_k, i, j, k, dir, SZ, nx_loc, ny_loc, nz_loc)
+      !! Get application storage directional index from cartesian index
       integer, intent(out) :: dir_i, dir_j, dir_k        ! application storage indices
       integer, intent(in) :: i, j, k                     ! cartesian indices
       integer, intent(in) :: dir                        ! direction of the applicatino storage indices
@@ -58,9 +58,9 @@ contains
 
    end subroutine get_index_dir
 
-   ! Converts a set of application storage directional index to an other direction. 
-   ! The two directions are defined by the reorder_dir variable, RDR_X2Y will go from storage in X to Y etc.
    pure subroutine get_index_reordering(out_i, out_j, out_k, in_i, in_j, in_k, reorder_dir, SZ, nx_loc, ny_loc, nz_loc)
+      !! Converts a set of application storage directional index to an other direction. 
+      !! The two directions are defined by the reorder_dir variable, RDR_X2Y will go from storage in X to Y etc.
       integer, intent(out) :: out_i, out_j, out_k         ! new indices in the application storage
       integer, intent(in) :: in_i, in_j, in_k             ! original indices
       integer, intent(in) :: reorder_dir
