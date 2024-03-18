@@ -34,6 +34,7 @@ program test_reorder
     class(base_backend_t), pointer :: backend
     class(allocator_t), pointer :: allocator
     type(dirps_t), target :: xdirps, ydirps, zdirps
+    logical :: pass_X, pass_Y, pass_Z
 
 #ifdef CUDA
     type(cuda_backend_t), target :: cuda_backend
@@ -99,17 +100,25 @@ program test_reorder
     backend%zdirps => zdirps
 
     if (nrank == 0) print*, 'Parallel run with', nproc, 'ranks'
+    pass_X = .true.
+    pass_Y = .true.
+    pass_Z = .true.
 
    ! Test indexing only
     do k=1, zdirps%n
         do j=1, ydirps%n
             do i=1, xdirps%n
-                call test_index_reversing(allpass, i, j, k, dir_X, SZ, xdirps%n, ydirps%n, zdirps%n)
-                call test_index_reversing(allpass, i, j, k, dir_Y, SZ, xdirps%n, ydirps%n, zdirps%n)
-                call test_index_reversing(allpass, i, j, k, dir_Z, SZ, xdirps%n, ydirps%n, zdirps%n)
+                call test_index_reversing(pass_X, i, j, k, dir_X, SZ, xdirps%n, ydirps%n, zdirps%n)
+                call test_index_reversing(pass_Y, i, j, k, dir_Y, SZ, xdirps%n, ydirps%n, zdirps%n)
+                call test_index_reversing(pass_Z, i, j, k, dir_Z, SZ, xdirps%n, ydirps%n, zdirps%n)
             end do
         end do
     end do
+    if (.not. pass_X) print *, "Error in X direction for index reversing"
+    if (.not. pass_Y) print *, "Error in Y direction for index reversing"
+    if (.not. pass_Z) print *, "Error in Z direction for index reversing"
+
+    allpass = (pass_X .and. pass_Y .and. pass_Z)
  
 
     ! Test reordering
@@ -148,9 +157,9 @@ program test_reorder
 
     contains
 
-    subroutine test_index_reversing(allpass, i, j, k, dir, SZ, nx, ny, nz)
-        logical, intent(inout) :: allpass
-        integer, intent(in) :: i, j, k
+    subroutine test_index_reversing(pass, i, j, k, dir, SZ, nx, ny, nz)
+        logical, intent(inout) :: pass
+        integer, intent(in) :: i, j, k    ! original indices in the cartesian space
         integer, intent(in) :: dir
         integer, intent(in) :: SZ, nx, ny, nz
         integer :: dir_i, dir_j, dir_k    ! indices in the applicatin storage direction
@@ -159,9 +168,8 @@ program test_reorder
         call get_index_dir(dir_i, dir_j, dir_k, i, j, k, dir, SZ, nx, ny, nz)
         call get_index_ijk(cart_i, cart_j, cart_k, dir_i, dir_j, dir_k, dir, SZ, nx, ny, nz)
 
-        if (i /= cart_i .or. j /= cart_j .or. k/= cart_k) then
-            print *, "Error in indexing mapping in dir", dir
-            allpass = .false.
+        if (i /= cart_i .or. j /= cart_j .or. k /= cart_k) then
+            pass = .false.
         end if
 
     end subroutine
