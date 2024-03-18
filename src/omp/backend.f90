@@ -225,9 +225,9 @@ module m_omp_backend
       type(dirps_t), intent(in) :: dirps
       class(field_t), pointer :: du, d2u, dud
 
-      du => self%allocator%get_block()
-      dud => self%allocator%get_block()
-      d2u => self%allocator%get_block()
+      du => self%allocator%get_block(dirps%dir)
+      dud => self%allocator%get_block(dirps%dir)
+      d2u => self%allocator%get_block(dirps%dir)
 
       call exec_dist_transeq_compact(&
          rhs%data, du%data, dud%data, d2u%data, &

@@ -297,9 +297,9 @@ module m_cuda_backend
          du_dev, dud_dev, d2u_dev
 
       ! Get some fields for storing the intermediate results
-      du => self%allocator%get_block()
-      dud => self%allocator%get_block()
-      d2u => self%allocator%get_block()
+      du => self%allocator%get_block(dirps%dir)
+      dud => self%allocator%get_block(dirps%dir)
+      d2u => self%allocator%get_block(dirps%dir)
 
       call resolve_field_t(du_dev, du)
       call resolve_field_t(dud_dev, dud)
