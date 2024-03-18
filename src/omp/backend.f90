@@ -316,8 +316,13 @@ module m_omp_backend
          case (RDR_Z2Y)
             ndir_loc = self%zdirps%n
             ndir_groups = self%zdirps%n_blocks
+         case default
+            ndir_loc = 0
+            ndir_groups = 0
+            error stop 'unsuported reordering'
       end select
 
+      !$omp parallel do private(out_i, out_j, out_k)
       do k=1, ndir_groups
          do j=1, ndir_loc
             do i=1, SZ
@@ -327,6 +332,7 @@ module m_omp_backend
             end do
          end do
       end do
+      !$omp end parallel do
 
    end subroutine reorder_omp
 

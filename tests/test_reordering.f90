@@ -24,7 +24,7 @@ program test_reorder
 
     logical :: allpass = .true.
     class(field_t), pointer :: u_x, u_y, u_z
-    class(field_t), pointer :: u_x_original, u_y_original, u_z_original
+    class(field_t), pointer :: u_x_original
 
     integer :: nrank, nproc
     integer :: ierr, i, j, k
@@ -127,14 +127,10 @@ program test_reorder
     u_y => allocator%get_block()
     u_z => allocator%get_block()
     u_x_original => allocator%get_block()
-    u_y_original => allocator%get_block()
-    u_z_original => allocator%get_block()
 
     call random_number(u_x_original%data)
 
-    u_x%data(:, :, :) = u_x_original%data(:, :, :)
-
-    call backend%reorder(u_y, u_x, RDR_X2Y)
+    call backend%reorder(u_y, u_x_original, RDR_X2Y)
     call backend%reorder(u_x, u_y, RDR_Y2X)
     call check_reorder(allpass, u_x, u_x_original, "X2Y, Y2X")
 
