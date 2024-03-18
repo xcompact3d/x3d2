@@ -38,9 +38,9 @@ module m_allocator
       !> incremented each time a new block is allocated.
       integer :: next_id = 0
       !> Padded dimensions for x, y, and z oriented fields
-      integer :: xdims(3), ydims(3), zdims(3)
+      integer :: xdims_padded(3), ydims_padded(3), zdims_padded(3)
       !> Padded dimensions for natural Cartesian ordering
-      integer :: cdims(3)
+      integer :: cdims_padded(3)
       !> The pointer to the first block on the list.  Non associated if
       !> the list is empty
       ! TODO: Rename first to head
@@ -119,10 +119,10 @@ contains
       allocator%ngrid = nx_padded*ny_padded*nz_padded
       allocator%sz = sz
 
-      allocator%xdims = [sz, nx_padded, ny_padded*nz_padded/sz]
-      allocator%ydims = [sz, ny_padded, nx_padded*nz_padded/sz]
-      allocator%zdims = [sz, nz_padded, nx_padded*ny_padded/sz]
-      allocator%cdims = [nx_padded, ny_padded, nz_padded]
+      allocator%xdims_padded = [sz, nx_padded, ny_padded*nz_padded/sz]
+      allocator%ydims_padded = [sz, ny_padded, nx_padded*nz_padded/sz]
+      allocator%zdims_padded = [sz, nz_padded, nx_padded*ny_padded/sz]
+      allocator%cdims_padded = [nx_padded, ny_padded, nz_padded]
    end function allocator_init
 
    function create_block(self, next) result(ptr)
@@ -169,13 +169,13 @@ contains
       ! Set dims based on direction
       select case(dir)
       case (DIR_X)
-         dims = self%xdims
+         dims = self%xdims_padded
       case (DIR_Y)
-         dims = self%ydims
+         dims = self%ydims_padded
       case (DIR_Z)
-         dims = self%zdims
+         dims = self%zdims_padded
       case (DIR_C)
-         dims = self%cdims
+         dims = self%cdims_padded
       case default
          error stop 'Undefined direction, allocator cannot provide a shape.'
       end select
