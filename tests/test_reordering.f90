@@ -8,7 +8,7 @@ program test_reorder
     use m_tdsops, only: dirps_t, tdsops_t
 
     use m_common, only: dp, pi, globs_t, set_pprev_pnext, &
-                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, dir_X, dir_Y, dir_Z
+                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, DIR_X, DIR_Y, DIR_Z
 
     use m_ordering, only: get_index_dir, get_index_ijk
 
@@ -57,8 +57,8 @@ program test_reorder
     ierr = cudaGetDevice(devnum)
 #endif
  
-    globs%nx = 96
-    globs%ny = 96
+    globs%nx = 32
+    globs%ny = 64
     globs%nz = 96
  
     globs%nx_loc = globs%nx/nproc
@@ -79,7 +79,7 @@ program test_reorder
  
    
 #ifdef CUDA
-    cuda_allocator = cuda_allocator_t([SZ, globs%nx_loc, globs%n_groups_x])
+    cuda_allocator = cuda_allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, SZ)
     allocator => cuda_allocator
     print*, 'CUDA allocator instantiated'
 
@@ -87,7 +87,7 @@ program test_reorder
     backend => cuda_backend
     print*, 'CUDA backend instantiated'
 #else
-    omp_allocator = allocator_t([SZ, globs%nx_loc, globs%n_groups_x])
+    omp_allocator = allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, SZ)
     allocator => omp_allocator
     print*, 'OpenMP allocator instantiated'
 
@@ -109,9 +109,9 @@ program test_reorder
     do k=1, zdirps%n
         do j=1, ydirps%n
             do i=1, xdirps%n
-                call test_index_reversing(pass_X, i, j, k, dir_X, SZ, xdirps%n, ydirps%n, zdirps%n)
-                call test_index_reversing(pass_Y, i, j, k, dir_Y, SZ, xdirps%n, ydirps%n, zdirps%n)
-                call test_index_reversing(pass_Z, i, j, k, dir_Z, SZ, xdirps%n, ydirps%n, zdirps%n)
+                call test_index_reversing(pass_X, i, j, k, DIR_X, SZ, xdirps%n, ydirps%n, zdirps%n)
+                call test_index_reversing(pass_Y, i, j, k, DIR_Y, SZ, xdirps%n, ydirps%n, zdirps%n)
+                call test_index_reversing(pass_Z, i, j, k, DIR_Z, SZ, xdirps%n, ydirps%n, zdirps%n)
             end do
         end do
     end do
@@ -123,10 +123,10 @@ program test_reorder
  
 
     ! Test reordering
-    u_x => allocator%get_block()
-    u_y => allocator%get_block()
-    u_z => allocator%get_block()
-    u_x_original => allocator%get_block()
+    u_x => allocator%get_block(DIR_X)
+    u_y => allocator%get_block(DIR_Y)
+    u_z => allocator%get_block(DIR_Z)
+    u_x_original => allocator%get_block(DIR_X)
 
     call random_number(u_x_original%data)
 

@@ -3,7 +3,8 @@ module m_solver
    use m_base_backend, only: base_backend_t
    use m_common, only: dp, globs_t, &
                        RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
-                       POISSON_SOLVER_FFT, POISSON_SOLVER_CG
+                       POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
+                       DIR_X, DIR_Y, DIR_Z
    use m_tdsops, only: tdsops_t, dirps_t
    use m_time_integrator, only: time_intg_t
 
@@ -96,12 +97,12 @@ contains
       solver%ydirps => ydirps
       solver%zdirps => zdirps
 
-      solver%u => solver%backend%allocator%get_block()
-      solver%v => solver%backend%allocator%get_block()
-      solver%w => solver%backend%allocator%get_block()
+      solver%u => solver%backend%allocator%get_block(DIR_X)
+      solver%v => solver%backend%allocator%get_block(DIR_X)
+      solver%w => solver%backend%allocator%get_block(DIR_X)
 
       ! Set initial conditions
-      dims(:) = solver%backend%allocator%dims(:)
+      dims(:) = solver%backend%allocator%xdims_padded(:)
       allocate(u_init(dims(1), dims(2), dims(3)))
       allocate(v_init(dims(1), dims(2), dims(3)))
       allocate(w_init(dims(1), dims(2), dims(3)))
@@ -203,12 +204,12 @@ contains
       call self%backend%transeq_x(du, dv, dw, u, v, w, self%xdirps)
 
       ! request fields from the allocator
-      u_y => self%backend%allocator%get_block()
-      v_y => self%backend%allocator%get_block()
-      w_y => self%backend%allocator%get_block()
-      du_y => self%backend%allocator%get_block()
-      dv_y => self%backend%allocator%get_block()
-      dw_y => self%backend%allocator%get_block()
+      u_y => self%backend%allocator%get_block(DIR_Y)
+      v_y => self%backend%allocator%get_block(DIR_Y)
+      w_y => self%backend%allocator%get_block(DIR_Y)
+      du_y => self%backend%allocator%get_block(DIR_Y)
+      dv_y => self%backend%allocator%get_block(DIR_Y)
+      dw_y => self%backend%allocator%get_block(DIR_Y)
 
       ! reorder data from x orientation to y orientation
       call self%backend%reorder(u_y, u, RDR_X2Y)
@@ -235,12 +236,12 @@ contains
       call self%backend%allocator%release_block(dw_y)
 
       ! just like in y direction, get some fields for the z derivatives.
-      u_z => self%backend%allocator%get_block()
-      v_z => self%backend%allocator%get_block()
-      w_z => self%backend%allocator%get_block()
-      du_z => self%backend%allocator%get_block()
-      dv_z => self%backend%allocator%get_block()
-      dw_z => self%backend%allocator%get_block()
+      u_z => self%backend%allocator%get_block(DIR_Z)
+      v_z => self%backend%allocator%get_block(DIR_Z)
+      w_z => self%backend%allocator%get_block(DIR_Z)
+      du_z => self%backend%allocator%get_block(DIR_Z)
+      dv_z => self%backend%allocator%get_block(DIR_Z)
+      dw_z => self%backend%allocator%get_block(DIR_Z)
 
       ! reorder from x to z
       call self%backend%reorder(u_z, u, RDR_X2Z)
@@ -280,9 +281,9 @@ contains
                                  u_y, v_y, w_y, du_y, dv_y, dw_y, &
                                  u_z, w_z, dw_z
 
-      du_x => self%backend%allocator%get_block()
-      dv_x => self%backend%allocator%get_block()
-      dw_x => self%backend%allocator%get_block()
+      du_x => self%backend%allocator%get_block(DIR_X)
+      dv_x => self%backend%allocator%get_block(DIR_X)
+      dw_x => self%backend%allocator%get_block(DIR_X)
 
       ! Staggared der for u field in x
       ! Interpolation for v field in x
@@ -295,9 +296,9 @@ contains
                                   self%xdirps%interpl_v2p)
 
       ! request fields from the allocator
-      u_y => self%backend%allocator%get_block()
-      v_y => self%backend%allocator%get_block()
-      w_y => self%backend%allocator%get_block()
+      u_y => self%backend%allocator%get_block(DIR_Y)
+      v_y => self%backend%allocator%get_block(DIR_Y)
+      w_y => self%backend%allocator%get_block(DIR_Y)
 
       ! reorder data from x orientation to y orientation
       call self%backend%reorder(u_y, du_x, RDR_X2Y)
@@ -308,9 +309,9 @@ contains
       call self%backend%allocator%release_block(dv_x)
       call self%backend%allocator%release_block(dw_x)
 
-      du_y => self%backend%allocator%get_block()
-      dv_y => self%backend%allocator%get_block()
-      dw_y => self%backend%allocator%get_block()
+      du_y => self%backend%allocator%get_block(DIR_Y)
+      dv_y => self%backend%allocator%get_block(DIR_Y)
+      dw_y => self%backend%allocator%get_block(DIR_Y)
 
       ! similar to the x direction, obtain derivatives in y.
       call self%backend%tds_solve(du_y, u_y, self%ydirps, &
@@ -329,8 +330,8 @@ contains
       call self%backend%allocator%release_block(w_y)
 
       ! just like in y direction, get some fields for the z derivatives.
-      u_z => self%backend%allocator%get_block()
-      w_z => self%backend%allocator%get_block()
+      u_z => self%backend%allocator%get_block(DIR_Z)
+      w_z => self%backend%allocator%get_block(DIR_Z)
 
       ! du_y = dv_y + du_y
       call self%backend%vecadd(1._dp, dv_y, 1._dp, du_y)
@@ -344,7 +345,7 @@ contains
       call self%backend%allocator%release_block(dv_y)
       call self%backend%allocator%release_block(dw_y)
 
-      dw_z => self%backend%allocator%get_block()
+      dw_z => self%backend%allocator%get_block(DIR_Z)
 
       ! get the derivatives in z
       call self%backend%tds_solve(div_u, u_z, self%zdirps, &
@@ -378,8 +379,8 @@ contains
                                  p_sx_y, dpdy_sx_y, dpdz_sx_y, &
                                  p_sx_x, dpdy_sx_x, dpdz_sx_x
 
-      p_sxy_z => self%backend%allocator%get_block()
-      dpdz_sxy_z => self%backend%allocator%get_block()
+      p_sxy_z => self%backend%allocator%get_block(DIR_Z)
+      dpdz_sxy_z => self%backend%allocator%get_block(DIR_Z)
 
       ! Staggared der for pressure field in z
       ! Interpolation for pressure field in z
@@ -389,8 +390,8 @@ contains
                                   self%zdirps%stagder_p2v)
 
       ! request fields from the allocator
-      p_sxy_y => self%backend%allocator%get_block()
-      dpdz_sxy_y => self%backend%allocator%get_block()
+      p_sxy_y => self%backend%allocator%get_block(DIR_Y)
+      dpdz_sxy_y => self%backend%allocator%get_block(DIR_Y)
 
       ! reorder data from z orientation to y orientation
       call self%backend%reorder(p_sxy_y, p_sxy_z, RDR_Z2Y)
@@ -399,9 +400,9 @@ contains
       call self%backend%allocator%release_block(p_sxy_z)
       call self%backend%allocator%release_block(dpdz_sxy_z)
 
-      p_sx_y => self%backend%allocator%get_block()
-      dpdy_sx_y => self%backend%allocator%get_block()
-      dpdz_sx_y => self%backend%allocator%get_block()
+      p_sx_y => self%backend%allocator%get_block(DIR_Y)
+      dpdy_sx_y => self%backend%allocator%get_block(DIR_Y)
+      dpdz_sx_y => self%backend%allocator%get_block(DIR_Y)
 
       ! similar to the z direction, obtain derivatives in y.
       call self%backend%tds_solve(p_sx_y, p_sxy_y, self%ydirps, &
@@ -416,9 +417,9 @@ contains
       call self%backend%allocator%release_block(dpdz_sxy_y)
 
       ! just like in y direction, get some fields for the x derivatives.
-      p_sx_x => self%backend%allocator%get_block()
-      dpdy_sx_x => self%backend%allocator%get_block()
-      dpdz_sx_x => self%backend%allocator%get_block()
+      p_sx_x => self%backend%allocator%get_block(DIR_X)
+      dpdy_sx_x => self%backend%allocator%get_block(DIR_X)
+      dpdz_sx_x => self%backend%allocator%get_block(DIR_X)
 
       ! reorder from y to x
       call self%backend%reorder(p_sx_x, p_sx_y, RDR_Y2X)
@@ -464,8 +465,8 @@ contains
 
       ! omega_i_hat
       ! dw/dy
-      w_y => self%backend%allocator%get_block()
-      dwdy_y => self%backend%allocator%get_block()
+      w_y => self%backend%allocator%get_block(DIR_Y)
+      dwdy_y => self%backend%allocator%get_block(DIR_Y)
       call self%backend%reorder(w_y, w, RDR_X2Y)
       call self%backend%tds_solve(dwdy_y, w_y, self%ydirps, self%ydirps%der1st)
 
@@ -475,12 +476,12 @@ contains
       call self%backend%allocator%release_block(dwdy_y)
 
       ! dv/dz
-      v_z => self%backend%allocator%get_block()
-      dvdz_z => self%backend%allocator%get_block()
+      v_z => self%backend%allocator%get_block(DIR_Z)
+      dvdz_z => self%backend%allocator%get_block(DIR_Z)
       call self%backend%reorder(v_z, v, RDR_X2Z)
       call self%backend%tds_solve(dvdz_z, v_z, self%zdirps, self%zdirps%der1st)
 
-      dvdz_x => self%backend%allocator%get_block()
+      dvdz_x => self%backend%allocator%get_block(DIR_X)
       call self%backend%reorder(dvdz_x, dvdz_z, RDR_Z2X)
 
       call self%backend%allocator%release_block(v_z)
@@ -493,12 +494,12 @@ contains
 
       ! omega_j_hat
       ! du/dz
-      u_z => self%backend%allocator%get_block()
-      dudz_z => self%backend%allocator%get_block()
+      u_z => self%backend%allocator%get_block(DIR_Z)
+      dudz_z => self%backend%allocator%get_block(DIR_Z)
       call self%backend%reorder(u_z, u, RDR_X2Z)
       call self%backend%tds_solve(dudz_z, u_z, self%zdirps, self%zdirps%der1st)
 
-      dudz_x => self%backend%allocator%get_block()
+      dudz_x => self%backend%allocator%get_block(DIR_X)
       call self%backend%reorder(dudz_x, dudz_z, RDR_Z2X)
 
       call self%backend%allocator%release_block(u_z)
@@ -517,12 +518,12 @@ contains
       call self%backend%tds_solve(o_k_hat, v, self%xdirps, self%xdirps%der1st)
 
       ! du/dy
-      u_y => self%backend%allocator%get_block()
-      dudy_y => self%backend%allocator%get_block()
+      u_y => self%backend%allocator%get_block(DIR_Y)
+      dudy_y => self%backend%allocator%get_block(DIR_Y)
       call self%backend%reorder(u_y, u, RDR_X2Y)
       call self%backend%tds_solve(dudy_y, u_y, self%ydirps, self%ydirps%der1st)
 
-      dudy_x => self%backend%allocator%get_block()
+      dudy_x => self%backend%allocator%get_block(DIR_X)
       call self%backend%reorder(dudy_x, dudy_y, RDR_Y2X)
 
       call self%backend%allocator%release_block(u_y)
@@ -570,15 +571,15 @@ contains
       real(dp), intent(in) :: t
       real(dp), dimension(:, :, :), intent(inout) :: u_out
 
-      class(field_t), pointer :: du, dv, dw
+      class(field_t), pointer :: du, dv, dw, div_u
       integer :: ngrid
 
       ngrid = self%xdirps%n*self%ydirps%n*self%zdirps%n
       print*, 'time = ', t
 
-      du => self%backend%allocator%get_block()
-      dv => self%backend%allocator%get_block()
-      dw => self%backend%allocator%get_block()
+      du => self%backend%allocator%get_block(DIR_X)
+      dv => self%backend%allocator%get_block(DIR_X)
+      dw => self%backend%allocator%get_block(DIR_X)
 
       call self%curl(du, dv, dw, self%u, self%v, self%w)
       print*, 'enstrophy:', 0.5_dp*( &
@@ -591,8 +592,13 @@ contains
       call self%backend%allocator%release_block(dv)
       call self%backend%allocator%release_block(dw)
 
-      call self%divergence_v2p(du, self%u, self%v, self%w)
-      call self%backend%get_field(u_out, du)
+      div_u => self%backend%allocator%get_block(DIR_Z)
+
+      call self%divergence_v2p(div_u, self%u, self%v, self%w)
+      call self%backend%get_field(u_out, div_u)
+
+      call self%backend%allocator%release_block(div_u)
+
       print*, 'div u max mean:', maxval(abs(u_out)), sum(abs(u_out))/ngrid
 
    end subroutine output
@@ -615,9 +621,9 @@ contains
       print*, 'start run'
 
       do i = 1, self%n_iters
-         du => self%backend%allocator%get_block()
-         dv => self%backend%allocator%get_block()
-         dw => self%backend%allocator%get_block()
+         du => self%backend%allocator%get_block(DIR_X)
+         dv => self%backend%allocator%get_block(DIR_X)
+         dw => self%backend%allocator%get_block(DIR_X)
 
          call self%transeq(du, dv, dw, self%u, self%v, self%w)
 
@@ -630,19 +636,19 @@ contains
          call self%backend%allocator%release_block(dw)
 
          ! pressure
-         div_u => self%backend%allocator%get_block()
+         div_u => self%backend%allocator%get_block(DIR_Z)
 
          call self%divergence_v2p(div_u, self%u, self%v, self%w)
 
-         pressure => self%backend%allocator%get_block()
+         pressure => self%backend%allocator%get_block(DIR_Z)
 
          call self%poisson(pressure, div_u)
 
          call self%backend%allocator%release_block(div_u)
 
-         dpdx => self%backend%allocator%get_block()
-         dpdy => self%backend%allocator%get_block()
-         dpdz => self%backend%allocator%get_block()
+         dpdx => self%backend%allocator%get_block(DIR_X)
+         dpdy => self%backend%allocator%get_block(DIR_X)
+         dpdz => self%backend%allocator%get_block(DIR_X)
 
          call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
 

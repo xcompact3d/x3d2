@@ -1,7 +1,7 @@
 module m_time_integrator
    use m_allocator, only: allocator_t, field_t, flist_t
    use m_base_backend, only: base_backend_t
-   use m_common, only: dp
+   use m_common, only: dp, DIR_X
 
    implicit none
 
@@ -46,7 +46,7 @@ contains
       ! Request all the storage for old timesteps
       do i = 1, constructor%nvars
          do j = 1, constructor%nolds
-            constructor%olds(i, j)%ptr => allocator%get_block()
+            constructor%olds(i, j)%ptr => allocator%get_block(DIR_X)
          end do
       end do
 

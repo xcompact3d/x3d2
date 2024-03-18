@@ -1,6 +1,6 @@
 module m_ordering
 
-   use m_common, only: dp, dir_X, dir_Y, dir_Z, &
+   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, &
                        RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
 
    implicit none
@@ -18,15 +18,15 @@ contains
       integer, intent(in) :: SZ, nx_loc, ny_loc, nz_loc ! dimensions of the block
       
       select case (dir)
-         case (dir_X)
+         case (DIR_X)
             i = dir_j
             j = mod(dir_k - 1, ny_loc/SZ)*SZ + dir_i 
             k = 1 + (dir_k - 1)/(ny_loc/SZ)
-         case (dir_Y)
+         case (DIR_Y)
             i = mod(dir_k - 1, nx_loc/SZ)*SZ + dir_i 
             j = dir_j
             k = 1 + (dir_k - 1)/(nx_loc/SZ)
-         case (dir_Z)
+         case (DIR_Z)
             i = mod(dir_k - 1, nx_loc/SZ)*SZ + dir_i 
             j = 1 + (dir_k - 1)/(nx_loc/SZ)
             k = dir_j
@@ -42,15 +42,15 @@ contains
       integer, intent(in) :: SZ, nx_loc, ny_loc, nz_loc ! dimensions of the block
       
       select case (dir)
-         case (dir_X)
+         case (DIR_X)
             dir_i = mod(j-1, SZ) + 1
             dir_j = i
             dir_k = (ny_loc/SZ)*(k-1) + 1 + (j-1)/SZ
-         case (dir_Y)
+         case (DIR_Y)
             dir_i = mod(i-1, SZ) + 1
             dir_j = j
             dir_k = (nx_loc/SZ)*(k-1) + 1 + (i-1)/SZ
-         case (dir_Z)
+         case (DIR_Z)
             dir_i = mod(i-1, SZ) + 1
             dir_j = k
             dir_k = (nx_loc/SZ)*(j-1) + 1 + (i-1)/SZ
@@ -70,23 +70,23 @@ contains
 
       select case (reorder_dir)
          case (RDR_X2Y)
-            dir_in = dir_X
-            dir_out = dir_Y
+            dir_in = DIR_X
+            dir_out = DIR_Y
          case (RDR_X2Z)
-            dir_in = dir_X
-            dir_out = dir_Z
+            dir_in = DIR_X
+            dir_out = DIR_Z
          case (RDR_Y2X)
-            dir_in = dir_Y
-            dir_out = dir_X
+            dir_in = DIR_Y
+            dir_out = DIR_X
          case (RDR_Y2Z)
-            dir_in = dir_Y
-            dir_out = dir_Z
+            dir_in = DIR_Y
+            dir_out = DIR_Z
          case (RDR_Z2X)
-            dir_in = dir_Z
-            dir_out = dir_X
+            dir_in = DIR_Z
+            dir_out = DIR_X
          case (RDR_Z2Y)
-            dir_in = dir_Z
-            dir_out = dir_Y
+            dir_in = DIR_Z
+            dir_out = DIR_Y
       end select
 
       call get_index_ijk(i, j, k, in_i, in_j, in_k, dir_in, SZ, nx_loc, ny_loc, nz_loc)
