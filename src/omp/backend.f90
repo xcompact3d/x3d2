@@ -225,9 +225,9 @@ module m_omp_backend
       type(dirps_t), intent(in) :: dirps
       class(field_t), pointer :: du, d2u, dud
 
-      du => self%allocator%get_block()
-      dud => self%allocator%get_block()
-      d2u => self%allocator%get_block()
+      du => self%allocator%get_block(dirps%dir)
+      dud => self%allocator%get_block(dirps%dir)
+      d2u => self%allocator%get_block(dirps%dir)
 
       call exec_dist_transeq_compact(&
          rhs%data, du%data, dud%data, d2u%data, &
@@ -253,6 +253,11 @@ module m_omp_backend
       class(field_t), intent(in) :: u
       type(dirps_t), intent(in) :: dirps
       class(tdsops_t), intent(in) :: tdsops
+
+      ! Check if direction matches for both in/out fields and dirps
+      if (dirps%dir /= du%dir .or. u%dir /= du%dir) then
+         error stop 'DIR mismatch between fields and dirps in tds_solve.'
+      end if
 
       call tds_solve_dist(self, du, u, dirps, tdsops)
 

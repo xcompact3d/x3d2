@@ -6,7 +6,7 @@ module m_common
 
    integer, parameter :: RDR_X2Y = 12, RDR_X2Z = 13, RDR_Y2X = 21, &
                          RDR_Y2Z = 23, RDR_Z2X = 31, RDR_Z2Y = 32
-
+   integer, parameter :: DIR_X = 1, DIR_Y = 2, DIR_Z = 3, DIR_C = 4
    integer, parameter :: POISSON_SOLVER_FFT = 0, POISSON_SOLVER_CG = 1
 
    type :: globs_t
