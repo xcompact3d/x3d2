@@ -254,6 +254,11 @@ module m_omp_backend
       type(dirps_t), intent(in) :: dirps
       class(tdsops_t), intent(in) :: tdsops
 
+      ! Check if direction matches for both in/out fields and dirps
+      if (dirps%dir /= du%dir .or. u%dir /= du%dir) then
+         error stop 'DIR mismatch between fields and dirps in tds_solve.'
+      end if
+
       call tds_solve_dist(self, du, u, dirps, tdsops)
 
    end subroutine tds_solve_omp

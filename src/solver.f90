@@ -571,7 +571,7 @@ contains
       real(dp), intent(in) :: t
       real(dp), dimension(:, :, :), intent(inout) :: u_out
 
-      class(field_t), pointer :: du, dv, dw
+      class(field_t), pointer :: du, dv, dw, div_u
       integer :: ngrid
 
       ngrid = self%xdirps%n*self%ydirps%n*self%zdirps%n
@@ -592,8 +592,13 @@ contains
       call self%backend%allocator%release_block(dv)
       call self%backend%allocator%release_block(dw)
 
-      call self%divergence_v2p(du, self%u, self%v, self%w)
-      call self%backend%get_field(u_out, du)
+      div_u => self%backend%allocator%get_block(DIR_Z)
+
+      call self%divergence_v2p(div_u, self%u, self%v, self%w)
+      call self%backend%get_field(u_out, div_u)
+
+      call self%backend%allocator%release_block(div_u)
+
       print*, 'div u max mean:', maxval(abs(u_out)), sum(abs(u_out))/ngrid
 
    end subroutine output

@@ -352,6 +352,11 @@ module m_cuda_backend
 
       type(dim3) :: blocks, threads
 
+      ! Check if direction matches for both in/out fields and dirps
+      if (dirps%dir /= du%dir .or. u%dir /= du%dir) then
+         error stop 'DIR mismatch between fields and dirps in tds_solve.'
+      end if
+
       blocks = dim3(dirps%n_blocks, 1, 1); threads = dim3(SZ, 1, 1)
 
       call tds_solve_dist(self, du, u, dirps, tdsops, blocks, threads)
