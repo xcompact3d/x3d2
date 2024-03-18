@@ -23,7 +23,7 @@ program test_reorder
     implicit none
 
     logical :: allpass = .true.
-    class(field_t), pointer :: u_x, u_y, u_z,
+    class(field_t), pointer :: u_x, u_y, u_z
     class(field_t), pointer :: u_x_original, u_y_original, u_z_original
 
     integer :: nrank, nproc
@@ -190,9 +190,6 @@ program test_reorder
 
     end subroutine
 
-    subroutine test_zeros(allpass, a, message)
-
-    end subroutine
 
 end program test_reorder
 
