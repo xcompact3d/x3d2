@@ -113,7 +113,8 @@ contains
       ! Apply padding based on sz
       nx_padded = nx - 1 + mod(-(nx - 1), sz) + sz
       ny_padded = ny - 1 + mod(-(ny - 1), sz) + sz
-      nz_padded = nz - 1 + mod(-(nz - 1), sz) + sz
+      ! Current reorder functions do not require a padding in z-direction.
+      nz_padded = nz
 
       allocator%ngrid = nx_padded*ny_padded*nz_padded
       allocator%sz = sz
