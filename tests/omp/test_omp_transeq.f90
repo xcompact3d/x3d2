@@ -3,7 +3,7 @@ program test_omp_transeq
    use mpi
 
    use m_allocator, only: allocator_t, field_t
-   use m_common, only: dp, pi, globs_t, set_pprev_pnext
+   use m_common, only: dp, pi, globs_t, set_pprev_pnext, DIR_X, DIR_Y, DIR_Z
    use m_omp_common, only: SZ
    use m_omp_sendrecv, only: sendrecv_fields
    use m_omp_backend, only: omp_backend_t, transeq_x_omp, base_backend_t
@@ -67,6 +67,10 @@ program test_omp_transeq
    xdirps%n_blocks = globs%n_groups_x
    ydirps%n_blocks = globs%n_groups_y
    zdirps%n_blocks = globs%n_groups_z
+
+   xdirps%dir = DIR_X
+   ydirps%dir = DIR_Y
+   zdirps%dir = DIR_Z
 
    omp_allocator = allocator_t(xdirps%n, ydirps%n, zdirps%n, SZ)
    allocator => omp_allocator
