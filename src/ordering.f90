@@ -21,14 +21,14 @@ contains
          case (dir_X)
             i = dir_j
             j = mod(dir_k - 1, ny_loc/SZ)*SZ + dir_i 
-            k = ceiling(real(dir_k)/(ny_loc/SZ))
+            k = 1 + (dir_k - 1)/(ny_loc/SZ)
          case (dir_Y)
             i = mod(dir_k - 1, nx_loc/SZ)*SZ + dir_i 
             j = dir_j
-            k = ceiling(real(dir_k)/(nx_loc/SZ))
+            k = 1 + (dir_k - 1)/(nx_loc/SZ)
          case (dir_Z)
             i = mod(dir_k - 1, nx_loc/SZ)*SZ + dir_i 
-            j = ceiling(real(dir_k)/(nx_loc/SZ))
+            j = 1 + (dir_k - 1)/(nx_loc/SZ)
             k = dir_j
       end select
 
@@ -45,15 +45,15 @@ contains
          case (dir_X)
             dir_i = mod(j-1, SZ) + 1
             dir_j = i
-            dir_k = int(ny_loc/SZ)*(k-1) + ceiling(real(j)/SZ)
+            dir_k = (ny_loc/SZ)*(k-1) + 1 + (j-1)/SZ
          case (dir_Y)
             dir_i = mod(i-1, SZ) + 1
             dir_j = j
-            dir_k = int(nx_loc/SZ)*(k-1) + ceiling(real(i)/SZ)
+            dir_k = (nx_loc/SZ)*(k-1) + 1 + (i-1)/SZ
          case (dir_Z)
             dir_i = mod(i-1, SZ) + 1
             dir_j = k
-            dir_k = int(nx_loc/SZ)*(j-1) + ceiling(real(i)/SZ)
+            dir_k = (nx_loc/SZ)*(j-1) + 1 + (i-1)/SZ
       end select
 
    end subroutine get_index_dir
