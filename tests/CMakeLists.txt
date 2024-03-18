@@ -8,7 +8,7 @@ function(define_test testfile np backend)
   add_executable(${test_name} ${testfile})
 
   if(${backend} STREQUAL cuda)
-    target_compile_options(${test_name} PRIVATE "-cpp -cuda")
+    target_compile_options(${test_name} PRIVATE "-cpp -cuda -DCUDA")
     target_link_options(${test_name} INTERFACE "-cuda")
   else()
     target_compile_options(${test_name} PRIVATE "-cpp")
