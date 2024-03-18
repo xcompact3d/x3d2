@@ -69,11 +69,6 @@ find_package(MPI REQUIRED)
 target_link_libraries(x3d2 PRIVATE MPI::MPI_Fortran)
 target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
 
-#
-# Set the Poisson solver choice
-#
-set(POISSON_SOLVER FFT CACHE STRING
-  "Select the Poisson solver: FFT or ITER")
 if (${POISSON_SOLVER} STREQUAL "FFT")
   message(STATUS "Using the FFT Poisson solver")
 elseif (${POISSON_SOLVER} STREQUAL "ITER")
