@@ -4,7 +4,8 @@ program xcompact
    use m_allocator
    use m_base_backend
    use m_common, only: pi, globs_t, set_pprev_pnext, &
-                       POISSON_SOLVER_FFT, POISSON_SOLVER_CG
+                       POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
+                       DIR_X, DIR_Y, DIR_Z
    use m_solver, only: solver_t
    use m_time_integrator, only: time_intg_t
    use m_tdsops, only: tdsops_t
@@ -109,6 +110,8 @@ program xcompact
    xdirps%n_blocks = globs%n_groups_x
    ydirps%n_blocks = globs%n_groups_y
    zdirps%n_blocks = globs%n_groups_z
+
+   xdirps%dir = DIR_X; ydirps%dir = DIR_Y; zdirps%dir = DIR_Z
 
 #ifdef CUDA
    cuda_allocator = cuda_allocator_t(globs%nx_loc, globs%ny_loc, &

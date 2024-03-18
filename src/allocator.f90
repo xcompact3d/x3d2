@@ -64,6 +64,7 @@ module m_allocator
       class(field_t), pointer :: next
       real(dp), pointer, private :: p_data(:)
       real(dp), pointer, contiguous :: data(:, :, :)
+      integer :: dir
       integer :: refcount = 0
       integer :: id !! An integer identifying the memory block.
    contains
@@ -165,6 +166,9 @@ contains
       else
          direction = DIR_X
       end if
+
+      ! Store direction info in the field type.
+      handle%dir = direction
 
       ! Set dims based on direction
       select case(direction)
