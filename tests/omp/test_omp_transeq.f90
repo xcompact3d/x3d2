@@ -91,13 +91,13 @@ program test_omp_transeq
    omp_backend%nu = nu
 
    
-   u => allocator%get_block()
-   v => allocator%get_block()
-   w => allocator%get_block()
+   u => allocator%get_block(DIR_X)
+   v => allocator%get_block(DIR_X)
+   w => allocator%get_block(DIR_X)
 
-   du => allocator%get_block()
-   dv => allocator%get_block()
-   dw => allocator%get_block()
+   du => allocator%get_block(DIR_X)
+   dv => allocator%get_block(DIR_X)
+   dw => allocator%get_block(DIR_X)
 
    dx_per = 2*pi/n_glob
    dx = 2*pi/(n_glob - 1)

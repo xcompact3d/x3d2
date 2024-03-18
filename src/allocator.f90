@@ -150,8 +150,8 @@ contains
     !! ```
       class(allocator_t), intent(inout) :: self
       class(field_t), pointer :: handle
-      integer, optional, intent(in) :: dir
-      integer :: direction, dims(3)
+      integer, intent(in) :: dir
+      integer :: dims(3)
       ! If the list is empty, allocate a new block before returning a
       ! pointer to it.
       if (.not. associated(self%first)) then
@@ -163,18 +163,11 @@ contains
       self%first => self%first%next ! 2nd block becomes head block
       handle%next => null() ! Detach ex-head block from the block list
 
-      ! If no direction is specified assume DIR_X
-      if (present(dir)) then
-         direction = dir
-      else
-         direction = DIR_X
-      end if
-
       ! Store direction info in the field type.
-      handle%dir = direction
+      handle%dir = dir
 
       ! Set dims based on direction
-      select case(direction)
+      select case(dir)
       case (DIR_X)
          dims = self%xdims
       case (DIR_Y)

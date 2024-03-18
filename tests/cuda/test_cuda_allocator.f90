@@ -2,6 +2,7 @@ program test_allocator_cuda
   use iso_fortran_env, only: stderr => error_unit
 
   use m_allocator, only: allocator_t, field_t
+  use m_common, only: DIR_X
   use m_cuda_allocator, only: cuda_allocator_t
 
   implicit none
@@ -28,8 +29,8 @@ program test_allocator_cuda
 
   ! Request two blocks and release them in reverse order.  List should
   ! contain two free blocks. (1 -> 2)
-  ptr1 => allocator%get_block()
-  ptr2 => allocator%get_block()
+  ptr1 => allocator%get_block(DIR_X)
+  ptr2 => allocator%get_block(DIR_X)
   call allocator%release_block(ptr2)
   call allocator%release_block(ptr1)
 
@@ -52,13 +53,13 @@ program test_allocator_cuda
 
   ! Request a block from a list of three.  This should grab the first
   ! block on top of the pile and reduce the free list to two blocks.
-  ptr1 => allocator%get_block()
-  ptr2 => allocator%get_block()
-  ptr3 => allocator%get_block()
+  ptr1 => allocator%get_block(DIR_X)
+  ptr2 => allocator%get_block(DIR_X)
+  ptr3 => allocator%get_block(DIR_X)
   call allocator%release_block(ptr3)
   call allocator%release_block(ptr2)
   call allocator%release_block(ptr1)
-  ptr1 => allocator%get_block()
+  ptr1 => allocator%get_block(DIR_X)
 
   if (.not. all(allocator%get_block_ids() .eq. [2, 3])) then
      allpass = .false.
