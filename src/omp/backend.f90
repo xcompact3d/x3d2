@@ -11,6 +11,8 @@ module m_omp_backend
 
    implicit none
 
+   private :: transeq_halo_exchange, transeq_dist_component
+
    type, extends(base_backend_t) :: omp_backend_t
       !character(len=*), parameter :: name = 'omp'
       integer :: MPI_FP_PREC = dp
@@ -165,11 +167,20 @@ module m_omp_backend
       call transeq_halo_exchange(self, u, v, w, dirps)
 
       call transeq_dist_component(self, du, u, u, &
-            dirps%der1st, dirps%der1st_sym, dirps%der2nd, dirps)
+                                  self%u_recv_s, self%u_recv_e, &
+                                  self%u_recv_s, self%u_recv_e, &
+                                  dirps%der1st, dirps%der1st_sym, &
+                                  dirps%der2nd, dirps)
       call transeq_dist_component(self, dv, v, u, &
-            dirps%der1st_sym, dirps%der1st, dirps%der2nd_sym, dirps)
+                                  self%v_recv_s, self%v_recv_e, &
+                                  self%u_recv_s, self%u_recv_e, &
+                                  dirps%der1st_sym, dirps%der1st, &
+                                  dirps%der2nd_sym, dirps)
       call transeq_dist_component(self, dw, w, u, &
-            dirps%der1st_sym, dirps%der1st, dirps%der2nd_sym, dirps)
+                                  self%w_recv_s, self%w_recv_e, &
+                                  self%u_recv_s, self%u_recv_e, &
+                                  dirps%der1st_sym, dirps%der1st, &
+                                  dirps%der2nd_sym, dirps)
 
    end subroutine transeq_omp_dist
 
@@ -196,13 +207,18 @@ module m_omp_backend
 
    end subroutine transeq_halo_exchange
 
-   !> Computes RHS_x^v following:
-   ! rhs_x^v = -0.5*(u*dv/dx + duv/dx) + nu*d2v/dx2
-   subroutine transeq_dist_component(self, rhs, v, u, tdsops_du, tdsops_dud, tdsops_d2u, dirps)
-
+   subroutine transeq_dist_component(self, rhs, u, conv, &
+                                     u_recv_s, u_recv_e, &
+                                     conv_recv_s, conv_recv_e, &
+                                     tdsops_du, tdsops_dud, tdsops_d2u, dirps)
+      !! Computes RHS_x^u following:
+      !!
+      !! rhs_x^u = -0.5*(conv*du/dx + d(u*conv)/dx) + nu*d2u/dx2
       class(omp_backend_t) :: self
       class(field_t), intent(inout) :: rhs
-      class(field_t), intent(in) :: u, v
+      class(field_t), intent(in) :: u, conv
+      real(dp), dimension(:, :, :), intent(in) :: u_recv_s, u_recv_e, &
+                                                  conv_recv_s, conv_recv_e
       class(tdsops_t), intent(in) :: tdsops_du
       class(tdsops_t), intent(in) :: tdsops_dud
       class(tdsops_t), intent(in) :: tdsops_d2u
@@ -218,8 +234,8 @@ module m_omp_backend
          self%du_send_s,  self%du_send_e,  self%du_recv_s,  self%du_recv_e, &
          self%dud_send_s, self%dud_send_e, self%dud_recv_s, self%dud_recv_e, &
          self%d2u_send_s, self%d2u_send_e, self%d2u_recv_s, self%d2u_recv_e, &
-         u%data, self%u_recv_s, self%u_recv_e, &
-         v%data, self%v_recv_s, self%v_recv_e, &
+         u%data, u_recv_s, u_recv_e, &
+         conv%data, conv_recv_s, conv_recv_e, &
          tdsops_du, tdsops_dud, tdsops_d2u, self%nu, &
          dirps%nproc, dirps%pprev, dirps%pnext, dirps%n_blocks)
 
