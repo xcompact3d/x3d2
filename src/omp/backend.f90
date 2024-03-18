@@ -327,7 +327,7 @@ module m_omp_backend
             error stop 'unsuported reordering'
       end select
 
-      !$omp parallel do private(out_i, out_j, out_k)
+      !$omp parallel do private(out_i, out_j, out_k) collapse(2)
       do k=1, ndir_groups
          do j=1, ndir_loc
             do i=1, SZ
