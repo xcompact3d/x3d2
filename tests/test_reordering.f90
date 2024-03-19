@@ -4,17 +4,20 @@ program test_reorder
 
     use m_allocator, only: allocator_t, field_t
     use m_base_backend, only: base_backend_t
-    use m_solver, only: allocate_tdsops
-    use m_tdsops, only: dirps_t, tdsops_t
+    use m_tdsops, only: dirps_t
 
     use m_common, only: dp, pi, globs_t, set_pprev_pnext, &
-                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, DIR_X, DIR_Y, DIR_Z
+                        RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
+                        DIR_X, DIR_Y, DIR_Z
 
     use m_ordering, only: get_index_dir, get_index_ijk
 
 #ifdef CUDA
+   use cudafor
+
+   use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
+   use m_cuda_backend, only: cuda_backend_t
    use m_cuda_common, only: SZ
-   use m_cuda_tdsops, only: cuda_tdsops_t
 #else
    use m_omp_common, only: SZ
    use m_omp_backend, only: omp_backend_t
@@ -25,6 +28,10 @@ program test_reorder
     logical :: allpass = .true.
     class(field_t), pointer :: u_x, u_y, u_z
     class(field_t), pointer :: u_x_original
+
+    real(dp), allocatable, dimension(:, :, :) :: u_array, temp_1, temp_2
+
+    integer :: dims(3)
 
     integer :: nrank, nproc
     integer :: ierr, i, j, k
@@ -128,7 +135,25 @@ program test_reorder
     u_z => allocator%get_block(DIR_Z)
     u_x_original => allocator%get_block(DIR_X)
 
-    call random_number(u_x_original%data)
+    dims(:) = allocator%xdims_padded(:)
+    allocate (u_array(dims(1), dims(2), dims(3)))
+
+    call random_number(u_array)
+
+#ifdef CUDA
+    allocate (temp_1(dims(1), dims(2), dims(3)))
+    allocate (temp_2(dims(1), dims(2), dims(3)))
+
+    select type (u_x_original)
+    type is (cuda_field_t)
+       u_x_original%data_d = u_array
+    end select
+#else
+    select type (u_x_original)
+    type is (field_t)
+       u_x_original%data = u_array
+    end select
+#endif
 
     call backend%reorder(u_y, u_x_original, RDR_X2Y)
     call backend%reorder(u_x, u_y, RDR_Y2X)
@@ -179,10 +204,19 @@ program test_reorder
         character(len=*), intent(in) :: message
         real(dp) :: tol = 1d-8
 
+#ifdef CUDA
+        select type (a); type is (cuda_field_t); temp_1 = a%data_d; end select
+        select type (b); type is (cuda_field_t); temp_2 = b%data_d; end select
+        if (norm2(temp_1 - temp_2) > tol) then
+            allpass = .false.
+            write(stderr, '(a)') message
+        end if
+#else
         if (norm2(a%data - b%data) > tol) then
             allpass = .false.
             write(stderr, '(a)') message
         end if
+#endif
 
     end subroutine
 

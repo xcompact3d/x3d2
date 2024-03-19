@@ -4,11 +4,14 @@ set(CMAKE_CTEST_NPROCS "4" CACHE STRING "number of process used in tests")
 
 function(define_test testfile np backend)
   get_filename_component(test_name ${testfile} NAME_WE)
+  string(CONCAT test_name ${test_name} _ ${backend})
 
   add_executable(${test_name} ${testfile})
 
   if(${backend} STREQUAL cuda)
-    target_compile_options(${test_name} PRIVATE "-cpp -cuda -DCUDA")
+    target_compile_options(${test_name} PRIVATE "-cpp")
+    target_compile_options(${test_name} PRIVATE "-cuda")
+    target_compile_options(${test_name} PRIVATE "-DCUDA")
     target_link_options(${test_name} INTERFACE "-cuda")
   else()
     target_compile_options(${test_name} PRIVATE "-cpp")
