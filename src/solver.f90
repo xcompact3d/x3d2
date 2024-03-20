@@ -133,9 +133,9 @@ contains
          end do
       end do
 
-      call solver%backend%set_field(solver%u, u_init)
-      call solver%backend%set_field(solver%v, v_init)
-      call solver%backend%set_field(solver%w, w_init)
+      call solver%backend%set_field_data(solver%u, u_init, 1)
+      call solver%backend%set_field_data(solver%v, v_init, 1)
+      call solver%backend%set_field_data(solver%w, w_init, 1)
 
       deallocate(u_init, v_init, w_init)
       print*, 'initial conditions are set'
@@ -595,7 +595,7 @@ contains
       div_u => self%backend%allocator%get_block(DIR_Z)
 
       call self%divergence_v2p(div_u, self%u, self%v, self%w)
-      call self%backend%get_field(u_out, div_u)
+      call self%backend%get_field_data(u_out, div_u, 3)
 
       call self%backend%allocator%release_block(div_u)
 
@@ -671,9 +671,9 @@ contains
 
       print*, 'run end'
 
-      call self%backend%get_field(u_out, self%u)
-      call self%backend%get_field(v_out, self%v)
-      call self%backend%get_field(w_out, self%w)
+      call self%backend%get_field_data(u_out, self%u, 1)
+      call self%backend%get_field_data(v_out, self%v, 1)
+      call self%backend%get_field_data(w_out, self%w, 1)
 
    end subroutine run
 

@@ -50,8 +50,8 @@ module m_cuda_backend
       procedure :: sum_zintox => sum_zintox_cuda
       procedure :: vecadd => vecadd_cuda
       procedure :: scalar_product => scalar_product_cuda
-      procedure :: set_field => set_field_cuda
-      procedure :: get_field => get_field_cuda
+      procedure :: copy_data_to_f => copy_data_to_f_cuda
+      procedure :: copy_f_to_data => copy_f_to_data_cuda
       procedure :: init_poisson_fft => init_cuda_poisson_fft
       procedure :: transeq_cuda_dist
       procedure :: transeq_cuda_thom
@@ -630,27 +630,21 @@ module m_cuda_backend
 
    end subroutine copy_into_buffers
 
-   subroutine set_field_cuda(self, f, arr)
-      implicit none
-
-      class(cuda_backend_t) :: self
+   subroutine copy_data_to_f_cuda(self, f, data)
+      class(cuda_backend_t), intent(inout) :: self
       class(field_t), intent(inout) :: f
-      real(dp), dimension(:, :, :), intent(in) :: arr
+      real(dp), dimension(:, :, :), intent(inout) :: data
 
-      select type(f); type is (cuda_field_t); f%data_d = arr; end select
+      select type(f); type is (cuda_field_t); f%data_d = data; end select
+   end subroutine copy_data_to_f_cuda
 
-   end subroutine set_field_cuda
-
-   subroutine get_field_cuda(self, arr, f)
-      implicit none
-
-      class(cuda_backend_t) :: self
-      real(dp), dimension(:, :, :), intent(out) :: arr
+   subroutine copy_f_to_data_cuda(self, data, f)
+      class(cuda_backend_t), intent(inout) :: self
+      real(dp), dimension(:, :, :), intent(out) :: data
       class(field_t), intent(in) :: f
 
-      select type(f); type is (cuda_field_t); arr = f%data_d; end select
-
-   end subroutine get_field_cuda
+      select type(f); type is (cuda_field_t); data = f%data_d; end select
+   end subroutine copy_f_to_data_cuda
 
    subroutine init_cuda_poisson_fft(self, xdirps, ydirps, zdirps)
       implicit none

@@ -34,8 +34,8 @@ module m_omp_backend
       procedure :: sum_zintox => sum_zintox_omp
       procedure :: vecadd => vecadd_omp
       procedure :: scalar_product => scalar_product_omp
-      procedure :: set_field => set_field_omp
-      procedure :: get_field => get_field_omp
+      procedure :: copy_data_to_f => copy_data_to_f_omp
+      procedure :: copy_f_to_data => copy_f_to_data_omp
       procedure :: init_poisson_fft => init_omp_poisson_fft
       procedure :: transeq_omp_dist
    end type omp_backend_t
@@ -363,27 +363,21 @@ module m_omp_backend
 
    end subroutine copy_into_buffers
 
-   subroutine set_field_omp(self, f, arr)
-      implicit none
-
-      class(omp_backend_t) :: self
+   subroutine copy_data_to_f_omp(self, f, data)
+      class(omp_backend_t), intent(inout) :: self
       class(field_t), intent(inout) :: f
-      real(dp), dimension(:, :, :), intent(in) :: arr
+      real(dp), dimension(:, :, :), intent(in) :: data
 
-      f%data = arr
+      f%data = data
+   end subroutine copy_data_to_f_omp
 
-   end subroutine set_field_omp
-
-   subroutine get_field_omp(self, arr, f)
-      implicit none
-
-      class(omp_backend_t) :: self
-      real(dp), dimension(:, :, :), intent(out) :: arr
+   subroutine copy_f_to_data_omp(self, data, f)
+      class(omp_backend_t), intent(inout) :: self
+      real(dp), dimension(:, :, :), intent(out) :: data
       class(field_t), intent(in) :: f
 
-      arr = f%data
-
-   end subroutine get_field_omp
+      data = f%data
+   end subroutine copy_f_to_data_omp
 
    subroutine init_omp_poisson_fft(self, xdirps, ydirps, zdirps)
       implicit none
