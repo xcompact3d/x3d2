@@ -589,7 +589,7 @@ contains
       div_u => self%backend%allocator%get_block(DIR_Z)
 
       call self%divergence_v2p(div_u, self%u, self%v, self%w)
-      call self%backend%get_field_data(u_out, div_u, 3)
+      call self%backend%get_field_data(u_out, div_u)
 
       call self%backend%allocator%release_block(div_u)
 
@@ -665,9 +665,9 @@ contains
 
       print*, 'run end'
 
-      call self%backend%get_field_data(u_out, self%u, 1)
-      call self%backend%get_field_data(v_out, self%v, 1)
-      call self%backend%get_field_data(w_out, self%w, 1)
+      call self%backend%get_field_data(u_out, self%u)
+      call self%backend%get_field_data(v_out, self%v)
+      call self%backend%get_field_data(w_out, self%w)
 
    end subroutine run
 

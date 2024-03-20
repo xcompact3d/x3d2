@@ -41,6 +41,7 @@ program xcompact
    real(dp), allocatable, dimension(:, :, :) :: u, v, w
 
    real(dp) :: t_start, t_end
+   integer :: dims(3)
    integer :: nrank, nproc, ierr
 
    call MPI_Init(ierr)
@@ -132,9 +133,10 @@ program xcompact
    print*, 'OpenMP backend instantiated'
 #endif
 
-   allocate(u(SZ, globs%nx_loc, globs%n_groups_x))
-   allocate(v(SZ, globs%nx_loc, globs%n_groups_x))
-   allocate(w(SZ, globs%nx_loc, globs%n_groups_x))
+   dims(:) = allocator%cdims_padded
+   allocate (u(dims(1), dims(2), dims(3)))
+   allocate (v(dims(1), dims(2), dims(3)))
+   allocate (w(dims(1), dims(2), dims(3)))
 
    time_integrator = time_intg_t(allocator=allocator, backend=backend)
    print*, 'time integrator instantiated'
