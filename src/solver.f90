@@ -88,7 +88,7 @@ contains
       integer :: dims(3)
 
       real(dp) :: x, y, z
-      integer :: nx, ny, nz, i, j, b, ka, kb, ix, iy, iz, sz
+      integer :: nx, ny, nz, i, j, k
 
       solver%backend => backend
       solver%time_integrator => time_integrator
@@ -102,7 +102,7 @@ contains
       solver%w => solver%backend%allocator%get_block(DIR_X)
 
       ! Set initial conditions
-      dims(:) = solver%backend%allocator%xdims_padded(:)
+      dims(:) = solver%backend%allocator%cdims_padded(:)
       allocate(u_init(dims(1), dims(2), dims(3)))
       allocate(v_init(dims(1), dims(2), dims(3)))
       allocate(w_init(dims(1), dims(2), dims(3)))
@@ -112,30 +112,24 @@ contains
       solver%n_iters = globs%n_iters
       solver%n_output = globs%n_output
 
-      sz = dims(1)
       nx = globs%nx_loc; ny = globs%ny_loc; nz = globs%nz_loc
-      do ka = 1, nz
-         do kb = 1, ny/sz
-            do j = 1, nx
-               do i = 1, sz
-                  ! Mapping to ix, iy, iz depends on global group numbering
-                  ix = j; iy = (kb - 1)*sz + i; iz = ka
-                  x = (ix - 1)*globs%dx
-                  y = (iy - 1)*globs%dy
-                  z = (iz - 1)*globs%dz
+      do k = 1, nz
+         do j = 1, ny
+            do i = 1, nx
+               x = (i - 1)*globs%dx
+               y = (j - 1)*globs%dy
+               z = (k - 1)*globs%dz
 
-                  b = ka + (kb - 1)*xdirps%n
-                  u_init(i, j, b) = sin(x)*cos(y)*cos(z)
-                  v_init(i, j, b) =-cos(x)*sin(y)*cos(z)
-                  w_init(i, j, b) = 0
-               end do
+               u_init(i, j, k) = sin(x)*cos(y)*cos(z)
+               v_init(i, j, k) = -cos(x)*sin(y)*cos(z)
+               w_init(i, j, k) = 0
             end do
          end do
       end do
 
-      call solver%backend%set_field_data(solver%u, u_init, 1)
-      call solver%backend%set_field_data(solver%v, v_init, 1)
-      call solver%backend%set_field_data(solver%w, w_init, 1)
+      call solver%backend%set_field_data(solver%u, u_init)
+      call solver%backend%set_field_data(solver%v, v_init)
+      call solver%backend%set_field_data(solver%w, w_init)
 
       deallocate(u_init, v_init, w_init)
       print*, 'initial conditions are set'
