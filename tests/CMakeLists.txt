@@ -3,6 +3,7 @@ set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" CACHE STRING "comma separated li
 set(CMAKE_CTEST_NPROCS "4" CACHE STRING "number of process used in tests")
 
 find_package(MPI REQUIRED)
+find_package(ADIOS2 REQUIRED)
 
 function(define_test testfile np backend)
   get_filename_component(test_name ${testfile} NAME_WE)
@@ -22,6 +23,7 @@ function(define_test testfile np backend)
   endif()
   target_link_libraries(${test_name} PRIVATE x3d2)
   target_link_libraries(${test_name} PRIVATE MPI::MPI_Fortran)
+  target_link_libraries(${test_name} PRIVATE adios2::fortran_mpi)
 
   add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} ${test_name}")
 
