@@ -1,6 +1,6 @@
 module m_base_backend
    use m_allocator, only: allocator_t, field_t
-   use m_common, only: dp
+   use m_common, only: dp, DIR_C, get_rdr_from_dirs
    use m_poisson_fft, only: poisson_fft_t
    use m_tdsops, only: tdsops_t, dirps_t
 
@@ -36,10 +36,12 @@ module m_base_backend
       procedure(sum_intox), deferred :: sum_zintox
       procedure(vecadd), deferred :: vecadd
       procedure(scalar_product), deferred :: scalar_product
-      procedure(get_field), deferred :: get_field
-      procedure(set_field), deferred :: set_field
+      procedure(copy_data_to_f), deferred :: copy_data_to_f
+      procedure(copy_f_to_data), deferred :: copy_f_to_data
       procedure(alloc_tdsops), deferred :: alloc_tdsops
       procedure(init_poisson_fft), deferred :: init_poisson_fft
+      procedure :: get_field_data
+      procedure :: set_field_data
    end type base_backend_t
 
    abstract interface
@@ -143,32 +145,31 @@ module m_base_backend
    end interface
 
    abstract interface
-      subroutine get_field(self, arr, f)
-         !! copy the specialist data structure from device or host back
-         !! to a regular 3D data structure.
+      subroutine copy_data_to_f(self, f, data)
+         !! Copy the specialist data structure from device or host back
+         !! to a regular 3D data array in host memory.
          import :: base_backend_t
          import :: dp
          import :: field_t
          implicit none
 
-         class(base_backend_t) :: self
-         real(dp), dimension(:, :, :), intent(out) :: arr
-         class(field_t), intent(in) :: f
-      end subroutine get_field
-
-      subroutine set_field(self, f, arr)
-         !! copy the initial condition stored in a regular 3D data
-         !! structure into the specialist data structure array on the
-         !! device or host.
-         import :: base_backend_t
-         import :: dp
-         import :: field_t
-         implicit none
-
-         class(base_backend_t) :: self
+         class(base_backend_t), intent(inout) :: self
          class(field_t), intent(inout) :: f
-         real(dp), dimension(:, :, :), intent(in) :: arr
-      end subroutine set_field
+         real(dp), dimension(:, :, :), intent(in) :: data
+      end subroutine copy_data_to_f
+
+      subroutine copy_f_to_data(self, data, f)
+         !! Copy a regular 3D array in host memory into the specialist
+         !! data structure field that lives on device or host
+         import :: base_backend_t
+         import :: dp
+         import :: field_t
+         implicit none
+
+         class(base_backend_t), intent(inout) :: self
+         real(dp), dimension(:, :, :), intent(out) :: data
+         class(field_t), intent(in) :: f
+      end subroutine copy_f_to_data
    end interface
 
    abstract interface
@@ -201,5 +202,73 @@ module m_base_backend
          type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
       end subroutine init_poisson_fft
    end interface
+
+contains
+
+   subroutine get_field_data(self, data, f, dir)
+   !! Extract data from field `f` optionally reordering into `dir` orientation.
+   !! To output in same orientation as `f`, use `call ...%get_field_data(data, f, f%dir)`
+      implicit none
+
+      class(base_backend_t) :: self
+      real(dp), dimension(:, :, :), intent(out) :: data !! Output array
+      class(field_t), intent(in) :: f !! Field
+      integer, optional, intent(in) :: dir !! Desired orientation of output array (defaults to Cartesian)
+
+      class(field_t), pointer :: f_temp
+      integer :: direction, rdr_dir
+
+      if (present(dir)) then
+         direction = dir
+      else
+         direction = DIR_C
+      end if
+
+      ! Returns 0 if no reorder required
+      rdr_dir = get_rdr_from_dirs(direction, f%dir)
+
+      ! Carry out a reorder if we need, and copy from field to data array
+      if (rdr_dir /= 0) then
+         f_temp => self%allocator%get_block(direction)
+         call self%reorder(f_temp, f, rdr_dir)
+         call self%copy_f_to_data(data, f_temp)
+         call self%allocator%release_block(f_temp)
+      else
+         call self%copy_f_to_data(data, f)
+      end if
+
+   end subroutine get_field_data
+
+   subroutine set_field_data(self, f, data, dir)
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: f !! Field
+      real(dp), dimension(:, :, :), intent(in) :: data !! Input array
+      integer, optional, intent(in) :: dir !! Orientation of input array (defaults to Cartesian)
+
+      class(field_t), pointer :: f_temp
+      integer :: direction, rdr_dir
+
+      if (present(dir)) then
+         direction = dir
+      else
+         direction = DIR_C
+      end if
+
+      ! Returns 0 if no reorder required
+      rdr_dir = get_rdr_from_dirs(f%dir, direction)
+
+      ! Carry out a reorder if we need, and copy from data array to field
+      if (rdr_dir /= 0) then
+         f_temp => self%allocator%get_block(direction)
+         call self%copy_data_to_f(f_temp, data)
+         call self%reorder(f, f_temp, rdr_dir)
+         call self%allocator%release_block(f_temp)
+      else
+         call self%copy_data_to_f(f, data)
+      end if
+
+   end subroutine set_field_data
 
 end module m_base_backend

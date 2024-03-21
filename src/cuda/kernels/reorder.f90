@@ -6,6 +6,52 @@ module m_cuda_kernels_reorder
 
 contains
 
+   attributes(global) subroutine reorder_c2x(u_x, u_c, nz)
+      implicit none
+
+      real(dp), device, intent(out), dimension(:, :, :) :: u_x
+      real(dp), device, intent(in), dimension(:, :, :) :: u_c
+      integer, value, intent(in) :: nz
+
+      real(dp), shared :: tile(SZ, SZ)
+      integer :: i, j, b_i, b_j, b_k
+
+      i = threadIdx%x; j = threadIdx%y
+      b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
+
+      ! copy into shared
+      tile(i, j) = u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k)
+
+      call syncthreads()
+
+      ! copy into output array from shared
+      u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz) = tile(j, i)
+
+   end subroutine reorder_c2x
+
+   attributes(global) subroutine reorder_x2c(u_c, u_x, nz)
+      implicit none
+
+      real(dp), device, intent(out), dimension(:, :, :) :: u_c
+      real(dp), device, intent(in), dimension(:, :, :) :: u_x
+      integer, value, intent(in) :: nz
+
+      real(dp), shared :: tile(SZ, SZ)
+      integer :: i, j, b_i, b_j, b_k
+
+      i = threadIdx%x; j = threadIdx%y
+      b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
+
+      ! copy into shared
+      tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz)
+
+      call syncthreads()
+
+      ! copy into output array from shared
+      u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k) = tile(j, i)
+
+   end subroutine reorder_x2c
+
    attributes(global) subroutine reorder_x2y(u_y, u_x, nz)
       implicit none
 
