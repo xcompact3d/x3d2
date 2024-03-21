@@ -206,12 +206,14 @@ module m_base_backend
 contains
 
    subroutine get_field_data(self, data, f, dir)
+   !! Extract data from field `f` optionally reordering into `dir` orientation.
+   !! To output in same orientation as `f`, use `call ...%get_field_data(data, f, f%dir)`
       implicit none
 
       class(base_backend_t) :: self
-      real(dp), dimension(:, :, :), intent(out) :: data
-      class(field_t), intent(in) :: f
-      integer, optional, intent(in) :: dir
+      real(dp), dimension(:, :, :), intent(out) :: data !! Output array
+      class(field_t), intent(in) :: f !! Field
+      integer, optional, intent(in) :: dir !! Desired orientation of output array (defaults to Cartesian)
 
       class(field_t), pointer :: f_temp
       integer :: direction, rdr_dir
@@ -241,9 +243,9 @@ contains
       implicit none
 
       class(base_backend_t) :: self
-      class(field_t), intent(inout) :: f
-      real(dp), dimension(:, :, :), intent(in) :: data
-      integer, optional, intent(in) :: dir
+      class(field_t), intent(inout) :: f !! Field
+      real(dp), dimension(:, :, :), intent(in) :: data !! Input array
+      integer, optional, intent(in) :: dir !! Orientation of input array (defaults to Cartesian)
 
       class(field_t), pointer :: f_temp
       integer :: direction, rdr_dir
