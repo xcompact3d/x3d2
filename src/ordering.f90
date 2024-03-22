@@ -38,7 +38,7 @@ contains
       !! Get application storage directional index from cartesian index
       integer, intent(out) :: dir_i, dir_j, dir_k        ! application storage indices
       integer, intent(in) :: i, j, k                     ! cartesian indices
-      integer, intent(in) :: dir                        ! direction of the applicatino storage indices
+      integer, intent(in) :: dir                        ! direction of the application storage indices
       integer, intent(in) :: SZ, nx_loc, ny_loc, nz_loc ! dimensions of the block
       
       select case (dir)
@@ -64,7 +64,7 @@ contains
       integer, intent(out) :: out_i, out_j, out_k         ! new indices in the application storage
       integer, intent(in) :: in_i, in_j, in_k             ! original indices
       integer, intent(in) :: reorder_dir
-      integer, intent(in) :: SZ, nx_loc, ny_loc, nz_loc
+      integer, intent(in) :: SZ, nx_loc, ny_loc, nz_loc ! dimensions of the block
       integer :: i, j, k        ! Intermediary cartesian indices
       integer :: dir_in, dir_out
 

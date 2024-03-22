@@ -157,19 +157,19 @@ program test_reorder
 
     call backend%reorder(u_y, u_x_original, RDR_X2Y)
     call backend%reorder(u_x, u_y, RDR_Y2X)
-    call check_reorder(allpass, u_x, u_x_original, "X2Y, Y2X")
+    call check_reorder(allpass, u_x, u_x_original, "testing X2Y and Y2X failed")
 
     call backend%reorder(u_z, u_x, RDR_X2Z)
     call backend%reorder(u_x, u_z, RDR_Z2X)
-    call check_reorder(allpass, u_x, u_x_original, "X2Z, Z2X")
+    call check_reorder(allpass, u_x, u_x_original, "testing X2Z and Z2X failed")
 
     call backend%reorder(u_z, u_y, RDR_Y2Z)
     call backend%reorder(u_x, u_z, RDR_Z2X)
-    call check_reorder(allpass, u_x, u_x_original, "Y2Z, Z2X")
+    call check_reorder(allpass, u_x, u_x_original, "testing Y2Z and Z2X failed")
 
     call backend%reorder(u_y, u_z, RDR_Z2Y)
     call backend%reorder(u_x, u_y, RDR_Y2X)
-    call check_reorder(allpass, u_x, u_x_original, "Z2Y, Y2X")
+    call check_reorder(allpass, u_x, u_x_original, "testing Z2Y and Y2X failed")
 
     if (allpass) then
         if (nrank == 0) write(stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
