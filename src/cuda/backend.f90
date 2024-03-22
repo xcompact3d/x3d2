@@ -6,7 +6,9 @@ module m_cuda_backend
    use m_allocator, only: allocator_t, field_t
    use m_base_backend, only: base_backend_t
    use m_common, only: dp, globs_t, &
-                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
+                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
+                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
+                       DIR_X, DIR_Y, DIR_Z, DIR_C
    use m_poisson_fft, only: poisson_fft_t
    use m_tdsops, only: dirps_t, tdsops_t
 
@@ -19,7 +21,8 @@ module m_cuda_backend
    use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
    use m_cuda_kernels_reorder, only: &
        reorder_x2y, reorder_x2z, reorder_y2x, reorder_y2z, reorder_z2x, &
-       reorder_z2y, sum_yintox, sum_zintox, scalar_product, axpby, buffer_copy
+       reorder_z2y, reorder_c2x, reorder_x2c, &
+       sum_yintox, sum_zintox, scalar_product, axpby, buffer_copy
 
    implicit none
 
@@ -47,8 +50,8 @@ module m_cuda_backend
       procedure :: sum_zintox => sum_zintox_cuda
       procedure :: vecadd => vecadd_cuda
       procedure :: scalar_product => scalar_product_cuda
-      procedure :: set_field => set_field_cuda
-      procedure :: get_field => get_field_cuda
+      procedure :: copy_data_to_f => copy_data_to_f_cuda
+      procedure :: copy_f_to_data => copy_f_to_data_cuda
       procedure :: init_poisson_fft => init_cuda_poisson_fft
       procedure :: transeq_cuda_dist
       procedure :: transeq_cuda_thom
@@ -297,9 +300,9 @@ module m_cuda_backend
          du_dev, dud_dev, d2u_dev
 
       ! Get some fields for storing the intermediate results
-      du => self%allocator%get_block()
-      dud => self%allocator%get_block()
-      d2u => self%allocator%get_block()
+      du => self%allocator%get_block(dirps%dir)
+      dud => self%allocator%get_block(dirps%dir)
+      d2u => self%allocator%get_block(dirps%dir)
 
       call resolve_field_t(du_dev, du)
       call resolve_field_t(dud_dev, dud)
@@ -351,6 +354,11 @@ module m_cuda_backend
       class(tdsops_t), intent(in) :: tdsops
 
       type(dim3) :: blocks, threads
+
+      ! Check if direction matches for both in/out fields and dirps
+      if (dirps%dir /= du%dir .or. u%dir /= du%dir) then
+         error stop 'DIR mismatch between fields and dirps in tds_solve.'
+      end if
 
       blocks = dim3(dirps%n_blocks, 1, 1); threads = dim3(SZ, 1, 1)
 
@@ -412,39 +420,102 @@ module m_cuda_backend
       class(field_t), intent(in) :: u_i
       integer, intent(in) :: direction
 
-      real(dp), device, pointer, dimension(:, :, :) :: u_o_d, u_i_d
+      real(dp), device, pointer, dimension(:, :, :) :: u_o_d, u_i_d, u_temp_d
+      class(field_t), pointer :: u_temp
       type(dim3) :: blocks, threads
 
       call resolve_field_t(u_o_d, u_o)
       call resolve_field_t(u_i_d, u_i)
 
       select case (direction)
-      case (RDR_X2Y) ! x2y
+      case (RDR_X2Y)
          blocks = dim3(self%nx_loc/SZ, self%nz_loc, self%ny_loc/SZ)
          threads = dim3(SZ, SZ, 1)
          call reorder_x2y<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
-      case (RDR_X2Z) ! x2z
+      case (RDR_X2Z)
          blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
          threads = dim3(SZ, 1, 1)
          call reorder_x2z<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
-      case (RDR_Y2X) ! y2x
+      case (RDR_Y2X)
          blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
          threads = dim3(SZ, SZ, 1)
          call reorder_y2x<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
-      case (RDR_Y2Z) ! y2z
+      case (RDR_Y2Z)
          blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
          threads = dim3(SZ, SZ, 1)
          call reorder_y2z<<<blocks, threads>>>(u_o_d, u_i_d, &
                                                self%nx_loc, self%nz_loc)
-      case (RDR_Z2X) ! z2x
+      case (RDR_Z2X)
          blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
          threads = dim3(SZ, 1, 1)
          call reorder_z2x<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
-      case (RDR_Z2Y) ! z2y
+      case (RDR_Z2Y)
          blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
          threads = dim3(SZ, SZ, 1)
          call reorder_z2y<<<blocks, threads>>>(u_o_d, u_i_d, &
                                                self%nx_loc, self%nz_loc)
+      case (RDR_C2X)
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_c2x<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      case (RDR_C2Y)
+         ! First reorder from C to X, then from X to Y
+         u_temp => self%allocator%get_block(DIR_X)
+         call resolve_field_t(u_temp_d, u_temp)
+
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_c2x<<<blocks, threads>>>(u_temp_d, u_i_d, self%nz_loc)
+
+         blocks = dim3(self%nx_loc/SZ, self%nz_loc, self%ny_loc/SZ)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_x2y<<<blocks, threads>>>(u_o_d, u_temp_d, self%nz_loc)
+
+         call self%allocator%release_block(u_temp)
+      case (RDR_C2Z)
+         ! First reorder from C to X, then from X to Z
+         u_temp => self%allocator%get_block(DIR_X)
+         call resolve_field_t(u_temp_d, u_temp)
+
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_c2x<<<blocks, threads>>>(u_temp_d, u_i_d, self%nz_loc)
+
+         blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
+         threads = dim3(SZ, 1, 1)
+         call reorder_x2z<<<blocks, threads>>>(u_o_d, u_temp_d, self%nz_loc)
+
+         call self%allocator%release_block(u_temp)
+      case (RDR_X2C)
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_x2c<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      case (RDR_Y2C)
+         ! First reorder from Y to X, then from X to C
+         u_temp => self%allocator%get_block(DIR_X)
+         call resolve_field_t(u_temp_d, u_temp)
+
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_y2x<<<blocks, threads>>>(u_temp_d, u_i_d, self%nz_loc)
+
+         call reorder_x2c<<<blocks, threads>>>(u_o_d, u_temp_d, self%nz_loc)
+
+         call self%allocator%release_block(u_temp)
+      case (RDR_Z2C)
+         ! First reorder from Z to X, then from X to C
+         u_temp => self%allocator%get_block(DIR_X)
+         call resolve_field_t(u_temp_d, u_temp)
+
+         blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
+         threads = dim3(SZ, 1, 1)
+         call reorder_z2x<<<blocks, threads>>>(u_temp_d, u_i_d, self%nz_loc)
+
+         blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
+         threads = dim3(SZ, SZ, 1)
+         call reorder_x2c<<<blocks, threads>>>(u_o_d, u_temp_d, self%nz_loc)
+
+         call self%allocator%release_block(u_temp)
       case default
          error stop 'Reorder direction is undefined.'
       end select
@@ -559,27 +630,21 @@ module m_cuda_backend
 
    end subroutine copy_into_buffers
 
-   subroutine set_field_cuda(self, f, arr)
-      implicit none
-
-      class(cuda_backend_t) :: self
+   subroutine copy_data_to_f_cuda(self, f, data)
+      class(cuda_backend_t), intent(inout) :: self
       class(field_t), intent(inout) :: f
-      real(dp), dimension(:, :, :), intent(in) :: arr
+      real(dp), dimension(:, :, :), intent(inout) :: data
 
-      select type(f); type is (cuda_field_t); f%data_d = arr; end select
+      select type(f); type is (cuda_field_t); f%data_d = data; end select
+   end subroutine copy_data_to_f_cuda
 
-   end subroutine set_field_cuda
-
-   subroutine get_field_cuda(self, arr, f)
-      implicit none
-
-      class(cuda_backend_t) :: self
-      real(dp), dimension(:, :, :), intent(out) :: arr
+   subroutine copy_f_to_data_cuda(self, data, f)
+      class(cuda_backend_t), intent(inout) :: self
+      real(dp), dimension(:, :, :), intent(out) :: data
       class(field_t), intent(in) :: f
 
-      select type(f); type is (cuda_field_t); arr = f%data_d; end select
-
-   end subroutine get_field_cuda
+      select type(f); type is (cuda_field_t); data = f%data_d; end select
+   end subroutine copy_f_to_data_cuda
 
    subroutine init_cuda_poisson_fft(self, xdirps, ydirps, zdirps)
       implicit none

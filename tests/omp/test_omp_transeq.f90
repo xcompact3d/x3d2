@@ -3,7 +3,7 @@ program test_omp_transeq
    use mpi
 
    use m_allocator, only: allocator_t, field_t
-   use m_common, only: dp, pi, globs_t, set_pprev_pnext
+   use m_common, only: dp, pi, globs_t, set_pprev_pnext, DIR_X, DIR_Y, DIR_Z
    use m_omp_common, only: SZ
    use m_omp_sendrecv, only: sendrecv_fields
    use m_omp_backend, only: omp_backend_t, transeq_x_omp, base_backend_t
@@ -68,7 +68,11 @@ program test_omp_transeq
    ydirps%n_blocks = globs%n_groups_y
    zdirps%n_blocks = globs%n_groups_z
 
-   omp_allocator = allocator_t([SZ, globs%nx_loc, globs%n_groups_x])
+   xdirps%dir = DIR_X
+   ydirps%dir = DIR_Y
+   zdirps%dir = DIR_Z
+
+   omp_allocator = allocator_t(xdirps%n, ydirps%n, zdirps%n, SZ)
    allocator => omp_allocator
    print*, 'OpenMP allocator instantiated'
 
@@ -87,13 +91,13 @@ program test_omp_transeq
    omp_backend%nu = nu
 
    
-   u => allocator%get_block()
-   v => allocator%get_block()
-   w => allocator%get_block()
+   u => allocator%get_block(DIR_X)
+   v => allocator%get_block(DIR_X)
+   w => allocator%get_block(DIR_X)
 
-   du => allocator%get_block()
-   dv => allocator%get_block()
-   dw => allocator%get_block()
+   du => allocator%get_block(DIR_X)
+   dv => allocator%get_block(DIR_X)
+   dw => allocator%get_block(DIR_X)
 
    dx_per = 2*pi/n_glob
    dx = 2*pi/(n_glob - 1)

@@ -2,6 +2,7 @@ program test_allocator
   use iso_fortran_env, only: stderr => error_unit
 
   use m_allocator, only: allocator_t, field_t
+  use m_common, only: DIR_X
 
   implicit none
 
@@ -11,7 +12,7 @@ program test_allocator
   class(field_t), pointer :: ptr1, ptr2, ptr3
   integer, allocatable :: l(:)
 
-  allocator = allocator_t(dims)
+  allocator = allocator_t(dims(1), dims(2), dims(3), 8)
 
   allpass = .true.
 
@@ -27,8 +28,8 @@ program test_allocator
 
   ! Request two blocks and release them in reverse order.  List should
   ! contain two free blocks. (1 -> 2)
-  ptr1 => allocator%get_block()
-  ptr2 => allocator%get_block()
+  ptr1 => allocator%get_block(DIR_X)
+  ptr2 => allocator%get_block(DIR_X)
   call allocator%release_block(ptr2)
   call allocator%release_block(ptr1)
 
@@ -51,13 +52,13 @@ program test_allocator
 
   ! Request a block from a list of three.  This should grab the first
   ! block on top of the pile and reduce the free list to two blocks.
-  ptr1 => allocator%get_block()
-  ptr2 => allocator%get_block()
-  ptr3 => allocator%get_block()
+  ptr1 => allocator%get_block(DIR_X)
+  ptr2 => allocator%get_block(DIR_X)
+  ptr3 => allocator%get_block(DIR_X)
   call allocator%release_block(ptr3)
   call allocator%release_block(ptr2)
   call allocator%release_block(ptr1)
-  ptr1 => allocator%get_block()
+  ptr1 => allocator%get_block(DIR_X)
 
   if (.not. all(allocator%get_block_ids() .eq. [2, 3])) then
      allpass = .false.
