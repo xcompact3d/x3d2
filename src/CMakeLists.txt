@@ -6,9 +6,10 @@ set(SRC
   solver.f90
   tdsops.f90
   time_integrator.f90
+  ordering.f90
   omp/backend.f90
   omp/common.f90
-  omp/kernels_dist.f90
+  omp/kernels/distributed.f90
   omp/poisson_fft.f90
   omp/sendrecv.f90
   omp/exec_dist.f90
