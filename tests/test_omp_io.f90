@@ -14,9 +14,11 @@ program test_omp_io
    class(field_t), pointer :: arr !! array to save & restore
 
    !> MPI vars
-   integer :: nrank, nproc
+   integer :: irank, nproc
    !> Error code, used for MPI and ADIOS
    integer :: ierr
+
+   type(adios2_adios) :: adios_ctx
 
    !> ADIOS2 context, io and variable
    integer, parameter :: NSTEPS = 16
@@ -39,8 +41,13 @@ program test_omp_io
    ! nz_loc = nz/nproc
 
    call MPI_Init(ierr)
-   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
+   call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+
+   call adios2_init(adios_ctx, MPI_COMM_WORLD, ierr)
+   if (.not.adios_ctx%valid) then
+      write(*,*) "Error when creating ADIOS2 context"
+   endif
 
    !================ 
    ! SETUP TEST DATA
@@ -70,34 +77,31 @@ program test_omp_io
    call write_test_file()
    call read_test_file()
 
+   if (adios_ctx%valid) then
+     call adios2_finalize(adios_ctx, ierr)
+   endif
+
+   call MPI_Finalize(ierr)
+
    if (allpass) then
-      if (nrank == 0) write(stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
+      if (irank == 0) write(stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
    else
       error stop 'SOME TESTS FAILED.'
    end if
 
-   call MPI_Finalize(ierr)
-
    contains
 
      subroutine write_test_file()
-       type(adios2_adios) :: adios_ctx
        type(adios2_io) :: io
        type(adios2_engine) :: engine
        type(adios2_variable) :: adios_var
 
        integer :: ierr
 
-       call adios2_init(adios_ctx, MPI_COMM_WORLD, ierr)
-       if (.not.adios_ctx%valid) then
-          write(*,*) "Error when creating ADIOS2 context"
-       endif
-
        call adios2_declare_io (io, adios_ctx, 'TestWrite', ierr)
        if (.not.io%valid) then
           write(*,*) "Error when creating ADIOS2 io"
        endif
-       call adios2_set_engine(io, "HDF5", ierr)
 
        call adios2_open(engine, io, "test_omp_io.bp", adios2_mode_write, ierr)
        if (.not.engine%valid) then
@@ -108,11 +112,16 @@ program test_omp_io
        !                             3, [globs%nx, globs%ny, globs%nz], [SZ, globs%nx_loc, globs%n_groups_x], ierr)
 
        call adios2_define_variable(adios_var, io, "output42", adios2_type_integer4, ierr)
+       if (.not.adios_var%valid) then
+          write(*,*) "ierr = ", ierr
+          allpass = .false.
+          error stop "Error defining adios variable"
+       endif
 
        do i=0, NSTEPS-1
           call adios2_begin_step(engine, adios2_step_mode_append, ierr)
           ! call adios2_put(engine, "test", arr%data, ierr)
-          call adios2_put(engine, "output42", 42+i, ierr)
+          call adios2_put(engine, adios_var, 42+i, ierr)
           call adios2_end_step(engine, ierr)
        enddo
 
@@ -120,27 +129,19 @@ program test_omp_io
           call adios2_close(engine, ierr)
        endif
 
-       if (adios_ctx%valid) then
-         call adios2_finalize(adios_ctx, ierr)
-       endif
      end subroutine
 
      subroutine read_test_file()
-       type(adios2_adios) :: adios_ctx
        type(adios2_io) :: io
        type(adios2_engine) :: engine
        type(adios2_variable) :: adios_var
        integer*8 :: numsteps
        integer, dimension(:), allocatable :: steps
 
-      type(adios2_namestruct) :: namestruct
-       character(100), dimension(100) :: namelist
-
        integer :: ierr
 
-       call adios2_init(adios_ctx, MPI_COMM_WORLD, ierr)
-       if (.not.adios_ctx%valid) then
-          write(*,*) "Error when creating ADIOS2 context"
+       if (irank /= 0) then
+         return
        endif
 
        call adios2_declare_io (io, adios_ctx, 'TestRead', ierr)
@@ -148,14 +149,11 @@ program test_omp_io
           write(*,*) "Error when creating ADIOS2 io"
        endif
 
-       call adios2_set_engine(io, "HDF5", ierr)
-
-       call adios2_open(engine, io, "test_omp_io.bp", adios2_mode_read, ierr)
+       call adios2_open(engine, io, "test_omp_io.bp", adios2_mode_readRandomAccess, MPI_COMM_SELF, ierr)
        if (.not.engine%valid) then
           write(*,*) "Error when creating ADIOS2 engine"
        endif
 
-       ! call adios2_define_variable(adios_var, io, "test", adios2_type_integer4, ierr)
        call adios2_inquire_variable(adios_var, io, "output42", ierr)
        if (.not.adios_var%valid) then
           write(*,*) "ierr = ", ierr
@@ -165,26 +163,30 @@ program test_omp_io
 
        call adios2_variable_steps(numsteps, adios_var, ierr)
        if(numsteps /= NSTEPS) then
-          if (nrank == 0) write(stderr, '(a)') 'numsteps /= NSTEPS.'
-          if (nrank == 0) write(stderr, '(a, i5)') 'numsteps =', numsteps
+          if (irank == 0) write(stderr, '(a)') 'numsteps /= NSTEPS.'
+          if (irank == 0) write(stderr, '(a, i5)') 'numsteps =', numsteps
           allpass = .false.
           return
        endif
-       ! call adios2_set_step_selection(adios_var, 0_8, numsteps, ierr)
-       ! allocate(steps(numsteps))
-       ! call adios2_get(engine, adios_var, steps , ierr)
-       ! write(*,'(a,i5)') "Number of steps in diag.bp = ", numsteps
-       ! write(fmt,'(a,i5,a)') '(a10,',numsteps,'i4,a2)'
-       ! !write(*,'(a)') fmt
-       ! write(*,fmt) "Steps = [", steps, " ]"
-       ! deallocate(steps)
+
+       call adios2_set_step_selection(adios_var, 0_8, numsteps, ierr)
+
+       allocate(steps(numsteps))
+
+       call adios2_get(engine, adios_var, steps, ierr)
+
+       do i=0, NSTEPS-1
+          if(steps(i+1) /= 42+i) then
+             if (irank == 0) write(stderr, '(a, i5, a, i5)') 'steps', steps(i+1), "/=", 42+i
+             allpass = .false.
+             return
+          endif
+       enddo
+
+       deallocate(steps)
        !
        if (engine%valid) then
           call adios2_close(engine, ierr)
-       endif
-
-       if (adios_ctx%valid) then
-         call adios2_finalize(adios_ctx, ierr)
        endif
      end subroutine
 end program
