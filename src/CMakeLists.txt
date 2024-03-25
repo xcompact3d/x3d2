@@ -64,6 +64,5 @@ find_package(MPI REQUIRED)
 target_link_libraries(x3d2 PRIVATE MPI::MPI_Fortran)
 target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
 
-find_package(ADIOS2 REQUIRED)
 target_link_libraries(x3d2 PRIVATE adios2::fortran_mpi)
 target_link_libraries(xcompact PRIVATE adios2::fortran_mpi)
