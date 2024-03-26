@@ -1,32 +1,32 @@
-module m_cuda_tdsops
-   use iso_fortran_env, only: stderr => error_unit
+  module m_cuda_tdsops
+    use iso_fortran_env, only: stderr => error_unit
 
-   use m_common, only: dp
-   use m_tdsops, only: tdsops_t, tdsops_init
+    use m_common, only: dp
+    use m_tdsops, only: tdsops_t, tdsops_init
 
-   implicit none
+    implicit none
 
-   type, extends(tdsops_t) :: cuda_tdsops_t
+    type, extends(tdsops_t) :: cuda_tdsops_t
       !! CUDA extension of the Tridiagonal Solver Operators class.
       !!
       !! Regular tdsops_t class is initiated and the coefficient arrays are
       !! copied into device arrays so that cuda kernels can use them.
       real(dp), device, allocatable :: dist_fw_dev(:), dist_bw_dev(:), &
-                                       dist_sa_dev(:), dist_sc_dev(:), &
-                                       dist_af_dev(:)
+        dist_sa_dev(:), dist_sc_dev(:), &
+        dist_af_dev(:)
       real(dp), device, allocatable :: coeffs_dev(:), &
-                                       coeffs_s_dev(:, :), coeffs_e_dev(:, :)
-   contains
-   end type cuda_tdsops_t
+        coeffs_s_dev(:, :), coeffs_e_dev(:, :)
+    contains
+    end type cuda_tdsops_t
 
-   interface cuda_tdsops_t
+    interface cuda_tdsops_t
       module procedure cuda_tdsops_init
-   end interface cuda_tdsops_t
+    end interface cuda_tdsops_t
 
-contains
+  contains
 
-   function cuda_tdsops_init(n, delta, operation, scheme, n_halo, from_to, &
-                             bc_start, bc_end, sym, c_nu, nu0_nu) &
+    function cuda_tdsops_init(n, delta, operation, scheme, n_halo, from_to, &
+      bc_start, bc_end, sym, c_nu, nu0_nu) &
       result(tdsops)
       !! Constructor function for the cuda_tdsops_t class.
       !! See tdsops_t for details.
@@ -45,8 +45,8 @@ contains
       integer :: n_stencil
 
       tdsops%tdsops_t = tdsops_init(n, delta, operation, scheme, n_halo, &
-                                    from_to, bc_start, bc_end, sym, &
-                                    c_nu, nu0_nu)
+        from_to, bc_start, bc_end, sym, &
+        c_nu, nu0_nu)
 
       n_stencil = 2*tdsops%n_halo + 1
 
@@ -67,7 +67,7 @@ contains
       tdsops%coeffs_s_dev(:, :) = tdsops%coeffs_s(:, :)
       tdsops%coeffs_e_dev(:, :) = tdsops%coeffs_e(:, :)
 
-   end function cuda_tdsops_init
+    end function cuda_tdsops_init
 
-end module m_cuda_tdsops
+  end module m_cuda_tdsops
 

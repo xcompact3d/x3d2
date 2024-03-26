@@ -1,4 +1,4 @@
-program test_reorder
+  program test_reorder
     use iso_fortran_env, only: stderr => error_unit
     use mpi
 
@@ -7,20 +7,20 @@ program test_reorder
     use m_tdsops, only: dirps_t
 
     use m_common, only: dp, pi, globs_t, set_pprev_pnext, &
-                        RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
-                        DIR_X, DIR_Y, DIR_Z
+      RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
+      DIR_X, DIR_Y, DIR_Z
 
     use m_ordering, only: get_index_dir, get_index_ijk
 
 #ifdef CUDA
-   use cudafor
+    use cudafor
 
-   use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
-   use m_cuda_backend, only: cuda_backend_t
-   use m_cuda_common, only: SZ
+    use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
+    use m_cuda_backend, only: cuda_backend_t
+    use m_cuda_common, only: SZ
 #else
-   use m_omp_common, only: SZ
-   use m_omp_backend, only: omp_backend_t
+    use m_omp_common, only: SZ
+    use m_omp_backend, only: omp_backend_t
 #endif
 
     implicit none
@@ -63,15 +63,15 @@ program test_reorder
     ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robin
     ierr = cudaGetDevice(devnum)
 #endif
- 
+
     globs%nx = 32
     globs%ny = 64
     globs%nz = 96
- 
+
     globs%nx_loc = globs%nx/nproc
     globs%ny_loc = globs%ny/nproc
     globs%nz_loc = globs%nz/nproc
- 
+
     globs%n_groups_x = globs%ny_loc*globs%nz_loc/SZ
     globs%n_groups_y = globs%nx_loc*globs%nz_loc/SZ
     globs%n_groups_z = globs%nx_loc*globs%ny_loc/SZ
@@ -83,8 +83,8 @@ program test_reorder
     xdirps%n_blocks = globs%n_groups_x
     ydirps%n_blocks = globs%n_groups_y
     zdirps%n_blocks = globs%n_groups_z
- 
-   
+
+
 #ifdef CUDA
     cuda_allocator = cuda_allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, SZ)
     allocator => cuda_allocator
@@ -112,22 +112,22 @@ program test_reorder
     pass_Y = .true.
     pass_Z = .true.
 
-   ! Test indexing only
+    ! Test indexing only
     do k=1, zdirps%n
-        do j=1, ydirps%n
-            do i=1, xdirps%n
-                call test_index_reversing(pass_X, i, j, k, DIR_X, SZ, xdirps%n, ydirps%n, zdirps%n)
-                call test_index_reversing(pass_Y, i, j, k, DIR_Y, SZ, xdirps%n, ydirps%n, zdirps%n)
-                call test_index_reversing(pass_Z, i, j, k, DIR_Z, SZ, xdirps%n, ydirps%n, zdirps%n)
-            end do
+      do j=1, ydirps%n
+        do i=1, xdirps%n
+          call test_index_reversing(pass_X, i, j, k, DIR_X, SZ, xdirps%n, ydirps%n, zdirps%n)
+          call test_index_reversing(pass_Y, i, j, k, DIR_Y, SZ, xdirps%n, ydirps%n, zdirps%n)
+          call test_index_reversing(pass_Z, i, j, k, DIR_Z, SZ, xdirps%n, ydirps%n, zdirps%n)
         end do
+      end do
     end do
     if (.not. pass_X) print *, "Error in X direction for index reversing"
     if (.not. pass_Y) print *, "Error in Y direction for index reversing"
     if (.not. pass_Z) print *, "Error in Z direction for index reversing"
 
     allpass = (pass_X .and. pass_Y .and. pass_Z)
- 
+
 
     ! Test reordering
     u_x => allocator%get_block(DIR_X)
@@ -145,13 +145,13 @@ program test_reorder
     allocate (temp_2(dims(1), dims(2), dims(3)))
 
     select type (u_x_original)
-    type is (cuda_field_t)
-       u_x_original%data_d = u_array
+     type is (cuda_field_t)
+      u_x_original%data_d = u_array
     end select
 #else
     select type (u_x_original)
-    type is (field_t)
-       u_x_original%data = u_array
+     type is (field_t)
+      u_x_original%data = u_array
     end select
 #endif
 
@@ -172,54 +172,54 @@ program test_reorder
     call check_reorder(allpass, u_x, u_x_original, "testing Z2Y and Y2X failed")
 
     if (allpass) then
-        if (nrank == 0) write(stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
+      if (nrank == 0) write(stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
     else
-        error stop 'SOME TESTS FAILED.'
+      error stop 'SOME TESTS FAILED.'
     end if
 
     call MPI_Finalize(ierr)
 
-    contains
+  contains
 
     subroutine test_index_reversing(pass, i, j, k, dir, SZ, nx, ny, nz)
-        logical, intent(inout) :: pass
-        integer, intent(in) :: i, j, k    ! original indices in the cartesian space
-        integer, intent(in) :: dir
-        integer, intent(in) :: SZ, nx, ny, nz
-        integer :: dir_i, dir_j, dir_k    ! indices in the applicatin storage direction
-        integer :: cart_i, cart_j, cart_k ! newly computed indices in the cartesian space
+      logical, intent(inout) :: pass
+      integer, intent(in) :: i, j, k    ! original indices in the cartesian space
+      integer, intent(in) :: dir
+      integer, intent(in) :: SZ, nx, ny, nz
+      integer :: dir_i, dir_j, dir_k    ! indices in the applicatin storage direction
+      integer :: cart_i, cart_j, cart_k ! newly computed indices in the cartesian space
 
-        call get_index_dir(dir_i, dir_j, dir_k, i, j, k, dir, SZ, nx, ny, nz)
-        call get_index_ijk(cart_i, cart_j, cart_k, dir_i, dir_j, dir_k, dir, SZ, nx, ny, nz)
+      call get_index_dir(dir_i, dir_j, dir_k, i, j, k, dir, SZ, nx, ny, nz)
+      call get_index_ijk(cart_i, cart_j, cart_k, dir_i, dir_j, dir_k, dir, SZ, nx, ny, nz)
 
-        if (i /= cart_i .or. j /= cart_j .or. k /= cart_k) then
-            pass = .false.
-        end if
+      if (i /= cart_i .or. j /= cart_j .or. k /= cart_k) then
+        pass = .false.
+      end if
 
     end subroutine
 
     subroutine check_reorder(allpass, a, b, message)
-        logical, intent(inout) :: allpass
-        class(field_t), intent(in) :: a, b
-        character(len=*), intent(in) :: message
-        real(dp) :: tol = 1d-8
+      logical, intent(inout) :: allpass
+      class(field_t), intent(in) :: a, b
+      character(len=*), intent(in) :: message
+      real(dp) :: tol = 1d-8
 
 #ifdef CUDA
-        select type (a); type is (cuda_field_t); temp_1 = a%data_d; end select
-        select type (b); type is (cuda_field_t); temp_2 = b%data_d; end select
-        if (norm2(temp_1 - temp_2) > tol) then
-            allpass = .false.
-            write(stderr, '(a)') message
-        end if
+      select type (a); type is (cuda_field_t); temp_1 = a%data_d; end select
+      select type (b); type is (cuda_field_t); temp_2 = b%data_d; end select
+      if (norm2(temp_1 - temp_2) > tol) then
+        allpass = .false.
+        write(stderr, '(a)') message
+      end if
 #else
-        if (norm2(a%data - b%data) > tol) then
-            allpass = .false.
-            write(stderr, '(a)') message
-        end if
+      if (norm2(a%data - b%data) > tol) then
+        allpass = .false.
+        write(stderr, '(a)') message
+      end if
 #endif
 
     end subroutine
 
 
-end program test_reorder
+  end program test_reorder
 
