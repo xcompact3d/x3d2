@@ -1,12 +1,12 @@
-module m_base_backend
-   use m_allocator, only: allocator_t, field_t
-   use m_common, only: dp, DIR_C, get_rdr_from_dirs
-   use m_poisson_fft, only: poisson_fft_t
-   use m_tdsops, only: tdsops_t, dirps_t
+  module m_base_backend
+    use m_allocator, only: allocator_t, field_t
+    use m_common, only: dp, DIR_C, get_rdr_from_dirs
+    use m_poisson_fft, only: poisson_fft_t
+    use m_tdsops, only: tdsops_t, dirps_t
 
-   implicit none
+    implicit none
 
-   type, abstract :: base_backend_t
+    type, abstract :: base_backend_t
       !! base_backend class defines all the abstract operations that the
       !! solver class requires.
       !!
@@ -26,7 +26,7 @@ module m_base_backend
       class(allocator_t), pointer :: allocator
       class(dirps_t), pointer :: xdirps, ydirps, zdirps
       class(poisson_fft_t), pointer :: poisson_fft
-   contains
+    contains
       procedure(transeq_ders), deferred :: transeq_x
       procedure(transeq_ders), deferred :: transeq_y
       procedure(transeq_ders), deferred :: transeq_z
@@ -42,172 +42,172 @@ module m_base_backend
       procedure(init_poisson_fft), deferred :: init_poisson_fft
       procedure :: get_field_data
       procedure :: set_field_data
-   end type base_backend_t
+    end type base_backend_t
 
-   abstract interface
+    abstract interface
       subroutine transeq_ders(self, du, dv, dw, u, v, w, dirps)
-         !! transeq equation obtains the derivatives direction by
-         !! direction, and the exact algorithm used to obtain these
-         !! derivatives are decided at runtime. Backend implementations
-         !! are responsible from directing calls to transeq_ders into
-         !! the correct algorithm.
-         import :: base_backend_t
-         import :: field_t
-         import :: dirps_t
-         implicit none
+        !! transeq equation obtains the derivatives direction by
+        !! direction, and the exact algorithm used to obtain these
+        !! derivatives are decided at runtime. Backend implementations
+        !! are responsible from directing calls to transeq_ders into
+        !! the correct algorithm.
+        import :: base_backend_t
+        import :: field_t
+        import :: dirps_t
+        implicit none
 
-         class(base_backend_t) :: self
-         class(field_t), intent(inout) :: du, dv, dw
-         class(field_t), intent(in) :: u, v, w
-         type(dirps_t), intent(in) :: dirps
+        class(base_backend_t) :: self
+        class(field_t), intent(inout) :: du, dv, dw
+        class(field_t), intent(in) :: u, v, w
+        type(dirps_t), intent(in) :: dirps
       end subroutine transeq_ders
-   end interface
+    end interface
 
-   abstract interface
+    abstract interface
       subroutine tds_solve(self, du, u, dirps, tdsops)
-         !! transeq equation obtains the derivatives direction by
-         !! direction, and the exact algorithm used to obtain these
-         !! derivatives are decided at runtime. Backend implementations
-         !! are responsible from directing calls to transeq_ders into
-         !! the correct algorithm.
-         import :: base_backend_t
-         import :: field_t
-         import :: dirps_t
-         import :: tdsops_t
-         implicit none
+        !! transeq equation obtains the derivatives direction by
+        !! direction, and the exact algorithm used to obtain these
+        !! derivatives are decided at runtime. Backend implementations
+        !! are responsible from directing calls to transeq_ders into
+        !! the correct algorithm.
+        import :: base_backend_t
+        import :: field_t
+        import :: dirps_t
+        import :: tdsops_t
+        implicit none
 
-         class(base_backend_t) :: self
-         class(field_t), intent(inout) :: du
-         class(field_t), intent(in) :: u
-         type(dirps_t), intent(in) :: dirps
-         class(tdsops_t), intent(in) :: tdsops
+        class(base_backend_t) :: self
+        class(field_t), intent(inout) :: du
+        class(field_t), intent(in) :: u
+        type(dirps_t), intent(in) :: dirps
+        class(tdsops_t), intent(in) :: tdsops
       end subroutine tds_solve
-   end interface
+    end interface
 
-   abstract interface
+    abstract interface
       subroutine reorder(self, u_, u, direction)
-         !! reorder subroutines are straightforward, they rearrange
-         !! data into our specialist data structure so that regardless
-         !! of the direction tridiagonal systems are solved efficiently
-         !! and fast.
-         import :: base_backend_t
-         import :: field_t
-         implicit none
+        !! reorder subroutines are straightforward, they rearrange
+        !! data into our specialist data structure so that regardless
+        !! of the direction tridiagonal systems are solved efficiently
+        !! and fast.
+        import :: base_backend_t
+        import :: field_t
+        implicit none
 
-         class(base_backend_t) :: self
-         class(field_t), intent(inout) :: u_
-         class(field_t), intent(in) :: u
-         integer, intent(in) :: direction
+        class(base_backend_t) :: self
+        class(field_t), intent(inout) :: u_
+        class(field_t), intent(in) :: u
+        integer, intent(in) :: direction
       end subroutine reorder
-   end interface
+    end interface
 
-   abstract interface
+    abstract interface
       subroutine sum_intox(self, u, u_)
-         !! sum9into3 subroutine combines all the directional velocity
-         !! derivatives into the corresponding x directional fields.
-         import :: base_backend_t
-         import :: field_t
-         implicit none
+        !! sum9into3 subroutine combines all the directional velocity
+        !! derivatives into the corresponding x directional fields.
+        import :: base_backend_t
+        import :: field_t
+        implicit none
 
-         class(base_backend_t) :: self
-         class(field_t), intent(inout) :: u
-         class(field_t), intent(in) :: u_
+        class(base_backend_t) :: self
+        class(field_t), intent(inout) :: u
+        class(field_t), intent(in) :: u_
       end subroutine sum_intox
-   end interface
+    end interface
 
-   abstract interface
+    abstract interface
       subroutine vecadd(self, a, x, b, y)
-         !! adds two vectors together: y = a*x + b*y
-         import :: base_backend_t
-         import :: dp
-         import :: field_t
-         implicit none
+        !! adds two vectors together: y = a*x + b*y
+        import :: base_backend_t
+        import :: dp
+        import :: field_t
+        implicit none
 
-         class(base_backend_t) :: self
-         real(dp), intent(in) :: a
-         class(field_t), intent(in) :: x
-         real(dp), intent(in) :: b
-         class(field_t), intent(inout) :: y
+        class(base_backend_t) :: self
+        real(dp), intent(in) :: a
+        class(field_t), intent(in) :: x
+        real(dp), intent(in) :: b
+        class(field_t), intent(inout) :: y
       end subroutine vecadd
-   end interface
+    end interface
 
-   abstract interface
+    abstract interface
       real(dp) function scalar_product(self, x, y) result(s)
-         !! Calculates the scalar product of two input fields
-         import :: base_backend_t
-         import :: dp
-         import :: field_t
-         implicit none
+        !! Calculates the scalar product of two input fields
+        import :: base_backend_t
+        import :: dp
+        import :: field_t
+        implicit none
 
-         class(base_backend_t) :: self
-         class(field_t), intent(in) :: x, y
+        class(base_backend_t) :: self
+        class(field_t), intent(in) :: x, y
       end function scalar_product
-   end interface
+    end interface
 
-   abstract interface
+    abstract interface
       subroutine copy_data_to_f(self, f, data)
-         !! Copy the specialist data structure from device or host back
-         !! to a regular 3D data array in host memory.
-         import :: base_backend_t
-         import :: dp
-         import :: field_t
-         implicit none
+        !! Copy the specialist data structure from device or host back
+        !! to a regular 3D data array in host memory.
+        import :: base_backend_t
+        import :: dp
+        import :: field_t
+        implicit none
 
-         class(base_backend_t), intent(inout) :: self
-         class(field_t), intent(inout) :: f
-         real(dp), dimension(:, :, :), intent(in) :: data
+        class(base_backend_t), intent(inout) :: self
+        class(field_t), intent(inout) :: f
+        real(dp), dimension(:, :, :), intent(in) :: data
       end subroutine copy_data_to_f
 
       subroutine copy_f_to_data(self, data, f)
-         !! Copy a regular 3D array in host memory into the specialist
-         !! data structure field that lives on device or host
-         import :: base_backend_t
-         import :: dp
-         import :: field_t
-         implicit none
+        !! Copy a regular 3D array in host memory into the specialist
+        !! data structure field that lives on device or host
+        import :: base_backend_t
+        import :: dp
+        import :: field_t
+        implicit none
 
-         class(base_backend_t), intent(inout) :: self
-         real(dp), dimension(:, :, :), intent(out) :: data
-         class(field_t), intent(in) :: f
+        class(base_backend_t), intent(inout) :: self
+        real(dp), dimension(:, :, :), intent(out) :: data
+        class(field_t), intent(in) :: f
       end subroutine copy_f_to_data
-   end interface
+    end interface
 
-   abstract interface
+    abstract interface
       subroutine alloc_tdsops(self, tdsops, n, dx, operation, scheme, n_halo, &
-                              from_to, bc_start, bc_end, sym, c_nu, nu0_nu)
-         import :: base_backend_t
-         import :: dp
-         import :: tdsops_t
-         implicit none
+        from_to, bc_start, bc_end, sym, c_nu, nu0_nu)
+        import :: base_backend_t
+        import :: dp
+        import :: tdsops_t
+        implicit none
 
-         class(base_backend_t) :: self
-         class(tdsops_t), allocatable, intent(inout) :: tdsops
-         integer, intent(in) :: n
-         real(dp), intent(in) :: dx
-         character(*), intent(in) :: operation, scheme
-         integer, optional, intent(in) :: n_halo
-         character(*), optional, intent(in) :: from_to, bc_start, bc_end
-         logical, optional, intent(in) :: sym
-         real(dp), optional, intent(in) :: c_nu, nu0_nu
+        class(base_backend_t) :: self
+        class(tdsops_t), allocatable, intent(inout) :: tdsops
+        integer, intent(in) :: n
+        real(dp), intent(in) :: dx
+        character(*), intent(in) :: operation, scheme
+        integer, optional, intent(in) :: n_halo
+        character(*), optional, intent(in) :: from_to, bc_start, bc_end
+        logical, optional, intent(in) :: sym
+        real(dp), optional, intent(in) :: c_nu, nu0_nu
       end subroutine alloc_tdsops
-   end interface
+    end interface
 
-   abstract interface
+    abstract interface
       subroutine init_poisson_fft(self, xdirps, ydirps, zdirps)
-         import :: base_backend_t
-         import :: dirps_t
-         implicit none
+        import :: base_backend_t
+        import :: dirps_t
+        implicit none
 
-         class(base_backend_t) :: self
-         type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+        class(base_backend_t) :: self
+        type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
       end subroutine init_poisson_fft
-   end interface
+    end interface
 
-contains
+  contains
 
-   subroutine get_field_data(self, data, f, dir)
-   !! Extract data from field `f` optionally reordering into `dir` orientation.
-   !! To output in same orientation as `f`, use `call ...%get_field_data(data, f, f%dir)`
+    subroutine get_field_data(self, data, f, dir)
+      !! Extract data from field `f` optionally reordering into `dir` orientation.
+      !! To output in same orientation as `f`, use `call ...%get_field_data(data, f, f%dir)`
       implicit none
 
       class(base_backend_t) :: self
@@ -219,9 +219,9 @@ contains
       integer :: direction, rdr_dir
 
       if (present(dir)) then
-         direction = dir
+        direction = dir
       else
-         direction = DIR_C
+        direction = DIR_C
       end if
 
       ! Returns 0 if no reorder required
@@ -229,17 +229,17 @@ contains
 
       ! Carry out a reorder if we need, and copy from field to data array
       if (rdr_dir /= 0) then
-         f_temp => self%allocator%get_block(direction)
-         call self%reorder(f_temp, f, rdr_dir)
-         call self%copy_f_to_data(data, f_temp)
-         call self%allocator%release_block(f_temp)
+        f_temp => self%allocator%get_block(direction)
+        call self%reorder(f_temp, f, rdr_dir)
+        call self%copy_f_to_data(data, f_temp)
+        call self%allocator%release_block(f_temp)
       else
-         call self%copy_f_to_data(data, f)
+        call self%copy_f_to_data(data, f)
       end if
 
-   end subroutine get_field_data
+    end subroutine get_field_data
 
-   subroutine set_field_data(self, f, data, dir)
+    subroutine set_field_data(self, f, data, dir)
       implicit none
 
       class(base_backend_t) :: self
@@ -251,9 +251,9 @@ contains
       integer :: direction, rdr_dir
 
       if (present(dir)) then
-         direction = dir
+        direction = dir
       else
-         direction = DIR_C
+        direction = DIR_C
       end if
 
       ! Returns 0 if no reorder required
@@ -261,14 +261,14 @@ contains
 
       ! Carry out a reorder if we need, and copy from data array to field
       if (rdr_dir /= 0) then
-         f_temp => self%allocator%get_block(direction)
-         call self%copy_data_to_f(f_temp, data)
-         call self%reorder(f, f_temp, rdr_dir)
-         call self%allocator%release_block(f_temp)
+        f_temp => self%allocator%get_block(direction)
+        call self%copy_data_to_f(f_temp, data)
+        call self%reorder(f, f_temp, rdr_dir)
+        call self%allocator%release_block(f_temp)
       else
-         call self%copy_data_to_f(f, data)
+        call self%copy_data_to_f(f, data)
       end if
 
-   end subroutine set_field_data
+    end subroutine set_field_data
 
-end module m_base_backend
+  end module m_base_backend

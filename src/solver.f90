@@ -1,16 +1,16 @@
-module m_solver
-   use m_allocator, only: allocator_t, field_t
-   use m_base_backend, only: base_backend_t
-   use m_common, only: dp, globs_t, &
-                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
-                       POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
-                       DIR_X, DIR_Y, DIR_Z
-   use m_tdsops, only: tdsops_t, dirps_t
-   use m_time_integrator, only: time_intg_t
+  module m_solver
+    use m_allocator, only: allocator_t, field_t
+    use m_base_backend, only: base_backend_t
+    use m_common, only: dp, globs_t, &
+      RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
+      POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
+      DIR_X, DIR_Y, DIR_Z
+    use m_tdsops, only: tdsops_t, dirps_t
+    use m_time_integrator, only: time_intg_t
 
-   implicit none
+    implicit none
 
-   type :: solver_t
+    type :: solver_t
       !! solver class defines the Incompact3D algorithm at a very high level.
       !!
       !! Procedures defined here that are part of the Incompact3D algorithm
@@ -47,34 +47,34 @@ module m_solver
       class(dirps_t), pointer :: xdirps, ydirps, zdirps
       class(time_intg_t), pointer :: time_integrator
       procedure(poisson_solver), pointer :: poisson => null()
-   contains
+    contains
       procedure :: transeq
       procedure :: divergence_v2p
       procedure :: gradient_p2v
       procedure :: curl
       procedure :: output
       procedure :: run
-   end type solver_t
+    end type solver_t
 
-   abstract interface
+    abstract interface
       subroutine poisson_solver(self, pressure, div_u)
-         import :: solver_t
-         import :: field_t
-         implicit none
+        import :: solver_t
+        import :: field_t
+        implicit none
 
-         class(solver_t) :: self
-         class(field_t), intent(inout) :: pressure
-         class(field_t), intent(in) :: div_u
+        class(solver_t) :: self
+        class(field_t), intent(inout) :: pressure
+        class(field_t), intent(in) :: div_u
       end subroutine poisson_solver
-   end interface
+    end interface
 
-   interface solver_t
+    interface solver_t
       module procedure init
-   end interface solver_t
+    end interface solver_t
 
-contains
+  contains
 
-   function init(backend, time_integrator, xdirps, ydirps, zdirps, globs) &
+    function init(backend, time_integrator, xdirps, ydirps, zdirps, globs) &
       result(solver)
       implicit none
 
@@ -114,17 +114,17 @@ contains
 
       nx = globs%nx_loc; ny = globs%ny_loc; nz = globs%nz_loc
       do k = 1, nz
-         do j = 1, ny
-            do i = 1, nx
-               x = (i - 1)*globs%dx
-               y = (j - 1)*globs%dy
-               z = (k - 1)*globs%dz
+        do j = 1, ny
+          do i = 1, nx
+            x = (i - 1)*globs%dx
+            y = (j - 1)*globs%dy
+            z = (k - 1)*globs%dz
 
-               u_init(i, j, k) = sin(x)*cos(y)*cos(z)
-               v_init(i, j, k) = -cos(x)*sin(y)*cos(z)
-               w_init(i, j, k) = 0
-            end do
-         end do
+            u_init(i, j, k) = sin(x)*cos(y)*cos(z)
+            v_init(i, j, k) = -cos(x)*sin(y)*cos(z)
+            w_init(i, j, k) = 0
+          end do
+        end do
       end do
 
       call solver%backend%set_field_data(solver%u, u_init)
@@ -140,44 +140,44 @@ contains
       call allocate_tdsops(solver%zdirps, nz, globs%dz, solver%backend)
 
       select case (globs%poisson_solver_type)
-      case (POISSON_SOLVER_FFT)
-         print*, 'Poisson solver: FFT'
-         call solver%backend%init_poisson_fft(xdirps, ydirps, zdirps)
-         solver%poisson => poisson_fft
-      case (POISSON_SOLVER_CG)
-         print*, 'Poisson solver: CG, not yet implemented'
-         solver%poisson => poisson_cg
+       case (POISSON_SOLVER_FFT)
+        print*, 'Poisson solver: FFT'
+        call solver%backend%init_poisson_fft(xdirps, ydirps, zdirps)
+        solver%poisson => poisson_fft
+       case (POISSON_SOLVER_CG)
+        print*, 'Poisson solver: CG, not yet implemented'
+        solver%poisson => poisson_cg
       end select
 
-   end function init
+    end function init
 
-   subroutine allocate_tdsops(dirps, nx, dx, backend)
+    subroutine allocate_tdsops(dirps, nx, dx, backend)
       class(dirps_t), intent(inout) :: dirps
       real(dp), intent(in) :: dx
       integer, intent(in) :: nx
       class(base_backend_t), intent(in) :: backend
 
       call backend%alloc_tdsops(dirps%der1st, nx, dx, &
-                                'first-deriv', 'compact6')
+        'first-deriv', 'compact6')
       call backend%alloc_tdsops(dirps%der1st_sym, nx, dx, &
-                                'first-deriv', 'compact6')
+        'first-deriv', 'compact6')
       call backend%alloc_tdsops(dirps%der2nd, nx, dx, &
-                                'second-deriv', 'compact6')
+        'second-deriv', 'compact6')
       call backend%alloc_tdsops(dirps%der2nd_sym, nx, dx, &
-                                'second-deriv', 'compact6')
+        'second-deriv', 'compact6')
       call backend%alloc_tdsops(dirps%interpl_v2p, nx, dx, &
-                                'interpolate', 'classic', from_to='v2p')
+        'interpolate', 'classic', from_to='v2p')
       call backend%alloc_tdsops(dirps%interpl_p2v, nx, dx, &
-                                'interpolate', 'classic', from_to='p2v')
+        'interpolate', 'classic', from_to='p2v')
       call backend%alloc_tdsops(dirps%stagder_v2p, nx, dx, &
-                                'stag-deriv', 'compact6', from_to='v2p')
+        'stag-deriv', 'compact6', from_to='v2p')
       call backend%alloc_tdsops(dirps%stagder_p2v, nx, dx, &
-                                'stag-deriv', 'compact6', from_to='p2v')
+        'stag-deriv', 'compact6', from_to='p2v')
 
 
-   end subroutine
+    end subroutine
 
-   subroutine transeq(self, du, dv, dw, u, v, w)
+    subroutine transeq(self, du, dv, dw, u, v, w)
       !! Skew-symmetric form of convection-diffusion terms in the
       !! incompressible Navier-Stokes momemtum equations, excluding
       !! pressure terms.
@@ -189,7 +189,7 @@ contains
       class(field_t), intent(in) :: u, v, w
 
       class(field_t), pointer :: u_y, v_y, w_y, u_z, v_z, w_z, &
-                                 du_y, dv_y, dw_y, du_z, dv_z, dw_z
+        du_y, dv_y, dw_y, du_z, dv_z, dw_z
 
       ! -1/2(nabla u curl u + u nabla u) + nu nablasq u
 
@@ -260,9 +260,9 @@ contains
       call self%backend%allocator%release_block(dv_z)
       call self%backend%allocator%release_block(dw_z)
 
-   end subroutine transeq
+    end subroutine transeq
 
-   subroutine divergence_v2p(self, div_u, u, v, w)
+    subroutine divergence_v2p(self, div_u, u, v, w)
       !! Divergence of a vector field (u, v, w).
       !! Inputs from velocity grid and outputs to pressure grid.
       implicit none
@@ -272,8 +272,8 @@ contains
       class(field_t), intent(in) :: u, v, w
 
       class(field_t), pointer :: du_x, dv_x, dw_x, &
-                                 u_y, v_y, w_y, du_y, dv_y, dw_y, &
-                                 u_z, w_z, dw_z
+        u_y, v_y, w_y, du_y, dv_y, dw_y, &
+        u_z, w_z, dw_z
 
       du_x => self%backend%allocator%get_block(DIR_X)
       dv_x => self%backend%allocator%get_block(DIR_X)
@@ -283,11 +283,11 @@ contains
       ! Interpolation for v field in x
       ! Interpolation for w field in x
       call self%backend%tds_solve(du_x, u, self%xdirps, &
-                                  self%xdirps%stagder_v2p)
+        self%xdirps%stagder_v2p)
       call self%backend%tds_solve(dv_x, v, self%xdirps, &
-                                  self%xdirps%interpl_v2p)
+        self%xdirps%interpl_v2p)
       call self%backend%tds_solve(dw_x, w, self%xdirps, &
-                                  self%xdirps%interpl_v2p)
+        self%xdirps%interpl_v2p)
 
       ! request fields from the allocator
       u_y => self%backend%allocator%get_block(DIR_Y)
@@ -309,11 +309,11 @@ contains
 
       ! similar to the x direction, obtain derivatives in y.
       call self%backend%tds_solve(du_y, u_y, self%ydirps, &
-                                  self%ydirps%interpl_v2p)
+        self%ydirps%interpl_v2p)
       call self%backend%tds_solve(dv_y, v_y, self%ydirps, &
-                                  self%ydirps%stagder_v2p)
+        self%ydirps%stagder_v2p)
       call self%backend%tds_solve(dw_y, w_y, self%ydirps, &
-                                  self%ydirps%interpl_v2p)
+        self%ydirps%interpl_v2p)
 
       ! we don't need the velocities in y orientation any more, so release
       ! them to open up space.
@@ -343,9 +343,9 @@ contains
 
       ! get the derivatives in z
       call self%backend%tds_solve(div_u, u_z, self%zdirps, &
-                                  self%zdirps%interpl_v2p)
+        self%zdirps%interpl_v2p)
       call self%backend%tds_solve(dw_z, w_z, self%zdirps, &
-                                  self%zdirps%stagder_v2p)
+        self%zdirps%stagder_v2p)
 
       ! div_u = div_u + dw_z
       call self%backend%vecadd(1._dp, dw_z, 1._dp, div_u)
@@ -357,9 +357,9 @@ contains
       call self%backend%allocator%release_block(w_z)
       call self%backend%allocator%release_block(dw_z)
 
-   end subroutine divergence_v2p
+    end subroutine divergence_v2p
 
-   subroutine gradient_p2v(self, dpdx, dpdy, dpdz, pressure)
+    subroutine gradient_p2v(self, dpdx, dpdy, dpdz, pressure)
       !! Gradient of a scalar field 'pressure'.
       !! Inputs from pressure grid and outputs to velocity grid.
       implicit none
@@ -369,9 +369,9 @@ contains
       class(field_t), intent(in) :: pressure
 
       class(field_t), pointer :: p_sxy_z, dpdz_sxy_z, &
-                                 p_sxy_y, dpdz_sxy_y, &
-                                 p_sx_y, dpdy_sx_y, dpdz_sx_y, &
-                                 p_sx_x, dpdy_sx_x, dpdz_sx_x
+        p_sxy_y, dpdz_sxy_y, &
+        p_sx_y, dpdy_sx_y, dpdz_sx_y, &
+        p_sx_x, dpdy_sx_x, dpdz_sx_x
 
       p_sxy_z => self%backend%allocator%get_block(DIR_Z)
       dpdz_sxy_z => self%backend%allocator%get_block(DIR_Z)
@@ -379,9 +379,9 @@ contains
       ! Staggared der for pressure field in z
       ! Interpolation for pressure field in z
       call self%backend%tds_solve(p_sxy_z, pressure, self%zdirps, &
-                                  self%zdirps%interpl_p2v)
+        self%zdirps%interpl_p2v)
       call self%backend%tds_solve(dpdz_sxy_z, pressure, self%zdirps, &
-                                  self%zdirps%stagder_p2v)
+        self%zdirps%stagder_p2v)
 
       ! request fields from the allocator
       p_sxy_y => self%backend%allocator%get_block(DIR_Y)
@@ -400,11 +400,11 @@ contains
 
       ! similar to the z direction, obtain derivatives in y.
       call self%backend%tds_solve(p_sx_y, p_sxy_y, self%ydirps, &
-                                  self%ydirps%interpl_p2v)
+        self%ydirps%interpl_p2v)
       call self%backend%tds_solve(dpdy_sx_y, p_sxy_y, self%ydirps, &
-                                  self%ydirps%stagder_p2v)
+        self%ydirps%stagder_p2v)
       call self%backend%tds_solve(dpdz_sx_y, dpdz_sxy_y, self%ydirps, &
-                                  self%ydirps%interpl_p2v)
+        self%ydirps%interpl_p2v)
 
       ! release memory
       call self%backend%allocator%release_block(p_sxy_y)
@@ -427,20 +427,20 @@ contains
 
       ! get the derivatives in x
       call self%backend%tds_solve(dpdx, p_sx_x, self%xdirps, &
-                                  self%xdirps%stagder_p2v)
+        self%xdirps%stagder_p2v)
       call self%backend%tds_solve(dpdy, dpdy_sx_x, self%xdirps, &
-                                  self%xdirps%interpl_p2v)
+        self%xdirps%interpl_p2v)
       call self%backend%tds_solve(dpdz, dpdz_sx_x, self%xdirps, &
-                                  self%xdirps%interpl_p2v)
+        self%xdirps%interpl_p2v)
 
       ! release temporary x fields
       call self%backend%allocator%release_block(p_sx_x)
       call self%backend%allocator%release_block(dpdy_sx_x)
       call self%backend%allocator%release_block(dpdz_sx_x)
 
-   end subroutine gradient_p2v
+    end subroutine gradient_p2v
 
-   subroutine curl(self, o_i_hat, o_j_hat, o_k_hat, u, v, w)
+    subroutine curl(self, o_i_hat, o_j_hat, o_k_hat, u, v, w)
       !! Curl of a vector field (u, v, w).
       !! Inputs from velocity grid and outputs to velocity grid.
       implicit none
@@ -451,7 +451,7 @@ contains
       class(field_t), intent(in) :: u, v, w
 
       class(field_t), pointer :: u_y, u_z, v_z, w_y, dwdy_y, dvdz_z, dvdz_x, &
-                                 dudz_z, dudz_x, dudy_y, dudy_x
+        dudz_z, dudz_x, dudy_y, dudy_x
 
       ! omega_i_hat = dw/dy - dv/dz
       ! omega_j_hat = du/dz - dw/dx
@@ -528,9 +528,9 @@ contains
 
       call self%backend%allocator%release_block(dudy_x)
 
-   end subroutine curl
+    end subroutine curl
 
-   subroutine poisson_fft(self, pressure, div_u)
+    subroutine poisson_fft(self, pressure, div_u)
       implicit none
 
       class(solver_t) :: self
@@ -547,18 +547,18 @@ contains
       ! call backward FFT
       call self%backend%poisson_fft%fft_backward(pressure)
 
-   end subroutine poisson_fft
+    end subroutine poisson_fft
 
-   subroutine poisson_cg(self, pressure, div_u)
+    subroutine poisson_cg(self, pressure, div_u)
       implicit none
 
       class(solver_t) :: self
       class(field_t), intent(inout) :: pressure
       class(field_t), intent(in) :: div_u
 
-   end subroutine poisson_cg
+    end subroutine poisson_cg
 
-   subroutine output(self, t, u_out)
+    subroutine output(self, t, u_out)
       implicit none
 
       class(solver_t), intent(in) :: self
@@ -577,10 +577,10 @@ contains
 
       call self%curl(du, dv, dw, self%u, self%v, self%w)
       print*, 'enstrophy:', 0.5_dp*( &
-         self%backend%scalar_product(du, du) &
-         + self%backend%scalar_product(dv, dv) &
-         + self%backend%scalar_product(dw, dw) &
-         )/ngrid
+        self%backend%scalar_product(du, du) &
+        + self%backend%scalar_product(dv, dv) &
+        + self%backend%scalar_product(dw, dw) &
+        )/ngrid
 
       call self%backend%allocator%release_block(du)
       call self%backend%allocator%release_block(dv)
@@ -595,9 +595,9 @@ contains
 
       print*, 'div u max mean:', maxval(abs(u_out)), sum(abs(u_out))/ngrid
 
-   end subroutine output
+    end subroutine output
 
-   subroutine run(self, u_out, v_out, w_out)
+    subroutine run(self, u_out, v_out, w_out)
       implicit none
 
       class(solver_t), intent(in) :: self
@@ -615,52 +615,52 @@ contains
       print*, 'start run'
 
       do i = 1, self%n_iters
-         du => self%backend%allocator%get_block(DIR_X)
-         dv => self%backend%allocator%get_block(DIR_X)
-         dw => self%backend%allocator%get_block(DIR_X)
+        du => self%backend%allocator%get_block(DIR_X)
+        dv => self%backend%allocator%get_block(DIR_X)
+        dw => self%backend%allocator%get_block(DIR_X)
 
-         call self%transeq(du, dv, dw, self%u, self%v, self%w)
+        call self%transeq(du, dv, dw, self%u, self%v, self%w)
 
-         ! time integration
-         call self%time_integrator%step(self%u, self%v, self%w, &
-                                        du, dv, dw, self%dt)
+        ! time integration
+        call self%time_integrator%step(self%u, self%v, self%w, &
+          du, dv, dw, self%dt)
 
-         call self%backend%allocator%release_block(du)
-         call self%backend%allocator%release_block(dv)
-         call self%backend%allocator%release_block(dw)
+        call self%backend%allocator%release_block(du)
+        call self%backend%allocator%release_block(dv)
+        call self%backend%allocator%release_block(dw)
 
-         ! pressure
-         div_u => self%backend%allocator%get_block(DIR_Z)
+        ! pressure
+        div_u => self%backend%allocator%get_block(DIR_Z)
 
-         call self%divergence_v2p(div_u, self%u, self%v, self%w)
+        call self%divergence_v2p(div_u, self%u, self%v, self%w)
 
-         pressure => self%backend%allocator%get_block(DIR_Z)
+        pressure => self%backend%allocator%get_block(DIR_Z)
 
-         call self%poisson(pressure, div_u)
+        call self%poisson(pressure, div_u)
 
-         call self%backend%allocator%release_block(div_u)
+        call self%backend%allocator%release_block(div_u)
 
-         dpdx => self%backend%allocator%get_block(DIR_X)
-         dpdy => self%backend%allocator%get_block(DIR_X)
-         dpdz => self%backend%allocator%get_block(DIR_X)
+        dpdx => self%backend%allocator%get_block(DIR_X)
+        dpdy => self%backend%allocator%get_block(DIR_X)
+        dpdz => self%backend%allocator%get_block(DIR_X)
 
-         call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
+        call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
 
-         call self%backend%allocator%release_block(pressure)
+        call self%backend%allocator%release_block(pressure)
 
-         ! velocity correction
-         call self%backend%vecadd(-1._dp, dpdx, 1._dp, self%u)
-         call self%backend%vecadd(-1._dp, dpdy, 1._dp, self%v)
-         call self%backend%vecadd(-1._dp, dpdz, 1._dp, self%w)
+        ! velocity correction
+        call self%backend%vecadd(-1._dp, dpdx, 1._dp, self%u)
+        call self%backend%vecadd(-1._dp, dpdy, 1._dp, self%v)
+        call self%backend%vecadd(-1._dp, dpdz, 1._dp, self%w)
 
-         call self%backend%allocator%release_block(dpdx)
-         call self%backend%allocator%release_block(dpdy)
-         call self%backend%allocator%release_block(dpdz)
+        call self%backend%allocator%release_block(dpdx)
+        call self%backend%allocator%release_block(dpdy)
+        call self%backend%allocator%release_block(dpdz)
 
-         if ( mod(i, self%n_output) == 0 ) then
-            t = i*self%dt
-            call self%output(t, u_out)
-         end if
+        if ( mod(i, self%n_output) == 0 ) then
+          t = i*self%dt
+          call self%output(t, u_out)
+        end if
       end do
 
       print*, 'run end'
@@ -669,6 +669,6 @@ contains
       call self%backend%get_field_data(v_out, self%v)
       call self%backend%get_field_data(w_out, self%w)
 
-   end subroutine run
+    end subroutine run
 
-end module m_solver
+  end module m_solver

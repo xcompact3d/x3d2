@@ -1,21 +1,21 @@
-module m_cuda_poisson_fft
-   use cudafor
-   use cufft
+  module m_cuda_poisson_fft
+    use cudafor
+    use cufft
 
-   use m_allocator, only: field_t
-   use m_common, only: dp
-   use m_poisson_fft, only: poisson_fft_t
-   use m_tdsops, only: dirps_t
+    use m_allocator, only: field_t
+    use m_common, only: dp
+    use m_poisson_fft, only: poisson_fft_t
+    use m_tdsops, only: dirps_t
 
-   use m_cuda_allocator, only: cuda_field_t
-   use m_cuda_common, only: SZ
-   use m_cuda_complex, only: reorder_cmplx_x2y_T, reorder_cmplx_y2x_T, &
-                             reorder_cmplx_y2z_T, reorder_cmplx_z2y_T, &
-                             process_spectral_div_u
+    use m_cuda_allocator, only: cuda_field_t
+    use m_cuda_common, only: SZ
+    use m_cuda_complex, only: reorder_cmplx_x2y_T, reorder_cmplx_y2x_T, &
+      reorder_cmplx_y2z_T, reorder_cmplx_z2y_T, &
+      process_spectral_div_u
 
-   implicit none
+    implicit none
 
-   type, extends(poisson_fft_t) :: cuda_poisson_fft_t
+    type, extends(poisson_fft_t) :: cuda_poisson_fft_t
       !! FFT based Poisson solver
       !! It can only handle 1D decompositions along z direction.
 
@@ -25,26 +25,26 @@ module m_cuda_poisson_fft
       complex(dp), device, allocatable, dimension(:, :, :) :: waves_dev
 
       real(dp), device, allocatable, dimension(:) :: ax_dev, bx_dev, &
-         ay_dev, by_dev, az_dev, bz_dev
+        ay_dev, by_dev, az_dev, bz_dev
 
       real(dp), device, allocatable, dimension(:, :, :) :: f_tmp
 
       integer :: planD2Zz, planZ2Dz, planZ2Zx, planZ2Zy
-   contains
+    contains
       procedure :: fft_forward => fft_forward_cuda
       procedure :: fft_backward => fft_backward_cuda
       procedure :: fft_postprocess => fft_postprocess_cuda
-   end type cuda_poisson_fft_t
+    end type cuda_poisson_fft_t
 
-   interface cuda_poisson_fft_t
+    interface cuda_poisson_fft_t
       module procedure init
-   end interface cuda_poisson_fft_t
+    end interface cuda_poisson_fft_t
 
-   private :: init
+    private :: init
 
-contains
+  contains
 
-   function init(xdirps, ydirps, zdirps) result(poisson_fft)
+    function init(xdirps, ydirps, zdirps) result(poisson_fft)
       implicit none
 
       class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
@@ -82,31 +82,31 @@ contains
       ! set cufft plans
       ierrfft = cufftCreate(poisson_fft%planD2Zz)
       ierrfft = cufftMakePlanMany(poisson_fft%planD2Zz, 1, nz, &
-                                  nz, 1, nz, nz/2+1, 1, nz/2+1, &
-                                  CUFFT_D2Z, nx*ny, worksize)
+        nz, 1, nz, nz/2+1, 1, nz/2+1, &
+        CUFFT_D2Z, nx*ny, worksize)
       ierrfft = cufftSetWorkArea(poisson_fft%planD2Zz, poisson_fft%c_x_dev)
 
       ierrfft = cufftCreate(poisson_fft%planZ2Dz)
       ierrfft = cufftMakePlanMany(poisson_fft%planZ2Dz, 1, nz, &
-                                  nz/2+1, 1, nz/2+1, nz, 1, nz, &
-                                  CUFFT_Z2D, nx*ny, worksize)
+        nz/2+1, 1, nz/2+1, nz, 1, nz, &
+        CUFFT_Z2D, nx*ny, worksize)
       ierrfft = cufftSetWorkArea(poisson_fft%planZ2Dz, poisson_fft%c_x_dev)
 
       ierrfft = cufftCreate(poisson_fft%planZ2Zy)
       ierrfft = cufftMakePlanMany(poisson_fft%planZ2Zy, 1, ny, &
-                                  ny, 1, ny, ny, 1, ny, &
-                                  CUFFT_Z2Z, nx*(nz/2 + 1), worksize)
+        ny, 1, ny, ny, 1, ny, &
+        CUFFT_Z2Z, nx*(nz/2 + 1), worksize)
       ierrfft = cufftSetWorkArea(poisson_fft%planZ2Zy, poisson_fft%c_x_dev)
 
       ierrfft = cufftCreate(poisson_fft%planZ2Zx)
       ierrfft = cufftMakePlanMany(poisson_fft%planZ2Zx, 1, nx, &
-                                  nx, 1, nx, nx, 1, nx, &
-                                  CUFFT_Z2Z, ny*(nz/2 + 1), worksize)
+        nx, 1, nx, nx, 1, nx, &
+        CUFFT_Z2Z, ny*(nz/2 + 1), worksize)
       ierrfft = cufftSetWorkArea(poisson_fft%planZ2Zx, poisson_fft%c_y_dev)
 
-   end function init
+    end function init
 
-   subroutine fft_forward_cuda(self, f)
+    subroutine fft_forward_cuda(self, f)
       implicit none
 
       class(cuda_poisson_fft_t) :: self
@@ -114,7 +114,7 @@ contains
 
       real(dp), device, pointer, dimension(:, :, :) :: f_dev
       complex(dp), device, dimension(:, :, :), pointer :: c_x_ptr, c_y_ptr, &
-                                                          c_z_ptr
+        c_z_ptr
 
       type(dim3) :: blocks, threads
       integer :: ierrfft
@@ -136,11 +136,11 @@ contains
       c_z_ptr(1:self%nz/2 + 1, 1:SZ, 1:self%nx*self%ny/SZ) => self%c_z_dev
 
       call reorder_cmplx_z2y_T<<<blocks, threads>>>(c_y_ptr, c_z_ptr, &
-                                                    self%nx, self%nz/2 + 1)
+        self%nx, self%nz/2 + 1)
 
       ! In-place forward FFT in y
       ierrfft = cufftExecZ2Z(self%planZ2Zy, self%c_y_dev, self%c_y_dev, &
-                             CUFFT_FORWARD)
+        CUFFT_FORWARD)
 
       ! Reorder from y to x
       blocks = dim3(self%nx/SZ, self%ny/SZ, self%nz/2 + 1)
@@ -149,15 +149,15 @@ contains
       c_y_ptr(1:self%ny, 1:SZ, 1:(self%nx*(self%nz/2 + 1))/SZ) => self%c_y_dev
 
       call reorder_cmplx_y2x_T<<<blocks, threads>>>(c_x_ptr, c_y_ptr, &
-                                                    self%nz/2 + 1)
+        self%nz/2 + 1)
 
       ! In-place forward FFT in x
       ierrfft = cufftExecZ2Z(self%planZ2Zx, self%c_x_dev, self%c_x_dev, &
-                             CUFFT_FORWARD)
+        CUFFT_FORWARD)
 
-   end subroutine fft_forward_cuda
+    end subroutine fft_forward_cuda
 
-   subroutine fft_backward_cuda(self, f)
+    subroutine fft_backward_cuda(self, f)
       implicit none
 
       class(cuda_poisson_fft_t) :: self
@@ -165,7 +165,7 @@ contains
 
       real(dp), device, pointer, dimension(:, :, :) :: f_dev
       complex(dp), device, dimension(:, :, :), pointer :: c_x_ptr, c_y_ptr, &
-                                                          c_z_ptr
+        c_z_ptr
 
       type(dim3) :: blocks, threads
       integer :: ierrfft
@@ -174,7 +174,7 @@ contains
 
       ! In-place backward FFT in x
       ierrfft = cufftExecZ2Z(self%planZ2Zx, self%c_x_dev, self%c_x_dev, &
-                             CUFFT_INVERSE)
+        CUFFT_INVERSE)
 
       ! Reorder from x to y
       blocks = dim3(self%nx/SZ, self%ny/SZ, self%nz/2 + 1)
@@ -183,11 +183,11 @@ contains
       c_y_ptr(1:self%ny, 1:SZ, 1:(self%nx*(self%nz/2 + 1))/SZ) => self%c_y_dev
 
       call reorder_cmplx_x2y_T<<<blocks, threads>>>(c_y_ptr, c_x_ptr, &
-                                                    self%nz/2 + 1)
+        self%nz/2 + 1)
 
       ! In-place backward FFT in y
       ierrfft = cufftExecZ2Z(self%planZ2Zy, self%c_y_dev, self%c_y_dev, &
-                             CUFFT_INVERSE)
+        CUFFT_INVERSE)
 
       ! Reorder from y to z
       blocks = dim3(self%nz/2/SZ + 1, self%ny/SZ, self%nx)
@@ -196,7 +196,7 @@ contains
       c_z_ptr(1:self%nz/2 + 1, 1:SZ, 1:self%nx*self%ny/SZ) => self%c_z_dev
 
       call reorder_cmplx_y2z_T<<<blocks, threads>>>(c_z_ptr, c_y_ptr, &
-                                                    self%nx, self%nz/2 + 1)
+        self%nx, self%nz/2 + 1)
 
       ! Backward FFT transform in z from complex to real
       ierrfft = cufftExecZ2D(self%planZ2Dz, self%c_z_dev, self%f_tmp)
@@ -206,9 +206,9 @@ contains
       threads = dim3(SZ, SZ, 1)
       call reshapeDSB<<<blocks, threads>>>(f_dev, self%f_tmp)
 
-   end subroutine fft_backward_cuda
+    end subroutine fft_backward_cuda
 
-   subroutine fft_postprocess_cuda(self)
+    subroutine fft_postprocess_cuda(self)
       implicit none
 
       class(cuda_poisson_fft_t) :: self
@@ -229,16 +229,16 @@ contains
       blocks = dim3((self%ny*(self%nz/2 + 1))/SZ, 1, 1)
       threads = dim3(SZ, 1, 1)
       call process_spectral_div_u<<<blocks, threads>>>( &
-         c_dev, self%waves_dev, self%nx, self%ny, self%nz, &
-         self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
-         self%az_dev, self%bz_dev &
-         )
+        c_dev, self%waves_dev, self%nx, self%ny, self%nz, &
+        self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
+        self%az_dev, self%bz_dev &
+        )
 
       ! Reshape from our specialist data structure to cartesian-like
       blocks = dim3(self%nx/SZ, (self%ny*(self%nz/2 + 1))/SZ, 1)
       threads = dim3(SZ, SZ, 1)
       call reshapeCDSF<<<blocks, threads>>>(c_x_ptr, c_dev)
 
-   end subroutine fft_postprocess_cuda
+    end subroutine fft_postprocess_cuda
 
-end module m_cuda_poisson_fft
+  end module m_cuda_poisson_fft
