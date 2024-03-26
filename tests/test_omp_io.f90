@@ -4,14 +4,14 @@ program test_omp_io
    use mpi
 
    use m_allocator, only: allocator_t, field_t
-   use m_common, only: dp, globs_t
+   use m_common, only: dp, DIR_C
    use m_omp_common, only: SZ
 
    implicit none
 
    logical :: allpass !! flag indicating all tests pass
 
-   class(field_t), pointer :: arr !! array to save & restore
+   class(field_t), pointer :: arr_to_write !! array to save & restore
 
    !> MPI vars
    integer :: irank, nproc
@@ -20,68 +20,49 @@ program test_omp_io
 
    type(adios2_adios) :: adios_ctx
 
-   !> ADIOS2 context, io and variable
-   integer, parameter :: NSTEPS = 16
+   type(allocator_t), target :: omp_allocator
 
+   integer(kind=8), dimension(3) :: ishape, istart, icount
    integer :: n, n_block, n_glob
-   integer :: nx, ny, nz
-   integer :: nx_loc, ny_loc, nz_loc
+   integer, parameter :: nx = 64, ny = 32, nz = 16
+   integer, parameter :: n_groups_x = 1
+   character(*), parameter :: varname = "TestArr"
+   character(*), parameter :: fname = "__FILE__.bp"
 
-   integer :: i
+   integer :: i, j, k
    character(len=80)::fmt
 
    allpass = .true.
 
-   ! nx = 96
-   ! ny = 96
-   ! nz = 96
-   !
-   ! nx_loc = nx/nproc
-   ! ny_loc = ny/nproc
-   ! nz_loc = nz/nproc
+   call init_mpi_adios()
 
-   call MPI_Init(ierr)
-   call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
-   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-   call adios2_init(adios_ctx, MPI_COMM_WORLD, ierr)
-   if (.not.adios_ctx%valid) then
-      write(*,*) "Error when creating ADIOS2 context"
-   endif
+   ! if (nrank == 0 && nproc > 1) print*, 'Parallel run with', nproc, 'ranks'
+   if (nproc > 1) call abort_test("Test does not support multiple MPI processes")
 
    !================ 
    ! SETUP TEST DATA
    !================
 
-   ! omp_allocator = allocator_t([SZ, globs%nx_loc, globs%n_groups_x])
-   ! allocator => omp_allocator
-   ! print*, 'OpenMP allocator instantiated'
-   !
-   ! if (nrank == 0 && nproc > 1) print*, 'Parallel run with', nproc, 'ranks'
-   !
-   ! arr => omp_allocator%get_block()
-   !
-   ! n_glob = globs%nx
-   ! n = n_glob/nproc
-   ! n_block = globs%n_groups_x 
-   !
-   ! ! Initialise with a simple index (value of index not important)
-   ! do k = 1, n_block
-   !    do j = 1, n
-   !       do i = 1, SZ
-   !          arr%data(i, j, k) = i + j*SZ + k*SZ*n
-   !       end do
-   !    end do
-   ! end do
+   icount = (/ nx, ny, nz/) ! global size
+   istart = (/ 0, 0, 0/) ! local offset
+   ishape = (/ nx, ny, nz/) ! local size
+
+   omp_allocator = allocator_t(nx, ny, nz, SZ)
+   print*, 'OpenMP allocator instantiated'
+
+   arr_to_write => omp_allocator%get_block(DIR_C)
+
+   ! Initialise with a simple index to verify read later
+   do k = 1, nz
+      do j = 1, ny
+         do i = 1, nx
+            arr_to_write%data(i, j, k) = i + j*nx + k*nx*ny
+         end do
+      end do
+   end do
 
    call write_test_file()
    call read_test_file()
-
-   if (adios_ctx%valid) then
-     call adios2_finalize(adios_ctx, ierr)
-   endif
-
-   call MPI_Finalize(ierr)
 
    if (allpass) then
       if (irank == 0) write(stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
@@ -89,7 +70,36 @@ program test_omp_io
       error stop 'SOME TESTS FAILED.'
    end if
 
+   call deinit_mpi_adios()
+
    contains
+
+     subroutine init_mpi_adios()
+       call MPI_Init(ierr)
+       call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
+       call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+
+       call adios2_init(adios_ctx, MPI_COMM_WORLD, ierr)
+       if (.not.adios_ctx%valid) then
+          call abort_test("Cannot create ADIOS2 context")
+       endif
+     end subroutine
+
+     subroutine deinit_mpi_adios()
+       if (adios_ctx%valid) then
+         call adios2_finalize(adios_ctx, ierr)
+       endif
+
+       call MPI_Finalize(ierr)
+     end subroutine
+
+     subroutine abort_test(msg)
+       character(*) :: msg
+
+       call deinit_mpi_adios()
+
+       error stop msg
+     end subroutine
 
      subroutine write_test_file()
        type(adios2_io) :: io
@@ -100,30 +110,21 @@ program test_omp_io
 
        call adios2_declare_io (io, adios_ctx, 'TestWrite', ierr)
        if (.not.io%valid) then
-          write(*,*) "Error when creating ADIOS2 io"
+          call abort_test("Cannot create ADIOS2 IO")
        endif
 
-       call adios2_open(engine, io, "test_omp_io.bp", adios2_mode_write, ierr)
+       call adios2_open(engine, io, fname, adios2_mode_write, ierr)
        if (.not.engine%valid) then
-          write(*,*) "Error when creating ADIOS2 engine"
+          call abort_test("Cannot create ADIOS2 engine")
        endif
 
-       ! call adios2_define_variable(adios_var, io, "test", adios2_type_dp, &
-       !                             3, [globs%nx, globs%ny, globs%nz], [SZ, globs%nx_loc, globs%n_groups_x], ierr)
+       ! TODO tie double precision variable to a
+       call adios2_define_variable(adios_var, io, varname, adios2_type_dp, &
+                                   3, ishape, istart, icount, adios2_constant_dims, ierr)
 
-       call adios2_define_variable(adios_var, io, "output42", adios2_type_integer4, ierr)
-       if (.not.adios_var%valid) then
-          write(*,*) "ierr = ", ierr
-          allpass = .false.
-          error stop "Error defining adios variable"
-       endif
-
-       do i=0, NSTEPS-1
-          call adios2_begin_step(engine, adios2_step_mode_append, ierr)
-          ! call adios2_put(engine, "test", arr%data, ierr)
-          call adios2_put(engine, adios_var, 42+i, ierr)
-          call adios2_end_step(engine, ierr)
-       enddo
+       call adios2_begin_step(engine, adios2_step_mode_append, ierr)
+       call adios2_put(engine, adios_var, arr_to_write%data, ierr)
+       call adios2_end_step(engine, ierr)
 
        if (engine%valid) then
           call adios2_close(engine, ierr)
@@ -135,55 +136,47 @@ program test_omp_io
        type(adios2_io) :: io
        type(adios2_engine) :: engine
        type(adios2_variable) :: adios_var
-       integer*8 :: numsteps
-       integer, dimension(:), allocatable :: steps
-
+       class(field_t), pointer :: arr_to_read !! array to save & restore
        integer :: ierr
 
        if (irank /= 0) then
          return
        endif
 
+       arr_to_read => omp_allocator%get_block(DIR_C)
+
        call adios2_declare_io (io, adios_ctx, 'TestRead', ierr)
        if (.not.io%valid) then
-          write(*,*) "Error when creating ADIOS2 io"
+          call abort_test("Cannot create ADIOS2 IO")
        endif
 
-       call adios2_open(engine, io, "test_omp_io.bp", adios2_mode_readRandomAccess, MPI_COMM_SELF, ierr)
+       call adios2_open(engine, io, fname, adios2_mode_read, MPI_COMM_SELF, ierr)
        if (.not.engine%valid) then
-          write(*,*) "Error when creating ADIOS2 engine"
+          call abort_test("Cannot create ADIOS2 engine")
        endif
 
-       call adios2_inquire_variable(adios_var, io, "output42", ierr)
+       call adios2_begin_step(engine, adios2_step_mode_read, ierr)
+       call adios2_inquire_variable(adios_var, io, varname, ierr)
        if (.not.adios_var%valid) then
-          write(*,*) "ierr = ", ierr
-          allpass = .false.
-          error stop "Error when fetching adios variable"
+          call abort_test("Cannot fetch ADIOS2 IO")
        endif
+       call adios2_set_step_selection(adios_var, 0_8, 1_8, ierr)
+       call adios2_get(engine, adios_var, arr_to_read%data, ierr)
+       call adios2_end_step(engine, ierr)
 
-       call adios2_variable_steps(numsteps, adios_var, ierr)
-       if(numsteps /= NSTEPS) then
-          if (irank == 0) write(stderr, '(a)') 'numsteps /= NSTEPS.'
-          if (irank == 0) write(stderr, '(a, i5)') 'numsteps =', numsteps
-          allpass = .false.
-          return
-       endif
-
-       call adios2_set_step_selection(adios_var, 0_8, numsteps, ierr)
-
-       allocate(steps(numsteps))
-
-       call adios2_get(engine, adios_var, steps, ierr)
-
-       do i=0, NSTEPS-1
-          if(steps(i+1) /= 42+i) then
-             if (irank == 0) write(stderr, '(a, i5, a, i5)') 'steps', steps(i+1), "/=", 42+i
-             allpass = .false.
-             return
-          endif
-       enddo
-
-       deallocate(steps)
+       do k = 1, nz
+          do j = 1, ny
+             do i = 1, nx
+                if(arr_to_read%data(i, j, k) /= i + j*nx + k*nx*ny) then
+                   if (irank == 0) write(stderr, '(a, f8.4, a, f8.4, a, i5, i5, i5)') &
+                     'Mismatch between read array(', arr_to_write%data(i, j, k), &
+                     ") and expected index (", i + j*nx + k*nx*ny, "at (i,j,k) = ", i, j, k
+                   allpass = .false.
+                   return ! end test on first issue
+                end if
+             end do
+          end do
+       end do
        !
        if (engine%valid) then
           call adios2_close(engine, ierr)
