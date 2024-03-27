@@ -25,7 +25,8 @@ module m_cuda_poisson_fft
     complex(dp), device, allocatable, dimension(:, :, :) :: waves_dev
 
     real(dp), device, allocatable, dimension(:) :: ax_dev, bx_dev, &
-                                                 ay_dev, by_dev, az_dev, bz_dev
+                                                   ay_dev, by_dev, &
+                                                   az_dev, bz_dev
 
     real(dp), device, allocatable, dimension(:, :, :) :: f_tmp
 
@@ -124,7 +125,7 @@ contains
     ! First reorder f into cartesian-like data structure
     blocks = dim3(self%nz/SZ, self%nx*self%ny/SZ, 1)
     threads = dim3(SZ, SZ, 1)
-    call reshapeDSF<<<blocks, threads>>>(self%f_tmp, f_dev)
+    call reshapeDSF<<<blocks, threads>>>(self%f_tmp, f_dev) !&
 
     ! Forward FFT transform in z from real to complex
     ierrfft = cufftExecD2Z(self%planD2Zz, self%f_tmp, self%c_z_dev)
@@ -135,7 +136,7 @@ contains
     c_y_ptr(1:self%ny, 1:SZ, 1:(self%nx*(self%nz/2 + 1))/SZ) => self%c_y_dev
     c_z_ptr(1:self%nz/2 + 1, 1:SZ, 1:self%nx*self%ny/SZ) => self%c_z_dev
 
-    call reorder_cmplx_z2y_T<<<blocks, threads>>>(c_y_ptr, c_z_ptr, &
+    call reorder_cmplx_z2y_T<<<blocks, threads>>>(c_y_ptr, c_z_ptr, & !&
                                                   self%nx, self%nz/2 + 1)
 
     ! In-place forward FFT in y
@@ -148,7 +149,7 @@ contains
     c_x_ptr(1:self%nx, 1:SZ, 1:(self%ny*(self%nz/2 + 1))/SZ) => self%c_x_dev
     c_y_ptr(1:self%ny, 1:SZ, 1:(self%nx*(self%nz/2 + 1))/SZ) => self%c_y_dev
 
-    call reorder_cmplx_y2x_T<<<blocks, threads>>>(c_x_ptr, c_y_ptr, &
+    call reorder_cmplx_y2x_T<<<blocks, threads>>>(c_x_ptr, c_y_ptr, & !&
                                                   self%nz/2 + 1)
 
     ! In-place forward FFT in x
@@ -182,7 +183,7 @@ contains
     c_x_ptr(1:self%nx, 1:SZ, 1:(self%ny*(self%nz/2 + 1))/SZ) => self%c_x_dev
     c_y_ptr(1:self%ny, 1:SZ, 1:(self%nx*(self%nz/2 + 1))/SZ) => self%c_y_dev
 
-    call reorder_cmplx_x2y_T<<<blocks, threads>>>(c_y_ptr, c_x_ptr, &
+    call reorder_cmplx_x2y_T<<<blocks, threads>>>(c_y_ptr, c_x_ptr, & !&
                                                   self%nz/2 + 1)
 
     ! In-place backward FFT in y
@@ -195,7 +196,7 @@ contains
     c_y_ptr(1:self%ny, 1:SZ, 1:(self%nx*(self%nz/2 + 1))/SZ) => self%c_y_dev
     c_z_ptr(1:self%nz/2 + 1, 1:SZ, 1:self%nx*self%ny/SZ) => self%c_z_dev
 
-    call reorder_cmplx_y2z_T<<<blocks, threads>>>(c_z_ptr, c_y_ptr, &
+    call reorder_cmplx_y2z_T<<<blocks, threads>>>(c_z_ptr, c_y_ptr, & !&
                                                   self%nx, self%nz/2 + 1)
 
     ! Backward FFT transform in z from complex to real
@@ -204,7 +205,7 @@ contains
     ! Finally reorder f back into our specialist data structure
     blocks = dim3(self%nz/SZ, self%nx*self%ny/SZ, 1)
     threads = dim3(SZ, SZ, 1)
-    call reshapeDSB<<<blocks, threads>>>(f_dev, self%f_tmp)
+    call reshapeDSB<<<blocks, threads>>>(f_dev, self%f_tmp) !&
 
   end subroutine fft_backward_cuda
 
@@ -223,12 +224,12 @@ contains
     ! Reshape from cartesian-like to our specialist data structure
     blocks = dim3(self%nx/SZ, (self%ny*(self%nz/2 + 1))/SZ, 1)
     threads = dim3(SZ, SZ, 1)
-    call reshapeCDSB<<<blocks, threads>>>(c_dev, c_x_ptr)
+    call reshapeCDSB<<<blocks, threads>>>(c_dev, c_x_ptr) !&
 
     ! Postprocess
     blocks = dim3((self%ny*(self%nz/2 + 1))/SZ, 1, 1)
     threads = dim3(SZ, 1, 1)
-    call process_spectral_div_u<<<blocks, threads>>>( &
+    call process_spectral_div_u<<<blocks, threads>>>( & !&
       c_dev, self%waves_dev, self%nx, self%ny, self%nz, &
       self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
       self%az_dev, self%bz_dev &
@@ -237,7 +238,7 @@ contains
     ! Reshape from our specialist data structure to cartesian-like
     blocks = dim3(self%nx/SZ, (self%ny*(self%nz/2 + 1))/SZ, 1)
     threads = dim3(SZ, SZ, 1)
-    call reshapeCDSF<<<blocks, threads>>>(c_x_ptr, c_dev)
+    call reshapeCDSF<<<blocks, threads>>>(c_x_ptr, c_dev) !&
 
   end subroutine fft_postprocess_cuda
 

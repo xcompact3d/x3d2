@@ -44,11 +44,11 @@ program test_cuda_reorder
   ! do a x to y reordering first and then a y to x
   blocks = dim3(nx/SZ, nz, ny/SZ)
   threads = dim3(SZ, SZ, 1)
-  call reorder_x2y<<<blocks, threads>>>(u_temp_d, u_i_d, nz)
+  call reorder_x2y<<<blocks, threads>>>(u_temp_d, u_i_d, nz) !&
 
   blocks = dim3(nx/SZ, ny/SZ, nz)
   threads = dim3(SZ, SZ, 1)
-  call reorder_y2x<<<blocks, threads>>>(u_o_d, u_temp_d, nz)
+  call reorder_y2x<<<blocks, threads>>>(u_o_d, u_temp_d, nz) !&
 
   ! move the result back to host
   u_o = u_o_d
@@ -68,7 +68,7 @@ program test_cuda_reorder
   ! u_temp_d is in y orientation, use y2z to reorder it into z direction
   blocks = dim3(nx/SZ, ny/SZ, nz)
   threads = dim3(SZ, SZ, 1)
-  call reorder_y2z<<<blocks, threads>>>(u_o_d, u_temp_d, nx, nz)
+  call reorder_y2z<<<blocks, threads>>>(u_o_d, u_temp_d, nx, nz) !&
 
   ! store initial z oriented field
   u_temp = u_temp_d
@@ -76,7 +76,7 @@ program test_cuda_reorder
   ! z oriented field into y
   blocks = dim3(nx/SZ, ny/SZ, nz)
   threads = dim3(SZ, SZ, 1)
-  call reorder_z2y<<<blocks, threads>>>(u_temp_d, u_o_d, nx, nz)
+  call reorder_z2y<<<blocks, threads>>>(u_temp_d, u_o_d, nx, nz) !&
 
   u_o = u_temp_d
 
@@ -92,12 +92,12 @@ program test_cuda_reorder
   ! reorder initial random field into z orientation
   blocks = dim3(nx, ny/SZ, 1)
   threads = dim3(SZ, 1, 1)
-  call reorder_x2z<<<blocks, threads>>>(u_o_d, u_i_d, nz)
+  call reorder_x2z<<<blocks, threads>>>(u_o_d, u_i_d, nz) !&
 
   ! z oriented field into x
   blocks = dim3(nx, ny/SZ, 1)
   threads = dim3(SZ, 1, 1)
-  call reorder_z2x<<<blocks, threads>>>(u_temp_d, u_o_d, nz)
+  call reorder_z2x<<<blocks, threads>>>(u_temp_d, u_o_d, nz) !&
   u_o = u_temp_d
 
   ! compare two z oriented fields
@@ -112,13 +112,13 @@ program test_cuda_reorder
   ! x ordering into Cartesian ordering
   blocks = dim3(nx/SZ, ny/SZ, nz)
   threads = dim3(SZ, SZ, 1)
-  call reorder_x2c<<<blocks, threads>>>(u_c_d, u_i_d, nz)
+  call reorder_x2c<<<blocks, threads>>>(u_c_d, u_i_d, nz) !&
 
   ! sanitise u_o_d
   u_o_d = 0
 
   ! Cartesian ordering back to x ordering
-  call reorder_c2x<<<blocks, threads>>>(u_o_d, u_c_d, nz)
+  call reorder_c2x<<<blocks, threads>>>(u_o_d, u_c_d, nz) !&
   u_o = u_o_d
 
   ! now both u_o and u_i in x ordering, compare them
@@ -143,7 +143,7 @@ program test_cuda_reorder
   threads = dim3(SZ, SZ, 1)
   call cpu_time(tstart)
   do i = 1, n_iters
-    call reorder_x2y<<<blocks, threads>>>(u_o_d, u_i_d, nz)
+    call reorder_x2y<<<blocks, threads>>>(u_o_d, u_i_d, nz) !&
   end do
   call cpu_time(tend)
 
@@ -154,7 +154,7 @@ program test_cuda_reorder
   threads = dim3(SZ, 1, 1)
   call cpu_time(tstart)
   do i = 1, n_iters
-    call reorder_x2z<<<blocks, threads>>>(u_o_d, u_i_d, nz)
+    call reorder_x2z<<<blocks, threads>>>(u_o_d, u_i_d, nz) !&
   end do
   call cpu_time(tend)
 
@@ -165,7 +165,7 @@ program test_cuda_reorder
   threads = dim3(SZ, SZ, 1)
   call cpu_time(tstart)
   do i = 1, n_iters
-    call reorder_y2x<<<blocks, threads>>>(u_o_d, u_i_d, nz)
+    call reorder_y2x<<<blocks, threads>>>(u_o_d, u_i_d, nz) !&
   end do
   call cpu_time(tend)
 
@@ -176,7 +176,7 @@ program test_cuda_reorder
   threads = dim3(SZ, SZ, 1)
   call cpu_time(tstart)
   do i = 1, n_iters
-    call reorder_y2z<<<blocks, threads>>>(u_o_d, u_i_d, nx, nz)
+    call reorder_y2z<<<blocks, threads>>>(u_o_d, u_i_d, nx, nz) !&
   end do
   call cpu_time(tend)
 
@@ -187,7 +187,7 @@ program test_cuda_reorder
   threads = dim3(SZ, 1, 1)
   call cpu_time(tstart)
   do i = 1, n_iters
-    call reorder_z2x<<<blocks, threads>>>(u_o_d, u_i_d, nz)
+    call reorder_z2x<<<blocks, threads>>>(u_o_d, u_i_d, nz) !&
   end do
   call cpu_time(tend)
 
@@ -198,7 +198,7 @@ program test_cuda_reorder
   threads = dim3(SZ, SZ, 1)
   call cpu_time(tstart)
   do i = 1, n_iters
-    call reorder_z2y<<<blocks, threads>>>(u_o_d, u_i_d, nx, nz)
+    call reorder_z2y<<<blocks, threads>>>(u_o_d, u_i_d, nx, nz) !&
   end do
   call cpu_time(tend)
 
@@ -209,7 +209,7 @@ program test_cuda_reorder
   threads = dim3(SZ, SZ, 1)
   call cpu_time(tstart)
   do i = 1, n_iters
-    call reorder_x2c<<<blocks, threads>>>(u_c_d, u_i_d, nz)
+    call reorder_x2c<<<blocks, threads>>>(u_c_d, u_i_d, nz) !&
   end do
   call cpu_time(tend)
 
@@ -220,7 +220,7 @@ program test_cuda_reorder
   threads = dim3(SZ, SZ, 1)
   call cpu_time(tstart)
   do i = 1, n_iters
-    call reorder_c2x<<<blocks, threads>>>(u_o_d, u_c_d, nz)
+    call reorder_c2x<<<blocks, threads>>>(u_o_d, u_c_d, nz) !&
   end do
   call cpu_time(tend)
 

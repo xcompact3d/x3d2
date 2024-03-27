@@ -431,33 +431,33 @@ contains
     case (RDR_X2Y)
       blocks = dim3(self%nx_loc/SZ, self%nz_loc, self%ny_loc/SZ)
       threads = dim3(SZ, SZ, 1)
-      call reorder_x2y<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      call reorder_x2y<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc) !&
     case (RDR_X2Z)
       blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
       threads = dim3(SZ, 1, 1)
-      call reorder_x2z<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      call reorder_x2z<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc) !&
     case (RDR_Y2X)
       blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
       threads = dim3(SZ, SZ, 1)
-      call reorder_y2x<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      call reorder_y2x<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc) !&
     case (RDR_Y2Z)
       blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
       threads = dim3(SZ, SZ, 1)
-      call reorder_y2z<<<blocks, threads>>>(u_o_d, u_i_d, &
+      call reorder_y2z<<<blocks, threads>>>(u_o_d, u_i_d, & !&
                                             self%nx_loc, self%nz_loc)
     case (RDR_Z2X)
       blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
       threads = dim3(SZ, 1, 1)
-      call reorder_z2x<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      call reorder_z2x<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc) !&
     case (RDR_Z2Y)
       blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
       threads = dim3(SZ, SZ, 1)
-      call reorder_z2y<<<blocks, threads>>>(u_o_d, u_i_d, &
+      call reorder_z2y<<<blocks, threads>>>(u_o_d, u_i_d, & !&
                                             self%nx_loc, self%nz_loc)
     case (RDR_C2X)
       blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
       threads = dim3(SZ, SZ, 1)
-      call reorder_c2x<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      call reorder_c2x<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc) !&
     case (RDR_C2Y)
       ! First reorder from C to X, then from X to Y
       u_temp => self%allocator%get_block(DIR_X)
@@ -465,11 +465,11 @@ contains
 
       blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
       threads = dim3(SZ, SZ, 1)
-      call reorder_c2x<<<blocks, threads>>>(u_temp_d, u_i_d, self%nz_loc)
+      call reorder_c2x<<<blocks, threads>>>(u_temp_d, u_i_d, self%nz_loc) !&
 
       blocks = dim3(self%nx_loc/SZ, self%nz_loc, self%ny_loc/SZ)
       threads = dim3(SZ, SZ, 1)
-      call reorder_x2y<<<blocks, threads>>>(u_o_d, u_temp_d, self%nz_loc)
+      call reorder_x2y<<<blocks, threads>>>(u_o_d, u_temp_d, self%nz_loc) !&
 
       call self%allocator%release_block(u_temp)
     case (RDR_C2Z)
@@ -479,17 +479,17 @@ contains
 
       blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
       threads = dim3(SZ, SZ, 1)
-      call reorder_c2x<<<blocks, threads>>>(u_temp_d, u_i_d, self%nz_loc)
+      call reorder_c2x<<<blocks, threads>>>(u_temp_d, u_i_d, self%nz_loc) !&
 
       blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
       threads = dim3(SZ, 1, 1)
-      call reorder_x2z<<<blocks, threads>>>(u_o_d, u_temp_d, self%nz_loc)
+      call reorder_x2z<<<blocks, threads>>>(u_o_d, u_temp_d, self%nz_loc) !&
 
       call self%allocator%release_block(u_temp)
     case (RDR_X2C)
       blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
       threads = dim3(SZ, SZ, 1)
-      call reorder_x2c<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc)
+      call reorder_x2c<<<blocks, threads>>>(u_o_d, u_i_d, self%nz_loc) !&
     case (RDR_Y2C)
       ! First reorder from Y to X, then from X to C
       u_temp => self%allocator%get_block(DIR_X)
@@ -497,9 +497,9 @@ contains
 
       blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
       threads = dim3(SZ, SZ, 1)
-      call reorder_y2x<<<blocks, threads>>>(u_temp_d, u_i_d, self%nz_loc)
+      call reorder_y2x<<<blocks, threads>>>(u_temp_d, u_i_d, self%nz_loc) !&
 
-      call reorder_x2c<<<blocks, threads>>>(u_o_d, u_temp_d, self%nz_loc)
+      call reorder_x2c<<<blocks, threads>>>(u_o_d, u_temp_d, self%nz_loc) !&
 
       call self%allocator%release_block(u_temp)
     case (RDR_Z2C)
@@ -509,11 +509,11 @@ contains
 
       blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
       threads = dim3(SZ, 1, 1)
-      call reorder_z2x<<<blocks, threads>>>(u_temp_d, u_i_d, self%nz_loc)
+      call reorder_z2x<<<blocks, threads>>>(u_temp_d, u_i_d, self%nz_loc) !&
 
       blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
       threads = dim3(SZ, SZ, 1)
-      call reorder_x2c<<<blocks, threads>>>(u_o_d, u_temp_d, self%nz_loc)
+      call reorder_x2c<<<blocks, threads>>>(u_o_d, u_temp_d, self%nz_loc) !&
 
       call self%allocator%release_block(u_temp)
     case default
@@ -537,7 +537,7 @@ contains
 
     blocks = dim3(self%nx_loc/SZ, self%ny_loc/SZ, self%nz_loc)
     threads = dim3(SZ, SZ, 1)
-    call sum_yintox<<<blocks, threads>>>(u_d, u_y_d, self%nz_loc)
+    call sum_yintox<<<blocks, threads>>>(u_d, u_y_d, self%nz_loc) !&
 
   end subroutine sum_yintox_cuda
 
@@ -556,7 +556,7 @@ contains
 
     blocks = dim3(self%nx_loc, self%ny_loc/SZ, 1)
     threads = dim3(SZ, 1, 1)
-    call sum_zintox<<<blocks, threads>>>(u_d, u_z_d, self%nz_loc)
+    call sum_zintox<<<blocks, threads>>>(u_d, u_z_d, self%nz_loc) !&
 
   end subroutine sum_zintox_cuda
 
@@ -579,7 +579,7 @@ contains
     nx = size(x_d, dim=2)
     blocks = dim3(size(x_d, dim=3), 1, 1)
     threads = dim3(SZ, 1, 1)
-    call axpby<<<blocks, threads>>>(nx, a, x_d, b, y_d)
+    call axpby<<<blocks, threads>>>(nx, a, x_d, b, y_d) !&
 
   end subroutine vecadd_cuda
 
@@ -603,7 +603,7 @@ contains
     n = size(x_d, dim=2)
     blocks = dim3(size(x_d, dim=3), 1, 1)
     threads = dim3(SZ, 1, 1)
-    call scalar_product<<<blocks, threads>>>(sum_d, x_d, y_d, n)
+    call scalar_product<<<blocks, threads>>>(sum_d, x_d, y_d, n) !&
 
     s = sum_d
 
@@ -625,7 +625,7 @@ contains
 
     blocks = dim3(size(u_dev, dim=3), 1, 1)
     threads = dim3(SZ, 1, 1)
-    call buffer_copy<<<blocks, threads>>>(u_send_s_dev, u_send_e_dev, &
+    call buffer_copy<<<blocks, threads>>>(u_send_s_dev, u_send_e_dev, & !&
                                           u_dev, n, n_halo)
 
   end subroutine copy_into_buffers

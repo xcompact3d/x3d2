@@ -37,7 +37,7 @@ contains
 
     n_data = SZ*1*blocks%x
 
-    call der_univ_dist<<<blocks, threads>>>( &
+    call der_univ_dist<<<blocks, threads>>>( & !&
       du, du_send_s, du_send_e, u, u_recv_s, u_recv_e, &
       tdsops%coeffs_s_dev, tdsops%coeffs_e_dev, tdsops%coeffs_dev, &
       tdsops%n, tdsops%dist_fw_dev, tdsops%dist_bw_dev, tdsops%dist_af_dev &
@@ -47,7 +47,7 @@ contains
     call sendrecv_fields(du_recv_s, du_recv_e, du_send_s, du_send_e, &
                          n_data, nproc, pprev, pnext)
 
-    call der_univ_subs<<<blocks, threads>>>( &
+    call der_univ_subs<<<blocks, threads>>>( & !&
       du, du_recv_s, du_recv_e, &
       tdsops%n, tdsops%dist_sa_dev, tdsops%dist_sc_dev &
       )
@@ -87,7 +87,7 @@ contains
 
     n_data = SZ*1*blocks%x
 
-    call transeq_3fused_dist<<<blocks, threads>>>( &
+    call transeq_3fused_dist<<<blocks, threads>>>( & !&
       du, dud, d2u, &
       du_send_s, du_send_e, &
       dud_send_s, dud_send_e, &
@@ -109,7 +109,7 @@ contains
       n_data, nproc, pprev, pnext &
       )
 
-    call transeq_3fused_subs<<<blocks, threads>>>( &
+    call transeq_3fused_subs<<<blocks, threads>>>( & !&
       r_u, v, du, dud, d2u, &
       du_recv_s, du_recv_e, &
       dud_recv_s, dud_recv_e, &
