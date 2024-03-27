@@ -195,16 +195,25 @@ contains
     ! TODO: don't hardcode n_halo
     n_halo = 4
 
-      call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, dirps%n, dirps%n_blocks)
-      call copy_into_buffers(self%v_send_s, self%v_send_e, v%data, dirps%n, dirps%n_blocks)
-      call copy_into_buffers(self%w_send_s, self%w_send_e, w%data, dirps%n, dirps%n_blocks)
+    call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
+                           dirps%n, dirps%n_blocks)
+    call copy_into_buffers(self%v_send_s, self%v_send_e, v%data, &
+                           dirps%n, dirps%n_blocks)
+    call copy_into_buffers(self%w_send_s, self%w_send_e, w%data, &
+                           dirps%n, dirps%n_blocks)
 
-      call sendrecv_fields(self%u_recv_s, self%u_recv_e, self%u_send_s, self%u_send_e, &
-               SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext)
-      call sendrecv_fields(self%v_recv_s, self%v_recv_e, self%v_send_s, self%v_send_e, &
-               SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext)
-      call sendrecv_fields(self%w_recv_s, self%w_recv_e, self%w_send_s, self%w_send_e, &
-               SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext)
+    call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
+                         self%u_send_s, self%u_send_e, &
+                         SZ*n_halo*dirps%n_blocks, &
+                         dirps%nproc, dirps%pprev, dirps%pnext)
+    call sendrecv_fields(self%v_recv_s, self%v_recv_e, &
+                         self%v_send_s, self%v_send_e, &
+                         SZ*n_halo*dirps%n_blocks, &
+                         dirps%nproc, dirps%pprev, dirps%pnext)
+    call sendrecv_fields(self%w_recv_s, self%w_recv_e, &
+                         self%w_send_s, self%w_send_e, &
+                         SZ*n_halo*dirps%n_blocks, &
+                         dirps%nproc, dirps%pprev, dirps%pnext)
 
   end subroutine transeq_halo_exchange
 
@@ -276,16 +285,20 @@ contains
 
     ! TODO: don't hardcode n_halo
     n_halo = 4
-      call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, dirps%n, dirps%n_blocks)
+    call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
+                           dirps%n, dirps%n_blocks)
 
     ! halo exchange
-      call sendrecv_fields(self%u_recv_s, self%u_recv_e, self%u_send_s, self%u_send_e, &
-               SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext)
+    call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
+                         self%u_send_s, self%u_send_e, &
+                         SZ*n_halo*dirps%n_blocks, &
+                         dirps%nproc, dirps%pprev, dirps%pnext)
 
     call exec_dist_tds_compact( &
-         du%data, u%data, self%u_recv_s, self%u_recv_e, self%du_send_s, self%du_send_e, &
-      self%du_recv_s, self%du_recv_e, &
-      tdsops, dirps%nproc, dirps%pprev, dirps%pnext, dirps%n_blocks)
+      du%data, u%data, self%u_recv_s, self%u_recv_e, &
+      self%du_send_s, self%du_send_e, self%du_recv_s, self%du_recv_e, &
+      tdsops, dirps%nproc, dirps%pprev, dirps%pnext, dirps%n_blocks &
+      )
 
   end subroutine tds_solve_dist
 
@@ -329,8 +342,10 @@ contains
     do k = 1, ndir_groups
       do j = 1, ndir_loc
         do i = 1, SZ
-          call get_index_reordering(out_i, out_j, out_k, i, j, k, direction, &
-                               SZ, self%xdirps%n, self%ydirps%n, self%zdirps%n)
+          call get_index_reordering( &
+            out_i, out_j, out_k, i, j, k, direction, &
+            SZ, self%xdirps%n, self%ydirps%n, self%zdirps%n &
+            )
           u_%data(out_i, out_j, out_k) = u%data(i, j, k)
         end do
       end do

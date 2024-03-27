@@ -112,15 +112,16 @@ contains
       call der_univ_dist( &
         du(:, :, k), du_send_s(:, :, k), du_send_e(:, :, k), u(:, :, k), &
         u_recv_s(:, :, k), u_recv_e(:, :, k), &
-       tdsops_du%coeffs_s, tdsops_du%coeffs_e, tdsops_du%coeffs, tdsops_du%n, &
-        tdsops_du%dist_fw, tdsops_du%dist_bw, tdsops_du%dist_af &
+        tdsops_du%coeffs_s, tdsops_du%coeffs_e, tdsops_du%coeffs, &
+        tdsops_du%n, tdsops_du%dist_fw, tdsops_du%dist_bw, tdsops_du%dist_af &
         )
 
       call der_univ_dist( &
         d2u(:, :, k), d2u_send_s(:, :, k), d2u_send_e(:, :, k), u(:, :, k), &
         u_recv_s(:, :, k), u_recv_e(:, :, k), &
-   tdsops_d2u%coeffs_s, tdsops_d2u%coeffs_e, tdsops_d2u%coeffs, tdsops_d2u%n, &
-        tdsops_d2u%dist_fw, tdsops_d2u%dist_bw, tdsops_d2u%dist_af &
+        tdsops_d2u%coeffs_s, tdsops_d2u%coeffs_e, tdsops_d2u%coeffs, &
+        tdsops_d2u%n, tdsops_d2u%dist_fw, tdsops_d2u%dist_bw, &
+        tdsops_d2u%dist_af &
         )
 
       ! Handle dud by locally generating u*v
@@ -144,8 +145,9 @@ contains
       call der_univ_dist( &
         dud(:, :, k), dud_send_s(:, :, k), dud_send_e(:, :, k), ud(:, :), &
         ud_recv_s(:, :), ud_recv_e(:, :), &
-   tdsops_dud%coeffs_s, tdsops_dud%coeffs_e, tdsops_dud%coeffs, tdsops_dud%n, &
-        tdsops_dud%dist_fw, tdsops_dud%dist_bw, tdsops_dud%dist_af &
+        tdsops_dud%coeffs_s, tdsops_dud%coeffs_e, tdsops_dud%coeffs, &
+        tdsops_dud%n, tdsops_dud%dist_fw, tdsops_dud%dist_bw, &
+        tdsops_dud%dist_af &
         )
 
     end do
@@ -176,7 +178,8 @@ contains
       do j = 1, n
         !$omp simd
         do i = 1, SZ
-               rhs(i, j, k) = -0.5_dp*(v(i, j, k)*du(i, j, k) + dud(i, j, k)) + nu*d2u(i, j, k)
+          rhs(i, j, k) = -0.5_dp*(v(i, j, k)*du(i, j, k) + dud(i, j, k)) &
+                         + nu*d2u(i, j, k)
         end do
         !$omp end simd
       end do

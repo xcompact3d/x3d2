@@ -297,8 +297,9 @@ contains
       call sendrecv_fields(u_recv_s, u_recv_e, u_send_s, u_send_e, &
                            SZ*n_halo*n_block, nproc, pprev, pnext)
 
-      call exec_dist_tds_compact(du, u, u_recv_s, u_recv_e, send_s, send_e, &
-                          recv_s, recv_e, tdsops, nproc, pprev, pnext, n_block)
+      call exec_dist_tds_compact(du, u, u_recv_s, u_recv_e, &
+                                 send_s, send_e, recv_s, recv_e, &
+                                 tdsops, nproc, pprev, pnext, n_block)
 
     end do
   end subroutine run_kernel

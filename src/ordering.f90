@@ -10,7 +10,8 @@ contains
    !!  This set of functions converts indices from this application storage (_dir) to cartesian indices (_ijk)
    !!
 
-   pure subroutine get_index_ijk(i, j, k, dir_i, dir_j, dir_k, dir, SZ, nx_loc, ny_loc, nz_loc)
+  pure subroutine get_index_ijk(i, j, k, dir_i, dir_j, dir_k, dir, &
+                                SZ, nx_loc, ny_loc, nz_loc)
       !! Get cartesian index from application storage directional one
     integer, intent(out) :: i, j, k                   ! cartesian indices
     integer, intent(in) :: dir_i, dir_j, dir_k        ! application storage indices
@@ -34,7 +35,8 @@ contains
 
   end subroutine get_index_ijk
 
-   pure subroutine get_index_dir(dir_i, dir_j, dir_k, i, j, k, dir, SZ, nx_loc, ny_loc, nz_loc)
+  pure subroutine get_index_dir(dir_i, dir_j, dir_k, i, j, k, dir, &
+                                SZ, nx_loc, ny_loc, nz_loc)
       !! Get application storage directional index from cartesian index
     integer, intent(out) :: dir_i, dir_j, dir_k        ! application storage indices
     integer, intent(in) :: i, j, k                     ! cartesian indices
@@ -58,7 +60,8 @@ contains
 
   end subroutine get_index_dir
 
-   pure subroutine get_index_reordering(out_i, out_j, out_k, in_i, in_j, in_k, reorder_dir, SZ, nx_loc, ny_loc, nz_loc)
+  pure subroutine get_index_reordering(out_i, out_j, out_k, in_i, in_j, in_k, &
+                                       reorder_dir, SZ, nx_loc, ny_loc, nz_loc)
       !! Converts a set of application storage directional index to an other direction.
       !! The two directions are defined by the reorder_dir variable, RDR_X2Y will go from storage in X to Y etc.
     integer, intent(out) :: out_i, out_j, out_k         ! new indices in the application storage
@@ -89,8 +92,10 @@ contains
       dir_out = DIR_Y
     end select
 
-      call get_index_ijk(i, j, k, in_i, in_j, in_k, dir_in, SZ, nx_loc, ny_loc, nz_loc)
-      call get_index_dir(out_i, out_j, out_k, i, j, k, dir_out, SZ, nx_loc, ny_loc, nz_loc)
+    call get_index_ijk(i, j, k, in_i, in_j, in_k, dir_in, &
+                       SZ, nx_loc, ny_loc, nz_loc)
+    call get_index_dir(out_i, out_j, out_k, i, j, k, dir_out, &
+                       SZ, nx_loc, ny_loc, nz_loc)
 
   end subroutine get_index_reordering
 

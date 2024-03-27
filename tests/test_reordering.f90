@@ -85,7 +85,8 @@ program test_reorder
   zdirps%n_blocks = globs%n_groups_z
 
 #ifdef CUDA
-cuda_allocator = cuda_allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, SZ)
+  cuda_allocator = cuda_allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, &
+                                    SZ)
   allocator => cuda_allocator
   print *, 'CUDA allocator instantiated'
 
@@ -115,9 +116,12 @@ cuda_allocator = cuda_allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, SZ)
   do k = 1, zdirps%n
     do j = 1, ydirps%n
       do i = 1, xdirps%n
-                call test_index_reversing(pass_X, i, j, k, DIR_X, SZ, xdirps%n, ydirps%n, zdirps%n)
-                call test_index_reversing(pass_Y, i, j, k, DIR_Y, SZ, xdirps%n, ydirps%n, zdirps%n)
-                call test_index_reversing(pass_Z, i, j, k, DIR_Z, SZ, xdirps%n, ydirps%n, zdirps%n)
+        call test_index_reversing(pass_X, i, j, k, DIR_X, &
+                                  SZ, xdirps%n, ydirps%n, zdirps%n)
+        call test_index_reversing(pass_Y, i, j, k, DIR_Y, &
+                                  SZ, xdirps%n, ydirps%n, zdirps%n)
+        call test_index_reversing(pass_Z, i, j, k, DIR_Z, &
+                                  SZ, xdirps%n, ydirps%n, zdirps%n)
       end do
     end do
   end do
@@ -188,7 +192,8 @@ contains
     integer :: cart_i, cart_j, cart_k ! newly computed indices in the cartesian space
 
     call get_index_dir(dir_i, dir_j, dir_k, i, j, k, dir, SZ, nx, ny, nz)
-        call get_index_ijk(cart_i, cart_j, cart_k, dir_i, dir_j, dir_k, dir, SZ, nx, ny, nz)
+    call get_index_ijk(cart_i, cart_j, cart_k, dir_i, dir_j, dir_k, dir, &
+                       SZ, nx, ny, nz)
 
     if (i /= cart_i .or. j /= cart_j .or. k /= cart_k) then
       pass = .false.
