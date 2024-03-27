@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Computing the spatial contribution to the momentum equation &#8212; x3d2  documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=12dfc556" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=eafc0fe6" />
+    <script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=888ff710"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Memory management" href="allocator.html" />
+    <link rel="prev" title="Internals" href="index.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="computing-the-spatial-contribution-to-the-momentum-equation">
+<h1>Computing the spatial contribution to the momentum equation<a class="headerlink" href="#computing-the-spatial-contribution-to-the-momentum-equation" title="Link to this heading">¶</a></h1>
+<p>The first stage of solving the momentum equation at a given time-step
+<span class="math notranslate nohighlight">\(k\)</span> is to evaluate the spatial contribution</p>
+<div class="math notranslate nohighlight" id="equation-rhs">
+<span class="eqno">(1)<a class="headerlink" href="#equation-rhs" title="Link to this equation">¶</a></span>\[\mathbf{F}^k = - \frac{1}{2}[\nabla (\mathbf{u}^k \otimes \mathbf{u}^k)
++ (\mathbf{u}^k \cdot \nabla) \mathbf{u}^k] + \nu \nabla^2\mathbf{u}^k\]</div>
+<p>This term involves spatial derivatives along the three directions
+<span class="math notranslate nohighlight">\(\hat{\mathbf{x}}\)</span>, <span class="math notranslate nohighlight">\(\hat{\mathbf{y}}\)</span> and
+<span class="math notranslate nohighlight">\(\hat{\mathbf{z}}\)</span>.  In order to reduce the number of
+communications between MPI processes, the computation is performed in
+three stages corresponding to three different data configurations:</p>
+<ul class="simple">
+<li><p>In the x-configuration, the process has access to a data slab
+covering the x-y plane.  This a 1D domain decomposition along the
+<span class="math notranslate nohighlight">\(\hat{\mathbf{z}}\)</span> direction.  Derivatives along
+<span class="math notranslate nohighlight">\(\hat{\mathbf{x}}\)</span> can be computed without communications.</p></li>
+<li><p>In the z-configuration, a process has access to a data slab
+covering the y-z plane.  This a 1D domain decomposition along the
+<span class="math notranslate nohighlight">\(\hat{\mathbf{x}}\)</span> direction.  Derivatives along
+<span class="math notranslate nohighlight">\(\hat{\mathbf{z}}\)</span> can be computed without communications.</p></li>
+<li><p>In the y-configuration, a process has access to a data slab
+covering the x-y plane.  This a 1D domain decomposition along the
+<span class="math notranslate nohighlight">\(\hat{\mathbf{z}}\)</span> direction.  Derivatives along
+<span class="math notranslate nohighlight">\(\hat{\mathbf{y}}\)</span> can be computed without communications.</p></li>
+</ul>
+<p>In the i-configuration, field data (e.g. the x-component of the
+velocity field) is stored in a three-dimensional array of dimension
+<code class="docutils literal notranslate"><span class="pre">dimension(SZ,</span> <span class="pre">N,</span> <span class="pre">M)</span></code> where <code class="docutils literal notranslate"><span class="pre">N</span></code> is the size of the domain in the i
+direction.  This data layout decomposes slab data into <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">*</span> <span class="pre">SZ</span></code> ` 1D
+arrays (called pencils) of size <code class="docutils literal notranslate"><span class="pre">N</span></code>.  Pencils are processed in
+batches of size <code class="docutils literal notranslate"><span class="pre">SZ</span></code> allowing for vectorised operations.</p>
+<p>The algorithm for computing <a class="reference internal" href="#equation-rhs">(1)</a> then becomes:</p>
+<div class="highlight-fortran notranslate"><div class="highlight"><pre><span></span><span class="c">! Instances of type slab_t have access to slab data</span>
+<span class="c">! and can compute derivatives and contributions to</span>
+<span class="c">! momentum equation along a specific direction.</span>
+<span class="k">type</span><span class="p">(</span><span class="n">slab_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">xslab</span><span class="p">,</span><span class="w"> </span><span class="n">yslab</span><span class="p">,</span><span class="w"> </span><span class="n">zslab</span>
+
+<span class="c">! ...</span>
+
+<span class="c">! Perform necesseary communications across processes</span>
+<span class="c">! asynchonously</span>
+<span class="k">call </span><span class="n">async_rotate_x_to_z</span><span class="p">(</span><span class="n">xslab</span><span class="p">,</span><span class="w"> </span><span class="n">z_comm_buffer</span><span class="p">)</span>
+
+<span class="c">! Meanwhile, compute the contribution in the x direction</span>
+<span class="n">x_contrib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x_slab</span><span class="p">%</span><span class="n">transport</span><span class="p">()</span>
+
+<span class="c">! Assuming x to z transfer is done, arrange field data</span>
+<span class="c">! in the correct z-configuration layout and compute</span>
+<span class="c">! z contribution</span>
+<span class="k">call </span><span class="n">from_comms_buffer</span><span class="p">(</span><span class="n">z_comm_buffer</span><span class="p">,</span><span class="w"> </span><span class="n">z_slab</span><span class="p">)</span>
+<span class="n">z_dir_contrib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">z_slab</span><span class="p">%</span><span class="n">transport</span><span class="p">()</span>
+
+<span class="c">! Transfer the result back</span>
+<span class="k">call </span><span class="n">async_rotate_z_to_x</span><span class="p">(</span><span class="n">z_dir_contrib</span><span class="p">,</span><span class="w"> </span><span class="n">x_slab_z</span><span class="p">)</span>
+
+<span class="c">! Meanwhile, switch from x-config to y-config</span>
+<span class="c">! (no communications needed, only data reshuffling)</span>
+<span class="k">call </span><span class="n">rotate_x_to_y</span><span class="p">(</span><span class="n">x_slab</span><span class="p">,</span><span class="w"> </span><span class="n">y_slab</span><span class="p">)</span>
+<span class="n">y_dir_contrib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">yslab</span><span class="p">%</span><span class="n">transport</span><span class="p">()</span>
+
+<span class="n">F</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x_dir_contrib</span><span class="p">%</span><span class="k">data</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">y_dir_contrib</span><span class="p">%</span><span class="k">data</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">z_dir_contrib</span><span class="p">%</span><span class="k">data</span>
+</pre></div>
+</div>
+<section id="the-slab3d-t-type">
+<h2>The <code class="docutils literal notranslate"><span class="pre">slab3d_t</span></code> type<a class="headerlink" href="#the-slab3d-t-type" title="Link to this heading">¶</a></h2>
+<p>Computation of <a class="reference internal" href="#equation-rhs">(1)</a> is supported by instances of the
+<code class="docutils literal notranslate"><span class="pre">slab3d_t</span></code> derived type.  These hold data for the three components
+of a 3D vector in 3D space (thinks <span class="math notranslate nohighlight">\(u_x\)</span>, <span class="math notranslate nohighlight">\(u_y\)</span> and
+<span class="math notranslate nohighlight">\(u_z\)</span>) within a single data slab in the x, y or z-</p>
+<p>The purpose of <code class="docutils literal notranslate"><span class="pre">slab3d_t</span></code> instances is to compute spatial
+derivatives along a given direction referred to as the slab’s primary
+direction.  More precisely, user code is given access to type-bound
+procedures such as <code class="docutils literal notranslate"><span class="pre">transport</span></code> or <code class="docutils literal notranslate"><span class="pre">divergence</span></code> which compute
+contributions to physical quantities coming from spatial derivatives
+in the slab’s primary direction.</p>
+<p>For more details, see the API docs.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">x3d2</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../report_a_bug.html">Report a bug</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Internals</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Computing the spatial contribution to the momentum equation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="allocator.html">Memory management</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../developer/index.html">Contributing to x3d2</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://xcompact3d.github.io/x3d2/api">API reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Internals</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">Internals</a></li>
+      <li>Next: <a href="allocator.html" title="next chapter">Memory management</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023, Xcompact3D team.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.2.6</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="../_sources/internals/momentum_rhs_calculation.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Fortran style guide &#8212; x3d2  documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=12dfc556" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=eafc0fe6" />
+    <script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=888ff710"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Contributing documentation" href="writing_docs.html" />
+    <link rel="prev" title="Contributing guidelines" href="contributing_guidelines.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="fortran-style-guide">
+<h1>Fortran style guide<a class="headerlink" href="#fortran-style-guide" title="Link to this heading">¶</a></h1>
+<section id="basic-formatting">
+<h2>Basic formatting<a class="headerlink" href="#basic-formatting" title="Link to this heading">¶</a></h2>
+<p>Identation, whitespaces and line length are enforced by <cite>fprettify</cite>.
+Project settings are defined in the <cite>.fprettify.ini</cite> located at the
+root of the repository.</p>
+<p>In most cases, developers are expected to install the associated
+pre-commit git hook.  Additionally, it is recommended to configure
+your text editor to run fprettify for you (for instance on saving a
+file).</p>
+<p>If you want to preview changes without overwriting a file, you can do
+so using the <cite>–stdout</cite> option:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>fprettify<span class="w"> </span>--config<span class="w"> </span>.fprettify.ini<span class="w"> </span>--stdout
+</pre></div>
+</div>
+<p>Note: CUDA Fortran chevron syntax is not supported by <cite>fprettify</cite>.
+Thus, we use <cite>!&amp;</cite> to deactivate <cite>fprettify</cite> on lines chevron syntax is
+used.</p>
+<div class="highlight-fortran notranslate"><div class="highlight"><pre><span></span><span class="k">call </span><span class="n">gpu_kernel</span><span class="o">&lt;&lt;&lt;</span><span class="n">blocks</span><span class="p">,</span><span class="w"> </span><span class="n">threads</span><span class="o">&gt;&gt;&gt;</span><span class="p">(</span><span class="n">args</span><span class="p">,</span><span class="w"> </span><span class="p">...)</span><span class="w"> </span><span class="c">!&amp;</span>
+</pre></div>
+</div>
+</section>
+<section id="naming-conventions">
+<h2>Naming conventions<a class="headerlink" href="#naming-conventions" title="Link to this heading">¶</a></h2>
+<p>In the following “symbol” is a catch all phrase for variables,
+procedures, derived types, type components and interfaces.</p>
+<ul class="simple">
+<li><p>Symbols are name using the <cite>snake_case</cite> convention.</p></li>
+<li><p>Variable declared with the <cite>parameter</cite> are named using UPPER CASE
+letters.</p></li>
+<li><p>Symbols should, as much as possible, be named after they meaning
+rather than their mathematical notation (.e.g <cite>velocity_field</cite>
+instead of <cite>u</cite>).</p></li>
+</ul>
+</section>
+<section id="procedure-definitions">
+<h2>Procedure definitions<a class="headerlink" href="#procedure-definitions" title="Link to this heading">¶</a></h2>
+<ul>
+<li><p>Procedure prototypes spanning more than 79 characters should be split
+before the first dummy argument is defined, after the opening
+parenthese.  If the list of dummy arguments spans more than 79
+characters each argument is defined on it own line.</p>
+<div class="highlight-fortran notranslate"><div class="highlight"><pre><span></span><span class="k">subroutine </span><span class="n">my_long_subroutine</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">   </span><span class="n">argument1</span><span class="p">,</span><span class="w"> </span><span class="n">argument3</span><span class="p">,</span><span class="w"> </span><span class="n">argument4</span><span class="p">,</span><span class="w"> </span><span class="n">argument5</span><span class="p">,</span><span class="w"> </span><span class="n">argument5</span><span class="p">,</span><span class="w"> </span><span class="n">argument6</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">   </span><span class="p">)</span>
+
+<span class="k">subroutine </span><span class="n">my_very_long_subroutine</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">   </span><span class="n">argument1</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">   </span><span class="n">argument2</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">   </span><span class="n">argument3</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">   </span><span class="n">argument4</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">   </span><span class="n">argument5</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">   </span><span class="n">argument6</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">   </span><span class="n">argument7</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">   </span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+<li><p>Function prototypes indicate the return object type unless the
+return object is an array.</p></li>
+<li><p>Functions are always defined with the <cite>pure</cite> prefix.  A procedure
+with side effects must be a <cite>subroutine</cite>.</p></li>
+</ul>
+</section>
+<section id="modules">
+<h2>Modules<a class="headerlink" href="#modules" title="Link to this heading">¶</a></h2>
+<ul>
+<li><p>Module names end with the <cite>_m</cite> suffix. Examples:
+<cite>module allocator_m</cite>, <cite>use allocator_m, only: …</cite>.</p></li>
+<li><p>All module components are <cite>private</cite> by default.</p></li>
+<li><p>The module components are always acessed through the <cite>only</cite> keyword:</p>
+<div class="highlight-fortran notranslate"><div class="highlight"><pre><span></span><span class="k">module </span><span class="n">a_module_m</span>
+<span class="w">   </span><span class="c">! Non compliant</span>
+<span class="w">   </span><span class="k">use </span><span class="n">stencil_m</span>
+<span class="w">   </span><span class="c">! Compliant</span>
+<span class="w">   </span><span class="k">use </span><span class="n">stencil_m</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">stencil_t</span>
+</pre></div>
+</div>
+</li>
+</ul>
+</section>
+<section id="derived-type-definitions">
+<h2>Derived type definitions<a class="headerlink" href="#derived-type-definitions" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Derived type names end with the <cite>_t</cite> suffix. Examples:
+<cite>allocator_t</cite>, <cite>type(stencil_t) :: s</cite>.</p></li>
+<li><p>The <cite>contains</cite> keyword is omitted is the type does not define any
+type-bound procedures.</p></li>
+<li><p>All type components are <cite>private</cite> by default.</p></li>
+</ul>
+</section>
+<section id="custom-structure-constructors">
+<h2>Custom structure constructors<a class="headerlink" href="#custom-structure-constructors" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Are named like <cite>create_&lt;type_root_name&gt;[_&lt;suffix&gt;]</cite></p></li>
+<li><p>Are declared with the <cite>private</cite> attribute</p></li>
+<li><p>Are defined at the top of the module’s <cite>contains</cite> block.</p></li>
+</ul>
+<p>Example</p>
+<div class="highlight-fortran notranslate"><div class="highlight"><pre><span></span><span class="k">module </span><span class="n">square_module</span>
+
+<span class="w">   </span><span class="k">type</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">square_t</span>
+<span class="w">      </span><span class="kt">real</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">size</span>
+<span class="w">      </span><span class="kt">character</span><span class="p">(:),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">color</span>
+<span class="w">   </span><span class="k">end type </span><span class="n">square_t</span>
+
+<span class="w">   </span><span class="k">interface </span><span class="n">square_t</span>
+<span class="w">      </span><span class="k">module procedure </span><span class="n">create_square_from_square</span>
+<span class="w">      </span><span class="k">module procedure </span><span class="n">create_square_default_color</span>
+<span class="w">   </span><span class="k">end interface </span><span class="n">square_t</span>
+
+<span class="k">contains</span>
+
+<span class="k">   type</span><span class="p">(</span><span class="n">square_t</span><span class="p">)</span><span class="w"> </span><span class="k">function </span><span class="n">create_square_from_square</span><span class="p">(</span><span class="n">sq_in</span><span class="p">)</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">square</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sq_in</span>
+<span class="w">      </span><span class="c">! ...</span>
+<span class="w">   </span><span class="k">end function </span><span class="n">create_square_from_square</span>
+
+<span class="w">   </span><span class="k">type</span><span class="p">(</span><span class="n">square_t</span><span class="p">)</span><span class="w"> </span><span class="k">function </span><span class="n">create_square_default_color</span><span class="p">(</span><span class="n">sq_size</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sq_size</span>
+<span class="w">      </span><span class="c">! ...</span>
+<span class="w">   </span><span class="k">end function </span><span class="n">create_square_default_color</span>
+</pre></div>
+</div>
+</section>
+<section id="in-code-documentation">
+<span id="in-code-docs"></span><h2>In-code documentation<a class="headerlink" href="#in-code-documentation" title="Link to this heading">¶</a></h2>
+<p>The body of modules, public types, public procedures and public
+type-bound methods MUST be preceded of one or more documentation
+paragraphs.  Optionally, the body of private symbols MAY be
+preceded by documentation paragraph.</p>
+<p>Procedure dummy arguments, interface components and type-bound
+procedures declarations MAY be documented using an inline comment
+either on the same line directly following the statement (using the
+docmark <cite>!!</cite>) or on the line directly above the statement (using the
+predocmark <cite>!&gt;</cite>).</p>
+<p>x3d2 uses <a class="reference external" href="https://forddocs.readthedocs.io/en/latest/">ford</a> to
+extract in-code documentation and generate HTML pages.  The syntax for
+in-code documentation follows ford’s syntax for comments. See
+<a class="reference external" href="https://forddocs.readthedocs.io/en/latest/user_guide/writing_documentation.html">(ford)Writing documentation</a></p>
+<div class="highlight-fortran notranslate"><div class="highlight"><pre><span></span><span class="k">subroutine </span><span class="n">add</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">)</span>
+<span class="w">    </span><span class="c">!! This is the first paragraph of the procedures</span>
+<span class="w">    </span><span class="c">!! documentation.  Note that it starts with TWO !.</span>
+<span class="w">    </span><span class="kt">real</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="c">!! Optional documentation for dummy argument.</span>
+<span class="w">    </span><span class="kt">real</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="c">!! The result of a + b</span>
+
+<span class="w">    </span><span class="c">! The line below is a regular comment.</span>
+<span class="w">    </span><span class="c">! Make use of the well-known the addition algorithm.</span>
+<span class="w">    </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b</span>
+<span class="k">end subroutine</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">x3d2</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../report_a_bug.html">Report a bug</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../internals/index.html">Internals</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Contributing to x3d2</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="contribution_workflow.html">Overview of the contribution process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tooling.html">Required tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dev_environment.html">Setting up for development</a></li>
+<li class="toctree-l2"><a class="reference internal" href="build.html">Building and running the unit tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing_guidelines.html">Contributing guidelines</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Fortran style guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="writing_docs.html">Contributing documentation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference external" href="https://xcompact3d.github.io/x3d2/api">API reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Contributing to x3d2</a><ul>
+      <li>Previous: <a href="contributing_guidelines.html" title="previous chapter">Contributing guidelines</a></li>
+      <li>Next: <a href="writing_docs.html" title="next chapter">Contributing documentation</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023, Xcompact3D team.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.2.6</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="../_sources/developer/style.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

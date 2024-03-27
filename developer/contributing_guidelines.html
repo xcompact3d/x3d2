@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Contributing guidelines &#8212; x3d2  documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=12dfc556" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=eafc0fe6" />
+    <script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=888ff710"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Fortran style guide" href="style.html" />
+    <link rel="prev" title="Building and running the unit tests" href="build.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="contributing-guidelines">
+<h1>Contributing guidelines<a class="headerlink" href="#contributing-guidelines" title="Link to this heading">¶</a></h1>
+<p>x3d2 is a collaborative project, open to all.  In order to enable
+effective collaboration, however, we ask that your contribution(s)
+comply with a set of ground rules.</p>
+<section id="in-a-nutshell">
+<h2>In a nutshell<a class="headerlink" href="#in-a-nutshell" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>For any contribution not covered by an existing issue, <strong>open an issue
+first</strong>.</p></li>
+<li><p>Respect the commit format.  (<a class="reference internal" href="dev_environment.html#devenv-setup"><span class="std std-ref">Install the git hook!</span></a>).</p></li>
+<li><p>Only commit changes formatted with <cite>fprettify</cite>, using the project’s
+configuration.  (<a class="reference internal" href="dev_environment.html#devenv-setup"><span class="std std-ref">Install the git hook!</span></a>).</p></li>
+<li><p>Strive to contribute <strong>small and focused Pull Requests with detailed
+descriptions</strong>.</p></li>
+<li><p>Add (a) unit test(s) covering a new feature, or (a) regression
+test(s) for a bug fix.</p></li>
+</ul>
+</section>
+<section id="issues-first">
+<h2>Issues first<a class="headerlink" href="#issues-first" title="Link to this heading">¶</a></h2>
+<p>Issues are opened as soon as possible, particularly before any
+significant implementation work is carried out or any pull request is
+opened.  Starting with issues greatly facilitates collaboration:</p>
+<ul class="simple">
+<li><p>It encourages developers to write (and therefore think) about the
+work they plan to achieve.</p></li>
+<li><p>It helps maintaining a shared and up to date record of current work
+(known bugs, current developments).</p></li>
+<li><p>It helps coordination between developers by sign-posting who is
+working on what, as well as what is not being worked on.</p></li>
+<li><p>It allows discussions between developers on how to best fix the
+issue or implement the described improvement(s).</p></li>
+</ul>
+<p>This doesn’t mean that you should forbid yourself from exploratory
+prototyping until an issue has been opened. In fact, prototyping is
+often helpful to write the content of the issue.  On the other hand,
+do open an issue before commiting to a particular design or
+implementation.</p>
+</section>
+<section id="format-commits-accordingly">
+<span id="commit-formatting"></span><h2>Format commits accordingly<a class="headerlink" href="#format-commits-accordingly" title="Link to this heading">¶</a></h2>
+<p>Commits messages are formatted according to the conventional commits
+specification (v1.0.0).  Commit messages must respect the following
+structure:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="nb">type</span><span class="o">&gt;</span><span class="p">[</span><span class="n">optional</span> <span class="n">scope</span><span class="p">]:</span> <span class="o">&lt;</span><span class="n">description</span><span class="o">&gt;</span>
+
+<span class="p">[</span><span class="n">optional</span> <span class="n">body</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>where <cite>&lt;type&gt;</cite> is one of <cite>fix</cite>, <cite>feat</cite>, <cite>build</cite>, <cite>chore</cite>, <cite>ci</cite>,
+<cite>docs</cite>, <cite>style</cite>, <cite>refactor</cite>, <cite>perf</cite> or <cite>test</cite>.</p>
+<p>Breaking changes are specified by adding an <cite>!</cite> before the colon <cite>:</cite>. Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>fix(allocator)!: Return 1D arrays as data blocks
+
+This is a breaking change because e.g. the allocator used to
+return 3D data blocks.
+</pre></div>
+</div>
+<p>In addition, commit message header lines must not contain more than 68
+characters.  Lines in the commit message body cannot exceed 72
+characters.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Commit messages in x3d2 do not use footers as specified in the
+conventional commit specs.  You are welcome to use footers in your
+commit messages, but know that they hold no special place in the
+commit format policy.</p>
+</div>
+<p>A Git hook is provided to prevent you from registering non-conformant
+commit messages. See setting up your development environment.</p>
+</section>
+<section id="fortran-code-formatting">
+<h2>Fortran code formatting<a class="headerlink" href="#fortran-code-formatting" title="Link to this heading">¶</a></h2>
+<p>Code formatting dictates things like indentation levels, number of
+whitespace between operators or use upper/lowercase characters for
+keywords.</p>
+<p>Because having to learn such project specific rules isn’t terribily
+interesting, all Fortran code in x3d2 is formatted automatically using
+<a class="reference external" href="https://github.com/pseewald/fprettify">fprettify</a>. Some non-default
+configuraiton options are specified in the project’s <cite>.fprettify.ini</cite>
+file.</p>
+<p>Note that a a GitHub pull request will not be merged until all the
+associated code addtions conform to the formatting.</p>
+<p>The best way to deal with code formatting is to <strong>automate it and
+forget about it</strong>.  To do so, make sure you install the pre-commit
+hook into your local git repository, see .  This way, <cite>fprettify</cite> will
+run automatically each time you commit new changes.</p>
+</section>
+<section id="pull-requests-and-code-review">
+<h2>Pull requests and code review<a class="headerlink" href="#pull-requests-and-code-review" title="Link to this heading">¶</a></h2>
+<p>Code review is a fondamental part of x3d2’s collaborative development.
+Particularly, GitHub pull requests must be approved by at least two
+maintainers before the associated commits are merged.  Code review allows for</p>
+<ul class="simple">
+<li><p>Gatekeeping, by preventing the integration of changes that are not
+up to standards, introducing bugs or potentially disruptive to
+ongoing and/or future developments.</p></li>
+<li><p>Knowledge transfer, by making sure that at least a couple of project
+developers have an opportunity to study and understand the code to
+be integrated.</p></li>
+<li><p>Training, by giving new contributors opportunities to get feedback
+and help, as well as chances to review contributions from more
+experienced developers.</p></li>
+</ul>
+<p>Poor quality pull requests can however turn the code review process
+into a bottleneck or worse, lead to poor quality reviews. In order to
+facilitate the code review process, pull request must be both
+<strong>focused and small</strong> and have a <strong>detailed description</strong>.</p>
+<ol class="arabic">
+<li><p>Pull requests should aim to merge a be coherent body of changes,
+targeting a single aspect of an issue.  It is much prefereable to
+fix an issue through multiple pull requests than one big
+contribution.</p></li>
+<li><p>Pull requests should aim to merge a limited number of changes.  As
+a rule of thumb, pull requests usually become much harder to review
+beyond 10 changes.</p></li>
+<li><p>Pull requests should come with a detailed description containing:</p>
+<ul class="simple">
+<li><p>One or two sentences summing up the motivation for the changes.</p></li>
+<li><p>A link to the addressed issue(s).</p></li>
+<li><p>A summary of the changes.</p></li>
+<li><p>A technical description of the changes.</p></li>
+</ul>
+<p>The description is important for archiving purposes, but most
+importlantl in order to guide the work of reviewers.</p>
+</li>
+</ol>
+<p>Note that the points above are guidelines as opposed to hard and fast
+rules.  For a given pull request, the amount of work required to
+review the changes will vary across reviewers.  Generally, however,
+please <strong>empathise with your fellow contributors who are going to spend
+time reviewing your code</strong>.  Aim to make their work easier, and they
+will do the same for you.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">x3d2</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../report_a_bug.html">Report a bug</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../internals/index.html">Internals</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Contributing to x3d2</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="contribution_workflow.html">Overview of the contribution process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tooling.html">Required tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dev_environment.html">Setting up for development</a></li>
+<li class="toctree-l2"><a class="reference internal" href="build.html">Building and running the unit tests</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Contributing guidelines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style.html">Fortran style guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="writing_docs.html">Contributing documentation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference external" href="https://xcompact3d.github.io/x3d2/api">API reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Contributing to x3d2</a><ul>
+      <li>Previous: <a href="build.html" title="previous chapter">Building and running the unit tests</a></li>
+      <li>Next: <a href="style.html" title="next chapter">Fortran style guide</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023, Xcompact3D team.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.2.6</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="../_sources/developer/contributing_guidelines.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
