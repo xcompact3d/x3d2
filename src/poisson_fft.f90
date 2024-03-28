@@ -6,8 +6,7 @@ module m_poisson_fft
   implicit none
 
   type, abstract :: poisson_fft_t
-      !! FFT based Poisson solver
-      !! It can only handle 1D decompositions along z direction.
+    !! FFT based Poisson solver
     integer :: nx, ny, nz
     complex(dp), allocatable, dimension(:, :, :) :: waves
     complex(dp), allocatable, dimension(:) :: ax, bx, ay, by, az, bz

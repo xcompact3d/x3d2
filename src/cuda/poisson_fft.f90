@@ -8,9 +8,7 @@ module m_cuda_poisson_fft
   use m_tdsops, only: dirps_t
 
   use m_cuda_allocator, only: cuda_field_t
-  use m_cuda_complex, only: reorder_cmplx_x2y_T, reorder_cmplx_y2x_T, &
-                            reorder_cmplx_y2z_T, reorder_cmplx_z2y_T, &
-                            process_spectral_div_u
+  use m_cuda_complex, only: process_spectral_div_u
 
   implicit none
 
