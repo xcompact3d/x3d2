@@ -48,12 +48,11 @@ module m_poisson_fft
 
 contains
 
-  subroutine base_init(self, xdirps, ydirps, zdirps, sz)
+  subroutine base_init(self, xdirps, ydirps, zdirps)
     implicit none
 
     class(poisson_fft_t) :: self
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
-    integer, intent(in) :: sz
 
     self%nx = xdirps%n; self%ny = ydirps%n; self%nz = zdirps%n
 
@@ -65,17 +64,16 @@ contains
     allocate (self%waves(self%nz/2 + 1, self%ny, self%nx))
 
     ! waves_set requires some of the preprocessed tdsops variables.
-    call self%waves_set(xdirps, ydirps, zdirps, sz)
+    call self%waves_set(xdirps, ydirps, zdirps)
 
   end subroutine base_init
 
-  subroutine waves_set(self, xdirps, ydirps, zdirps, sz)
+  subroutine waves_set(self, xdirps, ydirps, zdirps)
     !! Ref. JCP 228 (2009), 5989–6015, Sec 4
     implicit none
 
     class(poisson_fft_t) :: self
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
-    integer, intent(in) :: sz
 
     complex(dp), allocatable, dimension(:) :: xkx, xk2, yky, yk2, zkz, zk2, &
                                               exs, eys, ezs
