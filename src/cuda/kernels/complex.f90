@@ -20,46 +20,43 @@ contains
     integer, value, intent(in) :: nx, ny, nz
 
     ! Local variables
-    integer :: i, j, b, ix, iy, iz
+    integer :: i, j, k
     real(dp) :: tmp_r, tmp_c, div_r, div_c
 
     i = threadIdx%x
-    b = blockIdx%x
+    k = blockIdx%x
 
-    do j = 1, nx
+    do j = 1, ny
       ! normalisation
-      div_r = real(div(i, j, b), kind=dp)/(nx*ny*nz)
-      div_c = aimag(div(i, j, b))/(nx*ny*nz)
-
-      ! get the indices for x, y, z directions
-      ix = j; iy = i + (b - 1)/(nz/2 + 1)*SZ; iz = mod(b - 1, nz/2 + 1) + 1
+      div_r = real(div(k, j, i), kind=dp)/(nx*ny*nz)
+      div_c = aimag(div(k, j, i))/(nx*ny*nz)
 
       ! post-process forward
       ! post-process in z
       tmp_r = div_r
       tmp_c = div_c
-      div_r = tmp_r*bz(iz) + tmp_c*az(iz)
-      div_c = tmp_c*bz(iz) - tmp_r*az(iz)
+      div_r = tmp_r*bz(k) + tmp_c*az(k)
+      div_c = tmp_c*bz(k) - tmp_r*az(k)
 
       ! post-process in y
       tmp_r = div_r
       tmp_c = div_c
-      div_r = tmp_r*by(iy) + tmp_c*ay(iy)
-      div_c = tmp_c*by(iy) - tmp_r*ay(iy)
-      if (iy > ny/2 + 1) div_r = -div_r
-      if (iy > ny/2 + 1) div_c = -div_c
+      div_r = tmp_r*by(j) + tmp_c*ay(j)
+      div_c = tmp_c*by(j) - tmp_r*ay(j)
+      if (j > ny/2 + 1) div_r = -div_r
+      if (j > ny/2 + 1) div_c = -div_c
 
       ! post-process in x
       tmp_r = div_r
       tmp_c = div_c
-      div_r = tmp_r*bx(ix) + tmp_c*ax(ix)
-      div_c = tmp_c*bx(ix) - tmp_r*ax(ix)
-      if (ix > nx/2 + 1) div_r = -div_r
-      if (ix > nx/2 + 1) div_c = -div_c
+      div_r = tmp_r*bx(i) + tmp_c*ax(i)
+      div_c = tmp_c*bx(i) - tmp_r*ax(i)
+      if (i > nx/2 + 1) div_r = -div_r
+      if (i > nx/2 + 1) div_c = -div_c
 
       ! Solve Poisson
-      tmp_r = real(waves(i, j, b), kind=dp)
-      tmp_c = aimag(waves(i, j, b))
+      tmp_r = real(waves(k, j, i), kind=dp)
+      tmp_c = aimag(waves(k, j, i))
       if ((tmp_r < 1.e-16_dp) .or. (tmp_c < 1.e-16_dp)) then
         div_r = 0._dp; div_c = 0._dp
       else
@@ -71,27 +68,27 @@ contains
       ! post-process in z
       tmp_r = div_r
       tmp_c = div_c
-      div_r = tmp_r*bz(iz) - tmp_c*az(iz)
-      div_c = -tmp_c*bz(iz) - tmp_r*az(iz)
+      div_r = tmp_r*bz(k) - tmp_c*az(k)
+      div_c = -tmp_c*bz(k) - tmp_r*az(k)
 
       ! post-process in y
       tmp_r = div_r
       tmp_c = div_c
-      div_r = tmp_r*by(iy) + tmp_c*ay(iy)
-      div_c = tmp_c*by(iy) - tmp_r*ay(iy)
-      if (iy > ny/2 + 1) div_r = -div_r
-      if (iy > ny/2 + 1) div_c = -div_c
+      div_r = tmp_r*by(j) + tmp_c*ay(j)
+      div_c = tmp_c*by(j) - tmp_r*ay(j)
+      if (j > ny/2 + 1) div_r = -div_r
+      if (j > ny/2 + 1) div_c = -div_c
 
       ! post-process in x
       tmp_r = div_r
       tmp_c = div_c
-      div_r = tmp_r*bx(ix) + tmp_c*ax(ix)
-      div_c = -tmp_c*bx(ix) + tmp_r*ax(ix)
-      if (ix > nx/2 + 1) div_r = -div_r
-      if (ix > nx/2 + 1) div_c = -div_c
+      div_r = tmp_r*bx(i) + tmp_c*ax(i)
+      div_c = -tmp_c*bx(i) + tmp_r*ax(i)
+      if (i > nx/2 + 1) div_r = -div_r
+      if (i > nx/2 + 1) div_c = -div_c
 
       ! update the entry
-      div(i, j, b) = cmplx(div_r, div_c, kind=dp)
+      div(k, j, i) = cmplx(div_r, div_c, kind=dp)
     end do
 
   end subroutine process_spectral_div_u

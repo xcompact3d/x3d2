@@ -58,10 +58,11 @@ contains
     self%nx = xdirps%n; self%ny = ydirps%n; self%nz = zdirps%n
 
     allocate (self%ax(self%nx), self%bx(self%nx))
-    allocate (self%ay(self%nx), self%by(self%nx))
-    allocate (self%az(self%nx), self%bz(self%nx))
+    allocate (self%ay(self%ny), self%by(self%ny))
+    allocate (self%az(self%nz), self%bz(self%nz))
 
-    allocate (self%waves(sz, self%nx, (self%ny*(self%nz/2 + 1))/sz))
+    ! cuFFT 3D transform halves the first index.
+    allocate (self%waves(self%nz/2 + 1, self%ny, self%nx))
 
     ! waves_set requires some of the preprocessed tdsops variables.
     call self%waves_set(xdirps, ydirps, zdirps, sz)
@@ -69,7 +70,7 @@ contains
   end subroutine base_init
 
   subroutine waves_set(self, xdirps, ydirps, zdirps, sz)
-      !! Ref. JCP 228 (2009), 5989–6015, Sec 4
+    !! Ref. JCP 228 (2009), 5989–6015, Sec 4
     implicit none
 
     class(poisson_fft_t) :: self
@@ -83,7 +84,7 @@ contains
     real(dp) :: w, wp, rlexs, rleys, rlezs, xtt, ytt, ztt, xt1, yt1, zt1
     complex(dp) :: xt2, yt2, zt2, xyzk
 
-    integer :: i, j, ka, kb, ix, iy, iz
+    integer :: i, j, k
 
     nx = xdirps%n; ny = ydirps%n; nz = zdirps%n
 
@@ -156,39 +157,36 @@ contains
 
     print *, 'waves array is correctly set only for a single rank run'
     ! TODO: do loop ranges below are valid only for single rank runs
-    do ka = 1, nz/2 + 1
-      do kb = 1, ny/sz
-        do j = 1, nx
-          do i = 1, sz
-            ix = j; iy = (kb - 1)*sz + i; iz = ka
-            rlexs = real(exs(ix), kind=dp)*xdirps%d
-            rleys = real(eys(iy), kind=dp)*ydirps%d
-            rlezs = real(ezs(iz), kind=dp)*zdirps%d
+    do k = 1, nz/2 + 1
+      do j = 1, ny
+        do i = 1, nx
+          rlexs = real(exs(i), kind=dp)*xdirps%d
+          rleys = real(eys(j), kind=dp)*ydirps%d
+          rlezs = real(ezs(k), kind=dp)*zdirps%d
 
-            xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
-                     + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
-                     + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
-                     + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
-            ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
-                     + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
-                     + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
-                     + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
-            ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
-                     + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
-                     + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
-                     + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
+          xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
+                   + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
+                   + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
+                   + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
+          ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
+                   + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
+                   + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
+                   + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
+          ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
+                   + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
+                   + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
+                   + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
 
-            xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
-            yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
-            zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
+          xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
+          yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
+          zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
 
-            xt2 = xk2(ix)*(((ytt/yt1)*(ztt/zt1))**2)
-            yt2 = yk2(iy)*(((xtt/xt1)*(ztt/zt1))**2)
-            zt2 = zk2(iz)*(((xtt/xt1)*(ytt/yt1))**2)
+          xt2 = xk2(i)*(((ytt/yt1)*(ztt/zt1))**2)
+          yt2 = yk2(j)*(((xtt/xt1)*(ztt/zt1))**2)
+          zt2 = zk2(k)*(((xtt/xt1)*(ytt/yt1))**2)
 
-            xyzk = xt2 + yt2 + zt2
-            self%waves(i, j, ka + (kb - 1)*(nz/2 + 1)) = xyzk
-          end do
+          xyzk = xt2 + yt2 + zt2
+          self%waves(k, j, i) = xyzk
         end do
       end do
     end do
