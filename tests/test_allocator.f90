@@ -20,10 +20,10 @@ program test_allocator
   ! and returned list is [0].
   l = allocator%get_block_ids()
   if (size(l) /= 1 .or. l(1) /= 0) then
-     allpass = .false.
-     write(stderr, '(a)') 'Free list is initialised empty... failed'
+    allpass = .false.
+    write (stderr, '(a)') 'Free list is initialised empty... failed'
   else
-     write(stderr, '(a)') 'Free list is initialised empty... passed'
+    write (stderr, '(a)') 'Free list is initialised empty... passed'
   end if
 
   ! Request two blocks and release them in reverse order.  List should
@@ -33,21 +33,21 @@ program test_allocator
   call allocator%release_block(ptr2)
   call allocator%release_block(ptr1)
 
-  if (.not. all(allocator%get_block_ids() .eq. [1, 2])) then
-     allpass = .false.
-     write(stderr, '(a)') 'Blocks are released correctly... failed'
+  if (.not. all(allocator%get_block_ids() == [1, 2])) then
+    allpass = .false.
+    write (stderr, '(a)') 'Blocks are released correctly... failed'
   else
-     write(stderr, '(a)') 'Blocks are released correctly... passed'
+    write (stderr, '(a)') 'Blocks are released correctly... passed'
   end if
 
   !! Destroy the free list and check that the list is empty again.
   call allocator%destroy()
   l = allocator%get_block_ids()
-  if (size(l) /= 1 .or. l(1) /= 0 .or. allocator%next_id /=0) then
-     allpass = .false.
-     write(stderr, '(a)') 'Free list is correctly destroyed... failed'
+  if (size(l) /= 1 .or. l(1) /= 0 .or. allocator%next_id /= 0) then
+    allpass = .false.
+    write (stderr, '(a)') 'Free list is correctly destroyed... failed'
   else
-     write(stderr, '(a)') 'Free list is correctly destroyed... passed'
+    write (stderr, '(a)') 'Free list is correctly destroyed... passed'
   end if
 
   ! Request a block from a list of three.  This should grab the first
@@ -60,18 +60,18 @@ program test_allocator
   call allocator%release_block(ptr1)
   ptr1 => allocator%get_block(DIR_X)
 
-  if (.not. all(allocator%get_block_ids() .eq. [2, 3])) then
-     allpass = .false.
-     write(stderr, '(a)') 'Block is correctly allocated... failed'
+  if (.not. all(allocator%get_block_ids() == [2, 3])) then
+    allpass = .false.
+    write (stderr, '(a)') 'Block is correctly allocated... failed'
   else
-     write(stderr, '(a)') 'Block is correctly allocated... passed'
+    write (stderr, '(a)') 'Block is correctly allocated... passed'
   end if
 
   call allocator%destroy()
 
   if (allpass) then
-     write(stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
+    write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
   else
-     error stop 'SOME TESTS FAILED.'
+    error stop 'SOME TESTS FAILED.'
   end if
 end program test_allocator

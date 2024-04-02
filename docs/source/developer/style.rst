@@ -20,6 +20,14 @@ so using the `--stdout` option:
 
    $ fprettify --config .fprettify.ini --stdout
 
+Note: CUDA Fortran chevron syntax is not supported by `fprettify`.
+Thus, we use `!&` to deactivate `fprettify` on lines chevron syntax is
+used.
+
+.. code:: fortran
+
+   call gpu_kernel<<<blocks, threads>>>(args, ...) !&
+
 Naming conventions
 ------------------
 
