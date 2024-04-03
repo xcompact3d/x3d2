@@ -50,7 +50,7 @@ contains
 
     integer :: nx, ny, nz
 
-    integer :: ierrfft
+    integer :: ierr
     integer(int_ptr_kind()) :: worksize
 
     call poisson_fft%base_init(xdirps, ydirps, zdirps)
@@ -75,9 +75,10 @@ contains
     allocate (poisson_fft%f_tmp(nx, ny, nz))
 
     ! 3D plans
-    ierrfft = cufftPlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z)
+    ierr = cufftPlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z)
 
-    ierrfft = cufftPlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D)
+
+    ierr = cufftPlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D)
 
   end function init
 
@@ -90,12 +91,12 @@ contains
     real(dp), device, pointer, dimension(:, :, :) :: f_dev
 
     type(dim3) :: blocks, threads
-    integer :: ierrfft
+    integer :: ierr
 
     select type (f); type is (cuda_field_t); f_dev => f%data_d; end select
 
     self%f_tmp = f_dev
-    ierrfft = cufftExecD2Z(self%plan3D_fw, self%f_tmp, self%c_w_dev)
+    ierr = cufftExecD2Z(self%plan3D_fw, self%f_tmp, self%c_w_dev)
 
   end subroutine fft_forward_cuda
 
@@ -108,11 +109,11 @@ contains
     real(dp), device, pointer, dimension(:, :, :) :: f_dev
 
     type(dim3) :: blocks, threads
-    integer :: ierrfft
+    integer :: ierr
 
     select type (f); type is (cuda_field_t); f_dev => f%data_d; end select
 
-    ierrfft = cufftExecZ2D(self%plan3D_bw, self%c_w_dev, self%f_tmp)
+    ierr = cufftExecZ2D(self%plan3D_bw, self%c_w_dev, self%f_tmp)
     f_dev = self%f_tmp
 
   end subroutine fft_backward_cuda
