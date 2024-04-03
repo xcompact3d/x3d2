@@ -77,7 +77,6 @@ contains
     ! 3D plans
     ierr = cufftPlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z)
 
-
     ierr = cufftPlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D)
 
   end function init
@@ -127,8 +126,8 @@ contains
     type(dim3) :: blocks, threads
 
     ! Postprocess
-    blocks = dim3((self%nx/2 + 1), 1, 1)
-    threads = dim3(self%nz, 1, 1)
+    blocks = dim3(self%nz, 1, 1)
+    threads = dim3(self%nx/2 + 1, 1, 1)
     call process_spectral_div_u<<<blocks, threads>>>( & !&
       self%c_w_dev, self%waves_dev, self%nx, self%ny, self%nz, &
       self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &

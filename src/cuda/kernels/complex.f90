@@ -27,8 +27,8 @@ contains
 
     do j = 1, ny
       ! normalisation
-      div_r = real(div(k, j, i), kind=dp)/(nx*ny*nz)
-      div_c = aimag(div(k, j, i))/(nx*ny*nz)
+      div_r = real(div(i, j, k), kind=dp)/(nx*ny*nz)
+      div_c = aimag(div(i, j, k))/(nx*ny*nz)
 
       ! post-process forward
       ! post-process in z
@@ -54,8 +54,8 @@ contains
       if (i > nx/2 + 1) div_c = -div_c
 
       ! Solve Poisson
-      tmp_r = real(waves(k, j, i), kind=dp)
-      tmp_c = aimag(waves(k, j, i))
+      tmp_r = real(waves(i, j, k), kind=dp)
+      tmp_c = aimag(waves(i, j, k))
       if ((tmp_r < 1.e-16_dp) .or. (tmp_c < 1.e-16_dp)) then
         div_r = 0._dp; div_c = 0._dp
       else
@@ -87,7 +87,7 @@ contains
       if (i > nx/2 + 1) div_c = -div_c
 
       ! update the entry
-      div(k, j, i) = cmplx(div_r, div_c, kind=dp)
+      div(i, j, k) = cmplx(div_r, div_c, kind=dp)
     end do
 
   end subroutine process_spectral_div_u
