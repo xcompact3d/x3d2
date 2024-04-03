@@ -196,8 +196,6 @@ contains
       call MatSetSizes(M, nlocal, nlocal, PETSC_DECIDE, PETSC_DECIDE, ierr)
       call MatSetFromOptions(M, ierr)
     else
-      ! TODO: How do we get the ctx?
-
       call MatCreateShell(PETSC_COMM_WORLD, nlocal, nlocal, PETSC_DETERMINE, &
                           PETSC_DETERMINE, ctx, M, ierr)
       call MatShellSetContext(M, ctx, ierr) ! Is this necessary?
