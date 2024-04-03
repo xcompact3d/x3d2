@@ -4,12 +4,38 @@ module m_cg_types
   !! Types module providing the context type required by the PETSc matrix-free
   !! operator.
 
+  use m_base_backend, only: base_backend_t
+  use m_allocator, only: allocator_t, field_t
+
   implicit none
 
   private
+  public :: mat_ctx_t
 
-  type, public :: mat_ctx
-  end type mat_ctx
+  type, public :: mat_ctx_t
+    class(base_backend_t), pointer :: backend
+    class(field_t), pointer :: xfield
+    class(field_t), pointer :: ffield
+  end type mat_ctx_t
+
+  interface mat_ctx_t
+    module procedure init_ctx
+  end interface mat_ctx_t
+
+contains
+
+  function init_ctx(allocator, backend, dir) result(ctx)
+
+    class(allocator_t), pointer, intent(in) :: allocator
+    class(base_backend_t), pointer, intent(in) :: backend
+    integer, intent(in) :: dir
+    type(mat_ctx_t) :: ctx
+
+    ctx%xfield => allocator%get_block(dir)
+    ctx%ffield => allocator%get_block(dir)
+    ctx%backend => backend
+
+  end function init_ctx
 
 end module m_cg_types
 
@@ -20,6 +46,10 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
   use petsc
 
   use m_cg_types
+
+  use m_allocator, only: allocator_t
+  use m_common, only: dp, DIR_X, DIR_C
+  use m_base_backend, only: base_backend_t
 
   implicit none
 
@@ -50,7 +80,7 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
       integer :: ncol_l ! Local number of columns
       integer :: nrow_g ! Global number of rows
       integer :: ncol_g ! Global number of columns
-      type(mat_ctx) :: ctx ! The shell matrix context
+      type(mat_ctx_t) :: ctx ! The shell matrix context
       type(tMat) :: M   ! The matrix object
       integer :: ierr
     end subroutine MatCreateShell
@@ -63,7 +93,7 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
       use petsc
       use m_cg_types
       type(tMat) :: M      ! The matrix object
-      type(mat_ctx) :: ctx ! The shell matrix context
+      type(mat_ctx_t) :: ctx ! The shell matrix context
       integer :: ierr
     end subroutine MatShellSetContext
   end interface MatShellSetContext
@@ -75,7 +105,7 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
       use petsc
       use m_cg_types
       type(tMat) :: M      ! The matrix object
-      type(mat_ctx) :: ctx ! The shell matrix context
+      type(mat_ctx_t) :: ctx ! The shell matrix context
       integer :: ierr
     end subroutine MatShellGetContext
   end interface MatShellGetContext
@@ -102,15 +132,19 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
 
 contains
 
-  module function init_cg(xdirps, ydirps, zdirps) result(poisson_cg)
+  module function init_cg(xdirps, ydirps, zdirps, allocator, backend) &
+                  result(poisson_cg)
     !! Public constructor for the poisson_cg_t type.
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps ! X/Y/Z discretisation operators
     class(poisson_cg_t), allocatable :: poisson_cg
+    class(allocator_t), pointer, intent(in) :: allocator
+    class(base_backend_t), pointer, intent(in) :: backend
 
     allocate (petsc_poisson_cg_t :: poisson_cg)
     select type (poisson_cg)
     type is (petsc_poisson_cg_t)
-      call init_petsc_cg(poisson_cg, xdirps, ydirps, zdirps)
+      call init_petsc_cg(poisson_cg, xdirps, ydirps, zdirps, allocator, &
+                         backend)
     class default
       ! This should be impossible
       print *, "Failure in allocating PETSc Poisson solver -- this indicates a serious problem"
@@ -118,10 +152,12 @@ contains
     end select
   end function init_cg
 
-  subroutine init_petsc_cg(self, xdirps, ydirps, zdirps)
+  subroutine init_petsc_cg(self, xdirps, ydirps, zdirps, allocator, backend)
     !! Private constructor for the poisson_cg_t type.
     type(petsc_poisson_cg_t), intent(inout) :: self
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps ! X/Y/Z discretisation operators
+    class(allocator_t), pointer, intent(in) :: allocator
+    class(base_backend_t), pointer, intent(in) :: backend
 
     integer :: nx, ny, nz, n ! Local problem size
 
@@ -134,22 +170,26 @@ contains
     ! Initialise preconditioner and operator matrices
     ! XXX: Add option to use preconditioner as operator (would imply low-order
     !      solution)?
-    call create_matrix(n, "assemled", self%P)
-    call create_matrix(n, "matfree", self%A)
+    call create_matrix(n, "assemled", allocator, backend, self%P)
+    call create_matrix(n, "matfree", allocator, backend, self%A)
   end subroutine init_petsc_cg
 
-  subroutine create_matrix(nlocal, mat_type, M)
+  subroutine create_matrix(nlocal, mat_type, allocator, backend, M)
     !! Creates either a matrix object given the local problem size.
     !! The matrix can be either "assembled" - suitable for preconditioners, or
     !! "matfree" - for use as a high-order operator.
     integer, intent(in) :: nlocal            ! The local problem size
     character(len=*), intent(in) :: mat_type ! The desired type of matrix - valid values
                                              ! are "assembled" or "matfree"
+    class(allocator_t), pointer, intent(in) :: allocator  ! The field allocator
+    class(base_backend_t), pointer, intent(in) :: backend ! The compute backend
     type(tMat), intent(out) :: M             ! The matrix object
 
-    type(mat_ctx) :: ctx
+    type(mat_ctx_t) :: ctx
 
     integer :: ierr
+
+    ctx = mat_ctx_t(allocator, backend, DIR_X)
 
     if (mat_type == "assembled") then
       call MatCreate(PETSC_COMM_WORLD, M, ierr)
@@ -175,17 +215,80 @@ contains
     type(tVec) :: f ! The output vector
     integer :: ierr ! The error code
 
-    type(mat_ctx) :: ctx
-
-    type(petsc_field_t), allocatable :: xfield ! Field wrapper for the input vector
-    type(petsc_field_t), allocatable :: ffield ! Field wrapper for the output vector
+    type(mat_ctx_t) :: ctx
 
     call MatShellGetContext(M, ctx, ierr)
 
-    ! Wrap x and f in a field
-    call poissmult(xfield, ffield)
-    ! Extract field into f
+    call copy_vec_to_field(ctx%xfield, x, ctx%backend)
+    call poissmult(ctx%xfield, ctx%ffield)
+    call copy_field_to_vec(f, ctx%ffield, ctx%backend)
 
   end subroutine poissmult_petsc
+
+  subroutine copy_vec_to_field(f, v, backend)
+    !! Copies the contents of a PETSc vector into an x3d2 field object
+    ! XXX: This can be avoided if a field can wrap the vector memory
+    class(field_t), intent(inout) :: f
+    type(tVec) :: v
+    class(base_backend_t), intent(in) :: backend
+
+    real(dp), dimension(:), pointer :: vdata
+    real(dp), dimension(:, :, :), pointer :: vdata3d
+    integer :: ierr
+
+    integer :: nx, ny, nz
+
+    nx = backend%nx_loc
+    ny = backend%ny_loc
+    nz = backend%nz_loc
+
+    ! Local copy
+    call VecGetArrayReadF90(v, vdata, ierr)
+    if (nx*ny*nz /= size(vdata)) then
+      print *, "Vector and field sizes are incompatible (padding?)"
+      stop 1
+    end if
+    vdata3d(1:nx, 1:ny, 1:nz) => vdata(:) ! Get a 3D representation of the vector
+    call backend%set_field_data(f, vdata3d, DIR_C)
+    call VecRestoreArrayReadF90(v, vdata, ierr)
+    nullify (vdata3d)
+
+    ! Halo exchange
+
+  end subroutine copy_vec_to_field
+
+  subroutine copy_field_to_vec(v, f, backend)
+    !! Copies the contents of an x3d2 field object into a PETSc vector
+    ! XXX: This can be avoided if a field can wrap the vector memory
+    type(tVec) :: v
+    class(field_t), intent(in) :: f
+    class(base_backend_t), intent(in) :: backend
+
+    real(dp), dimension(:), pointer :: vdata
+    real(dp), dimension(:, :, :), pointer :: vdata3d
+    integer :: ierr
+
+    integer :: nx, ny, nz
+
+    nx = backend%nx_loc
+    ny = backend%ny_loc
+    nz = backend%nz_loc
+
+    ! Local copy
+    call VecGetArrayF90(v, vdata, ierr)
+    if (nx*ny*nz /= size(vdata)) then
+      print *, "Vector and field sizes are incompatible (padding?)"
+      stop 1
+    end if
+    vdata3d(1:nx, 1:ny, 1:nz) => vdata(:) ! Get a 3D representation of the vector
+    call backend%get_field_data(vdata3d, f, DIR_C)
+    call VecRestoreArrayF90(v, vdata, ierr)
+    nullify (vdata3d)
+
+    ! Halo exchange
+    call VecAssemblyBegin(v, ierr)
+    call VecAssemblyEnd(v, ierr)
+
+  end subroutine copy_field_to_vec
 
 end submodule m_petsc_poisson_cg

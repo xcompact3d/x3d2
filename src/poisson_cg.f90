@@ -2,7 +2,8 @@ module m_poisson_cg
   !! Module defining a Poisson solver based on the (preconditioned) Conjugate
   !! Gradient method.
 
-  use m_allocator, only: field_t
+  use m_allocator, only: allocator_t, field_t
+  use m_base_backend, only: base_backend_t
   use m_tdsops, only: dirps_t
 
   implicit none
@@ -22,9 +23,11 @@ module m_poisson_cg
   end type poisson_cg_t
 
   interface
-    module function init_cg(xdirps, ydirps, zdirps) result(poisson_cg)
+    module function init_cg(xdirps, ydirps, zdirps, allocator, backend) result(poisson_cg)
       class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
       class(poisson_cg_t), allocatable :: poisson_cg
+      class(allocator_t), pointer, intent(in) :: allocator
+      class(base_backend_t), pointer, intent(in) :: backend
     end function init_cg
   end interface
 
