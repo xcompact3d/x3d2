@@ -60,7 +60,7 @@ contains
     allocate (self%az(self%nz), self%bz(self%nz))
 
     ! cuFFT 3D transform halves the first index.
-    allocate (self%waves(self%nz/2 + 1, self%ny, self%nx))
+    allocate (self%waves(self%nx/2 + 1, self%ny, self%nz))
 
     ! waves_set requires some of the preprocessed tdsops variables.
     call self%waves_set(xdirps, ydirps, zdirps)
@@ -151,12 +151,17 @@ contains
       ezs(i) = cmplx(1._dp, 1._dp, kind=dp)*(nz*w/zdirps%L)
       zk2(i) = cmplx(1._dp, 1._dp, kind=dp)*(nz*wp/zdirps%L)**2
     end do
+    do i = nz/2 + 2, nz
+      zkz(i) = zkz(nz - i + 2)
+      ezs(i) = ezs(nz - i + 2)
+      zk2(i) = zk2(nz - i + 2)
+    end do
 
     print *, 'waves array is correctly set only for a single rank run'
     ! TODO: do loop ranges below are valid only for single rank runs
-    do k = 1, nz/2 + 1
+    do i = 1, nx/2 + 1
       do j = 1, ny
-        do i = 1, nx
+        do k = 1, nz
           rlexs = real(exs(i), kind=dp)*xdirps%d
           rleys = real(eys(j), kind=dp)*ydirps%d
           rlezs = real(ezs(k), kind=dp)*zdirps%d
@@ -183,7 +188,7 @@ contains
           zt2 = zk2(k)*(((xtt/xt1)*(ytt/yt1))**2)
 
           xyzk = xt2 + yt2 + zt2
-          self%waves(k, j, i) = xyzk
+          self%waves(i, j, k) = xyzk
         end do
       end do
     end do

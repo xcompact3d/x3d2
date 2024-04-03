@@ -57,7 +57,7 @@ contains
 
     nx = poisson_fft%nx; ny = poisson_fft%ny; nz = poisson_fft%nz
 
-    allocate (poisson_fft%waves_dev(nz/2 + 1, ny, nx))
+    allocate (poisson_fft%waves_dev(nx/2 + 1, ny, nz))
     poisson_fft%waves_dev = poisson_fft%waves
 
     allocate (poisson_fft%ax_dev(nx), poisson_fft%bx_dev(nx))
@@ -67,7 +67,7 @@ contains
     poisson_fft%ay_dev = poisson_fft%ay; poisson_fft%by_dev = poisson_fft%by
     poisson_fft%az_dev = poisson_fft%az; poisson_fft%bz_dev = poisson_fft%bz
 
-    allocate (poisson_fft%c_w_dev(nz/2 + 1, ny, nx))
+    allocate (poisson_fft%c_w_dev(nx/2 + 1, ny, nz))
 
     ! We can't currently ask allocator to pass us an array with
     ! exact shape we want, so we allocate an extra array here.
@@ -127,8 +127,8 @@ contains
     type(dim3) :: blocks, threads
 
     ! Postprocess
-    blocks = dim3((self%nz/2 + 1), 1, 1)
-    threads = dim3(self%nx, 1, 1)
+    blocks = dim3((self%nx/2 + 1), 1, 1)
+    threads = dim3(self%nz, 1, 1)
     call process_spectral_div_u<<<blocks, threads>>>( & !&
       self%c_w_dev, self%waves_dev, self%nx, self%ny, self%nz, &
       self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
