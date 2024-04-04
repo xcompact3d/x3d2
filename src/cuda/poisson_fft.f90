@@ -69,9 +69,8 @@ contains
 
     allocate (poisson_fft%c_w_dev(nx/2 + 1, ny, nz))
 
-    ! We can't currently ask allocator to pass us an array with
-    ! exact shape we want, so we allocate an extra array here.
-    ! This will be removed when allocator is fixed.
+    ! Running FFT kernels directly using field_t%data_d results in segfault.
+    ! The temporary device array is a way to get around this problem.
     allocate (poisson_fft%f_tmp(nx, ny, nz))
 
     ! 3D plans
@@ -94,7 +93,10 @@ contains
 
     select type (f); type is (cuda_field_t); f_dev => f%data_d; end select
 
+    ! Copy data into temporary device array first
+    ! Running cufftExec directly reading from field results in a segfault
     self%f_tmp = f_dev
+
     ierr = cufftExecD2Z(self%plan3D_fw, self%f_tmp, self%c_w_dev)
 
   end subroutine fft_forward_cuda
@@ -113,6 +115,8 @@ contains
     select type (f); type is (cuda_field_t); f_dev => f%data_d; end select
 
     ierr = cufftExecZ2D(self%plan3D_bw, self%c_w_dev, self%f_tmp)
+
+    ! Copy data back to field_t instance
     f_dev = self%f_tmp
 
   end subroutine fft_backward_cuda

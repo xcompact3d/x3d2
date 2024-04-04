@@ -539,6 +539,7 @@ contains
 
     class(field_t), pointer :: p_temp
 
+    ! reorder into 3D Cartesian data structure
     p_temp => self%backend%allocator%get_block(DIR_C)
     call self%backend%reorder(p_temp, div_u, RDR_Z2C)
 
@@ -552,6 +553,7 @@ contains
     ! call backward FFT
     call self%backend%poisson_fft%fft_backward(p_temp)
 
+    ! reorder back to our specialist data structure from 3D Cartesian
     call self%backend%reorder(pressure, p_temp, RDR_C2Z)
 
     call self%backend%allocator%release_block(p_temp)
