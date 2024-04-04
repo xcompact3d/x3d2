@@ -124,10 +124,15 @@ contains
 
     complex(dp), device, dimension(:, :, :), pointer :: c_dev
     type(dim3) :: blocks, threads
+    integer :: tsize
 
-    ! Postprocess
-    blocks = dim3(self%nz, 1, 1)
-    threads = dim3(self%nx/2 + 1, 1, 1)
+    ! tsize is different than SZ, because here we work on a 3D Cartesian
+    ! data structure, and free to specify any suitable thread/block size.
+    tsize = 16
+    blocks = dim3((self%ny - 1)/tsize + 1, self%nz, 1)
+    threads = dim3(tsize, 1, 1)
+
+    ! Postprocess div_u in spectral space
     call process_spectral_div_u<<<blocks, threads>>>( & !&
       self%c_w_dev, self%waves_dev, self%nx, self%ny, self%nz, &
       self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &

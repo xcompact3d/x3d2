@@ -22,73 +22,75 @@ contains
     integer :: i, j, k
     real(dp) :: tmp_r, tmp_c, div_r, div_c
 
-    i = threadIdx%x
-    k = blockIdx%x
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    k = blockIdx%y
 
-    do j = 1, ny
-      ! normalisation
-      div_r = real(div(i, j, k), kind=dp)/(nx*ny*nz)
-      div_c = aimag(div(i, j, k))/(nx*ny*nz)
+    if (j <= ny) then
+      do i = 1, nx/2 + 1
+        ! normalisation
+        div_r = real(div(i, j, k), kind=dp)/(nx*ny*nz)
+        div_c = aimag(div(i, j, k))/(nx*ny*nz)
 
-      ! post-process forward
-      ! post-process in z
-      tmp_r = div_r
-      tmp_c = div_c
-      div_r = tmp_r*bz(k) + tmp_c*az(k)
-      div_c = tmp_c*bz(k) - tmp_r*az(k)
+        ! post-process forward
+        ! post-process in z
+        tmp_r = div_r
+        tmp_c = div_c
+        div_r = tmp_r*bz(k) + tmp_c*az(k)
+        div_c = tmp_c*bz(k) - tmp_r*az(k)
 
-      ! post-process in y
-      tmp_r = div_r
-      tmp_c = div_c
-      div_r = tmp_r*by(j) + tmp_c*ay(j)
-      div_c = tmp_c*by(j) - tmp_r*ay(j)
-      if (j > ny/2 + 1) div_r = -div_r
-      if (j > ny/2 + 1) div_c = -div_c
+        ! post-process in y
+        tmp_r = div_r
+        tmp_c = div_c
+        div_r = tmp_r*by(j) + tmp_c*ay(j)
+        div_c = tmp_c*by(j) - tmp_r*ay(j)
+        if (j > ny/2 + 1) div_r = -div_r
+        if (j > ny/2 + 1) div_c = -div_c
 
-      ! post-process in x
-      tmp_r = div_r
-      tmp_c = div_c
-      div_r = tmp_r*bx(i) + tmp_c*ax(i)
-      div_c = tmp_c*bx(i) - tmp_r*ax(i)
-      if (i > nx/2 + 1) div_r = -div_r
-      if (i > nx/2 + 1) div_c = -div_c
+        ! post-process in x
+        tmp_r = div_r
+        tmp_c = div_c
+        div_r = tmp_r*bx(i) + tmp_c*ax(i)
+        div_c = tmp_c*bx(i) - tmp_r*ax(i)
+        if (i > nx/2 + 1) div_r = -div_r
+        if (i > nx/2 + 1) div_c = -div_c
 
-      ! Solve Poisson
-      tmp_r = real(waves(i, j, k), kind=dp)
-      tmp_c = aimag(waves(i, j, k))
-      if ((tmp_r < 1.e-16_dp) .or. (tmp_c < 1.e-16_dp)) then
-        div_r = 0._dp; div_c = 0._dp
-      else
-        div_r = -div_r/tmp_r
-        div_c = -div_c/tmp_c
-      end if
+        ! Solve Poisson
+        tmp_r = real(waves(i, j, k), kind=dp)
+        tmp_c = aimag(waves(i, j, k))
+        if ((tmp_r < 1.e-16_dp) .or. (tmp_c < 1.e-16_dp)) then
+          div_r = 0._dp; div_c = 0._dp
+        else
+          div_r = -div_r/tmp_r
+          div_c = -div_c/tmp_c
+        end if
 
-      ! post-process backward
-      ! post-process in z
-      tmp_r = div_r
-      tmp_c = div_c
-      div_r = tmp_r*bz(k) - tmp_c*az(k)
-      div_c = -tmp_c*bz(k) - tmp_r*az(k)
+        ! post-process backward
+        ! post-process in z
+        tmp_r = div_r
+        tmp_c = div_c
+        div_r = tmp_r*bz(k) - tmp_c*az(k)
+        div_c = -tmp_c*bz(k) - tmp_r*az(k)
 
-      ! post-process in y
-      tmp_r = div_r
-      tmp_c = div_c
-      div_r = tmp_r*by(j) + tmp_c*ay(j)
-      div_c = tmp_c*by(j) - tmp_r*ay(j)
-      if (j > ny/2 + 1) div_r = -div_r
-      if (j > ny/2 + 1) div_c = -div_c
+        ! post-process in y
+        tmp_r = div_r
+        tmp_c = div_c
+        div_r = tmp_r*by(j) + tmp_c*ay(j)
+        div_c = tmp_c*by(j) - tmp_r*ay(j)
+        if (j > ny/2 + 1) div_r = -div_r
+        if (j > ny/2 + 1) div_c = -div_c
 
-      ! post-process in x
-      tmp_r = div_r
-      tmp_c = div_c
-      div_r = tmp_r*bx(i) + tmp_c*ax(i)
-      div_c = -tmp_c*bx(i) + tmp_r*ax(i)
-      if (i > nx/2 + 1) div_r = -div_r
-      if (i > nx/2 + 1) div_c = -div_c
+        ! post-process in x
+        tmp_r = div_r
+        tmp_c = div_c
+        div_r = tmp_r*bx(i) + tmp_c*ax(i)
+        div_c = -tmp_c*bx(i) + tmp_r*ax(i)
+        if (i > nx/2 + 1) div_r = -div_r
+        if (i > nx/2 + 1) div_c = -div_c
 
-      ! update the entry
-      div(i, j, k) = cmplx(div_r, div_c, kind=dp)
-    end do
+        ! update the entry
+        div(i, j, k) = cmplx(div_r, div_c, kind=dp)
+      end do
+    end if
 
   end subroutine process_spectral_div_u
 
