@@ -41,7 +41,7 @@ program xcompact
   real(dp), allocatable, dimension(:, :, :) :: u, v, w
 
   real(dp) :: t_start, t_end
-  integer :: dims(3)
+  integer :: dims(3), nrank_x, nrank_y
   integer :: nrank, nproc, ierr
 
   call MPI_Init(ierr)
@@ -72,9 +72,6 @@ program xcompact
   globs%nproc_x = 1; globs%nproc_y = 1; globs%nproc_z = 1
 
   globs%poisson_solver_type = POISSON_SOLVER_FFT
-
-  ! Lets allow a 1D decomposition for the moment
-  !globs%nproc_x = nproc
 
   xdirps%nproc = globs%nproc_x
   ydirps%nproc = globs%nproc_y
@@ -113,6 +110,14 @@ program xcompact
   zdirps%n_blocks = globs%n_groups_z
 
   xdirps%dir = DIR_X; ydirps%dir = DIR_Y; zdirps%dir = DIR_Z
+
+  ! set the shift amount in x, y, z
+  nrank_x = modulo(nrank, xdirps%nproc)
+  nrank_y = modulo((nrank - nrank_x)/xdirps%nproc, ydirps%nproc)
+  xdirps%n_shift = xdirps%n*nrank_x
+  ydirps%n_shift = ydirps%n*nrank_y
+  zdirps%n_shift = zdirps%n*(nrank - nrank_x - nrank_y*xdirps%nproc) &
+                   /(xdirps%nproc*ydirps%nproc)
 
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(globs%nx_loc, globs%ny_loc, &
