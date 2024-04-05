@@ -113,13 +113,13 @@ contains
     solver%n_iters = globs%n_iters
     solver%n_output = globs%n_output
 
-    nx = globs%nx_loc; ny = globs%ny_loc; nz = globs%nz_loc
+    nx = xdirps%n; ny = ydirps%n; nz = zdirps%n
     do k = 1, nz
       do j = 1, ny
         do i = 1, nx
-          x = (i - 1)*globs%dx
-          y = (j - 1)*globs%dy
-          z = (k - 1)*globs%dz
+          x = (i - 1 + xdirps%n_shift)*xdirps%d
+          y = (j - 1 + ydirps%n_shift)*ydirps%d
+          z = (k - 1 + zdirps%n_shift)*zdirps%d
 
           u_init(i, j, k) = sin(x)*cos(y)*cos(z)
           v_init(i, j, k) = -cos(x)*sin(y)*cos(z)
@@ -136,9 +136,9 @@ contains
     print *, 'initial conditions are set'
 
     ! Allocate and set the tdsops
-    call allocate_tdsops(solver%xdirps, nx, globs%dx, solver%backend)
-    call allocate_tdsops(solver%ydirps, ny, globs%dy, solver%backend)
-    call allocate_tdsops(solver%zdirps, nz, globs%dz, solver%backend)
+    call allocate_tdsops(solver%xdirps, nx, xdirps%d, solver%backend)
+    call allocate_tdsops(solver%ydirps, ny, ydirps%d, solver%backend)
+    call allocate_tdsops(solver%zdirps, nz, zdirps%d, solver%backend)
 
     select case (globs%poisson_solver_type)
     case (POISSON_SOLVER_FFT)
