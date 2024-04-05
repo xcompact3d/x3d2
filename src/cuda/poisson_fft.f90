@@ -1,7 +1,8 @@
 module m_cuda_poisson_fft
+  use iso_c_binding, only: c_loc, c_ptr, c_f_pointer
+  use iso_fortran_env, only: stderr => error_unit
   use cudafor
   use cufft
-  use iso_c_binding, only: c_loc, c_ptr, c_f_pointer
 
   use m_allocator, only: field_t
   use m_common, only: dp
@@ -76,11 +77,13 @@ contains
     ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z, &
                            worksize)
     ierr = cufftSetWorkArea(poisson_fft%plan3D_fw, poisson_fft%fft_worksize)
+    if (ierr /= 0) error stop 'Forward 3D FFT plan generation failed'
 
     ierr = cufftCreate(poisson_fft%plan3D_bw)
     ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D, &
                            worksize)
     ierr = cufftSetWorkArea(poisson_fft%plan3D_bw, poisson_fft%fft_worksize)
+    if (ierr /= 0) error stop 'Backward 3D FFT plan generation failed'
 
   end function init
 
@@ -105,6 +108,7 @@ contains
     call c_f_pointer(f_c_ptr, f_ptr)
 
     ierr = cufftExecD2Z(self%plan3D_fw, f_ptr, self%c_w_dev)
+    if (ierr /= 0) error stop 'Forward 3D FFT execution failed'
 
   end subroutine fft_forward_cuda
 
@@ -129,6 +133,7 @@ contains
     call c_f_pointer(f_c_ptr, f_ptr)
 
     ierr = cufftExecZ2D(self%plan3D_bw, self%c_w_dev, f_ptr)
+    if (ierr /= 0) error stop 'Backward 3D FFT execution failed'
 
   end subroutine fft_backward_cuda
 
