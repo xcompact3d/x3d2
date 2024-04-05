@@ -1,6 +1,7 @@
 module m_cuda_poisson_fft
   use cudafor
   use cufft
+  use iso_c_binding, only: c_loc, c_ptr, c_f_pointer
 
   use m_allocator, only: field_t
   use m_common, only: dp
@@ -16,15 +17,15 @@ module m_cuda_poisson_fft
     !! FFT based Poisson solver
 
     !> Local domain sized array to store data in spectral space
-    complex(dp), device, allocatable :: c_w_dev(:, :, :)
+    complex(dp), device, allocatable, dimension(:, :, :) :: c_w_dev
     !> Local domain sized array storing the spectral equivalence constants
     complex(dp), device, allocatable, dimension(:, :, :) :: waves_dev
+    !> cufft requires a local domain sized storage
+    complex(dp), device, allocatable, dimension(:) :: fft_worksize
 
     real(dp), device, allocatable, dimension(:) :: ax_dev, bx_dev, &
                                                    ay_dev, by_dev, &
                                                    az_dev, bz_dev
-
-    real(dp), device, allocatable, dimension(:, :, :) :: f_tmp
 
     integer :: plan3D_fw, plan3D_bw
   contains
@@ -68,15 +69,18 @@ contains
     poisson_fft%az_dev = poisson_fft%az; poisson_fft%bz_dev = poisson_fft%bz
 
     allocate (poisson_fft%c_w_dev(nx/2 + 1, ny, nz))
-
-    ! Running FFT kernels directly using field_t%data_d results in segfault.
-    ! The temporary device array is a way to get around this problem.
-    allocate (poisson_fft%f_tmp(nx, ny, nz))
+    allocate (poisson_fft%fft_worksize((nx/2 + 1)*ny*nz))
 
     ! 3D plans
-    ierr = cufftPlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z)
+    ierr = cufftCreate(poisson_fft%plan3D_fw)
+    ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z, &
+                           worksize)
+    ierr = cufftSetWorkArea(poisson_fft%plan3D_fw, poisson_fft%fft_worksize)
 
-    ierr = cufftPlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D)
+    ierr = cufftCreate(poisson_fft%plan3D_bw)
+    ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D, &
+                           worksize)
+    ierr = cufftSetWorkArea(poisson_fft%plan3D_bw, poisson_fft%fft_worksize)
 
   end function init
 
@@ -87,17 +91,20 @@ contains
     class(field_t), intent(in) :: f
 
     real(dp), device, pointer, dimension(:, :, :) :: f_dev
+    real(dp), device, pointer :: f_ptr
+    type(c_ptr) :: f_c_ptr
 
     type(dim3) :: blocks, threads
     integer :: ierr
 
     select type (f); type is (cuda_field_t); f_dev => f%data_d; end select
 
-    ! Copy data into temporary device array first
-    ! Running cufftExec directly reading from field results in a segfault
-    self%f_tmp = f_dev
+    ! Using f_dev directly in cufft call causes a segfault
+    ! Pointer switches below fixes the problem
+    f_c_ptr = c_loc(f_dev)
+    call c_f_pointer(f_c_ptr, f_ptr)
 
-    ierr = cufftExecD2Z(self%plan3D_fw, self%f_tmp, self%c_w_dev)
+    ierr = cufftExecD2Z(self%plan3D_fw, f_ptr, self%c_w_dev)
 
   end subroutine fft_forward_cuda
 
@@ -108,16 +115,20 @@ contains
     class(field_t), intent(inout) :: f
 
     real(dp), device, pointer, dimension(:, :, :) :: f_dev
+    real(dp), device, pointer :: f_ptr
+    type(c_ptr) :: f_c_ptr
 
     type(dim3) :: blocks, threads
     integer :: ierr
 
     select type (f); type is (cuda_field_t); f_dev => f%data_d; end select
 
-    ierr = cufftExecZ2D(self%plan3D_bw, self%c_w_dev, self%f_tmp)
+    ! Using f_dev directly in cufft call causes a segfault
+    ! Pointer switches below fixes the problem
+    f_c_ptr = c_loc(f_dev)
+    call c_f_pointer(f_c_ptr, f_ptr)
 
-    ! Copy data back to field_t instance
-    f_dev = self%f_tmp
+    ierr = cufftExecZ2D(self%plan3D_bw, self%c_w_dev, f_ptr)
 
   end subroutine fft_backward_cuda
 
