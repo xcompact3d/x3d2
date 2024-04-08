@@ -43,6 +43,8 @@ program xcompact
   real(dp) :: t_start, t_end
   integer :: dims(3), nrank_x, nrank_y
   integer :: nrank, nproc, ierr
+  integer :: n, ix, iy, iz
+  integer, allocatable, dimension(:, :, :) :: global_ranks
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
@@ -76,6 +78,20 @@ program xcompact
   xdirps%nproc = globs%nproc_x
   ydirps%nproc = globs%nproc_y
   zdirps%nproc = globs%nproc_z
+
+  ! A 3D array corresponding to each region in the global domain
+  allocate (global_ranks(xdirps%nproc, ydirps%nproc, zdirps%nproc))
+
+  n = 0
+  do ix = 1, xdirps%nproc
+    do iy = 1, ydirps%nproc
+      do iz = 1, zdirps%nproc
+        ! set the corresponding global rank for each region
+        global_ranks(ix, iy, iz) = n
+        n = n + 1
+      end do
+    end do
+  end do
 
   ! Better if we move this somewhere else
   ! Set the pprev and pnext for each rank
