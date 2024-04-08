@@ -12,6 +12,7 @@ program test_omp_io
    logical :: allpass !! flag indicating all tests pass
 
    class(field_t), pointer :: arr_to_write !! array to save & restore
+   class(field_t), pointer :: arr_to_read !! array to save & restore
 
    !> MPI vars
    integer :: irank, nproc
@@ -26,8 +27,6 @@ program test_omp_io
    integer :: n, n_block, n_glob
    integer, parameter :: nx = 64, ny = 32, nz = 16
    integer, parameter :: n_groups_x = 1
-   character(*), parameter :: varname = "TestArr"
-   character(*), parameter :: fname = "__FILE__.bp"
 
    integer :: i, j, k
    character(len=80)::fmt
@@ -61,8 +60,27 @@ program test_omp_io
       end do
    end do
 
-   call write_test_file()
-   call read_test_file()
+   call write_test_file(arr_to_write, "__FILE__.bp",  "TestArr")
+   call omp_allocator%release_block(arr_to_write)
+
+   arr_to_read => omp_allocator%get_block(DIR_C)
+   call read_test_file(arr_to_read, "__FILE__.bp", "TestArr")
+
+   do k = 1, nz
+      do j = 1, ny
+         do i = 1, nx
+            if(arr_to_read%data(i, j, k) /= i + j*nx + k*nx*ny) then
+               if (irank == 0) write(stderr, '(a, f8.4, a, f8.4, a, i5, i5, i5)') &
+                 'Mismatch between read array(', arr_to_read%data(i, j, k), &
+                 ") and expected index (", i + j*nx + k*nx*ny, "at (i,j,k) = ", i, j, k
+               allpass = .false.
+               return ! end test on first issue
+            end if
+         end do
+      end do
+   end do
+
+   call omp_allocator%release_block(arr_to_read)
 
    if (allpass) then
       if (irank == 0) write(stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
@@ -101,11 +119,14 @@ program test_omp_io
        error stop msg
      end subroutine
 
-     subroutine write_test_file()
+     subroutine write_test_file(in_arr, fname, varname)
+       class(field_t), pointer, intent(in) :: in_arr !! array to save & restore
+       character(*), intent(in) :: fname
+       character(*), intent(in) :: varname
+
        type(adios2_io) :: io
        type(adios2_engine) :: engine
        type(adios2_variable) :: adios_var
-
        integer :: ierr
 
        call adios2_declare_io (io, adios_ctx, 'TestWrite', ierr)
@@ -118,7 +139,7 @@ program test_omp_io
           call abort_test("Cannot create ADIOS2 engine")
        endif
 
-       ! TODO tie double precision variable to a
+       ! TODO tie double precision variable to array
        call adios2_define_variable(adios_var, io, varname, adios2_type_dp, &
                                    3, ishape, istart, icount, adios2_constant_dims, ierr)
 
@@ -132,18 +153,19 @@ program test_omp_io
 
      end subroutine
 
-     subroutine read_test_file()
+     subroutine read_test_file(out_arr, fname, varname)
+       class(field_t), pointer, intent(out) :: out_arr !! array to save & restore
+       character(*), intent(in) :: fname
+       character(*), intent(in) :: varname
+
        type(adios2_io) :: io
        type(adios2_engine) :: engine
        type(adios2_variable) :: adios_var
-       class(field_t), pointer :: arr_to_read !! array to save & restore
        integer :: ierr
 
        if (irank /= 0) then
          return
        endif
-
-       arr_to_read => omp_allocator%get_block(DIR_C)
 
        call adios2_declare_io (io, adios_ctx, 'TestRead', ierr)
        if (.not.io%valid) then
@@ -160,24 +182,11 @@ program test_omp_io
        if (.not.adios_var%valid) then
           call abort_test("Cannot fetch ADIOS2 IO")
        endif
+
        call adios2_set_step_selection(adios_var, 0_8, 1_8, ierr)
-       call adios2_get(engine, adios_var, arr_to_read%data, ierr)
+       call adios2_get(engine, adios_var, out_arr%data, ierr)
        call adios2_end_step(engine, ierr)
 
-       do k = 1, nz
-          do j = 1, ny
-             do i = 1, nx
-                if(arr_to_read%data(i, j, k) /= i + j*nx + k*nx*ny) then
-                   if (irank == 0) write(stderr, '(a, f8.4, a, f8.4, a, i5, i5, i5)') &
-                     'Mismatch between read array(', arr_to_write%data(i, j, k), &
-                     ") and expected index (", i + j*nx + k*nx*ny, "at (i,j,k) = ", i, j, k
-                   allpass = .false.
-                   return ! end test on first issue
-                end if
-             end do
-          end do
-       end do
-       !
        if (engine%valid) then
           call adios2_close(engine, ierr)
        endif
