@@ -146,8 +146,8 @@ program test_omp_io
 
   logical :: allpass !! flag indicating all tests pass
 
-class(field_t), pointer :: arr_to_write !! array to save & restore
-class(field_t), pointer :: arr_to_read !! array to save & restore
+class(field_t), pointer :: arr_to_write
+class(field_t), pointer :: arr_to_read
 
   !> MPI vars
   integer :: irank, nproc
@@ -155,16 +155,12 @@ class(field_t), pointer :: arr_to_read !! array to save & restore
   integer :: ierr
 
   type(allocator_t), target :: omp_allocator
-
   type(adios_io_t) :: io
 
   integer(kind=8), dimension(3) :: ishape, istart, icount
-  integer :: n, n_block, n_glob
   integer, parameter :: nx = 64, ny = 32, nz = 16
-  integer, parameter :: n_groups_x = 1
 
   integer :: i, j, k
-  character(len=80)::fmt
 
   allpass = .true.
 
