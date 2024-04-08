@@ -119,9 +119,9 @@ contains
     do k = 1, nz
       do j = 1, ny
         do i = 1, nx
-          x = (i - 1 + xdirps%n_shift)*xdirps%d
-          y = (j - 1 + ydirps%n_shift)*ydirps%d
-          z = (k - 1 + zdirps%n_shift)*zdirps%d
+          x = (i - 1 + xdirps%n_offset)*xdirps%d
+          y = (j - 1 + ydirps%n_offset)*ydirps%d
+          z = (k - 1 + zdirps%n_offset)*zdirps%d
 
           u_init(i, j, k) = sin(x)*cos(y)*cos(z)
           v_init(i, j, k) = -cos(x)*sin(y)*cos(z)

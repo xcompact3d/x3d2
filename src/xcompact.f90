@@ -130,10 +130,10 @@ program xcompact
   ! set the shift amount in x, y, z
   nrank_x = modulo(nrank, xdirps%nproc)
   nrank_y = modulo((nrank - nrank_x)/xdirps%nproc, ydirps%nproc)
-  xdirps%n_shift = xdirps%n*nrank_x
-  ydirps%n_shift = ydirps%n*nrank_y
-  zdirps%n_shift = zdirps%n*(nrank - nrank_x - nrank_y*xdirps%nproc) &
-                   /(xdirps%nproc*ydirps%nproc)
+  xdirps%n_offset = xdirps%n*nrank_x
+  ydirps%n_offset = ydirps%n*nrank_y
+  zdirps%n_offset = zdirps%n*(nrank - nrank_x - nrank_y*xdirps%nproc) &
+                    /(xdirps%nproc*ydirps%nproc)
 
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(globs%nx_loc, globs%ny_loc, &
