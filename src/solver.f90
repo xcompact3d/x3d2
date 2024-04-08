@@ -41,6 +41,7 @@ module m_solver
 
     real(dp) :: dt, nu
     integer :: n_iters, n_output
+    integer :: ngrid
 
     class(field_t), pointer :: u, v, w
 
@@ -112,6 +113,7 @@ contains
     solver%backend%nu = globs%nu
     solver%n_iters = globs%n_iters
     solver%n_output = globs%n_output
+    solver%ngrid = globs%nx*globs%ny*globs%nz
 
     nx = xdirps%n; ny = ydirps%n; nz = zdirps%n
     do k = 1, nz
@@ -577,9 +579,7 @@ contains
     real(dp), dimension(:, :, :), intent(inout) :: u_out
 
     class(field_t), pointer :: du, dv, dw, div_u
-    integer :: ngrid
 
-    ngrid = self%xdirps%n*self%ydirps%n*self%zdirps%n
     print *, 'time = ', t
 
     du => self%backend%allocator%get_block(DIR_X)
@@ -591,7 +591,7 @@ contains
       self%backend%scalar_product(du, du) &
       + self%backend%scalar_product(dv, dv) &
       + self%backend%scalar_product(dw, dw) &
-      )/ngrid
+      )/self%ngrid
 
     call self%backend%allocator%release_block(du)
     call self%backend%allocator%release_block(dv)
@@ -604,7 +604,7 @@ contains
 
     call self%backend%allocator%release_block(div_u)
 
-    print *, 'div u max mean:', maxval(abs(u_out)), sum(abs(u_out))/ngrid
+    print *, 'div u max mean:', maxval(abs(u_out)), sum(abs(u_out))/self%ngrid
 
   end subroutine output
 
