@@ -78,7 +78,7 @@ contains
                            worksize)
     ierr = cufftSetWorkArea(poisson_fft%plan3D_fw, poisson_fft%fft_worksize)
     if (ierr /= 0) then
-      write(stderr, *), "CuFFT Error Code: ", ierr
+      write (stderr, *), "cuFFT Error Code: ", ierr
       error stop 'Forward 3D FFT plan generation failed'
     end if
 
@@ -87,7 +87,7 @@ contains
                            worksize)
     ierr = cufftSetWorkArea(poisson_fft%plan3D_bw, poisson_fft%fft_worksize)
     if (ierr /= 0) then
-      write(stderr, *), "CuFFT Error Code: ", ierr
+      write (stderr, *), "cuFFT Error Code: ", ierr
       error stop 'Backward 3D FFT plan generation failed'
     end if
 
@@ -115,7 +115,7 @@ contains
 
     ierr = cufftExecD2Z(self%plan3D_fw, f_ptr, self%c_w_dev)
     if (ierr /= 0) then
-      write(stderr, *), "CuFFT Error Code: ", ierr
+      write (stderr, *), "cuFFT Error Code: ", ierr
       error stop 'Forward 3D FFT execution failed'
     end if
 
@@ -143,7 +143,7 @@ contains
 
     ierr = cufftExecZ2D(self%plan3D_bw, self%c_w_dev, f_ptr)
     if (ierr /= 0) then
-      write(stderr, *), "CuFFT Error Code: ", ierr
+      write (stderr, *), "cuFFT Error Code: ", ierr
       error stop 'Backward 3D FFT execution failed'
     end if
 
