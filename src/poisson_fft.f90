@@ -1,5 +1,5 @@
 module m_poisson_fft
-  use m_allocator, only: field_t
+  use m_allocator, only: field_t, allocator_t
   use m_common, only: dp, pi
   use m_tdsops, only: dirps_t
 
@@ -48,14 +48,18 @@ module m_poisson_fft
 
 contains
 
-  subroutine base_init(self, xdirps, ydirps, zdirps, sz)
+  subroutine base_init(self, xdirps, ydirps, zdirps, allocator)
     implicit none
 
     class(poisson_fft_t) :: self
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
-    integer, intent(in) :: sz
+    class(allocator_t), target, intent(in) :: allocator
+    integer :: sz
 
-    self%nx = xdirps%n; self%ny = ydirps%n; self%nz = zdirps%n
+    sz = allocator%sz
+    self%nx = allocator%cdims(1)
+    self%ny = allocator%cdims(2)
+    self%nz = allocator%cdims(3)
 
     allocate (self%ax(self%nx), self%bx(self%nx))
     allocate (self%ay(self%nx), self%by(self%nx))
@@ -64,7 +68,7 @@ contains
     allocate (self%waves(sz, self%nx, (self%ny*(self%nz/2 + 1))/sz))
 
     ! waves_set requires some of the preprocessed tdsops variables.
-    call self%waves_set(xdirps, ydirps, zdirps, sz)
+    call self%waves_set(xdirps, ydirps, zdirps, allocator%sz)
 
   end subroutine base_init
 
@@ -85,7 +89,7 @@ contains
 
     integer :: i, j, ka, kb, ix, iy, iz
 
-    nx = xdirps%n; ny = ydirps%n; nz = zdirps%n
+    nx = self%nx; ny = self%ny; nz = self%nz
 
     do i = 1, nx
       self%ax(i) = sin((i - 1)*pi/nx)

@@ -8,7 +8,6 @@ module m_omp_backend
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
   use m_omp_sendrecv, only: sendrecv_fields
 
-  use m_omp_common, only: SZ
   use m_omp_poisson_fft, only: omp_poisson_fft_t
 
   implicit none
@@ -48,14 +47,13 @@ module m_omp_backend
 
 contains
 
-  function init(globs, allocator) result(backend)
+  function init(allocator) result(backend)
     implicit none
 
-    class(globs_t) :: globs
     class(allocator_t), target, intent(inout) :: allocator
     type(omp_backend_t) :: backend
 
-    integer :: n_halo, n_block
+    integer :: n_halo, n_groups, sz
 
     select type (allocator)
     type is (allocator_t)
@@ -64,33 +62,36 @@ contains
     end select
 
     n_halo = 4
-    n_block = globs%n_groups_x
+    ! Buffer size should be big enough for the largest MPI exchange.
+    n_groups = max(allocator%n_groups_x, allocator%n_groups_y, allocator%n_groups_z)
+    print *, "n_groups new", n_groups
+    sz = allocator%sz
 
-    allocate (backend%u_send_s(SZ, n_halo, n_block))
-    allocate (backend%u_send_e(SZ, n_halo, n_block))
-    allocate (backend%u_recv_s(SZ, n_halo, n_block))
-    allocate (backend%u_recv_e(SZ, n_halo, n_block))
-    allocate (backend%v_send_s(SZ, n_halo, n_block))
-    allocate (backend%v_send_e(SZ, n_halo, n_block))
-    allocate (backend%v_recv_s(SZ, n_halo, n_block))
-    allocate (backend%v_recv_e(SZ, n_halo, n_block))
-    allocate (backend%w_send_s(SZ, n_halo, n_block))
-    allocate (backend%w_send_e(SZ, n_halo, n_block))
-    allocate (backend%w_recv_s(SZ, n_halo, n_block))
-    allocate (backend%w_recv_e(SZ, n_halo, n_block))
+    allocate (backend%u_send_s(sz, n_halo, n_groups))
+    allocate (backend%u_send_e(sz, n_halo, n_groups))
+    allocate (backend%u_recv_s(sz, n_halo, n_groups))
+    allocate (backend%u_recv_e(sz, n_halo, n_groups))
+    allocate (backend%v_send_s(sz, n_halo, n_groups))
+    allocate (backend%v_send_e(sz, n_halo, n_groups))
+    allocate (backend%v_recv_s(sz, n_halo, n_groups))
+    allocate (backend%v_recv_e(sz, n_halo, n_groups))
+    allocate (backend%w_send_s(sz, n_halo, n_groups))
+    allocate (backend%w_send_e(sz, n_halo, n_groups))
+    allocate (backend%w_recv_s(sz, n_halo, n_groups))
+    allocate (backend%w_recv_e(sz, n_halo, n_groups))
 
-    allocate (backend%du_send_s(SZ, 1, n_block))
-    allocate (backend%du_send_e(SZ, 1, n_block))
-    allocate (backend%du_recv_s(SZ, 1, n_block))
-    allocate (backend%du_recv_e(SZ, 1, n_block))
-    allocate (backend%dud_send_s(SZ, 1, n_block))
-    allocate (backend%dud_send_e(SZ, 1, n_block))
-    allocate (backend%dud_recv_s(SZ, 1, n_block))
-    allocate (backend%dud_recv_e(SZ, 1, n_block))
-    allocate (backend%d2u_send_s(SZ, 1, n_block))
-    allocate (backend%d2u_send_e(SZ, 1, n_block))
-    allocate (backend%d2u_recv_s(SZ, 1, n_block))
-    allocate (backend%d2u_recv_e(SZ, 1, n_block))
+    allocate (backend%du_send_s(sz, 1, n_groups))
+    allocate (backend%du_send_e(sz, 1, n_groups))
+    allocate (backend%du_recv_s(sz, 1, n_groups))
+    allocate (backend%du_recv_e(sz, 1, n_groups))
+    allocate (backend%dud_send_s(sz, 1, n_groups))
+    allocate (backend%dud_send_e(sz, 1, n_groups))
+    allocate (backend%dud_recv_s(sz, 1, n_groups))
+    allocate (backend%dud_recv_e(sz, 1, n_groups))
+    allocate (backend%d2u_send_s(sz, 1, n_groups))
+    allocate (backend%d2u_send_e(sz, 1, n_groups))
+    allocate (backend%d2u_recv_s(sz, 1, n_groups))
+    allocate (backend%d2u_recv_e(sz, 1, n_groups))
 
   end function init
 
@@ -195,24 +196,21 @@ contains
     ! TODO: don't hardcode n_halo
     n_halo = 4
 
-    call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
-                           dirps%n, dirps%n_blocks)
-    call copy_into_buffers(self%v_send_s, self%v_send_e, v%data, &
-                           dirps%n, dirps%n_blocks)
-    call copy_into_buffers(self%w_send_s, self%w_send_e, w%data, &
-                           dirps%n, dirps%n_blocks)
+    call copy_into_buffers(self%u_send_s, self%u_send_e, u)
+    call copy_into_buffers(self%v_send_s, self%v_send_e, v)
+    call copy_into_buffers(self%w_send_s, self%w_send_e, w)
 
     call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
                          self%u_send_s, self%u_send_e, &
-                         SZ*n_halo*dirps%n_blocks, &
+                         u%sz*n_halo*u%n_groups, &
                          dirps%nproc, dirps%pprev, dirps%pnext)
     call sendrecv_fields(self%v_recv_s, self%v_recv_e, &
                          self%v_send_s, self%v_send_e, &
-                         SZ*n_halo*dirps%n_blocks, &
+                         v%sz*n_halo*v%n_groups, &
                          dirps%nproc, dirps%pprev, dirps%pnext)
     call sendrecv_fields(self%w_recv_s, self%w_recv_e, &
                          self%w_send_s, self%w_send_e, &
-                         SZ*n_halo*dirps%n_blocks, &
+                         w%sz*n_halo*w%n_groups, &
                          dirps%nproc, dirps%pprev, dirps%pnext)
 
   end subroutine transeq_halo_exchange
@@ -247,7 +245,7 @@ contains
       u%data, u_recv_s, u_recv_e, &
       conv%data, conv_recv_s, conv_recv_e, &
       tdsops_du, tdsops_dud, tdsops_d2u, self%nu, &
-      dirps%nproc, dirps%pprev, dirps%pnext, dirps%n_blocks)
+      dirps%nproc, dirps%pprev, dirps%pnext, u%n_groups, u%sz)
 
     call self%allocator%release_block(du)
     call self%allocator%release_block(dud)
@@ -285,20 +283,18 @@ contains
 
     ! TODO: don't hardcode n_halo
     n_halo = 4
-    call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
-                           dirps%n, dirps%n_blocks)
+    call copy_into_buffers(self%u_send_s, self%u_send_e, u)
 
     ! halo exchange
     call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
                          self%u_send_s, self%u_send_e, &
-                         SZ*n_halo*dirps%n_blocks, &
+                         u%sz*n_halo*u%n_groups, &
                          dirps%nproc, dirps%pprev, dirps%pnext)
 
     call exec_dist_tds_compact( &
       du%data, u%data, self%u_recv_s, self%u_recv_e, &
       self%du_send_s, self%du_send_e, self%du_recv_s, self%du_recv_e, &
-      tdsops, dirps%nproc, dirps%pprev, dirps%pnext, dirps%n_blocks &
-      )
+      tdsops, dirps%nproc, dirps%pprev, dirps%pnext, u%n_groups, u%sz)
 
   end subroutine tds_solve_dist
 
@@ -309,43 +305,16 @@ contains
     class(field_t), intent(inout) :: u_
     class(field_t), intent(in) :: u
     integer, intent(in) :: direction
-    integer :: ndir_loc, ndir_groups
     integer :: i, j, k
     integer :: out_i, out_j, out_k
 
-    select case (direction)
-    case (RDR_X2Y)
-      ndir_loc = self%xdirps%n
-      ndir_groups = self%xdirps%n_blocks
-    case (RDR_X2Z)
-      ndir_loc = self%xdirps%n
-      ndir_groups = self%xdirps%n_blocks
-    case (RDR_Y2X)
-      ndir_loc = self%ydirps%n
-      ndir_groups = self%ydirps%n_blocks
-    case (RDR_Y2Z)
-      ndir_loc = self%ydirps%n
-      ndir_groups = self%ydirps%n_blocks
-    case (RDR_Z2X)
-      ndir_loc = self%zdirps%n
-      ndir_groups = self%zdirps%n_blocks
-    case (RDR_Z2Y)
-      ndir_loc = self%zdirps%n
-      ndir_groups = self%zdirps%n_blocks
-    case default
-      ndir_loc = 0
-      ndir_groups = 0
-      error stop 'unsuported reordering'
-    end select
-
     !$omp parallel do private(out_i, out_j, out_k) collapse(2)
-    do k = 1, ndir_groups
-      do j = 1, ndir_loc
-        do i = 1, SZ
+    do k = 1, u%n_groups
+      do j = 1, u%n
+        do i = 1, u%sz
           call get_index_reordering( &
-            out_i, out_j, out_k, i, j, k, direction, &
-            SZ, self%xdirps%n, self%ydirps%n, self%zdirps%n &
-            )
+            out_i, out_j, out_k, i, j, k, direction, u%sz, &
+            self%allocator%cdims(1), self%allocator%cdims(2), self%allocator%cdims(3))
           u_%data(out_i, out_j, out_k) = u%data(i, j, k)
         end do
       end do
@@ -393,23 +362,21 @@ contains
 
   end function scalar_product_omp
 
-  subroutine copy_into_buffers(u_send_s, u_send_e, u, n, n_blocks)
+  subroutine copy_into_buffers(u_send_s, u_send_e, u)
     implicit none
 
     real(dp), dimension(:, :, :), intent(out) :: u_send_s, u_send_e
-    real(dp), dimension(:, :, :), intent(in) :: u
-    integer, intent(in) :: n
-    integer, intent(in) :: n_blocks
+    class(field_t), intent(in) :: u
     integer :: i, j, k
     integer :: n_halo = 4
 
     !$omp parallel do
-    do k = 1, n_blocks
+    do k = 1, u%n_groups
       do j = 1, n_halo
         !$omp simd
-        do i = 1, SZ
-          u_send_s(i, j, k) = u(i, j, k)
-          u_send_e(i, j, k) = u(i, n - n_halo + j, k)
+        do i = 1, u%sz
+          u_send_s(i, j, k) = u%data(i, j, k)
+          u_send_e(i, j, k) = u%data(i, u%n - n_halo + j, k)
         end do
         !$omp end simd
       end do
@@ -444,7 +411,7 @@ contains
 
     select type (poisson_fft => self%poisson_fft)
     type is (omp_poisson_fft_t)
-      poisson_fft = omp_poisson_fft_t(xdirps, ydirps, zdirps)
+      poisson_fft = omp_poisson_fft_t(xdirps, ydirps, zdirps, self%allocator)
     end select
 
   end subroutine init_omp_poisson_fft

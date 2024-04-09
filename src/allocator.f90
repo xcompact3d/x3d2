@@ -124,9 +124,13 @@ contains
     allocator%ngrid = nx_padded*ny_padded*nz_padded
     allocator%sz = sz
 
-    allocator%xdims_padded = [sz, nx_padded, ny_padded*nz_padded/sz]
-    allocator%ydims_padded = [sz, ny_padded, nx_padded*nz_padded/sz]
-    allocator%zdims_padded = [sz, nz_padded, nx_padded*ny_padded/sz]
+    allocator%n_groups_x = ny_padded*nz_padded/sz
+    allocator%n_groups_y = nx_padded*nz_padded/sz
+    allocator%n_groups_z = nx_padded*ny_padded/sz
+
+    allocator%xdims_padded = [sz, nx_padded, allocator%n_groups_x]
+    allocator%ydims_padded = [sz, ny_padded, allocator%n_groups_y]
+    allocator%zdims_padded = [sz, nz_padded, allocator%n_groups_z]
     allocator%cdims_padded = [nx_padded, ny_padded, nz_padded]
     allocator%cdims = [nx, ny, nz]
   end function allocator_init

@@ -85,7 +85,7 @@ contains
     type(solver_t) :: solver
 
     real(dp), allocatable, dimension(:, :, :) :: u_init, v_init, w_init
-    integer :: dims(3)
+    integer :: dims(3), dims_padded(3)
 
     real(dp) :: x, y, z
     integer :: nx, ny, nz, i, j, k
@@ -102,17 +102,18 @@ contains
     solver%w => solver%backend%allocator%get_block(DIR_X)
 
     ! Set initial conditions
-    dims(:) = solver%backend%allocator%cdims_padded(:)
-    allocate (u_init(dims(1), dims(2), dims(3)))
-    allocate (v_init(dims(1), dims(2), dims(3)))
-    allocate (w_init(dims(1), dims(2), dims(3)))
+    dims_padded(:) = solver%backend%allocator%cdims_padded(:)
+    allocate (u_init(dims_padded(1), dims_padded(2), dims_padded(3)))
+    allocate (v_init(dims_padded(1), dims_padded(2), dims_padded(3)))
+    allocate (w_init(dims_padded(1), dims_padded(2), dims_padded(3)))
+    dims(:) = solver%backend%allocator%cdims(:)
 
     solver%dt = globs%dt
     solver%backend%nu = globs%nu
     solver%n_iters = globs%n_iters
     solver%n_output = globs%n_output
 
-    nx = globs%nx_loc; ny = globs%ny_loc; nz = globs%nz_loc
+    nx = dims(1); ny = dims(2); nz = dims(3)
     do k = 1, nz
       do j = 1, ny
         do i = 1, nx
@@ -565,14 +566,17 @@ contains
     real(dp), dimension(:, :, :), intent(inout) :: u_out
 
     class(field_t), pointer :: du, dv, dw, div_u
+    integer :: cdims(3)
     integer :: ngrid
 
-    ngrid = self%xdirps%n*self%ydirps%n*self%zdirps%n
     print *, 'time = ', t
 
     du => self%backend%allocator%get_block(DIR_X)
     dv => self%backend%allocator%get_block(DIR_X)
     dw => self%backend%allocator%get_block(DIR_X)
+
+    cdims = self%backend%allocator%cdims
+    ngrid = cdims(1)*cdims(2)*cdims(3)
 
     call self%curl(du, dv, dw, self%u, self%v, self%w)
     print *, 'enstrophy:', 0.5_dp*( &

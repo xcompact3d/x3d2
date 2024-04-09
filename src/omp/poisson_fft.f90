@@ -1,5 +1,5 @@
 module m_omp_poisson_fft
-  use m_allocator, only: field_t
+  use m_allocator, only: field_t, allocator_t
   use m_common, only: dp
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t
@@ -26,14 +26,15 @@ module m_omp_poisson_fft
 
 contains
 
-  function init(xdirps, ydirps, zdirps) result(poisson_fft)
+  function init(xdirps, ydirps, zdirps, allocator) result(poisson_fft)
     implicit none
 
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    class(allocator_t), target, intent(in) :: allocator
 
     type(omp_poisson_fft_t) :: poisson_fft
 
-    call poisson_fft%base_init(xdirps, ydirps, zdirps, SZ)
+    call poisson_fft%base_init(xdirps, ydirps, zdirps, allocator)
 
   end function init
 

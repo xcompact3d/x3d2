@@ -64,15 +64,14 @@ module m_cuda_backend
 
 contains
 
-  function init(globs, allocator) result(backend)
+  function init(allocator) result(backend)
     implicit none
 
-    class(globs_t) :: globs
     class(allocator_t), target, intent(inout) :: allocator
     type(cuda_backend_t) :: backend
 
     type(cuda_poisson_fft_t) :: cuda_poisson_fft
-    integer :: n_halo, n_block
+    integer :: n_halo, n_groups, sz
 
     select type (allocator)
     type is (cuda_allocator_t)
@@ -80,46 +79,48 @@ contains
       backend%allocator => allocator
     end select
 
-    backend%xthreads = dim3(SZ, 1, 1)
-    backend%xblocks = dim3(globs%n_groups_x, 1, 1)
-    backend%ythreads = dim3(SZ, 1, 1)
-    backend%yblocks = dim3(globs%n_groups_y, 1, 1)
-    backend%zthreads = dim3(SZ, 1, 1)
-    backend%zblocks = dim3(globs%n_groups_z, 1, 1)
+    sz = allocator%sz
 
-    backend%nx_loc = globs%nx_loc
-    backend%ny_loc = globs%ny_loc
-    backend%nz_loc = globs%nz_loc
+    backend%xthreads = dim3(sz, 1, 1)
+    backend%xblocks = dim3(allocator%n_groups_x, 1, 1)
+    backend%ythreads = dim3(sz, 1, 1)
+    backend%yblocks = dim3(allocator%n_groups_y, 1, 1)
+    backend%zthreads = dim3(sz, 1, 1)
+    backend%zblocks = dim3(allocator%n_groups_z, 1, 1)
+
+    backend%nx_loc = allocator%dims(1)
+    backend%ny_loc = allocator%dims(2)
+    backend%nz_loc = allocator%dims(3)
 
     n_halo = 4
     ! Buffer size should be big enough for the largest MPI exchange.
-    n_block = max(globs%n_groups_x, globs%n_groups_y, globs%n_groups_z)
+    n_groups = max(allocator%n_groups_x, allocator%n_groups_y, allocator%n_groups_z)
 
-    allocate (backend%u_send_s_dev(SZ, n_halo, n_block))
-    allocate (backend%u_send_e_dev(SZ, n_halo, n_block))
-    allocate (backend%u_recv_s_dev(SZ, n_halo, n_block))
-    allocate (backend%u_recv_e_dev(SZ, n_halo, n_block))
-    allocate (backend%v_send_s_dev(SZ, n_halo, n_block))
-    allocate (backend%v_send_e_dev(SZ, n_halo, n_block))
-    allocate (backend%v_recv_s_dev(SZ, n_halo, n_block))
-    allocate (backend%v_recv_e_dev(SZ, n_halo, n_block))
-    allocate (backend%w_send_s_dev(SZ, n_halo, n_block))
-    allocate (backend%w_send_e_dev(SZ, n_halo, n_block))
-    allocate (backend%w_recv_s_dev(SZ, n_halo, n_block))
-    allocate (backend%w_recv_e_dev(SZ, n_halo, n_block))
+    allocate (backend%u_send_s_dev(sz, n_halo, n_groups))
+    allocate (backend%u_send_e_dev(sz, n_halo, n_groups))
+    allocate (backend%u_recv_s_dev(sz, n_halo, n_groups))
+    allocate (backend%u_recv_e_dev(sz, n_halo, n_groups))
+    allocate (backend%v_send_s_dev(sz, n_halo, n_groups))
+    allocate (backend%v_send_e_dev(sz, n_halo, n_groups))
+    allocate (backend%v_recv_s_dev(sz, n_halo, n_groups))
+    allocate (backend%v_recv_e_dev(sz, n_halo, n_groups))
+    allocate (backend%w_send_s_dev(sz, n_halo, n_groups))
+    allocate (backend%w_send_e_dev(sz, n_halo, n_groups))
+    allocate (backend%w_recv_s_dev(sz, n_halo, n_groups))
+    allocate (backend%w_recv_e_dev(sz, n_halo, n_groups))
 
-    allocate (backend%du_send_s_dev(SZ, 1, n_block))
-    allocate (backend%du_send_e_dev(SZ, 1, n_block))
-    allocate (backend%du_recv_s_dev(SZ, 1, n_block))
-    allocate (backend%du_recv_e_dev(SZ, 1, n_block))
-    allocate (backend%dud_send_s_dev(SZ, 1, n_block))
-    allocate (backend%dud_send_e_dev(SZ, 1, n_block))
-    allocate (backend%dud_recv_s_dev(SZ, 1, n_block))
-    allocate (backend%dud_recv_e_dev(SZ, 1, n_block))
-    allocate (backend%d2u_send_s_dev(SZ, 1, n_block))
-    allocate (backend%d2u_send_e_dev(SZ, 1, n_block))
-    allocate (backend%d2u_recv_s_dev(SZ, 1, n_block))
-    allocate (backend%d2u_recv_e_dev(SZ, 1, n_block))
+    allocate (backend%du_send_s_dev(sz, 1, n_groups))
+    allocate (backend%du_send_e_dev(sz, 1, n_groups))
+    allocate (backend%du_recv_s_dev(sz, 1, n_groups))
+    allocate (backend%du_recv_e_dev(sz, 1, n_groups))
+    allocate (backend%dud_send_s_dev(sz, 1, n_groups))
+    allocate (backend%dud_send_e_dev(sz, 1, n_groups))
+    allocate (backend%dud_recv_s_dev(sz, 1, n_groups))
+    allocate (backend%dud_recv_e_dev(sz, 1, n_groups))
+    allocate (backend%d2u_send_s_dev(sz, 1, n_groups))
+    allocate (backend%d2u_send_e_dev(sz, 1, n_groups))
+    allocate (backend%d2u_recv_s_dev(sz, 1, n_groups))
+    allocate (backend%d2u_recv_e_dev(sz, 1, n_groups))
 
   end function init
 
@@ -226,7 +227,7 @@ contains
     type is (cuda_tdsops_t); der2nd_sym => tdsops
     end select
 
-    call transeq_halo_exchange(self, u_dev, v_dev, w_dev, dirps)
+    call transeq_halo_exchange(self, u, v, w, dirps)
 
     call transeq_dist_component(self, du_dev, u_dev, u_dev, &
                                 self%u_recv_s_dev, self%u_recv_e_dev, &
@@ -246,22 +247,26 @@ contains
 
   end subroutine transeq_cuda_dist
 
-  subroutine transeq_halo_exchange(self, u_dev, v_dev, w_dev, dirps)
+  subroutine transeq_halo_exchange(self, u, v, w, dirps)
     class(cuda_backend_t) :: self
-    real(dp), device, dimension(:, :, :), intent(in) :: u_dev, v_dev, w_dev
+    class(field_t), intent(in) :: u, v, w
     type(dirps_t), intent(in) :: dirps
+    real(dp), device, dimension(:, :, :) :: u_dev, v_dev, w_dev
     integer :: n_halo
 
+    call resolve_field_t(u_dev, u)
+    call resolve_field_t(v_dev, v)
+    call resolve_field_t(w_dev, w)
     ! TODO: don't hardcode n_halo
     n_halo = 4
 
     ! Copy halo data into buffer arrays
     call copy_into_buffers(self%u_send_s_dev, self%u_send_e_dev, u_dev, &
-                           dirps%n)
+                           u%n, u%sz)
     call copy_into_buffers(self%v_send_s_dev, self%v_send_e_dev, v_dev, &
-                           dirps%n)
+                           v%n, u%sz)
     call copy_into_buffers(self%w_send_s_dev, self%w_send_e_dev, w_dev, &
-                           dirps%n)
+                           w%n, u%sz)
 
     ! halo exchange
     call sendrecv_3fields( &
@@ -271,7 +276,7 @@ contains
       self%u_send_s_dev, self%u_send_e_dev, &
       self%v_send_s_dev, self%v_send_e_dev, &
       self%w_send_s_dev, self%w_send_e_dev, &
-      SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext &
+      u%sz*n_halo*u%n_groups, dirps%nproc, dirps%pprev, dirps%pnext &
       )
 
   end subroutine transeq_halo_exchange
@@ -360,7 +365,7 @@ contains
       error stop 'DIR mismatch between fields and dirps in tds_solve.'
     end if
 
-    blocks = dim3(dirps%n_blocks, 1, 1); threads = dim3(SZ, 1, 1)
+    blocks = dim3(u%n_groups, 1, 1); threads = dim3(u%sz, 1, 1)
 
     call tds_solve_dist(self, du, u, dirps, tdsops, blocks, threads)
 
@@ -397,7 +402,7 @@ contains
 
     call sendrecv_fields(self%u_recv_s_dev, self%u_recv_e_dev, &
                          self%u_send_s_dev, self%u_send_e_dev, &
-                         SZ*n_halo*dirps%n_blocks, dirps%nproc, &
+                         u%sz*n_halo*u%n_groups, dirps%nproc, &
                          dirps%pprev, dirps%pnext)
 
     ! call exec_dist
@@ -612,19 +617,19 @@ contains
 
   end function scalar_product_cuda
 
-  subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n)
+  subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n, sz)
     implicit none
 
     real(dp), device, dimension(:, :, :), intent(out) :: u_send_s_dev, &
                                                          u_send_e_dev
     real(dp), device, dimension(:, :, :), intent(in) :: u_dev
-    integer, intent(in) :: n
+    integer, intent(in) :: n, sz
 
     type(dim3) :: blocks, threads
     integer :: n_halo = 4
 
     blocks = dim3(size(u_dev, dim=3), 1, 1)
-    threads = dim3(SZ, 1, 1)
+    threads = dim3(sz, 1, 1)
     call buffer_copy<<<blocks, threads>>>(u_send_s_dev, u_send_e_dev, & !&
                                           u_dev, n, n_halo)
 

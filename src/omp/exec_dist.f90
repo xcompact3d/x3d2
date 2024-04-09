@@ -2,7 +2,6 @@ module m_omp_exec_dist
   use mpi
 
   use m_common, only: dp
-  use m_omp_common, only: SZ
   use m_omp_kernels_dist, only: der_univ_dist, der_univ_subs
   use m_tdsops, only: tdsops_t
   use m_omp_sendrecv, only: sendrecv_fields
@@ -13,7 +12,7 @@ contains
 
   subroutine exec_dist_tds_compact( &
     du, u, u_recv_s, u_recv_e, du_send_s, du_send_e, du_recv_s, du_recv_e, &
-    tdsops, nproc, pprev, pnext, n_block &
+    tdsops, nproc, pprev, pnext, n_groups, sz &
     )
     implicit none
 
@@ -29,15 +28,16 @@ contains
 
     type(tdsops_t), intent(in) :: tdsops
     integer, intent(in) :: nproc, pprev, pnext
-    integer, intent(in) :: n_block
+    integer, intent(in) :: n_groups
+    integer, intent(in) :: sz
 
     integer :: n_data
     integer :: k
 
-    n_data = SZ*n_block
+    n_data = sz*n_groups
 
     !$omp parallel do
-    do k = 1, n_block
+    do k = 1, n_groups
       call der_univ_dist( &
         du(:, :, k), du_send_s(:, :, k), du_send_e(:, :, k), u(:, :, k), &
         u_recv_s(:, :, k), u_recv_e(:, :, k), &
@@ -52,7 +52,7 @@ contains
                          n_data, nproc, pprev, pnext)
 
     !$omp parallel do
-    do k = 1, n_block
+    do k = 1, n_groups
       call der_univ_subs(du(:, :, k), &
                          du_recv_s(:, :, k), du_recv_e(:, :, k), &
                          tdsops%n, tdsops%dist_sa, tdsops%dist_sc)
@@ -68,7 +68,7 @@ contains
     d2u_send_s, d2u_send_e, d2u_recv_s, d2u_recv_e, &
     u, u_recv_s, u_recv_e, &
     v, v_recv_s, v_recv_e, &
-    tdsops_du, tdsops_dud, tdsops_d2u, nu, nproc, pprev, pnext, n_block)
+    tdsops_du, tdsops_dud, tdsops_d2u, nu, nproc, pprev, pnext, n_groups, sz)
 
     implicit none
 
@@ -93,7 +93,8 @@ contains
     real(dp), dimension(:, :), allocatable :: ud, ud_recv_s, ud_recv_e
     real(dp) :: nu
     integer, intent(in) :: nproc, pprev, pnext
-    integer, intent(in) :: n_block
+    integer, intent(in) :: n_groups
+    integer, intent(in) :: sz
 
     integer :: n_data, n_halo
     integer :: k, i, j, n
@@ -101,14 +102,14 @@ contains
     ! TODO: don't hardcode n_halo
     n_halo = 4
     n = tdsops_d2u%n
-    n_data = SZ*n_block
+    n_data = sz*n_groups
 
-    allocate (ud(SZ, n))
-    allocate (ud_recv_e(SZ, n_halo))
-    allocate (ud_recv_s(SZ, n_halo))
+    allocate (ud(sz, n))
+    allocate (ud_recv_e(sz, n_halo))
+    allocate (ud_recv_s(sz, n_halo))
 
     !$omp parallel do private(ud, ud_recv_e, ud_recv_s)
-    do k = 1, n_block
+    do k = 1, n_groups
       call der_univ_dist( &
         du(:, :, k), du_send_s(:, :, k), du_send_e(:, :, k), u(:, :, k), &
         u_recv_s(:, :, k), u_recv_e(:, :, k), &
@@ -127,7 +128,7 @@ contains
       ! Handle dud by locally generating u*v
       do j = 1, n
         !$omp simd
-        do i = 1, SZ
+        do i = 1, sz
           ud(i, j) = u(i, j, k)*v(i, j, k)
         end do
         !$omp end simd
@@ -135,7 +136,7 @@ contains
 
       do j = 1, n_halo
         !$omp simd
-        do i = 1, SZ
+        do i = 1, sz
           ud_recv_s(i, j) = u_recv_s(i, j, k)*v_recv_s(i, j, k)
           ud_recv_e(i, j) = u_recv_e(i, j, k)*v_recv_e(i, j, k)
         end do
@@ -162,7 +163,7 @@ contains
                          n_data, nproc, pprev, pnext)
 
     !$omp parallel do
-    do k = 1, n_block
+    do k = 1, n_groups
       call der_univ_subs(du(:, :, k), &
                          du_recv_s(:, :, k), du_recv_e(:, :, k), &
                          tdsops_du%n, tdsops_du%dist_sa, tdsops_du%dist_sc)
@@ -177,7 +178,7 @@ contains
 
       do j = 1, n
         !$omp simd
-        do i = 1, SZ
+        do i = 1, sz
           rhs(i, j, k) = -0.5_dp*(v(i, j, k)*du(i, j, k) + dud(i, j, k)) &
                          + nu*d2u(i, j, k)
         end do

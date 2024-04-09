@@ -94,23 +94,11 @@ program xcompact
   globs%ny_loc = globs%ny/globs%nproc_y
   globs%nz_loc = globs%nz/globs%nproc_z
 
-  globs%n_groups_x = globs%ny_loc*globs%nz_loc/SZ
-  globs%n_groups_y = globs%nx_loc*globs%nz_loc/SZ
-  globs%n_groups_z = globs%nx_loc*globs%ny_loc/SZ
-
   globs%dx = globs%Lx/globs%nx
   globs%dy = globs%Ly/globs%ny
   globs%dz = globs%Lz/globs%nz
 
   xdirps%d = globs%dx; ydirps%d = globs%dy; zdirps%d = globs%dz
-
-  xdirps%n = globs%nx_loc
-  ydirps%n = globs%ny_loc
-  zdirps%n = globs%nz_loc
-
-  xdirps%n_blocks = globs%n_groups_x
-  ydirps%n_blocks = globs%n_groups_y
-  zdirps%n_blocks = globs%n_groups_z
 
   xdirps%dir = DIR_X; ydirps%dir = DIR_Y; zdirps%dir = DIR_Z
 
@@ -120,7 +108,7 @@ program xcompact
   allocator => cuda_allocator
   print *, 'CUDA allocator instantiated'
 
-  cuda_backend = cuda_backend_t(globs, allocator)
+  cuda_backend = cuda_backend_t(allocator)
   backend => cuda_backend
   print *, 'CUDA backend instantiated'
 #else
@@ -128,7 +116,7 @@ program xcompact
   allocator => omp_allocator
   print *, 'OpenMP allocator instantiated'
 
-  omp_backend = omp_backend_t(globs, allocator)
+  omp_backend = omp_backend_t(allocator)
   backend => omp_backend
   print *, 'OpenMP backend instantiated'
 #endif
