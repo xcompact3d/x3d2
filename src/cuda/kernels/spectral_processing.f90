@@ -1,4 +1,4 @@
-module m_cuda_complex
+module m_cuda_spectral
   use cudafor
 
   use m_common, only: dp
@@ -8,17 +8,22 @@ module m_cuda_complex
 contains
 
   attributes(global) subroutine process_spectral_div_u( &
-    div, waves, nx, ny, nz, ax, bx, ay, by, az, bz &
+    div_u, waves, nx, ny, nz, ax, bx, ay, by, az, bz &
     )
+    !! Post-processes the divergence of velocity in spectral space, including
+    !! scaling w.r.t. grid size.
+    !!
+    !! Ref. JCP 228 (2009), 5989–6015, Sec 4
     implicit none
 
-    ! Arguments
-    complex(dp), device, intent(inout), dimension(:, :, :) :: div
+    !> Divergence of velocity in spectral space
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
+    !> Spectral equivalence constants
     complex(dp), device, intent(in), dimension(:, :, :) :: waves
     real(dp), device, intent(in), dimension(:) :: ax, bx, ay, by, az, bz
+    !> Grid size
     integer, value, intent(in) :: nx, ny, nz
 
-    ! Local variables
     integer :: i, j, k
     real(dp) :: tmp_r, tmp_c, div_r, div_c
 
@@ -28,8 +33,8 @@ contains
     if (j <= ny) then
       do i = 1, nx/2 + 1
         ! normalisation
-        div_r = real(div(i, j, k), kind=dp)/(nx*ny*nz)
-        div_c = aimag(div(i, j, k))/(nx*ny*nz)
+        div_r = real(div_u(i, j, k), kind=dp)/(nx*ny*nz)
+        div_c = aimag(div_u(i, j, k))/(nx*ny*nz)
 
         ! post-process forward
         ! post-process in z
@@ -88,10 +93,10 @@ contains
         if (i > nx/2 + 1) div_c = -div_c
 
         ! update the entry
-        div(i, j, k) = cmplx(div_r, div_c, kind=dp)
+        div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
       end do
     end if
 
   end subroutine process_spectral_div_u
 
-end module m_cuda_complex
+end module m_cuda_spectral

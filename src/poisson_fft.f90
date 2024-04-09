@@ -68,6 +68,8 @@ contains
   end subroutine base_init
 
   subroutine waves_set(self, xdirps, ydirps, zdirps)
+    !! Spectral equivalence constants
+    !!
     !! Ref. JCP 228 (2009), 5989–6015, Sec 4
     implicit none
 
