@@ -40,7 +40,8 @@ module m_allocator
     !> Padded dimensions for x, y, and z oriented fields
     integer :: xdims_padded(3), ydims_padded(3), zdims_padded(3)
     !> Padded dimensions for natural Cartesian ordering
-    integer :: cdims_padded(3)
+    integer :: cdims_padded(3), cdims(3)
+    integer :: n_groups_x, n_groups_y, n_groups_z
     !> The pointer to the first block on the list.  Non associated if
     !> the list is empty
     ! TODO: Rename first to head
@@ -66,9 +67,13 @@ module m_allocator
     class(field_t), pointer :: next
     real(dp), pointer, private :: p_data(:)
     real(dp), pointer, contiguous :: data(:, :, :)
-    integer :: dir
     integer :: refcount = 0
     integer :: id !! An integer identifying the memory block.
+    integer :: dir
+    integer :: n         !! number of cells in the `dir` direction
+    integer :: n_padded  !! number of cells in the `dir` direction including padding
+    integer :: SZ
+    integer :: n_groups 
   contains
     procedure :: set_shape
   end type field_t
@@ -123,6 +128,7 @@ contains
     allocator%ydims_padded = [sz, ny_padded, nx_padded*nz_padded/sz]
     allocator%zdims_padded = [sz, nz_padded, nx_padded*ny_padded/sz]
     allocator%cdims_padded = [nx_padded, ny_padded, nz_padded]
+    allocator%cdims = [nx, ny, nz]
   end function allocator_init
 
   function create_block(self, next) result(ptr)
@@ -170,12 +176,28 @@ contains
     select case (dir)
     case (DIR_X)
       dims = self%xdims_padded
+      handle%n = self%cdims(1)
+      handle%SZ = self%xdims_padded(1)
+      handle%n_padded = self%xdims_padded(2)
+      handle%n_groups = self%xdims_padded(3)
     case (DIR_Y)
       dims = self%ydims_padded
+      handle%n = self%cdims(2)
+      handle%SZ = self%ydims_padded(1)
+      handle%n_padded = self%ydims_padded(2)
+      handle%n_groups = self%ydims_padded(3)
     case (DIR_Z)
       dims = self%zdims_padded
+      handle%n = self%cdims(3)
+      handle%SZ = self%zdims_padded(1)
+      handle%n_padded = self%zdims_padded(2)
+      handle%n_groups = self%zdims_padded(3)
     case (DIR_C)
       dims = self%cdims_padded
+      handle%n = -1
+      handle%SZ = -1
+      handle%n_padded = -1
+      handle%n_groups = -1 
     case default
       error stop 'Undefined direction, allocator cannot provide a shape.'
     end select
