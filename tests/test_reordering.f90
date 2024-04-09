@@ -32,6 +32,7 @@ program test_reorder
   real(dp), allocatable, dimension(:, :, :) :: u_array, temp_1, temp_2
 
   integer :: dims(3)
+  integer :: cdims(3)
 
   integer :: nrank, nproc
   integer :: ierr, i, j, k
@@ -72,25 +73,13 @@ program test_reorder
   globs%ny_loc = globs%ny/nproc
   globs%nz_loc = globs%nz/nproc
 
-  globs%n_groups_x = globs%ny_loc*globs%nz_loc/SZ
-  globs%n_groups_y = globs%nx_loc*globs%nz_loc/SZ
-  globs%n_groups_z = globs%nx_loc*globs%ny_loc/SZ
-
-  xdirps%n = globs%nx_loc
-  ydirps%n = globs%ny_loc
-  zdirps%n = globs%nz_loc
-
-  xdirps%n_blocks = globs%n_groups_x
-  ydirps%n_blocks = globs%n_groups_y
-  zdirps%n_blocks = globs%n_groups_z
-
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, &
                                     SZ)
   allocator => cuda_allocator
   print *, 'CUDA allocator instantiated'
 
-  cuda_backend = cuda_backend_t(globs, allocator)
+  cuda_backend = cuda_backend_t(allocator)
   backend => cuda_backend
   print *, 'CUDA backend instantiated'
 #else
@@ -98,7 +87,7 @@ program test_reorder
   allocator => omp_allocator
   print *, 'OpenMP allocator instantiated'
 
-  omp_backend = omp_backend_t(globs, allocator)
+  omp_backend = omp_backend_t(allocator)
   backend => omp_backend
   print *, 'OpenMP backend instantiated'
 #endif
@@ -112,16 +101,18 @@ program test_reorder
   pass_Y = .true.
   pass_Z = .true.
 
+  cdims = allocator%cdims
+
   ! Test indexing only
-  do k = 1, zdirps%n
-    do j = 1, ydirps%n
-      do i = 1, xdirps%n
+  do k = 1, cdims(3)
+    do j = 1, cdims(2)
+      do i = 1, cdims(1)
         call test_index_reversing(pass_X, i, j, k, DIR_X, &
-                                  SZ, xdirps%n, ydirps%n, zdirps%n)
+                                  allocator%sz, cdims(1), cdims(2), cdims(3))
         call test_index_reversing(pass_Y, i, j, k, DIR_Y, &
-                                  SZ, xdirps%n, ydirps%n, zdirps%n)
+                                  allocator%sz, cdims(1), cdims(2), cdims(3))
         call test_index_reversing(pass_Z, i, j, k, DIR_Z, &
-                                  SZ, xdirps%n, ydirps%n, zdirps%n)
+                                  allocator%sz, cdims(1), cdims(2), cdims(3))
       end do
     end do
   end do

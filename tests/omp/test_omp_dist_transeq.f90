@@ -115,7 +115,7 @@ program test_transeq
     d2u_send_s, d2u_send_e, d2u_recv_s, d2u_recv_e, &
     u, u_recv_s, u_recv_e, &
     v, v_recv_s, v_recv_e, &
-    der1st, der1st, der2nd, nu, nproc, pprev, pnext, n_block &
+    der1st, der1st, der2nd, nu, nproc, pprev, pnext, n_block, sz &
     )
 
   ! check error

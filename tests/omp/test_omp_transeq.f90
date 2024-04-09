@@ -60,23 +60,15 @@ program test_omp_transeq
     xdirps%nproc, ydirps%nproc, zdirps%nproc, nrank &
     )
 
-  xdirps%n = globs%nx_loc
-  ydirps%n = globs%ny_loc
-  zdirps%n = globs%nz_loc
-
-  xdirps%n_blocks = globs%n_groups_x
-  ydirps%n_blocks = globs%n_groups_y
-  zdirps%n_blocks = globs%n_groups_z
-
   xdirps%dir = DIR_X
   ydirps%dir = DIR_Y
   zdirps%dir = DIR_Z
 
-  omp_allocator = allocator_t(xdirps%n, ydirps%n, zdirps%n, SZ)
+  omp_allocator = allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, SZ)
   allocator => omp_allocator
   print *, 'OpenMP allocator instantiated'
 
-  omp_backend = omp_backend_t(globs, allocator)
+  omp_backend = omp_backend_t(allocator)
   backend => omp_backend
   print *, 'OpenMP backend instantiated'
 
@@ -84,7 +76,7 @@ program test_omp_transeq
 
   n_glob = globs%nx
   n = n_glob/nproc
-  n_block = xdirps%n_blocks
+  n_block = globs%n_groups_x
 
   nu = 1._dp
   omp_backend%nu = nu

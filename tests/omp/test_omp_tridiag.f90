@@ -299,7 +299,7 @@ contains
 
       call exec_dist_tds_compact(du, u, u_recv_s, u_recv_e, &
                                  send_s, send_e, recv_s, recv_e, &
-                                 tdsops, nproc, pprev, pnext, n_block)
+                                 tdsops, nproc, pprev, pnext, n_block, sz)
 
     end do
   end subroutine run_kernel
