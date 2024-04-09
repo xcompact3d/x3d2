@@ -6,7 +6,7 @@ program test_reorder
   use m_base_backend, only: base_backend_t
   use m_tdsops, only: dirps_t
 
-  use m_common, only: dp, pi, globs_t, set_pprev_pnext, &
+  use m_common, only: dp, pi, globs_t, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       DIR_X, DIR_Y, DIR_Z
 

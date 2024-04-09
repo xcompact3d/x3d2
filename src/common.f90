@@ -32,61 +32,6 @@ module m_common
 
 contains
 
-  subroutine set_pprev_pnext(xprev, xnext, yprev, ynext, zprev, znext, &
-                             xnproc, ynproc, znproc, nrank)
-    implicit none
-
-    integer, intent(out) :: xprev, xnext, yprev, ynext, zprev, znext
-    integer, intent(in) :: xnproc, ynproc, znproc, nrank
-
-    integer :: ix, iy, iz
-
-    ix = modulo(nrank, xnproc)
-    iy = modulo((nrank - ix)/xnproc, ynproc)
-    iz = (nrank - ix - iy*xnproc)/(xnproc*ynproc)
-    ! nrank == ix + iy*xnproc + iz*xnproc*ynproc
-
-    ! prev and next in x direction
-    if (ix == 0) then
-      xprev = nrank + (xnproc - 1)
-    else
-      xprev = nrank - 1
-    end if
-
-    if (ix == xnproc - 1) then
-      xnext = nrank - (xnproc - 1)
-    else
-      xnext = nrank + 1
-    end if
-
-    ! prev and next in y direction
-    if (iy == 0) then
-      yprev = nrank + (xnproc*(ynproc - 1))
-    else
-      yprev = nrank - xnproc
-    end if
-
-    if (iy == ynproc - 1) then
-      ynext = nrank - (xnproc*(ynproc - 1))
-    else
-      ynext = nrank + xnproc
-    end if
-
-    ! prev and next in z direction
-    if (iz == 0) then
-      zprev = nrank + (xnproc*ynproc*(znproc - 1))
-    else
-      zprev = nrank - xnproc*ynproc
-    end if
-
-    if (iz == znproc - 1) then
-      znext = nrank - (xnproc*ynproc*(znproc - 1))
-    else
-      znext = nrank + xnproc*ynproc
-    end if
-
-  end subroutine set_pprev_pnext
-
   integer function get_rdr_from_dirs(dir_from, dir_to) result(rdr_dir)
       !! Returns RDR_?2? value based on two direction inputs
     integer, intent(in) :: dir_from, dir_to
