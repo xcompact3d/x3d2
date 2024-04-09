@@ -93,9 +93,6 @@ contains
 
     real(dp) :: x, y, z
     integer :: nx, ny, nz, i, j, k
-    integer :: nrank, ierr
-
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
 
     solver%backend => backend
     solver%time_integrator => time_integrator
@@ -148,11 +145,12 @@ contains
 
     select case (globs%poisson_solver_type)
     case (POISSON_SOLVER_FFT)
-      if (nrank == 0) print *, 'Poisson solver: FFT'
+      if (solver%backend%nrank == 0) print *, 'Poisson solver: FFT'
       call solver%backend%init_poisson_fft(xdirps, ydirps, zdirps)
       solver%poisson => poisson_fft
     case (POISSON_SOLVER_CG)
-      if (nrank == 0) print *, 'Poisson solver: CG, not yet implemented'
+      if (solver%backend%nrank == 0) &
+        print *, 'Poisson solver: CG, not yet implemented'
       solver%poisson => poisson_cg
     end select
 
@@ -584,12 +582,9 @@ contains
 
     class(field_t), pointer :: du, dv, dw, div_u
     real(dp) :: enstrophy, div_u_max, div_u_mean
-    integer :: nrank, nproc, ierr
+    integer :: ierr
 
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-    if (nrank == 0) print *, 'time = ', t
+    if (self%backend%nrank == 0) print *, 'time = ', t
 
     du => self%backend%allocator%get_block(DIR_X)
     dv => self%backend%allocator%get_block(DIR_X)
@@ -599,7 +594,7 @@ contains
     enstrophy = 0.5_dp*(self%backend%scalar_product(du, du) &
                         + self%backend%scalar_product(dv, dv) &
                         + self%backend%scalar_product(dw, dw))/self%ngrid
-    if (nrank == 0) print *, 'enstrophy:', enstrophy
+    if (self%backend%nrank == 0) print *, 'enstrophy:', enstrophy
 
     call self%backend%allocator%release_block(du)
     call self%backend%allocator%release_block(dv)
@@ -618,8 +613,9 @@ contains
                        MPI_MAX, MPI_COMM_WORLD, ierr)
     call MPI_Allreduce(MPI_IN_PLACE, div_u_mean, 1, MPI_DOUBLE_PRECISION, &
                        MPI_SUM, MPI_COMM_WORLD, ierr)
-    div_u_mean = div_u_mean/nproc
-    if (nrank == 0) print *, 'div u max mean:', div_u_max, div_u_mean
+    div_u_mean = div_u_mean/self%backend%nproc
+    if (self%backend%nrank == 0) &
+      print *, 'div u max mean:', div_u_max, div_u_mean
 
   end subroutine output
 
@@ -632,16 +628,13 @@ contains
     class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
 
     real(dp) :: t
-    integer :: i, nrank, nproc, ierr
+    integer :: i
 
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-    if (nrank == 0) print *, 'initial conditions'
+    if (self%backend%nrank == 0) print *, 'initial conditions'
     t = 0._dp
     call self%output(t, u_out)
 
-    if (nrank == 0) print *, 'start run'
+    if (self%backend%nrank == 0) print *, 'start run'
 
     do i = 1, self%n_iters
       du => self%backend%allocator%get_block(DIR_X)
@@ -692,7 +685,7 @@ contains
       end if
     end do
 
-    if (nrank == 0) print *, 'run end'
+    if (self%backend%nrank == 0) print *, 'run end'
 
     call self%backend%get_field_data(u_out, self%u)
     call self%backend%get_field_data(v_out, self%v)

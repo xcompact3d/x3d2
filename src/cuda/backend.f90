@@ -74,6 +74,8 @@ contains
     type(cuda_poisson_fft_t) :: cuda_poisson_fft
     integer :: n_halo, n_block
 
+    call backend%base_init()
+
     select type (allocator)
     type is (cuda_allocator_t)
       ! class level access to the allocator
