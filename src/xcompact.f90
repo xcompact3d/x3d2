@@ -3,8 +3,7 @@ program xcompact
 
   use m_allocator
   use m_base_backend
-  use m_common, only: pi, globs_t, set_pprev_pnext, &
-                      POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
+  use m_common, only: pi, globs_t, POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
                       DIR_X, DIR_Y, DIR_Z
   use m_solver, only: solver_t
   use m_time_integrator, only: time_intg_t
@@ -41,9 +40,8 @@ program xcompact
   real(dp), allocatable, dimension(:, :, :) :: u, v, w
 
   real(dp) :: t_start, t_end
-  integer :: dims(3), nrank_x, nrank_y
-  integer :: nrank, nproc, ierr
-  integer :: n, ix, iy, iz
+  integer :: dims(3), subd_pos(3)
+  integer :: i, iprev, inext, nrank, nproc, ierr
   integer, allocatable, dimension(:, :, :) :: global_ranks
 
   call MPI_Init(ierr)
@@ -79,29 +77,6 @@ program xcompact
   ydirps%nproc = globs%nproc_y
   zdirps%nproc = globs%nproc_z
 
-  ! A 3D array corresponding to each region in the global domain
-  allocate (global_ranks(xdirps%nproc, ydirps%nproc, zdirps%nproc))
-
-  n = 0
-  do ix = 1, xdirps%nproc
-    do iy = 1, ydirps%nproc
-      do iz = 1, zdirps%nproc
-        ! set the corresponding global rank for each region
-        global_ranks(ix, iy, iz) = n
-        n = n + 1
-      end do
-    end do
-  end do
-
-  ! Better if we move this somewhere else
-  ! Set the pprev and pnext for each rank
-  call set_pprev_pnext( &
-    xdirps%pprev, xdirps%pnext, &
-    ydirps%pprev, ydirps%pnext, &
-    zdirps%pprev, zdirps%pnext, &
-    xdirps%nproc, ydirps%nproc, zdirps%nproc, nrank &
-    )
-
   ! lets assume simple cases for now
   globs%nx_loc = globs%nx/globs%nproc_x
   globs%ny_loc = globs%ny/globs%nproc_y
@@ -127,13 +102,39 @@ program xcompact
 
   xdirps%dir = DIR_X; ydirps%dir = DIR_Y; zdirps%dir = DIR_Z
 
-  ! set the shift amount in x, y, z
-  nrank_x = modulo(nrank, xdirps%nproc)
-  nrank_y = modulo((nrank - nrank_x)/xdirps%nproc, ydirps%nproc)
-  xdirps%n_offset = xdirps%n*nrank_x
-  ydirps%n_offset = ydirps%n*nrank_y
-  zdirps%n_offset = zdirps%n*(nrank - nrank_x - nrank_y*xdirps%nproc) &
-                    /(xdirps%nproc*ydirps%nproc)
+  ! A 3D array corresponding to each region in the global domain
+  allocate (global_ranks(xdirps%nproc, ydirps%nproc, zdirps%nproc))
+
+  ! set the corresponding global rank for each sub-domain
+  global_ranks = reshape([(i, i=0, nproc - 1)], &
+                         shape=[xdirps%nproc, ydirps%nproc, zdirps%nproc])
+
+  ! subdomain position in the global domain
+  subd_pos = findloc(global_ranks, nrank)
+
+  ! local/directional position of the subdomain
+  xdirps%nrank = subd_pos(1) - 1
+  ydirps%nrank = subd_pos(2) - 1
+  zdirps%nrank = subd_pos(3) - 1
+
+  xdirps%n_offset = xdirps%n*xdirps%nrank
+  ydirps%n_offset = ydirps%n*ydirps%nrank
+  zdirps%n_offset = zdirps%n*zdirps%nrank
+
+  iprev = modulo(subd_pos(1) - 2, xdirps%nproc) + 1
+  inext = modulo(subd_pos(1) - xdirps%nproc, xdirps%nproc) + 1
+  xdirps%pprev = global_ranks(iprev, subd_pos(2), subd_pos(3))
+  xdirps%pnext = global_ranks(inext, subd_pos(2), subd_pos(3))
+
+  iprev = modulo(subd_pos(2) - 2, ydirps%nproc) + 1
+  inext = modulo(subd_pos(2) - ydirps%nproc, ydirps%nproc) + 1
+  ydirps%pprev = global_ranks(subd_pos(1), iprev, subd_pos(3))
+  ydirps%pnext = global_ranks(subd_pos(1), inext, subd_pos(3))
+
+  iprev = modulo(subd_pos(3) - 2, zdirps%nproc) + 1
+  inext = modulo(subd_pos(3) - zdirps%nproc, zdirps%nproc) + 1
+  zdirps%pprev = global_ranks(subd_pos(1), subd_pos(2), iprev)
+  zdirps%pnext = global_ranks(subd_pos(1), subd_pos(2), inext)
 
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(globs%nx_loc, globs%ny_loc, &
