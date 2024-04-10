@@ -53,8 +53,8 @@ contains
     ! TODO should this be a field or a fortran array?
     character(*), intent(in) :: fpath !! Path to ouptut file
     character(*), intent(in) :: varname !! Name of variable in output file
-    integer(kind=8), dimension(3), intent(in) :: icount !! Global size of in_arr
-    integer(kind=8), dimension(3), intent(in) :: ishape !! Local size of in_arr
+    integer(kind=8), dimension(3), intent(in) :: icount !! Local size of in_arr
+    integer(kind=8), dimension(3), intent(in) :: ishape !! Global size of in_arr
     integer(kind=8), dimension(3), intent(in) :: istart !! Local offset of in_arr
 
     type(adios2_io) :: io
@@ -86,11 +86,14 @@ contains
 
   end subroutine
 
-  subroutine read(self, out_arr, fpath, varname)
+  subroutine read(self, out_arr, fpath, varname, icount, ishape, istart)
   class(adios_io_t), intent(inout) :: self
   class(field_t), pointer, intent(in) :: out_arr !! Field to be read from file
     character(*), intent(in) :: fpath !! Path to input file
     character(*), intent(in) :: varname !! Name of variable in input file
+    integer(kind=8), dimension(3), intent(in) :: icount !! Local size of in_arr
+    integer(kind=8), dimension(3), intent(in) :: ishape !! Global size of in_arr
+    integer(kind=8), dimension(3), intent(in) :: istart !! Local offset of in_arr
 
     integer(8), parameter :: initial_step = 0
     integer(8), parameter :: n_steps = 1
@@ -99,12 +102,6 @@ contains
     type(adios2_engine) :: reader
     type(adios2_variable) :: adios_var
     integer :: ierr
-
-
-    ! TODO reader should be distributed!
-    if (self%irank /= 0) then
-      return
-    endif
 
     call adios2_declare_io (io, self%adios_ctx, 'read', ierr)
     if (.not.io%valid) then
@@ -123,6 +120,7 @@ contains
     endif
 
     call adios2_set_step_selection(adios_var, initial_step, n_steps, ierr)
+    call adios2_set_selection(adios_var, 3, istart, icount, ierr)
     call adios2_get(reader, adios_var, out_arr%data, ierr)
     call adios2_end_step(reader, ierr)
 
@@ -180,27 +178,26 @@ class(field_t), pointer :: arr_to_read
 
   call io%init()
 
-  ! if (nrank == 0 && nproc > 1) print*, 'Parallel run with', nproc, 'ranks'
-  if (nproc > 1) call abort_test("Test does not support multiple MPI processes")
+  if (irank == 0) print*, 'Run with', nproc, 'ranks'
 
   !================ 
   ! SETUP TEST DATA
   !================
 
-  icount = (/ nproc*nx, ny, nz/) ! global size
-  ishape = (/ nx, ny, nz/) ! local size
+  icount = (/ nx, ny, nz/) ! local size
+  ishape = (/ nproc*nx, ny, nz/) ! global size
   istart = (/ irank*nx, 0, 0/) ! local offset
 
   omp_allocator = allocator_t(nx, ny, nz, SZ)
-  print*, 'OpenMP allocator instantiated'
+  if (irank == 0) print*, 'OpenMP allocator instantiated'
 
   arr_to_write => omp_allocator%get_block(DIR_C)
 
   ! Initialise with a simple index to verify read later
   do k = 1, nz
   do j = 1, ny
-  do i = istart(1), istart(1) + nx
-  arr_to_write%data(i, j, k) = i + j*nx*nproc + k*nx*nproc*ny
+  do i = 1, nx
+  arr_to_write%data(i, j, k) = (istart(1) + i) + j*nx*nproc + k*nx*nproc*ny
   end do
   end do
   end do
@@ -220,17 +217,16 @@ class(field_t), pointer :: arr_to_read
   !================
 
   arr_to_read => omp_allocator%get_block(DIR_C)
-  call io%read(arr_to_read, "test_omp_io.bp", "TestArr")
+  call io%read(arr_to_read, "test_omp_io.bp", "TestArr", icount, ishape, istart)
 
   do k = 1, nz
   do j = 1, ny
   do i = 1, nx
-  if(arr_to_read%data(i, j, k) /= i + j*nx + k*nx*ny) then
-    if (irank == 0) write(stderr, '(a, f8.4, a, f8.4, a, i5, i5, i5)') &
+  if(arr_to_read%data(i, j, k) /= (istart(1) + i) + j*nx*nproc + k*nx*nproc*ny) then
+    write(stderr, '(a, f8.4, a, i8, a, i5, i5, i5)') &
       'Mismatch between read array(', arr_to_read%data(i, j, k), &
-      ") and expected index (", i + j*nx + k*nx*ny, "at (i,j,k) = ", i, j, k
+      ") and expected index (", (istart(1) + i) + j*nx*nproc + k*nx*nproc*ny, ") at (i,j,k) = ", i, j, k
     allpass = .false.
-    return ! end test on first issue
   end if
   end do
   end do
