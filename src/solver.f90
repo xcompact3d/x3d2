@@ -3,8 +3,9 @@ module m_solver
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, globs_t, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
+                      RDR_Z2C, RDR_C2Z, &
                       POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
-                      DIR_X, DIR_Y, DIR_Z
+                      DIR_X, DIR_Y, DIR_Z, DIR_C
   use m_tdsops, only: tdsops_t, dirps_t
   use m_time_integrator, only: time_intg_t
 
@@ -536,15 +537,26 @@ contains
     class(field_t), intent(inout) :: pressure
     class(field_t), intent(in) :: div_u
 
+    class(field_t), pointer :: p_temp
+
+    ! reorder into 3D Cartesian data structure
+    p_temp => self%backend%allocator%get_block(DIR_C)
+    call self%backend%reorder(p_temp, div_u, RDR_Z2C)
+
     ! call forward FFT
     ! output array in spectral space is stored at poisson_fft class
-    call self%backend%poisson_fft%fft_forward(div_u)
+    call self%backend%poisson_fft%fft_forward(p_temp)
 
     ! postprocess
     call self%backend%poisson_fft%fft_postprocess
 
     ! call backward FFT
-    call self%backend%poisson_fft%fft_backward(pressure)
+    call self%backend%poisson_fft%fft_backward(p_temp)
+
+    ! reorder back to our specialist data structure from 3D Cartesian
+    call self%backend%reorder(pressure, p_temp, RDR_C2Z)
+
+    call self%backend%allocator%release_block(p_temp)
 
   end subroutine poisson_fft
 
