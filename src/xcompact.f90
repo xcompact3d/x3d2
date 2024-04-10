@@ -73,9 +73,9 @@ program xcompact
 
   globs%poisson_solver_type = POISSON_SOLVER_FFT
 
-  xdirps%nproc = globs%nproc_x
-  ydirps%nproc = globs%nproc_y
-  zdirps%nproc = globs%nproc_z
+  xdirps%nproc_dir = globs%nproc_x
+  ydirps%nproc_dir = globs%nproc_y
+  zdirps%nproc_dir = globs%nproc_z
 
   ! lets assume simple cases for now
   globs%nx_loc = globs%nx/globs%nproc_x

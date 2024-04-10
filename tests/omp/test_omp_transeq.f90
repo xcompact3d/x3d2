@@ -50,9 +50,9 @@ program test_omp_transeq
   globs%n_groups_y = globs%nx_loc*globs%nz_loc/SZ
   globs%n_groups_z = globs%nx_loc*globs%ny_loc/SZ
 
-  xdirps%nproc = nproc
-  ydirps%nproc = 1
-  zdirps%nproc = 1
+  xdirps%nproc_dir = nproc
+  ydirps%nproc_dir = 1
+  zdirps%nproc_dir = 1
 
   xdirps%n = globs%nx_loc
   ydirps%n = globs%ny_loc
