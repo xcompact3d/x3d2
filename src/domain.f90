@@ -35,13 +35,13 @@ contains
     subd_pos = findloc(global_ranks, nrank)
 
     ! local/directional position of the subdomain
-    xdirps%nrank = subd_pos(1) - 1
-    ydirps%nrank = subd_pos(2) - 1
-    zdirps%nrank = subd_pos(3) - 1
+    xdirps%nrank_dir = subd_pos(1) - 1
+    ydirps%nrank_dir = subd_pos(2) - 1
+    zdirps%nrank_dir = subd_pos(3) - 1
 
-    xdirps%n_offset = xdirps%n*xdirps%nrank
-    ydirps%n_offset = ydirps%n*ydirps%nrank
-    zdirps%n_offset = zdirps%n*zdirps%nrank
+    xdirps%n_offset = xdirps%n*xdirps%nrank_dir
+    ydirps%n_offset = ydirps%n*ydirps%nrank_dir
+    zdirps%n_offset = zdirps%n*zdirps%nrank_dir
 
     iprev = modulo(subd_pos(1) - 2, nproc_x) + 1
     inext = modulo(subd_pos(1) - nproc_x, nproc_x) + 1

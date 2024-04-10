@@ -44,7 +44,7 @@ module m_tdsops
     !! in each coordinate direction.
     class(tdsops_t), allocatable :: der1st, der1st_sym, der2nd, der2nd_sym, &
       stagder_v2p, stagder_p2v, interpl_v2p, interpl_p2v
-    integer :: nrank, nproc_dir, pnext, pprev, n, n_blocks, dir
+    integer :: nrank_dir, nproc_dir, pnext, pprev, n, n_blocks, dir
     integer :: n_offset = 0 ! offset w.r.t. global domain at the starting point
     real(dp) :: L, d
   end type dirps_t
