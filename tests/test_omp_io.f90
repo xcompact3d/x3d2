@@ -4,6 +4,10 @@ module adios_io
   use mpi
   use m_allocator, only: field_t
 
+  use, intrinsic :: iso_fortran_env, only : stdin=>input_unit, &
+                                            stdout=>output_unit, &
+                                            stderr=>error_unit
+
   implicit none
 
   type :: adios_io_t
@@ -21,6 +25,8 @@ contains
   subroutine init(self)
   class(adios_io_t), intent(inout) :: self
     ! TODO pass in communicator?
+    ! TODO include check that MPI has been initialised
+    ! TODO pass in MPI domain decomp data?
 
     integer :: ierr
 
@@ -28,8 +34,7 @@ contains
 
     call adios2_init(self%adios_ctx, MPI_COMM_WORLD, ierr)
     if (.not.self%adios_ctx%valid) then
-      print*, "ADIOS2 Error code:", ierr
-      call self%handle_fatal_error("Cannot initialise ADIOS context.")
+      call self%handle_fatal_error("Cannot initialise ADIOS context.", ierr)
     endif
   end subroutine
 
@@ -45,6 +50,7 @@ contains
   subroutine write(self, in_arr, fpath, varname, icount, ishape, istart)
   class(adios_io_t), intent(inout) :: self
   class(field_t), pointer, intent(in) :: in_arr !! Field to be outputted
+    ! TODO should this be a field or a fortran array?
     character(*), intent(in) :: fpath !! Path to ouptut file
     character(*), intent(in) :: varname !! Name of variable in output file
     integer(kind=8), dimension(3), intent(in) :: icount !! Global size of in_arr
@@ -58,12 +64,12 @@ contains
 
     call adios2_declare_io (io, self%adios_ctx, 'write', ierr)
     if (.not.io%valid) then
-      call self%handle_fatal_error("Cannot create ADIOS2 IO")
+      call self%handle_fatal_error("Cannot create ADIOS2 IO", ierr)
     endif
 
     call adios2_open(writer, io, fpath, adios2_mode_write, ierr)
     if (.not.writer%valid) then
-      call self%handle_fatal_error("Cannot create ADIOS2 writer")
+      call self%handle_fatal_error("Cannot create ADIOS2 writer", ierr)
     endif
 
     ! TODO tie double precision variable to array
@@ -94,24 +100,26 @@ contains
     type(adios2_variable) :: adios_var
     integer :: ierr
 
+
+    ! TODO reader should be distributed!
     if (self%irank /= 0) then
       return
     endif
 
     call adios2_declare_io (io, self%adios_ctx, 'read', ierr)
     if (.not.io%valid) then
-      call self%handle_fatal_error("Cannot create ADIOS2 IO")
+      call self%handle_fatal_error("Cannot create ADIOS2 IO", ierr)
     endif
 
     call adios2_open(reader, io, fpath, adios2_mode_read, MPI_COMM_SELF, ierr)
     if (.not.reader%valid) then
-      call self%handle_fatal_error("Cannot create ADIOS2 reader")
+      call self%handle_fatal_error("Cannot create ADIOS2 reader", ierr)
     endif
 
     call adios2_begin_step(reader, adios2_step_mode_read, ierr)
     call adios2_inquire_variable(adios_var, io, varname, ierr)
     if (.not.adios_var%valid) then
-      call self%handle_fatal_error("Cannot fetch ADIOS2 IO")
+      call self%handle_fatal_error("Cannot fetch ADIOS2 IO", ierr)
     endif
 
     call adios2_set_step_selection(adios_var, initial_step, n_steps, ierr)
@@ -123,10 +131,12 @@ contains
     endif
   end subroutine
 
-  subroutine handle_fatal_error(self, msg)
+  subroutine handle_fatal_error(self, msg, ierr)
   class(adios_io_t), intent(in) :: self
+    integer, intent(in) :: ierr
     character(*), intent(in) :: msg
 
+    write(stderr, *) "ADIOS2 Error code:", ierr
     error stop msg
   end subroutine
 end module
@@ -177,9 +187,9 @@ class(field_t), pointer :: arr_to_read
   ! SETUP TEST DATA
   !================
 
-  icount = (/ nx, ny, nz/) ! global size
+  icount = (/ nproc*nx, ny, nz/) ! global size
   ishape = (/ nx, ny, nz/) ! local size
-  istart = (/ 0, 0, 0/) ! local offset
+  istart = (/ irank*nx, 0, 0/) ! local offset
 
   omp_allocator = allocator_t(nx, ny, nz, SZ)
   print*, 'OpenMP allocator instantiated'
@@ -189,17 +199,28 @@ class(field_t), pointer :: arr_to_read
   ! Initialise with a simple index to verify read later
   do k = 1, nz
   do j = 1, ny
-  do i = 1, nx
-  arr_to_write%data(i, j, k) = i + j*nx + k*nx*ny
+  do i = istart(1), istart(1) + nx
+  arr_to_write%data(i, j, k) = i + j*nx*nproc + k*nx*nproc*ny
   end do
   end do
   end do
 
-  call io%write(arr_to_write, "__FILE__.bp",  "TestArr", icount, ishape, istart)
+  !================ 
+  ! WRITE TEST DATA
+  !================
+
+  ! TODO check if adios can output filtered or coursened data
+  ! TODO check if adios can output in a different precision
+  ! TODO consider how to implement different mesh sizes for different variables (eg pressure & velocity)
+  call io%write(arr_to_write, "test_omp_io.bp", "TestArr", icount, ishape, istart)
   call omp_allocator%release_block(arr_to_write)
 
+  !================ 
+  ! READ AND VERIFY TEST DATA
+  !================
+
   arr_to_read => omp_allocator%get_block(DIR_C)
-  call io%read(arr_to_read, "__FILE__.bp", "TestArr")
+  call io%read(arr_to_read, "test_omp_io.bp", "TestArr")
 
   do k = 1, nz
   do j = 1, ny
@@ -237,7 +258,5 @@ contains
 
     error stop msg
   end subroutine
-
-
 end program
 
