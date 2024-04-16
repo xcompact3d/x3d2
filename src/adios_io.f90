@@ -25,17 +25,23 @@ contains
   class(adios_io_t), intent(inout) :: self
     integer, intent(in), optional :: comm_in
 
-    ! TODO pass in communicator?
     ! TODO include check that MPI has been initialised
     ! TODO pass in MPI domain decomp data?
 
     integer :: comm
     integer :: ierr
+    logical :: is_mpi_initialised
 
     if(present(comm_in)) then
       comm = comm_in
     else
       comm = MPI_COMM_WORLD
+    endif
+
+    call mpi_initialized(is_mpi_initialised, ierr)
+
+    if(.not. is_mpi_initialised) then
+      call self%handle_fatal_error("ADIOS must be initialised after MPI!", 0)
     endif
 
     call MPI_Comm_rank(comm, self%irank, ierr)
