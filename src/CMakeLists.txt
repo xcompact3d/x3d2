@@ -1,4 +1,5 @@
 set(SRC
+  adios_io.f90
   allocator.f90
   backend.f90
   common.f90
