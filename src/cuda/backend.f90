@@ -74,6 +74,8 @@ contains
     type(cuda_poisson_fft_t) :: cuda_poisson_fft
     integer :: n_halo, n_block
 
+    call backend%base_init()
+
     select type (allocator)
     type is (cuda_allocator_t)
       ! class level access to the allocator
@@ -271,7 +273,7 @@ contains
       self%u_send_s_dev, self%u_send_e_dev, &
       self%v_send_s_dev, self%v_send_e_dev, &
       self%w_send_s_dev, self%w_send_e_dev, &
-      SZ*n_halo*dirps%n_blocks, dirps%nproc, dirps%pprev, dirps%pnext &
+      SZ*n_halo*dirps%n_blocks, dirps%nproc_dir, dirps%pprev, dirps%pnext &
       )
 
   end subroutine transeq_halo_exchange
@@ -320,7 +322,7 @@ contains
       self%d2u_send_s_dev, self%d2u_send_e_dev, &
       self%d2u_recv_s_dev, self%d2u_recv_e_dev, &
       tdsops_du, tdsops_d2u, self%nu, &
-      dirps%nproc, dirps%pprev, dirps%pnext, &
+      dirps%nproc_dir, dirps%pprev, dirps%pnext, &
       blocks, threads &
       )
 
@@ -397,7 +399,7 @@ contains
 
     call sendrecv_fields(self%u_recv_s_dev, self%u_recv_e_dev, &
                          self%u_send_s_dev, self%u_send_e_dev, &
-                         SZ*n_halo*dirps%n_blocks, dirps%nproc, &
+                         SZ*n_halo*dirps%n_blocks, dirps%nproc_dir, &
                          dirps%pprev, dirps%pnext)
 
     ! call exec_dist
@@ -406,7 +408,7 @@ contains
       self%u_recv_s_dev, self%u_recv_e_dev, &
       self%du_send_s_dev, self%du_send_e_dev, &
       self%du_recv_s_dev, self%du_recv_e_dev, &
-      tdsops_dev, dirps%nproc, dirps%pprev, dirps%pnext, &
+      tdsops_dev, dirps%nproc_dir, dirps%pprev, dirps%pnext, &
       blocks, threads &
       )
 

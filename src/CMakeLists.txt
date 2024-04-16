@@ -2,6 +2,7 @@ set(SRC
   allocator.f90
   backend.f90
   common.f90
+  domain.f90
   poisson_fft.f90
   solver.f90
   tdsops.f90

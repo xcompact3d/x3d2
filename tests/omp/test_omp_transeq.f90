@@ -3,7 +3,8 @@ program test_omp_transeq
   use mpi
 
   use m_allocator, only: allocator_t, field_t
-  use m_common, only: dp, pi, globs_t, set_pprev_pnext, DIR_X, DIR_Y, DIR_Z
+  use m_common, only: dp, pi, globs_t, DIR_X, DIR_Y, DIR_Z
+  use m_domain, only: domain_decomposition
   use m_omp_common, only: SZ
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_backend, only: omp_backend_t, transeq_x_omp, base_backend_t
@@ -49,16 +50,9 @@ program test_omp_transeq
   globs%n_groups_y = globs%nx_loc*globs%nz_loc/SZ
   globs%n_groups_z = globs%nx_loc*globs%ny_loc/SZ
 
-  xdirps%nproc = nproc
-  ydirps%nproc = nproc
-  zdirps%nproc = nproc
-
-  call set_pprev_pnext( &
-    xdirps%pprev, xdirps%pnext, &
-    ydirps%pprev, ydirps%pnext, &
-    zdirps%pprev, zdirps%pnext, &
-    xdirps%nproc, ydirps%nproc, zdirps%nproc, nrank &
-    )
+  xdirps%nproc_dir = nproc
+  ydirps%nproc_dir = 1
+  zdirps%nproc_dir = 1
 
   xdirps%n = globs%nx_loc
   ydirps%n = globs%ny_loc
@@ -71,6 +65,8 @@ program test_omp_transeq
   xdirps%dir = DIR_X
   ydirps%dir = DIR_Y
   zdirps%dir = DIR_Z
+
+  call domain_decomposition(xdirps, ydirps, zdirps, nrank, nproc)
 
   omp_allocator = allocator_t(xdirps%n, ydirps%n, zdirps%n, SZ)
   allocator => omp_allocator

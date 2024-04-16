@@ -3,9 +3,9 @@ program xcompact
 
   use m_allocator
   use m_base_backend
-  use m_common, only: pi, globs_t, set_pprev_pnext, &
-                      POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
+  use m_common, only: pi, globs_t, POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
                       DIR_X, DIR_Y, DIR_Z
+  use m_domain, only: domain_decomposition
   use m_solver, only: solver_t
   use m_time_integrator, only: time_intg_t
   use m_tdsops, only: tdsops_t
@@ -73,21 +73,9 @@ program xcompact
 
   globs%poisson_solver_type = POISSON_SOLVER_FFT
 
-  ! Lets allow a 1D decomposition for the moment
-  !globs%nproc_x = nproc
-
-  xdirps%nproc = globs%nproc_x
-  ydirps%nproc = globs%nproc_y
-  zdirps%nproc = globs%nproc_z
-
-  ! Better if we move this somewhere else
-  ! Set the pprev and pnext for each rank
-  call set_pprev_pnext( &
-    xdirps%pprev, xdirps%pnext, &
-    ydirps%pprev, ydirps%pnext, &
-    zdirps%pprev, zdirps%pnext, &
-    xdirps%nproc, ydirps%nproc, zdirps%nproc, nrank &
-    )
+  xdirps%nproc_dir = globs%nproc_x
+  ydirps%nproc_dir = globs%nproc_y
+  zdirps%nproc_dir = globs%nproc_z
 
   ! lets assume simple cases for now
   globs%nx_loc = globs%nx/globs%nproc_x
@@ -114,23 +102,25 @@ program xcompact
 
   xdirps%dir = DIR_X; ydirps%dir = DIR_Y; zdirps%dir = DIR_Z
 
+  call domain_decomposition(xdirps, ydirps, zdirps, nrank, nproc)
+
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(globs%nx_loc, globs%ny_loc, &
                                     globs%nz_loc, SZ)
   allocator => cuda_allocator
-  print *, 'CUDA allocator instantiated'
+  if (nrank == 0) print *, 'CUDA allocator instantiated'
 
   cuda_backend = cuda_backend_t(globs, allocator)
   backend => cuda_backend
-  print *, 'CUDA backend instantiated'
+  if (nrank == 0) print *, 'CUDA backend instantiated'
 #else
   omp_allocator = allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, SZ)
   allocator => omp_allocator
-  print *, 'OpenMP allocator instantiated'
+  if (nrank == 0) print *, 'OpenMP allocator instantiated'
 
   omp_backend = omp_backend_t(globs, allocator)
   backend => omp_backend
-  print *, 'OpenMP backend instantiated'
+  if (nrank == 0) print *, 'OpenMP backend instantiated'
 #endif
 
   dims(:) = allocator%cdims_padded
@@ -139,9 +129,9 @@ program xcompact
   allocate (w(dims(1), dims(2), dims(3)))
 
   time_integrator = time_intg_t(allocator=allocator, backend=backend)
-  print *, 'time integrator instantiated'
+  if (nrank == 0) print *, 'time integrator instantiated'
   solver = solver_t(backend, time_integrator, xdirps, ydirps, zdirps, globs)
-  print *, 'solver instantiated'
+  if (nrank == 0) print *, 'solver instantiated'
 
   call cpu_time(t_start)
 
@@ -149,9 +139,9 @@ program xcompact
 
   call cpu_time(t_end)
 
-  print *, 'Time: ', t_end - t_start
+  if (nrank == 0) print *, 'Time: ', t_end - t_start
 
-  print *, 'norms', norm2(u), norm2(v), norm2(w)
+  if (nrank == 0) print *, 'norms', norm2(u), norm2(v), norm2(w)
 
   call MPI_Finalize(ierr)
 

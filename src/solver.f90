@@ -1,4 +1,6 @@
 module m_solver
+  use mpi
+
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, globs_t, &
@@ -41,6 +43,7 @@ module m_solver
 
     real(dp) :: dt, nu
     integer :: n_iters, n_output
+    integer :: ngrid
 
     class(field_t), pointer :: u, v, w
 
@@ -112,14 +115,15 @@ contains
     solver%backend%nu = globs%nu
     solver%n_iters = globs%n_iters
     solver%n_output = globs%n_output
+    solver%ngrid = globs%nx*globs%ny*globs%nz
 
-    nx = globs%nx_loc; ny = globs%ny_loc; nz = globs%nz_loc
+    nx = xdirps%n; ny = ydirps%n; nz = zdirps%n
     do k = 1, nz
       do j = 1, ny
         do i = 1, nx
-          x = (i - 1)*globs%dx
-          y = (j - 1)*globs%dy
-          z = (k - 1)*globs%dz
+          x = (i - 1 + xdirps%n_offset)*xdirps%d
+          y = (j - 1 + ydirps%n_offset)*ydirps%d
+          z = (k - 1 + zdirps%n_offset)*zdirps%d
 
           u_init(i, j, k) = sin(x)*cos(y)*cos(z)
           v_init(i, j, k) = -cos(x)*sin(y)*cos(z)
@@ -133,20 +137,20 @@ contains
     call solver%backend%set_field_data(solver%w, w_init)
 
     deallocate (u_init, v_init, w_init)
-    print *, 'initial conditions are set'
 
     ! Allocate and set the tdsops
-    call allocate_tdsops(solver%xdirps, nx, globs%dx, solver%backend)
-    call allocate_tdsops(solver%ydirps, ny, globs%dy, solver%backend)
-    call allocate_tdsops(solver%zdirps, nz, globs%dz, solver%backend)
+    call allocate_tdsops(solver%xdirps, nx, xdirps%d, solver%backend)
+    call allocate_tdsops(solver%ydirps, ny, ydirps%d, solver%backend)
+    call allocate_tdsops(solver%zdirps, nz, zdirps%d, solver%backend)
 
     select case (globs%poisson_solver_type)
     case (POISSON_SOLVER_FFT)
-      print *, 'Poisson solver: FFT'
+      if (solver%backend%nrank == 0) print *, 'Poisson solver: FFT'
       call solver%backend%init_poisson_fft(xdirps, ydirps, zdirps)
       solver%poisson => poisson_fft
     case (POISSON_SOLVER_CG)
-      print *, 'Poisson solver: CG, not yet implemented'
+      if (solver%backend%nrank == 0) &
+        print *, 'Poisson solver: CG, not yet implemented'
       solver%poisson => poisson_cg
     end select
 
@@ -577,21 +581,20 @@ contains
     real(dp), dimension(:, :, :), intent(inout) :: u_out
 
     class(field_t), pointer :: du, dv, dw, div_u
-    integer :: ngrid
+    real(dp) :: enstrophy, div_u_max, div_u_mean
+    integer :: ierr
 
-    ngrid = self%xdirps%n*self%ydirps%n*self%zdirps%n
-    print *, 'time = ', t
+    if (self%backend%nrank == 0) print *, 'time = ', t
 
     du => self%backend%allocator%get_block(DIR_X)
     dv => self%backend%allocator%get_block(DIR_X)
     dw => self%backend%allocator%get_block(DIR_X)
 
     call self%curl(du, dv, dw, self%u, self%v, self%w)
-    print *, 'enstrophy:', 0.5_dp*( &
-      self%backend%scalar_product(du, du) &
-      + self%backend%scalar_product(dv, dv) &
-      + self%backend%scalar_product(dw, dw) &
-      )/ngrid
+    enstrophy = 0.5_dp*(self%backend%scalar_product(du, du) &
+                        + self%backend%scalar_product(dv, dv) &
+                        + self%backend%scalar_product(dw, dw))/self%ngrid
+    if (self%backend%nrank == 0) print *, 'enstrophy:', enstrophy
 
     call self%backend%allocator%release_block(du)
     call self%backend%allocator%release_block(dv)
@@ -604,7 +607,15 @@ contains
 
     call self%backend%allocator%release_block(div_u)
 
-    print *, 'div u max mean:', maxval(abs(u_out)), sum(abs(u_out))/ngrid
+    div_u_max = maxval(abs(u_out))
+    div_u_mean = sum(abs(u_out))/self%ngrid
+    call MPI_Allreduce(MPI_IN_PLACE, div_u_max, 1, MPI_DOUBLE_PRECISION, &
+                       MPI_MAX, MPI_COMM_WORLD, ierr)
+    call MPI_Allreduce(MPI_IN_PLACE, div_u_mean, 1, MPI_DOUBLE_PRECISION, &
+                       MPI_SUM, MPI_COMM_WORLD, ierr)
+    div_u_mean = div_u_mean/self%backend%nproc
+    if (self%backend%nrank == 0) &
+      print *, 'div u max mean:', div_u_max, div_u_mean
 
   end subroutine output
 
@@ -619,11 +630,11 @@ contains
     real(dp) :: t
     integer :: i
 
-    print *, 'initial conditions'
+    if (self%backend%nrank == 0) print *, 'initial conditions'
     t = 0._dp
     call self%output(t, u_out)
 
-    print *, 'start run'
+    if (self%backend%nrank == 0) print *, 'start run'
 
     do i = 1, self%n_iters
       du => self%backend%allocator%get_block(DIR_X)
@@ -674,7 +685,7 @@ contains
       end if
     end do
 
-    print *, 'run end'
+    if (self%backend%nrank == 0) print *, 'run end'
 
     call self%backend%get_field_data(u_out, self%u)
     call self%backend%get_field_data(v_out, self%v)
