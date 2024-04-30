@@ -2,6 +2,7 @@ set(SRC
   allocator.f90
   backend.f90
   common.f90
+  domain.f90
   poisson_fft.f90
   poisson_cg.f90
   solver.f90
@@ -21,8 +22,8 @@ set(CUDASRC
   cuda/common.f90
   cuda/exec_dist.f90
   cuda/kernels/distributed.f90
-  cuda/kernels/complex.f90
   cuda/kernels/reorder.f90
+  cuda/kernels/spectral_processing.f90
   cuda/poisson_fft.f90
   cuda/sendrecv.f90
   cuda/tdsops.f90

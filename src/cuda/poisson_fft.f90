@@ -1,4 +1,6 @@
 module m_cuda_poisson_fft
+  use iso_c_binding, only: c_loc, c_ptr, c_f_pointer
+  use iso_fortran_env, only: stderr => error_unit
   use cudafor
   use cufft
 
@@ -8,29 +10,25 @@ module m_cuda_poisson_fft
   use m_tdsops, only: dirps_t
 
   use m_cuda_allocator, only: cuda_field_t
-  use m_cuda_common, only: SZ
-  use m_cuda_complex, only: reorder_cmplx_x2y_T, reorder_cmplx_y2x_T, &
-                            reorder_cmplx_y2z_T, reorder_cmplx_z2y_T, &
-                            process_spectral_div_u
+  use m_cuda_spectral, only: process_spectral_div_u
 
   implicit none
 
   type, extends(poisson_fft_t) :: cuda_poisson_fft_t
-      !! FFT based Poisson solver
-      !! It can only handle 1D decompositions along z direction.
+    !! FFT based Poisson solver
 
-    !> Local domain sized arrays to store data in spectral space
-    complex(dp), device, pointer, dimension(:) :: c_x_dev, c_y_dev, c_z_dev
+    !> Local domain sized array to store data in spectral space
+    complex(dp), device, allocatable, dimension(:, :, :) :: c_w_dev
     !> Local domain sized array storing the spectral equivalence constants
     complex(dp), device, allocatable, dimension(:, :, :) :: waves_dev
+    !> cufft requires a local domain sized storage
+    complex(dp), device, allocatable, dimension(:) :: fft_worksize
 
     real(dp), device, allocatable, dimension(:) :: ax_dev, bx_dev, &
                                                    ay_dev, by_dev, &
                                                    az_dev, bz_dev
 
-    real(dp), device, allocatable, dimension(:, :, :) :: f_tmp
-
-    integer :: planD2Zz, planZ2Dz, planZ2Zx, planZ2Zy
+    integer :: plan3D_fw, plan3D_bw
   contains
     procedure :: fft_forward => fft_forward_cuda
     procedure :: fft_backward => fft_backward_cuda
@@ -54,14 +52,14 @@ contains
 
     integer :: nx, ny, nz
 
-    integer :: ierrfft
+    integer :: ierr
     integer(int_ptr_kind()) :: worksize
 
-    call poisson_fft%base_init(xdirps, ydirps, zdirps, SZ)
+    call poisson_fft%base_init(xdirps, ydirps, zdirps)
 
     nx = poisson_fft%nx; ny = poisson_fft%ny; nz = poisson_fft%nz
 
-    allocate (poisson_fft%waves_dev(SZ, nx, (ny*(nz/2 + 1))/SZ))
+    allocate (poisson_fft%waves_dev(nx/2 + 1, ny, nz))
     poisson_fft%waves_dev = poisson_fft%waves
 
     allocate (poisson_fft%ax_dev(nx), poisson_fft%bx_dev(nx))
@@ -71,39 +69,27 @@ contains
     poisson_fft%ay_dev = poisson_fft%ay; poisson_fft%by_dev = poisson_fft%by
     poisson_fft%az_dev = poisson_fft%az; poisson_fft%bz_dev = poisson_fft%bz
 
-    allocate (poisson_fft%c_x_dev(nx*ny*(nz/2 + 1)))
-    allocate (poisson_fft%c_y_dev(nx*ny*(nz/2 + 1)))
-    allocate (poisson_fft%c_z_dev(nx*ny*(nz/2 + 1)))
+    allocate (poisson_fft%c_w_dev(nx/2 + 1, ny, nz))
+    allocate (poisson_fft%fft_worksize((nx/2 + 1)*ny*nz))
 
-    ! We can't currently ask allocator to pass us an array with
-    ! exact shape we want, so we allocate an extra array here.
-    ! This will be removed when allocator is fixed.
-    allocate (poisson_fft%f_tmp(nz, SZ, nx*ny/SZ))
+    ! 3D plans
+    ierr = cufftCreate(poisson_fft%plan3D_fw)
+    ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z, &
+                           worksize)
+    ierr = cufftSetWorkArea(poisson_fft%plan3D_fw, poisson_fft%fft_worksize)
+    if (ierr /= 0) then
+      write (stderr, *), "cuFFT Error Code: ", ierr
+      error stop 'Forward 3D FFT plan generation failed'
+    end if
 
-    ! set cufft plans
-    ierrfft = cufftCreate(poisson_fft%planD2Zz)
-    ierrfft = cufftMakePlanMany(poisson_fft%planD2Zz, 1, nz, &
-                                nz, 1, nz, nz/2 + 1, 1, nz/2 + 1, &
-                                CUFFT_D2Z, nx*ny, worksize)
-    ierrfft = cufftSetWorkArea(poisson_fft%planD2Zz, poisson_fft%c_x_dev)
-
-    ierrfft = cufftCreate(poisson_fft%planZ2Dz)
-    ierrfft = cufftMakePlanMany(poisson_fft%planZ2Dz, 1, nz, &
-                                nz/2 + 1, 1, nz/2 + 1, nz, 1, nz, &
-                                CUFFT_Z2D, nx*ny, worksize)
-    ierrfft = cufftSetWorkArea(poisson_fft%planZ2Dz, poisson_fft%c_x_dev)
-
-    ierrfft = cufftCreate(poisson_fft%planZ2Zy)
-    ierrfft = cufftMakePlanMany(poisson_fft%planZ2Zy, 1, ny, &
-                                ny, 1, ny, ny, 1, ny, &
-                                CUFFT_Z2Z, nx*(nz/2 + 1), worksize)
-    ierrfft = cufftSetWorkArea(poisson_fft%planZ2Zy, poisson_fft%c_x_dev)
-
-    ierrfft = cufftCreate(poisson_fft%planZ2Zx)
-    ierrfft = cufftMakePlanMany(poisson_fft%planZ2Zx, 1, nx, &
-                                nx, 1, nx, nx, 1, nx, &
-                                CUFFT_Z2Z, ny*(nz/2 + 1), worksize)
-    ierrfft = cufftSetWorkArea(poisson_fft%planZ2Zx, poisson_fft%c_y_dev)
+    ierr = cufftCreate(poisson_fft%plan3D_bw)
+    ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D, &
+                           worksize)
+    ierr = cufftSetWorkArea(poisson_fft%plan3D_bw, poisson_fft%fft_worksize)
+    if (ierr /= 0) then
+      write (stderr, *), "cuFFT Error Code: ", ierr
+      error stop 'Backward 3D FFT plan generation failed'
+    end if
 
   end function init
 
@@ -114,47 +100,24 @@ contains
     class(field_t), intent(in) :: f
 
     real(dp), device, pointer, dimension(:, :, :) :: f_dev
-    complex(dp), device, dimension(:, :, :), pointer :: c_x_ptr, c_y_ptr, &
-                                                        c_z_ptr
+    real(dp), device, pointer :: f_ptr
+    type(c_ptr) :: f_c_ptr
 
     type(dim3) :: blocks, threads
-    integer :: ierrfft
+    integer :: ierr
 
     select type (f); type is (cuda_field_t); f_dev => f%data_d; end select
 
-    ! First reorder f into cartesian-like data structure
-    blocks = dim3(self%nz/SZ, self%nx*self%ny/SZ, 1)
-    threads = dim3(SZ, SZ, 1)
-    call reshapeDSF<<<blocks, threads>>>(self%f_tmp, f_dev) !&
+    ! Using f_dev directly in cufft call causes a segfault
+    ! Pointer switches below fixes the problem
+    f_c_ptr = c_loc(f_dev)
+    call c_f_pointer(f_c_ptr, f_ptr)
 
-    ! Forward FFT transform in z from real to complex
-    ierrfft = cufftExecD2Z(self%planD2Zz, self%f_tmp, self%c_z_dev)
-
-    ! Reorder from z to y
-    blocks = dim3(self%nz/2/SZ + 1, self%ny/SZ, self%nx)
-    threads = dim3(SZ, SZ, 1)
-    c_y_ptr(1:self%ny, 1:SZ, 1:(self%nx*(self%nz/2 + 1))/SZ) => self%c_y_dev
-    c_z_ptr(1:self%nz/2 + 1, 1:SZ, 1:self%nx*self%ny/SZ) => self%c_z_dev
-
-    call reorder_cmplx_z2y_T<<<blocks, threads>>>(c_y_ptr, c_z_ptr, & !&
-                                                  self%nx, self%nz/2 + 1)
-
-    ! In-place forward FFT in y
-    ierrfft = cufftExecZ2Z(self%planZ2Zy, self%c_y_dev, self%c_y_dev, &
-                           CUFFT_FORWARD)
-
-    ! Reorder from y to x
-    blocks = dim3(self%nx/SZ, self%ny/SZ, self%nz/2 + 1)
-    threads = dim3(SZ, SZ, 1)
-    c_x_ptr(1:self%nx, 1:SZ, 1:(self%ny*(self%nz/2 + 1))/SZ) => self%c_x_dev
-    c_y_ptr(1:self%ny, 1:SZ, 1:(self%nx*(self%nz/2 + 1))/SZ) => self%c_y_dev
-
-    call reorder_cmplx_y2x_T<<<blocks, threads>>>(c_x_ptr, c_y_ptr, & !&
-                                                  self%nz/2 + 1)
-
-    ! In-place forward FFT in x
-    ierrfft = cufftExecZ2Z(self%planZ2Zx, self%c_x_dev, self%c_x_dev, &
-                           CUFFT_FORWARD)
+    ierr = cufftExecD2Z(self%plan3D_fw, f_ptr, self%c_w_dev)
+    if (ierr /= 0) then
+      write (stderr, *), "cuFFT Error Code: ", ierr
+      error stop 'Forward 3D FFT execution failed'
+    end if
 
   end subroutine fft_forward_cuda
 
@@ -165,47 +128,24 @@ contains
     class(field_t), intent(inout) :: f
 
     real(dp), device, pointer, dimension(:, :, :) :: f_dev
-    complex(dp), device, dimension(:, :, :), pointer :: c_x_ptr, c_y_ptr, &
-                                                        c_z_ptr
+    real(dp), device, pointer :: f_ptr
+    type(c_ptr) :: f_c_ptr
 
     type(dim3) :: blocks, threads
-    integer :: ierrfft
+    integer :: ierr
 
     select type (f); type is (cuda_field_t); f_dev => f%data_d; end select
 
-    ! In-place backward FFT in x
-    ierrfft = cufftExecZ2Z(self%planZ2Zx, self%c_x_dev, self%c_x_dev, &
-                           CUFFT_INVERSE)
+    ! Using f_dev directly in cufft call causes a segfault
+    ! Pointer switches below fixes the problem
+    f_c_ptr = c_loc(f_dev)
+    call c_f_pointer(f_c_ptr, f_ptr)
 
-    ! Reorder from x to y
-    blocks = dim3(self%nx/SZ, self%ny/SZ, self%nz/2 + 1)
-    threads = dim3(SZ, SZ, 1)
-    c_x_ptr(1:self%nx, 1:SZ, 1:(self%ny*(self%nz/2 + 1))/SZ) => self%c_x_dev
-    c_y_ptr(1:self%ny, 1:SZ, 1:(self%nx*(self%nz/2 + 1))/SZ) => self%c_y_dev
-
-    call reorder_cmplx_x2y_T<<<blocks, threads>>>(c_y_ptr, c_x_ptr, & !&
-                                                  self%nz/2 + 1)
-
-    ! In-place backward FFT in y
-    ierrfft = cufftExecZ2Z(self%planZ2Zy, self%c_y_dev, self%c_y_dev, &
-                           CUFFT_INVERSE)
-
-    ! Reorder from y to z
-    blocks = dim3(self%nz/2/SZ + 1, self%ny/SZ, self%nx)
-    threads = dim3(SZ, SZ, 1)
-    c_y_ptr(1:self%ny, 1:SZ, 1:(self%nx*(self%nz/2 + 1))/SZ) => self%c_y_dev
-    c_z_ptr(1:self%nz/2 + 1, 1:SZ, 1:self%nx*self%ny/SZ) => self%c_z_dev
-
-    call reorder_cmplx_y2z_T<<<blocks, threads>>>(c_z_ptr, c_y_ptr, & !&
-                                                  self%nx, self%nz/2 + 1)
-
-    ! Backward FFT transform in z from complex to real
-    ierrfft = cufftExecZ2D(self%planZ2Dz, self%c_z_dev, self%f_tmp)
-
-    ! Finally reorder f back into our specialist data structure
-    blocks = dim3(self%nz/SZ, self%nx*self%ny/SZ, 1)
-    threads = dim3(SZ, SZ, 1)
-    call reshapeDSB<<<blocks, threads>>>(f_dev, self%f_tmp) !&
+    ierr = cufftExecZ2D(self%plan3D_bw, self%c_w_dev, f_ptr)
+    if (ierr /= 0) then
+      write (stderr, *), "cuFFT Error Code: ", ierr
+      error stop 'Backward 3D FFT execution failed'
+    end if
 
   end subroutine fft_backward_cuda
 
@@ -214,31 +154,22 @@ contains
 
     class(cuda_poisson_fft_t) :: self
 
-    complex(dp), device, dimension(:, :, :), pointer :: c_dev, c_x_ptr
+    complex(dp), device, dimension(:, :, :), pointer :: c_dev
     type(dim3) :: blocks, threads
+    integer :: tsize
 
-    ! Get some complex array pointers with right shape
-    c_x_ptr(1:self%nx, 1:SZ, 1:(self%ny*(self%nz/2 + 1))/SZ) => self%c_x_dev
-    c_dev(1:SZ, 1:self%nx, 1:(self%ny*(self%nz/2 + 1))/SZ) => self%c_y_dev
+    ! tsize is different than SZ, because here we work on a 3D Cartesian
+    ! data structure, and free to specify any suitable thread/block size.
+    tsize = 16
+    blocks = dim3((self%ny - 1)/tsize + 1, self%nz, 1)
+    threads = dim3(tsize, 1, 1)
 
-    ! Reshape from cartesian-like to our specialist data structure
-    blocks = dim3(self%nx/SZ, (self%ny*(self%nz/2 + 1))/SZ, 1)
-    threads = dim3(SZ, SZ, 1)
-    call reshapeCDSB<<<blocks, threads>>>(c_dev, c_x_ptr) !&
-
-    ! Postprocess
-    blocks = dim3((self%ny*(self%nz/2 + 1))/SZ, 1, 1)
-    threads = dim3(SZ, 1, 1)
+    ! Postprocess div_u in spectral space
     call process_spectral_div_u<<<blocks, threads>>>( & !&
-      c_dev, self%waves_dev, self%nx, self%ny, self%nz, &
+      self%c_w_dev, self%waves_dev, self%nx, self%ny, self%nz, &
       self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
       self%az_dev, self%bz_dev &
       )
-
-    ! Reshape from our specialist data structure to cartesian-like
-    blocks = dim3(self%nx/SZ, (self%ny*(self%nz/2 + 1))/SZ, 1)
-    threads = dim3(SZ, SZ, 1)
-    call reshapeCDSF<<<blocks, threads>>>(c_x_ptr, c_dev) !&
 
   end subroutine fft_postprocess_cuda
 

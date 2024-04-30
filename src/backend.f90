@@ -1,4 +1,6 @@
 module m_base_backend
+  use mpi
+
   use m_allocator, only: allocator_t, field_t
   use m_common, only: dp, DIR_C, get_rdr_from_dirs
   use m_poisson_fft, only: poisson_fft_t
@@ -23,6 +25,7 @@ module m_base_backend
 
     real(dp) :: nu
     integer :: nx_loc, ny_loc, nz_loc
+    integer :: nrank, nproc
     class(allocator_t), pointer :: allocator
     class(dirps_t), pointer :: xdirps, ydirps, zdirps
     class(poisson_fft_t), pointer :: poisson_fft
@@ -40,6 +43,7 @@ module m_base_backend
     procedure(copy_f_to_data), deferred :: copy_f_to_data
     procedure(alloc_tdsops), deferred :: alloc_tdsops
     procedure(init_poisson_fft), deferred :: init_poisson_fft
+    procedure :: base_init
     procedure :: get_field_data
     procedure :: set_field_data
   end type base_backend_t
@@ -204,6 +208,21 @@ module m_base_backend
   end interface
 
 contains
+
+  subroutine base_init(self)
+    implicit none
+
+    class(base_backend_t) :: self
+
+    integer :: nrank, nproc, ierr
+
+    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
+    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+
+    self%nrank = nrank
+    self%nproc = nproc
+
+  end subroutine base_init
 
   subroutine get_field_data(self, data, f, dir)
    !! Extract data from field `f` optionally reordering into `dir` orientation.

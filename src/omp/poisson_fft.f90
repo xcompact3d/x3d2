@@ -4,8 +4,6 @@ module m_omp_poisson_fft
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t
 
-  use m_omp_common, only: SZ
-
   implicit none
 
   type, extends(poisson_fft_t) :: omp_poisson_fft_t
@@ -33,7 +31,7 @@ contains
 
     type(omp_poisson_fft_t) :: poisson_fft
 
-    call poisson_fft%base_init(xdirps, ydirps, zdirps, SZ)
+    call poisson_fft%base_init(xdirps, ydirps, zdirps)
 
   end function init
 

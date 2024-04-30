@@ -57,6 +57,8 @@ contains
 
     integer :: n_halo, n_block
 
+    call backend%base_init()
+
     select type (allocator)
     type is (allocator_t)
       ! class level access to the allocator
@@ -205,15 +207,15 @@ contains
     call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
                          self%u_send_s, self%u_send_e, &
                          SZ*n_halo*dirps%n_blocks, &
-                         dirps%nproc, dirps%pprev, dirps%pnext)
+                         dirps%nproc_dir, dirps%pprev, dirps%pnext)
     call sendrecv_fields(self%v_recv_s, self%v_recv_e, &
                          self%v_send_s, self%v_send_e, &
                          SZ*n_halo*dirps%n_blocks, &
-                         dirps%nproc, dirps%pprev, dirps%pnext)
+                         dirps%nproc_dir, dirps%pprev, dirps%pnext)
     call sendrecv_fields(self%w_recv_s, self%w_recv_e, &
                          self%w_send_s, self%w_send_e, &
                          SZ*n_halo*dirps%n_blocks, &
-                         dirps%nproc, dirps%pprev, dirps%pnext)
+                         dirps%nproc_dir, dirps%pprev, dirps%pnext)
 
   end subroutine transeq_halo_exchange
 
@@ -247,7 +249,7 @@ contains
       u%data, u_recv_s, u_recv_e, &
       conv%data, conv_recv_s, conv_recv_e, &
       tdsops_du, tdsops_dud, tdsops_d2u, self%nu, &
-      dirps%nproc, dirps%pprev, dirps%pnext, dirps%n_blocks)
+      dirps%nproc_dir, dirps%pprev, dirps%pnext, dirps%n_blocks)
 
     call self%allocator%release_block(du)
     call self%allocator%release_block(dud)
@@ -292,12 +294,12 @@ contains
     call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
                          self%u_send_s, self%u_send_e, &
                          SZ*n_halo*dirps%n_blocks, &
-                         dirps%nproc, dirps%pprev, dirps%pnext)
+                         dirps%nproc_dir, dirps%pprev, dirps%pnext)
 
     call exec_dist_tds_compact( &
       du%data, u%data, self%u_recv_s, self%u_recv_e, &
       self%du_send_s, self%du_send_e, self%du_recv_s, self%du_recv_e, &
-      tdsops, dirps%nproc, dirps%pprev, dirps%pnext, dirps%n_blocks &
+      tdsops, dirps%nproc_dir, dirps%pprev, dirps%pnext, dirps%n_blocks &
       )
 
   end subroutine tds_solve_dist
