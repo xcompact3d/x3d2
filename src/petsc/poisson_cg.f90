@@ -5,7 +5,9 @@ module m_cg_types
   !! operator.
 
   use m_base_backend, only: base_backend_t
-  use m_allocator, only: allocator_t, field_t
+  use m_allocator, only: field_t
+  use m_poisson_cg, only: laplace_operator_t
+  use m_tdsops, only: dirps_t
 
   implicit none
 
@@ -14,8 +16,10 @@ module m_cg_types
 
   type, public :: mat_ctx_t
     class(base_backend_t), pointer :: backend
+    class(laplace_operator_t), pointer :: lapl
     class(field_t), pointer :: xfield
     class(field_t), pointer :: ffield
+    class(dirps_t), pointer :: xdirps, ydirps, zdirps
   end type mat_ctx_t
 
   interface mat_ctx_t
@@ -24,16 +28,17 @@ module m_cg_types
 
 contains
 
-  function init_ctx(allocator, backend, dir) result(ctx)
+  function init_ctx(backend, lapl, dir) result(ctx)
 
-    class(allocator_t), pointer, intent(in) :: allocator
     class(base_backend_t), pointer, intent(in) :: backend
+    class(laplace_operator_t), pointer, intent(in) :: lapl
     integer, intent(in) :: dir
     type(mat_ctx_t) :: ctx
 
-    ctx%xfield => allocator%get_block(dir)
-    ctx%ffield => allocator%get_block(dir)
+    ctx%xfield => backend%allocator%get_block(dir)
+    ctx%ffield => backend%allocator%get_block(dir)
     ctx%backend => backend
+    ctx%lapl => lapl
 
   end function init_ctx
 
@@ -47,7 +52,6 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
 
   use m_cg_types
 
-  use m_allocator, only: allocator_t
   use m_common, only: dp, DIR_X, DIR_C
   use m_base_backend, only: base_backend_t
 
@@ -62,6 +66,7 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
     !! Supports any decomposition that is also supported by the underlying
     !! finite difference schemes.
 
+    type(mat_ctx_t) :: ctx
     type(tMat) :: A ! The operator matrix
     type(tMat) :: P ! The preconditioner matrix
 
@@ -132,19 +137,20 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
 
 contains
 
-  module function init_cg(xdirps, ydirps, zdirps, allocator, backend) &
+  module function init_cg(xdirps, ydirps, zdirps, backend) &
                   result(poisson_cg)
     !! Public constructor for the poisson_cg_t type.
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps ! X/Y/Z discretisation operators
     class(poisson_cg_t), allocatable :: poisson_cg
-    class(allocator_t), pointer, intent(in) :: allocator
     class(base_backend_t), pointer, intent(in) :: backend
 
     allocate (petsc_poisson_cg_t :: poisson_cg)
+
+    call init_lapl(poisson_cg%lapl)
+    
     select type (poisson_cg)
     type is (petsc_poisson_cg_t)
-      call init_petsc_cg(poisson_cg, xdirps, ydirps, zdirps, allocator, &
-                         backend)
+      call init_petsc_cg(poisson_cg, xdirps, ydirps, zdirps, backend)
     class default
       ! This should be impossible
       print *, "Failure in allocating PETSc Poisson solver -- this indicates a serious problem"
@@ -152,11 +158,10 @@ contains
     end select
   end function init_cg
 
-  subroutine init_petsc_cg(self, xdirps, ydirps, zdirps, allocator, backend)
+  subroutine init_petsc_cg(self, xdirps, ydirps, zdirps, backend)
     !! Private constructor for the poisson_cg_t type.
     type(petsc_poisson_cg_t), intent(inout) :: self
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps ! X/Y/Z discretisation operators
-    class(allocator_t), pointer, intent(in) :: allocator
     class(base_backend_t), pointer, intent(in) :: backend
 
     integer :: nx, ny, nz, n ! Local problem size
@@ -167,29 +172,29 @@ contains
     nz = zdirps%n
     n = nx*ny*nz
 
+    self%ctx = mat_ctx_t(backend, self%lapl, DIR_X)
+
     ! Initialise preconditioner and operator matrices
     ! XXX: Add option to use preconditioner as operator (would imply low-order
     !      solution)?
-    call create_matrix(n, "assemled", allocator, backend, self%P)
-    call create_matrix(n, "matfree", allocator, backend, self%A)
+    call create_matrix(n, "assemled", backend, self%lapl, self%P)
+    call create_matrix(n, "matfree", backend, self%lapl, self%A)
   end subroutine init_petsc_cg
 
-  subroutine create_matrix(nlocal, mat_type, allocator, backend, M)
+  subroutine create_matrix(nlocal, mat_type, backend, lapl, M)
     !! Creates either a matrix object given the local problem size.
     !! The matrix can be either "assembled" - suitable for preconditioners, or
     !! "matfree" - for use as a high-order operator.
     integer, intent(in) :: nlocal            ! The local problem size
     character(len=*), intent(in) :: mat_type ! The desired type of matrix - valid values
                                              ! are "assembled" or "matfree"
-    class(allocator_t), pointer, intent(in) :: allocator  ! The field allocator
-    class(base_backend_t), pointer, intent(in) :: backend ! The compute backend
+    class(base_backend_t), pointer, intent(in) :: backend  ! The compute backend
+    class(laplace_operator_t), pointer, intent(in) :: lapl ! The Laplacian operator
     type(tMat), intent(out) :: M             ! The matrix object
 
     type(mat_ctx_t) :: ctx
 
     integer :: ierr
-
-    ctx = mat_ctx_t(allocator, backend, DIR_X)
 
     if (mat_type == "assembled") then
       call MatCreate(PETSC_COMM_WORLD, M, ierr)
@@ -218,7 +223,7 @@ contains
     call MatShellGetContext(M, ctx, ierr)
 
     call copy_vec_to_field(ctx%xfield, x, ctx%backend)
-    call poissmult(ctx%xfield, ctx%ffield)
+    call ctx%lapl%apply(ctx%ffield, ctx%xfield, ctx%backend)
     call copy_field_to_vec(f, ctx%ffield, ctx%backend)
 
   end subroutine poissmult_petsc
@@ -267,7 +272,7 @@ contains
     integer :: ierr
 
     integer :: nx, ny, nz
-
+    
     nx = backend%nx_loc
     ny = backend%ny_loc
     nz = backend%nz_loc
