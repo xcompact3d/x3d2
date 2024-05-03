@@ -1,4 +1,4 @@
-program test_omp_io
+program test_hostside_io
   use iso_fortran_env, only: stderr => error_unit
   use adios2
   use mpi
@@ -113,4 +113,3 @@ contains
     error stop msg
   end subroutine
 end program
-
