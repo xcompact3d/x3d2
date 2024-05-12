@@ -3,7 +3,11 @@ set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" CACHE STRING "comma separated li
 set(CMAKE_CTEST_NPROCS "4" CACHE STRING "number of process used in tests")
 
 function(define_test testfile np backend)
-  get_filename_component(test_name ${testfile} NAME_WE)
+  if ("${ARGC}" GREATER "3")
+    set(test_name ${ARGV3})
+  else()
+    get_filename_component(test_name ${testfile} NAME_WE)
+  endif()
   string(CONCAT test_name ${test_name} _ ${backend})
 
   add_executable(${test_name} ${testfile})
@@ -26,6 +30,7 @@ endfunction()
 
 define_test(test_allocator.f90 1 omp)
 define_test(test_reordering.f90 1 omp)
+define_test(test_reordering.f90 {CMAKE_CTEST_NPROCS} omp test_reordering-par)
 define_test(omp/test_omp_tridiag.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(omp/test_omp_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(omp/test_omp_dist_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
