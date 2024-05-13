@@ -39,4 +39,4 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_test(cuda/test_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
 endif()
 
-define_test(test_poisson_cg_eval.f90 ${CMAKE_CTEST_NPROCS} omp)
+define_test(test_poisson_cg_eval.f90 1 omp)

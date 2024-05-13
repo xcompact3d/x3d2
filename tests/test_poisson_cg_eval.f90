@@ -144,9 +144,12 @@ contains
     call init_dirps(backend%xdirps, backend%ydirps, backend%zdirps, globs, nproc, irank)
 
     print *, "ALLOCATE derivatives"
-    call backend%alloc_tdsops(backend%xdirps%der2nd, nx, backend%xdirps%d, "second-deriv", "compact6")
-    call backend%alloc_tdsops(backend%ydirps%der2nd, ny, backend%ydirps%d, "second-deriv", "compact6")
-    call backend%alloc_tdsops(backend%zdirps%der2nd, nz, backend%zdirps%d, "second-deriv", "compact6")
+    call backend%alloc_tdsops(backend%xdirps%der2nd, backend%xdirps%n, &
+                              backend%xdirps%d, "second-deriv", "compact6")
+    call backend%alloc_tdsops(backend%ydirps%der2nd, backend%ydirps%n, &
+                              backend%ydirps%d, "second-deriv", "compact6")
+    call backend%alloc_tdsops(backend%zdirps%der2nd, backend%zdirps%n, &
+                              backend%zdirps%d, "second-deriv", "compact6")
     print *, "DONE"
     
   end subroutine init_backend
