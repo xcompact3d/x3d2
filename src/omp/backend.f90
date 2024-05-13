@@ -316,22 +316,22 @@ contains
     select case (direction)
     case (RDR_X2Y)
       ndir_loc = self%xdirps%n
-      ndir_groups = self%xdirps%n_blocks
+      ndir_groups = self%allocator%xdims_padded(3)
     case (RDR_X2Z)
       ndir_loc = self%xdirps%n
-      ndir_groups = self%xdirps%n_blocks
+      ndir_groups = self%allocator%xdims_padded(3)
     case (RDR_Y2X)
       ndir_loc = self%ydirps%n
-      ndir_groups = self%ydirps%n_blocks
+      ndir_groups = self%allocator%ydims_padded(3)
     case (RDR_Y2Z)
       ndir_loc = self%ydirps%n
-      ndir_groups = self%ydirps%n_blocks
+      ndir_groups = self%allocator%ydims_padded(3)
     case (RDR_Z2X)
       ndir_loc = self%zdirps%n
-      ndir_groups = self%zdirps%n_blocks
+      ndir_groups = self%allocator%zdims_padded(3)
     case (RDR_Z2Y)
       ndir_loc = self%zdirps%n
-      ndir_groups = self%zdirps%n_blocks
+      ndir_groups = self%allocator%zdims_padded(3)
     case default
       ndir_loc = 0
       ndir_groups = 0
@@ -344,7 +344,7 @@ contains
         do i = 1, SZ
           call get_index_reordering( &
             out_i, out_j, out_k, i, j, k, direction, &
-            SZ, self%xdirps%n, self%ydirps%n, self%zdirps%n &
+            SZ, self%allocator%xdims_padded(2), self%allocator%ydims_padded(2), self%allocator%zdims_padded(2) &
             )
           u_%data(out_i, out_j, out_k) = u%data(i, j, k)
         end do
