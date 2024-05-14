@@ -127,7 +127,7 @@ contains
     integer :: i
 
     do i = 1, self%nvars
-      call self%backend%vecadd(dt, self%deriv(1)%ptr, 1._dp, self%curr(1)%ptr)
+      call self%backend%vecadd(dt, self%deriv(i)%ptr, 1._dp, self%curr(i)%ptr)
 
       ! for startup
       if (self%istep .eq. 0 .and. self%order .gt. 1) then
