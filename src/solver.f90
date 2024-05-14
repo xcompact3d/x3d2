@@ -575,14 +575,14 @@ contains
 
   end subroutine poisson_cg
 
-  subroutine output(self, t, u_out)
+  subroutine output(self, t)
     implicit none
 
     class(solver_t), intent(in) :: self
     real(dp), intent(in) :: t
-    real(dp), dimension(:, :, :), intent(inout) :: u_out
 
     class(field_t), pointer :: du, dv, dw, div_u
+    type(field_t), pointer :: u_out
     real(dp) :: enstrophy, div_u_max, div_u_mean
     integer :: ierr
 
@@ -605,12 +605,17 @@ contains
     div_u => self%backend%allocator%get_block(DIR_Z)
 
     call self%divergence_v2p(div_u, self%u, self%v, self%w)
-    call self%backend%get_field_data(u_out, div_u)
+
+    u_out => self%host_allocator%get_block(DIR_C)
+    call self%backend%get_field_data(u_out%data, div_u)
 
     call self%backend%allocator%release_block(div_u)
 
-    div_u_max = maxval(abs(u_out))
-    div_u_mean = sum(abs(u_out))/self%ngrid
+    div_u_max = maxval(abs(u_out%data))
+    div_u_mean = sum(abs(u_out%data))/self%ngrid
+
+    call self%host_allocator%release_block(u_out)
+
     call MPI_Allreduce(MPI_IN_PLACE, div_u_max, 1, MPI_DOUBLE_PRECISION, &
                        MPI_MAX, MPI_COMM_WORLD, ierr)
     call MPI_Allreduce(MPI_IN_PLACE, div_u_mean, 1, MPI_DOUBLE_PRECISION, &
@@ -634,7 +639,7 @@ contains
 
     if (self%backend%nrank == 0) print *, 'initial conditions'
     t = 0._dp
-    call self%output(t, u_out)
+    call self%output(t)
 
     if (self%backend%nrank == 0) print *, 'start run'
 
@@ -683,7 +688,7 @@ contains
 
       if (mod(i, self%n_output) == 0) then
         t = i*self%dt
-        call self%output(t, u_out)
+        call self%output(t)
       end if
     end do
 
