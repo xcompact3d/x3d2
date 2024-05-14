@@ -89,14 +89,13 @@ contains
     self%deriv(2)%ptr => dv
     self%deriv(3)%ptr => dw
 
-    order = min(self%istep, self%order)
-    call self%adams_bashforth(order, dt)
+    call self%adams_bashforth(dt)
 
     ! increment step counter
     self%istep = self%istep + 1
   end subroutine step
 
-  subroutine adams_bashforth(self, order, dt)
+  subroutine adams_bashforth(self, dt)
     class(time_intg_t), intent(inout) :: self
     integer, intent(in) :: order
     real(dp), intent(in) :: dt
@@ -104,6 +103,7 @@ contains
     integer :: i, j
     class(field_t), pointer :: ptr
 
+    order = min(self%istep, self%order)
     do i = 1, self%nvars
       ! update solution
       call self%backend%vecadd(self%coeffs(1, order)*dt, &
@@ -116,23 +116,23 @@ contains
       end do
 
       ! rotate pointers
-      if (self%istep == order .and. self%order > order) then
+      if (self%order > order) then
         ! for startup
-        if (self%istep == 1) then
-          ! update olds(1) with new derivative
-          call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, &
-                                   self%olds(i, 1)%ptr)
-        else
+        if (self%istep > 1) then
           call rotate(self%olds(i, :), order)
         end if
-      else if (self%order > 2) then
+      else 
         ! after startup
-        call rotate(self%olds(i, :), order - 1)
+        if (self%order > 2) then
+          call rotate(self%olds(i, :), order - 1)
+        end if
       end if
 
       ! update olds(1) with new derivative
-      call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, &
-                               self%olds(i, 1)%ptr)
+      if (self%order > 1) then
+        call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, &
+                                 self%olds(i, 1)%ptr)
+      end if
     end do
 
   end subroutine adams_bashforth
