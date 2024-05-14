@@ -5,11 +5,11 @@ module m_time_integrator
 
   implicit none
 
-  private adams_bashforth_1st, adams_bashforth_2nd
-  private adams_bashforth_3rd, adams_bashforth_4th
+  private adams_bashforth
 
   type :: time_intg_t
     integer :: istep, nsteps, nsubsteps, order, nvars, nolds
+    real(dp) :: coeffs(4,4)
     type(flist_t), allocatable :: olds(:, :)
     type(flist_t), allocatable :: curr(:)
     type(flist_t), allocatable :: deriv(:)
@@ -17,10 +17,7 @@ module m_time_integrator
     class(allocator_t), pointer :: allocator
   contains
     procedure :: step
-    procedure :: adams_bashforth_1st
-    procedure :: adams_bashforth_2nd
-    procedure :: adams_bashforth_3rd
-    procedure :: adams_bashforth_4th
+    procedure :: adams_bashforth
   end type time_intg_t
 
   interface time_intg_t
@@ -38,6 +35,11 @@ contains
     integer, intent(in), optional :: nvars
 
     integer :: i, j
+
+    !constructor%coeffs = reshape((/ 1.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, & 
+    !                   1.5_dp, -0.5_dp, 0.0_dp, 0.0_dp, &
+    !                   23._dp/12._dp, -4._dp/3._dp, 5._dp/12._dp, 0.0_dp, &
+    !                   55._dp/24._dp, -59._dp/24._dp, 37._dp/24._dp,  3._dp/8._dp /), shape(constructor%coeffs))
 
     constructor%backend => backend
     constructor%allocator => allocator
@@ -87,89 +89,42 @@ contains
     self%deriv(3)%ptr => dw
 
     order = min(self%istep + 1, self%order)
-    select case (order)
-    case (1)
-      call self%adams_bashforth_1st(dt)
-    case (2)
-      call self%adams_bashforth_2nd(dt)
-    case (3)
-      call self%adams_bashforth_3rd(dt)
-    case (4)
-      call self%adams_bashforth_4th(dt)
-    end select
+    call self%adams_bashforth(order, dt)
 
     ! increment step counter
     self%istep = self%istep + 1
   end subroutine step
 
-  subroutine adams_bashforth_1st(self, dt)
+  subroutine adams_bashforth(self, order, dt)
     class(time_intg_t), intent(inout) :: self
+    integer, intent(in) :: order
     real(dp), intent(in) :: dt
 
-    integer :: i
-
-    do i = 1, self%nvars
-      call self%backend%vecadd(dt, self%deriv(i)%ptr, 1._dp, self%curr(i)%ptr)
-
-      ! for startup
-      if (self%istep == 0 .and. self%order > 1) then
-        ! update olds(1) with new derivative
-        call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, &
-                                 self%olds(i, 1)%ptr)
-      end if
-    end do
-
-  end subroutine adams_bashforth_1st
-
-  subroutine adams_bashforth_2nd(self, dt)
-    class(time_intg_t), intent(inout) :: self
-    real(dp), intent(in) :: dt
-
-    integer :: i
-    class(field_t), pointer :: ptr
-
-    do i = 1, self%nvars
-      call self%backend%vecadd(1.5_dp*dt, self%deriv(i)%ptr, 1._dp, &
-                               self%curr(i)%ptr)
-      call self%backend%vecadd(-0.5_dp*dt, self%olds(i, 1)%ptr, 1._dp, &
-                               self%curr(i)%ptr)
-
-      ! rotate pointers
-      if (self%istep == 1 .and. self%order > 2) then
-        ! for startup
-        call rotate(self%olds(i, :), 2)
-      end if
-
-      ! update olds(1) with new derivative
-      call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, &
-                               self%olds(i, 1)%ptr)
-    end do
-
-  end subroutine adams_bashforth_2nd
-
-  subroutine adams_bashforth_3rd(self, dt)
-    class(time_intg_t), intent(inout) :: self
-    real(dp), intent(in) :: dt
-
-    integer :: i
+    integer :: i, j
     class(field_t), pointer :: ptr
 
     do i = 1, self%nvars
       ! update solution
-      call self%backend%vecadd(23._dp/12._dp*dt, self%deriv(i)%ptr, &
+      call self%backend%vecadd(self%coeffs(1, order)*dt, self%deriv(i)%ptr, &
                                1._dp, self%curr(i)%ptr)
-      call self%backend%vecadd(-4._dp/3._dp*dt, self%olds(i, 1)%ptr, &
-                               1._dp, self%curr(i)%ptr)
-      call self%backend%vecadd(5._dp/12._dp*dt, self%olds(i, 2)%ptr, &
-                               1._dp, self%curr(i)%ptr)
+      do j = 2, order
+        call self%backend%vecadd(self%coeffs(j, order)*dt, self%olds(i, j - 1)%ptr, &
+                                 1._dp, self%curr(i)%ptr)
+      end do
 
       ! rotate pointers
-      if (self%istep == 2 .and. self%order > 3) then
+      if (self%istep == order - 1 .and. self%order > order) then
         ! for startup
-        call rotate(self%olds(i, :), 3)
-      else
+        if (self%istep == 0) then
+          ! update olds(1) with new derivative
+          call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, &
+                                   self%olds(i, 1)%ptr)
+        else
+          call rotate(self%olds(i, :), order)
+        end if
+      else if (self%order > 2) then
         ! after startup
-        call rotate(self%olds(i, :), 2)
+        call rotate(self%olds(i, :), order - 1)
       end if
 
       ! update olds(1) with new derivative
@@ -177,41 +132,7 @@ contains
                                self%olds(i, 1)%ptr)
     end do
 
-  end subroutine adams_bashforth_3rd
-
-  subroutine adams_bashforth_4th(self, dt)
-    class(time_intg_t), intent(inout) :: self
-    real(dp), intent(in) :: dt
-
-    integer :: i
-    class(field_t), pointer :: ptr
-
-    do i = 1, self%nvars
-      ! update solution
-      call self%backend%vecadd(55._dp/24._dp*dt, self%deriv(i)%ptr, &
-                               1._dp, self%curr(i)%ptr)
-      call self%backend%vecadd(-59._dp/24._dp*dt, self%olds(i, 1)%ptr, &
-                               1._dp, self%curr(i)%ptr)
-      call self%backend%vecadd(37._dp/24._dp*dt, self%olds(i, 2)%ptr, &
-                               1._dp, self%curr(i)%ptr)
-      call self%backend%vecadd(3._dp/8._dp*dt, self%olds(i, 3)%ptr, &
-                               1._dp, self%curr(i)%ptr)
-
-      ! rotate pointers
-      if (self%istep == 3 .and. self%order > 4) then
-        ! for startup
-        call rotate(self%olds(i, :), 4)
-      else
-        ! after startup
-        call rotate(self%olds(i, :), 3)
-      end if
-
-      ! update olds(1) with new derivative
-      call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, &
-                               self%olds(i, 1)%ptr)
-    end do
-
-  end subroutine adams_bashforth_4th
+  end subroutine adams_bashforth
 
   subroutine rotate(sol, n)
     type(flist_t), intent(inout) :: sol(:)
