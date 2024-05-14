@@ -44,7 +44,7 @@ contains
 
     if (present(nvars)) then
       constructor%nvars = nvars
-    else 
+    else
       constructor%nvars = 3
     end if
 
@@ -88,20 +88,18 @@ contains
 
     order = min(self%istep + 1, self%order)
     select case (order)
-      case(1)
-        call self%adams_bashforth_1st(dt)
-      case(2)
-        call self%adams_bashforth_2nd(dt)
-      case(3)
-         call self%adams_bashforth_3rd(dt)
-      case(4)
-        call self%adams_bashforth_4th(dt)
+    case (1)
+      call self%adams_bashforth_1st(dt)
+    case (2)
+      call self%adams_bashforth_2nd(dt)
+    case (3)
+      call self%adams_bashforth_3rd(dt)
+    case (4)
+      call self%adams_bashforth_4th(dt)
     end select
 
-
     ! increment step counter
-    self%istep = self%istep + 1;
-
+    self%istep = self%istep + 1
   end subroutine step
 
   subroutine adams_bashforth_1st(self, dt)
@@ -114,9 +112,10 @@ contains
       call self%backend%vecadd(dt, self%deriv(i)%ptr, 1._dp, self%curr(i)%ptr)
 
       ! for startup
-      if (self%istep .eq. 0 .and. self%order .gt. 1) then
+      if (self%istep == 0 .and. self%order > 1) then
         ! update olds(1) with new derivative
-        call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, self%olds(i,1)%ptr)
+        call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, &
+                                 self%olds(i, 1)%ptr)
       end if
     end do
 
@@ -130,22 +129,25 @@ contains
     class(field_t), pointer :: ptr
 
     do i = 1, self%nvars
-      call self%backend%vecadd(1.5_dp * dt, self%deriv(i)%ptr, 1._dp, self%curr(i)%ptr)
-      call self%backend%vecadd(-0.5_dp * dt, self%olds(i,1)%ptr, 1._dp, self%curr(i)%ptr)
+      call self%backend%vecadd(1.5_dp*dt, self%deriv(i)%ptr, 1._dp, &
+                               self%curr(i)%ptr)
+      call self%backend%vecadd(-0.5_dp*dt, self%olds(i, 1)%ptr, 1._dp, &
+                               self%curr(i)%ptr)
 
       ! for startup
-      if (self%istep .eq. 1 .and. self%order .gt. 2) then
+      if (self%istep == 1 .and. self%order > 2) then
         ! rotate pointers
-        call rotate(self%olds(i,:), 2)
+        call rotate(self%olds(i, :), 2)
       end if
 
       ! update olds(1) with new derivative
-      call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, self%olds(i,1)%ptr)
+      call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, &
+                               self%olds(i, 1)%ptr)
     end do
 
   end subroutine adams_bashforth_2nd
 
-  subroutine adams_bashforth_3rd(self,  dt)
+  subroutine adams_bashforth_3rd(self, dt)
     class(time_intg_t), intent(inout) :: self
     real(dp), intent(in) :: dt
 
@@ -154,22 +156,26 @@ contains
 
     do i = 1, self%nvars
       ! update solution
-      call self%backend%vecadd(23._dp / 12._dp * dt, self%deriv(i)%ptr, 1._dp, self%curr(i)%ptr)
-      call self%backend%vecadd(-4._dp / 3._dp * dt, self%olds(i,1)%ptr, 1._dp, self%curr(i)%ptr)
-      call self%backend%vecadd(5._dp / 12._dp * dt, self%olds(i,2)%ptr, 1._dp, self%curr(i)%ptr)
-      
+      call self%backend%vecadd(23._dp/12._dp*dt, self%deriv(i)%ptr, &
+                               1._dp, self%curr(i)%ptr)
+      call self%backend%vecadd(-4._dp/3._dp*dt, self%olds(i, 1)%ptr, &
+                               1._dp, self%curr(i)%ptr)
+      call self%backend%vecadd(5._dp/12._dp*dt, self%olds(i, 2)%ptr, &
+                               1._dp, self%curr(i)%ptr)
+
       ! for startup
-      if (self%istep .eq. 2 .and. self%order .gt. 3) then
+      if (self%istep == 2 .and. self%order > 3) then
         ! rotate pointers
-        call rotate(self%olds(i,:), 3)
-      ! after startup
+        call rotate(self%olds(i, :), 3)
+        ! after startup
       else
         ! rotate pointers
-        call rotate(self%olds(i,:), 2)
+        call rotate(self%olds(i, :), 2)
       end if
 
       ! update olds(1) with new derivative
-      call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, self%olds(i,1)%ptr)
+      call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, &
+                               self%olds(i, 1)%ptr)
     end do
 
   end subroutine adams_bashforth_3rd
@@ -183,23 +189,28 @@ contains
 
     do i = 1, self%nvars
       ! update solution
-      call self%backend%vecadd(55._dp / 24._dp * dt, self%deriv(i)%ptr, 1._dp, self%curr(i)%ptr)
-      call self%backend%vecadd(-59._dp / 24._dp * dt, self%olds(i,1)%ptr, 1._dp, self%curr(i)%ptr)
-      call self%backend%vecadd(37._dp / 24._dp * dt, self%olds(i,2)%ptr, 1._dp, self%curr(i)%ptr)
-      call self%backend%vecadd(3._dp / 8._dp * dt, self%olds(i,3)%ptr, 1._dp, self%curr(i)%ptr)
-      
+      call self%backend%vecadd(55._dp/24._dp*dt, self%deriv(i)%ptr, &
+                               1._dp, self%curr(i)%ptr)
+      call self%backend%vecadd(-59._dp/24._dp*dt, self%olds(i, 1)%ptr, &
+                               1._dp, self%curr(i)%ptr)
+      call self%backend%vecadd(37._dp/24._dp*dt, self%olds(i, 2)%ptr, &
+                               1._dp, self%curr(i)%ptr)
+      call self%backend%vecadd(3._dp/8._dp*dt, self%olds(i, 3)%ptr, &
+                               1._dp, self%curr(i)%ptr)
+
       ! for startup
-      if (self%istep .eq. 3 .and. self%order .gt. 4) then
+      if (self%istep == 3 .and. self%order > 4) then
         ! rotate pointers
-        call rotate(self%olds(i,:), 4)
-      ! after startup
+        call rotate(self%olds(i, :), 4)
+        ! after startup
       else
         ! rotate pointers
-        call rotate(self%olds(i,:), 3)
+        call rotate(self%olds(i, :), 3)
       end if
 
       ! update olds(1) with new derivative
-      call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, self%olds(i,1)%ptr)
+      call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, &
+                               self%olds(i, 1)%ptr)
     end do
 
   end subroutine adams_bashforth_4th
@@ -214,9 +225,9 @@ contains
     ! rotate pointer
     ptr => sol(n)%ptr
     do i = n, 2, -1
-        sol(n)%ptr => sol(n-1)%ptr
+      sol(n)%ptr => sol(n - 1)%ptr
     end do
     sol(1)%ptr => ptr
-   
-   end subroutine rotate
+
+  end subroutine rotate
 end module m_time_integrator
