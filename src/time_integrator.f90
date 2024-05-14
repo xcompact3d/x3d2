@@ -9,7 +9,7 @@ module m_time_integrator
 
   type :: time_intg_t
     integer :: istep, nsteps, nsubsteps, order, nvars, nolds
-    real(dp) :: coeffs(4,4)
+    real(dp) :: coeffs(4, 4)
     type(flist_t), allocatable :: olds(:, :)
     type(flist_t), allocatable :: curr(:)
     type(flist_t), allocatable :: deriv(:)
@@ -36,10 +36,11 @@ contains
 
     integer :: i, j
 
-    !constructor%coeffs = reshape((/ 1.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, & 
-    !                   1.5_dp, -0.5_dp, 0.0_dp, 0.0_dp, &
-    !                   23._dp/12._dp, -4._dp/3._dp, 5._dp/12._dp, 0.0_dp, &
-    !                   55._dp/24._dp, -59._dp/24._dp, 37._dp/24._dp,  3._dp/8._dp /), shape(constructor%coeffs))
+    constructor%coeffs = reshape((/1.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, &
+                                   1.5_dp, -0.5_dp, 0.0_dp, 0.0_dp, &
+                           23._dp/12._dp, -4._dp/3._dp, 5._dp/12._dp, 0.0_dp, &
+                 55._dp/24._dp, -59._dp/24._dp, 37._dp/24._dp, 3._dp/8._dp/), &
+                                 shape(constructor%coeffs))
 
     constructor%backend => backend
     constructor%allocator => allocator
@@ -50,7 +51,7 @@ contains
       constructor%nvars = 3
     end if
 
-    constructor%istep = 0
+    constructor%istep = 1
     constructor%order = 1
     constructor%nolds = constructor%order - 1
 
@@ -88,7 +89,7 @@ contains
     self%deriv(2)%ptr => dv
     self%deriv(3)%ptr => dw
 
-    order = min(self%istep + 1, self%order)
+    order = min(self%istep, self%order)
     call self%adams_bashforth(order, dt)
 
     ! increment step counter
@@ -105,17 +106,19 @@ contains
 
     do i = 1, self%nvars
       ! update solution
-      call self%backend%vecadd(self%coeffs(1, order)*dt, self%deriv(i)%ptr, &
+      call self%backend%vecadd(self%coeffs(1, order)*dt, &
+                               self%deriv(i)%ptr, &
                                1._dp, self%curr(i)%ptr)
       do j = 2, order
-        call self%backend%vecadd(self%coeffs(j, order)*dt, self%olds(i, j - 1)%ptr, &
+        call self%backend%vecadd(self%coeffs(j, order)*dt, &
+                                 self%olds(i, j - 1)%ptr, &
                                  1._dp, self%curr(i)%ptr)
       end do
 
       ! rotate pointers
-      if (self%istep == order - 1 .and. self%order > order) then
+      if (self%istep == order .and. self%order > order) then
         ! for startup
-        if (self%istep == 0) then
+        if (self%istep == 1) then
           ! update olds(1) with new derivative
           call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, &
                                    self%olds(i, 1)%ptr)
