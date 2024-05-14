@@ -40,10 +40,7 @@ program xcompact
 
   type(allocator_t), target :: omp_allocator
 
-  real(dp), allocatable, dimension(:, :, :) :: u, v, w
-
   real(dp) :: t_start, t_end
-  integer :: dims(3)
   integer :: nrank, nproc, ierr
 
   call MPI_Init(ierr)
@@ -129,11 +126,6 @@ program xcompact
   if (nrank == 0) print *, 'OpenMP backend instantiated'
 #endif
 
-  dims(:) = allocator%cdims_padded
-  allocate (u(dims(1), dims(2), dims(3)))
-  allocate (v(dims(1), dims(2), dims(3)))
-  allocate (w(dims(1), dims(2), dims(3)))
-
   time_integrator = time_intg_t(allocator=allocator, backend=backend)
   if (nrank == 0) print *, 'time integrator instantiated'
   solver = solver_t(backend, time_integrator, host_allocator, &
@@ -142,13 +134,11 @@ program xcompact
 
   call cpu_time(t_start)
 
-  call solver%run(u, v, w)
+  call solver%run()
 
   call cpu_time(t_end)
 
   if (nrank == 0) print *, 'Time: ', t_end - t_start
-
-  if (nrank == 0) print *, 'norms', norm2(u), norm2(v), norm2(w)
 
   call MPI_Finalize(ierr)
 

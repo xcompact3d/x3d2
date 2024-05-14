@@ -626,13 +626,13 @@ contains
 
   end subroutine output
 
-  subroutine run(self, u_out, v_out, w_out)
+  subroutine run(self)
     implicit none
 
     class(solver_t), intent(in) :: self
-    real(dp), dimension(:, :, :), intent(inout) :: u_out, v_out, w_out
 
     class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
+    type(field_t), pointer :: u_out, v_out, w_out
 
     real(dp) :: t
     integer :: i
@@ -694,9 +694,23 @@ contains
 
     if (self%backend%nrank == 0) print *, 'run end'
 
-    call self%backend%get_field_data(u_out, self%u)
-    call self%backend%get_field_data(v_out, self%v)
-    call self%backend%get_field_data(w_out, self%w)
+    ! Below is for demonstrating purpuses only, to be removed when we have
+    ! proper I/O in place.
+    u_out => self%host_allocator%get_block(DIR_C)
+    v_out => self%host_allocator%get_block(DIR_C)
+    w_out => self%host_allocator%get_block(DIR_C)
+
+    call self%backend%get_field_data(u_out%data, self%u)
+    call self%backend%get_field_data(v_out%data, self%v)
+    call self%backend%get_field_data(w_out%data, self%w)
+
+    if (self%backend%nrank == 0) then
+      print *, 'norms', norm2(u_out%data), norm2(v_out%data), norm2(w_out%data)
+    end if
+
+    call self%host_allocator%release_block(u_out)
+    call self%host_allocator%release_block(v_out)
+    call self%host_allocator%release_block(w_out)
 
   end subroutine run
 
