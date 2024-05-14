@@ -134,9 +134,9 @@ contains
       call self%backend%vecadd(-0.5_dp*dt, self%olds(i, 1)%ptr, 1._dp, &
                                self%curr(i)%ptr)
 
-      ! for startup
+      ! rotate pointers
       if (self%istep == 1 .and. self%order > 2) then
-        ! rotate pointers
+        ! for startup
         call rotate(self%olds(i, :), 2)
       end if
 
@@ -163,13 +163,12 @@ contains
       call self%backend%vecadd(5._dp/12._dp*dt, self%olds(i, 2)%ptr, &
                                1._dp, self%curr(i)%ptr)
 
-      ! for startup
+      ! rotate pointers
       if (self%istep == 2 .and. self%order > 3) then
-        ! rotate pointers
+        ! for startup
         call rotate(self%olds(i, :), 3)
-        ! after startup
       else
-        ! rotate pointers
+        ! after startup
         call rotate(self%olds(i, :), 2)
       end if
 
@@ -198,13 +197,12 @@ contains
       call self%backend%vecadd(3._dp/8._dp*dt, self%olds(i, 3)%ptr, &
                                1._dp, self%curr(i)%ptr)
 
-      ! for startup
+      ! rotate pointers
       if (self%istep == 3 .and. self%order > 4) then
-        ! rotate pointers
+        ! for startup
         call rotate(self%olds(i, :), 4)
-        ! after startup
       else
-        ! rotate pointers
+        ! after startup
         call rotate(self%olds(i, :), 3)
       end if
 
