@@ -116,7 +116,7 @@ contains
       end do
 
       ! rotate pointers
-      if (self%order > order) then
+      if (order < self%order) then
         ! for startup
         if (self%istep > 1) then
           call rotate(self%olds(i, :), order)
