@@ -117,11 +117,17 @@ program test_reorder
     do j = 1, ydirps%n
       do i = 1, xdirps%n
         call test_index_reversing(pass_X, i, j, k, DIR_X, &
-                                  SZ, xdirps%n, ydirps%n, zdirps%n)
+                                  SZ, allocator%xdims_padded(2), &
+                                  allocator%ydims_padded(2), &
+                                  allocator%zdims_padded(2))
         call test_index_reversing(pass_Y, i, j, k, DIR_Y, &
-                                  SZ, xdirps%n, ydirps%n, zdirps%n)
+                                  SZ, allocator%xdims_padded(2), &
+                                  allocator%ydims_padded(2), &
+                                  allocator%zdims_padded(2))
         call test_index_reversing(pass_Z, i, j, k, DIR_Z, &
-                                  SZ, xdirps%n, ydirps%n, zdirps%n)
+                                  SZ, allocator%xdims_padded(2), &
+                                  allocator%ydims_padded(2), &
+                                  allocator%zdims_padded(2))
       end do
     end do
   end do
@@ -215,7 +221,8 @@ contains
       write (stderr, '(a)') message
     end if
 #else
-    if (norm2(a%data - b%data) > tol) then
+    if (norm2(a%data(1:SZ, 1:globs%nx_loc, 1:globs%n_groups_x) - &
+              b%data(1:SZ, 1:globs%nx_loc, 1:globs%n_groups_x)) > tol) then
       allpass = .false.
       write (stderr, '(a)') message
     end if
