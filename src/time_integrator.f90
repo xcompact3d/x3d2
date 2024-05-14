@@ -151,10 +151,8 @@ contains
 
       ! for startup
       if (self%istep .eq. 1 .and. self%order .gt. 2) then
-        ! roll pointers
-        ptr => self%olds(i,2)%ptr
-        self%olds(i,2)%ptr => self%olds(i,1)%ptr
-        self%olds(i,1)%ptr => ptr
+        ! rotate pointers
+        call rotate(self%olds(i,:), 2)
       end if
 
       ! update olds(1) with new derivative
@@ -178,17 +176,12 @@ contains
       
       ! for startup
       if (self%istep .eq. 2 .and. self%order .gt. 3) then
-        ! roll pointers
-        ptr => self%olds(i,3)%ptr
-        self%olds(i,3)%ptr => self%olds(i,2)%ptr
-        self%olds(i,2)%ptr => self%olds(i,1)%ptr
-        self%olds(i,1)%ptr => ptr
+        ! rotate pointers
+        call rotate(self%olds(i,:), 3)
       ! after startup
       else
-        ! roll pointers
-        ptr => self%olds(i,2)%ptr
-        self%olds(i,2)%ptr => self%olds(i,1)%ptr
-        self%olds(i,1)%ptr => ptr
+        ! rotate pointers
+        call rotate(self%olds(i,:), 2)
       end if
 
       ! update olds(1) with new derivative
@@ -213,19 +206,12 @@ contains
       
       ! for startup
       if (self%istep .eq. 3 .and. self%order .gt. 4) then
-        ! roll pointers
-        ptr => self%olds(i,4)%ptr
-        self%olds(i,4)%ptr => self%olds(i,3)%ptr
-        self%olds(i,3)%ptr => self%olds(i,2)%ptr
-        self%olds(i,2)%ptr => self%olds(i,1)%ptr
-        self%olds(i,1)%ptr => ptr
+        ! rotate pointers
+        call rotate(self%olds(i,:), 4)
       ! after startup
       else
-        ! roll pointers
-        ptr => self%olds(i,3)%ptr
-        self%olds(i,3)%ptr => self%olds(i,2)%ptr
-        self%olds(i,2)%ptr => self%olds(i,1)%ptr
-        self%olds(i,1)%ptr => ptr
+        ! rotate pointers
+        call rotate(self%olds(i,:), 3)
       end if
 
       ! update olds(1) with new derivative
@@ -234,4 +220,19 @@ contains
 
   end subroutine adams_bashforth_4th
 
+  subroutine rotate(sol, n)
+    type(flist_t), intent(inout) :: sol(:)
+    integer, intent(in) :: n
+
+    integer :: i
+    class(field_t), pointer :: ptr
+
+    ! rotate pointer
+    ptr => sol(n)%ptr
+    do i = n, 2, -1
+        sol(n)%ptr => sol(n-1)%ptr
+    end do
+    sol(1)%ptr => ptr
+   
+   end subroutine rotate
 end module m_time_integrator
