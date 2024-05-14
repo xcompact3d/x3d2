@@ -74,6 +74,8 @@ contains
 
     real(dp), intent(in) :: dt
 
+    integer :: order
+
     ! assign pointer to variables
     self%curr(1)%ptr => u
     self%curr(2)%ptr => v
@@ -84,40 +86,17 @@ contains
     self%deriv(2)%ptr => dv
     self%deriv(3)%ptr => dw
 
-    ! First-order
-    if (self%order .eq. 1) then
-      call self%adams_bashforth_1st(dt)
-
-    ! Second-order
-    else if (self%order .eq. 2) then
-      if (self%istep .eq. 0) then
+    order = min(self%istep + 1, self%order)
+    select case (order)
+      case(1)
         call self%adams_bashforth_1st(dt)
-      else
+      case(2)
         call self%adams_bashforth_2nd(dt)
-      end if
-
-    ! Third-order
-    else if (self%order .eq. 3) then
-      if (self%istep .eq. 0) then
-        call self%adams_bashforth_1st(dt)
-      else if (self%istep .eq. 1) then
-        call self%adams_bashforth_2nd(dt)
-      else
+      case(3)
          call self%adams_bashforth_3rd(dt)
-      end if
-
-    ! Fourth-order
-    else if (self%order .eq. 4) then
-      if (self%istep .eq. 0) then
-        call self%adams_bashforth_1st(dt)
-      else if (self%istep .eq. 1) then
-        call self%adams_bashforth_2nd(dt)
-      else if (self%istep .eq. 2) then
-        call self%adams_bashforth_3rd(dt)
-      else
+      case(4)
         call self%adams_bashforth_4th(dt)
-      end if
-    end if
+    end select
 
 
     ! increment step counter
