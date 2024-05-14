@@ -136,7 +136,8 @@ program xcompact
 
   time_integrator = time_intg_t(allocator=allocator, backend=backend)
   if (nrank == 0) print *, 'time integrator instantiated'
-  solver = solver_t(backend, time_integrator, xdirps, ydirps, zdirps, globs)
+  solver = solver_t(backend, time_integrator, host_allocator, &
+                    xdirps, ydirps, zdirps, globs)
   if (nrank == 0) print *, 'solver instantiated'
 
   call cpu_time(t_start)

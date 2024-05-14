@@ -48,8 +48,9 @@ module m_solver
     class(field_t), pointer :: u, v, w
 
     class(base_backend_t), pointer :: backend
-    class(dirps_t), pointer :: xdirps, ydirps, zdirps
     class(time_intg_t), pointer :: time_integrator
+    type(allocator_t), pointer :: host_allocator
+    class(dirps_t), pointer :: xdirps, ydirps, zdirps
     procedure(poisson_solver), pointer :: poisson => null()
   contains
     procedure :: transeq
@@ -78,12 +79,13 @@ module m_solver
 
 contains
 
-  function init(backend, time_integrator, xdirps, ydirps, zdirps, globs) &
-    result(solver)
+  function init(backend, time_integrator, host_allocator, &
+                xdirps, ydirps, zdirps, globs) result(solver)
     implicit none
 
     class(base_backend_t), target, intent(inout) :: backend
     class(time_intg_t), target, intent(inout) :: time_integrator
+    type(allocator_t), target, intent(inout) :: host_allocator
     class(dirps_t), target, intent(inout) :: xdirps, ydirps, zdirps
     class(globs_t), intent(in) :: globs
     type(solver_t) :: solver
@@ -96,6 +98,7 @@ contains
 
     solver%backend => backend
     solver%time_integrator => time_integrator
+    solver%host_allocator => host_allocator
 
     solver%xdirps => xdirps
     solver%ydirps => ydirps
