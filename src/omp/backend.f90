@@ -344,8 +344,8 @@ contains
         do i = 1, SZ
           call get_index_reordering( &
             out_i, out_j, out_k, i, j, k, direction, &
-            SZ, self%allocator%xdims_padded(2), self%allocator%ydims_padded(2), self%allocator%zdims_padded(2) &
-            )
+            SZ, self%allocator%xdims_padded(2), &
+            self%allocator%ydims_padded(2), self%allocator%zdims_padded(2))
           u_%data(out_i, out_j, out_k) = u%data(i, j, k)
         end do
       end do
