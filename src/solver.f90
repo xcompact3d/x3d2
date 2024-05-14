@@ -90,8 +90,7 @@ contains
     class(globs_t), intent(in) :: globs
     type(solver_t) :: solver
 
-    real(dp), allocatable, dimension(:, :, :) :: u_init, v_init, w_init
-    integer :: dims(3)
+    type(field_t), pointer :: u_init, v_init, w_init
 
     real(dp) :: x, y, z
     integer :: nx, ny, nz, i, j, k
@@ -108,17 +107,15 @@ contains
     solver%v => solver%backend%allocator%get_block(DIR_X)
     solver%w => solver%backend%allocator%get_block(DIR_X)
 
-    ! Set initial conditions
-    dims(:) = solver%backend%allocator%cdims_padded(:)
-    allocate (u_init(dims(1), dims(2), dims(3)))
-    allocate (v_init(dims(1), dims(2), dims(3)))
-    allocate (w_init(dims(1), dims(2), dims(3)))
-
     solver%dt = globs%dt
     solver%backend%nu = globs%nu
     solver%n_iters = globs%n_iters
     solver%n_output = globs%n_output
     solver%ngrid = globs%nx*globs%ny*globs%nz
+
+    u_init => solver%host_allocator%get_block(DIR_C)
+    v_init => solver%host_allocator%get_block(DIR_C)
+    w_init => solver%host_allocator%get_block(DIR_C)
 
     nx = xdirps%n; ny = ydirps%n; nz = zdirps%n
     do k = 1, nz
@@ -128,18 +125,20 @@ contains
           y = (j - 1 + ydirps%n_offset)*ydirps%d
           z = (k - 1 + zdirps%n_offset)*zdirps%d
 
-          u_init(i, j, k) = sin(x)*cos(y)*cos(z)
-          v_init(i, j, k) = -cos(x)*sin(y)*cos(z)
-          w_init(i, j, k) = 0
+          u_init%data(i, j, k) = sin(x)*cos(y)*cos(z)
+          v_init%data(i, j, k) = -cos(x)*sin(y)*cos(z)
+          w_init%data(i, j, k) = 0
         end do
       end do
     end do
 
-    call solver%backend%set_field_data(solver%u, u_init)
-    call solver%backend%set_field_data(solver%v, v_init)
-    call solver%backend%set_field_data(solver%w, w_init)
+    call solver%backend%set_field_data(solver%u, u_init%data)
+    call solver%backend%set_field_data(solver%v, v_init%data)
+    call solver%backend%set_field_data(solver%w, w_init%data)
 
-    deallocate (u_init, v_init, w_init)
+    call solver%host_allocator%release_block(u_init)
+    call solver%host_allocator%release_block(v_init)
+    call solver%host_allocator%release_block(w_init)
 
     ! Allocate and set the tdsops
     call allocate_tdsops(solver%xdirps, nx, xdirps%d, solver%backend)
