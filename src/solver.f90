@@ -90,7 +90,7 @@ contains
     class(globs_t), intent(in) :: globs
     type(solver_t) :: solver
 
-    type(field_t), pointer :: u_init, v_init, w_init
+    class(field_t), pointer :: u_init, v_init, w_init
 
     real(dp) :: x, y, z
     integer :: nx, ny, nz, i, j, k
@@ -582,7 +582,7 @@ contains
     real(dp), intent(in) :: t
 
     class(field_t), pointer :: du, dv, dw, div_u
-    type(field_t), pointer :: u_out
+    class(field_t), pointer :: u_out
     real(dp) :: enstrophy, div_u_max, div_u_mean
     integer :: ierr
 
@@ -632,7 +632,7 @@ contains
     class(solver_t), intent(in) :: self
 
     class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
-    type(field_t), pointer :: u_out, v_out, w_out
+    class(field_t), pointer :: u_out, v_out, w_out
 
     real(dp) :: t
     integer :: i
