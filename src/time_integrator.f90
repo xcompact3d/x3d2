@@ -5,6 +5,9 @@ module m_time_integrator
 
   implicit none
 
+  private adams_bashforth_1st, adams_bashforth_2nd
+  private adams_bashforth_3rd, adams_bashforth_4th
+
   type :: time_intg_t
     integer :: istep, nsteps, nsubsteps, order, nvars, nolds
     type(flist_t), allocatable :: olds(:, :)
@@ -50,6 +53,8 @@ contains
     constructor%nolds = constructor%order - 1
 
     allocate (constructor%olds(constructor%nvars, constructor%nolds))
+    allocate (constructor%curr(constructor%nvars))
+    allocate (constructor%deriv(constructor%nvars))
 
     ! Request all the storage for old timesteps
     do i = 1, constructor%nvars
