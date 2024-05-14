@@ -25,6 +25,7 @@ program xcompact
   type(globs_t) :: globs
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
+  type(allocator_t), pointer :: host_allocator
   type(solver_t) :: solver
   type(time_intg_t) :: time_integrator
   type(dirps_t) :: xdirps, ydirps, zdirps
@@ -35,8 +36,9 @@ program xcompact
   integer :: ndevs, devnum
 #else
   type(omp_backend_t), target :: omp_backend
-  type(allocator_t), target :: omp_allocator
 #endif
+
+  type(allocator_t), target :: omp_allocator
 
   real(dp), allocatable, dimension(:, :, :) :: u, v, w
 
@@ -110,12 +112,16 @@ program xcompact
   allocator => cuda_allocator
   if (nrank == 0) print *, 'CUDA allocator instantiated'
 
+  omp_allocator = allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, SZ)
+  host_allocator => omp_allocator
+
   cuda_backend = cuda_backend_t(globs, allocator)
   backend => cuda_backend
   if (nrank == 0) print *, 'CUDA backend instantiated'
 #else
   omp_allocator = allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, SZ)
   allocator => omp_allocator
+  host_allocator => omp_allocator
   if (nrank == 0) print *, 'OpenMP allocator instantiated'
 
   omp_backend = omp_backend_t(globs, allocator)
