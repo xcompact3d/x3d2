@@ -83,16 +83,17 @@ program test_omp_adamsbashforth
       ! startup
       istartup = k - 1
       do i = 1, istartup
-        du%data(1, 1, 1) = rhs(u%data(1, 1, 1))
+        du%data(1, 1, 1) = dahlquist_rhs(u%data(1, 1, 1))
         call time_integrator%step(u, v, w, du, dv, dw, dt)
-        u%data(1, 1, 1) = exact_sol(real(i, dp)*dt)
+        u%data(1, 1, 1) = dahlquist_exact_sol(real(i, dp)*dt)
       end do
 
       ! post-startup
       do i = 1, nstep
-        du%data(1, 1, 1) = rhs(u%data(1, 1, 1))
+        du%data(1, 1, 1) = dahlquist_rhs(u%data(1, 1, 1))
         call time_integrator%step(u, v, w, du, dv, dw, dt)
-        err(i) = u%data(1, 1, 1) - exact_sol(real(i + istartup, dp)*dt)
+        err(i) = u%data(1, 1, 1) - dahlquist_exact_sol( &
+                 real(i + istartup, dp)*dt)
       end do
 
       ! compute l2 norms
@@ -139,29 +140,29 @@ program test_omp_adamsbashforth
   call MPI_Finalize(ierr)
 
 contains
-  function rhs(u)
+  function dahlquist_rhs(u)
     implicit none
 
-    real(dp) :: rhs
+    real(dp) :: dahlquist_rhs
     real(dp), intent(in) :: u
 
     real(dp) :: lambda = -1.0_dp
 
-    rhs = lambda*u
+    dahlquist_rhs = lambda*u
 
-  end function rhs
+  end function dahlquist_rhs
 
-  function exact_sol(time)
+  function dahlquist_exact_sol(time)
     implicit none
 
-    real(dp) :: exact_sol
+    real(dp) :: dahlquist_exact_sol
     real(dp), intent(in) :: time
 
     real(dp) :: lambda = -1.0_dp
 
-    exact_sol = exp(lambda*time)
+    dahlquist_exact_sol = exp(lambda*time)
 
-  end function exact_sol
+  end function dahlquist_exact_sol
 
 end program test_omp_adamsbashforth
 
