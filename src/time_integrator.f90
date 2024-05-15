@@ -8,7 +8,7 @@ module m_time_integrator
   private adams_bashforth
 
   type :: time_intg_t
-    integer :: istep, nsteps, nsubsteps, order, nvars, nolds
+    integer :: istep, order, nvars, nolds
     real(dp) :: coeffs(4, 4)
     type(flist_t), allocatable :: olds(:, :)
     type(flist_t), allocatable :: curr(:)
