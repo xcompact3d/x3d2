@@ -26,12 +26,13 @@ module m_time_integrator
 
 contains
 
-  function init(backend, allocator, nvars)
+  function init(backend, allocator, order, nvars)
     implicit none
 
     type(time_intg_t) :: init
     class(base_backend_t), pointer :: backend
     class(allocator_t), pointer :: allocator
+    integer, intent(in), optional :: order
     integer, intent(in), optional :: nvars
 
     integer :: i, j
@@ -46,6 +47,12 @@ contains
 
     init%backend => backend
     init%allocator => allocator
+
+    if (present(order)) then
+      init%order = order
+    else
+      init%order = 1
+    end if
 
     if (present(nvars)) then
       init%nvars = nvars
@@ -101,7 +108,6 @@ contains
 
     integer :: i, j
     integer :: order
-    class(field_t), pointer :: ptr
 
     order = min(self%istep, self%order)
     do i = 1, self%nvars
