@@ -43,7 +43,7 @@ contains
     init%coeffs(:, 3) = &
       [23._dp/12._dp, -4._dp/3._dp, 5._dp/12._dp, 0.0_dp]
     init%coeffs(:, 4) = &
-      [55._dp/24._dp, -59._dp/24._dp, 37._dp/24._dp, 3._dp/8._dp]
+      [55._dp/24._dp, -59._dp/24._dp, 37._dp/24._dp, -3._dp/8._dp]
 
     init%backend => backend
     init%allocator => allocator
@@ -61,7 +61,6 @@ contains
     end if
 
     init%istep = 1
-    init%order = 1
     init%nolds = init%order - 1
 
     allocate (init%olds(init%nvars, init%nolds))
