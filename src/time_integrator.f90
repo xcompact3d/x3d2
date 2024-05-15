@@ -21,52 +21,54 @@ module m_time_integrator
   end type time_intg_t
 
   interface time_intg_t
-    module procedure constructor
+    module procedure init
   end interface time_intg_t
 
 contains
 
-  function constructor(backend, allocator, nvars)
+  function init(backend, allocator, nvars)
     implicit none
 
-    type(time_intg_t) :: constructor
+    type(time_intg_t) :: init
     class(base_backend_t), pointer :: backend
     class(allocator_t), pointer :: allocator
     integer, intent(in), optional :: nvars
 
     integer :: i, j
 
-    constructor%coeffs = reshape((/1.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, &
-                                   1.5_dp, -0.5_dp, 0.0_dp, 0.0_dp, &
-                           23._dp/12._dp, -4._dp/3._dp, 5._dp/12._dp, 0.0_dp, &
-                 55._dp/24._dp, -59._dp/24._dp, 37._dp/24._dp, 3._dp/8._dp/), &
-                                 shape(constructor%coeffs))
+    ! initialize Adams-Bashforth coefficients
+    init%coeffs(:, 1) = [1.0_dp, 0.0_dp, 0.0_dp, 0.0_dp]
+    init%coeffs(:, 2) = [1.5_dp, -0.5_dp, 0.0_dp, 0.0_dp]
+    init%coeffs(:, 3) = &
+      [23._dp/12._dp, -4._dp/3._dp, 5._dp/12._dp, 0.0_dp]
+    init%coeffs(:, 4) = &
+      [55._dp/24._dp, -59._dp/24._dp, 37._dp/24._dp, 3._dp/8._dp]
 
-    constructor%backend => backend
-    constructor%allocator => allocator
+    init%backend => backend
+    init%allocator => allocator
 
     if (present(nvars)) then
-      constructor%nvars = nvars
+      init%nvars = nvars
     else
-      constructor%nvars = 3
+      init%nvars = 3
     end if
 
-    constructor%istep = 1
-    constructor%order = 1
-    constructor%nolds = constructor%order - 1
+    init%istep = 1
+    init%order = 1
+    init%nolds = init%order - 1
 
-    allocate (constructor%olds(constructor%nvars, constructor%nolds))
-    allocate (constructor%curr(constructor%nvars))
-    allocate (constructor%deriv(constructor%nvars))
+    allocate (init%olds(init%nvars, init%nolds))
+    allocate (init%curr(init%nvars))
+    allocate (init%deriv(init%nvars))
 
     ! Request all the storage for old timesteps
-    do i = 1, constructor%nvars
-      do j = 1, constructor%nolds
-        constructor%olds(i, j)%ptr => allocator%get_block(DIR_X)
+    do i = 1, init%nvars
+      do j = 1, init%nolds
+        init%olds(i, j)%ptr => allocator%get_block(DIR_X)
       end do
     end do
 
-  end function constructor
+  end function init
 
   subroutine step(self, u, v, w, du, dv, dw, dt)
     implicit none
@@ -76,8 +78,6 @@ contains
     class(field_t), target, intent(in) :: du, dv, dw
 
     real(dp), intent(in) :: dt
-
-    integer :: order
 
     ! assign pointer to variables
     self%curr(1)%ptr => u
@@ -97,10 +97,10 @@ contains
 
   subroutine adams_bashforth(self, dt)
     class(time_intg_t), intent(inout) :: self
-    integer, intent(in) :: order
     real(dp), intent(in) :: dt
 
     integer :: i, j
+    integer :: order
     class(field_t), pointer :: ptr
 
     order = min(self%istep, self%order)
@@ -121,7 +121,7 @@ contains
         if (self%istep > 1) then
           call rotate(self%olds(i, :), order)
         end if
-      else 
+      else
         ! after startup
         if (self%order > 2) then
           call rotate(self%olds(i, :), order - 1)
