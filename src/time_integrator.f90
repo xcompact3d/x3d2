@@ -152,7 +152,7 @@ contains
     ! rotate pointer
     ptr => sol(n)%ptr
     do i = n, 2, -1
-      sol(n)%ptr => sol(n - 1)%ptr
+      sol(i)%ptr => sol(i - 1)%ptr
     end do
     sol(1)%ptr => ptr
 
