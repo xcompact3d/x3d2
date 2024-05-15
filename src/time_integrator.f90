@@ -45,6 +45,7 @@ contains
     init%coeffs(:, 4) = &
       [55._dp/24._dp, -59._dp/24._dp, 37._dp/24._dp, -3._dp/8._dp]
 
+    ! set variables
     init%backend => backend
     init%allocator => allocator
 
@@ -63,6 +64,7 @@ contains
     init%istep = 1
     init%nolds = init%order - 1
 
+    ! allocate memory
     allocate (init%olds(init%nvars, init%nolds))
     allocate (init%curr(init%nvars))
     allocate (init%deriv(init%nvars))
