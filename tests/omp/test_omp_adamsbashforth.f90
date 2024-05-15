@@ -24,8 +24,8 @@ program test_omp_adamsbashforth
   class(time_intg_t), allocatable :: time_integrator
 
   real(dp) :: dt0 = 0.01_dp, dt, order
-  integer:: i, j, k, istartup, ierr
-  integer:: nstep0 = 64, nstep, nrun = 4, norder = 4
+  integer :: i, j, k, istartup, ierr
+  integer :: nstep0 = 64, nstep, nrun = 4, norder = 4
 
   ! initialize MPI
   call MPI_Init(ierr)
@@ -52,7 +52,8 @@ program test_omp_adamsbashforth
   backend => omp_backend
   print *, 'OpenMP backend instantiated'
 
-  time_integrator = time_intg_t(allocator=allocator, backend=backend, order=norder)
+  time_integrator = time_intg_t(allocator=allocator, &
+                                backend=backend, order=norder)
   print *, 'time integrator instantiated'
 
   ! allocate memory
@@ -64,7 +65,7 @@ program test_omp_adamsbashforth
   dv => allocator%get_block(DIR_X)
   dw => allocator%get_block(DIR_X)
 
-  allocate(norm(nrun)) 
+  allocate (norm(nrun))
 
   ! compute l2 norm for various step sizes
   do k = 1, norder
@@ -76,33 +77,33 @@ program test_omp_adamsbashforth
       time_integrator%istep = 1
 
       ! compute l2 norm for a given step size
-      allocate(err(nstep)) 
-      u%data(1,1,1) = 1.0_dp
+      allocate (err(nstep))
+      u%data(1, 1, 1) = 1.0_dp
 
       ! startup
       istartup = k - 1
       do i = 1, istartup
-        du%data(1,1,1) = rhs(u%data(1,1,1))
+        du%data(1, 1, 1) = rhs(u%data(1, 1, 1))
         call time_integrator%step(u, v, w, du, dv, dw, dt)
-        u%data(1,1,1) = exact_sol(real(i, dp) * dt)
+        u%data(1, 1, 1) = exact_sol(real(i, dp)*dt)
       end do
 
       ! post-startup
       do i = 1, nstep
-        du%data(1,1,1) = rhs(u%data(1,1,1))
+        du%data(1, 1, 1) = rhs(u%data(1, 1, 1))
         call time_integrator%step(u, v, w, du, dv, dw, dt)
-        err(i) = u%data(1,1,1) - exact_sol(real(i + istartup, dp) * dt)
+        err(i) = u%data(1, 1, 1) - exact_sol(real(i + istartup, dp)*dt)
       end do
 
       ! compute l2 norms
       norm(j) = norm2(err)
-      norm(j) = sqrt(norm(j) * norm(j) / real(nstep, dp))
-      print*, err(nstep)
-      deallocate(err)
+      norm(j) = sqrt(norm(j)*norm(j)/real(nstep, dp))
+      print *, err(nstep)
+      deallocate (err)
 
       ! refine time stepping
-      dt = dt / 2.0_dp
-      nstep = nstep * 2
+      dt = dt/2.0_dp
+      nstep = nstep*2
     end do
 
     ! check order of convergence
@@ -124,7 +125,7 @@ program test_omp_adamsbashforth
   end if
 
   ! deallocate memory
-  deallocate(norm)
+  deallocate (norm)
 
   call allocator%release_block(du)
   call allocator%release_block(dv)
@@ -137,28 +138,28 @@ program test_omp_adamsbashforth
   ! finalize MPI
   call MPI_Finalize(ierr)
 
-contains 
+contains
   function rhs(u)
     implicit none
 
-    real(dp):: rhs
+    real(dp) :: rhs
     real(dp), intent(in) :: u
 
     real(dp) :: lambda = -1.0_dp
 
-    rhs =  lambda * u
+    rhs = lambda*u
 
   end function rhs
 
   function exact_sol(time)
     implicit none
 
-    real(dp):: exact_sol
+    real(dp) :: exact_sol
     real(dp), intent(in) :: time
 
     real(dp) :: lambda = -1.0_dp
 
-    exact_sol = exp(lambda * time)
+    exact_sol = exp(lambda*time)
 
   end function exact_sol
 
