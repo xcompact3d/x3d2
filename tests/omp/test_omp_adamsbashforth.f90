@@ -10,22 +10,20 @@ program test_omp_adamsbashforth
   implicit none
 
   logical :: allpass = .true.
+  integer :: i, j, k, istartup, ierr
+  integer :: nstep0 = 64, nstep, nrun = 4, norder = 4
   real(dp), allocatable, dimension(:) :: err
   real(dp), allocatable, dimension(:) :: norm
+  real(dp) :: dt0 = 0.01_dp, dt, order
   class(field_t), pointer :: u, v, w
   class(field_t), pointer :: du, dv, dw
 
   type(globs_t) :: globs
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
-
   type(omp_backend_t), target :: omp_backend
   type(allocator_t), target :: omp_allocator
   class(time_intg_t), allocatable :: time_integrator
-
-  real(dp) :: dt0 = 0.01_dp, dt, order
-  integer :: i, j, k, istartup, ierr
-  integer :: nstep0 = 64, nstep, nrun = 4, norder = 4
 
   ! initialize MPI
   call MPI_Init(ierr)
