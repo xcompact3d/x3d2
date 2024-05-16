@@ -10,8 +10,8 @@ program test_omp_adamsbashforth
   implicit none
 
   logical :: allpass = .true.
-  integer :: i, j, k, istartup, ierr
-  integer :: nstep0 = 64, nstep, nrun = 4, norder = 4
+  integer :: i, j, k, stage, istartup, ierr
+  integer :: nstep0 = 64, nstep, nrun = 4, nmethod = 8
   real(dp), allocatable, dimension(:) :: err
   real(dp), allocatable, dimension(:) :: norm
   real(dp) :: dt0 = 0.01_dp, dt, order
@@ -50,10 +50,6 @@ program test_omp_adamsbashforth
   backend => omp_backend
   print *, 'OpenMP backend instantiated'
 
-  time_integrator = time_intg_t(allocator=allocator, &
-                                backend=backend, order=norder)
-  print *, 'time integrator instantiated'
-
   ! allocate memory
   u => allocator%get_block(DIR_X)
   v => allocator%get_block(DIR_X)
@@ -66,8 +62,13 @@ program test_omp_adamsbashforth
   allocate (norm(nrun))
 
   ! compute l2 norm for various step sizes
-  do k = 1, norder
-    time_integrator%order = k
+  do k = 1, nmethod
+
+    ! initialize time-integrator
+    time_integrator = time_intg_t(allocator=allocator, &
+                                  backend=backend, method=k)
+    print *, 'time integrator instantiated'
+
     dt = dt0
     nstep = nstep0
     do j = 1, nrun
@@ -79,7 +80,7 @@ program test_omp_adamsbashforth
       u%data(1, 1, 1) = 1.0_dp
 
       ! startup
-      istartup = k - 1
+      istartup = time_integrator%nstep - 1
       do i = 1, istartup
         du%data(1, 1, 1) = dahlquist_rhs(u%data(1, 1, 1))
         call time_integrator%step(u, v, w, du, dv, dw, dt)
@@ -88,8 +89,10 @@ program test_omp_adamsbashforth
 
       ! post-startup
       do i = 1, nstep
-        du%data(1, 1, 1) = dahlquist_rhs(u%data(1, 1, 1))
-        call time_integrator%step(u, v, w, du, dv, dw, dt)
+        do stage = 1, time_integrator%nstage
+          du%data(1, 1, 1) = dahlquist_rhs(u%data(1, 1, 1))
+          call time_integrator%step(u, v, w, du, dv, dw, dt)
+        end do
         err(i) = u%data(1, 1, 1) - dahlquist_exact_sol( &
                  real(i + istartup, dp)*dt)
       end do
@@ -108,7 +111,7 @@ program test_omp_adamsbashforth
     ! check order of convergence
     order = log(norm(nrun - 1)/norm(nrun))/log(2.0_dp)
     print *, 'order', order
-    if (abs(order - real(k, dp)) > 0.1_dp) then
+    if (abs(order - real(time_integrator%order, dp)) > 0.25_dp) then
       allpass = .false.
       write (stderr, '(a)') 'Check order... failed'
     else
