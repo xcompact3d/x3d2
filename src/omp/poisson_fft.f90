@@ -3,6 +3,7 @@ module m_omp_poisson_fft
   use m_common, only: dp
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t
+  use m_mesh, only: mesh_t
 
   implicit none
 
@@ -24,14 +25,15 @@ module m_omp_poisson_fft
 
 contains
 
-  function init(xdirps, ydirps, zdirps) result(poisson_fft)
+  function init(mesh, xdirps, ydirps, zdirps) result(poisson_fft)
     implicit none
 
+    type(mesh_t), intent(in) :: mesh
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
     type(omp_poisson_fft_t) :: poisson_fft
 
-    call poisson_fft%base_init(xdirps, ydirps, zdirps)
+    call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps)
 
   end function init
 

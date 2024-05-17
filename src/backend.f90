@@ -5,6 +5,7 @@ module m_base_backend
   use m_common, only: dp, DIR_C, get_rdr_from_dirs
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: tdsops_t, dirps_t
+  use m_mesh, only: mesh_t
 
   implicit none
 
@@ -24,8 +25,7 @@ module m_base_backend
       !! architecture.
 
     real(dp) :: nu
-    integer :: nx_loc, ny_loc, nz_loc
-    integer :: nrank, nproc
+    class(mesh_t), allocatable :: mesh
     class(allocator_t), pointer :: allocator
     class(dirps_t), pointer :: xdirps, ydirps, zdirps
     class(poisson_fft_t), pointer :: poisson_fft
@@ -177,7 +177,7 @@ module m_base_backend
   end interface
 
   abstract interface
-    subroutine alloc_tdsops(self, tdsops, n, dx, operation, scheme, n_halo, &
+    subroutine alloc_tdsops(self, tdsops, dir, operation, scheme, n_halo, &
                             from_to, bc_start, bc_end, sym, c_nu, nu0_nu)
       import :: base_backend_t
       import :: dp
@@ -186,8 +186,7 @@ module m_base_backend
 
       class(base_backend_t) :: self
       class(tdsops_t), allocatable, intent(inout) :: tdsops
-      integer, intent(in) :: n
-      real(dp), intent(in) :: dx
+      integer, intent(in) :: dir
       character(*), intent(in) :: operation, scheme
       integer, optional, intent(in) :: n_halo
       character(*), optional, intent(in) :: from_to, bc_start, bc_end
@@ -197,12 +196,14 @@ module m_base_backend
   end interface
 
   abstract interface
-    subroutine init_poisson_fft(self, xdirps, ydirps, zdirps)
+    subroutine init_poisson_fft(self, mesh, xdirps, ydirps, zdirps)
       import :: base_backend_t
       import :: dirps_t
+      import :: mesh_t
       implicit none
 
       class(base_backend_t) :: self
+      class(mesh_t), intent(in) :: mesh
       type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     end subroutine init_poisson_fft
   end interface
@@ -213,14 +214,6 @@ contains
     implicit none
 
     class(base_backend_t) :: self
-
-    integer :: nrank, nproc, ierr
-
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-    self%nrank = nrank
-    self%nproc = nproc
 
   end subroutine base_init
 

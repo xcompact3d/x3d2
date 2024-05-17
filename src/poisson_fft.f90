@@ -1,13 +1,15 @@
 module m_poisson_fft
   use m_allocator, only: field_t
-  use m_common, only: dp, pi
+  use m_common, only: dp, pi, VERT, DIR_X, DIR_Y, DIR_Z
   use m_tdsops, only: dirps_t
+  use m_mesh, only: mesh_t
 
   implicit none
 
   type, abstract :: poisson_fft_t
     !! FFT based Poisson solver
     integer :: nx, ny, nz
+    class(mesh_t), allocatable :: mesh
     complex(dp), allocatable, dimension(:, :, :) :: waves
     complex(dp), allocatable, dimension(:) :: ax, bx, ay, by, az, bz
   contains
@@ -47,13 +49,17 @@ module m_poisson_fft
 
 contains
 
-  subroutine base_init(self, xdirps, ydirps, zdirps)
+  subroutine base_init(self, mesh, xdirps, ydirps, zdirps)
     implicit none
 
     class(poisson_fft_t) :: self
+    class(mesh_t), intent(in) :: mesh
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
-    self%nx = xdirps%n; self%ny = ydirps%n; self%nz = zdirps%n
+    self%mesh = mesh
+    self%nx = self%mesh%get_n(DIR_X, VERT)
+    self%ny = self%mesh%get_n(DIR_Y, VERT)
+    self%nz = self%mesh%get_n(DIR_Z, VERT)
 
     allocate (self%ax(self%nx), self%bx(self%nx))
     allocate (self%ay(self%ny), self%by(self%ny))
@@ -82,10 +88,13 @@ contains
     integer :: nx, ny, nz
     real(dp) :: w, wp, rlexs, rleys, rlezs, xtt, ytt, ztt, xt1, yt1, zt1
     complex(dp) :: xt2, yt2, zt2, xyzk
+    real(dp) :: d, L
 
     integer :: i, j, k
 
-    nx = xdirps%n; ny = ydirps%n; nz = zdirps%n
+    nx = self%mesh%get_n(DIR_X, VERT)
+    ny = self%mesh%get_n(DIR_Y, VERT)
+    nz = self%mesh%get_n(DIR_Z, VERT)
 
     do i = 1, nx
       self%ax(i) = sin((i - 1)*pi/nx)
@@ -109,15 +118,17 @@ contains
     xkx(:) = 0; xk2(:) = 0; yky(:) = 0; yk2(:) = 0; zkz(:) = 0; zk2(:) = 0
 
     ! periodic-x
+    d = self%mesh%geo%d(1)
+    L = self%mesh%geo%L(1)
     do i = 1, nx/2 + 1
       w = 2*pi*(i - 1)/nx
-      wp = xdirps%stagder_v2p%a*2*xdirps%d*sin(0.5_dp*w) &
-           + xdirps%stagder_v2p%b*2*xdirps%d*sin(1.5_dp*w)
+      wp = xdirps%stagder_v2p%a*2*d*sin(0.5_dp*w) &
+           + xdirps%stagder_v2p%b*2*d*sin(1.5_dp*w)
       wp = wp/(1._dp + 2*xdirps%stagder_v2p%alpha*cos(w))
 
-      xkx(i) = cmplx(1._dp, 1._dp, kind=dp)*(nx*wp/xdirps%L)
-      exs(i) = cmplx(1._dp, 1._dp, kind=dp)*(nx*w/xdirps%L)
-      xk2(i) = cmplx(1._dp, 1._dp, kind=dp)*(nx*wp/xdirps%L)**2
+      xkx(i) = cmplx(1._dp, 1._dp, kind=dp)*(nx*wp/L)
+      exs(i) = cmplx(1._dp, 1._dp, kind=dp)*(nx*w/L)
+      xk2(i) = cmplx(1._dp, 1._dp, kind=dp)*(nx*wp/L)**2
     end do
     do i = nx/2 + 2, nx
       xkx(i) = xkx(nx - i + 2)
@@ -126,15 +137,17 @@ contains
     end do
 
     ! periodic-y
+    d = self%mesh%geo%d(2)
+    L = self%mesh%geo%L(2)
     do i = 1, ny/2 + 1
       w = 2*pi*(i - 1)/ny
-      wp = ydirps%stagder_v2p%a*2*ydirps%d*sin(0.5_dp*w) &
-           + ydirps%stagder_v2p%b*2*ydirps%d*sin(1.5_dp*w)
+      wp = ydirps%stagder_v2p%a*2*d*sin(0.5_dp*w) &
+           + ydirps%stagder_v2p%b*2*d*sin(1.5_dp*w)
       wp = wp/(1._dp + 2*ydirps%stagder_v2p%alpha*cos(w))
 
-      yky(i) = cmplx(1._dp, 1._dp, kind=dp)*(ny*wp/ydirps%L)
-      eys(i) = cmplx(1._dp, 1._dp, kind=dp)*(ny*w/ydirps%L)
-      yk2(i) = cmplx(1._dp, 1._dp, kind=dp)*(ny*wp/ydirps%L)**2
+      yky(i) = cmplx(1._dp, 1._dp, kind=dp)*(ny*wp/L)
+      eys(i) = cmplx(1._dp, 1._dp, kind=dp)*(ny*w/L)
+      yk2(i) = cmplx(1._dp, 1._dp, kind=dp)*(ny*wp/L)**2
     end do
     do i = ny/2 + 2, ny
       yky(i) = yky(ny - i + 2)
@@ -143,15 +156,17 @@ contains
     end do
 
     ! periodic-z
+    d = self%mesh%geo%d(3)
+    L = self%mesh%geo%L(3)
     do i = 1, nz/2 + 1
       w = 2*pi*(i - 1)/nz
-      wp = zdirps%stagder_v2p%a*2*zdirps%d*sin(0.5_dp*w) &
-           + zdirps%stagder_v2p%b*2*zdirps%d*sin(1.5_dp*w)
+      wp = zdirps%stagder_v2p%a*2*d*sin(0.5_dp*w) &
+           + zdirps%stagder_v2p%b*2*d*sin(1.5_dp*w)
       wp = wp/(1._dp + 2*zdirps%stagder_v2p%alpha*cos(w))
 
-      zkz(i) = cmplx(1._dp, 1._dp, kind=dp)*(nz*wp/zdirps%L)
-      ezs(i) = cmplx(1._dp, 1._dp, kind=dp)*(nz*w/zdirps%L)
-      zk2(i) = cmplx(1._dp, 1._dp, kind=dp)*(nz*wp/zdirps%L)**2
+      zkz(i) = cmplx(1._dp, 1._dp, kind=dp)*(nz*wp/L)
+      ezs(i) = cmplx(1._dp, 1._dp, kind=dp)*(nz*w/L)
+      zk2(i) = cmplx(1._dp, 1._dp, kind=dp)*(nz*wp/L)**2
     end do
     do i = nz/2 + 2, nz
       zkz(i) = zkz(nz - i + 2)
@@ -164,9 +179,9 @@ contains
     do i = 1, nx/2 + 1
       do j = 1, ny
         do k = 1, nz
-          rlexs = real(exs(i), kind=dp)*xdirps%d
-          rleys = real(eys(j), kind=dp)*ydirps%d
-          rlezs = real(ezs(k), kind=dp)*zdirps%d
+          rlexs = real(exs(i), kind=dp)*self%mesh%geo%d(1)
+          rleys = real(eys(j), kind=dp)*self%mesh%geo%d(2)
+          rlezs = real(ezs(k), kind=dp)*self%mesh%geo%d(3)
 
           xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
                    + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &

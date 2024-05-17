@@ -7,9 +7,10 @@ module m_solver
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_Z2C, RDR_C2Z, &
                       POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
-                      DIR_X, DIR_Y, DIR_Z, DIR_C
+                      DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
   use m_tdsops, only: tdsops_t, dirps_t
   use m_time_integrator, only: time_intg_t
+  use m_mesh, only: mesh_t
 
   implicit none
 
@@ -48,6 +49,7 @@ module m_solver
     class(field_t), pointer :: u, v, w
 
     class(base_backend_t), pointer :: backend
+    class(mesh_t), allocatable :: mesh
     class(dirps_t), pointer :: xdirps, ydirps, zdirps
     class(time_intg_t), pointer :: time_integrator
     procedure(poisson_solver), pointer :: poisson => null()
@@ -78,11 +80,12 @@ module m_solver
 
 contains
 
-  function init(backend, time_integrator, xdirps, ydirps, zdirps, globs) &
+  function init(backend, mesh, time_integrator, xdirps, ydirps, zdirps, globs) &
     result(solver)
     implicit none
 
     class(base_backend_t), target, intent(inout) :: backend
+    type(mesh_t), intent(in) :: mesh
     class(time_intg_t), target, intent(inout) :: time_integrator
     class(dirps_t), target, intent(inout) :: xdirps, ydirps, zdirps
     class(globs_t), intent(in) :: globs
@@ -93,20 +96,22 @@ contains
 
     real(dp) :: x, y, z
     integer :: nx, ny, nz, i, j, k
+    real(dp), dimension(3) :: xloc
 
     solver%backend => backend
+    solver%mesh = mesh
     solver%time_integrator => time_integrator
 
     solver%xdirps => xdirps
     solver%ydirps => ydirps
     solver%zdirps => zdirps
 
-    solver%u => solver%backend%allocator%get_block(DIR_X)
-    solver%v => solver%backend%allocator%get_block(DIR_X)
-    solver%w => solver%backend%allocator%get_block(DIR_X)
+    solver%u => solver%backend%allocator%get_block(DIR_X, VERT)
+    solver%v => solver%backend%allocator%get_block(DIR_X, VERT)
+    solver%w => solver%backend%allocator%get_block(DIR_X, VERT)
 
     ! Set initial conditions
-    dims(:) = solver%backend%allocator%cdims_padded(:)
+    dims(:) = solver%mesh%get_padded_dims(DIR_C)
     allocate (u_init(dims(1), dims(2), dims(3)))
     allocate (v_init(dims(1), dims(2), dims(3)))
     allocate (w_init(dims(1), dims(2), dims(3)))
@@ -115,15 +120,16 @@ contains
     solver%backend%nu = globs%nu
     solver%n_iters = globs%n_iters
     solver%n_output = globs%n_output
-    solver%ngrid = globs%nx*globs%ny*globs%nz
+    solver%ngrid = product(solver%mesh%get_dims(DIR_C, VERT))
 
-    nx = xdirps%n; ny = ydirps%n; nz = zdirps%n
-    do k = 1, nz
-      do j = 1, ny
-        do i = 1, nx
-          x = (i - 1 + xdirps%n_offset)*xdirps%d
-          y = (j - 1 + ydirps%n_offset)*ydirps%d
-          z = (k - 1 + zdirps%n_offset)*zdirps%d
+    dims = solver%mesh%get_dims(DIR_C, VERT)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          xloc = solver%mesh%get_location(i, j, k)
+          x = xloc(1)
+          y = xloc(2)
+          z = xloc(3)
 
           u_init(i, j, k) = sin(x)*cos(y)*cos(z)
           v_init(i, j, k) = -cos(x)*sin(y)*cos(z)
@@ -139,44 +145,43 @@ contains
     deallocate (u_init, v_init, w_init)
 
     ! Allocate and set the tdsops
-    call allocate_tdsops(solver%xdirps, nx, xdirps%d, solver%backend)
-    call allocate_tdsops(solver%ydirps, ny, ydirps%d, solver%backend)
-    call allocate_tdsops(solver%zdirps, nz, zdirps%d, solver%backend)
+    call allocate_tdsops(solver%xdirps, DIR_X, solver%backend)
+    call allocate_tdsops(solver%ydirps, DIR_Y, solver%backend)
+    call allocate_tdsops(solver%zdirps, DIR_Z, solver%backend)
 
     select case (globs%poisson_solver_type)
     case (POISSON_SOLVER_FFT)
-      if (solver%backend%nrank == 0) print *, 'Poisson solver: FFT'
-      call solver%backend%init_poisson_fft(xdirps, ydirps, zdirps)
+      if (solver%mesh%par%is_root()) print *, 'Poisson solver: FFT'
+      call solver%backend%init_poisson_fft(solver%mesh, xdirps, ydirps, zdirps)
       solver%poisson => poisson_fft
     case (POISSON_SOLVER_CG)
-      if (solver%backend%nrank == 0) &
+      if (solver%mesh%par%is_root()) &
         print *, 'Poisson solver: CG, not yet implemented'
       solver%poisson => poisson_cg
     end select
 
   end function init
 
-  subroutine allocate_tdsops(dirps, nx, dx, backend)
+  subroutine allocate_tdsops(dirps, dir, backend)
     class(dirps_t), intent(inout) :: dirps
-    real(dp), intent(in) :: dx
-    integer, intent(in) :: nx
+    integer, intent(in) :: dir
     class(base_backend_t), intent(in) :: backend
 
-    call backend%alloc_tdsops(dirps%der1st, nx, dx, &
+    call backend%alloc_tdsops(dirps%der1st, dir, &
                               'first-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%der1st_sym, nx, dx, &
+    call backend%alloc_tdsops(dirps%der1st_sym, dir, &
                               'first-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%der2nd, nx, dx, &
+    call backend%alloc_tdsops(dirps%der2nd, dir, &
                               'second-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%der2nd_sym, nx, dx, &
+    call backend%alloc_tdsops(dirps%der2nd_sym, dir, &
                               'second-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%interpl_v2p, nx, dx, &
+    call backend%alloc_tdsops(dirps%interpl_v2p, dir, &
                               'interpolate', 'classic', from_to='v2p')
-    call backend%alloc_tdsops(dirps%interpl_p2v, nx, dx, &
+    call backend%alloc_tdsops(dirps%interpl_p2v, dir, &
                               'interpolate', 'classic', from_to='p2v')
-    call backend%alloc_tdsops(dirps%stagder_v2p, nx, dx, &
+    call backend%alloc_tdsops(dirps%stagder_v2p, dir, &
                               'stag-deriv', 'compact6', from_to='v2p')
-    call backend%alloc_tdsops(dirps%stagder_p2v, nx, dx, &
+    call backend%alloc_tdsops(dirps%stagder_p2v, dir, &
                               'stag-deriv', 'compact6', from_to='p2v')
 
   end subroutine
@@ -584,7 +589,7 @@ contains
     real(dp) :: enstrophy, div_u_max, div_u_mean
     integer :: ierr
 
-    if (self%backend%nrank == 0) print *, 'time = ', t
+    if (self%mesh%par%is_root()) print *, 'time = ', t
 
     du => self%backend%allocator%get_block(DIR_X)
     dv => self%backend%allocator%get_block(DIR_X)
@@ -594,7 +599,7 @@ contains
     enstrophy = 0.5_dp*(self%backend%scalar_product(du, du) &
                         + self%backend%scalar_product(dv, dv) &
                         + self%backend%scalar_product(dw, dw))/self%ngrid
-    if (self%backend%nrank == 0) print *, 'enstrophy:', enstrophy
+    if (self%mesh%par%is_root()) print *, 'enstrophy:', enstrophy
 
     call self%backend%allocator%release_block(du)
     call self%backend%allocator%release_block(dv)
@@ -613,8 +618,8 @@ contains
                        MPI_MAX, MPI_COMM_WORLD, ierr)
     call MPI_Allreduce(MPI_IN_PLACE, div_u_mean, 1, MPI_DOUBLE_PRECISION, &
                        MPI_SUM, MPI_COMM_WORLD, ierr)
-    div_u_mean = div_u_mean/self%backend%nproc
-    if (self%backend%nrank == 0) &
+    div_u_mean = div_u_mean/self%mesh%par%nproc
+    if (self%mesh%par%is_root()) &
       print *, 'div u max mean:', div_u_max, div_u_mean
 
   end subroutine output
@@ -630,11 +635,11 @@ contains
     real(dp) :: t
     integer :: i
 
-    if (self%backend%nrank == 0) print *, 'initial conditions'
+    if (self%mesh%par%is_root()) print *, 'initial conditions'
     t = 0._dp
     call self%output(t, u_out)
 
-    if (self%backend%nrank == 0) print *, 'start run'
+    if (self%mesh%par%is_root()) print *, 'start run'
 
     do i = 1, self%n_iters
       du => self%backend%allocator%get_block(DIR_X)
@@ -685,7 +690,7 @@ contains
       end if
     end do
 
-    if (self%backend%nrank == 0) print *, 'run end'
+    if (self%mesh%par%is_root()) print *, 'run end'
 
     call self%backend%get_field_data(u_out, self%u)
     call self%backend%get_field_data(v_out, self%v)
