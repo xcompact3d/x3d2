@@ -1,18 +1,36 @@
 program test_allocator
+  use mpi
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_allocator, only: allocator_t, field_t
-  use m_common, only: DIR_X
+  use m_allocator, only: allocator_t
+  use m_field, only: field_t
+  use m_mesh, only: mesh_t
+  use m_common, only: DIR_X, pi, dp
 
   implicit none
 
   logical :: allpass
-  integer, parameter :: dims(3) = [8, 8, 8]
+  integer, dimension(3) :: nproc_dir, dims_global
+  real(dp), dimension(3) :: L_global 
   class(allocator_t), allocatable :: allocator
+  class(mesh_t), allocatable :: mesh
   class(field_t), pointer :: ptr1, ptr2, ptr3
   integer, allocatable :: l(:)
+  integer :: ierr
 
-  allocator = allocator_t(dims(1), dims(2), dims(3), 8)
+  call MPI_Init(ierr)
+  ! Global number of cells in each direction
+  dims_global = [8, 8, 8]
+
+  ! Global domain dimensions
+  L_global = [2*pi, 2*pi, 2*pi]
+
+  ! Domain decomposition in each direction
+  nproc_dir = [1, 1, 1]
+
+  mesh = mesh_t(dims_global, nproc_dir, L_global, 8)
+
+  allocator = allocator_t(mesh)
 
   allpass = .true.
 
@@ -74,4 +92,6 @@ program test_allocator
   else
     error stop 'SOME TESTS FAILED.'
   end if
+
+  call MPI_Finalize(ierr)
 end program test_allocator

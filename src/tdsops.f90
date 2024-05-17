@@ -53,7 +53,7 @@ module m_tdsops
 
 contains
 
-  function tdsops_init(mesh, dir, operation, scheme, n_halo, from_to, &
+  function tdsops_init(mesh, dir, data_loc, operation, scheme, n_halo, from_to, &
                        bc_start, bc_end, sym, c_nu, nu0_nu) result(tdsops)
       !! Constructor function for the tdsops_t class.
       !!
@@ -78,6 +78,7 @@ contains
 
     type(mesh_t), intent(in) :: mesh
     integer, intent(in) :: dir
+    integer, intent(in) :: data_loc
     character(*), intent(in) :: operation, scheme
     integer, optional, intent(in) :: n_halo !! Number of halo cells
     character(*), optional, intent(in) :: from_to !! 'v2p' or 'p2v'
@@ -91,7 +92,7 @@ contains
 
     tdsops%mesh = mesh
     tdsops%dir = dir
-    n = tdsops%mesh%get_n(dir, VERT)
+    n = tdsops%mesh%get_n(dir, data_loc)
     delta = tdsops%mesh%geo%d(dir)
 
     if (present(n_halo)) then

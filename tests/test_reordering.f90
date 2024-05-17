@@ -8,9 +8,10 @@ program test_reorder
 
   use m_common, only: dp, pi, globs_t, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
-                      DIR_X, DIR_Y, DIR_Z
+                      DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
 
   use m_ordering, only: get_index_dir, get_index_ijk
+  use m_mesh, only: mesh_t
 
 #ifdef CUDA
   use cudafor
@@ -40,8 +41,11 @@ program test_reorder
 
   type(globs_t) :: globs
   class(base_backend_t), pointer :: backend
+  class(mesh_t), allocatable :: mesh
   class(allocator_t), pointer :: allocator
   type(dirps_t), target :: xdirps, ydirps, zdirps
+  integer, dimension(3) :: dims_padded, dims_global, nproc_dir
+  real(dp), dimension(3) :: L_global
   logical :: pass_X, pass_Y, pass_Z
 
 #ifdef CUDA
@@ -64,41 +68,32 @@ program test_reorder
   ierr = cudaGetDevice(devnum)
 #endif
 
-  globs%nx = 32
-  globs%ny = 64
-  globs%nz = 96
 
-  globs%nx_loc = globs%nx/nproc
-  globs%ny_loc = globs%ny/nproc
-  globs%nz_loc = globs%nz/nproc
+  ! Global number of cells in each direction
+  dims_global = [32, 64, 96]
 
-  globs%n_groups_x = globs%ny_loc*globs%nz_loc/SZ
-  globs%n_groups_y = globs%nx_loc*globs%nz_loc/SZ
-  globs%n_groups_z = globs%nx_loc*globs%ny_loc/SZ
+  ! Global domain dimensions
+  L_global = [2*pi, 2*pi, 2*pi]
 
-  xdirps%n = globs%nx_loc
-  ydirps%n = globs%ny_loc
-  zdirps%n = globs%nz_loc
+  ! Domain decomposition in each direction
+  nproc_dir = [nproc, 1, 1]
 
-  xdirps%n_blocks = globs%n_groups_x
-  ydirps%n_blocks = globs%n_groups_y
-  zdirps%n_blocks = globs%n_groups_z
+  mesh = mesh_t(dims_global, nproc_dir, L_global, SZ)
 
 #ifdef CUDA
-  cuda_allocator = cuda_allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, &
-                                    SZ)
+  cuda_allocator = cuda_allocator_t(mesh)
   allocator => cuda_allocator
   print *, 'CUDA allocator instantiated'
 
-  cuda_backend = cuda_backend_t(globs, allocator)
+  cuda_backend = cuda_backend_t(mesh, allocator)
   backend => cuda_backend
   print *, 'CUDA backend instantiated'
 #else
-  omp_allocator = allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, SZ)
+  omp_allocator = allocator_t(mesh)
   allocator => omp_allocator
   print *, 'OpenMP allocator instantiated'
 
-  omp_backend = omp_backend_t(globs, allocator)
+  omp_backend = omp_backend_t(mesh, allocator)
   backend => omp_backend
   print *, 'OpenMP backend instantiated'
 #endif
@@ -112,22 +107,21 @@ program test_reorder
   pass_Y = .true.
   pass_Z = .true.
 
+  dims_padded = mesh%get_padded_dims(DIR_C)
+
   ! Test indexing only
-  do k = 1, zdirps%n
-    do j = 1, ydirps%n
-      do i = 1, xdirps%n
+  do k = 1, mesh%get_n(DIR_Z, VERT) 
+    do j = 1, mesh%get_n(DIR_Y, VERT) 
+      do i = 1, mesh%get_n(DIR_X, VERT) 
         call test_index_reversing(pass_X, i, j, k, DIR_X, &
-                                  SZ, allocator%xdims_padded(2), &
-                                  allocator%ydims_padded(2), &
-                                  allocator%zdims_padded(2))
+                                  mesh%get_sz(), dims_padded(1), &
+                                  dims_padded(2),  dims_padded(3))
         call test_index_reversing(pass_Y, i, j, k, DIR_Y, &
-                                  SZ, allocator%xdims_padded(2), &
-                                  allocator%ydims_padded(2), &
-                                  allocator%zdims_padded(2))
+                                  mesh%get_sz(), dims_padded(1), &
+                                  dims_padded(2),  dims_padded(3))
         call test_index_reversing(pass_Z, i, j, k, DIR_Z, &
-                                  SZ, allocator%xdims_padded(2), &
-                                  allocator%ydims_padded(2), &
-                                  allocator%zdims_padded(2))
+                                  mesh%get_sz(), dims_padded(1), &
+                                  dims_padded(2),  dims_padded(3))
       end do
     end do
   end do
@@ -143,7 +137,7 @@ program test_reorder
   u_z => allocator%get_block(DIR_Z)
   u_x_original => allocator%get_block(DIR_X)
 
-  dims(:) = allocator%xdims_padded(:)
+  dims(:) = mesh%get_padded_dims(DIR_X)
   allocate (u_array(dims(1), dims(2), dims(3)))
 
   call random_number(u_array)
@@ -221,8 +215,8 @@ contains
       write (stderr, '(a)') message
     end if
 #else
-    if (norm2(a%data(1:SZ, 1:globs%nx_loc, 1:globs%n_groups_x) - &
-              b%data(1:SZ, 1:globs%nx_loc, 1:globs%n_groups_x)) > tol) then
+    if (norm2(a%data(:, 1:mesh%get_n(DIR_X, VERT), :) - &
+              b%data(:, 1:mesh%get_n(DIR_X, VERT), :)) > tol) then
       allpass = .false.
       write (stderr, '(a)') message
     end if

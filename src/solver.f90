@@ -95,7 +95,7 @@ contains
     integer :: dims(3)
 
     real(dp) :: x, y, z
-    integer :: nx, ny, nz, i, j, k
+    integer :: i, j, k
     real(dp), dimension(3) :: xloc
 
     solver%backend => backend
@@ -145,9 +145,9 @@ contains
     deallocate (u_init, v_init, w_init)
 
     ! Allocate and set the tdsops
-    call allocate_tdsops(solver%xdirps, DIR_X, solver%backend)
-    call allocate_tdsops(solver%ydirps, DIR_Y, solver%backend)
-    call allocate_tdsops(solver%zdirps, DIR_Z, solver%backend)
+    call allocate_tdsops(solver%xdirps, DIR_X, VERT, solver%backend)
+    call allocate_tdsops(solver%ydirps, DIR_Y, VERT, solver%backend)
+    call allocate_tdsops(solver%zdirps, DIR_Z, VERT, solver%backend)
 
     select case (globs%poisson_solver_type)
     case (POISSON_SOLVER_FFT)
@@ -162,26 +162,27 @@ contains
 
   end function init
 
-  subroutine allocate_tdsops(dirps, dir, backend)
+  subroutine allocate_tdsops(dirps, dir, data_loc, backend)
     class(dirps_t), intent(inout) :: dirps
     integer, intent(in) :: dir
+    integer, intent(in) :: data_loc
     class(base_backend_t), intent(in) :: backend
 
-    call backend%alloc_tdsops(dirps%der1st, dir, &
+    call backend%alloc_tdsops(dirps%der1st, dir, data_loc, &
                               'first-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%der1st_sym, dir, &
+    call backend%alloc_tdsops(dirps%der1st_sym, dir, data_loc, &
                               'first-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%der2nd, dir, &
+    call backend%alloc_tdsops(dirps%der2nd, dir, data_loc, &
                               'second-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%der2nd_sym, dir, &
+    call backend%alloc_tdsops(dirps%der2nd_sym, dir, data_loc, &
                               'second-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%interpl_v2p, dir, &
+    call backend%alloc_tdsops(dirps%interpl_v2p, dir, data_loc, &
                               'interpolate', 'classic', from_to='v2p')
-    call backend%alloc_tdsops(dirps%interpl_p2v, dir, &
+    call backend%alloc_tdsops(dirps%interpl_p2v, dir, data_loc, &
                               'interpolate', 'classic', from_to='p2v')
-    call backend%alloc_tdsops(dirps%stagder_v2p, dir, &
+    call backend%alloc_tdsops(dirps%stagder_v2p, dir, data_loc, &
                               'stag-deriv', 'compact6', from_to='v2p')
-    call backend%alloc_tdsops(dirps%stagder_p2v, dir, &
+    call backend%alloc_tdsops(dirps%stagder_p2v, dir, data_loc, &
                               'stag-deriv', 'compact6', from_to='p2v')
 
   end subroutine

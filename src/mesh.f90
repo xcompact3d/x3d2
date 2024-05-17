@@ -84,10 +84,12 @@ module m_mesh
     integer :: nx, ny, nz 
     integer :: ierr
 
+    allocate(mesh%geo)
+    allocate(mesh%par)
     mesh%dims_global(:) = dims_global
     ! Geometry
-    mesh%geo%L(:) = L_global(:)
-    mesh%geo%d(:) = mesh%geo%L(:) / mesh%dims_global(:)
+    mesh%geo%L = L_global
+    mesh%geo%d = mesh%geo%L(:) / mesh%dims_global(:)
 
     ! Parallel domain decomposition
     mesh%par%nproc_dir(:) = nproc_dir

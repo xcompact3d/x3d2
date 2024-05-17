@@ -99,7 +99,7 @@ contains
   end function init
 
   subroutine alloc_omp_tdsops( &
-    self, tdsops, dir, operation, scheme, &
+    self, tdsops, dir, data_loc, operation, scheme, &
     n_halo, from_to, bc_start, bc_end, sym, c_nu, nu0_nu &
     )
     implicit none
@@ -107,6 +107,7 @@ contains
     class(omp_backend_t) :: self
     class(tdsops_t), allocatable, intent(inout) :: tdsops
     integer, intent(in) :: dir
+    integer, intent(in) :: data_loc
     character(*), intent(in) :: operation, scheme
     integer, optional, intent(in) :: n_halo
     character(*), optional, intent(in) :: from_to, bc_start, bc_end
@@ -117,7 +118,7 @@ contains
 
     select type (tdsops)
     type is (tdsops_t)
-      tdsops = tdsops_t(self%mesh, dir, operation, scheme, n_halo, from_to, &
+      tdsops = tdsops_t(self%mesh, dir, data_loc, operation, scheme, n_halo, from_to, &
                         bc_start, bc_end, sym, c_nu, nu0_nu)
     end select
 
