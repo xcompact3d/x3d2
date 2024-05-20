@@ -11,63 +11,63 @@ contains
    !!
 
   pure subroutine get_index_ijk(i, j, k, dir_i, dir_j, dir_k, dir, &
-                                SZ, nx_loc, ny_loc, nz_loc)
+                                SZ, nx_padded, ny_padded, nz_padded)
       !! Get cartesian index from application storage directional one
     integer, intent(out) :: i, j, k                   ! cartesian indices
     integer, intent(in) :: dir_i, dir_j, dir_k        ! application storage indices
     integer, intent(in) :: dir                        ! direction of the applicatino storage indices
-    integer, intent(in) :: SZ, nx_loc, ny_loc, nz_loc ! dimensions of the block
+    integer, intent(in) :: SZ, nx_padded, ny_padded, nz_padded ! dimensions of the block
 
     select case (dir)
     case (DIR_X)
       i = dir_j
-      j = mod(dir_k - 1, ny_loc/SZ)*SZ + dir_i
-      k = 1 + (dir_k - 1)/(ny_loc/SZ)
+      j = mod(dir_k - 1, ny_padded/SZ)*SZ + dir_i
+      k = 1 + (dir_k - 1)/(ny_padded/SZ)
     case (DIR_Y)
-      i = mod(dir_k - 1, nx_loc/SZ)*SZ + dir_i
+      i = mod(dir_k - 1, nx_padded/SZ)*SZ + dir_i
       j = dir_j
-      k = 1 + (dir_k - 1)/(nx_loc/SZ)
+      k = 1 + (dir_k - 1)/(nx_padded/SZ)
     case (DIR_Z)
-      i = mod(dir_k - 1, nx_loc/SZ)*SZ + dir_i
-      j = 1 + (dir_k - 1)/(nx_loc/SZ)
+      i = mod(dir_k - 1, nx_padded/SZ)*SZ + dir_i
+      j = 1 + (dir_k - 1)/(nx_padded/SZ)
       k = dir_j
     end select
 
   end subroutine get_index_ijk
 
   pure subroutine get_index_dir(dir_i, dir_j, dir_k, i, j, k, dir, &
-                                SZ, nx_loc, ny_loc, nz_loc)
+                                SZ, nx_padded, ny_padded, nz_padded)
       !! Get application storage directional index from cartesian index
     integer, intent(out) :: dir_i, dir_j, dir_k        ! application storage indices
     integer, intent(in) :: i, j, k                     ! cartesian indices
     integer, intent(in) :: dir                        ! direction of the application storage indices
-    integer, intent(in) :: SZ, nx_loc, ny_loc, nz_loc ! dimensions of the block
+    integer, intent(in) :: SZ, nx_padded, ny_padded, nz_padded ! dimensions of the block
 
     select case (dir)
     case (DIR_X)
       dir_i = mod(j - 1, SZ) + 1
       dir_j = i
-      dir_k = (ny_loc/SZ)*(k - 1) + 1 + (j - 1)/SZ
+      dir_k = (ny_padded/SZ)*(k - 1) + 1 + (j - 1)/SZ
     case (DIR_Y)
       dir_i = mod(i - 1, SZ) + 1
       dir_j = j
-      dir_k = (nx_loc/SZ)*(k - 1) + 1 + (i - 1)/SZ
+      dir_k = (nx_padded/SZ)*(k - 1) + 1 + (i - 1)/SZ
     case (DIR_Z)
       dir_i = mod(i - 1, SZ) + 1
       dir_j = k
-      dir_k = (nx_loc/SZ)*(j - 1) + 1 + (i - 1)/SZ
+      dir_k = (nx_padded/SZ)*(j - 1) + 1 + (i - 1)/SZ
     end select
 
   end subroutine get_index_dir
 
   pure subroutine get_index_reordering(out_i, out_j, out_k, in_i, in_j, in_k, &
-                                       reorder_dir, SZ, nx_loc, ny_loc, nz_loc)
+                              reorder_dir, SZ, nx_padded, ny_padded, nz_padded)
       !! Converts a set of application storage directional index to an other direction.
       !! The two directions are defined by the reorder_dir variable, RDR_X2Y will go from storage in X to Y etc.
     integer, intent(out) :: out_i, out_j, out_k         ! new indices in the application storage
     integer, intent(in) :: in_i, in_j, in_k             ! original indices
     integer, intent(in) :: reorder_dir
-    integer, intent(in) :: SZ, nx_loc, ny_loc, nz_loc ! dimensions of the block
+    integer, intent(in) :: SZ, nx_padded, ny_padded, nz_padded ! dimensions of the block
     integer :: i, j, k        ! Intermediary cartesian indices
     integer :: dir_in, dir_out
 
@@ -93,9 +93,9 @@ contains
     end select
 
     call get_index_ijk(i, j, k, in_i, in_j, in_k, dir_in, &
-                       SZ, nx_loc, ny_loc, nz_loc)
+                       SZ, nx_padded, ny_padded, nz_padded)
     call get_index_dir(out_i, out_j, out_k, i, j, k, dir_out, &
-                       SZ, nx_loc, ny_loc, nz_loc)
+                       SZ, nx_padded, ny_padded, nz_padded)
 
   end subroutine get_index_reordering
 
