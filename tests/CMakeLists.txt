@@ -26,14 +26,15 @@ endfunction()
 
 define_test(test_allocator.f90 1 omp)
 define_test(test_reordering.f90 1 omp)
+define_test(test_time_integrator.f90 1 omp)
 define_test(omp/test_omp_tridiag.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(omp/test_omp_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(omp/test_omp_dist_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
-define_test(omp/test_omp_adamsbashforth.f90 1 omp)
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
     ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   define_test(test_reordering.f90 1 cuda)
+  define_test(test_time_integrator.f90 1 cuda)
   define_test(cuda/test_cuda_allocator.f90 1 cuda)
   define_test(cuda/test_cuda_reorder.f90 1 cuda)
   define_test(cuda/test_cuda_tridiag.f90 ${CMAKE_CTEST_NPROCS} cuda)

@@ -4,29 +4,52 @@ program test_omp_adamsbashforth
 
   use m_common, only: dp, globs_t, DIR_X
   use m_allocator, only: allocator_t, field_t
-  use m_omp_backend, only: omp_backend_t, base_backend_t
+  use m_base_backend, only: base_backend_t
   use m_time_integrator, only: time_intg_t
+#ifdef CUDA
+  use cudafor
+
+  use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
+  use m_cuda_backend, only: cuda_backend_t
+#else
+  use m_omp_backend, only: omp_backend_t
+#endif
 
   implicit none
 
   logical :: allpass = .true.
-  integer :: i, j, k, istartup, ierr
+  integer :: i, j, k, istartup, nrank, nproc, ierr
   integer :: nstep0 = 64, nstep, nrun = 4, norder = 4
   real(dp), allocatable, dimension(:) :: err
   real(dp), allocatable, dimension(:) :: norm
   real(dp) :: dt0 = 0.01_dp, dt, order
+  real(dp) :: u0
   class(field_t), pointer :: u, v, w
   class(field_t), pointer :: du, dv, dw
 
   type(globs_t) :: globs
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
+#ifdef CUDA
+  type(cuda_backend_t), target :: cuda_backend
+  type(cuda_allocator_t), target :: cuda_allocator
+  integer :: ndevs, devnum
+#else
   type(omp_backend_t), target :: omp_backend
   type(allocator_t), target :: omp_allocator
+#endif
   class(time_intg_t), allocatable :: time_integrator
 
   ! initialize MPI
   call MPI_Init(ierr)
+  call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
+  call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+
+#ifdef CUDA
+  ierr = cudaGetDeviceCount(ndevs)
+  ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robin
+  ierr = cudaGetDevice(devnum)
+#endif
 
   ! set globs parameters
   globs%nx = 1
@@ -42,6 +65,15 @@ program test_omp_adamsbashforth
   globs%n_groups_z = globs%nx_loc*globs%ny_loc
 
   ! allocate object
+#ifdef CUDA
+  cuda_allocator = cuda_allocator_t(globs%nx, globs%ny, globs%nz, 1)
+  allocator => cuda_allocator
+  print *, 'OpenCUDA allocator instantiated'
+
+  cuda_backend = cuda_backend_t(globs, allocator)
+  backend => cuda_backend
+  print *, 'OpenCUDA backend instantiated'
+#else
   omp_allocator = allocator_t(globs%nx, globs%ny, globs%nz, 1)
   allocator => omp_allocator
   print *, 'OpenMP allocator instantiated'
@@ -49,6 +81,7 @@ program test_omp_adamsbashforth
   omp_backend = omp_backend_t(globs, allocator)
   backend => omp_backend
   print *, 'OpenMP backend instantiated'
+#endif
 
   time_integrator = time_intg_t(allocator=allocator, &
                                 backend=backend, order=norder)
@@ -76,22 +109,66 @@ program test_omp_adamsbashforth
 
       ! compute l2 norm for a given step size
       allocate (err(nstep))
+#ifdef CUDA
+      select type (u)
+      type is (cuda_field_t)
+        u%data_d(1, 1, 1) = 1.0_dp
+      end select
+#else
       u%data(1, 1, 1) = 1.0_dp
-
+#endif
       ! startup
       istartup = k - 1
       do i = 1, istartup
+#ifdef CUDA
+        select type (u)
+        type is (cuda_field_t)
+          u0 = u%data_d(1, 1, 1)
+        end select
+        select type (du)
+        type is (cuda_field_t)
+          du%data_d(1, 1, 1) = dahlquist_rhs(u0)
+        end select
+#else
         du%data(1, 1, 1) = dahlquist_rhs(u%data(1, 1, 1))
+#endif
         call time_integrator%step(u, v, w, du, dv, dw, dt)
+#ifdef CUDA
+        select type (u)
+        type is (cuda_field_t)
+          u%data_d(1, 1, 1) = dahlquist_exact_sol(real(i, dp)*dt)
+        end select
+#else
         u%data(1, 1, 1) = dahlquist_exact_sol(real(i, dp)*dt)
+#endif
       end do
 
       ! post-startup
       do i = 1, nstep
+#ifdef CUDA
+        select type (u)
+        type is (cuda_field_t)
+          u0 = u%data_d(1, 1, 1)
+        end select
+        select type (du)
+        type is (cuda_field_t)
+          du%data_d(1, 1, 1) = dahlquist_rhs(u0)
+        end select
+#else
         du%data(1, 1, 1) = dahlquist_rhs(u%data(1, 1, 1))
+#endif
         call time_integrator%step(u, v, w, du, dv, dw, dt)
+#ifdef CUDA
+        select type (u)
+        type is (cuda_field_t)
+          u0 = u%data_d(1, 1, 1)
+        end select
+        err(i) = u0 - dahlquist_exact_sol( &
+                 real(i + istartup, dp)*dt)
+#else
         err(i) = u%data(1, 1, 1) - dahlquist_exact_sol( &
                  real(i + istartup, dp)*dt)
+#endif
       end do
 
       ! compute l2 norms
