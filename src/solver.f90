@@ -628,7 +628,7 @@ contains
     class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
 
     real(dp) :: t
-    integer :: i
+    integer :: i, j
 
     if (self%backend%nrank == 0) print *, 'initial conditions'
     t = 0._dp
@@ -637,47 +637,49 @@ contains
     if (self%backend%nrank == 0) print *, 'start run'
 
     do i = 1, self%n_iters
-      du => self%backend%allocator%get_block(DIR_X)
-      dv => self%backend%allocator%get_block(DIR_X)
-      dw => self%backend%allocator%get_block(DIR_X)
+      do j = 1, self%time_integrator%nstage
+        du => self%backend%allocator%get_block(DIR_X)
+        dv => self%backend%allocator%get_block(DIR_X)
+        dw => self%backend%allocator%get_block(DIR_X)
 
-      call self%transeq(du, dv, dw, self%u, self%v, self%w)
+        call self%transeq(du, dv, dw, self%u, self%v, self%w)
 
-      ! time integration
-      call self%time_integrator%step(self%u, self%v, self%w, &
-                                     du, dv, dw, self%dt)
+        ! time integration
+        call self%time_integrator%step(self%u, self%v, self%w, &
+                                       du, dv, dw, self%dt)
 
-      call self%backend%allocator%release_block(du)
-      call self%backend%allocator%release_block(dv)
-      call self%backend%allocator%release_block(dw)
+        call self%backend%allocator%release_block(du)
+        call self%backend%allocator%release_block(dv)
+        call self%backend%allocator%release_block(dw)
 
-      ! pressure
-      div_u => self%backend%allocator%get_block(DIR_Z)
+        ! pressure
+        div_u => self%backend%allocator%get_block(DIR_Z)
 
-      call self%divergence_v2p(div_u, self%u, self%v, self%w)
+        call self%divergence_v2p(div_u, self%u, self%v, self%w)
 
-      pressure => self%backend%allocator%get_block(DIR_Z)
+        pressure => self%backend%allocator%get_block(DIR_Z)
 
-      call self%poisson(pressure, div_u)
+        call self%poisson(pressure, div_u)
 
-      call self%backend%allocator%release_block(div_u)
+        call self%backend%allocator%release_block(div_u)
 
-      dpdx => self%backend%allocator%get_block(DIR_X)
-      dpdy => self%backend%allocator%get_block(DIR_X)
-      dpdz => self%backend%allocator%get_block(DIR_X)
+        dpdx => self%backend%allocator%get_block(DIR_X)
+        dpdy => self%backend%allocator%get_block(DIR_X)
+        dpdz => self%backend%allocator%get_block(DIR_X)
 
-      call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
+        call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
 
-      call self%backend%allocator%release_block(pressure)
+        call self%backend%allocator%release_block(pressure)
 
-      ! velocity correction
-      call self%backend%vecadd(-1._dp, dpdx, 1._dp, self%u)
-      call self%backend%vecadd(-1._dp, dpdy, 1._dp, self%v)
-      call self%backend%vecadd(-1._dp, dpdz, 1._dp, self%w)
+        ! velocity correction
+        call self%backend%vecadd(-1._dp, dpdx, 1._dp, self%u)
+        call self%backend%vecadd(-1._dp, dpdy, 1._dp, self%v)
+        call self%backend%vecadd(-1._dp, dpdz, 1._dp, self%w)
 
-      call self%backend%allocator%release_block(dpdx)
-      call self%backend%allocator%release_block(dpdy)
-      call self%backend%allocator%release_block(dpdz)
+        call self%backend%allocator%release_block(dpdx)
+        call self%backend%allocator%release_block(dpdy)
+        call self%backend%allocator%release_block(dpdz)
+      end do
 
       if (mod(i, self%n_output) == 0) then
         t = i*self%dt
