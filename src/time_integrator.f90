@@ -18,6 +18,7 @@ module m_time_integrator
     class(base_backend_t), pointer :: backend
     class(allocator_t), pointer :: allocator
   contains
+    procedure :: finalize
     procedure :: step
     procedure :: runge_kutta
     procedure :: adams_bashforth
@@ -28,6 +29,30 @@ module m_time_integrator
   end interface time_intg_t
 
 contains
+
+  subroutine finalize(self)
+    implicit none
+
+    !type(time_intg_t), intent(inout) :: self
+    class(time_intg_t), intent(inout) :: self
+
+    integer :: i, j
+
+    ! Release all the storage for old timesteps
+    do i = 1, self%nvars
+      do j = 1, self%nolds
+          call self%allocator%release_block(self%olds(i, j)%ptr)
+      end do
+    end do
+
+    ! deallocate memory
+    deallocate (self%olds)
+    deallocate (self%curr)
+    deallocate (self%deriv)
+
+    print*, 'Time integrator deallocated'
+
+  end subroutine finalize
 
   function init(backend, allocator, method, nvars)
     implicit none
@@ -125,6 +150,7 @@ contains
       end do
     end do
 
+    print *, 'Time integrator instantiated'
   end function init
 
   subroutine step(self, u, v, w, du, dv, dw, dt)
@@ -155,6 +181,8 @@ contains
   end subroutine step
 
   subroutine runge_kutta(self, dt)
+    implicit none
+
     class(time_intg_t), intent(inout) :: self
     real(dp), intent(in) :: dt
 
@@ -213,6 +241,8 @@ contains
   end subroutine runge_kutta
 
   subroutine adams_bashforth(self, dt)
+    implicit none
+
     class(time_intg_t), intent(inout) :: self
     real(dp), intent(in) :: dt
 
@@ -257,6 +287,8 @@ contains
   end subroutine adams_bashforth
 
   subroutine rotate(sol, n)
+    implicit none
+
     type(flist_t), intent(inout) :: sol(:)
     integer, intent(in) :: n
 
@@ -271,4 +303,5 @@ contains
     sol(1)%ptr => ptr
 
   end subroutine rotate
+
 end module m_time_integrator

@@ -67,7 +67,6 @@ program test_omp_adamsbashforth
     ! initialize time-integrator
     time_integrator = time_intg_t(allocator=allocator, &
                                   backend=backend, method=k)
-    print *, 'time integrator instantiated'
 
     dt = dt0
     nstep = nstep0
@@ -117,6 +116,8 @@ program test_omp_adamsbashforth
     else
       write (stderr, '(a)') 'Check order... passed'
     end if
+
+    call time_integrator%finalize
 
   end do
 
