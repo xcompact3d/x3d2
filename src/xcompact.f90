@@ -25,6 +25,7 @@ program xcompact
   type(globs_t) :: globs
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
+  type(allocator_t), pointer :: host_allocator
   type(solver_t) :: solver
   type(time_intg_t) :: time_integrator
   type(dirps_t) :: xdirps, ydirps, zdirps
@@ -35,13 +36,11 @@ program xcompact
   integer :: ndevs, devnum
 #else
   type(omp_backend_t), target :: omp_backend
-  type(allocator_t), target :: omp_allocator
 #endif
 
-  real(dp), allocatable, dimension(:, :, :) :: u, v, w
+  type(allocator_t), target :: omp_allocator
 
   real(dp) :: t_start, t_end
-  integer :: dims(3)
   integer :: nrank, nproc, ierr
 
   call MPI_Init(ierr)
@@ -110,12 +109,16 @@ program xcompact
   allocator => cuda_allocator
   if (nrank == 0) print *, 'CUDA allocator instantiated'
 
+  omp_allocator = allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, SZ)
+  host_allocator => omp_allocator
+
   cuda_backend = cuda_backend_t(globs, allocator)
   backend => cuda_backend
   if (nrank == 0) print *, 'CUDA backend instantiated'
 #else
   omp_allocator = allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, SZ)
   allocator => omp_allocator
+  host_allocator => omp_allocator
   if (nrank == 0) print *, 'OpenMP allocator instantiated'
 
   omp_backend = omp_backend_t(globs, allocator)
@@ -123,25 +126,19 @@ program xcompact
   if (nrank == 0) print *, 'OpenMP backend instantiated'
 #endif
 
-  dims(:) = allocator%cdims_padded
-  allocate (u(dims(1), dims(2), dims(3)))
-  allocate (v(dims(1), dims(2), dims(3)))
-  allocate (w(dims(1), dims(2), dims(3)))
-
   time_integrator = time_intg_t(allocator=allocator, backend=backend)
   if (nrank == 0) print *, 'time integrator instantiated'
-  solver = solver_t(backend, time_integrator, xdirps, ydirps, zdirps, globs)
+  solver = solver_t(backend, time_integrator, host_allocator, &
+                    xdirps, ydirps, zdirps, globs)
   if (nrank == 0) print *, 'solver instantiated'
 
   call cpu_time(t_start)
 
-  call solver%run(u, v, w)
+  call solver%run()
 
   call cpu_time(t_end)
 
   if (nrank == 0) print *, 'Time: ', t_end - t_start
-
-  if (nrank == 0) print *, 'norms', norm2(u), norm2(v), norm2(w)
 
   call MPI_Finalize(ierr)
 
