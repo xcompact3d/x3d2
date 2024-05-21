@@ -176,7 +176,7 @@ program test_omp_adamsbashforth
       ! compute l2 norms
       norm(j) = norm2(err)
       norm(j) = sqrt(norm(j)*norm(j)/real(nstep, dp))
-      print *, err(nstep)
+      print *, norm(j)
       deallocate (err)
 
       ! refine time stepping
