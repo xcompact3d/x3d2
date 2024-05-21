@@ -383,6 +383,8 @@ contains
     real(dp), intent(in) :: b
     class(field_t), intent(inout) :: y
 
+    y%data = a*x%data + b*y%data ! fixme
+
   end subroutine vecadd_omp
 
   real(dp) function scalar_product_omp(self, x, y) result(s)
