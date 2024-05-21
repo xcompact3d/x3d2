@@ -24,13 +24,14 @@ module m_cuda_poisson_fft
     complex(dp), device, allocatable, dimension(:, :, :) :: waves_dev
     !> cufft requires a local domain sized storage
     complex(dp), device, allocatable, dimension(:) :: fft_worksize
-
+    !> Wave numbers in x, y, and z
     real(dp), device, allocatable, dimension(:) :: ax_dev, bx_dev, &
                                                    ay_dev, by_dev, &
                                                    az_dev, bz_dev
 
     integer :: plan3D_fw, plan3D_bw
 
+    !> cuFFTMp object manages decomposition and data storage
     type(cudaLibXtDesc), pointer :: xtdesc
   contains
     procedure :: fft_forward => fft_forward_cuda

@@ -8,12 +8,19 @@ module m_poisson_fft
 
   type, abstract :: poisson_fft_t
     !! FFT based Poisson solver
+    !> Global dimensions
     integer :: nx_glob, ny_glob, nz_glob
+    !> Local dimensions
     integer :: nx_loc, ny_loc, nz_loc
+    !> Local dimensions in the permuted slabs
     integer :: nx_perm, ny_perm, nz_perm
+    !> Local dimensions in the permuted slabs in spectral space
     integer :: nx_spec, ny_spec, nz_spec
+    !> Offset in y direction in the permuted slabs in spectral space
     integer :: y_sp_st
+    !> Local domain sized array storing the spectral equivalence constants
     complex(dp), allocatable, dimension(:, :, :) :: waves
+    !> Wave numbers in x, y, and z
     complex(dp), allocatable, dimension(:) :: ax, bx, ay, by, az, bz
   contains
     procedure(fft_forward), deferred :: fft_forward

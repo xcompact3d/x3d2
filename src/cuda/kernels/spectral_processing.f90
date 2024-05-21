@@ -22,8 +22,12 @@ contains
     !> Spectral equivalence constants
     complex(dp), device, intent(in), dimension(:, :, :) :: waves
     real(dp), device, intent(in), dimension(:) :: ax, bx, ay, by, az, bz
+    !> Grid size in spectral space
+    integer, value, intent(in) :: nx_spec, ny_spec
+    !> Offset in y direction in the permuted slabs in spectral space
+    integer, value, intent(in) :: y_sp_st
     !> Grid size
-    integer, value, intent(in) :: nx_spec, ny_spec, y_sp_st, nx, ny, nz
+    integer, value, intent(in) :: nx, ny, nz
 
     integer :: i, j, k, ix, iy, iz
     real(dp) :: tmp_r, tmp_c, div_r, div_c
