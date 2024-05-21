@@ -12,6 +12,7 @@ module m_time_integrator
     real(dp) :: coeffs(4, 4)
     real(dp) :: rk_b(4, 4)
     real(dp) :: rk_a(3, 3, 4)
+    character(len=3) :: sname
     type(flist_t), allocatable :: olds(:, :)
     type(flist_t), allocatable :: curr(:)
     type(flist_t), allocatable :: deriv(:)
@@ -50,7 +51,7 @@ contains
     deallocate (self%curr)
     deallocate (self%deriv)
 
-    print *, 'Time integrator deallocated'
+    print *, self%sname, ' time integrator deallocated'
 
   end subroutine finalize
 
@@ -119,12 +120,14 @@ contains
       init%nstep = init%method
       init%nstage = 1
       init%nolds = init%nstep - 1
+      write (init%sname, "(A2,I1)") "AB", init%order
     else
       ! method 5 to 8 -> RK1 to RK4
       init%order = init%method - 4
       init%nstep = 1
       init%nstage = init%method - 4
       init%nolds = init%nstage
+      write (init%sname, "(A2,I1)") "RK", init%order
     end if
 
     if (present(nvars)) then
@@ -148,7 +151,8 @@ contains
       end do
     end do
 
-    print *, 'Time integrator instantiated'
+    print *, init%sname, ' time integrator instantiated'
+
   end function init
 
   subroutine step(self, u, v, w, du, dv, dw, dt)
