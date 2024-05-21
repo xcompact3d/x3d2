@@ -41,7 +41,7 @@ contains
     ! Release all the storage for old timesteps
     do i = 1, self%nvars
       do j = 1, self%nolds
-          call self%allocator%release_block(self%olds(i, j)%ptr)
+        call self%allocator%release_block(self%olds(i, j)%ptr)
       end do
     end do
 
@@ -50,7 +50,7 @@ contains
     deallocate (self%curr)
     deallocate (self%deriv)
 
-    print*, 'Time integrator deallocated'
+    print *, 'Time integrator deallocated'
 
   end subroutine finalize
 
