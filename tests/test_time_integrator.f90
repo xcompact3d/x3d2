@@ -193,11 +193,13 @@ program test_omp_adamsbashforth
     else
       write (stderr, '(a)') 'Check order... passed'
     end if
-
+ 
+    ! deallocate time-integrator for each scheme
     call time_integrator%finalize
 
   end do
 
+  ! check if all tests are passing
   if (allpass) then
     write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
   else
