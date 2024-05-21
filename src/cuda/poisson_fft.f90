@@ -84,7 +84,7 @@ contains
     ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z, &
                            worksize)
     if (ierr /= 0) then
-      write (stderr, *), "cuFFT Error Code: ", ierr
+      write (stderr, *), 'cuFFT Error Code: ', ierr
       error stop 'Forward 3D FFT plan generation failed'
     end if
 
@@ -94,7 +94,7 @@ contains
     ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D, &
                            worksize)
     if (ierr /= 0) then
-      write (stderr, *), "cuFFT Error Code: ", ierr
+      write (stderr, *), 'cuFFT Error Code: ', ierr
       error stop 'Backward 3D FFT plan generation failed'
     end if
 
@@ -102,7 +102,7 @@ contains
     ierr = cufftXtMalloc(poisson_fft%plan3D_fw, poisson_fft%xtdesc, &
                          CUFFT_XT_FORMAT_INPLACE)
     if (ierr /= 0) then
-      write (stderr, *), "cuFFT Error Code: ", ierr
+      write (stderr, *), 'cuFFT Error Code: ', ierr
       error stop 'cufftXtMalloc failed'
     end if
 
@@ -131,7 +131,7 @@ contains
     ierr = cudaMemcpy2D(d_dev, self%nx_loc + 2, flat_dev, self%nx_loc, &
                         self%nx_loc, self%ny_loc*self%nz_loc)
     if (ierr /= 0) then
-      print*, "cudaMemcpy2D error code: ", ierr
+      print *, 'cudaMemcpy2D error code: ', ierr
       error stop 'cudaMemcpy2D failed'
     end if
 
@@ -139,7 +139,7 @@ contains
                                  CUFFT_FORWARD)
 
     if (ierr /= 0) then
-      write (stderr, *), "cuFFT Error Code: ", ierr
+      write (stderr, *), 'cuFFT Error Code: ', ierr
       error stop 'Forward 3D FFT execution failed'
     end if
 
@@ -160,7 +160,7 @@ contains
     ierr = cufftXtExecDescriptor(self%plan3D_bw, self%xtdesc, self%xtdesc, &
                                  CUFFT_INVERSE)
     if (ierr /= 0) then
-      write (stderr, *), "cuFFT Error Code: ", ierr
+      write (stderr, *), 'cuFFT Error Code: ', ierr
       error stop 'Backward 3D FFT execution failed'
     end if
 
@@ -175,7 +175,7 @@ contains
     ierr = cudaMemcpy2D(flat_dev, self%nx_loc, d_dev, self%nx_loc + 2, &
                         self%nx_loc, self%ny_loc*self%nz_loc)
     if (ierr /= 0) then
-      print*, "cudaMemcpy2D error code: ", ierr
+      print *, 'cudaMemcpy2D error code: ', ierr
       error stop 'cudaMemcpy2D failed'
     end if
 
