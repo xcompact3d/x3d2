@@ -110,23 +110,21 @@ contains
 
     if (present(method)) then
       init%method = method
-      if (method < 5) then
-        ! method 1 to 4 -> AB1 to AB4
-        init%order = init%method
-        init%nstep = init%method
-        init%nstage = 1
-        init%nolds = init%nstep - 1
-      else
-        ! method 5 to 8 -> RK1 to RK4
-        init%order = init%method - 4
-        init%nstep = 1
-        init%nstage = init%method - 4
-        init%nolds = init%nstage
-      end if
     else
-      init%method = 1
+      init%method = 3
+    end if
+    if (init%method < 5) then
+      ! method 1 to 4 -> AB1 to AB4
+      init%order = init%method
+      init%nstep = init%method
+      init%nstage = 1
+      init%nolds = init%nstep - 1
+    else
+      ! method 5 to 8 -> RK1 to RK4
+      init%order = init%method - 4
       init%nstep = 1
-      init%nolds = 0
+      init%nstage = init%method - 4
+      init%nolds = init%nstage
     end if
 
     if (present(nvars)) then
