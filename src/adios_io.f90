@@ -215,7 +215,7 @@ contains
     call adios2_begin_step(reader, adios2_step_mode_read, ierr)
     call adios2_inquire_variable(adios_var, io, varname, ierr)
     if (.not.adios_var%valid) then
-      call self%handle_fatal_error("Cannot fetch ADIOS2 IO", ierr)
+      call self%handle_fatal_error("Cannot fetch ADIOS2 variable", ierr)
     endif
 
     call adios2_set_step_selection(adios_var, idump, n_steps, ierr)
