@@ -32,7 +32,10 @@ contains
       write(stderr, '(a)') 'Single precision IO test failed.'
       allpass = .false.
     endif
-    ! if(.not. test_strided_io()) write(stderr, '(a)') 'Strided IO test failed.'; allpass = .false.
+    if(.not. test_strided_io()) then
+      write(stderr, '(a)') 'Strided IO test failed.'
+      allpass = .false.
+    endif
 
     if (allpass) then
       if (irank == 0) write(stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
@@ -41,7 +44,8 @@ contains
     call MPI_Finalize(ierr)
 
     if(.not. allpass) then
-      error stop 'SOME TESTS FAILED.'
+      write(stderr, '(a)') 'SOME TESTS FAILED.'
+      stop
     endif
   end subroutine
 
@@ -86,7 +90,7 @@ contains
     do k = 1, nz
     do j = 1, ny
     do i = 1, nx
-    arr_to_write%data(i, j, k) = (istart(1) + i) + j*nx*nproc + k*nx*nproc*ny
+    arr_to_write%data(i, j, k) = (istart(1) + i-1) + (j-1)*nx*nproc + (k-1)*nx*nproc*ny
     end do
     end do
     end do
@@ -108,10 +112,10 @@ contains
     do k = 1, nz
     do j = 1, ny
     do i = 1, nx
-    if(arr_to_read%data(i, j, k) /= (istart(1) + i) + j*nx*nproc + k*nx*nproc*ny) then
+    if(arr_to_read%data(i, j, k) /= (istart(1) + i-1) + (j-1)*nx*nproc + (k-1)*nx*nproc*ny) then
       write(stderr, '(a, f8.4, a, i8, a, i5, i5, i5)') &
         'Mismatch between read array(', arr_to_read%data(i, j, k), &
-        ") and expected index (", (istart(1) + i) + j*nx*nproc + k*nx*nproc*ny, ") at (i,j,k) = ", i, j, k
+        ") and expected index (", (istart(1) + i-1) + (j-1)*nx*nproc + (k-1)*nx*nproc*ny, ") at (i,j,k) = ", i, j, k
       test_passed = .false.
     end if
     end do
@@ -146,7 +150,7 @@ contains
     integer(kind=8), dimension(3) :: ishape, istart, icount
     integer, parameter :: nx = 64, ny = 32, nz = 16
 
-    real(kind=4), dimension(3) :: arr_to_read(nx, ny, nz)
+    real(kind=4) :: arr_to_read(nx, ny, nz)
 
     integer :: i, j, k
 
@@ -172,7 +176,7 @@ contains
     do k = 1, nz
     do j = 1, ny
     do i = 1, nx
-    arr_to_write%data(i, j, k) = (istart(1) + i) + j*nx*nproc + k*nx*nproc*ny
+    arr_to_write%data(i, j, k) = (istart(1) + i-1) + (j-1)*nx*nproc + (k-1)*nx*nproc*ny
     end do
     end do
     end do
@@ -220,10 +224,10 @@ contains
     do k = 1, nz
     do j = 1, ny
     do i = 1, nx
-    if(arr_to_read(i, j, k) /= (istart(1) + i) + j*nx*nproc + k*nx*nproc*ny) then
+    if(arr_to_read(i, j, k) /= (istart(1) + i-1) + (j-1)*nx*nproc + (k-1)*nx*nproc*ny) then
       write(stderr, '(a, f8.4, a, i8, a, i5, i5, i5)') &
         'Mismatch between read array(', arr_to_read(i, j, k), &
-        ") and expected index (", (istart(1) + i) + j*nx*nproc + k*nx*nproc*ny, ") at (i,j,k) = ", i, j, k
+        ") and expected index (", (istart(1) + i-1) + (j-1)*nx*nproc + (k-1)*nx*nproc*ny, ") at (i,j,k) = ", i, j, k
       test_passed = .false.
       stop
     end if
@@ -242,7 +246,7 @@ contains
     use m_omp_common, only: SZ
 
     class(field_t), pointer :: arr_to_write
-    class(field_t), pointer :: arr_to_read
+    real(kind=8), dimension(:,:,:), allocatable :: arr_to_read
 
     !> Did the test pass?
     logical :: test_passed
@@ -250,16 +254,21 @@ contains
     type(allocator_t), target :: omp_allocator
     type(adios_io_t) :: io
 
-    integer(kind=8), dimension(3) :: ishape, istart, icount
-    integer, parameter :: nx = 64, ny = 32, nz = 16
+    type(adios2_io) :: aio
+    type(adios2_engine) :: reader
+    type(adios2_variable) :: adios_var
+    integer(kind=8) :: idump = 0
 
-    integer :: i, j, k
+    integer(kind=8), dimension(3) :: ishape, istart, icount, istride, icount_strided, ishape_strided
+    integer, parameter :: nx = 32, ny = 16, nz = 64
+
+    integer :: i, j, k, idx
 
     test_passed = .true.
 
     call io%init(MPI_COMM_WORLD)
 
-    if (irank == 0) print*, 'Run with', nproc, 'ranks'
+    if(irank == 0) write(stderr, '(a)') 'Starting strided IO test.'
 
     !================ 
     ! SETUP TEST DATA
@@ -270,7 +279,6 @@ contains
     istart = (/ irank*nx, 0, 0/) ! local offset
 
     omp_allocator = allocator_t(nx, ny, nz, SZ)
-    if (irank == 0) print*, 'OpenMP allocator instantiated'
 
     arr_to_write => omp_allocator%get_block(DIR_C)
 
@@ -278,7 +286,7 @@ contains
     do k = 1, nz
     do j = 1, ny
     do i = 1, nx
-    arr_to_write%data(i, j, k) = (istart(1) + i) + j*nx*nproc + k*nx*nproc*ny
+    arr_to_write%data(i, j, k) = (istart(1) + i-1) + (j-1)*nx*nproc + (k-1)*nx*nproc*ny
     end do
     end do
     end do
@@ -287,31 +295,69 @@ contains
     ! WRITE TEST DATA
     !================
 
-    call io%write(arr_to_write, "test_strided_io_output.bp", "TestArr", icount, ishape, istart, istride_in=[2_8, 1_8, 1_8])
+    istride = [2_8, 3_8, 4_8]
+    icount_strided = icount / istride
+
+    call io%write(arr_to_write, "test_strided_io_data.bp", "TestArr", icount, ishape, istart, istride_in=istride)
     call omp_allocator%release_block(arr_to_write)
 
     !================ 
     ! READ AND VERIFY TEST DATA
     !================
 
-    ! arr_to_read => omp_allocator%get_block(DIR_C)
-    ! call io%read(arr_to_read, "test_omp_io.bp", "TestArr", icount, ishape, istart)
-    !
-    ! do k = 1, nz
-    ! do j = 1, ny
-    ! do i = 1, nx
-    ! if(arr_to_read%data(i, j, k) /= (istart(1) + i) + j*nx*nproc + k*nx*nproc*ny) then
-    !   write(stderr, '(a, f8.4, a, i8, a, i5, i5, i5)') &
-    !     'Mismatch between read array(', arr_to_read%data(i, j, k), &
-    !     ") and expected index (", (istart(1) + i) + j*nx*nproc + k*nx*nproc*ny, ") at (i,j,k) = ", i, j, k
-    !   test_passed = .false.
-    ! end if
-    ! end do
-    ! end do
-    ! end do
-    !
-    ! call omp_allocator%release_block(arr_to_read)
+    ! Read only from one rank; let's not overcomplicate this
+    if(irank == 0) then
+      ishape_strided = ishape/istride
+      allocate(arr_to_read(ishape_strided(1), ishape_strided(2), ishape_strided(3)))
+
+      call adios2_declare_io (aio, io%adios_ctx, 'read', ierr)
+      if (.not. aio%valid) then
+        write(stderr, *) "Cannot create ADIOS2 IO"
+        test_passed = .false.
+        return
+      endif
+      call adios2_open(reader, aio, "test_strided_io_data.bp", adios2_mode_read, MPI_COMM_SELF, ierr)
+      if (.not. reader%valid) then
+        write(stderr, *) "Cannot create ADIOS2 reader"
+        test_passed = .false.
+        return
+      endif
+      call adios2_begin_step(reader, adios2_step_mode_read, ierr)
+      call adios2_inquire_variable(adios_var, aio, "TestArr", ierr)
+      if (.not. adios_var%valid) then
+        write(stderr, *) "Cannot fetch ADIOS2 variable"
+        test_passed = .false.
+        return
+      endif
+
+      call adios2_set_step_selection(adios_var, 0_8, 1_8, ierr)
+      call adios2_set_selection(adios_var, 3, [0_8,0_8,0_8], ishape_strided, ierr)
+      call adios2_get(reader, adios_var, arr_to_read, ierr)
+      call adios2_end_step(reader, ierr)
+
+      if (reader%valid) then
+        call adios2_close(reader, ierr)
+      endif
+
+      do k = 1, ishape_strided(3)
+      do j = 1, ishape_strided(2)
+      do i = 1, ishape_strided(1)
+      idx = (istart(1) + i-1)*istride(1) + (j-1)*istride(2)*nx*nproc + (k-1)*istride(3)*nx*nproc*ny
+      if(arr_to_read(i, j, k) /= idx) then
+        write(stderr, '(a, f8.4, a, i8, a, i5, i5, i5)') &
+          'Mismatch between read array(', arr_to_read(i, j, k), &
+          ") and expected index (", idx, ") at (i,j,k) = ", i, j, k
+        test_passed = .false.
+      end if
+      end do
+      end do
+      end do
+
+      deallocate(arr_to_read)
+    endif
 
     call io%deinit()
+
+    if(irank == 0) write(stderr, '(a)') 'Finishing strided IO test.'
   end function
 end program

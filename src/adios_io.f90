@@ -69,8 +69,8 @@ contains
   end function
 
   subroutine write(self, in_arr, fpath, varname, icount, ishape, istart, convert_to_sp_in, istride_in)
-  class(adios_io_t), intent(inout) :: self
-  class(field_t), pointer, intent(in) :: in_arr !! Field to be outputted
+    class(adios_io_t), intent(inout) :: self
+    class(field_t), pointer, intent(in) :: in_arr !! Field to be outputted
     ! TODO should this be a field or a fortran array?
     character(*), intent(in) :: fpath !! Path to ouptut file
     character(*), intent(in) :: varname !! Name of variable in output file
@@ -83,6 +83,7 @@ contains
     !> Defaults to .false.
     logical, intent(in), optional :: convert_to_sp_in
     logical :: convert_to_sp = .false.
+    logical :: should_stride = .false.
     !> If set, will coarsen output in each direction by only dumping every
     !> `istride` gridpoints.
     !> Defaults to (1,1,1).
@@ -92,7 +93,8 @@ contains
     real(4), allocatable :: data_sp(:,:,:)
     real(4), allocatable :: data_strided_sp(:,:,:)
     real(8), allocatable :: data_strided_dp(:,:,:)
-    integer(8), dimension(3) :: start_idx
+    integer(8), dimension(3) :: istart_strided
+    integer(8), dimension(3) :: icount_strided
 
     type(adios2_io) :: io
     type(adios2_engine) :: writer
@@ -100,10 +102,14 @@ contains
     integer :: vartype
     integer :: ierr
 
-    integer :: i
+    integer :: i, j, k
 
     ! Set our optional inputs
-    if(present(convert_to_sp_in)) convert_to_sp = convert_to_sp_in
+    if(present(convert_to_sp_in)) then
+      convert_to_sp = convert_to_sp_in
+    else
+      convert_to_sp = .false.
+    endif
     if(present(istride_in)) istride = istride_in
 
     if(istride(1) < 1 .or. istride(2) < 1 .or. istride(3) < 1) then
@@ -120,7 +126,8 @@ contains
       call self%handle_fatal_error("Cannot create ADIOS2 writer", ierr)
     endif
 
-    if(convert_to_sp .eqv. .true.) then
+    if(convert_to_sp) then
+      print*, "converting to single precision!"
       allocate(data_sp(icount(1), icount(2), icount(3)))
       data_sp(:,:,:) = real(in_arr%data(:,:,:))
       vartype = adios2_type_real
@@ -128,44 +135,61 @@ contains
       vartype = adios2_type_dp
     endif
 
-    if(any(istride /= [1,1,1])) then
+    should_stride = any(istride /= [1,1,1])
+
+    if(should_stride) then
+      print*, "striding!"
       do i = 1, 3
-        start_idx(i) = calc_local_strided_offset(istart(i), istride(i))
+        istart_strided(i) = calc_local_strided_offset(istart(i), istride(i))
       end do
+      icount_strided = icount/istride
       if(convert_to_sp) then
         allocate(data_strided_sp(&
-          icount(1)/istride(1),&
-          icount(2)/istride(2),&
-          icount(3)/istride(3)&
+          icount_strided(1),&
+          icount_strided(2),&
+          icount_strided(3)&
           ))
         data_strided_sp(:,:,:) = data_sp(&
-          start_idx(1):icount(1):istride(1),&
-          start_idx(2):icount(2):istride(2),&
-          start_idx(3):icount(3):istride(3)&
+          istart_strided(1)::istride(1),&
+          istart_strided(2)::istride(2),&
+          istart_strided(3)::istride(3)&
           )
       else
         allocate(data_strided_dp(&
-          icount(1)/istride(1),&
-          icount(2)/istride(2),&
-          icount(3)/istride(3)&
+          icount_strided(1),&
+          icount_strided(2),&
+          icount_strided(3)&
           ))
         data_strided_dp(:,:,:) = in_arr%data(&
-          start_idx(1):icount(1):istride(1),&
-          start_idx(2):icount(2):istride(2),&
-          start_idx(3):icount(3):istride(3)&
+          istart_strided(1)::istride(1),&
+          istart_strided(2)::istride(2),&
+          istart_strided(3)::istride(3)&
           )
       endif
     endif
 
-    call adios2_define_variable(adios_var, io, varname, vartype, &
-      3, ishape, istart, icount, adios2_constant_dims, ierr)
+    if(should_stride) then
+      call adios2_define_variable(adios_var, io, varname, vartype, &
+        3, ishape/istride, istart/istride, icount_strided, adios2_constant_dims, ierr)
+    else
+      call adios2_define_variable(adios_var, io, varname, vartype, &
+        3, ishape, istart, icount, adios2_constant_dims, ierr)
+    endif
 
     call adios2_begin_step(writer, adios2_step_mode_append, ierr)
 
-    if(convert_to_sp .eqv. .true.) then
-      call adios2_put(writer, adios_var, data_sp, ierr)
+    if(should_stride) then
+      if(convert_to_sp) then
+        call adios2_put(writer, adios_var, data_strided_sp, ierr)
+      else
+        call adios2_put(writer, adios_var, data_strided_dp, ierr)
+      endif
     else
-      call adios2_put(writer, adios_var, in_arr%data, ierr)
+      if(convert_to_sp) then
+        call adios2_put(writer, adios_var, data_sp, ierr)
+      else
+        call adios2_put(writer, adios_var, in_arr%data, ierr)
+      endif
     endif
 
     call adios2_end_step(writer, ierr)
