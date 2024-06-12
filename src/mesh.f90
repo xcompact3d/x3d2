@@ -270,9 +270,15 @@ module m_mesh
     integer, intent(in) :: data_loc
     integer, dimension(3) :: dims
 
-    dims(1) = self%sz
-    dims(2) = self%get_n(dir, data_loc)
-    dims(3) = self%get_n_groups(dir)
+    if (dir == DIR_C) then
+      dims(1) = self%get_n(DIR_X, data_loc)
+      dims(2) = self%get_n(DIR_Y, data_loc)
+      dims(3) = self%get_n(DIR_Z, data_loc)
+    else
+      dims(1) = self%sz
+      dims(2) = self%get_n(dir, data_loc)
+      dims(3) = self%get_n_groups(dir)
+    end if
 
   end function
 
