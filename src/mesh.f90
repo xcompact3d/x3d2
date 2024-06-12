@@ -62,6 +62,9 @@ module m_mesh
     generic :: get_padded_dims => get_padded_dims_dir, get_padded_dims_phi
   
     procedure :: get_location
+
+    procedure :: set_sz
+    procedure :: set_padded_dims
   end type mesh_t
 
   interface mesh_t
@@ -118,6 +121,22 @@ module m_mesh
 
   end function mesh_init
 
+  subroutine set_padded_dims(self, cdims)
+    class(mesh_t), intent(inout) :: self
+    integer, dimension(3), intent(in) :: cdims
+
+    self%cdims_padded = cdims
+
+  end subroutine
+
+  subroutine set_sz(self, sz)
+    class(mesh_t), intent(inout) :: self
+    integer, intent(in) :: sz
+
+    self%sz = sz
+
+  end subroutine
+
   subroutine domain_decomposition(mesh)
     !! Supports 1D, 2D, and 3D domain decomposition.
     !!
@@ -167,7 +186,7 @@ module m_mesh
 
   end subroutine domain_decomposition
 
-  pure function get_SZ(self) result(sz)
+  pure function get_sz(self) result(sz)
   !! Getter for parameter SZ
     class(mesh_t), intent(in) :: self
     integer :: sz

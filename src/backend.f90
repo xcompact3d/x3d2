@@ -25,7 +25,7 @@ module m_base_backend
       !! architecture.
 
     real(dp) :: nu
-    class(mesh_t), allocatable :: mesh
+    class(mesh_t), pointer :: mesh
     class(allocator_t), pointer :: allocator
     class(dirps_t), pointer :: xdirps, ydirps, zdirps
     class(poisson_fft_t), pointer :: poisson_fft

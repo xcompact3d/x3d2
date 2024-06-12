@@ -1,7 +1,7 @@
 module m_allocator
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, NONE
+  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, NONE, VERT
   use m_mesh, only: mesh_t
   use m_field, only: field_t
 
@@ -42,7 +42,7 @@ module m_allocator
     !> The pointer to the first block on the list.  Non associated if
     !> the list is empty
     ! TODO: Rename first to head
-    type(mesh_t) :: mesh
+    class(mesh_t), pointer :: mesh
     class(field_t), pointer :: first => null()
   contains
     procedure :: get_block
@@ -50,6 +50,7 @@ module m_allocator
     procedure :: create_block
     procedure :: get_block_ids
     procedure :: destroy
+    procedure :: compute_padded_dims
   end type allocator_t
 
   interface allocator_t
@@ -63,14 +64,39 @@ module m_allocator
 
 contains
 
-  function allocator_init(mesh) result(allocator)
-    type(mesh_t), intent(in) :: mesh
+  function allocator_init(mesh, sz) result(allocator)
+    type(mesh_t), target, intent(inout) :: mesh
+    integer, intent(in) :: sz
     type(allocator_t) :: allocator
 
-    allocator%mesh = mesh
+    allocator%mesh => mesh
+    call allocator%compute_padded_dims(sz)
     allocator%ngrid = product(allocator%mesh%get_padded_dims(DIR_C))
 
   end function allocator_init
+
+  subroutine compute_padded_dims(self, sz)
+    class(allocator_t), intent(inout) :: self
+    integer, intent(in) :: sz
+    integer, dimension(3) :: cdims
+    integer :: nx, ny, nz, nx_padded, ny_padded, nz_padded
+
+    cdims = self%mesh%get_dims(DIR_C, VERT)
+    nx = cdims(1)
+    ny = cdims(2)
+    nz = cdims(3)
+
+    ! Apply padding based on sz
+    nx_padded = nx - 1 + mod(-(nx - 1), sz) + sz
+    ny_padded = ny - 1 + mod(-(ny - 1), sz) + sz
+    ! Current reorder functions do not require a padding in z-direction.
+    nz_padded = nz
+    cdims = [nx_padded, ny_padded, nz_padded]
+
+    call self%mesh%set_sz(sz)
+    call self%mesh%set_padded_dims(cdims)
+
+  end subroutine
 
   function create_block(self, next) result(ptr)
     !! Allocate memory for a new block and return a pointer to a new

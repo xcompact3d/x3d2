@@ -89,7 +89,7 @@ program xcompact
   backend => cuda_backend
   if (nrank == 0) print *, 'CUDA backend instantiated'
 #else
-  omp_allocator = allocator_t(mesh)
+  omp_allocator = allocator_t(mesh, SZ)
   allocator => omp_allocator
   if (nrank == 0) print *, 'OpenMP allocator instantiated'
 

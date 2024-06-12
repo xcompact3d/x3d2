@@ -52,7 +52,7 @@ contains
   function init(mesh, allocator) result(backend)
     implicit none
 
-    class(mesh_t), intent(in) :: mesh
+    class(mesh_t), target, intent(inout) :: mesh
     class(allocator_t), target, intent(inout) :: allocator
     type(omp_backend_t) :: backend
 
@@ -67,8 +67,10 @@ contains
     end select
 
     n_halo = 4
-    backend%mesh = mesh
-    n_groups = backend%mesh%get_n_groups(DIR_X)
+    backend%mesh => mesh
+    n_groups = maxval([ backend%mesh%get_n_groups(DIR_X), &
+                        backend%mesh%get_n_groups(DIR_Y), & 
+                        backend%mesh%get_n_groups(DIR_Z) ])
 
     allocate (backend%u_send_s(SZ, n_halo, n_groups))
     allocate (backend%u_send_e(SZ, n_halo, n_groups))
