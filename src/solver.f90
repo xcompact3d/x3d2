@@ -126,7 +126,7 @@ contains
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          xloc = solver%mesh%get_location(i, j, k)
+          xloc = solver%mesh%get_coordinates(i, j, k)
           x = xloc(1)
           y = xloc(2)
           z = xloc(3)

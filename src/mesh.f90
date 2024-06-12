@@ -61,7 +61,7 @@ module m_mesh
     procedure :: get_padded_dims_dir
     generic :: get_padded_dims => get_padded_dims_dir, get_padded_dims_phi
   
-    procedure :: get_location
+    procedure :: get_coordinates
 
     procedure :: set_sz
     procedure :: set_padded_dims
@@ -326,7 +326,7 @@ module m_mesh
     end select
   end function
 
-  pure function get_location(self, i, j, k) result(xloc)
+  pure function get_coordinates(self, i, j, k) result(xloc)
   !! Get the physical location of a cell center with i,j,k local indices
     class(mesh_t), intent(in) :: self
     integer, intent(in) :: i, j, k
