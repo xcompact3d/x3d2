@@ -1,8 +1,7 @@
 module m_tdsops
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_common, only: dp, pi, VERT
-  use m_mesh, only: mesh_t
+  use m_common, only: dp, pi, VERT, CELL, NONE
 
   implicit none
 
@@ -29,7 +28,7 @@ module m_tdsops
                                            dist_af !! the auxiliary factors
     real(dp), allocatable :: coeffs(:), coeffs_s(:, :), coeffs_e(:, :)
     real(dp) :: alpha, a, b, c = 0._dp, d = 0._dp
-    class(mesh_t), allocatable :: mesh
+    integer :: tds_n
     integer :: dir
     integer :: n_halo
   contains
@@ -47,18 +46,17 @@ module m_tdsops
     !! in each coordinate direction.
     class(tdsops_t), allocatable :: der1st, der1st_sym, der2nd, der2nd_sym, &
       stagder_v2p, stagder_p2v, interpl_v2p, interpl_p2v
-    type(mesh_t) :: mesh
     integer :: dir
   end type dirps_t
 
 contains
 
-  function tdsops_init(mesh, dir, data_loc, operation, scheme, n_halo, from_to, &
+  function tdsops_init(tds_n, delta, operation, scheme, n_halo, from_to, &
                        bc_start, bc_end, sym, c_nu, nu0_nu) result(tdsops)
       !! Constructor function for the tdsops_t class.
       !!
-      !! 'mesh', 'dir', 'operation', and 'scheme' are necessary arguments.
-      !! 'mesh' is the mesh object, 'dir' is the direction of the tdsops, the
+      !! 'n', 'delta', 'operation', and 'scheme' are necessary arguments.
+      !! Number of points 'n', distance between two points 'delta', the
       !! 'operation' the tridiagonal system defines, and the 'scheme' that
       !! specifies the exact scheme we choose to apply for the operation.
       !! The remaining arguments are optional.
@@ -76,9 +74,8 @@ contains
 
     type(tdsops_t) :: tdsops !! return value of the function
 
-    type(mesh_t), intent(in) :: mesh
-    integer, intent(in) :: dir
-    integer, intent(in) :: data_loc
+    integer, intent(in) :: tds_n
+    real(dp), intent(in) :: delta
     character(*), intent(in) :: operation, scheme
     integer, optional, intent(in) :: n_halo !! Number of halo cells
     character(*), optional, intent(in) :: from_to !! 'v2p' or 'p2v'
@@ -87,13 +84,8 @@ contains
     real(dp), optional, intent(in) :: c_nu, nu0_nu !! params for hypervisc.
 
     integer :: n_stencil
-    integer :: n
-    real(dp) :: delta
 
-    tdsops%mesh = mesh
-    tdsops%dir = dir
-    n = tdsops%mesh%get_n(dir, data_loc)
-    delta = tdsops%mesh%geo%d(dir)
+    tdsops%tds_n = tds_n
 
     if (present(n_halo)) then
       tdsops%n_halo = n_halo
@@ -109,9 +101,9 @@ contains
 
     n_stencil = 2*tdsops%n_halo + 1
 
-    allocate (tdsops%dist_fw(n), tdsops%dist_bw(n))
-    allocate (tdsops%dist_sa(n), tdsops%dist_sc(n))
-    allocate (tdsops%dist_af(n))
+    allocate (tdsops%dist_fw(tds_n), tdsops%dist_bw(tds_n))
+    allocate (tdsops%dist_sa(tds_n), tdsops%dist_sc(tds_n))
+    allocate (tdsops%dist_af(tds_n))
     allocate (tdsops%coeffs(n_stencil))
     allocate (tdsops%coeffs_s(n_stencil, tdsops%n_halo))
     allocate (tdsops%coeffs_e(n_stencil, tdsops%n_halo))
@@ -130,6 +122,28 @@ contains
     end if
 
   end function tdsops_init
+
+  pure function get_operation_data_loc(operation, scheme, from_to) result(data_loc)
+  !! Get the output data_loc of a field from its operation and schemes
+    character(*), intent(in) :: operation
+    character(*), intent(in) :: scheme
+    character(*), optional, intent(in) :: from_to
+    integer :: data_loc
+
+    data_loc = NONE
+    !! TODO implement properly
+
+    if (present(from_to)) then
+      select case(from_to)
+      case("v2p")
+        data_loc = CELL
+      case("p2v")
+        data_loc = VERT
+      end select
+    end if
+
+end function
+
 
   subroutine deriv_1st(self, delta, scheme, bc_start, bc_end, sym)
     implicit none
@@ -178,7 +192,7 @@ contains
 
     self%dist_sa(:) = alpha; self%dist_sc(:) = alpha
 
-    n = self%mesh%get_n(self%dir, VERT)
+    n = self%tds_n
     n_halo = self%n_halo
 
     allocate (dist_b(n))
@@ -348,7 +362,7 @@ contains
 
     self%dist_sa(:) = alpha; self%dist_sc(:) = alpha
 
-    n = self%mesh%get_n(self%dir, VERT)
+    n = self%tds_n
     n_halo = self%n_halo
 
     allocate (dist_b(n))
@@ -548,7 +562,7 @@ contains
 
     self%dist_sa(:) = alpha; self%dist_sc(:) = alpha
 
-    n = self%mesh%get_n(self%dir, VERT)
+    n = self%tds_n
     n_halo = self%n_halo
 
     allocate (dist_b(n))
@@ -673,7 +687,7 @@ contains
 
     self%dist_sa(:) = alpha; self%dist_sc(:) = alpha
 
-    n = self%mesh%get_n(self%dir, VERT)
+    n = self%tds_n
     n_halo = self%n_halo
 
     allocate (dist_b(n))
@@ -743,7 +757,7 @@ contains
     integer :: i
     integer :: n
 
-    n = self%mesh%get_n(self%dir, VERT)
+    n = self%tds_n
 
     ! Ref DOI: 10.1109/MCSE.2021.3130544
     ! Algorithm 3 in page 4

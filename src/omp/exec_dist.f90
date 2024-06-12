@@ -31,13 +31,12 @@ contains
     type(mesh_t), intent(in) :: mesh
     integer, intent(in) :: dir
     integer :: nproc, pprev, pnext
-    integer :: n_groups, n
+    integer :: n_groups
 
     integer :: n_data
     integer :: k
 
     n_groups = mesh%get_n_groups(dir)
-    n = mesh%get_n(dir, VERT)
     nproc = mesh%par%nproc
     pprev = mesh%par%pprev(dir)
     pnext = mesh%par%pnext(dir)
@@ -48,7 +47,7 @@ contains
       call der_univ_dist( &
         du(:, :, k), du_send_s(:, :, k), du_send_e(:, :, k), u(:, :, k), &
         u_recv_s(:, :, k), u_recv_e(:, :, k), &
-        tdsops%coeffs_s, tdsops%coeffs_e, tdsops%coeffs, n, &
+        tdsops%coeffs_s, tdsops%coeffs_e, tdsops%coeffs, tdsops%tds_n, &
         tdsops%dist_fw, tdsops%dist_bw, tdsops%dist_af &
         )
     end do
@@ -62,7 +61,7 @@ contains
     do k = 1, n_groups
       call der_univ_subs(du(:, :, k), &
                          du_recv_s(:, :, k), du_recv_e(:, :, k), &
-                         n, tdsops%dist_sa, tdsops%dist_sc)
+                         tdsops%tds_n, tdsops%dist_sa, tdsops%dist_sc)
     end do
     !$omp end parallel do
 
@@ -108,7 +107,7 @@ contains
 
     ! TODO: don't hardcode n_halo
     n_halo = 4
-    n = mesh%get_n(dir, VERT)
+    n = tdsops_du%tds_n 
     n_groups = mesh%get_n_groups(dir)
     nproc = mesh%par%nproc
     pprev = mesh%par%pprev(dir)

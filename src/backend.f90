@@ -177,7 +177,7 @@ module m_base_backend
   end interface
 
   abstract interface
-    subroutine alloc_tdsops(self, tdsops, dir, data_loc, operation, scheme, n_halo, &
+    subroutine alloc_tdsops(self, tdsops, dir, operation, scheme, n_halo, &
                             from_to, bc_start, bc_end, sym, c_nu, nu0_nu)
       import :: base_backend_t
       import :: dp
@@ -187,7 +187,6 @@ module m_base_backend
       class(base_backend_t) :: self
       class(tdsops_t), allocatable, intent(inout) :: tdsops
       integer, intent(in) :: dir
-      integer, intent(in) :: data_loc
       character(*), intent(in) :: operation, scheme
       integer, optional, intent(in) :: n_halo
       character(*), optional, intent(in) :: from_to, bc_start, bc_end

@@ -4,7 +4,7 @@ module m_omp_backend
   use m_ordering, only: get_index_reordering
   use m_common, only: dp, globs_t, VERT, DIR_X, DIR_Y, DIR_Z, DIR_C, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
-  use m_tdsops, only: dirps_t, tdsops_t
+  use m_tdsops, only: dirps_t, tdsops_t, get_operation_data_loc
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
   use m_omp_sendrecv, only: sendrecv_fields
 
@@ -101,7 +101,7 @@ contains
   end function init
 
   subroutine alloc_omp_tdsops( &
-    self, tdsops, dir, data_loc, operation, scheme, &
+    self, tdsops, dir, operation, scheme, &
     n_halo, from_to, bc_start, bc_end, sym, c_nu, nu0_nu &
     )
     implicit none
@@ -109,18 +109,22 @@ contains
     class(omp_backend_t) :: self
     class(tdsops_t), allocatable, intent(inout) :: tdsops
     integer, intent(in) :: dir
-    integer, intent(in) :: data_loc
     character(*), intent(in) :: operation, scheme
     integer, optional, intent(in) :: n_halo
     character(*), optional, intent(in) :: from_to, bc_start, bc_end
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
+    integer :: data_loc, tds_n
+    real(dp) :: delta
 
     allocate (tdsops_t :: tdsops)
 
     select type (tdsops)
     type is (tdsops_t)
-      tdsops = tdsops_t(self%mesh, dir, data_loc, operation, scheme, n_halo, from_to, &
+      data_loc = get_operation_data_loc(operation, scheme, from_to)
+      tds_n = self%mesh%get_n(dir, data_loc)
+      delta = self%mesh%geo%d(dir)
+      tdsops = tdsops_t(tds_n, delta, operation, scheme, n_halo, from_to, &
                         bc_start, bc_end, sym, c_nu, nu0_nu)
     end select
 
@@ -294,16 +298,15 @@ contains
     class(field_t), intent(in) :: u
     type(dirps_t), intent(in) :: dirps
     class(tdsops_t), intent(in) :: tdsops
-    integer :: n_halo, n, n_groups, dir
+    integer :: n_halo, n_groups, dir
 
     ! TODO: don't hardcode n_halo
     n_halo = 4
     dir = u%dir
-    n = self%mesh%get_n(u)
     n_groups = self%mesh%get_n_groups(u)
 
     call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
-                           n, n_groups)
+                           tdsops%tds_n, n_groups)
 
     ! halo exchange
     call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
