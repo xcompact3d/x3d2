@@ -1,6 +1,6 @@
 module m_poisson_fft
   use m_allocator, only: field_t
-  use m_common, only: dp, pi, VERT, DIR_X, DIR_Y, DIR_Z
+  use m_common, only: dp, pi, VERT, CELL, DIR_X, DIR_Y, DIR_Z
   use m_tdsops, only: dirps_t
   use m_mesh, only: mesh_t
 
@@ -8,8 +8,7 @@ module m_poisson_fft
 
   type, abstract :: poisson_fft_t
     !! FFT based Poisson solver
-    integer :: nx, ny, nz
-    class(mesh_t), allocatable :: mesh
+    class(mesh_t), pointer :: mesh
     complex(dp), allocatable, dimension(:, :, :) :: waves
     complex(dp), allocatable, dimension(:) :: ax, bx, ay, by, az, bz
   contains
@@ -53,20 +52,21 @@ contains
     implicit none
 
     class(poisson_fft_t) :: self
-    class(mesh_t), intent(in) :: mesh
+    class(mesh_t), target, intent(in) :: mesh
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    integer :: nx, ny, nz
 
-    self%mesh = mesh
-    self%nx = self%mesh%get_n(DIR_X, VERT)
-    self%ny = self%mesh%get_n(DIR_Y, VERT)
-    self%nz = self%mesh%get_n(DIR_Z, VERT)
+    self%mesh => mesh
+    nx = self%mesh%get_n(DIR_X, CELL)
+    ny = self%mesh%get_n(DIR_Y, CELL)
+    nz = self%mesh%get_n(DIR_Z, CELL)
 
-    allocate (self%ax(self%nx), self%bx(self%nx))
-    allocate (self%ay(self%ny), self%by(self%ny))
-    allocate (self%az(self%nz), self%bz(self%nz))
+    allocate (self%ax(nx), self%bx(nx))
+    allocate (self%ay(ny), self%by(ny))
+    allocate (self%az(nz), self%bz(nz))
 
     ! cuFFT 3D transform halves the first index.
-    allocate (self%waves(self%nx/2 + 1, self%ny, self%nz))
+    allocate (self%waves(nx/2 + 1, ny, nz))
 
     ! waves_set requires some of the preprocessed tdsops variables.
     call self%waves_set(xdirps, ydirps, zdirps)
@@ -92,9 +92,9 @@ contains
 
     integer :: i, j, k
 
-    nx = self%mesh%get_n(DIR_X, VERT)
-    ny = self%mesh%get_n(DIR_Y, VERT)
-    nz = self%mesh%get_n(DIR_Z, VERT)
+    nx = self%mesh%get_n(DIR_X, CELL)
+    ny = self%mesh%get_n(DIR_Y, CELL)
+    nz = self%mesh%get_n(DIR_Z, CELL)
 
     do i = 1, nx
       self%ax(i) = sin((i - 1)*pi/nx)
