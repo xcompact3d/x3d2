@@ -35,8 +35,9 @@ module m_mesh
   type :: mesh_t
     integer, dimension(3), private :: dims_global ! global number of vertices in each direction
 
-    integer, dimension(3), private :: cdims_padded ! local domain size including padding (cartesian structure)
-    integer, dimension(3), private :: cdims ! local domain size without padding (cartesian structure)
+    integer, dimension(3), private :: vert_dims_padded ! local domain size including padding (cartesian structure)
+    integer, dimension(3), private :: vert_dims ! local number of vertices in each direction without padding (cartesian structure)
+    integer, dimension(3), private :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
     logical, dimension(3), private :: periodic_dir ! Whether or not a direction has a periodic BC
     integer, private :: sz
     class(geo_t), allocatable :: geo ! object containing geometry information
@@ -83,9 +84,9 @@ module m_mesh
     integer, intent(in) :: sz
     type(mesh_t) :: mesh
 
-    integer :: nx_padded, ny_padded, nz_padded
-    integer :: nx, ny, nz 
+    integer :: nx, ny, nz, dir
     integer :: ierr
+    logical :: is_last_domain
 
     allocate(mesh%geo)
     allocate(mesh%par)
@@ -106,26 +107,33 @@ module m_mesh
     ny = mesh%dims_global(2)/mesh%par%nproc_dir(2)
     nz = mesh%dims_global(3)/mesh%par%nproc_dir(3)
 
-    ! Apply padding based on sz
-    nx_padded = nx - 1 + mod(-(nx - 1), sz) + sz
-    ny_padded = ny - 1 + mod(-(ny - 1), sz) + sz
-    ! Current reorder functions do not require a padding in z-direction.
-    nz_padded = nz
-
-    mesh%sz = sz
-    mesh%cdims_padded = [nx_padded, ny_padded, nz_padded]
-    mesh%cdims = [nx, ny, nz]
 
     ! TODO: fixme: hard code no periodic boundary (for now)
     mesh%periodic_dir(:) = .false.
 
+    ! Define number of cells and vertices in each direction
+    mesh%vert_dims = [nx, ny, nz]
+    mesh%cell_dims = mesh%vert_dims
+
+    do dir=1, 3
+      is_last_domain = (mesh%par%nrank_dir(dir) == mesh%par%nproc_dir(dir))
+      if (is_last_domain) then
+        if (mesh%periodic_dir(dir)) then
+          mesh%vert_dims(dir) = mesh%vert_dims(dir) + 1
+          mesh%cell_dims(dir) = mesh%cell_dims(dir) + 1
+        end if
+
+        mesh%cell_dims(dir) = mesh%cell_dims(dir) - 1
+      end if
+    end do
+
   end function mesh_init
 
-  subroutine set_padded_dims(self, cdims)
+  subroutine set_padded_dims(self, vert_dims)
     class(mesh_t), intent(inout) :: self
-    integer, dimension(3), intent(in) :: cdims
+    integer, dimension(3), intent(in) :: vert_dims
 
-    self%cdims_padded = cdims
+    self%vert_dims_padded = vert_dims
 
   end subroutine
 
@@ -202,10 +210,10 @@ module m_mesh
     integer, dimension(3) :: dims_padded
 
     if (dir == DIR_C) then
-      dims_padded = self%cdims_padded
+      dims_padded = self%vert_dims_padded
     else
       dims_padded(1) = self%sz 
-      dims_padded(2) = self%cdims_padded(dir)
+      dims_padded(2) = self%vert_dims_padded(dir)
       dims_padded(3) = self%get_n_groups(dir)
     end if
 
@@ -228,7 +236,7 @@ module m_mesh
     integer, intent(in) :: dir
     integer :: n_groups
 
-      n_groups = (product(self%cdims_padded(:))/self%cdims_padded(dir)) /self%sz
+      n_groups = (product(self%vert_dims_padded(:))/self%vert_dims_padded(dir)) /self%sz
 
   end function
 
@@ -297,32 +305,45 @@ module m_mesh
     class(mesh_t), intent(in) :: self
     integer, intent(in) :: dir
     integer, intent(in) :: data_loc
-    integer :: n
-    logical :: is_last_domain
+    integer :: n, n_cell, n_vert
 
-    n = self%cdims(dir)
+    n_cell = self%cell_dims(dir)
+    n_vert = self%vert_dims(dir)
 
-    ! Whether this is the last domain in the direction `dir`
-    is_last_domain = (self%par%nrank_dir(dir) == self%par%nproc_dir(dir))
-    ! Add 1 if periodic and last cell of the domain
-    if (self%periodic_dir(dir) .and. is_last_domain) then
-        n = n + 1
-    end if
+    ! default to n_vert
+    n = n_vert
 
     select case(data_loc)
       case(CELL)
-        n = n - 1
+        n = n_cell
       case(VERT)
-        n = n
+        n = n_vert
       case(X_FACE)
-        n = n
+        if (dir /= DIR_X) then
+          n = n_cell
+        end if
       case(Y_FACE)
-        n = n
+        if (dir /= DIR_Y) then
+          n = n_cell
+        end if
       case(Z_FACE)
-        n = n
+        if (dir /= DIR_Z) then
+          n = n_cell
+        end if
       case(X_EDGE)
+        if (dir == DIR_X) then
+          n = n_cell
+        end if
       case(Y_EDGE)
+        if (dir == DIR_Y) then
+          n = n_cell
+        end if
       case(Z_EDGE)
+        if (dir == DIR_Z) then
+          n = n_cell
+        end if
+      case(NONE)
+        error stop
     end select
   end function
 

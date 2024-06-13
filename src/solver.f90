@@ -7,7 +7,7 @@ module m_solver
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_Z2C, RDR_C2Z, &
                       POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
-                      DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
+                      DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL
   use m_tdsops, only: tdsops_t, dirps_t
   use m_time_integrator, only: time_intg_t
   use m_mesh, only: mesh_t
