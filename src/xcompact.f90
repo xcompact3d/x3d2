@@ -69,7 +69,7 @@ program xcompact
   ! Domain decomposition in each direction
   nproc_dir = [1, 1, 1]
 
-  mesh = mesh_t(dims_global, nproc_dir, L_global, SZ)
+  mesh = mesh_t(dims_global, nproc_dir, L_global)
 
   globs%dt = 0.001_dp
   globs%nu = 1._dp/1600._dp

@@ -74,14 +74,13 @@ module m_mesh
 
   contains 
 
-  function mesh_init(dims_global, nproc_dir, L_global, sz) result(mesh)
+  function mesh_init(dims_global, nproc_dir, L_global) result(mesh)
     !! Completely initialise the mesh object. 
     !! Upon initialisation the mesh object can be read-only and shouldn't be edited
     !! Takes as argument global information about the mesh like its length, number of cells and decomposition in each direction
     integer, dimension(3), intent(in) :: dims_global
     integer, dimension(3), intent(in) :: nproc_dir ! Number of proc in each direction
     real(dp), dimension(3), intent(in) :: L_global
-    integer, intent(in) :: sz
     type(mesh_t) :: mesh
 
     integer :: nx, ny, nz, dir
