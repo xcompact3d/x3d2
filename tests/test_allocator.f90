@@ -28,9 +28,9 @@ program test_allocator
   ! Domain decomposition in each direction
   nproc_dir = [1, 1, 1]
 
-  mesh = mesh_t(dims_global, nproc_dir, L_global, 8)
+  mesh = mesh_t(dims_global, nproc_dir, L_global)
 
-  allocator = allocator_t(mesh)
+  allocator = allocator_t(mesh, 8)
 
   allpass = .true.
 

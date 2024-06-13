@@ -78,7 +78,7 @@ program test_reorder
   ! Domain decomposition in each direction
   nproc_dir = [nproc, 1, 1]
 
-  mesh = mesh_t(dims_global, nproc_dir, L_global, SZ)
+  mesh = mesh_t(dims_global, nproc_dir, L_global)
 
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(mesh)
@@ -89,7 +89,7 @@ program test_reorder
   backend => cuda_backend
   print *, 'CUDA backend instantiated'
 #else
-  omp_allocator = allocator_t(mesh)
+  omp_allocator = allocator_t(mesh, SZ)
   allocator => omp_allocator
   print *, 'OpenMP allocator instantiated'
 
