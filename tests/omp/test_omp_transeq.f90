@@ -3,13 +3,13 @@ program test_omp_transeq
   use mpi
 
   use m_allocator, only: allocator_t, field_t
-  use m_common, only: dp, pi, globs_t, DIR_X, DIR_Y, DIR_Z
-  use m_domain, only: domain_decomposition
+  use m_common, only: dp, pi, globs_t, DIR_X, DIR_Y, DIR_Z, VERT
   use m_omp_common, only: SZ
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_backend, only: omp_backend_t, transeq_x_omp, base_backend_t
   use m_tdsops, only: dirps_t, tdsops_t
   use m_solver, only: allocate_tdsops
+  use m_mesh, only: mesh_t
 
   implicit none
 
@@ -17,13 +17,15 @@ program test_omp_transeq
   class(field_t), pointer :: u, v, w
   class(field_t), pointer :: du, dv, dw
   real(dp), dimension(:, :, :), allocatable :: r_u
+  class(mesh_t), allocatable :: mesh
+  integer, dimension(3) :: dims_global, nproc_dir
+  real(dp), dimension(3) :: L_global
 
-  integer :: n, n_block, i, j, k
-  integer :: n_glob
+  integer :: n, n_groups, i, j, k
   integer :: nrank, nproc
   integer :: ierr
 
-  real(dp) :: dx, dx_per, nu, norm_du, tol = 1d-8, tstart, tend
+  real(dp) :: dx_per, nu, norm_du, tol = 1d-8, tstart, tend
 
   type(globs_t) :: globs
   class(base_backend_t), pointer :: backend
@@ -38,66 +40,47 @@ program test_omp_transeq
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
 
-  globs%nx = 96
-  globs%ny = 96
-  globs%nz = 96
 
-  globs%nx_loc = globs%nx/nproc
-  globs%ny_loc = globs%ny/nproc
-  globs%nz_loc = globs%nz/nproc
+  ! Global number of cells in each direction
+  dims_global = [96, 96, 96]
+  
+  ! Global domain dimensions
+  L_global = [2*pi, 2*pi, 2*pi]
 
-  globs%n_groups_x = globs%ny_loc*globs%nz_loc/SZ
-  globs%n_groups_y = globs%nx_loc*globs%nz_loc/SZ
-  globs%n_groups_z = globs%nx_loc*globs%ny_loc/SZ
+  ! Domain decomposition in each direction
+  nproc_dir = [nproc, 1, 1]
 
-  xdirps%nproc_dir = nproc
-  ydirps%nproc_dir = 1
-  zdirps%nproc_dir = 1
+  mesh = mesh_t(dims_global, nproc_dir, L_global)
 
-  xdirps%n = globs%nx_loc
-  ydirps%n = globs%ny_loc
-  zdirps%n = globs%nz_loc
+  xdirps%dir = DIR_X; ydirps%dir = DIR_Y; zdirps%dir = DIR_Z
 
-  xdirps%n_blocks = globs%n_groups_x
-  ydirps%n_blocks = globs%n_groups_y
-  zdirps%n_blocks = globs%n_groups_z
-
-  xdirps%dir = DIR_X
-  ydirps%dir = DIR_Y
-  zdirps%dir = DIR_Z
-
-  call domain_decomposition(xdirps, ydirps, zdirps, nrank, nproc)
-
-  omp_allocator = allocator_t(xdirps%n, ydirps%n, zdirps%n, SZ)
+  omp_allocator = allocator_t(mesh, SZ)
   allocator => omp_allocator
   print *, 'OpenMP allocator instantiated'
 
-  omp_backend = omp_backend_t(globs, allocator)
+  omp_backend = omp_backend_t(mesh, allocator)
   backend => omp_backend
   print *, 'OpenMP backend instantiated'
 
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
-  n_glob = globs%nx
-  n = n_glob/nproc
-  n_block = xdirps%n_blocks
+  n = mesh%get_n(DIR_X, VERT)
+  n_groups = mesh%get_n_groups(DIR_X) 
 
   nu = 1._dp
   omp_backend%nu = nu
 
-  u => allocator%get_block(DIR_X)
-  v => allocator%get_block(DIR_X)
-  w => allocator%get_block(DIR_X)
+  u => allocator%get_block(DIR_X, VERT)
+  v => allocator%get_block(DIR_X, VERT)
+  w => allocator%get_block(DIR_X, VERT)
 
-  du => allocator%get_block(DIR_X)
-  dv => allocator%get_block(DIR_X)
-  dw => allocator%get_block(DIR_X)
+  du => allocator%get_block(DIR_X, VERT)
+  dv => allocator%get_block(DIR_X, VERT)
+  dw => allocator%get_block(DIR_X, VERT)
 
-  dx_per = 2*pi/n_glob
-  dx = 2*pi/(n_glob - 1)
-  globs%dx = dx
+  dx_per = mesh%geo%d(DIR_X)
 
-  do k = 1, n_block
+  do k = 1, n_groups
     do j = 1, n
       do i = 1, SZ
         u%data(i, j, k) = sin((j - 1 + nrank*n)*dx_per)
@@ -107,7 +90,7 @@ program test_omp_transeq
   end do
   w%data(:, :, :) = 0.d0
 
-  call allocate_tdsops(xdirps, globs%nx_loc, dx_per, omp_backend)
+  call allocate_tdsops(xdirps, DIR_X, omp_backend)
 
   call cpu_time(tstart)
   call transeq_x_omp(omp_backend, du, dv, dw, u, v, w, xdirps)
@@ -115,7 +98,7 @@ program test_omp_transeq
 
   if (nrank == 0) print *, 'Total time', tend - tstart
 
-  allocate (r_u(SZ, n, n_block))
+  allocate (r_u(SZ, n, n_groups))
 
   ! check error
   ! dv = -1/2*(u*dv/dx + d(u*v)/dx) + nu*d2v/dx2
@@ -124,7 +107,7 @@ program test_omp_transeq
   !    = u*u - 1/2*v*v - nu*v
   r_u = dv%data - (u%data*u%data - 0.5_dp*v%data*v%data - nu*v%data)
   norm_du = norm2(r_u)
-  norm_du = norm_du*norm_du/n_glob/n_block/SZ
+  norm_du = norm_du*norm_du/dims_global(DIR_X)/n_groups/SZ
   call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_DOUBLE_PRECISION, &
                      MPI_SUM, MPI_COMM_WORLD, ierr)
   norm_du = sqrt(norm_du)
