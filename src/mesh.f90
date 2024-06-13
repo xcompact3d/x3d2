@@ -38,7 +38,7 @@ module m_mesh
     integer, dimension(3), private :: vert_dims_padded ! local domain size including padding (cartesian structure)
     integer, dimension(3), private :: vert_dims ! local number of vertices in each direction without padding (cartesian structure)
     integer, dimension(3), private :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
-    logical, dimension(3), private :: periodic_dir ! Whether or not a direction has a periodic BC
+    logical, dimension(3), private :: periodic_BC ! Whether or not a direction has a periodic BC
     integer, private :: sz
     class(geo_t), allocatable :: geo ! object containing geometry information
     class(parallel_t), allocatable :: par ! object containing parallel domain decomposition information
@@ -74,25 +74,41 @@ module m_mesh
 
   contains 
 
-  function mesh_init(dims_global, nproc_dir, L_global) result(mesh)
+  function mesh_init(dims_global, nproc_dir, L_global, periodic_BC) result(mesh)
     !! Completely initialise the mesh object. 
     !! Upon initialisation the mesh object can be read-only and shouldn't be edited
     !! Takes as argument global information about the mesh like its length, number of cells and decomposition in each direction
     integer, dimension(3), intent(in) :: dims_global
     integer, dimension(3), intent(in) :: nproc_dir ! Number of proc in each direction
     real(dp), dimension(3), intent(in) :: L_global
+    logical, dimension(3), optional, intent(in) :: periodic_BC
     type(mesh_t) :: mesh
 
-    integer :: nx, ny, nz, dir
+    integer :: nx, ny, nz, dir, n_cell_global
     integer :: ierr
     logical :: is_last_domain
 
     allocate(mesh%geo)
     allocate(mesh%par)
     mesh%dims_global(:) = dims_global
+
+    if (present(periodic_BC)) then
+      mesh%periodic_BC(:) = periodic_BC
+    else 
+      ! Default to periodic BC
+      mesh%periodic_BC(:) = .true.
+    end if
+
     ! Geometry
     mesh%geo%L = L_global
-    mesh%geo%d = mesh%geo%L(:) / mesh%dims_global(:)
+
+    do dir=1, 3
+      n_cell_global = mesh%dims_global(dir)
+      if (.not. mesh%periodic_BC(dir)) then
+        n_cell_global = n_cell_global -1
+      end if
+      mesh%geo%d(dir) = mesh%geo%L(dir) / n_cell_global
+    end do
 
     ! Parallel domain decomposition
     mesh%par%nproc_dir(:) = nproc_dir
@@ -106,24 +122,16 @@ module m_mesh
     ny = mesh%dims_global(2)/mesh%par%nproc_dir(2)
     nz = mesh%dims_global(3)/mesh%par%nproc_dir(3)
 
-
-    ! TODO: fixme: hard code no periodic boundary (for now)
-    mesh%periodic_dir(:) = .false.
-
     ! Define number of cells and vertices in each direction
     mesh%vert_dims = [nx, ny, nz]
     mesh%cell_dims = mesh%vert_dims
 
-
     do dir=1, 3
       is_last_domain = (mesh%par%nrank_dir(dir) == mesh%par%nproc_dir(dir))
       if (is_last_domain) then
-        if (mesh%periodic_dir(dir)) then
-          mesh%vert_dims(dir) = mesh%vert_dims(dir) + 1
-          mesh%cell_dims(dir) = mesh%cell_dims(dir) + 1
+        if (.not. mesh%periodic_BC(dir)) then
+          mesh%cell_dims(dir) = mesh%cell_dims(dir) - 1
         end if
-
-        mesh%cell_dims(dir) = mesh%cell_dims(dir) - 1
       end if
     end do
 
