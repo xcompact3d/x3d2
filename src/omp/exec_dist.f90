@@ -6,7 +6,6 @@ module m_omp_exec_dist
   use m_omp_kernels_dist, only: der_univ_dist, der_univ_subs
   use m_tdsops, only: tdsops_t
   use m_omp_sendrecv, only: sendrecv_fields
-  use m_mesh, only: mesh_t
 
   implicit none
 
@@ -14,7 +13,7 @@ contains
 
   subroutine exec_dist_tds_compact( &
     du, u, u_recv_s, u_recv_e, du_send_s, du_send_e, du_recv_s, du_recv_e, &
-    tdsops, mesh, dir)
+    tdsops, nproc, pprev, pnext, n_groups)
     implicit none
 
     ! du = d(u)
@@ -28,18 +27,12 @@ contains
       du_send_s, du_send_e, du_recv_s, du_recv_e
 
     type(tdsops_t), intent(in) :: tdsops
-    type(mesh_t), intent(in) :: mesh
-    integer, intent(in) :: dir
-    integer :: nproc, pprev, pnext
-    integer :: n_groups
+    integer, intent(in) :: nproc, pprev, pnext
+    integer, intent(in) :: n_groups
 
     integer :: n_data
     integer :: k
 
-    n_groups = mesh%get_n_groups(dir)
-    nproc = mesh%par%nproc
-    pprev = mesh%par%pprev(dir)
-    pnext = mesh%par%pnext(dir)
     n_data = SZ*n_groups
 
     !$omp parallel do
@@ -74,7 +67,7 @@ contains
     d2u_send_s, d2u_send_e, d2u_recv_s, d2u_recv_e, &
     u, u_recv_s, u_recv_e, &
     v, v_recv_s, v_recv_e, &
-    tdsops_du, tdsops_dud, tdsops_d2u, nu, mesh, dir)
+    tdsops_du, tdsops_dud, tdsops_d2u, nu, nproc, pprev, pnext, n_groups)
 
     implicit none
 
@@ -95,23 +88,18 @@ contains
     real(dp), dimension(:, :, :), intent(in) :: v, v_recv_s, v_recv_e
 
     type(tdsops_t), intent(in) :: tdsops_du, tdsops_dud, tdsops_d2u
+    real(dp), intent(in) :: nu
+    integer, intent(in) :: nproc, pprev, pnext
+    integer, intent(in) :: n_groups 
 
     real(dp), dimension(:, :), allocatable :: ud, ud_recv_s, ud_recv_e
-    real(dp) :: nu
-    class(mesh_t), intent(in) :: mesh 
-    integer, intent(in) :: dir
 
-    integer :: n_groups, nproc, pprev, pnext
     integer :: n_data, n_halo
     integer :: k, i, j, n
 
     ! TODO: don't hardcode n_halo
     n_halo = 4
     n = tdsops_du%tds_n 
-    n_groups = mesh%get_n_groups(dir)
-    nproc = mesh%par%nproc
-    pprev = mesh%par%pprev(dir)
-    pnext = mesh%par%pnext(dir)
     n_data = SZ*n_groups
 
     allocate (ud(SZ, n))
