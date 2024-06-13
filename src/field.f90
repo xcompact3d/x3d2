@@ -17,6 +17,7 @@ module m_field
     integer :: id !! An integer identifying the memory block.
   contains
     procedure :: set_shape
+    procedure :: set_data_loc
   end type field_t
 
   interface field_t
@@ -24,6 +25,14 @@ module m_field
   end interface field_t
 
   contains
+
+  subroutine set_data_loc(self, data_loc)
+    class(field_t) :: self
+    integer, intent(in) :: data_loc
+
+    self%data_loc = data_loc
+
+  end subroutine
 
   subroutine set_shape(self, dims)
     implicit none

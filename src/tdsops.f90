@@ -125,7 +125,7 @@ contains
   end function tdsops_init
 
   pure function get_tds_n(mesh, dir, from_to) result(tds_n)
-  !! Get the output data_loc of a field from its operation and schemes
+  !! Get the tds_n size based on the from_to value (and the mesh)
     class(mesh_t), intent(in) :: mesh
     integer, intent(in) :: dir
     character(*), optional, intent(in) :: from_to
