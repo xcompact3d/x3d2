@@ -207,9 +207,9 @@ contains
     call self%backend%transeq_x(du, dv, dw, u, v, w, self%xdirps)
 
     ! request fields from the allocator
-    u_y => self%backend%allocator%get_block(DIR_Y)
-    v_y => self%backend%allocator%get_block(DIR_Y)
-    w_y => self%backend%allocator%get_block(DIR_Y)
+    u_y => self%backend%allocator%get_block(DIR_Y, VERT)
+    v_y => self%backend%allocator%get_block(DIR_Y, VERT)
+    w_y => self%backend%allocator%get_block(DIR_Y, VERT)
     du_y => self%backend%allocator%get_block(DIR_Y)
     dv_y => self%backend%allocator%get_block(DIR_Y)
     dw_y => self%backend%allocator%get_block(DIR_Y)
@@ -239,9 +239,9 @@ contains
     call self%backend%allocator%release_block(dw_y)
 
     ! just like in y direction, get some fields for the z derivatives.
-    u_z => self%backend%allocator%get_block(DIR_Z)
-    v_z => self%backend%allocator%get_block(DIR_Z)
-    w_z => self%backend%allocator%get_block(DIR_Z)
+    u_z => self%backend%allocator%get_block(DIR_Z, VERT)
+    v_z => self%backend%allocator%get_block(DIR_Z, VERT)
+    w_z => self%backend%allocator%get_block(DIR_Z, VERT)
     du_z => self%backend%allocator%get_block(DIR_Z)
     dv_z => self%backend%allocator%get_block(DIR_Z)
     dw_z => self%backend%allocator%get_block(DIR_Z)
@@ -299,9 +299,9 @@ contains
                                 self%xdirps%interpl_v2p)
 
     ! request fields from the allocator
-    u_y => self%backend%allocator%get_block(DIR_Y)
-    v_y => self%backend%allocator%get_block(DIR_Y)
-    w_y => self%backend%allocator%get_block(DIR_Y)
+    u_y => self%backend%allocator%get_block(DIR_Y, VERT)
+    v_y => self%backend%allocator%get_block(DIR_Y, VERT)
+    w_y => self%backend%allocator%get_block(DIR_Y, VERT)
 
     ! reorder data from x orientation to y orientation
     call self%backend%reorder(u_y, du_x, RDR_X2Y)
@@ -333,8 +333,8 @@ contains
     call self%backend%allocator%release_block(w_y)
 
     ! just like in y direction, get some fields for the z derivatives.
-    u_z => self%backend%allocator%get_block(DIR_Z)
-    w_z => self%backend%allocator%get_block(DIR_Z)
+    u_z => self%backend%allocator%get_block(DIR_Z, VERT)
+    w_z => self%backend%allocator%get_block(DIR_Z, VERT)
 
     ! du_y = dv_y + du_y
     call self%backend%vecadd(1._dp, dv_y, 1._dp, du_y)
@@ -468,7 +468,7 @@ contains
 
     ! omega_i_hat
     ! dw/dy
-    w_y => self%backend%allocator%get_block(DIR_Y)
+    w_y => self%backend%allocator%get_block(DIR_Y, VERT)
     dwdy_y => self%backend%allocator%get_block(DIR_Y)
     call self%backend%reorder(w_y, w, RDR_X2Y)
     call self%backend%tds_solve(dwdy_y, w_y, self%ydirps, self%ydirps%der1st)
@@ -497,7 +497,7 @@ contains
 
     ! omega_j_hat
     ! du/dz
-    u_z => self%backend%allocator%get_block(DIR_Z)
+    u_z => self%backend%allocator%get_block(DIR_Z, VERT)
     dudz_z => self%backend%allocator%get_block(DIR_Z)
     call self%backend%reorder(u_z, u, RDR_X2Z)
     call self%backend%tds_solve(dudz_z, u_z, self%zdirps, self%zdirps%der1st)
@@ -521,7 +521,7 @@ contains
     call self%backend%tds_solve(o_k_hat, v, self%xdirps, self%xdirps%der1st)
 
     ! du/dy
-    u_y => self%backend%allocator%get_block(DIR_Y)
+    u_y => self%backend%allocator%get_block(DIR_Y, VERT)
     dudy_y => self%backend%allocator%get_block(DIR_Y)
     call self%backend%reorder(u_y, u, RDR_X2Y)
     call self%backend%tds_solve(dudy_y, u_y, self%ydirps, self%ydirps%der1st)
@@ -549,7 +549,7 @@ contains
     class(field_t), pointer :: p_temp
 
     ! reorder into 3D Cartesian data structure
-    p_temp => self%backend%allocator%get_block(DIR_C)
+    p_temp => self%backend%allocator%get_block(DIR_C, CELL)
     call self%backend%reorder(p_temp, div_u, RDR_Z2C)
 
     ! call forward FFT
@@ -591,9 +591,9 @@ contains
 
     if (self%mesh%par%is_root()) print *, 'time = ', t
 
-    du => self%backend%allocator%get_block(DIR_X)
-    dv => self%backend%allocator%get_block(DIR_X)
-    dw => self%backend%allocator%get_block(DIR_X)
+    du => self%backend%allocator%get_block(DIR_X, VERT)
+    dv => self%backend%allocator%get_block(DIR_X, VERT)
+    dw => self%backend%allocator%get_block(DIR_X, VERT)
 
     call self%curl(du, dv, dw, self%u, self%v, self%w)
     enstrophy = 0.5_dp*(self%backend%scalar_product(du, du) &
@@ -661,7 +661,7 @@ contains
 
       call self%divergence_v2p(div_u, self%u, self%v, self%w)
 
-      pressure => self%backend%allocator%get_block(DIR_Z)
+      pressure => self%backend%allocator%get_block(DIR_Z, CELL)
 
       call self%poisson(pressure, div_u)
 
