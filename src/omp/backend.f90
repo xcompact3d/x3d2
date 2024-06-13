@@ -264,7 +264,7 @@ contains
       u%data, u_recv_s, u_recv_e, &
       conv%data, conv_recv_s, conv_recv_e, &
       tdsops_du, tdsops_dud, tdsops_d2u, self%nu, &
-      self%mesh%par%nproc, self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), &
+      self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), &
       self%mesh%get_n_groups(dir))
 
     call self%allocator%release_block(du)
@@ -321,7 +321,7 @@ contains
     call exec_dist_tds_compact( &
       du%data, u%data, self%u_recv_s, self%u_recv_e, &
       self%du_send_s, self%du_send_e, self%du_recv_s, self%du_recv_e, &
-      tdsops, self%mesh%par%nproc, self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), &
+      tdsops, self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), &
       n_groups)
 
   end subroutine tds_solve_dist
