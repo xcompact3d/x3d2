@@ -4,7 +4,7 @@ module m_omp_backend
   use m_ordering, only: get_index_reordering
   use m_common, only: dp, globs_t, VERT, DIR_X, DIR_Y, DIR_Z, DIR_C, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
-  use m_tdsops, only: dirps_t, tdsops_t, get_operation_data_loc
+  use m_tdsops, only: dirps_t, tdsops_t, get_tds_n
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
   use m_omp_sendrecv, only: sendrecv_fields
 
@@ -114,15 +114,14 @@ contains
     character(*), optional, intent(in) :: from_to, bc_start, bc_end
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
-    integer :: data_loc, tds_n
+    integer :: tds_n
     real(dp) :: delta
 
     allocate (tdsops_t :: tdsops)
 
     select type (tdsops)
     type is (tdsops_t)
-      data_loc = get_operation_data_loc(operation, scheme, from_to)
-      tds_n = self%mesh%get_n(dir, data_loc)
+      tds_n = get_tds_n(self%mesh, dir, from_to)
       delta = self%mesh%geo%d(dir)
       tdsops = tdsops_t(tds_n, delta, operation, scheme, n_halo, from_to, &
                         bc_start, bc_end, sym, c_nu, nu0_nu)

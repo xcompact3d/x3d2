@@ -2,6 +2,7 @@ module m_tdsops
   use iso_fortran_env, only: stderr => error_unit
 
   use m_common, only: dp, pi, VERT, CELL, NONE
+  use m_mesh, only: mesh_t
 
   implicit none
 
@@ -123,26 +124,24 @@ contains
 
   end function tdsops_init
 
-  pure function get_operation_data_loc(operation, scheme, from_to) result(data_loc)
+  pure function get_tds_n(mesh, dir, from_to) result(tds_n)
   !! Get the output data_loc of a field from its operation and schemes
-    character(*), intent(in) :: operation
-    character(*), intent(in) :: scheme
+    class(mesh_t), intent(in) :: mesh
+    integer, intent(in) :: dir
     character(*), optional, intent(in) :: from_to
+    integer :: tds_n
     integer :: data_loc
 
-    data_loc = NONE
-    !! TODO implement properly
-
+    data_loc = VERT
     if (present(from_to)) then
-      select case(from_to)
-      case("v2p")
+      if (from_to == "v2p") then
         data_loc = CELL
-      case("p2v")
-        data_loc = VERT
-      end select
+      end if
     end if
 
-end function
+    tds_n = mesh%get_n(dir, data_loc)
+
+    end function
 
 
   subroutine deriv_1st(self, delta, scheme, bc_start, bc_end, sym)
