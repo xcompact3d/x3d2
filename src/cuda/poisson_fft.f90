@@ -43,9 +43,10 @@ module m_cuda_poisson_fft
 
 contains
 
-  function init(xdirps, ydirps, zdirps) result(poisson_fft)
+  function init(mesh, xdirps, ydirps, zdirps) result(poisson_fft)
     implicit none
 
+    class(mesh_t), target, intent(in) :: mesh
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
     type(cuda_poisson_fft_t) :: poisson_fft
@@ -55,9 +56,11 @@ contains
     integer :: ierr
     integer(int_ptr_kind()) :: worksize
 
-    call poisson_fft%base_init(xdirps, ydirps, zdirps)
+    call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps)
 
-    nx = poisson_fft%nx; ny = poisson_fft%ny; nz = poisson_fft%nz
+    nx = self%mesh%get_n(DIR_X, CELL)
+    ny = self%mesh%get_n(DIR_Y, CELL)
+    nz = self%mesh%get_n(DIR_Z, CELL)
 
     allocate (poisson_fft%waves_dev(nx/2 + 1, ny, nz))
     poisson_fft%waves_dev = poisson_fft%waves
@@ -156,17 +159,21 @@ contains
 
     complex(dp), device, dimension(:, :, :), pointer :: c_dev
     type(dim3) :: blocks, threads
-    integer :: tsize
+    integer :: tsize, nx, ny, nz
+
+    nx = self%mesh%get_n(DIR_X, CELL)
+    ny = self%mesh%get_n(DIR_Y, CELL)
+    nz = self%mesh%get_n(DIR_Z, CELL)
 
     ! tsize is different than SZ, because here we work on a 3D Cartesian
     ! data structure, and free to specify any suitable thread/block size.
     tsize = 16
-    blocks = dim3((self%ny - 1)/tsize + 1, self%nz, 1)
+    blocks = dim3((ny - 1)/tsize + 1, nz, 1)
     threads = dim3(tsize, 1, 1)
 
     ! Postprocess div_u in spectral space
     call process_spectral_div_u<<<blocks, threads>>>( & !&
-      self%c_w_dev, self%waves_dev, self%nx, self%ny, self%nz, &
+      self%c_w_dev, self%waves_dev, nx, ny, nz, &
       self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
       self%az_dev, self%bz_dev &
       )
