@@ -309,6 +309,7 @@ contains
     call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
                            tdsops%tds_n, n_groups)
 
+    print*, self%mesh%par%nrank, n_groups
     ! halo exchange
     call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
                          self%u_send_s, self%u_send_e, &

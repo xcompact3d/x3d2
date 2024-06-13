@@ -114,6 +114,7 @@ module m_mesh
     mesh%vert_dims = [nx, ny, nz]
     mesh%cell_dims = mesh%vert_dims
 
+
     do dir=1, 3
       is_last_domain = (mesh%par%nrank_dir(dir) == mesh%par%nproc_dir(dir))
       if (is_last_domain) then
@@ -125,6 +126,10 @@ module m_mesh
         mesh%cell_dims(dir) = mesh%cell_dims(dir) - 1
       end if
     end do
+
+    ! Define default values
+    mesh%vert_dims_padded = mesh%vert_dims
+    mesh%sz = 1
 
   end function mesh_init
 

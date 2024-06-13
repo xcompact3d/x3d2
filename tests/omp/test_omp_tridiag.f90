@@ -3,18 +3,22 @@ program test_omp_tridiag
   use mpi
   use omp_lib
 
-  use m_common, only: dp, pi
+  use m_common, only: dp, pi, DIR_X, VERT
   use m_omp_common, only: SZ
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_exec_dist, only: exec_dist_tds_compact
+  use m_allocator, only: allocator_t
+  use m_field, only: field_t
 
   use m_tdsops, only: tdsops_t, tdsops_init
+  use m_mesh, only: mesh_t
 
   implicit none
 
   logical :: allpass = .true.
 
   real(dp), allocatable, dimension(:, :, :) :: u, du
+  class(field_t), pointer :: u_field, du_field
   real(dp), allocatable, dimension(:, :, :) :: u_recv_s, u_recv_e, &
                                                u_send_s, u_send_e
 
@@ -29,10 +33,14 @@ program test_omp_tridiag
 
   character(len=20) :: bc_start, bc_end
 
-  integer :: n, n_block, j, n_halo, n_iters, n_loc
+  integer :: n, n_groups, j, n_halo, n_iters, n_loc
   integer :: n_glob
   integer :: nrank, nproc, pprev, pnext
   integer :: ierr, memClockRt, memBusWidth
+  real(dp), dimension(3) :: L_global
+  integer, dimension(3) :: dims_global, nproc_dir
+  class(mesh_t), allocatable :: mesh
+  class(allocator_t), allocatable :: allocator
 
   real(dp) :: dx, dx_per, norm_du, tol = 1d-8, tstart, tend
   real(dp) :: achievedBW, deviceBW, achievedBWmax, achievedBWmin
@@ -43,15 +51,30 @@ program test_omp_tridiag
 
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
-  pnext = modulo(nrank - nproc + 1, nproc)
-  pprev = modulo(nrank - 1, nproc)
+  ! Global number of cells in each direction
+  dims_global = [1024, 64, 64]
 
-  n_glob = 1024
-  n = n_glob/nproc
-  n_block = 64*64/SZ
+  ! Global domain dimensions
+  L_global = [2*pi, 2*pi, 2*pi]
+
+  ! Domain decomposition in each direction
+  nproc_dir = [nproc, 1, 1]
+
+  mesh = mesh_t(dims_global, nproc_dir, L_global)
+  allocator = allocator_t(mesh, SZ)
+  
+  pnext = mesh%par%pnext(DIR_X)
+  pprev = mesh%par%pprev(DIR_X)
+
+  n_glob = dims_global(1)
+  n = mesh%get_n(DIR_X, VERT)
+  n_groups = mesh%get_n_groups(DIR_X)
   n_iters = 1
 
-  allocate (u(SZ, n, n_block), du(SZ, n, n_block))
+  u_field => allocator%get_block(DIR_X, VERT)
+  du_field => allocator%get_block(DIR_X, VERT)
+  u = u_field%data
+  du = du_field%data
 
   dx_per = 2*pi/n_glob
   dx = 2*pi/(n_glob - 1)
@@ -71,23 +94,23 @@ program test_omp_tridiag
   n_halo = 4
 
   ! arrays for exchanging data between ranks
-  allocate (u_send_s(SZ, n_halo, n_block))
-  allocate (u_send_e(SZ, n_halo, n_block))
-  allocate (u_recv_s(SZ, n_halo, n_block))
-  allocate (u_recv_e(SZ, n_halo, n_block))
+  allocate (u_send_s(SZ, n_halo, n_groups))
+  allocate (u_send_e(SZ, n_halo, n_groups))
+  allocate (u_recv_s(SZ, n_halo, n_groups))
+  allocate (u_recv_e(SZ, n_halo, n_groups))
 
-  allocate (send_s(SZ, 1, n_block), send_e(SZ, 1, n_block))
-  allocate (recv_s(SZ, 1, n_block), recv_e(SZ, 1, n_block))
+  allocate (send_s(SZ, 1, n_groups), send_e(SZ, 1, n_groups))
+  allocate (recv_s(SZ, 1, n_groups), recv_e(SZ, 1, n_groups))
 
   ! =========================================================================
   ! second derivative with periodic BC
   tdsops = tdsops_init(n, dx_per, operation='second-deriv', scheme='compact6')
 
-  call set_u(u, sin_0_2pi_per, n, n_block)
+  call set_u(u, sin_0_2pi_per, n, n_groups)
 
   tstart = omp_get_wtime()
 
-  call run_kernel(n_iters, n_block, u, du, tdsops, n, &
+  call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
                   u_recv_s, u_recv_e, u_send_s, u_send_e, &
                   recv_s, recv_e, send_s, send_e, &
                   nproc, pprev, pnext &
@@ -96,7 +119,7 @@ program test_omp_tridiag
   tend = omp_get_wtime()
   if (nrank == 0) print *, 'Total time', tend - tstart
 
-  call check_error_norm(du, sin_0_2pi_per, n, n_glob, n_block, 1, norm_du)
+  call check_error_norm(du, sin_0_2pi_per, n, n_glob, n_groups, 1, norm_du)
   if (nrank == 0) print *, 'error norm second-deriv periodic', norm_du
 
   if (nrank == 0) then
@@ -112,15 +135,15 @@ program test_omp_tridiag
   ! first derivative with periodic BC
   tdsops = tdsops_init(n, dx_per, operation='first-deriv', scheme='compact6')
 
-  call set_u(u, sin_0_2pi_per, n, n_block)
+  call set_u(u, sin_0_2pi_per, n, n_groups)
 
-  call run_kernel(n_iters, n_block, u, du, tdsops, n, &
+  call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
                   u_recv_s, u_recv_e, u_send_s, u_send_e, &
                   recv_s, recv_e, send_s, send_e, &
                   nproc, pprev, pnext &
                   )
 
-  call check_error_norm(du, cos_0_2pi_per, n, n_glob, n_block, -1, norm_du)
+  call check_error_norm(du, cos_0_2pi_per, n, n_glob, n_groups, -1, norm_du)
   if (nrank == 0) print *, 'error norm first-deriv periodic', norm_du
 
   if (nrank == 0) then
@@ -149,15 +172,15 @@ program test_omp_tridiag
                        bc_start=trim(bc_start), bc_end=trim(bc_end), &
                        sym=.false.)
 
-  call set_u(u, sin_0_2pi, n, n_block)
+  call set_u(u, sin_0_2pi, n, n_groups)
 
-  call run_kernel(n_iters, n_block, u, du, tdsops, n, &
+  call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
                   u_recv_s, u_recv_e, u_send_s, u_send_e, &
                   recv_s, recv_e, send_s, send_e, &
                   nproc, pprev, pnext &
                   )
 
-  call check_error_norm(du, cos_0_2pi, n, n_glob, n_block, -1, norm_du)
+  call check_error_norm(du, cos_0_2pi, n, n_glob, n_groups, -1, norm_du)
   if (nrank == 0) print *, 'error norm first deriv dir-neu', norm_du
 
   if (nrank == 0) then
@@ -177,15 +200,15 @@ program test_omp_tridiag
                        bc_start=trim(bc_start), bc_end=trim(bc_end), &
                        from_to='v2p')
 
-  call set_u(u, cos_0_2pi, n, n_block)
+  call set_u(u, cos_0_2pi, n, n_groups)
 
-  call run_kernel(n_iters, n_block, u, du, tdsops, n_loc, &
+  call run_kernel(n_iters, n_groups, u, du, tdsops, n_loc, &
                   u_recv_s, u_recv_e, u_send_s, u_send_e, &
                   recv_s, recv_e, send_s, send_e, &
                   nproc, pprev, pnext &
                   )
 
-  call check_error_norm(du, cos_stag, n_loc, n_glob, n_block, -1, norm_du)
+  call check_error_norm(du, cos_stag, n_loc, n_glob, n_groups, -1, norm_du)
   if (nrank == 0) print *, 'error norm interpolate', norm_du
 
   if (nrank == 0) then
@@ -205,15 +228,15 @@ program test_omp_tridiag
                        bc_start=trim(bc_start), bc_end=trim(bc_end), &
                        sym=.false., c_nu=0.22_dp, nu0_nu=63._dp)
 
-  call set_u(u, sin_0_2pi, n, n_block)
+  call set_u(u, sin_0_2pi, n, n_groups)
 
-  call run_kernel(n_iters, n_block, u, du, tdsops, n, &
+  call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
                   u_recv_s, u_recv_e, u_send_s, u_send_e, &
                   recv_s, recv_e, send_s, send_e, &
                   nproc, pprev, pnext &
                   )
 
-  call check_error_norm(du, sin_0_2pi, n, n_glob, n_block, 1, norm_du)
+  call check_error_norm(du, sin_0_2pi, n, n_glob, n_groups, 1, norm_du)
   if (nrank == 0) print *, 'error norm hyperviscous', norm_du
 
   if (nrank == 0) then
@@ -228,7 +251,7 @@ program test_omp_tridiag
   ! =========================================================================
   ! BW utilisation and performance checks
   ! 3 in the first phase, 2 in the second phase, so 5 in total
-  achievedBW = 5._dp*n_iters*n*n_block*SZ*dp/(tend - tstart)
+  achievedBW = 5._dp*n_iters*n*n_groups*SZ*dp/(tend - tstart)
   call MPI_Allreduce(achievedBW, achievedBWmax, 1, MPI_DOUBLE_PRECISION, &
                      MPI_MAX, MPI_COMM_WORLD, ierr)
   call MPI_Allreduce(achievedBW, achievedBWmin, 1, MPI_DOUBLE_PRECISION, &
@@ -259,13 +282,13 @@ program test_omp_tridiag
 
 contains
 
-  subroutine run_kernel(n_iters, n_block, u, du, tdsops, n, &
+  subroutine run_kernel(n_iters, n_groups, u, du, tdsops, n, &
                         u_recv_s, u_recv_e, u_send_s, u_send_e, &
                         recv_s, recv_e, send_s, send_e, &
                         nproc, pprev, pnext)
     implicit none
 
-    integer, intent(in) :: n_iters, n_block
+    integer, intent(in) :: n_iters, n_groups
     real(dp), intent(in), dimension(:, :, :) :: u
     real(dp), intent(out), dimension(:, :, :) :: du
     type(tdsops_t), intent(in) :: tdsops
@@ -281,7 +304,7 @@ contains
     do iters = 1, n_iters
       ! first copy halo data into buffers
       !$omp parallel do
-      do k = 1, n_block
+      do k = 1, n_groups
         do j = 1, 4
           !$omp simd
           do i = 1, SZ
@@ -295,25 +318,25 @@ contains
 
       ! halo exchange
       call sendrecv_fields(u_recv_s, u_recv_e, u_send_s, u_send_e, &
-                           SZ*n_halo*n_block, nproc, pprev, pnext)
+                           SZ*n_halo*n_groups, nproc, pprev, pnext)
 
-      call exec_dist_tds_compact(du, u, u_recv_s, u_recv_e, &
-                                 send_s, send_e, recv_s, recv_e, &
-                                 tdsops, nproc, pprev, pnext, n_block)
+     call exec_dist_tds_compact(du, u, u_recv_s, u_recv_e, &
+                                send_s, send_e, recv_s, recv_e, &
+                                tdsops, nproc, pprev, pnext, n_groups)
 
     end do
   end subroutine run_kernel
 
-  subroutine set_u(u, line, n, n_block)
+  subroutine set_u(u, line, n, n_groups)
     implicit none
 
     real(dp), intent(out), dimension(:, :, :) :: u
     real(dp), intent(in), dimension(:) :: line
-    integer, intent(in) :: n, n_block
+    integer, intent(in) :: n, n_groups
 
     integer :: i, j, k
 
-    do k = 1, n_block
+    do k = 1, n_groups
       do j = 1, n
         do i = 1, SZ
           u(i, j, k) = line(j)
@@ -323,17 +346,17 @@ contains
 
   end subroutine set_u
 
-  subroutine check_error_norm(du, line, n, n_glob, n_block, c, norm)
+  subroutine check_error_norm(du, line, n, n_glob, n_groups, c, norm)
     implicit none
 
     real(dp), intent(inout), dimension(:, :, :) :: du
     real(dp), intent(in), dimension(:) :: line
-    integer, intent(in) :: n, n_glob, n_block, c
+    integer, intent(in) :: n, n_glob, n_groups, c
     real(dp), intent(out) :: norm
 
     integer :: i, j, k
 
-    do k = 1, n_block
+    do k = 1, n_groups
       do j = 1, n
         do i = 1, SZ
           du(i, j, k) = du(i, j, k) + c*line(j)
@@ -342,7 +365,7 @@ contains
     end do
 
     norm = norm2(du(:, 1:n, :))
-    norm = norm*norm/n_glob/n_block/SZ
+    norm = norm*norm/n_glob/n_groups/SZ
     call MPI_Allreduce(MPI_IN_PLACE, norm, 1, MPI_DOUBLE_PRECISION, &
                        MPI_SUM, MPI_COMM_WORLD, ierr)
     norm = sqrt(norm)
