@@ -80,7 +80,7 @@ program test_reorder
   mesh = mesh_t(dims_global, nproc_dir, L_global)
 
 #ifdef CUDA
-  cuda_allocator = cuda_allocator_t(mesh)
+  cuda_allocator = cuda_allocator_t(mesh, SZ)
   allocator => cuda_allocator
   print *, 'CUDA allocator instantiated'
 
