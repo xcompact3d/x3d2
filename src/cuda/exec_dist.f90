@@ -40,7 +40,8 @@ contains
     call der_univ_dist<<<blocks, threads>>>( & !&
       du, du_send_s, du_send_e, u, u_recv_s, u_recv_e, &
       tdsops%coeffs_s_dev, tdsops%coeffs_e_dev, tdsops%coeffs_dev, &
-      tdsops%tds_n, tdsops%dist_fw_dev, tdsops%dist_bw_dev, tdsops%dist_af_dev &
+      tdsops%tds_n, tdsops%dist_fw_dev, tdsops%dist_bw_dev, &
+      tdsops%dist_af_dev &
       )
 
     ! halo exchange for 2x2 systems
