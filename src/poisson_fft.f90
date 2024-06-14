@@ -2,13 +2,13 @@ module m_poisson_fft
   use m_allocator, only: field_t
   use m_common, only: dp, pi, VERT, CELL, DIR_X, DIR_Y, DIR_Z
   use m_tdsops, only: dirps_t
-  use m_mesh, only: mesh_t
+  use m_mesh, only: mesh_t, geo_t
 
   implicit none
 
   type, abstract :: poisson_fft_t
     !! FFT based Poisson solver
-    class(mesh_t), pointer :: mesh
+    integer :: nx, ny, nz
     complex(dp), allocatable, dimension(:, :, :) :: waves
     complex(dp), allocatable, dimension(:) :: ax, bx, ay, by, az, bz
   contains
@@ -52,34 +52,33 @@ contains
     implicit none
 
     class(poisson_fft_t) :: self
-    class(mesh_t), target, intent(in) :: mesh
+    class(mesh_t), intent(in) :: mesh
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
-    integer :: nx, ny, nz
 
-    self%mesh => mesh
-    nx = self%mesh%get_n(DIR_X, CELL)
-    ny = self%mesh%get_n(DIR_Y, CELL)
-    nz = self%mesh%get_n(DIR_Z, CELL)
+    self%nx = mesh%get_n(DIR_X, CELL)
+    self%ny = mesh%get_n(DIR_Y, CELL)
+    self%nz = mesh%get_n(DIR_Z, CELL)
 
-    allocate (self%ax(nx), self%bx(nx))
-    allocate (self%ay(ny), self%by(ny))
-    allocate (self%az(nz), self%bz(nz))
+    allocate (self%ax(self%nx), self%bx(self%nx))
+    allocate (self%ay(self%ny), self%by(self%ny))
+    allocate (self%az(self%nz), self%bz(self%nz))
 
     ! cuFFT 3D transform halves the first index.
-    allocate (self%waves(nx/2 + 1, ny, nz))
+    allocate (self%waves(self%nx/2 + 1, self%ny, self%nz))
 
     ! waves_set requires some of the preprocessed tdsops variables.
-    call self%waves_set(xdirps, ydirps, zdirps)
+    call self%waves_set(mesh%geo, xdirps, ydirps, zdirps)
 
   end subroutine base_init
 
-  subroutine waves_set(self, xdirps, ydirps, zdirps)
+  subroutine waves_set(self, geo, xdirps, ydirps, zdirps)
     !! Spectral equivalence constants
     !!
     !! Ref. JCP 228 (2009), 5989–6015, Sec 4
     implicit none
 
     class(poisson_fft_t) :: self
+    type(geo_t), intent(in) :: geo
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
     complex(dp), allocatable, dimension(:) :: xkx, xk2, yky, yk2, zkz, zk2, &
@@ -92,9 +91,7 @@ contains
 
     integer :: i, j, k
 
-    nx = self%mesh%get_n(DIR_X, CELL)
-    ny = self%mesh%get_n(DIR_Y, CELL)
-    nz = self%mesh%get_n(DIR_Z, CELL)
+    nx = self%nx; ny = self%ny; nz = self%nz
 
     do i = 1, nx
       self%ax(i) = sin((i - 1)*pi/nx)
@@ -118,8 +115,8 @@ contains
     xkx(:) = 0; xk2(:) = 0; yky(:) = 0; yk2(:) = 0; zkz(:) = 0; zk2(:) = 0
 
     ! periodic-x
-    d = self%mesh%geo%d(1)
-    L = self%mesh%geo%L(1)
+    d = geo%d(1)
+    L = geo%L(1)
     do i = 1, nx/2 + 1
       w = 2*pi*(i - 1)/nx
       wp = xdirps%stagder_v2p%a*2*d*sin(0.5_dp*w) &
@@ -137,8 +134,8 @@ contains
     end do
 
     ! periodic-y
-    d = self%mesh%geo%d(2)
-    L = self%mesh%geo%L(2)
+    d = geo%d(2)
+    L = geo%L(2)
     do i = 1, ny/2 + 1
       w = 2*pi*(i - 1)/ny
       wp = ydirps%stagder_v2p%a*2*d*sin(0.5_dp*w) &
@@ -156,8 +153,8 @@ contains
     end do
 
     ! periodic-z
-    d = self%mesh%geo%d(3)
-    L = self%mesh%geo%L(3)
+    d = geo%d(3)
+    L = geo%L(3)
     do i = 1, nz/2 + 1
       w = 2*pi*(i - 1)/nz
       wp = zdirps%stagder_v2p%a*2*d*sin(0.5_dp*w) &
@@ -179,9 +176,9 @@ contains
     do i = 1, nx/2 + 1
       do j = 1, ny
         do k = 1, nz
-          rlexs = real(exs(i), kind=dp)*self%mesh%geo%d(1)
-          rleys = real(eys(j), kind=dp)*self%mesh%geo%d(2)
-          rlezs = real(ezs(k), kind=dp)*self%mesh%geo%d(3)
+          rlexs = real(exs(i), kind=dp)*geo%d(1)
+          rleys = real(eys(j), kind=dp)*geo%d(2)
+          rlezs = real(ezs(k), kind=dp)*geo%d(3)
 
           xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
                    + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
