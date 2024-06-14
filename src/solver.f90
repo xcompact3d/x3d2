@@ -50,8 +50,9 @@ module m_solver
 
     class(base_backend_t), pointer :: backend
     class(mesh_t), allocatable :: mesh
-    class(dirps_t), pointer :: xdirps, ydirps, zdirps
     class(time_intg_t), pointer :: time_integrator
+    type(allocator_t), pointer :: host_allocator
+    class(dirps_t), pointer :: xdirps, ydirps, zdirps
     procedure(poisson_solver), pointer :: poisson => null()
   contains
     procedure :: transeq
@@ -80,27 +81,29 @@ module m_solver
 
 contains
 
-  function init(backend, mesh, time_integrator, xdirps, ydirps, zdirps, globs) &
-    result(solver)
+  function init(backend, mesh, time_integrator, host_allocator, &
+                xdirps, ydirps, zdirps, globs) result(solver)
     implicit none
 
     class(base_backend_t), target, intent(inout) :: backend
     type(mesh_t), intent(in) :: mesh
     class(time_intg_t), target, intent(inout) :: time_integrator
+    type(allocator_t), target, intent(inout) :: host_allocator
     class(dirps_t), target, intent(inout) :: xdirps, ydirps, zdirps
     class(globs_t), intent(in) :: globs
     type(solver_t) :: solver
 
-    real(dp), allocatable, dimension(:, :, :) :: u_init, v_init, w_init
-    integer :: dims(3)
+    class(field_t), pointer :: u_init, v_init, w_init
 
     real(dp) :: x, y, z
     integer :: i, j, k
+    integer, dimension(3) :: dims
     real(dp), dimension(3) :: xloc
 
     solver%backend => backend
     solver%mesh = mesh
     solver%time_integrator => time_integrator
+    solver%host_allocator => host_allocator
 
     solver%xdirps => xdirps
     solver%ydirps => ydirps
@@ -110,12 +113,6 @@ contains
     solver%v => solver%backend%allocator%get_block(DIR_X, VERT)
     solver%w => solver%backend%allocator%get_block(DIR_X, VERT)
 
-    ! Set initial conditions
-    dims(:) = solver%mesh%get_padded_dims(DIR_C)
-    allocate (u_init(dims(1), dims(2), dims(3)))
-    allocate (v_init(dims(1), dims(2), dims(3)))
-    allocate (w_init(dims(1), dims(2), dims(3)))
-
     solver%dt = globs%dt
     solver%backend%nu = globs%nu
     solver%n_iters = globs%n_iters
@@ -123,6 +120,10 @@ contains
     solver%ngrid = product(solver%mesh%get_dims(DIR_C, VERT))
 
     dims = solver%mesh%get_dims(DIR_C, VERT)
+    u_init => solver%host_allocator%get_block(DIR_C)
+    v_init => solver%host_allocator%get_block(DIR_C)
+    w_init => solver%host_allocator%get_block(DIR_C)
+
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -131,18 +132,20 @@ contains
           y = xloc(2)
           z = xloc(3)
 
-          u_init(i, j, k) = sin(x)*cos(y)*cos(z)
-          v_init(i, j, k) = -cos(x)*sin(y)*cos(z)
-          w_init(i, j, k) = 0
+          u_init%data(i, j, k) = sin(x)*cos(y)*cos(z)
+          v_init%data(i, j, k) = -cos(x)*sin(y)*cos(z)
+          w_init%data(i, j, k) = 0
         end do
       end do
     end do
 
-    call solver%backend%set_field_data(solver%u, u_init)
-    call solver%backend%set_field_data(solver%v, v_init)
-    call solver%backend%set_field_data(solver%w, w_init)
+    call solver%backend%set_field_data(solver%u, u_init%data)
+    call solver%backend%set_field_data(solver%v, v_init%data)
+    call solver%backend%set_field_data(solver%w, w_init%data)
 
-    deallocate (u_init, v_init, w_init)
+    call solver%host_allocator%release_block(u_init)
+    call solver%host_allocator%release_block(v_init)
+    call solver%host_allocator%release_block(w_init)
 
     ! Allocate and set the tdsops
     call allocate_tdsops(solver%xdirps, DIR_X, solver%backend)
@@ -578,14 +581,14 @@ contains
 
   end subroutine poisson_cg
 
-  subroutine output(self, t, u_out)
+  subroutine output(self, t)
     implicit none
 
     class(solver_t), intent(in) :: self
     real(dp), intent(in) :: t
-    real(dp), dimension(:, :, :), intent(inout) :: u_out
 
     class(field_t), pointer :: du, dv, dw, div_u
+    class(field_t), pointer :: u_out
     real(dp) :: enstrophy, div_u_max, div_u_mean
     integer :: ierr
 
@@ -608,12 +611,17 @@ contains
     div_u => self%backend%allocator%get_block(DIR_Z)
 
     call self%divergence_v2p(div_u, self%u, self%v, self%w)
-    call self%backend%get_field_data(u_out, div_u)
+
+    u_out => self%host_allocator%get_block(DIR_C)
+    call self%backend%get_field_data(u_out%data, div_u)
 
     call self%backend%allocator%release_block(div_u)
 
-    div_u_max = maxval(abs(u_out))
-    div_u_mean = sum(abs(u_out))/self%ngrid
+    div_u_max = maxval(abs(u_out%data))
+    div_u_mean = sum(abs(u_out%data))/self%ngrid
+
+    call self%host_allocator%release_block(u_out)
+
     call MPI_Allreduce(MPI_IN_PLACE, div_u_max, 1, MPI_DOUBLE_PRECISION, &
                        MPI_MAX, MPI_COMM_WORLD, ierr)
     call MPI_Allreduce(MPI_IN_PLACE, div_u_mean, 1, MPI_DOUBLE_PRECISION, &
@@ -624,20 +632,20 @@ contains
 
   end subroutine output
 
-  subroutine run(self, u_out, v_out, w_out)
+  subroutine run(self)
     implicit none
 
     class(solver_t), intent(in) :: self
-    real(dp), dimension(:, :, :), intent(inout) :: u_out, v_out, w_out
 
     class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
+    class(field_t), pointer :: u_out, v_out, w_out
 
     real(dp) :: t
     integer :: i
 
     if (self%mesh%par%is_root()) print *, 'initial conditions'
     t = 0._dp
-    call self%output(t, u_out)
+    call self%output(t)
 
     if (self%mesh%par%is_root()) print *, 'start run'
 
@@ -686,15 +694,29 @@ contains
 
       if (mod(i, self%n_output) == 0) then
         t = i*self%dt
-        call self%output(t, u_out)
+        call self%output(t)
       end if
     end do
 
     if (self%mesh%par%is_root()) print *, 'run end'
 
-    call self%backend%get_field_data(u_out, self%u)
-    call self%backend%get_field_data(v_out, self%v)
-    call self%backend%get_field_data(w_out, self%w)
+    ! Below is for demonstrating purpuses only, to be removed when we have
+    ! proper I/O in place.
+    u_out => self%host_allocator%get_block(DIR_C)
+    v_out => self%host_allocator%get_block(DIR_C)
+    w_out => self%host_allocator%get_block(DIR_C)
+
+    call self%backend%get_field_data(u_out%data, self%u)
+    call self%backend%get_field_data(v_out%data, self%v)
+    call self%backend%get_field_data(w_out%data, self%w)
+
+    if (self%mesh%par%is_root()) then
+      print *, 'norms', norm2(u_out%data), norm2(v_out%data), norm2(w_out%data)
+    end if
+
+    call self%host_allocator%release_block(u_out)
+    call self%host_allocator%release_block(v_out)
+    call self%host_allocator%release_block(w_out)
 
   end subroutine run
 
