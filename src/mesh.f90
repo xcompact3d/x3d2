@@ -124,10 +124,10 @@ module m_mesh
 
     ! Define number of cells and vertices in each direction
     mesh%vert_dims = [nx, ny, nz]
-    mesh%cell_dims = mesh%vert_dims
+    mesh%cell_dims(:) = mesh%vert_dims(:)
 
     do dir=1, 3
-      is_last_domain = (mesh%par%nrank_dir(dir) == mesh%par%nproc_dir(dir))
+      is_last_domain = (mesh%par%nrank_dir(dir) +1 == mesh%par%nproc_dir(dir))
       if (is_last_domain) then
         if (.not. mesh%periodic_BC(dir)) then
           mesh%cell_dims(dir) = mesh%cell_dims(dir) - 1
