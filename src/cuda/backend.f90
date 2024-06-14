@@ -434,58 +434,60 @@ contains
     real(dp), device, pointer, dimension(:, :, :) :: u_o_d, u_i_d, u_temp_d
     class(field_t), pointer :: u_temp
     type(dim3) :: blocks, threads
-    integer :: nx_loc, ny_loc, nz_loc
+    integer :: nx_padded, ny_padded, nz_padded
+    integer, dimension(3) :: dims_padded
 
     call resolve_field_t(u_o_d, u_o)
     call resolve_field_t(u_i_d, u_i)
 
-    nx_loc = self%mesh%get_n(DIR_X, VERT)
-    ny_loc = self%mesh%get_n(DIR_Y, VERT)
-    nz_loc = self%mesh%get_n(DIR_Z, VERT)
+    dims_padded = self%mesh%get_padded_dims(DIR_C)
+    nx_padded = dims_padded(1)
+    ny_padded = dims_padded(2)
+    nz_padded = dims_padded(3)
 
     select case (direction)
     case (RDR_X2Y)
-      blocks = dim3(nx_loc/SZ, nz_loc, ny_loc/SZ)
+      blocks = dim3(nx_padded/SZ, nz_padded, ny_padded/SZ)
       threads = dim3(SZ, SZ, 1)
-      call reorder_x2y<<<blocks, threads>>>(u_o_d, u_i_d, nz_loc) !&
+      call reorder_x2y<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_X2Z)
-      blocks = dim3(nx_loc, ny_loc/SZ, 1)
+      blocks = dim3(nx_padded, ny_padded/SZ, 1)
       threads = dim3(SZ, 1, 1)
-      call reorder_x2z<<<blocks, threads>>>(u_o_d, u_i_d, nz_loc) !&
+      call reorder_x2z<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_Y2X)
-      blocks = dim3(nx_loc/SZ, ny_loc/SZ, nz_loc)
+      blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
       threads = dim3(SZ, SZ, 1)
-      call reorder_y2x<<<blocks, threads>>>(u_o_d, u_i_d, nz_loc) !&
+      call reorder_y2x<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_Y2Z)
-      blocks = dim3(nx_loc/SZ, ny_loc/SZ, nz_loc)
+      blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
       threads = dim3(SZ, SZ, 1)
       call reorder_y2z<<<blocks, threads>>>(u_o_d, u_i_d, & !&
-                                            nx_loc, nz_loc)
+                                            nx_padded, nz_padded)
     case (RDR_Z2X)
-      blocks = dim3(nx_loc, ny_loc/SZ, 1)
+      blocks = dim3(nx_padded, ny_padded/SZ, 1)
       threads = dim3(SZ, 1, 1)
-      call reorder_z2x<<<blocks, threads>>>(u_o_d, u_i_d, nz_loc) !&
+      call reorder_z2x<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_Z2Y)
-      blocks = dim3(nx_loc/SZ, ny_loc/SZ, nz_loc)
+      blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
       threads = dim3(SZ, SZ, 1)
       call reorder_z2y<<<blocks, threads>>>(u_o_d, u_i_d, & !&
-                                            nx_loc, nz_loc)
+                                            nx_padded, nz_padded)
     case (RDR_C2X)
-      blocks = dim3(nx_loc/SZ, ny_loc/SZ, nz_loc)
+      blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
       threads = dim3(SZ, SZ, 1)
-      call reorder_c2x<<<blocks, threads>>>(u_o_d, u_i_d, nz_loc) !&
+      call reorder_c2x<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_C2Y)
       ! First reorder from C to X, then from X to Y
       u_temp => self%allocator%get_block(DIR_X)
       call resolve_field_t(u_temp_d, u_temp)
 
-      blocks = dim3(nx_loc/SZ, ny_loc/SZ, nz_loc)
+      blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
       threads = dim3(SZ, SZ, 1)
-      call reorder_c2x<<<blocks, threads>>>(u_temp_d, u_i_d, nz_loc) !&
+      call reorder_c2x<<<blocks, threads>>>(u_temp_d, u_i_d, nz_padded) !&
 
-      blocks = dim3(nx_loc/SZ, nz_loc, ny_loc/SZ)
+      blocks = dim3(nx_padded/SZ, nz_padded, ny_padded/SZ)
       threads = dim3(SZ, SZ, 1)
-      call reorder_x2y<<<blocks, threads>>>(u_o_d, u_temp_d, nz_loc) !&
+      call reorder_x2y<<<blocks, threads>>>(u_o_d, u_temp_d, nz_padded) !&
 
       call self%allocator%release_block(u_temp)
     case (RDR_C2Z)
@@ -493,29 +495,29 @@ contains
       u_temp => self%allocator%get_block(DIR_X)
       call resolve_field_t(u_temp_d, u_temp)
 
-      blocks = dim3(nx_loc/SZ, ny_loc/SZ, nz_loc)
+      blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
       threads = dim3(SZ, SZ, 1)
-      call reorder_c2x<<<blocks, threads>>>(u_temp_d, u_i_d, nz_loc) !&
+      call reorder_c2x<<<blocks, threads>>>(u_temp_d, u_i_d, nz_padded) !&
 
-      blocks = dim3(nx_loc, ny_loc/SZ, 1)
+      blocks = dim3(nx_padded, ny_padded/SZ, 1)
       threads = dim3(SZ, 1, 1)
-      call reorder_x2z<<<blocks, threads>>>(u_o_d, u_temp_d, nz_loc) !&
+      call reorder_x2z<<<blocks, threads>>>(u_o_d, u_temp_d, nz_padded) !&
 
       call self%allocator%release_block(u_temp)
     case (RDR_X2C)
-      blocks = dim3(nx_loc/SZ, ny_loc/SZ, nz_loc)
+      blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
       threads = dim3(SZ, SZ, 1)
-      call reorder_x2c<<<blocks, threads>>>(u_o_d, u_i_d, nz_loc) !&
+      call reorder_x2c<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_Y2C)
       ! First reorder from Y to X, then from X to C
       u_temp => self%allocator%get_block(DIR_X)
       call resolve_field_t(u_temp_d, u_temp)
 
-      blocks = dim3(nx_loc/SZ, ny_loc/SZ, nz_loc)
+      blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
       threads = dim3(SZ, SZ, 1)
-      call reorder_y2x<<<blocks, threads>>>(u_temp_d, u_i_d, nz_loc) !&
+      call reorder_y2x<<<blocks, threads>>>(u_temp_d, u_i_d, nz_padded) !&
 
-      call reorder_x2c<<<blocks, threads>>>(u_o_d, u_temp_d, nz_loc) !&
+      call reorder_x2c<<<blocks, threads>>>(u_o_d, u_temp_d, nz_padded) !&
 
       call self%allocator%release_block(u_temp)
     case (RDR_Z2C)
@@ -523,13 +525,13 @@ contains
       u_temp => self%allocator%get_block(DIR_X)
       call resolve_field_t(u_temp_d, u_temp)
 
-      blocks = dim3(nx_loc, ny_loc/SZ, 1)
+      blocks = dim3(nx_padded, ny_padded/SZ, 1)
       threads = dim3(SZ, 1, 1)
-      call reorder_z2x<<<blocks, threads>>>(u_temp_d, u_i_d, nz_loc) !&
+      call reorder_z2x<<<blocks, threads>>>(u_temp_d, u_i_d, nz_padded) !&
 
-      blocks = dim3(nx_loc/SZ, ny_loc/SZ, nz_loc)
+      blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
       threads = dim3(SZ, SZ, 1)
-      call reorder_x2c<<<blocks, threads>>>(u_o_d, u_temp_d, nz_loc) !&
+      call reorder_x2c<<<blocks, threads>>>(u_o_d, u_temp_d, nz_padded) !&
 
       call self%allocator%release_block(u_temp)
     case default
@@ -547,18 +549,16 @@ contains
 
     real(dp), device, pointer, dimension(:, :, :) :: u_d, u_y_d
     type(dim3) :: blocks, threads
-    integer :: nx_loc, ny_loc, nz_loc
+    integer, dimension(3) :: dims_padded
 
     call resolve_field_t(u_d, u)
     call resolve_field_t(u_y_d, u_y)
 
-    nx_loc = self%mesh%get_n(DIR_X, VERT)
-    ny_loc = self%mesh%get_n(DIR_Y, VERT)
-    nz_loc = self%mesh%get_n(DIR_Z, VERT)
+    dims_padded = self%mesh%get_padded_dims(DIR_C)
 
-    blocks = dim3(nx_loc/SZ, ny_loc/SZ, nz_loc)
+    blocks = dim3(dims_padded(1)/SZ, dims_padded(2)/SZ, dims_padded(3))
     threads = dim3(SZ, SZ, 1)
-    call sum_yintox<<<blocks, threads>>>(u_d, u_y_d, nz_loc) !&
+    call sum_yintox<<<blocks, threads>>>(u_d, u_y_d, dims_padded(3)) !&
 
   end subroutine sum_yintox_cuda
 
@@ -571,18 +571,16 @@ contains
 
     real(dp), device, pointer, dimension(:, :, :) :: u_d, u_z_d
     type(dim3) :: blocks, threads
-    integer :: nx_loc, ny_loc, nz_loc
+    integer, dimension(3) :: dims_padded
 
     call resolve_field_t(u_d, u)
     call resolve_field_t(u_z_d, u_z)
 
-    nx_loc = self%mesh%get_n(DIR_X, VERT)
-    ny_loc = self%mesh%get_n(DIR_Y, VERT)
-    nz_loc = self%mesh%get_n(DIR_Z, VERT)
+    dims_padded = self%mesh%get_padded_dims(DIR_C)
 
-    blocks = dim3(nx_loc, ny_loc/SZ, 1)
+    blocks = dim3(dims_padded(1), dims_padded(2)/SZ, 1)
     threads = dim3(SZ, 1, 1)
-    call sum_zintox<<<blocks, threads>>>(u_d, u_z_d, nz_loc) !&
+    call sum_zintox<<<blocks, threads>>>(u_d, u_z_d, dims_padded(3)) !&
 
   end subroutine sum_zintox_cuda
 
