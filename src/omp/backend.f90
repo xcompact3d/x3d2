@@ -68,9 +68,9 @@ contains
 
     n_halo = 4
     backend%mesh => mesh
-    n_groups = maxval([ backend%mesh%get_n_groups(DIR_X), &
-                        backend%mesh%get_n_groups(DIR_Y), & 
-                        backend%mesh%get_n_groups(DIR_Z) ])
+    n_groups = maxval([backend%mesh%get_n_groups(DIR_X), &
+                       backend%mesh%get_n_groups(DIR_Y), &
+                       backend%mesh%get_n_groups(DIR_Z)])
 
     allocate (backend%u_send_s(SZ, n_halo, n_groups))
     allocate (backend%u_send_e(SZ, n_halo, n_groups))
@@ -175,8 +175,6 @@ contains
     class(field_t), intent(in) :: u, v, w
     type(dirps_t), intent(in) :: dirps
 
-
-
     call transeq_halo_exchange(self, u, v, w, dirps%dir)
 
     call transeq_dist_component(self, du, u, u, &
@@ -264,8 +262,8 @@ contains
       u%data, u_recv_s, u_recv_e, &
       conv%data, conv_recv_s, conv_recv_e, &
       tdsops_du, tdsops_dud, tdsops_d2u, self%nu, &
-      self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), &
-      self%mesh%get_n_groups(dir))
+      self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), &
+      self%mesh%par%pnext(dir), self%mesh%get_n_groups(dir))
 
     call self%allocator%release_block(du)
     call self%allocator%release_block(dud)
@@ -309,7 +307,7 @@ contains
     call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
                            tdsops%tds_n, n_groups)
 
-    print*, self%mesh%par%nrank, n_groups
+    print *, self%mesh%par%nrank, n_groups
     ! halo exchange
     call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
                          self%u_send_s, self%u_send_e, &
@@ -321,7 +319,8 @@ contains
     call exec_dist_tds_compact( &
       du%data, u%data, self%u_recv_s, self%u_recv_e, &
       self%du_send_s, self%du_send_e, self%du_recv_s, self%du_recv_e, &
-      tdsops, self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), &
+      tdsops, self%mesh%par%nproc_dir(dir), &
+      self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), &
       n_groups)
 
   end subroutine tds_solve_dist

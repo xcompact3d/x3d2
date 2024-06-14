@@ -52,10 +52,10 @@ program test_omp_tridiag
 
   n_glob = 1024
   n = n_glob/nproc
-  n_groups = 64*64/SZ 
+  n_groups = 64*64/SZ
   n_iters = 1
 
-  allocate (u(SZ, n, n_groups), du(SZ, n, n_groups)) 
+  allocate (u(SZ, n, n_groups), du(SZ, n, n_groups))
 
   dx_per = 2*pi/n_glob
   dx = 2*pi/(n_glob - 1)
@@ -301,9 +301,9 @@ contains
       call sendrecv_fields(u_recv_s, u_recv_e, u_send_s, u_send_e, &
                            SZ*n_halo*n_groups, nproc, pprev, pnext)
 
-     call exec_dist_tds_compact(du, u, u_recv_s, u_recv_e, &
-                                send_s, send_e, recv_s, recv_e, &
-                                tdsops, nproc, pprev, pnext, n_groups)
+      call exec_dist_tds_compact(du, u, u_recv_s, u_recv_e, &
+                                 send_s, send_e, recv_s, recv_e, &
+                                 tdsops, nproc, pprev, pnext, n_groups)
 
     end do
   end subroutine run_kernel

@@ -1,7 +1,7 @@
 module m_allocator
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, NONE, VERT
+  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, none, VERT
   use m_mesh, only: mesh_t
   use m_field, only: field_t
 
@@ -56,7 +56,6 @@ module m_allocator
   interface allocator_t
     module procedure allocator_init
   end interface allocator_t
-  
 
   type :: flist_t
     class(field_t), pointer :: ptr
@@ -142,7 +141,7 @@ contains
     if (present(data_loc)) then
       handle%data_loc = data_loc
     else
-      handle%data_loc = NONE
+      handle%data_loc = none
     end if
 
     ! Set dims based on direction

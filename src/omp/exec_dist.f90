@@ -90,7 +90,7 @@ contains
     type(tdsops_t), intent(in) :: tdsops_du, tdsops_dud, tdsops_d2u
     real(dp), intent(in) :: nu
     integer, intent(in) :: nproc, pprev, pnext
-    integer, intent(in) :: n_groups 
+    integer, intent(in) :: n_groups
 
     real(dp), dimension(:, :), allocatable :: ud, ud_recv_s, ud_recv_e
 
@@ -99,7 +99,7 @@ contains
 
     ! TODO: don't hardcode n_halo
     n_halo = 4
-    n = tdsops_du%tds_n 
+    n = tdsops_du%tds_n
     n_data = SZ*n_groups
 
     allocate (ud(SZ, n))

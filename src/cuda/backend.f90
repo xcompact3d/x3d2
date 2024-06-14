@@ -90,12 +90,11 @@ contains
     backend%zthreads = dim3(SZ, 1, 1)
     backend%zblocks = dim3(backend%mesh%get_n_groups(DIR_Z), 1, 1)
 
-
     n_halo = 4
     ! Buffer size should be big enough for the largest MPI exchange.
-    n_groups = maxval([ backend%mesh%get_n_groups(DIR_X), &
-                        backend%mesh%get_n_groups(DIR_Y), &
-                        backend%mesh%get_n_groups(DIR_Z) ])
+    n_groups = maxval([backend%mesh%get_n_groups(DIR_X), &
+                       backend%mesh%get_n_groups(DIR_Y), &
+                       backend%mesh%get_n_groups(DIR_Z)])
 
     allocate (backend%u_send_s_dev(SZ, n_halo, n_groups))
     allocate (backend%u_send_e_dev(SZ, n_halo, n_groups))
@@ -148,7 +147,8 @@ contains
     type is (cuda_tdsops_t)
       tds_n = get_tds_n(self%mesh, dir, from_to)
       delta = self%mesh%geo%d(dir)
-      tdsops = cuda_tdsops_t(tds_n, delta, operation, scheme, n_halo, from_to, &
+      tdsops = cuda_tdsops_t(tds_n, delta, operation, &
+                             scheme, n_halo, from_to, &
                              bc_start, bc_end, sym, c_nu, nu0_nu)
     end select
 
@@ -327,8 +327,8 @@ contains
       self%d2u_send_s_dev, self%d2u_send_e_dev, &
       self%d2u_recv_s_dev, self%d2u_recv_e_dev, &
       tdsops_du, tdsops_d2u, self%nu, &
-      self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), &
-      blocks, threads &
+      self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), &
+      self%mesh%par%pnext(dir), blocks, threads &
       )
 
     ! Release temporary blocks
@@ -417,7 +417,8 @@ contains
       self%u_recv_s_dev, self%u_recv_e_dev, &
       self%du_send_s_dev, self%du_send_e_dev, &
       self%du_recv_s_dev, self%du_recv_e_dev, &
-      tdsops_dev, self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), &
+      tdsops_dev, self%mesh%par%nproc_dir(dir), &
+      self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), &
       blocks, threads &
       )
 

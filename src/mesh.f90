@@ -3,12 +3,11 @@ module m_mesh
 
   use mpi
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, &
-                     CELL, VERT, NONE, X_FACE, Y_FACE, Z_FACE, &
-                     X_EDGE, Y_EDGE, Z_EDGE
+                      CELL, VERT, none, X_FACE, Y_FACE, Z_FACE, &
+                      X_EDGE, Y_EDGE, Z_EDGE
   use m_field, only: field_t
 
   implicit none
-
 
   ! Stores geometry information
   type :: geo_t
@@ -28,7 +27,6 @@ module m_mesh
   contains
     procedure :: is_root ! returns if the current rank is the root rank
   end type
-
 
   ! The mesh class stores all the information about the global and local (due to domain decomposition) mesh
   ! It also includes getter functions to access some of its parameters
@@ -54,14 +52,14 @@ module m_mesh
     procedure :: get_dims_phi_dataloc
     generic :: get_dims => get_dims_dir, get_dims_phi, get_dims_phi_dataloc
 
-    procedure :: get_n_dir 
+    procedure :: get_n_dir
     procedure :: get_n_phi
     generic :: get_n => get_n_dir, get_n_phi
 
     procedure :: get_padded_dims_phi
     procedure :: get_padded_dims_dir
     generic :: get_padded_dims => get_padded_dims_dir, get_padded_dims_phi
-  
+
     procedure :: get_coordinates
 
     procedure :: set_sz
@@ -72,10 +70,11 @@ module m_mesh
     module procedure mesh_init
   end interface mesh_t
 
-  contains 
+contains
 
-  function mesh_init(dims_global, nproc_dir, L_global, periodic_BC) result(mesh)
-    !! Completely initialise the mesh object. 
+  function mesh_init(dims_global, nproc_dir, L_global, &
+                     periodic_BC) result(mesh)
+    !! Completely initialise the mesh object.
     !! Upon initialisation the mesh object can be read-only and shouldn't be edited
     !! Takes as argument global information about the mesh like its length, number of cells and decomposition in each direction
     integer, dimension(3), intent(in) :: dims_global
@@ -88,13 +87,13 @@ module m_mesh
     integer :: ierr
     logical :: is_last_domain
 
-    allocate(mesh%geo)
-    allocate(mesh%par)
+    allocate (mesh%geo)
+    allocate (mesh%par)
     mesh%dims_global(:) = dims_global
 
     if (present(periodic_BC)) then
       mesh%periodic_BC(:) = periodic_BC
-    else 
+    else
       ! Default to periodic BC
       mesh%periodic_BC(:) = .true.
     end if
@@ -102,12 +101,12 @@ module m_mesh
     ! Geometry
     mesh%geo%L = L_global
 
-    do dir=1, 3
+    do dir = 1, 3
       n_cell_global = mesh%dims_global(dir)
       if (.not. mesh%periodic_BC(dir)) then
-        n_cell_global = n_cell_global -1
+        n_cell_global = n_cell_global - 1
       end if
-      mesh%geo%d(dir) = mesh%geo%L(dir) / n_cell_global
+      mesh%geo%d(dir) = mesh%geo%L(dir)/n_cell_global
     end do
 
     ! Parallel domain decomposition
@@ -126,8 +125,8 @@ module m_mesh
     mesh%vert_dims = [nx, ny, nz]
     mesh%cell_dims(:) = mesh%vert_dims(:)
 
-    do dir=1, 3
-      is_last_domain = (mesh%par%nrank_dir(dir) +1 == mesh%par%nproc_dir(dir))
+    do dir = 1, 3
+      is_last_domain = (mesh%par%nrank_dir(dir) + 1 == mesh%par%nproc_dir(dir))
       if (is_last_domain) then
         if (.not. mesh%periodic_BC(dir)) then
           mesh%cell_dims(dir) = mesh%cell_dims(dir) - 1
@@ -187,9 +186,10 @@ module m_mesh
     ! local/directional position of the subdomain
     mesh%par%nrank_dir(:) = subd_pos(:) - 1
 
-    mesh%par%n_offset(:) = (mesh%dims_global(:)/mesh%par%nproc_dir(:)) * mesh%par%nrank_dir(:)
+    mesh%par%n_offset(:) = (mesh%dims_global(:)/mesh%par%nproc_dir(:)) &
+                           *mesh%par%nrank_dir(:)
 
-    do dir=1, 3
+    do dir = 1, 3
       nproc = mesh%par%nproc_dir(dir)
       subd_pos_prev(:) = subd_pos(:)
       subd_pos_prev(dir) = modulo(subd_pos(dir) - 2, nproc) + 1
@@ -224,7 +224,7 @@ module m_mesh
     if (dir == DIR_C) then
       dims_padded = self%vert_dims_padded
     else
-      dims_padded(1) = self%sz 
+      dims_padded(1) = self%sz
       dims_padded(2) = self%vert_dims_padded(dir)
       dims_padded(3) = self%get_n_groups(dir)
     end if
@@ -248,7 +248,8 @@ module m_mesh
     integer, intent(in) :: dir
     integer :: n_groups
 
-      n_groups = (product(self%vert_dims_padded(:))/self%vert_dims_padded(dir)) /self%sz
+    n_groups = (product(self%vert_dims_padded(:))/ &
+                self%vert_dims_padded(dir))/self%sz
 
   end function
 
@@ -258,7 +259,7 @@ module m_mesh
     class(field_t), intent(in) :: phi
     integer :: n_groups
 
-      n_groups = self%get_n_groups(phi%dir)
+    n_groups = self%get_n_groups(phi%dir)
 
   end function
 
@@ -325,37 +326,37 @@ module m_mesh
     ! default to n_vert
     n = n_vert
 
-    select case(data_loc)
-      case(CELL)
+    select case (data_loc)
+    case (CELL)
+      n = n_cell
+    case (VERT)
+      n = n_vert
+    case (X_FACE)
+      if (dir /= DIR_X) then
         n = n_cell
-      case(VERT)
-        n = n_vert
-      case(X_FACE)
-        if (dir /= DIR_X) then
-          n = n_cell
-        end if
-      case(Y_FACE)
-        if (dir /= DIR_Y) then
-          n = n_cell
-        end if
-      case(Z_FACE)
-        if (dir /= DIR_Z) then
-          n = n_cell
-        end if
-      case(X_EDGE)
-        if (dir == DIR_X) then
-          n = n_cell
-        end if
-      case(Y_EDGE)
-        if (dir == DIR_Y) then
-          n = n_cell
-        end if
-      case(Z_EDGE)
-        if (dir == DIR_Z) then
-          n = n_cell
-        end if
-      case(NONE)
-        error stop
+      end if
+    case (Y_FACE)
+      if (dir /= DIR_Y) then
+        n = n_cell
+      end if
+    case (Z_FACE)
+      if (dir /= DIR_Z) then
+        n = n_cell
+      end if
+    case (X_EDGE)
+      if (dir == DIR_X) then
+        n = n_cell
+      end if
+    case (Y_EDGE)
+      if (dir == DIR_Y) then
+        n = n_cell
+      end if
+    case (Z_EDGE)
+      if (dir == DIR_Z) then
+        n = n_cell
+      end if
+    case (none)
+      error stop
     end select
   end function
 
@@ -377,7 +378,6 @@ module m_mesh
 
     is_root_rank = (self%nrank == 0)
 
-end function
-
+  end function
 
 end module m_mesh

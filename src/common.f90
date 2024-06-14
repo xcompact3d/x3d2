@@ -18,7 +18,7 @@ module m_common
                         X_EDGE = 101, & ! Data on edges along X
                         Y_EDGE = 102, & ! Data on edges along Y
                         Z_EDGE = 103, & ! Data on edges along Z
-                        NONE = -1 ! The location of data isn't specified
+                        none = -1 ! The location of data isn't specified
   integer, protected :: &
     rdr_map(4, 4) = reshape([0, RDR_X2Y, RDR_X2Z, RDR_X2C, &
                              RDR_Y2X, 0, RDR_Y2Z, RDR_Y2C, &

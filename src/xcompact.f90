@@ -61,7 +61,7 @@ program xcompact
 
   ! Global number of cells in each direction
   dims_global = [256, 256, 256]
-  
+
   ! Global domain dimensions
   L_global = [2*pi, 2*pi, 2*pi]
 

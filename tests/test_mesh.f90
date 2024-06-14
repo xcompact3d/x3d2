@@ -12,7 +12,7 @@ program test_allocator
   logical :: allpass
   integer, dimension(3) :: nproc_dir, dims_global
   logical, dimension(3) :: periodic_BC
-  real(dp), dimension(3) :: L_global 
+  real(dp), dimension(3) :: L_global
   class(allocator_t), allocatable :: allocator
   class(mesh_t), allocatable :: mesh
   class(field_t), pointer :: ptr1, ptr2, ptr3
@@ -34,7 +34,7 @@ program test_allocator
   ! Domain decomposition in each direction
   nproc_dir = [4, 1, 1]
 
-  periodic_BC = [.false. , .true., .false.]
+  periodic_BC = [.false., .true., .false.]
 
   mesh = mesh_t(dims_global, nproc_dir, L_global, periodic_BC)
 
@@ -56,7 +56,8 @@ program test_allocator
   if (mesh%par%nrank == 3) then
     if (.not. (n_cell == 3 .and. n_vert == 4)) then
       allpass = .false.
-      print *, "error in get_n and last rank, n_cell=", n_cell, "n_vert=", n_vert
+      print *, "error in get_n and last rank, n_cell=", &
+        n_cell, "n_vert=", n_vert
     end if
   else
     if (.not. (n_cell == 4 .and. n_vert == 4)) then
@@ -67,8 +68,8 @@ program test_allocator
 
   n_x_face = mesh%get_n(ptr3)
   if (.not. n_x_face == 3) then
-      allpass = .false.
-      print *, "error in get_n for x_face, n_x_face=", n_x_face
+    allpass = .false.
+    print *, "error in get_n for x_face, n_x_face=", n_x_face
   end if
 
   dims = mesh%get_padded_dims(DIR_C)
@@ -79,12 +80,12 @@ program test_allocator
     print *, "error with padded dimensions, dims_padded=", dims
   end if
 
-  if (.not. abs(mesh%geo%d(DIR_X) - 1._dp/(16-1)) .lt. eps ) then
+  if (.not. abs(mesh%geo%d(DIR_X) - 1._dp/(16 - 1)) < eps) then
     allpass = .false.
     print *, "error with geo%d, non periodic BC"
   end if
 
-  if (.not. abs(mesh%geo%d(DIR_Y) - 1._dp/4) .lt. eps ) then
+  if (.not. abs(mesh%geo%d(DIR_Y) - 1._dp/4) < eps) then
     allpass = .false.
     print *, "error with geo%d, periodic BC"
   end if

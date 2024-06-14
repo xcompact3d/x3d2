@@ -68,7 +68,6 @@ program test_reorder
   ierr = cudaGetDevice(devnum)
 #endif
 
-
   ! Global number of cells in each direction
   dims_global = [32, 64, 96]
 
@@ -110,18 +109,18 @@ program test_reorder
   dims_padded = mesh%get_padded_dims(DIR_C)
 
   ! Test indexing only
-  do k = 1, mesh%get_n(DIR_Z, VERT) 
-    do j = 1, mesh%get_n(DIR_Y, VERT) 
-      do i = 1, mesh%get_n(DIR_X, VERT) 
+  do k = 1, mesh%get_n(DIR_Z, VERT)
+    do j = 1, mesh%get_n(DIR_Y, VERT)
+      do i = 1, mesh%get_n(DIR_X, VERT)
         call test_index_reversing(pass_X, i, j, k, DIR_X, &
                                   mesh%get_sz(), dims_padded(1), &
-                                  dims_padded(2),  dims_padded(3))
+                                  dims_padded(2), dims_padded(3))
         call test_index_reversing(pass_Y, i, j, k, DIR_Y, &
                                   mesh%get_sz(), dims_padded(1), &
-                                  dims_padded(2),  dims_padded(3))
+                                  dims_padded(2), dims_padded(3))
         call test_index_reversing(pass_Z, i, j, k, DIR_Z, &
                                   mesh%get_sz(), dims_padded(1), &
-                                  dims_padded(2),  dims_padded(3))
+                                  dims_padded(2), dims_padded(3))
       end do
     end do
   end do

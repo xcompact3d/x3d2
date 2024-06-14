@@ -56,7 +56,7 @@ program test_omp_adamsbashforth
 
   ! Global number of cells in each direction
   dims_global = [1, 1, 1]
-  
+
   ! Global domain dimensions
   L_global = [2*pi, 2*pi, 2*pi]
 
@@ -67,21 +67,21 @@ program test_omp_adamsbashforth
 
   ! allocate object
 #ifdef CUDA
-    cuda_allocator = cuda_allocator_t(mesh, 1)
-    allocator => cuda_allocator
-    if (nrank == 0) print *, 'CUDA allocator instantiated'
-  
-    cuda_backend = cuda_backend_t(mesh, allocator)
-    backend => cuda_backend
-    if (nrank == 0) print *, 'CUDA backend instantiated'
+  cuda_allocator = cuda_allocator_t(mesh, 1)
+  allocator => cuda_allocator
+  if (nrank == 0) print *, 'CUDA allocator instantiated'
+
+  cuda_backend = cuda_backend_t(mesh, allocator)
+  backend => cuda_backend
+  if (nrank == 0) print *, 'CUDA backend instantiated'
 #else
-    omp_allocator = allocator_t(mesh, 1)
-    allocator => omp_allocator
-    if (nrank == 0) print *, 'OpenMP allocator instantiated'
-  
-    omp_backend = omp_backend_t(mesh, allocator)
-    backend => omp_backend
-    if (nrank == 0) print *, 'OpenMP backend instantiated'
+  omp_allocator = allocator_t(mesh, 1)
+  allocator => omp_allocator
+  if (nrank == 0) print *, 'OpenMP allocator instantiated'
+
+  omp_backend = omp_backend_t(mesh, allocator)
+  backend => omp_backend
+  if (nrank == 0) print *, 'OpenMP backend instantiated'
 #endif
 
   time_integrator = time_intg_t(allocator=allocator, &

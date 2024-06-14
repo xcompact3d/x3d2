@@ -1,7 +1,7 @@
 module m_tdsops
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_common, only: dp, pi, VERT, CELL, NONE
+  use m_common, only: dp, pi, VERT, CELL, none
   use m_mesh, only: mesh_t
 
   implicit none
@@ -141,8 +141,7 @@ contains
 
     tds_n = mesh%get_n(dir, data_loc)
 
-    end function
-
+  end function
 
   subroutine deriv_1st(self, delta, scheme, bc_start, bc_end, sym)
     implicit none

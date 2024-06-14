@@ -11,7 +11,7 @@ program test_allocator
 
   logical :: allpass
   integer, dimension(3) :: nproc_dir, dims_global
-  real(dp), dimension(3) :: L_global 
+  real(dp), dimension(3) :: L_global
   class(allocator_t), allocatable :: allocator
   class(mesh_t), allocatable :: mesh
   class(field_t), pointer :: ptr1, ptr2, ptr3

@@ -24,7 +24,7 @@ module m_field
     module procedure field_init
   end interface field_t
 
-  contains
+contains
 
   subroutine set_data_loc(self, data_loc)
     class(field_t) :: self
@@ -44,7 +44,6 @@ module m_field
 
   end subroutine set_shape
 
-
   function field_init(ngrid, next, id) result(f)
     integer, intent(in) :: ngrid, id
     type(field_t), pointer, intent(in) :: next
@@ -55,6 +54,5 @@ module m_field
     f%next => next
     f%id = id
   end function field_init
-
 
 end module m_field

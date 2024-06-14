@@ -40,10 +40,9 @@ program test_omp_transeq
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
 
-
   ! Global number of cells in each direction
   dims_global = [96, 96, 96]
-  
+
   ! Global domain dimensions
   L_global = [2*pi, 2*pi, 2*pi]
 
@@ -65,7 +64,7 @@ program test_omp_transeq
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
   n = mesh%get_n(DIR_X, VERT)
-  n_groups = mesh%get_n_groups(DIR_X) 
+  n_groups = mesh%get_n_groups(DIR_X)
 
   nu = 1._dp
   omp_backend%nu = nu
