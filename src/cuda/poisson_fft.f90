@@ -5,7 +5,8 @@ module m_cuda_poisson_fft
   use cufft
 
   use m_allocator, only: field_t
-  use m_common, only: dp
+  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, CELL
+  use m_mesh, only: mesh_t
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t
 
@@ -58,9 +59,9 @@ contains
 
     call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps)
 
-    nx = self%mesh%get_n(DIR_X, CELL)
-    ny = self%mesh%get_n(DIR_Y, CELL)
-    nz = self%mesh%get_n(DIR_Z, CELL)
+    nx = poisson_fft%mesh%get_n(DIR_X, CELL)
+    ny = poisson_fft%mesh%get_n(DIR_Y, CELL)
+    nz = poisson_fft%mesh%get_n(DIR_Z, CELL)
 
     allocate (poisson_fft%waves_dev(nx/2 + 1, ny, nz))
     poisson_fft%waves_dev = poisson_fft%waves
