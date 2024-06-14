@@ -9,8 +9,9 @@ module m_cuda_backend
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
+  use m_mesh, only: mesh_t
   use m_poisson_fft, only: poisson_fft_t
-  use m_tdsops, only: dirps_t, tdsops_t
+  use m_tdsops, only: dirps_t, tdsops_t, get_tds_n
 
   use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
   use m_cuda_common, only: SZ
@@ -261,7 +262,7 @@ contains
     ! TODO: don't hardcode n_halo
     n_halo = 4
     n_groups = self%mesh%get_n_groups(dir)
-    n = self%mesh%get_n(u)
+    n = self%mesh%get_n(dir, VERT)
     nproc_dir = self%mesh%par%nproc_dir(dir)
     pprev = self%mesh%par%pprev(dir)
     pnext = self%mesh%par%pnext(dir)
@@ -367,7 +368,7 @@ contains
       error stop 'DIR mismatch between fields and dirps in tds_solve.'
     end if
 
-    blocks = dim3(dirps%n_blocks, 1, 1); threads = dim3(SZ, 1, 1)
+    blocks = dim3(self%mesh%get_n_groups(u), 1, 1); threads = dim3(SZ, 1, 1)
 
     call tds_solve_dist(self, du, u, dirps, tdsops, blocks, threads)
 
@@ -671,17 +672,18 @@ contains
     select type (f); type is (cuda_field_t); data = f%data_d; end select
   end subroutine copy_f_to_data_cuda
 
-  subroutine init_cuda_poisson_fft(self, xdirps, ydirps, zdirps)
+  subroutine init_cuda_poisson_fft(self, mesh, xdirps, ydirps, zdirps)
     implicit none
 
     class(cuda_backend_t) :: self
+    class(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
     allocate (cuda_poisson_fft_t :: self%poisson_fft)
 
     select type (poisson_fft => self%poisson_fft)
     type is (cuda_poisson_fft_t)
-      poisson_fft = cuda_poisson_fft_t(xdirps, ydirps, zdirps)
+      poisson_fft = cuda_poisson_fft_t(mesh, xdirps, ydirps, zdirps)
     end select
 
   end subroutine init_cuda_poisson_fft
