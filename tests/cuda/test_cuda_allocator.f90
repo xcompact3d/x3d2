@@ -9,11 +9,15 @@ program test_allocator_cuda
 
   logical :: allpass
   integer, parameter :: dims(3) = [8, 8, 8]
+  integer, parameter :: nproc_dir(3) = [1, 1, 1]
+  real(dp), parameter :: L_global(3) = [2*pi, 2*pi, 2*pi]
   class(allocator_t), allocatable :: allocator
   class(field_t), pointer :: ptr1, ptr2, ptr3
   integer, allocatable :: l(:)
 
-  allocator = cuda_allocator_t(dims(1), dims(2), dims(3), 8)
+  mesh = mesh_t(dims, nproc_dir, L_global)
+
+  allocator = cuda_allocator_t(mesh, 8)
 
   allpass = .true.
 
