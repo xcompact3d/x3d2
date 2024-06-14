@@ -3,15 +3,13 @@ program test_omp_tridiag
   use mpi
   use omp_lib
 
-  use m_common, only: dp, pi, DIR_X, VERT
+  use m_common, only: dp, pi
   use m_omp_common, only: SZ
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_exec_dist, only: exec_dist_tds_compact
-  use m_allocator, only: allocator_t
   use m_field, only: field_t
 
   use m_tdsops, only: tdsops_t, tdsops_init
-  use m_mesh, only: mesh_t
 
   implicit none
 
@@ -39,8 +37,6 @@ program test_omp_tridiag
   integer :: ierr, memClockRt, memBusWidth
   real(dp), dimension(3) :: L_global
   integer, dimension(3) :: dims_global, nproc_dir
-  class(mesh_t), allocatable :: mesh
-  class(allocator_t), allocatable :: allocator
 
   real(dp) :: dx, dx_per, norm_du, tol = 1d-8, tstart, tend
   real(dp) :: achievedBW, deviceBW, achievedBWmax, achievedBWmin
@@ -51,30 +47,15 @@ program test_omp_tridiag
 
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
-  ! Global number of cells in each direction
-  dims_global = [1024, 64, 64]
+  pnext = modulo(nrank - nproc + 1, nproc)
+  pprev = modulo(nrank - 1, nproc)
 
-  ! Global domain dimensions
-  L_global = [2*pi, 2*pi, 2*pi]
-
-  ! Domain decomposition in each direction
-  nproc_dir = [nproc, 1, 1]
-
-  mesh = mesh_t(dims_global, nproc_dir, L_global)
-  allocator = allocator_t(mesh, SZ)
-  
-  pnext = mesh%par%pnext(DIR_X)
-  pprev = mesh%par%pprev(DIR_X)
-
-  n_glob = dims_global(1)
-  n = mesh%get_n(DIR_X, VERT)
-  n_groups = mesh%get_n_groups(DIR_X)
+  n_glob = 1024
+  n = n_glob/nproc
+  n_groups = 64*64/SZ 
   n_iters = 1
 
-  u_field => allocator%get_block(DIR_X, VERT)
-  du_field => allocator%get_block(DIR_X, VERT)
-  u = u_field%data
-  du = du_field%data
+  allocate (u(SZ, n, n_groups), du(SZ, n, n_groups)) 
 
   dx_per = 2*pi/n_glob
   dx = 2*pi/(n_glob - 1)
