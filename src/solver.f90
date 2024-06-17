@@ -49,7 +49,7 @@ module m_solver
     class(field_t), pointer :: u, v, w
 
     class(base_backend_t), pointer :: backend
-    class(mesh_t), allocatable :: mesh
+    class(mesh_t), pointer :: mesh
     class(time_intg_t), pointer :: time_integrator
     type(allocator_t), pointer :: host_allocator
     class(dirps_t), pointer :: xdirps, ydirps, zdirps
@@ -86,7 +86,7 @@ contains
     implicit none
 
     class(base_backend_t), target, intent(inout) :: backend
-    type(mesh_t), intent(in) :: mesh
+    type(mesh_t), target, intent(inout) :: mesh
     class(time_intg_t), target, intent(inout) :: time_integrator
     type(allocator_t), target, intent(inout) :: host_allocator
     class(dirps_t), target, intent(inout) :: xdirps, ydirps, zdirps
@@ -101,7 +101,7 @@ contains
     real(dp), dimension(3) :: xloc
 
     solver%backend => backend
-    solver%mesh = mesh
+    solver%mesh => mesh
     solver%time_integrator => time_integrator
     solver%host_allocator => host_allocator
 
