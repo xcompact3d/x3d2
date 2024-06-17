@@ -2,12 +2,13 @@ set(SRC
   allocator.f90
   backend.f90
   common.f90
-  domain.f90
   poisson_fft.f90
   solver.f90
   tdsops.f90
   time_integrator.f90
   ordering.f90
+  mesh.f90
+  field.f90
   omp/backend.f90
   omp/common.f90
   omp/kernels/distributed.f90

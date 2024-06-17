@@ -40,7 +40,8 @@ contains
     call der_univ_dist<<<blocks, threads>>>( & !&
       du, du_send_s, du_send_e, u, u_recv_s, u_recv_e, &
       tdsops%coeffs_s_dev, tdsops%coeffs_e_dev, tdsops%coeffs_dev, &
-      tdsops%n, tdsops%dist_fw_dev, tdsops%dist_bw_dev, tdsops%dist_af_dev &
+      tdsops%tds_n, tdsops%dist_fw_dev, tdsops%dist_bw_dev, &
+      tdsops%dist_af_dev &
       )
 
     ! halo exchange for 2x2 systems
@@ -49,7 +50,7 @@ contains
 
     call der_univ_subs<<<blocks, threads>>>( & !&
       du, du_recv_s, du_recv_e, &
-      tdsops%n, tdsops%dist_sa_dev, tdsops%dist_sc_dev &
+      tdsops%tds_n, tdsops%dist_sa_dev, tdsops%dist_sc_dev &
       )
 
   end subroutine exec_dist_tds_compact
@@ -93,7 +94,7 @@ contains
       dud_send_s, dud_send_e, &
       d2u_send_s, d2u_send_e, &
       u, u_recv_s, u_recv_e, &
-      v, v_recv_s, v_recv_e, der1st%n, &
+      v, v_recv_s, v_recv_e, der1st%tds_n, &
       der1st%coeffs_s_dev, der1st%coeffs_e_dev, der1st%coeffs_dev, &
       der1st%dist_fw_dev, der1st%dist_bw_dev, der1st%dist_af_dev, &
       der2nd%coeffs_s_dev, der2nd%coeffs_e_dev, der2nd%coeffs_dev, &
@@ -116,7 +117,7 @@ contains
       d2u_recv_s, d2u_recv_e, &
       der1st%dist_sa_dev, der1st%dist_sc_dev, &
       der2nd%dist_sa_dev, der2nd%dist_sc_dev, &
-      der1st%n, nu &
+      der1st%tds_n, nu &
       )
 
   end subroutine exec_dist_transeq_3fused

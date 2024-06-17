@@ -2,7 +2,8 @@ program test_omp_adamsbashforth
   use iso_fortran_env, only: stderr => error_unit
   use mpi
 
-  use m_common, only: dp, globs_t, DIR_X
+  use m_common, only: dp, DIR_X, pi
+  use m_mesh, only: mesh_t
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_time_integrator, only: time_intg_t
@@ -26,10 +27,12 @@ program test_omp_adamsbashforth
   real(dp) :: u0
   class(field_t), pointer :: u, v, w
   class(field_t), pointer :: du, dv, dw
+  integer, dimension(3) :: dims_global, nproc_dir
+  real(dp), dimension(3) :: L_global
 
-  type(globs_t) :: globs
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
+  class(mesh_t), allocatable :: mesh
 #ifdef CUDA
   type(cuda_backend_t), target :: cuda_backend
   type(cuda_allocator_t), target :: cuda_allocator
@@ -51,36 +54,34 @@ program test_omp_adamsbashforth
   ierr = cudaGetDevice(devnum)
 #endif
 
-  ! set globs parameters
-  globs%nx = 1
-  globs%ny = 1
-  globs%nz = 1
+  ! Global number of cells in each direction
+  dims_global = [1, 1, 1]
 
-  globs%nx_loc = globs%nx
-  globs%ny_loc = globs%ny
-  globs%nz_loc = globs%nz
+  ! Global domain dimensions
+  L_global = [2*pi, 2*pi, 2*pi]
 
-  globs%n_groups_x = globs%ny_loc*globs%nz_loc
-  globs%n_groups_y = globs%nx_loc*globs%nz_loc
-  globs%n_groups_z = globs%nx_loc*globs%ny_loc
+  ! Domain decomposition in each direction
+  nproc_dir = [1, 1, 1]
+
+  mesh = mesh_t(dims_global, nproc_dir, L_global)
 
   ! allocate object
 #ifdef CUDA
-  cuda_allocator = cuda_allocator_t(globs%nx, globs%ny, globs%nz, 1)
+  cuda_allocator = cuda_allocator_t(mesh, 1)
   allocator => cuda_allocator
-  print *, 'OpenCUDA allocator instantiated'
+  if (nrank == 0) print *, 'CUDA allocator instantiated'
 
-  cuda_backend = cuda_backend_t(globs, allocator)
+  cuda_backend = cuda_backend_t(mesh, allocator)
   backend => cuda_backend
-  print *, 'OpenCUDA backend instantiated'
+  if (nrank == 0) print *, 'CUDA backend instantiated'
 #else
-  omp_allocator = allocator_t(globs%nx, globs%ny, globs%nz, 1)
+  omp_allocator = allocator_t(mesh, 1)
   allocator => omp_allocator
-  print *, 'OpenMP allocator instantiated'
+  if (nrank == 0) print *, 'OpenMP allocator instantiated'
 
-  omp_backend = omp_backend_t(globs, allocator)
+  omp_backend = omp_backend_t(mesh, allocator)
   backend => omp_backend
-  print *, 'OpenMP backend instantiated'
+  if (nrank == 0) print *, 'OpenMP backend instantiated'
 #endif
 
   time_integrator = time_intg_t(allocator=allocator, &

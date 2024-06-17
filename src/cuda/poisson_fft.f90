@@ -5,7 +5,8 @@ module m_cuda_poisson_fft
   use cufft
 
   use m_allocator, only: field_t
-  use m_common, only: dp
+  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, CELL
+  use m_mesh, only: mesh_t
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t
 
@@ -43,9 +44,10 @@ module m_cuda_poisson_fft
 
 contains
 
-  function init(xdirps, ydirps, zdirps) result(poisson_fft)
+  function init(mesh, xdirps, ydirps, zdirps) result(poisson_fft)
     implicit none
 
+    class(mesh_t), intent(in) :: mesh
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
     type(cuda_poisson_fft_t) :: poisson_fft
@@ -55,7 +57,7 @@ contains
     integer :: ierr
     integer(int_ptr_kind()) :: worksize
 
-    call poisson_fft%base_init(xdirps, ydirps, zdirps)
+    call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps)
 
     nx = poisson_fft%nx; ny = poisson_fft%ny; nz = poisson_fft%nz
 

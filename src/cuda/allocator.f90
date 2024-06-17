@@ -1,6 +1,8 @@
 module m_cuda_allocator
   use m_allocator, only: allocator_t, field_t
   use m_common, only: dp
+  use m_field, only: field_t
+  use m_mesh, only: mesh_t
 
   implicit none
 
@@ -47,11 +49,12 @@ contains
 
   end subroutine set_shape_cuda
 
-  function cuda_allocator_init(nx, ny, nz, sz) result(allocator)
-    integer, intent(in) :: nx, ny, nz, sz
+  function cuda_allocator_init(mesh, sz) result(allocator)
+    class(mesh_t), intent(inout) :: mesh
+    integer, intent(in) :: sz
     type(cuda_allocator_t) :: allocator
 
-    allocator%allocator_t = allocator_t(nx, ny, nz, sz)
+    allocator%allocator_t = allocator_t(mesh, sz)
   end function cuda_allocator_init
 
   function create_cuda_block(self, next) result(ptr)

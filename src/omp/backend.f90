@@ -2,14 +2,15 @@ module m_omp_backend
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_ordering, only: get_index_reordering
-  use m_common, only: dp, globs_t, &
+  use m_common, only: dp, globs_t, VERT, DIR_X, DIR_Y, DIR_Z, DIR_C, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
-  use m_tdsops, only: dirps_t, tdsops_t
+  use m_tdsops, only: dirps_t, tdsops_t, get_tds_n
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
   use m_omp_sendrecv, only: sendrecv_fields
 
   use m_omp_common, only: SZ
   use m_omp_poisson_fft, only: omp_poisson_fft_t
+  use m_mesh, only: mesh_t
 
   implicit none
 
@@ -48,14 +49,14 @@ module m_omp_backend
 
 contains
 
-  function init(globs, allocator) result(backend)
+  function init(mesh, allocator) result(backend)
     implicit none
 
-    class(globs_t) :: globs
+    class(mesh_t), target, intent(inout) :: mesh
     class(allocator_t), target, intent(inout) :: allocator
     type(omp_backend_t) :: backend
 
-    integer :: n_halo, n_block
+    integer :: n_halo, n_groups
 
     call backend%base_init()
 
@@ -66,57 +67,63 @@ contains
     end select
 
     n_halo = 4
-    n_block = globs%n_groups_x
+    backend%mesh => mesh
+    n_groups = maxval([backend%mesh%get_n_groups(DIR_X), &
+                       backend%mesh%get_n_groups(DIR_Y), &
+                       backend%mesh%get_n_groups(DIR_Z)])
 
-    allocate (backend%u_send_s(SZ, n_halo, n_block))
-    allocate (backend%u_send_e(SZ, n_halo, n_block))
-    allocate (backend%u_recv_s(SZ, n_halo, n_block))
-    allocate (backend%u_recv_e(SZ, n_halo, n_block))
-    allocate (backend%v_send_s(SZ, n_halo, n_block))
-    allocate (backend%v_send_e(SZ, n_halo, n_block))
-    allocate (backend%v_recv_s(SZ, n_halo, n_block))
-    allocate (backend%v_recv_e(SZ, n_halo, n_block))
-    allocate (backend%w_send_s(SZ, n_halo, n_block))
-    allocate (backend%w_send_e(SZ, n_halo, n_block))
-    allocate (backend%w_recv_s(SZ, n_halo, n_block))
-    allocate (backend%w_recv_e(SZ, n_halo, n_block))
+    allocate (backend%u_send_s(SZ, n_halo, n_groups))
+    allocate (backend%u_send_e(SZ, n_halo, n_groups))
+    allocate (backend%u_recv_s(SZ, n_halo, n_groups))
+    allocate (backend%u_recv_e(SZ, n_halo, n_groups))
+    allocate (backend%v_send_s(SZ, n_halo, n_groups))
+    allocate (backend%v_send_e(SZ, n_halo, n_groups))
+    allocate (backend%v_recv_s(SZ, n_halo, n_groups))
+    allocate (backend%v_recv_e(SZ, n_halo, n_groups))
+    allocate (backend%w_send_s(SZ, n_halo, n_groups))
+    allocate (backend%w_send_e(SZ, n_halo, n_groups))
+    allocate (backend%w_recv_s(SZ, n_halo, n_groups))
+    allocate (backend%w_recv_e(SZ, n_halo, n_groups))
 
-    allocate (backend%du_send_s(SZ, 1, n_block))
-    allocate (backend%du_send_e(SZ, 1, n_block))
-    allocate (backend%du_recv_s(SZ, 1, n_block))
-    allocate (backend%du_recv_e(SZ, 1, n_block))
-    allocate (backend%dud_send_s(SZ, 1, n_block))
-    allocate (backend%dud_send_e(SZ, 1, n_block))
-    allocate (backend%dud_recv_s(SZ, 1, n_block))
-    allocate (backend%dud_recv_e(SZ, 1, n_block))
-    allocate (backend%d2u_send_s(SZ, 1, n_block))
-    allocate (backend%d2u_send_e(SZ, 1, n_block))
-    allocate (backend%d2u_recv_s(SZ, 1, n_block))
-    allocate (backend%d2u_recv_e(SZ, 1, n_block))
+    allocate (backend%du_send_s(SZ, 1, n_groups))
+    allocate (backend%du_send_e(SZ, 1, n_groups))
+    allocate (backend%du_recv_s(SZ, 1, n_groups))
+    allocate (backend%du_recv_e(SZ, 1, n_groups))
+    allocate (backend%dud_send_s(SZ, 1, n_groups))
+    allocate (backend%dud_send_e(SZ, 1, n_groups))
+    allocate (backend%dud_recv_s(SZ, 1, n_groups))
+    allocate (backend%dud_recv_e(SZ, 1, n_groups))
+    allocate (backend%d2u_send_s(SZ, 1, n_groups))
+    allocate (backend%d2u_send_e(SZ, 1, n_groups))
+    allocate (backend%d2u_recv_s(SZ, 1, n_groups))
+    allocate (backend%d2u_recv_e(SZ, 1, n_groups))
 
   end function init
 
   subroutine alloc_omp_tdsops( &
-    self, tdsops, n, dx, operation, scheme, &
+    self, tdsops, dir, operation, scheme, &
     n_halo, from_to, bc_start, bc_end, sym, c_nu, nu0_nu &
     )
     implicit none
 
     class(omp_backend_t) :: self
     class(tdsops_t), allocatable, intent(inout) :: tdsops
-    integer, intent(in) :: n
-    real(dp), intent(in) :: dx
+    integer, intent(in) :: dir
     character(*), intent(in) :: operation, scheme
     integer, optional, intent(in) :: n_halo
     character(*), optional, intent(in) :: from_to, bc_start, bc_end
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
+    integer :: tds_n
+    real(dp) :: delta
 
     allocate (tdsops_t :: tdsops)
 
     select type (tdsops)
     type is (tdsops_t)
-      tdsops = tdsops_t(n, dx, operation, scheme, n_halo, from_to, &
+      tds_n = get_tds_n(self%mesh, dir, from_to)
+      delta = self%mesh%geo%d(dir)
+      tdsops = tdsops_t(tds_n, delta, operation, scheme, n_halo, from_to, &
                         bc_start, bc_end, sym, c_nu, nu0_nu)
     end select
 
@@ -168,61 +175,67 @@ contains
     class(field_t), intent(in) :: u, v, w
     type(dirps_t), intent(in) :: dirps
 
-    call transeq_halo_exchange(self, u, v, w, dirps)
+    call transeq_halo_exchange(self, u, v, w, dirps%dir)
 
     call transeq_dist_component(self, du, u, u, &
                                 self%u_recv_s, self%u_recv_e, &
                                 self%u_recv_s, self%u_recv_e, &
                                 dirps%der1st, dirps%der1st_sym, &
-                                dirps%der2nd, dirps)
+                                dirps%der2nd, dirps%dir)
     call transeq_dist_component(self, dv, v, u, &
                                 self%v_recv_s, self%v_recv_e, &
                                 self%u_recv_s, self%u_recv_e, &
                                 dirps%der1st_sym, dirps%der1st, &
-                                dirps%der2nd_sym, dirps)
+                                dirps%der2nd_sym, dirps%dir)
     call transeq_dist_component(self, dw, w, u, &
                                 self%w_recv_s, self%w_recv_e, &
                                 self%u_recv_s, self%u_recv_e, &
                                 dirps%der1st_sym, dirps%der1st, &
-                                dirps%der2nd_sym, dirps)
+                                dirps%der2nd_sym, dirps%dir)
 
   end subroutine transeq_omp_dist
 
-  subroutine transeq_halo_exchange(self, u, v, w, dirps)
+  subroutine transeq_halo_exchange(self, u, v, w, dir)
     class(omp_backend_t) :: self
     class(field_t), intent(in) :: u, v, w
-    type(dirps_t), intent(in) :: dirps
-    integer :: n_halo
+    integer, intent(in) :: dir
+    integer :: n_halo, n, nproc_dir, pprev, pnext
+    integer :: n_groups
 
     ! TODO: don't hardcode n_halo
     n_halo = 4
+    n_groups = self%mesh%get_n_groups(dir)
+    n = self%mesh%get_n(u)
+    nproc_dir = self%mesh%par%nproc_dir(dir)
+    pprev = self%mesh%par%pprev(dir)
+    pnext = self%mesh%par%pnext(dir)
 
     call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
-                           dirps%n, dirps%n_blocks)
+                           n, n_groups)
     call copy_into_buffers(self%v_send_s, self%v_send_e, v%data, &
-                           dirps%n, dirps%n_blocks)
+                           n, n_groups)
     call copy_into_buffers(self%w_send_s, self%w_send_e, w%data, &
-                           dirps%n, dirps%n_blocks)
+                           n, n_groups)
 
     call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
                          self%u_send_s, self%u_send_e, &
-                         SZ*n_halo*dirps%n_blocks, &
-                         dirps%nproc_dir, dirps%pprev, dirps%pnext)
+                         SZ*n_halo*n_groups, &
+                         nproc_dir, pprev, pnext)
     call sendrecv_fields(self%v_recv_s, self%v_recv_e, &
                          self%v_send_s, self%v_send_e, &
-                         SZ*n_halo*dirps%n_blocks, &
-                         dirps%nproc_dir, dirps%pprev, dirps%pnext)
+                         SZ*n_halo*n_groups, &
+                         nproc_dir, pprev, pnext)
     call sendrecv_fields(self%w_recv_s, self%w_recv_e, &
                          self%w_send_s, self%w_send_e, &
-                         SZ*n_halo*dirps%n_blocks, &
-                         dirps%nproc_dir, dirps%pprev, dirps%pnext)
+                         SZ*n_halo*n_groups, &
+                         nproc_dir, pprev, pnext)
 
   end subroutine transeq_halo_exchange
 
   subroutine transeq_dist_component(self, rhs, u, conv, &
                                     u_recv_s, u_recv_e, &
                                     conv_recv_s, conv_recv_e, &
-                                    tdsops_du, tdsops_dud, tdsops_d2u, dirps)
+                                    tdsops_du, tdsops_dud, tdsops_d2u, dir)
       !! Computes RHS_x^u following:
       !!
       !! rhs_x^u = -0.5*(conv*du/dx + d(u*conv)/dx) + nu*d2u/dx2
@@ -234,12 +247,12 @@ contains
     class(tdsops_t), intent(in) :: tdsops_du
     class(tdsops_t), intent(in) :: tdsops_dud
     class(tdsops_t), intent(in) :: tdsops_d2u
-    type(dirps_t), intent(in) :: dirps
+    integer, intent(in) :: dir
     class(field_t), pointer :: du, d2u, dud
 
-    du => self%allocator%get_block(dirps%dir)
-    dud => self%allocator%get_block(dirps%dir)
-    d2u => self%allocator%get_block(dirps%dir)
+    du => self%allocator%get_block(dir, VERT)
+    dud => self%allocator%get_block(dir, VERT)
+    d2u => self%allocator%get_block(dir, VERT)
 
     call exec_dist_transeq_compact( &
       rhs%data, du%data, dud%data, d2u%data, &
@@ -249,7 +262,8 @@ contains
       u%data, u_recv_s, u_recv_e, &
       conv%data, conv_recv_s, conv_recv_e, &
       tdsops_du, tdsops_dud, tdsops_d2u, self%nu, &
-      dirps%nproc_dir, dirps%pprev, dirps%pnext, dirps%n_blocks)
+      self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), &
+      self%mesh%par%pnext(dir), self%mesh%get_n_groups(dir))
 
     call self%allocator%release_block(du)
     call self%allocator%release_block(dud)
@@ -283,24 +297,31 @@ contains
     class(field_t), intent(in) :: u
     type(dirps_t), intent(in) :: dirps
     class(tdsops_t), intent(in) :: tdsops
-    integer :: n_halo
+    integer :: n_halo, n_groups, dir
 
     ! TODO: don't hardcode n_halo
     n_halo = 4
-    call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
-                           dirps%n, dirps%n_blocks)
+    dir = u%dir
+    n_groups = self%mesh%get_n_groups(u)
 
+    call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
+                           tdsops%tds_n, n_groups)
+
+    print *, self%mesh%par%nrank, n_groups
     ! halo exchange
     call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
                          self%u_send_s, self%u_send_e, &
-                         SZ*n_halo*dirps%n_blocks, &
-                         dirps%nproc_dir, dirps%pprev, dirps%pnext)
+                         SZ*n_halo*n_groups, &
+                         self%mesh%par%nproc_dir(dir), &
+                         self%mesh%par%pprev(dir), &
+                         self%mesh%par%pnext(dir))
 
     call exec_dist_tds_compact( &
       du%data, u%data, self%u_recv_s, self%u_recv_e, &
       self%du_send_s, self%du_send_e, self%du_recv_s, self%du_recv_e, &
-      tdsops, dirps%nproc_dir, dirps%pprev, dirps%pnext, dirps%n_blocks &
-      )
+      tdsops, self%mesh%par%nproc_dir(dir), &
+      self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), &
+      n_groups)
 
   end subroutine tds_solve_dist
 
@@ -311,43 +332,18 @@ contains
     class(field_t), intent(inout) :: u_
     class(field_t), intent(in) :: u
     integer, intent(in) :: direction
-    integer :: ndir_loc, ndir_groups
+    integer, dimension(3) :: dims
     integer :: i, j, k
     integer :: out_i, out_j, out_k
 
-    select case (direction)
-    case (RDR_X2Y)
-      ndir_loc = self%xdirps%n
-      ndir_groups = self%allocator%xdims_padded(3)
-    case (RDR_X2Z)
-      ndir_loc = self%xdirps%n
-      ndir_groups = self%allocator%xdims_padded(3)
-    case (RDR_Y2X)
-      ndir_loc = self%ydirps%n
-      ndir_groups = self%allocator%ydims_padded(3)
-    case (RDR_Y2Z)
-      ndir_loc = self%ydirps%n
-      ndir_groups = self%allocator%ydims_padded(3)
-    case (RDR_Z2X)
-      ndir_loc = self%zdirps%n
-      ndir_groups = self%allocator%zdims_padded(3)
-    case (RDR_Z2Y)
-      ndir_loc = self%zdirps%n
-      ndir_groups = self%allocator%zdims_padded(3)
-    case default
-      ndir_loc = 0
-      ndir_groups = 0
-      error stop 'unsuported reordering'
-    end select
+    dims = self%mesh%get_padded_dims(u)
 
     !$omp parallel do private(out_i, out_j, out_k) collapse(2)
-    do k = 1, ndir_groups
-      do j = 1, ndir_loc
-        do i = 1, SZ
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
           call get_index_reordering( &
-            out_i, out_j, out_k, i, j, k, direction, &
-            SZ, self%allocator%xdims_padded(2), &
-            self%allocator%ydims_padded(2), self%allocator%zdims_padded(2))
+            out_i, out_j, out_k, i, j, k, direction, self%mesh)
           u_%data(out_i, out_j, out_k) = u%data(i, j, k)
         end do
       end do
@@ -397,18 +393,18 @@ contains
 
   end function scalar_product_omp
 
-  subroutine copy_into_buffers(u_send_s, u_send_e, u, n, n_blocks)
+  subroutine copy_into_buffers(u_send_s, u_send_e, u, n, n_groups)
     implicit none
 
     real(dp), dimension(:, :, :), intent(out) :: u_send_s, u_send_e
     real(dp), dimension(:, :, :), intent(in) :: u
     integer, intent(in) :: n
-    integer, intent(in) :: n_blocks
+    integer, intent(in) :: n_groups
     integer :: i, j, k
     integer :: n_halo = 4
 
     !$omp parallel do
-    do k = 1, n_blocks
+    do k = 1, n_groups
       do j = 1, n_halo
         !$omp simd
         do i = 1, SZ
@@ -438,17 +434,18 @@ contains
     data = f%data
   end subroutine copy_f_to_data_omp
 
-  subroutine init_omp_poisson_fft(self, xdirps, ydirps, zdirps)
+  subroutine init_omp_poisson_fft(self, mesh, xdirps, ydirps, zdirps)
     implicit none
 
     class(omp_backend_t) :: self
+    class(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
     allocate (omp_poisson_fft_t :: self%poisson_fft)
 
     select type (poisson_fft => self%poisson_fft)
     type is (omp_poisson_fft_t)
-      poisson_fft = omp_poisson_fft_t(xdirps, ydirps, zdirps)
+      poisson_fft = omp_poisson_fft_t(mesh, xdirps, ydirps, zdirps)
     end select
 
   end subroutine init_omp_poisson_fft

@@ -7,9 +7,10 @@ module m_solver
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_Z2C, RDR_C2Z, &
                       POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
-                      DIR_X, DIR_Y, DIR_Z, DIR_C
+                      DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL
   use m_tdsops, only: tdsops_t, dirps_t
   use m_time_integrator, only: time_intg_t
+  use m_mesh, only: mesh_t
 
   implicit none
 
@@ -48,6 +49,7 @@ module m_solver
     class(field_t), pointer :: u, v, w
 
     class(base_backend_t), pointer :: backend
+    class(mesh_t), pointer :: mesh
     class(time_intg_t), pointer :: time_integrator
     type(allocator_t), pointer :: host_allocator
     class(dirps_t), pointer :: xdirps, ydirps, zdirps
@@ -79,11 +81,12 @@ module m_solver
 
 contains
 
-  function init(backend, time_integrator, host_allocator, &
+  function init(backend, mesh, time_integrator, host_allocator, &
                 xdirps, ydirps, zdirps, globs) result(solver)
     implicit none
 
     class(base_backend_t), target, intent(inout) :: backend
+    type(mesh_t), target, intent(inout) :: mesh
     class(time_intg_t), target, intent(inout) :: time_integrator
     type(allocator_t), target, intent(inout) :: host_allocator
     class(dirps_t), target, intent(inout) :: xdirps, ydirps, zdirps
@@ -93,9 +96,12 @@ contains
     class(field_t), pointer :: u_init, v_init, w_init
 
     real(dp) :: x, y, z
-    integer :: nx, ny, nz, i, j, k
+    integer :: i, j, k
+    integer, dimension(3) :: dims
+    real(dp), dimension(3) :: xloc
 
     solver%backend => backend
+    solver%mesh => mesh
     solver%time_integrator => time_integrator
     solver%host_allocator => host_allocator
 
@@ -103,27 +109,28 @@ contains
     solver%ydirps => ydirps
     solver%zdirps => zdirps
 
-    solver%u => solver%backend%allocator%get_block(DIR_X)
-    solver%v => solver%backend%allocator%get_block(DIR_X)
-    solver%w => solver%backend%allocator%get_block(DIR_X)
+    solver%u => solver%backend%allocator%get_block(DIR_X, VERT)
+    solver%v => solver%backend%allocator%get_block(DIR_X, VERT)
+    solver%w => solver%backend%allocator%get_block(DIR_X, VERT)
 
     solver%dt = globs%dt
     solver%backend%nu = globs%nu
     solver%n_iters = globs%n_iters
     solver%n_output = globs%n_output
-    solver%ngrid = globs%nx*globs%ny*globs%nz
+    solver%ngrid = product(solver%mesh%get_dims(VERT))
 
+    dims = solver%mesh%get_dims(VERT)
     u_init => solver%host_allocator%get_block(DIR_C)
     v_init => solver%host_allocator%get_block(DIR_C)
     w_init => solver%host_allocator%get_block(DIR_C)
 
-    nx = xdirps%n; ny = ydirps%n; nz = zdirps%n
-    do k = 1, nz
-      do j = 1, ny
-        do i = 1, nx
-          x = (i - 1 + xdirps%n_offset)*xdirps%d
-          y = (j - 1 + ydirps%n_offset)*ydirps%d
-          z = (k - 1 + zdirps%n_offset)*zdirps%d
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          xloc = solver%mesh%get_coordinates(i, j, k)
+          x = xloc(1)
+          y = xloc(2)
+          z = xloc(3)
 
           u_init%data(i, j, k) = sin(x)*cos(y)*cos(z)
           v_init%data(i, j, k) = -cos(x)*sin(y)*cos(z)
@@ -141,44 +148,43 @@ contains
     call solver%host_allocator%release_block(w_init)
 
     ! Allocate and set the tdsops
-    call allocate_tdsops(solver%xdirps, nx, xdirps%d, solver%backend)
-    call allocate_tdsops(solver%ydirps, ny, ydirps%d, solver%backend)
-    call allocate_tdsops(solver%zdirps, nz, zdirps%d, solver%backend)
+    call allocate_tdsops(solver%xdirps, DIR_X, solver%backend)
+    call allocate_tdsops(solver%ydirps, DIR_Y, solver%backend)
+    call allocate_tdsops(solver%zdirps, DIR_Z, solver%backend)
 
     select case (globs%poisson_solver_type)
     case (POISSON_SOLVER_FFT)
-      if (solver%backend%nrank == 0) print *, 'Poisson solver: FFT'
-      call solver%backend%init_poisson_fft(xdirps, ydirps, zdirps)
+      if (solver%mesh%par%is_root()) print *, 'Poisson solver: FFT'
+      call solver%backend%init_poisson_fft(solver%mesh, xdirps, ydirps, zdirps)
       solver%poisson => poisson_fft
     case (POISSON_SOLVER_CG)
-      if (solver%backend%nrank == 0) &
+      if (solver%mesh%par%is_root()) &
         print *, 'Poisson solver: CG, not yet implemented'
       solver%poisson => poisson_cg
     end select
 
   end function init
 
-  subroutine allocate_tdsops(dirps, nx, dx, backend)
+  subroutine allocate_tdsops(dirps, dir, backend)
     class(dirps_t), intent(inout) :: dirps
-    real(dp), intent(in) :: dx
-    integer, intent(in) :: nx
+    integer, intent(in) :: dir
     class(base_backend_t), intent(in) :: backend
 
-    call backend%alloc_tdsops(dirps%der1st, nx, dx, &
+    call backend%alloc_tdsops(dirps%der1st, dir, &
                               'first-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%der1st_sym, nx, dx, &
+    call backend%alloc_tdsops(dirps%der1st_sym, dir, &
                               'first-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%der2nd, nx, dx, &
+    call backend%alloc_tdsops(dirps%der2nd, dir, &
                               'second-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%der2nd_sym, nx, dx, &
+    call backend%alloc_tdsops(dirps%der2nd_sym, dir, &
                               'second-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%interpl_v2p, nx, dx, &
+    call backend%alloc_tdsops(dirps%interpl_v2p, dir, &
                               'interpolate', 'classic', from_to='v2p')
-    call backend%alloc_tdsops(dirps%interpl_p2v, nx, dx, &
+    call backend%alloc_tdsops(dirps%interpl_p2v, dir, &
                               'interpolate', 'classic', from_to='p2v')
-    call backend%alloc_tdsops(dirps%stagder_v2p, nx, dx, &
+    call backend%alloc_tdsops(dirps%stagder_v2p, dir, &
                               'stag-deriv', 'compact6', from_to='v2p')
-    call backend%alloc_tdsops(dirps%stagder_p2v, nx, dx, &
+    call backend%alloc_tdsops(dirps%stagder_p2v, dir, &
                               'stag-deriv', 'compact6', from_to='p2v')
 
   end subroutine
@@ -204,9 +210,9 @@ contains
     call self%backend%transeq_x(du, dv, dw, u, v, w, self%xdirps)
 
     ! request fields from the allocator
-    u_y => self%backend%allocator%get_block(DIR_Y)
-    v_y => self%backend%allocator%get_block(DIR_Y)
-    w_y => self%backend%allocator%get_block(DIR_Y)
+    u_y => self%backend%allocator%get_block(DIR_Y, VERT)
+    v_y => self%backend%allocator%get_block(DIR_Y, VERT)
+    w_y => self%backend%allocator%get_block(DIR_Y, VERT)
     du_y => self%backend%allocator%get_block(DIR_Y)
     dv_y => self%backend%allocator%get_block(DIR_Y)
     dw_y => self%backend%allocator%get_block(DIR_Y)
@@ -236,9 +242,9 @@ contains
     call self%backend%allocator%release_block(dw_y)
 
     ! just like in y direction, get some fields for the z derivatives.
-    u_z => self%backend%allocator%get_block(DIR_Z)
-    v_z => self%backend%allocator%get_block(DIR_Z)
-    w_z => self%backend%allocator%get_block(DIR_Z)
+    u_z => self%backend%allocator%get_block(DIR_Z, VERT)
+    v_z => self%backend%allocator%get_block(DIR_Z, VERT)
+    w_z => self%backend%allocator%get_block(DIR_Z, VERT)
     du_z => self%backend%allocator%get_block(DIR_Z)
     dv_z => self%backend%allocator%get_block(DIR_Z)
     dw_z => self%backend%allocator%get_block(DIR_Z)
@@ -296,9 +302,9 @@ contains
                                 self%xdirps%interpl_v2p)
 
     ! request fields from the allocator
-    u_y => self%backend%allocator%get_block(DIR_Y)
-    v_y => self%backend%allocator%get_block(DIR_Y)
-    w_y => self%backend%allocator%get_block(DIR_Y)
+    u_y => self%backend%allocator%get_block(DIR_Y, VERT)
+    v_y => self%backend%allocator%get_block(DIR_Y, VERT)
+    w_y => self%backend%allocator%get_block(DIR_Y, VERT)
 
     ! reorder data from x orientation to y orientation
     call self%backend%reorder(u_y, du_x, RDR_X2Y)
@@ -330,8 +336,8 @@ contains
     call self%backend%allocator%release_block(w_y)
 
     ! just like in y direction, get some fields for the z derivatives.
-    u_z => self%backend%allocator%get_block(DIR_Z)
-    w_z => self%backend%allocator%get_block(DIR_Z)
+    u_z => self%backend%allocator%get_block(DIR_Z, VERT)
+    w_z => self%backend%allocator%get_block(DIR_Z, VERT)
 
     ! du_y = dv_y + du_y
     call self%backend%vecadd(1._dp, dv_y, 1._dp, du_y)
@@ -465,7 +471,7 @@ contains
 
     ! omega_i_hat
     ! dw/dy
-    w_y => self%backend%allocator%get_block(DIR_Y)
+    w_y => self%backend%allocator%get_block(DIR_Y, VERT)
     dwdy_y => self%backend%allocator%get_block(DIR_Y)
     call self%backend%reorder(w_y, w, RDR_X2Y)
     call self%backend%tds_solve(dwdy_y, w_y, self%ydirps, self%ydirps%der1st)
@@ -494,7 +500,7 @@ contains
 
     ! omega_j_hat
     ! du/dz
-    u_z => self%backend%allocator%get_block(DIR_Z)
+    u_z => self%backend%allocator%get_block(DIR_Z, VERT)
     dudz_z => self%backend%allocator%get_block(DIR_Z)
     call self%backend%reorder(u_z, u, RDR_X2Z)
     call self%backend%tds_solve(dudz_z, u_z, self%zdirps, self%zdirps%der1st)
@@ -518,7 +524,7 @@ contains
     call self%backend%tds_solve(o_k_hat, v, self%xdirps, self%xdirps%der1st)
 
     ! du/dy
-    u_y => self%backend%allocator%get_block(DIR_Y)
+    u_y => self%backend%allocator%get_block(DIR_Y, VERT)
     dudy_y => self%backend%allocator%get_block(DIR_Y)
     call self%backend%reorder(u_y, u, RDR_X2Y)
     call self%backend%tds_solve(dudy_y, u_y, self%ydirps, self%ydirps%der1st)
@@ -546,7 +552,7 @@ contains
     class(field_t), pointer :: p_temp
 
     ! reorder into 3D Cartesian data structure
-    p_temp => self%backend%allocator%get_block(DIR_C)
+    p_temp => self%backend%allocator%get_block(DIR_C, CELL)
     call self%backend%reorder(p_temp, div_u, RDR_Z2C)
 
     ! call forward FFT
@@ -586,17 +592,17 @@ contains
     real(dp) :: enstrophy, div_u_max, div_u_mean
     integer :: ierr
 
-    if (self%backend%nrank == 0) print *, 'time = ', t
+    if (self%mesh%par%is_root()) print *, 'time = ', t
 
-    du => self%backend%allocator%get_block(DIR_X)
-    dv => self%backend%allocator%get_block(DIR_X)
-    dw => self%backend%allocator%get_block(DIR_X)
+    du => self%backend%allocator%get_block(DIR_X, VERT)
+    dv => self%backend%allocator%get_block(DIR_X, VERT)
+    dw => self%backend%allocator%get_block(DIR_X, VERT)
 
     call self%curl(du, dv, dw, self%u, self%v, self%w)
     enstrophy = 0.5_dp*(self%backend%scalar_product(du, du) &
                         + self%backend%scalar_product(dv, dv) &
                         + self%backend%scalar_product(dw, dw))/self%ngrid
-    if (self%backend%nrank == 0) print *, 'enstrophy:', enstrophy
+    if (self%mesh%par%is_root()) print *, 'enstrophy:', enstrophy
 
     call self%backend%allocator%release_block(du)
     call self%backend%allocator%release_block(dv)
@@ -620,8 +626,8 @@ contains
                        MPI_MAX, MPI_COMM_WORLD, ierr)
     call MPI_Allreduce(MPI_IN_PLACE, div_u_mean, 1, MPI_DOUBLE_PRECISION, &
                        MPI_SUM, MPI_COMM_WORLD, ierr)
-    div_u_mean = div_u_mean/self%backend%nproc
-    if (self%backend%nrank == 0) &
+    div_u_mean = div_u_mean/self%mesh%par%nproc
+    if (self%mesh%par%is_root()) &
       print *, 'div u max mean:', div_u_max, div_u_mean
 
   end subroutine output
@@ -637,11 +643,11 @@ contains
     real(dp) :: t
     integer :: i
 
-    if (self%backend%nrank == 0) print *, 'initial conditions'
+    if (self%mesh%par%is_root()) print *, 'initial conditions'
     t = 0._dp
     call self%output(t)
 
-    if (self%backend%nrank == 0) print *, 'start run'
+    if (self%mesh%par%is_root()) print *, 'start run'
 
     do i = 1, self%n_iters
       du => self%backend%allocator%get_block(DIR_X)
@@ -663,7 +669,7 @@ contains
 
       call self%divergence_v2p(div_u, self%u, self%v, self%w)
 
-      pressure => self%backend%allocator%get_block(DIR_Z)
+      pressure => self%backend%allocator%get_block(DIR_Z, CELL)
 
       call self%poisson(pressure, div_u)
 
@@ -692,7 +698,7 @@ contains
       end if
     end do
 
-    if (self%backend%nrank == 0) print *, 'run end'
+    if (self%mesh%par%is_root()) print *, 'run end'
 
     ! Below is for demonstrating purpuses only, to be removed when we have
     ! proper I/O in place.
@@ -704,7 +710,7 @@ contains
     call self%backend%get_field_data(v_out%data, self%v)
     call self%backend%get_field_data(w_out%data, self%w)
 
-    if (self%backend%nrank == 0) then
+    if (self%mesh%par%is_root()) then
       print *, 'norms', norm2(u_out%data), norm2(v_out%data), norm2(w_out%data)
     end if
 

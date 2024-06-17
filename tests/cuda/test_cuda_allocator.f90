@@ -2,18 +2,31 @@ program test_allocator_cuda
   use iso_fortran_env, only: stderr => error_unit
 
   use m_allocator, only: allocator_t, field_t
-  use m_common, only: DIR_X
+  use m_common, only: dp, pi, DIR_X
+  use m_mesh, only: mesh_t
+
   use m_cuda_allocator, only: cuda_allocator_t
 
   implicit none
 
   logical :: allpass
-  integer, parameter :: dims(3) = [8, 8, 8]
+  integer, dimension(3) :: dims, nproc_dir
+  real(dp) :: L_global(3)
   class(allocator_t), allocatable :: allocator
+  class(mesh_t), allocatable :: mesh
   class(field_t), pointer :: ptr1, ptr2, ptr3
   integer, allocatable :: l(:)
+  integer :: ierr
 
-  allocator = cuda_allocator_t(dims(1), dims(2), dims(3), 8)
+  call MPI_Init(ierr)
+
+  dims = [8, 8, 8]
+  nproc_dir = [1, 1, 1]
+  L_global = [2*pi, 2*pi, 2*pi]
+
+  mesh = mesh_t(dims, nproc_dir, L_global)
+
+  allocator = cuda_allocator_t(mesh, 8)
 
   allpass = .true.
 
@@ -69,4 +82,6 @@ program test_allocator_cuda
   end if
 
   call allocator%destroy()
+
+  call MPI_Finalize(ierr)
 end program test_allocator_cuda

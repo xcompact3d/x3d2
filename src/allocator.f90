@@ -1,7 +1,9 @@
 module m_allocator
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C
+  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, none, VERT
+  use m_mesh, only: mesh_t
+  use m_field, only: field_t
 
   implicit none
 
@@ -33,17 +35,14 @@ module m_allocator
      !! [[m_allocator(module):release_block(subroutine)]].  The
      !! released block is then pushed in front of the block list.
 
-    integer :: ngrid, sz
+    integer :: ngrid
     !> The id for the next allocated block.  This counter is
     !> incremented each time a new block is allocated.
     integer :: next_id = 0
-    !> Padded dimensions for x, y, and z oriented fields
-    integer :: xdims_padded(3), ydims_padded(3), zdims_padded(3)
-    !> Padded dimensions for natural Cartesian ordering
-    integer :: cdims_padded(3)
     !> The pointer to the first block on the list.  Non associated if
     !> the list is empty
     ! TODO: Rename first to head
+    class(mesh_t), pointer :: mesh
     class(field_t), pointer :: first => null()
   contains
     procedure :: get_block
@@ -51,31 +50,12 @@ module m_allocator
     procedure :: create_block
     procedure :: get_block_ids
     procedure :: destroy
+    procedure :: compute_padded_dims
   end type allocator_t
 
   interface allocator_t
     module procedure allocator_init
   end interface allocator_t
-
-  type :: field_t
-     !! Memory block type holding both a data field and a pointer
-     !! to the next block.  The `field_t` type also holds a integer
-     !! `refcount` that counts the number of references to this
-     !! field.  User code is currently responsible for incrementing
-     !! the reference count.
-    class(field_t), pointer :: next
-    real(dp), pointer, private :: p_data(:)
-    real(dp), pointer, contiguous :: data(:, :, :)
-    integer :: dir
-    integer :: refcount = 0
-    integer :: id !! An integer identifying the memory block.
-  contains
-    procedure :: set_shape
-  end type field_t
-
-  interface field_t
-    module procedure field_init
-  end interface field_t
 
   type :: flist_t
     class(field_t), pointer :: ptr
@@ -83,47 +63,39 @@ module m_allocator
 
 contains
 
-  function field_init(ngrid, next, id) result(f)
-    integer, intent(in) :: ngrid, id
-    type(field_t), pointer, intent(in) :: next
-    type(field_t) :: f
-
-    allocate (f%p_data(ngrid))
-    f%refcount = 0
-    f%next => next
-    f%id = id
-  end function field_init
-
-  subroutine set_shape(self, dims)
-    implicit none
-
-    class(field_t) :: self
-    integer, intent(in) :: dims(3)
-
-    self%data(1:dims(1), 1:dims(2), 1:dims(3)) => self%p_data
-
-  end subroutine set_shape
-
-  function allocator_init(nx, ny, nz, sz) result(allocator)
-    integer, intent(in) :: nx, ny, nz, sz
+  function allocator_init(mesh, sz) result(allocator)
+    type(mesh_t), target, intent(inout) :: mesh
+    integer, intent(in) :: sz
     type(allocator_t) :: allocator
 
-    integer :: nx_padded, ny_padded, nz_padded
+    allocator%mesh => mesh
+    call allocator%compute_padded_dims(sz)
+    allocator%ngrid = product(allocator%mesh%get_padded_dims(DIR_C))
+
+  end function allocator_init
+
+  subroutine compute_padded_dims(self, sz)
+    class(allocator_t), intent(inout) :: self
+    integer, intent(in) :: sz
+    integer, dimension(3) :: cdims
+    integer :: nx, ny, nz, nx_padded, ny_padded, nz_padded
+
+    cdims = self%mesh%get_dims(VERT)
+    nx = cdims(1)
+    ny = cdims(2)
+    nz = cdims(3)
 
     ! Apply padding based on sz
     nx_padded = nx - 1 + mod(-(nx - 1), sz) + sz
     ny_padded = ny - 1 + mod(-(ny - 1), sz) + sz
     ! Current reorder functions do not require a padding in z-direction.
     nz_padded = nz
+    cdims = [nx_padded, ny_padded, nz_padded]
 
-    allocator%ngrid = nx_padded*ny_padded*nz_padded
-    allocator%sz = sz
+    call self%mesh%set_sz(sz)
+    call self%mesh%set_padded_dims(cdims)
 
-    allocator%xdims_padded = [sz, nx_padded, ny_padded*nz_padded/sz]
-    allocator%ydims_padded = [sz, ny_padded, nx_padded*nz_padded/sz]
-    allocator%zdims_padded = [sz, nz_padded, nx_padded*ny_padded/sz]
-    allocator%cdims_padded = [nx_padded, ny_padded, nz_padded]
-  end function allocator_init
+  end subroutine
 
   function create_block(self, next) result(ptr)
     !! Allocate memory for a new block and return a pointer to a new
@@ -138,7 +110,7 @@ contains
     ptr => newblock
   end function create_block
 
-  function get_block(self, dir) result(handle)
+  function get_block(self, dir, data_loc) result(handle)
     !! Return a pointer to the first available memory block, i.e. the
     !! current head of the block list.  If the list is empty, allocate
     !! a new block with [[m_allocator(module):create_block(function)]]
@@ -151,6 +123,7 @@ contains
     class(allocator_t), intent(inout) :: self
     class(field_t), pointer :: handle
     integer, intent(in) :: dir
+    integer, intent(in), optional :: data_loc
     integer :: dims(3)
     ! If the list is empty, allocate a new block before returning a
     ! pointer to it.
@@ -165,20 +138,14 @@ contains
 
     ! Store direction info in the field type.
     handle%dir = dir
+    if (present(data_loc)) then
+      handle%data_loc = data_loc
+    else
+      handle%data_loc = none
+    end if
 
     ! Set dims based on direction
-    select case (dir)
-    case (DIR_X)
-      dims = self%xdims_padded
-    case (DIR_Y)
-      dims = self%ydims_padded
-    case (DIR_Z)
-      dims = self%zdims_padded
-    case (DIR_C)
-      dims = self%cdims_padded
-    case default
-      error stop 'Undefined direction, allocator cannot provide a shape.'
-    end select
+    dims = self%mesh%get_padded_dims(dir)
 
     ! Apply bounds remapping based on requested direction
     call handle%set_shape(dims)
