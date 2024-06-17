@@ -55,7 +55,7 @@ module m_mesh
     procedure :: get_field_dims_phi
     procedure :: get_field_dims_phi_dataloc
     generic :: get_field_dims => get_field_dims_dir, get_field_dims_phi, &
-               get_field_dims_phi_dataloc
+      get_field_dims_phi_dataloc
 
     procedure :: get_n_dir
     procedure :: get_n_phi
@@ -88,7 +88,7 @@ contains
     logical, dimension(3), optional, intent(in) :: periodic_BC
     type(mesh_t) :: mesh
 
-    integer :: nx, ny, nz, dir, n_cell_global
+    integer :: dir
     integer :: ierr
 
     allocate (mesh%geo)
