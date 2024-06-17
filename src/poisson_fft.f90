@@ -74,8 +74,8 @@ contains
     self%nx_loc = dims(1); self%ny_loc = dims(2); self%nz_loc = dims(3)
 
     ! 1D decomposition along Z in real domain, and along Y in spectral space
-    if (mesh%par%nproc_dir(1) /= 1) print*, 'nproc_dir in x-dir must be 1'
-    if (mesh%par%nproc_dir(2) /= 1) print*, 'nproc_dir in y-dir must be 1'
+    if (mesh%par%nproc_dir(1) /= 1) print *, 'nproc_dir in x-dir must be 1'
+    if (mesh%par%nproc_dir(2) /= 1) print *, 'nproc_dir in y-dir must be 1'
     self%nx_perm = self%nx_loc/mesh%par%nproc_dir(2)
     self%ny_perm = self%ny_loc/mesh%par%nproc_dir(3)
     self%nz_perm = self%nz_glob
@@ -117,7 +117,7 @@ contains
 
     integer :: i, j, k
 
-    nx = xdirps%n_glob; ny = ydirps%n_glob; nz = zdirps%n_glob
+    nx = self%nx_glob; ny = self%ny_glob; nz = self%nz_glob
 
     do i = 1, nx
       self%ax(i) = sin((i - 1)*pi/nx)

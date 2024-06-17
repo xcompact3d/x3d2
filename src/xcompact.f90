@@ -70,10 +70,6 @@ program xcompact
 
   mesh = mesh_t(dims_global, nproc_dir, L_global)
 
-  xdirps%n_glob = globs%nx
-  ydirps%n_glob = globs%ny
-  zdirps%n_glob = globs%nz
-
   globs%dt = 0.001_dp
   globs%nu = 1._dp/1600._dp
   globs%n_iters = 20000

@@ -22,13 +22,11 @@ module m_cuda_poisson_fft
 
     !> Local domain sized array storing the spectral equivalence constants
     complex(dp), device, allocatable, dimension(:, :, :) :: waves_dev
-    !> cufft requires a local domain sized storage
-    complex(dp), device, allocatable, dimension(:) :: fft_worksize
     !> Wave numbers in x, y, and z
     real(dp), device, allocatable, dimension(:) :: ax_dev, bx_dev, &
                                                    ay_dev, by_dev, &
                                                    az_dev, bz_dev
-
+    !> Forward and backward FFT transform plans
     integer :: plan3D_fw, plan3D_bw
 
     !> cuFFTMp object manages decomposition and data storage
