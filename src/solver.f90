@@ -117,9 +117,9 @@ contains
     solver%backend%nu = globs%nu
     solver%n_iters = globs%n_iters
     solver%n_output = globs%n_output
-    solver%ngrid = product(solver%mesh%get_field_dims(DIR_C, VERT))
+    solver%ngrid = product(solver%mesh%get_dims(VERT))
 
-    dims = solver%mesh%get_field_dims(DIR_C, VERT)
+    dims = solver%mesh%get_dims(VERT)
     u_init => solver%host_allocator%get_block(DIR_C)
     v_init => solver%host_allocator%get_block(DIR_C)
     w_init => solver%host_allocator%get_block(DIR_C)

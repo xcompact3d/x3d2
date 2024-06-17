@@ -80,7 +80,7 @@ contains
     integer, dimension(3) :: cdims
     integer :: nx, ny, nz, nx_padded, ny_padded, nz_padded
 
-    cdims = self%mesh%get_field_dims(DIR_C, VERT)
+    cdims = self%mesh%get_dims(VERT)
     nx = cdims(1)
     ny = cdims(2)
     nz = cdims(3)

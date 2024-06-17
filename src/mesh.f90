@@ -43,6 +43,8 @@ module m_mesh
   contains
     procedure :: get_SZ
 
+    procedure :: get_dims
+
     procedure :: get_n_groups_dir
     procedure :: get_n_groups_phi
     generic :: get_n_groups => get_n_groups_dir, get_n_groups_phi
@@ -214,6 +216,42 @@ contains
 
     sz = self%sz
 
+  end function
+
+  pure function get_dims(self, data_loc) result(dims)
+  !! Getter for local domain dimensions
+    class(mesh_t), intent(in) :: self
+    integer, intent(in) :: data_loc
+    integer, dimension(3) :: dims
+
+    select case (data_loc)
+    case (CELL)
+      dims = self%cell_dims
+    case (VERT)
+      dims = self%vert_dims
+    case (X_FACE)
+      dims(1) = self%vert_dims(1)
+      dims(2:3) = self%cell_dims(2:3)
+    case (Y_FACE)
+      dims(1) = self%cell_dims(1)
+      dims(2) = self%vert_dims(2)
+      dims(3) = self%cell_dims(3)
+    case (Z_FACE)
+      dims(1:2) = self%cell_dims(1:2)
+      dims(3) = self%vert_dims(3)
+    case (X_EDGE)
+      dims(1) = self%cell_dims(1)
+      dims(2:3) = self%vert_dims(2:3)
+    case (Y_EDGE)
+      dims(1) = self%vert_dims(1)
+      dims(2) = self%cell_dims(2)
+      dims(3) = self%vert_dims(3)
+    case (Z_EDGE)
+      dims(1:2) = self%vert_dims(1:2)
+      dims(3) = self%cell_dims(3)
+    case (none)
+      error stop
+    end select
   end function
 
   pure function get_padded_dims_dir(self, dir) result(dims_padded)
