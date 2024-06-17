@@ -31,7 +31,8 @@ module m_mesh
   ! The mesh class stores all the information about the global and local (due to domain decomposition) mesh
   ! It also includes getter functions to access some of its parameters
   type :: mesh_t
-    integer, dimension(3), private :: dims_global ! global number of vertices in each direction
+    integer, dimension(3), private :: global_vert_dims ! global number of vertices in each direction without padding (cartesian structure)
+    integer, dimension(3), private :: global_cell_dims ! global number of cells in each direction without padding (cartesian structure)
 
     integer, dimension(3), private :: vert_dims_padded ! local domain size including padding (cartesian structure)
     integer, dimension(3), private :: vert_dims ! local number of vertices in each direction without padding (cartesian structure)
@@ -44,6 +45,7 @@ module m_mesh
     procedure :: get_SZ
 
     procedure :: get_dims
+    procedure :: get_global_dims
 
     procedure :: get_n_groups_dir
     procedure :: get_n_groups_phi
@@ -88,11 +90,10 @@ contains
 
     integer :: nx, ny, nz, dir, n_cell_global
     integer :: ierr
-    logical :: is_last_domain
 
     allocate (mesh%geo)
     allocate (mesh%par)
-    mesh%dims_global(:) = dims_global
+    mesh%global_vert_dims(:) = dims_global
 
     if (present(periodic_BC)) then
       mesh%periodic_BC(:) = periodic_BC
@@ -101,16 +102,17 @@ contains
       mesh%periodic_BC(:) = .true.
     end if
 
+    do dir = 1, 3
+      if (mesh%periodic_BC(dir)) then
+        mesh%global_cell_dims(dir) = mesh%global_vert_dims(dir)
+      else
+        mesh%global_cell_dims(dir) = mesh%global_vert_dims(dir) - 1
+      end if
+    end do
+
     ! Geometry
     mesh%geo%L = L_global
-
-    do dir = 1, 3
-      n_cell_global = mesh%dims_global(dir)
-      if (.not. mesh%periodic_BC(dir)) then
-        n_cell_global = n_cell_global - 1
-      end if
-      mesh%geo%d(dir) = mesh%geo%L(dir)/n_cell_global
-    end do
+    mesh%geo%d = mesh%geo%L/mesh%global_cell_dims
 
     ! Parallel domain decomposition
     mesh%par%nproc_dir(:) = nproc_dir
@@ -118,24 +120,6 @@ contains
     call MPI_Comm_rank(MPI_COMM_WORLD, mesh%par%nrank, ierr)
     call MPI_Comm_size(MPI_COMM_WORLD, mesh%par%nproc, ierr)
     call domain_decomposition(mesh)
-
-    ! Local mesh dimensions
-    nx = mesh%dims_global(1)/mesh%par%nproc_dir(1)
-    ny = mesh%dims_global(2)/mesh%par%nproc_dir(2)
-    nz = mesh%dims_global(3)/mesh%par%nproc_dir(3)
-
-    ! Define number of cells and vertices in each direction
-    mesh%vert_dims = [nx, ny, nz]
-    mesh%cell_dims(:) = mesh%vert_dims(:)
-
-    do dir = 1, 3
-      is_last_domain = (mesh%par%nrank_dir(dir) + 1 == mesh%par%nproc_dir(dir))
-      if (is_last_domain) then
-        if (.not. mesh%periodic_BC(dir)) then
-          mesh%cell_dims(dir) = mesh%cell_dims(dir) - 1
-        end if
-      end if
-    end do
 
     ! Define default values
     mesh%vert_dims_padded = mesh%vert_dims
@@ -170,6 +154,7 @@ contains
     integer :: i, nproc_x, nproc_y, nproc_z, nproc
     integer, dimension(3) :: subd_pos, subd_pos_prev, subd_pos_next
     integer :: dir
+    logical :: is_last_domain
 
     ! Number of processes on a direction basis
     nproc_x = mesh%par%nproc_dir(1)
@@ -189,8 +174,19 @@ contains
     ! local/directional position of the subdomain
     mesh%par%nrank_dir(:) = subd_pos(:) - 1
 
-    mesh%par%n_offset(:) = (mesh%dims_global(:)/mesh%par%nproc_dir(:)) &
-                           *mesh%par%nrank_dir(:)
+    ! Define number of cells and vertices in each direction
+    mesh%vert_dims = mesh%global_vert_dims/mesh%par%nproc_dir
+
+    do dir = 1, 3
+      is_last_domain = (mesh%par%nrank_dir(dir) + 1 == mesh%par%nproc_dir(dir))
+      if (is_last_domain .and. (.not. mesh%periodic_BC(dir))) then
+        mesh%cell_dims(dir) = mesh%vert_dims(dir) - 1
+      else
+        mesh%cell_dims(dir) = mesh%vert_dims(dir)
+      end if
+    end do
+
+    mesh%par%n_offset(:) = mesh%vert_dims(:)*mesh%par%nrank_dir(:)
 
     do dir = 1, 3
       nproc = mesh%par%nproc_dir(dir)
@@ -224,31 +220,50 @@ contains
     integer, intent(in) :: data_loc
     integer, dimension(3) :: dims
 
+    dims = get_dims_dataloc(data_loc, self%vert_dims, self%cell_dims)
+  end function
+
+  pure function get_global_dims(self, data_loc) result(dims)
+  !! Getter for local domain dimensions
+    class(mesh_t), intent(in) :: self
+    integer, intent(in) :: data_loc
+    integer, dimension(3) :: dims
+
+    dims = get_dims_dataloc(data_loc, self%global_vert_dims, &
+                            self%global_cell_dims)
+  end function
+
+  pure function get_dims_dataloc(data_loc, vert_dims, cell_dims) result(dims)
+  !! Getter for domain dimensions
+    integer, intent(in) :: data_loc
+    integer, dimension(3), intent(in) :: vert_dims, cell_dims
+    integer, dimension(3) :: dims
+
     select case (data_loc)
-    case (CELL)
-      dims = self%cell_dims
     case (VERT)
-      dims = self%vert_dims
+      dims = vert_dims
+    case (CELL)
+      dims = cell_dims
     case (X_FACE)
-      dims(1) = self%vert_dims(1)
-      dims(2:3) = self%cell_dims(2:3)
+      dims(1) = vert_dims(1)
+      dims(2:3) = cell_dims(2:3)
     case (Y_FACE)
-      dims(1) = self%cell_dims(1)
-      dims(2) = self%vert_dims(2)
-      dims(3) = self%cell_dims(3)
+      dims(1) = cell_dims(1)
+      dims(2) = vert_dims(2)
+      dims(3) = cell_dims(3)
     case (Z_FACE)
-      dims(1:2) = self%cell_dims(1:2)
-      dims(3) = self%vert_dims(3)
+      dims(1:2) = cell_dims(1:2)
+      dims(3) = vert_dims(3)
     case (X_EDGE)
-      dims(1) = self%cell_dims(1)
-      dims(2:3) = self%vert_dims(2:3)
+      dims(1) = cell_dims(1)
+      dims(2:3) = vert_dims(2:3)
     case (Y_EDGE)
-      dims(1) = self%vert_dims(1)
-      dims(2) = self%cell_dims(2)
-      dims(3) = self%vert_dims(3)
+      dims(1) = vert_dims(1)
+      dims(2) = cell_dims(2)
+      dims(3) = vert_dims(3)
     case (Z_EDGE)
-      dims(1:2) = self%vert_dims(1:2)
-      dims(3) = self%cell_dims(3)
+      dims(1:2) = vert_dims(1:2)
+      dims(3) = cell_dims(3)
     case (none)
       error stop
     end select

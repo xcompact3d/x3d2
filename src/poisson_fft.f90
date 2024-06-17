@@ -1,6 +1,6 @@
 module m_poisson_fft
   use m_allocator, only: field_t
-  use m_common, only: dp, pi, VERT, CELL, DIR_X, DIR_Y, DIR_Z
+  use m_common, only: dp, pi, CELL
   use m_tdsops, only: dirps_t
   use m_mesh, only: mesh_t, geo_t
 
@@ -55,9 +55,10 @@ contains
     class(mesh_t), intent(in) :: mesh
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
-    self%nx = mesh%get_n(DIR_X, CELL)
-    self%ny = mesh%get_n(DIR_Y, CELL)
-    self%nz = mesh%get_n(DIR_Z, CELL)
+    integer :: dims(3)
+
+    dims = mesh%get_global_dims(CELL)
+    self%nx = dims(1); self%ny = dims(2); self%nz = dims(3)
 
     allocate (self%ax(self%nx), self%bx(self%nx))
     allocate (self%ay(self%ny), self%by(self%ny))
