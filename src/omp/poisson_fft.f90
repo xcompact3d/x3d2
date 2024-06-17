@@ -28,7 +28,7 @@ contains
   function init(mesh, xdirps, ydirps, zdirps) result(poisson_fft)
     implicit none
 
-    class(mesh_t), target, intent(in) :: mesh
+    class(mesh_t), intent(in) :: mesh
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
     type(omp_poisson_fft_t) :: poisson_fft
