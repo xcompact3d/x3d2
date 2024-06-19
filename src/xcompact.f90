@@ -66,7 +66,7 @@ program xcompact
   L_global = [2*pi, 2*pi, 2*pi]
 
   ! Domain decomposition in each direction
-  nproc_dir = [1, 1, 1]
+  nproc_dir = [1, 1, nproc]
 
   mesh = mesh_t(dims_global, nproc_dir, L_global)
 

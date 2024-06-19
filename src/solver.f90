@@ -117,7 +117,7 @@ contains
     solver%backend%nu = globs%nu
     solver%n_iters = globs%n_iters
     solver%n_output = globs%n_output
-    solver%ngrid = product(solver%mesh%get_dims(VERT))
+    solver%ngrid = product(solver%mesh%get_global_dims(VERT))
 
     dims = solver%mesh%get_dims(VERT)
     u_init => solver%host_allocator%get_block(DIR_C)
@@ -626,7 +626,6 @@ contains
                        MPI_MAX, MPI_COMM_WORLD, ierr)
     call MPI_Allreduce(MPI_IN_PLACE, div_u_mean, 1, MPI_DOUBLE_PRECISION, &
                        MPI_SUM, MPI_COMM_WORLD, ierr)
-    div_u_mean = div_u_mean/self%mesh%par%nproc
     if (self%mesh%par%is_root()) &
       print *, 'div u max mean:', div_u_max, div_u_mean
 

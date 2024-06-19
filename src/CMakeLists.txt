@@ -47,10 +47,9 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr -Ktrap=fp")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
   target_link_options(x3d2 INTERFACE "-cuda")
-  target_link_options(x3d2 INTERFACE "-lcufft")
+  target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
 
   target_compile_options(xcompact PRIVATE "-DCUDA")
-  #  target_link_options(xcompact INTERFACE "-cuda")
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
   set(CMAKE_Fortran_FLAGS "-cpp -std=f2008")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")

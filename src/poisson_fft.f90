@@ -8,8 +8,19 @@ module m_poisson_fft
 
   type, abstract :: poisson_fft_t
     !! FFT based Poisson solver
-    integer :: nx, ny, nz
+    !> Global dimensions
+    integer :: nx_glob, ny_glob, nz_glob
+    !> Local dimensions
+    integer :: nx_loc, ny_loc, nz_loc
+    !> Local dimensions in the permuted slabs
+    integer :: nx_perm, ny_perm, nz_perm
+    !> Local dimensions in the permuted slabs in spectral space
+    integer :: nx_spec, ny_spec, nz_spec
+    !> Offset in y direction in the permuted slabs in spectral space
+    integer :: y_sp_st
+    !> Local domain sized array storing the spectral equivalence constants
     complex(dp), allocatable, dimension(:, :, :) :: waves
+    !> Wave numbers in x, y, and z
     complex(dp), allocatable, dimension(:) :: ax, bx, ay, by, az, bz
   contains
     procedure(fft_forward), deferred :: fft_forward
@@ -58,14 +69,28 @@ contains
     integer :: dims(3)
 
     dims = mesh%get_global_dims(CELL)
-    self%nx = dims(1); self%ny = dims(2); self%nz = dims(3)
+    self%nx_glob = dims(1); self%ny_glob = dims(2); self%nz_glob = dims(3)
+    dims = mesh%get_dims(CELL)
+    self%nx_loc = dims(1); self%ny_loc = dims(2); self%nz_loc = dims(3)
 
-    allocate (self%ax(self%nx), self%bx(self%nx))
-    allocate (self%ay(self%ny), self%by(self%ny))
-    allocate (self%az(self%nz), self%bz(self%nz))
+    ! 1D decomposition along Z in real domain, and along Y in spectral space
+    if (mesh%par%nproc_dir(1) /= 1) print *, 'nproc_dir in x-dir must be 1'
+    if (mesh%par%nproc_dir(2) /= 1) print *, 'nproc_dir in y-dir must be 1'
+    self%nx_perm = self%nx_loc/mesh%par%nproc_dir(2)
+    self%ny_perm = self%ny_loc/mesh%par%nproc_dir(3)
+    self%nz_perm = self%nz_glob
+    self%nx_spec = self%nx_loc/2 + 1
+    self%ny_spec = self%ny_perm
+    self%nz_spec = self%nz_perm
+
+    self%y_sp_st = (self%ny_loc/mesh%par%nproc_dir(3))*mesh%par%nrank_dir(3)
+
+    allocate (self%ax(self%nx_glob), self%bx(self%nx_glob))
+    allocate (self%ay(self%ny_glob), self%by(self%ny_glob))
+    allocate (self%az(self%nz_glob), self%bz(self%nz_glob))
 
     ! cuFFT 3D transform halves the first index.
-    allocate (self%waves(self%nx/2 + 1, self%ny, self%nz))
+    allocate (self%waves(self%nx_spec, self%ny_spec, self%nz_spec))
 
     ! waves_set requires some of the preprocessed tdsops variables.
     call self%waves_set(mesh%geo, xdirps, ydirps, zdirps)
@@ -85,14 +110,14 @@ contains
     complex(dp), allocatable, dimension(:) :: xkx, xk2, yky, yk2, zkz, zk2, &
                                               exs, eys, ezs
 
-    integer :: nx, ny, nz
+    integer :: nx, ny, nz, ix, iy, iz
     real(dp) :: w, wp, rlexs, rleys, rlezs, xtt, ytt, ztt, xt1, yt1, zt1
     complex(dp) :: xt2, yt2, zt2, xyzk
     real(dp) :: d, L
 
     integer :: i, j, k
 
-    nx = self%nx; ny = self%ny; nz = self%nz
+    nx = self%nx_glob; ny = self%ny_glob; nz = self%nz_glob
 
     do i = 1, nx
       self%ax(i) = sin((i - 1)*pi/nx)
@@ -172,14 +197,13 @@ contains
       zk2(i) = zk2(nz - i + 2)
     end do
 
-    print *, 'waves array is correctly set only for a single rank run'
-    ! TODO: do loop ranges below are valid only for single rank runs
-    do i = 1, nx/2 + 1
-      do j = 1, ny
-        do k = 1, nz
-          rlexs = real(exs(i), kind=dp)*geo%d(1)
-          rleys = real(eys(j), kind=dp)*geo%d(2)
-          rlezs = real(ezs(k), kind=dp)*geo%d(3)
+    do i = 1, self%nx_spec
+      do j = 1, self%ny_spec
+        do k = 1, self%nz_spec
+          ix = i; iy = j + self%y_sp_st; iz = k
+          rlexs = real(exs(ix), kind=dp)*geo%d(1)
+          rleys = real(eys(iy), kind=dp)*geo%d(2)
+          rlezs = real(ezs(iz), kind=dp)*geo%d(3)
 
           xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
                    + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
@@ -198,9 +222,9 @@ contains
           yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
           zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
 
-          xt2 = xk2(i)*(((ytt/yt1)*(ztt/zt1))**2)
-          yt2 = yk2(j)*(((xtt/xt1)*(ztt/zt1))**2)
-          zt2 = zk2(k)*(((xtt/xt1)*(ytt/yt1))**2)
+          xt2 = xk2(ix)*(((ytt/yt1)*(ztt/zt1))**2)
+          yt2 = yk2(iy)*(((xtt/xt1)*(ztt/zt1))**2)
+          zt2 = zk2(iz)*(((xtt/xt1)*(ytt/yt1))**2)
 
           xyzk = xt2 + yt2 + zt2
           self%waves(i, j, k) = xyzk
