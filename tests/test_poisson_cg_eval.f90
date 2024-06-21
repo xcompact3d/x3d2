@@ -50,6 +50,7 @@ program test_poisson_cg_eval
   
   ! Run test
   call test_constant_field(pressure, lapl, f)
+  call test_variable_field(pressure, lapl, f)
   
   ! Finalise test
   call backend%allocator%release_block(pressure)
@@ -209,7 +210,7 @@ contains
     pressure%data = 42
     allocate(expect, mold = f%data)
     expect = 0  ! Correct answer
-    f%data = 17 ! Initialise with wrong anser
+    f%data = 17 ! Initialise with wrong answer
     
     call lapl%apply(f, pressure, backend)
 
@@ -217,6 +218,63 @@ contains
     call check_soln(f, expect)
 
   end subroutine test_constant_field
+
+  subroutine test_variable_field(pressure, lapl, f)
+
+    use m_common, only: pi
+    use m_ordering, only: get_index_dir
+    
+    class(field_t), intent(in) :: pressure
+    type(laplace_operator_t), intent(in) :: lapl
+    class(field_t), intent(inout) :: f
+
+    real(dp), dimension(:, :, :), allocatable :: expect
+
+    real(dp) :: x, y, z
+    integer :: i, j, k
+    integer :: ii, jj, kk
+    
+    if (irank == 0) then
+      print *, "Testing variable field"
+    end if
+
+    ! Set pressure field to some variable
+    allocate(expect, mold = f%data)
+    associate(xdirps => backend%xdirps, &
+              ydirps => backend%ydirps, &
+              zdirps => backend%zdirps, &
+              dx => globs%dx, dy => globs%dy, dz => globs%dz, &
+              Lx => globs%Lx, Ly => globs%Ly, Lz => globs%Lz)
+      do k = 1, zdirps%n
+        do j = 1, ydirps%n
+          do i = 1, xdirps%n
+            x = (xdirps%n_offset + (i - 1)) * dx
+            y = (ydirps%n_offset + (j - 1)) * dy
+            z = (zdirps%n_offset + (k - 1)) * dz
+
+            ! Need to get Cartesian -> memory layout mapping
+            call get_index_dir(ii, jj, kk, i, j, k, &
+                               DIR_X, &
+                               SZ, xdirps%n, ydirps%n, zdirps%n)
+
+            pressure%data(ii, jj, kk) = cos(2 * pi * (x / Lx)) + &
+                                        cos(2 * pi * (y / Ly)) + &
+                                        cos(2 * pi * (z / Lz))
+            expect(ii, jj, kk) = -((2 * pi / Lx)**2 * cos(2 * pi * (x / Lx)) + &
+                                   (2 * pi / Ly)**2 * cos(2 * pi * (y / Ly)) + &
+                                   (2 * pi / Lz)**2 * cos(2 * pi * (z / Lz)))
+          end do
+        end do
+      end do
+      f%data = 17 ! Initialise with wrong answer
+    end associate
+
+    call lapl%apply(f, pressure, backend)
+
+    ! Check Laplacian evaluation
+    call check_soln(f, expect)
+    
+  end subroutine test_variable_field
 
   subroutine check_soln(soln, expect, opttol)
 
@@ -235,7 +293,7 @@ contains
       tol = 1.0e-8_dp
     end if
 
-    n = globs%nx * globs%ny * globs%nz
+    n = backend%xdirps%n * backend%ydirps%n * backend%zdirps%n
     
     rms = sum((soln%data - expect)**2)
     call MPI_Allreduce(MPI_IN_PLACE, rms, 1, &
