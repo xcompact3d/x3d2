@@ -2,7 +2,7 @@ program test_hostside_io
   use iso_fortran_env, only: stderr => error_unit
   use adios2
   use mpi
-  use adios_io
+  use m_adios_io
 
   implicit none
 
