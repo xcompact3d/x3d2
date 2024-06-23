@@ -1,4 +1,4 @@
-module adios_io
+module m_adios_io
   use adios2
   use mpi
   use m_allocator, only: field_t
@@ -18,6 +18,7 @@ module adios_io
     procedure:: handle_fatal_error 
     procedure:: read 
     procedure:: write 
+    procedure:: write_real
   end type
 
 contains
@@ -68,6 +69,41 @@ contains
     local_offset = mod(stride - mod(offset, stride), stride) + 1
   end function
 
+  subroutine write_real(self, var, fpath, varname)
+    class(adios_io_t), intent(inout) :: self
+    real(8), intent(in) :: var
+    character(*), intent(in) :: fpath !! Path to ouptut file
+    character(*), intent(in) :: varname !! Name of variable in output file
+
+    type(adios2_io) :: io
+    type(adios2_engine) :: writer
+    type(adios2_variable) :: adios_var
+    integer :: vartype
+    integer :: ierr
+
+    call adios2_declare_io (io, self%adios_ctx, 'write', ierr)
+    if (.not.io%valid) then
+      call self%handle_fatal_error("Cannot create ADIOS2 IO", ierr)
+    endif
+
+    call adios2_open(writer, io, fpath, adios2_mode_write, ierr)
+    if (.not.writer%valid) then
+      call self%handle_fatal_error("Cannot create ADIOS2 writer", ierr)
+    endif
+
+    vartype = adios2_type_real
+
+    call adios2_define_variable(adios_var, io, varname, vartype, ierr)
+    call adios2_begin_step(writer, adios2_step_mode_append, ierr)
+    call adios2_put(writer, adios_var, var, ierr)
+    call adios2_end_step(writer, ierr)
+
+    if (writer%valid) then
+      call adios2_close(writer, ierr)
+    endif
+
+  end subroutine
+
   subroutine write(self, in_arr, fpath, varname, icount, ishape, istart, convert_to_sp_in, istride_in)
     class(adios_io_t), intent(inout) :: self
     class(field_t), pointer, intent(in) :: in_arr !! Field to be outputted
@@ -102,7 +138,7 @@ contains
     integer :: vartype
     integer :: ierr
 
-    integer :: i, j, k
+    integer :: i
 
     ! Set our optional inputs
     if(present(convert_to_sp_in)) then
