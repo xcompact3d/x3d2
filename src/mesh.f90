@@ -39,8 +39,8 @@ module m_mesh
     integer, dimension(3), private :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
     logical, dimension(3), private :: periodic_BC ! Whether or not a direction has a periodic BC
     integer, private :: sz
-    class(geo_t), allocatable :: geo ! object containing geometry information
-    class(parallel_t), allocatable :: par ! object containing parallel domain decomposition information
+    type(geo_t), allocatable :: geo ! object containing geometry information
+    type(parallel_t), allocatable :: par ! object containing parallel domain decomposition information
   contains
     procedure :: get_SZ
 
