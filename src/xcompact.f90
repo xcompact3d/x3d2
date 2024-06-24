@@ -1,6 +1,7 @@
 program xcompact
   use mpi
 
+  use decomp_2d_fft
   use m_allocator
   use m_base_backend
   use m_common, only: pi, globs_t, POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
