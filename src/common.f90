@@ -34,7 +34,53 @@ module m_common
 
 contains
 
-  integer function get_rdr_from_dirs(dir_from, dir_to) result(rdr_dir)
+  pure subroutine get_dirs_from_rdr(dir_from, dir_to, rdr_dir)
+    integer, intent(out) :: dir_from, dir_to
+    integer, intent(in) :: rdr_dir
+    
+    select case (rdr_dir)
+    case (RDR_X2Y)
+      dir_from = DIR_X
+      dir_to = DIR_Y
+    case (RDR_X2Z)
+      dir_from = DIR_X
+      dir_to = DIR_Z
+    case (RDR_Y2X)
+      dir_from = DIR_Y
+      dir_to = DIR_X
+    case (RDR_Y2Z)
+      dir_from = DIR_Y
+      dir_to = DIR_Z
+    case (RDR_Z2X)
+      dir_from = DIR_Z
+      dir_to = DIR_X
+    case (RDR_Z2Y)
+      dir_from = DIR_Z
+      dir_to = DIR_Y
+    case (RDR_C2X)
+      dir_from = DIR_C
+      dir_to = DIR_X
+    case (RDR_C2Y)
+      dir_from = DIR_C
+      dir_to = DIR_Y
+    case (RDR_C2Z)
+      dir_from = DIR_C
+      dir_to = DIR_Z
+    case (RDR_X2C)
+      dir_from = DIR_X
+      dir_to = DIR_C
+    case (RDR_Y2C)
+      dir_from = DIR_Y
+      dir_to = DIR_C
+    case (RDR_Z2C)
+      dir_from = DIR_Z
+      dir_to = DIR_C
+    end select
+
+
+  end subroutine
+
+  pure integer function get_rdr_from_dirs(dir_from, dir_to) result(rdr_dir)
       !! Returns RDR_?2? value based on two direction inputs
     integer, intent(in) :: dir_from, dir_to
 

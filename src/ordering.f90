@@ -1,6 +1,6 @@
 module m_ordering
 
-  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, &
+  use m_common, only: dp, get_dirs_from_rdr, DIR_X, DIR_Y, DIR_Z, DIR_C, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
 
   use m_mesh, only: mesh_t
@@ -33,6 +33,10 @@ contains
       i = mod(dir_k - 1, nx_padded/SZ)*SZ + dir_i
       j = 1 + (dir_k - 1)/(nx_padded/SZ)
       k = dir_j
+    case (DIR_C)
+      i = dir_i
+      j = dir_j
+      k = dir_k
     end select
 
   end subroutine get_index_ijk
@@ -58,6 +62,10 @@ contains
       dir_i = mod(i - 1, SZ) + 1
       dir_j = k
       dir_k = (nx_padded/SZ)*(j - 1) + 1 + (i - 1)/SZ
+    case (DIR_C)
+      dir_i = i
+      dir_j = j
+      dir_k = k
     end select
 
   end subroutine get_index_dir
@@ -74,26 +82,7 @@ contains
     integer :: dir_in, dir_out
     integer, dimension(3) :: dims_padded
 
-    select case (reorder_dir)
-    case (RDR_X2Y)
-      dir_in = DIR_X
-      dir_out = DIR_Y
-    case (RDR_X2Z)
-      dir_in = DIR_X
-      dir_out = DIR_Z
-    case (RDR_Y2X)
-      dir_in = DIR_Y
-      dir_out = DIR_X
-    case (RDR_Y2Z)
-      dir_in = DIR_Y
-      dir_out = DIR_Z
-    case (RDR_Z2X)
-      dir_in = DIR_Z
-      dir_out = DIR_X
-    case (RDR_Z2Y)
-      dir_in = DIR_Z
-      dir_out = DIR_Y
-    end select
+    call get_dirs_from_rdr(dir_in, dir_out, reorder_dir)
 
     dims_padded = mesh%get_padded_dims(DIR_C)
     call get_index_ijk(i, j, k, in_i, in_j, in_k, dir_in, mesh%get_sz(), &
