@@ -10,11 +10,12 @@ program test_poisson_cg_eval
   
   use m_allocator, only: field_t
   use m_base_backend, only: base_backend_t
+  use m_mesh, only: mesh_t
 #ifdef CUDA
 #else
   use m_omp_backend
 #endif
-  use m_common, only: globs_t, DIR_X, DIR_Y, DIR_Z
+  use m_common, only: globs_t, DIR_X, DIR_Y, DIR_Z, CELL, POISSON_SOLVER_CG
   use m_poisson_cg, only: laplace_operator_t
   use m_tdsops, only: dirps_t
   
@@ -23,6 +24,7 @@ program test_poisson_cg_eval
   type(globs_t) :: globs
   class(allocator_t), allocatable :: allocator
   class(base_backend_t), allocatable :: backend
+  type(mesh_t) :: mesh
   class(field_t), pointer :: pressure
   class(field_t), pointer :: f
   type(laplace_operator_t) :: lapl
@@ -87,9 +89,9 @@ contains
     end if
 #else
     allocate(allocator)
-    allocator = allocator_t(globs%nx_loc, globs%ny_loc, globs%nz_loc, SZ)
+    allocator = allocator_t(mesh, SZ)
     allocate(omp_backend_t :: backend)
-    backend = omp_backend_t(globs, allocator)
+    backend = omp_backend_t(mesh, allocator)
 #endif
     print *, "INIT BACKEND"
     call init_backend(backend, globs, nproc, irank)
@@ -107,27 +109,9 @@ contains
     integer, intent(in) :: nproc            ! The number of processors
     real(dp), dimension(3), intent(in) :: L ! The domain dimensions
 
-    globs%nx = n(1)
-    globs%ny = n(2)
-    globs%nz = n(3)
+    mesh = mesh_t(n, [1, 1, nproc], L)
 
-    globs%Lx = L(1)
-    globs%Ly = L(2)
-    globs%Lz = L(3)
-
-    ! XXX: This requires the grid to be factorisable by nproc
-    globs%nx_loc = globs%nx / nproc
-    globs%ny_loc = globs%ny / nproc
-    globs%nz_loc = globs%nz / nproc
-
-    globs%n_groups_x = globs%ny_loc*globs%nz_loc/SZ
-    globs%n_groups_y = globs%nx_loc*globs%nz_loc/SZ
-    globs%n_groups_z = globs%nx_loc*globs%ny_loc/SZ
-
-    ! XXX: currently no way to select between periodic/non-periodic BCs
-    globs%dx = globs%Lx / globs%nx
-    globs%dy = globs%Ly / globs%ny
-    globs%dz = globs%Lz / globs%nz
+    globs%poisson_solver_type = POISSON_SOLVER_CG
 
   end subroutine init_globs
 
@@ -145,52 +129,29 @@ contains
     call init_dirps(backend%xdirps, backend%ydirps, backend%zdirps, globs, nproc, irank)
 
     print *, "ALLOCATE derivatives"
-    call backend%alloc_tdsops(backend%xdirps%der2nd, backend%xdirps%n, &
-                              backend%xdirps%d, "second-deriv", "compact6")
-    call backend%alloc_tdsops(backend%ydirps%der2nd, backend%ydirps%n, &
-                              backend%ydirps%d, "second-deriv", "compact6")
-    call backend%alloc_tdsops(backend%zdirps%der2nd, backend%zdirps%n, &
-                              backend%zdirps%d, "second-deriv", "compact6")
+
+    call backend%alloc_tdsops(backend%xdirps%der2nd, DIR_X, &
+                              "second-deriv", "compact6")
+    call backend%alloc_tdsops(backend%ydirps%der2nd, DIR_Y, &
+                              "second-deriv", "compact6")
+    call backend%alloc_tdsops(backend%zdirps%der2nd, DIR_Z, &
+                              "second-deriv", "compact6")
     print *, "DONE"
     
   end subroutine init_backend
   
   subroutine init_dirps(xdirps, ydirps, zdirps, globs, nproc, irank)
-
-    use m_domain, only: domain_decomposition
     
     type(dirps_t), intent(out) :: xdirps, ydirps, zdirps
     type(globs_t), intent(in) :: globs
     integer, intent(in) :: nproc
     integer, intent(in) :: irank
 
-    xdirps%nproc_dir = globs%nproc_x
-    ydirps%nproc_dir = globs%nproc_y
-    zdirps%nproc_dir = globs%nproc_z
-
-    xdirps%n = globs%nx_loc
-    ydirps%n = globs%ny_loc
-    zdirps%n = globs%nz_loc
-
-    xdirps%L = globs%Lx
-    ydirps%L = globs%Ly
-    zdirps%L = globs%Lz
-
-    xdirps%d = globs%dx
-    ydirps%d = globs%dy
-    zdirps%d = globs%dz
-
-    xdirps%n_blocks = globs%n_groups_x
-    ydirps%n_blocks = globs%n_groups_y
-    zdirps%n_blocks = globs%n_groups_z
-
     xdirps%dir = DIR_X
     ydirps%dir = DIR_Y
     zdirps%dir = DIR_Z
 
     print *, "DECOMP"
-    call domain_decomposition(xdirps, ydirps, zdirps, &
-                              irank, nproc)
       
   end subroutine init_dirps
 
@@ -230,32 +191,38 @@ contains
 
     real(dp), dimension(:, :, :), allocatable :: expect
 
+    integer, dimension(3) :: n
     real(dp) :: x, y, z
     integer :: i, j, k
     integer :: ii, jj, kk
+
+    real(dp) :: dx, dy, dz
+    real(dp) :: Lx, Ly, Lz
     
     if (irank == 0) then
       print *, "Testing variable field"
     end if
 
+    dx = mesh%geo%d(1); dy = mesh%geo%d(2); dz = mesh%geo%d(3)
+    Lx = mesh%geo%L(1); Ly = mesh%geo%L(2); dz = mesh%geo%L(3)
+    n = mesh%get_dims(CELL)
+
     ! Set pressure field to some variable
     allocate(expect, mold = f%data)
     associate(xdirps => backend%xdirps, &
               ydirps => backend%ydirps, &
-              zdirps => backend%zdirps, &
-              dx => globs%dx, dy => globs%dy, dz => globs%dz, &
-              Lx => globs%Lx, Ly => globs%Ly, Lz => globs%Lz)
-      do k = 1, zdirps%n
-        do j = 1, ydirps%n
-          do i = 1, xdirps%n
-            x = (xdirps%n_offset + (i - 1)) * dx
-            y = (ydirps%n_offset + (j - 1)) * dy
-            z = (zdirps%n_offset + (k - 1)) * dz
+              zdirps => backend%zdirps)
+      do k = 1, n(3)
+        do j = 1, n(2)
+          do i = 1, n(1)
+            x = (mesh%par%n_offset(1) + (i - 1)) * dx
+            y = (mesh%par%n_offset(2) + (j - 1)) * dy
+            z = (mesh%par%n_offset(3) + (k - 1)) * dz
 
             ! Need to get Cartesian -> memory layout mapping
             call get_index_dir(ii, jj, kk, i, j, k, &
                                DIR_X, &
-                               SZ, xdirps%n, ydirps%n, zdirps%n)
+                               SZ, n(1), n(2), n(3))
 
             pressure%data(ii, jj, kk) = cos(2 * pi * (x / Lx)) + &
                                         cos(2 * pi * (y / Ly)) + &
@@ -285,6 +252,7 @@ contains
     real(dp) :: rms
     real(dp) :: tol
 
+    integer, dimension(3) :: ng
     integer :: n
     
     if (present(opttol)) then
@@ -293,7 +261,8 @@ contains
       tol = 1.0e-8_dp
     end if
 
-    n = backend%xdirps%n * backend%ydirps%n * backend%zdirps%n
+    ng = mesh%get_global_dims(CELL)
+    n = product(ng)
     
     rms = sum((soln%data - expect)**2)
     call MPI_Allreduce(MPI_IN_PLACE, rms, 1, &

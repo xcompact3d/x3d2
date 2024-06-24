@@ -52,7 +52,7 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
 
   use m_cg_types
 
-  use m_common, only: dp, DIR_X, DIR_C
+  use m_common, only: dp, DIR_X, DIR_C, CELL
   use m_base_backend, only: base_backend_t
 
   implicit none
@@ -137,10 +137,10 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
 
 contains
 
-  module function init_cg(xdirps, ydirps, zdirps, backend) &
+  module function init_cg(mesh, backend) &
                   result(poisson_cg)
     !! Public constructor for the poisson_cg_t type.
-    class(dirps_t), intent(in) :: xdirps, ydirps, zdirps ! X/Y/Z discretisation operators
+    class(mesh_t), intent(in) :: mesh
     class(poisson_cg_t), allocatable :: poisson_cg
     class(base_backend_t), pointer, intent(in) :: backend
 
@@ -150,7 +150,7 @@ contains
     
     select type (poisson_cg)
     type is (petsc_poisson_cg_t)
-      call init_petsc_cg(poisson_cg, xdirps, ydirps, zdirps, backend)
+      call init_petsc_cg(poisson_cg, mesh, backend)
     class default
       ! This should be impossible
       print *, "Failure in allocating PETSc Poisson solver -- this indicates a serious problem"
@@ -158,19 +158,16 @@ contains
     end select
   end function init_cg
 
-  subroutine init_petsc_cg(self, xdirps, ydirps, zdirps, backend)
+  subroutine init_petsc_cg(self, mesh, backend)
     !! Private constructor for the poisson_cg_t type.
     type(petsc_poisson_cg_t), intent(inout) :: self
-    class(dirps_t), intent(in) :: xdirps, ydirps, zdirps ! X/Y/Z discretisation operators
+    class(mesh_t), intent(in) :: mesh
     class(base_backend_t), pointer, intent(in) :: backend
 
-    integer :: nx, ny, nz, n ! Local problem size
+    integer :: n ! Local problem size
 
     ! Determine local problem size
-    nx = xdirps%n
-    ny = ydirps%n
-    nz = zdirps%n
-    n = nx*ny*nz
+    n = product(mesh%get_dims(CELL))
 
     self%ctx = mat_ctx_t(backend, self%lapl, DIR_X)
 
@@ -239,11 +236,13 @@ contains
     real(dp), dimension(:, :, :), pointer :: vdata3d
     integer :: ierr
 
+    integer, dimension(3) :: dims
     integer :: nx, ny, nz
 
-    nx = backend%nx_loc
-    ny = backend%ny_loc
-    nz = backend%nz_loc
+    dims = backend%mesh%get_dims(CELL)
+    nx = dims(1)
+    ny = dims(2)
+    nz = dims(3)
 
     ! Local copy
     call VecGetArrayReadF90(v, vdata, ierr)
@@ -271,11 +270,13 @@ contains
     real(dp), dimension(:, :, :), pointer :: vdata3d
     integer :: ierr
 
+    integer, dimension(3) :: dims
     integer :: nx, ny, nz
     
-    nx = backend%nx_loc
-    ny = backend%ny_loc
-    nz = backend%nz_loc
+    dims = backend%mesh%get_dims(CELL)
+    nx = dims(1)
+    ny = dims(2)
+    nz = dims(3)
 
     ! Local copy
     call VecGetArrayF90(v, vdata, ierr)
