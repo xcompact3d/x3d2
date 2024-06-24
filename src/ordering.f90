@@ -1,9 +1,15 @@
 module m_ordering
 
-  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, &
+  use m_common, only: dp, get_dirs_from_rdr, DIR_X, DIR_Y, DIR_Z, DIR_C, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
 
+  use m_mesh, only: mesh_t
+
   implicit none
+  interface get_index_reordering
+    procedure get_index_reordering_rdr, get_index_reordering_dirs
+  end interface
+
 contains
    !!
    !! "Application storage" stores spatial data with a directionality for better cache locality
@@ -31,6 +37,10 @@ contains
       i = mod(dir_k - 1, nx_padded/SZ)*SZ + dir_i
       j = 1 + (dir_k - 1)/(nx_padded/SZ)
       k = dir_j
+    case (DIR_C)
+      i = dir_i
+      j = dir_j
+      k = dir_k
     end select
 
   end subroutine get_index_ijk
@@ -56,47 +66,44 @@ contains
       dir_i = mod(i - 1, SZ) + 1
       dir_j = k
       dir_k = (nx_padded/SZ)*(j - 1) + 1 + (i - 1)/SZ
+    case (DIR_C)
+      dir_i = i
+      dir_j = j
+      dir_k = k
     end select
 
   end subroutine get_index_dir
 
-  pure subroutine get_index_reordering(out_i, out_j, out_k, in_i, in_j, in_k, &
-                              reorder_dir, SZ, nx_padded, ny_padded, nz_padded)
+  pure subroutine get_index_reordering_dirs(out_i, out_j, out_k, in_i, in_j, in_k, &
+                                       dir_from, dir_to, mesh)
       !! Converts a set of application storage directional index to an other direction.
       !! The two directions are defined by the reorder_dir variable, RDR_X2Y will go from storage in X to Y etc.
     integer, intent(out) :: out_i, out_j, out_k         ! new indices in the application storage
     integer, intent(in) :: in_i, in_j, in_k             ! original indices
-    integer, intent(in) :: reorder_dir
-    integer, intent(in) :: SZ, nx_padded, ny_padded, nz_padded ! dimensions of the block
+    integer, intent(in) :: dir_from, dir_to
+    class(mesh_t), intent(in) :: mesh
     integer :: i, j, k        ! Intermediary cartesian indices
-    integer :: dir_in, dir_out
+    integer, dimension(3) :: dims_padded
 
-    select case (reorder_dir)
-    case (RDR_X2Y)
-      dir_in = DIR_X
-      dir_out = DIR_Y
-    case (RDR_X2Z)
-      dir_in = DIR_X
-      dir_out = DIR_Z
-    case (RDR_Y2X)
-      dir_in = DIR_Y
-      dir_out = DIR_X
-    case (RDR_Y2Z)
-      dir_in = DIR_Y
-      dir_out = DIR_Z
-    case (RDR_Z2X)
-      dir_in = DIR_Z
-      dir_out = DIR_X
-    case (RDR_Z2Y)
-      dir_in = DIR_Z
-      dir_out = DIR_Y
-    end select
+    dims_padded = mesh%get_padded_dims(DIR_C)
+    call get_index_ijk(i, j, k, in_i, in_j, in_k, dir_from, mesh%get_sz(), &
+                       dims_padded(1), dims_padded(2), dims_padded(3))
+    call get_index_dir(out_i, out_j, out_k, i, j, k, dir_to, mesh%get_sz(), &
+                       dims_padded(1), dims_padded(2), dims_padded(3))
 
-    call get_index_ijk(i, j, k, in_i, in_j, in_k, dir_in, &
-                       SZ, nx_padded, ny_padded, nz_padded)
-    call get_index_dir(out_i, out_j, out_k, i, j, k, dir_out, &
-                       SZ, nx_padded, ny_padded, nz_padded)
+  end subroutine get_index_reordering_dirs
 
-  end subroutine get_index_reordering
+  pure subroutine get_index_reordering_rdr(out_i, out_j, out_k, in_i, in_j, in_k, reorder_dir, mesh)
+    integer, intent(out) :: out_i, out_j, out_k         ! new indices in the application storage
+    integer, intent(in) :: in_i, in_j, in_k             ! original indices
+    integer, intent(in) :: reorder_dir
+    class(mesh_t), intent(in) :: mesh
+    integer :: dir_from, dir_to
+
+    call get_dirs_from_rdr(dir_from, dir_to, reorder_dir)
+    call get_index_reordering(out_i, out_j, out_k, in_i, in_j, in_k, &
+                              dir_from, dir_to, mesh)
+
+  end subroutine get_index_reordering_rdr
 
 end module m_ordering

@@ -10,7 +10,15 @@ module m_common
                         RDR_X2C = 14, RDR_Y2C = 24, RDR_Z2C = 34
   integer, parameter :: DIR_X = 1, DIR_Y = 2, DIR_Z = 3, DIR_C = 4
   integer, parameter :: POISSON_SOLVER_FFT = 0, POISSON_SOLVER_CG = 1
-
+  integer, parameter :: VERT = 1, & ! Vertex centered data
+                        CELL = 2, & ! Cell centered data
+                        X_FACE = 11, &  ! Data on faces normal to X
+                        Y_FACE = 12, &  ! Data on faces normal to Y
+                        Z_FACE = 13, &  ! Data on faces normal to Z
+                        X_EDGE = 101, & ! Data on edges along X
+                        Y_EDGE = 102, & ! Data on edges along Y
+                        Z_EDGE = 103, & ! Data on edges along Z
+                        none = -1 ! The location of data isn't specified
   integer, protected :: &
     rdr_map(4, 4) = reshape([0, RDR_X2Y, RDR_X2Z, RDR_X2C, &
                              RDR_Y2X, 0, RDR_Y2Z, RDR_Y2C, &
@@ -18,21 +26,26 @@ module m_common
                              RDR_C2X, RDR_C2Y, RDR_C2Z, 0], shape=[4, 4])
 
   type :: globs_t
-    integer :: nx, ny, nz
-    integer :: nx_loc, ny_loc, nz_loc
-    integer :: n_groups_x, n_groups_y, n_groups_z
-    real(dp) :: Lx, Ly, Lz
-    real(dp) :: dx, dy, dz
     real(dp) :: nu, dt
     integer :: n_iters, n_output
-    integer :: nproc_x = 1, nproc_y = 1, nproc_z = 1
     character(len=20) :: BC_x_s, BC_x_e, BC_y_s, BC_y_e, BC_z_s, BC_z_e
     integer :: poisson_solver_type
   end type globs_t
 
 contains
 
-  integer function get_rdr_from_dirs(dir_from, dir_to) result(rdr_dir)
+  pure subroutine get_dirs_from_rdr(dir_from, dir_to, rdr_dir)
+    integer, intent(out) :: dir_from, dir_to
+    integer, intent(in) :: rdr_dir
+    integer, dimension(2) :: dirs
+    
+    dirs = findloc(rdr_map, rdr_dir)
+    dir_from = dirs(2)
+    dir_to = dirs(1)
+
+  end subroutine
+
+  pure integer function get_rdr_from_dirs(dir_from, dir_to) result(rdr_dir)
       !! Returns RDR_?2? value based on two direction inputs
     integer, intent(in) :: dir_from, dir_to
 

@@ -1,7 +1,8 @@
 module m_tdsops
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_common, only: dp, pi
+  use m_common, only: dp, pi, VERT, CELL, none
+  use m_mesh, only: mesh_t
 
   implicit none
 
@@ -28,7 +29,9 @@ module m_tdsops
                                            dist_af !! the auxiliary factors
     real(dp), allocatable :: coeffs(:), coeffs_s(:, :), coeffs_e(:, :)
     real(dp) :: alpha, a, b, c = 0._dp, d = 0._dp
-    integer :: n, n_halo
+    integer :: tds_n
+    integer :: dir
+    integer :: n_halo
   contains
     procedure :: deriv_1st, deriv_2nd, interpl_mid, stagder_1st, preprocess
   end type tdsops_t
@@ -44,14 +47,12 @@ module m_tdsops
     !! in each coordinate direction.
     class(tdsops_t), allocatable :: der1st, der1st_sym, der2nd, der2nd_sym, &
       stagder_v2p, stagder_p2v, interpl_v2p, interpl_p2v
-    integer :: nrank_dir, nproc_dir, pnext, pprev, n, n_blocks, dir
-    integer :: n_offset = 0 ! offset w.r.t. global domain at the starting point
-    real(dp) :: L, d
+    integer :: dir
   end type dirps_t
 
 contains
 
-  function tdsops_init(n, delta, operation, scheme, n_halo, from_to, &
+  function tdsops_init(tds_n, delta, operation, scheme, n_halo, from_to, &
                        bc_start, bc_end, sym, c_nu, nu0_nu) result(tdsops)
       !! Constructor function for the tdsops_t class.
       !!
@@ -74,7 +75,7 @@ contains
 
     type(tdsops_t) :: tdsops !! return value of the function
 
-    integer, intent(in) :: n
+    integer, intent(in) :: tds_n
     real(dp), intent(in) :: delta
     character(*), intent(in) :: operation, scheme
     integer, optional, intent(in) :: n_halo !! Number of halo cells
@@ -85,7 +86,8 @@ contains
 
     integer :: n_stencil
 
-    tdsops%n = n
+    tdsops%tds_n = tds_n
+
     if (present(n_halo)) then
       tdsops%n_halo = n_halo
       if (n_halo /= 4) then
@@ -100,9 +102,9 @@ contains
 
     n_stencil = 2*tdsops%n_halo + 1
 
-    allocate (tdsops%dist_fw(n), tdsops%dist_bw(n))
-    allocate (tdsops%dist_sa(n), tdsops%dist_sc(n))
-    allocate (tdsops%dist_af(n))
+    allocate (tdsops%dist_fw(tds_n), tdsops%dist_bw(tds_n))
+    allocate (tdsops%dist_sa(tds_n), tdsops%dist_sc(tds_n))
+    allocate (tdsops%dist_af(tds_n))
     allocate (tdsops%coeffs(n_stencil))
     allocate (tdsops%coeffs_s(n_stencil, tdsops%n_halo))
     allocate (tdsops%coeffs_e(n_stencil, tdsops%n_halo))
@@ -121,6 +123,25 @@ contains
     end if
 
   end function tdsops_init
+
+  pure function get_tds_n(mesh, dir, from_to) result(tds_n)
+  !! Get the tds_n size based on the from_to value (and the mesh)
+    class(mesh_t), intent(in) :: mesh
+    integer, intent(in) :: dir
+    character(*), optional, intent(in) :: from_to
+    integer :: tds_n
+    integer :: data_loc
+
+    data_loc = VERT
+    if (present(from_to)) then
+      if (from_to == "v2p") then
+        data_loc = CELL
+      end if
+    end if
+
+    tds_n = mesh%get_n(dir, data_loc)
+
+  end function
 
   subroutine deriv_1st(self, delta, scheme, bc_start, bc_end, sym)
     implicit none
@@ -169,7 +190,7 @@ contains
 
     self%dist_sa(:) = alpha; self%dist_sc(:) = alpha
 
-    n = self%n
+    n = self%tds_n
     n_halo = self%n_halo
 
     allocate (dist_b(n))
@@ -339,7 +360,7 @@ contains
 
     self%dist_sa(:) = alpha; self%dist_sc(:) = alpha
 
-    n = self%n
+    n = self%tds_n
     n_halo = self%n_halo
 
     allocate (dist_b(n))
@@ -539,7 +560,7 @@ contains
 
     self%dist_sa(:) = alpha; self%dist_sc(:) = alpha
 
-    n = self%n
+    n = self%tds_n
     n_halo = self%n_halo
 
     allocate (dist_b(n))
@@ -664,7 +685,7 @@ contains
 
     self%dist_sa(:) = alpha; self%dist_sc(:) = alpha
 
-    n = self%n
+    n = self%tds_n
     n_halo = self%n_halo
 
     allocate (dist_b(n))
@@ -732,6 +753,9 @@ contains
     real(dp), dimension(:), intent(in) :: dist_b
 
     integer :: i
+    integer :: n
+
+    n = self%tds_n
 
     ! Ref DOI: 10.1109/MCSE.2021.3130544
     ! Algorithm 3 in page 4
@@ -744,7 +768,7 @@ contains
     end do
 
     ! Then the remaining in the forward pass
-    do i = 3, self%n
+    do i = 3, n
       ! Algorithm 3 in ref obtains 'r' coeffs on the fly in line 7.
       ! As we have to solve many RHSs with the same tridiagonal system,
       ! it is better to do a preprocessing first.
@@ -761,7 +785,7 @@ contains
     end do
 
     ! backward pass starting in line 12 of Algorithm 3.
-    do i = self%n - 2, 2, -1
+    do i = n - 2, 2, -1
       self%dist_sa(i) = self%dist_sa(i) &
                         - self%dist_sc(i)*self%dist_sa(i + 1)
       self%dist_bw(i) = self%dist_sc(i)

@@ -2,12 +2,13 @@ set(SRC
   allocator.f90
   backend.f90
   common.f90
-  domain.f90
   poisson_fft.f90
   solver.f90
   tdsops.f90
   time_integrator.f90
   ordering.f90
+  mesh.f90
+  field.f90
   omp/backend.f90
   omp/common.f90
   omp/kernels/distributed.f90
@@ -46,12 +47,11 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr -Ktrap=fp")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
   target_link_options(x3d2 INTERFACE "-cuda")
-  target_link_options(x3d2 INTERFACE "-lcufft")
+  target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
 
   target_compile_options(xcompact PRIVATE "-DCUDA")
-  #  target_link_options(xcompact INTERFACE "-cuda")
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
-  set(CMAKE_Fortran_FLAGS "-cpp -std=f2008")
+  set(CMAKE_Fortran_FLAGS "-cpp -std=f2018")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math")
 endif()
