@@ -146,6 +146,8 @@ contains
     allocate (init%curr(init%nvars))
     allocate (init%deriv(init%nvars))
 
+    print*, "allocated curr here: ", allocated(init%curr)
+
     ! Request all the storage for old timesteps
     do i = 1, init%nvars
       do j = 1, init%nolds
@@ -158,7 +160,7 @@ contains
   end function init
 
   subroutine write_checkpoint(self, fpath, io)
-    class(time_intg_t), intent(out) :: self
+    class(time_intg_t), intent(inout) :: self
     character(*), intent(in) :: fpath !! Path to ouptut file
     class(adios_io_t), intent(inout) :: io
 
@@ -182,6 +184,8 @@ contains
     class(field_t), target, intent(in) :: du, dv, dw
 
     real(dp), intent(in) :: dt
+
+    print*, "allocated curr here?: ", allocated(self%curr)
 
     ! assign pointer to variables
     self%curr(1)%ptr => u
