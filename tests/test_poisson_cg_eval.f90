@@ -189,7 +189,7 @@ contains
     end if
 
     dx = mesh%geo%d(1); dy = mesh%geo%d(2); dz = mesh%geo%d(3)
-    Lx = mesh%geo%L(1); Ly = mesh%geo%L(2); dz = mesh%geo%L(3)
+    Lx = mesh%geo%L(1); Ly = mesh%geo%L(2); Lz = mesh%geo%L(3)
     n = mesh%get_dims(CELL)
 
     ! Set pressure field to some variable
