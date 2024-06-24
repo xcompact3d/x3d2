@@ -2,7 +2,7 @@ module m_omp_backend
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_ordering, only: get_index_reordering
-  use m_common, only: dp, globs_t, VERT, DIR_X, DIR_Y, DIR_Z, DIR_C, &
+  use m_common, only: dp, globs_t, get_dirs_from_rdr, VERT, DIR_X, DIR_Y, DIR_Z, DIR_C, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
   use m_tdsops, only: dirps_t, tdsops_t, get_tds_n
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
@@ -334,15 +334,17 @@ contains
     integer, dimension(3) :: dims
     integer :: i, j, k
     integer :: out_i, out_j, out_k
+    integer :: dir_from, dir_to
 
     dims = self%mesh%get_padded_dims(u)
+    call get_dirs_from_rdr(dir_from, dir_to, direction)
 
     !$omp parallel do private(out_i, out_j, out_k) collapse(2)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
           call get_index_reordering( &
-            out_i, out_j, out_k, i, j, k, direction, self%mesh)
+            out_i, out_j, out_k, i, j, k, dir_from, dir_to, self%mesh)
           u_%data(out_i, out_j, out_k) = u%data(i, j, k)
         end do
       end do

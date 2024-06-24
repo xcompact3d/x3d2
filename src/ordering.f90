@@ -6,6 +6,10 @@ module m_ordering
   use m_mesh, only: mesh_t
 
   implicit none
+  interface get_index_reordering
+    procedure get_index_reordering_rdr, get_index_reordering_dirs
+  end interface
+
 contains
    !!
    !! "Application storage" stores spatial data with a directionality for better cache locality
@@ -70,26 +74,36 @@ contains
 
   end subroutine get_index_dir
 
-  pure subroutine get_index_reordering(out_i, out_j, out_k, in_i, in_j, in_k, &
-                                       reorder_dir, mesh)
+  pure subroutine get_index_reordering_dirs(out_i, out_j, out_k, in_i, in_j, in_k, &
+                                       dir_from, dir_to, mesh)
       !! Converts a set of application storage directional index to an other direction.
       !! The two directions are defined by the reorder_dir variable, RDR_X2Y will go from storage in X to Y etc.
     integer, intent(out) :: out_i, out_j, out_k         ! new indices in the application storage
     integer, intent(in) :: in_i, in_j, in_k             ! original indices
-    integer, intent(in) :: reorder_dir
+    integer, intent(in) :: dir_from, dir_to
     class(mesh_t), intent(in) :: mesh
     integer :: i, j, k        ! Intermediary cartesian indices
-    integer :: dir_in, dir_out
     integer, dimension(3) :: dims_padded
 
-    call get_dirs_from_rdr(dir_in, dir_out, reorder_dir)
-
     dims_padded = mesh%get_padded_dims(DIR_C)
-    call get_index_ijk(i, j, k, in_i, in_j, in_k, dir_in, mesh%get_sz(), &
+    call get_index_ijk(i, j, k, in_i, in_j, in_k, dir_from, mesh%get_sz(), &
                        dims_padded(1), dims_padded(2), dims_padded(3))
-    call get_index_dir(out_i, out_j, out_k, i, j, k, dir_out, mesh%get_sz(), &
+    call get_index_dir(out_i, out_j, out_k, i, j, k, dir_to, mesh%get_sz(), &
                        dims_padded(1), dims_padded(2), dims_padded(3))
 
-  end subroutine get_index_reordering
+  end subroutine get_index_reordering_dirs
+
+  pure subroutine get_index_reordering_rdr(out_i, out_j, out_k, in_i, in_j, in_k, reorder_dir, mesh)
+    integer, intent(out) :: out_i, out_j, out_k         ! new indices in the application storage
+    integer, intent(in) :: in_i, in_j, in_k             ! original indices
+    integer, intent(in) :: reorder_dir
+    class(mesh_t), intent(in) :: mesh
+    integer :: dir_from, dir_to
+
+    call get_dirs_from_rdr(dir_from, dir_to, reorder_dir)
+    call get_index_reordering(out_i, out_j, out_k, in_i, in_j, in_k, &
+                              dir_from, dir_to, mesh)
+
+  end subroutine get_index_reordering_rdr
 
 end module m_ordering
