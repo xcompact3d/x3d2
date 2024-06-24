@@ -13,12 +13,12 @@ module m_adios_io
     type(adios2_adios) :: adios_ctx
     integer :: irank, nproc
   contains
-    procedure:: init 
-    procedure:: deinit 
-    procedure:: handle_fatal_error 
-    procedure:: read 
-    procedure:: write 
-    procedure:: write_real
+    procedure :: init 
+    procedure :: deinit 
+    procedure :: handle_fatal_error 
+    procedure :: read 
+    procedure :: write 
+    procedure :: write_real
   end type
 
 contains
@@ -152,7 +152,7 @@ contains
       call self%handle_fatal_error("Output stride < 1. Cannot continue.", 0)
     endif
 
-    call adios2_declare_io (io, self%adios_ctx, 'write', ierr)
+    call adios2_declare_io(io, self%adios_ctx, 'write', ierr)
     if (.not.io%valid) then
       call self%handle_fatal_error("Cannot create ADIOS2 IO", ierr)
     endif
