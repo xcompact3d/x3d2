@@ -146,8 +146,6 @@ contains
     allocate (init%curr(init%nvars))
     allocate (init%deriv(init%nvars))
 
-    print*, "allocated curr here: ", allocated(init%curr)
-
     ! Request all the storage for old timesteps
     do i = 1, init%nvars
       do j = 1, init%nolds
@@ -184,8 +182,6 @@ contains
     class(field_t), target, intent(in) :: du, dv, dw
 
     real(dp), intent(in) :: dt
-
-    print*, "allocated curr here?: ", allocated(self%curr)
 
     ! assign pointer to variables
     self%curr(1)%ptr => u

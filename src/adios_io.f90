@@ -11,6 +11,7 @@ module m_adios_io
 
   type :: adios_io_t
     type(adios2_adios) :: adios_ctx
+    type(adios2_io) :: aio
     integer :: irank, nproc
   contains
     procedure :: init 
@@ -19,6 +20,13 @@ module m_adios_io
     procedure :: read 
     procedure :: write 
     procedure :: write_real
+    procedure :: open_file
+    procedure :: close_file
+  end type
+
+  type :: adios_file_t
+    character(1024) :: fpath
+    type(adios2_engine) :: writer
   end type
 
 contains
@@ -48,6 +56,12 @@ contains
     if (.not.self%adios_ctx%valid) then
       call self%handle_fatal_error("Cannot initialise ADIOS context.", ierr)
     endif
+
+    call adios2_declare_io (self%aio, self%adios_ctx, 'main_io', ierr)
+    if (.not.self%aio%valid) then
+      call self%handle_fatal_error("Cannot create ADIOS2 IO", ierr)
+    endif
+
   end subroutine
 
   subroutine deinit(self)
@@ -69,39 +83,52 @@ contains
     local_offset = mod(stride - mod(offset, stride), stride) + 1
   end function
 
+  function open_file(self, fpath) result(file)
+    class(adios_io_t), intent(inout) :: self
+    character(*), intent(in) :: fpath !! Path to ouptut file
+    class(adios_file_t) :: file
+
+    integer :: ierr
+
+    call adios2_open(file%writer, self%aio, fpath, adios2_mode_write, ierr)
+    if (.not.file%writer%valid) then
+      call self%handle_fatal_error("Cannot create ADIOS2 writer", ierr)
+    endif
+  end function
+
+  subroutine close_file(self, file)
+    class(adios_io_t), intent(inout) :: self
+    class(adios_file_t), intent(inout) :: file
+
+    integer :: ierr
+
+    if (file%writer%valid) then
+      call adios2_close(file%writer, ierr)
+    endif
+  end subroutine
+
   subroutine write_real(self, var, fpath, varname)
     class(adios_io_t), intent(inout) :: self
     real(8), intent(in) :: var
     character(*), intent(in) :: fpath !! Path to ouptut file
     character(*), intent(in) :: varname !! Name of variable in output file
 
-    type(adios2_io) :: aio
-    type(adios2_engine) :: writer
+    type(adios_file_t) :: file
     type(adios2_variable) :: adios_var
     integer :: vartype
+
     integer :: ierr
 
-    call adios2_declare_io (aio, self%adios_ctx, 'write', ierr)
-    if (.not.aio%valid) then
-      call self%handle_fatal_error("Cannot create ADIOS2 IO", ierr)
-    endif
-
-    call adios2_open(writer, aio, fpath, adios2_mode_write, ierr)
-    if (.not.writer%valid) then
-      call self%handle_fatal_error("Cannot create ADIOS2 writer", ierr)
-    endif
+    file = self%open_file(fpath)
 
     vartype = adios2_type_dp
 
-    call adios2_define_variable(adios_var, aio, varname, vartype, ierr)
-    call adios2_begin_step(writer, adios2_step_mode_append, ierr)
-    call adios2_put(writer, adios_var, var, ierr)
-    call adios2_end_step(writer, ierr)
+    call adios2_define_variable(adios_var, self%aio, varname, vartype, ierr)
+    call adios2_begin_step(file%writer, adios2_step_mode_append, ierr)
+    call adios2_put(file%writer, adios_var, var, ierr)
+    call adios2_end_step(file%writer, ierr)
 
-    if (writer%valid) then
-      call adios2_close(writer, ierr)
-    endif
-
+    call self%close_file(file)
   end subroutine
 
   subroutine write(self, in_arr, fpath, varname, icount, ishape, istart, convert_to_sp_in, istride_in)
