@@ -385,13 +385,54 @@ contains
   end subroutine vecadd_omp
 
   real(dp) function scalar_product_omp(self, x, y) result(s)
+
+    use mpi
+    
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(in) :: x, y
+    integer, dimension(3) :: dims
+    integer :: dir
+    integer :: i, j, k
+    integer :: ierr
 
-    s = 0._dp
+    if ((x%dir /= y%dir) .or. (x%data_loc /= y%data_loc)) then
+      error stop "Called scalar product with incompatible fields"
+    end if
+    
+    dims = self%mesh%get_field_dims(x)
+    dir = x%dir
 
+    s = 0.0_dp
+    if (dir == DIR_C) then
+      !$omp parallel do reduction(+:s) collapse(3)
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          do i = 1, dims(1)
+            s = s + x%data(i, j, k) * y%data(i, j, k)
+          end do
+        end do
+      end do
+      !$omp end parallel do
+    else
+      !$omp parallel do reduction(+:s) collapse(2)
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          !$omp simd reduction(+:s)
+          do i = 1, SZ
+            s = s + x%data(i, j, k) * y%data(i, j, k)
+          end do
+          !$omp end simd
+        end do
+      end do
+      !$omp end parallel do
+    end if
+    
+    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, &
+                       MPI_SUM, MPI_COMM_WORLD, &
+                       ierr)
+      
   end function scalar_product_omp
 
   subroutine copy_into_buffers(u_send_s, u_send_e, u, n, n_groups)
