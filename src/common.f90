@@ -37,46 +37,11 @@ contains
   pure subroutine get_dirs_from_rdr(dir_from, dir_to, rdr_dir)
     integer, intent(out) :: dir_from, dir_to
     integer, intent(in) :: rdr_dir
+    integer, dimension(2) :: dirs
     
-    select case (rdr_dir)
-    case (RDR_X2Y)
-      dir_from = DIR_X
-      dir_to = DIR_Y
-    case (RDR_X2Z)
-      dir_from = DIR_X
-      dir_to = DIR_Z
-    case (RDR_Y2X)
-      dir_from = DIR_Y
-      dir_to = DIR_X
-    case (RDR_Y2Z)
-      dir_from = DIR_Y
-      dir_to = DIR_Z
-    case (RDR_Z2X)
-      dir_from = DIR_Z
-      dir_to = DIR_X
-    case (RDR_Z2Y)
-      dir_from = DIR_Z
-      dir_to = DIR_Y
-    case (RDR_C2X)
-      dir_from = DIR_C
-      dir_to = DIR_X
-    case (RDR_C2Y)
-      dir_from = DIR_C
-      dir_to = DIR_Y
-    case (RDR_C2Z)
-      dir_from = DIR_C
-      dir_to = DIR_Z
-    case (RDR_X2C)
-      dir_from = DIR_X
-      dir_to = DIR_C
-    case (RDR_Y2C)
-      dir_from = DIR_Y
-      dir_to = DIR_C
-    case (RDR_Z2C)
-      dir_from = DIR_Z
-      dir_to = DIR_C
-    end select
-
+    dirs = findloc(rdr_map, rdr_dir)
+    dir_from = dirs(2)
+    dir_to = dirs(1)
 
   end subroutine
 
