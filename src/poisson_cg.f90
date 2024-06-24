@@ -68,15 +68,11 @@ contains
     class(base_backend_t), intent(in) :: backend
 
     ! Compute d2pdx2
-    print *, "d2pdx2"
     call compute_der2nd(f, p, backend, backend%xdirps)
     
     ! Compute d2pdy2, d2pdz2 and accumulate
-    print *, "d2pdy2"
     call compute_and_acc_der2nd(f, p, backend, backend%ydirps, RDR_X2Y)
-    print *, "d2pdz2"
     call compute_and_acc_der2nd(f, p, backend, backend%zdirps, RDR_X2Z)
-    print *, "DONE"
 
   end subroutine poissmult
 
@@ -103,12 +99,9 @@ contains
     
     p_i => backend%allocator%get_block(DIR)
     f_i => backend%allocator%get_block(DIR)
-    print *, "REORDER"
     call backend%reorder(p_i, p, reorder_op)
-    print *, "- DONE"
 
     call compute_der2nd(f_i, p_i, backend, dirps)
-    print *, "COMPUTED d2/dx2"
     if (reorder_op == RDR_X2Y) then
       call backend%sum_yintox(f, f_i)
     else if (reorder_op == RDR_X2Z) then
@@ -116,11 +109,9 @@ contains
     else
       error stop "Unsupported reordering operation"
     end if
-    print *, "SUMMED"
 
     call backend%allocator%release_block(p_i)
     call backend%allocator%release_block(f_i)
-    print *, "CLEANED"
     
   end subroutine compute_and_acc_der2nd
 

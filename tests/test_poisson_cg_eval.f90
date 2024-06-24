@@ -80,9 +80,7 @@ contains
       print *, "Parallel run with", nproc, "ranks"
     end if
 
-    print *, "INIT GLOBS"
     call init_globs(globs, [nx, ny, nz], nproc, [Lx, Ly, Lz])
-    print *, "SELECT BACKEND"
 #ifdef CUDA
     if (irank == 0) then
       error stop "CUDA iterative solver not currently supported"
@@ -93,8 +91,7 @@ contains
     allocate(omp_backend_t :: backend)
     backend = omp_backend_t(mesh, allocator)
 #endif
-    print *, "INIT BACKEND"
-    call init_backend(backend, globs, nproc, irank)
+    call init_backend(backend)
 
     pressure => backend%allocator%get_block(DIR_X)
     f => backend%allocator%get_block(DIR_X)
@@ -115,20 +112,14 @@ contains
 
   end subroutine init_globs
 
-  subroutine init_backend(backend, globs, nproc, irank)
+  subroutine init_backend(backend)
 
     class(base_backend_t), intent(inout) :: backend
-    type(globs_t), intent(in) :: globs
-    integer, intent(in) :: nproc
-    integer, intent(in) :: irank
 
-    print *, "INIT DERPS"
     allocate(backend%xdirps)
     allocate(backend%ydirps)
     allocate(backend%zdirps)
-    call init_dirps(backend%xdirps, backend%ydirps, backend%zdirps, globs, nproc, irank)
-
-    print *, "ALLOCATE derivatives"
+    call init_dirps(backend%xdirps, backend%ydirps, backend%zdirps)
 
     call backend%alloc_tdsops(backend%xdirps%der2nd, DIR_X, &
                               "second-deriv", "compact6")
@@ -136,22 +127,16 @@ contains
                               "second-deriv", "compact6")
     call backend%alloc_tdsops(backend%zdirps%der2nd, DIR_Z, &
                               "second-deriv", "compact6")
-    print *, "DONE"
     
   end subroutine init_backend
   
-  subroutine init_dirps(xdirps, ydirps, zdirps, globs, nproc, irank)
+  subroutine init_dirps(xdirps, ydirps, zdirps)
     
     type(dirps_t), intent(out) :: xdirps, ydirps, zdirps
-    type(globs_t), intent(in) :: globs
-    integer, intent(in) :: nproc
-    integer, intent(in) :: irank
 
     xdirps%dir = DIR_X
     ydirps%dir = DIR_Y
     zdirps%dir = DIR_Z
-
-    print *, "DECOMP"
       
   end subroutine init_dirps
 
@@ -269,17 +254,25 @@ contains
                        MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, &
                        ierr)
     rms = sqrt(rms / n)
-    if (rms > tol) then
+
+    if (rms /= rms) then ! NAN check
+      print *, "- SEVERE ERROR: RMS=NAN"
       test_pass = .false.
-      
-      if (irank == 0) then
-        print *, "- FAILED RMS(err) = ", rms
-      end if
     else
-      if (irank == 0) then
-        print *, "- PASSED"
+      if (rms > tol) then
+        test_pass = .false.
+
+        if (irank == 0) then
+          print *, "- FAILED RMS(err) = ", rms
+        end if
+      else
+        if (irank == 0) then
+          print *, "- PASSED"
+        end if
       end if
     end if
+
+    test_pass = .false.
 
   end subroutine check_soln
 
