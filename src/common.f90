@@ -34,7 +34,18 @@ module m_common
 
 contains
 
-  integer function get_rdr_from_dirs(dir_from, dir_to) result(rdr_dir)
+  pure subroutine get_dirs_from_rdr(dir_from, dir_to, rdr_dir)
+    integer, intent(out) :: dir_from, dir_to
+    integer, intent(in) :: rdr_dir
+    integer, dimension(2) :: dirs
+    
+    dirs = findloc(rdr_map, rdr_dir)
+    dir_from = dirs(2)
+    dir_to = dirs(1)
+
+  end subroutine
+
+  pure integer function get_rdr_from_dirs(dir_from, dir_to) result(rdr_dir)
       !! Returns RDR_?2? value based on two direction inputs
     integer, intent(in) :: dir_from, dir_to
 
