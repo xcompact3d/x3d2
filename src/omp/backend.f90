@@ -379,8 +379,38 @@ contains
     class(field_t), intent(in) :: x
     real(dp), intent(in) :: b
     class(field_t), intent(inout) :: y
+    integer, dimension(3) :: dims
+    integer :: i, j, k
 
-    y%data = a*x%data + b*y%data ! fixme
+    if ((x%dir /= y%dir) .or. (x%data_loc /= y%data_loc)) then
+      error stop "Called vector add with incompatible fields"
+    end if
+    
+    dims = size(x%data)
+
+    if (dims(1) == SZ) then
+      !$omp parallel do collapse(2)
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          !$omp simd
+          do i = 1, SZ
+            y%data(i, j, k) = a * x%data(i, j, k) + b * y%data(i, j, k)
+          end do
+          !$omp end simd
+        end do
+      end do
+      !$omp end parallel do
+    else
+      !$omp parallel do collapse(3)
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          do i = 1, dims(1)
+            y%data(i, j, k) = a * x%data(i, j, k) + b * y%data(i, j, k)
+          end do
+        end do
+      end do
+      !$omp end parallel do
+    end if
 
   end subroutine vecadd_omp
 
