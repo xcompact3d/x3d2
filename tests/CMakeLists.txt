@@ -36,6 +36,7 @@ define_test(omp/test_omp_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(omp/test_omp_dist_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
 
 define_test(test_scalar_product.f90 ${CMAKE_CTEST_NPROCS} omp)
+define_test(test_sum_yintox.f90 ${CMAKE_CTEST_NPROCS} omp)
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
     ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")

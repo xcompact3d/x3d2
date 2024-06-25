@@ -360,6 +360,27 @@ contains
     class(field_t), intent(inout) :: u
     class(field_t), intent(in) :: u_
 
+    integer :: dir_from, dir_to
+    integer, dimension(3) :: dims
+    integer :: i, j, k ! Working indices
+    integer :: iy, jy, ky ! Transpose indices
+
+    dir_from = DIR_Y
+    dir_to = DIR_X
+
+    dims = self%mesh%get_padded_dims(u)
+    !$omp parallel do private(iy, jy, ky) collapse(2)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          call get_index_reordering(iy, jy, ky, i, j, k, &
+                                    dir_from, dir_to, self%mesh)
+          u%data(i, j, k) = u%data(i, j, k) + u_%data(iy, jy, ky)
+        end do
+      end do
+    end do
+    !$omp end parallel do
+    
   end subroutine sum_yintox_omp
 
   subroutine sum_zintox_omp(self, u, u_)
