@@ -413,37 +413,39 @@ contains
     real(dp), intent(in) :: b
     class(field_t), intent(inout) :: y
     integer, dimension(3) :: dims
-    integer :: i, j, k
+    integer :: i, j, k, ii
+
+    integer :: nvec, remstart
 
     if ((x%dir /= y%dir) .or. (x%data_loc /= y%data_loc)) then
       error stop "Called vector add with incompatible fields"
     end if
     
     dims = size(x%data)
+    nvec = dims(1) / SZ
+    remstart = nvec * SZ + 1
 
-    if (dims(1) == SZ) then
-      !$omp parallel do collapse(2)
-      do k = 1, dims(3)
-        do j = 1, dims(2)
+    !$omp parallel do collapse(2)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        ! Execute inner vectorised loops
+        do ii = 1, nvec
           !$omp simd
           do i = 1, SZ
-            y%data(i, j, k) = a * x%data(i, j, k) + b * y%data(i, j, k)
+            y%data(i + (ii - 1) * SZ, j, k) = &
+              a * x%data(i + (ii - 1) * SZ, j, k) + &
+              b * y%data(i + (ii - 1) * SZ, j, k)
           end do
           !$omp end simd
         end do
-      end do
-      !$omp end parallel do
-    else
-      !$omp parallel do collapse(3)
-      do k = 1, dims(3)
-        do j = 1, dims(2)
-          do i = 1, dims(1)
-            y%data(i, j, k) = a * x%data(i, j, k) + b * y%data(i, j, k)
-          end do
+
+        ! Remainder loop
+        do i = remstart, dims(1)
+          y%data(i, j, k) = a * x%data(i, j, k) + b * y%data(i, j, k)
         end do
       end do
-      !$omp end parallel do
-    end if
+    end do
+    !$omp end parallel do
 
   end subroutine vecadd_omp
 
@@ -456,41 +458,41 @@ contains
     class(omp_backend_t) :: self
     class(field_t), intent(in) :: x, y
     integer, dimension(3) :: dims
-    integer :: dir
-    integer :: i, j, k
+    integer :: i, j, k, ii
     integer :: ierr
+
+    integer :: nvec, remstart
 
     if ((x%dir /= y%dir) .or. (x%data_loc /= y%data_loc)) then
       error stop "Called scalar product with incompatible fields"
     end if
     
     dims = self%mesh%get_field_dims(x)
-    dir = x%dir
+
+    nvec = dims(1) / SZ
+    remstart = nvec * SZ + 1
 
     s = 0.0_dp
-    if (dir == DIR_C) then
-      !$omp parallel do reduction(+:s) collapse(3)
-      do k = 1, dims(3)
-        do j = 1, dims(2)
-          do i = 1, dims(1)
-            s = s + x%data(i, j, k) * y%data(i, j, k)
-          end do
-        end do
-      end do
-      !$omp end parallel do
-    else
-      !$omp parallel do reduction(+:s) collapse(2)
-      do k = 1, dims(3)
-        do j = 1, dims(2)
+    !$omp parallel do reduction(+:s) collapse(2)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        ! Execute inner vectorised loops
+        do ii = 1, nvec
           !$omp simd reduction(+:s)
           do i = 1, SZ
-            s = s + x%data(i, j, k) * y%data(i, j, k)
+            s = s + x%data(i + (ii - 1) * SZ, j, k) * &
+                    y%data(i + (ii - 1) * sZ, j, k)
           end do
           !$omp end simd
         end do
+
+        ! Remainder loop
+        do i = remstart, dims(1)
+          s = s + x%data(i, j, k) * y%data(i, j, k)
+        end do
       end do
-      !$omp end parallel do
-    end if
+    end do
+    !$omp end parallel do
     
     call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, &
                        MPI_SUM, MPI_COMM_WORLD, &
