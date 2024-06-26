@@ -13,12 +13,12 @@ program test_scalar_product
   use m_omp_backend
   use m_omp_common, only: SZ
 #endif
-  
+
   implicit none
 
   integer, parameter :: nx = 17, ny = 32, nz = 59
   real(dp), parameter :: lx = 1.618, ly = 3.141529, lz = 1.729
-  
+
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
 #ifdef CUDA
@@ -36,11 +36,11 @@ program test_scalar_product
   integer :: ierr
 
   logical :: test_pass = .true.
-  
+
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-  
+
   mesh = mesh_t([nx, ny, nz], &
                 [1, 1, nproc], &
                 [lx, ly, lz])
@@ -64,7 +64,7 @@ program test_scalar_product
   end if
 
   call MPI_Finalize(ierr)
-  
+
 contains
 
   subroutine runtest(dir)
@@ -76,13 +76,13 @@ contains
 
     integer :: n
     integer :: expt
-    
+
     a => backend%allocator%get_block(dir)
     b => backend%allocator%get_block(dir)
 
     call a%set_data_loc(VERT)
     call b%set_data_loc(VERT)
-    
+
     if (nrank == 0) then
       print *, "Simplest check: dot(0, 0) = 0"
     end if
@@ -109,7 +109,7 @@ contains
     s = backend%scalar_product(a, a)
 
     n = product(mesh%get_field_dims(a))
-    expt = n * (nrank + 1)**2
+    expt = n*(nrank + 1)**2
     call MPI_Allreduce(MPI_IN_PLACE, expt, 1, &
                        MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, &
                        ierr)
@@ -130,5 +130,5 @@ contains
     call backend%allocator%release_block(b)
 
   end subroutine runtest
-  
+
 end program test_scalar_product
