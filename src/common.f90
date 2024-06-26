@@ -38,7 +38,7 @@ contains
     integer, intent(out) :: dir_from, dir_to
     integer, intent(in) :: rdr_dir
     integer, dimension(2) :: dirs
-    
+
     dirs = findloc(rdr_map, rdr_dir)
     dir_from = dirs(1)
     dir_to = dirs(2)

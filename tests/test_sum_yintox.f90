@@ -11,12 +11,12 @@ program test_sum_yintox
   use m_omp_backend
   use m_omp_common, only: SZ
 #endif
-  
+
   implicit none
 
   integer, parameter :: nx = 17, ny = 32, nz = 59
   real(dp), parameter :: lx = 1.618, ly = 3.141529, lz = 1.729
-  
+
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
 #ifdef CUDA
@@ -31,11 +31,11 @@ program test_sum_yintox
   integer :: ierr
 
   logical :: test_pass = .true.
-  
+
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-  
+
   mesh = mesh_t([nx, ny, nz], &
                 [1, 1, nproc], &
                 [lx, ly, lz])
@@ -81,9 +81,11 @@ contains
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          call get_index_dir(ii, jj, kk, i, j, k, DIR_X, SZ, dims(1), dims(2), dims(3))
+          call get_index_dir(ii, jj, kk, i, j, k, DIR_X, SZ, &
+                             dims(1), dims(2), dims(3))
           a%data(ii, jj, kk) = ctr
-          call get_index_dir(ii, jj, kk, i, j, k, DIR_Y, SZ, dims(1), dims(2), dims(3))
+          call get_index_dir(ii, jj, kk, i, j, k, DIR_Y, SZ, &
+                             dims(1), dims(2), dims(3))
           b%data(ii, jj, kk) = -ctr
           ctr = ctr + 1
         end do
@@ -95,7 +97,7 @@ contains
     if ((minval(a%data) /= 0) .or. (maxval(a%data) /= 0)) then
       test_pass = .false.
     end if
-    
+
   end subroutine runtest
 
 end program test_sum_yintox
