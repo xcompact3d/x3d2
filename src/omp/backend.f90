@@ -384,13 +384,13 @@ contains
 
     integer :: dir_from
     integer, dimension(3) :: dims
-    integer :: i, j, k ! Working indices
+    integer :: i, j, k    ! Working indices
     integer :: ii, jj, kk ! Transpose indices
 
     dir_from = DIR_X
 
     dims = self%mesh%get_padded_dims(u)
-    !$omp parallel do private(ii, jj, kk) collapse(2)
+    !$omp parallel do private(i, ii, jj, kk) collapse(2)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -425,7 +425,7 @@ contains
     nvec = dims(1) / SZ
     remstart = nvec * SZ + 1
 
-    !$omp parallel do collapse(2)
+    !$omp parallel do private(i, ii) collapse(2)
     do k = 1, dims(3)
       do j = 1, dims(2)
         ! Execute inner vectorised loops
@@ -473,7 +473,7 @@ contains
     remstart = nvec * SZ + 1
 
     s = 0.0_dp
-    !$omp parallel do reduction(+:s) collapse(2)
+    !$omp parallel do reduction(+:s) private(i, ii) collapse(2)
     do k = 1, dims(3)
       do j = 1, dims(2)
         ! Execute inner vectorised loops
