@@ -49,7 +49,7 @@ module m_solver
     integer :: steps_between_checkpoints ! checkpoints can be used as restarts
     integer :: steps_between_snapshots
 
-    class(field_t), pointer :: u, v, w
+    class(field_t), pointer :: u, v, w, pressure
 
     class(base_backend_t), pointer :: backend
     class(mesh_t), pointer :: mesh
@@ -117,6 +117,7 @@ contains
     solver%u => solver%backend%allocator%get_block(DIR_X, VERT)
     solver%v => solver%backend%allocator%get_block(DIR_X, VERT)
     solver%w => solver%backend%allocator%get_block(DIR_X, VERT)
+    solver%pressure => solver%backend%allocator%get_block(DIR_Z, CELL)
 
     solver%steps_between_checkpoints = 1
     solver%steps_between_snapshots = 1
@@ -663,7 +664,7 @@ contains
 
     class(solver_t), intent(inout) :: self
 
-    class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
+    class(field_t), pointer :: du, dv, dw, div_u, dpdx, dpdy, dpdz
     class(field_t), pointer :: u_out, v_out, w_out
 
     integer(8), dimension(3) :: icount !! Local size of output array
@@ -684,10 +685,6 @@ contains
 
     do i = 1, self%n_iters
       do j = 1, self%time_integrator%nstage
-        if(i == checkpoint_at_i) then
-          checkpoint_file = self%io%open_file("test_output.bp", self%io%io_mode_write)
-        end if
-
         du => self%backend%allocator%get_block(DIR_X)
         dv => self%backend%allocator%get_block(DIR_X)
         dw => self%backend%allocator%get_block(DIR_X)
@@ -698,10 +695,6 @@ contains
         call self%time_integrator%step(self%u, self%v, self%w, &
                                        du, dv, dw, self%dt)
 
-        if(i == checkpoint_at_i) then
-          call self%time_integrator%write_checkpoint(checkpoint_file, self%io)
-        end if
-
         call self%backend%allocator%release_block(du)
         call self%backend%allocator%release_block(dv)
         call self%backend%allocator%release_block(dw)
@@ -711,9 +704,7 @@ contains
 
         call self%divergence_v2p(div_u, self%u, self%v, self%w)
 
-        pressure => self%backend%allocator%get_block(DIR_Z, CELL)
-
-        call self%poisson(pressure, div_u)
+        call self%poisson(self%pressure, div_u)
 
         call self%backend%allocator%release_block(div_u)
 
@@ -721,13 +712,7 @@ contains
         dpdy => self%backend%allocator%get_block(DIR_X)
         dpdz => self%backend%allocator%get_block(DIR_X)
 
-        call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
-
-        if(i == checkpoint_at_i) then
-          ! call self%write_variable("test_output.bp", "pressure", pressure, TODO, TODO, TODO)
-        end if
-
-        call self%backend%allocator%release_block(pressure)
+        call self%gradient_p2v(dpdx, dpdy, dpdz, self%pressure)
 
         ! velocity correction
         call self%backend%vecadd(-1._dp, dpdx, 1._dp, self%u)
@@ -740,9 +725,20 @@ contains
       end do
 
       if(i == checkpoint_at_i) then
-        icount = [self%xdirps%n, self%ydirps%n, self%zdirps%n]
-        ishape = [NX, NY, NZ]
-        istart = [self%xdirps%n_offset, self%ydirps%n_offset, self%zdirps%n_offset]
+        checkpoint_file = self%io%open_file("test_output.bp", self%io%io_mode_write)
+
+        icount = self%mesh%get_dims(self%pressure%data_loc)
+        ishape = self%mesh%get_global_dims(self%pressure%data_loc)
+        istart = self%mesh%par%n_offset ! Is this offset the same for pressure and velocity?
+
+        call self%time_integrator%write_checkpoint(checkpoint_file, self%io)
+
+        call self%write_variable(checkpoint_file, "pressure", self%pressure, &
+          icount, ishape, istart)
+
+        icount = self%mesh%get_dims(self%u%data_loc)
+        ishape = self%mesh%get_global_dims(self%u%data_loc)
+        istart = self%mesh%par%n_offset
 
         call self%write_variable(checkpoint_file, "u", self%u, icount, ishape, istart)
         call self%write_variable(checkpoint_file, "v", self%v, icount, ishape, istart)
