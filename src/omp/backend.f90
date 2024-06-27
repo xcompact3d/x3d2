@@ -453,6 +453,8 @@ contains
 
     use mpi
 
+    use m_common, only: NONE
+
     implicit none
 
     class(omp_backend_t) :: self
@@ -463,6 +465,9 @@ contains
 
     integer :: nvec, remstart
 
+    if ((x%data_loc == NONE) .or. (y%data_loc == NONE)) then
+      error stop "You must set the field location before calling scalar product"
+    end if
     if ((x%dir /= y%dir) .or. (x%data_loc /= y%data_loc)) then
       error stop "Called scalar product with incompatible fields"
     end if
