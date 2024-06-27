@@ -11,7 +11,7 @@ module m_solver
   use m_tdsops, only: tdsops_t, dirps_t
   use m_time_integrator, only: time_intg_t
   use m_mesh, only: mesh_t
-  use m_adios_io, only: adios_io_t
+  use m_adios_io, only: adios_io_t, adios_file_t
 
   implicit none
 
@@ -707,6 +707,7 @@ contains
     ! integer(8), dimension(3) :: ishape !! Global size of output array
     ! integer(8), dimension(3) :: istart !! Local offset of output array
 
+    type(adios_file_t) :: checkpoint_file
     real(dp) :: t
     integer :: i, j
     integer :: checkpoint_at_i = 1
@@ -720,6 +721,10 @@ contains
 
     do i = 1, self%n_iters
       do j = 1, self%time_integrator%nstage
+        if(i == checkpoint_at_i) then
+          checkpoint_file = self%io%open_file("test_output.bp", self%io%io_mode_write)
+        end if
+
         du => self%backend%allocator%get_block(DIR_X)
         dv => self%backend%allocator%get_block(DIR_X)
         dw => self%backend%allocator%get_block(DIR_X)
@@ -731,7 +736,7 @@ contains
                                        du, dv, dw, self%dt)
 
         if(i == checkpoint_at_i) then
-          call self%time_integrator%write_checkpoint("test_output.bp", self%io)
+          call self%time_integrator%write_checkpoint(checkpoint_file, self%io)
         end if
 
         call self%backend%allocator%release_block(du)
@@ -776,11 +781,17 @@ contains
       !   ishape = [NX, NY, NZ]
       !   istart = [self%xdirps%n_offset, self%ydirps%n_offset, self%zdirps%n_offset]
       !
-      !   self%write_variable("test_output.bp", "u", self%u, TODO, TODO, TODO)
+        ! self%write_variable("test_output.bp", "u", self%u, TODO, TODO, TODO)
       !   self%write_variable("test_output.bp", "v", self%v, TODO, TODO, TODO)
       !   self%write_variable("test_output.bp", "w", self%w, TODO, TODO, TODO)
       !   checkpoint_at_i += self%steps_between_checkpoints
       ! end if
+
+      if(i == checkpoint_at_i) then
+        call self%io%close_file(checkpoint_file)
+        call self%io%write_real8(t, checkpoint_file, "time")
+        call self%io%write_integer8(1_8, checkpoint_file, "is_valid")
+      end if
 
       if (mod(i, self%n_output) == 0) then
         t = i*self%dt

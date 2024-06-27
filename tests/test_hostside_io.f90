@@ -28,14 +28,17 @@ contains
       write(stderr, '(a)') 'Basic IO test failed.'
       allpass = .false.
     endif
+
     if(.not. test_single_precision_io()) then
       write(stderr, '(a)') 'Single precision IO test failed.'
       allpass = .false.
     endif
+
     if(.not. test_strided_io()) then
       write(stderr, '(a)') 'Strided IO test failed.'
       allpass = .false.
     endif
+
     if(.not. test_strided_single_precision_io()) then
       write(stderr, '(a)') 'Strided + SP IO test failed.'
       allpass = .false.
@@ -66,6 +69,8 @@ contains
 
     type(allocator_t), target :: omp_allocator
     type(adios_io_t) :: io
+    type(adios_file_t) :: write_file
+    type(adios_file_t) :: read_file
 
     integer(kind=8), dimension(3) :: ishape, istart, icount
     integer, parameter :: nx = 64, ny = 32, nz = 16
@@ -103,7 +108,9 @@ contains
     ! WRITE TEST DATA
     !================
 
-    call io%write(arr_to_write, "test_basic_io.bp", "TestArr", icount, ishape, istart)
+    write_file = io%open_file("test_basic_io.bp", io%io_mode_write)
+    call io%write_field(arr_to_write, write_file, "TestArr", icount, ishape, istart)
+    call io%close_file(write_file)
     call omp_allocator%release_block(arr_to_write)
 
     !================ 
@@ -111,7 +118,9 @@ contains
     !================
 
     arr_to_read => omp_allocator%get_block(DIR_C)
-    call io%read(arr_to_read, "test_basic_io.bp", "TestArr", icount, ishape, istart)
+    read_file = io%open_file("test_basic_io.bp", io%io_mode_read)
+    call io%read_field(arr_to_read, read_file, "TestArr", icount, ishape, istart)
+    call io%close_file(read_file)
 
     do k = 1, nz
     do j = 1, ny
@@ -145,6 +154,7 @@ contains
 
     type(allocator_t), target :: omp_allocator
     type(adios_io_t) :: io
+    type(adios_file_t) :: write_file
 
     type(adios2_io) :: aio
     type(adios2_engine) :: reader
@@ -189,12 +199,16 @@ contains
     ! WRITE TEST DATA
     !================
 
-    call io%write(arr_to_write, "test_single_precision_io_data.bp", "TestArr", icount, ishape, istart, .true.)
+    write_file = io%open_file("test_single_precision_io_data.bp", io%io_mode_write)
+    call io%write_field(arr_to_write, write_file, "TestArr", icount, ishape, istart, .true.)
+    call io%close_file(write_file)
     call omp_allocator%release_block(arr_to_write)
 
     !================ 
     ! READ AND VERIFY TEST DATA
     !================
+
+    ! Need to read manually because we haven't implemented a single-precision reader
 
     call adios2_declare_io (aio, io%adios_ctx, 'read', ierr)
     if (.not. aio%valid) then
@@ -257,6 +271,7 @@ contains
 
     type(allocator_t), target :: omp_allocator
     type(adios_io_t) :: io
+    type(adios_file_t) :: write_file
 
     type(adios2_io) :: aio
     type(adios2_engine) :: reader
@@ -302,7 +317,9 @@ contains
     istride = [2_8, 3_8, 4_8]
     icount_strided = icount / istride
 
-    call io%write(arr_to_write, "test_strided_io_data.bp", "TestArr", icount, ishape, istart, istride_in=istride)
+    write_file = io%open_file("test_strided_io_data.bp", io%io_mode_write)
+    call io%write_field(arr_to_write, write_file, "TestArr", icount, ishape, istart, istride_in=istride)
+    call io%close_file(write_file)
     call omp_allocator%release_block(arr_to_write)
 
     !================ 
@@ -378,6 +395,7 @@ contains
 
     type(allocator_t), target :: omp_allocator
     type(adios_io_t) :: io
+    type(adios_file_t) :: write_file
 
     type(adios2_io) :: aio
     type(adios2_engine) :: reader
@@ -423,7 +441,9 @@ contains
     istride = [2_8, 3_8, 4_8]
     icount_strided = icount / istride
 
-    call io%write(arr_to_write, "test_strided_io_data.bp", "TestArr", icount, ishape, istart, convert_to_sp_in=.true., istride_in=istride)
+    write_file = io%open_file("test_strided_io_sp_data.bp", io%io_mode_write)
+    call io%write_field(arr_to_write, write_file, "TestArr", icount, ishape, istart, convert_to_sp_in=.true., istride_in=istride)
+    call io%close_file(write_file)
     call omp_allocator%release_block(arr_to_write)
 
     !================ 
@@ -441,7 +461,7 @@ contains
         test_passed = .false.
         return
       endif
-      call adios2_open(reader, aio, "test_strided_io_data.bp", adios2_mode_read, MPI_COMM_SELF, ierr)
+      call adios2_open(reader, aio, "test_strided_io_sp_data.bp", adios2_mode_read, MPI_COMM_SELF, ierr)
       if (.not. reader%valid) then
         write(stderr, *) "Cannot create ADIOS2 reader"
         test_passed = .false.

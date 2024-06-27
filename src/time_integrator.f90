@@ -2,7 +2,7 @@ module m_time_integrator
   use m_allocator, only: allocator_t, field_t, flist_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X
-  use m_adios_io, only: adios_io_t
+  use m_adios_io, only: adios_io_t, adios_file_t
 
   implicit none
 
@@ -157,12 +157,12 @@ contains
 
   end function init
 
-  subroutine write_checkpoint(self, fpath, io)
+  subroutine write_checkpoint(self, file, io)
     class(time_intg_t), intent(inout) :: self
-    character(*), intent(in) :: fpath !! Path to ouptut file
+    type(adios_file_t), intent(inout) :: file !! File already opened for writing
     class(adios_io_t), intent(inout) :: io
 
-    call io%write_real(3.14_dp, fpath, "pi") ! TODO save method/order data
+    call io%write_real8(3.14_8, file, "pi") ! TODO save method/order data
 
     ! if adams_bashforth:
     !   io%write(..., self%istep) ! required to ensure startup doesn't happen again

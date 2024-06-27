@@ -13,20 +13,22 @@ module m_adios_io
     type(adios2_adios) :: adios_ctx
     type(adios2_io) :: aio
     integer :: irank, nproc
+    integer :: io_mode_write = adios2_mode_write
+    integer :: io_mode_read = adios2_mode_read
   contains
     procedure :: init 
     procedure :: deinit 
     procedure :: handle_fatal_error 
-    procedure :: read 
-    procedure :: write 
-    procedure :: write_real
+    procedure :: read_field
+    procedure :: write_field
+    procedure :: write_real8
+    procedure :: write_integer8
     procedure :: open_file
     procedure :: close_file
   end type
 
   type :: adios_file_t
-    character(1024) :: fpath
-    type(adios2_engine) :: writer
+    type(adios2_engine) :: engine
   end type
 
 contains
@@ -47,20 +49,21 @@ contains
     call mpi_initialized(is_mpi_initialised, ierr)
 
     if(.not. is_mpi_initialised) then
-      call self%handle_fatal_error("ADIOS must be initialised after MPI!", 0)
+      call self%handle_fatal_error("IO: ADIOS must be initialised after MPI!", 0)
     endif
 
     call MPI_Comm_rank(comm, self%irank, ierr)
 
     call adios2_init(self%adios_ctx, comm, ierr)
     if (.not.self%adios_ctx%valid) then
-      call self%handle_fatal_error("Cannot initialise ADIOS context.", ierr)
+      call self%handle_fatal_error("IO: Cannot initialise ADIOS context.", ierr)
     endif
 
-    call adios2_declare_io (self%aio, self%adios_ctx, 'main_io', ierr)
+    call adios2_declare_io (self%aio, self%adios_ctx, "main_io", ierr)
     if (.not.self%aio%valid) then
-      call self%handle_fatal_error("Cannot create ADIOS2 IO", ierr)
+      call self%handle_fatal_error("IO: Cannot create ADIOS2 IO", ierr)
     endif
+
 
   end subroutine
 
@@ -83,17 +86,31 @@ contains
     local_offset = mod(stride - mod(offset, stride), stride) + 1
   end function
 
-  function open_file(self, fpath) result(file)
+  function open_file(self, fpath, mode) result(file)
     class(adios_io_t), intent(inout) :: self
     character(*), intent(in) :: fpath !! Path to ouptut file
-    class(adios_file_t) :: file
+    integer :: mode !! Read/write mode. Should be adios2_mode_write or adios2_mode_read
+    type(adios_file_t) :: file
 
     integer :: ierr
 
-    call adios2_open(file%writer, self%aio, fpath, adios2_mode_write, ierr)
-    if (.not.file%writer%valid) then
-      call self%handle_fatal_error("Cannot create ADIOS2 writer", ierr)
+    call adios2_open(file%engine, self%aio, fpath, mode, ierr)
+    if (.not.file%engine%valid) then
+      call self%handle_fatal_error("IO: Cannot create ADIOS2 engine", ierr)
     endif
+
+    if(mode == adios2_mode_write) then
+      call adios2_begin_step(file%engine, adios2_step_mode_append, ierr)
+    else if(mode == adios2_mode_read) then
+      call adios2_begin_step(file%engine, adios2_step_mode_read, ierr)
+    else
+      error stop "Unsupported mode"
+    endif
+
+    if (ierr /= 0) then
+      call self%handle_fatal_error("IO: Cannot begin step", ierr)
+    endif
+
   end function
 
   subroutine close_file(self, file)
@@ -101,41 +118,54 @@ contains
     class(adios_file_t), intent(inout) :: file
 
     integer :: ierr
+    ! Might be abusing ADIOS here... We tend to redefined variables every time we open a file
+    call adios2_remove_all_variables(self%aio, ierr) 
+    call adios2_end_step(file%engine, ierr)
 
-    if (file%writer%valid) then
-      call adios2_close(file%writer, ierr)
+    if (file%engine%valid) then
+      call adios2_close(file%engine, ierr)
     endif
   end subroutine
 
-  subroutine write_real(self, var, fpath, varname)
+  subroutine write_real8(self, var, file, varname)
     class(adios_io_t), intent(inout) :: self
     real(8), intent(in) :: var
-    character(*), intent(in) :: fpath !! Path to ouptut file
+    type(adios_file_t), intent(inout) :: file
     character(*), intent(in) :: varname !! Name of variable in output file
 
-    type(adios_file_t) :: file
     type(adios2_variable) :: adios_var
     integer :: vartype
 
     integer :: ierr
 
-    file = self%open_file(fpath)
-
-    vartype = adios2_type_dp
+    vartype = adios2_type_real8
 
     call adios2_define_variable(adios_var, self%aio, varname, vartype, ierr)
-    call adios2_begin_step(file%writer, adios2_step_mode_append, ierr)
-    call adios2_put(file%writer, adios_var, var, ierr)
-    call adios2_end_step(file%writer, ierr)
-
-    call self%close_file(file)
+    call adios2_put(file%engine, adios_var, var, ierr)
   end subroutine
 
-  subroutine write(self, in_arr, fpath, varname, icount, ishape, istart, convert_to_sp_in, istride_in)
+  subroutine write_integer8(self, var, file, varname)
+    class(adios_io_t), intent(inout) :: self
+    integer(8), intent(in) :: var
+    type(adios_file_t), intent(inout) :: file
+    character(*), intent(in) :: varname !! Name of variable in output file
+
+    type(adios2_variable) :: adios_var
+    integer :: vartype
+
+    integer :: ierr
+
+    vartype = adios2_type_integer8
+
+    call adios2_define_variable(adios_var, self%aio, varname, vartype, ierr)
+    call adios2_put(file%engine, adios_var, var, ierr)
+  end subroutine
+
+  subroutine write_field(self, in_arr, file, varname, icount, ishape, istart, convert_to_sp_in, istride_in)
     class(adios_io_t), intent(inout) :: self
     class(field_t), pointer, intent(in) :: in_arr !! Field to be outputted
     ! TODO should this be a field or a fortran array?
-    character(*), intent(in) :: fpath !! Path to ouptut file
+    type(adios_file_t), intent(inout) :: file
     character(*), intent(in) :: varname !! Name of variable in output file
     integer(8), dimension(3), intent(in) :: icount !! Local size of in_arr
     integer(8), dimension(3), intent(in) :: ishape !! Global size of in_arr
@@ -159,8 +189,6 @@ contains
     integer(8), dimension(3) :: istart_strided
     integer(8), dimension(3) :: icount_strided
 
-    type(adios2_io) :: io
-    type(adios2_engine) :: writer
     type(adios2_variable) :: adios_var
     integer :: vartype
     integer :: ierr
@@ -177,16 +205,6 @@ contains
 
     if(istride(1) < 1 .or. istride(2) < 1 .or. istride(3) < 1) then
       call self%handle_fatal_error("Output stride < 1. Cannot continue.", 0)
-    endif
-
-    call adios2_declare_io(io, self%adios_ctx, 'write', ierr)
-    if (.not.io%valid) then
-      call self%handle_fatal_error("Cannot create ADIOS2 IO", ierr)
-    endif
-
-    call adios2_open(writer, io, fpath, adios2_mode_write, ierr)
-    if (.not.writer%valid) then
-      call self%handle_fatal_error("Cannot create ADIOS2 writer", ierr)
     endif
 
     if(convert_to_sp) then
@@ -232,33 +250,25 @@ contains
     endif
 
     if(should_stride) then
-      call adios2_define_variable(adios_var, io, varname, vartype, &
+      call adios2_define_variable(adios_var, self%aio, varname, vartype, &
         3, ishape/istride, istart/istride, icount_strided, adios2_constant_dims, ierr)
     else
-      call adios2_define_variable(adios_var, io, varname, vartype, &
+      call adios2_define_variable(adios_var, self%aio, varname, vartype, &
         3, ishape, istart, icount, adios2_constant_dims, ierr)
     endif
 
-    call adios2_begin_step(writer, adios2_step_mode_append, ierr)
-
     if(should_stride) then
       if(convert_to_sp) then
-        call adios2_put(writer, adios_var, data_strided_sp, ierr)
+        call adios2_put(file%engine, adios_var, data_strided_sp, ierr)
       else
-        call adios2_put(writer, adios_var, data_strided_dp, ierr)
+        call adios2_put(file%engine, adios_var, data_strided_dp, ierr)
       endif
     else
       if(convert_to_sp) then
-        call adios2_put(writer, adios_var, data_sp, ierr)
+        call adios2_put(file%engine, adios_var, data_sp, ierr)
       else
-        call adios2_put(writer, adios_var, in_arr%data, ierr)
+        call adios2_put(file%engine, adios_var, in_arr%data, ierr)
       endif
-    endif
-
-    call adios2_end_step(writer, ierr)
-
-    if (writer%valid) then
-      call adios2_close(writer, ierr)
     endif
 
     if(allocated(data_sp)) then
@@ -267,10 +277,10 @@ contains
 
   end subroutine
 
-  subroutine read(self, out_arr, fpath, varname, icount, ishape, istart, idump_in)
+  subroutine read_field(self, out_arr, file, varname, icount, ishape, istart, idump_in)
     class(adios_io_t), intent(inout) :: self
     class(field_t), pointer, intent(in) :: out_arr !! Field to be read from file
-    character(*), intent(in) :: fpath !! Path to input file
+    type(adios_file_t), intent(inout) :: file !! File already opened for reading
     character(*), intent(in) :: varname !! Name of variable in input file
     integer(kind=8), dimension(3), intent(in) :: icount !! Local size of in_arr
     integer(kind=8), dimension(3), intent(in) :: ishape !! Global size of in_arr
@@ -282,36 +292,29 @@ contains
 
     integer(8), parameter :: n_steps = 1 !! This version reads one dump at a time
 
-    type(adios2_io) :: io
-    type(adios2_engine) :: reader
     type(adios2_variable) :: adios_var
     integer :: ierr
 
     if (present(idump_in)) idump = idump_in
 
-    call adios2_declare_io (io, self%adios_ctx, 'read', ierr)
-    if (.not.io%valid) then
-      call self%handle_fatal_error("Cannot create ADIOS2 IO", ierr)
-    endif
-
-    call adios2_open(reader, io, fpath, adios2_mode_read, MPI_COMM_SELF, ierr)
-    if (.not.reader%valid) then
-      call self%handle_fatal_error("Cannot create ADIOS2 reader", ierr)
-    endif
-
-    call adios2_begin_step(reader, adios2_step_mode_read, ierr)
-    call adios2_inquire_variable(adios_var, io, varname, ierr)
+    call adios2_inquire_variable(adios_var, self%aio, varname, ierr)
     if (.not.adios_var%valid) then
       call self%handle_fatal_error("Cannot fetch ADIOS2 variable", ierr)
     endif
 
     call adios2_set_step_selection(adios_var, idump, n_steps, ierr)
-    call adios2_set_selection(adios_var, 3, istart, icount, ierr)
-    call adios2_get(reader, adios_var, out_arr%data, ierr)
-    call adios2_end_step(reader, ierr)
+    if (ierr /= 0) then
+      call self%handle_fatal_error("IO: Cannot set step selection", ierr)
+    endif
 
-    if (reader%valid) then
-      call adios2_close(reader, ierr)
+    call adios2_set_selection(adios_var, 3, istart, icount, ierr)
+    if (ierr /= 0) then
+      call self%handle_fatal_error("IO: Cannot set selection", ierr)
+    endif
+
+    call adios2_get(file%engine, adios_var, out_arr%data, ierr)
+    if (ierr /= 0) then
+      call self%handle_fatal_error("IO: Cannot fetch data from file", ierr)
     endif
   end subroutine
 
