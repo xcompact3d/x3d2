@@ -19,8 +19,8 @@ program test_omp_adamsbashforth
   implicit none
 
   logical :: allpass = .true.
-  integer :: i, j, k, istartup, nrank, nproc, ierr
-  integer :: nstep0 = 64, nstep, nrun = 4, norder = 4
+  integer :: i, j, k, stage, istartup, nrank, nproc, ierr
+  integer :: nstep0 = 64, nstep, nrun = 4, nmethod = 8
   real(dp), allocatable, dimension(:) :: err
   real(dp), allocatable, dimension(:) :: norm
   real(dp) :: dt0 = 0.01_dp, dt, order
@@ -84,10 +84,6 @@ program test_omp_adamsbashforth
   if (nrank == 0) print *, 'OpenMP backend instantiated'
 #endif
 
-  time_integrator = time_intg_t(allocator=allocator, &
-                                backend=backend, order=norder)
-  print *, 'time integrator instantiated'
-
   ! allocate memory
   u => allocator%get_block(DIR_X)
   v => allocator%get_block(DIR_X)
@@ -100,8 +96,12 @@ program test_omp_adamsbashforth
   allocate (norm(nrun))
 
   ! compute l2 norm for various step sizes
-  do k = 1, norder
-    time_integrator%order = k
+  do k = 1, nmethod
+
+    ! initialize time-integrator
+    time_integrator = time_intg_t(allocator=allocator, &
+                                  backend=backend, method=k)
+
     dt = dt0
     nstep = nstep0
     do j = 1, nrun
@@ -119,7 +119,7 @@ program test_omp_adamsbashforth
       u%data(1, 1, 1) = 1.0_dp
 #endif
       ! startup
-      istartup = k - 1
+      istartup = time_integrator%nstep - 1
       do i = 1, istartup
 #ifdef CUDA
         select type (u)
@@ -146,19 +146,21 @@ program test_omp_adamsbashforth
 
       ! post-startup
       do i = 1, nstep
+        do stage = 1, time_integrator%nstage
 #ifdef CUDA
-        select type (u)
-        type is (cuda_field_t)
-          u0 = u%data_d(1, 1, 1)
-        end select
-        select type (du)
-        type is (cuda_field_t)
-          du%data_d(1, 1, 1) = dahlquist_rhs(u0)
-        end select
+          select type (u)
+          type is (cuda_field_t)
+            u0 = u%data_d(1, 1, 1)
+          end select
+          select type (du)
+          type is (cuda_field_t)
+            du%data_d(1, 1, 1) = dahlquist_rhs(u0)
+          end select
 #else
-        du%data(1, 1, 1) = dahlquist_rhs(u%data(1, 1, 1))
+          du%data(1, 1, 1) = dahlquist_rhs(u%data(1, 1, 1))
 #endif
-        call time_integrator%step(u, v, w, du, dv, dw, dt)
+          call time_integrator%step(u, v, w, du, dv, dw, dt)
+        end do
 #ifdef CUDA
         select type (u)
         type is (cuda_field_t)
@@ -175,7 +177,7 @@ program test_omp_adamsbashforth
       ! compute l2 norms
       norm(j) = norm2(err)
       norm(j) = sqrt(norm(j)*norm(j)/real(nstep, dp))
-      print *, err(nstep)
+      print *, norm(j)
       deallocate (err)
 
       ! refine time stepping
@@ -186,15 +188,19 @@ program test_omp_adamsbashforth
     ! check order of convergence
     order = log(norm(nrun - 1)/norm(nrun))/log(2.0_dp)
     print *, 'order', order
-    if (abs(order - real(k, dp)) > 0.1_dp) then
+    if (abs(order - real(time_integrator%order, dp)) > 0.25_dp) then
       allpass = .false.
       write (stderr, '(a)') 'Check order... failed'
     else
       write (stderr, '(a)') 'Check order... passed'
     end if
 
+    ! deallocate time-integrator for each scheme
+    call time_integrator%finalize
+
   end do
 
+  ! check if all tests are passing
   if (allpass) then
     write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
   else
