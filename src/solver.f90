@@ -65,6 +65,7 @@ module m_solver
     procedure :: curl
     procedure :: output
     procedure :: run
+    procedure :: write_variable
   end type solver_t
 
   abstract interface
@@ -117,6 +118,8 @@ contains
     solver%v => solver%backend%allocator%get_block(DIR_X, VERT)
     solver%w => solver%backend%allocator%get_block(DIR_X, VERT)
 
+    solver%steps_between_checkpoints = 1
+    solver%steps_between_snapshots = 1
     solver%dt = globs%dt
     solver%backend%nu = globs%nu
     solver%n_iters = globs%n_iters
@@ -578,63 +581,23 @@ contains
 
   end subroutine poisson_fft
 
-  ! subroutine write_checkpoint(self, u, v, w, pressure)
-  !   class(solver_t), intent(in) :: self
-  !   class(field_t), intent(in) :: u, v, w, pressure
-  !
-  !   class(field_t), pointer :: u_out, v_out, w_out, p_out
-  !
-  !   !> Local domain dimensions
-  !   integer(kind=8), dimension(3) :: icount = [self%xdirps%n, self%ydirps%n, self%zdirps%n]
-  !   !> GLobal domain dimensions
-  !   integer(kind=8), dimension(3) :: ishape = [NX, NY, NZ]
-  !   !> Offset of local domain in global domain
-  !   integer(kind=8), dimension(3) :: istart = [self%xdirps%n_offset, self%ydirps%n_offset, self%zdirps%n_offset]
-  !
-  !   u_out => self%host_allocator%get_block(DIR_C)
-  !   v_out => self%host_allocator%get_block(DIR_C)
-  !   w_out => self%host_allocator%get_block(DIR_C)
-  !   p_out => self%host_allocator%get_block(DIR_C)
-  !
-  !   ! Backend should handle moving from device if necessary
-  !   call self%backend%get_field_data(u_out%data, u)
-  !   call self%backend%get_field_data(v_out%data, v)
-  !   call self%backend%get_field_data(w_out%data, w)
-  !   call self%backend%get_field_data(p_out%data, pressure)
-  !
-  !   call io%write(u_out%data, "TEST.bp", "u", icount, ishape, istart)
-  !   call io%write(v_out%data, "TEST.bp", "v", icount, ishape, istart)
-  !   call io%write(w_out%data, "TEST.bp", "w", icount, ishape, istart)
-  !   call io%write(p_out%data, "TEST.bp", "pressure", TODO, TODO, TODO)
-  !
-  !   ! TODO If Adams-Bashforth then also output time integrator copies of du, dv, dw
-  !   ! TODO is it worth having the time integrator describe what it must save? Or having the time integrator itself do the saving?
-  !
-  !   call self%host_allocator%release_block(u_out)
-  !   call self%host_allocator%release_block(v_out)
-  !   call self%host_allocator%release_block(w_out)
-  !   call self%host_allocator%release_block(p_out)
-  !
-  ! end subroutine write_checkpoint
-  !
-  ! subroutine write_variable(self, fpath, varname, varfield, icount, ishape, istart)
-  !   class(solver_t), intent(in) :: self
-  !   character(*), intent(in) :: fpath !! Path to ouptut file
-  !   character(*), intent(in) :: varname !! Name of variable in output file
-  !   class(field_t), intent(in) :: varfield !! Field to be written out
-  !   integer(8), dimension(3), intent(in) :: icount !! Local size of in_arr
-  !   integer(8), dimension(3), intent(in) :: ishape !! Global size of in_arr
-  !   integer(8), dimension(3), intent(in) :: istart !! Local offset of in_arr
-  !
-  !   class(field_t), pointer :: out
-  !
-  !   out => self%host_allocator%get_block(DIR_C)
-  !   ! Backend should handle moving from device if necessary
-  !   call self%backend%get_field_data(out%data, varfield)
-  !   call io%write(out%data, fname, varname, icount, ishape, istart)
-  !   call self%host_allocator%release_block(out)
-  !
-  ! end subroutine write_checkpoint
+  subroutine write_variable(self, file, varname, varfield, icount, ishape, istart)
+    class(solver_t), intent(in) :: self
+    type(adios_file_t) :: file
+    character(*), intent(in) :: varname !! Name of variable in output file
+    class(field_t), intent(in) :: varfield !! Field to be written out
+    integer(8), dimension(3), intent(in) :: icount !! Local size of in_arr
+    integer(8), dimension(3), intent(in) :: ishape !! Global size of in_arr
+    integer(8), dimension(3), intent(in) :: istart !! Local offset of in_arr
+
+    class(field_t), pointer :: out
+
+    out => self%host_allocator%get_block(DIR_C)
+    ! Backend should handle moving from device if necessary
+    call self%backend%get_field_data(out%data, varfield)
+    call self%io%write_field(out, file, varname, icount, ishape, istart)
+    call self%host_allocator%release_block(out)
+  end subroutine write_variable
 
   subroutine poisson_cg(self, pressure, div_u)
     implicit none
@@ -703,9 +666,9 @@ contains
     class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
     class(field_t), pointer :: u_out, v_out, w_out
 
-    ! integer(8), dimension(3) :: icount !! Local size of output array
-    ! integer(8), dimension(3) :: ishape !! Global size of output array
-    ! integer(8), dimension(3) :: istart !! Local offset of output array
+    integer(8), dimension(3) :: icount !! Local size of output array
+    integer(8), dimension(3) :: ishape !! Global size of output array
+    integer(8), dimension(3) :: istart !! Local offset of output array
 
     type(adios_file_t) :: checkpoint_file
     real(dp) :: t
@@ -776,21 +739,21 @@ contains
         call self%backend%allocator%release_block(dpdz)
       end do
 
-      ! if(i == checkpoint_at_i) then
-      !   icount = [self%xdirps%n, self%ydirps%n, self%zdirps%n]
-      !   ishape = [NX, NY, NZ]
-      !   istart = [self%xdirps%n_offset, self%ydirps%n_offset, self%zdirps%n_offset]
-      !
-        ! self%write_variable("test_output.bp", "u", self%u, TODO, TODO, TODO)
-      !   self%write_variable("test_output.bp", "v", self%v, TODO, TODO, TODO)
-      !   self%write_variable("test_output.bp", "w", self%w, TODO, TODO, TODO)
-      !   checkpoint_at_i += self%steps_between_checkpoints
-      ! end if
-
       if(i == checkpoint_at_i) then
-        call self%io%close_file(checkpoint_file)
+        icount = [self%xdirps%n, self%ydirps%n, self%zdirps%n]
+        ishape = [NX, NY, NZ]
+        istart = [self%xdirps%n_offset, self%ydirps%n_offset, self%zdirps%n_offset]
+
+        call self%write_variable(checkpoint_file, "u", self%u, icount, ishape, istart)
+        call self%write_variable(checkpoint_file, "v", self%v, icount, ishape, istart)
+        call self%write_variable(checkpoint_file, "w", self%w, icount, ishape, istart)
+
         call self%io%write_real8(t, checkpoint_file, "time")
         call self%io%write_integer8(1_8, checkpoint_file, "is_valid")
+
+        call self%io%close_file(checkpoint_file)
+
+        checkpoint_at_i = checkpoint_at_i + self%steps_between_checkpoints
       end if
 
       if (mod(i, self%n_output) == 0) then
