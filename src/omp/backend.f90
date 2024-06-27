@@ -417,7 +417,7 @@ contains
 
     integer :: nvec, remstart
 
-    if ((x%dir /= y%dir) .or. (x%data_loc /= y%data_loc)) then
+    if (x%dir /= y%dir) then
       error stop "Called vector add with incompatible fields"
     end if
 
