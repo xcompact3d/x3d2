@@ -2,7 +2,10 @@ program test_hostside_io
   use iso_fortran_env, only: stderr => error_unit
   use adios2
   use mpi
+
   use m_adios_io
+  use m_omp_backend, only: omp_backend_t
+  use m_mesh, only: mesh_t
 
   implicit none
 
@@ -68,6 +71,11 @@ contains
     logical :: test_passed
 
     type(allocator_t), target :: omp_allocator
+    class(mesh_t), allocatable :: mesh
+
+    integer, dimension(3) :: dims_global, nproc_dir
+    real(dp), dimension(3) :: L_global
+    
     type(adios_io_t) :: io
     type(adios_file_t) :: write_file
     type(adios_file_t) :: read_file
@@ -91,7 +99,14 @@ contains
     ishape = (/ nproc*nx, ny, nz/) ! global size
     istart = (/ irank*nx, 0, 0/) ! local offset
 
-    omp_allocator = allocator_t(nx, ny, nz, SZ)
+    dims_global = (/ nx, ny, nz/)
+    ! Global domain dimensions (unused)
+    L_global = [1.0, 1.0, 1.0]
+    nproc_dir = [nproc, 1, 1]
+    mesh = mesh_t(dims_global, nproc_dir, L_global)
+
+    omp_allocator = allocator_t(mesh, SZ)
+    print *, 'OpenMP allocator instantiated'
 
     arr_to_write => omp_allocator%get_block(DIR_C)
 
@@ -153,6 +168,10 @@ contains
     logical :: test_passed
 
     type(allocator_t), target :: omp_allocator
+    class(mesh_t), allocatable :: mesh
+
+    integer, dimension(3) :: dims_global, nproc_dir
+    real(dp), dimension(3) :: L_global
     type(adios_io_t) :: io
     type(adios_file_t) :: write_file
 
@@ -182,7 +201,14 @@ contains
     ishape = (/ nproc*nx, ny, nz/) ! global size
     istart = (/ irank*nx, 0, 0/) ! local offset
 
-    omp_allocator = allocator_t(nx, ny, nz, SZ)
+    dims_global = (/ nx, ny, nz/)
+    ! Global domain dimensions (unused)
+    L_global = [1.0, 1.0, 1.0]
+    nproc_dir = [nproc, 1, 1]
+    mesh = mesh_t(dims_global, nproc_dir, L_global)
+
+    omp_allocator = allocator_t(mesh, SZ)
+    print *, 'OpenMP allocator instantiated'
 
     arr_to_write => omp_allocator%get_block(DIR_C)
 
@@ -270,6 +296,10 @@ contains
     logical :: test_passed
 
     type(allocator_t), target :: omp_allocator
+    class(mesh_t), allocatable :: mesh
+
+    integer, dimension(3) :: dims_global, nproc_dir
+    real(dp), dimension(3) :: L_global
     type(adios_io_t) :: io
     type(adios_file_t) :: write_file
 
@@ -297,7 +327,14 @@ contains
     ishape = (/ nproc*nx, ny, nz/) ! global size
     istart = (/ irank*nx, 0, 0/) ! local offset
 
-    omp_allocator = allocator_t(nx, ny, nz, SZ)
+    dims_global = (/ nx, ny, nz/)
+    ! Global domain dimensions (unused)
+    L_global = [1.0, 1.0, 1.0]
+    nproc_dir = [nproc, 1, 1]
+    mesh = mesh_t(dims_global, nproc_dir, L_global)
+
+    omp_allocator = allocator_t(mesh, SZ)
+    print *, 'OpenMP allocator instantiated'
 
     arr_to_write => omp_allocator%get_block(DIR_C)
 
@@ -394,6 +431,10 @@ contains
     logical :: test_passed
 
     type(allocator_t), target :: omp_allocator
+    class(mesh_t), allocatable :: mesh
+
+    integer, dimension(3) :: dims_global, nproc_dir
+    real(dp), dimension(3) :: L_global
     type(adios_io_t) :: io
     type(adios_file_t) :: write_file
 
@@ -421,7 +462,14 @@ contains
     ishape = (/ nproc*nx, ny, nz/) ! global size
     istart = (/ irank*nx, 0, 0/) ! local offset
 
-    omp_allocator = allocator_t(nx, ny, nz, SZ)
+    dims_global = (/ nx, ny, nz/)
+    ! Global domain dimensions (unused)
+    L_global = [1.0, 1.0, 1.0]
+    nproc_dir = [nproc, 1, 1]
+    mesh = mesh_t(dims_global, nproc_dir, L_global)
+
+    omp_allocator = allocator_t(mesh, SZ)
+    print *, 'OpenMP allocator instantiated'
 
     arr_to_write => omp_allocator%get_block(DIR_C)
 
