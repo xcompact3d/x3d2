@@ -360,6 +360,8 @@ contains
     class(field_t), intent(inout) :: u
     class(field_t), intent(in) :: u_
 
+    call sum_intox_omp(self, u, u_, DIR_Y)
+
   end subroutine sum_yintox_omp
 
   subroutine sum_zintox_omp(self, u, u_)
@@ -369,7 +371,38 @@ contains
     class(field_t), intent(inout) :: u
     class(field_t), intent(in) :: u_
 
+    call sum_intox_omp(self, u, u_, DIR_Z)
+
   end subroutine sum_zintox_omp
+
+  subroutine sum_intox_omp(self, u, u_, dir_to)
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: u
+    class(field_t), intent(in) :: u_
+    integer, intent(in) :: dir_to
+
+    integer :: dir_from
+    integer, dimension(3) :: dims
+    integer :: i, j, k    ! Working indices
+    integer :: ii, jj, kk ! Transpose indices
+
+    dir_from = DIR_X
+
+    dims = self%mesh%get_padded_dims(u)
+    !$omp parallel do private(i, ii, jj, kk) collapse(2)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          call get_index_reordering(ii, jj, kk, i, j, k, &
+                                    dir_from, dir_to, self%mesh)
+          u%data(i, j, k) = u%data(i, j, k) + u_%data(ii, jj, kk)
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+  end subroutine sum_intox_omp
 
   subroutine vecadd_omp(self, a, x, b, y)
     implicit none
@@ -379,18 +412,91 @@ contains
     class(field_t), intent(in) :: x
     real(dp), intent(in) :: b
     class(field_t), intent(inout) :: y
+    integer, dimension(3) :: dims
+    integer :: i, j, k, ii
 
-    y%data = a*x%data + b*y%data ! fixme
+    integer :: nvec, remstart
+
+    if ((x%dir /= y%dir) .or. (x%data_loc /= y%data_loc)) then
+      error stop "Called vector add with incompatible fields"
+    end if
+
+    dims = size(x%data)
+    nvec = dims(1)/SZ
+    remstart = nvec*SZ + 1
+
+    !$omp parallel do private(i, ii) collapse(2)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        ! Execute inner vectorised loops
+        do ii = 1, nvec
+          !$omp simd
+          do i = 1, SZ
+            y%data(i + (ii - 1)*SZ, j, k) = &
+              a*x%data(i + (ii - 1)*SZ, j, k) + &
+              b*y%data(i + (ii - 1)*SZ, j, k)
+          end do
+          !$omp end simd
+        end do
+
+        ! Remainder loop
+        do i = remstart, dims(1)
+          y%data(i, j, k) = a*x%data(i, j, k) + b*y%data(i, j, k)
+        end do
+      end do
+    end do
+    !$omp end parallel do
 
   end subroutine vecadd_omp
 
   real(dp) function scalar_product_omp(self, x, y) result(s)
+
+    use mpi
+
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(in) :: x, y
+    integer, dimension(3) :: dims
+    integer :: i, j, k, ii
+    integer :: ierr
 
-    s = 0._dp
+    integer :: nvec, remstart
+
+    if ((x%dir /= y%dir) .or. (x%data_loc /= y%data_loc)) then
+      error stop "Called scalar product with incompatible fields"
+    end if
+
+    dims = self%mesh%get_field_dims(x)
+
+    nvec = dims(1)/SZ
+    remstart = nvec*SZ + 1
+
+    s = 0.0_dp
+    !$omp parallel do reduction(+:s) private(i, ii) collapse(2)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        ! Execute inner vectorised loops
+        do ii = 1, nvec
+          !$omp simd reduction(+:s)
+          do i = 1, SZ
+            s = s + x%data(i + (ii - 1)*SZ, j, k)* &
+                y%data(i + (ii - 1)*sZ, j, k)
+          end do
+          !$omp end simd
+        end do
+
+        ! Remainder loop
+        do i = remstart, dims(1)
+          s = s + x%data(i, j, k)*y%data(i, j, k)
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, &
+                       MPI_SUM, MPI_COMM_WORLD, &
+                       ierr)
 
   end function scalar_product_omp
 

@@ -16,6 +16,7 @@ function(define_test testfile np backend)
   else()
     target_compile_options(${test_name} PRIVATE "-cpp")
     find_package(OpenMP REQUIRED)
+    target_compile_options(${test_name} PRIVATE "-cpp")
     target_link_libraries(${test_name} PRIVATE OpenMP::OpenMP_Fortran)
   endif()
   target_link_libraries(${test_name} PRIVATE x3d2)
@@ -34,6 +35,10 @@ define_test(omp/test_omp_tridiag.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(omp/test_omp_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(omp/test_omp_dist_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
 
+define_test(test_scalar_product.f90 ${CMAKE_CTEST_NPROCS} omp)
+define_test(test_sum_yintox.f90 ${CMAKE_CTEST_NPROCS} omp)
+define_test(test_sum_zintox.f90 ${CMAKE_CTEST_NPROCS} omp)
+
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
     ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   define_test(test_reordering.f90 1 cuda)
@@ -44,3 +49,4 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_test(cuda/test_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
 endif()
 
+define_test(test_poisson_cg_eval.f90 1 omp)

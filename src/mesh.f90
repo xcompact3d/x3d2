@@ -265,9 +265,9 @@ contains
       dims(1:2) = vert_dims(1:2)
       dims(3) = cell_dims(3)
     case (none)
-      error stop
+      error stop "Unknown location in get_dims_dataloc"
     end select
-  end function
+  end function get_dims_dataloc
 
   pure function get_padded_dims_dir(self, dir) result(dims_padded)
   !! Getter for padded dimensions with structure in `dir` direction
@@ -410,9 +410,9 @@ contains
         n = n_cell
       end if
     case (none)
-      error stop
+      error stop "Unknown direction in get_n_dir"
     end select
-  end function
+  end function get_n_dir
 
   pure function get_coordinates(self, i, j, k) result(xloc)
   !! Get the physical location of a cell center with i,j,k local indices
