@@ -52,5 +52,41 @@ contains
     end if
 
   end subroutine test_one_get_dirs_from_rdr
+
+  subroutine test_get_rdr_from_dirs()
+
+    call test_one_get_rdr_from_dirs("X->Y", DIR_X, DIR_Y, RDR_X2Y)
+    call test_one_get_rdr_from_dirs("X->Z", DIR_X, DIR_Z, RDR_X2Z)
+    call test_one_get_rdr_from_dirs("X->C", DIR_X, DIR_C, RDR_X2C)
+
+    call test_one_get_rdr_from_dirs("Y->X", DIR_Y, DIR_X, RDR_Y2X)
+    call test_one_get_rdr_from_dirs("Y->Z", DIR_Y, DIR_Z, RDR_Y2Z)
+    call test_one_get_rdr_from_dirs("Y->C", DIR_Y, DIR_C, RDR_Y2C)
+
+    call test_one_get_rdr_from_dirs("Z->X", DIR_Z, DIR_X, RDR_Z2X)
+    call test_one_get_rdr_from_dirs("Z->Y", DIR_Z, DIR_Y, RDR_Z2Y)
+    call test_one_get_rdr_from_dirs("Z->C", DIR_Z, DIR_C, RDR_Z2C)
+
+    call test_one_get_rdr_from_dirs("C->X", DIR_C, DIR_X, RDR_C2X)
+    call test_one_get_rdr_from_dirs("C->Y", DIR_C, DIR_Y, RDR_C2Y)
+    call test_one_get_rdr_from_dirs("C->Z", DIR_C, DIR_Z, RDR_C2Z)
+    
+  end subroutine test_get_rdr_from_dirs
+
+  subroutine test_one_get_rdr_from_dirs(test, from, to, expect_rdr)
+
+    character(len=*), intent(in) :: test
+    integer, intent(in) :: from, to, expect_rdr
+    integer :: rdr
+
+    rdr = get_rdr_from_dirs(from, to)
+    print *, test
+    print *, "- Expect: ", expect_rdr
+    print *, "- Got: ", rdr
+    if (rdr /= expect_rdr) then
+      test_pass = .false.
+    end if
+
+  end subroutine test_one_get_rdr_from_dirs
   
 end program test_reorder_map
