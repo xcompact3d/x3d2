@@ -86,11 +86,8 @@ contains
       print *, "Testing ", test
     end if
     
-    a => backend%allocator%get_block(dir)
-    b => backend%allocator%get_block(dir)
-
-    call a%set_data_loc(VERT)
-    call b%set_data_loc(VERT)
+    a => backend%allocator%get_block(dir, VERT)
+    b => backend%allocator%get_block(dir, VERT)
 
     if (nrank == 0) then
       print *, "Simplest check: dot(0, 0) = 0"
