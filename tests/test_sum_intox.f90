@@ -109,6 +109,8 @@ contains
     
     if ((minval(a%data) /= 0) .or. (maxval(a%data) /= 0)) then
       check_pass = .false.
+    else
+      check_pass = .true.
     end if
     call MPI_Allreduce(MPI_IN_PLACE, check_pass, 1, &
                        MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
