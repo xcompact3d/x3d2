@@ -10,6 +10,7 @@ program test_reorder_map
   test_pass = .true.
   
   call test_get_dirs_from_rdr()
+  call test_get_rdr_from_dirs()
 
   if (.not. test_pass) then
     error stop "FAIL"

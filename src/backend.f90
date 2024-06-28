@@ -237,7 +237,7 @@ contains
     end if
 
     ! Returns 0 if no reorder required
-    rdr_dir = get_rdr_from_dirs(direction, f%dir)
+    rdr_dir = get_rdr_from_dirs(f%dir, direction)
 
     ! Carry out a reorder if we need, and copy from field to data array
     if (rdr_dir /= 0) then
@@ -269,7 +269,7 @@ contains
     end if
 
     ! Returns 0 if no reorder required
-    rdr_dir = get_rdr_from_dirs(f%dir, direction)
+    rdr_dir = get_rdr_from_dirs(direction, f%dir)
 
     ! Carry out a reorder if we need, and copy from data array to field
     if (rdr_dir /= 0) then
