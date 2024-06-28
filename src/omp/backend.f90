@@ -492,7 +492,7 @@ contains
           !$omp simd reduction(+:s)
           do i = 1, SZ
             s = s + x_%data(i + (ii - 1)*SZ, j, k)* &
-                y_%data(i + (ii - 1)*sZ, j, k)
+                y_%data(i + (ii - 1)*SZ, j, k)
           end do
           !$omp end simd
         end do
