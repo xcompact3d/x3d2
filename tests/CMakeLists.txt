@@ -2,6 +2,8 @@
 set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" CACHE STRING "comma separated list of arguments to pass to ctest")
 set(CMAKE_CTEST_NPROCS "4" CACHE STRING "number of process used in tests")
 
+find_package(MPI REQUIRED)
+
 function(define_test testfile np backend)
   get_filename_component(test_name ${testfile} NAME_WE)
   string(CONCAT test_name ${test_name} _ ${backend} _ ${np})
@@ -20,6 +22,8 @@ function(define_test testfile np backend)
     target_link_libraries(${test_name} PRIVATE OpenMP::OpenMP_Fortran)
   endif()
   target_link_libraries(${test_name} PRIVATE x3d2)
+  target_link_libraries(${test_name} PRIVATE MPI::MPI_Fortran)
+  target_link_libraries(${test_name} PRIVATE adios2::fortran_mpi)
 
   add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} ${test_name}")
 
@@ -32,6 +36,7 @@ define_test(test_reordering.f90 2 omp)
 define_test(test_reordering.f90 4 omp)
 define_test(test_reorder_map.f90 1 omp)
 define_test(test_time_integrator.f90 1 omp)
+define_test(test_hostside_io.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(omp/test_omp_tridiag.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(omp/test_omp_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(omp/test_omp_dist_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
