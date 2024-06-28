@@ -1,8 +1,8 @@
-program test_sum_zintox
-  !! Tests the implementation of summing a Z-oriented field into an X-oriented
+program test_sum_intox
+  !! Tests the implementation of summing a Y-oriented field into an X-oriented
   !! one.
 
-  use m_common, only: DIR_X, DIR_Z
+  use m_common, only: DIR_X, DIR_Y, DIR_Z
 
   use m_allocator
   use m_base_backend
@@ -48,7 +48,8 @@ program test_sum_zintox
   backend => omp_backend
 #endif
 
-  call runtest()
+  call runtest("YintoX", DIR_Y)
+  call runtest("ZintoX", DIR_Z)
 
   if (nrank == 0) then
     if (.not. test_pass) then
@@ -60,19 +61,27 @@ program test_sum_zintox
 
 contains
 
-  subroutine runtest()
+  subroutine runtest(test, dir_from)
 
     use m_ordering, only: get_index_dir
 
+    character(len=*), intent(in) :: test
+    integer, intent(in) :: dir_from
+    
     class(field_t), pointer :: a, b
     integer :: ctr
     integer :: i, j, k
     integer :: ii, jj, kk
 
     integer, dimension(3) :: dims
+    logical :: check_pass
+
+    if (nrank == 0) then
+      print *, "Test ", test
+    end if
 
     a => backend%allocator%get_block(DIR_X)
-    b => backend%allocator%get_block(DIR_Z)
+    b => backend%allocator%get_block(dir_from)
 
     dims = mesh%get_padded_dims(DIR_C)
 
@@ -84,7 +93,7 @@ contains
           call get_index_dir(ii, jj, kk, i, j, k, DIR_X, SZ, &
                              dims(1), dims(2), dims(3))
           a%data(ii, jj, kk) = ctr
-          call get_index_dir(ii, jj, kk, i, j, k, DIR_Z, SZ, &
+          call get_index_dir(ii, jj, kk, i, j, k, dir_from, SZ, &
                              dims(1), dims(2), dims(3))
           b%data(ii, jj, kk) = -ctr
           ctr = ctr + 1
@@ -92,12 +101,31 @@ contains
       end do
     end do
 
-    call backend%sum_zintox(a, b)
-
-    if ((minval(a%data) /= 0) .or. (maxval(a%data) /= 0)) then
-      test_pass = .false.
+    if (dir_from == DIR_Y) then
+      call backend%sum_yintox(a, b)
+    else
+      call backend%sum_zintox(a, b)
     end if
+    
+    if ((minval(a%data) /= 0) .or. (maxval(a%data) /= 0)) then
+      check_pass = .false.
+    end if
+    call MPI_Allreduce(MPI_IN_PLACE, check_pass, 1, &
+                       MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
+                       ierr)
+    test_pass = test_pass .and. check_pass
+
+    if (nrank == 0) then
+      if (check_pass) then
+        print *, "- PASS"
+      else
+        print *, "- FAIL"
+      end if
+    end if
+
+    call backend%allocator%release_block(a)
+    call backend%allocator%release_block(b)
 
   end subroutine runtest
 
-end program test_sum_zintox
+end program test_sum_intox
