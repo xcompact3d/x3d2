@@ -460,7 +460,6 @@ contains
     class(omp_backend_t) :: self
     class(field_t), intent(in) :: x, y
     class(field_t), pointer :: x_, y_
-    integer :: RDR
     integer, dimension(3) :: dims
     integer :: i, j, k, ii
     integer :: nvec, remstart
@@ -474,22 +473,10 @@ contains
     end if
 
     ! Reorient data into temporary DIR_C storage
-    x_ => self%allocator%get_block(DIR_C)
-    x_%data_loc = x%data_loc
-    if (x%dir == DIR_C) then
-      call self%copy_f_to_data(x_%data, x)
-    else
-      RDR = get_rdr_from_dirs(x%dir, DIR_C)
-      call self%reorder(x_, x, RDR)
-    end if
-    y_ => self%allocator%get_block(DIR_C)
-    y_%data_loc = y%data_loc
-    if (y%dir == DIR_C) then
-      call self%copy_f_to_data(y_%data, y)
-    else
-      RDR = get_rdr_from_dirs(y%dir, DIR_C)
-      call self%reorder(y_, y, RDR)
-    end if
+    x_ => self%allocator%get_block(DIR_C, x%data_loc)
+    call self%get_field_data(x_%data, x)
+    y_ => self%allocator%get_block(DIR_C, y%data_loc)
+    call self%get_field_data(y_%data, y)
 
     dims = self%mesh%get_field_dims(x_)
 
