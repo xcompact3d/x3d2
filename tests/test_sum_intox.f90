@@ -107,9 +107,7 @@ contains
       call backend%sum_zintox(a, b)
     end if
     
-    if ((minval(a%data) /= 0) .or. (maxval(a%data) /= 0)) then
-      check_pass = .false.
-    end if
+    check_pass = .not. ((minval(a%data) /= 0) .or. (maxval(a%data) /= 0))
     call MPI_Allreduce(MPI_IN_PLACE, check_pass, 1, &
                        MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
                        ierr)
