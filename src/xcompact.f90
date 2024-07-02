@@ -42,10 +42,16 @@ program xcompact
   type(allocator_t), target :: omp_allocator
 
   real(dp) :: t_start, t_end
+
+  character(len=100) :: input_file
   integer, dimension(3) :: dims_global
   integer, dimension(3) :: nproc_dir
   real(dp), dimension(3) :: L_global
+  integer :: n_iters, n_output
+  real(dp) :: dt, Re
   integer :: nrank, nproc, ierr
+
+  namelist /basic/ L_global, dims_global, Re, dt, n_iters, n_output
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
@@ -59,21 +65,20 @@ program xcompact
   ierr = cudaGetDevice(devnum)
 #endif
 
-  ! Global number of cells in each direction
-  dims_global = [256, 256, 256]
-
-  ! Global domain dimensions
-  L_global = [2*pi, 2*pi, 2*pi]
+  call get_command_argument(1, input_file)
+  open (100, file=input_file)
+  read (100, nml=basic)
+  close (100)
 
   ! Domain decomposition in each direction
   nproc_dir = [1, 1, nproc]
 
   mesh = mesh_t(dims_global, nproc_dir, L_global)
 
-  globs%dt = 0.001_dp
-  globs%nu = 1._dp/1600._dp
-  globs%n_iters = 20000
-  globs%n_output = 100
+  globs%dt = dt
+  globs%nu = 1._dp/Re
+  globs%n_iters = n_iters
+  globs%n_output = n_output
 
   globs%poisson_solver_type = POISSON_SOLVER_FFT
 
