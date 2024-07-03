@@ -4,7 +4,7 @@ program test_scalar_product
   !! Given two fields, a and b, computes s = a_i * b_i where repeated indices
   !! imply summation.
 
-  use m_common, only: DIR_X, DIR_Y, DIR_Z, DIR_C, CELL
+  use m_common, only: DIR_X, DIR_Y, DIR_Z, DIR_C
 
   use m_allocator
   use m_base_backend
@@ -29,6 +29,8 @@ program test_scalar_product
 
   type(mesh_t) :: mesh
 
+  character(len=5), dimension(4), parameter :: test = &
+    ["DIR_X", "DIR_Y", "DIR_Z", "DIR_C"]
   integer, dimension(4), parameter :: dir = [DIR_X, DIR_Y, DIR_Z, DIR_C]
   integer :: i
 
@@ -54,7 +56,7 @@ program test_scalar_product
 #endif
 
   do i = 1, 4
-    call runtest(dir(i))
+    call runtest(test(i), dir(i))
   end do
 
   if (nrank == 0) then
@@ -62,26 +64,30 @@ program test_scalar_product
       error stop "Test failed"
     end if
   end if
+  call MPI_Barrier(MPI_COMM_WORLD, ierr)
 
   call MPI_Finalize(ierr)
 
 contains
 
-  subroutine runtest(dir)
+  subroutine runtest(test, dir)
 
+    character(len=*), intent(in) :: test
     integer, intent(in) :: dir
 
-    class(field_t), pointer :: a, b
+    class(field_t), pointer :: a, b, c
     real(dp) :: s
 
     integer :: n
     integer :: expt
+    logical :: check_pass
 
-    a => backend%allocator%get_block(dir)
-    b => backend%allocator%get_block(dir)
-
-    call a%set_data_loc(VERT)
-    call b%set_data_loc(VERT)
+    if (nrank == 0) then
+      print *, "Testing ", test
+    end if
+    
+    a => backend%allocator%get_block(dir, VERT)
+    b => backend%allocator%get_block(dir, VERT)
 
     if (nrank == 0) then
       print *, "Simplest check: dot(0, 0) = 0"
@@ -90,41 +96,58 @@ contains
     b%data = 0
     s = backend%scalar_product(a, b)
     if (s /= 0) then
-      if (nrank == 0) then
-        print *, "- FAIL"
-        print *, "- Got: ", s
-        print *, "- Expected: ", 0
-      end if
-      test_pass = .false.
+      check_pass = .false.
     else
-      if (nrank == 0) then
+      check_pass = .true.
+    end if
+    call MPI_Allreduce(MPI_IN_PLACE, check_pass, 1, &
+      MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
+      ierr)
+    if (nrank == 0) then
+      print *, "- Got: ", s
+      print *, "- Expected: ", 0
+      if (.not. check_pass) then
+        print *, "- FAIL"
+      else
         print *, "- PASS"
       end if
     end if
-
+    test_pass = test_pass .and. check_pass
+      
     if (nrank == 0) then
       print *, "Check: dot(nrank, nrank) = sum^{nrank-1}_i=0 sum_n(i) i**2"
     end if
     a%data = (nrank + 1)
     s = backend%scalar_product(a, a)
 
-    n = product(mesh%get_field_dims(a))
+    ! Determine number of interior points, using a temporary DIR_C field
+    c => backend%allocator%get_block(DIR_C)
+    call c%set_data_loc(a%data_loc)
+    n = product(mesh%get_field_dims(c))
+    call backend%allocator%release_block(c)
+    
     expt = n*(nrank + 1)**2
     call MPI_Allreduce(MPI_IN_PLACE, expt, 1, &
                        MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, &
                        ierr)
     if (s /= real(expt, kind(s))) then
-      if (nrank == 0) then
-        print *, "- FAIL"
-        print *, "- Got: ", s
-        print *, "- Expected: ", expt
-      end if
-      test_pass = .false.
+      check_pass = .false.
     else
-      if (nrank == 0) then
+      check_pass = .true.
+    end if
+    call MPI_Allreduce(MPI_IN_PLACE, check_pass, 1, &
+      MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
+      ierr)
+    if (nrank == 0) then
+      print *, "- Got: ", s
+      print *, "- Expected: ", expt
+      if (.not. check_pass) then
+        print *, "- FAIL"
+      else
         print *, "- PASS"
       end if
     end if
+    test_pass = test_pass .and. check_pass
 
     call backend%allocator%release_block(a)
     call backend%allocator%release_block(b)

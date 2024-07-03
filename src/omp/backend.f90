@@ -417,7 +417,7 @@ contains
 
     integer :: nvec, remstart
 
-    if ((x%dir /= y%dir) .or. (x%data_loc /= y%data_loc)) then
+    if (x%dir /= y%dir) then
       error stop "Called vector add with incompatible fields"
     end if
 
@@ -453,21 +453,32 @@ contains
 
     use mpi
 
+    use m_common, only: NONE, get_rdr_from_dirs
+
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(in) :: x, y
+    class(field_t), pointer :: x_, y_
     integer, dimension(3) :: dims
     integer :: i, j, k, ii
+    integer :: nvec, remstart
     integer :: ierr
 
-    integer :: nvec, remstart
-
-    if ((x%dir /= y%dir) .or. (x%data_loc /= y%data_loc)) then
+    if ((x%data_loc == NONE) .or. (y%data_loc == NONE)) then
+      error stop "You must set the field location before calling scalar product"
+    end if
+    if (x%data_loc /= y%data_loc) then
       error stop "Called scalar product with incompatible fields"
     end if
 
-    dims = self%mesh%get_field_dims(x)
+    ! Reorient data into temporary DIR_C storage
+    x_ => self%allocator%get_block(DIR_C, x%data_loc)
+    call self%get_field_data(x_%data, x)
+    y_ => self%allocator%get_block(DIR_C, y%data_loc)
+    call self%get_field_data(y_%data, y)
+
+    dims = self%mesh%get_field_dims(x_)
 
     nvec = dims(1)/SZ
     remstart = nvec*SZ + 1
@@ -480,20 +491,25 @@ contains
         do ii = 1, nvec
           !$omp simd reduction(+:s)
           do i = 1, SZ
-            s = s + x%data(i + (ii - 1)*SZ, j, k)* &
-                y%data(i + (ii - 1)*sZ, j, k)
+            s = s + x_%data(i + (ii - 1)*SZ, j, k)* &
+                y_%data(i + (ii - 1)*SZ, j, k)
           end do
           !$omp end simd
         end do
 
         ! Remainder loop
         do i = remstart, dims(1)
-          s = s + x%data(i, j, k)*y%data(i, j, k)
+          s = s + x_%data(i, j, k)*y_%data(i, j, k)
         end do
       end do
     end do
     !$omp end parallel do
 
+    ! Release temporary storage
+    call self%allocator%release_block(x_)
+    call self%allocator%release_block(y_)
+
+    ! Reduce the result
     call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, &
                        MPI_SUM, MPI_COMM_WORLD, &
                        ierr)
