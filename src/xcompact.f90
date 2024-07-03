@@ -45,13 +45,13 @@ program xcompact
 
   character(len=100) :: input_file
   integer, dimension(3) :: dims_global
-  integer, dimension(3) :: nproc_dir
+  integer, dimension(3) :: nproc_dir = 0
   real(dp), dimension(3) :: L_global
   integer :: n_iters, n_output
   real(dp) :: dt, Re
   integer :: nrank, nproc, ierr
 
-  namelist /basic/ L_global, dims_global, Re, dt, n_iters, n_output
+  namelist /basic/ L_global, dims_global, nproc_dir, Re, dt, n_iters, n_output
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
@@ -70,8 +70,12 @@ program xcompact
   read (100, nml=basic)
   close (100)
 
-  ! Domain decomposition in each direction
-  nproc_dir = [1, 1, nproc]
+  if (product(nproc_dir) /= nproc) then
+    if (nrank == 0) print *, 'nproc_dir specified in the input file does &
+                              &not match the total number of ranks, falling &
+                              &back to a 1D decomposition along Z-dir instead.'
+    nproc_dir = [1, 1, nproc]
+  end if
 
   mesh = mesh_t(dims_global, nproc_dir, L_global)
 
