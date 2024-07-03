@@ -24,7 +24,6 @@ program test_poisson_cg_eval
   type(globs_t) :: globs
   class(allocator_t), allocatable :: allocator
   class(base_backend_t), allocatable :: backend
-  type(mesh_t) :: mesh
   class(field_t), pointer :: pressure
   class(field_t), pointer :: f
   type(laplace_operator_t) :: lapl
@@ -41,26 +40,10 @@ program test_poisson_cg_eval
   real(dp), parameter :: Ly = 1.0_dp
   real(dp), parameter :: Lz = 1.0_dp
   
-  call initialise_test()
 
   test_pass = .true.
- 
-  call MPI_Barrier(MPI_COMM_WORLD, ierr)
-  if (irank == 0) then
-    print *, "Initialisation complete"
-  end if
-  
-  ! Run test
-  call test_constant_field(pressure, lapl, f)
-  call test_variable_field(pressure, lapl, f)
-  
-  ! Finalise test
-  call backend%allocator%release_block(pressure)
-  
-  call MPI_Allreduce(MPI_IN_PLACE, test_pass, 1, &
-                     MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
-                     ierr)
-  call MPI_Finalize(ierr)
+
+  call run_test([nx, ny, nz])
 
   if (irank == 0) then
     if (.not. test_pass) then
@@ -70,7 +53,31 @@ program test_poisson_cg_eval
 
 contains
 
-  subroutine initialise_test()
+  subroutine run_test(n)
+
+    integer, dimension(3), intent(in) :: n
+    
+    type(mesh_t) :: mesh
+
+    call initialise_test(mesh, n)
+
+    call test_constant_field(f, lapl, pressure, mesh)
+    call test_variable_field(f, lapl, pressure, mesh)
+
+    ! Finalise test
+    call backend%allocator%release_block(pressure)
+  
+    call MPI_Allreduce(MPI_IN_PLACE, test_pass, 1, &
+                       MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
+                       ierr)
+    call MPI_Finalize(ierr)
+
+  end subroutine run_test
+
+  subroutine initialise_test(mesh, n)
+
+    type(mesh_t), intent(out) :: mesh
+    integer, dimension(3), intent(in) :: n
 
     call MPI_Init(ierr)
     call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
@@ -80,7 +87,7 @@ contains
       print *, "Parallel run with", nproc, "ranks"
     end if
 
-    call init_globs(globs, [nx, ny, nz], nproc, [Lx, Ly, Lz])
+    call init_globs(globs, mesh, n, nproc, [Lx, Ly, Lz])
 #ifdef CUDA
     if (irank == 0) then
       error stop "CUDA iterative solver not currently supported"
@@ -95,13 +102,19 @@ contains
 
     pressure => backend%allocator%get_block(DIR_X)
     f => backend%allocator%get_block(DIR_X)
+ 
+    call MPI_Barrier(MPI_COMM_WORLD, ierr)
+    if (irank == 0) then
+      print *, "Initialisation complete"
+    end if
 
   end subroutine initialise_test
   
-  subroutine init_globs(globs, n, nproc, L)
+  subroutine init_globs(globs, mesh, n, nproc, L)
     !! Initialisation for the globs object
     
     type(globs_t), intent(out) :: globs
+    type(mesh_t), intent(out) :: mesh
     integer, dimension(3), intent(in) :: n  ! The grid sizes
     integer, intent(in) :: nproc            ! The number of processors
     real(dp), dimension(3), intent(in) :: L ! The domain dimensions
@@ -140,11 +153,12 @@ contains
       
   end subroutine init_dirps
 
-  subroutine test_constant_field(pressure, lapl, f)
+  subroutine test_constant_field(f, lapl, pressure, mesh)
 
-    class(field_t), intent(in) :: pressure
-    type(laplace_operator_t), intent(in) :: lapl
     class(field_t), intent(inout) :: f
+    type(laplace_operator_t), intent(in) :: lapl
+    class(field_t), intent(in) :: pressure
+    type(mesh_t), intent(in) :: mesh
 
     real(dp), dimension(:, :, :), allocatable :: expect
     
@@ -161,18 +175,19 @@ contains
     call lapl%apply(f, pressure, backend)
 
     ! Check Laplacian evaluation (expect zero)
-    call check_soln(f, expect)
+    call check_soln(mesh, f, expect)
 
   end subroutine test_constant_field
 
-  subroutine test_variable_field(pressure, lapl, f)
+  subroutine test_variable_field(f, lapl, pressure, mesh)
 
     use m_common, only: pi
     use m_ordering, only: get_index_dir
     
-    class(field_t), intent(in) :: pressure
-    type(laplace_operator_t), intent(in) :: lapl
     class(field_t), intent(inout) :: f
+    type(laplace_operator_t), intent(in) :: lapl
+    class(field_t), intent(in) :: pressure
+    type(mesh_t), intent(in) :: mesh
 
     real(dp), dimension(:, :, :), allocatable :: expect
 
@@ -224,12 +239,13 @@ contains
     call lapl%apply(f, pressure, backend)
 
     ! Check Laplacian evaluation
-    call check_soln(f, expect)
+    call check_soln(mesh, f, expect)
     
   end subroutine test_variable_field
 
-  subroutine check_soln(soln, expect, opttol)
+  subroutine check_soln(mesh, soln, expect, opttol)
 
+    type(mesh_t), intent(in) :: mesh
     class(field_t), intent(in) :: soln
     real(dp), dimension(:, :, :), intent(in) :: expect
     real(dp), intent(in), optional :: opttol
