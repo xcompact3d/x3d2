@@ -9,6 +9,7 @@ set(SRC
   ordering.f90
   mesh.f90
   field.f90
+  windturb_adm.f90
   omp/backend.f90
   omp/common.f90
   omp/kernels/distributed.f90

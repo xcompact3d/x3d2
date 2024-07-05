@@ -60,18 +60,19 @@ program xcompact
 #endif
 
   ! Global number of cells in each direction
-  dims_global = [256, 256, 256]
+  dims_global = [512, 256, 256]
 
   ! Global domain dimensions
   L_global = [2*pi, 2*pi, 2*pi]
+  L_global = [2000, 1000, 1000]
 
   ! Domain decomposition in each direction
   nproc_dir = [1, 1, nproc]
 
   mesh = mesh_t(dims_global, nproc_dir, L_global)
 
-  globs%dt = 0.001_dp
-  globs%nu = 1._dp/1600._dp
+  globs%dt = 0.1_dp
+  globs%nu = 1._dp/66000._dp
   globs%n_iters = 20000
   globs%n_output = 100
 
