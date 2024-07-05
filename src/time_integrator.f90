@@ -61,7 +61,7 @@ contains
     type(time_intg_t) :: init
     class(base_backend_t), pointer :: backend
     class(allocator_t), pointer :: allocator
-    character(3), intent(in), optional :: method
+    character(3), intent(in) :: method
     integer, intent(in), optional :: nvars
 
     integer :: i, j, stat
@@ -108,12 +108,7 @@ contains
     ! set variables
     init%backend => backend
     init%allocator => allocator
-
-    if (present(method)) then
-      init%sname = method
-    else
-      init%sname = 'AB3'
-    end if
+    init%sname = method
 
     if (init%sname(1:2) == 'AB') then
       read (init%sname(3:3), *, iostat=stat) init%order
