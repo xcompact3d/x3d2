@@ -61,10 +61,10 @@ contains
     type(time_intg_t) :: init
     class(base_backend_t), pointer :: backend
     class(allocator_t), pointer :: allocator
-    integer, intent(in), optional :: method
+    character(3), intent(in), optional :: method
     integer, intent(in), optional :: nvars
 
-    integer :: i, j
+    integer :: i, j, stat
 
     ! initialize Runge-Kutta coefficients
     ! rk1
@@ -110,24 +110,28 @@ contains
     init%allocator => allocator
 
     if (present(method)) then
-      init%method = method
+      init%sname = method
     else
-      init%method = 3
+      init%sname = 'AB3'
     end if
-    if (init%method < 5) then
-      ! method 1 to 4 -> AB1 to AB4
-      init%order = init%method
-      init%nstep = init%method
+
+    if (init%sname(1:2) == 'AB') then
+      read (init%sname(3:3), *, iostat=stat) init%order
+      if (stat /= 0) error stop 'Error reading AB integration order'
+      if (init%order >= 5) error stop 'Integration order >4 is not supported'
+      init%nstep = init%order
       init%nstage = 1
       init%nolds = init%nstep - 1
-      write (init%sname, "(A2,I1)") "AB", init%order
-    else
-      ! method 5 to 8 -> RK1 to RK4
-      init%order = init%method - 4
+    else if (init%sname(1:2) == 'RK') then
+      read (init%sname(3:3), *, iostat=stat) init%order
+      if (stat /= 0) error stop 'Error reading RK integration order'
+      if (init%order >= 5) error stop 'Integration order >4 is not supported'
       init%nstep = 1
-      init%nstage = init%method - 4
+      init%nstage = init%order
       init%nolds = init%nstage
-      write (init%sname, "(A2,I1)") "RK", init%order
+    else
+      print *, 'Integration method '//init%sname//' is not defined'
+      error stop
     end if
 
     if (present(nvars)) then
@@ -151,8 +155,6 @@ contains
       end do
     end do
 
-    print *, init%sname, ' time integrator instantiated'
-
   end function init
 
   subroutine step(self, u, v, w, du, dv, dw, dt)
@@ -174,7 +176,7 @@ contains
     self%deriv(2)%ptr => dv
     self%deriv(3)%ptr => dw
 
-    if (self%method < 5) then
+    if (self%sname(1:2) == 'AB' ) then
       call self%adams_bashforth(dt)
     else
       call self%runge_kutta(dt)

@@ -21,6 +21,7 @@ program test_omp_adamsbashforth
   logical :: allpass = .true.
   integer :: i, j, k, stage, istartup, nrank, nproc, ierr
   integer :: nstep0 = 64, nstep, nrun = 4, nmethod = 8
+  character(len=3) :: method(8)
   real(dp), allocatable, dimension(:) :: err
   real(dp), allocatable, dimension(:) :: norm
   real(dp) :: dt0 = 0.01_dp, dt, order
@@ -95,12 +96,14 @@ program test_omp_adamsbashforth
 
   allocate (norm(nrun))
 
+  method = ['AB1', 'AB2', 'AB3', 'AB4', 'RK1', 'RK2', 'RK3', 'RK4']
+
   ! compute l2 norm for various step sizes
   do k = 1, nmethod
 
     ! initialize time-integrator
     time_integrator = time_intg_t(allocator=allocator, &
-                                  backend=backend, method=k)
+                                  backend=backend, method=method(k))
 
     dt = dt0
     nstep = nstep0

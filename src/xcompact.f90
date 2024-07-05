@@ -103,8 +103,9 @@ program xcompact
   if (nrank == 0) print *, 'OpenMP backend instantiated'
 #endif
 
-  time_integrator = time_intg_t(allocator=allocator, backend=backend)
-  if (nrank == 0) print *, 'time integrator instantiated'
+  time_integrator = time_intg_t(allocator=allocator, backend=backend, &
+                                method='AB3')
+  if (nrank == 0) print *, time_integrator%sname//' time intg instantiated'
   solver = solver_t(backend, mesh, time_integrator, host_allocator)
   if (nrank == 0) print *, 'solver instantiated'
 
