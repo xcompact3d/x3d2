@@ -47,11 +47,9 @@ program xcompact
   integer, dimension(3) :: dims_global
   integer, dimension(3) :: nproc_dir = 0
   real(dp), dimension(3) :: L_global
-  integer :: n_iters, n_output
-  real(dp) :: dt, Re
   integer :: nrank, nproc, ierr
 
-  namelist /basic/ L_global, dims_global, nproc_dir, Re, dt, n_iters, n_output
+  namelist /domain_params/ L_global, dims_global, nproc_dir
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
@@ -65,10 +63,17 @@ program xcompact
   ierr = cudaGetDevice(devnum)
 #endif
 
-  call get_command_argument(1, input_file)
-  open (100, file=input_file)
-  read (100, nml=basic)
-  close (100)
+  ! set defaults
+  L_global = [2*pi, 2*pi, 2*pi]
+  dims_global = [256, 256, 256]
+  nproc_dir = [1, 1, nproc]
+
+  if (command_argument_count() >= 1) then
+    call get_command_argument(1, input_file)
+    open (100, file=input_file)
+    read (100, nml=domain_params)
+    close (100)
+  end if
 
   if (product(nproc_dir) /= nproc) then
     if (nrank == 0) print *, 'nproc_dir specified in the input file does &
@@ -78,11 +83,6 @@ program xcompact
   end if
 
   mesh = mesh_t(dims_global, nproc_dir, L_global)
-
-  globs%dt = dt
-  globs%nu = 1._dp/Re
-  globs%n_iters = n_iters
-  globs%n_output = n_output
 
   globs%poisson_solver_type = POISSON_SOLVER_FFT
 

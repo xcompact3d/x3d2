@@ -95,6 +95,11 @@ contains
 
     class(field_t), pointer :: u_init, v_init, w_init
 
+    character(len=200) :: input_file
+    real(dp) :: Re, dt
+    integer :: n_iters, n_output
+    namelist /solver_params/ Re, dt, n_iters, n_output
+
     real(dp) :: x, y, z
     integer :: i, j, k
     integer, dimension(3) :: dims
@@ -113,10 +118,20 @@ contains
     solver%v => solver%backend%allocator%get_block(DIR_X, VERT)
     solver%w => solver%backend%allocator%get_block(DIR_X, VERT)
 
-    solver%dt = globs%dt
-    solver%backend%nu = globs%nu
-    solver%n_iters = globs%n_iters
-    solver%n_output = globs%n_output
+    ! set defaults
+    Re = 1600._dp; dt = 0.001_dp; n_iters = 20000; n_output = 100
+
+    if (command_argument_count() >= 1) then
+      call get_command_argument(1, input_file)
+      open (100, file=input_file)
+      read (100, nml=solver_params)
+      close (100)
+    end if
+
+    solver%dt = dt
+    solver%backend%nu = 1._dp/Re
+    solver%n_iters = n_iters
+    solver%n_output = n_output
     solver%ngrid = product(solver%mesh%get_global_dims(VERT))
 
     dims = solver%mesh%get_dims(VERT)
