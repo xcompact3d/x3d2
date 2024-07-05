@@ -96,10 +96,6 @@ program test_reorder
   print *, 'OpenMP backend instantiated'
 #endif
 
-  backend%xdirps => xdirps
-  backend%ydirps => ydirps
-  backend%zdirps => zdirps
-
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
   pass_X = .true.
   pass_Y = .true.
