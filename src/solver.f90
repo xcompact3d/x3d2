@@ -52,7 +52,7 @@ module m_solver
     class(mesh_t), pointer :: mesh
     class(time_intg_t), pointer :: time_integrator
     type(allocator_t), pointer :: host_allocator
-    class(dirps_t), pointer :: xdirps, ydirps, zdirps
+    type(dirps_t), pointer :: xdirps, ydirps, zdirps
     procedure(poisson_solver), pointer :: poisson => null()
   contains
     procedure :: transeq
@@ -81,15 +81,13 @@ module m_solver
 
 contains
 
-  function init(backend, mesh, time_integrator, host_allocator, &
-                xdirps, ydirps, zdirps) result(solver)
+  function init(backend, mesh, time_integrator, host_allocator) result(solver)
     implicit none
 
     class(base_backend_t), target, intent(inout) :: backend
     type(mesh_t), target, intent(inout) :: mesh
     class(time_intg_t), target, intent(inout) :: time_integrator
     type(allocator_t), target, intent(inout) :: host_allocator
-    class(dirps_t), target, intent(inout) :: xdirps, ydirps, zdirps
     type(solver_t) :: solver
 
     class(field_t), pointer :: u_init, v_init, w_init
@@ -110,9 +108,10 @@ contains
     solver%time_integrator => time_integrator
     solver%host_allocator => host_allocator
 
-    solver%xdirps => xdirps
-    solver%ydirps => ydirps
-    solver%zdirps => zdirps
+    allocate (solver%xdirps, solver%ydirps, solver%zdirps)
+    solver%xdirps%dir = DIR_X
+    solver%ydirps%dir = DIR_Y
+    solver%zdirps%dir = DIR_Z
 
     solver%u => solver%backend%allocator%get_block(DIR_X, VERT)
     solver%v => solver%backend%allocator%get_block(DIR_X, VERT)
@@ -171,7 +170,8 @@ contains
     select case (trim(poisson_solver_type))
     case ('FFT')
       if (solver%mesh%par%is_root()) print *, 'Poisson solver: FFT'
-      call solver%backend%init_poisson_fft(solver%mesh, xdirps, ydirps, zdirps)
+      call solver%backend%init_poisson_fft(solver%mesh, solver%xdirps, &
+                                           solver%ydirps, solver%zdirps)
       solver%poisson => poisson_fft
     case ('CG')
       if (solver%mesh%par%is_root()) &
@@ -184,7 +184,7 @@ contains
   end function init
 
   subroutine allocate_tdsops(dirps, dir, backend)
-    class(dirps_t), intent(inout) :: dirps
+    type(dirps_t), intent(inout) :: dirps
     integer, intent(in) :: dir
     class(base_backend_t), intent(in) :: backend
 

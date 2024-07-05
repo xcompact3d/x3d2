@@ -3,7 +3,7 @@ program xcompact
 
   use m_allocator
   use m_base_backend
-  use m_common, only: pi, DIR_X, DIR_Y, DIR_Z, DIR_C
+  use m_common, only: pi
   use m_solver, only: solver_t
   use m_time_integrator, only: time_intg_t
   use m_tdsops, only: tdsops_t
@@ -27,7 +27,6 @@ program xcompact
   type(allocator_t), pointer :: host_allocator
   type(solver_t) :: solver
   type(time_intg_t) :: time_integrator
-  type(dirps_t) :: xdirps, ydirps, zdirps
 
 #ifdef CUDA
   type(cuda_backend_t), target :: cuda_backend
@@ -82,8 +81,6 @@ program xcompact
 
   mesh = mesh_t(dims_global, nproc_dir, L_global)
 
-  xdirps%dir = DIR_X; ydirps%dir = DIR_Y; zdirps%dir = DIR_Z
-
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(mesh, SZ)
   allocator => cuda_allocator
@@ -108,8 +105,7 @@ program xcompact
 
   time_integrator = time_intg_t(allocator=allocator, backend=backend)
   if (nrank == 0) print *, 'time integrator instantiated'
-  solver = solver_t(backend, mesh, time_integrator, host_allocator, &
-                    xdirps, ydirps, zdirps)
+  solver = solver_t(backend, mesh, time_integrator, host_allocator)
   if (nrank == 0) print *, 'solver instantiated'
 
   call cpu_time(t_start)
