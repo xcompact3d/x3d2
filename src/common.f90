@@ -25,13 +25,6 @@ module m_common
                              RDR_X2Z, RDR_Y2Z, 0, RDR_C2Z, &
                              RDR_X2C, RDR_Y2C, RDR_Z2C, 0], shape=[4, 4])
 
-  type :: globs_t
-    real(dp) :: nu, dt
-    integer :: n_iters, n_output
-    character(len=20) :: BC_x_s, BC_x_e, BC_y_s, BC_y_e, BC_z_s, BC_z_e
-    integer :: poisson_solver_type
-  end type globs_t
-
 contains
 
   pure subroutine get_dirs_from_rdr(dir_from, dir_to, rdr_dir)

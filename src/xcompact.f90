@@ -3,7 +3,7 @@ program xcompact
 
   use m_allocator
   use m_base_backend
-  use m_common, only: pi, globs_t, DIR_X, DIR_Y, DIR_Z, DIR_C
+  use m_common, only: pi, DIR_X, DIR_Y, DIR_Z, DIR_C
   use m_solver, only: solver_t
   use m_time_integrator, only: time_intg_t
   use m_tdsops, only: tdsops_t
@@ -21,7 +21,6 @@ program xcompact
 
   implicit none
 
-  type(globs_t) :: globs
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
   type(mesh_t) :: mesh

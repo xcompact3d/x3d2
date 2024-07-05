@@ -2,8 +2,7 @@ module m_omp_backend
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_ordering, only: get_index_reordering
-  use m_common, only: dp, globs_t, get_dirs_from_rdr, VERT, DIR_X, DIR_Y, DIR_Z, DIR_C, &
-                      RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
+  use m_common, only: dp, get_dirs_from_rdr, VERT, DIR_X, DIR_Y, DIR_Z, DIR_C
   use m_tdsops, only: dirps_t, tdsops_t, get_tds_n
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
   use m_omp_sendrecv, only: sendrecv_fields

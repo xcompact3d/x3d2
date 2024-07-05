@@ -3,7 +3,7 @@ program test_omp_transeq
   use mpi
 
   use m_allocator, only: allocator_t, field_t
-  use m_common, only: dp, pi, globs_t, DIR_X, DIR_Y, DIR_Z, VERT
+  use m_common, only: dp, pi, DIR_X, DIR_Y, DIR_Z, VERT
   use m_omp_common, only: SZ
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_backend, only: omp_backend_t, transeq_x_omp, base_backend_t
@@ -27,7 +27,6 @@ program test_omp_transeq
 
   real(dp) :: dx_per, nu, norm_du, tol = 1d-8, tstart, tend
 
-  type(globs_t) :: globs
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
 
