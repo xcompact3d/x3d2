@@ -18,6 +18,7 @@ module m_time_integrator
     type(flist_t), allocatable :: deriv(:)
     class(base_backend_t), pointer :: backend
     class(allocator_t), pointer :: allocator
+    procedure(stepper_func), pointer :: stepper => null()
   contains
     procedure :: finalize
     procedure :: step
@@ -28,6 +29,17 @@ module m_time_integrator
   interface time_intg_t
     module procedure init
   end interface time_intg_t
+
+  abstract interface
+    subroutine stepper_func(self, dt)
+      import :: time_intg_t
+      import :: dp
+      implicit none
+
+      class(time_intg_t), intent(inout) :: self
+      real(dp), intent(in) :: dt
+    end subroutine stepper_func
+  end interface
 
 contains
 
@@ -117,6 +129,7 @@ contains
       init%nstep = init%order
       init%nstage = 1
       init%nolds = init%nstep - 1
+      init%stepper => adams_bashforth
     else if (init%sname(1:2) == 'RK') then
       read (init%sname(3:3), *, iostat=stat) init%order
       if (stat /= 0) error stop 'Error reading RK integration order'
@@ -124,6 +137,7 @@ contains
       init%nstep = 1
       init%nstage = init%order
       init%nolds = init%nstage
+      init%stepper => runge_kutta
     else
       print *, 'Integration method '//init%sname//' is not defined'
       error stop
@@ -171,11 +185,7 @@ contains
     self%deriv(2)%ptr => dv
     self%deriv(3)%ptr => dw
 
-    if (self%sname(1:2) == 'AB' ) then
-      call self%adams_bashforth(dt)
-    else
-      call self%runge_kutta(dt)
-    end if
+    call self%stepper(dt)
 
   end subroutine step
 
