@@ -40,13 +40,15 @@ program xcompact
 
   real(dp) :: t_start, t_end
 
-  character(len=100) :: input_file
+  character(len=200) :: input_file
+  character(len=3) :: method
   integer, dimension(3) :: dims_global
   integer, dimension(3) :: nproc_dir = 0
   real(dp), dimension(3) :: L_global
   integer :: nrank, nproc, ierr
 
   namelist /domain_params/ L_global, dims_global, nproc_dir
+  namelist /time_intg_params/ method
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
@@ -64,11 +66,13 @@ program xcompact
   L_global = [2*pi, 2*pi, 2*pi]
   dims_global = [256, 256, 256]
   nproc_dir = [1, 1, nproc]
+  method = 'AB3'
 
   if (command_argument_count() >= 1) then
     call get_command_argument(1, input_file)
     open (100, file=input_file)
     read (100, nml=domain_params)
+    read (100, nml=time_intg_params)
     close (100)
   end if
 
@@ -104,7 +108,7 @@ program xcompact
 #endif
 
   time_integrator = time_intg_t(allocator=allocator, backend=backend, &
-                                method='AB3')
+                                method=method)
   if (nrank == 0) print *, time_integrator%sname//' time intg instantiated'
   solver = solver_t(backend, mesh, time_integrator, host_allocator)
   if (nrank == 0) print *, 'solver instantiated'
