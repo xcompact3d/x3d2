@@ -1,4 +1,5 @@
 module m_solver
+  use iso_fortran_env, only: stderr => error_unit
   use mpi
 
   use m_allocator, only: allocator_t, field_t
@@ -6,7 +7,6 @@ module m_solver
   use m_common, only: dp, globs_t, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_Z2C, RDR_C2Z, &
-                      POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL
   use m_tdsops, only: tdsops_t, dirps_t
   use m_time_integrator, only: time_intg_t
@@ -82,7 +82,7 @@ module m_solver
 contains
 
   function init(backend, mesh, time_integrator, host_allocator, &
-                xdirps, ydirps, zdirps, globs) result(solver)
+                xdirps, ydirps, zdirps) result(solver)
     implicit none
 
     class(base_backend_t), target, intent(inout) :: backend
@@ -90,7 +90,6 @@ contains
     class(time_intg_t), target, intent(inout) :: time_integrator
     type(allocator_t), target, intent(inout) :: host_allocator
     class(dirps_t), target, intent(inout) :: xdirps, ydirps, zdirps
-    class(globs_t), intent(in) :: globs
     type(solver_t) :: solver
 
     class(field_t), pointer :: u_init, v_init, w_init
@@ -98,7 +97,8 @@ contains
     character(len=200) :: input_file
     real(dp) :: Re, dt
     integer :: n_iters, n_output
-    namelist /solver_params/ Re, dt, n_iters, n_output
+    character(3) :: poisson_solver_type
+    namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type
 
     real(dp) :: x, y, z
     integer :: i, j, k
@@ -120,6 +120,7 @@ contains
 
     ! set defaults
     Re = 1600._dp; dt = 0.001_dp; n_iters = 20000; n_output = 100
+    poisson_solver_type = 'FFT'
 
     if (command_argument_count() >= 1) then
       call get_command_argument(1, input_file)
@@ -167,15 +168,17 @@ contains
     call allocate_tdsops(solver%ydirps, DIR_Y, solver%backend)
     call allocate_tdsops(solver%zdirps, DIR_Z, solver%backend)
 
-    select case (globs%poisson_solver_type)
-    case (POISSON_SOLVER_FFT)
+    select case (trim(poisson_solver_type))
+    case ('FFT')
       if (solver%mesh%par%is_root()) print *, 'Poisson solver: FFT'
       call solver%backend%init_poisson_fft(solver%mesh, xdirps, ydirps, zdirps)
       solver%poisson => poisson_fft
-    case (POISSON_SOLVER_CG)
+    case ('CG')
       if (solver%mesh%par%is_root()) &
         print *, 'Poisson solver: CG, not yet implemented'
       solver%poisson => poisson_cg
+    case default
+      error stop 'poisson_solver_type is not valid. Use "FFT" or "CG".'
     end select
 
   end function init
