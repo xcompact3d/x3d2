@@ -40,6 +40,7 @@ module m_mesh
     integer, dimension(3), private :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
     logical, dimension(3), private :: periodic_BC ! Whether or not a direction has a periodic BC
     integer, dimension(3, 2), private :: BCs_global
+    integer, dimension(3, 2), private :: BCs
     integer, private :: sz
     type(geo_t), allocatable :: geo ! object containing geometry information
     type(parallel_t), allocatable :: par ! object containing parallel domain decomposition information
@@ -91,6 +92,7 @@ contains
     type(mesh_t) :: mesh
 
     character(len=20), dimension(3, 2) :: BC_all
+    logical :: is_first_domain, is_last_domain
     integer :: dir, j
     integer :: ierr
 
@@ -138,6 +140,22 @@ contains
     call MPI_Comm_rank(MPI_COMM_WORLD, mesh%par%nrank, ierr)
     call MPI_Comm_size(MPI_COMM_WORLD, mesh%par%nproc, ierr)
     call domain_decomposition(mesh)
+
+    ! Set subdomain BCs
+    do dir = 1, 3
+      is_first_domain = mesh%par%nrank_dir(dir) == 0
+      is_last_domain = mesh%par%nrank_dir(dir) + 1 == mesh%par%nproc_dir(dir)
+      ! subdomain-subdomain boundaries are identical to periodic BCs
+      if (is_first_domain) then
+        mesh%BCs(dir, 1) = mesh%BCs_global(dir, 1)
+        mesh%BCs(dir, 2) = BC_PERIODIC
+      else if (is_last_domain) then
+        mesh%BCs(dir, 1) = BC_PERIODIC
+        mesh%BCs(dir, 2) = mesh%BCs_global(dir, 2)
+      else
+        mesh%BCs(dir, :) = BC_PERIODIC
+      end if
+    end do
 
     ! Define default values
     mesh%vert_dims_padded = mesh%vert_dims
