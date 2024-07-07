@@ -20,6 +20,7 @@ program test_omp_transeq
   class(mesh_t), allocatable :: mesh
   integer, dimension(3) :: dims_global, nproc_dir
   real(dp), dimension(3) :: L_global
+  character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
 
   integer :: n, n_groups, i, j, k
   integer :: nrank, nproc
@@ -48,7 +49,11 @@ program test_omp_transeq
   ! Domain decomposition in each direction
   nproc_dir = [nproc, 1, 1]
 
-  mesh = mesh_t(dims_global, nproc_dir, L_global)
+  BC_x = ['periodic', 'periodic']
+  BC_y = ['periodic', 'periodic']
+  BC_z = ['periodic', 'periodic']
+
+  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
   xdirps%dir = DIR_X; ydirps%dir = DIR_Y; zdirps%dir = DIR_Z
 

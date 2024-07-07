@@ -42,12 +42,13 @@ program xcompact
 
   character(len=200) :: input_file
   character(len=3) :: method
+  character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
   integer, dimension(3) :: dims_global
   integer, dimension(3) :: nproc_dir = 0
   real(dp), dimension(3) :: L_global
   integer :: nrank, nproc, ierr
 
-  namelist /domain_params/ L_global, dims_global, nproc_dir
+  namelist /domain_params/ L_global, dims_global, nproc_dir, BC_x, BC_y, BC_z
   namelist /time_intg_params/ method
 
   call MPI_Init(ierr)
@@ -63,9 +64,12 @@ program xcompact
 #endif
 
   ! set defaults
-  L_global = [2*pi, 2*pi, 2*pi]
   dims_global = [256, 256, 256]
+  L_global = [2*pi, 2*pi, 2*pi]
   nproc_dir = [1, 1, nproc]
+  BC_x = [character(len=20) :: 'periodic', 'periodic']
+  BC_y = [character(len=20) :: 'periodic', 'periodic']
+  BC_z = [character(len=20) :: 'periodic', 'periodic']
   method = 'AB3'
 
   if (command_argument_count() >= 1) then
@@ -83,7 +87,7 @@ program xcompact
     nproc_dir = [1, 1, nproc]
   end if
 
-  mesh = mesh_t(dims_global, nproc_dir, L_global)
+  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(mesh, SZ)

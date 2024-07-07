@@ -27,6 +27,7 @@ program test_sum_intox
 
   type(mesh_t) :: mesh
 
+  character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
   integer :: nrank, nproc
   integer :: ierr
 
@@ -36,9 +37,14 @@ program test_sum_intox
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
 
+  BC_x = ['periodic', 'periodic']
+  BC_y = ['periodic', 'periodic']
+  BC_z = ['periodic', 'periodic']
+
   mesh = mesh_t([nx, ny, nz], &
                 [1, 1, nproc], &
-                [lx, ly, lz])
+                [lx, ly, lz], &
+                BC_x, BC_y, BC_z)
 
 #ifdef CUDA
 #else

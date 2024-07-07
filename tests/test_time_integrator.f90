@@ -30,6 +30,7 @@ program test_omp_adamsbashforth
   class(field_t), pointer :: du, dv, dw
   integer, dimension(3) :: dims_global, nproc_dir
   real(dp), dimension(3) :: L_global
+  character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
 
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
@@ -64,7 +65,11 @@ program test_omp_adamsbashforth
   ! Domain decomposition in each direction
   nproc_dir = [1, 1, 1]
 
-  mesh = mesh_t(dims_global, nproc_dir, L_global)
+  BC_x = ['periodic', 'periodic']
+  BC_y = ['periodic', 'periodic']
+  BC_z = ['periodic', 'periodic']
+
+  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
   ! allocate object
 #ifdef CUDA

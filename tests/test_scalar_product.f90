@@ -29,6 +29,8 @@ program test_scalar_product
 
   type(mesh_t) :: mesh
 
+  character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
+
   character(len=5), dimension(4), parameter :: test = &
     ["DIR_X", "DIR_Y", "DIR_Z", "DIR_C"]
   integer, dimension(4), parameter :: dir = [DIR_X, DIR_Y, DIR_Z, DIR_C]
@@ -43,9 +45,14 @@ program test_scalar_product
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
 
+  BC_x = ['periodic', 'periodic']
+  BC_y = ['periodic', 'periodic']
+  BC_z = ['periodic', 'periodic']
+
   mesh = mesh_t([nx, ny, nz], &
                 [1, 1, nproc], &
-                [lx, ly, lz])
+                [lx, ly, lz], &
+                BC_x, BC_y, BC_z)
 
 #ifdef CUDA
 #else

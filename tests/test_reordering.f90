@@ -45,6 +45,7 @@ program test_reorder
   type(dirps_t), target :: xdirps, ydirps, zdirps
   integer, dimension(3) :: dims_padded, dims_global, nproc_dir
   real(dp), dimension(3) :: L_global
+  character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
   logical :: pass_X, pass_Y, pass_Z
 
 #ifdef CUDA
@@ -76,7 +77,11 @@ program test_reorder
   ! Domain decomposition in each direction
   nproc_dir = [nproc, 1, 1]
 
-  mesh = mesh_t(dims_global, nproc_dir, L_global)
+  BC_x = ['periodic', 'periodic']
+  BC_y = ['periodic', 'periodic']
+  BC_z = ['periodic', 'periodic']
+
+  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(mesh, SZ)

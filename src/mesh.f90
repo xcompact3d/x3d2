@@ -4,7 +4,8 @@ module m_mesh
   use mpi
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, &
                       CELL, VERT, none, X_FACE, Y_FACE, Z_FACE, &
-                      X_EDGE, Y_EDGE, Z_EDGE
+                      X_EDGE, Y_EDGE, Z_EDGE, &
+                      BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET
   use m_field, only: field_t
 
   implicit none
@@ -38,6 +39,7 @@ module m_mesh
     integer, dimension(3), private :: vert_dims ! local number of vertices in each direction without padding (cartesian structure)
     integer, dimension(3), private :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
     logical, dimension(3), private :: periodic_BC ! Whether or not a direction has a periodic BC
+    integer, dimension(3, 2), private :: BCs_global
     integer, private :: sz
     type(geo_t), allocatable :: geo ! object containing geometry information
     type(parallel_t), allocatable :: par ! object containing parallel domain decomposition information
@@ -77,30 +79,46 @@ module m_mesh
 
 contains
 
-  function mesh_init(dims_global, nproc_dir, L_global, &
-                     periodic_BC) result(mesh)
+  function mesh_init(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z) &
+    result(mesh)
     !! Completely initialise the mesh object.
     !! Upon initialisation the mesh object can be read-only and shouldn't be edited
     !! Takes as argument global information about the mesh like its length, number of cells and decomposition in each direction
     integer, dimension(3), intent(in) :: dims_global
     integer, dimension(3), intent(in) :: nproc_dir ! Number of proc in each direction
     real(dp), dimension(3), intent(in) :: L_global
-    logical, dimension(3), optional, intent(in) :: periodic_BC
+    character(len=*), dimension(2), intent(in) :: BC_x, BC_y, BC_z
     type(mesh_t) :: mesh
 
-    integer :: dir
+    character(len=20), dimension(3, 2) :: BC_all
+    integer :: dir, j
     integer :: ierr
 
     allocate (mesh%geo)
     allocate (mesh%par)
     mesh%global_vert_dims(:) = dims_global
 
-    if (present(periodic_BC)) then
-      mesh%periodic_BC(:) = periodic_BC
-    else
-      ! Default to periodic BC
-      mesh%periodic_BC(:) = .true.
-    end if
+    BC_all(1, 1) = BC_x(1); BC_all(1, 2) = BC_x(2)
+    BC_all(2, 1) = BC_y(1); BC_all(2, 2) = BC_y(2)
+    BC_all(3, 1) = BC_z(1); BC_all(3, 2) = BC_z(2)
+    do dir = 1, 3
+      do j = 1, 2
+        select case (trim(BC_all(dir, j)))
+        case ('periodic')
+          mesh%BCs_global(dir, j) = BC_PERIODIC
+        case ('neumann')
+          mesh%BCs_global(dir, j) = BC_NEUMANN
+        case ('dirichlet')
+          mesh%BCs_global(dir, j) = BC_DIRICHLET
+        case default
+          error stop 'Unknown BC'
+        end select
+      end do
+    end do
+
+    do dir = 1, 3
+      mesh%periodic_BC(dir) = all(mesh%BCs_global(dir, :) == BC_PERIODIC)
+    end do
 
     do dir = 1, 3
       if (mesh%periodic_BC(dir)) then
