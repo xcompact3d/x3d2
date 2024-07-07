@@ -98,7 +98,6 @@ contains
 
     allocate (mesh%geo)
     allocate (mesh%par)
-    mesh%global_vert_dims(:) = dims_global
 
     BC_all(1, 1) = BC_x(1); BC_all(1, 2) = BC_x(2)
     BC_all(2, 1) = BC_y(1); BC_all(2, 2) = BC_y(2)
@@ -122,6 +121,10 @@ contains
       mesh%periodic_BC(dir) = all(mesh%BCs_global(dir, :) == BC_PERIODIC)
     end do
 
+    ! Set global vertex dims
+    mesh%global_vert_dims(:) = dims_global
+
+    ! Set global cell dims
     do dir = 1, 3
       if (mesh%periodic_BC(dir)) then
         mesh%global_cell_dims(dir) = mesh%global_vert_dims(dir)
@@ -157,6 +160,21 @@ contains
       end if
     end do
 
+    ! Define number of cells and vertices in each direction
+    mesh%vert_dims = mesh%global_vert_dims/mesh%par%nproc_dir
+
+    do dir = 1, 3
+      is_last_domain = (mesh%par%nrank_dir(dir) + 1 == mesh%par%nproc_dir(dir))
+      if (is_last_domain .and. (.not. mesh%periodic_BC(dir))) then
+        mesh%cell_dims(dir) = mesh%vert_dims(dir) - 1
+      else
+        mesh%cell_dims(dir) = mesh%vert_dims(dir)
+      end if
+    end do
+
+    ! Set offset for global indices
+    mesh%par%n_offset(:) = mesh%vert_dims(:)*mesh%par%nrank_dir(:)
+
     ! Define default values
     mesh%vert_dims_padded = mesh%vert_dims
     mesh%sz = 1
@@ -190,7 +208,6 @@ contains
     integer :: i, nproc_x, nproc_y, nproc_z, nproc
     integer, dimension(3) :: subd_pos, subd_pos_prev, subd_pos_next
     integer :: dir
-    logical :: is_last_domain
 
     ! Number of processes on a direction basis
     nproc_x = mesh%par%nproc_dir(1)
@@ -209,20 +226,6 @@ contains
 
     ! local/directional position of the subdomain
     mesh%par%nrank_dir(:) = subd_pos(:) - 1
-
-    ! Define number of cells and vertices in each direction
-    mesh%vert_dims = mesh%global_vert_dims/mesh%par%nproc_dir
-
-    do dir = 1, 3
-      is_last_domain = (mesh%par%nrank_dir(dir) + 1 == mesh%par%nproc_dir(dir))
-      if (is_last_domain .and. (.not. mesh%periodic_BC(dir))) then
-        mesh%cell_dims(dir) = mesh%vert_dims(dir) - 1
-      else
-        mesh%cell_dims(dir) = mesh%vert_dims(dir)
-      end if
-    end do
-
-    mesh%par%n_offset(:) = mesh%vert_dims(:)*mesh%par%nrank_dir(:)
 
     do dir = 1, 3
       nproc = mesh%par%nproc_dir(dir)
