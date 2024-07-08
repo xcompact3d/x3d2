@@ -40,7 +40,9 @@ program test_poisson_cg_eval
   real(dp), parameter :: Ly = 1.0_dp
   real(dp), parameter :: Lz = 1.0_dp
   integer :: i
-  integer, parameter :: nref = 1
+  integer, parameter :: nref = 4
+
+  real(dp), dimension(nref) :: e
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
@@ -52,10 +54,16 @@ program test_poisson_cg_eval
   
   test_pass = .true.
 
-  nx = 32; ny = 32; nz = 32
+  nx = 16; ny = 16; nz = 16
   do i = 1, nref
-    call run_test([nx, ny, nz])
+    e(i) = run_test([nx, ny, nz])
     nx = 2 * nx; ny = 2 * ny; nz = 2 * nz
+  end do
+
+  do i = 2, nref
+    if (e(i) > 1.1 * (e(i - 1) / (2**6))) then
+      print *, "Error convergence failed ", e(i), e(i - 1) / (2**6)
+    end if
   end do
   
   call MPI_Allreduce(MPI_IN_PLACE, test_pass, 1, &
@@ -71,21 +79,24 @@ program test_poisson_cg_eval
 
 contains
 
-  subroutine run_test(n)
+  real(dp) function run_test(n)
 
     integer, dimension(3), intent(in) :: n
     
     type(mesh_t) :: mesh
+    real(dp) :: rms_err
 
     call initialise_test(mesh, n)
 
     call test_constant_field(f, lapl, pressure, mesh)
-    call test_variable_field(f, lapl, pressure, mesh)
+    rms_err = test_variable_field(f, lapl, pressure, mesh)
 
     ! Finalise test
     call backend%allocator%release_block(pressure)
 
-  end subroutine run_test
+    run_test = rms_err
+
+  end function run_test
 
   subroutine initialise_test(mesh, n)
 
@@ -98,8 +109,15 @@ contains
       error stop "CUDA iterative solver not currently supported"
     end if
 #else
+    if (allocated(allocator)) then
+      deallocate(allocator)
+    end if
     allocate(allocator)
     allocator = allocator_t(mesh, SZ)
+
+    if (allocated(backend)) then
+      deallocate(backend)
+    end if
     allocate(omp_backend_t :: backend)
     backend = omp_backend_t(mesh, allocator)
 #endif
@@ -167,6 +185,10 @@ contains
 
     real(dp), dimension(:, :, :), allocatable :: expect
     
+    real(dp) :: rms_err
+
+    logical :: check_pass
+    
     if (irank == 0) then
       print *, "Testing constant field"
     end if
@@ -180,11 +202,23 @@ contains
     call lapl%apply(f, pressure, backend)
 
     ! Check Laplacian evaluation (expect zero)
-    call check_soln(mesh, f, expect)
+    rms_err = check_soln(check_pass, mesh, f, expect)
+
+    if (.not. check_pass) then
+      test_pass = .false.
+
+      if (irank == 0) then
+        print *, "- FAILED RMS(err) = ", rms_err
+      end if
+    else
+      if (irank == 0) then
+        print *, "- PASS"
+      end if
+    end if
 
   end subroutine test_constant_field
 
-  subroutine test_variable_field(f, lapl, pressure, mesh)
+  real(dp) function test_variable_field(f, lapl, pressure, mesh)
 
     use m_common, only: pi
     use m_ordering, only: get_index_dir
@@ -203,7 +237,9 @@ contains
 
     real(dp) :: dx, dy, dz
     real(dp) :: Lx, Ly, Lz
-    
+
+    logical :: check_pass
+
     if (irank == 0) then
       print *, "Testing variable field"
     end if
@@ -245,12 +281,13 @@ contains
 
     ! Check Laplacian evaluation
     ! XXX: Note had to relax the tolerance, otherwise obtains RMS(err)~=8e-7
-    call check_soln(mesh, f, expect, opttol=1.0e-6_dp)
+    test_variable_field = check_soln(check_pass, mesh, f, expect, opttol=1.0e-6_dp)
     
-  end subroutine test_variable_field
+  end function test_variable_field
 
-  subroutine check_soln(mesh, soln, expect, opttol)
+  real(dp) function check_soln(check_pass, mesh, soln, expect, opttol)
 
+    logical, intent(out) :: check_pass
     type(mesh_t), intent(in) :: mesh
     class(field_t), intent(in) :: soln
     real(dp), dimension(:, :, :), intent(in) :: expect
@@ -282,18 +319,12 @@ contains
       test_pass = .false.
     else
       if (rms > tol) then
-        test_pass = .false.
-
-        if (irank == 0) then
-          print *, "- FAILED RMS(err) = ", rms
-        end if
-      else
-        if (irank == 0) then
-          print *, "- PASSED"
-        end if
+        check_pass = .false.
       end if
     end if
 
-  end subroutine check_soln
+    check_soln = rms
+    
+  end function check_soln
 
 end program test_poisson_cg_eval
