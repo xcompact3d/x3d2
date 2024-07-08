@@ -63,6 +63,7 @@ program test_poisson_cg_eval
   do i = 2, nref
     if (e(i) > 1.1 * (e(i - 1) / (2**6))) then
       print *, "Error convergence failed ", e(i), e(i - 1) / (2**6)
+      test_pass = .false.
     end if
   end do
   
@@ -317,9 +318,12 @@ contains
     if (rms /= rms) then ! NAN check
       print *, "- SEVERE ERROR: RMS=NAN"
       test_pass = .false.
+      check_pass = .false.
     else
       if (rms > tol) then
         check_pass = .false.
+      else
+        check_pass = .true.
       end if
     end if
 
