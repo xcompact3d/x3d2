@@ -27,13 +27,16 @@ module m_tdsops
     real(dp), allocatable, dimension(:) :: dist_fw, dist_bw, & !! fw/bw phase
                                            dist_sa, dist_sc, & !! back subs.
                                            dist_af !! the auxiliary factors
+    real(dp), allocatable, dimension(:) :: thom_f, thom_s, thom_w, thom_p
     real(dp), allocatable :: coeffs(:), coeffs_s(:, :), coeffs_e(:, :)
     real(dp) :: alpha, a, b, c = 0._dp, d = 0._dp
+    logical :: periodic
     integer :: tds_n
     integer :: dir
     integer :: n_halo
   contains
-    procedure :: deriv_1st, deriv_2nd, interpl_mid, stagder_1st, preprocess
+    procedure :: deriv_1st, deriv_2nd, interpl_mid, stagder_1st
+    procedure :: preprocess_dist, preprocess_thom
   end type tdsops_t
 
   interface tdsops_t
@@ -102,12 +105,21 @@ contains
 
     n_stencil = 2*tdsops%n_halo + 1
 
+    ! preprocessed coefficient arrays for the distributed algorithm
     allocate (tdsops%dist_fw(tds_n), tdsops%dist_bw(tds_n))
     allocate (tdsops%dist_sa(tds_n), tdsops%dist_sc(tds_n))
     allocate (tdsops%dist_af(tds_n))
+
+    ! preprocessed coefficient arrays for the Thomas algorithm
+    allocate (tdsops%thom_f(tds_n), tdsops%thom_s(tds_n))
+    allocate (tdsops%thom_w(tds_n), tdsops%thom_p(tds_n))
+
+    ! RHS coefficient arrays
     allocate (tdsops%coeffs(n_stencil))
     allocate (tdsops%coeffs_s(n_stencil, tdsops%n_halo))
     allocate (tdsops%coeffs_e(n_stencil, tdsops%n_halo))
+
+    tdsops%periodic = bc_start == 'periodic' .and. bc_end == 'periodic'
 
     if (operation == 'first-deriv') then
       call tdsops%deriv_1st(delta, scheme, bc_start, bc_end, sym)
@@ -284,7 +296,8 @@ contains
       self%coeffs_e(:, n_halo - 1) = self%coeffs_e(:, n_halo - 1)/delta
     end select
 
-    call self%preprocess(dist_b)
+    call self%preprocess_thom(dist_b)
+    call self%preprocess_dist(dist_b)
 
   end subroutine deriv_1st
 
@@ -496,7 +509,8 @@ contains
       self%coeffs_e(:, 1) = self%coeffs_e(:, 2)
     end select
 
-    call self%preprocess(dist_b)
+    call self%preprocess_thom(dist_b)
+    call self%preprocess_dist(dist_b)
 
   end subroutine deriv_2nd
 
@@ -634,7 +648,8 @@ contains
       end select
     end if
 
-    call self%preprocess(dist_b)
+    call self%preprocess_thom(dist_b)
+    call self%preprocess_dist(dist_b)
 
   end subroutine interpl_mid
 
@@ -741,11 +756,12 @@ contains
       end select
     end if
 
-    call self%preprocess(dist_b)
+    call self%preprocess_thom(dist_b)
+    call self%preprocess_dist(dist_b)
 
   end subroutine stagder_1st
 
-  subroutine preprocess(self, dist_b)
+  subroutine preprocess_dist(self, dist_b)
     implicit none
 
     class(tdsops_t), intent(inout) :: self
@@ -805,7 +821,45 @@ contains
     self%dist_sa(1) = self%dist_fw(1)*self%dist_sa(1)
     self%dist_sc(1) = -self%dist_fw(1)*self%dist_sc(1)*self%dist_sc(2)
 
-  end subroutine preprocess
+  end subroutine preprocess_dist
+
+  subroutine preprocess_thom(self, b)
+    implicit none
+
+    class(tdsops_t), intent(inout) :: self
+    real(dp), dimension(:), intent(in) :: b
+
+    integer :: i, n
+
+    n = self%tds_n
+
+    self%thom_w = b
+    self%thom_f = self%dist_sc
+    if (self%periodic) then
+      self%thom_w(1) = 2._dp
+      self%thom_w(self%tds_n) = 1._dp + self%alpha*self%alpha
+    end if
+
+    self%thom_s(1) = 0._dp
+    do i = 2, n
+      self%thom_s(i) = self%dist_sa(i)/self%thom_w(i - 1)
+      self%thom_w(i) = self%thom_w(i) - self%thom_f(i - 1)*self%thom_s(i)
+    end do
+    do i = 1, n
+      self%thom_w(i) = 1._dp/self%thom_w(i)
+    end do
+
+    self%thom_p = [-1._dp, (0._dp, i=2, self%tds_n - 1), self%alpha]
+    do i = 2, n
+      self%thom_p(i) = self%thom_p(i) - self%thom_p(i - 1)*self%thom_s(i)
+    end do
+    self%thom_p(n) = self%thom_p(n)*self%thom_w(n)
+    do i = n - 1, 1, -1
+      self%thom_p(i) = self%thom_w(i)*(self%thom_p(i) &
+                                       - self%thom_f(i)*self%thom_p(i + 1))
+    end do
+
+  end subroutine preprocess_thom
 
 end module m_tdsops
 
