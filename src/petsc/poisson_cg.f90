@@ -137,10 +137,8 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
 
 contains
 
-  module function init_cg(mesh, backend) &
-                  result(poisson_cg)
+  module function init_cg(backend) result(poisson_cg)
     !! Public constructor for the poisson_cg_t type.
-    class(mesh_t), intent(in) :: mesh
     class(poisson_cg_t), allocatable :: poisson_cg
     class(base_backend_t), pointer, intent(in) :: backend
 
@@ -150,7 +148,7 @@ contains
     
     select type (poisson_cg)
     type is (petsc_poisson_cg_t)
-      call init_petsc_cg(poisson_cg, mesh, backend)
+      call init_petsc_cg(poisson_cg, backend)
     class default
       ! This should be impossible
       print *, "Failure in allocating PETSc Poisson solver -- this indicates a serious problem"
@@ -158,34 +156,32 @@ contains
     end select
   end function init_cg
 
-  subroutine init_petsc_cg(self, mesh, backend)
+  subroutine init_petsc_cg(self, backend)
     !! Private constructor for the poisson_cg_t type.
     type(petsc_poisson_cg_t), intent(inout) :: self
-    class(mesh_t), intent(in) :: mesh
     class(base_backend_t), pointer, intent(in) :: backend
 
     integer :: n ! Local problem size
 
     ! Determine local problem size
-    n = product(mesh%get_dims(CELL))
+    n = product(backend%mesh%get_dims(CELL))
 
     self%ctx = mat_ctx_t(backend, self%lapl, DIR_X)
 
     ! Initialise preconditioner and operator matrices
     ! XXX: Add option to use preconditioner as operator (would imply low-order
     !      solution)?
-    call create_matrix(n, "assemled", backend, self%lapl, self%P)
-    call create_matrix(n, "matfree", backend, self%lapl, self%A)
+    call create_matrix(n, "assemled", self%lapl, self%P)
+    call create_matrix(n, "matfree", self%lapl, self%A)
   end subroutine init_petsc_cg
 
-  subroutine create_matrix(nlocal, mat_type, backend, lapl, M)
+  subroutine create_matrix(nlocal, mat_type, lapl, M)
     !! Creates either a matrix object given the local problem size.
     !! The matrix can be either "assembled" - suitable for preconditioners, or
     !! "matfree" - for use as a high-order operator.
     integer, intent(in) :: nlocal            ! The local problem size
     character(len=*), intent(in) :: mat_type ! The desired type of matrix - valid values
                                              ! are "assembled" or "matfree"
-    class(base_backend_t), pointer, intent(in) :: backend  ! The compute backend
     class(laplace_operator_t), pointer, intent(in) :: lapl ! The Laplacian operator
     type(tMat), intent(out) :: M             ! The matrix object
 
