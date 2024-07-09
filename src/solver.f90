@@ -11,6 +11,7 @@ module m_solver
   use m_tdsops, only: tdsops_t, dirps_t
   use m_time_integrator, only: time_intg_t
   use m_mesh, only: mesh_t
+  use m_windturb_adm, only: windturb_adm_t
 
   implicit none
 
@@ -45,6 +46,7 @@ module m_solver
     real(dp) :: dt, nu
     integer :: n_iters, n_output
     integer :: ngrid
+    logical :: wind_turbine
 
     class(field_t), pointer :: u, v, w
 
@@ -54,11 +56,13 @@ module m_solver
     type(allocator_t), pointer :: host_allocator
     class(dirps_t), pointer :: xdirps, ydirps, zdirps
     procedure(poisson_solver), pointer :: poisson => null()
+    type(windturb_adm_t) :: windturb_adm
   contains
     procedure :: transeq
     procedure :: divergence_v2p
     procedure :: gradient_p2v
     procedure :: curl
+    procedure :: compute_turbines
     procedure :: output
     procedure :: run
   end type solver_t
@@ -99,6 +103,7 @@ contains
     integer :: i, j, k
     integer, dimension(3) :: dims
     real(dp), dimension(3) :: xloc
+    real(dp), allocatable, dimension(:, :) :: disc_params
 
     solver%backend => backend
     solver%mesh => mesh
@@ -132,8 +137,8 @@ contains
           y = xloc(2)
           z = xloc(3)
 
-          u_init%data(i, j, k) = sin(x)*cos(y)*cos(z)
-          v_init%data(i, j, k) = -cos(x)*sin(y)*cos(z)
+          u_init%data(i, j, k) = 10._dp!sin(x)*cos(y)*cos(z)
+          v_init%data(i, j, k) = 0._dp!-cos(x)*sin(y)*cos(z)
           w_init%data(i, j, k) = 0
         end do
       end do
@@ -162,6 +167,19 @@ contains
         print *, 'Poisson solver: CG, not yet implemented'
       solver%poisson => poisson_cg
     end select
+
+    solver%wind_turbine = .true.
+    if (solver%wind_turbine) then
+      allocate (disc_params(2, 8))
+      ! coords x, y, z, yaw, tilt, D, C_T, alpha
+      disc_params(1, :) = [500._dp, 500._dp, 500._dp, 0._dp, 0._dp, &
+                           100._dp, 0.75_dp, 0.25_dp]
+      disc_params(2, :) = [1500._dp, 500._dp, 500._dp, 0._dp, 0._dp, &
+                           100._dp, 0.75_dp, 0.25_dp]
+      ! instantiate the actuator disc class
+      solver%windturb_adm = windturb_adm_t(backend, mesh, host_allocator, &
+                                           disc_params)
+    end if
 
   end function init
 
@@ -542,6 +560,32 @@ contains
 
   end subroutine curl
 
+  subroutine compute_turbines(self, du, dv, dw, u, v, w)
+    implicit none
+
+    class(solver_t) :: self
+    class(field_t), intent(inout) :: du, dv, dw
+    class(field_t), intent(in) :: u, v, w
+
+    class(field_t), pointer :: Fx, Fy, Fz
+
+    Fx => self%backend%allocator%get_block(DIR_X)
+    Fy => self%backend%allocator%get_block(DIR_X)
+    Fz => self%backend%allocator%get_block(DIR_X)
+
+    call self%windturb_adm%compute_sources(Fx, Fy, Fz, u, v, w)
+
+    ! add resulting forces into the rhs of the momentum equation
+    !call self%backend%vecadd(self%windturb_adm%rho_air, Fx, 1._dp, du)
+    !call self%backend%vecadd(self%windturb_adm%rho_air, Fy, 1._dp, dv)
+    !call self%backend%vecadd(self%windturb_adm%rho_air, Fz, 1._dp, dw)
+
+    call self%backend%allocator%release_block(Fx)
+    call self%backend%allocator%release_block(Fy)
+    call self%backend%allocator%release_block(Fz)
+
+  end subroutine compute_turbines
+
   subroutine poisson_fft(self, pressure, div_u)
     implicit none
 
@@ -656,6 +700,11 @@ contains
 
         call self%transeq(du, dv, dw, self%u, self%v, self%w)
 
+        ! calculate the source terms from turbines and add into du, dv, dw
+        if (self%wind_turbine) then
+          call self%compute_turbines(du, dv, dw, self%u, self%v, self%w)
+        end if
+
         ! time integration
         call self%time_integrator%step(self%u, self%v, self%w, &
                                        du, dv, dw, self%dt)
@@ -696,6 +745,9 @@ contains
       if (mod(i, self%n_output) == 0) then
         t = i*self%dt
         call self%output(t)
+        if (self%mesh%par%is_root()) then
+          print *, 'power', self%windturb_adm%disc(:)%power
+        end if
       end if
     end do
 
