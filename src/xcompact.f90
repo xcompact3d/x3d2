@@ -59,19 +59,13 @@ program xcompact
   ierr = cudaGetDevice(devnum)
 #endif
 
-  ! set defaults
-  dims_global = [256, 256, 256]
-  L_global = [2*pi, 2*pi, 2*pi]
-  nproc_dir = [1, 1, nproc]
-  BC_x = [character(len=20) :: 'periodic', 'periodic']
-  BC_y = [character(len=20) :: 'periodic', 'periodic']
-  BC_z = [character(len=20) :: 'periodic', 'periodic']
-
   if (command_argument_count() >= 1) then
     call get_command_argument(1, input_file)
     open (100, file=input_file)
     read (100, nml=domain_params)
     close (100)
+  else
+    error stop 'Input file is not provided.'
   end if
 
   if (product(nproc_dir) /= nproc) then

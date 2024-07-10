@@ -120,7 +120,6 @@ contains
     solver%w => solver%backend%allocator%get_block(DIR_X, VERT)
 
     ! set defaults
-    Re = 1600._dp; dt = 0.001_dp; n_iters = 20000; n_output = 100
     poisson_solver_type = 'FFT'
     time_intg = 'AB3'
     der1st_scheme = 'compact6'; der2nd_scheme = 'compact6'
@@ -131,6 +130,8 @@ contains
       open (100, file=input_file)
       read (100, nml=solver_params)
       close (100)
+    else
+      error stop 'Input file is not provided.'
     end if
 
     solver%time_integrator = time_intg_t(solver%backend, &
