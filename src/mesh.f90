@@ -118,6 +118,11 @@ contains
     end do
 
     do dir = 1, 3
+      if (any(mesh%BCs_global(dir, :) == BC_PERIODIC) .and. &
+          (.not. all(mesh%BCs_global(dir, :) == BC_PERIODIC))) then
+        error stop 'BCs are incompatible: in a direction make sure to have &
+                    &either both sides periodic or none.'
+      end if
       mesh%periodic_BC(dir) = all(mesh%BCs_global(dir, :) == BC_PERIODIC)
     end do
 
