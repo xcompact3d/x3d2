@@ -96,7 +96,11 @@ contains
     real(dp) :: Re, dt
     integer :: n_iters, n_output
     character(3) :: poisson_solver_type
-    namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type
+    character(30) :: der1st_scheme, der2nd_scheme, &
+                     interpl_scheme, stagder_scheme
+    namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
+                             der1st_scheme, der2nd_scheme, &
+                             interpl_scheme, stagder_scheme
 
     real(dp) :: x, y, z
     integer :: i, j, k
@@ -120,6 +124,8 @@ contains
     ! set defaults
     Re = 1600._dp; dt = 0.001_dp; n_iters = 20000; n_output = 100
     poisson_solver_type = 'FFT'
+    der1st_scheme = 'compact6'; der2nd_scheme = 'compact6'
+    interpl_scheme = 'classic'; stagder_scheme = 'compact6'
 
     if (command_argument_count() >= 1) then
       call get_command_argument(1, input_file)
@@ -163,9 +169,15 @@ contains
     call solver%host_allocator%release_block(w_init)
 
     ! Allocate and set the tdsops
-    call allocate_tdsops(solver%xdirps, DIR_X, solver%backend)
-    call allocate_tdsops(solver%ydirps, DIR_Y, solver%backend)
-    call allocate_tdsops(solver%zdirps, DIR_Z, solver%backend)
+    call allocate_tdsops(solver%xdirps, solver%backend, &
+                         der1st_scheme, der2nd_scheme, &
+                         interpl_scheme, stagder_scheme)
+    call allocate_tdsops(solver%ydirps, solver%backend, &
+                         der1st_scheme, der2nd_scheme, &
+                         interpl_scheme, stagder_scheme)
+    call allocate_tdsops(solver%zdirps, solver%backend, &
+                         der1st_scheme, der2nd_scheme, &
+                         interpl_scheme, stagder_scheme)
 
     select case (trim(poisson_solver_type))
     case ('FFT')
@@ -183,27 +195,29 @@ contains
 
   end function init
 
-  subroutine allocate_tdsops(dirps, dir, backend)
+  subroutine allocate_tdsops(dirps, backend, der1st_scheme, der2nd_scheme, &
+                             interpl_scheme, stagder_scheme)
     type(dirps_t), intent(inout) :: dirps
-    integer, intent(in) :: dir
     class(base_backend_t), intent(in) :: backend
+    character(*), intent(in) :: der1st_scheme, der2nd_scheme, &
+                                 interpl_scheme, stagder_scheme
 
-    call backend%alloc_tdsops(dirps%der1st, dir, &
-                              'first-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%der1st_sym, dir, &
-                              'first-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%der2nd, dir, &
-                              'second-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%der2nd_sym, dir, &
-                              'second-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%interpl_v2p, dir, &
-                              'interpolate', 'classic', from_to='v2p')
-    call backend%alloc_tdsops(dirps%interpl_p2v, dir, &
-                              'interpolate', 'classic', from_to='p2v')
-    call backend%alloc_tdsops(dirps%stagder_v2p, dir, &
-                              'stag-deriv', 'compact6', from_to='v2p')
-    call backend%alloc_tdsops(dirps%stagder_p2v, dir, &
-                              'stag-deriv', 'compact6', from_to='p2v')
+    call backend%alloc_tdsops(dirps%der1st, dirps%dir, &
+                              'first-deriv', der1st_scheme)
+    call backend%alloc_tdsops(dirps%der1st_sym, dirps%dir, &
+                              'first-deriv', der1st_scheme)
+    call backend%alloc_tdsops(dirps%der2nd, dirps%dir, &
+                              'second-deriv', der2nd_scheme)
+    call backend%alloc_tdsops(dirps%der2nd_sym, dirps%dir, &
+                              'second-deriv', der2nd_scheme)
+    call backend%alloc_tdsops(dirps%interpl_v2p, dirps%dir, &
+                              'interpolate', interpl_scheme, from_to='v2p')
+    call backend%alloc_tdsops(dirps%interpl_p2v, dirps%dir, &
+                              'interpolate', interpl_scheme, from_to='p2v')
+    call backend%alloc_tdsops(dirps%stagder_v2p, dirps%dir, &
+                              'stag-deriv', stagder_scheme, from_to='v2p')
+    call backend%alloc_tdsops(dirps%stagder_p2v, dirps%dir, &
+                              'stag-deriv', stagder_scheme, from_to='p2v')
 
   end subroutine
 

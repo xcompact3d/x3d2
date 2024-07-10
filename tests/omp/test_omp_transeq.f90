@@ -93,7 +93,8 @@ program test_omp_transeq
   end do
   w%data(:, :, :) = 0.d0
 
-  call allocate_tdsops(xdirps, DIR_X, omp_backend)
+  call allocate_tdsops(xdirps, omp_backend, 'compact6', 'compact6', &
+                       'classic', 'compact6')
 
   call cpu_time(tstart)
   call transeq_x_omp(omp_backend, du, dv, dw, u, v, w, xdirps)
