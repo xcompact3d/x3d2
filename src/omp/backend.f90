@@ -452,7 +452,7 @@ contains
 
     use mpi
 
-    use m_common, only: NONE, get_rdr_from_dirs
+    use m_common, only: none, get_rdr_from_dirs
 
     implicit none
 
@@ -464,8 +464,8 @@ contains
     integer :: nvec, remstart
     integer :: ierr
 
-    if ((x%data_loc == NONE) .or. (y%data_loc == NONE)) then
-      error stop "You must set the field location before calling scalar product"
+    if ((x%data_loc == none) .or. (y%data_loc == none)) then
+      error stop "You must set the data_loc before calling scalar product"
     end if
     if (x%data_loc /= y%data_loc) then
       error stop "Called scalar product with incompatible fields"

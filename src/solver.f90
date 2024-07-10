@@ -98,8 +98,8 @@ contains
     character(30) :: der1st_scheme, der2nd_scheme, &
                      interpl_scheme, stagder_scheme
     namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
-                             time_intg, der1st_scheme, der2nd_scheme, &
-                             interpl_scheme, stagder_scheme
+      time_intg, der1st_scheme, der2nd_scheme, &
+      interpl_scheme, stagder_scheme
 
     real(dp) :: x, y, z
     integer :: i, j, k
@@ -207,7 +207,7 @@ contains
     type(dirps_t), intent(inout) :: dirps
     class(base_backend_t), intent(in) :: backend
     character(*), intent(in) :: der1st_scheme, der2nd_scheme, &
-                                 interpl_scheme, stagder_scheme
+                                interpl_scheme, stagder_scheme
 
     call backend%alloc_tdsops(dirps%der1st, dirps%dir, &
                               'first-deriv', der1st_scheme)
