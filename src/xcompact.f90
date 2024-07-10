@@ -26,7 +26,7 @@ program xcompact
   type(globs_t) :: globs
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
-  class(mesh_t), allocatable :: mesh
+  type(mesh_t) :: mesh
   type(allocator_t), pointer :: host_allocator
   type(solver_t) :: solver
   type(time_intg_t) :: time_integrator

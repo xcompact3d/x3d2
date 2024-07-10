@@ -2,7 +2,7 @@ module m_omp_backend
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_ordering, only: get_index_reordering
-  use m_common, only: dp, globs_t, VERT, DIR_X, DIR_Y, DIR_Z, DIR_C, &
+  use m_common, only: dp, globs_t, get_dirs_from_rdr, VERT, DIR_X, DIR_Y, DIR_Z, DIR_C, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
   use m_tdsops, only: dirps_t, tdsops_t, get_tds_n
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
@@ -307,7 +307,6 @@ contains
     call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
                            tdsops%tds_n, n_groups)
 
-    print *, self%mesh%par%nrank, n_groups
     ! halo exchange
     call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
                          self%u_send_s, self%u_send_e, &
@@ -335,15 +334,17 @@ contains
     integer, dimension(3) :: dims
     integer :: i, j, k
     integer :: out_i, out_j, out_k
+    integer :: dir_from, dir_to
 
     dims = self%mesh%get_padded_dims(u)
+    call get_dirs_from_rdr(dir_from, dir_to, direction)
 
     !$omp parallel do private(out_i, out_j, out_k) collapse(2)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
           call get_index_reordering( &
-            out_i, out_j, out_k, i, j, k, direction, self%mesh)
+            out_i, out_j, out_k, i, j, k, dir_from, dir_to, self%mesh)
           u_%data(out_i, out_j, out_k) = u%data(i, j, k)
         end do
       end do
@@ -359,6 +360,8 @@ contains
     class(field_t), intent(inout) :: u
     class(field_t), intent(in) :: u_
 
+    call sum_intox_omp(self, u, u_, DIR_Y)
+
   end subroutine sum_yintox_omp
 
   subroutine sum_zintox_omp(self, u, u_)
@@ -368,7 +371,38 @@ contains
     class(field_t), intent(inout) :: u
     class(field_t), intent(in) :: u_
 
+    call sum_intox_omp(self, u, u_, DIR_Z)
+
   end subroutine sum_zintox_omp
+
+  subroutine sum_intox_omp(self, u, u_, dir_to)
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: u
+    class(field_t), intent(in) :: u_
+    integer, intent(in) :: dir_to
+
+    integer :: dir_from
+    integer, dimension(3) :: dims
+    integer :: i, j, k    ! Working indices
+    integer :: ii, jj, kk ! Transpose indices
+
+    dir_from = DIR_X
+
+    dims = self%mesh%get_padded_dims(u)
+    !$omp parallel do private(i, ii, jj, kk) collapse(2)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          call get_index_reordering(ii, jj, kk, i, j, k, &
+                                    dir_from, dir_to, self%mesh)
+          u%data(i, j, k) = u%data(i, j, k) + u_%data(ii, jj, kk)
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+  end subroutine sum_intox_omp
 
   subroutine vecadd_omp(self, a, x, b, y)
     implicit none
@@ -378,18 +412,107 @@ contains
     class(field_t), intent(in) :: x
     real(dp), intent(in) :: b
     class(field_t), intent(inout) :: y
+    integer, dimension(3) :: dims
+    integer :: i, j, k, ii
 
-    y%data = a*x%data + b*y%data ! fixme
+    integer :: nvec, remstart
+
+    if (x%dir /= y%dir) then
+      error stop "Called vector add with incompatible fields"
+    end if
+
+    dims = size(x%data)
+    nvec = dims(1)/SZ
+    remstart = nvec*SZ + 1
+
+    !$omp parallel do private(i, ii) collapse(2)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        ! Execute inner vectorised loops
+        do ii = 1, nvec
+          !$omp simd
+          do i = 1, SZ
+            y%data(i + (ii - 1)*SZ, j, k) = &
+              a*x%data(i + (ii - 1)*SZ, j, k) + &
+              b*y%data(i + (ii - 1)*SZ, j, k)
+          end do
+          !$omp end simd
+        end do
+
+        ! Remainder loop
+        do i = remstart, dims(1)
+          y%data(i, j, k) = a*x%data(i, j, k) + b*y%data(i, j, k)
+        end do
+      end do
+    end do
+    !$omp end parallel do
 
   end subroutine vecadd_omp
 
   real(dp) function scalar_product_omp(self, x, y) result(s)
+
+    use mpi
+
+    use m_common, only: NONE, get_rdr_from_dirs
+
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(in) :: x, y
+    class(field_t), pointer :: x_, y_
+    integer, dimension(3) :: dims
+    integer :: i, j, k, ii
+    integer :: nvec, remstart
+    integer :: ierr
 
-    s = 0._dp
+    if ((x%data_loc == NONE) .or. (y%data_loc == NONE)) then
+      error stop "You must set the field location before calling scalar product"
+    end if
+    if (x%data_loc /= y%data_loc) then
+      error stop "Called scalar product with incompatible fields"
+    end if
+
+    ! Reorient data into temporary DIR_C storage
+    x_ => self%allocator%get_block(DIR_C, x%data_loc)
+    call self%get_field_data(x_%data, x)
+    y_ => self%allocator%get_block(DIR_C, y%data_loc)
+    call self%get_field_data(y_%data, y)
+
+    dims = self%mesh%get_field_dims(x_)
+
+    nvec = dims(1)/SZ
+    remstart = nvec*SZ + 1
+
+    s = 0.0_dp
+    !$omp parallel do reduction(+:s) private(i, ii) collapse(2)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        ! Execute inner vectorised loops
+        do ii = 1, nvec
+          !$omp simd reduction(+:s)
+          do i = 1, SZ
+            s = s + x_%data(i + (ii - 1)*SZ, j, k)* &
+                y_%data(i + (ii - 1)*SZ, j, k)
+          end do
+          !$omp end simd
+        end do
+
+        ! Remainder loop
+        do i = remstart, dims(1)
+          s = s + x_%data(i, j, k)*y_%data(i, j, k)
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+    ! Release temporary storage
+    call self%allocator%release_block(x_)
+    call self%allocator%release_block(y_)
+
+    ! Reduce the result
+    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, &
+                       MPI_SUM, MPI_COMM_WORLD, &
+                       ierr)
 
   end function scalar_product_omp
 

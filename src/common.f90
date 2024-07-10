@@ -20,10 +20,10 @@ module m_common
                         Z_EDGE = 103, & ! Data on edges along Z
                         none = -1 ! The location of data isn't specified
   integer, protected :: &
-    rdr_map(4, 4) = reshape([0, RDR_X2Y, RDR_X2Z, RDR_X2C, &
-                             RDR_Y2X, 0, RDR_Y2Z, RDR_Y2C, &
-                             RDR_Z2X, RDR_Z2Y, 0, RDR_Z2C, &
-                             RDR_C2X, RDR_C2Y, RDR_C2Z, 0], shape=[4, 4])
+    rdr_map(4, 4) = reshape([0, RDR_Y2X, RDR_Z2X, RDR_C2X, &
+                             RDR_X2Y, 0, RDR_Z2Y, RDR_C2Y, &
+                             RDR_X2Z, RDR_Y2Z, 0, RDR_C2Z, &
+                             RDR_X2C, RDR_Y2C, RDR_Z2C, 0], shape=[4, 4])
 
   type :: globs_t
     real(dp) :: nu, dt
@@ -34,7 +34,18 @@ module m_common
 
 contains
 
-  integer function get_rdr_from_dirs(dir_from, dir_to) result(rdr_dir)
+  pure subroutine get_dirs_from_rdr(dir_from, dir_to, rdr_dir)
+    integer, intent(out) :: dir_from, dir_to
+    integer, intent(in) :: rdr_dir
+    integer, dimension(2) :: dirs
+
+    dirs = findloc(rdr_map, rdr_dir)
+    dir_from = dirs(1)
+    dir_to = dirs(2)
+
+  end subroutine
+
+  pure integer function get_rdr_from_dirs(dir_from, dir_to) result(rdr_dir)
       !! Returns RDR_?2? value based on two direction inputs
     integer, intent(in) :: dir_from, dir_to
 
