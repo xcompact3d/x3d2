@@ -5,7 +5,6 @@ program xcompact
   use m_base_backend
   use m_common, only: pi
   use m_solver, only: solver_t
-  use m_time_integrator, only: time_intg_t
   use m_tdsops, only: tdsops_t
   use m_mesh
 
@@ -26,7 +25,6 @@ program xcompact
   type(mesh_t) :: mesh
   type(allocator_t), pointer :: host_allocator
   type(solver_t) :: solver
-  type(time_intg_t) :: time_integrator
 
 #ifdef CUDA
   type(cuda_backend_t), target :: cuda_backend
@@ -41,7 +39,6 @@ program xcompact
   real(dp) :: t_start, t_end
 
   character(len=200) :: input_file
-  character(len=3) :: method
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
   integer, dimension(3) :: dims_global
   integer, dimension(3) :: nproc_dir = 0
@@ -49,7 +46,6 @@ program xcompact
   integer :: nrank, nproc, ierr
 
   namelist /domain_params/ L_global, dims_global, nproc_dir, BC_x, BC_y, BC_z
-  namelist /time_intg_params/ method
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
@@ -70,13 +66,11 @@ program xcompact
   BC_x = [character(len=20) :: 'periodic', 'periodic']
   BC_y = [character(len=20) :: 'periodic', 'periodic']
   BC_z = [character(len=20) :: 'periodic', 'periodic']
-  method = 'AB3'
 
   if (command_argument_count() >= 1) then
     call get_command_argument(1, input_file)
     open (100, file=input_file)
     read (100, nml=domain_params)
-    read (100, nml=time_intg_params)
     close (100)
   end if
 
@@ -111,10 +105,7 @@ program xcompact
   if (nrank == 0) print *, 'OpenMP backend instantiated'
 #endif
 
-  time_integrator = time_intg_t(allocator=allocator, backend=backend, &
-                                method=method)
-  if (nrank == 0) print *, time_integrator%sname//' time intg instantiated'
-  solver = solver_t(backend, mesh, time_integrator, host_allocator)
+  solver = solver_t(backend, mesh, host_allocator)
   if (nrank == 0) print *, 'solver instantiated'
 
   call cpu_time(t_start)

@@ -50,7 +50,7 @@ module m_solver
 
     class(base_backend_t), pointer :: backend
     class(mesh_t), pointer :: mesh
-    class(time_intg_t), pointer :: time_integrator
+    type(time_intg_t) :: time_integrator
     type(allocator_t), pointer :: host_allocator
     type(dirps_t), pointer :: xdirps, ydirps, zdirps
     procedure(poisson_solver), pointer :: poisson => null()
@@ -81,12 +81,11 @@ module m_solver
 
 contains
 
-  function init(backend, mesh, time_integrator, host_allocator) result(solver)
+  function init(backend, mesh, host_allocator) result(solver)
     implicit none
 
     class(base_backend_t), target, intent(inout) :: backend
     type(mesh_t), target, intent(inout) :: mesh
-    class(time_intg_t), target, intent(inout) :: time_integrator
     type(allocator_t), target, intent(inout) :: host_allocator
     type(solver_t) :: solver
 
@@ -95,11 +94,11 @@ contains
     character(len=200) :: input_file
     real(dp) :: Re, dt
     integer :: n_iters, n_output
-    character(3) :: poisson_solver_type
+    character(3) :: poisson_solver_type, time_intg
     character(30) :: der1st_scheme, der2nd_scheme, &
                      interpl_scheme, stagder_scheme
     namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
-                             der1st_scheme, der2nd_scheme, &
+                             time_intg, der1st_scheme, der2nd_scheme, &
                              interpl_scheme, stagder_scheme
 
     real(dp) :: x, y, z
@@ -109,7 +108,6 @@ contains
 
     solver%backend => backend
     solver%mesh => mesh
-    solver%time_integrator => time_integrator
     solver%host_allocator => host_allocator
 
     allocate (solver%xdirps, solver%ydirps, solver%zdirps)
@@ -124,6 +122,7 @@ contains
     ! set defaults
     Re = 1600._dp; dt = 0.001_dp; n_iters = 20000; n_output = 100
     poisson_solver_type = 'FFT'
+    time_intg = 'AB3'
     der1st_scheme = 'compact6'; der2nd_scheme = 'compact6'
     interpl_scheme = 'classic'; stagder_scheme = 'compact6'
 
@@ -132,6 +131,13 @@ contains
       open (100, file=input_file)
       read (100, nml=solver_params)
       close (100)
+    end if
+
+    solver%time_integrator = time_intg_t(solver%backend, &
+                                         solver%backend%allocator, &
+                                         time_intg)
+    if (solver%mesh%par%is_root()) then
+      print *, time_intg//' time integrator instantiated'
     end if
 
     solver%dt = dt
@@ -666,7 +672,7 @@ contains
   subroutine run(self)
     implicit none
 
-    class(solver_t), intent(in) :: self
+    class(solver_t), intent(inout) :: self
 
     class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
     class(field_t), pointer :: u_out, v_out, w_out
