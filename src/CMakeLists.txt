@@ -10,6 +10,7 @@ set(SRC
   mesh.f90
   field.f90
   omp/backend.f90
+  omp/mesh.f90
   omp/common.f90
   omp/kernels/distributed.f90
   omp/poisson_fft.f90
