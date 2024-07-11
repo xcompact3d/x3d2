@@ -27,7 +27,6 @@ module m_base_backend
     real(dp) :: nu
     class(mesh_t), pointer :: mesh
     class(allocator_t), pointer :: allocator
-    class(dirps_t), pointer :: xdirps, ydirps, zdirps
     class(poisson_fft_t), pointer :: poisson_fft
   contains
     procedure(transeq_ders), deferred :: transeq_x

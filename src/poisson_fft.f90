@@ -64,7 +64,7 @@ contains
 
     class(poisson_fft_t) :: self
     class(mesh_t), intent(in) :: mesh
-    class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
     integer :: dims(3)
 

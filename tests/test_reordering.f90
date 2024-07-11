@@ -6,7 +6,7 @@ program test_reorder
   use m_base_backend, only: base_backend_t
   use m_tdsops, only: dirps_t
 
-  use m_common, only: dp, pi, globs_t, &
+  use m_common, only: dp, pi, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
 
@@ -39,13 +39,13 @@ program test_reorder
 
   real(dp) :: dx, dx_per
 
-  type(globs_t) :: globs
   class(base_backend_t), pointer :: backend
   class(mesh_t), allocatable :: mesh
   class(allocator_t), pointer :: allocator
   type(dirps_t), target :: xdirps, ydirps, zdirps
   integer, dimension(3) :: dims_padded, dims_global, nproc_dir
   real(dp), dimension(3) :: L_global
+  character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
   logical :: pass_X, pass_Y, pass_Z
 
 #ifdef CUDA
@@ -77,7 +77,11 @@ program test_reorder
   ! Domain decomposition in each direction
   nproc_dir = [nproc, 1, 1]
 
-  mesh = mesh_t(dims_global, nproc_dir, L_global)
+  BC_x = ['periodic', 'periodic']
+  BC_y = ['periodic', 'periodic']
+  BC_z = ['periodic', 'periodic']
+
+  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(mesh, SZ)
@@ -96,10 +100,6 @@ program test_reorder
   backend => omp_backend
   print *, 'OpenMP backend instantiated'
 #endif
-
-  backend%xdirps => xdirps
-  backend%ydirps => ydirps
-  backend%zdirps => zdirps
 
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
   pass_X = .true.
