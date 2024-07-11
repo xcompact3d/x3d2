@@ -10,6 +10,7 @@ set(SRC
   mesh.f90
   field.f90
   omp/backend.f90
+  omp/mesh.f90
   omp/common.f90
   omp/kernels/distributed.f90
   omp/poisson_fft.f90
@@ -51,6 +52,9 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
 
   target_compile_options(xcompact PRIVATE "-DCUDA")
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
+  find_package(decomp2d REQUIRED)
+  include_directories(${decomp2d_INCLUDE_DIRS})
+  target_link_libraries(decomp2d)
   set(CMAKE_Fortran_FLAGS "-cpp -std=f2018")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math")

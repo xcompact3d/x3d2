@@ -35,6 +35,8 @@ contains
 
     call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps)
 
+    call decomp_2d_fft_init(PHYSICAL_IN_X)
+
   end function init
 
   subroutine fft_forward_omp(self, f_in)
@@ -42,6 +44,9 @@ contains
 
     class(omp_poisson_fft_t) :: self
     class(field_t), intent(in) :: f_in
+
+    call decomp_2d_fft_3d(f_in%data, self%waves)
+
   end subroutine fft_forward_omp
 
   subroutine fft_backward_omp(self, f_out)
@@ -49,12 +54,17 @@ contains
 
     class(omp_poisson_fft_t) :: self
     class(field_t), intent(inout) :: f_out
+
+    call decomp_2d_fft_3d(self%waves, f_out%data)
+
   end subroutine fft_backward_omp
 
   subroutine fft_postprocess_omp(self)
     implicit none
 
     class(omp_poisson_fft_t) :: self
+    !TODO
+
   end subroutine fft_postprocess_omp
 
 end module m_omp_poisson_fft

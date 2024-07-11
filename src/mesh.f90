@@ -45,6 +45,7 @@ module m_mesh
     type(geo_t), allocatable :: geo ! object containing geometry information
     type(parallel_t), allocatable :: par ! object containing parallel domain decomposition information
   contains
+    procedure :: domain_decomposition => domain_decomposition_generic
     procedure :: get_SZ
 
     procedure :: get_dims
@@ -147,7 +148,7 @@ contains
     mesh%par%nproc = product(nproc_dir(:))
     call MPI_Comm_rank(MPI_COMM_WORLD, mesh%par%nrank, ierr)
     call MPI_Comm_size(MPI_COMM_WORLD, mesh%par%nproc, ierr)
-    call domain_decomposition(mesh)
+    call mesh%domain_decomposition()
 
     ! Set subdomain BCs
     do dir = 1, 3
@@ -202,7 +203,7 @@ contains
 
   end subroutine
 
-  subroutine domain_decomposition(mesh)
+  subroutine domain_decomposition_generic(mesh)
     !! Supports 1D, 2D, and 3D domain decomposition.
     !!
     !! Current implementation allows only constant sub-domain size across a
@@ -247,7 +248,7 @@ contains
                                          subd_pos_next(3))
     end do
 
-  end subroutine domain_decomposition
+  end subroutine domain_decomposition_generic
 
   pure function get_sz(self) result(sz)
   !! Getter for parameter SZ
