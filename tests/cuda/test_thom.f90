@@ -4,7 +4,7 @@ program test_thom
 
   use m_common, only: dp, pi
   use m_cuda_common, only: SZ
-  use m_cuda_exec_thom, only: exec_thom_tds_compact, exec_thom_per_tds_compact
+  use m_cuda_exec_thom, only: exec_thom_tds_compact
   use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
 
   implicit none
@@ -56,7 +56,7 @@ program test_thom
 
   call cpu_time(tstart)
   do i = 1, n_iters
-    call exec_thom_per_tds_compact(du_dev, u_dev, tdsops, blocks, threads)
+    call exec_thom_tds_compact(du_dev, u_dev, tdsops, blocks, threads)
   end do
   call cpu_time(tend)
   if (nrank == 0) print *, 'Total time', tend - tstart
