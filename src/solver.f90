@@ -86,7 +86,7 @@ contains
     implicit none
 
     class(base_backend_t), target, intent(inout) :: backend
-    type(mesh_t), target, intent(inout) :: mesh
+    class(mesh_t), target, intent(inout) :: mesh
     class(time_intg_t), target, intent(inout) :: time_integrator
     type(allocator_t), target, intent(inout) :: host_allocator
     class(dirps_t), target, intent(inout) :: xdirps, ydirps, zdirps

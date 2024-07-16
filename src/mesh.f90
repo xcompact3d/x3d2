@@ -31,13 +31,13 @@ module m_mesh
   ! The mesh class stores all the information about the global and local (due to domain decomposition) mesh
   ! It also includes getter functions to access some of its parameters
   type :: mesh_t
-    integer, dimension(3), private :: global_vert_dims ! global number of vertices in each direction without padding (cartesian structure)
-    integer, dimension(3), private :: global_cell_dims ! global number of cells in each direction without padding (cartesian structure)
+    integer, dimension(3) :: global_vert_dims ! global number of vertices in each direction without padding (cartesian structure)
+    integer, dimension(3) :: global_cell_dims ! global number of cells in each direction without padding (cartesian structure)
 
-    integer, dimension(3), private :: vert_dims_padded ! local domain size including padding (cartesian structure)
-    integer, dimension(3), private :: vert_dims ! local number of vertices in each direction without padding (cartesian structure)
-    integer, dimension(3), private :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
-    logical, dimension(3), private :: periodic_BC ! Whether or not a direction has a periodic BC
+    integer, dimension(3) :: vert_dims_padded ! local domain size including padding (cartesian structure)
+    integer, dimension(3) :: vert_dims ! local number of vertices in each direction without padding (cartesian structure)
+    integer, dimension(3) :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
+    logical, dimension(3) :: periodic_BC ! Whether or not a direction has a periodic BC
     integer, private :: sz
     type(geo_t), allocatable :: geo ! object containing geometry information
     type(parallel_t), allocatable :: par ! object containing parallel domain decomposition information
@@ -87,7 +87,7 @@ contains
     integer, dimension(3), intent(in) :: nproc_dir ! Number of proc in each direction
     real(dp), dimension(3), intent(in) :: L_global
     logical, dimension(3), optional, intent(in) :: periodic_BC
-    type(mesh_t) :: mesh
+    class(mesh_t), allocatable :: mesh
 
     integer :: dir
     integer :: ierr
@@ -162,6 +162,9 @@ contains
     nproc_y = mesh%par%nproc_dir(2)
     nproc_z = mesh%par%nproc_dir(3)
 
+    ! Define number of cells and vertices in each direction
+    mesh%vert_dims = mesh%global_vert_dims/mesh%par%nproc_dir
+
     ! A 3D array corresponding to each region in the global domain
     allocate (global_ranks(nproc_x, nproc_y, nproc_z))
 
@@ -174,9 +177,6 @@ contains
 
     ! local/directional position of the subdomain
     mesh%par%nrank_dir(:) = subd_pos(:) - 1
-
-    ! Define number of cells and vertices in each direction
-    mesh%vert_dims = mesh%global_vert_dims/mesh%par%nproc_dir
 
     do dir = 1, 3
       is_last_domain = (mesh%par%nrank_dir(dir) + 1 == mesh%par%nproc_dir(dir))

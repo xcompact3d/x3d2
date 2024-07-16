@@ -19,6 +19,7 @@ program xcompact
 #else
   use m_omp_backend
   use m_omp_common, only: SZ
+  use m_omp_mesh
 #endif
 
   implicit none
@@ -26,7 +27,6 @@ program xcompact
   type(globs_t) :: globs
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
-  type(mesh_t) :: mesh
   type(allocator_t), pointer :: host_allocator
   type(solver_t) :: solver
   type(time_intg_t) :: time_integrator
@@ -35,9 +35,11 @@ program xcompact
 #ifdef CUDA
   type(cuda_backend_t), target :: cuda_backend
   type(cuda_allocator_t), target :: cuda_allocator
+  type(mesh_t), target :: mesh
   integer :: ndevs, devnum
 #else
   type(omp_backend_t), target :: omp_backend
+  type(omp_mesh_t), target :: mesh
 #endif
 
   type(allocator_t), target :: omp_allocator
@@ -69,7 +71,11 @@ program xcompact
   ! Domain decomposition in each direction
   nproc_dir = [1, 1, nproc]
 
+#ifdef CUDA
   mesh = mesh_t(dims_global, nproc_dir, L_global)
+#else
+  mesh = omp_mesh_t(dims_global, nproc_dir, L_global)
+#endif
 
   globs%dt = 0.001_dp
   globs%nu = 1._dp/1600._dp

@@ -1,4 +1,7 @@
 module m_omp_poisson_fft
+
+  use decomp_2d_constants, only: PHYSICAL_IN_X
+  use decomp_2d_fft, only: decomp_2d_fft_init, decomp_2d_fft_3d
   use m_allocator, only: field_t
   use m_common, only: dp
   use m_poisson_fft, only: poisson_fft_t
