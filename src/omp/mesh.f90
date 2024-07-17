@@ -29,10 +29,13 @@ module m_omp_mesh
     real(dp), dimension(3), intent(in) :: L_global
     logical, dimension(3), optional, intent(in) :: periodic_BC
 
-    type(omp_mesh_t) :: mesh
+    type(omp_mesh_t), allocatable :: mesh
+    allocate(omp_mesh_t :: mesh) 
 
     mesh%mesh_t = mesh_t(dims_global, nproc_dir, L_global, &
                      periodic_BC)
+
+    call domain_decomposition_2decompfft(mesh)
 
   end function
 
@@ -56,17 +59,18 @@ module m_omp_mesh
     integer :: cart_rank
     integer, dimension(2) :: coords
 
-    nx = mesh%global_vert_dims(1)
-    ny = mesh%global_vert_dims(2)
-    nz = mesh%global_vert_dims(3)
+    if (mesh%par%is_root()) then
+      print*, "Domain decomposition by 2decomp&fft"
+    end if
+
+    nx = mesh%global_cell_dims(1)
+    ny = mesh%global_cell_dims(2)
+    nz = mesh%global_cell_dims(3)
 
     p_row = mesh%par%nproc_dir(2)
     p_col = mesh%par%nproc_dir(3)
     periodic_bc(:) = mesh%periodic_BC(:)
     call decomp_2d_init(nx, ny, nz, p_row, p_col, periodic_bc)
-
-    mesh%vert_dims(:) = xsize(:)
-    mesh%par%n_offset(:) = xstart(:)
 
     ! Get global_ranks
     allocate(global_ranks(1, p_row, p_col))
@@ -76,30 +80,33 @@ module m_omp_mesh
     call MPI_Comm_rank(DECOMP_2D_COMM_CART_X, cart_rank, ierr)
     call MPI_Cart_coords(DECOMP_2D_COMM_CART_X, cart_rank, 2, coords, ierr)
 
-    global_ranks_lin(coords(1) + p_row*(coords(2)-1)) = mesh%par%nrank
+    global_ranks_lin(coords(1)+1 + p_row*(coords(2))) = mesh%par%nrank
 
     call MPI_Allreduce(MPI_IN_PLACE, global_ranks_lin, p_row*p_col, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
 
     global_ranks = reshape(global_ranks_lin, shape=[1, p_row, p_col])
 
-    ! TODO: refactirise
     ! subdomain position in the global domain
     subd_pos = findloc(global_ranks, mesh%par%nrank)
 
     ! local/directional position of the subdomain
     mesh%par%nrank_dir(:) = subd_pos(:) - 1
 
+    ! Get local domain size and offset from 2decomp
+    mesh%cell_dims(:) = xsize(:)
+    mesh%par%n_offset(:) = xstart(:)
+
+    ! compute vert_dims from cell_dims
     do dir = 1, 3
       is_last_domain = (mesh%par%nrank_dir(dir) + 1 == mesh%par%nproc_dir(dir))
       if (is_last_domain .and. (.not. mesh%periodic_BC(dir))) then
-        mesh%cell_dims(dir) = mesh%vert_dims(dir) - 1
+        mesh%vert_dims(dir) = mesh%cell_dims(dir) +1
       else
-        mesh%cell_dims(dir) = mesh%vert_dims(dir)
+        mesh%vert_dims(dir) = mesh%cell_dims(dir)
       end if
     end do
 
-    mesh%par%n_offset(:) = mesh%vert_dims(:)*mesh%par%nrank_dir(:)
-
+    ! Get neighbour ranks
     do dir = 1, 3
       nproc = mesh%par%nproc_dir(dir)
       subd_pos_prev(:) = subd_pos(:)
@@ -114,7 +121,6 @@ module m_omp_mesh
                                          subd_pos_next(2), &
                                          subd_pos_next(3))
     end do
-
 
   end subroutine domain_decomposition_2decompfft
 

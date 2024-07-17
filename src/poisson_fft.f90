@@ -89,7 +89,7 @@ contains
     allocate (self%ay(self%ny_glob), self%by(self%ny_glob))
     allocate (self%az(self%nz_glob), self%bz(self%nz_glob))
 
-    ! cuFFT 3D transform halves the first index.
+    ! FFT 3D transform halves the first index.
     allocate (self%waves(self%nx_spec, self%ny_spec, self%nz_spec))
 
     ! waves_set requires some of the preprocessed tdsops variables.

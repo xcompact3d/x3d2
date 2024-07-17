@@ -92,6 +92,7 @@ contains
     integer :: dir
     integer :: ierr
 
+    allocate(mesh)
     allocate (mesh%geo)
     allocate (mesh%par)
     mesh%global_vert_dims(:) = dims_global
@@ -156,6 +157,10 @@ contains
     integer, dimension(3) :: subd_pos, subd_pos_prev, subd_pos_next
     integer :: dir
     logical :: is_last_domain
+
+    if (mesh%par%is_root()) then
+      print*, "Generic domain decomposition"
+    end if
 
     ! Number of processes on a direction basis
     nproc_x = mesh%par%nproc_dir(1)
