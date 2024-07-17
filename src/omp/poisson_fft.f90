@@ -38,7 +38,15 @@ contains
 
     call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps)
 
+    if (mesh%par%is_root()) then
+      print*, "Initialising 2decomp&fft"
+    end if
+
     call decomp_2d_fft_init(PHYSICAL_IN_X)
+
+    if (mesh%par%is_root()) then
+      print*, "Initialising done 2decomp&fft"
+    end if
 
   end function init
 

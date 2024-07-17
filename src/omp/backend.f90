@@ -421,7 +421,9 @@ contains
       error stop "Called vector add with incompatible fields"
     end if
 
-    dims = size(x%data)
+    !dims = size(x%data)
+    ! Fix for size being stored wrongly into dims
+    dims = self%mesh%get_padded_dims(x)
     nvec = dims(1)/SZ
     remstart = nvec*SZ + 1
 
