@@ -142,10 +142,15 @@ contains
     c_p1 = coeffs(6); c_p2 = coeffs(7); c_p3 = coeffs(8); c_p4 = coeffs(9)
 
     do j = 1, n
-      jm4 = modulo(j - 5, n) + 1; jm3 = modulo(j - 4, n) + 1
-      jm2 = modulo(j - 3, n) + 1; jm1 = modulo(j - 2, n) + 1
-      jp1 = modulo(j - n, n) + 1; jp2 = modulo(j - n + 1, n) + 1
-      jp3 = modulo(j - n + 2, n) + 1; jp4 = modulo(j - n + 3, n) + 1
+      jm4 = modulo(j - 5, n) + 1
+      jm3 = modulo(j - 4, n) + 1
+      jm2 = modulo(j - 3, n) + 1
+      jm1 = modulo(j - 2, n) + 1
+      jp1 = modulo(j - n, n) + 1
+      jp2 = modulo(j - n + 1, n) + 1
+      jp3 = modulo(j - n + 2, n) + 1
+      jp4 = modulo(j - n + 3, n) + 1
+
       temp_du = c_m4*u(i, jm4, b) + c_m3*u(i, jm3, b) &
                 + c_m2*u(i, jm2, b) + c_m1*u(i, jm1, b) &
                 + c_j*u(i, j, b) &
