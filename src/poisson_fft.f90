@@ -21,7 +21,7 @@ module m_poisson_fft
     !> Local domain sized array storing the spectral equivalence constants
     complex(dp), allocatable, dimension(:, :, :) :: waves
     !> Wave numbers in x, y, and z
-    complex(dp), allocatable, dimension(:) :: ax, bx, ay, by, az, bz
+    real(dp), allocatable, dimension(:) :: ax, bx, ay, by, az, bz
   contains
     procedure(fft_forward), deferred :: fft_forward
     procedure(fft_backward), deferred :: fft_backward

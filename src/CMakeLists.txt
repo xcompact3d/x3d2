@@ -13,6 +13,7 @@ set(SRC
   omp/mesh.f90
   omp/common.f90
   omp/kernels/distributed.f90
+  omp/kernels/spectral_processing.f90
   omp/poisson_fft.f90
   omp/sendrecv.f90
   omp/exec_dist.f90
