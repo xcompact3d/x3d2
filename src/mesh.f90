@@ -39,8 +39,8 @@ module m_mesh
     integer, dimension(3), private :: vert_dims ! local number of vertices in each direction without padding (cartesian structure)
     integer, dimension(3), private :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
     logical, dimension(3), private :: periodic_BC ! Whether or not a direction has a periodic BC
-    integer, dimension(3, 2), private :: BCs_global
-    integer, dimension(3, 2), private :: BCs
+    integer, dimension(3, 2) :: BCs_global
+    integer, dimension(3, 2) :: BCs
     integer, private :: sz
     type(geo_t), allocatable :: geo ! object containing geometry information
     type(parallel_t), allocatable :: par ! object containing parallel domain decomposition information

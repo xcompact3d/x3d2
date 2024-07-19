@@ -2,7 +2,7 @@ program test_thom
   use iso_fortran_env, only: stderr => error_unit
   use cudafor
 
-  use m_common, only: dp, pi
+  use m_common, only: dp, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_NULL
   use m_cuda_common, only: SZ
   use m_cuda_exec_thom, only: exec_thom_tds_compact
   use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
@@ -49,7 +49,7 @@ program test_thom
   ! preprocess the operator and coefficient arrays
   tdsops = cuda_tdsops_init(n, dx_per, operation='second-deriv', &
                             scheme='compact6', &
-                            bc_start='periodic', bc_end='periodic')
+                            bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
 
   blocks = dim3(n_block, 1, 1)
   threads = dim3(SZ, 1, 1)
@@ -93,7 +93,7 @@ program test_thom
   ! preprocess the operator and coefficient arrays
   tdsops = cuda_tdsops_init(n, dx, operation='second-deriv', &
                             scheme='compact6', &
-                            bc_start='dirichlet', bc_end='dirichlet')
+                            bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET)
   call cpu_time(tstart)
   do i = 1, n_iters
     call exec_thom_tds_compact(du_dev, u_dev, tdsops, blocks, threads)
