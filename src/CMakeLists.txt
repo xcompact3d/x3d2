@@ -21,9 +21,11 @@ set(CUDASRC
   cuda/backend.f90
   cuda/common.f90
   cuda/exec_dist.f90
+  cuda/exec_thom.f90
   cuda/kernels/distributed.f90
   cuda/kernels/reorder.f90
   cuda/kernels/spectral_processing.f90
+  cuda/kernels/thomas.f90
   cuda/poisson_fft.f90
   cuda/sendrecv.f90
   cuda/tdsops.f90
