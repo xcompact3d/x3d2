@@ -140,6 +140,8 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
     end subroutine MatShellSetOperation
   end interface MatShellSetOperation
 
+  type(mat_ctx_t), save :: ctx_global ! XXX: This sucks!
+  
 contains
 
   module subroutine solve_petsc(self, p, f, backend)
@@ -186,7 +188,7 @@ contains
     ! Determine local problem size
     n = product(backend%mesh%get_dims(CELL))
 
-    self%ctx = mat_ctx_t(backend, self%lapl, DIR_X)
+    ctx_global = mat_ctx_t(backend, self%lapl, DIR_X)
 
     ! Initialise preconditioner and operator matrices
     ! XXX: Add option to use preconditioner as operator (would imply low-order
@@ -288,7 +290,9 @@ contains
     type(mat_ctx_t) :: ctx
 
     print *, "Get context"
-    call MatShellGetContext(M, ctx, ierr)
+    ! call MatShellGetContext(M, ctx, ierr)
+    ! print *, ctx%foo
+    ctx = ctx_global
 
     print *, "V->F"
     call copy_vec_to_field(ctx%xfield, x, ctx%backend)
