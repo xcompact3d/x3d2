@@ -100,6 +100,10 @@ contains
       
       call backend%allocator%release_block(p)
       call backend%allocator%release_block(f)
+
+      nx = 2 * nx
+      ny = 2 * ny
+      nz = 2 * nz
     end do
     
     call test_convergence(rms)
