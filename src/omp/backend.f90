@@ -421,7 +421,7 @@ contains
       error stop "Called vector add with incompatible fields"
     end if
 
-    dims = size(x%data)
+    dims = shape(x%data)
     nvec = dims(1)/SZ
     remstart = nvec*SZ + 1
 
