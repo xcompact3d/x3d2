@@ -51,7 +51,7 @@ module m_poisson_cg
   interface
     module subroutine init_solver(solver, backend)
       class(poisson_solver_t), allocatable, intent(out) :: solver
-      class(base_backend_t), intent(in) :: backend
+      class(base_backend_t), target, intent(in) :: backend
     end subroutine init_solver
 
     module subroutine solve_poisson(self, p, f, backend)
@@ -74,7 +74,7 @@ contains
   end subroutine solve
 
   function init_cg(backend) result(solver)
-    class(base_backend_t), intent(in) :: backend
+    class(base_backend_t), target, intent(in) :: backend
     type(poisson_cg_t) :: solver
 
     call init_solver(solver%solver, backend)

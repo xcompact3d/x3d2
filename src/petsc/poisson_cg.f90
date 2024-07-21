@@ -27,7 +27,7 @@ contains
 
   function init_ctx(backend, lapl, dir) result(ctx)
 
-    class(base_backend_t), pointer, intent(in) :: backend
+    class(base_backend_t), target, intent(in) :: backend
     class(laplace_operator_t), intent(in) :: lapl
     integer, intent(in) :: dir
     type(mat_ctx_t) :: ctx
@@ -159,7 +159,7 @@ contains
   module subroutine init_solver(solver, backend) 
     !! Public constructor for the poisson_cg_t type.
     class(poisson_solver_t), allocatable, intent(out) :: solver
-    class(base_backend_t), pointer, intent(in) :: backend
+    class(base_backend_t), target, intent(in) :: backend
 
     allocate (petsc_poisson_cg_t :: solver)
     
@@ -175,7 +175,7 @@ contains
   subroutine init_petsc_cg(self, backend)
     !! Private constructor for the poisson_cg_t type.
     type(petsc_poisson_cg_t), intent(inout) :: self
-    class(base_backend_t), pointer, intent(in) :: backend
+    class(base_backend_t), target, intent(in) :: backend
 
     integer :: n ! Local problem size
 
