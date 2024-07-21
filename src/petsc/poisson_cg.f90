@@ -289,16 +289,13 @@ contains
 
     type(mat_ctx_t) :: ctx
 
-    print *, "Get context"
+    ! XXX: Fixme
     ! call MatShellGetContext(M, ctx, ierr)
     ! print *, ctx%foo
     ctx = ctx_global
 
-    print *, "V->F"
     call copy_vec_to_field(ctx%xfield, x, ctx%backend)
-    print *, "LAPL"
     call ctx%lapl%apply(ctx%ffield, ctx%xfield, ctx%backend)
-    print *, "F->V"
     call copy_field_to_vec(f, ctx%ffield, ctx%backend)
 
   end subroutine poissmult_petsc
@@ -317,22 +314,17 @@ contains
     integer, dimension(3) :: dims
     integer :: nx, ny, nz
 
-    print *, "Dims"
     dims = backend%mesh%get_dims(CELL)
     nx = dims(1)
     ny = dims(2)
     nz = dims(3)
 
     ! Local copy
-    print *, "GetArray"
     call VecGetArrayReadF90(v, vdata, ierr)
     if (nx*ny*nz /= size(vdata)) then
       print *, "Vector and field sizes are incompatible (padding?)"
       stop 1
     end if
-    print *, nx, ny, nz
-    print *, shape(vdata3d)
-    print *, shape(f%data)
     vdata3d(1:nx, 1:ny, 1:nz) => vdata(:) ! Get a 3D representation of the vector
     call backend%set_field_data(f, vdata3d, DIR_C)
     call VecRestoreArrayReadF90(v, vdata, ierr)
