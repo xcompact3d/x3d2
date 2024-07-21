@@ -10,7 +10,6 @@ module m_poisson_cg
   implicit none
 
   private
-  public :: init_lapl
 
   type, public :: laplace_operator_t
     !! Operator that computes the Laplacian of a field.
@@ -21,41 +20,66 @@ module m_poisson_cg
     procedure :: apply => poissmult
   end type laplace_operator_t
 
-  type, abstract, public :: poisson_cg_t
+  type, abstract :: poisson_solver_t
+    ! Prevent default access to components of type.
+    private
+    type(laplace_operator_t) :: lapl
+  contains
+    private
+    procedure(solve_poisson), public, deferred :: solve
+  end type poisson_solver_t
+
+  type, public :: poisson_cg_t
     !! Conjugate Gradient based Poisson solver.
     !! Supports any decomposition that is also supported by the underlying
     !! finite difference schemes.
 
     ! Prevent default access to components of type.
     private
+    class(poisson_solver_t), allocatable :: solver
 
-    type(laplace_operator_t), pointer :: lapl
   contains
+    private
+    procedure, public :: solve
   end type poisson_cg_t
-
-  interface
-    module function init_cg(backend) result(poisson_cg)
-      class(poisson_cg_t), allocatable :: poisson_cg
-      class(base_backend_t), pointer, intent(in) :: backend
-    end function init_cg
-  end interface
 
   interface poisson_cg_t
     !! Public constructor for the poisson_cg_t type.
     module procedure init_cg
   end interface poisson_cg_t
 
+  interface
+    module subroutine init_solver(solver, backend)
+      class(poisson_solver_t), allocatable, intent(out) :: solver
+      class(base_backend_t), intent(in) :: backend
+    end subroutine init_solver
+
+    module subroutine solve_poisson(self, p, f, backend)
+      class(poisson_solver_t) :: self
+      class(field_t), intent(inout) :: p ! Pressure solution
+      class(field_t), intent(in) :: f    ! Poisson RHS
+      class(base_backend_t), intent(in) :: backend
+    end subroutine solve_poisson
+  end interface
+
 contains
 
-  subroutine init_lapl(lapl)
+  subroutine solve(self, p, f, backend)
+    class(poisson_cg_t) :: self
+    class(field_t), intent(inout) :: p ! Pressure solution
+    class(field_t), intent(in) :: f    ! Poisson RHS
+    class(base_backend_t), intent(in) :: backend
 
-    type(laplace_operator_t), pointer :: lapl
+    call self%solver%solve(p, f, backend)
+  end subroutine solve
 
-    print *, "Initialise LAPL"
-    
-    allocate(lapl)
-    
-  end subroutine init_lapl
+  function init_cg(backend) result(solver)
+    class(base_backend_t), intent(in) :: backend
+    type(poisson_cg_t) :: solver
+
+    call init_solver(solver%solver, backend)
+
+  end function init_cg
   
   subroutine poissmult(self, f, p, backend)
     !! Computes the action of the Laplace operator, i.e. `f = Ax` where `A` is

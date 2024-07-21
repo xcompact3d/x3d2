@@ -7,19 +7,16 @@ module m_cg_types
   use m_base_backend, only: base_backend_t
   use m_allocator, only: field_t
   use m_poisson_cg, only: laplace_operator_t
-  use m_tdsops, only: dirps_t
 
   implicit none
 
   private
-  public :: mat_ctx_t
 
   type, public :: mat_ctx_t
     class(base_backend_t), pointer :: backend
-    class(laplace_operator_t), pointer :: lapl
+    type(laplace_operator_t) :: lapl
     class(field_t), pointer :: xfield
     class(field_t), pointer :: ffield
-    class(dirps_t), pointer :: xdirps, ydirps, zdirps
   end type mat_ctx_t
 
   interface mat_ctx_t
@@ -31,14 +28,14 @@ contains
   function init_ctx(backend, lapl, dir) result(ctx)
 
     class(base_backend_t), pointer, intent(in) :: backend
-    class(laplace_operator_t), pointer, intent(in) :: lapl
+    class(laplace_operator_t), intent(in) :: lapl
     integer, intent(in) :: dir
     type(mat_ctx_t) :: ctx
 
     ctx%xfield => backend%allocator%get_block(dir)
     ctx%ffield => backend%allocator%get_block(dir)
     ctx%backend => backend
-    ctx%lapl => lapl
+    ctx%lapl = lapl
 
   end function init_ctx
 
@@ -61,16 +58,24 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
     !! Field extension to wrap PETSc vector data in a field interface
   end type petsc_field_t
 
-  type, extends(poisson_cg_t) :: petsc_poisson_cg_t
+  type, extends(poisson_solver_t) :: petsc_poisson_cg_t
     !! Conjugate Gradient based Poisson solver using PETSc as a backend.
     !! Supports any decomposition that is also supported by the underlying
     !! finite difference schemes.
 
     type(mat_ctx_t) :: ctx
-    type(tMat) :: A ! The operator matrix
-    type(tMat) :: P ! The preconditioner matrix
+    type(tKSP) :: ksp  ! The solver
+    type(tMat) :: Amat ! The operator matrix
+    type(tMat) :: Pmat ! The preconditioner matrix
+    type(tVec) :: fvec ! The RHS vector
+    type(tVec) :: pvec ! The solution vector
 
   contains
+    procedure :: solve => solve_petsc
+    procedure :: create_operator
+    procedure :: create_preconditioner
+    procedure :: create_vectors
+    procedure :: create_solver
   end type petsc_poisson_cg_t
 
   interface MatCreateShell
@@ -137,24 +142,35 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
 
 contains
 
-  module function init_cg(backend) result(poisson_cg)
+  module subroutine solve_petsc(self, p, f, backend)
+    class(petsc_poisson_cg_t) :: self
+    class(field_t), intent(inout) :: p ! Pressure solution
+    class(field_t), intent(in) :: f    ! Poisson RHS
+    class(base_backend_t), intent(in) :: backend
+
+    integer :: ierr
+
+    call copy_field_to_vec(self%fvec, f, backend)
+    call KSPSolve(self%ksp, self%fvec, self%pvec, ierr)
+    call copy_vec_to_field(p, self%pvec, backend)
+    
+  end subroutine solve_petsc
+
+  module subroutine init_solver(solver, backend) 
     !! Public constructor for the poisson_cg_t type.
-    class(poisson_cg_t), allocatable :: poisson_cg
+    class(poisson_solver_t), allocatable, intent(out) :: solver
     class(base_backend_t), pointer, intent(in) :: backend
 
-    allocate (petsc_poisson_cg_t :: poisson_cg)
-
-    call init_lapl(poisson_cg%lapl)
+    allocate (petsc_poisson_cg_t :: solver)
     
-    select type (poisson_cg)
+    select type (solver)
     type is (petsc_poisson_cg_t)
-      call init_petsc_cg(poisson_cg, backend)
+      call init_petsc_cg(solver, backend)
     class default
       ! This should be impossible
-      print *, "Failure in allocating PETSc Poisson solver -- this indicates a serious problem"
-      stop 1
+      error stop "Failure in allocating PETSc Poisson solver -- this indicates a serious problem"
     end select
-  end function init_cg
+  end subroutine init_solver
 
   subroutine init_petsc_cg(self, backend)
     !! Private constructor for the poisson_cg_t type.
@@ -162,6 +178,10 @@ contains
     class(base_backend_t), pointer, intent(in) :: backend
 
     integer :: n ! Local problem size
+
+    integer :: ierr
+
+    call PetscInitialize(ierr)
 
     ! Determine local problem size
     n = product(backend%mesh%get_dims(CELL))
@@ -171,37 +191,91 @@ contains
     ! Initialise preconditioner and operator matrices
     ! XXX: Add option to use preconditioner as operator (would imply low-order
     !      solution)?
-    call create_matrix(n, "assemled", self%lapl, self%P)
-    call create_matrix(n, "matfree", self%lapl, self%A)
+    call self%create_operator(n)
+    call self%create_preconditioner(n)
+
+    ! Initialise RHS and solution vectors
+    call self%create_vectors(n)
+
+    ! Create the linear system
+    call self%create_solver()
+
   end subroutine init_petsc_cg
 
-  subroutine create_matrix(nlocal, mat_type, lapl, M)
-    !! Creates either a matrix object given the local problem size.
-    !! The matrix can be either "assembled" - suitable for preconditioners, or
-    !! "matfree" - for use as a high-order operator.
-    integer, intent(in) :: nlocal            ! The local problem size
-    character(len=*), intent(in) :: mat_type ! The desired type of matrix - valid values
-                                             ! are "assembled" or "matfree"
-    class(laplace_operator_t), pointer, intent(in) :: lapl ! The Laplacian operator
-    type(tMat), intent(out) :: M             ! The matrix object
-
-    type(mat_ctx_t) :: ctx
+  subroutine create_operator(self, n)
+    class(petsc_poisson_cg_t) :: self
+    integer, intent(in) :: n
 
     integer :: ierr
 
-    if (mat_type == "assembled") then
-      call MatCreate(PETSC_COMM_WORLD, M, ierr)
-      call MatSetSizes(M, nlocal, nlocal, PETSC_DECIDE, PETSC_DECIDE, ierr)
-      call MatSetFromOptions(M, ierr)
-    else
-      call MatCreateShell(PETSC_COMM_WORLD, nlocal, nlocal, PETSC_DETERMINE, &
-                          PETSC_DETERMINE, ctx, M, ierr)
-      call MatShellSetContext(M, ctx, ierr) ! Is this necessary?
-      call MatShellSetOperation(M, MATOP_MULT, poissmult_petsc, ierr)
-    end if
-    call MatSetUp(M, ierr)
+    call MatCreateShell(PETSC_COMM_WORLD, n, n, PETSC_DETERMINE, &
+      PETSC_DETERMINE, self%ctx, self%Amat, ierr)
+    call MatShellSetContext(self%Amat, self%ctx, ierr) ! Is this necessary?
+    call MatShellSetOperation(self%Amat, MATOP_MULT, poissmult_petsc, ierr)
+    call MatSetUp(self%Amat, ierr)
 
-  end subroutine create_matrix
+    call MatAssemblyBegin(self%Amat, MAT_FINAL_ASSEMBLY, ierr)
+    call MatAssemblyEnd(self%Amat, MAT_FINAL_ASSEMBLY, ierr)
+    
+  end subroutine create_operator
+
+  subroutine create_preconditioner(self, n)
+    class(petsc_poisson_cg_t) :: self
+    integer :: n
+
+    integer :: ierr
+
+    type(tVec) :: v
+
+    call MatCreate(PETSC_COMM_WORLD, self%Pmat, ierr)
+    call MatSetSizes(self%Pmat, n, n, PETSC_DECIDE, PETSC_DECIDE, ierr)
+    call MatSetFromOptions(self%Pmat, ierr)
+    call MatSetUp(self%Pmat, ierr)
+
+    !! Create an identity matrix
+    call create_vec(v, n)
+    call VecSet(v, 1.0_dp, ierr)
+    call MatDiagonalSet(self%Pmat, v, INSERT_VALUES, ierr)
+    
+    call MatAssemblyBegin(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
+    call MatAssemblyEnd(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
+
+  end subroutine create_preconditioner
+
+  subroutine create_vectors(self, n)
+    class(petsc_poisson_cg_t) :: self
+    integer, intent(in) :: n
+
+    call create_vec(self%fvec, n)
+    call create_vec(self%pvec, n)
+    
+  end subroutine create_vectors
+
+  subroutine create_vec(v, n)
+    type(tVec), intent(out) :: v
+    integer, intent(in) :: n
+
+    integer :: ierr
+
+    call VecCreate(PETSC_COMM_WORLD, v, ierr)
+    call VecSetSizes(v, n, PETSC_DETERMINE, ierr)
+    call VecSetFromOptions(v, ierr)
+
+    call VecAssemblyBegin(v, ierr)
+    call VecAssemblyEnd(v, ierr)
+    
+  end subroutine create_vec
+
+  subroutine create_solver(self)
+    class(petsc_poisson_cg_t) :: self
+
+    integer :: ierr
+
+    call KSPCreate(PETSC_COMM_WORLD, self%ksp, ierr)
+    call KSPSetOperators(self%ksp, self%Amat, self%Pmat, ierr)
+    call KSPSetFromOptions(self%ksp, ierr)
+
+  end subroutine create_solver
 
   subroutine poissmult_petsc(M, x, f, ierr)
     !! Computes the action of the Poisson operator, i.e. `f = Mx` where `M` is
@@ -213,10 +287,14 @@ contains
 
     type(mat_ctx_t) :: ctx
 
+    print *, "Get context"
     call MatShellGetContext(M, ctx, ierr)
 
+    print *, "V->F"
     call copy_vec_to_field(ctx%xfield, x, ctx%backend)
+    print *, "LAPL"
     call ctx%lapl%apply(ctx%ffield, ctx%xfield, ctx%backend)
+    print *, "F->V"
     call copy_field_to_vec(f, ctx%ffield, ctx%backend)
 
   end subroutine poissmult_petsc
@@ -235,17 +313,22 @@ contains
     integer, dimension(3) :: dims
     integer :: nx, ny, nz
 
+    print *, "Dims"
     dims = backend%mesh%get_dims(CELL)
     nx = dims(1)
     ny = dims(2)
     nz = dims(3)
 
     ! Local copy
+    print *, "GetArray"
     call VecGetArrayReadF90(v, vdata, ierr)
     if (nx*ny*nz /= size(vdata)) then
       print *, "Vector and field sizes are incompatible (padding?)"
       stop 1
     end if
+    print *, nx, ny, nz
+    print *, shape(vdata3d)
+    print *, shape(f%data)
     vdata3d(1:nx, 1:ny, 1:nz) => vdata(:) ! Get a 3D representation of the vector
     call backend%set_field_data(f, vdata3d, DIR_C)
     call VecRestoreArrayReadF90(v, vdata, ierr)
