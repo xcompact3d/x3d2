@@ -205,6 +205,11 @@ contains
     real(dp) :: r
     real(dp) :: tol
 
+    do i = 1, size(rms_err)
+      if (irank == 0) then
+        print *, "RMS = ", rms_err(i)
+      end if
+    end do
     do i = 2, size(rms_err)
       r = rms_err(i) / rms_err(i - 1)
       if (irank == 0) then

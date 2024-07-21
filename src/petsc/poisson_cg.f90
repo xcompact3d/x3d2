@@ -51,6 +51,7 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
 
   use m_common, only: dp, DIR_X, DIR_C, CELL
   use m_base_backend, only: base_backend_t
+  use m_mesh, only: mesh_t
 
   implicit none
 
@@ -194,7 +195,7 @@ contains
     ! XXX: Add option to use preconditioner as operator (would imply low-order
     !      solution)?
     call self%create_operator(n)
-    call self%create_preconditioner(n)
+    call self%create_preconditioner(backend%mesh, n)
 
     ! Initialise RHS and solution vectors
     call self%create_vectors(n)
@@ -221,23 +222,97 @@ contains
     
   end subroutine create_operator
 
-  subroutine create_preconditioner(self, n)
+  subroutine create_preconditioner(self, mesh, n)
     class(petsc_poisson_cg_t) :: self
-    integer :: n
+    type(mesh_t), intent(in) :: mesh
+    integer, intent(in) :: n
 
     integer :: ierr
 
-    type(tVec) :: v
+    integer, parameter :: nnb = 6 ! Number of neighbours (7-point star has 6 neighbours)
+
+    integer, dimension(3) :: dims
+    integer :: i, j, k
+    real(dp) :: dx, dy, dz
+
+    real(dp), dimension(nnb + 1) :: coeffs
+    integer, dimension(nnb + 1) :: cols
+    integer :: row
 
     call MatCreate(PETSC_COMM_WORLD, self%Pmat, ierr)
     call MatSetSizes(self%Pmat, n, n, PETSC_DECIDE, PETSC_DECIDE, ierr)
+    call MatSeqAIJSetPreallocation(self%Pmat, nnb + 1, PETSC_NULL_INTEGER, ierr)
+    call MatMPIAIJSetPreallocation(self%Pmat, nnb + 1, PETSC_NULL_INTEGER, &
+                                   nnb, PETSC_NULL_INTEGER, &
+                                   ierr)
     call MatSetFromOptions(self%Pmat, ierr)
     call MatSetUp(self%Pmat, ierr)
 
-    !! Create an identity matrix
-    call create_vec(v, n)
-    call VecSet(v, 1.0_dp, ierr)
-    call MatDiagonalSet(self%Pmat, v, INSERT_VALUES, ierr)
+    dims = mesh%get_padded_dims(DIR_C)
+    dx = mesh%geo%d(1); dy = mesh%geo%d(2); dz = mesh%geo%d(3)
+    row = 1 ! XXX: Need to figure out natural->global mapping
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          coeffs = 0
+          cols = -1 ! Set null (simplifies BCs)
+          cols(1) = row
+          
+          ! d2pdx2
+          coeffs(1) = coeffs(1) - 2 / dx**2
+          coeffs(2) = 1 / dx**2
+          coeffs(3) = 1 / dx**2
+          if (i > 1) then
+            cols(2) = cols(1) - 1
+          else
+            cols(2) = cols(1) + (dims(1) - i)
+          end if
+          if (i < dims(1)) then
+            cols(3) = cols(1) + 1
+          else
+            cols(3) = cols(1) - (dims(1) - 1)
+          end if
+
+          ! d2pdy2
+          coeffs(1) = coeffs(1) - 2 / dy**2
+          coeffs(4) = 1 / dy**2
+          coeffs(5) = 1 / dy**2
+          if (j > 1) then
+            cols(4) = cols(1) - dims(1)
+          else
+            cols(4) = cols(1) + (dims(2) - j) * dims(1)
+          end if
+          if (j < dims(2)) then
+            cols(5) = cols(1) + dims(1)
+          else
+            cols(5) = cols(1) - (dims(2) - 1) * dims(1)
+          end if
+
+          ! d2pdz2
+          coeffs(1) = coeffs(1) - 2 / dz**2
+          coeffs(6) = 1 / dz**2
+          coeffs(7) = 1 / dz**2
+          if (k > 1) then
+            cols(6) = cols(1) - dims(2) * dims(1)
+          else
+            cols(6) = cols(1) + (dims(3) - k) * dims(2) * dims(1)
+          end if
+          if (k < dims(3)) then
+            cols(7) = cols(1) + dims(2) * dims(1)
+          else
+            cols(7) = cols(1) - (dims(3) - 1) * dims(2) * dims(1)
+          end if
+          
+          ! Push to matrix
+          ! Recall Fortran (1-based) -> C (0-based) indexing
+          call MatSetValues(self%Pmat, 1, row - 1, nnb + 1, cols - 1, coeffs, &
+                            INSERT_VALUES, ierr)
+
+          ! Advance row counter
+          row = row + 1
+        end do
+      end do
+    end do
     
     call MatAssemblyBegin(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
     call MatAssemblyEnd(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
