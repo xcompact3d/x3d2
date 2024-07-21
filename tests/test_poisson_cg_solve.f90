@@ -7,7 +7,7 @@ program test_poisson_cg_solve
 
   use mpi
   
-  use m_common, only: dp, DIR_X, CELL, pi
+  use m_common, only: dp, DIR_Z, CELL, pi
   use m_mesh, only: mesh_t
   use m_base_backend, only: base_backend_t
 #ifdef CUDA
@@ -89,8 +89,9 @@ contains
                                 "second-deriv", "compact6")
       poisson_cg = poisson_cg_t(backend)
 
-      p => backend%allocator%get_block(DIR_X, CELL)
-      f => backend%allocator%get_block(DIR_X, CELL)
+      ! Main solver calls Poisson in the DIR_Z orientation
+      p => backend%allocator%get_block(DIR_Z, CELL)
+      f => backend%allocator%get_block(DIR_Z, CELL)
 
       call set_rhs(f, backend%mesh)
 
@@ -134,7 +135,7 @@ contains
 
           ! Need to get Cartesian -> memory layout mapping
           call get_index_dir(ii, jj, kk, i, j, k, &
-                             DIR_X, &
+                             DIR_Z, &
                              SZ, n(1), n(2), n(3))
 
           f%data(ii, jj, kk) = cos(2 * pi * (x / L(1))) + &
@@ -177,7 +178,7 @@ contains
 
           ! Need to get Cartesian -> memory layout mapping
           call get_index_dir(ii, jj, kk, i, j, k, &
-                             DIR_X, &
+                             DIR_Z, &
                              SZ, n(1), n(2), n(3))
 
           p_an = -((2 * pi / L(1))**2 * cos(2 * pi * (x / L(1))) + &

@@ -124,8 +124,9 @@ contains
 #endif
     call init_backend(backend)
 
-    pressure => backend%allocator%get_block(DIR_X)
-    f => backend%allocator%get_block(DIR_X)
+    ! Main solver calls Poisson in the DIR_Z orientation
+    pressure => backend%allocator%get_block(DIR_Z)
+    f => backend%allocator%get_block(DIR_Z)
  
     call MPI_Barrier(MPI_COMM_WORLD, ierr)
     if (irank == 0) then
