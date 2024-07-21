@@ -74,6 +74,19 @@ contains
       allocate(omp_backend_t :: backend)
       backend = omp_backend_t(mesh, allocator)
 #endif
+      allocate(backend%xdirps)
+      allocate(backend%ydirps)
+      allocate(backend%zdirps)
+      backend%xdirps%dir = DIR_X
+      backend%ydirps%dir = DIR_Y
+      backend%zdirps%dir = DIR_Z
+
+      call backend%alloc_tdsops(backend%xdirps%der2nd, DIR_X, &
+                                "second-deriv", "compact6")
+      call backend%alloc_tdsops(backend%ydirps%der2nd, DIR_Y, &
+                                "second-deriv", "compact6")
+      call backend%alloc_tdsops(backend%zdirps%der2nd, DIR_Z, &
+                                "second-deriv", "compact6")
       poisson_cg = poisson_cg_t(backend)
 
       p => backend%allocator%get_block(DIR_X, CELL)
