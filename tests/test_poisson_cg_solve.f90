@@ -138,9 +138,9 @@ contains
                              DIR_Z, &
                              SZ, n(1), n(2), n(3))
 
-          f%data(ii, jj, kk) = cos(2 * pi * (x / L(1))) + &
-                               cos(2 * pi * (y / L(2))) + &
-                               cos(2 * pi * (z / L(3)))
+          f%data(ii, jj, kk) = -((2 * pi / L(1))**2 * cos(2 * pi * (x / L(1))) + &
+                                 (2 * pi / L(2))**2 * cos(2 * pi * (y / L(2))) + &
+                                 (2 * pi / L(3))**2 * cos(2 * pi * (z / L(3))))
         end do
       end do
     end do
@@ -181,9 +181,9 @@ contains
                              DIR_Z, &
                              SZ, n(1), n(2), n(3))
 
-          p_an = -((2 * pi / L(1))**2 * cos(2 * pi * (x / L(1))) + &
-                   (2 * pi / L(2))**2 * cos(2 * pi * (y / L(2))) + &
-                   (2 * pi / L(3))**2 * cos(2 * pi * (z / L(3))))
+          p_an = cos(2 * pi * (x / L(1))) + &
+                 cos(2 * pi * (y / L(2))) + &
+                 cos(2 * pi * (z / L(3)))
 
           err_rms = err_rms + (p%data(ii, jj, kk) - p_an)**2
         end do
