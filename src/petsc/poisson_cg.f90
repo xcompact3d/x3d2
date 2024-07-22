@@ -241,11 +241,11 @@ contains
 
     call MatCreate(PETSC_COMM_WORLD, self%Pmat, ierr)
     call MatSetSizes(self%Pmat, n, n, PETSC_DECIDE, PETSC_DECIDE, ierr)
+    call MatSetFromOptions(self%Pmat, ierr)
     call MatSeqAIJSetPreallocation(self%Pmat, nnb + 1, PETSC_NULL_INTEGER, ierr)
     call MatMPIAIJSetPreallocation(self%Pmat, nnb + 1, PETSC_NULL_INTEGER, &
                                    nnb, PETSC_NULL_INTEGER, &
                                    ierr)
-    call MatSetFromOptions(self%Pmat, ierr)
     call MatSetUp(self%Pmat, ierr)
 
     dims = mesh%get_padded_dims(DIR_C)
