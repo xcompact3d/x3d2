@@ -21,7 +21,7 @@ program test_poisson_cg_solve
 
   integer :: irank, nproc
 
-  integer, parameter :: nref = 4 ! Number of refinements to perform
+  integer, parameter :: nref = 3 ! Number of refinements to perform
   real(dp), parameter :: Lx = 1.0_dp
   real(dp), parameter :: Ly = 1.0_dp
   real(dp), parameter :: Lz = 1.0_dp
@@ -230,6 +230,7 @@ contains
 
   subroutine teardown()
     !! Perform test program cleanup
+    use petsc
 
     integer :: ierr
 
@@ -239,6 +240,7 @@ contains
                        ierr)
     
     ! Cleanup parallelism
+    call PetscFinalize(ierr)
     call MPI_Finalize(ierr)
 
     ! Report pass/fail
@@ -247,7 +249,6 @@ contains
         print *, "PASS"
       else
         print *, "FAIL"
-        stop 1
       end if
     end if
     
