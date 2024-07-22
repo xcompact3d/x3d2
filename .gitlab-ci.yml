@@ -1,0 +1,52 @@
+workflow:
+  rules:
+    # Run pipeline on tags for the main project
+    - if: $CI_COMMIT_TAG && $CI_PROJECT_PATH == "CFD-Xing/x3d2"
+    # DO NOT run pipeline if WIP
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TITLE =~ /^WIP:.*/
+      when: never
+    # DO NOT run pipeline if Draft
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TITLE =~ /^Draft:.*/
+      when: never
+
+stages:
+  - build-and-test
+  - check-policies
+  - build-docs
+
+.build-and-test-template: &build-and-test-template
+  #image: ubuntu-20.04
+  stage: build-and-test
+  timeout: 1h
+  variables:
+  script:
+    - echo Success!
+
+.check-formatting-template: &check-formatting-template
+  #image: ubuntu-latest
+  stage: check-policies
+  variables:
+  before_script:
+  script:
+    - echo Success!
+  allow_failure: false
+  timeout: 15m
+
+.build-docs-template: &build-docs-template
+  #image: ubuntu-latest
+  stage: build-docs
+  variables:
+  script:
+    - echo Success!
+
+build-and-test:
+  <<: *build-and-test-template
+  needs: []
+    
+check-formatting:
+  <<: *check-formatting-template
+  needs: []
+    
+build-docs:
+  <<: *build-docs-template
+  needs: []
