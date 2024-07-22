@@ -6,6 +6,7 @@ program test_poisson_cg_solve
   !! Tests solving the Poisson problem using CG.
 
   use mpi
+  use petsc
   
   use m_common, only: dp, DIR_Z, CELL, pi
   use m_mesh, only: mesh_t
@@ -40,6 +41,7 @@ contains
     integer :: ierr
 
     call MPI_Init(ierr)
+    call PETScInitialize(PETSC_NULL_CHARACTER, ierr)
     call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
     call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
 

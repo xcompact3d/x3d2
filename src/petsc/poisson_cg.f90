@@ -189,7 +189,7 @@ contains
     call PetscInitialized(initialised, ierr)
     if (.not. initialised) then
       print *, "Initialising PETSc"
-      call PetscInitialize(ierr)
+      call PetscInitialize(PETSC_NULL_CHARACTER, ierr)
     end if
     print *, "PETSc Initialised"
 
