@@ -216,6 +216,7 @@ contains
     class(petsc_poisson_cg_t) :: self
     integer, intent(in) :: n
 
+    type(tMatNullSpace) :: nsp
     integer :: ierr
 
     call MatCreateShell(PETSC_COMM_WORLD, n, n, PETSC_DETERMINE, &
@@ -227,6 +228,10 @@ contains
     call MatAssemblyBegin(self%Amat, MAT_FINAL_ASSEMBLY, ierr)
     call MatAssemblyEnd(self%Amat, MAT_FINAL_ASSEMBLY, ierr)
     
+    call MatNullSpaceCreate(PETSC_COMM_WORLD, PETSC_TRUE, 0, PETSC_NULL_VEC, nsp, ierr)
+    call MatSetnullSpace(self%Amat, nsp, ierr)
+    call MatNullSpaceDestroy(nsp, ierr)
+
   end subroutine create_operator
 
   subroutine create_preconditioner(self, mesh, n)
@@ -234,6 +239,7 @@ contains
     type(mesh_t), intent(in) :: mesh
     integer, intent(in) :: n
 
+    type(tMatNullSpace) :: nsp
     integer :: ierr
 
     integer, parameter :: nnb = 6 ! Number of neighbours (7-point star has 6 neighbours)
@@ -324,6 +330,10 @@ contains
     call MatAssemblyBegin(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
     call MatAssemblyEnd(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
 
+    call MatNullSpaceCreate(PETSC_COMM_WORLD, PETSC_TRUE, 0, PETSC_NULL_VEC, nsp, ierr)
+    call MatSetnullSpace(self%Pmat, nsp, ierr)
+    call MatNullSpaceDestroy(nsp, ierr)
+
   end subroutine create_preconditioner
 
   subroutine create_vectors(self, n)
@@ -356,7 +366,7 @@ contains
     integer :: ierr
 
     call KSPCreate(PETSC_COMM_WORLD, self%ksp, ierr)
-    call KSPSetOperators(self%ksp, self%Amat, self%Pmat, ierr)
+    call KSPSetOperators(self%ksp, self%Pmat, self%Pmat, ierr)
     call KSPSetFromOptions(self%ksp, ierr)
 
   end subroutine create_solver

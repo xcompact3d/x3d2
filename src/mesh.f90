@@ -13,7 +13,7 @@ module m_mesh
   type :: geo_t
     real(dp), dimension(3) :: d ! size of a cell in each direction (=edge length, distance between centers, distance between vertices)
     real(dp), dimension(3) :: L ! Global dimensions of the domain in each direction
-  end type
+  end type geo_t
 
   ! Stores parallel domain related information
   type :: parallel_t
@@ -26,7 +26,7 @@ module m_mesh
     integer, dimension(3) :: pprev ! rank ID of the next rank in each direction
   contains
     procedure :: is_root ! returns if the current rank is the root rank
-  end type
+  end type parallel_t
 
   ! The mesh class stores all the information about the global and local (due to domain decomposition) mesh
   ! It also includes getter functions to access some of its parameters
