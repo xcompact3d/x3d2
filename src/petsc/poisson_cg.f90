@@ -184,7 +184,14 @@ contains
 
     integer :: ierr
 
-    call PetscInitialize(ierr)
+    logical :: initialised
+
+    call PetscInitialized(initialised, ierr)
+    if (.not. initialised) then
+      print *, "Initialising PETSc"
+      call PetscInitialize(ierr)
+    end if
+    print *, "PETSc Initialised"
 
     ! Determine local problem size
     n = product(backend%mesh%get_dims(CELL))
