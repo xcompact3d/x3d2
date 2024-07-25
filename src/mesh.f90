@@ -4,7 +4,8 @@ module m_mesh
   use mpi
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, &
                       CELL, VERT, none, X_FACE, Y_FACE, Z_FACE, &
-                      X_EDGE, Y_EDGE, Z_EDGE
+                      X_EDGE, Y_EDGE, Z_EDGE, &
+                      BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET
   use m_field, only: field_t
 
   implicit none
@@ -38,6 +39,8 @@ module m_mesh
     integer, dimension(3), private :: vert_dims ! local number of vertices in each direction without padding (cartesian structure)
     integer, dimension(3), private :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
     logical, dimension(3), private :: periodic_BC ! Whether or not a direction has a periodic BC
+    integer, dimension(3, 2), private :: BCs_global
+    integer, dimension(3, 2), private :: BCs
     integer, private :: sz
     type(geo_t), allocatable :: geo ! object containing geometry information
     type(parallel_t), allocatable :: par ! object containing parallel domain decomposition information
@@ -77,31 +80,56 @@ module m_mesh
 
 contains
 
-  function mesh_init(dims_global, nproc_dir, L_global, &
-                     periodic_BC) result(mesh)
+  function mesh_init(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z) &
+    result(mesh)
     !! Completely initialise the mesh object.
     !! Upon initialisation the mesh object can be read-only and shouldn't be edited
     !! Takes as argument global information about the mesh like its length, number of cells and decomposition in each direction
     integer, dimension(3), intent(in) :: dims_global
     integer, dimension(3), intent(in) :: nproc_dir ! Number of proc in each direction
     real(dp), dimension(3), intent(in) :: L_global
-    logical, dimension(3), optional, intent(in) :: periodic_BC
+    character(len=*), dimension(2), intent(in) :: BC_x, BC_y, BC_z
     type(mesh_t) :: mesh
 
-    integer :: dir
+    character(len=20), dimension(3, 2) :: BC_all
+    logical :: is_first_domain, is_last_domain
+    integer :: dir, j
     integer :: ierr
 
     allocate (mesh%geo)
     allocate (mesh%par)
+
+    BC_all(1, 1) = BC_x(1); BC_all(1, 2) = BC_x(2)
+    BC_all(2, 1) = BC_y(1); BC_all(2, 2) = BC_y(2)
+    BC_all(3, 1) = BC_z(1); BC_all(3, 2) = BC_z(2)
+    do dir = 1, 3
+      do j = 1, 2
+        select case (trim(BC_all(dir, j)))
+        case ('periodic')
+          mesh%BCs_global(dir, j) = BC_PERIODIC
+        case ('neumann')
+          mesh%BCs_global(dir, j) = BC_NEUMANN
+        case ('dirichlet')
+          mesh%BCs_global(dir, j) = BC_DIRICHLET
+        case default
+          error stop 'Unknown BC'
+        end select
+      end do
+    end do
+
+    do dir = 1, 3
+      if (any(mesh%BCs_global(dir, :) == BC_PERIODIC) .and. &
+          (.not. all(mesh%BCs_global(dir, :) == BC_PERIODIC))) then
+        error stop 'BCs are incompatible: in a direction make sure to have &
+                    &either both sides periodic or none.'
+      end if
+      mesh%periodic_BC(dir) = all(mesh%BCs_global(dir, :) == BC_PERIODIC)
+    end do
+
+    ! Set global vertex dims
     mesh%global_vert_dims(:) = dims_global
 
-    if (present(periodic_BC)) then
-      mesh%periodic_BC(:) = periodic_BC
-    else
-      ! Default to periodic BC
-      mesh%periodic_BC(:) = .true.
-    end if
-
+    ! Set global cell dims
     do dir = 1, 3
       if (mesh%periodic_BC(dir)) then
         mesh%global_cell_dims(dir) = mesh%global_vert_dims(dir)
@@ -120,6 +148,37 @@ contains
     call MPI_Comm_rank(MPI_COMM_WORLD, mesh%par%nrank, ierr)
     call MPI_Comm_size(MPI_COMM_WORLD, mesh%par%nproc, ierr)
     call domain_decomposition(mesh)
+
+    ! Set subdomain BCs
+    do dir = 1, 3
+      is_first_domain = mesh%par%nrank_dir(dir) == 0
+      is_last_domain = mesh%par%nrank_dir(dir) + 1 == mesh%par%nproc_dir(dir)
+      ! subdomain-subdomain boundaries are identical to periodic BCs
+      if (is_first_domain) then
+        mesh%BCs(dir, 1) = mesh%BCs_global(dir, 1)
+        mesh%BCs(dir, 2) = BC_PERIODIC
+      else if (is_last_domain) then
+        mesh%BCs(dir, 1) = BC_PERIODIC
+        mesh%BCs(dir, 2) = mesh%BCs_global(dir, 2)
+      else
+        mesh%BCs(dir, :) = BC_PERIODIC
+      end if
+    end do
+
+    ! Define number of cells and vertices in each direction
+    mesh%vert_dims = mesh%global_vert_dims/mesh%par%nproc_dir
+
+    do dir = 1, 3
+      is_last_domain = (mesh%par%nrank_dir(dir) + 1 == mesh%par%nproc_dir(dir))
+      if (is_last_domain .and. (.not. mesh%periodic_BC(dir))) then
+        mesh%cell_dims(dir) = mesh%vert_dims(dir) - 1
+      else
+        mesh%cell_dims(dir) = mesh%vert_dims(dir)
+      end if
+    end do
+
+    ! Set offset for global indices
+    mesh%par%n_offset(:) = mesh%vert_dims(:)*mesh%par%nrank_dir(:)
 
     ! Define default values
     mesh%vert_dims_padded = mesh%vert_dims
@@ -154,7 +213,6 @@ contains
     integer :: i, nproc_x, nproc_y, nproc_z, nproc
     integer, dimension(3) :: subd_pos, subd_pos_prev, subd_pos_next
     integer :: dir
-    logical :: is_last_domain
 
     ! Number of processes on a direction basis
     nproc_x = mesh%par%nproc_dir(1)
@@ -173,20 +231,6 @@ contains
 
     ! local/directional position of the subdomain
     mesh%par%nrank_dir(:) = subd_pos(:) - 1
-
-    ! Define number of cells and vertices in each direction
-    mesh%vert_dims = mesh%global_vert_dims/mesh%par%nproc_dir
-
-    do dir = 1, 3
-      is_last_domain = (mesh%par%nrank_dir(dir) + 1 == mesh%par%nproc_dir(dir))
-      if (is_last_domain .and. (.not. mesh%periodic_BC(dir))) then
-        mesh%cell_dims(dir) = mesh%vert_dims(dir) - 1
-      else
-        mesh%cell_dims(dir) = mesh%vert_dims(dir)
-      end if
-    end do
-
-    mesh%par%n_offset(:) = mesh%vert_dims(:)*mesh%par%nrank_dir(:)
 
     do dir = 1, 3
       nproc = mesh%par%nproc_dir(dir)

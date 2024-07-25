@@ -19,18 +19,12 @@ module m_common
                         Y_EDGE = 102, & ! Data on edges along Y
                         Z_EDGE = 103, & ! Data on edges along Z
                         none = -1 ! The location of data isn't specified
+  integer, parameter :: BC_PERIODIC = 0, BC_NEUMANN = 1, BC_DIRICHLET = 2
   integer, protected :: &
     rdr_map(4, 4) = reshape([0, RDR_Y2X, RDR_Z2X, RDR_C2X, &
                              RDR_X2Y, 0, RDR_Z2Y, RDR_C2Y, &
                              RDR_X2Z, RDR_Y2Z, 0, RDR_C2Z, &
                              RDR_X2C, RDR_Y2C, RDR_Z2C, 0], shape=[4, 4])
-
-  type :: globs_t
-    real(dp) :: nu, dt
-    integer :: n_iters, n_output
-    character(len=20) :: BC_x_s, BC_x_e, BC_y_s, BC_y_e, BC_z_s, BC_z_e
-    integer :: poisson_solver_type
-  end type globs_t
 
 contains
 
