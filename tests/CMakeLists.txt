@@ -50,6 +50,7 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_test(test_time_integrator.f90 1 cuda)
   define_test(cuda/test_cuda_allocator.f90 1 cuda)
   define_test(cuda/test_cuda_reorder.f90 1 cuda)
+  define_test(cuda/test_thom.f90 1 cuda)
   define_test(cuda/test_cuda_tridiag.f90 ${CMAKE_CTEST_NPROCS} cuda)
   define_test(cuda/test_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
 endif()

@@ -1,0 +1,15 @@
+name: Trigger GitLab CI
+
+on: [push, pull_request] 
+
+jobs:
+  trigger-gitlab-ci:
+    name: Test against https://gitlab.nektar.info/CFD-Xing/x3d2-ci
+    runs-on: ubuntu-latest
+    steps:
+    - name: Trigger pipeline on CFD-Xing/gitlab-ci
+      uses: xcompact3d/x3d2@main
+      with:
+        url: https://gitlab.nektar.info
+        project_id: 364
+        token: ${{ secrets.GITLABCI }}

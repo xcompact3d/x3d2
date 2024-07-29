@@ -19,6 +19,7 @@ module m_time_integrator
     type(flist_t), allocatable :: deriv(:)
     class(base_backend_t), pointer :: backend
     class(allocator_t), pointer :: allocator
+    procedure(stepper_func), pointer :: stepper => null()
   contains
     procedure :: finalize
     procedure :: step
@@ -30,6 +31,17 @@ module m_time_integrator
   interface time_intg_t
     module procedure init
   end interface time_intg_t
+
+  abstract interface
+    subroutine stepper_func(self, dt)
+      import :: time_intg_t
+      import :: dp
+      implicit none
+
+      class(time_intg_t), intent(inout) :: self
+      real(dp), intent(in) :: dt
+    end subroutine stepper_func
+  end interface
 
 contains
 
@@ -63,10 +75,10 @@ contains
     type(time_intg_t) :: init
     class(base_backend_t), pointer :: backend
     class(allocator_t), pointer :: allocator
-    integer, intent(in), optional :: method
+    character(3), intent(in) :: method
     integer, intent(in), optional :: nvars
 
-    integer :: i, j
+    integer :: i, j, stat
 
     ! initialize Runge-Kutta coefficients
     ! rk1
@@ -110,26 +122,27 @@ contains
     ! set variables
     init%backend => backend
     init%allocator => allocator
+    init%sname = method
 
-    if (present(method)) then
-      init%method = method
-    else
-      init%method = 3
-    end if
-    if (init%method < 5) then
-      ! method 1 to 4 -> AB1 to AB4
-      init%order = init%method
-      init%nstep = init%method
+    if (init%sname(1:2) == 'AB') then
+      read (init%sname(3:3), *, iostat=stat) init%order
+      if (stat /= 0) error stop 'Error reading AB integration order'
+      if (init%order >= 5) error stop 'Integration order >4 is not supported'
+      init%nstep = init%order
       init%nstage = 1
       init%nolds = init%nstep - 1
-      write (init%sname, "(A2,I1)") "AB", init%order
-    else
-      ! method 5 to 8 -> RK1 to RK4
-      init%order = init%method - 4
+      init%stepper => adams_bashforth
+    else if (init%sname(1:2) == 'RK') then
+      read (init%sname(3:3), *, iostat=stat) init%order
+      if (stat /= 0) error stop 'Error reading RK integration order'
+      if (init%order >= 5) error stop 'Integration order >4 is not supported'
       init%nstep = 1
-      init%nstage = init%method - 4
+      init%nstage = init%order
       init%nolds = init%nstage
-      write (init%sname, "(A2,I1)") "RK", init%order
+      init%stepper => runge_kutta
+    else
+      print *, 'Integration method '//init%sname//' is not defined'
+      error stop
     end if
 
     if (present(nvars)) then
@@ -152,8 +165,6 @@ contains
         init%olds(i, j)%ptr => allocator%get_block(DIR_X)
       end do
     end do
-
-    print *, init%sname, ' time integrator instantiated'
 
   end function init
 
@@ -193,11 +204,7 @@ contains
     self%deriv(2)%ptr => dv
     self%deriv(3)%ptr => dw
 
-    if (self%method < 5) then
-      call self%adams_bashforth(dt)
-    else
-      call self%runge_kutta(dt)
-    end if
+    call self%stepper(dt)
 
   end subroutine step
 

@@ -74,8 +74,9 @@ contains
 
   end subroutine get_index_dir
 
-  pure subroutine get_index_reordering_dirs(out_i, out_j, out_k, in_i, in_j, in_k, &
-                                            dir_from, dir_to, mesh)
+  pure subroutine get_index_reordering_dirs( &
+    out_i, out_j, out_k, in_i, in_j, in_k, dir_from, dir_to, mesh &
+    )
       !! Converts a set of application storage directional index to an other direction.
       !! The two directions are defined by the reorder_dir variable, RDR_X2Y will go from storage in X to Y etc.
     integer, intent(out) :: out_i, out_j, out_k         ! new indices in the application storage
@@ -93,7 +94,8 @@ contains
 
   end subroutine get_index_reordering_dirs
 
-  pure subroutine get_index_reordering_rdr(out_i, out_j, out_k, in_i, in_j, in_k, reorder_dir, mesh)
+  pure subroutine get_index_reordering_rdr(out_i, out_j, out_k, &
+                                           in_i, in_j, in_k, reorder_dir, mesh)
     integer, intent(out) :: out_i, out_j, out_k         ! new indices in the application storage
     integer, intent(in) :: in_i, in_j, in_k             ! original indices
     integer, intent(in) :: reorder_dir

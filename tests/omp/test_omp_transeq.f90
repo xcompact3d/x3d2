@@ -3,7 +3,7 @@ program test_omp_transeq
   use mpi
 
   use m_allocator, only: allocator_t, field_t
-  use m_common, only: dp, pi, globs_t, DIR_X, DIR_Y, DIR_Z, VERT
+  use m_common, only: dp, pi, DIR_X, DIR_Y, DIR_Z, VERT
   use m_omp_common, only: SZ
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_backend, only: omp_backend_t, transeq_x_omp, base_backend_t
@@ -20,6 +20,7 @@ program test_omp_transeq
   class(mesh_t), allocatable :: mesh
   integer, dimension(3) :: dims_global, nproc_dir
   real(dp), dimension(3) :: L_global
+  character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
 
   integer :: n, n_groups, i, j, k
   integer :: nrank, nproc
@@ -27,7 +28,6 @@ program test_omp_transeq
 
   real(dp) :: dx_per, nu, norm_du, tol = 1d-8, tstart, tend
 
-  type(globs_t) :: globs
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
 
@@ -49,7 +49,11 @@ program test_omp_transeq
   ! Domain decomposition in each direction
   nproc_dir = [nproc, 1, 1]
 
-  mesh = mesh_t(dims_global, nproc_dir, L_global)
+  BC_x = ['periodic', 'periodic']
+  BC_y = ['periodic', 'periodic']
+  BC_z = ['periodic', 'periodic']
+
+  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
   xdirps%dir = DIR_X; ydirps%dir = DIR_Y; zdirps%dir = DIR_Z
 
@@ -89,7 +93,8 @@ program test_omp_transeq
   end do
   w%data(:, :, :) = 0.d0
 
-  call allocate_tdsops(xdirps, DIR_X, omp_backend)
+  call allocate_tdsops(xdirps, omp_backend, 'compact6', 'compact6', &
+                       'classic', 'compact6')
 
   call cpu_time(tstart)
   call transeq_x_omp(omp_backend, du, dv, dw, u, v, w, xdirps)

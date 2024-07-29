@@ -1,12 +1,12 @@
 module m_solver
+  use iso_fortran_env, only: stderr => error_unit
   use mpi
 
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, globs_t, &
+  use m_common, only: dp, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_Z2C, RDR_C2Z, &
-                      POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL
   use m_tdsops, only: tdsops_t, dirps_t
   use m_time_integrator, only: time_intg_t
@@ -54,9 +54,9 @@ module m_solver
     class(base_backend_t), pointer :: backend
     class(mesh_t), pointer :: mesh
     type(adios_io_t) :: io
-    class(time_intg_t), pointer :: time_integrator
+    type(time_intg_t) :: time_integrator
     type(allocator_t), pointer :: host_allocator
-    class(dirps_t), pointer :: xdirps, ydirps, zdirps
+    type(dirps_t), pointer :: xdirps, ydirps, zdirps
     procedure(poisson_solver), pointer :: poisson => null()
   contains
     procedure :: transeq
@@ -86,19 +86,25 @@ module m_solver
 
 contains
 
-  function init(backend, mesh, time_integrator, host_allocator, &
-                xdirps, ydirps, zdirps, globs) result(solver)
+  function init(backend, mesh, host_allocator) result(solver)
     implicit none
 
     class(base_backend_t), target, intent(inout) :: backend
     type(mesh_t), target, intent(inout) :: mesh
-    class(time_intg_t), target, intent(inout) :: time_integrator
     type(allocator_t), target, intent(inout) :: host_allocator
-    class(dirps_t), target, intent(inout) :: xdirps, ydirps, zdirps
-    class(globs_t), intent(in) :: globs
     type(solver_t) :: solver
 
     class(field_t), pointer :: u_init, v_init, w_init
+
+    character(len=200) :: input_file
+    real(dp) :: Re, dt
+    integer :: n_iters, n_output
+    character(3) :: poisson_solver_type, time_intg
+    character(30) :: der1st_scheme, der2nd_scheme, &
+                     interpl_scheme, stagder_scheme
+    namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
+      time_intg, der1st_scheme, der2nd_scheme, &
+      interpl_scheme, stagder_scheme
 
     real(dp) :: x, y, z
     integer :: i, j, k
@@ -107,17 +113,39 @@ contains
 
     solver%backend => backend
     solver%mesh => mesh
-    solver%time_integrator => time_integrator
     solver%host_allocator => host_allocator
 
-    solver%xdirps => xdirps
-    solver%ydirps => ydirps
-    solver%zdirps => zdirps
+    allocate (solver%xdirps, solver%ydirps, solver%zdirps)
+    solver%xdirps%dir = DIR_X
+    solver%ydirps%dir = DIR_Y
+    solver%zdirps%dir = DIR_Z
 
     solver%u => solver%backend%allocator%get_block(DIR_X, VERT)
     solver%v => solver%backend%allocator%get_block(DIR_X, VERT)
     solver%w => solver%backend%allocator%get_block(DIR_X, VERT)
     solver%pressure => solver%backend%allocator%get_block(DIR_Z, CELL)
+
+    ! set defaults
+    poisson_solver_type = 'FFT'
+    time_intg = 'AB3'
+    der1st_scheme = 'compact6'; der2nd_scheme = 'compact6'
+    interpl_scheme = 'classic'; stagder_scheme = 'compact6'
+
+    if (command_argument_count() >= 1) then
+      call get_command_argument(1, input_file)
+      open (100, file=input_file)
+      read (100, nml=solver_params)
+      close (100)
+    else
+      error stop 'Input file is not provided.'
+    end if
+
+    solver%time_integrator = time_intg_t(solver%backend, &
+                                         solver%backend%allocator, &
+                                         time_intg)
+    if (solver%mesh%par%is_root()) then
+      print *, time_intg//' time integrator instantiated'
+    end if
 
     solver%steps_between_checkpoints = 1
     solver%steps_between_snapshots = 1
@@ -156,46 +184,57 @@ contains
     call solver%host_allocator%release_block(w_init)
 
     ! Allocate and set the tdsops
-    call allocate_tdsops(solver%xdirps, DIR_X, solver%backend)
-    call allocate_tdsops(solver%ydirps, DIR_Y, solver%backend)
-    call allocate_tdsops(solver%zdirps, DIR_Z, solver%backend)
+    call allocate_tdsops(solver%xdirps, solver%backend, &
+                         der1st_scheme, der2nd_scheme, &
+                         interpl_scheme, stagder_scheme)
+    call allocate_tdsops(solver%ydirps, solver%backend, &
+                         der1st_scheme, der2nd_scheme, &
+                         interpl_scheme, stagder_scheme)
+    call allocate_tdsops(solver%zdirps, solver%backend, &
+                         der1st_scheme, der2nd_scheme, &
+                         interpl_scheme, stagder_scheme)
 
-    select case (globs%poisson_solver_type)
-    case (POISSON_SOLVER_FFT)
+    select case (trim(poisson_solver_type))
+    case ('FFT')
       if (solver%mesh%par%is_root()) print *, 'Poisson solver: FFT'
-      call solver%backend%init_poisson_fft(solver%mesh, xdirps, ydirps, zdirps)
+      call solver%backend%init_poisson_fft(solver%mesh, solver%xdirps, &
+                                           solver%ydirps, solver%zdirps)
       solver%poisson => poisson_fft
-    case (POISSON_SOLVER_CG)
+    case ('CG')
       if (solver%mesh%par%is_root()) &
         print *, 'Poisson solver: CG, not yet implemented'
       solver%poisson => poisson_cg
+    case default
+      error stop 'poisson_solver_type is not valid. Use "FFT" or "CG".'
     end select
 
     call solver%io%init(MPI_COMM_WORLD)
 
   end function init
 
-  subroutine allocate_tdsops(dirps, dir, backend)
-    class(dirps_t), intent(inout) :: dirps
-    integer, intent(in) :: dir
+  subroutine allocate_tdsops(dirps, backend, der1st_scheme, der2nd_scheme, &
+                             interpl_scheme, stagder_scheme)
+    type(dirps_t), intent(inout) :: dirps
     class(base_backend_t), intent(in) :: backend
+    character(*), intent(in) :: der1st_scheme, der2nd_scheme, &
+                                interpl_scheme, stagder_scheme
 
-    call backend%alloc_tdsops(dirps%der1st, dir, &
-                              'first-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%der1st_sym, dir, &
-                              'first-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%der2nd, dir, &
-                              'second-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%der2nd_sym, dir, &
-                              'second-deriv', 'compact6')
-    call backend%alloc_tdsops(dirps%interpl_v2p, dir, &
-                              'interpolate', 'classic', from_to='v2p')
-    call backend%alloc_tdsops(dirps%interpl_p2v, dir, &
-                              'interpolate', 'classic', from_to='p2v')
-    call backend%alloc_tdsops(dirps%stagder_v2p, dir, &
-                              'stag-deriv', 'compact6', from_to='v2p')
-    call backend%alloc_tdsops(dirps%stagder_p2v, dir, &
-                              'stag-deriv', 'compact6', from_to='p2v')
+    call backend%alloc_tdsops(dirps%der1st, dirps%dir, &
+                              'first-deriv', der1st_scheme)
+    call backend%alloc_tdsops(dirps%der1st_sym, dirps%dir, &
+                              'first-deriv', der1st_scheme)
+    call backend%alloc_tdsops(dirps%der2nd, dirps%dir, &
+                              'second-deriv', der2nd_scheme)
+    call backend%alloc_tdsops(dirps%der2nd_sym, dirps%dir, &
+                              'second-deriv', der2nd_scheme)
+    call backend%alloc_tdsops(dirps%interpl_v2p, dirps%dir, &
+                              'interpolate', interpl_scheme, from_to='v2p')
+    call backend%alloc_tdsops(dirps%interpl_p2v, dirps%dir, &
+                              'interpolate', interpl_scheme, from_to='p2v')
+    call backend%alloc_tdsops(dirps%stagder_v2p, dirps%dir, &
+                              'stag-deriv', stagder_scheme, from_to='v2p')
+    call backend%alloc_tdsops(dirps%stagder_p2v, dirps%dir, &
+                              'stag-deriv', stagder_scheme, from_to='p2v')
 
   end subroutine
 
