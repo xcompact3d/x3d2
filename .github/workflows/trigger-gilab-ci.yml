@@ -1,6 +1,6 @@
 name: Trigger GitLab CI
 
-on: [push, pull_request] 
+on: [pull_request] 
 
 jobs:
   trigger-gitlab-ci:
@@ -8,8 +8,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Trigger pipeline on CFD-Xing/gitlab-ci
+      id: trigger
       uses: xcompact3d/x3d2@main
       with:
         url: https://gitlab.nektar.info
         project_id: 364
         token: ${{ secrets.GITLABCI }}
+    - name: Print GitLab pipeline URL
+      run: |
+        echo web_url=${{ steps.trigger.outputs.web_url }}
