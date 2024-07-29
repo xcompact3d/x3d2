@@ -21,16 +21,24 @@ inputs:
     required: false
     default: 'main'
 
+outputs:
+  web_url:
+    description: "GitLab pipeline URL"
+    value: ${{ steps.call-webhook.outputs.web_url }}
+    
 runs:
   using: "composite"
   steps:
-    - run: |
+    - id: call-webhook
+      run: |
         curl -X POST \
              --fail \
              -o response.json \
              -F "token=${TOKEN}" \
              -F "ref=${REF_NAME}" \
              ${URL}/api/v4/projects/${PROJECT_ID}/trigger/pipeline
+        # Parse URL
+        echo "web_url=$(cat response.json | jq -c '.web_url')" >> $GITHUB_OUTPUT
       shell: bash
       env:
         URL: ${{ inputs.url }}
