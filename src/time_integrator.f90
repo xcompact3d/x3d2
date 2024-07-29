@@ -107,7 +107,7 @@ contains
 
     ! initialize Adams-Bashforth coefficients
     ! ab1
-    init%coeffs(:, 1) = [5._dp, 0._dp, 0._dp, 0._dp]
+    init%coeffs(:, 1) = [1._dp, 0._dp, 0._dp, 0._dp]
     ! ab2
     init%coeffs(:, 2) = [1.5_dp, -0.5_dp, 0._dp, 0._dp]
     ! ab3
