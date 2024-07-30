@@ -12,12 +12,16 @@ stages:
     - echo Success!
 
 .check-formatting-template: &check-formatting-template
-  #image: ubuntu-latest
+  image: python:3.9.19-bullseye
   stage: check-policies
   variables:
+    FPRETTIFY_COMMAND: fprettify --config .fprettify.ini --diff --recursive src
   before_script:
+    - pip install fprettify
   script:
-    - echo Success!
+    - cd "$CI_PROJECT_DIR"
+    - "$FPRETTIFY_COMMAND"
+    - if [[ ! -z "($FPRETTIFY_COMMAND)" ]]; then echo "::warning::Code formatting issues detected. See log for details."; fi
   allow_failure: false
   timeout: 15m
 
