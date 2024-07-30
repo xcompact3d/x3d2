@@ -65,7 +65,10 @@ contains
     ! Test across multiple refinement levels
     nx = 16; ny = 16; nz = 16
     do i = 1, nref
-      mesh = mesh_t([nx, ny, nz], [1, 1, nproc], [Lx, Ly, Lz])
+      mesh = mesh_t([nx, ny, nz], [1, 1, nproc], [Lx, Ly, Lz], &
+                   ["periodic", "periodic"], &
+                   ["periodic", "periodic"], &
+                   ["periodic", "periodic"])
 #ifdef CUDA
       error stop "CUDA iterative solver not currently supported"
 #else
@@ -76,19 +79,6 @@ contains
       allocate(omp_backend_t :: backend)
       backend = omp_backend_t(mesh, allocator)
 #endif
-      allocate(backend%xdirps)
-      allocate(backend%ydirps)
-      allocate(backend%zdirps)
-      backend%xdirps%dir = DIR_X
-      backend%ydirps%dir = DIR_Y
-      backend%zdirps%dir = DIR_Z
-
-      call backend%alloc_tdsops(backend%xdirps%der2nd, DIR_X, &
-                                "second-deriv", "compact6")
-      call backend%alloc_tdsops(backend%ydirps%der2nd, DIR_Y, &
-                                "second-deriv", "compact6")
-      call backend%alloc_tdsops(backend%zdirps%der2nd, DIR_Z, &
-                                "second-deriv", "compact6")
       poisson_cg = poisson_cg_t(backend)
 
       ! Main solver calls Poisson in the DIR_Z orientation

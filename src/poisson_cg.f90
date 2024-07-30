@@ -19,9 +19,16 @@ module m_poisson_cg
 
     ! Prevent default access to components of type.
     private
+    type(dirps_t) :: xdirps, ydirps, zdirps
   contains
     procedure :: apply => poissmult
+    procedure :: poissmult_dirx
   end type laplace_operator_t
+
+  interface laplace_operator_t
+    !! Public constructor for the laplace_operator_t type.
+    procedure init_lapl
+  end interface laplace_operator_t
 
   type, abstract :: poisson_solver_t
     ! Prevent default access to components of type.
@@ -76,11 +83,26 @@ contains
     call self%solver%solve(p, f, backend)
   end subroutine solve
 
+  function init_lapl(backend) result(lapl)
+    type(laplace_operator_t) :: lapl
+    class(base_backend_t), intent(in) :: backend
+
+    lapl%xdirps%dir = DIR_X; lapl%ydirps%dir = DIR_Y; lapl%zdirps%dir = DIR_Z
+
+    call backend%alloc_tdsops(lapl%xdirps%der2nd, DIR_X, &
+                              "second-deriv", "compact6")
+    call backend%alloc_tdsops(lapl%ydirps%der2nd, DIR_Y, &
+                              "second-deriv", "compact6")
+    call backend%alloc_tdsops(lapl%zdirps%der2nd, DIR_Z, &
+                              "second-deriv", "compact6")
+  end function init_lapl
+  
   function init_cg(backend) result(solver)
     class(base_backend_t), target, intent(in) :: backend
     type(poisson_cg_t) :: solver
 
     call init_solver(solver%solver, backend)
+    solver%solver%lapl = laplace_operator_t(backend)
 
   end function init_cg
   
@@ -95,8 +117,12 @@ contains
     class(field_t), pointer :: f_x, p_x
     integer :: reorder_op, reorder_op2x
 
+    if (p%dir /= f%dir) then
+      error stop "Currently orientations of P and F must match"
+    end if
+    
     if (f%dir == DIR_X) then
-      call poissmult_dirx(f, p, backend)
+      call self%poissmult_dirx(f, p, backend)
     else
       f_x => backend%allocator%get_block(DIR_X, CELL)
       p_x => backend%allocator%get_block(DIR_X, CELL)
@@ -111,11 +137,11 @@ contains
         reorder_op2x = RDR_C2X
         reorder_op = RDR_X2C
       else
-        print *, "Unsupported Poisson orientation"
+        error stop "Unsupported Poisson orientation"
       end if
       call backend%reorder(p_x, p, reorder_op2x)
 
-      call poissmult_dirx(f_x, p_x, backend)
+      call self%poissmult_dirx(f_x, p_x, backend)
 
       call backend%reorder(f, f_x, reorder_op)
 
@@ -125,25 +151,25 @@ contains
     
   end subroutine poissmult
 
-  subroutine poissmult_dirx(f, p, backend)
+  subroutine poissmult_dirx(self, f, p, backend)
     !! Computes the action of the Laplace operator, i.e. `f = Ax` where `A` is
     !! the discrete Laplacian.
     !
     !! XXX: This requires fields in the DIR_X orientation due to use of
     !! sumintox.
+    class(laplace_operator_t) :: self
     class(field_t), intent(inout) :: f ! The output field
     class(field_t), intent(in) :: p    ! The input field
     class(base_backend_t), intent(in) :: backend
 
     ! Compute d2pdx2
-    call compute_der2nd(f, p, backend, backend%xdirps)
+    call compute_der2nd(f, p, backend, self%xdirps)
     
     ! Compute d2pdy2, d2pdz2 and accumulate
-    call compute_and_acc_der2nd(f, p, backend, backend%ydirps, RDR_X2Y)
-    call compute_and_acc_der2nd(f, p, backend, backend%zdirps, RDR_X2Z)
+    call compute_and_acc_der2nd(f, p, backend, self%ydirps, RDR_X2Y)
+    call compute_and_acc_der2nd(f, p, backend, self%zdirps, RDR_X2Z)
 
   end subroutine poissmult_dirx
-    
 
   subroutine compute_and_acc_der2nd(f, p, backend, dirps, reorder_op)
 

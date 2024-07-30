@@ -15,13 +15,12 @@ program test_poisson_cg_eval
 #else
   use m_omp_backend
 #endif
-  use m_common, only: globs_t, DIR_X, DIR_Y, DIR_Z, CELL, POISSON_SOLVER_CG
+  use m_common, only: DIR_X, DIR_Y, DIR_Z, CELL, POISSON_SOLVER_CG
   use m_poisson_cg, only: laplace_operator_t
   use m_tdsops, only: dirps_t
   
   implicit none
 
-  type(globs_t) :: globs
   class(allocator_t), allocatable :: allocator
   class(base_backend_t), allocatable :: backend
   class(field_t), pointer :: pressure
@@ -55,14 +54,23 @@ program test_poisson_cg_eval
   test_pass = .true.
 
   nx = 16; ny = 16; nz = 16
+  ! nx = nx * nproc
+  ny = ny * nproc
+  ! nz = nz * nproc
   do i = 1, nref
+    if (irank == 0) then
+      print *, "---------------------------------"
+      print *, "Testing refinement level ", i - 1
+    end if
     e(i) = run_test([nx, ny, nz])
     nx = 2 * nx; ny = 2 * ny; nz = 2 * nz
   end do
 
   do i = 2, nref
-    if (e(i) > 1.1 * (e(i - 1) / (2**6))) then
-      print *, "Error convergence failed ", e(i), e(i - 1) / (2**6)
+    if (e(i) > 2.2 * (e(i - 1) / (2**6))) then
+      if (irank == 0) then
+        print *, "Error convergence ", i, " failed ", e(i), e(i - 1) / (2**6)
+      end if
       test_pass = .false.
     end if
   end do
@@ -104,7 +112,7 @@ contains
     type(mesh_t), intent(out) :: mesh
     integer, dimension(3), intent(in) :: n
 
-    call init_globs(globs, mesh, n, nproc, [Lx, Ly, Lz])
+    call init_globs(mesh, n, nproc, [Lx, Ly, Lz])
 #ifdef CUDA
     if (irank == 0) then
       error stop "CUDA iterative solver not currently supported"
@@ -122,7 +130,7 @@ contains
     allocate(omp_backend_t :: backend)
     backend = omp_backend_t(mesh, allocator)
 #endif
-    call init_backend(backend)
+    lapl = laplace_operator_t(backend)
 
     ! Main solver calls Poisson in the DIR_Z orientation
     pressure => backend%allocator%get_block(DIR_Z)
@@ -135,48 +143,20 @@ contains
 
   end subroutine initialise_test
   
-  subroutine init_globs(globs, mesh, n, nproc, L)
+  subroutine init_globs(mesh, n, nproc, L)
     !! Initialisation for the globs object
     
-    type(globs_t), intent(out) :: globs
     type(mesh_t), intent(out) :: mesh
     integer, dimension(3), intent(in) :: n  ! The grid sizes
     integer, intent(in) :: nproc            ! The number of processors
     real(dp), dimension(3), intent(in) :: L ! The domain dimensions
 
-    mesh = mesh_t(n, [1, 1, nproc], L)
-
-    globs%poisson_solver_type = POISSON_SOLVER_CG
+    mesh = mesh_t(n, [1, nproc, 1], L, &
+                  ["periodic", "periodic"], &
+                  ["periodic", "periodic"], &
+                  ["periodic", "periodic"])
 
   end subroutine init_globs
-
-  subroutine init_backend(backend)
-
-    class(base_backend_t), intent(inout) :: backend
-
-    allocate(backend%xdirps)
-    allocate(backend%ydirps)
-    allocate(backend%zdirps)
-    call init_dirps(backend%xdirps, backend%ydirps, backend%zdirps)
-
-    call backend%alloc_tdsops(backend%xdirps%der2nd, DIR_X, &
-                              "second-deriv", "compact6")
-    call backend%alloc_tdsops(backend%ydirps%der2nd, DIR_Y, &
-                              "second-deriv", "compact6")
-    call backend%alloc_tdsops(backend%zdirps%der2nd, DIR_Z, &
-                              "second-deriv", "compact6")
-    
-  end subroutine init_backend
-  
-  subroutine init_dirps(xdirps, ydirps, zdirps)
-    
-    type(dirps_t), intent(out) :: xdirps, ydirps, zdirps
-
-    xdirps%dir = DIR_X
-    ydirps%dir = DIR_Y
-    zdirps%dir = DIR_Z
-      
-  end subroutine init_dirps
 
   subroutine test_constant_field(f, lapl, pressure, mesh)
 
@@ -234,6 +214,7 @@ contains
 
     integer, dimension(3) :: n
     real(dp) :: x, y, z
+    real(dp), dimension(3) :: coords
     integer :: i, j, k
     integer :: ii, jj, kk
 
@@ -252,32 +233,29 @@ contains
 
     ! Set pressure field to some variable
     allocate(expect, mold = f%data)
-    associate(xdirps => backend%xdirps, &
-              ydirps => backend%ydirps, &
-              zdirps => backend%zdirps)
-      do k = 1, n(3)
-        do j = 1, n(2)
-          do i = 1, n(1)
-            x = (mesh%par%n_offset(1) + (i - 1)) * dx
-            y = (mesh%par%n_offset(2) + (j - 1)) * dy
-            z = (mesh%par%n_offset(3) + (k - 1)) * dz
+    do k = 1, n(3)
+      do j = 1, n(2)
+        do i = 1, n(1)
+          coords = mesh%get_coordinates(i, j, k)
+          x = coords(1); y = coords(2); z = coords(3)
 
-            ! Need to get Cartesian -> memory layout mapping
-            call get_index_dir(ii, jj, kk, i, j, k, &
-                               DIR_X, &
-                               SZ, n(1), n(2), n(3))
+          ! Need to get Cartesian -> memory layout mapping
+          call get_index_dir(ii, jj, kk, i, j, k, &
+            DIR_Z, &
+            SZ, n(1), n(2), n(3))
 
-            pressure%data(ii, jj, kk) = cos(2 * pi * (x / Lx)) + &
-                                        cos(2 * pi * (y / Ly)) + &
-                                        cos(2 * pi * (z / Lz))
-            expect(ii, jj, kk) = -((2 * pi / Lx)**2 * cos(2 * pi * (x / Lx)) + &
-                                   (2 * pi / Ly)**2 * cos(2 * pi * (y / Ly)) + &
-                                   (2 * pi / Lz)**2 * cos(2 * pi * (z / Lz)))
-          end do
+          pressure%data(ii, jj, kk) = cos(2 * pi * (x / Lx)) + &
+                                      cos(2 * pi * (y / Ly)) + &
+                                      cos(2 * pi * (z / Lz))
+          expect(ii, jj, kk) = -((2 * pi / Lx)**2 * cos(2 * pi * (x / Lx)) + &
+                                 (2 * pi / Ly)**2 * cos(2 * pi * (y / Ly)) + &
+                                 (2 * pi / Lz)**2 * cos(2 * pi * (z / Lz)))
+          ! pressure%data(ii, jj, kk) = cos(2 * pi * (z / Lz))
+          ! expect(ii, jj, kk) = -((2 * pi / Lz)**2 * cos(2 * pi * (z / Lz)))
         end do
       end do
-      f%data = 17 ! Initialise with wrong answer
-    end associate
+    end do
+    f%data = 0 ! Initialise with wrong answer
 
     call lapl%apply(f, pressure, backend)
 

@@ -261,9 +261,11 @@ contains
                                    ierr)
     call MatSetUp(self%Pmat, ierr)
 
+    call build_index_map(mesh, self%Pmat)
+
     dims = mesh%get_padded_dims(DIR_C)
     dx = mesh%geo%d(1); dy = mesh%geo%d(2); dz = mesh%geo%d(3)
-    row = 1 ! XXX: Need to figure out natural->global mapping
+    row = (dims(1) + 2) * (dims(2) + 2)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -275,50 +277,26 @@ contains
           coeffs(1) = coeffs(1) - 2 / dx**2
           coeffs(2) = 1 / dx**2
           coeffs(3) = 1 / dx**2
-          if (i > 1) then
-            cols(2) = cols(1) - 1
-          else
-            cols(2) = cols(1) + (dims(1) - i)
-          end if
-          if (i < dims(1)) then
-            cols(3) = cols(1) + 1
-          else
-            cols(3) = cols(1) - (dims(1) - 1)
-          end if
+          cols(2) = cols(1) - 1
+          cols(3) = cols(1) + 1
 
           ! d2pdy2
           coeffs(1) = coeffs(1) - 2 / dy**2
           coeffs(4) = 1 / dy**2
           coeffs(5) = 1 / dy**2
-          if (j > 1) then
-            cols(4) = cols(1) - dims(1)
-          else
-            cols(4) = cols(1) + (dims(2) - j) * dims(1)
-          end if
-          if (j < dims(2)) then
-            cols(5) = cols(1) + dims(1)
-          else
-            cols(5) = cols(1) - (dims(2) - 1) * dims(1)
-          end if
+          cols(4) = cols(1) - (dims(1) + 2)
+          cols(5) = cols(1) + (dims(1) + 2)
 
           ! d2pdz2
           coeffs(1) = coeffs(1) - 2 / dz**2
           coeffs(6) = 1 / dz**2
           coeffs(7) = 1 / dz**2
-          if (k > 1) then
-            cols(6) = cols(1) - dims(2) * dims(1)
-          else
-            cols(6) = cols(1) + (dims(3) - k) * dims(2) * dims(1)
-          end if
-          if (k < dims(3)) then
-            cols(7) = cols(1) + dims(2) * dims(1)
-          else
-            cols(7) = cols(1) - (dims(3) - 1) * dims(2) * dims(1)
-          end if
+          cols(6) = cols(1) - (dims(1) + 2) * (dims(2) + 2)
+          cols(7) = cols(1) + (dims(1) + 2) * (dims(2) + 2)
           
           ! Push to matrix
           ! Recall Fortran (1-based) -> C (0-based) indexing
-          call MatSetValues(self%Pmat, 1, row - 1, nnb + 1, cols - 1, coeffs, &
+          call MatSetValuesLocal(self%Pmat, 1, row - 1, nnb + 1, cols - 1, coeffs, &
                             INSERT_VALUES, ierr)
 
           ! Advance row counter
@@ -326,6 +304,7 @@ contains
         end do
       end do
     end do
+
     
     call MatAssemblyBegin(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
     call MatAssemblyEnd(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
@@ -335,6 +314,104 @@ contains
     call MatNullSpaceDestroy(nsp, ierr)
 
   end subroutine create_preconditioner
+
+  subroutine build_index_map(mesh, P)
+    ! Builds the map from local indices to the global (equation ordering) index
+#include "petsc/finclude/petscis.h"
+    type(mesh_t), intent(in) :: mesh
+    type(tMat) :: P
+    ISLocalToGlobalMapping map
+    integer :: ierr
+
+    integer, dimension(3) :: dims, gdims
+    integer :: n
+
+    integer :: i, j, k
+
+    integer, dimension(:), allocatable :: idx
+    integer :: ctr, local_ctr
+    integer :: global_start
+
+    dims = mesh%get_dims(CELL)
+    gdims = mesh%get_global_dims(CELL)
+    n = product(dims + 2) ! Size of domain + 1 deep halo
+
+    allocate(idx(n))
+    idx(:) = 0
+
+    ctr = 1
+    local_ctr = 0
+    global_start = 1
+    do k = 1, dims(3) + 2
+      do j = 1, dims(2) + 2
+        do i = 1, dims(1) + 2
+
+          if (((k > 1) .and. (k < dims(3) + 2)) .and. &
+              ((j > 1) .and. (j < dims(2) + 2)) .and. &
+              ((i > 1) .and. (i < dims(1) + 2))) then
+            ! On-process
+            idx(ctr) = global_start + local_ctr
+
+            local_ctr = local_ctr + 1
+          else
+            ! Halo
+
+            if (((k > 1) .and. (k < dims(3) + 2)) .and. &
+                ((j > 1) .and. (j < dims(2) + 2))) then
+              if (i == 1) then
+                ! Left halo
+                if (mesh%par%nrank_dir(1) > 0) then
+                  ! Assuming periodic
+                  idx(ctr) = (global_start + (local_ctr + 1)) + (gdims(1) - 1)
+                end if
+              else
+                ! Right halo
+                if (mesh%par%nrank_dir(1) + 1 < mesh%par%nproc_dir(1)) then
+                  idx(ctr) = (global_start + (local_ctr + 1)) + (gdims(1) - 1)
+                end if
+              end if
+            end if
+
+            if (((k > 1) .and. (k < dims(3) + 2)) .and. &
+                ((i > 1) .and. (i < dims(1) + 2))) then
+              if (j == 1) then
+                ! Down halo
+                if (mesh%par%nrank_dir(2) > 0) then
+                end if
+              else
+                ! Up halo
+                if (mesh%par%nrank_dir(2) + 1 < mesh%par%nproc_dir(2)) then
+                end if
+              end if
+            end if
+
+            if (((j > 1) .and. (j < dims(2) + 2)) .and. &
+                ((i > 1) .and. (i < dims(1) + 2))) then
+              if (k == 1) then
+                ! Back halo
+                if (mesh%par%nrank_dir(3) > 0) then
+                end if
+              else
+                ! Front halo
+                if (mesh%par%nrank_dir(3) + 1 < mesh%par%nproc_dir(3)) then
+                end if
+              end if
+            end if
+            
+          end if
+          
+          ctr = ctr + 1
+        end do
+      end do
+    end do
+    idx = idx - 1 ! F->C
+
+    call ISLocalToGlobalMappingCreate(PETSC_COMM_WORLD, 1, n, idx, PETSC_COPY_VALUES, map, ierr)
+    call MatSetLocalToGlobalMapping(P, map, map, ierr)
+
+    deallocate(idx)
+
+  end subroutine build_index_map
 
   subroutine create_vectors(self, n)
     class(petsc_poisson_cg_t) :: self
