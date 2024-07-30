@@ -17,7 +17,6 @@ program test_poisson_cg_eval
 #endif
   use m_common, only: DIR_X, DIR_Y, DIR_Z, CELL, POISSON_SOLVER_CG
   use m_poisson_cg, only: laplace_operator_t
-  use m_tdsops, only: dirps_t
   
   implicit none
 
