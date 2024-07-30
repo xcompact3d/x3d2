@@ -153,6 +153,7 @@ contains
 
     integer :: ierr
 
+    ctx_global = mat_ctx_t(backend, self%lapl, DIR_X)
     call copy_field_to_vec(self%fvec, f, backend)
     call KSPSolve(self%ksp, self%fvec, self%pvec, ierr)
     call copy_vec_to_field(p, self%pvec, backend)
@@ -195,8 +196,6 @@ contains
 
     ! Determine local problem size
     n = product(backend%mesh%get_dims(CELL))
-
-    ctx_global = mat_ctx_t(backend, self%lapl, DIR_X)
 
     ! Initialise preconditioner and operator matrices
     ! XXX: Add option to use preconditioner as operator (would imply low-order
@@ -265,38 +264,90 @@ contains
 
     dims = mesh%get_padded_dims(DIR_C)
     dx = mesh%geo%d(1); dy = mesh%geo%d(2); dz = mesh%geo%d(3)
-    row = (dims(1) + 2) * (dims(2) + 2)
+    ! row = (dims(1) + 2) * (dims(2) + 2)
+    row = 1
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
+          ! coeffs = 0
+          ! cols = -1 ! Set null (simplifies BCs)
+          ! cols(1) = row
+          
+          ! ! d2pdx2
+          ! coeffs(1) = coeffs(1) - 2 / dx**2
+          ! coeffs(2) = 1 / dx**2
+          ! coeffs(3) = 1 / dx**2
+          ! cols(2) = cols(1) - 1
+          ! cols(3) = cols(1) + 1
+
+          ! ! d2pdy2
+          ! coeffs(1) = coeffs(1) - 2 / dy**2
+          ! coeffs(4) = 1 / dy**2
+          ! coeffs(5) = 1 / dy**2
+          ! cols(4) = cols(1) - (dims(1) + 2)
+          ! cols(5) = cols(1) + (dims(1) + 2)
+
+          ! ! d2pdz2
+          ! coeffs(1) = coeffs(1) - 2 / dz**2
+          ! coeffs(6) = 1 / dz**2
+          ! coeffs(7) = 1 / dz**2
+          ! cols(6) = cols(1) - (dims(1) + 2) * (dims(2) + 2)
+          ! cols(7) = cols(1) + (dims(1) + 2) * (dims(2) + 2)
+
           coeffs = 0
           cols = -1 ! Set null (simplifies BCs)
           cols(1) = row
-          
+
           ! d2pdx2
           coeffs(1) = coeffs(1) - 2 / dx**2
           coeffs(2) = 1 / dx**2
           coeffs(3) = 1 / dx**2
-          cols(2) = cols(1) - 1
-          cols(3) = cols(1) + 1
+          if (i > 1) then
+            cols(2) = cols(1) - 1
+          else
+            cols(2) = cols(1) + (dims(1) - i)
+          end if
+          if (i < dims(1)) then
+            cols(3) = cols(1) + 1
+          else
+            cols(3) = cols(1) - (dims(1) - 1)
+          end if
 
           ! d2pdy2
           coeffs(1) = coeffs(1) - 2 / dy**2
           coeffs(4) = 1 / dy**2
           coeffs(5) = 1 / dy**2
-          cols(4) = cols(1) - (dims(1) + 2)
-          cols(5) = cols(1) + (dims(1) + 2)
+          if (j > 1) then
+            cols(4) = cols(1) - dims(1)
+          else
+            cols(4) = cols(1) + (dims(2) - j) * dims(1)
+          end if
+          if (j < dims(2)) then
+            cols(5) = cols(1) + dims(1)
+          else
+            cols(5) = cols(1) - (dims(2) - 1) * dims(1)
+          end if
 
           ! d2pdz2
           coeffs(1) = coeffs(1) - 2 / dz**2
           coeffs(6) = 1 / dz**2
           coeffs(7) = 1 / dz**2
-          cols(6) = cols(1) - (dims(1) + 2) * (dims(2) + 2)
-          cols(7) = cols(1) + (dims(1) + 2) * (dims(2) + 2)
+          if (k > 1) then
+            cols(6) = cols(1) - dims(2) * dims(1)
+          else
+            cols(6) = cols(1) + (dims(3) - k) * dims(2) * dims(1)
+          end if
+          if (k < dims(3)) then
+            cols(7) = cols(1) + dims(2) * dims(1)
+          else
+            cols(7) = cols(1) - (dims(3) - 1) * dims(2) * dims(1)
+          end if
           
           ! Push to matrix
           ! Recall Fortran (1-based) -> C (0-based) indexing
-          call MatSetValuesLocal(self%Pmat, 1, row - 1, nnb + 1, cols - 1, coeffs, &
+          ! call MatSetValuesLocal(self%Pmat, 1, row - 1, nnb + 1, cols - 1, coeffs, &
+          !                   INSERT_VALUES, ierr)
+          call MatSetValues(self%Pmat, 1, row - 1, nnb + 1, cols - 1, coeffs, &
                             INSERT_VALUES, ierr)
 
           ! Advance row counter
@@ -305,7 +356,6 @@ contains
       end do
     end do
 
-    
     call MatAssemblyBegin(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
     call MatAssemblyEnd(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
 
