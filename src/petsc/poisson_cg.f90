@@ -495,6 +495,7 @@ contains
     call KSPCreate(PETSC_COMM_WORLD, self%ksp, ierr)
     call KSPSetOperators(self%ksp, self%Amat, self%Pmat, ierr)
     call KSPSetFromOptions(self%ksp, ierr)
+    call KSPSetInitialGuessNonzero(self%ksp, PETSC_TRUE, ierr)
 
   end subroutine create_solver
 
