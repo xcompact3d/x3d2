@@ -443,7 +443,7 @@ contains
     integer :: ierr
 
     call KSPCreate(PETSC_COMM_WORLD, self%ksp, ierr)
-    call KSPSetOperators(self%ksp, self%Pmat, self%Pmat, ierr)
+    call KSPSetOperators(self%ksp, self%Amat, self%Pmat, ierr)
     call KSPSetFromOptions(self%ksp, ierr)
 
   end subroutine create_solver
