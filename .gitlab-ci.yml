@@ -51,12 +51,16 @@ stages:
     - echo Deploy sphinx docs
     - git config user.name 'github-action'
     - git config user.email 'github-action'
-    - ghp-import -m 'Update sphinx docs' --push --branch gh-pages docs/build/html --no-jekyll --force
+    - git remote add upstream git@github.com:xcompact3d/x3d2.git
+    - ghp-import -m 'Update sphinx docs' --push --remote upstream --branch gh-pages docs/build/html --no-jekyll --force
     - echo Build API docs with ford
     - ford $FORD_CFG -o $FORD_OUTPUT_DIR
     - echo Deploy api-docs
-    - ghp-import -m 'Update API docs' --prefix $PUBLISH_DIR \
-          --push --branch gh-pages $FORD_OUTPUT_DIR --no-jekyll --force
+    - ghp-import -m 'Update API docs' --prefix $PUBLISH_DIR --push --remote upstream --branch gh-pages $FORD_OUTPUT_DIR --no-jekyll --force
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master"'
+      when: on_success
+    - when: never
   allow_failure: false
   timeout: 15m
 
