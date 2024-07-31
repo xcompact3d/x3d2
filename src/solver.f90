@@ -12,6 +12,8 @@ module m_solver
   use m_time_integrator, only: time_intg_t
   use m_mesh, only: mesh_t
 
+  use m_poisson_cg, only: poisson_cg_t
+
   implicit none
 
   type :: solver_t
@@ -51,6 +53,7 @@ module m_solver
     class(base_backend_t), pointer :: backend
     class(mesh_t), pointer :: mesh
     type(time_intg_t) :: time_integrator
+    type(poisson_cg_t) :: poisson_cg
     type(allocator_t), pointer :: host_allocator
     type(dirps_t), pointer :: xdirps, ydirps, zdirps
     procedure(poisson_solver), pointer :: poisson => null()
@@ -193,8 +196,11 @@ contains
                                            solver%ydirps, solver%zdirps)
       solver%poisson => poisson_fft
     case ('CG')
-      if (solver%mesh%par%is_root()) &
-        print *, 'Poisson solver: CG, not yet implemented'
+      if (solver%mesh%par%is_root()) then
+        print *, 'Poisson solver: CG'
+      end if
+      
+      solver%poisson_cg = poisson_cg_t(solver%backend)
       solver%poisson => poisson_cg
     case default
       error stop 'poisson_solver_type is not valid. Use "FFT" or "CG".'
@@ -617,6 +623,8 @@ contains
     class(solver_t) :: self
     class(field_t), intent(inout) :: pressure
     class(field_t), intent(in) :: div_u
+
+    call self%poisson_cg%solve(pressure, div_u, self%backend)
 
   end subroutine poisson_cg
 

@@ -3,6 +3,7 @@ set(SRC
   backend.f90
   common.f90
   poisson_fft.f90
+  poisson_cg.f90
   solver.f90
   tdsops.f90
   time_integrator.f90
@@ -30,10 +31,16 @@ set(CUDASRC
   cuda/sendrecv.f90
   cuda/tdsops.f90
 )
+set(PETSCSRC
+  petsc/poisson_cg.f90
+)
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   list(APPEND SRC ${CUDASRC})
+endif()
+if (${POISSON_SOLVER} STREQUAL "ITER")
+  list(APPEND SRC ${PETSCSRC})
 endif()
 
 add_library(x3d2 STATIC ${SRC})
@@ -66,3 +73,15 @@ find_package(MPI REQUIRED)
 target_link_libraries(x3d2 PRIVATE MPI::MPI_Fortran)
 target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
 
+if (${POISSON_SOLVER} STREQUAL "FFT")
+  message(STATUS "Using the FFT Poisson solver")
+elseif (${POISSON_SOLVER} STREQUAL "ITER")
+  message(STATUS "Using the iterative Poisson solver")
+
+  # Find and link PETSc
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(PETSC REQUIRED IMPORTED_TARGET petsc)
+  target_link_libraries(x3d2 PUBLIC PkgConfig::PETSC)
+else()
+  message(FATAL_ERROR "Unrecognised Poisson solver: ${POISSON_SOLVER}")
+endif()
