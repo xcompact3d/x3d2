@@ -1,7 +1,8 @@
 module m_tdsops
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_common, only: dp, pi, VERT, CELL, none
+  use m_common, only: dp, pi, VERT, CELL, none, &
+                      BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET
   use m_mesh, only: mesh_t
 
   implicit none
@@ -81,9 +82,9 @@ contains
     integer, intent(in) :: tds_n
     real(dp), intent(in) :: delta
     character(*), intent(in) :: operation, scheme
+    integer, intent(in) :: bc_start, bc_end !! Boundary Cond.
     integer, optional, intent(in) :: n_halo !! Number of halo cells
     character(*), optional, intent(in) :: from_to !! 'v2p' or 'p2v'
-    character(*), optional, intent(in) :: bc_start, bc_end !! Boundary Cond.
     logical, optional, intent(in) :: sym !! (==npaire), only for Neumann BCs
     real(dp), optional, intent(in) :: c_nu, nu0_nu !! params for hypervisc.
 
@@ -119,7 +120,7 @@ contains
     allocate (tdsops%coeffs_s(n_stencil, tdsops%n_halo))
     allocate (tdsops%coeffs_e(n_stencil, tdsops%n_halo))
 
-    tdsops%periodic = bc_start == 'periodic' .and. bc_end == 'periodic'
+    tdsops%periodic = bc_start == BC_PERIODIC .and. bc_end == BC_PERIODIC
 
     if (operation == 'first-deriv') then
       call tdsops%deriv_1st(delta, scheme, bc_start, bc_end, sym)
@@ -161,7 +162,7 @@ contains
     class(tdsops_t), intent(inout) :: self
     real(dp), intent(in) :: delta
     character(*), intent(in) :: scheme
-    character(*), optional, intent(in) :: bc_start, bc_end
+    integer, intent(in) :: bc_start, bc_end
     logical, optional, intent(in) :: sym
 
     real(dp), allocatable :: dist_b(:)
@@ -209,7 +210,7 @@ contains
     dist_b(:) = 1._dp
 
     select case (bc_start)
-    case ('neumann')
+    case (BC_NEUMANN)
       if (symmetry) then
         ! sym == .true.; d(uu)/dx, dv/dx, dw/dx
         !                d(vv)/dy, du/dy, dw/dy
@@ -235,7 +236,7 @@ contains
                                bfi, &
                                afi, bfi, 0._dp, 0._dp]
       end if
-    case ('dirichlet')
+    case (BC_DIRICHLET)
       ! first line
       self%dist_sa(1) = 0._dp
       self%dist_sc(1) = 2._dp
@@ -253,7 +254,7 @@ contains
     end select
 
     select case (bc_end)
-    case ('neumann')
+    case (BC_NEUMANN)
       if (symmetry) then
         ! sym == .true.; d(uu)/dx, dv/dx, dw/dx
         !                d(vv)/dy, du/dy, dw/dy
@@ -279,7 +280,7 @@ contains
                                         -bfi, &
                                         afi, 0._dp, 0._dp, 0._dp]
       end if
-    case ('dirichlet')
+    case (BC_DIRICHLET)
       ! last line
       self%dist_sa(n) = 2._dp
       self%dist_sc(n) = 0._dp
@@ -308,7 +309,7 @@ contains
     class(tdsops_t), intent(inout) :: self
     real(dp), intent(in) :: delta
     character(*), intent(in) :: scheme
-    character(*), optional, intent(in) :: bc_start, bc_end
+    integer, intent(in) :: bc_start, bc_end
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
 
@@ -380,7 +381,7 @@ contains
     dist_b(:) = 1._dp
 
     select case (bc_start)
-    case ('neumann')
+    case (BC_NEUMANN)
       if (symmetry) then
         ! sym == .true.; d2v/dx2, d2w/dx2
         !                d2u/dy2, d2w/dy2
@@ -418,7 +419,7 @@ contains
                                -2*asi - 2*bsi - 2*csi - 2*dsi, &
                                asi, bsi, csi, dsi]
       end if
-    case ('dirichlet')
+    case (BC_DIRICHLET)
       ! first line
       self%dist_sa(1) = 0._dp
       self%dist_sc(1) = 11._dp
@@ -445,7 +446,7 @@ contains
     end select
 
     select case (bc_end)
-    case ('neumann')
+    case (BC_NEUMANN)
       if (symmetry) then
         ! sym == .true.; d2v/dx2, d2w/dx2
         !                d2u/dy2, d2w/dy2
@@ -483,7 +484,7 @@ contains
                                -2*asi - 2*bsi - 2*csi - 2*dsi, &
                                asi, bsi - dsi, -csi, 0._dp]
       end if
-    case ('dirichlet')
+    case (BC_DIRICHLET)
       ! last line
       self%dist_sa(n) = 11._dp
       self%dist_sc(n) = 0._dp
@@ -519,7 +520,7 @@ contains
 
     class(tdsops_t), intent(inout) :: self
     character(*), intent(in) :: scheme, from_to
-    character(*), optional, intent(in) :: bc_start, bc_end
+    integer, intent(in) :: bc_start, bc_end
     logical, optional, intent(in) :: sym
 
     real(dp), allocatable :: dist_b(:)
@@ -580,7 +581,7 @@ contains
     allocate (dist_b(n))
     dist_b(:) = 1._dp
 
-    if ((bc_start == 'dirichlet') .or. (bc_start == 'neumann')) then
+    if ((bc_start == BC_DIRICHLET) .or. (bc_start == BC_NEUMANN)) then
       self%dist_sa(1) = 0._dp
 
       select case (from_to)
@@ -614,7 +615,7 @@ contains
       end select
     end if
 
-    if ((bc_end == 'dirichlet') .or. (bc_end == 'neumann')) then
+    if ((bc_end == BC_DIRICHLET) .or. (bc_end == BC_NEUMANN)) then
       self%dist_sc(n) = 0._dp
 
       select case (from_to)
@@ -659,7 +660,7 @@ contains
     class(tdsops_t), intent(inout) :: self
     real(dp), intent(in) :: delta
     character(*), intent(in) :: scheme, from_to
-    character(*), optional, intent(in) :: bc_start, bc_end
+    integer, intent(in) :: bc_start, bc_end
     logical, optional, intent(in) :: sym
 
     real(dp), allocatable :: dist_b(:)
@@ -706,7 +707,7 @@ contains
     allocate (dist_b(n))
     dist_b(:) = 1._dp
 
-    if ((bc_start == 'dirichlet') .or. (bc_start == 'neumann')) then
+    if ((bc_start == BC_DIRICHLET) .or. (bc_start == BC_NEUMANN)) then
       self%dist_sa(1) = 0._dp
 
       select case (from_to)
@@ -731,7 +732,7 @@ contains
       end select
     end if
 
-    if ((bc_end == 'dirichlet') .or. (bc_end == 'neumann')) then
+    if ((bc_end == BC_DIRICHLET) .or. (bc_end == BC_NEUMANN)) then
       self%dist_sc(n) = 0._dp
 
       select case (from_to)

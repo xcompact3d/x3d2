@@ -3,7 +3,7 @@ program test_omp_tridiag
   use mpi
   use omp_lib
 
-  use m_common, only: dp, pi
+  use m_common, only: dp, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_NULL
   use m_omp_common, only: SZ
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_exec_dist, only: exec_dist_tds_compact
@@ -29,7 +29,7 @@ program test_omp_tridiag
 
   type(tdsops_t) :: tdsops
 
-  character(len=20) :: bc_start, bc_end
+  integer :: bc_start, bc_end
 
   integer :: n, n_groups, j, n_halo, n_iters, n_loc
   integer :: n_glob
@@ -85,7 +85,8 @@ program test_omp_tridiag
 
   ! =========================================================================
   ! second derivative with periodic BC
-  tdsops = tdsops_init(n, dx_per, operation='second-deriv', scheme='compact6')
+  tdsops = tdsops_init(n, dx_per, operation='second-deriv', scheme='compact6', &
+                       bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
 
   call set_u(u, sin_0_2pi_per, n, n_groups)
 
@@ -114,7 +115,8 @@ program test_omp_tridiag
 
   ! =========================================================================
   ! first derivative with periodic BC
-  tdsops = tdsops_init(n, dx_per, operation='first-deriv', scheme='compact6')
+  tdsops = tdsops_init(n, dx_per, operation='first-deriv', scheme='compact6', &
+                       bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
 
   call set_u(u, sin_0_2pi_per, n, n_groups)
 
@@ -139,18 +141,18 @@ program test_omp_tridiag
   ! =========================================================================
   ! first derivative with dirichlet and neumann
   if (nrank == 0) then
-    bc_start = 'dirichlet'!'neumann'!'dirichlet'
+    bc_start = BC_DIRICHLET
   else
-    bc_start = 'null'
+    bc_start = BC_NULL
   end if
   if (nrank == nproc - 1) then
-    bc_end = 'neumann'!'dirichlet'!'neumann'
+    bc_end = BC_NEUMANN
   else
-    bc_end = 'null'
+    bc_end = BC_NULL
   end if
 
   tdsops = tdsops_init(n, dx, operation='first-deriv', scheme='compact6', &
-                       bc_start=trim(bc_start), bc_end=trim(bc_end), &
+                       bc_start=bc_start, bc_end=bc_end, &
                        sym=.false.)
 
   call set_u(u, sin_0_2pi, n, n_groups)
@@ -178,7 +180,7 @@ program test_omp_tridiag
   n_loc = n
   if (nrank == nproc - 1) n_loc = n - 1
   tdsops = tdsops_init(n_loc, dx, operation='interpolate', scheme='classic', &
-                       bc_start=trim(bc_start), bc_end=trim(bc_end), &
+                       bc_start=bc_start, bc_end=bc_end, &
                        from_to='v2p')
 
   call set_u(u, cos_0_2pi, n, n_groups)
@@ -206,7 +208,7 @@ program test_omp_tridiag
   ! c_nu = 0.22 and nu0_nu = 63 results in alpha = 0.40869111947709036
   tdsops = tdsops_init(n, dx, operation='second-deriv', &
                        scheme='compact6-hyperviscous', &
-                       bc_start=trim(bc_start), bc_end=trim(bc_end), &
+                       bc_start=bc_start, bc_end=bc_end, &
                        sym=.false., c_nu=0.22_dp, nu0_nu=63._dp)
 
   call set_u(u, sin_0_2pi, n, n_groups)
