@@ -2,6 +2,7 @@ module m_time_integrator
   use m_allocator, only: allocator_t, field_t, flist_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X
+  use m_adios_io, only: adios_io_t, adios_file_t
 
   implicit none
 
@@ -24,6 +25,7 @@ module m_time_integrator
     procedure :: step
     procedure :: runge_kutta
     procedure :: adams_bashforth
+    procedure :: write_checkpoint
   end type time_intg_t
 
   interface time_intg_t
@@ -165,6 +167,23 @@ contains
     end do
 
   end function init
+
+  subroutine write_checkpoint(self, file, io)
+    class(time_intg_t), intent(inout) :: self
+    type(adios_file_t), intent(inout) :: file !! File already opened for writing
+    class(adios_io_t), intent(inout) :: io
+
+    call io%write_real8(3.14_8, file, "pi") ! TODO save method/order data
+
+    ! if adams_bashforth:
+    !   io%write(..., self%istep) ! required to ensure startup doesn't happen again
+    !   for var in olds:
+    !     for step in olds[var]: ! index 1 is the most recent
+    !       data = olds[var][step]
+    !       call io%write(filename, "old_{var}_{step}", data)
+    !     else if runge_kutta:
+          ! do nothing (TODO)
+  end subroutine
 
   subroutine step(self, u, v, w, du, dv, dw, dt)
     implicit none
