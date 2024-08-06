@@ -15,6 +15,7 @@ set(SRC
   omp/poisson_fft.f90
   omp/sendrecv.f90
   omp/exec_dist.f90
+  omp/exec_thom.f90
 )
 set(CUDASRC
   cuda/allocator.f90
