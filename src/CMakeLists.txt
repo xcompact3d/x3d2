@@ -20,6 +20,7 @@ set(SRC
   backend/omp/kernels/spectral_processing.f90
   backend/omp/sendrecv.f90
   backend/omp/exec_dist.f90
+  backend/omp/exec_thom.f90
   case/base_case.f90
   case/channel.f90
   case/generic.f90
