@@ -52,7 +52,7 @@ contains
         do j = 2, 4
           !$omp simd
           do i = 1, SZ
-            du(i, j, k) = sum(coeffs_s(6-j:9, j) * u(i, 1:4+j, k)) &
+            du(i, j, k) = sum(coeffs_s(4-(j-2):9, j) * u(i, 1:4+j, k)) &
               - du(i, j - 1, k) * thom_s(j)
           end do
           !$omp end simd
