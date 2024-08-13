@@ -69,7 +69,7 @@ program test_thom
     end do
   end do
 
-  tdsops = tdsops_init(n, dx_per, &
+  tdsops = tdsops_init(n, dx, &
                        operation = "second-deriv", scheme = "compact6", &
                        bc_start = "dirichlet", bc_end = "dirichlet")
 
@@ -128,6 +128,8 @@ contains
     norm_du = sum((u + du)**2) / n_glob / n_groups / SZ
     norm_du = sqrt(norm_du)
 
+    print *, minval(u + du), maxval(u+du)
+    
     print *, "error norm", norm_du
 
     if (norm_du > tol) then
