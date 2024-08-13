@@ -122,8 +122,8 @@ contains
         !! Forward pass
         do j = 1, n
           do i = 1, 4
-            jm(i) = modulo(j - (1 + i), n) + 1
-            jp(i) = modulo(j - (n + (i - 1)), n) + 1
+            jm(i) = modulo(j - (5 - (i - 1)), n) + 1
+            jp(i) = modulo(j - (n - (i - 1)), n) + 1
           end do
 
           !$omp simd
@@ -131,7 +131,7 @@ contains
             du(i, j, k) = sum(coeffs(1:4) * u(i, jm(1:4), k))
             du(i, j, k) = du(i, j, k) + coeffs(5) * u(i, j, k)
             du(i, j, k) = du(i, j, k) + sum(coeffs(6:9) * u(i, jp(1:4), k))
-            du(i, j, k) = du(i, j, k) - du(i, jm(1), k) * thom_s(j)
+            du(i, j, k) = du(i, j, k) - du(i, jm(4), k) * thom_s(j)
           end do
           !$omp end simd
         end do
