@@ -36,7 +36,8 @@ program test_thom
   dx = 2 * pi / (n_glob - 1)
 
   !! Periodic case
-  
+  print *, "=== Testing periodic case ==="
+
   do k = 1, n_groups
     do j = 1, n
       do i = 1, SZ
@@ -60,6 +61,7 @@ program test_thom
   call checkerr(u, du, 1.0e-8_dp)
 
   !! Dirichlet case
+  print *, "=== Testing Dirichlet case ==="
   
   do k = 1, n_groups
     do j = 1, n
@@ -82,9 +84,6 @@ program test_thom
 
   call checkperf(tend - tstart, n_iters, ndof, 5.0_dp)
   call checkerr(u, du, 1.0e-8_dp)
-
-  
-  error stop "STILL UNDER IMPLEMENTATION"
 
 contains
 
@@ -133,10 +132,10 @@ contains
     print *, "error norm", norm_du
 
     if (norm_du > tol) then
-      print *, "Check Dirichlet second derivatives... FAILED"
+      print *, "Check second derivatives... FAILED"
       allpass = .false.
     else
-      print *,  "Check Dirichlet second derivatives... PASSED"
+      print *,  "Check second derivatives... PASSED"
     end if
     
   end subroutine checkerr
