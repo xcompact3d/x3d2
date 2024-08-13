@@ -131,7 +131,7 @@ contains
             du(i, j, k) = sum(coeffs(1:4) * u(i, jm(1:4), k))
             du(i, j, k) = du(i, j, k) + coeffs(5) * u(i, j, k)
             du(i, j, k) = du(i, j, k) + sum(coeffs(6:9) * u(i, jp(1:4), k))
-            du(i, j, k) = du(i, j, k) - du(i, jm(4), k) * thom_s(j)
+            du(i, j, k) = du(i, j, k) - du(i, jm(1), k) * thom_s(j)
           end do
           !$omp end simd
         end do
