@@ -1,5 +1,6 @@
 program test_thom
 
+  use omp_lib
   use m_common, only: dp, pi
   use m_omp_common, only: SZ
   use m_tdsops, only: tdsops_t, tdsops_init
@@ -24,10 +25,17 @@ program test_thom
 
   allpass = .true.
   
+  !! Performance test
+  ! n_glob = 512
+  ! n_groups = 512 * 512 / SZ
+  ! n_iters = 1000
+
+  !! Verification test
   n_glob = 1024
-  n = n_glob
   n_groups = 64 * 64 / SZ
   n_iters = 1
+
+  n = n_glob
   ndof = n_glob * n_groups * SZ
 
   allocate(u(SZ, n, n_groups), du(SZ, n, n_groups))
@@ -50,14 +58,14 @@ program test_thom
                        operation = "second-deriv", scheme = "compact6", &
                        bc_start = "periodic", bc_end = "periodic")
 
-  call cpu_time(tstart)
+  tstart = omp_get_wtime()
   do i = 1, n_iters
     call exec_thom_tds_compact(du, u, tdsops)
   end do
-  call cpu_time(tend)
+  tend = omp_get_wtime()
   print *, "Total time", tend - tstart
 
-  call checkperf(tend - tstart, n_iters, ndof, 5.0_dp)
+  call checkperf(tend - tstart, n_iters, ndof, 3.0_dp)
   call checkerr(u, du, 1.0e-8_dp)
 
   !! Dirichlet case
@@ -75,14 +83,14 @@ program test_thom
                        operation = "second-deriv", scheme = "compact6", &
                        bc_start = "dirichlet", bc_end = "dirichlet")
 
-  call cpu_time(tstart)
+  tstart = omp_get_wtime()
   do i = 1, n_iters
     call exec_thom_tds_compact(du, u, tdsops)
   end do
-  call cpu_time(tend)
+  tend = omp_get_wtime()
   print *, "Total time", tend - tstart
 
-  call checkperf(tend - tstart, n_iters, ndof, 5.0_dp)
+  call checkperf(tend - tstart, n_iters, ndof, 3.0_dp)
   call checkerr(u, du, 1.0e-8_dp)
 
 contains
