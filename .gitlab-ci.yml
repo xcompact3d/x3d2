@@ -4,12 +4,33 @@ stages:
   - build-docs
 
 .build-and-test-template: &build-and-test-template
-  #image: ubuntu-20.04
+  image: ubuntu-20.04
   stage: build-and-test
   timeout: 1h
   variables:
+     OMPI_VERSION: 4.1.5
   script:
-    - echo Success!
+    - echo Display GCC version number
+    - gcc --version
+    - echo Build openmpi
+    - wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-$OMPI_VERSION.tar.gz
+    - tar -xf openmpi-$OMPI_VERSION.tar.gz
+    - cd openmpi-$OMPI_VERSION/ && mkdir installed
+    - ./configure --prefix=$(pwd)/installed
+    - make all install
+    - echo Update PATH
+    - echo "$GITHUB_WORKSPACE/openmpi-${OMPI_VERSION}/installed/bin" \
+          >> $GITHUB_PATH
+    - echo Configure Debug build
+    - make FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+    - echo Build with Debug (strict) flags
+    - make -C build
+    - echo Configure Release build
+    - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+    - echo Build tests
+    - make -C build
+    - echo Run the tests
+    - make -C build test
 
 .check-formatting-template: &check-formatting-template
   image: python:3.9.19-bullseye
