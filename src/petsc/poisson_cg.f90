@@ -264,91 +264,91 @@ contains
 
     dims = mesh%get_padded_dims(DIR_C)
     dx = mesh%geo%d(1); dy = mesh%geo%d(2); dz = mesh%geo%d(3)
-    ! row = (dims(1) + 2) * (dims(2) + 2)
-    row = 1
+    row = (dims(1) + 2) + 2
+    ! row = 1
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          ! coeffs = 0
-          ! cols = -1 ! Set null (simplifies BCs)
-          ! cols(1) = row
-          
-          ! ! d2pdx2
-          ! coeffs(1) = coeffs(1) - 2 / dx**2
-          ! coeffs(2) = 1 / dx**2
-          ! coeffs(3) = 1 / dx**2
-          ! cols(2) = cols(1) - 1
-          ! cols(3) = cols(1) + 1
-
-          ! ! d2pdy2
-          ! coeffs(1) = coeffs(1) - 2 / dy**2
-          ! coeffs(4) = 1 / dy**2
-          ! coeffs(5) = 1 / dy**2
-          ! cols(4) = cols(1) - (dims(1) + 2)
-          ! cols(5) = cols(1) + (dims(1) + 2)
-
-          ! ! d2pdz2
-          ! coeffs(1) = coeffs(1) - 2 / dz**2
-          ! coeffs(6) = 1 / dz**2
-          ! coeffs(7) = 1 / dz**2
-          ! cols(6) = cols(1) - (dims(1) + 2) * (dims(2) + 2)
-          ! cols(7) = cols(1) + (dims(1) + 2) * (dims(2) + 2)
-
           coeffs = 0
           cols = -1 ! Set null (simplifies BCs)
           cols(1) = row
-
+          
           ! d2pdx2
           coeffs(1) = coeffs(1) - 2 / dx**2
           coeffs(2) = 1 / dx**2
           coeffs(3) = 1 / dx**2
-          if (i > 1) then
-            cols(2) = cols(1) - 1
-          else
-            cols(2) = cols(1) + (dims(1) - i)
-          end if
-          if (i < dims(1)) then
-            cols(3) = cols(1) + 1
-          else
-            cols(3) = cols(1) - (dims(1) - 1)
-          end if
+          cols(2) = cols(1) - 1
+          cols(3) = cols(1) + 1
 
           ! d2pdy2
           coeffs(1) = coeffs(1) - 2 / dy**2
           coeffs(4) = 1 / dy**2
           coeffs(5) = 1 / dy**2
-          if (j > 1) then
-            cols(4) = cols(1) - dims(1)
-          else
-            cols(4) = cols(1) + (dims(2) - j) * dims(1)
-          end if
-          if (j < dims(2)) then
-            cols(5) = cols(1) + dims(1)
-          else
-            cols(5) = cols(1) - (dims(2) - 1) * dims(1)
-          end if
+          cols(4) = cols(1) - (dims(1) + 2)
+          cols(5) = cols(1) + (dims(1) + 2)
 
           ! d2pdz2
           coeffs(1) = coeffs(1) - 2 / dz**2
           coeffs(6) = 1 / dz**2
           coeffs(7) = 1 / dz**2
-          if (k > 1) then
-            cols(6) = cols(1) - dims(2) * dims(1)
-          else
-            cols(6) = cols(1) + (dims(3) - k) * dims(2) * dims(1)
-          end if
-          if (k < dims(3)) then
-            cols(7) = cols(1) + dims(2) * dims(1)
-          else
-            cols(7) = cols(1) - (dims(3) - 1) * dims(2) * dims(1)
-          end if
+          cols(6) = cols(1) - (dims(1) + 2) * (dims(2) + 2)
+          cols(7) = cols(1) + (dims(1) + 2) * (dims(2) + 2)
+
+          ! coeffs = 0
+          ! cols = -1 ! Set null (simplifies BCs)
+          ! cols(1) = row
+
+          ! ! d2pdx2
+          ! coeffs(1) = coeffs(1) - 2 / dx**2
+          ! coeffs(2) = 1 / dx**2
+          ! coeffs(3) = 1 / dx**2
+          ! if (i > 1) then
+          !   cols(2) = cols(1) - 1
+          ! else
+          !   cols(2) = cols(1) + (dims(1) - i)
+          ! end if
+          ! if (i < dims(1)) then
+          !   cols(3) = cols(1) + 1
+          ! else
+          !   cols(3) = cols(1) - (dims(1) - 1)
+          ! end if
+
+          ! ! d2pdy2
+          ! coeffs(1) = coeffs(1) - 2 / dy**2
+          ! coeffs(4) = 1 / dy**2
+          ! coeffs(5) = 1 / dy**2
+          ! if (j > 1) then
+          !   cols(4) = cols(1) - dims(1)
+          ! else
+          !   cols(4) = cols(1) + (dims(2) - j) * dims(1)
+          ! end if
+          ! if (j < dims(2)) then
+          !   cols(5) = cols(1) + dims(1)
+          ! else
+          !   cols(5) = cols(1) - (dims(2) - 1) * dims(1)
+          ! end if
+
+          ! ! d2pdz2
+          ! coeffs(1) = coeffs(1) - 2 / dz**2
+          ! coeffs(6) = 1 / dz**2
+          ! coeffs(7) = 1 / dz**2
+          ! if (k > 1) then
+          !   cols(6) = cols(1) - dims(2) * dims(1)
+          ! else
+          !   cols(6) = cols(1) + (dims(3) - k) * dims(2) * dims(1)
+          ! end if
+          ! if (k < dims(3)) then
+          !   cols(7) = cols(1) + dims(2) * dims(1)
+          ! else
+          !   cols(7) = cols(1) - (dims(3) - 1) * dims(2) * dims(1)
+          ! end if
           
           ! Push to matrix
           ! Recall Fortran (1-based) -> C (0-based) indexing
-          ! call MatSetValuesLocal(self%Pmat, 1, row - 1, nnb + 1, cols - 1, coeffs, &
-          !                   INSERT_VALUES, ierr)
-          call MatSetValues(self%Pmat, 1, row - 1, nnb + 1, cols - 1, coeffs, &
+          call MatSetValuesLocal(self%Pmat, 1, row - 1, nnb + 1, cols - 1, coeffs, &
                             INSERT_VALUES, ierr)
+          ! call MatSetValues(self%Pmat, 1, row - 1, nnb + 1, cols - 1, coeffs, &
+          !                   INSERT_VALUES, ierr)
 
           ! Advance row counter
           row = row + 1
@@ -373,17 +373,14 @@ contains
     ISLocalToGlobalMapping map
     integer :: ierr
 
-    integer, dimension(3) :: dims, gdims
+    integer, dimension(3) :: dims
     integer :: n
-
-    integer :: i, j, k
 
     integer, dimension(:), allocatable :: idx
     integer :: ctr, local_ctr
     integer :: global_start
 
     dims = mesh%get_dims(CELL)
-    gdims = mesh%get_global_dims(CELL)
     n = product(dims + 2) ! Size of domain + 1 deep halo
 
     allocate(idx(n))
@@ -392,68 +389,8 @@ contains
     ctr = 1
     local_ctr = 0
     global_start = 1
-    do k = 1, dims(3) + 2
-      do j = 1, dims(2) + 2
-        do i = 1, dims(1) + 2
-
-          if (((k > 1) .and. (k < dims(3) + 2)) .and. &
-              ((j > 1) .and. (j < dims(2) + 2)) .and. &
-              ((i > 1) .and. (i < dims(1) + 2))) then
-            ! On-process
-            idx(ctr) = global_start + local_ctr
-
-            local_ctr = local_ctr + 1
-          else
-            ! Halo
-
-            if (((k > 1) .and. (k < dims(3) + 2)) .and. &
-                ((j > 1) .and. (j < dims(2) + 2))) then
-              if (i == 1) then
-                ! Left halo
-                if (mesh%par%nrank_dir(1) > 0) then
-                  ! Assuming periodic
-                  idx(ctr) = (global_start + (local_ctr + 1)) + (gdims(1) - 1)
-                end if
-              else
-                ! Right halo
-                if (mesh%par%nrank_dir(1) + 1 < mesh%par%nproc_dir(1)) then
-                  idx(ctr) = (global_start + (local_ctr + 1)) + (gdims(1) - 1)
-                end if
-              end if
-            end if
-
-            if (((k > 1) .and. (k < dims(3) + 2)) .and. &
-                ((i > 1) .and. (i < dims(1) + 2))) then
-              if (j == 1) then
-                ! Down halo
-                if (mesh%par%nrank_dir(2) > 0) then
-                end if
-              else
-                ! Up halo
-                if (mesh%par%nrank_dir(2) + 1 < mesh%par%nproc_dir(2)) then
-                end if
-              end if
-            end if
-
-            if (((j > 1) .and. (j < dims(2) + 2)) .and. &
-                ((i > 1) .and. (i < dims(1) + 2))) then
-              if (k == 1) then
-                ! Back halo
-                if (mesh%par%nrank_dir(3) > 0) then
-                end if
-              else
-                ! Front halo
-                if (mesh%par%nrank_dir(3) + 1 < mesh%par%nproc_dir(3)) then
-                end if
-              end if
-            end if
-            
-          end if
-          
-          ctr = ctr + 1
-        end do
-      end do
-    end do
+    call build_interior_index_map(idx, mesh)
+    call build_neighbour_index_map(idx, mesh)
     idx = idx - 1 ! F->C
 
     call ISLocalToGlobalMappingCreate(PETSC_COMM_WORLD, 1, n, idx, PETSC_COPY_VALUES, map, ierr)
@@ -462,6 +399,188 @@ contains
     deallocate(idx)
 
   end subroutine build_index_map
+
+  subroutine build_interior_index_map(idx, mesh)
+
+    integer, dimension(:), intent(inout) :: idx
+    type(mesh_t), intent(in) :: mesh
+
+    integer, dimension(3) :: dims
+    integer :: nx, ny, nz
+    integer :: global_start
+    
+    integer :: i, j, k
+    integer :: ctr, local_ctr
+
+    dims = mesh%get_dims(CELL)
+    nx = dims(1); ny = dims(2); nz = dims(3)
+    global_start = 1;
+    
+    ctr = 0
+    local_ctr = (nx + 2) + 2
+    do k = 2, nz + 1
+      do j = 2, ny + 1
+        do i = 2, nx + 1
+          idx(local_ctr) = global_start + ctr
+          local_ctr = local_ctr + 1
+          ctr = ctr + 1
+        end do
+      end do
+    end do
+    
+  end subroutine build_interior_index_map
+
+  subroutine build_neighbour_index_map(idx, mesh)
+
+    use mpi
+
+    integer, dimension(:), intent(inout) :: idx
+    type(mesh_t), intent(in) :: mesh
+
+    integer, dimension(3) :: dims
+    integer :: nx, ny, nz
+    integer :: global_start
+    integer, dimension(4) :: myinfo
+    integer, dimension(4, 2, 3) :: info
+    integer :: d
+
+    integer, dimension(:, :, :), allocatable :: halobuf_x, halobuf_y, halobuf_z
+    integer :: ctr
+    integer :: i, j, k
+
+    integer, dimension(2, 3) :: requests, rrequests
+    integer :: tag, nbtag, nproc
+    integer :: ierr
+
+    dims = mesh%get_dims(CELL)
+    nx = dims(1); ny = dims(2); nz = dims(3)
+    global_start = 1;
+    
+    ! Create and fill halobuffers
+    allocate(halobuf_x(2, ny, nz))
+    allocate(halobuf_y(nx, 2, nz))
+    allocate(halobuf_z(nx, ny, 2))
+    halobuf_x = -1; halobuf_y = -1; halobuf_z = -1
+
+    myinfo = [global_start, dims(1), dims(2), dims(3)]
+    nproc = mesh%par%nproc
+    tag = mesh%par%nrank * max(nproc, 6)
+    do d = 1, 3
+      ! Recv left and right
+      nbtag = mesh%par%pnext(d) * max(nproc, 2)
+      call MPI_IRecv(info(:, 2, d), 4, MPI_INTEGER, mesh%par%pnext(d), nbtag + 2 * (d - 1) + 1, & 
+                    MPI_COMM_WORLD, rrequests(1, d), ierr)
+      nbtag = mesh%par%pprev(d) * max(nproc, 2)
+      call MPI_IRecv(info(:, 1, d), 4, MPI_INTEGER, mesh%par%pprev(d), nbtag + 2 * (d - 1) + 2, & 
+                    MPI_COMM_WORLD, rrequests(2, d), ierr)
+      
+      ! Send left and right
+      call MPI_ISend(myinfo, 4, MPI_INTEGER, mesh%par%pprev(d), tag + 2 * (d - 1) + 1, &
+                     MPI_COMM_WORLD, requests(1, d), ierr)
+      call MPI_ISend(myinfo, 4, MPI_INTEGER, mesh%par%pnext(d), tag + 2 * (d - 1) + 2, &
+                     MPI_COMM_WORLD, requests(2, d), ierr)
+    end do
+    do d = 1, 3
+      call MPI_Wait(rrequests(1, d), MPI_STATUS_IGNORE, ierr)
+      call MPI_Wait(requests(1, d), MPI_STATUS_IGNORE, ierr)
+      call MPI_Wait(rrequests(2, d), MPI_STATUS_IGNORE, ierr)
+      call MPI_Wait(requests(2, d), MPI_STATUS_IGNORE, ierr)
+    end do
+
+    !! X halos
+    ! Left halo
+    ctr = info(1, 1, 1) + (info(2, 1, 1) - 1) ! Global starting index -> xend
+    do k = 1, info(4, 1, 1)
+      do j = 1, info(3, 1, 1)
+        halobuf_x(1, j, k) = ctr
+        ctr = ctr + info(2, 1, 1) ! Step in j
+      end do
+    end do
+    ! Right halo
+    ctr = info(1, 2, 1) ! Global starting index == xstart
+    do k = 1, info(4, 2, 1)
+      do j = 1, info(3, 2, 1)
+        halobuf_x(2, j, k) = ctr
+        ctr = ctr + info(2, 2, 1) ! Step in j
+      end do
+    end do
+
+    !! Y halos
+    ! Left halo
+    ctr = info(1, 1, 2) + info(2, 1, 2) * (info(3, 1, 2) - 1) ! Global starting index -> yend
+    do k = 1, info(4, 1, 2)
+      do i = 1, info(3, 1, 2)
+        halobuf_y(i, 1, k) = ctr
+        ctr = ctr + 1 ! Step in i
+      end do
+      ctr = ctr + info(2, 1, 2) * (info(3, 1, 2) - 1) + 1 ! Step in k
+    end do
+    ! Right halo
+    ctr = info(1, 2, 2) ! Global starting index == ystart
+    do k = 1, info(4, 2, 2)
+      do j = 1, info(3, 2, 2)
+        halobuf_y(i, 2, k) = ctr
+        ctr = ctr + 1 ! Step in i
+      end do
+      ctr = ctr + info(2, 2, 2) * (info(3, 2, 2) - 1) + 1 ! Step in k
+    end do
+
+    !! Z halos
+    ! Left halo
+    ctr = info(1, 1, 3) + info(2, 1, 3) * info(3, 1, 3) * (info(4, 1, 3) - 1) ! Global starting index -> zend
+    do j = 1, info(3, 1, 3)
+      do i = 1, info(2, 1, 3)
+        halobuf_z(i, j, 1) = ctr
+        ctr = ctr + 1 ! Step in i
+      end do
+    end do
+    ! Left halo
+    ctr = info(1, 2, 3) ! Global startin index == zstart
+    do j = 1, info(3, 2, 3)
+      do i = 1, info(2, 2, 3)
+        halobuf_z(i, j, 1) = ctr
+        ctr = ctr + 1 ! Step in i
+      end do
+    end do
+    
+    !! Map my neighbours indices into my halos
+    ctr = 1
+    do k = 1, nz + 2
+      do j = 1, ny + 2
+        do i = 1, nx + 2
+          if ((j > 1) .and. (j < (ny + 2)) .and. &
+              (k > 1) .and. (k < (nz + 2))) then
+            if (i == 1) then
+              idx(ctr) = halobuf_x(1, j, k)
+            else if (i == (nx + 2)) then
+              idx(ctr) = halobuf_x(2, j, k)
+            end if
+          end if
+
+          if ((i > 1) .and. (i < (nx + 2))) then
+            if ((k > 1) .and. (k < (nz + 2))) then
+              if (j == 1) then
+                idx(ctr) = halobuf_y(i, 1, k)
+              else if (j == (ny + 2)) then
+                idx(ctr) = halobuf_y(i, 2, k)
+              end if
+            end if
+
+            if ((j > 1) .and. (j < (nx + 2))) then
+              if (k == 1) then
+                idx(ctr) = halobuf_z(i, j, 1)
+              else if (k == (nz + 2)) then
+                idx(ctr) = halobuf_z(i, j, 2)
+              end if
+            end if
+          end if
+
+          ctr = ctr + 1
+        end do
+      end do
+    end do
+
+  end subroutine build_neighbour_index_map
 
   subroutine create_vectors(self, n)
     class(petsc_poisson_cg_t) :: self
