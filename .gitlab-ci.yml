@@ -33,6 +33,7 @@ stages:
     - pip install fprettify
   script:
     - cd $CI_PROJECT_DIR
+    - git branch
     - $FPRETTIFY_COMMAND &> fprettify.log
     - if [[ ! -z "$(cat fprettify.log)" ]]; then echo "::warning::Code formatting issues detected. See log for details."; exit 1; fi
   allow_failure: false
