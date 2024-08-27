@@ -58,6 +58,7 @@ module m_solver
     procedure(poisson_solver), pointer :: poisson => null()
   contains
     procedure :: transeq
+    procedure :: pressure_correction
     procedure :: divergence_v2p
     procedure :: gradient_p2v
     procedure :: curl
@@ -417,6 +418,42 @@ contains
 
   end subroutine poisson_cg
 
+  subroutine pressure_correction(self)
+    implicit none
+
+    class(solver_t) :: self
+
+    class(field_t), pointer :: div_u, pressure, dpdx, dpdy, dpdz
+
+    div_u => self%backend%allocator%get_block(DIR_Z)
+
+    call self%divergence_v2p(div_u, self%u, self%v, self%w)
+
+    pressure => self%backend%allocator%get_block(DIR_Z)
+
+    call self%poisson(pressure, div_u)
+
+    call self%backend%allocator%release_block(div_u)
+
+    dpdx => self%backend%allocator%get_block(DIR_X)
+    dpdy => self%backend%allocator%get_block(DIR_X)
+    dpdz => self%backend%allocator%get_block(DIR_X)
+
+    call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
+
+    call self%backend%allocator%release_block(pressure)
+
+    ! velocity correction
+    call self%backend%vecadd(-1._dp, dpdx, 1._dp, self%u)
+    call self%backend%vecadd(-1._dp, dpdy, 1._dp, self%v)
+    call self%backend%vecadd(-1._dp, dpdz, 1._dp, self%w)
+
+    call self%backend%allocator%release_block(dpdx)
+    call self%backend%allocator%release_block(dpdy)
+    call self%backend%allocator%release_block(dpdz)
+
+  end subroutine pressure_correction
+
   subroutine output(self, t)
     implicit none
 
@@ -500,33 +537,7 @@ contains
         call self%backend%allocator%release_block(dv)
         call self%backend%allocator%release_block(dw)
 
-        ! pressure
-        div_u => self%backend%allocator%get_block(DIR_Z)
-
-        call self%divergence_v2p(div_u, self%u, self%v, self%w)
-
-        pressure => self%backend%allocator%get_block(DIR_Z)
-
-        call self%poisson(pressure, div_u)
-
-        call self%backend%allocator%release_block(div_u)
-
-        dpdx => self%backend%allocator%get_block(DIR_X)
-        dpdy => self%backend%allocator%get_block(DIR_X)
-        dpdz => self%backend%allocator%get_block(DIR_X)
-
-        call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
-
-        call self%backend%allocator%release_block(pressure)
-
-        ! velocity correction
-        call self%backend%vecadd(-1._dp, dpdx, 1._dp, self%u)
-        call self%backend%vecadd(-1._dp, dpdy, 1._dp, self%v)
-        call self%backend%vecadd(-1._dp, dpdz, 1._dp, self%w)
-
-        call self%backend%allocator%release_block(dpdx)
-        call self%backend%allocator%release_block(dpdy)
-        call self%backend%allocator%release_block(dpdz)
+        call self%pressure_correction()
       end do
 
       if (mod(i, self%n_output) == 0) then
