@@ -8,6 +8,7 @@ stages:
   stage: build-and-test
   timeout: 1h
   script:
+    - echo "Setup environment"
     - apt-get update
     - apt-get install -y cmake
     - apt-get install -y gcc
@@ -15,6 +16,12 @@ stages:
     - apt-get install -y libibverbs-dev libfabric1 libfabric-dev libpsm2-dev
     - apt-get install -y openmpi-bin openmpi-common libopenmpi-dev libgtk2.0-dev
     - apt-get install -y librdmacm-dev libpsm2-dev
+    - echo "Create runner user"
+    - adduser runner
+    - su runner
+    - echo "Copy directory ${CI_PROJECT_DIR}"
+    - mkdir -p tmp && cd tmp
+    - cp -r $CI_PROJECT_DIR .
     - echo "Display GCC version number"
     - gcc --version
     - echo "Configure Debug build"
@@ -37,7 +44,6 @@ stages:
     - pip install fprettify
   script:
     - cd $CI_PROJECT_DIR
-    - git branch
     - $FPRETTIFY_COMMAND &> fprettify.log
     - if [[ ! -z "$(cat fprettify.log)" ]]; then echo "::warning::Code formatting issues detected. See log for details."; exit 1; fi
   allow_failure: false
