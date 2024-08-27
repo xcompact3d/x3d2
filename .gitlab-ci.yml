@@ -27,16 +27,7 @@ stages:
     - echo "Build tests"
     - make -C build
     - echo "Run the tests"
-    - if [ $(whoami) == "root" ];
-      then 
-        useradd -ms /bin/bash runner;
-        whoami;
-        cp -r ${CI_PROJECT_DIR}/build;
-        cd build;
-        ctest;
-      else 
-        make -C build test;
-      fi
+    - make -C build test;
 
 .check-formatting-template: &check-formatting-template
   image: python:3.9.19-bullseye
