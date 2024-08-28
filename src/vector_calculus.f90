@@ -14,6 +14,7 @@ module m_vector_calculus
     procedure :: curl
     procedure :: divergence_v2p
     procedure :: gradient_p2v
+    procedure :: laplacian
   end type vector_calculus_t
 
   interface vector_calculus_t
@@ -294,5 +295,49 @@ contains
     call self%backend%allocator%release_block(dpdz_sx_x)
 
   end subroutine gradient_p2v
+
+  subroutine laplacian(self, lapl_u, u, x_der2nd, y_der2nd, z_der2nd)
+    implicit none
+
+    class(vector_calculus_t) :: self
+    class(field_t), intent(inout) :: lapl_u
+    class(field_t), intent(in) :: u
+
+    class(tdsops_t), intent(in) :: x_der1st, y_der1st, z_der2nd
+
+    class(field_t), pointer :: u_y, d2u_y, u_z, d2u_z
+
+    ! d2u/dx2
+    call self%backend%tds_solve(lapl_u, u, x_der2nd)
+
+    ! y directional temporary fields
+    u_y => self%backend%allocator%get_block(DIR_Y)
+    d2u_y => self%backend%allocator%get_block(DIR_Y)
+
+    call self%backend%reorder(u_y, u, RDR_X2Y)
+
+    ! d2u/dy2
+    call self%backend%tds_solve(d2u_y, u_y, y_der2nd)
+
+    call self%backend%sum_yintox(lapl_u, d2u_y)
+
+    call self%backend%allocator%release_block(u_y)
+    call self%backend%allocator%release_block(d2u_y)
+
+    ! z directional temporary fields
+    u_z => self%backend%allocator%get_block(DIR_Z)
+    d2u_z => self%backend%allocator%get_block(DIR_Z)
+
+    call self%backend%reorder(u_z, u, RDR_X2Z)
+
+    ! d2u/dz2
+    call self%backend%tds_solve(d2u_z, u_z, z_der2nd)
+
+    call self%backend%sum_zintox(lapl_u, d2u_z)
+
+    call self%backend%allocator%release_block(u_z)
+    call self%backend%allocator%release_block(d2u_z)
+
+  end subroutine laplacian
 
 end module m_vector_calculus
