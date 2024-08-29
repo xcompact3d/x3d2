@@ -1,5 +1,5 @@
 module m_vector_calculus
-  use m_alllocator, only: allocator_t, field_t
+  use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
@@ -54,7 +54,7 @@ contains
 
     ! omega_i_hat
     ! dw/dy
-    w_y => self%backend%allocator%get_block(DIR_Y, VERT)
+    w_y => self%backend%allocator%get_block(DIR_Y)
     dwdy_y => self%backend%allocator%get_block(DIR_Y)
     call self%backend%reorder(w_y, w, RDR_X2Y)
     call self%backend%tds_solve(dwdy_y, w_y, y_der1st)
@@ -83,7 +83,7 @@ contains
 
     ! omega_j_hat
     ! du/dz
-    u_z => self%backend%allocator%get_block(DIR_Z, VERT)
+    u_z => self%backend%allocator%get_block(DIR_Z)
     dudz_z => self%backend%allocator%get_block(DIR_Z)
     call self%backend%reorder(u_z, u, RDR_X2Z)
     call self%backend%tds_solve(dudz_z, u_z, z_der1st)
@@ -107,7 +107,7 @@ contains
     call self%backend%tds_solve(o_k_hat, v, x_der1st)
 
     ! du/dy
-    u_y => self%backend%allocator%get_block(DIR_Y, VERT)
+    u_y => self%backend%allocator%get_block(DIR_Y)
     dudy_y => self%backend%allocator%get_block(DIR_Y)
     call self%backend%reorder(u_y, u, RDR_X2Y)
     call self%backend%tds_solve(dudy_y, u_y, y_der1st)
@@ -156,9 +156,9 @@ contains
     call self%backend%tds_solve(dw_x, w, x_interpl_v2p)
 
     ! request fields from the allocator
-    u_y => self%backend%allocator%get_block(DIR_Y, VERT)
-    v_y => self%backend%allocator%get_block(DIR_Y, VERT)
-    w_y => self%backend%allocator%get_block(DIR_Y, VERT)
+    u_y => self%backend%allocator%get_block(DIR_Y)
+    v_y => self%backend%allocator%get_block(DIR_Y)
+    w_y => self%backend%allocator%get_block(DIR_Y)
 
     ! reorder data from x orientation to y orientation
     call self%backend%reorder(u_y, du_x, RDR_X2Y)
@@ -187,8 +187,8 @@ contains
     call self%backend%allocator%release_block(w_y)
 
     ! just like in y direction, get some fields for the z derivatives.
-    u_z => self%backend%allocator%get_block(DIR_Z, VERT)
-    w_z => self%backend%allocator%get_block(DIR_Z, VERT)
+    u_z => self%backend%allocator%get_block(DIR_Z)
+    w_z => self%backend%allocator%get_block(DIR_Z)
 
     ! du_y = dv_y + du_y
     call self%backend%vecadd(1._dp, dv_y, 1._dp, du_y)
@@ -306,7 +306,7 @@ contains
     class(field_t), intent(inout) :: lapl_u
     class(field_t), intent(in) :: u
 
-    class(tdsops_t), intent(in) :: x_der1st, y_der1st, z_der2nd
+    class(tdsops_t), intent(in) :: x_der2nd, y_der2nd, z_der2nd
 
     class(field_t), pointer :: u_y, d2u_y, u_z, d2u_z
 
