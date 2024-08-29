@@ -333,12 +333,9 @@ contains
     ! Staggared der for u field in x
     ! Interpolation for v field in x
     ! Interpolation for w field in x
-    call self%backend%tds_solve(du_x, u, self%xdirps, &
-                                self%xdirps%stagder_v2p)
-    call self%backend%tds_solve(dv_x, v, self%xdirps, &
-                                self%xdirps%interpl_v2p)
-    call self%backend%tds_solve(dw_x, w, self%xdirps, &
-                                self%xdirps%interpl_v2p)
+    call self%backend%tds_solve(du_x, u, self%xdirps%stagder_v2p)
+    call self%backend%tds_solve(dv_x, v, self%xdirps%interpl_v2p)
+    call self%backend%tds_solve(dw_x, w, self%xdirps%interpl_v2p)
 
     ! request fields from the allocator
     u_y => self%backend%allocator%get_block(DIR_Y, VERT)
@@ -359,12 +356,9 @@ contains
     dw_y => self%backend%allocator%get_block(DIR_Y)
 
     ! similar to the x direction, obtain derivatives in y.
-    call self%backend%tds_solve(du_y, u_y, self%ydirps, &
-                                self%ydirps%interpl_v2p)
-    call self%backend%tds_solve(dv_y, v_y, self%ydirps, &
-                                self%ydirps%stagder_v2p)
-    call self%backend%tds_solve(dw_y, w_y, self%ydirps, &
-                                self%ydirps%interpl_v2p)
+    call self%backend%tds_solve(du_y, u_y, self%ydirps%interpl_v2p)
+    call self%backend%tds_solve(dv_y, v_y, self%ydirps%stagder_v2p)
+    call self%backend%tds_solve(dw_y, w_y, self%ydirps%interpl_v2p)
 
     ! we don't need the velocities in y orientation any more, so release
     ! them to open up space.
@@ -393,10 +387,8 @@ contains
     dw_z => self%backend%allocator%get_block(DIR_Z)
 
     ! get the derivatives in z
-    call self%backend%tds_solve(div_u, u_z, self%zdirps, &
-                                self%zdirps%interpl_v2p)
-    call self%backend%tds_solve(dw_z, w_z, self%zdirps, &
-                                self%zdirps%stagder_v2p)
+    call self%backend%tds_solve(div_u, u_z, self%zdirps%interpl_v2p)
+    call self%backend%tds_solve(dw_z, w_z, self%zdirps%stagder_v2p)
 
     ! div_u = div_u + dw_z
     call self%backend%vecadd(1._dp, dw_z, 1._dp, div_u)
@@ -429,10 +421,8 @@ contains
 
     ! Staggared der for pressure field in z
     ! Interpolation for pressure field in z
-    call self%backend%tds_solve(p_sxy_z, pressure, self%zdirps, &
-                                self%zdirps%interpl_p2v)
-    call self%backend%tds_solve(dpdz_sxy_z, pressure, self%zdirps, &
-                                self%zdirps%stagder_p2v)
+    call self%backend%tds_solve(p_sxy_z, pressure, self%zdirps%interpl_p2v)
+    call self%backend%tds_solve(dpdz_sxy_z, pressure, self%zdirps%stagder_p2v)
 
     ! request fields from the allocator
     p_sxy_y => self%backend%allocator%get_block(DIR_Y)
@@ -450,12 +440,9 @@ contains
     dpdz_sx_y => self%backend%allocator%get_block(DIR_Y)
 
     ! similar to the z direction, obtain derivatives in y.
-    call self%backend%tds_solve(p_sx_y, p_sxy_y, self%ydirps, &
-                                self%ydirps%interpl_p2v)
-    call self%backend%tds_solve(dpdy_sx_y, p_sxy_y, self%ydirps, &
-                                self%ydirps%stagder_p2v)
-    call self%backend%tds_solve(dpdz_sx_y, dpdz_sxy_y, self%ydirps, &
-                                self%ydirps%interpl_p2v)
+    call self%backend%tds_solve(p_sx_y, p_sxy_y, self%ydirps%interpl_p2v)
+    call self%backend%tds_solve(dpdy_sx_y, p_sxy_y, self%ydirps%stagder_p2v)
+    call self%backend%tds_solve(dpdz_sx_y, dpdz_sxy_y, self%ydirps%interpl_p2v)
 
     ! release memory
     call self%backend%allocator%release_block(p_sxy_y)
@@ -477,12 +464,9 @@ contains
     call self%backend%allocator%release_block(dpdz_sx_y)
 
     ! get the derivatives in x
-    call self%backend%tds_solve(dpdx, p_sx_x, self%xdirps, &
-                                self%xdirps%stagder_p2v)
-    call self%backend%tds_solve(dpdy, dpdy_sx_x, self%xdirps, &
-                                self%xdirps%interpl_p2v)
-    call self%backend%tds_solve(dpdz, dpdz_sx_x, self%xdirps, &
-                                self%xdirps%interpl_p2v)
+    call self%backend%tds_solve(dpdx, p_sx_x, self%xdirps%stagder_p2v)
+    call self%backend%tds_solve(dpdy, dpdy_sx_x, self%xdirps%interpl_p2v)
+    call self%backend%tds_solve(dpdz, dpdz_sx_x, self%xdirps%interpl_p2v)
 
     ! release temporary x fields
     call self%backend%allocator%release_block(p_sx_x)
@@ -513,7 +497,7 @@ contains
     w_y => self%backend%allocator%get_block(DIR_Y, VERT)
     dwdy_y => self%backend%allocator%get_block(DIR_Y)
     call self%backend%reorder(w_y, w, RDR_X2Y)
-    call self%backend%tds_solve(dwdy_y, w_y, self%ydirps, self%ydirps%der1st)
+    call self%backend%tds_solve(dwdy_y, w_y, self%ydirps%der1st)
 
     call self%backend%reorder(o_i_hat, dwdy_y, RDR_Y2X)
 
@@ -524,7 +508,7 @@ contains
     v_z => self%backend%allocator%get_block(DIR_Z)
     dvdz_z => self%backend%allocator%get_block(DIR_Z)
     call self%backend%reorder(v_z, v, RDR_X2Z)
-    call self%backend%tds_solve(dvdz_z, v_z, self%zdirps, self%zdirps%der1st)
+    call self%backend%tds_solve(dvdz_z, v_z, self%zdirps%der1st)
 
     dvdz_x => self%backend%allocator%get_block(DIR_X)
     call self%backend%reorder(dvdz_x, dvdz_z, RDR_Z2X)
@@ -542,7 +526,7 @@ contains
     u_z => self%backend%allocator%get_block(DIR_Z, VERT)
     dudz_z => self%backend%allocator%get_block(DIR_Z)
     call self%backend%reorder(u_z, u, RDR_X2Z)
-    call self%backend%tds_solve(dudz_z, u_z, self%zdirps, self%zdirps%der1st)
+    call self%backend%tds_solve(dudz_z, u_z, self%zdirps%der1st)
 
     dudz_x => self%backend%allocator%get_block(DIR_X)
     call self%backend%reorder(dudz_x, dudz_z, RDR_Z2X)
@@ -551,7 +535,7 @@ contains
     call self%backend%allocator%release_block(dudz_z)
 
     ! dw/dx
-    call self%backend%tds_solve(o_j_hat, w, self%xdirps, self%xdirps%der1st)
+    call self%backend%tds_solve(o_j_hat, w, self%xdirps%der1st)
 
     ! omega_j_hat = du/dz - dw/dx
     call self%backend%vecadd(1._dp, dudz_x, -1._dp, o_j_hat)
@@ -560,13 +544,13 @@ contains
 
     ! omega_k_hat
     ! dv/dx
-    call self%backend%tds_solve(o_k_hat, v, self%xdirps, self%xdirps%der1st)
+    call self%backend%tds_solve(o_k_hat, v, self%xdirps%der1st)
 
     ! du/dy
     u_y => self%backend%allocator%get_block(DIR_Y, VERT)
     dudy_y => self%backend%allocator%get_block(DIR_Y)
     call self%backend%reorder(u_y, u, RDR_X2Y)
-    call self%backend%tds_solve(dudy_y, u_y, self%ydirps, self%ydirps%der1st)
+    call self%backend%tds_solve(dudy_y, u_y, self%ydirps%der1st)
 
     dudy_x => self%backend%allocator%get_block(DIR_X)
     call self%backend%reorder(dudy_x, dudy_y, RDR_Y2X)
