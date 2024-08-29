@@ -19,7 +19,7 @@ module m_vector_calculus
 
   interface vector_calculus_t
     module procedure init
-  end interface vector_calculus_t 
+  end interface vector_calculus_t
 
 contains
 
@@ -33,7 +33,8 @@ contains
 
   end function init
 
-  subroutine curl(self, o_i_hat, o_j_hat, o_k_hat, u, v, w, x_der1st, y_der1st, z_der1st)
+  subroutine curl(self, o_i_hat, o_j_hat, o_k_hat, u, v, w, &
+                  x_der1st, y_der1st, z_der1st)
     !! Curl of a vector field (u, v, w).
     !! Inputs from velocity grid and outputs to velocity grid.
     implicit none
@@ -124,8 +125,10 @@ contains
 
   end subroutine curl
 
-  subroutine divergence_v2p(self, div_u, u, v, w, x_stagder_v2p, x_interpl_v2p, &
-                            y_stagder_v2p, y_interpl_v2p, z_stagder_v2p, z_interpl_v2p)
+  subroutine divergence_v2p(self, div_u, u, v, w, &
+                            x_stagder_v2p, x_interpl_v2p, &
+                            y_stagder_v2p, y_interpl_v2p, &
+                            z_stagder_v2p, z_interpl_v2p)
     !! Divergence of a vector field (u, v, w).
     !! Inputs from velocity grid and outputs to pressure grid.
     implicit none
@@ -134,8 +137,8 @@ contains
     class(field_t), intent(inout) :: div_u
     class(field_t), intent(in) :: u, v, w
     class(tdsops_t), intent(in) :: x_stagder_v2p, x_interpl_v2p, &
-                                   y_stagder_v2p, y_interpl_v2p, &
-                                   z_stagder_v2p, z_interpl_v2p
+      y_stagder_v2p, y_interpl_v2p, &
+      z_stagder_v2p, z_interpl_v2p
 
     class(field_t), pointer :: du_x, dv_x, dw_x, &
       u_y, v_y, w_y, du_y, dv_y, dw_y, &
@@ -229,8 +232,8 @@ contains
     class(field_t), intent(inout) :: dpdx, dpdy, dpdz
     class(field_t), intent(in) :: pressure
     class(tdsops_t), intent(in) :: x_stagder_p2v, x_interpl_p2v, &
-                                   y_stagder_p2v, y_interpl_p2v, &
-                                   z_stagder_p2v, z_interpl_p2v
+      y_stagder_p2v, y_interpl_p2v, &
+      z_stagder_p2v, z_interpl_p2v
 
     class(field_t), pointer :: p_sxy_z, dpdz_sxy_z, &
       p_sxy_y, dpdz_sxy_y, &
