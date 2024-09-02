@@ -262,9 +262,9 @@ contains
 
     call build_index_map(mesh, self%Pmat)
 
-    dims = mesh%get_padded_dims(DIR_C)
+    dims = mesh%get_dims(CELL)
     dx = mesh%geo%d(1); dy = mesh%geo%d(2); dz = mesh%geo%d(3)
-    row = (dims(1) + 2) + 2
+    row = ((dims(1) + 2) * (dims(2) + 2)) + (dims(1) + 2) + 2
     ! row = 1
     do k = 1, dims(3)
       do j = 1, dims(2)
@@ -353,7 +353,11 @@ contains
           ! Advance row counter
           row = row + 1
         end do
+        ! Step in j
+        row = row + 2
       end do
+      ! Step in k
+      row = row + 2 * (dims(1) + 2) + 2
     end do
 
     call MatAssemblyBegin(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
@@ -377,8 +381,6 @@ contains
     integer :: n
 
     integer, dimension(:), allocatable :: idx
-    integer :: ctr, local_ctr
-    integer :: global_start
 
     dims = mesh%get_dims(CELL)
     n = product(dims + 2) ! Size of domain + 1 deep halo
@@ -386,9 +388,6 @@ contains
     allocate(idx(n))
     idx(:) = 0
 
-    ctr = 1
-    local_ctr = 0
-    global_start = 1
     call build_interior_index_map(idx, mesh)
     call build_neighbour_index_map(idx, mesh)
     idx = idx - 1 ! F->C
@@ -417,7 +416,7 @@ contains
     global_start = 1;
     
     ctr = 0
-    local_ctr = (nx + 2) + 2
+    local_ctr = ((nx + 2) * (ny + 2)) + (nx + 2) + 2
     do k = 2, nz + 1
       do j = 2, ny + 1
         do i = 2, nx + 1
@@ -427,7 +426,7 @@ contains
         end do
         local_ctr = local_ctr + 2
       end do
-      local_ctr = local_ctr + 2 * (nx + 2) + 2
+      local_ctr = local_ctr + 2 * (nx + 2)
     end do
     
   end subroutine build_interior_index_map
@@ -491,59 +490,79 @@ contains
 
     !! X halos
     ! Left halo
-    ctr = info(1, 1, 1) + (info(2, 1, 1) - 1) ! Global starting index -> xend
-    do k = 1, info(4, 1, 1)
-      do j = 1, info(3, 1, 1)
-        halobuf_x(1, j, k) = ctr
-        ctr = ctr + info(2, 1, 1) ! Step in j
+    associate(offset_left => info(1, 1, 1), &
+      nx_left => info(2, 1, 1), ny_left => info(3, 1, 1), nz_left => info(4, 1, 1))
+      ctr = offset_left + (nx_left - 1) ! Global starting index -> xend
+      do k = 1, nz_left
+        do j = 1, ny_left
+          halobuf_x(1, j, k) = ctr
+          ctr = ctr + nx_left ! Step in j
+        end do
       end do
-    end do
+    end associate
     ! Right halo
-    ctr = info(1, 2, 1) ! Global starting index == xstart
-    do k = 1, info(4, 2, 1)
-      do j = 1, info(3, 2, 1)
-        halobuf_x(2, j, k) = ctr
-        ctr = ctr + info(2, 2, 1) ! Step in j
+    associate(offset_right => info(1, 2, 1), &
+              nx_right => info(2, 2, 1), ny_right => info(3, 2, 1), nz_right => info(4, 2, 1))
+      ctr = offset_right ! Global starting index == xstart
+      do k = 1, nz_right
+        do j = 1, ny_right
+          halobuf_x(2, j, k) = ctr
+          ctr = ctr + nx_right ! Step in j
+        end do
       end do
-    end do
+    end associate
 
     !! Y halos
     ! Left halo
-    ctr = info(1, 1, 2) + info(2, 1, 2) * (info(3, 1, 2) - 1) ! Global starting index -> yend
-    do k = 1, info(4, 1, 2)
-      do i = 1, info(3, 1, 2)
-        halobuf_y(i, 1, k) = ctr
-        ctr = ctr + 1 ! Step in i
+    associate(offset_down => info(1, 1, 2), &
+              nx_down => info(2, 1, 2), ny_down => info(3, 1, 2), nz_down => info(4, 1, 2))
+      ctr = offset_down + (ny_down - 1) * nx_down ! Global starting index -> yend
+      do k = 1, nz_down
+        do i = 1, nx_down
+          halobuf_y(i, 1, k) = ctr
+          ctr = ctr + 1 ! Step in i
+        end do
+        ctr = ctr - nx_down  ! Reset counter to start of line
+        ctr = ctr + (nx_down * ny_down) ! Step in k
       end do
-      ctr = ctr + info(2, 1, 2) * (info(3, 1, 2) - 1) + 1 ! Step in k
-    end do
+    end associate
     ! Right halo
-    ctr = info(1, 2, 2) ! Global starting index == ystart
-    do k = 1, info(4, 2, 2)
-      do j = 1, info(3, 2, 2)
-        halobuf_y(i, 2, k) = ctr
-        ctr = ctr + 1 ! Step in i
+    associate(offset_up => info(1, 2, 2), &
+              nx_up => info(2, 2, 2), ny_up => info(3, 2, 2), nz_up => info(4, 2, 2))
+      ctr = offset_up ! Global starting index == ystart
+      do k = 1, nz_up
+        do i = 1, nx_up
+          halobuf_y(i, 2, k) = ctr
+          ctr = ctr + 1 ! Step in i
+        end do
+        ctr = ctr - nx_up  ! Reset counter to start of line
+        ctr = ctr + (nx_up * ny_up) ! Step in k
       end do
-      ctr = ctr + info(2, 2, 2) * (info(3, 2, 2) - 1) + 1 ! Step in k
-    end do
+    end associate
 
     !! Z halos
     ! Left halo
-    ctr = info(1, 1, 3) + info(2, 1, 3) * info(3, 1, 3) * (info(4, 1, 3) - 1) ! Global starting index -> zend
-    do j = 1, info(3, 1, 3)
-      do i = 1, info(2, 1, 3)
-        halobuf_z(i, j, 1) = ctr
-        ctr = ctr + 1 ! Step in i
+    associate(offset_back => info(1, 1, 3), &
+              nx_back => info(2, 1, 3), ny_back => info(3, 1, 3), nz_back => info(4, 1, 3))
+      ctr = offset_back + ny_back * nx_back ! Global starting index -> zend
+      do j = 1, ny_back
+        do i = 1, nx_back
+          halobuf_z(i, j, 1) = ctr
+          ctr = ctr + 1 ! Step in i
+        end do
       end do
-    end do
-    ! Left halo
-    ctr = info(1, 2, 3) ! Global startin index == zstart
-    do j = 1, info(3, 2, 3)
-      do i = 1, info(2, 2, 3)
-        halobuf_z(i, j, 1) = ctr
-        ctr = ctr + 1 ! Step in i
+    end associate
+    ! Right halo
+    associate(offset_front => info(1, 2, 3), &
+              nx_front => info(2, 2, 3), ny_front => info(3, 2, 3), nz_front => info(4, 2, 3))
+      ctr = offset_front ! Global startin index == zstart
+      do j = 1, ny_front
+        do i = 1, nx_front
+          halobuf_z(i, j, 2) = ctr
+          ctr = ctr + 1 ! Step in i
+        end do
       end do
-    end do
+    end associate
     
     !! Map my neighbours indices into my halos
     ctr = 1
@@ -553,26 +572,26 @@ contains
           if ((j > 1) .and. (j < (ny + 2)) .and. &
               (k > 1) .and. (k < (nz + 2))) then
             if (i == 1) then
-              idx(ctr) = halobuf_x(1, j, k)
+              idx(ctr) = halobuf_x(1, j - 1, k - 1)
             else if (i == (nx + 2)) then
-              idx(ctr) = halobuf_x(2, j, k)
+              idx(ctr) = halobuf_x(2, j - 1, k - 1)
             end if
           end if
 
           if ((i > 1) .and. (i < (nx + 2))) then
             if ((k > 1) .and. (k < (nz + 2))) then
               if (j == 1) then
-                idx(ctr) = halobuf_y(i, 1, k)
+                idx(ctr) = halobuf_y(i - 1, 1, k - 1)
               else if (j == (ny + 2)) then
-                idx(ctr) = halobuf_y(i, 2, k)
+                idx(ctr) = halobuf_y(i - 1, 2, k - 1)
               end if
             end if
 
-            if ((j > 1) .and. (j < (nx + 2))) then
+            if ((j > 1) .and. (j < (ny + 2))) then
               if (k == 1) then
-                idx(ctr) = halobuf_z(i, j, 1)
+                idx(ctr) = halobuf_z(i - 1, j - 1, 1)
               else if (k == (nz + 2)) then
-                idx(ctr) = halobuf_z(i, j, 2)
+                idx(ctr) = halobuf_z(i - 1, j - 1, 2)
               end if
             end if
           end if
