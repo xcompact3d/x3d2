@@ -47,4 +47,10 @@ contains
     rdr_dir = rdr_map(dir_from, dir_to)
   end function get_rdr_from_dirs
 
+  integer function move_data_loc(in_data_loc, dir, move) result(out_data_loc)
+    integer, intent(in) :: in_data_loc, dir, move
+
+    out_data_loc = in_data_loc + move*(10**dir)
+  end function move_data_loc
+
 end module m_common
