@@ -357,7 +357,7 @@ contains
         row = row + 2
       end do
       ! Step in k
-      row = row + 2 * (dims(1) + 2) + 2
+      row = row + 2 * (dims(1) + 2)
     end do
 
     call MatAssemblyBegin(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
