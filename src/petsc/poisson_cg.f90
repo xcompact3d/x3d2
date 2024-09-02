@@ -449,7 +449,7 @@ contains
     integer :: ctr
     integer :: i, j, k
 
-    integer, dimension(2, 3) :: requests, rrequests
+    integer, dimension(12) :: requests
     integer :: tag, nbtag, nproc
     integer :: ierr
 
@@ -468,25 +468,20 @@ contains
     tag = mesh%par%nrank * max(nproc, 6)
     do d = 1, 3
       ! Recv left and right
-      nbtag = mesh%par%pnext(d) * max(nproc, 2)
+      nbtag = mesh%par%pnext(d) * max(nproc, 6)
       call MPI_IRecv(info(:, 2, d), 4, MPI_INTEGER, mesh%par%pnext(d), nbtag + 2 * (d - 1) + 1, & 
-                    MPI_COMM_WORLD, rrequests(1, d), ierr)
-      nbtag = mesh%par%pprev(d) * max(nproc, 2)
+                    MPI_COMM_WORLD, requests(4 * (d - 1) + 1), ierr)
+      nbtag = mesh%par%pprev(d) * max(nproc, 6)
       call MPI_IRecv(info(:, 1, d), 4, MPI_INTEGER, mesh%par%pprev(d), nbtag + 2 * (d - 1) + 2, & 
-                    MPI_COMM_WORLD, rrequests(2, d), ierr)
+                    MPI_COMM_WORLD, requests(4 * (d - 1) + 2), ierr)
       
       ! Send left and right
       call MPI_ISend(myinfo, 4, MPI_INTEGER, mesh%par%pprev(d), tag + 2 * (d - 1) + 1, &
-                     MPI_COMM_WORLD, requests(1, d), ierr)
+                     MPI_COMM_WORLD, requests(4 * (d - 1) + 3), ierr)
       call MPI_ISend(myinfo, 4, MPI_INTEGER, mesh%par%pnext(d), tag + 2 * (d - 1) + 2, &
-                     MPI_COMM_WORLD, requests(2, d), ierr)
+                     MPI_COMM_WORLD, requests(4 * (d - 1) + 4), ierr)
     end do
-    do d = 1, 3
-      call MPI_Wait(rrequests(1, d), MPI_STATUS_IGNORE, ierr)
-      call MPI_Wait(requests(1, d), MPI_STATUS_IGNORE, ierr)
-      call MPI_Wait(rrequests(2, d), MPI_STATUS_IGNORE, ierr)
-      call MPI_Wait(requests(2, d), MPI_STATUS_IGNORE, ierr)
-    end do
+    call MPI_Waitall(12, requests, MPI_STATUS_IGNORE, ierr)
 
     !! X halos
     ! Left halo
