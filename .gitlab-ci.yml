@@ -10,12 +10,21 @@ stages:
   script:
     - echo "Setup environment"
     - apt-get update
+    - apt-get install -y wget
     - apt-get install -y cmake
     - apt-get install -y gcc
     - apt-get install -y infiniband-diags ibverbs-utils 
     - apt-get install -y libibverbs-dev libfabric1 libfabric-dev libpsm2-dev
     - apt-get install -y openmpi-bin openmpi-common libopenmpi-dev libgtk2.0-dev
     - apt-get install -y librdmacm-dev libpsm2-dev
+    - wget https://developer.download.nvidia.com/compute/cuda/12.6.0/local_installers/cuda-repo-debian12-12-6-local_12.6.0-560.28.03-1_amd64.deb
+    - dpkg -i cuda-repo-debian12-12-6-local_12.6.0-560.28.03-1_amd64.deb
+    - cp /var/cuda-repo-debian12-12-6-local/cuda-*-keyring.gpg /usr/share/keyrings/ 
+    - add-apt-repository contrib
+    - apt-get update
+    - apt-get install -y cuda-toolkit-12-6 
+    - PATH=/usr/local/cuda-12.6/bin:$PATH
+    - LD_LIBRARY_PATH=/usr/local/cuda-12.6/bin/lib64:$LD_LIBRARY_PATH
     - echo "Display GCC version number"
     - gcc --version
     - echo "Configure Debug build"
@@ -27,7 +36,9 @@ stages:
     - echo "Build tests"
     - make -C build
     #- echo "Run the tests"
-    #- make -C build test;
+    #- make -C build test
+  tags:
+    - gpu
 
 .check-formatting-template: &check-formatting-template
   image: python:3.9.19-bullseye
