@@ -3,7 +3,7 @@ module m_mesh
 
   use mpi
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, &
-                      CELL, VERT, none, X_FACE, Y_FACE, Z_FACE, &
+                      CELL, VERT, X_FACE, Y_FACE, Z_FACE, &
                       X_EDGE, Y_EDGE, Z_EDGE, &
                       BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET
   use m_field, only: field_t
@@ -308,7 +308,7 @@ contains
     case (Z_EDGE)
       dims(1:2) = vert_dims(1:2)
       dims(3) = cell_dims(3)
-    case (none)
+    case default
       error stop "Unknown location in get_dims_dataloc"
     end select
   end function get_dims_dataloc
@@ -453,7 +453,7 @@ contains
       if (dir == DIR_Z) then
         n = n_cell
       end if
-    case (none)
+    case default
       error stop "Unknown direction in get_n_dir"
     end select
   end function get_n_dir
