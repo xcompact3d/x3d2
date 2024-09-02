@@ -86,10 +86,10 @@ contains
       !$omp simd
       do i = 1, SZ
         du(i, j) = c_m4*u(i, j - 4) + c_m3*u(i, j - 3) &
-                  + c_m2*u(i, j - 2) + c_m1*u(i, j - 1) &
-                  + c_j*u(i, j) &
-                  + c_p1*u(i, j + 1) + c_p2*u(i, j + 2) &
-                  + c_p3*u(i, j + 3) + c_p4*u(i, j + 4)
+                   + c_m2*u(i, j - 2) + c_m1*u(i, j - 1) &
+                   + c_j*u(i, j) &
+                   + c_p1*u(i, j + 1) + c_p2*u(i, j + 2) &
+                   + c_p3*u(i, j + 3) + c_p4*u(i, j + 4)
         du(i, j) = ffr(j)*(du(i, j) - alpha*du(i, j - 1))
       end do
       !$omp end simd
