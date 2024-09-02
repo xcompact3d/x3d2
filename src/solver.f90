@@ -325,7 +325,7 @@ contains
     class(field_t), intent(inout) :: div_u
     class(field_t), intent(in) :: u, v, w
 
-    call self%vector_calculus%divergence_v2p( &
+    call self%vector_calculus%divergence_v2c( &
       div_u, u, v, w, &
       self%xdirps%stagder_v2p, self%xdirps%interpl_v2p, &
       self%ydirps%stagder_v2p, self%ydirps%interpl_v2p, &
@@ -342,7 +342,7 @@ contains
     class(field_t), intent(inout) :: dpdx, dpdy, dpdz
     class(field_t), intent(in) :: pressure
 
-    call self%vector_calculus%gradient_p2v( &
+    call self%vector_calculus%gradient_c2v( &
       dpdx, dpdy, dpdz, pressure, &
       self%xdirps%stagder_p2v, self%xdirps%interpl_p2v, &
       self%ydirps%stagder_p2v, self%ydirps%interpl_p2v, &

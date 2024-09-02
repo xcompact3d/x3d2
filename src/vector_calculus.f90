@@ -12,8 +12,8 @@ module m_vector_calculus
     class(base_backend_t), pointer :: backend
   contains
     procedure :: curl
-    procedure :: divergence_v2p
-    procedure :: gradient_p2v
+    procedure :: divergence_v2c
+    procedure :: gradient_c2v
     procedure :: laplacian
   end type vector_calculus_t
 
@@ -36,7 +36,10 @@ contains
   subroutine curl(self, o_i_hat, o_j_hat, o_k_hat, u, v, w, &
                   x_der1st, y_der1st, z_der1st)
     !! Curl of a vector field (u, v, w).
-    !! Inputs from velocity grid and outputs to velocity grid.
+    !!
+    !! Evaluated at the data_loc defined by u, v, w fields.
+    !!
+    !! All the input and output fields are in DIR_X layout.
     implicit none
 
     class(vector_calculus_t) :: self
@@ -125,20 +128,25 @@ contains
 
   end subroutine curl
 
-  subroutine divergence_v2p(self, div_u, u, v, w, &
-                            x_stagder_v2p, x_interpl_v2p, &
-                            y_stagder_v2p, y_interpl_v2p, &
-                            z_stagder_v2p, z_interpl_v2p)
+  subroutine divergence_v2c(self, div_u, u, v, w, &
+                            x_stagder_v2c, x_interpl_v2c, &
+                            y_stagder_v2c, y_interpl_v2c, &
+                            z_stagder_v2c, z_interpl_v2c)
     !! Divergence of a vector field (u, v, w).
-    !! Inputs from velocity grid and outputs to pressure grid.
+    !!
+    !! Evaluated at the cell centers (data_loc=CELL)
+    !! Input fields are at vertices (data_loc=VERT)
+    !!
+    !! Input fields are in DIR_X data layout.
+    !! Output field is in DIR_Z data layout.
     implicit none
 
     class(vector_calculus_t) :: self
     class(field_t), intent(inout) :: div_u
     class(field_t), intent(in) :: u, v, w
-    class(tdsops_t), intent(in) :: x_stagder_v2p, x_interpl_v2p, &
-      y_stagder_v2p, y_interpl_v2p, &
-      z_stagder_v2p, z_interpl_v2p
+    class(tdsops_t), intent(in) :: x_stagder_v2c, x_interpl_v2c, &
+      y_stagder_v2c, y_interpl_v2c, &
+      z_stagder_v2c, z_interpl_v2c
 
     class(field_t), pointer :: du_x, dv_x, dw_x, &
       u_y, v_y, w_y, du_y, dv_y, dw_y, &
@@ -151,9 +159,9 @@ contains
     ! Staggared der for u field in x
     ! Interpolation for v field in x
     ! Interpolation for w field in x
-    call self%backend%tds_solve(du_x, u, x_stagder_v2p)
-    call self%backend%tds_solve(dv_x, v, x_interpl_v2p)
-    call self%backend%tds_solve(dw_x, w, x_interpl_v2p)
+    call self%backend%tds_solve(du_x, u, x_stagder_v2c)
+    call self%backend%tds_solve(dv_x, v, x_interpl_v2c)
+    call self%backend%tds_solve(dw_x, w, x_interpl_v2c)
 
     ! request fields from the allocator
     u_y => self%backend%allocator%get_block(DIR_Y)
@@ -174,9 +182,9 @@ contains
     dw_y => self%backend%allocator%get_block(DIR_Y)
 
     ! similar to the x direction, obtain derivatives in y.
-    call self%backend%tds_solve(du_y, u_y, y_interpl_v2p)
-    call self%backend%tds_solve(dv_y, v_y, y_stagder_v2p)
-    call self%backend%tds_solve(dw_y, w_y, y_interpl_v2p)
+    call self%backend%tds_solve(du_y, u_y, y_interpl_v2c)
+    call self%backend%tds_solve(dv_y, v_y, y_stagder_v2c)
+    call self%backend%tds_solve(dw_y, w_y, y_interpl_v2c)
 
     ! we don't need the velocities in y orientation any more, so release
     ! them to open up space.
@@ -205,8 +213,8 @@ contains
     dw_z => self%backend%allocator%get_block(DIR_Z)
 
     ! get the derivatives in z
-    call self%backend%tds_solve(div_u, u_z, z_interpl_v2p)
-    call self%backend%tds_solve(dw_z, w_z, z_stagder_v2p)
+    call self%backend%tds_solve(div_u, u_z, z_interpl_v2c)
+    call self%backend%tds_solve(dw_z, w_z, z_stagder_v2c)
 
     ! div_u = div_u + dw_z
     call self%backend%vecadd(1._dp, dw_z, 1._dp, div_u)
@@ -218,22 +226,27 @@ contains
     call self%backend%allocator%release_block(w_z)
     call self%backend%allocator%release_block(dw_z)
 
-  end subroutine divergence_v2p
+  end subroutine divergence_v2c
 
-  subroutine gradient_p2v(self, dpdx, dpdy, dpdz, pressure, &
-                          x_stagder_p2v, x_interpl_p2v, &
-                          y_stagder_p2v, y_interpl_p2v, &
-                          z_stagder_p2v, z_interpl_p2v)
-    !! Gradient of a scalar field 'pressure'.
-    !! Inputs from pressure grid and outputs to velocity grid.
+  subroutine gradient_c2v(self, dpdx, dpdy, dpdz, p, &
+                          x_stagder_c2v, x_interpl_c2v, &
+                          y_stagder_c2v, y_interpl_c2v, &
+                          z_stagder_c2v, z_interpl_c2v)
+    !! Gradient of a scalar field 'p'.
+    !!
+    !! Evaluated at the vertices (data_loc=VERT)
+    !! Input field is at cell centers (data_loc=CELL)
+    !!
+    !! Input field is in DIR_Z data layout.
+    !! Output fields (dpdx, dpdy, dpdz) are in DIR_X data layout.
     implicit none
 
     class(vector_calculus_t) :: self
     class(field_t), intent(inout) :: dpdx, dpdy, dpdz
-    class(field_t), intent(in) :: pressure
-    class(tdsops_t), intent(in) :: x_stagder_p2v, x_interpl_p2v, &
-      y_stagder_p2v, y_interpl_p2v, &
-      z_stagder_p2v, z_interpl_p2v
+    class(field_t), intent(in) :: p
+    class(tdsops_t), intent(in) :: x_stagder_c2v, x_interpl_c2v, &
+      y_stagder_c2v, y_interpl_c2v, &
+      z_stagder_c2v, z_interpl_c2v
 
     class(field_t), pointer :: p_sxy_z, dpdz_sxy_z, &
       p_sxy_y, dpdz_sxy_y, &
@@ -243,10 +256,10 @@ contains
     p_sxy_z => self%backend%allocator%get_block(DIR_Z)
     dpdz_sxy_z => self%backend%allocator%get_block(DIR_Z)
 
-    ! Staggared der for pressure field in z
-    ! Interpolation for pressure field in z
-    call self%backend%tds_solve(p_sxy_z, pressure, z_interpl_p2v)
-    call self%backend%tds_solve(dpdz_sxy_z, pressure, z_stagder_p2v)
+    ! Staggared der for p field in z
+    ! Interpolation for p field in z
+    call self%backend%tds_solve(p_sxy_z, p, z_interpl_c2v)
+    call self%backend%tds_solve(dpdz_sxy_z, p, z_stagder_c2v)
 
     ! request fields from the allocator
     p_sxy_y => self%backend%allocator%get_block(DIR_Y)
@@ -264,9 +277,9 @@ contains
     dpdz_sx_y => self%backend%allocator%get_block(DIR_Y)
 
     ! similar to the z direction, obtain derivatives in y.
-    call self%backend%tds_solve(p_sx_y, p_sxy_y, y_interpl_p2v)
-    call self%backend%tds_solve(dpdy_sx_y, p_sxy_y, y_stagder_p2v)
-    call self%backend%tds_solve(dpdz_sx_y, dpdz_sxy_y, y_interpl_p2v)
+    call self%backend%tds_solve(p_sx_y, p_sxy_y, y_interpl_c2v)
+    call self%backend%tds_solve(dpdy_sx_y, p_sxy_y, y_stagder_c2v)
+    call self%backend%tds_solve(dpdz_sx_y, dpdz_sxy_y, y_interpl_c2v)
 
     ! release memory
     call self%backend%allocator%release_block(p_sxy_y)
@@ -288,18 +301,23 @@ contains
     call self%backend%allocator%release_block(dpdz_sx_y)
 
     ! get the derivatives in x
-    call self%backend%tds_solve(dpdx, p_sx_x, x_stagder_p2v)
-    call self%backend%tds_solve(dpdy, dpdy_sx_x, x_interpl_p2v)
-    call self%backend%tds_solve(dpdz, dpdz_sx_x, x_interpl_p2v)
+    call self%backend%tds_solve(dpdx, p_sx_x, x_stagder_c2v)
+    call self%backend%tds_solve(dpdy, dpdy_sx_x, x_interpl_c2v)
+    call self%backend%tds_solve(dpdz, dpdz_sx_x, x_interpl_c2v)
 
     ! release temporary x fields
     call self%backend%allocator%release_block(p_sx_x)
     call self%backend%allocator%release_block(dpdy_sx_x)
     call self%backend%allocator%release_block(dpdz_sx_x)
 
-  end subroutine gradient_p2v
+  end subroutine gradient_c2v
 
   subroutine laplacian(self, lapl_u, u, x_der2nd, y_der2nd, z_der2nd)
+    !! Laplacian of a scalar field 'u'.
+    !!
+    !! Evaluated at the data_loc defined by the input u field
+    !!
+    !! Input and output fields are in DIR_X layout.
     implicit none
 
     class(vector_calculus_t) :: self
@@ -322,8 +340,10 @@ contains
     ! d2u/dy2
     call self%backend%tds_solve(d2u_y, u_y, y_der2nd)
 
+    ! add the y derivative component into the result field
     call self%backend%sum_yintox(lapl_u, d2u_y)
 
+    ! release y directional fields
     call self%backend%allocator%release_block(u_y)
     call self%backend%allocator%release_block(d2u_y)
 
@@ -336,8 +356,10 @@ contains
     ! d2u/dz2
     call self%backend%tds_solve(d2u_z, u_z, z_der2nd)
 
+    ! add the z derivative component into the result field
     call self%backend%sum_zintox(lapl_u, d2u_z)
 
+    ! release z directional fields
     call self%backend%allocator%release_block(u_z)
     call self%backend%allocator%release_block(d2u_z)
 
