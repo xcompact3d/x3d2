@@ -425,7 +425,9 @@ contains
           local_ctr = local_ctr + 1
           ctr = ctr + 1
         end do
+        local_ctr = local_ctr + 2
       end do
+      local_ctr = local_ctr + 2 * (nx + 2) + 2
     end do
     
   end subroutine build_interior_index_map
