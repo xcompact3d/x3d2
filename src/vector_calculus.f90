@@ -1,4 +1,6 @@
 module m_vector_calculus
+  use iso_fortran_env, only: stderr => error_unit
+
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, &
@@ -50,6 +52,13 @@ contains
 
     class(field_t), pointer :: u_y, u_z, v_z, w_y, dwdy_y, dvdz_z, dvdz_x, &
       dudz_z, dudz_x, dudy_y, dudy_x
+
+    if (o_i_hat%dir /= DIR_X .or. o_j_hat%dir /= DIR_X &
+        .or. o_k_hat%dir /= DIR_X .or. u%dir /= DIR_X .or. v%dir /= DIR_X &
+        .or. w%dir /= DIR_X) then
+      error stop 'Error in curl input/output field %dirs: &
+                  &outputs and inputs must be in DIR_X layout.'
+    end if
 
     ! omega_i_hat = dw/dy - dv/dz
     ! omega_j_hat = du/dz - dw/dx
@@ -152,6 +161,12 @@ contains
       u_y, v_y, w_y, du_y, dv_y, dw_y, &
       u_z, w_z, dw_z
 
+    if (div_u%dir /= DIR_Z .or. u%dir /= DIR_X .or. v%dir /= DIR_X &
+        .or. w%dir /= DIR_X) then
+      error stop 'Error in divergence_v2c input/output field dirs: &
+                  &output must be in DIR_Z, inputs must be in DIR_X layout.'
+    end if
+
     du_x => self%backend%allocator%get_block(DIR_X)
     dv_x => self%backend%allocator%get_block(DIR_X)
     dw_x => self%backend%allocator%get_block(DIR_X)
@@ -253,6 +268,12 @@ contains
       p_sx_y, dpdy_sx_y, dpdz_sx_y, &
       p_sx_x, dpdy_sx_x, dpdz_sx_x
 
+    if (dpdx%dir /= DIR_X .or. dpdy%dir /= DIR_X .or. dpdz%dir /= DIR_X &
+        .or. p%dir /= DIR_Z) then
+      error stop 'Error in gradient_c2v input/output field dirs: &
+                  &outputs must be in DIR_X, input must be in DIR_Z layout.'
+    end if
+
     p_sxy_z => self%backend%allocator%get_block(DIR_Z)
     dpdz_sxy_z => self%backend%allocator%get_block(DIR_Z)
 
@@ -327,6 +348,11 @@ contains
     class(tdsops_t), intent(in) :: x_der2nd, y_der2nd, z_der2nd
 
     class(field_t), pointer :: u_y, d2u_y, u_z, d2u_z
+
+    if (u%dir /= DIR_X .or. lapl_u%dir /= DIR_X) then
+      error stop 'Error in laplacian input/output field %dirs: &
+                  &outputs and inputs must be in DIR_X layout.'
+    end if
 
     ! d2u/dx2
     call self%backend%tds_solve(lapl_u, u, x_der2nd)

@@ -71,11 +71,10 @@ module m_base_backend
       !! transeq equation obtains the derivatives direction by
       !! direction, and the exact algorithm used to obtain these
       !! derivatives are decided at runtime. Backend implementations
-      !! are responsible from directing calls to transeq_ders into
-      !! the correct algorithm.
+      !! are responsible from directing calls to tds_solve to the
+      !! correct algorithm.
       import :: base_backend_t
       import :: field_t
-      import :: dirps_t
       import :: tdsops_t
       implicit none
 
