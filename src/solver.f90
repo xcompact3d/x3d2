@@ -50,7 +50,7 @@ module m_solver
     integer :: steps_between_checkpoints ! checkpoints can be used as restarts
     integer :: steps_between_snapshots
 
-    class(field_t), pointer :: u, v, w, pressure
+    class(field_t), pointer :: u, v, w
 
     class(base_backend_t), pointer :: backend
     class(mesh_t), pointer :: mesh
@@ -127,7 +127,6 @@ contains
     solver%u => solver%backend%allocator%get_block(DIR_X, VERT)
     solver%v => solver%backend%allocator%get_block(DIR_X, VERT)
     solver%w => solver%backend%allocator%get_block(DIR_X, VERT)
-    solver%pressure => solver%backend%allocator%get_block(DIR_Z, CELL)
 
     ! set defaults
     poisson_solver_type = 'FFT'
@@ -153,10 +152,10 @@ contains
 
     solver%steps_between_checkpoints = 1
     solver%steps_between_snapshots = 1
-    solver%dt = globs%dt
-    solver%backend%nu = globs%nu
-    solver%n_iters = globs%n_iters
-    solver%n_output = globs%n_output
+    solver%dt = dt
+    solver%backend%nu = 1._dp/Re
+    solver%n_iters = n_iters
+    solver%n_output = n_output
     solver%ngrid = product(solver%mesh%get_global_dims(VERT))
 
     dims = solver%mesh%get_dims(VERT)
@@ -489,7 +488,7 @@ contains
 
     class(solver_t), intent(inout) :: self
 
-    class(field_t), pointer :: du, dv, dw, div_u, dpdx, dpdy, dpdz
+    class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
     class(field_t), pointer :: u_out, v_out, w_out
 
     integer(8), dimension(3) :: icount !! Local size of output array
@@ -529,7 +528,9 @@ contains
 
         call self%divergence_v2p(div_u, self%u, self%v, self%w)
 
-        call self%poisson(self%pressure, div_u)
+        pressure => self%backend%allocator%get_block(DIR_Z, CELL)
+
+        call self%poisson(pressure, div_u)
 
         call self%backend%allocator%release_block(div_u)
 
@@ -537,7 +538,9 @@ contains
         dpdy => self%backend%allocator%get_block(DIR_X)
         dpdz => self%backend%allocator%get_block(DIR_X)
 
-        call self%gradient_p2v(dpdx, dpdy, dpdz, self%pressure)
+        call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
+
+        call self%backend%allocator%release_block(pressure)
 
         ! velocity correction
         call self%backend%vecadd(-1._dp, dpdx, 1._dp, self%u)
