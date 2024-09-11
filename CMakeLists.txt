@@ -8,7 +8,7 @@ include(FetchContent)
 
 FetchContent_Declare(
   Adios2
-  GIT_REPOSITORY git@github.com:ornladios/ADIOS2.git
+  GIT_REPOSITORY https://github.com/ornladios/ADIOS2.git
   GIT_TAG        v2.10.0-rc1
 )
 FetchContent_MakeAvailable(Adios2)
