@@ -4,29 +4,83 @@ stages:
   - build-docs
 
 .build-and-test-template: &build-and-test-template
-  #image: ubuntu-20.04
+  image: ubuntu:22.04
   stage: build-and-test
   timeout: 1h
-  variables:
   script:
-    - echo Success!
+    - echo "Setup environment"
+    - apt-get update
+    - apt-get install -y cmake
+    - apt-get install -y gcc
+    - apt-get install -y infiniband-diags ibverbs-utils 
+    - apt-get install -y libibverbs-dev libfabric1 libfabric-dev libpsm2-dev
+    - apt-get install -y openmpi-bin openmpi-common libopenmpi-dev libgtk2.0-dev
+    - apt-get install -y librdmacm-dev libpsm2-dev
+    - echo "Display GCC version number"
+    - gcc --version
+    - echo "Configure Debug build"
+    - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+    - echo "Build with Debug (strict) flags"
+    - make -C build
+    - echo "Configure Release build"
+    - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+    - echo "Build tests"
+    - make -C build
+    #- echo "Run the tests"
+    #- make -C build test;
 
 .check-formatting-template: &check-formatting-template
-  #image: ubuntu-latest
+  image: python:3.9.19-bullseye
   stage: check-policies
   variables:
+    FPRETTIFY_COMMAND: fprettify --config .fprettify.ini --diff --recursive src
   before_script:
+    - pip install fprettify
   script:
-    - echo Success!
+    - cd $CI_PROJECT_DIR
+    - $FPRETTIFY_COMMAND &> fprettify.log
+    - if [[ ! -z "$(cat fprettify.log)" ]]; then echo "::warning::Code formatting issues detected. See log for details."; exit 1; fi
   allow_failure: false
   timeout: 15m
+  artifacts:
+    expire_in: 1 month
+    when: on_failure
+    paths:
+      - fprettify.log
 
 .build-docs-template: &build-docs-template
-  #image: ubuntu-latest
+  image: python:3.9.19-slim-bookworm
   stage: build-docs
   variables:
+    PUBLISH_DIR: api/
+    FORD_OUTPUT_DIR: api-docs
+    FORD_CFG: ford.md
   script:
-    - echo Success!
+    - cd $CI_PROJECT_DIR
+    - apt update
+    - apt install -y git
+    - echo Install sphinx, ford and ghp-import
+    - pip install -r docs/docs-requirements.txt
+    - echo Install graphviz
+    - apt install graphviz -y
+    - echo Build sphinx docs
+    - apt-get install make -y
+    - make -C docs html
+    - echo Deploy sphinx docs
+    - git config user.name 'github-action'
+    - git config user.email 'github-action'
+    - git remote add upstream git@github.com:xcompact3d/x3d2.git
+    - ghp-import -m 'Update sphinx docs' --push --remote upstream --branch gh-pages docs/build/html --no-jekyll --force
+    - echo Build API docs with ford
+    - ford $FORD_CFG -o $FORD_OUTPUT_DIR
+    - echo Deploy api-docs
+    - ghp-import -m 'Update API docs' --prefix $PUBLISH_DIR --push --remote upstream --branch gh-pages $FORD_OUTPUT_DIR --no-jekyll --force
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: on_success
+    - when: never
+  allow_failure: false
+  timeout: 15m
 
 build-and-test:
   <<: *build-and-test-template
@@ -36,6 +90,6 @@ check-formatting:
   <<: *check-formatting-template
   needs: []
     
-build-docs:
-  <<: *build-docs-template
-  needs: []
+#build-docs:
+#  <<: *build-docs-template
+#  needs: []
