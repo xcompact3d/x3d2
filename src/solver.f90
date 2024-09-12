@@ -12,6 +12,7 @@ module m_solver
   use m_time_integrator, only: time_intg_t
   use m_vector_calculus, only: vector_calculus_t
   use m_mesh, only: mesh_t
+  use m_adios_io, only: adios_io_t, adios_file_t
 
   implicit none
 
@@ -46,11 +47,14 @@ module m_solver
     real(dp) :: dt, nu
     integer :: n_iters, n_output
     integer :: ngrid
+    integer :: steps_between_checkpoints ! checkpoints can be used as restarts
+    integer :: steps_between_snapshots
 
-    class(field_t), pointer :: u, v, w
+    class(field_t), pointer :: u, v, w, pressure
 
     class(base_backend_t), pointer :: backend
     class(mesh_t), pointer :: mesh
+    type(adios_io_t) :: io
     type(time_intg_t) :: time_integrator
     type(allocator_t), pointer :: host_allocator
     type(dirps_t), pointer :: xdirps, ydirps, zdirps
@@ -63,6 +67,7 @@ module m_solver
     procedure :: curl
     procedure :: output
     procedure :: run
+    procedure :: write_variable
   end type solver_t
 
   abstract interface
@@ -122,6 +127,7 @@ contains
     solver%u => solver%backend%allocator%get_block(DIR_X, VERT)
     solver%v => solver%backend%allocator%get_block(DIR_X, VERT)
     solver%w => solver%backend%allocator%get_block(DIR_X, VERT)
+    solver%pressure => solver%backend%allocator%get_block(DIR_Z, VERT)
 
     ! set defaults
     poisson_solver_type = 'FFT'
@@ -145,6 +151,8 @@ contains
       print *, time_intg//' time integrator instantiated'
     end if
 
+    solver%steps_between_checkpoints = 1
+    solver%steps_between_snapshots = 1
     solver%dt = dt
     solver%backend%nu = 1._dp/Re
     solver%n_iters = n_iters
@@ -203,6 +211,8 @@ contains
     case default
       error stop 'poisson_solver_type is not valid. Use "FFT" or "CG".'
     end select
+
+    call solver%io%init(MPI_COMM_WORLD)
 
   end function init
 
@@ -397,6 +407,24 @@ contains
 
   end subroutine poisson_fft
 
+  subroutine write_variable(self, file, varname, varfield, icount, ishape, istart)
+    class(solver_t), intent(in) :: self
+    type(adios_file_t) :: file
+    character(*), intent(in) :: varname !! Name of variable in output file
+    class(field_t), intent(in) :: varfield !! Field to be written out
+    integer(8), dimension(3), intent(in) :: icount !! Local size of in_arr
+    integer(8), dimension(3), intent(in) :: ishape !! Global size of in_arr
+    integer(8), dimension(3), intent(in) :: istart !! Local offset of in_arr
+
+    class(field_t), pointer :: out
+
+    out => self%host_allocator%get_block(DIR_C)
+    ! Backend should handle moving from device if necessary
+    call self%backend%get_field_data(out%data, varfield)
+    call self%io%write_field(out, file, varname, icount, ishape, istart)
+    call self%host_allocator%release_block(out)
+  end subroutine write_variable
+
   subroutine poisson_cg(self, pressure, div_u)
     implicit none
 
@@ -461,17 +489,24 @@ contains
 
     class(solver_t), intent(inout) :: self
 
-    class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
+    class(field_t), pointer :: du, dv, dw, div_u, dpdx, dpdy, dpdz
     class(field_t), pointer :: u_out, v_out, w_out
 
+    integer(8), dimension(3) :: icount !! Local size of output array
+    integer(8), dimension(3) :: ishape !! Global size of output array
+    integer(8), dimension(3) :: istart !! Local offset of output array
+
+    type(adios_file_t) :: checkpoint_file
     real(dp) :: t
     integer :: i, j
+    integer :: checkpoint_at_i = 1
 
     if (self%mesh%par%is_root()) print *, 'initial conditions'
     t = 0._dp
     call self%output(t)
 
     if (self%mesh%par%is_root()) print *, 'start run'
+    checkpoint_at_i = checkpoint_at_i + self%steps_between_checkpoints
 
     do i = 1, self%n_iters
       do j = 1, self%time_integrator%nstage
@@ -494,9 +529,7 @@ contains
 
         call self%divergence_v2p(div_u, self%u, self%v, self%w)
 
-        pressure => self%backend%allocator%get_block(DIR_Z, CELL)
-
-        call self%poisson(pressure, div_u)
+        call self%poisson(self%pressure, div_u)
 
         call self%backend%allocator%release_block(div_u)
 
@@ -504,9 +537,7 @@ contains
         dpdy => self%backend%allocator%get_block(DIR_X)
         dpdz => self%backend%allocator%get_block(DIR_X)
 
-        call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
-
-        call self%backend%allocator%release_block(pressure)
+        call self%gradient_p2v(dpdx, dpdy, dpdz, self%pressure)
 
         ! velocity correction
         call self%backend%vecadd(-1._dp, dpdx, 1._dp, self%u)
@@ -517,6 +548,34 @@ contains
         call self%backend%allocator%release_block(dpdy)
         call self%backend%allocator%release_block(dpdz)
       end do
+
+      if(i == checkpoint_at_i) then
+        checkpoint_file = self%io%open_file("test_output.bp", self%io%io_mode_write)
+
+        icount = self%mesh%get_dims(self%pressure%data_loc)
+        ishape = self%mesh%get_global_dims(self%pressure%data_loc)
+        istart = self%mesh%par%n_offset ! Is this offset the same for pressure and velocity?
+
+        call self%time_integrator%write_checkpoint(checkpoint_file, self%io)
+
+        call self%write_variable(checkpoint_file, "pressure", self%pressure, &
+          icount, ishape, istart)
+
+        icount = self%mesh%get_dims(self%u%data_loc)
+        ishape = self%mesh%get_global_dims(self%u%data_loc)
+        istart = self%mesh%par%n_offset
+
+        call self%write_variable(checkpoint_file, "u", self%u, icount, ishape, istart)
+        call self%write_variable(checkpoint_file, "v", self%v, icount, ishape, istart)
+        call self%write_variable(checkpoint_file, "w", self%w, icount, ishape, istart)
+
+        call self%io%write_real8(t, checkpoint_file, "time")
+        call self%io%write_integer8(1_8, checkpoint_file, "is_valid")
+
+        call self%io%close_file(checkpoint_file)
+
+        checkpoint_at_i = checkpoint_at_i + self%steps_between_checkpoints
+      end if
 
       if (mod(i, self%n_output) == 0) then
         t = i*self%dt
