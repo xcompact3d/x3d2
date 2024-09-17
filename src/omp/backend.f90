@@ -270,31 +270,29 @@ contains
 
   end subroutine transeq_dist_component
 
-  subroutine tds_solve_omp(self, du, u, dirps, tdsops)
+  subroutine tds_solve_omp(self, du, u, tdsops)
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: du
     class(field_t), intent(in) :: u
-    type(dirps_t), intent(in) :: dirps
     class(tdsops_t), intent(in) :: tdsops
 
-    ! Check if direction matches for both in/out fields and dirps
-    if (dirps%dir /= du%dir .or. u%dir /= du%dir) then
-      error stop 'DIR mismatch between fields and dirps in tds_solve.'
+    ! Check if direction matches for both in/out fields
+    if (u%dir /= du%dir) then
+      error stop 'DIR mismatch between fields in tds_solve.'
     end if
 
-    call tds_solve_dist(self, du, u, dirps, tdsops)
+    call tds_solve_dist(self, du, u, tdsops)
 
   end subroutine tds_solve_omp
 
-  subroutine tds_solve_dist(self, du, u, dirps, tdsops)
+  subroutine tds_solve_dist(self, du, u, tdsops)
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: du
     class(field_t), intent(in) :: u
-    type(dirps_t), intent(in) :: dirps
     class(tdsops_t), intent(in) :: tdsops
     integer :: n_halo, n_groups, dir
 

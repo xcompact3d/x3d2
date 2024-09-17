@@ -352,35 +352,33 @@ contains
 
   end subroutine transeq_cuda_thom
 
-  subroutine tds_solve_cuda(self, du, u, dirps, tdsops)
+  subroutine tds_solve_cuda(self, du, u, tdsops)
     implicit none
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: du
     class(field_t), intent(in) :: u
-    type(dirps_t), intent(in) :: dirps
     class(tdsops_t), intent(in) :: tdsops
 
     type(dim3) :: blocks, threads
 
     ! Check if direction matches for both in/out fields and dirps
-    if (dirps%dir /= du%dir .or. u%dir /= du%dir) then
-      error stop 'DIR mismatch between fields and dirps in tds_solve.'
+    if (u%dir /= du%dir) then
+      error stop 'DIR mismatch between fields in tds_solve.'
     end if
 
     blocks = dim3(self%mesh%get_n_groups(u), 1, 1); threads = dim3(SZ, 1, 1)
 
-    call tds_solve_dist(self, du, u, dirps, tdsops, blocks, threads)
+    call tds_solve_dist(self, du, u, tdsops, blocks, threads)
 
   end subroutine tds_solve_cuda
 
-  subroutine tds_solve_dist(self, du, u, dirps, tdsops, blocks, threads)
+  subroutine tds_solve_dist(self, du, u, tdsops, blocks, threads)
     implicit none
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: du
     class(field_t), intent(in) :: u
-    type(dirps_t), intent(in) :: dirps
     class(tdsops_t), intent(in) :: tdsops
     type(dim3), intent(in) :: blocks, threads
 

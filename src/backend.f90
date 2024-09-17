@@ -67,22 +67,20 @@ module m_base_backend
   end interface
 
   abstract interface
-    subroutine tds_solve(self, du, u, dirps, tdsops)
-         !! transeq equation obtains the derivatives direction by
-         !! direction, and the exact algorithm used to obtain these
-         !! derivatives are decided at runtime. Backend implementations
-         !! are responsible from directing calls to transeq_ders into
-         !! the correct algorithm.
+    subroutine tds_solve(self, du, u, tdsops)
+      !! transeq equation obtains the derivatives direction by
+      !! direction, and the exact algorithm used to obtain these
+      !! derivatives are decided at runtime. Backend implementations
+      !! are responsible from directing calls to tds_solve to the
+      !! correct algorithm.
       import :: base_backend_t
       import :: field_t
-      import :: dirps_t
       import :: tdsops_t
       implicit none
 
       class(base_backend_t) :: self
       class(field_t), intent(inout) :: du
       class(field_t), intent(in) :: u
-      type(dirps_t), intent(in) :: dirps
       class(tdsops_t), intent(in) :: tdsops
     end subroutine tds_solve
   end interface
