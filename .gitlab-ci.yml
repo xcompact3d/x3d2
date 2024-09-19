@@ -12,9 +12,10 @@ workflow:
       changes:
         compare_to: 'refs/heads/main'
         paths:
-          - '**/src/*'
-          - '**/examples/*'
-          - '**/tests/*'
+          - "src/**/*"
+          - "examples/**/*"
+          - "tests/**/*"
+          - .gitlab-ci.yml
 
 stages:
   - build-and-test
@@ -27,25 +28,25 @@ stages:
   timeout: 1h
   script:
     - echo "Setup environment"
-    - apt-get install -y software-properties-common
+    - apt update
+    - apt install -y environment-modules
+    - echo "/apps/modules" >> /etc/environment-modules/modulespath
     - apt-get update
-    - apt-get install -y wget
+    - apt-get install -y ccache
     - apt-get install -y cmake
     - apt-get install -y gcc
     - apt-get install -y infiniband-diags ibverbs-utils 
     - apt-get install -y libibverbs-dev libfabric1 libfabric-dev libpsm2-dev
     - apt-get install -y openmpi-bin openmpi-common libopenmpi-dev libgtk2.0-dev
     - apt-get install -y librdmacm-dev libpsm2-dev
-    - wget https://developer.download.nvidia.com/compute/cuda/12.6.0/local_installers/cuda-repo-debian12-12-6-local_12.6.0-560.28.03-1_amd64.deb
-    - dpkg -i cuda-repo-debian12-12-6-local_12.6.0-560.28.03-1_amd64.deb
-    - cp /var/cuda-repo-debian12-12-6-local/cuda-*-keyring.gpg /usr/share/keyrings/ 
-    - add-apt-repository contrib
-    - apt-get update
-    - apt-get install -y cuda-toolkit-12-6 
-    - PATH=/usr/local/cuda-12.6/bin:$PATH
-    - LD_LIBRARY_PATH=/usr/local/cuda-12.6/bin/lib64:$LD_LIBRARY_PATH
+    - . /etc/profile.d/modules.sh
+    - ccache -s && ccache -M 5G
     - echo "Display GCC version number"
     - gcc --version
+    - echo "Display nvcc version number"
+    - module avail
+      #- module load cuda
+      #- nvcc --version
     - echo "Configure Debug build"
     - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
     - echo "Build with Debug (strict) flags"
@@ -54,8 +55,10 @@ stages:
     - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
     - echo "Build tests"
     - make -C build
-    #- echo "Run the tests"
-    #- make -C build test
+    - echo "Run the tests"
+    - export OMPI_ALLOW_RUN_AS_ROOT=1
+    - export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+    - make -C build test
   tags:
     - gpu
 
