@@ -58,9 +58,17 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   target_compile_options(xcompact PRIVATE "-DCUDA")
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
   if (NOT FLAGS_SET)
+    message("CMAKE_Fortran_FLAGS: ${CMAKE_Fortran_FLAGS}")
+    message("CMAKE_Fortran_FLAGS_DEBUG: ${CMAKE_Fortran_FLAGS_DEBUG}")
+    message("CMAKE_Fortran_FLAGS_RELEASE: ${CMAKE_Fortran_FLAGS_RELEASE}")
+
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cpp -std=f2018 -fallow-argument-mismatch" CACHE STRING "" FORCE)
     set(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG} -g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument" CACHE STRING "" FORCE)
     set(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE} -O3 -ffast-math -march=native" CACHE STRING "" FORCE)
+
+    message("CMAKE_Fortran_FLAGS: ${CMAKE_Fortran_FLAGS}")
+    message("CMAKE_Fortran_FLAGS_DEBUG: ${CMAKE_Fortran_FLAGS_DEBUG}")
+    message("CMAKE_Fortran_FLAGS_RELEASE: ${CMAKE_Fortran_FLAGS_RELEASE}")
     set(FLAGS_SET 1 CACHE INTERNAL "")
   endif()
 endif()
