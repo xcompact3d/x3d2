@@ -48,7 +48,7 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
  
   set(CMAKE_Fortran_FLAGS "-cpp -cuda")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr -Ktrap=fp")
-  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast -gpu=ccnative")
   target_link_options(x3d2 INTERFACE "-cuda")
   target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
 
@@ -56,7 +56,7 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
   set(CMAKE_Fortran_FLAGS "-cpp -std=f2018")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
-  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -march=native")
 endif()
 
 find_package(OpenMP REQUIRED)
