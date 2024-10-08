@@ -60,6 +60,8 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
   if (NOT FLAGS_SET)
     set(OpenMP_Fortran_FLAGS "-fopenmp" CACHE STRING "" FORCE)
     set(OpenMP_Fortran_LIB_NAMES "gomp" CACHE STRING "" FORCE)
+    set(OpenMP_gomp_LIBRARY "-lgomp" CACHE STRING "" FORCE)
+
     set(CMAKE_Fortran_FLAGS "-cpp -std=f2018 -fallow-argument-mismatch" CACHE STRING "" FORCE)
     set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument" CACHE STRING "" FORCE)
     set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -march=native" CACHE STRING "" FORCE)
