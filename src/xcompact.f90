@@ -7,6 +7,7 @@ program xcompact
   use m_solver, only: solver_t
   use m_tdsops, only: tdsops_t
   use m_mesh
+  use m_case_tgv, only: case_tgv_t
 
 #ifdef CUDA
   use m_cuda_allocator
@@ -24,7 +25,7 @@ program xcompact
   class(allocator_t), pointer :: allocator
   type(mesh_t) :: mesh
   type(allocator_t), pointer :: host_allocator
-  type(solver_t) :: solver
+  class(solver_t), allocatable :: solver
 
 #ifdef CUDA
   type(cuda_backend_t), target :: cuda_backend
@@ -99,7 +100,9 @@ program xcompact
   if (nrank == 0) print *, 'OpenMP backend instantiated'
 #endif
 
-  solver = solver_t(backend, mesh, host_allocator)
+  !solver = solver_t(backend, mesh, host_allocator)
+  !allocate(solver :: case_tgv_t)
+  solver = case_tgv_t(backend, mesh, host_allocator)
   if (nrank == 0) print *, 'solver instantiated'
 
   call cpu_time(t_start)

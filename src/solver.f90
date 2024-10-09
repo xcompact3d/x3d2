@@ -58,6 +58,7 @@ module m_solver
     procedure(poisson_solver), pointer :: poisson => null()
   contains
     procedure :: transeq
+    procedure :: post_transeq
     procedure :: pressure_correction
     procedure :: divergence_v2p
     procedure :: gradient_p2v
@@ -329,6 +330,16 @@ contains
 
   end subroutine transeq
 
+  subroutine post_transeq(self, du, dv, dw)
+    implicit none
+
+    class(solver_t) :: self
+    class(field_t), intent(inout) :: du, dv, dw
+
+    print*, 'base post_transeq'
+
+  end subroutine post_transeq
+
   subroutine divergence_v2p(self, div_u, u, v, w)
     !! Wrapper for divergence_v2p
     implicit none
@@ -528,6 +539,8 @@ contains
         dw => self%backend%allocator%get_block(DIR_X)
 
         call self%transeq(du, dv, dw, self%u, self%v, self%w)
+
+        call self%post_transeq(du, dv, dw)
 
         ! time integration
         call self%time_integrator%step(self%u, self%v, self%w, &
