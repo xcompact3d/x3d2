@@ -45,7 +45,6 @@ contains
     ! first call the parent class
     call self%solver_t%post_transeq(du, dv, dw)
 
-    print *, 'post_transeq for the tgv case'
   end subroutine post_transeq_tgv
 
 end module m_case_tgv
