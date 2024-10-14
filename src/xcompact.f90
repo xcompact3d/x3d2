@@ -7,6 +7,7 @@ program xcompact
   use m_solver, only: solver_t
   use m_tdsops, only: tdsops_t
   use m_mesh
+  use m_case_generic, only: case_generic_t
   use m_case_tgv, only: case_tgv_t
 
 #ifdef CUDA
@@ -41,12 +42,14 @@ program xcompact
 
   character(len=200) :: input_file
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
+  character(len=20) :: flow_case
   integer, dimension(3) :: dims_global
   integer, dimension(3) :: nproc_dir = 0
   real(dp), dimension(3) :: L_global
   integer :: nrank, nproc, ierr
 
-  namelist /domain_params/ L_global, dims_global, nproc_dir, BC_x, BC_y, BC_z
+  namelist /domain_settings/ flow_case, L_global, dims_global, nproc_dir, &
+                             BC_x, BC_y, BC_z
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
@@ -63,7 +66,7 @@ program xcompact
   if (command_argument_count() >= 1) then
     call get_command_argument(1, input_file)
     open (100, file=input_file)
-    read (100, nml=domain_params)
+    read (100, nml=domain_settings)
     close (100)
   else
     error stop 'Input file is not provided.'
@@ -100,9 +103,16 @@ program xcompact
   if (nrank == 0) print *, 'OpenMP backend instantiated'
 #endif
 
-  !solver = solver_t(backend, mesh, host_allocator)
-  !allocate(solver :: case_tgv_t)
-  solver = case_tgv_t(backend, mesh, host_allocator)
+  if (nrank == 0) print *, 'Flow case: ', flow_case
+
+  select case(trim(flow_case))
+  case('generic')
+    solver = case_generic_t(backend, mesh, host_allocator)
+  case('tgv')
+    solver = case_tgv_t(backend, mesh, host_allocator)
+  case default
+    error stop 'Undefined flow_case.'
+  end select
   if (nrank == 0) print *, 'solver instantiated'
 
   call cpu_time(t_start)
