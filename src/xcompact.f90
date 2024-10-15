@@ -49,7 +49,7 @@ program xcompact
   integer :: nrank, nproc, ierr
 
   namelist /domain_settings/ flow_case, L_global, dims_global, nproc_dir, &
-                             BC_x, BC_y, BC_z
+    BC_x, BC_y, BC_z
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
@@ -105,12 +105,12 @@ program xcompact
 
   if (nrank == 0) print *, 'Flow case: ', flow_case
 
-  select case(trim(flow_case))
-  case('generic')
-    allocate(case_generic_t :: solver)
+  select case (trim(flow_case))
+  case ('generic')
+    allocate (case_generic_t :: solver)
     solver = case_generic_t(backend, mesh, host_allocator)
-  case('tgv')
-    allocate(case_tgv_t :: solver)
+  case ('tgv')
+    allocate (case_tgv_t :: solver)
     solver = case_tgv_t(backend, mesh, host_allocator)
   case default
     error stop 'Undefined flow_case.'
