@@ -439,16 +439,17 @@ contains
 
   end subroutine poisson_cg
 
-  subroutine pressure_correction(self)
+  subroutine pressure_correction(self, u, v, w)
     implicit none
 
     class(solver_t) :: self
+    class(field_t), intent(inout) :: u, v, w
 
     class(field_t), pointer :: div_u, pressure, dpdx, dpdy, dpdz
 
     div_u => self%backend%allocator%get_block(DIR_Z)
 
-    call self%divergence_v2p(div_u, self%u, self%v, self%w)
+    call self%divergence_v2p(div_u, u, v, w)
 
     pressure => self%backend%allocator%get_block(DIR_Z)
 
@@ -465,9 +466,9 @@ contains
     call self%backend%allocator%release_block(pressure)
 
     ! velocity correction
-    call self%backend%vecadd(-1._dp, dpdx, 1._dp, self%u)
-    call self%backend%vecadd(-1._dp, dpdy, 1._dp, self%v)
-    call self%backend%vecadd(-1._dp, dpdz, 1._dp, self%w)
+    call self%backend%vecadd(-1._dp, dpdx, 1._dp, u)
+    call self%backend%vecadd(-1._dp, dpdy, 1._dp, v)
+    call self%backend%vecadd(-1._dp, dpdz, 1._dp, w)
 
     call self%backend%allocator%release_block(dpdx)
     call self%backend%allocator%release_block(dpdy)
@@ -552,7 +553,7 @@ contains
 
     class(solver_t), intent(inout) :: self
 
-    class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
+    class(field_t), pointer :: du, dv, dw
     class(field_t), pointer :: u_out, v_out, w_out
 
     real(dp) :: t
@@ -582,7 +583,7 @@ contains
         call self%backend%allocator%release_block(dv)
         call self%backend%allocator%release_block(dw)
 
-        call self%pressure_correction()
+        call self%pressure_correction(self%u, self%v, self%w)
       end do
 
       if (mod(i, self%n_output) == 0) then
