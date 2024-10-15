@@ -107,8 +107,10 @@ program xcompact
 
   select case(trim(flow_case))
   case('generic')
+    allocate(case_generic_t :: solver)
     solver = case_generic_t(backend, mesh, host_allocator)
   case('tgv')
+    allocate(case_tgv_t :: solver)
     solver = case_tgv_t(backend, mesh, host_allocator)
   case default
     error stop 'Undefined flow_case.'
