@@ -52,6 +52,8 @@ module m_cuda_backend
     procedure :: sum_zintox => sum_zintox_cuda
     procedure :: vecadd => vecadd_cuda
     procedure :: scalar_product => scalar_product_cuda
+    procedure :: field_scale => field_scale_cuda
+    procedure :: field_shift => field_shift_cuda
     procedure :: copy_data_to_f => copy_data_to_f_cuda
     procedure :: copy_f_to_data => copy_f_to_data_cuda
     procedure :: init_poisson_fft => init_cuda_poisson_fft
@@ -654,6 +656,46 @@ contains
                                           u_dev, n, n_halo)
 
   end subroutine copy_into_buffers
+
+  subroutine field_scale_cuda(self, f, a)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(in) :: f
+    real(dp), intent(in) :: a
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    type(dim3) :: blocks, threads
+    integer :: n
+
+    call resolve_field_t(f_d, f)
+
+    n = size(f_d, dim=2)
+    blocks = dim3(size(f_d, dim=3), 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call field_scale<<<blocks, threads>>>(f_d, a, n) !&
+
+  end subroutine field_scale_cuda
+
+  subroutine field_shift_cuda(self, f, a)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(in) :: f
+    real(dp), intent(in) :: a
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    type(dim3) :: blocks, threads
+    integer :: n
+
+    call resolve_field_t(f_d, f)
+
+    n = size(f_d, dim=2)
+    blocks = dim3(size(f_d, dim=3), 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call field_shift<<<blocks, threads>>>(f_d, a, n) !&
+
+  end subroutine field_shift_cuda
 
   subroutine copy_data_to_f_cuda(self, f, data)
     class(cuda_backend_t), intent(inout) :: self
