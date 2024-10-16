@@ -43,6 +43,42 @@ contains
 
   end subroutine buffer_copy
 
+  attributes(global) subroutine field_scale(f, alpha, n)
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), value, intent(in) :: alpha
+    integer, value, intent(in) :: n
+
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      f(i, j, b) = alpha*f(i, j, b)
+    end do
+
+  end subroutine field_scale
+
+  attributes(global) subroutine field_shift(f, const, n)
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), value, intent(in) :: const
+    integer, value, intent(in) :: n
+
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      f(i, j, b) = f(i, j, b) + const
+    end do
+
+  end subroutine field_shift
+
   attributes(global) subroutine scalar_product(s, x, y, n)
     implicit none
 
