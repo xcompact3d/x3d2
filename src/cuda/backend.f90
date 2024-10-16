@@ -21,10 +21,11 @@ module m_cuda_backend
   use m_cuda_tdsops, only: cuda_tdsops_t
   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
   use m_cuda_kernels_fieldops, only: axpby, buffer_copy, field_scale, &
-    field_shift, scalar_product
+                                     field_shift, scalar_product
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
-    reorder_y2z, reorder_z2x, reorder_z2y, reorder_c2x, reorder_x2c, &
-    sum_yintox, sum_zintox
+                                    reorder_y2z, reorder_z2x, reorder_z2y, &
+                                    reorder_c2x, reorder_x2c, &
+                                    sum_yintox, sum_zintox
 
   implicit none
 
