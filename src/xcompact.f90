@@ -1,7 +1,6 @@
 program xcompact
   use mpi
 
-  use decomp_2d_fft
   use m_allocator
   use m_base_backend
   use m_common, only: pi, globs_t, POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
@@ -19,7 +18,6 @@ program xcompact
 #else
   use m_omp_backend
   use m_omp_common, only: SZ
-  use m_omp_mesh
 #endif
 
   implicit none
@@ -31,15 +29,14 @@ program xcompact
   type(solver_t) :: solver
   type(time_intg_t) :: time_integrator
   type(dirps_t) :: xdirps, ydirps, zdirps
+  type(mesh_t), target :: mesh
 
 #ifdef CUDA
   type(cuda_backend_t), target :: cuda_backend
   type(cuda_allocator_t), target :: cuda_allocator
-  type(mesh_t), target :: mesh
   integer :: ndevs, devnum
 #else
   type(omp_backend_t), target :: omp_backend
-  type(omp_mesh_t), target :: mesh
 #endif
 
   type(allocator_t), target :: omp_allocator
@@ -63,7 +60,7 @@ program xcompact
 #endif
 
   ! Global number of cells in each direction
-  dims_global = [256, 256, 256]
+  dims_global = [96, 96, 96]
 
   ! Global domain dimensions
   L_global = [2*pi, 2*pi, 2*pi]
@@ -71,16 +68,12 @@ program xcompact
   ! Domain decomposition in each direction
   nproc_dir = [1, 1, nproc]
 
-#ifdef CUDA
   mesh = mesh_t(dims_global, nproc_dir, L_global)
-#else
-  mesh = omp_mesh_t(dims_global, nproc_dir, L_global)
-#endif
 
   globs%dt = 0.001_dp
   globs%nu = 1._dp/1600._dp
   globs%n_iters = 20000
-  globs%n_output = 100
+  globs%n_output = 10
 
   globs%poisson_solver_type = POISSON_SOLVER_FFT
 
