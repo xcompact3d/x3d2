@@ -2,8 +2,7 @@ module m_omp_backend
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_ordering, only: get_index_reordering
-  use m_common, only: dp, globs_t, get_dirs_from_rdr, VERT, DIR_X, DIR_Y, DIR_Z, DIR_C, &
-                      RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
+  use m_common, only: dp, get_dirs_from_rdr, VERT, DIR_X, DIR_Y, DIR_Z, DIR_C
   use m_tdsops, only: dirps_t, tdsops_t, get_tds_n
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
   use m_omp_sendrecv, only: sendrecv_fields
@@ -271,31 +270,29 @@ contains
 
   end subroutine transeq_dist_component
 
-  subroutine tds_solve_omp(self, du, u, dirps, tdsops)
+  subroutine tds_solve_omp(self, du, u, tdsops)
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: du
     class(field_t), intent(in) :: u
-    type(dirps_t), intent(in) :: dirps
     class(tdsops_t), intent(in) :: tdsops
 
-    ! Check if direction matches for both in/out fields and dirps
-    if (dirps%dir /= du%dir .or. u%dir /= du%dir) then
-      error stop 'DIR mismatch between fields and dirps in tds_solve.'
+    ! Check if direction matches for both in/out fields
+    if (u%dir /= du%dir) then
+      error stop 'DIR mismatch between fields in tds_solve.'
     end if
 
-    call tds_solve_dist(self, du, u, dirps, tdsops)
+    call tds_solve_dist(self, du, u, tdsops)
 
   end subroutine tds_solve_omp
 
-  subroutine tds_solve_dist(self, du, u, dirps, tdsops)
+  subroutine tds_solve_dist(self, du, u, tdsops)
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: du
     class(field_t), intent(in) :: u
-    type(dirps_t), intent(in) :: dirps
     class(tdsops_t), intent(in) :: tdsops
     integer :: n_halo, n_groups, dir
 
@@ -455,7 +452,7 @@ contains
 
     use mpi
 
-    use m_common, only: NONE, get_rdr_from_dirs
+    use m_common, only: none, get_rdr_from_dirs
 
     implicit none
 
@@ -467,8 +464,8 @@ contains
     integer :: nvec, remstart
     integer :: ierr
 
-    if ((x%data_loc == NONE) .or. (y%data_loc == NONE)) then
-      error stop "You must set the field location before calling scalar product"
+    if ((x%data_loc == none) .or. (y%data_loc == none)) then
+      error stop "You must set the data_loc before calling scalar product"
     end if
     if (x%data_loc /= y%data_loc) then
       error stop "Called scalar product with incompatible fields"

@@ -10,27 +10,21 @@ module m_common
                         RDR_X2C = 14, RDR_Y2C = 24, RDR_Z2C = 34
   integer, parameter :: DIR_X = 1, DIR_Y = 2, DIR_Z = 3, DIR_C = 4
   integer, parameter :: POISSON_SOLVER_FFT = 0, POISSON_SOLVER_CG = 1
-  integer, parameter :: VERT = 1, & ! Vertex centered data
-                        CELL = 2, & ! Cell centered data
-                        X_FACE = 11, &  ! Data on faces normal to X
-                        Y_FACE = 12, &  ! Data on faces normal to Y
-                        Z_FACE = 13, &  ! Data on faces normal to Z
-                        X_EDGE = 101, & ! Data on edges along X
-                        Y_EDGE = 102, & ! Data on edges along Y
-                        Z_EDGE = 103, & ! Data on edges along Z
-                        none = -1 ! The location of data isn't specified
+  integer, parameter :: VERT = 0000, & ! Vertex centered data
+                        CELL = 1110, & ! Cell centered data
+                        X_FACE = 0110, &  ! Data on faces normal to X
+                        Y_FACE = 1010, &  ! Data on faces normal to Y
+                        Z_FACE = 1100, &  ! Data on faces normal to Z
+                        X_EDGE = 1000, & ! Data on edges along X
+                        Y_EDGE = 0100, & ! Data on edges along Y
+                        Z_EDGE = 0010, & ! Data on edges along Z
+                        none = -0001 ! The location of data isn't specified
+  integer, parameter :: BC_PERIODIC = 0, BC_NEUMANN = 1, BC_DIRICHLET = 2
   integer, protected :: &
     rdr_map(4, 4) = reshape([0, RDR_Y2X, RDR_Z2X, RDR_C2X, &
                              RDR_X2Y, 0, RDR_Z2Y, RDR_C2Y, &
                              RDR_X2Z, RDR_Y2Z, 0, RDR_C2Z, &
                              RDR_X2C, RDR_Y2C, RDR_Z2C, 0], shape=[4, 4])
-
-  type :: globs_t
-    real(dp) :: nu, dt
-    integer :: n_iters, n_output
-    character(len=20) :: BC_x_s, BC_x_e, BC_y_s, BC_y_e, BC_z_s, BC_z_e
-    integer :: poisson_solver_type
-  end type globs_t
 
 contains
 

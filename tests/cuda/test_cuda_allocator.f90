@@ -12,6 +12,7 @@ program test_allocator_cuda
   logical :: allpass
   integer, dimension(3) :: dims, nproc_dir
   real(dp) :: L_global(3)
+  character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
   class(allocator_t), allocatable :: allocator
   class(mesh_t), allocatable :: mesh
   class(field_t), pointer :: ptr1, ptr2, ptr3
@@ -24,7 +25,11 @@ program test_allocator_cuda
   nproc_dir = [1, 1, 1]
   L_global = [2*pi, 2*pi, 2*pi]
 
-  mesh = mesh_t(dims, nproc_dir, L_global)
+  BC_x = ['periodic', 'periodic']
+  BC_y = ['periodic', 'periodic']
+  BC_z = ['periodic', 'periodic']
+
+  mesh = mesh_t(dims, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
   allocator = cuda_allocator_t(mesh, 8)
 

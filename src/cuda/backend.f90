@@ -5,7 +5,7 @@ module m_cuda_backend
 
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, globs_t, &
+  use m_common, only: dp, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
@@ -352,35 +352,33 @@ contains
 
   end subroutine transeq_cuda_thom
 
-  subroutine tds_solve_cuda(self, du, u, dirps, tdsops)
+  subroutine tds_solve_cuda(self, du, u, tdsops)
     implicit none
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: du
     class(field_t), intent(in) :: u
-    type(dirps_t), intent(in) :: dirps
     class(tdsops_t), intent(in) :: tdsops
 
     type(dim3) :: blocks, threads
 
     ! Check if direction matches for both in/out fields and dirps
-    if (dirps%dir /= du%dir .or. u%dir /= du%dir) then
-      error stop 'DIR mismatch between fields and dirps in tds_solve.'
+    if (u%dir /= du%dir) then
+      error stop 'DIR mismatch between fields in tds_solve.'
     end if
 
     blocks = dim3(self%mesh%get_n_groups(u), 1, 1); threads = dim3(SZ, 1, 1)
 
-    call tds_solve_dist(self, du, u, dirps, tdsops, blocks, threads)
+    call tds_solve_dist(self, du, u, tdsops, blocks, threads)
 
   end subroutine tds_solve_cuda
 
-  subroutine tds_solve_dist(self, du, u, dirps, tdsops, blocks, threads)
+  subroutine tds_solve_dist(self, du, u, tdsops, blocks, threads)
     implicit none
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: du
     class(field_t), intent(in) :: u
-    type(dirps_t), intent(in) :: dirps
     class(tdsops_t), intent(in) :: tdsops
     type(dim3), intent(in) :: blocks, threads
 

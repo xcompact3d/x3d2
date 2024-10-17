@@ -49,7 +49,7 @@ contains
     implicit none
 
     class(mesh_t), intent(in) :: mesh
-    class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
     type(cuda_poisson_fft_t) :: poisson_fft
 

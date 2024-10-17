@@ -3,8 +3,9 @@ module m_mesh
 
   use mpi
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, &
-                      CELL, VERT, none, X_FACE, Y_FACE, Z_FACE, &
-                      X_EDGE, Y_EDGE, Z_EDGE
+                      CELL, VERT, X_FACE, Y_FACE, Z_FACE, &
+                      X_EDGE, Y_EDGE, Z_EDGE, &
+                      BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET
   use m_field, only: field_t
   use m_par
   use m_grid
@@ -60,9 +61,8 @@ module m_mesh
 
 contains
 
-  function mesh_init(dims_global, nproc_dir, L_global, &
-                     periodic_BC) result(mesh)
-
+  function mesh_init(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z) &
+    result(mesh)
     use m_decomp, only: decomp_t
     !! Completely initialise the mesh object.
     !! Upon initialisation the mesh object can be read-only and shouldn't be edited
@@ -70,25 +70,50 @@ contains
     integer, dimension(3), intent(in) :: dims_global
     integer, dimension(3), intent(in) :: nproc_dir ! Number of proc in each direction
     real(dp), dimension(3), intent(in) :: L_global
-    logical, dimension(3), optional, intent(in) :: periodic_BC
     class(mesh_t), allocatable :: mesh
     class(decomp_t), allocatable :: decomp
+    character(len=*), dimension(2), intent(in) :: BC_x, BC_y, BC_z
 
-    integer :: dir
+    character(len=20), dimension(3, 2) :: BC_all
+    logical :: is_first_domain, is_last_domain
+    integer :: dir, j
     integer :: ierr
 
     allocate(mesh)
     allocate (mesh%geo)
     allocate (mesh%par)
+
+    BC_all(1, 1) = BC_x(1); BC_all(1, 2) = BC_x(2)
+    BC_all(2, 1) = BC_y(1); BC_all(2, 2) = BC_y(2)
+    BC_all(3, 1) = BC_z(1); BC_all(3, 2) = BC_z(2)
+    do dir = 1, 3
+      do j = 1, 2
+        select case (trim(BC_all(dir, j)))
+        case ('periodic')
+          mesh%grid%BCs_global(dir, j) = BC_PERIODIC
+        case ('neumann')
+          mesh%grid%BCs_global(dir, j) = BC_NEUMANN
+        case ('dirichlet')
+          mesh%grid%BCs_global(dir, j) = BC_DIRICHLET
+        case default
+          error stop 'Unknown BC'
+        end select
+      end do
+    end do
+
+    do dir = 1, 3
+      if (any(mesh%grid%BCs_global(dir, :) == BC_PERIODIC) .and. &
+          (.not. all(mesh%grid%BCs_global(dir, :) == BC_PERIODIC))) then
+        error stop 'BCs are incompatible: in a direction make sure to have &
+                    &either both sides periodic or none.'
+      end if
+      mesh%grid%periodic_BC(dir) = all(mesh%grid%BCs_global(dir, :) == BC_PERIODIC)
+    end do
+
+    ! Set global vertex dims
     mesh%grid%global_vert_dims(:) = dims_global
 
-    if (present(periodic_BC)) then
-      mesh%grid%periodic_BC(:) = periodic_BC
-    else
-      ! Default to periodic BC
-      mesh%grid%periodic_BC(:) = .true.
-    end if
-
+    ! Set global cell dims
     do dir = 1, 3
       if (mesh%grid%periodic_BC(dir)) then
         mesh%grid%global_cell_dims(dir) = mesh%grid%global_vert_dims(dir)
@@ -108,6 +133,37 @@ contains
     call MPI_Comm_size(MPI_COMM_WORLD, mesh%par%nproc, ierr)
 
     call decomp%decomposition(mesh%grid, mesh%par)
+
+    ! Set subdomain BCs
+    do dir = 1, 3
+      is_first_domain = mesh%par%nrank_dir(dir) == 0
+      is_last_domain = mesh%par%nrank_dir(dir) + 1 == mesh%par%nproc_dir(dir)
+      ! subdomain-subdomain boundaries are identical to periodic BCs
+      if (is_first_domain) then
+        mesh%grid%BCs(dir, 1) = mesh%grid%BCs_global(dir, 1)
+        mesh%grid%BCs(dir, 2) = BC_PERIODIC
+      else if (is_last_domain) then
+        mesh%grid%BCs(dir, 1) = BC_PERIODIC
+        mesh%grid%BCs(dir, 2) = mesh%grid%BCs_global(dir, 2)
+      else
+        mesh%grid%BCs(dir, :) = BC_PERIODIC
+      end if
+    end do
+
+    ! Define number of cells and vertices in each direction
+    mesh%grid%vert_dims = mesh%grid%global_vert_dims/mesh%par%nproc_dir
+
+    do dir = 1, 3
+      is_last_domain = (mesh%par%nrank_dir(dir) + 1 == mesh%par%nproc_dir(dir))
+      if (is_last_domain .and. (.not. mesh%grid%periodic_BC(dir))) then
+        mesh%grid%cell_dims(dir) = mesh%grid%vert_dims(dir) - 1
+      else
+        mesh%grid%cell_dims(dir) = mesh%grid%vert_dims(dir)
+      end if
+    end do
+
+    ! Set offset for global indices
+    mesh%par%n_offset(:) = mesh%grid%vert_dims(:)*mesh%par%nrank_dir(:)
 
     ! Define default values
     mesh%grid%vert_dims_padded = mesh%grid%vert_dims
@@ -190,7 +246,7 @@ contains
     case (Z_EDGE)
       dims(1:2) = vert_dims(1:2)
       dims(3) = cell_dims(3)
-    case (none)
+    case default
       error stop "Unknown location in get_dims_dataloc"
     end select
   end function get_dims_dataloc
@@ -335,7 +391,7 @@ contains
       if (dir == DIR_Z) then
         n = n_cell
       end if
-    case (none)
+    case default
       error stop "Unknown direction in get_n_dir"
     end select
   end function get_n_dir

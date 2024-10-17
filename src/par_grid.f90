@@ -39,6 +39,8 @@ module m_grid
     integer, dimension(3) :: vert_dims ! local number of vertices in each direction without padding (cartesian structure)
     integer, dimension(3) :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
     logical, dimension(3) :: periodic_BC ! Whether or not a direction has a periodic BC
+    integer, dimension(3, 2) :: BCs_global
+    integer, dimension(3, 2) :: BCs
   end type
 end module
 

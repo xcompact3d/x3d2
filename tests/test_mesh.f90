@@ -11,8 +11,8 @@ program test_allocator
 
   logical :: allpass
   integer, dimension(3) :: nproc_dir, dims_global
-  logical, dimension(3) :: periodic_BC
   real(dp), dimension(3) :: L_global
+  character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
   class(allocator_t), allocatable :: allocator
   class(mesh_t), allocatable :: mesh
   class(field_t), pointer :: ptr1, ptr2, ptr3
@@ -34,9 +34,11 @@ program test_allocator
   ! Domain decomposition in each direction
   nproc_dir = [4, 1, 1]
 
-  periodic_BC = [.false., .true., .false.]
+  BC_x = [character(len=20) :: 'dirichlet', 'neumann']
+  BC_y = [character(len=20) :: 'periodic', 'periodic']
+  BC_z = [character(len=20) :: 'neumann', 'dirichlet']
 
-  mesh = mesh_t(dims_global, nproc_dir, L_global, periodic_BC)
+  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
   if (mesh%par%nproc /= 4) then
     allpass = .false.

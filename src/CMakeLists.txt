@@ -2,6 +2,9 @@ set(SRC
   allocator.f90
   backend.f90
   common.f90
+  field.f90
+  mesh.f90
+  ordering.f90
   poisson_fft.f90
   solver.f90
   tdsops.f90
@@ -11,6 +14,7 @@ set(SRC
   decomp.f90
   field.f90
   par_grid.f90
+  vector_calculus.f90
   omp/backend.f90
   omp/common.f90
   omp/kernels/distributed.f90
@@ -23,9 +27,11 @@ set(CUDASRC
   cuda/backend.f90
   cuda/common.f90
   cuda/exec_dist.f90
+  cuda/exec_thom.f90
   cuda/kernels/distributed.f90
   cuda/kernels/reorder.f90
   cuda/kernels/spectral_processing.f90
+  cuda/kernels/thomas.f90
   cuda/poisson_fft.f90
   cuda/sendrecv.f90
   cuda/tdsops.f90

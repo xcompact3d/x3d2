@@ -3,10 +3,8 @@ program xcompact
 
   use m_allocator
   use m_base_backend
-  use m_common, only: pi, globs_t, POISSON_SOLVER_FFT, POISSON_SOLVER_CG, &
-                      DIR_X, DIR_Y, DIR_Z, DIR_C
+  use m_common, only: pi
   use m_solver, only: solver_t
-  use m_time_integrator, only: time_intg_t
   use m_tdsops, only: tdsops_t
   use m_mesh
 
@@ -22,13 +20,10 @@ program xcompact
 
   implicit none
 
-  type(globs_t) :: globs
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
   type(allocator_t), pointer :: host_allocator
   type(solver_t) :: solver
-  type(time_intg_t) :: time_integrator
-  type(dirps_t) :: xdirps, ydirps, zdirps
   type(mesh_t), target :: mesh
 
 #ifdef CUDA
@@ -42,10 +37,15 @@ program xcompact
   type(allocator_t), target :: omp_allocator
 
   real(dp) :: t_start, t_end
+
+  character(len=200) :: input_file
+  character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
   integer, dimension(3) :: dims_global
-  integer, dimension(3) :: nproc_dir
+  integer, dimension(3) :: nproc_dir = 0
   real(dp), dimension(3) :: L_global
   integer :: nrank, nproc, ierr
+
+  namelist /domain_params/ L_global, dims_global, nproc_dir, BC_x, BC_y, BC_z
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
@@ -59,25 +59,23 @@ program xcompact
   ierr = cudaGetDevice(devnum)
 #endif
 
-  ! Global number of cells in each direction
-  dims_global = [96, 96, 96]
+  if (command_argument_count() >= 1) then
+    call get_command_argument(1, input_file)
+    open (100, file=input_file)
+    read (100, nml=domain_params)
+    close (100)
+  else
+    error stop 'Input file is not provided.'
+  end if
 
-  ! Global domain dimensions
-  L_global = [2*pi, 2*pi, 2*pi]
+  if (product(nproc_dir) /= nproc) then
+    if (nrank == 0) print *, 'nproc_dir specified in the input file does &
+                              &not match the total number of ranks, falling &
+                              &back to a 1D decomposition along Z-dir instead.'
+    nproc_dir = [1, 1, nproc]
+  end if
 
-  ! Domain decomposition in each direction
-  nproc_dir = [1, 1, nproc]
-
-  mesh = mesh_t(dims_global, nproc_dir, L_global)
-
-  globs%dt = 0.001_dp
-  globs%nu = 1._dp/1600._dp
-  globs%n_iters = 20000
-  globs%n_output = 10
-
-  globs%poisson_solver_type = POISSON_SOLVER_FFT
-
-  xdirps%dir = DIR_X; ydirps%dir = DIR_Y; zdirps%dir = DIR_Z
+  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(mesh, SZ)
@@ -101,10 +99,7 @@ program xcompact
   if (nrank == 0) print *, 'OpenMP backend instantiated'
 #endif
 
-  time_integrator = time_intg_t(allocator=allocator, backend=backend)
-  if (nrank == 0) print *, 'time integrator instantiated'
-  solver = solver_t(backend, mesh, time_integrator, host_allocator, &
-                    xdirps, ydirps, zdirps, globs)
+  solver = solver_t(backend, mesh, host_allocator)
   if (nrank == 0) print *, 'solver instantiated'
 
   call cpu_time(t_start)

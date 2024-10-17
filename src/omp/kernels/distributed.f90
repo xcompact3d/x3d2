@@ -26,7 +26,7 @@ contains
     integer :: i, j!, b
 
     real(dp) :: c_m4, c_m3, c_m2, c_m1, c_j, c_p1, c_p2, c_p3, c_p4, &
-                temp_du, alpha, last_r
+                alpha, last_r
 
     ! store bulk coeffs in the registers
     c_m4 = coeffs(1); c_m3 = coeffs(2); c_m2 = coeffs(3); c_m1 = coeffs(4)
@@ -85,12 +85,12 @@ contains
     do j = 5, n - 4
       !$omp simd
       do i = 1, SZ
-        temp_du = c_m4*u(i, j - 4) + c_m3*u(i, j - 3) &
-                  + c_m2*u(i, j - 2) + c_m1*u(i, j - 1) &
-                  + c_j*u(i, j) &
-                  + c_p1*u(i, j + 1) + c_p2*u(i, j + 2) &
-                  + c_p3*u(i, j + 3) + c_p4*u(i, j + 4)
-        du(i, j) = ffr(j)*(temp_du - alpha*du(i, j - 1))
+        du(i, j) = c_m4*u(i, j - 4) + c_m3*u(i, j - 3) &
+                   + c_m2*u(i, j - 2) + c_m1*u(i, j - 1) &
+                   + c_j*u(i, j) &
+                   + c_p1*u(i, j + 1) + c_p2*u(i, j + 2) &
+                   + c_p3*u(i, j + 3) + c_p4*u(i, j + 4)
+        du(i, j) = ffr(j)*(du(i, j) - alpha*du(i, j - 1))
       end do
       !$omp end simd
     end do
