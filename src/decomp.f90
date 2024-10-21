@@ -8,8 +8,7 @@ implicit none
 
   interface
     subroutine decomposition(self, grid, par)
-      use m_grid, only: grid_t
-      use m_par, only: par_t
+      use m_mesh_content, only: par_t, grid_t
       import :: decomp_t
       class(decomp_t) :: self
       class(grid_t), intent(inout) :: grid

@@ -1,6 +1,27 @@
-module m_par 
+module m_mesh_content
 
+  use m_common, only: dp
   implicit none
+
+  ! Stores geometry information
+  type :: geo_t
+    real(dp), dimension(3) :: d ! size of a cell in each direction (=edge length, distance between centers, distance between vertices)
+    real(dp), dimension(3) :: L ! Global dimensions of the domain in each direction
+  end type
+
+ ! Stores grid information
+  type :: grid_t
+    integer, dimension(3) :: global_vert_dims ! global number of vertices in each direction without padding (cartesian structure)
+    integer, dimension(3) :: global_cell_dims ! global number of cells in each direction without padding (cartesian structure)
+
+    integer, dimension(3) :: vert_dims_padded ! local domain size including padding (cartesian structure)
+    integer, dimension(3) :: vert_dims ! local number of vertices in each direction without padding (cartesian structure)
+    integer, dimension(3) :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
+    logical, dimension(3) :: periodic_BC ! Whether or not a direction has a periodic BC
+    integer, dimension(3, 2) :: BCs_global
+    integer, dimension(3, 2) :: BCs
+  end type
+
   ! Stores parallel domain related information
   type :: par_t
     integer :: nrank ! local rank ID
@@ -25,22 +46,4 @@ module m_par
 
   end function
 
-end module m_par
-
-module m_grid
-  implicit none
-
- ! Stores grid information
-  type :: grid_t
-    integer, dimension(3) :: global_vert_dims ! global number of vertices in each direction without padding (cartesian structure)
-    integer, dimension(3) :: global_cell_dims ! global number of cells in each direction without padding (cartesian structure)
-
-    integer, dimension(3) :: vert_dims_padded ! local domain size including padding (cartesian structure)
-    integer, dimension(3) :: vert_dims ! local number of vertices in each direction without padding (cartesian structure)
-    integer, dimension(3) :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
-    logical, dimension(3) :: periodic_BC ! Whether or not a direction has a periodic BC
-    integer, dimension(3, 2) :: BCs_global
-    integer, dimension(3, 2) :: BCs
-  end type
-end module
-
+end module m_mesh_content

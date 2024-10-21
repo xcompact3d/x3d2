@@ -16,8 +16,7 @@ submodule(m_decomp) m_decomp_2decompfft
     !!
     !! Current implementation allows only constant sub-domain size across a
     !! given direction.
-    use m_grid, only: grid_t
-    use m_par, only: par_t
+    use m_mesh_content, only: par_t, grid_t
     use decomp_2d, only: decomp_2d_init, DECOMP_2D_COMM_CART_X, xsize, xstart
 
     class(decomp_2decompfft_t) :: self

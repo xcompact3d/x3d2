@@ -11,8 +11,7 @@ submodule(m_decomp) m_decomp_generic
   contains
 
   module subroutine decomposition_generic(self, grid, par)
-    use m_grid, only: grid_t
-    use m_par, only: par_t
+    use m_mesh_content, only: par_t, grid_t
 
     class(decomp_generic_t) :: self
     class(grid_t), intent(inout) :: grid

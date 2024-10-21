@@ -7,16 +7,9 @@ module m_mesh
                       X_EDGE, Y_EDGE, Z_EDGE, &
                       BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET
   use m_field, only: field_t
-  use m_par
-  use m_grid
+  use m_mesh_content
 
   implicit none
-
-  ! Stores geometry information
-  type :: geo_t
-    real(dp), dimension(3) :: d ! size of a cell in each direction (=edge length, distance between centers, distance between vertices)
-    real(dp), dimension(3) :: L ! Global dimensions of the domain in each direction
-  end type
 
   ! The mesh class stores all the information about the global and local (due to domain decomposition) mesh
   ! It also includes getter functions to access some of its parameters
