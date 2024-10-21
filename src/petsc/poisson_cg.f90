@@ -189,10 +189,14 @@ contains
 
     call PetscInitialized(initialised, ierr)
     if (.not. initialised) then
-      print *, "Initialising PETSc"
+      if (backend%mesh%par%nrank == 0) then
+        print *, "Initialising PETSc"
+      end if
       call PetscInitialize(PETSC_NULL_CHARACTER, ierr)
     end if
-    print *, "PETSc Initialised"
+    if (backend%mesh%par%nrank == 0) then
+      print *, "PETSc Initialised"
+    end if
 
     ! Determine local problem size
     n = product(backend%mesh%get_dims(CELL))
@@ -379,6 +383,7 @@ contains
 
     integer, dimension(3) :: dims
     integer :: n
+    integer :: global_start
 
     integer, dimension(:), allocatable :: idx
 
@@ -388,8 +393,18 @@ contains
     allocate(idx(n))
     idx(:) = 0
 
-    call build_interior_index_map(idx, mesh)
-    call build_neighbour_index_map(idx, mesh)
+    ! Determine global start point based on PETSc decomposition
+    ! | 0 ... P0 ... P0_n-1 | P0_n ... P1 ... P0_n+P1_n-1 | P0_n+P1_n ... P2
+    ! i.e. an exclusive scan sum of each rank's allocation
+    call MPI_Exscan(product(dims), global_start, 1, MPI_INTEGER, MPI_SUM, PETSC_COMM_WORLD, ierr)
+    if (mesh%par%nrank == 0) then
+      global_start = 0
+    end if
+    global_start = global_start + 1 ! C->F
+
+    ! Build the local->global index map
+    call build_interior_index_map(idx, mesh, global_start)
+    call build_neighbour_index_map(idx, mesh, global_start)
     idx = idx - 1 ! F->C
 
     call ISLocalToGlobalMappingCreate(PETSC_COMM_WORLD, 1, n, idx, PETSC_COPY_VALUES, map, ierr)
@@ -399,21 +414,20 @@ contains
 
   end subroutine build_index_map
 
-  subroutine build_interior_index_map(idx, mesh)
+  subroutine build_interior_index_map(idx, mesh, global_start)
 
     integer, dimension(:), intent(inout) :: idx
     type(mesh_t), intent(in) :: mesh
+    integer, intent(in) :: global_start
 
     integer, dimension(3) :: dims
     integer :: nx, ny, nz
-    integer :: global_start
     
     integer :: i, j, k
     integer :: ctr, local_ctr
 
     dims = mesh%get_dims(CELL)
     nx = dims(1); ny = dims(2); nz = dims(3)
-    global_start = 1;
     
     ctr = 0
     local_ctr = ((nx + 2) * (ny + 2)) + (nx + 2) + 2
@@ -431,16 +445,16 @@ contains
     
   end subroutine build_interior_index_map
 
-  subroutine build_neighbour_index_map(idx, mesh)
+  subroutine build_neighbour_index_map(idx, mesh, global_start)
 
     use mpi
 
     integer, dimension(:), intent(inout) :: idx
     type(mesh_t), intent(in) :: mesh
+    integer, intent(in) :: global_start
 
     integer, dimension(3) :: dims
     integer :: nx, ny, nz
-    integer :: global_start
     integer, dimension(4) :: myinfo
     integer, dimension(4, 2, 3) :: info
     integer :: d
@@ -455,7 +469,6 @@ contains
 
     dims = mesh%get_dims(CELL)
     nx = dims(1); ny = dims(2); nz = dims(3)
-    global_start = 1;
     
     ! Create and fill halobuffers
     allocate(halobuf_x(2, ny, nz))
