@@ -41,18 +41,13 @@ stages:
     - apt-get install -y librdmacm-dev libpsm2-dev
     - . /etc/profile.d/modules.sh
     - ccache -s && ccache -M 5G
-    - echo "Display GCC version number"
-    - gcc --version
-    - echo "Display nvcc version number"
-    - module avail
-    - module load cuda
-    - nvcc --version
+    - module load "${EXTRA_MODULE}"
     - echo "Configure Debug build"
-    - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+    - FC=mpif90 cmake -S . -B build "-DCMAKE_BUILD_TYPE=Debug ${BUILD_FORTRAN}"
     - echo "Build with Debug (strict) flags"
     - make -C build
     - echo "Configure Release build"
-    - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+    - FC=mpif90 cmake -S . -B build "-DCMAKE_BUILD_TYPE=Release ${BUILD_FORTRAN}"
     - echo "Build tests"
     - make -C build
     - echo "Run the tests"
@@ -118,6 +113,16 @@ stages:
 build-and-test:
   <<: *build-and-test-template
   needs: []
+  variabes:
+    EXTRA_MODULE: ""
+    BUILD_FORTRAN: "-DCMAKE_Fortran_COMPILER=gcc" 
+
+build-and-test-cuda:
+  <<: *build-and-test-template
+  needs: []
+  variabes:
+    EXTRA_MODULE: "cuda-hpc-sdk"
+    BUILD_FORTRAN: "-DCMAKE_Fortran_COMPILER=nvfortran" 
     
 check-formatting:
   <<: *check-formatting-template
