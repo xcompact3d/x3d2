@@ -38,6 +38,8 @@ module m_base_backend
     procedure(sum_intox), deferred :: sum_zintox
     procedure(vecadd), deferred :: vecadd
     procedure(scalar_product), deferred :: scalar_product
+    procedure(field_ops), deferred :: field_scale
+    procedure(field_ops), deferred :: field_shift
     procedure(copy_data_to_f), deferred :: copy_data_to_f
     procedure(copy_f_to_data), deferred :: copy_f_to_data
     procedure(alloc_tdsops), deferred :: alloc_tdsops
@@ -143,6 +145,20 @@ module m_base_backend
       class(base_backend_t) :: self
       class(field_t), intent(in) :: x, y
     end function scalar_product
+  end interface
+
+  abstract interface
+    subroutine field_ops(self, f, a)
+      !! Scales or shifts a field by a
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(in) :: f
+      real(dp), intent(in) :: a
+    end subroutine field_ops
   end interface
 
   abstract interface

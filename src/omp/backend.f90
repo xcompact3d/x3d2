@@ -36,6 +36,8 @@ module m_omp_backend
     procedure :: sum_zintox => sum_zintox_omp
     procedure :: vecadd => vecadd_omp
     procedure :: scalar_product => scalar_product_omp
+    procedure :: field_scale => field_scale_omp
+    procedure :: field_shift => field_shift_omp
     procedure :: copy_data_to_f => copy_data_to_f_omp
     procedure :: copy_f_to_data => copy_f_to_data_omp
     procedure :: init_poisson_fft => init_omp_poisson_fft
@@ -537,6 +539,26 @@ contains
     !$omp end parallel do
 
   end subroutine copy_into_buffers
+
+  subroutine field_scale_omp(self, f, a)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(in) :: f
+    real(dp), intent(in) :: a
+
+    f%data = a*f%data
+  end subroutine field_scale_omp
+
+  subroutine field_shift_omp(self, f, a)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(in) :: f
+    real(dp), intent(in) :: a
+
+    f%data = f%data + a
+  end subroutine field_shift_omp
 
   subroutine copy_data_to_f_omp(self, f, data)
     class(omp_backend_t), intent(inout) :: self
