@@ -22,9 +22,9 @@ program xcompact
 
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
-  type(mesh_t) :: mesh
   type(allocator_t), pointer :: host_allocator
   type(solver_t) :: solver
+  type(mesh_t), target :: mesh
 
 #ifdef CUDA
   type(cuda_backend_t), target :: cuda_backend

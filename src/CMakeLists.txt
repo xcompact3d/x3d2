@@ -9,11 +9,16 @@ set(SRC
   solver.f90
   tdsops.f90
   time_integrator.f90
+  ordering.f90
+  mesh.f90
+  mesh_content.f90
+  decomp.f90
+  field.f90
   vector_calculus.f90
   omp/backend.f90
   omp/common.f90
   omp/kernels/distributed.f90
-  omp/poisson_fft.f90
+  omp/kernels/spectral_processing.f90
   omp/sendrecv.f90
   omp/exec_dist.f90
 )
@@ -31,10 +36,22 @@ set(CUDASRC
   cuda/sendrecv.f90
   cuda/tdsops.f90
 )
+set(2DECOMPFFTSRC
+  2decompfft/omp/poisson_fft.f90
+  2decompfft/decomp.f90
+)
+set(GENERICDECOMPSRC
+  decomp_generic.f90
+)
 
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
+if(${BACKEND} STREQUAL "CUDA")
   list(APPEND SRC ${CUDASRC})
+endif()
+
+if (${POISSON_SOLVER} STREQUAL "FFT" AND ${BACKEND} STREQUAL "OMP")
+  list(APPEND SRC ${2DECOMPFFTSRC})
+else()
+  list(APPEND SRC ${GENERICDECOMPSRC})
 endif()
 
 add_library(x3d2 STATIC ${SRC})
@@ -43,9 +60,7 @@ target_include_directories(x3d2 INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
 add_executable(xcompact xcompact.f90)
 target_link_libraries(xcompact PRIVATE x3d2)
 
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
- 
+if(${BACKEND} STREQUAL "CUDA")
   set(CMAKE_Fortran_FLAGS "-cpp -cuda")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr -Ktrap=fp")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
@@ -59,6 +74,15 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math")
 endif()
 
+if (${POISSON_SOLVER} STREQUAL "FFT" AND ${BACKEND} STREQUAL "OMP")
+  message(STATUS "Using the FFT poisson solver with 2decomp&fft")
+  set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
+  find_package(decomp2d REQUIRED)
+  include_directories(${decomp2d_INCLUDE_DIRS})
+  target_link_libraries(decomp2d)
+  target_link_libraries(x3d2 PRIVATE decomp2d)
+endif()
+
 find_package(OpenMP REQUIRED)
 target_link_libraries(x3d2 PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(xcompact PRIVATE OpenMP::OpenMP_Fortran)
@@ -66,4 +90,3 @@ target_link_libraries(xcompact PRIVATE OpenMP::OpenMP_Fortran)
 find_package(MPI REQUIRED)
 target_link_libraries(x3d2 PRIVATE MPI::MPI_Fortran)
 target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
-
