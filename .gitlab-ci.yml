@@ -41,7 +41,7 @@ stages:
     - apt-get install -y librdmacm-dev libpsm2-dev
     - . /etc/profile.d/modules.sh
     - ccache -s && ccache -M 5G
-    - module load "${EXTRA_MODULE}"
+    - if [ "${EXTRA_MODULE}" != "" ]; then module load "${EXTRA_MODULE}"; fi
     - echo "Configure Debug build"
     - FC=mpif90 cmake -S . -B build "-DCMAKE_BUILD_TYPE=Debug ${BUILD_FORTRAN}"
     - echo "Build with Debug (strict) flags"
