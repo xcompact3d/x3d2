@@ -57,12 +57,17 @@ module m_solver
     type(vector_calculus_t) :: vector_calculus
     procedure(poisson_solver), pointer :: poisson => null()
   contains
+    procedure :: boundary_conditions
     procedure :: transeq
+    procedure :: post_transeq
+    procedure :: pressure_correction
+    procedure :: postprocess
     procedure :: divergence_v2p
     procedure :: gradient_p2v
     procedure :: curl
-    procedure :: output
     procedure :: run
+    procedure :: print_enstrophy
+    procedure :: print_div_max_mean
   end type solver_t
 
   abstract interface
@@ -232,11 +237,19 @@ contains
 
   end subroutine
 
+  subroutine boundary_conditions(self)
+    !! base solver boundary_conditions: do nothing!
+    implicit none
+
+    class(solver_t) :: self
+
+  end subroutine boundary_conditions
+
   subroutine transeq(self, du, dv, dw, u, v, w)
-      !! Skew-symmetric form of convection-diffusion terms in the
-      !! incompressible Navier-Stokes momemtum equations, excluding
-      !! pressure terms.
-      !! Inputs from velocity grid and outputs to velocity grid.
+    !! Skew-symmetric form of convection-diffusion terms in the
+    !! incompressible Navier-Stokes momemtum equations, excluding
+    !! pressure terms.
+    !! Inputs from velocity grid and outputs to velocity grid.
     implicit none
 
     class(solver_t) :: self
@@ -316,6 +329,15 @@ contains
     call self%backend%allocator%release_block(dw_z)
 
   end subroutine transeq
+
+  subroutine post_transeq(self, du, dv, dw)
+    !! base solver post_transeq
+    implicit none
+
+    class(solver_t) :: self
+    class(field_t), intent(inout) :: du, dv, dw
+
+  end subroutine post_transeq
 
   subroutine divergence_v2p(self, div_u, u, v, w)
     !! Wrapper for divergence_v2p
@@ -406,24 +428,70 @@ contains
 
   end subroutine poisson_cg
 
-  subroutine output(self, t)
+  subroutine pressure_correction(self, u, v, w)
+    implicit none
+
+    class(solver_t) :: self
+    class(field_t), intent(inout) :: u, v, w
+
+    class(field_t), pointer :: div_u, pressure, dpdx, dpdy, dpdz
+
+    div_u => self%backend%allocator%get_block(DIR_Z)
+
+    call self%divergence_v2p(div_u, u, v, w)
+
+    pressure => self%backend%allocator%get_block(DIR_Z, CELL)
+
+    call self%poisson(pressure, div_u)
+
+    call self%backend%allocator%release_block(div_u)
+
+    dpdx => self%backend%allocator%get_block(DIR_X)
+    dpdy => self%backend%allocator%get_block(DIR_X)
+    dpdz => self%backend%allocator%get_block(DIR_X)
+
+    call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
+
+    call self%backend%allocator%release_block(pressure)
+
+    ! velocity correction
+    call self%backend%vecadd(-1._dp, dpdx, 1._dp, u)
+    call self%backend%vecadd(-1._dp, dpdy, 1._dp, v)
+    call self%backend%vecadd(-1._dp, dpdz, 1._dp, w)
+
+    call self%backend%allocator%release_block(dpdx)
+    call self%backend%allocator%release_block(dpdy)
+    call self%backend%allocator%release_block(dpdz)
+
+  end subroutine pressure_correction
+
+  subroutine postprocess(self, t)
     implicit none
 
     class(solver_t), intent(in) :: self
     real(dp), intent(in) :: t
 
-    class(field_t), pointer :: du, dv, dw, div_u
-    class(field_t), pointer :: u_out
-    real(dp) :: enstrophy, div_u_max, div_u_mean
-    integer :: ierr
-
     if (self%mesh%par%is_root()) print *, 'time = ', t
+
+    call self%print_enstrophy(self%u, self%v, self%w)
+    call self%print_div_max_mean(self%u, self%v, self%w)
+
+  end subroutine postprocess
+
+  subroutine print_enstrophy(self, u, v, w)
+    implicit none
+
+    class(solver_t), intent(in) :: self
+    class(field_t), intent(in) :: u, v, w
+
+    class(field_t), pointer :: du, dv, dw
+    real(dp) :: enstrophy
 
     du => self%backend%allocator%get_block(DIR_X, VERT)
     dv => self%backend%allocator%get_block(DIR_X, VERT)
     dw => self%backend%allocator%get_block(DIR_X, VERT)
 
-    call self%curl(du, dv, dw, self%u, self%v, self%w)
+    call self%curl(du, dv, dw, u, v, w)
     enstrophy = 0.5_dp*(self%backend%scalar_product(du, du) &
                         + self%backend%scalar_product(dv, dv) &
                         + self%backend%scalar_product(dw, dw))/self%ngrid
@@ -433,9 +501,22 @@ contains
     call self%backend%allocator%release_block(dv)
     call self%backend%allocator%release_block(dw)
 
+  end subroutine print_enstrophy
+
+  subroutine print_div_max_mean(self, u, v, w)
+    implicit none
+
+    class(solver_t), intent(in) :: self
+    class(field_t), intent(in) :: u, v, w
+
+    class(field_t), pointer :: div_u
+    class(field_t), pointer :: u_out
+    real(dp) :: div_u_max, div_u_mean
+    integer :: ierr
+
     div_u => self%backend%allocator%get_block(DIR_Z)
 
-    call self%divergence_v2p(div_u, self%u, self%v, self%w)
+    call self%divergence_v2p(div_u, u, v, w)
 
     u_out => self%host_allocator%get_block(DIR_C)
     call self%backend%get_field_data(u_out%data, div_u)
@@ -454,14 +535,14 @@ contains
     if (self%mesh%par%is_root()) &
       print *, 'div u max mean:', div_u_max, div_u_mean
 
-  end subroutine output
+  end subroutine print_div_max_mean
 
   subroutine run(self)
     implicit none
 
     class(solver_t), intent(inout) :: self
 
-    class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
+    class(field_t), pointer :: du, dv, dw
     class(field_t), pointer :: u_out, v_out, w_out
 
     real(dp) :: t
@@ -469,7 +550,7 @@ contains
 
     if (self%mesh%par%is_root()) print *, 'initial conditions'
     t = 0._dp
-    call self%output(t)
+    call self%postprocess(t)
 
     if (self%mesh%par%is_root()) print *, 'start run'
 
@@ -481,6 +562,8 @@ contains
 
         call self%transeq(du, dv, dw, self%u, self%v, self%w)
 
+        call self%post_transeq(du, dv, dw)
+
         ! time integration
         call self%time_integrator%step(self%u, self%v, self%w, &
                                        du, dv, dw, self%dt)
@@ -489,38 +572,12 @@ contains
         call self%backend%allocator%release_block(dv)
         call self%backend%allocator%release_block(dw)
 
-        ! pressure
-        div_u => self%backend%allocator%get_block(DIR_Z)
-
-        call self%divergence_v2p(div_u, self%u, self%v, self%w)
-
-        pressure => self%backend%allocator%get_block(DIR_Z, CELL)
-
-        call self%poisson(pressure, div_u)
-
-        call self%backend%allocator%release_block(div_u)
-
-        dpdx => self%backend%allocator%get_block(DIR_X)
-        dpdy => self%backend%allocator%get_block(DIR_X)
-        dpdz => self%backend%allocator%get_block(DIR_X)
-
-        call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
-
-        call self%backend%allocator%release_block(pressure)
-
-        ! velocity correction
-        call self%backend%vecadd(-1._dp, dpdx, 1._dp, self%u)
-        call self%backend%vecadd(-1._dp, dpdy, 1._dp, self%v)
-        call self%backend%vecadd(-1._dp, dpdz, 1._dp, self%w)
-
-        call self%backend%allocator%release_block(dpdx)
-        call self%backend%allocator%release_block(dpdy)
-        call self%backend%allocator%release_block(dpdz)
+        call self%pressure_correction(self%u, self%v, self%w)
       end do
 
       if (mod(i, self%n_output) == 0) then
         t = i*self%dt
-        call self%output(t)
+        call self%postprocess(t)
       end if
     end do
 
