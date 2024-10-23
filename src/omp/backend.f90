@@ -283,6 +283,10 @@ contains
       error stop 'DIR mismatch between fields in tds_solve.'
     end if
 
+    if (u%data_loc /= none) then
+      du%set_data_loc(move_data_loc(u%data_loc, tdsops%dir, tdsops%move))
+    end if
+
     call tds_solve_dist(self, du, u, tdsops)
 
   end subroutine tds_solve_omp

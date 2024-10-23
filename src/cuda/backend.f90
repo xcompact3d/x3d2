@@ -5,7 +5,7 @@ module m_cuda_backend
 
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, &
+  use m_common, only: dp, move_data_loc, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
@@ -368,6 +368,10 @@ contains
     end if
 
     blocks = dim3(self%mesh%get_n_groups(u), 1, 1); threads = dim3(SZ, 1, 1)
+
+    if (u%data_loc /= none) then
+      du%set_data_loc(move_data_loc(u%data_loc, tdsops%dir, tdsops%move))
+    end if
 
     call tds_solve_dist(self, du, u, tdsops, blocks, threads)
 

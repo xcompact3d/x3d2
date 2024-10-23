@@ -32,7 +32,8 @@ module m_tdsops
     real(dp) :: alpha, a, b, c = 0._dp, d = 0._dp
     logical :: periodic
     integer :: tds_n
-    integer :: dir
+    integer :: dir ! direction of the operator (DIR_X/Y/Z)
+    integer :: move ! shift in data_loc
     integer :: n_halo
   contains
     procedure :: deriv_1st, deriv_2nd, interpl_mid, stagder_1st
