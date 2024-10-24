@@ -26,13 +26,13 @@ program test_allocator
   allpass = .true.
 
   ! Global number of cells in each direction
-  dims_global = [16, 4, 4]
+  dims_global = [4, 4, 16]
 
   ! Global domain dimensions
   L_global = [1._dp, 1._dp, 1._dp]
 
   ! Domain decomposition in each direction
-  nproc_dir = [4, 1, 1]
+  nproc_dir = [1, 1, 4]
 
   BC_x = [character(len=20) :: 'dirichlet', 'neumann']
   BC_y = [character(len=20) :: 'periodic', 'periodic']
@@ -54,24 +54,23 @@ program test_allocator
   n_cell = mesh%get_n(ptr1)
   n_vert = mesh%get_n(ptr2)
 
-  ! if last rank
-  if (mesh%par%nrank == 3) then
-    if (.not. (n_cell == 3 .and. n_vert == 4)) then
-      allpass = .false.
-      print *, "error in get_n and last rank, n_cell=", &
-        n_cell, "n_vert=", n_vert
-    end if
-  else
-    if (.not. (n_cell == 4 .and. n_vert == 4)) then
-      allpass = .false.
-      print *, "error in get_n, n_cell=", n_cell, "n_vert=", n_vert
-    end if
+  if (.not. (n_cell == 3 .and. n_vert == 4)) then
+    allpass = .false.
+    print *, "error in get_n, n_cell=", n_cell, "n_vert=", n_vert
   end if
 
   n_x_face = mesh%get_n(ptr3)
-  if (.not. n_x_face == 3) then
-    allpass = .false.
-    print *, "error in get_n for x_face, n_x_face=", n_x_face
+  ! if last rank
+  if (mesh%par%nrank == 3) then
+    if (.not. n_x_face == 3) then
+      allpass = .false.
+      print *, "error in get_n for x_face last rank, n_x_face=", n_x_face
+    end if
+  else
+    if (.not. n_x_face == 4) then
+      allpass = .false.
+      print *, "error in get_n for x_face, n_x_face=", n_x_face
+    end if
   end if
 
   dims = mesh%get_padded_dims(DIR_C)
@@ -82,7 +81,7 @@ program test_allocator
     print *, "error with padded dimensions, dims_padded=", dims
   end if
 
-  if (.not. abs(mesh%geo%d(DIR_X) - 1._dp/(16 - 1)) < eps) then
+  if (.not. abs(mesh%geo%d(DIR_X) - 1._dp/(4 - 1)) < eps) then
     allpass = .false.
     print *, "error with geo%d, non periodic BC"
   end if

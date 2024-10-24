@@ -39,8 +39,7 @@ define_test(omp/test_omp_dist_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(test_scalar_product.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(test_sum_intox.f90 ${CMAKE_CTEST_NPROCS} omp)
 
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
+if(${BACKEND} STREQUAL "CUDA")
   define_test(test_reordering.f90 1 cuda)
   define_test(test_time_integrator.f90 1 cuda)
   define_test(cuda/test_cuda_allocator.f90 1 cuda)
