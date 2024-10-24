@@ -75,7 +75,7 @@ program test_reorder
   L_global = [2*pi, 2*pi, 2*pi]
 
   ! Domain decomposition in each direction
-  nproc_dir = [nproc, 1, 1]
+  nproc_dir = [1, 1, nproc]
 
   BC_x = ['periodic', 'periodic']
   BC_y = ['periodic', 'periodic']
