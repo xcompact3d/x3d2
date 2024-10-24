@@ -197,9 +197,9 @@ contains
       zk2(i) = zk2(nz - i + 2)
     end do
 
-    do i = 1, self%nx_spec
+    do k = 1, self%nz_spec
       do j = 1, self%ny_spec
-        do k = 1, self%nz_spec
+        do i = 1, self%nx_spec
           ix = i; iy = j + self%y_sp_st; iz = k
           rlexs = real(exs(ix), kind=dp)*geo%d(1)
           rleys = real(eys(iy), kind=dp)*geo%d(2)

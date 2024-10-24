@@ -1,7 +1,7 @@
 submodule(m_decomp) m_decomp_2decompfft
+!! Parallel decomposition provided by 2decomp&FFT
 
   use mpi
-  use m_decomp, only: decomp_t
   implicit none
 
   type, extends(decomp_t) :: decomp_2decompfft_t
@@ -11,13 +11,17 @@ submodule(m_decomp) m_decomp_2decompfft
 
   contains
 
+  module subroutine init_decomp(decomp)
+    class(decomp_t), allocatable, intent(out):: decomp
+
+    allocate(decomp_2decompfft_t :: decomp)
+  end subroutine
+
   module subroutine decomposition_2decompfft(self, grid, par)
-    !! Supports 1D, 2D, and 3D domain decomposition.
-    !!
-    !! Current implementation allows only constant sub-domain size across a
-    !! given direction.
+    !! Performs 2D mesh decomposition using 2decomp&fft
     use m_mesh_content, only: par_t, grid_t
     use decomp_2d, only: decomp_2d_init, DECOMP_2D_COMM_CART_X, xsize, xstart
+    use decomp_2d_mpi, only: nrank, nproc
 
     class(decomp_2decompfft_t) :: self
     class(grid_t), intent(inout) :: grid
@@ -38,6 +42,8 @@ submodule(m_decomp) m_decomp_2decompfft
     if (par%is_root()) then
       print*, "Domain decomposition by 2decomp&fft"
     end if
+    nrank = par%nrank
+    nproc = par%nproc
 
     nx = grid%global_cell_dims(1)
     ny = grid%global_cell_dims(2)
@@ -45,6 +51,7 @@ submodule(m_decomp) m_decomp_2decompfft
 
     p_row = par%nproc_dir(2)
     p_col = par%nproc_dir(3)
+    print *, p_row, p_col, nproc, nrank
     periodic_bc(:) = grid%periodic_BC(:)
     call decomp_2d_init(nx, ny, nz, p_row, p_col, periodic_bc)
 

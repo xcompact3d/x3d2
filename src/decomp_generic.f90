@@ -1,6 +1,6 @@
 submodule(m_decomp) m_decomp_generic
 
-  use m_decomp, only: decomp_t
+  use mpi
   implicit none
 
   type, extends(decomp_t) :: decomp_generic_t
@@ -9,6 +9,12 @@ submodule(m_decomp) m_decomp_generic
   end type
 
   contains
+
+  module subroutine init_decomp(decomp)
+    class(decomp_t), allocatable, intent(out):: decomp
+
+    allocate(decomp_generic_t :: decomp)
+  end subroutine
 
   module subroutine decomposition_generic(self, grid, par)
     use m_mesh_content, only: par_t, grid_t
