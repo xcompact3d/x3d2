@@ -64,7 +64,7 @@ module m_allocator
 contains
 
   function allocator_init(mesh, sz) result(allocator)
-    type(mesh_t), target, intent(inout) :: mesh
+    class(mesh_t), target, intent(inout) :: mesh
     integer, intent(in) :: sz
     type(allocator_t) :: allocator
 
