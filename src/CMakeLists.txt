@@ -76,6 +76,7 @@ endif()
 
 if (${POISSON_SOLVER} STREQUAL "FFT" AND ${BACKEND} STREQUAL "OMP")
   message(STATUS "Using the FFT poisson solver with 2decomp&fft")
+  set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
   find_package(decomp2d REQUIRED)
   include_directories(${decomp2d_INCLUDE_DIRS})
   target_link_libraries(decomp2d)
