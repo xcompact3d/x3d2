@@ -11,7 +11,7 @@ jobs:
   unit-tests:
     runs-on: ubuntu-22.04
     env:
-      OMPI_VERSION: 5.0.0
+      OMPI_VERSION: 4.1.5
     steps:
 
     - uses: actions/checkout@v4
@@ -34,7 +34,7 @@ jobs:
     - name: Build openmpi
       if: steps.cache-openmpi.outputs.cache-hit != 'true'
       run: |
-        wget https://download.open-mpi.org/release/open-mpi/v5.0/openmpi-$OMPI_VERSION.tar.gz
+        wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-$OMPI_VERSION.tar.gz
         tar -xf openmpi-$OMPI_VERSION.tar.gz
         cd openmpi-$OMPI_VERSION/ && mkdir installed
         ./configure --prefix=$(pwd)/installed
