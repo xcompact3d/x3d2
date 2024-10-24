@@ -56,7 +56,7 @@ contains
 
   function mesh_init(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z) &
     result(mesh)
-    use m_decomp, only: decomp_t
+    use m_decomp, only: decomp_mod_t
     !! Completely initialise the mesh object.
     !! Upon initialisation the mesh object can be read-only and shouldn't be edited
     !! Takes as argument global information about the mesh like its length, number of cells and decomposition in each direction
@@ -64,7 +64,7 @@ contains
     integer, dimension(3), intent(in) :: nproc_dir ! Number of proc in each direction
     real(dp), dimension(3), intent(in) :: L_global
     class(mesh_t), allocatable :: mesh
-    class(decomp_t), allocatable :: decomp
+    type(decomp_mod_t) :: decomp
     character(len=*), dimension(2), intent(in) :: BC_x, BC_y, BC_z
 
     character(len=20), dimension(3, 2) :: BC_all
@@ -74,6 +74,7 @@ contains
 
     allocate(mesh)
     allocate (mesh%geo)
+    allocate (mesh%grid)
     allocate (mesh%par)
 
     BC_all(1, 1) = BC_x(1); BC_all(1, 2) = BC_x(2)
@@ -125,7 +126,8 @@ contains
     call MPI_Comm_rank(MPI_COMM_WORLD, mesh%par%nrank, ierr)
     call MPI_Comm_size(MPI_COMM_WORLD, mesh%par%nproc, ierr)
 
-    call decomp%decomposition(mesh%grid, mesh%par)
+    decomp = decomp_mod_t()
+    call decomp%decomp_grid(mesh%grid, mesh%par)
 
     ! Set subdomain BCs
     do dir = 1, 3
