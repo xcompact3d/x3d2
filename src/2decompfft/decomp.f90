@@ -52,6 +52,9 @@ submodule(m_decomp) m_decomp_2decompfft
     p_row = par%nproc_dir(2)
     p_col = par%nproc_dir(3)
     print *, p_row, p_col, nproc, nrank
+    if (p_row*p_col /= par%nproc) then
+      error stop "Decomposition in X not supported by 2decomp&fft backend"
+    end if
     periodic_bc(:) = grid%periodic_BC(:)
     call decomp_2d_init(nx, ny, nz, p_row, p_col, periodic_bc)
 
