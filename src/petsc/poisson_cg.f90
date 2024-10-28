@@ -59,6 +59,13 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
     !! Field extension to wrap PETSc vector data in a field interface
   end type petsc_field_t
 
+  type, extends(poisson_precon_impl_t) :: petsc_poisson_precon_t
+    type(tMat) :: Pmat ! The preconditioner matrix
+  contains
+    procedure :: init => init_precon_petsc
+    procedure :: apply_precon => petsc_apply_precon
+  end type petsc_poisson_precon_t
+  
   type, extends(poisson_solver_t) :: petsc_poisson_cg_t
     !! Conjugate Gradient based Poisson solver using PETSc as a backend.
     !! Supports any decomposition that is also supported by the underlying
@@ -145,6 +152,155 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
   
 contains
 
+  module subroutine init_precon_impl(precon, backend)
+    class(poisson_precon_impl_t), allocatable, intent(out) :: precon
+    class(base_backend_t), intent(in) :: backend
+
+    allocate(petsc_poisson_precon_t :: precon)
+    select type(precon)
+    type is(petsc_poisson_precon_t)
+      call precon%init(backend)
+    class default
+      print *, "IMPOSSIBLE"
+      stop 42
+    end select
+    
+  end subroutine init_precon_impl
+
+  subroutine init_precon_petsc(self, backend)
+
+    class(petsc_poisson_precon_t), intent(out) :: self
+    class(base_backend_t), intent(in) :: backend
+
+    integer :: n
+
+    type(tMatNullSpace) :: nsp
+    integer :: ierr
+
+    integer, parameter :: nnb = 6 ! Number of neighbours (7-point star has 6 neighbours)
+
+    integer, dimension(3) :: dims
+    integer :: i, j, k
+    real(dp) :: dx, dy, dz
+
+    real(dp), dimension(nnb + 1) :: coeffs
+    integer, dimension(nnb + 1) :: cols
+    integer :: row
+
+    logical :: initialised
+
+    integer :: istep, jstep, kstep
+    
+    call PetscInitialized(initialised, ierr)
+    if (.not. initialised) then
+      if (backend%mesh%par%nrank == 0) then
+        print *, "Initialising PETSc"
+      end if
+      call PetscInitialize(PETSC_NULL_CHARACTER, ierr)
+    end if
+    if (backend%mesh%par%nrank == 0) then
+      print *, "PETSc Initialised"
+    end if
+
+    n = product(backend%mesh%get_dims(CELL))
+
+    call MatCreate(PETSC_COMM_WORLD, self%Pmat, ierr)
+    call MatSetSizes(self%Pmat, n, n, PETSC_DECIDE, PETSC_DECIDE, ierr)
+    call MatSetFromOptions(self%Pmat, ierr)
+    call MatSeqAIJSetPreallocation(self%Pmat, nnb + 1, PETSC_NULL_INTEGER, ierr)
+    call MatMPIAIJSetPreallocation(self%Pmat, nnb + 1, PETSC_NULL_INTEGER, &
+                                   nnb, PETSC_NULL_INTEGER, &
+                                   ierr)
+    call MatSetUp(self%Pmat, ierr)
+
+    associate(mesh => backend%mesh)
+      call build_index_map(mesh, self%Pmat)
+
+      dims = mesh%get_dims(CELL)
+      dx = mesh%geo%d(1); dy = mesh%geo%d(2); dz = mesh%geo%d(3)
+
+      istep = 1
+      jstep = dims(1) + 2
+      kstep = (dims(1) + 2) * (dims(2) + 2)
+
+      row = kstep + jstep + istep + 1
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          do i = 1, dims(1)
+            coeffs = 0
+            cols = -1 ! Set null (simplifies BCs)
+            cols(1) = row
+
+            ! d2pdx2
+            coeffs(1) = coeffs(1) - 2 / dx**2
+            coeffs(2) = 1 / dx**2
+            coeffs(3) = 1 / dx**2
+            cols(2) = cols(1) - istep
+            cols(3) = cols(1) + istep
+
+            ! d2pdy2
+            coeffs(1) = coeffs(1) - 2 / dy**2
+            coeffs(4) = 1 / dy**2
+            coeffs(5) = 1 / dy**2
+            cols(4) = cols(1) - jstep
+            cols(5) = cols(1) + jstep
+
+            ! d2pdz2
+            coeffs(1) = coeffs(1) - 2 / dz**2
+            coeffs(6) = 1 / dz**2
+            coeffs(7) = 1 / dz**2
+            cols(6) = cols(1) - kstep
+            cols(7) = cols(1) + kstep
+
+            ! Push to matrix
+            ! Recall Fortran (1-based) -> C (0-based) indexing
+            call MatSetValuesLocal(self%Pmat, 1, row - 1, nnb + 1, cols - 1, coeffs, &
+              INSERT_VALUES, ierr)
+
+            ! Advance row counter
+            row = row + 1
+          end do
+          ! Step in j
+          row = row + 2
+        end do
+        ! Step in k
+        row = row + 2 * (dims(1) + 2)
+      end do
+    end associate
+
+    call MatAssemblyBegin(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
+    call MatAssemblyEnd(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
+
+    call MatNullSpaceCreate(PETSC_COMM_WORLD, PETSC_TRUE, 0, PETSC_NULL_VEC, nsp, ierr)
+    call MatSetnullSpace(self%Pmat, nsp, ierr)
+    call MatNullSpaceDestroy(nsp, ierr)
+
+  end subroutine init_precon_petsc
+  
+  module subroutine petsc_apply_precon(self, p, b, backend)
+    class(petsc_poisson_precon_t) :: self
+    class(field_t), intent(in) :: p
+    class(field_t), intent(inout) :: b
+    class(base_backend_t), intent(in) :: backend
+
+    type(tVec) :: pVec, bVec
+    integer :: ierr
+
+    integer :: n
+    
+    n = product(backend%mesh%get_dims(CELL))
+    call create_vec(pVec, n)
+    call create_vec(bVec, n)
+
+    call copy_field_to_vec(pVec, p, backend)
+    call MatMult(self%PMat, pVec, bVec, ierr)
+    call copy_vec_to_field(b, bVec, backend)
+
+    call VecDestroy(pVec, ierr)
+    call VecDestroy(bVec, ierr)
+    
+  end subroutine petsc_apply_precon
+  
   module subroutine solve_petsc(self, p, f, backend)
     class(petsc_poisson_cg_t) :: self
     class(field_t), intent(inout) :: p ! Pressure solution
@@ -255,6 +411,8 @@ contains
     integer, dimension(nnb + 1) :: cols
     integer :: row
 
+    integer :: istep, jstep, kstep
+
     call MatCreate(PETSC_COMM_WORLD, self%Pmat, ierr)
     call MatSetSizes(self%Pmat, n, n, PETSC_DECIDE, PETSC_DECIDE, ierr)
     call MatSetFromOptions(self%Pmat, ierr)
@@ -268,8 +426,12 @@ contains
 
     dims = mesh%get_dims(CELL)
     dx = mesh%geo%d(1); dy = mesh%geo%d(2); dz = mesh%geo%d(3)
-    row = ((dims(1) + 2) * (dims(2) + 2)) + (dims(1) + 2) + 2
-    ! row = 1
+
+    istep = 1
+    jstep = dims(1) + 2
+    kstep = (dims(1) + 2) * (dims(2) + 2)
+
+    row = kstep + jstep + istep + 1
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -281,22 +443,22 @@ contains
           coeffs(1) = coeffs(1) - 2 / dx**2
           coeffs(2) = 1 / dx**2
           coeffs(3) = 1 / dx**2
-          cols(2) = cols(1) - 1
-          cols(3) = cols(1) + 1
+          cols(2) = cols(1) - istep
+          cols(3) = cols(1) + istep
 
           ! d2pdy2
           coeffs(1) = coeffs(1) - 2 / dy**2
           coeffs(4) = 1 / dy**2
           coeffs(5) = 1 / dy**2
-          cols(4) = cols(1) - (dims(1) + 2)
-          cols(5) = cols(1) + (dims(1) + 2)
+          cols(4) = cols(1) - jstep
+          cols(5) = cols(1) + jstep
 
           ! d2pdz2
           coeffs(1) = coeffs(1) - 2 / dz**2
           coeffs(6) = 1 / dz**2
           coeffs(7) = 1 / dz**2
-          cols(6) = cols(1) - (dims(1) + 2) * (dims(2) + 2)
-          cols(7) = cols(1) + (dims(1) + 2) * (dims(2) + 2)
+          cols(6) = cols(1) - kstep
+          cols(7) = cols(1) + kstep
           
           ! Push to matrix
           ! Recall Fortran (1-based) -> C (0-based) indexing
@@ -452,7 +614,9 @@ contains
     !! X halos
     ! Left halo
     associate(offset_left => info(1, 1, 1), &
-      nx_left => info(2, 1, 1), ny_left => info(3, 1, 1), nz_left => info(4, 1, 1))
+              nx_left => info(2, 1, 1), &
+              ny_left => info(3, 1, 1), &
+              nz_left => info(4, 1, 1))
       ctr = offset_left + (nx_left - 1) ! Global starting index -> xend
       do k = 1, nz_left
         do j = 1, ny_left
@@ -463,7 +627,9 @@ contains
     end associate
     ! Right halo
     associate(offset_right => info(1, 2, 1), &
-              nx_right => info(2, 2, 1), ny_right => info(3, 2, 1), nz_right => info(4, 2, 1))
+              nx_right => info(2, 2, 1), &
+              ny_right => info(3, 2, 1), &
+              nz_right => info(4, 2, 1))
       ctr = offset_right ! Global starting index == xstart
       do k = 1, nz_right
         do j = 1, ny_right
@@ -476,7 +642,9 @@ contains
     !! Y halos
     ! Bottom halo
     associate(offset_down => info(1, 1, 2), &
-              nx_down => info(2, 1, 2), ny_down => info(3, 1, 2), nz_down => info(4, 1, 2))
+              nx_down => info(2, 1, 2), &
+              ny_down => info(3, 1, 2), &
+              nz_down => info(4, 1, 2))
       ctr = offset_down + (ny_down - 1) * nx_down ! Global starting index -> yend
       do k = 1, nz_down
         do i = 1, nx_down
@@ -489,7 +657,9 @@ contains
     end associate
     ! Top halo
     associate(offset_up => info(1, 2, 2), &
-              nx_up => info(2, 2, 2), ny_up => info(3, 2, 2), nz_up => info(4, 2, 2))
+              nx_up => info(2, 2, 2), &
+              ny_up => info(3, 2, 2), &
+              nz_up => info(4, 2, 2))
       ctr = offset_up ! Global starting index == ystart
       do k = 1, nz_up
         do i = 1, nx_up
@@ -504,7 +674,9 @@ contains
     !! Z halos
     ! Back halo
     associate(offset_back => info(1, 1, 3), &
-              nx_back => info(2, 1, 3), ny_back => info(3, 1, 3), nz_back => info(4, 1, 3))
+              nx_back => info(2, 1, 3), &
+              ny_back => info(3, 1, 3), &
+              nz_back => info(4, 1, 3))
       ctr = offset_back + ny_back * nx_back ! Global starting index -> zend
       do j = 1, ny_back
         do i = 1, nx_back
@@ -515,7 +687,9 @@ contains
     end associate
     ! Front halo
     associate(offset_front => info(1, 2, 3), &
-              nx_front => info(2, 2, 3), ny_front => info(3, 2, 3), nz_front => info(4, 2, 3))
+              nx_front => info(2, 2, 3), &
+              ny_front => info(3, 2, 3), &
+              nz_front => info(4, 2, 3))
       ctr = offset_front ! Global startin index == zstart
       do j = 1, ny_front
         do i = 1, nx_front
@@ -529,36 +703,46 @@ contains
     ctr = 1
     do k = 1, nz + 2
       do j = 1, ny + 2
-        do i = 1, nx + 2
-          if ((j > 1) .and. (j < (ny + 2)) .and. &
-              (k > 1) .and. (k < (nz + 2))) then
-            if (i == 1) then
-              idx(ctr) = halobuf_x(1, j - 1, k - 1)
-            else if (i == (nx + 2)) then
-              idx(ctr) = halobuf_x(2, j - 1, k - 1)
+
+        ! Left halo
+        if ((j > 1) .and. (j < (ny + 2)) .and. &
+            (k > 1) .and. (k < (nz + 2))) then
+          idx(ctr) = halobuf_x(1, j - 1, k - 1)
+        end if
+        ctr = ctr + 1
+
+        do i = 2, nx + 1
+          
+          if ((k > 1) .and. (k < (nz + 2))) then
+            if (j == 1) then
+              ! Bottom halo
+              idx(ctr) = halobuf_y(i - 1, 1, k - 1)
+            else if (j == (ny + 2)) then
+              ! Top halo
+              idx(ctr) = halobuf_y(i - 1, 2, k - 1)
             end if
           end if
 
-          if ((i > 1) .and. (i < (nx + 2))) then
-            if ((k > 1) .and. (k < (nz + 2))) then
-              if (j == 1) then
-                idx(ctr) = halobuf_y(i - 1, 1, k - 1)
-              else if (j == (ny + 2)) then
-                idx(ctr) = halobuf_y(i - 1, 2, k - 1)
-              end if
-            end if
-
-            if ((j > 1) .and. (j < (ny + 2))) then
-              if (k == 1) then
-                idx(ctr) = halobuf_z(i - 1, j - 1, 1)
-              else if (k == (nz + 2)) then
-                idx(ctr) = halobuf_z(i - 1, j - 1, 2)
-              end if
+          if ((j > 1) .and. (j < (ny + 2))) then
+            if (k == 1) then
+              ! Back halo
+              idx(ctr) = halobuf_z(i - 1, j - 1, 1)
+            else if (k == (nz + 2)) then
+              ! Front halo
+              idx(ctr) = halobuf_z(i - 1, j - 1, 2)
             end if
           end if
 
           ctr = ctr + 1
         end do
+
+        ! Right halo
+        if ((j > 1) .and. (j < (ny + 2)) .and. &
+            (k > 1) .and. (k < (nz + 2))) then
+          idx(ctr) = halobuf_x(2, j - 1, k - 1)
+        end if
+        ctr = ctr + 1
+
       end do
     end do
 

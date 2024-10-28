@@ -30,10 +30,44 @@ module m_poisson_cg
     procedure init_lapl
   end interface laplace_operator_t
 
+  type, abstract :: poisson_precon_impl_t
+    private
+  contains
+    private
+    procedure(apply_precon_internal), public, deferred :: apply_precon
+  end type poisson_precon_impl_t
+
+  type, public :: poisson_precon_t
+    private
+    class(poisson_precon_impl_t), allocatable :: precon
+  contains
+    private
+    procedure, public :: apply => apply_precon
+  end type poisson_precon_t
+
+  interface poisson_precon_t
+    module procedure init_precon
+  end interface poisson_precon_t
+    
+  interface
+    module subroutine init_precon_impl(precon, backend)
+      class(poisson_precon_impl_t), allocatable, intent(out) :: precon
+      class(base_backend_t), intent(in) :: backend
+    end subroutine init_precon_impl
+    
+    module subroutine apply_precon_internal(self, p, b, backend)
+      class(poisson_precon_impl_t) :: self
+      class(field_t), intent(in) :: p ! Pressure solution
+      class(field_t), intent(inout) :: b ! The evaluated matrix-vector product
+      class(base_backend_t), intent(in) :: backend
+    end subroutine apply_precon_internal
+  end interface
+
   type, abstract :: poisson_solver_t
     ! Prevent default access to components of type.
     private
     type(laplace_operator_t) :: lapl
+    type(poisson_precon_t) :: precon
   contains
     private
     procedure(solve_poisson), public, deferred :: solve
@@ -74,6 +108,22 @@ module m_poisson_cg
 
 contains
 
+  subroutine apply_precon(self, p, b, backend)
+    class(poisson_precon_t) :: self
+    class(field_t), intent(in) :: p
+    class(field_t), intent(inout) :: b
+    class(base_backend_t), intent(in) :: backend
+
+    call self%precon%apply_precon(p, b, backend)
+  end subroutine apply_precon
+
+  function init_precon(backend) result(precon)
+    class(base_backend_t), target, intent(in) :: backend
+    type(poisson_precon_t) :: precon
+
+    call init_precon_impl(precon%precon, backend)
+  end function init_precon
+  
   subroutine solve(self, p, f, backend)
     class(poisson_cg_t) :: self
     class(field_t), intent(inout) :: p ! Pressure solution

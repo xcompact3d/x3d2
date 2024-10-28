@@ -16,7 +16,7 @@ program test_poisson_cg_eval
   use m_omp_backend
 #endif
   use m_common, only: DIR_X, DIR_Y, DIR_Z, CELL, POISSON_SOLVER_CG
-  use m_poisson_cg, only: laplace_operator_t
+  use m_poisson_cg, only: laplace_operator_t, poisson_precon_t
   
   implicit none
 
@@ -24,23 +24,21 @@ program test_poisson_cg_eval
   class(base_backend_t), allocatable :: backend
   class(field_t), pointer :: pressure
   class(field_t), pointer :: f
-  type(laplace_operator_t) :: lapl
   
   integer :: irank, nproc
   integer :: ierr
   
   logical :: test_pass
 
-  integer :: nx 
-  integer :: ny 
-  integer :: nz 
   real(dp), parameter :: Lx = 1.0_dp
   real(dp), parameter :: Ly = 1.0_dp
   real(dp), parameter :: Lz = 1.0_dp
-  integer :: i
   integer, parameter :: nref = 4
 
   real(dp), dimension(nref) :: e
+
+  type(laplace_operator_t) :: lapl
+  type(poisson_precon_t) :: precon
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
@@ -52,27 +50,8 @@ program test_poisson_cg_eval
   
   test_pass = .true.
 
-  nx = 16; ny = 16; nz = 16
-  ! nx = nx * nproc
-  ny = ny * nproc
-  ! nz = nz * nproc
-  do i = 1, nref
-    if (irank == 0) then
-      print *, "---------------------------------"
-      print *, "Testing refinement level ", i - 1
-    end if
-    e(i) = run_test([nx, ny, nz])
-    nx = 2 * nx; ny = 2 * ny; nz = 2 * nz
-  end do
-
-  do i = 2, nref
-    if (e(i) > 2.2 * (e(i - 1) / (2**6))) then
-      if (irank == 0) then
-        print *, "Error convergence ", i, " failed ", e(i), e(i - 1) / (2**6)
-      end if
-      test_pass = .false.
-    end if
-  end do
+  call test_driver(lapl)
+  call test_driver(precon)
   
   call MPI_Allreduce(MPI_IN_PLACE, test_pass, 1, &
                      MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
@@ -87,17 +66,70 @@ program test_poisson_cg_eval
 
 contains
 
-  real(dp) function run_test(n)
+  subroutine test_driver(linear_operator)
+
+    class(*), intent(in) :: linear_operator
+
+    integer :: nx 
+    integer :: ny 
+    integer :: nz 
+    integer :: i
+
+    integer :: order
+    character(len=:), allocatable :: opname
+
+    select type(linear_operator)
+    type is (laplace_operator_t)
+      order = 6
+      opname = "High-Order Laplacian"
+    type is (poisson_precon_t)
+      order = 2
+      opname = "Low-Order preconditioner"
+    class default
+      error stop "Unknown linear operator"
+    end select
+
+    nx = 16; ny = 16; nz = 16
+    ! nx = nx * nproc
+    ny = ny * nproc
+    ! nz = nz * nproc
+    do i = 1, nref
+      if (irank == 0) then
+        print *, "---------------------------------"
+        print *, "Testing refinement level ", i - 1
+        print *, "Using the ", opname
+      end if
+      e(i) = run_test([nx, ny, nz], linear_operator)
+      nx = 2 * nx; ny = 2 * ny; nz = 2 * nz
+    end do
+
+    do i = 2, nref
+      if (e(i) > 2.2 * (e(i - 1) / (2**order))) then
+        if (irank == 0) then
+          print *, "Error convergence ", i, " failed ", e(i), e(i - 1) / (2**order)
+        end if
+        test_pass = .false.
+      else
+        if (irank == 0) then
+          print *, "Error convergence ", i, "satisfied ", e(i), e(i - 1) / (2**order)
+        end if
+      end if
+    end do
+
+  end subroutine test_driver
+
+  real(dp) function run_test(n, linear_operator)
 
     integer, dimension(3), intent(in) :: n
+    class(*), intent(in) :: linear_operator
     
     type(mesh_t) :: mesh
     real(dp) :: rms_err
 
     call initialise_test(mesh, n)
 
-    call test_constant_field(f, lapl, pressure, mesh)
-    rms_err = test_variable_field(f, lapl, pressure, mesh)
+    call test_constant_field(f, linear_operator, pressure, mesh)
+    rms_err = test_variable_field(f, linear_operator, pressure, mesh)
 
     ! Finalise test
     call backend%allocator%release_block(pressure)
@@ -130,6 +162,7 @@ contains
     backend = omp_backend_t(mesh, allocator)
 #endif
     lapl = laplace_operator_t(backend)
+    precon = poisson_precon_t(backend)
 
     ! Main solver calls Poisson in the DIR_Z orientation
     pressure => backend%allocator%get_block(DIR_Z)
@@ -157,10 +190,10 @@ contains
 
   end subroutine init_globs
 
-  subroutine test_constant_field(f, lapl, pressure, mesh)
+  subroutine test_constant_field(f, linear_operator, pressure, mesh)
 
     class(field_t), intent(inout) :: f
-    type(laplace_operator_t), intent(in) :: lapl
+    class(*), intent(in) :: linear_operator
     class(field_t), intent(in) :: pressure
     type(mesh_t), intent(in) :: mesh
 
@@ -175,13 +208,20 @@ contains
     end if
 
     ! Set pressure field to some constant
-    pressure%data = 42
+    pressure%data = 0 !42
     allocate(expect, mold = f%data)
     expect = 0  ! Correct answer
     f%data = 17 ! Initialise with wrong answer
-    
-    call lapl%apply(f, pressure, backend)
 
+    select type(linear_operator)
+    type is(laplace_operator_t)
+      call linear_operator%apply(f, pressure, backend)
+    type is (poisson_precon_t)
+      call linear_operator%apply(pressure, f, backend)
+    class default
+      error stop "Unsupported linear operator type"
+    end select
+      
     ! Check Laplacian evaluation (expect zero)
     rms_err = check_soln(check_pass, mesh, f, expect)
 
@@ -199,13 +239,13 @@ contains
 
   end subroutine test_constant_field
 
-  real(dp) function test_variable_field(f, lapl, pressure, mesh)
+  real(dp) function test_variable_field(f, linear_operator, pressure, mesh)
 
     use m_common, only: pi
     use m_ordering, only: get_index_dir
     
     class(field_t), intent(inout) :: f
-    type(laplace_operator_t), intent(in) :: lapl
+    class(*), intent(in) :: linear_operator
     class(field_t), intent(in) :: pressure
     type(mesh_t), intent(in) :: mesh
 
@@ -240,8 +280,8 @@ contains
 
           ! Need to get Cartesian -> memory layout mapping
           call get_index_dir(ii, jj, kk, i, j, k, &
-            DIR_Z, &
-            SZ, n(1), n(2), n(3))
+                             DIR_Z, &
+                             SZ, n(1), n(2), n(3))
 
           pressure%data(ii, jj, kk) = cos(2 * pi * (x / Lx)) + &
                                       cos(2 * pi * (y / Ly)) + &
@@ -256,7 +296,14 @@ contains
     end do
     f%data = 0 ! Initialise with wrong answer
 
-    call lapl%apply(f, pressure, backend)
+    select type(linear_operator)
+    type is(laplace_operator_t)
+      call linear_operator%apply(f, pressure, backend)
+    type is(poisson_precon_t)
+      call linear_operator%apply(pressure, f, backend)
+    class default
+      error stop "Unsupported linear operator type"
+    end select
 
     ! Check Laplacian evaluation
     ! XXX: Note had to relax the tolerance, otherwise obtains RMS(err)~=8e-7
