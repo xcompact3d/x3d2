@@ -241,6 +241,7 @@ contains
         print *, "PASS"
       else
         print *, "FAIL"
+        stop 1
       end if
     end if
     

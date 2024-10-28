@@ -223,7 +223,7 @@ contains
     integer :: ierr
 
     call MatCreateShell(PETSC_COMM_WORLD, n, n, PETSC_DETERMINE, &
-      PETSC_DETERMINE, self%ctx, self%Amat, ierr)
+                        PETSC_DETERMINE, self%ctx, self%Amat, ierr)
     call MatShellSetContext(self%Amat, self%ctx, ierr) ! Is this necessary?
     call MatShellSetOperation(self%Amat, MATOP_MULT, poissmult_petsc, ierr)
     call MatSetUp(self%Amat, ierr)
@@ -297,62 +297,11 @@ contains
           coeffs(7) = 1 / dz**2
           cols(6) = cols(1) - (dims(1) + 2) * (dims(2) + 2)
           cols(7) = cols(1) + (dims(1) + 2) * (dims(2) + 2)
-
-          ! coeffs = 0
-          ! cols = -1 ! Set null (simplifies BCs)
-          ! cols(1) = row
-
-          ! ! d2pdx2
-          ! coeffs(1) = coeffs(1) - 2 / dx**2
-          ! coeffs(2) = 1 / dx**2
-          ! coeffs(3) = 1 / dx**2
-          ! if (i > 1) then
-          !   cols(2) = cols(1) - 1
-          ! else
-          !   cols(2) = cols(1) + (dims(1) - i)
-          ! end if
-          ! if (i < dims(1)) then
-          !   cols(3) = cols(1) + 1
-          ! else
-          !   cols(3) = cols(1) - (dims(1) - 1)
-          ! end if
-
-          ! ! d2pdy2
-          ! coeffs(1) = coeffs(1) - 2 / dy**2
-          ! coeffs(4) = 1 / dy**2
-          ! coeffs(5) = 1 / dy**2
-          ! if (j > 1) then
-          !   cols(4) = cols(1) - dims(1)
-          ! else
-          !   cols(4) = cols(1) + (dims(2) - j) * dims(1)
-          ! end if
-          ! if (j < dims(2)) then
-          !   cols(5) = cols(1) + dims(1)
-          ! else
-          !   cols(5) = cols(1) - (dims(2) - 1) * dims(1)
-          ! end if
-
-          ! ! d2pdz2
-          ! coeffs(1) = coeffs(1) - 2 / dz**2
-          ! coeffs(6) = 1 / dz**2
-          ! coeffs(7) = 1 / dz**2
-          ! if (k > 1) then
-          !   cols(6) = cols(1) - dims(2) * dims(1)
-          ! else
-          !   cols(6) = cols(1) + (dims(3) - k) * dims(2) * dims(1)
-          ! end if
-          ! if (k < dims(3)) then
-          !   cols(7) = cols(1) + dims(2) * dims(1)
-          ! else
-          !   cols(7) = cols(1) - (dims(3) - 1) * dims(2) * dims(1)
-          ! end if
           
           ! Push to matrix
           ! Recall Fortran (1-based) -> C (0-based) indexing
           call MatSetValuesLocal(self%Pmat, 1, row - 1, nnb + 1, cols - 1, coeffs, &
-                            INSERT_VALUES, ierr)
-          ! call MatSetValues(self%Pmat, 1, row - 1, nnb + 1, cols - 1, coeffs, &
-          !                   INSERT_VALUES, ierr)
+                                 INSERT_VALUES, ierr)
 
           ! Advance row counter
           row = row + 1
@@ -480,17 +429,21 @@ contains
     nproc = mesh%par%nproc
     tag = mesh%par%nrank * max(nproc, 6)
     do d = 1, 3
-      ! Recv left and right
+      !! Recv left and right
+      !  Right Recv
       nbtag = mesh%par%pnext(d) * max(nproc, 6)
       call MPI_IRecv(info(:, 2, d), 4, MPI_INTEGER, mesh%par%pnext(d), nbtag + 2 * (d - 1) + 1, & 
                     MPI_COMM_WORLD, requests(4 * (d - 1) + 1), ierr)
+      !  Left Recv
       nbtag = mesh%par%pprev(d) * max(nproc, 6)
       call MPI_IRecv(info(:, 1, d), 4, MPI_INTEGER, mesh%par%pprev(d), nbtag + 2 * (d - 1) + 2, & 
                     MPI_COMM_WORLD, requests(4 * (d - 1) + 2), ierr)
       
-      ! Send left and right
+      !! Send left and right
+      !  Left Send
       call MPI_ISend(myinfo, 4, MPI_INTEGER, mesh%par%pprev(d), tag + 2 * (d - 1) + 1, &
                      MPI_COMM_WORLD, requests(4 * (d - 1) + 3), ierr)
+      !  Right Send
       call MPI_ISend(myinfo, 4, MPI_INTEGER, mesh%par%pnext(d), tag + 2 * (d - 1) + 2, &
                      MPI_COMM_WORLD, requests(4 * (d - 1) + 4), ierr)
     end do
@@ -521,7 +474,7 @@ contains
     end associate
 
     !! Y halos
-    ! Left halo
+    ! Bottom halo
     associate(offset_down => info(1, 1, 2), &
               nx_down => info(2, 1, 2), ny_down => info(3, 1, 2), nz_down => info(4, 1, 2))
       ctr = offset_down + (ny_down - 1) * nx_down ! Global starting index -> yend
@@ -534,7 +487,7 @@ contains
         ctr = ctr + (nx_down * ny_down) ! Step in k
       end do
     end associate
-    ! Right halo
+    ! Top halo
     associate(offset_up => info(1, 2, 2), &
               nx_up => info(2, 2, 2), ny_up => info(3, 2, 2), nz_up => info(4, 2, 2))
       ctr = offset_up ! Global starting index == ystart
@@ -549,7 +502,7 @@ contains
     end associate
 
     !! Z halos
-    ! Left halo
+    ! Back halo
     associate(offset_back => info(1, 1, 3), &
               nx_back => info(2, 1, 3), ny_back => info(3, 1, 3), nz_back => info(4, 1, 3))
       ctr = offset_back + ny_back * nx_back ! Global starting index -> zend
@@ -560,7 +513,7 @@ contains
         end do
       end do
     end associate
-    ! Right halo
+    ! Front halo
     associate(offset_front => info(1, 2, 3), &
               nx_front => info(2, 2, 3), ny_front => info(3, 2, 3), nz_front => info(4, 2, 3))
       ctr = offset_front ! Global startin index == zstart
@@ -656,6 +609,8 @@ contains
     integer :: ierr ! The error code
 
     type(mat_ctx_t) :: ctx
+
+    ierr = 0;
 
     ! XXX: Fixme
     ! call MatShellGetContext(M, ctx, ierr)
