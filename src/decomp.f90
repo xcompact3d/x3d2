@@ -2,11 +2,13 @@ module m_decomp
   use m_mesh_content, only: par_t, grid_t
   implicit none
 
+  ! Object implementing the actual decomposition
   type, abstract :: decomp_t 
   contains
-    procedure(decomposition_a), public, deferred :: decomposition
+    procedure(decomposition), public, deferred :: decomposition
   end type decomp_t
 
+  ! Abstraction layer to allow different version of the decomposition computation
   type, public :: decomp_mod_t
     class(decomp_t), allocatable :: decomp
     contains
@@ -22,17 +24,13 @@ module m_decomp
       class(decomp_t), allocatable, intent(out) :: decomp
     end subroutine
 
-    module subroutine decomposition_a(self, grid, par)
+    module subroutine decomposition(self, grid, par)
       use m_mesh_content, only: par_t, grid_t
-      !import :: decomp_t
       class(decomp_t) :: self
       class(grid_t), intent(inout) :: grid
       class(par_t), intent(inout) :: par
     end subroutine
 
-!     module function init_decomp_mod() return(decomp)
-      ! type(decomp_mod_t) :: decomp
-    ! end function
    end interface
  
   contains

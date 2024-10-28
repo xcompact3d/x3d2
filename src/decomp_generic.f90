@@ -17,6 +17,8 @@ submodule(m_decomp) m_decomp_generic
   end subroutine
 
   module subroutine decomposition_generic(self, grid, par)
+    !! Generic method to perform parallel decomposition
+
     use m_mesh_content, only: par_t, grid_t
 
     class(decomp_generic_t) :: self
