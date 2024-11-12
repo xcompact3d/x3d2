@@ -12,7 +12,7 @@ program test_transeq
 
   logical :: allpass = .true.
   real(dp), allocatable, dimension(:, :, :) :: u, v, r_u
-  real(dp), allocatable, dimension(:, :, :) :: du, dud, d2u ! intermediate solution arrays
+  real(dp), allocatable, dimension(:, :, :) :: dud, d2u ! intermediate solution arrays
   real(dp), allocatable, dimension(:, :, :) :: &
     du_recv_s, du_recv_e, du_send_s, du_send_e, &
     dud_recv_s, dud_recv_e, dud_send_s, dud_send_e, &
@@ -52,7 +52,6 @@ program test_transeq
   ! main input fields
   ! field for storing the result
   ! intermediate solution fields
-  allocate (du(SZ, n, n_block))
   allocate (dud(SZ, n, n_block))
   allocate (d2u(SZ, n, n_block))
 
@@ -108,8 +107,7 @@ program test_transeq
                        SZ*4*n_block, nproc, pprev, pnext)
 
   call exec_dist_transeq_compact( &
-    r_u, &
-    du, dud, d2u, &
+    r_u, dud, d2u, &
     du_send_s, du_send_e, du_recv_s, du_recv_e, &
     dud_send_s, dud_send_e, dud_recv_s, dud_recv_e, &
     d2u_send_s, d2u_send_e, d2u_recv_s, d2u_recv_e, &
