@@ -167,6 +167,7 @@ contains
     
   end subroutine init_precon_impl
 
+  ! Initialise the PETSc implementation of the preconditioner object
   subroutine init_precon_petsc(self, backend)
 
     class(petsc_poisson_precon_t), intent(out) :: self
@@ -439,19 +440,19 @@ contains
           cols = -1 ! Set null (simplifies BCs)
           cols(1) = row
           
-          ! d2pdx2
-          coeffs(1) = coeffs(1) - 2 / dx**2
-          coeffs(2) = 1 / dx**2
-          coeffs(3) = 1 / dx**2
-          cols(2) = cols(1) - istep
-          cols(3) = cols(1) + istep
+          ! ! d2pdx2
+          ! coeffs(1) = coeffs(1) - 2 / dx**2
+          ! coeffs(2) = 1 / dx**2
+          ! coeffs(3) = 1 / dx**2
+          ! cols(2) = cols(1) - istep
+          ! cols(3) = cols(1) + istep
 
-          ! d2pdy2
-          coeffs(1) = coeffs(1) - 2 / dy**2
-          coeffs(4) = 1 / dy**2
-          coeffs(5) = 1 / dy**2
-          cols(4) = cols(1) - jstep
-          cols(5) = cols(1) + jstep
+          ! ! d2pdy2
+          ! coeffs(1) = coeffs(1) - 2 / dy**2
+          ! coeffs(4) = 1 / dy**2
+          ! coeffs(5) = 1 / dy**2
+          ! cols(4) = cols(1) - jstep
+          ! cols(5) = cols(1) + jstep
 
           ! d2pdz2
           coeffs(1) = coeffs(1) - 2 / dz**2
@@ -677,7 +678,7 @@ contains
               nx_back => info(2, 1, 3), &
               ny_back => info(3, 1, 3), &
               nz_back => info(4, 1, 3))
-      ctr = offset_back + ny_back * nx_back ! Global starting index -> zend
+      ctr = offset_back + (nz_back - 1) * ny_back * nx_back ! Global starting index -> zend
       do j = 1, ny_back
         do i = 1, nx_back
           halobuf_z(i, j, 1) = ctr
@@ -721,9 +722,7 @@ contains
               ! Top halo
               idx(ctr) = halobuf_y(i - 1, 2, k - 1)
             end if
-          end if
-
-          if ((j > 1) .and. (j < (ny + 2))) then
+          else if ((j > 1) .and. (j < (ny + 2))) then
             if (k == 1) then
               ! Back halo
               idx(ctr) = halobuf_z(i - 1, j - 1, 1)
