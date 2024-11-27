@@ -71,8 +71,10 @@ contains
 
     implicit none
 
-    ! du = d(u)
-    real(dp), dimension(:, :, :), intent(inout) :: rhs_du, dud, d2u
+    !> The result array, it is also used as temporary storage
+    real(dp), dimension(:, :, :), intent(out) :: rhs_du
+    !> Temporary storage arrays
+    real(dp), dimension(:, :, :), intent(out) :: dud, d2u
 
     ! The ones below are intent(out) just so that we can write data in them,
     ! not because we actually need the data they store later where this
@@ -177,7 +179,8 @@ contains
       do j = 1, n
         !$omp simd
         do i = 1, SZ
-          rhs_du(i, j, k) = -0.5_dp*(v(i, j, k)*rhs_du(i, j, k) + dud(i, j, k)) &
+          rhs_du(i, j, k) = -0.5_dp*(v(i, j, k)*rhs_du(i, j, k) &
+                                     + dud(i, j, k)) &
                             + nu*d2u(i, j, k)
         end do
         !$omp end simd

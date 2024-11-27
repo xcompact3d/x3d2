@@ -237,10 +237,11 @@ contains
                                     u_recv_s, u_recv_e, &
                                     conv_recv_s, conv_recv_e, &
                                     tdsops_du, tdsops_dud, tdsops_d2u, dir)
-      !! Computes RHS_x^u following:
-      !!
-      !! rhs_x^u = -0.5*(conv*du/dx + d(u*conv)/dx) + nu*d2u/dx2
+    !! Computes RHS_x^u following:
+    !!
+    !! rhs_x^u = -0.5*(conv*du/dx + d(u*conv)/dx) + nu*d2u/dx2
     class(omp_backend_t) :: self
+    !> The result field, it is also used as temporary storage
     class(field_t), intent(inout) :: rhs_du
     class(field_t), intent(in) :: u, conv
     real(dp), dimension(:, :, :), intent(in) :: u_recv_s, u_recv_e, &

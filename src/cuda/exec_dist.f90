@@ -66,7 +66,8 @@ contains
     implicit none
 
     ! r_du = -1/2*(v*d1(u) + d1(u*v)) + nu*d2(u)
-    real(dp), device, dimension(:, :, :), intent(inout) :: r_du
+    !> The result array, it is also used as temporary storage
+    real(dp), device, dimension(:, :, :), intent(out) :: r_du
     real(dp), device, dimension(:, :, :), intent(in) :: u, u_recv_s, u_recv_e
     real(dp), device, dimension(:, :, :), intent(in) :: v, v_recv_s, v_recv_e
 

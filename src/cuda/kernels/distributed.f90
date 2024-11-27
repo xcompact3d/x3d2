@@ -578,6 +578,7 @@ contains
     implicit none
 
     ! Arguments
+    !> The result array, it stores 'du' first then its overwritten
     real(dp), device, intent(inout), dimension(:, :, :) :: r_du
     real(dp), device, intent(in), dimension(:, :, :) :: conv, dud, d2u
     real(dp), device, intent(in), dimension(:, :, :) :: &
