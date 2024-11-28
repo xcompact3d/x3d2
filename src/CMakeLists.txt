@@ -1,6 +1,7 @@
 set(SRC
   allocator.f90
   backend.f90
+  case.f90
   common.f90
   field.f90
   mesh.f90
