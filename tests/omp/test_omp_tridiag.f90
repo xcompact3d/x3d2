@@ -3,7 +3,7 @@ program test_omp_tridiag
   use mpi
   use omp_lib
 
-  use m_common, only: dp, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_NULL
+  use m_common, only: dp, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
   use m_omp_common, only: SZ
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_exec_dist, only: exec_dist_tds_compact
@@ -143,12 +143,12 @@ program test_omp_tridiag
   if (nrank == 0) then
     bc_start = BC_DIRICHLET
   else
-    bc_start = BC_NULL
+    bc_start = BC_HALO
   end if
   if (nrank == nproc - 1) then
     bc_end = BC_NEUMANN
   else
-    bc_end = BC_NULL
+    bc_end = BC_HALO
   end if
 
   tdsops = tdsops_init(n, dx, operation='first-deriv', scheme='compact6', &

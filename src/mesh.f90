@@ -5,7 +5,7 @@ module m_mesh
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, &
                       CELL, VERT, X_FACE, Y_FACE, Z_FACE, &
                       X_EDGE, Y_EDGE, Z_EDGE, &
-                      BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET
+                      BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
   use m_field, only: field_t
 
   implicit none
@@ -154,14 +154,17 @@ contains
       is_first_domain = mesh%par%nrank_dir(dir) == 0
       is_last_domain = mesh%par%nrank_dir(dir) + 1 == mesh%par%nproc_dir(dir)
       ! subdomain-subdomain boundaries are identical to periodic BCs
-      if (is_first_domain) then
+      if (is_first_domain .and. is_last_domain) then
         mesh%BCs(dir, 1) = mesh%BCs_global(dir, 1)
-        mesh%BCs(dir, 2) = BC_PERIODIC
+        mesh%BCs(dir, 2) = mesh%BCs_global(dir, 2)
+      else if (is_first_domain) then
+        mesh%BCs(dir, 1) = mesh%BCs_global(dir, 1)
+        mesh%BCs(dir, 2) = BC_HALO
       else if (is_last_domain) then
-        mesh%BCs(dir, 1) = BC_PERIODIC
+        mesh%BCs(dir, 1) = BC_HALO
         mesh%BCs(dir, 2) = mesh%BCs_global(dir, 2)
       else
-        mesh%BCs(dir, :) = BC_PERIODIC
+        mesh%BCs(dir, :) = BC_HALO
       end if
     end do
 
