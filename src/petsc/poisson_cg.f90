@@ -74,14 +74,12 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
     type(mat_ctx_t) :: ctx
     type(tKSP) :: ksp  ! The solver
     type(tMat) :: Amat ! The operator matrix
-    type(tMat) :: Pmat ! The preconditioner matrix
     type(tVec) :: fvec ! The RHS vector
     type(tVec) :: pvec ! The solution vector
 
   contains
     procedure :: solve => solve_petsc
     procedure :: create_operator
-    procedure :: create_preconditioner
     procedure :: create_vectors
     procedure :: create_solver
   end type petsc_poisson_cg_t
@@ -323,6 +321,7 @@ contains
     class(base_backend_t), target, intent(in) :: backend
 
     allocate (petsc_poisson_cg_t :: solver)
+    solver%precon = poisson_precon_t(backend)
     
     select type (solver)
     type is (petsc_poisson_cg_t)
@@ -362,7 +361,6 @@ contains
     ! XXX: Add option to use preconditioner as operator (would imply low-order
     !      solution)?
     call self%create_operator(n)
-    call self%create_preconditioner(backend%mesh, n)
 
     ! Initialise RHS and solution vectors
     call self%create_vectors(n)
@@ -393,97 +391,6 @@ contains
     call MatNullSpaceDestroy(nsp, ierr)
 
   end subroutine create_operator
-
-  subroutine create_preconditioner(self, mesh, n)
-    class(petsc_poisson_cg_t) :: self
-    type(mesh_t), intent(in) :: mesh
-    integer, intent(in) :: n
-
-    type(tMatNullSpace) :: nsp
-    integer :: ierr
-
-    integer, parameter :: nnb = 6 ! Number of neighbours (7-point star has 6 neighbours)
-
-    integer, dimension(3) :: dims
-    integer :: i, j, k
-    real(dp) :: dx, dy, dz
-
-    real(dp), dimension(nnb + 1) :: coeffs
-    integer, dimension(nnb + 1) :: cols
-    integer :: row
-
-    integer :: istep, jstep, kstep
-
-    call MatCreate(PETSC_COMM_WORLD, self%Pmat, ierr)
-    call MatSetSizes(self%Pmat, n, n, PETSC_DECIDE, PETSC_DECIDE, ierr)
-    call MatSetFromOptions(self%Pmat, ierr)
-    call MatSeqAIJSetPreallocation(self%Pmat, nnb + 1, PETSC_NULL_INTEGER, ierr)
-    call MatMPIAIJSetPreallocation(self%Pmat, nnb + 1, PETSC_NULL_INTEGER, &
-                                   nnb, PETSC_NULL_INTEGER, &
-                                   ierr)
-    call MatSetUp(self%Pmat, ierr)
-
-    call build_index_map(mesh, self%Pmat)
-
-    dims = mesh%get_dims(CELL)
-    dx = mesh%geo%d(1); dy = mesh%geo%d(2); dz = mesh%geo%d(3)
-
-    istep = 1
-    jstep = dims(1) + 2
-    kstep = (dims(1) + 2) * (dims(2) + 2)
-
-    row = kstep + jstep + istep + 1
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          coeffs = 0
-          cols = -1 ! Set null (simplifies BCs)
-          cols(1) = row
-          
-          ! ! d2pdx2
-          ! coeffs(1) = coeffs(1) - 2 / dx**2
-          ! coeffs(2) = 1 / dx**2
-          ! coeffs(3) = 1 / dx**2
-          ! cols(2) = cols(1) - istep
-          ! cols(3) = cols(1) + istep
-
-          ! ! d2pdy2
-          ! coeffs(1) = coeffs(1) - 2 / dy**2
-          ! coeffs(4) = 1 / dy**2
-          ! coeffs(5) = 1 / dy**2
-          ! cols(4) = cols(1) - jstep
-          ! cols(5) = cols(1) + jstep
-
-          ! d2pdz2
-          coeffs(1) = coeffs(1) - 2 / dz**2
-          coeffs(6) = 1 / dz**2
-          coeffs(7) = 1 / dz**2
-          cols(6) = cols(1) - kstep
-          cols(7) = cols(1) + kstep
-          
-          ! Push to matrix
-          ! Recall Fortran (1-based) -> C (0-based) indexing
-          call MatSetValuesLocal(self%Pmat, 1, row - 1, nnb + 1, cols - 1, coeffs, &
-                                 INSERT_VALUES, ierr)
-
-          ! Advance row counter
-          row = row + 1
-        end do
-        ! Step in j
-        row = row + 2
-      end do
-      ! Step in k
-      row = row + 2 * (dims(1) + 2)
-    end do
-
-    call MatAssemblyBegin(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
-    call MatAssemblyEnd(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
-
-    call MatNullSpaceCreate(PETSC_COMM_WORLD, PETSC_TRUE, 0, PETSC_NULL_VEC, nsp, ierr)
-    call MatSetnullSpace(self%Pmat, nsp, ierr)
-    call MatNullSpaceDestroy(nsp, ierr)
-
-  end subroutine create_preconditioner
 
   subroutine build_index_map(mesh, P)
     ! Builds the map from local indices to the global (equation ordering) index
@@ -776,11 +683,18 @@ contains
 
     integer :: ierr
 
-    call KSPCreate(PETSC_COMM_WORLD, self%ksp, ierr)
-    call KSPSetOperators(self%ksp, self%Amat, self%Pmat, ierr)
-    call KSPSetFromOptions(self%ksp, ierr)
-    call KSPSetInitialGuessNonzero(self%ksp, PETSC_TRUE, ierr)
-
+    associate(precon => self%precon%precon)
+      select type(precon)
+      type is (petsc_poisson_precon_t)
+        call KSPCreate(PETSC_COMM_WORLD, self%ksp, ierr)
+        call KSPSetOperators(self%ksp, self%Amat, precon%Pmat, ierr)
+        call KSPSetFromOptions(self%ksp, ierr)
+        call KSPSetInitialGuessNonzero(self%ksp, PETSC_TRUE, ierr)
+      class default
+        error stop "Poisson preconditioner type is wrong"
+      end select
+    end associate
+    
   end subroutine create_solver
 
   subroutine poissmult_petsc(M, x, f, ierr)

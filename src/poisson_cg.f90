@@ -31,7 +31,6 @@ module m_poisson_cg
   end interface laplace_operator_t
 
   type, abstract :: poisson_precon_impl_t
-    private
   contains
     private
     procedure(apply_precon_internal), public, deferred :: apply_precon
@@ -39,7 +38,7 @@ module m_poisson_cg
 
   type, public :: poisson_precon_t
     private
-    class(poisson_precon_impl_t), allocatable :: precon
+    class(poisson_precon_impl_t), public, allocatable :: precon
   contains
     private
     procedure, public :: apply => apply_precon
@@ -148,6 +147,10 @@ contains
   end function init_lapl
   
   function init_cg(backend) result(solver)
+    !! Initialises the conjugate gradient (CG) solver.
+    !! XXX: The solver implementation is responsible for initialising the
+    !!      preconditioner, i.e. it should at some point during its initialisation
+    !!      do the equivalent of: `call self%precon = poisson_precon_t(backend)`.
     class(base_backend_t), target, intent(in) :: backend
     type(poisson_cg_t) :: solver
 
