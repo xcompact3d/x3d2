@@ -60,6 +60,8 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
   end type petsc_field_t
 
   type, extends(poisson_precon_impl_t) :: petsc_poisson_precon_t
+    !! The PETSc implementation of the Poisson preconditioner, implements a 2nd
+    !! order finite difference approximation of the Laplacian.
     type(tMat) :: Pmat ! The preconditioner matrix
   contains
     procedure :: init => init_precon_petsc
@@ -151,6 +153,7 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
 contains
 
   module subroutine init_precon_impl(precon, backend)
+    ! Constructs the PETSc preconditioner implementation
     class(poisson_precon_impl_t), allocatable, intent(out) :: precon
     class(base_backend_t), intent(in) :: backend
 
@@ -159,14 +162,13 @@ contains
     type is(petsc_poisson_precon_t)
       call precon%init(backend)
     class default
-      print *, "IMPOSSIBLE"
-      stop 42
+      error stop "IMPOSSIBLE"
     end select
     
   end subroutine init_precon_impl
 
-  ! Initialise the PETSc implementation of the preconditioner object
   subroutine init_precon_petsc(self, backend)
+    ! Initialise the PETSc implementation of the preconditioner object
 
     class(petsc_poisson_precon_t), intent(out) :: self
     class(base_backend_t), intent(in) :: backend
@@ -189,7 +191,8 @@ contains
     logical :: initialised
 
     integer :: istep, jstep, kstep
-    
+
+    ! Ensure PETSc is initialised
     call PetscInitialized(initialised, ierr)
     if (.not. initialised) then
       if (backend%mesh%par%nrank == 0) then
@@ -201,6 +204,7 @@ contains
       print *, "PETSc Initialised"
     end if
 
+    ! Create an explicit preconditioner matrix
     n = product(backend%mesh%get_dims(CELL))
 
     call MatCreate(PETSC_COMM_WORLD, self%Pmat, ierr)
@@ -212,6 +216,7 @@ contains
                                    ierr)
     call MatSetUp(self%Pmat, ierr)
 
+    ! Set the Poisson coefficients
     associate(mesh => backend%mesh)
       call build_index_map(mesh, self%Pmat)
 
@@ -371,8 +376,9 @@ contains
   end subroutine init_petsc_cg
 
   subroutine create_operator(self, n)
+    ! Set the PETSc MATVEC to use the x3d2 high-order Laplacian operator
     class(petsc_poisson_cg_t) :: self
-    integer, intent(in) :: n
+    integer, intent(in) :: n ! The local problem size
 
     type(tMatNullSpace) :: nsp
     integer :: ierr
@@ -393,10 +399,10 @@ contains
   end subroutine create_operator
 
   subroutine build_index_map(mesh, P)
-    ! Builds the map from local indices to the global (equation ordering) index
+    ! Builds the map from local indices to the global (equation ordering) index for the preconditioner
 #include "petsc/finclude/petscis.h"
-    type(mesh_t), intent(in) :: mesh
-    type(tMat) :: P
+    type(mesh_t), intent(in) :: mesh ! The mesh for the simulation
+    type(tMat) :: P                  ! The preconditioner matrix
     ISLocalToGlobalMapping map
     integer :: ierr
 
@@ -434,10 +440,13 @@ contains
   end subroutine build_index_map
 
   subroutine build_interior_index_map(idx, mesh, global_start)
+    ! Builds the map from local indices to the global (equation ordering) index
+    ! for internal (local) indices
 
-    integer, dimension(:), intent(inout) :: idx
-    type(mesh_t), intent(in) :: mesh
-    integer, intent(in) :: global_start
+    ! The local->global index map, local indices are offset into the domain by 1 in each axis to simplify finite differences
+    integer, dimension(:), intent(inout) :: idx 
+    type(mesh_t), intent(in) :: mesh    ! The mesh for the simulation
+    integer, intent(in) :: global_start ! The global offset for this rank in the global equation system
 
     integer, dimension(3) :: dims
     integer :: nx, ny, nz
@@ -465,6 +474,8 @@ contains
   end subroutine build_interior_index_map
 
   subroutine build_neighbour_index_map(idx, mesh, global_start)
+    ! Builds the map from local indices to the global (equation ordering) index
+    ! for partition boundary indices
 
     use mpi
 
@@ -655,8 +666,10 @@ contains
   end subroutine build_neighbour_index_map
 
   subroutine create_vectors(self, n)
-    class(petsc_poisson_cg_t) :: self
-    integer, intent(in) :: n
+    ! Allocates the pressure and forcing vectors.
+
+    class(petsc_poisson_cg_t) :: self ! The Poisson solver
+    integer, intent(in) :: n          ! The local vector size
 
     call create_vec(self%fvec, n)
     call create_vec(self%pvec, n)
@@ -664,8 +677,10 @@ contains
   end subroutine create_vectors
 
   subroutine create_vec(v, n)
-    type(tVec), intent(out) :: v
-    integer, intent(in) :: n
+    ! Utility subroutine to allocate a PETSc vector.
+
+    type(tVec), intent(out) :: v ! The vector
+    integer, intent(in) :: n     ! The local vector size
 
     integer :: ierr
 
@@ -679,6 +694,8 @@ contains
   end subroutine create_vec
 
   subroutine create_solver(self)
+    ! Sets up the PETSc linear solver.
+    
     class(petsc_poisson_cg_t) :: self
 
     integer :: ierr
@@ -711,6 +728,7 @@ contains
 
     ! XXX: Fixme
     ! call MatShellGetContext(M, ctx, ierr)
+    associate(matrix => M); end associate ! Silence unused argument
     ! print *, ctx%foo
     ctx = ctx_global
 
@@ -723,8 +741,8 @@ contains
   subroutine copy_vec_to_field(f, v, backend)
     !! Copies the contents of a PETSc vector into an x3d2 field object
     ! XXX: This can be avoided if a field can wrap the vector memory
-    class(field_t), intent(inout) :: f
-    type(tVec) :: v
+    class(field_t), intent(inout) :: f ! The destination field
+    type(tVec) :: v                    ! The source vector
     class(base_backend_t), intent(in) :: backend
 
     real(dp), dimension(:), pointer :: vdata
@@ -757,8 +775,8 @@ contains
   subroutine copy_field_to_vec(v, f, backend)
     !! Copies the contents of an x3d2 field object into a PETSc vector
     ! XXX: This can be avoided if a field can wrap the vector memory
-    type(tVec) :: v
-    class(field_t), intent(in) :: f
+    type(tVec) :: v                 ! The destination vector.
+    class(field_t), intent(in) :: f ! The source field.
     class(base_backend_t), intent(in) :: backend
 
     real(dp), dimension(:), pointer :: vdata

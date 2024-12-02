@@ -16,8 +16,6 @@ module m_poisson_cg
 
   type, public :: laplace_operator_t
     !! Operator that computes the Laplacian of a field.
-
-    ! Prevent default access to components of type.
     private
     type(dirps_t) :: xdirps, ydirps, zdirps
   contains
@@ -31,44 +29,56 @@ module m_poisson_cg
   end interface laplace_operator_t
 
   type, abstract :: poisson_precon_impl_t
+    !! Base definition of backend-specific implementation of the preconditioner
+    !! for the Poisson problem.
   contains
     private
-    procedure(apply_precon_internal), public, deferred :: apply_precon
+    ! Applies the preconditioner to compute b=Px, mostly for testing purposes.
+    procedure(apply_precon_internal), public, deferred :: apply_precon 
   end type poisson_precon_impl_t
 
   type, public :: poisson_precon_t
+    !! Wrapper definition of the Poisson preconditioner.
+    !! User code should use this class which will instantiate the
+    !! backend-specific code (determined at compile time).
     private
     class(poisson_precon_impl_t), public, allocatable :: precon
   contains
     private
+    ! Applies the preconditioner to compute b=Px, mostly for testing purposes.
     procedure, public :: apply => apply_precon
   end type poisson_precon_t
 
   interface poisson_precon_t
+    !! Public constructor for the Poisson preconditioner object.
     module procedure init_precon
   end interface poisson_precon_t
     
   interface
     module subroutine init_precon_impl(precon, backend)
-      class(poisson_precon_impl_t), allocatable, intent(out) :: precon
-      class(base_backend_t), intent(in) :: backend
+      !! Constructor for the backend-specific Poisson preconditioner implementation.
+      class(poisson_precon_impl_t), allocatable, intent(out) :: precon ! The constructed preconditioner object
+      class(base_backend_t), intent(in) :: backend                     ! The x3d2 backend code
     end subroutine init_precon_impl
     
     module subroutine apply_precon_internal(self, p, b, backend)
+      ! Applies the preconditioner to compute b=Px, mostly for testing purposes.
       class(poisson_precon_impl_t) :: self
-      class(field_t), intent(in) :: p ! Pressure solution
+      class(field_t), intent(in) :: p    ! Pressure solution
       class(field_t), intent(inout) :: b ! The evaluated matrix-vector product
       class(base_backend_t), intent(in) :: backend
     end subroutine apply_precon_internal
   end interface
 
   type, abstract :: poisson_solver_t
-    ! Prevent default access to components of type.
+    !! Base definition of the backend-specific implementation of the iterative
+    !! Poisson solver.
     private
-    type(laplace_operator_t) :: lapl
-    type(poisson_precon_t) :: precon
+    type(laplace_operator_t) :: lapl ! The high-order Laplacian operator
+    type(poisson_precon_t) :: precon ! The (low-order) preconditioner
   contains
     private
+    ! Solves the Poisson problem
     procedure(solve_poisson), public, deferred :: solve
   end type poisson_solver_t
 
@@ -83,6 +93,7 @@ module m_poisson_cg
 
   contains
     private
+    ! Solves the Poisson problem
     procedure, public :: solve
   end type poisson_cg_t
 
@@ -93,11 +104,13 @@ module m_poisson_cg
 
   interface
     module subroutine init_solver(solver, backend)
+      !! Public constructor for the poisson_cg_t type.
       class(poisson_solver_t), allocatable, intent(out) :: solver
       class(base_backend_t), target, intent(in) :: backend
     end subroutine init_solver
 
     module subroutine solve_poisson(self, p, f, backend)
+      ! Solves the Poisson problem
       class(poisson_solver_t) :: self
       class(field_t), intent(inout) :: p ! Pressure solution
       class(field_t), intent(in) :: f    ! Poisson RHS
@@ -108,22 +121,27 @@ module m_poisson_cg
 contains
 
   subroutine apply_precon(self, p, b, backend)
+    ! Applies the preconditioner to compute b=Px, mostly for testing purposes.
     class(poisson_precon_t) :: self
-    class(field_t), intent(in) :: p
-    class(field_t), intent(inout) :: b
+    class(field_t), intent(in) :: p    ! Pressure solution
+    class(field_t), intent(inout) :: b ! The evaluated matrix-vector product
     class(base_backend_t), intent(in) :: backend
 
+    ! Call the backend-specific subroutine
     call self%precon%apply_precon(p, b, backend)
   end subroutine apply_precon
 
   function init_precon(backend) result(precon)
+    !! Public constructor for the Poisson preconditioner object.
     class(base_backend_t), target, intent(in) :: backend
     type(poisson_precon_t) :: precon
 
+    ! Call the backend-specific constructor
     call init_precon_impl(precon%precon, backend)
   end function init_precon
   
   subroutine solve(self, p, f, backend)
+    ! Solves the Poisson problem
     class(poisson_cg_t) :: self
     class(field_t), intent(inout) :: p ! Pressure solution
     class(field_t), intent(in) :: f    ! Poisson RHS
@@ -133,6 +151,7 @@ contains
   end subroutine solve
 
   function init_lapl(backend) result(lapl)
+    !! Public constructor for the laplace_operator_t type.
     type(laplace_operator_t) :: lapl
     class(base_backend_t), intent(in) :: backend
 
@@ -225,12 +244,13 @@ contains
   end subroutine poissmult_dirx
 
   subroutine compute_and_acc_der2nd(f, p, backend, dirps, reorder_op)
+    !! Accumulates 2nd derivatives into the Laplacian
 
-    class(field_t), intent(inout) :: f
-    class(field_t), intent(in) :: p
+    class(field_t), intent(inout) :: f ! The Laplacian
+    class(field_t), intent(in) :: p    ! The pressure field
     class(base_backend_t), intent(in) :: backend
     class(dirps_t), intent(in) :: dirps
-    integer, intent(in) :: reorder_op
+    integer, intent(in) :: reorder_op  ! The reordering operation
 
     class(field_t), pointer :: p_i ! P in operation order
     class(field_t), pointer :: f_i ! F in operation order
@@ -265,8 +285,8 @@ contains
 
   subroutine compute_der2nd(d2fdx2, f, backend, dirps)
     !! Computes the 2nd derivative of a field
-    class(field_t), intent(inout) :: d2fdx2
-    class(field_t), intent(in) :: f
+    class(field_t), intent(inout) :: d2fdx2      ! The 2nd derivative
+    class(field_t), intent(in) :: f              ! The field for derivative
     class(base_backend_t), intent(in) :: backend
     class(dirps_t), intent(in) :: dirps
 
