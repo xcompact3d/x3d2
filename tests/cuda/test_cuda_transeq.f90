@@ -3,7 +3,7 @@ program test_cuda_tridiag
   use cudafor
   use mpi
 
-  use m_common, only: dp, pi
+  use m_common, only: dp, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_NULL
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused
   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
@@ -106,9 +106,11 @@ program test_cuda_tridiag
 
   ! preprocess the operator and coefficient arrays
   der1st = cuda_tdsops_t(n, dx_per, operation='first-deriv', &
-                         scheme='compact6')
+                         scheme='compact6', &
+                         bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
   der2nd = cuda_tdsops_t(n, dx_per, operation='second-deriv', &
-                         scheme='compact6')
+                         scheme='compact6', &
+                         bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
 
   blocks = dim3(n_block, 1, 1)
   threads = dim3(SZ, 1, 1)

@@ -19,7 +19,8 @@ module m_common
                         Y_EDGE = 0100, & ! Data on edges along Y
                         Z_EDGE = 0010, & ! Data on edges along Z
                         none = -0001 ! The location of data isn't specified
-  integer, parameter :: BC_PERIODIC = 0, BC_NEUMANN = 1, BC_DIRICHLET = 2
+  integer, parameter :: BC_PERIODIC = 0, BC_NEUMANN = 1, BC_DIRICHLET = 2, &
+                        BC_HALO = -1
   integer, protected :: &
     rdr_map(4, 4) = reshape([0, RDR_Y2X, RDR_Z2X, RDR_C2X, &
                              RDR_X2Y, 0, RDR_Z2Y, RDR_C2Y, &

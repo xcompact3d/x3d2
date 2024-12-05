@@ -2,7 +2,7 @@ program test_transeq
   use iso_fortran_env, only: stderr => error_unit
   use mpi
 
-  use m_common, only: dp, pi
+  use m_common, only: dp, pi, BC_PERIODIC
   use m_omp_common, only: SZ
   use m_omp_exec_dist, only: exec_dist_transeq_compact
   use m_omp_sendrecv, only: sendrecv_fields
@@ -88,10 +88,10 @@ program test_transeq
   allocate (d2u_recv_s(SZ, 1, n_block), d2u_recv_e(SZ, 1, n_block))
 
   ! preprocess the operator and coefficient arrays
-  der1st = tdsops_t(n, dx_per, operation='first-deriv', &
-                    scheme='compact6')
-  der2nd = tdsops_t(n, dx_per, operation='second-deriv', &
-                    scheme='compact6')
+  der1st = tdsops_t(n, dx_per, operation='first-deriv', scheme='compact6', &
+                    bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
+  der2nd = tdsops_t(n, dx_per, operation='second-deriv', scheme='compact6', &
+                    bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
 
   u_send_s(:, :, :) = u(:, 1:4, :)
   u_send_e(:, :, :) = u(:, n - n_halo + 1:n, :)
