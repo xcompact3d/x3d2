@@ -234,15 +234,16 @@ contains
 
   end subroutine transeq_halo_exchange
 
-  subroutine transeq_dist_component(self, rhs, u, conv, &
+  subroutine transeq_dist_component(self, rhs_du, u, conv, &
                                     u_recv_s, u_recv_e, &
                                     conv_recv_s, conv_recv_e, &
                                     tdsops_du, tdsops_dud, tdsops_d2u, dir)
-      !! Computes RHS_x^u following:
-      !!
-      !! rhs_x^u = -0.5*(conv*du/dx + d(u*conv)/dx) + nu*d2u/dx2
+    !! Computes RHS_x^u following:
+    !!
+    !! rhs_x^u = -0.5*(conv*du/dx + d(u*conv)/dx) + nu*d2u/dx2
     class(omp_backend_t) :: self
-    class(field_t), intent(inout) :: rhs
+    !> The result field, it is also used as temporary storage
+    class(field_t), intent(inout) :: rhs_du
     class(field_t), intent(in) :: u, conv
     real(dp), dimension(:, :, :), intent(in) :: u_recv_s, u_recv_e, &
                                                 conv_recv_s, conv_recv_e
@@ -250,14 +251,13 @@ contains
     class(tdsops_t), intent(in) :: tdsops_dud
     class(tdsops_t), intent(in) :: tdsops_d2u
     integer, intent(in) :: dir
-    class(field_t), pointer :: du, d2u, dud
+    class(field_t), pointer :: d2u, dud
 
-    du => self%allocator%get_block(dir, VERT)
     dud => self%allocator%get_block(dir, VERT)
     d2u => self%allocator%get_block(dir, VERT)
 
     call exec_dist_transeq_compact( &
-      rhs%data, du%data, dud%data, d2u%data, &
+      rhs_du%data, dud%data, d2u%data, &
       self%du_send_s, self%du_send_e, self%du_recv_s, self%du_recv_e, &
       self%dud_send_s, self%dud_send_e, self%dud_recv_s, self%dud_recv_e, &
       self%d2u_send_s, self%d2u_send_e, self%d2u_recv_s, self%d2u_recv_e, &
@@ -267,7 +267,6 @@ contains
       self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), &
       self%mesh%par%pnext(dir), self%mesh%get_n_groups(dir))
 
-    call self%allocator%release_block(du)
     call self%allocator%release_block(dud)
     call self%allocator%release_block(d2u)
 

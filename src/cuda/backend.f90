@@ -288,16 +288,17 @@ contains
 
   end subroutine transeq_halo_exchange
 
-  subroutine transeq_dist_component(self, rhs_dev, u_dev, conv_dev, &
+  subroutine transeq_dist_component(self, rhs_du_dev, u_dev, conv_dev, &
                                     u_recv_s_dev, u_recv_e_dev, &
                                     conv_recv_s_dev, conv_recv_e_dev, &
                                     tdsops_du, tdsops_dud, tdsops_d2u, &
                                     dir, blocks, threads)
-      !! Computes RHS_x^u following:
-      !!
-      !! rhs_x^u = -0.5*(conv*du/dx + d(u*conv)/dx) + nu*d2u/dx2
+    !! Computes RHS_x^u following:
+    !!
+    !! rhs_x^u = -0.5*(conv*du/dx + d(u*conv)/dx) + nu*d2u/dx2
     class(cuda_backend_t) :: self
-    real(dp), device, dimension(:, :, :), intent(inout) :: rhs_dev
+    !> The result field, it is also used as temporary storage
+    real(dp), device, dimension(:, :, :), intent(out) :: rhs_du_dev
     real(dp), device, dimension(:, :, :), intent(in) :: u_dev, conv_dev
     real(dp), device, dimension(:, :, :), intent(in) :: &
       u_recv_s_dev, u_recv_e_dev, &
@@ -306,25 +307,22 @@ contains
     integer, intent(in) :: dir
     type(dim3), intent(in) :: blocks, threads
 
-    class(field_t), pointer :: du, dud, d2u
+    class(field_t), pointer :: dud, d2u
 
-    real(dp), device, pointer, dimension(:, :, :) :: &
-      du_dev, dud_dev, d2u_dev
+    real(dp), device, pointer, dimension(:, :, :) :: dud_dev, d2u_dev
 
     ! Get some fields for storing the intermediate results
-    du => self%allocator%get_block(dir, VERT)
     dud => self%allocator%get_block(dir, VERT)
     d2u => self%allocator%get_block(dir, VERT)
 
-    call resolve_field_t(du_dev, du)
     call resolve_field_t(dud_dev, dud)
     call resolve_field_t(d2u_dev, d2u)
 
     call exec_dist_transeq_3fused( &
-      rhs_dev, &
+      rhs_du_dev, &
       u_dev, u_recv_s_dev, u_recv_e_dev, &
       conv_dev, conv_recv_s_dev, conv_recv_e_dev, &
-      du_dev, dud_dev, d2u_dev, &
+      dud_dev, d2u_dev, &
       self%du_send_s_dev, self%du_send_e_dev, &
       self%du_recv_s_dev, self%du_recv_e_dev, &
       self%dud_send_s_dev, self%dud_send_e_dev, &
@@ -337,7 +335,6 @@ contains
       )
 
     ! Release temporary blocks
-    call self%allocator%release_block(du)
     call self%allocator%release_block(dud)
     call self%allocator%release_block(d2u)
 

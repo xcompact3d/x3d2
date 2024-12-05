@@ -15,7 +15,7 @@ program test_cuda_tridiag
   real(dp), allocatable, dimension(:, :, :) :: u, v, r_u
   real(dp), device, allocatable, dimension(:, :, :) :: &
     u_dev, v_dev, r_u_dev, & ! main fields u, v and result r_u
-    du_dev, dud_dev, d2u_dev ! intermediate solution arrays
+    dud_dev, d2u_dev ! intermediate solution arrays
   real(dp), device, allocatable, dimension(:, :, :) :: &
     du_recv_s_dev, du_recv_e_dev, du_send_s_dev, du_send_e_dev, &
     dud_recv_s_dev, dud_recv_e_dev, dud_send_s_dev, dud_send_e_dev, &
@@ -65,7 +65,6 @@ program test_cuda_tridiag
   ! field for storing the result
   allocate (r_u_dev(SZ, n, n_block))
   ! intermediate solution fields
-  allocate (du_dev(SZ, n, n_block))
   allocate (dud_dev(SZ, n, n_block))
   allocate (d2u_dev(SZ, n, n_block))
 
@@ -135,7 +134,7 @@ program test_cuda_tridiag
       r_u_dev, &
       u_dev, u_recv_s_dev, u_recv_e_dev, &
       v_dev, v_recv_s_dev, v_recv_e_dev, &
-      du_dev, dud_dev, d2u_dev, &
+      dud_dev, d2u_dev, &
       du_send_s_dev, du_send_e_dev, du_recv_s_dev, du_recv_e_dev, &
       dud_send_s_dev, dud_send_e_dev, dud_recv_s_dev, dud_recv_e_dev, &
       d2u_send_s_dev, d2u_send_e_dev, d2u_recv_s_dev, d2u_recv_e_dev, &
