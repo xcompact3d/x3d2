@@ -145,21 +145,6 @@ contains
       end if
     end do
 
-    ! Define number of cells and vertices in each direction
-    mesh%grid%vert_dims = mesh%grid%global_vert_dims/mesh%par%nproc_dir
-
-    do dir = 1, 3
-      is_last_domain = (mesh%par%nrank_dir(dir) + 1 == mesh%par%nproc_dir(dir))
-      if (is_last_domain .and. (.not. mesh%grid%periodic_BC(dir))) then
-        mesh%grid%cell_dims(dir) = mesh%grid%vert_dims(dir) - 1
-      else
-        mesh%grid%cell_dims(dir) = mesh%grid%vert_dims(dir)
-      end if
-    end do
-
-    ! Set offset for global indices
-    mesh%par%n_offset(:) = mesh%grid%vert_dims(:)*mesh%par%nrank_dir(:)
-
     ! Define default values
     mesh%grid%vert_dims_padded = mesh%grid%vert_dims
     mesh%sz = 1
