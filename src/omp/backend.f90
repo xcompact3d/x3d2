@@ -2,7 +2,8 @@ module m_omp_backend
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_ordering, only: get_index_reordering
-  use m_common, only: dp, get_dirs_from_rdr, VERT, DIR_X, DIR_Y, DIR_Z, DIR_C
+  use m_common, only: dp, get_dirs_from_rdr, VERT, DIR_X, DIR_Y, DIR_Z, &
+                      DIR_C, RDR_X2Y, RDR_X2Z
   use m_tdsops, only: dirps_t, tdsops_t, get_tds_n
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
   use m_omp_sendrecv, only: sendrecv_fields
@@ -331,24 +332,55 @@ contains
     class(field_t), intent(in) :: u
     integer, intent(in) :: direction
     integer, dimension(3) :: dims
-    integer :: i, j, k
+    integer :: i, j, k, ka, kb
     integer :: out_i, out_j, out_k
     integer :: dir_from, dir_to
 
-    dims = self%mesh%get_padded_dims(u)
-    call get_dirs_from_rdr(dir_from, dir_to, direction)
-
-    !$omp parallel do private(out_i, out_j, out_k) collapse(2)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          call get_index_reordering( &
-            out_i, out_j, out_k, i, j, k, dir_from, dir_to, self%mesh)
-          u_%data(out_i, out_j, out_k) = u%data(i, j, k)
+    select case (direction)
+    case (RDR_X2Y)
+      dims = self%mesh%get_padded_dims(DIR_C)
+      !$omp parallel do collapse(2)
+      do kb = 1, dims(2)/SZ
+        do ka = 1, dims(3)
+          do j = 1, dims(1)
+            do i = 1, SZ
+              u_%data(mod(j-1, SZ)+1, (kb-1)*SZ+i, ka+dims(3)*((j-1)/SZ)) = &
+                u%data(i, j, ka+dims(3)*(kb-1))
+            end do
+          end do
         end do
       end do
-    end do
-    !$omp end parallel do
+      !$omp end parallel do
+    case (RDR_X2Z)
+      dims = self%mesh%get_padded_dims(DIR_C)
+      !$omp parallel do collapse(2)
+      do kb = 1, dims(2)/SZ
+        do ka = 1, dims(1)
+          do j = 1, dims(3)
+            do i = 1, SZ
+              u_%data(i, j, ka + (kb - 1)*dims(1)) = &
+                u%data(i, ka, (kb - 1)*dims(3) + mod(j - 1, dims(3)) + 1)
+            end do
+          end do
+        end do
+      end do
+      !$omp end parallel do
+    case default
+      dims = self%mesh%get_padded_dims(u)
+      call get_dirs_from_rdr(dir_from, dir_to, direction)
+  
+      !$omp parallel do private(out_i, out_j, out_k) collapse(2)
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          do i = 1, dims(1)
+            call get_index_reordering( &
+              out_i, out_j, out_k, i, j, k, dir_from, dir_to, self%mesh)
+            u_%data(out_i, out_j, out_k) = u%data(i, j, k)
+          end do
+        end do
+      end do
+      !$omp end parallel do
+    end select
 
   end subroutine reorder_omp
 
@@ -359,7 +391,25 @@ contains
     class(field_t), intent(inout) :: u
     class(field_t), intent(in) :: u_
 
-    call sum_intox_omp(self, u, u_, DIR_Y)
+    integer :: i, j, ka, kb, dims(3)
+
+    !call sum_intox_omp(self, u, u_, DIR_Y)
+
+    dims = self%mesh%get_padded_dims(DIR_C)
+    !$omp parallel do collapse(2)
+    do kb = 1, dims(2)/SZ
+      do ka = 1, dims(3)
+        do j = 1, dims(1)
+          do i = 1, SZ
+            u%data(i, j, ka + dims(3)*(kb - 1)) = &
+              u%data(i, j, ka + dims(3)*(kb - 1)) &
+              + u_%data(mod(j - 1, SZ) + 1, (kb - 1)*SZ + i, &
+                        ka + dims(3)*((j - 1)/SZ))
+          end do
+        end do
+      end do
+    end do
+    !$omp end parallel do
 
   end subroutine sum_yintox_omp
 
@@ -370,7 +420,24 @@ contains
     class(field_t), intent(inout) :: u
     class(field_t), intent(in) :: u_
 
-    call sum_intox_omp(self, u, u_, DIR_Z)
+    integer :: i, j, ka, kb, dims(3)
+
+    !call sum_intox_omp(self, u, u_, DIR_Z)
+
+    dims = self%mesh%get_padded_dims(DIR_C)
+    !$omp parallel do collapse(2)
+    do kb = 1, dims(2)/SZ
+      do ka = 1, dims(1)
+        do j = 1, dims(3)
+          do i = 1, SZ
+            u%data(i, ka, (kb - 1)*dims(3) + mod(j - 1, dims(3)) + 1) = &
+              u%data(i, ka, (kb - 1)*dims(3) + mod(j - 1, dims(3)) + 1) &
+              + u_%data(i, j, ka + (kb - 1)*dims(1))
+          end do
+        end do
+      end do
+    end do
+    !$omp end parallel do
 
   end subroutine sum_zintox_omp
 
