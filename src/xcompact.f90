@@ -43,9 +43,13 @@ program xcompact
   integer, dimension(3) :: dims_global
   integer, dimension(3) :: nproc_dir = 0
   real(dp), dimension(3) :: L_global
+  character(3) :: poisson_solver_type
+  character(32) :: backend_name
   integer :: nrank, nproc, ierr
+  logical :: use_2decomp
 
   namelist /domain_params/ L_global, dims_global, nproc_dir, BC_x, BC_y, BC_z
+  namelist /solver_params/ poisson_solver_type
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
@@ -57,6 +61,9 @@ program xcompact
   ierr = cudaGetDeviceCount(ndevs)
   ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robin
   ierr = cudaGetDevice(devnum)
+  backend_name = "CUDA"
+#else 
+  backend_name = "OMP"
 #endif
 
   if (command_argument_count() >= 1) then
@@ -75,7 +82,10 @@ program xcompact
     nproc_dir = [1, 1, nproc]
   end if
 
-  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
+  ! Decide whether 2decomp is used or not
+  use_2decomp = (poisson_solver_type == 'FFT' .and.  trim(backend_name) == 'OMP')
+
+  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, use_2decomp=use_2decomp)
 
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(mesh, SZ)

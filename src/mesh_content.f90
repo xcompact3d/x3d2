@@ -20,6 +20,9 @@ module m_mesh_content
     logical, dimension(3) :: periodic_BC ! Whether or not a direction has a periodic BC
     integer, dimension(3, 2) :: BCs_global
     integer, dimension(3, 2) :: BCs
+  contains
+    procedure :: copy_cell2vert_dims  ! Copies cell_dims to vert_dims taking periodicity into account
+    procedure :: copy_vert2cell_dims  ! Copies vert_dims to cell_dims taking periodicity into account
   end type
 
   ! Stores parallel domain related information
@@ -33,6 +36,7 @@ module m_mesh_content
     integer, dimension(3) :: pprev ! rank ID of the next rank in each direction
   contains
     procedure :: is_root ! returns if the current rank is the root rank
+    procedure :: compute_rank_pos_from_global ! fills in pnext, pprev and nrank_dir from global ranks map
   end type
 
   contains
@@ -45,5 +49,76 @@ module m_mesh_content
     is_root_rank = (self%nrank == 0)
 
   end function
+
+  pure subroutine compute_rank_pos_from_global(self, global_ranks)
+    ! From the global rank maps, fills in the rank position as well
+    ! as the previous and next rank in the `par` structure
+
+    class(par_t), intent(inout) :: self
+    integer, dimension(:, :, :), intent(in) :: global_ranks
+    integer, dimension(3) :: subd_pos, subd_pos_prev, subd_pos_next
+    integer :: dir, nproc
+
+    ! subdomain position in the global domain
+    subd_pos = findloc(global_ranks, self%nrank)
+
+    ! local/directional position of the subdomain
+    self%nrank_dir(:) = subd_pos(:) - 1
+
+    do dir = 1, 3
+      nproc = self%nproc_dir(dir)
+      subd_pos_prev(:) = subd_pos(:)
+      subd_pos_prev(dir) = modulo(subd_pos(dir) - 2, nproc) + 1
+      self%pprev(dir) = global_ranks(subd_pos_prev(1), &
+                                         subd_pos_prev(2), &
+                                         subd_pos_prev(3))
+
+      subd_pos_next(:) = subd_pos(:)
+      subd_pos_next(dir) = modulo(subd_pos(dir) - nproc, nproc) + 1
+      self%pnext(dir) = global_ranks(subd_pos_next(1), &
+                                         subd_pos_next(2), &
+                                         subd_pos_next(3))
+    end do
+
+
+  end subroutine
+
+  pure subroutine copy_vert2cell_dims(self, par)
+    ! Copies vert_dims information to cell_dims taking 
+    ! periodicity into account
+    class(grid_t), intent(inout) :: self
+    type(par_t), intent(in) :: par
+    integer :: dir
+    logical :: is_last_domain
+
+    do dir = 1, 3
+      is_last_domain = (par%nrank_dir(dir) + 1 == par%nproc_dir(dir))
+      if (is_last_domain .and. (.not. self%periodic_BC(dir))) then
+          self%cell_dims(dir) = self%vert_dims(dir) - 1
+      else
+          self%cell_dims(dir) = self%vert_dims(dir)
+      end if
+    end do
+
+  end subroutine
+
+  pure subroutine copy_cell2vert_dims(self, par)
+    ! Copies cell_dims information to vert_dims taking 
+    ! periodicity into account
+    class(grid_t), intent(inout) :: self
+    type(par_t), intent(in) :: par
+    integer :: dir
+    logical :: is_last_domain
+
+    do dir = 1, 3
+      is_last_domain = (par%nrank_dir(dir) + 1 == par%nproc_dir(dir))
+      if (is_last_domain .and. (.not. self%periodic_BC(dir))) then
+          self%vert_dims(dir) = self%cell_dims(dir) + 1
+      else
+          self%vert_dims(dir) = self%cell_dims(dir)
+      end if
+    end do
+
+  end subroutine
 
 end module m_mesh_content

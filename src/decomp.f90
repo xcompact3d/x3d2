@@ -4,6 +4,7 @@ module m_decomp
 
   ! Object implementing the actual decomposition
   type, abstract :: decomp_t 
+    logical :: is_avail_2decomp
   contains
     procedure(decomposition), public, deferred :: decomposition
   end type decomp_t
@@ -13,6 +14,7 @@ module m_decomp
     class(decomp_t), allocatable :: decomp
     contains
     procedure, public :: decomp_grid
+    procedure, public :: is_avail_2decomp
   end type
 
   interface decomp_mod_t
@@ -43,12 +45,18 @@ module m_decomp
   end function
  
   module subroutine decomp_grid(self, grid, par)
-      class(decomp_mod_t) :: self
-      class(grid_t), intent(inout) :: grid
-      class(par_t), intent(inout) :: par
+    class(decomp_mod_t) :: self
+    class(grid_t), intent(inout) :: grid
+    class(par_t), intent(inout) :: par
 
-      call self%decomp%decomposition(grid, par)
+    call self%decomp%decomposition(grid, par)
   end subroutine
 
+  module function is_avail_2decomp(self) result(is_available)
+    logical :: is_available
+    class(decomp_mod_t) :: self
+
+    is_available = self%decomp%is_avail_2decomp
+  end function
 
 end module m_decomp

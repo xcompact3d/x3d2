@@ -15,6 +15,7 @@ submodule(m_decomp) m_decomp_2decompfft
     class(decomp_t), allocatable, intent(out):: decomp
 
     allocate(decomp_2decompfft_t :: decomp)
+    decomp%is_avail_2decomp = .true.
   end subroutine
 
   module subroutine decomposition_2decompfft(self, grid, par)
@@ -30,10 +31,7 @@ submodule(m_decomp) m_decomp_2decompfft
     integer, allocatable, dimension(:, :, :) :: global_ranks
     integer, allocatable, dimension(:) :: global_ranks_lin
     integer :: nproc
-    integer, dimension(3) :: subd_pos, subd_pos_prev, subd_pos_next
     logical, dimension(3) :: periodic_bc
-    integer :: dir
-    logical :: is_last_domain
     integer :: nx, ny, nz
     integer :: ierr
     integer :: cart_rank
@@ -71,43 +69,13 @@ submodule(m_decomp) m_decomp_2decompfft
 
     global_ranks = reshape(global_ranks_lin, shape=[1, p_row, p_col])
 
-    ! subdomain position in the global domain
-    subd_pos = findloc(global_ranks, par%nrank)
-
-    ! local/directional position of the subdomain
-    par%nrank_dir(:) = subd_pos(:) - 1
-
     ! Get local domain size and offset from 2decomp
     grid%cell_dims(:) = xsize(:)
     par%n_offset(:) = xstart(:)
 
-    ! compute vert_dims from cell_dims
-    do dir = 1, 3
-      is_last_domain = (par%nrank_dir(dir) + 1 == par%nproc_dir(dir))
-      if (is_last_domain .and. (.not. grid%periodic_BC(dir))) then
-        grid%vert_dims(dir) = grid%cell_dims(dir) +1
-      else
-        grid%vert_dims(dir) = grid%cell_dims(dir)
-      end if
-    end do
-
-    ! Get neighbour ranks
-    do dir = 1, 3
-      nproc = par%nproc_dir(dir)
-      subd_pos_prev(:) = subd_pos(:)
-      subd_pos_prev(dir) = modulo(subd_pos(dir) - 2, nproc) + 1
-      par%pprev(dir) = global_ranks(subd_pos_prev(1), &
-                                         subd_pos_prev(2), &
-                                         subd_pos_prev(3))
-
-      subd_pos_next(:) = subd_pos(:)
-      subd_pos_next(dir) = modulo(subd_pos(dir) - nproc, nproc) + 1
-      par%pnext(dir) = global_ranks(subd_pos_next(1), &
-                                         subd_pos_next(2), &
-                                         subd_pos_next(3))
-    end do
+    call grid%copy_cell2vert_dims(par)
+    call par%compute_rank_pos_from_global(global_ranks)
 
   end subroutine decomposition_2decompfft
-
 
 end submodule

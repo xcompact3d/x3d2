@@ -54,7 +54,7 @@ module m_mesh
 
 contains
 
-  function mesh_init(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z) &
+  function mesh_init(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, use_2decomp) &
     result(mesh)
     use m_decomp, only: decomp_mod_t
     !! Completely initialise the mesh object.
@@ -63,6 +63,7 @@ contains
     integer, dimension(3), intent(in) :: dims_global
     integer, dimension(3), intent(in) :: nproc_dir ! Number of proc in each direction
     real(dp), dimension(3), intent(in) :: L_global
+    logical, optional, intent(in) :: use_2decomp
     class(mesh_t), allocatable :: mesh
     type(decomp_mod_t) :: decomp
     character(len=*), dimension(2), intent(in) :: BC_x, BC_y, BC_z
@@ -126,8 +127,17 @@ contains
     call MPI_Comm_rank(MPI_COMM_WORLD, mesh%par%nrank, ierr)
     call MPI_Comm_size(MPI_COMM_WORLD, mesh%par%nproc, ierr)
 
-    decomp = decomp_mod_t()
-    call decomp%decomp_grid(mesh%grid, mesh%par)
+    ! Either use 2decomp or the generic decomposition
+    if (present(use_2decomp)) then
+      decomp = decomp_mod_t()
+      if (decomp%is_avail_2decomp() .and. use_2decomp) then
+        call decomp%decomp_grid(mesh%grid, mesh%par)
+      else 
+        call decomposition_generic(mesh%grid, mesh%par)
+      end if
+    else 
+      call decomposition_generic(mesh%grid, mesh%par)
+    end if
 
     ! Set subdomain BCs
     do dir = 1, 3
@@ -150,6 +160,42 @@ contains
     mesh%sz = 1
 
   end function mesh_init
+
+  subroutine decomposition_generic(grid, par)
+    ! Generic decomposition used when 2decomp isn't used
+
+    use m_mesh_content, only: par_t, grid_t
+
+    class(grid_t), intent(inout) :: grid
+    class(par_t), intent(inout) :: par 
+    integer, allocatable, dimension(:, :, :) :: global_ranks
+    integer :: i, nproc_x, nproc_y, nproc_z
+
+    if (par%is_root()) then
+      print*, "Domain decomposition by x3d2 (generic)"
+    end if
+
+    ! Number of processes on a direction basis
+    nproc_x = par%nproc_dir(1)
+    nproc_y = par%nproc_dir(2)
+    nproc_z = par%nproc_dir(3)
+
+    ! Define number of cells and vertices in each direction
+    grid%vert_dims = grid%global_vert_dims/par%nproc_dir
+
+    ! A 3D array corresponding to each region in the global domain
+    allocate (global_ranks(nproc_x, nproc_y, nproc_z))
+
+    ! set the corresponding global rank for each sub-domain
+    global_ranks = reshape([(i, i=0, par%nproc - 1)], &
+                           shape=[nproc_x, nproc_y, nproc_z])
+
+    par%n_offset(:) = grid%vert_dims(:)*par%nrank_dir(:)
+
+    call grid%copy_vert2cell_dims(par)
+    call par%compute_rank_pos_from_global(global_ranks)
+
+  end subroutine
 
   subroutine set_padded_dims(self, vert_dims)
     class(mesh_t), intent(inout) :: self

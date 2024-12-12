@@ -41,7 +41,7 @@ set(2DECOMPFFTSRC
   2decompfft/decomp.f90
 )
 set(GENERICDECOMPSRC
-  decomp_generic.f90
+  decomp_dummy.f90
 )
 
 if(${BACKEND} STREQUAL "CUDA")
