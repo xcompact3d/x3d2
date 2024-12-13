@@ -48,6 +48,10 @@ contains
 
     class(case_generic_t) :: self
 
+    call self%solver%u%fill(1._dp)
+    call self%solver%v%fill(0._dp)
+    call self%solver%w%fill(0._dp)
+
   end subroutine initial_conditions_generic
 
   subroutine postprocess_generic(self, t)
@@ -55,6 +59,10 @@ contains
 
     class(case_generic_t) :: self
     real(dp), intent(in) :: t
+
+    if (self%solver%mesh%par%is_root()) print *, 'time =', t
+    call self%print_enstrophy(self%solver%u, self%solver%v, self%solver%w)
+    call self%print_div_max_mean(self%solver%u, self%solver%v, self%solver%w)
 
   end subroutine postprocess_generic
 
