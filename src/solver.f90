@@ -92,8 +92,6 @@ contains
     type(allocator_t), target, intent(inout) :: host_allocator
     type(solver_t) :: solver
 
-    class(field_t), pointer :: u_init, v_init, w_init
-
     character(len=200) :: input_file
     real(dp) :: Re, dt
     integer :: n_iters, n_output
@@ -103,11 +101,6 @@ contains
     namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
       time_intg, der1st_scheme, der2nd_scheme, &
       interpl_scheme, stagder_scheme
-
-    real(dp) :: x, y, z
-    integer :: i, j, k
-    integer, dimension(3) :: dims
-    real(dp), dimension(3) :: xloc
 
     solver%backend => backend
     solver%mesh => mesh
@@ -151,38 +144,6 @@ contains
     solver%n_iters = n_iters
     solver%n_output = n_output
     solver%ngrid = product(solver%mesh%get_global_dims(VERT))
-
-    dims = solver%mesh%get_dims(VERT)
-    u_init => solver%host_allocator%get_block(DIR_C)
-    v_init => solver%host_allocator%get_block(DIR_C)
-    w_init => solver%host_allocator%get_block(DIR_C)
-
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          xloc = solver%mesh%get_coordinates(i, j, k)
-          x = xloc(1)
-          y = xloc(2)
-          z = xloc(3)
-
-          u_init%data(i, j, k) = sin(x)*cos(y)*cos(z)
-          v_init%data(i, j, k) = -cos(x)*sin(y)*cos(z)
-          w_init%data(i, j, k) = 0
-        end do
-      end do
-    end do
-
-    call solver%backend%set_field_data(solver%u, u_init%data)
-    call solver%backend%set_field_data(solver%v, v_init%data)
-    call solver%backend%set_field_data(solver%w, w_init%data)
-
-    call solver%u%set_data_loc(VERT)
-    call solver%v%set_data_loc(VERT)
-    call solver%w%set_data_loc(VERT)
-
-    call solver%host_allocator%release_block(u_init)
-    call solver%host_allocator%release_block(v_init)
-    call solver%host_allocator%release_block(w_init)
 
     ! Allocate and set the tdsops
     call allocate_tdsops(solver%xdirps, solver%backend, &
