@@ -105,10 +105,8 @@ contains
     class(case_tgv_t) :: self
     real(dp), intent(in) :: t
 
-    call self%solver%print_enstrophy(self%solver%u, self%solver%v, &
-                                     self%solver%w)
-    call self%solver%print_div_max_mean(self%solver%u, self%solver%v, &
-                                        self%solver%w)
+    call self%print_enstrophy(self%solver%u, self%solver%v, self%solver%w)
+    call self%print_div_max_mean(self%solver%u, self%solver%v, self%solver%w)
 
   end subroutine postprocess_tgv
 
