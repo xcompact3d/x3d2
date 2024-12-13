@@ -57,15 +57,11 @@ module m_solver
     type(vector_calculus_t) :: vector_calculus
     procedure(poisson_solver), pointer :: poisson => null()
   contains
-    procedure :: boundary_conditions
     procedure :: transeq
-    procedure :: post_transeq
     procedure :: pressure_correction
-    procedure :: postprocess
     procedure :: divergence_v2p
     procedure :: gradient_p2v
     procedure :: curl
-    procedure :: run
     procedure :: print_enstrophy
     procedure :: print_div_max_mean
   end type solver_t
@@ -248,14 +244,6 @@ contains
 
   end subroutine
 
-  subroutine boundary_conditions(self)
-    !! base solver boundary_conditions: do nothing!
-    implicit none
-
-    class(solver_t) :: self
-
-  end subroutine boundary_conditions
-
   subroutine transeq(self, du, dv, dw, u, v, w)
     !! Skew-symmetric form of convection-diffusion terms in the
     !! incompressible Navier-Stokes momemtum equations, excluding
@@ -340,15 +328,6 @@ contains
     call self%backend%allocator%release_block(dw_z)
 
   end subroutine transeq
-
-  subroutine post_transeq(self, du, dv, dw)
-    !! base solver post_transeq
-    implicit none
-
-    class(solver_t) :: self
-    class(field_t), intent(inout) :: du, dv, dw
-
-  end subroutine post_transeq
 
   subroutine divergence_v2p(self, div_u, u, v, w)
     !! Wrapper for divergence_v2p
@@ -476,19 +455,6 @@ contains
 
   end subroutine pressure_correction
 
-  subroutine postprocess(self, t)
-    implicit none
-
-    class(solver_t), intent(in) :: self
-    real(dp), intent(in) :: t
-
-    if (self%mesh%par%is_root()) print *, 'time = ', t
-
-    call self%print_enstrophy(self%u, self%v, self%w)
-    call self%print_div_max_mean(self%u, self%v, self%w)
-
-  end subroutine postprocess
-
   subroutine print_enstrophy(self, u, v, w)
     implicit none
 
@@ -547,71 +513,5 @@ contains
       print *, 'div u max mean:', div_u_max, div_u_mean
 
   end subroutine print_div_max_mean
-
-  subroutine run(self)
-    implicit none
-
-    class(solver_t), intent(inout) :: self
-
-    class(field_t), pointer :: du, dv, dw
-    class(field_t), pointer :: u_out, v_out, w_out
-
-    real(dp) :: t
-    integer :: i, j
-
-    if (self%mesh%par%is_root()) print *, 'initial conditions'
-    t = 0._dp
-    call self%postprocess(t)
-
-    if (self%mesh%par%is_root()) print *, 'start run'
-
-    do i = 1, self%n_iters
-      do j = 1, self%time_integrator%nstage
-        du => self%backend%allocator%get_block(DIR_X)
-        dv => self%backend%allocator%get_block(DIR_X)
-        dw => self%backend%allocator%get_block(DIR_X)
-
-        call self%transeq(du, dv, dw, self%u, self%v, self%w)
-
-        call self%post_transeq(du, dv, dw)
-
-        ! time integration
-        call self%time_integrator%step(self%u, self%v, self%w, &
-                                       du, dv, dw, self%dt)
-
-        call self%backend%allocator%release_block(du)
-        call self%backend%allocator%release_block(dv)
-        call self%backend%allocator%release_block(dw)
-
-        call self%pressure_correction(self%u, self%v, self%w)
-      end do
-
-      if (mod(i, self%n_output) == 0) then
-        t = i*self%dt
-        call self%postprocess(t)
-      end if
-    end do
-
-    if (self%mesh%par%is_root()) print *, 'run end'
-
-    ! Below is for demonstrating purpuses only, to be removed when we have
-    ! proper I/O in place.
-    u_out => self%host_allocator%get_block(DIR_C)
-    v_out => self%host_allocator%get_block(DIR_C)
-    w_out => self%host_allocator%get_block(DIR_C)
-
-    call self%backend%get_field_data(u_out%data, self%u)
-    call self%backend%get_field_data(v_out%data, self%v)
-    call self%backend%get_field_data(w_out%data, self%w)
-
-    if (self%mesh%par%is_root()) then
-      print *, 'norms', norm2(u_out%data), norm2(v_out%data), norm2(w_out%data)
-    end if
-
-    call self%host_allocator%release_block(u_out)
-    call self%host_allocator%release_block(v_out)
-    call self%host_allocator%release_block(w_out)
-
-  end subroutine run
 
 end module m_solver
