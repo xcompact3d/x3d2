@@ -2,7 +2,8 @@ module m_omp_backend
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_ordering, only: get_index_reordering
-  use m_common, only: dp, get_dirs_from_rdr, VERT, DIR_X, DIR_Y, DIR_Z, DIR_C
+  use m_common, only: dp, get_dirs_from_rdr, move_data_loc, &
+                      DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC
   use m_tdsops, only: dirps_t, tdsops_t, get_tds_n
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
   use m_omp_sendrecv, only: sendrecv_fields
@@ -253,8 +254,8 @@ contains
     integer, intent(in) :: dir
     class(field_t), pointer :: d2u, dud
 
-    dud => self%allocator%get_block(dir, VERT)
-    d2u => self%allocator%get_block(dir, VERT)
+    dud => self%allocator%get_block(dir)
+    d2u => self%allocator%get_block(dir)
 
     call exec_dist_transeq_compact( &
       rhs_du%data, dud%data, d2u%data, &
@@ -266,6 +267,8 @@ contains
       tdsops_du, tdsops_dud, tdsops_d2u, self%nu, &
       self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), &
       self%mesh%par%pnext(dir), self%mesh%get_n_groups(dir))
+
+    call rhs_du%set_data_loc(u%data_loc)
 
     call self%allocator%release_block(dud)
     call self%allocator%release_block(d2u)
@@ -283,6 +286,10 @@ contains
     ! Check if direction matches for both in/out fields
     if (u%dir /= du%dir) then
       error stop 'DIR mismatch between fields in tds_solve.'
+    end if
+
+    if (u%data_loc /= NULL_LOC) then
+      call du%set_data_loc(move_data_loc(u%data_loc, u%dir, tdsops%move))
     end if
 
     call tds_solve_dist(self, du, u, tdsops)
@@ -349,6 +356,9 @@ contains
       end do
     end do
     !$omp end parallel do
+
+    ! reorder keeps the data_loc the same
+    call u_%set_data_loc(u%data_loc)
 
   end subroutine reorder_omp
 
@@ -452,7 +462,7 @@ contains
 
     use mpi
 
-    use m_common, only: none, get_rdr_from_dirs
+    use m_common, only: NULL_LOC, get_rdr_from_dirs
 
     implicit none
 
@@ -464,7 +474,7 @@ contains
     integer :: nvec, remstart
     integer :: ierr
 
-    if ((x%data_loc == none) .or. (y%data_loc == none)) then
+    if ((x%data_loc == NULL_LOC) .or. (y%data_loc == NULL_LOC)) then
       error stop "You must set the data_loc before calling scalar product"
     end if
     if (x%data_loc /= y%data_loc) then

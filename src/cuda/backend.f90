@@ -5,10 +5,10 @@ module m_cuda_backend
 
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, &
+  use m_common, only: dp, move_data_loc, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
-                      DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
+                      DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC
   use m_mesh, only: mesh_t
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t, tdsops_t, get_tds_n
@@ -254,6 +254,10 @@ contains
                                 der1st_sym, der1st, der2nd_sym, dirps%dir, &
                                 blocks, threads)
 
+    call du%set_data_loc(u%data_loc)
+    call dv%set_data_loc(v%data_loc)
+    call dw%set_data_loc(w%data_loc)
+
   end subroutine transeq_cuda_dist
 
   subroutine transeq_halo_exchange(self, u_dev, v_dev, w_dev, dir)
@@ -312,8 +316,8 @@ contains
     real(dp), device, pointer, dimension(:, :, :) :: dud_dev, d2u_dev
 
     ! Get some fields for storing the intermediate results
-    dud => self%allocator%get_block(dir, VERT)
-    d2u => self%allocator%get_block(dir, VERT)
+    dud => self%allocator%get_block(dir)
+    d2u => self%allocator%get_block(dir)
 
     call resolve_field_t(dud_dev, dud)
     call resolve_field_t(d2u_dev, d2u)
@@ -369,6 +373,10 @@ contains
     end if
 
     blocks = dim3(self%mesh%get_n_groups(u), 1, 1); threads = dim3(SZ, 1, 1)
+
+    if (u%data_loc /= NULL_LOC) then
+      call du%set_data_loc(move_data_loc(u%data_loc, u%dir, tdsops%move))
+    end if
 
     call tds_solve_dist(self, du, u, tdsops, blocks, threads)
 
@@ -538,6 +546,9 @@ contains
     case default
       error stop 'Reorder direction is undefined.'
     end select
+
+    ! reorder keeps the data_loc the same
+    call u_o%set_data_loc(u_i%data_loc)
 
   end subroutine reorder_cuda
 
