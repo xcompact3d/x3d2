@@ -62,8 +62,6 @@ module m_solver
     procedure :: divergence_v2p
     procedure :: gradient_p2v
     procedure :: curl
-    procedure :: print_enstrophy
-    procedure :: print_div_max_mean
   end type solver_t
 
   abstract interface
@@ -415,64 +413,5 @@ contains
     call self%backend%allocator%release_block(dpdz)
 
   end subroutine pressure_correction
-
-  subroutine print_enstrophy(self, u, v, w)
-    implicit none
-
-    class(solver_t), intent(in) :: self
-    class(field_t), intent(in) :: u, v, w
-
-    class(field_t), pointer :: du, dv, dw
-    real(dp) :: enstrophy
-
-    du => self%backend%allocator%get_block(DIR_X, VERT)
-    dv => self%backend%allocator%get_block(DIR_X, VERT)
-    dw => self%backend%allocator%get_block(DIR_X, VERT)
-
-    call self%curl(du, dv, dw, u, v, w)
-    enstrophy = 0.5_dp*(self%backend%scalar_product(du, du) &
-                        + self%backend%scalar_product(dv, dv) &
-                        + self%backend%scalar_product(dw, dw))/self%ngrid
-    if (self%mesh%par%is_root()) print *, 'enstrophy:', enstrophy
-
-    call self%backend%allocator%release_block(du)
-    call self%backend%allocator%release_block(dv)
-    call self%backend%allocator%release_block(dw)
-
-  end subroutine print_enstrophy
-
-  subroutine print_div_max_mean(self, u, v, w)
-    implicit none
-
-    class(solver_t), intent(in) :: self
-    class(field_t), intent(in) :: u, v, w
-
-    class(field_t), pointer :: div_u
-    class(field_t), pointer :: u_out
-    real(dp) :: div_u_max, div_u_mean
-    integer :: ierr
-
-    div_u => self%backend%allocator%get_block(DIR_Z)
-
-    call self%divergence_v2p(div_u, u, v, w)
-
-    u_out => self%host_allocator%get_block(DIR_C)
-    call self%backend%get_field_data(u_out%data, div_u)
-
-    call self%backend%allocator%release_block(div_u)
-
-    div_u_max = maxval(abs(u_out%data))
-    div_u_mean = sum(abs(u_out%data))/self%ngrid
-
-    call self%host_allocator%release_block(u_out)
-
-    call MPI_Allreduce(MPI_IN_PLACE, div_u_max, 1, MPI_DOUBLE_PRECISION, &
-                       MPI_MAX, MPI_COMM_WORLD, ierr)
-    call MPI_Allreduce(MPI_IN_PLACE, div_u_mean, 1, MPI_DOUBLE_PRECISION, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
-    if (self%mesh%par%is_root()) &
-      print *, 'div u max mean:', div_u_max, div_u_mean
-
-  end subroutine print_div_max_mean
 
 end module m_solver

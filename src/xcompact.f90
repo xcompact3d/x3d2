@@ -50,8 +50,8 @@ program xcompact
   real(dp), dimension(3) :: L_global
   integer :: nrank, nproc, ierr
 
-  namelist /domain_settings/ flow_case_name, L_global, dims_global, nproc_dir, &
-    BC_x, BC_y, BC_z
+  namelist /domain_settings/ flow_case_name, L_global, dims_global, &
+    nproc_dir, BC_x, BC_y, BC_z
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
