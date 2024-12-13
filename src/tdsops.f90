@@ -135,6 +135,13 @@ contains
       error stop 'operation is not defined'
     end if
 
+    if (tdsops%dist_sa(tds_n) > 1d-16) then
+      print *, 'There are ', tds_n, 'points in a subdomain, it may be too few!'
+      print *, 'The entry distributed solver disregards in "' &
+        //operation//'" operation is:', tdsops%dist_sa(tds_n)
+      print *, 'It may result in numerical errors with the distributed solver!'
+    end if
+
   end function tdsops_init
 
   pure function get_tds_n(mesh, dir, from_to) result(tds_n)
