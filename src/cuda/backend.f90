@@ -8,7 +8,7 @@ module m_cuda_backend
   use m_common, only: dp, move_data_loc, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
-                      DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NONE
+                      DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC
   use m_mesh, only: mesh_t
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t, tdsops_t, get_tds_n
@@ -374,7 +374,7 @@ contains
 
     blocks = dim3(self%mesh%get_n_groups(u), 1, 1); threads = dim3(SZ, 1, 1)
 
-    if (u%data_loc /= none) then
+    if (u%data_loc /= NULL_LOC) then
       call du%set_data_loc(move_data_loc(u%data_loc, u%dir, tdsops%move))
     end if
 

@@ -3,7 +3,7 @@ module m_omp_backend
   use m_base_backend, only: base_backend_t
   use m_ordering, only: get_index_reordering
   use m_common, only: dp, get_dirs_from_rdr, move_data_loc, &
-                      DIR_X, DIR_Y, DIR_Z, DIR_C, NONE
+                      DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC
   use m_tdsops, only: dirps_t, tdsops_t, get_tds_n
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
   use m_omp_sendrecv, only: sendrecv_fields
@@ -288,7 +288,7 @@ contains
       error stop 'DIR mismatch between fields in tds_solve.'
     end if
 
-    if (u%data_loc /= none) then
+    if (u%data_loc /= NULL_LOC) then
       call du%set_data_loc(move_data_loc(u%data_loc, u%dir, tdsops%move))
     end if
 
@@ -462,7 +462,7 @@ contains
 
     use mpi
 
-    use m_common, only: none, get_rdr_from_dirs
+    use m_common, only: NULL_LOC, get_rdr_from_dirs
 
     implicit none
 
@@ -474,7 +474,7 @@ contains
     integer :: nvec, remstart
     integer :: ierr
 
-    if ((x%data_loc == none) .or. (y%data_loc == none)) then
+    if ((x%data_loc == NULL_LOC) .or. (y%data_loc == NULL_LOC)) then
       error stop "You must set the data_loc before calling scalar product"
     end if
     if (x%data_loc /= y%data_loc) then
