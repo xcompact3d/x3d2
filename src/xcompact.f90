@@ -3,6 +3,7 @@ program xcompact
 
   use m_allocator
   use m_base_backend
+  use m_base_case, only: base_case_t
   use m_common, only: pi
   use m_solver, only: solver_t
   use m_tdsops, only: tdsops_t
@@ -26,7 +27,8 @@ program xcompact
   class(allocator_t), pointer :: allocator
   type(mesh_t) :: mesh
   type(allocator_t), pointer :: host_allocator
-  class(solver_t), allocatable :: solver
+  !class(solver_t), allocatable :: solver
+  class(base_case_t), allocatable :: flow_case
 
 #ifdef CUDA
   type(cuda_backend_t), target :: cuda_backend
@@ -42,13 +44,13 @@ program xcompact
 
   character(len=200) :: input_file
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
-  character(len=20) :: flow_case
+  character(len=20) :: flow_case_name
   integer, dimension(3) :: dims_global
   integer, dimension(3) :: nproc_dir = 0
   real(dp), dimension(3) :: L_global
   integer :: nrank, nproc, ierr
 
-  namelist /domain_settings/ flow_case, L_global, dims_global, nproc_dir, &
+  namelist /domain_settings/ flow_case_name, L_global, dims_global, nproc_dir, &
     BC_x, BC_y, BC_z
 
   call MPI_Init(ierr)
@@ -103,15 +105,15 @@ program xcompact
   if (nrank == 0) print *, 'OpenMP backend instantiated'
 #endif
 
-  if (nrank == 0) print *, 'Flow case: ', flow_case
+  if (nrank == 0) print *, 'Flow case: ', flow_case_name
 
-  select case (trim(flow_case))
+  select case (trim(flow_case_name))
   case ('generic')
-    allocate (case_generic_t :: solver)
-    solver = case_generic_t(backend, mesh, host_allocator)
+    allocate (case_generic_t :: flow_case)
+    flow_case = case_generic_t(backend, mesh, host_allocator)
   case ('tgv')
-    allocate (case_tgv_t :: solver)
-    solver = case_tgv_t(backend, mesh, host_allocator)
+    allocate (case_tgv_t :: flow_case)
+    flow_case = case_tgv_t(backend, mesh, host_allocator)
   case default
     error stop 'Undefined flow_case.'
   end select
@@ -119,7 +121,7 @@ program xcompact
 
   call cpu_time(t_start)
 
-  call solver%run()
+  call flow_case%run()
 
   call cpu_time(t_end)
 
