@@ -32,7 +32,8 @@ contains
     type(allocator_t), target, intent(inout) :: host_allocator
     type(case_generic_t) :: flow_case
 
-    flow_case%solver = init(backend, mesh, host_allocator)
+    call flow_case%case_init(backend, mesh, host_allocator)
+
   end function case_generic_init
 
   subroutine boundary_conditions_generic(self)

@@ -32,9 +32,7 @@ contains
     type(allocator_t), target, intent(inout) :: host_allocator
     type(case_tgv_t) :: flow_case
 
-    flow_case%solver = init(backend, mesh, host_allocator)
-
-    call flow_case%initial_conditions()
+    call flow_case%case_init(backend, mesh, host_allocator)
 
   end function case_tgv_init
 
@@ -105,6 +103,7 @@ contains
     class(case_tgv_t) :: self
     real(dp), intent(in) :: t
 
+    if (self%solver%mesh%par%is_root()) print *, 'time =', t
     call self%print_enstrophy(self%solver%u, self%solver%v, self%solver%w)
     call self%print_div_max_mean(self%solver%u, self%solver%v, self%solver%w)
 
