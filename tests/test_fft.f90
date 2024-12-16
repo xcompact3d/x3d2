@@ -1,4 +1,4 @@
-program test_reorder
+program test_fft
   use iso_fortran_env, only: stderr => error_unit
   use mpi
 
@@ -157,5 +157,4 @@ program test_reorder
 
   call MPI_Finalize(ierr)
 
-end program test_reorder
-
+end program test_fft
