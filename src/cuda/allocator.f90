@@ -50,7 +50,7 @@ contains
   end subroutine set_shape_cuda
 
   function cuda_allocator_init(mesh, sz) result(allocator)
-    class(mesh_t), intent(inout) :: mesh
+    type(mesh_t), intent(inout) :: mesh
     integer, intent(in) :: sz
     type(cuda_allocator_t) :: allocator
 

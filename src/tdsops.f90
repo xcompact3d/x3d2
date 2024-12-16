@@ -138,7 +138,7 @@ contains
 
   pure function get_tds_n(mesh, dir, from_to) result(tds_n)
   !! Get the tds_n size based on the from_to value (and the mesh)
-    class(mesh_t), intent(in) :: mesh
+    type(mesh_t), intent(in) :: mesh
     integer, intent(in) :: dir
     character(*), optional, intent(in) :: from_to
     integer :: tds_n

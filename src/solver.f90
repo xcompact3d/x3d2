@@ -50,7 +50,7 @@ module m_solver
     class(field_t), pointer :: u, v, w
 
     class(base_backend_t), pointer :: backend
-    class(mesh_t), pointer :: mesh
+    type(mesh_t), pointer :: mesh
     type(time_intg_t) :: time_integrator
     type(allocator_t), pointer :: host_allocator
     type(dirps_t), pointer :: xdirps, ydirps, zdirps

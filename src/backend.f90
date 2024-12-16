@@ -25,7 +25,7 @@ module m_base_backend
       !! architecture.
 
     real(dp) :: nu
-    class(mesh_t), pointer :: mesh
+    type(mesh_t), pointer :: mesh
     class(allocator_t), pointer :: allocator
     class(poisson_fft_t), pointer :: poisson_fft
   contains
@@ -200,7 +200,7 @@ module m_base_backend
       implicit none
 
       class(base_backend_t) :: self
-      class(mesh_t), intent(in) :: mesh
+      type(mesh_t), intent(in) :: mesh
       type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     end subroutine init_poisson_fft
   end interface
