@@ -1,20 +1,21 @@
 module m_decomp
+  ! Interface module handling the decomposition.
   use m_mesh_content, only: par_t, grid_t
   implicit none
 
   ! Object implementing the actual decomposition
   type, abstract :: decomp_t 
-    logical :: is_avail_2decomp
+    logical :: is_avail_2decomp ! tell whether or not an actual implementation is available
   contains
-    procedure(decomposition), public, deferred :: decomposition
+    procedure(decomposition), public, deferred :: decomposition ! Function performing the decomposition
   end type decomp_t
 
   ! Abstraction layer to allow different version of the decomposition computation
   type, public :: decomp_mod_t
     class(decomp_t), allocatable :: decomp
     contains
-    procedure, public :: decomp_grid
-    procedure, public :: is_avail_2decomp
+    procedure, public :: decomp_grid ! caller for the decomposition
+    procedure, public :: is_avail_2decomp ! getter for decomp%is_avail_2decomp
   end type
 
   interface decomp_mod_t
@@ -36,6 +37,7 @@ module m_decomp
    end interface
  
   contains
+  ! Functions making the link between the abstraction layer and implementation
 
   function init_decomp_mod() result(decomp)
     type(decomp_mod_t) :: decomp
