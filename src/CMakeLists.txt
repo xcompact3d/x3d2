@@ -12,7 +12,7 @@ set(SRC
   ordering.f90
   mesh.f90
   mesh_content.f90
-  decomp.f90
+  decomp/decomp.f90
   field.f90
   vector_calculus.f90
   omp/backend.f90
@@ -37,11 +37,11 @@ set(CUDASRC
   cuda/tdsops.f90
 )
 set(2DECOMPFFTSRC
-  2decompfft/omp/poisson_fft.f90
-  2decompfft/decomp.f90
+  omp/poisson_fft.f90
+  decomp/decomp_2decompfft.f90
 )
 set(GENERICDECOMPSRC
-  decomp_dummy.f90
+  decomp/decomp_dummy.f90
 )
 
 if(${BACKEND} STREQUAL "CUDA")
