@@ -22,8 +22,8 @@ module m_omp_spectral
       do j=1, ny_spec
         do i=1, nx_spec 
           ! normalisation
-          div_r = real(div_u(i, j, k), kind=dp)/(nx*ny*nz)
-          div_c = aimag(div_u(i, j, k))/(nx*ny*nz)
+          div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
+          div_c = aimag(div_u(i, j, k))/nx/ny/nz
 
           ix = i
           iy = j + y_sp_st
