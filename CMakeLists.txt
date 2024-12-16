@@ -8,11 +8,16 @@ enable_testing()
 set(POISSON_SOLVER FFT CACHE STRING
   "Select the Poisson solver: FFT or ITER")
 
+set(BACKEND None CACHE STRING
+  "Select the Backend: CUDA or OMP")
+
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
-   set(BACKEND CUDA)
+   set(COMPILER CUDA)
+elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
+   set(COMPILER GNU)
 else()
-   set(BACKEND OMP)
+   set(COMPILER OTHER)
 endif()
 
 add_subdirectory(src)
