@@ -13,7 +13,6 @@ module m_omp_poisson_fft
 
   type, extends(poisson_fft_t) :: omp_poisson_fft_t
       !! FFT based Poisson solver
-      !! It can only handle 1D decompositions along z direction.
     complex(dp), allocatable, dimension(:, :, :) :: c_x, c_y, c_z
   contains
     procedure :: fft_forward => fft_forward_omp

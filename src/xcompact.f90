@@ -4,7 +4,7 @@ program xcompact
   use m_allocator
   use m_base_backend
   use m_common, only: pi
-  use m_solver, only: solver_t
+  use m_solver, only: solver_t, read_solver_input
   use m_tdsops, only: tdsops_t
   use m_mesh
 
@@ -49,7 +49,6 @@ program xcompact
   logical :: use_2decomp
 
   namelist /domain_params/ L_global, dims_global, nproc_dir, BC_x, BC_y, BC_z
-  namelist /solver_params/ poisson_solver_type
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
@@ -81,6 +80,8 @@ program xcompact
                               &back to a 1D decomposition along Z-dir instead.'
     nproc_dir = [1, 1, nproc]
   end if
+
+  call read_solver_input(i_poisson_solver_type=poisson_solver_type)
 
   ! Decide whether 2decomp is used or not
   use_2decomp = (poisson_solver_type == 'FFT' .and.  trim(backend_name) == 'OMP')
