@@ -40,7 +40,7 @@ set(2DECOMPFFTSRC
   omp/poisson_fft.f90
   decomp/decomp_2decompfft.f90
 )
-set(GENERICDECOMPSRC
+set(DUMMYDECOMPSRC
   decomp/decomp_dummy.f90
 )
 
@@ -50,12 +50,12 @@ endif()
 
 # Decide whether 2decomp&fft is supported by the build
 find_package(decomp2d)
-set(2DECOMPFFT_SUPPORT (${POISSON_SOLVER} STREQUAL "FFT" AND decomp2d_FOUND))
+set(WITH_2DECOMPFFT (${POISSON_SOLVER} STREQUAL "FFT" AND decomp2d_FOUND))
 
-if(2DECOMPFFT_SUPPORT)
+if(WITH_2DECOMPFFT)
   list(APPEND SRC ${2DECOMPFFTSRC})
 else()
-  list(APPEND SRC ${GENERICDECOMPSRC})
+  list(APPEND SRC ${DUMMYDECOMPSRC})
 endif()
 
 add_library(x3d2 STATIC ${SRC})
@@ -78,7 +78,7 @@ elseif(${COMPILER} STREQUAL "GNU")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math")
 endif()
 
-if(2DECOMPFFT_SUPPORT)
+if(WITH_2DECOMPFFT)
   message(STATUS "Using the FFT poisson solver with 2decomp&fft support")
   set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
   find_package(decomp2d REQUIRED)
