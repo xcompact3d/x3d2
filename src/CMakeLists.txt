@@ -29,6 +29,7 @@ set(CUDASRC
   cuda/exec_dist.f90
   cuda/exec_thom.f90
   cuda/kernels/distributed.f90
+  cuda/kernels/fieldops.f90
   cuda/kernels/reorder.f90
   cuda/kernels/spectral_processing.f90
   cuda/kernels/thomas.f90

@@ -27,11 +27,10 @@ module m_cuda_tdsops
 
 contains
 
-  function cuda_tdsops_init(n, delta, operation, scheme, n_halo, from_to, &
-                            bc_start, bc_end, sym, c_nu, nu0_nu) &
-    result(tdsops)
-      !! Constructor function for the cuda_tdsops_t class.
-      !! See tdsops_t for details.
+  function cuda_tdsops_init(n, delta, operation, scheme, bc_start, bc_end, &
+                            n_halo, from_to, sym, c_nu, nu0_nu) result(tdsops)
+    !! Constructor function for the cuda_tdsops_t class.
+    !! See tdsops_t for details.
     implicit none
 
     type(cuda_tdsops_t) :: tdsops !! return value of the function
@@ -39,16 +38,16 @@ contains
     integer, intent(in) :: n
     real(dp), intent(in) :: delta
     character(*), intent(in) :: operation, scheme
+    integer, intent(in) :: bc_start, bc_end
     integer, optional, intent(in) :: n_halo
-    character(*), optional, intent(in) :: from_to, bc_start, bc_end
+    character(*), optional, intent(in) :: from_to
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
 
     integer :: n_stencil
 
-    tdsops%tdsops_t = tdsops_init(n, delta, operation, scheme, n_halo, &
-                                  from_to, bc_start, bc_end, sym, &
-                                  c_nu, nu0_nu)
+    tdsops%tdsops_t = tdsops_init(n, delta, operation, scheme, bc_start, &
+                                  bc_end, n_halo, from_to, sym, c_nu, nu0_nu)
 
     n_stencil = 2*tdsops%n_halo + 1
 

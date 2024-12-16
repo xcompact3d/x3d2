@@ -3,7 +3,7 @@ program test_cuda_tridiag
   use cudafor
   use mpi
 
-  use m_common, only: dp, pi
+  use m_common, only: dp, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused
   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
@@ -15,7 +15,7 @@ program test_cuda_tridiag
   real(dp), allocatable, dimension(:, :, :) :: u, v, r_u
   real(dp), device, allocatable, dimension(:, :, :) :: &
     u_dev, v_dev, r_u_dev, & ! main fields u, v and result r_u
-    du_dev, dud_dev, d2u_dev ! intermediate solution arrays
+    dud_dev, d2u_dev ! intermediate solution arrays
   real(dp), device, allocatable, dimension(:, :, :) :: &
     du_recv_s_dev, du_recv_e_dev, du_send_s_dev, du_send_e_dev, &
     dud_recv_s_dev, dud_recv_e_dev, dud_send_s_dev, dud_send_e_dev, &
@@ -65,7 +65,6 @@ program test_cuda_tridiag
   ! field for storing the result
   allocate (r_u_dev(SZ, n, n_block))
   ! intermediate solution fields
-  allocate (du_dev(SZ, n, n_block))
   allocate (dud_dev(SZ, n, n_block))
   allocate (d2u_dev(SZ, n, n_block))
 
@@ -106,9 +105,11 @@ program test_cuda_tridiag
 
   ! preprocess the operator and coefficient arrays
   der1st = cuda_tdsops_t(n, dx_per, operation='first-deriv', &
-                         scheme='compact6')
+                         scheme='compact6', &
+                         bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
   der2nd = cuda_tdsops_t(n, dx_per, operation='second-deriv', &
-                         scheme='compact6')
+                         scheme='compact6', &
+                         bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
 
   blocks = dim3(n_block, 1, 1)
   threads = dim3(SZ, 1, 1)
@@ -133,7 +134,7 @@ program test_cuda_tridiag
       r_u_dev, &
       u_dev, u_recv_s_dev, u_recv_e_dev, &
       v_dev, v_recv_s_dev, v_recv_e_dev, &
-      du_dev, dud_dev, d2u_dev, &
+      dud_dev, d2u_dev, &
       du_send_s_dev, du_send_e_dev, du_recv_s_dev, du_recv_e_dev, &
       dud_send_s_dev, dud_send_e_dev, dud_recv_s_dev, dud_recv_e_dev, &
       d2u_send_s_dev, d2u_send_e_dev, d2u_recv_s_dev, d2u_recv_e_dev, &
