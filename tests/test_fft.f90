@@ -47,6 +47,7 @@ program test_fft
   real(dp) :: error_norm
   real(dp), dimension(3) :: xloc
   real(dp), parameter :: tol=1e-10
+  logical :: use_2decomp
 
 #ifdef CUDA
   type(cuda_backend_t), target :: cuda_backend
@@ -66,6 +67,9 @@ program test_fft
   ierr = cudaGetDeviceCount(ndevs)
   ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robin
   ierr = cudaGetDevice(devnum)
+  use_2decomp = .false.
+#else
+  use_2decomp = .true.
 #endif
 
   ! Global number of cells in each direction
@@ -81,7 +85,7 @@ program test_fft
   BC_y = ['periodic', 'periodic']
   BC_z = ['periodic', 'periodic']
 
-  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
+  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, use_2decomp=use_2decomp)
 
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(mesh, SZ)
@@ -106,11 +110,11 @@ program test_fft
   ydirps%dir = DIR_Y
   zdirps%dir = DIR_Z
   call allocate_tdsops(xdirps, backend, 'compact6', 'compact6', &
-                       'classic', 'compact6')
+                       'classic', 'compact6', mesh%grid%BCs)
   call allocate_tdsops(ydirps, backend, 'compact6', 'compact6', &
-                       'classic', 'compact6')
+                       'classic', 'compact6', mesh%grid%BCs)
   call allocate_tdsops(zdirps, backend, 'compact6', 'compact6', &
-                       'classic', 'compact6')
+                       'classic', 'compact6', mesh%grid%BCs)
 
   input_field => allocator%get_block(DIR_C, CELL)
   output_field => allocator%get_block(DIR_C, CELL)
