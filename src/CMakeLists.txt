@@ -65,7 +65,9 @@ target_include_directories(x3d2 INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
 add_executable(xcompact xcompact.f90)
 target_link_libraries(xcompact PRIVATE x3d2)
 
-if(${COMPILER} STREQUAL "CUDA")
+# if CUDA compiler
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   set(CMAKE_Fortran_FLAGS "-cpp -cuda")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr -Ktrap=fp")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
@@ -73,7 +75,8 @@ if(${COMPILER} STREQUAL "CUDA")
   target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
 
   target_compile_options(xcompact PRIVATE "-DCUDA")
-elseif(${COMPILER} STREQUAL "GNU")
+
+elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
   set(CMAKE_Fortran_FLAGS "-cpp -std=f2018")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math")
