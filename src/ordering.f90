@@ -82,7 +82,7 @@ contains
     integer, intent(out) :: out_i, out_j, out_k         ! new indices in the application storage
     integer, intent(in) :: in_i, in_j, in_k             ! original indices
     integer, intent(in) :: dir_from, dir_to
-    class(mesh_t), intent(in) :: mesh
+    type(mesh_t), intent(in) :: mesh
     integer :: i, j, k        ! Intermediary cartesian indices
     integer, dimension(3) :: dims_padded
 
@@ -99,7 +99,7 @@ contains
     integer, intent(out) :: out_i, out_j, out_k         ! new indices in the application storage
     integer, intent(in) :: in_i, in_j, in_k             ! original indices
     integer, intent(in) :: reorder_dir
-    class(mesh_t), intent(in) :: mesh
+    type(mesh_t), intent(in) :: mesh
     integer :: dir_from, dir_to
 
     call get_dirs_from_rdr(dir_from, dir_to, reorder_dir)

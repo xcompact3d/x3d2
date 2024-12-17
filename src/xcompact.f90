@@ -4,7 +4,7 @@ program xcompact
   use m_allocator
   use m_base_backend
   use m_common, only: pi
-  use m_solver, only: solver_t
+  use m_solver, only: solver_t, read_solver_input
   use m_tdsops, only: tdsops_t
   use m_mesh
 
@@ -22,9 +22,9 @@ program xcompact
 
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
-  type(mesh_t) :: mesh
   type(allocator_t), pointer :: host_allocator
   type(solver_t) :: solver
+  type(mesh_t), target :: mesh
 
 #ifdef CUDA
   type(cuda_backend_t), target :: cuda_backend
@@ -43,7 +43,10 @@ program xcompact
   integer, dimension(3) :: dims_global
   integer, dimension(3) :: nproc_dir = 0
   real(dp), dimension(3) :: L_global
+  character(3) :: poisson_solver_type
+  character(32) :: backend_name
   integer :: nrank, nproc, ierr
+  logical :: use_2decomp
 
   namelist /domain_params/ L_global, dims_global, nproc_dir, BC_x, BC_y, BC_z
 
@@ -57,6 +60,9 @@ program xcompact
   ierr = cudaGetDeviceCount(ndevs)
   ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robin
   ierr = cudaGetDevice(devnum)
+  backend_name = "CUDA"
+#else 
+  backend_name = "OMP"
 #endif
 
   if (command_argument_count() >= 1) then
@@ -75,7 +81,12 @@ program xcompact
     nproc_dir = [1, 1, nproc]
   end if
 
-  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
+  call read_solver_input(i_poisson_solver_type=poisson_solver_type)
+
+  ! Decide whether 2decomp is used or not
+  use_2decomp = (poisson_solver_type == 'FFT' .and.  trim(backend_name) == 'OMP')
+
+  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, use_2decomp=use_2decomp)
 
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(mesh, SZ)

@@ -53,7 +53,7 @@ contains
   function init(mesh, allocator) result(backend)
     implicit none
 
-    class(mesh_t), target, intent(inout) :: mesh
+    type(mesh_t), target, intent(inout) :: mesh
     class(allocator_t), target, intent(inout) :: allocator
     type(omp_backend_t) :: backend
 
@@ -420,7 +420,7 @@ contains
       error stop "Called vector add with incompatible fields"
     end if
 
-    dims = size(x%data)
+    dims = self%mesh%get_padded_dims(x)
     nvec = dims(1)/SZ
     remstart = nvec*SZ + 1
 
@@ -580,7 +580,7 @@ contains
     implicit none
 
     class(omp_backend_t) :: self
-    class(mesh_t), intent(in) :: mesh
+    type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
     allocate (omp_poisson_fft_t :: self%poisson_fft)
