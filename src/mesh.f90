@@ -195,8 +195,8 @@ contains
 
     par%n_offset(:) = grid%vert_dims(:)*par%nrank_dir(:)
 
-    call grid%copy_vert2cell_dims(par)
     call par%compute_rank_pos_from_global(global_ranks)
+    call grid%copy_vert2cell_dims(par)
 
   end subroutine
 

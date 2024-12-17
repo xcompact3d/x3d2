@@ -73,8 +73,8 @@ submodule(m_decomp) m_decomp_2decompfft
     grid%cell_dims(:) = xsize(:)
     par%n_offset(:) = xstart(:)
 
-    call grid%copy_cell2vert_dims(par)
     call par%compute_rank_pos_from_global(global_ranks)
+    call grid%copy_cell2vert_dims(par)
 
   end subroutine decomposition_2decompfft
 
