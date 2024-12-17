@@ -143,7 +143,7 @@ program test_fft
   call backend%poisson_fft%fft_forward(input_field)
   call backend%poisson_fft%fft_backward(output_field)
 
-  ! The output scaled with number of cells in domain (hende the first '/product(dims_global)'). 
+  ! The output scaled with number of cells in domain, hence the first '/product(dims_global)'. 
   ! RMS value is used for the norm, hence the second '/product(dims_global)'
   error_norm = norm2(input_field%data(:, :, :) - output_field%data(:, :, :)/product(dims_global) )**2/product(dims_global)
   call MPI_Allreduce(MPI_IN_PLACE, error_norm, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
