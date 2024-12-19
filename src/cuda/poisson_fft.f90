@@ -13,7 +13,7 @@ module m_cuda_poisson_fft
   use m_tdsops, only: dirps_t
 
   use m_cuda_allocator, only: cuda_field_t
-  use m_cuda_spectral, only: process_spectral_div_u, memcpy3D
+  use m_cuda_spectral, only: process_spectral_000, memcpy3D
 
   implicit none
 
@@ -225,7 +225,7 @@ contains
     threads = dim3(tsize, 1, 1)
 
     ! Postprocess div_u in spectral space
-    call process_spectral_div_u<<<blocks, threads>>>( & !&
+    call process_spectral_000<<<blocks, threads>>>( & !&
       c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
       self%nx_glob, self%ny_glob, self%nz_glob, &
       self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &

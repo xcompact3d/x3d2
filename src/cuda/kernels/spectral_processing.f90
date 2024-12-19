@@ -27,7 +27,7 @@ contains
     end if
   end subroutine memcpy3D
 
-  attributes(global) subroutine process_spectral_div_u( &
+  attributes(global) subroutine process_spectral_000( &
     div_u, waves, nx_spec, ny_spec, y_sp_st, nx, ny, nz, &
     ax, bx, ay, by, az, bz &
     )
@@ -124,6 +124,6 @@ contains
       end do
     end if
 
-  end subroutine process_spectral_div_u
+  end subroutine process_spectral_000
 
 end module m_cuda_spectral
