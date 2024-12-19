@@ -34,7 +34,8 @@ module m_cuda_poisson_fft
   contains
     procedure :: fft_forward => fft_forward_cuda
     procedure :: fft_backward => fft_backward_cuda
-    procedure :: fft_postprocess => fft_postprocess_cuda
+    procedure :: fft_postprocess_000 => fft_postprocess_000_cuda
+
   end type cuda_poisson_fft_t
 
   interface cuda_poisson_fft_t
@@ -202,7 +203,7 @@ contains
 
   end subroutine fft_backward_cuda
 
-  subroutine fft_postprocess_cuda(self)
+  subroutine fft_postprocess_000_cuda(self)
     implicit none
 
     class(cuda_poisson_fft_t) :: self
@@ -232,6 +233,6 @@ contains
       self%az_dev, self%bz_dev &
       )
 
-  end subroutine fft_postprocess_cuda
+  end subroutine fft_postprocess_000_cuda
 
 end module m_cuda_poisson_fft
