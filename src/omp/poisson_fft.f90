@@ -20,7 +20,7 @@ module m_omp_poisson_fft
   contains
     procedure :: fft_forward => fft_forward_omp
     procedure :: fft_backward => fft_backward_omp
-    procedure :: fft_postprocess => fft_postprocess_omp
+    procedure :: fft_postprocess_000 => fft_postprocess_000_omp
   end type omp_poisson_fft_t
 
   interface omp_poisson_fft_t
@@ -77,7 +77,7 @@ contains
 
   end subroutine fft_backward_omp
 
-  subroutine fft_postprocess_omp(self)
+  subroutine fft_postprocess_000_omp(self)
     implicit none
 
     class(omp_poisson_fft_t) :: self
@@ -89,6 +89,6 @@ contains
       self%ax, self%bx, self%ay, self%by, self%az, self%bz &
       )
 
-  end subroutine fft_postprocess_omp
+  end subroutine fft_postprocess_000_omp
 
 end module m_omp_poisson_fft

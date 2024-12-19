@@ -343,15 +343,8 @@ contains
     p_temp => self%backend%allocator%get_block(DIR_C, CELL)
     call self%backend%reorder(p_temp, div_u, RDR_Z2C)
 
-    ! call forward FFT
-    ! output array in spectral space is stored at poisson_fft class
-    call self%backend%poisson_fft%fft_forward(p_temp)
-
-    ! postprocess
-    call self%backend%poisson_fft%fft_postprocess
-
-    ! call backward FFT
-    call self%backend%poisson_fft%fft_backward(p_temp)
+    ! solve poisson equation with FFT based approach
+    call self%backend%poisson_fft%solve_poisson(p_temp)
 
     ! reorder back to our specialist data structure from 3D Cartesian
     call self%backend%reorder(pressure, p_temp, RDR_C2Z)
