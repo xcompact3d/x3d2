@@ -24,10 +24,13 @@ module m_poisson_fft
     real(dp), allocatable, dimension(:) :: ax, bx, ay, by, az, bz
     !> Periodicity in x, y, and z
     logical :: periodic_x, periodic_y, periodic_z
+    !> Procedure pointer to BC specific poisson solvers
+    procedure(poisson_xxx), pointer :: poisson => null()
   contains
     procedure(fft_forward), deferred :: fft_forward
     procedure(fft_backward), deferred :: fft_backward
-    procedure(fft_postprocess), deferred :: fft_postprocess
+    procedure(fft_postprocess), deferred :: fft_postprocess_000
+    procedure :: solve_poisson
     procedure :: base_init
     procedure :: waves_set
   end type poisson_fft_t
@@ -57,6 +60,16 @@ module m_poisson_fft
 
       class(poisson_fft_t) :: self
     end subroutine fft_postprocess
+  end interface
+
+  abstract interface
+    subroutine poisson_xxx(self, f)
+      import :: poisson_fft_t
+      import :: field_t
+
+      class(poisson_fft_t) :: self
+      class(field_t), intent(inout) :: f
+    end subroutine poisson_xxx
   end interface
 
 contains
@@ -101,7 +114,35 @@ contains
     ! waves_set requires some of the preprocessed tdsops variables.
     call self%waves_set(mesh%geo, xdirps, ydirps, zdirps)
 
+    self%poisson => poisson_000
   end subroutine base_init
+
+  subroutine solve_poisson(self, f)
+    implicit none
+
+    class(poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f
+
+    call self%poisson(f)
+
+  end subroutine solve_poisson
+
+  subroutine poisson_000(self, f)
+    implicit none
+
+    class(poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f
+
+    ! call forward FFT
+    call self%fft_forward(f)
+
+    ! postprocess
+    call self%fft_postprocess_000
+
+    ! call backward FFT
+    call self%fft_backward(f)
+
+  end subroutine poisson_000
 
   subroutine waves_set(self, geo, xdirps, ydirps, zdirps)
     !! Spectral equivalence constants
