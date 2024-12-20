@@ -352,7 +352,7 @@ contains
     call self%backend%reorder(p_temp, div_u, RDR_Z2C)
 
     ! solve poisson equation with FFT based approach
-    call self%backend%poisson_fft%solve_poisson(p_temp)
+    call self%backend%poisson_fft%solve_poisson(p_temp, pressure)
 
     ! reorder back to our specialist data structure from 3D Cartesian
     call self%backend%reorder(pressure, p_temp, RDR_C2Z)
