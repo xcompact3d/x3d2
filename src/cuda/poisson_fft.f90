@@ -13,8 +13,9 @@ module m_cuda_poisson_fft
   use m_tdsops, only: dirps_t
 
   use m_cuda_allocator, only: cuda_field_t
-  use m_cuda_spectral, only: process_spectral_000, process_spectral_010, &
-                             memcpy3D
+  use m_cuda_spectral, only: memcpy3D, &
+                             process_spectral_000, process_spectral_010, &
+                             enforce_periodicity_y, undo_periodicity_y
 
   implicit none
 
@@ -277,6 +278,24 @@ contains
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
+    real(dp), device, pointer, dimension(:, :, :) :: f_out_dev, f_in_dev
+    type(dim3) :: blocks, threads
+
+    select type (f_out)
+    type is (cuda_field_t)
+      f_out_dev => f_out%data_d
+    end select
+    select type (f_in)
+    type is (cuda_field_t)
+      f_in_dev => f_in%data_d
+    end select
+
+    blocks = dim3(self%nz_loc, 1, 1)
+    threads = dim3(self%nx_loc, 1, 1)
+    call enforce_periodicity_y<<<blocks, threads>>>( & !&
+      f_out_dev, f_in_dev, self%ny_glob &
+      )
+
   end subroutine enforce_periodicity_y_cuda
 
   subroutine undo_periodicity_y_cuda(self, f_out, f_in)
@@ -285,6 +304,24 @@ contains
     class(cuda_poisson_fft_t) :: self
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_out_dev, f_in_dev
+    type(dim3) :: blocks, threads
+
+    select type (f_out)
+    type is (cuda_field_t)
+      f_out_dev => f_out%data_d
+    end select
+    select type (f_in)
+    type is (cuda_field_t)
+      f_in_dev => f_in%data_d
+    end select
+
+    blocks = dim3(self%nz_loc, 1, 1)
+    threads = dim3(self%nx_loc, 1, 1)
+    call undo_periodicity_y<<<blocks, threads>>>( & !&
+      f_out_dev, f_in_dev, self%ny_glob &
+      )
 
   end subroutine undo_periodicity_y_cuda
 
