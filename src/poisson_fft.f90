@@ -30,6 +30,9 @@ module m_poisson_fft
     procedure(fft_forward), deferred :: fft_forward
     procedure(fft_backward), deferred :: fft_backward
     procedure(fft_postprocess), deferred :: fft_postprocess_000
+    procedure(fft_postprocess), deferred :: fft_postprocess_010
+    procedure(field_process), deferred :: enforce_periodicity_y
+    procedure(field_process), deferred :: undo_periodicity_y
     procedure :: solve_poisson
     procedure :: base_init
     procedure :: waves_set
@@ -63,13 +66,22 @@ module m_poisson_fft
   end interface
 
   abstract interface
-    subroutine poisson_xxx(self, f)
+    subroutine poisson_xxx(self, f, temp)
       import :: poisson_fft_t
       import :: field_t
 
       class(poisson_fft_t) :: self
-      class(field_t), intent(inout) :: f
+      class(field_t), intent(inout) :: f, temp
     end subroutine poisson_xxx
+
+    subroutine field_process(self, f_out, f_in)
+      import :: poisson_fft_t
+      import :: field_t
+
+      class(poisson_fft_t) :: self
+      class(field_t), intent(inout) :: f_out
+      class(field_t), intent(in) :: f_in
+    end subroutine field_process
   end interface
 
 contains
@@ -114,35 +126,52 @@ contains
     ! waves_set requires some of the preprocessed tdsops variables.
     call self%waves_set(mesh%geo, xdirps, ydirps, zdirps)
 
-    self%poisson => poisson_000
+    ! use correct procedure based on BCs
+    if (self%periodic_x .and. self%periodic_y .and. self%periodic_z) then
+      self%poisson => poisson_000
+    else if (self%periodic_x .and. (.not. self%periodic_y) &
+             .and. (self%periodic_z)) then
+      self%poisson => poisson_010
+    end if
   end subroutine base_init
 
-  subroutine solve_poisson(self, f)
+  subroutine solve_poisson(self, f, temp)
     implicit none
 
     class(poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f
+    class(field_t), intent(inout) :: f, temp
 
-    call self%poisson(f)
+    call self%poisson(f, temp)
 
   end subroutine solve_poisson
 
-  subroutine poisson_000(self, f)
+  subroutine poisson_000(self, f, temp)
     implicit none
 
     class(poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f
+    class(field_t), intent(inout) :: f, temp
 
-    ! call forward FFT
     call self%fft_forward(f)
-
-    ! postprocess
     call self%fft_postprocess_000
-
-    ! call backward FFT
     call self%fft_backward(f)
 
   end subroutine poisson_000
+
+  subroutine poisson_010(self, f, temp)
+    implicit none
+
+    class(poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f, temp
+
+    call self%enforce_periodicity_y(temp, f)
+
+    call self%fft_forward(temp)
+    call self%fft_postprocess_010
+    call self%fft_backward(temp)
+
+    call self%undo_periodicity_y(f, temp)
+
+  end subroutine poisson_010
 
   subroutine waves_set(self, geo, xdirps, ydirps, zdirps)
     !! Spectral equivalence constants

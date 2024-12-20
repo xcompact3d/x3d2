@@ -21,6 +21,9 @@ module m_omp_poisson_fft
     procedure :: fft_forward => fft_forward_omp
     procedure :: fft_backward => fft_backward_omp
     procedure :: fft_postprocess_000 => fft_postprocess_000_omp
+    procedure :: fft_postprocess_010 => fft_postprocess_010_omp
+    procedure :: enforce_periodicity_y => enforce_periodicity_y_omp
+    procedure :: undo_periodicity_y => undo_periodicity_y_omp
   end type omp_poisson_fft_t
 
   interface omp_poisson_fft_t
@@ -90,5 +93,29 @@ contains
       )
 
   end subroutine fft_postprocess_000_omp
+
+  subroutine fft_postprocess_010_omp(self)
+    implicit none
+
+    class(omp_poisson_fft_t) :: self
+  end subroutine fft_postprocess_010_omp
+
+  subroutine enforce_periodicity_y_omp(self, f_out, f_in)
+    implicit none
+
+    class(omp_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f_out
+    class(field_t), intent(in) :: f_in
+
+  end subroutine enforce_periodicity_y_omp
+
+  subroutine undo_periodicity_y_omp(self, f_out, f_in)
+    implicit none
+
+    class(omp_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f_out
+    class(field_t), intent(in) :: f_in
+
+  end subroutine undo_periodicity_y_omp
 
 end module m_omp_poisson_fft
