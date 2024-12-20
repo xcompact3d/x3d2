@@ -16,6 +16,7 @@ set(SRC
   field.f90
   vector_calculus.f90
   case/base_case.f90
+  case/channel.f90
   case/generic.f90
   case/tgv.f90
   omp/common.f90
