@@ -17,6 +17,7 @@ module m_field
     integer :: id !! An integer identifying the memory block.
   contains
     procedure :: fill
+    procedure :: get_shape
     procedure :: set_shape
     procedure :: set_data_loc
   end type field_t
@@ -55,6 +56,16 @@ contains
     self%data_loc = data_loc
 
   end subroutine
+
+  function get_shape(self) result(dims)
+    implicit none
+
+    class(field_t) :: self
+    integer :: dims(3)
+
+    dims = shape(self%data)
+
+  end function get_shape
 
   subroutine set_shape(self, dims)
     implicit none
