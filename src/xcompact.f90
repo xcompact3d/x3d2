@@ -8,6 +8,7 @@ program xcompact
   use m_solver, only: solver_t
   use m_tdsops, only: tdsops_t
   use m_mesh
+  use m_case_channel, only: case_channel_t
   use m_case_generic, only: case_generic_t
   use m_case_tgv, only: case_tgv_t
 
@@ -108,6 +109,9 @@ program xcompact
   if (nrank == 0) print *, 'Flow case: ', flow_case_name
 
   select case (trim(flow_case_name))
+  case ('channel')
+    allocate (case_channel_t :: flow_case)
+    flow_case = case_channel_t(backend, mesh, host_allocator)
   case ('generic')
     allocate (case_generic_t :: flow_case)
     flow_case = case_generic_t(backend, mesh, host_allocator)
