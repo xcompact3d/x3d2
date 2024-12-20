@@ -285,4 +285,44 @@ contains
 
   end subroutine process_spectral_010
 
+  attributes(global) subroutine enforce_periodicity_y(f_out, f_in, ny)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: f_out
+    real(dp), device, intent(in), dimension(:, :, :) :: f_in
+    integer, value, intent(in) :: ny
+
+    integer :: i, j, k
+
+    i = threadIdx%x
+    k = blockIdx%x
+
+    do j = 1, ny/2
+      f_out(i, j, k) = f_in(i, 2*j - 1, k)
+    end do
+    do j = ny/2 + 1, ny
+      f_out(i, j, k) = f_in(i, 2*ny - 2*j + 2, k)
+    end do
+
+  end subroutine enforce_periodicity_y
+
+  attributes(global) subroutine undo_periodicity_y(f_out, f_in, ny)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: f_out
+    real(dp), device, intent(in), dimension(:, :, :) :: f_in
+    integer, value, intent(in) :: ny
+
+    integer :: i, j, k
+
+    i = threadIdx%x
+    k = blockIdx%x
+
+    do j = 1, ny/2
+      f_out(i, 2*j - 1, k) = f_in(i, j, k)
+      f_out(i, 2*j, k) = f_in(i, ny - j + 1, k)
+    end do
+
+  end subroutine undo_periodicity_y
+
 end module m_cuda_spectral
