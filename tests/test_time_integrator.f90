@@ -28,7 +28,8 @@ program test_omp_adamsbashforth
   real(dp) :: u0
   class(field_t), pointer :: u, v, w
   class(field_t), pointer :: du, dv, dw
-  integer, dimension(3) :: dims_global, nproc_dir
+  real(dp), allocatable, dimension(:, :, :) :: data_array
+  integer, dimension(3) :: dims_global, nproc_dir, dims
   real(dp), dimension(3) :: L_global
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
 
@@ -100,6 +101,8 @@ program test_omp_adamsbashforth
   dw => allocator%get_block(DIR_X)
 
   allocate (norm(nrun))
+  dims = u%get_shape()
+  allocate (data_array(dims(1), dims(2), dims(3)))
 
   method = ['AB1', 'AB2', 'AB3', 'AB4', 'RK1', 'RK2', 'RK3', 'RK4']
 
@@ -118,68 +121,30 @@ program test_omp_adamsbashforth
 
       ! compute l2 norm for a given step size
       allocate (err(nstep))
-#ifdef CUDA
-      select type (u)
-      type is (cuda_field_t)
-        u%data_d(1, 1, 1) = 1.0_dp
-      end select
-#else
-      u%data(1, 1, 1) = 1.0_dp
-#endif
+      call u%fill(1.0_dp)
+      call backend%get_field_data(data_array, u, DIR_X)
+
       ! startup
       istartup = time_integrator%nstep - 1
       do i = 1, istartup
-#ifdef CUDA
-        select type (u)
-        type is (cuda_field_t)
-          u0 = u%data_d(1, 1, 1)
-        end select
-        select type (du)
-        type is (cuda_field_t)
-          du%data_d(1, 1, 1) = dahlquist_rhs(u0)
-        end select
-#else
-        du%data(1, 1, 1) = dahlquist_rhs(u%data(1, 1, 1))
-#endif
+        call backend%get_field_data(data_array, u, DIR_X)
+        call du%fill(dahlquist_rhs(data_array(1, 1, 1)))
         call time_integrator%step(u, v, w, du, dv, dw, dt)
-#ifdef CUDA
-        select type (u)
-        type is (cuda_field_t)
-          u%data_d(1, 1, 1) = dahlquist_exact_sol(real(i, dp)*dt)
-        end select
-#else
-        u%data(1, 1, 1) = dahlquist_exact_sol(real(i, dp)*dt)
-#endif
+
+        call u%fill(dahlquist_exact_sol(real(i, dp)*dt))
       end do
 
       ! post-startup
       do i = 1, nstep
         do stage = 1, time_integrator%nstage
-#ifdef CUDA
-          select type (u)
-          type is (cuda_field_t)
-            u0 = u%data_d(1, 1, 1)
-          end select
-          select type (du)
-          type is (cuda_field_t)
-            du%data_d(1, 1, 1) = dahlquist_rhs(u0)
-          end select
-#else
-          du%data(1, 1, 1) = dahlquist_rhs(u%data(1, 1, 1))
-#endif
+          call backend%get_field_data(data_array, u, DIR_X)
+          call du%fill(dahlquist_rhs(data_array(1, 1, 1)))
           call time_integrator%step(u, v, w, du, dv, dw, dt)
         end do
-#ifdef CUDA
-        select type (u)
-        type is (cuda_field_t)
-          u0 = u%data_d(1, 1, 1)
-        end select
-        err(i) = u0 - dahlquist_exact_sol( &
-                 real(i + istartup, dp)*dt)
-#else
-        err(i) = u%data(1, 1, 1) - dahlquist_exact_sol( &
-                 real(i + istartup, dp)*dt)
-#endif
+
+        call backend%get_field_data(data_array, u, DIR_X)
+        err(i) = data_array(1, 1, 1) &
+                 - dahlquist_exact_sol(real(i + istartup, dp)*dt)
       end do
 
       ! compute l2 norms
