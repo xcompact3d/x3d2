@@ -16,6 +16,7 @@ module m_field
     integer :: refcount = 0
     integer :: id !! An integer identifying the memory block.
   contains
+    procedure :: fill
     procedure :: set_shape
     procedure :: set_data_loc
   end type field_t
@@ -25,6 +26,27 @@ module m_field
   end interface field_t
 
 contains
+
+  function field_init(ngrid, next, id) result(f)
+    integer, intent(in) :: ngrid, id
+    type(field_t), pointer, intent(in) :: next
+    type(field_t) :: f
+
+    allocate (f%p_data(ngrid))
+    f%refcount = 0
+    f%next => next
+    f%id = id
+  end function field_init
+
+  subroutine fill(self, c)
+    implicit none
+
+    class(field_t) :: self
+    real(dp), intent(in) :: c
+
+    self%p_data(:) = c
+
+  end subroutine fill
 
   subroutine set_data_loc(self, data_loc)
     class(field_t) :: self
@@ -43,16 +65,5 @@ contains
     self%data(1:dims(1), 1:dims(2), 1:dims(3)) => self%p_data
 
   end subroutine set_shape
-
-  function field_init(ngrid, next, id) result(f)
-    integer, intent(in) :: ngrid, id
-    type(field_t), pointer, intent(in) :: next
-    type(field_t) :: f
-
-    allocate (f%p_data(ngrid))
-    f%refcount = 0
-    f%next => next
-    f%id = id
-  end function field_init
 
 end module m_field
