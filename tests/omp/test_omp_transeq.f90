@@ -47,7 +47,7 @@ program test_omp_transeq
   L_global = [2*pi, 2*pi, 2*pi]
 
   ! Domain decomposition in each direction
-  nproc_dir = [nproc, 1, 1]
+  nproc_dir = [1, 1, nproc]
 
   BC_x = ['periodic', 'periodic']
   BC_y = ['periodic', 'periodic']
@@ -94,7 +94,7 @@ program test_omp_transeq
   w%data(:, :, :) = 0.d0
 
   call allocate_tdsops(xdirps, omp_backend, 'compact6', 'compact6', &
-                       'classic', 'compact6', mesh%BCs)
+                       'classic', 'compact6', mesh%grid%BCs)
 
   call cpu_time(tstart)
   call transeq_x_omp(omp_backend, du, dv, dw, u, v, w, xdirps)

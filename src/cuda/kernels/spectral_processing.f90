@@ -38,8 +38,8 @@ contains
     if (j <= ny_spec) then
       do i = 1, nx_spec
         ! normalisation
-        div_r = real(div_u(i, j, k), kind=dp)/(nx*ny*nz)
-        div_c = aimag(div_u(i, j, k))/(nx*ny*nz)
+        div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
+        div_c = aimag(div_u(i, j, k))/nx/ny/nz
 
         ix = i; iy = j + y_sp_st; iz = k
 
