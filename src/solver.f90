@@ -119,9 +119,9 @@ contains
 
     solver%vector_calculus = vector_calculus_t(solver%backend)
 
-    solver%u => solver%backend%allocator%get_block(DIR_X, VERT)
-    solver%v => solver%backend%allocator%get_block(DIR_X, VERT)
-    solver%w => solver%backend%allocator%get_block(DIR_X, VERT)
+    solver%u => solver%backend%allocator%get_block(DIR_X)
+    solver%v => solver%backend%allocator%get_block(DIR_X)
+    solver%w => solver%backend%allocator%get_block(DIR_X)
 
     ! set defaults
     poisson_solver_type = 'FFT'
@@ -174,6 +174,10 @@ contains
     call solver%backend%set_field_data(solver%u, u_init%data)
     call solver%backend%set_field_data(solver%v, v_init%data)
     call solver%backend%set_field_data(solver%w, w_init%data)
+
+    call solver%u%set_data_loc(VERT)
+    call solver%v%set_data_loc(VERT)
+    call solver%w%set_data_loc(VERT)
 
     call solver%host_allocator%release_block(u_init)
     call solver%host_allocator%release_block(v_init)
@@ -260,9 +264,9 @@ contains
     call self%backend%transeq_x(du, dv, dw, u, v, w, self%xdirps)
 
     ! request fields from the allocator
-    u_y => self%backend%allocator%get_block(DIR_Y, VERT)
-    v_y => self%backend%allocator%get_block(DIR_Y, VERT)
-    w_y => self%backend%allocator%get_block(DIR_Y, VERT)
+    u_y => self%backend%allocator%get_block(DIR_Y)
+    v_y => self%backend%allocator%get_block(DIR_Y)
+    w_y => self%backend%allocator%get_block(DIR_Y)
     du_y => self%backend%allocator%get_block(DIR_Y)
     dv_y => self%backend%allocator%get_block(DIR_Y)
     dw_y => self%backend%allocator%get_block(DIR_Y)
@@ -292,9 +296,9 @@ contains
     call self%backend%allocator%release_block(dw_y)
 
     ! just like in y direction, get some fields for the z derivatives.
-    u_z => self%backend%allocator%get_block(DIR_Z, VERT)
-    v_z => self%backend%allocator%get_block(DIR_Z, VERT)
-    w_z => self%backend%allocator%get_block(DIR_Z, VERT)
+    u_z => self%backend%allocator%get_block(DIR_Z)
+    v_z => self%backend%allocator%get_block(DIR_Z)
+    w_z => self%backend%allocator%get_block(DIR_Z)
     du_z => self%backend%allocator%get_block(DIR_Z)
     dv_z => self%backend%allocator%get_block(DIR_Z)
     dw_z => self%backend%allocator%get_block(DIR_Z)
@@ -501,7 +505,7 @@ contains
 
         call self%divergence_v2p(div_u, self%u, self%v, self%w)
 
-        pressure => self%backend%allocator%get_block(DIR_Z, CELL)
+        pressure => self%backend%allocator%get_block(DIR_Z)
 
         call self%poisson(pressure, div_u)
 
