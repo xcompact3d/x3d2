@@ -125,12 +125,20 @@ contains
     integer, intent(in) :: dir
     integer, intent(in), optional :: data_loc
     integer :: dims(3)
+
+    type(field_t), pointer :: nextptr ! Temporary used to resolve type interface
+
     ! If the list is empty, allocate a new block before returning a
     ! pointer to it.
     if (.not. associated(self%first)) then
       ! Construct a field_t. This effectively allocates
       ! storage space.
-      self%first => self%create_block(next=self%first)
+
+      ! XXX: Note that create_block expects a type(field_t), whereas allocator_t%first is class(field_t). To avoid changes to the
+      !      function definitions a temporary pointer of type(field_t) is used.
+      nextptr => self%first
+      self%first => self%create_block(next=nextptr)
+      nextptr => null()
     end if
     handle => self%first
     self%first => self%first%next ! 2nd block becomes head block
