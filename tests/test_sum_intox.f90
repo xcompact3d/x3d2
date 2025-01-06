@@ -7,6 +7,7 @@ program test_sum_intox
   use m_allocator
   use m_base_backend
 #ifdef CUDA
+  use m_cuda_common, only: SZ
 #else
   use m_omp_backend
   use m_omp_common, only: SZ
