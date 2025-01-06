@@ -98,7 +98,7 @@ contains
     associate(first => self%first)
       select type(first)
       type is (cuda_field_t)
-        ptr => self%create_cuda_block(next=first)
+        ptr => create_cuda_block(self, next=first)
       class default
         error stop "Create first block (CUDA) has not been properly overloaded"
       end select
