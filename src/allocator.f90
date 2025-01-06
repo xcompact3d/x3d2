@@ -47,7 +47,7 @@ module m_allocator
   contains
     procedure :: get_block
     procedure :: release_block
-    procedure :: create_block
+    procedure :: create_block, create_first_block
     procedure :: get_block_ids
     procedure :: destroy
     procedure :: compute_padded_dims
@@ -110,6 +110,23 @@ contains
     ptr => newblock
   end function create_block
 
+  function create_first_block(self) result(ptr)
+    !! Resolve the type of the field linked list to handle the special
+    !! case of creating the first block.
+    class(allocator_t), intent(inout) :: self
+    class(field_t), pointer :: ptr
+
+    associate(first => self%first)
+      select type(first)
+      type is (field_t)
+        ptr => self%create_block(next=first)
+      class default
+        error stop "Create first block has not been properly overloaded"
+      end select
+    end associate
+
+  end function create_first_block
+
   function get_block(self, dir, data_loc) result(handle)
     !! Return a pointer to the first available memory block, i.e. the
     !! current head of the block list.  If the list is empty, allocate
@@ -126,19 +143,12 @@ contains
     integer, intent(in), optional :: data_loc
     integer :: dims(3)
 
-    type(field_t), pointer :: nextptr ! Temporary used to resolve type interface
-
     ! If the list is empty, allocate a new block before returning a
     ! pointer to it.
     if (.not. associated(self%first)) then
       ! Construct a field_t. This effectively allocates
       ! storage space.
-
-      ! XXX: Note that create_block expects a type(field_t), whereas allocator_t%first is class(field_t). To avoid changes to the
-      !      function definitions a temporary pointer of type(field_t) is used.
-      nextptr => self%first
-      self%first => self%create_block(next=nextptr)
-      nextptr => null()
+      self%first => self%create_first_block()
     end if
     handle => self%first
     self%first => self%first%next ! 2nd block becomes head block
