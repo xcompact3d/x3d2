@@ -9,6 +9,7 @@ module m_cuda_allocator
   type, extends(allocator_t) :: cuda_allocator_t
   contains
     procedure :: create_block => create_cuda_block
+    procedure :: create_first_block => create_first_cuda_block
   end type cuda_allocator_t
 
   interface cuda_allocator_t
@@ -89,5 +90,20 @@ contains
     newblock = cuda_field_t(self%ngrid, next, id=self%next_id)
     ptr => newblock
   end function create_cuda_block
+
+  function create_first_cuda_block(self) result(ptr)
+    class(cuda_allocator_t), intent(inout) :: self
+    class(field_t), pointer :: ptr
+
+    associate(first => self%first)
+      select type(first)
+      type is (cuda_field_t)
+        ptr => create_cuda_block(self, next=first)
+      class default
+        error stop "Create first block (CUDA) has not been properly overloaded"
+      end select
+    end associate
+
+  end function create_first_cuda_block
 
 end module m_cuda_allocator
