@@ -50,6 +50,10 @@ set(DUMMYDECOMPSRC
   decomp/decomp_dummy.f90
 )
 
+set(XCOMPACTSRC
+  xcompact.f90
+)
+
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   list(APPEND SRC ${CUDASRC})
@@ -84,6 +88,7 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
   target_link_options(x3d2 INTERFACE "-cuda")
   target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
+  target_link_options(x3d2 INTERFACE "-c++libs")
 
   target_compile_options(xcompact PRIVATE "-DCUDA")
 
