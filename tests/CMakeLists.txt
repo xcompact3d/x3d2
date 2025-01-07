@@ -13,6 +13,12 @@ function(define_test testfile np backend)
     target_compile_options(${test_name} PRIVATE "-cuda")
     target_compile_options(${test_name} PRIVATE "-DCUDA")
     target_link_options(${test_name} INTERFACE "-cuda")
+  elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
+    target_compile_options(${test_name} PRIVATE "-cpp")
+    target_compile_options(${test_name} PRIVATE "-cuda")
+    target_compile_options(${test_name} PRIVATE "-DCUDA")
+    target_link_options(${test_name} INTERFACE "-cuda")
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
     target_compile_options(${test_name} PRIVATE "-cpp")
     find_package(OpenMP REQUIRED)
@@ -31,7 +37,11 @@ function(define_test testfile np backend)
     add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} ${test_name}")
   endif()
 
+  target_link_libraries(${test_name} PRIVATE MPI::MPI_Fortran)
+
 endfunction()
+
+find_package(MPI REQUIRED)
 
 define_test(test_allocator.f90 1 omp)
 define_test(test_mesh.f90 4 omp)
