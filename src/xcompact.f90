@@ -5,8 +5,6 @@ program xcompact
   use m_base_backend
   use m_base_case, only: base_case_t
   use m_common, only: pi
-  use m_solver, only: solver_t
-  use m_tdsops, only: tdsops_t
   use m_mesh
   use m_case_generic, only: case_generic_t
   use m_case_tgv, only: case_tgv_t
@@ -15,7 +13,6 @@ program xcompact
   use m_cuda_allocator
   use m_cuda_backend
   use m_cuda_common, only: SZ
-  use m_cuda_tdsops, only: cuda_tdsops_t
 #else
   use m_omp_backend
   use m_omp_common, only: SZ
@@ -27,7 +24,6 @@ program xcompact
   class(allocator_t), pointer :: allocator
   type(mesh_t) :: mesh
   type(allocator_t), pointer :: host_allocator
-  !class(solver_t), allocatable :: solver
   class(base_case_t), allocatable :: flow_case
 
 #ifdef CUDA

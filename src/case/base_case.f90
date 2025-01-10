@@ -1,4 +1,7 @@
 module m_base_case
+  !! Provides the base case for running a simulation. New cases are
+  !! implemented by extending this to specify the initial and boundary
+  !! conditions, forcing terms and case-specific postprocessing and analysis.
   use mpi
 
   use m_allocator, only: allocator_t
@@ -25,6 +28,7 @@ module m_base_case
 
   abstract interface
     subroutine boundary_conditions(self)
+      !! Applies case-specific boundary coinditions
       import :: base_case_t
       implicit none
 
@@ -32,6 +36,7 @@ module m_base_case
     end subroutine boundary_conditions
 
     subroutine initial_conditions(self)
+      !! Sets case-specific initial conditions
       import :: base_case_t
       implicit none
 
@@ -39,6 +44,7 @@ module m_base_case
     end subroutine initial_conditions
 
     subroutine post_transeq(self, du, dv, dw)
+      !! Applies case-specific or model realated forcings after transeq
       import :: base_case_t
       import :: field_t
       implicit none
@@ -48,6 +54,7 @@ module m_base_case
     end subroutine post_transeq
 
     subroutine postprocess(self, t)
+      !! Triggers case-specific postprocessings at user specified intervals
       import :: base_case_t
       import :: dp
       implicit none
@@ -74,6 +81,7 @@ contains
   end subroutine case_init
 
   subroutine print_enstrophy(self, u, v, w)
+    !! Reports the enstrophy
     implicit none
 
     class(base_case_t), intent(in) :: self
@@ -100,6 +108,7 @@ contains
   end subroutine print_enstrophy
 
   subroutine print_div_max_mean(self, u, v, w)
+    !! Reports the div(u) at cell centres
     implicit none
 
     class(base_case_t), intent(in) :: self
@@ -134,6 +143,8 @@ contains
   end subroutine print_div_max_mean
 
   subroutine run(self)
+    !! Runs the solver forwards in time from t=t_0 to t=T, performing
+    !! postprocessing/IO and reporting diagnostics.
     implicit none
 
     class(base_case_t), intent(inout) :: self

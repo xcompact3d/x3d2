@@ -1,4 +1,6 @@
 module m_case_generic
+  !! An example case set up to run and sustain a freestream flow.
+  !! This is a good place to start for adding a new flow case.
   use iso_fortran_env, only: stderr => error_unit
 
   use m_allocator, only: allocator_t, field_t
