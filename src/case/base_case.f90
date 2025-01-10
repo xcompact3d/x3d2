@@ -18,7 +18,7 @@ module m_base_case
   contains
     procedure(boundary_conditions), deferred :: boundary_conditions
     procedure(initial_conditions), deferred :: initial_conditions
-    procedure(post_transeq), deferred :: post_transeq
+    procedure(forcings), deferred :: forcings
     procedure(postprocess), deferred :: postprocess
     procedure :: case_init
     procedure :: run
@@ -43,7 +43,7 @@ module m_base_case
       class(base_case_t) :: self
     end subroutine initial_conditions
 
-    subroutine post_transeq(self, du, dv, dw)
+    subroutine forcings(self, du, dv, dw)
       !! Applies case-specific or model realated forcings after transeq
       import :: base_case_t
       import :: field_t
@@ -51,7 +51,7 @@ module m_base_case
 
       class(base_case_t) :: self
       class(field_t), intent(inout) :: du, dv, dw
-    end subroutine post_transeq
+    end subroutine forcings
 
     subroutine postprocess(self, t)
       !! Triggers case-specific postprocessings at user specified intervals
@@ -174,7 +174,7 @@ contains
                                  self%solver%u, self%solver%v, self%solver%w)
 
         ! models that introduce source terms handled here
-        call self%post_transeq(du, dv, dw)
+        call self%forcings(du, dv, dw)
 
         ! time integration
         call self%solver%time_integrator%step( &

@@ -14,7 +14,7 @@ module m_case_tgv
   contains
     procedure :: boundary_conditions => boundary_conditions_tgv
     procedure :: initial_conditions => initial_conditions_tgv
-    procedure :: post_transeq => post_transeq_tgv
+    procedure :: forcings => forcings_tgv
     procedure :: postprocess => postprocess_tgv
   end type case_tgv_t
 
@@ -88,14 +88,14 @@ contains
     ! do nothing for TGV case
   end subroutine boundary_conditions_tgv
 
-  subroutine post_transeq_tgv(self, du, dv, dw)
+  subroutine forcings_tgv(self, du, dv, dw)
     implicit none
 
     class(case_tgv_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
 
     ! do nothing for TGV case
-  end subroutine post_transeq_tgv
+  end subroutine forcings_tgv
 
   subroutine postprocess_tgv(self, t)
     implicit none

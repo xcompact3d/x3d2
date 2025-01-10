@@ -16,7 +16,7 @@ module m_case_generic
   contains
     procedure :: boundary_conditions => boundary_conditions_generic
     procedure :: initial_conditions => initial_conditions_generic
-    procedure :: post_transeq => post_transeq_generic
+    procedure :: forcings => forcings_generic
     procedure :: postprocess => postprocess_generic
   end type case_generic_t
 
@@ -68,12 +68,12 @@ contains
 
   end subroutine postprocess_generic
 
-  subroutine post_transeq_generic(self, du, dv, dw)
+  subroutine forcings_generic(self, du, dv, dw)
     implicit none
 
     class(case_generic_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
 
-  end subroutine post_transeq_generic
+  end subroutine forcings_generic
 
 end module m_case_generic
