@@ -19,8 +19,9 @@ module m_common
                         X_EDGE = 1000, & ! Data on edges along X
                         Y_EDGE = 0100, & ! Data on edges along Y
                         Z_EDGE = 0010, & ! Data on edges along Z
-                        none = -0001 ! The location of data isn't specified
-  integer, parameter :: BC_PERIODIC = 0, BC_NEUMANN = 1, BC_DIRICHLET = 2
+                        NULL_LOC = -0001 ! The location of data isn't specified
+  integer, parameter :: BC_PERIODIC = 0, BC_NEUMANN = 1, BC_DIRICHLET = 2, &
+                        BC_HALO = -1
   integer, protected :: &
     rdr_map(4, 4) = reshape([0, RDR_Y2X, RDR_Z2X, RDR_C2X, &
                              RDR_X2Y, 0, RDR_Z2Y, RDR_C2Y, &
@@ -46,5 +47,11 @@ contains
 
     rdr_dir = rdr_map(dir_from, dir_to)
   end function get_rdr_from_dirs
+
+  integer function move_data_loc(in_data_loc, dir, move) result(out_data_loc)
+    integer, intent(in) :: in_data_loc, dir, move
+
+    out_data_loc = in_data_loc + move*(10**dir)
+  end function move_data_loc
 
 end module m_common

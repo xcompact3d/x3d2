@@ -5,7 +5,7 @@ module m_mesh
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, &
                       CELL, VERT, X_FACE, Y_FACE, Z_FACE, &
                       X_EDGE, Y_EDGE, Z_EDGE, &
-                      BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET
+                      BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
   use m_field, only: field_t
   use m_mesh_content
 
@@ -14,6 +14,15 @@ module m_mesh
   ! The mesh class stores all the information about the global and local (due to domain decomposition) mesh
   ! It also includes getter functions to access some of its parameters
   type :: mesh_t
+    integer, dimension(3), private :: global_vert_dims ! global number of vertices in each direction without padding (cartesian structure)
+    integer, dimension(3), private :: global_cell_dims ! global number of cells in each direction without padding (cartesian structure)
+
+    integer, dimension(3), private :: vert_dims_padded ! local domain size including padding (cartesian structure)
+    integer, dimension(3), private :: vert_dims ! local number of vertices in each direction without padding (cartesian structure)
+    integer, dimension(3), private :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
+    logical, dimension(3), private :: periodic_BC ! Whether or not a direction has a periodic BC
+    integer, dimension(3, 2) :: BCs_global
+    integer, dimension(3, 2) :: BCs
     integer, private :: sz
     type(geo_t), allocatable :: geo ! object containing geometry information
     class(grid_t), allocatable :: grid ! object containing grid information
@@ -134,14 +143,17 @@ contains
       is_first_domain = mesh%par%nrank_dir(dir) == 0
       is_last_domain = mesh%par%nrank_dir(dir) + 1 == mesh%par%nproc_dir(dir)
       ! subdomain-subdomain boundaries are identical to periodic BCs
-      if (is_first_domain) then
-        mesh%grid%BCs(dir, 1) = mesh%grid%BCs_global(dir, 1)
-        mesh%grid%BCs(dir, 2) = BC_PERIODIC
+      if (is_first_domain .and. is_last_domain) then
+        mesh%BCs(dir, 1) = mesh%BCs_global(dir, 1)
+        mesh%BCs(dir, 2) = mesh%BCs_global(dir, 2)
+      else if (is_first_domain) then
+        mesh%BCs(dir, 1) = mesh%BCs_global(dir, 1)
+        mesh%BCs(dir, 2) = BC_HALO
       else if (is_last_domain) then
-        mesh%grid%BCs(dir, 1) = BC_PERIODIC
-        mesh%grid%BCs(dir, 2) = mesh%grid%BCs_global(dir, 2)
+        mesh%BCs(dir, 1) = BC_HALO
+        mesh%BCs(dir, 2) = mesh%BCs_global(dir, 2)
       else
-        mesh%grid%BCs(dir, :) = BC_PERIODIC
+        mesh%BCs(dir, :) = BC_HALO
       end if
     end do
 

@@ -38,6 +38,8 @@ module m_base_backend
     procedure(sum_intox), deferred :: sum_zintox
     procedure(vecadd), deferred :: vecadd
     procedure(scalar_product), deferred :: scalar_product
+    procedure(field_ops), deferred :: field_scale
+    procedure(field_ops), deferred :: field_shift
     procedure(copy_data_to_f), deferred :: copy_data_to_f
     procedure(copy_f_to_data), deferred :: copy_f_to_data
     procedure(alloc_tdsops), deferred :: alloc_tdsops
@@ -146,6 +148,20 @@ module m_base_backend
   end interface
 
   abstract interface
+    subroutine field_ops(self, f, a)
+      !! Scales or shifts a field by a
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(in) :: f
+      real(dp), intent(in) :: a
+    end subroutine field_ops
+  end interface
+
+  abstract interface
     subroutine copy_data_to_f(self, f, data)
          !! Copy the specialist data structure from device or host back
          !! to a regular 3D data array in host memory.
@@ -174,8 +190,8 @@ module m_base_backend
   end interface
 
   abstract interface
-    subroutine alloc_tdsops(self, tdsops, dir, operation, scheme, n_halo, &
-                            from_to, bc_start, bc_end, sym, c_nu, nu0_nu)
+    subroutine alloc_tdsops(self, tdsops, dir, operation, scheme, bc_start, &
+                            bc_end, n_halo, from_to, sym, c_nu, nu0_nu)
       import :: base_backend_t
       import :: dp
       import :: tdsops_t
@@ -185,8 +201,9 @@ module m_base_backend
       class(tdsops_t), allocatable, intent(inout) :: tdsops
       integer, intent(in) :: dir
       character(*), intent(in) :: operation, scheme
+      integer, intent(in) :: bc_start, bc_end
       integer, optional, intent(in) :: n_halo
-      character(*), optional, intent(in) :: from_to, bc_start, bc_end
+      character(*), optional, intent(in) :: from_to
       logical, optional, intent(in) :: sym
       real(dp), optional, intent(in) :: c_nu, nu0_nu
     end subroutine alloc_tdsops

@@ -3,7 +3,7 @@ program test_cuda_tridiag
   use cudafor
   use mpi
 
-  use m_common, only: dp, pi
+  use m_common, only: dp, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_tds_compact
   use m_cuda_sendrecv, only: sendrecv_fields
@@ -81,7 +81,8 @@ program test_cuda_tridiag
 
   ! preprocess the operator and coefficient arrays
   tdsops = cuda_tdsops_init(n, dx_per, operation='second-deriv', &
-                            scheme='compact6')
+                            scheme='compact6', &
+                            bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
 
   blocks = dim3(n_block, 1, 1)
   threads = dim3(SZ, 1, 1)
