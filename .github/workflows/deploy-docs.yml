@@ -12,29 +12,24 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-python@v3
-    - name: Install sphinx, ford and ghp-import
+    - name: Install ford and ghp-import
       run: |
-        pip install -r docs/docs-requirements.txt
+        pip install ford ghp-import
     - name: Install graphviz
       run: sudo apt install graphviz
-    - name: Build sphinx docs
-      run: make -C docs html
-    - name: Deploy sphinx docs
+    - name: Build API docs with FORD
+      run: |
+        mkdir -p $FORD_OUTPUT_DIR
+        ford $FORD_CFG -o $FORD_OUTPUT_DIR
+      env:
+        FORD_CFG: docs/ford.md
+        FORD_OUTPUT_DIR: api-docs
+
+    - name: Deploy API docs to GitHub Pages
       run: |
         git config user.name 'github-action'
         git config user.email 'github-action'
-        ghp-import -m 'Update sphinx docs' --push \
-          --branch gh-pages docs/build/html --no-jekyll --force
-    - name: Build API docs with ford
-      run: ford $FORD_CFG -o $FORD_OUTPUT_DIR
-      env:
-        FORD_CFG: ford.md
-        FORD_OUTPUT_DIR: api-docs
-    - name: Deploy api-docs
-      run: |
-        ghp-import -m 'Update API docs' --prefix $PUBLISH_DIR \
+        ghp-import -m 'Update API docs' \
           --push --branch gh-pages $FORD_OUTPUT_DIR --no-jekyll --force
       env:
-        PUBLISH_DIR: api/
-        FORD_OUTPUT_DIR: api-docs
-
+        FORD_OUTPUT_DIR: docs/api-docs
