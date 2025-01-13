@@ -3,7 +3,8 @@ module m_omp_exec_dist
 
   use m_common, only: dp, VERT
   use m_omp_common, only: SZ
-  use m_omp_kernels_dist, only: der_univ_dist, der_univ_subs
+  use m_omp_kernels_dist, only: der_univ_dist, der_univ_subs, &
+                                der_univ_fused_subs
   use m_tdsops, only: tdsops_t
   use m_omp_sendrecv, only: sendrecv_fields
 
@@ -61,7 +62,7 @@ contains
   end subroutine exec_dist_tds_compact
 
   subroutine exec_dist_transeq_compact( &
-    rhs, du, dud, d2u, &
+    rhs_du, dud, d2u, &
     du_send_s, du_send_e, du_recv_s, du_recv_e, &
     dud_send_s, dud_send_e, dud_recv_s, dud_recv_e, &
     d2u_send_s, d2u_send_e, d2u_recv_s, d2u_recv_e, &
@@ -71,8 +72,10 @@ contains
 
     implicit none
 
-    ! du = d(u)
-    real(dp), dimension(:, :, :), intent(out) :: rhs, du, dud, d2u
+    !> The result array, it is also used as temporary storage
+    real(dp), dimension(:, :, :), intent(out) :: rhs_du
+    !> Temporary storage arrays
+    real(dp), dimension(:, :, :), intent(out) :: dud, d2u
 
     ! The ones below are intent(out) just so that we can write data in them,
     ! not because we actually need the data they store later where this
@@ -109,7 +112,7 @@ contains
     !$omp parallel do private(ud, ud_recv_e, ud_recv_s)
     do k = 1, n_groups
       call der_univ_dist( &
-        du(:, :, k), du_send_s(:, :, k), du_send_e(:, :, k), u(:, :, k), &
+        rhs_du(:, :, k), du_send_s(:, :, k), du_send_e(:, :, k), u(:, :, k), &
         u_recv_s(:, :, k), u_recv_e(:, :, k), &
         tdsops_du%coeffs_s, tdsops_du%coeffs_e, tdsops_du%coeffs, &
         n, tdsops_du%dist_fw, tdsops_du%dist_bw, tdsops_du%dist_af &
@@ -162,27 +165,15 @@ contains
 
     !$omp parallel do
     do k = 1, n_groups
-      call der_univ_subs(du(:, :, k), &
-                         du_recv_s(:, :, k), du_recv_e(:, :, k), &
-                         n, tdsops_du%dist_sa, tdsops_du%dist_sc)
-
-      call der_univ_subs(dud(:, :, k), &
-                         dud_recv_s(:, :, k), dud_recv_e(:, :, k), &
-                         n, tdsops_dud%dist_sa, tdsops_dud%dist_sc)
-
-      call der_univ_subs(d2u(:, :, k), &
-                         d2u_recv_s(:, :, k), d2u_recv_e(:, :, k), &
-                         n, tdsops_d2u%dist_sa, tdsops_d2u%dist_sc)
-
-      do j = 1, n
-        !$omp simd
-        do i = 1, SZ
-          rhs(i, j, k) = -0.5_dp*(v(i, j, k)*du(i, j, k) + dud(i, j, k)) &
-                         + nu*d2u(i, j, k)
-        end do
-        !$omp end simd
-      end do
-
+      call der_univ_fused_subs( &
+        rhs_du(:, :, k), dud(:, :, k), d2u(:, :, k), v(:, :, k), &
+        du_recv_s(:, :, k), du_recv_e(:, :, k), &
+        dud_recv_s(:, :, k), dud_recv_e(:, :, k), &
+        d2u_recv_s(:, :, k), d2u_recv_e(:, :, k), &
+        nu, n, tdsops_du%dist_sa, tdsops_du%dist_sc, &
+        tdsops_dud%dist_sa, tdsops_dud%dist_sc, &
+        tdsops_d2u%dist_sa, tdsops_d2u%dist_sc &
+        )
     end do
     !$omp end parallel do
 

@@ -119,9 +119,9 @@ contains
 
     solver%vector_calculus = vector_calculus_t(solver%backend)
 
-    solver%u => solver%backend%allocator%get_block(DIR_X, VERT)
-    solver%v => solver%backend%allocator%get_block(DIR_X, VERT)
-    solver%w => solver%backend%allocator%get_block(DIR_X, VERT)
+    solver%u => solver%backend%allocator%get_block(DIR_X)
+    solver%v => solver%backend%allocator%get_block(DIR_X)
+    solver%w => solver%backend%allocator%get_block(DIR_X)
 
     ! set defaults
     poisson_solver_type = 'FFT'
@@ -175,6 +175,10 @@ contains
     call solver%backend%set_field_data(solver%v, v_init%data)
     call solver%backend%set_field_data(solver%w, w_init%data)
 
+    call solver%u%set_data_loc(VERT)
+    call solver%v%set_data_loc(VERT)
+    call solver%w%set_data_loc(VERT)
+
     call solver%host_allocator%release_block(u_init)
     call solver%host_allocator%release_block(v_init)
     call solver%host_allocator%release_block(w_init)
@@ -182,13 +186,13 @@ contains
     ! Allocate and set the tdsops
     call allocate_tdsops(solver%xdirps, solver%backend, &
                          der1st_scheme, der2nd_scheme, &
-                         interpl_scheme, stagder_scheme)
+                         interpl_scheme, stagder_scheme, solver%mesh%BCs)
     call allocate_tdsops(solver%ydirps, solver%backend, &
                          der1st_scheme, der2nd_scheme, &
-                         interpl_scheme, stagder_scheme)
+                         interpl_scheme, stagder_scheme, solver%mesh%BCs)
     call allocate_tdsops(solver%zdirps, solver%backend, &
                          der1st_scheme, der2nd_scheme, &
-                         interpl_scheme, stagder_scheme)
+                         interpl_scheme, stagder_scheme, solver%mesh%BCs)
 
     select case (trim(poisson_solver_type))
     case ('FFT')
@@ -207,28 +211,35 @@ contains
   end function init
 
   subroutine allocate_tdsops(dirps, backend, der1st_scheme, der2nd_scheme, &
-                             interpl_scheme, stagder_scheme)
+                             interpl_scheme, stagder_scheme, BCs)
     type(dirps_t), intent(inout) :: dirps
     class(base_backend_t), intent(in) :: backend
     character(*), intent(in) :: der1st_scheme, der2nd_scheme, &
                                 interpl_scheme, stagder_scheme
+    integer, dimension(:, :), intent(in) :: BCs
 
-    call backend%alloc_tdsops(dirps%der1st, dirps%dir, &
-                              'first-deriv', der1st_scheme)
-    call backend%alloc_tdsops(dirps%der1st_sym, dirps%dir, &
-                              'first-deriv', der1st_scheme)
-    call backend%alloc_tdsops(dirps%der2nd, dirps%dir, &
-                              'second-deriv', der2nd_scheme)
-    call backend%alloc_tdsops(dirps%der2nd_sym, dirps%dir, &
-                              'second-deriv', der2nd_scheme)
-    call backend%alloc_tdsops(dirps%interpl_v2p, dirps%dir, &
-                              'interpolate', interpl_scheme, from_to='v2p')
-    call backend%alloc_tdsops(dirps%interpl_p2v, dirps%dir, &
-                              'interpolate', interpl_scheme, from_to='p2v')
-    call backend%alloc_tdsops(dirps%stagder_v2p, dirps%dir, &
-                              'stag-deriv', stagder_scheme, from_to='v2p')
-    call backend%alloc_tdsops(dirps%stagder_p2v, dirps%dir, &
-                              'stag-deriv', stagder_scheme, from_to='p2v')
+    integer :: dir, bc_start, bc_end
+
+    dir = dirps%dir
+    bc_start = BCs(dir, 1)
+    bc_end = BCs(dir, 2)
+
+    call backend%alloc_tdsops(dirps%der1st, dir, 'first-deriv', &
+                              der1st_scheme, bc_start, bc_end)
+    call backend%alloc_tdsops(dirps%der1st_sym, dir, 'first-deriv', &
+                              der1st_scheme, bc_start, bc_end)
+    call backend%alloc_tdsops(dirps%der2nd, dir, 'second-deriv', &
+                              der2nd_scheme, bc_start, bc_end)
+    call backend%alloc_tdsops(dirps%der2nd_sym, dir, 'second-deriv', &
+                              der2nd_scheme, bc_start, bc_end)
+    call backend%alloc_tdsops(dirps%interpl_v2p, dir, 'interpolate', &
+                              interpl_scheme, bc_start, bc_end, from_to='v2p')
+    call backend%alloc_tdsops(dirps%interpl_p2v, dir, 'interpolate', &
+                              interpl_scheme, bc_start, bc_end, from_to='p2v')
+    call backend%alloc_tdsops(dirps%stagder_v2p, dir, 'stag-deriv', &
+                              stagder_scheme, bc_start, bc_end, from_to='v2p')
+    call backend%alloc_tdsops(dirps%stagder_p2v, dir, 'stag-deriv', &
+                              stagder_scheme, bc_start, bc_end, from_to='p2v')
 
   end subroutine
 
@@ -253,9 +264,9 @@ contains
     call self%backend%transeq_x(du, dv, dw, u, v, w, self%xdirps)
 
     ! request fields from the allocator
-    u_y => self%backend%allocator%get_block(DIR_Y, VERT)
-    v_y => self%backend%allocator%get_block(DIR_Y, VERT)
-    w_y => self%backend%allocator%get_block(DIR_Y, VERT)
+    u_y => self%backend%allocator%get_block(DIR_Y)
+    v_y => self%backend%allocator%get_block(DIR_Y)
+    w_y => self%backend%allocator%get_block(DIR_Y)
     du_y => self%backend%allocator%get_block(DIR_Y)
     dv_y => self%backend%allocator%get_block(DIR_Y)
     dw_y => self%backend%allocator%get_block(DIR_Y)
@@ -285,9 +296,9 @@ contains
     call self%backend%allocator%release_block(dw_y)
 
     ! just like in y direction, get some fields for the z derivatives.
-    u_z => self%backend%allocator%get_block(DIR_Z, VERT)
-    v_z => self%backend%allocator%get_block(DIR_Z, VERT)
-    w_z => self%backend%allocator%get_block(DIR_Z, VERT)
+    u_z => self%backend%allocator%get_block(DIR_Z)
+    v_z => self%backend%allocator%get_block(DIR_Z)
+    w_z => self%backend%allocator%get_block(DIR_Z)
     du_z => self%backend%allocator%get_block(DIR_Z)
     dv_z => self%backend%allocator%get_block(DIR_Z)
     dw_z => self%backend%allocator%get_block(DIR_Z)
@@ -494,7 +505,7 @@ contains
 
         call self%divergence_v2p(div_u, self%u, self%v, self%w)
 
-        pressure => self%backend%allocator%get_block(DIR_Z, CELL)
+        pressure => self%backend%allocator%get_block(DIR_Z)
 
         call self%poisson(pressure, div_u)
 

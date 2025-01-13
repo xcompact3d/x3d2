@@ -571,15 +571,16 @@ contains
   end subroutine transeq_3fused_dist
 
   attributes(global) subroutine transeq_3fused_subs( &
-    r_u, conv, du, dud, d2u, &
+    r_du, conv, dud, d2u, &
     recv_du_s, recv_du_e, recv_dud_s, recv_dud_e, recv_d2u_s, recv_d2u_e, &
     d1_sa, d1_sc, d2_sa, d2_sc, n, nu &
     )
     implicit none
 
     ! Arguments
-    real(dp), device, intent(out), dimension(:, :, :) :: r_u
-    real(dp), device, intent(in), dimension(:, :, :) :: conv, du, dud, d2u
+    !> The result array, it stores 'du' first then its overwritten
+    real(dp), device, intent(inout), dimension(:, :, :) :: r_du
+    real(dp), device, intent(in), dimension(:, :, :) :: conv, dud, d2u
     real(dp), device, intent(in), dimension(:, :, :) :: &
       recv_du_s, recv_du_e, recv_dud_s, recv_dud_e, recv_d2u_s, recv_d2u_e
     real(dp), device, intent(in), dimension(:) :: d1_sa, d1_sc, d2_sa, d2_sc
@@ -610,7 +611,7 @@ contains
     ur = d1_sa(1)
     recp = 1._dp/(1._dp - ur*bl)
 
-    du_s = recp*(du(i, 1, b) - bl*recv_du_s(i, 1, b))
+    du_s = recp*(r_du(i, 1, b) - bl*recv_du_s(i, 1, b))
     dud_s = recp*(dud(i, 1, b) - bl*recv_dud_s(i, 1, b))
 
     ! second derivative
@@ -627,7 +628,7 @@ contains
     ur = d1_sc(n)
     recp = 1._dp/(1._dp - ur*bl)
 
-    du_e = recp*(du(i, n, b) - ur*recv_du_e(i, 1, b))
+    du_e = recp*(r_du(i, n, b) - ur*recv_du_e(i, 1, b))
     dud_e = recp*(dud(i, n, b) - ur*recv_dud_e(i, 1, b))
 
     ! second derivative
@@ -638,15 +639,14 @@ contains
     d2u_e = recp*(d2u(i, n, b) - ur*recv_d2u_e(i, 1, b))
 
     ! final substitution
-    r_u(i, 1, b) = -0.5_dp*(conv(i, 1, b)*du_s + dud_s) + nu*d2u_s
+    r_du(i, 1, b) = -0.5_dp*(conv(i, 1, b)*du_s + dud_s) + nu*d2u_s
     do j = 2, n - 1
-      du_temp = (du(i, j, b) - d1_sa(j)*du_s - d1_sc(j)*du_e)
+      du_temp = (r_du(i, j, b) - d1_sa(j)*du_s - d1_sc(j)*du_e)
       dud_temp = (dud(i, j, b) - d1_sa(j)*dud_s - d1_sc(j)*dud_e)
       d2u_temp = (d2u(i, j, b) - d2_sa(j)*d2u_s - d2_sc(j)*d2u_e)
-      r_u(i, j, b) = -0.5_dp*(conv(i, j, b)*du_temp + dud_temp) &
-                     + nu*d2u_temp
+      r_du(i, j, b) = -0.5_dp*(conv(i, j, b)*du_temp + dud_temp) + nu*d2u_temp
     end do
-    r_u(i, n, b) = -0.5_dp*(conv(i, n, b)*du_e + dud_e) + nu*d2u_e
+    r_du(i, n, b) = -0.5_dp*(conv(i, n, b)*du_e + dud_e) + nu*d2u_e
 
   end subroutine transeq_3fused_subs
 

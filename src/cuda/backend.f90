@@ -5,10 +5,10 @@ module m_cuda_backend
 
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, &
+  use m_common, only: dp, move_data_loc, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
-                      DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
+                      DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC
   use m_mesh, only: mesh_t
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t, tdsops_t, get_tds_n
@@ -20,10 +20,12 @@ module m_cuda_backend
   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
   use m_cuda_tdsops, only: cuda_tdsops_t
   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
-  use m_cuda_kernels_reorder, only: &
-    reorder_x2y, reorder_x2z, reorder_y2x, reorder_y2z, reorder_z2x, &
-    reorder_z2y, reorder_c2x, reorder_x2c, &
-    sum_yintox, sum_zintox, scalar_product, axpby, buffer_copy
+  use m_cuda_kernels_fieldops, only: axpby, buffer_copy, field_scale, &
+                                     field_shift, scalar_product
+  use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
+                                    reorder_y2z, reorder_z2x, reorder_z2y, &
+                                    reorder_c2x, reorder_x2c, &
+                                    sum_yintox, sum_zintox
 
   implicit none
 
@@ -51,6 +53,8 @@ module m_cuda_backend
     procedure :: sum_zintox => sum_zintox_cuda
     procedure :: vecadd => vecadd_cuda
     procedure :: scalar_product => scalar_product_cuda
+    procedure :: field_scale => field_scale_cuda
+    procedure :: field_shift => field_shift_cuda
     procedure :: copy_data_to_f => copy_data_to_f_cuda
     procedure :: copy_f_to_data => copy_f_to_data_cuda
     procedure :: init_poisson_fft => init_cuda_poisson_fft
@@ -126,8 +130,8 @@ contains
   end function init
 
   subroutine alloc_cuda_tdsops( &
-    self, tdsops, dir, operation, scheme, &
-    n_halo, from_to, bc_start, bc_end, sym, c_nu, nu0_nu &
+    self, tdsops, dir, operation, scheme, bc_start, bc_end, &
+    n_halo, from_to, sym, c_nu, nu0_nu &
     )
     implicit none
 
@@ -135,8 +139,9 @@ contains
     class(tdsops_t), allocatable, intent(inout) :: tdsops
     integer, intent(in) :: dir
     character(*), intent(in) :: operation, scheme
+    integer, intent(in) :: bc_start, bc_end
     integer, optional, intent(in) :: n_halo
-    character(*), optional, intent(in) :: from_to, bc_start, bc_end
+    character(*), optional, intent(in) :: from_to
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
     integer :: tds_n
@@ -148,9 +153,8 @@ contains
     type is (cuda_tdsops_t)
       tds_n = get_tds_n(self%mesh, dir, from_to)
       delta = self%mesh%geo%d(dir)
-      tdsops = cuda_tdsops_t(tds_n, delta, operation, &
-                             scheme, n_halo, from_to, &
-                             bc_start, bc_end, sym, c_nu, nu0_nu)
+      tdsops = cuda_tdsops_t(tds_n, delta, operation, scheme, bc_start, &
+                             bc_end, n_halo, from_to, sym, c_nu, nu0_nu)
     end select
 
   end subroutine alloc_cuda_tdsops
@@ -250,6 +254,10 @@ contains
                                 der1st_sym, der1st, der2nd_sym, dirps%dir, &
                                 blocks, threads)
 
+    call du%set_data_loc(u%data_loc)
+    call dv%set_data_loc(v%data_loc)
+    call dw%set_data_loc(w%data_loc)
+
   end subroutine transeq_cuda_dist
 
   subroutine transeq_halo_exchange(self, u_dev, v_dev, w_dev, dir)
@@ -284,16 +292,17 @@ contains
 
   end subroutine transeq_halo_exchange
 
-  subroutine transeq_dist_component(self, rhs_dev, u_dev, conv_dev, &
+  subroutine transeq_dist_component(self, rhs_du_dev, u_dev, conv_dev, &
                                     u_recv_s_dev, u_recv_e_dev, &
                                     conv_recv_s_dev, conv_recv_e_dev, &
                                     tdsops_du, tdsops_dud, tdsops_d2u, &
                                     dir, blocks, threads)
-      !! Computes RHS_x^u following:
-      !!
-      !! rhs_x^u = -0.5*(conv*du/dx + d(u*conv)/dx) + nu*d2u/dx2
+    !! Computes RHS_x^u following:
+    !!
+    !! rhs_x^u = -0.5*(conv*du/dx + d(u*conv)/dx) + nu*d2u/dx2
     class(cuda_backend_t) :: self
-    real(dp), device, dimension(:, :, :), intent(inout) :: rhs_dev
+    !> The result field, it is also used as temporary storage
+    real(dp), device, dimension(:, :, :), intent(out) :: rhs_du_dev
     real(dp), device, dimension(:, :, :), intent(in) :: u_dev, conv_dev
     real(dp), device, dimension(:, :, :), intent(in) :: &
       u_recv_s_dev, u_recv_e_dev, &
@@ -302,25 +311,22 @@ contains
     integer, intent(in) :: dir
     type(dim3), intent(in) :: blocks, threads
 
-    class(field_t), pointer :: du, dud, d2u
+    class(field_t), pointer :: dud, d2u
 
-    real(dp), device, pointer, dimension(:, :, :) :: &
-      du_dev, dud_dev, d2u_dev
+    real(dp), device, pointer, dimension(:, :, :) :: dud_dev, d2u_dev
 
     ! Get some fields for storing the intermediate results
-    du => self%allocator%get_block(dir, VERT)
-    dud => self%allocator%get_block(dir, VERT)
-    d2u => self%allocator%get_block(dir, VERT)
+    dud => self%allocator%get_block(dir)
+    d2u => self%allocator%get_block(dir)
 
-    call resolve_field_t(du_dev, du)
     call resolve_field_t(dud_dev, dud)
     call resolve_field_t(d2u_dev, d2u)
 
     call exec_dist_transeq_3fused( &
-      rhs_dev, &
+      rhs_du_dev, &
       u_dev, u_recv_s_dev, u_recv_e_dev, &
       conv_dev, conv_recv_s_dev, conv_recv_e_dev, &
-      du_dev, dud_dev, d2u_dev, &
+      dud_dev, d2u_dev, &
       self%du_send_s_dev, self%du_send_e_dev, &
       self%du_recv_s_dev, self%du_recv_e_dev, &
       self%dud_send_s_dev, self%dud_send_e_dev, &
@@ -333,7 +339,6 @@ contains
       )
 
     ! Release temporary blocks
-    call self%allocator%release_block(du)
     call self%allocator%release_block(dud)
     call self%allocator%release_block(d2u)
 
@@ -368,6 +373,10 @@ contains
     end if
 
     blocks = dim3(self%mesh%get_n_groups(u), 1, 1); threads = dim3(SZ, 1, 1)
+
+    if (u%data_loc /= NULL_LOC) then
+      call du%set_data_loc(move_data_loc(u%data_loc, u%dir, tdsops%move))
+    end if
 
     call tds_solve_dist(self, du, u, tdsops, blocks, threads)
 
@@ -538,6 +547,9 @@ contains
       error stop 'Reorder direction is undefined.'
     end select
 
+    ! reorder keeps the data_loc the same
+    call u_o%set_data_loc(u_i%data_loc)
+
   end subroutine reorder_cuda
 
   subroutine sum_yintox_cuda(self, u, u_y)
@@ -653,6 +665,46 @@ contains
                                           u_dev, n, n_halo)
 
   end subroutine copy_into_buffers
+
+  subroutine field_scale_cuda(self, f, a)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(in) :: f
+    real(dp), intent(in) :: a
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    type(dim3) :: blocks, threads
+    integer :: n
+
+    call resolve_field_t(f_d, f)
+
+    n = size(f_d, dim=2)
+    blocks = dim3(size(f_d, dim=3), 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call field_scale<<<blocks, threads>>>(f_d, a, n) !&
+
+  end subroutine field_scale_cuda
+
+  subroutine field_shift_cuda(self, f, a)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(in) :: f
+    real(dp), intent(in) :: a
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    type(dim3) :: blocks, threads
+    integer :: n
+
+    call resolve_field_t(f_d, f)
+
+    n = size(f_d, dim=2)
+    blocks = dim3(size(f_d, dim=3), 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call field_shift<<<blocks, threads>>>(f_d, a, n) !&
+
+  end subroutine field_shift_cuda
 
   subroutine copy_data_to_f_cuda(self, f, data)
     class(cuda_backend_t), intent(inout) :: self
