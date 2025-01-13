@@ -53,13 +53,14 @@ module m_base_case
       class(field_t), intent(inout) :: du, dv, dw
     end subroutine forcings
 
-    subroutine postprocess(self, t)
+    subroutine postprocess(self, i, t)
       !! Triggers case-specific postprocessings at user specified intervals
       import :: base_case_t
       import :: dp
       implicit none
 
       class(base_case_t) :: self
+      integer, intent(in) :: i
       real(dp), intent(in) :: t
     end subroutine postprocess
   end interface
@@ -157,7 +158,7 @@ contains
 
     if (self%solver%mesh%par%is_root()) print *, 'initial conditions'
     t = 0._dp
-    call self%postprocess(t)
+    call self%postprocess(0, t)
 
     if (self%solver%mesh%par%is_root()) print *, 'start run'
 
@@ -192,7 +193,7 @@ contains
 
       if (mod(i, self%solver%n_output) == 0) then
         t = i*self%solver%dt
-        call self%postprocess(t)
+        call self%postprocess(i, t)
       end if
     end do
 

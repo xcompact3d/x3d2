@@ -56,13 +56,14 @@ contains
 
   end subroutine initial_conditions_generic
 
-  subroutine postprocess_generic(self, t)
+  subroutine postprocess_generic(self, i, t)
     implicit none
 
     class(case_generic_t) :: self
+    integer, intent(in) :: i
     real(dp), intent(in) :: t
 
-    if (self%solver%mesh%par%is_root()) print *, 'time =', t
+    if (self%solver%mesh%par%is_root()) print *, 'time =', t, 'iteration =', i
     call self%print_enstrophy(self%solver%u, self%solver%v, self%solver%w)
     call self%print_div_max_mean(self%solver%u, self%solver%v, self%solver%w)
 
