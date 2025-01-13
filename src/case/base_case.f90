@@ -21,6 +21,7 @@ module m_base_case
     procedure(forcings), deferred :: forcings
     procedure(postprocess), deferred :: postprocess
     procedure :: case_init
+    procedure :: set_init
     procedure :: run
     procedure :: print_enstrophy
     procedure :: print_div_max_mean
@@ -80,6 +81,45 @@ contains
     call self%initial_conditions()
 
   end subroutine case_init
+
+  subroutine set_init(self, field, field_func)
+    implicit none
+
+    class(base_case_t) :: self
+    class(field_t), intent(inout) :: field
+
+    interface
+      pure function field_func(coords) result(r)
+        import dp
+        implicit none
+
+        real(dp), intent(in) :: coords(3)
+        real(dp) :: r
+      end function field_func
+    end interface
+
+    class(field_t), pointer :: field_init
+
+    integer :: i, j, k, dims(3)
+    real(dp) :: coords(3)
+
+    dims = self%solver%mesh%get_dims(VERT)
+    field_init => self%solver%host_allocator%get_block(DIR_C)
+
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          coords = self%solver%mesh%get_coordinates(i, j, k)
+          field_init%data(i, j, k) = field_func(coords)
+        end do
+      end do
+    end do
+
+    call self%solver%backend%set_field_data(field, field_init%data)
+
+    call self%solver%host_allocator%release_block(field_init)
+
+  end subroutine set_init
 
   subroutine print_enstrophy(self, u, v, w)
     !! Reports the enstrophy
