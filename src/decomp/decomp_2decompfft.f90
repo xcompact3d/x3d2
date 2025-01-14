@@ -6,13 +6,13 @@ module m_decomp
 
   contains
 
-  module function is_avail_2decomp() result(avail)
+  function is_avail_2decomp() result(avail)
     logical :: avail
 
     avail = .true.
   end function
 
-  module subroutine decomposition_2decomp(grid, par)
+  subroutine decomposition_2decomp(grid, par)
     !! Performs 2D mesh decomposition using 2decomp&fft
     use m_mesh_content, only: par_t, grid_t
     use decomp_2d, only: decomp_2d_init, DECOMP_2D_COMM_CART_X, xsize, xstart

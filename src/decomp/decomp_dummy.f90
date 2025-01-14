@@ -5,13 +5,13 @@ module m_decomp
 
   contains
 
-  module function is_avail_2decomp() result(avail)
+  function is_avail_2decomp() result(avail)
     logical :: avail
 
     avail = .false.
   end function
 
-  module subroutine decomposition_2decomp(grid, par)
+  subroutine decomposition_2decomp(grid, par)
     use m_mesh_content, only: par_t, grid_t
     class(grid_t), intent(inout) :: grid
     class(par_t), intent(inout) :: par 
