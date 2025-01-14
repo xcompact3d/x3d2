@@ -8,8 +8,5 @@ enable_testing()
 set(POISSON_SOLVER FFT CACHE STRING
   "Select the Poisson solver: FFT or ITER")
 
-set(BACKEND None CACHE STRING
-  "Select the Backend: CUDA or OMP")
-
 add_subdirectory(src)
 add_subdirectory(tests)

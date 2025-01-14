@@ -47,7 +47,8 @@ set(DUMMYDECOMPSRC
   decomp/decomp_dummy.f90
 )
 
-if(${BACKEND} STREQUAL "CUDA")
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   list(APPEND SRC ${CUDASRC})
 endif()
 
