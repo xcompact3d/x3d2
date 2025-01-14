@@ -48,6 +48,7 @@ program test_fft
   real(dp), dimension(3) :: xloc
   real(dp), parameter :: tol=1e-10
   logical :: use_2decomp
+  real(dp), allocatable, dimension(:, :, :) :: input_data, output_data
 
 #ifdef CUDA
   type(cuda_backend_t), target :: cuda_backend
@@ -119,10 +120,11 @@ program test_fft
   input_field => allocator%get_block(DIR_C, CELL)
   output_field => allocator%get_block(DIR_C, CELL)
 
-  dims = mesh%get_dims(CELL)
-  input_field%data(:, :, :) = 0.0
-  output_field%data(:, :, :) = 0.0
+  call input_field%fill(0._dp)
+  call output_field%fill(0._dp)
 
+  dims = mesh%get_dims(CELL)
+  allocate(input_data(dims(1), dims(2), dims(3)))
 
   ! Initialise field with some function
   do k = 1, dims(3)
@@ -132,10 +134,12 @@ program test_fft
         x = xloc(1)
         y = xloc(2)
         z = xloc(3)
-        input_field%data(i, j, k) = sin(x)*cos(y)*cos(z) + 2*x
+        input_data(i, j, k) = sin(x)*cos(y)*cos(z) + 2*x
       end do
     end do
   end do
+
+  call backend%set_field_data(input_field, input_data, DIR_C)
 
   call backend%init_poisson_fft(mesh, xdirps, ydirps, zdirps)
 
@@ -143,9 +147,11 @@ program test_fft
   call backend%poisson_fft%fft_forward(input_field)
   call backend%poisson_fft%fft_backward(output_field)
 
+  allocate(output_data(dims(1), dims(2), dims(3)))
+  call backend%get_field_data(output_data, output_field, DIR_C)
   ! The output scaled with number of cells in domain, hence the first '/product(dims_global)'. 
   ! RMS value is used for the norm, hence the second '/product(dims_global)'
-  error_norm = norm2(input_field%data(:, :, :) - output_field%data(:, :, :)/product(dims_global) )**2/product(dims_global)
+  error_norm = norm2(input_data(:, :, :) - output_data(:, :, :)/product(dims_global) )**2/product(dims_global)
   call MPI_Allreduce(MPI_IN_PLACE, error_norm, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
   error_norm = sqrt(error_norm)
 

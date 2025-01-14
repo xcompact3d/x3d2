@@ -21,6 +21,16 @@ function(define_test testfile np backend)
   endif()
   target_link_libraries(${test_name} PRIVATE x3d2)
 
+if(WITH_2DECOMPFFT)
+  find_package(decomp2d REQUIRED)
+  include_directories(${decomp2d_INCLUDE_DIRS})
+  target_link_libraries(decomp2d)
+  target_link_libraries(${test_name} PRIVATE decomp2d)
+endif()
+
+  find_package(MPI REQUIRED)
+  target_link_libraries(${test_name} PRIVATE MPI::MPI_Fortran)
+
   add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} ${test_name}")
 
 endfunction()

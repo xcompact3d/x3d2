@@ -53,7 +53,7 @@ endif()
 
 # Decide whether 2decomp&fft is supported by the build
 find_package(decomp2d)
-set(WITH_2DECOMPFFT (${POISSON_SOLVER} STREQUAL "FFT" AND decomp2d_FOUND))
+set(WITH_2DECOMPFFT (${POISSON_SOLVER} STREQUAL "FFT" AND decomp2d_FOUND) CACHE INTERNAL "use 2decomp")
 
 if(WITH_2DECOMPFFT)
   list(APPEND SRC ${2DECOMPFFTSRC})
