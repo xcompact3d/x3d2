@@ -6,9 +6,6 @@ module m_decomp
 
   contains
 
-  !public :: is_avail_decomp
-  !public :: decomposition
-  
   module function is_avail_2decomp() result(avail)
     logical :: avail
 

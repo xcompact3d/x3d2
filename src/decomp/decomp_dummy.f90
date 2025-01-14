@@ -1,9 +1,7 @@
 module m_decomp
+  !! Dummy implementation of the decomposition to be linked against when 2decomp&fft isn't available.
 
   implicit none
-
-  !public :: is_avail_decomp
-  !public :: decomposition
 
   contains
 
