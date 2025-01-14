@@ -14,6 +14,9 @@ set(SRC
   mesh_content.f90
   field.f90
   vector_calculus.f90
+  case/base_case.f90
+  case/generic.f90
+  case/tgv.f90
   omp/backend.f90
   omp/common.f90
   omp/kernels/distributed.f90
