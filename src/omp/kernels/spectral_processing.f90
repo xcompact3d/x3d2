@@ -1,11 +1,12 @@
 module m_omp_spectral
-
   use m_common, only: dp
   implicit none
-  
-  contains
-  subroutine process_spectral_div_u(div_u, waves, nx_spec, ny_spec, nz_spec, &
-      y_sp_st, nx, ny, nz, ax, bx, ay, by, az, bz)
+
+contains
+  subroutine process_spectral_div_u( &
+    div_u, waves, nx_spec, ny_spec, nz_spec, y_sp_st, &
+    nx, ny, nz, ax, bx, ay, by, az, bz &
+    )
 
     complex(dp), intent(inout), dimension(:, :, :) :: div_u
     complex(dp), intent(in), dimension(:, :, :) :: waves
@@ -17,10 +18,9 @@ module m_omp_spectral
     integer :: i, j, k, ix, iy, iz
     real(dp) :: tmp_r, tmp_c, div_r, div_c
 
-
-    do k=1, nz_spec
-      do j=1, ny_spec
-        do i=1, nx_spec 
+    do k = 1, nz_spec
+      do j = 1, ny_spec
+        do i = 1, nx_spec
           ! normalisation
           div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
           div_c = aimag(div_u(i, j, k))/nx/ny/nz
@@ -87,12 +87,9 @@ module m_omp_spectral
 
           ! update the entry
           div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
-        
         end do
       end do
     end do
-
-
 
   end subroutine
 

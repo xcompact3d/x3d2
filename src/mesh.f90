@@ -54,8 +54,8 @@ module m_mesh
 
 contains
 
-  function mesh_init(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, use_2decomp) &
-    result(mesh)
+  function mesh_init(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, &
+                     use_2decomp) result(mesh)
     use m_decomp, only: is_avail_2decomp, decomposition_2decomp
     !! Completely initialise the mesh object.
     !! Upon initialisation the mesh object can be read-only and shouldn't be edited
@@ -72,7 +72,7 @@ contains
     integer :: dir, j
     integer :: ierr
 
-    allocate(mesh)
+    allocate (mesh)
     allocate (mesh%geo)
     allocate (mesh%grid)
     allocate (mesh%par)
@@ -101,7 +101,8 @@ contains
         error stop 'BCs are incompatible: in a direction make sure to have &
                     &either both sides periodic or none.'
       end if
-      mesh%grid%periodic_BC(dir) = all(mesh%grid%BCs_global(dir, :) == BC_PERIODIC)
+      mesh%grid%periodic_BC(dir) = all(mesh%grid%BCs_global(dir, :) &
+                                       == BC_PERIODIC)
     end do
 
     ! Set global vertex dims
@@ -130,10 +131,10 @@ contains
     if (present(use_2decomp)) then
       if (is_avail_2decomp() .and. use_2decomp) then
         call decomposition_2decomp(mesh%grid, mesh%par)
-      else 
+      else
         call decomposition_generic(mesh%grid, mesh%par)
       end if
-    else 
+    else
       call decomposition_generic(mesh%grid, mesh%par)
     end if
 
@@ -168,12 +169,12 @@ contains
     use m_mesh_content, only: par_t, grid_t
 
     class(grid_t), intent(inout) :: grid
-    class(par_t), intent(inout) :: par 
+    class(par_t), intent(inout) :: par
     integer, allocatable, dimension(:, :, :) :: global_ranks
     integer :: i, nproc_x, nproc_y, nproc_z
 
     if (par%is_root()) then
-      print*, "Domain decomposition by x3d2 (generic)"
+      print *, "Domain decomposition by x3d2 (generic)"
     end if
 
     ! Number of processes on a direction basis

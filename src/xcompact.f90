@@ -64,7 +64,7 @@ program xcompact
   ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robin
   ierr = cudaGetDevice(devnum)
   backend_name = "CUDA"
-#else 
+#else
   backend_name = "OMP"
 #endif
 
@@ -87,9 +87,10 @@ program xcompact
   call read_solver_input(i_poisson_solver_type=poisson_solver_type)
 
   ! Decide whether 2decomp is used or not
-  use_2decomp = (poisson_solver_type == 'FFT' .and.  trim(backend_name) == 'OMP')
+  use_2decomp = poisson_solver_type == 'FFT' .and. trim(backend_name) == 'OMP'
 
-  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, use_2decomp=use_2decomp)
+  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, &
+                use_2decomp=use_2decomp)
 
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(mesh, SZ)

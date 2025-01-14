@@ -111,10 +111,9 @@ contains
     solver%v => solver%backend%allocator%get_block(DIR_X)
     solver%w => solver%backend%allocator%get_block(DIR_X)
 
-
     call read_solver_input(Re, dt, n_iters, n_output, poisson_solver_type, &
-      time_intg, der1st_scheme, der2nd_scheme, &
-      interpl_scheme, stagder_scheme)
+                           time_intg, der1st_scheme, der2nd_scheme, &
+                           interpl_scheme, stagder_scheme)
 
     solver%time_integrator = time_intg_t(solver%backend, &
                                          solver%backend%allocator, &
@@ -189,15 +188,16 @@ contains
 
   end subroutine
 
-  subroutine read_solver_input(i_Re, i_dt, i_n_iters, i_n_output, i_poisson_solver_type, &
-      i_time_intg, i_der1st_scheme, i_der2nd_scheme, &
-      i_interpl_scheme, i_stagder_scheme)
-  !! Read solver section of input file
+  subroutine read_solver_input( &
+    i_Re, i_dt, i_n_iters, i_n_output, i_poisson_solver_type, i_time_intg, &
+    i_der1st_scheme, i_der2nd_scheme, i_interpl_scheme, i_stagder_scheme &
+    )
+    !! Read solver section of input file
     real(dp), optional, intent(out) :: i_Re, i_dt
     integer, optional, intent(out) :: i_n_iters, i_n_output
     character(3), optional, intent(out) :: i_poisson_solver_type, i_time_intg
     character(30), optional, intent(out) :: i_der1st_scheme, i_der2nd_scheme, &
-                     i_interpl_scheme, i_stagder_scheme
+                                            i_interpl_scheme, i_stagder_scheme
 
     real(dp) :: Re, dt
     integer :: n_iters, n_output
@@ -226,16 +226,17 @@ contains
       error stop 'Input file is not provided.'
     end if
 
-    if(present(i_Re                 ))  i_Re                  = Re
-    if(present(i_dt                 ))  i_dt                  = dt
-    if(present(i_n_iters            ))  i_n_iters             = n_iters
-    if(present(i_n_output           ))  i_n_output            = n_output
-    if(present(i_poisson_solver_type))  i_poisson_solver_type = poisson_solver_type
-    if(present(i_time_intg          ))  i_time_intg           = time_intg
-    if(present(i_der1st_scheme      ))  i_der1st_scheme       = der1st_scheme
-    if(present(i_der2nd_scheme      ))  i_der2nd_scheme       = der2nd_scheme
-    if(present(i_interpl_scheme     ))  i_interpl_scheme      = interpl_scheme
-    if(present(i_stagder_scheme     ))  i_stagder_scheme      = stagder_scheme
+    if (present(i_Re)) i_Re = Re
+    if (present(i_dt)) i_dt = dt
+    if (present(i_n_iters)) i_n_iters = n_iters
+    if (present(i_n_output)) i_n_output = n_output
+    if (present(i_poisson_solver_type)) &
+      i_poisson_solver_type = poisson_solver_type
+    if (present(i_time_intg)) i_time_intg = time_intg
+    if (present(i_der1st_scheme)) i_der1st_scheme = der1st_scheme
+    if (present(i_der2nd_scheme)) i_der2nd_scheme = der2nd_scheme
+    if (present(i_interpl_scheme)) i_interpl_scheme = interpl_scheme
+    if (present(i_stagder_scheme)) i_stagder_scheme = stagder_scheme
 
   end subroutine
 

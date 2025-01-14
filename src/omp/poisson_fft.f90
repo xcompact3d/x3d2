@@ -39,11 +39,12 @@ contains
     call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps)
 
     if (mesh%par%is_root()) then
-      print*, "Initialising 2decomp&fft"
+      print *, "Initialising 2decomp&fft"
     end if
 
     call decomp_2d_fft_init(PHYSICAL_IN_X)
-    allocate(poisson_fft%c_x(poisson_fft%nx_spec, poisson_fft%ny_spec, poisson_fft%nz_spec))
+    allocate (poisson_fft%c_x(poisson_fft%nx_spec, poisson_fft%ny_spec, &
+                              poisson_fft%nz_spec))
 
   end function init
 
@@ -72,9 +73,11 @@ contains
 
     class(omp_poisson_fft_t) :: self
 
-    call process_spectral_div_u(self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
+    call process_spectral_div_u( &
+      self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
       self%y_sp_st, self%nx_glob, self%ny_glob, self%nz_glob, &
-      self%ax, self%bx, self%ay, self%by, self%az, self%bz)
+      self%ax, self%bx, self%ay, self%by, self%az, self%bz &
+      )
 
   end subroutine fft_postprocess_omp
 

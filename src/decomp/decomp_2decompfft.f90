@@ -4,7 +4,7 @@ module m_decomp
   use mpi
   implicit none
 
-  contains
+contains
 
   function is_avail_2decomp() result(avail)
     logical :: avail
@@ -19,11 +19,10 @@ module m_decomp
     use decomp_2d_mpi, only: nrank, nproc
 
     class(grid_t), intent(inout) :: grid
-    class(par_t), intent(inout) :: par 
+    class(par_t), intent(inout) :: par
     integer :: p_col, p_row
     integer, allocatable, dimension(:, :, :) :: global_ranks
     integer, allocatable, dimension(:) :: global_ranks_lin
-    !integer :: nproc
     logical, dimension(3) :: periodic_bc
     integer :: nx, ny, nz
     integer :: ierr
@@ -31,7 +30,7 @@ module m_decomp
     integer, dimension(2) :: coords
 
     if (par%is_root()) then
-      print*, "Domain decomposition by 2decomp&fft"
+      print *, "Domain decomposition by 2decomp&fft"
     end if
     nrank = par%nrank
     nproc = par%nproc
@@ -49,16 +48,17 @@ module m_decomp
     call decomp_2d_init(nx, ny, nz, p_row, p_col, periodic_bc)
 
     ! Get global_ranks
-    allocate(global_ranks(1, p_row, p_col))
-    allocate(global_ranks_lin(p_row*p_col))
+    allocate (global_ranks(1, p_row, p_col))
+    allocate (global_ranks_lin(p_row*p_col))
     global_ranks_lin(:) = 0
 
     call MPI_Comm_rank(DECOMP_2D_COMM_CART_X, cart_rank, ierr)
     call MPI_Cart_coords(DECOMP_2D_COMM_CART_X, cart_rank, 2, coords, ierr)
 
-    global_ranks_lin(coords(1)+1 + p_row*(coords(2))) = par%nrank
+    global_ranks_lin(coords(1) + 1 + p_row*(coords(2))) = par%nrank
 
-    call MPI_Allreduce(MPI_IN_PLACE, global_ranks_lin, p_row*p_col, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+    call MPI_Allreduce(MPI_IN_PLACE, global_ranks_lin, p_row*p_col, &
+                       MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
 
     global_ranks = reshape(global_ranks_lin, shape=[1, p_row, p_col])
 
