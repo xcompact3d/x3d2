@@ -1,28 +1,24 @@
-submodule(m_decomp) m_decomp_dummy
+module m_decomp
 
-  use mpi
   implicit none
 
-  type, extends(decomp_t) :: decomp_dummy_t
-  contains
-    procedure :: decomposition => decomposition_dummy
-  end type
+  !public :: is_avail_decomp
+  !public :: decomposition
 
   contains
 
-  module subroutine init_decomp(decomp)
-    class(decomp_t), allocatable, intent(out):: decomp
+  module function is_avail_2decomp() result(avail)
+    logical :: avail
 
-    allocate(decomp_dummy_t :: decomp)
-    decomp%is_avail_2decomp = .false.
-  end subroutine
+    avail = .false.
+  end function
 
-  module subroutine decomposition_dummy(self, grid, par)
+  module subroutine decomposition_2decomp(grid, par)
     use m_mesh_content, only: par_t, grid_t
-    class(decomp_generic_t) :: self
     class(grid_t), intent(inout) :: grid
+    class(par_t), intent(inout) :: par 
 
      error stop "This build doesn't support 2decomp decomposition"
   end subroutine decomposition_dummy
 
-end submodule
+end module

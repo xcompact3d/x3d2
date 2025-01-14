@@ -1,36 +1,32 @@
-submodule(m_decomp) m_decomp_2decompfft
+module m_decomp
 !! Parallel decomposition provided by 2decomp&FFT
 
   use mpi
   implicit none
 
-  type, extends(decomp_t) :: decomp_2decompfft_t
-  contains
-    procedure :: decomposition => decomposition_2decompfft
-  end type
-
   contains
 
-  module subroutine init_decomp(decomp)
-    class(decomp_t), allocatable, intent(out):: decomp
+  !public :: is_avail_decomp
+  !public :: decomposition
+  
+  module function is_avail_2decomp() result(avail)
+    logical :: avail
 
-    allocate(decomp_2decompfft_t :: decomp)
-    decomp%is_avail_2decomp = .true.
-  end subroutine
+    avail = .true.
+  end function
 
-  module subroutine decomposition_2decompfft(self, grid, par)
+  module subroutine decomposition_2decomp(grid, par)
     !! Performs 2D mesh decomposition using 2decomp&fft
     use m_mesh_content, only: par_t, grid_t
     use decomp_2d, only: decomp_2d_init, DECOMP_2D_COMM_CART_X, xsize, xstart
     use decomp_2d_mpi, only: nrank, nproc
 
-    class(decomp_2decompfft_t) :: self
     class(grid_t), intent(inout) :: grid
     class(par_t), intent(inout) :: par 
     integer :: p_col, p_row
     integer, allocatable, dimension(:, :, :) :: global_ranks
     integer, allocatable, dimension(:) :: global_ranks_lin
-    integer :: nproc
+    !integer :: nproc
     logical, dimension(3) :: periodic_bc
     integer :: nx, ny, nz
     integer :: ierr
@@ -76,6 +72,6 @@ submodule(m_decomp) m_decomp_2decompfft
     call par%compute_rank_pos_from_global(global_ranks)
     call grid%copy_cell2vert_dims(par)
 
-  end subroutine decomposition_2decompfft
+  end subroutine decomposition_2decomp
 
-end submodule
+end module

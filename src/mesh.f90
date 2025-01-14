@@ -56,7 +56,7 @@ contains
 
   function mesh_init(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, use_2decomp) &
     result(mesh)
-    use m_decomp, only: decomp_mod_t
+    use m_decomp, only: is_avail_2decomp, decomposition_2decomp
     !! Completely initialise the mesh object.
     !! Upon initialisation the mesh object can be read-only and shouldn't be edited
     !! Takes as argument global information about the mesh like its length, number of cells and decomposition in each direction
@@ -65,7 +65,6 @@ contains
     real(dp), dimension(3), intent(in) :: L_global
     logical, optional, intent(in) :: use_2decomp
     class(mesh_t), allocatable :: mesh
-    type(decomp_mod_t) :: decomp
     character(len=*), dimension(2), intent(in) :: BC_x, BC_y, BC_z
 
     character(len=20), dimension(3, 2) :: BC_all
@@ -129,9 +128,8 @@ contains
 
     ! Either use 2decomp or the generic decomposition
     if (present(use_2decomp)) then
-      decomp = decomp_mod_t()
-      if (decomp%is_avail_2decomp() .and. use_2decomp) then
-        call decomp%decomp_grid(mesh%grid, mesh%par)
+      if (is_avail_2decomp() .and. use_2decomp) then
+        call decomposition_2decomp(mesh%grid, mesh%par)
       else 
         call decomposition_generic(mesh%grid, mesh%par)
       end if

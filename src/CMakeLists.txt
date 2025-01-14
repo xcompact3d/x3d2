@@ -12,7 +12,6 @@ set(SRC
   ordering.f90
   mesh.f90
   mesh_content.f90
-  decomp/decomp.f90
   field.f90
   vector_calculus.f90
   omp/backend.f90
