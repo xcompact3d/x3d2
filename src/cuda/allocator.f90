@@ -19,6 +19,8 @@ module m_cuda_allocator
     real(dp), device, pointer, private :: p_data_d(:)
     real(dp), device, pointer, contiguous :: data_d(:, :, :)
   contains
+    procedure :: fill => fill_cuda
+    procedure :: get_shape => get_shape_cuda
     procedure :: set_shape => set_shape_cuda
   end type cuda_field_t
 
@@ -38,6 +40,26 @@ contains
     f%next => next
     f%id = id
   end function cuda_field_init
+
+  subroutine fill_cuda(self, c)
+    implicit none
+
+    class(cuda_field_t) :: self
+    real(dp), intent(in) :: c
+
+    self%p_data_d(:) = c
+
+  end subroutine fill_cuda
+
+  function get_shape_cuda(self) result(dims)
+    implicit none
+
+    class(cuda_field_t) :: self
+    integer :: dims(3)
+
+    dims = shape(self%data_d)
+
+  end function get_shape_cuda
 
   subroutine set_shape_cuda(self, dims)
     implicit none

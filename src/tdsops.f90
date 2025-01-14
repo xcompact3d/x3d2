@@ -1,7 +1,7 @@
 module m_tdsops
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_common, only: dp, pi, VERT, CELL, none, &
+  use m_common, only: dp, pi, VERT, CELL, &
                       BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET
   use m_mesh, only: mesh_t
 
@@ -33,7 +33,7 @@ module m_tdsops
     real(dp) :: alpha, a, b, c = 0._dp, d = 0._dp
     logical :: periodic
     integer :: tds_n
-    integer :: dir
+    integer :: move = 0 ! move between vertices and cell centres
     integer :: n_halo
   contains
     procedure :: deriv_1st, deriv_2nd, interpl_mid, stagder_1st
@@ -133,6 +133,22 @@ contains
       call tdsops%stagder_1st(delta, scheme, from_to, bc_start, bc_end, sym)
     else
       error stop 'operation is not defined'
+    end if
+
+    select case (from_to)
+    case ('v2p')
+      tdsops%move = 1
+    case ('p2v')
+      tdsops%move = -1
+    case default
+      tdsops%move = 0
+    end select
+
+    if (tdsops%dist_sa(tds_n) > 1d-16) then
+      print *, 'There are ', tds_n, 'points in a subdomain, it may be too few!'
+      print *, 'The entry distributed solver disregards in "' &
+        //operation//'" operation is:', tdsops%dist_sa(tds_n)
+      print *, 'It may result in numerical errors with the distributed solver!'
     end if
 
   end function tdsops_init
