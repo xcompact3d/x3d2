@@ -21,12 +21,23 @@ function(define_test testfile np backend)
   endif()
   target_link_libraries(${test_name} PRIVATE x3d2)
 
+if(WITH_2DECOMPFFT)
+  find_package(decomp2d REQUIRED)
+  include_directories(${decomp2d_INCLUDE_DIRS})
+  target_link_libraries(decomp2d)
+  target_link_libraries(${test_name} PRIVATE decomp2d)
+endif()
+
+  find_package(MPI REQUIRED)
+  target_link_libraries(${test_name} PRIVATE MPI::MPI_Fortran)
+
   add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} ${test_name}")
 
 endfunction()
 
 define_test(test_allocator.f90 1 omp)
 define_test(test_mesh.f90 4 omp)
+define_test(test_fft.f90 4 omp)
 define_test(test_reordering.f90 1 omp)
 define_test(test_reordering.f90 2 omp)
 define_test(test_reordering.f90 4 omp)
@@ -40,9 +51,10 @@ define_test(test_scalar_product.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(test_sum_intox.f90 ${CMAKE_CTEST_NPROCS} omp)
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
+   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   define_test(test_reordering.f90 1 cuda)
   define_test(test_time_integrator.f90 1 cuda)
+  define_test(test_fft.f90 1 cuda)
   define_test(cuda/test_cuda_allocator.f90 1 cuda)
   define_test(cuda/test_cuda_reorder.f90 1 cuda)
   define_test(cuda/test_thom.f90 1 cuda)

@@ -48,7 +48,7 @@ contains
   function init(mesh, xdirps, ydirps, zdirps) result(poisson_fft)
     implicit none
 
-    class(mesh_t), intent(in) :: mesh
+    type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
     type(cuda_poisson_fft_t) :: poisson_fft
