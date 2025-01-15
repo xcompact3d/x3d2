@@ -18,6 +18,7 @@ contains
     integer :: i, j, k, ix, iy, iz
     real(dp) :: tmp_r, tmp_c, div_r, div_c
 
+    !$omp parallel do private(div_r, div_c, ix, iy, iz, tmp_r, tmp_c) collapse(3)
     do k = 1, nz_spec
       do j = 1, ny_spec
         do i = 1, nx_spec
@@ -90,6 +91,7 @@ contains
         end do
       end do
     end do
+    !$omp end parallel do
 
   end subroutine
 
