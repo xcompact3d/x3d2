@@ -4,7 +4,7 @@ module m_omp_spectral
 
 contains
   subroutine process_spectral_div_u( &
-    div_u, waves, nx_spec, ny_spec, nz_spec, y_sp_st, z_sp_st, &
+    div_u, waves, nx_spec, ny_spec, nz_spec, x_sp_st, y_sp_st, z_sp_st, &
     nx, ny, nz, ax, bx, ay, by, az, bz &
     )
 
@@ -12,7 +12,7 @@ contains
     complex(dp), intent(in), dimension(:, :, :) :: waves
     real(dp), intent(in), dimension(:) :: ax, bx, ay, by, az, bz
     integer, intent(in) :: nx_spec, ny_spec, nz_spec
-    integer, intent(in) :: y_sp_st, z_sp_st
+    integer, intent(in) :: x_sp_st, y_sp_st, z_sp_st
     integer, intent(in) :: nx, ny, nz
 
     integer :: i, j, k, ix, iy, iz
@@ -25,7 +25,7 @@ contains
           div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
           div_c = aimag(div_u(i, j, k))/nx/ny/nz
 
-          ix = i
+          ix = i + x_sp_st
           iy = j + y_sp_st
           iz = k + z_sp_st
 

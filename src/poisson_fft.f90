@@ -17,7 +17,7 @@ module m_poisson_fft
     !> Local dimensions in the permuted slabs in spectral space
     integer :: nx_spec, ny_spec, nz_spec
     !> Offset in y and z directions in the permuted slabs in spectral space
-    integer :: y_sp_st, z_sp_st
+    integer :: x_sp_st, y_sp_st, z_sp_st
     !> Local domain sized array storing the spectral equivalence constants
     complex(dp), allocatable, dimension(:, :, :) :: waves
     !> Wave numbers in x, y, and z
@@ -89,12 +89,13 @@ contains
     type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     integer, dimension(3), intent(in) :: n_spec ! Size of the spectral pencil
-    integer, dimension(3), intent(in) :: n_sp_st ! Start of the spectral pencil (=offset)
+    integer, dimension(3), intent(in) :: n_sp_st ! Offset of the spectral pencil
 
     self%nx_spec = n_spec(1)
     self%ny_spec = n_spec(2)
     self%nz_spec = n_spec(3)
 
+    self%x_sp_st = n_sp_st(1)
     self%y_sp_st = n_sp_st(2)
     self%z_sp_st = n_sp_st(3)
 
@@ -209,7 +210,7 @@ contains
     do k = 1, self%nz_spec
       do j = 1, self%ny_spec
         do i = 1, self%nx_spec
-          ix = i; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+          ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
           rlexs = real(exs(ix), kind=dp)*geo%d(1)
           rleys = real(eys(iy), kind=dp)*geo%d(2)
           rlezs = real(ezs(iz), kind=dp)*geo%d(3)

@@ -45,6 +45,8 @@ contains
 
     call decomp_2d_fft_init(PHYSICAL_IN_X)
     call decomp_2d_fft_get_size(istart, iend, isize)
+    ! Converts a start position into an offset
+    istart(:) = istart(:) - 1
     call poisson_fft%spec_init(mesh, xdirps, ydirps, zdirps, isize, istart)
 
     allocate (poisson_fft%c_x(poisson_fft%nx_spec, poisson_fft%ny_spec, &
@@ -78,7 +80,7 @@ contains
     class(omp_poisson_fft_t) :: self
 
     call process_spectral_div_u( &
-      self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
+      self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, self%x_sp_st, &
       self%y_sp_st, self%z_sp_st, self%nx_glob, self%ny_glob, self%nz_glob, &
       self%ax, self%bx, self%ay, self%by, self%az, self%bz &
       )
