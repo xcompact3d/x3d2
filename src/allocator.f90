@@ -47,7 +47,7 @@ module m_allocator
   contains
     procedure :: get_block
     procedure :: release_block
-    procedure :: create_block, create_first_block
+    procedure :: create_block
     procedure :: get_block_ids
     procedure :: destroy
     procedure :: compute_padded_dims
@@ -97,35 +97,17 @@ contains
 
   end subroutine
 
-  function create_block(self, next) result(ptr)
+  function create_block(self) result(ptr)
     !! Allocate memory for a new block and return a pointer to a new
     !! [[m_allocator(module):field_t(type)]] object.
     class(allocator_t), intent(inout) :: self
-    type(field_t), pointer, intent(in) :: next
     type(field_t), pointer :: newblock
     class(field_t), pointer :: ptr
     self%next_id = self%next_id + 1
     allocate (newblock)
-    newblock = field_t(self%ngrid, next, id=self%next_id)
+    newblock = field_t(self%ngrid, self%first, id=self%next_id)
     ptr => newblock
   end function create_block
-
-  function create_first_block(self) result(ptr)
-    !! Resolve the type of the field linked list to handle the special
-    !! case of creating the first block.
-    class(allocator_t), intent(inout) :: self
-    class(field_t), pointer :: ptr
-
-    associate(first => self%first)
-      select type(first)
-      type is (field_t)
-        ptr => self%create_block(next=first)
-      class default
-        error stop "Create first block has not been properly overloaded"
-      end select
-    end associate
-
-  end function create_first_block
 
   function get_block(self, dir, data_loc) result(handle)
     !! Return a pointer to the first available memory block, i.e. the
@@ -148,7 +130,7 @@ contains
     if (.not. associated(self%first)) then
       ! Construct a field_t. This effectively allocates
       ! storage space.
-      self%first => self%create_first_block()
+      self%first => self%create_block()
     end if
     handle => self%first
     self%first => self%first%next ! 2nd block becomes head block
