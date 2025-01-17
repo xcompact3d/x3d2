@@ -192,10 +192,10 @@ contains
     global_ranks = reshape([(i, i=0, par%nproc - 1)], &
                            shape=[nproc_x, nproc_y, nproc_z])
 
-    par%n_offset(:) = grid%vert_dims(:)*par%nrank_dir(:)
-
     call par%compute_rank_pos_from_global(global_ranks)
     call grid%copy_vert2cell_dims(par)
+
+    par%n_offset(:) = grid%vert_dims(:)*par%nrank_dir(:)
 
   end subroutine
 
