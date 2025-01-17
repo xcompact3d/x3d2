@@ -37,17 +37,17 @@ contains
 
     type(omp_poisson_fft_t) :: poisson_fft
 
-    call poisson_fft%base_init(mesh)
-
     if (mesh%par%is_root()) then
       print *, "Initialising 2decomp&fft"
     end if
 
+    ! Work out the spectral dimensions in the permuted state
     call decomp_2d_fft_init(PHYSICAL_IN_X)
     call decomp_2d_fft_get_size(istart, iend, isize)
     ! Converts a start position into an offset
     istart(:) = istart(:) - 1
-    call poisson_fft%spec_init(mesh, xdirps, ydirps, zdirps, isize, istart)
+
+    call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps, isize, istart)
 
     allocate (poisson_fft%c_x(poisson_fft%nx_spec, poisson_fft%ny_spec, &
                               poisson_fft%nz_spec))

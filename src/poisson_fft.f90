@@ -27,7 +27,6 @@ module m_poisson_fft
     procedure(fft_backward), deferred :: fft_backward
     procedure(fft_postprocess), deferred :: fft_postprocess
     procedure :: base_init
-    procedure :: spec_init
     procedure :: waves_set
   end type poisson_fft_t
 
@@ -60,36 +59,24 @@ module m_poisson_fft
 
 contains
 
-  subroutine base_init(self, mesh)
+  subroutine base_init(self, mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
     implicit none
-
-    class(poisson_fft_t) :: self
-    type(mesh_t), intent(in) :: mesh
-
-    integer :: dims(3)
-
-    dims = mesh%get_global_dims(CELL)
-    self%nx_glob = dims(1); self%ny_glob = dims(2); self%nz_glob = dims(3)
-    dims = mesh%get_dims(CELL)
-    self%nx_loc = dims(1); self%ny_loc = dims(2); self%nz_loc = dims(3)
-
-    ! 1D decomposition along Z in real domain, and along Y in spectral space
-    if (mesh%par%nproc_dir(1) /= 1) print *, 'nproc_dir in x-dir must be 1'
-
-    allocate (self%ax(self%nx_glob), self%bx(self%nx_glob))
-    allocate (self%ay(self%ny_glob), self%by(self%ny_glob))
-    allocate (self%az(self%nz_glob), self%bz(self%nz_glob))
-
-  end subroutine base_init
-
-  subroutine spec_init(self, mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
-    !! Initialise the spectral space based on pencil sizes
 
     class(poisson_fft_t) :: self
     type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     integer, dimension(3), intent(in) :: n_spec ! Size of the spectral pencil
     integer, dimension(3), intent(in) :: n_sp_st ! Offset of the spectral pencil
+
+    integer :: dims(3)
+
+    ! Decomposition is in y- and z-directions
+    if (mesh%par%nproc_dir(1) /= 1) print *, 'nproc_dir in x-dir must be 1'
+
+    dims = mesh%get_global_dims(CELL)
+    self%nx_glob = dims(1); self%ny_glob = dims(2); self%nz_glob = dims(3)
+    dims = mesh%get_dims(CELL)
+    self%nx_loc = dims(1); self%ny_loc = dims(2); self%nz_loc = dims(3)
 
     self%nx_spec = n_spec(1)
     self%ny_spec = n_spec(2)
@@ -99,13 +86,16 @@ contains
     self%y_sp_st = n_sp_st(2)
     self%z_sp_st = n_sp_st(3)
 
-    ! FFT 3D transform halves the first index.
+    allocate (self%ax(self%nx_glob), self%bx(self%nx_glob))
+    allocate (self%ay(self%ny_glob), self%by(self%ny_glob))
+    allocate (self%az(self%nz_glob), self%bz(self%nz_glob))
+
     allocate (self%waves(self%nx_spec, self%ny_spec, self%nz_spec))
 
     ! waves_set requires some of the preprocessed tdsops variables.
     call self%waves_set(mesh%geo, xdirps, ydirps, zdirps)
 
-  end subroutine
+  end subroutine base_init
 
   subroutine waves_set(self, geo, xdirps, ydirps, zdirps)
     !! Spectral equivalence constants
