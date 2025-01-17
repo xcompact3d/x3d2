@@ -81,7 +81,7 @@ contains
 
   function create_cuda_block(self, next) result(ptr)
     class(cuda_allocator_t), intent(inout) :: self
-    type(cuda_field_t), pointer, intent(in) :: next
+    type(cuda_field_t), pointer :: next
     type(cuda_field_t), pointer :: newblock
     class(field_t), pointer :: ptr
     allocate (newblock)
