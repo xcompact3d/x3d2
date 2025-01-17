@@ -79,14 +79,14 @@ contains
     allocator%allocator_t = allocator_t(mesh, sz)
   end function cuda_allocator_init
 
-  function create_cuda_block(self) result(ptr)
+  function create_cuda_block(self, next) result(ptr)
     class(cuda_allocator_t), intent(inout) :: self
-    type(cuda_field_t), pointer, intent(in) :: next
+    type(cuda_field_t), pointer :: next
     type(cuda_field_t), pointer :: newblock
     class(field_t), pointer :: ptr
     allocate (newblock)
     self%next_id = self%next_id + 1
-    newblock = cuda_field_t(self%ngrid, self%first, id=self%next_id)
+    newblock = cuda_field_t(self%ngrid, next, id=self%next_id)
     ptr => newblock
   end function create_cuda_block
 
