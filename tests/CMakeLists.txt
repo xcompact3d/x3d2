@@ -20,6 +20,7 @@ function(define_test testfile np backend)
     target_link_libraries(${test_name} PRIVATE OpenMP::OpenMP_Fortran)
   endif()
   target_link_libraries(${test_name} PRIVATE x3d2)
+  target_link_libraries(${test_name} PRIVATE x3d2_backends)
 
 if(WITH_2DECOMPFFT)
   find_package(decomp2d REQUIRED)

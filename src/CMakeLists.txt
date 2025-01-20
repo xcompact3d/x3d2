@@ -17,7 +17,6 @@ set(SRC
   case/base_case.f90
   case/generic.f90
   case/tgv.f90
-  omp/backend.f90
   omp/common.f90
   omp/kernels/distributed.f90
   omp/kernels/spectral_processing.f90
@@ -26,7 +25,6 @@ set(SRC
 )
 set(CUDASRC
   cuda/allocator.f90
-  cuda/backend.f90
   cuda/common.f90
   cuda/exec_dist.f90
   cuda/exec_thom.f90
@@ -39,6 +37,9 @@ set(CUDASRC
   cuda/sendrecv.f90
   cuda/tdsops.f90
 )
+set(BACKENDSRC
+  omp/backend.f90
+  )
 set(2DECOMPFFTSRC
   omp/poisson_fft.f90
   decomp/decomp_2decompfft.f90
@@ -50,6 +51,7 @@ set(DUMMYDECOMPSRC
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   list(APPEND SRC ${CUDASRC})
+  list(APPEND BACKENDSRC cuda/backend.f90)
 endif()
 
 # Decide whether 2decomp&fft is supported by the build
@@ -64,8 +66,13 @@ endif()
 add_library(x3d2 STATIC ${SRC})
 target_include_directories(x3d2 INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
 
+add_library(x3d2_backends STATIC ${BACKENDSRC})
+target_include_directories(x3d2_backends INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(x3d2_backends PRIVATE x3d2)
+
 add_executable(xcompact xcompact.f90)
 target_link_libraries(xcompact PRIVATE x3d2)
+target_link_libraries(xcompact PRIVATE x3d2_backends)
 
 # if CUDA compiler
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
@@ -92,6 +99,7 @@ if(WITH_2DECOMPFFT)
   target_link_libraries(decomp2d)
   target_link_libraries(x3d2 PRIVATE decomp2d)
   target_compile_options(x3d2 PRIVATE "-DWITH_2DECOMPFFT")
+  target_compile_options(x3d2_backends PRIVATE "-DWITH_2DECOMPFFT")
 endif()
 
 find_package(OpenMP REQUIRED)
