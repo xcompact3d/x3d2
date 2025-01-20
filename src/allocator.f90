@@ -42,7 +42,7 @@ module m_allocator
     !> The pointer to the first block on the list.  Non associated if
     !> the list is empty
     ! TODO: Rename first to head
-    class(mesh_t), pointer :: mesh
+    type(mesh_t), pointer :: mesh
     class(field_t), pointer :: first => null()
   contains
     procedure :: get_block

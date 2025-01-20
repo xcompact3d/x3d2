@@ -72,7 +72,7 @@ contains
   function init(mesh, allocator) result(backend)
     implicit none
 
-    class(mesh_t), target, intent(inout) :: mesh
+    type(mesh_t), target, intent(inout) :: mesh
     class(allocator_t), target, intent(inout) :: allocator
     type(cuda_backend_t) :: backend
 
@@ -726,7 +726,7 @@ contains
     implicit none
 
     class(cuda_backend_t) :: self
-    class(mesh_t), intent(in) :: mesh
+    type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
     allocate (cuda_poisson_fft_t :: self%poisson_fft)
