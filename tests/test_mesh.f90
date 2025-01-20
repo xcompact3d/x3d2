@@ -38,10 +38,12 @@ program test_mesh
   end if
   call run_test_mesh(.false., allpass)
 
+#ifdef WITH_2DECOMPFFT
   if (nrank == 0) then
       print *, "2decomp decomposition"
   end if
   call run_test_mesh(.true., allpass)
+#endif
 
   if (allpass) then
     write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'

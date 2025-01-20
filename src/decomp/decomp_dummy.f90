@@ -17,6 +17,6 @@ contains
     class(par_t), intent(inout) :: par
 
     error stop "This build doesn't support 2decomp decomposition"
-  end subroutine decomposition_dummy
+  end subroutine decomposition_2decomp
 
 end module

@@ -9,7 +9,6 @@ module m_omp_backend
   use m_omp_sendrecv, only: sendrecv_fields
 
   use m_omp_common, only: SZ
-  use m_omp_poisson_fft, only: omp_poisson_fft_t
   use m_mesh, only: mesh_t
 
   implicit none
@@ -587,18 +586,27 @@ contains
   end subroutine copy_f_to_data_omp
 
   subroutine init_omp_poisson_fft(self, mesh, xdirps, ydirps, zdirps)
+#ifdef WITH_2DECOMPFFT
+    use m_omp_poisson_fft, only: omp_poisson_fft_t
+#endif
+
     implicit none
 
     class(omp_backend_t) :: self
     type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
+#ifdef WITH_2DECOMPFFT
     allocate (omp_poisson_fft_t :: self%poisson_fft)
 
     select type (poisson_fft => self%poisson_fft)
     type is (omp_poisson_fft_t)
       poisson_fft = omp_poisson_fft_t(mesh, xdirps, ydirps, zdirps)
     end select
+#else
+    error stop 'This build does not support FFT based Poisson solver &
+                &on the OpenMP backend!'
+#endif
 
   end subroutine init_omp_poisson_fft
 
