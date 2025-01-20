@@ -64,7 +64,7 @@ contains
 
     ! Get local domain size and offset from 2decomp
     grid%cell_dims(:) = xsize(:)
-    par%n_offset(:) = xstart(:)
+    par%n_offset(:) = xstart(:) - 1
 
     call par%compute_rank_pos_from_global(global_ranks)
     call grid%copy_cell2vert_dims(par)
