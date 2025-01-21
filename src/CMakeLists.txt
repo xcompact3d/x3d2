@@ -2,6 +2,7 @@ set(SRC
   allocator.f90
   backend.f90
   common.f90
+  config.f90
   field.f90
   mesh.f90
   ordering.f90
