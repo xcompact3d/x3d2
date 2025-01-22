@@ -5,8 +5,7 @@ program xcompact
   use m_base_backend
   use m_base_case, only: base_case_t
   use m_common, only: pi
-  use m_config, only: domain_config_t
-  use m_solver, only: read_solver_input
+  use m_config, only: domain_config_t, solver_config_t
   use m_mesh
   use m_case_generic, only: case_generic_t
   use m_case_tgv, only: case_tgv_t
@@ -42,7 +41,7 @@ program xcompact
 
   character(len=200) :: input_file
   type(domain_config_t) :: domain_cfg
-  character(3) :: poisson_solver_type
+  type(solver_config_t) :: solver_cfg
   character(32) :: backend_name
   integer :: nrank, nproc, ierr
   logical :: use_2decomp
@@ -65,6 +64,7 @@ program xcompact
   if (command_argument_count() >= 1) then
     call get_command_argument(1, input_file)
     call domain_cfg%read(file_name=input_file)
+    call solver_cfg%read(file_name=input_file)
   else
     error stop 'Input file is not provided.'
   end if
@@ -76,10 +76,9 @@ program xcompact
     domain_cfg%nproc_dir = [1, 1, nproc]
   end if
 
-  call read_solver_input(i_poisson_solver_type=poisson_solver_type)
-
   ! Decide whether 2decomp is used or not
-  use_2decomp = poisson_solver_type == 'FFT' .and. trim(backend_name) == 'OMP'
+  use_2decomp = solver_cfg%poisson_solver_type == 'FFT' &
+                .and. trim(backend_name) == 'OMP'
 
   mesh = mesh_t(domain_cfg%dims_global, domain_cfg%nproc_dir, &
                 domain_cfg%L_global, domain_cfg%BC_x, domain_cfg%BC_y, &

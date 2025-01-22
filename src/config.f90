@@ -21,6 +21,16 @@ module m_config
     procedure :: read => read_domain_nml
   end type domain_config_t
 
+  type, extends(base_config_t) :: solver_config_t
+    real(dp) :: Re, dt
+    integer :: n_iters, n_output
+    character(3) :: poisson_solver_type, time_intg
+    character(30) :: der1st_scheme, der2nd_scheme, &
+                     interpl_scheme, stagder_scheme
+  contains
+    procedure :: read => read_solver_nml
+  end type solver_config_t
+
   abstract interface
     subroutine read(self, file_name, src) !&
       import :: base_config_t
@@ -72,6 +82,49 @@ contains
     self%BC_z = BC_z
 
   end subroutine read_domain_nml
+
+  subroutine read_solver_nml(self, file_name, src)
+    implicit none
+
+    class(solver_config_t) :: self
+    character(*), optional, intent(in) :: file_name
+    character(*), optional, intent(in) :: src
+
+    real(dp) :: Re, dt
+    integer :: n_iters, n_output
+    character(3) :: poisson_solver_type = 'FFT', time_intg
+    character(30) :: der1st_scheme = 'compact6', der2nd_scheme = 'compact6', &
+                     interpl_scheme = 'classic', stagder_scheme = 'compact6'
+
+    namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
+      time_intg, der1st_scheme, der2nd_scheme, interpl_scheme, stagder_scheme
+
+    if (present(file_name) .and. present(src)) then
+      error stop 'Reading solver config failed! &
+                 &Provide only a file name or source, not both.'
+    else if (present(file_name)) then
+      open (100, file=file_name)
+      read (100, nml=solver_params)
+      close (100)
+    else if (present(src)) then
+      read (src, nml=solver_params)
+    else
+      error stop 'Reading solver config failed! &
+                 &Provide at least one of the following: file name or source'
+    end if
+
+    self%Re = Re
+    self%dt = dt
+    self%n_iters = n_iters
+    self%n_output = n_output
+    self%poisson_solver_type = poisson_solver_type
+    self%time_intg = time_intg
+    self%der1st_scheme = der1st_scheme
+    self%der2nd_scheme = der2nd_scheme
+    self%interpl_scheme = interpl_scheme
+    self%stagder_scheme = stagder_scheme
+
+  end subroutine read_solver_nml
 
 end module m_config
 

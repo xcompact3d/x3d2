@@ -8,6 +8,7 @@ module m_solver
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_Z2C, RDR_C2Z, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL
+  use m_config, only: solver_config_t
   use m_tdsops, only: tdsops_t, dirps_t
   use m_time_integrator, only: time_intg_t
   use m_vector_calculus, only: vector_calculus_t
@@ -90,11 +91,8 @@ contains
     type(allocator_t), target, intent(inout) :: host_allocator
     type(solver_t) :: solver
 
-    real(dp) :: Re, dt
-    integer :: n_iters, n_output
-    character(3) :: poisson_solver_type, time_intg
-    character(30) :: der1st_scheme, der2nd_scheme, &
-                     interpl_scheme, stagder_scheme
+    character(len=200) :: input_file
+    type(solver_config_t) :: solver_cfg
 
     solver%backend => backend
     solver%mesh => mesh
@@ -111,35 +109,44 @@ contains
     solver%v => solver%backend%allocator%get_block(DIR_X)
     solver%w => solver%backend%allocator%get_block(DIR_X)
 
-    call read_solver_input(Re, dt, n_iters, n_output, poisson_solver_type, &
-                           time_intg, der1st_scheme, der2nd_scheme, &
-                           interpl_scheme, stagder_scheme)
+    if (command_argument_count() >= 1) then
+      call get_command_argument(1, input_file)
+      call solver_cfg%read(file_name=input_file)
+    else
+      error stop 'Input file is not provided.'
+    end if
 
     solver%time_integrator = time_intg_t(solver%backend, &
                                          solver%backend%allocator, &
-                                         time_intg)
+                                         solver_cfg%time_intg)
     if (solver%mesh%par%is_root()) then
-      print *, time_intg//' time integrator instantiated'
+      print *, solver_cfg%time_intg//' time integrator instantiated'
     end if
 
-    solver%dt = dt
-    solver%backend%nu = 1._dp/Re
-    solver%n_iters = n_iters
-    solver%n_output = n_output
+    solver%dt = solver_cfg%dt
+    solver%backend%nu = 1._dp/solver_cfg%Re
+    solver%n_iters = solver_cfg%n_iters
+    solver%n_output = solver_cfg%n_output
     solver%ngrid = product(solver%mesh%get_global_dims(VERT))
 
     ! Allocate and set the tdsops
-    call allocate_tdsops(solver%xdirps, solver%backend, &
-                         der1st_scheme, der2nd_scheme, &
-                         interpl_scheme, stagder_scheme, solver%mesh%grid%BCs)
-    call allocate_tdsops(solver%ydirps, solver%backend, &
-                         der1st_scheme, der2nd_scheme, &
-                         interpl_scheme, stagder_scheme, solver%mesh%grid%BCs)
-    call allocate_tdsops(solver%zdirps, solver%backend, &
-                         der1st_scheme, der2nd_scheme, &
-                         interpl_scheme, stagder_scheme, solver%mesh%grid%BCs)
+    call allocate_tdsops( &
+      solver%xdirps, solver%backend, solver_cfg%der1st_scheme, &
+      solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
+      solver_cfg%stagder_scheme, solver%mesh%grid%BCs &
+      )
+    call allocate_tdsops( &
+      solver%ydirps, solver%backend, solver_cfg%der1st_scheme, &
+      solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
+      solver_cfg%stagder_scheme, solver%mesh%grid%BCs &
+      )
+    call allocate_tdsops( &
+      solver%zdirps, solver%backend, solver_cfg%der1st_scheme, &
+      solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
+      solver_cfg%stagder_scheme, solver%mesh%grid%BCs &
+      )
 
-    select case (trim(poisson_solver_type))
+    select case (trim(solver_cfg%poisson_solver_type))
     case ('FFT')
       if (solver%mesh%par%is_root()) print *, 'Poisson solver: FFT'
       call solver%backend%init_poisson_fft(solver%mesh, solver%xdirps, &
@@ -185,58 +192,6 @@ contains
                               stagder_scheme, bc_start, bc_end, from_to='v2p')
     call backend%alloc_tdsops(dirps%stagder_p2v, dir, 'stag-deriv', &
                               stagder_scheme, bc_start, bc_end, from_to='p2v')
-
-  end subroutine
-
-  subroutine read_solver_input( &
-    i_Re, i_dt, i_n_iters, i_n_output, i_poisson_solver_type, i_time_intg, &
-    i_der1st_scheme, i_der2nd_scheme, i_interpl_scheme, i_stagder_scheme &
-    )
-    !! Read solver section of input file
-    real(dp), optional, intent(out) :: i_Re, i_dt
-    integer, optional, intent(out) :: i_n_iters, i_n_output
-    character(3), optional, intent(out) :: i_poisson_solver_type, i_time_intg
-    character(30), optional, intent(out) :: i_der1st_scheme, i_der2nd_scheme, &
-                                            i_interpl_scheme, i_stagder_scheme
-
-    real(dp) :: Re, dt
-    integer :: n_iters, n_output
-    character(3) :: poisson_solver_type, time_intg
-    character(30) :: der1st_scheme, der2nd_scheme, &
-                     interpl_scheme, stagder_scheme
-
-    character(len=200) :: input_file
-
-    namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
-      time_intg, der1st_scheme, der2nd_scheme, &
-      interpl_scheme, stagder_scheme
-
-    ! set defaults
-    poisson_solver_type = 'FFT'
-    time_intg = 'AB3'
-    der1st_scheme = 'compact6'; der2nd_scheme = 'compact6'
-    interpl_scheme = 'classic'; stagder_scheme = 'compact6'
-
-    if (command_argument_count() >= 1) then
-      call get_command_argument(1, input_file)
-      open (100, file=input_file)
-      read (100, nml=solver_params)
-      close (100)
-    else
-      error stop 'Input file is not provided.'
-    end if
-
-    if (present(i_Re)) i_Re = Re
-    if (present(i_dt)) i_dt = dt
-    if (present(i_n_iters)) i_n_iters = n_iters
-    if (present(i_n_output)) i_n_output = n_output
-    if (present(i_poisson_solver_type)) &
-      i_poisson_solver_type = poisson_solver_type
-    if (present(i_time_intg)) i_time_intg = time_intg
-    if (present(i_der1st_scheme)) i_der1st_scheme = der1st_scheme
-    if (present(i_der2nd_scheme)) i_der2nd_scheme = der2nd_scheme
-    if (present(i_interpl_scheme)) i_interpl_scheme = interpl_scheme
-    if (present(i_stagder_scheme)) i_stagder_scheme = stagder_scheme
 
   end subroutine
 
