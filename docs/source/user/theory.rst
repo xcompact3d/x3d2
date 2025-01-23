@@ -319,3 +319,88 @@ While a 1D decomposition algorithm swaps between two states, in a 2D decompositi
 2D domain decomposition is widely used for spectral codes, particularly those that are compatible with implicit schemes in space. This method allows for efficient parallelisation by dividing the computational domain into smaller subdomains, each handled by a separate processor. For a simulation with a cubic mesh of size :math:`N^3` up to :math:`N^2` procesors can be used, which significantly increases the scalability compared to 1D decomposition. 
 
 `x3d2` uses the `2DECOMP` library for 2D decomposition. One of the key advantages of using this library is that it does not require modifications to the existing derivative and interpolation subroutines, making it easier to implement. Additionally, this approach utilises customised global `MPI_ALLTOALL(V)` transpositions to redistribute data among processors. Although communication overhead can range from 30% to 80% of the total computational time, with up to 70 transpositions per time step, the overall efficiency and scalability of the simulations are greatly enhanced.
+
+The flowchart below shows the solver processes and the swapping between pencils at different stages of the solution. The swapping between pencils is essential for performing computations along each dimension, such as calculating X-derivatives. When a global operation is performed, the data need to be swapped between different pencil orientations.
+
+.. graphviz::
+
+    digraph SolverFlowchart {
+        graph [rankdir=TB, splines=ortho ];
+
+        # default style for process steps
+        node [shape=box, style=filled, fillcolor=lightgrey, fontname="Arial", fontsize=12];
+
+        # process steps
+        Initialisation        [label="Initialisation"];
+        ConvectionDiff        [label="Convection/Diffusion"];
+        TimeAdvancement       [label="Time Advancement"];
+        VelocityDivergence    [label="Velocity Divergence"];
+        PressurePoisson       [label="Pressure Poisson"];
+        PressureGradient      [label="Pressure Gradient"];
+        VelocityCorrection    [label="Velocity Correction"];
+        IOFinalise            [label="I/O, Finalise"];
+
+        # define annotations
+        node [shape=plaintext, style="", fillcolor="", fontname="Arial", fontsize=12];
+
+        Start                [label="Start in X"];
+        Swap1                [label="X->Y->Z->Y->X\n(24 global operations)"];
+        Swap2                [label="No swap"];
+        Swap3                [label="X->Y->Z\n(16 global operations)"];
+        Swap4                [label="Stay in Z\n(4 global operations, up to 16 depending BC)"];
+        Swap5                [label="Z->Y->X\n(5 global operations)"];
+        Swap6                [label="No swap"];
+        ExtraOps             [label="+(extra 6 global operations if check divergence free)"];
+
+        # define strict vertical process flow
+        Initialisation     -> ConvectionDiff     [style=invis]; 
+        ConvectionDiff     -> TimeAdvancement    [style=invis];
+        TimeAdvancement    -> VelocityDivergence [style=invis];
+        VelocityDivergence -> PressurePoisson    [style=invis];
+        PressurePoisson    -> PressureGradient   [style=invis];
+        PressureGradient   -> VelocityCorrection [style=invis];
+        VelocityCorrection -> IOFinalise         [style=invis];
+       
+        # align annotations
+        { rank=same; Initialisation; Start }
+        { rank=same; ConvectionDiff; Swap1 }
+        { rank=same; TimeAdvancement; Swap2 }
+        { rank=same; VelocityDivergence; Swap3 }
+        { rank=same; PressurePoisson; Swap4 }
+        { rank=same; PressureGradient; Swap5 }
+        { rank=same; VelocityCorrection; Swap6 }
+        { rank=same; IOFinalise; ExtraOps }
+
+        # connect annotations
+        Initialisation      ->  Start    [style=invis];
+        ConvectionDiff      ->  Swap1    [style=invis];
+        TimeAdvancement     ->  Swap2    [style=invis];
+        VelocityDivergence  ->  Swap3    [style=invis];
+        PressurePoisson     ->  Swap4    [style=invis];
+        PressureGradient    ->  Swap5    [style=invis];
+        VelocityCorrection  ->  Swap6    [style=invis];
+        IOFinalise          ->  ExtraOps [style=invis];
+
+        # time loop
+        VelocityCorrection -> ConvectionDiff [
+                color="darkblue", 
+                style=dashed, 
+                constraint=false, 
+                tailport=w, 
+                headport=w,
+                arrowhead=normal]; 
+
+        # time loop label
+        TimeLoopLabel [shape=plaintext, label=< <FONT COLOR="darkblue">Time Loop</FONT> >];
+        { rank=same; TimeLoopLabel; PressurePoisson; }
+        TimeLoopLabel -> PressurePoisson [style=invis];
+        
+        # add real (visible) edges for the process flow
+        Initialisation     -> ConvectionDiff;
+        ConvectionDiff     -> TimeAdvancement;
+        TimeAdvancement    -> VelocityDivergence;
+        VelocityDivergence -> PressurePoisson;
+        PressurePoisson    -> PressureGradient;
+        PressureGradient   -> VelocityCorrection;
+        VelocityCorrection -> IOFinalise;
+    }
