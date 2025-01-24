@@ -1,9 +1,9 @@
 workflow:
   rules:
     # Run pipeline on tags for the main project
-    - if: $CI_COMMIT_TAG && $CI_PROJECT_PATH == "CFD-Xing/x3d2"
+    - if: $CI_COMMIT_TAG && $CI_PROJECT_PATH == "xcompact3d/x3d2"
     # Run pipeline on the default branch for the main project
-    - if: $CI_COMMIT_BRANCH == "main" && $CI_PROJECT_PATH == "CFD-Xing/x3d2"
+    - if: $CI_COMMIT_BRANCH == "main" && $CI_PROJECT_PATH == "xcompact3d/x3d2"
     # DO NOT run pipeline if Draft
     - if: $CI_PIPELINE_SOURCE == "external_pull_request_event" && $CI_MERGE_REQUEST_TITLE =~ /^(\[Draft\]|\(Draft\)|Draft:).*/
       when: never
@@ -20,7 +20,6 @@ workflow:
 stages:
   - build-and-test
   - check-policies
-  - build-docs
 
 .build-and-test-template: &build-and-test-template
   image: ubuntu:22.04
@@ -78,40 +77,6 @@ stages:
     paths:
       - fprettify.log
 
-.build-docs-template: &build-docs-template
-  image: python:3.9.19-slim-bookworm
-  stage: build-docs
-  variables:
-    PUBLISH_DIR: api/
-    FORD_OUTPUT_DIR: api-docs
-    FORD_CFG: ford.md
-  script:
-    - cd $CI_PROJECT_DIR
-    - apt update
-    - apt install -y git
-    - echo Install sphinx, ford and ghp-import
-    - pip install -r docs/docs-requirements.txt
-    - echo Install graphviz
-    - apt install graphviz -y
-    - echo Build sphinx docs
-    - apt-get install make -y
-    - make -C docs html
-    - echo Deploy sphinx docs
-    - git config user.name 'github-action'
-    - git config user.email 'github-action'
-    - git remote add upstream git@github.com:xcompact3d/x3d2.git
-    - ghp-import -m 'Update sphinx docs' --push --remote upstream --branch gh-pages docs/build/html --no-jekyll --force
-    - echo Build API docs with ford
-    - ford $FORD_CFG -o $FORD_OUTPUT_DIR
-    - echo Deploy api-docs
-    - ghp-import -m 'Update API docs' --prefix $PUBLISH_DIR --push --remote upstream --branch gh-pages $FORD_OUTPUT_DIR --no-jekyll --force
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
-      when: on_success
-    - when: never
-  allow_failure: false
-  timeout: 15m
-
 build-and-test:
   <<: *build-and-test-template
   needs: []
@@ -129,7 +94,4 @@ build-and-test-cuda:
 check-formatting:
   <<: *check-formatting-template
   needs: []
-    
-#build-docs:
-#  <<: *build-docs-template
-#  needs: []
+
