@@ -18,4 +18,4 @@ Contents:
    report_a_bug
    internals/index
    developer/index
-   API reference <https://xcompact3d.github.io/x3d2/api>
+   API reference <https://xcompact3d.github.io/x3d2>
