@@ -50,7 +50,7 @@ module m_solver
     class(field_t), pointer :: u, v, w
 
     class(base_backend_t), pointer :: backend
-    class(mesh_t), pointer :: mesh
+    type(mesh_t), pointer :: mesh
     type(time_intg_t) :: time_integrator
     type(allocator_t), pointer :: host_allocator
     type(dirps_t), pointer :: xdirps, ydirps, zdirps
@@ -58,11 +58,10 @@ module m_solver
     procedure(poisson_solver), pointer :: poisson => null()
   contains
     procedure :: transeq
+    procedure :: pressure_correction
     procedure :: divergence_v2p
     procedure :: gradient_p2v
     procedure :: curl
-    procedure :: output
-    procedure :: run
   end type solver_t
 
   abstract interface
@@ -91,22 +90,11 @@ contains
     type(allocator_t), target, intent(inout) :: host_allocator
     type(solver_t) :: solver
 
-    class(field_t), pointer :: u_init, v_init, w_init
-
-    character(len=200) :: input_file
     real(dp) :: Re, dt
     integer :: n_iters, n_output
     character(3) :: poisson_solver_type, time_intg
     character(30) :: der1st_scheme, der2nd_scheme, &
                      interpl_scheme, stagder_scheme
-    namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
-      time_intg, der1st_scheme, der2nd_scheme, &
-      interpl_scheme, stagder_scheme
-
-    real(dp) :: x, y, z
-    integer :: i, j, k
-    integer, dimension(3) :: dims
-    real(dp), dimension(3) :: xloc
 
     solver%backend => backend
     solver%mesh => mesh
@@ -123,20 +111,9 @@ contains
     solver%v => solver%backend%allocator%get_block(DIR_X)
     solver%w => solver%backend%allocator%get_block(DIR_X)
 
-    ! set defaults
-    poisson_solver_type = 'FFT'
-    time_intg = 'AB3'
-    der1st_scheme = 'compact6'; der2nd_scheme = 'compact6'
-    interpl_scheme = 'classic'; stagder_scheme = 'compact6'
-
-    if (command_argument_count() >= 1) then
-      call get_command_argument(1, input_file)
-      open (100, file=input_file)
-      read (100, nml=solver_params)
-      close (100)
-    else
-      error stop 'Input file is not provided.'
-    end if
+    call read_solver_input(Re, dt, n_iters, n_output, poisson_solver_type, &
+                           time_intg, der1st_scheme, der2nd_scheme, &
+                           interpl_scheme, stagder_scheme)
 
     solver%time_integrator = time_intg_t(solver%backend, &
                                          solver%backend%allocator, &
@@ -151,48 +128,16 @@ contains
     solver%n_output = n_output
     solver%ngrid = product(solver%mesh%get_global_dims(VERT))
 
-    dims = solver%mesh%get_dims(VERT)
-    u_init => solver%host_allocator%get_block(DIR_C)
-    v_init => solver%host_allocator%get_block(DIR_C)
-    w_init => solver%host_allocator%get_block(DIR_C)
-
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          xloc = solver%mesh%get_coordinates(i, j, k)
-          x = xloc(1)
-          y = xloc(2)
-          z = xloc(3)
-
-          u_init%data(i, j, k) = sin(x)*cos(y)*cos(z)
-          v_init%data(i, j, k) = -cos(x)*sin(y)*cos(z)
-          w_init%data(i, j, k) = 0
-        end do
-      end do
-    end do
-
-    call solver%backend%set_field_data(solver%u, u_init%data)
-    call solver%backend%set_field_data(solver%v, v_init%data)
-    call solver%backend%set_field_data(solver%w, w_init%data)
-
-    call solver%u%set_data_loc(VERT)
-    call solver%v%set_data_loc(VERT)
-    call solver%w%set_data_loc(VERT)
-
-    call solver%host_allocator%release_block(u_init)
-    call solver%host_allocator%release_block(v_init)
-    call solver%host_allocator%release_block(w_init)
-
     ! Allocate and set the tdsops
     call allocate_tdsops(solver%xdirps, solver%backend, &
                          der1st_scheme, der2nd_scheme, &
-                         interpl_scheme, stagder_scheme, solver%mesh%BCs)
+                         interpl_scheme, stagder_scheme, solver%mesh%grid%BCs)
     call allocate_tdsops(solver%ydirps, solver%backend, &
                          der1st_scheme, der2nd_scheme, &
-                         interpl_scheme, stagder_scheme, solver%mesh%BCs)
+                         interpl_scheme, stagder_scheme, solver%mesh%grid%BCs)
     call allocate_tdsops(solver%zdirps, solver%backend, &
                          der1st_scheme, der2nd_scheme, &
-                         interpl_scheme, stagder_scheme, solver%mesh%BCs)
+                         interpl_scheme, stagder_scheme, solver%mesh%grid%BCs)
 
     select case (trim(poisson_solver_type))
     case ('FFT')
@@ -243,11 +188,63 @@ contains
 
   end subroutine
 
+  subroutine read_solver_input( &
+    i_Re, i_dt, i_n_iters, i_n_output, i_poisson_solver_type, i_time_intg, &
+    i_der1st_scheme, i_der2nd_scheme, i_interpl_scheme, i_stagder_scheme &
+    )
+    !! Read solver section of input file
+    real(dp), optional, intent(out) :: i_Re, i_dt
+    integer, optional, intent(out) :: i_n_iters, i_n_output
+    character(3), optional, intent(out) :: i_poisson_solver_type, i_time_intg
+    character(30), optional, intent(out) :: i_der1st_scheme, i_der2nd_scheme, &
+                                            i_interpl_scheme, i_stagder_scheme
+
+    real(dp) :: Re, dt
+    integer :: n_iters, n_output
+    character(3) :: poisson_solver_type, time_intg
+    character(30) :: der1st_scheme, der2nd_scheme, &
+                     interpl_scheme, stagder_scheme
+
+    character(len=200) :: input_file
+
+    namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
+      time_intg, der1st_scheme, der2nd_scheme, &
+      interpl_scheme, stagder_scheme
+
+    ! set defaults
+    poisson_solver_type = 'FFT'
+    time_intg = 'AB3'
+    der1st_scheme = 'compact6'; der2nd_scheme = 'compact6'
+    interpl_scheme = 'classic'; stagder_scheme = 'compact6'
+
+    if (command_argument_count() >= 1) then
+      call get_command_argument(1, input_file)
+      open (100, file=input_file)
+      read (100, nml=solver_params)
+      close (100)
+    else
+      error stop 'Input file is not provided.'
+    end if
+
+    if (present(i_Re)) i_Re = Re
+    if (present(i_dt)) i_dt = dt
+    if (present(i_n_iters)) i_n_iters = n_iters
+    if (present(i_n_output)) i_n_output = n_output
+    if (present(i_poisson_solver_type)) &
+      i_poisson_solver_type = poisson_solver_type
+    if (present(i_time_intg)) i_time_intg = time_intg
+    if (present(i_der1st_scheme)) i_der1st_scheme = der1st_scheme
+    if (present(i_der2nd_scheme)) i_der2nd_scheme = der2nd_scheme
+    if (present(i_interpl_scheme)) i_interpl_scheme = interpl_scheme
+    if (present(i_stagder_scheme)) i_stagder_scheme = stagder_scheme
+
+  end subroutine
+
   subroutine transeq(self, du, dv, dw, u, v, w)
-      !! Skew-symmetric form of convection-diffusion terms in the
-      !! incompressible Navier-Stokes momemtum equations, excluding
-      !! pressure terms.
-      !! Inputs from velocity grid and outputs to velocity grid.
+    !! Skew-symmetric form of convection-diffusion terms in the
+    !! incompressible Navier-Stokes momemtum equations, excluding
+    !! pressure terms.
+    !! Inputs from velocity grid and outputs to velocity grid.
     implicit none
 
     class(solver_t) :: self
@@ -417,144 +414,41 @@ contains
 
   end subroutine poisson_cg
 
-  subroutine output(self, t)
+  subroutine pressure_correction(self, u, v, w)
     implicit none
 
-    class(solver_t), intent(in) :: self
-    real(dp), intent(in) :: t
+    class(solver_t) :: self
+    class(field_t), intent(inout) :: u, v, w
 
-    class(field_t), pointer :: du, dv, dw, div_u
-    class(field_t), pointer :: u_out
-    real(dp) :: enstrophy, div_u_max, div_u_mean
-    integer :: ierr
-
-    if (self%mesh%par%is_root()) print *, 'time = ', t
-
-    du => self%backend%allocator%get_block(DIR_X, VERT)
-    dv => self%backend%allocator%get_block(DIR_X, VERT)
-    dw => self%backend%allocator%get_block(DIR_X, VERT)
-
-    call self%curl(du, dv, dw, self%u, self%v, self%w)
-    enstrophy = 0.5_dp*(self%backend%scalar_product(du, du) &
-                        + self%backend%scalar_product(dv, dv) &
-                        + self%backend%scalar_product(dw, dw))/self%ngrid
-    if (self%mesh%par%is_root()) print *, 'enstrophy:', enstrophy
-
-    call self%backend%allocator%release_block(du)
-    call self%backend%allocator%release_block(dv)
-    call self%backend%allocator%release_block(dw)
+    class(field_t), pointer :: div_u, pressure, dpdx, dpdy, dpdz
 
     div_u => self%backend%allocator%get_block(DIR_Z)
 
-    call self%divergence_v2p(div_u, self%u, self%v, self%w)
+    call self%divergence_v2p(div_u, u, v, w)
 
-    u_out => self%host_allocator%get_block(DIR_C)
-    call self%backend%get_field_data(u_out%data, div_u)
+    pressure => self%backend%allocator%get_block(DIR_Z)
+
+    call self%poisson(pressure, div_u)
 
     call self%backend%allocator%release_block(div_u)
 
-    div_u_max = maxval(abs(u_out%data))
-    div_u_mean = sum(abs(u_out%data))/self%ngrid
+    dpdx => self%backend%allocator%get_block(DIR_X)
+    dpdy => self%backend%allocator%get_block(DIR_X)
+    dpdz => self%backend%allocator%get_block(DIR_X)
 
-    call self%host_allocator%release_block(u_out)
+    call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
 
-    call MPI_Allreduce(MPI_IN_PLACE, div_u_max, 1, MPI_DOUBLE_PRECISION, &
-                       MPI_MAX, MPI_COMM_WORLD, ierr)
-    call MPI_Allreduce(MPI_IN_PLACE, div_u_mean, 1, MPI_DOUBLE_PRECISION, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
-    if (self%mesh%par%is_root()) &
-      print *, 'div u max mean:', div_u_max, div_u_mean
+    call self%backend%allocator%release_block(pressure)
 
-  end subroutine output
+    ! velocity correction
+    call self%backend%vecadd(-1._dp, dpdx, 1._dp, u)
+    call self%backend%vecadd(-1._dp, dpdy, 1._dp, v)
+    call self%backend%vecadd(-1._dp, dpdz, 1._dp, w)
 
-  subroutine run(self)
-    implicit none
+    call self%backend%allocator%release_block(dpdx)
+    call self%backend%allocator%release_block(dpdy)
+    call self%backend%allocator%release_block(dpdz)
 
-    class(solver_t), intent(inout) :: self
-
-    class(field_t), pointer :: du, dv, dw, div_u, pressure, dpdx, dpdy, dpdz
-    class(field_t), pointer :: u_out, v_out, w_out
-
-    real(dp) :: t
-    integer :: i, j
-
-    if (self%mesh%par%is_root()) print *, 'initial conditions'
-    t = 0._dp
-    call self%output(t)
-
-    if (self%mesh%par%is_root()) print *, 'start run'
-
-    do i = 1, self%n_iters
-      do j = 1, self%time_integrator%nstage
-        du => self%backend%allocator%get_block(DIR_X)
-        dv => self%backend%allocator%get_block(DIR_X)
-        dw => self%backend%allocator%get_block(DIR_X)
-
-        call self%transeq(du, dv, dw, self%u, self%v, self%w)
-
-        ! time integration
-        call self%time_integrator%step(self%u, self%v, self%w, &
-                                       du, dv, dw, self%dt)
-
-        call self%backend%allocator%release_block(du)
-        call self%backend%allocator%release_block(dv)
-        call self%backend%allocator%release_block(dw)
-
-        ! pressure
-        div_u => self%backend%allocator%get_block(DIR_Z)
-
-        call self%divergence_v2p(div_u, self%u, self%v, self%w)
-
-        pressure => self%backend%allocator%get_block(DIR_Z)
-
-        call self%poisson(pressure, div_u)
-
-        call self%backend%allocator%release_block(div_u)
-
-        dpdx => self%backend%allocator%get_block(DIR_X)
-        dpdy => self%backend%allocator%get_block(DIR_X)
-        dpdz => self%backend%allocator%get_block(DIR_X)
-
-        call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
-
-        call self%backend%allocator%release_block(pressure)
-
-        ! velocity correction
-        call self%backend%vecadd(-1._dp, dpdx, 1._dp, self%u)
-        call self%backend%vecadd(-1._dp, dpdy, 1._dp, self%v)
-        call self%backend%vecadd(-1._dp, dpdz, 1._dp, self%w)
-
-        call self%backend%allocator%release_block(dpdx)
-        call self%backend%allocator%release_block(dpdy)
-        call self%backend%allocator%release_block(dpdz)
-      end do
-
-      if (mod(i, self%n_output) == 0) then
-        t = i*self%dt
-        call self%output(t)
-      end if
-    end do
-
-    if (self%mesh%par%is_root()) print *, 'run end'
-
-    ! Below is for demonstrating purpuses only, to be removed when we have
-    ! proper I/O in place.
-    u_out => self%host_allocator%get_block(DIR_C)
-    v_out => self%host_allocator%get_block(DIR_C)
-    w_out => self%host_allocator%get_block(DIR_C)
-
-    call self%backend%get_field_data(u_out%data, self%u)
-    call self%backend%get_field_data(v_out%data, self%v)
-    call self%backend%get_field_data(w_out%data, self%w)
-
-    if (self%mesh%par%is_root()) then
-      print *, 'norms', norm2(u_out%data), norm2(v_out%data), norm2(w_out%data)
-    end if
-
-    call self%host_allocator%release_block(u_out)
-    call self%host_allocator%release_block(v_out)
-    call self%host_allocator%release_block(w_out)
-
-  end subroutine run
+  end subroutine pressure_correction
 
 end module m_solver

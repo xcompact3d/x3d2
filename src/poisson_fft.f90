@@ -16,8 +16,8 @@ module m_poisson_fft
     integer :: nx_perm, ny_perm, nz_perm
     !> Local dimensions in the permuted slabs in spectral space
     integer :: nx_spec, ny_spec, nz_spec
-    !> Offset in y direction in the permuted slabs in spectral space
-    integer :: y_sp_st
+    !> Offset in y and z directions in the permuted slabs in spectral space
+    integer :: x_sp_st, y_sp_st, z_sp_st
     !> Local domain sized array storing the spectral equivalence constants
     complex(dp), allocatable, dimension(:, :, :) :: waves
     !> Wave numbers in x, y, and z
@@ -59,37 +59,37 @@ module m_poisson_fft
 
 contains
 
-  subroutine base_init(self, mesh, xdirps, ydirps, zdirps)
+  subroutine base_init(self, mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
     implicit none
 
     class(poisson_fft_t) :: self
-    class(mesh_t), intent(in) :: mesh
+    type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    integer, dimension(3), intent(in) :: n_spec ! Size of the spectral pencil
+    integer, dimension(3), intent(in) :: n_sp_st ! Offset of the spectral pencil
 
     integer :: dims(3)
+
+    ! Decomposition is in y- and z-directions
+    if (mesh%par%nproc_dir(1) /= 1) print *, 'nproc_dir in x-dir must be 1'
 
     dims = mesh%get_global_dims(CELL)
     self%nx_glob = dims(1); self%ny_glob = dims(2); self%nz_glob = dims(3)
     dims = mesh%get_dims(CELL)
     self%nx_loc = dims(1); self%ny_loc = dims(2); self%nz_loc = dims(3)
 
-    ! 1D decomposition along Z in real domain, and along Y in spectral space
-    if (mesh%par%nproc_dir(1) /= 1) print *, 'nproc_dir in x-dir must be 1'
-    if (mesh%par%nproc_dir(2) /= 1) print *, 'nproc_dir in y-dir must be 1'
-    self%nx_perm = self%nx_loc/mesh%par%nproc_dir(2)
-    self%ny_perm = self%ny_loc/mesh%par%nproc_dir(3)
-    self%nz_perm = self%nz_glob
-    self%nx_spec = self%nx_loc/2 + 1
-    self%ny_spec = self%ny_perm
-    self%nz_spec = self%nz_perm
+    self%nx_spec = n_spec(1)
+    self%ny_spec = n_spec(2)
+    self%nz_spec = n_spec(3)
 
-    self%y_sp_st = (self%ny_loc/mesh%par%nproc_dir(3))*mesh%par%nrank_dir(3)
+    self%x_sp_st = n_sp_st(1)
+    self%y_sp_st = n_sp_st(2)
+    self%z_sp_st = n_sp_st(3)
 
     allocate (self%ax(self%nx_glob), self%bx(self%nx_glob))
     allocate (self%ay(self%ny_glob), self%by(self%ny_glob))
     allocate (self%az(self%nz_glob), self%bz(self%nz_glob))
 
-    ! FFT 3D transform halves the first index.
     allocate (self%waves(self%nx_spec, self%ny_spec, self%nz_spec))
 
     ! waves_set requires some of the preprocessed tdsops variables.
@@ -200,7 +200,7 @@ contains
     do k = 1, self%nz_spec
       do j = 1, self%ny_spec
         do i = 1, self%nx_spec
-          ix = i; iy = j + self%y_sp_st; iz = k
+          ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
           rlexs = real(exs(ix), kind=dp)*geo%d(1)
           rleys = real(eys(iy), kind=dp)*geo%d(2)
           rlezs = real(ezs(iz), kind=dp)*geo%d(3)

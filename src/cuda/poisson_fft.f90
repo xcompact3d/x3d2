@@ -48,7 +48,7 @@ contains
   function init(mesh, xdirps, ydirps, zdirps) result(poisson_fft)
     implicit none
 
-    class(mesh_t), intent(in) :: mesh
+    type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
     type(cuda_poisson_fft_t) :: poisson_fft
@@ -58,7 +58,24 @@ contains
     integer :: ierr
     integer(int_ptr_kind()) :: worksize
 
-    call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps)
+    integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
+
+    ! 1D decomposition along Z in real domain, and along Y in spectral space
+    if (mesh%par%nproc_dir(2) /= 1) print *, 'nproc_dir in y-dir must be 1'
+
+    ! Work out the spectral dimensions in the permuted state
+    dims_glob = mesh%get_global_dims(CELL)
+    dims_loc = mesh%get_dims(CELL)
+
+    n_spec(1) = dims_loc(1)/2 + 1
+    n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
+    n_spec(3) = dims_glob(3)
+
+    n_sp_st(1) = 0
+    n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
+    n_sp_st(3) = 0
+
+    call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
 
     nx = poisson_fft%nx_glob
     ny = poisson_fft%ny_glob

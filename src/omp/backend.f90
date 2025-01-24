@@ -9,7 +9,6 @@ module m_omp_backend
   use m_omp_sendrecv, only: sendrecv_fields
 
   use m_omp_common, only: SZ
-  use m_omp_poisson_fft, only: omp_poisson_fft_t
   use m_mesh, only: mesh_t
 
   implicit none
@@ -54,7 +53,7 @@ contains
   function init(mesh, allocator) result(backend)
     implicit none
 
-    class(mesh_t), target, intent(inout) :: mesh
+    type(mesh_t), target, intent(inout) :: mesh
     class(allocator_t), target, intent(inout) :: allocator
     type(omp_backend_t) :: backend
 
@@ -430,8 +429,6 @@ contains
       error stop "Called vector add with incompatible fields"
     end if
 
-    !dims = size(x%data)
-    ! Fix for size being stored wrongly into dims
     dims = self%mesh%get_padded_dims(x)
     nvec = dims(1)/SZ
     remstart = nvec*SZ + 1
@@ -589,18 +586,27 @@ contains
   end subroutine copy_f_to_data_omp
 
   subroutine init_omp_poisson_fft(self, mesh, xdirps, ydirps, zdirps)
+#ifdef WITH_2DECOMPFFT
+    use m_omp_poisson_fft, only: omp_poisson_fft_t
+#endif
+
     implicit none
 
     class(omp_backend_t) :: self
-    class(mesh_t), intent(in) :: mesh
+    type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
+#ifdef WITH_2DECOMPFFT
     allocate (omp_poisson_fft_t :: self%poisson_fft)
 
     select type (poisson_fft => self%poisson_fft)
     type is (omp_poisson_fft_t)
       poisson_fft = omp_poisson_fft_t(mesh, xdirps, ydirps, zdirps)
     end select
+#else
+    error stop 'This build does not support FFT based Poisson solver &
+                &on the OpenMP backend!'
+#endif
 
   end subroutine init_omp_poisson_fft
 

@@ -94,7 +94,7 @@ program test_omp_transeq
   w%data(:, :, :) = 0.d0
 
   call allocate_tdsops(xdirps, omp_backend, 'compact6', 'compact6', &
-                       'classic', 'compact6', mesh%BCs)
+                       'classic', 'compact6', mesh%grid%BCs)
 
   call cpu_time(tstart)
   call transeq_x_omp(omp_backend, du, dv, dw, u, v, w, xdirps)
