@@ -1,4 +1,3 @@
-! some changes
 module m_common
   implicit none
 
