@@ -1,14 +1,15 @@
 ---
 project: x3d2
 src_dir: ../src
-summary: x3d2 is a suite of high-order finite difference flow solvers dedicated
-         to the study of turbulent flows. x3d2 is a re-implementation of the Xcompact3d
-         framework to run on supercomputers (both GPUs and CPUs).
-author: Xcompact3d team
-exclude: cuda_allocator.f90
-         vector3d_cuda.f90
-         vector3d_simd.f90
-         vector3d.f90
+summary: 
+x3d2 is the current codename for what is to become Xcompact3d
+version 2.0.  This project is a rewrite of Xcompact3d leading to
+
+- Improved serial and parallel performance.
+- Support for NVIDIA GPU accelerators (using CUDA Fortran).
+- Improved modularity and testability.
+author: Xcompact3d Team
+exclude: 
 search: true
 creation_date: true
 coloured_edges: true
