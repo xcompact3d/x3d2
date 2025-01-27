@@ -33,6 +33,11 @@ module m_config
 
   abstract interface
     subroutine read(self, file_name, src) !&
+      !! Assigns the member variables either from a file or text source.
+      !!
+      !! file_name can be an absolute or relative path
+      !! src is a character string that contains the namelist definition.
+      !! For example, src="&foobar_nml foo=0, bar='this'/"
       import :: base_config_t
 
       class(base_config_t) :: self
@@ -50,6 +55,8 @@ contains
     character(*), optional, intent(in) :: file_name
     character(*), optional, intent(in) :: src
 
+    integer :: unit
+
     character(len=20) :: flow_case_name
     real(dp), dimension(3) :: L_global
     integer, dimension(3) :: dims_global
@@ -63,9 +70,9 @@ contains
       error stop 'Reading domain config failed! &
                  &Provide only a file name or source, not both.'
     else if (present(file_name)) then
-      open (100, file=file_name)
-      read (100, nml=domain_settings)
-      close (100)
+      open (newunit=unit, file=file_name)
+      read (unit, nml=domain_settings)
+      close (unit)
     else if (present(src)) then
       read (src, nml=domain_settings)
     else
@@ -90,6 +97,8 @@ contains
     character(*), optional, intent(in) :: file_name
     character(*), optional, intent(in) :: src
 
+    integer :: unit
+
     real(dp) :: Re, dt
     integer :: n_iters, n_output
     character(3) :: poisson_solver_type = 'FFT', time_intg
@@ -103,9 +112,9 @@ contains
       error stop 'Reading solver config failed! &
                  &Provide only a file name or source, not both.'
     else if (present(file_name)) then
-      open (100, file=file_name)
-      read (100, nml=solver_params)
-      close (100)
+      open (newunit=unit, file=file_name)
+      read (unit, nml=solver_params)
+      close (unit)
     else if (present(src)) then
       read (src, nml=solver_params)
     else
