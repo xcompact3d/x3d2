@@ -4,7 +4,7 @@ module m_solver
 
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, &
+  use m_common, only: dp, get_argument, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_Z2C, RDR_C2Z, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL
@@ -91,7 +91,6 @@ contains
     type(allocator_t), target, intent(inout) :: host_allocator
     type(solver_t) :: solver
 
-    character(len=200) :: input_file
     type(solver_config_t) :: solver_cfg
 
     solver%backend => backend
@@ -109,12 +108,7 @@ contains
     solver%v => solver%backend%allocator%get_block(DIR_X)
     solver%w => solver%backend%allocator%get_block(DIR_X)
 
-    if (command_argument_count() >= 1) then
-      call get_command_argument(1, input_file)
-      call solver_cfg%read(nml_file=input_file)
-    else
-      error stop 'Input file is not provided.'
-    end if
+    call solver_cfg%read(nml_file=get_argument(1))
 
     solver%time_integrator = time_intg_t(solver%backend, &
                                          solver%backend%allocator, &
