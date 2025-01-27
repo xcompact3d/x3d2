@@ -4,7 +4,7 @@ program xcompact
   use m_allocator
   use m_base_backend
   use m_base_case, only: base_case_t
-  use m_common, only: pi
+  use m_common, only: pi, get_argument
   use m_config, only: domain_config_t, solver_config_t
   use m_mesh
   use m_case_generic, only: case_generic_t
@@ -39,7 +39,6 @@ program xcompact
 
   real(dp) :: t_start, t_end
 
-  character(len=200) :: input_file
   type(domain_config_t) :: domain_cfg
   type(solver_config_t) :: solver_cfg
   character(32) :: backend_name
@@ -61,13 +60,8 @@ program xcompact
   backend_name = "OMP"
 #endif
 
-  if (command_argument_count() >= 1) then
-    call get_command_argument(1, input_file)
-    call domain_cfg%read(nml_file=input_file)
-    call solver_cfg%read(nml_file=input_file)
-  else
-    error stop 'Input file is not provided.'
-  end if
+  call domain_cfg%read(nml_file=get_argument(1))
+  call solver_cfg%read(nml_file=get_argument(1))
 
   if (product(domain_cfg%nproc_dir) /= nproc) then
     if (nrank == 0) print *, 'nproc_dir specified in the input file does &

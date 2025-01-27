@@ -47,6 +47,24 @@ contains
     rdr_dir = rdr_map(dir_from, dir_to)
   end function get_rdr_from_dirs
 
+  function get_argument(pos) result(arg)
+    integer, intent(in) :: pos
+    character(:), allocatable :: arg
+
+    character(len=200) :: temp
+    integer :: stat
+
+    call get_command_argument(pos, temp, status=stat)
+
+    if (stat > 0) then
+      error stop 'Argument retrieval failed!'
+    else if (stat == -1) then
+      error stop 'Argument is truncated!'
+    end if
+
+    arg = trim(temp)
+  end function get_argument
+
   integer function move_data_loc(in_data_loc, dir, move) result(out_data_loc)
     integer, intent(in) :: in_data_loc, dir, move
 
