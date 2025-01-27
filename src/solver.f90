@@ -111,7 +111,7 @@ contains
 
     if (command_argument_count() >= 1) then
       call get_command_argument(1, input_file)
-      call solver_cfg%read(file_name=input_file)
+      call solver_cfg%read(nml_file=input_file)
     else
       error stop 'Input file is not provided.'
     end if

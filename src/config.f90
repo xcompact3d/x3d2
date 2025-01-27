@@ -32,28 +32,28 @@ module m_config
   end type solver_config_t
 
   abstract interface
-    subroutine read(self, file_name, src) !&
+    subroutine read(self, nml_file, nml_string) !&
       !! Assigns the member variables either from a file or text source.
       !!
-      !! file_name can be an absolute or relative path
-      !! src is a character string that contains the namelist definition.
-      !! For example, src="&foobar_nml foo=0, bar='this'/"
+      !! nml_file can be an absolute or relative path
+      !! nml_string is a character string that contains the namelist.
+      !! For example, nml_string="&foobar_nml foo=0, bar='this'/"
       import :: base_config_t
 
       class(base_config_t) :: self
-      character(*), optional, intent(in) :: file_name
-      character(*), optional, intent(in) :: src
+      character(*), optional, intent(in) :: nml_file
+      character(*), optional, intent(in) :: nml_string
     end subroutine read
   end interface
 
 contains
 
-  subroutine read_domain_nml(self, file_name, src)
+  subroutine read_domain_nml(self, nml_file, nml_string)
     implicit none
 
     class(domain_config_t) :: self
-    character(*), optional, intent(in) :: file_name
-    character(*), optional, intent(in) :: src
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
 
     integer :: unit
 
@@ -66,15 +66,15 @@ contains
     namelist /domain_settings/ flow_case_name, L_global, dims_global, &
       nproc_dir, BC_x, BC_y, BC_z
 
-    if (present(file_name) .and. present(src)) then
+    if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading domain config failed! &
                  &Provide only a file name or source, not both.'
-    else if (present(file_name)) then
-      open (newunit=unit, file=file_name)
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file)
       read (unit, nml=domain_settings)
       close (unit)
-    else if (present(src)) then
-      read (src, nml=domain_settings)
+    else if (present(nml_string)) then
+      read (nml_string, nml=domain_settings)
     else
       error stop 'Reading domain config failed! &
                  &Provide at least one of the following: file name or source'
@@ -90,33 +90,34 @@ contains
 
   end subroutine read_domain_nml
 
-  subroutine read_solver_nml(self, file_name, src)
+  subroutine read_solver_nml(self, nml_file, nml_string)
     implicit none
 
     class(solver_config_t) :: self
-    character(*), optional, intent(in) :: file_name
-    character(*), optional, intent(in) :: src
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
 
     integer :: unit
 
     real(dp) :: Re, dt
     integer :: n_iters, n_output
-    character(3) :: poisson_solver_type = 'FFT', time_intg
+    character(3) :: time_intg
+    character(3) :: poisson_solver_type = 'FFT'
     character(30) :: der1st_scheme = 'compact6', der2nd_scheme = 'compact6', &
                      interpl_scheme = 'classic', stagder_scheme = 'compact6'
 
     namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
       time_intg, der1st_scheme, der2nd_scheme, interpl_scheme, stagder_scheme
 
-    if (present(file_name) .and. present(src)) then
+    if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading solver config failed! &
                  &Provide only a file name or source, not both.'
-    else if (present(file_name)) then
-      open (newunit=unit, file=file_name)
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file)
       read (unit, nml=solver_params)
       close (unit)
-    else if (present(src)) then
-      read (src, nml=solver_params)
+    else if (present(nml_string)) then
+      read (nml_string, nml=solver_params)
     else
       error stop 'Reading solver config failed! &
                  &Provide at least one of the following: file name or source'
