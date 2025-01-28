@@ -11,7 +11,20 @@ jobs:
         with:
           python-version: '3.10'
       - run: pip install fprettify
-      - run: fprettify --config .fprettify.ini --diff --recursive src
-      - run: if [[ ! -z "$($FPRETTIFY_COMMAND)" ]]; then echo "::warning::Code formatting issues detected. See log for details."; fi
-        env:
-          FPRETTIFY_COMMAND: fprettify --config .fprettify.ini --diff --recursive src
+      - name: Run fprettify
+        id: fprettify-check
+        run: |
+          echo "Running fprettify..."
+          FPRETTIFY_OUTPUT=$(fprettify --config .fprettify.ini --diff --recursive src)
+          echo "$FPRETTIFY_OUTPUT"
+          {
+            echo "fprettify_output<<EOF"
+            echo "$FPRETTIFY_OUTPUT"
+            echo "EOF"
+          } >> $GITHUB_ENV
+      - name: Check fprettify result
+        if: env.fprettify_output != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.setFailed('Code formatting issues found. Please run fprettify locally and commit the changes.')
