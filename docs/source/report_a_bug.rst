@@ -1,11 +1,12 @@
 Report a bug
 ============
 
-You can do so by adding a new issue to the x3d2 issue tracker on
-GitHub. See `(GitHub docs) Creating an issue <https://docs.github.com/en/issues/tracking-your-work-with-issues/creating-an-issue>`_.
+To report a bug, please add a new issue to the x3d2 issue tracker on GitHub. For detailed instructions, see the `(GitHub docs) Creating an issue <https://docs.github.com/en/issues/tracking-your-work-with-issues/creating-an-issue>`_.
 
-If you are reporting a bug, be sure to include
+When reporting a bug, be sure to include the following information:
 
-- The version of x3d2 you are using
+- The version of x3d2 you are using.
 - Information about your operating system.
-- Every information required to reproduce the bug (e.g. input files).
+- The compiler and its version you are using.
+- Steps to reproduce the bug, including any relevant input files.
+- Any error messages or logs that can help diagnose the issue.

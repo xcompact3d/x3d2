@@ -20,7 +20,7 @@ Contents:
    :maxdepth: 2
 
    getting_started.rst
-   report_a_bug
    user/index
    developer/index
+   report_a_bug
    API reference <https://xcompact3d.github.io/x3d2>

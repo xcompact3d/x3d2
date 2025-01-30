@@ -3,33 +3,30 @@
 Setting up for development
 ==========================
 
-0. To begin with, make sure you have the right tools installed by going
-   through the :ref:`required tooling <tooling>`.
+Ensure you have the necessary tools installed by following the :ref:`required tooling <tooling>`.
 
-1. Download the x3d2 repository from GitHub::
 
-    $ git clone git@github.com:xcompact3d/x3d2.git
-    $ cd x3d2/
+1. Fork the `x3d2 repository <https://github.com/xcompact3d/x3d2/>`_ on GitHub by navigating to the x3d2 repository page and clicking the "Fork" button.
 
-  The following commands assume that your shell's current directory is
-  the root of the `x3d2` repository.
+2. Clone your forked repository to your local machine:
 
-2. Install the `pre-commit` Git hook into your project-local
-   configuration::
+   .. code:: bash
 
-     $ cp githooks/pre-commit .git/hooks/
-     $ chmod +x .git/hooks/pre-commit
+      $ git clone git@github.com:your-username/x3d2.git
+      $ cd x3d2/
 
-   This Git hook will cause the automatic formatting of all fortran
-   files staged in your commit, using `fprettify`.
+   The following commands assume that your shell's current directory is the root of the `x3d2` repository.
 
-3. Install the `commit-msg` Git hook into your project-local
-   configuration::
+3. Set up the upstream repository to keep your fork in sync with the original repository:
 
-     $ cp githooks/commit-msg .git/hooks/
-     $ chmod +x .git/hooks/commit-msg
+   .. code:: bash
 
-   This Git hook will automatically check your commit message against
-   the commit message format, based on the conventional commits
-   specification. See :ref:`the contribution guidelines
-   <commit-formatting>`.
+      $ git remote add upstream git@github.com:xcompact3d/x3d2.git
+      $ git fetch upstream
+
+4. (Optional) Install the ``pre-commit`` Git hook to automatically format Fortran files staged in your commit using ``fprettify``:
+
+   .. code:: bash
+
+      $ cp githooks/pre-commit .git/hooks/
+      $ chmod +x .git/hooks/pre-commit
