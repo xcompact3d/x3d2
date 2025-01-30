@@ -1,40 +1,27 @@
-Overview of the contribution process
-====================================
+Contribution process
+====================
 
 The graph below illustrates the general process for contributing code
 changes to x3d2:
 
-.. graphviz::
+.. mermaid::
+    
+   graph TD
+    A[Idea] --> B["Open new issue"]
+    B --> C[commit changes locally]
+    C --> D[Open/update Pull Request]
+    D --> E{Changes approved?}
+    E -- yes --> F[merge]
+    E -- no --> C
+    G["Pick existing issue"] --> C
 
-   digraph G {
-       review[shape="diamond", label="Changes approved"]
-       commit[label="commit changes locally"]
+    subgraph Review
+        E
+        F
+    end 
 
-       PR[label="Open/update Pull Request"];
+Contributions are accepted in the form of Pull Requests (PR) targeting the ``main`` branch on the x3d2 GitHub repository. For more information, see the GitHub documentation on `Creating a pull request <https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request>`_.
 
-       Idea -> "Open new issue" -> commit -> PR
-       PR -> review
-       review -> merge [label="yes"]
-       review -> commit [label=" no"]
-       "Pick existing issue" -> commit
+By default, your GitHub account will not have push access to the x3d2 repository, so you will need to open a pull request from a fork. For details, see `Creating a pull request from a fork <https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork>`_.
 
-       {
-           rank=sink;
-           review; merge
-       }
-   }
-
-Contributions are accepeted in the form of pull requests targeting the
-`main` branch on the x3d2 GitHub repository.  See `(GitHub docs)
-Creating a pull request
-<https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request>`_.
-
-By default your GitHub account will not be able to push changes to the
-x3d2 repo, and you will have to open the pull request from a fork. See
-`(GitHub docs) Creating a pull request from a fork
-<https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork>`_.
-
-Note that the whole process is **driven by issues**. If you found a
-bug not currently referenced by an existing issue, or have an idea on
-how to improve a part of x3d2, please open a new item on the issue
-tracker before opening a pull request.
+Please note that the entire process is **driven by issues**. If you find a bug that is not currently referenced by an existing issue, or if you have an idea for improving x3d2, please open a new issue on the issue tracker before submitting a pull request.

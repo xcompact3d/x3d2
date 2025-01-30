@@ -50,6 +50,7 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.mathjax',
     'sphinx_rtd_theme',
+    'sphinxcontrib.mermaid',
     'sphinx.ext.graphviz'
 ]
 

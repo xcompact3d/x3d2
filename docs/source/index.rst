@@ -15,7 +15,7 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
-   report_a_bug
    internals/index
    developer/index
+   report_a_bug
    API reference <https://xcompact3d.github.io/x3d2>

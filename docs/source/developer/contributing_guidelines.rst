@@ -1,145 +1,98 @@
 Contributing guidelines
 =======================
 
-x3d2 is a collaborative project, open to all.  In order to enable
-effective collaboration, however, we ask that your contribution(s)
-comply with a set of ground rules.
+We welcome your contributions to x3d2! To ensure effective collaboration, please follow the guidelines outlined below.
 
-In a nutshell
--------------
 
-- For any contribution not covered by an existing issue, **open an issue
-  first**.
-- Respect the commit format.  (:ref:`Install the git hook! <devenv-setup>`).
-- Only commit changes formatted with `fprettify`, using the project's
-  configuration.  (:ref:`Install the git hook! <devenv-setup>`).
-- Strive to contribute **small and focused Pull Requests with detailed
-  descriptions**.
-- Add (a) unit test(s) covering a new feature, or (a) regression
-  test(s) for a bug fix.
+General principles
+~~~~~~~~~~~~~~~~~~
+
+* Create an issue before opening a Pull Request (PR)
+* Keep PRs small and focused with detailed descriptions
+* Ensure Fortran code is formatted with ``fprettify``
+* Write tests for new features and bug fixes
+* Request a maintainer to review your PR before merging
+* Rebase your branch on top of the latest ``main`` before merging
+
 
 Issues first
-------------
+~~~~~~~~~~~~
 
-Issues are opened as soon as possible, particularly before any
-significant implementation work is carried out or any pull request is
-opened.  Starting with issues greatly facilitates collaboration:
-
-- It encourages developers to write (and therefore think) about the
-  work they plan to achieve.
-- It helps maintaining a shared and up to date record of current work
-  (known bugs, current developments).
-- It helps coordination between developers by sign-posting who is
-  working on what, as well as what is not being worked on.
-- It allows discussions between developers on how to best fix the
-  issue or implement the described improvement(s).
-
-This doesn't mean that you should forbid yourself from exploratory
-prototyping until an issue has been opened. In fact, prototyping is
-often helpful to write the content of the issue.  On the other hand,
-do open an issue before commiting to a particular design or
-implementation.
-
-.. _commit-formatting:
-
-Format commits accordingly
---------------------------
-
-Commits messages are formatted according to the conventional commits
-specification (v1.0.0).  Commit messages must respect the following
-structure::
-
-  <type>[optional scope]: <description>
-
-  [optional body]
-
-where `<type>` is one of `fix`, `feat`, `build`, `chore`, `ci`,
-`docs`, `style`, `refactor`, `perf` or `test`.
-
-Breaking changes are specified by adding an `!` before the colon `:`. Example::
-
-  fix(allocator)!: Return 1D arrays as data blocks
-
-  This is a breaking change because e.g. the allocator used to
-  return 3D data blocks.
-
-In addition, commit message header lines must not contain more than 68
-characters.  Lines in the commit message body cannot exceed 72
-characters.
+* Open an issue before starting work on a feature or bug fix, unless one already exists.
+* Open issues as early as possible to avoid wasted effort and ensure alignment.
+* Provide detailed descriptions and relevant context in issues.
+* Assign issues to the person responsible for the work to avoid duplication.
+* Keep issues updated with the latest information and status.
+* Close issues once the work is complete to maintain project organization.
 
 .. note::
 
-   Commit messages in x3d2 do not use footers as specified in the
-   conventional commit specs.  You are welcome to use footers in your
-   commit messages, but know that they hold no special place in the
-   commit format policy.
+  Prototyping is encouraged and can help write the issue content. However, open an issue before committing to a specific design or implementation.
 
-A Git hook is provided to prevent you from registering non-conformant
-commit messages. See setting up your development environment.
+.. _commit-formatting:
 
-Fortran code formatting
------------------------
+Commit message guidelines
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Code formatting dictates things like indentation levels, number of
-whitespace between operators or use upper/lowercase characters for
-keywords.
+To keep commit history readable and maintainable, we recommend the following best practices:
 
-Because having to learn such project specific rules isn't terribily
-interesting, all Fortran code in x3d2 is formatted automatically using
-`fprettify <https://github.com/pseewald/fprettify>`_. Some non-default
-configuraiton options are specified in the project's `.fprettify.ini`
-file.
+* Write clear and concise commit messages.
+* Use short messages for minor changes. Messages like "Fix typo" or "Update documentation" are acceptable for small updates.
+* Make atomic commits: Each commit should represent a single logical change. Avoid bundling unrelated changes in a single commit.
+* Reference relevant issue numbers in commit messages to provide context (e.g., "Fixes #123").
+* Provide a detailed description in the commit message body if the change is not self-explanatory.
 
-Note that a a GitHub pull request will not be merged until all the
-associated code addtions conform to the formatting.
 
-The best way to deal with code formatting is to **automate it and
-forget about it**.  To do so, make sure you install the pre-commit
-hook into your local git repository, see .  This way, `fprettify` will
-run automatically each time you commit new changes.
+Code formatting
+~~~~~~~~~~~~~~~
+
+* Use `fprettify <https://github.com/pseewald/fprettify>`_ for automatic Fortran formatting. Some non-default configuraiton options are specified in the project's ``.fprettify.ini`` file. 
+* We recommend installing the pre-commit hook to automatically format your code before each commit. Alternatively you can run ``fprettify`` manually before submitting a pull request.
+* PRs will not be merged unless all code conforms to formatting.
 
 Pull requests and code review
--------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Code review is a fondamental part of x3d2's collaborative development.
-Particularly, GitHub pull requests must be approved by at least two
-maintainers before the associated commits are merged.  Code review allows for
 
-- Gatekeeping, by preventing the integration of changes that are not
-  up to standards, introducing bugs or potentially disruptive to
-  ongoing and/or future developments.
-- Knowledge transfer, by making sure that at least a couple of project
-  developers have an opportunity to study and understand the code to
-  be integrated.
-- Training, by giving new contributors opportunities to get feedback
-  and help, as well as chances to review contributions from more
-  experienced developers.
+* PRs must be small and focused (one PR per feature/bug fix).
+* Write meaningful PR desriptions to help reviewers. This should include:
 
-Poor quality pull requests can however turn the code review process
-into a bottleneck or worse, lead to poor quality reviews. In order to
-facilitate the code review process, pull request must be both
-**focused and small** and have a **detailed description**.
+  * Summary of changes
+  * Technical explanation of key modifications
+  * Link to the relevant issue
+  * Test results (if applicable)
 
-1. Pull requests should aim to merge a be coherent body of changes,
-   targeting a single aspect of an issue.  It is much prefereable to
-   fix an issue through multiple pull requests than one big
-   contribution.
-2. Pull requests should aim to merge a limited number of changes.  As
-   a rule of thumb, pull requests usually become much harder to review
-   beyond 10 changes.
-3. Pull requests should come with a detailed description containing:
+* Self-review your code and ensure tests pass before requesting a review.
+* PRs must be approved by at least one maintainer before merging.
+* For high-impact changes a second review is recommended but not required.
+* For small, non-critical PRs (e.g. documentation, minor formatting), self-merging is allowed.
 
-   - One or two sentences summing up the motivation for the changes.
-   - A link to the addressed issue(s).
-   - A summary of the changes.
-   - A technical description of the changes.
+Merging best practices
+~~~~~~~~~~~~~~~~~~~~~~
 
-   The description is important for archiving purposes, but most
-   importlantl in order to guide the work of reviewers.
+Before merging your PR to ``main``,  follow these guidelines.
 
-Note that the points above are guidelines as opposed to hard and fast
-rules.  For a given pull request, the amount of work required to
-review the changes will vary across reviewers.  Generally, however,
-please **empathise with your fellow contributors who are going to spend
-time reviewing your code**.  Aim to make their work easier, and they
-will do the same for you.
+* Rebase instead of merging: Rebase your feature branch on top of the latest ``main`` to avoid unnecessary merge commits and keep the commit history linear.
+
+.. code-block:: bash
+
+    # Fetch the latest changes from the original repository
+    git fetch upstream
+
+    # Checkout your feature branch
+    git checkout my-feature-branch
+
+    # Rebase your branch on top of the latest main
+    git rebase upstream/main
+
+* Resolve conflicts during rebase: If there are conflicts during rebase, resolve them manually. Use the following commands to continue the rebase after resolving conflicts:
+
+.. code-block:: bash
+
+    # Add the resolved files
+    git add .
+
+    # Continue the rebase
+    git rebase --continue
+
+* Squash commits before merging: If your feature branch has multiple commits, squash them into a single commit before merging. This keeps the commit history clean and concise.
