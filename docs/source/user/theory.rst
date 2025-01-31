@@ -56,6 +56,48 @@ and
 
 for a Runge-Kutta scheme with coefficients :math:`a_k`, :math:`b_k`, and :math:`c_k=a_k+b_k` and :math:`n_k` sub-time steps :math:`k=1,\dots{n_k}` with :math:`t_1=t_n` and :math:`t_{n_k} = t_{n+1}`. Pressure and forcing terms are expressed through their time-averaged values on a given sub-step :math:`c_k\Delta{t}`, indicated by the tilde in :math:`\tilde{p}^{k+1}` and :math:`\tilde{\mathbf{f}}^{k+1}`.
 
+Role of intermediate velocities
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+In this approach, we introduce two intermediate velocities :math:`\mathbf{u}^*` and :math:`\mathbf{u}^{**}`. The motivation for using these intermediate steps is to enforce the divergence-free condition at the walls while also satisfying Dirichilet boundary conditions.
+
+First, we compute a velocity field :math:`\mathbf{u}^*` that satisfies the momentum equation without yet enforcing incompressibility. This provides a preliminary estimate of the velocity. Next, we modify :math:`\mathbf{u}^*` by incorporating the pressure gradient from the previous time step :math:`\nabla{p}^k` to obtain :math:`\mathbf{u}^{**}`.
+
+.. math::
+    :label: first_vel
+
+    \mathbf{u}^{**}\big|_w = \mathbf{u}^*\big|_w + \Delta{t}\cdot{c_k} \nabla{p}^k
+
+To ensure :math:`\nabla\cdot\mathbf{u}^{k+1}=0` we use the pressure gradient gradient :math:`\nabla{p}^{k+1}` from the current time-step:
+
+.. math::
+    :label: second_vel
+
+    \mathbf{u}^{k+1}\big|_w = \mathbf{u}^{**}\big|_w - \Delta{t}\cdot{c_k} \nabla{p}^{k+1}
+
+At the walls, :math:`\mathbf{u}^*\big|_w=0` (no-slip condition for the first intermediate velocity) which when substituted into Eq. :eq:`first_vel` gives:
+
+.. math::
+    :label: second_vel2
+
+    \mathbf{u}^{**}\big|_w=\Delta{t}\cdot{c_k}\nabla{p}^K
+
+Therefore, the velocity at the wall in the current time-step is:
+
+.. math::
+    :label: wall_vel1
+
+    \mathbf{u}^{k+1}\big|_w =\Delta{t}\cdot{c_k}\left(\nabla{p}^{k}-\nabla{p}^{k+1}\right)
+
+Since for small time steps :math:`\nabla{p}^{k+1}\approx\nabla{p}^{k}` this results in:
+
+
+.. math::
+    :label: wall_vel2
+
+    \mathbf{u}^{k+1}\big|_w\approx{0}
+
+which ensures that the no-slip boundary condition is satisfied.
 
 Boundary conditions
 ~~~~~~~~~~~~~~~~~~~
