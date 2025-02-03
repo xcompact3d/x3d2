@@ -25,7 +25,9 @@ program test_omp_tridiag
 
   real(dp), allocatable, dimension(:) :: sin_0_2pi_per, cos_0_2pi_per, &
                                          sin_0_2pi, cos_0_2pi, &
-                                         sin_stag, cos_stag
+                                         sin_0_2pi_stag, cos_0_2pi_stag, &
+                                         cos_0_pi, cos_0_pi_stag, &
+                                         sin_0_pi, sin_0_pi_stag
 
   type(tdsops_t) :: tdsops
 
@@ -38,7 +40,7 @@ program test_omp_tridiag
   real(dp), dimension(3) :: L_global
   integer, dimension(3) :: dims_global, nproc_dir
 
-  real(dp) :: dx, dx_per, norm_du, tol = 1d-8, tstart, tend
+  real(dp) :: dx, dx_per, dx_pi, norm_du, tol = 1d-8, tstart, tend
   real(dp) :: achievedBW, deviceBW, achievedBWmax, achievedBWmin
 
   call MPI_Init(ierr)
@@ -59,17 +61,24 @@ program test_omp_tridiag
 
   dx_per = 2*pi/n_glob
   dx = 2*pi/(n_glob - 1)
+  dx_pi = pi/(n_glob - 1)
 
   allocate (sin_0_2pi_per(n), cos_0_2pi_per(n))
   allocate (sin_0_2pi(n), cos_0_2pi(n))
-  allocate (sin_stag(n), cos_stag(n))
+  allocate (cos_0_pi(n), cos_0_pi_stag(n))
+  allocate (sin_0_pi(n), sin_0_pi_stag(n))
+  allocate (cos_0_2pi_stag(n), sin_0_2pi_stag(n))
   do j = 1, n
     sin_0_2pi_per(j) = sin(((j - 1) + nrank*n)*dx_per)
     cos_0_2pi_per(j) = cos(((j - 1) + nrank*n)*dx_per)
     sin_0_2pi(j) = sin(((j - 1) + nrank*n)*dx)
     cos_0_2pi(j) = cos(((j - 1) + nrank*n)*dx)
-    sin_stag(j) = sin(((j - 1) + nrank*n)*dx + dx/2._dp)
-    cos_stag(j) = cos(((j - 1) + nrank*n)*dx + dx/2._dp)
+    cos_0_pi(j) = cos(((j - 1) + nrank*n)*dx_pi)
+    cos_0_pi_stag(j) = cos(((j - 1) + nrank*n)*dx_pi + dx_pi/2._dp)
+    sin_0_pi(j) = sin(((j - 1) + nrank*n)*dx_pi)
+    sin_0_pi_stag(j) = sin(((j - 1) + nrank*n)*dx_pi + dx_pi/2._dp)
+    cos_0_2pi_stag(j) = cos(((j - 1) + nrank*n)*dx + dx/2._dp)
+    sin_0_2pi_stag(j) = sin(((j - 1) + nrank*n)*dx + dx/2._dp)
   end do
 
   n_halo = 4
@@ -176,14 +185,15 @@ program test_omp_tridiag
   end if
 
   ! =========================================================================
-  ! stag interpolate with neumann sym
+  ! stag interpolate 'v2p' with neumann sym
   n_loc = n
   if (nrank == nproc - 1) n_loc = n - 1
-  tdsops = tdsops_init(n_loc, dx, operation='interpolate', scheme='classic', &
+  tdsops = tdsops_init(n_loc, dx_pi, operation='interpolate', scheme='classic', &
                        bc_start=bc_start, bc_end=bc_end, &
                        from_to='v2p')
 
-  call set_u(u, cos_0_2pi, n, n_groups)
+  ! stag-interpolate v2p requires an even, cos-type function
+  call set_u(u, cos_0_pi, n, n_groups)
 
   call run_kernel(n_iters, n_groups, u, du, tdsops, n_loc, &
                   u_recv_s, u_recv_e, u_send_s, u_send_e, &
@@ -191,15 +201,102 @@ program test_omp_tridiag
                   nproc, pprev, pnext &
                   )
 
-  call check_error_norm(du, cos_stag, n_loc, n_glob, n_groups, -1, norm_du)
-  if (nrank == 0) print *, 'error norm interpolate', norm_du
+  call check_error_norm(du, cos_0_pi_stag, n_loc, n_glob, n_groups, -1, norm_du)
+  if (nrank == 0) print *, 'error norm interpolate v2p', norm_du
 
   if (nrank == 0) then
     if (norm_du > tol) then
       allpass = .false.
-      write (stderr, '(a)') 'Check interpolation... failed'
+      write (stderr, '(a)') 'Check interpolation "v2p"... failed'
     else
-      write (stderr, '(a)') 'Check interpolation... passed'
+      write (stderr, '(a)') 'Check interpolation "v2p"... passed'
+    end if
+  end if
+
+  ! =========================================================================
+  ! stag interpolate 'p2v' with neumann sym
+  n_loc = n
+  if (nrank == nproc - 1) n_loc = n - 1
+  tdsops = tdsops_init(n, dx_pi, operation='interpolate', scheme='classic', &
+                       bc_start=bc_start, bc_end=bc_end, &
+                       from_to='p2v')
+
+  ! stag-interpolate p2v requires an even, cos-type function
+  call set_u(u, cos_0_pi_stag, n_loc, n_groups)
+
+  call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
+                  u_recv_s, u_recv_e, u_send_s, u_send_e, &
+                  recv_s, recv_e, send_s, send_e, &
+                  nproc, pprev, pnext &
+                  )
+
+  call check_error_norm(du, cos_0_pi, n, n_glob, n_groups, -1, norm_du)
+  if (nrank == 0) print *, 'error norm interpolate p2v', norm_du
+
+  if (nrank == 0) then
+    if (norm_du > tol) then
+      allpass = .false.
+      write (stderr, '(a)') 'Check interpolation "p2v"... failed'
+    else
+      write (stderr, '(a)') 'Check interpolation "p2v"... passed'
+    end if
+  end if
+
+  ! =========================================================================
+  ! stag derivative 'v2p' with neumann anti-sym
+  n_loc = n
+  if (nrank == nproc - 1) n_loc = n - 1
+  tdsops = tdsops_init(n_loc, dx_pi, operation='stag-deriv', scheme='compact6', &
+                       bc_start=bc_start, bc_end=bc_end, &
+                       from_to='v2p')
+
+  ! stag-derivative v2p requires an odd, sin-type function
+  call set_u(u, sin_0_pi, n, n_groups)
+
+  call run_kernel(n_iters, n_groups, u, du, tdsops, n_loc, &
+                  u_recv_s, u_recv_e, u_send_s, u_send_e, &
+                  recv_s, recv_e, send_s, send_e, &
+                  nproc, pprev, pnext &
+                  )
+
+  call check_error_norm(du, cos_0_pi_stag, n_loc, n_glob, n_groups, -1, norm_du)
+  if (nrank == 0) print *, 'error norm stag derivative v2p', norm_du
+
+  if (nrank == 0) then
+    if (norm_du > tol) then
+      allpass = .false.
+      write (stderr, '(a)') 'Check stag derivative "v2p"... failed'
+    else
+      write (stderr, '(a)') 'Check stag derivative "v2p"... passed'
+    end if
+  end if
+
+  ! =========================================================================
+  ! stag derivative 'p2v' with neumann sym
+  n_loc = n
+  if (nrank == nproc - 1) n_loc = n - 1
+  tdsops = tdsops_init(n, dx_pi, operation='stag-deriv', scheme='compact6', &
+                       bc_start=bc_start, bc_end=bc_end, &
+                       from_to='p2v')
+
+  ! stag-derivative p2v requires an even, cos-type function
+  call set_u(u, cos_0_pi_stag, n_loc, n_groups)
+
+  call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
+                  u_recv_s, u_recv_e, u_send_s, u_send_e, &
+                  recv_s, recv_e, send_s, send_e, &
+                  nproc, pprev, pnext &
+                  )
+
+  call check_error_norm(du, sin_0_pi, n_loc, n_glob, n_groups, 1, norm_du)
+  if (nrank == 0) print *, 'error norm stag derivative p2v', norm_du
+
+  if (nrank == 0) then
+    if (norm_du > tol) then
+      allpass = .false.
+      write (stderr, '(a)') 'Check stag derivative "p2v"... failed'
+    else
+      write (stderr, '(a)') 'Check stag derivative "p2v"... passed'
     end if
   end if
 
