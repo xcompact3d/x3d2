@@ -190,8 +190,10 @@ module m_base_backend
   end interface
 
   abstract interface
-    subroutine alloc_tdsops(self, tdsops, dir, operation, scheme, bc_start, &
-                            bc_end, n_halo, from_to, sym, c_nu, nu0_nu)
+    subroutine alloc_tdsops( &
+      self, tdsops, n_tds, delta, operation, scheme, &
+      bc_start, bc_end, n_halo, from_to, sym, c_nu, nu0_nu &
+      )
       import :: base_backend_t
       import :: dp
       import :: tdsops_t
@@ -199,7 +201,8 @@ module m_base_backend
 
       class(base_backend_t) :: self
       class(tdsops_t), allocatable, intent(inout) :: tdsops
-      integer, intent(in) :: dir
+      integer, intent(in) :: n_tds
+      real(dp), intent(in) :: delta
       character(*), intent(in) :: operation, scheme
       integer, intent(in) :: bc_start, bc_end
       integer, optional, intent(in) :: n_halo

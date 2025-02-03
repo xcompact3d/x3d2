@@ -9,21 +9,21 @@ module m_omp_kernels_dist
 contains
 
   subroutine der_univ_dist( &
-    du, send_u_s, send_u_e, u, u_s, u_e, coeffs_s, coeffs_e, coeffs, n, &
-    ffr, fbc, faf &
+    du, send_u_s, send_u_e, u, u_s, u_e, &
+    n_tds, n_rhs, coeffs_s, coeffs_e, coeffs, ffr, fbc, faf &
     )
     implicit none
 
     ! Arguments
     real(dp), intent(out), dimension(:, :) :: du, send_u_s, send_u_e
     real(dp), intent(in), dimension(:, :) :: u, u_s, u_e
+    integer, intent(in) :: n_tds, n_rhs
     real(dp), intent(in), dimension(:, :) :: coeffs_s, coeffs_e ! start/end
     real(dp), intent(in), dimension(:) :: coeffs
-    integer, intent(in) :: n
     real(dp), intent(in), dimension(:) :: ffr, fbc, faf
 
     ! Local variables
-    integer :: i, j!, b
+    integer :: i, j
 
     real(dp) :: c_m4, c_m3, c_m2, c_m1, c_j, c_p1, c_p2, c_p3, c_p4, &
                 alpha, last_r
@@ -82,7 +82,7 @@ contains
     ! alpha is always the same in the bulk region for us
     alpha = faf(5)
 
-    do j = 5, n - 4
+    do j = 5, n_rhs - 4
       !$omp simd
       do i = 1, SZ
         du(i, j) = c_m4*u(i, j - 4) + c_m3*u(i, j - 3) &
@@ -97,7 +97,7 @@ contains
 
     !$omp simd
     do i = 1, SZ
-      j = n - 3
+      j = n_rhs - 3
       du(i, j) = coeffs_e(1, 1)*u(i, j - 4) &
                  + coeffs_e(2, 1)*u(i, j - 3) &
                  + coeffs_e(3, 1)*u(i, j - 2) &
@@ -108,7 +108,7 @@ contains
                  + coeffs_e(8, 1)*u(i, j + 3) &
                  + coeffs_e(9, 1)*u_e(i, 1)
       du(i, j) = ffr(j)*(du(i, j) - faf(j)*du(i, j - 1))
-      j = n - 2
+      j = n_rhs - 2
       du(i, j) = coeffs_e(1, 2)*u(i, j - 4) &
                  + coeffs_e(2, 2)*u(i, j - 3) &
                  + coeffs_e(3, 2)*u(i, j - 2) &
@@ -119,7 +119,7 @@ contains
                  + coeffs_e(8, 2)*u_e(i, 1) &
                  + coeffs_e(9, 2)*u_e(i, 2)
       du(i, j) = ffr(j)*(du(i, j) - faf(j)*du(i, j - 1))
-      j = n - 1
+      j = n_rhs - 1
       du(i, j) = coeffs_e(1, 3)*u(i, j - 4) &
                  + coeffs_e(2, 3)*u(i, j - 3) &
                  + coeffs_e(3, 3)*u(i, j - 2) &
@@ -130,7 +130,7 @@ contains
                  + coeffs_e(8, 3)*u_e(i, 2) &
                  + coeffs_e(9, 3)*u_e(i, 3)
       du(i, j) = ffr(j)*(du(i, j) - faf(j)*du(i, j - 1))
-      j = n
+      j = n_rhs
       du(i, j) = coeffs_e(1, 4)*u(i, j - 4) &
                  + coeffs_e(2, 4)*u(i, j - 3) &
                  + coeffs_e(3, 4)*u(i, j - 2) &
@@ -146,12 +146,12 @@ contains
 
     !$omp simd
     do i = 1, SZ
-      send_u_e(i, 1) = du(i, n)
+      send_u_e(i, 1) = du(i, n_tds)
     end do
     !$omp end simd
 
     ! Backward pass of the hybrid algorithm
-    do j = n - 2, 2, -1
+    do j = n_tds - 2, 2, -1
       !$omp simd
       do i = 1, SZ
         du(i, j) = du(i, j) - fbc(j)*du(i, j + 1)

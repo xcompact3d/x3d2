@@ -4,7 +4,7 @@ module m_omp_backend
   use m_ordering, only: get_index_reordering
   use m_common, only: dp, get_dirs_from_rdr, move_data_loc, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC
-  use m_tdsops, only: dirps_t, tdsops_t, get_tds_n
+  use m_tdsops, only: dirps_t, tdsops_t
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
   use m_omp_sendrecv, only: sendrecv_fields
 
@@ -102,31 +102,28 @@ contains
   end function init
 
   subroutine alloc_omp_tdsops( &
-    self, tdsops, dir, operation, scheme, bc_start, bc_end, &
+    self, tdsops, n_tds, delta, operation, scheme, bc_start, bc_end, &
     n_halo, from_to, sym, c_nu, nu0_nu &
     )
     implicit none
 
     class(omp_backend_t) :: self
     class(tdsops_t), allocatable, intent(inout) :: tdsops
-    integer, intent(in) :: dir
+    integer, intent(in) :: n_tds
+    real(dp), intent(in) :: delta
     character(*), intent(in) :: operation, scheme
     integer, intent(in) :: bc_start, bc_end
     integer, optional, intent(in) :: n_halo
     character(*), optional, intent(in) :: from_to
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
-    integer :: tds_n
-    real(dp) :: delta
 
     allocate (tdsops_t :: tdsops)
 
     select type (tdsops)
     type is (tdsops_t)
-      tds_n = get_tds_n(self%mesh, dir, from_to)
-      delta = self%mesh%geo%d(dir)
-      tdsops = tdsops_t(tds_n, delta, operation, scheme, bc_start, bc_end, &
-                        n_halo, from_to, sym, c_nu, nu0_nu)
+      tdsops = tdsops_t(n_tds, delta, operation, scheme, bc_start, &
+                        bc_end, n_halo, from_to, sym, c_nu, nu0_nu)
     end select
 
   end subroutine alloc_omp_tdsops
@@ -310,7 +307,7 @@ contains
     n_groups = self%mesh%get_n_groups(u)
 
     call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
-                           tdsops%tds_n, n_groups)
+                           tdsops%n_tds, n_groups)
 
     ! halo exchange
     call sendrecv_fields(self%u_recv_s, self%u_recv_e, &

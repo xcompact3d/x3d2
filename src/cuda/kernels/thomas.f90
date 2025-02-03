@@ -8,15 +8,15 @@ module m_cuda_kernels_thom
 contains
 
   attributes(global) subroutine der_univ_thom( &
-    du, u, coeffs_s, coeffs_e, coeffs, n, thom_f, thom_s, thom_w &
+    du, u, n_tds, n_rhs, coeffs_s, coeffs_e, coeffs, thom_f, thom_s, thom_w &
     )
     implicit none
 
     real(dp), device, intent(out), dimension(:, :, :) :: du
     real(dp), device, intent(in), dimension(:, :, :) :: u
+    integer, value, intent(in) :: n_tds, n_rhs
     real(dp), device, intent(in), dimension(:, :) :: coeffs_s, coeffs_e
     real(dp), device, intent(in), dimension(:) :: coeffs
-    integer, value, intent(in) :: n
     real(dp), device, intent(in), dimension(:) :: thom_f, thom_s, thom_w
 
     integer :: i, j, b
@@ -62,7 +62,7 @@ contains
                   + coeffs_s(9, 4)*u(i, 8, b)
     du(i, 4, b) = du(i, 4, b) - du(i, 3, b)*thom_s(4)
 
-    do j = 5, n - 4
+    do j = 5, n_rhs - 4
       temp_du = c_m4*u(i, j - 4, b) + c_m3*u(i, j - 3, b) &
                 + c_m2*u(i, j - 2, b) + c_m1*u(i, j - 1, b) &
                 + c_j*u(i, j, b) &
@@ -71,7 +71,7 @@ contains
       du(i, j, b) = temp_du - du(i, j - 1, b)*thom_s(j)
     end do
 
-    j = n - 3
+    j = n_rhs - 3
     du(i, j, b) = coeffs_e(1, 1)*u(i, j - 4, b) &
                   + coeffs_e(2, 1)*u(i, j - 3, b) &
                   + coeffs_e(3, 1)*u(i, j - 2, b) &
@@ -81,7 +81,7 @@ contains
                   + coeffs_e(7, 1)*u(i, j + 2, b) &
                   + coeffs_e(8, 1)*u(i, j + 3, b)
     du(i, j, b) = du(i, j, b) - du(i, j - 1, b)*thom_s(j)
-    j = n - 2
+    j = n_rhs - 2
     du(i, j, b) = coeffs_e(1, 2)*u(i, j - 4, b) &
                   + coeffs_e(2, 2)*u(i, j - 3, b) &
                   + coeffs_e(3, 2)*u(i, j - 2, b) &
@@ -90,7 +90,7 @@ contains
                   + coeffs_e(6, 2)*u(i, j + 1, b) &
                   + coeffs_e(7, 2)*u(i, j + 2, b)
     du(i, j, b) = du(i, j, b) - du(i, j - 1, b)*thom_s(j)
-    j = n - 1
+    j = n_rhs - 1
     du(i, j, b) = coeffs_e(1, 3)*u(i, j - 4, b) &
                   + coeffs_e(2, 3)*u(i, j - 3, b) &
                   + coeffs_e(3, 3)*u(i, j - 2, b) &
@@ -98,7 +98,7 @@ contains
                   + coeffs_e(5, 3)*u(i, j, b) &
                   + coeffs_e(6, 3)*u(i, j + 1, b)
     du(i, j, b) = du(i, j, b) - du(i, j - 1, b)*thom_s(j)
-    j = n
+    j = n_rhs
     du(i, j, b) = coeffs_e(1, 4)*u(i, j - 4, b) &
                   + coeffs_e(2, 4)*u(i, j - 3, b) &
                   + coeffs_e(3, 4)*u(i, j - 2, b) &
@@ -107,22 +107,22 @@ contains
     du(i, j, b) = du(i, j, b) - du(i, j - 1, b)*thom_s(j)
 
     ! Backward pass of the Thomas algorithm
-    du(i, n, b) = du(i, n, b)*thom_w(n)
-    do j = n - 1, 1, -1
+    du(i, n_tds, b) = du(i, n_tds, b)*thom_w(n_tds)
+    do j = n_tds - 1, 1, -1
       du(i, j, b) = (du(i, j, b) - thom_f(j)*du(i, j + 1, b))*thom_w(j)
     end do
 
   end subroutine der_univ_thom
 
   attributes(global) subroutine der_univ_thom_per( &
-    du, u, coeffs, n, alpha, thom_f, thom_s, thom_w, thom_p &
+    du, u, n, coeffs, alpha, thom_f, thom_s, thom_w, thom_p &
     )
     implicit none
 
     real(dp), device, intent(out), dimension(:, :, :) :: du
     real(dp), device, intent(in), dimension(:, :, :) :: u
-    real(dp), device, intent(in), dimension(:) :: coeffs
     integer, value, intent(in) :: n
+    real(dp), device, intent(in), dimension(:) :: coeffs
     real(dp), value, intent(in) :: alpha
     real(dp), device, intent(in), dimension(:) :: thom_f, thom_s, thom_w, &
                                                   thom_p

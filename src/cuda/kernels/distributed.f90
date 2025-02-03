@@ -8,8 +8,8 @@ module m_cuda_kernels_dist
 contains
 
   attributes(global) subroutine der_univ_dist( &
-    du, send_u_s, send_u_e, u, u_s, u_e, coeffs_s, coeffs_e, coeffs, n, &
-    ffr, fbc, faf &
+    du, send_u_s, send_u_e, u, u_s, u_e, &
+    n_tds, n_rhs, coeffs_s, coeffs_e, coeffs, ffr, fbc, faf &
     )
     implicit none
 
@@ -17,9 +17,9 @@ contains
     real(dp), device, intent(out), dimension(:, :, :) :: du, send_u_s, &
                                                          send_u_e
     real(dp), device, intent(in), dimension(:, :, :) :: u, u_s, u_e
+    integer, value, intent(in) :: n_tds, n_rhs
     real(dp), device, intent(in), dimension(:, :) :: coeffs_s, coeffs_e
     real(dp), device, intent(in), dimension(:) :: coeffs
-    integer, value, intent(in) :: n
     real(dp), device, intent(in), dimension(:) :: ffr, fbc, faf
 
     ! Local variables
@@ -81,7 +81,7 @@ contains
 
     alpha = faf(5)
 
-    do j = 5, n - 4
+    do j = 5, n_rhs - 4
       temp_du = c_m4*u(i, j - 4, b) + c_m3*u(i, j - 3, b) &
                 + c_m2*u(i, j - 2, b) + c_m1*u(i, j - 1, b) &
                 + c_j*u(i, j, b) &
@@ -90,7 +90,7 @@ contains
       du(i, j, b) = ffr(j)*(temp_du - alpha*du(i, j - 1, b))
     end do
 
-    j = n - 3
+    j = n_rhs - 3
     du(i, j, b) = coeffs_e(1, 1)*u(i, j - 4, b) &
                   + coeffs_e(2, 1)*u(i, j - 3, b) &
                   + coeffs_e(3, 1)*u(i, j - 2, b) &
@@ -101,7 +101,7 @@ contains
                   + coeffs_e(8, 1)*u(i, j + 3, b) &
                   + coeffs_e(9, 1)*u_e(i, 1, b)
     du(i, j, b) = ffr(j)*(du(i, j, b) - faf(j)*du(i, j - 1, b))
-    j = n - 2
+    j = n_rhs - 2
     du(i, j, b) = coeffs_e(1, 2)*u(i, j - 4, b) &
                   + coeffs_e(2, 2)*u(i, j - 3, b) &
                   + coeffs_e(3, 2)*u(i, j - 2, b) &
@@ -112,7 +112,7 @@ contains
                   + coeffs_e(8, 2)*u_e(i, 1, b) &
                   + coeffs_e(9, 2)*u_e(i, 2, b)
     du(i, j, b) = ffr(j)*(du(i, j, b) - faf(j)*du(i, j - 1, b))
-    j = n - 1
+    j = n_rhs - 1
     du(i, j, b) = coeffs_e(1, 3)*u(i, j - 4, b) &
                   + coeffs_e(2, 3)*u(i, j - 3, b) &
                   + coeffs_e(3, 3)*u(i, j - 2, b) &
@@ -123,7 +123,7 @@ contains
                   + coeffs_e(8, 3)*u_e(i, 2, b) &
                   + coeffs_e(9, 3)*u_e(i, 3, b)
     du(i, j, b) = ffr(j)*(du(i, j, b) - faf(j)*du(i, j - 1, b))
-    j = n
+    j = n_rhs
     du(i, j, b) = coeffs_e(1, 4)*u(i, j - 4, b) &
                   + coeffs_e(2, 4)*u(i, j - 3, b) &
                   + coeffs_e(3, 4)*u(i, j - 2, b) &
@@ -135,10 +135,10 @@ contains
                   + coeffs_e(9, 4)*u_e(i, 4, b)
     du(i, j, b) = ffr(j)*(du(i, j, b) - faf(j)*du(i, j - 1, b))
 
-    send_u_e(i, 1, b) = du(i, n, b)
+    send_u_e(i, 1, b) = du(i, n_tds, b)
 
     ! Backward pass of the hybrid algorithm
-    do j = n - 2, 2, -1
+    do j = n_tds - 2, 2, -1
       du(i, j, b) = du(i, j, b) - fbc(j)*du(i, j + 1, b)
     end do
     du(i, 1, b) = last_r*(du(i, 1, b) - fbc(1)*du(i, 2, b))
@@ -196,7 +196,7 @@ contains
   attributes(global) subroutine transeq_3fused_dist( &
     du, dud, d2u, &
     send_du_s, send_du_e, send_dud_s, send_dud_e, send_d2u_s, send_d2u_e, &
-    u, u_s, u_e, v, v_s, v_e, n, &
+    u, u_s, u_e, v, v_s, v_e, n_tds, n_rhs, &
     d1_coeffs_s, d1_coeffs_e, d1_coeffs, d1_fw, d1_bw, d1_af, &
     d2_coeffs_s, d2_coeffs_e, d2_coeffs, d2_fw, d2_bw, d2_af &
     )
@@ -208,7 +208,7 @@ contains
       send_du_s, send_du_e, send_dud_s, send_dud_e, send_d2u_s, send_d2u_e
     real(dp), device, intent(in), dimension(:, :, :) :: u, u_s, u_e, &
                                                         v, v_s, v_e
-    integer, value, intent(in) :: n
+    integer, value, intent(in) :: n_tds, n_rhs
     real(dp), device, intent(in) :: d1_coeffs_s(:, :), d1_coeffs_e(:, :), &
                                     d1_coeffs(:)
     real(dp), device, intent(in) :: d1_fw(:), d1_bw(:), d1_af(:)
@@ -392,7 +392,7 @@ contains
     v_j = v(i, 5, b); v_p1 = v(i, 6, b)
     v_p2 = v(i, 7, b); v_p3 = v(i, 8, b)
 
-    do j = 5, n - 4
+    do j = 5, n_rhs - 4
       u_p4 = u(i, j + 4, b); v_p4 = v(i, j + 4, b)
 
       ! du
@@ -425,7 +425,7 @@ contains
       v_j = v_p1; v_p1 = v_p2; v_p2 = v_p3; v_p3 = v_p4
     end do
 
-    j = n - 3
+    j = n_rhs - 3
     temp_du = d1_coeffs_e(1, 1)*u(i, j - 4, b) &
               + d1_coeffs_e(2, 1)*u(i, j - 3, b) &
               + d1_coeffs_e(3, 1)*u(i, j - 2, b) &
@@ -456,7 +456,7 @@ contains
                + d2_coeffs_e(8, 1)*u(i, j + 3, b) &
                + d2_coeffs_e(9, 1)*u_e(i, 1, b)
     d2u(i, j, b) = d2_fw(j)*(temp_d2u - d2_af(j)*d2u(i, j - 1, b))
-    j = n - 2
+    j = n_rhs - 2
     temp_du = d1_coeffs_e(1, 2)*u(i, j - 4, b) &
               + d1_coeffs_e(2, 2)*u(i, j - 3, b) &
               + d1_coeffs_e(3, 2)*u(i, j - 2, b) &
@@ -487,7 +487,7 @@ contains
                + d2_coeffs_e(8, 2)*u_e(i, 1, b) &
                + d2_coeffs_e(9, 2)*u_e(i, 2, b)
     d2u(i, j, b) = d2_fw(j)*(temp_d2u - d2_af(j)*d2u(i, j - 1, b))
-    j = n - 1
+    j = n_rhs - 1
     temp_du = d1_coeffs_e(1, 3)*u(i, j - 4, b) &
               + d1_coeffs_e(2, 3)*u(i, j - 3, b) &
               + d1_coeffs_e(3, 3)*u(i, j - 2, b) &
@@ -518,7 +518,7 @@ contains
                + d2_coeffs_e(8, 3)*u_e(i, 2, b) &
                + d2_coeffs_e(9, 3)*u_e(i, 3, b)
     d2u(i, j, b) = d2_fw(j)*(temp_d2u - d2_af(j)*d2u(i, j - 1, b))
-    j = n
+    j = n_rhs
     temp_du = d1_coeffs_e(1, 4)*u(i, j - 4, b) &
               + d1_coeffs_e(2, 4)*u(i, j - 3, b) &
               + d1_coeffs_e(3, 4)*u(i, j - 2, b) &
@@ -550,12 +550,12 @@ contains
                + d2_coeffs_e(9, 4)*u_e(i, 4, b)
     d2u(i, j, b) = d2_fw(j)*(temp_d2u - d2_af(j)*d2u(i, j - 1, b))
 
-    send_du_e(i, 1, b) = du(i, n, b)
-    send_dud_e(i, 1, b) = dud(i, n, b)
-    send_d2u_e(i, 1, b) = d2u(i, n, b)
+    send_du_e(i, 1, b) = du(i, n_tds, b)
+    send_dud_e(i, 1, b) = dud(i, n_tds, b)
+    send_d2u_e(i, 1, b) = d2u(i, n_tds, b)
 
     ! Backward pass of the hybrid algorithm
-    do j = n - 2, 2, -1
+    do j = n_tds - 2, 2, -1
       du(i, j, b) = du(i, j, b) - d1_bw(j)*du(i, j + 1, b)
       dud(i, j, b) = dud(i, j, b) - d1_bw(j)*dud(i, j + 1, b)
       d2u(i, j, b) = d2u(i, j, b) - d2_bw(j)*d2u(i, j + 1, b)
@@ -573,7 +573,7 @@ contains
   attributes(global) subroutine transeq_3fused_subs( &
     r_du, conv, dud, d2u, &
     recv_du_s, recv_du_e, recv_dud_s, recv_dud_e, recv_d2u_s, recv_d2u_e, &
-    d1_sa, d1_sc, d2_sa, d2_sc, n, nu &
+    n, nu, d1_sa, d1_sc, d2_sa, d2_sc &
     )
     implicit none
 
@@ -583,9 +583,9 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: conv, dud, d2u
     real(dp), device, intent(in), dimension(:, :, :) :: &
       recv_du_s, recv_du_e, recv_dud_s, recv_dud_e, recv_d2u_s, recv_d2u_e
-    real(dp), device, intent(in), dimension(:) :: d1_sa, d1_sc, d2_sa, d2_sc
     integer, value, intent(in) :: n
     real(dp), value, intent(in) :: nu
+    real(dp), device, intent(in), dimension(:) :: d1_sa, d1_sc, d2_sa, d2_sc
 
     ! Local variables
     integer :: i, j, b
