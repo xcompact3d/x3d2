@@ -21,7 +21,6 @@ Contents:
 
    getting_started.rst
    report_a_bug
-   internals/index
    user/index
    developer/index
    API reference <https://xcompact3d.github.io/x3d2>

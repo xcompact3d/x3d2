@@ -1,4 +1,4 @@
-Getting Started
+Getting started
 ===============
 
 Installing on Linux
@@ -9,7 +9,7 @@ Dependencies
 
 To build x3d2 on Linux, you will need the following dependencies:
 
-Fortran Compiler
+Fortran compiler
 ^^^^^^^^^^^^^^^^
 
 A recent modern Fortran compiler is required to build x3d2. For example GNU Fortran compiler (``gfortran``) version 9 and above. You can install it using your package manager. For Ubuntu this can be obtained using:
@@ -145,12 +145,12 @@ CMake
 
 To build x3d2, you will need CMake version 3.20 and above. You can download the latest version from the `CMake website <https://cmake.org/download/>`_. Alternatively, you can install it using Homebrew:
 
-Compile from source
-~~~~~~~~~~~~~~~~~~~
-
 .. code-block:: bash
 
    brew install cmake
+
+Compile from source
+~~~~~~~~~~~~~~~~~~~
 
 To install x3d2 from source, follow these steps:
 

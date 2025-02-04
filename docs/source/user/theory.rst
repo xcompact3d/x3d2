@@ -1,11 +1,17 @@
 Theoretical Background
 ======================
 
+.. _theoretical-background:
+
 Numerical method framework
 --------------------------
 
+.. _numerical_method:
+
 Governing equations
 ~~~~~~~~~~~~~~~~~~~
+
+.. _governing-equations:
 
 The governing equations are the forced incompressible Navier-Stokes equations:
 
@@ -29,7 +35,6 @@ Time advancement
 ~~~~~~~~~~~~~~~~
 
 The time advancement of Eq. :eq:`incomp-ns` can be expressed as:
-
 
 .. math::
     :label: time-adv
@@ -56,10 +61,19 @@ and
 
 for a Runge-Kutta scheme with coefficients :math:`a_k`, :math:`b_k`, and :math:`c_k=a_k+b_k` and :math:`n_k` sub-time steps :math:`k=1,\dots{n_k}` with :math:`t_1=t_n` and :math:`t_{n_k} = t_{n+1}`. Pressure and forcing terms are expressed through their time-averaged values on a given sub-step :math:`c_k\Delta{t}`, indicated by the tilde in :math:`\tilde{p}^{k+1}` and :math:`\tilde{\mathbf{f}}^{k+1}`.
 
+Boundary conditions
+~~~~~~~~~~~~~~~~~~~
+
+The governing equations Eq. :eq:`incomp-ns` and :eq:`div-free` are solved in a computational domain :math:`L_x \times L_y \times L_z` discretised on a Cartesian mesh of :math:`n_x \times n_y \times n_z` nodes. 
+
+At the boundaries of the time periodic, free-slip, no-slip, or open conditions can be applied depending on the flow configuration considered. Period and free-slip boundary conditions can be imposed directly via the spatial discretisation without specific care in time advancements. 
+
+However, the use of Dirichlet conditions on the velocity (for no-slip or open conditions) needs to be defined according to time advancement procedure. Conventional homogeneous Neumann conditions are used to solve the pressure.
+
 Role of intermediate velocities
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In this approach, we introduce two intermediate velocities :math:`\mathbf{u}^*` and :math:`\mathbf{u}^{**}`. The motivation for using these intermediate steps is to enforce the divergence-free condition at the walls while also satisfying Dirichilet boundary conditions.
+In this approach, we introduce two intermediate velocities :math:`\mathbf{u}^*` and :math:`\mathbf{u}^{**}`. The motivation for using these intermediate steps is to enforce the divergence-free condition at the walls while also satisfying Dirichlet boundary conditions.
 
 First, we compute a velocity field :math:`\mathbf{u}^*` that satisfies the momentum equation without yet enforcing incompressibility. This provides a preliminary estimate of the velocity. Next, we modify :math:`\mathbf{u}^*` by incorporating the pressure gradient from the previous time step :math:`\nabla{p}^k` to obtain :math:`\mathbf{u}^{**}`.
 
@@ -68,7 +82,7 @@ First, we compute a velocity field :math:`\mathbf{u}^*` that satisfies the momen
 
     \mathbf{u}^{**}\big|_w = \mathbf{u}^*\big|_w + \Delta{t}\cdot{c_k} \nabla{p}^k
 
-To ensure :math:`\nabla\cdot\mathbf{u}^{k+1}=0` we use the pressure gradient gradient :math:`\nabla{p}^{k+1}` from the current time-step:
+To ensure :math:`\nabla\cdot\mathbf{u}^{k+1}=0` we use the pressure gradient :math:`\nabla{p}^{k+1}` from the current time-step:
 
 .. math::
     :label: second_vel
@@ -99,14 +113,7 @@ Since for small time steps :math:`\nabla{p}^{k+1}\approx\nabla{p}^{k}` this resu
 
 which ensures that the no-slip boundary condition is satisfied.
 
-Boundary conditions
-~~~~~~~~~~~~~~~~~~~
 
-The governing equations Eq. :eq:`incomp-ns` and :eq:`div-free` are solved in a computational domain :math:`L_x \times L_y \times L_z` discretised on a Cartesian mesh of :math:`n_x \times n_y \times n_z` nodes. 
-
-At the boundaries of the time periodic, free-slip, no-slip, or open conditions can be applied depending on the flow configuration considered. Period and free-slip boundary conditions can be imposed directly via the spatial discretisation without specific care in time advancements. 
-
-However, the use of Dirichlet conditions on the velocity (for no-slip or open conditions) needs to be defined according to time advancement procedure. Conventional homogeneous Neumann conditions are used to solve the pressure.
 
 Pressure treatment
 ~~~~~~~~~~~~~~~~~~
@@ -120,6 +127,8 @@ The incompressibility condition :eq:`div-free` can be verified at the end of eac
 
 that provides the estimation of :math:`\tilde{p}^{k+1}` required to perform the pressure correction.
 
+
+.. _spatial_discretisation:
 
 Spatial discretisation
 ----------------------
@@ -188,12 +197,14 @@ The concept of the modified wave number still holds in the staggered formulation
 
     k'_x\Delta{x} = \frac{2a\sin(k_x\Delta{x}/2) + (2b/3)\sin(3k_x\Delta{x}/2)}{1+2\alpha\cos(k_x\Delta{x})}
 
-The well known principle of equivalence between multiplication in Fourier space and derivation/interpolation in the physical space is recalled here. This equivalence is exact, hence, the computaion of a derivative  in physical space using :eq:`staggered-first-derivative` with relevant boundary conditions must lead to the same result obtained with the use of :eq:`modified-wave-number-staggered` in spectral space.
+The well known principle of equivalence between multiplication in Fourier space and derivation/interpolation in the physical space is recalled here. This equivalence is exact, hence, the computation of a derivative in physical space using :eq:`staggered-first-derivative` with relevant boundary conditions must lead to the same result obtained with the use of :eq:`modified-wave-number-staggered` in spectral space.
+
+.. _solving_the_poisson_equation:
 
 Solving the Poisson equation
 ----------------------------
 
-There are several numerical algorithms for solving Poisson's equations, which can be broadly classified into two categories: iterative solvers and direct solvers. Among the direct methods, Fast Fourier Transform (FFT) based solvers are the most efficient. 
+There are several numerical algorithms for solving Poisson's equations, which can be broadly classified into two categories: iterative solvers and direct solvers. x3d2 currently uses direct methods with iterative solvers planned in future versions. Among the direct methods, Fast Fourier Transform (FFT) based solvers are the most efficient.
 
 For simplicity, a generic 3D Fourier transform can be defined as:
 
@@ -209,7 +220,7 @@ with its inverse expression
 
     \hat{p}_{ijk} = \sum_{l}\sum_{m}\sum_{n} \hat{p}_{lmn} W_x(-k_xx_i)W_y(k_yy_j)W_z(k_zz_k)
 
-where the sums, the base functions :math:`(W_x, W_y, W_z)` and the wave numbers :math:`(k_x, k_y, k_z)` can correspond to standard FFT (for periodic boundary conditions) or cosine FFT (for free-slip or :math:`\mathbf{u}`-Dirichlet/:math:`p`-Neumann boundary conditions) in their collocated or staggered versions. 3D direct :eq:`3d-dft` and inverse :eq:`3d-idft` can be performed with any efficient FFT routines availbale in scientific Fortran or C libraries. The first stage in solving the Poissin equation :eq:`poisson` consists in the computation of its right hand side. After performing the relevant Fourier transform :eq:`3d-dft` to :math:`D=\nabla\cdot\mathbf{u}^{**}`, the solving of the Poisson equation consists in a single division of each Fourier mode :math:`\hat{D}_{lmn}` by  a factor :math:`F_{lmn}` with
+where the sums, the base functions :math:`(W_x, W_y, W_z)` and the wave numbers :math:`(k_x, k_y, k_z)` can correspond to standard FFT (for periodic boundary conditions) or cosine FFT (for free-slip or :math:`\mathbf{u}`-Dirichlet/:math:`p`-Neumann boundary conditions) in their collocated or staggered versions. 3D direct :eq:`3d-dft` and inverse :eq:`3d-idft` can be performed with any efficient FFT routines available in scientific Fortran or C libraries. The first stage in solving the Poisson equation :eq:`poisson` consists in the computation of its right-hand side. After performing the relevant Fourier transform :eq:`3d-dft` to :math:`D=\nabla\cdot\mathbf{u}^{**}`, the solving of the Poisson equation consists in a single division of each Fourier mode :math:`\hat{D}_{lmn}` by a factor :math:`F_{lmn}` with
 
 .. math::
     :label: poisson-solve
@@ -290,9 +301,9 @@ It can be deduced that the three coefficients of the metric :eq:`fourier-mapping
 
     \alpha = \frac{1}{L_y}\left(\frac{\alpha}{\pi} + \frac{1}{2\pi\beta}\right), \quad \hat{a}_1 = \hat{a}_{-1}  = -\frac{1}{L_y}\left(\frac{\cos{2\pi\delta}}{4\pi\beta}\right)
 
-for :math:`\gamma=1` and :math:`\delta=0` or :math:`1/2`. The main advantage of this compact expression in spectral space is that the convolution of the metric by the first derivation with respect to the regular coordiate :math:`s` requires only :math:`3n_y` multiplications.
+for :math:`\gamma=1` and :math:`\delta=0` or :math:`1/2`. The main advantage of this compact expression in spectral space is that the convolution of the metric by the first derivation with respect to the regular coordinate :math:`s` requires only :math:`3n_y` multiplications.
 
-To solve the Poisson equation :eq:`poisson` (using 3D Fourier transforms :eq:`3d-dft` and :eq:`3d-idft` where :math:`y` needs to be substituted by :math:`s` for the :math:`y`-stretched approach) the counter part of the integration scheme :eq:`poisson-solve` becomes
+To solve the Poisson equation :eq:`poisson` (using 3D Fourier transforms :eq:`3d-dft` and :eq:`3d-idft` where :math:`y` needs to be substituted by :math:`s` for the :math:`y`-stretched approach) the counterpart of the integration scheme :eq:`poisson-solve` becomes
 
 
 .. math::
@@ -313,136 +324,85 @@ where :math:`\hat{\tilde{\mathbf{p}}}_{ln}^{k+1}` and :math:`\widehat{\mathbf{D}
 
 where the :math:`k'_m` are the modified wave numbers from relation like :eq:`modified-wave-number` or :eq:`modified-wave-number-staggered` based on the computational coordinate :math:`s` instead of :math:`x`. 
 
-The above matrix is diagonal for a regular :math:`y`-coordinate (with :math:`a_1=a_{-1}=0`) so that the simplified expression :eq:`transfer-function` can be recovered. In the other cases, the computation of pressure nodes :math:`\hat{\tilde{\mathbf{p}}}_{ln}^{k+1}` requires to invert :math:`n_x \times n_y` linear systems based on :math:`n_y\times{n_y}` pentadiagonal matrices. The corresponding computational cost is proportional to :math:`n_x\times{n_y}\times{n_z}` so that the solver Poisson can be direct without any iterative process.
+The above matrix is diagonal for a regular :math:`y`-coordinate (with :math:`a_1=a_{-1}=0`) so that the simplified expression :eq:`transfer-function` can be recovered. In the other cases, the computation of pressure nodes :math:`\hat{\tilde{\mathbf{p}}}_{ln}^{k+1}` requires inverting :math:`n_x \times n_y` linear systems based on :math:`n_y\times{n_y}` pentadiagonal matrices. The corresponding computational cost is proportional to :math:`n_x\times{n_y}\times{n_z}` so that the solver Poisson can be direct without any iterative process.
 
-In terms of computational cost, solving the Poisson equation directly requires both a forward and an inverse 3D FFT. For a completely regular mesh in three spatial dimensions, these two FFT operations constitute majority of the computational expense for the Poisson stage, accounting for about 10% of the total computational effort required to solve the Navier-Stokes equations. When dealing with meshes that have one stretched direction, the cost of ensuring incompressibility increases but still represents about 15% of the overall computational cost for a given simulation.
+In terms of computational cost, solving the Poisson equation directly requires both a forward and an inverse 3D FFT. For a completely regular mesh in three spatial dimensions, these two FFT operations constitute the majority of the computational expense for the Poisson stage, accounting for about 10% of the total computational effort required to solve the Navier-Stokes equations. When dealing with meshes that have one stretched direction, the cost of ensuring incompressibility increases but still represents about 15% of the overall computational cost for a given simulation.
 
-Although using Fourier transforms for pressure is highly suitable for periodic or free-slip boundary conditions, it is less ideal for no-slip or open boundary conditions. In these cases the pressure must be expressed using consine Fourier transforms, assuming that homogeneous Neumann conditions are met. This assumption introduces an error that is only second-order accurate in space.
+Although using Fourier transforms for pressure is highly suitable for periodic or free-slip boundary conditions, it is less ideal for no-slip or open boundary conditions. In these cases the pressure must be expressed using cosine Fourier transforms, assuming that homogeneous Neumann conditions are met. This assumption introduces an error that is only second-order accurate in space.
 
+.. _tridiagonal_systems:
 
-Tridiagonal systems solver algorithm
-------------------------------------
+Tridiagonal systems
+-------------------
 
-The framework used here requires solving up to 150 batches of tridiagonal systems at each time step to compute derivatives and interpolations using implicit high-order finite-difference schemes. The ability of software to exploit exascale systems depends on the scalability of numerical simulation applications and their underlying algorithms.
-
-Tridiagonal systems solvers are needed to solve system of linear equations of the form :math:`Ax=d`, where :math:`a_0=c_{N-1}=0`
+A tridiagonal system is a linear system of equations where the non-zero coefficients are concentrated along the main diagonal, the subdiagonal, and the superdiagonal. These systems frequently occur in high-order compact finite difference schemes and take the form :math:`Ax=d`:
 
 .. math::
     :label: tdsops1
 
-    a_iu_{i-1} + b_iu_i + c_iu_{i+1} = d_i \quad i=0,1,\dots,N-1
+    a_iu_{i-1} + b_iu_i + c_iu_{i+1} = d_i \quad i=0,1,\dots,N-1,
 
-The Thomas algorithm is a well-known method for solving tridiagonal systems of equations. It is a specialised form of Gaussian elimination that involves a forward pass to eliminate the lower diagonal elements :math:`a_i` of the tridiagonal matrix, by adding a multiple of the row above. This is followed by a backward pass using the modified :math:`c_i` values from the last index to the first. This algorithm is inherently serial as each iteration of the loop has a dependency on the previous one, taking :math:`2N` steps.
+where :math:`a_0=c_{N-1}=0`.
 
+Tridiagonal systems solver algorithms
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In contrast, the parallel cyclic reduction (PCR)  is inherently parallel, allowing multiple threads to solve each tridiagonal system simultaneously, as the iterations of the inner loop do not depend on each other. Although the PCR algorithm is computationally more expensive than the Thomas algorithm, it is well-suited for modern multicore/many-core architectures with high computational capabilities.
+The Thomas algorithm is a well-known method for solving tridiagonal systems of equations. It is a specialised form of Gaussian elimination that involves a forward pass to eliminate the lower diagonal elements :math:`a_i` of the tridiagonal matrix by adding a multiple of the row above, followed by a backward substitution pass using the modified upper diagonal coefficients :math:`c_i`. This algorithm is inherently serial as each iteration depends on the results of the previous step, requiring :math:`2N` steps with no parallelism.
 
-In x3d2, a hybrid algorithm combinining Thomas with PCR is implemented, as it has been shown to perform best on GPUs. This hybrid algorithm has a key advantage that, up to a certain system size, the entire subsystem can be stored in the registers of a warp (32 CUDA threads that executes the same instruction simultaneously).
+In contrast, the parallel cyclic reduction (PCR) algorithm is inherently parallel. It recursively reduces the system into smaller independent subsystems, enabling multiple threads to solve each tridiagonal system simultaneously. Unlike the Thomas algorithm, PCR's inner-loop iterations are independent, making it suitable for modern multicore architectures.  However, PCR introduces trade-offs: it requires :math:`O (N \log N)` operations, making it computationally more expensive than Thomas's :math:`O(N)` scaling. Furthermore, distributed-memory PCR faces scalability challenges due to its reliance on MPI all-to-all during the reduction phases. This global communication arises because dependencies between unknowns span non-adjacent subdomains at each reduction step, necessitating data exchange across all processors. While shared-memory PCR implementations avoid this by operating within a single rank, they cannot leverage distributed parallelism.
 
+The fundamental difference between a serial algorithms like Thomas algorithm and distributed-memory algorithms is that the distributed algorithms divide the individual systems into multiple subdomains. This enables localised communication (e.g. neighbour-to-neighbour exchanges) instead of global dependencies.  For example, a 3D decomposition strategy can distribute subdomains across ranks while maintaining static decomposition states, avoiding frequent reconfiguration. Crucially, these approaches eliminate the need for MPI all-to-all communications across the entire domain.
 
-2D domain decomposition
------------------------
+Many tridiagonal algorithms face performance challenges, particularly along the :math:`x` direction, due to inefficient memory access patterns in Cartesian data structures. There are two main characteristics in tridiagonal matrix algorithms that are crucial for computational performance:
 
-For many applications that solve differential equations on three-dimensional Cartesian meshes, the numerical algorithms are inherently implicit. A compact finite difference scheme such as those described above, results in solving a tridiagonal linear system when evaluating spatial derivatives or interpolations. A spectral code often involves performing Fast Fourier Transforms along global mesh lines.
+1. The algorithms are heavily bandwidth-bound because the FLOP requirements of these algorithms are very low compared to the data movement requirements.
+2. The backward and forward passes of the algorithm require accessing the same data twice in a short time interval. This can be optimised by using CPU cache or GPU shared memory to store intermediate states between the forward and backward passes.
 
-There are two approaches to performing such computations on distributed-memory systems. One can either develop distributed algorithms (such as a parallel tridiagonal solver or parallel FFT working on distributed data), or dynamically redistribute (transpose) data among processors to apply serial algorithms in local memory. The second approach is often preferred due to its simplicity.
+x3d2's solution: DistD2-TDS
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Many applications have implemented this idea using 1D domain decomposition. However, 1D decomposition has some limitations. For example, for a cubic mesh size of :math:`N^3` the maximum number of processors :math:`N_{\mathrm{proc}}` that can be used in a 1D decomposition is :math:`N` as each slab must contain at least one plane. For a cubic mesh of 1 billion points, this constraint is :math:`N_{\mathrm{proc}} \lt 10^4`. This limitation can be overcome by using 2D domain decomposition.
+To address the challenges of solving tridiagonal systems efficiently in distributed-memory environments on both CPUs and GPUs, x3d2 uses a novel algorithm called `DistD2-TDS`. This algorithm is based on a specialised data structure that:
 
+1. Improves data locality and minimises data movements via cache blocking and kernel fusion strategies.
+2. Uses data continuity to enable a contiguous data access pattern, resulting in efficient utilisation of the available memory bandwidth.
+3. Supports a data layout that enables vectorisation on CPUs and thread-level parallelisation on GPUs for improved performance.
+
+Modern CPUs have large enough caches to store the entire tridiagonal matrix, which can be accessed quickly. However, GPU caches are not large enough, and kernel fusion is the only option to reduce data movement on GPUs. To enable a linear and predictive memory access pattern regardless of the spatial direction of the tridiagonal systems, DistD2-TDS data structure subdivides the computational domain into groups of individual tridiagonal systems. These groups are tightly packed in memory to ensure data continiuty. This arrangement enables vectorisation on CPUs and thread-level parallelism on GPUs, as the :math:`n^{th}` entries of all tridiagonal systems within a group are stored next to each other in memory. Therefore, the sequential operations in the algorithms, as we apply the forward and backward passes, can be concurrently executed for :math:`SZ` systems at once per core on a CPU or per SM on a GPU.
+
+Example: In a domain of size :math:`32 \times 8 \times 4` shown below; a single group might consist of 4 individual tridiagonal systems, resulting in 8 groups in total. For a Cartesian mesh with :math:`n_x`, :math:`n_y`, and :math:`n_z` the data is arranged as  :math:`SZ, n_x, n_y \cdot n_z / SZ` where :math:`SZ` is the size of the group.
+
+.. figure:: images/data_structure.png
+    :scale: 50%
+
+    x3d2 data structure for an :math:`x`-directional tridiagonal system. Data continuity in memory is in column-major order.
+
+Typically, for a double-precision simulation on CPUs, :math:`SZ=8` as vector registers (512 bits) handle 8 double-precision FLOPs per cycle. For GPUs, :math:`SZ=32` as a single streaming multiprocessor (SM) typically has 32 double-precision cores in total, where each core is effectively assigned an individual tridiagonal system.
+
+Tridiagonal systems resulting from high-order compact finite-difference schemes are always diagonally dominant, and the algorithm used in x3d2 takes advantage of this characteristic to minimise communication requirements between ranks. This involves dividing a batch of tridiagonal systems into multiple domains, where the subdomains are located across multiple ranks in a distributed memory environment. 
+
+Apart from the specialised data structure in DistD2, another novel aspect of this algorithm is that it fuses the RHS construction based on discretised equations such as Eq. :eq:`first-derivative` with the forward pass in the decoupling phase of the algorithm -- this minimises data movement requirements.
+
+After the decoupling phase of the algorithm, the next step is to solve the reduced system. By exploiting diagonal dominance, certain entries in the reduced system  can be eliminated without any loss in numerical accuracy, leading to independent :math:`2 \times 2` systems that are coupled across MPI boundaries. This step is the main deviation from other tridiagonal solvers that use a PCR-type strategy to obtain the solution of the reduced system on a single rank. In the DistD2 algorithm, the reduced systems are not coupled across the entire domain, but only across 2 individual ranks across an MPI boundary. These smaller systems are then solved efficiently using local communication between neighbouring ranks. This single-step MPI communication involving two neighbouring ranks is a significant advantage of the DistD2 algorithm over existing strategies. Finally, the substitution phase of the algorithm requires a simple algebraic substitution and does not require any further MPI communications.
+
+2D Domain Decomposition for FFT
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The current implementation of x3d2 uses a direct approach, namely Fast Fourier Transform (FFT), to solve the Poisson equation. Spectral codes often involve performing FFTs along global mesh lines. There are two approaches to performing such computations on distributed-memory systems: 
+
+1. Develop distributed algorithms (such as a parallel tridiagonal solver or parallel FFT working on distributed data).
+2. Dynamically redistribute (transpose) data among processors to apply serial algorithms in local memory.
+
+The second approach is often preferred due to its simplicity.
+
+Many applications have implemented this idea using 1D domain decomposition. However, 1D decomposition has some limitations. For example, for a cubic mesh size of :math:`N^3`, the maximum number of processors :math:`N_{\mathrm{proc}}` that can be used in a 1D decomposition is :math:`N`, as each slab must contain at least one plane. For a cubic mesh of 1 billion points, this constraint is :math:`N_{\mathrm{proc}} \lt 10^4`. This limitation can be overcome by using 2D domain decomposition.
 
 .. figure:: images/2ddecomp.png
     :scale: 50%
 
     3D Cartesian domain (left), 1D domain decomposition (middle), 2D domain decomposition (right).
 
-While a 1D decomposition algorithm swaps between two states, in a 2D decomposition one needs to traverse three different states using four global transpositions to complete a cycle. The swapping between states can be achieved using `MPI_ALLTOALL(V)` library.
+While a 1D decomposition algorithm swaps between two states, a 2D decomposition requires traversing three different states using four global transpositions to complete a cycle. The swapping between states can be achieved using the `MPI_ALLTOALL(V)` library.
 
+2D domain decomposition is widely used for spectral codes, particularly those compatible with implicit schemes in space. This method allows for efficient parallelization by dividing the computational domain into smaller subdomains, each handled by a separate processor. For a simulation with a cubic mesh of size :math:`N^3`, up to :math:`N^2` processors can be used, significantly increasing scalability compared to 1D decomposition.
 
-2D domain decomposition is widely used for spectral codes, particularly those that are compatible with implicit schemes in space. This method allows for efficient parallelisation by dividing the computational domain into smaller subdomains, each handled by a separate processor. For a simulation with a cubic mesh of size :math:`N^3` up to :math:`N^2` procesors can be used, which significantly increases the scalability compared to 1D decomposition. 
-
-`x3d2` uses the `2DECOMP` library for 2D decomposition. One of the key advantages of using this library is that it does not require modifications to the existing derivative and interpolation subroutines, making it easier to implement. Additionally, this approach utilises customised global `MPI_ALLTOALL(V)` transpositions to redistribute data among processors. Although communication overhead can range from 30% to 80% of the total computational time, with up to 70 transpositions per time step, the overall efficiency and scalability of the simulations are greatly enhanced.
-
-The flowchart below shows the solver processes and the swapping between pencils at different stages of the solution. The swapping between pencils is essential for performing computations along each dimension, such as calculating X-derivatives. When a global operation is performed, the data need to be swapped between different pencil orientations.
-
-.. graphviz::
-
-    digraph SolverFlowchart {
-        graph [rankdir=TB, splines=ortho ];
-
-        # default style for process steps
-        node [shape=box, style=filled, fillcolor=lightgrey, fontname="Arial", fontsize=12];
-
-        # process steps
-        Initialisation        [label="Initialisation"];
-        ConvectionDiff        [label="Convection/Diffusion"];
-        TimeAdvancement       [label="Time Advancement"];
-        VelocityDivergence    [label="Velocity Divergence"];
-        PressurePoisson       [label="Pressure Poisson"];
-        PressureGradient      [label="Pressure Gradient"];
-        VelocityCorrection    [label="Velocity Correction"];
-        IOFinalise            [label="I/O, Finalise"];
-
-        # define annotations
-        node [shape=plaintext, style="", fillcolor="", fontname="Arial", fontsize=12];
-
-        Start                [label="Start in X"];
-        Swap1                [label="X->Y->Z->Y->X\n(24 global operations)"];
-        Swap2                [label="No swap"];
-        Swap3                [label="X->Y->Z\n(16 global operations)"];
-        Swap4                [label="Stay in Z\n(4 global operations, up to 16 depending BC)"];
-        Swap5                [label="Z->Y->X\n(5 global operations)"];
-        Swap6                [label="No swap"];
-        ExtraOps             [label="+(extra 6 global operations if check divergence free)"];
-
-        # define strict vertical process flow
-        Initialisation     -> ConvectionDiff     [style=invis]; 
-        ConvectionDiff     -> TimeAdvancement    [style=invis];
-        TimeAdvancement    -> VelocityDivergence [style=invis];
-        VelocityDivergence -> PressurePoisson    [style=invis];
-        PressurePoisson    -> PressureGradient   [style=invis];
-        PressureGradient   -> VelocityCorrection [style=invis];
-        VelocityCorrection -> IOFinalise         [style=invis];
-       
-        # align annotations
-        { rank=same; Initialisation; Start }
-        { rank=same; ConvectionDiff; Swap1 }
-        { rank=same; TimeAdvancement; Swap2 }
-        { rank=same; VelocityDivergence; Swap3 }
-        { rank=same; PressurePoisson; Swap4 }
-        { rank=same; PressureGradient; Swap5 }
-        { rank=same; VelocityCorrection; Swap6 }
-        { rank=same; IOFinalise; ExtraOps }
-
-        # connect annotations
-        Initialisation      ->  Start    [style=invis];
-        ConvectionDiff      ->  Swap1    [style=invis];
-        TimeAdvancement     ->  Swap2    [style=invis];
-        VelocityDivergence  ->  Swap3    [style=invis];
-        PressurePoisson     ->  Swap4    [style=invis];
-        PressureGradient    ->  Swap5    [style=invis];
-        VelocityCorrection  ->  Swap6    [style=invis];
-        IOFinalise          ->  ExtraOps [style=invis];
-
-        # time loop
-        VelocityCorrection -> ConvectionDiff [
-                color="darkblue", 
-                style=dashed, 
-                constraint=false, 
-                tailport=w, 
-                headport=w,
-                arrowhead=normal]; 
-
-        # time loop label
-        TimeLoopLabel [shape=plaintext, label=< <FONT COLOR="darkblue">Time Loop</FONT> >];
-        { rank=same; TimeLoopLabel; PressurePoisson; }
-        TimeLoopLabel -> PressurePoisson [style=invis];
-        
-        # add real (visible) edges for the process flow
-        Initialisation     -> ConvectionDiff;
-        ConvectionDiff     -> TimeAdvancement;
-        TimeAdvancement    -> VelocityDivergence;
-        VelocityDivergence -> PressurePoisson;
-        PressurePoisson    -> PressureGradient;
-        PressureGradient   -> VelocityCorrection;
-        VelocityCorrection -> IOFinalise;
-    }
+x3d2 uses the `2DECOMP&FFT <https://2decomp-fft.github.io/>`_ library for 2D decomposition. One of the key advantages of using this library is that it does not require modifications to the existing derivative and interpolation subroutines, making it easier to implement. Additionally, this approach utilises customised global `MPI_ALLTOALL(V)` transpositions to redistribute data among processors. Although communication overhead can range from 30% to 80% of the total computational time, with up to 70 transpositions per time step, the overall efficiency and scalability of the simulations are greatly enhanced.
