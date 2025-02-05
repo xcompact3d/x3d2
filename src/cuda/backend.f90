@@ -11,7 +11,7 @@ module m_cuda_backend
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC
   use m_mesh, only: mesh_t
   use m_poisson_fft, only: poisson_fft_t
-  use m_tdsops, only: dirps_t, tdsops_t, get_tds_n
+  use m_tdsops, only: dirps_t, tdsops_t
 
   use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
   use m_cuda_common, only: SZ
@@ -130,30 +130,27 @@ contains
   end function init
 
   subroutine alloc_cuda_tdsops( &
-    self, tdsops, dir, operation, scheme, bc_start, bc_end, &
+    self, tdsops, n_tds, delta, operation, scheme, bc_start, bc_end, &
     n_halo, from_to, sym, c_nu, nu0_nu &
     )
     implicit none
 
     class(cuda_backend_t) :: self
     class(tdsops_t), allocatable, intent(inout) :: tdsops
-    integer, intent(in) :: dir
+    integer, intent(in) :: n_tds
+    real(dp), intent(in) :: delta
     character(*), intent(in) :: operation, scheme
     integer, intent(in) :: bc_start, bc_end
     integer, optional, intent(in) :: n_halo
     character(*), optional, intent(in) :: from_to
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
-    integer :: tds_n
-    real(dp) :: delta
 
     allocate (cuda_tdsops_t :: tdsops)
 
     select type (tdsops)
     type is (cuda_tdsops_t)
-      tds_n = get_tds_n(self%mesh, dir, from_to)
-      delta = self%mesh%geo%d(dir)
-      tdsops = cuda_tdsops_t(tds_n, delta, operation, scheme, bc_start, &
+      tdsops = cuda_tdsops_t(n_tds, delta, operation, scheme, bc_start, &
                              bc_end, n_halo, from_to, sym, c_nu, nu0_nu)
     end select
 
@@ -410,7 +407,7 @@ contains
     end select
 
     call copy_into_buffers(self%u_send_s_dev, self%u_send_e_dev, u_dev, &
-                           tdsops_dev%tds_n)
+                           tdsops_dev%n_tds)
 
     call sendrecv_fields(self%u_recv_s_dev, self%u_recv_e_dev, &
                          self%u_send_s_dev, self%u_send_e_dev, &

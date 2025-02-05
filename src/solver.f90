@@ -125,19 +125,19 @@ contains
 
     ! Allocate and set the tdsops
     call allocate_tdsops( &
-      solver%xdirps, solver%backend, solver_cfg%der1st_scheme, &
+      solver%xdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
       solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
-      solver_cfg%stagder_scheme, solver%mesh%grid%BCs &
+      solver_cfg%stagder_scheme &
       )
     call allocate_tdsops( &
-      solver%ydirps, solver%backend, solver_cfg%der1st_scheme, &
+      solver%ydirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
       solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
-      solver_cfg%stagder_scheme, solver%mesh%grid%BCs &
+      solver_cfg%stagder_scheme &
       )
     call allocate_tdsops( &
-      solver%zdirps, solver%backend, solver_cfg%der1st_scheme, &
+      solver%zdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
       solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
-      solver_cfg%stagder_scheme, solver%mesh%grid%BCs &
+      solver_cfg%stagder_scheme &
       )
 
     select case (trim(solver_cfg%poisson_solver_type))
@@ -156,35 +156,40 @@ contains
 
   end function init
 
-  subroutine allocate_tdsops(dirps, backend, der1st_scheme, der2nd_scheme, &
-                             interpl_scheme, stagder_scheme, BCs)
+  subroutine allocate_tdsops(dirps, backend, mesh, der1st_scheme, &
+                             der2nd_scheme, interpl_scheme, stagder_scheme)
     type(dirps_t), intent(inout) :: dirps
     class(base_backend_t), intent(in) :: backend
+    type(mesh_t), intent(in) :: mesh
     character(*), intent(in) :: der1st_scheme, der2nd_scheme, &
                                 interpl_scheme, stagder_scheme
-    integer, dimension(:, :), intent(in) :: BCs
 
-    integer :: dir, bc_start, bc_end
+    integer :: dir, bc_start, bc_end, n_vert, n_cell
+    real(dp) :: d
 
     dir = dirps%dir
-    bc_start = BCs(dir, 1)
-    bc_end = BCs(dir, 2)
+    bc_start = mesh%grid%BCs(dir, 1)
+    bc_end = mesh%grid%BCs(dir, 2)
+    d = mesh%geo%d(dir)
 
-    call backend%alloc_tdsops(dirps%der1st, dir, 'first-deriv', &
+    n_vert = mesh%get_n(dir, VERT)
+    n_cell = mesh%get_n(dir, CELL)
+
+    call backend%alloc_tdsops(dirps%der1st, n_vert, d, 'first-deriv', &
                               der1st_scheme, bc_start, bc_end)
-    call backend%alloc_tdsops(dirps%der1st_sym, dir, 'first-deriv', &
+    call backend%alloc_tdsops(dirps%der1st_sym, n_vert, d, 'first-deriv', &
                               der1st_scheme, bc_start, bc_end)
-    call backend%alloc_tdsops(dirps%der2nd, dir, 'second-deriv', &
+    call backend%alloc_tdsops(dirps%der2nd, n_vert, d, 'second-deriv', &
                               der2nd_scheme, bc_start, bc_end)
-    call backend%alloc_tdsops(dirps%der2nd_sym, dir, 'second-deriv', &
+    call backend%alloc_tdsops(dirps%der2nd_sym, n_vert, d, 'second-deriv', &
                               der2nd_scheme, bc_start, bc_end)
-    call backend%alloc_tdsops(dirps%interpl_v2p, dir, 'interpolate', &
+    call backend%alloc_tdsops(dirps%interpl_v2p, n_cell, d, 'interpolate', &
                               interpl_scheme, bc_start, bc_end, from_to='v2p')
-    call backend%alloc_tdsops(dirps%interpl_p2v, dir, 'interpolate', &
+    call backend%alloc_tdsops(dirps%interpl_p2v, n_vert, d, 'interpolate', &
                               interpl_scheme, bc_start, bc_end, from_to='p2v')
-    call backend%alloc_tdsops(dirps%stagder_v2p, dir, 'stag-deriv', &
+    call backend%alloc_tdsops(dirps%stagder_v2p, n_cell, d, 'stag-deriv', &
                               stagder_scheme, bc_start, bc_end, from_to='v2p')
-    call backend%alloc_tdsops(dirps%stagder_p2v, dir, 'stag-deriv', &
+    call backend%alloc_tdsops(dirps%stagder_p2v, n_vert, d, 'stag-deriv', &
                               stagder_scheme, bc_start, bc_end, from_to='p2v')
 
   end subroutine

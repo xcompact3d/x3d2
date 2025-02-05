@@ -3,7 +3,7 @@ program test_omp_transeq
   use mpi
 
   use m_allocator, only: allocator_t, field_t
-  use m_common, only: dp, pi, DIR_X, DIR_Y, DIR_Z, VERT
+  use m_common, only: dp, pi, DIR_X, DIR_Y, DIR_Z, VERT, BC_PERIODIC
   use m_omp_common, only: SZ
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_backend, only: omp_backend_t, transeq_x_omp, base_backend_t
@@ -93,8 +93,8 @@ program test_omp_transeq
   end do
   w%data(:, :, :) = 0.d0
 
-  call allocate_tdsops(xdirps, omp_backend, 'compact6', 'compact6', &
-                       'classic', 'compact6', mesh%grid%BCs)
+  call allocate_tdsops(xdirps, omp_backend, mesh, &
+                       'compact6', 'compact6', 'classic', 'compact6')
 
   call cpu_time(tstart)
   call transeq_x_omp(omp_backend, du, dv, dw, u, v, w, xdirps)

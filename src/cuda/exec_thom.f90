@@ -19,16 +19,16 @@ contains
 
     if (tdsops%periodic) then
       call der_univ_thom_per<<<blocks, threads>>>( & !&
-        du, u, tdsops%coeffs_dev, tdsops%tds_n, tdsops%alpha, &
+        du, u, tdsops%n_tds, tdsops%coeffs_dev, tdsops%alpha, &
         tdsops%thom_f_dev, tdsops%thom_s_dev, &
         tdsops%thom_w_dev, tdsops%thom_p_dev &
         )
     else
       call der_univ_thom<<<blocks, threads>>>( & !&
         du, u, &
+        tdsops%n_tds, tdsops%n_rhs, &
         tdsops%coeffs_s_dev, tdsops%coeffs_e_dev, tdsops%coeffs_dev, &
-        tdsops%tds_n, tdsops%thom_f_dev, tdsops%thom_s_dev, &
-        tdsops%thom_w_dev &
+        tdsops%thom_f_dev, tdsops%thom_s_dev, tdsops%thom_w_dev &
         )
     end if
 
