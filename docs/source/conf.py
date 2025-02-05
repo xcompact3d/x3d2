@@ -50,6 +50,7 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.mathjax',
     'sphinx_rtd_theme',
+    'sphinxcontrib.tikz',
     'sphinx.ext.graphviz'
 ]
 
@@ -87,4 +88,10 @@ html_theme_options = {
 
 html_sidebars = {
     "**": ["logo-text.html", "globaltoc.html", "localtoc.html", "searchbox.html"]
+}
+
+latex_elements = {
+    "preamble": r"""
+    \usepackage{tikz}
+    """
 }
