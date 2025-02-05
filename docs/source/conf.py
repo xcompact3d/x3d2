@@ -51,6 +51,7 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx_rtd_theme',
     'sphinxcontrib.tikz',
+    'sphinxcontrib.bibtex',
     'sphinx.ext.graphviz'
 ]
 
@@ -95,3 +96,5 @@ latex_elements = {
     \usepackage{tikz}
     """
 }
+
+bibtex_bibfiles = ["refs.bib"]

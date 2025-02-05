@@ -145,12 +145,12 @@ CMake
 
 To build x3d2, you will need CMake version 3.20 and above. You can download the latest version from the `CMake website <https://cmake.org/download/>`_. Alternatively, you can install it using Homebrew:
 
-Compile from source
-~~~~~~~~~~~~~~~~~~~
-
 .. code-block:: bash
 
    brew install cmake
+
+Compile from source
+~~~~~~~~~~~~~~~~~~~
 
 To install x3d2 from source, follow these steps:
 

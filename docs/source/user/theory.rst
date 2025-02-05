@@ -29,7 +29,7 @@ The governing equations are the forced incompressible Navier-Stokes equations:
 
 where :math:`\mathbf{u}` is the velocity field, :math:`p` is the pressure field, :math:`\nu` is the kinematic viscosity,
 and :math:`\mathbf{f}` is the external force field. Eq. :eq:`incomp-ns` is the momentum equation and  Eq. :eq:`div-free` 
-is the incompressibility constraint.
+is the incompressibility constraint. Further details on the numerical methods can be found in :cite:`bartholomew_sx_20, laizet_jcp_09, lamballais_jcp_11`.
 
 Time advancement
 ~~~~~~~~~~~~~~~~
@@ -388,7 +388,7 @@ Many tridiagonal algorithms face performance challenges, particularly along the 
 x3d2's solution: DistD2-TDS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To address the challenges of solving tridiagonal systems efficiently in distributed-memory environments on both CPUs and GPUs, x3d2 uses a novel algorithm called `DistD2-TDS`. This algorithm is based on a specialised data structure that:
+To address the challenges of solving tridiagonal systems efficiently in distributed-memory environments on both CPUs and GPUs, x3d2 uses a novel algorithm called `DistD2-TDS` (see :cite:`akkurt_cpc_24` for more details). This algorithm is based on a specialised data structure that:
 
 1. Improves data locality and minimises data movements via cache blocking and kernel fusion strategies.
 2. Uses data continuity to enable a contiguous data access pattern, resulting in efficient utilisation of the available memory bandwidth.
@@ -880,4 +880,11 @@ While a 1D decomposition algorithm swaps between two states, a 2D decomposition 
 
 2D domain decomposition is widely used for spectral codes, particularly those compatible with implicit schemes in space. This method allows for efficient parallelization by dividing the computational domain into smaller subdomains, each handled by a separate processor. For a simulation with a cubic mesh of size :math:`N^3`, up to :math:`N^2` processors can be used, significantly increasing scalability compared to 1D decomposition.
 
-x3d2 uses the `2DECOMP&FFT <https://2decomp-fft.github.io/>`_ library for 2D decomposition. One of the key advantages of using this library is that it does not require modifications to the existing derivative and interpolation subroutines, making it easier to implement. Additionally, this approach utilises customised global `MPI_ALLTOALL(V)` transpositions to redistribute data among processors. Although communication overhead can range from 30% to 80% of the total computational time, with up to 70 transpositions per time step, the overall efficiency and scalability of the simulations are greatly enhanced.
+x3d2 uses the `2DECOMP&FFT <https://2decomp-fft.github.io/>`_ library for 2D decomposition (see :cite:`li_cray_10` for more details). One of the key advantages of using this library is that it does not require modifications to the existing derivative and interpolation subroutines, making it easier to implement. Additionally, this approach utilises customised global `MPI_ALLTOALL(V)` transpositions to redistribute data among processors. Although communication overhead can range from 30% to 80% of the total computational time, with up to 70 transpositions per time step, the overall efficiency and scalability of the simulations are greatly enhanced.
+
+References
+----------
+
+.. bibliography::
+    :cited:
+    :style: unsrt
