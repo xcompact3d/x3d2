@@ -38,6 +38,7 @@ module m_base_backend
     procedure(sum_intox), deferred :: sum_zintox
     procedure(vecadd), deferred :: vecadd
     procedure(scalar_product), deferred :: scalar_product
+    procedure(field_max_mean), deferred :: field_max_mean
     procedure(field_ops), deferred :: field_scale
     procedure(field_ops), deferred :: field_shift
     procedure(copy_data_to_f), deferred :: copy_data_to_f
@@ -159,6 +160,21 @@ module m_base_backend
       class(field_t), intent(in) :: f
       real(dp), intent(in) :: a
     end subroutine field_ops
+  end interface
+
+  abstract interface
+    subroutine field_max_mean(self, max_val, mean_val, f, enforced_data_loc)
+      !! Obtains maximum and mean values in a field
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      real(dp), intent(out) :: max_val, mean_val
+      class(field_t), intent(in) :: f
+      integer, optional, intent(in) :: enforced_data_loc
+    end subroutine field_max_mean
   end interface
 
   abstract interface
