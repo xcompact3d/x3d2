@@ -458,6 +458,7 @@ contains
   end subroutine vecadd_omp
 
   real(dp) function scalar_product_omp(self, x, y) result(s)
+    !! [[m_base_backend(module):scalar_product(function)]]
     implicit none
 
     class(omp_backend_t) :: self

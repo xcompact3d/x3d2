@@ -79,23 +79,27 @@ contains
 
   end subroutine field_shift
 
-  attributes(global) subroutine scalar_product(s, x, y, n)
+  attributes(global) subroutine scalar_product(s, x, y, n, n_i_pad, n_j)
     implicit none
 
     real(dp), device, intent(inout) :: s
     real(dp), device, intent(in), dimension(:, :, :) :: x, y
-    integer, value, intent(in) :: n
+    integer, value, intent(in) :: n, n_i_pad, n_j
 
     real(dp) :: s_pncl !! pencil sum
-    integer :: i, j, b, ierr
+    integer :: i, j, b, b_i, b_j, ierr
 
     i = threadIdx%x
-    b = blockIdx%x
+    b_i = blockIdx%x
+    b_j = blockIdx%y
 
+    b = b_i + (b_j - 1)*n_i_pad
     s_pncl = 0._dp
-    do j = 1, n
-      s_pncl = s_pncl + x(i, j, b)*y(i, j, b)
-    end do
+    if (i + (b_j - 1)*blockDim%x <= n_j) then
+      do j = 1, n
+        s_pncl = s_pncl + x(i, j, b)*y(i, j, b)
+      end do
+    end if
     ierr = atomicadd(s, s_pncl)
 
   end subroutine scalar_product

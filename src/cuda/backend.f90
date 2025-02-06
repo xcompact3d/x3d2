@@ -618,6 +618,7 @@ contains
   end subroutine vecadd_cuda
 
   real(dp) function scalar_product_cuda(self, x, y) result(s)
+    !! [[m_base_backend(module):scalar_product(function)]]
     implicit none
 
     class(cuda_backend_t) :: self
@@ -625,8 +626,15 @@ contains
 
     real(dp), device, pointer, dimension(:, :, :) :: x_d, y_d
     real(dp), device, allocatable :: sum_d
+    integer :: dims(3), dims_padded(3), n, n_i, n_i_pad, n_j, ierr
     type(dim3) :: blocks, threads
-    integer :: n, ierr
+
+    if ((x%data_loc == NULL_LOC) .or. (y%data_loc == NULL_LOC)) then
+      error stop "You must set the data_loc before calling scalar product"
+    end if
+    if ((x%data_loc /= y%data_loc) .or. (x%dir /= y%dir)) then
+      error stop "Called scalar product with incompatible fields"
+    end if
 
     call resolve_field_t(x_d, x)
     call resolve_field_t(y_d, y)
@@ -634,10 +642,23 @@ contains
     allocate (sum_d)
     sum_d = 0._dp
 
-    n = size(x_d, dim=2)
-    blocks = dim3(size(x_d, dim=3), 1, 1)
+    dims = self%mesh%get_dims(x%data_loc)
+    dims_padded = self%mesh%get_padded_dims(DIR_C)
+
+    if (x%dir == DIR_X) then
+      n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (x%dir == DIR_Y) then
+      n = dims(2); n_j = dims(1); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (x%dir == DIR_Z) then
+      n = dims(3); n_j = dims(2); n_i = dims(1); n_i_pad = dims_padded(1)
+    else
+      error stop 'scalar_product_cuda does not support DIR_C fields!'
+    end if
+
+    blocks = dim3(n_i, (n_j - 1)/SZ + 1, 1)
     threads = dim3(SZ, 1, 1)
-    call scalar_product<<<blocks, threads>>>(sum_d, x_d, y_d, n) !&
+    call scalar_product<<<blocks, threads>>>(sum_d, x_d, y_d, & !&
+                                             n, n_i_pad, n_j)
 
     s = sum_d
 
