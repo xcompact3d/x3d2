@@ -1,4 +1,6 @@
 module m_omp_backend
+  use mpi
+
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_ordering, only: get_index_reordering
@@ -36,6 +38,7 @@ module m_omp_backend
     procedure :: sum_zintox => sum_zintox_omp
     procedure :: vecadd => vecadd_omp
     procedure :: scalar_product => scalar_product_omp
+    procedure :: field_max_mean => field_max_mean_omp
     procedure :: field_scale => field_scale_omp
     procedure :: field_shift => field_shift_omp
     procedure :: copy_data_to_f => copy_data_to_f_omp
@@ -455,11 +458,6 @@ contains
   end subroutine vecadd_omp
 
   real(dp) function scalar_product_omp(self, x, y) result(s)
-
-    use mpi
-
-    use m_common, only: NULL_LOC, get_rdr_from_dirs
-
     implicit none
 
     class(omp_backend_t) :: self
@@ -545,6 +543,79 @@ contains
     !$omp end parallel do
 
   end subroutine copy_into_buffers
+
+  subroutine field_max_mean_omp(self, max_val, mean_val, f, enforced_data_loc)
+    !! [[m_base_backend(module):field_max_mean(function)]]
+    implicit none
+
+    class(omp_backend_t) :: self
+    real(dp), intent(out) :: max_val, mean_val
+    class(field_t), intent(in) :: f
+    integer, optional, intent(in) :: enforced_data_loc
+
+    real(dp) :: val, max_p, sum_p, max_pncl, sum_pncl
+    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j
+    integer :: i, j, k, k_i, k_j, ierr
+
+    if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
+      error stop 'The input field to omp::field_max_mean does not have a &
+                  &valid f%data_loc. You may enforce a data_loc of your &
+                  &choice as last argument to carry on at your own risk!'
+    end if
+
+    if (present(enforced_data_loc)) then
+      data_loc = enforced_data_loc
+    else
+      data_loc = f%data_loc
+    end if
+
+    dims = self%mesh%get_dims(data_loc)
+    dims_padded = self%mesh%get_padded_dims(DIR_C)
+
+    if (f%dir == DIR_X) then
+      n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (f%dir == DIR_Y) then
+      n = dims(2); n_j = dims(1); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (f%dir == DIR_Z) then
+      n = dims(3); n_j = dims(1); n_i = dims(2); n_i_pad = dims_padded(2)
+    else
+      error stop 'field_max_mean does not support DIR_C fields!'
+    end if
+
+    sum_p = 0._dp
+    max_p = 0._dp
+    !$omp parallel do collapse(2) reduction(+:sum_p) reduction(max:max_p) &
+    !$omp private(k, val, sum_pncl, max_pncl)
+    do k_j = 1, (n_j - 1)/SZ + 1 ! loop over stacked groups
+      do k_i = 1, n_i
+        k = k_j + (k_i - 1)*((n_j - 1)/SZ + 1)
+        sum_pncl = 0._dp
+        max_pncl = 0._dp
+        do j = 1, n
+          ! loop over only non-padded entries in the present group
+          do i = 1, min(SZ, n_j - (k_j - 1)*SZ)
+            val = abs(f%data(i, j, k))
+            sum_pncl = sum_pncl + val
+            max_pncl = max(max_pncl, val)
+          end do
+        end do
+        sum_p = sum_p + sum_pncl
+        max_p = max(max_p, max_pncl)
+      end do
+    end do
+    !$omp end parallel do
+
+    ! rank-local values
+    max_val = max_p
+    mean_val = sum_p/product(self%mesh%get_global_dims(data_loc))
+
+    ! make sure all ranks have final values
+    call MPI_Allreduce(MPI_IN_PLACE, max_val, 1, MPI_DOUBLE_PRECISION, &
+                       MPI_MAX, MPI_COMM_WORLD, ierr)
+    call MPI_Allreduce(MPI_IN_PLACE, mean_val, 1, MPI_DOUBLE_PRECISION, &
+                       MPI_SUM, MPI_COMM_WORLD, ierr)
+
+  end subroutine field_max_mean_omp
 
   subroutine field_scale_omp(self, f, a)
     implicit none

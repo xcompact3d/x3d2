@@ -100,4 +100,33 @@ contains
 
   end subroutine scalar_product
 
+  attributes(global) subroutine field_max_sum(max_f, sum_f, f, n, n_i_pad, n_j)
+    implicit none
+
+    real(dp), device, intent(inout) :: max_f, sum_f
+    real(dp), device, intent(in), dimension(:, :, :) :: f
+    integer, value, intent(in) :: n, n_i_pad, n_j
+
+    real(dp) :: max_pncl, sum_pncl, val
+    integer :: i, j, b, b_i, b_j, ierr
+
+    i = threadIdx%x
+    b_i = blockIdx%x
+    b_j = blockIdx%y
+
+    b = b_i + (b_j - 1)*n_i_pad
+    max_pncl = 0._dp
+    sum_pncl = 0._dp
+    if (i + (b_j - 1)*blockDim%x <= n_j) then
+      do j = 1, n
+        val = abs(f(i, j, b))
+        sum_pncl = sum_pncl + val
+        max_pncl = max(max_pncl, val)
+      end do
+    end if
+    ierr = atomicadd(sum_f, sum_pncl)
+    ierr = atomicmax(max_f, max_pncl)
+
+  end subroutine field_max_sum
+
 end module m_cuda_kernels_fieldops

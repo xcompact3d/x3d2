@@ -21,7 +21,7 @@ module m_cuda_backend
   use m_cuda_tdsops, only: cuda_tdsops_t
   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
   use m_cuda_kernels_fieldops, only: axpby, buffer_copy, field_scale, &
-                                     field_shift, scalar_product
+                                     field_shift, scalar_product, field_max_sum
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
                                     reorder_c2x, reorder_x2c, &
@@ -53,6 +53,7 @@ module m_cuda_backend
     procedure :: sum_zintox => sum_zintox_cuda
     procedure :: vecadd => vecadd_cuda
     procedure :: scalar_product => scalar_product_cuda
+    procedure :: field_max_mean => field_max_mean_cuda
     procedure :: field_scale => field_scale_cuda
     procedure :: field_shift => field_shift_cuda
     procedure :: copy_data_to_f => copy_data_to_f_cuda
@@ -662,6 +663,68 @@ contains
                                           u_dev, n, n_halo)
 
   end subroutine copy_into_buffers
+
+  subroutine field_max_mean_cuda(self, max_val, mean_val, f, enforced_data_loc)
+    !! [[m_base_backend(module):field_max_mean(function)]]
+    implicit none
+
+    class(cuda_backend_t) :: self
+    real(dp), intent(out) :: max_val, mean_val
+    class(field_t), intent(in) :: f
+    integer, optional, intent(in) :: enforced_data_loc
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    real(dp), device, allocatable :: max_d, sum_d
+    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j, ierr
+    type(dim3) :: blocks, threads
+
+    if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
+      error stop 'The input field to cuda::field_max_mean does not have a &
+                  &valid f%data_loc. You may enforce a data_loc of your &
+                  &choice as last argument to carry on at your own risk!'
+    end if
+
+    if (present(enforced_data_loc)) then
+      data_loc = enforced_data_loc
+    else
+      data_loc = f%data_loc
+    end if
+
+    dims = self%mesh%get_dims(data_loc)
+    dims_padded = self%mesh%get_padded_dims(DIR_C)
+
+    call resolve_field_t(f_d, f)
+
+    allocate (max_d, sum_d)
+    max_d = 0._dp; sum_d = 0._dp
+
+    if (f%dir == DIR_X) then
+      n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (f%dir == DIR_Y) then
+      n = dims(2); n_j = dims(1); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (f%dir == DIR_Z) then
+      n = dims(3); n_j = dims(2); n_i = dims(1); n_i_pad = dims_padded(1)
+    else
+      error stop 'field_max_mean does not support DIR_C fields!'
+    end if
+
+    blocks = dim3(n_i, (n_j - 1)/SZ + 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call field_max_sum<<<blocks, threads>>>(max_d, sum_d, f_d, & !&
+                                            n, n_i_pad, n_j)
+
+    ! rank-local values, copy them first from device to host
+    max_val = max_d
+    mean_val = sum_d
+    mean_val = mean_val/product(self%mesh%get_global_dims(data_loc))
+
+    ! make sure all ranks have final values
+    call MPI_Allreduce(MPI_IN_PLACE, max_val, 1, MPI_DOUBLE_PRECISION, &
+                       MPI_MAX, MPI_COMM_WORLD, ierr)
+    call MPI_Allreduce(MPI_IN_PLACE, mean_val, 1, MPI_DOUBLE_PRECISION, &
+                       MPI_SUM, MPI_COMM_WORLD, ierr)
+
+  end subroutine field_max_mean_cuda
 
   subroutine field_scale_cuda(self, f, a)
     implicit none
