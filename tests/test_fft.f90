@@ -110,12 +110,12 @@ program test_fft
   xdirps%dir = DIR_X
   ydirps%dir = DIR_Y
   zdirps%dir = DIR_Z
-  call allocate_tdsops(xdirps, backend, 'compact6', 'compact6', &
-                       'classic', 'compact6', mesh%grid%BCs)
-  call allocate_tdsops(ydirps, backend, 'compact6', 'compact6', &
-                       'classic', 'compact6', mesh%grid%BCs)
-  call allocate_tdsops(zdirps, backend, 'compact6', 'compact6', &
-                       'classic', 'compact6', mesh%grid%BCs)
+  call allocate_tdsops(xdirps, backend, mesh, 'compact6', 'compact6', &
+                       'classic', 'compact6')
+  call allocate_tdsops(ydirps, backend, mesh, 'compact6', 'compact6', &
+                       'classic', 'compact6')
+  call allocate_tdsops(zdirps, backend, mesh, 'compact6', 'compact6', &
+                       'classic', 'compact6')
 
   input_field => allocator%get_block(DIR_C, CELL)
   output_field => allocator%get_block(DIR_C, CELL)
