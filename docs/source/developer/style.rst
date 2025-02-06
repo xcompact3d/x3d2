@@ -167,11 +167,16 @@ Example:
 In-code documentation
 ---------------------
 
+x3d2 uses `FORD <https://forddocs.readthedocs.io/en/latest/>`_ to extract in-code documentation and generate HTML pages. The syntax for in-code documentation follows FORD's syntax for comments. See the `FORD User Guide <https://forddocs.readthedocs.io/en/latest/user_guide/writing_documentation.html>`_ for more details.
+
 The body of modules, public types, public procedures, and public type-bound methods MUST be preceded by one or more documentation paragraphs. Optionally, the body of private symbols MAY be preceded by a documentation paragraph.
 
 Procedure dummy arguments, interface components, and type-bound procedure declarations MAY be documented using an inline comment either on the same line directly following the statement (using the docmark ``!!``) or on the line directly above the statement (using the predocmark ``!>``).
 
-x3d2 uses `FORD <https://forddocs.readthedocs.io/en/latest/>`_ to extract in-code documentation and generate HTML pages. The syntax for in-code documentation follows FORD's syntax for comments. See the `FORD User Guide <https://forddocs.readthedocs.io/en/latest/user_guide/writing_documentation.html>`_ for more details.
+Including LaTeX in in-code documentation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You can include LaTeX equations in your documentation. For inline math, use ``\( ... \)``. For displayed equations, you can use either ``$$ ... $$`` or ``\[ ... \]``. Note that ``$ ... $`` is not supported for inline math. Displayed equations can be written using ``$$ ... $$``, but this method does not number the equations. To create numbered equations, use the ``\begin{equation} ... \end{equation}`` environment. You can also use ``\label{eq:some_equation}`` to label the equations and ``\eqref{eq:some_equation}`` to reference them within the text.
 
 Example:
 
@@ -180,8 +185,13 @@ Example:
    subroutine add(a, b, c)
        !! This is the first paragraph of the procedure's
        !! documentation. Note that it starts with TWO !.
+       !! The addition operation is defined in-line as \( c = a + b \).
+       !! 
+       !! The following operation shows it as a displayed equation:
+       !! $$c = a + b$$
+       !! 
        real, intent(in) :: a, b !! Optional documentation for dummy argument.
-       real, intent(out) :: c !! The result of a + b
+       real, intent(out) :: c !! The result of \( a + b \)
 
        ! The line below is a regular comment.
        ! Make use of the well-known addition algorithm.
