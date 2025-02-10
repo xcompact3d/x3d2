@@ -34,13 +34,13 @@ program test_mesh
   end if
 
   if (nrank == 0) then
-      print *, "Generic decomposition"
+    print *, "Generic decomposition"
   end if
   call run_test_mesh(.false., allpass)
 
 #ifdef WITH_2DECOMPFFT
   if (nrank == 0) then
-      print *, "2decomp decomposition"
+    print *, "2decomp decomposition"
   end if
   call run_test_mesh(.true., allpass)
 #endif
@@ -96,15 +96,15 @@ contains
 
     ! if last rank
     if (mesh%par%nrank == 3) then
-      if (.not. (n_cell == n_vert_z(mesh%par%nrank+1) -1 &
-          .and. n_vert ==  n_vert_z(mesh%par%nrank+1))) then
+      if (.not. (n_cell == n_vert_z(mesh%par%nrank + 1) - 1 &
+                 .and. n_vert == n_vert_z(mesh%par%nrank + 1))) then
         allpass = .false.
         print *, mesh%par%nrank, "error in get_n and last rank, n_cell=", &
           n_cell, "n_vert=", n_vert
       end if
     else
-      if (.not. (n_cell == n_vert_z(mesh%par%nrank+1) &
-          .and. n_vert ==  n_vert_z(mesh%par%nrank+1))) then
+      if (.not. (n_cell == n_vert_z(mesh%par%nrank + 1) &
+                 .and. n_vert == n_vert_z(mesh%par%nrank + 1))) then
         allpass = .false.
         print *, mesh%par%nrank, "error in get_n, n_cell=", n_cell, "n_vert=", n_vert
       end if
@@ -117,7 +117,7 @@ contains
     end if
 
     dims = mesh%get_padded_dims(DIR_C)
-    dims_check = [8, 8, n_vert_z(mesh%par%nrank+1)] ! No padding in Z
+    dims_check = [8, 8, n_vert_z(mesh%par%nrank + 1)] ! No padding in Z
 
     if (.not. all(dims(:) == dims_check(:))) then
       allpass = .false.
@@ -136,6 +136,6 @@ contains
 
     call allocator%destroy()
 
-end subroutine
+  end subroutine
 
 end program test_mesh

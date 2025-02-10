@@ -7,7 +7,7 @@ program test_poisson_cg_eval
   !! used by the iterative Poisson solver.
 
   use MPI
-  
+
   use m_allocator, only: field_t
   use m_base_backend, only: base_backend_t
   use m_mesh, only: mesh_t
@@ -17,17 +17,17 @@ program test_poisson_cg_eval
 #endif
   use m_common, only: DIR_X, DIR_Y, DIR_Z, CELL, POISSON_SOLVER_CG
   use m_poisson_cg, only: laplace_operator_t, poisson_precon_t
-  
+
   implicit none
 
   class(allocator_t), allocatable :: allocator
   class(base_backend_t), allocatable :: backend
   class(field_t), pointer :: pressure
   class(field_t), pointer :: f
-  
+
   integer :: irank, nproc
   integer :: ierr
-  
+
   logical :: test_pass
 
   real(dp), parameter :: Lx = 1.0_dp
@@ -49,14 +49,14 @@ program test_poisson_cg_eval
     print *, "Testing the pressure Laplacian operator"
     print *, "Parallel run with", nproc, "ranks"
   end if
-  
+
   test_pass = .true.
 
   call test_driver(lapl)
 #ifdef HAVE_CG
   call test_driver(precon)
 #endif
-  
+
   call MPI_Allreduce(MPI_IN_PLACE, test_pass, 1, &
                      MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
                      ierr)
@@ -74,15 +74,15 @@ contains
 
     class(*), intent(in) :: linear_operator
 
-    integer :: nx 
-    integer :: ny 
-    integer :: nz 
+    integer :: nx
+    integer :: ny
+    integer :: nz
     integer :: i
 
     integer :: order
     character(len=:), allocatable :: opname
 
-    select type(linear_operator)
+    select type (linear_operator)
     type is (laplace_operator_t)
       order = 6
       opname = "High-Order Laplacian"
@@ -95,7 +95,7 @@ contains
 
     nx = 16; ny = 16; nz = 16
     ! nx = nx * nproc
-    ny = ny * nproc
+    ny = ny*nproc
     ! nz = nz * nproc
     do i = 1, nref
       if (irank == 0) then
@@ -104,11 +104,11 @@ contains
         print *, "Using the ", opname
       end if
       e(i) = run_test([nx, ny, nz], linear_operator)
-      nx = 2 * nx; ny = 2 * ny; nz = 2 * nz
+      nx = 2*nx; ny = 2*ny; nz = 2*nz
     end do
 
     do i = 2, nref
-      if (e(i) > 2.2 * (e(i - 1) / (2**order))) then
+      if (e(i) > 2.2*(e(i - 1)/(2**order))) then
         if (irank == 0) then
           print *, "Error convergence ", i, " failed ", e(i), e(i - 1) / (2**order)
         end if
@@ -126,7 +126,7 @@ contains
 
     integer, dimension(3), intent(in) :: n
     class(*), intent(in) :: linear_operator
-    
+
     type(mesh_t) :: mesh
     real(dp) :: rms_err
 
@@ -154,15 +154,15 @@ contains
     end if
 #else
     if (allocated(allocator)) then
-      deallocate(allocator)
+      deallocate (allocator)
     end if
-    allocate(allocator)
+    allocate (allocator)
     allocator = allocator_t(mesh, SZ)
 
     if (allocated(backend)) then
-      deallocate(backend)
+      deallocate (backend)
     end if
-    allocate(omp_backend_t :: backend)
+    allocate (omp_backend_t :: backend)
     backend = omp_backend_t(mesh, allocator)
 #endif
     lapl = laplace_operator_t(backend, mesh)
@@ -173,17 +173,17 @@ contains
     ! Main solver calls Poisson in the DIR_Z orientation
     pressure => backend%allocator%get_block(DIR_Z)
     f => backend%allocator%get_block(DIR_Z)
- 
+
     call MPI_Barrier(MPI_COMM_WORLD, ierr)
     if (irank == 0) then
       print *, "Initialisation complete"
     end if
 
   end subroutine initialise_test
-  
+
   subroutine init_globs(mesh, n, nproc, L)
     !! Initialisation for the globs object
-    
+
     type(mesh_t), intent(out) :: mesh
     integer, dimension(3), intent(in) :: n  ! The grid sizes
     integer, intent(in) :: nproc            ! The number of processors
@@ -204,30 +204,30 @@ contains
     type(mesh_t), intent(in) :: mesh
 
     real(dp), dimension(:, :, :), allocatable :: expect
-    
+
     real(dp) :: rms_err
 
     logical :: check_pass
-    
+
     if (irank == 0) then
       print *, "Testing constant field"
     end if
 
     ! Set pressure field to some constant
     pressure%data = 0 !42
-    allocate(expect, mold = f%data)
+    allocate (expect, mold=f%data)
     expect = 0  ! Correct answer
     f%data = 17 ! Initialise with wrong answer
 
-    select type(linear_operator)
-    type is(laplace_operator_t)
+    select type (linear_operator)
+    type is (laplace_operator_t)
       call linear_operator%apply(f, pressure, backend)
     type is (poisson_precon_t)
       call linear_operator%apply(pressure, f, backend)
     class default
       error stop "Unsupported linear operator type"
     end select
-      
+
     ! Check Laplacian evaluation (expect zero)
     rms_err = check_soln(check_pass, mesh, f, expect)
 
@@ -249,7 +249,7 @@ contains
 
     use m_common, only: pi
     use m_ordering, only: get_index_dir
-    
+
     class(field_t), intent(inout) :: f
     class(*), intent(in) :: linear_operator
     class(field_t), intent(in) :: pressure
@@ -277,7 +277,7 @@ contains
     n = mesh%get_dims(CELL)
 
     ! Set pressure field to some variable
-    allocate(expect, mold = f%data)
+    allocate (expect, mold=f%data)
     do k = 1, n(3)
       do j = 1, n(2)
         do i = 1, n(1)
@@ -289,12 +289,12 @@ contains
                              DIR_Z, &
                              SZ, n(1), n(2), n(3))
 
-          pressure%data(ii, jj, kk) = cos(2 * pi * (x / Lx)) + &
-                                      cos(2 * pi * (y / Ly)) + &
-                                      cos(2 * pi * (z / Lz))
-          expect(ii, jj, kk) = -((2 * pi / Lx)**2 * cos(2 * pi * (x / Lx)) + &
-                                 (2 * pi / Ly)**2 * cos(2 * pi * (y / Ly)) + &
-                                 (2 * pi / Lz)**2 * cos(2 * pi * (z / Lz)))
+          pressure%data(ii, jj, kk) = cos(2*pi*(x/Lx)) + &
+                                      cos(2*pi*(y/Ly)) + &
+                                      cos(2*pi*(z/Lz))
+          expect(ii, jj, kk) = -((2*pi/Lx)**2*cos(2*pi*(x/Lx)) + &
+                                 (2*pi/Ly)**2*cos(2*pi*(y/Ly)) + &
+                                 (2*pi/Lz)**2*cos(2*pi*(z/Lz)))
           ! pressure%data(ii, jj, kk) = cos(2 * pi * (z / Lz))
           ! expect(ii, jj, kk) = -((2 * pi / Lz)**2 * cos(2 * pi * (z / Lz)))
         end do
@@ -302,10 +302,10 @@ contains
     end do
     f%data = 0 ! Initialise with wrong answer
 
-    select type(linear_operator)
-    type is(laplace_operator_t)
+    select type (linear_operator)
+    type is (laplace_operator_t)
       call linear_operator%apply(f, pressure, backend)
-    type is(poisson_precon_t)
+    type is (poisson_precon_t)
       call linear_operator%apply(pressure, f, backend)
     class default
       error stop "Unsupported linear operator type"
@@ -330,7 +330,7 @@ contains
 
     integer, dimension(3) :: ng
     integer :: n
-    
+
     if (present(opttol)) then
       tol = opttol
     else
@@ -339,12 +339,12 @@ contains
 
     ng = mesh%get_global_dims(CELL)
     n = product(ng)
-    
+
     rms = sum((soln%data - expect)**2)
     call MPI_Allreduce(MPI_IN_PLACE, rms, 1, &
                        MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, &
                        ierr)
-    rms = sqrt(rms / n)
+    rms = sqrt(rms/n)
 
     if (rms /= rms) then ! NAN check
       print *, "- SEVERE ERROR: RMS=NAN"
@@ -359,7 +359,7 @@ contains
     end if
 
     check_soln = rms
-    
+
   end function check_soln
 
 end program test_poisson_cg_eval

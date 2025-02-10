@@ -3,7 +3,7 @@
 submodule(m_poisson_cg) m_dummy_poisson_cg
 
 contains
-  
+
   module subroutine init_precon_impl(precon, backend)
     class(poisson_precon_impl_t), allocatable, intent(out) :: precon
     class(base_backend_t), intent(in) :: backend
@@ -23,9 +23,9 @@ contains
     ! Silence compiler warnings for unused variables
     associate (foo => solver, bar => backend)
     end associate
-    
+
     error stop "This dummy module does not implement CG, recompile the code with PETSc"
 
   end subroutine init_solver
-  
+
 end submodule m_dummy_poisson_cg

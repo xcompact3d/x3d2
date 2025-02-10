@@ -67,7 +67,7 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
     procedure :: init => init_precon_petsc
     procedure :: apply_precon => petsc_apply_precon
   end type petsc_poisson_precon_t
-  
+
   type, extends(poisson_solver_t) :: petsc_poisson_cg_t
     !! Conjugate Gradient based Poisson solver using PETSc as a backend.
     !! Supports any decomposition that is also supported by the underlying
@@ -149,7 +149,7 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
   end interface MatShellSetOperation
 
   type(mat_ctx_t), save :: ctx_global ! XXX: This sucks!
-  
+
 contains
 
   module subroutine init_precon_impl(precon, backend)
@@ -157,14 +157,14 @@ contains
     class(poisson_precon_impl_t), allocatable, intent(out) :: precon
     class(base_backend_t), intent(in) :: backend
 
-    allocate(petsc_poisson_precon_t :: precon)
-    select type(precon)
-    type is(petsc_poisson_precon_t)
+    allocate (petsc_poisson_precon_t :: precon)
+    select type (precon)
+    type is (petsc_poisson_precon_t)
       call precon%init(backend)
     class default
       error stop "IMPOSSIBLE"
     end select
-    
+
   end subroutine init_precon_impl
 
   subroutine init_precon_petsc(self, backend)
@@ -217,7 +217,7 @@ contains
     call MatSetUp(self%Pmat, ierr)
 
     ! Set the Poisson coefficients
-    associate(mesh => backend%mesh)
+    associate (mesh => backend%mesh)
       call build_index_map(mesh, self%Pmat)
 
       dims = mesh%get_dims(CELL)
@@ -225,7 +225,7 @@ contains
 
       istep = 1
       jstep = dims(1) + 2
-      kstep = (dims(1) + 2) * (dims(2) + 2)
+      kstep = (dims(1) + 2)*(dims(2) + 2)
 
       row = kstep + jstep + istep + 1
       do k = 1, dims(3)
@@ -236,23 +236,23 @@ contains
             cols(1) = row
 
             ! d2pdx2
-            coeffs(1) = coeffs(1) - 2 / dx**2
-            coeffs(2) = 1 / dx**2
-            coeffs(3) = 1 / dx**2
+            coeffs(1) = coeffs(1) - 2/dx**2
+            coeffs(2) = 1/dx**2
+            coeffs(3) = 1/dx**2
             cols(2) = cols(1) - istep
             cols(3) = cols(1) + istep
 
             ! d2pdy2
-            coeffs(1) = coeffs(1) - 2 / dy**2
-            coeffs(4) = 1 / dy**2
-            coeffs(5) = 1 / dy**2
+            coeffs(1) = coeffs(1) - 2/dy**2
+            coeffs(4) = 1/dy**2
+            coeffs(5) = 1/dy**2
             cols(4) = cols(1) - jstep
             cols(5) = cols(1) + jstep
 
             ! d2pdz2
-            coeffs(1) = coeffs(1) - 2 / dz**2
-            coeffs(6) = 1 / dz**2
-            coeffs(7) = 1 / dz**2
+            coeffs(1) = coeffs(1) - 2/dz**2
+            coeffs(6) = 1/dz**2
+            coeffs(7) = 1/dz**2
             cols(6) = cols(1) - kstep
             cols(7) = cols(1) + kstep
 
@@ -268,7 +268,7 @@ contains
           row = row + 2
         end do
         ! Step in k
-        row = row + 2 * (dims(1) + 2)
+        row = row + 2*(dims(1) + 2)
       end do
     end associate
 
@@ -280,7 +280,7 @@ contains
     call MatNullSpaceDestroy(nsp, ierr)
 
   end subroutine init_precon_petsc
-  
+
   module subroutine petsc_apply_precon(self, p, b, backend)
     class(petsc_poisson_precon_t) :: self
     class(field_t), intent(in) :: p
@@ -291,7 +291,7 @@ contains
     integer :: ierr
 
     integer :: n
-    
+
     n = product(backend%mesh%get_dims(CELL))
     call create_vec(pVec, n)
     call create_vec(bVec, n)
@@ -302,9 +302,9 @@ contains
 
     call VecDestroy(pVec, ierr)
     call VecDestroy(bVec, ierr)
-    
+
   end subroutine petsc_apply_precon
-  
+
   module subroutine solve_petsc(self, p, f, backend)
     class(petsc_poisson_cg_t) :: self
     class(field_t), intent(inout) :: p ! Pressure solution
@@ -317,17 +317,17 @@ contains
     call copy_field_to_vec(self%fvec, f, backend)
     call KSPSolve(self%ksp, self%fvec, self%pvec, ierr)
     call copy_vec_to_field(p, self%pvec, backend)
-    
+
   end subroutine solve_petsc
 
-  module subroutine init_solver(solver, backend) 
+  module subroutine init_solver(solver, backend)
     !! Public constructor for the poisson_cg_t type.
     class(poisson_solver_t), allocatable, intent(out) :: solver
     class(base_backend_t), target, intent(in) :: backend
 
     allocate (petsc_poisson_cg_t :: solver)
     solver%precon = poisson_precon_t(backend)
-    
+
     select type (solver)
     type is (petsc_poisson_cg_t)
       call init_petsc_cg(solver, backend)
@@ -391,7 +391,7 @@ contains
 
     call MatAssemblyBegin(self%Amat, MAT_FINAL_ASSEMBLY, ierr)
     call MatAssemblyEnd(self%Amat, MAT_FINAL_ASSEMBLY, ierr)
-    
+
     call MatNullSpaceCreate(PETSC_COMM_WORLD, PETSC_TRUE, 0, PETSC_NULL_VEC, nsp, ierr)
     call MatSetnullSpace(self%Amat, nsp, ierr)
     call MatNullSpaceDestroy(nsp, ierr)
@@ -415,7 +415,7 @@ contains
     dims = mesh%get_dims(CELL)
     n = product(dims + 2) ! Size of domain + 1 deep halo
 
-    allocate(idx(n))
+    allocate (idx(n))
     idx(:) = 0
 
     ! Determine global start point based on PETSc decomposition
@@ -435,7 +435,7 @@ contains
     call ISLocalToGlobalMappingCreate(PETSC_COMM_WORLD, 1, n, idx, PETSC_COPY_VALUES, map, ierr)
     call MatSetLocalToGlobalMapping(P, map, map, ierr)
 
-    deallocate(idx)
+    deallocate (idx)
 
   end subroutine build_index_map
 
@@ -444,21 +444,21 @@ contains
     ! for internal (local) indices
 
     ! The local->global index map, local indices are offset into the domain by 1 in each axis to simplify finite differences
-    integer, dimension(:), intent(inout) :: idx 
+    integer, dimension(:), intent(inout) :: idx
     type(mesh_t), intent(in) :: mesh    ! The mesh for the simulation
     integer, intent(in) :: global_start ! The global offset for this rank in the global equation system
 
     integer, dimension(3) :: dims
     integer :: nx, ny, nz
-    
+
     integer :: i, j, k
     integer :: ctr, local_ctr
 
     dims = mesh%get_dims(CELL)
     nx = dims(1); ny = dims(2); nz = dims(3)
-    
+
     ctr = 0
-    local_ctr = ((nx + 2) * (ny + 2)) + (nx + 2) + 2
+    local_ctr = ((nx + 2)*(ny + 2)) + (nx + 2) + 2
     do k = 2, nz + 1
       do j = 2, ny + 1
         do i = 2, nx + 1
@@ -468,9 +468,9 @@ contains
         end do
         local_ctr = local_ctr + 2
       end do
-      local_ctr = local_ctr + 2 * (nx + 2)
+      local_ctr = local_ctr + 2*(nx + 2)
     end do
-    
+
   end subroutine build_interior_index_map
 
   subroutine build_neighbour_index_map(idx, mesh, global_start)
@@ -499,43 +499,43 @@ contains
 
     dims = mesh%get_dims(CELL)
     nx = dims(1); ny = dims(2); nz = dims(3)
-    
+
     ! Create and fill halobuffers
-    allocate(halobuf_x(2, ny, nz))
-    allocate(halobuf_y(nx, 2, nz))
-    allocate(halobuf_z(nx, ny, 2))
+    allocate (halobuf_x(2, ny, nz))
+    allocate (halobuf_y(nx, 2, nz))
+    allocate (halobuf_z(nx, ny, 2))
     halobuf_x = -1; halobuf_y = -1; halobuf_z = -1
 
     myinfo = [global_start, dims(1), dims(2), dims(3)]
     nproc = mesh%par%nproc
-    tag = mesh%par%nrank * max(nproc, 6)
+    tag = mesh%par%nrank*max(nproc, 6)
     do d = 1, 3
       !! Recv left and right
       !  Right Recv
-      nbtag = mesh%par%pnext(d) * max(nproc, 6)
+      nbtag = mesh%par%pnext(d)*max(nproc, 6)
       call MPI_IRecv(info(:, 2, d), 4, MPI_INTEGER, mesh%par%pnext(d), nbtag + 2 * (d - 1) + 1, & 
-                    MPI_COMM_WORLD, requests(4 * (d - 1) + 1), ierr)
+                     MPI_COMM_WORLD, requests(4*(d - 1) + 1), ierr)
       !  Left Recv
-      nbtag = mesh%par%pprev(d) * max(nproc, 6)
+      nbtag = mesh%par%pprev(d)*max(nproc, 6)
       call MPI_IRecv(info(:, 1, d), 4, MPI_INTEGER, mesh%par%pprev(d), nbtag + 2 * (d - 1) + 2, & 
-                    MPI_COMM_WORLD, requests(4 * (d - 1) + 2), ierr)
-      
+                     MPI_COMM_WORLD, requests(4*(d - 1) + 2), ierr)
+
       !! Send left and right
       !  Left Send
       call MPI_ISend(myinfo, 4, MPI_INTEGER, mesh%par%pprev(d), tag + 2 * (d - 1) + 1, &
-                     MPI_COMM_WORLD, requests(4 * (d - 1) + 3), ierr)
+                     MPI_COMM_WORLD, requests(4*(d - 1) + 3), ierr)
       !  Right Send
       call MPI_ISend(myinfo, 4, MPI_INTEGER, mesh%par%pnext(d), tag + 2 * (d - 1) + 2, &
-                     MPI_COMM_WORLD, requests(4 * (d - 1) + 4), ierr)
+                     MPI_COMM_WORLD, requests(4*(d - 1) + 4), ierr)
     end do
     call MPI_Waitall(12, requests, MPI_STATUS_IGNORE, ierr)
 
     !! X halos
     ! Left halo
-    associate(offset_left => info(1, 1, 1), &
-              nx_left => info(2, 1, 1), &
-              ny_left => info(3, 1, 1), &
-              nz_left => info(4, 1, 1))
+    associate (offset_left => info(1, 1, 1), &
+               nx_left => info(2, 1, 1), &
+               ny_left => info(3, 1, 1), &
+               nz_left => info(4, 1, 1))
       ctr = offset_left + (nx_left - 1) ! Global starting index -> xend
       do k = 1, nz_left
         do j = 1, ny_left
@@ -545,10 +545,10 @@ contains
       end do
     end associate
     ! Right halo
-    associate(offset_right => info(1, 2, 1), &
-              nx_right => info(2, 2, 1), &
-              ny_right => info(3, 2, 1), &
-              nz_right => info(4, 2, 1))
+    associate (offset_right => info(1, 2, 1), &
+               nx_right => info(2, 2, 1), &
+               ny_right => info(3, 2, 1), &
+               nz_right => info(4, 2, 1))
       ctr = offset_right ! Global starting index == xstart
       do k = 1, nz_right
         do j = 1, ny_right
@@ -560,25 +560,25 @@ contains
 
     !! Y halos
     ! Bottom halo
-    associate(offset_down => info(1, 1, 2), &
-              nx_down => info(2, 1, 2), &
-              ny_down => info(3, 1, 2), &
-              nz_down => info(4, 1, 2))
-      ctr = offset_down + (ny_down - 1) * nx_down ! Global starting index -> yend
+    associate (offset_down => info(1, 1, 2), &
+               nx_down => info(2, 1, 2), &
+               ny_down => info(3, 1, 2), &
+               nz_down => info(4, 1, 2))
+      ctr = offset_down + (ny_down - 1)*nx_down ! Global starting index -> yend
       do k = 1, nz_down
         do i = 1, nx_down
           halobuf_y(i, 1, k) = ctr
           ctr = ctr + 1 ! Step in i
         end do
         ctr = ctr - nx_down  ! Reset counter to start of line
-        ctr = ctr + (nx_down * ny_down) ! Step in k
+        ctr = ctr + (nx_down*ny_down) ! Step in k
       end do
     end associate
     ! Top halo
-    associate(offset_up => info(1, 2, 2), &
-              nx_up => info(2, 2, 2), &
-              ny_up => info(3, 2, 2), &
-              nz_up => info(4, 2, 2))
+    associate (offset_up => info(1, 2, 2), &
+               nx_up => info(2, 2, 2), &
+               ny_up => info(3, 2, 2), &
+               nz_up => info(4, 2, 2))
       ctr = offset_up ! Global starting index == ystart
       do k = 1, nz_up
         do i = 1, nx_up
@@ -586,17 +586,17 @@ contains
           ctr = ctr + 1 ! Step in i
         end do
         ctr = ctr - nx_up  ! Reset counter to start of line
-        ctr = ctr + (nx_up * ny_up) ! Step in k
+        ctr = ctr + (nx_up*ny_up) ! Step in k
       end do
     end associate
 
     !! Z halos
     ! Back halo
-    associate(offset_back => info(1, 1, 3), &
-              nx_back => info(2, 1, 3), &
-              ny_back => info(3, 1, 3), &
-              nz_back => info(4, 1, 3))
-      ctr = offset_back + (nz_back - 1) * ny_back * nx_back ! Global starting index -> zend
+    associate (offset_back => info(1, 1, 3), &
+               nx_back => info(2, 1, 3), &
+               ny_back => info(3, 1, 3), &
+               nz_back => info(4, 1, 3))
+      ctr = offset_back + (nz_back - 1)*ny_back*nx_back ! Global starting index -> zend
       do j = 1, ny_back
         do i = 1, nx_back
           halobuf_z(i, j, 1) = ctr
@@ -605,10 +605,10 @@ contains
       end do
     end associate
     ! Front halo
-    associate(offset_front => info(1, 2, 3), &
-              nx_front => info(2, 2, 3), &
-              ny_front => info(3, 2, 3), &
-              nz_front => info(4, 2, 3))
+    associate (offset_front => info(1, 2, 3), &
+               nx_front => info(2, 2, 3), &
+               ny_front => info(3, 2, 3), &
+               nz_front => info(4, 2, 3))
       ctr = offset_front ! Global startin index == zstart
       do j = 1, ny_front
         do i = 1, nx_front
@@ -617,7 +617,7 @@ contains
         end do
       end do
     end associate
-    
+
     !! Map my neighbours indices into my halos
     ctr = 1
     do k = 1, nz + 2
@@ -631,7 +631,7 @@ contains
         ctr = ctr + 1
 
         do i = 2, nx + 1
-          
+
           if ((k > 1) .and. (k < (nz + 2))) then
             if (j == 1) then
               ! Bottom halo
@@ -673,7 +673,7 @@ contains
 
     call create_vec(self%fvec, n)
     call create_vec(self%pvec, n)
-    
+
   end subroutine create_vectors
 
   subroutine create_vec(v, n)
@@ -690,18 +690,18 @@ contains
 
     call VecAssemblyBegin(v, ierr)
     call VecAssemblyEnd(v, ierr)
-    
+
   end subroutine create_vec
 
   subroutine create_solver(self)
     ! Sets up the PETSc linear solver.
-    
+
     class(petsc_poisson_cg_t) :: self
 
     integer :: ierr
 
-    associate(precon => self%precon%precon)
-      select type(precon)
+    associate (precon => self%precon%precon)
+      select type (precon)
       type is (petsc_poisson_precon_t)
         call KSPCreate(PETSC_COMM_WORLD, self%ksp, ierr)
         call KSPSetOperators(self%ksp, self%Amat, precon%Pmat, ierr)
@@ -711,7 +711,7 @@ contains
         error stop "Poisson preconditioner type is wrong"
       end select
     end associate
-    
+
   end subroutine create_solver
 
   subroutine poissmult_petsc(M, x, f, ierr)
@@ -724,11 +724,10 @@ contains
 
     type(mat_ctx_t) :: ctx
 
-    ierr = 0;
-
+    ierr = 0; 
     ! XXX: Fixme
     ! call MatShellGetContext(M, ctx, ierr)
-    associate(matrix => M); end associate ! Silence unused argument
+    associate (matrix => M); end associate ! Silence unused argument
     ! print *, ctx%foo
     ctx = ctx_global
 
@@ -785,7 +784,7 @@ contains
 
     integer, dimension(3) :: dims
     integer :: nx, ny, nz
-    
+
     dims = backend%mesh%get_dims(CELL)
     nx = dims(1)
     ny = dims(2)

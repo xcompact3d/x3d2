@@ -153,7 +153,7 @@ contains
       if (solver%mesh%par%is_root()) then
         print *, 'Poisson solver: CG'
       end if
-      
+
       solver%poisson_cg = poisson_cg_t(solver%backend, mesh)
       solver%poisson => poisson_cg
     case default
