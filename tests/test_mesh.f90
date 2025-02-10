@@ -76,7 +76,8 @@ contains
     BC_y = [character(len=20) :: 'periodic', 'periodic']
     BC_z = [character(len=20) :: 'dirichlet', 'neumann']
 
-    mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, use_2decomp)
+    mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, &
+                  use_2decomp)
 
     ! Expected decomposition by 2decomp and generic
     if (use_2decomp) then
@@ -106,7 +107,9 @@ contains
       if (.not. (n_cell == n_vert_z(mesh%par%nrank + 1) &
                  .and. n_vert == n_vert_z(mesh%par%nrank + 1))) then
         allpass = .false.
-        print *, mesh%par%nrank, "error in get_n, n_cell=", n_cell, "n_vert=", n_vert
+        print *, mesh%par%nrank, &
+          "error in get_n, n_cell=", n_cell, &
+          "n_vert=", n_vert
       end if
     end if
 

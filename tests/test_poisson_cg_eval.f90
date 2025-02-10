@@ -110,12 +110,14 @@ contains
     do i = 2, nref
       if (e(i) > 2.2*(e(i - 1)/(2**order))) then
         if (irank == 0) then
-          print *, "Error convergence ", i, " failed ", e(i), e(i - 1) / (2**order)
+          print *, "Error convergence ", i, " failed ", &
+            e(i), e(i - 1)/(2**order)
         end if
         test_pass = .false.
       else
         if (irank == 0) then
-          print *, "Error convergence ", i, "satisfied ", e(i), e(i - 1) / (2**order)
+          print *, "Error convergence ", i, "satisfied ", &
+            e(i), e(i - 1)/(2**order)
         end if
       end if
     end do
@@ -313,8 +315,9 @@ contains
 
     ! Check Laplacian evaluation
     ! XXX: Note had to relax the tolerance, otherwise obtains RMS(err)~=8e-7
-    test_variable_field = check_soln(check_pass, mesh, f, expect, opttol=1.0e-6_dp)
-    
+    test_variable_field = check_soln(check_pass, mesh, f, expect, &
+                                     opttol=1.0e-6_dp)
+
   end function test_variable_field
 
   real(dp) function check_soln(check_pass, mesh, soln, expect, opttol)

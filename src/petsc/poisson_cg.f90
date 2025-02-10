@@ -210,7 +210,8 @@ contains
     call MatCreate(PETSC_COMM_WORLD, self%Pmat, ierr)
     call MatSetSizes(self%Pmat, n, n, PETSC_DECIDE, PETSC_DECIDE, ierr)
     call MatSetFromOptions(self%Pmat, ierr)
-    call MatSeqAIJSetPreallocation(self%Pmat, nnb + 1, PETSC_NULL_INTEGER, ierr)
+    call MatSeqAIJSetPreallocation(self%Pmat, nnb + 1, PETSC_NULL_INTEGER, &
+                                   ierr)
     call MatMPIAIJSetPreallocation(self%Pmat, nnb + 1, PETSC_NULL_INTEGER, &
                                    nnb, PETSC_NULL_INTEGER, &
                                    ierr)
@@ -258,8 +259,8 @@ contains
 
             ! Push to matrix
             ! Recall Fortran (1-based) -> C (0-based) indexing
-            call MatSetValuesLocal(self%Pmat, 1, row - 1, nnb + 1, cols - 1, coeffs, &
-              INSERT_VALUES, ierr)
+            call MatSetValuesLocal(self%Pmat, 1, row - 1, nnb + 1, cols - 1, &
+                                   coeffs, INSERT_VALUES, ierr)
 
             ! Advance row counter
             row = row + 1
