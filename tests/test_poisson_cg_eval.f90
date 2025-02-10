@@ -38,7 +38,9 @@ program test_poisson_cg_eval
   real(dp), dimension(nref) :: e
 
   type(laplace_operator_t) :: lapl
+#ifdef HAVE_CG
   type(poisson_precon_t) :: precon
+#endif
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
@@ -51,7 +53,9 @@ program test_poisson_cg_eval
   test_pass = .true.
 
   call test_driver(lapl)
+#ifdef HAVE_CG
   call test_driver(precon)
+#endif
   
   call MPI_Allreduce(MPI_IN_PLACE, test_pass, 1, &
                      MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
@@ -162,7 +166,9 @@ contains
     backend = omp_backend_t(mesh, allocator)
 #endif
     lapl = laplace_operator_t(backend)
+#ifdef HAVE_CG
     precon = poisson_precon_t(backend)
+#endif
 
     ! Main solver calls Poisson in the DIR_Z orientation
     pressure => backend%allocator%get_block(DIR_Z)
