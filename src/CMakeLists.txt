@@ -7,7 +7,7 @@ set(SRC
   mesh.f90
   ordering.f90
   poisson_fft.f90
-  poisson_cg.f90
+  poisson_cg_types.f90
   solver.f90
   tdsops.f90
   time_integrator.f90
@@ -42,10 +42,12 @@ set(CUDASRC
 if (${POISSON_SOLVER} STREQUAL "ITER")
   set(CGSRC
     petsc/poisson_cg.f90
+    poisson_cg.f90
   )
 else()
   set(CGSRC
     dummy/poisson_cg.f90
+    poisson_cg.f90
   )
 endif()
 set(BACKENDSRC

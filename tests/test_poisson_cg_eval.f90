@@ -16,7 +16,8 @@ program test_poisson_cg_eval
   use m_omp_backend
 #endif
   use m_common, only: DIR_X, DIR_Y, DIR_Z, CELL, POISSON_SOLVER_CG
-  use m_poisson_cg, only: laplace_operator_t, poisson_precon_t
+  use m_base_poisson_cg, only: laplace_operator_t
+  use m_poisson_cg_backend, only: poisson_precon_impl
 
   implicit none
 
@@ -86,7 +87,7 @@ contains
     type is (laplace_operator_t)
       order = 6
       opname = "High-Order Laplacian"
-    type is (poisson_precon_t)
+    type is (poisson_precon_impl)
       order = 2
       opname = "Low-Order preconditioner"
     class default
@@ -224,7 +225,7 @@ contains
     select type (linear_operator)
     type is (laplace_operator_t)
       call linear_operator%apply(f, pressure, backend)
-    type is (poisson_precon_t)
+    type is (poisson_precon_impl)
       call linear_operator%apply(pressure, f, backend)
     class default
       error stop "Unsupported linear operator type"
@@ -307,7 +308,7 @@ contains
     select type (linear_operator)
     type is (laplace_operator_t)
       call linear_operator%apply(f, pressure, backend)
-    type is (poisson_precon_t)
+    type is (poisson_precon_impl)
       call linear_operator%apply(pressure, f, backend)
     class default
       error stop "Unsupported linear operator type"
