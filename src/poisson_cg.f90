@@ -6,7 +6,8 @@ module m_poisson_cg
                       RDR_X2Y, RDR_X2Z, RDR_X2C, &
                       RDR_Y2X, RDR_Z2X, RDR_C2X, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, &
-                      CELL
+                      CELL, &
+                      BC_PERIODIC
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_tdsops, only: tdsops_t, dirps_t
@@ -172,6 +173,11 @@ contains
     dx = mesh%geo%d(DIR_X)
     dy = mesh%geo%d(DIR_Y)
     dz = mesh%geo%d(DIR_Z)
+
+    ! TODO: Add more sensible BCs
+    bcx1 = BC_PERIODIC; bcxn = BC_PERIODIC
+    bcy1 = BC_PERIODIC; bcyn = BC_PERIODIC
+    bcz1 = BC_PERIODIC; bczn = BC_PERIODIC
 
     call backend%alloc_tdsops(lapl%xdirps%der2nd, nx, dx, &
                               "second-deriv", "compact6", bcx1, bcxn)
