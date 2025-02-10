@@ -8,6 +8,10 @@ contains
     class(poisson_precon_impl_t), allocatable, intent(out) :: precon
     class(base_backend_t), intent(in) :: backend
 
+    ! Silence compiler warnings for unused variables
+    associate (foo => precon, bar => backend)
+    end associate
+
     error stop "This dummy module does not implement CG, recompile the code with PETSc"
 
   end subroutine init_precon_impl
@@ -16,6 +20,10 @@ contains
     class(poisson_solver_t), allocatable, intent(out) :: solver
     class(base_backend_t), target, intent(in) :: backend
 
+    ! Silence compiler warnings for unused variables
+    associate (foo => solver, bar => backend)
+    end associate
+    
     error stop "This dummy module does not implement CG, recompile the code with PETSc"
 
   end subroutine init_solver
