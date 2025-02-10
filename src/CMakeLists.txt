@@ -31,17 +31,21 @@ set(CUDASRC
   cuda/sendrecv.f90
   cuda/tdsops.f90
 )
-set(PETSCSRC
-  petsc/poisson_cg.f90
-)
+if (${POISSON_SOLVER} STREQUAL "ITER")
+  set(CGSRC
+    petsc/poisson_cg.f90
+  )
+else()
+  set(CGSRC
+    dummy/poisson_cg.f90
+  )
+endif()
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   list(APPEND SRC ${CUDASRC})
 endif()
-if (${POISSON_SOLVER} STREQUAL "ITER")
-  list(APPEND SRC ${PETSCSRC})
-endif()
+list(APPEND SRC ${CGSRC})
 
 add_library(x3d2 STATIC ${SRC})
 target_include_directories(x3d2 INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
