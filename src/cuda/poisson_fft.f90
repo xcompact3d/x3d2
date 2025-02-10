@@ -7,13 +7,13 @@ module m_cuda_poisson_fft
   use mpi
 
   use m_allocator, only: field_t
-  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, CELL
+  use m_common, only: dp, DIR_C, CELL
   use m_mesh, only: mesh_t
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t
 
   use m_cuda_allocator, only: cuda_field_t
-  use m_cuda_spectral, only: process_spectral_div_u
+  use m_cuda_spectral, only: process_spectral_div_u, memcpy3D
 
   implicit none
 
@@ -48,7 +48,7 @@ contains
   function init(mesh, xdirps, ydirps, zdirps) result(poisson_fft)
     implicit none
 
-    class(mesh_t), intent(in) :: mesh
+    type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
     type(cuda_poisson_fft_t) :: poisson_fft
@@ -58,7 +58,24 @@ contains
     integer :: ierr
     integer(int_ptr_kind()) :: worksize
 
-    call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps)
+    integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
+
+    ! 1D decomposition along Z in real domain, and along Y in spectral space
+    if (mesh%par%nproc_dir(2) /= 1) print *, 'nproc_dir in y-dir must be 1'
+
+    ! Work out the spectral dimensions in the permuted state
+    dims_glob = mesh%get_global_dims(CELL)
+    dims_loc = mesh%get_dims(CELL)
+
+    n_spec(1) = dims_loc(1)/2 + 1
+    n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
+    n_spec(3) = dims_glob(3)
+
+    n_sp_st(1) = 0
+    n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
+    n_sp_st(3) = 0
+
+    call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
 
     nx = poisson_fft%nx_glob
     ny = poisson_fft%ny_glob
@@ -113,26 +130,30 @@ contains
     class(cuda_poisson_fft_t) :: self
     class(field_t), intent(in) :: f
 
-    real(dp), device, pointer :: flat_dev(:, :), d_dev(:, :, :)
+    real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
 
     type(cudaXtDesc), pointer :: descriptor
 
-    integer :: ierr
+    integer :: tsize, ierr
+    type(dim3) :: blocks, threads
 
     select type (f)
     type is (cuda_field_t)
-      flat_dev(1:self%nx_loc, 1:self%ny_loc*self%nz_loc) => f%data_d
+      padded_dev => f%data_d
     end select
 
     call c_f_pointer(self%xtdesc%descriptor, descriptor)
     call c_f_pointer(descriptor%data(1), d_dev, &
-                     [self%nx_loc + 2, self%ny_loc*self%nz_loc])
-    ierr = cudaMemcpy2D(d_dev, self%nx_loc + 2, flat_dev, self%nx_loc, &
-                        self%nx_loc, self%ny_loc*self%nz_loc)
-    if (ierr /= 0) then
-      print *, 'cudaMemcpy2D error code: ', ierr
-      error stop 'cudaMemcpy2D failed'
-    end if
+                     [self%nx_loc + 2, self%ny_loc, self%nz_loc])
+
+    ! tsize is different than SZ, because here we work on a 3D Cartesian
+    ! data structure, and free to specify any suitable thread/block size.
+    tsize = 16
+    blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
+    threads = dim3(tsize, 1, 1)
+
+    call memcpy3D<<<blocks, threads>>>(d_dev, padded_dev, & !&
+                                       self%nx_loc, self%ny_loc, self%nz_loc)
 
     ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, &
                                  CUFFT_FORWARD)
@@ -150,11 +171,12 @@ contains
     class(cuda_poisson_fft_t) :: self
     class(field_t), intent(inout) :: f
 
-    real(dp), device, pointer :: flat_dev(:, :), d_dev(:, :, :)
+    real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
 
     type(cudaXtDesc), pointer :: descriptor
 
-    integer :: ierr
+    integer :: tsize, ierr
+    type(dim3) :: blocks, threads
 
     ierr = cufftXtExecDescriptor(self%plan3D_bw, self%xtdesc, self%xtdesc, &
                                  CUFFT_INVERSE)
@@ -165,18 +187,18 @@ contains
 
     select type (f)
     type is (cuda_field_t)
-      flat_dev(1:self%nx_loc, 1:self%ny_loc*self%nz_loc) => f%data_d
+      padded_dev => f%data_d
     end select
 
     call c_f_pointer(self%xtdesc%descriptor, descriptor)
     call c_f_pointer(descriptor%data(1), d_dev, &
-                     [self%nx_loc + 2, self%ny_loc*self%nz_loc])
-    ierr = cudaMemcpy2D(flat_dev, self%nx_loc, d_dev, self%nx_loc + 2, &
-                        self%nx_loc, self%ny_loc*self%nz_loc)
-    if (ierr /= 0) then
-      print *, 'cudaMemcpy2D error code: ', ierr
-      error stop 'cudaMemcpy2D failed'
-    end if
+                     [self%nx_loc + 2, self%ny_loc, self%nz_loc])
+
+    tsize = 16
+    blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
+    threads = dim3(tsize, 1, 1)
+    call memcpy3D<<<blocks, threads>>>(padded_dev, d_dev, & !&
+                                       self%nx_loc, self%ny_loc, self%nz_loc)
 
   end subroutine fft_backward_cuda
 

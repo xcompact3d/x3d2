@@ -2,13 +2,13 @@ module m_omp_backend
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_ordering, only: get_index_reordering
-  use m_common, only: dp, get_dirs_from_rdr, VERT, DIR_X, DIR_Y, DIR_Z, DIR_C
-  use m_tdsops, only: dirps_t, tdsops_t, get_tds_n
+  use m_common, only: dp, get_dirs_from_rdr, move_data_loc, &
+                      DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC
+  use m_tdsops, only: dirps_t, tdsops_t
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
   use m_omp_sendrecv, only: sendrecv_fields
 
   use m_omp_common, only: SZ
-  use m_omp_poisson_fft, only: omp_poisson_fft_t
   use m_mesh, only: mesh_t
 
   implicit none
@@ -36,6 +36,8 @@ module m_omp_backend
     procedure :: sum_zintox => sum_zintox_omp
     procedure :: vecadd => vecadd_omp
     procedure :: scalar_product => scalar_product_omp
+    procedure :: field_scale => field_scale_omp
+    procedure :: field_shift => field_shift_omp
     procedure :: copy_data_to_f => copy_data_to_f_omp
     procedure :: copy_f_to_data => copy_f_to_data_omp
     procedure :: init_poisson_fft => init_omp_poisson_fft
@@ -51,7 +53,7 @@ contains
   function init(mesh, allocator) result(backend)
     implicit none
 
-    class(mesh_t), target, intent(inout) :: mesh
+    type(mesh_t), target, intent(inout) :: mesh
     class(allocator_t), target, intent(inout) :: allocator
     type(omp_backend_t) :: backend
 
@@ -100,30 +102,28 @@ contains
   end function init
 
   subroutine alloc_omp_tdsops( &
-    self, tdsops, dir, operation, scheme, &
-    n_halo, from_to, bc_start, bc_end, sym, c_nu, nu0_nu &
+    self, tdsops, n_tds, delta, operation, scheme, bc_start, bc_end, &
+    n_halo, from_to, sym, c_nu, nu0_nu &
     )
     implicit none
 
     class(omp_backend_t) :: self
     class(tdsops_t), allocatable, intent(inout) :: tdsops
-    integer, intent(in) :: dir
+    integer, intent(in) :: n_tds
+    real(dp), intent(in) :: delta
     character(*), intent(in) :: operation, scheme
+    integer, intent(in) :: bc_start, bc_end
     integer, optional, intent(in) :: n_halo
-    character(*), optional, intent(in) :: from_to, bc_start, bc_end
+    character(*), optional, intent(in) :: from_to
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
-    integer :: tds_n
-    real(dp) :: delta
 
     allocate (tdsops_t :: tdsops)
 
     select type (tdsops)
     type is (tdsops_t)
-      tds_n = get_tds_n(self%mesh, dir, from_to)
-      delta = self%mesh%geo%d(dir)
-      tdsops = tdsops_t(tds_n, delta, operation, scheme, n_halo, from_to, &
-                        bc_start, bc_end, sym, c_nu, nu0_nu)
+      tdsops = tdsops_t(n_tds, delta, operation, scheme, bc_start, &
+                        bc_end, n_halo, from_to, sym, c_nu, nu0_nu)
     end select
 
   end subroutine alloc_omp_tdsops
@@ -231,15 +231,16 @@ contains
 
   end subroutine transeq_halo_exchange
 
-  subroutine transeq_dist_component(self, rhs, u, conv, &
+  subroutine transeq_dist_component(self, rhs_du, u, conv, &
                                     u_recv_s, u_recv_e, &
                                     conv_recv_s, conv_recv_e, &
                                     tdsops_du, tdsops_dud, tdsops_d2u, dir)
-      !! Computes RHS_x^u following:
-      !!
-      !! rhs_x^u = -0.5*(conv*du/dx + d(u*conv)/dx) + nu*d2u/dx2
+    !! Computes RHS_x^u following:
+    !!
+    !! rhs_x^u = -0.5*(conv*du/dx + d(u*conv)/dx) + nu*d2u/dx2
     class(omp_backend_t) :: self
-    class(field_t), intent(inout) :: rhs
+    !> The result field, it is also used as temporary storage
+    class(field_t), intent(inout) :: rhs_du
     class(field_t), intent(in) :: u, conv
     real(dp), dimension(:, :, :), intent(in) :: u_recv_s, u_recv_e, &
                                                 conv_recv_s, conv_recv_e
@@ -247,14 +248,13 @@ contains
     class(tdsops_t), intent(in) :: tdsops_dud
     class(tdsops_t), intent(in) :: tdsops_d2u
     integer, intent(in) :: dir
-    class(field_t), pointer :: du, d2u, dud
+    class(field_t), pointer :: d2u, dud
 
-    du => self%allocator%get_block(dir, VERT)
-    dud => self%allocator%get_block(dir, VERT)
-    d2u => self%allocator%get_block(dir, VERT)
+    dud => self%allocator%get_block(dir)
+    d2u => self%allocator%get_block(dir)
 
     call exec_dist_transeq_compact( &
-      rhs%data, du%data, dud%data, d2u%data, &
+      rhs_du%data, dud%data, d2u%data, &
       self%du_send_s, self%du_send_e, self%du_recv_s, self%du_recv_e, &
       self%dud_send_s, self%dud_send_e, self%dud_recv_s, self%dud_recv_e, &
       self%d2u_send_s, self%d2u_send_e, self%d2u_recv_s, self%d2u_recv_e, &
@@ -264,37 +264,40 @@ contains
       self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), &
       self%mesh%par%pnext(dir), self%mesh%get_n_groups(dir))
 
-    call self%allocator%release_block(du)
+    call rhs_du%set_data_loc(u%data_loc)
+
     call self%allocator%release_block(dud)
     call self%allocator%release_block(d2u)
 
   end subroutine transeq_dist_component
 
-  subroutine tds_solve_omp(self, du, u, dirps, tdsops)
+  subroutine tds_solve_omp(self, du, u, tdsops)
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: du
     class(field_t), intent(in) :: u
-    type(dirps_t), intent(in) :: dirps
     class(tdsops_t), intent(in) :: tdsops
 
-    ! Check if direction matches for both in/out fields and dirps
-    if (dirps%dir /= du%dir .or. u%dir /= du%dir) then
-      error stop 'DIR mismatch between fields and dirps in tds_solve.'
+    ! Check if direction matches for both in/out fields
+    if (u%dir /= du%dir) then
+      error stop 'DIR mismatch between fields in tds_solve.'
     end if
 
-    call tds_solve_dist(self, du, u, dirps, tdsops)
+    if (u%data_loc /= NULL_LOC) then
+      call du%set_data_loc(move_data_loc(u%data_loc, u%dir, tdsops%move))
+    end if
+
+    call tds_solve_dist(self, du, u, tdsops)
 
   end subroutine tds_solve_omp
 
-  subroutine tds_solve_dist(self, du, u, dirps, tdsops)
+  subroutine tds_solve_dist(self, du, u, tdsops)
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: du
     class(field_t), intent(in) :: u
-    type(dirps_t), intent(in) :: dirps
     class(tdsops_t), intent(in) :: tdsops
     integer :: n_halo, n_groups, dir
 
@@ -304,7 +307,7 @@ contains
     n_groups = self%mesh%get_n_groups(u)
 
     call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
-                           tdsops%tds_n, n_groups)
+                           tdsops%n_tds, n_groups)
 
     ! halo exchange
     call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
@@ -349,6 +352,9 @@ contains
       end do
     end do
     !$omp end parallel do
+
+    ! reorder keeps the data_loc the same
+    call u_%set_data_loc(u%data_loc)
 
   end subroutine reorder_omp
 
@@ -420,7 +426,7 @@ contains
       error stop "Called vector add with incompatible fields"
     end if
 
-    dims = shape(x%data)
+    dims = self%mesh%get_padded_dims(x)
     nvec = dims(1)/SZ
     remstart = nvec*SZ + 1
 
@@ -452,7 +458,7 @@ contains
 
     use mpi
 
-    use m_common, only: none, get_rdr_from_dirs
+    use m_common, only: NULL_LOC, get_rdr_from_dirs
 
     implicit none
 
@@ -464,7 +470,7 @@ contains
     integer :: nvec, remstart
     integer :: ierr
 
-    if ((x%data_loc == none) .or. (y%data_loc == none)) then
+    if ((x%data_loc == NULL_LOC) .or. (y%data_loc == NULL_LOC)) then
       error stop "You must set the data_loc before calling scalar product"
     end if
     if (x%data_loc /= y%data_loc) then
@@ -540,6 +546,26 @@ contains
 
   end subroutine copy_into_buffers
 
+  subroutine field_scale_omp(self, f, a)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(in) :: f
+    real(dp), intent(in) :: a
+
+    f%data = a*f%data
+  end subroutine field_scale_omp
+
+  subroutine field_shift_omp(self, f, a)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(in) :: f
+    real(dp), intent(in) :: a
+
+    f%data = f%data + a
+  end subroutine field_shift_omp
+
   subroutine copy_data_to_f_omp(self, f, data)
     class(omp_backend_t), intent(inout) :: self
     class(field_t), intent(inout) :: f
@@ -557,18 +583,27 @@ contains
   end subroutine copy_f_to_data_omp
 
   subroutine init_omp_poisson_fft(self, mesh, xdirps, ydirps, zdirps)
+#ifdef WITH_2DECOMPFFT
+    use m_omp_poisson_fft, only: omp_poisson_fft_t
+#endif
+
     implicit none
 
     class(omp_backend_t) :: self
-    class(mesh_t), intent(in) :: mesh
+    type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
+#ifdef WITH_2DECOMPFFT
     allocate (omp_poisson_fft_t :: self%poisson_fft)
 
     select type (poisson_fft => self%poisson_fft)
     type is (omp_poisson_fft_t)
       poisson_fft = omp_poisson_fft_t(mesh, xdirps, ydirps, zdirps)
     end select
+#else
+    error stop 'This build does not support FFT based Poisson solver &
+                &on the OpenMP backend!'
+#endif
 
   end subroutine init_omp_poisson_fft
 

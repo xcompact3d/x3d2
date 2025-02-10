@@ -7,6 +7,8 @@ enable_testing()
 #
 set(POISSON_SOLVER FFT CACHE STRING
   "Select the Poisson solver: FFT or ITER")
+set(WITH_2DECOMPFFT ON CACHE BOOL
+  "Enable Poisson based FFT solver on the OpenMP backend.")
 
 add_subdirectory(src)
 add_subdirectory(tests)

@@ -3,16 +3,17 @@ program xcompact
 
   use m_allocator
   use m_base_backend
-  use m_common, only: pi
-  use m_solver, only: solver_t
-  use m_tdsops, only: tdsops_t
+  use m_base_case, only: base_case_t
+  use m_common, only: pi, get_argument
+  use m_config, only: domain_config_t, solver_config_t
   use m_mesh
+  use m_case_generic, only: case_generic_t
+  use m_case_tgv, only: case_tgv_t
 
 #ifdef CUDA
   use m_cuda_allocator
   use m_cuda_backend
   use m_cuda_common, only: SZ
-  use m_cuda_tdsops, only: cuda_tdsops_t
 #else
   use m_omp_backend
   use m_omp_common, only: SZ
@@ -22,9 +23,9 @@ program xcompact
 
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
-  type(mesh_t) :: mesh
   type(allocator_t), pointer :: host_allocator
-  type(solver_t) :: solver
+  type(mesh_t), target :: mesh
+  class(base_case_t), allocatable :: flow_case
 
 #ifdef CUDA
   type(cuda_backend_t), target :: cuda_backend
@@ -38,14 +39,11 @@ program xcompact
 
   real(dp) :: t_start, t_end
 
-  character(len=200) :: input_file
-  character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
-  integer, dimension(3) :: dims_global
-  integer, dimension(3) :: nproc_dir = 0
-  real(dp), dimension(3) :: L_global
+  type(domain_config_t) :: domain_cfg
+  type(solver_config_t) :: solver_cfg
+  character(32) :: backend_name
   integer :: nrank, nproc, ierr
-
-  namelist /domain_params/ L_global, dims_global, nproc_dir, BC_x, BC_y, BC_z
+  logical :: use_2decomp
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
@@ -57,25 +55,28 @@ program xcompact
   ierr = cudaGetDeviceCount(ndevs)
   ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robin
   ierr = cudaGetDevice(devnum)
+  backend_name = "CUDA"
+#else
+  backend_name = "OMP"
 #endif
 
-  if (command_argument_count() >= 1) then
-    call get_command_argument(1, input_file)
-    open (100, file=input_file)
-    read (100, nml=domain_params)
-    close (100)
-  else
-    error stop 'Input file is not provided.'
-  end if
+  call domain_cfg%read(nml_file=get_argument(1))
+  call solver_cfg%read(nml_file=get_argument(1))
 
-  if (product(nproc_dir) /= nproc) then
+  if (product(domain_cfg%nproc_dir) /= nproc) then
     if (nrank == 0) print *, 'nproc_dir specified in the input file does &
                               &not match the total number of ranks, falling &
                               &back to a 1D decomposition along Z-dir instead.'
-    nproc_dir = [1, 1, nproc]
+    domain_cfg%nproc_dir = [1, 1, nproc]
   end if
 
-  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
+  ! Decide whether 2decomp is used or not
+  use_2decomp = solver_cfg%poisson_solver_type == 'FFT' &
+                .and. trim(backend_name) == 'OMP'
+
+  mesh = mesh_t(domain_cfg%dims_global, domain_cfg%nproc_dir, &
+                domain_cfg%L_global, domain_cfg%BC_x, domain_cfg%BC_y, &
+                domain_cfg%BC_z, use_2decomp=use_2decomp)
 
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(mesh, SZ)
@@ -99,12 +100,23 @@ program xcompact
   if (nrank == 0) print *, 'OpenMP backend instantiated'
 #endif
 
-  solver = solver_t(backend, mesh, host_allocator)
+  if (nrank == 0) print *, 'Flow case: ', domain_cfg%flow_case_name
+
+  select case (trim(domain_cfg%flow_case_name))
+  case ('generic')
+    allocate (case_generic_t :: flow_case)
+    flow_case = case_generic_t(backend, mesh, host_allocator)
+  case ('tgv')
+    allocate (case_tgv_t :: flow_case)
+    flow_case = case_tgv_t(backend, mesh, host_allocator)
+  case default
+    error stop 'Undefined flow_case.'
+  end select
   if (nrank == 0) print *, 'solver instantiated'
 
   call cpu_time(t_start)
 
-  call solver%run()
+  call flow_case%run()
 
   call cpu_time(t_end)
 

@@ -2,13 +2,15 @@ module m_poisson_cg
   !! Module defining a Poisson solver based on the (preconditioned) Conjugate
   !! Gradient method.
 
-  use m_common, only: RDR_X2Y, RDR_X2Z, RDR_X2C, &
+  use m_common, only: dp, &
+                      RDR_X2Y, RDR_X2Z, RDR_X2C, &
                       RDR_Y2X, RDR_Z2X, RDR_C2X, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, &
                       CELL
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
-  use m_tdsops, only: dirps_t
+  use m_tdsops, only: tdsops_t, dirps_t
+  use m_mesh, only: mesh_t
 
   implicit none
 
@@ -150,31 +152,48 @@ contains
     call self%solver%solve(p, f, backend)
   end subroutine solve
 
-  function init_lapl(backend) result(lapl)
+  function init_lapl(backend, mesh) result(lapl)
     !! Public constructor for the laplace_operator_t type.
     type(laplace_operator_t) :: lapl
     class(base_backend_t), intent(in) :: backend
+    type(mesh_t), intent(in) :: mesh
 
+    integer :: nx, ny, nz
+    real(dp) :: dx, dy, dz
+    integer :: bcx1, bcxn
+    integer :: bcy1, bcyn
+    integer :: bcz1, bczn
+    
     lapl%xdirps%dir = DIR_X; lapl%ydirps%dir = DIR_Y; lapl%zdirps%dir = DIR_Z
 
-    call backend%alloc_tdsops(lapl%xdirps%der2nd, DIR_X, &
-                              "second-deriv", "compact6")
-    call backend%alloc_tdsops(lapl%ydirps%der2nd, DIR_Y, &
-                              "second-deriv", "compact6")
-    call backend%alloc_tdsops(lapl%zdirps%der2nd, DIR_Z, &
-                              "second-deriv", "compact6")
+    nx = mesh%get_n(DIR_X, CELL)
+    ny = mesh%get_n(DIR_Y, CELL)
+    nz = mesh%get_n(DIR_Z, CELL)
+    dx = mesh%geo%d(DIR_X)
+    dy = mesh%geo%d(DIR_Y)
+    dz = mesh%geo%d(DIR_Z)
+
+    call backend%alloc_tdsops(lapl%xdirps%der2nd, nx, dx, &
+                              "second-deriv", "compact6", bcx1, bcxn)
+
+    call backend%alloc_tdsops(lapl%ydirps%der2nd, ny, dy, &
+                              "second-deriv", "compact6", bcy1, bcyn)
+
+    call backend%alloc_tdsops(lapl%zdirps%der2nd, nz, dz, &
+                              "second-deriv", "compact6", bcz1, bczn)
   end function init_lapl
   
-  function init_cg(backend) result(solver)
+  function init_cg(backend, mesh) result(solver)
     !! Initialises the conjugate gradient (CG) solver.
     !! XXX: The solver implementation is responsible for initialising the
     !!      preconditioner, i.e. it should at some point during its initialisation
     !!      do the equivalent of: `call self%precon = poisson_precon_t(backend)`.
     class(base_backend_t), target, intent(in) :: backend
     type(poisson_cg_t) :: solver
+    type(mesh_t), intent(in) :: mesh
 
     call init_solver(solver%solver, backend)
-    solver%solver%lapl = laplace_operator_t(backend)
+    solver%solver%lapl = laplace_operator_t(backend, mesh)
 
   end function init_cg
   
@@ -235,21 +254,21 @@ contains
     class(base_backend_t), intent(in) :: backend
 
     ! Compute d2pdx2
-    call compute_der2nd(f, p, backend, self%xdirps)
+    call compute_der2nd(f, p, backend, self%xdirps%der2nd)
     
     ! Compute d2pdy2, d2pdz2 and accumulate
-    call compute_and_acc_der2nd(f, p, backend, self%ydirps, RDR_X2Y)
-    call compute_and_acc_der2nd(f, p, backend, self%zdirps, RDR_X2Z)
+    call compute_and_acc_der2nd(f, p, backend, self%ydirps%der2nd, RDR_X2Y)
+    call compute_and_acc_der2nd(f, p, backend, self%zdirps%der2nd, RDR_X2Z)
 
   end subroutine poissmult_dirx
 
-  subroutine compute_and_acc_der2nd(f, p, backend, dirps, reorder_op)
+  subroutine compute_and_acc_der2nd(f, p, backend, tdsops, reorder_op)
     !! Accumulates 2nd derivatives into the Laplacian
 
     class(field_t), intent(inout) :: f ! The Laplacian
     class(field_t), intent(in) :: p    ! The pressure field
     class(base_backend_t), intent(in) :: backend
-    class(dirps_t), intent(in) :: dirps
+    class(tdsops_t), intent(in) :: tdsops        ! The tridiagonal operator
     integer, intent(in) :: reorder_op  ! The reordering operation
 
     class(field_t), pointer :: p_i ! P in operation order
@@ -269,7 +288,7 @@ contains
     f_i => backend%allocator%get_block(DIR)
     call backend%reorder(p_i, p, reorder_op)
 
-    call compute_der2nd(f_i, p_i, backend, dirps)
+    call compute_der2nd(f_i, p_i, backend, tdsops)
     if (reorder_op == RDR_X2Y) then
       call backend%sum_yintox(f, f_i)
     else if (reorder_op == RDR_X2Z) then
@@ -283,14 +302,14 @@ contains
     
   end subroutine compute_and_acc_der2nd
 
-  subroutine compute_der2nd(d2fdx2, f, backend, dirps)
+  subroutine compute_der2nd(d2fdx2, f, backend, tdsops)
     !! Computes the 2nd derivative of a field
     class(field_t), intent(inout) :: d2fdx2      ! The 2nd derivative
     class(field_t), intent(in) :: f              ! The field for derivative
-    class(base_backend_t), intent(in) :: backend
-    class(dirps_t), intent(in) :: dirps
+    class(base_backend_t), intent(in) :: backend ! The backend implementation of operations
+    class(tdsops_t), intent(in) :: tdsops        ! The tridiagonal operator
 
-    call backend%tds_solve(d2fdx2, f, dirps, dirps%der2nd)
+    call backend%tds_solve(d2fdx2, f, tdsops)
     
   end subroutine compute_der2nd
 

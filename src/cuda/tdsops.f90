@@ -27,36 +27,37 @@ module m_cuda_tdsops
 
 contains
 
-  function cuda_tdsops_init(n, delta, operation, scheme, n_halo, from_to, &
-                            bc_start, bc_end, sym, c_nu, nu0_nu) &
+  function cuda_tdsops_init(n_tds, delta, operation, scheme, bc_start, &
+                            bc_end, n_halo, from_to, sym, c_nu, nu0_nu) &
     result(tdsops)
-      !! Constructor function for the cuda_tdsops_t class.
-      !! See tdsops_t for details.
+    !! Constructor function for the cuda_tdsops_t class.
+    !! See tdsops_t for details.
     implicit none
 
     type(cuda_tdsops_t) :: tdsops !! return value of the function
 
-    integer, intent(in) :: n
+    integer, intent(in) :: n_tds
     real(dp), intent(in) :: delta
     character(*), intent(in) :: operation, scheme
+    integer, intent(in) :: bc_start, bc_end
     integer, optional, intent(in) :: n_halo
-    character(*), optional, intent(in) :: from_to, bc_start, bc_end
+    character(*), optional, intent(in) :: from_to
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
 
-    integer :: n_stencil
+    integer :: n, n_stencil
 
-    tdsops%tdsops_t = tdsops_init(n, delta, operation, scheme, n_halo, &
-                                  from_to, bc_start, bc_end, sym, &
-                                  c_nu, nu0_nu)
+    tdsops%tdsops_t = tdsops_init(n_tds, delta, operation, scheme, bc_start, &
+                                  bc_end, n_halo, from_to, sym, c_nu, nu0_nu)
 
-    n_stencil = 2*tdsops%n_halo + 1
-
+    n = tdsops%n_rhs
     allocate (tdsops%dist_fw_dev(n), tdsops%dist_bw_dev(n))
     allocate (tdsops%dist_sa_dev(n), tdsops%dist_sc_dev(n))
     allocate (tdsops%dist_af_dev(n))
     allocate (tdsops%thom_f_dev(n), tdsops%thom_s_dev(n))
     allocate (tdsops%thom_w_dev(n), tdsops%thom_p_dev(n))
+
+    n_stencil = 2*tdsops%n_halo + 1
     allocate (tdsops%coeffs_dev(n_stencil))
     allocate (tdsops%coeffs_s_dev(n_stencil, tdsops%n_halo))
     allocate (tdsops%coeffs_e_dev(n_stencil, tdsops%n_halo))

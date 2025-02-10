@@ -165,7 +165,7 @@ contains
     allocate(omp_backend_t :: backend)
     backend = omp_backend_t(mesh, allocator)
 #endif
-    lapl = laplace_operator_t(backend)
+    lapl = laplace_operator_t(backend, mesh)
 #ifdef HAVE_CG
     precon = poisson_precon_t(backend)
 #endif

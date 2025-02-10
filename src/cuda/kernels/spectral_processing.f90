@@ -7,6 +7,26 @@ module m_cuda_spectral
 
 contains
 
+  attributes(global) subroutine memcpy3D(dst, src, nx, ny, nz)
+    !! Copy data between x3d2 padded arrays and cuFFTMp descriptors
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: dst
+    real(dp), device, intent(in), dimension(:, :, :) :: src
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, j, k
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x !ny
+    k = blockIdx%y !nz
+
+    if (j <= ny) then
+      do i = 1, nx
+        dst(i, j, k) = src(i, j, k)
+      end do
+    end if
+  end subroutine memcpy3D
+
   attributes(global) subroutine process_spectral_div_u( &
     div_u, waves, nx_spec, ny_spec, y_sp_st, nx, ny, nz, &
     ax, bx, ay, by, az, bz &
@@ -38,8 +58,8 @@ contains
     if (j <= ny_spec) then
       do i = 1, nx_spec
         ! normalisation
-        div_r = real(div_u(i, j, k), kind=dp)/(nx*ny*nz)
-        div_c = aimag(div_u(i, j, k))/(nx*ny*nz)
+        div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
+        div_c = aimag(div_u(i, j, k))/nx/ny/nz
 
         ix = i; iy = j + y_sp_st; iz = k
 

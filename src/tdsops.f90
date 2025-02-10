@@ -1,7 +1,8 @@
 module m_tdsops
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_common, only: dp, pi, VERT, CELL, none
+  use m_common, only: dp, pi, VERT, CELL, &
+                      BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET
   use m_mesh, only: mesh_t
 
   implicit none
@@ -29,11 +30,12 @@ module m_tdsops
                                            dist_af !! the auxiliary factors
     real(dp), allocatable, dimension(:) :: thom_f, thom_s, thom_w, thom_p
     real(dp), allocatable :: coeffs(:), coeffs_s(:, :), coeffs_e(:, :)
-    real(dp) :: alpha, a, b, c = 0._dp, d = 0._dp
+    real(dp) :: alpha, a, b, c = 0._dp, d = 0._dp !! Compact scheme coeffs
     logical :: periodic
-    integer :: tds_n
-    integer :: dir
-    integer :: n_halo
+    integer :: n_tds !! Tridiagonal system size
+    integer :: n_rhs !! Right-hand-side builder size
+    integer :: move = 0 !! move between vertices and cell centres
+    integer :: n_halo !! number of halo points
   contains
     procedure :: deriv_1st, deriv_2nd, interpl_mid, stagder_1st
     procedure :: preprocess_dist, preprocess_thom
@@ -55,41 +57,56 @@ module m_tdsops
 
 contains
 
-  function tdsops_init(tds_n, delta, operation, scheme, n_halo, from_to, &
-                       bc_start, bc_end, sym, c_nu, nu0_nu) result(tdsops)
-      !! Constructor function for the tdsops_t class.
-      !!
-      !! 'n', 'delta', 'operation', and 'scheme' are necessary arguments.
-      !! Number of points 'n', distance between two points 'delta', the
-      !! 'operation' the tridiagonal system defines, and the 'scheme' that
-      !! specifies the exact scheme we choose to apply for the operation.
-      !! The remaining arguments are optional.
-      !! 'from_to' is necessary for interpolation and staggared derivative, and
-      !! it can be 'v2p' or 'p2v'.
-      !! If the specific region the instance is operating is not a boundary
-      !! region, then 'bc_start' and 'bc_end' are either 'null' or not defined.
-      !! 'sym' is relevant when the boundary condition is free-slip. If sym is
-      !! .true. then it means the field we operate on is assumed to be an even
-      !! function (symmetric) accross the boundary. If it is .false. it means
-      !! that the field is assumed to be an odd function (anti-symmetric).
-      !! 'c_nu', 'nu0_nu' are relevant when operation is second order
-      !! derivative and scheme is compact6-hyperviscous.
+  function tdsops_init(n_tds, delta, operation, scheme, &
+                       bc_start, bc_end, n_halo, from_to, sym, c_nu, nu0_nu) &
+    result(tdsops)
+    !! Constructor function for the tdsops_t class.
+    !!
+    !! 'n_tds', 'delta', 'operation', 'scheme', 'bc_start', and 'bc_end' are
+    !! necessary arguments. The remaining arguments are optional.
+    !!
+    !! 'from_to' is necessary for interpolation and staggared derivative, and
+    !! it can be 'v2p' or 'p2v'.
+    !! If the specific region the instance is operating is not a boundary
+    !! region, then 'bc_start' and 'bc_end' are BC_HALO.
+    !!
+    !! 'sym' is relevant when the BC is free-slip. If sym is .true. then it
+    !! means the field we operate on is assumed to be an even function
+    !! (symmetric, cos type) accross the boundary. If it is .false. it means
+    !! the field is assumed to be an odd function (anti-symmetric, sin type).
+    !!
+    !! 'c_nu', 'nu0_nu' are relevant when operation is second order
+    !! derivative and scheme is compact6-hyperviscous.
     implicit none
 
     type(tdsops_t) :: tdsops !! return value of the function
 
-    integer, intent(in) :: tds_n
-    real(dp), intent(in) :: delta
+    integer, intent(in) :: n_tds !! Tridiagonal system size
+    real(dp), intent(in) :: delta !! Grid spacing
     character(*), intent(in) :: operation, scheme
+    integer, intent(in) :: bc_start, bc_end !! Boundary Cond.
     integer, optional, intent(in) :: n_halo !! Number of halo cells
     character(*), optional, intent(in) :: from_to !! 'v2p' or 'p2v'
-    character(*), optional, intent(in) :: bc_start, bc_end !! Boundary Cond.
     logical, optional, intent(in) :: sym !! (==npaire), only for Neumann BCs
     real(dp), optional, intent(in) :: c_nu, nu0_nu !! params for hypervisc.
 
-    integer :: n_stencil
+    integer :: n, n_stencil
 
-    tdsops%tds_n = tds_n
+    tdsops%n_tds = n_tds
+
+    ! we need special treatment in the right-hand-side build stage for
+    ! the very last point in the domain if output length is smaller than
+    ! the input length
+    if (present(from_to)) then
+      if ((bc_end == BC_NEUMANN .or. bc_end == BC_DIRICHLET) &
+          .and. from_to == 'v2p') then
+        tdsops%n_rhs = n_tds + 1
+      else
+        tdsops%n_rhs = n_tds
+      end if
+    else
+      tdsops%n_rhs = n_tds
+    end if
 
     if (present(n_halo)) then
       tdsops%n_halo = n_halo
@@ -103,23 +120,25 @@ contains
       tdsops%n_halo = 4
     end if
 
-    n_stencil = 2*tdsops%n_halo + 1
+    ! n_rhs >= n_tds, n is used when its better to allocate a larger size
+    n = tdsops%n_rhs
 
     ! preprocessed coefficient arrays for the distributed algorithm
-    allocate (tdsops%dist_fw(tds_n), tdsops%dist_bw(tds_n))
-    allocate (tdsops%dist_sa(tds_n), tdsops%dist_sc(tds_n))
-    allocate (tdsops%dist_af(tds_n))
+    allocate (tdsops%dist_fw(n), tdsops%dist_bw(n))
+    allocate (tdsops%dist_sa(n), tdsops%dist_sc(n))
+    allocate (tdsops%dist_af(n))
 
     ! preprocessed coefficient arrays for the Thomas algorithm
-    allocate (tdsops%thom_f(tds_n), tdsops%thom_s(tds_n))
-    allocate (tdsops%thom_w(tds_n), tdsops%thom_p(tds_n))
+    allocate (tdsops%thom_f(n), tdsops%thom_s(n))
+    allocate (tdsops%thom_w(n), tdsops%thom_p(n))
 
     ! RHS coefficient arrays
+    n_stencil = 2*tdsops%n_halo + 1
     allocate (tdsops%coeffs(n_stencil))
     allocate (tdsops%coeffs_s(n_stencil, tdsops%n_halo))
     allocate (tdsops%coeffs_e(n_stencil, tdsops%n_halo))
 
-    tdsops%periodic = bc_start == 'periodic' .and. bc_end == 'periodic'
+    tdsops%periodic = bc_start == BC_PERIODIC .and. bc_end == BC_PERIODIC
 
     if (operation == 'first-deriv') then
       call tdsops%deriv_1st(delta, scheme, bc_start, bc_end, sym)
@@ -134,26 +153,23 @@ contains
       error stop 'operation is not defined'
     end if
 
-  end function tdsops_init
+    select case (from_to)
+    case ('v2p')
+      tdsops%move = 1
+    case ('p2v')
+      tdsops%move = -1
+    case default
+      tdsops%move = 0
+    end select
 
-  pure function get_tds_n(mesh, dir, from_to) result(tds_n)
-  !! Get the tds_n size based on the from_to value (and the mesh)
-    class(mesh_t), intent(in) :: mesh
-    integer, intent(in) :: dir
-    character(*), optional, intent(in) :: from_to
-    integer :: tds_n
-    integer :: data_loc
-
-    data_loc = VERT
-    if (present(from_to)) then
-      if (from_to == "v2p") then
-        data_loc = CELL
-      end if
+    if (tdsops%dist_sa(n_tds) > 1d-16) then
+      print *, 'There are ', n_tds, 'points in a subdomain, it may be too few!'
+      print *, 'The entry distributed solver disregards in "' &
+        //operation//'" operation is:', tdsops%dist_sa(n_tds)
+      print *, 'It may result in numerical errors with the distributed solver!'
     end if
 
-    tds_n = mesh%get_n(dir, data_loc)
-
-  end function
+  end function tdsops_init
 
   subroutine deriv_1st(self, delta, scheme, bc_start, bc_end, sym)
     implicit none
@@ -161,7 +177,7 @@ contains
     class(tdsops_t), intent(inout) :: self
     real(dp), intent(in) :: delta
     character(*), intent(in) :: scheme
-    character(*), optional, intent(in) :: bc_start, bc_end
+    integer, intent(in) :: bc_start, bc_end
     logical, optional, intent(in) :: sym
 
     real(dp), allocatable :: dist_b(:)
@@ -202,14 +218,14 @@ contains
 
     self%dist_sa(:) = alpha; self%dist_sc(:) = alpha
 
-    n = self%tds_n
+    n = self%n_tds
     n_halo = self%n_halo
 
-    allocate (dist_b(n))
+    allocate (dist_b(self%n_rhs))
     dist_b(:) = 1._dp
 
     select case (bc_start)
-    case ('neumann')
+    case (BC_NEUMANN)
       if (symmetry) then
         ! sym == .true.; d(uu)/dx, dv/dx, dw/dx
         !                d(vv)/dy, du/dy, dw/dy
@@ -235,7 +251,7 @@ contains
                                bfi, &
                                afi, bfi, 0._dp, 0._dp]
       end if
-    case ('dirichlet')
+    case (BC_DIRICHLET)
       ! first line
       self%dist_sa(1) = 0._dp
       self%dist_sc(1) = 2._dp
@@ -253,7 +269,7 @@ contains
     end select
 
     select case (bc_end)
-    case ('neumann')
+    case (BC_NEUMANN)
       if (symmetry) then
         ! sym == .true.; d(uu)/dx, dv/dx, dw/dx
         !                d(vv)/dy, du/dy, dw/dy
@@ -279,7 +295,7 @@ contains
                                         -bfi, &
                                         afi, 0._dp, 0._dp, 0._dp]
       end if
-    case ('dirichlet')
+    case (BC_DIRICHLET)
       ! last line
       self%dist_sa(n) = 2._dp
       self%dist_sc(n) = 0._dp
@@ -308,7 +324,7 @@ contains
     class(tdsops_t), intent(inout) :: self
     real(dp), intent(in) :: delta
     character(*), intent(in) :: scheme
-    character(*), optional, intent(in) :: bc_start, bc_end
+    integer, intent(in) :: bc_start, bc_end
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
 
@@ -373,14 +389,14 @@ contains
 
     self%dist_sa(:) = alpha; self%dist_sc(:) = alpha
 
-    n = self%tds_n
+    n = self%n_tds
     n_halo = self%n_halo
 
-    allocate (dist_b(n))
+    allocate (dist_b(self%n_rhs))
     dist_b(:) = 1._dp
 
     select case (bc_start)
-    case ('neumann')
+    case (BC_NEUMANN)
       if (symmetry) then
         ! sym == .true.; d2v/dx2, d2w/dx2
         !                d2u/dy2, d2w/dy2
@@ -418,7 +434,7 @@ contains
                                -2*asi - 2*bsi - 2*csi - 2*dsi, &
                                asi, bsi, csi, dsi]
       end if
-    case ('dirichlet')
+    case (BC_DIRICHLET)
       ! first line
       self%dist_sa(1) = 0._dp
       self%dist_sc(1) = 11._dp
@@ -445,7 +461,7 @@ contains
     end select
 
     select case (bc_end)
-    case ('neumann')
+    case (BC_NEUMANN)
       if (symmetry) then
         ! sym == .true.; d2v/dx2, d2w/dx2
         !                d2u/dy2, d2w/dy2
@@ -483,7 +499,7 @@ contains
                                -2*asi - 2*bsi - 2*csi - 2*dsi, &
                                asi, bsi - dsi, -csi, 0._dp]
       end if
-    case ('dirichlet')
+    case (BC_DIRICHLET)
       ! last line
       self%dist_sa(n) = 11._dp
       self%dist_sc(n) = 0._dp
@@ -519,7 +535,7 @@ contains
 
     class(tdsops_t), intent(inout) :: self
     character(*), intent(in) :: scheme, from_to
-    character(*), optional, intent(in) :: bc_start, bc_end
+    integer, intent(in) :: bc_start, bc_end
     logical, optional, intent(in) :: sym
 
     real(dp), allocatable :: dist_b(:)
@@ -574,13 +590,13 @@ contains
 
     self%dist_sa(:) = alpha; self%dist_sc(:) = alpha
 
-    n = self%tds_n
+    n = self%n_tds
     n_halo = self%n_halo
 
-    allocate (dist_b(n))
+    allocate (dist_b(self%n_rhs))
     dist_b(:) = 1._dp
 
-    if ((bc_start == 'dirichlet') .or. (bc_start == 'neumann')) then
+    if ((bc_start == BC_DIRICHLET) .or. (bc_start == BC_NEUMANN)) then
       self%dist_sa(1) = 0._dp
 
       select case (from_to)
@@ -614,20 +630,21 @@ contains
       end select
     end if
 
-    if ((bc_end == 'dirichlet') .or. (bc_end == 'neumann')) then
+    if ((bc_end == BC_DIRICHLET) .or. (bc_end == BC_NEUMANN)) then
       self%dist_sc(n) = 0._dp
 
       select case (from_to)
       case ('v2p')
         ! sym is always .true.
         dist_b(n) = 1._dp + alpha
-        self%coeffs_e(:, 4) = [0._dp, dici, cici + dici, bici + cici, &
+        self%coeffs_e(:, 4) = 0._dp
+        self%coeffs_e(:, 3) = [0._dp, dici, cici + dici, bici + cici, &
                                aici + bici, &
                                aici, 0._dp, 0._dp, 0._dp]
-        self%coeffs_e(:, 3) = [0._dp, dici, cici, bici, &
+        self%coeffs_e(:, 2) = [0._dp, dici, cici, bici, &
                                aici + dici, &
                                aici + cici, bici, 0._dp, 0._dp]
-        self%coeffs_e(:, 2) = [0._dp, dici, cici, bici, &
+        self%coeffs_e(:, 1) = [0._dp, dici, cici, bici, &
                                aici, &
                                aici, bici + dici, cici, 0._dp]
       case ('p2v')
@@ -659,7 +676,7 @@ contains
     class(tdsops_t), intent(inout) :: self
     real(dp), intent(in) :: delta
     character(*), intent(in) :: scheme, from_to
-    character(*), optional, intent(in) :: bc_start, bc_end
+    integer, intent(in) :: bc_start, bc_end
     logical, optional, intent(in) :: sym
 
     real(dp), allocatable :: dist_b(:)
@@ -700,13 +717,13 @@ contains
 
     self%dist_sa(:) = alpha; self%dist_sc(:) = alpha
 
-    n = self%tds_n
+    n = self%n_tds
     n_halo = self%n_halo
 
-    allocate (dist_b(n))
+    allocate (dist_b(self%n_rhs))
     dist_b(:) = 1._dp
 
-    if ((bc_start == 'dirichlet') .or. (bc_start == 'neumann')) then
+    if ((bc_start == BC_DIRICHLET) .or. (bc_start == BC_NEUMANN)) then
       self%dist_sa(1) = 0._dp
 
       select case (from_to)
@@ -722,34 +739,28 @@ contains
       case ('p2v')
         ! sym is always .true.
         self%dist_sc(1) = 0._dp
-        self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
-                               0._dp, &
-                               0._dp, 0._dp, 0._dp, 0._dp]
+        self%coeffs_s(:, 1) = 0._dp
         self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, -aci - bci, &
                                aci, &
                                bci, 0._dp, 0._dp, 0._dp]
       end select
     end if
 
-    if ((bc_end == 'dirichlet') .or. (bc_end == 'neumann')) then
+    if ((bc_end == BC_DIRICHLET) .or. (bc_end == BC_NEUMANN)) then
       self%dist_sc(n) = 0._dp
 
       select case (from_to)
       case ('v2p')
         ! sym is always .false.
         dist_b(n) = 1._dp + alpha
-        self%coeffs_e(:, n_halo) = [0._dp, 0._dp, 0._dp, -bci, &
-                                    -aci - bci, &
-                                    aci + 2*bci, 0._dp, 0._dp, 0._dp]
+        self%coeffs_e(:, n_halo) = 0._dp
         self%coeffs_e(:, n_halo - 1) = [0._dp, 0._dp, 0._dp, -bci, &
-                                        -aci, &
-                                        aci, bci, 0._dp, 0._dp]
+                                        -aci - bci, &
+                                        aci + 2*bci, 0._dp, 0._dp, 0._dp]
       case ('p2v')
         ! sym is always .true.
         self%dist_sa(n) = 0._dp
-        self%coeffs_e(:, n_halo) = [0._dp, 0._dp, 0._dp, 0._dp, &
-                                    0._dp, &
-                                    0._dp, 0._dp, 0._dp, 0._dp]
+        self%coeffs_e(:, n_halo) = 0._dp
         self%coeffs_e(:, n_halo - 1) = [0._dp, 0._dp, -bci, -aci, &
                                         aci + bci, &
                                         0._dp, 0._dp, 0._dp, 0._dp]
@@ -769,9 +780,6 @@ contains
     real(dp), dimension(:), intent(in) :: dist_b
 
     integer :: i
-    integer :: n
-
-    n = self%tds_n
 
     ! Ref DOI: 10.1109/MCSE.2021.3130544
     ! Algorithm 3 in page 4
@@ -784,7 +792,7 @@ contains
     end do
 
     ! Then the remaining in the forward pass
-    do i = 3, n
+    do i = 3, self%n_tds
       ! Algorithm 3 in ref obtains 'r' coeffs on the fly in line 7.
       ! As we have to solve many RHSs with the same tridiagonal system,
       ! it is better to do a preprocessing first.
@@ -801,7 +809,7 @@ contains
     end do
 
     ! backward pass starting in line 12 of Algorithm 3.
-    do i = n - 2, 2, -1
+    do i = self%n_tds - 2, 2, -1
       self%dist_sa(i) = self%dist_sa(i) &
                         - self%dist_sc(i)*self%dist_sa(i + 1)
       self%dist_bw(i) = self%dist_sc(i)
@@ -831,13 +839,13 @@ contains
 
     integer :: i, n
 
-    n = self%tds_n
+    n = self%n_tds
 
     self%thom_w = b
     self%thom_f = self%dist_sc
     if (self%periodic) then
       self%thom_w(1) = 2._dp
-      self%thom_w(self%tds_n) = 1._dp + self%alpha*self%alpha
+      self%thom_w(n) = 1._dp + self%alpha*self%alpha
     end if
 
     self%thom_s(1) = 0._dp
@@ -849,7 +857,7 @@ contains
       self%thom_w(i) = 1._dp/self%thom_w(i)
     end do
 
-    self%thom_p = [-1._dp, (0._dp, i=2, self%tds_n - 1), self%alpha]
+    self%thom_p = [-1._dp, (0._dp, i=2, n - 1), self%alpha]
     do i = 2, n
       self%thom_p(i) = self%thom_p(i) - self%thom_p(i - 1)*self%thom_s(i)
     end do

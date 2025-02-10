@@ -1,7 +1,7 @@
 module m_allocator
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, none, VERT
+  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC, VERT
   use m_mesh, only: mesh_t
   use m_field, only: field_t
 
@@ -42,7 +42,7 @@ module m_allocator
     !> The pointer to the first block on the list.  Non associated if
     !> the list is empty
     ! TODO: Rename first to head
-    class(mesh_t), pointer :: mesh
+    type(mesh_t), pointer :: mesh
     class(field_t), pointer :: first => null()
   contains
     procedure :: get_block
@@ -141,7 +141,7 @@ contains
     if (present(data_loc)) then
       handle%data_loc = data_loc
     else
-      handle%data_loc = none
+      handle%data_loc = NULL_LOC
     end if
 
     ! Set dims based on direction
