@@ -26,6 +26,7 @@ module m_poisson_cg
     private
     ! Solves the Poisson problem
     procedure, public :: solve
+    procedure, public :: init => init_internal
   end type poisson_cg_t
 
   interface poisson_cg_t
@@ -51,11 +52,20 @@ contains
     !!      preconditioner, i.e. it should at some point during its initialisation
     !!      do the equivalent of: `call self%precon = poisson_precon_t(backend)`.
     class(base_backend_t), target, intent(in) :: backend
-    type(poisson_cg_t) :: solver
     type(mesh_t), intent(in) :: mesh
+    type(poisson_cg_t) :: solver
 
-    call init_solver(solver%solver, backend, mesh)
+    call solver%init(backend, mesh)
 
   end function init_cg
+
+  subroutine init_internal(self, backend, mesh)
+    class(poisson_cg_t), intent(out) :: self
+    class(base_backend_t), target, intent(in) :: backend
+    type(mesh_t), intent(in) :: mesh
+
+    call init_solver(self%solver, backend, mesh)
+
+  end subroutine init_internal
 
 end module m_poisson_cg

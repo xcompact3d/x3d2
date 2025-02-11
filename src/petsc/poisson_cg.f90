@@ -6,7 +6,7 @@ module m_cg_types
 
   use m_base_backend, only: base_backend_t
   use m_allocator, only: field_t
-  use m_poisson_cg, only: laplace_operator_t
+  use m_base_poisson_cg, only: laplace_operator_t
 
   implicit none
 
@@ -41,50 +41,53 @@ contains
 
 end module m_cg_types
 
-submodule(m_poisson_cg) m_petsc_poisson_cg
+module m_poisson_cg_backend
   !! Module implementing a Poisson solver based on the (preconditioned)
   !! Conjugate Gradient method using PETSc.
+
+  use m_base_poisson_cg, only: poisson_solver_t, poisson_precon_t, laplace_operator_t
 
   use petsc
 
   use m_cg_types
 
   use m_common, only: dp, DIR_X, DIR_C, CELL
+  use m_allocator, only: field_t
   use m_base_backend, only: base_backend_t
   use m_mesh, only: mesh_t
 
   implicit none
 
-  type, extends(field_t) :: petsc_field_t
-    !! Field extension to wrap PETSc vector data in a field interface
-  end type petsc_field_t
+  private
+  public :: init_solver
+  public :: init_precon
 
-  type, extends(poisson_precon_impl_t) :: petsc_poisson_precon_t
-    !! The PETSc implementation of the Poisson preconditioner, implements a 2nd
-    !! order finite difference approximation of the Laplacian.
-    type(tMat) :: Pmat ! The preconditioner matrix
-  contains
-    procedure :: init => init_precon_petsc
-    procedure :: apply_precon => petsc_apply_precon
-  end type petsc_poisson_precon_t
-
-  type, extends(poisson_solver_t) :: petsc_poisson_cg_t
+  type, extends(poisson_solver_t), public :: poisson_solver_impl
     !! Conjugate Gradient based Poisson solver using PETSc as a backend.
     !! Supports any decomposition that is also supported by the underlying
     !! finite difference schemes.
-
     type(mat_ctx_t) :: ctx
     type(tKSP) :: ksp  ! The solver
     type(tMat) :: Amat ! The operator matrix
     type(tVec) :: fvec ! The RHS vector
     type(tVec) :: pvec ! The solution vector
-
+    type(laplace_operator_t) :: lapl
+    class(poisson_precon_t), allocatable :: precon
   contains
-    procedure :: solve => solve_petsc
+    procedure, public :: solve => solve_petsc
     procedure :: create_operator
     procedure :: create_vectors
     procedure :: create_solver
-  end type petsc_poisson_cg_t
+  end type poisson_solver_impl
+
+  type, extends(poisson_precon_t), public :: poisson_precon_impl
+    !! The PETSc implementation of the Poisson preconditioner, implements a 2nd
+    !! order finite difference approximation of the Laplacian.
+    type(tMat) :: Pmat ! The preconditioner matrix
+  contains
+    procedure :: init => init_precon_petsc
+    procedure :: apply => petsc_apply_precon
+  end type poisson_precon_impl
 
   interface MatCreateShell
     !! Defines the interface to the external (PETSc) function to create a
@@ -152,25 +155,25 @@ submodule(m_poisson_cg) m_petsc_poisson_cg
 
 contains
 
-  module subroutine init_precon_impl(precon, backend)
+  function init_precon(backend) result(precon)
     ! Constructs the PETSc preconditioner implementation
-    class(poisson_precon_impl_t), allocatable, intent(out) :: precon
     class(base_backend_t), intent(in) :: backend
+    class(poisson_precon_t), allocatable :: precon
 
-    allocate (petsc_poisson_precon_t :: precon)
+    allocate (poisson_precon_impl :: precon)
     select type (precon)
-    type is (petsc_poisson_precon_t)
+    type is (poisson_precon_impl)
       call precon%init(backend)
     class default
       error stop "IMPOSSIBLE"
     end select
 
-  end subroutine init_precon_impl
+  end function init_precon
 
   subroutine init_precon_petsc(self, backend)
     ! Initialise the PETSc implementation of the preconditioner object
 
-    class(petsc_poisson_precon_t), intent(out) :: self
+    class(poisson_precon_impl), intent(out) :: self
     class(base_backend_t), intent(in) :: backend
 
     integer :: n
@@ -283,7 +286,7 @@ contains
   end subroutine init_precon_petsc
 
   module subroutine petsc_apply_precon(self, p, b, backend)
-    class(petsc_poisson_precon_t) :: self
+    class(poisson_precon_impl) :: self
     class(field_t), intent(in) :: p
     class(field_t), intent(inout) :: b
     class(base_backend_t), intent(in) :: backend
@@ -307,7 +310,7 @@ contains
   end subroutine petsc_apply_precon
 
   module subroutine solve_petsc(self, p, f, backend)
-    class(petsc_poisson_cg_t) :: self
+    class(poisson_solver_impl) :: self
     class(field_t), intent(inout) :: p ! Pressure solution
     class(field_t), intent(in) :: f    ! Poisson RHS
     class(base_backend_t), intent(in) :: backend
@@ -321,16 +324,18 @@ contains
 
   end subroutine solve_petsc
 
-  module subroutine init_solver(solver, backend)
+  module subroutine init_solver(solver, backend, mesh)
     !! Public constructor for the poisson_cg_t type.
     class(poisson_solver_t), allocatable, intent(out) :: solver
     class(base_backend_t), target, intent(in) :: backend
+    type(mesh_t), intent(in) :: mesh
 
-    allocate (petsc_poisson_cg_t :: solver)
-    solver%precon = poisson_precon_t(backend)
+    allocate (poisson_solver_impl :: solver)
 
     select type (solver)
-    type is (petsc_poisson_cg_t)
+    type is (poisson_solver_impl)
+      solver%precon = init_precon(backend)
+      solver%lapl = laplace_operator_t(backend, mesh)
       call init_petsc_cg(solver, backend)
     class default
       ! This should be impossible
@@ -340,7 +345,7 @@ contains
 
   subroutine init_petsc_cg(self, backend)
     !! Private constructor for the poisson_cg_t type.
-    type(petsc_poisson_cg_t), intent(inout) :: self
+    type(poisson_solver_impl), intent(inout) :: self
     class(base_backend_t), target, intent(in) :: backend
 
     integer :: n ! Local problem size
@@ -378,7 +383,7 @@ contains
 
   subroutine create_operator(self, n)
     ! Set the PETSc MATVEC to use the x3d2 high-order Laplacian operator
-    class(petsc_poisson_cg_t) :: self
+    class(poisson_solver_impl) :: self
     integer, intent(in) :: n ! The local problem size
 
     type(tMatNullSpace) :: nsp
@@ -669,7 +674,7 @@ contains
   subroutine create_vectors(self, n)
     ! Allocates the pressure and forcing vectors.
 
-    class(petsc_poisson_cg_t) :: self ! The Poisson solver
+    class(poisson_solver_impl) :: self ! The Poisson solver
     integer, intent(in) :: n          ! The local vector size
 
     call create_vec(self%fvec, n)
@@ -697,13 +702,13 @@ contains
   subroutine create_solver(self)
     ! Sets up the PETSc linear solver.
 
-    class(petsc_poisson_cg_t) :: self
+    class(poisson_solver_impl) :: self
 
     integer :: ierr
 
-    associate (precon => self%precon%precon)
+    associate (precon => self%precon)
       select type (precon)
-      type is (petsc_poisson_precon_t)
+      type is (poisson_precon_impl)
         call KSPCreate(PETSC_COMM_WORLD, self%ksp, ierr)
         call KSPSetOperators(self%ksp, self%Amat, precon%Pmat, ierr)
         call KSPSetFromOptions(self%ksp, ierr)
@@ -808,4 +813,4 @@ contains
 
   end subroutine copy_field_to_vec
 
-end submodule m_petsc_poisson_cg
+end module m_poisson_cg_backend

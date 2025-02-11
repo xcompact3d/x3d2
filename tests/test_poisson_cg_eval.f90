@@ -16,8 +16,8 @@ program test_poisson_cg_eval
   use m_omp_backend
 #endif
   use m_common, only: DIR_X, DIR_Y, DIR_Z, CELL, POISSON_SOLVER_CG
-  use m_base_poisson_cg, only: laplace_operator_t
-  use m_poisson_cg_backend, only: poisson_precon_impl
+  use m_base_poisson_cg, only: laplace_operator_t, poisson_precon_t
+  use m_poisson_cg_backend, only: init_precon, poisson_precon_impl
 
   implicit none
 
@@ -40,7 +40,7 @@ program test_poisson_cg_eval
 
   type(laplace_operator_t) :: lapl
 #ifdef HAVE_CG
-  type(poisson_precon_t) :: precon
+  class(poisson_precon_t), allocatable :: precon
 #endif
 
   call MPI_Init(ierr)
@@ -170,7 +170,7 @@ contains
 #endif
     lapl = laplace_operator_t(backend, mesh)
 #ifdef HAVE_CG
-    precon = poisson_precon_t(backend)
+    precon = init_precon(backend)
 #endif
 
     ! Main solver calls Poisson in the DIR_Z orientation

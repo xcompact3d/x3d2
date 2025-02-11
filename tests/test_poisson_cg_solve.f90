@@ -15,7 +15,7 @@ program test_poisson_cg_solve
 #else
   use m_omp_backend
 #endif
-  use m_poisson_cg, only: poisson_cg_t, poisson_cg_t
+  use m_poisson_cg, only: poisson_cg_t
   use m_ordering, only: get_index_dir
 
   implicit none
@@ -79,7 +79,7 @@ contains
       allocate (omp_backend_t :: backend)
       backend = omp_backend_t(mesh, allocator)
 #endif
-      poisson_cg = poisson_cg_t(backend)
+      poisson_cg = poisson_cg_t(backend, mesh)
 
       ! Main solver calls Poisson in the DIR_Z orientation
       p => backend%allocator%get_block(DIR_Z, CELL)
