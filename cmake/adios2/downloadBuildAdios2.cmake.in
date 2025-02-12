@@ -1,0 +1,19 @@
+cmake_minimum_required(VERSION 3.0)
+project(Adios2Superbuild NONE)
+
+include(ExternalProject)
+
+set(ADIOS2_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/adios2-install")
+
+ExternalProject_Add(downloadBuildAdios2
+    GIT_REPOSITORY    "https://github.com/ornladios/ADIOS2.git"
+    GIT_TAG           "v2.10.2"
+    SOURCE_DIR        "${CMAKE_CURRENT_BINARY_DIR}/adios2-src"
+    BINARY_DIR        "${CMAKE_CURRENT_BINARY_DIR}/adios2-subbuild"
+    INSTALL_DIR       "${ADIOS2_INSTALL_PREFIX}"
+    CMAKE_ARGS
+      -DCMAKE_INSTALL_PREFIX:PATH=${ADIOS2_INSTALL_PREFIX}
+      -DADIOS2_BUILD_EXAMPLES=OFF
+      -DADIOS2_BUILD_TESTING=OFF
+      -DADIOS2_USE_Fortran=ON
+)
