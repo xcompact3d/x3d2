@@ -31,8 +31,6 @@ program test_setget_field
   class(field_t), pointer :: fld, fld_c
   real(dp), dimension(:, :, :), allocatable :: arr
 
-  integer :: nx, ny, nz
-
   integer :: ierr
   
   call MPI_Init(ierr)
