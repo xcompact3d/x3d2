@@ -1,0 +1,281 @@
+module m_base_case
+  !! Provides the base case for running a simulation. New cases are
+  !! implemented by extending this to specify the initial and boundary
+  !! conditions, forcing terms and case-specific postprocessing and analysis.
+  use mpi
+
+  use m_allocator, only: allocator_t
+  use m_base_backend, only: base_backend_t
+  use m_common, only: dp, DIR_X, DIR_Z, DIR_C, VERT
+  use m_field, only: field_t
+  use m_mesh, only: mesh_t
+  use m_solver, only: solver_t, init
+
+  implicit none
+
+  type, abstract :: base_case_t
+    class(solver_t), allocatable :: solver
+  contains
+    procedure(boundary_conditions), deferred :: boundary_conditions
+    procedure(initial_conditions), deferred :: initial_conditions
+    procedure(forcings), deferred :: forcings
+    procedure(postprocess), deferred :: postprocess
+    procedure :: case_init
+    procedure :: set_init
+    procedure :: run
+    procedure :: print_enstrophy
+    procedure :: print_div_max_mean
+  end type base_case_t
+
+  abstract interface
+    subroutine boundary_conditions(self)
+      !! Applies case-specific boundary coinditions
+      import :: base_case_t
+      implicit none
+
+      class(base_case_t) :: self
+    end subroutine boundary_conditions
+
+    subroutine initial_conditions(self)
+      !! Sets case-specific initial conditions
+      import :: base_case_t
+      implicit none
+
+      class(base_case_t) :: self
+    end subroutine initial_conditions
+
+    subroutine forcings(self, du, dv, dw)
+      !! Applies case-specific or model realated forcings after transeq
+      import :: base_case_t
+      import :: field_t
+      implicit none
+
+      class(base_case_t) :: self
+      class(field_t), intent(inout) :: du, dv, dw
+    end subroutine forcings
+
+    subroutine postprocess(self, i, t)
+      !! Triggers case-specific postprocessings at user specified intervals
+      import :: base_case_t
+      import :: dp
+      implicit none
+
+      class(base_case_t) :: self
+      integer, intent(in) :: i
+      real(dp), intent(in) :: t
+    end subroutine postprocess
+  end interface
+
+contains
+
+  subroutine case_init(self, backend, mesh, host_allocator)
+    implicit none
+
+    class(base_case_t) :: self
+    class(base_backend_t), target, intent(inout) :: backend
+    type(mesh_t), target, intent(inout) :: mesh
+    type(allocator_t), target, intent(inout) :: host_allocator
+
+    self%solver = init(backend, mesh, host_allocator)
+
+    call self%initial_conditions()
+
+  end subroutine case_init
+
+  subroutine set_init(self, field, field_func)
+    implicit none
+
+    class(base_case_t) :: self
+    class(field_t), intent(inout) :: field
+
+    interface
+      pure function field_func(coords) result(r)
+        import dp
+        implicit none
+
+        real(dp), intent(in) :: coords(3)
+        real(dp) :: r
+      end function field_func
+    end interface
+
+    class(field_t), pointer :: field_init
+
+    integer :: i, j, k, dims(3)
+    real(dp) :: coords(3)
+
+    dims = self%solver%mesh%get_dims(VERT)
+    field_init => self%solver%host_allocator%get_block(DIR_C)
+
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          coords = self%solver%mesh%get_coordinates(i, j, k)
+          field_init%data(i, j, k) = field_func(coords)
+        end do
+      end do
+    end do
+
+    call self%solver%backend%set_field_data(field, field_init%data)
+
+    call self%solver%host_allocator%release_block(field_init)
+
+  end subroutine set_init
+
+  subroutine print_enstrophy(self, u, v, w)
+    !! Reports the enstrophy
+    implicit none
+
+    class(base_case_t), intent(in) :: self
+    class(field_t), intent(in) :: u, v, w
+
+    class(field_t), pointer :: du, dv, dw
+    class(field_t), pointer :: f_out
+    real(dp) :: enstrophy
+    integer :: ierr, dims(3)
+
+    du => self%solver%backend%allocator%get_block(DIR_X, VERT)
+    dv => self%solver%backend%allocator%get_block(DIR_X, VERT)
+    dw => self%solver%backend%allocator%get_block(DIR_X, VERT)
+
+    call self%solver%curl(du, dv, dw, u, v, w)
+
+    dims = self%solver%mesh%get_dims(VERT)
+
+    f_out => self%solver%host_allocator%get_block(DIR_C)
+
+    call self%solver%backend%get_field_data(f_out%data, du)
+    enstrophy = norm2(f_out%data(1:dims(1), 1:dims(2), 1:dims(3)))**2
+    call self%solver%backend%get_field_data(f_out%data, dv)
+    enstrophy = enstrophy &
+                + norm2(f_out%data(1:dims(1), 1:dims(2), 1:dims(3)))**2
+    call self%solver%backend%get_field_data(f_out%data, dw)
+    enstrophy = enstrophy &
+                + norm2(f_out%data(1:dims(1), 1:dims(2), 1:dims(3)))**2
+
+    enstrophy = 0.5_dp*enstrophy/self%solver%ngrid
+    call MPI_Allreduce(MPI_IN_PLACE, enstrophy, 1, MPI_DOUBLE_PRECISION, &
+                       MPI_SUM, MPI_COMM_WORLD, ierr)
+    if (self%solver%mesh%par%is_root()) print *, 'enstrophy:', enstrophy
+
+    call self%solver%host_allocator%release_block(f_out)
+
+    call self%solver%backend%allocator%release_block(du)
+    call self%solver%backend%allocator%release_block(dv)
+    call self%solver%backend%allocator%release_block(dw)
+
+  end subroutine print_enstrophy
+
+  subroutine print_div_max_mean(self, u, v, w)
+    !! Reports the div(u) at cell centres
+    implicit none
+
+    class(base_case_t), intent(in) :: self
+    class(field_t), intent(in) :: u, v, w
+
+    class(field_t), pointer :: div_u
+    class(field_t), pointer :: u_out
+    real(dp) :: div_u_max, div_u_mean
+    integer :: ierr, dims(3)
+
+    div_u => self%solver%backend%allocator%get_block(DIR_Z)
+
+    call self%solver%divergence_v2p(div_u, u, v, w)
+
+    u_out => self%solver%host_allocator%get_block(DIR_C)
+    call self%solver%backend%get_field_data(u_out%data, div_u)
+
+    call self%solver%backend%allocator%release_block(div_u)
+
+    dims = self%solver%mesh%get_dims(div_u%data_loc)
+    div_u_max = maxval(abs(u_out%data(1:dims(1), 1:dims(2), 1:dims(3))))
+    div_u_mean = sum(abs(u_out%data(1:dims(1), 1:dims(2), 1:dims(3)))) &
+                 /self%solver%ngrid
+
+    call self%solver%host_allocator%release_block(u_out)
+
+    call MPI_Allreduce(MPI_IN_PLACE, div_u_max, 1, MPI_DOUBLE_PRECISION, &
+                       MPI_MAX, MPI_COMM_WORLD, ierr)
+    call MPI_Allreduce(MPI_IN_PLACE, div_u_mean, 1, MPI_DOUBLE_PRECISION, &
+                       MPI_SUM, MPI_COMM_WORLD, ierr)
+    if (self%solver%mesh%par%is_root()) &
+      print *, 'div u max mean:', div_u_max, div_u_mean
+
+  end subroutine print_div_max_mean
+
+  subroutine run(self)
+    !! Runs the solver forwards in time from t=t_0 to t=T, performing
+    !! postprocessing/IO and reporting diagnostics.
+    implicit none
+
+    class(base_case_t), intent(inout) :: self
+
+    class(field_t), pointer :: du, dv, dw
+    class(field_t), pointer :: u_out, v_out, w_out
+
+    real(dp) :: t
+    integer :: i, j
+
+    if (self%solver%mesh%par%is_root()) print *, 'initial conditions'
+    t = 0._dp
+    call self%postprocess(0, t)
+
+    if (self%solver%mesh%par%is_root()) print *, 'start run'
+
+    do i = 1, self%solver%n_iters
+      do j = 1, self%solver%time_integrator%nstage
+        ! first apply case-specific BCs
+        call self%boundary_conditions()
+
+        du => self%solver%backend%allocator%get_block(DIR_X)
+        dv => self%solver%backend%allocator%get_block(DIR_X)
+        dw => self%solver%backend%allocator%get_block(DIR_X)
+
+        call self%solver%transeq(du, dv, dw, &
+                                 self%solver%u, self%solver%v, self%solver%w)
+
+        ! models that introduce source terms handled here
+        call self%forcings(du, dv, dw)
+
+        ! time integration
+        call self%solver%time_integrator%step( &
+          self%solver%u, self%solver%v, self%solver%w, du, dv, dw, &
+          self%solver%dt &
+          )
+
+        call self%solver%backend%allocator%release_block(du)
+        call self%solver%backend%allocator%release_block(dv)
+        call self%solver%backend%allocator%release_block(dw)
+
+        call self%solver%pressure_correction(self%solver%u, self%solver%v, &
+                                             self%solver%w)
+      end do
+
+      if (mod(i, self%solver%n_output) == 0) then
+        t = i*self%solver%dt
+        call self%postprocess(i, t)
+      end if
+    end do
+
+    if (self%solver%mesh%par%is_root()) print *, 'run end'
+
+    ! Below is for demonstrating purpuses only, to be removed when we have
+    ! proper I/O in place.
+    u_out => self%solver%host_allocator%get_block(DIR_C)
+    v_out => self%solver%host_allocator%get_block(DIR_C)
+    w_out => self%solver%host_allocator%get_block(DIR_C)
+
+    call self%solver%backend%get_field_data(u_out%data, self%solver%u)
+    call self%solver%backend%get_field_data(v_out%data, self%solver%v)
+    call self%solver%backend%get_field_data(w_out%data, self%solver%w)
+
+    if (self%solver%mesh%par%is_root()) then
+      print *, 'norms', norm2(u_out%data), norm2(v_out%data), norm2(w_out%data)
+    end if
+
+    call self%solver%host_allocator%release_block(u_out)
+    call self%solver%host_allocator%release_block(v_out)
+    call self%solver%host_allocator%release_block(w_out)
+
+  end subroutine run
+
+end module m_base_case
