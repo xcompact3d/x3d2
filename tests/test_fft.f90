@@ -46,7 +46,7 @@ program test_fft
   real(dp) :: x, y, z
   real(dp) :: error_norm
   real(dp), dimension(3) :: xloc
-  real(dp), parameter :: tol=1e-10
+  real(dp), parameter :: tol = 1e-10
   logical :: use_2decomp
   real(dp), allocatable, dimension(:, :, :) :: input_data, output_data
 
@@ -124,7 +124,7 @@ program test_fft
   call output_field%fill(0._dp)
 
   dims = mesh%get_dims(CELL)
-  allocate(input_data(dims(1), dims(2), dims(3)))
+  allocate (input_data(dims(1), dims(2), dims(3)))
 
   ! Initialise field with some function
   do k = 1, dims(3)
@@ -147,15 +147,15 @@ program test_fft
   call backend%poisson_fft%fft_forward(input_field)
   call backend%poisson_fft%fft_backward(output_field)
 
-  allocate(output_data(dims(1), dims(2), dims(3)))
+  allocate (output_data(dims(1), dims(2), dims(3)))
   call backend%get_field_data(output_data, output_field, DIR_C)
-  ! The output scaled with number of cells in domain, hence the first '/product(dims_global)'. 
+  ! The output scaled with number of cells in domain, hence the first '/product(dims_global)'.
   ! RMS value is used for the norm, hence the second '/product(dims_global)'
   error_norm = norm2(input_data(:, :, :) - output_data(:, :, :)/product(dims_global) )**2/product(dims_global)
   call MPI_Allreduce(MPI_IN_PLACE, error_norm, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
   error_norm = sqrt(error_norm)
 
-  if (error_norm .gt. tol) then
+  if (error_norm > tol) then
     if (mesh%par%is_root()) then
       print *, "error in FFT result, error norm=", error_norm
     end if
