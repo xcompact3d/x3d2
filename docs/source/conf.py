@@ -49,7 +49,6 @@ extensions = [
     'sphinx.ext.autosummary',
     'sphinx.ext.napoleon',
     'sphinx.ext.mathjax',
-    'sphinx_rtd_theme',
     'sphinxcontrib.tikz',
     'sphinxcontrib.bibtex',
     'sphinx.ext.graphviz'

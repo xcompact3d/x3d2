@@ -113,8 +113,6 @@ Since for small time steps :math:`\nabla{p}^{k+1}\approx\nabla{p}^{k}` this resu
 
 which ensures that the no-slip boundary condition is satisfied.
 
-
-
 Pressure treatment
 ~~~~~~~~~~~~~~~~~~
 
@@ -374,9 +372,10 @@ where :math:`a_0=c_{N-1}=0`.
 Tridiagonal systems solver algorithms
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The Thomas algorithm is a well-known method for solving tridiagonal systems of equations. It is a specialised form of Gaussian elimination that involves a forward pass to eliminate the lower diagonal elements :math:`a_i` of the tridiagonal matrix by adding a multiple of the row above, followed by a backward substitution pass using the modified upper diagonal coefficients :math:`c_i`. This algorithm is inherently serial as each iteration depends on the results of the previous step, requiring :math:`2N` steps with no parallelism.
+The Thomas algorithm is a well-known method for solving tridiagonal systems of equations. It is a specialised form of Gaussian elimination that involves a forward pass to eliminate the lower diagonal elements :math:`a_i` of the tridiagonal matrix by adding a multiple of the row above, followed by a backward substitution pass using the modified upper diagonal coefficients :math:`c_i`. Even though the Thomas algorithm is inherently serial, when solving a batch of tridiagonal systems it is possible to parallelise the overall operation by assigning many tridiagonal systems per MPI rank. 
 
-In contrast, the parallel cyclic reduction (PCR) algorithm is inherently parallel. It recursively reduces the system into smaller independent subsystems, enabling multiple threads to solve each tridiagonal system simultaneously. Unlike the Thomas algorithm, PCR's inner-loop iterations are independent, making it suitable for modern multicore architectures.  However, PCR introduces trade-offs: it requires :math:`O (N \log N)` operations, making it computationally more expensive than Thomas's :math:`O(N)` scaling. Furthermore, distributed-memory PCR faces scalability challenges due to its reliance on MPI all-to-all during the reduction phases. This global communication arises because dependencies between unknowns span non-adjacent subdomains at each reduction step, necessitating data exchange across all processors. While shared-memory PCR implementations avoid this by operating within a single rank, they cannot leverage distributed parallelism.
+
+However, the Thomas algorithm requires the entire length of a tridiagonal system to be contained within a single rank. Consequently, this strategy necessitates MPI all-to-all communication to rearrange the domain decomposition, ensuring that batches of tridiagonal systems are oriented in the :math:`x-`, :math:`y-`, and :math:`z-` directions. This ensures that the entire length of each tridiagonal system is always within a single rank, while individual systems are distributed across all available ranks. As a result, the derivations and interpolations can be performed in each direction using the Thomas algorithm.
 
 The fundamental difference between a serial algorithms like Thomas algorithm and distributed-memory algorithms is that the distributed algorithms divide the individual systems into multiple subdomains. This enables localised communication (e.g. neighbour-to-neighbour exchanges) instead of global dependencies.  For example, a 3D decomposition strategy can distribute subdomains across ranks while maintaining static decomposition states, avoiding frequent reconfiguration. Crucially, these approaches eliminate the need for MPI all-to-all communications across the entire domain.
 
@@ -391,12 +390,12 @@ x3d2's solution: DistD2-TDS
 To address the challenges of solving tridiagonal systems efficiently in distributed-memory environments on both CPUs and GPUs, x3d2 uses a novel algorithm called `DistD2-TDS` (see :cite:`akkurt_cpc_24` for more details). This algorithm is based on a specialised data structure that:
 
 1. Improves data locality and minimises data movements via cache blocking and kernel fusion strategies.
-2. Uses data continuity to enable a contiguous data access pattern, resulting in efficient utilisation of the available memory bandwidth.
-3. Supports a data layout that enables vectorisation on CPUs and thread-level parallelisation on GPUs for improved performance.
+2. Enables a contiguous data access pattern, resulting in efficient utilisation of the available memory bandwidth.
+3. Supports vectorisation on CPUs and thread-level parallelisation on GPUs for improved performance.
 
-Modern CPUs have large enough caches to store the entire tridiagonal matrix, which can be accessed quickly. However, GPU caches are not large enough, and kernel fusion is the only option to reduce data movement on GPUs. To enable a linear and predictive memory access pattern regardless of the spatial direction of the tridiagonal systems, DistD2-TDS data structure subdivides the computational domain into groups of individual tridiagonal systems. These groups are tightly packed in memory to ensure data continiuty. This arrangement enables vectorisation on CPUs and thread-level parallelism on GPUs, as the :math:`n^{th}` entries of all tridiagonal systems within a group are stored next to each other in memory. Therefore, the sequential operations in the algorithms, as we apply the forward and backward passes, can be concurrently executed for :math:`SZ` systems at once per core on a CPU or per SM on a GPU.
+Modern CPUs have large enough caches to store the entire tridiagonal matrix, which can be accessed quickly. However, GPU caches are not large enough, and kernel fusion is the only option to reduce data movement on GPUs. To enable a linear and predictive memory access pattern regardless of the spatial direction of the tridiagonal systems, DistD2-TDS data structure subdivides the computational domain into groups of individual tridiagonal systems. These groups are tightly packed in memory to ensure data continuity. This arrangement enables vectorisation on CPUs and thread-level parallelism on GPUs, as the :math:`n^{th}` entries of all tridiagonal systems within a group are stored next to each other in memory. Therefore, the sequential operations in the algorithms, as we apply the forward and backward passes, can be concurrently executed for :math:`SZ` systems at once per core on a CPU or per SM on a GPU.
 
-Example: In a domain of size :math:`32 \times 8 \times 4` shown below; a single group might consist of 4 individual tridiagonal systems, resulting in 8 groups in total. For a Cartesian mesh with :math:`n_x`, :math:`n_y`, and :math:`n_z` the data is arranged as  :math:`SZ, n_x, n_y \cdot n_z / SZ` where :math:`SZ` is the size of the group.
+Example: In a domain of size :math:`32 \times 8 \times 4` shown below; a single group consist of 4 individual tridiagonal systems, resulting in 8 groups in total. For a Cartesian mesh with :math:`n_x`, :math:`n_y`, and :math:`n_z` the data is arranged as  :math:`SZ, n_x, n_y \cdot n_z / SZ` for an :math:`x`-directional layout where :math:`SZ` is the number of tridiagonal systems in a group.
 
 .. tikz::  x3d2 data structure for an :math:`x`-directional tridiagonal system. Data continuity in memory is in column-major order.
 
@@ -507,9 +506,7 @@ The current implementation of x3d2 uses a direct approach, namely Fast Fourier T
 1. Develop distributed algorithms (such as a parallel tridiagonal solver or parallel FFT working on distributed data).
 2. Dynamically redistribute (transpose) data among processors to apply serial algorithms in local memory.
 
-The second approach is often preferred due to its simplicity.
-
-Many applications have implemented this idea using 1D domain decomposition. However, 1D decomposition has some limitations. For example, for a cubic mesh size of :math:`N^3`, the maximum number of processors :math:`N_{\mathrm{proc}}` that can be used in a 1D decomposition is :math:`N`, as each slab must contain at least one plane. For a cubic mesh of 1 billion points, this constraint is :math:`N_{\mathrm{proc}} \lt 10^4`. This limitation can be overcome by using 2D domain decomposition.
+The second approach is often preferred due to its simplicity. Many applications have implemented this idea using 1D domain decomposition. However, 1D decomposition has some limitations. For example, for a cubic mesh size of :math:`N^3`, the maximum number of processors :math:`N_{\mathrm{proc}}` that can be used in a 1D decomposition is :math:`N`, as each slab must contain at least one plane. For a cubic mesh of 1 billion points, this constraint is :math:`N_{\mathrm{proc}} \lt 10^4`. This limitation can be overcome by using 2D domain decomposition. While a 1D decomposition algorithm swaps between two states, a 2D decomposition requires traversing three different states using four global transpositions to complete a cycle. The swapping between states can be achieved using the `MPI_ALLTOALL(V)` library.
 
 .. tikz:: 1D domain decomposition (left), 2D domain decomposition (middle), 3D domain decomposition (right).
    :align: center
@@ -876,11 +873,9 @@ Many applications have implemented this idea using 1D domain decomposition. Howe
 
    \end{scope}
    
-While a 1D decomposition algorithm swaps between two states, a 2D decomposition requires traversing three different states using four global transpositions to complete a cycle. The swapping between states can be achieved using the `MPI_ALLTOALL(V)` library.
-
 2D domain decomposition is widely used for spectral codes, particularly those compatible with implicit schemes in space. This method allows for efficient parallelization by dividing the computational domain into smaller subdomains, each handled by a separate processor. For a simulation with a cubic mesh of size :math:`N^3`, up to :math:`N^2` processors can be used, significantly increasing scalability compared to 1D decomposition.
 
-x3d2 uses the `2DECOMP&FFT <https://2decomp-fft.github.io/>`_ library for 2D decomposition (see :cite:`li_cray_10` for more details). One of the key advantages of using this library is that it does not require modifications to the existing derivative and interpolation subroutines, making it easier to implement. Additionally, this approach utilises customised global `MPI_ALLTOALL(V)` transpositions to redistribute data among processors. Although communication overhead can range from 30% to 80% of the total computational time, with up to 70 transpositions per time step, the overall efficiency and scalability of the simulations are greatly enhanced.
+x3d2 uses the `2DECOMP&FFT <https://2decomp-fft.github.io/>`_ library for 2D decomposition and FFT (see :cite:`li_cray_10` for more details) when using OpenMP as a backend (for NVIDIA GPUs it uses `cuFFT <https://developer.nvidia.com/cufft>`_). One of the key advantages of using the 2DECOMP&FFT library is that it does not require modifications to the existing derivative and interpolation subroutines, making it easier to implement. Additionally, this approach utilises customised global `MPI_ALLTOALL(V)` transpositions to redistribute data among processors. Although communication overhead can range from 30% to 80% of the total computational time, with up to 70 transpositions per time step, the overall efficiency and scalability of the simulations are greatly enhanced.
 
 References
 ----------
