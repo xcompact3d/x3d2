@@ -4,7 +4,7 @@ program test_setget_field
 
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, VERT
+  use m_common, only: dp, DIR_C, DIR_X, DIR_Y, DIR_Z, VERT
 #ifdef CUDA
   use m_cuda_allocator, only: cuda_allocator_t
   use m_cuda_backend, only: cuda_backend_t
@@ -28,7 +28,7 @@ program test_setget_field
 #endif
   type(mesh_t) :: mesh
   
-  class(field_t), pointer :: fld
+  class(field_t), pointer :: fld, fld_c
   real(dp), dimension(:, :, :), allocatable :: arr
 
   integer :: nx, ny, nz
@@ -42,10 +42,6 @@ program test_setget_field
     ["periodic", "periodic"], &
     ["periodic", "periodic"])
 
-  nx = mesh%get_n(DIR_X, VERT)
-  ny = mesh%get_n(DIR_Y, VERT)
-  nz = mesh%get_n(DIR_Z, VERT)
-
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(mesh, SZ)
   allocator => cuda_allocator
@@ -58,12 +54,18 @@ program test_setget_field
 #endif
   
   fld => backend%allocator%get_block(DIR_X, VERT)
+  fld_c => backend%allocator%get_block(DIR_C, VERT)
+  allocate(arr, mold=fld_c%data)
   arr = 1.0_dp
   call backend%set_field_data(fld, arr)
   
   if (fld%data_loc /= VERT) then
     error stop "Field location was changed by set_field_data"
   end if
+
+  deallocate(arr)
+  call backend%allocator%release_block(fld)
+  call backend%allocator%release_block(fld_c)
 
   call MPI_Finalize(ierr)
   
