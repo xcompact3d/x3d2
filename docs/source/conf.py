@@ -51,6 +51,7 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinxcontrib.tikz',
     'sphinxcontrib.bibtex',
+    'sphinxcontrib.mermaid',
     'sphinx.ext.graphviz'
 ]
 
