@@ -51,6 +51,11 @@ set(2DECOMPFFTSRC
 set(DUMMYDECOMPSRC
   decomp/decomp_dummy.f90
 )
+set(ADIOS2SRC
+  adios2/adios2_base.f90
+  adios2/adios2_writer.f90
+  adios2/adios2_reader.f90
+)
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
@@ -65,6 +70,10 @@ if(WITH_2DECOMPFFT)
   list(APPEND SRC ${2DECOMPFFTSRC})
 else()
   list(APPEND SRC ${DUMMYDECOMPSRC})
+endif()
+
+if(ENABLE_ADIOS2)
+  list(APPEND SRC ${ADIOS2SRC})
 endif()
 
 add_library(x3d2 STATIC ${SRC})
