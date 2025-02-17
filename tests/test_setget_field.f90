@@ -30,6 +30,7 @@ program test_setget_field
   
   class(field_t), pointer :: fld, fld_c
   real(dp), dimension(:, :, :), allocatable :: arr
+  integer, dimension(3) :: shape_c
 
   integer :: ierr
   
@@ -53,7 +54,8 @@ program test_setget_field
   
   fld => backend%allocator%get_block(DIR_X, VERT)
   fld_c => backend%allocator%get_block(DIR_C, VERT)
-  allocate(arr, mold=fld_c%data)
+  shape_c = fld_c%get_shape()
+  allocate(arr(shape_c(1), shape_c(2), shape_c(3)))
   arr = 1.0_dp
   call backend%set_field_data(fld, arr)
   
