@@ -70,7 +70,7 @@ Pull requests and code review
 Merging best practices
 ~~~~~~~~~~~~~~~~~~~~~~
 
-Before merging your PR to ``main``,  follow these guidelines.
+Before merging your PR to ``main``, follow these guidelines.
 
 * Rebase instead of merging: Rebase your feature branch on top of the latest ``main`` to avoid unnecessary merge commits and keep the commit history linear.
 
@@ -95,4 +95,9 @@ Before merging your PR to ``main``,  follow these guidelines.
     # Continue the rebase
     git rebase --continue
 
-* Squash commits before merging: If your feature branch has multiple commits, squash them into a single commit before merging. This keeps the commit history clean and concise.
+* We leave it to the developer to decide whether they want to squash commits before merging. For large PRs, you may want to keep the commit history provided that:
+
+  * Each commit is atomic and represents a single meaningful change that is complete and self-consistent.
+  * The code should not be broken at any commit in the history (i.e., each commit should pass all tests). If a bug is introduced in a commit, it should be fixed in the same commit without creating a new commit.
+
+The main aim of these guidelines is to keep the merge history linear and readable.

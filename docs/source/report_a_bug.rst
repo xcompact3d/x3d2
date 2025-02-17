@@ -5,7 +5,7 @@ To report a bug, please add a new issue to the x3d2 issue tracker on GitHub. For
 
 When reporting a bug, be sure to include the following information:
 
-- The version of x3d2 you are using.
+- The commit hash that produces the bug.
 - Information about your operating system.
 - The compiler and its version you are using.
 - Steps to reproduce the bug, including any relevant input files.

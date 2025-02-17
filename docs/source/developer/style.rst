@@ -36,23 +36,13 @@ In the following, "symbol" is a catch-all term for variables, procedures, derive
 Procedure definitions
 ---------------------
 
-- Procedure prototypes spanning more than 79 characters should be split before the first dummy argument is defined, after the opening parenthesis. If the list of dummy arguments spans more than 79 characters, each argument should be defined on its own line.
+- Procedure prototypes spanning more than 79 characters should be split before the first dummy argument is defined, after the opening parenthesis.
 
   .. code:: fortran
 
      subroutine my_long_subroutine( &
         argument1, argument2, argument3, argument4, argument5, argument6 &
-     )
-
-     subroutine my_very_long_subroutine( &
-        argument1, &
-        argument2, &
-        argument3, &
-        argument4, &
-        argument5, &
-        argument6, &
-        argument7 &
-     )
+        )
 
 - Function prototypes should indicate the return object type unless the return object is an array.
 
@@ -121,7 +111,7 @@ Derived type definitions
 Custom structure constructors
 -----------------------------
 
-- Name constructors as ``create_<type_root_name>[_<suffix>]``.
+- Name constructors as ``init`` or ``<type_root_name>_init``.
 - Declare constructors with the ``private`` attribute.
 - Define constructors at the top of the module's ``contains`` block.
 
@@ -171,7 +161,7 @@ x3d2 uses `FORD <https://forddocs.readthedocs.io/en/latest/>`_ to extract in-cod
 
 The body of modules, public types, public procedures, and public type-bound methods MUST be preceded by one or more documentation paragraphs. Optionally, the body of private symbols MAY be preceded by a documentation paragraph.
 
-Procedure dummy arguments, interface components, and type-bound procedure declarations MAY be documented using an inline comment either on the same line directly following the statement (using the docmark ``!!``) or on the line directly above the statement (using the predocmark ``!>``).
+Procedure dummy arguments, interface components, and type-bound procedure declarations MAY be documented using an inline comment either on the same line or the next line directly following the statement (using two exclamation marks docmark ``!!``). It is also possible to place documentation before the code which it is documenting (using the predocmark ``!>``). See the example below for these two methods of documenting code.
 
 Including LaTeX in in-code documentation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -196,4 +186,22 @@ Example:
        ! The line below is a regular comment.
        ! Make use of the well-known addition algorithm.
        c = a + b
+       
+   end subroutine add
+
+Alternatively, it is possible to place documentation before the code which it is documenting using the predocmark ``!>``. This is useful when the documentation is longer than a single line.
+
+.. code:: fortran
+
+   subroutine add(a, b, c)
+       !> Optional documentation for dummy argument.
+       real, intent(in) :: a, b 
+       !> Or we can document the code before the statement using the predocmark
+       !> The result of \(a + b)\
+       real, intent(out) :: c
+
+       ! The line below is a regular comment.
+       ! Make use of the well-known addition algorithm.
+       c = a + b
+       
    end subroutine add
