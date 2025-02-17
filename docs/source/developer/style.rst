@@ -4,108 +4,125 @@ Fortran style guide
 Basic formatting
 ----------------
 
-Identation, whitespaces and line length are enforced by `fprettify`.
-Project settings are defined in the `.fprettify.ini` located at the
-root of the repository.
+Indentation, whitespaces, and line lengths are enforced by `fprettify`. Project settings are defined in the ``.fprettify.ini`` file located at the root of the repository.
 
-In most cases, developers are expected to install the associated
-pre-commit git hook.  Additionally, it is recommended to configure
-your text editor to run fprettify for you (for instance on saving a
-file).
+Developers are encouraged to install the associated pre-commit Git hook. Additionally, it is recommended to configure your text editor to run `fprettify` automatically (e.g., on saving a file).
 
-If you want to preview changes without overwriting a file, you can do
-so using the `--stdout` option:
+To preview changes without overwriting a file, use the `--stdout` option:
 
-.. code:: console
+.. code:: bash
 
    $ fprettify --config .fprettify.ini --stdout
 
-Note: CUDA Fortran chevron syntax is not supported by `fprettify`.
-Thus, we use `!&` to deactivate `fprettify` on lines chevron syntax is
-used.
+.. warning:: 
+   
+   CUDA Fortran chevron syntax is not supported by `fprettify`. To handle this, use ``!&`` to deactivate `fprettify` on lines where chevron syntax is used.
 
-.. code:: fortran
-
-   call gpu_kernel<<<blocks, threads>>>(args, ...) !&
+   .. code:: fortran
+  
+      call gpu_kernel<<<blocks, threads>>>(args, ...) !&
 
 Naming conventions
 ------------------
 
-In the following "symbol" is a catch all phrase for variables,
-procedures, derived types, type components and interfaces.
+In the following, "symbol" is a catch-all term for variables, procedures, derived types, type components, and interfaces.
 
-- Symbols are name using the `snake_case` convention.
-- Variable declared with the `parameter` are named using UPPER CASE
-  letters.
-- Symbols should, as much as possible, be named after they meaning
-  rather than their mathematical notation (.e.g `velocity_field`
-  instead of `u`).
+- Use lowercase for all Fortran constructs (e.g., ``do``, ``subroutine``, ``module``).
+- Symbols are named using the `snake_case` convention.
+- Variables declared with the `parameter` attribute are named using UPPER CASE letters. For all other names use lowercase.
+- Symbols should, as much as possible, be named after their meaning rather than their mathematical notation (e.g., ``velocity_field`` instead of ``u``).
+
 
 Procedure definitions
 ---------------------
 
-- Procedure prototypes spanning more than 79 characters should be split
-  before the first dummy argument is defined, after the opening
-  parenthese.  If the list of dummy arguments spans more than 79
-  characters each argument is defined on it own line.
+- Procedure prototypes spanning more than 79 characters should be split before the first dummy argument is defined, after the opening parenthesis.
 
   .. code:: fortran
 
      subroutine my_long_subroutine( &
-        argument1, argument3, argument4, argument5, argument5, argument6 &
-	)
+        argument1, argument2, argument3, argument4, argument5, argument6 &
+        )
 
-     subroutine my_very_long_subroutine( &
-        argument1, &
-	argument2, &
-	argument3, &
-	argument4, &
-	argument5, &
-	argument6, &
-	argument7, &
-	)
-- Function prototypes indicate the return object type unless the
-  return object is an array.
-- Functions are always defined with the `pure` prefix.  A procedure
-  with side effects must be a `subroutine`.
+- Function prototypes should indicate the return object type unless the return object is an array.
+
+  .. code:: fortran
+
+     pure function compute_area(radius) result(area)
+       real :: compute_area
+       real, intent(in) :: radius
+       real :: area
+
+       area = pi * radius**2
+     end function compute_area
+
+- Functions should always be defined with the ``pure`` prefix. A procedure with side effects must be a ``subroutine``.
 
 Modules
 -------
 
-- Module names end with the `_m` suffix. Examples:
-  `module allocator_m`, `use allocator_m, only: ...`.
-- All module components are `private` by default.
-- The module components are always acessed through the `only` keyword:
+- Module names should start with the `m_` suffix. Examples: ``module m_allocator``, ``use m_allocator, only: ...``.
+- All module components should be ``private`` by default.
+- Always access module components using the ``only`` keyword:
 
   .. code:: fortran
 
-     module a_module_m
-        ! Non compliant
-	use stencil_m
-	! Compliant
-	use stencil_m, only: stencil_t
+     module m_a_module
+        implicit none
+        private
+        public :: some_subroutine
+
+        contains
+
+        subroutine some_subroutine()
+            ! Subroutine implementation
+        end subroutine some_subroutine
+     end module m_a_module
+
+  .. code:: fortran
+
+     ! Non-compliant
+     use m_stencil
+
+     ! Compliant
+     use m_stencil, only: stencil_t
 
 Derived type definitions
 ------------------------
 
-- Derived type names end with the `_t` suffix. Examples:
-  `allocator_t`, `type(stencil_t) :: s`. 
-- The `contains` keyword is omitted is the type does not define any
-  type-bound procedures.
-- All type components are `private` by default.
+- Derived type names should end with the ``_t`` suffix. Examples: ``allocator_t``, ``type(stencil_t) :: s``.
+- Omit the ``contains`` keyword if the type does not define any type-bound procedures.
+- All type components should be ``private`` by default.
+
+  .. code:: fortran
+
+     type :: allocator_t
+        private
+        ! Type components
+     end type allocator_t
+
+     type :: stencil_t
+        private
+        ! Type components
+        contains
+        procedure :: some_procedure
+     end type stencil_t
 
 Custom structure constructors
 -----------------------------
 
-- Are named like `create_<type_root_name>[_<suffix>]`
-- Are declared with the `private` attribute
-- Are defined at the top of the module's `contains` block.
+- Name constructors as ``init`` or ``<type_root_name>_init``.
+- Declare constructors with the ``private`` attribute.
+- Define constructors at the top of the module's ``contains`` block.
 
-Example
+Example:
 
 .. code:: fortran
 
    module square_module
+      implicit none
+      private
+      public :: square_t, create_square_from_square, create_square_default_color
 
       type :: square_t
          real :: size
@@ -120,46 +137,71 @@ Example
    contains
 
       type(square_t) function create_square_from_square(sq_in)
-         type(square), intent(in) :: sq_in
-         ! ...
+         type(square_t), intent(in) :: sq_in
+         ! Function implementation
+         create_square_from_square%size = sq_in%size
+         create_square_from_square%color = sq_in%color
       end function create_square_from_square
 
       type(square_t) function create_square_default_color(sq_size)
          real, intent(in) :: sq_size
-         ! ...
+         ! Function implementation
+         create_square_default_color%size = sq_size
+         create_square_default_color%color = 'blue'
       end function create_square_default_color
+
+   end module square_module
 
 .. _in-code-docs:
 
 In-code documentation
 ---------------------
 
-The body of modules, public types, public procedures and public
-type-bound methods MUST be preceded of one or more documentation
-paragraphs.  Optionally, the body of private symbols MAY be
-preceded by documentation paragraph.
+x3d2 uses `FORD <https://forddocs.readthedocs.io/en/latest/>`_ to extract in-code documentation and generate HTML pages. The syntax for in-code documentation follows FORD's syntax for comments. See the `FORD User Guide <https://forddocs.readthedocs.io/en/latest/user_guide/writing_documentation.html>`_ for more details.
 
-Procedure dummy arguments, interface components and type-bound
-procedures declarations MAY be documented using an inline comment
-either on the same line directly following the statement (using the
-docmark `!!`) or on the line directly above the statement (using the
-predocmark `!>`).
+The body of modules, public types, public procedures, and public type-bound methods MUST be preceded by one or more documentation paragraphs. Optionally, the body of private symbols MAY be preceded by a documentation paragraph.
 
-x3d2 uses `ford <https://forddocs.readthedocs.io/en/latest/>`_ to
-extract in-code documentation and generate HTML pages.  The syntax for
-in-code documentation follows ford's syntax for comments. See
-`(ford)Writing documentation
-<https://forddocs.readthedocs.io/en/latest/user_guide/writing_documentation.html>`_
+Procedure dummy arguments, interface components, and type-bound procedure declarations MAY be documented using an inline comment either on the same line or the next line directly following the statement (using two exclamation marks docmark ``!!``). It is also possible to place documentation before the code which it is documenting (using the predocmark ``!>``). See the example below for these two methods of documenting code.
+
+Including LaTeX in in-code documentation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You can include LaTeX equations in your documentation. For inline math, use ``\( ... \)``. For displayed equations, you can use either ``$$ ... $$`` or ``\[ ... \]``. Note that ``$ ... $`` is not supported for inline math. Displayed equations can be written using ``$$ ... $$``, but this method does not number the equations. To create numbered equations, use the ``\begin{equation} ... \end{equation}`` environment. You can also use ``\label{eq:some_equation}`` to label the equations and ``\eqref{eq:some_equation}`` to reference them within the text.
+
+Example:
 
 .. code:: fortran
 
    subroutine add(a, b, c)
-       !! This is the first paragraph of the procedures
-       !! documentation.  Note that it starts with TWO !.
+       !! This is the first paragraph of the procedure's
+       !! documentation. Note that it starts with TWO !.
+       !! The addition operation is defined in-line as \( c = a + b \).
+       !! 
+       !! The following operation shows it as a displayed equation:
+       !! $$c = a + b$$
+       !! 
        real, intent(in) :: a, b !! Optional documentation for dummy argument.
-       real, intent(out) :: c !! The result of a + b
+       real, intent(out) :: c !! The result of \( a + b \)
 
        ! The line below is a regular comment.
-       ! Make use of the well-known the addition algorithm.
+       ! Make use of the well-known addition algorithm.
        c = a + b
-   end subroutine
+       
+   end subroutine add
+
+Alternatively, it is possible to place documentation before the code which it is documenting using the predocmark ``!>``. This is useful when the documentation is longer than a single line.
+
+.. code:: fortran
+
+   subroutine add(a, b, c)
+       !> Optional documentation for dummy argument.
+       real, intent(in) :: a, b 
+       !> Or we can document the code before the statement using the predocmark
+       !> The result of \(a + b)\
+       real, intent(out) :: c
+
+       ! The line below is a regular comment.
+       ! Make use of the well-known addition algorithm.
+       c = a + b
+       
+   end subroutine add
