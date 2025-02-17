@@ -57,6 +57,8 @@ define_test(omp/test_omp_dist_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(test_scalar_product.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(test_sum_intox.f90 ${CMAKE_CTEST_NPROCS} omp)
 
+define_test(test_setget_field.f90 1 omp)
+
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   define_test(test_reordering.f90 1 cuda)
