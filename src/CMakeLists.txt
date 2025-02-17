@@ -52,9 +52,7 @@ set(DUMMYDECOMPSRC
   decomp/decomp_dummy.f90
 )
 set(ADIOS2SRC
-  adios2/adios2_base.f90
-  adios2/adios2_writer.f90
-  adios2/adios2_reader.f90
+  adios2/adios2_io.f90
 )
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
