@@ -174,8 +174,8 @@ contains
 #endif
 
     ! Main solver calls Poisson in the DIR_Z orientation
-    pressure => backend%allocator%get_block(DIR_Z)
-    f => backend%allocator%get_block(DIR_Z)
+    pressure => backend%allocator%get_block(DIR_Z, CELL)
+    f => backend%allocator%get_block(DIR_Z, CELL)
 
     call MPI_Barrier(MPI_COMM_WORLD, ierr)
     if (irank == 0) then
@@ -224,7 +224,7 @@ contains
 
     select type (linear_operator)
     type is (laplace_operator_t)
-      call linear_operator%apply(f, pressure, backend)
+      call linear_operator%apply(f, pressure)
     type is (poisson_precon_impl)
       call linear_operator%apply(pressure, f, backend)
     class default
@@ -307,7 +307,7 @@ contains
 
     select type (linear_operator)
     type is (laplace_operator_t)
-      call linear_operator%apply(f, pressure, backend)
+      call linear_operator%apply(f, pressure)
     type is (poisson_precon_impl)
       call linear_operator%apply(pressure, f, backend)
     class default

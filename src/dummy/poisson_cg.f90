@@ -5,6 +5,7 @@ module m_poisson_cg_backend
   use m_allocator, only: field_t
   use m_base_backend, only: base_backend_t
   use m_mesh, only: mesh_t
+  use m_vector_calculus, only: vector_calculus_t
 
   implicit none
 

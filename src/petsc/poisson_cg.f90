@@ -4,6 +4,7 @@ module m_cg_types
   !! Types module providing the context type required by the PETSc matrix-free
   !! operator.
 
+  use m_common, only: CELL
   use m_base_backend, only: base_backend_t
   use m_allocator, only: field_t
   use m_base_poisson_cg, only: laplace_operator_t
@@ -32,8 +33,8 @@ contains
     integer, intent(in) :: dir
     type(mat_ctx_t) :: ctx
 
-    ctx%xfield => backend%allocator%get_block(dir)
-    ctx%ffield => backend%allocator%get_block(dir)
+    ctx%xfield => backend%allocator%get_block(dir, CELL)
+    ctx%ffield => backend%allocator%get_block(dir, CELL)
     ctx%backend => backend
     ctx%lapl = lapl
 
@@ -51,7 +52,7 @@ module m_poisson_cg_backend
 
   use m_cg_types
 
-  use m_common, only: dp, DIR_X, DIR_C, CELL
+  use m_common, only: dp, DIR_Z, DIR_C, CELL
   use m_allocator, only: field_t
   use m_base_backend, only: base_backend_t
   use m_mesh, only: mesh_t
@@ -317,7 +318,7 @@ contains
 
     integer :: ierr
 
-    ctx_global = mat_ctx_t(backend, self%lapl, DIR_X)
+    ctx_global = mat_ctx_t(backend, self%lapl, DIR_Z)
     call copy_field_to_vec(self%fvec, f, backend)
     call KSPSolve(self%ksp, self%fvec, self%pvec, ierr)
     call copy_vec_to_field(p, self%pvec, backend)
@@ -738,7 +739,7 @@ contains
     ctx = ctx_global
 
     call copy_vec_to_field(ctx%xfield, x, ctx%backend)
-    call ctx%lapl%apply(ctx%ffield, ctx%xfield, ctx%backend)
+    call ctx%lapl%apply(ctx%ffield, ctx%xfield)
     call copy_field_to_vec(f, ctx%ffield, ctx%backend)
 
   end subroutine poissmult_petsc

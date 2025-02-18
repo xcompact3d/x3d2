@@ -68,7 +68,8 @@ contains
       mesh = mesh_t([nx, ny, nz], [1, 1, nproc], [Lx, Ly, Lz], &
                     ["periodic", "periodic"], &
                     ["periodic", "periodic"], &
-                    ["periodic", "periodic"])
+                    ["periodic", "periodic"], &
+                    .false.)
 #ifdef CUDA
       error stop "CUDA iterative solver not currently supported"
 #else

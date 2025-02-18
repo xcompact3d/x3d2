@@ -4,7 +4,8 @@ module m_vector_calculus
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, &
-                      RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
+                      RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
+                      CELL, VERT
   use m_tdsops, only: tdsops_t
 
   implicit none
@@ -17,6 +18,7 @@ module m_vector_calculus
     procedure :: divergence_v2c
     procedure :: gradient_c2v
     procedure :: laplacian
+    procedure :: divgrad
   end type vector_calculus_t
 
   interface vector_calculus_t
@@ -390,5 +392,58 @@ contains
     call self%backend%allocator%release_block(d2u_z)
 
   end subroutine laplacian
+
+  subroutine divgrad(self, d2pdx2, p, &
+    x_stagder_c2v, x_interpl_c2v, &
+    y_stagder_c2v, y_interpl_c2v, &
+    z_stagder_c2v, z_interpl_c2v, &
+    x_stagder_v2c, x_interpl_v2c, &
+    y_stagder_v2c, y_interpl_v2c, &
+    z_stagder_v2c, z_interpl_v2c)
+    !! Computes the Laplacian of a scalar field 'p' using the div(grad)
+    !! formulation. The expected use case is evaluating the pressure Laplacian
+    !! consistently with div(u).
+    !!
+    !! Evaluated at the cell centres (data_loc=CELL).
+    !!
+    !! Input and output fields are in DIR_Z layout.
+    class(vector_calculus_t) :: self
+    class(field_t), intent(inout) :: d2pdx2
+    class(field_t), intent(in) :: p
+    class(tdsops_t), intent(in) :: x_stagder_c2v, x_interpl_c2v, &
+      y_stagder_c2v, y_interpl_c2v, &
+      z_stagder_c2v, z_interpl_c2v
+    class(tdsops_t), intent(in) :: x_stagder_v2c, x_interpl_v2c, &
+      y_stagder_v2c, y_interpl_v2c, &
+      z_stagder_v2c, z_interpl_v2c
+
+    class(field_t), pointer :: dpdx, dpdy, dpdz
+
+    if (d2pdx2%data_loc /= CELL .or. p%data_loc /= CELL) then
+      error stop "p and d2pdx2 must both be cell-centred for div(grad)"
+    end if
+
+    if (d2pdx2%dir /= DIR_Z .or. p%dir /= DIR_Z) then
+      error stop "p and d2pdx2 must both be Z-oriented for div(grad)"
+    end if
+    
+    dpdx => self%backend%allocator%get_block(DIR_X, VERT)
+    dpdy => self%backend%allocator%get_block(DIR_X, VERT)
+    dpdz => self%backend%allocator%get_block(DIR_X, VERT)
+    
+    call self%gradient_c2v(dpdx, dpdy, dpdz, p, &
+      x_stagder_c2v, x_interpl_c2v, &
+      y_stagder_c2v, y_interpl_c2v, &
+      z_stagder_c2v, z_interpl_c2v)
+    call self%divergence_v2c(d2pdx2, dpdx, dpdy, dpdz, &
+      x_stagder_v2c, x_interpl_v2c, &
+      y_stagder_v2c, y_interpl_v2c, &
+      z_stagder_v2c, z_interpl_v2c)
+
+    call self%backend%allocator%release_block(dpdx)
+    call self%backend%allocator%release_block(dpdy)
+    call self%backend%allocator%release_block(dpdz)
+
+  end subroutine divgrad
 
 end module m_vector_calculus
