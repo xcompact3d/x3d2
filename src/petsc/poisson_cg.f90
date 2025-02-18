@@ -182,7 +182,7 @@ contains
     type(tMatNullSpace) :: nsp
     integer :: ierr
 
-    integer, parameter :: nnb = 6 ! Number of neighbours (7-point star has 6 neighbours)
+    integer, parameter :: nnb = 26 ! Number of neighbours (27-point stencil has 26 neighbours)
 
     integer, dimension(3) :: dims
     integer :: i, j, k
@@ -195,6 +195,27 @@ contains
     logical :: initialised
 
     integer :: istep, jstep, kstep
+
+    integer, dimension(3), parameter :: stencil1d = [1, -2, 1]
+    integer, dimension(3, 3, 3) :: stencil3d
+    integer, dimension(3, 3, 3) :: stencil3d_x, stencil3d_y, stencil3d_z
+    integer, dimension(3, 3, 3) :: map3d
+
+    ! Set up stencils
+    do k = 1, 3
+      do j = 1, 3
+        stencil3d(:, j, k) = stencil1d
+      end do
+    end do
+    stencil3d(:, 2, 1) = 2 * stencil3d(:, 2, 1)
+    stencil3d(:, 1, 2) = 2 * stencil3d(:, 1, 2)
+    stencil3d(:, 2, 2) = 4 * stencil3d(:, 2, 2)
+    stencil3d(:, 3, 2) = 2 * stencil3d(:, 3, 2)
+    stencil3d(:, 2, 3) = 2 * stencil3d(:, 2, 3)
+
+    stencil3d_x = stencil3d
+    stencil3d_y = reshape(stencil3d, shape=[3, 3, 3], order=[2, 1, 3])
+    stencil3d_z = reshape(stencil3d, shape=[3, 3, 3], order=[3, 2, 1])
 
     ! Ensure PETSc is initialised
     call PetscInitialized(initialised, ierr)
@@ -232,34 +253,22 @@ contains
       jstep = dims(1) + 2
       kstep = (dims(1) + 2)*(dims(2) + 2)
 
+      ! Set up index map
+      do k = -1, 1
+        do j = -1, 1
+          do i = -1, 1
+            map3d(i + 2, j + 2, k + 2) = i * istep + j * jstep + k * kstep
+          end do
+        end do
+      end do
+
       row = kstep + jstep + istep + 1
       do k = 1, dims(3)
         do j = 1, dims(2)
           do i = 1, dims(1)
-            coeffs = 0
-            cols = -1 ! Set null (simplifies BCs)
-            cols(1) = row
 
-            ! d2pdx2
-            coeffs(1) = coeffs(1) - 2/dx**2
-            coeffs(2) = 1/dx**2
-            coeffs(3) = 1/dx**2
-            cols(2) = cols(1) - istep
-            cols(3) = cols(1) + istep
-
-            ! d2pdy2
-            coeffs(1) = coeffs(1) - 2/dy**2
-            coeffs(4) = 1/dy**2
-            coeffs(5) = 1/dy**2
-            cols(4) = cols(1) - jstep
-            cols(5) = cols(1) + jstep
-
-            ! d2pdz2
-            coeffs(1) = coeffs(1) - 2/dz**2
-            coeffs(6) = 1/dz**2
-            coeffs(7) = 1/dz**2
-            cols(6) = cols(1) - kstep
-            cols(7) = cols(1) + kstep
+            coeffs = reshape(stencil3d_x / dx**2 + stencil3d_y / dy**2 + stencil3d_z**2, shape=[27]) / 16.0_dp
+            cols = reshape(map3d + row, shape=[27])
 
             ! Push to matrix
             ! Recall Fortran (1-based) -> C (0-based) indexing
@@ -437,6 +446,7 @@ contains
     ! Build the local->global index map
     call build_interior_index_map(idx, mesh, global_start)
     call build_neighbour_index_map(idx, mesh, global_start)
+    call build_corner_index_map(idx, mesh)
     idx = idx - 1 ! F->C
 
     call ISLocalToGlobalMappingCreate(PETSC_COMM_WORLD, 1, n, idx, PETSC_COPY_VALUES, map, ierr)
@@ -671,6 +681,75 @@ contains
     end do
 
   end subroutine build_neighbour_index_map
+
+  subroutine build_corner_index_map(idx, mesh)
+    integer, dimension(:), intent(inout) :: idx
+    type(mesh_t), intent(in) :: mesh
+
+    integer, dimension(:, :, :), allocatable :: idx3d
+    
+    integer, dimension(3) :: dims
+    integer, dimension(:, :, :), allocatable :: halo_x_fb, halo_x_tb
+    integer, dimension(:, :, :), allocatable :: halo_y_se, halo_y_tb
+    integer, dimension(:, :, :), allocatable :: halo_z_se, halo_z_fb
+
+    integer :: nx, ny, nz
+    
+    dims = mesh%get_dims(CELL) + 2
+    nx = dims(1); ny = dims(2); nz = dims(3)
+
+    idx3d = reshape(idx, [nx, ny, nz])
+
+    !! Create halo buffers for lower and upper ends of the axis
+    allocate(halo_x_fb(ny, 2, 2))
+    allocate(halo_x_tb(nz, 2, 2))
+    allocate(halo_y_se(nx, 2, 2))
+    allocate(halo_y_tb(nz, 2, 2))
+    allocate(halo_z_se(nx, 2, 2))
+    allocate(halo_z_fb(ny, 2, 2))
+
+    halo_x_fb = -1; halo_x_tb = -1
+    halo_y_se = -1; halo_y_tb = -1
+    halo_z_se = -1; halo_z_fb = -1
+    
+    !! Populate halos
+    halo_x_fb(:, 1, 1) = idx3d(1, :, 1); halo_x_fb(:, 2, 1) = idx3d(1, :, nz)
+    halo_x_fb(:, 1, 2) = idx3d(nx, :, 1); halo_x_fb(:, 2, 2) = idx3d(nx, :, nz)
+    halo_x_tb(:, 1, 1) = idx3d(1, 1, :); halo_x_tb(:, 2, 1) = idx3d(1, ny, :)
+    halo_x_tb(:, 1, 2) = idx3d(nx, 1, :); halo_x_tb(:, 2, 2) = idx3d(nx, ny, :)
+
+    halo_y_se(:, 1, 1) = idx3d(:, 1, 1); halo_y_se(:, 2, 1) = idx3d(:, 1, nz)
+    halo_y_se(:, 1, 2) = idx3d(:, ny, 1); halo_y_se(:, 2, 2) = idx3d(:, ny, nz)
+    halo_y_tb(:, 1, 1) = idx3d(1, 1, :); halo_y_tb(:, 2, 1) = idx3d(nx, 1, :)
+    halo_y_tb(:, 1, 2) = idx3d(1, ny, :); halo_y_tb(:, 2, 2) = idx3d(nx, ny, :)
+
+    halo_z_se(:, 1, 1) = idx3d(:, 1, 1); halo_z_se(:, 2, 1) = idx3d(:, ny, 1)
+    halo_z_se(:, 1, 2) = idx3d(:, 1, nz); halo_z_se(:, 2, 2) = idx3d(:, ny, nz)
+    halo_z_fb(:, 1, 1) = idx3d(1, :, 1); halo_z_fb(:, 2, 1) = idx3d(nx, :, 1)
+    halo_z_fb(:, 1, 2) = idx3d(1, :, nz); halo_z_fb(:, 2, 2) = idx3d(nx, :, nz)
+
+    !! Exchange halos
+
+    !! Store halos
+    idx3d(1, :, 1) = merge(halo_x_fb(:, 1, 1), idx3d(1, :, 1), halo_x_fb(:, 1, 1) > -1)
+    idx3d(1, :, nz) = merge(halo_x_fb(:, 2, 1), idx3d(1, :, nz), halo_x_fb(:, 2, 1) > -1)
+    idx3d(nx, :, 1) = merge(halo_x_fb(:, 1, 2), idx3d(nx, :, 1), halo_x_fb(:, 1, 2) > -1)
+    idx3d(nx, :, nz) = merge(halo_x_fb(:, 2, 2), idx3d(nx, :, nz), halo_x_fb(:, 2, 2) > -1)
+
+    idx = reshape(idx3d, [size(idx)])
+    if (any(idx < 1)) then
+      print *, "Got ", count(idx < 0), " -ve indices; ", count(idx == 0), " 0 indices."
+      error stop
+    end if
+    
+    deallocate(halo_x_fb)
+    deallocate(halo_x_tb)
+    deallocate(halo_y_se)
+    deallocate(halo_y_tb)
+    deallocate(halo_z_se)
+    deallocate(halo_z_fb)
+
+  end subroutine build_corner_index_map
 
   subroutine create_vectors(self, n)
     ! Allocates the pressure and forcing vectors.
