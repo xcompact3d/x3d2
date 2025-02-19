@@ -2,6 +2,7 @@ module m_cuda_kernels_fieldops
   use cudafor
 
   use m_common, only: dp
+  use m_cuda_common, only: SZ
 
 contains
 
@@ -132,5 +133,29 @@ contains
     ierr = atomicmax(max_f, max_pncl)
 
   end subroutine field_max_sum
+
+  attributes(global) subroutine field_set_y_face(f, c_start, c_end, nx, ny, nz)
+    !! Set domain Y_FACE to a constant
+    !! c_start at the bottom and c_end at the top
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), value, intent(in) :: c_start, c_end
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, j, b, n_mod, b_end
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x ! from 1 to nx
+    b = blockIdx%y ! from 1 to nz
+
+    n_mod = mod(ny - 1, SZ) + 1
+    b_end = b + (ny - 1)/SZ*nz
+
+    if (j <= nx) then
+      f(1, j, b) = c_start
+      f(n_mod, j, b_end) = c_end
+    end if
+
+  end subroutine field_set_y_face
 
 end module m_cuda_kernels_fieldops
