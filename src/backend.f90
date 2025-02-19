@@ -40,6 +40,7 @@ module m_base_backend
     procedure(scalar_product), deferred :: scalar_product
     procedure(field_ops), deferred :: field_scale
     procedure(field_ops), deferred :: field_shift
+    procedure(field_set_face), deferred :: field_set_face
     procedure(copy_data_to_f), deferred :: copy_data_to_f
     procedure(copy_f_to_data), deferred :: copy_f_to_data
     procedure(alloc_tdsops), deferred :: alloc_tdsops
@@ -159,6 +160,21 @@ module m_base_backend
       class(field_t), intent(in) :: f
       real(dp), intent(in) :: a
     end subroutine field_ops
+  end interface
+
+  abstract interface
+    subroutine field_set_face(self, f, c_start, c_end, face)
+      !! Set a face in field
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: f
+      real(dp), intent(in) :: c_start, c_end
+      integer, intent(in) :: face
+    end subroutine field_set_face
   end interface
 
   abstract interface
