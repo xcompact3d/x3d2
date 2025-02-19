@@ -8,7 +8,8 @@ module m_cuda_backend
   use m_common, only: dp, move_data_loc, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
-                      DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC
+                      DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC, &
+                      X_FACE, Y_FACE, Z_FACE
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t, tdsops_t
@@ -21,7 +22,8 @@ module m_cuda_backend
   use m_cuda_tdsops, only: cuda_tdsops_t
   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
   use m_cuda_kernels_fieldops, only: axpby, buffer_copy, field_scale, &
-                                     field_shift, scalar_product, field_max_sum
+                                     field_shift, scalar_product, &
+                                     field_max_sum, field_set_y_face
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
                                     reorder_c2x, reorder_x2c, &
@@ -56,6 +58,7 @@ module m_cuda_backend
     procedure :: field_max_mean => field_max_mean_cuda
     procedure :: field_scale => field_scale_cuda
     procedure :: field_shift => field_shift_cuda
+    procedure :: field_set_face => field_set_face_cuda
     procedure :: copy_data_to_f => copy_data_to_f_cuda
     procedure :: copy_f_to_data => copy_f_to_data_cuda
     procedure :: init_poisson_fft => init_cuda_poisson_fft
@@ -786,6 +789,47 @@ contains
     call field_shift<<<blocks, threads>>>(f_d, a, n) !&
 
   end subroutine field_shift_cuda
+
+  subroutine field_set_face_cuda(self, f, c_start, c_end, face)
+    !! [[m_base_backend(module):field_set_face(subroutine)]]
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c_start, c_end
+    integer, intent(in) :: face
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    type(dim3) :: blocks, threads
+    integer :: dims(3), nx, ny, nz
+
+    if (f%dir /= DIR_X) then
+      error stop 'Setting a field face is only supported for DIR_X fields.'
+    end if
+
+    if (f%data_loc == NULL_LOC) then
+      error stop 'field_set_face require a valid data_loc.'
+    end if
+
+    call resolve_field_t(f_d, f)
+
+    dims = self%mesh%get_dims(f%data_loc)
+
+    select case (face)
+    case (X_FACE)
+      error stop 'Setting X_FACE is not yet supported.'
+    case (Y_FACE)
+      blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
+      threads = dim3(64, 1, 1)
+      call field_set_y_face<<<blocks, threads>>>(f_d, c_start, c_end, & !&
+                                                 dims(1), dims(2), dims(3))
+    case (Z_FACE)
+      error stop 'Setting Z_FACE is not yet supported.'
+    case default
+      error stop 'face is undefined.'
+    end select
+
+  end subroutine field_set_face_cuda
 
   subroutine copy_data_to_f_cuda(self, f, data)
     class(cuda_backend_t), intent(inout) :: self
