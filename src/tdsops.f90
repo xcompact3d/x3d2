@@ -3,7 +3,6 @@ module m_tdsops
 
   use m_common, only: dp, pi, VERT, CELL, &
                       BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET
-  use m_mesh, only: mesh_t
 
   implicit none
 

@@ -57,10 +57,6 @@ module m_allocator
     module procedure allocator_init
   end interface allocator_t
 
-  type :: flist_t
-    class(field_t), pointer :: ptr
-  end type flist_t
-
 contains
 
   function allocator_init(mesh, sz) result(allocator)

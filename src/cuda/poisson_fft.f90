@@ -6,8 +6,8 @@ module m_cuda_poisson_fft
   use cufft
   use mpi
 
-  use m_allocator, only: field_t
-  use m_common, only: dp, DIR_C, CELL
+  use m_common, only: dp, CELL
+  use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t
