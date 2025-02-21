@@ -3,11 +3,13 @@ module m_omp_poisson_fft
   use decomp_2d_constants, only: PHYSICAL_IN_X
   use decomp_2d_fft, only: decomp_2d_fft_init, decomp_2d_fft_3d, &
                            decomp_2d_fft_get_size
-  use m_allocator, only: field_t
+
   use m_common, only: dp
+  use m_field, only: field_t
+  use m_mesh, only: mesh_t
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t
-  use m_mesh, only: mesh_t
+
   use m_omp_spectral, only: process_spectral_div_u
 
   implicit none

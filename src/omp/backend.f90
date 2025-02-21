@@ -1,17 +1,18 @@
 module m_omp_backend
   use mpi
 
-  use m_allocator, only: allocator_t, field_t
+  use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_ordering, only: get_index_reordering
   use m_common, only: dp, get_dirs_from_rdr, move_data_loc, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC
+  use m_field, only: field_t
+  use m_mesh, only: mesh_t
+  use m_ordering, only: get_index_reordering
   use m_tdsops, only: dirps_t, tdsops_t
-  use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
-  use m_omp_sendrecv, only: sendrecv_fields
 
   use m_omp_common, only: SZ
-  use m_mesh, only: mesh_t
+  use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
+  use m_omp_sendrecv, only: sendrecv_fields
 
   implicit none
 
@@ -458,7 +459,7 @@ contains
   end subroutine vecadd_omp
 
   real(dp) function scalar_product_omp(self, x, y) result(s)
-    !! [[m_base_backend(module):scalar_product(function)]]
+    !! [[m_base_backend(module):scalar_product(interface)]]
     implicit none
 
     class(omp_backend_t) :: self
@@ -546,7 +547,7 @@ contains
   end subroutine copy_into_buffers
 
   subroutine field_max_mean_omp(self, max_val, mean_val, f, enforced_data_loc)
-    !! [[m_base_backend(module):field_max_mean(function)]]
+    !! [[m_base_backend(module):field_max_mean(interface)]]
     implicit none
 
     class(omp_backend_t) :: self

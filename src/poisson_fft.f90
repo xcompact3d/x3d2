@@ -1,8 +1,8 @@
 module m_poisson_fft
-  use m_allocator, only: field_t
   use m_common, only: dp, pi, CELL
-  use m_tdsops, only: dirps_t
+  use m_field, only: field_t
   use m_mesh, only: mesh_t, geo_t
+  use m_tdsops, only: dirps_t
 
   implicit none
 
