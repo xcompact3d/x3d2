@@ -2,17 +2,18 @@ module m_solver
   use iso_fortran_env, only: stderr => error_unit
   use mpi
 
-  use m_allocator, only: allocator_t, field_t
+  use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, get_argument, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_Z2C, RDR_C2Z, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL
   use m_config, only: solver_config_t
-  use m_tdsops, only: tdsops_t, dirps_t
+  use m_field, only: field_t
+  use m_mesh, only: mesh_t
+  use m_tdsops, only: dirps_t
   use m_time_integrator, only: time_intg_t
   use m_vector_calculus, only: vector_calculus_t
-  use m_mesh, only: mesh_t
 
   implicit none
 

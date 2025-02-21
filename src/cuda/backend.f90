@@ -3,14 +3,14 @@ module m_cuda_backend
   use cudafor
   use mpi
 
-  use m_allocator, only: allocator_t, field_t
+  use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, move_data_loc, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC
+  use m_field, only: field_t
   use m_mesh, only: mesh_t
-  use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t, tdsops_t
 
   use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
@@ -618,7 +618,7 @@ contains
   end subroutine vecadd_cuda
 
   real(dp) function scalar_product_cuda(self, x, y) result(s)
-    !! [[m_base_backend(module):scalar_product(function)]]
+    !! [[m_base_backend(module):scalar_product(interface)]]
     implicit none
 
     class(cuda_backend_t) :: self
@@ -686,7 +686,7 @@ contains
   end subroutine copy_into_buffers
 
   subroutine field_max_mean_cuda(self, max_val, mean_val, f, enforced_data_loc)
-    !! [[m_base_backend(module):field_max_mean(function)]]
+    !! [[m_base_backend(module):field_max_mean(interface)]]
     implicit none
 
     class(cuda_backend_t) :: self

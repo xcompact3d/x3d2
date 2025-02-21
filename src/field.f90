@@ -26,6 +26,11 @@ module m_field
     module procedure field_init
   end interface field_t
 
+  type :: flist_t
+    !! Use for creating a list of field pointers
+    class(field_t), pointer :: ptr
+  end type flist_t
+
 contains
 
   function field_init(ngrid, next, id) result(f)

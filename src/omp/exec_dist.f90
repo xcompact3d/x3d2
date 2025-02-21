@@ -1,7 +1,7 @@
 module m_omp_exec_dist
   use mpi
 
-  use m_common, only: dp, VERT
+  use m_common, only: dp
   use m_omp_common, only: SZ
   use m_omp_kernels_dist, only: der_univ_dist, der_univ_subs, &
                                 der_univ_fused_subs

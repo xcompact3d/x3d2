@@ -1,11 +1,12 @@
 module m_base_backend
   use mpi
 
-  use m_allocator, only: allocator_t, field_t
+  use m_allocator, only: allocator_t
   use m_common, only: dp, DIR_C, get_rdr_from_dirs
+  use m_field, only: field_t
+  use m_mesh, only: mesh_t
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: tdsops_t, dirps_t
-  use m_mesh, only: mesh_t
 
   implicit none
 

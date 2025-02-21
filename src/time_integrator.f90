@@ -1,7 +1,8 @@
 module m_time_integrator
-  use m_allocator, only: allocator_t, field_t, flist_t
+  use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X
+  use m_field, only: field_t, flist_t
 
   implicit none
 
