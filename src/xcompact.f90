@@ -77,7 +77,8 @@ program xcompact
 
   mesh = mesh_t(domain_cfg%dims_global, domain_cfg%nproc_dir, &
                 domain_cfg%L_global, domain_cfg%BC_x, domain_cfg%BC_y, &
-                domain_cfg%BC_z, use_2decomp=use_2decomp)
+                domain_cfg%BC_z, domain_cfg%stretching, domain_cfg%beta, &
+                use_2decomp=use_2decomp)
 
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(mesh, SZ)

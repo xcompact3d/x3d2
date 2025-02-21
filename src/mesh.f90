@@ -55,7 +55,7 @@ module m_mesh
 contains
 
   function mesh_init(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, &
-                     use_2decomp) result(mesh)
+                     stretching, beta, use_2decomp) result(mesh)
     use m_decomp, only: is_avail_2decomp, decomposition_2decomp
     !! Completely initialise the mesh object.
     !! Upon initialisation the mesh object can be read-only and shouldn't be edited
@@ -63,9 +63,11 @@ contains
     integer, dimension(3), intent(in) :: dims_global
     integer, dimension(3), intent(in) :: nproc_dir ! Number of proc in each direction
     real(dp), dimension(3), intent(in) :: L_global
+    character(len=*), dimension(2), intent(in) :: BC_x, BC_y, BC_z
+    character(len=*), dimension(3), optional, intent(in) :: stretching
+    real(dp), dimension(3), optional, intent(in) :: beta
     logical, optional, intent(in) :: use_2decomp
     class(mesh_t), allocatable :: mesh
-    character(len=*), dimension(2), intent(in) :: BC_x, BC_y, BC_z
 
     character(len=20), dimension(3, 2) :: BC_all
     logical :: is_first_domain, is_last_domain
@@ -117,10 +119,6 @@ contains
       end if
     end do
 
-    ! Geometry
-    mesh%geo%L = L_global
-    mesh%geo%d = mesh%geo%L/mesh%grid%global_cell_dims
-
     ! Parallel domain decomposition
     mesh%par%nproc_dir(:) = nproc_dir
     mesh%par%nproc = product(nproc_dir(:))
@@ -156,6 +154,26 @@ contains
         mesh%grid%BCs(dir, :) = BC_HALO
       end if
     end do
+
+    ! Geometry
+    mesh%geo%L = L_global
+    mesh%geo%d = mesh%geo%L/mesh%grid%global_cell_dims
+
+    if (present(stretching)) then
+      mesh%geo%stretching = stretching
+    else
+      mesh%geo%stretching(:) = 'uniform'
+    end if
+
+    if (present(beta)) then
+      mesh%geo%beta = beta
+    else
+      mesh%geo%beta(:) = 1
+    end if
+
+    call mesh%geo%obtain_coordinates( &
+      mesh%grid%vert_dims, mesh%grid%cell_dims, mesh%par%n_offset &
+      )
 
     ! Define default values
     mesh%grid%vert_dims_padded = mesh%grid%vert_dims
@@ -425,14 +443,14 @@ contains
   end function get_n_dir
 
   pure function get_coordinates(self, i, j, k) result(xloc)
-  !! Get the physical location of a cell center with i,j,k local indices
+    !! Get the coordinates of a vertex with i, j, k local indices
     class(mesh_t), intent(in) :: self
     integer, intent(in) :: i, j, k
     real(dp), dimension(3) :: xloc
 
-    xloc(1) = (i - 1 + self%par%n_offset(1))*self%geo%d(1)
-    xloc(2) = (j - 1 + self%par%n_offset(2))*self%geo%d(2)
-    xloc(3) = (k - 1 + self%par%n_offset(3))*self%geo%d(3)
+    xloc(1) = self%geo%vert_coords(i, 1)
+    xloc(2) = self%geo%vert_coords(j, 2)
+    xloc(3) = self%geo%vert_coords(k, 3)
   end function
 
 end module m_mesh
