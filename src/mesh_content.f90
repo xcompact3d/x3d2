@@ -36,6 +36,7 @@ module m_mesh_content
     integer, dimension(3) :: pprev ! rank ID of the next rank in each direction
   contains
     procedure :: is_root ! returns if the current rank is the root rank
+    procedure :: compute_global_rank_layout   ! determines the layout of ranks in a 3-D grid
     procedure :: compute_rank_pos_from_global ! fills in pnext, pprev and nrank_dir from global ranks map
   end type
 
@@ -50,6 +51,19 @@ contains
 
   end function
 
+  pure function compute_global_rank_layout(self) result(global_rank_layout)
+    class(par_t), intent(in) :: self
+    integer, dimension(self%nproc_dir(1), self%nproc_dir(2), self%nproc_dir(3)) :: global_rank_layout
+
+    integer :: i
+
+    global_rank_layout = reshape([(i, i=0, self%nproc - 1)], &
+                                 shape=[self%nproc_dir(1), &
+                                        self%nproc_dir(2), &
+                                        self%nproc_dir(3)])
+
+  end function compute_global_rank_layout
+  
   pure subroutine compute_rank_pos_from_global(self, global_ranks)
     !! From the global rank maps, fills in the rank position as well
     !! as the previous and next rank in the `par` structure

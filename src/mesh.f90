@@ -171,7 +171,7 @@ contains
     class(grid_t), intent(inout) :: grid
     class(par_t), intent(inout) :: par
     integer, allocatable, dimension(:, :, :) :: global_ranks
-    integer :: i, nproc_x, nproc_y, nproc_z
+    integer :: nproc_x, nproc_y, nproc_z
 
     if (par%is_root()) then
       print *, "Domain decomposition by x3d2 (generic)"
@@ -189,8 +189,7 @@ contains
     allocate (global_ranks(nproc_x, nproc_y, nproc_z))
 
     ! set the corresponding global rank for each sub-domain
-    global_ranks = reshape([(i, i=0, par%nproc - 1)], &
-                           shape=[nproc_x, nproc_y, nproc_z])
+    global_ranks = par%compute_global_rank_layout()
 
     call par%compute_rank_pos_from_global(global_ranks)
     call grid%copy_vert2cell_dims(par)

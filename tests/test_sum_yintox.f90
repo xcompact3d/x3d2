@@ -1,8 +1,8 @@
-program test_sum_intox
+program test_sum_yintox
   !! Tests the implementation of summing a Y-oriented field into an X-oriented
   !! one.
 
-  use m_common, only: DIR_X, DIR_Y, DIR_Z
+  use m_common, only: DIR_X, DIR_Y
 
   use m_allocator
   use m_base_backend
@@ -27,7 +27,6 @@ program test_sum_intox
 
   type(mesh_t) :: mesh
 
-  character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
   integer :: nrank, nproc
   integer :: ierr
 
@@ -37,14 +36,9 @@ program test_sum_intox
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
 
-  BC_x = ['periodic', 'periodic']
-  BC_y = ['periodic', 'periodic']
-  BC_z = ['periodic', 'periodic']
-
   mesh = mesh_t([nx, ny, nz], &
                 [1, 1, nproc], &
-                [lx, ly, lz], &
-                BC_x, BC_y, BC_z)
+                [lx, ly, lz])
 
 #ifdef CUDA
 #else
@@ -54,8 +48,7 @@ program test_sum_intox
   backend => omp_backend
 #endif
 
-  call runtest("YintoX", DIR_Y)
-  call runtest("ZintoX", DIR_Z)
+  call runtest()
 
   if (nrank == 0) then
     if (.not. test_pass) then
@@ -67,12 +60,9 @@ program test_sum_intox
 
 contains
 
-  subroutine runtest(test, dir_from)
+  subroutine runtest()
 
     use m_ordering, only: get_index_dir
-
-    character(len=*), intent(in) :: test
-    integer, intent(in) :: dir_from
 
     class(field_t), pointer :: a, b
     integer :: ctr
@@ -80,14 +70,9 @@ contains
     integer :: ii, jj, kk
 
     integer, dimension(3) :: dims
-    logical :: check_pass
-
-    if (nrank == 0) then
-      print *, "Test ", test
-    end if
 
     a => backend%allocator%get_block(DIR_X)
-    b => backend%allocator%get_block(dir_from)
+    b => backend%allocator%get_block(DIR_Y)
 
     dims = mesh%get_padded_dims(DIR_C)
 
@@ -99,7 +84,7 @@ contains
           call get_index_dir(ii, jj, kk, i, j, k, DIR_X, SZ, &
                              dims(1), dims(2), dims(3))
           a%data(ii, jj, kk) = ctr
-          call get_index_dir(ii, jj, kk, i, j, k, dir_from, SZ, &
+          call get_index_dir(ii, jj, kk, i, j, k, DIR_Y, SZ, &
                              dims(1), dims(2), dims(3))
           b%data(ii, jj, kk) = -ctr
           ctr = ctr + 1
@@ -107,29 +92,12 @@ contains
       end do
     end do
 
-    if (dir_from == DIR_Y) then
-      call backend%sum_yintox(a, b)
-    else
-      call backend%sum_zintox(a, b)
+    call backend%sum_yintox(a, b)
+
+    if ((minval(a%data) /= 0) .or. (maxval(a%data) /= 0)) then
+      test_pass = .false.
     end if
-
-    check_pass = .not. ((minval(a%data) /= 0) .or. (maxval(a%data) /= 0))
-    call MPI_Allreduce(MPI_IN_PLACE, check_pass, 1, &
-                       MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
-                       ierr)
-    test_pass = test_pass .and. check_pass
-
-    if (nrank == 0) then
-      if (check_pass) then
-        print *, "- PASS"
-      else
-        print *, "- FAIL"
-      end if
-    end if
-
-    call backend%allocator%release_block(a)
-    call backend%allocator%release_block(b)
 
   end subroutine runtest
 
-end program test_sum_intox
+end program test_sum_yintox
