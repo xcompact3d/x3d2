@@ -85,6 +85,7 @@ module m_poisson_cg_backend
     !! The PETSc implementation of the Poisson preconditioner, implements a 2nd
     !! order finite difference approximation of the Laplacian.
     type(tMat) :: Pmat ! The preconditioner matrix
+    type(tDM) :: da
   contains
     procedure :: init => init_precon_petsc
     procedure :: apply => petsc_apply_precon
@@ -173,11 +174,10 @@ contains
 
   subroutine init_precon_petsc(self, backend)
     ! Initialise the PETSc implementation of the preconditioner object
+#include "petsc/finclude/petscmat.h"
 
     class(poisson_precon_impl), intent(out) :: self
     class(base_backend_t), intent(in) :: backend
-
-    integer :: n
 
     type(tMatNullSpace) :: nsp
     integer :: ierr
@@ -188,18 +188,92 @@ contains
     integer :: i, j, k
     real(dp) :: dx, dy, dz
 
+    MatStencil :: row(4, 1)
+    MatStencil :: col(4, 27)
     real(dp), dimension(nnb + 1) :: coeffs
-    integer, dimension(nnb + 1) :: cols
-    integer :: row
 
     logical :: initialised
-
-    integer :: istep, jstep, kstep
 
     integer, dimension(3), parameter :: stencil1d = [1, -2, 1]
     integer, dimension(3, 3, 3) :: stencil3d
     integer, dimension(3, 3, 3) :: stencil3d_x, stencil3d_y, stencil3d_z
-    integer, dimension(3, 3, 3) :: map3d
+
+    integer, dimension(:), allocatable :: procx, procy, procz
+    integer, dimension(:), allocatable :: nxglobal, nyglobal, nzglobal
+    integer, dimension(:), allocatable :: lx, ly, lz
+    integer, dimension(:, :, :), allocatable :: procgrid
+    integer, parameter :: dof = 1 ! Variables per point in the linear system (P)
+    integer, parameter :: stencil_width = 1
+    integer :: ctr
+    integer :: ii, jj, kk
+    integer :: ifirst, jfirst, kfirst
+    integer :: ilast, jlast, klast
+
+    ! Ensure PETSc is initialised
+    call PetscInitialized(initialised, ierr)
+    if (.not. initialised) then
+      if (backend%mesh%par%nrank == 0) then
+        print *, "Initialising PETSc"
+      end if
+      call PetscInitialize(PETSC_NULL_CHARACTER, ierr)
+    end if
+    if (backend%mesh%par%nrank == 0) then
+      print *, "PETSc Initialised"
+    end if
+
+    ! Create an explicit preconditioner matrix
+    associate (mesh => backend%mesh)
+
+      allocate(procgrid(mesh%par%nproc_dir(1), mesh%par%nproc_dir(2), mesh%par%nproc_dir(3)))
+      procgrid = mesh%par%compute_global_rank_layout()
+      
+      procx = procgrid(:, mesh%par%nrank_dir(2) + 1, mesh%par%nrank_dir(3) + 1)
+      procy = procgrid(mesh%par%nrank_dir(1) + 1, :, mesh%par%nrank_dir(3) + 1)
+      procz = procgrid(mesh%par%nrank_dir(1) + 1, mesh%par%nrank_dir(2) + 1, :)
+      deallocate(procgrid)
+
+      dims = mesh%get_dims(CELL)
+      allocate(nxglobal(mesh%par%nproc))
+      allocate(nyglobal(mesh%par%nproc))
+      allocate(nzglobal(mesh%par%nproc))
+      nxglobal = 0; nyglobal = 0; nzglobal = 0
+      nxglobal(mesh%par%nrank + 1) = dims(1)
+      nyglobal(mesh%par%nrank + 1) = dims(2)
+      nzglobal(mesh%par%nrank + 1) = dims(3)
+
+      call MPI_Allreduce(MPI_IN_PLACE, nxglobal, mesh%par%nproc, &
+                         MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_Allreduce(MPI_IN_PLACE, nyglobal, mesh%par%nproc, &
+                         MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+      call MPI_Allreduce(MPI_IN_PLACE, nzglobal, mesh%par%nproc, &
+                         MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+      
+      lx = nxglobal(procx + 1)
+      ly = nyglobal(procy + 1)
+      lz = nzglobal(procz + 1)
+
+      deallocate(nxglobal)
+      deallocate(nyglobal)
+      deallocate(nzglobal)
+      
+      dims = mesh%get_global_dims(CELL)
+      call DMDACreate3d(PETSC_COMM_WORLD, &
+                        DM_BOUNDARY_PERIODIC, DM_BOUNDARY_PERIODIC, DM_BOUNDARY_PERIODIC, &
+                        DMDA_STENCIL_BOX, &
+                        dims(1), dims(2), dims(3), &
+                        mesh%par%nproc_dir(1), mesh%par%nproc_dir(2), mesh%par%nproc_dir(3), &
+                        dof, &
+                        stencil_width, &
+                        lx, ly, lz, &
+                        self%da, &
+                        ierr)
+      call DMSetFromOptions(self%da, ierr)
+      call DMSetUp(self%da, ierr)
+    end associate
+
+    call DMCreateMatrix(self%da, self%Pmat, ierr)
+    call MatSetFromOptions(self%Pmat, ierr)
+    call MatSetUp(self%Pmat, ierr)
 
     ! Set up stencils
     do k = 1, 3
@@ -217,72 +291,40 @@ contains
     stencil3d_y = reshape(stencil3d, shape=[3, 3, 3], order=[2, 1, 3])
     stencil3d_z = reshape(stencil3d, shape=[3, 3, 3], order=[3, 2, 1])
 
-    ! Ensure PETSc is initialised
-    call PetscInitialized(initialised, ierr)
-    if (.not. initialised) then
-      if (backend%mesh%par%nrank == 0) then
-        print *, "Initialising PETSc"
-      end if
-      call PetscInitialize(PETSC_NULL_CHARACTER, ierr)
-    end if
-    if (backend%mesh%par%nrank == 0) then
-      print *, "PETSc Initialised"
-    end if
-
-    ! Create an explicit preconditioner matrix
-    n = product(backend%mesh%get_dims(CELL))
-
-    call MatCreate(PETSC_COMM_WORLD, self%Pmat, ierr)
-    call MatSetSizes(self%Pmat, n, n, PETSC_DECIDE, PETSC_DECIDE, ierr)
-    call MatSetFromOptions(self%Pmat, ierr)
-    call MatSeqAIJSetPreallocation(self%Pmat, nnb + 1, PETSC_NULL_INTEGER, &
-                                   ierr)
-    call MatMPIAIJSetPreallocation(self%Pmat, nnb + 1, PETSC_NULL_INTEGER, &
-                                   nnb, PETSC_NULL_INTEGER, &
-                                   ierr)
-    call MatSetUp(self%Pmat, ierr)
-
     ! Set the Poisson coefficients
     associate (mesh => backend%mesh)
-      call build_index_map(mesh, self%Pmat)
-
       dims = mesh%get_dims(CELL)
       dx = mesh%geo%d(1); dy = mesh%geo%d(2); dz = mesh%geo%d(3)
 
-      istep = 1
-      jstep = dims(1) + 2
-      kstep = (dims(1) + 2)*(dims(2) + 2)
+      call DMDAGetCorners(self%da, ifirst, jfirst, kfirst, ilast, jlast, klast, ierr)
+      ilast = ifirst + (ilast - 1)
+      jlast = jfirst + (jlast - 1)
+      klast = kfirst + (klast - 1)
+      do k = kfirst, klast
+        do j = jfirst, jlast
+          do i = ifirst, ilast
 
-      ! Set up index map
-      do k = -1, 1
-        do j = -1, 1
-          do i = -1, 1
-            map3d(i + 2, j + 2, k + 2) = i * istep + j * jstep + k * kstep
-          end do
-        end do
-      end do
-
-      row = kstep + jstep + istep + 1
-      do k = 1, dims(3)
-        do j = 1, dims(2)
-          do i = 1, dims(1)
-
-            coeffs = reshape(stencil3d_x / dx**2 + stencil3d_y / dy**2 + stencil3d_z**2, shape=[27]) / 16.0_dp
-            cols = reshape(map3d + row, shape=[27])
+            row(MatStencil_i, 1) = i
+            row(MatStencil_j, 1) = j
+            row(MatStencil_k, 1) = k
+            ctr = 1
+            do kk = -1, 1
+              do jj = -1, 1
+                do ii = -1, 1
+                  col(MatStencil_i, ctr) = i + ii
+                  col(MatStencil_j, ctr) = j + jj
+                  col(MatStencil_k, ctr) = k + kk
+                  ctr = ctr + 1
+                end do
+              end do
+            end do
+            coeffs = reshape(stencil3d_x / dx**2 + stencil3d_y / dy**2 + stencil3d_z / dz**2, shape=[27]) / 16.0_dp
 
             ! Push to matrix
-            ! Recall Fortran (1-based) -> C (0-based) indexing
-            call MatSetValuesLocal(self%Pmat, 1, row - 1, nnb + 1, cols - 1, &
-                                   coeffs, INSERT_VALUES, ierr)
-
-            ! Advance row counter
-            row = row + 1
+            call MatSetValuesStencil(self%Pmat, 1, row, nnb + 1, col, &
+                                     coeffs, INSERT_VALUES, ierr)
           end do
-          ! Step in j
-          row = row + 2
         end do
-        ! Step in k
-        row = row + 2*(dims(1) + 2)
       end do
     end associate
 
@@ -413,343 +455,6 @@ contains
     call MatNullSpaceDestroy(nsp, ierr)
 
   end subroutine create_operator
-
-  subroutine build_index_map(mesh, P)
-    ! Builds the map from local indices to the global (equation ordering) index for the preconditioner
-#include "petsc/finclude/petscis.h"
-    type(mesh_t), intent(in) :: mesh ! The mesh for the simulation
-    type(tMat) :: P                  ! The preconditioner matrix
-    ISLocalToGlobalMapping map
-    integer :: ierr
-
-    integer, dimension(3) :: dims
-    integer :: n
-    integer :: global_start
-
-    integer, dimension(:), allocatable :: idx
-
-    dims = mesh%get_dims(CELL)
-    n = product(dims + 2) ! Size of domain + 1 deep halo
-
-    allocate (idx(n))
-    idx(:) = 0
-
-    ! Determine global start point based on PETSc decomposition
-    ! | 0 ... P0 ... P0_n-1 | P0_n ... P1 ... P0_n+P1_n-1 | P0_n+P1_n ... P2
-    ! i.e. an exclusive scan sum of each rank's allocation
-    call MPI_Exscan(product(dims), global_start, 1, MPI_INTEGER, MPI_SUM, PETSC_COMM_WORLD, ierr)
-    if (mesh%par%nrank == 0) then
-      global_start = 0
-    end if
-    global_start = global_start + 1 ! C->F
-
-    ! Build the local->global index map
-    call build_interior_index_map(idx, mesh, global_start)
-    call build_neighbour_index_map(idx, mesh, global_start)
-    call build_corner_index_map(idx, mesh)
-    idx = idx - 1 ! F->C
-
-    call ISLocalToGlobalMappingCreate(PETSC_COMM_WORLD, 1, n, idx, PETSC_COPY_VALUES, map, ierr)
-    call MatSetLocalToGlobalMapping(P, map, map, ierr)
-
-    deallocate (idx)
-
-  end subroutine build_index_map
-
-  subroutine build_interior_index_map(idx, mesh, global_start)
-    ! Builds the map from local indices to the global (equation ordering) index
-    ! for internal (local) indices
-
-    ! The local->global index map, local indices are offset into the domain by 1 in each axis to simplify finite differences
-    integer, dimension(:), intent(inout) :: idx
-    type(mesh_t), intent(in) :: mesh    ! The mesh for the simulation
-    integer, intent(in) :: global_start ! The global offset for this rank in the global equation system
-
-    integer, dimension(3) :: dims
-    integer :: nx, ny, nz
-
-    integer :: i, j, k
-    integer :: ctr, local_ctr
-
-    dims = mesh%get_dims(CELL)
-    nx = dims(1); ny = dims(2); nz = dims(3)
-
-    ctr = 0
-    local_ctr = ((nx + 2)*(ny + 2)) + (nx + 2) + 2
-    do k = 2, nz + 1
-      do j = 2, ny + 1
-        do i = 2, nx + 1
-          idx(local_ctr) = global_start + ctr
-          local_ctr = local_ctr + 1
-          ctr = ctr + 1
-        end do
-        local_ctr = local_ctr + 2
-      end do
-      local_ctr = local_ctr + 2*(nx + 2)
-    end do
-
-  end subroutine build_interior_index_map
-
-  subroutine build_neighbour_index_map(idx, mesh, global_start)
-    ! Builds the map from local indices to the global (equation ordering) index
-    ! for partition boundary indices
-
-    use mpi
-
-    integer, dimension(:), intent(inout) :: idx
-    type(mesh_t), intent(in) :: mesh
-    integer, intent(in) :: global_start
-
-    integer, dimension(3) :: dims
-    integer :: nx, ny, nz
-    integer, dimension(4) :: myinfo
-    integer, dimension(4, 2, 3) :: info
-    integer :: d
-
-    integer, dimension(:, :, :), allocatable :: halobuf_x, halobuf_y, halobuf_z
-    integer :: ctr
-    integer :: i, j, k
-
-    integer, dimension(12) :: requests
-    integer :: tag, nbtag, nproc
-    integer :: ierr
-
-    dims = mesh%get_dims(CELL)
-    nx = dims(1); ny = dims(2); nz = dims(3)
-
-    ! Create and fill halobuffers
-    allocate (halobuf_x(2, ny, nz))
-    allocate (halobuf_y(nx, 2, nz))
-    allocate (halobuf_z(nx, ny, 2))
-    halobuf_x = -1; halobuf_y = -1; halobuf_z = -1
-
-    myinfo = [global_start, dims(1), dims(2), dims(3)]
-    nproc = mesh%par%nproc
-    tag = mesh%par%nrank*max(nproc, 6)
-    do d = 1, 3
-      !! Recv left and right
-      !  Right Recv
-      nbtag = mesh%par%pnext(d)*max(nproc, 6)
-      call MPI_IRecv(info(:, 2, d), 4, MPI_INTEGER, mesh%par%pnext(d), nbtag + 2 * (d - 1) + 1, & 
-                     MPI_COMM_WORLD, requests(4*(d - 1) + 1), ierr)
-      !  Left Recv
-      nbtag = mesh%par%pprev(d)*max(nproc, 6)
-      call MPI_IRecv(info(:, 1, d), 4, MPI_INTEGER, mesh%par%pprev(d), nbtag + 2 * (d - 1) + 2, & 
-                     MPI_COMM_WORLD, requests(4*(d - 1) + 2), ierr)
-
-      !! Send left and right
-      !  Left Send
-      call MPI_ISend(myinfo, 4, MPI_INTEGER, mesh%par%pprev(d), tag + 2 * (d - 1) + 1, &
-                     MPI_COMM_WORLD, requests(4*(d - 1) + 3), ierr)
-      !  Right Send
-      call MPI_ISend(myinfo, 4, MPI_INTEGER, mesh%par%pnext(d), tag + 2 * (d - 1) + 2, &
-                     MPI_COMM_WORLD, requests(4*(d - 1) + 4), ierr)
-    end do
-    call MPI_Waitall(12, requests, MPI_STATUS_IGNORE, ierr)
-
-    !! X halos
-    ! Left halo
-    associate (offset_left => info(1, 1, 1), &
-               nx_left => info(2, 1, 1), &
-               ny_left => info(3, 1, 1), &
-               nz_left => info(4, 1, 1))
-      ctr = offset_left + (nx_left - 1) ! Global starting index -> xend
-      do k = 1, nz_left
-        do j = 1, ny_left
-          halobuf_x(1, j, k) = ctr
-          ctr = ctr + nx_left ! Step in j
-        end do
-      end do
-    end associate
-    ! Right halo
-    associate (offset_right => info(1, 2, 1), &
-               nx_right => info(2, 2, 1), &
-               ny_right => info(3, 2, 1), &
-               nz_right => info(4, 2, 1))
-      ctr = offset_right ! Global starting index == xstart
-      do k = 1, nz_right
-        do j = 1, ny_right
-          halobuf_x(2, j, k) = ctr
-          ctr = ctr + nx_right ! Step in j
-        end do
-      end do
-    end associate
-
-    !! Y halos
-    ! Bottom halo
-    associate (offset_down => info(1, 1, 2), &
-               nx_down => info(2, 1, 2), &
-               ny_down => info(3, 1, 2), &
-               nz_down => info(4, 1, 2))
-      ctr = offset_down + (ny_down - 1)*nx_down ! Global starting index -> yend
-      do k = 1, nz_down
-        do i = 1, nx_down
-          halobuf_y(i, 1, k) = ctr
-          ctr = ctr + 1 ! Step in i
-        end do
-        ctr = ctr - nx_down  ! Reset counter to start of line
-        ctr = ctr + (nx_down*ny_down) ! Step in k
-      end do
-    end associate
-    ! Top halo
-    associate (offset_up => info(1, 2, 2), &
-               nx_up => info(2, 2, 2), &
-               ny_up => info(3, 2, 2), &
-               nz_up => info(4, 2, 2))
-      ctr = offset_up ! Global starting index == ystart
-      do k = 1, nz_up
-        do i = 1, nx_up
-          halobuf_y(i, 2, k) = ctr
-          ctr = ctr + 1 ! Step in i
-        end do
-        ctr = ctr - nx_up  ! Reset counter to start of line
-        ctr = ctr + (nx_up*ny_up) ! Step in k
-      end do
-    end associate
-
-    !! Z halos
-    ! Back halo
-    associate (offset_back => info(1, 1, 3), &
-               nx_back => info(2, 1, 3), &
-               ny_back => info(3, 1, 3), &
-               nz_back => info(4, 1, 3))
-      ctr = offset_back + (nz_back - 1)*ny_back*nx_back ! Global starting index -> zend
-      do j = 1, ny_back
-        do i = 1, nx_back
-          halobuf_z(i, j, 1) = ctr
-          ctr = ctr + 1 ! Step in i
-        end do
-      end do
-    end associate
-    ! Front halo
-    associate (offset_front => info(1, 2, 3), &
-               nx_front => info(2, 2, 3), &
-               ny_front => info(3, 2, 3), &
-               nz_front => info(4, 2, 3))
-      ctr = offset_front ! Global startin index == zstart
-      do j = 1, ny_front
-        do i = 1, nx_front
-          halobuf_z(i, j, 2) = ctr
-          ctr = ctr + 1 ! Step in i
-        end do
-      end do
-    end associate
-
-    !! Map my neighbours indices into my halos
-    ctr = 1
-    do k = 1, nz + 2
-      do j = 1, ny + 2
-
-        ! Left halo
-        if ((j > 1) .and. (j < (ny + 2)) .and. &
-            (k > 1) .and. (k < (nz + 2))) then
-          idx(ctr) = halobuf_x(1, j - 1, k - 1)
-        end if
-        ctr = ctr + 1
-
-        do i = 2, nx + 1
-
-          if ((k > 1) .and. (k < (nz + 2))) then
-            if (j == 1) then
-              ! Bottom halo
-              idx(ctr) = halobuf_y(i - 1, 1, k - 1)
-            else if (j == (ny + 2)) then
-              ! Top halo
-              idx(ctr) = halobuf_y(i - 1, 2, k - 1)
-            end if
-          else if ((j > 1) .and. (j < (ny + 2))) then
-            if (k == 1) then
-              ! Back halo
-              idx(ctr) = halobuf_z(i - 1, j - 1, 1)
-            else if (k == (nz + 2)) then
-              ! Front halo
-              idx(ctr) = halobuf_z(i - 1, j - 1, 2)
-            end if
-          end if
-
-          ctr = ctr + 1
-        end do
-
-        ! Right halo
-        if ((j > 1) .and. (j < (ny + 2)) .and. &
-            (k > 1) .and. (k < (nz + 2))) then
-          idx(ctr) = halobuf_x(2, j - 1, k - 1)
-        end if
-        ctr = ctr + 1
-
-      end do
-    end do
-
-  end subroutine build_neighbour_index_map
-
-  subroutine build_corner_index_map(idx, mesh)
-    integer, dimension(:), intent(inout) :: idx
-    type(mesh_t), intent(in) :: mesh
-
-    integer, dimension(:, :, :), allocatable :: idx3d
-    
-    integer, dimension(3) :: dims
-    integer, dimension(:, :, :), allocatable :: halo_x_fb, halo_x_tb
-    integer, dimension(:, :, :), allocatable :: halo_y_se, halo_y_tb
-    integer, dimension(:, :, :), allocatable :: halo_z_se, halo_z_fb
-
-    integer :: nx, ny, nz
-    
-    dims = mesh%get_dims(CELL) + 2
-    nx = dims(1); ny = dims(2); nz = dims(3)
-
-    idx3d = reshape(idx, [nx, ny, nz])
-
-    !! Create halo buffers for lower and upper ends of the axis
-    allocate(halo_x_fb(ny, 2, 2))
-    allocate(halo_x_tb(nz, 2, 2))
-    allocate(halo_y_se(nx, 2, 2))
-    allocate(halo_y_tb(nz, 2, 2))
-    allocate(halo_z_se(nx, 2, 2))
-    allocate(halo_z_fb(ny, 2, 2))
-
-    halo_x_fb = -1; halo_x_tb = -1
-    halo_y_se = -1; halo_y_tb = -1
-    halo_z_se = -1; halo_z_fb = -1
-    
-    !! Populate halos
-    halo_x_fb(:, 1, 1) = idx3d(1, :, 1); halo_x_fb(:, 2, 1) = idx3d(1, :, nz)
-    halo_x_fb(:, 1, 2) = idx3d(nx, :, 1); halo_x_fb(:, 2, 2) = idx3d(nx, :, nz)
-    halo_x_tb(:, 1, 1) = idx3d(1, 1, :); halo_x_tb(:, 2, 1) = idx3d(1, ny, :)
-    halo_x_tb(:, 1, 2) = idx3d(nx, 1, :); halo_x_tb(:, 2, 2) = idx3d(nx, ny, :)
-
-    halo_y_se(:, 1, 1) = idx3d(:, 1, 1); halo_y_se(:, 2, 1) = idx3d(:, 1, nz)
-    halo_y_se(:, 1, 2) = idx3d(:, ny, 1); halo_y_se(:, 2, 2) = idx3d(:, ny, nz)
-    halo_y_tb(:, 1, 1) = idx3d(1, 1, :); halo_y_tb(:, 2, 1) = idx3d(nx, 1, :)
-    halo_y_tb(:, 1, 2) = idx3d(1, ny, :); halo_y_tb(:, 2, 2) = idx3d(nx, ny, :)
-
-    halo_z_se(:, 1, 1) = idx3d(:, 1, 1); halo_z_se(:, 2, 1) = idx3d(:, ny, 1)
-    halo_z_se(:, 1, 2) = idx3d(:, 1, nz); halo_z_se(:, 2, 2) = idx3d(:, ny, nz)
-    halo_z_fb(:, 1, 1) = idx3d(1, :, 1); halo_z_fb(:, 2, 1) = idx3d(nx, :, 1)
-    halo_z_fb(:, 1, 2) = idx3d(1, :, nz); halo_z_fb(:, 2, 2) = idx3d(nx, :, nz)
-
-    !! Exchange halos
-
-    !! Store halos
-    idx3d(1, :, 1) = merge(halo_x_fb(:, 1, 1), idx3d(1, :, 1), halo_x_fb(:, 1, 1) > -1)
-    idx3d(1, :, nz) = merge(halo_x_fb(:, 2, 1), idx3d(1, :, nz), halo_x_fb(:, 2, 1) > -1)
-    idx3d(nx, :, 1) = merge(halo_x_fb(:, 1, 2), idx3d(nx, :, 1), halo_x_fb(:, 1, 2) > -1)
-    idx3d(nx, :, nz) = merge(halo_x_fb(:, 2, 2), idx3d(nx, :, nz), halo_x_fb(:, 2, 2) > -1)
-
-    idx = reshape(idx3d, [size(idx)])
-    if (any(idx < 1)) then
-      print *, "Got ", count(idx < 0), " -ve indices; ", count(idx == 0), " 0 indices."
-      error stop
-    end if
-    
-    deallocate(halo_x_fb)
-    deallocate(halo_x_tb)
-    deallocate(halo_y_se)
-    deallocate(halo_y_tb)
-    deallocate(halo_z_se)
-    deallocate(halo_z_fb)
-
-  end subroutine build_corner_index_map
 
   subroutine create_vectors(self, n)
     ! Allocates the pressure and forcing vectors.
