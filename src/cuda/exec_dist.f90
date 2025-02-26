@@ -49,8 +49,8 @@ contains
                          n_data, nproc, pprev, pnext)
 
     call der_univ_subs<<<blocks, threads>>>( & !&
-      du, du_recv_s, du_recv_e, &
-      tdsops%n_tds, tdsops%dist_sa_dev, tdsops%dist_sc_dev &
+      du, du_recv_s, du_recv_e, tdsops%n_tds, &
+      tdsops%dist_sa_dev, tdsops%dist_sc_dev, tdsops%stretch_dev &
       )
 
   end subroutine exec_dist_tds_compact
@@ -115,8 +115,10 @@ contains
     call transeq_3fused_subs<<<blocks, threads>>>( & !&
       r_du, v, dud, d2u, &
       du_recv_s, du_recv_e, dud_recv_s, dud_recv_e, d2u_recv_s, d2u_recv_e, &
-      der1st%n_tds, nu, der1st%dist_sa_dev, der1st%dist_sc_dev, &
-      der2nd%dist_sa_dev, der2nd%dist_sc_dev &
+      der1st%n_tds, nu, &
+      der1st%dist_sa_dev, der1st%dist_sc_dev, der1st%stretch_dev, &
+      der2nd%dist_sa_dev, der2nd%dist_sc_dev, der2nd%stretch_dev, &
+      der2nd%stretch_correct_dev &
       )
 
   end subroutine exec_dist_transeq_3fused
