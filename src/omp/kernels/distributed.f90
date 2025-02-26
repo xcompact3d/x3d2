@@ -167,13 +167,13 @@ contains
 
   end subroutine der_univ_dist
 
-  subroutine der_univ_subs(du, recv_u_s, recv_u_e, n, dist_sa, dist_sc)
+  subroutine der_univ_subs(du, recv_u_s, recv_u_e, n, dist_sa, dist_sc, strch)
     implicit none
 
     ! Arguments
     real(dp), intent(out), dimension(:, :) :: du
     real(dp), intent(in), dimension(:, :) :: recv_u_s, recv_u_e
-    real(dp), intent(in), dimension(:) :: dist_sa, dist_sc
+    real(dp), intent(in), dimension(:) :: dist_sa, dist_sc, strch
     integer, intent(in) :: n
 
     ! Local variables
@@ -209,31 +209,32 @@ contains
 
     !$omp simd
     do i = 1, SZ
-      du(i, 1) = du_s(i)
+      du(i, 1) = du_s(i)*strch(1)
     end do
     !$omp end simd
     do j = 2, n - 1
       !$omp simd
       do i = 1, SZ
-        du(i, j) = (du(i, j) - dist_sa(j)*du_s(i) - dist_sc(j)*du_e(i))
+        du(i, j) = (du(i, j) - dist_sa(j)*du_s(i) - dist_sc(j)*du_e(i)) &
+                   *strch(j)
       end do
       !$omp end simd
     end do
     !$omp simd
     do i = 1, SZ
-      du(i, n) = du_e(i)
+      du(i, n) = du_e(i)*strch(n)
     end do
     !$omp end simd
 
   end subroutine der_univ_subs
 
-  subroutine der_univ_fused_subs(rhs_du, dud, d2u, v, &
-                                 du_recv_s, du_recv_e, &
-                                 dud_recv_s, dud_recv_e, &
-                                 d2u_recv_s, d2u_recv_e, &
-                                 nu, n, du_dist_sa, du_dist_sc, &
-                                 dud_dist_sa, dud_dist_sc, &
-                                 d2u_dist_sa, d2u_dist_sc)
+  subroutine der_univ_fused_subs( &
+    rhs_du, dud, d2u, v, &
+    du_recv_s, du_recv_e, dud_recv_s, dud_recv_e, d2u_recv_s, d2u_recv_e, &
+    nu, n, du_dist_sa, du_dist_sc, du_strch, &
+    dud_dist_sa, dud_dist_sc, dud_strch, &
+    d2u_dist_sa, d2u_dist_sc, d2u_strch, d2u_strch_cor &
+    )
     implicit none
 
     ! Arguments
@@ -242,9 +243,10 @@ contains
     real(dp), intent(in), dimension(:, :) :: du_recv_s, du_recv_e
     real(dp), intent(in), dimension(:, :) :: dud_recv_s, dud_recv_e
     real(dp), intent(in), dimension(:, :) :: d2u_recv_s, d2u_recv_e
-    real(dp), intent(in), dimension(:) :: du_dist_sa, du_dist_sc
-    real(dp), intent(in), dimension(:) :: dud_dist_sa, dud_dist_sc
-    real(dp), intent(in), dimension(:) :: d2u_dist_sa, d2u_dist_sc
+    real(dp), intent(in), dimension(:) :: du_dist_sa, du_dist_sc, du_strch
+    real(dp), intent(in), dimension(:) :: dud_dist_sa, dud_dist_sc, dud_strch
+    real(dp), intent(in), dimension(:) :: d2u_dist_sa, d2u_dist_sc, d2u_strch
+    real(dp), intent(in), dimension(:) :: d2u_strch_cor
     real(dp), intent(in) :: nu
     integer, intent(in) :: n
 
@@ -302,18 +304,22 @@ contains
 
     !$omp simd
     do i = 1, SZ
-      rhs_du(i, 1) = -0.5_dp*(v(i, 1)*du_s(i) + dud_s(i)) + nu*d2u_s(i)
+      rhs_du(i, 1) = -0.5_dp*(v(i, 1)*du_s(i)*du_strch(1) &
+                              + dud_s(i)*dud_strch(1)) &
+                     + nu*(d2u_s(i)*d2u_strch(1) &
+                           + du_s(i)*du_strch(1)*d2u_strch_cor(1))
     end do
     !$omp end simd
     do j = 2, n - 1
       !$omp simd
       do i = 1, SZ
-        temp_du(i) = rhs_du(i, j) &
-                     - du_dist_sa(j)*du_s(i) - du_dist_sc(j)*du_e(i)
-        temp_dud(i) = dud(i, j) &
-                      - dud_dist_sa(j)*dud_s(i) - dud_dist_sc(j)*dud_e(i)
-        temp_d2u(i) = d2u(i, j) &
-                      - d2u_dist_sa(j)*d2u_s(i) - d2u_dist_sc(j)*d2u_e(i)
+        temp_du(i) = du_strch(j)*(rhs_du(i, j) - du_dist_sa(j)*du_s(i) &
+                                  - du_dist_sc(j)*du_e(i))
+        temp_dud(i) = dud_strch(j)*(dud(i, j) - dud_dist_sa(j)*dud_s(i) &
+                                    - dud_dist_sc(j)*dud_e(i))
+        temp_d2u(i) = d2u_strch(j)*(d2u(i, j) - d2u_dist_sa(j)*d2u_s(i) &
+                                    - d2u_dist_sc(j)*d2u_e(i)) &
+                      + temp_du(i)*d2u_strch_cor(j)
         rhs_du(i, j) = -0.5_dp*(v(i, j)*temp_du(i) + temp_dud(i)) &
                        + nu*temp_d2u(i)
       end do
@@ -321,7 +327,10 @@ contains
     end do
     !$omp simd
     do i = 1, SZ
-      rhs_du(i, n) = -0.5_dp*(v(i, n)*du_e(i) + dud_e(i)) + nu*d2u_e(i)
+      rhs_du(i, n) = -0.5_dp*(v(i, n)*du_e(i)*du_strch(n) &
+                              + dud_e(i)*dud_strch(n)) &
+                     + nu*(d2u_e(i)*d2u_strch(n) &
+                           + du_e(i)*du_strch(n)*d2u_strch_cor(n))
     end do
     !$omp end simd
 

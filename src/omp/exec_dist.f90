@@ -54,9 +54,10 @@ contains
 
     !$omp parallel do
     do k = 1, n_groups
-      call der_univ_subs(du(:, :, k), &
-                         du_recv_s(:, :, k), du_recv_e(:, :, k), &
-                         tdsops%n_tds, tdsops%dist_sa, tdsops%dist_sc)
+      call der_univ_subs( &
+        du(:, :, k), du_recv_s(:, :, k), du_recv_e(:, :, k), &
+        tdsops%n_tds, tdsops%dist_sa, tdsops%dist_sc, tdsops%stretch &
+        )
     end do
     !$omp end parallel do
 
@@ -171,9 +172,11 @@ contains
         du_recv_s(:, :, k), du_recv_e(:, :, k), &
         dud_recv_s(:, :, k), dud_recv_e(:, :, k), &
         d2u_recv_s(:, :, k), d2u_recv_e(:, :, k), &
-        nu, tdsops_du%n_tds, tdsops_du%dist_sa, tdsops_du%dist_sc, &
-        tdsops_dud%dist_sa, tdsops_dud%dist_sc, &
-        tdsops_d2u%dist_sa, tdsops_d2u%dist_sc &
+        nu, tdsops_du%n_tds, &
+        tdsops_du%dist_sa, tdsops_du%dist_sc, tdsops_du%stretch, &
+        tdsops_dud%dist_sa, tdsops_dud%dist_sc, tdsops_dud%stretch, &
+        tdsops_d2u%dist_sa, tdsops_d2u%dist_sc, tdsops_d2u%stretch, &
+        tdsops_d2u%stretch_correct &
         )
     end do
     !$omp end parallel do
