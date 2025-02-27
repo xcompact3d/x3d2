@@ -559,10 +559,10 @@ contains
     ! call VecSetSizes(v, n, PETSC_DETERMINE, ierr)
     ! call VecSetFromOptions(v, ierr)
 
-    ! call VecAssemblyBegin(v, ierr)
-    ! call VecAssemblyEnd(v, ierr)
-
     call DMCreateGlobalVector(dm, v, ierr)
+
+    call VecAssemblyBegin(v, ierr)
+    call VecAssemblyEnd(v, ierr)
 
   end subroutine create_vec
 
@@ -641,9 +641,9 @@ contains
     ! call backend%set_field_data(f, vdata3d, DIR_C)
     ! call VecRestoreArrayReadF90(v, vdata, ierr)
     ! nullify (vdata3d)
-    call DMDAVecGetArrayF90(da, v, vdata3d, ierr)
+    call DMDAVecGetArrayReadF90(da, v, vdata3d, ierr)
     call backend%set_field_data(f, vdata3d, DIR_C)
-    call DMDAVecRestoreArrayF90(da, v, vdata3d, ierr)
+    call DMDAVecRestoreArrayReadF90(da, v, vdata3d, ierr)
 
     ! Halo exchange
 
