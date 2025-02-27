@@ -4,6 +4,8 @@ module m_cg_types
   !! Types module providing the context type required by the PETSc matrix-free
   !! operator.
 
+  use petsc
+
   use m_common, only: CELL
   use m_base_backend, only: base_backend_t
   use m_allocator, only: field_t
@@ -154,6 +156,7 @@ module m_poisson_cg_backend
   end interface MatShellSetOperation
 
   type(mat_ctx_t), save :: ctx_global ! XXX: This sucks!
+  type(tDM), pointer, save :: da_ptr_global        ! XXX: This sucks!
 
 contains
 
@@ -195,8 +198,8 @@ contains
     logical :: initialised
 
     integer, dimension(3), parameter :: stencil1d = [1, -2, 1]
-    integer, dimension(3, 3, 3) :: stencil3d
-    integer, dimension(3, 3, 3) :: stencil3d_x, stencil3d_y, stencil3d_z
+    real(dp), dimension(3, 3, 3) :: stencil3d
+    ! integer, dimension(3, 3, 3) :: stencil3d_x, stencil3d_y, stencil3d_z
 
     integer, dimension(:), allocatable :: procx, procy, procz
     integer, dimension(:), allocatable :: nxglobal, nyglobal, nzglobal
@@ -287,19 +290,76 @@ contains
     stencil3d(:, 3, 2) = 2 * stencil3d(:, 3, 2)
     stencil3d(:, 2, 3) = 2 * stencil3d(:, 2, 3)
 
-    stencil3d_x = stencil3d
-    stencil3d_y = reshape(stencil3d, shape=[3, 3, 3], order=[2, 1, 3])
-    stencil3d_z = reshape(stencil3d, shape=[3, 3, 3], order=[3, 2, 1])
+    ! stencil3d_x = stencil3d
+    ! stencil3d_y = reshape(stencil3d, shape=[3, 3, 3], order=[2, 1, 3])
+    ! stencil3d_z = reshape(stencil3d, shape=[3, 3, 3], order=[3, 2, 1])
+
+    !! Stencil according to Marcin Krotkiewski & Marcin Dabrowski, "Efficient 3D
+    !! stencil computations using CUDA", Parallel Computing (2019)
+
+    ! ! Central
+    ! stencil3d(2, 2, 2) = 8.0_dp / 3.0_dp
+
+    ! ! Face centre
+    ! stencil3d([1, 3], 2, 2) = 0
+    ! stencil3d(2, [1, 3], 2) = 0
+    ! stencil3d(2, 2, [1, 3]) = 0
+
+    ! ! Edge centre
+    ! stencil3d([1, 3], [1, 3], 2) = -1.0_dp / 6.0_dp
+    ! stencil3d([1, 3], 2, [1, 3]) = -1.0_dp / 6.0_dp
+    ! stencil3d(2, [1, 3], [1, 3]) = -1.0_dp / 6.0_dp
+
+    ! ! Corner
+    ! stencil3d([1, 3], [1, 3], [1, 3]) = -1.0_dp / 12.0_dp
+
+    ! !! Stencil according to PETSc bench_kspsolve
+
+    ! ! Central
+    ! stencil3d(2, 2, 2) = 44.0_dp / 13.0_dp
+
+    ! ! Face centre
+    ! stencil3d([1, 3], 2, 2) = -3.0_dp / 13.0_dp
+    ! stencil3d(2, [1, 3], 2) = -3.0_dp / 13.0_dp
+    ! stencil3d(2, 2, [1, 3]) = -3.0_dp / 13.0_dp
+
+    ! ! Edge centre
+    ! stencil3d([1, 3], [1, 3], 2) = -3.0_dp / 26.0_dp
+    ! stencil3d([1, 3], 2, [1, 3]) = -3.0_dp / 26.0_dp
+    ! stencil3d(2, [1, 3], [1, 3]) = -3.0_dp / 26.0_dp
+
+    ! ! Corner
+    ! stencil3d([1, 3], [1, 3], [1, 3]) = -1.0_dp / 13.0_dp
+
+    ! !! 7-point star stencil
+    ! stencil3d = 0
+    ! stencil3d(1, 2, 2) = 1
+    ! stencil3d(3, 2, 2) = 1
+    ! stencil3d(2, 1, 2) = 1
+    ! stencil3d(2, 3, 2) = 1
+    ! stencil3d(2, 2, 1) = 1
+    ! stencil3d(2, 2, 3) = 1
+    ! stencil3d(2, 2, 2) = -6
+
+    !! 27-point stencil
+
+    stencil3d = 1.0_dp
+    stencil3d(2, 2, 2) = -26.0_dp
+    stencil3d = stencil3d / 9.0_dp
 
     ! Set the Poisson coefficients
     associate (mesh => backend%mesh)
       dims = mesh%get_dims(CELL)
       dx = mesh%geo%d(1); dy = mesh%geo%d(2); dz = mesh%geo%d(3)
+      print *, dx, dy, dz
 
       call DMDAGetCorners(self%da, ifirst, jfirst, kfirst, ilast, jlast, klast, ierr)
       ilast = ifirst + (ilast - 1)
       jlast = jfirst + (jlast - 1)
       klast = kfirst + (klast - 1)
+      print *, ifirst, ilast
+      print *, jfirst, jlast
+      print *, kfirst, klast
       do k = kfirst, klast
         do j = jfirst, jlast
           do i = ifirst, ilast
@@ -318,7 +378,8 @@ contains
                 end do
               end do
             end do
-            coeffs = reshape(stencil3d_x / dx**2 + stencil3d_y / dy**2 + stencil3d_z / dz**2, shape=[27]) / 16.0_dp
+            ! coeffs = reshape(stencil3d_x / dx**2 + stencil3d_y / dy**2 + stencil3d_z / dz**2, shape=[27]) / 16.0_dp
+            coeffs = reshape(stencil3d / dx**2, shape=[27])
 
             ! Push to matrix
             call MatSetValuesStencil(self%Pmat, 1, row, nnb + 1, col, &
@@ -327,6 +388,7 @@ contains
         end do
       end do
     end associate
+    ! print *, coeffs
 
     call MatAssemblyBegin(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
     call MatAssemblyEnd(self%Pmat, MAT_FINAL_ASSEMBLY, ierr)
@@ -334,6 +396,8 @@ contains
     call MatNullSpaceCreate(PETSC_COMM_WORLD, PETSC_TRUE, 0, PETSC_NULL_VEC, nsp, ierr)
     call MatSetnullSpace(self%Pmat, nsp, ierr)
     call MatNullSpaceDestroy(nsp, ierr)
+
+    ! call MatView(self%Pmat, PETSC_VIEWER_STDOUT_SELF, ierr)
 
   end subroutine init_precon_petsc
 
@@ -349,12 +413,12 @@ contains
     integer :: n
 
     n = product(backend%mesh%get_dims(CELL))
-    call create_vec(pVec, n)
-    call create_vec(bVec, n)
+    call create_vec(pVec, self%da)
+    call create_vec(bVec, self%da)
 
-    call copy_field_to_vec(pVec, p, backend)
+    call copy_field_to_vec(pVec, p, backend, self%da)
     call MatMult(self%PMat, pVec, bVec, ierr)
-    call copy_vec_to_field(b, bVec, backend)
+    call copy_vec_to_field(b, bVec, backend, self%da)
 
     call VecDestroy(pVec, ierr)
     call VecDestroy(bVec, ierr)
@@ -369,10 +433,18 @@ contains
 
     integer :: ierr
 
+    associate (precon => self%precon)
+      select type(precon)
+      type is (poisson_precon_impl)
+        da_ptr_global => precon%da
+      class default
+        error stop
+      end select
+    end associate
     ctx_global = mat_ctx_t(backend, self%lapl, DIR_Z)
-    call copy_field_to_vec(self%fvec, f, backend)
+    call copy_field_to_vec(self%fvec, f, backend, da_ptr_global)
     call KSPSolve(self%ksp, self%fvec, self%pvec, ierr)
-    call copy_vec_to_field(p, self%pvec, backend)
+    call copy_vec_to_field(p, self%pvec, backend, da_ptr_global)
 
   end subroutine solve_petsc
 
@@ -462,25 +534,35 @@ contains
     class(poisson_solver_impl) :: self ! The Poisson solver
     integer, intent(in) :: n          ! The local vector size
 
-    call create_vec(self%fvec, n)
-    call create_vec(self%pvec, n)
+    associate(precon => self%precon)
+      select type(precon)
+      type is (poisson_precon_impl)
+        call create_vec(self%fvec, precon%da)
+        call create_vec(self%pvec, precon%da)
+      class default
+        error stop
+      end select
+    end associate
 
   end subroutine create_vectors
 
-  subroutine create_vec(v, n)
+  subroutine create_vec(v, dm)
     ! Utility subroutine to allocate a PETSc vector.
 
     type(tVec), intent(out) :: v ! The vector
-    integer, intent(in) :: n     ! The local vector size
+    ! integer, intent(in) :: n     ! The local vector size
+    type(tDM), intent(in) :: dm
 
     integer :: ierr
 
-    call VecCreate(PETSC_COMM_WORLD, v, ierr)
-    call VecSetSizes(v, n, PETSC_DETERMINE, ierr)
-    call VecSetFromOptions(v, ierr)
+    ! call VecCreate(PETSC_COMM_WORLD, v, ierr)
+    ! call VecSetSizes(v, n, PETSC_DETERMINE, ierr)
+    ! call VecSetFromOptions(v, ierr)
 
-    call VecAssemblyBegin(v, ierr)
-    call VecAssemblyEnd(v, ierr)
+    ! call VecAssemblyBegin(v, ierr)
+    ! call VecAssemblyEnd(v, ierr)
+
+    call DMCreateGlobalVector(dm, v, ierr)
 
   end subroutine create_vec
 
@@ -496,6 +578,7 @@ contains
       type is (poisson_precon_impl)
         call KSPCreate(PETSC_COMM_WORLD, self%ksp, ierr)
         call KSPSetOperators(self%ksp, self%Amat, precon%Pmat, ierr)
+        ! call KSPSetOperators(self%ksp, precon%Pmat, precon%Pmat, ierr)
         call KSPSetFromOptions(self%ksp, ierr)
         call KSPSetInitialGuessNonzero(self%ksp, PETSC_TRUE, ierr)
       class default
@@ -522,20 +605,21 @@ contains
     ! print *, ctx%foo
     ctx = ctx_global
 
-    call copy_vec_to_field(ctx%xfield, x, ctx%backend)
+    call copy_vec_to_field(ctx%xfield, x, ctx%backend, da_ptr_global)
     call ctx%lapl%apply(ctx%ffield, ctx%xfield)
-    call copy_field_to_vec(f, ctx%ffield, ctx%backend)
+    call copy_field_to_vec(f, ctx%ffield, ctx%backend, da_ptr_global)
 
   end subroutine poissmult_petsc
 
-  subroutine copy_vec_to_field(f, v, backend)
+  subroutine copy_vec_to_field(f, v, backend, da)
     !! Copies the contents of a PETSc vector into an x3d2 field object
     ! XXX: This can be avoided if a field can wrap the vector memory
     class(field_t), intent(inout) :: f ! The destination field
     type(tVec) :: v                    ! The source vector
     class(base_backend_t), intent(in) :: backend
+    type(tDM), intent(in) :: da
 
-    real(dp), dimension(:), pointer :: vdata
+    ! real(dp), dimension(:), pointer :: vdata
     real(dp), dimension(:, :, :), pointer :: vdata3d
     integer :: ierr
 
@@ -548,28 +632,32 @@ contains
     nz = dims(3)
 
     ! Local copy
-    call VecGetArrayReadF90(v, vdata, ierr)
-    if (nx*ny*nz /= size(vdata)) then
-      print *, "Vector and field sizes are incompatible (padding?)"
-      stop 1
-    end if
-    vdata3d(1:nx, 1:ny, 1:nz) => vdata(:) ! Get a 3D representation of the vector
+    ! call VecGetArrayReadF90(v, vdata, ierr)
+    ! if (nx*ny*nz /= size(vdata)) then
+    !   print *, "Vector and field sizes are incompatible (padding?)"
+    !   stop 1
+    ! end if
+    ! vdata3d(1:nx, 1:ny, 1:nz) => vdata(:) ! Get a 3D representation of the vector
+    ! call backend%set_field_data(f, vdata3d, DIR_C)
+    ! call VecRestoreArrayReadF90(v, vdata, ierr)
+    ! nullify (vdata3d)
+    call DMDAVecGetArrayF90(da, v, vdata3d, ierr)
     call backend%set_field_data(f, vdata3d, DIR_C)
-    call VecRestoreArrayReadF90(v, vdata, ierr)
-    nullify (vdata3d)
+    call DMDAVecRestoreArrayF90(da, v, vdata3d, ierr)
 
     ! Halo exchange
 
   end subroutine copy_vec_to_field
 
-  subroutine copy_field_to_vec(v, f, backend)
+  subroutine copy_field_to_vec(v, f, backend, da)
     !! Copies the contents of an x3d2 field object into a PETSc vector
     ! XXX: This can be avoided if a field can wrap the vector memory
     type(tVec) :: v                 ! The destination vector.
     class(field_t), intent(in) :: f ! The source field.
     class(base_backend_t), intent(in) :: backend
+    type(tDM), intent(in) :: da
 
-    real(dp), dimension(:), pointer :: vdata
+    ! real(dp), dimension(:), pointer :: vdata
     real(dp), dimension(:, :, :), pointer :: vdata3d
     integer :: ierr
 
@@ -582,15 +670,18 @@ contains
     nz = dims(3)
 
     ! Local copy
-    call VecGetArrayF90(v, vdata, ierr)
-    if (nx*ny*nz /= size(vdata)) then
-      print *, "Vector and field sizes are incompatible (padding?)"
-      stop 1
-    end if
-    vdata3d(1:nx, 1:ny, 1:nz) => vdata(:) ! Get a 3D representation of the vector
+    ! call VecGetArrayF90(v, vdata, ierr)
+    ! if (nx*ny*nz /= size(vdata)) then
+    !   print *, "Vector and field sizes are incompatible (padding?)"
+    !   stop 1
+    ! end if
+    ! vdata3d(1:nx, 1:ny, 1:nz) => vdata(:) ! Get a 3D representation of the vector
+    ! call backend%get_field_data(vdata3d, f, DIR_C)
+    ! call VecRestoreArrayF90(v, vdata, ierr)
+    ! nullify (vdata3d)
+    call DMDAVecGetArrayF90(da, v, vdata3d, ierr)
     call backend%get_field_data(vdata3d, f, DIR_C)
-    call VecRestoreArrayF90(v, vdata, ierr)
-    nullify (vdata3d)
+    call DMDAVecRestoreArrayF90(da, v, vdata3d, ierr)
 
     ! Halo exchange
     call VecAssemblyBegin(v, ierr)
