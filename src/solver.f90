@@ -165,7 +165,7 @@ contains
     character(*), intent(in) :: der1st_scheme, der2nd_scheme, &
                                 interpl_scheme, stagder_scheme
 
-    integer :: dir, bc_start, bc_end, n_vert, n_cell
+    integer :: dir, bc_start, bc_end, n_vert, n_cell, i
     real(dp) :: d
 
     dir = dirps%dir
@@ -176,22 +176,40 @@ contains
     n_vert = mesh%get_n(dir, VERT)
     n_cell = mesh%get_n(dir, CELL)
 
-    call backend%alloc_tdsops(dirps%der1st, n_vert, d, 'first-deriv', &
-                              der1st_scheme, bc_start, bc_end)
-    call backend%alloc_tdsops(dirps%der1st_sym, n_vert, d, 'first-deriv', &
-                              der1st_scheme, bc_start, bc_end)
-    call backend%alloc_tdsops(dirps%der2nd, n_vert, d, 'second-deriv', &
-                              der2nd_scheme, bc_start, bc_end)
-    call backend%alloc_tdsops(dirps%der2nd_sym, n_vert, d, 'second-deriv', &
-                              der2nd_scheme, bc_start, bc_end)
-    call backend%alloc_tdsops(dirps%interpl_v2p, n_cell, d, 'interpolate', &
-                              interpl_scheme, bc_start, bc_end, from_to='v2p')
-    call backend%alloc_tdsops(dirps%interpl_p2v, n_vert, d, 'interpolate', &
-                              interpl_scheme, bc_start, bc_end, from_to='p2v')
-    call backend%alloc_tdsops(dirps%stagder_v2p, n_cell, d, 'stag-deriv', &
-                              stagder_scheme, bc_start, bc_end, from_to='v2p')
-    call backend%alloc_tdsops(dirps%stagder_p2v, n_vert, d, 'stag-deriv', &
-                              stagder_scheme, bc_start, bc_end, from_to='p2v')
+    call backend%alloc_tdsops( &
+      dirps%der1st, n_vert, d, 'first-deriv', der1st_scheme, &
+      bc_start, bc_end, stretch=mesh%geo%vert_ds(1:n_vert, dir) &
+      )
+    call backend%alloc_tdsops( &
+      dirps%der1st_sym, n_vert, d, 'first-deriv', der1st_scheme, &
+      bc_start, bc_end, stretch=mesh%geo%vert_ds(1:n_vert, dir) &
+      )
+    call backend%alloc_tdsops( &
+      dirps%der2nd, n_vert, d, 'second-deriv', der2nd_scheme, &
+      bc_start, bc_end, stretch=mesh%geo%vert_ds2(1:n_vert, dir), &
+      stretch_correct=mesh%geo%vert_d2s(1:n_vert, dir) &
+      )
+    call backend%alloc_tdsops( &
+      dirps%der2nd_sym, n_vert, d, 'second-deriv', der2nd_scheme, &
+      bc_start, bc_end, stretch=mesh%geo%vert_ds2(1:n_vert, dir), &
+      stretch_correct=mesh%geo%vert_d2s(1:n_vert, dir) &
+      )
+    call backend%alloc_tdsops( &
+      dirps%stagder_v2p, n_cell, d, 'stag-deriv', stagder_scheme, bc_start, &
+      bc_end, from_to='v2p', stretch=mesh%geo%midp_ds(1:n_cell, dir) &
+      )
+    call backend%alloc_tdsops( &
+      dirps%stagder_p2v, n_vert, d, 'stag-deriv', stagder_scheme, bc_start, &
+      bc_end, from_to='p2v', stretch=mesh%geo%vert_ds(1:n_vert, dir) &
+      )
+    call backend%alloc_tdsops( &
+      dirps%interpl_v2p, n_cell, d, 'interpolate', interpl_scheme, &
+      bc_start, bc_end, from_to='v2p', stretch=[(1._dp, i=1, n_cell)] &
+      )
+    call backend%alloc_tdsops( &
+      dirps%interpl_p2v, n_vert, d, 'interpolate', interpl_scheme, &
+      bc_start, bc_end, from_to='p2v', stretch=[(1._dp, i=1, n_vert)] &
+      )
 
   end subroutine
 

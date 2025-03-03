@@ -1,12 +1,32 @@
 module m_mesh_content
 
-  use m_common, only: dp
+  use m_common, only: dp, pi
   implicit none
 
   type :: geo_t
     !! Stores geometry information
-    real(dp), dimension(3) :: d ! size of a cell in each direction (=edge length, distance between centers, distance between vertices)
-    real(dp), dimension(3) :: L ! Global dimensions of the domain in each direction
+    !> Origin: coordinates of vertex (1, 1, 1)
+    real(dp) :: origin(3)
+    !> size of a cell in each direction for a uniform mesh
+    real(dp) :: d(3)
+    !> Global dimensions of the domain in each direction
+    real(dp) :: L(3)
+    !> Global coordinates at vertices
+    real(dp), allocatable, dimension(:, :) :: vert_coords
+    !> Global coordinates at midpoints
+    real(dp), allocatable, dimension(:, :) :: midp_coords
+    !> Stretching type
+    character(len=20), dimension(3) :: stretching
+    !> Stretching
+    logical :: stretched(3)
+    !> Stretching parameter
+    real(dp) :: beta(3)
+    !> Stretching factors at vertices
+    real(dp), allocatable, dimension(:, :) :: vert_ds, vert_ds2, vert_d2s
+    !> Stretching factors at midpoints
+    real(dp), allocatable, dimension(:, :) :: midp_ds, midp_ds2, midp_d2s
+  contains
+    procedure :: obtain_coordinates
   end type
 
   type :: grid_t
@@ -119,5 +139,102 @@ contains
     end do
 
   end subroutine
+
+  subroutine obtain_coordinates(self, vert_dims, cell_dims, n_offset)
+    !! Obtains global coordinates for all the vertices and midpoints
+    implicit none
+    class(geo_t) :: self
+    integer, intent(in) :: vert_dims(3), cell_dims(3), n_offset(3)
+
+    integer :: dir, i, i_glob
+    real(dp) :: L_inf, alpha, beta, r, const, s, yeta_vt, yeta_mp, coord
+
+    allocate (self%vert_coords(maxval(vert_dims), 3))
+    allocate (self%vert_ds(maxval(vert_dims), 3))
+    allocate (self%vert_ds2(maxval(vert_dims), 3))
+    allocate (self%vert_d2s(maxval(vert_dims), 3))
+
+    allocate (self%midp_coords(maxval(cell_dims), 3))
+    allocate (self%midp_ds(maxval(cell_dims), 3))
+    allocate (self%midp_ds2(maxval(cell_dims), 3))
+    allocate (self%midp_d2s(maxval(cell_dims), 3))
+
+    ! vertex coordinates
+    do dir = 1, 3
+      if (trim(self%stretching(dir)) == 'uniform') then
+        self%stretched(dir) = .false.
+        self%vert_coords(:, dir) = [((i - 1)*self%d(dir), i=1, vert_dims(dir))]
+        self%vert_ds(:, dir) = 1._dp
+        self%vert_ds2(:, dir) = 1._dp
+        self%vert_d2s(:, dir) = 0._dp
+        self%midp_coords(:, dir) = [((i - 0.5_dp)*self%d(dir), &
+                                     i=1, cell_dims(dir))]
+        self%midp_ds(:, dir) = 1._dp
+        self%midp_ds2(:, dir) = 1._dp
+        self%midp_d2s(:, dir) = 0._dp
+        ! all sorted, move on to the next direction
+        cycle
+      else
+        self%stretched(dir) = .true.
+      end if
+
+      L_inf = self%L(dir)/2
+      beta = self%beta(dir)
+      alpha = abs((L_inf - sqrt((pi*beta)**2 + L_inf**2))/(2*beta*L_inf))
+      r = sqrt((alpha*beta + 1)/(alpha*beta))
+      const = sqrt(beta)/(2*sqrt(alpha)*sqrt(alpha*beta + 1))
+      s = self%d(dir)/self%L(dir)
+
+      do i = 1, vert_dims(dir)
+        i_glob = i + n_offset(dir)
+        select case (trim(self%stretching(dir)))
+        case ('centred')
+          yeta_vt = (i_glob - 1)*s
+          yeta_mp = (i_glob - 0.5_dp)*s
+        case ('both-ends')
+          yeta_vt = (i_glob - 1)*s - 0.5_dp
+          yeta_mp = (i_glob - 0.5_dp)*s - 0.5_dp
+        case ('bottom')
+          yeta_vt = (i_glob - 1)*s/2 - 0.5_dp
+          yeta_mp = (i_glob - 0.5_dp)*s/2 - 0.5_dp
+        case default
+          error stop 'Invalid stretching type'
+        end select
+
+        ! vertex coordinates
+        coord = const*atan2(r*sin(pi*yeta_vt), cos(pi*yeta_vt)) &
+                *(2*alpha*beta - cos(2*pi*yeta_vt) + 1) &
+                /(sin(pi*yeta_vt)**2 + alpha*beta)
+        self%vert_coords(i, dir) = coord + pi*const
+        self%vert_ds(i, dir) = self%L(dir)*(alpha/pi &
+                                            + sin(pi*yeta_vt)**2/(pi*beta))
+        self%vert_ds2(i, dir) = self%vert_ds(i, dir)**2
+        self%vert_d2s(i, dir) = 2*cos(pi*yeta_vt)*sin(pi*yeta_vt)/beta
+
+        ! midpoint coordinates
+        coord = const*atan2(r*sin(pi*yeta_mp), cos(pi*yeta_mp)) &
+                *(2*alpha*beta - cos(2*pi*yeta_mp) + 1) &
+                /(sin(pi*yeta_mp)**2 + alpha*beta)
+        self%midp_coords(i, dir) = coord + pi*const
+        self%midp_ds(i, dir) = self%L(dir)*(alpha/pi &
+                                            + sin(pi*yeta_mp)**2/(pi*beta))
+        self%midp_ds2(i, dir) = self%vert_ds(i, dir)**2
+        self%midp_d2s(i, dir) = 2*cos(pi*yeta_mp)*sin(pi*yeta_mp)/beta
+      end do
+
+      ! final shifts/corrections
+      select case (trim(self%stretching(dir)))
+      case ('centred')
+        self%vert_coords(:, dir) = self%vert_coords(:, dir) - L_inf
+        self%midp_coords(:, dir) = self%midp_coords(:, dir) - L_inf
+      case ('bottom')
+        self%vert_coords(:, dir) = 2*(self%vert_coords(:, dir))
+        self%vert_d2s(:, dir) = self%vert_d2s(:, dir)/2
+        self%midp_coords(:, dir) = 2*(self%midp_coords(:, dir))
+        self%midp_d2s(:, dir) = self%midp_d2s(:, dir)/2
+      end select
+    end do
+
+  end subroutine obtain_coordinates
 
 end module m_mesh_content

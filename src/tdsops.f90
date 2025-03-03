@@ -28,6 +28,7 @@ module m_tdsops
                                            dist_sa, dist_sc, & !! back subs.
                                            dist_af !! the auxiliary factors
     real(dp), allocatable, dimension(:) :: thom_f, thom_s, thom_w, thom_p
+    real(dp), allocatable :: stretch(:), stretch_correct(:)
     real(dp), allocatable :: coeffs(:), coeffs_s(:, :), coeffs_e(:, :)
     real(dp) :: alpha, a, b, c = 0._dp, d = 0._dp !! Compact scheme coeffs
     logical :: periodic
@@ -56,13 +57,17 @@ module m_tdsops
 
 contains
 
-  function tdsops_init(n_tds, delta, operation, scheme, &
-                       bc_start, bc_end, n_halo, from_to, sym, c_nu, nu0_nu) &
-    result(tdsops)
+  function tdsops_init( &
+    n_tds, delta, operation, scheme, bc_start, bc_end, &
+    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
+    ) result(tdsops)
     !! Constructor function for the tdsops_t class.
     !!
     !! 'n_tds', 'delta', 'operation', 'scheme', 'bc_start', and 'bc_end' are
     !! necessary arguments. The remaining arguments are optional.
+    !!
+    !! 'stretch' is for obtaining the correct derivations in a stretched mesh
+    !! 'stretch_correct' is for correcting the second derivative with the first
     !!
     !! 'from_to' is necessary for interpolation and staggared derivative, and
     !! it can be 'v2p' or 'p2v'.
@@ -84,6 +89,8 @@ contains
     real(dp), intent(in) :: delta !! Grid spacing
     character(*), intent(in) :: operation, scheme
     integer, intent(in) :: bc_start, bc_end !! Boundary Cond.
+    real(dp), optional, intent(in) :: stretch(:) !! Stretching coefficients
+    real(dp), optional, intent(in) :: stretch_correct(:) !! Stretch correction
     integer, optional, intent(in) :: n_halo !! Number of halo cells
     character(*), optional, intent(in) :: from_to !! 'v2p' or 'p2v'
     logical, optional, intent(in) :: sym !! (==npaire), only for Neumann BCs
@@ -136,6 +143,20 @@ contains
     allocate (tdsops%coeffs(n_stencil))
     allocate (tdsops%coeffs_s(n_stencil, tdsops%n_halo))
     allocate (tdsops%coeffs_e(n_stencil, tdsops%n_halo))
+
+    allocate (tdsops%stretch(n_tds))
+    if (present(stretch)) then
+      tdsops%stretch(:) = stretch(:)
+    else
+      tdsops%stretch(:) = 1._dp
+    end if
+
+    allocate (tdsops%stretch_correct(n_tds))
+    if (present(stretch_correct)) then
+      tdsops%stretch_correct(:) = stretch_correct(:)
+    else
+      tdsops%stretch_correct(:) = 0._dp
+    end if
 
     tdsops%periodic = bc_start == BC_PERIODIC .and. bc_end == BC_PERIODIC
 
