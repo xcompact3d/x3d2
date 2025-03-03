@@ -42,6 +42,8 @@ module m_base_backend
     procedure(field_max_mean), deferred :: field_max_mean
     procedure(field_ops), deferred :: field_scale
     procedure(field_ops), deferred :: field_shift
+    procedure(field_reduce), deferred :: field_volume_integral
+    procedure(field_set_face), deferred :: field_set_face
     procedure(copy_data_to_f), deferred :: copy_data_to_f
     procedure(copy_f_to_data), deferred :: copy_f_to_data
     procedure(alloc_tdsops), deferred :: alloc_tdsops
@@ -164,6 +166,19 @@ module m_base_backend
   end interface
 
   abstract interface
+    real(dp) function field_reduce(self, f) result(s)
+      !! Reduces field to a scalar, example: volume integral
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(in) :: f
+    end function field_reduce
+  end interface
+
+  abstract interface
     subroutine field_max_mean(self, max_val, mean_val, f, enforced_data_loc)
       !! Obtains maximum and mean values in a field
       import :: base_backend_t
@@ -176,6 +191,21 @@ module m_base_backend
       class(field_t), intent(in) :: f
       integer, optional, intent(in) :: enforced_data_loc
     end subroutine field_max_mean
+  end interface
+
+  abstract interface
+    subroutine field_set_face(self, f, c_start, c_end, face)
+      !! Set a face in field
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: f
+      real(dp), intent(in) :: c_start, c_end
+      integer, intent(in) :: face
+    end subroutine field_set_face
   end interface
 
   abstract interface

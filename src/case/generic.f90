@@ -18,6 +18,7 @@ module m_case_generic
     procedure :: boundary_conditions => boundary_conditions_generic
     procedure :: initial_conditions => initial_conditions_generic
     procedure :: forcings => forcings_generic
+    procedure :: pre_correction => pre_correction_generic
     procedure :: postprocess => postprocess_generic
   end type case_generic_t
 
@@ -61,25 +62,37 @@ contains
 
   end subroutine initial_conditions_generic
 
-  subroutine postprocess_generic(self, i, t)
-    implicit none
-
-    class(case_generic_t) :: self
-    integer, intent(in) :: i
-    real(dp), intent(in) :: t
-
-    if (self%solver%mesh%par%is_root()) print *, 'time =', t, 'iteration =', i
-    call self%print_enstrophy(self%solver%u, self%solver%v, self%solver%w)
-    call self%print_div_max_mean(self%solver%u, self%solver%v, self%solver%w)
-
-  end subroutine postprocess_generic
-
-  subroutine forcings_generic(self, du, dv, dw)
+  subroutine forcings_generic(self, du, dv, dw, iter)
     implicit none
 
     class(case_generic_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
+    integer, intent(in) :: iter
 
   end subroutine forcings_generic
+
+  subroutine pre_correction_generic(self, u, v, w)
+    implicit none
+
+    class(case_generic_t) :: self
+    class(field_t), intent(inout) :: u, v, w
+
+  end subroutine pre_correction_generic
+
+  subroutine postprocess_generic(self, iter, t)
+    implicit none
+
+    class(case_generic_t) :: self
+    integer, intent(in) :: iter
+    real(dp), intent(in) :: t
+
+    if (self%solver%mesh%par%is_root()) then
+      print *, 'time =', t, 'iteration =', iter
+    end if
+
+    call self%print_enstrophy(self%solver%u, self%solver%v, self%solver%w)
+    call self%print_div_max_mean(self%solver%u, self%solver%v, self%solver%w)
+
+  end subroutine postprocess_generic
 
 end module m_case_generic

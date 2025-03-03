@@ -337,21 +337,18 @@ contains
     class(field_t), intent(inout) :: pressure
     class(field_t), intent(in) :: div_u
 
-    class(field_t), pointer :: p_temp
+    class(field_t), pointer :: p_temp, temp
 
     ! reorder into 3D Cartesian data structure
-    p_temp => self%backend%allocator%get_block(DIR_C, CELL)
+    p_temp => self%backend%allocator%get_block(DIR_C)
     call self%backend%reorder(p_temp, div_u, RDR_Z2C)
 
-    ! call forward FFT
-    ! output array in spectral space is stored at poisson_fft class
-    call self%backend%poisson_fft%fft_forward(p_temp)
+    temp => self%backend%allocator%get_block(DIR_C)
 
-    ! postprocess
-    call self%backend%poisson_fft%fft_postprocess
+    ! solve poisson equation with FFT based approach
+    call self%backend%poisson_fft%solve_poisson(p_temp, temp)
 
-    ! call backward FFT
-    call self%backend%poisson_fft%fft_backward(p_temp)
+    call self%backend%allocator%release_block(temp)
 
     ! reorder back to our specialist data structure from 3D Cartesian
     call self%backend%reorder(pressure, p_temp, RDR_C2Z)

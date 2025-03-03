@@ -1,0 +1,38 @@
+&domain_settings
+! Flow case
+flow_case_name = 'channel'
+
+! Global domain length
+L_global = 4d0, 2d0, 2d0
+
+! Global number of cells in each direction
+dims_global = 64, 361, 32
+
+! Domain decomposition in each direction
+nproc_dir = 1, 1, 1
+
+! BC options are 'periodic' | 'neumann' | 'dirichlet'
+BC_x = 'periodic', 'periodic'
+BC_y = 'dirichlet', 'dirichlet'
+BC_z = 'periodic', 'periodic'
+/End
+
+&solver_params
+Re = 4200d0
+time_intg = 'RK3' ! 'AB[1-4]' | 'RK[1-4]'
+dt = 0.005d0
+n_iters = 20000
+n_output = 1000
+poisson_solver_type = 'FFT' ! 'FFT' | 'CG'
+der1st_scheme = 'compact6'
+der2nd_scheme = 'compact6' ! 'compact6' | 'compact6-hyperviscous'
+interpl_scheme = 'classic' ! 'classic' | 'optimised' | 'aggressive'
+stagder_scheme = 'compact6'
+/End
+
+&channel_nml
+noise = 0.125d0
+rotation = T
+omega_rot = 0.12d0
+n_rotate = 5000
+/End

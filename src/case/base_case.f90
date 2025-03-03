@@ -18,6 +18,7 @@ module m_base_case
     procedure(boundary_conditions), deferred :: boundary_conditions
     procedure(initial_conditions), deferred :: initial_conditions
     procedure(forcings), deferred :: forcings
+    procedure(pre_correction), deferred :: pre_correction
     procedure(postprocess), deferred :: postprocess
     procedure :: case_init
     procedure :: set_init
@@ -43,7 +44,7 @@ module m_base_case
       class(base_case_t) :: self
     end subroutine initial_conditions
 
-    subroutine forcings(self, du, dv, dw)
+    subroutine forcings(self, du, dv, dw, iter)
       !! Applies case-specific or model realated forcings after transeq
       import :: base_case_t
       import :: field_t
@@ -51,16 +52,28 @@ module m_base_case
 
       class(base_case_t) :: self
       class(field_t), intent(inout) :: du, dv, dw
+      integer, intent(in) :: iter
     end subroutine forcings
 
-    subroutine postprocess(self, i, t)
+    subroutine pre_correction(self, u, v, w)
+      !! Applies case-specific pre-correction to the velocity fields before
+      !! pressure correction
+      import :: base_case_t
+      import :: field_t
+      implicit none
+
+      class(base_case_t) :: self
+      class(field_t), intent(inout) :: u, v, w
+    end subroutine pre_correction
+
+    subroutine postprocess(self, iter, t)
       !! Triggers case-specific postprocessings at user specified intervals
       import :: base_case_t
       import :: dp
       implicit none
 
       class(base_case_t) :: self
-      integer, intent(in) :: i
+      integer, intent(in) :: iter
       real(dp), intent(in) :: t
     end subroutine postprocess
   end interface
@@ -182,7 +195,7 @@ contains
     class(field_t), pointer :: u_out, v_out, w_out
 
     real(dp) :: t
-    integer :: i, j
+    integer :: iter, sub_iter
 
     if (self%solver%mesh%par%is_root()) print *, 'initial conditions'
     t = 0._dp
@@ -190,8 +203,8 @@ contains
 
     if (self%solver%mesh%par%is_root()) print *, 'start run'
 
-    do i = 1, self%solver%n_iters
-      do j = 1, self%solver%time_integrator%nstage
+    do iter = 1, self%solver%n_iters
+      do sub_iter = 1, self%solver%time_integrator%nstage
         ! first apply case-specific BCs
         call self%boundary_conditions()
 
@@ -203,7 +216,7 @@ contains
                                  self%solver%u, self%solver%v, self%solver%w)
 
         ! models that introduce source terms handled here
-        call self%forcings(du, dv, dw)
+        call self%forcings(du, dv, dw, iter)
 
         ! time integration
         call self%solver%time_integrator%step( &
@@ -215,13 +228,15 @@ contains
         call self%solver%backend%allocator%release_block(dv)
         call self%solver%backend%allocator%release_block(dw)
 
+        call self%pre_correction(self%solver%u, self%solver%v, self%solver%w)
+
         call self%solver%pressure_correction(self%solver%u, self%solver%v, &
                                              self%solver%w)
       end do
 
-      if (mod(i, self%solver%n_output) == 0) then
-        t = i*self%solver%dt
-        call self%postprocess(i, t)
+      if (mod(iter, self%solver%n_output) == 0) then
+        t = iter*self%solver%dt
+        call self%postprocess(iter, t)
       end if
     end do
 
