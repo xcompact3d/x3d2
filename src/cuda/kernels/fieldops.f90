@@ -158,4 +158,29 @@ contains
 
   end subroutine field_set_y_face
 
+  attributes(global) subroutine volume_integral(s, f, n, n_i_pad, n_j)
+    implicit none
+
+    real(dp), device, intent(inout) :: s
+    real(dp), device, intent(in), dimension(:, :, :) :: f
+    integer, value, intent(in) :: n, n_i_pad, n_j
+
+    real(dp) :: s_pncl !! pencil sum
+    integer :: i, j, b, b_i, b_j, ierr
+
+    i = threadIdx%x
+    b_i = blockIdx%x
+    b_j = blockIdx%y
+
+    b = b_i + (b_j - 1)*n_i_pad
+    s_pncl = 0._dp
+    if (i + (b_j - 1)*blockDim%x <= n_j) then
+      do j = 1, n
+        s_pncl = s_pncl + f(i, j, b)
+      end do
+    end if
+    ierr = atomicadd(s, s_pncl)
+
+  end subroutine volume_integral
+
 end module m_cuda_kernels_fieldops

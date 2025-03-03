@@ -42,6 +42,7 @@ module m_base_backend
     procedure(field_max_mean), deferred :: field_max_mean
     procedure(field_ops), deferred :: field_scale
     procedure(field_ops), deferred :: field_shift
+    procedure(field_reduce), deferred :: field_volume_integral
     procedure(field_set_face), deferred :: field_set_face
     procedure(copy_data_to_f), deferred :: copy_data_to_f
     procedure(copy_f_to_data), deferred :: copy_f_to_data
@@ -162,6 +163,19 @@ module m_base_backend
       class(field_t), intent(in) :: f
       real(dp), intent(in) :: a
     end subroutine field_ops
+  end interface
+
+  abstract interface
+    real(dp) function field_reduce(self, f) result(s)
+      !! Reduces field to a scalar, example: volume integral
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(in) :: f
+    end function field_reduce
   end interface
 
   abstract interface
