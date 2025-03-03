@@ -23,7 +23,8 @@ module m_cuda_backend
   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
   use m_cuda_kernels_fieldops, only: axpby, buffer_copy, field_scale, &
                                      field_shift, scalar_product, &
-                                     field_max_sum, field_set_y_face
+                                     field_max_sum, field_set_y_face, &
+                                     volume_integral
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
                                     reorder_c2x, reorder_x2c, &
@@ -59,6 +60,7 @@ module m_cuda_backend
     procedure :: field_scale => field_scale_cuda
     procedure :: field_shift => field_shift_cuda
     procedure :: field_set_face => field_set_face_cuda
+    procedure :: field_volume_integral => field_volume_integral_cuda
     procedure :: copy_data_to_f => copy_data_to_f_cuda
     procedure :: copy_f_to_data => copy_f_to_data_cuda
     procedure :: init_poisson_fft => init_cuda_poisson_fft
@@ -830,6 +832,45 @@ contains
     end select
 
   end subroutine field_set_face_cuda
+
+  real(dp) function field_volume_integral_cuda(self, f) result(s)
+    !! volume integral of a field
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(in) :: f
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    real(dp), device, allocatable :: integral_d
+    integer :: dims(3), dims_padded(3), ierr
+    type(dim3) :: blocks, threads
+
+    if (f%data_loc == NULL_LOC) then
+      error stop 'You must set the data_loc before calling volume integral.'
+    end if
+    if (f%dir /= DIR_X) then
+      error stop 'Volume integral can only be called on DIR_X fields.'
+    end if
+
+    call resolve_field_t(f_d, f)
+
+    allocate (integral_d)
+    integral_d = 0._dp
+
+    dims = self%mesh%get_dims(f%data_loc)
+    dims_padded = self%mesh%get_padded_dims(DIR_C)
+
+    blocks = dim3(dims(3), (dims(2) - 1)/SZ + 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call volume_integral<<<blocks, threads>>>(integral_d, f_d, & !&
+                                              dims(1), dims_padded(3), dims(2))
+
+    s = integral_d
+
+    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+
+  end function field_volume_integral_cuda
 
   subroutine copy_data_to_f_cuda(self, f, data)
     class(cuda_backend_t), intent(inout) :: self
