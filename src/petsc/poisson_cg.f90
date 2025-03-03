@@ -87,7 +87,7 @@ module m_poisson_cg_backend
     !! The PETSc implementation of the Poisson preconditioner, implements a 2nd
     !! order finite difference approximation of the Laplacian.
     type(tMat) :: Pmat ! The preconditioner matrix
-    type(tDM) :: da
+    type(tDM), pointer :: da
   contains
     procedure :: init => init_precon_petsc
     procedure :: apply => petsc_apply_precon
@@ -157,6 +157,7 @@ module m_poisson_cg_backend
 
   type(mat_ctx_t), save :: ctx_global ! XXX: This sucks!
   type(tDM), pointer, save :: da_ptr_global        ! XXX: This sucks!
+  type(tDM), target, save :: da_tgt
 
 contains
 
@@ -223,6 +224,8 @@ contains
     if (backend%mesh%par%nrank == 0) then
       print *, "PETSc Initialised"
     end if
+
+    self%da => da_tgt
 
     ! Create an explicit preconditioner matrix
     associate (mesh => backend%mesh)
