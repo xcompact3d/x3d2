@@ -7,6 +7,7 @@ program xcompact
   use m_common, only: pi, get_argument
   use m_config, only: domain_config_t, solver_config_t
   use m_mesh
+  use m_case_channel, only: case_channel_t
   use m_case_generic, only: case_generic_t
   use m_case_tgv, only: case_tgv_t
 
@@ -103,6 +104,9 @@ program xcompact
   if (nrank == 0) print *, 'Flow case: ', domain_cfg%flow_case_name
 
   select case (trim(domain_cfg%flow_case_name))
+  case ('channel')
+    allocate (case_channel_t :: flow_case)
+    flow_case = case_channel_t(backend, mesh, host_allocator)
   case ('generic')
     allocate (case_generic_t :: flow_case)
     flow_case = case_generic_t(backend, mesh, host_allocator)

@@ -31,6 +31,14 @@ module m_config
     procedure :: read => read_solver_nml
   end type solver_config_t
 
+  type, extends(base_config_t) :: channel_config_t
+    real(dp) :: noise, omega_rot
+    logical :: rotation
+    integer :: n_rotate
+  contains
+    procedure :: read => read_channel_nml
+  end type channel_config_t
+
   abstract interface
     subroutine read(self, nml_file, nml_string) !&
       !! Assigns the member variables either from a file or text source.
@@ -135,6 +143,42 @@ contains
     self%stagder_scheme = stagder_scheme
 
   end subroutine read_solver_nml
+
+  subroutine read_channel_nml(self, nml_file, nml_string)
+    implicit none
+
+    class(channel_config_t) :: self
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
+
+    integer :: unit
+
+    real(dp) :: noise, omega_rot
+    logical :: rotation
+    integer :: n_rotate
+
+    namelist /channel_nml/ noise, rotation, omega_rot, n_rotate
+
+    if (present(nml_file) .and. present(nml_string)) then
+      error stop 'Reading channel config failed! &
+                 &Provide only a file name or source, not both.'
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file)
+      read (unit, nml=channel_nml)
+      close (unit)
+    else if (present(nml_string)) then
+      read (nml_string, nml=channel_nml)
+    else
+      error stop 'Reading channel config failed! &
+                 &Provide at least one of the following: file name or source'
+    end if
+
+    self%noise = noise
+    self%rotation = rotation
+    self%omega_rot = omega_rot
+    self%n_rotate = n_rotate
+
+  end subroutine read_channel_nml
 
 end module m_config
 

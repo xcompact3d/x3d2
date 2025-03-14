@@ -4,7 +4,8 @@ module m_omp_backend
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, get_dirs_from_rdr, move_data_loc, &
-                      DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC
+                      DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC, &
+                      X_FACE, Y_FACE, Z_FACE
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_ordering, only: get_index_reordering
@@ -42,6 +43,8 @@ module m_omp_backend
     procedure :: field_max_mean => field_max_mean_omp
     procedure :: field_scale => field_scale_omp
     procedure :: field_shift => field_shift_omp
+    procedure :: field_set_face => field_set_face_omp
+    procedure :: field_volume_integral => field_volume_integral_omp
     procedure :: copy_data_to_f => copy_data_to_f_omp
     procedure :: copy_f_to_data => copy_f_to_data_omp
     procedure :: init_poisson_fft => init_omp_poisson_fft
@@ -638,6 +641,94 @@ contains
 
     f%data = f%data + a
   end subroutine field_shift_omp
+
+  subroutine field_set_face_omp(self, f, c_start, c_end, face)
+    !! [[m_base_backend(module):field_set_face(subroutine)]]
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c_start, c_end
+    integer, intent(in) :: face
+
+    integer :: dims(3), k, j, i_mod, k_end
+
+    if (f%dir /= DIR_X) then
+      error stop 'Setting a field face is only supported for DIR_X fields.'
+    end if
+
+    if (f%data_loc == NULL_LOC) then
+      error stop 'field_set_face require a valid data_loc.'
+    end if
+
+    dims = self%mesh%get_dims(f%data_loc)
+
+    select case (face)
+    case (X_FACE)
+      error stop 'Setting X_FACE is not yet supported.'
+    case (Y_FACE)
+      i_mod = mod(dims(2) - 1, SZ) + 1
+      !$omp parallel do private(k_end)
+      do k = 1, dims(3)
+        k_end = k + (dims(2) - 1)/SZ*dims(3)
+        do j = 1, dims(1)
+          f%data(1, j, k) = c_start
+          f%data(i_mod, j, k_end) = c_end
+        end do
+      end do
+      !$omp end parallel do
+    case (Z_FACE)
+      error stop 'Setting Z_FACE is not yet supported.'
+    case default
+      error stop 'face is undefined.'
+    end select
+
+  end subroutine field_set_face_omp
+
+  real(dp) function field_volume_integral_omp(self, f) result(s)
+    !! volume integral of a field
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(in) :: f
+
+    real(dp) :: sum_p, sum_pncl
+    integer :: dims(3), stacked, i, j, k, k_i, k_j, ierr
+
+    if (f%data_loc == NULL_LOC) then
+      error stop 'You must set the data_loc before calling volume integral.'
+    end if
+    if (f%dir /= DIR_X) then
+      error stop 'Volume integral can only be called on DIR_X fields.'
+    end if
+
+    dims = self%mesh%get_dims(f%data_loc)
+    stacked = (dims(2) - 1)/SZ + 1
+
+    sum_p = 0._dp
+    !$omp parallel do collapse(2) reduction(+:sum_p) private(k, sum_pncl)
+    do k_j = 1, stacked ! loop over stacked groups
+      do k_i = 1, dims(3)
+        k = k_j + (k_i - 1)*stacked
+        sum_pncl = 0._dp
+        do j = 1, dims(1)
+          ! loop over only non-padded entries in the present group
+          do i = 1, min(SZ, dims(2) - (k_j - 1)*SZ)
+            sum_pncl = sum_pncl + f%data(i, j, k)
+          end do
+        end do
+        sum_p = sum_p + sum_pncl
+      end do
+    end do
+    !$omp end parallel do
+
+    ! rank-local values
+    s = sum_p
+
+    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+
+  end function field_volume_integral_omp
 
   subroutine copy_data_to_f_omp(self, f, data)
     class(omp_backend_t), intent(inout) :: self
