@@ -17,6 +17,8 @@ module m_config
     real(dp) :: L_global(3)
     integer :: dims_global(3), nproc_dir(3)
     character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
+    character(len=20) :: stretching(3)
+    real(dp) :: beta(3)
   contains
     procedure :: read => read_domain_nml
   end type domain_config_t
@@ -70,9 +72,11 @@ contains
     integer, dimension(3) :: dims_global
     integer, dimension(3) :: nproc_dir
     character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
+    character(len=20) :: stretching(3) = ['uniform', 'uniform', 'uniform']
+    real(dp), dimension(3) :: beta
 
     namelist /domain_settings/ flow_case_name, L_global, dims_global, &
-      nproc_dir, BC_x, BC_y, BC_z
+      nproc_dir, BC_x, BC_y, BC_z, stretching, beta
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading domain config failed! &
@@ -95,6 +99,8 @@ contains
     self%BC_x = BC_x
     self%BC_y = BC_y
     self%BC_z = BC_z
+    self%stretching = stretching
+    self%beta = beta
 
   end subroutine read_domain_nml
 

@@ -8,7 +8,8 @@ module m_cuda_kernels_thom
 contains
 
   attributes(global) subroutine der_univ_thom( &
-    du, u, n_tds, n_rhs, coeffs_s, coeffs_e, coeffs, thom_f, thom_s, thom_w &
+    du, u, n_tds, n_rhs, coeffs_s, coeffs_e, coeffs, &
+    thom_f, thom_s, thom_w, strch &
     )
     implicit none
 
@@ -17,7 +18,7 @@ contains
     integer, value, intent(in) :: n_tds, n_rhs
     real(dp), device, intent(in), dimension(:, :) :: coeffs_s, coeffs_e
     real(dp), device, intent(in), dimension(:) :: coeffs
-    real(dp), device, intent(in), dimension(:) :: thom_f, thom_s, thom_w
+    real(dp), device, intent(in), dimension(:) :: thom_f, thom_s, thom_w, strch
 
     integer :: i, j, b
 
@@ -107,15 +108,17 @@ contains
     du(i, j, b) = du(i, j, b) - du(i, j - 1, b)*thom_s(j)
 
     ! Backward pass of the Thomas algorithm
-    du(i, n_tds, b) = du(i, n_tds, b)*thom_w(n_tds)
+    du(i, n_tds, b) = du(i, n_tds, b)*thom_w(n_tds)*strch(n_tds)
     do j = n_tds - 1, 1, -1
-      du(i, j, b) = (du(i, j, b) - thom_f(j)*du(i, j + 1, b))*thom_w(j)
+      ! du(j) = (du(j) - f*du(j+1)/strch(j))*w*strch(j)
+      du(i, j, b) = (du(i, j, b)*strch(j) - thom_f(j)*du(i, j + 1, b)) &
+                    *thom_w(j)
     end do
 
   end subroutine der_univ_thom
 
   attributes(global) subroutine der_univ_thom_per( &
-    du, u, n, coeffs, alpha, thom_f, thom_s, thom_w, thom_p &
+    du, u, n, coeffs, alpha, thom_f, thom_s, thom_w, thom_p, strch &
     )
     implicit none
 
@@ -125,7 +128,7 @@ contains
     real(dp), device, intent(in), dimension(:) :: coeffs
     real(dp), value, intent(in) :: alpha
     real(dp), device, intent(in), dimension(:) :: thom_f, thom_s, thom_w, &
-                                                  thom_p
+                                                  thom_p, strch
 
     integer :: i, j, b
     integer :: jm4, jm3, jm2, jm1, jp1, jp2, jp3, jp4
@@ -169,7 +172,7 @@ contains
     ss = (du(i, 1, b) - alpha*du(i, n, b)) &
          /(1._dp + thom_p(1) - alpha*thom_p(n))
     do j = 1, n
-      du(i, j, b) = du(i, j, b) - ss*thom_p(j)
+      du(i, j, b) = (du(i, j, b) - ss*thom_p(j))*strch(j)
     end do
 
   end subroutine der_univ_thom_per
