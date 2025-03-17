@@ -1,6 +1,5 @@
 set(SRC
   allocator.f90
-  backend.f90
   common.f90
   config.f90
   field.f90
@@ -15,35 +14,36 @@ set(SRC
   mesh_content.f90
   field.f90
   vector_calculus.f90
+  backend/backend.f90
+  backend/omp/common.f90
+  backend/omp/kernels/distributed.f90
+  backend/omp/kernels/spectral_processing.f90
+  backend/omp/sendrecv.f90
+  backend/omp/exec_dist.f90
   case/base_case.f90
   case/channel.f90
   case/generic.f90
   case/tgv.f90
-  omp/common.f90
-  omp/kernels/distributed.f90
-  omp/kernels/spectral_processing.f90
-  omp/sendrecv.f90
-  omp/exec_dist.f90
 )
 set(CUDASRC
-  cuda/allocator.f90
-  cuda/common.f90
-  cuda/exec_dist.f90
-  cuda/exec_thom.f90
-  cuda/kernels/distributed.f90
-  cuda/kernels/fieldops.f90
-  cuda/kernels/reorder.f90
-  cuda/kernels/spectral_processing.f90
-  cuda/kernels/thomas.f90
-  cuda/poisson_fft.f90
-  cuda/sendrecv.f90
-  cuda/tdsops.f90
+  backend/cuda/allocator.f90
+  backend/cuda/common.f90
+  backend/cuda/exec_dist.f90
+  backend/cuda/exec_thom.f90
+  backend/cuda/kernels/distributed.f90
+  backend/cuda/kernels/fieldops.f90
+  backend/cuda/kernels/reorder.f90
+  backend/cuda/kernels/spectral_processing.f90
+  backend/cuda/kernels/thomas.f90
+  backend/cuda/poisson_fft.f90
+  backend/cuda/sendrecv.f90
+  backend/cuda/tdsops.f90
 )
 set(BACKENDSRC
-  omp/backend.f90
+  backend/omp/backend.f90
   )
 set(2DECOMPFFTSRC
-  omp/poisson_fft.f90
+  backend/omp/poisson_fft.f90
   decomp/decomp_2decompfft.f90
 )
 set(DUMMYDECOMPSRC
@@ -53,7 +53,7 @@ set(DUMMYDECOMPSRC
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   list(APPEND SRC ${CUDASRC})
-  list(APPEND BACKENDSRC cuda/backend.f90)
+  list(APPEND BACKENDSRC backend/cuda/backend.f90)
 endif()
 
 # Decide whether 2decomp&fft is supported by the build
