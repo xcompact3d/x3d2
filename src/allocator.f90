@@ -102,7 +102,7 @@ contains
     class(field_t), pointer :: ptr
     self%next_id = self%next_id + 1
     allocate (newblock)
-    associate(p_next => next)
+    associate (p_next => next)
       select type (p_next)
       type is (field_t)
         newblock = field_t(self%ngrid, p_next, id=self%next_id)
