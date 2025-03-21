@@ -32,7 +32,7 @@ program test_scalar_product
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
 
   character(len=5), dimension(4), parameter :: test = &
-    ["DIR_X", "DIR_Y", "DIR_Z", "DIR_C"]
+                                           ["DIR_X", "DIR_Y", "DIR_Z", "DIR_C"]
   integer, dimension(4), parameter :: dir = [DIR_X, DIR_Y, DIR_Z, DIR_C]
   integer :: i
 
@@ -92,7 +92,7 @@ contains
     if (nrank == 0) then
       print *, "Testing ", test
     end if
-    
+
     a => backend%allocator%get_block(dir, VERT)
     b => backend%allocator%get_block(dir, VERT)
 
@@ -108,8 +108,8 @@ contains
       check_pass = .true.
     end if
     call MPI_Allreduce(MPI_IN_PLACE, check_pass, 1, &
-      MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
-      ierr)
+                       MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
+                       ierr)
     if (nrank == 0) then
       print *, "- Got: ", s
       print *, "- Expected: ", 0
@@ -120,7 +120,7 @@ contains
       end if
     end if
     test_pass = test_pass .and. check_pass
-      
+
     if (nrank == 0) then
       print *, "Check: dot(nrank, nrank) = sum^{nrank-1}_i=0 sum_n(i) i**2"
     end if
@@ -132,7 +132,7 @@ contains
     call c%set_data_loc(a%data_loc)
     n = product(mesh%get_field_dims(c))
     call backend%allocator%release_block(c)
-    
+
     expt = n*(nrank + 1)**2
     call MPI_Allreduce(MPI_IN_PLACE, expt, 1, &
                        MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, &
@@ -143,8 +143,8 @@ contains
       check_pass = .true.
     end if
     call MPI_Allreduce(MPI_IN_PLACE, check_pass, 1, &
-      MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
-      ierr)
+                       MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
+                       ierr)
     if (nrank == 0) then
       print *, "- Got: ", s
       print *, "- Expected: ", expt

@@ -7,6 +7,7 @@ program test_sum_intox
   use m_allocator
   use m_base_backend
 #ifdef CUDA
+  use m_cuda_common, only: SZ
 #else
   use m_omp_backend
   use m_omp_common, only: SZ
@@ -73,7 +74,7 @@ contains
 
     character(len=*), intent(in) :: test
     integer, intent(in) :: dir_from
-    
+
     class(field_t), pointer :: a, b
     integer :: ctr
     integer :: i, j, k
@@ -112,7 +113,7 @@ contains
     else
       call backend%sum_zintox(a, b)
     end if
-    
+
     check_pass = .not. ((minval(a%data) /= 0) .or. (maxval(a%data) /= 0))
     call MPI_Allreduce(MPI_IN_PLACE, check_pass, 1, &
                        MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
