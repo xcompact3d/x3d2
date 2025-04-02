@@ -18,6 +18,7 @@ set(SRC
   backend/omp/common.f90
   backend/omp/kernels/distributed.f90
   backend/omp/kernels/spectral_processing.f90
+  backend/omp/kernels/thomas.f90
   backend/omp/sendrecv.f90
   backend/omp/exec_dist.f90
   backend/omp/exec_thom.f90
