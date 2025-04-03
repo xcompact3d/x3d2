@@ -94,7 +94,8 @@ program test_omp_tridiag
 
   ! =========================================================================
   ! second derivative with periodic BC
-  tdsops = tdsops_init(n, dx_per, operation='second-deriv', scheme='compact6', &
+  tdsops = tdsops_init(n, dx_per, operation='second-deriv', &
+                       scheme='compact6', &
                        bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
 
   call set_u(u, sin_0_2pi_per, n, n_groups)
@@ -188,7 +189,8 @@ program test_omp_tridiag
   ! stag interpolate 'v2p' with neumann sym
   n_loc = n
   if (nrank == nproc - 1) n_loc = n - 1
-  tdsops = tdsops_init(n_loc, dx_pi, operation='interpolate', scheme='classic', &
+  tdsops = tdsops_init(n_loc, dx_pi, operation='interpolate', &
+                       scheme='classic', &
                        bc_start=bc_start, bc_end=bc_end, &
                        from_to='v2p')
 
@@ -201,7 +203,8 @@ program test_omp_tridiag
                   nproc, pprev, pnext &
                   )
 
-  call check_error_norm(du, cos_0_pi_stag, n_loc, n_glob, n_groups, -1, norm_du)
+  call check_error_norm(du, cos_0_pi_stag, n_loc, n_glob, n_groups, &
+                        -1, norm_du)
   if (nrank == 0) print *, 'error norm interpolate v2p', norm_du
 
   if (nrank == 0) then
@@ -246,7 +249,8 @@ program test_omp_tridiag
   ! stag derivative 'v2p' with neumann anti-sym
   n_loc = n
   if (nrank == nproc - 1) n_loc = n - 1
-  tdsops = tdsops_init(n_loc, dx_pi, operation='stag-deriv', scheme='compact6', &
+  tdsops = tdsops_init(n_loc, dx_pi, operation='stag-deriv', &
+                       scheme='compact6', &
                        bc_start=bc_start, bc_end=bc_end, &
                        from_to='v2p')
 
@@ -259,7 +263,8 @@ program test_omp_tridiag
                   nproc, pprev, pnext &
                   )
 
-  call check_error_norm(du, cos_0_pi_stag, n_loc, n_glob, n_groups, -1, norm_du)
+  call check_error_norm(du, cos_0_pi_stag, n_loc, n_glob, n_groups, &
+                        -1, norm_du)
   if (nrank == 0) print *, 'error norm stag derivative v2p', norm_du
 
   if (nrank == 0) then
