@@ -32,8 +32,10 @@ program test_scalar_product
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
 
   character(len=5), dimension(4), parameter :: test = &
-                                           ["DIR_X", "DIR_Y", "DIR_Z", "DIR_C"]
-  integer, dimension(4), parameter :: dir = [DIR_X, DIR_Y, DIR_Z, DIR_C]
+                                               ["DIR_X", "DIR_Y", &
+                                                "DIR_Z", "DIR_C"]
+  integer, dimension(4), parameter :: dir = [DIR_X, DIR_Y, &
+                                             DIR_Z, DIR_C]
   integer :: i
 
   integer :: nrank, nproc
