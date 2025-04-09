@@ -1,0 +1,1160 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>backend.f90 &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../program/xcompact.html">Program</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>backend.f90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 4.1% of total for source files.">252 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/backend.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">backend.f90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/m_base_backend.html">m_base_backend</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/backend.f90.html#src">backend.f90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~backend.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilebackendf90EfferentGraph" width="641pt" height="229pt"
+ viewBox="0.00 0.00 641.00 229.47" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~backend.f90~~EfferentGraph" class="graph" transform="scale(0.87 0.87) rotate(0) translate(4 258.4)">
+<title>sourcefile~~backend.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-258.4 729,-258.4 729,4 -4,4"/>
+<!-- sourcefile~backend.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~backend.f90</title>
+<polygon fill="none" stroke="black" points="725,-104 646,-104 646,-80 725,-80 725,-104"/>
+<text text-anchor="middle" x="685.5" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50">backend.f90</text>
+</g>
+<!-- sourcefile~allocator.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~allocator.f90</title>
+<g id="a_sourcefile~~backend.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/allocator.f90.html" xlink:title="allocator.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="604.5,-144 525.5,-144 525.5,-120 604.5,-120 604.5,-144"/>
+<text text-anchor="middle" x="565" y="-129.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allocator.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~allocator.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~allocator.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M648.95,-104C637.22,-107.96 624.01,-112.42 611.64,-116.6"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="610.29,-113.35 601.94,-119.87 612.53,-119.99 610.29,-113.35"/>
+</g>
+<!-- sourcefile~common.f90~3 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_node3" class="node">
+<title>sourcefile~common.f90~3</title>
+<g id="a_sourcefile~~backend.f90~~EfferentGraph_node3"><a xlink:href="../sourcefile/common.f90~3.html" xlink:title="common.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="80,-142 0,-142 0,-118 80,-118 80,-142"/>
+<text text-anchor="middle" x="40" y="-127.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">common.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M449.5,-250C325.07,-262.42 290.78,-245.92 171,-210"/>
+</g>
+<!-- sourcefile~field.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_node4" class="node">
+<title>sourcefile~field.f90</title>
+<g id="a_sourcefile~~backend.f90~~EfferentGraph_node4"><a xlink:href="../sourcefile/field.f90.html" xlink:title="field.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="348.5,-222 292.5,-222 292.5,-198 348.5,-198 348.5,-222"/>
+<text text-anchor="middle" x="320.5" y="-207.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">field.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M676.16,-104.01C648.54,-142.21 555.79,-257.98 451.5,-250"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M449.5,-250C431.78,-251.77 389.55,-237.15 358.41,-225.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="359.33,-221.69 348.74,-221.29 356.77,-228.2 359.33,-221.69"/>
+</g>
+<!-- sourcefile~mesh.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_node5" class="node">
+<title>sourcefile~mesh.f90</title>
+<g id="a_sourcefile~~backend.f90~~EfferentGraph_node5"><a xlink:href="../sourcefile/mesh.f90.html" xlink:title="mesh.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="481.5,-104 419.5,-104 419.5,-80 481.5,-80 481.5,-104"/>
+<text text-anchor="middle" x="450.5" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mesh.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge4" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M645.76,-92C603.2,-92 535.17,-92 491.94,-92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="491.78,-88.5 481.78,-92 491.78,-95.5 491.78,-88.5"/>
+</g>
+<!-- sourcefile~poisson_fft.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_node6" class="node">
+<title>sourcefile~poisson_fft.f90</title>
+<g id="a_sourcefile~~backend.f90~~EfferentGraph_node6"><a xlink:href="../sourcefile/poisson_fft.f90.html" xlink:title="poisson_fft.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="610,-64 520,-64 520,-40 610,-40 610,-64"/>
+<text text-anchor="middle" x="565" y="-49.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">poisson_fft.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~poisson_fft.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge5" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~poisson_fft.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M648.95,-80C637.22,-76.04 624.01,-71.58 611.64,-67.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="612.53,-64.01 601.94,-64.13 610.29,-70.65 612.53,-64.01"/>
+</g>
+<!-- sourcefile~tdsops.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_node7" class="node">
+<title>sourcefile~tdsops.f90</title>
+<g id="a_sourcefile~~backend.f90~~EfferentGraph_node7"><a xlink:href="../sourcefile/tdsops.f90.html" xlink:title="tdsops.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="484,-24 417,-24 417,0 484,0 484,-24"/>
+<text text-anchor="middle" x="450.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tdsops.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~tdsops.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge6" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~tdsops.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M674.01,-80C660.7,-65.66 636.3,-42.2 610,-31 573.07,-15.27 527.2,-11.26 494.32,-10.74"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="494.15,-7.24 484.13,-10.68 494.11,-14.24 494.15,-7.24"/>
+</g>
+<!-- sourcefile~allocator.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge7" class="edge">
+<title>sourcefile~allocator.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M532.92,-144.17C510.57,-152.51 479.56,-163.24 451.5,-170"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M449.5,-170C367.21,-189.84 343.48,-175.03 260,-189 219.92,-195.71 210.11,-221.07 171,-210"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M169,-210C127.68,-197.61 86.58,-168.08 62.5,-148.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="64.66,-145.82 54.72,-142.14 60.19,-151.21 64.66,-145.82"/>
+</g>
+<!-- sourcefile~allocator.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge8" class="edge">
+<title>sourcefile~allocator.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M449.5,-170C418.33,-177.51 383.65,-188.52 358.26,-197.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="357.01,-193.82 348.67,-200.35 359.27,-200.44 357.01,-193.82"/>
+</g>
+<!-- sourcefile~allocator.f90&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge9" class="edge">
+<title>sourcefile~allocator.f90&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M530.25,-120C517.97,-115.63 503.99,-110.66 491.24,-106.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="492.38,-102.82 481.78,-102.77 490.03,-109.42 492.38,-102.82"/>
+</g>
+<!-- sourcefile~field.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge10" class="edge">
+<title>sourcefile~field.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M292.34,-214.36C262.09,-218.22 212.06,-221.62 171,-210"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge11" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M419.47,-90.28C393.52,-89.09 355,-88.04 321.5,-90"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M319.5,-90C253.61,-93.85 235.52,-76.11 171,-90"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge13" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M433.72,-104.15C428.33,-108.42 422.32,-113.33 417,-118 389.64,-142.04 359.62,-171.5 340.68,-190.5"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="338.08,-188.16 333.52,-197.72 343.05,-193.09 338.08,-188.16"/>
+</g>
+<!-- sourcefile~decomp_dummy.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_node8" class="node">
+<title>sourcefile~decomp_dummy.f90</title>
+<g id="a_sourcefile~~backend.f90~~EfferentGraph_node8"><a xlink:href="../sourcefile/decomp_dummy.f90.html" xlink:title="decomp_dummy.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="381,-142 260,-142 260,-118 381,-118 381,-142"/>
+<text text-anchor="middle" x="320.5" y="-127.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">decomp_dummy.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~decomp_dummy.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge12" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~decomp_dummy.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M419.49,-100.91C405.29,-105.12 387.95,-110.27 371.83,-115.06"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="370.57,-111.78 361.98,-117.98 372.57,-118.49 370.57,-111.78"/>
+</g>
+<!-- sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_node9" class="node">
+<title>sourcefile~mesh_content.f90</title>
+<g id="a_sourcefile~~backend.f90~~EfferentGraph_node9"><a xlink:href="../sourcefile/mesh_content.f90.html" xlink:title="mesh_content.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="224,-142 116,-142 116,-118 224,-118 224,-142"/>
+<text text-anchor="middle" x="170" y="-127.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mesh_content.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge14" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~mesh_content.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M319.5,-90C281.66,-92.21 240.13,-104.27 210.63,-114.57"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="209.34,-111.32 201.11,-117.98 211.7,-117.91 209.34,-111.32"/>
+</g>
+<!-- sourcefile~poisson_fft.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge15" class="edge">
+<title>sourcefile~poisson_fft.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M519.67,-46.77C470.64,-42.19 389.58,-38.2 321.5,-52"/>
+</g>
+<!-- sourcefile~poisson_fft.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge16" class="edge">
+<title>sourcefile~poisson_fft.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M549.04,-64.22C533.25,-76.93 507.44,-97.15 484,-113 439.47,-143.12 385.49,-174.36 352.32,-192.99"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="350.56,-189.96 343.54,-197.9 353.98,-196.07 350.56,-189.96"/>
+</g>
+<!-- sourcefile~poisson_fft.f90&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge17" class="edge">
+<title>sourcefile~poisson_fft.f90&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M530.25,-64C517.97,-68.37 503.99,-73.34 491.24,-77.87"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="490.03,-74.58 481.78,-81.23 492.38,-81.18 490.03,-74.58"/>
+</g>
+<!-- sourcefile~poisson_fft.f90&#45;&gt;sourcefile~tdsops.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge18" class="edge">
+<title>sourcefile~poisson_fft.f90&#45;&gt;sourcefile~tdsops.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M530.25,-40C518.7,-35.89 505.65,-31.25 493.54,-26.95"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="494.67,-23.63 484.07,-23.58 492.32,-30.23 494.67,-23.63"/>
+</g>
+<!-- sourcefile~tdsops.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge19" class="edge">
+<title>sourcefile~tdsops.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M417.36,-24.07C391.76,-33.19 354.81,-45.25 321.5,-52"/>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M319.5,-52C252.73,-65.53 237.6,-75.66 171,-90"/>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M169,-90C139.99,-96.24 108.15,-106.18 83.47,-114.59"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="82.02,-111.39 73.71,-117.97 84.31,-118.01 82.02,-111.39"/>
+</g>
+<!-- sourcefile~decomp_dummy.f90&#45;&gt;sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge20" class="edge">
+<title>sourcefile~decomp_dummy.f90&#45;&gt;sourcefile~mesh_content.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M259.96,-130C251.58,-130 242.94,-130 234.5,-130"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.32,-126.5 224.32,-130 234.32,-133.5 234.32,-126.5"/>
+</g>
+<!-- sourcefile~mesh_content.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~backend.f90~~EfferentGraph_edge21" class="edge">
+<title>sourcefile~mesh_content.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M115.83,-130C107.33,-130 98.57,-130 90.17,-130"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="90.15,-126.5 80.15,-130 90.15,-133.5 90.15,-126.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilebackendf90EfferentGraph = svgPanZoom('#sourcefilebackendf90EfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~backend.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilebackendf90AfferentGraph" width="641pt" height="223pt"
+ viewBox="0.00 0.00 641.00 223.46" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~backend.f90~~AfferentGraph" class="graph" transform="scale(0.9 0.9) rotate(0) translate(4 243.52)">
+<title>sourcefile~~backend.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-243.52 706,-243.52 706,4 -4,4"/>
+<!-- sourcefile~backend.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~backend.f90</title>
+<polygon fill="none" stroke="black" points="79,-100.52 0,-100.52 0,-76.52 79,-76.52 79,-100.52"/>
+<text text-anchor="middle" x="39.5" y="-86.12" font-family="Helvetica,sans-Serif" font-size="10.50">backend.f90</text>
+</g>
+<!-- sourcefile~backend.f90~2 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~backend.f90~2</title>
+<g id="a_sourcefile~~backend.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/backend.f90~2.html" xlink:title="backend.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="464.5,-239.52 385.5,-239.52 385.5,-215.52 464.5,-215.52 464.5,-239.52"/>
+<text text-anchor="middle" x="425" y="-225.12" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">backend.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~backend.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~backend.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M385.44,-225.28C353.1,-222.71 305.92,-217.37 266,-206.52 222.95,-194.81 216.99,-177.47 173.5,-167.52"/>
+</g>
+<!-- sourcefile~backend.f90~3 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~backend.f90~3</title>
+<g id="a_sourcefile~~backend.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/backend.f90~3.html" xlink:title="backend.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="345,-197.52 266,-197.52 266,-173.52 345,-173.52 345,-197.52"/>
+<text text-anchor="middle" x="305.5" y="-183.12" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">backend.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~3&#45;&gt;sourcefile~backend.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~backend.f90~3&#45;&gt;sourcefile~backend.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M265.77,-182.01C239.52,-179.19 204.16,-174.53 173.5,-167.52"/>
+</g>
+<!-- sourcefile~base_case.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~base_case.f90</title>
+<g id="a_sourcefile~~backend.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/base_case.f90.html" xlink:title="base_case.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="469,-117.52 381,-117.52 381,-93.52 469,-93.52 469,-117.52"/>
+<text text-anchor="middle" x="425" y="-103.12" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">base_case.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~base_case.f90&#45;&gt;sourcefile~backend.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~base_case.f90&#45;&gt;sourcefile~backend.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M396.65,-117.68C373.25,-127.39 338.39,-140.21 306.5,-145.52"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M304.5,-145.52C246.26,-155.21 231.05,-180.68 173.5,-167.52"/>
+</g>
+<!-- sourcefile~solver.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~solver.f90</title>
+<g id="a_sourcefile~~backend.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/solver.f90.html" xlink:title="solver.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="337.5,-79.52 273.5,-79.52 273.5,-55.52 337.5,-55.52 337.5,-79.52"/>
+<text text-anchor="middle" x="305.5" y="-65.12" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">solver.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~base_case.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~base_case.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M386.82,-93.49C374.18,-89.4 359.99,-84.81 347.09,-80.64"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="348.12,-77.3 337.53,-77.55 345.96,-83.96 348.12,-77.3"/>
+</g>
+<!-- sourcefile~channel.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~channel.f90</title>
+<g id="a_sourcefile~~backend.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/channel.f90.html" xlink:title="channel.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="581,-161.52 505,-161.52 505,-137.52 581,-137.52 581,-161.52"/>
+<text text-anchor="middle" x="543" y="-147.12" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">channel.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~channel.f90&#45;&gt;sourcefile~backend.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~channel.f90&#45;&gt;sourcefile~backend.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M424,-145.52C372.57,-136.44 358.01,-136.95 306.5,-145.52"/>
+</g>
+<!-- sourcefile~channel.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~channel.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M510.3,-137.49C497,-132.45 481.36,-126.52 467.19,-121.14"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="468.25,-117.8 457.66,-117.53 465.77,-124.34 468.25,-117.8"/>
+</g>
+<!-- sourcefile~channel.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~channel.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M504.89,-150.87C481.99,-151.05 452.1,-150.12 426,-145.52"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M424,-145.52C383.84,-138.43 346.2,-107.55 324.8,-86.84"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="327.23,-84.31 317.68,-79.73 322.29,-89.27 327.23,-84.31"/>
+</g>
+<!-- sourcefile~generic.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~generic.f90</title>
+<g id="a_sourcefile~~backend.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/generic.f90.html" xlink:title="generic.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="579.5,-39.52 506.5,-39.52 506.5,-15.52 579.5,-15.52 579.5,-39.52"/>
+<text text-anchor="middle" x="543" y="-25.12" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">generic.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~generic.f90&#45;&gt;sourcefile~backend.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~generic.f90&#45;&gt;sourcefile~backend.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M506.4,-25.99C483.42,-25.39 452.89,-25.28 426,-27.52"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M424,-27.52C371.96,-31.84 358.72,-27.44 306.5,-27.52"/>
+</g>
+<!-- sourcefile~generic.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~generic.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M518.87,-39.72C514.18,-42.45 509.35,-45.46 505,-48.52 487.74,-60.67 486.09,-67.12 469,-79.52 464.97,-82.44 460.61,-85.34 456.26,-88.1"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="454.14,-85.29 447.45,-93.5 457.8,-91.26 454.14,-85.29"/>
+</g>
+<!-- sourcefile~generic.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~generic.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M424,-27.52C394.5,-29.97 362.82,-41.31 339.8,-51.29"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="338.2,-48.17 330.5,-55.45 341.06,-54.56 338.2,-48.17"/>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~backend.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~backend.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M297.52,-79.83C279.8,-109.3 230.4,-180.53 173.5,-167.52"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M171.5,-167.52C128.42,-157.66 86,-127.25 61.58,-107.16"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="63.63,-104.3 53.73,-100.54 59.12,-109.66 63.63,-104.3"/>
+</g>
+<!-- sourcefile~time_integrator.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~time_integrator.f90</title>
+<g id="a_sourcefile~~backend.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/time_integrator.f90.html" xlink:title="time_integrator.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="229.5,-121.52 115.5,-121.52 115.5,-97.52 229.5,-97.52 229.5,-121.52"/>
+<text text-anchor="middle" x="172.5" y="-107.12" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">time_integrator.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~time_integrator.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge24" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~time_integrator.f90</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M273.45,-77.47C257.9,-82.46 238.71,-88.61 221.32,-94.18"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="219.79,-91 211.33,-97.39 221.92,-97.67 219.79,-91"/>
+</g>
+<!-- sourcefile~vector_calculus.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~vector_calculus.f90</title>
+<g id="a_sourcefile~~backend.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/vector_calculus.f90.html" xlink:title="vector_calculus.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="230,-79.52 115,-79.52 115,-55.52 230,-55.52 230,-79.52"/>
+<text text-anchor="middle" x="172.5" y="-65.12" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vector_calculus.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~vector_calculus.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge25" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~vector_calculus.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M273.45,-67.52C263.45,-67.52 251.94,-67.52 240.38,-67.52"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="240.24,-64.02 230.24,-67.52 240.24,-71.02 240.24,-64.02"/>
+</g>
+<!-- sourcefile~tgv.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~tgv.f90</title>
+<g id="a_sourcefile~~backend.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/tgv.f90.html" xlink:title="tgv.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="570,-81.52 516,-81.52 516,-57.52 570,-57.52 570,-81.52"/>
+<text text-anchor="middle" x="543" y="-67.12" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tgv.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~tgv.f90&#45;&gt;sourcefile~backend.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~tgv.f90&#45;&gt;sourcefile~backend.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M515.69,-69.47C492.14,-69.22 456.7,-68.34 426,-65.52"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M424,-65.52C369.35,-60.49 361.39,-27.44 306.5,-27.52"/>
+</g>
+<!-- sourcefile~tgv.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~tgv.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M515.97,-77.6C503.7,-81.4 488.66,-86.07 474.42,-90.49"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="473.24,-87.19 464.72,-93.5 475.31,-93.88 473.24,-87.19"/>
+</g>
+<!-- sourcefile~tgv.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~tgv.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M424,-65.52C398.92,-63.21 370.7,-63.59 348.21,-64.61"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="347.8,-61.13 337.99,-65.13 348.15,-68.12 347.8,-61.13"/>
+</g>
+<!-- sourcefile~time_integrator.f90&#45;&gt;sourcefile~backend.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~time_integrator.f90&#45;&gt;sourcefile~backend.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M115.18,-100.49C106.51,-99.1 97.61,-97.67 89.12,-96.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="89.44,-92.82 79.01,-94.69 88.33,-99.73 89.44,-92.82"/>
+</g>
+<!-- sourcefile~vector_calculus.f90&#45;&gt;sourcefile~backend.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~vector_calculus.f90&#45;&gt;sourcefile~backend.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M114.8,-76.61C106.25,-77.98 97.49,-79.38 89.13,-80.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="88.48,-77.28 79.16,-82.32 89.59,-84.19 88.48,-77.28"/>
+</g>
+<!-- sourcefile~xcompact.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~xcompact.f90</title>
+<g id="a_sourcefile~~backend.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/xcompact.f90.html" xlink:title="xcompact.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="702,-101.52 617,-101.52 617,-77.52 702,-77.52 702,-101.52"/>
+<text text-anchor="middle" x="659.5" y="-87.12" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">xcompact.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~backend.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~backend.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M651.64,-77.26C640.03,-57.92 614.45,-21.05 581,-6.52 550.02,6.94 538.76,-5.56 505,-6.52 449.82,-8.07 435.79,-6.85 381,-13.52 347.56,-17.59 340.19,-27.47 306.5,-27.52"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M304.5,-27.52C219.89,-25.04 195.7,-20.97 115,-46.52 97.58,-52.03 79.7,-61.95 65.82,-70.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="63.76,-67.92 57.32,-76.34 67.6,-73.78 63.76,-67.92"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~backend.f90~2 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~backend.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M542,-189.52C520.47,-199.4 495.62,-207.9 474.46,-214.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="473.3,-211.03 464.71,-217.24 475.29,-217.74 473.3,-211.03"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~backend.f90~3 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~backend.f90~3</title>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M649.03,-101.72C635.39,-118.73 608.77,-149.8 581,-170.52 566.18,-181.57 560.8,-181.8 544,-189.52"/>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M542,-189.52C510.01,-204.2 414.54,-197.33 355.44,-191.25"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="355.52,-187.74 345.2,-190.17 354.78,-194.7 355.52,-187.74"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M616.93,-92.38C578.44,-95.03 521,-98.98 479.18,-101.86"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="478.91,-98.37 469.18,-102.55 479.39,-105.35 478.91,-98.37"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~channel.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~channel.f90</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M635.33,-101.66C618.34,-110.56 595.04,-122.77 576.23,-132.63"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="574.37,-129.65 567.14,-137.39 577.62,-135.85 574.37,-129.65"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~generic.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~generic.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M636.15,-77.42C618.81,-68.03 594.57,-54.9 575.3,-44.47"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="576.75,-41.27 566.29,-39.59 573.42,-47.43 576.75,-41.27"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~tgv.f90 -->
+<g id="sourcefile~~backend.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~tgv.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M616.84,-82.24C604.77,-80.13 591.7,-77.85 580.01,-75.81"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="580.61,-72.36 570.15,-74.09 579.4,-79.25 580.61,-72.36"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilebackendf90AfferentGraph = svgPanZoom('#sourcefilebackendf90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="k">module </span><span class="n">m_base_backend</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="w">  </span><span class="k">use </span><span class="n">mpi</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">  </span><span class="k">use </span><span class="n">m_allocator</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">allocator_t</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">  </span><span class="k">use </span><span class="n">m_common</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">dp</span><span class="p">,</span><span class="w"> </span><span class="n">DIR_C</span><span class="p">,</span><span class="w"> </span><span class="n">get_rdr_from_dirs</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="w">  </span><span class="k">use </span><span class="n">m_field</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">  </span><span class="k">use </span><span class="n">m_mesh</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">mesh_t</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="w">  </span><span class="k">use </span><span class="n">m_poisson_fft</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">poisson_fft_t</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">  </span><span class="k">use </span><span class="n">m_tdsops</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">tdsops_t</span><span class="p">,</span><span class="w"> </span><span class="n">dirps_t</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">  </span><span class="k">implicit none</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="k">  type</span><span class="p">,</span><span class="w"> </span><span class="k">abstract</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">      </span><span class="c">!! base_backend class defines all the abstract operations that the</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">      </span><span class="c">!! solver class requires.</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">      </span><span class="c">!! For example, transport equation in solver class evaluates the</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">      </span><span class="c">!! derivatives in x, y, and z directions, and reorders the input</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">      </span><span class="c">!! fields as required. Then finally, combines all the directional</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">      </span><span class="c">!! derivatives to obtain the divergence of U*.</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="w">      </span><span class="c">!! All these high level operations solver class executes are</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">      </span><span class="c">!! defined here using the abstract interfaces. Every backend</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">      </span><span class="c">!! implementation extends the present abstact backend class to</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">      </span><span class="c">!! define the specifics of these operations based on the target</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">      </span><span class="c">!! architecture.</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nu</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="n">mesh_t</span><span class="p">),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mesh</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">allocator_t</span><span class="p">),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">allocator</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">poisson_fft_t</span><span class="p">),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">poisson_fft</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">  </span><span class="k">contains</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="k">    procedure</span><span class="p">(</span><span class="n">transeq_ders</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">transeq_x</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">transeq_ders</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">transeq_y</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">transeq_ders</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">transeq_z</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">tds_solve</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tds_solve</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">reorder</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">reorder</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">sum_intox</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sum_yintox</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">sum_intox</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sum_zintox</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">vecadd</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">vecadd</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">scalar_product</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">scalar_product</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">field_max_mean</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_max_mean</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">field_ops</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_scale</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">field_ops</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_shift</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">field_reduce</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_volume_integral</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">field_set_face</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_set_face</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">copy_data_to_f</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">copy_data_to_f</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">copy_f_to_data</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">copy_f_to_data</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">alloc_tdsops</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">alloc_tdsops</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">init_poisson_fft</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">init_poisson_fft</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">    </span><span class="k">procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base_init</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">    </span><span class="k">procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">get_field_data</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">    </span><span class="k">procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">set_field_data</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="w">  </span><span class="k">end type </span><span class="n">base_backend_t</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">  </span><span class="k">abstract interface</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="k">    subroutine </span><span class="n">transeq_ders</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">du</span><span class="p">,</span><span class="w"> </span><span class="n">dv</span><span class="p">,</span><span class="w"> </span><span class="n">dw</span><span class="p">,</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="n">dirps</span><span class="p">)</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">         </span><span class="c">!! transeq equation obtains the derivatives direction by</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">         </span><span class="c">!! direction, and the exact algorithm used to obtain these</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">         </span><span class="c">!! derivatives are decided at runtime. Backend implementations</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">         </span><span class="c">!! are responsible from directing calls to transeq_ders into</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">         </span><span class="c">!! the correct algorithm.</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dirps_t</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="k">      class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">du</span><span class="p">,</span><span class="w"> </span><span class="n">dv</span><span class="p">,</span><span class="w"> </span><span class="n">dw</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">w</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">dirps_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dirps</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">transeq_ders</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="k">  abstract interface</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="k">    subroutine </span><span class="n">tds_solve</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">du</span><span class="p">,</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">tdsops</span><span class="p">)</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">      </span><span class="c">!! transeq equation obtains the derivatives direction by</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">      </span><span class="c">!! direction, and the exact algorithm used to obtain these</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">      </span><span class="c">!! derivatives are decided at runtime. Backend implementations</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">      </span><span class="c">!! are responsible from directing calls to tds_solve to the</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">      </span><span class="c">!! correct algorithm.</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tdsops_t</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-86" name="ln-86" href="#ln-86"></a>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="k">      class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">du</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">tdsops_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tdsops</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">tds_solve</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="k">  abstract interface</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="k">    subroutine </span><span class="n">reorder</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">u_</span><span class="p">,</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">direction</span><span class="p">)</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="w">         </span><span class="c">!! reorder subroutines are straightforward, they rearrange</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">         </span><span class="c">!! data into our specialist data structure so that regardless</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">         </span><span class="c">!! of the direction tridiagonal systems are solved efficiently</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a><span class="w">         </span><span class="c">!! and fast.</span>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="k">      class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">direction</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">reorder</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="k">  abstract interface</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="k">    subroutine </span><span class="n">sum_intox</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">u_</span><span class="p">)</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">         </span><span class="c">!! sum9into3 subroutine combines all the directional velocity</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="w">         </span><span class="c">!! derivatives into the corresponding x directional fields.</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="k">      class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u</span>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">sum_intox</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="k">  abstract interface</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="k">    subroutine </span><span class="n">vecadd</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="p">)</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">         </span><span class="c">!! adds two vectors together: y = a*x + b*y</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dp</span>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="k">      class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a</span>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">x</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">b</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">y</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">vecadd</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="k">  abstract interface</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a><span class="k">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span><span class="w"> </span><span class="k">function </span><span class="n">scalar_product</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="w">         </span><span class="c">!! Calculates the scalar product of two input fields</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-145" name="ln-145" href="#ln-145"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dp</span>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-148" name="ln-148" href="#ln-148"></a>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="k">      class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a><span class="w">    </span><span class="k">end function </span><span class="n">scalar_product</span>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="k">  abstract interface</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="k">    subroutine </span><span class="n">field_ops</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">)</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="w">      </span><span class="c">!! Scales or shifts a field by a</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dp</span>
+<a id="ln-159" name="ln-159" href="#ln-159"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="k">      class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a</span>
+<a id="ln-165" name="ln-165" href="#ln-165"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">field_ops</span>
+<a id="ln-166" name="ln-166" href="#ln-166"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-167" name="ln-167" href="#ln-167"></a>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="k">  abstract interface</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="k">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span><span class="w"> </span><span class="k">function </span><span class="n">field_reduce</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="w">      </span><span class="c">!! Reduces field to a scalar, example: volume integral</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dp</span>
+<a id="ln-173" name="ln-173" href="#ln-173"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-174" name="ln-174" href="#ln-174"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-175" name="ln-175" href="#ln-175"></a>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="k">      class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a><span class="w">    </span><span class="k">end function </span><span class="n">field_reduce</span>
+<a id="ln-179" name="ln-179" href="#ln-179"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-180" name="ln-180" href="#ln-180"></a>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="k">  abstract interface</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a><span class="k">    subroutine </span><span class="n">field_max_mean</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">max_val</span><span class="p">,</span><span class="w"> </span><span class="n">mean_val</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="n">enforced_data_loc</span><span class="p">)</span>
+<a id="ln-183" name="ln-183" href="#ln-183"></a><span class="w">      </span><span class="c">!! Obtains maximum and mean values in a field</span>
+<a id="ln-184" name="ln-184" href="#ln-184"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dp</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-187" name="ln-187" href="#ln-187"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-188" name="ln-188" href="#ln-188"></a>
+<a id="ln-189" name="ln-189" href="#ln-189"></a><span class="k">      class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-190" name="ln-190" href="#ln-190"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">max_val</span><span class="p">,</span><span class="w"> </span><span class="n">mean_val</span>
+<a id="ln-191" name="ln-191" href="#ln-191"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f</span>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">optional</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enforced_data_loc</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">field_max_mean</span>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a>
+<a id="ln-196" name="ln-196" href="#ln-196"></a><span class="k">  abstract interface</span>
+<a id="ln-197" name="ln-197" href="#ln-197"></a><span class="k">    subroutine </span><span class="n">field_set_face</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="n">c_start</span><span class="p">,</span><span class="w"> </span><span class="n">c_end</span><span class="p">,</span><span class="w"> </span><span class="n">face</span><span class="p">)</span>
+<a id="ln-198" name="ln-198" href="#ln-198"></a><span class="w">      </span><span class="c">!! A field is a subdomain with a rectangular cuboid shape.</span>
+<a id="ln-199" name="ln-199" href="#ln-199"></a><span class="w">      </span><span class="c">!! It has 6 faces, and these faces are either a subdomain boundary</span>
+<a id="ln-200" name="ln-200" href="#ln-200"></a><span class="w">      </span><span class="c">!! or a global domain boundary based on the location of the subdomain.</span>
+<a id="ln-201" name="ln-201" href="#ln-201"></a><span class="w">      </span><span class="c">!! This subroutine allows us to set any of these faces to a value,</span>
+<a id="ln-202" name="ln-202" href="#ln-202"></a><span class="w">      </span><span class="c">!! &#39;c_start&#39; and &#39;c_end&#39; for faces at opposite sides.</span>
+<a id="ln-203" name="ln-203" href="#ln-203"></a><span class="w">      </span><span class="c">!! &#39;face&#39; is one of X_FACE, Y_FACE, Z_FACE from common.f90</span>
+<a id="ln-204" name="ln-204" href="#ln-204"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-205" name="ln-205" href="#ln-205"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dp</span>
+<a id="ln-206" name="ln-206" href="#ln-206"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-207" name="ln-207" href="#ln-207"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-208" name="ln-208" href="#ln-208"></a>
+<a id="ln-209" name="ln-209" href="#ln-209"></a><span class="k">      class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-210" name="ln-210" href="#ln-210"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f</span>
+<a id="ln-211" name="ln-211" href="#ln-211"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c_start</span><span class="p">,</span><span class="w"> </span><span class="n">c_end</span>
+<a id="ln-212" name="ln-212" href="#ln-212"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">face</span>
+<a id="ln-213" name="ln-213" href="#ln-213"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">field_set_face</span>
+<a id="ln-214" name="ln-214" href="#ln-214"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-215" name="ln-215" href="#ln-215"></a>
+<a id="ln-216" name="ln-216" href="#ln-216"></a><span class="k">  abstract interface</span>
+<a id="ln-217" name="ln-217" href="#ln-217"></a><span class="k">    subroutine </span><span class="n">copy_data_to_f</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="k">data</span><span class="p">)</span>
+<a id="ln-218" name="ln-218" href="#ln-218"></a><span class="w">         </span><span class="c">!! Copy the specialist data structure from device or host back</span>
+<a id="ln-219" name="ln-219" href="#ln-219"></a><span class="w">         </span><span class="c">!! to a regular 3D data array in host memory.</span>
+<a id="ln-220" name="ln-220" href="#ln-220"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-221" name="ln-221" href="#ln-221"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dp</span>
+<a id="ln-222" name="ln-222" href="#ln-222"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-223" name="ln-223" href="#ln-223"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-224" name="ln-224" href="#ln-224"></a>
+<a id="ln-225" name="ln-225" href="#ln-225"></a><span class="k">      class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-226" name="ln-226" href="#ln-226"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f</span>
+<a id="ln-227" name="ln-227" href="#ln-227"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">data</span>
+<a id="ln-228" name="ln-228" href="#ln-228"></a><span class="k">    end subroutine </span><span class="n">copy_data_to_f</span>
+<a id="ln-229" name="ln-229" href="#ln-229"></a>
+<a id="ln-230" name="ln-230" href="#ln-230"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">copy_f_to_data</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">)</span>
+<a id="ln-231" name="ln-231" href="#ln-231"></a><span class="w">         </span><span class="c">!! Copy a regular 3D array in host memory into the specialist</span>
+<a id="ln-232" name="ln-232" href="#ln-232"></a><span class="w">         </span><span class="c">!! data structure field that lives on device or host</span>
+<a id="ln-233" name="ln-233" href="#ln-233"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-234" name="ln-234" href="#ln-234"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dp</span>
+<a id="ln-235" name="ln-235" href="#ln-235"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-236" name="ln-236" href="#ln-236"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-237" name="ln-237" href="#ln-237"></a>
+<a id="ln-238" name="ln-238" href="#ln-238"></a><span class="k">      class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-239" name="ln-239" href="#ln-239"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">data</span>
+<a id="ln-240" name="ln-240" href="#ln-240"></a><span class="k">      class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f</span>
+<a id="ln-241" name="ln-241" href="#ln-241"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">copy_f_to_data</span>
+<a id="ln-242" name="ln-242" href="#ln-242"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-243" name="ln-243" href="#ln-243"></a>
+<a id="ln-244" name="ln-244" href="#ln-244"></a><span class="k">  abstract interface</span>
+<a id="ln-245" name="ln-245" href="#ln-245"></a><span class="k">    subroutine </span><span class="n">alloc_tdsops</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-246" name="ln-246" href="#ln-246"></a><span class="w">      </span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">tdsops</span><span class="p">,</span><span class="w"> </span><span class="n">n_tds</span><span class="p">,</span><span class="w"> </span><span class="n">delta</span><span class="p">,</span><span class="w"> </span><span class="n">operation</span><span class="p">,</span><span class="w"> </span><span class="n">scheme</span><span class="p">,</span><span class="w"> </span><span class="n">bc_start</span><span class="p">,</span><span class="w"> </span><span class="n">bc_end</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-247" name="ln-247" href="#ln-247"></a><span class="w">      </span><span class="n">stretch</span><span class="p">,</span><span class="w"> </span><span class="n">stretch_correct</span><span class="p">,</span><span class="w"> </span><span class="n">n_halo</span><span class="p">,</span><span class="w"> </span><span class="n">from_to</span><span class="p">,</span><span class="w"> </span><span class="n">sym</span><span class="p">,</span><span class="w"> </span><span class="n">c_nu</span><span class="p">,</span><span class="w"> </span><span class="n">nu0_nu</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-248" name="ln-248" href="#ln-248"></a><span class="w">      </span><span class="p">)</span>
+<a id="ln-249" name="ln-249" href="#ln-249"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-250" name="ln-250" href="#ln-250"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dp</span>
+<a id="ln-251" name="ln-251" href="#ln-251"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tdsops_t</span>
+<a id="ln-252" name="ln-252" href="#ln-252"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-253" name="ln-253" href="#ln-253"></a>
+<a id="ln-254" name="ln-254" href="#ln-254"></a><span class="k">      class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-255" name="ln-255" href="#ln-255"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">tdsops_t</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tdsops</span>
+<a id="ln-256" name="ln-256" href="#ln-256"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_tds</span>
+<a id="ln-257" name="ln-257" href="#ln-257"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">delta</span>
+<a id="ln-258" name="ln-258" href="#ln-258"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="o">*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">operation</span><span class="p">,</span><span class="w"> </span><span class="n">scheme</span>
+<a id="ln-259" name="ln-259" href="#ln-259"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bc_start</span><span class="p">,</span><span class="w"> </span><span class="n">bc_end</span>
+<a id="ln-260" name="ln-260" href="#ln-260"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">stretch</span><span class="p">(:),</span><span class="w"> </span><span class="n">stretch_correct</span><span class="p">(:)</span>
+<a id="ln-261" name="ln-261" href="#ln-261"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">optional</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_halo</span>
+<a id="ln-262" name="ln-262" href="#ln-262"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="o">*</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">from_to</span>
+<a id="ln-263" name="ln-263" href="#ln-263"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">optional</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sym</span>
+<a id="ln-264" name="ln-264" href="#ln-264"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c_nu</span><span class="p">,</span><span class="w"> </span><span class="n">nu0_nu</span>
+<a id="ln-265" name="ln-265" href="#ln-265"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">alloc_tdsops</span>
+<a id="ln-266" name="ln-266" href="#ln-266"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-267" name="ln-267" href="#ln-267"></a>
+<a id="ln-268" name="ln-268" href="#ln-268"></a><span class="k">  abstract interface</span>
+<a id="ln-269" name="ln-269" href="#ln-269"></a><span class="k">    subroutine </span><span class="n">init_poisson_fft</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">mesh</span><span class="p">,</span><span class="w"> </span><span class="n">xdirps</span><span class="p">,</span><span class="w"> </span><span class="n">ydirps</span><span class="p">,</span><span class="w"> </span><span class="n">zdirps</span><span class="p">)</span>
+<a id="ln-270" name="ln-270" href="#ln-270"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-271" name="ln-271" href="#ln-271"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dirps_t</span>
+<a id="ln-272" name="ln-272" href="#ln-272"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mesh_t</span>
+<a id="ln-273" name="ln-273" href="#ln-273"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-274" name="ln-274" href="#ln-274"></a>
+<a id="ln-275" name="ln-275" href="#ln-275"></a><span class="k">      class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-276" name="ln-276" href="#ln-276"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">mesh_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mesh</span>
+<a id="ln-277" name="ln-277" href="#ln-277"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">dirps_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">xdirps</span><span class="p">,</span><span class="w"> </span><span class="n">ydirps</span><span class="p">,</span><span class="w"> </span><span class="n">zdirps</span>
+<a id="ln-278" name="ln-278" href="#ln-278"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">init_poisson_fft</span>
+<a id="ln-279" name="ln-279" href="#ln-279"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-280" name="ln-280" href="#ln-280"></a>
+<a id="ln-281" name="ln-281" href="#ln-281"></a><span class="k">contains</span>
+<a id="ln-282" name="ln-282" href="#ln-282"></a>
+<a id="ln-283" name="ln-283" href="#ln-283"></a><span class="k">  subroutine </span><span class="n">base_init</span><span class="p">(</span><span class="n">self</span><span class="p">)</span>
+<a id="ln-284" name="ln-284" href="#ln-284"></a><span class="w">    </span><span class="k">implicit none</span>
+<a id="ln-285" name="ln-285" href="#ln-285"></a>
+<a id="ln-286" name="ln-286" href="#ln-286"></a><span class="k">    class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-287" name="ln-287" href="#ln-287"></a>
+<a id="ln-288" name="ln-288" href="#ln-288"></a><span class="w">  </span><span class="k">end subroutine </span><span class="n">base_init</span>
+<a id="ln-289" name="ln-289" href="#ln-289"></a>
+<a id="ln-290" name="ln-290" href="#ln-290"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">get_field_data</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="n">dir</span><span class="p">)</span>
+<a id="ln-291" name="ln-291" href="#ln-291"></a><span class="w">   </span><span class="c">!! Extract data from field `f` optionally reordering into `dir` orientation.</span>
+<a id="ln-292" name="ln-292" href="#ln-292"></a><span class="w">   </span><span class="c">!! To output in same orientation as `f`, use `call ...%get_field_data(data, f, f%dir)`</span>
+<a id="ln-293" name="ln-293" href="#ln-293"></a><span class="w">    </span><span class="k">implicit none</span>
+<a id="ln-294" name="ln-294" href="#ln-294"></a>
+<a id="ln-295" name="ln-295" href="#ln-295"></a><span class="k">    class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-296" name="ln-296" href="#ln-296"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">data</span><span class="w"> </span><span class="c">!! Output array</span>
+<a id="ln-297" name="ln-297" href="#ln-297"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="c">!! Field</span>
+<a id="ln-298" name="ln-298" href="#ln-298"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">optional</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dir</span><span class="w"> </span><span class="c">!! Desired orientation of output array (defaults to Cartesian)</span>
+<a id="ln-299" name="ln-299" href="#ln-299"></a>
+<a id="ln-300" name="ln-300" href="#ln-300"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f_temp</span>
+<a id="ln-301" name="ln-301" href="#ln-301"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">direction</span><span class="p">,</span><span class="w"> </span><span class="n">rdr_dir</span>
+<a id="ln-302" name="ln-302" href="#ln-302"></a>
+<a id="ln-303" name="ln-303" href="#ln-303"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">dir</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-304" name="ln-304" href="#ln-304"></a><span class="k">      </span><span class="n">direction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dir</span>
+<a id="ln-305" name="ln-305" href="#ln-305"></a><span class="w">    </span><span class="k">else</span>
+<a id="ln-306" name="ln-306" href="#ln-306"></a><span class="k">      </span><span class="n">direction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">DIR_C</span>
+<a id="ln-307" name="ln-307" href="#ln-307"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-308" name="ln-308" href="#ln-308"></a>
+<a id="ln-309" name="ln-309" href="#ln-309"></a><span class="w">    </span><span class="c">! Returns 0 if no reorder required</span>
+<a id="ln-310" name="ln-310" href="#ln-310"></a><span class="w">    </span><span class="n">rdr_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_rdr_from_dirs</span><span class="p">(</span><span class="n">f</span><span class="p">%</span><span class="n">dir</span><span class="p">,</span><span class="w"> </span><span class="n">direction</span><span class="p">)</span>
+<a id="ln-311" name="ln-311" href="#ln-311"></a>
+<a id="ln-312" name="ln-312" href="#ln-312"></a><span class="w">    </span><span class="c">! Carry out a reorder if we need, and copy from field to data array</span>
+<a id="ln-313" name="ln-313" href="#ln-313"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rdr_dir</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-314" name="ln-314" href="#ln-314"></a><span class="k">      </span><span class="n">f_temp</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">direction</span><span class="p">)</span>
+<a id="ln-315" name="ln-315" href="#ln-315"></a><span class="w">      </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">reorder</span><span class="p">(</span><span class="n">f_temp</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="n">rdr_dir</span><span class="p">)</span>
+<a id="ln-316" name="ln-316" href="#ln-316"></a><span class="w">      </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">copy_f_to_data</span><span class="p">(</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">f_temp</span><span class="p">)</span>
+<a id="ln-317" name="ln-317" href="#ln-317"></a><span class="w">      </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">f_temp</span><span class="p">)</span>
+<a id="ln-318" name="ln-318" href="#ln-318"></a><span class="w">    </span><span class="k">else</span>
+<a id="ln-319" name="ln-319" href="#ln-319"></a><span class="k">      call </span><span class="n">self</span><span class="p">%</span><span class="n">copy_f_to_data</span><span class="p">(</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">)</span>
+<a id="ln-320" name="ln-320" href="#ln-320"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-321" name="ln-321" href="#ln-321"></a>
+<a id="ln-322" name="ln-322" href="#ln-322"></a><span class="k">  end subroutine </span><span class="n">get_field_data</span>
+<a id="ln-323" name="ln-323" href="#ln-323"></a>
+<a id="ln-324" name="ln-324" href="#ln-324"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">set_field_data</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">dir</span><span class="p">)</span>
+<a id="ln-325" name="ln-325" href="#ln-325"></a><span class="w">    </span><span class="k">implicit none</span>
+<a id="ln-326" name="ln-326" href="#ln-326"></a>
+<a id="ln-327" name="ln-327" href="#ln-327"></a><span class="k">    class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-328" name="ln-328" href="#ln-328"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="c">!! Field</span>
+<a id="ln-329" name="ln-329" href="#ln-329"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">data</span><span class="w"> </span><span class="c">!! Input array</span>
+<a id="ln-330" name="ln-330" href="#ln-330"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">optional</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dir</span><span class="w"> </span><span class="c">!! Orientation of input array (defaults to Cartesian)</span>
+<a id="ln-331" name="ln-331" href="#ln-331"></a>
+<a id="ln-332" name="ln-332" href="#ln-332"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f_temp</span>
+<a id="ln-333" name="ln-333" href="#ln-333"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">direction</span><span class="p">,</span><span class="w"> </span><span class="n">rdr_dir</span>
+<a id="ln-334" name="ln-334" href="#ln-334"></a>
+<a id="ln-335" name="ln-335" href="#ln-335"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">dir</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-336" name="ln-336" href="#ln-336"></a><span class="k">      </span><span class="n">direction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dir</span>
+<a id="ln-337" name="ln-337" href="#ln-337"></a><span class="w">    </span><span class="k">else</span>
+<a id="ln-338" name="ln-338" href="#ln-338"></a><span class="k">      </span><span class="n">direction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">DIR_C</span>
+<a id="ln-339" name="ln-339" href="#ln-339"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-340" name="ln-340" href="#ln-340"></a>
+<a id="ln-341" name="ln-341" href="#ln-341"></a><span class="w">    </span><span class="c">! Returns 0 if no reorder required</span>
+<a id="ln-342" name="ln-342" href="#ln-342"></a><span class="w">    </span><span class="n">rdr_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_rdr_from_dirs</span><span class="p">(</span><span class="n">direction</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">%</span><span class="n">dir</span><span class="p">)</span>
+<a id="ln-343" name="ln-343" href="#ln-343"></a>
+<a id="ln-344" name="ln-344" href="#ln-344"></a><span class="w">    </span><span class="c">! Carry out a reorder if we need, and copy from data array to field</span>
+<a id="ln-345" name="ln-345" href="#ln-345"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rdr_dir</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-346" name="ln-346" href="#ln-346"></a><span class="k">      </span><span class="n">f_temp</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">direction</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">%</span><span class="n">data_loc</span><span class="p">)</span>
+<a id="ln-347" name="ln-347" href="#ln-347"></a><span class="w">      </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">copy_data_to_f</span><span class="p">(</span><span class="n">f_temp</span><span class="p">,</span><span class="w"> </span><span class="k">data</span><span class="p">)</span>
+<a id="ln-348" name="ln-348" href="#ln-348"></a><span class="w">      </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">reorder</span><span class="p">(</span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="n">f_temp</span><span class="p">,</span><span class="w"> </span><span class="n">rdr_dir</span><span class="p">)</span>
+<a id="ln-349" name="ln-349" href="#ln-349"></a><span class="w">      </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">f_temp</span><span class="p">)</span>
+<a id="ln-350" name="ln-350" href="#ln-350"></a><span class="w">    </span><span class="k">else</span>
+<a id="ln-351" name="ln-351" href="#ln-351"></a><span class="k">      call </span><span class="n">self</span><span class="p">%</span><span class="n">copy_data_to_f</span><span class="p">(</span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="k">data</span><span class="p">)</span>
+<a id="ln-352" name="ln-352" href="#ln-352"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-353" name="ln-353" href="#ln-353"></a>
+<a id="ln-354" name="ln-354" href="#ln-354"></a><span class="k">  end subroutine </span><span class="n">set_field_data</span>
+<a id="ln-355" name="ln-355" href="#ln-355"></a>
+<a id="ln-356" name="ln-356" href="#ln-356"></a><span class="k">end module </span><span class="n">m_base_backend</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2025 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
