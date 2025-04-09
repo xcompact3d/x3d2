@@ -97,12 +97,19 @@ contains
     !! Allocate memory for a new block and return a pointer to a new
     !! [[m_allocator(module):field_t(type)]] object.
     class(allocator_t), intent(inout) :: self
-    type(field_t), pointer, intent(in) :: next
+    class(field_t), pointer, intent(in) :: next
     type(field_t), pointer :: newblock
     class(field_t), pointer :: ptr
     self%next_id = self%next_id + 1
     allocate (newblock)
-    newblock = field_t(self%ngrid, next, id=self%next_id)
+    associate (p_next => next)
+      select type (p_next)
+      type is (field_t)
+        newblock = field_t(self%ngrid, p_next, id=self%next_id)
+      class default
+        error stop "Incorrect overloading for create_block"
+      end select
+    end associate
     ptr => newblock
   end function create_block
 
@@ -121,12 +128,13 @@ contains
     integer, intent(in) :: dir
     integer, intent(in), optional :: data_loc
     integer :: dims(3)
+
     ! If the list is empty, allocate a new block before returning a
     ! pointer to it.
     if (.not. associated(self%first)) then
       ! Construct a field_t. This effectively allocates
       ! storage space.
-      self%first => self%create_block(next=self%first)
+      self%first => self%create_block(self%first)
     end if
     handle => self%first
     self%first => self%first%next ! 2nd block becomes head block
