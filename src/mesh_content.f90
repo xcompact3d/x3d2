@@ -163,14 +163,13 @@ contains
     do dir = 1, 3
       if (trim(self%stretching(dir)) == 'uniform') then
         self%stretched(dir) = .false.
-        self%vert_coords(1:vert_dims(dir), dir) = [((n_offset(dir) + i - 1)*self%d(dir), &
-                                                    i=1, vert_dims(dir))]
+        self%vert_coords(1:vert_dims(dir), dir) = &
+          [((n_offset(dir) + i - 1)*self%d(dir), i=1, vert_dims(dir))]
         self%vert_ds(:, dir) = 1._dp
         self%vert_ds2(:, dir) = 1._dp
         self%vert_d2s(:, dir) = 0._dp
-        self%midp_coords(1:cell_dims(dir), dir) = [((n_offset(dir) + i &
-                                                     - 0.5_dp)*self%d(dir), &
-                                                    i=1, cell_dims(dir))]
+        self%midp_coords(1:cell_dims(dir), dir) = &
+          [((n_offset(dir) + i - 0.5_dp)*self%d(dir), i=1, cell_dims(dir))]
         self%midp_ds(:, dir) = 1._dp
         self%midp_ds2(:, dir) = 1._dp
         self%midp_d2s(:, dir) = 0._dp
