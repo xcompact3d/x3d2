@@ -53,6 +53,7 @@ set(DUMMYDECOMPSRC
 )
 set(ADIOS2SRC
   adios2/adios2_io.f90
+  adios2/checkpoint_io.f90
 )
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
