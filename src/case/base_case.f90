@@ -9,14 +9,14 @@ module m_base_case
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_solver, only: solver_t, init
-  use m_adios2_io, only: adios2_writer_t, adios2_mode_write, adios2_file_t
+  use m_checkpoint_io, only: checkpoint_manager_t
   use iso_fortran_env, only: real32, real64, int64
 
   implicit none
 
   type, abstract :: base_case_t
     class(solver_t), allocatable :: solver
-    type(adios2_writer_t) :: adios2_writer
+    type(checkpoint_manager_t) :: checkpoint_mgr
   contains
     procedure(boundary_conditions), deferred :: boundary_conditions
     procedure(initial_conditions), deferred :: initial_conditions
@@ -29,7 +29,6 @@ module m_base_case
     procedure :: run
     procedure :: print_enstrophy
     procedure :: print_div_max_mean
-    procedure :: write_velocity_fields
   end type base_case_t
 
   abstract interface
@@ -95,18 +94,20 @@ contains
 
     self%solver = init(backend, mesh, host_allocator)
 
-    call self%adios2_writer%init(MPI_COMM_WORLD, "x3d2_writer")
+    call self%checkpoint_mgr%init(MPI_COMM_WORLD)
 
-    call self%initial_conditions()
+    call self%checkpoint_mgr%handle_restart(self%solver, MPI_COMM_WORLD)
+
+    if (.not. self%checkpoint_mgr%is_restart) call self%initial_conditions()
 
   end subroutine case_init
 
   subroutine case_finalise(self)
     class(base_case_t) :: self
 
-    call self%adios2_writer%finalise()
-
     if (self%solver%mesh%par%is_root()) print *, 'run end'
+
+    call self%checkpoint_mgr%finalise()
   end subroutine case_finalise
 
   subroutine set_init(self, field, field_func)
@@ -199,15 +200,6 @@ contains
 
   end subroutine print_div_max_mean
 
-  subroutine write_velocity_fields(self, timestep)
-      class(base_case_t), intent(inout) :: self
-      integer, intent(in) :: timestep
-
-      character(len=*), parameter :: field_names(3) = ["u", "v", "w"]
-
-      call self%adios2_writer%write_fields(timestep, field_names, self%solver)
-  end subroutine write_velocity_fields
-
   subroutine run(self)
     !! Runs the solver forwards in time from t=t_0 to t=T, performing
     !! postprocessing/IO and reporting diagnostics.
@@ -223,8 +215,6 @@ contains
     if (self%solver%mesh%par%is_root()) print *, 'initial conditions'
     t = 0._dp
     call self%postprocess(0, t)
-
-    call self%write_velocity_fields(0)
 
     if (self%solver%mesh%par%is_root()) print *, 'start run'
 
@@ -259,13 +249,15 @@ contains
                                              self%solver%w)
       end do
 
+      self%solver%current_iter = i
+
       if (mod(i, self%solver%n_output) == 0) then
         t = i*self%solver%dt
 
-        call self%write_velocity_fields(i)
-
         call self%postprocess(i, t)
       end if
+
+      call self%checkpoint_mgr%handle_io_step(self%solver, i, MPI_COMM_WORLD)
     end do
 
     call self%case_finalise
