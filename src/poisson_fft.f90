@@ -22,8 +22,19 @@ module m_poisson_fft
     complex(dp), allocatable, dimension(:, :, :) :: waves
     !> Wave numbers in x, y, and z
     real(dp), allocatable, dimension(:) :: ax, bx, ay, by, az, bz
+    !> Wave numbers in x, y, and z
+    complex(dp), allocatable, dimension(:) :: kx, ky, kz, exs, eys, ezs, &
+                                              k2x, k2y, k2z
+    !> Staggared grid transformation
+    real(dp), allocatable, dimension(:) :: trans_x_re, trans_x_im, &
+                                           trans_y_re, trans_y_im, &
+                                           trans_z_re, trans_z_im
     !> Periodicity in x, y, and z
     logical :: periodic_x, periodic_y, periodic_z
+    !> Stretching operator matrices
+    real(dp), allocatable, dimension(:, :, :, :) :: a_odd_re, a_odd_im, &
+                                                    a_even_re, a_even_im, &
+                                                    a_re, a_im
     !> Procedure pointer to BC specific poisson solvers
     procedure(poisson_xxx), pointer :: poisson => null()
   contains
@@ -33,9 +44,13 @@ module m_poisson_fft
     procedure(fft_postprocess), deferred :: fft_postprocess_010
     procedure(field_process), deferred :: enforce_periodicity_y
     procedure(field_process), deferred :: undo_periodicity_y
-    procedure :: solve_poisson
     procedure :: base_init
+    procedure :: solve_poisson
+    procedure :: stretching_matrix
     procedure :: waves_set
+    procedure :: get_km
+    procedure :: get_km_re
+    procedure :: get_km_im
   end type poisson_fft_t
 
   abstract interface
@@ -121,10 +136,26 @@ contains
     allocate (self%ay(self%ny_glob), self%by(self%ny_glob))
     allocate (self%az(self%nz_glob), self%bz(self%nz_glob))
 
+    allocate (self%kx(self%nx_glob), self%k2x(self%nx_glob))
+    allocate (self%ky(self%ny_glob), self%k2y(self%ny_glob))
+    allocate (self%kz(self%nz_glob), self%k2z(self%nz_glob))
+    allocate (self%exs(self%nx_glob))
+    allocate (self%eys(self%ny_glob))
+    allocate (self%ezs(self%nz_glob))
+
+    allocate (self%trans_x_re(self%nx_spec), self%trans_x_im(self%nx_spec))
+    allocate (self%trans_y_re(self%ny_spec), self%trans_y_im(self%ny_spec))
+    allocate (self%trans_z_re(self%nz_spec), self%trans_z_im(self%nz_spec))
+
     allocate (self%waves(self%nx_spec, self%ny_spec, self%nz_spec))
 
     ! waves_set requires some of the preprocessed tdsops variables.
     call self%waves_set(mesh%geo, xdirps, ydirps, zdirps)
+
+    if (mesh%geo%stretched(1) .or. mesh%geo%stretched(3)) then
+      error stop 'FFT based Poisson solver does not support stretching in x-&
+                  & or z-directions!'
+    end if
 
     ! use correct procedure based on BCs
     if (self%periodic_x .and. self%periodic_y .and. self%periodic_z) then
@@ -132,6 +163,10 @@ contains
     else if (self%periodic_x .and. (.not. self%periodic_y) &
              .and. (self%periodic_z)) then
       self%poisson => poisson_010
+      ! stretching requires some coefficients matrices
+      if (mesh%geo%stretched(2)) then
+        call self%stretching_matrix(mesh%geo, xdirps, ydirps, zdirps)
+      end if
     end if
   end subroutine base_init
 
@@ -173,6 +208,123 @@ contains
 
   end subroutine poisson_010
 
+  subroutine stretching_matrix(self, geo, xdirps, ydirps, zdirps)
+    !! Stretching necessitates a special operation in spectral space.
+    !! The coefficients for the operation are stored in matrix form.
+    implicit none
+
+    class(poisson_fft_t) :: self
+    type(geo_t), intent(in) :: geo
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+
+    real(dp) :: temp, a0, a1
+    complex(dp) :: km_a1_od, km_a1_ev
+    integer :: i, j, k, ix, iy, iz, iy_od, iy_ev
+
+    do i = 1, self%nx_spec
+      temp = real(self%exs(i), kind=dp)*geo%d(1)
+      self%trans_x_re(i) = 2*(xdirps%interpl_v2p%a*cos(temp*0.5_dp) &
+                              + xdirps%interpl_v2p%b*cos(temp*1.5_dp) &
+                              + xdirps%interpl_v2p%c*cos(temp*2.5_dp) &
+                              + xdirps%interpl_v2p%d*cos(temp*3.5_dp)) &
+                           /(1._dp + 2*xdirps%interpl_v2p%alpha*cos(temp))
+      self%trans_x_im(i) = self%trans_x_re(i)
+    end do
+
+    do j = 1, self%ny_spec
+      temp = real(self%eys(j), kind=dp)*geo%d(2)
+      self%trans_y_re(j) = 2*(ydirps%interpl_v2p%a*cos(temp*0.5_dp) &
+                              + ydirps%interpl_v2p%b*cos(temp*1.5_dp) &
+                              + ydirps%interpl_v2p%c*cos(temp*2.5_dp) &
+                              + ydirps%interpl_v2p%d*cos(temp*3.5_dp)) &
+                           /(1._dp + 2*ydirps%interpl_v2p%alpha*cos(temp))
+      self%trans_y_im(j) = self%trans_y_re(j)
+    end do
+
+    do k = 1, self%nz_spec
+      temp = real(self%ezs(k), kind=dp)*geo%d(3)
+      self%trans_z_re(k) = 2*(zdirps%interpl_v2p%a*cos(temp*0.5_dp) &
+                              + zdirps%interpl_v2p%b*cos(temp*1.5_dp) &
+                              + zdirps%interpl_v2p%c*cos(temp*2.5_dp) &
+                              + zdirps%interpl_v2p%d*cos(temp*3.5_dp)) &
+                           /(1._dp + 2*zdirps%interpl_v2p%alpha*cos(temp))
+      self%trans_z_im(k) = self%trans_z_re(k)
+    end do
+
+    if (trim(geo%stretching(2)) == 'bottom') then
+      allocate (self%a_re(self%nx_spec, self%ny_spec, self%nz_spec, 5))
+      allocate (self%a_im(self%nx_spec, self%ny_spec, self%nz_spec, 5))
+    else
+      allocate (self%a_odd_re(self%nx_spec, self%ny_spec/2, self%nz_spec, 5))
+      allocate (self%a_odd_im(self%nx_spec, self%ny_spec/2, self%nz_spec, 5))
+      allocate (self%a_even_re(self%nx_spec, self%ny_spec/2, self%nz_spec, 5))
+      allocate (self%a_even_im(self%nx_spec, self%ny_spec/2, self%nz_spec, 5))
+
+      a0 = geo%alpha(2)/pi + 1._dp/(2*pi*geo%beta(2))
+      select case (trim(geo%stretching(2)))
+      case ('centred')
+        a1 = 1._dp/(4*pi*geo%beta(2))
+      case ('both-ends')
+        a1 = -1._dp/(4*pi*geo%beta(2))
+      case default
+        a1 = 0._dp
+      end select
+
+      ! diagonal
+      do k = 1, self%nz_spec
+        do j = 1, self%ny_spec/2
+          do i = 1, self%nx_spec
+            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            iy_od = 2*iy - 1
+            iy_ev = 2*iy
+            if (iy == 1) then
+              km_a1_od = self%get_km(ix, 3, iz)
+              km_a1_ev = self%get_km(ix, 4, iz)
+            else if (iy == self%ny_spec/2) then
+              km_a1_od = self%get_km(ix, self%ny_spec/2 - 3, iz)
+              km_a1_ev = self%get_km(ix, self%ny_spec/2 - 2, iz)
+            else
+              km_a1_od = self%get_km(ix, iy_od - 2, iz) &
+                         *self%get_km(ix, iy_od + 2, iz)
+              km_a1_ev = self%get_km(ix, iy_ev - 2, iz) &
+                         *self%get_km(ix, iy_ev + 2, iz)
+            end if
+
+            self%a_odd_re(i, j, k, 3) = &
+              -(get_real(self%kx(ix)) &
+                *self%trans_y_re(iy_od)*self%trans_z_re(iz))**2 &
+              - (get_real(self%kz(iz)) &
+                 *self%trans_y_re(iy_od)*self%trans_x_re(iz))**2 &
+              - a0**2*self%get_km_re(ix, iy_od, iz)**2 &
+              - a1**2*get_real(km_a1_od)
+            self%a_odd_im(i, j, k, 3) = &
+              -(get_imag(self%kx(ix)) &
+                *self%trans_y_im(iy_od)*self%trans_z_im(iz))**2 &
+              - (get_imag(self%kz(iz)) &
+                 *self%trans_y_im(iy_od)*self%trans_x_im(iz))**2 &
+              - a0**2*self%get_km_im(ix, iy_od, iz)**2 &
+              - a1**2*get_imag(km_a1_od)
+            self%a_even_re(i, j, k, 3) = &
+              -(get_real(self%kx(ix)) &
+                *self%trans_y_re(iy_ev)*self%trans_z_re(iz))**2 &
+              - (get_real(self%kz(iz)) &
+                 *self%trans_y_re(iy_ev)*self%trans_x_re(iz))**2 &
+              - a0**2*self%get_km_re(ix, iy_ev, iz)**2 &
+              - a1**2*get_real(km_a1_ev)
+            self%a_even_im(i, j, k, 3) = &
+              -(get_imag(self%kx(ix)) &
+                *self%trans_y_im(iy_ev)*self%trans_z_im(iz))**2 &
+              - (get_imag(self%kz(iz)) &
+                 *self%trans_y_im(iy_ev)*self%trans_x_im(iz))**2 &
+              - a0**2*self%get_km_im(ix, iy_ev, iz)**2 &
+              - a1**2*get_imag(km_a1_ev)
+          end do
+        end do
+      end do
+    end if
+
+  end subroutine stretching_matrix
+
   subroutine waves_set(self, geo, xdirps, ydirps, zdirps)
     !! Spectral equivalence constants
     !!
@@ -183,38 +335,25 @@ contains
     type(geo_t), intent(in) :: geo
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
-    complex(dp), allocatable, dimension(:) :: xkx, xk2, yky, yk2, zkz, zk2, &
-                                              exs, eys, ezs
-
-    integer :: nx, ny, nz, ix, iy, iz
+    integer :: i, j, k, ix, iy, iz
     real(dp) :: rlexs, rleys, rlezs, xtt, ytt, ztt, xt1, yt1, zt1
     complex(dp) :: xt2, yt2, zt2, xyzk
-    real(dp) :: L_x, L_y, L_z, d_x, d_y, d_z
-
-    integer :: i, j, k
-
-    nx = self%nx_glob; ny = self%ny_glob; nz = self%nz_glob
-    L_x = geo%L(1); L_y = geo%L(2); L_z = geo%L(3)
-    d_x = geo%d(1); d_y = geo%d(2); d_z = geo%d(3)
-
-    ! Now kxyz
-    allocate (xkx(nx), xk2(nx), exs(nx))
-    allocate (yky(ny), yk2(ny), eys(ny))
-    allocate (zkz(nz), zk2(nz), ezs(nz))
-    xkx(:) = 0; xk2(:) = 0; yky(:) = 0; yk2(:) = 0; zkz(:) = 0; zk2(:) = 0
 
     call wave_numbers( &
-      self%ax, self%bx, xkx, exs, xk2, nx, L_x, d_x, self%periodic_x, &
+      self%ax, self%bx, self%kx, self%exs, self%k2x, &
+      self%nx_glob, geo%L(1), geo%d(1), self%periodic_x, &
       xdirps%stagder_v2p%a, xdirps%stagder_v2p%b, xdirps%stagder_v2p%alpha &
       )
 
     call wave_numbers( &
-      self%ay, self%by, yky, eys, yk2, ny, L_y, d_y, self%periodic_y, &
+      self%ay, self%by, self%ky, self%eys, self%k2y, &
+      self%ny_glob, geo%L(2), geo%d(2), self%periodic_y, &
       ydirps%stagder_v2p%a, ydirps%stagder_v2p%b, ydirps%stagder_v2p%alpha &
       )
 
     call wave_numbers( &
-      self%az, self%bz, zkz, ezs, zk2, nz, L_z, d_z, self%periodic_z, &
+      self%az, self%bz, self%kz, self%ezs, self%k2z, &
+      self%nz_glob, geo%L(3), geo%d(3), self%periodic_z, &
       zdirps%stagder_v2p%a, zdirps%stagder_v2p%b, zdirps%stagder_v2p%alpha &
       )
 
@@ -224,9 +363,9 @@ contains
         do j = 1, self%ny_spec
           do i = 1, self%nx_spec
             ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
-            rlexs = real(exs(ix), kind=dp)*geo%d(1)
-            rleys = real(eys(iy), kind=dp)*geo%d(2)
-            rlezs = real(ezs(iz), kind=dp)*geo%d(3)
+            rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
+            rleys = real(self%eys(iy), kind=dp)*geo%d(2)
+            rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
 
             xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
                      + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
@@ -245,9 +384,9 @@ contains
             yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
             zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
 
-            xt2 = xk2(ix)*(((ytt/yt1)*(ztt/zt1))**2)
-            yt2 = yk2(iy)*(((xtt/xt1)*(ztt/zt1))**2)
-            zt2 = zk2(iz)*(((xtt/xt1)*(ytt/yt1))**2)
+            xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
+            yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
+            zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
 
             xyzk = xt2 + yt2 + zt2
             self%waves(i, j, k) = xyzk
@@ -315,5 +454,50 @@ contains
     end if
 
   end subroutine wave_numbers
+
+  real(dp) function get_km_re(self, i, j, k) result(re)
+    implicit none
+
+    class(poisson_fft_t) :: self
+    integer, intent(in) :: i, j, k
+
+    re = get_real(self%get_km(i, j, k))
+  end function get_km_re
+
+  real(dp) function get_km_im(self, i, j, k) result(re)
+    implicit none
+
+    class(poisson_fft_t) :: self
+    integer, intent(in) :: i, j, k
+
+    re = get_imag(self%get_km(i, j, k))
+  end function get_km_im
+
+  complex(dp) function get_km(self, i, j, k) result(km)
+    implicit none
+
+    class(poisson_fft_t) :: self
+    integer, intent(in) :: i, j, k
+
+    km = self%trans_x_re(i) &
+         *cmplx(get_real(self%ky(j)*self%trans_z_re(k)), &
+                get_imag(self%ky(j)*self%trans_z_im(k)), kind=dp)
+  end function get_km
+
+  real(dp) function get_real(complx) result(re)
+    implicit none
+
+    complex(dp), intent(in) :: complx
+
+    re = real(complx, kind=dp)
+  end function get_real
+
+  real(dp) function get_imag(complx) result(im)
+    implicit none
+
+    complex(dp), intent(in) :: complx
+
+    im = aimag(complx)
+  end function get_imag
 
 end module m_poisson_fft
