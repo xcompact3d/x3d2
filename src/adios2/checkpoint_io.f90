@@ -245,9 +245,17 @@ contains
     integer, intent(in), optional :: comm
     
     character(len=*), parameter :: field_names(3) = ["u", "v", "w"]
-    integer :: myrank, ierr
+    integer :: myrank, ierr, i, j, k
     integer :: comm_to_use
     character(len=256) :: filename
+    type(adios2_file_t) :: file
+    integer :: nx, ny, nz
+    integer :: dims(3), data_loc
+    real(dp), dimension(3) :: min_coords, max_coords, local_min, local_max
+    real(dp) :: dx, dy, dz
+    real(dp), dimension(3) :: coords
+    integer :: global_dims(3)
+    integer :: global_nx, global_ny, global_nz
     
     if (self%checkpoint_cfg%snapshot_freq <= 0) return
     if (mod(timestep, self%checkpoint_cfg%snapshot_freq) /= 0) return
@@ -257,18 +265,78 @@ contains
     else
       comm_to_use = MPI_COMM_WORLD
     end if
-    
     call MPI_Comm_rank(comm_to_use, myrank, ierr)
     
-    ! Generate snapshot filename with timestep
     write(filename, '(A,A,I0.6,A)') trim(self%checkpoint_cfg%snapshot_prefix), '_', timestep, '.bp'
     
+    if (myrank == 0) print *, 'Writing snapshot: ', trim(filename)
+
+    file = self%adios2_writer%open(filename, adios2_mode_write, comm_to_use)
+    call self%adios2_writer%begin_step(file)
+
+    data_loc = solver%u%data_loc
+    dims = solver%mesh%get_dims(data_loc)
+    nx = dims(1)
+    ny = dims(2)
+    nz = dims(3)
+
+    global_dims = solver%mesh%get_global_dims(data_loc)
+    global_nx = global_dims(1)
+    global_ny = global_dims(2)
+    global_nz = global_dims(3)
+
+    local_min = [huge(0.0_dp), huge(0.0_dp), huge(0.0_dp)]
+    local_max = [-huge(0.0_dp), -huge(0.0_dp), -huge(0.0_dp)]
+
+    ! sample corners of the local domain to find bounds
+    do k = 1, nz, max(1, nz-1)  ! just check first and last
+      do j = 1, ny, max(1, ny-1)
+        do i = 1, nx, max(1, nx-1)
+          coords = solver%mesh%get_coordinates(i, j, k)
+          
+          local_min(1) = min(local_min(1), coords(1))
+          local_min(2) = min(local_min(2), coords(2))
+          local_min(3) = min(local_min(3), coords(3))
+          
+          local_max(1) = max(local_max(1), coords(1))
+          local_max(2) = max(local_max(2), coords(2))
+          local_max(3) = max(local_max(3), coords(3))
+        end do
+      end do
+    end do
+
+    ! gather global min/max across all processes
+    call MPI_Allreduce(local_min, min_coords, 3, MPI_DOUBLE_PRECISION, MPI_MIN, comm_to_use, ierr)
+    call MPI_Allreduce(local_max, max_coords, 3, MPI_DOUBLE_PRECISION, MPI_MAX, comm_to_use, ierr)
+
+    ! calculate approximate spacing
+    dx = (max_coords(1) - min_coords(1)) / max(1, global_nx - 1)
+    dy = (max_coords(2) - min_coords(2)) / max(1, global_ny - 1)
+    dz = (max_coords(3) - min_coords(3)) / max(1, global_nz - 1)
+
+    ! paraview-specific mesh metadata
     if (myrank == 0) then
-      print *, 'Writing snapshot: ', trim(filename)
+      call self%adios2_writer%write_attribute("mesh/time_varying", "false", file)
+
+      call self%adios2_writer%write_attribute("mesh/format", "vtk", file)
+      call self%adios2_writer%write_attribute("mesh/type", "structured", file)
+      call self%adios2_writer%write_attribute("mesh/origin/x", trim(real_to_str(min_coords(1))), file)
+      call self%adios2_writer%write_attribute("mesh/origin/y", trim(real_to_str(min_coords(2))), file)
+      call self%adios2_writer%write_attribute("mesh/origin/z", trim(real_to_str(min_coords(3))), file)
+      call self%adios2_writer%write_attribute("mesh/spacing/x", trim(real_to_str(dx)), file)
+      call self%adios2_writer%write_attribute("mesh/spacing/y", trim(real_to_str(dy)), file)
+      call self%adios2_writer%write_attribute("mesh/spacing/z", trim(real_to_str(dz)), file)
+
+      call self%adios2_writer%write_attribute("ParaView/MeshDimensions", "u", file)
+
+      call self%adios2_writer%write_attribute("mesh/dimensionality", "3", file)
+      call self%adios2_writer%write_attribute("u/mesh", "mesh", file)
+      call self%adios2_writer%write_attribute("v/mesh", "mesh", file)
+      call self%adios2_writer%write_attribute("w/mesh", "mesh", file)
     end if
-    
-    ! Use the existing writer's method to write fields to a file
-    call self%adios2_writer%write_fields(timestep, field_names, solver, filename)
+
+    call self%adios2_writer%write_fields(timestep, field_names, solver, file)
+    call self%adios2_writer%close(file)
   end subroutine write_snapshot
   
   subroutine restart_checkpoint(self, solver, filename, timestep, restart_time, comm)
@@ -587,5 +655,13 @@ contains
     
     call self%adios2_writer%finalise()
   end subroutine finalise
+
+  function real_to_str(val) result(str)
+    real(dp), intent(in) :: val
+    character(len=30) :: str
+  
+    write(str, '(ES15.7E3)') val
+    str = adjustl(str)
+  end function real_to_str
   
 end module m_checkpoint_io

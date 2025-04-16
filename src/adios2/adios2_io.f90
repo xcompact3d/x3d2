@@ -12,7 +12,7 @@ module m_adios2_io
   use mpi
   use m_field, only: field_t
   use m_solver, only: solver_t
-  use m_common, only: DIR_C
+  use m_common, only: DIR_C, dp
   implicit none
 
   private
@@ -62,12 +62,19 @@ module m_adios2_io
     procedure, public :: write_fields
 
     generic, public :: write_data => write_scalar_integer, write_scalar_real, &
-                                     write_array_2d_real, write_array_3d_real
+                                     write_array_1d_real, write_array_2d_real, &
+                                     write_array_3d_real, write_array_1d_int, &
+                                     write_array_4d_real
+    generic, public :: write_attribute => write_attribute_string
 
-    procedure, private :: write_scalar_integer !! Writes scalar integer data
-    procedure, private :: write_scalar_real    !! Writes scalar real data
-    procedure, private :: write_array_2d_real  !! Writes 2d array real data
-    procedure, private :: write_array_3d_real  !! Writes 3d array real data
+    procedure, private :: write_scalar_integer   !! Writes scalar integer data
+    procedure, private :: write_scalar_real      !! Writes scalar real data
+    procedure, private :: write_array_1d_int     !! Writes 1d array integer data
+    procedure, private :: write_array_1d_real    !! Writes 1d array real data
+    procedure, private :: write_array_2d_real    !! Writes 2d array real data
+    procedure, private :: write_array_3d_real    !! Writes 3d array real data
+    procedure, private :: write_array_4d_real    !! Writes 4d array real data
+    procedure, private :: write_attribute_string !! Writes string attribute data
   end type adios2_writer_t
 
   !> ADIOS2 reader type
@@ -118,7 +125,6 @@ contains
     if (.not. is_mpi_initialised) call self%handle_error(1, &
             "MPI must be initialised before calling ADIOS2 init")
 
-
     self%comm = comm
     call MPI_Comm_rank(self%comm, comm_rank, ierr)
     call self%handle_error(ierr, "Failed to get MPI rank")
@@ -130,6 +136,9 @@ contains
     ! declare IO process configuration inside adios
     call adios2_declare_io(self%io, self%adios, io_name, ierr)
     call self%handle_error(ierr, "Failed to declare ADIOS2 IO object")
+
+    ! hardcode engine type to BP5
+    call adios2_set_engine(self%io, "BP5", ierr)
 
     if (.not. self%io%valid) call self%handle_error(1, "Failed to create ADIOS2 IO object")
   end subroutine init
@@ -266,6 +275,84 @@ contains
     call self%handle_error(ierr, "Error writing ADIOS2 scalar single precision real data")
   end subroutine write_scalar_real
 
+  !> Write 1d array integer data
+  subroutine write_array_1d_int(self, name, data, file, shape_dims, start_dims, count_dims)
+    class(adios2_writer_t), intent(inout) :: self
+    character(len=*), intent(in) :: name
+    integer, dimension(:), intent(in) :: data
+    type(adios2_file_t), intent(inout) :: file
+    integer(kind=int64), dimension(1), intent(in), optional :: shape_dims, &
+                                                               start_dims, &
+                                                               count_dims
+    type(adios2_variable) :: var
+    integer :: ierr
+    integer(kind=int64), dimension(1) :: local_shape, local_start, local_count
+
+    if (present(shape_dims)) then
+      local_shape = shape_dims
+    else
+      local_shape = int(size(data), kind=int64)
+    end if
+
+    if (present(start_dims)) then
+      local_start = start_dims
+    else
+      local_start = 0_int64
+    end if
+
+    if (present(count_dims)) then
+      local_count = count_dims
+    else
+      local_count = int(size(data), kind=int64)
+    end if
+
+    call adios2_define_variable(var, self%io, name, adios2_type_integer4, &
+                                1, local_shape, local_start, &
+                                local_count, adios2_constant_dims, ierr)
+    call self%handle_error(ierr, "Error defining ADIOS2 1D array integer variable")
+    call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
+    call self%handle_error(ierr, "Error writing ADIOS2 1D array integer data")
+  end subroutine write_array_1d_int
+
+  !> Write 1d array real data
+  subroutine write_array_1d_real(self, name, data, file, shape_dims, start_dims, count_dims)
+    class(adios2_writer_t), intent(inout) :: self
+    character(len=*), intent(in) :: name
+    real(dp), dimension(:), intent(in) :: data
+    type(adios2_file_t), intent(inout) :: file
+    integer(kind=int64), dimension(1), intent(in), optional :: shape_dims, &
+                                                               start_dims, &
+                                                               count_dims
+    type(adios2_variable) :: var
+    integer :: ierr
+    integer(kind=int64), dimension(1) :: local_shape, local_start, local_count
+
+    if (present(shape_dims)) then
+      local_shape = shape_dims
+    else
+      local_shape = int(size(data), kind=int64)
+    end if
+
+    if (present(start_dims)) then
+      local_start = start_dims
+    else
+      local_start = 0_int64
+    end if
+
+    if (present(count_dims)) then
+      local_count = count_dims
+    else
+      local_count = int(size(data), kind=int64)
+    end if
+
+    call adios2_define_variable(var, self%io, name, adios2_type_dp, &
+                                1, local_shape, local_start, &
+                                local_count, adios2_constant_dims, ierr)
+    call self%handle_error(ierr, "Error defining ADIOS2 1D array single precision real variable")
+    call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
+    call self%handle_error(ierr, "Error writing ADIOS2 1D array single precision real data") 
+  end subroutine write_array_1d_real
+
   !> Write 2d array real data
   subroutine write_array_2d_real(self, name, data, file, shape_dims, start_dims, count_dims)
     class(adios2_writer_t), intent(inout) :: self
@@ -305,16 +392,35 @@ contains
     call self%handle_error(ierr, "Error writing ADIOS2 3D array single precision real data")
   end subroutine write_array_3d_real
 
+  !> Write 4d array real data
+  subroutine write_array_4d_real(self, name, data, file, shape_dims, start_dims, count_dims)
+    class(adios2_writer_t), intent(inout) :: self
+    character(len=*), intent(in) :: name
+    real(kind=real64), dimension(:,:,:,:), intent(in) :: data
+    type(adios2_file_t), intent(inout) :: file
+    integer(kind=int64), dimension(4), intent(in) :: shape_dims, &
+                                                     start_dims, &
+                                                     count_dims
+    type(adios2_variable) :: var
+    integer :: ierr
+    call adios2_define_variable(var, self%io, name, adios2_type_dp, &
+                                4, shape_dims, start_dims, &
+                                count_dims, adios2_constant_dims, ierr)
+    call self%handle_error(ierr, "Error defining ADIOS2 4D array single precision real variable")
+
+    call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
+    call self%handle_error(ierr, "Error writing ADIOS2 4D array single precision real data")
+  end subroutine write_array_4d_real
+
+
   !> Write field data
-  subroutine write_fields(self, timestep, field_names, solver, user_filename)
+  subroutine write_fields(self, timestep, field_names, solver, file)
     class(adios2_writer_t), intent(inout) :: self
     integer, intent(in) :: timestep
     character(len=*), intent(in) :: field_names(:)   !! Names of fields to write
     class(solver_t), intent(in) :: solver
-    character(len=*), intent(in), optional :: user_filename
+    type(adios2_file_t), intent(inout) :: file
 
-    character(len=256) :: filename
-    type(adios2_file_t) :: file
     class(field_t), pointer :: host_field, field
     integer :: i, dims(3), data_loc
     integer(kind=int64), dimension(ndims_3d)  :: shape_dims, &   !! Global size of field data
@@ -325,16 +431,6 @@ contains
     shape_dims = int(solver%mesh%get_global_dims(data_loc), kind=int64)
     start_dims = int(solver%mesh%par%n_offset, kind=int64)
     count_dims = int(dims, kind=int64)
-
-    ! create filename with timestep
-    if (present(user_filename)) then
-      filename = user_filename
-    else
-      write(filename, '(A,I6.6,".bp")') "output_", timestep
-    end if
-
-    file = self%open(filename, adios2_mode_write, self%comm)
-    call self%begin_step(file)
 
     do i = 1, size(field_names)
       select case (trim(field_names(i)))
@@ -357,9 +453,19 @@ contains
                                    file, shape_dims, start_dims, count_dims)
       call solver%host_allocator%release_block(host_field)
     end do
-
-    call self%close(file)
   end subroutine write_fields
+
+  subroutine write_attribute_string(self, name, value, file)
+    class(adios2_writer_t), intent(inout) :: self
+    character(len=*), intent(in) :: name, value
+    type(adios2_file_t), intent(inout) :: file
+
+    type(adios2_attribute) :: attr
+    integer :: ierr
+
+    call adios2_define_attribute(attr, self%io, name, value, ierr)
+    call self%handle_error(ierr, "Error defining ADIOS2 attribute")
+  end subroutine write_attribute_string
 
   !> Begin a step for ADIOS2 reader type
   subroutine begin_step_reader(self, file)
