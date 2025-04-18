@@ -41,6 +41,18 @@ module m_config
     procedure :: read => read_channel_nml
   end type channel_config_t
 
+  type, extends(base_config_t) :: checkpoint_config_t
+    integer :: checkpoint_freq = 0                         !! Frequency of checkpointing (0 = off)
+    integer :: snapshot_freq = 0                           !! Frequency of snapshots (0 = off)
+    logical :: keep_checkpoint = .true.                    !! If false, only keep latest checkpoint
+    character(len=256) :: checkpoint_prefix = "checkpoint"
+    character(len=256) :: snapshot_prefix = "snapshot"
+    logical :: restart_from_checkpoint = .false.
+    character(len=256) :: restart_file = ""
+  contains
+    procedure :: read => read_checkpoint_nml
+  end type checkpoint_config_t
+
   abstract interface
     subroutine read(self, nml_file, nml_string) !&
       !! Assigns the member variables either from a file or text source.
@@ -185,6 +197,55 @@ contains
     self%n_rotate = n_rotate
 
   end subroutine read_channel_nml
+
+  subroutine read_checkpoint_nml(self, nml_file, nml_string)
+    implicit none
+
+    class(checkpoint_config_t) :: self
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
+
+    integer :: unit, ierr
+
+    integer :: checkpoint_freq = 0
+    integer :: snapshot_freq = 0
+    logical :: keep_checkpoint = .false.
+    character(len=256) :: checkpoint_prefix = "checkpoint"
+    character(len=256) :: snapshot_prefix = "snapshot"
+    logical :: restart_from_checkpoint = .false.
+    character(len=256) :: restart_file = ""
+
+    namelist /checkpoint_params/ checkpoint_freq, snapshot_freq, &
+      keep_checkpoint, checkpoint_prefix, snapshot_prefix, &
+      restart_from_checkpoint, restart_file
+
+    if (present(nml_file) .and. present(nml_string)) then
+      error stop 'Reading checkpoint config failed! &
+                 &Provide only a file name or source, not both.'
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file, iostat=ierr)
+      if (ierr == 0) then
+        read (unit, nml=checkpoint_params, iostat=ierr)
+
+        if (ierr /=0 .and. ierr /= -1 ) &
+          print *, 'WARNING: Error in checkpoint_params namelist, using defaults'
+      end if
+      close (unit)
+    else if (present(nml_string)) then
+      read (nml_string, nml=checkpoint_params)
+    else
+      error stop 'Reading checkpoint config failed! &
+                 &Provide at least one of the following: file name or source'
+    end if
+
+    self%checkpoint_freq = checkpoint_freq
+    self%snapshot_freq = snapshot_freq
+    self%keep_checkpoint = keep_checkpoint
+    self%checkpoint_prefix = checkpoint_prefix
+    self%snapshot_prefix = snapshot_prefix
+    self%restart_from_checkpoint = restart_from_checkpoint
+    self%restart_file = restart_file
+  end subroutine read_checkpoint_nml
 
 end module m_config
 
