@@ -378,10 +378,6 @@ contains
     call reader%read_data("timestep", timestep, file)
     call reader%read_data("time", restart_time, file)
 
-    if (solver%mesh%par%is_root()) then
-      print *, 'Loaded timestep: ', timestep, "time: ", restart_time
-    end if
-
     do i = 1, size(field_names)
       if (allocated(field_data)) deallocate(field_data)
 

@@ -11,6 +11,7 @@ module m_base_case
   use m_solver, only: solver_t, init
   use m_checkpoint_io, only: checkpoint_manager_t
   use iso_fortran_env, only: real32, real64, int64
+  use mpi, only: MPI_COMM_WORLD
 
   implicit none
 
@@ -210,15 +211,25 @@ contains
     class(field_t), pointer :: du, dv, dw
 
     real(dp) :: t
-    integer :: iter, sub_iter
+    integer :: iter, sub_iter, start_iter
 
-    if (self%solver%mesh%par%is_root()) print *, 'initial conditions'
-    t = 0._dp
-    call self%postprocess(0, t)
+    if (self%checkpoint_mgr%is_restart) then
+      t = self%solver%current_iter*self%solver%dt
+      if (self%solver%mesh%par%is_root()) &
+        ! for restarts current_iter is read from the checkpoint file
+        print *, 'Continuing from iteration:', self%solver%current_iter, 'at time ', t
+    else
+      self%solver%current_iter = 0
+      if (self%solver%mesh%par%is_root()) print *, 'initial conditions'
+      t = 0._dp
+    end if
+   
+    call self%postprocess(self%solver%current_iter, t)
+    start_iter = self%solver%current_iter + 1
 
     if (self%solver%mesh%par%is_root()) print *, 'start run'
 
-    do iter = 1, self%solver%n_iters
+    do iter = start_iter, self%solver%n_iters
       do sub_iter = 1, self%solver%time_integrator%nstage
         ! first apply case-specific BCs
         call self%boundary_conditions()
@@ -249,15 +260,15 @@ contains
                                              self%solver%w)
       end do
 
-      self%solver%current_iter = i
+      self%solver%current_iter = iter
 
-      if (mod(i, self%solver%n_output) == 0) then
-        t = i*self%solver%dt
+      if (mod(iter, self%solver%n_output) == 0) then
+        t = iter*self%solver%dt
 
-        call self%postprocess(i, t)
+        call self%postprocess(iter, t)
       end if
 
-      call self%checkpoint_mgr%handle_io_step(self%solver, i, MPI_COMM_WORLD)
+      call self%checkpoint_mgr%handle_io_step(self%solver, iter, MPI_COMM_WORLD)
     end do
 
     call self%case_finalise
