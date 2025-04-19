@@ -9,10 +9,8 @@ module m_adios2_io
 !! - Engine abstraction for reusing the APIs for different transport modes
   use adios2
   use iso_fortran_env, only: real32, real64, int64
-  use mpi
-  use m_field, only: field_t
-  use m_solver, only: solver_t
-  use m_common, only: DIR_C, dp
+  use mpi, only: MPI_COMM_NULL, MPI_Initialized, MPI_Comm_rank
+  use m_common, only: dp
   implicit none
 
   private
@@ -59,7 +57,6 @@ module m_adios2_io
   type, extends(base_adios2_t) :: adios2_writer_t
   contains
     procedure, public :: begin_step => begin_step_writer
-    procedure, public :: write_fields
 
     generic, public :: write_data => write_scalar_integer, write_scalar_real, &
                                      write_array_1d_real, write_array_2d_real, &
@@ -411,49 +408,6 @@ contains
     call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
     call self%handle_error(ierr, "Error writing ADIOS2 4D array single precision real data")
   end subroutine write_array_4d_real
-
-
-  !> Write field data
-  subroutine write_fields(self, timestep, field_names, solver, file)
-    class(adios2_writer_t), intent(inout) :: self
-    integer, intent(in) :: timestep
-    character(len=*), intent(in) :: field_names(:)   !! Names of fields to write
-    class(solver_t), intent(in) :: solver
-    type(adios2_file_t), intent(inout) :: file
-
-    class(field_t), pointer :: host_field, field
-    integer :: i, dims(3), data_loc
-    integer(kind=int64), dimension(ndims_3d)  :: shape_dims, &   !! Global size of field data
-                                                 start_dims, &   !! Local offset of field data
-                                                 count_dims      !! Local size of field data
-    data_loc = solver%u%data_loc
-    dims = solver%mesh%get_dims(data_loc)
-    shape_dims = int(solver%mesh%get_global_dims(data_loc), kind=int64)
-    start_dims = int(solver%mesh%par%n_offset, kind=int64)
-    count_dims = int(dims, kind=int64)
-
-    do i = 1, size(field_names)
-      select case (trim(field_names(i)))
-        case ("u")
-          field => solver%u
-        case ("v")
-          field => solver%v
-        case ("w")
-          field => solver%w
-        case default
-          call self%handle_error(1, "Invalid field name"//trim(field_names(i)))
-          cycle
-      end select
-
-      host_field => solver%host_allocator%get_block(DIR_C, data_loc)
-      call solver%backend%get_field_data(host_field%data, field)
-      call self%write_array_3d_real(field_names(i), host_field%data(1:dims(1), &
-                                   1:dims(2), &
-                                   1:dims(3)), &
-                                   file, shape_dims, start_dims, count_dims)
-      call solver%host_allocator%release_block(host_field)
-    end do
-  end subroutine write_fields
 
   subroutine write_attribute_string(self, name, value, file)
     class(adios2_writer_t), intent(inout) :: self

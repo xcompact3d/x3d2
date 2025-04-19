@@ -55,6 +55,9 @@ set(ADIOS2SRC
   adios2/adios2_io.f90
   adios2/checkpoint_io.f90
 )
+set(DUMMYADIOS2SRC
+  adios2/checkpoint_dummy.f90
+)
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
@@ -73,6 +76,8 @@ endif()
 
 if(ENABLE_ADIOS2)
   list(APPEND SRC ${ADIOS2SRC})
+else()
+  list(APPEND SRC ${DUMMYADIOS2SRC})
 endif()
 
 add_library(x3d2 STATIC ${SRC})
