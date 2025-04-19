@@ -9,7 +9,7 @@ module m_base_case
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_solver, only: solver_t, init
-  use m_checkpoint_io, only: checkpoint_manager_t
+  use m_checkpoint_manager, only: checkpoint_manager_t, create_checkpoint_manager
   use iso_fortran_env, only: real32, real64, int64
   use mpi, only: MPI_COMM_WORLD
 
@@ -95,12 +95,10 @@ contains
 
     self%solver = init(backend, mesh, host_allocator)
 
-    call self%checkpoint_mgr%init(MPI_COMM_WORLD)
-
+    self%checkpoint_mgr = create_checkpoint_manager(MPI_COMM_WORLD)
     call self%checkpoint_mgr%handle_restart(self%solver, MPI_COMM_WORLD)
 
-    if (.not. self%checkpoint_mgr%is_restart) call self%initial_conditions()
-
+    if (.not. self%checkpoint_mgr%is_restart()) call self%initial_conditions()
   end subroutine case_init
 
   subroutine case_finalise(self)
@@ -213,7 +211,7 @@ contains
     real(dp) :: t
     integer :: iter, sub_iter, start_iter
 
-    if (self%checkpoint_mgr%is_restart) then
+    if (self%checkpoint_mgr%is_restart()) then
       t = self%solver%current_iter*self%solver%dt
       if (self%solver%mesh%par%is_root()) &
         ! for restarts current_iter is read from the checkpoint file
