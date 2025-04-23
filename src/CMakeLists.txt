@@ -109,6 +109,7 @@ endif()
 
 find_package(OpenMP REQUIRED)
 target_link_libraries(x3d2 PRIVATE OpenMP::OpenMP_Fortran)
+target_link_libraries(x3d2_backends PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(xcompact PRIVATE OpenMP::OpenMP_Fortran)
 
 find_package(MPI REQUIRED)
