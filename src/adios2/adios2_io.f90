@@ -7,27 +7,32 @@ module m_adios2_io
 !! - MPI (although non-MPI serial code is also supported)
 !! - Deferred/prefetch/grouped variables transport mode by default
 !! - Engine abstraction for reusing the APIs for different transport modes
-  use adios2
-  use iso_fortran_env, only: real32, real64, int64
+  use adios2, only: adios2_adios, adios2_io, adios2_engine, &
+                    adios2_variable, adios2_attribute, &
+                    adios2_mode_sync, adios2_mode_write, &
+                    adios2_mode_deferred, adios2_mode_read, &
+                    adios2_step_mode_append, adios2_step_mode_read, &
+                    adios2_init, adios2_finalize, &
+                    adios2_declare_io, adios2_set_engine, &
+                    adios2_open, adios2_close, &
+                    adios2_begin_step, adios2_end_step, &
+                    adios2_define_variable, adios2_inquire_variable, &
+                    adios2_define_attribute, &
+                    adios2_set_selection, adios2_put, &
+                    adios2_get, adios2_remove_all_variables, &
+                    adios2_found, adios2_constant_dims, &
+                    adios2_type_dp, adios2_type_integer4
   use mpi, only: MPI_COMM_NULL, MPI_Initialized, MPI_Comm_rank
-  use m_common, only: dp
+  use m_common, only: dp, i8
   implicit none
 
   private
-  public :: base_adios2_t, adios2_writer_t, adios2_reader_t, adios2_file_t, ndims_3d
-
-  ! ADIOS2 module parameters
-  public :: adios2_mode_write, adios2_mode_append, adios2_mode_read
-
-  ! module parameters
-  integer, parameter :: ndims_2d = 2   !! 2D array dimension
-  integer, parameter :: ndims_3d = 3   !! 3D array dimension
+  public :: adios2_writer_t, adios2_reader_t, adios2_file_t, &
+            adios2_mode_write, adios2_mode_read
 
   !> ADIOS2 base type 
   !> Abstract base module for ADIOS2 operations
   !> Defines the abstract base type `base_adios2_t` for common ADIOS2 components
-  !> Abstract base type for ADIOS2 operations
-  !> This type provides common ADIOS2 attributes for reading and writing operations
   type, abstract :: base_adios2_t
   private
     type(adios2_adios) :: adios              !! ADIOS2 global handler
@@ -38,9 +43,8 @@ module m_adios2_io
 
     !> IO configuration parameters
     integer :: output_stride(3) = [1, 1, 1]  !! Output stride for 3D arrays
-    integer :: output_precision = real64     !! Output precision (single/double precision)
+    integer :: output_precision = dp         !! Output precision (single/double precision)
   contains
-    ! common operations
     procedure, public :: init                !! Initialises ADIOS2 handler
     procedure, public :: open                !! Opens an ADIOS2 engine
     procedure, public :: close               !! Closes the ADIOS2 session
@@ -49,7 +53,6 @@ module m_adios2_io
     procedure, public :: setup_io            !! Setup ADIOS2 IO output
     procedure, public :: finalise            !! Finalises ADIOS2 handler
 
-    ! deferred implementations
     procedure(begin_step), deferred, public :: begin_step !! Begins a step in the ADIOS2 engine
   end type base_adios2_t
 
@@ -58,20 +61,23 @@ module m_adios2_io
   contains
     procedure, public :: begin_step => begin_step_writer
 
-    generic, public :: write_data => write_scalar_integer, write_scalar_real, &
-                                     write_array_1d_real, write_array_2d_real, &
-                                     write_array_3d_real, write_array_1d_int, &
+    generic, public :: write_data => write_scalar_integer, &
+                                     write_scalar_real, &
+                                     write_array_1d_real, &
+                                     write_array_2d_real, &
+                                     write_array_3d_real, &
+                                     write_array_1d_int, &
                                      write_array_4d_real
     generic, public :: write_attribute => write_attribute_string
 
-    procedure, private :: write_scalar_integer   !! Writes scalar integer data
-    procedure, private :: write_scalar_real      !! Writes scalar real data
-    procedure, private :: write_array_1d_int     !! Writes 1d array integer data
-    procedure, private :: write_array_1d_real    !! Writes 1d array real data
-    procedure, private :: write_array_2d_real    !! Writes 2d array real data
-    procedure, private :: write_array_3d_real    !! Writes 3d array real data
-    procedure, private :: write_array_4d_real    !! Writes 4d array real data
-    procedure, private :: write_attribute_string !! Writes string attribute data
+    procedure, private :: write_scalar_integer
+    procedure, private :: write_scalar_real
+    procedure, private :: write_array_1d_int
+    procedure, private :: write_array_1d_real
+    procedure, private :: write_array_2d_real
+    procedure, private :: write_array_3d_real
+    procedure, private :: write_array_4d_real
+    procedure, private :: write_attribute_string
   end type adios2_writer_t
 
   !> ADIOS2 reader type
@@ -82,10 +88,10 @@ module m_adios2_io
     generic, public :: read_data => read_scalar_integer, read_scalar_real, &
                                     read_array2d_real, read_array3d_real
 
-    procedure, private :: read_scalar_integer   !! Reads scalar integer data
-    procedure, private :: read_scalar_real      !! Reads scalar real data
-    procedure, private :: read_array2d_real     !! Reads 2d array real data
-    procedure, private :: read_array3d_real     !! Reads 3d array real data
+    procedure, private :: read_scalar_integer
+    procedure, private :: read_scalar_real
+    procedure, private :: read_array2d_real
+    procedure, private :: read_array3d_real
   end type adios2_reader_t
 
   !> ADIOS2 file type
@@ -116,11 +122,12 @@ contains
     logical :: is_mpi_initialised
     integer :: ierr, comm_rank
 
-    if (comm == MPI_COMM_NULL) call self%handle_error(1, &
-                                "Invalid MPI communicator")
+    if (comm == MPI_COMM_NULL) &
+       call self%handle_error(1, "Invalid MPI communicator")
     call MPI_Initialized(is_mpi_initialised, ierr)
-    if (.not. is_mpi_initialised) call self%handle_error(1, &
-            "MPI must be initialised before calling ADIOS2 init")
+    if (.not. is_mpi_initialised) &
+       call self%handle_error(1,"MPI must be initialised &
+                              & before calling ADIOS2 init")
 
     self%comm = comm
     call MPI_Comm_rank(self%comm, comm_rank, ierr)
@@ -137,7 +144,8 @@ contains
     ! hardcode engine type to BP5
     call adios2_set_engine(self%io, "BP5", ierr)
 
-    if (.not. self%io%valid) call self%handle_error(1, "Failed to create ADIOS2 IO object")
+    if (.not. self%io%valid) &
+       call self%handle_error(1, "Failed to create ADIOS2 IO object")
   end subroutine init
 
   !> Opens an ADIOS2 engine
@@ -153,7 +161,8 @@ contains
 
     use_comm = self%comm
     if (present(comm)) use_comm = comm
-    if (.not. self%io%valid) call self%handle_error(1, "ADIOS2 IO object is not valid")
+    if (.not. self%io%valid) &
+       call self%handle_error(1, "ADIOS2 IO object is not valid")
 
     call adios2_open(file%engine, self%io, filename, mode, use_comm, ierr)
     call self%handle_error(ierr, "Failed to open ADIOS2 engine")
@@ -246,169 +255,196 @@ contains
     integer :: ierr
 
     call adios2_define_variable(var, self%io, name, adios2_type_integer4, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 scalar integer variable")
+    call self%handle_error(ierr, &
+                         "Error defining ADIOS2 scalar integer variable")
 
     call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
     call self%handle_error(ierr, "Error writing ADIOS2 scalar integer data")
   end subroutine write_scalar_integer
 
   !> Write scalar real data
-  subroutine write_scalar_real(self, name, data, file, shape_dims, start_dims, count_dims)
+  subroutine write_scalar_real(self, name, data, file, &
+                              shape_dims, start_dims, count_dims)
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name  !! unique variable identifier within io
-    real(kind=real64), intent(in) :: data !! scalar real data
+    real(dp), intent(in) :: data !! scalar real data
     type(adios2_file_t), intent(inout) :: file
-    integer(kind=int64), dimension(:), optional, intent(in) :: shape_dims, &
-                                                      start_dims, count_dims
+    integer(i8), dimension(:), optional, intent(in) :: shape_dims, &  !! Global shape
+                                                       start_dims, &  !! Local offset
+                                                       count_dims     !! Local size
     type(adios2_variable) :: var          !! handler to newly defined variable
     integer :: ierr
 
     ! define adios2 variable to be written in given file format
     call adios2_define_variable(var, self%io, name, &
                                 adios2_type_dp, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 scalar single precision real variable")
+    call self%handle_error(ierr, "Error defining ADIOS2 scalar &
+                                 & double precision real variable")
 
     call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
-    call self%handle_error(ierr, "Error writing ADIOS2 scalar single precision real data")
+    call self%handle_error(ierr, "Error writing ADIOS2 scalar &
+                                 & double precision real data")
   end subroutine write_scalar_real
 
   !> Write 1d array integer data
-  subroutine write_array_1d_int(self, name, data, file, shape_dims, start_dims, count_dims)
+  subroutine write_array_1d_int( &
+    self, name, data, file, shape_dims, start_dims, count_dims
+    )
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
     integer, dimension(:), intent(in) :: data
     type(adios2_file_t), intent(inout) :: file
-    integer(kind=int64), dimension(1), intent(in), optional :: shape_dims, &
-                                                               start_dims, &
-                                                               count_dims
+    integer(i8), dimension(1), intent(in), optional :: shape_dims, &
+                                                       start_dims, &
+                                                       count_dims
     type(adios2_variable) :: var
     integer :: ierr
-    integer(kind=int64), dimension(1) :: local_shape, local_start, local_count
+    integer(i8), dimension(1) :: local_shape, local_start, local_count
 
     if (present(shape_dims)) then
       local_shape = shape_dims
     else
-      local_shape = int(size(data), kind=int64)
+      local_shape = int(size(data), i8)
     end if
 
     if (present(start_dims)) then
       local_start = start_dims
     else
-      local_start = 0_int64
+      local_start = 0_i8
     end if
 
     if (present(count_dims)) then
       local_count = count_dims
     else
-      local_count = int(size(data), kind=int64)
+      local_count = int(size(data), i8)
     end if
 
     call adios2_define_variable(var, self%io, name, adios2_type_integer4, &
                                 1, local_shape, local_start, &
                                 local_count, adios2_constant_dims, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 1D array integer variable")
+    call self%handle_error(ierr, &
+         "Error defining ADIOS2 1D array integer variable")
     call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
     call self%handle_error(ierr, "Error writing ADIOS2 1D array integer data")
   end subroutine write_array_1d_int
 
   !> Write 1d array real data
-  subroutine write_array_1d_real(self, name, data, file, shape_dims, start_dims, count_dims)
+  subroutine write_array_1d_real( &
+    self, name, data, file, shape_dims, start_dims, count_dims
+    )
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
     real(dp), dimension(:), intent(in) :: data
     type(adios2_file_t), intent(inout) :: file
-    integer(kind=int64), dimension(1), intent(in), optional :: shape_dims, &
-                                                               start_dims, &
-                                                               count_dims
+    integer(i8), dimension(1), intent(in), optional :: shape_dims, &
+                                                       start_dims, &
+                                                       count_dims
     type(adios2_variable) :: var
     integer :: ierr
-    integer(kind=int64), dimension(1) :: local_shape, local_start, local_count
+    integer(i8), dimension(1) :: local_shape, local_start, local_count
 
     if (present(shape_dims)) then
       local_shape = shape_dims
     else
-      local_shape = int(size(data), kind=int64)
+      local_shape = int(size(data), i8)
     end if
 
     if (present(start_dims)) then
       local_start = start_dims
     else
-      local_start = 0_int64
+      local_start = 0_i8
     end if
 
     if (present(count_dims)) then
       local_count = count_dims
     else
-      local_count = int(size(data), kind=int64)
+      local_count = int(size(data), i8)
     end if
 
     call adios2_define_variable(var, self%io, name, adios2_type_dp, &
                                 1, local_shape, local_start, &
                                 local_count, adios2_constant_dims, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 1D array single precision real variable")
+    call self%handle_error(ierr, "Error defining ADIOS2 1D array &
+                                 & double precision real variable")
     call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
-    call self%handle_error(ierr, "Error writing ADIOS2 1D array single precision real data") 
+    call self%handle_error(ierr, "Error writing ADIOS2 1D array &
+                                & double precision real data")
   end subroutine write_array_1d_real
 
   !> Write 2d array real data
-  subroutine write_array_2d_real(self, name, data, file, shape_dims, start_dims, count_dims)
+  subroutine write_array_2d_real( &
+    self, name, data, file, shape_dims, start_dims, count_dims
+    )
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
-    real(kind=real64), dimension(:,:), intent(in) :: data
+    real(dp), dimension(:,:), intent(in) :: data
     type(adios2_file_t), intent(inout) :: file
-    integer(kind=int64), dimension(ndims_2d), intent(in) :: shape_dims, &
-                                                   start_dims, count_dims
+    integer(i8), dimension(2), intent(in) :: shape_dims, &
+                                             start_dims, &
+                                             count_dims
     type(adios2_variable) :: var
     integer :: ierr
 
     call adios2_define_variable(var, self%io, name, adios2_type_dp, &
-                                ndims_2d, shape_dims, start_dims, &
+                                2, shape_dims, start_dims, &
                                 count_dims, adios2_constant_dims, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 2D array single precision real variable")
+    call self%handle_error(ierr, "Error defining ADIOS2 2D array &
+                                 & double precision real variable")
 
     call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
-    call self%handle_error(ierr, "Error writing ADIOS2 2D array single precision real data")
+    call self%handle_error(ierr, "Error writing ADIOS2 2D array &
+                                 & double precision real data")
   end subroutine write_array_2d_real
 
   !> Write 3d array real data
-  subroutine write_array_3d_real(self, name, data, file, shape_dims, start_dims, count_dims)
+  subroutine write_array_3d_real( &
+    self, name, data, file, shape_dims, start_dims, count_dims
+    )
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
-    real(kind=real64), dimension(:,:,:), intent(in) :: data
+    real(dp), dimension(:,:,:), intent(in) :: data
     type(adios2_file_t), intent(inout) :: file
-    integer(kind=int64), dimension(ndims_3d), intent(in) :: shape_dims, &
-                                                   start_dims, count_dims
+    integer(i8), dimension(3), intent(in) :: shape_dims, &
+                                             start_dims, &
+                                             count_dims
     type(adios2_variable) :: var
     integer :: ierr
     call adios2_define_variable(var, self%io, name, adios2_type_dp, &
-                                ndims_3d, shape_dims, start_dims, &
+                                3, shape_dims, start_dims, &
                                 count_dims, adios2_constant_dims, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 3D array single precision real variable")
+    call self%handle_error(ierr, "Error defining ADIOS2 3D array &
+                                 & double precision real variable")
 
     call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
-    call self%handle_error(ierr, "Error writing ADIOS2 3D array single precision real data")
+    call self%handle_error(ierr, "Error writing ADIOS2 3D array &
+                                 & double precision real data")
   end subroutine write_array_3d_real
 
   !> Write 4d array real data
-  subroutine write_array_4d_real(self, name, data, file, shape_dims, start_dims, count_dims)
+  subroutine write_array_4d_real(& 
+    self, name, data, file, shape_dims, start_dims, count_dims
+    )
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
-    real(kind=real64), dimension(:,:,:,:), intent(in) :: data
+    real(dp), dimension(:,:,:,:), intent(in) :: data
     type(adios2_file_t), intent(inout) :: file
-    integer(kind=int64), dimension(4), intent(in) :: shape_dims, &
-                                                     start_dims, &
-                                                     count_dims
+    integer(i8), dimension(4), intent(in) :: shape_dims, &
+                                             start_dims, &
+                                             count_dims
     type(adios2_variable) :: var
     integer :: ierr
     call adios2_define_variable(var, self%io, name, adios2_type_dp, &
                                 4, shape_dims, start_dims, &
                                 count_dims, adios2_constant_dims, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 4D array single precision real variable")
+    call self%handle_error(ierr, "Error defining ADIOS2 4D array &
+                                 & double precision real variable")
 
     call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
-    call self%handle_error(ierr, "Error writing ADIOS2 4D array single precision real data")
+    call self%handle_error(ierr, "Error writing ADIOS2 4D array &
+                                 & double precision real data")
   end subroutine write_array_4d_real
 
+  !> Write string attribute for Paraview
   subroutine write_attribute_string(self, name, value, file)
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name, value
@@ -458,7 +494,7 @@ contains
   subroutine read_scalar_real(self, name, data, file)
     class(adios2_reader_t), intent(inout) :: self
     character(len=*), intent(in) :: name
-    real(kind=real64), intent(out) :: data
+    real(dp), intent(out) :: data
     type(adios2_file_t), intent(inout) :: file
 
     type(adios2_variable) :: var
@@ -478,9 +514,9 @@ contains
   subroutine read_array2d_real(self, name, data, file, start_dims, count_dims)
     class(adios2_reader_t), intent(inout) :: self
     character(len=*), intent(in) :: name
-    real(kind=real64), dimension(:,:), allocatable, intent(out) :: data
+    real(dp), dimension(:,:), allocatable, intent(out) :: data
     type(adios2_file_t), intent(inout) :: file
-    integer(kind=int64), dimension(ndims_2d), intent(in) :: start_dims, count_dims
+    integer(i8), dimension(2), intent(in) :: start_dims, count_dims
 
     type(adios2_variable) :: var
     integer :: ierr
@@ -491,8 +527,9 @@ contains
     if (ierr == adios2_found) then
       if (.not. allocated(data)) allocate(data(count_dims(1), count_dims(2)))
 
-      call adios2_set_selection(var, ndims_2d, start_dims, count_dims, ierr)
-      call self%handle_error(ierr, "Failed to set selection for variable"//name)
+      call adios2_set_selection(var, 2, start_dims, count_dims, ierr)
+      call self%handle_error(ierr, &
+           "Failed to set selection for variable"//name)
 
       call adios2_get(file%engine, var, data, adios2_mode_sync, ierr)
       call self%handle_error(ierr, "Failed to read variable"//name)
@@ -503,9 +540,9 @@ contains
   subroutine read_array3d_real(self, name, data, file, start_dims, count_dims)
     class(adios2_reader_t), intent(inout) :: self
     character(len=*), intent(in) :: name
-    real(kind=real64), dimension(:,:,:), allocatable, intent(out) :: data
+    real(dp), dimension(:,:,:), allocatable, intent(out) :: data
     type(adios2_file_t), intent(inout) :: file
-    integer(kind=int64), dimension(ndims_3d), intent(in) :: start_dims, count_dims
+    integer(i8), dimension(3), intent(in) :: start_dims, count_dims
 
     type(adios2_variable) :: var
     integer :: ierr
@@ -514,10 +551,12 @@ contains
     call self%handle_error(ierr, "Failed to inquire variable"//name)
 
     if (ierr == adios2_found) then
-      if (.not. allocated(data)) allocate(data(count_dims(1), count_dims(2), count_dims(3)))
+      if (.not. allocated(data)) &
+         allocate(data(count_dims(1), count_dims(2), count_dims(3)))
 
-      call adios2_set_selection(var, ndims_3d, start_dims, count_dims, ierr)
-      call self%handle_error(ierr, "Failed to set selection for variable"//name)
+      call adios2_set_selection(var, 3, start_dims, count_dims, ierr)
+      call self%handle_error(ierr, &
+           "Failed to set selection for variable"//name)
 
       call adios2_get(file%engine, var, data, adios2_mode_sync, ierr)
       call self%handle_error(ierr, "Failed to read variable"//name)
