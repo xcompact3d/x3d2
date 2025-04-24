@@ -30,7 +30,8 @@ module m_poisson_fft
                                            trans_y_re, trans_y_im, &
                                            trans_z_re, trans_z_im
     !> Periodicity in x, y, and z
-    logical :: periodic_x, periodic_y, periodic_z
+    logical :: periodic_x, periodic_y, periodic_z, &
+               stretched_y = .false., stretched_y_sym
     !> Stretching operator matrices
     real(dp), allocatable, dimension(:, :, :, :) :: a_odd_re, a_odd_im, &
                                                     a_even_re, a_even_im, &
@@ -165,6 +166,7 @@ contains
       self%poisson => poisson_010
       ! stretching requires some coefficients matrices
       if (mesh%geo%stretched(2)) then
+        self%stretched_y = .true.
         call self%stretching_matrix(mesh%geo, xdirps, ydirps, zdirps)
       end if
     end if
@@ -252,6 +254,7 @@ contains
     end do
 
     if (trim(geo%stretching(2)) == 'bottom') then
+      self%stretched_y_sym = .false.
       allocate (self%a_re(self%nx_spec, self%ny_spec, self%nz_spec, 5))
       allocate (self%a_im(self%nx_spec, self%ny_spec, self%nz_spec, 5))
 
@@ -354,6 +357,7 @@ contains
       self%a_re(1, 1, 1, 4) = 0; self%a_im(1, 1, 1, 4) = 0
       self%a_re(1, 1, 1, 5) = 0; self%a_im(1, 1, 1, 5) = 0
     else
+      self%stretched_y_sym = .true.
       allocate (self%a_odd_re(self%nx_spec, self%ny_spec/2, self%nz_spec, 5))
       allocate (self%a_odd_im(self%nx_spec, self%ny_spec/2, self%nz_spec, 5))
       allocate (self%a_even_re(self%nx_spec, self%ny_spec/2, self%nz_spec, 5))
