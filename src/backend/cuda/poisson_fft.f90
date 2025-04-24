@@ -15,7 +15,10 @@ module m_cuda_poisson_fft
   use m_cuda_allocator, only: cuda_field_t
   use m_cuda_spectral, only: memcpy3D, &
                              process_spectral_000, process_spectral_010, &
-                             enforce_periodicity_y, undo_periodicity_y
+                             enforce_periodicity_y, undo_periodicity_y, &
+                             process_spectral_010_fw, &
+                             process_spectral_010_poisson, &
+                             process_spectral_010_bw
 
   implicit none
 
@@ -28,6 +31,10 @@ module m_cuda_poisson_fft
     real(dp), device, allocatable, dimension(:) :: ax_dev, bx_dev, &
                                                    ay_dev, by_dev, &
                                                    az_dev, bz_dev
+    !> Stretching operator matrices
+    real(dp), device, allocatable, dimension(:, :, :, :) :: &
+      a_odd_re_dev, a_odd_im_dev, a_even_re_dev, a_even_im_dev, &
+      a_re_dev, a_im_dev
     !> Forward and backward FFT transform plans
     integer :: plan3D_fw, plan3D_bw
 
@@ -97,6 +104,18 @@ contains
     poisson_fft%ax_dev = poisson_fft%ax; poisson_fft%bx_dev = poisson_fft%bx
     poisson_fft%ay_dev = poisson_fft%ay; poisson_fft%by_dev = poisson_fft%by
     poisson_fft%az_dev = poisson_fft%az; poisson_fft%bz_dev = poisson_fft%bz
+
+    ! if stretching in y is 'centred' or 'both-ends'
+    if (poisson_fft%stretched_y .and. poisson_fft%stretched_y_sym) then
+      poisson_fft%a_odd_re_dev = poisson_fft%a_odd_re
+      poisson_fft%a_odd_im_dev = poisson_fft%a_odd_im
+      poisson_fft%a_even_re_dev = poisson_fft%a_even_re
+      poisson_fft%a_even_im_dev = poisson_fft%a_even_im
+    !! if stretching in y is 'bottom'
+    else if (poisson_fft%stretched_y .and. poisson_fft%stretched_y_sym) then
+      poisson_fft%a_re_dev = poisson_fft%a_re
+      poisson_fft%a_im_dev = poisson_fft%a_im
+    end if
 
     ! 3D plans
     ierr = cufftCreate(poisson_fft%plan3D_fw)
@@ -262,12 +281,31 @@ contains
     threads = dim3(tsize, 1, 1)
 
     ! Postprocess div_u in spectral space
-    call process_spectral_010<<<blocks, threads>>>( & !&
-      c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
-      self%nx_glob, self%ny_glob, self%nz_glob, &
-      self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
-      self%az_dev, self%bz_dev &
-      )
+    if (.not. self%stretched_y) then
+      call process_spectral_010<<<blocks, threads>>>( & !&
+        c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
+        self%az_dev, self%bz_dev &
+        )
+    else
+      call process_spectral_010_fw<<<blocks, threads>>>( & !&
+        c_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
+        self%az_dev, self%bz_dev &
+        )
+      call process_spectral_010_poisson<<<blocks, threads>>>( & !&
+        c_dev, self%waves_dev, self%nx_spec, self%ny_spec, &
+        self%nx_glob, self%ny_glob, self%nz_glob &
+        )
+      call process_spectral_010_bw<<<blocks, threads>>>( & !&
+        c_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
+        self%az_dev, self%bz_dev &
+        )
+    end if
 
   end subroutine fft_postprocess_010_cuda
 
