@@ -67,6 +67,8 @@ module m_checkpoint_manager_impl
   type, extends(checkpoint_manager_base_t) :: checkpoint_manager_adios2_t
     type(adios2_writer_t) :: adios2_writer
     integer :: last_checkpoint_step = -1
+    integer, dimension(3) :: output_stride = [2, 2, 2]  !! Spatial stride for snapshot output
+    integer :: output_precision = dp                    !! Output precision for snapshot
   contains
     procedure :: init
     procedure :: handle_restart
@@ -75,9 +77,9 @@ module m_checkpoint_manager_impl
     procedure, private :: write_checkpoint
     procedure, private :: write_snapshot
     procedure, private :: restart_checkpoint
-    procedure, private :: verify_checkpoint
     procedure, private :: configure
     procedure, private :: write_fields
+    procedure, private :: stride_data
   end type checkpoint_manager_adios2_t
   
 contains
@@ -220,7 +222,7 @@ contains
     call self%adios2_writer%write_data("time", real(simulation_time, dp), file)
     call self%adios2_writer%write_data("dt", real(solver%dt, dp), file)
 
-    call self%write_fields(field_names, solver, file)
+    call self%write_fields(field_names, solver, file, use_stride=.false.)
     call self%adios2_writer%close(file)
 
     ! Remove old checkpoint if configured to keep only the latest
@@ -238,7 +240,6 @@ contains
     end if
 
     self%last_checkpoint_step = timestep
-    !call self%verify_checkpoint(solver, timestep, comm)
   end subroutine write_checkpoint
   
   subroutine write_snapshot(self, solver, timestep, comm)
@@ -344,12 +345,46 @@ contains
       call self%adios2_writer%write_attribute("w/mesh", "mesh", file)
     end if
 
-    call self%write_fields(field_names, solver, file)
+    call self%write_fields(field_names, solver, file, use_stride=.true.)
     call self%adios2_writer%close(file)
   end subroutine write_snapshot
+
+  function stride_data(self, input_data, dims, stride) result(strided_data)
+    !! Stride the input data based on the specified stride
+    class(checkpoint_manager_adios2_t), intent(inout) :: self
+    real(dp), dimension(:,:,:), intent(in) :: input_data
+    integer, dimension(3), intent(in) :: dims
+    integer, dimension(3), intent(in) :: stride
+
+    real(dp), dimension(:,:,:), allocatable :: strided_data
+    integer :: i, j, k, is, js, ks
+    integer :: strided_dims(3)
+
+    strided_dims(1) = (dims(1) + stride(1) - 1) / stride(1)
+    strided_dims(2) = (dims(2) + stride(2) - 1) / stride(2)
+    strided_dims(3) = (dims(3) + stride(3) - 1) / stride(3)
+
+    allocate(strided_data(strided_dims(1), strided_dims(2), &
+                          strided_dims(3)))
+
+    is = 1
+    do i = 1, dims(1), stride(1)
+      js = 1
+      do j = 1, dims(2), stride(2)
+        ks = 1
+        do k = 1, dims(3), stride(3)
+          strided_data(is, js, ks) = input_data(i, j, k)
+          ks = ks + 1
+        end do
+        js = js + 1
+      end do
+      is = is + 1
+    end do
+
+  end function stride_data
   
   subroutine restart_checkpoint( &
-    self, solver, filename, timestep, restart_time, comm
+    self, solver, filename, timestep, restart_time, comm &
     )
     !! Restart simulation state from checkpoint file
     class(checkpoint_manager_adios2_t), intent(inout) :: self
@@ -434,281 +469,94 @@ contains
     if (allocated(field_data)) deallocate(field_data)
   end subroutine restart_checkpoint
   
-  subroutine verify_checkpoint(self, solver, timestep, comm)
-  !! Verify the checkpoint file by reading it back and checking values
-    class(checkpoint_manager_adios2_t), intent(inout) :: self
-    class(solver_t), intent(in) :: solver
-    integer, intent(in) :: timestep
-    integer, intent(in) :: comm
-
-    type(adios2_reader_t) :: reader
-    character(len=256) :: checkpoint_filename
-    type(adios2_file_t) :: file
-    real(dp), allocatable :: field_data(:,:,:)
-    real(dp), allocatable :: orig_data(:,:,:)
-    real(dp) :: max_diff, mean_diff, field_min, field_max
-    real(dp) :: max_diff_u, max_diff_v, max_diff_w
-    real(dp) :: mean_diff_u, mean_diff_v, mean_diff_w
-    real(dp) :: u_min, u_max, v_min, v_max, w_min, w_max
-    integer :: ierr, data_loc
-    integer :: i_field, i_x, j_y, k_z
-    integer :: dims(3), local_count, global_count
-    class(field_t), pointer :: host_field
-    integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
-    character(len=*), parameter :: field_names(3) = ["u", "v", "w"]
-    logical :: field_read_ok
-
-    write(checkpoint_filename, '(A,A,I0.6,A)') &
-     trim(self%checkpoint_cfg%checkpoint_prefix), '_', timestep, '.bp'
-
-    call reader%init(comm, "checkpoint_verify")
-
-    data_loc = solver%u%data_loc
-    dims = solver%mesh%get_dims(data_loc)
-    shape_dims = int(solver%mesh%get_global_dims(data_loc), i8)
-    start_dims = int(solver%mesh%par%n_offset, i8)
-    count_dims = int(dims, i8)
-
-    file = reader%open(checkpoint_filename, adios2_mode_read, comm)
-
-    if (solver%mesh%par%is_root()) then
-        print *, "===== ADIOS2 Variables in File ====="
-        call execute_command_line("bpls " &
-             // trim(checkpoint_filename) // " -la")
-        print *, "=================================="
-    end if
-
-    call reader%begin_step(file)
-
-    allocate(orig_data(dims(1), dims(2), dims(3)))
-
-    max_diff_u = 0.0_dp
-    max_diff_v = 0.0_dp
-    max_diff_w = 0.0_dp
-    mean_diff_u = 0.0_dp
-    mean_diff_v = 0.0_dp
-    mean_diff_w = 0.0_dp
-    u_min = 0.0_dp
-    u_max = 0.0_dp
-    v_min = 0.0_dp
-    v_max = 0.0_dp
-    w_min = 0.0_dp
-    w_max = 0.0_dp
-
-    do i_field = 1, size(field_names)
-        select case (trim(field_names(i_field)))
-            case ("u")
-                host_field => solver%host_allocator%get_block(DIR_C, data_loc)
-                call solver%backend%get_field_data(host_field%data, solver%u)
-                orig_data = host_field%data(1:dims(1), 1:dims(2), 1:dims(3))
-                call solver%host_allocator%release_block(host_field)
-            case ("v")
-                host_field => solver%host_allocator%get_block(DIR_C, data_loc)
-                call solver%backend%get_field_data(host_field%data, solver%v)
-                orig_data = host_field%data(1:dims(1), 1:dims(2), 1:dims(3))
-                call solver%host_allocator%release_block(host_field)
-            case ("w")
-                host_field => solver%host_allocator%get_block(DIR_C, data_loc)
-                call solver%backend%get_field_data(host_field%data, solver%w)
-                orig_data = host_field%data(1:dims(1), 1:dims(2), 1:dims(3))
-                call solver%host_allocator%release_block(host_field)
-            case default
-                call self%adios2_writer%handle_error( & 
-                  1, "Invalid field name"//trim(field_names(i_field)))
-                cycle
-        end select
-
-        max_diff = 0.0_dp
-        mean_diff = 0.0_dp
-        field_min = 0.0_dp
-        field_max = 0.0_dp
-        local_count = 0
-        field_read_ok = .false.
-
-        if (allocated(field_data)) deallocate(field_data)  ! make sure we start fresh
-
-        if (solver%mesh%par%is_root()) then
-            print *, "Reading field: ", trim(field_names(i_field))
-        endif
-
-        call reader%read_data(field_names(i_field), &
-             field_data, file, start_dims, count_dims)
-
-        if (solver%mesh%par%is_root() .and. allocated(field_data)) then
-            print *, "Field: ", trim(field_names(i_field))
-            print *, "  Original data - first value: ", orig_data(1,1,1)
-            print *, "  Read data - first value: ", field_data(1,1,1)
-            print *, "  Original data - middle value: ", &
-                     orig_data(dims(1)/2, dims(2)/2, dims(3)/2)
-            print *, "  Read data - middle value: ", &
-                     field_data(dims(1)/2, dims(2)/2, dims(3)/2)
-        end if
-
-        if (solver%mesh%par%is_root() .and. allocated(field_data)) then
-            print *, "Field shape: ", shape(field_data)
-            print *, "Array bounds: ", lbound(field_data), ubound(field_data)
-
-            ! Check if data is transposed
-            print *, "Testing for transposition:"
-            print *, "  Original(1,2,3):", orig_data(1,2,3)
-            print *, "  Read(1,2,3):", field_data(1,2,3)
-            print *, "  Read(3,2,1):", field_data(3,2,1)
-            print *, "Original data address:", size(orig_data)
-            print *, "Field data address:", size(field_data)
-        end if
-
-        if (allocated(field_data)) then
-            field_read_ok = .true.
-
-            field_min = minval(field_data)
-            field_max = maxval(field_data)
-
-            do k_z = 1, dims(3)
-              do j_y = 1, dims(2)
-                do i_x = 1, dims(1)
-                    mean_diff = mean_diff + abs(field_data(i_x,j_y,k_z) &
-                              - orig_data(i_x,j_y,k_z))
-                    max_diff = max(max_diff, abs(field_data(i_x,j_y,k_z) &
-                              - orig_data(i_x,j_y,k_z)))
-                    local_count = local_count + 1
-                end do
-              end do
-            end do
-
-            call MPI_Allreduce(local_count, global_count, 1, &
-                 MPI_INTEGER, MPI_SUM, comm, ierr)
-
-            if (local_count > 0) then
-                mean_diff = mean_diff / local_count
-            end if
-
-            call MPI_Allreduce(MPI_IN_PLACE, max_diff, 1, &
-                 MPI_DOUBLE_PRECISION, MPI_MAX, comm, ierr)
-            call MPI_Allreduce(MPI_IN_PLACE, mean_diff, 1, &
-                 MPI_DOUBLE_PRECISION, MPI_SUM, comm, ierr)
-            call MPI_Allreduce(MPI_IN_PLACE, field_min, 1, &
-                 MPI_DOUBLE_PRECISION, MPI_MIN, comm, ierr)
-            call MPI_Allreduce(MPI_IN_PLACE, field_max, 1, &
-                 MPI_DOUBLE_PRECISION, MPI_MAX, comm, ierr)
-
-            if (global_count > 0) then
-                mean_diff = mean_diff / global_count
-            end if
-
-            select case (trim(field_names(i_field)))
-                case ("u")
-                    max_diff_u = max_diff
-                    mean_diff_u = mean_diff
-                    u_min = field_min
-                    u_max = field_max
-                case ("v")
-                    max_diff_v = max_diff
-                    mean_diff_v = mean_diff
-                    v_min = field_min
-                    v_max = field_max
-                case ("w")
-                    max_diff_w = max_diff
-                    mean_diff_w = mean_diff
-                    w_min = field_min
-                    w_max = field_max
-            end select
-        else
-            if (solver%mesh%par%is_root()) then
-                print *, "WARNING: Failed to read field: ", &
-               trim(field_names(i_field))
-            endif
-        end if
-    end do
-
-    if (solver%mesh%par%is_root()) then
-        print '(A)', '===== CHECKPOINT VERIFICATION RESULTS ====='
-        print '(A,A)', 'Checkpoint file: ', trim(checkpoint_filename)
-
-        print '(A)', 'U velocity:'
-        print '(A,E12.5)', '  Max difference: ', max_diff_u
-        print '(A,E12.5)', '  Mean difference:', mean_diff_u
-        print '(A,E12.5,A,E12.5)', '  Range: [', u_min, ', ', u_max, ']'
-
-        print '(A)', 'V velocity:'
-        print '(A,E12.5)', '  Max difference: ', max_diff_v
-        print '(A,E12.5)', '  Mean difference:', mean_diff_v
-        print '(A,E12.5,A,E12.5)', '  Range: [', v_min, ', ', v_max, ']'
-
-        print '(A)', 'W velocity:'
-        print '(A,E12.5)', '  Max difference: ', max_diff_w
-        print '(A,E12.5)', '  Mean difference:', mean_diff_w
-        print '(A,E12.5,A,E12.5)', '  Range: [', w_min, ', ', w_max, ']'
-
-        if (max(max_diff_u, max(max_diff_v, max_diff_w)) < 1.0e-12_dp) then
-            print '(A)', 'VERIFICATION RESULT: PASSED'
-            print '(A)', 'The checkpoint data matches the current state &
-                         & within tolerance.'
-        else
-            print '(A)', 'VERIFICATION RESULT: FAILED'
-            print '(A)', 'The checkpoint data differs from the current state &
-                         & beyond tolerance.'
-        end if
-        print '(A)', '========================================='
-    end if
-
-    call reader%close(file)
-    call reader%finalise()
-    if (allocated(field_data)) deallocate(field_data)
-    if (allocated(orig_data)) deallocate(orig_data)
-  end subroutine verify_checkpoint
-
-  subroutine write_fields(self, field_names, solver, file)
-  !! Write field data
+  subroutine write_fields(self, field_names, solver, file, use_stride)
+    !! Write field data, optionally with striding
     class(checkpoint_manager_adios2_t), intent(inout) :: self
     character(len=*), dimension(:), intent(in) :: field_names
     class(solver_t), intent(in) :: solver
     type(adios2_file_t), intent(inout) :: file
+    logical, intent(in), optional :: use_stride
 
-    class(field_t), pointer :: host_field, field
-    integer :: i, dims(3), data_loc
-    integer(i8), dimension(3)  :: shape_dims, &
-                                  start_dims, &
-                                  count_dims
+    class(field_t), pointer :: host_field, field_ptr
+    integer :: i_field, dims(3), data_loc
+    integer(i8), dimension(3)  :: shape_dims, start_dims, count_dims
+    integer(i8), dimension(3) :: output_shape, output_start, output_count
+    real(dp), dimension(:,:,:), allocatable :: data_to_write
+    logical :: apply_stride
 
-    do i = 1, size(field_names)
-      select case (trim(field_names(i)))
+    apply_stride = .false.
+    if (present(use_stride)) apply_stride = use_stride
+
+
+    do i_field = 1, size(field_names)
+      select case (trim(field_names(i_field)))
         case ("u")
-          field => solver%u
+          field_ptr => solver%u
+          data_loc = solver%u%data_loc
         case ("v")
-          field => solver%v
+          field_ptr => solver%v
+          data_loc = solver%v%data_loc
         case ("w")
-          field => solver%w
+          field_ptr => solver%w
+          data_loc = solver%w%data_loc
         case default
           call self%adios2_writer%handle_error( & 
-            1, "Invalid field name"//trim(field_names(i)))
+            1, "Invalid field name"//trim(field_names(i_field)))
           cycle
       end select
 
-      data_loc = solver%u%data_loc
       dims = solver%mesh%get_dims(data_loc)
       shape_dims = int(solver%mesh%get_global_dims(data_loc), i8)
       start_dims = int(solver%mesh%par%n_offset, i8)
       count_dims = int(dims, i8)
 
+      if (apply_stride) then
+        output_shape = (shape_dims + self%output_stride - 1) / &
+                        self%output_stride
+        output_start = start_dims / self%output_stride
+        output_count = (count_dims + self%output_stride - 1) / &
+                       self%output_stride
+      else
+        output_shape = shape_dims
+        output_start = start_dims
+        output_count = count_dims
+      end if
+
       host_field => solver%host_allocator%get_block(DIR_C, data_loc)
-      call solver%backend%get_field_data(host_field%data, field)
-      select case (trim(field_names(i)))
+
+      if (allocated(data_to_write)) deallocate(data_to_write)
+
+      call solver%backend%get_field_data(host_field%data, field_ptr)
+
+      if (apply_stride) then
+        data_to_write = self%stride_data(&
+          host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), &
+          dims, self%output_stride &
+          )
+      else
+        allocate(data_to_write(dims(1), dims(2), dims(3)))
+        data_to_write = host_field%data(1:dims(1), 1:dims(2), 1:dims(3))
+      end if
+
+      select case (trim(field_names(i_field)))
         case ("u")
           call self%adios2_writer%write_data( &
             "u", host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), &
-            file, shape_dims, start_dims, count_dims
+            file, shape_dims, start_dims, count_dims &
             )
         case ("v")
           call self%adios2_writer%write_data( &
             "v", host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), &
-            file, shape_dims, start_dims, count_dims
+            file, shape_dims, start_dims, count_dims &
             )
         case ("w")
           call self%adios2_writer%write_data( &
             "w", host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), &
-            file, shape_dims, start_dims, count_dims
+            file, shape_dims, start_dims, count_dims &
             )
       end select
+
+      if (allocated(data_to_write)) deallocate(data_to_write)
     end do
     call solver%host_allocator%release_block(host_field)
   end subroutine write_fields
