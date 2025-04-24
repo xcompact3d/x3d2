@@ -41,16 +41,12 @@ module m_adios2_io
     logical :: is_step_active = .false.      !! Flag to track if a step is active
     integer :: comm = MPI_COMM_NULL          !! MPI communicator
 
-    !> IO configuration parameters
-    integer :: output_stride(3) = [1, 1, 1]  !! Output stride for 3D arrays
-    integer :: output_precision = dp         !! Output precision (single/double precision)
   contains
     procedure, public :: init                !! Initialises ADIOS2 handler
     procedure, public :: open                !! Opens an ADIOS2 engine
     procedure, public :: close               !! Closes the ADIOS2 session
     procedure, public :: end_step            !! Ends a step in the ADIOS2 engine
     procedure, public :: handle_error        !! Error handling for ADIOS2 operations
-    procedure, public :: setup_io            !! Setup ADIOS2 IO output
     procedure, public :: finalise            !! Finalises ADIOS2 handler
 
     procedure(begin_step), deferred, public :: begin_step !! Begins a step in the ADIOS2 engine
@@ -85,13 +81,15 @@ module m_adios2_io
   contains
     procedure, public :: begin_step => begin_step_reader
 
-    generic, public :: read_data => read_scalar_integer, read_scalar_real, &
-                                    read_array2d_real, read_array3d_real
+    generic, public :: read_data => read_scalar_integer, &
+                                    read_scalar_real, &
+                                    read_array_2d_real, &
+                                    read_array_3d_real
 
     procedure, private :: read_scalar_integer
     procedure, private :: read_scalar_real
-    procedure, private :: read_array2d_real
-    procedure, private :: read_array3d_real
+    procedure, private :: read_array_2d_real
+    procedure, private :: read_array_3d_real
   end type adios2_reader_t
 
   !> ADIOS2 file type
@@ -221,16 +219,6 @@ contains
     end if  
   end subroutine handle_error
 
-  !> Configure I/O settings and ADIOS2 operations
-  subroutine setup_io(self, stride, precision)
-    class(base_adios2_t), intent(inout) :: self
-    integer, intent(in), optional :: stride    !! Spatial stride for output
-    integer, intent(in), optional :: precision !! Output precision
-
-    if (present(stride)) self%output_stride = stride
-    if (present(precision)) self%output_precision = precision
-  end subroutine setup_io
-
   !> Begin a step for ADIOS2 writer type
   subroutine begin_step_writer(self, file)
     class(adios2_writer_t), intent(inout) :: self
@@ -288,7 +276,7 @@ contains
 
   !> Write 1d array integer data
   subroutine write_array_1d_int( &
-    self, name, data, file, shape_dims, start_dims, count_dims
+    self, name, data, file, shape_dims, start_dims, count_dims &
     )
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
@@ -330,7 +318,7 @@ contains
 
   !> Write 1d array real data
   subroutine write_array_1d_real( &
-    self, name, data, file, shape_dims, start_dims, count_dims
+    self, name, data, file, shape_dims, start_dims, count_dims &
     )
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
@@ -373,7 +361,7 @@ contains
 
   !> Write 2d array real data
   subroutine write_array_2d_real( &
-    self, name, data, file, shape_dims, start_dims, count_dims
+    self, name, data, file, shape_dims, start_dims, count_dims &
     )
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
@@ -398,7 +386,7 @@ contains
 
   !> Write 3d array real data
   subroutine write_array_3d_real( &
-    self, name, data, file, shape_dims, start_dims, count_dims
+    self, name, data, file, shape_dims, start_dims, count_dims &
     )
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
@@ -422,7 +410,7 @@ contains
 
   !> Write 4d array real data
   subroutine write_array_4d_real(& 
-    self, name, data, file, shape_dims, start_dims, count_dims
+    self, name, data, file, shape_dims, start_dims, count_dims &
     )
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
@@ -511,7 +499,7 @@ contains
   end subroutine read_scalar_real
 
   !> Read 2d array real data
-  subroutine read_array2d_real(self, name, data, file, start_dims, count_dims)
+  subroutine read_array_2d_real(self, name, data, file, start_dims, count_dims)
     class(adios2_reader_t), intent(inout) :: self
     character(len=*), intent(in) :: name
     real(dp), dimension(:,:), allocatable, intent(out) :: data
@@ -534,10 +522,10 @@ contains
       call adios2_get(file%engine, var, data, adios2_mode_sync, ierr)
       call self%handle_error(ierr, "Failed to read variable"//name)
     end if
-  end subroutine read_array2d_real
+  end subroutine read_array_2d_real
 
   !> Read 3d array real data
-  subroutine read_array3d_real(self, name, data, file, start_dims, count_dims)
+  subroutine read_array_3d_real(self, name, data, file, start_dims, count_dims)
     class(adios2_reader_t), intent(inout) :: self
     character(len=*), intent(in) :: name
     real(dp), dimension(:,:,:), allocatable, intent(out) :: data
@@ -561,6 +549,6 @@ contains
       call adios2_get(file%engine, var, data, adios2_mode_sync, ierr)
       call self%handle_error(ierr, "Failed to read variable"//name)
     end if
-  end subroutine read_array3d_real
+  end subroutine read_array_3d_real
 
 end module m_adios2_io
