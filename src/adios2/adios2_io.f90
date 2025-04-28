@@ -57,7 +57,7 @@ module m_adios2_io
   contains
     procedure, public :: begin_step => begin_step_writer
 
-    generic, public :: write_data => write_scalar_integer, &
+    generic, public :: write_data => write_scalar_int, &
       write_scalar_real, &
       write_array_1d_real, &
       write_array_2d_real, &
@@ -66,7 +66,7 @@ module m_adios2_io
       write_array_4d_real
     generic, public :: write_attribute => write_attribute_string
 
-    procedure, private :: write_scalar_integer
+    procedure, private :: write_scalar_int
     procedure, private :: write_scalar_real
     procedure, private :: write_array_1d_int
     procedure, private :: write_array_1d_real
@@ -233,7 +233,7 @@ contains
   end subroutine begin_step_writer
 
   !> Write scalar integer data
-  subroutine write_scalar_integer(self, name, data, file)
+  subroutine write_scalar_int(self, name, data, file)
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
     integer, intent(in) :: data
@@ -248,22 +248,18 @@ contains
 
     call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
     call self%handle_error(ierr, "Error writing ADIOS2 scalar integer data")
-  end subroutine write_scalar_integer
+  end subroutine write_scalar_int
 
   !> Write scalar real data
-  subroutine write_scalar_real(self, name, data, file, &
-                               shape_dims, start_dims, count_dims)
+  subroutine write_scalar_real(self, name, data, file)
     class(adios2_writer_t), intent(inout) :: self
-    character(len=*), intent(in) :: name  !! unique variable identifier within io
-    real(dp), intent(in) :: data !! scalar real data
+    character(len=*), intent(in) :: name
+    real(dp), intent(in) :: data              
     type(adios2_file_t), intent(inout) :: file
-    integer(i8), dimension(:), optional, intent(in) :: shape_dims, &  !! Global shape
-                                                       start_dims, &  !! Local offset
-                                                       count_dims     !! Local size
-    type(adios2_variable) :: var          !! handler to newly defined variable
+
+    type(adios2_variable) :: var
     integer :: ierr
 
-    ! define adios2 variable to be written in given file format
     call adios2_define_variable(var, self%io, name, &
                                 adios2_type_dp, ierr)
     call self%handle_error(ierr, "Error defining ADIOS2 scalar &
@@ -279,13 +275,13 @@ contains
     self, name, data, file, shape_dims, start_dims, count_dims &
     )
     class(adios2_writer_t), intent(inout) :: self
-    character(len=*), intent(in) :: name
-    integer, dimension(:), intent(in) :: data
+    character(len=*), intent(in) :: name                              !! unique variable identifier within io
+    integer, dimension(:), intent(in) :: data                         !! scalar real data
     type(adios2_file_t), intent(inout) :: file
-    integer(i8), dimension(1), intent(in), optional :: shape_dims, &
-                                                       start_dims, &
-                                                       count_dims
-    type(adios2_variable) :: var
+    integer(i8), dimension(:), intent(in), optional :: shape_dims, &  !! Global shape
+                                                       start_dims, &  !! Local offset
+                                                       count_dims     !! Local size
+    type(adios2_variable) :: var                                      !! handler to newly defined variable
     integer :: ierr
     integer(i8), dimension(1) :: local_shape, local_start, local_count
 
@@ -307,6 +303,7 @@ contains
       local_count = int(size(data), i8)
     end if
 
+    ! define adios2 variable to be written in given file format
     call adios2_define_variable(var, self%io, name, adios2_type_integer4, &
                                 1, local_shape, local_start, &
                                 local_count, adios2_constant_dims, ierr)
