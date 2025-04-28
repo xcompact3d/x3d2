@@ -229,8 +229,9 @@ contains
       if (ierr == 0) then
         read (unit, nml=checkpoint_params, iostat=ierr)
 
-        if (ierr /=0 .and. ierr /= -1 ) &
-          print *, 'WARNING: Error in checkpoint_params namelist, using defaults'
+        if (ierr /= 0 .and. ierr /= -1) &
+          print *, 'WARNING: Error in checkpoint_params namelist, &
+          & using defaults'
       end if
       close (unit)
     else if (present(nml_string)) then
