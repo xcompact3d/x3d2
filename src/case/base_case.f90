@@ -216,13 +216,13 @@ contains
       if (self%solver%mesh%par%is_root()) &
         ! for restarts current_iter is read from the checkpoint file
         print *, 'Continuing from iteration:', &
-          self%solver%current_iter, 'at time ', t
+        self%solver%current_iter, 'at time ', t
     else
       self%solver%current_iter = 0
       if (self%solver%mesh%par%is_root()) print *, 'initial conditions'
       t = 0._dp
     end if
-   
+
     call self%postprocess(self%solver%current_iter, t)
     start_iter = self%solver%current_iter + 1
 
@@ -268,7 +268,7 @@ contains
       end if
 
       call self%checkpoint_mgr%handle_io_step(self%solver, &
-        iter, MPI_COMM_WORLD)
+                                              iter, MPI_COMM_WORLD)
     end do
 
     call self%case_finalise
