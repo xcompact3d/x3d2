@@ -254,7 +254,7 @@ contains
   subroutine write_scalar_real(self, name, data, file)
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
-    real(dp), intent(in) :: data              
+    real(dp), intent(in) :: data
     type(adios2_file_t), intent(inout) :: file
 
     type(adios2_variable) :: var
