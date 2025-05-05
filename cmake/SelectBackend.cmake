@@ -4,12 +4,22 @@
 # - GPU/CUDAFortran (nvfort only)
 # - CPU/OMP (all)
 
+set(X3D2_BACKEND_OPTIONS "OMP/CPU")
+if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
+  set(X3D2_BACKEND_DEFAULT "CUDA/GPU")
+  list(APPEND X3D2_BACKEND_OPTIONS ${X3D2_BACKEND_DEFAULT})
+else()
+  set(X3D2_BACKEND_DEFAULT "OMP/CPU")
+endif()
+
 set(X3D2_BACKEND
-  "OMP/CPU"
+  ${X3D2_BACKEND_DEFAULT}
   CACHE
   STRING
-  "Select the backend. Current options are 'OMP/CPU' and 'CUDA/GPU'")
+  "Select the backend. Current options are ${X3D2_BACKEND_OPTIONS}")
 set_property(CACHE
   X3D2_BACKEND
   PROPERTY STRINGS
-  "OMP/CPU" "CUDA/GPU")
+  ${X3D2_BACKEND_OPTIONS})
+message(STATUS "Using ${X3D2_BACKEND} backend")
