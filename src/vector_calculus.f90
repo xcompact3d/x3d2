@@ -5,7 +5,7 @@ module m_vector_calculus
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
-                      CELL, VERT
+                      CELL, X_FACE, Y_FACE, Z_FACE, VERT
   use m_tdsops, only: tdsops_t
 
   implicit none
@@ -19,6 +19,7 @@ module m_vector_calculus
     procedure :: gradient_c2v
     procedure :: laplacian
     procedure :: divgrad
+    procedure :: divgrad_stag
   end type vector_calculus_t
 
   interface vector_calculus_t
@@ -445,5 +446,59 @@ contains
     call self%backend%allocator%release_block(dpdz)
 
   end subroutine divgrad
+
+  subroutine divgrad_stag(self, d2pdx2_z, p, &
+    x_stagder_c2v, y_stagder_c2v, z_stagder_c2v,  &
+    x_stagder_v2c, y_stagder_v2c, z_stagder_v2c)
+
+    class(vector_calculus_t) :: self
+    class(field_t), intent(inout) :: d2pdx2_z
+    class(field_t), intent(in) :: p
+    class(tdsops_t), intent(in) :: x_stagder_c2v, y_stagder_c2v, z_stagder_c2v
+    class(tdsops_t), intent(in) :: x_stagder_v2c, y_stagder_v2c, z_stagder_v2c
+
+    class(field_t), pointer :: p_x, p_y
+    class(field_t), pointer :: dpdx, dpdy, dpdz
+    class(field_t), pointer :: d2pdx2, d2pdy2, d2pdz2
+
+    ! Compute staggered (face) gradients
+    dpdx => self%backend%allocator%get_block(DIR_X, X_FACE)
+    dpdy => self%backend%allocator%get_block(DIR_Y, Y_FACE)
+    dpdz => self%backend%allocator%get_block(DIR_Z, Z_FACE)
+    p_x => self%backend%allocator%get_block(DIR_X, CELL)
+    p_y => self%backend%allocator%get_block(DIR_Y, CELL)
+
+    call self%backend%reorder(p_x, p, RDR_Z2X)
+    call self%backend%reorder(p_y, p, RDR_Z2Y)
+    call self%backend%tds_solve(dpdx, p_x, x_stagder_c2v)
+    call self%backend%tds_solve(dpdy, p_y, y_stagder_c2v)
+    call self%backend%tds_solve(dpdz, p, z_stagder_c2v)
+
+    call self%backend%allocator%release_block(p_x)
+    call self%backend%allocator%release_block(p_y)
+
+    ! Compute staggered (cell) derder
+    d2pdx2 => self%backend%allocator%get_block(DIR_X, CELL)
+    d2pdy2 => self%backend%allocator%get_block(DIR_Y, CELL)
+    d2pdz2 => self%backend%allocator%get_block(DIR_Z, CELL)
+    call self%backend%tds_solve(d2pdx2, dpdx, x_stagder_v2c)
+    call self%backend%tds_solve(d2pdy2, dpdy, y_stagder_v2c)
+    call self%backend%tds_solve(d2pdz2, dpdz, z_stagder_v2c)
+
+    call self%backend%allocator%release_block(dpdx)
+    call self%backend%allocator%release_block(dpdy)
+    call self%backend%allocator%release_block(dpdz)
+
+    ! Accumulate Laplacian
+    call self%backend%sum_yintox(d2pdx2, d2pdy2)
+    call self%backend%sum_zintox(d2pdx2, d2pdz2)
+
+    call self%backend%reorder(d2pdx2_z, d2pdx2, RDR_X2Z)
+
+    call self%backend%allocator%release_block(d2pdx2)
+    call self%backend%allocator%release_block(d2pdy2)
+    call self%backend%allocator%release_block(d2pdz2)
+
+  end subroutine divgrad_stag
 
 end module m_vector_calculus

@@ -334,21 +334,21 @@ contains
     ! ! Corner
     ! stencil3d([1, 3], [1, 3], [1, 3]) = -1.0_dp / 13.0_dp
 
-    ! !! 7-point star stencil
-    ! stencil3d = 0
-    ! stencil3d(1, 2, 2) = 1
-    ! stencil3d(3, 2, 2) = 1
-    ! stencil3d(2, 1, 2) = 1
-    ! stencil3d(2, 3, 2) = 1
-    ! stencil3d(2, 2, 1) = 1
-    ! stencil3d(2, 2, 3) = 1
-    ! stencil3d(2, 2, 2) = -6
+    !! 7-point star stencil
+    stencil3d = 0
+    stencil3d(1, 2, 2) = 1
+    stencil3d(3, 2, 2) = 1
+    stencil3d(2, 1, 2) = 1
+    stencil3d(2, 3, 2) = 1
+    stencil3d(2, 2, 1) = 1
+    stencil3d(2, 2, 3) = 1
+    stencil3d(2, 2, 2) = -6
 
-    !! 27-point stencil
+    ! !! 27-point stencil
 
-    stencil3d = 1.0_dp
-    stencil3d(2, 2, 2) = -26.0_dp
-    stencil3d = stencil3d / 9.0_dp
+    ! stencil3d = 1.0_dp
+    ! stencil3d(2, 2, 2) = -26.0_dp
+    ! stencil3d = stencil3d / 9.0_dp
 
     ! Set the Poisson coefficients
     associate (mesh => backend%mesh)

@@ -184,13 +184,16 @@ contains
       error stop "The pressure Poisson equation must be evaluated at cell centres"
     end if
 
-    call lapl%vector_calculus%divgrad(f, p, &
-      lapl%xdirps%stagder_p2v, lapl%xdirps%interpl_p2v, &
-      lapl%ydirps%stagder_p2v, lapl%ydirps%interpl_p2v, &
-      lapl%zdirps%stagder_p2v, lapl%zdirps%interpl_p2v, &
-      lapl%xdirps%stagder_v2p, lapl%xdirps%interpl_v2p, &
-      lapl%ydirps%stagder_v2p, lapl%ydirps%interpl_v2p, &
-      lapl%zdirps%stagder_v2p, lapl%zdirps%interpl_v2p)
+    ! call lapl%vector_calculus%divgrad(f, p, &
+    !   lapl%xdirps%stagder_p2v, lapl%xdirps%interpl_p2v, &
+    !   lapl%ydirps%stagder_p2v, lapl%ydirps%interpl_p2v, &
+    !   lapl%zdirps%stagder_p2v, lapl%zdirps%interpl_p2v, &
+    !   lapl%xdirps%stagder_v2p, lapl%xdirps%interpl_v2p, &
+    !   lapl%ydirps%stagder_v2p, lapl%ydirps%interpl_v2p, &
+    !   lapl%zdirps%stagder_v2p, lapl%zdirps%interpl_v2p)
+    call lapl%vector_calculus%divgrad_stag(f, p, &
+      lapl%xdirps%stagder_p2v, lapl%ydirps%stagder_p2v, lapl%zdirps%stagder_p2v, &
+      lapl%xdirps%stagder_v2p, lapl%ydirps%stagder_v2p, lapl%zdirps%stagder_v2p)
 
   end subroutine poissmult_dirz
   
