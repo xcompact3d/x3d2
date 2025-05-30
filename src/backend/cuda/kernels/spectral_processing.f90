@@ -366,10 +366,9 @@ contains
   end subroutine process_spectral_010_fw
 
   attributes(global) subroutine process_spectral_010_poisson( &
-    div_u, waves, nx_spec, ny_spec, nx, ny, nz &
+    div_u, a_re, a_im, nx_spec, n, nx, ny, nz &
     )
-    !! Post-processes the divergence of velocity in spectral space, including
-    !! scaling w.r.t. grid size.
+    !! Solve the Poisson equation at cell centres with non-perioic BC along y
     !!
     !! Ref. JCP 228 (2009), 5989–6015, Sec 4
     implicit none
@@ -377,39 +376,134 @@ contains
     !> Divergence of velocity in spectral space
     complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
     !> Spectral equivalence constants
-    complex(dp), device, intent(in), dimension(:, :, :) :: waves
+    real(dp), device, intent(inout), dimension(:, :, :, :) :: a_re, a_im
     !> Grid size in spectral space
-    integer, value, intent(in) :: nx_spec, ny_spec
-    !> Grid size
-    integer, value, intent(in) :: nx, ny, nz
+    integer, value, intent(in) :: nx_spec, n, nx, ny, nz
 
     integer :: i, j, k
-    real(dp) :: tmp_r, tmp_c, div_r, div_c
+    real(dp) :: tmp_r, tmp_c, div_r, div_c, epsilon
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
     k = blockIdx%y ! nz_spec
 
+    epsilon = 1.e-16_dp
+
     ! Solve Poisson
     if (i <= nx_spec) then
-      do j = 1, ny_spec
-        div_r = real(div_u(i, j, k), kind=dp)
-        div_c = aimag(div_u(i, j, k))
-
-        tmp_r = real(waves(i, j, k), kind=dp)
-        tmp_c = aimag(waves(i, j, k))
-        if (abs(tmp_r) < 1.e-16_dp) then
-          div_r = 0._dp
-        else
-          div_r = -div_r/tmp_r
+      ! Forward pass for the pentadiagonal matrix
+      do j = 1, n - 2
+        ! eliminate diag-1
+        tmp_r = 0._dp
+        if (abs(a_re(i, j, k, 3)) > epsilon) then
+          tmp_r = a_re(i, j + 1, k, 2)/a_re(i, j, k, 3)
         end if
-        if (abs(tmp_c) < 1.e-16_dp) then
-          div_c = 0._dp
-        else
-          div_c = -div_c/tmp_c
+        tmp_c = 0._dp
+        if (abs(a_im(i, j, k, 3)) > epsilon) then
+          tmp_c = a_im(i, j + 1, k, 2)/a_im(i, j, k, 3)
         end if
+        div_r = real(div_u(i, j + 1, k) - tmp_r*div_u(i, j, k), kind=dp)
+        div_c = aimag(div_u(i, j + 1, k) - tmp_c*div_u(i, j, k))
+        div_u(i, j + 1, k) = cmplx(div_r, div_c, kind=dp)
+        ! modify pentadiagonal coefficients in-place
+        a_re(i, j + 1, k, 3) = a_re(i, j + 1, k, 3) - tmp_r*a_re(i, j, k, 4)
+        a_im(i, j + 1, k, 3) = a_im(i, j + 1, k, 3) - tmp_c*a_im(i, j, k, 4)
+        a_re(i, j + 1, k, 4) = a_re(i, j + 1, k, 4) - tmp_r*a_re(i, j, k, 5)
+        a_im(i, j + 1, k, 4) = a_im(i, j + 1, k, 4) - tmp_c*a_im(i, j, k, 5)
 
-        ! update the entry
-        div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
+        ! eliminate diag-2
+        tmp_r = 0._dp
+        if (abs(a_re(i, j, k, 3)) > epsilon) then
+          tmp_r = a_re(i, j + 2, k, 1)/a_re(i, j, k, 3)
+        end if
+        tmp_c = 0._dp
+        if (abs(a_im(i, j, k, 3)) > epsilon) then
+          tmp_c = a_im(i, j + 2, k, 1)/a_im(i, j, k, 3)
+        end if
+        div_r = real(div_u(i, j + 2, k) - tmp_r*div_u(i, j, k), kind=dp)
+        div_c = aimag(div_u(i, j + 2, k) - tmp_c*div_u(i, j, k))
+        div_u(i, j + 2, k) = cmplx(div_r, div_c, kind=dp)
+        ! modify pentadiagonal coefficients in-place
+        a_re(i, j + 2, k, 3) = a_re(i, j + 2, k, 3) - tmp_r*a_re(i, j, k, 4)
+        a_im(i, j + 2, k, 3) = a_im(i, j + 2, k, 3) - tmp_c*a_im(i, j, k, 4)
+        a_re(i, j + 2, k, 4) = a_re(i, j + 2, k, 4) - tmp_r*a_re(i, j, k, 5)
+        a_im(i, j + 2, k, 4) = a_im(i, j + 2, k, 4) - tmp_c*a_im(i, j, k, 5)
+      end do
+
+      ! handle the last row
+      if (abs(a_re(i, n - 1, k, 3)) > epsilon) then
+        tmp_r = a_re(i, n, k, 2)/a_re(i, n - 1, k, 3)
+      else
+        tmp_r = 0._dp
+      end if
+      if (abs(a_im(i, n - 1, k, 3)) > epsilon) then
+        tmp_c = a_im(i, n, k, 2)/a_im(i, n - 1, k, 3)
+      else
+        tmp_c = 0._dp
+      end if
+      div_r = a_re(i, n, k, 3) - tmp_r*a_re(i, n - 1, k, 4)
+      div_c = a_im(i, n, k, 3) - tmp_c*a_im(i, n - 1, k, 4)
+
+      if (abs(div_r) > epsilon) then
+        tmp_r = tmp_r/div_r
+        div_r = real(div_u(i, n, k), kind=dp) &
+                /(div_r - tmp_r*real(div_u(i, n - 1, k), kind=dp))
+      else
+        tmp_r = 0._dp
+        div_r = 0._dp
+      end if
+      if (abs(div_c) > epsilon) then
+        tmp_c = tmp_c/div_c
+        div_c = aimag(div_u(i, n, k)) &
+                /(div_c - tmp_c*aimag(div_u(i, n - 1, k)))
+      else
+        tmp_c = 0._dp
+        div_c = 0._dp
+      end if
+      div_u(i, n, k) = cmplx(div_r, div_c, kind=dp)
+
+      if (abs(a_re(i, n - 1, k, 3)) > epsilon) then
+        tmp_r = 1._dp/a_re(i, n - 1, k, 3)
+      else
+        tmp_r = 0._dp
+      end if
+      if (abs(a_im(i, n - 1, k, 3)) > epsilon) then
+        tmp_c = 1._dp/a_im(i, n - 1, k, 3)
+      else
+        tmp_c = 0._dp
+      end if
+      div_r = a_re(i, n - 1, k, 4)*tmp_r
+      div_c = a_im(i, n - 1, k, 4)*tmp_c
+      div_u(i, n - 1, k) = cmplx(real(div_u(i, n - 1, k), kind=dp)*tmp_r &
+                                 - real(div_u(i, n, k), kind=dp)*div_r, &
+                                 aimag(div_u(i, n - 1, k))*tmp_c &
+                                 - aimag(div_u(i, n, k))*div_c, &
+                                 kind=dp)
+
+      ! backward pass
+      do j = n - 2, 1, -1
+        if (abs(a_re(i, j, k, 3)) > epsilon) then
+          tmp_r = 1._dp/a_re(i, n, k, 3)
+        else
+          tmp_r = 0._dp
+        end if
+        if (abs(a_im(i, j, k, 3)) > epsilon) then
+          tmp_c = 1._dp/a_im(i, j, k, 3)
+        else
+          tmp_c = 0._dp
+        end if
+        div_r = a_re(i, j, k, 4)*tmp_r
+        div_c = a_im(i, j, k, 4)*tmp_c
+        div_r = a_re(i, j, k, 5)*tmp_r
+        div_c = a_im(i, j, k, 5)*tmp_c
+        div_u(i, j, k) = cmplx( & !&
+          tmp_r*(real(div_u(i, j, k), kind=dp) &
+                 - a_re(i, j, k, 4)*real(div_u(i, j + 1, k), kind=dp) &
+                 - a_re(i, j, k, 5)*real(div_u(i, j + 2, k), kind=dp)), &
+          tmp_c*(aimag(div_u(i, j, k)) &
+                 - a_im(i, j, k, 4)*aimag(div_u(i, j + 1, k)) &
+                 - a_im(i, j, k, 5)*aimag(div_u(i, j + 2, k))), &
+          kind=dp &
+          )
         if (i == nx/2 + 1 .and. k == nz/2 + 1) div_u(i, j, k) = 0._dp
       end do
     end if
