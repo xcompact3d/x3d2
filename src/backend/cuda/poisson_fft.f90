@@ -112,7 +112,8 @@ contains
       poisson_fft%a_even_re_dev = poisson_fft%a_even_re
       poisson_fft%a_even_im_dev = poisson_fft%a_even_im
     !! if stretching in y is 'bottom'
-    else if (poisson_fft%stretched_y .and. poisson_fft%stretched_y_sym) then
+    else if (poisson_fft%stretched_y .and. &
+             (.not. poisson_fft%stretched_y_sym)) then
       poisson_fft%a_re_dev = poisson_fft%a_re
       poisson_fft%a_im_dev = poisson_fft%a_im
     end if
@@ -295,10 +296,35 @@ contains
         self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
         self%az_dev, self%bz_dev &
         )
-      call process_spectral_010_poisson<<<blocks, threads>>>( & !&
-        c_dev, self%waves_dev, self%nx_spec, self%ny_spec, &
-        self%nx_glob, self%ny_glob, self%nz_glob &
-        )
+
+      ! if stretching in y is 'centred' or 'both-ends'
+      if (self%stretched_y_sym) then
+        ! PERF issue: data movement from host to device at each step
+        self%a_odd_re_dev = self%a_odd_re
+        self%a_odd_im_dev = self%a_odd_im
+        self%a_even_re_dev = self%a_even_re
+        self%a_even_im_dev = self%a_even_im
+        call process_spectral_010_poisson<<<blocks, threads>>>( & !&
+          c_dev, self%a_odd_re_dev, self%a_odd_im_dev, &
+          self%nx_spec, self%ny_spec/2, &
+          self%nx_glob, self%ny_glob, self%nz_glob &
+          )
+        call process_spectral_010_poisson<<<blocks, threads>>>( & !&
+          c_dev, self%a_even_re_dev, self%a_even_im_dev, &
+          self%nx_spec, self%ny_spec/2, &
+          self%nx_glob, self%ny_glob, self%nz_glob &
+          )
+      !! if stretching in y is 'bottom'
+      else
+        ! PERF issue: data movement from host to device at each step
+        self%a_re_dev = self%a_re
+        self%a_im_dev = self%a_im
+        call process_spectral_010_poisson<<<blocks, threads>>>( & !&
+          c_dev, self%a_re_dev, self%a_im_dev, self%nx_spec, self%ny_spec, &
+          self%nx_glob, self%ny_glob, self%nz_glob &
+          )
+      end if
+
       call process_spectral_010_bw<<<blocks, threads>>>( & !&
         c_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
         self%nx_glob, self%ny_glob, self%nz_glob, &
