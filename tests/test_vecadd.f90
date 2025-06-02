@@ -112,6 +112,8 @@ contains
     class(field_t), pointer :: r
     class(field_t), pointer :: r_host, a_host
 
+    print *, dirnames(d), " Testing: a + 0 = a"
+
     r => allocator%get_block(dirs(d))
     r_host => host_allocator%get_block(dirs(d))
     a_host => host_allocator%get_block(dirs(d))
@@ -140,6 +142,8 @@ contains
 
     class(field_t), pointer :: r
     class(field_t), pointer :: r_host, a_host
+
+    print *, dirnames(d), " Testing: a + a = 2a"
 
     r => allocator%get_block(dirs(d))
     r_host => host_allocator%get_block(dirs(d))
@@ -170,6 +174,8 @@ contains
     class(field_t), pointer :: r
     class(field_t), pointer :: r_host, a_host
 
+    print *, dirnames(d), " Testing: a + (-a) = 0"
+
     r => allocator%get_block(dirs(d))
     r_host => host_allocator%get_block(dirs(d))
     a_host => host_allocator%get_block(dirs(d))
@@ -198,6 +204,8 @@ contains
 
     class(field_t), pointer :: r
     class(field_t), pointer :: r_host, b_host, c_host
+
+    print *, dirnames(d), " Testing: a + b = c"
 
     r => allocator%get_block(dirs(d))
     r_host => host_allocator%get_block(dirs(d))
@@ -230,6 +238,8 @@ contains
     class(field_t), pointer, intent(inout) :: a, b, c, z
     class(field_t), pointer :: a_host, b_host, c_host, z_host
 
+    print *, dirnames(d), ": Initialising test data"
+
     if (associated(a)) then
       call allocator%release_block(a)
     end if
@@ -259,10 +269,10 @@ contains
     c_host%data = a_host%data + b_host%data
     z_host%data = 0.0_dp
 
-    call backend%set_field_data(a, a_host%data)
-    call backend%set_field_data(b, b_host%data)
-    call backend%set_field_data(c, c_host%data)
-    call backend%set_field_data(z, z_host%data)
+    call backend%set_field_data(a, a_host%data, dirs(d))
+    call backend%set_field_data(b, b_host%data, dirs(d))
+    call backend%set_field_data(c, c_host%data, dirs(d))
+    call backend%set_field_data(z, z_host%data, dirs(d))
 
     call host_allocator%release_block(a_host)
     call host_allocator%release_block(b_host)
