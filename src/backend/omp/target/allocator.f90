@@ -1,4 +1,4 @@
-!!! backends/omp/allocator.f90
+!!! backends/omp/target/allocator.f90
 !!
 !! Implements an allocator specialised to OMP target offloading
 
@@ -27,6 +27,8 @@ module m_omptgt_allocator
 
   type, extends(field_t) :: omptgt_field_t
     ! A device-resident field
+    real(dp), pointer, private :: p_data_tgt(:) => null()
+    real(dp), pointer, contiguous :: data_tgt(:, :, :) => null()
   contains
     procedure :: fill => fill_omptgt
   end type omptgt_field_t
@@ -46,13 +48,15 @@ contains
   end function omptgt_allocator_init
 
   ! Allocates a device-resident block
-  class(field_t), pointer function create_block_omptgt(self, next) result(ptr)
+  module function create_block_omptgt(self, next) result(ptr)
     class(omptgt_allocator_t) :: self
     type(omptgt_field_t), pointer, intent(in) :: next
+    type(omptgt_field_t), target :: newblock
+    class(field_t), pointer :: ptr
 
-    allocate(omptgt_field_t :: ptr)
     self%next_id = self%next_id + 1
-    ptr = omptgt_field_t(self%ngrid, next, id=self%next_if)
+    newblock = omptgt_field_t(self%ngrid, next, id=self%next_id)
+    ptr => newblock
 
   end function create_block_omptgt
 
@@ -62,22 +66,25 @@ contains
     type(omptgt_field_t), pointer, intent(in) :: next
     integer, intent(in) :: id
 
-    f%field_t = field_t(ngrid, next, id)
-    !$omp target enter data map(allocate:f%p_data) map(to:f%refcount) map(to:f%id)
+    allocate(f%p_data_tgt(ngrid))
+    f%refcount = 0
+    f%next => next
+    f%id = id
+    !$omp target enter data map(alloc:f%p_data_tgt) map(to:f%refcount) map(to:f%id)
     
   end function omptgt_field_init
 
-  subroutine fill_omptgt(self, c)
+  module subroutine fill_omptgt(self, c)
     class(omptgt_field_t) :: self
     real(dp), intent(in) :: c
 
     integer :: i
     
-    !$omp target parallel teams distribute parallel do
-    do i = 1, size(self%p_data)
-      self%p_data(i) = c
+    !$omp target teams distribute parallel do
+    do i = 1, size(self%p_data_tgt)
+      self%p_data_tgt(i) = c
     end do
-    !$omp end target parallel teams distribute parallel do
+    !$omp end target teams distribute parallel do
 
   end subroutine fill_omptgt
 
