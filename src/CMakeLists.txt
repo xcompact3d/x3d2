@@ -98,6 +98,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
   set(CMAKE_Fortran_FLAGS "-eF -M878") # -M878 suppresses WARNING multiple module includes (not useful)
   set(CMAKE_Fortran_FLAGS_DEBUG "-G2 -O0")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3")
+  target_link_options(x3d2 INTERFACE -h omp)
 endif()
 
 if(WITH_2DECOMPFFT)
