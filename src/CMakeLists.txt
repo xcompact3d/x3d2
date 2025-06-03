@@ -49,6 +49,9 @@ set(CUDASRC
 set(BACKENDSRC
   backend/omp/backend.f90
   )
+set(OMPTGTSRC # For OMP offloading
+  backend/omp/target/allocator.f90
+  )
 set(2DECOMPFFTSRC
   backend/omp/poisson_fft.f90
   decomp/decomp_2decompfft.f90
@@ -85,6 +88,13 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   list(APPEND SRC ${CUDASRC})
   list(APPEND BACKENDSRC backend/cuda/backend.f90)
 endif()
+
+if(OMP_TGT)
+  list(APPEND SRC ${OMPTGTSRC})
+endif()
+
+# Decide whether 2decomp&fft is supported by the build
+find_package(decomp2d)
 
 if(WITH_2DECOMPFFT)
   list(APPEND SRC ${2DECOMPFFTSRC})
