@@ -49,14 +49,23 @@ contains
 
   ! Allocates a device-resident block
   module function create_block_omptgt(self, next) result(ptr)
-    class(omptgt_allocator_t) :: self
-    type(omptgt_field_t), pointer, intent(in) :: next
-    type(omptgt_field_t), target :: newblock
+    class(omptgt_allocator_t), intent(inout) :: self
+    class(field_t), pointer, intent(in) :: next
+    type(omptgt_field_t), pointer :: newblock_tgt
+    type(field_t), pointer :: newblock
     class(field_t), pointer :: ptr
 
     self%next_id = self%next_id + 1
-    newblock = omptgt_field_t(self%ngrid, next, id=self%next_id)
-    ptr => newblock
+    select type(next)
+    type is(omptgt_field_t)
+      allocate(newblock_tgt)
+      newblock_tgt = omptgt_field_t(self%ngrid, next, id=self%next_id)
+      ptr => newblock_tgt
+    class default
+      allocate(newblock)
+      newblock = field_t(self%ngrid, next, id=self%next_id)
+      ptr => newblock
+    end select
 
   end function create_block_omptgt
 
