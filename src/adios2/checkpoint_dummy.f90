@@ -184,7 +184,7 @@ contains
     class(checkpoint_manager_t), intent(in) :: self
     logical :: is_restart
 
-    is_restart = self%impl%is_restart
+    is_restart = self%impl%checkpoint_cfg%restart_from_checkpoint
   end function cm_is_restart
 
 end module m_checkpoint_manager
