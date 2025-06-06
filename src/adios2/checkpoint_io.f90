@@ -1,4 +1,5 @@
 module m_checkpoint_manager_base
+!! Base module defining abstract interface for checkpoint functionality
   use m_solver, only: solver_t
   use m_config, only: checkpoint_config_t
 
@@ -9,7 +10,6 @@ module m_checkpoint_manager_base
 
   type, abstract :: checkpoint_manager_base_t
     type(checkpoint_config_t) :: checkpoint_cfg
-    logical :: is_restart = .false.
   contains
     procedure(init_interface), deferred :: init
     procedure(handle_restart_interface), deferred :: handle_restart
@@ -68,6 +68,7 @@ module m_checkpoint_manager_impl
     integer, dimension(3) :: output_stride = [2, 2, 2]  !! Spatial stride for snapshot output
     integer :: output_precision = dp                    !! Output precision for snapshot
     real(dp), dimension(:, :, :), allocatable :: strided_buffer
+    real(dp), dimension(:), allocatable :: coords_x, coords_y, coords_z
     integer(i8), dimension(3) :: last_shape_dims = 0
     integer(i8), dimension(3) :: last_strided_shape = 0
   contains
@@ -86,6 +87,10 @@ module m_checkpoint_manager_impl
     procedure, private :: get_strided_dimensions
     procedure, private :: generate_coordinates
   end type checkpoint_manager_adios2_t
+
+  type :: field_ptr_t
+    class(field_t), pointer :: ptr => null()
+  end type field_ptr_t
 
 contains
 
@@ -119,9 +124,6 @@ contains
     character(len=256) :: restart_file
     integer :: restart_timestep
     real(dp) :: restart_time
-
-    if (.not. self%checkpoint_cfg%restart_from_checkpoint) return
-    self%is_restart = .true.
 
     restart_file = trim(self%checkpoint_cfg%restart_file)
     if (solver%mesh%par%is_root()) then
@@ -209,13 +211,14 @@ contains
     integer, intent(in) :: timestep
     integer, intent(in), optional :: comm
 
-    character(len=256) :: filename
+    character(len=256) :: filename, temp_filename, old_filename
     type(adios2_file_t) :: file
     integer :: ierr, myrank
     integer :: comm_to_use
     character(len=*), parameter :: field_names(3) = ["u", "v", "w"]
     real(dp) :: simulation_time
     logical :: file_exists
+    type(field_ptr_t), allocatable :: field_ptrs(:)
 
     if (self%checkpoint_cfg%checkpoint_freq <= 0) return
     if (mod(timestep, self%checkpoint_cfg%checkpoint_freq) /= 0) return
@@ -224,21 +227,13 @@ contains
     if (present(comm)) comm_to_use = comm
     call MPI_Comm_rank(comm_to_use, myrank, ierr)
 
-    write (filename, '(A,A,I0.6,A)') &
+    write(filename, '(A,A,I0.6,A)') &
       trim(self%checkpoint_cfg%checkpoint_prefix), '_', timestep, '.bp'
+    write(temp_filename, '(A,A)') &
+      trim(self%checkpoint_cfg%checkpoint_prefix), '_temp.bp'
     if (myrank == 0) print *, 'Writing checkpoint: ', trim(filename)
 
-    inquire (file=trim(filename), exist=file_exists)
-    if (file_exists) then
-      if (myrank == 0) then
-        call execute_command_line('rm -rf '//trim(filename), exitstat=ierr)
-        if (ierr /= 0) then
-          print *, 'WARNING: failed to remove existing file: ', trim(filename)
-        end if
-      end if
-    end if
-
-    file = self%adios2_writer%open(filename, adios2_mode_write, comm_to_use)
+    file = self%adios2_writer%open(temp_filename, adios2_mode_write, comm_to_use)
     call self%adios2_writer%begin_step(file)
 
     simulation_time = timestep*solver%dt
@@ -246,23 +241,45 @@ contains
     call self%adios2_writer%write_data("time", real(simulation_time, dp), file)
     call self%adios2_writer%write_data("dt", real(solver%dt, dp), file)
 
-    call self%write_fields(field_names, solver, file, use_stride=.false.)
+    allocate(field_ptrs(3))
+    field_ptrs(1)%ptr => solver%u
+    field_ptrs(2)%ptr => solver%v
+    field_ptrs(3)%ptr => solver%w
+
+    call self%write_fields( &
+      field_names, field_ptrs, &
+      solver, file, use_stride=.false. &
+      )
     call self%adios2_writer%close(file)
 
-    ! Remove old checkpoint if configured to keep only the latest
-    if (.not. self%checkpoint_cfg%keep_checkpoint &
-        .and. self%last_checkpoint_step > 0) then
-      write (filename, '(A,A,I0.6,A)') &
-        trim(self%checkpoint_cfg%checkpoint_prefix), '_', &
-        self%last_checkpoint_step, '.bp'
+    deallocate(field_ptrs)
 
-      inquire (file=trim(filename), exist=file_exists)
-      if (file_exists .and. myrank == 0) then
-        call execute_command_line('rm -rf '//trim(filename), exitstat=ierr)
-        if (ierr /= 0) then
-          print *, 'WARNING: failed to remove old checkpoint: ', trim(filename)
+    if (myrank == 0) then
+      ! Move temporary file to final checkpoint filename
+      call execute_command_line('mv ' //trim(temp_filename)//' '// &
+           trim(filename))
+
+      inquire(file=trim(filename), exist=file_exists)
+      if (.not. file_exists) then
+        print *, 'ERROR: Checkpoint file not created: ', trim(filename)
+      end if
+
+      ! Remove old checkpoint if configured to keep only the latest
+      if (.not. self%checkpoint_cfg%keep_checkpoint &
+          .and. self%last_checkpoint_step > 0) then
+        write(old_filename, '(A,A,I0.6,A)') &
+          trim(self%checkpoint_cfg%checkpoint_prefix), '_', &
+          self%last_checkpoint_step, '.bp'
+        inquire (file=trim(old_filename), exist=file_exists)
+        if (file_exists) then
+          call execute_command_line('rm -rf '//trim(old_filename), exitstat=ierr)
+          if (ierr /= 0) then
+            print *, 'WARNING: failed to remove old checkpoint: ', &
+                     trim(old_filename)
+          end if
         end if
       end if
+
     end if
 
     self%last_checkpoint_step = timestep
@@ -283,6 +300,7 @@ contains
     integer :: dims(3)
     integer :: global_dims(3)
     integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
+    type(field_ptr_t), allocatable :: field_ptrs(:)
 
     if (self%checkpoint_cfg%snapshot_freq <= 0) return
     if (mod(timestep, self%checkpoint_cfg%snapshot_freq) /= 0) return
@@ -306,7 +324,7 @@ contains
 
     ! paraview-specific mesh metadata - write only from root
     if (myrank == 0) then
-      call self%adios2_writer%write_attribute("mesh/type", "structured", file)
+      call self%adios2_writer%write_attribute("mesh/type", "rectilinear", file)
       call self%adios2_writer%write_attribute("mesh/dimensionality", "3", file)
 
       call self%adios2_writer%write_attribute("u/mesh", "mesh", file)
@@ -320,7 +338,16 @@ contains
     call self%generate_coordinates( &
       solver, file, shape_dims, start_dims, count_dims &
       )
-    call self%write_fields(field_names, solver, file, use_stride=.true.)
+
+    allocate(field_ptrs(3))
+    field_ptrs(1)%ptr => solver%u
+    field_ptrs(2)%ptr => solver%v
+    field_ptrs(3)%ptr => solver%w
+
+    call self%write_fields( &
+      field_names, field_ptrs, &
+      solver, file, use_stride=.true. &
+      )
     call self%adios2_writer%close(file)
   end subroutine write_snapshot
 
@@ -332,37 +359,67 @@ contains
     type(adios2_file_t), intent(inout) :: file
     integer(i8), dimension(3), intent(in) :: shape_dims, start_dims, count_dims
 
-    integer :: i, j, k, nx, ny, nz
+    integer :: i, nx, ny, nz
     real(dp), dimension(3) :: coords
-    real(dp), dimension(:, :, :), allocatable :: coords_x, coords_y, coords_z
+    integer(i8), dimension(1) :: x_shape, y_shape, z_shape
+    integer(i8), dimension(1) :: x_start, y_start, z_start
+    integer(i8), dimension(1) :: x_count, y_count, z_count
 
     nx = int(count_dims(1))
     ny = int(count_dims(2))
     nz = int(count_dims(3))
 
-    allocate (coords_x(nx, ny, nz), coords_y(nx, ny, nz), coords_z(nx, ny, nz))
+    if (.not. allocated(self%coords_x) .or. size(self%coords_x) /= nx) then
+      if (allocated(self%coords_x)) deallocate (self%coords_x)
+      allocate (self%coords_x(nx))
+    end if
 
-    do k = 1, nz
-      do j = 1, ny
-        do i = 1, nx
-          coords = solver%mesh%get_coordinates(i, j, k)
-          coords_x(i, j, k) = coords(1)
-          coords_y(i, j, k) = coords(2)
-          coords_z(i, j, k) = coords(3)
-        end do
-      end do
+    if (.not. allocated(self%coords_y) .or. size(self%coords_y) /= ny) then
+      if (allocated(self%coords_y)) deallocate (self%coords_y)
+      allocate (self%coords_y(ny))
+    end if
+
+    if (.not. allocated(self%coords_z) .or. size(self%coords_z) /= nz) then
+      if (allocated(self%coords_z)) deallocate (self%coords_z)
+      allocate (self%coords_z(nz))
+    end if
+
+    do i = 1, nx
+      coords = solver%mesh%get_coordinates(i, 1, 1)
+      self%coords_x(i) = coords(1)
+    end do
+  
+    do i = 1, ny
+      coords = solver%mesh%get_coordinates(1, i, 1)
+      self%coords_y(i) = coords(2)
+    end do
+  
+    do i = 1, nz
+      coords = solver%mesh%get_coordinates(1, 1, i)
+      self%coords_z(i) = coords(3)
     end do
 
+    x_shape(1) = shape_dims(1)
+    x_start(1) = start_dims(1)
+    x_count(1) = count_dims(1)
+
+    y_shape(1) = shape_dims(2)
+    y_start(1) = start_dims(2)
+    y_count(1) = count_dims(2)
+
+    z_shape(1) = shape_dims(3) 
+    z_start(1) = start_dims(3)
+    z_count(1) = count_dims(3)
+
     call self%adios2_writer%write_data( &
-      "coordinates/x", coords_x, file, shape_dims, start_dims, count_dims &
+      "coordinates/x", self%coords_x, file, x_shape, x_start, x_count &
       )
     call self%adios2_writer%write_data( &
-      "coordinates/y", coords_y, file, shape_dims, start_dims, count_dims &
+      "coordinates/y", self%coords_y, file, y_shape, y_start, y_count &
       )
     call self%adios2_writer%write_data( &
-      "coordinates/z", coords_z, file, shape_dims, start_dims, count_dims &
+      "coordinates/z", self%coords_z, file, z_shape, z_start, z_count &
       )
-    deallocate (coords_x, coords_y, coords_z)
   end subroutine generate_coordinates
 
   function stride_data( &
@@ -571,10 +628,11 @@ contains
     if (allocated(field_data)) deallocate (field_data)
   end subroutine restart_checkpoint
 
-  subroutine write_fields(self, field_names, solver, file, use_stride)
+  subroutine write_fields(self, field_names, fields, solver, file, use_stride)
     !! Write field data, optionally with striding
     class(checkpoint_manager_adios2_t), intent(inout) :: self
     character(len=*), dimension(:), intent(in) :: field_names
+    class(field_ptr_t), dimension(:), target, intent(in) :: fields
     class(solver_t), intent(in) :: solver
     type(adios2_file_t), intent(inout) :: file
     logical, intent(in), optional :: use_stride
@@ -589,72 +647,28 @@ contains
     if (present(use_stride)) apply_stride = use_stride
 
     do i_field = 1, size(field_names)
-      host_field => get_field_data(solver, trim(field_names(i_field)))
-      if (.not. associated(host_field)) cycle
+      host_field => solver%host_allocator%get_block(DIR_C, &
+                    fields(i_field)%ptr%data_loc)
+      call solver%backend%get_field_data(host_field%data, fields(i_field)%ptr)
 
-      call write_single_field(trim(field_names(i_field)), host_field)
+      call write_single_field(trim(field_names(i_field)), host_field, &
+           fields(i_field)%ptr%data_loc)
     end do
     call solver%host_allocator%release_block(host_field)
 
   contains
 
-    function get_data_loc(field_name) result(data_loc)
-      character(len=*), intent(in) :: field_name
-      integer :: data_loc
-
-      select case (trim(field_name))
-      case ("u")
-        data_loc = solver%u%data_loc
-      case ("v")
-        data_loc = solver%v%data_loc
-      case ("w")
-        data_loc = solver%w%data_loc
-      case default
-        call self%adios2_writer%handle_error( &
-          1, "Invalid field name"//trim(field_name))
-        data_loc = -1
-      end select
-    end function get_data_loc
-
-    function get_field_data(solver, field_name) result(host_field)
-      class(solver_t), intent(in) :: solver
-      character(len=*), intent(in) :: field_name
-      class(field_t), pointer :: host_field, field_ptr
-      integer :: data_loc
-
-      data_loc = get_data_loc(field_name)
-      if (data_loc < 0) then
-        host_field => null()
-        return
-      end if
-
-      select case (trim(field_name))
-      case ("u")
-        field_ptr => solver%u
-      case ("v")
-        field_ptr => solver%v
-      case ("w")
-        field_ptr => solver%w
-      case default
-        host_field => null()
-        return
-      end select
-
-      host_field => solver%host_allocator%get_block(DIR_C, data_loc)
-      call solver%backend%get_field_data(host_field%data, field_ptr)
-    end function get_field_data
-
-    subroutine write_single_field(field_name, host_field)
+    subroutine write_single_field(field_name, host_field, data_loc)
       character(len=*), intent(in) :: field_name
       class(field_t), pointer :: host_field
+      integer, intent(in) :: data_loc
       integer, dimension(3) :: strided_dims_local, stride_factors
 
       integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
       integer(i8), dimension(3) :: strided_shape, strided_start, strided_count
       real(dp), dimension(:, :, :), pointer :: field_data
-      integer :: data_loc, dims(3)
+      integer :: dims(3)
 
-      data_loc = get_data_loc(field_name)
       dims = solver%mesh%get_dims(data_loc)
       shape_dims = int(solver%mesh%get_global_dims(data_loc), i8)
       start_dims = int(solver%mesh%par%n_offset, i8)
@@ -724,6 +738,10 @@ module m_checkpoint_manager
     procedure :: is_restart => cm_is_restart
   end type checkpoint_manager_t
 
+  interface checkpoint_manager_t
+    module procedure create_checkpoint_manager
+  end interface checkpoint_manager_t
+
 contains
   function create_checkpoint_manager(comm) result(mgr)
     integer, intent(in) :: comm
@@ -766,7 +784,7 @@ contains
     class(checkpoint_manager_t), intent(in) :: self
     logical :: is_restart
 
-    is_restart = self%impl%is_restart
+    is_restart = self%impl%checkpoint_cfg%restart_from_checkpoint
   end function cm_is_restart
 
 end module m_checkpoint_manager

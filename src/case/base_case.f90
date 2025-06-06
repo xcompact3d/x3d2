@@ -9,8 +9,7 @@ module m_base_case
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_solver, only: solver_t, init
-  use m_checkpoint_manager, only: checkpoint_manager_t, &
-                                  create_checkpoint_manager
+  use m_checkpoint_manager, only: checkpoint_manager_t
   use mpi, only: MPI_COMM_WORLD
 
   implicit none
@@ -95,10 +94,13 @@ contains
 
     self%solver = init(backend, mesh, host_allocator)
 
-    self%checkpoint_mgr = create_checkpoint_manager(MPI_COMM_WORLD)
-    call self%checkpoint_mgr%handle_restart(self%solver, MPI_COMM_WORLD)
+    self%checkpoint_mgr = checkpoint_manager_t(MPI_COMM_WORLD)
+    if (self%checkpoint_mgr%is_restart()) then
+      call self%checkpoint_mgr%handle_restart(self%solver, MPI_COMM_WORLD)
+    else
+      call self%initial_conditions()
+    end if
 
-    if (.not. self%checkpoint_mgr%is_restart()) call self%initial_conditions()
   end subroutine case_init
 
   subroutine case_finalise(self)

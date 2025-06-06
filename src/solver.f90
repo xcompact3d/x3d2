@@ -124,7 +124,6 @@ contains
     solver%n_iters = solver_cfg%n_iters
     solver%n_output = solver_cfg%n_output
     solver%ngrid = product(solver%mesh%get_global_dims(VERT))
-    solver%current_iter = 0
 
     ! Allocate and set the tdsops
     call allocate_tdsops( &
