@@ -94,7 +94,7 @@ contains
 
     self%solver = init(backend, mesh, host_allocator)
 
-    self%checkpoint_mgr = checkpoint_manager_t(MPI_COMM_WORLD)
+    call self%checkpoint_mgr%init(MPI_COMM_WORLD)
     if (self%checkpoint_mgr%is_restart()) then
       call self%checkpoint_mgr%handle_restart(self%solver, MPI_COMM_WORLD)
     else

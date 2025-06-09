@@ -652,8 +652,8 @@ contains
 
     do i_field = 1, size(field_names)
       host_field => solver%host_allocator%get_block( &
-                    DIR_C, fields(i_field)%ptr%data_loc
-      )
+                    DIR_C, fields(i_field)%ptr%data_loc &
+                    )
       call solver%backend%get_field_data(host_field%data, fields(i_field)%ptr)
 
       call write_single_field(trim(field_names(i_field)), host_field, &
