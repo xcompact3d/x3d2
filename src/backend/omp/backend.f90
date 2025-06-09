@@ -1,15 +1,19 @@
 module m_omp_backend
-  use m_allocator, only: allocator_t, field_t
+  use mpi
+
+  use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_ordering, only: get_index_reordering
   use m_common, only: dp, get_dirs_from_rdr, move_data_loc, &
-                      DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC
+                      DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC, &
+                      X_FACE, Y_FACE, Z_FACE
+  use m_field, only: field_t
+  use m_mesh, only: mesh_t
+  use m_ordering, only: get_index_reordering
   use m_tdsops, only: dirps_t, tdsops_t
-  use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
-  use m_omp_sendrecv, only: sendrecv_fields
 
   use m_omp_common, only: SZ
-  use m_mesh, only: mesh_t
+  use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
+  use m_omp_sendrecv, only: sendrecv_fields
 
   implicit none
 
@@ -36,8 +40,11 @@ module m_omp_backend
     procedure :: sum_zintox => sum_zintox_omp
     procedure :: vecadd => vecadd_omp
     procedure :: scalar_product => scalar_product_omp
+    procedure :: field_max_mean => field_max_mean_omp
     procedure :: field_scale => field_scale_omp
     procedure :: field_shift => field_shift_omp
+    procedure :: field_set_face => field_set_face_omp
+    procedure :: field_volume_integral => field_volume_integral_omp
     procedure :: copy_data_to_f => copy_data_to_f_omp
     procedure :: copy_f_to_data => copy_f_to_data_omp
     procedure :: init_poisson_fft => init_omp_poisson_fft
@@ -103,7 +110,7 @@ contains
 
   subroutine alloc_omp_tdsops( &
     self, tdsops, n_tds, delta, operation, scheme, bc_start, bc_end, &
-    n_halo, from_to, sym, c_nu, nu0_nu &
+    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
     )
     implicit none
 
@@ -113,6 +120,7 @@ contains
     real(dp), intent(in) :: delta
     character(*), intent(in) :: operation, scheme
     integer, intent(in) :: bc_start, bc_end
+    real(dp), optional, intent(in) :: stretch(:), stretch_correct(:)
     integer, optional, intent(in) :: n_halo
     character(*), optional, intent(in) :: from_to
     logical, optional, intent(in) :: sym
@@ -122,8 +130,9 @@ contains
 
     select type (tdsops)
     type is (tdsops_t)
-      tdsops = tdsops_t(n_tds, delta, operation, scheme, bc_start, &
-                        bc_end, n_halo, from_to, sym, c_nu, nu0_nu)
+      tdsops = tdsops_t(n_tds, delta, operation, scheme, bc_start, bc_end, &
+                        stretch, stretch_correct, n_halo, from_to, sym, &
+                        c_nu, nu0_nu)
     end select
 
   end subroutine alloc_omp_tdsops
@@ -455,11 +464,7 @@ contains
   end subroutine vecadd_omp
 
   real(dp) function scalar_product_omp(self, x, y) result(s)
-
-    use mpi
-
-    use m_common, only: NULL_LOC, get_rdr_from_dirs
-
+    !! [[m_base_backend(module):scalar_product(interface)]]
     implicit none
 
     class(omp_backend_t) :: self
@@ -546,6 +551,79 @@ contains
 
   end subroutine copy_into_buffers
 
+  subroutine field_max_mean_omp(self, max_val, mean_val, f, enforced_data_loc)
+    !! [[m_base_backend(module):field_max_mean(interface)]]
+    implicit none
+
+    class(omp_backend_t) :: self
+    real(dp), intent(out) :: max_val, mean_val
+    class(field_t), intent(in) :: f
+    integer, optional, intent(in) :: enforced_data_loc
+
+    real(dp) :: val, max_p, sum_p, max_pncl, sum_pncl
+    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j
+    integer :: i, j, k, k_i, k_j, ierr
+
+    if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
+      error stop 'The input field to omp::field_max_mean does not have a &
+                  &valid f%data_loc. You may enforce a data_loc of your &
+                  &choice as last argument to carry on at your own risk!'
+    end if
+
+    if (present(enforced_data_loc)) then
+      data_loc = enforced_data_loc
+    else
+      data_loc = f%data_loc
+    end if
+
+    dims = self%mesh%get_dims(data_loc)
+    dims_padded = self%mesh%get_padded_dims(DIR_C)
+
+    if (f%dir == DIR_X) then
+      n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (f%dir == DIR_Y) then
+      n = dims(2); n_j = dims(1); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (f%dir == DIR_Z) then
+      n = dims(3); n_j = dims(1); n_i = dims(2); n_i_pad = dims_padded(2)
+    else
+      error stop 'field_max_mean does not support DIR_C fields!'
+    end if
+
+    sum_p = 0._dp
+    max_p = 0._dp
+    !$omp parallel do collapse(2) reduction(+:sum_p) reduction(max:max_p) &
+    !$omp private(k, val, sum_pncl, max_pncl)
+    do k_j = 1, (n_j - 1)/SZ + 1 ! loop over stacked groups
+      do k_i = 1, n_i
+        k = k_j + (k_i - 1)*((n_j - 1)/SZ + 1)
+        sum_pncl = 0._dp
+        max_pncl = 0._dp
+        do j = 1, n
+          ! loop over only non-padded entries in the present group
+          do i = 1, min(SZ, n_j - (k_j - 1)*SZ)
+            val = abs(f%data(i, j, k))
+            sum_pncl = sum_pncl + val
+            max_pncl = max(max_pncl, val)
+          end do
+        end do
+        sum_p = sum_p + sum_pncl
+        max_p = max(max_p, max_pncl)
+      end do
+    end do
+    !$omp end parallel do
+
+    ! rank-local values
+    max_val = max_p
+    mean_val = sum_p/product(self%mesh%get_global_dims(data_loc))
+
+    ! make sure all ranks have final values
+    call MPI_Allreduce(MPI_IN_PLACE, max_val, 1, MPI_DOUBLE_PRECISION, &
+                       MPI_MAX, MPI_COMM_WORLD, ierr)
+    call MPI_Allreduce(MPI_IN_PLACE, mean_val, 1, MPI_DOUBLE_PRECISION, &
+                       MPI_SUM, MPI_COMM_WORLD, ierr)
+
+  end subroutine field_max_mean_omp
+
   subroutine field_scale_omp(self, f, a)
     implicit none
 
@@ -565,6 +643,94 @@ contains
 
     f%data = f%data + a
   end subroutine field_shift_omp
+
+  subroutine field_set_face_omp(self, f, c_start, c_end, face)
+    !! [[m_base_backend(module):field_set_face(subroutine)]]
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c_start, c_end
+    integer, intent(in) :: face
+
+    integer :: dims(3), k, j, i_mod, k_end
+
+    if (f%dir /= DIR_X) then
+      error stop 'Setting a field face is only supported for DIR_X fields.'
+    end if
+
+    if (f%data_loc == NULL_LOC) then
+      error stop 'field_set_face require a valid data_loc.'
+    end if
+
+    dims = self%mesh%get_dims(f%data_loc)
+
+    select case (face)
+    case (X_FACE)
+      error stop 'Setting X_FACE is not yet supported.'
+    case (Y_FACE)
+      i_mod = mod(dims(2) - 1, SZ) + 1
+      !$omp parallel do private(k_end)
+      do k = 1, dims(3)
+        k_end = k + (dims(2) - 1)/SZ*dims(3)
+        do j = 1, dims(1)
+          f%data(1, j, k) = c_start
+          f%data(i_mod, j, k_end) = c_end
+        end do
+      end do
+      !$omp end parallel do
+    case (Z_FACE)
+      error stop 'Setting Z_FACE is not yet supported.'
+    case default
+      error stop 'face is undefined.'
+    end select
+
+  end subroutine field_set_face_omp
+
+  real(dp) function field_volume_integral_omp(self, f) result(s)
+    !! volume integral of a field
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(in) :: f
+
+    real(dp) :: sum_p, sum_pncl
+    integer :: dims(3), stacked, i, j, k, k_i, k_j, ierr
+
+    if (f%data_loc == NULL_LOC) then
+      error stop 'You must set the data_loc before calling volume integral.'
+    end if
+    if (f%dir /= DIR_X) then
+      error stop 'Volume integral can only be called on DIR_X fields.'
+    end if
+
+    dims = self%mesh%get_dims(f%data_loc)
+    stacked = (dims(2) - 1)/SZ + 1
+
+    sum_p = 0._dp
+    !$omp parallel do collapse(2) reduction(+:sum_p) private(k, sum_pncl)
+    do k_j = 1, stacked ! loop over stacked groups
+      do k_i = 1, dims(3)
+        k = k_j + (k_i - 1)*stacked
+        sum_pncl = 0._dp
+        do j = 1, dims(1)
+          ! loop over only non-padded entries in the present group
+          do i = 1, min(SZ, dims(2) - (k_j - 1)*SZ)
+            sum_pncl = sum_pncl + f%data(i, j, k)
+          end do
+        end do
+        sum_p = sum_p + sum_pncl
+      end do
+    end do
+    !$omp end parallel do
+
+    ! rank-local values
+    s = sum_p
+
+    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+
+  end function field_volume_integral_omp
 
   subroutine copy_data_to_f_omp(self, f, data)
     class(omp_backend_t), intent(inout) :: self

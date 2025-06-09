@@ -147,13 +147,13 @@ contains
   end subroutine der_univ_dist
 
   attributes(global) subroutine der_univ_subs(du, recv_u_s, recv_u_e, &
-                                              n, dist_sa, dist_sc)
+                                              n, dist_sa, dist_sc, strch)
     implicit none
 
     ! Arguments
     real(dp), device, intent(out), dimension(:, :, :) :: du
     real(dp), device, intent(in), dimension(:, :, :) :: recv_u_s, recv_u_e
-    real(dp), device, intent(in), dimension(:) :: dist_sa, dist_sc
+    real(dp), device, intent(in), dimension(:) :: dist_sa, dist_sc, strch
     integer, value, intent(in) :: n
 
     ! Local variables
@@ -185,11 +185,11 @@ contains
     recp = 1._dp/(1._dp - ur*bl)
     du_e = recp*(du(i, n, b) - ur*recv_u_e(i, 1, b))
 
-    du(i, 1, b) = du_s
+    du(i, 1, b) = du_s*strch(1)
     do j = 2, n - 1
-      du(i, j, b) = (du(i, j, b) - dist_sa(j)*du_s - dist_sc(j)*du_e)
+      du(i, j, b) = (du(i, j, b) - dist_sa(j)*du_s - dist_sc(j)*du_e)*strch(j)
     end do
-    du(i, n, b) = du_e
+    du(i, n, b) = du_e*strch(n)
 
   end subroutine der_univ_subs
 
@@ -573,7 +573,7 @@ contains
   attributes(global) subroutine transeq_3fused_subs( &
     r_du, conv, dud, d2u, &
     recv_du_s, recv_du_e, recv_dud_s, recv_dud_e, recv_d2u_s, recv_d2u_e, &
-    n, nu, d1_sa, d1_sc, d2_sa, d2_sc &
+    n, nu, d1_sa, d1_sc, d1_strch, d2_sa, d2_sc, d2_strch, d2_strch_cor &
     )
     implicit none
 
@@ -585,7 +585,9 @@ contains
       recv_du_s, recv_du_e, recv_dud_s, recv_dud_e, recv_d2u_s, recv_d2u_e
     integer, value, intent(in) :: n
     real(dp), value, intent(in) :: nu
-    real(dp), device, intent(in), dimension(:) :: d1_sa, d1_sc, d2_sa, d2_sc
+    real(dp), device, intent(in), dimension(:) :: d1_sa, d1_sc, d1_strch, &
+                                                  d2_sa, d2_sc, d2_strch, &
+                                                  d2_strch_cor
 
     ! Local variables
     integer :: i, j, b
@@ -639,14 +641,19 @@ contains
     d2u_e = recp*(d2u(i, n, b) - ur*recv_d2u_e(i, 1, b))
 
     ! final substitution
-    r_du(i, 1, b) = -0.5_dp*(conv(i, 1, b)*du_s + dud_s) + nu*d2u_s
+    r_du(i, 1, b) = -0.5_dp*(conv(i, 1, b)*du_s*d1_strch(1) &
+                             + dud_s*d1_strch(1)) &
+                    + nu*(d2u_s*d2_strch(1) + du_s*d1_strch(1)*d2_strch_cor(1))
     do j = 2, n - 1
-      du_temp = (r_du(i, j, b) - d1_sa(j)*du_s - d1_sc(j)*du_e)
-      dud_temp = (dud(i, j, b) - d1_sa(j)*dud_s - d1_sc(j)*dud_e)
-      d2u_temp = (d2u(i, j, b) - d2_sa(j)*d2u_s - d2_sc(j)*d2u_e)
+      du_temp = (r_du(i, j, b) - d1_sa(j)*du_s - d1_sc(j)*du_e)*d1_strch(j)
+      dud_temp = (dud(i, j, b) - d1_sa(j)*dud_s - d1_sc(j)*dud_e)*d1_strch(j)
+      d2u_temp = (d2u(i, j, b) - d2_sa(j)*d2u_s - d2_sc(j)*d2u_e)*d2_strch(j) &
+                 + du_temp*d2_strch_cor(j)
       r_du(i, j, b) = -0.5_dp*(conv(i, j, b)*du_temp + dud_temp) + nu*d2u_temp
     end do
-    r_du(i, n, b) = -0.5_dp*(conv(i, n, b)*du_e + dud_e) + nu*d2u_e
+    r_du(i, n, b) = -0.5_dp*(conv(i, n, b)*du_e*d1_strch(n) &
+                             + dud_e*d1_strch(n)) &
+                    + nu*(d2u_e*d2_strch(n) + du_s*d1_strch(n)*d2_strch_cor(n))
 
   end subroutine transeq_3fused_subs
 

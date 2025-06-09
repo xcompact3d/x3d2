@@ -1,13 +1,7 @@
-Building and running the unit tests
-===================================
+Building x3d2
+=============
 
-x3d2 is in early development phase, and there is no main executable
-yet to be built.  However, currently implemented functionality is
-covered by unit tests, which you can build and run on you development
-machine.
-
-To build x3d2, you will need git, a fortran compiler and CMake, see
-:ref:`tooling`.
+See :ref:`tooling` for details on the tool required to build x3d2.
 
 Start by configuring the build directory:
 
@@ -15,34 +9,28 @@ Start by configuring the build directory:
 
    $ cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 
-To configure the build with the NVIDIA Fortran compiler, you can set
-the `FC` environment variable to the compiler executable.  If you
-specify an relative path, it must be present in your current `PATH`.
+The above is using ``Debug`` build, for release build use ``Release`` instead.
 
-.. code-block:: console
+Set the ``FC`` environment variable to the compiler executable (this can either be from NVIDIA HPC SDK or Open MPI). If you specify a relative path, it must be present in your current ``PATH``.
 
-   $ FC=nvfortran cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+.. code-block:: bash
 
-Setting the Fortran compiler to the NVIDIA Fortran compiler will
-automatically include the CUDA Fortran source files into the build
-tree, which are ignored by default.
+   $ FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 
-Once the build directory is configured, the tests can be built and run
-as follows:
+Once the build directory is configured, you can build the executable and run the tests as follows:
 
-.. code-block:: console
+.. code-block:: bash
 
    $ cd build
    $ make
    $ make test
 
-Note that ``make test`` is only a launcher for the ``ctest``
-executable.  By default ``ctest`` does not show the output of test
-executables on failure.  If one of more tests fail, you probably want
-to run the tests with:
+Note that ``make test`` is only a launcher for the ``ctest`` executable. By default, ``ctest`` does not show the output of test executables on failure. If one or more tests fail, you probably want to run the tests with:
 
-.. code-block:: console
+.. code-block:: bash
 
    $ ctest --output-on-failure
 
 instead of ``make test``.
+
+The main executable will be built in the ``build/src`` directory as ``xcompact``.

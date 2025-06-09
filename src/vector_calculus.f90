@@ -1,11 +1,12 @@
 module m_vector_calculus
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_allocator, only: allocator_t, field_t
+  use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       CELL, X_FACE, Y_FACE, Z_FACE, VERT
+  use m_field, only: field_t
   use m_tdsops, only: tdsops_t
 
   implicit none

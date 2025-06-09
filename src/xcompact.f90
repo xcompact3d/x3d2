@@ -7,6 +7,7 @@ program xcompact
   use m_common, only: pi, get_argument
   use m_config, only: domain_config_t, solver_config_t
   use m_mesh
+  use m_case_channel, only: case_channel_t
   use m_case_generic, only: case_generic_t
   use m_case_tgv, only: case_tgv_t
 
@@ -76,7 +77,8 @@ program xcompact
 
   mesh = mesh_t(domain_cfg%dims_global, domain_cfg%nproc_dir, &
                 domain_cfg%L_global, domain_cfg%BC_x, domain_cfg%BC_y, &
-                domain_cfg%BC_z, use_2decomp=use_2decomp)
+                domain_cfg%BC_z, domain_cfg%stretching, domain_cfg%beta, &
+                use_2decomp=use_2decomp)
 
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(mesh, SZ)
@@ -103,6 +105,9 @@ program xcompact
   if (nrank == 0) print *, 'Flow case: ', domain_cfg%flow_case_name
 
   select case (trim(domain_cfg%flow_case_name))
+  case ('channel')
+    allocate (case_channel_t :: flow_case)
+    flow_case = case_channel_t(backend, mesh, host_allocator)
   case ('generic')
     allocate (case_generic_t :: flow_case)
     flow_case = case_generic_t(backend, mesh, host_allocator)

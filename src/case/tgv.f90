@@ -1,10 +1,11 @@
 module m_case_tgv
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_allocator, only: allocator_t, field_t
+  use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
   use m_common, only: dp, VERT, DIR_C
+  use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_solver, only: init
 
@@ -15,6 +16,7 @@ module m_case_tgv
     procedure :: boundary_conditions => boundary_conditions_tgv
     procedure :: initial_conditions => initial_conditions_tgv
     procedure :: forcings => forcings_tgv
+    procedure :: pre_correction => pre_correction_tgv
     procedure :: postprocess => postprocess_tgv
   end type case_tgv_t
 
@@ -77,23 +79,36 @@ contains
     ! do nothing for TGV case
   end subroutine boundary_conditions_tgv
 
-  subroutine forcings_tgv(self, du, dv, dw)
+  subroutine forcings_tgv(self, du, dv, dw, iter)
     implicit none
 
     class(case_tgv_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
+    integer, intent(in) :: iter
 
     ! do nothing for TGV case
   end subroutine forcings_tgv
 
-  subroutine postprocess_tgv(self, i, t)
+  subroutine pre_correction_tgv(self, u, v, w)
     implicit none
 
     class(case_tgv_t) :: self
-    integer, intent(in) :: i
+    class(field_t), intent(inout) :: u, v, w
+
+    ! do nothing for TGV case
+  end subroutine pre_correction_tgv
+
+  subroutine postprocess_tgv(self, iter, t)
+    implicit none
+
+    class(case_tgv_t) :: self
+    integer, intent(in) :: iter
     real(dp), intent(in) :: t
 
-    if (self%solver%mesh%par%is_root()) print *, 'time =', t, 'iteration =', i
+    if (self%solver%mesh%par%is_root()) then
+      print *, 'time =', t, 'iteration =', iter
+    end if
+
     call self%print_enstrophy(self%solver%u, self%solver%v, self%solver%w)
     call self%print_div_max_mean(self%solver%u, self%solver%v, self%solver%w)
 

@@ -57,10 +57,6 @@ module m_allocator
     module procedure allocator_init
   end interface allocator_t
 
-  type :: flist_t
-    class(field_t), pointer :: ptr
-  end type flist_t
-
 contains
 
   function allocator_init(mesh, sz) result(allocator)
@@ -101,12 +97,17 @@ contains
     !! Allocate memory for a new block and return a pointer to a new
     !! [[m_allocator(module):field_t(type)]] object.
     class(allocator_t), intent(inout) :: self
-    type(field_t), pointer, intent(in) :: next
+    class(field_t), pointer, intent(in) :: next
     type(field_t), pointer :: newblock
     class(field_t), pointer :: ptr
     self%next_id = self%next_id + 1
     allocate (newblock)
-    newblock = field_t(self%ngrid, next, id=self%next_id)
+    select type (next)
+    type is (field_t)
+      newblock = field_t(self%ngrid, next, id=self%next_id)
+    class default
+      error stop "Incorrect overloading for create_block"
+    end select
     ptr => newblock
   end function create_block
 

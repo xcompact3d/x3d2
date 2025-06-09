@@ -17,6 +17,8 @@ module m_config
     real(dp) :: L_global(3)
     integer :: dims_global(3), nproc_dir(3)
     character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
+    character(len=20) :: stretching(3)
+    real(dp) :: beta(3)
   contains
     procedure :: read => read_domain_nml
   end type domain_config_t
@@ -30,6 +32,14 @@ module m_config
   contains
     procedure :: read => read_solver_nml
   end type solver_config_t
+
+  type, extends(base_config_t) :: channel_config_t
+    real(dp) :: noise, omega_rot
+    logical :: rotation
+    integer :: n_rotate
+  contains
+    procedure :: read => read_channel_nml
+  end type channel_config_t
 
   abstract interface
     subroutine read(self, nml_file, nml_string) !&
@@ -62,9 +72,11 @@ contains
     integer, dimension(3) :: dims_global
     integer, dimension(3) :: nproc_dir
     character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
+    character(len=20) :: stretching(3) = ['uniform', 'uniform', 'uniform']
+    real(dp), dimension(3) :: beta
 
     namelist /domain_settings/ flow_case_name, L_global, dims_global, &
-      nproc_dir, BC_x, BC_y, BC_z
+      nproc_dir, BC_x, BC_y, BC_z, stretching, beta
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading domain config failed! &
@@ -87,6 +99,8 @@ contains
     self%BC_x = BC_x
     self%BC_y = BC_y
     self%BC_z = BC_z
+    self%stretching = stretching
+    self%beta = beta
 
   end subroutine read_domain_nml
 
@@ -135,6 +149,42 @@ contains
     self%stagder_scheme = stagder_scheme
 
   end subroutine read_solver_nml
+
+  subroutine read_channel_nml(self, nml_file, nml_string)
+    implicit none
+
+    class(channel_config_t) :: self
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
+
+    integer :: unit
+
+    real(dp) :: noise, omega_rot
+    logical :: rotation
+    integer :: n_rotate
+
+    namelist /channel_nml/ noise, rotation, omega_rot, n_rotate
+
+    if (present(nml_file) .and. present(nml_string)) then
+      error stop 'Reading channel config failed! &
+                 &Provide only a file name or source, not both.'
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file)
+      read (unit, nml=channel_nml)
+      close (unit)
+    else if (present(nml_string)) then
+      read (nml_string, nml=channel_nml)
+    else
+      error stop 'Reading channel config failed! &
+                 &Provide at least one of the following: file name or source'
+    end if
+
+    self%noise = noise
+    self%rotation = rotation
+    self%omega_rot = omega_rot
+    self%n_rotate = n_rotate
+
+  end subroutine read_channel_nml
 
 end module m_config
 

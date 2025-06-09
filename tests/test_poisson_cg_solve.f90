@@ -65,11 +65,13 @@ contains
     ! Test across multiple refinement levels
     nx = 16; ny = 16; nz = 16
     do i = 1, nref
-      mesh = mesh_t([nx, ny, nz], [1, 1, nproc], [Lx, Ly, Lz], &
-                    ["periodic", "periodic"], &
-                    ["periodic", "periodic"], &
-                    ["periodic", "periodic"], &
-                    .false.)
+      mesh = mesh_t(dims_global=[nx, ny, nz], &
+                    nproc_dir=[1, 1, nproc], &
+                    L_global=[Lx, Ly, Lz], &
+                    BC_x=["periodic", "periodic"], &
+                    BC_y=["periodic", "periodic"], &
+                    BC_z=["periodic", "periodic"], &
+                    use_2decomp=.false.)
 #ifdef CUDA
       error stop "CUDA iterative solver not currently supported"
 #else

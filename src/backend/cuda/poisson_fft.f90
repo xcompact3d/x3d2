@@ -6,14 +6,16 @@ module m_cuda_poisson_fft
   use cufft
   use mpi
 
-  use m_allocator, only: field_t
-  use m_common, only: dp, DIR_C, CELL
+  use m_common, only: dp, CELL
+  use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t
 
   use m_cuda_allocator, only: cuda_field_t
-  use m_cuda_spectral, only: process_spectral_div_u, memcpy3D
+  use m_cuda_spectral, only: memcpy3D, &
+                             process_spectral_000, process_spectral_010, &
+                             enforce_periodicity_y, undo_periodicity_y
 
   implicit none
 
@@ -34,7 +36,10 @@ module m_cuda_poisson_fft
   contains
     procedure :: fft_forward => fft_forward_cuda
     procedure :: fft_backward => fft_backward_cuda
-    procedure :: fft_postprocess => fft_postprocess_cuda
+    procedure :: fft_postprocess_000 => fft_postprocess_000_cuda
+    procedure :: fft_postprocess_010 => fft_postprocess_010_cuda
+    procedure :: enforce_periodicity_y => enforce_periodicity_y_cuda
+    procedure :: undo_periodicity_y => undo_periodicity_y_cuda
   end type cuda_poisson_fft_t
 
   interface cuda_poisson_fft_t
@@ -202,7 +207,7 @@ contains
 
   end subroutine fft_backward_cuda
 
-  subroutine fft_postprocess_cuda(self)
+  subroutine fft_postprocess_000_cuda(self)
     implicit none
 
     class(cuda_poisson_fft_t) :: self
@@ -225,13 +230,99 @@ contains
     threads = dim3(tsize, 1, 1)
 
     ! Postprocess div_u in spectral space
-    call process_spectral_div_u<<<blocks, threads>>>( & !&
+    call process_spectral_000<<<blocks, threads>>>( & !&
       c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
       self%nx_glob, self%ny_glob, self%nz_glob, &
       self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
       self%az_dev, self%bz_dev &
       )
 
-  end subroutine fft_postprocess_cuda
+  end subroutine fft_postprocess_000_cuda
+
+  subroutine fft_postprocess_010_cuda(self)
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+
+    type(cudaXtDesc), pointer :: descriptor
+
+    complex(dp), device, dimension(:, :, :), pointer :: c_dev
+    type(dim3) :: blocks, threads
+    integer :: tsize
+
+    ! obtain a pointer to descriptor so that we can carry out postprocessing
+    call c_f_pointer(self%xtdesc%descriptor, descriptor)
+    call c_f_pointer(descriptor%data(1), c_dev, &
+                     [self%nx_spec, self%ny_spec, self%nz_spec])
+
+    ! tsize is different than SZ, because here we work on a 3D Cartesian
+    ! data structure, and free to specify any suitable thread/block size.
+    tsize = 16
+    blocks = dim3((self%nx_spec - 1)/tsize + 1, self%nz_spec, 1)
+    threads = dim3(tsize, 1, 1)
+
+    ! Postprocess div_u in spectral space
+    call process_spectral_010<<<blocks, threads>>>( & !&
+      c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+      self%nx_glob, self%ny_glob, self%nz_glob, &
+      self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
+      self%az_dev, self%bz_dev &
+      )
+
+  end subroutine fft_postprocess_010_cuda
+
+  subroutine enforce_periodicity_y_cuda(self, f_out, f_in)
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f_out
+    class(field_t), intent(in) :: f_in
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_out_dev, f_in_dev
+    type(dim3) :: blocks, threads
+
+    select type (f_out)
+    type is (cuda_field_t)
+      f_out_dev => f_out%data_d
+    end select
+    select type (f_in)
+    type is (cuda_field_t)
+      f_in_dev => f_in%data_d
+    end select
+
+    blocks = dim3(self%nz_loc, 1, 1)
+    threads = dim3(self%nx_loc, 1, 1)
+    call enforce_periodicity_y<<<blocks, threads>>>( & !&
+      f_out_dev, f_in_dev, self%ny_glob &
+      )
+
+  end subroutine enforce_periodicity_y_cuda
+
+  subroutine undo_periodicity_y_cuda(self, f_out, f_in)
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f_out
+    class(field_t), intent(in) :: f_in
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_out_dev, f_in_dev
+    type(dim3) :: blocks, threads
+
+    select type (f_out)
+    type is (cuda_field_t)
+      f_out_dev => f_out%data_d
+    end select
+    select type (f_in)
+    type is (cuda_field_t)
+      f_in_dev => f_in%data_d
+    end select
+
+    blocks = dim3(self%nz_loc, 1, 1)
+    threads = dim3(self%nx_loc, 1, 1)
+    call undo_periodicity_y<<<blocks, threads>>>( & !&
+      f_out_dev, f_in_dev, self%ny_glob &
+      )
+
+  end subroutine undo_periodicity_y_cuda
 
 end module m_cuda_poisson_fft

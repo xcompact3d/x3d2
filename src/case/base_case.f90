@@ -2,7 +2,6 @@ module m_base_case
   !! Provides the base case for running a simulation. New cases are
   !! implemented by extending this to specify the initial and boundary
   !! conditions, forcing terms and case-specific postprocessing and analysis.
-  use mpi
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
@@ -19,6 +18,7 @@ module m_base_case
     procedure(boundary_conditions), deferred :: boundary_conditions
     procedure(initial_conditions), deferred :: initial_conditions
     procedure(forcings), deferred :: forcings
+    procedure(pre_correction), deferred :: pre_correction
     procedure(postprocess), deferred :: postprocess
     procedure :: case_init
     procedure :: set_init
@@ -44,7 +44,7 @@ module m_base_case
       class(base_case_t) :: self
     end subroutine initial_conditions
 
-    subroutine forcings(self, du, dv, dw)
+    subroutine forcings(self, du, dv, dw, iter)
       !! Applies case-specific or model realated forcings after transeq
       import :: base_case_t
       import :: field_t
@@ -52,16 +52,28 @@ module m_base_case
 
       class(base_case_t) :: self
       class(field_t), intent(inout) :: du, dv, dw
+      integer, intent(in) :: iter
     end subroutine forcings
 
-    subroutine postprocess(self, i, t)
+    subroutine pre_correction(self, u, v, w)
+      !! Applies case-specific pre-correction to the velocity fields before
+      !! pressure correction
+      import :: base_case_t
+      import :: field_t
+      implicit none
+
+      class(base_case_t) :: self
+      class(field_t), intent(inout) :: u, v, w
+    end subroutine pre_correction
+
+    subroutine postprocess(self, iter, t)
       !! Triggers case-specific postprocessings at user specified intervals
       import :: base_case_t
       import :: dp
       implicit none
 
       class(base_case_t) :: self
-      integer, intent(in) :: i
+      integer, intent(in) :: iter
       real(dp), intent(in) :: t
     end subroutine postprocess
   end interface
@@ -129,9 +141,7 @@ contains
     class(field_t), intent(in) :: u, v, w
 
     class(field_t), pointer :: du, dv, dw
-    class(field_t), pointer :: f_out
     real(dp) :: enstrophy
-    integer :: ierr, dims(3)
 
     du => self%solver%backend%allocator%get_block(DIR_X, VERT)
     dv => self%solver%backend%allocator%get_block(DIR_X, VERT)
@@ -139,25 +149,12 @@ contains
 
     call self%solver%curl(du, dv, dw, u, v, w)
 
-    dims = self%solver%mesh%get_dims(VERT)
+    enstrophy = 0.5_dp*(self%solver%backend%scalar_product(du, du) &
+                        + self%solver%backend%scalar_product(dv, dv) &
+                        + self%solver%backend%scalar_product(dw, dw)) &
+                /self%solver%ngrid
 
-    f_out => self%solver%host_allocator%get_block(DIR_C)
-
-    call self%solver%backend%get_field_data(f_out%data, du)
-    enstrophy = norm2(f_out%data(1:dims(1), 1:dims(2), 1:dims(3)))**2
-    call self%solver%backend%get_field_data(f_out%data, dv)
-    enstrophy = enstrophy &
-                + norm2(f_out%data(1:dims(1), 1:dims(2), 1:dims(3)))**2
-    call self%solver%backend%get_field_data(f_out%data, dw)
-    enstrophy = enstrophy &
-                + norm2(f_out%data(1:dims(1), 1:dims(2), 1:dims(3)))**2
-
-    enstrophy = 0.5_dp*enstrophy/self%solver%ngrid
-    call MPI_Allreduce(MPI_IN_PLACE, enstrophy, 1, MPI_DOUBLE_PRECISION, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
     if (self%solver%mesh%par%is_root()) print *, 'enstrophy:', enstrophy
-
-    call self%solver%host_allocator%release_block(f_out)
 
     call self%solver%backend%allocator%release_block(du)
     call self%solver%backend%allocator%release_block(dv)
@@ -173,32 +170,17 @@ contains
     class(field_t), intent(in) :: u, v, w
 
     class(field_t), pointer :: div_u
-    class(field_t), pointer :: u_out
     real(dp) :: div_u_max, div_u_mean
-    integer :: ierr, dims(3)
 
     div_u => self%solver%backend%allocator%get_block(DIR_Z)
 
     call self%solver%divergence_v2p(div_u, u, v, w)
 
-    u_out => self%solver%host_allocator%get_block(DIR_C)
-    call self%solver%backend%get_field_data(u_out%data, div_u)
-
-    call self%solver%backend%allocator%release_block(div_u)
-
-    dims = self%solver%mesh%get_dims(div_u%data_loc)
-    div_u_max = maxval(abs(u_out%data(1:dims(1), 1:dims(2), 1:dims(3))))
-    div_u_mean = sum(abs(u_out%data(1:dims(1), 1:dims(2), 1:dims(3)))) &
-                 /self%solver%ngrid
-
-    call self%solver%host_allocator%release_block(u_out)
-
-    call MPI_Allreduce(MPI_IN_PLACE, div_u_max, 1, MPI_DOUBLE_PRECISION, &
-                       MPI_MAX, MPI_COMM_WORLD, ierr)
-    call MPI_Allreduce(MPI_IN_PLACE, div_u_mean, 1, MPI_DOUBLE_PRECISION, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
+    call self%solver%backend%field_max_mean(div_u_max, div_u_mean, div_u)
     if (self%solver%mesh%par%is_root()) &
       print *, 'div u max mean:', div_u_max, div_u_mean
+
+    call self%solver%backend%allocator%release_block(div_u)
 
   end subroutine print_div_max_mean
 
@@ -213,7 +195,7 @@ contains
     class(field_t), pointer :: u_out, v_out, w_out
 
     real(dp) :: t
-    integer :: i, j
+    integer :: iter, sub_iter
 
     if (self%solver%mesh%par%is_root()) print *, 'initial conditions'
     t = 0._dp
@@ -221,8 +203,8 @@ contains
 
     if (self%solver%mesh%par%is_root()) print *, 'start run'
 
-    do i = 1, self%solver%n_iters
-      do j = 1, self%solver%time_integrator%nstage
+    do iter = 1, self%solver%n_iters
+      do sub_iter = 1, self%solver%time_integrator%nstage
         ! first apply case-specific BCs
         call self%boundary_conditions()
 
@@ -234,7 +216,7 @@ contains
                                  self%solver%u, self%solver%v, self%solver%w)
 
         ! models that introduce source terms handled here
-        call self%forcings(du, dv, dw)
+        call self%forcings(du, dv, dw, iter)
 
         ! time integration
         call self%solver%time_integrator%step( &
@@ -246,13 +228,15 @@ contains
         call self%solver%backend%allocator%release_block(dv)
         call self%solver%backend%allocator%release_block(dw)
 
+        call self%pre_correction(self%solver%u, self%solver%v, self%solver%w)
+
         call self%solver%pressure_correction(self%solver%u, self%solver%v, &
                                              self%solver%w)
       end do
 
-      if (mod(i, self%solver%n_output) == 0) then
-        t = i*self%solver%dt
-        call self%postprocess(i, t)
+      if (mod(iter, self%solver%n_output) == 0) then
+        t = iter*self%solver%dt
+        call self%postprocess(iter, t)
       end if
     end do
 

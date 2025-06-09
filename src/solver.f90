@@ -2,17 +2,18 @@ module m_solver
   use iso_fortran_env, only: stderr => error_unit
   use mpi
 
-  use m_allocator, only: allocator_t, field_t
+  use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, get_argument, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_Z2C, RDR_C2Z, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL
   use m_config, only: solver_config_t
-  use m_tdsops, only: tdsops_t, dirps_t
+  use m_field, only: field_t
+  use m_mesh, only: mesh_t
+  use m_tdsops, only: dirps_t
   use m_time_integrator, only: time_intg_t
   use m_vector_calculus, only: vector_calculus_t
-  use m_mesh, only: mesh_t
 
   use m_poisson_cg, only: poisson_cg_t
 
@@ -170,7 +171,7 @@ contains
     character(*), intent(in) :: der1st_scheme, der2nd_scheme, &
                                 interpl_scheme, stagder_scheme
 
-    integer :: dir, bc_start, bc_end, n_vert, n_cell
+    integer :: dir, bc_start, bc_end, n_vert, n_cell, i
     real(dp) :: d
 
     dir = dirps%dir
@@ -181,22 +182,40 @@ contains
     n_vert = mesh%get_n(dir, VERT)
     n_cell = mesh%get_n(dir, CELL)
 
-    call backend%alloc_tdsops(dirps%der1st, n_vert, d, 'first-deriv', &
-                              der1st_scheme, bc_start, bc_end)
-    call backend%alloc_tdsops(dirps%der1st_sym, n_vert, d, 'first-deriv', &
-                              der1st_scheme, bc_start, bc_end)
-    call backend%alloc_tdsops(dirps%der2nd, n_vert, d, 'second-deriv', &
-                              der2nd_scheme, bc_start, bc_end)
-    call backend%alloc_tdsops(dirps%der2nd_sym, n_vert, d, 'second-deriv', &
-                              der2nd_scheme, bc_start, bc_end)
-    call backend%alloc_tdsops(dirps%interpl_v2p, n_cell, d, 'interpolate', &
-                              interpl_scheme, bc_start, bc_end, from_to='v2p')
-    call backend%alloc_tdsops(dirps%interpl_p2v, n_vert, d, 'interpolate', &
-                              interpl_scheme, bc_start, bc_end, from_to='p2v')
-    call backend%alloc_tdsops(dirps%stagder_v2p, n_cell, d, 'stag-deriv', &
-                              stagder_scheme, bc_start, bc_end, from_to='v2p')
-    call backend%alloc_tdsops(dirps%stagder_p2v, n_vert, d, 'stag-deriv', &
-                              stagder_scheme, bc_start, bc_end, from_to='p2v')
+    call backend%alloc_tdsops( &
+      dirps%der1st, n_vert, d, 'first-deriv', der1st_scheme, &
+      bc_start, bc_end, stretch=mesh%geo%vert_ds(1:n_vert, dir) &
+      )
+    call backend%alloc_tdsops( &
+      dirps%der1st_sym, n_vert, d, 'first-deriv', der1st_scheme, &
+      bc_start, bc_end, stretch=mesh%geo%vert_ds(1:n_vert, dir) &
+      )
+    call backend%alloc_tdsops( &
+      dirps%der2nd, n_vert, d, 'second-deriv', der2nd_scheme, &
+      bc_start, bc_end, stretch=mesh%geo%vert_ds2(1:n_vert, dir), &
+      stretch_correct=mesh%geo%vert_d2s(1:n_vert, dir) &
+      )
+    call backend%alloc_tdsops( &
+      dirps%der2nd_sym, n_vert, d, 'second-deriv', der2nd_scheme, &
+      bc_start, bc_end, stretch=mesh%geo%vert_ds2(1:n_vert, dir), &
+      stretch_correct=mesh%geo%vert_d2s(1:n_vert, dir) &
+      )
+    call backend%alloc_tdsops( &
+      dirps%stagder_v2p, n_cell, d, 'stag-deriv', stagder_scheme, bc_start, &
+      bc_end, from_to='v2p', stretch=mesh%geo%midp_ds(1:n_cell, dir) &
+      )
+    call backend%alloc_tdsops( &
+      dirps%stagder_p2v, n_vert, d, 'stag-deriv', stagder_scheme, bc_start, &
+      bc_end, from_to='p2v', stretch=mesh%geo%vert_ds(1:n_vert, dir) &
+      )
+    call backend%alloc_tdsops( &
+      dirps%interpl_v2p, n_cell, d, 'interpolate', interpl_scheme, &
+      bc_start, bc_end, from_to='v2p', stretch=[(1._dp, i=1, n_cell)] &
+      )
+    call backend%alloc_tdsops( &
+      dirps%interpl_p2v, n_vert, d, 'interpolate', interpl_scheme, &
+      bc_start, bc_end, from_to='p2v', stretch=[(1._dp, i=1, n_vert)] &
+      )
 
   end subroutine
 
@@ -342,21 +361,18 @@ contains
     class(field_t), intent(inout) :: pressure
     class(field_t), intent(in) :: div_u
 
-    class(field_t), pointer :: p_temp
+    class(field_t), pointer :: p_temp, temp
 
     ! reorder into 3D Cartesian data structure
-    p_temp => self%backend%allocator%get_block(DIR_C, CELL)
+    p_temp => self%backend%allocator%get_block(DIR_C)
     call self%backend%reorder(p_temp, div_u, RDR_Z2C)
 
-    ! call forward FFT
-    ! output array in spectral space is stored at poisson_fft class
-    call self%backend%poisson_fft%fft_forward(p_temp)
+    temp => self%backend%allocator%get_block(DIR_C)
 
-    ! postprocess
-    call self%backend%poisson_fft%fft_postprocess
+    ! solve poisson equation with FFT based approach
+    call self%backend%poisson_fft%solve_poisson(p_temp, temp)
 
-    ! call backward FFT
-    call self%backend%poisson_fft%fft_backward(p_temp)
+    call self%backend%allocator%release_block(temp)
 
     ! reorder back to our specialist data structure from 3D Cartesian
     call self%backend%reorder(pressure, p_temp, RDR_C2Z)

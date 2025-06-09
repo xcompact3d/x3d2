@@ -1,11 +1,12 @@
 module m_base_backend
   use mpi
 
-  use m_allocator, only: allocator_t, field_t
+  use m_allocator, only: allocator_t
   use m_common, only: dp, DIR_C, get_rdr_from_dirs
+  use m_field, only: field_t
+  use m_mesh, only: mesh_t
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: tdsops_t, dirps_t
-  use m_mesh, only: mesh_t
 
   implicit none
 
@@ -38,8 +39,11 @@ module m_base_backend
     procedure(sum_intox), deferred :: sum_zintox
     procedure(vecadd), deferred :: vecadd
     procedure(scalar_product), deferred :: scalar_product
+    procedure(field_max_mean), deferred :: field_max_mean
     procedure(field_ops), deferred :: field_scale
     procedure(field_ops), deferred :: field_shift
+    procedure(field_reduce), deferred :: field_volume_integral
+    procedure(field_set_face), deferred :: field_set_face
     procedure(copy_data_to_f), deferred :: copy_data_to_f
     procedure(copy_f_to_data), deferred :: copy_f_to_data
     procedure(alloc_tdsops), deferred :: alloc_tdsops
@@ -162,6 +166,54 @@ module m_base_backend
   end interface
 
   abstract interface
+    real(dp) function field_reduce(self, f) result(s)
+      !! Reduces field to a scalar, example: volume integral
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(in) :: f
+    end function field_reduce
+  end interface
+
+  abstract interface
+    subroutine field_max_mean(self, max_val, mean_val, f, enforced_data_loc)
+      !! Obtains maximum and mean values in a field
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      real(dp), intent(out) :: max_val, mean_val
+      class(field_t), intent(in) :: f
+      integer, optional, intent(in) :: enforced_data_loc
+    end subroutine field_max_mean
+  end interface
+
+  abstract interface
+    subroutine field_set_face(self, f, c_start, c_end, face)
+      !! A field is a subdomain with a rectangular cuboid shape.
+      !! It has 6 faces, and these faces are either a subdomain boundary
+      !! or a global domain boundary based on the location of the subdomain.
+      !! This subroutine allows us to set any of these faces to a value,
+      !! 'c_start' and 'c_end' for faces at opposite sides.
+      !! 'face' is one of X_FACE, Y_FACE, Z_FACE from common.f90
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: f
+      real(dp), intent(in) :: c_start, c_end
+      integer, intent(in) :: face
+    end subroutine field_set_face
+  end interface
+
+  abstract interface
     subroutine copy_data_to_f(self, f, data)
          !! Copy the specialist data structure from device or host back
          !! to a regular 3D data array in host memory.
@@ -191,8 +243,8 @@ module m_base_backend
 
   abstract interface
     subroutine alloc_tdsops( &
-      self, tdsops, n_tds, delta, operation, scheme, &
-      bc_start, bc_end, n_halo, from_to, sym, c_nu, nu0_nu &
+      self, tdsops, n_tds, delta, operation, scheme, bc_start, bc_end, &
+      stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
       )
       import :: base_backend_t
       import :: dp
@@ -205,6 +257,7 @@ module m_base_backend
       real(dp), intent(in) :: delta
       character(*), intent(in) :: operation, scheme
       integer, intent(in) :: bc_start, bc_end
+      real(dp), optional, intent(in) :: stretch(:), stretch_correct(:)
       integer, optional, intent(in) :: n_halo
       character(*), optional, intent(in) :: from_to
       logical, optional, intent(in) :: sym
