@@ -2,6 +2,7 @@ module m_common
   implicit none
 
   integer, parameter :: dp = kind(0.0d0)
+  integer, parameter :: i8 = selected_int_kind(18)
   real(dp), parameter :: pi = 4*atan(1.0_dp)
 
   integer, parameter :: RDR_X2Y = 12, RDR_X2Z = 13, RDR_Y2X = 21, &
