@@ -107,8 +107,9 @@ contains
       if (.not. (n_cell == n_vert_z(mesh%par%nrank + 1) &
                  .and. n_vert == n_vert_z(mesh%par%nrank + 1))) then
         allpass = .false.
-        print *, mesh%par%nrank, "error in get_n, n_cell=", &
-          n_cell, "n_vert=", n_vert
+        print *, mesh%par%nrank, &
+          "error in get_n, n_cell=", n_cell, &
+          "n_vert=", n_vert
       end if
     end if
 
