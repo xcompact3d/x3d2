@@ -68,7 +68,7 @@ module m_checkpoint_manager_impl
     integer, dimension(3) :: output_stride = [2, 2, 2]  !! Spatial stride for snapshot output
     integer :: output_precision = dp                    !! Output precision for snapshot
     real(dp), dimension(:, :, :), allocatable :: strided_buffer
-    real(dp), dimension(:), allocatable :: coords_x, coords_y, coords_z
+    real(dp), dimension(:, :, :), allocatable :: coords_x, coords_y, coords_z
     integer(i8), dimension(3) :: last_shape_dims = 0
     integer(i8), dimension(3) :: last_strided_shape = 0
   contains
@@ -227,13 +227,14 @@ contains
     if (present(comm)) comm_to_use = comm
     call MPI_Comm_rank(comm_to_use, myrank, ierr)
 
-    write(filename, '(A,A,I0.6,A)') &
+    write (filename, '(A,A,I0.6,A)') &
       trim(self%checkpoint_cfg%checkpoint_prefix), '_', timestep, '.bp'
-    write(temp_filename, '(A,A)') &
+    write (temp_filename, '(A,A)') &
       trim(self%checkpoint_cfg%checkpoint_prefix), '_temp.bp'
     if (myrank == 0) print *, 'Writing checkpoint: ', trim(filename)
 
-    file = self%adios2_writer%open(temp_filename, adios2_mode_write, comm_to_use)
+    file = self%adios2_writer%open(temp_filename, adios2_mode_write, &
+                                   comm_to_use)
     call self%adios2_writer%begin_step(file)
 
     simulation_time = timestep*solver%dt
@@ -241,7 +242,7 @@ contains
     call self%adios2_writer%write_data("time", real(simulation_time, dp), file)
     call self%adios2_writer%write_data("dt", real(solver%dt, dp), file)
 
-    allocate(field_ptrs(3))
+    allocate (field_ptrs(3))
     field_ptrs(1)%ptr => solver%u
     field_ptrs(2)%ptr => solver%v
     field_ptrs(3)%ptr => solver%w
@@ -252,14 +253,14 @@ contains
       )
     call self%adios2_writer%close(file)
 
-    deallocate(field_ptrs)
+    deallocate (field_ptrs)
 
     if (myrank == 0) then
       ! Move temporary file to final checkpoint filename
-      call execute_command_line('mv ' //trim(temp_filename)//' '// &
-           trim(filename))
+      call execute_command_line('mv '//trim(temp_filename)//' '// &
+                                trim(filename))
 
-      inquire(file=trim(filename), exist=file_exists)
+      inquire (file=trim(filename), exist=file_exists)
       if (.not. file_exists) then
         print *, 'ERROR: Checkpoint file not created: ', trim(filename)
       end if
@@ -267,15 +268,16 @@ contains
       ! Remove old checkpoint if configured to keep only the latest
       if (.not. self%checkpoint_cfg%keep_checkpoint &
           .and. self%last_checkpoint_step > 0) then
-        write(old_filename, '(A,A,I0.6,A)') &
+        write (old_filename, '(A,A,I0.6,A)') &
           trim(self%checkpoint_cfg%checkpoint_prefix), '_', &
           self%last_checkpoint_step, '.bp'
         inquire (file=trim(old_filename), exist=file_exists)
         if (file_exists) then
-          call execute_command_line('rm -rf '//trim(old_filename), exitstat=ierr)
+          call execute_command_line('rm -rf '//trim(old_filename), &
+                                    exitstat=ierr)
           if (ierr /= 0) then
             print *, 'WARNING: failed to remove old checkpoint: ', &
-                     trim(old_filename)
+              trim(old_filename)
           end if
         end if
       end if
@@ -297,8 +299,7 @@ contains
     integer :: comm_to_use
     character(len=256) :: filename
     type(adios2_file_t) :: file
-    integer :: dims(3)
-    integer :: global_dims(3)
+    integer :: dims(3), global_dims(3)
     integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
     type(field_ptr_t), allocatable :: field_ptrs(:)
 
@@ -324,6 +325,7 @@ contains
 
     ! paraview-specific mesh metadata - write only from root
     if (myrank == 0) then
+      call self%adios2_writer%write_attribute("data_type", "image", file)
       call self%adios2_writer%write_attribute("mesh/type", "rectilinear", file)
       call self%adios2_writer%write_attribute("mesh/dimensionality", "3", file)
 
@@ -339,7 +341,7 @@ contains
       solver, file, shape_dims, start_dims, count_dims &
       )
 
-    allocate(field_ptrs(3))
+    allocate (field_ptrs(3))
     field_ptrs(1)%ptr => solver%u
     field_ptrs(2)%ptr => solver%v
     field_ptrs(3)%ptr => solver%w
@@ -348,6 +350,8 @@ contains
       field_names, field_ptrs, &
       solver, file, use_stride=.true. &
       )
+    deallocate (field_ptrs)
+
     call self%adios2_writer%close(file)
   end subroutine write_snapshot
 
@@ -361,9 +365,9 @@ contains
 
     integer :: i, nx, ny, nz
     real(dp), dimension(3) :: coords
-    integer(i8), dimension(1) :: x_shape, y_shape, z_shape
-    integer(i8), dimension(1) :: x_start, y_start, z_start
-    integer(i8), dimension(1) :: x_count, y_count, z_count
+    integer(i8), dimension(3) :: x_shape, y_shape, z_shape
+    integer(i8), dimension(3) :: x_start, y_start, z_start
+    integer(i8), dimension(3) :: x_count, y_count, z_count
 
     nx = int(count_dims(1))
     ny = int(count_dims(2))
@@ -371,45 +375,45 @@ contains
 
     if (.not. allocated(self%coords_x) .or. size(self%coords_x) /= nx) then
       if (allocated(self%coords_x)) deallocate (self%coords_x)
-      allocate (self%coords_x(nx))
+      allocate (self%coords_x(nx, 1, 1))
     end if
 
     if (.not. allocated(self%coords_y) .or. size(self%coords_y) /= ny) then
       if (allocated(self%coords_y)) deallocate (self%coords_y)
-      allocate (self%coords_y(ny))
+      allocate (self%coords_y(1, ny, 1))
     end if
 
     if (.not. allocated(self%coords_z) .or. size(self%coords_z) /= nz) then
       if (allocated(self%coords_z)) deallocate (self%coords_z)
-      allocate (self%coords_z(nz))
+      allocate (self%coords_z(1, 1, nz))
     end if
 
     do i = 1, nx
       coords = solver%mesh%get_coordinates(i, 1, 1)
-      self%coords_x(i) = coords(1)
+      self%coords_x(i, 1, 1) = coords(1)
     end do
-  
+
     do i = 1, ny
       coords = solver%mesh%get_coordinates(1, i, 1)
-      self%coords_y(i) = coords(2)
+      self%coords_y(1, i, 1) = coords(2)
     end do
-  
+
     do i = 1, nz
       coords = solver%mesh%get_coordinates(1, 1, i)
-      self%coords_z(i) = coords(3)
+      self%coords_z(1, 1, i) = coords(3)
     end do
 
-    x_shape(1) = shape_dims(1)
-    x_start(1) = start_dims(1)
-    x_count(1) = count_dims(1)
+    x_shape = [1_i8, 1_i8, shape_dims(1)]
+    x_start = [0_i8, 0_i8, start_dims(1)]
+    x_count = [1_i8, 1_i8, count_dims(1)]
 
-    y_shape(1) = shape_dims(2)
-    y_start(1) = start_dims(2)
-    y_count(1) = count_dims(2)
+    y_shape = [1_i8, shape_dims(2), 1_i8]
+    y_start = [0_i8, start_dims(2), 0_i8]
+    y_count = [1_i8, count_dims(2), 1_i8]
 
-    z_shape(1) = shape_dims(3) 
-    z_start(1) = start_dims(3)
-    z_count(1) = count_dims(3)
+    z_shape = [shape_dims(3), 1_i8, 1_i8]
+    z_start = [start_dims(3), 0_i8, 0_i8]
+    z_count = [count_dims(3), 1_i8, 1_i8]
 
     call self%adios2_writer%write_data( &
       "coordinates/x", self%coords_x, file, x_shape, x_start, x_count &
@@ -647,12 +651,13 @@ contains
     if (present(use_stride)) apply_stride = use_stride
 
     do i_field = 1, size(field_names)
-      host_field => solver%host_allocator%get_block(DIR_C, &
-                    fields(i_field)%ptr%data_loc)
+      host_field => solver%host_allocator%get_block( &
+                    DIR_C, fields(i_field)%ptr%data_loc
+      )
       call solver%backend%get_field_data(host_field%data, fields(i_field)%ptr)
 
       call write_single_field(trim(field_names(i_field)), host_field, &
-           fields(i_field)%ptr%data_loc)
+                              fields(i_field)%ptr%data_loc)
     end do
     call solver%host_allocator%release_block(host_field)
 
@@ -690,7 +695,7 @@ contains
           self%strided_buffer, strided_dims_local)
 
         call self%adios2_writer%write_data( &
-          field_name//"_viz", self%strided_buffer, &
+          field_name, self%strided_buffer, &
           file, strided_shape, strided_start, strided_count &
           )
       else
