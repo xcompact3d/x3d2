@@ -54,6 +54,7 @@ module m_cuda_backend
     procedure :: reorder => reorder_cuda
     procedure :: sum_yintox => sum_yintox_cuda
     procedure :: sum_zintox => sum_zintox_cuda
+    procedure :: veccopy => veccopy_cuda
     procedure :: vecadd => vecadd_cuda
     procedure :: scalar_product => scalar_product_cuda
     procedure :: field_max_mean => field_max_mean_cuda
@@ -600,6 +601,27 @@ contains
     call sum_zintox<<<blocks, threads>>>(u_d, u_z_d, dims_padded(3)) !&
 
   end subroutine sum_zintox_cuda
+
+  subroutine veccopy_cuda(self, x, y)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(in) :: x
+    class(field_t), intent(inout) :: y
+
+    real(dp), device, pointer, dimension(:, :, :) :: x_d, y_d
+    type(dim3) :: blocks, threads
+    integer :: nx
+
+    call resolve_field_t(x_d, x)
+    call resolve_field_t(y_d, y)
+
+    nx = size(x_d, dim=2)
+    blocks = dim3(size(x_d, dim=3), 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call copy<<<blocks, threads>>>(nx, x_d, y_d) !&
+
+  end subroutine veccopy_cuda
 
   subroutine vecadd_cuda(self, a, x, b, y)
     implicit none
