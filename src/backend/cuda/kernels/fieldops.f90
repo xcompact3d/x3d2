@@ -6,6 +6,24 @@ module m_cuda_kernels_fieldops
 
 contains
 
+  attributes(global) subroutine copy(n, x, y)
+    implicit none
+
+    integer, value, intent(in) :: n
+    real(dp), device, intent(in), dimension(:, :, :) :: x
+    real(dp), device, intent(out), dimension(:, :, :) :: y
+
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      y(i, j, b) = x(i, j, b)
+    end do
+
+  end subroutine copy
+
   attributes(global) subroutine axpby(n, alpha, x, beta, y)
     implicit none
 

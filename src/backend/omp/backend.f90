@@ -38,6 +38,7 @@ module m_omp_backend
     procedure :: reorder => reorder_omp
     procedure :: sum_yintox => sum_yintox_omp
     procedure :: sum_zintox => sum_zintox_omp
+    procedure :: veccopy => veccopy_omp
     procedure :: vecadd => vecadd_omp
     procedure :: scalar_product => scalar_product_omp
     procedure :: field_max_mean => field_max_mean_omp
@@ -417,6 +418,48 @@ contains
     !$omp end parallel do
 
   end subroutine sum_intox_omp
+
+  subroutine veccopy_omp(self, x, y)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(in) :: x
+    class(field_t), intent(inout) :: y
+    integer, dimension(3) :: dims
+    integer :: i, j, k, ii
+
+    integer :: nvec, remstart
+
+    if (x%dir /= y%dir) then
+      error stop "Called vector add with incompatible fields"
+    end if
+
+    dims = self%mesh%get_padded_dims(x)
+    nvec = dims(1)/SZ
+    remstart = nvec*SZ + 1
+
+    !$omp parallel do private(i, ii) collapse(2)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        ! Execute inner vectorised loops
+        do ii = 1, nvec
+          !$omp simd
+          do i = 1, SZ
+            y%data(i + (ii - 1)*SZ, j, k) = &
+              x%data(i + (ii - 1)*SZ, j, k)
+          end do
+          !$omp end simd
+        end do
+
+        ! Remainder loop
+        do i = remstart, dims(1)
+          y%data(i, j, k) = x%data(i, j, k)
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+  end subroutine veccopy_omp
 
   subroutine vecadd_omp(self, a, x, b, y)
     implicit none
