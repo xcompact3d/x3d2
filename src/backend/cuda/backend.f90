@@ -602,24 +602,24 @@ contains
 
   end subroutine sum_zintox_cuda
 
-  subroutine veccopy_cuda(self, x, y)
+  subroutine veccopy_cuda(self, dst, src)
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(in) :: x
-    class(field_t), intent(inout) :: y
+    class(field_t), intent(inout) :: dst
+    class(field_t), intent(in) :: src
 
-    real(dp), device, pointer, dimension(:, :, :) :: x_d, y_d
+    real(dp), device, pointer, dimension(:, :, :) :: dst_d, src_d
     type(dim3) :: blocks, threads
-    integer :: nx
+    integer :: n
 
-    call resolve_field_t(x_d, x)
-    call resolve_field_t(y_d, y)
+    call resolve_field_t(dst_d, dst)
+    call resolve_field_t(src_d, src)
 
-    nx = size(x_d, dim=2)
-    blocks = dim3(size(x_d, dim=3), 1, 1)
+    n = size(src_d, dim=2)
+    blocks = dim3(size(src_d, dim=3), 1, 1)
     threads = dim3(SZ, 1, 1)
-    call copy<<<blocks, threads>>>(nx, x_d, y_d) !&
+    call copy<<<blocks, threads>>>(n, dst_d, src_d) !&
 
   end subroutine veccopy_cuda
 

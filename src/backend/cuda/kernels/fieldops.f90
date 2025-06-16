@@ -6,12 +6,12 @@ module m_cuda_kernels_fieldops
 
 contains
 
-  attributes(global) subroutine copy(n, x, y)
+  attributes(global) subroutine copy(n, dst, src)
     implicit none
 
     integer, value, intent(in) :: n
-    real(dp), device, intent(in), dimension(:, :, :) :: x
-    real(dp), device, intent(out), dimension(:, :, :) :: y
+    real(dp), device, intent(out), dimension(:, :, :) :: dst
+    real(dp), device, intent(in), dimension(:, :, :) :: src
 
     integer :: i, j, b
 
@@ -19,7 +19,7 @@ contains
     b = blockIdx%x
 
     do j = 1, n
-      y(i, j, b) = x(i, j, b)
+      dst(i, j, b) = src(i, j, b)
     end do
 
   end subroutine copy

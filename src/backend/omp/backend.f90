@@ -419,22 +419,22 @@ contains
 
   end subroutine sum_intox_omp
 
-  subroutine veccopy_omp(self, x, y)
+  subroutine veccopy_omp(self, dst, src)
     implicit none
 
     class(omp_backend_t) :: self
-    class(field_t), intent(in) :: x
-    class(field_t), intent(inout) :: y
+    class(field_t), intent(inout) :: dst
+    class(field_t), intent(in) :: src
     integer, dimension(3) :: dims
     integer :: i, j, k, ii
 
     integer :: nvec, remstart
 
-    if (x%dir /= y%dir) then
+    if (src%dir /= dst%dir) then
       error stop "Called vector add with incompatible fields"
     end if
 
-    dims = self%mesh%get_padded_dims(x)
+    dims = self%mesh%get_padded_dims(src)
     nvec = dims(1)/SZ
     remstart = nvec*SZ + 1
 
@@ -445,15 +445,15 @@ contains
         do ii = 1, nvec
           !$omp simd
           do i = 1, SZ
-            y%data(i + (ii - 1)*SZ, j, k) = &
-              x%data(i + (ii - 1)*SZ, j, k)
+            dst%data(i + (ii - 1)*SZ, j, k) = &
+              src%data(i + (ii - 1)*SZ, j, k)
           end do
           !$omp end simd
         end do
 
         ! Remainder loop
         do i = remstart, dims(1)
-          y%data(i, j, k) = x%data(i, j, k)
+          dst%data(i, j, k) = src%data(i, j, k)
         end do
       end do
     end do

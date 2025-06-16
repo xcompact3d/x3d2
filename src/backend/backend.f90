@@ -124,15 +124,15 @@ module m_base_backend
   end interface
 
   abstract interface
-    subroutine veccopy(self, x, y)
+    subroutine veccopy(self, dst, src)
          !! copy vectors: y = x
       import :: base_backend_t
       import :: field_t
       implicit none
 
       class(base_backend_t) :: self
-      class(field_t), intent(in) :: x
-      class(field_t), intent(inout) :: y
+      class(field_t), intent(inout) :: dst
+      class(field_t), intent(in) :: src
     end subroutine veccopy
   end interface
 
