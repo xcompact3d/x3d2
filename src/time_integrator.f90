@@ -203,8 +203,7 @@ contains
       do i = 1, self%nvars
         ! update step solution from stage derivative
         if (self%nstage > 1) then
-          call self%backend%vecadd(1.0_dp, self%olds(i, 1)%ptr, 0._dp, &
-                                   self%curr(i)%ptr)
+          call self%backend%veccopy(self%curr(i)%ptr, self%olds(i, 1)%ptr)
         end if
 
         do j = 1, self%nstage - 1
@@ -224,18 +223,15 @@ contains
       do i = 1, self%nvars
         ! save step initial condition
         if (self%istage == 1) then
-          call self%backend%vecadd(1.0_dp, self%curr(i)%ptr, 0._dp, &
-                                   self%olds(i, 1)%ptr)
+          call self%backend%veccopy(self%olds(i, 1)%ptr, self%curr(i)%ptr)
         end if
 
         ! save stage derivative
-        call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, &
-                                 self%olds(i, self%istage + 1)%ptr)
+call self%backend%veccopy(self%olds(i, self%istage + 1)%ptr, self%deriv(i)%ptr)
 
         ! update stage solution
         if (self%istage > 1) then
-          call self%backend%vecadd(1.0_dp, self%olds(i, 1)%ptr, 0._dp, &
-                                   self%curr(i)%ptr)
+          call self%backend%veccopy(self%curr(i)%ptr, self%olds(i, 1)%ptr)
         end if
         do j = 1, self%istage
           call self%backend%vecadd(self%rk_a(j, self%istage, self%nstage)*dt, &
@@ -286,8 +282,7 @@ contains
 
       ! update olds(1) with new derivative
       if (self%nstep > 1) then
-        call self%backend%vecadd(1.0_dp, self%deriv(i)%ptr, 0._dp, &
-                                 self%olds(i, 1)%ptr)
+        call self%backend%veccopy(self%olds(i, 1)%ptr, self%deriv(i)%ptr)
       end if
     end do
 

@@ -37,6 +37,7 @@ module m_base_backend
     procedure(reorder), deferred :: reorder
     procedure(sum_intox), deferred :: sum_yintox
     procedure(sum_intox), deferred :: sum_zintox
+    procedure(veccopy), deferred :: veccopy
     procedure(vecadd), deferred :: vecadd
     procedure(scalar_product), deferred :: scalar_product
     procedure(field_max_mean), deferred :: field_max_mean
@@ -120,6 +121,19 @@ module m_base_backend
       class(field_t), intent(inout) :: u
       class(field_t), intent(in) :: u_
     end subroutine sum_intox
+  end interface
+
+  abstract interface
+    subroutine veccopy(self, dst, src)
+         !! copy vectors: y = x
+      import :: base_backend_t
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: dst
+      class(field_t), intent(in) :: src
+    end subroutine veccopy
   end interface
 
   abstract interface
