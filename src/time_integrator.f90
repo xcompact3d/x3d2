@@ -227,7 +227,8 @@ contains
         end if
 
         ! save stage derivative
-call self%backend%veccopy(self%olds(i, self%istage + 1)%ptr, self%deriv(i)%ptr)
+        call self%backend%veccopy(self%olds(i, self%istage + 1)%ptr, &
+                                  self%deriv(i)%ptr)
 
         ! update stage solution
         if (self%istage > 1) then
