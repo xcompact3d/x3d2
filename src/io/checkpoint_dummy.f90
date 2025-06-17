@@ -98,7 +98,7 @@ contains
         self%checkpoint_cfg%restart_from_checkpoint) then
       call print_error( &
         comm, "Checkpoint functionality requested but ADIOS2 is not enabled. &
-        & Recompile with -DENABLE_ADIOS2=ON to enable checkpointing")
+        & Recompile with -DWITH_ADIOS2=ON to enable checkpointing")
       call MPI_Barrier(comm, ierr)
       stop 1
     end if

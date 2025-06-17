@@ -5,9 +5,9 @@ enable_testing()
 set(WITH_2DECOMPFFT ON CACHE BOOL
   "Enable Poisson based FFT solver on the OpenMP backend.")
 
-option(ENABLE_ADIOS2 "Enable ADIOS2" OFF)
+option(WITH_ADIOS2 "Enable ADIOS2 for I/O" OFF)
 
-if(ENABLE_ADIOS2)
+if(WITH_ADIOS2)
   list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/adios2")
   cmake_policy(SET CMP0074 NEW)
   find_package(ADIOS2)

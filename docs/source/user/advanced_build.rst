@@ -9,11 +9,11 @@ x3d2 can leverage the ADIOS2 library for high-performance I/O operations used by
 Enabling ADIOS2 Support
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-To build x3d2 with ADIOS2 support, use the ``ENABLE_ADIOS2`` CMake option:
+To build x3d2 with ADIOS2 support, use the ``WITH_ADIOS2`` CMake option:
 
 .. code-block:: bash
 
-   -DENABLE_ADIOS2=ON
+   -DWITH_ADIOS2=ON
 
 ADIOS2 Installation Options
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -33,13 +33,13 @@ If ADIOS2 is installed in a standard location, no additional configuration is ne
 
 .. code-block:: bash
 
-   -DENABLE_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
+   -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
 
 For custom installation locations, provide the path to CMake:
 
 .. code-block:: bash
 
-   -DENABLE_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DADIOS2_ROOT=/path/to/adios2/installation
+   -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DADIOS2_ROOT=/path/to/adios2/installation
 
 When to Build a Custom ADIOS2
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -54,7 +54,7 @@ To use the built-in ADIOS2 (default behavior):
 
 .. code-block:: bash
 
-   -DENABLE_ADIOS2=ON
+   -DWITH_ADIOS2=ON
 
 Library Path Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -373,6 +373,7 @@ contains
     ny = int(count_dims(2))
     nz = int(count_dims(3))
 
+    ! coordinates are structured as 3D arrays for ParaView ADIOS2 reader compatibility
     if (.not. allocated(self%coords_x) .or. size(self%coords_x) /= nx) then
       if (allocated(self%coords_x)) deallocate (self%coords_x)
       allocate (self%coords_x(nx, 1, 1))
