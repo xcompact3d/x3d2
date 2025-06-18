@@ -9,11 +9,14 @@ module m_base_case
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_solver, only: solver_t, init
+  use m_checkpoint_manager, only: checkpoint_manager_t
+  use mpi, only: MPI_COMM_WORLD
 
   implicit none
 
   type, abstract :: base_case_t
     class(solver_t), allocatable :: solver
+    type(checkpoint_manager_t) :: checkpoint_mgr
   contains
     procedure(boundary_conditions), deferred :: boundary_conditions
     procedure(initial_conditions), deferred :: initial_conditions
@@ -21,6 +24,7 @@ module m_base_case
     procedure(pre_correction), deferred :: pre_correction
     procedure(postprocess), deferred :: postprocess
     procedure :: case_init
+    procedure :: case_finalise
     procedure :: set_init
     procedure :: run
     procedure :: print_enstrophy
@@ -90,9 +94,22 @@ contains
 
     self%solver = init(backend, mesh, host_allocator)
 
-    call self%initial_conditions()
+    call self%checkpoint_mgr%init(MPI_COMM_WORLD)
+    if (self%checkpoint_mgr%is_restart()) then
+      call self%checkpoint_mgr%handle_restart(self%solver, MPI_COMM_WORLD)
+    else
+      call self%initial_conditions()
+    end if
 
   end subroutine case_init
+
+  subroutine case_finalise(self)
+    class(base_case_t) :: self
+
+    if (self%solver%mesh%par%is_root()) print *, 'run end'
+
+    call self%checkpoint_mgr%finalise()
+  end subroutine case_finalise
 
   subroutine set_init(self, field, field_func)
     implicit none
@@ -192,18 +209,28 @@ contains
     class(base_case_t), intent(inout) :: self
 
     class(field_t), pointer :: du, dv, dw
-    class(field_t), pointer :: u_out, v_out, w_out
 
     real(dp) :: t
-    integer :: iter, sub_iter
+    integer :: iter, sub_iter, start_iter
 
-    if (self%solver%mesh%par%is_root()) print *, 'initial conditions'
-    t = 0._dp
-    call self%postprocess(0, t)
+    if (self%checkpoint_mgr%is_restart()) then
+      t = self%solver%current_iter*self%solver%dt
+      if (self%solver%mesh%par%is_root()) &
+        ! for restarts current_iter is read from the checkpoint file
+        print *, 'Continuing from iteration:', &
+        self%solver%current_iter, 'at time ', t
+    else
+      self%solver%current_iter = 0
+      if (self%solver%mesh%par%is_root()) print *, 'initial conditions'
+      t = 0._dp
+    end if
+
+    call self%postprocess(self%solver%current_iter, t)
+    start_iter = self%solver%current_iter + 1
 
     if (self%solver%mesh%par%is_root()) print *, 'start run'
 
-    do iter = 1, self%solver%n_iters
+    do iter = start_iter, self%solver%n_iters
       do sub_iter = 1, self%solver%time_integrator%nstage
         ! first apply case-specific BCs
         call self%boundary_conditions()
@@ -234,31 +261,19 @@ contains
                                              self%solver%w)
       end do
 
+      self%solver%current_iter = iter
+
       if (mod(iter, self%solver%n_output) == 0) then
         t = iter*self%solver%dt
+
         call self%postprocess(iter, t)
       end if
+
+      call self%checkpoint_mgr%handle_io_step(self%solver, &
+                                              iter, MPI_COMM_WORLD)
     end do
 
-    if (self%solver%mesh%par%is_root()) print *, 'run end'
-
-    ! Below is for demonstrating purpuses only, to be removed when we have
-    ! proper I/O in place.
-    u_out => self%solver%host_allocator%get_block(DIR_C)
-    v_out => self%solver%host_allocator%get_block(DIR_C)
-    w_out => self%solver%host_allocator%get_block(DIR_C)
-
-    call self%solver%backend%get_field_data(u_out%data, self%solver%u)
-    call self%solver%backend%get_field_data(v_out%data, self%solver%v)
-    call self%solver%backend%get_field_data(w_out%data, self%solver%w)
-
-    if (self%solver%mesh%par%is_root()) then
-      print *, 'norms', norm2(u_out%data), norm2(v_out%data), norm2(w_out%data)
-    end if
-
-    call self%solver%host_allocator%release_block(u_out)
-    call self%solver%host_allocator%release_block(v_out)
-    call self%solver%host_allocator%release_block(w_out)
+    call self%case_finalise
 
   end subroutine run
 

@@ -40,6 +40,10 @@ endif()
   find_package(MPI REQUIRED)
   target_link_libraries(${test_name} PRIVATE MPI::MPI_Fortran)
 
+  if(WITH_ADIOS2)
+    target_link_libraries(${test_name} PRIVATE adios2::fortran_mpi)
+  endif()
+
   if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
     add_test(NAME ${test_name} COMMAND "srun ${test_name}")
   else()
@@ -66,6 +70,9 @@ define_test(omp/test_omp_dist_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
 
 define_test(test_scalar_product.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(test_sum_intox.f90 ${CMAKE_CTEST_NPROCS} omp)
+if(WITH_ADIOS2)
+  define_test(test_adios2_read_write.f90 4 omp)
+endif()
 
 define_test(test_setget_field.f90 1 omp)
 
@@ -78,6 +85,9 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_test(cuda/test_cuda_allocator.f90 1 cuda)
   define_test(cuda/test_cuda_reorder.f90 1 cuda)
   define_test(cuda/test_thom.f90 1 cuda)
+  if(WITH_ADIOS2)
+    define_test(test_adios2_read_write.f90 4 cuda)
+  endif()
   define_test(cuda/test_cuda_tridiag.f90 ${CMAKE_CTEST_NPROCS} cuda)
   define_test(cuda/test_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
 endif()
