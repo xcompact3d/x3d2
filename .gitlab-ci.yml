@@ -4,10 +4,7 @@ workflow:
     - if: $CI_COMMIT_TAG && $CI_PROJECT_PATH == "xcompact3d/x3d2"
     # Run pipeline on the default branch for the main project
     - if: $CI_COMMIT_BRANCH == "main" && $CI_PROJECT_PATH == "xcompact3d/x3d2"
-    # DO NOT run pipeline if Draft
-    - if: $CI_PIPELINE_SOURCE == "external_pull_request_event" && $CI_MERGE_REQUEST_TITLE =~ /^(\[Draft\]|\(Draft\)|Draft:).*/
-      when: never
-    # Other merge requests trigger pipelines
+    # Rune pipeline on pull requests
     - if: $CI_PIPELINE_SOURCE == "external_pull_request_event"
       changes:
         compare_to: 'refs/heads/main'
