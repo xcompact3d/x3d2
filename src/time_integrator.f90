@@ -15,14 +15,11 @@ module m_time_integrator
     real(dp) :: rk_a(3, 3, 4)
     character(len=3) :: sname
     type(flist_t), allocatable :: olds(:, :)
-    type(flist_t), allocatable :: curr(:)
-    type(flist_t), allocatable :: deriv(:)
     class(base_backend_t), pointer :: backend
     class(allocator_t), pointer :: allocator
-    procedure(stepper_func), pointer :: stepper => null()
+    procedure(stepper_func), pointer :: step => null()
   contains
     procedure :: finalize
-    procedure :: step
     procedure :: runge_kutta
     procedure :: adams_bashforth
   end type time_intg_t
@@ -32,12 +29,15 @@ module m_time_integrator
   end interface time_intg_t
 
   abstract interface
-    subroutine stepper_func(self, dt)
+    subroutine stepper_func(self, curr, deriv, dt)
       import :: time_intg_t
       import :: dp
+      import :: flist_t
       implicit none
 
       class(time_intg_t), intent(inout) :: self
+      type(flist_t), allocatable, intent(inout) :: curr(:)
+      type(flist_t), allocatable, intent(in) :: deriv(:)
       real(dp), intent(in) :: dt
     end subroutine stepper_func
   end interface
@@ -61,8 +61,6 @@ contains
 
     ! deallocate memory
     deallocate (self%olds)
-    deallocate (self%curr)
-    deallocate (self%deriv)
 
     print *, self%sname, ' time integrator deallocated'
 
@@ -75,7 +73,7 @@ contains
     class(base_backend_t), pointer :: backend
     class(allocator_t), pointer :: allocator
     character(3), intent(in) :: method
-    integer, intent(in), optional :: nvars
+    integer, intent(in) :: nvars
 
     integer :: i, j, stat
 
@@ -130,7 +128,7 @@ contains
       init%nstep = init%order
       init%nstage = 1
       init%nolds = init%nstep - 1
-      init%stepper => adams_bashforth
+      init%step => adams_bashforth
     else if (init%sname(1:2) == 'RK') then
       read (init%sname(3:3), *, iostat=stat) init%order
       if (stat /= 0) error stop 'Error reading RK integration order'
@@ -138,25 +136,19 @@ contains
       init%nstep = 1
       init%nstage = init%order
       init%nolds = init%nstage
-      init%stepper => runge_kutta
+      init%step => runge_kutta
     else
       print *, 'Integration method '//init%sname//' is not defined'
       error stop
     end if
 
-    if (present(nvars)) then
-      init%nvars = nvars
-    else
-      init%nvars = 3
-    end if
+    init%nvars = nvars
 
     init%istep = 1
     init%istage = 1
 
     ! allocate memory
     allocate (init%olds(init%nvars, init%nolds))
-    allocate (init%curr(init%nvars))
-    allocate (init%deriv(init%nvars))
 
     ! Request all the storage for old timesteps
     do i = 1, init%nvars
@@ -167,33 +159,12 @@ contains
 
   end function init
 
-  subroutine step(self, u, v, w, du, dv, dw, dt)
+  subroutine runge_kutta(self, curr, deriv, dt)
     implicit none
 
     class(time_intg_t), intent(inout) :: self
-    class(field_t), target, intent(inout) :: u, v, w
-    class(field_t), target, intent(in) :: du, dv, dw
-
-    real(dp), intent(in) :: dt
-
-    ! assign pointer to variables
-    self%curr(1)%ptr => u
-    self%curr(2)%ptr => v
-    self%curr(3)%ptr => w
-
-    ! assign pointer to variables
-    self%deriv(1)%ptr => du
-    self%deriv(2)%ptr => dv
-    self%deriv(3)%ptr => dw
-
-    call self%stepper(dt)
-
-  end subroutine step
-
-  subroutine runge_kutta(self, dt)
-    implicit none
-
-    class(time_intg_t), intent(inout) :: self
+    type(flist_t), allocatable, intent(inout) :: curr(:)
+    type(flist_t), allocatable, intent(in) :: deriv(:)
     real(dp), intent(in) :: dt
 
     integer :: i, j
@@ -203,17 +174,17 @@ contains
       do i = 1, self%nvars
         ! update step solution from stage derivative
         if (self%nstage > 1) then
-          call self%backend%veccopy(self%curr(i)%ptr, self%olds(i, 1)%ptr)
+          call self%backend%veccopy(curr(i)%ptr, self%olds(i, 1)%ptr)
         end if
 
         do j = 1, self%nstage - 1
           call self%backend%vecadd(self%rk_b(j, self%nstage)*dt, &
                                    self%olds(i, j + 1)%ptr, &
-                                   1._dp, self%curr(i)%ptr)
+                                   1._dp, curr(i)%ptr)
         end do
         call self%backend%vecadd(self%rk_b(self%nstage, self%nstage)*dt, &
-                                 self%deriv(i)%ptr, &
-                                 1._dp, self%curr(i)%ptr)
+                                 deriv(i)%ptr, &
+                                 1._dp, curr(i)%ptr)
 
       end do
 
@@ -223,21 +194,21 @@ contains
       do i = 1, self%nvars
         ! save step initial condition
         if (self%istage == 1) then
-          call self%backend%veccopy(self%olds(i, 1)%ptr, self%curr(i)%ptr)
+          call self%backend%veccopy(self%olds(i, 1)%ptr, curr(i)%ptr)
         end if
 
         ! save stage derivative
         call self%backend%veccopy(self%olds(i, self%istage + 1)%ptr, &
-                                  self%deriv(i)%ptr)
+                                  deriv(i)%ptr)
 
         ! update stage solution
         if (self%istage > 1) then
-          call self%backend%veccopy(self%curr(i)%ptr, self%olds(i, 1)%ptr)
+          call self%backend%veccopy(curr(i)%ptr, self%olds(i, 1)%ptr)
         end if
         do j = 1, self%istage
           call self%backend%vecadd(self%rk_a(j, self%istage, self%nstage)*dt, &
                                    self%olds(i, j + 1)%ptr, &
-                                   1._dp, self%curr(i)%ptr)
+                                   1._dp, curr(i)%ptr)
         end do
       end do
 
@@ -247,10 +218,12 @@ contains
 
   end subroutine runge_kutta
 
-  subroutine adams_bashforth(self, dt)
+  subroutine adams_bashforth(self, curr, deriv, dt)
     implicit none
 
     class(time_intg_t), intent(inout) :: self
+    type(flist_t), allocatable, intent(inout) :: curr(:)
+    type(flist_t), allocatable, intent(in) :: deriv(:)
     real(dp), intent(in) :: dt
 
     integer :: i, j
@@ -260,12 +233,12 @@ contains
     do i = 1, self%nvars
       ! update solution
       call self%backend%vecadd(self%coeffs(1, nstep)*dt, &
-                               self%deriv(i)%ptr, &
-                               1._dp, self%curr(i)%ptr)
+                               deriv(i)%ptr, &
+                               1._dp, curr(i)%ptr)
       do j = 2, nstep
         call self%backend%vecadd(self%coeffs(j, nstep)*dt, &
                                  self%olds(i, j - 1)%ptr, &
-                                 1._dp, self%curr(i)%ptr)
+                                 1._dp, curr(i)%ptr)
       end do
 
       ! rotate pointers
@@ -283,7 +256,7 @@ contains
 
       ! update olds(1) with new derivative
       if (self%nstep > 1) then
-        call self%backend%veccopy(self%olds(i, 1)%ptr, self%deriv(i)%ptr)
+        call self%backend%veccopy(self%olds(i, 1)%ptr, deriv(i)%ptr)
       end if
     end do
 

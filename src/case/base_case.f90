@@ -6,7 +6,7 @@ module m_base_case
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X, DIR_Z, DIR_C, VERT
-  use m_field, only: field_t
+  use m_field, only: field_t, flist_t
   use m_mesh, only: mesh_t
   use m_solver, only: solver_t, init
 
@@ -191,7 +191,8 @@ contains
 
     class(base_case_t), intent(inout) :: self
 
-    class(field_t), pointer :: du, dv, dw
+    type(flist_t), allocatable :: curr(:)
+    type(flist_t), allocatable :: deriv(:)
     class(field_t), pointer :: u_out, v_out, w_out
 
     real(dp) :: t
@@ -203,30 +204,34 @@ contains
 
     if (self%solver%mesh%par%is_root()) print *, 'start run'
 
+    allocate (curr(self%solver%time_integrator%nvars))
+    allocate (deriv(self%solver%time_integrator%nvars))
+
     do iter = 1, self%solver%n_iters
       do sub_iter = 1, self%solver%time_integrator%nstage
         ! first apply case-specific BCs
         call self%boundary_conditions()
 
-        du => self%solver%backend%allocator%get_block(DIR_X)
-        dv => self%solver%backend%allocator%get_block(DIR_X)
-        dw => self%solver%backend%allocator%get_block(DIR_X)
+        curr(1)%ptr => self%solver%u
+        curr(2)%ptr => self%solver%v
+        curr(3)%ptr => self%solver%w
 
-        call self%solver%transeq(du, dv, dw, &
+        deriv(1)%ptr => self%solver%backend%allocator%get_block(DIR_X)
+        deriv(2)%ptr => self%solver%backend%allocator%get_block(DIR_X)
+        deriv(3)%ptr => self%solver%backend%allocator%get_block(DIR_X)
+
+        call self%solver%transeq(deriv(1)%ptr, deriv(2)%ptr, deriv(3)%ptr, &
                                  self%solver%u, self%solver%v, self%solver%w)
 
         ! models that introduce source terms handled here
-        call self%forcings(du, dv, dw, iter)
+        call self%forcings(deriv(1)%ptr, deriv(2)%ptr, deriv(3)%ptr, iter)
 
         ! time integration
-        call self%solver%time_integrator%step( &
-          self%solver%u, self%solver%v, self%solver%w, du, dv, dw, &
-          self%solver%dt &
-          )
+        call self%solver%time_integrator%step(curr, deriv, self%solver%dt)
 
-        call self%solver%backend%allocator%release_block(du)
-        call self%solver%backend%allocator%release_block(dv)
-        call self%solver%backend%allocator%release_block(dw)
+        call self%solver%backend%allocator%release_block(deriv(1)%ptr)
+        call self%solver%backend%allocator%release_block(deriv(2)%ptr)
+        call self%solver%backend%allocator%release_block(deriv(3)%ptr)
 
         call self%pre_correction(self%solver%u, self%solver%v, self%solver%w)
 
@@ -259,6 +264,10 @@ contains
     call self%solver%host_allocator%release_block(u_out)
     call self%solver%host_allocator%release_block(v_out)
     call self%solver%host_allocator%release_block(w_out)
+
+    ! deallocate memory
+    deallocate (curr)
+    deallocate (deriv)
 
   end subroutine run
 
