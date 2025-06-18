@@ -47,6 +47,7 @@ module m_solver
 
     real(dp) :: dt, nu
     integer :: n_iters, n_output
+    integer :: current_iter = 0
     integer :: ngrid
     integer :: nvars = 3
 
