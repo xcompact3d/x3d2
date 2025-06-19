@@ -163,8 +163,8 @@ contains
     implicit none
 
     class(time_intg_t), intent(inout) :: self
-    type(flist_t), allocatable, intent(inout) :: curr(:)
-    type(flist_t), allocatable, intent(in) :: deriv(:)
+    type(flist_t), intent(inout) :: curr(:)
+    type(flist_t), intent(in) :: deriv(:)
     real(dp), intent(in) :: dt
 
     integer :: i, j
@@ -222,8 +222,8 @@ contains
     implicit none
 
     class(time_intg_t), intent(inout) :: self
-    type(flist_t), allocatable, intent(inout) :: curr(:)
-    type(flist_t), allocatable, intent(in) :: deriv(:)
+    type(flist_t), intent(inout) :: curr(:)
+    type(flist_t), intent(in) :: deriv(:)
     real(dp), intent(in) :: dt
 
     integer :: i, j
