@@ -234,14 +234,14 @@ contains
     allocate (curr(self%solver%time_integrator%nvars))
     allocate (deriv(self%solver%time_integrator%nvars))
 
+    curr(1)%ptr => self%solver%u
+    curr(2)%ptr => self%solver%v
+    curr(3)%ptr => self%solver%w
+
     do iter = start_iter, self%solver%n_iters
       do sub_iter = 1, self%solver%time_integrator%nstage
         ! first apply case-specific BCs
         call self%boundary_conditions()
-
-        curr(1)%ptr => self%solver%u
-        curr(2)%ptr => self%solver%v
-        curr(3)%ptr => self%solver%w
 
         deriv(1)%ptr => self%solver%backend%allocator%get_block(DIR_X)
         deriv(2)%ptr => self%solver%backend%allocator%get_block(DIR_X)
