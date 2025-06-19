@@ -71,6 +71,7 @@ module m_checkpoint_manager_impl
     real(dp), dimension(:, :, :), allocatable :: coords_x, coords_y, coords_z
     integer(i8), dimension(3) :: last_shape_dims = 0
     integer(i8), dimension(3) :: last_strided_shape = 0
+    character(len=4096) :: vtk_xml = ""                 !! VTK XML string for ParaView compatibility
   contains
     procedure :: init
     procedure :: handle_restart
@@ -86,6 +87,7 @@ module m_checkpoint_manager_impl
     procedure, private :: cleanup_strided_buffers
     procedure, private :: get_strided_dimensions
     procedure, private :: generate_coordinates
+    procedure, private :: generate_vtk_xml
   end type checkpoint_manager_adios2_t
 
   type :: field_ptr_t
@@ -298,10 +300,13 @@ contains
     integer :: myrank, ierr
     integer :: comm_to_use
     character(len=256) :: filename
+    character(len=256) :: dim_str
     type(adios2_file_t) :: file
     integer :: dims(3), global_dims(3)
     integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
     type(field_ptr_t), allocatable :: field_ptrs(:)
+    character(len=32), dimension(3) :: field_list
+    field_list = [character(len=32) :: "u", "v", "w"]
 
     if (self%checkpoint_cfg%snapshot_freq <= 0) return
     if (mod(timestep, self%checkpoint_cfg%snapshot_freq) /= 0) return
@@ -323,18 +328,26 @@ contains
     file = self%adios2_writer%open(filename, adios2_mode_write, comm_to_use)
     call self%adios2_writer%begin_step(file)
 
+    call self%generate_vtk_xml(shape_dims, field_list)
+
     ! paraview-specific mesh metadata - write only from root
     if (myrank == 0) then
-      call self%adios2_writer%write_attribute("data_type", "image", file)
-      call self%adios2_writer%write_attribute("mesh/type", "rectilinear", file)
-      call self%adios2_writer%write_attribute("mesh/dimensionality", "3", file)
+      call self%adios2_writer%write_attribute("vtk.xml", self%vtk_xml, file)
 
-      call self%adios2_writer%write_attribute("u/mesh", "mesh", file)
-      call self%adios2_writer%write_attribute("v/mesh", "mesh", file)
-      call self%adios2_writer%write_attribute("w/mesh", "mesh", file)
-
+      call self%adios2_writer%write_attribute("vtk.mesh", "mesh", file)
+      call self%adios2_writer%write_attribute("vtk.mesh.type", "structured", &
+        file)
+      write(dim_str, '(I0,1X,I0,1X,I0)') &
+        shape_dims(1), shape_dims(2), shape_dims(3)
       call self%adios2_writer%write_attribute( &
-        "mesh/coordinates", "coordinates/x;coordinates/y;coordinates/z", file)
+        "vtk.mesh.dimensions", trim(dim_str), file)
+
+      call self%adios2_writer%write_attribute("vtk.mesh.coordinates", &
+           "coordinates/x;coordinates/y;coordinates/z", file)
+    
+      call self%adios2_writer%write_attribute("u/vtk.associatedmesh", "mesh", file)
+      call self%adios2_writer%write_attribute("v/vtk.associatedmesh", "mesh", file)
+      call self%adios2_writer%write_attribute("w/vtk.associatedmesh", "mesh", file)
     end if
 
     call self%generate_coordinates( &
@@ -354,6 +367,43 @@ contains
 
     call self%adios2_writer%close(file)
   end subroutine write_snapshot
+
+  subroutine generate_vtk_xml(self, dims, fields)
+    !! Generate a VTK XML string for a RectilinearGrid for ParaView's ADIOS2VTXReader
+    class(checkpoint_manager_adios2_t), intent(inout) :: self
+    integer(i8), dimension(3), intent(in) :: dims
+    character(len=*), dimension(:), intent(in) :: fields
+
+    character(len=4096) :: xml
+    character(len=16) :: dim_x, dim_y, dim_z
+    character(len=32) :: spacing_str
+    integer :: i
+
+    write(dim_x, '(I0)') int(dims(1)-1)
+    write(dim_y, '(I0)') int(dims(2)-1)
+    write(dim_z, '(I0)') int(dims(3)-1)
+
+    spacing_str = "1.0 1.0 1.0"
+
+    xml = '<?xml version="1.0"?>' // new_line('a') // &
+          '<VTKFile type="ImageData" version="0.1">' // new_line('a') // &
+          '  <ImageData WholeExtent="0 ' // trim(adjustl(dim_x)) // ' 0 ' // &
+          trim(adjustl(dim_y)) // ' 0 ' // trim(adjustl(dim_z)) // &
+          '" Origin="0 0 0" Spacing="' // trim(spacing_str) // '">' // new_line('a') // &
+          '    <Piece Extent="0 ' // trim(adjustl(dim_x)) // ' 0 ' // &
+          trim(adjustl(dim_y)) // ' 0 ' // trim(adjustl(dim_z)) // '">' // new_line('a') // &
+          '      <PointData>' // new_line('a')
+  
+    do i = 1, size(fields)
+      xml = trim(xml) // '        <DataArray Name="' // trim(fields(i)) // '" />' // new_line('a')
+    end do
+  
+    xml = trim(xml) // '      </PointData>' // new_line('a') // &
+          '    </Piece>' // new_line('a') // &
+          '  </ImageData>' // new_line('a') // &
+        '</VTKFile>'
+    self%vtk_xml = xml
+  end subroutine generate_vtk_xml
 
   subroutine generate_coordinates( &
     self, solver, file, shape_dims, start_dims, count_dims, data_loc &
