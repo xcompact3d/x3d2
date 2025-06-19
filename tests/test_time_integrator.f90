@@ -7,6 +7,7 @@ program test_omp_adamsbashforth
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_time_integrator, only: time_intg_t
+  use m_field, only: flist_t
 #ifdef CUDA
   use cudafor
 
@@ -26,8 +27,8 @@ program test_omp_adamsbashforth
   real(dp), allocatable, dimension(:) :: norm
   real(dp) :: dt0 = 0.01_dp, dt, order
   real(dp) :: u0
-  class(field_t), pointer :: u, v, w
-  class(field_t), pointer :: du, dv, dw
+  type(flist_t), allocatable :: sol(:)
+  type(flist_t), allocatable :: deriv(:)
   real(dp), allocatable, dimension(:, :, :) :: data_array
   integer, dimension(3) :: dims_global, nproc_dir, dims
   real(dp), dimension(3) :: L_global
@@ -92,16 +93,13 @@ program test_omp_adamsbashforth
 #endif
 
   ! allocate memory
-  u => allocator%get_block(DIR_X)
-  v => allocator%get_block(DIR_X)
-  w => allocator%get_block(DIR_X)
-
-  du => allocator%get_block(DIR_X)
-  dv => allocator%get_block(DIR_X)
-  dw => allocator%get_block(DIR_X)
+  allocate (sol(1))
+  allocate (deriv(1))
+  sol(1)%ptr => allocator%get_block(DIR_X)
+  deriv(1)%ptr => allocator%get_block(DIR_X)
 
   allocate (norm(nrun))
-  dims = u%get_shape()
+  dims = sol(1)%ptr%get_shape()
   allocate (data_array(dims(1), dims(2), dims(3)))
 
   method = ['AB1', 'AB2', 'AB3', 'AB4', 'RK1', 'RK2', 'RK3', 'RK4']
@@ -111,7 +109,7 @@ program test_omp_adamsbashforth
 
     ! initialize time-integrator
     time_integrator = time_intg_t(allocator=allocator, &
-                                  backend=backend, method=method(k))
+                                  backend=backend, method=method(k), nvars=1)
 
     dt = dt0
     nstep = nstep0
@@ -121,28 +119,28 @@ program test_omp_adamsbashforth
 
       ! compute l2 norm for a given step size
       allocate (err(nstep))
-      call u%fill(1.0_dp)
-      call backend%get_field_data(data_array, u, DIR_X)
+      call sol(1)%ptr%fill(1.0_dp)
+      call backend%get_field_data(data_array, sol(1)%ptr, DIR_X)
 
       ! startup
       istartup = time_integrator%nstep - 1
       do i = 1, istartup
-        call backend%get_field_data(data_array, u, DIR_X)
-        call du%fill(dahlquist_rhs(data_array(1, 1, 1)))
-        call time_integrator%step(u, v, w, du, dv, dw, dt)
+        call backend%get_field_data(data_array, sol(1)%ptr, DIR_X)
+        call deriv(1)%ptr%fill(dahlquist_rhs(data_array(1, 1, 1)))
+        call time_integrator%step(sol, deriv, dt)
 
-        call u%fill(dahlquist_exact_sol(real(i, dp)*dt))
+        call sol(1)%ptr%fill(dahlquist_exact_sol(real(i, dp)*dt))
       end do
 
       ! post-startup
       do i = 1, nstep
         do stage = 1, time_integrator%nstage
-          call backend%get_field_data(data_array, u, DIR_X)
-          call du%fill(dahlquist_rhs(data_array(1, 1, 1)))
-          call time_integrator%step(u, v, w, du, dv, dw, dt)
+          call backend%get_field_data(data_array, sol(1)%ptr, DIR_X)
+          call deriv(1)%ptr%fill(dahlquist_rhs(data_array(1, 1, 1)))
+          call time_integrator%step(sol, deriv, dt)
         end do
 
-        call backend%get_field_data(data_array, u, DIR_X)
+        call backend%get_field_data(data_array, sol(1)%ptr, DIR_X)
         err(i) = data_array(1, 1, 1) &
                  - dahlquist_exact_sol(real(i + istartup, dp)*dt)
       end do
@@ -180,16 +178,13 @@ program test_omp_adamsbashforth
     error stop 'SOME TESTS FAILED.'
   end if
 
+  call allocator%release_block(sol(1)%ptr)
+  call allocator%release_block(deriv(1)%ptr)
+
   ! deallocate memory
+  deallocate (sol)
+  deallocate (deriv)
   deallocate (norm)
-
-  call allocator%release_block(du)
-  call allocator%release_block(dv)
-  call allocator%release_block(dw)
-
-  call allocator%release_block(u)
-  call allocator%release_block(v)
-  call allocator%release_block(w)
 
   ! finalize MPI
   call MPI_Finalize(ierr)
