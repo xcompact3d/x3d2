@@ -36,8 +36,8 @@ module m_time_integrator
       implicit none
 
       class(time_intg_t), intent(inout) :: self
-      type(flist_t), allocatable, intent(inout) :: curr(:)
-      type(flist_t), allocatable, intent(in) :: deriv(:)
+      type(flist_t), intent(inout) :: curr(:)
+      type(flist_t), intent(in) :: deriv(:)
       real(dp), intent(in) :: dt
     end subroutine stepper_func
   end interface
