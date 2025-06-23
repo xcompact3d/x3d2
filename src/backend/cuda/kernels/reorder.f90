@@ -16,16 +16,23 @@ contains
     real(dp), shared :: tile(SZ, SZ)
     integer :: i, j, b_i, b_j, b_k
 
-    i = threadIdx%x; j = threadIdx%y
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    tile(i, j) = u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k)
+    do j = threadIdx%y, SZ, blockDim%y
+      do i = threadIdx%x, SZ, blockDim%x
+        tile(i, j) = u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k)
+      end do
+    end do
 
     call syncthreads()
 
     ! copy into output array from shared
-    u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz) = tile(j, i)
+    do j = threadIdx%y, SZ, blockDim%y
+      do i = threadIdx%x, SZ, blockDim%x
+        u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz) = tile(j, i)
+      end do
+    end do
 
   end subroutine reorder_c2x
 
@@ -39,16 +46,23 @@ contains
     real(dp), shared :: tile(SZ, SZ)
     integer :: i, j, b_i, b_j, b_k
 
-    i = threadIdx%x; j = threadIdx%y
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz)
+    do j = threadIdx%y, SZ, blockDim%y
+      do i = threadIdx%x, SZ, blockDim%x
+        tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz)
+      end do
+    end do
 
     call syncthreads()
 
     ! copy into output array from shared
-    u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k) = tile(j, i)
+    do j = threadIdx%y, SZ, blockDim%y
+      do i = threadIdx%x, SZ, blockDim%x
+        u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k) = tile(j, i)
+      end do
+    end do
 
   end subroutine reorder_x2c
 
@@ -62,16 +76,23 @@ contains
     real(dp), shared :: tile(SZ, SZ)
     integer :: i, j, b_i, b_j, b_k
 
-    i = threadIdx%x; j = threadIdx%y
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_j + (b_k - 1)*nz)
+    do j = threadIdx%y, SZ, blockDim%y
+      do i = threadIdx%x, SZ, blockDim%x
+        tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_j + (b_k - 1)*nz)
+      end do
+    end do
 
     call syncthreads()
 
     ! copy into output array from shared
-    u_y(i, j + (b_k - 1)*SZ, b_j + (b_i - 1)*nz) = tile(j, i)
+    do j = threadIdx%y, SZ, blockDim%y
+      do i = threadIdx%x, SZ, blockDim%x
+        u_y(i, j + (b_k - 1)*SZ, b_j + (b_i - 1)*nz) = tile(j, i)
+      end do
+    end do
 
   end subroutine reorder_x2y
 
@@ -105,16 +126,23 @@ contains
     real(dp), shared :: tile(SZ, SZ)
     integer :: i, j, b_i, b_j, b_k
 
-    i = threadIdx%x; j = threadIdx%y
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
+    do j = threadIdx%y, SZ, blockDim%y
+      do i = threadIdx%x, SZ, blockDim%x
+        tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
+      end do
+    end do
 
     call syncthreads()
 
     ! copy into output array from shared
-    u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + b_k) = tile(j, i)
+    do j = threadIdx%y, SZ, blockDim%y
+      do i = threadIdx%x, SZ, blockDim%x
+        u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + b_k) = tile(j, i)
+      end do
+    end do
 
   end subroutine reorder_y2x
 
@@ -128,16 +156,23 @@ contains
     real(dp), shared :: tile(SZ, SZ)
     integer :: i, j, b_i, b_j, b_k
 
-    i = threadIdx%x; j = threadIdx%y
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
+    do j = threadIdx%y, SZ, blockDim%y
+      do i = threadIdx%x, SZ, blockDim%x
+        tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
+      end do
+    end do
 
     call syncthreads()
 
     ! copy into output array from shared
-    u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx) = tile(j, i)
+    do j = threadIdx%y, SZ, blockDim%y
+      do i = threadIdx%x, SZ, blockDim%x
+        u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx) = tile(j, i)
+      end do
+    end do
 
   end subroutine reorder_y2z
 
@@ -169,16 +204,23 @@ contains
     real(dp), shared :: tile(SZ, SZ)
     integer :: i, j, b_i, b_j, b_k
 
-    i = threadIdx%x; j = threadIdx%y
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    tile(i, j) = u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx)
+    do j = threadIdx%y, SZ, blockDim%y
+      do i = threadIdx%x, SZ, blockDim%x
+        tile(i, j) = u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx)
+      end do
+    end do
 
     call syncthreads()
 
     ! copy into output array from shared
-    u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k) = tile(j, i)
+    do j = threadIdx%y, SZ, blockDim%y
+      do i = threadIdx%x, SZ, blockDim%x
+        u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k) = tile(j, i)
+      end do
+    end do
 
   end subroutine reorder_z2y
 
@@ -192,17 +234,24 @@ contains
     real(dp), shared :: tile(SZ, SZ)
     integer :: i, j, b_i, b_j, b_k
 
-    i = threadIdx%x; j = threadIdx%y
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_k) + nz*(b_i - 1))
+    do j = threadIdx%y, SZ, blockDim%y
+      do i = threadIdx%x, SZ, blockDim%x
+        tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_k) + nz*(b_i - 1))
+      end do
+    end do
 
     call syncthreads()
 
     ! copy into output array from shared
-    u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) = &
-      u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) + tile(j, i)
+    do j = threadIdx%y, SZ, blockDim%y
+      do i = threadIdx%x, SZ, blockDim%x
+        u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) = &
+          u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) + tile(j, i)
+      end do
+    end do
 
   end subroutine sum_yintox
 

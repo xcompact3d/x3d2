@@ -18,11 +18,12 @@ program test_vecadd
   use m_omp_common, only: SZ
   use m_omp_backend, only: omp_backend_t
 #endif
-  
+
   implicit none
-  
-  integer, dimension(4), parameter :: dirs = [ DIR_X, DIR_Y, DIR_Z, DIR_C ]
-  character(len=5), dimension(4), parameter :: dirnames = [ "DIR_X", "DIR_Y", "DIR_Z", "DIR_C" ]
+
+  integer, dimension(4), parameter :: dirs = [DIR_X, DIR_Y, DIR_Z, DIR_C]
+  character(len=5), dimension(4), parameter :: dirnames = &\
+  ["DIR_X", "DIR_Y", "DIR_Z", "DIR_C"]
 
   class(mesh_t), allocatable :: mesh
   class(allocator_t), pointer :: allocator => null()
@@ -45,21 +46,21 @@ program test_vecadd
   integer, dimension(3) :: nproc_dir
   real(dp), dimension(3) :: L_global
   character(len=8), dimension(2) :: BC_x, BC_y, BC_z
-  
+
   integer :: ierr
 
   logical :: test_pass
   integer :: d
 
   call MPI_Init(ierr)
-  
-  dims_global = [32, 32, 32]
+
+  dims_global = [64, 64, 64]
   L_global = [1.0, 1.0, 1.0]
   nproc_dir = [1, 1, 1]
   BC_x = ["periodic", "periodic"]
   BC_y = BC_x
   BC_z = BC_x
-  
+
   mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(mesh, SZ)
@@ -82,7 +83,7 @@ program test_vecadd
   do d = 1, size(dirs)
 
     call initialise_data(a, b, c, z, d)
-    
+
     call test_add_zero(d)
     call test_double(d)
     call test_subself(d)
@@ -94,7 +95,7 @@ program test_vecadd
   call allocator%release_block(b)
   call allocator%release_block(c)
   call allocator%release_block(z)
-  
+
   if (test_pass) then
     print *, "PASS"
   else
@@ -156,7 +157,7 @@ contains
     call backend%vecadd(1.0_dp, a, 1.0_dp, r)
 
     call backend%get_field_data(r_host%data, r, dirs(d))
-    if (any(r_host%data /= 2 * a_host%data)) then
+    if (any(r_host%data /= 2*a_host%data)) then
       print *, dirnames(d), ": a + a = 2a failed"
       test_pass = .false.
     end if
@@ -280,6 +281,6 @@ contains
     call host_allocator%release_block(z_host)
 
   end subroutine initialise_data
-  
+
 end program test_vecadd
-  
+
