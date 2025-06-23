@@ -22,8 +22,8 @@ program test_vecadd
   implicit none
 
   integer, dimension(4), parameter :: dirs = [DIR_X, DIR_Y, DIR_Z, DIR_C]
-  character(len=5), dimension(4), parameter :: dirnames = &\
-  ["DIR_X", "DIR_Y", "DIR_Z", "DIR_C"]
+  character(len=5), dimension(4), parameter :: dirnames = &
+                         ["DIR_X", "DIR_Y", "DIR_Z", "DIR_C"]
 
   class(mesh_t), allocatable :: mesh
   class(allocator_t), pointer :: allocator => null()
