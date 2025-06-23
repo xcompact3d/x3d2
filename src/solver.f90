@@ -49,6 +49,7 @@ module m_solver
     integer :: n_iters, n_output
     integer :: current_iter = 0
     integer :: ngrid
+    integer :: nvars = 3
 
     class(field_t), pointer :: u, v, w
 
@@ -114,7 +115,7 @@ contains
 
     solver%time_integrator = time_intg_t(solver%backend, &
                                          solver%backend%allocator, &
-                                         solver_cfg%time_intg)
+                                         solver_cfg%time_intg, solver%nvars)
     if (solver%mesh%par%is_root()) then
       print *, solver_cfg%time_intg//' time integrator instantiated'
     end if
