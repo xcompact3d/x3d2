@@ -366,7 +366,7 @@ contains
   end subroutine process_spectral_010_fw
 
   attributes(global) subroutine process_spectral_010_poisson( &
-    div_u, a_re, a_im, nx_spec, n, nx, ny, nz &
+    div_u, a_re, a_im, off, inc, nx_spec, n, nx, ny, nz &
     )
     !! Solve the Poisson equation at cell centres with non-perioic BC along y
     !!
@@ -377,10 +377,12 @@ contains
     complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
     !> Spectral equivalence constants
     real(dp), device, intent(inout), dimension(:, :, :, :) :: a_re, a_im
+    !> offset and increment. increment is 2 when considering only odd or even
+    integer, value, intent(in) :: off, inc
     !> Grid size in spectral space
     integer, value, intent(in) :: nx_spec, n, nx, ny, nz
 
-    integer :: i, j, k
+    integer :: i, j, k, jm, nm
     real(dp) :: tmp_r, tmp_c, div_r, div_c, epsilon
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
@@ -392,6 +394,11 @@ contains
     if (i <= nx_spec) then
       ! Forward pass for the pentadiagonal matrix
       do j = 1, n - 2
+        ! j mapping based on odd/even
+        ! inc=2, off=0 ---> j => 2j - 1
+        ! inc=2, off=1 ---> j => 2j
+        ! inc=1, off=0 ---> j => j
+        jm = inc*j + off - inc/2
         ! eliminate diag-1
         tmp_r = 0._dp
         if (abs(a_re(i, j, k, 3)) > epsilon) then
@@ -401,9 +408,9 @@ contains
         if (abs(a_im(i, j, k, 3)) > epsilon) then
           tmp_c = a_im(i, j + 1, k, 2)/a_im(i, j, k, 3)
         end if
-        div_r = real(div_u(i, j + 1, k) - tmp_r*div_u(i, j, k), kind=dp)
-        div_c = aimag(div_u(i, j + 1, k) - tmp_c*div_u(i, j, k))
-        div_u(i, j + 1, k) = cmplx(div_r, div_c, kind=dp)
+        div_r = real(div_u(i, jm + inc, k) - tmp_r*div_u(i, jm, k), kind=dp)
+        div_c = aimag(div_u(i, jm + inc, k) - tmp_c*div_u(i, jm, k))
+        div_u(i, jm + inc, k) = cmplx(div_r, div_c, kind=dp)
         ! modify pentadiagonal coefficients in-place
         a_re(i, j + 1, k, 3) = a_re(i, j + 1, k, 3) - tmp_r*a_re(i, j, k, 4)
         a_im(i, j + 1, k, 3) = a_im(i, j + 1, k, 3) - tmp_c*a_im(i, j, k, 4)
@@ -412,6 +419,8 @@ contains
       end do
 
       do j = 1, n - 2
+        ! j mapping based on odd/even
+        jm = inc*j + off - inc/2
         ! eliminate diag-2
         tmp_r = 0._dp
         if (abs(a_re(i, j, k, 3)) > epsilon) then
@@ -421,9 +430,9 @@ contains
         if (abs(a_im(i, j, k, 3)) > epsilon) then
           tmp_c = a_im(i, j + 2, k, 1)/a_im(i, j, k, 3)
         end if
-        div_r = real(div_u(i, j + 2, k) - tmp_r*div_u(i, j, k), kind=dp)
-        div_c = aimag(div_u(i, j + 2, k) - tmp_c*div_u(i, j, k))
-        div_u(i, j + 2, k) = cmplx(div_r, div_c, kind=dp)
+        div_r = real(div_u(i, jm + 2*inc, k) - tmp_r*div_u(i, jm, k), kind=dp)
+        div_c = aimag(div_u(i, jm + 2*inc, k) - tmp_c*div_u(i, jm, k))
+        div_u(i, jm + 2*inc, k) = cmplx(div_r, div_c, kind=dp)
         ! modify pentadiagonal coefficients in-place
         a_re(i, j + 2, k, 2) = a_re(i, j + 2, k, 2) - tmp_r*a_re(i, j, k, 3)
         a_im(i, j + 2, k, 2) = a_im(i, j + 2, k, 2) - tmp_c*a_im(i, j, k, 3)
@@ -445,23 +454,24 @@ contains
       div_r = a_re(i, n, k, 3) - tmp_r*a_re(i, n - 1, k, 4)
       div_c = a_im(i, n, k, 3) - tmp_c*a_im(i, n - 1, k, 4)
 
+      nm = inc*n + off - inc/2
       if (abs(div_r) > epsilon) then
         tmp_r = tmp_r/div_r
-        div_r = real(div_u(i, n, k), kind=dp) &
-                /(div_r - tmp_r*real(div_u(i, n - 1, k), kind=dp))
+        div_r = real(div_u(i, nm, k), kind=dp) &
+                /(div_r - tmp_r*real(div_u(i, nm - inc, k), kind=dp))
       else
         tmp_r = 0._dp
         div_r = 0._dp
       end if
       if (abs(div_c) > epsilon) then
         tmp_c = tmp_c/div_c
-        div_c = aimag(div_u(i, n, k)) &
-                /(div_c - tmp_c*aimag(div_u(i, n - 1, k)))
+        div_c = aimag(div_u(i, nm, k)) &
+                /(div_c - tmp_c*aimag(div_u(i, nm - inc, k)))
       else
         tmp_c = 0._dp
         div_c = 0._dp
       end if
-      div_u(i, n, k) = cmplx(div_r, div_c, kind=dp)
+      div_u(i, nm, k) = cmplx(div_r, div_c, kind=dp)
 
       if (abs(a_re(i, n - 1, k, 3)) > epsilon) then
         tmp_r = 1._dp/a_re(i, n - 1, k, 3)
@@ -475,18 +485,23 @@ contains
       end if
       div_r = a_re(i, n - 1, k, 4)*tmp_r
       div_c = a_im(i, n - 1, k, 4)*tmp_c
-      div_u(i, n - 1, k) = cmplx(real(div_u(i, n - 1, k), kind=dp)*tmp_r &
-                                 - real(div_u(i, n, k), kind=dp)*div_r, &
-                                 aimag(div_u(i, n - 1, k))*tmp_c &
-                                 - aimag(div_u(i, n, k))*div_c, &
-                                 kind=dp)
+      div_u(i, nm - inc, k) = cmplx( & !&
+        real(div_u(i, nm - inc, k), kind=dp)*tmp_r &
+        - real(div_u(i, nm, k), kind=dp)*div_r, &
+        aimag(div_u(i, nm - inc, k))*tmp_c &
+        - aimag(div_u(i, nm, k))*div_c, &
+        kind=dp &
+        )
 
       if (i == nx/2 + 1 .and. k == nz/2 + 1) then
-        div_u(i, n, k) = 0._dp
-        div_u(i, n - 1, k) = 0._dp
+        div_u(i, nm, k) = 0._dp
+        div_u(i, nm - inc, k) = 0._dp
       end if
+
       ! backward pass
       do j = n - 2, 1, -1
+        ! j mapping based on odd/even
+        jm = inc*j + off - inc/2
         if (abs(a_re(i, j, k, 3)) > epsilon) then
           tmp_r = 1._dp/a_re(i, j, k, 3)
         else
@@ -497,16 +512,16 @@ contains
         else
           tmp_c = 0._dp
         end if
-        div_u(i, j, k) = cmplx( & !&
-          tmp_r*(real(div_u(i, j, k), kind=dp) &
-                 - a_re(i, j, k, 4)*real(div_u(i, j + 1, k), kind=dp) &
-                 - a_re(i, j, k, 5)*real(div_u(i, j + 2, k), kind=dp)), &
-          tmp_c*(aimag(div_u(i, j, k)) &
-                 - a_im(i, j, k, 4)*aimag(div_u(i, j + 1, k)) &
-                 - a_im(i, j, k, 5)*aimag(div_u(i, j + 2, k))), &
+        div_u(i, jm, k) = cmplx( & !&
+          tmp_r*(real(div_u(i, jm, k), kind=dp) &
+                 - a_re(i, j, k, 4)*real(div_u(i, jm + inc, k), kind=dp) &
+                 - a_re(i, j, k, 5)*real(div_u(i, jm + 2*inc, k), kind=dp)), &
+          tmp_c*(aimag(div_u(i, jm, k)) &
+                 - a_im(i, j, k, 4)*aimag(div_u(i, jm + inc, k)) &
+                 - a_im(i, j, k, 5)*aimag(div_u(i, jm + 2*inc, k))), &
           kind=dp &
           )
-        if (i == nx/2 + 1 .and. k == nz/2 + 1) div_u(i, j, k) = 0._dp
+        if (i == nx/2 + 1 .and. k == nz/2 + 1) div_u(i, jm, k) = 0._dp
       end do
     end if
 

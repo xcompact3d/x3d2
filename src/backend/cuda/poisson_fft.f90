@@ -268,7 +268,7 @@ contains
 
     complex(dp), device, dimension(:, :, :), pointer :: c_dev
     type(dim3) :: blocks, threads
-    integer :: tsize
+    integer :: tsize, off, inc
 
     ! obtain a pointer to descriptor so that we can carry out postprocessing
     call c_f_pointer(self%xtdesc%descriptor, descriptor)
@@ -304,13 +304,19 @@ contains
         self%a_odd_im_dev = self%a_odd_im
         self%a_even_re_dev = self%a_even_re
         self%a_even_im_dev = self%a_even_im
+        ! start from the first odd entry
+        off = 0
+        ! and continue with odd ones
+        inc = 2
         call process_spectral_010_poisson<<<blocks, threads>>>( & !&
-          c_dev, self%a_odd_re_dev, self%a_odd_im_dev, &
+          c_dev, self%a_odd_re_dev, self%a_odd_im_dev, off, inc, &
           self%nx_spec, self%ny_spec/2, &
           self%nx_glob, self%ny_glob, self%nz_glob &
           )
+        ! start from the first even entry, and continue with even ones
+        off = 1
         call process_spectral_010_poisson<<<blocks, threads>>>( & !&
-          c_dev, self%a_even_re_dev, self%a_even_im_dev, &
+          c_dev, self%a_even_re_dev, self%a_even_im_dev, off, inc, &
           self%nx_spec, self%ny_spec/2, &
           self%nx_glob, self%ny_glob, self%nz_glob &
           )
@@ -319,8 +325,12 @@ contains
         ! PERF issue: data movement from host to device at each step
         self%a_re_dev = self%a_re
         self%a_im_dev = self%a_im
+        off = 0
+        inc = 1
+        ! start from the first entry and increment 1
         call process_spectral_010_poisson<<<blocks, threads>>>( & !&
-          c_dev, self%a_re_dev, self%a_im_dev, self%nx_spec, self%ny_spec, &
+          c_dev, self%a_re_dev, self%a_im_dev, off, inc, &
+          self%nx_spec, self%ny_spec, &
           self%nx_glob, self%ny_glob, self%nz_glob &
           )
       end if
