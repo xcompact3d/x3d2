@@ -25,7 +25,7 @@ module m_config
 
   type, extends(base_config_t) :: solver_config_t
     real(dp) :: Re, dt
-    integer :: n_iters, n_output
+    integer :: n_iters, n_output, iibm
     character(3) :: poisson_solver_type, time_intg
     character(30) :: der1st_scheme, der2nd_scheme, &
                      interpl_scheme, stagder_scheme
@@ -127,7 +127,7 @@ contains
     integer :: unit
 
     real(dp) :: Re, dt
-    integer :: n_iters, n_output
+    integer :: n_iters, n_output, iibm = 0
     character(3) :: time_intg
     character(3) :: poisson_solver_type = 'FFT'
     character(30) :: der1st_scheme = 'compact6', der2nd_scheme = 'compact6', &
@@ -154,6 +154,7 @@ contains
     self%dt = dt
     self%n_iters = n_iters
     self%n_output = n_output
+    self%iibm = iibm
     self%poisson_solver_type = poisson_solver_type
     self%time_intg = time_intg
     self%der1st_scheme = der1st_scheme

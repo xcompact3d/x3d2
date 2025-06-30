@@ -10,6 +10,7 @@ module m_solver
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL
   use m_config, only: solver_config_t
   use m_field, only: field_t
+  use m_ibm, only : ibm_t
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t
   use m_time_integrator, only: time_intg_t
@@ -60,6 +61,8 @@ module m_solver
     type(dirps_t), pointer :: xdirps, ydirps, zdirps
     type(vector_calculus_t) :: vector_calculus
     procedure(poisson_solver), pointer :: poisson => null()
+    type(ibm_t) :: ibm
+    logical :: ibm_on
   contains
     procedure :: transeq
     procedure :: pressure_correction
@@ -156,6 +159,11 @@ contains
     case default
       error stop 'poisson_solver_type is not valid. Use "FFT" or "CG".'
     end select
+
+    ! Initialize the IBM module
+    solver%ibm_on = solver_cfg%iibm /= 0
+    if (solver%ibm_on) &
+      solver%ibm = ibm_t(backend, mesh, host_allocator, solver_cfg%iibm)
 
   end function init
 
