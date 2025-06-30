@@ -153,6 +153,20 @@ module m_base_backend
   end interface
 
   abstract interface
+    subroutine vecmult(self, y, x)
+        !! pointwise multiplication between two vectors: y(:) = y(:) * x(:)
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: y
+      class(field_t), intent(in) :: x
+    end subroutine vecmult
+  end interface
+
+  abstract interface
     real(dp) function scalar_product(self, x, y) result(s)
          !! Calculates the scalar product of two input fields
       import :: base_backend_t

@@ -43,6 +43,24 @@ contains
 
   end subroutine axpby
 
+  attributes(global) subroutine pwmul(y, x, n)
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: y
+    real(dp), device, intent(in), dimension(:, :, :) :: x
+    integer, value, intent(in) :: n
+
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      y(i, j, b) = y(i, j, b)*x(i, j, b)
+    end do
+
+  end subroutine pwmul
+
   attributes(global) subroutine buffer_copy(u_send_s, u_send_e, u, n, n_halo)
     implicit none
 

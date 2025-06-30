@@ -40,6 +40,7 @@ module m_omp_backend
     procedure :: sum_zintox => sum_zintox_omp
     procedure :: veccopy => veccopy_omp
     procedure :: vecadd => vecadd_omp
+    procedure :: vecmult => vecmult_omp
     procedure :: scalar_product => scalar_product_omp
     procedure :: field_max_mean => field_max_mean_omp
     procedure :: field_scale => field_scale_omp
@@ -505,6 +506,29 @@ contains
     !$omp end parallel do
 
   end subroutine vecadd_omp
+
+  subroutine vecmult_omp(self, y, x)
+    !! [[m_base_backend(module):vecmult(interface)]]
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: y
+    class(field_t), intent(in) :: x
+    integer :: i, j, k
+
+    !$omp parallel do
+    do k = 1, size(y%data, 3)
+      do j = 1, size(y%data, 2)
+        !$omp simd
+        do i = 1, SZ
+          y%data(i, j, k) = y%data(i, j, k)*x%data(i, j, k)
+        end do
+        !$omp end simd
+      end do
+    end do
+    !$omp end parallel do
+
+  end subroutine vecmult_omp
 
   real(dp) function scalar_product_omp(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]

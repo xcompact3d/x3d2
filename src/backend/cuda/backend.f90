@@ -24,7 +24,7 @@ module m_cuda_backend
   use m_cuda_kernels_fieldops, only: axpby, buffer_copy, field_scale, &
                                      field_shift, scalar_product, &
                                      field_max_sum, field_set_y_face, &
-                                     volume_integral
+                                     pwmul, volume_integral
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
                                     reorder_c2x, reorder_x2c, &
@@ -56,6 +56,7 @@ module m_cuda_backend
     procedure :: sum_zintox => sum_zintox_cuda
     procedure :: veccopy => veccopy_cuda
     procedure :: vecadd => vecadd_cuda
+    procedure :: vecmult => vecmult_cuda
     procedure :: scalar_product => scalar_product_cuda
     procedure :: field_max_mean => field_max_mean_cuda
     procedure :: field_scale => field_scale_cuda
@@ -645,6 +646,27 @@ contains
     call axpby<<<blocks, threads>>>(nx, a, x_d, b, y_d) !&
 
   end subroutine vecadd_cuda
+
+  subroutine vecmult_cuda(self, y, x)
+    !! [[m_base_backend(module):vecmult(interface)]]
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: y
+    class(field_t), intent(in) :: x
+    real(dp), device, pointer, dimension(:, :, :) :: x_d, y_d
+    type(dim3) :: blocks, threads
+    integer :: n
+
+    call resolve_field_t(x_d, x)
+    call resolve_field_t(y_d, y)
+
+    n = size(y_d, dim=2)
+    blocks = dim3(size(y_d, dim=3), 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call pwmul<<<blocks, threads>>>(y_d, x_d, n) !&
+
+  end subroutine vecmult_cuda
 
   real(dp) function scalar_product_cuda(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]
