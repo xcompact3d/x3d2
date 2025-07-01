@@ -4,7 +4,7 @@ module m_omp_poisson_fft
   use decomp_2d_fft, only: decomp_2d_fft_init, decomp_2d_fft_3d, &
                            decomp_2d_fft_get_size
 
-  use m_common, only: dp
+  use m_common, only: dp, CELL
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_poisson_fft, only: poisson_fft_t
@@ -40,6 +40,7 @@ contains
     type(mesh_t), intent(in) :: mesh
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     integer, dimension(3) :: istart, iend, isize
+    integer :: dims(3)
 
     type(omp_poisson_fft_t) :: poisson_fft
 
@@ -47,8 +48,11 @@ contains
       print *, "Initialising 2decomp&fft"
     end if
 
+    ! Get global cell dims
+    dims = mesh%get_global_dims(CELL)
+
     ! Work out the spectral dimensions in the permuted state
-    call decomp_2d_fft_init(PHYSICAL_IN_X)
+    call decomp_2d_fft_init(PHYSICAL_IN_X, dims(1), dims(2), dims(3))
     call decomp_2d_fft_get_size(istart, iend, isize)
     ! Converts a start position into an offset
     istart(:) = istart(:) - 1
