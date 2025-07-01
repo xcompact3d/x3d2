@@ -16,31 +16,32 @@ contains
     real(dp), shared :: tile(SZ, SZ)
     integer :: i, j, b_i, b_j, b_k
 
+    i = threadIdx%x; j = threadIdx%y; 
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    j = threadIdx%y
-    do while (j <= SZ)
-      i = threadIdx%x;
-      do while (i <= SZ)
-        tile(i, j) = u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k)
-        i = i + blockDim%x
-      end do
-      j = j + blockDim%y
-    end do
+    if (SZ == 32) then
+      tile(i, j) = u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k)
+    else if (SZ == 64) then
+      tile(i, j) = u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k)
+      tile(i + 32, j) = u_c(i + 32 + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k)
+      tile(i, j + 32) = u_c(i + (b_i - 1)*SZ, j + 32 + (b_j - 1)*SZ, b_k)
+      tile(i + 32, j + 32) = &
+        u_c(i + 32 + (b_i - 1)*SZ, j + 32 + (b_j - 1)*SZ, b_k)
+    end if
 
     call syncthreads()
 
     ! copy into output array from shared
-    j = threadIdx%y
-    do while (j <= SZ)
-      i = threadIdx%x;
-      do while (i <= SZ)
-        u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz) = tile(j, i)
-        i = i + blockDim%x
-      end do
-      j = j + blockDim%y
-    end do
+    if (SZ == 32) then
+      u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz) = tile(j, i)
+    else if (SZ == 64) then
+      u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz) = tile(j, i)
+      u_x(i + 32, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz) = tile(j, i + 32)
+      u_x(i, j + 32 + (b_i - 1)*SZ, b_k + (b_j - 1)*nz) = tile(j + 32, i)
+      u_x(i + 32, j + 32 + (b_i - 1)*SZ, b_k + (b_j - 1)*nz) = &
+        tile(j + 32, i + 32)
+    end if
 
   end subroutine reorder_c2x
 
@@ -54,31 +55,32 @@ contains
     real(dp), shared :: tile(SZ, SZ)
     integer :: i, j, b_i, b_j, b_k
 
+    i = threadIdx%x; j = threadIdx%y; 
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    j = threadIdx%y
-    do while (j <= SZ)
-      i = threadIdx%x;
-      do while (i <= SZ)
-        tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz)
-        i = i + blockDim%x
-      end do
-      j = j + blockDim%y
-    end do
+    if (SZ == 32) then
+      tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz)
+    else if (SZ == 64) then
+      tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz)
+      tile(i + 32, j) = u_x(i + 32, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz)
+      tile(i, j + 32) = u_x(i, j + 32 + (b_i - 1)*SZ, b_k + (b_j - 1)*nz)
+      tile(i + 32, j + 32) = &
+        u_x(i + 32, j + 32 + (b_i - 1)*SZ, b_k + (b_j - 1)*nz)
+    end if
 
     call syncthreads()
 
     ! copy into output array from shared
-    j = threadIdx%y
-    do while (j <= SZ)
-      i = threadIdx%x;
-      do while (i <= SZ)
-        u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k) = tile(j, i)
-        i = i + blockDim%x
-      end do
-      j = j + blockDim%y
-    end do
+    if (SZ == 32) then
+      u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k) = tile(j, i)
+    else if (SZ == 64) then
+      u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k) = tile(j, i)
+      u_c(i + 32 + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k) = tile(j, i + 32)
+      u_c(i + (b_i - 1)*SZ, j + 32 + (b_j - 1)*SZ, b_k) = tile(j + 32, i)
+      u_c(i + 32 + (b_i - 1)*SZ, j + 32 + (b_j - 1)*SZ, b_k) = &
+        tile(j + 32, i + 32)
+    end if
 
   end subroutine reorder_x2c
 
@@ -92,31 +94,32 @@ contains
     real(dp), shared :: tile(SZ, SZ)
     integer :: i, j, b_i, b_j, b_k
 
+    i = threadIdx%x; j = threadIdx%y; 
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    j = threadIdx%y
-    do while (j <= SZ)
-      i = threadIdx%x;
-      do while (i <= SZ)
-        tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_j + (b_k - 1)*nz)
-        i = i + blockDim%x
-      end do
-      j = j + blockDim%y
-    end do
+    if (SZ == 32) then
+      tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_j + (b_k - 1)*nz)
+    else if (SZ == 64) then
+      tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_j + (b_k - 1)*nz)
+      tile(i + 32, j) = u_x(i + 32, j + (b_i - 1)*SZ, b_j + (b_k - 1)*nz)
+      tile(i, j + 32) = u_x(i, j + 32 + (b_i - 1)*SZ, b_j + (b_k - 1)*nz)
+      tile(i + 32, j + 32) = &
+        u_x(i + 32, j + 32 + (b_i - 1)*SZ, b_j + (b_k - 1)*nz)
+    end if
 
     call syncthreads()
 
     ! copy into output array from shared
-    j = threadIdx%y
-    do while (j <= SZ)
-      i = threadIdx%x;
-      do while (i <= SZ)
-        u_y(i, j + (b_k - 1)*SZ, b_j + (b_i - 1)*nz) = tile(j, i)
-        i = i + blockDim%x
-      end do
-      j = j + blockDim%y
-    end do
+    if (SZ == 32) then
+      u_y(i, j + (b_k - 1)*SZ, b_j + (b_i - 1)*nz) = tile(j, i)
+    else if (SZ == 64) then
+      u_y(i, j + (b_k - 1)*SZ, b_j + (b_i - 1)*nz) = tile(j, i)
+      u_y(i + 32, j + (b_k - 1)*SZ, b_j + (b_i - 1)*nz) = tile(j, i + 32)
+      u_y(i, j + 32 + (b_k - 1)*SZ, b_j + (b_i - 1)*nz) = tile(j + 32, i)
+      u_y(i + 32, j + 32 + (b_k - 1)*SZ, b_j + (b_i - 1)*nz) = &
+        tile(j + 32, i + 32)
+    end if
 
   end subroutine reorder_x2y
 
@@ -150,31 +153,32 @@ contains
     real(dp), shared :: tile(SZ, SZ)
     integer :: i, j, b_i, b_j, b_k
 
+    i = threadIdx%x; j = threadIdx%y; 
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    j = threadIdx%y
-    do while (j <= SZ)
-      i = threadIdx%x;
-      do while (i <= SZ)
-        tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
-        i = i + blockDim%x
-      end do
-      j = j + blockDim%y
-    end do
+    if (SZ == 32) then
+      tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
+    else if (SZ == 64) then
+      tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
+      tile(i + 32, j) = u_y(i + 32, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
+      tile(i, j + 32) = u_y(i, (b_j - 1)*SZ + j + 32, (b_i - 1)*nz + b_k)
+      tile(i + 32, j + 32) = &
+        u_y(i + 32, (b_j - 1)*SZ + j + 32, (b_i - 1)*nz + b_k)
+    end if
 
     call syncthreads()
 
     ! copy into output array from shared
-    j = threadIdx%y
-    do while (j <= SZ)
-      i = threadIdx%x;
-      do while (i <= SZ)
-        u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + b_k) = tile(j, i)
-        i = i + blockDim%x
-      end do
-      j = j + blockDim%y
-    end do
+    if (SZ == 32) then
+      u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + b_k) = tile(j, i)
+    else if (SZ == 64) then
+      u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + b_k) = tile(j, i)
+      u_x(i + 32, (b_i - 1)*SZ + j, (b_j - 1)*nz + b_k) = tile(j, i + 32)
+      u_x(i, (b_i - 1)*SZ + j + 32, (b_j - 1)*nz + b_k) = tile(j + 32, i)
+      u_x(i + 32, (b_i - 1)*SZ + j + 32, (b_j - 1)*nz + b_k) = &
+        tile(j + 32, i + 32)
+    end if
 
   end subroutine reorder_y2x
 
@@ -188,31 +192,32 @@ contains
     real(dp), shared :: tile(SZ, SZ)
     integer :: i, j, b_i, b_j, b_k
 
+    i = threadIdx%x; j = threadIdx%y; 
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    j = threadIdx%y
-    do while (j <= SZ)
-      i = threadIdx%x;
-      do while (i <= SZ)
-        tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
-        i = i + blockDim%x
-      end do
-      j = j + blockDim%y
-    end do
+    if (SZ == 32) then
+      tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
+    else if (SZ == 64) then
+      tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
+      tile(i + 32, j) = u_y(i + 32, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
+      tile(i, j + 32) = u_y(i, (b_j - 1)*SZ + j + 32, (b_i - 1)*nz + b_k)
+      tile(i + 32, j + 32) = &
+        u_y(i + 32, (b_j - 1)*SZ + j + 32, (b_i - 1)*nz + b_k)
+    end if
 
     call syncthreads()
 
     ! copy into output array from shared
-    j = threadIdx%y
-    do while (j <= SZ)
-      i = threadIdx%x;
-      do while (i <= SZ)
-        u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx) = tile(j, i)
-        i = i + blockDim%x
-      end do
-      j = j + blockDim%y
-    end do
+    if (SZ == 32) then
+      u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx) = tile(j, i)
+    else if (SZ == 64) then
+      u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx) = tile(j, i)
+      u_z(i + 32, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx) = tile(j, i + 32)
+      u_z(i, b_k, (b_i - 1)*SZ + j + 32 + (b_j - 1)*nx) = tile(j + 32, i)
+      u_z(i + 32, b_k, (b_i - 1)*SZ + j + 32 + (b_j - 1)*nx) = &
+        tile(j + 32, i + 32)
+    end if
 
   end subroutine reorder_y2z
 
@@ -244,31 +249,32 @@ contains
     real(dp), shared :: tile(SZ, SZ)
     integer :: i, j, b_i, b_j, b_k
 
+    i = threadIdx%x; j = threadIdx%y; 
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    j = threadIdx%y
-    do while (j <= SZ)
-      i = threadIdx%x;
-      do while (i <= SZ)
-        tile(i, j) = u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx)
-        i = i + blockDim%x
-      end do
-      j = j + blockDim%y
-    end do
+    if (SZ == 32) then
+      tile(i, j) = u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx)
+    else if (SZ == 64) then
+      tile(i, j) = u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx)
+      tile(i + 32, j) = u_z(i + 32, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx)
+      tile(i, j + 32) = u_z(i, b_k, (b_i - 1)*SZ + j + 32 + (b_j - 1)*nx)
+      tile(i + 32, j + 32) = &
+        u_z(i + 32, b_k, (b_i - 1)*SZ + j + 32 + (b_j - 1)*nx)
+    end if
 
     call syncthreads()
 
     ! copy into output array from shared
-    j = threadIdx%y
-    do while (j <= SZ)
-      i = threadIdx%x;
-      do while (i <= SZ)
-        u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k) = tile(j, i)
-        i = i + blockDim%x
-      end do
-      j = j + blockDim%y
-    end do
+    if (SZ == 32) then
+      u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k) = tile(j, i)
+    else if (SZ == 64) then
+      u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k) = tile(j, i)
+      u_y(i + 32, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k) = tile(j, i + 32)
+      u_y(i, (b_j - 1)*SZ + j + 32, (b_i - 1)*nz + b_k) = tile(j + 32, i)
+      u_y(i + 32, (b_j - 1)*SZ + j + 32, (b_i - 1)*nz + b_k) = &
+        tile(j + 32, i + 32)
+    end if
 
   end subroutine reorder_z2y
 
@@ -282,32 +288,37 @@ contains
     real(dp), shared :: tile(SZ, SZ)
     integer :: i, j, b_i, b_j, b_k
 
+    i = threadIdx%x; j = threadIdx%y; 
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    j = threadIdx%y
-    do while (j <= SZ)
-      i = threadIdx%x;
-      do while (i <= SZ)
-        tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_k) + nz*(b_i - 1))
-        i = i + blockDim%x
-      end do
-      j = j + blockDim%y
-    end do
+    if (SZ == 32) then
+      tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_k) + nz*(b_i - 1))
+    else if (SZ == 64) then
+      tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_k) + nz*(b_i - 1))
+      tile(i + 32, j) = u_y(i + 32, (b_j - 1)*SZ + j, (b_k) + nz*(b_i - 1))
+      tile(i, j + 32) = u_y(i, (b_j - 1)*SZ + j + 32, (b_k) + nz*(b_i - 1))
+      tile(i + 32, j + 32) = &
+        u_y(i + 32, (b_j - 1)*SZ + j + 32, (b_k) + nz*(b_i - 1))
+    end if
 
     call syncthreads()
 
     ! copy into output array from shared
-    j = threadIdx%y
-    do while (j <= SZ)
-      i = threadIdx%x;
-      do while (i <= SZ)
-        u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) = &
-          u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) + tile(j, i)
-        i = i + blockDim%x
-      end do
-      j = j + blockDim%y
-    end do
+    if (SZ == 32) then
+      u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) = &
+        u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) + tile(j, i)
+    else if (SZ == 64) then
+      u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) = &
+        u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) + tile(j, i)
+      u_x(i + 32, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) = &
+        u_x(i + 32, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) + tile(j, i + 32)
+      u_x(i, (b_i - 1)*SZ + j + 32, (b_j - 1)*nz + (b_k)) = &
+        u_x(i, (b_i - 1)*SZ + j + 32, (b_j - 1)*nz + (b_k)) + tile(j + 32, i)
+      u_x(i + 32, (b_i - 1)*SZ + j + 32, (b_j - 1)*nz + (b_k)) = &
+        u_x(i + 32, (b_i - 1)*SZ + j + 32, (b_j - 1)*nz + (b_k)) + &
+        tile(j + 32, i + 32)
+    end if
 
   end subroutine sum_yintox
 
