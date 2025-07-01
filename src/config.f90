@@ -134,7 +134,8 @@ contains
                      interpl_scheme = 'classic', stagder_scheme = 'compact6'
 
     namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
-      time_intg, der1st_scheme, der2nd_scheme, interpl_scheme, stagder_scheme
+      time_intg, der1st_scheme, der2nd_scheme, interpl_scheme, &
+      stagder_scheme, iibm
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading solver config failed! &
