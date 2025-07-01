@@ -19,19 +19,27 @@ contains
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    do j = threadIdx%y, SZ, blockDim%y
-      do i = threadIdx%x, SZ, blockDim%x
+    j = threadIdx%y
+    do while (j <= SZ)
+      i = threadIdx%x;
+      do while (i <= SZ)
         tile(i, j) = u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k)
+        i = i + blockDim%x
       end do
+      j = j + blockDim%y
     end do
 
     call syncthreads()
 
     ! copy into output array from shared
-    do j = threadIdx%y, SZ, blockDim%y
-      do i = threadIdx%x, SZ, blockDim%x
+    j = threadIdx%y
+    do while (j <= SZ)
+      i = threadIdx%x;
+      do while (i <= SZ)
         u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz) = tile(j, i)
+        i = i + blockDim%x
       end do
+      j = j + blockDim%y
     end do
 
   end subroutine reorder_c2x
@@ -49,19 +57,27 @@ contains
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    do j = threadIdx%y, SZ, blockDim%y
-      do i = threadIdx%x, SZ, blockDim%x
+    j = threadIdx%y
+    do while (j <= SZ)
+      i = threadIdx%x;
+      do while (i <= SZ)
         tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz)
+        i = i + blockDim%x
       end do
+      j = j + blockDim%y
     end do
 
     call syncthreads()
 
     ! copy into output array from shared
-    do j = threadIdx%y, SZ, blockDim%y
-      do i = threadIdx%x, SZ, blockDim%x
+    j = threadIdx%y
+    do while (j <= SZ)
+      i = threadIdx%x;
+      do while (i <= SZ)
         u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k) = tile(j, i)
+        i = i + blockDim%x
       end do
+      j = j + blockDim%y
     end do
 
   end subroutine reorder_x2c
@@ -79,19 +95,27 @@ contains
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    do j = threadIdx%y, SZ, blockDim%y
-      do i = threadIdx%x, SZ, blockDim%x
+    j = threadIdx%y
+    do while (j <= SZ)
+      i = threadIdx%x;
+      do while (i <= SZ)
         tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_j + (b_k - 1)*nz)
+        i = i + blockDim%x
       end do
+      j = j + blockDim%y
     end do
 
     call syncthreads()
 
     ! copy into output array from shared
-    do j = threadIdx%y, SZ, blockDim%y
-      do i = threadIdx%x, SZ, blockDim%x
+    j = threadIdx%y
+    do while (j <= SZ)
+      i = threadIdx%x;
+      do while (i <= SZ)
         u_y(i, j + (b_k - 1)*SZ, b_j + (b_i - 1)*nz) = tile(j, i)
+        i = i + blockDim%x
       end do
+      j = j + blockDim%y
     end do
 
   end subroutine reorder_x2y
@@ -129,19 +153,27 @@ contains
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    do j = threadIdx%y, SZ, blockDim%y
-      do i = threadIdx%x, SZ, blockDim%x
+    j = threadIdx%y
+    do while (j <= SZ)
+      i = threadIdx%x;
+      do while (i <= SZ)
         tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
+        i = i + blockDim%x
       end do
+      j = j + blockDim%y
     end do
 
     call syncthreads()
 
     ! copy into output array from shared
-    do j = threadIdx%y, SZ, blockDim%y
-      do i = threadIdx%x, SZ, blockDim%x
+    j = threadIdx%y
+    do while (j <= SZ)
+      i = threadIdx%x;
+      do while (i <= SZ)
         u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + b_k) = tile(j, i)
+        i = i + blockDim%x
       end do
+      j = j + blockDim%y
     end do
 
   end subroutine reorder_y2x
@@ -159,19 +191,27 @@ contains
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    do j = threadIdx%y, SZ, blockDim%y
-      do i = threadIdx%x, SZ, blockDim%x
+    j = threadIdx%y
+    do while (j <= SZ)
+      i = threadIdx%x;
+      do while (i <= SZ)
         tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
+        i = i + blockDim%x
       end do
+      j = j + blockDim%y
     end do
 
     call syncthreads()
 
     ! copy into output array from shared
-    do j = threadIdx%y, SZ, blockDim%y
-      do i = threadIdx%x, SZ, blockDim%x
+    j = threadIdx%y
+    do while (j <= SZ)
+      i = threadIdx%x;
+      do while (i <= SZ)
         u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx) = tile(j, i)
+        i = i + blockDim%x
       end do
+      j = j + blockDim%y
     end do
 
   end subroutine reorder_y2z
@@ -207,19 +247,27 @@ contains
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    do j = threadIdx%y, SZ, blockDim%y
-      do i = threadIdx%x, SZ, blockDim%x
+    j = threadIdx%y
+    do while (j <= SZ)
+      i = threadIdx%x;
+      do while (i <= SZ)
         tile(i, j) = u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx)
+        i = i + blockDim%x
       end do
+      j = j + blockDim%y
     end do
 
     call syncthreads()
 
     ! copy into output array from shared
-    do j = threadIdx%y, SZ, blockDim%y
-      do i = threadIdx%x, SZ, blockDim%x
+    j = threadIdx%y
+    do while (j <= SZ)
+      i = threadIdx%x;
+      do while (i <= SZ)
         u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k) = tile(j, i)
+        i = i + blockDim%x
       end do
+      j = j + blockDim%y
     end do
 
   end subroutine reorder_z2y
@@ -237,20 +285,28 @@ contains
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    do j = threadIdx%y, SZ, blockDim%y
-      do i = threadIdx%x, SZ, blockDim%x
+    j = threadIdx%y
+    do while (j <= SZ)
+      i = threadIdx%x;
+      do while (i <= SZ)
         tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_k) + nz*(b_i - 1))
+        i = i + blockDim%x
       end do
+      j = j + blockDim%y
     end do
 
     call syncthreads()
 
     ! copy into output array from shared
-    do j = threadIdx%y, SZ, blockDim%y
-      do i = threadIdx%x, SZ, blockDim%x
+    j = threadIdx%y
+    do while (j <= SZ)
+      i = threadIdx%x;
+      do while (i <= SZ)
         u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) = &
           u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) + tile(j, i)
+        i = i + blockDim%x
       end do
+      j = j + blockDim%y
     end do
 
   end subroutine sum_yintox
