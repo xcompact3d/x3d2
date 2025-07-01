@@ -161,9 +161,8 @@ contains
     end select
 
     ! Initialize the IBM module
-    solver%ibm_on = solver_cfg%iibm /= 0
     if (solver%ibm_on) &
-      solver%ibm = ibm_t(backend, mesh, host_allocator, solver_cfg%iibm)
+      solver%ibm = ibm_t(backend, mesh, host_allocator)
 
   end function init
 
