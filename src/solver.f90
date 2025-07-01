@@ -161,6 +161,7 @@ contains
     end select
 
     ! Initialize the IBM module
+    solver%ibm_on = solver_cfg%ibm_on
     if (solver%ibm_on) &
       solver%ibm = ibm_t(backend, mesh, host_allocator)
 
