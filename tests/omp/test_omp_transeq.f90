@@ -71,7 +71,6 @@ program test_omp_transeq
   n_groups = mesh%get_n_groups(DIR_X)
 
   nu = 1._dp
-  omp_backend%nu = nu
 
   u => allocator%get_block(DIR_X, VERT)
   v => allocator%get_block(DIR_X, VERT)
@@ -97,7 +96,7 @@ program test_omp_transeq
                        'compact6', 'compact6', 'classic', 'compact6')
 
   call cpu_time(tstart)
-  call transeq_x_omp(omp_backend, du, dv, dw, u, v, w, xdirps)
+  call transeq_x_omp(omp_backend, du, dv, dw, u, v, w, nu, xdirps)
   call cpu_time(tend)
 
   if (nrank == 0) print *, 'Total time', tend - tstart
