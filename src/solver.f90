@@ -384,6 +384,10 @@ contains
     class(field_t), intent(inout) :: pressure
     class(field_t), intent(in) :: div_u
 
+    ! set the pressure field to 0 so that we can do performance tests easily
+    ! this will be removed once the CG solver is implemented of course
+    call pressure%fill(0._dp)
+
   end subroutine poisson_cg
 
   subroutine pressure_correction(self, u, v, w)
