@@ -245,17 +245,17 @@ contains
 
     call transeq_halo_exchange(self, u_dev, v_dev, w_dev, dirps%dir)
 
-    call transeq_dist_component(self, du_dev, u_dev, u_dev, &
+    call transeq_dist_component(self, du_dev, u_dev, u_dev, self%nu, &
                                 self%u_recv_s_dev, self%u_recv_e_dev, &
                                 self%u_recv_s_dev, self%u_recv_e_dev, &
                                 der1st, der1st_sym, der2nd, dirps%dir, &
                                 blocks, threads)
-    call transeq_dist_component(self, dv_dev, v_dev, u_dev, &
+    call transeq_dist_component(self, dv_dev, v_dev, u_dev, self%nu, &
                                 self%v_recv_s_dev, self%v_recv_e_dev, &
                                 self%u_recv_s_dev, self%u_recv_e_dev, &
                                 der1st_sym, der1st, der2nd_sym, dirps%dir, &
                                 blocks, threads)
-    call transeq_dist_component(self, dw_dev, w_dev, u_dev, &
+    call transeq_dist_component(self, dw_dev, w_dev, u_dev, self%nu, &
                                 self%w_recv_s_dev, self%w_recv_e_dev, &
                                 self%u_recv_s_dev, self%u_recv_e_dev, &
                                 der1st_sym, der1st, der2nd_sym, dirps%dir, &
@@ -299,7 +299,7 @@ contains
 
   end subroutine transeq_halo_exchange
 
-  subroutine transeq_dist_component(self, rhs_du_dev, u_dev, conv_dev, &
+  subroutine transeq_dist_component(self, rhs_du_dev, u_dev, conv_dev, nu, &
                                     u_recv_s_dev, u_recv_e_dev, &
                                     conv_recv_s_dev, conv_recv_e_dev, &
                                     tdsops_du, tdsops_dud, tdsops_d2u, &
@@ -311,6 +311,7 @@ contains
     !> The result field, it is also used as temporary storage
     real(dp), device, dimension(:, :, :), intent(out) :: rhs_du_dev
     real(dp), device, dimension(:, :, :), intent(in) :: u_dev, conv_dev
+    real(dp), intent(in) :: nu
     real(dp), device, dimension(:, :, :), intent(in) :: &
       u_recv_s_dev, u_recv_e_dev, &
       conv_recv_s_dev, conv_recv_e_dev
@@ -340,7 +341,7 @@ contains
       self%dud_recv_s_dev, self%dud_recv_e_dev, &
       self%d2u_send_s_dev, self%d2u_send_e_dev, &
       self%d2u_recv_s_dev, self%d2u_recv_e_dev, &
-      tdsops_du, tdsops_d2u, self%nu, &
+      tdsops_du, tdsops_d2u, nu, &
       self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), &
       self%mesh%par%pnext(dir), blocks, threads &
       )

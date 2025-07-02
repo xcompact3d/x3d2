@@ -187,17 +187,17 @@ contains
 
     call transeq_halo_exchange(self, u, v, w, dirps%dir)
 
-    call transeq_dist_component(self, du, u, u, &
+    call transeq_dist_component(self, du, u, u, self%nu, &
                                 self%u_recv_s, self%u_recv_e, &
                                 self%u_recv_s, self%u_recv_e, &
                                 dirps%der1st, dirps%der1st_sym, &
                                 dirps%der2nd, dirps%dir)
-    call transeq_dist_component(self, dv, v, u, &
+    call transeq_dist_component(self, dv, v, u, self%nu, &
                                 self%v_recv_s, self%v_recv_e, &
                                 self%u_recv_s, self%u_recv_e, &
                                 dirps%der1st_sym, dirps%der1st, &
                                 dirps%der2nd_sym, dirps%dir)
-    call transeq_dist_component(self, dw, w, u, &
+    call transeq_dist_component(self, dw, w, u, self%nu, &
                                 self%w_recv_s, self%w_recv_e, &
                                 self%u_recv_s, self%u_recv_e, &
                                 dirps%der1st_sym, dirps%der1st, &
@@ -242,7 +242,7 @@ contains
 
   end subroutine transeq_halo_exchange
 
-  subroutine transeq_dist_component(self, rhs_du, u, conv, &
+  subroutine transeq_dist_component(self, rhs_du, u, conv, nu, &
                                     u_recv_s, u_recv_e, &
                                     conv_recv_s, conv_recv_e, &
                                     tdsops_du, tdsops_dud, tdsops_d2u, dir)
@@ -253,6 +253,7 @@ contains
     !> The result field, it is also used as temporary storage
     class(field_t), intent(inout) :: rhs_du
     class(field_t), intent(in) :: u, conv
+    real(dp), intent(in) :: nu
     real(dp), dimension(:, :, :), intent(in) :: u_recv_s, u_recv_e, &
                                                 conv_recv_s, conv_recv_e
     class(tdsops_t), intent(in) :: tdsops_du
@@ -271,7 +272,7 @@ contains
       self%d2u_send_s, self%d2u_send_e, self%d2u_recv_s, self%d2u_recv_e, &
       u%data, u_recv_s, u_recv_e, &
       conv%data, conv_recv_s, conv_recv_e, &
-      tdsops_du, tdsops_dud, tdsops_d2u, self%nu, &
+      tdsops_du, tdsops_dud, tdsops_d2u, nu, &
       self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), &
       self%mesh%par%pnext(dir), self%mesh%get_n_groups(dir))
 
