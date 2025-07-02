@@ -139,41 +139,44 @@ contains
 
   end subroutine alloc_omp_tdsops
 
-  subroutine transeq_x_omp(self, du, dv, dw, u, v, w, dirps)
+  subroutine transeq_x_omp(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
 
-    call self%transeq_omp_dist(du, dv, dw, u, v, w, dirps)
+    call self%transeq_omp_dist(du, dv, dw, u, v, w, nu, dirps)
 
   end subroutine transeq_x_omp
 
-  subroutine transeq_y_omp(self, du, dv, dw, u, v, w, dirps)
+  subroutine transeq_y_omp(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
 
     ! u, v, w is reordered so that we pass v, u, w
-    call self%transeq_omp_dist(dv, du, dw, v, u, w, dirps)
+    call self%transeq_omp_dist(dv, du, dw, v, u, w, nu, dirps)
 
   end subroutine transeq_y_omp
 
-  subroutine transeq_z_omp(self, du, dv, dw, u, v, w, dirps)
+  subroutine transeq_z_omp(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
 
     ! u, v, w is reordered so that we pass w, u, v
-    call self%transeq_omp_dist(dw, du, dv, w, u, v, dirps)
+    call self%transeq_omp_dist(dw, du, dv, w, u, v, nu, dirps)
 
   end subroutine transeq_z_omp
 
@@ -183,21 +186,22 @@ contains
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
 
     call transeq_halo_exchange(self, u, v, w, dirps%dir)
 
-    call transeq_dist_component(self, du, u, u, self%nu, &
+    call transeq_dist_component(self, du, u, u, nu, &
                                 self%u_recv_s, self%u_recv_e, &
                                 self%u_recv_s, self%u_recv_e, &
                                 dirps%der1st, dirps%der1st_sym, &
                                 dirps%der2nd, dirps%dir)
-    call transeq_dist_component(self, dv, v, u, self%nu, &
+    call transeq_dist_component(self, dv, v, u, nu, &
                                 self%v_recv_s, self%v_recv_e, &
                                 self%u_recv_s, self%u_recv_e, &
                                 dirps%der1st_sym, dirps%der1st, &
                                 dirps%der2nd_sym, dirps%dir)
-    call transeq_dist_component(self, dw, w, u, self%nu, &
+    call transeq_dist_component(self, dw, w, u, nu, &
                                 self%w_recv_s, self%w_recv_e, &
                                 self%u_recv_s, self%u_recv_e, &
                                 dirps%der1st_sym, dirps%der1st, &

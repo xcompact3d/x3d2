@@ -166,54 +166,58 @@ contains
 
   end subroutine alloc_cuda_tdsops
 
-  subroutine transeq_x_cuda(self, du, dv, dw, u, v, w, dirps)
+  subroutine transeq_x_cuda(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
 
-    call self%transeq_cuda_dist(du, dv, dw, u, v, w, dirps, &
+    call self%transeq_cuda_dist(du, dv, dw, u, v, w, nu, dirps, &
                                 self%xblocks, self%xthreads)
 
   end subroutine transeq_x_cuda
 
-  subroutine transeq_y_cuda(self, du, dv, dw, u, v, w, dirps)
+  subroutine transeq_y_cuda(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
 
     ! u, v, w is reordered so that we pass v, u, w
-    call self%transeq_cuda_dist(dv, du, dw, v, u, w, dirps, &
+    call self%transeq_cuda_dist(dv, du, dw, v, u, w, nu, dirps, &
                                 self%yblocks, self%ythreads)
 
   end subroutine transeq_y_cuda
 
-  subroutine transeq_z_cuda(self, du, dv, dw, u, v, w, dirps)
+  subroutine transeq_z_cuda(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
 
     ! u, v, w is reordered so that we pass w, u, v
-    call self%transeq_cuda_dist(dw, du, dv, w, u, v, dirps, &
+    call self%transeq_cuda_dist(dw, du, dv, w, u, v, nu, dirps, &
                                 self%zblocks, self%zthreads)
 
   end subroutine transeq_z_cuda
 
-  subroutine transeq_cuda_dist(self, du, dv, dw, u, v, w, dirps, &
+  subroutine transeq_cuda_dist(self, du, dv, dw, u, v, w, nu, dirps, &
                                blocks, threads)
     implicit none
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
     type(dim3), intent(in) :: blocks, threads
 
@@ -245,17 +249,17 @@ contains
 
     call transeq_halo_exchange(self, u_dev, v_dev, w_dev, dirps%dir)
 
-    call transeq_dist_component(self, du_dev, u_dev, u_dev, self%nu, &
+    call transeq_dist_component(self, du_dev, u_dev, u_dev, nu, &
                                 self%u_recv_s_dev, self%u_recv_e_dev, &
                                 self%u_recv_s_dev, self%u_recv_e_dev, &
                                 der1st, der1st_sym, der2nd, dirps%dir, &
                                 blocks, threads)
-    call transeq_dist_component(self, dv_dev, v_dev, u_dev, self%nu, &
+    call transeq_dist_component(self, dv_dev, v_dev, u_dev, nu, &
                                 self%v_recv_s_dev, self%v_recv_e_dev, &
                                 self%u_recv_s_dev, self%u_recv_e_dev, &
                                 der1st_sym, der1st, der2nd_sym, dirps%dir, &
                                 blocks, threads)
-    call transeq_dist_component(self, dw_dev, w_dev, u_dev, self%nu, &
+    call transeq_dist_component(self, dw_dev, w_dev, u_dev, nu, &
                                 self%w_recv_s_dev, self%w_recv_e_dev, &
                                 self%u_recv_s_dev, self%u_recv_e_dev, &
                                 der1st_sym, der1st, der2nd_sym, dirps%dir, &
