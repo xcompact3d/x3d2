@@ -9,7 +9,7 @@ module m_solver
                       RDR_Z2C, RDR_C2Z, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL
   use m_config, only: solver_config_t
-  use m_field, only: field_t
+  use m_field, only: field_t, flist_t
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t
   use m_time_integrator, only: time_intg_t
@@ -215,7 +215,7 @@ contains
 
   end subroutine
 
-  subroutine transeq(self, du, dv, dw, u, v, w)
+  subroutine transeq(self, rhs, variables)
     !! Skew-symmetric form of convection-diffusion terms in the
     !! incompressible Navier-Stokes momemtum equations, excluding
     !! pressure terms.
@@ -223,11 +223,19 @@ contains
     implicit none
 
     class(solver_t) :: self
-    class(field_t), intent(inout) :: du, dv, dw
-    class(field_t), intent(in) :: u, v, w
+    type(flist_t), intent(inout) :: rhs(:)
+    type(flist_t), intent(in) :: variables(:)
 
     class(field_t), pointer :: u_y, v_y, w_y, u_z, v_z, w_z, &
-      du_y, dv_y, dw_y, du_z, dv_z, dw_z
+      du_y, dv_y, dw_y, du_z, dv_z, dw_z, &
+      du, dv, dw, u, v, w
+
+    du => rhs(1)%ptr
+    dv => rhs(2)%ptr
+    dw => rhs(3)%ptr
+    u => variables(1)%ptr
+    v => variables(2)%ptr
+    w => variables(3)%ptr
 
     ! -1/2(nabla u curl u + u nabla u) + nu nablasq u
 
