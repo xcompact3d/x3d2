@@ -247,8 +247,7 @@ contains
         deriv(2)%ptr => self%solver%backend%allocator%get_block(DIR_X)
         deriv(3)%ptr => self%solver%backend%allocator%get_block(DIR_X)
 
-        call self%solver%transeq(deriv(1)%ptr, deriv(2)%ptr, deriv(3)%ptr, &
-                                 self%solver%u, self%solver%v, self%solver%w)
+        call self%solver%transeq(deriv, curr)
 
         ! models that introduce source terms handled here
         call self%forcings(deriv(1)%ptr, deriv(2)%ptr, deriv(3)%ptr, iter)
