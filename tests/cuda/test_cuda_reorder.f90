@@ -84,9 +84,9 @@ program test_cuda_reorder
   norm_u = norm2(u_o - u_temp)
   if (norm_u > tol) then
     allpass = .false.
-    write (stderr, '(a)') 'Check reorder y2z and y2z... failed'
+    write (stderr, '(a)') 'Check reorder y2z and z2y... failed'
   else
-    write (stderr, '(a)') 'Check reorder y2z and y2z... passed'
+    write (stderr, '(a)') 'Check reorder y2z and z2y... passed'
   end if
 
   ! reorder initial random field into z orientation
