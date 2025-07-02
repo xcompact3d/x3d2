@@ -47,7 +47,7 @@ contains
     class(cuda_field_t) :: self
     real(dp), intent(in) :: c
 
-    self%p_data_d(:) = c
+    self%p_data_d = c
 
   end subroutine fill_cuda
 
