@@ -212,7 +212,7 @@ contains
     type(flist_t), allocatable :: deriv(:)
 
     real(dp) :: t
-    integer :: iter, sub_iter, start_iter
+    integer :: i, iter, sub_iter, start_iter
 
     if (self%checkpoint_mgr%is_restart()) then
       t = self%solver%current_iter*self%solver%dt
@@ -237,15 +237,18 @@ contains
     curr(1)%ptr => self%solver%u
     curr(2)%ptr => self%solver%v
     curr(3)%ptr => self%solver%w
+    do i = 1, self%solver%nspecies
+      curr(3 + i)%ptr => self%solver%species(i)%ptr
+    end do
 
     do iter = start_iter, self%solver%n_iters
       do sub_iter = 1, self%solver%time_integrator%nstage
         ! first apply case-specific BCs
         call self%boundary_conditions()
 
-        deriv(1)%ptr => self%solver%backend%allocator%get_block(DIR_X)
-        deriv(2)%ptr => self%solver%backend%allocator%get_block(DIR_X)
-        deriv(3)%ptr => self%solver%backend%allocator%get_block(DIR_X)
+        do i = 1, self%solver%nvars
+          deriv(i)%ptr => self%solver%backend%allocator%get_block(DIR_X)
+        end do
 
         call self%solver%transeq(deriv, curr)
 
@@ -255,9 +258,9 @@ contains
         ! time integration
         call self%solver%time_integrator%step(curr, deriv, self%solver%dt)
 
-        call self%solver%backend%allocator%release_block(deriv(1)%ptr)
-        call self%solver%backend%allocator%release_block(deriv(2)%ptr)
-        call self%solver%backend%allocator%release_block(deriv(3)%ptr)
+        do i = 1, self%solver%nvars
+          call self%solver%backend%allocator%release_block(deriv(i)%ptr)
+        end do
 
         call self%pre_correction(self%solver%u, self%solver%v, self%solver%w)
 

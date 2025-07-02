@@ -6,6 +6,8 @@ module m_config
 
   implicit none
 
+  integer, parameter :: n_species_max = 99
+
   type, abstract :: base_config_t
     !! All config types have a method read to initialise their data
   contains
@@ -25,7 +27,8 @@ module m_config
 
   type, extends(base_config_t) :: solver_config_t
     real(dp) :: Re, dt
-    integer :: n_iters, n_output
+    real(dp), dimension(:), allocatable :: pr_species
+    integer :: n_iters, n_output, n_species
     character(3) :: poisson_solver_type, time_intg
     character(30) :: der1st_scheme, der2nd_scheme, &
                      interpl_scheme, stagder_scheme
@@ -127,13 +130,15 @@ contains
     integer :: unit
 
     real(dp) :: Re, dt
-    integer :: n_iters, n_output
+    real(dp), dimension(n_species_max) :: pr_species = 1._dp
+    integer :: n_iters, n_output, n_species = 0
     character(3) :: time_intg
     character(3) :: poisson_solver_type = 'FFT'
     character(30) :: der1st_scheme = 'compact6', der2nd_scheme = 'compact6', &
                      interpl_scheme = 'classic', stagder_scheme = 'compact6'
 
     namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
+      n_species, pr_species, &
       time_intg, der1st_scheme, der2nd_scheme, interpl_scheme, stagder_scheme
 
     if (present(nml_file) .and. present(nml_string)) then
@@ -154,6 +159,8 @@ contains
     self%dt = dt
     self%n_iters = n_iters
     self%n_output = n_output
+    self%n_species = n_species
+    if (n_species > 0) self%pr_species = pr_species(1:n_species)
     self%poisson_solver_type = poisson_solver_type
     self%time_intg = time_intg
     self%der1st_scheme = der1st_scheme
