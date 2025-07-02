@@ -5,12 +5,12 @@ module m_ibm
 !!
 !! When iibm = 1, the basic IBM capability is used.
 !! It only requires ep1, a 3D field, as input.
-!! This field should be one (zero) in the fluid (solid) 
+!! This field should be one (zero) in the fluid (solid)
 !! domain.
   use iso_fortran_env, only: stderr => error_unit
   use mpi
 
-  use m_adios2_io, only : adios2_reader_t, adios2_file_t, adios2_mode_read
+  use m_adios2_io, only: adios2_reader_t, adios2_file_t, adios2_mode_read
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, i8, pi, DIR_X, DIR_C, VERT

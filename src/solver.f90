@@ -10,7 +10,7 @@ module m_solver
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL
   use m_config, only: solver_config_t
   use m_field, only: field_t
-  use m_ibm, only : ibm_t
+  use m_ibm, only: ibm_t
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t
   use m_time_integrator, only: time_intg_t
