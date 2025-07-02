@@ -274,19 +274,19 @@ contains
                          self%mesh%par%pnext(dirps%dir))
 
     if (dirps%dir == DIR_X) then
-      call transeq_dist_component(self, dspev_dev, spec_dev, u_dev, nu, &
+      call transeq_dist_component(self, dspec_dev, spec_dev, u_dev, nu, &
                                   self%spec_recv_s_dev, self%spec_recv_e_dev, &
                                   self%u_recv_s_dev, self%u_recv_e_dev, &
                                   der1st, der1st_sym, der2nd, dirps%dir, &
                                   self%xblocks, self%xthreads)
     else if (dirps%dir == DIR_Y) then
-      call transeq_dist_component(self, dspev_dev, spec_dev, v_dev, nu, &
+      call transeq_dist_component(self, dspec_dev, spec_dev, v_dev, nu, &
                                   self%spec_recv_s_dev, self%spec_recv_e_dev, &
                                   self%v_recv_s_dev, self%v_recv_e_dev, &
                                   der1st, der1st_sym, der2nd, dirps%dir, &
                                   self%yblocks, self%ythreads)
     else
-      call transeq_dist_component(self, dspev_dev, spec_dev, w_dev, nu, &
+      call transeq_dist_component(self, dspec_dev, spec_dev, w_dev, nu, &
                                   self%spec_recv_s_dev, self%spec_recv_e_dev, &
                                   self%w_recv_s_dev, self%w_recv_e_dev, &
                                   der1st, der1st_sym, der2nd, dirps%dir, &
