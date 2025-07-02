@@ -131,7 +131,7 @@ contains
       ! Get blocks for the species
       allocate (solver%species(solver%nspecies))
       do i = 1, solver%nspecies
-       solver%species(i)%ptr => solver%backend%allocator%get_block(DIR_X)
+        solver%species(i)%ptr => solver%backend%allocator%get_block(DIR_X)
       end do
     end if
 
