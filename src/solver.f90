@@ -46,12 +46,15 @@ module m_solver
       !! for later use.
 
     real(dp) :: dt, nu
+    real(dp), dimension(:), allocatable :: nu_species
     integer :: n_iters, n_output
     integer :: current_iter = 0
     integer :: ngrid
     integer :: nvars = 3
+    integer :: nspecies = 0
 
     class(field_t), pointer :: u, v, w
+    type(flist_t), dimension(:), pointer :: species => null()
 
     class(base_backend_t), pointer :: backend
     type(mesh_t), pointer :: mesh
@@ -62,6 +65,7 @@ module m_solver
     procedure(poisson_solver), pointer :: poisson => null()
   contains
     procedure :: transeq
+    procedure :: transeq_species
     procedure :: pressure_correction
     procedure :: divergence_v2p
     procedure :: gradient_p2v
@@ -95,6 +99,7 @@ contains
     type(solver_t) :: solver
 
     type(solver_config_t) :: solver_cfg
+    integer :: i
 
     solver%backend => backend
     solver%mesh => mesh
@@ -112,6 +117,23 @@ contains
     solver%w => solver%backend%allocator%get_block(DIR_X)
 
     call solver_cfg%read(nml_file=get_argument(1))
+
+    ! Add transported species
+    solver%nspecies = solver_cfg%n_species
+    if (solver%nspecies > 0) then
+      ! Increase the number of variables
+      solver%nvars = solver%nvars + solver%nspecies
+
+      ! Init the diffusivity coefficients for species
+      allocate (solver%nu_species(solver%nspecies))
+      solver%nu_species = 1._dp/solver_cfg%Re/solver_cfg%pr_species
+
+      ! Get blocks for the species
+      allocate (solver%species(solver%nspecies))
+      do i = 1, solver%nspecies
+       solver%species(i)%ptr => solver%backend%allocator%get_block(DIR_X, VERT)
+      end do
+    end if
 
     solver%time_integrator = time_intg_t(solver%backend, &
                                          solver%backend%allocator, &
@@ -306,7 +328,120 @@ contains
     call self%backend%allocator%release_block(dv_z)
     call self%backend%allocator%release_block(dw_z)
 
+    ! Convection-diffusion for species
+    if (self%nspecies > 0) then
+      call self%transeq_species(rhs(4:), variables)
+    end if
+
   end subroutine transeq
+
+  subroutine transeq_species(self, rhs, variables)
+    !! Skew-symmetric form of convection-diffusion terms in the
+    !! species equation.
+    !! Inputs from velocity grid and outputs to velocity grid.
+    implicit none
+
+    class(solver_t) :: self
+    type(flist_t), intent(inout) :: rhs(:)
+    type(flist_t), intent(in) :: variables(:)
+
+    integer :: i
+    class(field_t), pointer :: u, v, w, &
+      u_y, v_y, w_y, spec_y, dspec_y, &
+      u_z, v_z, w_z, spec_z, dspec_z
+
+    ! Map the velocity vector
+    u => variables(1)%ptr
+    v => variables(2)%ptr
+    w => variables(3)%ptr
+
+    ! FIXME later
+    ! Minor optimization
+    ! species could start with z convection-diffusion
+    ! velocity components are ready to use in the z dir.
+
+    ! derivatives in x
+    do i = 1, size(rhs)
+      call self%backend%transeq_species(rhs(i)%ptr, u, v, w, &
+                                        variables(3 + i)%ptr, &
+                                        self%nu_species(i), &
+                                        self%xdirps, &
+                                        i <= 1)
+    end do
+
+    ! Request blocks
+    u_y => self%backend%allocator%get_block(DIR_Y)
+    v_y => self%backend%allocator%get_block(DIR_Y)
+    w_y => self%backend%allocator%get_block(DIR_Y)
+    spec_y => self%backend%allocator%get_block(DIR_Y)
+    dspec_y => self%backend%allocator%get_block(DIR_Y)
+
+    ! reorder velocity
+    call self%backend%reorder(u_y, u, RDR_X2Y)
+    call self%backend%reorder(v_y, v, RDR_X2Y)
+    call self%backend%reorder(w_y, w, RDR_X2Y)
+
+    do i = 1, size(rhs)
+
+      ! reorder spec in y
+      call self%backend%reorder(spec_y, variables(3 + i)%ptr, RDR_X2Y)
+
+      ! y-derivatives
+      call self%backend%transeq_species(dspec_y, u_y, v_y, w_y, &
+                                        spec_y, &
+                                        self%nu_species(i), &
+                                        self%ydirps, &
+                                        i <= 1)
+
+      ! sum_yintox
+      call self%backend%sum_yintox(rhs(i)%ptr, dspec_y)
+
+    end do
+
+    ! Release blocks
+    call self%backend%allocator%release_block(u_y)
+    call self%backend%allocator%release_block(v_y)
+    call self%backend%allocator%release_block(w_y)
+    call self%backend%allocator%release_block(spec_y)
+    call self%backend%allocator%release_block(dspec_y)
+
+    ! Request blocks
+    u_z => self%backend%allocator%get_block(DIR_Z)
+    v_z => self%backend%allocator%get_block(DIR_Z)
+    w_z => self%backend%allocator%get_block(DIR_Z)
+    spec_z => self%backend%allocator%get_block(DIR_Z)
+    dspec_z => self%backend%allocator%get_block(DIR_Z)
+
+    ! reorder velocity
+    call self%backend%reorder(u_z, u, RDR_X2Z)
+    call self%backend%reorder(v_z, v, RDR_X2Z)
+    call self%backend%reorder(w_z, w, RDR_X2Z)
+
+    do i = 1, size(rhs)
+
+      ! reorder spec in z
+      call self%backend%reorder(spec_z, variables(3 + i)%ptr, RDR_X2Z)
+
+      ! z-derivatives
+      call self%backend%transeq_species(dspec_z, u_z, v_z, w_z, &
+                                        spec_z, &
+                                        self%nu_species(i), &
+                                        self%zdirps, &
+                                        i <= 1)
+
+      ! sum_zintox
+      call self%backend%sum_zintox(rhs(i)%ptr, dspec_z)
+
+    end do
+
+    ! Release blocks
+    call self%backend%allocator%release_block(u_z)
+    call self%backend%allocator%release_block(v_z)
+    call self%backend%allocator%release_block(w_z)
+    call self%backend%allocator%release_block(spec_z)
+    call self%backend%allocator%release_block(dspec_z)
+
+  end subroutine transeq_species
 
   subroutine divergence_v2p(self, div_u, u, v, w)
     !! Wrapper for divergence_v2p

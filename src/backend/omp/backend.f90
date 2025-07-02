@@ -5,7 +5,7 @@ module m_omp_backend
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, get_dirs_from_rdr, move_data_loc, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC, &
-                      X_FACE, Y_FACE, Z_FACE
+                      X_FACE, Y_FACE, Z_FACE, VERT
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_ordering, only: get_index_reordering
@@ -26,6 +26,7 @@ module m_omp_backend
       u_recv_s, u_recv_e, u_send_s, u_send_e, &
       v_recv_s, v_recv_e, v_send_s, v_send_e, &
       w_recv_s, w_recv_e, w_send_s, w_send_e, &
+      spec_recv_s, spec_recv_e, spec_send_s, spec_send_e, &
       du_send_s, du_send_e, du_recv_s, du_recv_e, &
       dud_send_s, dud_send_e, dud_recv_s, dud_recv_e, &
       d2u_send_s, d2u_send_e, d2u_recv_s, d2u_recv_e
@@ -34,6 +35,7 @@ module m_omp_backend
     procedure :: transeq_x => transeq_x_omp
     procedure :: transeq_y => transeq_y_omp
     procedure :: transeq_z => transeq_z_omp
+    procedure :: transeq_species => transeq_species_omp
     procedure :: tds_solve => tds_solve_omp
     procedure :: reorder => reorder_omp
     procedure :: sum_yintox => sum_yintox_omp
@@ -94,6 +96,10 @@ contains
     allocate (backend%w_send_e(SZ, n_halo, n_groups))
     allocate (backend%w_recv_s(SZ, n_halo, n_groups))
     allocate (backend%w_recv_e(SZ, n_halo, n_groups))
+    allocate (backend%spec_send_s(SZ, n_halo, n_groups))
+    allocate (backend%spec_send_e(SZ, n_halo, n_groups))
+    allocate (backend%spec_recv_s(SZ, n_halo, n_groups))
+    allocate (backend%spec_recv_e(SZ, n_halo, n_groups))
 
     allocate (backend%du_send_s(SZ, 1, n_groups))
     allocate (backend%du_send_e(SZ, 1, n_groups))
@@ -180,7 +186,63 @@ contains
 
   end subroutine transeq_z_omp
 
-  subroutine transeq_omp_dist(self, du, dv, dw, u, v, w, dirps)
+  subroutine transeq_species_omp(self, dspec, u, v, w, spec, nu, dirps, sync)
+    !! Compute the convection and diffusion for the given field
+    !! in the given direction.
+    !! Halo exchange for the given field is necessary
+    !! When sync is true, halo exchange of momentum is necessary
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: dspec
+    class(field_t), intent(in) :: u, v, w, spec
+    real(dp), intent(in) :: nu
+    type(dirps_t), intent(in) :: dirps
+    logical, intent(in) :: sync
+
+    integer :: n_halo, n_groups
+
+    ! TODO: don't hardcode n_halo
+    n_halo = 4
+    n_groups = self%mesh%get_n_groups(dirps%dir)
+
+    ! Halo exchange for momentum if needed
+    if (sync) call transeq_halo_exchange(self, u, v, w, dirps%dir)
+
+    ! Halo exchange for the given field
+    call copy_into_buffers(self%spec_send_s, self%spec_send_e, spec%data, &
+                           dirps%der1st%n_tds, n_groups)
+    call sendrecv_fields(self%spec_recv_s, self%spec_recv_e, &
+                         self%spec_send_s, self%spec_send_e, &
+                         SZ*n_halo*n_groups, &
+                         self%mesh%par%nproc_dir(dirps%dir), &
+                         self%mesh%par%pprev(dirps%dir), &
+                         self%mesh%par%pnext(dirps%dir))
+
+    ! combine convection and diffusion
+    if (dirps%dir == DIR_X) then
+      call transeq_dist_component(self, dspec, spec, u, nu, &
+                                  self%spec_recv_s, self%spec_recv_e, &
+                                  self%u_recv_s, self%u_recv_e, &
+                                  dirps%der1st, dirps%der1st_sym, &
+                                  dirps%der2nd, dirps%dir)
+    else if (dirps%dir == DIR_Y) then
+      call transeq_dist_component(self, dspec, spec, v, nu, &
+                                  self%spec_recv_s, self%spec_recv_e, &                    
+                                  self%v_recv_s, self%v_recv_e, &                    
+                                  dirps%der1st, dirps%der1st_sym, &                        
+                                  dirps%der2nd, dirps%dir)
+    else
+      call transeq_dist_component(self, dspec, spec, w, nu, &
+                                  self%spec_recv_s, self%spec_recv_e, &                    
+                                  self%w_recv_s, self%w_recv_e, &                    
+                                  dirps%der1st, dirps%der1st_sym, &                        
+                                  dirps%der2nd, dirps%dir)
+    end if
+
+  end subroutine transeq_species_omp
+
+  subroutine transeq_omp_dist(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
 
     class(omp_backend_t) :: self
