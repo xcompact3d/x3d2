@@ -131,7 +131,7 @@ contains
       ! Get blocks for the species
       allocate (solver%species(solver%nspecies))
       do i = 1, solver%nspecies
-       solver%species(i)%ptr => solver%backend%allocator%get_block(DIR_X, VERT)
+       solver%species(i)%ptr => solver%backend%allocator%get_block(DIR_X)
       end do
     end if
 
@@ -279,7 +279,8 @@ contains
     call self%backend%reorder(w_y, w, RDR_X2Y)
 
     ! similar to the x direction, obtain derivatives in y.
-    call self%backend%transeq_y(du_y, dv_y, dw_y, u_y, v_y, w_y, self%nu, self%ydirps)
+    call self%backend%transeq_y(du_y, dv_y, dw_y, u_y, v_y, w_y, &
+                                self%nu, self%ydirps)
 
     ! we don't need the velocities in y orientation any more, so release
     ! them to open up space.
@@ -311,7 +312,8 @@ contains
     call self%backend%reorder(w_z, w, RDR_X2Z)
 
     ! get the derivatives in z
-    call self%backend%transeq_z(du_z, dv_z, dw_z, u_z, v_z, w_z, self%nu, self%zdirps)
+    call self%backend%transeq_z(du_z, dv_z, dw_z, u_z, v_z, w_z, &
+                                self%nu, self%zdirps)
 
     ! there is no need to keep velocities in z orientation around, so release
     call self%backend%allocator%release_block(u_z)
