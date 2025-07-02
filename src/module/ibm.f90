@@ -84,7 +84,7 @@ contains
       do i = 1, dims(1)
         do j = 1, dims(2)
           do k = 1, dims(3)
-            ep1%data(i,j,k) = field_data(k,j,i)
+            ep1%data(i, j, k) = field_data(k, j, i)
           end do
         end do
       end do
