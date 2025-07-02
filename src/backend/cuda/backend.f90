@@ -266,11 +266,11 @@ contains
                            spec_dev, self%mesh%get_n(dirps%dir, VERT))
 
     ! halo exchange
-    call sendrecv_fields(self%spec_recv_s_dev, self%spec_recv_e_dev, &                            
-                         self%spec_send_s_dev, self%spec_send_e_dev, &                            
+    call sendrecv_fields(self%spec_recv_s_dev, self%spec_recv_e_dev, &
+                         self%spec_send_s_dev, self%spec_send_e_dev, &
                          SZ*n_halo*n_groups, &
-                         self%mesh%par%nproc_dir(dirps%dir), &                                    
-                         self%mesh%par%pprev(dirps%dir), &                                        
+                         self%mesh%par%nproc_dir(dirps%dir), &
+                         self%mesh%par%pprev(dirps%dir), &
                          self%mesh%par%pnext(dirps%dir))
 
     if (dirps%dir == DIR_X) then
@@ -280,16 +280,16 @@ contains
                                   der1st, der1st_sym, der2nd, dirps%dir, &
                                   self%xblocks, self%xthreads)
     else if (dirps%dir == DIR_Y) then
-      call transeq_dist_component(self, dspev_dev, spec_dev, v_dev, nu, &                
-                                  self%spec_recv_s_dev, self%spec_recv_e_dev, &          
-                                  self%v_recv_s_dev, self%v_recv_e_dev, &                 
-                                  der1st, der1st_sym, der2nd, dirps%dir, &               
+      call transeq_dist_component(self, dspev_dev, spec_dev, v_dev, nu, &
+                                  self%spec_recv_s_dev, self%spec_recv_e_dev, &
+                                  self%v_recv_s_dev, self%v_recv_e_dev, &
+                                  der1st, der1st_sym, der2nd, dirps%dir, &
                                   self%yblocks, self%ythreads)
     else
-      call transeq_dist_component(self, dspev_dev, spec_dev, w_dev, nu, &               
-                                  self%spec_recv_s_dev, self%spec_recv_e_dev, &         
-                                  self%w_recv_s_dev, self%w_recv_e_dev, &               
-                                  der1st, der1st_sym, der2nd, dirps%dir, &              
+      call transeq_dist_component(self, dspev_dev, spec_dev, w_dev, nu, &
+                                  self%spec_recv_s_dev, self%spec_recv_e_dev, &
+                                  self%w_recv_s_dev, self%w_recv_e_dev, &
+                                  der1st, der1st_sym, der2nd, dirps%dir, &
                                   self%zblocks, self%zthreads)
     end if
 

@@ -228,15 +228,15 @@ contains
                                   dirps%der2nd, dirps%dir)
     else if (dirps%dir == DIR_Y) then
       call transeq_dist_component(self, dspec, spec, v, nu, &
-                                  self%spec_recv_s, self%spec_recv_e, &                    
-                                  self%v_recv_s, self%v_recv_e, &                    
-                                  dirps%der1st, dirps%der1st_sym, &                        
+                                  self%spec_recv_s, self%spec_recv_e, &
+                                  self%v_recv_s, self%v_recv_e, &
+                                  dirps%der1st, dirps%der1st_sym, &
                                   dirps%der2nd, dirps%dir)
     else
       call transeq_dist_component(self, dspec, spec, w, nu, &
-                                  self%spec_recv_s, self%spec_recv_e, &                    
-                                  self%w_recv_s, self%w_recv_e, &                    
-                                  dirps%der1st, dirps%der1st_sym, &                        
+                                  self%spec_recv_s, self%spec_recv_e, &
+                                  self%w_recv_s, self%w_recv_e, &
+                                  dirps%der1st, dirps%der1st_sym, &
                                   dirps%der2nd, dirps%dir)
     end if
 
