@@ -74,14 +74,20 @@ contains
 
       ! Read the vertex mask ep1 and close
       dims = mesh%get_dims(VERT)
-      start_dims = int(ibm%mesh%par%n_offset, i8)
-      count_dims = int(dims, i8)
+      start_dims = int(ibm%mesh%par%n_offset(3:1:-1), i8)
+      count_dims = int(dims(3:1:-1), i8)
       call reader%read_data("ep1", field_data, file, start_dims, count_dims)
       call reader%close(file)
 
       ! Get and fill a block on the host
       ep1 => ibm%host_allocator%get_block(DIR_C)
-      ep1%data(1:dims(1), 1:dims(2), 1:dims(3)) = field_data
+      do i = 1, dims(1)
+        do j = 1, dims(2)
+          do k = 1, dims(3)
+            ep1%data(i,j,k) = field_data(k,j,i)
+          end do
+        end do
+      end do
 
       ! Get a block on the device and move the data
       ibm%ep1 => ibm%backend%allocator%get_block(DIR_X)
