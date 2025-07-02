@@ -41,6 +41,7 @@ module m_cuda_backend
       u_recv_s_dev, u_recv_e_dev, u_send_s_dev, u_send_e_dev, &
       v_recv_s_dev, v_recv_e_dev, v_send_s_dev, v_send_e_dev, &
       w_recv_s_dev, w_recv_e_dev, w_send_s_dev, w_send_e_dev, &
+      spec_recv_s_dev, spec_recv_e_dev, spec_send_s_dev, spec_send_e_dev, &
       du_send_s_dev, du_send_e_dev, du_recv_s_dev, du_recv_e_dev, &
       dud_send_s_dev, dud_send_e_dev, dud_recv_s_dev, dud_recv_e_dev, &
       d2u_send_s_dev, d2u_send_e_dev, d2u_recv_s_dev, d2u_recv_e_dev
@@ -50,6 +51,7 @@ module m_cuda_backend
     procedure :: transeq_x => transeq_x_cuda
     procedure :: transeq_y => transeq_y_cuda
     procedure :: transeq_z => transeq_z_cuda
+    procedure :: transeq_species => transeq_species_cuda
     procedure :: tds_solve => tds_solve_cuda
     procedure :: reorder => reorder_cuda
     procedure :: sum_yintox => sum_yintox_cuda
@@ -121,6 +123,10 @@ contains
     allocate (backend%w_send_e_dev(SZ, n_halo, n_groups))
     allocate (backend%w_recv_s_dev(SZ, n_halo, n_groups))
     allocate (backend%w_recv_e_dev(SZ, n_halo, n_groups))
+    allocate (backend%spec_send_s_dev(SZ, n_halo, n_groups))
+    allocate (backend%spec_send_e_dev(SZ, n_halo, n_groups))
+    allocate (backend%spec_recv_s_dev(SZ, n_halo, n_groups))
+    allocate (backend%spec_recv_e_dev(SZ, n_halo, n_groups))
 
     allocate (backend%du_send_s_dev(SZ, 1, n_groups))
     allocate (backend%du_send_e_dev(SZ, 1, n_groups))
@@ -209,6 +215,87 @@ contains
                                 self%zblocks, self%zthreads)
 
   end subroutine transeq_z_cuda
+
+  subroutine transeq_species_cuda(self, dspec, u, v, w, spec, nu, dirps, sync)
+    !! Compute the convection and diffusion for the given field
+    !! in the given direction.
+    !! Halo exchange for the given field is necessary
+    !! When sync is true, halo exchange of momentum is necessary
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: dspec
+    class(field_t), intent(in) :: u, v, w, spec
+    real(dp), intent(in) :: nu
+    type(dirps_t), intent(in) :: dirps
+    logical, intent(in) :: sync
+
+    integer :: n_halo, n_groups
+    type(cuda_tdsops_t), pointer :: der1st, der1st_sym, der2nd, der2nd_sym
+    real(dp), device, pointer, dimension(:, :, :) :: u_dev, v_dev, w_dev, &
+                                                     spec_dev, dspec_dev
+
+    call resolve_field_t(u_dev, u)
+    call resolve_field_t(v_dev, v)
+    call resolve_field_t(w_dev, w)
+    call resolve_field_t(spec_dev, spec)
+    call resolve_field_t(dspec_dev, dspec)
+
+    select type (tdsops => dirps%der1st)
+    type is (cuda_tdsops_t); der1st => tdsops
+    end select
+    select type (tdsops => dirps%der1st_sym)
+    type is (cuda_tdsops_t); der1st_sym => tdsops
+    end select
+    select type (tdsops => dirps%der2nd)
+    type is (cuda_tdsops_t); der2nd => tdsops
+    end select
+    select type (tdsops => dirps%der2nd_sym)
+    type is (cuda_tdsops_t); der2nd_sym => tdsops
+    end select
+
+    ! Halo exchange for momentum if needed
+    if (sync) call transeq_halo_exchange(self, u_dev, v_dev, w_dev, dirps%dir)
+
+    ! TODO: don't hardcode n_halo
+    n_halo = 4
+    n_groups = self%mesh%get_n_groups(dirps%dir)
+
+    ! Copy halo data into buffer arrays
+    call copy_into_buffers(self%spec_send_s_dev, self%spec_send_e_dev, &
+                           spec_dev, self%mesh%get_n(dirps%dir, VERT))
+
+    ! halo exchange
+    call sendrecv_fields(self%spec_recv_s_dev, self%spec_recv_e_dev, &                            
+                         self%spec_send_s_dev, self%spec_send_e_dev, &                            
+                         SZ*n_halo*n_groups, &
+                         self%mesh%par%nproc_dir(dirps%dir), &                                    
+                         self%mesh%par%pprev(dirps%dir), &                                        
+                         self%mesh%par%pnext(dirps%dir))
+
+    if (dirps%dir == DIR_X) then
+      call transeq_dist_component(self, dspev_dev, spec_dev, u_dev, nu, &
+                                  self%spec_recv_s_dev, self%spec_recv_e_dev, &
+                                  self%u_recv_s_dev, self%u_recv_e_dev, &
+                                  der1st, der1st_sym, der2nd, dirps%dir, &
+                                  self%xblocks, self%xthreads)
+    else if (dirps%dir == DIR_Y) then
+      call transeq_dist_component(self, dspev_dev, spec_dev, v_dev, nu, &                
+                                  self%spec_recv_s_dev, self%spec_recv_e_dev, &          
+                                  self%v_recv_s_dev, self%v_recv_e_dev, &                 
+                                  der1st, der1st_sym, der2nd, dirps%dir, &               
+                                  self%yblocks, self%ythreads)
+    else
+      call transeq_dist_component(self, dspev_dev, spec_dev, w_dev, nu, &               
+                                  self%spec_recv_s_dev, self%spec_recv_e_dev, &         
+                                  self%w_recv_s_dev, self%w_recv_e_dev, &               
+                                  der1st, der1st_sym, der2nd, dirps%dir, &              
+                                  self%zblocks, self%zthreads)
+    end if
+
+    call dspec%set_data_loc(spec%data_loc)
+
+  end subroutine transeq_species_cuda
 
   subroutine transeq_cuda_dist(self, du, dv, dw, u, v, w, nu, dirps, &
                                blocks, threads)
