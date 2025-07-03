@@ -20,10 +20,8 @@ contains
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    if (SZ == 32) then
-      tile(i, j) = u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k)
-    else if (SZ == 64) then
-      tile(i, j) = u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k)
+    tile(i, j) = u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k)
+    if (SZ == 64) then
       tile(i + 32, j) = u_c(i + 32 + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k)
       tile(i, j + 32) = u_c(i + (b_i - 1)*SZ, j + 32 + (b_j - 1)*SZ, b_k)
       tile(i + 32, j + 32) = &
@@ -33,10 +31,8 @@ contains
     call syncthreads()
 
     ! copy into output array from shared
-    if (SZ == 32) then
-      u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz) = tile(j, i)
-    else if (SZ == 64) then
-      u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz) = tile(j, i)
+    u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz) = tile(j, i)
+    if (SZ == 64) then
       u_x(i + 32, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz) = tile(j, i + 32)
       u_x(i, j + 32 + (b_i - 1)*SZ, b_k + (b_j - 1)*nz) = tile(j + 32, i)
       u_x(i + 32, j + 32 + (b_i - 1)*SZ, b_k + (b_j - 1)*nz) = &
@@ -59,10 +55,8 @@ contains
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    if (SZ == 32) then
-      tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz)
-    else if (SZ == 64) then
-      tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz)
+    tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz)
+    if (SZ == 64) then
       tile(i + 32, j) = u_x(i + 32, j + (b_i - 1)*SZ, b_k + (b_j - 1)*nz)
       tile(i, j + 32) = u_x(i, j + 32 + (b_i - 1)*SZ, b_k + (b_j - 1)*nz)
       tile(i + 32, j + 32) = &
@@ -72,10 +66,8 @@ contains
     call syncthreads()
 
     ! copy into output array from shared
-    if (SZ == 32) then
-      u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k) = tile(j, i)
-    else if (SZ == 64) then
-      u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k) = tile(j, i)
+    u_c(i + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k) = tile(j, i)
+    if (SZ == 64) then
       u_c(i + 32 + (b_i - 1)*SZ, j + (b_j - 1)*SZ, b_k) = tile(j, i + 32)
       u_c(i + (b_i - 1)*SZ, j + 32 + (b_j - 1)*SZ, b_k) = tile(j + 32, i)
       u_c(i + 32 + (b_i - 1)*SZ, j + 32 + (b_j - 1)*SZ, b_k) = &
@@ -98,10 +90,8 @@ contains
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    if (SZ == 32) then
-      tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_j + (b_k - 1)*nz)
-    else if (SZ == 64) then
-      tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_j + (b_k - 1)*nz)
+    tile(i, j) = u_x(i, j + (b_i - 1)*SZ, b_j + (b_k - 1)*nz)
+    if (SZ == 64) then
       tile(i + 32, j) = u_x(i + 32, j + (b_i - 1)*SZ, b_j + (b_k - 1)*nz)
       tile(i, j + 32) = u_x(i, j + 32 + (b_i - 1)*SZ, b_j + (b_k - 1)*nz)
       tile(i + 32, j + 32) = &
@@ -111,10 +101,8 @@ contains
     call syncthreads()
 
     ! copy into output array from shared
-    if (SZ == 32) then
-      u_y(i, j + (b_k - 1)*SZ, b_j + (b_i - 1)*nz) = tile(j, i)
-    else if (SZ == 64) then
-      u_y(i, j + (b_k - 1)*SZ, b_j + (b_i - 1)*nz) = tile(j, i)
+    u_y(i, j + (b_k - 1)*SZ, b_j + (b_i - 1)*nz) = tile(j, i)
+    if (SZ == 64) then
       u_y(i + 32, j + (b_k - 1)*SZ, b_j + (b_i - 1)*nz) = tile(j, i + 32)
       u_y(i, j + 32 + (b_k - 1)*SZ, b_j + (b_i - 1)*nz) = tile(j + 32, i)
       u_y(i + 32, j + 32 + (b_k - 1)*SZ, b_j + (b_i - 1)*nz) = &
@@ -157,10 +145,8 @@ contains
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    if (SZ == 32) then
-      tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
-    else if (SZ == 64) then
-      tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
+    tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
+    if (SZ == 64) then
       tile(i + 32, j) = u_y(i + 32, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
       tile(i, j + 32) = u_y(i, (b_j - 1)*SZ + j + 32, (b_i - 1)*nz + b_k)
       tile(i + 32, j + 32) = &
@@ -170,10 +156,8 @@ contains
     call syncthreads()
 
     ! copy into output array from shared
-    if (SZ == 32) then
-      u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + b_k) = tile(j, i)
-    else if (SZ == 64) then
-      u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + b_k) = tile(j, i)
+    u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + b_k) = tile(j, i)
+    if (SZ == 64) then
       u_x(i + 32, (b_i - 1)*SZ + j, (b_j - 1)*nz + b_k) = tile(j, i + 32)
       u_x(i, (b_i - 1)*SZ + j + 32, (b_j - 1)*nz + b_k) = tile(j + 32, i)
       u_x(i + 32, (b_i - 1)*SZ + j + 32, (b_j - 1)*nz + b_k) = &
@@ -196,10 +180,8 @@ contains
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    if (SZ == 32) then
-      tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
-    else if (SZ == 64) then
-      tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
+    tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
+    if (SZ == 64) then
       tile(i + 32, j) = u_y(i + 32, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k)
       tile(i, j + 32) = u_y(i, (b_j - 1)*SZ + j + 32, (b_i - 1)*nz + b_k)
       tile(i + 32, j + 32) = &
@@ -209,10 +191,8 @@ contains
     call syncthreads()
 
     ! copy into output array from shared
-    if (SZ == 32) then
-      u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx) = tile(j, i)
-    else if (SZ == 64) then
-      u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx) = tile(j, i)
+    u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx) = tile(j, i)
+    if (SZ == 64) then
       u_z(i + 32, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx) = tile(j, i + 32)
       u_z(i, b_k, (b_i - 1)*SZ + j + 32 + (b_j - 1)*nx) = tile(j + 32, i)
       u_z(i + 32, b_k, (b_i - 1)*SZ + j + 32 + (b_j - 1)*nx) = &
@@ -253,10 +233,8 @@ contains
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    if (SZ == 32) then
-      tile(i, j) = u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx)
-    else if (SZ == 64) then
-      tile(i, j) = u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx)
+    tile(i, j) = u_z(i, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx)
+    if (SZ == 64) then
       tile(i + 32, j) = u_z(i + 32, b_k, (b_i - 1)*SZ + j + (b_j - 1)*nx)
       tile(i, j + 32) = u_z(i, b_k, (b_i - 1)*SZ + j + 32 + (b_j - 1)*nx)
       tile(i + 32, j + 32) = &
@@ -266,10 +244,8 @@ contains
     call syncthreads()
 
     ! copy into output array from shared
-    if (SZ == 32) then
-      u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k) = tile(j, i)
-    else if (SZ == 64) then
-      u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k) = tile(j, i)
+    u_y(i, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k) = tile(j, i)
+    if (SZ == 64) then
       u_y(i + 32, (b_j - 1)*SZ + j, (b_i - 1)*nz + b_k) = tile(j, i + 32)
       u_y(i, (b_j - 1)*SZ + j + 32, (b_i - 1)*nz + b_k) = tile(j + 32, i)
       u_y(i + 32, (b_j - 1)*SZ + j + 32, (b_i - 1)*nz + b_k) = &
@@ -292,10 +268,8 @@ contains
     b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
 
     ! copy into shared
-    if (SZ == 32) then
-      tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_k) + nz*(b_i - 1))
-    else if (SZ == 64) then
-      tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_k) + nz*(b_i - 1))
+    tile(i, j) = u_y(i, (b_j - 1)*SZ + j, (b_k) + nz*(b_i - 1))
+    if (SZ == 64) then
       tile(i + 32, j) = u_y(i + 32, (b_j - 1)*SZ + j, (b_k) + nz*(b_i - 1))
       tile(i, j + 32) = u_y(i, (b_j - 1)*SZ + j + 32, (b_k) + nz*(b_i - 1))
       tile(i + 32, j + 32) = &
@@ -305,12 +279,9 @@ contains
     call syncthreads()
 
     ! copy into output array from shared
-    if (SZ == 32) then
-      u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) = &
-        u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) + tile(j, i)
-    else if (SZ == 64) then
-      u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) = &
-        u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) + tile(j, i)
+    u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) = &
+      u_x(i, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) + tile(j, i)
+    if (SZ == 64) then
       u_x(i + 32, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) = &
         u_x(i + 32, (b_i - 1)*SZ + j, (b_j - 1)*nz + (b_k)) + tile(j, i + 32)
       u_x(i, (b_i - 1)*SZ + j + 32, (b_j - 1)*nz + (b_k)) = &
