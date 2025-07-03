@@ -26,7 +26,6 @@ module m_omp_backend
       u_recv_s, u_recv_e, u_send_s, u_send_e, &
       v_recv_s, v_recv_e, v_send_s, v_send_e, &
       w_recv_s, w_recv_e, w_send_s, w_send_e, &
-      spec_recv_s, spec_recv_e, spec_send_s, spec_send_e, &
       du_send_s, du_send_e, du_recv_s, du_recv_e, &
       dud_send_s, dud_send_e, dud_recv_s, dud_recv_e, &
       d2u_send_s, d2u_send_e, d2u_recv_s, d2u_recv_e
@@ -96,11 +95,6 @@ contains
     allocate (backend%w_send_e(SZ, n_halo, n_groups))
     allocate (backend%w_recv_s(SZ, n_halo, n_groups))
     allocate (backend%w_recv_e(SZ, n_halo, n_groups))
-    ! The spec buffers are not used when solver%nspecies = 0
-    allocate (backend%spec_send_s(SZ, n_halo, n_groups))
-    allocate (backend%spec_send_e(SZ, n_halo, n_groups))
-    allocate (backend%spec_recv_s(SZ, n_halo, n_groups))
-    allocate (backend%spec_recv_e(SZ, n_halo, n_groups))
 
     allocate (backend%du_send_s(SZ, 1, n_groups))
     allocate (backend%du_send_e(SZ, 1, n_groups))
@@ -220,10 +214,10 @@ contains
     end if
 
     ! Halo exchange for the given field
-    call copy_into_buffers(self%spec_send_s, self%spec_send_e, spec%data, &
+    call copy_into_buffers(self%v_send_s, self%v_send_e, spec%data, &
                            dirps%der1st%n_tds, n_groups)
-    call sendrecv_fields(self%spec_recv_s, self%spec_recv_e, &
-                         self%spec_send_s, self%spec_send_e, &
+    call sendrecv_fields(self%v_recv_s, self%v_recv_e, &
+                         self%v_send_s, self%v_send_e, &
                          SZ*n_halo*n_groups, &
                          self%mesh%par%nproc_dir(dirps%dir), &
                          self%mesh%par%pprev(dirps%dir), &
@@ -231,7 +225,7 @@ contains
 
     ! combine convection and diffusion
     call transeq_dist_component(self, dspec, spec, uvw, nu, &
-                                self%spec_recv_s, self%spec_recv_e, &
+                                self%v_recv_s, self%v_recv_e, &
                                 self%u_recv_s, self%u_recv_e, &
                                 dirps%der1st, dirps%der1st_sym, &
                                 dirps%der2nd, dirps%dir)
