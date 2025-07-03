@@ -208,29 +208,11 @@ contains
     n_groups = self%mesh%get_n_groups(dirps%dir)
 
     ! Halo exchange for momentum if needed
-    if (sync .and. dirps%dir == DIR_X) then
+    if (sync) then
       call copy_into_buffers(self%u_send_s, self%u_send_e, uvw%data, &
                              dirps%der1st%n_tds, n_groups)
       call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
                            self%u_send_s, self%u_send_e, &
-                           SZ*n_halo*n_groups, &
-                           self%mesh%par%nproc_dir(dirps%dir), &
-                           self%mesh%par%pprev(dirps%dir), &
-                           self%mesh%par%pnext(dirps%dir))
-    else if (sync .and. dirps%dir == DIR_Y) then
-      call copy_into_buffers(self%v_send_s, self%v_send_e, uvw%data, &
-                             dirps%der1st%n_tds, n_groups)
-      call sendrecv_fields(self%v_recv_s, self%v_recv_e, &
-                           self%v_send_s, self%v_send_e, &
-                           SZ*n_halo*n_groups, &
-                           self%mesh%par%nproc_dir(dirps%dir), &
-                           self%mesh%par%pprev(dirps%dir), &
-                           self%mesh%par%pnext(dirps%dir))
-    else if (sync) then
-      call copy_into_buffers(self%w_send_s, self%w_send_e, uvw%data, &
-                             dirps%der1st%n_tds, n_groups)
-      call sendrecv_fields(self%w_recv_s, self%w_recv_e, &
-                           self%w_send_s, self%w_send_e, &
                            SZ*n_halo*n_groups, &
                            self%mesh%par%nproc_dir(dirps%dir), &
                            self%mesh%par%pprev(dirps%dir), &
@@ -248,25 +230,11 @@ contains
                          self%mesh%par%pnext(dirps%dir))
 
     ! combine convection and diffusion
-    if (dirps%dir == DIR_X) then
-      call transeq_dist_component(self, dspec, spec, uvw, nu, &
-                                  self%spec_recv_s, self%spec_recv_e, &
-                                  self%u_recv_s, self%u_recv_e, &
-                                  dirps%der1st, dirps%der1st_sym, &
-                                  dirps%der2nd, dirps%dir)
-    else if (dirps%dir == DIR_Y) then
-      call transeq_dist_component(self, dspec, spec, uvw, nu, &
-                                  self%spec_recv_s, self%spec_recv_e, &
-                                  self%v_recv_s, self%v_recv_e, &
-                                  dirps%der1st, dirps%der1st_sym, &
-                                  dirps%der2nd, dirps%dir)
-    else
-      call transeq_dist_component(self, dspec, spec, uvw, nu, &
-                                  self%spec_recv_s, self%spec_recv_e, &
-                                  self%w_recv_s, self%w_recv_e, &
-                                  dirps%der1st, dirps%der1st_sym, &
-                                  dirps%der2nd, dirps%dir)
-    end if
+    call transeq_dist_component(self, dspec, spec, uvw, nu, &
+                                self%spec_recv_s, self%spec_recv_e, &
+                                self%u_recv_s, self%u_recv_e, &
+                                dirps%der1st, dirps%der1st_sym, &
+                                dirps%der2nd, dirps%dir)
 
   end subroutine transeq_species_omp
 
