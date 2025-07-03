@@ -364,7 +364,7 @@ contains
     if (dir == DIR_X) then
       do i = 1, size(rhs)
         call self%backend%transeq_species(rhs(i)%ptr, uvw, &
-                                          variables(3 + i)%ptr, &
+                                          variables(i)%ptr, &
                                           self%nu_species(i), &
                                           self%xdirps)
       end do
@@ -379,7 +379,7 @@ contains
       do i = 1, size(rhs)
 
         ! reorder spec in y
-        call self%backend%reorder(spec_y, variables(3 + i)%ptr, RDR_X2Y)
+        call self%backend%reorder(spec_y, variables(i)%ptr, RDR_X2Y)
 
         ! derivatives in y
         call self%backend%transeq_species(dspec_y, uvw, &
@@ -407,7 +407,7 @@ contains
       do i = 1, size(rhs)
 
         ! reorder spec in z
-        call self%backend%reorder(spec_z, variables(3 + i)%ptr, RDR_X2Z)
+        call self%backend%reorder(spec_z, variables(i)%ptr, RDR_X2Z)
 
         ! z-derivatives
         call self%backend%transeq_species(dspec_z, uvw, &
