@@ -349,8 +349,8 @@ contains
 
     integer :: i
     class(field_t), pointer :: u, v, w, &
-      u_y, v_y, w_y, spec_y, dspec_y, &
-      u_z, v_z, w_z, spec_z, dspec_z
+      v_y, spec_y, dspec_y, &
+      w_z, spec_z, dspec_z
 
     ! Map the velocity vector
     u => variables(1)%ptr
@@ -364,7 +364,7 @@ contains
 
     ! derivatives in x
     do i = 1, size(rhs)
-      call self%backend%transeq_species(rhs(i)%ptr, u, v, w, &
+      call self%backend%transeq_species(rhs(i)%ptr, u, &
                                         variables(3 + i)%ptr, &
                                         self%nu_species(i), &
                                         self%xdirps, &
@@ -372,16 +372,12 @@ contains
     end do
 
     ! Request blocks
-    u_y => self%backend%allocator%get_block(DIR_Y)
     v_y => self%backend%allocator%get_block(DIR_Y)
-    w_y => self%backend%allocator%get_block(DIR_Y)
     spec_y => self%backend%allocator%get_block(DIR_Y)
     dspec_y => self%backend%allocator%get_block(DIR_Y)
 
     ! reorder velocity
-    call self%backend%reorder(u_y, u, RDR_X2Y)
     call self%backend%reorder(v_y, v, RDR_X2Y)
-    call self%backend%reorder(w_y, w, RDR_X2Y)
 
     do i = 1, size(rhs)
 
@@ -389,7 +385,7 @@ contains
       call self%backend%reorder(spec_y, variables(3 + i)%ptr, RDR_X2Y)
 
       ! y-derivatives
-      call self%backend%transeq_species(dspec_y, u_y, v_y, w_y, &
+      call self%backend%transeq_species(dspec_y, v_y, &
                                         spec_y, &
                                         self%nu_species(i), &
                                         self%ydirps, &
@@ -401,22 +397,16 @@ contains
     end do
 
     ! Release blocks
-    call self%backend%allocator%release_block(u_y)
     call self%backend%allocator%release_block(v_y)
-    call self%backend%allocator%release_block(w_y)
     call self%backend%allocator%release_block(spec_y)
     call self%backend%allocator%release_block(dspec_y)
 
     ! Request blocks
-    u_z => self%backend%allocator%get_block(DIR_Z)
-    v_z => self%backend%allocator%get_block(DIR_Z)
     w_z => self%backend%allocator%get_block(DIR_Z)
     spec_z => self%backend%allocator%get_block(DIR_Z)
     dspec_z => self%backend%allocator%get_block(DIR_Z)
 
     ! reorder velocity
-    call self%backend%reorder(u_z, u, RDR_X2Z)
-    call self%backend%reorder(v_z, v, RDR_X2Z)
     call self%backend%reorder(w_z, w, RDR_X2Z)
 
     do i = 1, size(rhs)
@@ -425,7 +415,7 @@ contains
       call self%backend%reorder(spec_z, variables(3 + i)%ptr, RDR_X2Z)
 
       ! z-derivatives
-      call self%backend%transeq_species(dspec_z, u_z, v_z, w_z, &
+      call self%backend%transeq_species(dspec_z, w_z, &
                                         spec_z, &
                                         self%nu_species(i), &
                                         self%zdirps, &
@@ -437,8 +427,6 @@ contains
     end do
 
     ! Release blocks
-    call self%backend%allocator%release_block(u_z)
-    call self%backend%allocator%release_block(v_z)
     call self%backend%allocator%release_block(w_z)
     call self%backend%allocator%release_block(spec_z)
     call self%backend%allocator%release_block(dspec_z)

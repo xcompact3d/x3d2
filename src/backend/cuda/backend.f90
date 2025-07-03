@@ -216,7 +216,7 @@ contains
 
   end subroutine transeq_z_cuda
 
-  subroutine transeq_species_cuda(self, dspec, u, v, w, spec, nu, dirps, sync)
+  subroutine transeq_species_cuda(self, dspec, uvw, spec, nu, dirps, sync)
     !! Compute the convection and diffusion for the given field
     !! in the given direction.
     !! Halo exchange for the given field is necessary
@@ -225,7 +225,7 @@ contains
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: dspec
-    class(field_t), intent(in) :: u, v, w, spec
+    class(field_t), intent(in) :: uvw, spec
     real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
     logical, intent(in) :: sync
@@ -235,9 +235,13 @@ contains
     real(dp), device, pointer, dimension(:, :, :) :: u_dev, v_dev, w_dev, &
                                                      spec_dev, dspec_dev
 
-    call resolve_field_t(u_dev, u)
-    call resolve_field_t(v_dev, v)
-    call resolve_field_t(w_dev, w)
+    if (dirps%dir == DIR_X) then
+      call resolve_field_t(u_dev, uvw)
+    else if (dirps%dir == DIR_Y) then
+      call resolve_field_t(v_dev, uvw)
+    else
+      call resolve_field_t(w_dev, uvw)
+    end if
     call resolve_field_t(spec_dev, spec)
     call resolve_field_t(dspec_dev, dspec)
 
@@ -254,12 +258,39 @@ contains
     type is (cuda_tdsops_t); der2nd_sym => tdsops
     end select
 
-    ! Halo exchange for momentum if needed
-    if (sync) call transeq_halo_exchange(self, u_dev, v_dev, w_dev, dirps%dir)
-
     ! TODO: don't hardcode n_halo
     n_halo = 4
     n_groups = self%mesh%get_n_groups(dirps%dir)
+
+    ! Halo exchange for momentum if needed
+    if (sync .and. dirps%dir == DIR_X) then
+      call copy_into_buffers(self%u_send_s_dev, self%u_send_e_dev, &
+                             u_dev, self%mesh%get_n(dirps%dir, VERT))
+      call sendrecv_fields(self%u_recv_s_dev, self%u_recv_e_dev, &
+                           self%u_send_s_dev, self%u_send_e_dev, &
+                           SZ*n_halo*n_groups, &
+                           self%mesh%par%nproc_dir(dirps%dir), &
+                           self%mesh%par%pprev(dirps%dir), &
+                           self%mesh%par%pnext(dirps%dir))
+    else if (sync .and. dirps%dir == DIR_Y) then
+      call copy_into_buffers(self%v_send_s_dev, self%v_send_e_dev, &
+                             v_dev, self%mesh%get_n(dirps%dir, VERT))
+      call sendrecv_fields(self%v_recv_s_dev, self%v_recv_e_dev, &
+                           self%v_send_s_dev, self%v_send_e_dev, &
+                           SZ*n_halo*n_groups, &
+                           self%mesh%par%nproc_dir(dirps%dir), &
+                           self%mesh%par%pprev(dirps%dir), &
+                           self%mesh%par%pnext(dirps%dir))
+    else if (sync) then
+      call copy_into_buffers(self%w_send_s_dev, self%w_send_e_dev, &
+                             w_dev, self%mesh%get_n(dirps%dir, VERT))
+      call sendrecv_fields(self%w_recv_s_dev, self%w_recv_e_dev, &
+                           self%w_send_s_dev, self%w_send_e_dev, &
+                           SZ*n_halo*n_groups, &
+                           self%mesh%par%nproc_dir(dirps%dir), &
+                           self%mesh%par%pprev(dirps%dir), &
+                           self%mesh%par%pnext(dirps%dir))
+    end if
 
     ! Copy halo data into buffer arrays
     call copy_into_buffers(self%spec_send_s_dev, self%spec_send_e_dev, &
