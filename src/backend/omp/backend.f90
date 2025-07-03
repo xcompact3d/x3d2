@@ -96,6 +96,7 @@ contains
     allocate (backend%w_send_e(SZ, n_halo, n_groups))
     allocate (backend%w_recv_s(SZ, n_halo, n_groups))
     allocate (backend%w_recv_e(SZ, n_halo, n_groups))
+    ! The spec buffers are not used when solver%nspecies = 0
     allocate (backend%spec_send_s(SZ, n_halo, n_groups))
     allocate (backend%spec_send_e(SZ, n_halo, n_groups))
     allocate (backend%spec_recv_s(SZ, n_halo, n_groups))
