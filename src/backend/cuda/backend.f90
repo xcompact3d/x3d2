@@ -543,7 +543,7 @@ contains
     select case (direction)
     case (RDR_X2Y)
       blocks = dim3(nx_padded/SZ, nz_padded, ny_padded/SZ)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_x2y<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_X2Z)
       blocks = dim3(nx_padded, ny_padded/SZ, 1)
@@ -551,11 +551,11 @@ contains
       call reorder_x2z<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_Y2X)
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_y2x<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_Y2Z)
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_y2z<<<blocks, threads>>>(u_o_d, u_i_d, & !&
                                             nx_padded, nz_padded)
     case (RDR_Z2X)
@@ -564,12 +564,12 @@ contains
       call reorder_z2x<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_Z2Y)
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_z2y<<<blocks, threads>>>(u_o_d, u_i_d, & !&
                                             nx_padded, nz_padded)
     case (RDR_C2X)
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_c2x<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_C2Y)
       ! First reorder from C to X, then from X to Y
@@ -577,11 +577,11 @@ contains
       call resolve_field_t(u_temp_d, u_temp)
 
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_c2x<<<blocks, threads>>>(u_temp_d, u_i_d, nz_padded) !&
 
       blocks = dim3(nx_padded/SZ, nz_padded, ny_padded/SZ)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_x2y<<<blocks, threads>>>(u_o_d, u_temp_d, nz_padded) !&
 
       call self%allocator%release_block(u_temp)
@@ -591,7 +591,7 @@ contains
       call resolve_field_t(u_temp_d, u_temp)
 
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_c2x<<<blocks, threads>>>(u_temp_d, u_i_d, nz_padded) !&
 
       blocks = dim3(nx_padded, ny_padded/SZ, 1)
@@ -601,7 +601,7 @@ contains
       call self%allocator%release_block(u_temp)
     case (RDR_X2C)
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_x2c<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_Y2C)
       ! First reorder from Y to X, then from X to C
@@ -609,7 +609,7 @@ contains
       call resolve_field_t(u_temp_d, u_temp)
 
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_y2x<<<blocks, threads>>>(u_temp_d, u_i_d, nz_padded) !&
 
       call reorder_x2c<<<blocks, threads>>>(u_o_d, u_temp_d, nz_padded) !&
@@ -625,7 +625,7 @@ contains
       call reorder_z2x<<<blocks, threads>>>(u_temp_d, u_i_d, nz_padded) !&
 
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_x2c<<<blocks, threads>>>(u_o_d, u_temp_d, nz_padded) !&
 
       call self%allocator%release_block(u_temp)
@@ -655,7 +655,7 @@ contains
     dims_padded = self%mesh%get_padded_dims(DIR_C)
 
     blocks = dim3(dims_padded(1)/SZ, dims_padded(2)/SZ, dims_padded(3))
-    threads = dim3(SZ, SZ, 1)
+    threads = dim3(min(SZ, 32), min(SZ, 32), 1)
     call sum_yintox<<<blocks, threads>>>(u_d, u_y_d, dims_padded(3)) !&
 
   end subroutine sum_yintox_cuda
