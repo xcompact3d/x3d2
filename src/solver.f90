@@ -264,6 +264,9 @@ contains
     ! call derivatives in x direction. Based on the run time arguments this
     ! executes a distributed algorithm or the Thomas algorithm.
     call self%backend%transeq_x(du, dv, dw, u, v, w, self%nu, self%xdirps)
+    if (self%nspecies > 0) then
+      call self%transeq_species(rhs(4:), u, variables(4:), DIR_X)
+    end if
 
     ! request fields from the allocator
     u_y => self%backend%allocator%get_block(DIR_Y)
@@ -282,13 +285,19 @@ contains
     call self%backend%transeq_y(du_y, dv_y, dw_y, u_y, v_y, w_y, &
                                 self%nu, self%ydirps)
 
-    ! we don't need the velocities in y orientation any more, so release
-    ! them to open up space.
+    ! only v_y is needed for transeq_species in y.
+    ! u_y and w_y are not needed any more.
+    ! release them to open up space.
     ! It is important that this doesn't actually deallocate any memory,
     ! it just makes the corresponding memory space available for use.
     call self%backend%allocator%release_block(u_y)
-    call self%backend%allocator%release_block(v_y)
     call self%backend%allocator%release_block(w_y)
+
+    if (self%nspecies > 0) then
+      call self%transeq_species(rhs(4:), v_y, variables(4:), DIR_Y)
+    end if
+
+    call self%backend%allocator%release_block(v_y)
 
     call self%backend%sum_yintox(du, du_y)
     call self%backend%sum_yintox(dv, dv_y)
@@ -315,9 +324,14 @@ contains
     call self%backend%transeq_z(du_z, dv_z, dw_z, u_z, v_z, w_z, &
                                 self%nu, self%zdirps)
 
-    ! there is no need to keep velocities in z orientation around, so release
+    ! only w_z is needed for transeq in z.
     call self%backend%allocator%release_block(u_z)
     call self%backend%allocator%release_block(v_z)
+
+    if (self%nspecies > 0) then
+      call self%transeq_species(rhs(4:), w_z, variables(4:), DIR_Z)
+    end if
+
     call self%backend%allocator%release_block(w_z)
 
     ! gather all the contributions into the x result array
@@ -330,14 +344,9 @@ contains
     call self%backend%allocator%release_block(dv_z)
     call self%backend%allocator%release_block(dw_z)
 
-    ! Convection-diffusion for species
-    if (self%nspecies > 0) then
-      call self%transeq_species(rhs(4:), variables)
-    end if
-
   end subroutine transeq
 
-  subroutine transeq_species(self, rhs, variables)
+  subroutine transeq_species(self, rhs, uvw, variables, dir)
     !! Skew-symmetric form of convection-diffusion terms in the
     !! species equation.
     !! Inputs from velocity grid and outputs to velocity grid.
@@ -345,103 +354,77 @@ contains
 
     class(solver_t) :: self
     type(flist_t), intent(inout) :: rhs(:)
+    class(field_t), intent(in), pointer :: uvw
     type(flist_t), intent(in) :: variables(:)
+    integer, intent(in) :: dir
 
     integer :: i
-    class(field_t), pointer :: u, v, w, &
-      u_y, v_y, w_y, spec_y, dspec_y, &
-      u_z, v_z, w_z, spec_z, dspec_z
+    class(field_t), pointer :: spec_y, dspec_y, spec_z, dspec_z
 
-    ! Map the velocity vector
-    u => variables(1)%ptr
-    v => variables(2)%ptr
-    w => variables(3)%ptr
+    if (dir == DIR_X) then
+      do i = 1, size(rhs)
+        call self%backend%transeq_species(rhs(i)%ptr, uvw, &
+                                          variables(3 + i)%ptr, &
+                                          self%nu_species(i), &
+                                          self%xdirps)
+      end do
+    end if
 
-    ! FIXME later
-    ! Minor optimization
-    ! species could start with z convection-diffusion
-    ! velocity components are ready to use in the z dir.
+    if (dir == DIR_Y) then
 
-    ! derivatives in x
-    do i = 1, size(rhs)
-      call self%backend%transeq_species(rhs(i)%ptr, u, v, w, &
-                                        variables(3 + i)%ptr, &
-                                        self%nu_species(i), &
-                                        self%xdirps, &
-                                        i <= 1)
-    end do
+      ! Request blocks
+      spec_y => self%backend%allocator%get_block(DIR_Y)
+      dspec_y => self%backend%allocator%get_block(DIR_Y)
 
-    ! Request blocks
-    u_y => self%backend%allocator%get_block(DIR_Y)
-    v_y => self%backend%allocator%get_block(DIR_Y)
-    w_y => self%backend%allocator%get_block(DIR_Y)
-    spec_y => self%backend%allocator%get_block(DIR_Y)
-    dspec_y => self%backend%allocator%get_block(DIR_Y)
+      do i = 1, size(rhs)
 
-    ! reorder velocity
-    call self%backend%reorder(u_y, u, RDR_X2Y)
-    call self%backend%reorder(v_y, v, RDR_X2Y)
-    call self%backend%reorder(w_y, w, RDR_X2Y)
+        ! reorder spec in y
+        call self%backend%reorder(spec_y, variables(3 + i)%ptr, RDR_X2Y)
 
-    do i = 1, size(rhs)
+        ! derivatives in y
+        call self%backend%transeq_species(dspec_y, uvw, &
+                                          spec_y, &
+                                          self%nu_species(i), &
+                                          self%ydirps)
 
-      ! reorder spec in y
-      call self%backend%reorder(spec_y, variables(3 + i)%ptr, RDR_X2Y)
+        ! sum_yintox
+        call self%backend%sum_yintox(rhs(i)%ptr, dspec_y)
 
-      ! y-derivatives
-      call self%backend%transeq_species(dspec_y, u_y, v_y, w_y, &
-                                        spec_y, &
-                                        self%nu_species(i), &
-                                        self%ydirps, &
-                                        i <= 1)
+      end do
 
-      ! sum_yintox
-      call self%backend%sum_yintox(rhs(i)%ptr, dspec_y)
+      ! Release blocks
+      call self%backend%allocator%release_block(spec_y)
+      call self%backend%allocator%release_block(dspec_y)
 
-    end do
+    end if
 
-    ! Release blocks
-    call self%backend%allocator%release_block(u_y)
-    call self%backend%allocator%release_block(v_y)
-    call self%backend%allocator%release_block(w_y)
-    call self%backend%allocator%release_block(spec_y)
-    call self%backend%allocator%release_block(dspec_y)
+    if (dir == DIR_Z) then
 
-    ! Request blocks
-    u_z => self%backend%allocator%get_block(DIR_Z)
-    v_z => self%backend%allocator%get_block(DIR_Z)
-    w_z => self%backend%allocator%get_block(DIR_Z)
-    spec_z => self%backend%allocator%get_block(DIR_Z)
-    dspec_z => self%backend%allocator%get_block(DIR_Z)
+      ! Request blocks
+      spec_z => self%backend%allocator%get_block(DIR_Z)
+      dspec_z => self%backend%allocator%get_block(DIR_Z)
 
-    ! reorder velocity
-    call self%backend%reorder(u_z, u, RDR_X2Z)
-    call self%backend%reorder(v_z, v, RDR_X2Z)
-    call self%backend%reorder(w_z, w, RDR_X2Z)
+      do i = 1, size(rhs)
 
-    do i = 1, size(rhs)
+        ! reorder spec in z
+        call self%backend%reorder(spec_z, variables(3 + i)%ptr, RDR_X2Z)
 
-      ! reorder spec in z
-      call self%backend%reorder(spec_z, variables(3 + i)%ptr, RDR_X2Z)
+        ! z-derivatives
+        call self%backend%transeq_species(dspec_z, uvw, &
+                                          spec_z, &
+                                          self%nu_species(i), &
+                                          self%zdirps)
 
-      ! z-derivatives
-      call self%backend%transeq_species(dspec_z, u_z, v_z, w_z, &
-                                        spec_z, &
-                                        self%nu_species(i), &
-                                        self%zdirps, &
-                                        i <= 1)
+        ! sum_zintox
+        call self%backend%sum_zintox(rhs(i)%ptr, dspec_z)
 
-      ! sum_zintox
-      call self%backend%sum_zintox(rhs(i)%ptr, dspec_z)
+      end do
 
-    end do
+      ! Release blocks
+      call self%backend%allocator%release_block(spec_z)
+      call self%backend%allocator%release_block(dspec_z)
 
-    ! Release blocks
-    call self%backend%allocator%release_block(u_z)
-    call self%backend%allocator%release_block(v_z)
-    call self%backend%allocator%release_block(w_z)
-    call self%backend%allocator%release_block(spec_z)
-    call self%backend%allocator%release_block(dspec_z)
+    end if
 
   end subroutine transeq_species
 

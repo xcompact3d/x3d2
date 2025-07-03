@@ -186,28 +186,23 @@ contains
 
   end subroutine transeq_z_omp
 
-  subroutine transeq_species_omp(self, dspec, u, v, w, spec, nu, dirps, sync)
+  subroutine transeq_species_omp(self, dspec, uvw, spec, nu, dirps)
     !! Compute the convection and diffusion for the given field
     !! in the given direction.
     !! Halo exchange for the given field is necessary
-    !! When sync is true, halo exchange of momentum is necessary
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: dspec
-    class(field_t), intent(in) :: u, v, w, spec
+    class(field_t), intent(in) :: uvw, spec
     real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
-    logical, intent(in) :: sync
 
     integer :: n_halo, n_groups
 
     ! TODO: don't hardcode n_halo
     n_halo = 4
     n_groups = self%mesh%get_n_groups(dirps%dir)
-
-    ! Halo exchange for momentum if needed
-    if (sync) call transeq_halo_exchange(self, u, v, w, dirps%dir)
 
     ! Halo exchange for the given field
     call copy_into_buffers(self%spec_send_s, self%spec_send_e, spec%data, &
@@ -221,19 +216,19 @@ contains
 
     ! combine convection and diffusion
     if (dirps%dir == DIR_X) then
-      call transeq_dist_component(self, dspec, spec, u, nu, &
+      call transeq_dist_component(self, dspec, spec, uvw, nu, &
                                   self%spec_recv_s, self%spec_recv_e, &
                                   self%u_recv_s, self%u_recv_e, &
                                   dirps%der1st, dirps%der1st_sym, &
                                   dirps%der2nd, dirps%dir)
     else if (dirps%dir == DIR_Y) then
-      call transeq_dist_component(self, dspec, spec, v, nu, &
+      call transeq_dist_component(self, dspec, spec, uvw, nu, &
                                   self%spec_recv_s, self%spec_recv_e, &
                                   self%v_recv_s, self%v_recv_e, &
                                   dirps%der1st, dirps%der1st_sym, &
                                   dirps%der2nd, dirps%dir)
     else
-      call transeq_dist_component(self, dspec, spec, w, nu, &
+      call transeq_dist_component(self, dspec, spec, uvw, nu, &
                                   self%spec_recv_s, self%spec_recv_e, &
                                   self%w_recv_s, self%w_recv_e, &
                                   dirps%der1st, dirps%der1st_sym, &
