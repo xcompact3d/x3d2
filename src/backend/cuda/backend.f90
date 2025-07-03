@@ -233,16 +233,9 @@ contains
 
     integer :: n_halo, n_groups
     type(cuda_tdsops_t), pointer :: der1st, der1st_sym, der2nd, der2nd_sym
-    real(dp), device, pointer, dimension(:, :, :) :: u_dev, v_dev, w_dev, &
-                                                     spec_dev, dspec_dev
+    real(dp), device, pointer, dimension(:, :, :) :: u_dev, spec_dev, dspec_dev
 
-    if (dirps%dir == DIR_X) then
-      call resolve_field_t(u_dev, uvw)
-    else if (dirps%dir == DIR_Y) then
-      call resolve_field_t(v_dev, uvw)
-    else
-      call resolve_field_t(w_dev, uvw)
-    end if
+    call resolve_field_t(u_dev, uvw)
     call resolve_field_t(spec_dev, spec)
     call resolve_field_t(dspec_dev, dspec)
 
@@ -264,29 +257,11 @@ contains
     n_groups = self%mesh%get_n_groups(dirps%dir)
 
     ! Halo exchange for momentum if needed
-    if (sync .and. dirps%dir == DIR_X) then
+    if (sync) then
       call copy_into_buffers(self%u_send_s_dev, self%u_send_e_dev, &
                              u_dev, self%mesh%get_n(dirps%dir, VERT))
       call sendrecv_fields(self%u_recv_s_dev, self%u_recv_e_dev, &
                            self%u_send_s_dev, self%u_send_e_dev, &
-                           SZ*n_halo*n_groups, &
-                           self%mesh%par%nproc_dir(dirps%dir), &
-                           self%mesh%par%pprev(dirps%dir), &
-                           self%mesh%par%pnext(dirps%dir))
-    else if (sync .and. dirps%dir == DIR_Y) then
-      call copy_into_buffers(self%v_send_s_dev, self%v_send_e_dev, &
-                             v_dev, self%mesh%get_n(dirps%dir, VERT))
-      call sendrecv_fields(self%v_recv_s_dev, self%v_recv_e_dev, &
-                           self%v_send_s_dev, self%v_send_e_dev, &
-                           SZ*n_halo*n_groups, &
-                           self%mesh%par%nproc_dir(dirps%dir), &
-                           self%mesh%par%pprev(dirps%dir), &
-                           self%mesh%par%pnext(dirps%dir))
-    else if (sync) then
-      call copy_into_buffers(self%w_send_s_dev, self%w_send_e_dev, &
-                             w_dev, self%mesh%get_n(dirps%dir, VERT))
-      call sendrecv_fields(self%w_recv_s_dev, self%w_recv_e_dev, &
-                           self%w_send_s_dev, self%w_send_e_dev, &
                            SZ*n_halo*n_groups, &
                            self%mesh%par%nproc_dir(dirps%dir), &
                            self%mesh%par%pprev(dirps%dir), &
@@ -305,25 +280,11 @@ contains
                          self%mesh%par%pprev(dirps%dir), &
                          self%mesh%par%pnext(dirps%dir))
 
-    if (dirps%dir == DIR_X) then
-      call transeq_dist_component(self, dspec_dev, spec_dev, u_dev, nu, &
-                                  self%spec_recv_s_dev, self%spec_recv_e_dev, &
-                                  self%u_recv_s_dev, self%u_recv_e_dev, &
-                                  der1st, der1st_sym, der2nd, dirps%dir, &
-                                  self%xblocks, self%xthreads)
-    else if (dirps%dir == DIR_Y) then
-      call transeq_dist_component(self, dspec_dev, spec_dev, v_dev, nu, &
-                                  self%spec_recv_s_dev, self%spec_recv_e_dev, &
-                                  self%v_recv_s_dev, self%v_recv_e_dev, &
-                                  der1st, der1st_sym, der2nd, dirps%dir, &
-                                  self%yblocks, self%ythreads)
-    else
-      call transeq_dist_component(self, dspec_dev, spec_dev, w_dev, nu, &
-                                  self%spec_recv_s_dev, self%spec_recv_e_dev, &
-                                  self%w_recv_s_dev, self%w_recv_e_dev, &
-                                  der1st, der1st_sym, der2nd, dirps%dir, &
-                                  self%zblocks, self%zthreads)
-    end if
+    call transeq_dist_component(self, dspec_dev, spec_dev, u_dev, nu, &
+                                self%spec_recv_s_dev, self%spec_recv_e_dev, &
+                                self%u_recv_s_dev, self%u_recv_e_dev, &
+                                der1st, der1st_sym, der2nd, dirps%dir, &
+                                self%xblocks, self%xthreads)
 
     call dspec%set_data_loc(spec%data_loc)
 
