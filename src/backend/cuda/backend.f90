@@ -216,30 +216,28 @@ contains
 
   end subroutine transeq_z_cuda
 
-  subroutine transeq_species_cuda(self, dspec, uvw, spec, nu, dirps)
+  subroutine transeq_species_cuda(self, dspec, u, v, w, spec, nu, dirps, sync)
     !! Compute the convection and diffusion for the given field
     !! in the given direction.
     !! Halo exchange for the given field is necessary
+    !! When sync is true, halo exchange of momentum is necessary
     implicit none
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: dspec
-    class(field_t), intent(in) :: uvw, spec
+    class(field_t), intent(in) :: u, v, w, spec
     real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
+    logical, intent(in) :: sync
 
     integer :: n_halo, n_groups
     type(cuda_tdsops_t), pointer :: der1st, der1st_sym, der2nd, der2nd_sym
     real(dp), device, pointer, dimension(:, :, :) :: u_dev, v_dev, w_dev, &
                                                      spec_dev, dspec_dev
 
-    if (dirps%dir == DIR_X) then
-      call resolve_field_t(u_dev, uvw)
-    else if (dirps%dir == DIR_Y) then
-      call resolve_field_t(v_dev, uvw)
-    else
-      call resolve_field_t(w_dev, uvw)
-    end if
+    call resolve_field_t(u_dev, u)
+    call resolve_field_t(v_dev, v)
+    call resolve_field_t(w_dev, w)
     call resolve_field_t(spec_dev, spec)
     call resolve_field_t(dspec_dev, dspec)
 
@@ -255,6 +253,9 @@ contains
     select type (tdsops => dirps%der2nd_sym)
     type is (cuda_tdsops_t); der2nd_sym => tdsops
     end select
+
+    ! Halo exchange for momentum if needed
+    if (sync) call transeq_halo_exchange(self, u_dev, v_dev, w_dev, dirps%dir)
 
     ! TODO: don't hardcode n_halo
     n_halo = 4

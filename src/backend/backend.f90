@@ -76,11 +76,11 @@ module m_base_backend
   end interface
 
   abstract interface
-    subroutine transeq_ders_spec(self, dspec, uvw, spec, nu, dirps)
+    subroutine transeq_ders_spec(self, dspec, u, v, w, spec, nu, dirps, sync)
          !! transeq equation obtains the derivatives direction by
          !! direction, and the exact algorithm used to obtain these
          !! derivatives are decided at runtime. Backend implementations
-         !! are responsible from directing calls to transeq_ders_spec into
+         !! are responsible from directing calls to transeq_ders into
          !! the correct algorithm.
       import :: base_backend_t
       import :: field_t
@@ -90,9 +90,10 @@ module m_base_backend
 
       class(base_backend_t) :: self
       class(field_t), intent(inout) :: dspec
-      class(field_t), intent(in) :: uvw, spec
+      class(field_t), intent(in) :: u, v, w, spec
       real(dp), intent(in) :: nu
       type(dirps_t), intent(in) :: dirps
+      logical, intent(in) :: sync
     end subroutine transeq_ders_spec
   end interface
 
