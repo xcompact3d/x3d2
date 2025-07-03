@@ -275,7 +275,7 @@ contains
                          self%mesh%par%pnext(dirps%dir))
 
     call transeq_dist_component(self, dspec_dev, spec_dev, u_dev, nu, &
-                                self%vpec_recv_s_dev, self%v_recv_e_dev, &
+                                self%v_recv_s_dev, self%v_recv_e_dev, &
                                 self%u_recv_s_dev, self%u_recv_e_dev, &
                                 der1st, der1st_sym, der2nd, dirps%dir, &
                                 self%xblocks, self%xthreads)
