@@ -115,6 +115,12 @@ contains
     if (self%iibm == iibm_basic) then
 
       ! vel = vel * ep1
+      !
+      ! FIXME : currently velocity is zero in the solid.
+      !         It should be dt * grad(p^n).
+      !         After reconstruction, it should be
+      !   dt * grad(p^n) - dt * grad(p^n+1)
+      !         Currently grad(p^n) is not available
       call self%backend%vecmult(u, self%ep1)
       call self%backend%vecmult(v, self%ep1)
       call self%backend%vecmult(w, self%ep1)
