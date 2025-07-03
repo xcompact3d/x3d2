@@ -41,7 +41,6 @@ module m_cuda_backend
       u_recv_s_dev, u_recv_e_dev, u_send_s_dev, u_send_e_dev, &
       v_recv_s_dev, v_recv_e_dev, v_send_s_dev, v_send_e_dev, &
       w_recv_s_dev, w_recv_e_dev, w_send_s_dev, w_send_e_dev, &
-      spec_recv_s_dev, spec_recv_e_dev, spec_send_s_dev, spec_send_e_dev, &
       du_send_s_dev, du_send_e_dev, du_recv_s_dev, du_recv_e_dev, &
       dud_send_s_dev, dud_send_e_dev, dud_recv_s_dev, dud_recv_e_dev, &
       d2u_send_s_dev, d2u_send_e_dev, d2u_recv_s_dev, d2u_recv_e_dev
@@ -123,11 +122,6 @@ contains
     allocate (backend%w_send_e_dev(SZ, n_halo, n_groups))
     allocate (backend%w_recv_s_dev(SZ, n_halo, n_groups))
     allocate (backend%w_recv_e_dev(SZ, n_halo, n_groups))
-    ! The spec buffers are not used when solver%nspecies = 0
-    allocate (backend%spec_send_s_dev(SZ, n_halo, n_groups))
-    allocate (backend%spec_send_e_dev(SZ, n_halo, n_groups))
-    allocate (backend%spec_recv_s_dev(SZ, n_halo, n_groups))
-    allocate (backend%spec_recv_e_dev(SZ, n_halo, n_groups))
 
     allocate (backend%du_send_s_dev(SZ, 1, n_groups))
     allocate (backend%du_send_e_dev(SZ, 1, n_groups))
@@ -269,19 +263,19 @@ contains
     end if
 
     ! Copy halo data into buffer arrays
-    call copy_into_buffers(self%spec_send_s_dev, self%spec_send_e_dev, &
+    call copy_into_buffers(self%v_send_s_dev, self%v_send_e_dev, &
                            spec_dev, self%mesh%get_n(dirps%dir, VERT))
 
     ! halo exchange
-    call sendrecv_fields(self%spec_recv_s_dev, self%spec_recv_e_dev, &
-                         self%spec_send_s_dev, self%spec_send_e_dev, &
+    call sendrecv_fields(self%v_recv_s_dev, self%v_recv_e_dev, &
+                         self%v_send_s_dev, self%v_send_e_dev, &
                          SZ*n_halo*n_groups, &
                          self%mesh%par%nproc_dir(dirps%dir), &
                          self%mesh%par%pprev(dirps%dir), &
                          self%mesh%par%pnext(dirps%dir))
 
     call transeq_dist_component(self, dspec_dev, spec_dev, u_dev, nu, &
-                                self%spec_recv_s_dev, self%spec_recv_e_dev, &
+                                self%vpec_recv_s_dev, self%v_recv_e_dev, &
                                 self%u_recv_s_dev, self%u_recv_e_dev, &
                                 der1st, der1st_sym, der2nd, dirps%dir, &
                                 self%xblocks, self%xthreads)
