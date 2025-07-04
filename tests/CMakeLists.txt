@@ -66,6 +66,7 @@ define_test(test_time_integrator.f90 1 omp)
 define_test(omp/test_omp_tridiag.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(omp/test_thom.f90 1 omp)
 define_test(omp/test_omp_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
+define_test(omp/test_omp_transeq_species.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(omp/test_omp_dist_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
 
 define_test(test_scalar_product.f90 ${CMAKE_CTEST_NPROCS} omp)

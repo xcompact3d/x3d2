@@ -5,7 +5,7 @@ module m_omp_backend
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, get_dirs_from_rdr, move_data_loc, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC, &
-                      X_FACE, Y_FACE, Z_FACE
+                      X_FACE, Y_FACE, Z_FACE, VERT
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_ordering, only: get_index_reordering
@@ -34,6 +34,7 @@ module m_omp_backend
     procedure :: transeq_x => transeq_x_omp
     procedure :: transeq_y => transeq_y_omp
     procedure :: transeq_z => transeq_z_omp
+    procedure :: transeq_species => transeq_species_omp
     procedure :: tds_solve => tds_solve_omp
     procedure :: reorder => reorder_omp
     procedure :: sum_yintox => sum_yintox_omp
@@ -139,65 +140,120 @@ contains
 
   end subroutine alloc_omp_tdsops
 
-  subroutine transeq_x_omp(self, du, dv, dw, u, v, w, dirps)
+  subroutine transeq_x_omp(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
 
-    call self%transeq_omp_dist(du, dv, dw, u, v, w, dirps)
+    call self%transeq_omp_dist(du, dv, dw, u, v, w, nu, dirps)
 
   end subroutine transeq_x_omp
 
-  subroutine transeq_y_omp(self, du, dv, dw, u, v, w, dirps)
+  subroutine transeq_y_omp(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
 
     ! u, v, w is reordered so that we pass v, u, w
-    call self%transeq_omp_dist(dv, du, dw, v, u, w, dirps)
+    call self%transeq_omp_dist(dv, du, dw, v, u, w, nu, dirps)
 
   end subroutine transeq_y_omp
 
-  subroutine transeq_z_omp(self, du, dv, dw, u, v, w, dirps)
+  subroutine transeq_z_omp(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
 
     ! u, v, w is reordered so that we pass w, u, v
-    call self%transeq_omp_dist(dw, du, dv, w, u, v, dirps)
+    call self%transeq_omp_dist(dw, du, dv, w, u, v, nu, dirps)
 
   end subroutine transeq_z_omp
 
-  subroutine transeq_omp_dist(self, du, dv, dw, u, v, w, dirps)
+  subroutine transeq_species_omp(self, dspec, uvw, spec, nu, dirps, sync)
+    !! Compute the convection and diffusion for the given field
+    !! in the given direction.
+    !! Halo exchange for the given field is necessary
+    !! When sync is true, halo exchange of momentum is necessary
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: dspec
+    class(field_t), intent(in) :: uvw, spec
+    real(dp), intent(in) :: nu
+    type(dirps_t), intent(in) :: dirps
+    logical, intent(in) :: sync
+
+    integer :: n_halo, n_groups
+
+    ! TODO: don't hardcode n_halo
+    n_halo = 4
+    n_groups = self%mesh%get_n_groups(dirps%dir)
+
+    ! Halo exchange for momentum if needed
+    if (sync) then
+      call copy_into_buffers(self%u_send_s, self%u_send_e, uvw%data, &
+                             dirps%der1st%n_tds, n_groups)
+      call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
+                           self%u_send_s, self%u_send_e, &
+                           SZ*n_halo*n_groups, &
+                           self%mesh%par%nproc_dir(dirps%dir), &
+                           self%mesh%par%pprev(dirps%dir), &
+                           self%mesh%par%pnext(dirps%dir))
+    end if
+
+    ! Halo exchange for the given field
+    call copy_into_buffers(self%v_send_s, self%v_send_e, spec%data, &
+                           dirps%der1st%n_tds, n_groups)
+    call sendrecv_fields(self%v_recv_s, self%v_recv_e, &
+                         self%v_send_s, self%v_send_e, &
+                         SZ*n_halo*n_groups, &
+                         self%mesh%par%nproc_dir(dirps%dir), &
+                         self%mesh%par%pprev(dirps%dir), &
+                         self%mesh%par%pnext(dirps%dir))
+
+    ! combine convection and diffusion
+    call transeq_dist_component(self, dspec, spec, uvw, nu, &
+                                self%v_recv_s, self%v_recv_e, &
+                                self%u_recv_s, self%u_recv_e, &
+                                dirps%der1st, dirps%der1st_sym, &
+                                dirps%der2nd, dirps%dir)
+
+  end subroutine transeq_species_omp
+
+  subroutine transeq_omp_dist(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
 
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
 
     call transeq_halo_exchange(self, u, v, w, dirps%dir)
 
-    call transeq_dist_component(self, du, u, u, &
+    call transeq_dist_component(self, du, u, u, nu, &
                                 self%u_recv_s, self%u_recv_e, &
                                 self%u_recv_s, self%u_recv_e, &
                                 dirps%der1st, dirps%der1st_sym, &
                                 dirps%der2nd, dirps%dir)
-    call transeq_dist_component(self, dv, v, u, &
+    call transeq_dist_component(self, dv, v, u, nu, &
                                 self%v_recv_s, self%v_recv_e, &
                                 self%u_recv_s, self%u_recv_e, &
                                 dirps%der1st_sym, dirps%der1st, &
                                 dirps%der2nd_sym, dirps%dir)
-    call transeq_dist_component(self, dw, w, u, &
+    call transeq_dist_component(self, dw, w, u, nu, &
                                 self%w_recv_s, self%w_recv_e, &
                                 self%u_recv_s, self%u_recv_e, &
                                 dirps%der1st_sym, dirps%der1st, &
@@ -242,7 +298,7 @@ contains
 
   end subroutine transeq_halo_exchange
 
-  subroutine transeq_dist_component(self, rhs_du, u, conv, &
+  subroutine transeq_dist_component(self, rhs_du, u, conv, nu, &
                                     u_recv_s, u_recv_e, &
                                     conv_recv_s, conv_recv_e, &
                                     tdsops_du, tdsops_dud, tdsops_d2u, dir)
@@ -253,6 +309,7 @@ contains
     !> The result field, it is also used as temporary storage
     class(field_t), intent(inout) :: rhs_du
     class(field_t), intent(in) :: u, conv
+    real(dp), intent(in) :: nu
     real(dp), dimension(:, :, :), intent(in) :: u_recv_s, u_recv_e, &
                                                 conv_recv_s, conv_recv_e
     class(tdsops_t), intent(in) :: tdsops_du
@@ -271,7 +328,7 @@ contains
       self%d2u_send_s, self%d2u_send_e, self%d2u_recv_s, self%d2u_recv_e, &
       u%data, u_recv_s, u_recv_e, &
       conv%data, conv_recv_s, conv_recv_e, &
-      tdsops_du, tdsops_dud, tdsops_d2u, self%nu, &
+      tdsops_du, tdsops_dud, tdsops_d2u, nu, &
       self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), &
       self%mesh%par%pnext(dir), self%mesh%get_n_groups(dir))
 

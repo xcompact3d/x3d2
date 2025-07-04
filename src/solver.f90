@@ -9,7 +9,7 @@ module m_solver
                       RDR_Z2C, RDR_C2Z, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL
   use m_config, only: solver_config_t
-  use m_field, only: field_t
+  use m_field, only: field_t, flist_t
   use m_ibm, only: ibm_t
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t
@@ -47,12 +47,15 @@ module m_solver
       !! for later use.
 
     real(dp) :: dt, nu
+    real(dp), dimension(:), allocatable :: nu_species
     integer :: n_iters, n_output
     integer :: current_iter = 0
     integer :: ngrid
     integer :: nvars = 3
+    integer :: nspecies = 0
 
     class(field_t), pointer :: u, v, w
+    type(flist_t), dimension(:), pointer :: species => null()
 
     class(base_backend_t), pointer :: backend
     type(mesh_t), pointer :: mesh
@@ -65,6 +68,7 @@ module m_solver
     logical :: ibm_on
   contains
     procedure :: transeq
+    procedure :: transeq_species
     procedure :: pressure_correction
     procedure :: divergence_v2p
     procedure :: gradient_p2v
@@ -98,6 +102,7 @@ contains
     type(solver_t) :: solver
 
     type(solver_config_t) :: solver_cfg
+    integer :: i
 
     solver%backend => backend
     solver%mesh => mesh
@@ -116,6 +121,23 @@ contains
 
     call solver_cfg%read(nml_file=get_argument(1))
 
+    ! Add transported species
+    solver%nspecies = solver_cfg%n_species
+    if (solver%nspecies > 0) then
+      ! Increase the number of variables
+      solver%nvars = solver%nvars + solver%nspecies
+
+      ! Init the diffusivity coefficients for species
+      allocate (solver%nu_species(solver%nspecies))
+      solver%nu_species = 1._dp/solver_cfg%Re/solver_cfg%pr_species
+
+      ! Get blocks for the species
+      allocate (solver%species(solver%nspecies))
+      do i = 1, solver%nspecies
+        solver%species(i)%ptr => solver%backend%allocator%get_block(DIR_X)
+      end do
+    end if
+
     solver%time_integrator = time_intg_t(solver%backend, &
                                          solver%backend%allocator, &
                                          solver_cfg%time_intg, solver%nvars)
@@ -124,7 +146,7 @@ contains
     end if
 
     solver%dt = solver_cfg%dt
-    solver%backend%nu = 1._dp/solver_cfg%Re
+    solver%nu = 1._dp/solver_cfg%Re
     solver%n_iters = solver_cfg%n_iters
     solver%n_output = solver_cfg%n_output
     solver%ngrid = product(solver%mesh%get_global_dims(VERT))
@@ -223,7 +245,7 @@ contains
 
   end subroutine
 
-  subroutine transeq(self, du, dv, dw, u, v, w)
+  subroutine transeq(self, rhs, variables)
     !! Skew-symmetric form of convection-diffusion terms in the
     !! incompressible Navier-Stokes momemtum equations, excluding
     !! pressure terms.
@@ -231,17 +253,25 @@ contains
     implicit none
 
     class(solver_t) :: self
-    class(field_t), intent(inout) :: du, dv, dw
-    class(field_t), intent(in) :: u, v, w
+    type(flist_t), intent(inout) :: rhs(:)
+    type(flist_t), intent(in) :: variables(:)
 
     class(field_t), pointer :: u_y, v_y, w_y, u_z, v_z, w_z, &
-      du_y, dv_y, dw_y, du_z, dv_z, dw_z
+      du_y, dv_y, dw_y, du_z, dv_z, dw_z, &
+      du, dv, dw, u, v, w
+
+    du => rhs(1)%ptr
+    dv => rhs(2)%ptr
+    dw => rhs(3)%ptr
+    u => variables(1)%ptr
+    v => variables(2)%ptr
+    w => variables(3)%ptr
 
     ! -1/2(nabla u curl u + u nabla u) + nu nablasq u
 
     ! call derivatives in x direction. Based on the run time arguments this
     ! executes a distributed algorithm or the Thomas algorithm.
-    call self%backend%transeq_x(du, dv, dw, u, v, w, self%xdirps)
+    call self%backend%transeq_x(du, dv, dw, u, v, w, self%nu, self%xdirps)
 
     ! request fields from the allocator
     u_y => self%backend%allocator%get_block(DIR_Y)
@@ -257,7 +287,8 @@ contains
     call self%backend%reorder(w_y, w, RDR_X2Y)
 
     ! similar to the x direction, obtain derivatives in y.
-    call self%backend%transeq_y(du_y, dv_y, dw_y, u_y, v_y, w_y, self%ydirps)
+    call self%backend%transeq_y(du_y, dv_y, dw_y, u_y, v_y, w_y, &
+                                self%nu, self%ydirps)
 
     ! we don't need the velocities in y orientation any more, so release
     ! them to open up space.
@@ -289,7 +320,8 @@ contains
     call self%backend%reorder(w_z, w, RDR_X2Z)
 
     ! get the derivatives in z
-    call self%backend%transeq_z(du_z, dv_z, dw_z, u_z, v_z, w_z, self%zdirps)
+    call self%backend%transeq_z(du_z, dv_z, dw_z, u_z, v_z, w_z, &
+                                self%nu, self%zdirps)
 
     ! there is no need to keep velocities in z orientation around, so release
     call self%backend%allocator%release_block(u_z)
@@ -306,7 +338,108 @@ contains
     call self%backend%allocator%release_block(dv_z)
     call self%backend%allocator%release_block(dw_z)
 
+    ! Convection-diffusion for species
+    if (self%nspecies > 0) then
+      call self%transeq_species(rhs(4:), variables)
+    end if
+
   end subroutine transeq
+
+  subroutine transeq_species(self, rhs, variables)
+    !! Skew-symmetric form of convection-diffusion terms in the
+    !! species equation.
+    !! Inputs from velocity grid and outputs to velocity grid.
+    implicit none
+
+    class(solver_t) :: self
+    type(flist_t), intent(inout) :: rhs(:)
+    type(flist_t), intent(in) :: variables(:)
+
+    integer :: i
+    class(field_t), pointer :: u, v, w, &
+      v_y, spec_y, dspec_y, &
+      w_z, spec_z, dspec_z
+
+    ! Map the velocity vector
+    u => variables(1)%ptr
+    v => variables(2)%ptr
+    w => variables(3)%ptr
+
+    ! FIXME later
+    ! Minor optimization
+    ! species could start with z convection-diffusion
+    ! velocity components are ready to use in the z dir.
+
+    ! derivatives in x
+    do i = 1, size(rhs)
+      call self%backend%transeq_species(rhs(i)%ptr, u, &
+                                        variables(3 + i)%ptr, &
+                                        self%nu_species(i), &
+                                        self%xdirps, &
+                                        i <= 1)
+    end do
+
+    ! Request blocks
+    v_y => self%backend%allocator%get_block(DIR_Y)
+    spec_y => self%backend%allocator%get_block(DIR_Y)
+    dspec_y => self%backend%allocator%get_block(DIR_Y)
+
+    ! reorder velocity
+    call self%backend%reorder(v_y, v, RDR_X2Y)
+
+    do i = 1, size(rhs)
+
+      ! reorder spec in y
+      call self%backend%reorder(spec_y, variables(3 + i)%ptr, RDR_X2Y)
+
+      ! y-derivatives
+      call self%backend%transeq_species(dspec_y, v_y, &
+                                        spec_y, &
+                                        self%nu_species(i), &
+                                        self%ydirps, &
+                                        i <= 1)
+
+      ! sum_yintox
+      call self%backend%sum_yintox(rhs(i)%ptr, dspec_y)
+
+    end do
+
+    ! Release blocks
+    call self%backend%allocator%release_block(v_y)
+    call self%backend%allocator%release_block(spec_y)
+    call self%backend%allocator%release_block(dspec_y)
+
+    ! Request blocks
+    w_z => self%backend%allocator%get_block(DIR_Z)
+    spec_z => self%backend%allocator%get_block(DIR_Z)
+    dspec_z => self%backend%allocator%get_block(DIR_Z)
+
+    ! reorder velocity
+    call self%backend%reorder(w_z, w, RDR_X2Z)
+
+    do i = 1, size(rhs)
+
+      ! reorder spec in z
+      call self%backend%reorder(spec_z, variables(3 + i)%ptr, RDR_X2Z)
+
+      ! z-derivatives
+      call self%backend%transeq_species(dspec_z, w_z, &
+                                        spec_z, &
+                                        self%nu_species(i), &
+                                        self%zdirps, &
+                                        i <= 1)
+
+      ! sum_zintox
+      call self%backend%sum_zintox(rhs(i)%ptr, dspec_z)
+
+    end do
+
+    ! Release blocks
+    call self%backend%allocator%release_block(w_z)
+    call self%backend%allocator%release_block(spec_z)
+    call self%backend%allocator%release_block(dspec_z)
+
+  end subroutine transeq_species
 
   subroutine divergence_v2p(self, div_u, u, v, w)
     !! Wrapper for divergence_v2p
@@ -391,6 +524,10 @@ contains
     class(solver_t) :: self
     class(field_t), intent(inout) :: pressure
     class(field_t), intent(in) :: div_u
+
+    ! set the pressure field to 0 so that we can do performance tests easily
+    ! this will be removed once the CG solver is implemented of course
+    call pressure%fill(0._dp)
 
   end subroutine poisson_cg
 

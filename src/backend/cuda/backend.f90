@@ -50,6 +50,7 @@ module m_cuda_backend
     procedure :: transeq_x => transeq_x_cuda
     procedure :: transeq_y => transeq_y_cuda
     procedure :: transeq_z => transeq_z_cuda
+    procedure :: transeq_species => transeq_species_cuda
     procedure :: tds_solve => tds_solve_cuda
     procedure :: reorder => reorder_cuda
     procedure :: sum_yintox => sum_yintox_cuda
@@ -166,54 +167,131 @@ contains
 
   end subroutine alloc_cuda_tdsops
 
-  subroutine transeq_x_cuda(self, du, dv, dw, u, v, w, dirps)
+  subroutine transeq_x_cuda(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
 
-    call self%transeq_cuda_dist(du, dv, dw, u, v, w, dirps, &
+    call self%transeq_cuda_dist(du, dv, dw, u, v, w, nu, dirps, &
                                 self%xblocks, self%xthreads)
 
   end subroutine transeq_x_cuda
 
-  subroutine transeq_y_cuda(self, du, dv, dw, u, v, w, dirps)
+  subroutine transeq_y_cuda(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
 
     ! u, v, w is reordered so that we pass v, u, w
-    call self%transeq_cuda_dist(dv, du, dw, v, u, w, dirps, &
+    call self%transeq_cuda_dist(dv, du, dw, v, u, w, nu, dirps, &
                                 self%yblocks, self%ythreads)
 
   end subroutine transeq_y_cuda
 
-  subroutine transeq_z_cuda(self, du, dv, dw, u, v, w, dirps)
+  subroutine transeq_z_cuda(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
 
     ! u, v, w is reordered so that we pass w, u, v
-    call self%transeq_cuda_dist(dw, du, dv, w, u, v, dirps, &
+    call self%transeq_cuda_dist(dw, du, dv, w, u, v, nu, dirps, &
                                 self%zblocks, self%zthreads)
 
   end subroutine transeq_z_cuda
 
-  subroutine transeq_cuda_dist(self, du, dv, dw, u, v, w, dirps, &
+  subroutine transeq_species_cuda(self, dspec, uvw, spec, nu, dirps, sync)
+    !! Compute the convection and diffusion for the given field
+    !! in the given direction.
+    !! Halo exchange for the given field is necessary
+    !! When sync is true, halo exchange of momentum is necessary
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: dspec
+    class(field_t), intent(in) :: uvw, spec
+    real(dp), intent(in) :: nu
+    type(dirps_t), intent(in) :: dirps
+    logical, intent(in) :: sync
+
+    integer :: n_halo, n_groups
+    type(cuda_tdsops_t), pointer :: der1st, der1st_sym, der2nd, der2nd_sym
+    real(dp), device, pointer, dimension(:, :, :) :: u_dev, spec_dev, dspec_dev
+
+    call resolve_field_t(u_dev, uvw)
+    call resolve_field_t(spec_dev, spec)
+    call resolve_field_t(dspec_dev, dspec)
+
+    select type (tdsops => dirps%der1st)
+    type is (cuda_tdsops_t); der1st => tdsops
+    end select
+    select type (tdsops => dirps%der1st_sym)
+    type is (cuda_tdsops_t); der1st_sym => tdsops
+    end select
+    select type (tdsops => dirps%der2nd)
+    type is (cuda_tdsops_t); der2nd => tdsops
+    end select
+    select type (tdsops => dirps%der2nd_sym)
+    type is (cuda_tdsops_t); der2nd_sym => tdsops
+    end select
+
+    ! TODO: don't hardcode n_halo
+    n_halo = 4
+    n_groups = self%mesh%get_n_groups(dirps%dir)
+
+    ! Halo exchange for momentum if needed
+    if (sync) then
+      call copy_into_buffers(self%u_send_s_dev, self%u_send_e_dev, &
+                             u_dev, self%mesh%get_n(dirps%dir, VERT))
+      call sendrecv_fields(self%u_recv_s_dev, self%u_recv_e_dev, &
+                           self%u_send_s_dev, self%u_send_e_dev, &
+                           SZ*n_halo*n_groups, &
+                           self%mesh%par%nproc_dir(dirps%dir), &
+                           self%mesh%par%pprev(dirps%dir), &
+                           self%mesh%par%pnext(dirps%dir))
+    end if
+
+    ! Copy halo data into buffer arrays
+    call copy_into_buffers(self%v_send_s_dev, self%v_send_e_dev, &
+                           spec_dev, self%mesh%get_n(dirps%dir, VERT))
+
+    ! halo exchange
+    call sendrecv_fields(self%v_recv_s_dev, self%v_recv_e_dev, &
+                         self%v_send_s_dev, self%v_send_e_dev, &
+                         SZ*n_halo*n_groups, &
+                         self%mesh%par%nproc_dir(dirps%dir), &
+                         self%mesh%par%pprev(dirps%dir), &
+                         self%mesh%par%pnext(dirps%dir))
+
+    call transeq_dist_component(self, dspec_dev, spec_dev, u_dev, nu, &
+                                self%v_recv_s_dev, self%v_recv_e_dev, &
+                                self%u_recv_s_dev, self%u_recv_e_dev, &
+                                der1st, der1st_sym, der2nd, dirps%dir, &
+                                self%xblocks, self%xthreads)
+
+    call dspec%set_data_loc(spec%data_loc)
+
+  end subroutine transeq_species_cuda
+
+  subroutine transeq_cuda_dist(self, du, dv, dw, u, v, w, nu, dirps, &
                                blocks, threads)
     implicit none
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
     type(dirps_t), intent(in) :: dirps
     type(dim3), intent(in) :: blocks, threads
 
@@ -245,17 +323,17 @@ contains
 
     call transeq_halo_exchange(self, u_dev, v_dev, w_dev, dirps%dir)
 
-    call transeq_dist_component(self, du_dev, u_dev, u_dev, &
+    call transeq_dist_component(self, du_dev, u_dev, u_dev, nu, &
                                 self%u_recv_s_dev, self%u_recv_e_dev, &
                                 self%u_recv_s_dev, self%u_recv_e_dev, &
                                 der1st, der1st_sym, der2nd, dirps%dir, &
                                 blocks, threads)
-    call transeq_dist_component(self, dv_dev, v_dev, u_dev, &
+    call transeq_dist_component(self, dv_dev, v_dev, u_dev, nu, &
                                 self%v_recv_s_dev, self%v_recv_e_dev, &
                                 self%u_recv_s_dev, self%u_recv_e_dev, &
                                 der1st_sym, der1st, der2nd_sym, dirps%dir, &
                                 blocks, threads)
-    call transeq_dist_component(self, dw_dev, w_dev, u_dev, &
+    call transeq_dist_component(self, dw_dev, w_dev, u_dev, nu, &
                                 self%w_recv_s_dev, self%w_recv_e_dev, &
                                 self%u_recv_s_dev, self%u_recv_e_dev, &
                                 der1st_sym, der1st, der2nd_sym, dirps%dir, &
@@ -299,7 +377,7 @@ contains
 
   end subroutine transeq_halo_exchange
 
-  subroutine transeq_dist_component(self, rhs_du_dev, u_dev, conv_dev, &
+  subroutine transeq_dist_component(self, rhs_du_dev, u_dev, conv_dev, nu, &
                                     u_recv_s_dev, u_recv_e_dev, &
                                     conv_recv_s_dev, conv_recv_e_dev, &
                                     tdsops_du, tdsops_dud, tdsops_d2u, &
@@ -311,6 +389,7 @@ contains
     !> The result field, it is also used as temporary storage
     real(dp), device, dimension(:, :, :), intent(out) :: rhs_du_dev
     real(dp), device, dimension(:, :, :), intent(in) :: u_dev, conv_dev
+    real(dp), intent(in) :: nu
     real(dp), device, dimension(:, :, :), intent(in) :: &
       u_recv_s_dev, u_recv_e_dev, &
       conv_recv_s_dev, conv_recv_e_dev
@@ -340,7 +419,7 @@ contains
       self%dud_recv_s_dev, self%dud_recv_e_dev, &
       self%d2u_send_s_dev, self%d2u_send_e_dev, &
       self%d2u_recv_s_dev, self%d2u_recv_e_dev, &
-      tdsops_du, tdsops_d2u, self%nu, &
+      tdsops_du, tdsops_d2u, nu, &
       self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), &
       self%mesh%par%pnext(dir), blocks, threads &
       )
@@ -464,7 +543,7 @@ contains
     select case (direction)
     case (RDR_X2Y)
       blocks = dim3(nx_padded/SZ, nz_padded, ny_padded/SZ)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_x2y<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_X2Z)
       blocks = dim3(nx_padded, ny_padded/SZ, 1)
@@ -472,11 +551,11 @@ contains
       call reorder_x2z<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_Y2X)
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_y2x<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_Y2Z)
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_y2z<<<blocks, threads>>>(u_o_d, u_i_d, & !&
                                             nx_padded, nz_padded)
     case (RDR_Z2X)
@@ -485,12 +564,12 @@ contains
       call reorder_z2x<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_Z2Y)
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_z2y<<<blocks, threads>>>(u_o_d, u_i_d, & !&
                                             nx_padded, nz_padded)
     case (RDR_C2X)
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_c2x<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_C2Y)
       ! First reorder from C to X, then from X to Y
@@ -498,11 +577,11 @@ contains
       call resolve_field_t(u_temp_d, u_temp)
 
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_c2x<<<blocks, threads>>>(u_temp_d, u_i_d, nz_padded) !&
 
       blocks = dim3(nx_padded/SZ, nz_padded, ny_padded/SZ)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_x2y<<<blocks, threads>>>(u_o_d, u_temp_d, nz_padded) !&
 
       call self%allocator%release_block(u_temp)
@@ -512,7 +591,7 @@ contains
       call resolve_field_t(u_temp_d, u_temp)
 
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_c2x<<<blocks, threads>>>(u_temp_d, u_i_d, nz_padded) !&
 
       blocks = dim3(nx_padded, ny_padded/SZ, 1)
@@ -522,7 +601,7 @@ contains
       call self%allocator%release_block(u_temp)
     case (RDR_X2C)
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_x2c<<<blocks, threads>>>(u_o_d, u_i_d, nz_padded) !&
     case (RDR_Y2C)
       ! First reorder from Y to X, then from X to C
@@ -530,7 +609,7 @@ contains
       call resolve_field_t(u_temp_d, u_temp)
 
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_y2x<<<blocks, threads>>>(u_temp_d, u_i_d, nz_padded) !&
 
       call reorder_x2c<<<blocks, threads>>>(u_o_d, u_temp_d, nz_padded) !&
@@ -546,7 +625,7 @@ contains
       call reorder_z2x<<<blocks, threads>>>(u_temp_d, u_i_d, nz_padded) !&
 
       blocks = dim3(nx_padded/SZ, ny_padded/SZ, nz_padded)
-      threads = dim3(SZ, SZ, 1)
+      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
       call reorder_x2c<<<blocks, threads>>>(u_o_d, u_temp_d, nz_padded) !&
 
       call self%allocator%release_block(u_temp)
@@ -576,7 +655,7 @@ contains
     dims_padded = self%mesh%get_padded_dims(DIR_C)
 
     blocks = dim3(dims_padded(1)/SZ, dims_padded(2)/SZ, dims_padded(3))
-    threads = dim3(SZ, SZ, 1)
+    threads = dim3(min(SZ, 32), min(SZ, 32), 1)
     call sum_yintox<<<blocks, threads>>>(u_d, u_y_d, dims_padded(3)) !&
 
   end subroutine sum_yintox_cuda

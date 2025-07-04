@@ -1,4 +1,4 @@
-program test_omp_transeq
+program test_omp_transeq_species
   use iso_fortran_env, only: stderr => error_unit
   use mpi
 
@@ -14,8 +14,8 @@ program test_omp_transeq
   implicit none
 
   logical :: allpass = .true.
-  class(field_t), pointer :: u, v, w
-  class(field_t), pointer :: du, dv, dw
+  class(field_t), pointer :: u, v, w, spec
+  class(field_t), pointer :: dspec
   real(dp), dimension(:, :, :), allocatable :: r_u
   class(mesh_t), allocatable :: mesh
   integer, dimension(3) :: dims_global, nproc_dir
@@ -76,9 +76,8 @@ program test_omp_transeq
   v => allocator%get_block(DIR_X, VERT)
   w => allocator%get_block(DIR_X, VERT)
 
-  du => allocator%get_block(DIR_X, VERT)
-  dv => allocator%get_block(DIR_X, VERT)
-  dw => allocator%get_block(DIR_X, VERT)
+  spec => allocator%get_block(DIR_X, VERT)
+  dspec => allocator%get_block(DIR_X, VERT)
 
   dx_per = mesh%geo%d(DIR_X)
 
@@ -87,6 +86,7 @@ program test_omp_transeq
       do i = 1, SZ
         u%data(i, j, k) = sin((j - 1 + nrank*n)*dx_per)
         v%data(i, j, k) = cos((j - 1 + nrank*n)*dx_per)
+        spec%data(i, j, k) = cos((j - 1 + nrank*n)*dx_per)
       end do
     end do
   end do
@@ -96,7 +96,9 @@ program test_omp_transeq
                        'compact6', 'compact6', 'classic', 'compact6')
 
   call cpu_time(tstart)
-  call transeq_x_omp(omp_backend, du, dv, dw, u, v, w, nu, xdirps)
+  ! Compute species convection-diffusion
+  call omp_backend%transeq_species(dspec, u, spec, &
+                                   nu, xdirps, .true.)
   call cpu_time(tend)
 
   if (nrank == 0) print *, 'Total time', tend - tstart
@@ -104,11 +106,12 @@ program test_omp_transeq
   allocate (r_u(SZ, n, n_groups))
 
   ! check error
-  ! dv = -1/2*(u*dv/dx + d(u*v)/dx) + nu*d2v/dx2
-  ! u is sin, v is cos;
-  ! dv = -1/2*(u*(-u) + v*v + u*(-u)) + nu*(-v)
-  !    = u*u - 1/2*v*v - nu*v
-  r_u = dv%data - (u%data*u%data - 0.5_dp*v%data*v%data - nu*v%data)
+  ! dspec = -1/2*(u*dspec/dx + d(u*spec)/dx) + nu*d2spec/dx2
+  ! u is sin(x), v is cos(x), spec is cos(x);
+  ! dspec = -1/2*(u*(-u) + spec*spec + u*(-u)) + nu*(-spec)
+  !       = u*u - 1/2*spec*spec - nu*spec
+  r_u = dspec%data &
+        - (u%data*u%data - 0.5_dp*spec%data*spec%data - nu*spec%data)
   norm_du = norm2(r_u)
   norm_du = norm_du*norm_du/dims_global(DIR_X)/n_groups/SZ
   call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_DOUBLE_PRECISION, &
@@ -133,5 +136,5 @@ program test_omp_transeq
 
   call MPI_Finalize(ierr)
 
-end program test_omp_transeq
+end program test_omp_transeq_species
 

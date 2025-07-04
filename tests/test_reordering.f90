@@ -69,7 +69,7 @@ program test_reorder
 #endif
 
   ! Global number of cells in each direction
-  dims_global = [32, 64, 96]
+  dims_global = [64, 64, 96]
 
   ! Global domain dimensions
   L_global = [2*pi, 2*pi, 2*pi]
