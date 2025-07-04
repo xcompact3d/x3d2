@@ -67,7 +67,7 @@ contains
     class(allocator_t), target, intent(inout) :: allocator
     type(omp_backend_t) :: backend
 
-    integer :: n_halo, n_groups
+    integer :: n_groups
 
     call backend%base_init()
 
@@ -77,24 +77,23 @@ contains
       backend%allocator => allocator
     end select
 
-    n_halo = 4
     backend%mesh => mesh
     n_groups = maxval([backend%mesh%get_n_groups(DIR_X), &
                        backend%mesh%get_n_groups(DIR_Y), &
                        backend%mesh%get_n_groups(DIR_Z)])
 
-    allocate (backend%u_send_s(SZ, n_halo, n_groups))
-    allocate (backend%u_send_e(SZ, n_halo, n_groups))
-    allocate (backend%u_recv_s(SZ, n_halo, n_groups))
-    allocate (backend%u_recv_e(SZ, n_halo, n_groups))
-    allocate (backend%v_send_s(SZ, n_halo, n_groups))
-    allocate (backend%v_send_e(SZ, n_halo, n_groups))
-    allocate (backend%v_recv_s(SZ, n_halo, n_groups))
-    allocate (backend%v_recv_e(SZ, n_halo, n_groups))
-    allocate (backend%w_send_s(SZ, n_halo, n_groups))
-    allocate (backend%w_send_e(SZ, n_halo, n_groups))
-    allocate (backend%w_recv_s(SZ, n_halo, n_groups))
-    allocate (backend%w_recv_e(SZ, n_halo, n_groups))
+    allocate (backend%u_send_s(SZ, backend%n_halo, n_groups))
+    allocate (backend%u_send_e(SZ, backend%n_halo, n_groups))
+    allocate (backend%u_recv_s(SZ, backend%n_halo, n_groups))
+    allocate (backend%u_recv_e(SZ, backend%n_halo, n_groups))
+    allocate (backend%v_send_s(SZ, backend%n_halo, n_groups))
+    allocate (backend%v_send_e(SZ, backend%n_halo, n_groups))
+    allocate (backend%v_recv_s(SZ, backend%n_halo, n_groups))
+    allocate (backend%v_recv_e(SZ, backend%n_halo, n_groups))
+    allocate (backend%w_send_s(SZ, backend%n_halo, n_groups))
+    allocate (backend%w_send_e(SZ, backend%n_halo, n_groups))
+    allocate (backend%w_recv_s(SZ, backend%n_halo, n_groups))
+    allocate (backend%w_recv_e(SZ, backend%n_halo, n_groups))
 
     allocate (backend%du_send_s(SZ, 1, n_groups))
     allocate (backend%du_send_e(SZ, 1, n_groups))
@@ -195,10 +194,8 @@ contains
     type(dirps_t), intent(in) :: dirps
     logical, intent(in) :: sync
 
-    integer :: n_halo, n_groups
+    integer :: n_groups
 
-    ! TODO: don't hardcode n_halo
-    n_halo = 4
     n_groups = self%mesh%get_n_groups(dirps%dir)
 
     ! Halo exchange for momentum if needed
@@ -207,7 +204,7 @@ contains
                              dirps%der1st%n_tds, n_groups)
       call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
                            self%u_send_s, self%u_send_e, &
-                           SZ*n_halo*n_groups, &
+                           SZ*self%n_halo*n_groups, &
                            self%mesh%par%nproc_dir(dirps%dir), &
                            self%mesh%par%pprev(dirps%dir), &
                            self%mesh%par%pnext(dirps%dir))
@@ -218,7 +215,7 @@ contains
                            dirps%der1st%n_tds, n_groups)
     call sendrecv_fields(self%v_recv_s, self%v_recv_e, &
                          self%v_send_s, self%v_send_e, &
-                         SZ*n_halo*n_groups, &
+                         SZ*self%n_halo*n_groups, &
                          self%mesh%par%nproc_dir(dirps%dir), &
                          self%mesh%par%pprev(dirps%dir), &
                          self%mesh%par%pnext(dirps%dir))
@@ -265,11 +262,9 @@ contains
     class(omp_backend_t) :: self
     class(field_t), intent(in) :: u, v, w
     integer, intent(in) :: dir
-    integer :: n_halo, n, nproc_dir, pprev, pnext
+    integer :: n, nproc_dir, pprev, pnext
     integer :: n_groups
 
-    ! TODO: don't hardcode n_halo
-    n_halo = 4
     n_groups = self%mesh%get_n_groups(dir)
     n = self%mesh%get_n(u)
     nproc_dir = self%mesh%par%nproc_dir(dir)
@@ -285,15 +280,15 @@ contains
 
     call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
                          self%u_send_s, self%u_send_e, &
-                         SZ*n_halo*n_groups, &
+                         SZ*self%n_halo*n_groups, &
                          nproc_dir, pprev, pnext)
     call sendrecv_fields(self%v_recv_s, self%v_recv_e, &
                          self%v_send_s, self%v_send_e, &
-                         SZ*n_halo*n_groups, &
+                         SZ*self%n_halo*n_groups, &
                          nproc_dir, pprev, pnext)
     call sendrecv_fields(self%w_recv_s, self%w_recv_e, &
                          self%w_send_s, self%w_send_e, &
-                         SZ*n_halo*n_groups, &
+                         SZ*self%n_halo*n_groups, &
                          nproc_dir, pprev, pnext)
 
   end subroutine transeq_halo_exchange
@@ -367,10 +362,8 @@ contains
     class(field_t), intent(inout) :: du
     class(field_t), intent(in) :: u
     class(tdsops_t), intent(in) :: tdsops
-    integer :: n_halo, n_groups, dir
+    integer :: n_groups, dir
 
-    ! TODO: don't hardcode n_halo
-    n_halo = 4
     dir = u%dir
     n_groups = self%mesh%get_n_groups(u)
 
@@ -380,7 +373,7 @@ contains
     ! halo exchange
     call sendrecv_fields(self%u_recv_s, self%u_recv_e, &
                          self%u_send_s, self%u_send_e, &
-                         SZ*n_halo*n_groups, &
+                         SZ*self%n_halo*n_groups, &
                          self%mesh%par%nproc_dir(dir), &
                          self%mesh%par%pprev(dir), &
                          self%mesh%par%pnext(dir))

@@ -86,7 +86,7 @@ contains
     type(cuda_backend_t) :: backend
 
     type(cuda_poisson_fft_t) :: cuda_poisson_fft
-    integer :: n_halo, n_groups
+    integer :: n_groups
 
     call backend%base_init()
 
@@ -104,24 +104,23 @@ contains
     backend%zthreads = dim3(SZ, 1, 1)
     backend%zblocks = dim3(backend%mesh%get_n_groups(DIR_Z), 1, 1)
 
-    n_halo = 4
     ! Buffer size should be big enough for the largest MPI exchange.
     n_groups = maxval([backend%mesh%get_n_groups(DIR_X), &
                        backend%mesh%get_n_groups(DIR_Y), &
                        backend%mesh%get_n_groups(DIR_Z)])
 
-    allocate (backend%u_send_s_dev(SZ, n_halo, n_groups))
-    allocate (backend%u_send_e_dev(SZ, n_halo, n_groups))
-    allocate (backend%u_recv_s_dev(SZ, n_halo, n_groups))
-    allocate (backend%u_recv_e_dev(SZ, n_halo, n_groups))
-    allocate (backend%v_send_s_dev(SZ, n_halo, n_groups))
-    allocate (backend%v_send_e_dev(SZ, n_halo, n_groups))
-    allocate (backend%v_recv_s_dev(SZ, n_halo, n_groups))
-    allocate (backend%v_recv_e_dev(SZ, n_halo, n_groups))
-    allocate (backend%w_send_s_dev(SZ, n_halo, n_groups))
-    allocate (backend%w_send_e_dev(SZ, n_halo, n_groups))
-    allocate (backend%w_recv_s_dev(SZ, n_halo, n_groups))
-    allocate (backend%w_recv_e_dev(SZ, n_halo, n_groups))
+    allocate (backend%u_send_s_dev(SZ, backend%n_halo, n_groups))
+    allocate (backend%u_send_e_dev(SZ, backend%n_halo, n_groups))
+    allocate (backend%u_recv_s_dev(SZ, backend%n_halo, n_groups))
+    allocate (backend%u_recv_e_dev(SZ, backend%n_halo, n_groups))
+    allocate (backend%v_send_s_dev(SZ, backend%n_halo, n_groups))
+    allocate (backend%v_send_e_dev(SZ, backend%n_halo, n_groups))
+    allocate (backend%v_recv_s_dev(SZ, backend%n_halo, n_groups))
+    allocate (backend%v_recv_e_dev(SZ, backend%n_halo, n_groups))
+    allocate (backend%w_send_s_dev(SZ, backend%n_halo, n_groups))
+    allocate (backend%w_send_e_dev(SZ, backend%n_halo, n_groups))
+    allocate (backend%w_recv_s_dev(SZ, backend%n_halo, n_groups))
+    allocate (backend%w_recv_e_dev(SZ, backend%n_halo, n_groups))
 
     allocate (backend%du_send_s_dev(SZ, 1, n_groups))
     allocate (backend%du_send_e_dev(SZ, 1, n_groups))
@@ -225,7 +224,7 @@ contains
     type(dirps_t), intent(in) :: dirps
     logical, intent(in) :: sync
 
-    integer :: n_halo, n_groups
+    integer :: n_groups
     type(cuda_tdsops_t), pointer :: der1st, der1st_sym, der2nd, der2nd_sym
     real(dp), device, pointer, dimension(:, :, :) :: u_dev, spec_dev, dspec_dev
 
@@ -246,8 +245,6 @@ contains
     type is (cuda_tdsops_t); der2nd_sym => tdsops
     end select
 
-    ! TODO: don't hardcode n_halo
-    n_halo = 4
     n_groups = self%mesh%get_n_groups(dirps%dir)
 
     ! Halo exchange for momentum if needed
@@ -256,7 +253,7 @@ contains
                              u_dev, self%mesh%get_n(dirps%dir, VERT))
       call sendrecv_fields(self%u_recv_s_dev, self%u_recv_e_dev, &
                            self%u_send_s_dev, self%u_send_e_dev, &
-                           SZ*n_halo*n_groups, &
+                           SZ*self%n_halo*n_groups, &
                            self%mesh%par%nproc_dir(dirps%dir), &
                            self%mesh%par%pprev(dirps%dir), &
                            self%mesh%par%pnext(dirps%dir))
@@ -269,7 +266,7 @@ contains
     ! halo exchange
     call sendrecv_fields(self%v_recv_s_dev, self%v_recv_e_dev, &
                          self%v_send_s_dev, self%v_send_e_dev, &
-                         SZ*n_halo*n_groups, &
+                         SZ*self%n_halo*n_groups, &
                          self%mesh%par%nproc_dir(dirps%dir), &
                          self%mesh%par%pprev(dirps%dir), &
                          self%mesh%par%pnext(dirps%dir))
@@ -349,11 +346,9 @@ contains
     class(cuda_backend_t) :: self
     real(dp), device, dimension(:, :, :), intent(in) :: u_dev, v_dev, w_dev
     integer, intent(in) :: dir
-    integer :: n_halo, n, nproc_dir, pprev, pnext
+    integer :: n, nproc_dir, pprev, pnext
     integer :: n_groups
 
-    ! TODO: don't hardcode n_halo
-    n_halo = 4
     n_groups = self%mesh%get_n_groups(dir)
     n = self%mesh%get_n(dir, VERT)
     nproc_dir = self%mesh%par%nproc_dir(dir)
@@ -373,7 +368,7 @@ contains
       self%u_send_s_dev, self%u_send_e_dev, &
       self%v_send_s_dev, self%v_send_e_dev, &
       self%w_send_s_dev, self%w_send_e_dev, &
-      SZ*n_halo*n_groups, nproc_dir, pprev, pnext)
+      SZ*self%n_halo*n_groups, nproc_dir, pprev, pnext)
 
   end subroutine transeq_halo_exchange
 
@@ -481,10 +476,8 @@ contains
 
     type(cuda_tdsops_t), pointer :: tdsops_dev
 
-    integer :: n_halo, n_groups, dir
+    integer :: n_groups, dir
 
-    ! TODO: don't hardcode n_halo
-    n_halo = 4
     dir = u%dir
     n_groups = self%mesh%get_n_groups(u)
 
@@ -500,7 +493,7 @@ contains
 
     call sendrecv_fields(self%u_recv_s_dev, self%u_recv_e_dev, &
                          self%u_send_s_dev, self%u_send_e_dev, &
-                         SZ*n_halo*n_groups, &
+                         SZ*self%n_halo*n_groups, &
                          self%mesh%par%nproc_dir(dir), &
                          self%mesh%par%pprev(dir), &
                          self%mesh%par%pnext(dir))
