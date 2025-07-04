@@ -138,7 +138,7 @@ program test_cuda_tridiag
       du_send_s_dev, du_send_e_dev, du_recv_s_dev, du_recv_e_dev, &
       dud_send_s_dev, dud_send_e_dev, dud_recv_s_dev, dud_recv_e_dev, &
       d2u_send_s_dev, d2u_send_e_dev, d2u_recv_s_dev, d2u_recv_e_dev, &
-      der1st, der2nd, nu, nproc, pprev, pnext, blocks, threads &
+      der1st, der1st, der2nd, nu, nproc, pprev, pnext, blocks, threads &
       )
   end do
 
