@@ -49,7 +49,8 @@ contains
     type(allocator_t), target, intent(inout) :: host_allocator
     type(ibm_t) :: ibm
 
-    integer :: i, j, k, dims(3)
+    integer :: i, j, k
+    integer :: dims(3)
     real(dp), allocatable :: field_data(:, :, :)
     class(field_t), pointer :: ep1
     type(adios2_reader_t) :: reader
