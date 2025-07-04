@@ -414,7 +414,7 @@ contains
       self%dud_recv_s_dev, self%dud_recv_e_dev, &
       self%d2u_send_s_dev, self%d2u_send_e_dev, &
       self%d2u_recv_s_dev, self%d2u_recv_e_dev, &
-      tdsops_du, tdsops_d2u, nu, &
+      tdsops_du, tdsops_dud, tdsops_d2u, nu, &
       self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), &
       self%mesh%par%pnext(dir), blocks, threads &
       )
