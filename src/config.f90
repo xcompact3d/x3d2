@@ -27,13 +27,9 @@ module m_config
 
   type, extends(base_config_t) :: solver_config_t
     real(dp) :: Re, dt
-<<<<<<< HEAD
     logical :: ibm_on
-    integer :: n_iters, n_output
-=======
     real(dp), dimension(:), allocatable :: pr_species
     integer :: n_iters, n_output, n_species
->>>>>>> main
     character(3) :: poisson_solver_type, time_intg
     character(30) :: der1st_scheme, der2nd_scheme, &
                      interpl_scheme, stagder_scheme
@@ -166,12 +162,9 @@ contains
     self%dt = dt
     self%n_iters = n_iters
     self%n_output = n_output
-<<<<<<< HEAD
     self%ibm_on = ibm_on
-=======
     self%n_species = n_species
     if (n_species > 0) self%pr_species = pr_species(1:n_species)
->>>>>>> main
     self%poisson_solver_type = poisson_solver_type
     self%time_intg = time_intg
     self%der1st_scheme = der1st_scheme
