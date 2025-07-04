@@ -73,6 +73,10 @@ contains
     if (ibm%iibm == iibm_basic) then
 
       ! Read the vertex mask ep1 and close
+      !
+      ! The mask was written in python in C order
+      ! start_dims and count_dims are thus reversed
+      ! The resulting ADIOS2 output is in reversed order
       dims = mesh%get_dims(VERT)
       start_dims = int(ibm%mesh%par%n_offset(3:1:-1), i8)
       count_dims = int(dims(3:1:-1), i8)
@@ -80,6 +84,7 @@ contains
       call reader%close(file)
 
       ! Get and fill a block on the host
+      ! The order of the data is corrected in the loop below
       ep1 => ibm%host_allocator%get_block(DIR_C)
       do i = 1, dims(1)
         do j = 1, dims(2)
