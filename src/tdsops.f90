@@ -616,7 +616,8 @@ contains
     allocate (dist_b(self%n_rhs))
     dist_b(:) = 1._dp
 
-    if ((bc_start == BC_DIRICHLET) .or. (bc_start == BC_NEUMANN)) then
+    select case (bc_start)
+    case (BC_NEUMANN)
       self%dist_sa(1) = 0._dp
 
       select case (from_to)
@@ -648,9 +649,12 @@ contains
                                aici, &
                                bici, cici, dici, 0._dp]
       end select
-    end if
+    case (BC_DIRICHLET)
+      error stop 'Dirichlet BC is not supported for midpoint interpolations!'
+    end select
 
-    if ((bc_end == BC_DIRICHLET) .or. (bc_end == BC_NEUMANN)) then
+    select case (bc_end)
+    case (BC_NEUMANN)
       self%dist_sc(n) = 0._dp
 
       select case (from_to)
@@ -683,7 +687,9 @@ contains
                                aici, &
                                bici, cici + dici, 0._dp, 0._dp]
       end select
-    end if
+    case (BC_DIRICHLET)
+      error stop 'Dirichlet BC is not supported for midpoint interpolations!'
+    end select
 
     call self%preprocess_thom(dist_b)
     call self%preprocess_dist(dist_b)
@@ -743,7 +749,8 @@ contains
     allocate (dist_b(self%n_rhs))
     dist_b(:) = 1._dp
 
-    if ((bc_start == BC_DIRICHLET) .or. (bc_start == BC_NEUMANN)) then
+    select case (bc_start)
+    case (BC_NEUMANN)
       self%dist_sa(1) = 0._dp
 
       select case (from_to)
@@ -764,9 +771,12 @@ contains
                                aci, &
                                bci, 0._dp, 0._dp, 0._dp]
       end select
-    end if
+    case (BC_DIRICHLET)
+      error stop 'Dirichlet BC is not supported for midpoint derivatives!'
+    end select
 
-    if ((bc_end == BC_DIRICHLET) .or. (bc_end == BC_NEUMANN)) then
+    select case (bc_end)
+    case (BC_NEUMANN)
       self%dist_sc(n) = 0._dp
 
       select case (from_to)
@@ -785,7 +795,9 @@ contains
                                         aci + bci, &
                                         0._dp, 0._dp, 0._dp, 0._dp]
       end select
-    end if
+    case (BC_DIRICHLET)
+      error stop 'Dirichlet BC is not supported for midpoint derivatives!'
+    end select
 
     call self%preprocess_thom(dist_b)
     call self%preprocess_dist(dist_b)

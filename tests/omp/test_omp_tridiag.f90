@@ -187,6 +187,11 @@ program test_omp_tridiag
 
   ! =========================================================================
   ! stag interpolate 'v2p' with neumann sym
+  if (nrank == 0) then
+    bc_start = BC_NEUMANN
+  else
+    bc_start = BC_HALO
+  end if
   n_loc = n
   if (nrank == nproc - 1) n_loc = n - 1
   tdsops = tdsops_init(n_loc, dx_pi, operation='interpolate', &
