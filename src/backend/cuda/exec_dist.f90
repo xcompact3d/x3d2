@@ -61,7 +61,8 @@ contains
     du_send_s, du_send_e, du_recv_s, du_recv_e, &
     dud_send_s, dud_send_e, dud_recv_s, dud_recv_e, &
     d2u_send_s, d2u_send_e, d2u_recv_s, d2u_recv_e, &
-    der1st, der2nd, nu, nproc, pprev, pnext, blocks, threads &
+    tdsops_du, tdsops_dud, tdsops_d2u, nu, nproc, pprev, pnext, &
+    blocks, threads &
     )
     implicit none
 
@@ -80,7 +81,7 @@ contains
       dud_send_s, dud_send_e, dud_recv_s, dud_recv_e, &
       d2u_send_s, d2u_send_e, d2u_recv_s, d2u_recv_e
 
-    type(cuda_tdsops_t), intent(in) :: der1st, der2nd
+    type(cuda_tdsops_t), intent(in) :: tdsops_du, tdsops_dud, tdsops_d2u
     real(dp), intent(in) :: nu
     integer, intent(in) :: nproc, pprev, pnext
     type(dim3), intent(in) :: blocks, threads
@@ -96,11 +97,15 @@ contains
       d2u_send_s, d2u_send_e, &
       u, u_recv_s, u_recv_e, &
       v, v_recv_s, v_recv_e, &
-      der1st%n_tds, der1st%n_rhs, &
-      der1st%coeffs_s_dev, der1st%coeffs_e_dev, der1st%coeffs_dev, &
-      der1st%dist_fw_dev, der1st%dist_bw_dev, der1st%dist_af_dev, &
-      der2nd%coeffs_s_dev, der2nd%coeffs_e_dev, der2nd%coeffs_dev, &
-      der2nd%dist_fw_dev, der2nd%dist_bw_dev, der2nd%dist_af_dev &
+      tdsops_du%n_tds, tdsops_du%n_rhs, &
+      tdsops_du%coeffs_s_dev, tdsops_du%coeffs_e_dev, tdsops_du%coeffs_dev, &
+      tdsops_du%dist_fw_dev, tdsops_du%dist_bw_dev, tdsops_du%dist_af_dev, &
+      tdsops_dud%coeffs_s_dev, tdsops_dud%coeffs_e_dev, &
+      tdsops_dud%coeffs_dev, tdsops_dud%dist_fw_dev, tdsops_dud%dist_bw_dev, &
+      tdsops_dud%dist_af_dev, &
+      tdsops_d2u%coeffs_s_dev, tdsops_d2u%coeffs_e_dev, &
+      tdsops_d2u%coeffs_dev, tdsops_d2u%dist_fw_dev, tdsops_d2u%dist_bw_dev, &
+      tdsops_d2u%dist_af_dev &
       )
 
     ! halo exchange for 2x2 systems
@@ -115,10 +120,11 @@ contains
     call transeq_3fused_subs<<<blocks, threads>>>( & !&
       r_du, v, dud, d2u, &
       du_recv_s, du_recv_e, dud_recv_s, dud_recv_e, d2u_recv_s, d2u_recv_e, &
-      der1st%n_tds, nu, &
-      der1st%dist_sa_dev, der1st%dist_sc_dev, der1st%stretch_dev, &
-      der2nd%dist_sa_dev, der2nd%dist_sc_dev, der2nd%stretch_dev, &
-      der2nd%stretch_correct_dev &
+      tdsops_du%n_tds, nu, &
+      tdsops_du%dist_sa_dev, tdsops_du%dist_sc_dev, tdsops_du%stretch_dev, &
+      tdsops_dud%dist_sa_dev, tdsops_dud%dist_sc_dev, tdsops_dud%stretch_dev, &
+      tdsops_d2u%dist_sa_dev, tdsops_d2u%dist_sc_dev, tdsops_d2u%stretch_dev, &
+      tdsops_d2u%stretch_correct_dev &
       )
 
   end subroutine exec_dist_transeq_3fused
