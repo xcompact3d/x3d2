@@ -99,11 +99,12 @@ contains
 
     real(dp), dimension(:, :), allocatable :: ud, ud_recv_s, ud_recv_e
 
-    integer :: n_data, n_halo
+    integer :: n_data
     integer :: i, j, k
 
-    ! TODO: don't hardcode n_halo
-    n_halo = 4
+    !> DistD2 implementation is hardcoded for 4 halo layers
+    integer, parameter :: n_halo = 4
+
     n_data = SZ*n_groups
 
     allocate (ud(SZ, tdsops_dud%n_tds))

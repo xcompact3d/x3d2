@@ -63,11 +63,11 @@ module m_solver
     type(allocator_t), pointer :: host_allocator
     type(dirps_t), pointer :: xdirps, ydirps, zdirps
     type(vector_calculus_t) :: vector_calculus
-    procedure(poisson_solver), pointer :: poisson => null()
     type(ibm_t) :: ibm
     logical :: ibm_on
+    procedure(poisson_solver), pointer :: poisson => null()
+    procedure(transport_equation), pointer :: transeq => null()
   contains
-    procedure :: transeq
     procedure :: transeq_species
     procedure :: pressure_correction
     procedure :: divergence_v2p
@@ -85,6 +85,15 @@ module m_solver
       class(field_t), intent(inout) :: pressure
       class(field_t), intent(in) :: div_u
     end subroutine poisson_solver
+
+    subroutine transport_equation(self, rhs, variables)
+      import :: solver_t
+      import :: flist_t
+      implicit none
+
+      class(solver_t) :: self
+      type(flist_t), intent(inout) :: rhs(:), variables(:)
+    end subroutine transport_equation
   end interface
 
   interface solver_t
@@ -187,6 +196,12 @@ contains
     if (solver%ibm_on) &
       solver%ibm = ibm_t(backend, mesh, host_allocator)
 
+    if (solver_cfg%lowmem) then
+      solver%transeq => transeq_lowmem
+    else
+      solver%transeq => transeq_default
+    end if
+
   end function init
 
   subroutine allocate_tdsops(dirps, backend, mesh, der1st_scheme, &
@@ -245,7 +260,7 @@ contains
 
   end subroutine
 
-  subroutine transeq(self, rhs, variables)
+  subroutine transeq_default(self, rhs, variables)
     !! Skew-symmetric form of convection-diffusion terms in the
     !! incompressible Navier-Stokes momemtum equations, excluding
     !! pressure terms.
@@ -254,7 +269,7 @@ contains
 
     class(solver_t) :: self
     type(flist_t), intent(inout) :: rhs(:)
-    type(flist_t), intent(in) :: variables(:)
+    type(flist_t), intent(inout) :: variables(:)
 
     class(field_t), pointer :: u_y, v_y, w_y, u_z, v_z, w_z, &
       du_y, dv_y, dw_y, du_z, dv_z, dw_z, &
@@ -343,7 +358,123 @@ contains
       call self%transeq_species(rhs(4:), variables)
     end if
 
-  end subroutine transeq
+  end subroutine transeq_default
+
+  subroutine transeq_lowmem(self, rhs, variables)
+    !! low memory version of the transport equation
+    implicit none
+
+    class(solver_t) :: self
+    type(flist_t), intent(inout) :: rhs(:)
+    type(flist_t), intent(inout) :: variables(:)
+
+    class(field_t), pointer :: u_y, v_y, w_y, u_z, v_z, w_z, &
+      du_y, dv_y, dw_y, du_z, dv_z, dw_z, du, dv, dw, u, v, w
+
+    du => rhs(1)%ptr
+    dv => rhs(2)%ptr
+    dw => rhs(3)%ptr
+    u => variables(1)%ptr
+    v => variables(2)%ptr
+    w => variables(3)%ptr
+
+    ! -1/2(nabla u curl u + u nabla u) + nu nablasq u
+
+    ! call derivatives in x direction. Based on the run time arguments this
+    ! executes a distributed algorithm or the Thomas algorithm.
+    call self%backend%transeq_x(du, dv, dw, u, v, w, self%nu, self%xdirps)
+
+    ! request fields from the allocator
+    u_y => self%backend%allocator%get_block(DIR_Y)
+    v_y => self%backend%allocator%get_block(DIR_Y)
+    w_y => self%backend%allocator%get_block(DIR_Y)
+
+    ! reorder data from x orientation to y orientation
+    call self%backend%reorder(u_y, u, RDR_X2Y)
+    call self%backend%reorder(v_y, v, RDR_X2Y)
+    call self%backend%reorder(w_y, w, RDR_X2Y)
+
+    ! now release the x-directional fields for saving memory
+    call self%backend%allocator%release_block(u)
+    call self%backend%allocator%release_block(v)
+    call self%backend%allocator%release_block(w)
+
+    du_y => self%backend%allocator%get_block(DIR_Y)
+    dv_y => self%backend%allocator%get_block(DIR_Y)
+    dw_y => self%backend%allocator%get_block(DIR_Y)
+
+    ! similar to the x direction, obtain derivatives in y.
+    call self%backend%transeq_y(du_y, dv_y, dw_y, u_y, v_y, w_y, &
+                                self%nu, self%ydirps)
+
+    call self%backend%sum_yintox(du, du_y)
+    call self%backend%sum_yintox(dv, dv_y)
+    call self%backend%sum_yintox(dw, dw_y)
+
+    call self%backend%allocator%release_block(du_y)
+    call self%backend%allocator%release_block(dv_y)
+    call self%backend%allocator%release_block(dw_y)
+
+    ! just like in y direction, get some fields for the z derivatives.
+    u_z => self%backend%allocator%get_block(DIR_Z)
+    v_z => self%backend%allocator%get_block(DIR_Z)
+    w_z => self%backend%allocator%get_block(DIR_Z)
+
+    ! reorder from y to z
+    call self%backend%reorder(u_z, u_y, RDR_Y2Z)
+    call self%backend%reorder(v_z, v_y, RDR_Y2Z)
+    call self%backend%reorder(w_z, w_y, RDR_Y2Z)
+
+    ! we don't need the velocities in y orientation any more, so release
+    call self%backend%allocator%release_block(u_y)
+    call self%backend%allocator%release_block(v_y)
+    call self%backend%allocator%release_block(w_y)
+
+    du_z => self%backend%allocator%get_block(DIR_Z)
+    dv_z => self%backend%allocator%get_block(DIR_Z)
+    dw_z => self%backend%allocator%get_block(DIR_Z)
+
+    ! get the derivatives in z
+    call self%backend%transeq_z(du_z, dv_z, dw_z, u_z, v_z, w_z, &
+                                self%nu, self%zdirps)
+
+    ! gather all the contributions into the x result array
+    call self%backend%sum_zintox(du, du_z)
+    call self%backend%sum_zintox(dv, dv_z)
+    call self%backend%sum_zintox(dw, dw_z)
+
+    ! release all the unnecessary blocks.
+    call self%backend%allocator%release_block(du_z)
+    call self%backend%allocator%release_block(dv_z)
+    call self%backend%allocator%release_block(dw_z)
+
+    u => self%backend%allocator%get_block(DIR_X)
+    v => self%backend%allocator%get_block(DIR_X)
+    w => self%backend%allocator%get_block(DIR_X)
+
+    ! reorder from z to x
+    call self%backend%reorder(u, u_z, RDR_Z2X)
+    call self%backend%reorder(v, v_z, RDR_Z2X)
+    call self%backend%reorder(w, w_z, RDR_Z2X)
+
+    ! there is no need to keep velocities in z orientation around, so release
+    call self%backend%allocator%release_block(u_z)
+    call self%backend%allocator%release_block(v_z)
+    call self%backend%allocator%release_block(w_z)
+
+    variables(1)%ptr => u
+    variables(2)%ptr => v
+    variables(3)%ptr => w
+    self%u => u
+    self%v => v
+    self%w => w
+
+    ! Convection-diffusion for species
+    if (self%nspecies > 0) then
+      call self%transeq_species(rhs(4:), variables)
+    end if
+
+  end subroutine transeq_lowmem
 
   subroutine transeq_species(self, rhs, variables)
     !! Skew-symmetric form of convection-diffusion terms in the
