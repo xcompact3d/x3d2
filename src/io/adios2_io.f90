@@ -82,11 +82,13 @@ module m_adios2_io
     procedure, public :: begin_step => begin_step_reader
 
     generic, public :: read_data => read_scalar_integer, &
+      read_scalar_i8, &
       read_scalar_real, &
       read_array_2d_real, &
       read_array_3d_real
 
     procedure, private :: read_scalar_integer
+    procedure, private :: read_scalar_i8
     procedure, private :: read_scalar_real
     procedure, private :: read_array_2d_real
     procedure, private :: read_array_3d_real
@@ -474,6 +476,25 @@ contains
       call self%handle_error(ierr, "Failed to read variable"//name)
     end if
   end subroutine read_scalar_integer
+
+  !> Read scalar long integer data
+  subroutine read_scalar_i8(self, name, data, file)
+    class(adios2_reader_t), intent(inout) :: self
+    character(len=*), intent(in) :: name
+    integer(i8), intent(out) :: data
+    type(adios2_file_t), intent(inout) :: file
+
+    type(adios2_variable) :: var
+    integer :: ierr
+
+    call adios2_inquire_variable(var, self%io, name, ierr)
+    call self%handle_error(ierr, "Failed to inquire variable"//name)
+
+    if (ierr == adios2_found) then
+      call adios2_get(file%engine, var, data, adios2_mode_sync, ierr)
+      call self%handle_error(ierr, "Failed to read variable"//name)
+    end if
+  end subroutine read_scalar_i8
 
   !> Read scalar real data
   subroutine read_scalar_real(self, name, data, file)
