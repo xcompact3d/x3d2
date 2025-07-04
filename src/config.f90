@@ -29,6 +29,7 @@ module m_config
     real(dp) :: Re, dt
     real(dp), dimension(:), allocatable :: pr_species
     integer :: n_iters, n_output, n_species
+    logical :: lowmem
     character(3) :: poisson_solver_type, time_intg
     character(30) :: der1st_scheme, der2nd_scheme, &
                      interpl_scheme, stagder_scheme
@@ -132,13 +133,14 @@ contains
     real(dp) :: Re, dt
     real(dp), dimension(n_species_max) :: pr_species = 1._dp
     integer :: n_iters, n_output, n_species = 0
+    logical :: lowmem = .false.
     character(3) :: time_intg
     character(3) :: poisson_solver_type = 'FFT'
     character(30) :: der1st_scheme = 'compact6', der2nd_scheme = 'compact6', &
                      interpl_scheme = 'classic', stagder_scheme = 'compact6'
 
     namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
-      n_species, pr_species, &
+      n_species, pr_species, lowmem, &
       time_intg, der1st_scheme, der2nd_scheme, interpl_scheme, stagder_scheme
 
     if (present(nml_file) .and. present(nml_string)) then
@@ -161,6 +163,7 @@ contains
     self%n_output = n_output
     self%n_species = n_species
     if (n_species > 0) self%pr_species = pr_species(1:n_species)
+    self%lowmem = lowmem
     self%poisson_solver_type = poisson_solver_type
     self%time_intg = time_intg
     self%der1st_scheme = der1st_scheme

@@ -294,32 +294,28 @@ contains
     call self%backend%allocator%release_block(p_sxy_z)
     call self%backend%allocator%release_block(dpdz_sxy_z)
 
+    ! derivatives in y, with careful memory management
     p_sx_y => self%backend%allocator%get_block(DIR_Y)
     dpdy_sx_y => self%backend%allocator%get_block(DIR_Y)
-    dpdz_sx_y => self%backend%allocator%get_block(DIR_Y)
-
-    ! similar to the z direction, obtain derivatives in y.
     call self%backend%tds_solve(p_sx_y, p_sxy_y, y_interpl_c2v)
     call self%backend%tds_solve(dpdy_sx_y, p_sxy_y, y_stagder_c2v)
-    call self%backend%tds_solve(dpdz_sx_y, dpdz_sxy_y, y_interpl_c2v)
-
-    ! release memory
     call self%backend%allocator%release_block(p_sxy_y)
+
+    dpdz_sx_y => self%backend%allocator%get_block(DIR_Y)
+    call self%backend%tds_solve(dpdz_sx_y, dpdz_sxy_y, y_interpl_c2v)
     call self%backend%allocator%release_block(dpdz_sxy_y)
 
-    ! just like in y direction, get some fields for the x derivatives.
+    ! reorder from y to x, and release memory one by one
     p_sx_x => self%backend%allocator%get_block(DIR_X)
-    dpdy_sx_x => self%backend%allocator%get_block(DIR_X)
-    dpdz_sx_x => self%backend%allocator%get_block(DIR_X)
-
-    ! reorder from y to x
     call self%backend%reorder(p_sx_x, p_sx_y, RDR_Y2X)
-    call self%backend%reorder(dpdy_sx_x, dpdy_sx_y, RDR_Y2X)
-    call self%backend%reorder(dpdz_sx_x, dpdz_sx_y, RDR_Y2X)
-
-    ! release all the y directional fields.
     call self%backend%allocator%release_block(p_sx_y)
+
+    dpdy_sx_x => self%backend%allocator%get_block(DIR_X)
+    call self%backend%reorder(dpdy_sx_x, dpdy_sx_y, RDR_Y2X)
     call self%backend%allocator%release_block(dpdy_sx_y)
+
+    dpdz_sx_x => self%backend%allocator%get_block(DIR_X)
+    call self%backend%reorder(dpdz_sx_x, dpdz_sx_y, RDR_Y2X)
     call self%backend%allocator%release_block(dpdz_sx_y)
 
     ! get the derivatives in x
