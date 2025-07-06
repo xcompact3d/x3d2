@@ -48,6 +48,11 @@ jobs:
         ./configure --prefix=$(pwd)/installed
         make all install
 
+    - name: Update Open MPI PATH
+      run: |
+        echo "$GITHUB_WORKSPACE/openmpi-${OMPI_VERSION}/installed/bin" \
+          >> $GITHUB_PATH
+
     - name: Build ADIOS2
       if: steps.cache-adios2.outputs.cache-hit != 'true'
       run: |
@@ -57,10 +62,8 @@ jobs:
         cmake -DADIOS2_USE_MPI=ON -DADIOS2_USE_Python=OFF -DADIOS2_USE_Fortran=ON -B $(pwd)/installed -DCMAKE_PREFIX_PATH=$(pwd)/installed
         make -C $(pwd)/installed 
 
-    - name: Update PATH
+    - name: Update ADIOS2 PATH
       run: |
-        echo "$GITHUB_WORKSPACE/openmpi-${OMPI_VERSION}/installed/bin" \
-          >> $GITHUB_PATH
         echo "$GITHUB_WORKSPACE/adios2-${ADIOS2_VERSION}/installed/bin" \
           >> $GITHUB_PATH
 
