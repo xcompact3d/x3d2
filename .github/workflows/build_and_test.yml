@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       OMPI_VERSION: 4.1.5
+      ADIOS2_VERSION: 2.10.2
     steps:
 
     - uses: actions/checkout@v4
@@ -28,6 +29,13 @@ jobs:
         key: openmpi-${{ env.OMPI_VERSION }}
         save-always: 'true'
 
+    - name: Cache ADIOS2
+      id: cache-adios2
+      uses: actions/cache@v4
+      with:
+        path: ADIOS2-${{ env.ADIOS2_VERSION }}/installed
+        key: ADIOS2-${{ env.ADIOS2_VERSION }}
+        save-always: 'true'
     - name: Display GCC version number
       run: gcc --version
 
@@ -40,9 +48,23 @@ jobs:
         ./configure --prefix=$(pwd)/installed
         make all install
 
-    - name: Update PATH
+    - name: Update Open MPI PATH
       run: |
         echo "$GITHUB_WORKSPACE/openmpi-${OMPI_VERSION}/installed/bin" \
+          >> $GITHUB_PATH
+
+    - name: Build ADIOS2
+      if: steps.cache-adios2.outputs.cache-hit != 'true'
+      run: |
+        wget https://github.com/ornladios/ADIOS2/archive/refs/tags/v${ADIOS2_VERSION}.tar.gz
+        tar -xf v${ADIOS2_VERSION}.tar.gz
+        cd ADIOS2-${ADIOS2_VERSION}/ && mkdir installed
+        cmake -DADIOS2_USE_MPI=ON -DADIOS2_USE_Python=OFF -DADIOS2_USE_Fortran=ON -B $(pwd)/installed -DCMAKE_PREFIX_PATH=$(pwd)/installed
+        make -C $(pwd)/installed 
+
+    - name: Update ADIOS2 PATH
+      run: |
+        echo "$GITHUB_WORKSPACE/ADIOS2-${ADIOS2_VERSION}/installed/bin" \
           >> $GITHUB_PATH
 
     - name: Configure Debug build
