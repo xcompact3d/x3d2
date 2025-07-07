@@ -22,8 +22,6 @@ stages:
   image: ubuntu:22.04
   stage: build-and-test
   timeout: 1h
-  variables:
-    ADIOS2_VERSION: 2.10.2
   script:
     - echo "Setup environment"
     - apt update
@@ -87,6 +85,7 @@ build-and-test:
   <<: *build-and-test-template
   needs: []
   variables:
+    ADIOS2_VERSION: 2.10.2
     EXTRA_MODULE: ""
     BUILD_FORTRAN: "" 
 
@@ -94,6 +93,7 @@ build-and-test-cuda:
   <<: *build-and-test-template
   needs: []
   variables:
+    ADIOS2_VERSION: 2.10.2
     EXTRA_MODULE: "cuda-hpc-sdk"
     BUILD_FORTRAN: "-DCMAKE_Fortran_COMPILER=nvfortran" 
     
