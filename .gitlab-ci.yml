@@ -22,6 +22,8 @@ stages:
   image: ubuntu:22.04
   stage: build-and-test
   timeout: 1h
+  variables:
+    ADIOS2_VERSION: 2.10.2
   script:
     - echo "Setup environment"
     - apt update
@@ -39,12 +41,20 @@ stages:
     - . /etc/profile.d/modules.sh
     - ccache -s && ccache -M 5G
     - if [ "${EXTRA_MODULE}" != "" ]; then module load ${EXTRA_MODULE}; fi
+    - echo "Configure ADIOS2 build"
+    - python -m pip install mpi4py
+    - wget https://github.com/ornladios/ADIOS2/archive/refs/tags/v${ADIOS2_VERSION}.tar.gz
+    - tar -xf v${ADIOS2_VERSION}.tar.gz
+    - cd ADIOS2-${ADIOS2_VERSION}
+    - cmake -B $(pwd)/installed ${BUILD_FORTRAN} -DCMAKE_PREFIX_PATH=$(pwd)/installed -DADIOS2_USE_MPI=ON -DADIOS2_USE_Python=ON -DADIOS2_USE_Fortran=ON
+    - make -j8 -C $(pwd)/installed
+    - cd ../
     - echo "Configure Debug build"
-    - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug ${BUILD_FORTRAN} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
+    - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug ${BUILD_FORTRAN} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DADIOS2_ROOT_DIR=$(pwd)/ADIOS2-${ADIOS2_VERSION}/installed
     - echo "Build with Debug (strict) flags"
     - make -C build
     - echo "Configure Release build"
-    - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release ${BUILD_FORTRAN} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
+    - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release ${BUILD_FORTRAN} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DADIOS2_ROOT_DIR=$(pwd)/ADIOS2-${ADIOS2_VERSION}/installed
     - echo "Build tests"
     - make -C build
     - echo "Run the tests"
@@ -77,14 +87,14 @@ build-and-test:
   <<: *build-and-test-template
   needs: []
   variables:
-    EXTRA_MODULE: "adios2"
+    EXTRA_MODULE: ""
     BUILD_FORTRAN: "" 
 
 build-and-test-cuda:
   <<: *build-and-test-template
   needs: []
   variables:
-    EXTRA_MODULE: "cuda-hpc-sdk adios2"
+    EXTRA_MODULE: "cuda-hpc-sdk"
     BUILD_FORTRAN: "-DCMAKE_Fortran_COMPILER=nvfortran" 
     
 check-formatting:
