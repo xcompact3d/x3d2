@@ -40,11 +40,11 @@ stages:
     - ccache -s && ccache -M 5G
     - if [ "${EXTRA_MODULE}" != "" ]; then module load ${EXTRA_MODULE}; fi
     - echo "Configure Debug build"
-    - FC=mpif90 cmake -S . -B build "-DCMAKE_BUILD_TYPE=Debug ${BUILD_FORTRAN}"
+    - FC=mpif90 cmake -S . -B build "-DCMAKE_BUILD_TYPE=Debug ${BUILD_FORTRAN} -DUSE_SYSTEM_ADIOS2=ON"
     - echo "Build with Debug (strict) flags"
     - make -C build
     - echo "Configure Release build"
-    - FC=mpif90 cmake -S . -B build "-DCMAKE_BUILD_TYPE=Release ${BUILD_FORTRAN}"
+    - FC=mpif90 cmake -S . -B build "-DCMAKE_BUILD_TYPE=Release ${BUILD_FORTRAN} -DUSE_SYSTEM_ADIOS2=ON"
     - echo "Build tests"
     - make -C build
     - echo "Run the tests"
