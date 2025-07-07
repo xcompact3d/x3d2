@@ -63,7 +63,7 @@ jobs:
         wget https://github.com/ornladios/ADIOS2/archive/refs/tags/v${ADIOS2_VERSION}.tar.gz
         tar -xf v${ADIOS2_VERSION}.tar.gz
         cd ADIOS2-${ADIOS2_VERSION}/ && mkdir installed
-        cmake -DADIOS2_USE_MPI=ON -DADIOS2_USE_Python=ON -DADIOS2_USE_Fortran=ON -B $(pwd)/installed -DCMAKE_PREFIX_PATH=$(pwd)/installed
+        cmake -B $(pwd)/installed -DCMAKE_PREFIX_PATH=$(pwd)/installed -DADIOS2_USE_MPI=ON -DADIOS2_USE_Python=ON -DADIOS2_USE_Fortran=ON 
         make -C $(pwd)/installed 
 
     - name: Update ADIOS2 PATH
@@ -72,13 +72,13 @@ jobs:
           >> $GITHUB_PATH
 
     - name: Configure Debug build
-      run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+      run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
 
     - name: Build with Debug (strict) flags
       run: make -C build
       
     - name: Configure Release build
-      run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
 
     - name: Build tests
       run: make -C build
