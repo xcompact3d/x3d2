@@ -372,7 +372,7 @@ contains
       select case (trim(geo%stretching(2)))
       case ('centred')
         a1 = 1._dp/(4*pi*geo%beta(2))*geo%L(2)
-      case ('both-ends')
+      case ('top-bottom')
         a1 = -1._dp/(4*pi*geo%beta(2))*geo%L(2)
       case default
         a1 = 0._dp

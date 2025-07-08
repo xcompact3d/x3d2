@@ -190,7 +190,7 @@ contains
           case ('centred')
             yeta_vt = (i_glob - 1)*s
             yeta_mp = (i_glob - 0.5_dp)*s
-          case ('both-ends')
+          case ('top-bottom')
             yeta_vt = (i_glob - 1)*s - 0.5_dp
             yeta_mp = (i_glob - 0.5_dp)*s - 0.5_dp
           case ('bottom')
