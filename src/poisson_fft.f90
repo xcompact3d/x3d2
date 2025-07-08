@@ -163,12 +163,17 @@ contains
       self%poisson => poisson_000
     else if (self%periodic_x .and. (.not. self%periodic_y) &
              .and. (self%periodic_z)) then
+      if (mesh%par%nproc > 1) then
+        error stop 'Multiple ranks are not yet supported for non-periodic BCs!'
+      end if
       self%poisson => poisson_010
       ! stretching requires some coefficients matrices
       if (mesh%geo%stretched(2)) then
         self%stretched_y = .true.
         call self%stretching_matrix(mesh%geo, xdirps, ydirps, zdirps)
       end if
+    else
+      error stop 'Requested BCs are not supported in FFT-based Poisson solver!'
     end if
   end subroutine base_init
 
@@ -213,6 +218,8 @@ contains
   subroutine stretching_matrix(self, geo, xdirps, ydirps, zdirps)
     !! Stretching necessitates a special operation in spectral space.
     !! The coefficients for the operation are stored in matrix form.
+    !!
+    !! Ref. JCP 228 (2009), 5989–6015, Sec 5
     implicit none
 
     class(poisson_fft_t) :: self

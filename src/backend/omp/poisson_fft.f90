@@ -59,6 +59,11 @@ contains
 
     call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps, isize, istart)
 
+    if (mesh%geo%stretched(2)) then
+      error stop 'OpenMP backends FFT based Poisson solver does not support&
+                  & stretching in y-direction yet!'
+    end if
+
     allocate (poisson_fft%c_x(poisson_fft%nx_spec, poisson_fft%ny_spec, &
                               poisson_fft%nz_spec))
 
