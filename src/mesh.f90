@@ -305,15 +305,57 @@ contains
     end select
   end function get_n_dir
 
-  pure function get_coordinates(self, i, j, k) result(xloc)
-    !! Get the coordinates of a vertex with i, j, k local indices
+  pure function get_coordinates(self, i, j, k, data_loc_op) result(coords)
+    !! Get the coordinates of a vertex with i, j, k local cartesian indices
+    !! Avoid calling this in hot loops
     class(mesh_t), intent(in) :: self
     integer, intent(in) :: i, j, k
-    real(dp), dimension(3) :: xloc
+    integer, optional, intent(in) :: data_loc_op
+    integer :: data_loc
+    real(dp), dimension(3) :: coords
 
-    xloc(1) = self%geo%vert_coords(i, 1)
-    xloc(2) = self%geo%vert_coords(j, 2)
-    xloc(3) = self%geo%vert_coords(k, 3)
+    if (present(data_loc_op)) then
+      data_loc = data_loc_op
+    else
+      data_loc = VERT
+    end if
+
+    select case (data_loc)
+    case (VERT)
+      coords(1) = self%geo%vert_coords(i, 1)
+      coords(2) = self%geo%vert_coords(j, 2)
+      coords(3) = self%geo%vert_coords(k, 3)
+    case (CELL)
+      coords(1) = self%geo%midp_coords(i, 1)
+      coords(2) = self%geo%midp_coords(j, 2)
+      coords(3) = self%geo%midp_coords(k, 3)
+    case (X_FACE)
+      coords(1) = self%geo%vert_coords(i, 1)
+      coords(2) = self%geo%midp_coords(j, 2)
+      coords(3) = self%geo%midp_coords(k, 3)
+    case (Y_FACE)
+      coords(1) = self%geo%midp_coords(i, 1)
+      coords(2) = self%geo%vert_coords(j, 2)
+      coords(3) = self%geo%midp_coords(k, 3)
+    case (Z_FACE)
+      coords(1) = self%geo%midp_coords(i, 1)
+      coords(2) = self%geo%midp_coords(j, 2)
+      coords(3) = self%geo%vert_coords(k, 3)
+    case (X_EDGE)
+      coords(1) = self%geo%midp_coords(i, 1)
+      coords(2) = self%geo%vert_coords(j, 2)
+      coords(3) = self%geo%vert_coords(k, 3)
+    case (Y_EDGE)
+      coords(1) = self%geo%vert_coords(i, 1)
+      coords(2) = self%geo%midp_coords(j, 2)
+      coords(3) = self%geo%vert_coords(k, 3)
+    case (Z_EDGE)
+      coords(1) = self%geo%vert_coords(i, 1)
+      coords(2) = self%geo%vert_coords(j, 2)
+      coords(3) = self%geo%midp_coords(k, 3)
+    case default
+      error stop "Unknown data_loc in get_coordinates"
+    end select
   end function
 
 end module m_mesh
