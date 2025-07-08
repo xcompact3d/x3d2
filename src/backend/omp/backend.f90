@@ -365,7 +365,7 @@ contains
     integer :: n_groups, dir
 
     dir = u%dir
-    n_groups = self%allocator%get_n_groups(u%dir)
+    n_groups = self%allocator%get_n_groups(dir)
 
     call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
                            tdsops%n_tds, n_groups)

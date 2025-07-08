@@ -19,7 +19,7 @@ program test_allocator
 
   call MPI_Init(ierr)
 
-  allocator = allocator_t(8, 8, 8, 8)
+  allocator = allocator_t([8, 8, 8], 8)
 
   allpass = .true.
 

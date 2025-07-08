@@ -73,10 +73,9 @@ program test_omp_adamsbashforth
 
   mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
-  dims = mesh%get_dims(VERT)
   ! allocate object
 #ifdef CUDA
-  cuda_allocator = cuda_allocator_t(dims(1), dims(2), dims(3), 1)
+  cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), 1)
   allocator => cuda_allocator
   if (nrank == 0) print *, 'CUDA allocator instantiated'
 
@@ -84,7 +83,7 @@ program test_omp_adamsbashforth
   backend => cuda_backend
   if (nrank == 0) print *, 'CUDA backend instantiated'
 #else
-  omp_allocator = allocator_t(dims(1), dims(2), dims(3), 1)
+  omp_allocator = allocator_t(mesh%get_dims(VERT), 1)
   allocator => omp_allocator
   if (nrank == 0) print *, 'OpenMP allocator instantiated'
 

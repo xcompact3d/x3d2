@@ -16,7 +16,7 @@ program test_allocator_cuda
 
   call MPI_Init(ierr)
 
-  allocator = cuda_allocator_t(8, 8, 8, 8)
+  allocator = cuda_allocator_t([8, 8, 8], 8)
 
   allpass = .true.
 

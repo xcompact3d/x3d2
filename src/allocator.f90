@@ -61,11 +61,13 @@ module m_allocator
 
 contains
 
-  function allocator_init(nx, ny, nz, sz) result(allocator)
-    integer, intent(in) :: nx, ny, nz, sz
+  function allocator_init(dims, sz) result(allocator)
+    integer, intent(in) :: dims(3), sz
     type(allocator_t) :: allocator
 
-    integer :: nx_padded, ny_padded, nz_padded
+    integer :: nx, ny, nz, nx_padded, ny_padded, nz_padded
+
+    nx = dims(1); ny = dims(2); nz = dims(3)
 
     ! Apply padding based on sz
     nx_padded = nx - 1 + mod(-(nx - 1), sz) + sz

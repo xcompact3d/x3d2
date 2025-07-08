@@ -42,7 +42,7 @@ program test_vecadd
   class(field_t), pointer :: c => null()
   class(field_t), pointer :: z => null()
 
-  integer, dimension(3) :: dims_global, dims
+  integer, dimension(3) :: dims_global
   integer, dimension(3) :: nproc_dir
   real(dp), dimension(3) :: L_global
   character(len=8), dimension(2) :: BC_x, BC_y, BC_z
@@ -62,16 +62,16 @@ program test_vecadd
   BC_z = BC_x
 
   mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
-  dims = mesh%get_dims(VERT)
+
 #ifdef CUDA
-  cuda_allocator = cuda_allocator_t(dims(1), dims(2), dims(3), SZ)
+  cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
   allocator => cuda_allocator
-  host_allocator = allocator_t(dims(1), dims(2), dims(3), SZ)
+  host_allocator = allocator_t(mesh%get_dims(VERT), SZ)
 
   cuda_backend = cuda_backend_t(mesh, allocator)
   backend => cuda_backend
 #else
-  omp_allocator = allocator_t(dims(1), dims(2), dims(3), SZ)
+  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
   allocator => omp_allocator
   host_allocator => omp_allocator
 

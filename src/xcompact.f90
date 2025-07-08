@@ -83,18 +83,18 @@ program xcompact
   ! get local vertex dimensions
   dims = mesh%get_dims(VERT)
 #ifdef CUDA
-  cuda_allocator = cuda_allocator_t(dims(1), dims(2), dims(3), SZ)
+  cuda_allocator = cuda_allocator_t(dims, SZ)
   allocator => cuda_allocator
   if (nrank == 0) print *, 'CUDA allocator instantiated'
 
-  omp_allocator = allocator_t(dims(1), dims(2), dims(3), SZ)
+  omp_allocator = allocator_t(dims, SZ)
   host_allocator => omp_allocator
 
   cuda_backend = cuda_backend_t(mesh, allocator)
   backend => cuda_backend
   if (nrank == 0) print *, 'CUDA backend instantiated'
 #else
-  omp_allocator = allocator_t(dims(1), dims(2), dims(3), SZ)
+  omp_allocator = allocator_t(dims, SZ)
   allocator => omp_allocator
   host_allocator => omp_allocator
   if (nrank == 0) print *, 'OpenMP allocator instantiated'

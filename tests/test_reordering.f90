@@ -83,9 +83,8 @@ program test_reorder
 
   mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
-  dims = mesh%get_dims(VERT)
 #ifdef CUDA
-  cuda_allocator = cuda_allocator_t(dims(1), dims(2), dims(3), SZ)
+  cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
   allocator => cuda_allocator
   print *, 'CUDA allocator instantiated'
 
@@ -93,7 +92,7 @@ program test_reorder
   backend => cuda_backend
   print *, 'CUDA backend instantiated'
 #else
-  omp_allocator = allocator_t(dims(1), dims(2), dims(3), SZ)
+  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
   allocator => omp_allocator
   print *, 'OpenMP allocator instantiated'
 

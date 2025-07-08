@@ -18,7 +18,7 @@ program test_omp_transeq_species
   class(field_t), pointer :: dspec
   real(dp), dimension(:, :, :), allocatable :: r_u
   class(mesh_t), allocatable :: mesh
-  integer, dimension(3) :: dims_global, dims, nproc_dir
+  integer, dimension(3) :: dims_global, nproc_dir
   real(dp), dimension(3) :: L_global
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
 
@@ -55,11 +55,9 @@ program test_omp_transeq_species
 
   mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
-  dims = mesh%get_dims(VERT)
-
   xdirps%dir = DIR_X; ydirps%dir = DIR_Y; zdirps%dir = DIR_Z
 
-  omp_allocator = allocator_t(dims(1), dims(2), dims(3), SZ)
+  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
   allocator => omp_allocator
   print *, 'OpenMP allocator instantiated'
 

@@ -86,8 +86,7 @@ contains
       n_vert_z = [4, 4, 4, 4]
     end if
 
-    dims = mesh%get_dims(VERT)
-    allocator = allocator_t(dims(1), dims(2), dims(3), 8)
+    allocator = allocator_t(mesh%get_dims(VERT), 8)
 
     ptr1 => allocator%get_block(DIR_Z, CELL)
     ptr2 => allocator%get_block(DIR_Z, VERT)
