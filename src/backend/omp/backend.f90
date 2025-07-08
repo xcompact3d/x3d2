@@ -399,7 +399,7 @@ contains
     integer :: out_i, out_j, out_k
     integer :: dir_from, dir_to
 
-    dims = self%mesh%get_padded_dims(u)
+    dims = u%get_shape()
     cart_padded = self%mesh%get_padded_dims(DIR_C)
     call get_dirs_from_rdr(dir_from, dir_to, direction)
 
@@ -456,7 +456,7 @@ contains
 
     dir_from = DIR_X
 
-    dims = self%mesh%get_padded_dims(u)
+    dims = u%get_shape()
     cart_padded = self%mesh%get_padded_dims(DIR_C)
 
     !$omp parallel do private(i, ii, jj, kk) collapse(2)
@@ -488,7 +488,7 @@ contains
       error stop "Called vector add with incompatible fields"
     end if
 
-    dims = self%mesh%get_padded_dims(src)
+    dims = src%get_shape()
     nvec = dims(1)/SZ
     remstart = nvec*SZ + 1
 
@@ -532,7 +532,7 @@ contains
       error stop "Called vector add with incompatible fields"
     end if
 
-    dims = self%mesh%get_padded_dims(x)
+    dims = x%get_shape()
     nvec = dims(1)/SZ
     remstart = nvec*SZ + 1
 
