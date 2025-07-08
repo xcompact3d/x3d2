@@ -36,6 +36,8 @@ module m_poisson_fft
     real(dp), allocatable, dimension(:, :, :, :) :: a_odd_re, a_odd_im, &
                                                     a_even_re, a_even_im, &
                                                     a_re, a_im
+    !> lowmem option, only used in CUDA backend
+    logical :: lowmem = .false.
     !> Procedure pointer to BC specific poisson solvers
     procedure(poisson_xxx), pointer :: poisson => null()
   contains
