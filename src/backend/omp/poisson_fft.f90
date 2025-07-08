@@ -34,11 +34,12 @@ module m_omp_poisson_fft
 
 contains
 
-  function init(mesh, xdirps, ydirps, zdirps) result(poisson_fft)
+  function init(mesh, xdirps, ydirps, zdirps, lowmem) result(poisson_fft)
     implicit none
 
     type(mesh_t), intent(in) :: mesh
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    logical, optional, intent(in) :: lowmem
     integer, dimension(3) :: istart, iend, isize
     integer :: dims(3)
 
@@ -46,6 +47,10 @@ contains
 
     if (mesh%par%is_root()) then
       print *, "Initialising 2decomp&fft"
+    end if
+
+    if (present(lowmem)) then
+      print *, 'lowmem_fft has no impact in the OpenMP backend.'
     end if
 
     ! Get global cell dims

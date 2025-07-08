@@ -31,6 +31,11 @@ module m_cuda_poisson_fft
     real(dp), device, allocatable, dimension(:) :: ax_dev, bx_dev, &
                                                    ay_dev, by_dev, &
                                                    az_dev, bz_dev
+    !> Stretching operator matrices stores
+    real(dp), device, allocatable, dimension(:, :, :, :) :: &
+      store_a_odd_re_dev, store_a_odd_im_dev, &
+      store_a_even_re_dev, store_a_even_im_dev, &
+      store_a_re_dev, store_a_im_dev
     !> Stretching operator matrices
     real(dp), device, allocatable, dimension(:, :, :, :) :: &
       a_odd_re_dev, a_odd_im_dev, a_even_re_dev, a_even_im_dev, &
@@ -57,11 +62,12 @@ module m_cuda_poisson_fft
 
 contains
 
-  function init(mesh, xdirps, ydirps, zdirps) result(poisson_fft)
+  function init(mesh, xdirps, ydirps, zdirps, lowmem) result(poisson_fft)
     implicit none
 
     type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    logical, optional, intent(in) :: lowmem
 
     type(cuda_poisson_fft_t) :: poisson_fft
 
@@ -105,17 +111,32 @@ contains
     poisson_fft%ay_dev = poisson_fft%ay; poisson_fft%by_dev = poisson_fft%by
     poisson_fft%az_dev = poisson_fft%az; poisson_fft%bz_dev = poisson_fft%bz
 
+    ! will store the a matrix coefficients in GPU memory if (.not. lowmem)
+    ! and do a device-to-device copy at each iter. Otherwise copy from host.
+    ! lowmem is .false. by default
+    if (present(lowmem)) poisson_fft%lowmem = lowmem
+
     ! if stretching in y is 'centred' or 'top-bottom'
     if (poisson_fft%stretched_y .and. poisson_fft%stretched_y_sym) then
       poisson_fft%a_odd_re_dev = poisson_fft%a_odd_re
       poisson_fft%a_odd_im_dev = poisson_fft%a_odd_im
       poisson_fft%a_even_re_dev = poisson_fft%a_even_re
       poisson_fft%a_even_im_dev = poisson_fft%a_even_im
+      if (.not. poisson_fft%lowmem) then
+        poisson_fft%store_a_odd_re_dev = poisson_fft%a_odd_re
+        poisson_fft%store_a_odd_im_dev = poisson_fft%a_odd_im
+        poisson_fft%store_a_even_re_dev = poisson_fft%a_even_re
+        poisson_fft%store_a_even_im_dev = poisson_fft%a_even_im
+      end if
     !! if stretching in y is 'bottom'
     else if (poisson_fft%stretched_y .and. &
              (.not. poisson_fft%stretched_y_sym)) then
       poisson_fft%a_re_dev = poisson_fft%a_re
       poisson_fft%a_im_dev = poisson_fft%a_im
+      if (.not. poisson_fft%lowmem) then
+        poisson_fft%store_a_re_dev = poisson_fft%a_re
+        poisson_fft%store_a_im_dev = poisson_fft%a_im
+      end if
     end if
 
     ! 3D plans
@@ -299,11 +320,18 @@ contains
 
       ! if stretching in y is 'centred' or 'top-bottom'
       if (self%stretched_y_sym) then
-        ! PERF issue: data movement from host to device at each step
-        self%a_odd_re_dev = self%a_odd_re
-        self%a_odd_im_dev = self%a_odd_im
-        self%a_even_re_dev = self%a_even_re
-        self%a_even_im_dev = self%a_even_im
+        ! copy from host to device if lowmem else from device stores
+        if (self%lowmem) then
+          self%a_odd_re_dev = self%a_odd_re
+          self%a_odd_im_dev = self%a_odd_im
+          self%a_even_re_dev = self%a_even_re
+          self%a_even_im_dev = self%a_even_im
+        else
+          self%a_odd_re_dev = self%store_a_odd_re_dev
+          self%a_odd_im_dev = self%store_a_odd_im_dev
+          self%a_even_re_dev = self%store_a_even_re_dev
+          self%a_even_im_dev = self%store_a_even_im_dev
+        end if
         ! start from the first odd entry
         off = 0
         ! and continue with odd ones
@@ -322,9 +350,14 @@ contains
           )
       !! if stretching in y is 'bottom'
       else
-        ! PERF issue: data movement from host to device at each step
-        self%a_re_dev = self%a_re
-        self%a_im_dev = self%a_im
+        ! copy from host to device if lowmem else from device stores
+        if (self%lowmem) then
+          self%a_re_dev = self%a_re
+          self%a_im_dev = self%a_im
+        else
+          self%a_re_dev = self%store_a_re_dev
+          self%a_im_dev = self%store_a_im_dev
+        end if
         off = 0
         inc = 1
         ! start from the first entry and increment 1

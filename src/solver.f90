@@ -179,7 +179,8 @@ contains
     case ('FFT')
       if (solver%mesh%par%is_root()) print *, 'Poisson solver: FFT'
       call solver%backend%init_poisson_fft(solver%mesh, solver%xdirps, &
-                                           solver%ydirps, solver%zdirps)
+                                           solver%ydirps, solver%zdirps, &
+                                           solver_cfg%lowmem_fft)
       solver%poisson => poisson_fft
     case ('CG')
       if (solver%mesh%par%is_root()) &
@@ -189,7 +190,7 @@ contains
       error stop 'poisson_solver_type is not valid. Use "FFT" or "CG".'
     end select
 
-    if (solver_cfg%lowmem) then
+    if (solver_cfg%lowmem_transeq) then
       solver%transeq => transeq_lowmem
     else
       solver%transeq => transeq_default
@@ -372,7 +373,7 @@ contains
   end subroutine transeq_default
 
   subroutine transeq_lowmem(self, rhs, variables)
-    !! low memory version of the transport equation
+    !! low memory version of the transport equation, roughly %2 slower overall
     implicit none
 
     class(solver_t) :: self
