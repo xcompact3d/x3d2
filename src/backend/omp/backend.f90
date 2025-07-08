@@ -479,36 +479,22 @@ contains
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: dst
     class(field_t), intent(in) :: src
-    integer, dimension(3) :: dims
-    integer :: i, j, k, ii
-
-    integer :: nvec, remstart
+    integer :: i, j, k
 
     if (src%dir /= dst%dir) then
-      error stop "Called vector add with incompatible fields"
+      error stop "Called vector copy with incompatible fields"
     end if
 
-    dims = src%get_shape()
-    nvec = dims(1)/SZ
-    remstart = nvec*SZ + 1
+    if (dst%dir == DIR_C) error stop 'veccopy does not support DIR_C fields'
 
-    !$omp parallel do private(i, ii) collapse(2)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        ! Execute inner vectorised loops
-        do ii = 1, nvec
-          !$omp simd
-          do i = 1, SZ
-            dst%data(i + (ii - 1)*SZ, j, k) = &
-              src%data(i + (ii - 1)*SZ, j, k)
-          end do
-          !$omp end simd
-        end do
-
-        ! Remainder loop
-        do i = remstart, dims(1)
+    !$omp parallel do
+    do k = 1, size(dst%data, 3)
+      do j = 1, size(dst%data, 2)
+        !$omp simd
+        do i = 1, SZ
           dst%data(i, j, k) = src%data(i, j, k)
         end do
+        !$omp end simd
       end do
     end do
     !$omp end parallel do
@@ -523,37 +509,22 @@ contains
     class(field_t), intent(in) :: x
     real(dp), intent(in) :: b
     class(field_t), intent(inout) :: y
-    integer, dimension(3) :: dims
-    integer :: i, j, k, ii
-
-    integer :: nvec, remstart
+    integer :: i, j, k
 
     if (x%dir /= y%dir) then
       error stop "Called vector add with incompatible fields"
     end if
 
-    dims = x%get_shape()
-    nvec = dims(1)/SZ
-    remstart = nvec*SZ + 1
+    if (y%dir == DIR_C) error stop 'vecadd does not support DIR_C fields'
 
-    !$omp parallel do private(i, ii) collapse(2)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        ! Execute inner vectorised loops
-        do ii = 1, nvec
-          !$omp simd
-          do i = 1, SZ
-            y%data(i + (ii - 1)*SZ, j, k) = &
-              a*x%data(i + (ii - 1)*SZ, j, k) + &
-              b*y%data(i + (ii - 1)*SZ, j, k)
-          end do
-          !$omp end simd
-        end do
-
-        ! Remainder loop
-        do i = remstart, dims(1)
+    !$omp parallel do
+    do k = 1, size(y%data, 3)
+      do j = 1, size(y%data, 2)
+        !$omp simd
+        do i = 1, SZ
           y%data(i, j, k) = a*x%data(i, j, k) + b*y%data(i, j, k)
         end do
+        !$omp end simd
       end do
     end do
     !$omp end parallel do
@@ -568,6 +539,12 @@ contains
     class(field_t), intent(inout) :: y
     class(field_t), intent(in) :: x
     integer :: i, j, k
+
+    if (x%dir /= y%dir) then
+      error stop "Called vector multiply with incompatible fields"
+    end if
+
+    if (y%dir == DIR_C) error stop 'vecmult does not support DIR_C fields'
 
     !$omp parallel do
     do k = 1, size(y%data, 3)
