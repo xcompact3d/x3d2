@@ -84,7 +84,7 @@ program test_reorder
   mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
 #ifdef CUDA
-  cuda_allocator = cuda_allocator_t(mesh, SZ)
+  cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
   allocator => cuda_allocator
   print *, 'CUDA allocator instantiated'
 
@@ -92,7 +92,7 @@ program test_reorder
   backend => cuda_backend
   print *, 'CUDA backend instantiated'
 #else
-  omp_allocator = allocator_t(mesh, SZ)
+  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
   allocator => omp_allocator
   print *, 'OpenMP allocator instantiated'
 
@@ -106,20 +106,17 @@ program test_reorder
   pass_Y = .true.
   pass_Z = .true.
 
-  dims_padded = mesh%get_padded_dims(DIR_C)
+  dims_padded = allocator%get_padded_dims(DIR_C)
 
   ! Test indexing only
   do k = 1, mesh%get_n(DIR_Z, VERT)
     do j = 1, mesh%get_n(DIR_Y, VERT)
       do i = 1, mesh%get_n(DIR_X, VERT)
-        call test_index_reversing(pass_X, i, j, k, DIR_X, &
-                                  mesh%get_sz(), dims_padded(1), &
+        call test_index_reversing(pass_X, i, j, k, DIR_X, SZ, dims_padded(1), &
                                   dims_padded(2), dims_padded(3))
-        call test_index_reversing(pass_Y, i, j, k, DIR_Y, &
-                                  mesh%get_sz(), dims_padded(1), &
+        call test_index_reversing(pass_Y, i, j, k, DIR_Y, SZ, dims_padded(1), &
                                   dims_padded(2), dims_padded(3))
-        call test_index_reversing(pass_Z, i, j, k, DIR_Z, &
-                                  mesh%get_sz(), dims_padded(1), &
+        call test_index_reversing(pass_Z, i, j, k, DIR_Z, SZ, dims_padded(1), &
                                   dims_padded(2), dims_padded(3))
       end do
     end do
@@ -136,7 +133,7 @@ program test_reorder
   u_z => allocator%get_block(DIR_Z)
   u_x_original => allocator%get_block(DIR_X)
 
-  dims(:) = mesh%get_padded_dims(DIR_X)
+  dims(:) = allocator%get_padded_dims(DIR_X)
   allocate (u_array(dims(1), dims(2), dims(3)))
 
   call random_number(u_array)

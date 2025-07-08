@@ -57,7 +57,7 @@ program test_omp_transeq_species
 
   xdirps%dir = DIR_X; ydirps%dir = DIR_Y; zdirps%dir = DIR_Z
 
-  omp_allocator = allocator_t(mesh, SZ)
+  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
   allocator => omp_allocator
   print *, 'OpenMP allocator instantiated'
 
@@ -68,7 +68,7 @@ program test_omp_transeq_species
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
   n = mesh%get_n(DIR_X, VERT)
-  n_groups = mesh%get_n_groups(DIR_X)
+  n_groups = allocator%get_n_groups(DIR_X)
 
   nu = 1._dp
 

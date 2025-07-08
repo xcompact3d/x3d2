@@ -78,9 +78,9 @@ contains
     end select
 
     backend%mesh => mesh
-    n_groups = maxval([backend%mesh%get_n_groups(DIR_X), &
-                       backend%mesh%get_n_groups(DIR_Y), &
-                       backend%mesh%get_n_groups(DIR_Z)])
+    n_groups = maxval([backend%allocator%get_n_groups(DIR_X), &
+                       backend%allocator%get_n_groups(DIR_Y), &
+                       backend%allocator%get_n_groups(DIR_Z)])
 
     allocate (backend%u_send_s(SZ, backend%n_halo, n_groups))
     allocate (backend%u_send_e(SZ, backend%n_halo, n_groups))
@@ -196,7 +196,7 @@ contains
 
     integer :: n_groups
 
-    n_groups = self%mesh%get_n_groups(dirps%dir)
+    n_groups = self%allocator%get_n_groups(dirps%dir)
 
     ! Halo exchange for momentum if needed
     if (sync) then
@@ -265,7 +265,7 @@ contains
     integer :: n, nproc_dir, pprev, pnext
     integer :: n_groups
 
-    n_groups = self%mesh%get_n_groups(dir)
+    n_groups = self%allocator%get_n_groups(dir)
     n = self%mesh%get_n(u)
     nproc_dir = self%mesh%par%nproc_dir(dir)
     pprev = self%mesh%par%pprev(dir)
@@ -325,7 +325,7 @@ contains
       conv%data, conv_recv_s, conv_recv_e, &
       tdsops_du, tdsops_dud, tdsops_d2u, nu, &
       self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), &
-      self%mesh%par%pnext(dir), self%mesh%get_n_groups(dir))
+      self%mesh%par%pnext(dir), self%allocator%get_n_groups(dir))
 
     call rhs_du%set_data_loc(u%data_loc)
 
@@ -365,7 +365,7 @@ contains
     integer :: n_groups, dir
 
     dir = u%dir
-    n_groups = self%mesh%get_n_groups(u)
+    n_groups = self%allocator%get_n_groups(dir)
 
     call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
                            tdsops%n_tds, n_groups)
@@ -394,20 +394,21 @@ contains
     class(field_t), intent(inout) :: u_
     class(field_t), intent(in) :: u
     integer, intent(in) :: direction
-    integer, dimension(3) :: dims
+    integer, dimension(3) :: dims, cart_padded
     integer :: i, j, k
     integer :: out_i, out_j, out_k
     integer :: dir_from, dir_to
 
-    dims = self%mesh%get_padded_dims(u)
+    dims = self%allocator%get_padded_dims(u%dir)
+    cart_padded = self%allocator%get_padded_dims(DIR_C)
     call get_dirs_from_rdr(dir_from, dir_to, direction)
 
     !$omp parallel do private(out_i, out_j, out_k) collapse(2)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          call get_index_reordering( &
-            out_i, out_j, out_k, i, j, k, dir_from, dir_to, self%mesh)
+          call get_index_reordering(out_i, out_j, out_k, i, j, k, &
+                                    dir_from, dir_to, SZ, cart_padded)
           u_%data(out_i, out_j, out_k) = u%data(i, j, k)
         end do
       end do
@@ -449,19 +450,21 @@ contains
     integer, intent(in) :: dir_to
 
     integer :: dir_from
-    integer, dimension(3) :: dims
+    integer, dimension(3) :: dims, cart_padded
     integer :: i, j, k    ! Working indices
     integer :: ii, jj, kk ! Transpose indices
 
     dir_from = DIR_X
 
-    dims = self%mesh%get_padded_dims(u)
+    dims = self%allocator%get_padded_dims(u%dir)
+    cart_padded = self%allocator%get_padded_dims(DIR_C)
+
     !$omp parallel do private(i, ii, jj, kk) collapse(2)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
           call get_index_reordering(ii, jj, kk, i, j, k, &
-                                    dir_from, dir_to, self%mesh)
+                                    dir_from, dir_to, SZ, cart_padded)
           u%data(i, j, k) = u%data(i, j, k) + u_%data(ii, jj, kk)
         end do
       end do
@@ -485,7 +488,7 @@ contains
       error stop "Called vector add with incompatible fields"
     end if
 
-    dims = self%mesh%get_padded_dims(src)
+    dims = src%get_shape()
     nvec = dims(1)/SZ
     remstart = nvec*SZ + 1
 
@@ -529,7 +532,7 @@ contains
       error stop "Called vector add with incompatible fields"
     end if
 
-    dims = self%mesh%get_padded_dims(x)
+    dims = x%get_shape()
     nvec = dims(1)/SZ
     remstart = nvec*SZ + 1
 
@@ -605,7 +608,7 @@ contains
     y_ => self%allocator%get_block(DIR_C, y%data_loc)
     call self%get_field_data(y_%data, y)
 
-    dims = self%mesh%get_field_dims(x_)
+    dims = self%mesh%get_dims(x_%data_loc)
 
     nvec = dims(1)/SZ
     remstart = nvec*SZ + 1
@@ -694,7 +697,7 @@ contains
     end if
 
     dims = self%mesh%get_dims(data_loc)
-    dims_padded = self%mesh%get_padded_dims(DIR_C)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
 
     if (f%dir == DIR_X) then
       n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)

@@ -89,7 +89,7 @@ program test_fft
   mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, use_2decomp=use_2decomp)
 
 #ifdef CUDA
-  cuda_allocator = cuda_allocator_t(mesh, SZ)
+  cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
   allocator => cuda_allocator
   print *, 'CUDA allocator instantiated'
 
@@ -97,7 +97,7 @@ program test_fft
   backend => cuda_backend
   print *, 'CUDA backend instantiated'
 #else
-  omp_allocator = allocator_t(mesh, SZ)
+  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
   allocator => omp_allocator
 
   omp_backend = omp_backend_t(mesh, allocator)

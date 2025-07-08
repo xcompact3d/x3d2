@@ -34,7 +34,6 @@ module m_mesh_content
     integer, dimension(3) :: global_vert_dims ! global number of vertices in each direction without padding (cartesian structure)
     integer, dimension(3) :: global_cell_dims ! global number of cells in each direction without padding (cartesian structure)
 
-    integer, dimension(3) :: vert_dims_padded ! local domain size including padding (cartesian structure)
     integer, dimension(3) :: vert_dims ! local number of vertices in each direction without padding (cartesian structure)
     integer, dimension(3) :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
     logical, dimension(3) :: periodic_BC ! Whether or not a direction has a periodic BC

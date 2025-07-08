@@ -49,7 +49,7 @@ program test_sum_intox
 
 #ifdef CUDA
 #else
-  omp_allocator = allocator_t(mesh, SZ)
+  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
   allocator => omp_allocator
   omp_backend = omp_backend_t(mesh, allocator)
   backend => omp_backend
@@ -90,7 +90,7 @@ contains
     a => backend%allocator%get_block(DIR_X)
     b => backend%allocator%get_block(dir_from)
 
-    dims = mesh%get_padded_dims(DIR_C)
+    dims = backend%allocator%get_padded_dims(DIR_C)
 
     ! Initialise fields so that b = -a
     ctr = 0

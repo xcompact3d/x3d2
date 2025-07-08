@@ -4,7 +4,6 @@ program test_allocator
 
   use m_allocator, only: allocator_t
   use m_field, only: field_t
-  use m_mesh, only: mesh_t
   use m_common, only: DIR_X, pi, dp
 
   implicit none
@@ -14,28 +13,13 @@ program test_allocator
   real(dp), dimension(3) :: L_global
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
   class(allocator_t), allocatable :: allocator
-  class(mesh_t), allocatable :: mesh
   class(field_t), pointer :: ptr1, ptr2, ptr3
   integer, allocatable :: l(:)
   integer :: ierr
 
   call MPI_Init(ierr)
-  ! Global number of cells in each direction
-  dims_global = [8, 8, 8]
 
-  ! Global domain dimensions
-  L_global = [2*pi, 2*pi, 2*pi]
-
-  ! Domain decomposition in each direction
-  nproc_dir = [1, 1, 1]
-
-  BC_x = ['periodic', 'periodic']
-  BC_y = ['periodic', 'periodic']
-  BC_z = ['periodic', 'periodic']
-
-  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
-
-  allocator = allocator_t(mesh, 8)
+  allocator = allocator_t([8, 8, 8], 8)
 
   allpass = .true.
 

@@ -98,16 +98,16 @@ contains
     backend%mesh => mesh
 
     backend%xthreads = dim3(SZ, 1, 1)
-    backend%xblocks = dim3(backend%mesh%get_n_groups(DIR_X), 1, 1)
+    backend%xblocks = dim3(backend%allocator%get_n_groups(DIR_X), 1, 1)
     backend%ythreads = dim3(SZ, 1, 1)
-    backend%yblocks = dim3(backend%mesh%get_n_groups(DIR_Y), 1, 1)
+    backend%yblocks = dim3(backend%allocator%get_n_groups(DIR_Y), 1, 1)
     backend%zthreads = dim3(SZ, 1, 1)
-    backend%zblocks = dim3(backend%mesh%get_n_groups(DIR_Z), 1, 1)
+    backend%zblocks = dim3(backend%allocator%get_n_groups(DIR_Z), 1, 1)
 
     ! Buffer size should be big enough for the largest MPI exchange.
-    n_groups = maxval([backend%mesh%get_n_groups(DIR_X), &
-                       backend%mesh%get_n_groups(DIR_Y), &
-                       backend%mesh%get_n_groups(DIR_Z)])
+    n_groups = maxval([backend%allocator%get_n_groups(DIR_X), &
+                       backend%allocator%get_n_groups(DIR_Y), &
+                       backend%allocator%get_n_groups(DIR_Z)])
 
     allocate (backend%u_send_s_dev(SZ, backend%n_halo, n_groups))
     allocate (backend%u_send_e_dev(SZ, backend%n_halo, n_groups))
@@ -245,7 +245,7 @@ contains
     type is (cuda_tdsops_t); der2nd_sym => tdsops
     end select
 
-    n_groups = self%mesh%get_n_groups(dirps%dir)
+    n_groups = self%allocator%get_n_groups(dirps%dir)
 
     ! Halo exchange for momentum if needed
     if (sync) then
@@ -349,7 +349,7 @@ contains
     integer :: n, nproc_dir, pprev, pnext
     integer :: n_groups
 
-    n_groups = self%mesh%get_n_groups(dir)
+    n_groups = self%allocator%get_n_groups(dir)
     n = self%mesh%get_n(dir, VERT)
     nproc_dir = self%mesh%par%nproc_dir(dir)
     pprev = self%mesh%par%pprev(dir)
@@ -453,7 +453,8 @@ contains
       error stop 'DIR mismatch between fields in tds_solve.'
     end if
 
-    blocks = dim3(self%mesh%get_n_groups(u), 1, 1); threads = dim3(SZ, 1, 1)
+    blocks = dim3(self%allocator%get_n_groups(u%dir), 1, 1)
+    threads = dim3(SZ, 1, 1)
 
     if (u%data_loc /= NULL_LOC) then
       call du%set_data_loc(move_data_loc(u%data_loc, u%dir, tdsops%move))
@@ -479,7 +480,7 @@ contains
     integer :: n_groups, dir
 
     dir = u%dir
-    n_groups = self%mesh%get_n_groups(u)
+    n_groups = self%allocator%get_n_groups(u%dir)
 
     call resolve_field_t(du_dev, du)
     call resolve_field_t(u_dev, u)
@@ -528,7 +529,7 @@ contains
     call resolve_field_t(u_o_d, u_o)
     call resolve_field_t(u_i_d, u_i)
 
-    dims_padded = self%mesh%get_padded_dims(DIR_C)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
     nx_padded = dims_padded(1)
     ny_padded = dims_padded(2)
     nz_padded = dims_padded(3)
@@ -645,7 +646,7 @@ contains
     call resolve_field_t(u_d, u)
     call resolve_field_t(u_y_d, u_y)
 
-    dims_padded = self%mesh%get_padded_dims(DIR_C)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
 
     blocks = dim3(dims_padded(1)/SZ, dims_padded(2)/SZ, dims_padded(3))
     threads = dim3(min(SZ, 32), min(SZ, 32), 1)
@@ -667,7 +668,7 @@ contains
     call resolve_field_t(u_d, u)
     call resolve_field_t(u_z_d, u_z)
 
-    dims_padded = self%mesh%get_padded_dims(DIR_C)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
 
     blocks = dim3(dims_padded(1), dims_padded(2)/SZ, 1)
     threads = dim3(SZ, 1, 1)
@@ -766,7 +767,7 @@ contains
     sum_d = 0._dp
 
     dims = self%mesh%get_dims(x%data_loc)
-    dims_padded = self%mesh%get_padded_dims(DIR_C)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
 
     if (x%dir == DIR_X) then
       n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
@@ -835,7 +836,7 @@ contains
     end if
 
     dims = self%mesh%get_dims(data_loc)
-    dims_padded = self%mesh%get_padded_dims(DIR_C)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
 
     call resolve_field_t(f_d, f)
 
@@ -976,7 +977,7 @@ contains
     integral_d = 0._dp
 
     dims = self%mesh%get_dims(f%data_loc)
-    dims_padded = self%mesh%get_padded_dims(DIR_C)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
 
     blocks = dim3(dims(3), (dims(2) - 1)/SZ + 1, 1)
     threads = dim3(SZ, 1, 1)

@@ -14,38 +14,18 @@ module m_mesh
   ! The mesh class stores all the information about the global and local (due to domain decomposition) mesh
   ! It also includes getter functions to access some of its parameters
   type :: mesh_t
-    integer, private :: sz
     type(geo_t), allocatable :: geo ! object containing geometry information
     class(grid_t), allocatable :: grid ! object containing grid information
     class(par_t), allocatable :: par ! object containing parallel domain decomposition information
   contains
-    procedure :: get_SZ
-
     procedure :: get_dims
     procedure :: get_global_dims
-
-    procedure :: get_n_groups_dir
-    procedure :: get_n_groups_phi
-    generic :: get_n_groups => get_n_groups_dir, get_n_groups_phi
-
-    procedure :: get_field_dims_dir
-    procedure :: get_field_dims_phi
-    procedure :: get_field_dims_phi_dataloc
-    generic :: get_field_dims => get_field_dims_dir, get_field_dims_phi, &
-      get_field_dims_phi_dataloc
 
     procedure :: get_n_dir
     procedure :: get_n_phi
     generic :: get_n => get_n_dir, get_n_phi
 
-    procedure :: get_padded_dims_phi
-    procedure :: get_padded_dims_dir
-    generic :: get_padded_dims => get_padded_dims_dir, get_padded_dims_phi
-
     procedure :: get_coordinates
-
-    procedure :: set_sz
-    procedure :: set_padded_dims
   end type mesh_t
 
   interface mesh_t
@@ -175,10 +155,6 @@ contains
       mesh%grid%vert_dims, mesh%grid%cell_dims, mesh%par%n_offset &
       )
 
-    ! Define default values
-    mesh%grid%vert_dims_padded = mesh%grid%vert_dims
-    mesh%sz = 1
-
   end function mesh_init
 
   subroutine decomposition_generic(grid, par)
@@ -216,31 +192,6 @@ contains
     par%n_offset(:) = grid%vert_dims(:)*par%nrank_dir(:)
 
   end subroutine
-
-  subroutine set_padded_dims(self, vert_dims)
-    class(mesh_t), intent(inout) :: self
-    integer, dimension(3), intent(in) :: vert_dims
-
-    self%grid%vert_dims_padded = vert_dims
-
-  end subroutine
-
-  subroutine set_sz(self, sz)
-    class(mesh_t), intent(inout) :: self
-    integer, intent(in) :: sz
-
-    self%sz = sz
-
-  end subroutine
-
-  pure function get_sz(self) result(sz)
-  !! Getter for parameter SZ
-    class(mesh_t), intent(in) :: self
-    integer :: sz
-
-    sz = self%sz
-
-  end function
 
   pure function get_dims(self, data_loc) result(dims)
   !! Getter for local domain dimensions
@@ -296,94 +247,6 @@ contains
       error stop "Unknown location in get_dims_dataloc"
     end select
   end function get_dims_dataloc
-
-  pure function get_padded_dims_dir(self, dir) result(dims_padded)
-  !! Getter for padded dimensions with structure in `dir` direction
-    class(mesh_t), intent(in) :: self
-    integer, intent(in) :: dir
-    integer, dimension(3) :: dims_padded
-
-    if (dir == DIR_C) then
-      dims_padded = self%grid%vert_dims_padded
-    else
-      dims_padded(1) = self%sz
-      dims_padded(2) = self%grid%vert_dims_padded(dir)
-      dims_padded(3) = self%get_n_groups(dir)
-    end if
-
-  end function
-
-  pure function get_padded_dims_phi(self, phi) result(dims_padded)
-  !! Getter for padded dimensions for field phi
-  !! Gets the field direction from the field itself
-    class(mesh_t), intent(in) :: self
-    class(field_t), intent(in) :: phi
-    integer, dimension(3) :: dims_padded
-
-    dims_padded = self%get_padded_dims(phi%dir)
-
-  end function
-
-  pure function get_n_groups_dir(self, dir) result(n_groups)
-  !! Getter for the number of groups for fields in direction `dir`
-    class(mesh_t), intent(in) :: self
-    integer, intent(in) :: dir
-    integer :: n_groups
-
-    n_groups = (product(self%grid%vert_dims_padded(:))/ &
-                self%grid%vert_dims_padded(dir))/self%sz
-
-  end function
-
-  pure function get_n_groups_phi(self, phi) result(n_groups)
-  !! Getter for the number of groups for fields phi
-    class(mesh_t), intent(in) :: self
-    class(field_t), intent(in) :: phi
-    integer :: n_groups
-
-    n_groups = self%get_n_groups(phi%dir)
-
-  end function
-
-  pure function get_field_dims_phi(self, phi) result(dims)
-  !! Getter for the dimensions of field phi
-    class(mesh_t), intent(in) :: self
-    class(field_t), intent(in) :: phi
-    integer, dimension(3) :: dims
-
-    dims = self%get_field_dims(phi%dir, phi%data_loc)
-
-  end function
-
-  pure function get_field_dims_phi_dataloc(self, phi, data_loc) result(dims)
-  !! Getter for the dimensions of field phi where data is located on `data_loc`
-    class(mesh_t), intent(in) :: self
-    class(field_t), intent(in) :: phi
-    integer, intent(in) :: data_loc
-    integer, dimension(3) :: dims
-
-    dims = self%get_field_dims(phi%dir, data_loc)
-
-  end function
-
-  pure function get_field_dims_dir(self, dir, data_loc) result(dims)
-  !! Getter for the dimensions of an array directed along `dir` where data would be located on `data_loc`
-    class(mesh_t), intent(in) :: self
-    integer, intent(in) :: dir
-    integer, intent(in) :: data_loc
-    integer, dimension(3) :: dims
-
-    if (dir == DIR_C) then
-      dims(1) = self%get_n(DIR_X, data_loc)
-      dims(2) = self%get_n(DIR_Y, data_loc)
-      dims(3) = self%get_n(DIR_Z, data_loc)
-    else
-      dims(1) = self%sz
-      dims(2) = self%get_n(dir, data_loc)
-      dims(3) = self%get_n_groups(dir)
-    end if
-
-  end function
 
   pure function get_n_phi(self, phi) result(n)
   !! Getter for the main dimension of field phi

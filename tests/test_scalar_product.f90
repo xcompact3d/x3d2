@@ -58,7 +58,7 @@ program test_scalar_product
 
 #ifdef CUDA
 #else
-  omp_allocator = allocator_t(mesh, SZ)
+  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
   allocator => omp_allocator
   omp_backend = omp_backend_t(mesh, allocator)
   backend => omp_backend
@@ -132,7 +132,7 @@ contains
     ! Determine number of interior points, using a temporary DIR_C field
     c => backend%allocator%get_block(DIR_C)
     call c%set_data_loc(a%data_loc)
-    n = product(mesh%get_field_dims(c))
+    n = product(mesh%get_dims(c%data_loc))
     call backend%allocator%release_block(c)
 
     expt = n*(nrank + 1)**2

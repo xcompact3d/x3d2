@@ -42,10 +42,10 @@ program test_setget_field
                 ["periodic", "periodic"])
 
 #ifdef CUDA
-  cuda_allocator = cuda_allocator_t(mesh, SZ)
+  cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
   allocator => cuda_allocator
 #else
-  omp_allocator = allocator_t(mesh, SZ)
+  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
   allocator => omp_allocator
 
   omp_backend = omp_backend_t(mesh, allocator)
