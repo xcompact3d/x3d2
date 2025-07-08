@@ -132,7 +132,7 @@ contains
     ! Determine number of interior points, using a temporary DIR_C field
     c => backend%allocator%get_block(DIR_C)
     call c%set_data_loc(a%data_loc)
-    n = product(mesh%get_field_dims(c))
+    n = product(mesh%get_dims(c%data_loc))
     call backend%allocator%release_block(c)
 
     expt = n*(nrank + 1)**2

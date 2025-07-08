@@ -608,7 +608,7 @@ contains
     y_ => self%allocator%get_block(DIR_C, y%data_loc)
     call self%get_field_data(y_%data, y)
 
-    dims = self%mesh%get_field_dims(x_)
+    dims = self%mesh%get_dims(x_%data_loc)
 
     nvec = dims(1)/SZ
     remstart = nvec*SZ + 1

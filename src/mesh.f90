@@ -28,12 +28,6 @@ module m_mesh
     procedure :: get_n_groups_phi
     generic :: get_n_groups => get_n_groups_dir, get_n_groups_phi
 
-    procedure :: get_field_dims_dir
-    procedure :: get_field_dims_phi
-    procedure :: get_field_dims_phi_dataloc
-    generic :: get_field_dims => get_field_dims_dir, get_field_dims_phi, &
-      get_field_dims_phi_dataloc
-
     procedure :: get_n_dir
     procedure :: get_n_phi
     generic :: get_n => get_n_dir, get_n_phi
@@ -342,46 +336,6 @@ contains
     integer :: n_groups
 
     n_groups = self%get_n_groups(phi%dir)
-
-  end function
-
-  pure function get_field_dims_phi(self, phi) result(dims)
-  !! Getter for the dimensions of field phi
-    class(mesh_t), intent(in) :: self
-    class(field_t), intent(in) :: phi
-    integer, dimension(3) :: dims
-
-    dims = self%get_field_dims(phi%dir, phi%data_loc)
-
-  end function
-
-  pure function get_field_dims_phi_dataloc(self, phi, data_loc) result(dims)
-  !! Getter for the dimensions of field phi where data is located on `data_loc`
-    class(mesh_t), intent(in) :: self
-    class(field_t), intent(in) :: phi
-    integer, intent(in) :: data_loc
-    integer, dimension(3) :: dims
-
-    dims = self%get_field_dims(phi%dir, data_loc)
-
-  end function
-
-  pure function get_field_dims_dir(self, dir, data_loc) result(dims)
-  !! Getter for the dimensions of an array directed along `dir` where data would be located on `data_loc`
-    class(mesh_t), intent(in) :: self
-    integer, intent(in) :: dir
-    integer, intent(in) :: data_loc
-    integer, dimension(3) :: dims
-
-    if (dir == DIR_C) then
-      dims(1) = self%get_n(DIR_X, data_loc)
-      dims(2) = self%get_n(DIR_Y, data_loc)
-      dims(3) = self%get_n(DIR_Z, data_loc)
-    else
-      dims(1) = self%sz
-      dims(2) = self%get_n(dir, data_loc)
-      dims(3) = self%get_n_groups(dir)
-    end if
 
   end function
 
