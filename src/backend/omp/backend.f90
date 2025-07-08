@@ -394,20 +394,21 @@ contains
     class(field_t), intent(inout) :: u_
     class(field_t), intent(in) :: u
     integer, intent(in) :: direction
-    integer, dimension(3) :: dims
+    integer, dimension(3) :: dims, cart_padded
     integer :: i, j, k
     integer :: out_i, out_j, out_k
     integer :: dir_from, dir_to
 
     dims = self%mesh%get_padded_dims(u)
+    cart_padded = self%mesh%get_padded_dims(DIR_C)
     call get_dirs_from_rdr(dir_from, dir_to, direction)
 
     !$omp parallel do private(out_i, out_j, out_k) collapse(2)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          call get_index_reordering( &
-            out_i, out_j, out_k, i, j, k, dir_from, dir_to, self%mesh)
+          call get_index_reordering(out_i, out_j, out_k, i, j, k, &
+                                    dir_from, dir_to, SZ, cart_padded)
           u_%data(out_i, out_j, out_k) = u%data(i, j, k)
         end do
       end do
@@ -449,19 +450,21 @@ contains
     integer, intent(in) :: dir_to
 
     integer :: dir_from
-    integer, dimension(3) :: dims
+    integer, dimension(3) :: dims, cart_padded
     integer :: i, j, k    ! Working indices
     integer :: ii, jj, kk ! Transpose indices
 
     dir_from = DIR_X
 
     dims = self%mesh%get_padded_dims(u)
+    cart_padded = self%mesh%get_padded_dims(DIR_C)
+
     !$omp parallel do private(i, ii, jj, kk) collapse(2)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
           call get_index_reordering(ii, jj, kk, i, j, k, &
-                                    dir_from, dir_to, self%mesh)
+                                    dir_from, dir_to, SZ, cart_padded)
           u%data(i, j, k) = u%data(i, j, k) + u_%data(ii, jj, kk)
         end do
       end do
