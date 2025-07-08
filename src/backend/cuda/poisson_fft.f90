@@ -105,7 +105,7 @@ contains
     poisson_fft%ay_dev = poisson_fft%ay; poisson_fft%by_dev = poisson_fft%by
     poisson_fft%az_dev = poisson_fft%az; poisson_fft%bz_dev = poisson_fft%bz
 
-    ! if stretching in y is 'centred' or 'both-ends'
+    ! if stretching in y is 'centred' or 'top-bottom'
     if (poisson_fft%stretched_y .and. poisson_fft%stretched_y_sym) then
       poisson_fft%a_odd_re_dev = poisson_fft%a_odd_re
       poisson_fft%a_odd_im_dev = poisson_fft%a_odd_im
@@ -297,7 +297,7 @@ contains
         self%az_dev, self%bz_dev &
         )
 
-      ! if stretching in y is 'centred' or 'both-ends'
+      ! if stretching in y is 'centred' or 'top-bottom'
       if (self%stretched_y_sym) then
         ! PERF issue: data movement from host to device at each step
         self%a_odd_re_dev = self%a_odd_re
