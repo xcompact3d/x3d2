@@ -30,7 +30,7 @@ program test_setget_field
 
   class(field_t), pointer :: fld, fld_c
   real(dp), dimension(:, :, :), allocatable :: arr
-  integer, dimension(3) :: shape_c
+  integer, dimension(3) :: shape_c, dims
 
   integer :: ierr
 
@@ -41,11 +41,13 @@ program test_setget_field
                 ["periodic", "periodic"], &
                 ["periodic", "periodic"])
 
+  dims = mesh%get_dims(VERT)
+
 #ifdef CUDA
-  cuda_allocator = cuda_allocator_t(mesh, SZ)
+  cuda_allocator = cuda_allocator_t(dims(1), dims(2), dims(3), SZ)
   allocator => cuda_allocator
 #else
-  omp_allocator = allocator_t(mesh, SZ)
+  omp_allocator = allocator_t(dims(1), dims(2), dims(3), SZ)
   allocator => omp_allocator
 
   omp_backend = omp_backend_t(mesh, allocator)

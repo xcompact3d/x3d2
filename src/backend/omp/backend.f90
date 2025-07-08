@@ -78,9 +78,9 @@ contains
     end select
 
     backend%mesh => mesh
-    n_groups = maxval([backend%mesh%get_n_groups(DIR_X), &
-                       backend%mesh%get_n_groups(DIR_Y), &
-                       backend%mesh%get_n_groups(DIR_Z)])
+    n_groups = maxval([backend%allocator%get_n_groups(DIR_X), &
+                       backend%allocator%get_n_groups(DIR_Y), &
+                       backend%allocator%get_n_groups(DIR_Z)])
 
     allocate (backend%u_send_s(SZ, backend%n_halo, n_groups))
     allocate (backend%u_send_e(SZ, backend%n_halo, n_groups))
@@ -196,7 +196,7 @@ contains
 
     integer :: n_groups
 
-    n_groups = self%mesh%get_n_groups(dirps%dir)
+    n_groups = self%allocator%get_n_groups(dirps%dir)
 
     ! Halo exchange for momentum if needed
     if (sync) then
@@ -265,7 +265,7 @@ contains
     integer :: n, nproc_dir, pprev, pnext
     integer :: n_groups
 
-    n_groups = self%mesh%get_n_groups(dir)
+    n_groups = self%allocator%get_n_groups(dir)
     n = self%mesh%get_n(u)
     nproc_dir = self%mesh%par%nproc_dir(dir)
     pprev = self%mesh%par%pprev(dir)
@@ -325,7 +325,7 @@ contains
       conv%data, conv_recv_s, conv_recv_e, &
       tdsops_du, tdsops_dud, tdsops_d2u, nu, &
       self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), &
-      self%mesh%par%pnext(dir), self%mesh%get_n_groups(dir))
+      self%mesh%par%pnext(dir), self%allocator%get_n_groups(dir))
 
     call rhs_du%set_data_loc(u%data_loc)
 
@@ -365,7 +365,7 @@ contains
     integer :: n_groups, dir
 
     dir = u%dir
-    n_groups = self%mesh%get_n_groups(u)
+    n_groups = self%allocator%get_n_groups(u%dir)
 
     call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
                            tdsops%n_tds, n_groups)
@@ -399,8 +399,8 @@ contains
     integer :: out_i, out_j, out_k
     integer :: dir_from, dir_to
 
-    dims = u%get_shape()
-    cart_padded = self%mesh%get_padded_dims(DIR_C)
+    dims = self%allocator%get_padded_dims(u%dir)
+    cart_padded = self%allocator%get_padded_dims(DIR_C)
     call get_dirs_from_rdr(dir_from, dir_to, direction)
 
     !$omp parallel do private(out_i, out_j, out_k) collapse(2)
@@ -456,8 +456,8 @@ contains
 
     dir_from = DIR_X
 
-    dims = u%get_shape()
-    cart_padded = self%mesh%get_padded_dims(DIR_C)
+    dims = self%allocator%get_padded_dims(u%dir)
+    cart_padded = self%allocator%get_padded_dims(DIR_C)
 
     !$omp parallel do private(i, ii, jj, kk) collapse(2)
     do k = 1, dims(3)
@@ -697,7 +697,7 @@ contains
     end if
 
     dims = self%mesh%get_dims(data_loc)
-    dims_padded = self%mesh%get_padded_dims(DIR_C)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
 
     if (f%dir == DIR_X) then
       n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)

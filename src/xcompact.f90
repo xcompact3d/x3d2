@@ -4,7 +4,7 @@ program xcompact
   use m_allocator
   use m_base_backend
   use m_base_case, only: base_case_t
-  use m_common, only: pi, get_argument
+  use m_common, only: pi, get_argument, VERT
   use m_config, only: domain_config_t, solver_config_t
   use m_mesh
   use m_case_channel, only: case_channel_t
@@ -43,7 +43,7 @@ program xcompact
   type(domain_config_t) :: domain_cfg
   type(solver_config_t) :: solver_cfg
   character(32) :: backend_name
-  integer :: nrank, nproc, ierr
+  integer :: dims(3), nrank, nproc, ierr
   logical :: use_2decomp
 
   call MPI_Init(ierr)
@@ -80,19 +80,21 @@ program xcompact
                 domain_cfg%BC_z, domain_cfg%stretching, domain_cfg%beta, &
                 use_2decomp=use_2decomp)
 
+  ! get local vertex dimensions
+  dims = mesh%get_dims(VERT)
 #ifdef CUDA
-  cuda_allocator = cuda_allocator_t(mesh, SZ)
+  cuda_allocator = cuda_allocator_t(dims(1), dims(2), dims(3), SZ)
   allocator => cuda_allocator
   if (nrank == 0) print *, 'CUDA allocator instantiated'
 
-  omp_allocator = allocator_t(mesh, SZ)
+  omp_allocator = allocator_t(dims(1), dims(2), dims(3), SZ)
   host_allocator => omp_allocator
 
   cuda_backend = cuda_backend_t(mesh, allocator)
   backend => cuda_backend
   if (nrank == 0) print *, 'CUDA backend instantiated'
 #else
-  omp_allocator = allocator_t(mesh, SZ)
+  omp_allocator = allocator_t(dims(1), dims(2), dims(3), SZ)
   allocator => omp_allocator
   host_allocator => omp_allocator
   if (nrank == 0) print *, 'OpenMP allocator instantiated'

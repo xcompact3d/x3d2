@@ -1,8 +1,7 @@
 module m_allocator
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC, VERT
-  use m_mesh, only: mesh_t
+  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC
   use m_field, only: field_t
 
   implicit none
@@ -35,14 +34,16 @@ module m_allocator
      !! [[m_allocator(module):release_block(subroutine)]].  The
      !! released block is then pushed in front of the block list.
 
-    integer :: ngrid
+    integer :: ngrid, sz
     !> The id for the next allocated block.  This counter is
     !> incremented each time a new block is allocated.
     integer :: next_id = 0
+    !> padded dimensions and n_groups in all 'dir's
+    integer, private :: dims_padded_dir(3, 4)
+    integer, private :: n_groups_dir(3)
     !> The pointer to the first block on the list.  Non associated if
     !> the list is empty
     ! TODO: Rename first to head
-    type(mesh_t), pointer :: mesh
     class(field_t), pointer :: first => null()
   contains
     procedure :: get_block
@@ -50,7 +51,8 @@ module m_allocator
     procedure :: create_block
     procedure :: get_block_ids
     procedure :: destroy
-    procedure :: compute_padded_dims
+    procedure :: get_padded_dims
+    procedure :: get_n_groups
   end type allocator_t
 
   interface allocator_t
@@ -59,39 +61,34 @@ module m_allocator
 
 contains
 
-  function allocator_init(mesh, sz) result(allocator)
-    type(mesh_t), target, intent(inout) :: mesh
-    integer, intent(in) :: sz
+  function allocator_init(nx, ny, nz, sz) result(allocator)
+    integer, intent(in) :: nx, ny, nz, sz
     type(allocator_t) :: allocator
 
-    allocator%mesh => mesh
-    call allocator%compute_padded_dims(sz)
-    allocator%ngrid = product(allocator%mesh%get_padded_dims(DIR_C))
-
-  end function allocator_init
-
-  subroutine compute_padded_dims(self, sz)
-    class(allocator_t), intent(inout) :: self
-    integer, intent(in) :: sz
-    integer, dimension(3) :: cdims
-    integer :: nx, ny, nz, nx_padded, ny_padded, nz_padded
-
-    cdims = self%mesh%get_dims(VERT)
-    nx = cdims(1)
-    ny = cdims(2)
-    nz = cdims(3)
+    integer :: nx_padded, ny_padded, nz_padded
 
     ! Apply padding based on sz
     nx_padded = nx - 1 + mod(-(nx - 1), sz) + sz
     ny_padded = ny - 1 + mod(-(ny - 1), sz) + sz
     ! Current reorder functions do not require a padding in z-direction.
     nz_padded = nz
-    cdims = [nx_padded, ny_padded, nz_padded]
 
-    call self%mesh%set_sz(sz)
-    call self%mesh%set_padded_dims(cdims)
+    allocator%ngrid = nx_padded*ny_padded*nz_padded
+    allocator%sz = sz
 
-  end subroutine
+    allocator%n_groups_dir(1:3) = [ny_padded*nz_padded/sz, &
+                                   nx_padded*nz_padded/sz, &
+                                   nx_padded*ny_padded/sz]
+
+    allocator%dims_padded_dir(:, 1) = [sz, nx_padded, &
+                                       allocator%n_groups_dir(1)]
+    allocator%dims_padded_dir(:, 2) = [sz, ny_padded, &
+                                       allocator%n_groups_dir(2)]
+    allocator%dims_padded_dir(:, 3) = [sz, nz_padded, &
+                                       allocator%n_groups_dir(3)]
+    allocator%dims_padded_dir(:, 4) = [nx_padded, ny_padded, nz_padded]
+
+  end function allocator_init
 
   function create_block(self, next) result(ptr)
     !! Allocate memory for a new block and return a pointer to a new
@@ -146,7 +143,7 @@ contains
     end if
 
     ! Set dims based on direction
-    dims = self%mesh%get_padded_dims(dir)
+    dims = self%dims_padded_dir(1:3, dir)
 
     ! Apply bounds remapping based on requested direction
     call handle%set_shape(dims)
@@ -204,5 +201,25 @@ contains
       end do
     end if
   end function get_block_ids
+
+  function get_padded_dims(self, dir) result(dims)
+    implicit none
+
+    class(allocator_t), intent(inout) :: self
+    integer, intent(in) :: dir
+    integer :: dims(3)
+
+    dims = self%dims_padded_dir(1:3, dir)
+  end function get_padded_dims
+
+  function get_n_groups(self, dir) result(n_groups)
+    implicit none
+
+    class(allocator_t), intent(inout) :: self
+    integer, intent(in) :: dir
+    integer :: n_groups
+
+    n_groups = self%n_groups_dir(dir)
+  end function get_n_groups
 
 end module m_allocator

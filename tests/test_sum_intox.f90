@@ -29,7 +29,7 @@ program test_sum_intox
   type(mesh_t) :: mesh
 
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
-  integer :: nrank, nproc
+  integer :: nrank, nproc, dims(3)
   integer :: ierr
 
   logical :: test_pass = .true.
@@ -47,9 +47,11 @@ program test_sum_intox
                 [lx, ly, lz], &
                 BC_x, BC_y, BC_z)
 
+  dims = mesh%get_dims(VERT)
+
 #ifdef CUDA
 #else
-  omp_allocator = allocator_t(mesh, SZ)
+  omp_allocator = allocator_t(dims(1), dims(2), dims(3), SZ)
   allocator => omp_allocator
   omp_backend = omp_backend_t(mesh, allocator)
   backend => omp_backend
@@ -90,7 +92,7 @@ contains
     a => backend%allocator%get_block(DIR_X)
     b => backend%allocator%get_block(dir_from)
 
-    dims = mesh%get_padded_dims(DIR_C)
+    dims = backend%allocator%get_padded_dims(DIR_C)
 
     ! Initialise fields so that b = -a
     ctr = 0

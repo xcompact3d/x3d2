@@ -36,7 +36,7 @@ program test_scalar_product
                                                 "DIR_Z", "DIR_C"]
   integer, dimension(4), parameter :: dir = [DIR_X, DIR_Y, &
                                              DIR_Z, DIR_C]
-  integer :: i
+  integer :: i, dims(3)
 
   integer :: nrank, nproc
   integer :: ierr
@@ -56,9 +56,11 @@ program test_scalar_product
                 [lx, ly, lz], &
                 BC_x, BC_y, BC_z)
 
+  dims = mesh%get_dims(VERT)
+
 #ifdef CUDA
 #else
-  omp_allocator = allocator_t(mesh, SZ)
+  omp_allocator = allocator_t(dims(1), dims(2), dims(3), SZ)
   allocator => omp_allocator
   omp_backend = omp_backend_t(mesh, allocator)
   backend => omp_backend

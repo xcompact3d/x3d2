@@ -71,12 +71,11 @@ contains
 
   end subroutine set_shape_cuda
 
-  function cuda_allocator_init(mesh, sz) result(allocator)
-    type(mesh_t), intent(inout) :: mesh
-    integer, intent(in) :: sz
+  function cuda_allocator_init(nx, ny, nz, sz) result(allocator)
+    integer, intent(in) :: nx, ny, nz, sz
     type(cuda_allocator_t) :: allocator
 
-    allocator%allocator_t = allocator_t(mesh, sz)
+    allocator%allocator_t = allocator_t(nx, ny, nz, sz)
   end function cuda_allocator_init
 
   function create_cuda_block(self, next) result(ptr)

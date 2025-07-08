@@ -18,7 +18,7 @@ program test_omp_transeq
   class(field_t), pointer :: du, dv, dw
   real(dp), dimension(:, :, :), allocatable :: r_u
   class(mesh_t), allocatable :: mesh
-  integer, dimension(3) :: dims_global, nproc_dir
+  integer, dimension(3) :: dims_global, dims, nproc_dir
   real(dp), dimension(3) :: L_global
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
 
@@ -55,9 +55,11 @@ program test_omp_transeq
 
   mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
+  dims = mesh%get_dims(VERT)
+
   xdirps%dir = DIR_X; ydirps%dir = DIR_Y; zdirps%dir = DIR_Z
 
-  omp_allocator = allocator_t(mesh, SZ)
+  omp_allocator = allocator_t(dims(1), dims(2), dims(3), SZ)
   allocator => omp_allocator
   print *, 'OpenMP allocator instantiated'
 
@@ -68,7 +70,7 @@ program test_omp_transeq
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
   n = mesh%get_n(DIR_X, VERT)
-  n_groups = mesh%get_n_groups(DIR_X)
+  n_groups = allocator%get_n_groups(DIR_X)
 
   nu = 1._dp
 
