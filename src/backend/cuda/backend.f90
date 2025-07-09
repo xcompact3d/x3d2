@@ -5,7 +5,7 @@ module m_cuda_backend
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, move_data_loc, &
+  use m_common, only: dp, MPI_X3D2_DP, move_data_loc, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC, &
@@ -36,7 +36,6 @@ module m_cuda_backend
 
   type, extends(base_backend_t) :: cuda_backend_t
     !character(len=*), parameter :: name = 'cuda'
-    integer :: MPI_FP_PREC = dp
     real(dp), device, allocatable, dimension(:, :, :) :: &
       u_recv_s_dev, u_recv_e_dev, u_send_s_dev, u_send_e_dev, &
       v_recv_s_dev, v_recv_e_dev, v_send_s_dev, v_send_e_dev, &
@@ -786,7 +785,7 @@ contains
 
     s = sum_d
 
-    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
+    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_X3D2_DP, MPI_SUM, &
                        MPI_COMM_WORLD, ierr)
 
   end function scalar_product_cuda
@@ -864,9 +863,9 @@ contains
     mean_val = mean_val/product(self%mesh%get_global_dims(data_loc))
 
     ! make sure all ranks have final values
-    call MPI_Allreduce(MPI_IN_PLACE, max_val, 1, MPI_DOUBLE_PRECISION, &
+    call MPI_Allreduce(MPI_IN_PLACE, max_val, 1, MPI_X3D2_DP, &
                        MPI_MAX, MPI_COMM_WORLD, ierr)
-    call MPI_Allreduce(MPI_IN_PLACE, mean_val, 1, MPI_DOUBLE_PRECISION, &
+    call MPI_Allreduce(MPI_IN_PLACE, mean_val, 1, MPI_X3D2_DP, &
                        MPI_SUM, MPI_COMM_WORLD, ierr)
 
   end subroutine field_max_mean_cuda
@@ -986,7 +985,7 @@ contains
 
     s = integral_d
 
-    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
+    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_X3D2_DP, MPI_SUM, &
                        MPI_COMM_WORLD, ierr)
 
   end function field_volume_integral_cuda

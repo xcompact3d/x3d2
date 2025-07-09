@@ -50,7 +50,10 @@ program xcompact
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
 
-  if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
+  if (nrank == 0) then
+    print *, 'Parallel run with', nproc, 'ranks'
+    print *, 'Data precision is', dp
+  end if
 
 #ifdef CUDA
   ierr = cudaGetDeviceCount(ndevs)

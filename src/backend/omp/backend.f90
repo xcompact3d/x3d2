@@ -3,7 +3,7 @@ module m_omp_backend
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, get_dirs_from_rdr, move_data_loc, &
+  use m_common, only: dp, MPI_X3D2_DP, get_dirs_from_rdr, move_data_loc, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC, &
                       X_FACE, Y_FACE, Z_FACE, VERT
   use m_field, only: field_t
@@ -21,7 +21,6 @@ module m_omp_backend
 
   type, extends(base_backend_t) :: omp_backend_t
     !character(len=*), parameter :: name = 'omp'
-    integer :: MPI_FP_PREC = dp
     real(dp), allocatable, dimension(:, :, :) :: &
       u_recv_s, u_recv_e, u_send_s, u_send_e, &
       v_recv_s, v_recv_e, v_send_s, v_send_e, &
@@ -617,7 +616,7 @@ contains
     call self%allocator%release_block(y_)
 
     ! Reduce the result
-    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, &
+    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_X3D2_DP, &
                        MPI_SUM, MPI_COMM_WORLD, &
                        ierr)
 
@@ -714,9 +713,9 @@ contains
     mean_val = sum_p/product(self%mesh%get_global_dims(data_loc))
 
     ! make sure all ranks have final values
-    call MPI_Allreduce(MPI_IN_PLACE, max_val, 1, MPI_DOUBLE_PRECISION, &
+    call MPI_Allreduce(MPI_IN_PLACE, max_val, 1, MPI_X3D2_DP, &
                        MPI_MAX, MPI_COMM_WORLD, ierr)
-    call MPI_Allreduce(MPI_IN_PLACE, mean_val, 1, MPI_DOUBLE_PRECISION, &
+    call MPI_Allreduce(MPI_IN_PLACE, mean_val, 1, MPI_X3D2_DP, &
                        MPI_SUM, MPI_COMM_WORLD, ierr)
 
   end subroutine field_max_mean_omp
@@ -824,7 +823,7 @@ contains
     ! rank-local values
     s = sum_p
 
-    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
+    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_X3D2_DP, MPI_SUM, &
                        MPI_COMM_WORLD, ierr)
 
   end function field_volume_integral_omp
