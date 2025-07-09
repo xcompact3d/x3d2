@@ -64,7 +64,8 @@ module m_adios2_io
       write_array_3d_real, &
       write_array_1d_int, &
       write_array_4d_real
-    generic, public :: write_attribute => write_attribute_string
+    generic, public :: write_attribute => write_attribute_string, &
+                                          write_attribute_array_1d_real
 
     procedure, private :: write_scalar_int
     procedure, private :: write_scalar_real
@@ -74,6 +75,7 @@ module m_adios2_io
     procedure, private :: write_array_3d_real
     procedure, private :: write_array_4d_real
     procedure, private :: write_attribute_string
+    procedure, private :: write_attribute_array_1d_real
   end type adios2_writer_t
 
   !> ADIOS2 reader type
@@ -157,6 +159,13 @@ contains
     integer :: ierr, use_comm
     type(adios2_file_t) :: file   !! ADIOS2 file object
 
+    ! if opening in write mode, we are starting a new independent dataset
+    ! remove all old variables from the IO object
+    if (mode == adios2_mode_write) then
+      call adios2_remove_all_variables(self%io, ierr)
+      call self%handle_error(ierr, "Failed to remove old ADIOS2 variables before open")
+    endif
+
     use_comm = self%comm
     if (present(comm)) use_comm = comm
     if (.not. self%io%valid) &
@@ -171,9 +180,6 @@ contains
     class(base_adios2_t), intent(inout) :: self
     type(adios2_file_t), intent(inout) :: file
     integer :: ierr
-
-    call adios2_remove_all_variables(self%io, ierr)
-    call self%handle_error(ierr, "Failed to remove all ADIOS2 variables")
 
     if (self%is_step_active) call self%end_step(file)
 
@@ -394,6 +400,7 @@ contains
                                              count_dims
     type(adios2_variable) :: var
     integer :: ierr
+
     call adios2_define_variable(var, self%io, name, adios2_type_dp, &
                                 3, shape_dims, start_dims, &
                                 count_dims, adios2_constant_dims, ierr)
@@ -441,6 +448,23 @@ contains
     call adios2_define_attribute(attr, self%io, name, value, ierr)
     call self%handle_error(ierr, "Error defining ADIOS2 attribute")
   end subroutine write_attribute_string
+
+  !> Write 1D array attribute for Paraview
+  subroutine write_attribute_array_1d_real(self, name, data, file)
+    class(adios2_writer_t), intent(inout) :: self
+    character(len=*), intent(in) :: name
+    real(dp), dimension(:), intent(in) :: data
+    type(adios2_file_t), intent(inout) :: file
+
+    type(adios2_attribute) :: attr
+    integer :: ierr
+    integer :: num_elements
+
+    num_elements = size(data)
+  
+    call adios2_define_attribute(attr, self%io, name, data, num_elements, ierr)
+    call self%handle_error(ierr, "Error defining ADIOS2 1D real array attribute")
+  end subroutine write_attribute_array_1d_real
 
   !> Begin a step for ADIOS2 reader type
   subroutine begin_step_reader(self, file)
