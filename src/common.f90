@@ -1,8 +1,18 @@
 module m_common
+  use mpi
+
   implicit none
 
+#ifdef SINGLE_PREC
+  integer, parameter :: dp = kind(0.0e0)
+  integer, parameter :: MPI_X3D2_DP = MPI_REAL
+#else
   integer, parameter :: dp = kind(0.0d0)
+  integer, parameter :: MPI_X3D2_DP = MPI_DOUBLE_PRECISION
+#endif
+
   integer, parameter :: i8 = selected_int_kind(18)
+
   real(dp), parameter :: pi = 4*atan(1.0_dp)
 
   integer, parameter :: RDR_X2Y = 12, RDR_X2Z = 13, RDR_Y2X = 21, &

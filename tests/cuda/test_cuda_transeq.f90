@@ -3,7 +3,8 @@ program test_cuda_tridiag
   use cudafor
   use mpi
 
-  use m_common, only: dp, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
+  use m_common, only: dp, pi, MPI_X3D2_DP, &
+                      BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused
   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
@@ -148,9 +149,9 @@ program test_cuda_tridiag
   ! BW utilisation and performance checks
   ! 11 in the first phase, 5 in the second phase, 16 in total
   achievedBW = 16._dp*n_iters*n*n_block*SZ*dp/(tend - tstart)
-  call MPI_Allreduce(achievedBW, achievedBWmax, 1, MPI_DOUBLE_PRECISION, &
+  call MPI_Allreduce(achievedBW, achievedBWmax, 1, MPI_X3D2_DP, &
                      MPI_MAX, MPI_COMM_WORLD, ierr)
-  call MPI_Allreduce(achievedBW, achievedBWmin, 1, MPI_DOUBLE_PRECISION, &
+  call MPI_Allreduce(achievedBW, achievedBWmin, 1, MPI_X3D2_DP, &
                      MPI_MIN, MPI_COMM_WORLD, ierr)
 
   if (nrank == 0) then
@@ -174,7 +175,7 @@ program test_cuda_tridiag
   r_u = r_u - (-v*v + 0.5_dp*u*u - nu*u)
   norm_du = norm2(r_u)
   norm_du = norm_du*norm_du/n_glob/n_block/SZ
-  call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_DOUBLE_PRECISION, &
+  call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_X3D2_DP, &
                      MPI_SUM, MPI_COMM_WORLD, ierr)
   norm_du = sqrt(norm_du)
 

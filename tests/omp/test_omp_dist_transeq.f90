@@ -2,7 +2,7 @@ program test_transeq
   use iso_fortran_env, only: stderr => error_unit
   use mpi
 
-  use m_common, only: dp, pi, BC_PERIODIC
+  use m_common, only: dp, pi, MPI_X3D2_DP, BC_PERIODIC
   use m_omp_common, only: SZ
   use m_omp_exec_dist, only: exec_dist_transeq_compact
   use m_omp_sendrecv, only: sendrecv_fields
@@ -120,7 +120,7 @@ program test_transeq
   r_u = r_u - (-v*v + 0.5_dp*u*u - nu*u)
   norm_du = norm2(r_u)
   norm_du = norm_du*norm_du/n_glob/n_block/SZ
-  call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_DOUBLE_PRECISION, &
+  call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_X3D2_DP, &
                      MPI_SUM, MPI_COMM_WORLD, ierr)
   norm_du = sqrt(norm_du)
 

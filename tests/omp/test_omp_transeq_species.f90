@@ -3,7 +3,7 @@ program test_omp_transeq_species
   use mpi
 
   use m_allocator, only: allocator_t, field_t
-  use m_common, only: dp, pi, DIR_X, DIR_Y, DIR_Z, VERT
+  use m_common, only: dp, pi, MPI_X3D2_DP, DIR_X, DIR_Y, DIR_Z, VERT
   use m_omp_common, only: SZ
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_backend, only: omp_backend_t, transeq_x_omp, base_backend_t
@@ -114,7 +114,7 @@ program test_omp_transeq_species
         - (u%data*u%data - 0.5_dp*spec%data*spec%data - nu*spec%data)
   norm_du = norm2(r_u)
   norm_du = norm_du*norm_du/dims_global(DIR_X)/n_groups/SZ
-  call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_DOUBLE_PRECISION, &
+  call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_X3D2_DP, &
                      MPI_SUM, MPI_COMM_WORLD, ierr)
   norm_du = sqrt(norm_du)
 

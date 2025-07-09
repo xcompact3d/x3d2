@@ -143,8 +143,13 @@ contains
     ierr = cufftCreate(poisson_fft%plan3D_fw)
     ierr = cufftMpAttachComm(poisson_fft%plan3D_fw, CUFFT_COMM_MPI, &
                              MPI_COMM_WORLD)
+#ifdef SINGLE_PREC
+    ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_R2C, &
+                           worksize)
+#else
     ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z, &
                            worksize)
+#endif
     if (ierr /= 0) then
       write (stderr, *), 'cuFFT Error Code: ', ierr
       error stop 'Forward 3D FFT plan generation failed'
@@ -153,8 +158,13 @@ contains
     ierr = cufftCreate(poisson_fft%plan3D_bw)
     ierr = cufftMpAttachComm(poisson_fft%plan3D_bw, CUFFT_COMM_MPI, &
                              MPI_COMM_WORLD)
+#ifdef SINGLE_PREC
+    ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_C2R, &
+                           worksize)
+#else
     ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D, &
                            worksize)
+#endif
     if (ierr /= 0) then
       write (stderr, *), 'cuFFT Error Code: ', ierr
       error stop 'Backward 3D FFT plan generation failed'
