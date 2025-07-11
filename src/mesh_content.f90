@@ -188,13 +188,10 @@ contains
           select case (trim(self%stretching(dir)))
           case ('centred')
             yeta_vt = (i_glob - 1)*s
-            yeta_mp = (i_glob - 0.5_dp)*s
           case ('top-bottom')
             yeta_vt = (i_glob - 1)*s - 0.5_dp
-            yeta_mp = (i_glob - 0.5_dp)*s - 0.5_dp
           case ('bottom')
             yeta_vt = (i_glob - 1)*s/2 - 0.5_dp
-            yeta_mp = (i_glob - 0.5_dp)*s/2 - 0.5_dp
           case default
             error stop 'Invalid stretching type'
           end select
@@ -208,6 +205,20 @@ contains
                                               + sin(pi*yeta_vt)**2/(pi*beta))
           self%vert_ds2(i, dir) = self%vert_ds(i, dir)**2
           self%vert_d2s(i, dir) = 2*cos(pi*yeta_vt)*sin(pi*yeta_vt)/beta
+        end do
+
+        do i = 1, cell_dims(dir)
+          i_glob = i + n_offset(dir)
+          select case (trim(self%stretching(dir)))
+          case ('centred')
+            yeta_mp = (i_glob - 0.5_dp)*s
+          case ('top-bottom')
+            yeta_mp = (i_glob - 0.5_dp)*s - 0.5_dp
+          case ('bottom')
+            yeta_mp = (i_glob - 0.5_dp)*s/2 - 0.5_dp
+          case default
+            error stop 'Invalid stretching type'
+          end select
 
           ! midpoint coordinates
           coord = const*atan2(r*sin(pi*yeta_mp), cos(pi*yeta_mp)) &
@@ -216,7 +227,7 @@ contains
           self%midp_coords(i, dir) = coord + pi*const
           self%midp_ds(i, dir) = self%L(dir)*(alpha/pi &
                                               + sin(pi*yeta_mp)**2/(pi*beta))
-          self%midp_ds2(i, dir) = self%vert_ds(i, dir)**2
+          self%midp_ds2(i, dir) = self%midp_ds(i, dir)**2
           self%midp_d2s(i, dir) = 2*cos(pi*yeta_mp)*sin(pi*yeta_mp)/beta
         end do
 
