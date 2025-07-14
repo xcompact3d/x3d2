@@ -65,7 +65,7 @@ module m_adios2_io
       write_array_1d_int, &
       write_array_4d_real
     generic, public :: write_attribute => write_attribute_string, &
-                                          write_attribute_array_1d_real
+      write_attribute_array_1d_real
 
     procedure, private :: write_scalar_int
     procedure, private :: write_scalar_real
@@ -163,8 +163,9 @@ contains
     ! remove all old variables from the IO object
     if (mode == adios2_mode_write) then
       call adios2_remove_all_variables(self%io, ierr)
-      call self%handle_error(ierr, "Failed to remove old ADIOS2 variables before open")
-    endif
+      call self%handle_error(ierr, "Failed to remove old ADIOS2 variables &
+                             & before open")
+    end if
 
     use_comm = self%comm
     if (present(comm)) use_comm = comm
@@ -461,9 +462,10 @@ contains
     integer :: num_elements
 
     num_elements = size(data)
-  
+
     call adios2_define_attribute(attr, self%io, name, data, num_elements, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 1D real array attribute")
+    call self%handle_error(ierr, &
+                           "Error defining ADIOS2 1D real array attribute")
   end subroutine write_attribute_array_1d_real
 
   !> Begin a step for ADIOS2 reader type

@@ -303,7 +303,8 @@ contains
     integer(i8), dimension(3) :: strided_shape_dims
     integer, dimension(3) :: global_dims, strided_dims
     type(field_ptr_t), allocatable :: field_ptrs(:)
-    real(dp), dimension(3) :: origin, original_spacing, strided_spacing, coords_max
+    real(dp), dimension(3) :: origin, original_spacing, strided_spacing, &
+                              coords_max
 
     if (self%checkpoint_cfg%snapshot_freq <= 0) return
     if (mod(timestep, self%checkpoint_cfg%snapshot_freq) /= 0) return
@@ -322,30 +323,35 @@ contains
 
     do i = 1, 3
       if (global_dims(i) > 1) then
-        original_spacing(i) = (coords_max(i) - origin(i)) / real(global_dims(i) - 1, dp)
+        original_spacing(i) = (coords_max(i) - origin(i))/ &
+                              real(global_dims(i) - 1, dp)
       else
         original_spacing(i) = 1.0_dp
-      endif
+      end if
     end do
 
-    strided_spacing = original_spacing * real(self%output_stride, dp)
+    strided_spacing = original_spacing*real(self%output_stride, dp)
 
     do i = 1, 3
-      strided_dims(i) = (global_dims(i) + self%output_stride(i) - 1) / self%output_stride(i)
+      strided_dims(i) = (global_dims(i) + self%output_stride(i) - 1)/ &
+                        self%output_stride(i)
     end do
     strided_shape_dims = int(strided_dims, i8)
 
     file = self%adios2_writer%open(filename, adios2_mode_write, comm_to_use)
     call self%adios2_writer%begin_step(file)
 
-    call self%generate_vtk_xml(strided_shape_dims, field_names, origin, strided_spacing)
+    call self%generate_vtk_xml( &
+      strided_shape_dims, field_names, origin, strided_spacing
+    )
 
     if (myrank == 0) then
       call self%adios2_writer%write_attribute("vtk.xml", self%vtk_xml, file)
       call self%adios2_writer%write_attribute("vtk.mesh.type", "structured", &
-      file)
+                                              file)
       call self%adios2_writer%write_attribute("vtk.mesh.origin", origin, file)
-      call self%adios2_writer%write_attribute("vtk.mesh.spacing", strided_spacing, file)
+      call self%adios2_writer%write_attribute("vtk.mesh.spacing", &
+                                              strided_spacing, file)
     end if
 
     allocate (field_ptrs(3))
@@ -374,28 +380,29 @@ contains
     integer :: i
 
     ! for ImageData, the Extent defines the grid size (from 0 to N-1).
-    write(extent_str, '(A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A)') &
-        '0 ', dims(1) - 1, ' 0 ', dims(2) - 1, ' 0 ', dims(3) - 1
+    write (extent_str, '(A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A)') &
+      '0 ', dims(1) - 1, ' 0 ', dims(2) - 1, ' 0 ', dims(3) - 1
 
-    write(origin_str, '(G0, 1X, G0, 1X, G0)') origin
-    write(spacing_str, '(G0, 1X, G0, 1X, G0)') spacing
+    write (origin_str, '(G0, 1X, G0, 1X, G0)') origin
+    write (spacing_str, '(G0, 1X, G0, 1X, G0)') spacing
 
-    xml = '<?xml version="1.0"?>' // new_line('a') // &
-      '<VTKFile type="ImageData" version="0.1">' // new_line('a') // &
-      '  <ImageData WholeExtent=" ' // trim(adjustl(extent_str)) // '" ' // &
-      'Origin="'// trim(adjustl(origin_str)) //'" ' // &
-      'Spacing="'// trim(adjustl(spacing_str)) //'">' // new_line('a') // &
-      '    <Piece Extent="' // trim(adjustl(extent_str)) // '">' // new_line('a') // &
-      '      <PointData>' // new_line('a')
+    xml = '<?xml version="1.0"?>'//new_line('a')// &
+          '<VTKFile type="ImageData" version="0.1">'//new_line('a')// &
+          '  <ImageData WholeExtent=" '//trim(adjustl(extent_str))//'" ' &
+          //'Origin="'//trim(adjustl(origin_str))//'" '// &
+          'Spacing="'//trim(adjustl(spacing_str))//'">'//new_line('a')// &
+          '    <Piece Extent="'//trim(adjustl(extent_str))//'">' &
+          //new_line('a')//'      <PointData>'//new_line('a')
 
     do i = 1, size(fields)
-      xml = trim(xml) // '        <DataArray Name="' // trim(fields(i)) // '" />' // new_line('a')
+      xml = trim(xml)//'        <DataArray Name="'//trim(fields(i))// &
+            '" />'//new_line('a')
     end do
 
-    xml = trim(xml) // '      </PointData>' // new_line('a') // &
-      '    </Piece>' // new_line('a') // &
-      '  </ImageData>' // new_line('a') // &
-      '</VTKFile>'
+    xml = trim(xml)//'      </PointData>'//new_line('a')// &
+          '    </Piece>'//new_line('a')// &
+          '  </ImageData>'//new_line('a')// &
+          '</VTKFile>'
 
     self%vtk_xml = xml
   end subroutine generate_vtk_xml
