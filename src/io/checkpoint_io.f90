@@ -342,7 +342,7 @@ contains
     call self%adios2_writer%begin_step(file)
 
     call self%generate_vtk_xml( &
-      strided_shape_dims, field_names, origin, strided_spacing
+      strided_shape_dims, field_names, origin, strided_spacing &
     )
 
     if (myrank == 0) then
