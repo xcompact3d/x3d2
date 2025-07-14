@@ -305,6 +305,7 @@ contains
     type(field_ptr_t), allocatable :: field_ptrs(:)
     real(dp), dimension(3) :: origin, original_spacing, strided_spacing, &
                               coords_max
+    real(dp) :: simulation_time
 
     if (self%checkpoint_cfg%snapshot_freq <= 0) return
     if (mod(timestep, self%checkpoint_cfg%snapshot_freq) /= 0) return
@@ -341,17 +342,15 @@ contains
     file = self%adios2_writer%open(filename, adios2_mode_write, comm_to_use)
     call self%adios2_writer%begin_step(file)
 
+    simulation_time = timestep*solver%dt
+    call self%adios2_writer%write_data("time", real(simulation_time, dp), file)
+
     call self%generate_vtk_xml( &
       strided_shape_dims, field_names, origin, strided_spacing &
       )
 
     if (myrank == 0) then
       call self%adios2_writer%write_attribute("vtk.xml", self%vtk_xml, file)
-      call self%adios2_writer%write_attribute("vtk.mesh.type", "structured", &
-                                              file)
-      call self%adios2_writer%write_attribute("vtk.mesh.origin", origin, file)
-      call self%adios2_writer%write_attribute("vtk.mesh.spacing", &
-                                              strided_spacing, file)
     end if
 
     allocate (field_ptrs(3))
@@ -398,6 +397,9 @@ contains
       xml = trim(xml)//'        <DataArray Name="'//trim(fields(i))// &
             '" />'//new_line('a')
     end do
+
+    xml = trim(xml)//'        <DataArray Name="TIME">time</DataArray>' &
+          //new_line('a')
 
     xml = trim(xml)//'      </PointData>'//new_line('a')// &
           '    </Piece>'//new_line('a')// &
