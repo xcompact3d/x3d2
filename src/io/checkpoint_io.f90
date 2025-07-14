@@ -343,7 +343,7 @@ contains
 
     call self%generate_vtk_xml( &
       strided_shape_dims, field_names, origin, strided_spacing &
-    )
+      )
 
     if (myrank == 0) then
       call self%adios2_writer%write_attribute("vtk.xml", self%vtk_xml, file)
