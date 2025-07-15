@@ -66,7 +66,7 @@ module m_checkpoint_manager_impl
     type(adios2_writer_t) :: adios2_writer
     integer :: last_checkpoint_step = -1
     integer, dimension(3) :: output_stride = [2, 2, 2]  !! Spatial stride for snapshot output
-    integer :: output_precision = dp                    !! Output precision for snapshot
+    logical :: convert_to_sp = .false.                  !! Flag for single precision snapshots
     real(dp), dimension(:, :, :), allocatable :: strided_buffer
     real(dp), dimension(:, :, :), allocatable :: coords_x, coords_y, coords_z
     integer(i8), dimension(3) :: last_shape_dims = 0
@@ -111,6 +111,7 @@ contains
       self%checkpoint_cfg%checkpoint_prefix, &
       self%checkpoint_cfg%snapshot_prefix, &
       self%checkpoint_cfg%output_stride, &
+      self%checkpoint_cfg%snapshot_single_precision, &
       comm &
       )
   end subroutine init
@@ -158,12 +159,12 @@ contains
 
   subroutine configure( &
     self, checkpoint_freq, snapshot_freq, keep_checkpoint, &
-    checkpoint_prefix, snapshot_prefix, output_stride, comm &
+    checkpoint_prefix, snapshot_prefix, output_stride, convert_to_sp, comm &
     )
     !! Configure checkpoint and snapshot settings
     class(checkpoint_manager_adios2_t), intent(inout) :: self
     integer, intent(in), optional :: checkpoint_freq, snapshot_freq
-    logical, intent(in), optional :: keep_checkpoint
+    logical, intent(in), optional :: keep_checkpoint, convert_to_sp
     character(len=*), intent(in), optional :: checkpoint_prefix, &
                                               snapshot_prefix
     integer, dimension(3), intent(in), optional :: output_stride
@@ -187,6 +188,8 @@ contains
       self%checkpoint_cfg%snapshot_prefix = snapshot_prefix
     if (present(output_stride)) &
       self%output_stride = self%checkpoint_cfg%output_stride
+    if (present(convert_to_sp)) &
+      self%convert_to_sp = self%checkpoint_cfg%snapshot_single_precision
 
     if (myrank == 0) then
       if (self%checkpoint_cfg%checkpoint_freq > 0) then
@@ -200,6 +203,8 @@ contains
         print *, 'Snapshot frequency: ', self%checkpoint_cfg%snapshot_freq
         print *, 'Snapshot prefix: ', trim(self%checkpoint_cfg%snapshot_prefix)
         print *, 'Output stride: ', self%output_stride
+        print *, 'Snapshot precision: ', merge('Single', 'Double', &
+               self%checkpoint_cfg%snapshot_single_precision)
       end if
     end if
   end subroutine configure
@@ -696,9 +701,11 @@ contains
           field_data, dims, stride_factors, &
           self%strided_buffer, strided_dims_local)
 
+        ! striding and conversion to single precision is only done for snapshots
         call self%adios2_writer%write_data( &
           field_name, self%strided_buffer, &
-          file, strided_shape, strided_start, strided_count &
+          file, strided_shape, strided_start, strided_count, &
+          self%convert_to_sp &
           )
       else
         call self%adios2_writer%write_data( &

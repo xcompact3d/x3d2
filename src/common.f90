@@ -11,6 +11,8 @@ module m_common
   integer, parameter :: MPI_X3D2_DP = MPI_DOUBLE_PRECISION
 #endif
 
+  integer, parameter :: sp = kind(0.0e0)
+
   integer, parameter :: i8 = selected_int_kind(18)
 
   real(dp), parameter :: pi = 4*atan(1.0_dp)
