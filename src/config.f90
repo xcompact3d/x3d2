@@ -237,7 +237,8 @@ contains
 
     namelist /checkpoint_params/ checkpoint_freq, snapshot_freq, &
       keep_checkpoint, checkpoint_prefix, snapshot_prefix, &
-      restart_from_checkpoint, restart_file, output_stride
+      restart_from_checkpoint, restart_file, output_stride, &
+      snapshot_single_precision
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading checkpoint config failed! &
