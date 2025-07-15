@@ -49,7 +49,7 @@ end module m_checkpoint_manager_base
 module m_checkpoint_manager_impl
 !! Implementation of checkpoint manager when ADIOS2 is enabled
   use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Abort
-  use m_common, only: dp, i8, DIR_C, VERT, get_argument
+  use m_common, only: dp, i8, DIR_C, VERT, get_argument, is_single_prec
   use m_field, only: field_t
   use m_solver, only: solver_t
   use m_adios2_io, only: adios2_writer_t, adios2_reader_t, adios2_file_t, &
@@ -203,8 +203,13 @@ contains
         print *, 'Snapshot frequency: ', self%checkpoint_cfg%snapshot_freq
         print *, 'Snapshot prefix: ', trim(self%checkpoint_cfg%snapshot_prefix)
         print *, 'Output stride: ', self%output_stride
-        print *, 'Snapshot precision: ', merge('Single', 'Double', &
-               self%checkpoint_cfg%snapshot_single_precision)
+        print *, 'Snapshot precision: ', merge( &
+          'Single', 'Double', &
+          self%checkpoint_cfg%snapshot_single_precision)
+        if (is_single_prec) then
+          print *, 'NOTE: Code compiled with single precision. &
+                   &Snapshots will be in single precision.'
+        end if
       end if
     end if
   end subroutine configure
