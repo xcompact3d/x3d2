@@ -55,6 +55,7 @@ module m_config
     logical :: restart_from_checkpoint = .false.
     character(len=256) :: restart_file = ""
     integer, dimension(3) :: output_stride = [2, 2, 2]     !! Spatial stride for snapshot output
+    logical :: snapshot_single_precision = .false.         !! If true, write snapshots in single precision
   contains
     procedure :: read => read_checkpoint_nml
   end type checkpoint_config_t
@@ -232,6 +233,7 @@ contains
     logical :: restart_from_checkpoint = .false.
     character(len=256) :: restart_file = ""
     integer, dimension(3) :: output_stride = [1, 1, 1]
+    logical :: snapshot_single_precision = .false.
 
     namelist /checkpoint_params/ checkpoint_freq, snapshot_freq, &
       keep_checkpoint, checkpoint_prefix, snapshot_prefix, &
@@ -265,6 +267,7 @@ contains
     self%restart_from_checkpoint = restart_from_checkpoint
     self%restart_file = restart_file
     self%output_stride = output_stride
+    self%snapshot_single_precision = snapshot_single_precision
   end subroutine read_checkpoint_nml
 
 end module m_config
