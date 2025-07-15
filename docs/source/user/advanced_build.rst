@@ -115,3 +115,64 @@ If the wrong libraries are being loaded, adjust your ``LD_LIBRARY_PATH`` environ
    
    # Or to prioritise system ADIOS2 (if needed):
    export LD_LIBRARY_PATH=/usr/lib:/usr/local/lib:$LD_LIBRARY_PATH
+
+
+Configuring Single Precision Mode
+---------------------------------
+
+x3d2 can be compiled to use single precision (32-bit) floating-point numbers as the default precision for all calculations, which can provide significant performance benefits and memory savings on some hardware.
+
+Enabling Single Precision
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To compile x3d2 in single precision mode, use the ``SINGLE_PREC`` CMake option:
+
+.. code-block:: bash
+
+   cmake -DSINGLE_PREC=ON ..
+
+This will define the ``SINGLE_PREC`` preprocessor macro, causing the code to use single precision (``real32``) as the default floating-point type throughout the application.
+
+Benefits and Trade-offs
+~~~~~~~~~~~~~~~~~~~~~~
+
+**Benefits of single precision:**
+
+- Reduced memory usage (approximately half the memory of double precision)
+- Improved cache efficiency
+- Potentially faster calculations, especially on GPUs and some CPUs
+- Smaller checkpoint and snapshot files
+
+**Trade-offs:**
+
+- Reduced numerical precision (~7 decimal digits instead of ~15)
+- May affect solution accuracy for some problems
+- May require smaller timesteps for numerical stability in some cases
+
+Single Precision and Snapshot Files
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+x3d2 provides two separate mechanisms for controlling precision:
+
+1. **Compile-time precision** (``-DSINGLE_PREC=ON``): Controls the precision used for all computations within the code
+
+2. **Runtime snapshot precision** (``snapshot_single_precision`` in input file): Controls only the precision of visualisation snapshot output files
+
+These can be used in combination:
+
+- Double precision computation with single precision snapshots (saves disk space)
+- Single precision computation with single precision snapshots (maximum performance)
+
+When the code is compiled with ``-DSINGLE_PREC=ON``, the ``snapshot_single_precision`` setting in the input file has no effect because the simulation is already using single precision.
+
+Performance Considerations
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Single precision mode is particularly beneficial for:
+
+- Memory-bound applications
+- Large-scale simulations
+- Preliminary or exploratory simulations
+- Cases where absolute precision is less critical
+
+For production runs where high precision is required, the default double precision mode is recommended.
