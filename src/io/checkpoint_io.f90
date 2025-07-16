@@ -321,16 +321,7 @@ contains
     global_dims = solver%mesh%get_global_dims(VERT)
     origin = solver%mesh%get_coordinates(1, 1, 1)
     coords_max = solver%mesh%geo%L
-
-    do i = 1, 3
-      if (global_dims(i) > 1) then
-        original_spacing(i) = (coords_max(i) - origin(i))/ &
-                              real(global_dims(i) - 1, dp)
-      else
-        original_spacing(i) = 1.0_dp
-      end if
-    end do
-
+    original_spacing = solver%mesh%geo%d
     strided_spacing = original_spacing*real(self%output_stride, dp)
 
     do i = 1, 3

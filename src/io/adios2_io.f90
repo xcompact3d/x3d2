@@ -249,9 +249,14 @@ contains
     type(adios2_variable) :: var
     integer :: ierr
 
-    call adios2_define_variable(var, self%io, name, adios2_type_integer4, ierr)
-    call self%handle_error(ierr, &
-                           "Error defining ADIOS2 scalar integer variable")
+    call adios2_inquire_variable(var, self%io, name, ierr)
+
+    if (ierr /= adios2_found) then
+      call adios2_define_variable(var, self%io, name, adios2_type_integer4, &
+                                  ierr)
+      call self%handle_error(ierr, &
+                             "Error defining ADIOS2 scalar integer variable")
+    end if
 
     call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
     call self%handle_error(ierr, "Error writing ADIOS2 scalar integer data")
@@ -267,10 +272,14 @@ contains
     type(adios2_variable) :: var
     integer :: ierr
 
-    call adios2_define_variable(var, self%io, name, &
-                                adios2_type_dp, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 scalar &
-                                 & double precision real variable")
+    call adios2_inquire_variable(var, self%io, name, ierr)
+
+    if (ierr /= adios2_found) then
+      call adios2_define_variable(var, self%io, name, &
+                                  adios2_type_dp, ierr)
+      call self%handle_error(ierr, "Error defining ADIOS2 scalar &
+                                   & double precision real variable")
+    end if
 
     call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
     call self%handle_error(ierr, "Error writing ADIOS2 scalar &
@@ -310,12 +319,17 @@ contains
       local_count = int(size(data), i8)
     end if
 
-    ! define adios2 variable to be written in given file format
-    call adios2_define_variable(var, self%io, name, adios2_type_integer4, &
-                                1, local_shape, local_start, &
-                                local_count, adios2_constant_dims, ierr)
-    call self%handle_error(ierr, &
-                           "Error defining ADIOS2 1D array integer variable")
+    call adios2_inquire_variable(var, self%io, name, ierr)
+
+    if (ierr /= adios2_found) then
+      ! define adios2 variable to be written in given file format
+      call adios2_define_variable(var, self%io, name, adios2_type_integer4, &
+                                  1, local_shape, local_start, &
+                                  local_count, adios2_constant_dims, ierr)
+      call self%handle_error(ierr, &
+                             "Error defining ADIOS2 1D array integer variable")
+    end if
+
     call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
     call self%handle_error(ierr, "Error writing ADIOS2 1D array integer data")
   end subroutine write_array_1d_int
@@ -353,11 +367,16 @@ contains
       local_count = int(size(data), i8)
     end if
 
-    call adios2_define_variable(var, self%io, name, adios2_type_dp, &
-                                1, local_shape, local_start, &
-                                local_count, adios2_constant_dims, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 1D array &
-                                 & double precision real variable")
+    call adios2_inquire_variable(var, self%io, name, ierr)
+
+    if (ierr /= adios2_found) then
+      call adios2_define_variable(var, self%io, name, adios2_type_dp, &
+                                  1, local_shape, local_start, &
+                                  local_count, adios2_constant_dims, ierr)
+      call self%handle_error(ierr, "Error defining ADIOS2 1D array &
+                                   & double precision real variable")
+    end if
+
     call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
     call self%handle_error(ierr, "Error writing ADIOS2 1D array &
                                 & double precision real data")
@@ -377,11 +396,15 @@ contains
     type(adios2_variable) :: var
     integer :: ierr
 
-    call adios2_define_variable(var, self%io, name, adios2_type_dp, &
-                                2, shape_dims, start_dims, &
-                                count_dims, adios2_constant_dims, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 2D array &
-                                 & double precision real variable")
+    call adios2_inquire_variable(var, self%io, name, ierr)
+
+    if (ierr /= adios2_found) then
+      call adios2_define_variable(var, self%io, name, adios2_type_dp, &
+                                  2, shape_dims, start_dims, &
+                                  count_dims, adios2_constant_dims, ierr)
+      call self%handle_error(ierr, "Error defining ADIOS2 2D array &
+                                   & double precision real variable")
+    end if
 
     call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
     call self%handle_error(ierr, "Error writing ADIOS2 2D array &
@@ -402,11 +425,15 @@ contains
     type(adios2_variable) :: var
     integer :: ierr
 
-    call adios2_define_variable(var, self%io, name, adios2_type_dp, &
-                                3, shape_dims, start_dims, &
-                                count_dims, adios2_constant_dims, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 3D array &
-                                 & double precision real variable")
+    call adios2_inquire_variable(var, self%io, name, ierr)
+
+    if (ierr /= adios2_found) then
+      call adios2_define_variable(var, self%io, name, adios2_type_dp, &
+                                  3, shape_dims, start_dims, &
+                                  count_dims, adios2_constant_dims, ierr)
+      call self%handle_error(ierr, "Error defining ADIOS2 3D array &
+                                   & double precision real variable")
+    end if
 
     call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
     call self%handle_error(ierr, "Error writing ADIOS2 3D array &
@@ -426,11 +453,16 @@ contains
                                              count_dims
     type(adios2_variable) :: var
     integer :: ierr
-    call adios2_define_variable(var, self%io, name, adios2_type_dp, &
-                                4, shape_dims, start_dims, &
-                                count_dims, adios2_constant_dims, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 4D array &
-                                 & double precision real variable")
+
+    call adios2_inquire_variable(var, self%io, name, ierr)
+
+    if (ierr /= adios2_found) then
+      call adios2_define_variable(var, self%io, name, adios2_type_dp, &
+                                  4, shape_dims, start_dims, &
+                                  count_dims, adios2_constant_dims, ierr)
+      call self%handle_error(ierr, "Error defining ADIOS2 4D array &
+                                   & double precision real variable")
+    end if
 
     call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
     call self%handle_error(ierr, "Error writing ADIOS2 4D array &
