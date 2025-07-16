@@ -59,13 +59,35 @@ To use the built-in ADIOS2 (default behavior):
 Library Path Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you already have an ADIOS2 installation but want to use the version built by x3d2, you may need to set the library path to ensure that the correct ADIOS2 libraries are used at runtime:
+The project is configured to automatically download and build its own version of the ADIOS2 library. 
+However, if you have another version of ADIOS2 already installed globally on your system 
+(e.g., in ``/usr/lib`` or ``/usr/local/lib``), the runtime linker might mistakenly load the system's version. 
+This can lead to ``undefined symbol`` errors if the system's ADIOS2 was built with a different compiler 
+(e.g., GCC/gfortran) than the one used for this project.
 
-.. code-block:: bash
+If you encounter this error, you can manually force the system to use the correct, 
+project-built library by following these steps.
 
-   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/build/adios2/lib
+1. First, navigate into your **build directory** (the directory where you ran ``cmake`` and ``make``).
 
-This is particularly important when using a custom-built ADIOS2 with a different MPI implementation than what's available system-wide.
+   .. code-block:: bash
+
+      cd <path-to-your-build-directory>
+
+2. Now, run your command by prepending the correct library path to the ``LD_LIBRARY_PATH`` environment variable. 
+The required path is relative to your current build directory.
+
+   To run the test suite:
+
+   .. code-block:: bash
+
+      LD_LIBRARY_PATH=./adios2-build/adios2-install/lib:$LD_LIBRARY_PATH make test
+
+   To run an executable with ``mpirun``:
+
+   .. code-block:: bash
+
+      LD_LIBRARY_PATH=./adios2-build/adios2-install/lib:$LD_LIBRARY_PATH mpirun -np 2 ./src/xcompact <input_file>
 
 Verifying Your Installation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
