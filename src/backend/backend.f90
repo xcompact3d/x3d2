@@ -41,6 +41,7 @@ module m_base_backend
     procedure(sum_intox), deferred :: sum_zintox
     procedure(veccopy), deferred :: veccopy
     procedure(vecadd), deferred :: vecadd
+    procedure(vecmult), deferred :: vecmult
     procedure(scalar_product), deferred :: scalar_product
     procedure(field_max_mean), deferred :: field_max_mean
     procedure(field_ops), deferred :: field_scale

@@ -11,6 +11,7 @@ module m_solver
                       BC_NEUMANN, BC_DIRICHLET
   use m_config, only: solver_config_t
   use m_field, only: field_t, flist_t
+  use m_ibm, only: ibm_t
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t
   use m_time_integrator, only: time_intg_t
@@ -63,6 +64,8 @@ module m_solver
     type(allocator_t), pointer :: host_allocator
     type(dirps_t), pointer :: xdirps, ydirps, zdirps
     type(vector_calculus_t) :: vector_calculus
+    type(ibm_t) :: ibm
+    logical :: ibm_on
     procedure(poisson_solver), pointer :: poisson => null()
     procedure(transport_equation), pointer :: transeq => null()
   contains
@@ -190,11 +193,17 @@ contains
       error stop 'poisson_solver_type is not valid. Use "FFT" or "CG".'
     end select
 
+    ! Initialize the IBM module
+    solver%ibm_on = solver_cfg%ibm_on
+    if (solver%ibm_on) &
+      solver%ibm = ibm_t(backend, mesh, host_allocator)
+
     if (solver_cfg%lowmem_transeq) then
       solver%transeq => transeq_lowmem
     else
       solver%transeq => transeq_default
     end if
+
   end function init
 
   subroutine allocate_tdsops(dirps, backend, mesh, der1st_scheme, &

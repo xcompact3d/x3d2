@@ -27,6 +27,7 @@ module m_config
 
   type, extends(base_config_t) :: solver_config_t
     real(dp) :: Re, dt
+    logical :: ibm_on
     real(dp), dimension(:), allocatable :: pr_species
     integer :: n_iters, n_output, n_species
     logical :: lowmem_transeq, lowmem_fft
@@ -131,6 +132,7 @@ contains
     integer :: unit
 
     real(dp) :: Re, dt
+    logical :: ibm_on = .false.
     real(dp), dimension(n_species_max) :: pr_species = 1._dp
     integer :: n_iters, n_output, n_species = 0
     !> triggers the low memory implementations
@@ -142,7 +144,8 @@ contains
 
     namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
       n_species, pr_species, lowmem_transeq, lowmem_fft, &
-      time_intg, der1st_scheme, der2nd_scheme, interpl_scheme, stagder_scheme
+      time_intg, der1st_scheme, der2nd_scheme, interpl_scheme, &
+      stagder_scheme, ibm_on
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading solver config failed! &
@@ -162,6 +165,7 @@ contains
     self%dt = dt
     self%n_iters = n_iters
     self%n_output = n_output
+    self%ibm_on = ibm_on
     self%n_species = n_species
     if (n_species > 0) self%pr_species = pr_species(1:n_species)
     self%lowmem_transeq = lowmem_transeq
