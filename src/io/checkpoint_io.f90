@@ -71,6 +71,7 @@ module m_checkpoint_manager_impl
     real(dp), dimension(:, :, :), allocatable :: coords_x, coords_y, coords_z
     integer(i8), dimension(3) :: last_shape_dims = 0
     integer(i8), dimension(3) :: last_strided_shape = 0
+    character(len=4096) :: vtk_xml = ""                 !! VTK XML string for ParaView compatibility
   contains
     procedure :: init
     procedure :: handle_restart
@@ -86,6 +87,7 @@ module m_checkpoint_manager_impl
     procedure, private :: cleanup_strided_buffers
     procedure, private :: get_strided_dimensions
     procedure, private :: generate_coordinates
+    procedure, private :: generate_vtk_xml
   end type checkpoint_manager_adios2_t
 
   type :: field_ptr_t
@@ -295,13 +297,15 @@ contains
     integer, intent(in), optional :: comm
 
     character(len=*), parameter :: field_names(3) = ["u", "v", "w"]
-    integer :: myrank, ierr
-    integer :: comm_to_use
+    integer :: myrank, ierr, comm_to_use, i
     character(len=256) :: filename
     type(adios2_file_t) :: file
-    integer :: dims(3), global_dims(3)
-    integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
+    integer(i8), dimension(3) :: strided_shape_dims
+    integer, dimension(3) :: global_dims, strided_dims
     type(field_ptr_t), allocatable :: field_ptrs(:)
+    real(dp), dimension(3) :: origin, original_spacing, strided_spacing, &
+                              coords_max
+    real(dp) :: simulation_time
 
     if (self%checkpoint_cfg%snapshot_freq <= 0) return
     if (mod(timestep, self%checkpoint_cfg%snapshot_freq) /= 0) return
@@ -314,32 +318,31 @@ contains
       trim(self%checkpoint_cfg%snapshot_prefix), '_', timestep, '.bp'
     if (myrank == 0) print *, 'Writing snapshot: ', trim(filename)
 
-    dims = solver%mesh%get_dims(VERT)
     global_dims = solver%mesh%get_global_dims(VERT)
-    start_dims = int(solver%mesh%par%n_offset, i8)
-    shape_dims = int(global_dims, i8)
-    count_dims = int(dims, i8)
+    origin = solver%mesh%get_coordinates(1, 1, 1)
+    coords_max = solver%mesh%geo%L
+    original_spacing = solver%mesh%geo%d
+    strided_spacing = original_spacing*real(self%output_stride, dp)
+
+    do i = 1, 3
+      strided_dims(i) = (global_dims(i) + self%output_stride(i) - 1)/ &
+                        self%output_stride(i)
+    end do
+    strided_shape_dims = int(strided_dims, i8)
 
     file = self%adios2_writer%open(filename, adios2_mode_write, comm_to_use)
     call self%adios2_writer%begin_step(file)
 
-    ! paraview-specific mesh metadata - write only from root
-    if (myrank == 0) then
-      call self%adios2_writer%write_attribute("data_type", "image", file)
-      call self%adios2_writer%write_attribute("mesh/type", "rectilinear", file)
-      call self%adios2_writer%write_attribute("mesh/dimensionality", "3", file)
+    simulation_time = timestep*solver%dt
+    call self%adios2_writer%write_data("time", real(simulation_time, dp), file)
 
-      call self%adios2_writer%write_attribute("u/mesh", "mesh", file)
-      call self%adios2_writer%write_attribute("v/mesh", "mesh", file)
-      call self%adios2_writer%write_attribute("w/mesh", "mesh", file)
-
-      call self%adios2_writer%write_attribute( &
-        "mesh/coordinates", "coordinates/x;coordinates/y;coordinates/z", file)
-    end if
-
-    call self%generate_coordinates( &
-      solver, file, shape_dims, start_dims, count_dims, solver%u%data_loc &
+    call self%generate_vtk_xml( &
+      strided_shape_dims, field_names, origin, strided_spacing &
       )
+
+    if (myrank == 0) then
+      call self%adios2_writer%write_attribute("vtk.xml", self%vtk_xml, file)
+    end if
 
     allocate (field_ptrs(3))
     field_ptrs(1)%ptr => solver%u
@@ -354,6 +357,48 @@ contains
 
     call self%adios2_writer%close(file)
   end subroutine write_snapshot
+
+  subroutine generate_vtk_xml(self, dims, fields, origin, spacing)
+    !! Generate VTK XML string for ImageData format for ParaView's ADIOS2VTXReader
+    class(checkpoint_manager_adios2_t), intent(inout) :: self
+    integer(i8), dimension(3), intent(in) :: dims
+    character(len=*), dimension(:), intent(in) :: fields
+    real(dp), dimension(3), intent(in) :: origin, spacing
+
+    character(len=4096) :: xml
+    character(len=96) :: extent_str, origin_str, spacing_str
+    integer :: i
+
+    ! for ImageData, the Extent defines the grid size (from 0 to N-1).
+    write (extent_str, '(A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A)') &
+      '0 ', dims(1) - 1, ' 0 ', dims(2) - 1, ' 0 ', dims(3) - 1
+
+    write (origin_str, '(G0, 1X, G0, 1X, G0)') origin
+    write (spacing_str, '(G0, 1X, G0, 1X, G0)') spacing
+
+    xml = '<?xml version="1.0"?>'//new_line('a')// &
+          '<VTKFile type="ImageData" version="0.1">'//new_line('a')// &
+          '  <ImageData WholeExtent=" '//trim(adjustl(extent_str))//'" ' &
+          //'Origin="'//trim(adjustl(origin_str))//'" '// &
+          'Spacing="'//trim(adjustl(spacing_str))//'">'//new_line('a')// &
+          '    <Piece Extent="'//trim(adjustl(extent_str))//'">' &
+          //new_line('a')//'      <PointData>'//new_line('a')
+
+    do i = 1, size(fields)
+      xml = trim(xml)//'        <DataArray Name="'//trim(fields(i))// &
+            '" />'//new_line('a')
+    end do
+
+    xml = trim(xml)//'        <DataArray Name="TIME">time</DataArray>' &
+          //new_line('a')
+
+    xml = trim(xml)//'      </PointData>'//new_line('a')// &
+          '    </Piece>'//new_line('a')// &
+          '  </ImageData>'//new_line('a')// &
+          '</VTKFile>'
+
+    self%vtk_xml = xml
+  end subroutine generate_vtk_xml
 
   subroutine generate_coordinates( &
     self, solver, file, shape_dims, start_dims, count_dims, data_loc &
@@ -660,8 +705,8 @@ contains
 
       call write_single_field(trim(field_names(i_field)), host_field, &
                               fields(i_field)%ptr%data_loc)
+      call solver%host_allocator%release_block(host_field)
     end do
-    call solver%host_allocator%release_block(host_field)
 
   contains
 
