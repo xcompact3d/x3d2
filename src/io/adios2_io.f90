@@ -21,9 +21,9 @@ module m_adios2_io
                     adios2_set_selection, adios2_put, &
                     adios2_get, adios2_remove_all_variables, &
                     adios2_found, adios2_constant_dims, &
-                    adios2_type_dp, adios2_type_integer4
+                    adios2_type_dp, adios2_type_integer4, adios2_type_real
   use mpi, only: MPI_COMM_NULL, MPI_Initialized, MPI_Comm_rank
-  use m_common, only: dp, i8
+  use m_common, only: dp, i8, sp, is_single_prec
   implicit none
 
   private
@@ -62,8 +62,8 @@ module m_adios2_io
       write_array_1d_real, &
       write_array_2d_real, &
       write_array_3d_real, &
-      write_array_1d_int, &
-      write_array_4d_real
+      write_array_4d_real, &
+      write_array_1d_int
     generic, public :: write_attribute => write_attribute_string
 
     procedure, private :: write_scalar_int
@@ -109,6 +109,20 @@ module m_adios2_io
   end interface
 contains
 
+  !> Function to determine ADIOS2 variable type based on precision settings
+  function get_vartype(use_sp) result(vartype)
+    logical, intent(in) :: use_sp  !! Flag for single precision output
+    integer :: vartype
+
+    if (use_sp) then
+      vartype = adios2_type_real
+    else if (is_single_prec) then
+      vartype = adios2_type_real
+    else
+      vartype = adios2_type_dp
+    end if
+  end function get_vartype
+
   !> Initialises ADIOS2
   !> self: Instance of `base_adios2_t`
   !> comm: MPI communicator (use `MPI_COMM_WORLD` for parallel runs)
@@ -127,7 +141,7 @@ contains
     call MPI_Initialized(is_mpi_initialised, ierr)
     if (.not. is_mpi_initialised) &
        call self%handle_error(1, "MPI must be initialised &
-                              & before calling ADIOS2 init")
+                              &before calling ADIOS2 init")
 
     self%comm = comm
     call MPI_Comm_rank(self%comm, comm_rank, ierr)
@@ -253,23 +267,41 @@ contains
   end subroutine write_scalar_int
 
   !> Write scalar real data
-  subroutine write_scalar_real(self, name, data, file)
+  subroutine write_scalar_real(self, name, data, file, convert_to_sp)
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
     real(dp), intent(in) :: data
     type(adios2_file_t), intent(inout) :: file
+    logical, intent(in), optional :: convert_to_sp
 
     type(adios2_variable) :: var
-    integer :: ierr
+    integer :: ierr, vartype
+    logical :: use_sp
+    real(sp) :: data_sp
 
-    call adios2_define_variable(var, self%io, name, &
-                                adios2_type_dp, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 scalar &
-                                 & double precision real variable")
+    use_sp = .false.
+    if (present(convert_to_sp)) use_sp = convert_to_sp
+    vartype = get_vartype(use_sp)
 
-    call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
-    call self%handle_error(ierr, "Error writing ADIOS2 scalar &
-                                 & double precision real data")
+    if (use_sp) then
+      data_sp = real(data, sp)
+      call adios2_define_variable(var, self%io, name, vartype, ierr)
+      call self%handle_error(ierr, "Error defining ADIOS2 scalar &
+                                   &single precision real variable")
+
+      ! use sync mode for single precision put (copies data immediately)
+      call adios2_put(file%engine, var, data_sp, adios2_mode_sync, ierr)
+      call self%handle_error(ierr, "Error writing ADIOS2 scalar &
+                                   &single precision real data")
+    else
+      call adios2_define_variable(var, self%io, name, vartype, ierr)
+      call self%handle_error(ierr, "Error defining ADIOS2 scalar &
+                                   &real variable")
+
+      call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
+      call self%handle_error(ierr, "Error writing ADIOS2 scalar &
+                                   &real data")
+    end if
   end subroutine write_scalar_real
 
   !> Write 1d array integer data
@@ -315,9 +347,9 @@ contains
     call self%handle_error(ierr, "Error writing ADIOS2 1D array integer data")
   end subroutine write_array_1d_int
 
-  !> Write 1d array real data
+!> Write 1d array real data
   subroutine write_array_1d_real( &
-    self, name, data, file, shape_dims, start_dims, count_dims &
+    self, name, data, file, shape_dims, start_dims, count_dims, convert_to_sp &
     )
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
@@ -326,9 +358,12 @@ contains
     integer(i8), dimension(1), intent(in), optional :: shape_dims, &
                                                        start_dims, &
                                                        count_dims
+    logical, intent(in), optional :: convert_to_sp
     type(adios2_variable) :: var
-    integer :: ierr
+    integer :: ierr, vartype
     integer(i8), dimension(1) :: local_shape, local_start, local_count
+    logical :: use_sp
+    real(sp), dimension(:), allocatable :: data_sp
 
     if (present(shape_dims)) then
       local_shape = shape_dims
@@ -348,19 +383,37 @@ contains
       local_count = int(size(data), i8)
     end if
 
-    call adios2_define_variable(var, self%io, name, adios2_type_dp, &
-                                1, local_shape, local_start, &
-                                local_count, adios2_constant_dims, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 1D array &
-                                 & double precision real variable")
-    call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
-    call self%handle_error(ierr, "Error writing ADIOS2 1D array &
-                                & double precision real data")
+    use_sp = .false.
+    if (present(convert_to_sp)) use_sp = convert_to_sp
+    vartype = get_vartype(use_sp)
+
+    if (use_sp) then
+      allocate (data_sp(size(data)))
+      data_sp = real(data, sp)
+      call adios2_define_variable(var, self%io, name, vartype, &
+                                  1, local_shape, local_start, &
+                                  local_count, adios2_constant_dims, ierr)
+      call self%handle_error(ierr, "Error defining ADIOS2 1D array &
+                                   &single precision real variable")
+      call adios2_put(file%engine, var, data_sp, adios2_mode_sync, ierr)
+      call self%handle_error(ierr, "Error writing ADIOS2 1D array &
+                                   &single precision real data")
+      deallocate (data_sp)
+    else
+      call adios2_define_variable(var, self%io, name, vartype, &
+                                  1, local_shape, local_start, &
+                                  local_count, adios2_constant_dims, ierr)
+      call self%handle_error(ierr, "Error defining ADIOS2 1D array &
+                                   &real variable")
+      call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
+      call self%handle_error(ierr, "Error writing ADIOS2 1D array &
+                                   &real data")
+    end if
   end subroutine write_array_1d_real
 
   !> Write 2d array real data
   subroutine write_array_2d_real( &
-    self, name, data, file, shape_dims, start_dims, count_dims &
+    self, name, data, file, shape_dims, start_dims, count_dims, convert_to_sp &
     )
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
@@ -369,23 +422,45 @@ contains
     integer(i8), dimension(2), intent(in) :: shape_dims, &
                                              start_dims, &
                                              count_dims
+    logical, intent(in), optional :: convert_to_sp
     type(adios2_variable) :: var
-    integer :: ierr
+    integer :: ierr, vartype
+    logical :: use_sp
+    real(sp), dimension(:, :), allocatable :: data_sp
 
-    call adios2_define_variable(var, self%io, name, adios2_type_dp, &
-                                2, shape_dims, start_dims, &
-                                count_dims, adios2_constant_dims, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 2D array &
-                                 & double precision real variable")
+    use_sp = .false.
+    if (present(convert_to_sp)) use_sp = convert_to_sp
+    vartype = get_vartype(use_sp)
 
-    call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
-    call self%handle_error(ierr, "Error writing ADIOS2 2D array &
-                                 & double precision real data")
+    if (use_sp) then
+      allocate (data_sp(size(data, 1), size(data, 2)))
+      data_sp = real(data, sp)
+      call adios2_define_variable(var, self%io, name, vartype, &
+                                  2, shape_dims, start_dims, &
+                                  count_dims, adios2_constant_dims, ierr)
+      call self%handle_error(ierr, "Error defining ADIOS2 2D array &
+                                   &single precision real variable")
+
+      call adios2_put(file%engine, var, data_sp, adios2_mode_sync, ierr)
+      call self%handle_error(ierr, "Error writing ADIOS2 2D array &
+                                   &single precision real data")
+      deallocate (data_sp)
+    else
+      call adios2_define_variable(var, self%io, name, vartype, &
+                                  2, shape_dims, start_dims, &
+                                  count_dims, adios2_constant_dims, ierr)
+      call self%handle_error(ierr, "Error defining ADIOS2 2D array &
+                                   &real variable")
+
+      call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
+      call self%handle_error(ierr, "Error writing ADIOS2 2D array &
+                                   &real data")
+    end if
   end subroutine write_array_2d_real
 
   !> Write 3d array real data
   subroutine write_array_3d_real( &
-    self, name, data, file, shape_dims, start_dims, count_dims &
+    self, name, data, file, shape_dims, start_dims, count_dims, convert_to_sp &
     )
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
@@ -394,22 +469,45 @@ contains
     integer(i8), dimension(3), intent(in) :: shape_dims, &
                                              start_dims, &
                                              count_dims
+    logical, intent(in), optional :: convert_to_sp
     type(adios2_variable) :: var
-    integer :: ierr
-    call adios2_define_variable(var, self%io, name, adios2_type_dp, &
-                                3, shape_dims, start_dims, &
-                                count_dims, adios2_constant_dims, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 3D array &
-                                 & double precision real variable")
+    integer :: ierr, vartype
+    logical :: use_sp
+    real(sp), dimension(:, :, :), allocatable :: data_sp
 
-    call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
-    call self%handle_error(ierr, "Error writing ADIOS2 3D array &
-                                 & double precision real data")
+    use_sp = .false.
+    if (present(convert_to_sp)) use_sp = convert_to_sp
+    vartype = get_vartype(use_sp)
+
+    if (use_sp) then
+      allocate (data_sp(size(data, 1), size(data, 2), size(data, 3)))
+      data_sp = real(data, sp)
+      call adios2_define_variable(var, self%io, name, vartype, &
+                                  3, shape_dims, start_dims, &
+                                  count_dims, adios2_constant_dims, ierr)
+      call self%handle_error(ierr, "Error defining ADIOS2 3D array &
+                                   &single precision real variable")
+
+      call adios2_put(file%engine, var, data_sp, adios2_mode_sync, ierr)
+      call self%handle_error(ierr, "Error writing ADIOS2 3D array &
+                                   &single precision real data")
+      deallocate (data_sp)
+    else
+      call adios2_define_variable(var, self%io, name, vartype, &
+                                  3, shape_dims, start_dims, &
+                                  count_dims, adios2_constant_dims, ierr)
+      call self%handle_error(ierr, "Error defining ADIOS2 3D array &
+                                   &real variable")
+
+      call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
+      call self%handle_error(ierr, "Error writing ADIOS2 3D array &
+                                   &real data")
+    end if
   end subroutine write_array_3d_real
 
   !> Write 4d array real data
   subroutine write_array_4d_real( &
-    self, name, data, file, shape_dims, start_dims, count_dims &
+    self, name, data, file, shape_dims, start_dims, count_dims, convert_to_sp &
     )
     class(adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: name
@@ -418,17 +516,41 @@ contains
     integer(i8), dimension(4), intent(in) :: shape_dims, &
                                              start_dims, &
                                              count_dims
+    logical, intent(in), optional :: convert_to_sp
     type(adios2_variable) :: var
-    integer :: ierr
-    call adios2_define_variable(var, self%io, name, adios2_type_dp, &
-                                4, shape_dims, start_dims, &
-                                count_dims, adios2_constant_dims, ierr)
-    call self%handle_error(ierr, "Error defining ADIOS2 4D array &
-                                 & double precision real variable")
+    integer :: ierr, vartype
+    logical :: use_sp
+    real(sp), dimension(:, :, :, :), allocatable :: data_sp
 
-    call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
-    call self%handle_error(ierr, "Error writing ADIOS2 4D array &
-                                 & double precision real data")
+    use_sp = .false.
+    if (present(convert_to_sp)) use_sp = convert_to_sp
+    vartype = get_vartype(use_sp)
+
+    if (use_sp) then
+      allocate (data_sp(size(data, 1), size(data, 2), size(data, 3), &
+                        size(data, 4)))
+      data_sp = real(data, sp)
+      call adios2_define_variable(var, self%io, name, vartype, &
+                                  4, shape_dims, start_dims, &
+                                  count_dims, adios2_constant_dims, ierr)
+      call self%handle_error(ierr, "Error defining ADIOS2 4D array &
+                                   &single precision real variable")
+
+      call adios2_put(file%engine, var, data_sp, adios2_mode_sync, ierr)
+      call self%handle_error(ierr, "Error writing ADIOS2 4D array &
+                                   &single precision real data")
+      deallocate (data_sp)
+    else
+      call adios2_define_variable(var, self%io, name, vartype, &
+                                  4, shape_dims, start_dims, &
+                                  count_dims, adios2_constant_dims, ierr)
+      call self%handle_error(ierr, "Error defining ADIOS2 4D array &
+                                   &real variable")
+
+      call adios2_put(file%engine, var, data, adios2_mode_deferred, ierr)
+      call self%handle_error(ierr, "Error writing ADIOS2 4D array &
+                                   &real data")
+    end if
   end subroutine write_array_4d_real
 
   !> Write string attribute for Paraview

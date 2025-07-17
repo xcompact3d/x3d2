@@ -6,10 +6,14 @@ module m_common
 #ifdef SINGLE_PREC
   integer, parameter :: dp = kind(0.0e0)
   integer, parameter :: MPI_X3D2_DP = MPI_REAL
+  logical, parameter :: is_single_prec = .true.
 #else
   integer, parameter :: dp = kind(0.0d0)
   integer, parameter :: MPI_X3D2_DP = MPI_DOUBLE_PRECISION
+  logical, parameter :: is_single_prec = .false.
 #endif
+
+  integer, parameter :: sp = kind(0.0e0)
 
   integer, parameter :: i8 = selected_int_kind(18)
 
