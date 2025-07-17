@@ -3,7 +3,8 @@ program test_omp_tridiag
   use mpi
   use omp_lib
 
-  use m_common, only: dp, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
+  use m_common, only: dp, pi, MPI_X3D2_DP, &
+                      BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
   use m_omp_common, only: SZ
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_exec_dist, only: exec_dist_tds_compact
@@ -187,6 +188,11 @@ program test_omp_tridiag
 
   ! =========================================================================
   ! stag interpolate 'v2p' with neumann sym
+  if (nrank == 0) then
+    bc_start = BC_NEUMANN
+  else
+    bc_start = BC_HALO
+  end if
   n_loc = n
   if (nrank == nproc - 1) n_loc = n - 1
   tdsops = tdsops_init(n_loc, dx_pi, operation='interpolate', &
@@ -337,9 +343,9 @@ program test_omp_tridiag
   ! BW utilisation and performance checks
   ! 3 in the first phase, 2 in the second phase, so 5 in total
   achievedBW = 5._dp*n_iters*n*n_groups*SZ*dp/(tend - tstart)
-  call MPI_Allreduce(achievedBW, achievedBWmax, 1, MPI_DOUBLE_PRECISION, &
+  call MPI_Allreduce(achievedBW, achievedBWmax, 1, MPI_X3D2_DP, &
                      MPI_MAX, MPI_COMM_WORLD, ierr)
-  call MPI_Allreduce(achievedBW, achievedBWmin, 1, MPI_DOUBLE_PRECISION, &
+  call MPI_Allreduce(achievedBW, achievedBWmin, 1, MPI_X3D2_DP, &
                      MPI_MIN, MPI_COMM_WORLD, ierr)
   if (nrank == 0) then
     print'(a, f8.3, a)', 'Achieved BW min: ', achievedBWmin/2**30, ' GiB/s'
@@ -451,7 +457,7 @@ contains
 
     norm = norm2(du(:, 1:n, :))
     norm = norm*norm/n_glob/n_groups/SZ
-    call MPI_Allreduce(MPI_IN_PLACE, norm, 1, MPI_DOUBLE_PRECISION, &
+    call MPI_Allreduce(MPI_IN_PLACE, norm, 1, MPI_X3D2_DP, &
                        MPI_SUM, MPI_COMM_WORLD, ierr)
     norm = sqrt(norm)
 

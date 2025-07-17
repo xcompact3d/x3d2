@@ -19,8 +19,8 @@ module m_mesh_content
     character(len=20), dimension(3) :: stretching
     !> Stretching
     logical :: stretched(3)
-    !> Stretching parameter
-    real(dp) :: beta(3)
+    !> Stretching parameters
+    real(dp) :: alpha(3), beta(3)
     !> Stretching factors at vertices
     real(dp), allocatable, dimension(:, :) :: vert_ds, vert_ds2, vert_d2s
     !> Stretching factors at midpoints
@@ -34,7 +34,6 @@ module m_mesh_content
     integer, dimension(3) :: global_vert_dims ! global number of vertices in each direction without padding (cartesian structure)
     integer, dimension(3) :: global_cell_dims ! global number of cells in each direction without padding (cartesian structure)
 
-    integer, dimension(3) :: vert_dims_padded ! local domain size including padding (cartesian structure)
     integer, dimension(3) :: vert_dims ! local number of vertices in each direction without padding (cartesian structure)
     integer, dimension(3) :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
     logical, dimension(3) :: periodic_BC ! Whether or not a direction has a periodic BC
@@ -161,6 +160,11 @@ contains
 
     ! vertex coordinates
     do dir = 1, 3
+      L_inf = self%L(dir)/2
+      beta = self%beta(dir)
+      alpha = abs((L_inf - sqrt((pi*beta)**2 + L_inf**2))/(2*beta*L_inf))
+      self%alpha(dir) = alpha
+
       if (trim(self%stretching(dir)) == 'uniform') then
         self%stretched(dir) = .false.
         self%vert_coords(1:vert_dims(dir), dir) = &
@@ -173,67 +177,72 @@ contains
         self%midp_ds(:, dir) = 1._dp
         self%midp_ds2(:, dir) = 1._dp
         self%midp_d2s(:, dir) = 0._dp
-        ! all sorted, move on to the next direction
-        cycle
       else
         self%stretched(dir) = .true.
-      end if
+        r = sqrt((alpha*beta + 1)/(alpha*beta))
+        const = sqrt(beta)/(2*sqrt(alpha)*sqrt(alpha*beta + 1))
+        s = self%d(dir)/self%L(dir)
 
-      L_inf = self%L(dir)/2
-      beta = self%beta(dir)
-      alpha = abs((L_inf - sqrt((pi*beta)**2 + L_inf**2))/(2*beta*L_inf))
-      r = sqrt((alpha*beta + 1)/(alpha*beta))
-      const = sqrt(beta)/(2*sqrt(alpha)*sqrt(alpha*beta + 1))
-      s = self%d(dir)/self%L(dir)
+        do i = 1, vert_dims(dir)
+          i_glob = i + n_offset(dir)
+          select case (trim(self%stretching(dir)))
+          case ('centred')
+            yeta_vt = (i_glob - 1)*s
+          case ('top-bottom')
+            yeta_vt = (i_glob - 1)*s - 0.5_dp
+          case ('bottom')
+            yeta_vt = (i_glob - 1)*s/2 - 0.5_dp
+          case default
+            error stop 'Invalid stretching type'
+          end select
 
-      do i = 1, vert_dims(dir)
-        i_glob = i + n_offset(dir)
+          ! vertex coordinates
+          coord = const*atan2(r*sin(pi*yeta_vt), cos(pi*yeta_vt)) &
+                  *(2*alpha*beta - cos(2*pi*yeta_vt) + 1) &
+                  /(sin(pi*yeta_vt)**2 + alpha*beta)
+          self%vert_coords(i, dir) = coord + pi*const
+          self%vert_ds(i, dir) = self%L(dir)*(alpha/pi &
+                                              + sin(pi*yeta_vt)**2/(pi*beta))
+          self%vert_ds2(i, dir) = self%vert_ds(i, dir)**2
+          self%vert_d2s(i, dir) = 2*cos(pi*yeta_vt)*sin(pi*yeta_vt)/beta
+        end do
+
+        do i = 1, cell_dims(dir)
+          i_glob = i + n_offset(dir)
+          select case (trim(self%stretching(dir)))
+          case ('centred')
+            yeta_mp = (i_glob - 0.5_dp)*s
+          case ('top-bottom')
+            yeta_mp = (i_glob - 0.5_dp)*s - 0.5_dp
+          case ('bottom')
+            yeta_mp = (i_glob - 0.5_dp)*s/2 - 0.5_dp
+          case default
+            error stop 'Invalid stretching type'
+          end select
+
+          ! midpoint coordinates
+          coord = const*atan2(r*sin(pi*yeta_mp), cos(pi*yeta_mp)) &
+                  *(2*alpha*beta - cos(2*pi*yeta_mp) + 1) &
+                  /(sin(pi*yeta_mp)**2 + alpha*beta)
+          self%midp_coords(i, dir) = coord + pi*const
+          self%midp_ds(i, dir) = self%L(dir)*(alpha/pi &
+                                              + sin(pi*yeta_mp)**2/(pi*beta))
+          self%midp_ds2(i, dir) = self%midp_ds(i, dir)**2
+          self%midp_d2s(i, dir) = 2*cos(pi*yeta_mp)*sin(pi*yeta_mp)/beta
+        end do
+
+        ! final shifts/corrections
         select case (trim(self%stretching(dir)))
         case ('centred')
-          yeta_vt = (i_glob - 1)*s
-          yeta_mp = (i_glob - 0.5_dp)*s
-        case ('both-ends')
-          yeta_vt = (i_glob - 1)*s - 0.5_dp
-          yeta_mp = (i_glob - 0.5_dp)*s - 0.5_dp
+          self%vert_coords(:, dir) = self%vert_coords(:, dir) - L_inf
+          self%midp_coords(:, dir) = self%midp_coords(:, dir) - L_inf
         case ('bottom')
-          yeta_vt = (i_glob - 1)*s/2 - 0.5_dp
-          yeta_mp = (i_glob - 0.5_dp)*s/2 - 0.5_dp
-        case default
-          error stop 'Invalid stretching type'
+          self%vert_coords(:, dir) = 2*(self%vert_coords(:, dir))
+          self%vert_d2s(:, dir) = self%vert_d2s(:, dir)/2
+          self%midp_coords(:, dir) = 2*(self%midp_coords(:, dir))
+          self%midp_d2s(:, dir) = self%midp_d2s(:, dir)/2
         end select
-
-        ! vertex coordinates
-        coord = const*atan2(r*sin(pi*yeta_vt), cos(pi*yeta_vt)) &
-                *(2*alpha*beta - cos(2*pi*yeta_vt) + 1) &
-                /(sin(pi*yeta_vt)**2 + alpha*beta)
-        self%vert_coords(i, dir) = coord + pi*const
-        self%vert_ds(i, dir) = self%L(dir)*(alpha/pi &
-                                            + sin(pi*yeta_vt)**2/(pi*beta))
-        self%vert_ds2(i, dir) = self%vert_ds(i, dir)**2
-        self%vert_d2s(i, dir) = 2*cos(pi*yeta_vt)*sin(pi*yeta_vt)/beta
-
-        ! midpoint coordinates
-        coord = const*atan2(r*sin(pi*yeta_mp), cos(pi*yeta_mp)) &
-                *(2*alpha*beta - cos(2*pi*yeta_mp) + 1) &
-                /(sin(pi*yeta_mp)**2 + alpha*beta)
-        self%midp_coords(i, dir) = coord + pi*const
-        self%midp_ds(i, dir) = self%L(dir)*(alpha/pi &
-                                            + sin(pi*yeta_mp)**2/(pi*beta))
-        self%midp_ds2(i, dir) = self%vert_ds(i, dir)**2
-        self%midp_d2s(i, dir) = 2*cos(pi*yeta_mp)*sin(pi*yeta_mp)/beta
-      end do
-
-      ! final shifts/corrections
-      select case (trim(self%stretching(dir)))
-      case ('centred')
-        self%vert_coords(:, dir) = self%vert_coords(:, dir) - L_inf
-        self%midp_coords(:, dir) = self%midp_coords(:, dir) - L_inf
-      case ('bottom')
-        self%vert_coords(:, dir) = 2*(self%vert_coords(:, dir))
-        self%vert_d2s(:, dir) = self%vert_d2s(:, dir)/2
-        self%midp_coords(:, dir) = 2*(self%midp_coords(:, dir))
-        self%midp_d2s(:, dir) = self%midp_d2s(:, dir)/2
-      end select
+      end if
     end do
 
   end subroutine obtain_coordinates

@@ -58,7 +58,7 @@ contains
   subroutine run_test_mesh(use_2decomp, allpass)
     logical, intent(in) :: use_2decomp
     logical, intent(inout) :: allpass
-    integer, dimension(3) :: nproc_dir, dims_global
+    integer, dimension(3) :: nproc_dir, dims_global, dims
     real(dp), dimension(3) :: L_global
     character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
     integer, dimension(4) :: n_vert_z
@@ -86,7 +86,7 @@ contains
       n_vert_z = [4, 4, 4, 4]
     end if
 
-    allocator = allocator_t(mesh, 8)
+    allocator = allocator_t(mesh%get_dims(VERT), 8)
 
     ptr1 => allocator%get_block(DIR_Z, CELL)
     ptr2 => allocator%get_block(DIR_Z, VERT)
@@ -118,7 +118,7 @@ contains
       print *, "error in get_n for x_face, n_x_face=", n_x_face
     end if
 
-    dims = mesh%get_padded_dims(DIR_C)
+    dims = allocator%get_padded_dims(DIR_C)
     dims_check = [8, 8, n_vert_z(mesh%par%nrank + 1)] ! No padding in Z
 
     if (.not. all(dims(:) == dims_check(:))) then

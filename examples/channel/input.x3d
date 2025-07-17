@@ -6,7 +6,7 @@ flow_case_name = 'channel'
 L_global = 4d0, 2d0, 2d0
 
 ! Global number of cells in each direction
-dims_global = 64, 361, 32
+dims_global = 128, 65, 64
 
 ! Domain decomposition in each direction
 nproc_dir = 1, 1, 1
@@ -15,13 +15,17 @@ nproc_dir = 1, 1, 1
 BC_x = 'periodic', 'periodic'
 BC_y = 'dirichlet', 'dirichlet'
 BC_z = 'periodic', 'periodic'
+
+! Stretching options: 'uniform' (default) | 'centred' | 'top-bottom' | 'bottom'
+stretching(2) = 'top-bottom'
+beta(2) = 0.259065151d0
 /End
 
 &solver_params
 Re = 4200d0
 time_intg = 'RK3' ! 'AB[1-4]' | 'RK[1-4]'
 dt = 0.005d0
-n_iters = 20000
+n_iters = 100000
 n_output = 1000
 poisson_solver_type = 'FFT' ! 'FFT' | 'CG'
 der1st_scheme = 'compact6'

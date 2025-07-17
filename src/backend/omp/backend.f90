@@ -3,7 +3,7 @@ module m_omp_backend
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, get_dirs_from_rdr, move_data_loc, &
+  use m_common, only: dp, MPI_X3D2_DP, get_dirs_from_rdr, move_data_loc, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC, &
                       X_FACE, Y_FACE, Z_FACE, VERT
   use m_field, only: field_t
@@ -21,7 +21,6 @@ module m_omp_backend
 
   type, extends(base_backend_t) :: omp_backend_t
     !character(len=*), parameter :: name = 'omp'
-    integer :: MPI_FP_PREC = dp
     real(dp), allocatable, dimension(:, :, :) :: &
       u_recv_s, u_recv_e, u_send_s, u_send_e, &
       v_recv_s, v_recv_e, v_send_s, v_send_e, &
@@ -78,9 +77,9 @@ contains
     end select
 
     backend%mesh => mesh
-    n_groups = maxval([backend%mesh%get_n_groups(DIR_X), &
-                       backend%mesh%get_n_groups(DIR_Y), &
-                       backend%mesh%get_n_groups(DIR_Z)])
+    n_groups = maxval([backend%allocator%get_n_groups(DIR_X), &
+                       backend%allocator%get_n_groups(DIR_Y), &
+                       backend%allocator%get_n_groups(DIR_Z)])
 
     allocate (backend%u_send_s(SZ, backend%n_halo, n_groups))
     allocate (backend%u_send_e(SZ, backend%n_halo, n_groups))
@@ -196,7 +195,7 @@ contains
 
     integer :: n_groups
 
-    n_groups = self%mesh%get_n_groups(dirps%dir)
+    n_groups = self%allocator%get_n_groups(dirps%dir)
 
     ! Halo exchange for momentum if needed
     if (sync) then
@@ -265,7 +264,7 @@ contains
     integer :: n, nproc_dir, pprev, pnext
     integer :: n_groups
 
-    n_groups = self%mesh%get_n_groups(dir)
+    n_groups = self%allocator%get_n_groups(dir)
     n = self%mesh%get_n(u)
     nproc_dir = self%mesh%par%nproc_dir(dir)
     pprev = self%mesh%par%pprev(dir)
@@ -325,7 +324,7 @@ contains
       conv%data, conv_recv_s, conv_recv_e, &
       tdsops_du, tdsops_dud, tdsops_d2u, nu, &
       self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), &
-      self%mesh%par%pnext(dir), self%mesh%get_n_groups(dir))
+      self%mesh%par%pnext(dir), self%allocator%get_n_groups(dir))
 
     call rhs_du%set_data_loc(u%data_loc)
 
@@ -365,7 +364,7 @@ contains
     integer :: n_groups, dir
 
     dir = u%dir
-    n_groups = self%mesh%get_n_groups(u)
+    n_groups = self%allocator%get_n_groups(dir)
 
     call copy_into_buffers(self%u_send_s, self%u_send_e, u%data, &
                            tdsops%n_tds, n_groups)
@@ -394,20 +393,21 @@ contains
     class(field_t), intent(inout) :: u_
     class(field_t), intent(in) :: u
     integer, intent(in) :: direction
-    integer, dimension(3) :: dims
+    integer, dimension(3) :: dims, cart_padded
     integer :: i, j, k
     integer :: out_i, out_j, out_k
     integer :: dir_from, dir_to
 
-    dims = self%mesh%get_padded_dims(u)
+    dims = self%allocator%get_padded_dims(u%dir)
+    cart_padded = self%allocator%get_padded_dims(DIR_C)
     call get_dirs_from_rdr(dir_from, dir_to, direction)
 
     !$omp parallel do private(out_i, out_j, out_k) collapse(2)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          call get_index_reordering( &
-            out_i, out_j, out_k, i, j, k, dir_from, dir_to, self%mesh)
+          call get_index_reordering(out_i, out_j, out_k, i, j, k, &
+                                    dir_from, dir_to, SZ, cart_padded)
           u_%data(out_i, out_j, out_k) = u%data(i, j, k)
         end do
       end do
@@ -449,19 +449,21 @@ contains
     integer, intent(in) :: dir_to
 
     integer :: dir_from
-    integer, dimension(3) :: dims
+    integer, dimension(3) :: dims, cart_padded
     integer :: i, j, k    ! Working indices
     integer :: ii, jj, kk ! Transpose indices
 
     dir_from = DIR_X
 
-    dims = self%mesh%get_padded_dims(u)
+    dims = self%allocator%get_padded_dims(u%dir)
+    cart_padded = self%allocator%get_padded_dims(DIR_C)
+
     !$omp parallel do private(i, ii, jj, kk) collapse(2)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
           call get_index_reordering(ii, jj, kk, i, j, k, &
-                                    dir_from, dir_to, self%mesh)
+                                    dir_from, dir_to, SZ, cart_padded)
           u%data(i, j, k) = u%data(i, j, k) + u_%data(ii, jj, kk)
         end do
       end do
@@ -476,36 +478,22 @@ contains
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: dst
     class(field_t), intent(in) :: src
-    integer, dimension(3) :: dims
-    integer :: i, j, k, ii
-
-    integer :: nvec, remstart
+    integer :: i, j, k
 
     if (src%dir /= dst%dir) then
-      error stop "Called vector add with incompatible fields"
+      error stop "Called vector copy with incompatible fields"
     end if
 
-    dims = self%mesh%get_padded_dims(src)
-    nvec = dims(1)/SZ
-    remstart = nvec*SZ + 1
+    if (dst%dir == DIR_C) error stop 'veccopy does not support DIR_C fields'
 
-    !$omp parallel do private(i, ii) collapse(2)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        ! Execute inner vectorised loops
-        do ii = 1, nvec
-          !$omp simd
-          do i = 1, SZ
-            dst%data(i + (ii - 1)*SZ, j, k) = &
-              src%data(i + (ii - 1)*SZ, j, k)
-          end do
-          !$omp end simd
-        end do
-
-        ! Remainder loop
-        do i = remstart, dims(1)
+    !$omp parallel do
+    do k = 1, size(dst%data, 3)
+      do j = 1, size(dst%data, 2)
+        !$omp simd
+        do i = 1, SZ
           dst%data(i, j, k) = src%data(i, j, k)
         end do
+        !$omp end simd
       end do
     end do
     !$omp end parallel do
@@ -520,37 +508,22 @@ contains
     class(field_t), intent(in) :: x
     real(dp), intent(in) :: b
     class(field_t), intent(inout) :: y
-    integer, dimension(3) :: dims
-    integer :: i, j, k, ii
-
-    integer :: nvec, remstart
+    integer :: i, j, k
 
     if (x%dir /= y%dir) then
       error stop "Called vector add with incompatible fields"
     end if
 
-    dims = self%mesh%get_padded_dims(x)
-    nvec = dims(1)/SZ
-    remstart = nvec*SZ + 1
+    if (y%dir == DIR_C) error stop 'vecadd does not support DIR_C fields'
 
-    !$omp parallel do private(i, ii) collapse(2)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        ! Execute inner vectorised loops
-        do ii = 1, nvec
-          !$omp simd
-          do i = 1, SZ
-            y%data(i + (ii - 1)*SZ, j, k) = &
-              a*x%data(i + (ii - 1)*SZ, j, k) + &
-              b*y%data(i + (ii - 1)*SZ, j, k)
-          end do
-          !$omp end simd
-        end do
-
-        ! Remainder loop
-        do i = remstart, dims(1)
+    !$omp parallel do
+    do k = 1, size(y%data, 3)
+      do j = 1, size(y%data, 2)
+        !$omp simd
+        do i = 1, SZ
           y%data(i, j, k) = a*x%data(i, j, k) + b*y%data(i, j, k)
         end do
+        !$omp end simd
       end do
     end do
     !$omp end parallel do
@@ -565,6 +538,12 @@ contains
     class(field_t), intent(inout) :: y
     class(field_t), intent(in) :: x
     integer :: i, j, k
+
+    if (x%dir /= y%dir) then
+      error stop "Called vector multiply with incompatible fields"
+    end if
+
+    if (y%dir == DIR_C) error stop 'vecmult does not support DIR_C fields'
 
     !$omp parallel do
     do k = 1, size(y%data, 3)
@@ -605,7 +584,7 @@ contains
     y_ => self%allocator%get_block(DIR_C, y%data_loc)
     call self%get_field_data(y_%data, y)
 
-    dims = self%mesh%get_field_dims(x_)
+    dims = self%mesh%get_dims(x_%data_loc)
 
     nvec = dims(1)/SZ
     remstart = nvec*SZ + 1
@@ -637,7 +616,7 @@ contains
     call self%allocator%release_block(y_)
 
     ! Reduce the result
-    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, &
+    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_X3D2_DP, &
                        MPI_SUM, MPI_COMM_WORLD, &
                        ierr)
 
@@ -694,7 +673,7 @@ contains
     end if
 
     dims = self%mesh%get_dims(data_loc)
-    dims_padded = self%mesh%get_padded_dims(DIR_C)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
 
     if (f%dir == DIR_X) then
       n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
@@ -734,9 +713,9 @@ contains
     mean_val = sum_p/product(self%mesh%get_global_dims(data_loc))
 
     ! make sure all ranks have final values
-    call MPI_Allreduce(MPI_IN_PLACE, max_val, 1, MPI_DOUBLE_PRECISION, &
+    call MPI_Allreduce(MPI_IN_PLACE, max_val, 1, MPI_X3D2_DP, &
                        MPI_MAX, MPI_COMM_WORLD, ierr)
-    call MPI_Allreduce(MPI_IN_PLACE, mean_val, 1, MPI_DOUBLE_PRECISION, &
+    call MPI_Allreduce(MPI_IN_PLACE, mean_val, 1, MPI_X3D2_DP, &
                        MPI_SUM, MPI_COMM_WORLD, ierr)
 
   end subroutine field_max_mean_omp
@@ -844,7 +823,7 @@ contains
     ! rank-local values
     s = sum_p
 
-    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
+    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_X3D2_DP, MPI_SUM, &
                        MPI_COMM_WORLD, ierr)
 
   end function field_volume_integral_omp
@@ -865,7 +844,7 @@ contains
     data = f%data
   end subroutine copy_f_to_data_omp
 
-  subroutine init_omp_poisson_fft(self, mesh, xdirps, ydirps, zdirps)
+  subroutine init_omp_poisson_fft(self, mesh, xdirps, ydirps, zdirps, lowmem)
 #ifdef WITH_2DECOMPFFT
     use m_omp_poisson_fft, only: omp_poisson_fft_t
 #endif
@@ -875,13 +854,14 @@ contains
     class(omp_backend_t) :: self
     type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    logical, optional, intent(in) :: lowmem
 
 #ifdef WITH_2DECOMPFFT
     allocate (omp_poisson_fft_t :: self%poisson_fft)
 
     select type (poisson_fft => self%poisson_fft)
     type is (omp_poisson_fft_t)
-      poisson_fft = omp_poisson_fft_t(mesh, xdirps, ydirps, zdirps)
+      poisson_fft = omp_poisson_fft_t(mesh, xdirps, ydirps, zdirps, lowmem)
     end select
 #else
     error stop 'This build does not support FFT based Poisson solver &

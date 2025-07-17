@@ -7,7 +7,8 @@ module m_solver
   use m_common, only: dp, get_argument, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_Z2C, RDR_C2Z, &
-                      DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL
+                      DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL, &
+                      BC_NEUMANN, BC_DIRICHLET
   use m_config, only: solver_config_t
   use m_field, only: field_t, flist_t
   use m_ibm, only: ibm_t
@@ -181,7 +182,8 @@ contains
     case ('FFT')
       if (solver%mesh%par%is_root()) print *, 'Poisson solver: FFT'
       call solver%backend%init_poisson_fft(solver%mesh, solver%xdirps, &
-                                           solver%ydirps, solver%zdirps)
+                                           solver%ydirps, solver%zdirps, &
+                                           solver_cfg%lowmem_fft)
       solver%poisson => poisson_fft
     case ('CG')
       if (solver%mesh%par%is_root()) &
@@ -196,7 +198,7 @@ contains
     if (solver%ibm_on) &
       solver%ibm = ibm_t(backend, mesh, host_allocator)
 
-    if (solver_cfg%lowmem) then
+    if (solver_cfg%lowmem_transeq) then
       solver%transeq => transeq_lowmem
     else
       solver%transeq => transeq_default
@@ -212,13 +214,30 @@ contains
     character(*), intent(in) :: der1st_scheme, der2nd_scheme, &
                                 interpl_scheme, stagder_scheme
 
-    integer :: dir, bc_start, bc_end, n_vert, n_cell, i
+    integer :: dir, bc_start, bc_end, bc_mp_start, bc_mp_end, n_vert, n_cell, i
     real(dp) :: d
 
     dir = dirps%dir
+    d = mesh%geo%d(dir)
+
     bc_start = mesh%grid%BCs(dir, 1)
     bc_end = mesh%grid%BCs(dir, 2)
-    d = mesh%geo%d(dir)
+
+    ! For the FFT based poisson solver, the BC for the pressure has to be
+    ! Neumann. This is not strictly compatible with Navier-Stokes equations,
+    ! but it does not affect the quality of the simulation.
+    ! Thus, if the BC is Dirichlet, we enforce Neumann for the midpoint &
+    ! operators. (It could be BC_HALO too, if so we just keep it as is)
+    if (bc_start == BC_DIRICHLET) then
+      bc_mp_start = BC_NEUMANN
+    else
+      bc_mp_start = bc_start
+    end if
+    if (bc_end == BC_DIRICHLET) then
+      bc_mp_end = BC_NEUMANN
+    else
+      bc_mp_end = bc_end
+    end if
 
     n_vert = mesh%get_n(dir, VERT)
     n_cell = mesh%get_n(dir, CELL)
@@ -242,20 +261,22 @@ contains
       stretch_correct=mesh%geo%vert_d2s(1:n_vert, dir) &
       )
     call backend%alloc_tdsops( &
-      dirps%stagder_v2p, n_cell, d, 'stag-deriv', stagder_scheme, bc_start, &
-      bc_end, from_to='v2p', stretch=mesh%geo%midp_ds(1:n_cell, dir) &
+      dirps%stagder_v2p, n_cell, d, 'stag-deriv', stagder_scheme, &
+      bc_mp_start, bc_mp_end, from_to='v2p', &
+      stretch=mesh%geo%midp_ds(1:n_cell, dir) &
       )
     call backend%alloc_tdsops( &
-      dirps%stagder_p2v, n_vert, d, 'stag-deriv', stagder_scheme, bc_start, &
-      bc_end, from_to='p2v', stretch=mesh%geo%vert_ds(1:n_vert, dir) &
+      dirps%stagder_p2v, n_vert, d, 'stag-deriv', stagder_scheme, &
+      bc_mp_start, bc_mp_end, from_to='p2v', &
+      stretch=mesh%geo%vert_ds(1:n_vert, dir) &
       )
     call backend%alloc_tdsops( &
       dirps%interpl_v2p, n_cell, d, 'interpolate', interpl_scheme, &
-      bc_start, bc_end, from_to='v2p', stretch=[(1._dp, i=1, n_cell)] &
+      bc_mp_start, bc_mp_end, from_to='v2p', stretch=[(1._dp, i=1, n_cell)] &
       )
     call backend%alloc_tdsops( &
       dirps%interpl_p2v, n_vert, d, 'interpolate', interpl_scheme, &
-      bc_start, bc_end, from_to='p2v', stretch=[(1._dp, i=1, n_vert)] &
+      bc_mp_start, bc_mp_end, from_to='p2v', stretch=[(1._dp, i=1, n_vert)] &
       )
 
   end subroutine
@@ -361,7 +382,7 @@ contains
   end subroutine transeq_default
 
   subroutine transeq_lowmem(self, rhs, variables)
-    !! low memory version of the transport equation
+    !! low memory version of the transport equation, roughly %2 slower overall
     implicit none
 
     class(solver_t) :: self

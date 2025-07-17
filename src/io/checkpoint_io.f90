@@ -338,7 +338,7 @@ contains
     end if
 
     call self%generate_coordinates( &
-      solver, file, shape_dims, start_dims, count_dims &
+      solver, file, shape_dims, start_dims, count_dims, solver%u%data_loc &
       )
 
     allocate (field_ptrs(3))
@@ -356,12 +356,13 @@ contains
   end subroutine write_snapshot
 
   subroutine generate_coordinates( &
-    self, solver, file, shape_dims, start_dims, count_dims &
+    self, solver, file, shape_dims, start_dims, count_dims, data_loc &
     )
     class(checkpoint_manager_adios2_t), intent(inout) :: self
     class(solver_t), intent(in) :: solver
     type(adios2_file_t), intent(inout) :: file
     integer(i8), dimension(3), intent(in) :: shape_dims, start_dims, count_dims
+    integer, intent(in) :: data_loc
 
     integer :: i, nx, ny, nz
     real(dp), dimension(3) :: coords
@@ -390,17 +391,17 @@ contains
     end if
 
     do i = 1, nx
-      coords = solver%mesh%get_coordinates(i, 1, 1)
+      coords = solver%mesh%get_coordinates(i, 1, 1, data_loc)
       self%coords_x(i, 1, 1) = coords(1)
     end do
 
     do i = 1, ny
-      coords = solver%mesh%get_coordinates(1, i, 1)
+      coords = solver%mesh%get_coordinates(1, i, 1, data_loc)
       self%coords_y(1, i, 1) = coords(2)
     end do
 
     do i = 1, nz
-      coords = solver%mesh%get_coordinates(1, 1, i)
+      coords = solver%mesh%get_coordinates(1, 1, i, data_loc)
       self%coords_z(1, 1, i) = coords(3)
     end do
 

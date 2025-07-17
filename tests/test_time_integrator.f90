@@ -2,7 +2,7 @@ program test_omp_adamsbashforth
   use iso_fortran_env, only: stderr => error_unit
   use mpi
 
-  use m_common, only: dp, DIR_X, pi
+  use m_common, only: dp, pi, DIR_X, VERT
   use m_mesh, only: mesh_t
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
@@ -13,8 +13,10 @@ program test_omp_adamsbashforth
 
   use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
   use m_cuda_backend, only: cuda_backend_t
+  use m_cuda_common, only: SZ
 #else
   use m_omp_backend, only: omp_backend_t
+  use m_omp_common, only: SZ
 #endif
 
   implicit none
@@ -75,7 +77,7 @@ program test_omp_adamsbashforth
 
   ! allocate object
 #ifdef CUDA
-  cuda_allocator = cuda_allocator_t(mesh, 1)
+  cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
   allocator => cuda_allocator
   if (nrank == 0) print *, 'CUDA allocator instantiated'
 
@@ -83,7 +85,7 @@ program test_omp_adamsbashforth
   backend => cuda_backend
   if (nrank == 0) print *, 'CUDA backend instantiated'
 #else
-  omp_allocator = allocator_t(mesh, 1)
+  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
   allocator => omp_allocator
   if (nrank == 0) print *, 'OpenMP allocator instantiated'
 

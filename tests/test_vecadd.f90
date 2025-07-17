@@ -6,7 +6,7 @@ program test_vecadd
 
   use MPI
 
-  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C
+  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
   use m_mesh, only: mesh_t
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
@@ -21,9 +21,9 @@ program test_vecadd
 
   implicit none
 
-  integer, dimension(4), parameter :: dirs = [DIR_X, DIR_Y, DIR_Z, DIR_C]
-  character(len=5), dimension(4), parameter :: dirnames = &
-                         ["DIR_X", "DIR_Y", "DIR_Z", "DIR_C"]
+  integer, dimension(3), parameter :: dirs = [DIR_X, DIR_Y, DIR_Z]
+  character(len=5), dimension(3), parameter :: dirnames = &
+                         ["DIR_X", "DIR_Y", "DIR_Z"]
 
   class(mesh_t), allocatable :: mesh
   class(allocator_t), pointer :: allocator => null()
@@ -62,15 +62,16 @@ program test_vecadd
   BC_z = BC_x
 
   mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
+
 #ifdef CUDA
-  cuda_allocator = cuda_allocator_t(mesh, SZ)
+  cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
   allocator => cuda_allocator
-  host_allocator = allocator_t(mesh, SZ)
+  host_allocator = allocator_t(mesh%get_dims(VERT), SZ)
 
   cuda_backend = cuda_backend_t(mesh, allocator)
   backend => cuda_backend
 #else
-  omp_allocator = allocator_t(mesh, SZ)
+  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
   allocator => omp_allocator
   host_allocator => omp_allocator
 

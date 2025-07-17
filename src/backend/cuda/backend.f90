@@ -5,7 +5,7 @@ module m_cuda_backend
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, move_data_loc, &
+  use m_common, only: dp, MPI_X3D2_DP, move_data_loc, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC, &
@@ -36,7 +36,6 @@ module m_cuda_backend
 
   type, extends(base_backend_t) :: cuda_backend_t
     !character(len=*), parameter :: name = 'cuda'
-    integer :: MPI_FP_PREC = dp
     real(dp), device, allocatable, dimension(:, :, :) :: &
       u_recv_s_dev, u_recv_e_dev, u_send_s_dev, u_send_e_dev, &
       v_recv_s_dev, v_recv_e_dev, v_send_s_dev, v_send_e_dev, &
@@ -98,16 +97,16 @@ contains
     backend%mesh => mesh
 
     backend%xthreads = dim3(SZ, 1, 1)
-    backend%xblocks = dim3(backend%mesh%get_n_groups(DIR_X), 1, 1)
+    backend%xblocks = dim3(backend%allocator%get_n_groups(DIR_X), 1, 1)
     backend%ythreads = dim3(SZ, 1, 1)
-    backend%yblocks = dim3(backend%mesh%get_n_groups(DIR_Y), 1, 1)
+    backend%yblocks = dim3(backend%allocator%get_n_groups(DIR_Y), 1, 1)
     backend%zthreads = dim3(SZ, 1, 1)
-    backend%zblocks = dim3(backend%mesh%get_n_groups(DIR_Z), 1, 1)
+    backend%zblocks = dim3(backend%allocator%get_n_groups(DIR_Z), 1, 1)
 
     ! Buffer size should be big enough for the largest MPI exchange.
-    n_groups = maxval([backend%mesh%get_n_groups(DIR_X), &
-                       backend%mesh%get_n_groups(DIR_Y), &
-                       backend%mesh%get_n_groups(DIR_Z)])
+    n_groups = maxval([backend%allocator%get_n_groups(DIR_X), &
+                       backend%allocator%get_n_groups(DIR_Y), &
+                       backend%allocator%get_n_groups(DIR_Z)])
 
     allocate (backend%u_send_s_dev(SZ, backend%n_halo, n_groups))
     allocate (backend%u_send_e_dev(SZ, backend%n_halo, n_groups))
@@ -245,7 +244,7 @@ contains
     type is (cuda_tdsops_t); der2nd_sym => tdsops
     end select
 
-    n_groups = self%mesh%get_n_groups(dirps%dir)
+    n_groups = self%allocator%get_n_groups(dirps%dir)
 
     ! Halo exchange for momentum if needed
     if (sync) then
@@ -349,7 +348,7 @@ contains
     integer :: n, nproc_dir, pprev, pnext
     integer :: n_groups
 
-    n_groups = self%mesh%get_n_groups(dir)
+    n_groups = self%allocator%get_n_groups(dir)
     n = self%mesh%get_n(dir, VERT)
     nproc_dir = self%mesh%par%nproc_dir(dir)
     pprev = self%mesh%par%pprev(dir)
@@ -414,7 +413,7 @@ contains
       self%dud_recv_s_dev, self%dud_recv_e_dev, &
       self%d2u_send_s_dev, self%d2u_send_e_dev, &
       self%d2u_recv_s_dev, self%d2u_recv_e_dev, &
-      tdsops_du, tdsops_d2u, nu, &
+      tdsops_du, tdsops_dud, tdsops_d2u, nu, &
       self%mesh%par%nproc_dir(dir), self%mesh%par%pprev(dir), &
       self%mesh%par%pnext(dir), blocks, threads &
       )
@@ -453,7 +452,8 @@ contains
       error stop 'DIR mismatch between fields in tds_solve.'
     end if
 
-    blocks = dim3(self%mesh%get_n_groups(u), 1, 1); threads = dim3(SZ, 1, 1)
+    blocks = dim3(self%allocator%get_n_groups(u%dir), 1, 1)
+    threads = dim3(SZ, 1, 1)
 
     if (u%data_loc /= NULL_LOC) then
       call du%set_data_loc(move_data_loc(u%data_loc, u%dir, tdsops%move))
@@ -479,7 +479,7 @@ contains
     integer :: n_groups, dir
 
     dir = u%dir
-    n_groups = self%mesh%get_n_groups(u)
+    n_groups = self%allocator%get_n_groups(u%dir)
 
     call resolve_field_t(du_dev, du)
     call resolve_field_t(u_dev, u)
@@ -528,7 +528,7 @@ contains
     call resolve_field_t(u_o_d, u_o)
     call resolve_field_t(u_i_d, u_i)
 
-    dims_padded = self%mesh%get_padded_dims(DIR_C)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
     nx_padded = dims_padded(1)
     ny_padded = dims_padded(2)
     nz_padded = dims_padded(3)
@@ -645,7 +645,7 @@ contains
     call resolve_field_t(u_d, u)
     call resolve_field_t(u_y_d, u_y)
 
-    dims_padded = self%mesh%get_padded_dims(DIR_C)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
 
     blocks = dim3(dims_padded(1)/SZ, dims_padded(2)/SZ, dims_padded(3))
     threads = dim3(min(SZ, 32), min(SZ, 32), 1)
@@ -667,7 +667,7 @@ contains
     call resolve_field_t(u_d, u)
     call resolve_field_t(u_z_d, u_z)
 
-    dims_padded = self%mesh%get_padded_dims(DIR_C)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
 
     blocks = dim3(dims_padded(1), dims_padded(2)/SZ, 1)
     threads = dim3(SZ, 1, 1)
@@ -766,7 +766,7 @@ contains
     sum_d = 0._dp
 
     dims = self%mesh%get_dims(x%data_loc)
-    dims_padded = self%mesh%get_padded_dims(DIR_C)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
 
     if (x%dir == DIR_X) then
       n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
@@ -785,7 +785,7 @@ contains
 
     s = sum_d
 
-    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
+    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_X3D2_DP, MPI_SUM, &
                        MPI_COMM_WORLD, ierr)
 
   end function scalar_product_cuda
@@ -835,7 +835,7 @@ contains
     end if
 
     dims = self%mesh%get_dims(data_loc)
-    dims_padded = self%mesh%get_padded_dims(DIR_C)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
 
     call resolve_field_t(f_d, f)
 
@@ -863,9 +863,9 @@ contains
     mean_val = mean_val/product(self%mesh%get_global_dims(data_loc))
 
     ! make sure all ranks have final values
-    call MPI_Allreduce(MPI_IN_PLACE, max_val, 1, MPI_DOUBLE_PRECISION, &
+    call MPI_Allreduce(MPI_IN_PLACE, max_val, 1, MPI_X3D2_DP, &
                        MPI_MAX, MPI_COMM_WORLD, ierr)
-    call MPI_Allreduce(MPI_IN_PLACE, mean_val, 1, MPI_DOUBLE_PRECISION, &
+    call MPI_Allreduce(MPI_IN_PLACE, mean_val, 1, MPI_X3D2_DP, &
                        MPI_SUM, MPI_COMM_WORLD, ierr)
 
   end subroutine field_max_mean_cuda
@@ -976,7 +976,7 @@ contains
     integral_d = 0._dp
 
     dims = self%mesh%get_dims(f%data_loc)
-    dims_padded = self%mesh%get_padded_dims(DIR_C)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
 
     blocks = dim3(dims(3), (dims(2) - 1)/SZ + 1, 1)
     threads = dim3(SZ, 1, 1)
@@ -985,7 +985,7 @@ contains
 
     s = integral_d
 
-    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
+    call MPI_Allreduce(MPI_IN_PLACE, s, 1, MPI_X3D2_DP, MPI_SUM, &
                        MPI_COMM_WORLD, ierr)
 
   end function field_volume_integral_cuda
@@ -1006,18 +1006,19 @@ contains
     select type (f); type is (cuda_field_t); data = f%data_d; end select
   end subroutine copy_f_to_data_cuda
 
-  subroutine init_cuda_poisson_fft(self, mesh, xdirps, ydirps, zdirps)
+  subroutine init_cuda_poisson_fft(self, mesh, xdirps, ydirps, zdirps, lowmem)
     implicit none
 
     class(cuda_backend_t) :: self
     type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    logical, optional, intent(in) :: lowmem
 
     allocate (cuda_poisson_fft_t :: self%poisson_fft)
 
     select type (poisson_fft => self%poisson_fft)
     type is (cuda_poisson_fft_t)
-      poisson_fft = cuda_poisson_fft_t(mesh, xdirps, ydirps, zdirps)
+      poisson_fft = cuda_poisson_fft_t(mesh, xdirps, ydirps, zdirps, lowmem)
     end select
 
   end subroutine init_cuda_poisson_fft

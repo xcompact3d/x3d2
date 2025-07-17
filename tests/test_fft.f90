@@ -7,7 +7,7 @@ program test_fft
   use m_tdsops, only: dirps_t
   use m_solver, only: allocate_tdsops
 
-  use m_common, only: dp, pi, &
+  use m_common, only: dp, pi, MPI_X3D2_DP, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL
 
@@ -89,7 +89,7 @@ program test_fft
   mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, use_2decomp=use_2decomp)
 
 #ifdef CUDA
-  cuda_allocator = cuda_allocator_t(mesh, SZ)
+  cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
   allocator => cuda_allocator
   print *, 'CUDA allocator instantiated'
 
@@ -97,7 +97,7 @@ program test_fft
   backend => cuda_backend
   print *, 'CUDA backend instantiated'
 #else
-  omp_allocator = allocator_t(mesh, SZ)
+  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
   allocator => omp_allocator
 
   omp_backend = omp_backend_t(mesh, allocator)
@@ -152,7 +152,7 @@ program test_fft
   ! The output scaled with number of cells in domain, hence the first '/product(dims_global)'.
   ! RMS value is used for the norm, hence the second '/product(dims_global)'
   error_norm = norm2(input_data(:, :, :) - output_data(:, :, :)/product(dims_global) )**2/product(dims_global)
-  call MPI_Allreduce(MPI_IN_PLACE, error_norm, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+  call MPI_Allreduce(MPI_IN_PLACE, error_norm, 1, MPI_X3D2_DP, MPI_SUM, MPI_COMM_WORLD, ierr)
   error_norm = sqrt(error_norm)
 
   if (error_norm > tol) then

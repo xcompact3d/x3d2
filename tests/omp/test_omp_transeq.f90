@@ -3,7 +3,7 @@ program test_omp_transeq
   use mpi
 
   use m_allocator, only: allocator_t, field_t
-  use m_common, only: dp, pi, DIR_X, DIR_Y, DIR_Z, VERT
+  use m_common, only: dp, pi, MPI_X3D2_DP, DIR_X, DIR_Y, DIR_Z, VERT
   use m_omp_common, only: SZ
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_backend, only: omp_backend_t, transeq_x_omp, base_backend_t
@@ -57,7 +57,7 @@ program test_omp_transeq
 
   xdirps%dir = DIR_X; ydirps%dir = DIR_Y; zdirps%dir = DIR_Z
 
-  omp_allocator = allocator_t(mesh, SZ)
+  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
   allocator => omp_allocator
   print *, 'OpenMP allocator instantiated'
 
@@ -68,7 +68,7 @@ program test_omp_transeq
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
   n = mesh%get_n(DIR_X, VERT)
-  n_groups = mesh%get_n_groups(DIR_X)
+  n_groups = allocator%get_n_groups(DIR_X)
 
   nu = 1._dp
 
@@ -111,7 +111,7 @@ program test_omp_transeq
   r_u = dv%data - (u%data*u%data - 0.5_dp*v%data*v%data - nu*v%data)
   norm_du = norm2(r_u)
   norm_du = norm_du*norm_du/dims_global(DIR_X)/n_groups/SZ
-  call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_DOUBLE_PRECISION, &
+  call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_X3D2_DP, &
                      MPI_SUM, MPI_COMM_WORLD, ierr)
   norm_du = sqrt(norm_du)
 

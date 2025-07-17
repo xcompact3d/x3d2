@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       OMPI_VERSION: 4.1.5
+      ADIOS2_VERSION: 2.10.2
     steps:
 
     - uses: actions/checkout@v4
@@ -28,6 +29,13 @@ jobs:
         key: openmpi-${{ env.OMPI_VERSION }}
         save-always: 'true'
 
+    - name: Cache ADIOS2
+      id: cache-adios2
+      uses: actions/cache@v4
+      with:
+        path: ADIOS2-${{ env.ADIOS2_VERSION }}/installed
+        key: ADIOS2-${{ env.ADIOS2_VERSION }}
+        save-always: 'true'
     - name: Display GCC version number
       run: gcc --version
 
@@ -40,19 +48,37 @@ jobs:
         ./configure --prefix=$(pwd)/installed
         make all install
 
-    - name: Update PATH
+    - name: Update Open MPI PATH
       run: |
         echo "$GITHUB_WORKSPACE/openmpi-${OMPI_VERSION}/installed/bin" \
           >> $GITHUB_PATH
 
+    - name: Install MPI4PY
+      run: |
+        python -m pip install mpi4py
+
+    - name: Build ADIOS2
+      if: steps.cache-adios2.outputs.cache-hit != 'true'
+      run: |
+        wget https://github.com/ornladios/ADIOS2/archive/refs/tags/v${ADIOS2_VERSION}.tar.gz
+        tar -xf v${ADIOS2_VERSION}.tar.gz
+        cd ADIOS2-${ADIOS2_VERSION}/ && mkdir installed
+        cmake -B $(pwd)/installed -DCMAKE_PREFIX_PATH=$(pwd)/installed -DADIOS2_USE_MPI=ON -DADIOS2_USE_Python=ON -DADIOS2_USE_Fortran=ON 
+        make -C $(pwd)/installed 
+
+    - name: Update ADIOS2 PATH
+      run: |
+        echo "$GITHUB_WORKSPACE/ADIOS2-${ADIOS2_VERSION}/installed/bin" \
+          >> $GITHUB_PATH
+
     - name: Configure Debug build
-      run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+      run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
 
     - name: Build with Debug (strict) flags
       run: make -C build
       
     - name: Configure Release build
-      run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
 
     - name: Build tests
       run: make -C build

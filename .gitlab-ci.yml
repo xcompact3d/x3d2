@@ -30,21 +30,21 @@ stages:
     - apt-get update
     - apt-get install -y ccache
     - apt-get install -y cmake
-    - apt-get install -y git
     - apt-get install -y gcc
-    - apt-get install -y infiniband-diags ibverbs-utils 
+    - apt-get install -y git
+    - apt-get install -y infiniband-diags ibverbs-utils
     - apt-get install -y libibverbs-dev libfabric1 libfabric-dev libpsm2-dev
     - apt-get install -y openmpi-bin openmpi-common libopenmpi-dev libgtk2.0-dev
     - apt-get install -y librdmacm-dev libpsm2-dev
     - . /etc/profile.d/modules.sh
     - ccache -s && ccache -M 5G
-    - if [ "${EXTRA_MODULE}" != "" ]; then module load "${EXTRA_MODULE}"; fi
+    - if [ "${EXTRA_MODULE}" != "" ]; then module load ${EXTRA_MODULE}; fi
     - echo "Configure Debug build"
-    - FC=mpif90 cmake -S . -B build "-DCMAKE_BUILD_TYPE=Debug ${BUILD_FORTRAN}"
+    - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
     - echo "Build with Debug (strict) flags"
     - make -C build
     - echo "Configure Release build"
-    - FC=mpif90 cmake -S . -B build "-DCMAKE_BUILD_TYPE=Release ${BUILD_FORTRAN}"
+    - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
     - echo "Build tests"
     - make -C build
     - echo "Run the tests"
@@ -77,15 +77,15 @@ build-and-test:
   <<: *build-and-test-template
   needs: []
   variables:
-    EXTRA_MODULE: ""
-    BUILD_FORTRAN: "-DCMAKE_Fortran_COMPILER=gcc" 
+    ADIOS2_VERSION: 2.10.2
+    EXTRA_MODULE: "adios2"
 
 build-and-test-cuda:
   <<: *build-and-test-template
   needs: []
   variables:
-    EXTRA_MODULE: "cuda-hpc-sdk"
-    BUILD_FORTRAN: "-DCMAKE_Fortran_COMPILER=nvfortran" 
+    ADIOS2_VERSION: 2.10.2
+    EXTRA_MODULE: "adios2-nvfortran"
     
 check-formatting:
   <<: *check-formatting-template

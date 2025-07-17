@@ -15,7 +15,10 @@ module m_cuda_poisson_fft
   use m_cuda_allocator, only: cuda_field_t
   use m_cuda_spectral, only: memcpy3D, &
                              process_spectral_000, process_spectral_010, &
-                             enforce_periodicity_y, undo_periodicity_y
+                             enforce_periodicity_y, undo_periodicity_y, &
+                             process_spectral_010_fw, &
+                             process_spectral_010_poisson, &
+                             process_spectral_010_bw
 
   implicit none
 
@@ -28,6 +31,15 @@ module m_cuda_poisson_fft
     real(dp), device, allocatable, dimension(:) :: ax_dev, bx_dev, &
                                                    ay_dev, by_dev, &
                                                    az_dev, bz_dev
+    !> Stretching operator matrices stores
+    real(dp), device, allocatable, dimension(:, :, :, :) :: &
+      store_a_odd_re_dev, store_a_odd_im_dev, &
+      store_a_even_re_dev, store_a_even_im_dev, &
+      store_a_re_dev, store_a_im_dev
+    !> Stretching operator matrices
+    real(dp), device, allocatable, dimension(:, :, :, :) :: &
+      a_odd_re_dev, a_odd_im_dev, a_even_re_dev, a_even_im_dev, &
+      a_re_dev, a_im_dev
     !> Forward and backward FFT transform plans
     integer :: plan3D_fw, plan3D_bw
 
@@ -50,11 +62,12 @@ module m_cuda_poisson_fft
 
 contains
 
-  function init(mesh, xdirps, ydirps, zdirps) result(poisson_fft)
+  function init(mesh, xdirps, ydirps, zdirps, lowmem) result(poisson_fft)
     implicit none
 
     type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    logical, optional, intent(in) :: lowmem
 
     type(cuda_poisson_fft_t) :: poisson_fft
 
@@ -98,12 +111,45 @@ contains
     poisson_fft%ay_dev = poisson_fft%ay; poisson_fft%by_dev = poisson_fft%by
     poisson_fft%az_dev = poisson_fft%az; poisson_fft%bz_dev = poisson_fft%bz
 
+    ! will store the a matrix coefficients in GPU memory if (.not. lowmem)
+    ! and do a device-to-device copy at each iter. Otherwise copy from host.
+    ! lowmem is .false. by default
+    if (present(lowmem)) poisson_fft%lowmem = lowmem
+
+    ! if stretching in y is 'centred' or 'top-bottom'
+    if (poisson_fft%stretched_y .and. poisson_fft%stretched_y_sym) then
+      poisson_fft%a_odd_re_dev = poisson_fft%a_odd_re
+      poisson_fft%a_odd_im_dev = poisson_fft%a_odd_im
+      poisson_fft%a_even_re_dev = poisson_fft%a_even_re
+      poisson_fft%a_even_im_dev = poisson_fft%a_even_im
+      if (.not. poisson_fft%lowmem) then
+        poisson_fft%store_a_odd_re_dev = poisson_fft%a_odd_re
+        poisson_fft%store_a_odd_im_dev = poisson_fft%a_odd_im
+        poisson_fft%store_a_even_re_dev = poisson_fft%a_even_re
+        poisson_fft%store_a_even_im_dev = poisson_fft%a_even_im
+      end if
+    !! if stretching in y is 'bottom'
+    else if (poisson_fft%stretched_y .and. &
+             (.not. poisson_fft%stretched_y_sym)) then
+      poisson_fft%a_re_dev = poisson_fft%a_re
+      poisson_fft%a_im_dev = poisson_fft%a_im
+      if (.not. poisson_fft%lowmem) then
+        poisson_fft%store_a_re_dev = poisson_fft%a_re
+        poisson_fft%store_a_im_dev = poisson_fft%a_im
+      end if
+    end if
+
     ! 3D plans
     ierr = cufftCreate(poisson_fft%plan3D_fw)
     ierr = cufftMpAttachComm(poisson_fft%plan3D_fw, CUFFT_COMM_MPI, &
                              MPI_COMM_WORLD)
+#ifdef SINGLE_PREC
+    ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_R2C, &
+                           worksize)
+#else
     ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z, &
                            worksize)
+#endif
     if (ierr /= 0) then
       write (stderr, *), 'cuFFT Error Code: ', ierr
       error stop 'Forward 3D FFT plan generation failed'
@@ -112,8 +158,13 @@ contains
     ierr = cufftCreate(poisson_fft%plan3D_bw)
     ierr = cufftMpAttachComm(poisson_fft%plan3D_bw, CUFFT_COMM_MPI, &
                              MPI_COMM_WORLD)
+#ifdef SINGLE_PREC
+    ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_C2R, &
+                           worksize)
+#else
     ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D, &
                            worksize)
+#endif
     if (ierr /= 0) then
       write (stderr, *), 'cuFFT Error Code: ', ierr
       error stop 'Backward 3D FFT plan generation failed'
@@ -248,7 +299,7 @@ contains
 
     complex(dp), device, dimension(:, :, :), pointer :: c_dev
     type(dim3) :: blocks, threads
-    integer :: tsize
+    integer :: tsize, off, inc
 
     ! obtain a pointer to descriptor so that we can carry out postprocessing
     call c_f_pointer(self%xtdesc%descriptor, descriptor)
@@ -262,12 +313,78 @@ contains
     threads = dim3(tsize, 1, 1)
 
     ! Postprocess div_u in spectral space
-    call process_spectral_010<<<blocks, threads>>>( & !&
-      c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
-      self%nx_glob, self%ny_glob, self%nz_glob, &
-      self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
-      self%az_dev, self%bz_dev &
-      )
+    if (.not. self%stretched_y) then
+      call process_spectral_010<<<blocks, threads>>>( & !&
+        c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
+        self%az_dev, self%bz_dev &
+        )
+    else
+      call process_spectral_010_fw<<<blocks, threads>>>( & !&
+        c_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
+        self%az_dev, self%bz_dev &
+        )
+
+      ! if stretching in y is 'centred' or 'top-bottom'
+      if (self%stretched_y_sym) then
+        ! copy from host to device if lowmem else from device stores
+        if (self%lowmem) then
+          self%a_odd_re_dev = self%a_odd_re
+          self%a_odd_im_dev = self%a_odd_im
+          self%a_even_re_dev = self%a_even_re
+          self%a_even_im_dev = self%a_even_im
+        else
+          self%a_odd_re_dev = self%store_a_odd_re_dev
+          self%a_odd_im_dev = self%store_a_odd_im_dev
+          self%a_even_re_dev = self%store_a_even_re_dev
+          self%a_even_im_dev = self%store_a_even_im_dev
+        end if
+        ! start from the first odd entry
+        off = 0
+        ! and continue with odd ones
+        inc = 2
+        call process_spectral_010_poisson<<<blocks, threads>>>( & !&
+          c_dev, self%a_odd_re_dev, self%a_odd_im_dev, off, inc, &
+          self%nx_spec, self%ny_spec/2, &
+          self%nx_glob, self%ny_glob, self%nz_glob &
+          )
+        ! start from the first even entry, and continue with even ones
+        off = 1
+        call process_spectral_010_poisson<<<blocks, threads>>>( & !&
+          c_dev, self%a_even_re_dev, self%a_even_im_dev, off, inc, &
+          self%nx_spec, self%ny_spec/2, &
+          self%nx_glob, self%ny_glob, self%nz_glob &
+          )
+      !! if stretching in y is 'bottom'
+      else
+        ! copy from host to device if lowmem else from device stores
+        if (self%lowmem) then
+          self%a_re_dev = self%a_re
+          self%a_im_dev = self%a_im
+        else
+          self%a_re_dev = self%store_a_re_dev
+          self%a_im_dev = self%store_a_im_dev
+        end if
+        off = 0
+        inc = 1
+        ! start from the first entry and increment 1
+        call process_spectral_010_poisson<<<blocks, threads>>>( & !&
+          c_dev, self%a_re_dev, self%a_im_dev, off, inc, &
+          self%nx_spec, self%ny_spec, &
+          self%nx_glob, self%ny_glob, self%nz_glob &
+          )
+      end if
+
+      call process_spectral_010_bw<<<blocks, threads>>>( & !&
+        c_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
+        self%az_dev, self%bz_dev &
+        )
+    end if
 
   end subroutine fft_postprocess_010_cuda
 
