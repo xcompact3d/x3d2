@@ -168,7 +168,7 @@ contains
     !! deallocates its internal allocatable
     !! [[field_t(type):data(variable)]] array.
     class(allocator_t), intent(inout) :: self
-    type(field_t), pointer :: current
+    class(field_t), pointer :: current
     do
       if (.not. associated(self%first)) exit
       current => self%first

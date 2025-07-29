@@ -216,11 +216,12 @@ contains
     character(len=256) :: filename, temp_filename, old_filename
     type(adios2_file_t) :: file
     integer :: ierr, myrank
-    integer :: comm_to_use
-    character(len=*), parameter :: field_names(3) = ["u", "v", "w"]
+    integer :: comm_to_use, i
+    character(len=*), parameter :: field_names(*) = ["u", "v", "w"]
     real(dp) :: simulation_time
     logical :: file_exists
-    type(field_ptr_t), allocatable :: field_ptrs(:)
+    type(field_ptr_t), allocatable :: field_ptrs(:), host_fields(:)
+    integer, parameter :: num_fields = size(field_names)
 
     if (self%checkpoint_cfg%checkpoint_freq <= 0) return
     if (mod(timestep, self%checkpoint_cfg%checkpoint_freq) /= 0) return
@@ -244,18 +245,45 @@ contains
     call self%adios2_writer%write_data("time", real(simulation_time, dp), file)
     call self%adios2_writer%write_data("dt", real(solver%dt, dp), file)
 
-    allocate (field_ptrs(3))
-    field_ptrs(1)%ptr => solver%u
-    field_ptrs(2)%ptr => solver%v
-    field_ptrs(3)%ptr => solver%w
+    allocate (field_ptrs(num_fields))
+    allocate (host_fields(num_fields))
+    do i = 1, num_fields
+    select case (trim(field_names(i)))
+      case ("u")
+        field_ptrs(i)%ptr => solver%u
+      case ("v")
+        field_ptrs(i)%ptr => solver%v
+      case ("w")
+        field_ptrs(i)%ptr => solver%w
+      case default
+        if (solver%mesh%par%is_root()) then
+            print *, 'ERROR: Unknown field name in checkpoint list: ', &
+                     trim(field_names(i))
+        end if
+        error stop 1
+    end select
+    end do
+
+    do i = 1, num_fields
+      host_fields(i)%ptr => solver%host_allocator%get_block( &
+                            DIR_C, field_ptrs(i)%ptr%data_loc)
+      call solver%backend%get_field_data( &
+           host_fields(i)%ptr%data, field_ptrs(i)%ptr)
+    end do
 
     call self%write_fields( &
-      field_names, field_ptrs, &
+      field_names, field_ptrs, host_fields, &
       solver, file, use_stride=.false. &
       )
+    deallocate (field_ptrs)
+
     call self%adios2_writer%close(file)
 
-    deallocate (field_ptrs)
+    do i = 1, num_fields
+      call solver%host_allocator%release_block(host_fields(i)%ptr)
+    end do
+
+    deallocate(host_fields)
 
     if (myrank == 0) then
       ! Move temporary file to final checkpoint filename
@@ -296,13 +324,14 @@ contains
     integer, intent(in) :: timestep
     integer, intent(in), optional :: comm
 
-    character(len=*), parameter :: field_names(3) = ["u", "v", "w"]
+    character(len=*), parameter :: field_names(*) = ["u", "v", "w"]
     integer :: myrank, ierr, comm_to_use, i
     character(len=256) :: filename
     type(adios2_file_t) :: file
     integer(i8), dimension(3) :: strided_shape_dims
     integer, dimension(3) :: global_dims, strided_dims
-    type(field_ptr_t), allocatable :: field_ptrs(:)
+    type(field_ptr_t), allocatable :: field_ptrs(:), host_fields(:)
+    integer, parameter :: num_fields = size(field_names)
     real(dp), dimension(3) :: origin, original_spacing, strided_spacing, &
                               coords_max
     real(dp) :: simulation_time
@@ -324,7 +353,7 @@ contains
     original_spacing = solver%mesh%geo%d
     strided_spacing = original_spacing*real(self%output_stride, dp)
 
-    do i = 1, 3
+    do i = 1, size(field_names)
       strided_dims(i) = (global_dims(i) + self%output_stride(i) - 1)/ &
                         self%output_stride(i)
     end do
@@ -344,18 +373,45 @@ contains
       call self%adios2_writer%write_attribute("vtk.xml", self%vtk_xml, file)
     end if
 
-    allocate (field_ptrs(3))
-    field_ptrs(1)%ptr => solver%u
-    field_ptrs(2)%ptr => solver%v
-    field_ptrs(3)%ptr => solver%w
+    allocate (field_ptrs(num_fields))
+    allocate (host_fields(num_fields))
+    do i = 1, num_fields
+    select case (trim(field_names(i)))
+      case ("u")
+        field_ptrs(i)%ptr => solver%u
+      case ("v")
+        field_ptrs(i)%ptr => solver%v
+      case ("w")
+        field_ptrs(i)%ptr => solver%w
+      case default
+        if (solver%mesh%par%is_root()) then
+            print *, 'ERROR: Unknown field name in checkpoint list: ', &
+                     trim(field_names(i))
+        end if
+        error stop 1
+    end select
+    end do
+
+    do i = 1, num_fields
+      host_fields(i)%ptr => solver%host_allocator%get_block( &
+                            DIR_C, field_ptrs(i)%ptr%data_loc)
+      call solver%backend%get_field_data( &
+           host_fields(i)%ptr%data, field_ptrs(i)%ptr)
+    end do
 
     call self%write_fields( &
-      field_names, field_ptrs, &
+      field_names, field_ptrs, host_fields, &
       solver, file, use_stride=.true. &
       )
     deallocate (field_ptrs)
 
     call self%adios2_writer%close(file)
+
+    do i = 1, num_fields
+      call solver%host_allocator%release_block(host_fields(i)%ptr)
+    end do
+
+    deallocate(host_fields)
   end subroutine write_snapshot
 
   subroutine generate_vtk_xml(self, dims, fields, origin, spacing)
@@ -679,33 +735,30 @@ contains
     if (allocated(field_data)) deallocate (field_data)
   end subroutine restart_checkpoint
 
-  subroutine write_fields(self, field_names, fields, solver, file, use_stride)
+  subroutine write_fields( &
+             self, field_names, fields, host_fields, solver, file, use_stride &
+             )
     !! Write field data, optionally with striding
     class(checkpoint_manager_adios2_t), intent(inout) :: self
     character(len=*), dimension(:), intent(in) :: field_names
-    class(field_ptr_t), dimension(:), target, intent(in) :: fields
+    class(field_ptr_t), dimension(:), target, intent(in) :: fields, host_fields
     class(solver_t), intent(in) :: solver
     type(adios2_file_t), intent(inout) :: file
     logical, intent(in), optional :: use_stride
 
-    class(field_t), pointer :: host_field
     integer :: i_field
     logical :: apply_stride
 
+    ! clean-up the strided buffer from previous call to write_snapshot
     call self%cleanup_strided_buffers()
 
     apply_stride = .false.
     if (present(use_stride)) apply_stride = use_stride
 
     do i_field = 1, size(field_names)
-      host_field => solver%host_allocator%get_block( &
-                    DIR_C, fields(i_field)%ptr%data_loc &
-                    )
-      call solver%backend%get_field_data(host_field%data, fields(i_field)%ptr)
-
-      call write_single_field(trim(field_names(i_field)), host_field, &
+      call write_single_field(trim(field_names(i_field)), &
+                              host_fields(i_field)%ptr, &
                               fields(i_field)%ptr%data_loc)
-      call solver%host_allocator%release_block(host_field)
     end do
 
   contains
@@ -718,15 +771,12 @@ contains
 
       integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
       integer(i8), dimension(3) :: strided_shape, strided_start, strided_count
-      real(dp), dimension(:, :, :), pointer :: field_data
       integer :: dims(3)
 
       dims = solver%mesh%get_dims(data_loc)
       shape_dims = int(solver%mesh%get_global_dims(data_loc), i8)
       start_dims = int(solver%mesh%par%n_offset, i8)
       count_dims = int(dims, i8)
-
-      field_data => host_field%data(1:dims(1), 1:dims(2), 1:dims(3))
 
       if (use_stride) then
         stride_factors = self%output_stride
@@ -738,7 +788,7 @@ contains
           )
 
         call self%stride_data_to_buffer( &
-          field_data, dims, stride_factors, &
+          host_field%data, dims, stride_factors, &
           self%strided_buffer, strided_dims_local)
 
         call self%adios2_writer%write_data( &
@@ -747,7 +797,7 @@ contains
           )
       else
         call self%adios2_writer%write_data( &
-          field_name, field_data, &
+          field_name, host_field%data, &
           file, shape_dims, start_dims, count_dims &
           )
       end if
