@@ -404,7 +404,7 @@ contains
 
     call self%write_fields( &
       field_names, field_ptrs, host_fields, &
-      solver, file, use_stride=.true. &
+      solver, file, use_stride=.false. &
       )
     deallocate (field_ptrs)
 
@@ -429,8 +429,9 @@ contains
     integer :: i
 
     ! for ImageData, the Extent defines the grid size (from 0 to N-1).
+    ! VTK uses (x,y,z) order, so we need to adjust the dimensions accordingly.
     write (extent_str, '(A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A)') &
-      '0 ', dims(1) - 1, ' 0 ', dims(2) - 1, ' 0 ', dims(3) - 1
+      '0 ', dims(3) - 1, ' 0 ', dims(2) - 1, ' 0 ', dims(1) - 1
 
     write (origin_str, '(G0, 1X, G0, 1X, G0)') origin
     write (spacing_str, '(G0, 1X, G0, 1X, G0)') spacing
@@ -703,15 +704,15 @@ contains
     start_dims = int(solver%mesh%par%n_offset, i8)
     count_dims = int(dims, i8)
 
-    allocate (field_data(dims(1), dims(2), dims(3)))
+
+    call solver%u%set_data_loc(data_loc)
+    call solver%v%set_data_loc(data_loc)
+    call solver%w%set_data_loc(data_loc)
 
     do i = 1, size(field_names)
+      allocate (field_data(dims(1), dims(2), dims(3)))
       call reader%read_data(field_names(i), &
                             field_data, file, start_dims, count_dims)
-
-      call solver%u%set_data_loc(data_loc)
-      call solver%v%set_data_loc(data_loc)
-      call solver%w%set_data_loc(data_loc)
 
       select case (trim(field_names(i)))
       case ("u")
@@ -724,11 +725,11 @@ contains
         call self%adios2_writer%handle_error( &
           1, "Invalid field name"//trim(field_names(i)))
       end select
+      deallocate (field_data)
     end do
 
     call reader%close(file)
     call reader%finalise()
-    if (allocated(field_data)) deallocate (field_data)
   end subroutine restart_checkpoint
 
   subroutine write_fields( &
@@ -783,48 +784,43 @@ contains
           strided_dims_local &
           )
 
-        if (all(shape(host_field%data) == dims)) then
-          ! no padding - use directly
+        block
+          real(dp), allocatable :: temp_data(:,:,:)
+          allocate(temp_data(dims(1), dims(2), dims(3)))
+          temp_data = host_field%data(1:dims(1), 1:dims(2), 1:dims(3))
           call self%stride_data_to_buffer( &
-            host_field%data, dims, stride_factors, &
+            temp_data, dims, stride_factors, &
             self%strided_buffer, strided_dims_local)
-        else
-          ! padding present - extract physical domain first, then stride
-          block
-            real(dp), allocatable :: temp_data(:,:,:)
-            allocate(temp_data(dims(1), dims(2), dims(3)))
-            temp_data = host_field%data(1:dims(1), 1:dims(2), 1:dims(3))
-            call self%stride_data_to_buffer( &
-              temp_data, dims, stride_factors, &
-              self%strided_buffer, strided_dims_local)
-            deallocate(temp_data)
-          end block
-        end if
+          deallocate(temp_data)
+        end block
 
         call self%adios2_writer%write_data( &
           field_name, self%strided_buffer, &
           file, strided_shape, strided_start, strided_count &
           )
       else
-         if (all(shape(host_field%data) == dims)) then
-          ! no padding - write directly
+        block
+          real(dp), allocatable :: temp_data(:,:,:)
+          allocate(temp_data(dims(1), dims(2), dims(3)))
+          temp_data = host_field%data(1:dims(1), 1:dims(2), 1:dims(3))
+          if (solver%mesh%par%is_root()) then
+            print *, 'WRITE DEBUG', field_name, ':'
+            print *, '  Temp data shape: ', shape(temp_data)
+            print *, '  Temp data min/max: ', minval(temp_data), maxval(temp_data)
+            if (any(temp_data /= temp_data)) then
+              print *, '  *** FATAL ERROR: NaN still present! ***'
+              error stop 1
+            else
+              print *, '  Data is clean - proceeding with write'
+            end if
+          end if
+
           call self%adios2_writer%write_data( &
-            field_name, host_field%data, &
+            field_name, temp_data, &
             file, shape_dims, start_dims, count_dims &
             )
-        else
-         ! padding present - extract physical domain only
-          block
-            real(dp), allocatable :: temp_data(:,:,:)
-            allocate(temp_data(dims(1), dims(2), dims(3)))
-            temp_data = host_field%data(1:dims(1), 1:dims(2), 1:dims(3))
-            call self%adios2_writer%write_data( &
-              field_name, temp_data, &
-              file, shape_dims, start_dims, count_dims &
-              )
-            deallocate(temp_data)
-          end block
-        end if
+          deallocate(temp_data)
+        end block
       end if
     end subroutine write_single_field
 
