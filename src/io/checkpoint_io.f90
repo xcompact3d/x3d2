@@ -222,6 +222,7 @@ contains
     logical :: file_exists
     type(field_ptr_t), allocatable :: field_ptrs(:), host_fields(:)
     integer, parameter :: num_fields = size(field_names)
+    integer :: data_loc
 
     if (self%checkpoint_cfg%checkpoint_freq <= 0) return
     if (mod(timestep, self%checkpoint_cfg%checkpoint_freq) /= 0) return
@@ -241,9 +242,11 @@ contains
     call self%adios2_writer%begin_step(file)
 
     simulation_time = timestep*solver%dt
+    data_loc = solver%u%data_loc
     call self%adios2_writer%write_data("timestep", timestep, file)
     call self%adios2_writer%write_data("time", real(simulation_time, dp), file)
     call self%adios2_writer%write_data("dt", real(solver%dt, dp), file)
+    call self%adios2_writer%write_data("data_loc", data_loc, file)
 
     allocate (field_ptrs(num_fields))
     allocate (host_fields(num_fields))
@@ -677,6 +680,7 @@ contains
     integer(i8), dimension(3) :: start_dims, count_dims
     character(len=*), parameter :: field_names(3) = ["u", "v", "w"]
     logical :: file_exists
+    integer :: data_loc
 
     inquire (file=filename, exist=file_exists)
     if (.not. file_exists) then
@@ -689,14 +693,15 @@ contains
 
     call reader%init(comm, "checkpoint_reader")
 
-    dims = solver%mesh%get_dims(VERT)
-    start_dims = int(solver%mesh%par%n_offset, i8)
-    count_dims = int(dims, i8)
-
     file = reader%open(filename, adios2_mode_read, comm)
     call reader%begin_step(file)
     call reader%read_data("timestep", timestep, file)
     call reader%read_data("time", restart_time, file)
+    call reader%read_data("data_loc", data_loc, file)
+
+    dims = solver%mesh%get_dims(data_loc)
+    start_dims = int(solver%mesh%par%n_offset, i8)
+    count_dims = int(dims, i8)
 
     allocate (field_data(dims(1), dims(2), dims(3)))
 
@@ -704,31 +709,22 @@ contains
       call reader%read_data(field_names(i), &
                             field_data, file, start_dims, count_dims)
 
+      call solver%u%set_data_loc(data_loc)
+      call solver%v%set_data_loc(data_loc)
+      call solver%w%set_data_loc(data_loc)
+
       select case (trim(field_names(i)))
       case ("u")
-        host_field => solver%host_allocator%get_block(DIR_C)
-        host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) = field_data
-        call solver%backend%set_field_data(solver%u, host_field%data)
-        call solver%host_allocator%release_block(host_field)
+        call solver%backend%set_field_data(solver%u, field_data)
       case ("v")
-        host_field => solver%host_allocator%get_block(DIR_C)
-        host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) = field_data
-        call solver%backend%set_field_data(solver%v, host_field%data)
-        call solver%host_allocator%release_block(host_field)
+        call solver%backend%set_field_data(solver%v, field_data)
       case ("w")
-        host_field => solver%host_allocator%get_block(DIR_C)
-        host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) = field_data
-        call solver%backend%set_field_data(solver%w, host_field%data)
-        call solver%host_allocator%release_block(host_field)
+        call solver%backend%set_field_data(solver%w, field_data)
       case default
         call self%adios2_writer%handle_error( &
           1, "Invalid field name"//trim(field_names(i)))
       end select
     end do
-
-    call solver%u%set_data_loc(VERT)
-    call solver%v%set_data_loc(VERT)
-    call solver%w%set_data_loc(VERT)
 
     call reader%close(file)
     call reader%finalise()
@@ -787,19 +783,48 @@ contains
           strided_dims_local &
           )
 
-        call self%stride_data_to_buffer( &
-          host_field%data, dims, stride_factors, &
-          self%strided_buffer, strided_dims_local)
+        if (all(shape(host_field%data) == dims)) then
+          ! no padding - use directly
+          call self%stride_data_to_buffer( &
+            host_field%data, dims, stride_factors, &
+            self%strided_buffer, strided_dims_local)
+        else
+          ! padding present - extract physical domain first, then stride
+          block
+            real(dp), allocatable :: temp_data(:,:,:)
+            allocate(temp_data(dims(1), dims(2), dims(3)))
+            temp_data = host_field%data(1:dims(1), 1:dims(2), 1:dims(3))
+            call self%stride_data_to_buffer( &
+              temp_data, dims, stride_factors, &
+              self%strided_buffer, strided_dims_local)
+            deallocate(temp_data)
+          end block
+        end if
 
         call self%adios2_writer%write_data( &
           field_name, self%strided_buffer, &
           file, strided_shape, strided_start, strided_count &
           )
       else
-        call self%adios2_writer%write_data( &
-          field_name, host_field%data, &
-          file, shape_dims, start_dims, count_dims &
-          )
+         if (all(shape(host_field%data) == dims)) then
+          ! no padding - write directly
+          call self%adios2_writer%write_data( &
+            field_name, host_field%data, &
+            file, shape_dims, start_dims, count_dims &
+            )
+        else
+         ! padding present - extract physical domain only
+          block
+            real(dp), allocatable :: temp_data(:,:,:)
+            allocate(temp_data(dims(1), dims(2), dims(3)))
+            temp_data = host_field%data(1:dims(1), 1:dims(2), 1:dims(3))
+            call self%adios2_writer%write_data( &
+              field_name, temp_data, &
+              file, shape_dims, start_dims, count_dims &
+              )
+            deallocate(temp_data)
+          end block
+        end if
       end if
     end subroutine write_single_field
 
@@ -890,3 +915,4 @@ contains
   end function cm_is_restart
 
 end module m_checkpoint_manager
+
