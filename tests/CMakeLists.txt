@@ -25,6 +25,10 @@ function(define_test testfile np backend)
     endif()
     find_package(OpenMP REQUIRED)
     target_link_libraries(${test_name} PRIVATE OpenMP::OpenMP_Fortran)
+
+    if(${backend} STREQUAL omp_tgt)
+      target_compile_options(${test_name} PRIVATE "-DOMP_TGT")
+    endif()
   endif()
   target_link_libraries(${test_name} PRIVATE x3d2)
   target_link_libraries(${test_name} PRIVATE x3d2_backends)
@@ -77,6 +81,10 @@ if(WITH_ADIOS2)
 endif()
 
 define_test(test_setget_field.f90 1 omp)
+
+if(${OMP_TGT})
+  define_test(test_vecadd.f90 1 omp_tgt)
+endif()
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")

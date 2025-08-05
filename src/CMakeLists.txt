@@ -85,6 +85,7 @@ endif()
 
 if(OMP_TGT)
   list(APPEND SRC ${OMPTGTSRC})
+  list(APPEND BACKENDSRC backend/omp/target/backend.f90)
 endif()
 
 # Decide whether 2decomp&fft is supported by the build
