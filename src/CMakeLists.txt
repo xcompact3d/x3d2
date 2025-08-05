@@ -111,8 +111,8 @@ target_include_directories(x3d2_backends INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(x3d2_backends PRIVATE x3d2)
 
 add_executable(xcompact xcompact.f90)
-target_link_libraries(xcompact PRIVATE x3d2)
 target_link_libraries(xcompact PRIVATE x3d2_backends)
+target_link_libraries(xcompact PRIVATE x3d2)
 
 # if CUDA compiler
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
@@ -135,6 +135,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
   set(CMAKE_Fortran_FLAGS_DEBUG "-G2 -O0")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3")
   target_link_options(x3d2 INTERFACE -h omp)
+  target_link_options(x3d2_backends INTERFACE -h omp)
 endif()
 
 if(WITH_2DECOMPFFT)
