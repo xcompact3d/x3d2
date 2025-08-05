@@ -263,8 +263,10 @@ contains
         end do
 
         call self%pre_correction(self%solver%u, self%solver%v, self%solver%w)
-        if (self%solver%ibm_on) &
-         call self%solver%ibm%body(self%solver%u, self%solver%v, self%solver%w)
+        if (self%solver%ibm_on) then
+          call self%solver%ibm%body(self%solver%u, self%solver%v, &
+                                    self%solver%w)
+        end if
 
         call self%solver%pressure_correction(self%solver%u, self%solver%v, &
                                              self%solver%w)

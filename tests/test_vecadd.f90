@@ -23,7 +23,7 @@ program test_vecadd
 
   integer, dimension(3), parameter :: dirs = [DIR_X, DIR_Y, DIR_Z]
   character(len=5), dimension(3), parameter :: dirnames = &
-                         ["DIR_X", "DIR_Y", "DIR_Z"]
+                                               ["DIR_X", "DIR_Y", "DIR_Z"]
 
   class(mesh_t), allocatable :: mesh
   class(allocator_t), pointer :: allocator => null()

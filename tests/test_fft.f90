@@ -86,7 +86,9 @@ program test_fft
   BC_y = ['periodic', 'periodic']
   BC_z = ['periodic', 'periodic']
 
-  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, use_2decomp=use_2decomp)
+  mesh = mesh_t(dims_global, nproc_dir, L_global, &
+                BC_x, BC_y, BC_z, &
+                use_2decomp=use_2decomp)
 
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
@@ -151,8 +153,11 @@ program test_fft
   call backend%get_field_data(output_data, output_field, DIR_C)
   ! The output scaled with number of cells in domain, hence the first '/product(dims_global)'.
   ! RMS value is used for the norm, hence the second '/product(dims_global)'
-  error_norm = norm2(input_data(:, :, :) - output_data(:, :, :)/product(dims_global) )**2/product(dims_global)
-  call MPI_Allreduce(MPI_IN_PLACE, error_norm, 1, MPI_X3D2_DP, MPI_SUM, MPI_COMM_WORLD, ierr)
+  error_norm = norm2( &
+               input_data - output_data/product(dims_global) &
+               )**2/product(dims_global)
+  call MPI_Allreduce(MPI_IN_PLACE, error_norm, 1, MPI_X3D2_DP, MPI_SUM, &
+                     MPI_COMM_WORLD, ierr)
   error_norm = sqrt(error_norm)
 
   if (error_norm > tol) then

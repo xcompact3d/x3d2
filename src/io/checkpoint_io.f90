@@ -780,7 +780,7 @@ module m_checkpoint_manager
   private
   public :: checkpoint_manager_t, create_checkpoint_manager
 
-  type, public :: checkpoint_manager_t
+  type :: checkpoint_manager_t
     type(checkpoint_manager_adios2_t) :: impl
   contains
     procedure :: init => cm_init
