@@ -40,11 +40,11 @@ module m_omptgt_allocator
 contains
 
   ! Constructor for the OMP target offload allocator
-  type(omptgt_allocator_t) function omptgt_allocator_init(mesh, sz) result(a)
-    type(mesh_t), intent(inout) :: mesh
+  type(omptgt_allocator_t) function omptgt_allocator_init(dims, sz) result(a)
+    integer, intent(in) :: dims(3)
     integer, intent(in) :: sz
 
-    a%allocator_t = allocator_t(mesh, sz)
+    a%allocator_t = allocator_t(dims, sz)
   end function omptgt_allocator_init
 
   ! Allocates a device-resident block
@@ -52,27 +52,19 @@ contains
     class(omptgt_allocator_t), intent(inout) :: self
     class(field_t), pointer, intent(in) :: next
     type(omptgt_field_t), pointer :: newblock_tgt
-    type(field_t), pointer :: newblock
     class(field_t), pointer :: ptr
 
     self%next_id = self%next_id + 1
-    select type(next)
-    type is(omptgt_field_t)
-      allocate(newblock_tgt)
-      newblock_tgt = omptgt_field_t(self%ngrid, next, id=self%next_id)
-      ptr => newblock_tgt
-    class default
-      allocate(newblock)
-      newblock = field_t(self%ngrid, next, id=self%next_id)
-      ptr => newblock
-    end select
+    !allocate(newblock_tgt)
+    newblock_tgt = omptgt_field_t(self%ngrid, next, id=self%next_id)
+    ptr => newblock_tgt
 
   end function create_block_omptgt
 
   ! Constructs a device-resident field
   type(omptgt_field_t) function omptgt_field_init(ngrid, next, id) result(f)
     integer, intent(in) :: ngrid
-    type(omptgt_field_t), pointer, intent(in) :: next
+    class(field_t), pointer, intent(in) :: next
     integer, intent(in) :: id
 
     allocate(f%p_data_tgt(ngrid))
@@ -83,7 +75,30 @@ contains
     
   end function omptgt_field_init
 
-  module subroutine fill_omptgt(self, c)
+  ! Deallocates device-resident memory before deallocating the base type
+  subroutine destroy(self)
+    class(omptgt_allocator_t) :: self
+
+    class(field_t), pointer :: ptr
+
+    ptr => self%first
+    do
+      if (.not. associated(ptr)) then
+        exit
+      end if
+
+      select type(ptr)
+      type is(omptgt_field_t)
+        !$omp target exit data map(ptr%p_data_tgt) map(ptr%refcount) map(ptr%id)
+      end select
+
+      ptr => ptr%next
+    end do
+
+    call self%allocator_t%destroy()
+  end subroutine
+
+  subroutine fill_omptgt(self, c)
     class(omptgt_field_t) :: self
     real(dp), intent(in) :: c
 
