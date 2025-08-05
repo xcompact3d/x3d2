@@ -16,7 +16,12 @@ program test_vecadd
   use m_cuda_backend, only: cuda_backend_t
 #else
   use m_omp_common, only: SZ
+#ifndef OMP_TGT
   use m_omp_backend, only: omp_backend_t
+#else
+  use m_omptgt_backend, only: omptgt_backend_t
+  use m_omptgt_allocator, only: omptgt_allocator_t
+#endif
 #endif
 
   implicit none
@@ -35,7 +40,12 @@ program test_vecadd
 #else
   type(allocator_t), target :: omp_allocator
   type(allocator_t), pointer :: host_allocator
+#ifndef OMP_TGT
   type(omp_backend_t), target :: omp_backend
+#else
+  type(omptgt_allocator_t), target :: omptgt_allocator
+  type(omptgt_backend_t), target :: omptgt_backend
+#endif
 #endif
   class(field_t), pointer :: a => null()
   class(field_t), pointer :: b => null()
@@ -72,11 +82,17 @@ program test_vecadd
   backend => cuda_backend
 #else
   omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
+#ifdef OMP_TGT
+  omptgt_allocator = omptgt_allocator_t(mesh%get_dims(VERT), SZ)
+  allocator => omptgt_allocator
+  omptgt_backend = omptgt_backend_t(mesh, allocator)
+  backend => omptgt_backend
+#else
   allocator => omp_allocator
-  host_allocator => omp_allocator
-
   omp_backend = omp_backend_t(mesh, allocator)
   backend => omp_backend
+#endif
+  host_allocator => omp_allocator
 #endif
 
   test_pass = .true.
