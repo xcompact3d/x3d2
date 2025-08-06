@@ -31,6 +31,7 @@ module m_omptgt_allocator
     real(dp), pointer, contiguous :: data_tgt(:, :, :) => null()
   contains
     procedure :: fill => fill_omptgt
+    procedure :: set_shape => set_shape_omptgt
   end type omptgt_field_t
   
   interface omptgt_field_t
@@ -69,11 +70,11 @@ contains
     class(field_t), pointer, intent(in) :: next
     integer, intent(in) :: id
 
-    ! allocate(f%p_data_tgt(ngrid))
+    allocate(f%p_data_tgt(ngrid))
     f%refcount = 0
     f%next => next
     f%id = id
-    !$omp target enter data map(alloc:f%p_data_tgt(ngrid)) map(to:f%refcount) map(to:f%id) map(to:f%data_tgt)
+    !$omp target enter data map(alloc:f%p_data_tgt) map(to:f%refcount) map(to:f%id) map(to:f%data_tgt)
     
   end function omptgt_field_init
 
@@ -113,6 +114,16 @@ contains
     !$omp end target teams distribute parallel do
 
   end subroutine fill_omptgt
+
+  subroutine set_shape_omptgt(self, dims)
+    class(omptgt_field_t) :: self
+    integer, intent(in) :: dims(3)
+
+    !$omp target
+    self%data_tgt(1:dims(1), 1:dims(2), 1:dims(3)) => self%p_data_tgt(:)
+    !$omp end target
+
+  end subroutine
 
 end module m_omptgt_allocator
   

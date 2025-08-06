@@ -20,6 +20,8 @@ module m_omptgt_backend
 
   type, extends(omp_backend_t) :: omptgt_backend_t
   contains
+    procedure :: copy_f_to_data => copy_f_to_data_omptgt
+    procedure :: copy_data_to_f => copy_data_to_f_omptgt
     procedure :: vecadd => vecadd_omptgt
   end type
 
@@ -90,5 +92,27 @@ contains
     !$omp end target teams distribute parallel do
 
   end subroutine
+
+  subroutine copy_data_to_f_omptgt(self, f, data)
+    class(omptgt_backend_t), intent(inout) :: self
+    class(omptgt_field_t), intent(inout) :: f
+    real(dp), dimension(:, :, :), intent(in) :: data
+
+    !$omp target map(to:data)
+    f%data_tgt(:, :, :) = data(:, :, :)
+    !$omp end target
+
+  end subroutine copy_data_to_f_omptgt
+    
+  subroutine copy_f_to_data_omptgt(self, data, f)
+    class(omptgt_backend_t), intent(inout) :: self
+    real(dp), dimension(:, :, :), intent(out) :: data
+    class(omptgt_field_t), intent(in) :: f
+
+    !$omp target
+    data = f%data_tgt
+    !$omp end target
+    
+  end subroutine copy_f_to_data_omptgt
 
 end module
