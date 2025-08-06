@@ -69,11 +69,11 @@ contains
     class(field_t), pointer, intent(in) :: next
     integer, intent(in) :: id
 
-    allocate(f%p_data_tgt(ngrid))
+    ! allocate(f%p_data_tgt(ngrid))
     f%refcount = 0
     f%next => next
     f%id = id
-    !$omp target enter data map(alloc:f%p_data_tgt) map(to:f%refcount) map(to:f%id)
+    !$omp target enter data map(alloc:f%p_data_tgt(ngrid)) map(to:f%refcount) map(to:f%id) map(to:f%data_tgt)
     
   end function omptgt_field_init
 
@@ -91,7 +91,7 @@ contains
 
       select type(ptr)
       type is(omptgt_field_t)
-        !$omp target exit data map(ptr%p_data_tgt) map(ptr%refcount) map(ptr%id)
+        !$omp target exit data map(delete:ptr%p_data_tgt) map(delete:ptr%refcount) map(delete:ptr%id) map(delete:ptr%data_tgt)
       end select
 
       ptr => ptr%next
