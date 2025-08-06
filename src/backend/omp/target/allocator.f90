@@ -48,7 +48,7 @@ contains
   end function omptgt_allocator_init
 
   ! Allocates a device-resident block
-  module function create_block_omptgt(self, next) result(ptr)
+  function create_block_omptgt(self, next) result(ptr)
     class(omptgt_allocator_t), intent(inout) :: self
     class(field_t), pointer, intent(in) :: next
     type(omptgt_field_t), pointer :: newblock_tgt
