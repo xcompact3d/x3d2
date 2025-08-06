@@ -54,8 +54,10 @@ contains
     type(omptgt_field_t), pointer :: newblock_tgt
     class(field_t), pointer :: ptr
 
+    print *, "Create OMPTGT block"
+
     self%next_id = self%next_id + 1
-    !allocate(newblock_tgt)
+    allocate(newblock_tgt)
     newblock_tgt = omptgt_field_t(self%ngrid, next, id=self%next_id)
     ptr => newblock_tgt
 
