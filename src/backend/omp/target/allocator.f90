@@ -72,7 +72,7 @@ contains
     f%refcount = 0
     f%next => next
     f%id = id
-    !$omp target enter data map(alloc:f%p_data_tgt) map(to:f%refcount) map(to:f%id) map(to:f%data_tgt)
+    !$omp target enter data map(to:f%refcount) map(to:f%id)
     
   end function omptgt_field_init
 
@@ -90,7 +90,8 @@ contains
 
       select type(ptr)
       type is(omptgt_field_t)
-        !$omp target exit data map(delete:ptr%p_data_tgt) map(delete:ptr%refcount) map(delete:ptr%id) map(delete:ptr%data_tgt)
+        !$omp target exit data map(delete:ptr%data_tgt)
+        !$omp target exit data map(delete:ptr%refcount) map(delete:ptr%id)
       end select
 
       ptr => ptr%next
@@ -103,11 +104,20 @@ contains
     class(omptgt_field_t) :: self
     real(dp), intent(in) :: c
 
-    integer :: i
+    integer :: i, j, k
+    integer :: nx, ny, nz
+
+    nx = size(self%data_tgt, dim=1)
+    ny = size(self%data_tgt, dim=2)
+    nz = size(self%data_tgt, dim=3)
     
-    !$omp target teams distribute parallel do
-    do i = 1, size(self%p_data_tgt)
-      self%p_data_tgt(i) = c
+    !$omp target teams distribute parallel do default(shared) private(i, j, k) collapse(3)
+    do k = 1, nx
+      do j = 1, ny
+        do i = 1, nz
+          self%p_data_tgt(i) = c
+        end do
+      end do
     end do
     !$omp end target teams distribute parallel do
 
@@ -117,9 +127,8 @@ contains
     class(omptgt_field_t) :: self
     integer, intent(in) :: dims(3)
 
-    !$omp target
     self%data_tgt(1:dims(1), 1:dims(2), 1:dims(3)) => self%p_data_tgt(:)
-    !$omp end target
+    !$omp target enter data map(to:self%data_tgt)
 
   end subroutine
 
