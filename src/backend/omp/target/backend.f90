@@ -81,7 +81,7 @@ contains
 
     dims = self%allocator%get_padded_dims(x%dir)
 
-    !$omp target teams distribute parallel do collapse(3) map(to : x) map(tofrom : y)
+    !$omp target teams distribute parallel do default(shared) private(i, j, k) collapse(3)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
