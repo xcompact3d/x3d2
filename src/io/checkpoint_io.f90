@@ -799,28 +799,10 @@ contains
           file, strided_shape, strided_start, strided_count &
           )
       else
-        block
-          real(dp), allocatable :: temp_data(:,:,:)
-          allocate(temp_data(dims(1), dims(2), dims(3)))
-          temp_data = host_field%data(1:dims(1), 1:dims(2), 1:dims(3))
-          if (solver%mesh%par%is_root()) then
-            print *, 'WRITE DEBUG', field_name, ':'
-            print *, '  Temp data shape: ', shape(temp_data)
-            print *, '  Temp data min/max: ', minval(temp_data), maxval(temp_data)
-            if (any(temp_data /= temp_data)) then
-              print *, '  *** FATAL ERROR: NaN still present! ***'
-              error stop 1
-            else
-              print *, '  Data is clean - proceeding with write'
-            end if
-          end if
-
-          call self%adios2_writer%write_data( &
-            field_name, temp_data, &
-            file, shape_dims, start_dims, count_dims &
-            )
-          deallocate(temp_data)
-        end block
+        call self%adios2_writer%write_data( &
+          field_name, host_field%data, &
+          file, shape_dims, start_dims, count_dims &
+          )
       end if
     end subroutine write_single_field
 
