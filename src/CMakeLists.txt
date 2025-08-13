@@ -9,7 +9,6 @@ set(SRC
   solver.f90
   tdsops.f90
   time_integrator.f90
-  ordering.f90
   mesh.f90
   mesh_content.f90
   field.f90
