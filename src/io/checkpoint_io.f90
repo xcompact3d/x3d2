@@ -154,8 +154,8 @@ contains
     comm_to_use = MPI_COMM_WORLD
     if (present(comm)) comm_to_use = comm
 
-    call self%write_checkpoint(solver, timestep, comm)
-    call self%write_snapshot(solver, timestep, comm)
+    call self%write_checkpoint(solver, timestep, comm_to_use)
+    call self%write_snapshot(solver, timestep, comm_to_use)
   end subroutine handle_io_step
 
   subroutine configure( &
@@ -269,10 +269,39 @@ contains
 
     do i = 1, num_fields
       host_fields(i)%ptr => solver%host_allocator%get_block( &
-                            DIR_C, field_ptrs(i)%ptr%data_loc)
+                              DIR_C, field_ptrs(i)%ptr%data_loc)
       call solver%backend%get_field_data( &
            host_fields(i)%ptr%data, field_ptrs(i)%ptr)
     end do
+
+    block
+      integer :: j
+      integer :: nx, ny, nz
+      real(dp) :: s, l2, mn, mx
+      character(len=32) :: nm
+      integer :: data_loc
+      integer :: dims(3)
+
+      data_loc = solver%u%data_loc
+      dims = solver%mesh%get_dims(data_loc)
+      nx = dims(1); ny = dims(2); nz = dims(3)
+
+      do j = 1, num_fields
+        nm = trim(field_names(j))
+
+        associate(buf => host_fields(j)%ptr%data(1:nx, 1:ny, 1:nz))
+          s  = sum(buf,                   mask = buf == buf)
+          l2 = sqrt( sum(buf*buf,         mask = buf == buf) )
+          mn = minval(buf,                mask = buf == buf)
+          mx = maxval(buf,                mask = buf == buf)
+        end associate
+
+        call self%adios2_writer%write_data('chk.sum.'//nm,  s,  file)
+        call self%adios2_writer%write_data('chk.l2.' //nm,  l2, file)
+        call self%adios2_writer%write_data('chk.min.'//nm,  mn, file)
+        call self%adios2_writer%write_data('chk.max.'//nm,  mx, file)
+      end do
+    end block
 
     call self%write_fields( &
       field_names, field_ptrs, host_fields, &
@@ -674,7 +703,6 @@ contains
 
     type(adios2_reader_t) :: reader
     type(adios2_file_t) :: file
-    real(dp), allocatable :: field_data(:, :, :)
     integer :: i, ierr
     integer :: dims(3)
     class(field_t), pointer :: host_field
@@ -704,29 +732,90 @@ contains
     start_dims = int(solver%mesh%par%n_offset, i8)
     count_dims = int(dims, i8)
 
-
     call solver%u%set_data_loc(data_loc)
     call solver%v%set_data_loc(data_loc)
     call solver%w%set_data_loc(data_loc)
 
+    ! The ADIOS2 bug persists even with variable handle isolation
+    block
+      real(dp), allocatable, target :: field_data_u(:, :, :)
+      real(dp), allocatable, target :: field_data_v(:, :, :)
+      real(dp), allocatable, target :: field_data_w(:, :, :)
+      real(dp), pointer :: current_field_data(:, :, :)
+      type(adios2_reader_t) :: isolated_reader
+      type(adios2_file_t) :: isolated_file
+      
+      call isolated_reader%init(comm, "u_reader")
+      isolated_file = isolated_reader%open(filename, adios2_mode_read, comm)
+      call isolated_reader%begin_step(isolated_file)
+      call isolated_reader%read_data("u", field_data_u, isolated_file, start_dims, count_dims)
+      call isolated_reader%close(isolated_file)
+      call isolated_reader%finalise()
+      
+      call isolated_reader%init(comm, "v_reader")
+      isolated_file = isolated_reader%open(filename, adios2_mode_read, comm)
+      call isolated_reader%begin_step(isolated_file)
+      call isolated_reader%read_data("v", field_data_v, isolated_file, start_dims, count_dims)
+      call isolated_reader%close(isolated_file)
+      call isolated_reader%finalise()
+      
+      call isolated_reader%init(comm, "w_reader")
+      isolated_file = isolated_reader%open(filename, adios2_mode_read, comm)
+      call isolated_reader%begin_step(isolated_file)
+      call isolated_reader%read_data("w", field_data_w, isolated_file, start_dims, count_dims)
+      call isolated_reader%close(isolated_file)
+      call isolated_reader%finalise()
+      
+      block
+        real(dp) :: expected_u_sum, expected_v_sum, expected_w_sum
+        real(dp) :: actual_u_sum, actual_v_sum, actual_w_sum
+        logical :: u_correct, v_correct, w_correct
+        
+        call reader%read_data('chk.sum.u', expected_u_sum, file)
+        call reader%read_data('chk.sum.v', expected_v_sum, file)  
+        call reader%read_data('chk.sum.w', expected_w_sum, file)
+        
+        actual_u_sum = sum(field_data_u)
+        actual_v_sum = sum(field_data_v)
+        actual_w_sum = sum(field_data_w)
+        
+        u_correct = abs(actual_u_sum - expected_u_sum) < 1.0e-6_dp
+        v_correct = abs(actual_v_sum - expected_v_sum) < 1.0e-6_dp  
+        w_correct = abs(actual_w_sum - expected_w_sum) < 1.0e-6_dp
+        
+        if (solver%mesh%par%is_root()) then
+          print *, 'ADIOS2-BUG-CHECK u: expected=', expected_u_sum, ' actual=', actual_u_sum, ' match=', u_correct
+          print *, 'ADIOS2-BUG-CHECK v: expected=', expected_v_sum, ' actual=', actual_v_sum, ' match=', v_correct
+          print *, 'ADIOS2-BUG-CHECK w: expected=', expected_w_sum, ' actual=', actual_w_sum, ' match=', w_correct
+        end if
+      end block
+
     do i = 1, size(field_names)
-      allocate (field_data(dims(1), dims(2), dims(3)))
-      call reader%read_data(field_names(i), &
-                            field_data, file, start_dims, count_dims)
+      select case (trim(field_names(i)))
+      case ("u")
+        current_field_data => field_data_u
+      case ("v")
+        current_field_data => field_data_v
+      case ("w")
+        current_field_data => field_data_w
+      end select
 
       select case (trim(field_names(i)))
       case ("u")
-        call solver%backend%set_field_data(solver%u, field_data)
+        call solver%backend%set_field_data(solver%u, current_field_data)
       case ("v")
-        call solver%backend%set_field_data(solver%v, field_data)
+        call solver%backend%set_field_data(solver%v, current_field_data)
       case ("w")
-        call solver%backend%set_field_data(solver%w, field_data)
+        call solver%backend%set_field_data(solver%w, current_field_data)
       case default
         call self%adios2_writer%handle_error( &
           1, "Invalid field name"//trim(field_names(i)))
       end select
-      deallocate (field_data)
+
     end do
+    
+    deallocate(field_data_u, field_data_v, field_data_w)
+    end block
 
     call reader%close(file)
     call reader%finalise()
@@ -764,8 +853,8 @@ contains
       character(len=*), intent(in) :: field_name
       class(field_t), pointer :: host_field
       integer, intent(in) :: data_loc
-      integer, dimension(3) :: strided_dims_local, stride_factors
 
+      integer, dimension(3) :: strided_dims_local, stride_factors
       integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
       integer(i8), dimension(3) :: strided_shape, strided_start, strided_count
       integer :: dims(3)
@@ -800,9 +889,8 @@ contains
           )
       else
         call self%adios2_writer%write_data( &
-          field_name, host_field%data, &
-          file, shape_dims, start_dims, count_dims &
-          )
+          field_name, host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), &
+          file, shape_dims, start_dims, count_dims)
       end if
     end subroutine write_single_field
 
@@ -893,4 +981,3 @@ contains
   end function cm_is_restart
 
 end module m_checkpoint_manager
-
