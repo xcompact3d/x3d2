@@ -12,6 +12,7 @@ contains
 
   pure subroutine get_index_ijk(i, j, k, dir_i, dir_j, dir_k, dir, &
                                 SZ, nx_padded, ny_padded, nz_padded)
+    !$omp declare target
       !! Get cartesian index from application storage directional one
     integer, intent(out) :: i, j, k                   ! cartesian indices
     integer, intent(in) :: dir_i, dir_j, dir_k        ! application storage indices
@@ -41,6 +42,7 @@ contains
 
   pure subroutine get_index_dir(dir_i, dir_j, dir_k, i, j, k, dir, &
                                 SZ, nx_padded, ny_padded, nz_padded)
+    !$omp declare target
       !! Get application storage directional index from cartesian index
     integer, intent(out) :: dir_i, dir_j, dir_k        ! application storage indices
     integer, intent(in) :: i, j, k                     ! cartesian indices
@@ -71,6 +73,7 @@ contains
   pure subroutine get_index_reordering( &
     out_i, out_j, out_k, in_i, in_j, in_k, dir_from, dir_to, sz, cart_padded &
     )
+    !$omp declare target
     !! Converts indices in between any two DIR_?
     integer, intent(out) :: out_i, out_j, out_k ! output indices
     integer, intent(in) :: in_i, in_j, in_k ! input indices
