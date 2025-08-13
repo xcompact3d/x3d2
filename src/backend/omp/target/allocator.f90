@@ -31,6 +31,7 @@ module m_omptgt_allocator
     real(dp), pointer, contiguous :: data_tgt(:, :, :) => null()
   contains
     procedure :: fill => fill_omptgt
+    procedure :: get_shape => get_shape_omptgt
     procedure :: set_shape => set_shape_omptgt
   end type omptgt_field_t
   
@@ -122,6 +123,13 @@ contains
     !$omp end target teams distribute parallel do
 
   end subroutine fill_omptgt
+
+  function get_shape_omptgt(self) result(dims)
+    class(omptgt_field_t) :: self
+    integer :: dims(3)
+
+    dims = shape(self%data_tgt)
+  end function
 
   subroutine set_shape_omptgt(self, dims)
     class(omptgt_field_t) :: self
