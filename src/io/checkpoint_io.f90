@@ -364,8 +364,7 @@ contains
     integer, dimension(3) :: global_dims, strided_dims
     type(field_ptr_t), allocatable :: field_ptrs(:), host_fields(:)
     integer, parameter :: num_fields = size(field_names)
-    real(dp), dimension(3) :: origin, original_spacing, strided_spacing, &
-                              coords_max
+    real(dp), dimension(3) :: origin, original_spacing, strided_spacing
     real(dp) :: simulation_time
 
     if (self%checkpoint_cfg%snapshot_freq <= 0) return
@@ -381,15 +380,18 @@ contains
 
     global_dims = solver%mesh%get_global_dims(VERT)
     origin = solver%mesh%get_coordinates(1, 1, 1)
-    coords_max = solver%mesh%geo%L
     original_spacing = solver%mesh%geo%d
     strided_spacing = original_spacing*real(self%output_stride, dp)
 
-    do i = 1, size(field_names)
+    do i = 1, num_fields
       strided_dims(i) = (global_dims(i) + self%output_stride(i) - 1)/ &
                         self%output_stride(i)
     end do
     strided_shape_dims = int(strided_dims, i8)
+
+    call self%generate_vtk_xml( &
+      strided_shape_dims, field_names, origin, strided_spacing &
+      )
 
     file = self%adios2_writer%open(filename, adios2_mode_write, comm_to_use)
     call self%adios2_writer%begin_step(file)
@@ -397,52 +399,50 @@ contains
     simulation_time = timestep*solver%dt
     call self%adios2_writer%write_data("time", real(simulation_time, dp), file)
 
-    call self%generate_vtk_xml( &
-      strided_shape_dims, field_names, origin, strided_spacing &
-      )
-
     if (myrank == 0) then
       call self%adios2_writer%write_attribute("vtk.xml", self%vtk_xml, file)
     end if
 
     allocate (field_ptrs(num_fields))
     allocate (host_fields(num_fields))
+
+    ! point field_ptrs to actual solver data
     do i = 1, num_fields
-    select case (trim(field_names(i)))
-      case ("u")
-        field_ptrs(i)%ptr => solver%u
-      case ("v")
-        field_ptrs(i)%ptr => solver%v
-      case ("w")
-        field_ptrs(i)%ptr => solver%w
-      case default
-        if (solver%mesh%par%is_root()) then
-            print *, 'ERROR: Unknown field name in checkpoint list: ', &
-                     trim(field_names(i))
-        end if
-        error stop 1
-    end select
+      select case (trim(field_names(i)))
+        case ("u")
+          field_ptrs(i)%ptr => solver%u
+        case ("v")
+          field_ptrs(i)%ptr => solver%v
+        case ("w")
+          field_ptrs(i)%ptr => solver%w
+        case default
+          if (solver%mesh%par%is_root()) then
+              print *, 'ERROR: Unknown field name in snapshot list: ', &
+                       trim(field_names(i))
+          end if
+          error stop 1
+      end select
     end do
 
+    ! allocate a unique host buffer
     do i = 1, num_fields
       host_fields(i)%ptr => solver%host_allocator%get_block( &
                             DIR_C, field_ptrs(i)%ptr%data_loc)
       call solver%backend%get_field_data( &
            host_fields(i)%ptr%data, field_ptrs(i)%ptr)
     end do
-
+      
     call self%write_fields( &
       field_names, field_ptrs, host_fields, &
       solver, file, use_stride=.false. &
       )
-    deallocate (field_ptrs)
-
     call self%adios2_writer%close(file)
 
     do i = 1, num_fields
       call solver%host_allocator%release_block(host_fields(i)%ptr)
     end do
 
+    deallocate (field_ptrs)
     deallocate(host_fields)
   end subroutine write_snapshot
 
@@ -474,8 +474,8 @@ contains
           //new_line('a')//'      <PointData>'//new_line('a')
 
     do i = 1, size(fields)
-      xml = trim(xml)//'        <DataArray Name="'//trim(fields(i))// &
-            '" />'//new_line('a')
+      xml = trim(xml)//'      <DataArray Name="'//trim(fields(i))//'">'// &
+            trim(fields(i))//'</DataArray>'//new_line('a')
     end do
 
     xml = trim(xml)//'        <DataArray Name="TIME">time</DataArray>' &
