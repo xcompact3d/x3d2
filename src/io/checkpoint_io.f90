@@ -434,7 +434,7 @@ contains
       
     call self%write_fields( &
       field_names, field_ptrs, host_fields, &
-      solver, file, use_stride=.false. &
+      solver, file, use_stride=.true. &
       )
     call self%adios2_writer%close(file)
 
@@ -663,20 +663,20 @@ contains
         all(self%last_strided_shape > 0)) then
       strided_shape = self%last_strided_shape
     else
-      strided_shape = [(shape_dims(3) + stride_factors(3) - 1_i8) &
-                       /int(stride_factors(3), i8), &
+      strided_shape = [(shape_dims(1) + stride_factors(1) - 1_i8) &
+                       /int(stride_factors(1), i8), &
                        (shape_dims(2) + stride_factors(2) - 1_i8) &
                        /int(stride_factors(2), i8), &
-                       (shape_dims(1) + stride_factors(1) - 1_i8) &
-                       /int(stride_factors(1), i8)]
+                       (shape_dims(3) + stride_factors(3) - 1_i8) &
+                       /int(stride_factors(3), i8)]
 
       self%last_shape_dims = shape_dims
       self%last_strided_shape = strided_shape
     end if
 
-    strided_start = [start_dims(3)/int(stride_factors(3), i8), &
+    strided_start = [start_dims(1)/int(stride_factors(1), i8), &
                      start_dims(2)/int(stride_factors(2), i8), &
-                     start_dims(1)/int(stride_factors(1), i8)]
+                     start_dims(3)/int(stride_factors(3), i8)]
 
     strided_dims_local = [(int(count_dims(1)) + stride_factors(1) - 1) &
                           /stride_factors(1), &
@@ -685,9 +685,9 @@ contains
                           (int(count_dims(3)) + stride_factors(3) - 1) &
                           /stride_factors(3)]
 
-    strided_count = [int(strided_dims_local(3), i8), &
+    strided_count = [int(strided_dims_local(1), i8), &
                      int(strided_dims_local(2), i8), &
-                     int(strided_dims_local(1), i8)]
+                     int(strided_dims_local(3), i8)]
   end subroutine get_strided_dimensions
 
   subroutine restart_checkpoint( &
