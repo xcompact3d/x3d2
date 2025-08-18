@@ -366,6 +366,7 @@ contains
     integer, parameter :: num_fields = size(field_names)
     real(dp), dimension(3) :: origin, original_spacing, strided_spacing
     real(dp) :: simulation_time
+    logical :: snapshot_uses_stride = .true. ! snapshots always use striding
 
     if (self%checkpoint_cfg%snapshot_freq <= 0) return
     if (mod(timestep, self%checkpoint_cfg%snapshot_freq) /= 0) return
@@ -381,12 +382,17 @@ contains
     global_dims = solver%mesh%get_global_dims(VERT)
     origin = solver%mesh%get_coordinates(1, 1, 1)
     original_spacing = solver%mesh%geo%d
-    strided_spacing = original_spacing*real(self%output_stride, dp)
-
-    do i = 1, num_fields
-      strided_dims(i) = (global_dims(i) + self%output_stride(i) - 1)/ &
-                        self%output_stride(i)
-    end do
+    
+    if (snapshot_uses_stride) then
+      strided_spacing = original_spacing*real(self%output_stride, dp)
+      do i = 1, num_fields
+        strided_dims(i) = (global_dims(i) + self%output_stride(i) - 1)/ &
+                          self%output_stride(i)
+      end do
+    else
+      strided_spacing = original_spacing
+      strided_dims = global_dims
+    end if
     strided_shape_dims = int(strided_dims, i8)
 
     call self%generate_vtk_xml( &
@@ -434,7 +440,7 @@ contains
       
     call self%write_fields( &
       field_names, field_ptrs, host_fields, &
-      solver, file, use_stride=.true. &
+      solver, file, use_stride=snapshot_uses_stride &
       )
     call self%adios2_writer%close(file)
 
