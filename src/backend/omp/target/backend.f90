@@ -101,48 +101,75 @@ contains
     class(omptgt_field_t), intent(inout) :: f
     real(dp), dimension(:, :, :), intent(in) :: data
 
-    integer :: i, j, k
     integer, dimension(3) :: dims
 
     dims = self%allocator%get_padded_dims(f%dir)
     print *, "-->", dims
 
-    !$omp target teams distribute parallel do default(shared) private(i, j, k) collapse(3) map(to:data)
+    call copy_data_to_f_omptgt_(f%data_tgt, data, dims)
+
+    print *, "COPITED!"
+
+  end subroutine copy_data_to_f_omptgt
+
+  subroutine copy_data_to_f_omptgt_(f_arr, d, dims)
+    real(dp), dimension(:, :, :), intent(inout) :: f_arr
+    real(dp), dimension(:, :, :), intent(in) :: d
+    integer, dimension(3), intent(in) :: dims
+
+    integer :: i, j, k
+
+    print *, "+++++"
+    print *, dims
+    print *, shape(f_arr)
+    print *, shape(d)
+
+    !$omp target teams loop collapse(3) map(to:d)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          f%data_tgt(i, j, k) = data(i, j, k)
+          f_arr(i, j, k) = f_arr(i, j, k) + d(i, j, k)
         end do
       end do
     end do
-    !$omp end target teams distribute parallel do
+    !$omp end target teams loop
 
-  end subroutine copy_data_to_f_omptgt
+  end subroutine
     
   subroutine copy_f_to_data_omptgt(self, data, f)
     class(omptgt_backend_t), intent(inout) :: self
     real(dp), dimension(:, :, :), intent(out) :: data
     class(omptgt_field_t), intent(in) :: f
 
-    integer :: i, j, k
     integer, dimension(3) :: dims
 
     dims = self%allocator%get_padded_dims(f%dir)
     print *, "<--", dims
 
     print *, minval(data), maxval(data)
-    !$omp target teams distribute parallel do default(shared) private(i, j, k) collapse(3) map(from:data)
+    call copy_f_to_data_omptgt_(data, f%data_tgt, dims)
+    print *, minval(data), maxval(data)
+    
+  end subroutine copy_f_to_data_omptgt
+
+  subroutine copy_f_to_data_omptgt_(data, f_arr, dims)
+    real(dp), dimension(:, :, :), intent(out) :: data
+    real(dp), dimension(:, :, :), intent(in) :: f_arr
+    integer, dimension(3), intent(in) :: dims
+
+    integer :: i, j, k
+
+    !$omp target teams distribute parallel do collapse(3) map(from:data)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          data(i, j, k) = f%data_tgt(i, j, k)
+          data(i, j, k) = f_arr(i, j, k)
         end do
       end do
     end do
     !$omp end target teams distribute parallel do
-    print *, minval(data), maxval(data)
-    
-  end subroutine copy_f_to_data_omptgt
+
+  end subroutine
 
   subroutine reorder_omptgt(self, u_, u, direction)
     class(omptgt_backend_t) :: self
@@ -150,8 +177,6 @@ contains
     class(field_t), intent(in) :: u
     integer, intent(in) :: direction
     integer, dimension(3) :: dims, cart_padded
-    integer :: i, j, k
-    integer :: out_i, out_j, out_k
     integer :: dir_from, dir_to
 
     dims = self%allocator%get_padded_dims(u%dir)
@@ -160,9 +185,11 @@ contains
 
     select type(u)
     type is(omptgt_field_t)
-      call reorder_omptgt_dd(u_, u, dims, cart_padded, dir_from, dir_to)
+      call reorder_omptgt_(u_%data_tgt, u%data_tgt, dims, cart_padded, dir_from, dir_to)
     class default
-      call reorder_omptgt_hd(u_, u, dims, cart_padded, dir_from, dir_to)
+      !$omp target enter data map(to:u%data)
+      call reorder_omptgt_(u_%data_tgt, u%data, dims, cart_padded, dir_from, dir_to)
+      !$omp target exit data map(release:u%data)
     end select
 
     ! reorder keeps the data_loc the same
@@ -170,11 +197,11 @@ contains
 
   end subroutine reorder_omptgt
 
-  subroutine reorder_omptgt_dd(u_, u, dims, cart_padded, dir_from, dir_to)
-    class(omptgt_field_t), intent(inout) :: u_
-    class(omptgt_field_t), intent(in) :: u
-    integer, dimension(3) :: dims, cart_padded
-    integer :: dir_from, dir_to
+  subroutine reorder_omptgt_(u_, u, dims, cart_padded, dir_from, dir_to)
+    real(dp), dimension(:, :, :), intent(inout) :: u_
+    real(dp), dimension(:, :, :), intent(in) :: u
+    integer, dimension(3), intent(in) :: dims, cart_padded
+    integer, intent(in) :: dir_from, dir_to
 
     integer :: i, j, k
     integer :: out_i, out_j, out_k
@@ -185,30 +212,7 @@ contains
         do i = 1, dims(1)
           call get_index_reordering(out_i, out_j, out_k, i, j, k, &
                                     dir_from, dir_to, SZ, cart_padded)
-          u_%data_tgt(out_i, out_j, out_k) = u%data_tgt(i, j, k)
-        end do
-      end do
-    end do
-    !$omp end target teams distribute parallel do
-
-  end subroutine
-
-  subroutine reorder_omptgt_hd(u_, u, dims, cart_padded, dir_from, dir_to)
-    class(omptgt_field_t), intent(inout) :: u_
-    class(field_t), intent(in) :: u
-    integer, dimension(3) :: dims, cart_padded
-    integer :: dir_from, dir_to
-
-    integer :: i, j, k
-    integer :: out_i, out_j, out_k
-
-    !$omp target teams distribute parallel do private(out_i, out_j, out_k) collapse(3) map(to:u%data)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          call get_index_reordering(out_i, out_j, out_k, i, j, k, &
-                                    dir_from, dir_to, SZ, cart_padded)
-          u_%data_tgt(out_i, out_j, out_k) = u%data(i, j, k)
+          u_(out_i, out_j, out_k) = u(i, j, k)
         end do
       end do
     end do
