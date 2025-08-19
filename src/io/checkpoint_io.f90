@@ -71,8 +71,9 @@ module m_checkpoint_manager_impl
   type, extends(checkpoint_manager_base_t) :: checkpoint_manager_adios2_t
     type(adios2_writer_t) :: adios2_writer
     integer :: last_checkpoint_step = -1
-    integer, dimension(3) :: output_stride = [2, 2, 2]  !! Spatial stride for snapshot output
-    logical :: convert_to_sp = .false.                  !! Flag for single precision snapshots
+    integer, dimension(3) :: output_stride = [1, 1, 1]         !! Spatial stride for snapshot output (default: full resolution)
+    integer, dimension(3) :: checkpoint_stride_factors = [1, 1, 1]  !! Stride factors for checkpoints (no striding)
+    logical :: convert_to_sp = .false.                          !! Flag for single precision snapshots
     real(dp), dimension(:, :, :), allocatable :: strided_buffer  !! Fallback buffer for extra fields
     type(field_buffer_map_t), allocatable :: field_buffers(:) !! Dynamic field buffer mapping for true async I/O
     real(dp), dimension(:, :, :), allocatable :: coords_x, coords_y, coords_z
@@ -851,9 +852,13 @@ contains
     apply_stride = .false.
     if (present(use_stride)) apply_stride = use_stride
 
-    ! if using stride, pre-allocate separate buffers for each field to avoid race conditions
-    if (apply_stride .and. size(field_names) >= 3) then
-      call prepare_field_buffers(solver, self%output_stride, field_names)
+    ! pre-allocate separate buffers for each field to enable race-free async I/O
+    if (size(field_names) >= 3) then
+      if (apply_stride) then
+        call prepare_field_buffers(solver, self%output_stride, field_names)
+      else
+        call prepare_field_buffers(solver, self%checkpoint_stride_factors, field_names)
+      end if
     end if
 
     do i_field = 1, size(field_names)
@@ -902,6 +907,9 @@ contains
       integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
       integer(i8), dimension(3) :: strided_shape, strided_start, strided_count
       integer :: dims(3)
+      integer :: buffer_idx
+      logical :: buffer_found
+      real(dp), dimension(:, :, :), allocatable :: temp_data
 
       dims = solver%mesh%get_dims(data_loc)
       shape_dims = int(solver%mesh%get_global_dims(data_loc), i8)
@@ -910,64 +918,58 @@ contains
 
       if (apply_stride) then
         stride_factors = self%output_stride
-
-        call self%get_strided_dimensions( &
-          shape_dims, start_dims, count_dims, stride_factors, &
-          strided_shape, strided_start, strided_count, &
-          strided_dims_local &
-          )
-
-        ! find the matching buffer for this field
-        block
-          integer :: buffer_idx
-          logical :: buffer_found
-          real(dp), dimension(:, :, :), allocatable :: temp_data
-          
-          buffer_found = .false.
-          do buffer_idx = 1, size(self%field_buffers)
-            if (trim(self%field_buffers(buffer_idx)%field_name) == trim(field_name)) then
-              buffer_found = .true.
-              exit
-            end if
-          end do
-          
-          allocate(temp_data(dims(1), dims(2), dims(3)))
-          temp_data = host_field%data(1:dims(1), 1:dims(2), 1:dims(3))
-          
-          if (buffer_found) then
-            ! use the dedicated buffer for this field
-            call self%stride_data_to_buffer( &
-              temp_data, dims, stride_factors, &
-              self%field_buffers(buffer_idx)%buffer, strided_dims_local)
-            
-            call self%adios2_writer%write_data( &
-              field_name, self%field_buffers(buffer_idx)%buffer, &
-              file, strided_shape, strided_start, strided_count, &
-              self%convert_to_sp &
-              )
-          else
-            ! fallback to shared buffer for fields not in the map
-            if (.not. allocated(self%strided_buffer)) then
-              allocate(self%strided_buffer(strided_dims_local(1), strided_dims_local(2), strided_dims_local(3)))
-            end if
-            call self%stride_data_to_buffer( &
-              temp_data, dims, stride_factors, &
-              self%strided_buffer, strided_dims_local)
-            
-            call self%adios2_writer%write_data( &
-              field_name, self%strided_buffer, &
-              file, strided_shape, strided_start, strided_count, &
-              self%convert_to_sp &
-              )
-          end if
-          
-          deallocate(temp_data)
-        end block
       else
-        call self%adios2_writer%write_data( &
-          field_name, host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), &
-          file, shape_dims, start_dims, count_dims)
+        !no striding for checkpointing
+        stride_factors = self%checkpoint_stride_factors
       end if
+
+      call self%get_strided_dimensions( &
+        shape_dims, start_dims, count_dims, stride_factors, &
+        strided_shape, strided_start, strided_count, &
+        strided_dims_local &
+        )
+
+      ! find the matching buffer for this field
+      buffer_found = .false.
+      do buffer_idx = 1, size(self%field_buffers)
+        if (trim(self%field_buffers(buffer_idx)%field_name) == trim(field_name)) then
+          buffer_found = .true.
+          exit
+        end if
+      end do
+
+      ! copy field data to temporary buffer
+      allocate(temp_data(dims(1), dims(2), dims(3)))
+      temp_data = host_field%data(1:dims(1), 1:dims(2), 1:dims(3))
+
+      if (buffer_found) then
+        ! use the dedicated buffer for this field for true async I/O
+        call self%stride_data_to_buffer( &
+          temp_data, dims, stride_factors, &
+          self%field_buffers(buffer_idx)%buffer, strided_dims_local)
+        
+        call self%adios2_writer%write_data( &
+          field_name, self%field_buffers(buffer_idx)%buffer, &
+          file, strided_shape, strided_start, strided_count, &
+          self%convert_to_sp &
+          )
+      else
+        ! fallback to shared buffer for fields not in the map
+        if (.not. allocated(self%strided_buffer)) then
+          allocate(self%strided_buffer(strided_dims_local(1), strided_dims_local(2), strided_dims_local(3)))
+        end if
+        call self%stride_data_to_buffer( &
+          temp_data, dims, stride_factors, &
+          self%strided_buffer, strided_dims_local)
+        
+        call self%adios2_writer%write_data( &
+          field_name, self%strided_buffer, &
+          file, strided_shape, strided_start, strided_count, &
+          self%convert_to_sp &
+          )
+      end if
+
+      deallocate(temp_data)
     end subroutine write_single_field
 
   end subroutine write_fields
