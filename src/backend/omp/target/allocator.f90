@@ -27,7 +27,7 @@ module m_omptgt_allocator
 
   type, extends(field_t) :: omptgt_field_t
     ! A device-resident field
-    real(dp), pointer, private :: p_data_tgt(:) => null()
+    real(dp), pointer :: p_data_tgt(:) => null()
     real(dp), pointer, contiguous :: data_tgt(:, :, :) => null()
   contains
     procedure :: fill => fill_omptgt
@@ -69,13 +69,22 @@ contains
     class(field_t), pointer, intent(in) :: next
     integer, intent(in) :: id
 
-    allocate(f%p_data_tgt(ngrid))
+    !call omptgt_field_device_alloc(f%p_data_tgt, ngrid)
     f%refcount = 0
     f%next => next
     f%id = id
-    !$omp target enter data map(to:f%refcount) map(to:f%id)
+    allocate(f%p_data_tgt(ngrid))
+    !$omp target enter data map(alloc:f%p_data_tgt)
     
   end function omptgt_field_init
+
+  subroutine omptgt_field_device_alloc(pdata, ngrid)
+    real(dp), dimension(:), pointer :: pdata
+    integer, intent(in) :: ngrid
+
+    allocate(pdata(ngrid))
+    !$omp target enter data map(alloc:pdata)
+  end subroutine
 
   ! Deallocates device-resident memory before deallocating the base type
   subroutine destroy(self)
@@ -86,13 +95,13 @@ contains
     ptr => self%first
     do
       if (.not. associated(ptr)) then
-        exit
+        cycle
       end if
 
       select type(ptr)
       type is(omptgt_field_t)
+        !$omp target exit data map(delete:ptr%p_data_tgt)
         !$omp target exit data map(delete:ptr%data_tgt)
-        !$omp target exit data map(delete:ptr%refcount) map(delete:ptr%id)
       end select
 
       ptr => ptr%next
@@ -105,24 +114,24 @@ contains
     class(omptgt_field_t) :: self
     real(dp), intent(in) :: c
 
-    integer :: i, j, k
-    integer :: nx, ny, nz
+    call fill_omptgt_(self%p_data_tgt, c, size(self%p_data_tgt))
 
-    nx = size(self%data_tgt, dim=1)
-    ny = size(self%data_tgt, dim=2)
-    nz = size(self%data_tgt, dim=3)
+  end subroutine fill_omptgt
+
+  subroutine fill_omptgt_(p_data_tgt, c, n)
+    real(dp), dimension(:), intent(inout) :: p_data_tgt
+    real(dp), intent(in) :: c
+    integer, intent(in) :: n
+
+    integer :: i
     
-    !$omp target teams distribute parallel do default(shared) private(i, j, k) collapse(3)
-    do k = 1, nx
-      do j = 1, ny
-        do i = 1, nz
-          self%p_data_tgt(i) = c
-        end do
-      end do
+    !$omp target teams distribute parallel do 
+    do i = 1, n
+      p_data_tgt(i) = c
     end do
     !$omp end target teams distribute parallel do
 
-  end subroutine fill_omptgt
+  end subroutine
 
   function get_shape_omptgt(self) result(dims)
     class(omptgt_field_t) :: self
