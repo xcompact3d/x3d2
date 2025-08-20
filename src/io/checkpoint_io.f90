@@ -378,6 +378,7 @@ contains
     real(dp), dimension(3) :: origin, original_spacing, strided_spacing
     real(dp) :: simulation_time
     logical :: snapshot_uses_stride = .true. ! snapshots always use striding
+    logical :: file_exists
     integer :: unit_number
 
     if (self%checkpoint_cfg%snapshot_freq <= 0) return
@@ -410,9 +411,12 @@ contains
         strided_shape_dims, field_names, origin, strided_spacing &
         )
 
+      ! Only rank 0 checks file existence to avoid race conditions
       if (myrank == 0) then
         inquire(file=trim(filename), exist=file_exists)
       end if
+      
+      ! Broadcast file existence status to all ranks
       call MPI_Bcast(file_exists, 1, MPI_LOGICAL, 0, comm_to_use, ierr)
       
       if (file_exists) then
