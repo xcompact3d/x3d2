@@ -11,6 +11,7 @@ module m_adios2_io
                     adios2_variable, adios2_attribute, &
                     adios2_mode_sync, adios2_mode_write, &
                     adios2_mode_deferred, adios2_mode_read, &
+                    adios2_mode_append, &
                     adios2_step_mode_append, adios2_step_mode_read, &
                     adios2_init, adios2_finalize, &
                     adios2_declare_io, adios2_set_engine, &
@@ -28,7 +29,7 @@ module m_adios2_io
 
   private
   public :: adios2_writer_t, adios2_reader_t, adios2_file_t, &
-            adios2_mode_write, adios2_mode_read
+            adios2_mode_write, adios2_mode_read, adios2_mode_append
 
   !> ADIOS2 base type
   !> Abstract base module for ADIOS2 operations
