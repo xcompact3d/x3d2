@@ -69,7 +69,8 @@ module m_checkpoint_manager_impl
   end type field_buffer_map_t
 
   type, extends(checkpoint_manager_base_t) :: checkpoint_manager_adios2_t
-    type(adios2_writer_t) :: adios2_writer
+    type(adios2_writer_t) :: adios2_writer                     !! Writer for checkpoints
+    type(adios2_writer_t) :: snapshot_writer                   !! Dedicated writer for snapshots
     integer :: last_checkpoint_step = -1
     integer, dimension(3) :: output_stride = [1, 1, 1]         !! Spatial stride for snapshot output (default: full resolution)
     integer, dimension(3) :: checkpoint_stride_factors = [1, 1, 1]  !! Stride factors for checkpoints (no striding)
@@ -80,6 +81,8 @@ module m_checkpoint_manager_impl
     integer(i8), dimension(3) :: last_shape_dims = 0
     integer(i8), dimension(3) :: last_strided_shape = 0
     character(len=4096) :: vtk_xml = ""                 !! VTK XML string for ParaView compatibility
+    type(adios2_file_t) :: snapshot_file
+    logical :: is_snapshot_file_open = .false.
   contains
     procedure :: init
     procedure :: handle_restart
@@ -110,6 +113,7 @@ contains
     integer, intent(in) :: comm
 
     call self%adios2_writer%init(comm, "checkpoint_writer")
+    call self%snapshot_writer%init(comm, "snapshot_writer")
 
     self%checkpoint_cfg = checkpoint_config_t()
     call self%checkpoint_cfg%read(nml_file=get_argument(1))
@@ -313,7 +317,7 @@ contains
 
     call self%write_fields( &
       field_names, field_ptrs, host_fields, &
-      solver, file, use_stride=.false. &
+      solver, file, use_stride=.false., writer=self%adios2_writer &
       )
     deallocate (field_ptrs)
 
@@ -367,7 +371,6 @@ contains
     character(len=*), parameter :: field_names(*) = ["u", "v", "w"]
     integer :: myrank, ierr, comm_to_use, i
     character(len=256) :: filename
-    type(adios2_file_t) :: file
     integer(i8), dimension(3) :: strided_shape_dims
     integer, dimension(3) :: global_dims, strided_dims
     type(field_ptr_t), allocatable :: field_ptrs(:), host_fields(:)
@@ -375,6 +378,7 @@ contains
     real(dp), dimension(3) :: origin, original_spacing, strided_spacing
     real(dp) :: simulation_time
     logical :: snapshot_uses_stride = .true. ! snapshots always use striding
+    integer :: unit_number
 
     if (self%checkpoint_cfg%snapshot_freq <= 0) return
     if (mod(timestep, self%checkpoint_cfg%snapshot_freq) /= 0) return
@@ -383,39 +387,43 @@ contains
     if (present(comm)) comm_to_use = comm
     call MPI_Comm_rank(comm_to_use, myrank, ierr)
 
-    write (filename, '(A,A,I0.6,A)') &
-      trim(self%checkpoint_cfg%snapshot_prefix), '_', timestep, '.bp'
-    if (myrank == 0) print *, 'Writing snapshot: ', trim(filename)
+    if (.not. self%is_snapshot_file_open) then
+        write (filename, '(A,A)') trim(self%checkpoint_cfg%snapshot_prefix), '.bp'
 
-    global_dims = solver%mesh%get_global_dims(VERT)
-    origin = solver%mesh%get_coordinates(1, 1, 1)
-    original_spacing = solver%mesh%geo%d
-    
-    if (snapshot_uses_stride) then
-      strided_spacing = original_spacing*real(self%output_stride, dp)
-      do i = 1, num_fields
-        strided_dims(i) = (global_dims(i) + self%output_stride(i) - 1)/ &
-                          self%output_stride(i)
-      end do
-    else
-      strided_spacing = original_spacing
-      strided_dims = global_dims
+        global_dims = solver%mesh%get_global_dims(VERT)
+        origin = solver%mesh%get_coordinates(1, 1, 1)
+        original_spacing = solver%mesh%geo%d
+        
+        if (snapshot_uses_stride) then
+          strided_spacing = original_spacing*real(self%output_stride, dp)
+          do i = 1, size(global_dims)
+            strided_dims(i) = (global_dims(i) + self%output_stride(i) - 1)/ &
+                              self%output_stride(i)
+          end do
+        else
+          strided_spacing = original_spacing
+          strided_dims = global_dims
+        end if
+        strided_shape_dims = int(strided_dims, i8)
+
+        call self%generate_vtk_xml( &
+          strided_shape_dims, field_names, origin, strided_spacing &
+          )
+
+        self%snapshot_file = self%snapshot_writer%open(filename, adios2_mode_write, &
+                                                    comm_to_use)
+
+        if (myrank == 0) then
+            call self%snapshot_writer%write_attribute("vtk.xml", self%vtk_xml, self%snapshot_file)
+        end if
+
+        self%is_snapshot_file_open = .true.
     end if
-    strided_shape_dims = int(strided_dims, i8)
 
-    call self%generate_vtk_xml( &
-      strided_shape_dims, field_names, origin, strided_spacing &
-      )
-
-    file = self%adios2_writer%open(filename, adios2_mode_write, comm_to_use)
-    call self%adios2_writer%begin_step(file)
+    call self%snapshot_writer%begin_step(self%snapshot_file)
 
     simulation_time = timestep*solver%dt
-    call self%adios2_writer%write_data("time", real(simulation_time, dp), file)
-
-    if (myrank == 0) then
-      call self%adios2_writer%write_attribute("vtk.xml", self%vtk_xml, file)
-    end if
+    call self%snapshot_writer%write_data("time", real(simulation_time, dp), self%snapshot_file)
 
     allocate (field_ptrs(num_fields))
     allocate (host_fields(num_fields))
@@ -448,9 +456,9 @@ contains
       
     call self%write_fields( &
       field_names, field_ptrs, host_fields, &
-      solver, file, use_stride=snapshot_uses_stride &
+      solver, self%snapshot_file, use_stride=snapshot_uses_stride, writer=self%snapshot_writer &
       )
-    call self%adios2_writer%close(file)
+    call self%snapshot_writer%end_step(self%snapshot_file)
 
     do i = 1, num_fields
       call solver%host_allocator%release_block(host_fields(i)%ptr)
@@ -471,8 +479,7 @@ contains
     character(len=96) :: extent_str, origin_str, spacing_str
     integer :: i
 
-    ! for ImageData, the Extent defines the grid size (from 0 to N-1).
-    ! VTK uses (x,y,z) order, so we need to adjust the dimensions accordingly.
+    ! VTK uses (x,y,z) order, extent defines grid size from 0 to N-1
     write (extent_str, '(A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A)') &
       '0 ', dims(3) - 1, ' 0 ', dims(2) - 1, ' 0 ', dims(1) - 1
 
@@ -836,7 +843,8 @@ contains
   end subroutine restart_checkpoint
 
   subroutine write_fields( &
-             self, field_names, fields, host_fields, solver, file, use_stride &
+             self, field_names, fields, host_fields, solver, file, &
+             use_stride, writer &
              )
     !! Write field data, optionally with striding, using separate buffers for true async I/O
     class(checkpoint_manager_adios2_t), intent(inout) :: self
@@ -845,6 +853,7 @@ contains
     class(solver_t), intent(in) :: solver
     type(adios2_file_t), intent(inout) :: file
     logical, intent(in), optional :: use_stride
+    type(adios2_writer_t), intent(inout) :: writer
 
     integer :: i_field
     logical :: apply_stride
@@ -948,7 +957,7 @@ contains
           temp_data, dims, stride_factors, &
           self%field_buffers(buffer_idx)%buffer, strided_dims_local)
         
-        call self%adios2_writer%write_data( &
+        call writer%write_data( &
           field_name, self%field_buffers(buffer_idx)%buffer, &
           file, strided_shape, strided_start, strided_count, &
           self%convert_to_sp &
@@ -962,7 +971,7 @@ contains
           temp_data, dims, stride_factors, &
           self%strided_buffer, strided_dims_local)
         
-        call self%adios2_writer%write_data( &
+        call writer%write_data( &
           field_name, self%strided_buffer, &
           file, strided_shape, strided_start, strided_count, &
           self%convert_to_sp &
@@ -994,8 +1003,14 @@ contains
   subroutine finalise(self)
     class(checkpoint_manager_adios2_t), intent(inout) :: self
 
+    if (self%is_snapshot_file_open) then
+        call self%snapshot_writer%close(self%snapshot_file)
+        self%is_snapshot_file_open = .false.
+    end if
+
     call self%cleanup_strided_buffers()
     call self%adios2_writer%finalise()
+    call self%snapshot_writer%finalise()
   end subroutine finalise
 
 end module m_checkpoint_manager_impl
