@@ -153,17 +153,22 @@ contains
   !> Opens an ADIOS2 engine
   !> filename: Unique engine identifier within io
   !> mode: Opening mode (write, append, read)
-  function open (self, filename, mode, comm) result(file)
+  function open (self, filename, mode, comm, keep_vars) result(file)
     class(base_adios2_t), intent(inout) :: self
     character(len=*), intent(in) :: filename   !! Unique engine identifier within io
     integer, intent(in) :: mode                !! Opening mode (write, append, read)
     integer, intent(in), optional :: comm      !! MPI communicator (optional)
+    logical, intent(in), optional :: keep_vars !! Whether to keep existing variables when opening in write mode
     integer :: ierr, use_comm
+    logical :: l_keep_vars
     type(adios2_file_t) :: file   !! ADIOS2 file object
+
+    l_keep_vars = .false.
+    if (present(keep_vars)) l_keep_vars = keep_vars
 
     ! if opening in write mode, we are starting a new independent dataset
     ! remove all old variables from the IO object
-    if (mode == adios2_mode_write) then
+    if (mode == adios2_mode_write .and. .not. l_keep_vars) then
       call adios2_remove_all_variables(self%io, ierr)
       call self%handle_error(ierr, "Failed to remove old ADIOS2 variables &
                              & before open")
