@@ -789,21 +789,21 @@ contains
       call isolated_reader%init(comm, "u_reader")
       isolated_file = isolated_reader%open(filename, adios2_mode_read, comm)
       call isolated_reader%begin_step(isolated_file)
-      call isolated_reader%read_data("u", field_data_u, isolated_file, start_dims, count_dims)
+      call isolated_reader%read_data("chk_u", field_data_u, isolated_file, start_dims, count_dims)
       call isolated_reader%close(isolated_file)
       call isolated_reader%finalise()
       
       call isolated_reader%init(comm, "v_reader")
       isolated_file = isolated_reader%open(filename, adios2_mode_read, comm)
       call isolated_reader%begin_step(isolated_file)
-      call isolated_reader%read_data("v", field_data_v, isolated_file, start_dims, count_dims)
+      call isolated_reader%read_data("chk_v", field_data_v, isolated_file, start_dims, count_dims)
       call isolated_reader%close(isolated_file)
       call isolated_reader%finalise()
       
       call isolated_reader%init(comm, "w_reader")
       isolated_file = isolated_reader%open(filename, adios2_mode_read, comm)
       call isolated_reader%begin_step(isolated_file)
-      call isolated_reader%read_data("w", field_data_w, isolated_file, start_dims, count_dims)
+      call isolated_reader%read_data("chk_w", field_data_w, isolated_file, start_dims, count_dims)
       call isolated_reader%close(isolated_file)
       call isolated_reader%finalise()
       
@@ -977,11 +977,21 @@ contains
           temp_data, dims, stride_factors, &
           self%field_buffers(buffer_idx)%buffer, strided_dims_local)
         
-        call writer%write_data( &
-          field_name, self%field_buffers(buffer_idx)%buffer, &
-          file, strided_shape, strided_start, strided_count, &
-          self%convert_to_sp &
-          )
+        if (apply_stride) then
+          ! Snapshots use original field names for ParaView compatibility
+          call writer%write_data( &
+            field_name, self%field_buffers(buffer_idx)%buffer, &
+            file, strided_shape, strided_start, strided_count, &
+            self%convert_to_sp &
+            )
+        else
+          ! Checkpoints use prefixed names to avoid conflicts with snapshots
+          call writer%write_data( &
+            "chk_"//field_name, self%field_buffers(buffer_idx)%buffer, &
+            file, strided_shape, strided_start, strided_count, &
+            self%convert_to_sp &
+            )
+        end if
       else
         ! fallback to shared buffer for fields not in the map
         if (.not. allocated(self%strided_buffer)) then
@@ -991,11 +1001,21 @@ contains
           temp_data, dims, stride_factors, &
           self%strided_buffer, strided_dims_local)
         
-        call writer%write_data( &
-          field_name, self%strided_buffer, &
-          file, strided_shape, strided_start, strided_count, &
-          self%convert_to_sp &
-          )
+        if (apply_stride) then
+          ! Snapshots use original field names for ParaView compatibility
+          call writer%write_data( &
+            field_name, self%strided_buffer, &
+            file, strided_shape, strided_start, strided_count, &
+            self%convert_to_sp &
+            )
+        else
+          ! Checkpoints use prefixed names to avoid conflicts with snapshots
+          call writer%write_data( &
+            "chk_"//field_name, self%strided_buffer, &
+            file, strided_shape, strided_start, strided_count, &
+            self%convert_to_sp &
+            )
+        end if
       end if
 
       deallocate(temp_data)
