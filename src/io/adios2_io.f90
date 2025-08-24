@@ -21,6 +21,7 @@ module m_adios2_io
                     adios2_define_attribute, &
                     adios2_set_selection, adios2_put, &
                     adios2_get, adios2_remove_all_variables, &
+                    adios2_remove_variable, &
                     adios2_found, adios2_constant_dims, &
                     adios2_type_dp, adios2_type_integer4
   use mpi, only: MPI_COMM_NULL, MPI_Initialized, MPI_Comm_rank

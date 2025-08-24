@@ -79,6 +79,7 @@ module m_checkpoint_manager_impl
     type(field_buffer_map_t), allocatable :: field_buffers(:) !! Dynamic field buffer mapping for true async I/O
     real(dp), dimension(:, :, :), allocatable :: coords_x, coords_y, coords_z
     integer(i8), dimension(3) :: last_shape_dims = 0
+    integer, dimension(3) :: last_stride_factors = 0
     integer(i8), dimension(3) :: last_strided_shape = 0
     character(len=4096) :: vtk_xml = ""                 !! VTK XML string for ParaView compatibility
     type(adios2_file_t) :: snapshot_file
@@ -701,6 +702,7 @@ contains
     integer, dimension(3), intent(out) :: strided_dims_local
 
     if (all(shape_dims == self%last_shape_dims) .and. &
+        all(stride_factors == self%last_stride_factors) .and. &
         all(self%last_strided_shape > 0)) then
       strided_shape = self%last_strided_shape
     else
@@ -712,6 +714,7 @@ contains
                        /int(stride_factors(3), i8)]
 
       self%last_shape_dims = shape_dims
+      self%last_stride_factors = stride_factors
       self%last_strided_shape = strided_shape
     end if
 
