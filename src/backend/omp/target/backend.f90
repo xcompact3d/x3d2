@@ -79,21 +79,32 @@ contains
     real(dp), intent(in) :: b
     type(omptgt_field_t), intent(inout) :: y
 
-    integer :: i, j, k
     integer, dimension(3) :: dims
 
     dims = self%allocator%get_padded_dims(x%dir)
 
-    !$omp target teams distribute parallel do default(shared) private(i, j, k) collapse(3)
+    call vecadd_offload_(dims, a, x%data_tgt, b, y%data_tgt)
+
+  end subroutine
+
+  subroutine vecadd_offload_(dims, a, x, b, y)
+    integer, dimension(3), intent(in) :: dims
+    real(dp), intent(in) :: a
+    real(dp), dimension(:, :, :), pointer, intent(in) :: x
+    real(dp), intent(in) :: b
+    real(dp), dimension(:, :, :), pointer, intent(inout) :: y
+
+    integer :: i, j, k
+
+    !$omp target teams distribute parallel do collapse(3) has_device_addr(x, y)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          y%data_tgt(i, j, k) = a * x%data_tgt(i, j, k) + b * y%data_tgt(i, j, k)
+          y(i, j, k) = a * x(i, j, k) + b * y(i, j, k)
         end do
       end do
     end do
     !$omp end target teams distribute parallel do
-
   end subroutine
 
   subroutine copy_data_to_f_omptgt(self, f, data)
@@ -124,7 +135,7 @@ contains
     print *, shape(f_arr)
     print *, shape(d)
 
-    !$omp target teams loop collapse(3) map(to:d)
+    !$omp target teams loop collapse(3) map(to:d) has_device_addr(f_arr)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -159,7 +170,7 @@ contains
 
     integer :: i, j, k
 
-    !$omp target teams distribute parallel do collapse(3) map(from:data)
+    !$omp target teams distribute parallel do collapse(3) map(from:data) has_device_addr(f_arr)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -185,11 +196,11 @@ contains
 
     select type(u)
     type is(omptgt_field_t)
-      call reorder_omptgt_(u_%data_tgt, u%data_tgt, dims, cart_padded, dir_from, dir_to)
+      call reorder_omptgt_(u_%data_tgt, u%data_tgt, dims, dir_from, dir_to, cart_padded)
     class default
       !$omp target enter data map(to:u%data)
-      call reorder_omptgt_(u_%data_tgt, u%data, dims, cart_padded, dir_from, dir_to)
-      !$omp target exit data map(release:u%data)
+      call reorder_omptgt_(u_%data_tgt, u%data, dims, dir_from, dir_to, cart_padded)
+      !$omp target exit data
     end select
 
     ! reorder keeps the data_loc the same
@@ -197,11 +208,12 @@ contains
 
   end subroutine reorder_omptgt
 
-  subroutine reorder_omptgt_(u_, u, dims, cart_padded, dir_from, dir_to)
-    real(dp), dimension(:, :, :), intent(inout) :: u_
-    real(dp), dimension(:, :, :), intent(in) :: u
-    integer, dimension(3), intent(in) :: dims, cart_padded
+  subroutine reorder_omptgt_dd(u_, u, dims, dir_from, dir_to, cart_padded)
+    real(dp), dimension(:, :, :), pointer :: u_
+    real(dp), dimension(:, :, :), pointer, intent(in) :: u
+    integer, dimension(3), intent(in) :: dims
     integer, intent(in) :: dir_from, dir_to
+    integer, dimension(3), intent(in) :: cart_padded
 
     integer :: i, j, k
     integer :: out_i, out_j, out_k
