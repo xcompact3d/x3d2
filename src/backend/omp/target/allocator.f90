@@ -4,6 +4,9 @@
 
 module m_omptgt_allocator
 
+  use iso_c_binding, only: c_ptr, c_f_pointer, c_sizeof
+  use omp_lib, only: omp_target_alloc, omp_get_default_device
+
   use m_common, only: dp
 
   use m_allocator, only: allocator_t
@@ -27,9 +30,12 @@ module m_omptgt_allocator
 
   type, extends(field_t) :: omptgt_field_t
     ! A device-resident field
-    real(dp), pointer :: p_data_tgt(:) => null()
+    integer, private :: dev_id
+    type(c_ptr), private :: dev_ptr
+    real(dp), pointer, private :: p_data_tgt(:) => null()
     real(dp), pointer, contiguous :: data_tgt(:, :, :) => null()
   contains
+    procedure :: destroy => omptgt_field_destroy
     procedure :: fill => fill_omptgt
     procedure :: get_shape => get_shape_omptgt
     procedure :: set_shape => set_shape_omptgt
@@ -73,10 +79,25 @@ contains
     f%refcount = 0
     f%next => next
     f%id = id
-    allocate(f%p_data_tgt(ngrid))
-    !$omp target enter data map(alloc:f%p_data_tgt)
+    !!! allocate(f%p_data_tgt(ngrid))
+    !!! !$omp target enter data map(alloc:f%p_data_tgt)
+
+    f%dev_id = omp_get_default_device()
+    f%dev_ptr = omp_target_alloc(ngrid * c_sizeof(0.0_dp), f%dev_id)
+    call c_f_pointer(f%dev_ptr, f%p_data_tgt, shape=[ngrid])
+    !$omp target enter data use_device_addr(f%p_data_tgt)
     
   end function omptgt_field_init
+
+  subroutine omptgt_field_destroy(self)
+    class(omptgt_field_t) :: self
+
+    nullify(self%data_tgt)
+    !$omp target exit data
+    nullify(self%p_data_tgt)
+    !$omp target exit data
+    call omp_target_free(self%dev_ptr, self%dev_id)
+  end subroutine
 
   subroutine omptgt_field_device_alloc(pdata, ngrid)
     real(dp), dimension(:), pointer :: pdata
@@ -100,8 +121,9 @@ contains
 
       select type(ptr)
       type is(omptgt_field_t)
-        !$omp target exit data map(delete:ptr%p_data_tgt)
-        !$omp target exit data map(delete:ptr%data_tgt)
+        !!! !$omp target exit data map(delete:ptr%p_data_tgt)
+        !!! !$omp target exit data map(delete:ptr%data_tgt)
+        call ptr%destroy()
       end select
 
       ptr => ptr%next
@@ -144,8 +166,10 @@ contains
     class(omptgt_field_t) :: self
     integer, intent(in) :: dims(3)
 
-    self%data_tgt(1:dims(1), 1:dims(2), 1:dims(3)) => self%p_data_tgt(:)
-    !$omp target enter data map(to:self%data_tgt)
+    !!! self%data_tgt(1:dims(1), 1:dims(2), 1:dims(3)) => self%p_data_tgt(:)
+    !!! !$omp target enter data map(to:self%data_tgt)
+    call c_f_pointer(self%dev_ptr, self%data_tgt, shape=dims)
+    !$omp target enter data use_device_addr(self%data_tgt)
 
   end subroutine
 
