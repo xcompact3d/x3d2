@@ -96,7 +96,8 @@ contains
 
     integer :: i, j, k
 
-    !$omp target teams distribute parallel do collapse(3) has_device_addr(x, y)
+    !$omp target data use_device_addr(x, y)
+    !$omp target teams distribute parallel do collapse(3)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -105,6 +106,7 @@ contains
       end do
     end do
     !$omp end target teams distribute parallel do
+    !$omp end target data
   end subroutine
 
   subroutine copy_data_to_f_omptgt(self, f, data)
@@ -135,7 +137,8 @@ contains
     print *, shape(f_arr)
     print *, shape(d)
 
-    !$omp target teams loop collapse(3) map(to:d) has_device_addr(f_arr)
+    !$omp target data use_device_addr(f_arr)
+    !$omp target teams loop collapse(3) map(to:d)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -144,6 +147,7 @@ contains
       end do
     end do
     !$omp end target teams loop
+    !$omp end target data
 
   end subroutine
     
@@ -170,7 +174,8 @@ contains
 
     integer :: i, j, k
 
-    !$omp target teams distribute parallel do collapse(3) map(from:data) has_device_addr(f_arr)
+    !$omp target data use_device_addr(f_arr)
+    !$omp target teams distribute parallel do collapse(3) map(from:data)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -179,6 +184,7 @@ contains
       end do
     end do
     !$omp end target teams distribute parallel do
+    !$omp end target data
 
   end subroutine
 
@@ -196,11 +202,9 @@ contains
 
     select type(u)
     type is(omptgt_field_t)
-      call reorder_omptgt_(u_%data_tgt, u%data_tgt, dims, dir_from, dir_to, cart_padded)
+      call reorder_omptgt_dd(u_%data_tgt, u%data_tgt, dims, dir_from, dir_to, cart_padded)
     class default
-      !$omp target enter data map(to:u%data)
-      call reorder_omptgt_(u_%data_tgt, u%data, dims, dir_from, dir_to, cart_padded)
-      !$omp target exit data
+      call reorder_omptgt_dh(u_%data_tgt, u%data, dims, dir_from, dir_to, cart_padded)
     end select
 
     ! reorder keeps the data_loc the same
@@ -218,6 +222,7 @@ contains
     integer :: i, j, k
     integer :: out_i, out_j, out_k
 
+    !$omp target data use_device_addr(u_, u)
     !$omp target teams distribute parallel do private(out_i, out_j, out_k) collapse(3)
     do k = 1, dims(3)
       do j = 1, dims(2)
@@ -229,6 +234,33 @@ contains
       end do
     end do
     !$omp end target teams distribute parallel do
+    !$omp end target data
+
+  end subroutine
+
+  subroutine reorder_omptgt_dh(u_, u, dims, dir_from, dir_to, cart_padded)
+    real(dp), dimension(:, :, :), pointer :: u_
+    real(dp), dimension(:, :, :), pointer, intent(in) :: u
+    integer, dimension(3), intent(in) :: dims
+    integer, intent(in) :: dir_from, dir_to
+    integer, dimension(3), intent(in) :: cart_padded
+
+    integer :: i, j, k
+    integer :: out_i, out_j, out_k
+
+    !$omp target data use_device_addr(u_)
+    !$omp target teams distribute parallel do private(out_i, out_j, out_k) collapse(3) map(to:u)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          call get_index_reordering(out_i, out_j, out_k, i, j, k, &
+                                    dir_from, dir_to, SZ, cart_padded)
+          u_(out_i, out_j, out_k) = u(i, j, k)
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+    !$omp end target data
 
   end subroutine
 
