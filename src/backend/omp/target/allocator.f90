@@ -85,13 +85,16 @@ contains
     f%dev_id = omp_get_default_device()
     f%dev_ptr = omp_target_alloc(ngrid * c_sizeof(0.0_dp), f%dev_id)
     call c_f_pointer(f%dev_ptr, f%p_data_tgt, shape=[ngrid])
+    !$omp target enter data map(to:f%p_data_tgt)
     
   end function omptgt_field_init
 
   subroutine omptgt_field_destroy(self)
     class(omptgt_field_t) :: self
 
+    !$omp target exit data map(release:self%data_tgt)
     nullify(self%data_tgt)
+    !$omp target exit data map(release:self%p_data_tgt)
     nullify(self%p_data_tgt)
     call omp_target_free(self%dev_ptr, self%dev_id)
   end subroutine
@@ -168,6 +171,7 @@ contains
     !!! self%data_tgt(1:dims(1), 1:dims(2), 1:dims(3)) => self%p_data_tgt(:)
     !!! !$omp target enter data map(to:self%data_tgt)
     call c_f_pointer(self%dev_ptr, self%data_tgt, shape=dims)
+    !$omp target enter data map(to:self%data_tgt)
 
   end subroutine
 
