@@ -74,7 +74,6 @@ module m_checkpoint_manager_impl
     integer :: last_checkpoint_step = -1
     integer, dimension(3) :: output_stride = [1, 1, 1]         !! Spatial stride for snapshot output (default: full resolution)
     integer, dimension(3) :: checkpoint_stride_factors = [1, 1, 1]  !! Stride factors for checkpoints (no striding)
-    logical :: convert_to_sp = .false.                          !! Flag for single precision snapshots
     real(dp), dimension(:, :, :), allocatable :: strided_buffer  !! Fallback buffer for extra fields
     type(field_buffer_map_t), allocatable :: field_buffers(:) !! Dynamic field buffer mapping for true async I/O
     real(dp), dimension(:, :, :), allocatable :: coords_x, coords_y, coords_z
@@ -983,14 +982,12 @@ contains
         if (apply_stride) then
           call writer%write_data( &
             field_name, self%field_buffers(buffer_idx)%buffer, &
-            file, strided_shape, strided_start, strided_count, &
-            self%convert_to_sp &
+            file, strided_shape, strided_start, strided_count &
             )
         else
           call writer%write_data( &
             field_name, self%field_buffers(buffer_idx)%buffer, &
-            file, strided_shape, strided_start, strided_count, &
-            self%convert_to_sp &
+            file, strided_shape, strided_start, strided_count &
             )
         end if
       else
@@ -1005,14 +1002,12 @@ contains
         if (apply_stride) then
           call writer%write_data( &
             field_name, self%strided_buffer, &
-            file, strided_shape, strided_start, strided_count, &
-            self%convert_to_sp &
+            file, strided_shape, strided_start, strided_count &
             )
         else
           call writer%write_data( &
             field_name, self%strided_buffer, &
-            file, strided_shape, strided_start, strided_count, &
-            self%convert_to_sp &
+            file, strided_shape, strided_start, strided_count &
             )
         end if
       end if
