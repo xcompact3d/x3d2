@@ -82,7 +82,6 @@ module m_checkpoint_manager_impl
     integer(i8), dimension(3) :: last_strided_shape = 0
     character(len=4096) :: vtk_xml = ""                 !! VTK XML string for ParaView compatibility
     type(adios2_file_t) :: snapshot_file
-    logical :: is_snapshot_file_open = .false.
   contains
     procedure :: init
     procedure :: handle_restart
@@ -378,8 +377,6 @@ contains
     real(dp), dimension(3) :: origin, original_spacing, strided_spacing
     real(dp) :: simulation_time
     logical :: snapshot_uses_stride = .true. ! snapshots always use striding
-    logical :: file_exists
-    integer :: unit_number
 
     if (self%checkpoint_cfg%snapshot_freq <= 0) return
     if (mod(timestep, self%checkpoint_cfg%snapshot_freq) /= 0) return
@@ -388,54 +385,36 @@ contains
     if (present(comm)) comm_to_use = comm
     call MPI_Comm_rank(comm_to_use, myrank, ierr)
 
-    if (.not. self%is_snapshot_file_open) then
-      write (filename, '(A,A)') trim(self%checkpoint_cfg%snapshot_prefix), '.bp'
+    ! Create separate snapshot file for each timestep
+    write (filename, '(A,A,I0.6,A)') trim(self%checkpoint_cfg%snapshot_prefix), '_', timestep, '.bp'
 
-      global_dims = solver%mesh%get_global_dims(VERT)
-      origin = solver%mesh%get_coordinates(1, 1, 1)
-      original_spacing = solver%mesh%geo%d
-      
-      if (snapshot_uses_stride) then
-        strided_spacing = original_spacing*real(self%output_stride, dp)
-        do i = 1, size(global_dims)
-          strided_dims(i) = (global_dims(i) + self%output_stride(i) - 1)/ &
-                            self%output_stride(i)
-        end do
-      else
-        strided_spacing = original_spacing
-        strided_dims = global_dims
-      end if
-      strided_shape_dims = int(strided_dims, i8)
+    global_dims = solver%mesh%get_global_dims(VERT)
+    origin = solver%mesh%get_coordinates(1, 1, 1)
+    original_spacing = solver%mesh%geo%d
+    
+    if (snapshot_uses_stride) then
+      strided_spacing = original_spacing*real(self%output_stride, dp)
+      do i = 1, size(global_dims)
+        strided_dims(i) = (global_dims(i) + self%output_stride(i) - 1)/ &
+                          self%output_stride(i)
+      end do
+    else
+      strided_spacing = original_spacing
+      strided_dims = global_dims
+    end if
+    strided_shape_dims = int(strided_dims, i8)
 
-      call self%generate_vtk_xml( &
-        strided_shape_dims, field_names, origin, strided_spacing &
-        )
+    call self%generate_vtk_xml( &
+      strided_shape_dims, field_names, origin, strided_spacing &
+      )
 
-      ! Only rank 0 checks file existence to avoid race conditions
-      if (myrank == 0) then
-        inquire(file=trim(filename), exist=file_exists)
-      end if
-      
-      ! Broadcast file existence status to all ranks
-      call MPI_Bcast(file_exists, 1, MPI_LOGICAL, 0, comm_to_use, ierr)
-      
-      if (file_exists) then
-        self%snapshot_file = self%snapshot_writer%open(filename, adios2_mode_append, &
-                                                      comm_to_use)
-        if (myrank == 0) print *, 'Appending to existing snapshot file: ', trim(filename)
-      else
-        self%snapshot_file = self%snapshot_writer%open(filename, adios2_mode_write, &
-                                                      comm_to_use)
-        if (myrank == 0) print *, 'Creating new snapshot file: ', trim(filename)
-      end if
+    self%snapshot_file = self%snapshot_writer%open(filename, adios2_mode_write, &
+                                                  comm_to_use)
+    if (myrank == 0) print *, 'Creating snapshot file: ', trim(filename)
 
-      ! always write VTK XML attributes for ParaView compatibility
-      ! These are global file attributes and need to be present
-      if (myrank == 0 .and. .not. file_exists) then
-        call self%snapshot_writer%write_attribute("vtk.xml", self%vtk_xml, self%snapshot_file)
-      end if
-
-      self%is_snapshot_file_open = .true.
+    ! Write VTK XML attributes for ParaView compatibility
+    if (myrank == 0) then
+      call self%snapshot_writer%write_attribute("vtk.xml", self%vtk_xml, self%snapshot_file)
     end if
 
     call self%snapshot_writer%begin_step(self%snapshot_file)
@@ -479,6 +458,8 @@ contains
       solver, self%snapshot_file, use_stride=snapshot_uses_stride, writer=self%snapshot_writer &
       )
     call self%snapshot_writer%end_step(self%snapshot_file)
+    
+    call self%snapshot_writer%close(self%snapshot_file)
 
     do i = 1, num_fields
       call solver%host_allocator%release_block(host_fields(i)%ptr)
@@ -1037,10 +1018,6 @@ contains
   subroutine finalise(self)
     class(checkpoint_manager_adios2_t), intent(inout) :: self
 
-    if (self%is_snapshot_file_open) then
-        call self%snapshot_writer%close(self%snapshot_file)
-        self%is_snapshot_file_open = .false.
-    end if
 
     call self%cleanup_strided_buffers()
     call self%adios2_writer%finalise()
