@@ -29,7 +29,7 @@ module m_ibm
     class(mesh_t), pointer :: mesh => null()
     type(allocator_t), pointer :: host_allocator => null()
     integer :: iibm = 0
-    type(field_t), pointer :: ep1 => null()
+    class(field_t), pointer :: ep1 => null()
   contains
     procedure :: body
   end type ibm_t
