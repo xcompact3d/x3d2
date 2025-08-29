@@ -11,7 +11,6 @@ module m_adios2_io
                     adios2_variable, adios2_attribute, &
                     adios2_mode_sync, adios2_mode_write, &
                     adios2_mode_deferred, adios2_mode_read, &
-                    adios2_mode_append, &
                     adios2_step_mode_append, adios2_step_mode_read, &
                     adios2_init, adios2_finalize, &
                     adios2_declare_io, adios2_set_engine, &
@@ -21,7 +20,6 @@ module m_adios2_io
                     adios2_define_attribute, &
                     adios2_set_selection, adios2_put, &
                     adios2_get, adios2_remove_all_variables, &
-                    adios2_remove_variable, &
                     adios2_found, adios2_constant_dims, &
                     adios2_type_dp, adios2_type_integer4
   use mpi, only: MPI_COMM_NULL, MPI_Initialized, MPI_Comm_rank
@@ -30,7 +28,7 @@ module m_adios2_io
 
   private
   public :: adios2_writer_t, adios2_reader_t, adios2_file_t, &
-            adios2_mode_write, adios2_mode_read, adios2_mode_append
+            adios2_mode_write, adios2_mode_read
 
   !> ADIOS2 base type
   !> Abstract base module for ADIOS2 operations
@@ -155,22 +153,18 @@ contains
   !> Opens an ADIOS2 engine
   !> filename: Unique engine identifier within io
   !> mode: Opening mode (write, append, read)
-  function open (self, filename, mode, comm, keep_vars) result(file)
+  function open (self, filename, mode, comm) result(file)
     class(base_adios2_t), intent(inout) :: self
     character(len=*), intent(in) :: filename   !! Unique engine identifier within io
     integer, intent(in) :: mode                !! Opening mode (write, append, read)
     integer, intent(in), optional :: comm      !! MPI communicator (optional)
-    logical, intent(in), optional :: keep_vars !! Whether to keep existing variables when opening in write mode
     integer :: ierr, use_comm
-    logical :: l_keep_vars
     type(adios2_file_t) :: file   !! ADIOS2 file object
 
-    l_keep_vars = .false.
-    if (present(keep_vars)) l_keep_vars = keep_vars
 
     ! if opening in write mode, we are starting a new independent dataset
     ! remove all old variables from the IO object
-    if (mode == adios2_mode_write .and. .not. l_keep_vars) then
+    if (mode == adios2_mode_write) then
       call adios2_remove_all_variables(self%io, ierr)
       call self%handle_error(ierr, "Failed to remove old ADIOS2 variables &
                              & before open")
@@ -588,7 +582,7 @@ contains
   subroutine read_array_2d_real(self, name, data, file, start_dims, count_dims)
     class(adios2_reader_t), intent(inout) :: self
     character(len=*), intent(in) :: name
-    real(dp), dimension(:, :), allocatable, intent(out) :: data
+    real(dp), dimension(:, :), allocatable, intent(inout) :: data
     type(adios2_file_t), intent(inout) :: file
     integer(i8), dimension(2), intent(in) :: start_dims, count_dims
 
@@ -624,6 +618,7 @@ contains
 
     call adios2_inquire_variable(var, self%io, name, ierr)
 
+    if (ierr == adios2_found) then
       if (.not. allocated(data)) &
         allocate (data(count_dims(1), count_dims(2), count_dims(3)))
 
@@ -634,6 +629,9 @@ contains
 
       call adios2_get(file%engine, var, data, adios2_mode_sync, ierr)
       call self%handle_error(ierr, "Failed to read variable "//trim(name))
+    else
+      call self%handle_error(1, "Variable "//trim(name)//" not found in file")
+    end if
   end subroutine read_array_3d_real
 
 end module m_adios2_io
