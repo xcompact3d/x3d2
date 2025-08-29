@@ -48,12 +48,12 @@ end module m_checkpoint_manager_base
 
 module m_checkpoint_manager_impl
 !! Implementation of checkpoint manager when ADIOS2 is enabled
-  use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Abort, MPI_LOGICAL, MPI_Bcast
-  use m_common, only: dp, i8, DIR_C, VERT, get_argument, is_single_prec
+  use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Abort
+  use m_common, only: dp, i8, DIR_C, VERT, get_argument
   use m_field, only: field_t
   use m_solver, only: solver_t
   use m_adios2_io, only: adios2_writer_t, adios2_reader_t, adios2_file_t, &
-                         adios2_mode_write, adios2_mode_read, adios2_mode_append
+                         adios2_mode_write, adios2_mode_read
   use m_config, only: checkpoint_config_t
   use m_checkpoint_manager_base, only: checkpoint_manager_base_t
 
@@ -69,18 +69,18 @@ module m_checkpoint_manager_impl
   end type field_buffer_map_t
 
   type, extends(checkpoint_manager_base_t) :: checkpoint_manager_adios2_t
-    type(adios2_writer_t) :: adios2_writer                     !! Writer for checkpoints
-    type(adios2_writer_t) :: snapshot_writer                   !! Dedicated writer for snapshots
+    type(adios2_writer_t) :: adios2_writer                          !! Writer for checkpoints
+    type(adios2_writer_t) :: snapshot_writer                        !! Writer for snapshots
     integer :: last_checkpoint_step = -1
-    integer, dimension(3) :: output_stride = [1, 1, 1]         !! Spatial stride for snapshot output (default: full resolution)
+    integer, dimension(3) :: output_stride = [1, 1, 1]              !! Stride factors for snapshots (default: full resolution)
     integer, dimension(3) :: checkpoint_stride_factors = [1, 1, 1]  !! Stride factors for checkpoints (no striding)
-    real(dp), dimension(:, :, :), allocatable :: strided_buffer  !! Fallback buffer for extra fields
-    type(field_buffer_map_t), allocatable :: field_buffers(:) !! Dynamic field buffer mapping for true async I/O
+    real(dp), dimension(:, :, :), allocatable :: strided_buffer     !! Fallback buffer for extra fields
+    type(field_buffer_map_t), allocatable :: field_buffers(:)       !! Dynamic field buffer mapping for true async I/O
     real(dp), dimension(:, :, :), allocatable :: coords_x, coords_y, coords_z
     integer(i8), dimension(3) :: last_shape_dims = 0
     integer, dimension(3) :: last_stride_factors = 0
     integer(i8), dimension(3) :: last_strided_shape = 0
-    character(len=4096) :: vtk_xml = ""                 !! VTK XML string for ParaView compatibility
+    character(len=4096) :: vtk_xml = ""                             !! VTK XML string for ParaView compatibility
     type(adios2_file_t) :: snapshot_file
   contains
     procedure :: init
@@ -285,35 +285,6 @@ contains
            host_fields(i)%ptr%data, field_ptrs(i)%ptr)
     end do
 
-    block
-      integer :: j
-      integer :: nx, ny, nz
-      real(dp) :: s, l2, mn, mx
-      character(len=32) :: nm
-      integer :: data_loc
-      integer :: dims(3)
-
-      data_loc = solver%u%data_loc
-      dims = solver%mesh%get_dims(data_loc)
-      nx = dims(1); ny = dims(2); nz = dims(3)
-
-      do j = 1, num_fields
-        nm = trim(field_names(j))
-
-        associate(buf => host_fields(j)%ptr%data(1:nx, 1:ny, 1:nz))
-          s  = sum(buf,                   mask = buf == buf)
-          l2 = sqrt( sum(buf*buf,         mask = buf == buf) )
-          mn = minval(buf,                mask = buf == buf)
-          mx = maxval(buf,                mask = buf == buf)
-        end associate
-
-        call self%adios2_writer%write_data('chk.sum.'//nm,  s,  file)
-        call self%adios2_writer%write_data('chk.l2.' //nm,  l2, file)
-        call self%adios2_writer%write_data('chk.min.'//nm,  mn, file)
-        call self%adios2_writer%write_data('chk.max.'//nm,  mx, file)
-      end do
-    end block
-
     call self%write_fields( &
       field_names, field_ptrs, host_fields, &
       solver, file, use_stride=.false., writer=self%adios2_writer &
@@ -385,7 +356,6 @@ contains
     if (present(comm)) comm_to_use = comm
     call MPI_Comm_rank(comm_to_use, myrank, ierr)
 
-    ! Create separate snapshot file for each timestep
     write (filename, '(A,A,I0.6,A)') trim(self%checkpoint_cfg%snapshot_prefix), '_', timestep, '.bp'
 
     global_dims = solver%mesh%get_global_dims(VERT)
@@ -760,7 +730,7 @@ contains
     call solver%v%set_data_loc(data_loc)
     call solver%w%set_data_loc(data_loc)
 
-    ! The ADIOS2 bug persists even with variable handle isolation
+   ! use a separate reader for each variable to avoid data corruption.
     block
       real(dp), allocatable, target :: field_data_u(:, :, :)
       real(dp), allocatable, target :: field_data_v(:, :, :)
@@ -790,55 +760,30 @@ contains
       call isolated_reader%close(isolated_file)
       call isolated_reader%finalise()
       
-      block
-        real(dp) :: expected_u_sum, expected_v_sum, expected_w_sum
-        real(dp) :: actual_u_sum, actual_v_sum, actual_w_sum
-        logical :: u_correct, v_correct, w_correct
-        
-        call reader%read_data('chk.sum.u', expected_u_sum, file)
-        call reader%read_data('chk.sum.v', expected_v_sum, file)  
-        call reader%read_data('chk.sum.w', expected_w_sum, file)
-        
-        actual_u_sum = sum(field_data_u)
-        actual_v_sum = sum(field_data_v)
-        actual_w_sum = sum(field_data_w)
-        
-        u_correct = abs(actual_u_sum - expected_u_sum) < 1.0e-6_dp
-        v_correct = abs(actual_v_sum - expected_v_sum) < 1.0e-6_dp  
-        w_correct = abs(actual_w_sum - expected_w_sum) < 1.0e-6_dp
-        
-        if (solver%mesh%par%is_root()) then
-          print *, 'ADIOS2-BUG-CHECK u: expected=', expected_u_sum, ' actual=', actual_u_sum, ' match=', u_correct
-          print *, 'ADIOS2-BUG-CHECK v: expected=', expected_v_sum, ' actual=', actual_v_sum, ' match=', v_correct
-          print *, 'ADIOS2-BUG-CHECK w: expected=', expected_w_sum, ' actual=', actual_w_sum, ' match=', w_correct
-        end if
-      end block
+      do i = 1, size(field_names)
+        select case (trim(field_names(i)))
+        case ("u")
+          current_field_data => field_data_u
+        case ("v")
+          current_field_data => field_data_v
+        case ("w")
+          current_field_data => field_data_w
+        end select
 
-    do i = 1, size(field_names)
-      select case (trim(field_names(i)))
-      case ("u")
-        current_field_data => field_data_u
-      case ("v")
-        current_field_data => field_data_v
-      case ("w")
-        current_field_data => field_data_w
-      end select
-
-      select case (trim(field_names(i)))
-      case ("u")
-        call solver%backend%set_field_data(solver%u, current_field_data)
-      case ("v")
-        call solver%backend%set_field_data(solver%v, current_field_data)
-      case ("w")
-        call solver%backend%set_field_data(solver%w, current_field_data)
-      case default
-        call self%adios2_writer%handle_error( &
-          1, "Invalid field name"//trim(field_names(i)))
-      end select
-
-    end do
+        select case (trim(field_names(i)))
+        case ("u")
+          call solver%backend%set_field_data(solver%u, current_field_data)
+        case ("v")
+          call solver%backend%set_field_data(solver%v, current_field_data)
+        case ("w")
+          call solver%backend%set_field_data(solver%w, current_field_data)
+        case default
+          call self%adios2_writer%handle_error( &
+            1, "Invalid field name"//trim(field_names(i)))
+        end select
+      end do
     
-    deallocate(field_data_u, field_data_v, field_data_w)
+      deallocate(field_data_u, field_data_v, field_data_w)
     end block
 
     call reader%close(file)
