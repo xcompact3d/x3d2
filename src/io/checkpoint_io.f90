@@ -262,7 +262,7 @@ contains
     allocate (field_ptrs(num_fields))
     allocate (host_fields(num_fields))
     do i = 1, num_fields
-    select case (trim(field_names(i)))
+      select case (trim(field_names(i)))
       case ("u")
         field_ptrs(i)%ptr => solver%u
       case ("v")
@@ -271,18 +271,18 @@ contains
         field_ptrs(i)%ptr => solver%w
       case default
         if (solver%mesh%par%is_root()) then
-            print *, 'ERROR: Unknown field name in checkpoint list: ', &
-                     trim(field_names(i))
+          print *, 'ERROR: Unknown field name in checkpoint list: ', &
+            trim(field_names(i))
         end if
         error stop 1
-    end select
+      end select
     end do
 
     do i = 1, num_fields
       host_fields(i)%ptr => solver%host_allocator%get_block( &
-                              DIR_C, field_ptrs(i)%ptr%data_loc)
+                            DIR_C, field_ptrs(i)%ptr%data_loc)
       call solver%backend%get_field_data( &
-           host_fields(i)%ptr%data, field_ptrs(i)%ptr)
+        host_fields(i)%ptr%data, field_ptrs(i)%ptr)
     end do
 
     call self%write_fields( &
@@ -297,7 +297,7 @@ contains
       call solver%host_allocator%release_block(host_fields(i)%ptr)
     end do
 
-    deallocate(host_fields)
+    deallocate (host_fields)
 
     if (myrank == 0) then
       ! Move temporary file to final checkpoint filename
@@ -356,12 +356,13 @@ contains
     if (present(comm)) comm_to_use = comm
     call MPI_Comm_rank(comm_to_use, myrank, ierr)
 
-    write (filename, '(A,A,I0.6,A)') trim(self%checkpoint_cfg%snapshot_prefix), '_', timestep, '.bp'
+    write (filename, '(A,A,I0.6,A)') &
+      trim(self%checkpoint_cfg%snapshot_prefix), '_', timestep, '.bp'
 
     global_dims = solver%mesh%get_global_dims(VERT)
     origin = solver%mesh%get_coordinates(1, 1, 1)
     original_spacing = solver%mesh%geo%d
-    
+
     if (snapshot_uses_stride) then
       strided_spacing = original_spacing*real(self%output_stride, dp)
       do i = 1, size(global_dims)
@@ -378,21 +379,26 @@ contains
       strided_shape_dims, field_names, origin, strided_spacing &
       )
 
-    self%snapshot_file = self%snapshot_writer%open(filename, adios2_mode_write, &
-                                                  comm_to_use)
+    self%snapshot_file = self%snapshot_writer%open( &
+                         filename, adios2_mode_write, comm_to_use)
     if (myrank == 0) print *, 'Creating snapshot file: ', trim(filename)
 
     ! Write VTK XML attributes for ParaView compatibility
     if (myrank == 0) then
-      call self%snapshot_writer%write_attribute("vtk.xml", self%vtk_xml, self%snapshot_file)
+      call self%snapshot_writer%write_attribute( &
+        "vtk.xml", self%vtk_xml, self%snapshot_file)
     end if
 
     call self%snapshot_writer%begin_step(self%snapshot_file)
 
     simulation_time = timestep*solver%dt
-    if (myrank == 0) print *, 'Writing snapshot for time =', simulation_time, ' iteration =', timestep
+    if (myrank == 0) then
+      print *, 'Writing snapshot for time =', simulation_time, &
+        ' iteration =', timestep
+    end if
 
-    call self%snapshot_writer%write_data("time", real(simulation_time, dp), self%snapshot_file)
+    call self%snapshot_writer%write_data( &
+      "time", real(simulation_time, dp), self%snapshot_file)
 
     allocate (field_ptrs(num_fields))
     allocate (host_fields(num_fields))
@@ -400,18 +406,18 @@ contains
     ! point field_ptrs to actual solver data
     do i = 1, num_fields
       select case (trim(field_names(i)))
-        case ("u")
-          field_ptrs(i)%ptr => solver%u
-        case ("v")
-          field_ptrs(i)%ptr => solver%v
-        case ("w")
-          field_ptrs(i)%ptr => solver%w
-        case default
-          if (solver%mesh%par%is_root()) then
-              print *, 'ERROR: Unknown field name in snapshot list: ', &
-                       trim(field_names(i))
-          end if
-          error stop 1
+      case ("u")
+        field_ptrs(i)%ptr => solver%u
+      case ("v")
+        field_ptrs(i)%ptr => solver%v
+      case ("w")
+        field_ptrs(i)%ptr => solver%w
+      case default
+        if (solver%mesh%par%is_root()) then
+          print *, 'ERROR: Unknown field name in snapshot list: ', &
+            trim(field_names(i))
+        end if
+        error stop 1
       end select
     end do
 
@@ -420,15 +426,16 @@ contains
       host_fields(i)%ptr => solver%host_allocator%get_block( &
                             DIR_C, field_ptrs(i)%ptr%data_loc)
       call solver%backend%get_field_data( &
-           host_fields(i)%ptr%data, field_ptrs(i)%ptr)
+        host_fields(i)%ptr%data, field_ptrs(i)%ptr)
     end do
-      
+
     call self%write_fields( &
       field_names, field_ptrs, host_fields, &
-      solver, self%snapshot_file, use_stride=snapshot_uses_stride, writer=self%snapshot_writer &
+      solver, self%snapshot_file, use_stride=snapshot_uses_stride, &
+      writer=self%snapshot_writer &
       )
+
     call self%snapshot_writer%end_step(self%snapshot_file)
-    
     call self%snapshot_writer%close(self%snapshot_file)
 
     do i = 1, num_fields
@@ -436,7 +443,7 @@ contains
     end do
 
     deallocate (field_ptrs)
-    deallocate(host_fields)
+    deallocate (host_fields)
   end subroutine write_snapshot
 
   subroutine generate_vtk_xml(self, dims, fields, origin, spacing)
@@ -699,7 +706,6 @@ contains
     type(adios2_file_t) :: file
     integer :: i, ierr
     integer :: dims(3)
-    class(field_t), pointer :: host_field
     integer(i8), dimension(3) :: start_dims, count_dims
     character(len=*), parameter :: field_names(3) = ["u", "v", "w"]
     logical :: file_exists
@@ -730,7 +736,7 @@ contains
     call solver%v%set_data_loc(data_loc)
     call solver%w%set_data_loc(data_loc)
 
-   ! use a separate reader for each variable to avoid data corruption.
+    ! use a separate reader for each variable to avoid data corruption.
     block
       real(dp), allocatable, target :: field_data_u(:, :, :)
       real(dp), allocatable, target :: field_data_v(:, :, :)
@@ -738,28 +744,31 @@ contains
       real(dp), pointer :: current_field_data(:, :, :)
       type(adios2_reader_t) :: isolated_reader
       type(adios2_file_t) :: isolated_file
-      
+
       call isolated_reader%init(comm, "u_reader")
       isolated_file = isolated_reader%open(filename, adios2_mode_read, comm)
       call isolated_reader%begin_step(isolated_file)
-      call isolated_reader%read_data("u", field_data_u, isolated_file, start_dims, count_dims)
+      call isolated_reader%read_data( &
+        "u", field_data_u, isolated_file, start_dims, count_dims)
       call isolated_reader%close(isolated_file)
       call isolated_reader%finalise()
-      
+
       call isolated_reader%init(comm, "v_reader")
       isolated_file = isolated_reader%open(filename, adios2_mode_read, comm)
       call isolated_reader%begin_step(isolated_file)
-      call isolated_reader%read_data("v", field_data_v, isolated_file, start_dims, count_dims)
+      call isolated_reader%read_data( &
+        "v", field_data_v, isolated_file, start_dims, count_dims)
       call isolated_reader%close(isolated_file)
       call isolated_reader%finalise()
-      
+
       call isolated_reader%init(comm, "w_reader")
       isolated_file = isolated_reader%open(filename, adios2_mode_read, comm)
       call isolated_reader%begin_step(isolated_file)
-      call isolated_reader%read_data("w", field_data_w, isolated_file, start_dims, count_dims)
+      call isolated_reader%read_data( &
+        "w", field_data_w, isolated_file, start_dims, count_dims)
       call isolated_reader%close(isolated_file)
       call isolated_reader%finalise()
-      
+
       do i = 1, size(field_names)
         select case (trim(field_names(i)))
         case ("u")
@@ -782,8 +791,7 @@ contains
             1, "Invalid field name"//trim(field_names(i)))
         end select
       end do
-    
-      deallocate(field_data_u, field_data_v, field_data_w)
+      deallocate (field_data_u, field_data_v, field_data_w)
     end block
 
     call reader%close(file)
@@ -791,9 +799,9 @@ contains
   end subroutine restart_checkpoint
 
   subroutine write_fields( &
-             self, field_names, fields, host_fields, solver, file, &
-             use_stride, writer &
-             )
+    self, field_names, fields, host_fields, solver, file, &
+    use_stride, writer &
+    )
     !! Write field data, optionally with striding, using separate buffers for true async I/O
     class(checkpoint_manager_adios2_t), intent(inout) :: self
     character(len=*), dimension(:), intent(in) :: field_names
@@ -814,14 +822,15 @@ contains
       if (apply_stride) then
         call prepare_field_buffers(solver, self%output_stride, field_names)
       else
-        call prepare_field_buffers(solver, self%checkpoint_stride_factors, field_names)
+        call prepare_field_buffers( &
+          solver, self%checkpoint_stride_factors, field_names)
       end if
     end if
 
     do i_field = 1, size(field_names)
-      call write_single_field(trim(field_names(i_field)), &
-                              host_fields(i_field)%ptr, &
-                              fields(i_field)%ptr%data_loc)
+      call write_single_field( &
+        trim(field_names(i_field)), host_fields(i_field)%ptr, &
+        fields(i_field)%ptr%data_loc)
     end do
 
   contains
@@ -830,28 +839,31 @@ contains
       class(solver_t), intent(in) :: solver
       integer, dimension(3), intent(in) :: stride_factors
       character(len=*), dimension(:), intent(in) :: field_names
-      
       integer :: dims(3), strided_dims_local(3), i
       integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
       integer(i8), dimension(3) :: strided_shape, strided_start, strided_count
-      
+
       dims = solver%mesh%get_dims(fields(1)%ptr%data_loc)
       shape_dims = int(solver%mesh%get_global_dims(fields(1)%ptr%data_loc), i8)
       start_dims = int(solver%mesh%par%n_offset, i8)
       count_dims = int(dims, i8)
-      
+
       call self%get_strided_dimensions( &
         shape_dims, start_dims, count_dims, stride_factors, &
         strided_shape, strided_start, strided_count, &
         strided_dims_local &
         )
-      
-      if (allocated(self%field_buffers)) deallocate(self%field_buffers)
-      allocate(self%field_buffers(size(field_names)))
-      
+
+      if (allocated(self%field_buffers)) deallocate (self%field_buffers)
+      allocate (self%field_buffers(size(field_names)))
+
       do i = 1, size(field_names)
         self%field_buffers(i)%field_name = trim(field_names(i))
-        allocate(self%field_buffers(i)%buffer(strided_dims_local(1), strided_dims_local(2), strided_dims_local(3)))
+        allocate ( &
+          self%field_buffers(i)%buffer( &
+          strided_dims_local(1), &
+          strided_dims_local(2), &
+          strided_dims_local(3)))
       end do
     end subroutine prepare_field_buffers
 
@@ -889,14 +901,15 @@ contains
       ! find the matching buffer for this field
       buffer_found = .false.
       do buffer_idx = 1, size(self%field_buffers)
-        if (trim(self%field_buffers(buffer_idx)%field_name) == trim(field_name)) then
+        if (trim(self%field_buffers(buffer_idx)%field_name) &
+            == trim(field_name)) then
           buffer_found = .true.
           exit
         end if
       end do
 
       ! copy field data to temporary buffer
-      allocate(temp_data(dims(1), dims(2), dims(3)))
+      allocate (temp_data(dims(1), dims(2), dims(3)))
       temp_data = host_field%data(1:dims(1), 1:dims(2), 1:dims(3))
 
       if (buffer_found) then
@@ -904,7 +917,7 @@ contains
         call self%stride_data_to_buffer( &
           temp_data, dims, stride_factors, &
           self%field_buffers(buffer_idx)%buffer, strided_dims_local)
-        
+
         if (apply_stride) then
           call writer%write_data( &
             field_name, self%field_buffers(buffer_idx)%buffer, &
@@ -919,12 +932,15 @@ contains
       else
         ! fallback to shared buffer for fields not in the map
         if (.not. allocated(self%strided_buffer)) then
-          allocate(self%strided_buffer(strided_dims_local(1), strided_dims_local(2), strided_dims_local(3)))
+          allocate ( &
+            self%strided_buffer(strided_dims_local(1), &
+                                strided_dims_local(2), &
+                                strided_dims_local(3)))
         end if
         call self%stride_data_to_buffer( &
           temp_data, dims, stride_factors, &
           self%strided_buffer, strided_dims_local)
-        
+
         if (apply_stride) then
           call writer%write_data( &
             field_name, self%strided_buffer, &
@@ -938,7 +954,7 @@ contains
         end if
       end if
 
-      deallocate(temp_data)
+      deallocate (temp_data)
     end subroutine write_single_field
 
   end subroutine write_fields
@@ -949,20 +965,19 @@ contains
     integer :: i
 
     if (allocated(self%strided_buffer)) deallocate (self%strided_buffer)
-    
+
     if (allocated(self%field_buffers)) then
       do i = 1, size(self%field_buffers)
         if (allocated(self%field_buffers(i)%buffer)) then
-          deallocate(self%field_buffers(i)%buffer)
+          deallocate (self%field_buffers(i)%buffer)
         end if
       end do
-      deallocate(self%field_buffers)
+      deallocate (self%field_buffers)
     end if
   end subroutine cleanup_strided_buffers
 
   subroutine finalise(self)
     class(checkpoint_manager_adios2_t), intent(inout) :: self
-
 
     call self%cleanup_strided_buffers()
     call self%adios2_writer%finalise()
