@@ -35,7 +35,7 @@ contains
 
   function field_init(ngrid, next, id) result(f)
     integer, intent(in) :: ngrid, id
-    class(field_t), pointer, intent(in) :: next
+    type(field_t), pointer, intent(in) :: next
     type(field_t) :: f
 
     allocate (f%p_data(ngrid))
