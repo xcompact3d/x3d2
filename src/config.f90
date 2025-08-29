@@ -20,7 +20,7 @@ module m_config
     integer :: dims_global(3), nproc_dir(3)
     character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
     character(len=20) :: stretching(3)
-    real(dp), dimension(3) :: beta = [1._dp, 1._dp, 1._dp]
+    real(dp) :: beta(3)
   contains
     procedure :: read => read_domain_nml
   end type domain_config_t
