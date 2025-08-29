@@ -161,7 +161,6 @@ contains
     integer :: ierr, use_comm
     type(adios2_file_t) :: file   !! ADIOS2 file object
 
-
     ! if opening in write mode, we are starting a new independent dataset
     ! remove all old variables from the IO object
     if (mode == adios2_mode_write) then
