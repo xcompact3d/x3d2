@@ -367,7 +367,7 @@ contains
       output_spacing = original_spacing*real(self%output_stride, dp)
       do i = 1, size(global_dims)
         output_dims(i) = (global_dims(i) + self%output_stride(i) - 1)/ &
-                          self%output_stride(i)
+                         self%output_stride(i)
       end do
     else
       output_spacing = original_spacing
@@ -431,7 +431,8 @@ contains
 
     call self%write_fields( &
       field_names, host_fields, &
-      solver, self%snapshot_file, solver%u%data_loc, use_stride=snapshot_uses_stride, &
+      solver, self%snapshot_file, solver%u%data_loc, &
+      use_stride=snapshot_uses_stride, &
       writer=self%snapshot_writer &
       )
 
@@ -592,7 +593,7 @@ contains
     allocate (output_data(i_max, j_max, k_max))
 
     output_data = input_data(1:dims(1):i_stride, &
-                              1:dims(2):j_stride, 1:dims(3):k_stride)
+                             1:dims(2):j_stride, 1:dims(3):k_stride)
   end function stride_data
 
   subroutine stride_data_to_buffer( &
@@ -828,9 +829,11 @@ contains
 
     ! pre-allocate separate buffers for each field to enable race-free async I/O
     if (apply_stride) then
-      call prepare_field_buffers(solver, self%output_stride, field_names, data_loc)
+      call prepare_field_buffers(solver, self%output_stride, field_names, &
+                                 data_loc)
     else
-      call prepare_field_buffers(solver, self%full_resolution, field_names, data_loc)
+      call prepare_field_buffers(solver, self%full_resolution, field_names, &
+                                 data_loc)
     end if
 
     do i_field = 1, size(field_names)
@@ -841,7 +844,9 @@ contains
 
   contains
 
-    subroutine prepare_field_buffers(solver, stride_factors, field_names, data_loc)
+    subroutine prepare_field_buffers( &
+      solver, stride_factors, field_names, data_loc &
+      )
       class(solver_t), intent(in) :: solver
       integer, dimension(3), intent(in) :: stride_factors
       character(len=*), dimension(:), intent(in) :: field_names
@@ -917,8 +922,10 @@ contains
       if (buffer_found) then
         ! use the dedicated buffer for this field for true async I/O
         call self%stride_data_to_buffer( &
-          host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), dims, stride_factors, &
-          self%field_buffers(buffer_idx)%buffer, output_dims_local)
+          host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), dims, &
+          stride_factors, self%field_buffers(buffer_idx)%buffer, &
+          output_dims_local &
+          )
 
         call writer%write_data( &
           field_name, self%field_buffers(buffer_idx)%buffer, &
@@ -929,12 +936,12 @@ contains
         if (.not. allocated(self%output_buffer)) then
           allocate ( &
             self%output_buffer(output_dims_local(1), &
-                                output_dims_local(2), &
-                                output_dims_local(3)))
+                               output_dims_local(2), &
+                               output_dims_local(3)))
         end if
         call self%stride_data_to_buffer( &
-          host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), dims, stride_factors, &
-          self%output_buffer, output_dims_local)
+          host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), dims, &
+          stride_factors, self%output_buffer, output_dims_local)
 
         call writer%write_data( &
           field_name, self%output_buffer, &
