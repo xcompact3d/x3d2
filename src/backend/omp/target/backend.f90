@@ -90,14 +90,13 @@ contains
   subroutine vecadd_offload_(dims, a, x, b, y)
     integer, dimension(3), intent(in) :: dims
     real(dp), intent(in) :: a
-    real(dp), dimension(:, :, :), pointer, intent(in) :: x
+    real(dp), dimension(:, :, :), intent(in) :: x
     real(dp), intent(in) :: b
-    real(dp), dimension(:, :, :), pointer, intent(inout) :: y
+    real(dp), dimension(:, :, :), intent(inout) :: y
 
     integer :: i, j, k
 
-    !$omp target data use_device_addr(x, y)
-    !$omp target teams distribute parallel do collapse(3)
+    !$omp target teams distribute parallel do collapse(3) has_device_addr(x, y)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -106,22 +105,24 @@ contains
       end do
     end do
     !$omp end target teams distribute parallel do
-    !$omp end target data
   end subroutine
 
   subroutine copy_data_to_f_omptgt(self, f, data)
     class(omptgt_backend_t), intent(inout) :: self
-    class(omptgt_field_t), intent(inout) :: f
+    class(field_t), intent(inout) :: f
     real(dp), dimension(:, :, :), intent(in) :: data
 
     integer, dimension(3) :: dims
 
     dims = self%allocator%get_padded_dims(f%dir)
-    print *, "-->", dims
 
-    call copy_data_to_f_omptgt_(f%data_tgt, data, dims)
-
-    print *, "COPITED!"
+    ! XXX: This could be improved following cuda/backend.f90:resolve_field_t()
+    select type(f)
+    type is(omptgt_field_t)
+      call copy_data_to_f_omptgt_(f%data_tgt, data, dims)
+    class default
+      error stop "Unsupported"
+    end select
 
   end subroutine copy_data_to_f_omptgt
 
@@ -132,38 +133,34 @@ contains
 
     integer :: i, j, k
 
-    print *, "+++++"
-    print *, dims
-    print *, shape(f_arr)
-    print *, shape(d)
-
-    !$omp target data use_device_addr(f_arr)
-    !$omp target teams loop collapse(3) map(to:d)
+    ! XXX: This could be improved following cuda/backend.f90:resolve_field_t()
+    !$omp target teams loop collapse(3) map(to:d) has_device_addr(f_arr)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          f_arr(i, j, k) = f_arr(i, j, k) + d(i, j, k)
+          f_arr(i, j, k) = d(i, j, k)
         end do
       end do
     end do
     !$omp end target teams loop
-    !$omp end target data
 
   end subroutine
     
   subroutine copy_f_to_data_omptgt(self, data, f)
     class(omptgt_backend_t), intent(inout) :: self
     real(dp), dimension(:, :, :), intent(out) :: data
-    class(omptgt_field_t), intent(in) :: f
+    class(field_t), intent(in) :: f
 
     integer, dimension(3) :: dims
 
     dims = self%allocator%get_padded_dims(f%dir)
-    print *, "<--", dims
 
-    print *, minval(data), maxval(data)
-    call copy_f_to_data_omptgt_(data, f%data_tgt, dims)
-    print *, minval(data), maxval(data)
+    select type(f)
+    type is(omptgt_field_t)
+      call copy_f_to_data_omptgt_(data, f%data_tgt, dims)
+    class default
+      error stop "Unsupported"
+    end select
     
   end subroutine copy_f_to_data_omptgt
 
@@ -174,8 +171,7 @@ contains
 
     integer :: i, j, k
 
-    !$omp target data use_device_addr(f_arr)
-    !$omp target teams distribute parallel do collapse(3) map(from:data)
+    !$omp target teams distribute parallel do collapse(3) map(from:data) has_device_addr(f_arr)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -184,13 +180,12 @@ contains
       end do
     end do
     !$omp end target teams distribute parallel do
-    !$omp end target data
 
   end subroutine
 
   subroutine reorder_omptgt(self, u_, u, direction)
     class(omptgt_backend_t) :: self
-    class(omptgt_field_t), intent(inout) :: u_
+    class(field_t), intent(inout) :: u_
     class(field_t), intent(in) :: u
     integer, intent(in) :: direction
     integer, dimension(3) :: dims, cart_padded
@@ -200,11 +195,17 @@ contains
     cart_padded = self%allocator%get_padded_dims(DIR_C)
     call get_dirs_from_rdr(dir_from, dir_to, direction)
 
-    select type(u)
+    ! XXX: This could be improved following cuda/backend.f90:resolve_field_t()
+    select type(u_)
     type is(omptgt_field_t)
-      call reorder_omptgt_dd(u_%data_tgt, u%data_tgt, dims, dir_from, dir_to, cart_padded)
+      select type(u)
+      type is(omptgt_field_t)
+        call reorder_omptgt_dd(u_%data_tgt, u%data_tgt, dims, dir_from, dir_to, cart_padded)
+      class default
+        call reorder_omptgt_dh(u_%data_tgt, u%data, dims, dir_from, dir_to, cart_padded)
+      end select
     class default
-      call reorder_omptgt_dh(u_%data_tgt, u%data, dims, dir_from, dir_to, cart_padded)
+      error stop "Unsupported"
     end select
 
     ! reorder keeps the data_loc the same
@@ -222,8 +223,7 @@ contains
     integer :: i, j, k
     integer :: out_i, out_j, out_k
 
-    !$omp target data use_device_addr(u_, u)
-    !$omp target teams distribute parallel do private(out_i, out_j, out_k) collapse(3)
+    !$omp target teams distribute parallel do private(out_i, out_j, out_k) collapse(3) has_device_addr(u_, u)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -234,7 +234,6 @@ contains
       end do
     end do
     !$omp end target teams distribute parallel do
-    !$omp end target data
 
   end subroutine
 
@@ -248,8 +247,7 @@ contains
     integer :: i, j, k
     integer :: out_i, out_j, out_k
 
-    !$omp target data use_device_addr(u_)
-    !$omp target teams distribute parallel do private(out_i, out_j, out_k) collapse(3) map(to:u)
+    !$omp target teams distribute parallel do private(out_i, out_j, out_k) collapse(3) map(to:u) has_device_addr(u_)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -260,7 +258,6 @@ contains
       end do
     end do
     !$omp end target teams distribute parallel do
-    !$omp end target data
 
   end subroutine
 

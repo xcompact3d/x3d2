@@ -5,7 +5,7 @@
 module m_omptgt_allocator
 
   use iso_c_binding, only: c_ptr, c_f_pointer, c_sizeof
-  use omp_lib, only: omp_target_alloc, omp_get_default_device
+  use omp_lib, only: omp_target_alloc, omp_target_free, omp_get_default_device
 
   use m_common, only: dp
 
@@ -75,36 +75,22 @@ contains
     class(field_t), pointer, intent(in) :: next
     integer, intent(in) :: id
 
-    !call omptgt_field_device_alloc(f%p_data_tgt, ngrid)
     f%refcount = 0
     f%next => next
     f%id = id
-    !!! allocate(f%p_data_tgt(ngrid))
-    !!! !$omp target enter data map(alloc:f%p_data_tgt)
 
     f%dev_id = omp_get_default_device()
     f%dev_ptr = omp_target_alloc(ngrid * c_sizeof(0.0_dp), f%dev_id)
     call c_f_pointer(f%dev_ptr, f%p_data_tgt, shape=[ngrid])
-    !$omp target enter data map(to:f%p_data_tgt)
     
   end function omptgt_field_init
 
   subroutine omptgt_field_destroy(self)
     class(omptgt_field_t) :: self
 
-    !$omp target exit data map(release:self%data_tgt)
     nullify(self%data_tgt)
-    !$omp target exit data map(release:self%p_data_tgt)
     nullify(self%p_data_tgt)
     call omp_target_free(self%dev_ptr, self%dev_id)
-  end subroutine
-
-  subroutine omptgt_field_device_alloc(pdata, ngrid)
-    real(dp), dimension(:), pointer :: pdata
-    integer, intent(in) :: ngrid
-
-    allocate(pdata(ngrid))
-    !$omp target enter data map(alloc:pdata)
   end subroutine
 
   ! Deallocates device-resident memory before deallocating the base type
@@ -116,13 +102,11 @@ contains
     ptr => self%first
     do
       if (.not. associated(ptr)) then
-        cycle
+        exit
       end if
 
       select type(ptr)
       type is(omptgt_field_t)
-        !!! !$omp target exit data map(delete:ptr%p_data_tgt)
-        !!! !$omp target exit data map(delete:ptr%data_tgt)
         call ptr%destroy()
       end select
 
@@ -147,13 +131,11 @@ contains
 
     integer :: i
     
-    !$omp target data use_device_addr(p_data_tgt)
-    !$omp target teams distribute parallel do
+    !$omp target teams distribute parallel do has_device_addr(p_data_tgt)
     do i = 1, n
       p_data_tgt(i) = c
     end do
     !$omp end target teams distribute parallel do
-    !$omp end target data
 
   end subroutine
 
@@ -168,10 +150,7 @@ contains
     class(omptgt_field_t) :: self
     integer, intent(in) :: dims(3)
 
-    !!! self%data_tgt(1:dims(1), 1:dims(2), 1:dims(3)) => self%p_data_tgt(:)
-    !!! !$omp target enter data map(to:self%data_tgt)
     call c_f_pointer(self%dev_ptr, self%data_tgt, shape=dims)
-    !$omp target enter data map(to:self%data_tgt)
 
   end subroutine
 
