@@ -25,7 +25,7 @@ set(SRC
   case/channel.f90
   case/generic.f90
   case/tgv.f90
-  module/ibm.f90
+  #module/ibm.f90
 )
 set(CUDASRC
   backend/cuda/allocator.f90
@@ -129,6 +129,10 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
   set(CMAKE_Fortran_FLAGS "-cpp -std=f2018")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math")
+  if (OMP_TGT)
+    # A bit of a hack - hardcoded for MI300A
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp --offload-arch=gfx942")
+  endif()
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
   set(CMAKE_Fortran_FLAGS "-eF -M878") # -M878 suppresses WARNING multiple module includes (not useful)
   set(CMAKE_Fortran_FLAGS_DEBUG "-G2 -O0")
