@@ -49,7 +49,7 @@ end module m_checkpoint_manager_base
 module m_checkpoint_manager_impl
 !! Implementation of checkpoint manager when ADIOS2 is enabled
   use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Abort
-  use m_common, only: dp, i8, DIR_C, VERT, get_argument
+  use m_common, only: dp, i8, DIR_C, VERT, get_argument, is_single_prec
   use m_field, only: field_t
   use m_solver, only: solver_t
   use m_adios2_io, only: adios2_writer_t, adios2_reader_t, adios2_file_t, &
@@ -76,6 +76,7 @@ module m_checkpoint_manager_impl
     integer, dimension(3) :: full_resolution = [1, 1, 1]           !! Full resolution factors for checkpoints (no downsampling)
     real(dp), dimension(:, :, :), allocatable :: output_buffer     !! Fallback buffer for extra fields
     type(field_buffer_map_t), allocatable :: field_buffers(:)       !! Dynamic field buffer mapping for true async I/O
+    logical :: convert_to_sp = .false.                  !! Flag for single precision snapshots
     real(dp), dimension(:, :, :), allocatable :: coords_x, coords_y, coords_z
     integer(i8), dimension(3) :: last_shape_dims = 0
     integer, dimension(3) :: last_stride_factors = 0
@@ -124,6 +125,7 @@ contains
       self%checkpoint_cfg%checkpoint_prefix, &
       self%checkpoint_cfg%snapshot_prefix, &
       self%checkpoint_cfg%output_stride, &
+      self%checkpoint_cfg%snapshot_single_precision, &
       comm &
       )
   end subroutine init
@@ -171,12 +173,12 @@ contains
 
   subroutine configure( &
     self, checkpoint_freq, snapshot_freq, keep_checkpoint, &
-    checkpoint_prefix, snapshot_prefix, output_stride, comm &
+    checkpoint_prefix, snapshot_prefix, output_stride, convert_to_sp, comm &
     )
     !! Configure checkpoint and snapshot settings
     class(checkpoint_manager_adios2_t), intent(inout) :: self
     integer, intent(in), optional :: checkpoint_freq, snapshot_freq
-    logical, intent(in), optional :: keep_checkpoint
+    logical, intent(in), optional :: keep_checkpoint, convert_to_sp
     character(len=*), intent(in), optional :: checkpoint_prefix, &
                                               snapshot_prefix
     integer, dimension(3), intent(in), optional :: output_stride
@@ -200,6 +202,8 @@ contains
       self%checkpoint_cfg%snapshot_prefix = snapshot_prefix
     if (present(output_stride)) &
       self%output_stride = self%checkpoint_cfg%output_stride
+    if (present(convert_to_sp)) &
+      self%convert_to_sp = self%checkpoint_cfg%snapshot_single_precision
 
     if (myrank == 0) then
       if (self%checkpoint_cfg%checkpoint_freq > 0) then
@@ -213,6 +217,13 @@ contains
         print *, 'Snapshot frequency: ', self%checkpoint_cfg%snapshot_freq
         print *, 'Snapshot prefix: ', trim(self%checkpoint_cfg%snapshot_prefix)
         print *, 'Output stride: ', self%output_stride
+        print *, 'Snapshot precision: ', merge( &
+          'Single', 'Double', &
+          self%checkpoint_cfg%snapshot_single_precision)
+        if (is_single_prec) then
+          print *, 'NOTE: Code compiled with single precision. &
+                   &Snapshots will be in single precision.'
+        end if
       end if
     end if
   end subroutine configure
@@ -929,7 +940,8 @@ contains
 
         call writer%write_data( &
           field_name, self%field_buffers(buffer_idx)%buffer, &
-          file, output_shape, output_start, output_count &
+          file, output_shape, output_start, output_count, &
+          self%convert_to_sp &
           )
       else
         ! fallback to shared buffer for fields not in the map
