@@ -27,7 +27,12 @@ function(define_test testfile np backend)
     target_link_libraries(${test_name} PRIVATE OpenMP::OpenMP_Fortran)
 
     if(${backend} STREQUAL omp_tgt)
+      # Note this is somewhat of a hack - hardcoded to build against MI300A
+      target_compile_options(${test_name} PRIVATE "-fopenmp")
+      target_compile_options(${test_name} PRIVATE "--offload-arch=gfx942")
       target_compile_options(${test_name} PRIVATE "-DOMP_TGT")
+      target_link_options(${test_name} PRIVATE "-fopenmp")
+      target_link_options(${test_name} PRIVATE "--offload-arch=gfx942")
     endif()
   endif()
   target_link_libraries(${test_name} PRIVATE x3d2_backends)
