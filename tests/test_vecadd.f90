@@ -158,7 +158,7 @@ contains
     call backend%vecadd(1.0_dp, a, 1.0_dp, r)
 
     call backend%get_field_data(r_host%data, r, dirs(d))
-    if (any(r_host%data /= 2*a_host%data)) then
+    if (any(r_host%data /= 2.0_dp*a_host%data)) then
       print *, dirnames(d), ": a + a = 2a failed"
       test_pass = .false.
     end if

@@ -23,11 +23,15 @@ program test_omp_adamsbashforth
 
   logical :: allpass = .true.
   integer :: i, j, k, stage, istartup, nrank, nproc, ierr
-  integer :: nstep0 = 64, nstep, nrun = 4, nmethod = 8
+  integer :: nstep0 = 64, nstep, nrun = 3, nmethod = 8
   character(len=3) :: method(8)
   real(dp), allocatable, dimension(:) :: err
   real(dp), allocatable, dimension(:) :: norm
+#ifdef SINGLE_PREC
+  real(dp) :: dt0 = 0.25_dp, dt, order
+#else
   real(dp) :: dt0 = 0.01_dp, dt, order
+#endif
   real(dp) :: u0
   type(flist_t), allocatable :: sol(:)
   type(flist_t), allocatable :: deriv(:)
