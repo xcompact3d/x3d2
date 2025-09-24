@@ -1,7 +1,7 @@
 program test_thom
 
   use omp_lib
-  use m_common, only: dp, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
+  use m_common, only: dp, nbytes, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
   use m_omp_common, only: SZ
   use m_tdsops, only: tdsops_t, tdsops_init
   use m_exec_thom, only: exec_thom_tds_compact
@@ -106,14 +106,9 @@ contains
     integer, intent(in) :: ndof
     real(dp), intent(in) :: consumed_bw
 
-    integer :: nbytes, memClockRt, memBusWidth
+    integer :: memClockRt, memBusWidth
     real(dp) :: achievedBW, deviceBW
 
-    if (dp == kind(0.0d0)) then
-      nbytes = 8
-    else
-      nbytes = 4
-    end if
     memClockRt = 3200
     memBusWidth = 64
 

@@ -5,9 +5,11 @@ module m_common
 
 #ifdef SINGLE_PREC
   integer, parameter :: dp = kind(0.0e0)
+  integer, parameter :: nbytes = 4
   integer, parameter :: MPI_X3D2_DP = MPI_REAL
 #else
   integer, parameter :: dp = kind(0.0d0)
+  integer, parameter :: nbytes = 8
   integer, parameter :: MPI_X3D2_DP = MPI_DOUBLE_PRECISION
 #endif
 

@@ -2,7 +2,7 @@ program test_thom
 
   use iso_fortran_env, only: stderr => error_unit
   use cudafor
-  use m_common, only: dp, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
+  use m_common, only: dp, nbytes, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
   use m_cuda_common, only: SZ
   use m_cuda_exec_thom, only: exec_thom_tds_compact
   use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
@@ -124,14 +124,9 @@ contains
     real(dp), intent(in) :: consumed_bw
 
     integer :: ierr
-    integer :: nbytes, memClockRt, memBusWidth
+    integer :: memClockRt, memBusWidth
     real(dp) :: achievedBW, deviceBW
 
-    if (dp == kind(0.0d0)) then
-      nbytes = 8
-    else
-      nbytes = 4
-    end if
     ierr = cudaDeviceGetAttribute(memClockRt, cudaDevAttrMemoryClockRate, 0)
     ierr = cudaDeviceGetAttribute(memBusWidth, &
                                   cudaDevAttrGlobalMemoryBusWidth, 0)
