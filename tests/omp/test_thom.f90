@@ -1,29 +1,25 @@
 program test_thom
 
   use omp_lib
-  use m_common, only: dp, pi, BC_PERIODIC, BC_DIRICHLET
+  use m_common, only: dp, nbytes, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
   use m_omp_common, only: SZ
   use m_tdsops, only: tdsops_t, tdsops_init
   use m_exec_thom, only: exec_thom_tds_compact
 
   implicit none
 
+  logical :: allpass = .true.
+
+  integer :: i, j, k
   integer :: n_glob, n, n_groups
   integer :: n_iters
   integer :: ndof
 
+  real(kind(0.0d0)) :: tstart, tend
   real(dp), dimension(:, :, :), allocatable :: u, du
   real(dp) :: dx, dx_per
 
-  integer :: i, j, k
-
   type(tdsops_t) :: tdsops
-
-  real(dp) :: tstart, tend
-
-  logical :: allpass
-
-  allpass = .true.
 
   !! Performance test
   ! n_glob = 512
@@ -34,7 +30,6 @@ program test_thom
   n_glob = 1024
   n_groups = 64*64/SZ
   n_iters = 1
-
   n = n_glob
   ndof = n_glob*n_groups*SZ
 
@@ -54,6 +49,7 @@ program test_thom
     end do
   end do
 
+  ! preprocess the operator and coefficient arrays
   tdsops = tdsops_init(n, dx_per, &
                        operation="second-deriv", scheme="compact6", &
                        bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
@@ -79,6 +75,7 @@ program test_thom
     end do
   end do
 
+  ! preprocess the operator and coefficient arrays
   tdsops = tdsops_init(n, dx, &
                        operation="second-deriv", scheme="compact6", &
                        bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET)
@@ -93,35 +90,36 @@ program test_thom
   call checkperf(tend - tstart, n_iters, ndof, 3.0_dp)
   call checkerr(u, du, 1.0e-8_dp)
 
+  if (allpass) then
+      print *, 'ALL TESTS PASSED SUCCESSFULLY.'
+  else
+    error stop 'SOME TESTS FAILED.'
+  end if
+
 contains
 
   subroutine checkperf(trun, n_iters, ndof, consumed_bw)
+    implicit none
 
-    real(dp), intent(in) :: trun
+    real(kind(0.0d0)), intent(in) :: trun
     integer, intent(in) :: n_iters
     integer, intent(in) :: ndof
     real(dp), intent(in) :: consumed_bw
 
-    real(dp) :: nbytes
-    real(dp) :: achievedBW
-
-    real(dp) :: memClockRt, memBusWidth, deviceBW
-
-    if (dp == kind(0.0d0)) then
-      nbytes = 8_dp
-    else
-      nbytes = 4_dp
-    end if
-    achievedBW = consumed_bw*n_iters*ndof*nbytes/trun
-
-    print *, "Achieved BW: ", achievedBW/(2**30), " GiB/s"
+    integer :: memClockRt, memBusWidth
+    real(dp) :: achievedBW, deviceBW
 
     memClockRt = 3200
     memBusWidth = 64
-    deviceBW = 2*memBusWidth/nbytes*memClockRt*(10**6)
 
-    print *, "Available BW: ", deviceBW/2**30, " GiB/s / NUMA zone on ARCHER2"
-    print *, "Utilised BW: ", 100*(achievedBW/deviceBW), " %"
+    ! BW utilisation and performance checks
+    achievedBW = consumed_bw*n_iters*ndof*nbytes/trun
+    deviceBW = 2.0_dp*memBusWidth/nbytes*memClockRt*(10**6)
+
+    print *, "Check performance:"
+    print'(a, f8.3, a)', 'Achieved BW: ', achievedBW/2**30, ' GiB/s'
+    print'(a, f8.3, a)', 'Device BW:   ', deviceBW/2**30, ' GiB/s'
+    print'(a, f5.2)', 'Effective BW util: %', achievedBW/deviceBW*100
 
   end subroutine checkperf
 
@@ -135,8 +133,8 @@ contains
     norm_du = sum((u + du)**2)/n_glob/n_groups/SZ
     norm_du = sqrt(norm_du)
 
-    print *, minval(u + du), maxval(u + du)
-
+    print *, "Check error:"
+    print *, "min:", minval(u + du), "max: ", maxval(u + du)
     print *, "error norm", norm_du
 
     if (norm_du > tol) then
