@@ -1,7 +1,7 @@
 program test_thom
+
   use iso_fortran_env, only: stderr => error_unit
   use cudafor
-
   use m_common, only: dp, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
   use m_cuda_common, only: SZ
   use m_cuda_exec_thom, only: exec_thom_tds_compact
@@ -10,23 +10,26 @@ program test_thom
   implicit none
 
   logical :: allpass = .true.
+
+  type(dim3) :: blocks, threads
+  integer :: i, j, k
+  integer :: n_glob, n, n_block
+  integer :: n_iters
+  integer :: ndof
+  integer :: ierr
+
+  real(kind(0.0d0)) :: tstart, tend
   real(dp), allocatable, dimension(:, :, :) :: u, du
   real(dp), device, allocatable, dimension(:, :, :) :: u_dev, du_dev
+  real(dp) :: dx, dx_per, norm_du
 
   type(cuda_tdsops_t) :: tdsops
 
-  integer :: n, n_block, i, j, k, n_iters, ndof
-  integer :: n_glob
-  integer :: ierr, ndevs, devnum, memClockRt, memBusWidth
-
-  type(dim3) :: blocks, threads
-  real(dp) :: dx, dx_per, norm_du, tol = 1d-8, tstart, tend
-  real(dp) :: achievedBW, deviceBW
-
+  !! Verification test
   n_glob = 512*2
-  n = n_glob
   n_block = 512*512/SZ
   n_iters = 100
+  n = n_glob
   ndof = n_glob*n_block*SZ
 
   allocate (u(SZ, n, n_block), du(SZ, n, n_block))
@@ -34,6 +37,9 @@ program test_thom
 
   dx_per = 2*pi/n_glob
   dx = 2*pi/(n_glob - 1)
+
+  !! Periodic case
+  print *, "=== Testing periodic case ==="
 
   do k = 1, n_block
     do j = 1, n
@@ -61,23 +67,15 @@ program test_thom
   call cpu_time(tend)
   print *, 'Total time', tend - tstart
 
+  ! move data to host
+  du = du_dev
+
   ! 2 in fw pass, 2 in bw pass, 2 in final periodic pass: 6 in total
   call checkperf(tend - tstart, n_iters, ndof, 6._dp)
+  call checkerr(u, du, 1.0e-8_dp)
 
-  ! check error
-  du = du_dev
-  norm_du = norm2(u + du)
-  norm_du = norm_du*norm_du/n_glob/n_block/SZ
-  norm_du = sqrt(norm_du)
-
-  print *, 'error norm', norm_du
-
-  if (norm_du > tol) then
-    allpass = .false.
-    write (stderr, '(a)') 'Check periodic second derivatives... failed'
-  else
-    write (stderr, '(a)') 'Check periodic second derivatives... passed'
-  end if
+  !! Dirichlet case
+  print *, "=== Testing Dirichlet case ==="
 
   do k = 1, n_block
     do j = 1, n
@@ -91,9 +89,10 @@ program test_thom
   u_dev = u
 
   ! preprocess the operator and coefficient arrays
-  tdsops = cuda_tdsops_init(n, dx, operation='second-deriv', &
-                            scheme='compact6', &
+  tdsops = cuda_tdsops_init(n, dx, & 
+                            operation='second-deriv', scheme='compact6', &
                             bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET)
+
   call cpu_time(tstart)
   do i = 1, n_iters
     call exec_thom_tds_compact(du_dev, u_dev, tdsops, blocks, threads)
@@ -101,54 +100,74 @@ program test_thom
   call cpu_time(tend)
   print *, 'Total time', tend - tstart
 
+  ! move data to host
+  du = du_dev
+
   ! 2 in fw pass, 2 in bw pass: 4 in total
   call checkperf(tend - tstart, n_iters, ndof, 4._dp)
+  call checkerr(u, du, 1.0e-8_dp)
 
-  ! check error
-  du = du_dev
-  norm_du = norm2(u + du)
-  norm_du = norm_du*norm_du/n_glob/n_block/SZ
-  norm_du = sqrt(norm_du)
-
-  print *, 'error norm', norm_du
-
-  if (norm_du > tol) then
-    allpass = .false.
-    write (stderr, '(a)') 'Check dirichlet second derivatives... failed'
-  else
-    write (stderr, '(a)') 'Check dirichlet second derivatives... passed'
-  end if
   if (allpass) then
-    write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
+      print *, 'ALL TESTS PASSED SUCCESSFULLY.'
   else
     error stop 'SOME TESTS FAILED.'
   end if
 
 contains
 
-  subroutine checkperf(t_tot, n_iters, ndof, consumed_bw)
+  subroutine checkperf(trun, n_iters, ndof, consumed_bw)
     implicit none
 
-    real(dp), intent(in) :: t_tot, consumed_bw
-    integer, intent(in) :: n_iters, ndof
+    real(kind(0.0d0)), intent(in) :: trun
+    integer, intent(in) :: n_iters
+    integer, intent(in) :: ndof
+    real(dp), intent(in) :: consumed_bw
 
-    real(dp) :: achievedBW, devBW
-    integer :: ierr, memClockRt, memBusWidth
+    integer :: ierr
+    integer :: nbytes, memClockRt, memBusWidth
+    real(dp) :: achievedBW, deviceBW
 
-    ! BW utilisation and performance checks
-    achievedBW = consumed_bw*n_iters*ndof*dp/t_tot
-
-    print'(a, f8.3, a)', 'Achieved BW: ', achievedBW/2**30, ' GiB/s'
-
+    if (dp == kind(0.0d0)) then
+      nbytes = 8
+    else
+      nbytes = 4
+    end if
     ierr = cudaDeviceGetAttribute(memClockRt, cudaDevAttrMemoryClockRate, 0)
     ierr = cudaDeviceGetAttribute(memBusWidth, &
                                   cudaDevAttrGlobalMemoryBusWidth, 0)
-    devBW = 2*memBusWidth/8._dp*memClockRt*1000
 
-    print'(a, f8.3, a)', 'Device BW:   ', devBW/2**30, ' GiB/s'
-    print'(a, f5.2)', 'Effective BW util: %', achievedBW/devBW*100
+    ! BW utilisation and performance checks
+    achievedBW = consumed_bw*n_iters*ndof*nbytes/trun
+    deviceBW = 2.0_dp*memBusWidth/nbytes*memClockRt*1000
+
+    print *, "Check performance:"
+    print'(a, f8.3, a)', 'Achieved BW: ', achievedBW/2**30, ' GiB/s'
+    print'(a, f8.3, a)', 'Device BW:   ', deviceBW/2**30, ' GiB/s'
+    print'(a, f5.2)', 'Effective BW util: %', achievedBW/deviceBW*100
 
   end subroutine checkperf
 
-end program test_thom
+  subroutine checkerr(u, du, tol)
 
+    real(dp), dimension(:, :, :), intent(in) :: u, du
+    real(dp), intent(in) :: tol
+
+    real(dp) :: norm_du
+
+    norm_du = sum((u + du)**2)/n_glob/n_block/SZ
+    norm_du = sqrt(norm_du)
+
+    print *, "Check error:"
+    print *, "min:", minval(u + du), "max: ", maxval(u + du)
+    print *, "error norm", norm_du
+
+    if (norm_du > tol) then
+      print *, "Check second derivatives... FAILED"
+      allpass = .false.
+    else
+      print *, "Check second derivatives... PASSED"
+    end if
+
+  end subroutine checkerr
+
+end program test_thom

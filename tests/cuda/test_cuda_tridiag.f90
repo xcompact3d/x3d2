@@ -136,7 +136,7 @@ program test_cuda_tridiag
   du = du_dev
   norm_du = norm2(u + du)
   norm_du = norm_du*norm_du/n_glob/n_block/SZ
-  call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_DOUBLE_PRECISION, &
+  call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_X3D2_DP, &
                      MPI_SUM, MPI_COMM_WORLD, ierr)
   norm_du = sqrt(norm_du)
 
