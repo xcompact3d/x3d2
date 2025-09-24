@@ -8,7 +8,7 @@ module m_io_dummy
   implicit none
 
   private
-  public :: io_dummy_reader_t, io_dummy_writer_t, io_dummy_file_t
+  public :: io_dummy_reader_t, io_dummy_writer_t
 
   type, extends(io_file_t) :: io_dummy_file_t
     logical :: is_open = .false.

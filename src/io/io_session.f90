@@ -1,8 +1,8 @@
-module m_io_service
-!! High-level I/O service providing simple, user-friendly functions
+module m_io_session
+!! High-level I/O session providing a unified session-based interface
 !! This module abstracts away the complexity of the underlying I/O system,
-!! providing convenient functions for common I/O operations and factory functions
-!! for creating the appropriate I/O backend.
+!! providing the io_session_t type for efficient multi-variable I/O operations
+!! and factory functions for creating the appropriate I/O backend.
 
   use mpi, only: MPI_COMM_WORLD
   use m_common, only: dp, i8
@@ -14,16 +14,31 @@ module m_io_service
 
   private
   
-  ! Factory functions for creating I/O objects
-  public :: create_io_reader, create_io_writer, allocate_io_writer_ptr, allocate_io_reader_ptr
-  
-  ! High-level convenience functions
-  public :: read_scalar, read_array, read_multiple
+  ! I/O pointer allocation functions
+  public :: allocate_io_writer_ptr, allocate_io_reader_ptr
 
   ! Session-based API
   public :: io_session_t
 
   !> Type for reading and writing multiple variables from/to the same file efficiently
+  !!
+  !! Usage example for reading:
+  !!   type(io_session_t) :: io_session
+  !!   call io_session%open("checkpoint.bp", MPI_COMM_WORLD, io_mode_read)
+  !!   call io_session%read_data("timestep", timestep)
+  !!   call io_session%read_data("velocity_u", u_field, start_dims, count_dims)
+  !!   call io_session%close()
+  !!
+  !! Usage example for writing:
+  !!   type(io_session_t) :: io_session
+  !!   call io_session%open("output.bp", MPI_COMM_WORLD, io_mode_write)
+  !!   call io_session%write_data("timestep", current_step)
+  !!   call io_session%write_data("pressure", p_field, start_dims, count_dims)
+  !!   call io_session%write_attribute("ParaView", "vtk_xml_content")
+  !!   call io_session%close()
+  !!
+  !! The session automatically handles backend selection (currently just ADIOS2 but can be extended to MPI-IO, etc.)
+  !! and manages file handles, readers, and writers internally.
   type :: io_session_t
     private
     class(io_reader_t), pointer :: reader => null()
@@ -33,8 +48,7 @@ module m_io_service
     logical :: is_write_mode = .false.
   contains
     ! Open/close operations
-    generic :: open => session_open
-    procedure, private :: session_open
+    procedure :: open => session_open
     procedure :: close => session_close
     
     ! Generic read_data interface
@@ -50,21 +64,13 @@ module m_io_service
     procedure, private :: write_data_integer
     procedure, private :: write_data_real
     procedure, private :: write_data_array_3d
+    
+    ! Write attribute interface
+    procedure :: write_attribute => session_write_attribute
   end type io_session_t
 
 contains
 
-  function create_io_reader() result(reader)
-    class(io_reader_t), allocatable :: reader
-    reader = make_reader()
-  end function create_io_reader
-
-  function create_io_writer() result(writer)
-    class(io_writer_t), allocatable :: writer
-    writer = make_writer()
-  end function create_io_writer
-
-  !> Allocate an I/O writer pointer directly without copying (avoids ADIOS2 C++ object corruption)
   subroutine allocate_io_writer_ptr(writer)
     class(io_writer_t), pointer, intent(out) :: writer
     call make_writer_ptr(writer)
@@ -74,81 +80,6 @@ contains
     class(io_reader_t), pointer, intent(out) :: reader
     call make_reader_ptr(reader)
   end subroutine allocate_io_reader_ptr
-
-  !> Read a scalar integer(i8) value from a file
-  subroutine read_scalar(filename, variable_name, value, comm)
-    character(len=*), intent(in) :: filename
-    character(len=*), intent(in) :: variable_name
-    integer(i8), intent(out) :: value
-    integer, intent(in), optional :: comm
-
-    class(io_reader_t), allocatable :: reader
-    class(io_file_t), allocatable :: file
-    integer :: use_comm
-
-    use_comm = MPI_COMM_WORLD
-    if (present(comm)) use_comm = comm
-
-    reader = create_io_reader()
-    call reader%init(use_comm, "io_service_reader")
-    
-    file = reader%open(filename, io_mode_read, use_comm)
-    call file%begin_step()
-    call reader%read_data(variable_name, value, file)
-    
-    call file%close()
-    call reader%finalise()
-  end subroutine read_scalar
-
-  !> Read a 3D array from a file
-  subroutine read_array(filename, variable_name, array, start_dims, count_dims, comm)
-    character(len=*), intent(in) :: filename
-    character(len=*), intent(in) :: variable_name
-    real(dp), intent(inout) :: array(:, :, :)
-    integer(i8), intent(in), optional :: start_dims(3)
-    integer(i8), intent(in), optional :: count_dims(3)
-    integer, intent(in), optional :: comm
-
-    class(io_reader_t), allocatable :: reader
-    class(io_file_t), allocatable :: file
-    integer :: use_comm
-
-    use_comm = MPI_COMM_WORLD
-    if (present(comm)) use_comm = comm
-
-    reader = create_io_reader()
-    call reader%init(use_comm, "io_service_reader")
-    
-    file = reader%open(filename, io_mode_read, use_comm)
-    call file%begin_step()
-    call reader%read_data(variable_name, array, file, start_dims=start_dims, count_dims=count_dims)
-    
-    call file%close()
-    call reader%finalise()
-  end subroutine read_array
-
-  !> Read multiple variables from the same file efficiently
-  subroutine read_multiple(filename, comm, read_operations)
-    character(len=*), intent(in) :: filename
-    integer, intent(in), optional :: comm
-    
-    interface
-      subroutine read_operations(io_session)
-        import :: io_session_t
-        type(io_session_t), intent(inout) :: io_session
-      end subroutine read_operations
-    end interface
-
-    type(io_session_t) :: session
-    integer :: use_comm
-
-    use_comm = MPI_COMM_WORLD
-    if (present(comm)) use_comm = comm
-
-    call session%open(filename, use_comm)
-    call read_operations(session)
-    call session%close()
-  end subroutine read_multiple
 
   subroutine read_data_i8(self, variable_name, value)
     class(io_session_t), intent(inout) :: self
@@ -230,6 +161,16 @@ contains
     call self%writer%write_data(variable_name, array, self%file, start_dims=start_dims, count_dims=count_dims)
   end subroutine write_data_array_3d
 
+  subroutine session_write_attribute(self, attribute_name, attribute_value)
+    class(io_session_t), intent(inout) :: self
+    character(len=*), intent(in) :: attribute_name
+    character(len=*), intent(in) :: attribute_value
+
+    if (.not. self%is_open) error stop "IO session not open"
+    if (.not. self%is_write_mode) error stop "IO session not in write mode"
+    call self%writer%write_attribute(attribute_name, attribute_value, self%file)
+  end subroutine session_write_attribute
+
   subroutine session_open(self, filename, comm, mode)
     class(io_session_t), intent(inout) :: self
     character(len=*), intent(in) :: filename
@@ -271,4 +212,4 @@ contains
     self%is_write_mode = .false.
   end subroutine session_close
 
-end module m_io_service
+end module m_io_session
