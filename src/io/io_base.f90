@@ -10,9 +10,18 @@ module m_io_base
   private
   public :: io_reader_t, io_writer_t, io_file_t
   public :: io_mode_read, io_mode_write
+  public :: io_file_format_t
 
   integer, parameter :: io_mode_read = 1
   integer, parameter :: io_mode_write = 2
+
+  !> File format specification (extensible for future io backends)
+  type :: io_file_format_t
+    character(len=32) :: format_name = "default"
+    integer :: version = 1
+    logical :: self_describing = .true.    ! ADIOS2=true, MPI-IO=false
+    logical :: supports_metadata = .true.  ! ADIOS2=true, MPI-IO=limited
+  end type io_file_format_t
 
   type, abstract :: io_file_t
   contains
