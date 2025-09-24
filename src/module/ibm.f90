@@ -10,7 +10,8 @@ module m_ibm
   use iso_fortran_env, only: stderr => error_unit
   use mpi
 
-  use m_io_service, only: io_session_t
+  use m_io_service, only: allocate_io_reader_ptr
+  use m_io_base, only: io_reader_t, io_file_t, io_mode_read
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, i8, pi, DIR_X, DIR_C, VERT
@@ -53,7 +54,8 @@ contains
     integer :: dims(3)
     real(dp), allocatable :: field_data(:, :, :)
     class(field_t), pointer :: ep1
-    type(io_session_t) :: io_session
+    class(io_reader_t), pointer :: reader => null()
+    class(io_file_t), pointer :: file => null()
     character(len=*), parameter :: ibm_file = "ibm.bp"
     integer(i8) :: start_dims(3), count_dims(3), iibm_i8
 
@@ -62,10 +64,13 @@ contains
     ibm%host_allocator => host_allocator
 
     ! Open IBM configuration file
-    call io_session%open(ibm_file, MPI_COMM_WORLD)
+    call allocate_io_reader_ptr(reader)
+    call reader%init(MPI_COMM_WORLD, "ibm_reader")
+    file => reader%open(ibm_file, io_mode_read, MPI_COMM_WORLD)
+    call file%begin_step()
 
     ! Read the iibm parameter
-    call io_session%read_data("iibm", iibm_i8)
+    call reader%read_data("iibm", iibm_i8, file)
     ibm%iibm = int(iibm_i8, kind=4)
 
     ! Basic IBM only needs ep1 on the vertices
@@ -79,7 +84,9 @@ contains
       dims = mesh%get_dims(VERT)
       start_dims = int(ibm%mesh%par%n_offset(3:1:-1), i8)
       count_dims = int(dims(3:1:-1), i8)
-      call io_session%read_data("ep1", field_data, start_dims=start_dims, count_dims=count_dims)
+      
+      allocate(field_data(count_dims(1), count_dims(2), count_dims(3)))
+      call reader%read_data("ep1", field_data, file, start_dims=start_dims, count_dims=count_dims)
 
       ! Get and fill a block on the host
       ! The order of the data is corrected in the loop below
@@ -105,7 +112,10 @@ contains
       ibm%ep1 => null()
     end if
 
-    call io_session%close()
+    call file%end_step()
+    call file%close()
+    call reader%finalise()
+    if (associated(reader)) deallocate(reader)
 
   end function init
 
