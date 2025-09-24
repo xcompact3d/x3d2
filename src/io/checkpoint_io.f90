@@ -52,8 +52,8 @@ module m_checkpoint_manager_impl
   use m_common, only: dp, i8, DIR_C, VERT, get_argument
   use m_field, only: field_t
   use m_solver, only: solver_t
-  use m_io_service, only: create_io_reader, create_io_writer, allocate_io_writer_ptr, allocate_io_reader_ptr
-  use m_io_base, only: io_reader_t, io_writer_t, io_file_t, io_mode_read, io_mode_write
+  use m_io_service, only: allocate_io_writer_ptr, io_session_t
+  use m_io_base, only: io_writer_t, io_file_t, io_mode_write
   use m_config, only: checkpoint_config_t
   use m_checkpoint_manager_base, only: checkpoint_manager_base_t
 
@@ -81,7 +81,8 @@ module m_checkpoint_manager_impl
     integer, dimension(3) :: last_stride_factors = 0
     integer(i8), dimension(3) :: last_output_shape = 0
     character(len=4096) :: vtk_xml = ""                             !! VTK XML string for ParaView compatibility
-    class(io_file_t), allocatable :: snapshot_file
+    class(io_file_t), allocatable :: snapshot_file                  !! File handle for snapshot writing
+    class(io_file_t), allocatable :: checkpoint_file                !! File handle for checkpoint writing
   contains
     procedure :: init
     procedure :: handle_restart
@@ -227,7 +228,6 @@ contains
     integer, intent(in), optional :: comm
 
     character(len=256) :: filename, temp_filename, old_filename
-    class(io_file_t), pointer :: file => null()
     integer :: ierr, myrank
     integer :: comm_to_use, i
     character(len=*), parameter :: field_names(*) = ["u", "v", "w"]
@@ -250,16 +250,23 @@ contains
       trim(self%checkpoint_cfg%checkpoint_prefix), '_temp.bp'
     if (myrank == 0) print *, 'Writing checkpoint: ', trim(filename)
 
-    file => self%checkpoint_writer%open(temp_filename, io_mode_write, &
+    ! TODO: This could be simplified to use io_session_t pattern like:
+    ! type(io_session_t) :: io_session
+    ! call io_session%open(temp_filename, comm_to_use, io_mode_write)
+    ! call io_session%write_data("timestep", timestep)
+    ! call io_session%close()
+    ! But write_fields needs to be refactored first to accept io_session_t
+
+    self%checkpoint_file = self%checkpoint_writer%open(temp_filename, io_mode_write, &
                                    comm_to_use)
-    call file%begin_step()
+    call self%checkpoint_file%begin_step()
 
     simulation_time = timestep*solver%dt
     data_loc = solver%u%data_loc
-    call self%checkpoint_writer%write_data("timestep", timestep, file)
-    call self%checkpoint_writer%write_data("time", real(simulation_time, dp), file)
-    call self%checkpoint_writer%write_data("dt", real(solver%dt, dp), file)
-    call self%checkpoint_writer%write_data("data_loc", data_loc, file)
+    call self%checkpoint_writer%write_data("timestep", timestep, self%checkpoint_file)
+    call self%checkpoint_writer%write_data("time", real(simulation_time, dp), self%checkpoint_file)
+    call self%checkpoint_writer%write_data("dt", real(solver%dt, dp), self%checkpoint_file)
+    call self%checkpoint_writer%write_data("data_loc", data_loc, self%checkpoint_file)
 
     allocate (field_ptrs(num_fields))
     allocate (host_fields(num_fields))
@@ -289,11 +296,11 @@ contains
 
     call self%write_fields( &
       field_names, host_fields, &
-      solver, file, data_loc, use_stride=.false., writer=self%checkpoint_writer &
+      solver, self%checkpoint_file, data_loc, use_stride=.false., writer=self%checkpoint_writer &
       )
     deallocate (field_ptrs)
 
-    call file%close()
+    call self%checkpoint_file%close()
 
     do i = 1, num_fields
       call solver%host_allocator%release_block(host_fields(i)%ptr)
@@ -713,8 +720,7 @@ contains
     real(dp), intent(out) :: restart_time
     integer, intent(in) :: comm
 
-    class(io_reader_t), pointer :: reader => null()
-    class(io_file_t), pointer :: file => null()
+    type(io_session_t) :: io_session
     integer :: i, ierr
     integer :: dims(3)
     integer(i8), dimension(3) :: start_dims, count_dims
@@ -731,14 +737,10 @@ contains
       return
     end if
 
-    call allocate_io_reader_ptr(reader)
-    call reader%init(comm, "checkpoint_reader")
-
-    file => reader%open(filename, io_mode_read, comm)
-    call file%begin_step()
-    call reader%read_data("timestep", timestep, file)
-    call reader%read_data("time", restart_time, file)
-    call reader%read_data("data_loc", data_loc, file)
+    call io_session%open(filename, comm)
+    call io_session%read_data("timestep", timestep)
+    call io_session%read_data("time", restart_time)
+    call io_session%read_data("data_loc", data_loc)
 
     dims = solver%mesh%get_dims(data_loc)
     start_dims = int(solver%mesh%par%n_offset, i8)
@@ -757,18 +759,16 @@ contains
       allocate(field_data_v(count_dims(1), count_dims(2), count_dims(3)))
       allocate(field_data_w(count_dims(1), count_dims(2), count_dims(3)))
       
-      call reader%read_data("u", field_data_u, file)
-      call reader%read_data("v", field_data_v, file)
-      call reader%read_data("w", field_data_w, file)
+      call io_session%read_data("u", field_data_u)
+      call io_session%read_data("v", field_data_v)
+      call io_session%read_data("w", field_data_w)
       
       call solver%backend%set_field_data(solver%u, field_data_u)
       call solver%backend%set_field_data(solver%v, field_data_v)
       call solver%backend%set_field_data(solver%w, field_data_w)
     end block
 
-    call file%close()
-    call reader%finalise()
-    if (associated(reader)) deallocate(reader)
+    call io_session%close()
   end subroutine restart_checkpoint
 
   subroutine write_fields( &

@@ -10,8 +10,7 @@ module m_ibm
   use iso_fortran_env, only: stderr => error_unit
   use mpi
 
-  use m_io_service, only: allocate_io_reader_ptr
-  use m_io_base, only: io_reader_t, io_file_t, io_mode_read
+  use m_io_service, only: io_session_t
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, i8, pi, DIR_X, DIR_C, VERT
@@ -54,8 +53,7 @@ contains
     integer :: dims(3)
     real(dp), allocatable :: field_data(:, :, :)
     class(field_t), pointer :: ep1
-    class(io_reader_t), pointer :: reader => null()
-    class(io_file_t), pointer :: file => null()
+    type(io_session_t) :: io_session
     character(len=*), parameter :: ibm_file = "ibm.bp"
     integer(i8) :: start_dims(3), count_dims(3), iibm_i8
 
@@ -63,20 +61,17 @@ contains
     ibm%mesh => mesh
     ibm%host_allocator => host_allocator
 
-    ! Open IBM configuration file
-    call allocate_io_reader_ptr(reader)
-    call reader%init(MPI_COMM_WORLD, "ibm_reader")
-    file => reader%open(ibm_file, io_mode_read, MPI_COMM_WORLD)
-    call file%begin_step()
+    ! Open a session to read the IBM configuration file
+    call io_session%open(ibm_file, MPI_COMM_WORLD)
 
     ! Read the iibm parameter
-    call reader%read_data("iibm", iibm_i8, file)
+    call io_session%read_data("iibm", iibm_i8)
     ibm%iibm = int(iibm_i8, kind=4)
 
     ! Basic IBM only needs ep1 on the vertices
     if (ibm%iibm == iibm_basic) then
 
-      ! Read the vertex mask ep1 using I/O session
+      ! Read the vertex mask ep1
       !
       ! The mask was written in python in C order
       ! start_dims and count_dims are thus reversed
@@ -85,8 +80,9 @@ contains
       start_dims = int(ibm%mesh%par%n_offset(3:1:-1), i8)
       count_dims = int(dims(3:1:-1), i8)
       
+      ! Allocate field_data with the expected (reversed) dimensions from the read
       allocate(field_data(count_dims(1), count_dims(2), count_dims(3)))
-      call reader%read_data("ep1", field_data, file, start_dims=start_dims, count_dims=count_dims)
+      call io_session%read_data("ep1", field_data, start_dims, count_dims)
 
       ! Get and fill a block on the host
       ! The order of the data is corrected in the loop below
@@ -112,10 +108,8 @@ contains
       ibm%ep1 => null()
     end if
 
-    call file%end_step()
-    call file%close()
-    call reader%finalise()
-    if (associated(reader)) deallocate(reader)
+    ! Closing the session handles all file and reader finalisation
+    call io_session%close()
 
   end function init
 
