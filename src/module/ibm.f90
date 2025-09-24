@@ -10,7 +10,7 @@ module m_ibm
   use iso_fortran_env, only: stderr => error_unit
   use mpi
 
-  use m_adios2_io, only: adios2_reader_t, adios2_file_t, adios2_mode_read
+  use m_io_service, only: io_session_t
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, i8, pi, DIR_X, DIR_C, VERT
@@ -53,36 +53,33 @@ contains
     integer :: dims(3)
     real(dp), allocatable :: field_data(:, :, :)
     class(field_t), pointer :: ep1
-    type(adios2_reader_t) :: reader
-    type(adios2_file_t) :: file
+    type(io_session_t) :: io_session
+    character(len=*), parameter :: ibm_file = "ibm.bp"
     integer(i8) :: start_dims(3), count_dims(3), iibm_i8
 
     ibm%backend => backend
     ibm%mesh => mesh
     ibm%host_allocator => host_allocator
 
-    ! Open the IBM ADIOS2 object
-    call reader%init(MPI_COMM_WORLD, "IBM_reader")
-    file = reader%open("ibm.bp", adios2_mode_read, MPI_COMM_WORLD)
-    call reader%begin_step(file)
+    ! Open IBM configuration file
+    call io_session%open(ibm_file, MPI_COMM_WORLD)
 
     ! Read the iibm parameter
-    call reader%read_data("iibm", iibm_i8, file)
+    call io_session%read_data("iibm", iibm_i8)
     ibm%iibm = int(iibm_i8, kind=4)
 
     ! Basic IBM only needs ep1 on the vertices
     if (ibm%iibm == iibm_basic) then
 
-      ! Read the vertex mask ep1 and close
+      ! Read the vertex mask ep1 using I/O session
       !
       ! The mask was written in python in C order
       ! start_dims and count_dims are thus reversed
-      ! The resulting ADIOS2 output is in reversed order
+      ! The resulting output is in reversed order
       dims = mesh%get_dims(VERT)
       start_dims = int(ibm%mesh%par%n_offset(3:1:-1), i8)
       count_dims = int(dims(3:1:-1), i8)
-      call reader%read_data("ep1", field_data, file, start_dims, count_dims)
-      call reader%close(file)
+      call io_session%read_data("ep1", field_data, start_dims=start_dims, count_dims=count_dims)
 
       ! Get and fill a block on the host
       ! The order of the data is corrected in the loop below
@@ -104,10 +101,11 @@ contains
       deallocate (field_data)
 
     else
-
-      call reader%close(file)
-
+      ! IBM disabled or unsupported type
+      ibm%ep1 => null()
     end if
+
+    call io_session%close()
 
   end function init
 
