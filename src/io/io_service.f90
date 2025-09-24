@@ -7,10 +7,7 @@ module m_io_service
   use mpi, only: MPI_COMM_WORLD
   use m_common, only: dp, i8
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, io_mode_read
-#ifdef WITH_ADIOS2
-  use m_io_adios2, only: io_adios2_reader_t, io_adios2_writer_t
-#endif
-  use m_io_dummy, only: io_dummy_reader_t, io_dummy_writer_t
+  use m_io_factory, only: make_reader, make_writer, make_reader_ptr, make_writer_ptr
 
   implicit none
 
@@ -24,12 +21,6 @@ module m_io_service
 
   ! Session-based API
   public :: io_session_t
-
-#ifdef WITH_ADIOS2
-  logical, parameter :: use_adios2_backend = .true.
-#else
-  logical, parameter :: use_adios2_backend = .false.
-#endif
 
   !> Type for reading multiple variables from the same file efficiently
   type :: io_session_t
@@ -52,43 +43,23 @@ contains
 
   function create_io_reader() result(reader)
     class(io_reader_t), allocatable :: reader
-
-    if (use_adios2_backend) then
-      allocate(io_adios2_reader_t :: reader)
-    else
-      allocate(io_dummy_reader_t :: reader)
-    end if
+    reader = make_reader()
   end function create_io_reader
 
   function create_io_writer() result(writer)
     class(io_writer_t), allocatable :: writer
-
-    if (use_adios2_backend) then
-      allocate(io_adios2_writer_t :: writer)
-    else
-      allocate(io_dummy_writer_t :: writer)
-    end if
+    writer = make_writer()
   end function create_io_writer
 
   !> Allocate an I/O writer pointer directly without copying (avoids ADIOS2 C++ object corruption)
   subroutine allocate_io_writer_ptr(writer)
     class(io_writer_t), pointer, intent(out) :: writer
-
-    if (use_adios2_backend) then
-      allocate(io_adios2_writer_t :: writer)
-    else
-      allocate(io_dummy_writer_t :: writer)
-    end if
+    call make_writer_ptr(writer)
   end subroutine allocate_io_writer_ptr
 
   subroutine allocate_io_reader_ptr(reader)
     class(io_reader_t), pointer, intent(out) :: reader
-
-    if (use_adios2_backend) then
-      allocate(io_adios2_reader_t :: reader)
-    else
-      allocate(io_dummy_reader_t :: reader)
-    end if
+    call make_reader_ptr(reader)
   end subroutine allocate_io_reader_ptr
 
   !> Read a scalar integer(i8) value from a file
