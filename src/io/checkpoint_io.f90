@@ -52,7 +52,7 @@ module m_checkpoint_manager_impl
   use m_common, only: dp, i8, DIR_C, VERT, get_argument
   use m_field, only: field_t
   use m_solver, only: solver_t
-  use m_io_service, only: create_io_reader, create_io_writer
+  use m_io_service, only: create_io_reader, create_io_writer, allocate_io_writer_ptr, allocate_io_reader_ptr
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, io_mode_read, io_mode_write
   use m_config, only: checkpoint_config_t
   use m_checkpoint_manager_base, only: checkpoint_manager_base_t
@@ -69,8 +69,8 @@ module m_checkpoint_manager_impl
   end type field_buffer_map_t
 
   type, extends(checkpoint_manager_base_t) :: checkpoint_manager_impl_t
-    class(io_writer_t), allocatable :: checkpoint_writer                      !! Writer for checkpoints
-    class(io_writer_t), allocatable :: snapshot_writer                        !! Writer for snapshots
+    class(io_writer_t), pointer :: checkpoint_writer => null()               !! Writer for checkpoints
+    class(io_writer_t), pointer :: snapshot_writer => null()                 !! Writer for snapshots
     integer :: last_checkpoint_step = -1
     integer, dimension(3) :: output_stride = [1, 1, 1]              !! Stride factors for snapshots (default: full resolution)
     integer, dimension(3) :: full_resolution = [1, 1, 1]           !! Full resolution factors for checkpoints (no downsampling)
@@ -111,9 +111,9 @@ contains
     class(checkpoint_manager_impl_t), intent(inout) :: self
     integer, intent(in) :: comm
 
-    allocate(self%checkpoint_writer, source=create_io_writer())
+    call allocate_io_writer_ptr(self%checkpoint_writer)
     call self%checkpoint_writer%init(comm, "checkpoint_writer")
-    allocate(self%snapshot_writer, source=create_io_writer())
+    call allocate_io_writer_ptr(self%snapshot_writer)
     call self%snapshot_writer%init(comm, "snapshot_writer")
 
     self%checkpoint_cfg = checkpoint_config_t()
@@ -227,7 +227,7 @@ contains
     integer, intent(in), optional :: comm
 
     character(len=256) :: filename, temp_filename, old_filename
-    class(io_file_t), allocatable :: file
+    class(io_file_t), pointer :: file => null()
     integer :: ierr, myrank
     integer :: comm_to_use, i
     character(len=*), parameter :: field_names(*) = ["u", "v", "w"]
@@ -250,7 +250,7 @@ contains
       trim(self%checkpoint_cfg%checkpoint_prefix), '_temp.bp'
     if (myrank == 0) print *, 'Writing checkpoint: ', trim(filename)
 
-    file = self%checkpoint_writer%open(temp_filename, io_mode_write, &
+    file => self%checkpoint_writer%open(temp_filename, io_mode_write, &
                                    comm_to_use)
     call file%begin_step()
 
@@ -713,8 +713,8 @@ contains
     real(dp), intent(out) :: restart_time
     integer, intent(in) :: comm
 
-    class(io_reader_t), allocatable :: reader
-    class(io_file_t), allocatable :: file
+    class(io_reader_t), pointer :: reader => null()
+    class(io_file_t), pointer :: file => null()
     integer :: i, ierr
     integer :: dims(3)
     integer(i8), dimension(3) :: start_dims, count_dims
@@ -731,10 +731,10 @@ contains
       return
     end if
 
-    allocate(reader, source=create_io_reader())
+    call allocate_io_reader_ptr(reader)
     call reader%init(comm, "checkpoint_reader")
 
-    allocate(file, source=reader%open(filename, io_mode_read, comm))
+    file => reader%open(filename, io_mode_read, comm)
     call file%begin_step()
     call reader%read_data("timestep", timestep, file)
     call reader%read_data("time", restart_time, file)
@@ -748,66 +748,27 @@ contains
     call solver%v%set_data_loc(data_loc)
     call solver%w%set_data_loc(data_loc)
 
-    ! use a separate reader for each variable to avoid data corruption.
     block
       real(dp), allocatable, target :: field_data_u(:, :, :)
       real(dp), allocatable, target :: field_data_v(:, :, :)
       real(dp), allocatable, target :: field_data_w(:, :, :)
-      real(dp), pointer :: current_field_data(:, :, :)
-      class(io_reader_t), allocatable :: isolated_reader
-      class(io_file_t), allocatable :: isolated_file
 
-      allocate(isolated_reader, source=create_io_reader())
-      call isolated_reader%init(comm, "u_reader")
-      allocate(isolated_file, source=isolated_reader%open(filename, io_mode_read, comm))
-      call isolated_file%begin_step()
-      call isolated_reader%read_data( &
-        "u", field_data_u, isolated_file, start_dims, count_dims)
-      call isolated_file%close()
-      call isolated_reader%finalise()
-
-      call isolated_reader%init(comm, "v_reader")
-      isolated_file = isolated_reader%open(filename, io_mode_read, comm)
-      call isolated_file%begin_step()
-      call isolated_reader%read_data( &
-        "v", field_data_v, isolated_file, start_dims, count_dims)
-      call isolated_file%close()
-      call isolated_reader%finalise()
-
-      call isolated_reader%init(comm, "w_reader")
-      isolated_file = isolated_reader%open(filename, io_mode_read, comm)
-      call isolated_file%begin_step()
-      call isolated_reader%read_data( &
-        "w", field_data_w, isolated_file, start_dims, count_dims)
-      call isolated_file%close()
-      call isolated_reader%finalise()
-
-      do i = 1, size(field_names)
-        select case (trim(field_names(i)))
-        case ("u")
-          current_field_data => field_data_u
-        case ("v")
-          current_field_data => field_data_v
-        case ("w")
-          current_field_data => field_data_w
-        end select
-
-        select case (trim(field_names(i)))
-        case ("u")
-          call solver%backend%set_field_data(solver%u, current_field_data)
-        case ("v")
-          call solver%backend%set_field_data(solver%v, current_field_data)
-        case ("w")
-          call solver%backend%set_field_data(solver%w, current_field_data)
-        case default
-          error stop "Invalid field name: " // trim(field_names(i))
-        end select
-      end do
-      deallocate (field_data_u, field_data_v, field_data_w)
+      allocate(field_data_u(count_dims(1), count_dims(2), count_dims(3)))
+      allocate(field_data_v(count_dims(1), count_dims(2), count_dims(3)))
+      allocate(field_data_w(count_dims(1), count_dims(2), count_dims(3)))
+      
+      call reader%read_data("u", field_data_u, file)
+      call reader%read_data("v", field_data_v, file)
+      call reader%read_data("w", field_data_w, file)
+      
+      call solver%backend%set_field_data(solver%u, field_data_u)
+      call solver%backend%set_field_data(solver%v, field_data_v)
+      call solver%backend%set_field_data(solver%w, field_data_w)
     end block
 
     call file%close()
     call reader%finalise()
+    if (associated(reader)) deallocate(reader)
   end subroutine restart_checkpoint
 
   subroutine write_fields( &
@@ -979,6 +940,9 @@ contains
     call self%cleanup_output_buffers()
     call self%checkpoint_writer%finalise()
     call self%snapshot_writer%finalise()
+
+    if (associated(self%checkpoint_writer)) deallocate(self%checkpoint_writer)
+    if (associated(self%snapshot_writer)) deallocate(self%snapshot_writer)
   end subroutine finalise
 
 end module m_checkpoint_manager_impl

@@ -82,7 +82,7 @@ contains
     character(len=*), intent(in) :: filename
     integer, intent(in) :: mode
     integer, intent(in) :: comm
-    class(io_file_t), allocatable :: file_handle
+    class(io_file_t), pointer :: file_handle
 
     type(io_dummy_file_t), allocatable :: dummy_file
 
@@ -90,10 +90,11 @@ contains
     write(stderr, '(A)') "Compilation was done without ADIOS2 support"
     write(stderr, '(A)') "Please recompile with -DWITH_ADIOS2=ON to enable I/O functionality"
 
-    allocate(dummy_file)
-    dummy_file%is_open = .false.
-
-    call move_alloc(dummy_file, file_handle)
+    allocate(io_dummy_file_t :: file_handle)
+    select type(file_handle)
+    type is (io_dummy_file_t)
+      file_handle%is_open = .false.
+    end select
   end function reader_open_dummy
 
   subroutine read_data_i8_dummy(self, variable_name, value, file_handle)
@@ -163,18 +164,17 @@ contains
     character(len=*), intent(in) :: filename
     integer, intent(in) :: mode
     integer, intent(in) :: comm
-    class(io_file_t), allocatable :: file_handle
-
-    type(io_dummy_file_t), allocatable :: dummy_file
+    class(io_file_t), pointer :: file_handle
 
     write(stderr, '(A)') "ERROR: Cannot open file '" // trim(filename) // "' for writing - ADIOS2 not available"
     write(stderr, '(A)') "Compilation was done without ADIOS2 support"
     write(stderr, '(A)') "Please recompile with -DWITH_ADIOS2=ON to enable I/O functionality"
 
-    allocate(dummy_file)
-    dummy_file%is_open = .false.
-
-    call move_alloc(dummy_file, file_handle)
+    allocate(io_dummy_file_t :: file_handle)
+    select type(file_handle)
+    type is (io_dummy_file_t)
+      file_handle%is_open = .false.
+    end select
   end function writer_open_dummy
 
   subroutine write_data_i8_dummy(self, variable_name, value, file_handle)
