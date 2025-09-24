@@ -80,7 +80,7 @@ module m_io_base
       character(len=*), intent(in) :: filename
       integer, intent(in) :: mode
       integer, intent(in) :: comm
-      class(io_file_t), allocatable :: file_handle
+      class(io_file_t), pointer :: file_handle
     end function reader_open
 
     subroutine read_data_i8(self, variable_name, value, file_handle)
@@ -136,7 +136,7 @@ module m_io_base
       character(len=*), intent(in) :: filename
       integer, intent(in) :: mode
       integer, intent(in) :: comm
-      class(io_file_t), allocatable :: file_handle
+      class(io_file_t), pointer :: file_handle
     end function writer_open
 
     subroutine write_data_i8(self, variable_name, value, file_handle)
