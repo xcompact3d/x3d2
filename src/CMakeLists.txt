@@ -52,13 +52,17 @@ set(2DECOMPFFTSRC
 set(DUMMYDECOMPSRC
   decomp/decomp_dummy.f90
 )
-set(ADIOS2SRC
-  io/adios2_io.f90
+
+set(IOSRC
+  io/io_base.f90
+  io/io_dummy.f90
+  io/io_service.f90
   io/checkpoint_io.f90
 )
-set(DUMMYADIOS2SRC
-  io/checkpoint_dummy.f90
-)
+
+if(WITH_ADIOS2)
+  list(APPEND IOSRC io/io_adios2.f90)
+endif()
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
@@ -75,11 +79,7 @@ else()
   list(APPEND SRC ${DUMMYDECOMPSRC})
 endif()
 
-if(WITH_ADIOS2)
-  list(APPEND SRC ${ADIOS2SRC})
-else()
-  list(APPEND SRC ${DUMMYADIOS2SRC})
-endif()
+list(APPEND SRC ${IOSRC})
 
 add_library(x3d2 STATIC ${SRC})
 target_include_directories(x3d2 INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
@@ -138,4 +138,6 @@ target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
 if(WITH_ADIOS2)
   target_link_libraries(x3d2 PRIVATE adios2::fortran_mpi)
   target_link_libraries(xcompact PRIVATE adios2::fortran_mpi)
+  target_compile_options(x3d2 PRIVATE "-DWITH_ADIOS2")
+  target_compile_options(x3d2_backends PRIVATE "-DWITH_ADIOS2")
 endif()
