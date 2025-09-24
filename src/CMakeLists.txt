@@ -81,10 +81,6 @@ else()
   list(APPEND SRC ${DUMMYADIOS2SRC})
 endif()
 
-if(SINGLE_PREC)
-  add_definitions("-DSINGLE_PREC")
-endif()
-
 add_library(x3d2 STATIC ${SRC})
 target_include_directories(x3d2 INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
 

@@ -7,6 +7,10 @@ set(WITH_2DECOMPFFT ON CACHE BOOL
 
 option(WITH_ADIOS2 "Enable ADIOS2 for I/O" OFF)
 
+if(SINGLE_PREC)
+  add_definitions("-DSINGLE_PREC")
+endif()
+
 if(WITH_ADIOS2)
   set(X3D2_ADIOS2_CUDA OFF)
   if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
