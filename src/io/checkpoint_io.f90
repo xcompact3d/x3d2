@@ -52,7 +52,7 @@ module m_checkpoint_manager_impl
   use m_common, only: dp, i8, DIR_C, VERT, get_argument
   use m_field, only: field_t
   use m_solver, only: solver_t
-  use m_io_service, only: allocate_io_writer_ptr, io_session_t
+  use m_io_session, only: allocate_io_writer_ptr, io_session_t
   use m_io_base, only: io_writer_t, io_file_t, io_mode_write
   use m_config, only: checkpoint_config_t
   use m_checkpoint_manager_base, only: checkpoint_manager_base_t
@@ -81,8 +81,6 @@ module m_checkpoint_manager_impl
     integer, dimension(3) :: last_stride_factors = 0
     integer(i8), dimension(3) :: last_output_shape = 0
     character(len=4096) :: vtk_xml = ""                             !! VTK XML string for ParaView compatibility
-    class(io_file_t), allocatable :: snapshot_file                  !! File handle for snapshot writing
-    class(io_file_t), allocatable :: checkpoint_file                !! File handle for checkpoint writing
   contains
     procedure :: init
     procedure :: handle_restart
@@ -236,6 +234,7 @@ contains
     type(field_ptr_t), allocatable :: field_ptrs(:), host_fields(:)
     integer, parameter :: num_fields = size(field_names)
     integer :: data_loc
+    type(io_session_t) :: io_session
 
     if (self%checkpoint_cfg%checkpoint_freq <= 0) return
     if (mod(timestep, self%checkpoint_cfg%checkpoint_freq) /= 0) return
@@ -250,23 +249,14 @@ contains
       trim(self%checkpoint_cfg%checkpoint_prefix), '_temp.bp'
     if (myrank == 0) print *, 'Writing checkpoint: ', trim(filename)
 
-    ! TODO: This could be simplified to use io_session_t pattern like:
-    ! type(io_session_t) :: io_session
-    ! call io_session%open(temp_filename, comm_to_use, io_mode_write)
-    ! call io_session%write_data("timestep", timestep)
-    ! call io_session%close()
-    ! But write_fields needs to be refactored first to accept io_session_t
-
-    self%checkpoint_file = self%checkpoint_writer%open(temp_filename, io_mode_write, &
-                                   comm_to_use)
-    call self%checkpoint_file%begin_step()
+    call io_session%open(temp_filename, comm_to_use, io_mode_write)
 
     simulation_time = timestep*solver%dt
     data_loc = solver%u%data_loc
-    call self%checkpoint_writer%write_data("timestep", timestep, self%checkpoint_file)
-    call self%checkpoint_writer%write_data("time", real(simulation_time, dp), self%checkpoint_file)
-    call self%checkpoint_writer%write_data("dt", real(solver%dt, dp), self%checkpoint_file)
-    call self%checkpoint_writer%write_data("data_loc", data_loc, self%checkpoint_file)
+    call io_session%write_data("timestep", timestep)
+    call io_session%write_data("time", real(simulation_time, dp))
+    call io_session%write_data("dt", real(solver%dt, dp))
+    call io_session%write_data("data_loc", data_loc)
 
     allocate (field_ptrs(num_fields))
     allocate (host_fields(num_fields))
@@ -296,11 +286,11 @@ contains
 
     call self%write_fields( &
       field_names, host_fields, &
-      solver, self%checkpoint_file, data_loc, use_stride=.false., writer=self%checkpoint_writer &
+      solver, io_session, data_loc, use_stride=.false. &
       )
     deallocate (field_ptrs)
 
-    call self%checkpoint_file%close()
+    call io_session%close()
 
     do i = 1, num_fields
       call solver%host_allocator%release_block(host_fields(i)%ptr)
@@ -357,6 +347,7 @@ contains
     real(dp), dimension(3) :: origin, original_spacing, output_spacing
     real(dp) :: simulation_time
     logical :: snapshot_uses_stride = .true. ! snapshots always use striding
+    type(io_session_t) :: io_session
 
     if (self%checkpoint_cfg%snapshot_freq <= 0) return
     if (mod(timestep, self%checkpoint_cfg%snapshot_freq) /= 0) return
@@ -388,17 +379,13 @@ contains
       output_shape_dims, field_names, origin, output_spacing &
       )
 
-    self%snapshot_file = self%snapshot_writer%open( &
-                         filename, io_mode_write, comm_to_use)
+    call io_session%open(filename, comm_to_use, io_mode_write)
     if (myrank == 0) print *, 'Creating snapshot file: ', trim(filename)
 
     ! Write VTK XML attributes for ParaView compatibility
     if (myrank == 0) then
-      call self%snapshot_writer%write_attribute( &
-        "vtk.xml", self%vtk_xml, self%snapshot_file)
+      call io_session%write_attribute("vtk.xml", self%vtk_xml)
     end if
-
-    call self%snapshot_file%begin_step()
 
     simulation_time = timestep*solver%dt
     if (myrank == 0) then
@@ -406,8 +393,7 @@ contains
         ' iteration =', timestep
     end if
 
-    call self%snapshot_writer%write_data( &
-      "time", real(simulation_time, dp), self%snapshot_file)
+    call io_session%write_data("time", real(simulation_time, dp))
 
     allocate (field_ptrs(num_fields))
     allocate (host_fields(num_fields))
@@ -440,13 +426,11 @@ contains
 
     call self%write_fields( &
       field_names, host_fields, &
-      solver, self%snapshot_file, solver%u%data_loc, &
-      use_stride=snapshot_uses_stride, &
-      writer=self%snapshot_writer &
+      solver, io_session, solver%u%data_loc, &
+      use_stride=snapshot_uses_stride &
       )
 
-    call self%snapshot_file%end_step()
-    call self%snapshot_file%close()
+    call io_session%close()
 
     do i = 1, num_fields
       call solver%host_allocator%release_block(host_fields(i)%ptr)
@@ -772,18 +756,17 @@ contains
   end subroutine restart_checkpoint
 
   subroutine write_fields( &
-    self, field_names, host_fields, solver, file, data_loc, &
-    use_stride, writer &
+    self, field_names, host_fields, solver, io_session, data_loc, &
+    use_stride &
     )
     !! Write field data, optionally with striding, using separate buffers for true async I/O
     class(checkpoint_manager_impl_t), intent(inout) :: self
     character(len=*), dimension(:), intent(in) :: field_names
     class(field_ptr_t), dimension(:), target, intent(in) :: host_fields
     class(solver_t), intent(in) :: solver
-    class(io_file_t), intent(inout) :: file
+    type(io_session_t), intent(inout) :: io_session
     integer, intent(in) :: data_loc
     logical, intent(in), optional :: use_stride
-    class(io_writer_t), intent(inout) :: writer
 
     integer :: i_field
     logical :: apply_stride
@@ -891,9 +874,9 @@ contains
           output_dims_local &
           )
 
-        call writer%write_data( &
+        call io_session%write_data( &
           field_name, self%field_buffers(buffer_idx)%buffer, &
-          file, output_shape, output_start, output_count &
+          start_dims=output_start, count_dims=output_count &
           )
       else
         ! fallback to shared buffer for fields not in the map
@@ -907,9 +890,9 @@ contains
           host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), dims, &
           stride_factors, self%output_buffer, output_dims_local)
 
-        call writer%write_data( &
+        call io_session%write_data( &
           field_name, self%output_buffer, &
-          file, output_shape, output_start, output_count &
+          start_dims=output_start, count_dims=output_count &
           )
       end if
 
@@ -955,7 +938,7 @@ module m_checkpoint_manager
   implicit none
 
   private
-  public :: checkpoint_manager_t, create_checkpoint_manager
+  public :: checkpoint_manager_t
 
   type :: checkpoint_manager_t
     type(checkpoint_manager_impl_t) :: impl
@@ -967,17 +950,7 @@ module m_checkpoint_manager
     procedure :: is_restart => cm_is_restart
   end type checkpoint_manager_t
 
-  interface checkpoint_manager_t
-    module procedure create_checkpoint_manager
-  end interface checkpoint_manager_t
-
 contains
-  function create_checkpoint_manager(comm) result(mgr)
-    integer, intent(in) :: comm
-    type(checkpoint_manager_t) :: mgr
-
-    call mgr%init(comm)
-  end function create_checkpoint_manager
 
   subroutine cm_init(self, comm)
     class(checkpoint_manager_t), intent(inout) :: self

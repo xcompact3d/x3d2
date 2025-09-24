@@ -27,7 +27,7 @@ module m_io_adios2
   implicit none
 
   private
-  public :: io_adios2_reader_t, io_adios2_writer_t, io_adios2_file_t
+  public :: io_adios2_reader_t, io_adios2_writer_t
 
   type, extends(io_reader_t) :: io_adios2_reader_t
     private
