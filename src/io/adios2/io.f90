@@ -126,7 +126,7 @@ contains
     character(len=*), intent(in) :: filename
     integer, intent(in) :: mode
     integer, intent(in) :: comm
-    class(io_file_t), allocatable :: file_handle
+    class(io_file_t), pointer :: file_handle
     
     integer :: ierr, use_comm
 
@@ -247,10 +247,13 @@ contains
           local_count = int(shape(array), i8)
         end if
 
-        call adios2_set_selection(var, 3, local_start, local_count, ierr)
-        call self%handle_error(ierr, &
-                               "Failed to set selection for variable " &
-                               //trim(variable_name))
+        ! apply selection only when explicitly requested (partial array reads)
+        if (present(start_dims) .or. present(count_dims)) then
+          call adios2_set_selection(var, 3, local_start, local_count, ierr)
+          call self%handle_error(ierr, &
+                                 "Failed to set selection for variable " &
+                                 //trim(variable_name))
+        end if
 
         call adios2_get(file_handle%engine, var, array, adios2_mode_sync, ierr)
         call self%handle_error(ierr, "Failed to read variable "//trim(variable_name))
@@ -311,19 +314,11 @@ contains
     character(len=*), intent(in) :: filename
     integer, intent(in) :: mode
     integer, intent(in) :: comm
-    class(io_file_t), allocatable :: file_handle
+    class(io_file_t), pointer :: file_handle
     
     integer :: ierr, use_comm
 
     allocate(io_adios2_file_t :: file_handle)
-
-    ! if opening in write mode, we are starting a new independent dataset
-    ! remove all old variables from the IO object
-    if (mode == io_mode_write) then
-      call adios2_remove_all_variables(self%io_handle, ierr)
-      call self%handle_error(ierr, "Failed to remove old ADIOS2 variables &
-                             & before open")
-    end if
 
     use_comm = comm
     if (.not. self%io_handle%valid) &
@@ -331,6 +326,14 @@ contains
 
     select type(file_handle)
     type is (io_adios2_file_t)
+      ! if opening in write mode, we are starting a new independent dataset
+      ! remove all old variables from the IO object
+      if (mode == io_mode_write) then
+        call adios2_remove_all_variables(self%io_handle, ierr)
+        call self%handle_error(ierr, "Failed to remove old ADIOS2 variables &
+                               & before open")
+      end if
+
       call adios2_open(file_handle%engine, self%io_handle, filename, adios2_mode_write, use_comm, ierr)
       call self%handle_error(ierr, "Failed to open ADIOS2 engine for writing")
       file_handle%is_writer = .true.
@@ -498,7 +501,7 @@ contains
     type(adios2_attribute) :: attr
     integer :: ierr
     integer :: num_elements
-    
+
     select type(file_handle)
     type is (io_adios2_file_t)
       num_elements = size(values)

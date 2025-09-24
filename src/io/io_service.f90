@@ -17,7 +17,7 @@ module m_io_service
   private
   
   ! Factory functions for creating I/O objects
-  public :: create_io_reader, create_io_writer
+  public :: create_io_reader, create_io_writer, allocate_io_writer_ptr, allocate_io_reader_ptr
   
   ! High-level convenience functions
   public :: read_scalar, read_array, read_multiple
@@ -34,8 +34,8 @@ module m_io_service
   !> Type for reading multiple variables from the same file efficiently
   type :: io_session_t
     private
-    class(io_reader_t), allocatable :: reader
-    class(io_file_t), allocatable :: file
+    class(io_reader_t), pointer :: reader => null()
+    class(io_file_t), pointer :: file => null()
     logical :: is_open = .false.
   contains
     procedure :: open => session_open
@@ -69,6 +69,27 @@ contains
       allocate(io_dummy_writer_t :: writer)
     end if
   end function create_io_writer
+
+  !> Allocate an I/O writer pointer directly without copying (avoids ADIOS2 C++ object corruption)
+  subroutine allocate_io_writer_ptr(writer)
+    class(io_writer_t), pointer, intent(out) :: writer
+
+    if (use_adios2_backend) then
+      allocate(io_adios2_writer_t :: writer)
+    else
+      allocate(io_dummy_writer_t :: writer)
+    end if
+  end subroutine allocate_io_writer_ptr
+
+  subroutine allocate_io_reader_ptr(reader)
+    class(io_reader_t), pointer, intent(out) :: reader
+
+    if (use_adios2_backend) then
+      allocate(io_adios2_reader_t :: reader)
+    else
+      allocate(io_dummy_reader_t :: reader)
+    end if
+  end subroutine allocate_io_reader_ptr
 
   !> Read a scalar integer(i8) value from a file
   subroutine read_scalar(filename, variable_name, value, comm)
@@ -181,9 +202,9 @@ contains
 
     if (self%is_open) error stop "IO session already open"
     
-    allocate(self%reader, source=create_io_reader())
+    call allocate_io_reader_ptr(self%reader)
     call self%reader%init(comm, "session_reader")
-    allocate(self%file, source=self%reader%open(filename, io_mode_read, comm))
+    self%file => self%reader%open(filename, io_mode_read, comm)
     call self%file%begin_step()
     self%is_open = .true.
   end subroutine session_open
