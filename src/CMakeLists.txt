@@ -56,6 +56,7 @@ set(DUMMYDECOMPSRC
 set(IOSRC
   io/io_base.f90
   io/dummy/io.f90
+  io/io_factory.f90
   io/io_service.f90
   io/checkpoint_io.f90
 )
