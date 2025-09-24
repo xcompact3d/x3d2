@@ -55,13 +55,13 @@ set(DUMMYDECOMPSRC
 
 set(IOSRC
   io/io_base.f90
-  io/io_dummy.f90
+  io/dummy/io.f90
   io/io_service.f90
   io/checkpoint_io.f90
 )
 
 if(WITH_ADIOS2)
-  list(APPEND IOSRC io/io_adios2.f90)
+  list(APPEND IOSRC io/adios2/io.f90)
 endif()
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
