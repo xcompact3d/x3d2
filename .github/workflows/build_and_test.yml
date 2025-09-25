@@ -85,3 +85,16 @@ jobs:
 
     - name: Run the tests
       run: make -C build test
+
+    - name: Configure Debug build (single precision)
+      run: FC=mpif90 cmake -S . -B build-single -DCMAKE_BUILD_TYPE=Debug -DSINGLE_PREC=ON -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
+
+    - name: Build tests (single precision)
+      run: make -C build-single
+
+    - name: Configure Release build (single precision)
+      run: FC=mpif90 cmake -S . -B build-single -DCMAKE_BUILD_TYPE=Release -DSINGLE_PREC=ON -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
+
+    - name: Build tests (single precision)
+      run: make -C build-single
+

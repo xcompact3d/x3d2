@@ -5,7 +5,11 @@ if (decomp2d_FOUND)
   message(STATUS "2decomp-fft FOUND")
 else(decomp2d_FOUND)
   message(STATUS "2decomp-fft PATH not available we'll try to download and install")
-  configure_file(${CMAKE_SOURCE_DIR}/cmake/decomp2d/downloadBuild2decomp.cmake.in decomp2d-build/CMakeLists.txt)
+  if (SINGLE_PREC)
+    configure_file(${CMAKE_SOURCE_DIR}/cmake/decomp2d/downloadBuild2decompSinglePrec.cmake.in decomp2d-build/CMakeLists.txt)
+  else()
+    configure_file(${CMAKE_SOURCE_DIR}/cmake/decomp2d/downloadBuild2decomp.cmake.in decomp2d-build/CMakeLists.txt)
+  endif()
   execute_process(COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
           RESULT_VARIABLE result
           WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/decomp2d-build )
