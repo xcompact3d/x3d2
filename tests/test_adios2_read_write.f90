@@ -16,12 +16,12 @@ program test_adios2
   integer :: ierr, irank, isize
   integer(kind=int64), dimension(2) :: shape_dims, start_dims, count_dims
   integer(kind=int64), dimension(2) :: sel_start, sel_count
-  real(kind=real64), dimension(:, :), allocatable :: data_write, data_read
+  real(kind=dp), dimension(:, :), allocatable :: data_write, data_read
 
   ! application variables
   integer :: i, j, rank_id, inx = 3, iny = 4
   logical :: allpass = .true.
-  real(kind=real64) :: expected
+  real(kind=dp) :: expected
 
   ! launch MPI
   call MPI_Init(ierr)
