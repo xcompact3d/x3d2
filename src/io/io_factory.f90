@@ -1,5 +1,5 @@
 module m_io_factory
-!! Clean factory module that handles conditional compilation internally
+!! Factory module to handle allocation of I/O backends
 
   use m_io_base, only: io_reader_t, io_writer_t
   use m_io_dummy, only: io_dummy_reader_t, io_dummy_writer_t
@@ -10,7 +10,7 @@ module m_io_factory
   implicit none
 
   private
-  public :: make_reader, make_writer, make_reader_ptr, make_writer_ptr
+  public :: allocate_io_reader, allocate_io_writer
   public :: IO_BACKEND_DUMMY, IO_BACKEND_ADIOS2, IO_BACKEND_MPIIO
   public :: get_default_backend
 
@@ -31,96 +31,48 @@ contains
 #endif
   end function get_default_backend
 
-  function make_reader(backend) result(reader)
-    class(io_reader_t), allocatable :: reader
-    integer, intent(in), optional :: backend
-    
-    integer :: use_backend
-    
-    use_backend = get_default_backend()
-    if (present(backend)) use_backend = backend
-    
-    select case(use_backend)
-#ifdef WITH_ADIOS2
-    case(IO_BACKEND_ADIOS2)
-      allocate(io_adios2_reader_t :: reader)
-#endif
-    case(IO_BACKEND_MPIIO)
-      ! TODO: allocate(io_mpiio_reader_t :: reader)
-      ! for now, fall back to dummy
-      allocate(io_dummy_reader_t :: reader)
-    case default
-      allocate(io_dummy_reader_t :: reader)
-    end select
-  end function make_reader
-
-  function make_writer(backend) result(writer)
-    class(io_writer_t), allocatable :: writer
-    integer, intent(in), optional :: backend
-    
-    integer :: use_backend
-    
-    use_backend = get_default_backend()
-    if (present(backend)) use_backend = backend
-    
-    select case(use_backend)
-#ifdef WITH_ADIOS2
-    case(IO_BACKEND_ADIOS2)
-      allocate(io_adios2_writer_t :: writer)
-#endif
-    case(IO_BACKEND_MPIIO)
-      ! TODO: allocate(io_mpiio_writer_t :: writer)
-      ! for now, fall back to dummy
-      allocate(io_dummy_writer_t :: writer)
-    case default
-      allocate(io_dummy_writer_t :: writer)
-    end select
-  end function make_writer
-
-  subroutine make_reader_ptr(reader, backend)
+  !> Allocation interface for readers
+  subroutine allocate_io_reader(reader)
     class(io_reader_t), pointer, intent(out) :: reader
-    integer, intent(in), optional :: backend
     
-    integer :: use_backend
+    integer :: backend
     
-    use_backend = get_default_backend()
-    if (present(backend)) use_backend = backend
+    backend = get_default_backend()
     
-    select case(use_backend)
+    select case(backend)
 #ifdef WITH_ADIOS2
     case(IO_BACKEND_ADIOS2)
       allocate(io_adios2_reader_t :: reader)
 #endif
     case(IO_BACKEND_MPIIO)
-      ! TODO: allocate(io_mpiio_reader_t :: reader)
-      ! for now, fall back to dummy
+      ! TODO: implement MPI-IO backend
+      ! For now, fall back to dummy
       allocate(io_dummy_reader_t :: reader)
     case default
       allocate(io_dummy_reader_t :: reader)
     end select
-  end subroutine make_reader_ptr
+  end subroutine allocate_io_reader
 
-  subroutine make_writer_ptr(writer, backend)
+  !> Allocation interface for writers
+  subroutine allocate_io_writer(writer)
     class(io_writer_t), pointer, intent(out) :: writer
-    integer, intent(in), optional :: backend
     
-    integer :: use_backend
+    integer :: backend
     
-    use_backend = get_default_backend()
-    if (present(backend)) use_backend = backend
+    backend = get_default_backend()
     
-    select case(use_backend)
+    select case(backend)
 #ifdef WITH_ADIOS2
     case(IO_BACKEND_ADIOS2)
       allocate(io_adios2_writer_t :: writer)
 #endif
     case(IO_BACKEND_MPIIO)
-      ! TODO: allocate(io_mpiio_writer_t :: writer)
-      ! for now, fall back to dummy
+      ! TODO: implement MPI-IO backend  
+      ! For now, fall back to dummy
       allocate(io_dummy_writer_t :: writer)
     case default
       allocate(io_dummy_writer_t :: writer)
     end select
-  end subroutine make_writer_ptr
+  end subroutine allocate_io_writer
 
 end module m_io_factory
