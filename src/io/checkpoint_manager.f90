@@ -244,14 +244,12 @@ contains
       real(dp), allocatable, target :: field_data_v(:, :, :)
       real(dp), allocatable, target :: field_data_w(:, :, :)
 
-      allocate(field_data_u(count_dims(1), count_dims(2), count_dims(3)))
-      allocate(field_data_v(count_dims(1), count_dims(2), count_dims(3)))
-      allocate(field_data_w(count_dims(1), count_dims(2), count_dims(3)))
-      
+      allocate (field_data_u(count_dims(1), count_dims(2), count_dims(3)))
+      allocate (field_data_v(count_dims(1), count_dims(2), count_dims(3)))
+      allocate (field_data_w(count_dims(1), count_dims(2), count_dims(3)))
       call io_session%read_data("u", field_data_u)
       call io_session%read_data("v", field_data_v)
       call io_session%read_data("w", field_data_w)
-      
       call solver%backend%set_field_data(solver%u, field_data_u)
       call solver%backend%set_field_data(solver%v, field_data_v)
       call solver%backend%set_field_data(solver%w, field_data_w)
@@ -274,7 +272,8 @@ contains
     integer :: i_field
 
     ! Prepare buffers for full resolution (no striding for checkpoints)
-    call prepare_field_buffers(solver, self%full_resolution, field_names, data_loc)
+    call prepare_field_buffers( &
+      solver, self%full_resolution, field_names, data_loc)
 
     do i_field = 1, size(field_names)
       call write_single_field( &
@@ -303,7 +302,8 @@ contains
         shape_dims, start_dims, count_dims, stride_factors, &
         output_shape, output_start, output_count, &
         output_dims_local, &
-        self%last_shape_dims, self%last_stride_factors, self%last_output_shape &
+        self%last_shape_dims, self%last_stride_factors, &
+        self%last_output_shape &
         )
 
       if (allocated(self%field_buffers)) deallocate (self%field_buffers)
@@ -339,13 +339,15 @@ contains
         shape_dims, start_dims, count_dims, self%full_resolution, &
         output_shape, output_start, output_count, &
         output_dims_local, &
-        self%last_shape_dims, self%last_stride_factors, self%last_output_shape &
+        self%last_shape_dims, self%last_stride_factors, &
+        self%last_output_shape &
         )
 
       ! Find the matching buffer for this field
       buffer_found = .false.
       do buffer_idx = 1, size(self%field_buffers)
-        if (trim(self%field_buffers(buffer_idx)%field_name) == trim(field_name)) then
+        if (trim(self%field_buffers(buffer_idx)%field_name) == &
+            trim(field_name)) then
           buffer_found = .true.
           exit
         end if
@@ -363,7 +365,8 @@ contains
           start_dims=output_start, count_dims=output_count &
           )
       else
-        print *, 'INTERNAL ERROR: No buffer found for field: ', trim(field_name)
+        print *, 'INTERNAL ERROR: No buffer found for field: ', &
+          trim(field_name)
         error stop 'Missing field buffer'
       end if
     end subroutine write_single_field
@@ -392,7 +395,7 @@ contains
     call self%cleanup_output_buffers()
     call self%writer%finalise()
 
-    if (associated(self%writer)) deallocate(self%writer)
+    if (associated(self%writer)) deallocate (self%writer)
   end subroutine finalise
 
 end module m_checkpoint_manager

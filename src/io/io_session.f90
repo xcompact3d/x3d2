@@ -6,16 +6,16 @@ module m_io_session
 
   use mpi, only: MPI_COMM_WORLD
   use m_common, only: dp, i8
-  use m_io_base, only: io_reader_t, io_writer_t, io_file_t, io_mode_read, io_mode_write
+  use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
+                       io_mode_read, io_mode_write
   use m_io_factory, only: allocate_io_reader, allocate_io_writer
 
   implicit none
 
   private
-  
+
   ! Re-export factory functions through session module for proper layering
   public :: allocate_io_reader, allocate_io_writer
-  
   ! Session-based API
   public :: io_session_t
 
@@ -49,21 +49,20 @@ module m_io_session
     ! Open/close operations
     procedure :: open => session_open
     procedure :: close => session_close
-    
     ! Generic read_data interface
-    generic :: read_data => read_data_i8, read_data_integer, read_data_real, read_data_array_3d
+    generic :: read_data => read_data_i8, read_data_integer, &
+      read_data_real, read_data_array_3d
     procedure, private :: read_data_i8
     procedure, private :: read_data_integer
     procedure, private :: read_data_real
     procedure, private :: read_data_array_3d
-    
     ! Generic write_data interface
-    generic :: write_data => write_data_i8, write_data_integer, write_data_real, write_data_array_3d
+    generic :: write_data => write_data_i8, write_data_integer, &
+      write_data_real, write_data_array_3d
     procedure, private :: write_data_i8
     procedure, private :: write_data_integer
     procedure, private :: write_data_real
     procedure, private :: write_data_array_3d
-    
     ! Write attribute interface
     procedure :: write_attribute => session_write_attribute
   end type io_session_t
@@ -97,7 +96,9 @@ contains
     call self%reader%read_data(variable_name, value, self%file)
   end subroutine read_data_real
 
-  subroutine read_data_array_3d(self, variable_name, array, start_dims, count_dims)
+  subroutine read_data_array_3d( &
+    self, variable_name, array, start_dims, count_dims &
+    )
     class(io_session_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
     real(dp), intent(inout) :: array(:, :, :)
@@ -105,7 +106,10 @@ contains
     integer(i8), intent(in), optional :: count_dims(3)
 
     if (.not. self%is_open) error stop "IO session not open"
-    call self%reader%read_data(variable_name, array, self%file, start_dims=start_dims, count_dims=count_dims)
+    call self%reader%read_data( &
+      variable_name, array, self%file, &
+      start_dims=start_dims, count_dims=count_dims &
+      )
   end subroutine read_data_array_3d
 
   subroutine write_data_i8(self, variable_name, value)
@@ -138,7 +142,9 @@ contains
     call self%writer%write_data(variable_name, value, self%file)
   end subroutine write_data_real
 
-  subroutine write_data_array_3d(self, variable_name, array, start_dims, count_dims)
+  subroutine write_data_array_3d( &
+    self, variable_name, array, start_dims, count_dims &
+    )
     class(io_session_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
     real(dp), intent(in) :: array(:, :, :)
@@ -147,7 +153,10 @@ contains
 
     if (.not. self%is_open) error stop "IO session not open"
     if (.not. self%is_write_mode) error stop "IO session not in write mode"
-    call self%writer%write_data(variable_name, array, self%file, start_dims=start_dims, count_dims=count_dims)
+    call self%writer%write_data( &
+      variable_name, array, self%file, &
+      start_dims=start_dims, count_dims=count_dims &
+      )
   end subroutine write_data_array_3d
 
   subroutine session_write_attribute(self, attribute_name, attribute_value)
@@ -157,7 +166,9 @@ contains
 
     if (.not. self%is_open) error stop "IO session not open"
     if (.not. self%is_write_mode) error stop "IO session not in write mode"
-    call self%writer%write_attribute(attribute_name, attribute_value, self%file)
+    call self%writer%write_attribute( &
+      attribute_name, attribute_value, self%file &
+      )
   end subroutine session_write_attribute
 
   subroutine session_open(self, filename, comm, mode)
@@ -169,11 +180,11 @@ contains
     integer :: use_mode
 
     if (self%is_open) error stop "IO session already open"
-    
+
     ! Default to read mode if not specified
     use_mode = io_mode_read
     if (present(mode)) use_mode = mode
-    
+
     if (use_mode == io_mode_read) then
       call allocate_io_reader(self%reader)
       call self%reader%init(comm, "session_reader")
@@ -187,7 +198,7 @@ contains
     else
       error stop "Invalid I/O mode"
     end if
-    
+
     call self%file%begin_step()
     self%is_open = .true.
   end subroutine session_open

@@ -14,7 +14,7 @@ module m_io_manager
     type(snapshot_manager_t) :: snapshot_mgr
   contains
     procedure :: init => io_init
-    procedure :: handle_restart => io_handle_restart  
+    procedure :: handle_restart => io_handle_restart
     procedure :: handle_io_step => io_handle_step
     procedure :: finalise => io_finalise
     procedure :: is_restart => io_is_restart
@@ -25,7 +25,7 @@ contains
   subroutine io_init(self, comm)
     class(io_manager_t), intent(inout) :: self
     integer, intent(in) :: comm
-    
+
     call self%checkpoint_mgr%init(comm)
     call self%snapshot_mgr%init(comm)
   end subroutine io_init
@@ -34,7 +34,7 @@ contains
     class(io_manager_t), intent(inout) :: self
     class(solver_t), intent(inout) :: solver
     integer, intent(in), optional :: comm
-    
+
     call self%checkpoint_mgr%handle_restart(solver, comm)
   end subroutine io_handle_restart
 
@@ -43,7 +43,7 @@ contains
     class(solver_t), intent(in) :: solver
     integer, intent(in) :: timestep
     integer, intent(in), optional :: comm
-    
+
     call self%checkpoint_mgr%handle_checkpoint_step(solver, timestep, comm)
     call self%snapshot_mgr%handle_snapshot_step(solver, timestep, comm)
   end subroutine io_handle_step
@@ -51,13 +51,13 @@ contains
   function io_is_restart(self) result(is_restart)
     class(io_manager_t), intent(in) :: self
     logical :: is_restart
-    
+
     is_restart = self%checkpoint_mgr%is_restart()
   end function io_is_restart
 
   subroutine io_finalise(self)
     class(io_manager_t), intent(inout) :: self
-    
+
     call self%checkpoint_mgr%finalise()
     call self%snapshot_mgr%finalise()
   end subroutine io_finalise
