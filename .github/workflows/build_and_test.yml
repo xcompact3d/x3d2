@@ -74,8 +74,11 @@ jobs:
     - name: Configure Debug build
       run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
 
-    - name: Build with Debug (strict) flags
+    - name: Build test
       run: make -C build
+
+    - name: Run the tests
+      run: make -C build test
       
     - name: Configure Release build
       run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
