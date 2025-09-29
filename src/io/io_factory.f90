@@ -16,7 +16,7 @@ module m_io_factory
 
   ! backend type constants
   integer, parameter :: IO_BACKEND_DUMMY = 0
-  integer, parameter :: IO_BACKEND_ADIOS2 = 1  
+  integer, parameter :: IO_BACKEND_ADIOS2 = 1
   integer, parameter :: IO_BACKEND_MPIIO = 2
 
 contains
@@ -34,44 +34,44 @@ contains
   !> Allocation interface for readers
   subroutine allocate_io_reader(reader)
     class(io_reader_t), pointer, intent(out) :: reader
-    
+
     integer :: backend
-    
+
     backend = get_default_backend()
-    
-    select case(backend)
+
+    select case (backend)
 #ifdef WITH_ADIOS2
-    case(IO_BACKEND_ADIOS2)
-      allocate(io_adios2_reader_t :: reader)
+    case (IO_BACKEND_ADIOS2)
+      allocate (io_adios2_reader_t :: reader)
 #endif
-    case(IO_BACKEND_MPIIO)
+    case (IO_BACKEND_MPIIO)
       ! TODO: implement MPI-IO backend
       ! For now, fall back to dummy
-      allocate(io_dummy_reader_t :: reader)
+      allocate (io_dummy_reader_t :: reader)
     case default
-      allocate(io_dummy_reader_t :: reader)
+      allocate (io_dummy_reader_t :: reader)
     end select
   end subroutine allocate_io_reader
 
   !> Allocation interface for writers
   subroutine allocate_io_writer(writer)
     class(io_writer_t), pointer, intent(out) :: writer
-    
+
     integer :: backend
-    
+
     backend = get_default_backend()
-    
-    select case(backend)
+
+    select case (backend)
 #ifdef WITH_ADIOS2
-    case(IO_BACKEND_ADIOS2)
-      allocate(io_adios2_writer_t :: writer)
+    case (IO_BACKEND_ADIOS2)
+      allocate (io_adios2_writer_t :: writer)
 #endif
-    case(IO_BACKEND_MPIIO)
-      ! TODO: implement MPI-IO backend  
+    case (IO_BACKEND_MPIIO)
+      ! TODO: implement MPI-IO backend
       ! For now, fall back to dummy
-      allocate(io_dummy_writer_t :: writer)
+      allocate (io_dummy_writer_t :: writer)
     case default
-      allocate(io_dummy_writer_t :: writer)
+      allocate (io_dummy_writer_t :: writer)
     end select
   end subroutine allocate_io_writer
 

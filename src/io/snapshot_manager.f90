@@ -217,7 +217,8 @@ contains
     integer :: i_field
 
     ! Prepare buffers with striding for snapshots
-    call prepare_field_buffers(solver, self%output_stride, field_names, data_loc)
+    call prepare_field_buffers( &
+      solver, self%output_stride, field_names, data_loc)
 
     do i_field = 1, size(field_names)
       call write_single_field( &
@@ -246,7 +247,8 @@ contains
         shape_dims, start_dims, count_dims, stride_factors, &
         output_shape, output_start, output_count, &
         output_dims_local, &
-        self%last_shape_dims, self%last_stride_factors, self%last_output_shape &
+        self%last_shape_dims, self%last_stride_factors, &
+        self%last_output_shape &
         )
 
       if (allocated(self%field_buffers)) deallocate (self%field_buffers)
@@ -282,13 +284,15 @@ contains
         shape_dims, start_dims, count_dims, self%output_stride, &
         output_shape, output_start, output_count, &
         output_dims_local, &
-        self%last_shape_dims, self%last_stride_factors, self%last_output_shape &
+        self%last_shape_dims, self%last_stride_factors, &
+        self%last_output_shape &
         )
 
       ! Find the matching buffer for this field
       buffer_found = .false.
       do buffer_idx = 1, size(self%field_buffers)
-        if (trim(self%field_buffers(buffer_idx)%field_name) == trim(field_name)) then
+        if (trim(self%field_buffers(buffer_idx)%field_name) == &
+            trim(field_name)) then
           buffer_found = .true.
           exit
         end if
@@ -306,7 +310,8 @@ contains
           start_dims=output_start, count_dims=output_count &
           )
       else
-        print *, 'INTERNAL ERROR: No buffer found for field: ', trim(field_name)
+        print *, 'INTERNAL ERROR: No buffer found for field: ', &
+          trim(field_name)
         error stop 'Missing field buffer'
       end if
     end subroutine write_single_field
@@ -335,7 +340,7 @@ contains
     call self%cleanup_output_buffers()
     call self%writer%finalise()
 
-    if (associated(self%writer)) deallocate(self%writer)
+    if (associated(self%writer)) deallocate (self%writer)
   end subroutine finalise
 
 end module m_snapshot_manager

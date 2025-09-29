@@ -22,7 +22,8 @@ module m_io_adios2
                     adios2_type_dp, adios2_type_integer4
   use mpi, only: MPI_COMM_NULL, MPI_Initialized, MPI_Comm_rank
   use m_common, only: dp, i8
-  use m_io_base, only: io_reader_t, io_writer_t, io_file_t, io_mode_read, io_mode_write
+  use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
+                       io_mode_read, io_mode_write
 
   implicit none
 
@@ -38,13 +39,12 @@ module m_io_adios2
   contains
     procedure :: init => reader_init_adios2
     procedure :: open => reader_open_adios2
-    
-    generic :: read_data => read_data_i8_adios2, read_data_integer_adios2, read_data_real_adios2, read_data_array_3d_adios2
+    generic :: read_data => read_data_i8_adios2, read_data_integer_adios2, &
+      read_data_real_adios2, read_data_array_3d_adios2
     procedure :: read_data_i8 => read_data_i8_adios2
     procedure :: read_data_integer => read_data_integer_adios2
-    procedure :: read_data_real => read_data_real_adios2  
+    procedure :: read_data_real => read_data_real_adios2
     procedure :: read_data_array_3d => read_data_array_3d_adios2
-    
     procedure :: finalise => finalise_reader_adios2
     procedure, private :: handle_error => handle_error_reader
   end type io_adios2_reader_t
@@ -58,17 +58,17 @@ module m_io_adios2
   contains
     procedure :: init => writer_init_adios2
     procedure :: open => writer_open_adios2
-    
-    generic :: write_data => write_data_i8_adios2, write_data_integer_adios2, write_data_real_adios2, write_data_array_3d_adios2
+    generic :: write_data => write_data_i8_adios2, write_data_integer_adios2, &
+      write_data_real_adios2, write_data_array_3d_adios2
     procedure :: write_data_i8 => write_data_i8_adios2
     procedure :: write_data_integer => write_data_integer_adios2
     procedure :: write_data_real => write_data_real_adios2
     procedure :: write_data_array_3d => write_data_array_3d_adios2
-    
-    generic :: write_attribute => write_attribute_string_adios2, write_attribute_array_1d_real_adios2
+    generic :: write_attribute => write_attribute_string_adios2, &
+      write_attribute_array_1d_real_adios2
     procedure :: write_attribute_string => write_attribute_string_adios2
-    procedure :: write_attribute_array_1d_real => write_attribute_array_1d_real_adios2
-    
+    procedure :: write_attribute_array_1d_real => &
+      write_attribute_array_1d_real_adios2
     procedure :: finalise => finalise_writer_adios2
     procedure, private :: handle_error => handle_error_writer
   end type io_adios2_writer_t
@@ -126,19 +126,20 @@ contains
     character(len=*), intent(in) :: filename
     integer, intent(in) :: mode
     integer, intent(in) :: comm
+
     class(io_file_t), pointer :: file_handle
-    
     integer :: ierr, use_comm
 
-    allocate(io_adios2_file_t :: file_handle)
-    
+    allocate (io_adios2_file_t :: file_handle)
     use_comm = comm
     if (.not. self%io_handle%valid) &
       call self%handle_error(1, "ADIOS2 IO object is not valid")
 
-    select type(file_handle)
+    select type (file_handle)
     type is (io_adios2_file_t)
-      call adios2_open(file_handle%engine, self%io_handle, filename, adios2_mode_read, use_comm, ierr)
+      call adios2_open( &
+        file_handle%engine, self%io_handle, filename, &
+        adios2_mode_read, use_comm, ierr)
       call self%handle_error(ierr, "Failed to open ADIOS2 engine for reading")
       file_handle%is_writer = .false.
     end select
@@ -152,8 +153,8 @@ contains
 
     type(adios2_variable) :: var
     integer :: ierr
-    
-    select type(file_handle)
+
+    select type (file_handle)
     type is (io_adios2_file_t)
       call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
 
@@ -161,7 +162,8 @@ contains
         call adios2_get(file_handle%engine, var, value, adios2_mode_sync, ierr)
         call self%handle_error(ierr, "Failed to read variable "//variable_name)
       else
-        call self%handle_error(1, "Variable "//trim(variable_name)//" not found in file")
+        call self%handle_error(1, "Variable " &
+                               //trim(variable_name)//" not found in file")
       end if
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
@@ -176,8 +178,8 @@ contains
 
     type(adios2_variable) :: var
     integer :: ierr
-    
-    select type(file_handle)
+
+    select type (file_handle)
     type is (io_adios2_file_t)
       call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
 
@@ -185,7 +187,8 @@ contains
         call adios2_get(file_handle%engine, var, value, adios2_mode_sync, ierr)
         call self%handle_error(ierr, "Failed to read variable "//variable_name)
       else
-        call self%handle_error(1, "Variable "//trim(variable_name)//" not found in file")
+        call self%handle_error(1, "Variable " &
+                               //trim(variable_name)//" not found in file")
       end if
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
@@ -200,8 +203,8 @@ contains
 
     type(adios2_variable) :: var
     integer :: ierr
-    
-    select type(file_handle)
+
+    select type (file_handle)
     type is (io_adios2_file_t)
       ! retrieve a variable handler within current io handler
       call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
@@ -210,14 +213,18 @@ contains
         call adios2_get(file_handle%engine, var, value, adios2_mode_sync, ierr)
         call self%handle_error(ierr, "Failed to read variable "//variable_name)
       else
-        call self%handle_error(1, "Variable "//trim(variable_name)//" not found in file")
+        call self%handle_error(1, "Variable " &
+                               //trim(variable_name)//" not found in file")
       end if
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
     end select
   end subroutine read_data_real_adios2
 
-  subroutine read_data_array_3d_adios2(self, variable_name, array, file_handle, shape_dims, start_dims, count_dims)
+  subroutine read_data_array_3d_adios2( &
+    self, variable_name, array, file_handle, &
+    shape_dims, start_dims, count_dims &
+    )
     class(io_adios2_reader_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
     real(dp), intent(inout) :: array(:, :, :)
@@ -229,8 +236,8 @@ contains
     type(adios2_variable) :: var
     integer :: ierr
     integer(i8) :: local_start(3), local_count(3)
-    
-    select type(file_handle)
+
+    select type (file_handle)
     type is (io_adios2_file_t)
       call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
 
@@ -240,7 +247,6 @@ contains
         else
           local_start = 0_i8
         end if
-        
         if (present(count_dims)) then
           local_count = count_dims
         else
@@ -256,9 +262,11 @@ contains
         end if
 
         call adios2_get(file_handle%engine, var, array, adios2_mode_sync, ierr)
-        call self%handle_error(ierr, "Failed to read variable "//trim(variable_name))
+        call self%handle_error(ierr, &
+                               "Failed to read variable "//trim(variable_name))
       else
-        call self%handle_error(1, "Variable "//trim(variable_name)//" not found in file")
+        call self%handle_error(1, "Variable " &
+                               //trim(variable_name)//" not found in file")
       end if
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
@@ -314,17 +322,17 @@ contains
     character(len=*), intent(in) :: filename
     integer, intent(in) :: mode
     integer, intent(in) :: comm
+
     class(io_file_t), pointer :: file_handle
-    
     integer :: ierr, use_comm
 
-    allocate(io_adios2_file_t :: file_handle)
+    allocate (io_adios2_file_t :: file_handle)
 
     use_comm = comm
     if (.not. self%io_handle%valid) &
       call self%handle_error(1, "ADIOS2 IO object is not valid")
 
-    select type(file_handle)
+    select type (file_handle)
     type is (io_adios2_file_t)
       ! if opening in write mode, we are starting a new independent dataset
       ! remove all old variables from the IO object
@@ -334,7 +342,9 @@ contains
                                & before open")
       end if
 
-      call adios2_open(file_handle%engine, self%io_handle, filename, adios2_mode_write, use_comm, ierr)
+      call adios2_open( &
+        file_handle%engine, self%io_handle, filename, &
+        adios2_mode_write, use_comm, ierr)
       call self%handle_error(ierr, "Failed to open ADIOS2 engine for writing")
       file_handle%is_writer = .true.
     end select
@@ -348,20 +358,21 @@ contains
 
     type(adios2_variable) :: var
     integer :: ierr
-    
-    select type(file_handle)
+
+    select type (file_handle)
     type is (io_adios2_file_t)
       call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
 
       if (ierr /= adios2_found) then
         ! Use integer4 type for i8 compatibility - ADIOS2 will handle the conversion
-        call adios2_define_variable(var, self%io_handle, variable_name, adios2_type_integer4, &
-                                    ierr)
+        call adios2_define_variable( &
+          var, self%io_handle, variable_name, adios2_type_integer4, ierr)
         call self%handle_error(ierr, &
                                "Error defining ADIOS2 scalar i8 variable")
       end if
 
-      call adios2_put(file_handle%engine, var, value, adios2_mode_deferred, ierr)
+      call adios2_put( &
+        file_handle%engine, var, value, adios2_mode_deferred, ierr)
       call self%handle_error(ierr, "Error writing ADIOS2 scalar i8 data")
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
@@ -376,19 +387,20 @@ contains
 
     type(adios2_variable) :: var
     integer :: ierr
-    
-    select type(file_handle)
+
+    select type (file_handle)
     type is (io_adios2_file_t)
       call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
 
       if (ierr /= adios2_found) then
-        call adios2_define_variable(var, self%io_handle, variable_name, adios2_type_integer4, &
-                                    ierr)
+        call adios2_define_variable( &
+          var, self%io_handle, variable_name, adios2_type_integer4, ierr)
         call self%handle_error(ierr, &
                                "Error defining ADIOS2 scalar integer variable")
       end if
 
-      call adios2_put(file_handle%engine, var, value, adios2_mode_deferred, ierr)
+      call adios2_put( &
+        file_handle%engine, var, value, adios2_mode_deferred, ierr)
       call self%handle_error(ierr, "Error writing ADIOS2 scalar integer data")
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
@@ -403,8 +415,8 @@ contains
 
     type(adios2_variable) :: var
     integer :: ierr
-    
-    select type(file_handle)
+
+    select type (file_handle)
     type is (io_adios2_file_t)
       call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
 
@@ -415,7 +427,8 @@ contains
                                      & double precision real variable")
       end if
 
-      call adios2_put(file_handle%engine, var, value, adios2_mode_deferred, ierr)
+      call adios2_put( &
+        file_handle%engine, var, value, adios2_mode_deferred, ierr)
       call self%handle_error(ierr, "Error writing ADIOS2 scalar &
                                    & double precision real data")
     class default
@@ -423,7 +436,10 @@ contains
     end select
   end subroutine write_data_real_adios2
 
-  subroutine write_data_array_3d_adios2(self, variable_name, array, file_handle, shape_dims, start_dims, count_dims)
+  subroutine write_data_array_3d_adios2( &
+    self, variable_name, array, file_handle, &
+    shape_dims, start_dims, count_dims &
+    )
     class(io_adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
     real(dp), intent(in) :: array(:, :, :)
@@ -435,8 +451,8 @@ contains
     type(adios2_variable) :: var
     integer :: ierr
     integer(i8) :: local_shape(3), local_start(3), local_count(3)
-    
-    select type(file_handle)
+
+    select type (file_handle)
     type is (io_adios2_file_t)
       if (present(shape_dims)) then
         local_shape = shape_dims
@@ -459,14 +475,16 @@ contains
       call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
 
       if (ierr /= adios2_found) then
-        call adios2_define_variable(var, self%io_handle, variable_name, adios2_type_dp, &
-                                    3, local_shape, local_start, &
-                                    local_count, adios2_constant_dims, ierr)
+        call adios2_define_variable(var, self%io_handle, variable_name, &
+                                    adios2_type_dp, 3, local_shape, &
+                                    local_start, local_count, &
+                                    adios2_constant_dims, ierr)
         call self%handle_error(ierr, "Error defining ADIOS2 3D array &
                                      & double precision real variable")
       end if
 
-      call adios2_put(file_handle%engine, var, array, adios2_mode_deferred, ierr)
+      call adios2_put( &
+        file_handle%engine, var, array, adios2_mode_deferred, ierr)
       call self%handle_error(ierr, "Error writing ADIOS2 3D array &
                                    & double precision real data")
     class default
@@ -474,7 +492,9 @@ contains
     end select
   end subroutine write_data_array_3d_adios2
 
-  subroutine write_attribute_string_adios2(self, attribute_name, value, file_handle)
+  subroutine write_attribute_string_adios2( &
+    self, attribute_name, value, file_handle &
+    )
     class(io_adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: attribute_name
     character(len=*), intent(in) :: value
@@ -482,17 +502,22 @@ contains
 
     type(adios2_attribute) :: attr
     integer :: ierr
-    
-    select type(file_handle)
+
+    select type (file_handle)
     type is (io_adios2_file_t)
-      call adios2_define_attribute(attr, self%io_handle, attribute_name, value, ierr)
-      call self%handle_error(ierr, "Error defining ADIOS2 string attribute "//trim(attribute_name))
+      call adios2_define_attribute( &
+        attr, self%io_handle, attribute_name, value, ierr)
+      call self%handle_error(ierr, &
+                             "Error defining ADIOS2 string attribute " &
+                             //trim(attribute_name))
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
     end select
   end subroutine write_attribute_string_adios2
 
-  subroutine write_attribute_array_1d_real_adios2(self, attribute_name, values, file_handle)
+  subroutine write_attribute_array_1d_real_adios2( &
+    self, attribute_name, values, file_handle &
+    )
     class(io_adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: attribute_name
     real(dp), intent(in) :: values(:)
@@ -502,11 +527,15 @@ contains
     integer :: ierr
     integer :: num_elements
 
-    select type(file_handle)
+    select type (file_handle)
     type is (io_adios2_file_t)
       num_elements = size(values)
-      call adios2_define_attribute(attr, self%io_handle, attribute_name, values, num_elements, ierr)
-      call self%handle_error(ierr, "Error defining ADIOS2 real array attribute "//trim(attribute_name))
+      call adios2_define_attribute( &
+        attr, self%io_handle, attribute_name, values, num_elements, ierr)
+      call self%handle_error( &
+                             ierr, "Error defining ADIOS2 real &
+                             & array attribute " &
+                             //trim(attribute_name))
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
     end select
@@ -524,6 +553,7 @@ contains
 
   subroutine file_close_adios2(self)
     class(io_adios2_file_t), intent(inout) :: self
+
     integer :: ierr
 
     if (self%is_step_active) call self%end_step()
@@ -536,6 +566,7 @@ contains
 
   subroutine file_begin_step_adios2(self)
     class(io_adios2_file_t), intent(inout) :: self
+
     integer :: ierr
 
     if (self%is_step_active) return
@@ -547,12 +578,13 @@ contains
       call adios2_begin_step(self%engine, adios2_step_mode_read, ierr)
       call self%handle_error(ierr, "Error beginning ADIOS2 step for reading")
     end if
-    
+
     self%is_step_active = .true.
   end subroutine file_begin_step_adios2
 
   subroutine file_end_step_adios2(self)
     class(io_adios2_file_t), intent(inout) :: self
+
     integer :: ierr
 
     if (.not. self%is_step_active) return
