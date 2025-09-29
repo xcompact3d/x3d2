@@ -9,14 +9,14 @@ module m_base_case
   use m_field, only: field_t, flist_t
   use m_mesh, only: mesh_t
   use m_solver, only: solver_t, init
-  use m_checkpoint_manager, only: checkpoint_manager_t
+  use m_io_manager, only: io_manager_t
   use mpi, only: MPI_COMM_WORLD
 
   implicit none
 
   type, abstract :: base_case_t
     class(solver_t), allocatable :: solver
-    type(checkpoint_manager_t) :: checkpoint_mgr
+    type(io_manager_t) :: checkpoint_mgr
   contains
     procedure(boundary_conditions), deferred :: boundary_conditions
     procedure(initial_conditions), deferred :: initial_conditions
