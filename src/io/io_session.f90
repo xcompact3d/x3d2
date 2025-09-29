@@ -7,16 +7,15 @@ module m_io_session
   use mpi, only: MPI_COMM_WORLD
   use m_common, only: dp, i8
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, io_mode_read, io_mode_write
-  use m_io_factory, only: make_reader, make_writer, make_reader_ptr, make_writer_ptr, &
-                          allocate_io_reader_ptr, allocate_io_writer_ptr
+  use m_io_factory, only: allocate_io_reader, allocate_io_writer
 
   implicit none
 
   private
   
-  ! I/O pointer allocation functions
-  public :: allocate_io_writer_ptr, allocate_io_reader_ptr
-
+  ! Re-export factory functions through session module for proper layering
+  public :: allocate_io_reader, allocate_io_writer
+  
   ! Session-based API
   public :: io_session_t
 
@@ -70,16 +69,6 @@ module m_io_session
   end type io_session_t
 
 contains
-
-  subroutine allocate_io_writer_ptr(writer)
-    class(io_writer_t), pointer, intent(out) :: writer
-    call make_writer_ptr(writer)
-  end subroutine allocate_io_writer_ptr
-
-  subroutine allocate_io_reader_ptr(reader)
-    class(io_reader_t), pointer, intent(out) :: reader
-    call make_reader_ptr(reader)
-  end subroutine allocate_io_reader_ptr
 
   subroutine read_data_i8(self, variable_name, value)
     class(io_session_t), intent(inout) :: self
@@ -186,12 +175,12 @@ contains
     if (present(mode)) use_mode = mode
     
     if (use_mode == io_mode_read) then
-      call allocate_io_reader_ptr(self%reader)
+      call allocate_io_reader(self%reader)
       call self%reader%init(comm, "session_reader")
       self%file => self%reader%open(filename, io_mode_read, comm)
       self%is_write_mode = .false.
     else if (use_mode == io_mode_write) then
-      call allocate_io_writer_ptr(self%writer)
+      call allocate_io_writer(self%writer)
       call self%writer%init(comm, "session_writer")
       self%file => self%writer%open(filename, io_mode_write, comm)
       self%is_write_mode = .true.
