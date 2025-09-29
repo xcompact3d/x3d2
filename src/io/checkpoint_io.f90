@@ -64,6 +64,9 @@ module m_checkpoint_manager_impl
 
   ! type for dynamic field buffer mapping
   type :: field_buffer_map_t
+    !! Race-free field buffer mapping for async I/O operations.
+    !! Each field gets its own dedicated buffer to prevent data races
+    !! when multiple async write operations are in flight.
     character(len=32) :: field_name
     real(dp), dimension(:, :, :), allocatable :: buffer
   end type field_buffer_map_t
@@ -74,8 +77,7 @@ module m_checkpoint_manager_impl
     integer :: last_checkpoint_step = -1
     integer, dimension(3) :: output_stride = [1, 1, 1]              !! Stride factors for snapshots (default: full resolution)
     integer, dimension(3) :: full_resolution = [1, 1, 1]           !! Full resolution factors for checkpoints (no downsampling)
-    real(dp), dimension(:, :, :), allocatable :: output_buffer     !! Fallback buffer for extra fields
-    type(field_buffer_map_t), allocatable :: field_buffers(:)       !! Dynamic field buffer mapping for true async I/O
+    type(field_buffer_map_t), allocatable :: field_buffers(:)       !! Dynamic field buffer mapping for race-free async I/O
     real(dp), dimension(:, :, :), allocatable :: coords_x, coords_y, coords_z
     integer(i8), dimension(3) :: last_shape_dims = 0
     integer, dimension(3) :: last_stride_factors = 0
@@ -879,21 +881,15 @@ contains
           start_dims=output_start, count_dims=output_count &
           )
       else
-        ! fallback to shared buffer for fields not in the map
-        if (.not. allocated(self%output_buffer)) then
-          allocate ( &
-            self%output_buffer(output_dims_local(1), &
-                               output_dims_local(2), &
-                               output_dims_local(3)))
-        end if
-        call self%stride_data_to_buffer( &
-          host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), dims, &
-          stride_factors, self%output_buffer, output_dims_local)
-
-        call io_session%write_data( &
-          field_name, self%output_buffer, &
-          start_dims=output_start, count_dims=output_count &
-          )
+        ! ERROR: All fields must have pre-allocated buffers for race-free async I/O
+        print *, 'INTERNAL ERROR: No dedicated buffer found for field: ', trim(field_name)
+        print *, 'Available buffers:'
+        do buffer_idx = 1, size(self%field_buffers)
+          print *, '  - ', trim(self%field_buffers(buffer_idx)%field_name)
+        end do
+        print *, 'This violates the race-free async I/O design.'
+        print *, 'All fields must be pre-allocated in prepare_field_buffers().'
+        error stop 'Missing field buffer - race condition risk'
       end if
 
     end subroutine write_single_field
@@ -904,8 +900,6 @@ contains
     !! Clean up dynamic field buffers
     class(checkpoint_manager_impl_t), intent(inout) :: self
     integer :: i
-
-    if (allocated(self%output_buffer)) deallocate (self%output_buffer)
 
     if (allocated(self%field_buffers)) then
       do i = 1, size(self%field_buffers)
