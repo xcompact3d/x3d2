@@ -56,20 +56,13 @@ module m_checkpoint_manager_impl
   use m_io_base, only: io_writer_t, io_file_t, io_mode_write
   use m_config, only: checkpoint_config_t
   use m_checkpoint_manager_base, only: checkpoint_manager_base_t
+  use m_io_field_utils, only: field_buffer_map_t, field_ptr_t, stride_data, stride_data_to_buffer, &
+                              get_output_dimensions, generate_coordinates
 
   implicit none
 
   private
   public :: checkpoint_manager_impl_t
-
-  ! type for dynamic field buffer mapping
-  type :: field_buffer_map_t
-    !! Race-free field buffer mapping for async I/O operations.
-    !! Each field gets its own dedicated buffer to prevent data races
-    !! when multiple async write operations are in flight.
-    character(len=32) :: field_name
-    real(dp), dimension(:, :, :), allocatable :: buffer
-  end type field_buffer_map_t
 
   type, extends(checkpoint_manager_base_t) :: checkpoint_manager_impl_t
     class(io_writer_t), pointer :: checkpoint_writer => null()               !! Writer for checkpoints
@@ -93,17 +86,9 @@ module m_checkpoint_manager_impl
     procedure, private :: restart_checkpoint
     procedure, private :: configure
     procedure, private :: write_fields
-    procedure, private :: stride_data
-    procedure, private :: stride_data_to_buffer
     procedure, private :: cleanup_output_buffers
-    procedure, private :: get_output_dimensions
-    procedure, private :: generate_coordinates
     procedure, private :: generate_vtk_xml
   end type checkpoint_manager_impl_t
-
-  type :: field_ptr_t
-    class(field_t), pointer :: ptr => null()
-  end type field_ptr_t
 
 contains
 
@@ -484,217 +469,6 @@ contains
     self%vtk_xml = xml
   end subroutine generate_vtk_xml
 
-  subroutine generate_coordinates( &
-    self, solver, file, shape_dims, start_dims, count_dims, data_loc &
-    )
-    class(checkpoint_manager_impl_t), intent(inout) :: self
-    class(solver_t), intent(in) :: solver
-    class(io_file_t), intent(inout) :: file
-    integer(i8), dimension(3), intent(in) :: shape_dims, start_dims, count_dims
-    integer, intent(in) :: data_loc
-
-    integer :: i, nx, ny, nz
-    real(dp), dimension(3) :: coords
-    integer(i8), dimension(3) :: x_shape, y_shape, z_shape
-    integer(i8), dimension(3) :: x_start, y_start, z_start
-    integer(i8), dimension(3) :: x_count, y_count, z_count
-
-    nx = int(count_dims(1))
-    ny = int(count_dims(2))
-    nz = int(count_dims(3))
-
-    ! coordinates are structured as 3D arrays for ParaView ADIOS2 reader compatibility
-    if (.not. allocated(self%coords_x) .or. size(self%coords_x) /= nx) then
-      if (allocated(self%coords_x)) deallocate (self%coords_x)
-      allocate (self%coords_x(nx, 1, 1))
-    end if
-
-    if (.not. allocated(self%coords_y) .or. size(self%coords_y) /= ny) then
-      if (allocated(self%coords_y)) deallocate (self%coords_y)
-      allocate (self%coords_y(1, ny, 1))
-    end if
-
-    if (.not. allocated(self%coords_z) .or. size(self%coords_z) /= nz) then
-      if (allocated(self%coords_z)) deallocate (self%coords_z)
-      allocate (self%coords_z(1, 1, nz))
-    end if
-
-    do i = 1, nx
-      coords = solver%mesh%get_coordinates(i, 1, 1, data_loc)
-      self%coords_x(i, 1, 1) = coords(1)
-    end do
-
-    do i = 1, ny
-      coords = solver%mesh%get_coordinates(1, i, 1, data_loc)
-      self%coords_y(1, i, 1) = coords(2)
-    end do
-
-    do i = 1, nz
-      coords = solver%mesh%get_coordinates(1, 1, i, data_loc)
-      self%coords_z(1, 1, i) = coords(3)
-    end do
-
-    x_shape = [1_i8, 1_i8, shape_dims(1)]
-    x_start = [0_i8, 0_i8, start_dims(1)]
-    x_count = [1_i8, 1_i8, count_dims(1)]
-
-    y_shape = [1_i8, shape_dims(2), 1_i8]
-    y_start = [0_i8, start_dims(2), 0_i8]
-    y_count = [1_i8, count_dims(2), 1_i8]
-
-    z_shape = [shape_dims(3), 1_i8, 1_i8]
-    z_start = [start_dims(3), 0_i8, 0_i8]
-    z_count = [count_dims(3), 1_i8, 1_i8]
-
-    call self%checkpoint_writer%write_data( &
-      "coordinates/x", self%coords_x, file, x_shape, x_start, x_count &
-      )
-    call self%checkpoint_writer%write_data( &
-      "coordinates/y", self%coords_y, file, y_shape, y_start, y_count &
-      )
-    call self%checkpoint_writer%write_data( &
-      "coordinates/z", self%coords_z, file, z_shape, z_start, z_count &
-      )
-  end subroutine generate_coordinates
-
-  function stride_data( &
-    self, input_data, dims, stride, output_dims_out) &
-    result(output_data)
-    !! stride the input data based on the specified stride
-    class(checkpoint_manager_impl_t), intent(inout) :: self
-    real(dp), dimension(:, :, :), intent(in) :: input_data
-    integer, dimension(3), intent(in) :: dims
-    integer, dimension(3), intent(in) :: stride
-    integer, dimension(3), intent(out) :: output_dims_out
-
-    real(dp), dimension(:, :, :), allocatable :: output_data
-    integer :: i_stride, j_stride, k_stride
-    integer :: i_max, j_max, k_max
-
-    if (all(stride == 1)) then
-      allocate (output_data(dims(1), dims(2), dims(3)))
-      output_data = input_data
-      output_dims_out = dims
-      return
-    end if
-
-    i_stride = stride(1); j_stride = stride(2); k_stride = stride(3)
-
-    i_max = (dims(1) - 1)/i_stride + 1
-    j_max = (dims(2) - 1)/j_stride + 1
-    k_max = (dims(3) - 1)/k_stride + 1
-
-    output_dims_out = [i_max, j_max, k_max]
-    allocate (output_data(i_max, j_max, k_max))
-
-    output_data = input_data(1:dims(1):i_stride, &
-                             1:dims(2):j_stride, 1:dims(3):k_stride)
-  end function stride_data
-
-  subroutine stride_data_to_buffer( &
-    self, input_data, dims, stride, out_buffer, output_dims_out &
-    )
-    class(checkpoint_manager_impl_t), intent(inout) :: self
-    real(dp), dimension(:, :, :), intent(in) :: input_data
-    integer, dimension(3), intent(in) :: dims
-    integer, dimension(3), intent(in) :: stride
-    real(dp), dimension(:, :, :), allocatable, intent(inout) :: out_buffer
-    integer, dimension(3), intent(out) :: output_dims_out
-
-    integer :: i_stride, j_stride, k_stride
-    integer :: i_max, j_max, k_max
-
-    if (all(stride == 1)) then
-      if (allocated(out_buffer)) then
-        if (size(out_buffer, 1) /= dims(1) &
-            .or. size(out_buffer, 2) /= dims(2) .or. &
-            size(out_buffer, 3) /= dims(3)) then
-          deallocate (out_buffer)
-          allocate (out_buffer(dims(1), dims(2), dims(3)))
-        end if
-      else
-        allocate (out_buffer(dims(1), dims(2), dims(3)))
-      end if
-      out_buffer = input_data
-      output_dims_out = dims
-      return
-    end if
-
-    i_stride = stride(1); j_stride = stride(2); k_stride = stride(3)
-
-    i_max = (dims(1) + i_stride - 1)/i_stride
-    j_max = (dims(2) + j_stride - 1)/j_stride
-    k_max = (dims(3) + k_stride - 1)/k_stride
-
-    output_dims_out = [i_max, j_max, k_max]
-
-    if (allocated(out_buffer)) then
-      if (size(out_buffer, 1) /= i_max &
-          .or. size(out_buffer, 2) /= j_max .or. &
-          size(out_buffer, 3) /= k_max) then
-        deallocate (out_buffer)
-        allocate (out_buffer(i_max, j_max, k_max))
-      end if
-    else
-      allocate (out_buffer(i_max, j_max, k_max))
-    end if
-
-    out_buffer = input_data(1:dims(1):i_stride, &
-                            1:dims(2):j_stride, 1:dims(3):k_stride)
-  end subroutine stride_data_to_buffer
-
-  subroutine get_output_dimensions( &
-    self, shape_dims, start_dims, count_dims, stride_factors, &
-    output_shape, output_start, output_count, output_dims_local)
-
-    class(checkpoint_manager_impl_t), intent(inout) :: self
-    integer(i8), dimension(3), intent(in) :: shape_dims, start_dims, count_dims
-    integer, dimension(3), intent(in) :: stride_factors
-    integer(i8), dimension(3), intent(out) :: output_shape, output_start
-    integer(i8), dimension(3), intent(out) :: output_count
-    integer, dimension(3), intent(out) :: output_dims_local
-
-    if (all(stride_factors == 1)) then
-      output_shape = shape_dims
-      output_start = start_dims
-      output_count = count_dims
-      output_dims_local = int(count_dims)
-      return
-    end if
-
-    if (all(shape_dims == self%last_shape_dims) .and. &
-        all(stride_factors == self%last_stride_factors) .and. &
-        all(self%last_output_shape > 0)) then
-      output_shape = self%last_output_shape
-    else
-      output_shape = [(shape_dims(1) + stride_factors(1) - 1_i8) &
-                      /int(stride_factors(1), i8), &
-                      (shape_dims(2) + stride_factors(2) - 1_i8) &
-                      /int(stride_factors(2), i8), &
-                      (shape_dims(3) + stride_factors(3) - 1_i8) &
-                      /int(stride_factors(3), i8)]
-
-      self%last_shape_dims = shape_dims
-      self%last_stride_factors = stride_factors
-      self%last_output_shape = output_shape
-    end if
-
-    output_start = [start_dims(1)/int(stride_factors(1), i8), &
-                    start_dims(2)/int(stride_factors(2), i8), &
-                    start_dims(3)/int(stride_factors(3), i8)]
-
-    output_dims_local = [(int(count_dims(1)) + stride_factors(1) - 1) &
-                         /stride_factors(1), &
-                         (int(count_dims(2)) + stride_factors(2) - 1) &
-                         /stride_factors(2), &
-                         (int(count_dims(3)) + stride_factors(3) - 1) &
-                         /stride_factors(3)]
-
-    output_count = [int(output_dims_local(1), i8), &
-                    int(output_dims_local(2), i8), &
-                    int(output_dims_local(3), i8)]
-  end subroutine get_output_dimensions
-
   subroutine restart_checkpoint( &
     self, solver, filename, timestep, restart_time, comm &
     )
@@ -809,10 +583,11 @@ contains
       start_dims = int(solver%mesh%par%n_offset, i8)
       count_dims = int(dims, i8)
 
-      call self%get_output_dimensions( &
+      call get_output_dimensions( &
         shape_dims, start_dims, count_dims, stride_factors, &
         output_shape, output_start, output_count, &
-        output_dims_local &
+        output_dims_local, &
+        self%last_shape_dims, self%last_stride_factors, self%last_output_shape &
         )
 
       if (allocated(self%field_buffers)) deallocate (self%field_buffers)
@@ -852,10 +627,11 @@ contains
         stride_factors = self%full_resolution
       end if
 
-      call self%get_output_dimensions( &
+      call get_output_dimensions( &
         shape_dims, start_dims, count_dims, stride_factors, &
         output_shape, output_start, output_count, &
-        output_dims_local &
+        output_dims_local, &
+        self%last_shape_dims, self%last_stride_factors, self%last_output_shape &
         )
 
       ! find the matching buffer for this field
@@ -870,7 +646,7 @@ contains
 
       if (buffer_found) then
         ! use the dedicated buffer for this field for true async I/O
-        call self%stride_data_to_buffer( &
+        call stride_data_to_buffer( &
           host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), dims, &
           stride_factors, self%field_buffers(buffer_idx)%buffer, &
           output_dims_local &
