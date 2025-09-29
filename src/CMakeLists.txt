@@ -59,7 +59,8 @@ set(IOSRC
   io/io_factory.f90
   io/io_session.f90
   io/io_field_utils.f90
-  io/checkpoint_io.f90
+  io/checkpoint_manager.f90
+  io/snapshot_manager.f90
   io/io_manager.f90
 )
 
