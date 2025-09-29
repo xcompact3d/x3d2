@@ -188,7 +188,8 @@ contains
     class(io_file_t), intent(inout) :: file
     integer(i8), dimension(3), intent(in) :: shape_dims, start_dims, count_dims
     integer, intent(in) :: data_loc
-    real(dp), dimension(:, :, :), allocatable, intent(inout) :: coords_x, coords_y, coords_z
+    real(dp), dimension(:, :, :), allocatable, intent(inout) :: &
+      coords_x, coords_y, coords_z
 
     integer :: i, nx, ny, nz
     real(dp), dimension(3) :: coords
@@ -262,13 +263,11 @@ contains
     character(len=*), dimension(:), intent(in) :: field_names
     type(field_ptr_t), allocatable, intent(out) :: field_ptrs(:)
     type(field_ptr_t), allocatable, intent(out) :: host_fields(:)
-
     integer :: i, num_fields
 
     num_fields = size(field_names)
-    
-    allocate(field_ptrs(num_fields))
-    allocate(host_fields(num_fields))
+    allocate (field_ptrs(num_fields))
+    allocate (host_fields(num_fields))
 
     ! Point field_ptrs to actual solver data
     do i = 1, num_fields
@@ -311,12 +310,12 @@ contains
       do i = 1, size(host_fields)
         call solver%host_allocator%release_block(host_fields(i)%ptr)
       end do
-      deallocate(host_fields)
+      deallocate (host_fields)
     end if
 
     ! Clean up field pointers
     if (allocated(field_ptrs)) then
-      deallocate(field_ptrs)
+      deallocate (field_ptrs)
     end if
   end subroutine cleanup_field_arrays
 
