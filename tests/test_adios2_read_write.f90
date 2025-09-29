@@ -1,6 +1,6 @@
 program test_adios2
   use mpi
-  use m_io_session, only: allocate_io_writer_ptr, allocate_io_reader_ptr
+  use m_io_session, only: allocate_io_writer, allocate_io_reader
   use m_io_base, only: io_writer_t, io_reader_t, io_file_t, io_mode_write, io_mode_read
   use m_common, only: dp, i8
   use iso_fortran_env, only: stderr => error_unit
@@ -45,7 +45,7 @@ program test_adios2
   count_dims = [int(inx, i8), int(iny, i8), int(inz, i8)]
 
   ! write data
-  call allocate_io_writer_ptr(adios2_writer)
+  call allocate_io_writer(adios2_writer)
   call adios2_writer%init(MPI_COMM_WORLD, "test_io_write")
   file => adios2_writer%open("test_output.bp", io_mode_write, MPI_COMM_WORLD)
   call file%begin_step()
@@ -59,7 +59,7 @@ program test_adios2
 
   ! read data (rank 0 only)
   if (irank == 0) then
-    call allocate_io_reader_ptr(adios2_reader)
+    call allocate_io_reader(adios2_reader)
     call adios2_reader%init(MPI_COMM_SELF, "test_io_read")
     ! Note: file pointer is automatically nullified when writer is deallocated
     file => adios2_reader%open("test_output.bp", io_mode_read, MPI_COMM_SELF)

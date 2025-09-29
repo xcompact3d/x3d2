@@ -52,7 +52,7 @@ module m_checkpoint_manager_impl
   use m_common, only: dp, i8, DIR_C, VERT, get_argument
   use m_field, only: field_t
   use m_solver, only: solver_t
-  use m_io_session, only: allocate_io_writer_ptr, io_session_t
+  use m_io_session, only: allocate_io_writer, io_session_t
   use m_io_base, only: io_writer_t, io_file_t, io_mode_write
   use m_config, only: checkpoint_config_t
   use m_checkpoint_manager_base, only: checkpoint_manager_base_t
@@ -110,9 +110,9 @@ contains
     class(checkpoint_manager_impl_t), intent(inout) :: self
     integer, intent(in) :: comm
 
-    call allocate_io_writer_ptr(self%checkpoint_writer)
+    call allocate_io_writer(self%checkpoint_writer)
     call self%checkpoint_writer%init(comm, "checkpoint_writer")
-    call allocate_io_writer_ptr(self%snapshot_writer)
+    call allocate_io_writer(self%snapshot_writer)
     call self%snapshot_writer%init(comm, "snapshot_writer")
 
     self%checkpoint_cfg = checkpoint_config_t()
