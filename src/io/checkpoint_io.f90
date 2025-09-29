@@ -57,7 +57,8 @@ module m_checkpoint_manager_impl
   use m_config, only: checkpoint_config_t
   use m_checkpoint_manager_base, only: checkpoint_manager_base_t
   use m_io_field_utils, only: field_buffer_map_t, field_ptr_t, stride_data, stride_data_to_buffer, &
-                              get_output_dimensions, generate_coordinates
+                              get_output_dimensions, generate_coordinates, &
+                              setup_field_arrays, cleanup_field_arrays
 
   implicit none
 
@@ -245,45 +246,16 @@ contains
     call io_session%write_data("dt", real(solver%dt, dp))
     call io_session%write_data("data_loc", data_loc)
 
-    allocate (field_ptrs(num_fields))
-    allocate (host_fields(num_fields))
-    do i = 1, num_fields
-      select case (trim(field_names(i)))
-      case ("u")
-        field_ptrs(i)%ptr => solver%u
-      case ("v")
-        field_ptrs(i)%ptr => solver%v
-      case ("w")
-        field_ptrs(i)%ptr => solver%w
-      case default
-        if (solver%mesh%par%is_root()) then
-          print *, 'ERROR: Unknown field name in checkpoint list: ', &
-            trim(field_names(i))
-        end if
-        error stop 1
-      end select
-    end do
-
-    do i = 1, num_fields
-      host_fields(i)%ptr => solver%host_allocator%get_block( &
-                            DIR_C, field_ptrs(i)%ptr%data_loc)
-      call solver%backend%get_field_data( &
-        host_fields(i)%ptr%data, field_ptrs(i)%ptr)
-    end do
+    call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
 
     call self%write_fields( &
       field_names, host_fields, &
       solver, io_session, data_loc, use_stride=.false. &
       )
-    deallocate (field_ptrs)
 
     call io_session%close()
 
-    do i = 1, num_fields
-      call solver%host_allocator%release_block(host_fields(i)%ptr)
-    end do
-
-    deallocate (host_fields)
+    call cleanup_field_arrays(solver, field_ptrs, host_fields)
 
     if (myrank == 0) then
       ! Move temporary file to final checkpoint filename
@@ -382,34 +354,7 @@ contains
 
     call io_session%write_data("time", real(simulation_time, dp))
 
-    allocate (field_ptrs(num_fields))
-    allocate (host_fields(num_fields))
-
-    ! point field_ptrs to actual solver data
-    do i = 1, num_fields
-      select case (trim(field_names(i)))
-      case ("u")
-        field_ptrs(i)%ptr => solver%u
-      case ("v")
-        field_ptrs(i)%ptr => solver%v
-      case ("w")
-        field_ptrs(i)%ptr => solver%w
-      case default
-        if (solver%mesh%par%is_root()) then
-          print *, 'ERROR: Unknown field name in snapshot list: ', &
-            trim(field_names(i))
-        end if
-        error stop 1
-      end select
-    end do
-
-    ! allocate a unique host buffer
-    do i = 1, num_fields
-      host_fields(i)%ptr => solver%host_allocator%get_block( &
-                            DIR_C, field_ptrs(i)%ptr%data_loc)
-      call solver%backend%get_field_data( &
-        host_fields(i)%ptr%data, field_ptrs(i)%ptr)
-    end do
+    call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
 
     call self%write_fields( &
       field_names, host_fields, &
@@ -419,12 +364,7 @@ contains
 
     call io_session%close()
 
-    do i = 1, num_fields
-      call solver%host_allocator%release_block(host_fields(i)%ptr)
-    end do
-
-    deallocate (field_ptrs)
-    deallocate (host_fields)
+    call cleanup_field_arrays(solver, field_ptrs, host_fields)
   end subroutine write_snapshot
 
   subroutine generate_vtk_xml(self, dims, fields, origin, spacing)
