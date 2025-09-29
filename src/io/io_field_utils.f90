@@ -11,6 +11,7 @@ module m_io_field_utils
   public :: field_buffer_map_t, field_ptr_t
   public :: stride_data, stride_data_to_buffer, get_output_dimensions
   public :: generate_coordinates
+  public :: setup_field_arrays, cleanup_field_arrays
 
   type :: field_buffer_map_t
     !! Race-free field buffer mapping for async I/O operations.
@@ -252,5 +253,71 @@ contains
       "coordinates/z", coords_z, file, z_shape, z_start, z_count &
       )
   end subroutine generate_coordinates
+
+  subroutine setup_field_arrays( &
+    solver, field_names, field_ptrs, host_fields &
+    )
+    !! Set up field pointer arrays and allocate host buffers for I/O operations
+    class(solver_t), intent(in) :: solver
+    character(len=*), dimension(:), intent(in) :: field_names
+    type(field_ptr_t), allocatable, intent(out) :: field_ptrs(:)
+    type(field_ptr_t), allocatable, intent(out) :: host_fields(:)
+
+    integer :: i, num_fields
+
+    num_fields = size(field_names)
+    
+    allocate(field_ptrs(num_fields))
+    allocate(host_fields(num_fields))
+
+    ! Point field_ptrs to actual solver data
+    do i = 1, num_fields
+      select case (trim(field_names(i)))
+      case ("u")
+        field_ptrs(i)%ptr => solver%u
+      case ("v")
+        field_ptrs(i)%ptr => solver%v
+      case ("w")
+        field_ptrs(i)%ptr => solver%w
+      case default
+        if (solver%mesh%par%is_root()) then
+          print *, 'ERROR: Unknown field name: ', trim(field_names(i))
+        end if
+        error stop 1
+      end select
+    end do
+
+    ! Allocate host buffers and get field data
+    do i = 1, num_fields
+      host_fields(i)%ptr => solver%host_allocator%get_block( &
+                            DIR_C, field_ptrs(i)%ptr%data_loc)
+      call solver%backend%get_field_data( &
+        host_fields(i)%ptr%data, field_ptrs(i)%ptr)
+    end do
+  end subroutine setup_field_arrays
+
+  subroutine cleanup_field_arrays( &
+    solver, field_ptrs, host_fields &
+    )
+    !! Clean up field arrays and release host buffers
+    class(solver_t), intent(in) :: solver
+    type(field_ptr_t), allocatable, intent(inout) :: field_ptrs(:)
+    type(field_ptr_t), allocatable, intent(inout) :: host_fields(:)
+
+    integer :: i
+
+    ! Release host buffers
+    if (allocated(host_fields)) then
+      do i = 1, size(host_fields)
+        call solver%host_allocator%release_block(host_fields(i)%ptr)
+      end do
+      deallocate(host_fields)
+    end if
+
+    ! Clean up field pointers
+    if (allocated(field_ptrs)) then
+      deallocate(field_ptrs)
+    end if
+  end subroutine cleanup_field_arrays
 
 end module m_io_field_utils
