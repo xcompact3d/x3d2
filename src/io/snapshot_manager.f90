@@ -52,6 +52,7 @@ contains
 
   subroutine configure_output(self, comm)
     !! Configure snapshot output settings
+    use m_io_factory, only: get_default_backend, IO_BACKEND_DUMMY
     class(snapshot_manager_t), intent(inout) :: self
     integer, intent(in) :: comm
 
@@ -61,7 +62,7 @@ contains
 
     self%output_stride = self%config%output_stride
 
-    if (myrank == 0) then
+    if (myrank == 0 .and. get_default_backend() /= IO_BACKEND_DUMMY) then
       print *, 'Snapshot frequency: ', self%config%snapshot_freq
       print *, 'Snapshot prefix: ', trim(self%config%snapshot_prefix)
       print *, 'Output stride: ', self%output_stride
@@ -131,7 +132,9 @@ contains
       )
 
     call writer_session%open(filename, comm)
-    if (myrank == 0) print *, 'Creating snapshot file: ', trim(filename)
+    if (writer_session%is_session_functional() .and. myrank == 0) then
+      print *, 'Creating snapshot file: ', trim(filename)
+    end if
 
     ! Write VTK XML attributes for ParaView compatibility
     if (myrank == 0) then
@@ -139,7 +142,7 @@ contains
     end if
 
     simulation_time = timestep*solver%dt
-    if (myrank == 0) then
+    if (writer_session%is_session_functional() .and. myrank == 0) then
       print *, 'Writing snapshot for time =', simulation_time, &
         ' iteration =', timestep
     end if
