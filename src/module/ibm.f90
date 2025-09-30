@@ -10,7 +10,7 @@ module m_ibm
   use iso_fortran_env, only: stderr => error_unit
   use mpi
 
-  use m_io_session, only: io_session_t
+  use m_io_session, only: reader_session_t
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, i8, pi, DIR_X, DIR_C, VERT
@@ -53,7 +53,7 @@ contains
     integer :: dims(3)
     real(dp), allocatable :: field_data(:, :, :)
     class(field_t), pointer :: ep1
-    type(io_session_t) :: io_session
+    type(reader_session_t) :: reader_session
     character(len=*), parameter :: ibm_file = "ibm.bp"
     integer(i8) :: start_dims(3), count_dims(3), iibm_i8
 
@@ -62,10 +62,10 @@ contains
     ibm%host_allocator => host_allocator
 
     ! Open a session to read the IBM configuration file
-    call io_session%open(ibm_file, MPI_COMM_WORLD)
+    call reader_session%open(ibm_file, MPI_COMM_WORLD)
 
     ! Read the iibm parameter
-    call io_session%read_data("iibm", iibm_i8)
+    call reader_session%read_data("iibm", iibm_i8)
     ibm%iibm = int(iibm_i8, kind=4)
 
     ! Basic IBM only needs ep1 on the vertices
@@ -82,7 +82,7 @@ contains
 
       ! Allocate field_data with the expected (reversed) dimensions from the read
       allocate (field_data(count_dims(1), count_dims(2), count_dims(3)))
-      call io_session%read_data("ep1", field_data, start_dims, count_dims)
+      call reader_session%read_data("ep1", field_data, start_dims, count_dims)
 
       ! Get and fill a block on the host
       ! The order of the data is corrected in the loop below
@@ -109,7 +109,7 @@ contains
     end if
 
     ! Closing the session handles all file and reader finalisation
-    call io_session%close()
+    call reader_session%close()
 
   end function init
 

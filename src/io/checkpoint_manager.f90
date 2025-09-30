@@ -4,8 +4,7 @@ module m_checkpoint_manager
   use m_common, only: dp, i8, DIR_C, get_argument
   use m_field, only: field_t
   use m_solver, only: solver_t
-  use m_io_session, only: allocate_io_writer, io_session_t
-  use m_io_base, only: io_writer_t, io_file_t, io_mode_write
+  use m_io_session, only: reader_session_t, writer_session_t
   use m_config, only: checkpoint_config_t
   use m_io_field_utils, only: field_buffer_map_t, field_ptr_t, &
                               setup_field_arrays, cleanup_field_arrays, &
@@ -17,7 +16,6 @@ module m_checkpoint_manager
   public :: checkpoint_manager_t
 
   type :: checkpoint_manager_t
-    class(io_writer_t), pointer :: writer => null()
     type(checkpoint_config_t) :: config
     integer :: last_checkpoint_step = -1
     integer, dimension(3) :: full_resolution = [1, 1, 1]
@@ -40,12 +38,9 @@ module m_checkpoint_manager
 contains
 
   subroutine init(self, comm)
-    !! Initialize checkpoint manager
+    !! Initialise checkpoint manager
     class(checkpoint_manager_t), intent(inout) :: self
     integer, intent(in) :: comm
-
-    call allocate_io_writer(self%writer)
-    call self%writer%init(comm, "checkpoint_writer")
 
     self%config = checkpoint_config_t()
     call self%config%read(nml_file=get_argument(1))
@@ -134,7 +129,7 @@ contains
     logical :: file_exists
     type(field_ptr_t), allocatable :: field_ptrs(:), host_fields(:)
     integer :: data_loc
-    type(io_session_t) :: io_session
+    type(writer_session_t) :: writer_session
 
     if (self%config%checkpoint_freq <= 0) return
     if (mod(timestep, self%config%checkpoint_freq) /= 0) return
@@ -147,23 +142,23 @@ contains
       trim(self%config%checkpoint_prefix), '_temp.bp'
     if (myrank == 0) print *, 'Writing checkpoint: ', trim(filename)
 
-    call io_session%open(temp_filename, comm, io_mode_write)
+    call writer_session%open(temp_filename, comm)
 
     simulation_time = timestep*solver%dt
     data_loc = solver%u%data_loc
-    call io_session%write_data("timestep", timestep)
-    call io_session%write_data("time", real(simulation_time, dp))
-    call io_session%write_data("dt", real(solver%dt, dp))
-    call io_session%write_data("data_loc", data_loc)
+    call writer_session%write_data("timestep", timestep)
+    call writer_session%write_data("time", real(simulation_time, dp))
+    call writer_session%write_data("dt", real(solver%dt, dp))
+    call writer_session%write_data("data_loc", data_loc)
 
     call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
 
     call self%write_fields( &
       field_names, host_fields, &
-      solver, io_session, data_loc &
+      solver, writer_session, data_loc &
       )
 
-    call io_session%close()
+    call writer_session%close()
 
     call cleanup_field_arrays(solver, field_ptrs, host_fields)
 
@@ -209,7 +204,7 @@ contains
     real(dp), intent(out) :: restart_time
     integer, intent(in) :: comm
 
-    type(io_session_t) :: io_session
+    type(reader_session_t) :: reader_session
     integer :: ierr
     integer :: dims(3)
     integer(i8), dimension(3) :: start_dims, count_dims
@@ -226,10 +221,10 @@ contains
       return
     end if
 
-    call io_session%open(filename, comm)
-    call io_session%read_data("timestep", timestep)
-    call io_session%read_data("time", restart_time)
-    call io_session%read_data("data_loc", data_loc)
+    call reader_session%open(filename, comm)
+    call reader_session%read_data("timestep", timestep)
+    call reader_session%read_data("time", restart_time)
+    call reader_session%read_data("data_loc", data_loc)
 
     dims = solver%mesh%get_dims(data_loc)
     start_dims = int(solver%mesh%par%n_offset, i8)
@@ -247,26 +242,26 @@ contains
       allocate (field_data_u(count_dims(1), count_dims(2), count_dims(3)))
       allocate (field_data_v(count_dims(1), count_dims(2), count_dims(3)))
       allocate (field_data_w(count_dims(1), count_dims(2), count_dims(3)))
-      call io_session%read_data("u", field_data_u)
-      call io_session%read_data("v", field_data_v)
-      call io_session%read_data("w", field_data_w)
+      call reader_session%read_data("u", field_data_u)
+      call reader_session%read_data("v", field_data_v)
+      call reader_session%read_data("w", field_data_w)
       call solver%backend%set_field_data(solver%u, field_data_u)
       call solver%backend%set_field_data(solver%v, field_data_v)
       call solver%backend%set_field_data(solver%w, field_data_w)
     end block
 
-    call io_session%close()
+    call reader_session%close()
   end subroutine restart_checkpoint
 
   subroutine write_fields( &
-    self, field_names, host_fields, solver, io_session, data_loc &
+    self, field_names, host_fields, solver, writer_session, data_loc &
     )
     !! Write field data for checkpoints (no striding)
     class(checkpoint_manager_t), intent(inout) :: self
     character(len=*), dimension(:), intent(in) :: field_names
     class(field_ptr_t), dimension(:), target, intent(in) :: host_fields
     class(solver_t), intent(in) :: solver
-    type(io_session_t), intent(inout) :: io_session
+    type(writer_session_t), intent(inout) :: writer_session
     integer, intent(in) :: data_loc
 
     integer :: i_field
@@ -360,7 +355,7 @@ contains
           output_dims_local &
           )
 
-        call io_session%write_data( &
+        call writer_session%write_data( &
           field_name, self%field_buffers(buffer_idx)%buffer, &
           start_dims=output_start, count_dims=output_count &
           )
@@ -393,9 +388,6 @@ contains
     class(checkpoint_manager_t), intent(inout) :: self
 
     call self%cleanup_output_buffers()
-    call self%writer%finalise()
-
-    if (associated(self%writer)) deallocate (self%writer)
   end subroutine finalise
 
 end module m_checkpoint_manager
