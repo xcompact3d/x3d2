@@ -39,8 +39,6 @@ module m_io_adios2
   contains
     procedure :: init => reader_init_adios2
     procedure :: open => reader_open_adios2
-    generic :: read_data => read_data_i8_adios2, read_data_integer_adios2, &
-      read_data_real_adios2, read_data_array_3d_adios2
     procedure :: read_data_i8 => read_data_i8_adios2
     procedure :: read_data_integer => read_data_integer_adios2
     procedure :: read_data_real => read_data_real_adios2
@@ -58,14 +56,10 @@ module m_io_adios2
   contains
     procedure :: init => writer_init_adios2
     procedure :: open => writer_open_adios2
-    generic :: write_data => write_data_i8_adios2, write_data_integer_adios2, &
-      write_data_real_adios2, write_data_array_3d_adios2
     procedure :: write_data_i8 => write_data_i8_adios2
     procedure :: write_data_integer => write_data_integer_adios2
     procedure :: write_data_real => write_data_real_adios2
     procedure :: write_data_array_3d => write_data_array_3d_adios2
-    generic :: write_attribute => write_attribute_string_adios2, &
-      write_attribute_array_1d_real_adios2
     procedure :: write_attribute_string => write_attribute_string_adios2
     procedure :: write_attribute_array_1d_real => &
       write_attribute_array_1d_real_adios2
