@@ -25,7 +25,7 @@ set(SRC
   case/channel.f90
   case/generic.f90
   case/tgv.f90
-  #module/ibm.f90
+  module/ibm.f90
 )
 set(CUDASRC
   backend/cuda/allocator.f90
