@@ -27,8 +27,6 @@ module m_io_dummy
     procedure :: init => reader_init_dummy
     procedure :: open => reader_open_dummy
     procedure :: finalise => reader_finalise_dummy
-    generic :: read_data => read_data_i8_dummy, read_data_integer_dummy, &
-      read_data_real_dummy, read_data_array_3d_dummy
     procedure :: read_data_i8 => read_data_i8_dummy
     procedure :: read_data_integer => read_data_integer_dummy
     procedure :: read_data_real => read_data_real_dummy
@@ -41,14 +39,10 @@ module m_io_dummy
     procedure :: init => writer_init_dummy
     procedure :: open => writer_open_dummy
     procedure :: finalise => writer_finalise_dummy
-    generic :: write_data => write_data_i8_dummy, write_data_integer_dummy, &
-      write_data_real_dummy, write_data_array_3d_dummy
     procedure :: write_data_i8 => write_data_i8_dummy
     procedure :: write_data_integer => write_data_integer_dummy
     procedure :: write_data_real => write_data_real_dummy
     procedure :: write_data_array_3d => write_data_array_3d_dummy
-    generic :: write_attribute => write_attribute_string_dummy, &
-      write_attribute_array_1d_real_dummy
     procedure :: write_attribute_string => write_attribute_string_dummy
     procedure :: write_attribute_array_1d_real => &
       write_attribute_array_1d_real_dummy
@@ -91,8 +85,6 @@ contains
     integer, intent(in) :: mode
     integer, intent(in) :: comm
     class(io_file_t), pointer :: file_handle
-
-    type(io_dummy_file_t), allocatable :: dummy_file
 
     write (stderr, '(A)') "ERROR: Cannot open file '"//trim(filename)// &
       "' for reading - ADIOS2 not available"
