@@ -54,6 +54,7 @@ contains
 
   subroutine configure_output(self, comm)
     !! Configure checkpoint output settings
+    use m_io_factory, only: get_default_backend, IO_BACKEND_DUMMY
     class(checkpoint_manager_t), intent(inout) :: self
     integer, intent(in) :: comm
 
@@ -61,7 +62,7 @@ contains
 
     call MPI_Comm_rank(comm, myrank, ierr)
 
-    if (myrank == 0) then
+    if (myrank == 0 .and. get_default_backend() /= IO_BACKEND_DUMMY) then
       print *, 'Checkpoint frequency: ', self%config%checkpoint_freq
       print *, 'Keep all checkpoints: ', self%config%keep_checkpoint
       print *, 'Checkpoint prefix: ', trim(self%config%checkpoint_prefix)
@@ -142,9 +143,11 @@ contains
       trim(self%config%checkpoint_prefix), '_', timestep, '.bp'
     write (temp_filename, '(A,A)') &
       trim(self%config%checkpoint_prefix), '_temp.bp'
-    if (myrank == 0) print *, 'Writing checkpoint: ', trim(filename)
 
     call writer_session%open(temp_filename, comm)
+    if (writer_session%is_session_functional() .and. myrank == 0) then
+      print *, 'Writing checkpoint: ', trim(filename)
+    end if
 
     simulation_time = timestep*solver%dt
     data_loc = solver%u%data_loc
@@ -165,13 +168,18 @@ contains
     call cleanup_field_arrays(solver, field_ptrs, host_fields)
 
     if (myrank == 0) then
-      ! Move temporary file to final checkpoint filename
-      call execute_command_line('mv '//trim(temp_filename)//' '// &
-                                trim(filename))
+      inquire (file=trim(temp_filename), exist=file_exists)
+      if (file_exists) then
+        ! Move temporary file to final checkpoint filename
+        call execute_command_line('mv '//trim(temp_filename)//' '// &
+                                  trim(filename))
 
-      inquire (file=trim(filename), exist=file_exists)
-      if (.not. file_exists) then
-        print *, 'ERROR: Checkpoint file not created: ', trim(filename)
+        inquire (file=trim(filename), exist=file_exists)
+        if (.not. file_exists) then
+          print *, 'ERROR: Checkpoint file not created: ', trim(filename)
+        end if
+      else
+        ! temp file doesn't exist - skip file operations silently
       end if
 
       ! Remove old checkpoint if configured to keep only the latest

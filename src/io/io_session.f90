@@ -49,8 +49,10 @@ module m_io_session
     private
     class(io_file_t), pointer :: file => null()
     logical :: is_open = .false.
+    logical :: is_functional = .true.  ! false for dummy I/O
   contains
     procedure :: is_session_open
+    procedure :: is_session_functional
     procedure :: close => session_base_close
     procedure :: finalise => session_base_finalise
     procedure :: get_file
@@ -117,6 +119,11 @@ contains
     class(io_session_base_t), intent(in) :: self
     is_session_open = self%is_open
   end function is_session_open
+
+  logical function is_session_functional(self)
+    class(io_session_base_t), intent(in) :: self
+    is_session_functional = self%is_functional
+  end function is_session_functional
 
   function get_file(self) result(file_ptr)
     class(io_session_base_t), intent(in) :: self
@@ -197,6 +204,7 @@ contains
 
   ! Writer session procedures
   subroutine writer_session_open(self, filename, comm)
+    use m_io_dummy, only: io_dummy_file_t
     class(writer_session_t), intent(inout) :: self
     character(len=*), intent(in) :: filename
     integer, intent(in) :: comm
@@ -207,7 +215,15 @@ contains
     call self%writer%init(comm, "session_writer")
     self%file => self%writer%open(filename, io_mode_write, comm)
     call self%file%begin_step()
-    self%is_open = .true.
+    
+    ! check if file was actually opened (dummy I/O returns is_open = .false.)
+    self%is_functional = .true.
+    select type (file => self%file)
+    type is (io_dummy_file_t)
+      self%is_functional = file%is_open
+    end select
+    
+    self%is_open = .true.  ! always mark session as open so operations don't fail
   end subroutine writer_session_open
 
   subroutine write_data_i8(self, variable_name, value)
