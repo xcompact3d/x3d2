@@ -14,22 +14,22 @@ module m_io_session
 !! **Usage Pattern:**
 !! ```fortran
 !! use m_io_session, only: writer_session_t, reader_session_t
-!! 
+!!
 !! ! For writing data
 !! type(writer_session_t) :: writer_session
 !! call writer_session%open("output.bp", comm)
 !! call writer_session%write_data("temperature", temp_field)
 !! call writer_session%close()
-!! 
-!! ! For reading data  
+!!
+!! ! For reading data
 !! type(reader_session_t) :: reader_session
 !! call reader_session%open("input.bp", comm)
 !! call reader_session%read_data("temperature", temp_field)
 !! call reader_session%close()
 !! ```
 !!
-!! **Note:** Users should NOT directly use lower-level modules like `m_io_base`, 
-!! `m_io_factory`, or backend-specific modules. This module abstracts away all 
+!! **Note:** Users should NOT directly use lower-level modules like `m_io_base`,
+!! `m_io_factory`, or backend-specific modules. This module abstracts away all
 !! the complexity and provides everything needed for I/O operations.
 
   use m_common, only: dp, i8
@@ -215,14 +215,14 @@ contains
     call self%writer%init(comm, "session_writer")
     self%file => self%writer%open(filename, io_mode_write, comm)
     call self%file%begin_step()
-    
+
     ! check if file was actually opened (dummy I/O returns is_open = .false.)
     self%is_functional = .true.
     select type (file => self%file)
     type is (io_dummy_file_t)
       self%is_functional = file%is_open
     end select
-    
+
     self%is_open = .true.  ! always mark session as open so operations don't fail
   end subroutine writer_session_open
 
