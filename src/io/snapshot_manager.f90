@@ -9,8 +9,8 @@ module m_snapshot_manager
   use m_io_field_utils, only: field_buffer_map_t, field_ptr_t, &
                               setup_field_arrays, cleanup_field_arrays, &
                               stride_data_to_buffer, get_output_dimensions, &
-                              prepare_field_buffers, write_single_field_to_buffer, &
-                              cleanup_field_buffers
+                              prepare_field_buffers, cleanup_field_buffers, &
+                              write_single_field_to_buffer
 
   implicit none
 
