@@ -11,13 +11,12 @@ module m_io_factory
 
   private
   public :: allocate_io_reader, allocate_io_writer
-  public :: IO_BACKEND_DUMMY, IO_BACKEND_ADIOS2, IO_BACKEND_MPIIO
+  public :: IO_BACKEND_DUMMY, IO_BACKEND_ADIOS2
   public :: get_default_backend
 
   ! backend type constants
   integer, parameter :: IO_BACKEND_DUMMY = 0
   integer, parameter :: IO_BACKEND_ADIOS2 = 1
-  integer, parameter :: IO_BACKEND_MPIIO = 2
 
 contains
 
@@ -44,10 +43,6 @@ contains
     case (IO_BACKEND_ADIOS2)
       allocate (io_adios2_reader_t :: reader)
 #endif
-    case (IO_BACKEND_MPIIO)
-      ! TODO: implement MPI-IO backend
-      ! For now, fall back to dummy
-      allocate (io_dummy_reader_t :: reader)
     case default
       allocate (io_dummy_reader_t :: reader)
     end select
@@ -66,10 +61,6 @@ contains
     case (IO_BACKEND_ADIOS2)
       allocate (io_adios2_writer_t :: writer)
 #endif
-    case (IO_BACKEND_MPIIO)
-      ! TODO: implement MPI-IO backend
-      ! For now, fall back to dummy
-      allocate (io_dummy_writer_t :: writer)
     case default
       allocate (io_dummy_writer_t :: writer)
     end select
