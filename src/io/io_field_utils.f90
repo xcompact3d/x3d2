@@ -12,6 +12,8 @@ module m_io_field_utils
   public :: stride_data, stride_data_to_buffer, get_output_dimensions
   public :: generate_coordinates
   public :: setup_field_arrays, cleanup_field_arrays
+  public :: prepare_field_buffers, write_single_field_to_buffer, &
+            cleanup_field_buffers
 
   type :: field_buffer_map_t
     !! Race-free field buffer mapping for async I/O operations.
@@ -318,5 +320,117 @@ contains
       deallocate (field_ptrs)
     end if
   end subroutine cleanup_field_arrays
+
+  ! Common manager utility procedures
+  subroutine prepare_field_buffers( &
+    solver, stride_factors, field_names, data_loc, &
+    field_buffers, last_shape_dims, last_stride_factors, last_output_shape &
+    )
+    class(solver_t), intent(in) :: solver
+    integer, dimension(3), intent(in) :: stride_factors
+    character(len=*), dimension(:), intent(in) :: field_names
+    integer, intent(in) :: data_loc
+    type(field_buffer_map_t), allocatable, intent(inout) :: field_buffers(:)
+    integer(i8), dimension(3), intent(inout) :: last_shape_dims
+    integer, dimension(3), intent(inout) :: last_stride_factors
+    integer(i8), dimension(3), intent(inout) :: last_output_shape
+
+    integer :: dims(3), output_dims_local(3), i
+    integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
+    integer(i8), dimension(3) :: output_shape, output_start, output_count
+
+    dims = solver%mesh%get_dims(data_loc)
+    shape_dims = int(solver%mesh%get_global_dims(data_loc), i8)
+    start_dims = int(solver%mesh%par%n_offset, i8)
+    count_dims = int(dims, i8)
+
+    call get_output_dimensions( &
+      shape_dims, start_dims, count_dims, stride_factors, &
+      output_shape, output_start, output_count, &
+      output_dims_local, &
+      last_shape_dims, last_stride_factors, &
+      last_output_shape &
+      )
+
+    if (allocated(field_buffers)) deallocate (field_buffers)
+    allocate (field_buffers(size(field_names)))
+
+    do i = 1, size(field_names)
+      field_buffers(i)%field_name = trim(field_names(i))
+      allocate ( &
+        field_buffers(i)%buffer( &
+        output_dims_local(1), &
+        output_dims_local(2), &
+        output_dims_local(3)))
+    end do
+  end subroutine prepare_field_buffers
+
+  subroutine write_single_field_to_buffer( &
+    field_name, host_field, solver, stride_factors, data_loc, &
+    field_buffers, last_shape_dims, last_stride_factors, last_output_shape &
+    )
+    character(len=*), intent(in) :: field_name
+    class(field_t), pointer :: host_field
+    class(solver_t), intent(in) :: solver
+    integer, dimension(3), intent(in) :: stride_factors
+    integer, intent(in) :: data_loc
+    type(field_buffer_map_t), intent(inout) :: field_buffers(:)
+    integer(i8), dimension(3), intent(inout) :: last_shape_dims
+    integer, dimension(3), intent(inout) :: last_stride_factors
+    integer(i8), dimension(3), intent(inout) :: last_output_shape
+
+    integer, dimension(3) :: output_dims_local
+    integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
+    integer(i8), dimension(3) :: output_shape, output_start, output_count
+    integer :: dims(3), buffer_idx
+    logical :: buffer_found
+
+    dims = solver%mesh%get_dims(data_loc)
+    shape_dims = int(solver%mesh%get_global_dims(data_loc), i8)
+    start_dims = int(solver%mesh%par%n_offset, i8)
+    count_dims = int(dims, i8)
+
+    call get_output_dimensions( &
+      shape_dims, start_dims, count_dims, stride_factors, &
+      output_shape, output_start, output_count, &
+      output_dims_local, &
+      last_shape_dims, last_stride_factors, &
+      last_output_shape &
+      )
+
+    ! Find the matching buffer for this field
+    buffer_found = .false.
+    do buffer_idx = 1, size(field_buffers)
+      if (trim(field_buffers(buffer_idx)%field_name) == trim(field_name)) then
+        buffer_found = .true.
+        exit
+      end if
+    end do
+
+    if (buffer_found) then
+      call stride_data_to_buffer( &
+        host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), dims, &
+        stride_factors, field_buffers(buffer_idx)%buffer, &
+        output_dims_local &
+        )
+    else
+      print *, 'INTERNAL ERROR: No buffer found for field: ', trim(field_name)
+      error stop 'Missing field buffer'
+    end if
+  end subroutine write_single_field_to_buffer
+
+  subroutine cleanup_field_buffers(field_buffers)
+    type(field_buffer_map_t), allocatable, intent(inout) :: field_buffers(:)
+    integer :: i
+
+    if (allocated(field_buffers)) then
+      do i = 1, size(field_buffers)
+        if (allocated(field_buffers(i)%buffer)) then
+          deallocate (field_buffers(i)%buffer)
+        end if
+      end do
+      deallocate (field_buffers)
+    end if
+  end subroutine cleanup_field_buffers
 
 end module m_io_field_utils

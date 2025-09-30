@@ -8,7 +8,9 @@ module m_snapshot_manager
   use m_config, only: checkpoint_config_t
   use m_io_field_utils, only: field_buffer_map_t, field_ptr_t, &
                               setup_field_arrays, cleanup_field_arrays, &
-                              stride_data_to_buffer, get_output_dimensions
+                              stride_data_to_buffer, get_output_dimensions, &
+                              prepare_field_buffers, write_single_field_to_buffer, &
+                              cleanup_field_buffers
 
   implicit none
 
@@ -210,122 +212,49 @@ contains
     integer, intent(in) :: data_loc
 
     integer :: i_field
+    integer(i8), dimension(3) :: output_start, output_count
+    integer, dimension(3) :: output_dims_local
 
     ! Prepare buffers with striding for snapshots
     call prepare_field_buffers( &
-      solver, self%output_stride, field_names, data_loc)
+      solver, self%output_stride, field_names, data_loc, &
+      self%field_buffers, self%last_shape_dims, self%last_stride_factors, &
+      self%last_output_shape &
+      )
+
+    ! Calculate output dimensions for writing
+    call get_output_dimensions( &
+      int(solver%mesh%get_global_dims(data_loc), i8), &
+      int(solver%mesh%par%n_offset, i8), &
+      int(solver%mesh%get_dims(data_loc), i8), &
+      self%output_stride, &
+      self%last_output_shape, output_start, output_count, &
+      output_dims_local, &
+      self%last_shape_dims, self%last_stride_factors, &
+      self%last_output_shape &
+      )
 
     do i_field = 1, size(field_names)
-      call write_single_field( &
-        trim(field_names(i_field)), host_fields(i_field)%ptr, data_loc)
+      call write_single_field_to_buffer( &
+        trim(field_names(i_field)), host_fields(i_field)%ptr, &
+        solver, self%output_stride, data_loc, &
+        self%field_buffers, self%last_shape_dims, self%last_stride_factors, &
+        self%last_output_shape &
+        )
+
+      call writer_session%write_data( &
+        trim(field_names(i_field)), &
+        self%field_buffers(i_field)%buffer, &
+        start_dims=output_start, count_dims=output_count &
+        )
     end do
-
-  contains
-
-    subroutine prepare_field_buffers( &
-      solver, stride_factors, field_names, data_loc &
-      )
-      class(solver_t), intent(in) :: solver
-      integer, dimension(3), intent(in) :: stride_factors
-      character(len=*), dimension(:), intent(in) :: field_names
-      integer, intent(in) :: data_loc
-      integer :: dims(3), output_dims_local(3), i
-      integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
-      integer(i8), dimension(3) :: output_shape, output_start, output_count
-
-      dims = solver%mesh%get_dims(data_loc)
-      shape_dims = int(solver%mesh%get_global_dims(data_loc), i8)
-      start_dims = int(solver%mesh%par%n_offset, i8)
-      count_dims = int(dims, i8)
-
-      call get_output_dimensions( &
-        shape_dims, start_dims, count_dims, stride_factors, &
-        output_shape, output_start, output_count, &
-        output_dims_local, &
-        self%last_shape_dims, self%last_stride_factors, &
-        self%last_output_shape &
-        )
-
-      if (allocated(self%field_buffers)) deallocate (self%field_buffers)
-      allocate (self%field_buffers(size(field_names)))
-
-      do i = 1, size(field_names)
-        self%field_buffers(i)%field_name = trim(field_names(i))
-        allocate ( &
-          self%field_buffers(i)%buffer( &
-          output_dims_local(1), &
-          output_dims_local(2), &
-          output_dims_local(3)))
-      end do
-    end subroutine prepare_field_buffers
-
-    subroutine write_single_field(field_name, host_field, data_loc)
-      character(len=*), intent(in) :: field_name
-      class(field_t), pointer :: host_field
-      integer, intent(in) :: data_loc
-
-      integer, dimension(3) :: output_dims_local
-      integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
-      integer(i8), dimension(3) :: output_shape, output_start, output_count
-      integer :: dims(3), buffer_idx
-      logical :: buffer_found
-
-      dims = solver%mesh%get_dims(data_loc)
-      shape_dims = int(solver%mesh%get_global_dims(data_loc), i8)
-      start_dims = int(solver%mesh%par%n_offset, i8)
-      count_dims = int(dims, i8)
-
-      call get_output_dimensions( &
-        shape_dims, start_dims, count_dims, self%output_stride, &
-        output_shape, output_start, output_count, &
-        output_dims_local, &
-        self%last_shape_dims, self%last_stride_factors, &
-        self%last_output_shape &
-        )
-
-      ! Find the matching buffer for this field
-      buffer_found = .false.
-      do buffer_idx = 1, size(self%field_buffers)
-        if (trim(self%field_buffers(buffer_idx)%field_name) == &
-            trim(field_name)) then
-          buffer_found = .true.
-          exit
-        end if
-      end do
-
-      if (buffer_found) then
-        call stride_data_to_buffer( &
-          host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), dims, &
-          self%output_stride, self%field_buffers(buffer_idx)%buffer, &
-          output_dims_local &
-          )
-
-        call writer_session%write_data( &
-          field_name, self%field_buffers(buffer_idx)%buffer, &
-          start_dims=output_start, count_dims=output_count &
-          )
-      else
-        print *, 'INTERNAL ERROR: No buffer found for field: ', &
-          trim(field_name)
-        error stop 'Missing field buffer'
-      end if
-    end subroutine write_single_field
-
   end subroutine write_fields
 
   subroutine cleanup_output_buffers(self)
     !! Clean up dynamic field buffers
     class(snapshot_manager_t), intent(inout) :: self
-    integer :: i
 
-    if (allocated(self%field_buffers)) then
-      do i = 1, size(self%field_buffers)
-        if (allocated(self%field_buffers(i)%buffer)) then
-          deallocate (self%field_buffers(i)%buffer)
-        end if
-      end do
-      deallocate (self%field_buffers)
-    end if
+    call cleanup_field_buffers(self%field_buffers)
   end subroutine cleanup_output_buffers
 
   subroutine finalise(self)
