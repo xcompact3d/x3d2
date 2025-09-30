@@ -1,26 +1,19 @@
 module m_io_base
 !! Base types and constants for session-based I/O architecture
-!!
-!! This module provides the fundamental building blocks for X3D2's modern I/O system:
+!! This module provides the fundamental building blocks for X3D2's I/O system,
+!! but users should interact only with the high-level session interface (m_io_session).
 !!
 !! **Architecture Overview:**
-!! - Session-based interface (`io_session_t` in `m_io_session`) is the primary user interface
-!! - Factory pattern (`m_io_factory`) handles backend selection (only ADIOS2 currently)
+!! - Session interface (`reader_session_t` and `writer_session_t` in `m_io_session`) is the primary user interface
+!! - Factory pattern (`m_io_factory`) handles backend selection (only supports ADIOS2 currently)
 !! - Concrete backends (ADIOS2) extend the base types defined here
 !! - Base types provide polymorphic containers and enforce consistent interfaces
 !!
 !! **Design Philosophy:**
-!! - Users interact only with `io_session_t` - no manual file handle management
+!! - Users interact only with session types - no manual file handle management
 !! - Backends are selected automatically based on compile-time availability
 !! - Base types provide fallback implementations that error out (forcing proper override)
 !! - Clean separation: session manages complexity, backends focus on I/O specifics
-!!
-!! **Usage (via session interface):**
-!!   type(io_session_t) :: io_session
-!!   call io_session%open("output.bp", MPI_COMM_WORLD, io_mode_write)
-!!   call io_session%write_data("timestep", current_step)
-!!   call io_session%write_data("velocity", u_field, start_dims, count_dims)
-!!   call io_session%close()
 
   use m_common, only: dp, i8
 

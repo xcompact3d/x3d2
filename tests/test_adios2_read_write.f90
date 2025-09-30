@@ -1,6 +1,6 @@
 program test_adios2
   use mpi
-  use m_io_session, only: allocate_io_writer, allocate_io_reader
+  use m_io_factory, only: allocate_io_writer, allocate_io_reader
   use m_io_base, only: io_writer_t, io_reader_t, io_file_t, io_mode_write, io_mode_read
   use m_common, only: dp, i8
   use iso_fortran_env, only: stderr => error_unit
@@ -27,7 +27,7 @@ program test_adios2
   call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, isize, ierr)
 
-  ! data initialization
+  ! data initialisation
   allocate (data_write(inx, iny, inz))
 
   ! initialize data (unique per rank)

@@ -1,11 +1,10 @@
 module m_snapshot_manager
-!! Snapshot manager for visualization output
+!! Snapshot manager for visualisation output
   use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank
   use m_common, only: dp, i8, DIR_C, VERT, get_argument
   use m_field, only: field_t
   use m_solver, only: solver_t
-  use m_io_session, only: allocate_io_writer, io_session_t
-  use m_io_base, only: io_writer_t, io_file_t, io_mode_write
+  use m_io_session, only: writer_session_t
   use m_config, only: checkpoint_config_t
   use m_io_field_utils, only: field_buffer_map_t, field_ptr_t, &
                               setup_field_arrays, cleanup_field_arrays, &
@@ -17,7 +16,6 @@ module m_snapshot_manager
   public :: snapshot_manager_t
 
   type :: snapshot_manager_t
-    class(io_writer_t), pointer :: writer => null()
     type(checkpoint_config_t) :: config
     integer, dimension(3) :: output_stride = [1, 1, 1]
     type(field_buffer_map_t), allocatable :: field_buffers(:)
@@ -38,12 +36,9 @@ module m_snapshot_manager
 contains
 
   subroutine init(self, comm)
-    !! Initialize snapshot manager
+    !! Initialise snapshot manager
     class(snapshot_manager_t), intent(inout) :: self
     integer, intent(in) :: comm
-
-    call allocate_io_writer(self%writer)
-    call self%writer%init(comm, "snapshot_writer")
 
     self%config = checkpoint_config_t()
     call self%config%read(nml_file=get_argument(1))
@@ -87,7 +82,7 @@ contains
   end subroutine handle_snapshot_step
 
   subroutine write_snapshot(self, solver, timestep, comm)
-    !! Write a snapshot file for visualization
+    !! Write a snapshot file for visualisation
     class(snapshot_manager_t), intent(inout) :: self
     class(solver_t), intent(in) :: solver
     integer, intent(in) :: timestep
@@ -102,7 +97,7 @@ contains
     real(dp), dimension(3) :: origin, original_spacing, output_spacing
     real(dp) :: simulation_time
     logical :: snapshot_uses_stride = .true.
-    type(io_session_t) :: io_session
+    type(writer_session_t) :: writer_session
     integer :: i
 
     if (self%config%snapshot_freq <= 0) return
@@ -133,12 +128,12 @@ contains
       output_shape_dims, field_names, origin, output_spacing &
       )
 
-    call io_session%open(filename, comm, io_mode_write)
+    call writer_session%open(filename, comm)
     if (myrank == 0) print *, 'Creating snapshot file: ', trim(filename)
 
     ! Write VTK XML attributes for ParaView compatibility
     if (myrank == 0) then
-      call io_session%write_attribute("vtk.xml", self%vtk_xml)
+      call writer_session%write_attribute("vtk.xml", self%vtk_xml)
     end if
 
     simulation_time = timestep*solver%dt
@@ -147,16 +142,16 @@ contains
         ' iteration =', timestep
     end if
 
-    call io_session%write_data("time", real(simulation_time, dp))
+    call writer_session%write_data("time", real(simulation_time, dp))
 
     call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
 
     call self%write_fields( &
       field_names, host_fields, &
-      solver, io_session, solver%u%data_loc &
+      solver, writer_session, solver%u%data_loc &
       )
 
-    call io_session%close()
+    call writer_session%close()
 
     call cleanup_field_arrays(solver, field_ptrs, host_fields)
   end subroutine write_snapshot
@@ -204,14 +199,14 @@ contains
   end subroutine generate_vtk_xml
 
   subroutine write_fields( &
-    self, field_names, host_fields, solver, io_session, data_loc &
+    self, field_names, host_fields, solver, writer_session, data_loc &
     )
     !! Write field data with striding for snapshots
     class(snapshot_manager_t), intent(inout) :: self
     character(len=*), dimension(:), intent(in) :: field_names
     class(field_ptr_t), dimension(:), target, intent(in) :: host_fields
     class(solver_t), intent(in) :: solver
-    type(io_session_t), intent(inout) :: io_session
+    type(writer_session_t), intent(inout) :: writer_session
     integer, intent(in) :: data_loc
 
     integer :: i_field
@@ -305,7 +300,7 @@ contains
           output_dims_local &
           )
 
-        call io_session%write_data( &
+        call writer_session%write_data( &
           field_name, self%field_buffers(buffer_idx)%buffer, &
           start_dims=output_start, count_dims=output_count &
           )
@@ -338,9 +333,6 @@ contains
     class(snapshot_manager_t), intent(inout) :: self
 
     call self%cleanup_output_buffers()
-    call self%writer%finalise()
-
-    if (associated(self%writer)) deallocate (self%writer)
   end subroutine finalise
 
 end module m_snapshot_manager
