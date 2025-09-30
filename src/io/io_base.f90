@@ -103,6 +103,7 @@ contains
     integer, intent(in) :: mode
     integer, intent(in) :: comm
     class(io_file_t), pointer :: file_handle
+    file_handle => null()
     error stop "base_reader_open should not be called - &
       & use concrete implementation"
   end function base_reader_open
@@ -127,6 +128,7 @@ contains
     integer, intent(in) :: mode
     integer, intent(in) :: comm
     class(io_file_t), pointer :: file_handle
+    file_handle => null()
     error stop "base_writer_open should not be called - &
       & use concrete implementation"
   end function base_writer_open
