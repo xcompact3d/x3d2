@@ -56,7 +56,6 @@ set(DUMMYDECOMPSRC
 set(IOSRC
   io/io_base.f90
   io/dummy/io.f90
-  io/io_factory.f90
   io/io_session.f90
   io/io_field_utils.f90
   io/checkpoint_manager.f90
@@ -67,6 +66,9 @@ set(IOSRC
 if(WITH_ADIOS2)
   list(APPEND IOSRC io/adios2/io.f90)
 endif()
+
+# Add factory after all backend modules are defined
+list(APPEND IOSRC io/io_factory.f90)
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
