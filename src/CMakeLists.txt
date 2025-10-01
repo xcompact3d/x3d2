@@ -53,7 +53,7 @@ set(DUMMYDECOMPSRC
   decomp/decomp_dummy.f90
 )
 
-set(IOSRC
+set(IOSRC_BASE
   io/io_base.f90
   io/dummy/io.f90
   io/io_session.f90
@@ -63,11 +63,13 @@ set(IOSRC
   io/io_manager.f90
 )
 
+set(IOSRC ${IOSRC_BASE})
+
 if(WITH_ADIOS2)
   list(APPEND IOSRC io/adios2/io.f90)
 endif()
 
-# Add factory after all backend modules are defined
+# factory must be last to ensure all backend modules are compiled first
 list(APPEND IOSRC io/io_factory.f90)
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
@@ -87,8 +89,14 @@ endif()
 
 list(APPEND SRC ${IOSRC})
 
+# Create the main library
 add_library(x3d2 STATIC ${SRC})
 target_include_directories(x3d2 INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
+
+# Set Fortran module dependencies explicitly to ensure proper compilation order
+if(WITH_ADIOS2)
+  set_source_files_properties(io/io_factory.f90 PROPERTIES OBJECT_DEPENDS io/adios2/io.f90)
+endif()
 
 add_library(x3d2_backends STATIC ${BACKENDSRC})
 target_include_directories(x3d2_backends INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
