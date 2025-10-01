@@ -93,11 +93,6 @@ list(APPEND SRC ${IOSRC})
 add_library(x3d2 STATIC ${SRC})
 target_include_directories(x3d2 INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
 
-# Set Fortran module dependencies explicitly to ensure proper compilation order
-if(WITH_ADIOS2)
-  set_source_files_properties(io/io_factory.f90 PROPERTIES OBJECT_DEPENDS io/adios2/io.f90)
-endif()
-
 add_library(x3d2_backends STATIC ${BACKENDSRC})
 target_include_directories(x3d2_backends INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(x3d2_backends PRIVATE x3d2)
