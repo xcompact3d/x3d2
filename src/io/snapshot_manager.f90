@@ -52,7 +52,7 @@ contains
 
   subroutine configure_output(self, comm)
     !! Configure snapshot output settings
-    use m_io_factory, only: get_default_backend, IO_BACKEND_DUMMY
+    use m_io_backend, only: get_default_backend, IO_BACKEND_DUMMY
     class(snapshot_manager_t), intent(inout) :: self
     integer, intent(in) :: comm
 

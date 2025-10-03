@@ -53,9 +53,8 @@ set(DUMMYDECOMPSRC
   decomp/decomp_dummy.f90
 )
 
-set(IOSRC_BASE
+set(IOSRC
   io/io_base.f90
-  io/dummy/io.f90
   io/io_session.f90
   io/io_field_utils.f90
   io/checkpoint_manager.f90
@@ -63,14 +62,17 @@ set(IOSRC_BASE
   io/io_manager.f90
 )
 
-set(IOSRC ${IOSRC_BASE})
-
 if(WITH_ADIOS2)
-  list(APPEND IOSRC io/adios2/io.f90)
+  list(APPEND IOSRC 
+    io/adios2/io.f90
+  )
+else()
+  list(APPEND IOSRC 
+  io/dummy/io.f90
+  )
 endif()
 
-# factory must be last to ensure all backend modules are compiled first
-list(APPEND IOSRC io/io_factory.f90)
+list(APPEND SRC ${IOSRC})
 
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
