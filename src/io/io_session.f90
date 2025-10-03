@@ -35,7 +35,7 @@ module m_io_session
   use m_common, only: dp, i8
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
                        io_mode_read, io_mode_write
-  use m_io_factory, only: allocate_io_reader, allocate_io_writer
+  use m_io_backend, only: allocate_io_reader, allocate_io_writer
 
   implicit none
 
@@ -204,7 +204,6 @@ contains
 
   ! Writer session procedures
   subroutine writer_session_open(self, filename, comm)
-    use m_io_dummy, only: io_dummy_file_t
     class(writer_session_t), intent(inout) :: self
     character(len=*), intent(in) :: filename
     integer, intent(in) :: comm
@@ -216,12 +215,8 @@ contains
     self%file => self%writer%open(filename, io_mode_write, comm)
     call self%file%begin_step()
 
-    ! check if file was actually opened (dummy I/O returns is_open = .false.)
-    self%is_functional = .true.
-    select type (file => self%file)
-    type is (io_dummy_file_t)
-      self%is_functional = file%is_open
-    end select
+    ! check if backend is functional
+    self%is_functional = self%file%is_file_functional()
 
     self%is_open = .true.  ! always mark session as open so operations don't fail
   end subroutine writer_session_open
