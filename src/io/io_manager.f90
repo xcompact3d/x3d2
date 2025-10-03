@@ -1,5 +1,12 @@
 module m_io_manager
-!! I/O manager orchestrating checkpoint and snapshot operations
+!! @brief Provides a high-level manager that orchestrates all checkpoint and
+!! snapshot operations.
+!!
+!! @details This module acts as a facade to the I/O subsystem.
+!! Its purpose is to simplify the main simulation loop by providing
+!! a single point of contact for all I/O-related actions. The mainprogram only
+!! needs to interact with the `io_manager_t` type, which then delegates tasks
+!! to the specialised checkpoint and snapshot managers.
   use m_checkpoint_manager, only: checkpoint_manager_t
   use m_snapshot_manager, only: snapshot_manager_t
   use m_solver, only: solver_t

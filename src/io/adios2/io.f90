@@ -1,10 +1,24 @@
 module m_io_backend
-!! This module contains ADIOS2 (ADaptable Input Output System version 2)
-!! implementation with wrapper types for abtract interface compliance
-!! ADIOS2 APIs are based on:
-!! - MPI (although non-MPI serial code is also supported)
-!! - Deferred/prefetch/grouped variables transport mode by default
-!! - Engine abstraction for reusing the APIs for different transport modes
+!! @brief Provides ADIOS2-specific implementation of the I/O backend interface
+!!
+!! @details This module contains the concrete backend implementation for ADIOS2
+!! (ADaptive Input Output System v2) library. It acts as a translation layer
+!! converting generic I/O calls from the session interface into specific calls
+!! to the ADIOS2 API.
+!!
+!! The `adios2_reader_t` and `adios2_writer_t` types defined here extend the
+!! abstract base types from `m_io_base` and implement required procedures
+!!
+!! This backend leverages several key features of the underlying ADIOS2 library
+!! - engine abstraction - the same API can be used for different transport
+!! methods (e.g. BP4, BP5, HDF5)
+!! - Asynchronous I/O - by default ADIOS2 uses a deferred transport mode
+!! which can improve performance by overlapping computation and I/O
+!! - MPI integration - it is designed for large-scale paralle I/O and
+!! integrates with MPI, though serial operation is also supported
+!!
+!! @note This is an internal backend module and should never be used directly.
+!! All user interaction must go through `m_io_session`.
   use adios2, only: adios2_adios, adios2_io, adios2_engine, &
                     adios2_variable, adios2_attribute, &
                     adios2_mode_sync, adios2_mode_write, &

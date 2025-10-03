@@ -1,37 +1,45 @@
 module m_io_session
-!! **PRIMARY USER INTERFACE FOR X3D2 I/O OPERATIONS**
+!! @brief Provides high-level, session-based user interface for all I/O
+!! operations
 !!
-!! This module provides the ONLY interface that users need for I/O operations in X3D2.
-!! All file reading and writing should be done through the session types provided here.
+!! @details This module is the sole entry point for file reading and writing.
+!! It abstracts away all backend details and provides a type-safe interface
+!! for all I/O tasks.
 !!
-!! **Key Features:**
-!! - Type-safe specialised sessions: `reader_session_t` for reading, `writer_session_t` for writing
-!! - Automatic backend selection (currently ADIOS2, extensible to other formats)
-!! - Simple session-based workflow: open -> read/write -> close
-!! - No manual file handle management required
-!! - Compile-time prevention of mixing read/write operations
+!! Key features:
+!! - Type-safe sessions: specialised `reader_session_t` and `writer_session_t`
+!!   types for reading and writing operations, respectively.
+!! - Automatic backend selection: based on compile-time options
+!! - Simplified workflow - user only needs to manage a simple
+!! `open -> read/write -> close` workflow, with no need for manual file handle
+!!   management.
 !!
-!! **Usage Pattern:**
-!! ```fortran
+!! @example
+!! A typical usage pattern for reading data and writing data:
+!!
+!! @code{.f90}
 !! use m_io_session, only: writer_session_t, reader_session_t
 !!
+!! implicit none
+!!
+!! real, dimension(:,:,:), allocatable :: temp_field
+!! type(writer_session_t)           :: writer
+!! type(reader_session_t)           :: reader
+!!
 !! ! For writing data
-!! type(writer_session_t) :: writer_session
-!! call writer_session%open("output.bp", comm)
-!! call writer_session%write_data("temperature", temp_field)
-!! call writer_session%close()
+!! call writer%open("output.bp")
+!! call writer%write_data("temperature", temp_field)
+!! call writer%close()
 !!
 !! ! For reading data
-!! type(reader_session_t) :: reader_session
-!! call reader_session%open("input.bp", comm)
-!! call reader_session%read_data("temperature", temp_field)
-!! call reader_session%close()
-!! ```
+!! call reader%open("input.bp")
+!! call reader%read_data("temperature", temp_field)
+!! call reader%close()
+!! @endcode
 !!
-!! **Note:** Users should NOT directly use lower-level modules like `m_io_base`,
-!! `m_io_factory`, or backend-specific modules. This module abstracts away all
-!! the complexity and provides everything needed for I/O operations.
-
+!! @note Users should only use the types provided by this module. The lower-level
+!! modules like `m_io_base` and `m_io_backend` are internal components and should
+!! never be used directly in user code.
   use m_common, only: dp, i8
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
                        io_mode_read, io_mode_write
