@@ -1,5 +1,16 @@
 module m_io_field_utils
-!! Common utilities for field I/O operations
+!! @brief Provides common utilities and helper routines for field I/O
+!! operations
+!!
+!! @details This module contains a collection of procedures and derived
+!! types that handle the low-level tasks required for writing field data
+!! Its primary functionalities include:
+!! - Data sub-sampling (striding) - applying a stride to data to reduce the
+!! size of the output files
+!! - Parallel I/O calculations - determining correct global shapes,
+!! local starts, and counts for data distributed across multiple MPI ranks
+!! - Data management - handling the setup, cleanup, and buffering of field
+!! data in preparation for asynchronous I/O operations
   use m_common, only: dp, i8, DIR_C
   use m_field, only: field_t
   use m_solver, only: solver_t
@@ -16,9 +27,9 @@ module m_io_field_utils
             cleanup_field_buffers
 
   type :: field_buffer_map_t
-    !! Race-free field buffer mapping for async I/O operations.
-    !! Each field gets its own dedicated buffer to prevent data races
-    !! when multiple async write operations are in flight.
+    ! Race-free field buffer mapping for async I/O operations.
+    ! Each field gets its own dedicated buffer to prevent data races
+    ! when multiple async write operations are in flight.
     character(len=32) :: field_name
     real(dp), dimension(:, :, :), allocatable :: buffer
   end type field_buffer_map_t
@@ -32,7 +43,6 @@ contains
   function stride_data( &
     input_data, dims, stride, output_dims_out) &
     result(output_data)
-    !! stride the input data based on the specified stride
     real(dp), dimension(:, :, :), intent(in) :: input_data
     integer, dimension(3), intent(in) :: dims
     integer, dimension(3), intent(in) :: stride
@@ -123,7 +133,6 @@ contains
     integer(i8), dimension(3), intent(out) :: output_shape, output_start
     integer(i8), dimension(3), intent(out) :: output_count
     integer, dimension(3), intent(out) :: output_dims_local
-    ! Cache parameters - optional for performance optimization
     integer(i8), dimension(3), intent(inout), optional :: last_shape_dims
     integer, dimension(3), intent(inout), optional :: last_stride_factors
     integer(i8), dimension(3), intent(inout), optional :: last_output_shape
@@ -136,7 +145,6 @@ contains
       return
     end if
 
-    ! Use cache if available and valid
     if (present(last_shape_dims) .and. present(last_stride_factors) .and. &
         present(last_output_shape)) then
       if (all(shape_dims == last_shape_dims) .and. &
@@ -156,7 +164,6 @@ contains
         last_output_shape = output_shape
       end if
     else
-      ! No cache available, compute directly
       output_shape = [(shape_dims(1) + stride_factors(1) - 1_i8) &
                       /int(stride_factors(1), i8), &
                       (shape_dims(2) + stride_factors(2) - 1_i8) &
@@ -260,7 +267,6 @@ contains
   subroutine setup_field_arrays( &
     solver, field_names, field_ptrs, host_fields &
     )
-    !! Set up field pointer arrays and allocate host buffers for I/O operations
     class(solver_t), intent(in) :: solver
     character(len=*), dimension(:), intent(in) :: field_names
     type(field_ptr_t), allocatable, intent(out) :: field_ptrs(:)
@@ -271,7 +277,6 @@ contains
     allocate (field_ptrs(num_fields))
     allocate (host_fields(num_fields))
 
-    ! Point field_ptrs to actual solver data
     do i = 1, num_fields
       select case (trim(field_names(i)))
       case ("u")
@@ -288,7 +293,6 @@ contains
       end select
     end do
 
-    ! Allocate host buffers and get field data
     do i = 1, num_fields
       host_fields(i)%ptr => solver%host_allocator%get_block( &
                             DIR_C, field_ptrs(i)%ptr%data_loc)
@@ -300,14 +304,12 @@ contains
   subroutine cleanup_field_arrays( &
     solver, field_ptrs, host_fields &
     )
-    !! Clean up field arrays and release host buffers
     class(solver_t), intent(in) :: solver
     type(field_ptr_t), allocatable, intent(inout) :: field_ptrs(:)
     type(field_ptr_t), allocatable, intent(inout) :: host_fields(:)
 
     integer :: i
 
-    ! Release host buffers
     if (allocated(host_fields)) then
       do i = 1, size(host_fields)
         call solver%host_allocator%release_block(host_fields(i)%ptr)
@@ -315,13 +317,11 @@ contains
       deallocate (host_fields)
     end if
 
-    ! Clean up field pointers
     if (allocated(field_ptrs)) then
       deallocate (field_ptrs)
     end if
   end subroutine cleanup_field_arrays
 
-  ! Common manager utility procedures
   subroutine prepare_field_buffers( &
     solver, stride_factors, field_names, data_loc, &
     field_buffers, last_shape_dims, last_stride_factors, last_output_shape &
@@ -398,7 +398,6 @@ contains
       last_output_shape &
       )
 
-    ! Find the matching buffer for this field
     buffer_found = .false.
     do buffer_idx = 1, size(field_buffers)
       if (trim(field_buffers(buffer_idx)%field_name) == trim(field_name)) then
