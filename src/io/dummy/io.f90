@@ -1,6 +1,20 @@
 module m_io_backend
-!! Dummy implementation of the general I/O interface for when ADIOS2 is not available
-
+!! @brief Provides a dummy, non-functional I/O backend for when an I/O backend
+!! is not available
+!!
+!! @details This module provides a fallback implementation of the I/O backend
+!! interface. It is used when no real I/O backend (e.g. ADIOS2) is enabled at
+!! compile time.
+!!
+!! The primary purpose of this dummy backend is to allow the full program to
+!! compile and link against the session interface (`m_io_session`) without
+!! requiring a functional I/O library.
+!!
+!! @warning This is a non-functional stub. Calling any of its I/O procedures
+!! will immediately terminate the program with an error message.
+!!
+!! @note If you require file I/O, you must recompile the code with a functional
+!! backend
   use iso_fortran_env, only: stderr => error_unit
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, io_mode_read, &
                        io_mode_write

@@ -1,5 +1,20 @@
 module m_checkpoint_manager
-!! Checkpoint manager for simulation restart capabilities
+! @brief Manages the creation and restoration of simulation checkpoints
+!! for restart capabilities.
+!!
+!! @details This module is responsible for periodically saving the full, unstrided
+!! simulation state to a file. This allows a simulation to be stopped and resumed
+!! from the exact state it was in.
+!!
+!! Key features include:
+!! - Reading all checkpoint settings from a configuration file
+!! - Periodically writing the full-resolution simulation state
+!! - Handling the full logic for restarting a simulation from
+!! a specified checkpoint file.
+!! - A safe-write strategy that writes to a temporary file first,
+!!   then atomically renames it to the final filename to
+!! prevent corrupted checkpoints.
+!! - Optional cleanup of old checkpoint files to conserve disk space.
   use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Abort
   use m_common, only: dp, i8, DIR_C, get_argument
   use m_field, only: field_t
