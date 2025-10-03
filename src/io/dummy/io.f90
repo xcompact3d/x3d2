@@ -55,7 +55,7 @@ module m_io_backend
 
 contains
 
- subroutine allocate_io_reader(reader)
+  subroutine allocate_io_reader(reader)
     class(io_reader_t), pointer, intent(out) :: reader
     allocate (io_dummy_reader_t :: reader)
   end subroutine allocate_io_reader
