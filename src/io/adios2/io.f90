@@ -1,4 +1,4 @@
-module m_io_adios2
+module m_io_backend
 !! This module contains ADIOS2 (ADaptable Input Output System version 2)
 !! implementation with wrapper types for abtract interface compliance
 !! ADIOS2 APIs are based on:
@@ -28,7 +28,11 @@ module m_io_adios2
   implicit none
 
   private
-  public :: io_adios2_reader_t, io_adios2_writer_t
+  public :: allocate_io_reader, allocate_io_writer
+  public :: get_default_backend, IO_BACKEND_DUMMY, IO_BACKEND_ADIOS2
+
+  integer, parameter :: IO_BACKEND_DUMMY = 0
+  integer, parameter :: IO_BACKEND_ADIOS2 = 1
 
   type, extends(io_reader_t) :: io_adios2_reader_t
     private
@@ -80,6 +84,21 @@ module m_io_adios2
   end type io_adios2_file_t
 
 contains
+
+  subroutine allocate_io_reader(reader)
+    class(io_reader_t), pointer, intent(out) :: reader
+    allocate (io_adios2_reader_t :: reader)
+  end subroutine allocate_io_reader
+
+  subroutine allocate_io_writer(writer)
+    class(io_writer_t), pointer, intent(out) :: writer
+    allocate (io_adios2_writer_t :: writer)
+  end subroutine allocate_io_writer
+
+  function get_default_backend() result(backend)
+    integer :: backend
+    backend = IO_BACKEND_ADIOS2
+  end function get_default_backend
 
   subroutine reader_init_adios2(self, comm, name)
     class(io_adios2_reader_t), intent(inout) :: self
@@ -623,4 +642,4 @@ contains
     end if
   end subroutine handle_error_file
 
-end module m_io_adios2
+end module m_io_backend

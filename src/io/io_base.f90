@@ -32,6 +32,7 @@ module m_io_base
     procedure :: close => base_close
     procedure :: begin_step => base_begin_step
     procedure :: end_step => base_end_step
+    procedure :: is_file_functional => base_is_file_functional
   end type io_file_t
 
   !> Base I/O reader type for polymorphic usage
@@ -138,6 +139,12 @@ contains
     error stop "base_writer_finalise should not be called - &
       & use concrete implementation"
   end subroutine base_writer_finalise
+
+  function base_is_file_functional(self) result(is_functional)
+    class(io_file_t), intent(in) :: self
+    logical :: is_functional
+    is_functional = .true.
+  end function base_is_file_functional
 
   ! Base read implementations
   subroutine read_data_i8(self, variable_name, value, file_handle)
