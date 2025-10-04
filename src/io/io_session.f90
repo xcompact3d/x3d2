@@ -195,18 +195,19 @@ contains
   end subroutine read_data_real
 
   subroutine read_data_array_3d( &
-    self, variable_name, array, start_dims, count_dims &
+    self, variable_name, array, start_dims, count_dims, shape_dims &
     )
     class(reader_session_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
     real(dp), intent(inout) :: array(:, :, :)
     integer(i8), intent(in), optional :: start_dims(3)
     integer(i8), intent(in), optional :: count_dims(3)
+    integer(i8), intent(in), optional :: shape_dims(3)
 
     if (.not. self%is_open) error stop "IO session not open"
     call self%reader%read_data( &
       variable_name, array, self%file, &
-      start_dims=start_dims, count_dims=count_dims &
+      start_dims=start_dims, count_dims=count_dims, shape_dims=shape_dims &
       )
   end subroutine read_data_array_3d
 
@@ -257,18 +258,19 @@ contains
   end subroutine write_data_real
 
   subroutine write_data_array_3d( &
-    self, variable_name, array, start_dims, count_dims &
+    self, variable_name, array, start_dims, count_dims, shape_dims &
     )
     class(writer_session_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
     real(dp), intent(in) :: array(:, :, :)
     integer(i8), intent(in), optional :: start_dims(3)
     integer(i8), intent(in), optional :: count_dims(3)
+    integer(i8), intent(in), optional :: shape_dims(3)
 
     if (.not. self%is_open) error stop "IO session not open"
     call self%writer%write_data( &
       variable_name, array, self%file, &
-      start_dims=start_dims, count_dims=count_dims &
+      start_dims=start_dims, count_dims=count_dims, shape_dims=shape_dims &
       )
   end subroutine write_data_array_3d
 
