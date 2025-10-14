@@ -59,13 +59,35 @@ To use the built-in ADIOS2 (default behavior):
 Library Path Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you already have an ADIOS2 installation but want to use the version built by x3d2, you may need to set the library path to ensure that the correct ADIOS2 libraries are used at runtime:
+The project is configured to automatically download and build its own version of the ADIOS2 library. 
+However, if you have another version of ADIOS2 already installed globally on your system 
+(e.g., in ``/usr/lib`` or ``/usr/local/lib``), the runtime linker might mistakenly load the system's version. 
+This can lead to ``undefined symbol`` errors if the system's ADIOS2 was built with a different compiler 
+(e.g., GCC/gfortran) than the one used for this project.
 
-.. code-block:: bash
+If you encounter this error, you can manually force the system to use the correct, 
+project-built library by following these steps.
 
-   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/build/adios2/lib
+1. First, navigate into your **build directory** (the directory where you ran ``cmake`` and ``make``).
 
-This is particularly important when using a custom-built ADIOS2 with a different MPI implementation than what's available system-wide.
+   .. code-block:: bash
+
+      cd <path-to-your-build-directory>
+
+2. Now, run your command by prepending the correct library path to the ``LD_LIBRARY_PATH`` environment variable. 
+The required path is relative to your current build directory.
+
+   To run the test suite:
+
+   .. code-block:: bash
+
+      LD_LIBRARY_PATH=./adios2-build/adios2-install/lib:$LD_LIBRARY_PATH make test
+
+   To run an executable with ``mpirun``:
+
+   .. code-block:: bash
+
+      LD_LIBRARY_PATH=./adios2-build/adios2-install/lib:$LD_LIBRARY_PATH mpirun -np 2 ./src/xcompact <input_file>
 
 Verifying Your Installation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -115,3 +137,64 @@ If the wrong libraries are being loaded, adjust your ``LD_LIBRARY_PATH`` environ
    
    # Or to prioritise system ADIOS2 (if needed):
    export LD_LIBRARY_PATH=/usr/lib:/usr/local/lib:$LD_LIBRARY_PATH
+
+
+Configuring Single Precision Mode
+---------------------------------
+
+x3d2 can be compiled to use single precision (32-bit) floating-point numbers as the default precision for all calculations, which can provide significant performance benefits and memory savings on some hardware.
+
+Enabling Single Precision
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To compile x3d2 in single precision mode, use the ``SINGLE_PREC`` CMake option:
+
+.. code-block:: bash
+
+   cmake -DSINGLE_PREC=ON ..
+
+This will define the ``SINGLE_PREC`` preprocessor macro, causing the code to use single precision (``real32``) as the default floating-point type throughout the application.
+
+Benefits and Trade-offs
+~~~~~~~~~~~~~~~~~~~~~~
+
+**Benefits of single precision:**
+
+- Reduced memory usage (approximately half the memory of double precision)
+- Improved cache efficiency
+- Potentially faster calculations, especially on GPUs and some CPUs
+- Smaller checkpoint and snapshot files
+
+**Trade-offs:**
+
+- Reduced numerical precision (~7 decimal digits instead of ~15)
+- May affect solution accuracy for some problems
+- May require smaller timesteps for numerical stability in some cases
+
+Single Precision and Snapshot Files
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+x3d2 provides two separate mechanisms for controlling precision:
+
+1. **Compile-time precision** (``-DSINGLE_PREC=ON``): Controls the precision used for all computations within the code
+
+2. **Runtime snapshot precision** (``snapshot_single_precision`` in input file): Controls only the precision of visualisation snapshot output files
+
+These can be used in combination:
+
+- Double precision computation with single precision snapshots (saves disk space)
+- Single precision computation with single precision snapshots (maximum performance)
+
+When the code is compiled with ``-DSINGLE_PREC=ON``, the ``snapshot_single_precision`` setting in the input file has no effect because the simulation is already using single precision.
+
+Performance Considerations
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Single precision mode is particularly beneficial for:
+
+- Memory-bound applications
+- Large-scale simulations
+- Preliminary or exploratory simulations
+- Cases where absolute precision is less critical
+
+For production runs where high precision is required, the default double precision mode is recommended.
