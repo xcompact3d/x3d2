@@ -72,13 +72,13 @@ jobs:
           >> $GITHUB_PATH
 
     - name: Configure Debug build
-      run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
+      run: FC=mpif90 cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
 
     - name: Build test
-      run: make -C build
+      run: make -C build-debug
 
     - name: Run the tests
-      run: make -C build test
+      run: make -C build-debug test
       
     - name: Configure Release build
       run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
@@ -90,13 +90,13 @@ jobs:
       run: make -C build test
 
     - name: Configure Debug build (single precision)
-      run: FC=mpif90 cmake -S . -B build-single -DCMAKE_BUILD_TYPE=Debug -DSINGLE_PREC=ON -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
+      run: FC=mpif90 cmake -S . -B build-single-debug -DCMAKE_BUILD_TYPE=Debug -DSINGLE_PREC=ON -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
 
     - name: Build tests (single precision)
-      run: make -C build-single
+      run: make -C build-single-debug
 
     - name: Configure Release build (single precision)
-      run: FC=mpif90 cmake -S . -B build-single -DCMAKE_BUILD_TYPE=Release -DSINGLE_PREC=ON -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
+      run: FC=mpif90 cmake -S . -B build-single-debug -DCMAKE_BUILD_TYPE=Release -DSINGLE_PREC=ON -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
 
     - name: Build tests (single precision)
       run: make -C build-single

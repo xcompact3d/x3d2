@@ -42,11 +42,11 @@ stages:
     - export OMPI_ALLOW_RUN_AS_ROOT=1
     - export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
     - echo "Configure Debug build"
-    - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
+    - FC=mpif90 cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
     - echo "Build tests"
-    - make -C build
+    - make -C build-debug
     - echo "Run the tests"
-    - if [ "${RUN_TEST}" == "ON" ]; then make -C build test; fi
+    - if [ "${RUN_TEST}" == "ON" ]; then make -C build-debug test; fi
     - echo "Configure Release build"
     - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
     - echo "Build tests"
