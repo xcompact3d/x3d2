@@ -116,8 +116,8 @@ contains
     character(len=*), intent(in) :: filename
     integer, intent(in) :: mode
     integer, intent(in) :: comm
-    class(io_file_t), pointer :: file_handle
-    file_handle => null()
+    class(io_file_t), allocatable :: file_handle
+    allocate (io_file_t :: file_handle)
     error stop "base_reader_open should not be called - &
       & use concrete implementation"
   end function base_reader_open
@@ -141,8 +141,8 @@ contains
     character(len=*), intent(in) :: filename
     integer, intent(in) :: mode
     integer, intent(in) :: comm
-    class(io_file_t), pointer :: file_handle
-    file_handle => null()
+    class(io_file_t), allocatable :: file_handle
+    allocate (io_file_t :: file_handle)
     error stop "base_writer_open should not be called - &
       & use concrete implementation"
   end function base_writer_open

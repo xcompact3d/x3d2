@@ -59,14 +59,13 @@ module m_io_session
   !> Base type for common session functionality
   type :: io_session_base_t
     private
-    class(io_file_t), pointer :: file => null()
+    class(io_file_t), allocatable :: file
     logical :: is_open = .false.
     logical :: is_functional = .true.  ! false for dummy I/O
   contains
     procedure :: is_session_open
     procedure :: is_session_functional
     procedure :: close => session_base_close
-    procedure :: get_file
   end type io_session_base_t
 
   !> **PRIMARY TYPE FOR READING DATA** - Use this for all file reading operations
@@ -81,7 +80,7 @@ module m_io_session
   !!   call reader_session%close()
   type, extends(io_session_base_t) :: reader_session_t
     private
-    class(io_reader_t), pointer :: reader => null()
+    class(io_reader_t), allocatable :: reader
   contains
     ! Open/close operations
     procedure :: open => reader_session_open
@@ -109,7 +108,7 @@ module m_io_session
   !!   call writer_session%close()
   type, extends(io_session_base_t) :: writer_session_t
     private
-    class(io_writer_t), pointer :: writer => null()
+    class(io_writer_t), allocatable :: writer
   contains
     ! Open/close operations
     procedure :: open => writer_session_open
@@ -138,12 +137,6 @@ contains
     is_session_functional = self%is_functional
   end function is_session_functional
 
-  function get_file(self) result(file_ptr)
-    class(io_session_base_t), intent(in) :: self
-    class(io_file_t), pointer :: file_ptr
-    file_ptr => self%file
-  end function get_file
-
   subroutine session_base_close(self)
     class(io_session_base_t), intent(inout) :: self
     if (.not. self%is_open) return
@@ -161,7 +154,7 @@ contains
 
     call allocate_io_reader(self%reader)
     call self%reader%init(comm, "session_reader")
-    self%file => self%reader%open(filename, io_mode_read, comm)
+    self%file = self%reader%open(filename, io_mode_read, comm)
     call self%file%begin_step()
     self%is_open = .true.
   end subroutine reader_session_open
@@ -220,7 +213,7 @@ contains
 
     call allocate_io_writer(self%writer)
     call self%writer%init(comm, "session_writer")
-    self%file => self%writer%open(filename, io_mode_write, comm)
+    self%file = self%writer%open(filename, io_mode_write, comm)
     call self%file%begin_step()
 
     ! check if backend is functional
@@ -289,18 +282,15 @@ contains
   !! Ensures proper cleanup even if user forgets to call close
   subroutine reader_session_finaliser(self)
     type(reader_session_t) :: self
-    
     if (self%is_open) call self%close()
-    
-    if (associated(self%file)) then
-      deallocate(self%file)
-      self%file => null()
+
+    if (allocated(self%file)) then
+      deallocate (self%file)
     end if
-    
-    if (associated(self%reader)) then
+
+    if (allocated(self%reader)) then
       call self%reader%finalise()
-      deallocate(self%reader)
-      self%reader => null()
+      deallocate (self%reader)
     end if
   end subroutine reader_session_finaliser
 
@@ -309,18 +299,16 @@ contains
   !! Ensures proper cleanup even if user forgets to call close
   subroutine writer_session_finaliser(self)
     type(writer_session_t) :: self
-    
+
     if (self%is_open) call self%close()
-    
-    if (associated(self%file)) then
-      deallocate(self%file)
-      self%file => null()
+
+    if (allocated(self%file)) then
+      deallocate (self%file)
     end if
-    
-    if (associated(self%writer)) then
+
+    if (allocated(self%writer)) then
       call self%writer%finalise()
-      deallocate(self%writer)
-      self%writer => null()
+      deallocate (self%writer)
     end if
   end subroutine writer_session_finaliser
 
