@@ -7,9 +7,9 @@ program test_adios2
   implicit none
 
   ! ADIOS2 handlers
-  class(io_writer_t), pointer :: adios2_writer => null()
-  class(io_reader_t), pointer :: adios2_reader => null()
-  class(io_file_t), pointer :: file => null()
+  class(io_writer_t), allocatable :: adios2_writer
+  class(io_reader_t), allocatable :: adios2_reader
+  class(io_file_t), allocatable :: file
 
   ! MPI variables
   integer :: ierr, irank, isize
@@ -47,7 +47,7 @@ program test_adios2
   ! write data
   call allocate_io_writer(adios2_writer)
   call adios2_writer%init(MPI_COMM_WORLD, "test_io_write")
-  file => adios2_writer%open("test_output.bp", io_mode_write, MPI_COMM_WORLD)
+  file = adios2_writer%open("test_output.bp", io_mode_write, MPI_COMM_WORLD)
   call file%begin_step()
   call adios2_writer%write_data("data3D", data_write, file, &
                                 shape_dims, start_dims, count_dims)
@@ -61,8 +61,8 @@ program test_adios2
   if (irank == 0) then
     call allocate_io_reader(adios2_reader)
     call adios2_reader%init(MPI_COMM_SELF, "test_io_read")
-    ! Note: file pointer is automatically nullified when writer is deallocated
-    file => adios2_reader%open("test_output.bp", io_mode_read, MPI_COMM_SELF)
+    ! Note: file is automatically deallocated when going out of scope
+    file = adios2_reader%open("test_output.bp", io_mode_read, MPI_COMM_SELF)
     call file%begin_step()
 
     sel_start = [0, 0, 0]
@@ -93,11 +93,11 @@ program test_adios2
 
     if (allocated(data_read)) deallocate (data_read)
     call adios2_reader%finalise()
-    if (associated(adios2_reader)) deallocate(adios2_reader)
+    if (allocated(adios2_reader)) deallocate(adios2_reader)
   end if
 
   ! cleanup writer
-  if (associated(adios2_writer)) deallocate(adios2_writer)
+  if (allocated(adios2_writer)) deallocate(adios2_writer)
 
   ! Cleanup and finalize
   call MPI_Barrier(MPI_COMM_WORLD, ierr)

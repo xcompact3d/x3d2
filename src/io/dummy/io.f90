@@ -70,12 +70,12 @@ module m_io_backend
 contains
 
   subroutine allocate_io_reader(reader)
-    class(io_reader_t), pointer, intent(out) :: reader
+    class(io_reader_t), allocatable, intent(out) :: reader
     allocate (io_dummy_reader_t :: reader)
   end subroutine allocate_io_reader
 
   subroutine allocate_io_writer(writer)
-    class(io_writer_t), pointer, intent(out) :: writer
+    class(io_writer_t), allocatable, intent(out) :: writer
     allocate (io_dummy_writer_t :: writer)
   end subroutine allocate_io_writer
 
@@ -118,7 +118,7 @@ contains
     character(len=*), intent(in) :: filename
     integer, intent(in) :: mode
     integer, intent(in) :: comm
-    class(io_file_t), pointer :: file_handle
+    class(io_file_t), allocatable :: file_handle
 
     write (stderr, '(A)') "ERROR: Cannot open file '"//trim(filename)// &
       "' for reading - ADIOS2 not available"
@@ -202,7 +202,7 @@ contains
     character(len=*), intent(in) :: filename
     integer, intent(in) :: mode
     integer, intent(in) :: comm
-    class(io_file_t), pointer :: file_handle
+    class(io_file_t), allocatable :: file_handle
 
     ! Show warning for write operations (once)
     if (.not. write_warning_shown) then
