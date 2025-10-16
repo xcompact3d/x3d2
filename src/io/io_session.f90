@@ -10,9 +10,11 @@ module m_io_session
 !! - Type-safe sessions: specialised `reader_session_t` and `writer_session_t`
 !!   types for reading and writing operations, respectively.
 !! - Automatic backend selection: based on compile-time options
+!! - Resource cleanup: memory is automatically freed when sessions
+!!   go out of scope (using final subroutines).
 !! - Simplified workflow - user only needs to manage a simple
 !! `open -> read/write -> close` workflow, with no need for manual file handle
-!!   management.
+!!   management or explicit cleanup calls.
 !!
 !! @example
 !! A typical usage pattern for reading data and writing data:
@@ -30,11 +32,13 @@ module m_io_session
 !! call writer%open("output.bp")
 !! call writer%write_data("temperature", temp_field)
 !! call writer%close()
+!! ! Note: writer is automatically cleaned up when it goes out of scope
 !!
 !! ! For reading data
 !! call reader%open("input.bp")
 !! call reader%read_data("temperature", temp_field)
 !! call reader%close()
+!! ! Note: reader is automatically cleaned up when it goes out of scope
 !! @endcode
 !!
 !! @note Users should only use the types provided by this module. The lower-level
@@ -62,7 +66,6 @@ module m_io_session
     procedure :: is_session_open
     procedure :: is_session_functional
     procedure :: close => session_base_close
-    procedure :: finalise => session_base_finalise
     procedure :: get_file
   end type io_session_base_t
 
@@ -89,6 +92,7 @@ module m_io_session
     procedure, private :: read_data_integer
     procedure, private :: read_data_real
     procedure, private :: read_data_array_3d
+    final :: reader_session_finaliser
   end type reader_session_t
 
   !> **PRIMARY TYPE FOR WRITING DATA** - Use this for all file writing operations
@@ -118,6 +122,7 @@ module m_io_session
     procedure, private :: write_data_array_3d
     ! Write attribute interface
     procedure :: write_attribute => session_write_attribute
+    final :: writer_session_finaliser
   end type writer_session_t
 
 contains
@@ -145,15 +150,6 @@ contains
     call self%file%close()
     self%is_open = .false.
   end subroutine session_base_close
-
-  subroutine session_base_finalise(self)
-    class(io_session_base_t), intent(inout) :: self
-    if (self%is_open) call self%close()
-    if (associated(self%file)) then
-      deallocate(self%file)
-      self%file => null()
-    end if
-  end subroutine session_base_finalise
 
   ! Reader session procedures
   subroutine reader_session_open(self, filename, comm)
@@ -287,5 +283,45 @@ contains
       attribute_name, attribute_value, self%file &
       )
   end subroutine session_write_attribute
+
+  !> Finalisation for reader_session_t
+  !! Called automatically when a reader_session_t goes out of scope
+  !! Ensures proper cleanup even if user forgets to call close
+  subroutine reader_session_finaliser(self)
+    type(reader_session_t) :: self
+    
+    if (self%is_open) call self%close()
+    
+    if (associated(self%file)) then
+      deallocate(self%file)
+      self%file => null()
+    end if
+    
+    if (associated(self%reader)) then
+      call self%reader%finalise()
+      deallocate(self%reader)
+      self%reader => null()
+    end if
+  end subroutine reader_session_finaliser
+
+  !> Finalisation for writer_session_t
+  !! Called automatically when a writer_session_t goes out of scope
+  !! Ensures proper cleanup even if user forgets to call close
+  subroutine writer_session_finaliser(self)
+    type(writer_session_t) :: self
+    
+    if (self%is_open) call self%close()
+    
+    if (associated(self%file)) then
+      deallocate(self%file)
+      self%file => null()
+    end if
+    
+    if (associated(self%writer)) then
+      call self%writer%finalise()
+      deallocate(self%writer)
+      self%writer => null()
+    end if
+  end subroutine writer_session_finaliser
 
 end module m_io_session
