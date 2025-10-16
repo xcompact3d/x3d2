@@ -149,7 +149,10 @@ contains
   subroutine session_base_finalise(self)
     class(io_session_base_t), intent(inout) :: self
     if (self%is_open) call self%close()
-    if (associated(self%file)) self%file => null()
+    if (associated(self%file)) then
+      deallocate(self%file)
+      self%file => null()
+    end if
   end subroutine session_base_finalise
 
   ! Reader session procedures
