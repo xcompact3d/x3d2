@@ -155,21 +155,20 @@ contains
     integer, intent(in) :: comm
 
     class(io_file_t), allocatable :: file_handle
+    type(io_adios2_file_t) :: temp_handle
     integer :: ierr, use_comm
 
-    allocate (io_adios2_file_t :: file_handle)
     use_comm = comm
     if (.not. self%io_handle%valid) &
       call self%handle_error(1, "ADIOS2 IO object is not valid")
 
-    select type (file_handle)
-    type is (io_adios2_file_t)
-      call adios2_open( &
-        file_handle%engine, self%io_handle, filename, &
-        adios2_mode_read, use_comm, ierr)
-      call self%handle_error(ierr, "Failed to open ADIOS2 engine for reading")
-      file_handle%is_writer = .false.
-    end select
+    call adios2_open( &
+      temp_handle%engine, self%io_handle, filename, &
+      adios2_mode_read, use_comm, ierr)
+    call self%handle_error(ierr, "Failed to open ADIOS2 engine for reading")
+    temp_handle%is_writer = .false.
+
+    file_handle = temp_handle
   end function reader_open_adios2
 
   subroutine read_data_i8_adios2(self, variable_name, value, file_handle)
@@ -351,30 +350,28 @@ contains
     integer, intent(in) :: comm
 
     class(io_file_t), allocatable :: file_handle
+    type(io_adios2_file_t) :: temp_handle
     integer :: ierr, use_comm
-
-    allocate (io_adios2_file_t :: file_handle)
 
     use_comm = comm
     if (.not. self%io_handle%valid) &
       call self%handle_error(1, "ADIOS2 IO object is not valid")
 
-    select type (file_handle)
-    type is (io_adios2_file_t)
-      ! if opening in write mode, we are starting a new independent dataset
-      ! remove all old variables from the IO object
-      if (mode == io_mode_write) then
-        call adios2_remove_all_variables(self%io_handle, ierr)
-        call self%handle_error(ierr, "Failed to remove old ADIOS2 variables &
-                               & before open")
-      end if
+    ! if opening in write mode, we are starting a new independent dataset
+    ! remove all old variables from the IO object
+    if (mode == io_mode_write) then
+      call adios2_remove_all_variables(self%io_handle, ierr)
+      call self%handle_error(ierr, "Failed to remove old ADIOS2 variables &
+                             & before open")
+    end if
 
-      call adios2_open( &
-        file_handle%engine, self%io_handle, filename, &
-        adios2_mode_write, use_comm, ierr)
-      call self%handle_error(ierr, "Failed to open ADIOS2 engine for writing")
-      file_handle%is_writer = .true.
-    end select
+    call adios2_open( &
+      temp_handle%engine, self%io_handle, filename, &
+      adios2_mode_write, use_comm, ierr)
+    call self%handle_error(ierr, "Failed to open ADIOS2 engine for writing")
+    temp_handle%is_writer = .true.
+
+    file_handle = temp_handle
   end function writer_open_adios2
 
   subroutine write_data_i8_adios2(self, variable_name, value, file_handle)
