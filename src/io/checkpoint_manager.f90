@@ -146,8 +146,16 @@ contains
     real(dp) :: simulation_time
     logical :: file_exists
     type(field_ptr_t), allocatable :: field_ptrs(:), host_fields(:)
-    integer :: data_loc
+    integer :: data_loc, is_ab, i, j, n_total_vars
     type(writer_session_t) :: writer_session
+    integer(i8), dimension(3) :: output_start, output_count
+    integer, dimension(3) :: output_dims_local
+    integer :: nolds_total, idx
+    integer(i8), dimension(3) :: old_last_shape_dims, old_last_output_shape
+    integer, dimension(3) :: old_last_stride_factors
+    type(field_buffer_map_t), allocatable :: old_field_buffers(:)
+    character(len=16), allocatable :: old_field_names(:)
+    type(field_ptr_t), allocatable :: old_field_ptrs(:)
 
     if (self%config%checkpoint_freq <= 0) return
     if (mod(timestep, self%config%checkpoint_freq) /= 0) return
@@ -171,12 +179,76 @@ contains
     call writer_session%write_data("dt", real(solver%dt, dp))
     call writer_session%write_data("data_loc", data_loc)
 
+    n_total_vars = size(field_names)
+
     call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
 
     call self%write_fields( &
       field_names, host_fields, &
       solver, writer_session, data_loc &
       )
+
+    ! serialise time integrator metadata
+    if (solver%time_integrator%sname(1:2) == 'AB') then
+      is_ab = 1
+    else
+      is_ab = 0
+    end if
+    call writer_session%write_data('ti_is_ab', is_ab)
+    call writer_session%write_data('ti_order', solver%time_integrator%order)
+    call writer_session%write_data('ti_istep', solver%time_integrator%istep)
+    call writer_session%write_data('ti_nstep', solver%time_integrator%nstep)
+
+    ! for AB methods with order >1, keep derivative history olds(i,j)
+    if (is_ab == 1 .and. solver%time_integrator%order > 1) then
+      nolds_total = solver%time_integrator%nolds*n_total_vars
+      allocate (old_field_names(nolds_total))
+      allocate (old_field_ptrs(nolds_total))
+      idx = 0
+      do i = 1, n_total_vars
+        do j = 1, solver%time_integrator%nolds
+          idx = idx + 1
+          write (old_field_names(idx), '(A,"_rhs_old",I0)') &
+            trim(field_names(i)), j
+          old_field_ptrs(idx)%ptr => solver%time_integrator%olds(i, j)%ptr
+        end do
+      end do
+
+      call prepare_field_buffers( &
+        solver, self%full_resolution, old_field_names, data_loc, &
+        old_field_buffers, old_last_shape_dims, old_last_stride_factors, &
+        old_last_output_shape &
+        )
+
+      call get_output_dimensions( &
+        int(solver%mesh%get_global_dims(data_loc), i8), &
+        int(solver%mesh%par%n_offset, i8), &
+        int(solver%mesh%get_dims(data_loc), i8), &
+        self%full_resolution, &
+        old_last_output_shape, output_start, output_count, &
+        output_dims_local, &
+        old_last_shape_dims, old_last_stride_factors, &
+        old_last_output_shape &
+        )
+
+      do idx = 1, nolds_total
+        call write_single_field_to_buffer( &
+          trim(old_field_names(idx)), old_field_ptrs(idx)%ptr, &
+          solver, self%full_resolution, data_loc, &
+          old_field_buffers, old_last_shape_dims, old_last_stride_factors, &
+          old_last_output_shape &
+          )
+        call writer_session%write_data( &
+          trim(old_field_names(idx)), &
+          old_field_buffers(idx)%buffer, &
+          start_dims=output_start, count_dims=output_count &
+          )
+      end do
+
+      call cleanup_field_buffers(old_field_buffers)
+      deallocate (old_field_ptrs)
+      deallocate (old_field_names)
+    end if
 
     call writer_session%close()
 
@@ -233,9 +305,15 @@ contains
     integer :: ierr
     integer :: dims(3)
     integer(i8), dimension(3) :: start_dims, count_dims
-    character(len=*), parameter :: field_names(3) = ["u", "v", "w"]
+    character(len=*), parameter :: field_names(*) = ["u", "v", "w"]
     logical :: file_exists
     integer :: data_loc
+    integer :: ti_is_ab, ti_order, ti_istep, ti_nstep
+    logical :: have_ti_meta
+    character(len=16), allocatable :: var_names(:)
+    integer :: n_total_vars
+    character(len=64) :: old_name
+    integer :: i, j
 
     inquire (file=filename, exist=file_exists)
     if (.not. file_exists) then
@@ -250,6 +328,20 @@ contains
     call reader_session%read_data("timestep", timestep)
     call reader_session%read_data("time", restart_time)
     call reader_session%read_data("data_loc", data_loc)
+    ! restore dt if present
+    block
+      real(dp) :: chk_dt
+      call reader_session%read_data("dt", chk_dt)
+      solver%dt = chk_dt
+    end block
+    ! attempt to read time integrator metadata
+    have_ti_meta = .true.
+    block
+      call reader_session%read_data('ti_is_ab', ti_is_ab)
+      call reader_session%read_data('ti_order', ti_order)
+      call reader_session%read_data('ti_istep', ti_istep)
+      call reader_session%read_data('ti_nstep', ti_nstep)
+    end block
 
     dims = solver%mesh%get_dims(data_loc)
     start_dims = int(solver%mesh%par%n_offset, i8)
@@ -274,6 +366,40 @@ contains
       call solver%backend%set_field_data(solver%v, field_data_v)
       call solver%backend%set_field_data(solver%w, field_data_w)
     end block
+
+    ! restore AB derivative history if metadata indicates AB and order>1
+    if (have_ti_meta) then
+      if (ti_is_ab == 1) then
+        solver%time_integrator%istep = ti_istep
+        if (solver%time_integrator%order /= ti_order) then
+          if (solver%mesh%par%is_root()) then
+            print *, 'WARNING: checkpoint AB order differs from current &
+                  & solver config; using checkpoint order'
+          end if
+          solver%time_integrator%order = ti_order
+        end if
+        if (ti_order > 1) then
+          n_total_vars = size(field_names)
+          allocate (var_names(n_total_vars))
+          var_names = field_names
+          do i = 1, n_total_vars
+            do j = 1, solver%time_integrator%nolds
+              write (old_name, '(A,"_rhs_old",I0)') trim(var_names(i)), j
+              block
+                real(dp), allocatable, target :: old_field(:, :, :)
+                allocate (old_field(count_dims(1), &
+                                    count_dims(2), count_dims(3)))
+                call reader_session%read_data(trim(old_name), old_field)
+                call solver%backend%set_field_data( &
+                  solver%time_integrator%olds(i, j)%ptr, old_field)
+                deallocate (old_field)
+              end block
+            end do
+          end do
+          deallocate (var_names)
+        end if
+      end if
+    end if
 
     call reader_session%close()
   end subroutine restart_checkpoint
