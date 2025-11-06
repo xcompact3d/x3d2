@@ -147,6 +147,7 @@ contains
 
     integer :: dir, i, i_glob
     real(dp) :: L_inf, alpha, beta, r, const, s, yeta_vt, yeta_mp, coord
+    real(dp), parameter :: beta_tolerance = epsilon(1._dp)
 
     allocate (self%vert_coords(maxval(vert_dims), 3))
     allocate (self%vert_ds(maxval(vert_dims), 3))
@@ -160,13 +161,9 @@ contains
 
     ! vertex coordinates
     do dir = 1, 3
-      L_inf = self%L(dir)/2
-      beta = self%beta(dir)
-      alpha = abs((L_inf - sqrt((pi*beta)**2 + L_inf**2))/(2*beta*L_inf))
-      self%alpha(dir) = alpha
-
       if (trim(self%stretching(dir)) == 'uniform') then
         self%stretched(dir) = .false.
+        self%alpha(dir) = 0._dp
         self%vert_coords(1:vert_dims(dir), dir) = &
           [((n_offset(dir) + i - 1)*self%d(dir), i=1, vert_dims(dir))]
         self%vert_ds(:, dir) = 1._dp
@@ -179,6 +176,14 @@ contains
         self%midp_d2s(:, dir) = 0._dp
       else
         self%stretched(dir) = .true.
+        L_inf = self%L(dir)/2
+        beta = self%beta(dir)
+        if (beta <= beta_tolerance) then
+          error stop 'Invalid beta in domain_settings'
+        end if
+        alpha = abs((L_inf - sqrt((pi*beta)**2 + L_inf**2))/(2*beta*L_inf))
+        self%alpha(dir) = alpha
+
         r = sqrt((alpha*beta + 1)/(alpha*beta))
         const = sqrt(beta)/(2*sqrt(alpha)*sqrt(alpha*beta + 1))
         s = self%d(dir)/self%L(dir)
