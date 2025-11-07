@@ -244,13 +244,21 @@ contains
           start_dims=output_start, count_dims=output_count &
           )
       end do
-
-      call cleanup_field_buffers(old_field_buffers)
-      deallocate (old_field_ptrs)
-      deallocate (old_field_names)
     end if
 
     call writer_session%close()
+
+    ! clean up buffers after session close (ADIOS2 deferred writes need them until end_step)
+    if (allocated(old_field_buffers)) then
+      call cleanup_field_buffers(old_field_buffers)
+    end if
+    call self%cleanup_output_buffers()
+    if (allocated(old_field_ptrs)) then
+      deallocate (old_field_ptrs)
+    end if
+    if (allocated(old_field_names)) then
+      deallocate (old_field_names)
+    end if
 
     call cleanup_field_arrays(solver, field_ptrs, host_fields)
 
@@ -359,9 +367,12 @@ contains
       allocate (field_data_u(count_dims(1), count_dims(2), count_dims(3)))
       allocate (field_data_v(count_dims(1), count_dims(2), count_dims(3)))
       allocate (field_data_w(count_dims(1), count_dims(2), count_dims(3)))
-      call reader_session%read_data("u", field_data_u)
-      call reader_session%read_data("v", field_data_v)
-      call reader_session%read_data("w", field_data_w)
+      call reader_session%read_data("u", field_data_u, &
+        start_dims=start_dims, count_dims=count_dims)
+      call reader_session%read_data("v", field_data_v, &
+        start_dims=start_dims, count_dims=count_dims)
+      call reader_session%read_data("w", field_data_w, &
+        start_dims=start_dims, count_dims=count_dims)
       call solver%backend%set_field_data(solver%u, field_data_u)
       call solver%backend%set_field_data(solver%v, field_data_v)
       call solver%backend%set_field_data(solver%w, field_data_w)
@@ -389,7 +400,8 @@ contains
                 real(dp), allocatable, target :: old_field(:, :, :)
                 allocate (old_field(count_dims(1), &
                                     count_dims(2), count_dims(3)))
-                call reader_session%read_data(trim(old_name), old_field)
+                call reader_session%read_data(trim(old_name), old_field, &
+                  start_dims=start_dims, count_dims=count_dims)
                 call solver%backend%set_field_data( &
                   solver%time_integrator%olds(i, j)%ptr, old_field)
                 deallocate (old_field)
