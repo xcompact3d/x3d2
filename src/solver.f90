@@ -695,6 +695,10 @@ contains
 
     call self%divergence_v2p(div_u, u, v, w)
 
+    if (self%current_iter == 6 .and. self%mesh%par%is_root()) then
+      print *, 'DEBUG DIVU iter=', self%current_iter, ' div_u(1,1,1)=', div_u%data(1,1,1)
+    end if
+
     pressure => self%backend%allocator%get_block(DIR_Z)
 
     call self%poisson(pressure, div_u)
