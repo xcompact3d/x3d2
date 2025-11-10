@@ -129,7 +129,7 @@ A recent modern Fortran compiler is required to build x3d2. For example GNU Fort
 
    brew install gcc
 
-OpenMP is typically included with most modern compilers, including GCC. Therefore, installing ``gcc`` for example should also provide OpenMP support.
+OpenMP is typically included with most modern compilers, including GCC. Therefore, installing ``gcc`` for example should also provide OpenMP support. 
 
 Open MPI
 ^^^^^^^^
@@ -160,11 +160,22 @@ To install x3d2 from source, follow these steps:
 
    git clone https://github.com/xcompact3d/x3d2.git
 
-2. Set Fortran Compiler flag to use ``mpif90``
+2. Configure compilers
+macOS users must explicitly set GNU compilers for C/C++ to ensure OpenMP support is detected correctly.
+
+First, identify your installed GCC version:
+
+.. code-block:: bash
+
+   ls $(brew --prefix)/bin/gcc-*
+
+Then, export the compilers (replace ``15`` with your installed version if different):
 
 .. code-block:: bash
 
    export FC=mpif90
+   export CC=gcc-15
+   export CXX=g++-15
 
 3. Create the build system using CMake
 
