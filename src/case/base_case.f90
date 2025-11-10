@@ -269,6 +269,18 @@ contains
           call self%solver%backend%allocator%release_block(deriv(i)%ptr)
         end do
 
+        if (iter == 6 .and. self%solver%mesh%par%is_root()) then
+          print *, 'DEBUG VEL iter=', iter, ' u(1,1,1)=', self%solver%u%data(1,1,1)
+          print *, 'DEBUG VEL iter=', iter, ' v(1,1,1)=', self%solver%v%data(1,1,1)
+          print *, 'DEBUG VEL iter=', iter, ' w(1,1,1)=', self%solver%w%data(1,1,1)
+          print *, 'DEBUG VEL iter=', iter, ' u min/max=', &
+            minval(self%solver%u%data), maxval(self%solver%u%data)
+          print *, 'DEBUG VEL iter=', iter, ' v min/max=', &
+            minval(self%solver%v%data), maxval(self%solver%v%data)
+          print *, 'DEBUG VEL iter=', iter, ' w min/max=', &
+            minval(self%solver%w%data), maxval(self%solver%w%data)
+        end if
+
         call self%pre_correction(self%solver%u, self%solver%v, self%solver%w)
         if (self%solver%ibm_on) then
           call self%solver%ibm%body(self%solver%u, self%solver%v, &
