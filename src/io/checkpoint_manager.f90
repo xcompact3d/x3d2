@@ -386,6 +386,11 @@ contains
       real(dp), allocatable, target :: field_data_v(:, :, :)
       real(dp), allocatable, target :: field_data_w(:, :, :)
 
+      ! Zero velocity fields before restoring to ensure padding is initialized
+      call solver%u%fill(0.0_dp)
+      call solver%v%fill(0.0_dp)
+      call solver%w%fill(0.0_dp)
+
       allocate (field_data_u(count_dims(1), count_dims(2), count_dims(3)))
       allocate (field_data_v(count_dims(1), count_dims(2), count_dims(3)))
       allocate (field_data_w(count_dims(1), count_dims(2), count_dims(3)))
