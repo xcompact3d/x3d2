@@ -35,7 +35,7 @@ Note: in GPU kernels the 'k' loop is managed by the blocks and 'i' loop
 is managed by the threads. Therefore, a GPU kernel only contains the 'j'
 loop.
 
-.. code:: fortran
+.. code:: cuda
 
   ! kernel call from host side
   call gpu_kernel<<<dim3(n_group, 1, 1), dim3(SZ, 1, 1)>>>(...)
