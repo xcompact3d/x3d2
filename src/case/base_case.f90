@@ -255,6 +255,13 @@ contains
         ! models that introduce source terms handled here
         call self%forcings(deriv(1)%ptr, deriv(2)%ptr, deriv(3)%ptr, iter)
 
+        ! DEBUG: Print derivatives before AB (only for iter=6)
+        if (iter == 6 .and. self%solver%mesh%par%is_root()) then
+          print *, 'DEBUG DERIV iter=', iter, ' u_deriv(1,1,1)=', deriv(1)%ptr%data(1,1,1)
+          print *, 'DEBUG DERIV iter=', iter, ' v_deriv(1,1,1)=', deriv(2)%ptr%data(1,1,1)
+          print *, 'DEBUG DERIV iter=', iter, ' w_deriv(1,1,1)=', deriv(3)%ptr%data(1,1,1)
+        end if
+
         ! time integration
         call self%solver%time_integrator%step(curr, deriv, self%solver%dt)
 

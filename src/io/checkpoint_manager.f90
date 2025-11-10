@@ -16,7 +16,7 @@ module m_checkpoint_manager
 !! prevent corrupted checkpoints.
 !! - Optional cleanup of old checkpoint files to conserve disk space.
   use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Abort
-  use m_common, only: dp, i8, DIR_C, get_argument
+  use m_common, only: dp, i8, DIR_X, get_argument
   use m_field, only: field_t
   use m_solver, only: solver_t
   use m_io_session, only: reader_session_t, writer_session_t
@@ -148,12 +148,7 @@ contains
     type(field_ptr_t), allocatable :: field_ptrs(:), host_fields(:)
     integer :: data_loc, is_ab, i, j, n_total_vars
     type(writer_session_t) :: writer_session
-    integer(i8), dimension(3) :: output_start, output_count
-    integer, dimension(3) :: output_dims_local
     integer :: nolds_total, idx
-    integer(i8), dimension(3) :: old_last_shape_dims, old_last_output_shape
-    integer, dimension(3) :: old_last_stride_factors
-    type(field_buffer_map_t), allocatable :: old_field_buffers(:)
     character(len=16), allocatable :: old_field_names(:)
     type(field_ptr_t), allocatable :: old_field_ptrs(:)
 
@@ -194,6 +189,9 @@ contains
     else
       is_ab = 0
     end if
+    if (myrank == 0 .and. is_ab == 1) then
+      print *, 'DEBUG CHECKPOINT: istep=', solver%time_integrator%istep, ' at iteration=', timestep
+    end if
     call writer_session%write_data('ti_is_ab', is_ab)
     call writer_session%write_data('ti_order', solver%time_integrator%order)
     call writer_session%write_data('ti_istep', solver%time_integrator%istep)
@@ -201,6 +199,11 @@ contains
 
     ! for AB methods with order >1, keep derivative history olds(i,j)
     if (is_ab == 1 .and. solver%time_integrator%order > 1) then
+      ! Debug output before entering block
+      if (myrank == 0) then
+        print *, 'DEBUG: Writing', solver%time_integrator%nolds, 'olds for', n_total_vars, 'variables'
+      end if
+      
       nolds_total = solver%time_integrator%nolds*n_total_vars
       allocate (old_field_names(nolds_total))
       allocate (old_field_ptrs(nolds_total))
@@ -214,44 +217,57 @@ contains
         end do
       end do
 
-      call prepare_field_buffers( &
-        solver, self%full_resolution, old_field_names, data_loc, &
-        old_field_buffers, old_last_shape_dims, old_last_stride_factors, &
-        old_last_output_shape &
-        )
-
-      call get_output_dimensions( &
-        int(solver%mesh%get_global_dims(data_loc), i8), &
-        int(solver%mesh%par%n_offset, i8), &
-        int(solver%mesh%get_dims(data_loc), i8), &
-        self%full_resolution, &
-        old_last_output_shape, output_start, output_count, &
-        output_dims_local, &
-        old_last_shape_dims, old_last_stride_factors, &
-        old_last_output_shape &
-        )
-
-      do idx = 1, nolds_total
-        call write_single_field_to_buffer( &
-          trim(old_field_names(idx)), old_field_ptrs(idx)%ptr, &
-          solver, self%full_resolution, data_loc, &
-          old_field_buffers, old_last_shape_dims, old_last_stride_factors, &
-          old_last_output_shape &
-          )
-        call writer_session%write_data( &
-          trim(old_field_names(idx)), &
-          old_field_buffers(idx)%buffer, &
-          start_dims=output_start, count_dims=output_count &
-          )
-      end do
+      ! Olds fields are in DIR_X with blocked SIMD layout
+      ! Use backend%get_field_data to extract to natural [nx,ny,nz] layout
+      block
+        integer :: phys_dims(3), rank_id, ierr_local
+        integer(i8), dimension(3) :: phys_start, phys_count, phys_shape
+        real(dp), allocatable :: temp_data_array(:,:,:,:)  ! One buffer per olds field
+        
+        call MPI_Comm_rank(comm, rank_id, ierr_local)
+        
+        ! Use unpadded cell dimensions for physical data
+        phys_dims = solver%mesh%grid%cell_dims
+        phys_start = int(solver%mesh%par%n_offset, i8)
+        phys_count = int(phys_dims, i8)
+        phys_shape = int(solver%mesh%grid%global_cell_dims, i8)
+        
+        ! Allocate array to hold ALL olds fields (cannot reuse buffer - ADIOS2 deferred writes!)
+        allocate(temp_data_array(phys_dims(1), phys_dims(2), phys_dims(3), nolds_total))
+        
+        ! Extract all olds fields to natural layout
+        do idx = 1, nolds_total
+          call solver%backend%get_field_data(temp_data_array(:,:,:,idx), old_field_ptrs(idx)%ptr, DIR_X)
+        end do
+        
+        ! Debug output for first field
+        if (rank_id == 0) then
+          print *, 'DEBUG WRITE: Saving', nolds_total, 'olds fields'
+          do idx = 1, min(6, nolds_total)  ! Print first 6 fields
+            print *, 'DEBUG WRITE:', trim(old_field_names(idx)), '(1,1,1)=', temp_data_array(1,1,1,idx), &
+              ' min/max=', minval(temp_data_array(:,:,:,idx)), maxval(temp_data_array(:,:,:,idx))
+          end do
+        end if
+        
+        ! Now write all fields (data is stable in temp_data_array)
+        do idx = 1, nolds_total
+          call writer_session%write_data( &
+            trim(old_field_names(idx)), &
+            temp_data_array(:,:,:,idx), &
+            start_dims=phys_start, count_dims=phys_count, &
+            shape_dims=phys_shape &
+            )
+        end do
+        
+        ! DO NOT deallocate temp_data_array here - ADIOS2 needs it until close()
+        call writer_session%close()
+        deallocate(temp_data_array)
+      end block
+    else
+      call writer_session%close()
     end if
-
-    call writer_session%close()
 
     ! clean up buffers after session close (ADIOS2 deferred writes need them until end_step)
-    if (allocated(old_field_buffers)) then
-      call cleanup_field_buffers(old_field_buffers)
-    end if
     call self%cleanup_output_buffers()
     if (allocated(old_field_ptrs)) then
       deallocate (old_field_ptrs)
@@ -310,18 +326,19 @@ contains
     integer, intent(in) :: comm
 
     type(reader_session_t) :: reader_session
-    integer :: ierr
+    integer :: ierr, myrank, data_loc
     integer :: dims(3)
     integer(i8), dimension(3) :: start_dims, count_dims
     character(len=*), parameter :: field_names(*) = ["u", "v", "w"]
     logical :: file_exists
-    integer :: data_loc
     integer :: ti_is_ab, ti_order, ti_istep, ti_nstep
     logical :: have_ti_meta
     character(len=16), allocatable :: var_names(:)
     integer :: n_total_vars
     character(len=64) :: old_name
     integer :: i, j
+
+    call MPI_Comm_rank(comm, myrank, ierr)
 
     inquire (file=filename, exist=file_exists)
     if (.not. file_exists) then
@@ -333,6 +350,11 @@ contains
     end if
 
     call reader_session%open(filename, comm)
+    
+    if (myrank == 0) then
+      print *, 'DEBUG: Checkpoint file opened successfully'
+    end if
+    
     call reader_session%read_data("timestep", timestep)
     call reader_session%read_data("time", restart_time)
     call reader_session%read_data("data_loc", data_loc)
@@ -381,7 +403,11 @@ contains
     ! restore AB derivative history if metadata indicates AB and order>1
     if (have_ti_meta) then
       if (ti_is_ab == 1) then
+        if (solver%mesh%par%is_root()) then
+          print *, 'DEBUG RESTORE: istep=', ti_istep, ' at iteration=', timestep
+        end if
         solver%time_integrator%istep = ti_istep
+        solver%time_integrator%nstep = ti_nstep
         if (solver%time_integrator%order /= ti_order) then
           if (solver%mesh%par%is_root()) then
             print *, 'WARNING: checkpoint AB order differs from current &
@@ -390,25 +416,60 @@ contains
           solver%time_integrator%order = ti_order
         end if
         if (ti_order > 1) then
-          n_total_vars = size(field_names)
-          allocate (var_names(n_total_vars))
-          var_names = field_names
-          do i = 1, n_total_vars
-            do j = 1, solver%time_integrator%nolds
-              write (old_name, '(A,"_rhs_old",I0)') trim(var_names(i)), j
-              block
-                real(dp), allocatable, target :: old_field(:, :, :)
-                allocate (old_field(count_dims(1), &
-                                    count_dims(2), count_dims(3)))
-                call reader_session%read_data(trim(old_name), old_field, &
-                  start_dims=start_dims, count_dims=count_dims)
-                call solver%backend%set_field_data( &
-                  solver%time_integrator%olds(i, j)%ptr, old_field)
-                deallocate (old_field)
-              end block
+          ! Olds fields use blocked SIMD layout - use backend to restore
+          block
+            integer :: phys_dims(3)
+            integer(i8), dimension(3) :: phys_start, phys_count
+            real(dp), allocatable, target :: old_field(:, :, :)
+            
+            ! Use unpadded cell dimensions
+            phys_dims = solver%mesh%grid%cell_dims
+            phys_start = int(solver%mesh%par%n_offset, i8)
+            phys_count = int(phys_dims, i8)
+            
+            allocate (old_field(phys_count(1), phys_count(2), phys_count(3)))
+            
+            n_total_vars = size(field_names)
+            allocate (var_names(n_total_vars))
+            var_names = field_names
+            
+            ! Zero out olds fields before restoring to ensure padding is initialized
+            if (solver%mesh%par%is_root()) then
+              print *, 'DEBUG: Zeroing olds fields before restore'
+            end if
+            do i = 1, n_total_vars
+              do j = 1, solver%time_integrator%nolds
+                call solver%time_integrator%olds(i, j)%ptr%fill(0.0_dp)
+              end do
             end do
-          end do
-          deallocate (var_names)
+            
+            ! Read old derivative data and restore using backend
+            do i = 1, n_total_vars
+              do j = 1, solver%time_integrator%nolds
+                write (old_name, '(A,"_rhs_old",I0)') trim(var_names(i)), j
+                
+                call reader_session%read_data(trim(old_name), old_field, &
+                  start_dims=phys_start, count_dims=phys_count)
+                
+                if (solver%mesh%par%is_root()) then
+                  print *, 'DEBUG READ:', trim(old_name), '(1,1,1)=', old_field(1,1,1)
+                end if
+                
+                ! Use backend to convert natural layout back to blocked layout
+                call solver%backend%set_field_data( &
+                  solver%time_integrator%olds(i, j)%ptr, old_field, DIR_X)
+                
+                ! Verify restoration with min/max
+                if (solver%mesh%par%is_root()) then
+                  print *, 'DEBUG: ', trim(old_name), ' restored min/max=', &
+                    minval(solver%time_integrator%olds(i,j)%ptr%data), &
+                    maxval(solver%time_integrator%olds(i,j)%ptr%data)
+                end if
+              end do
+            end do
+            deallocate (var_names)
+            deallocate (old_field)
+          end block
         end if
       end if
     end if
