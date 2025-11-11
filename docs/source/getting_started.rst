@@ -129,16 +129,22 @@ A recent modern Fortran compiler is required to build x3d2. For example GNU Fort
 
    brew install gcc
 
-OpenMP is typically included with most modern compilers, including GCC. Therefore, installing ``gcc`` for example should also provide OpenMP support. 
+OpenMP is typically included with most modern compilers, including GCC. Therefore, installing ``gcc`` for example should also provide OpenMP support. Next, identify your installed version (e.g., ``gcc-15``). You will need this for the next steps.
+
+.. code-block:: bash
+
+   ls $(brew --prefix)/bin/gcc-*
 
 Open MPI
 ^^^^^^^^
 
-You can install Open MPI using Homebrew:
+You must build Open MPI from source to ensure it is compatible with GNU compilers. Replace ``15`` below with your specific GCC version.
 
 .. code-block:: bash
 
-   brew install open-mpi
+   export HOMEBREW_CXX=g++-15
+   export HOMEBREW_CC=gcc-15
+   brew install open-mpi --build-from-source
 
 CMake
 ^^^^^
@@ -161,15 +167,7 @@ To install x3d2 from source, follow these steps:
    git clone https://github.com/xcompact3d/x3d2.git
 
 2. Configure compilers
-macOS users must explicitly set GNU compilers for C/C++ to ensure OpenMP support is detected correctly.
-
-First, identify your installed GCC version:
-
-.. code-block:: bash
-
-   ls $(brew --prefix)/bin/gcc-*
-
-Then, export the compilers (replace ``15`` with your installed version if different):
+macOS users must explicitly set GNU compilers for C/C++ to ensure OpenMP support is detected correctly. Export the compilers (replace ``15`` with your installed version if different):
 
 .. code-block:: bash
 
