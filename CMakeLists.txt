@@ -25,5 +25,6 @@ else()
   message(STATUS "ADIOS2 is disabled")
 endif()
 
+set(EXECUTABLE_OUTPUT_PATH "bin")
 add_subdirectory(src)
 add_subdirectory(tests)
