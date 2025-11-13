@@ -151,3 +151,5 @@ if(WITH_ADIOS2)
   target_link_libraries(xcompact PRIVATE adios2::fortran_mpi)
   target_compile_options(x3d2 PRIVATE "-DWITH_ADIOS2")
 endif()
+
+set(EXECUTABLE_OUTPUT_PATH "${PROJECT_BINARY_DIR}/bin")
