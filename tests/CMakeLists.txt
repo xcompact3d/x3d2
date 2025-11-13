@@ -45,9 +45,9 @@ endif()
   endif()
 
   if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
-    add_test(NAME ${test_name} COMMAND "srun ${test_name}")
+    add_test(NAME ${test_name} COMMAND "srun bin/${test_name}")
   else()
-    add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} ${test_name}")
+    add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} bin/${test_name}")
   endif()
 
 endfunction()
@@ -95,3 +95,4 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_test(cuda/test_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
 endif()
 
+set(EXECUTABLE_OUTPUT_PATH "bin")
