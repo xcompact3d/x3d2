@@ -6,7 +6,7 @@ if [[ -z "$TARGET" ]]; then
 fi
 
 # PATHS
-HOME_PATH="/scratch/hpc-prf-agraph"
+HOME_PATH="$(dirname "$PWD")"
 SPACK_PATH=$HOME_PATH/spack
 . $SPACK_PATH/share/spack/setup-env.sh 
 PROJECT_DIR=$HOME_PATH/x3d2
@@ -16,7 +16,7 @@ BUILD_DIR="$PROJECT_DIR/build_$TARGET"
 if [[ "$TARGET" == "gpu" ]]; then
     	echo "Building with GPU flags..."
 	# CMAKE_FLAGS="-DUSE_GPU=ON -DUSE_CPU=OFF"
-	spack env activate -p ./spack-env-gpu
+	spack env activate -p $PROJECT_DIR/scripts/spack-env-gpu
 	spack install
 	spack load nvhpc
 	spack load cmake	
@@ -24,7 +24,7 @@ if [[ "$TARGET" == "gpu" ]]; then
 	# spack location -i nvhpc	
 elif [[ "$TARGET" == "cpu" ]]; then
     	echo "Building with CPU flags..."
-	spack env activate -p ./spack-env-cpu
+	spack env activate -p $PROJECT_DIR/scripts/spack-env-cpu
 	spack install
 	spack load openmpi
 	spack load cmake
