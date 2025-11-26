@@ -17,24 +17,6 @@ contains
     integer, intent(in) :: dir_i, dir_j, dir_k        ! application storage indices
     integer, intent(in) :: dir                        ! direction of the applicatino storage indices
     integer, intent(in) :: SZ, nx_padded, ny_padded, nz_padded ! dimensions of the block
-    !    select case (dir)
-!    case (DIR_X)
-!      i = dir_j
-!      j = mod(dir_k - 1, ny_padded/SZ)*SZ + dir_i
-!      k = 1 + (dir_k - 1)/(ny_padded/SZ)
-!    case (DIR_Y)
-!      i = mod(dir_k - 1, nx_padded/SZ)*SZ + dir_i
-!      j = dir_j
-!      k = 1 + (dir_k - 1)/(nx_padded/SZ)
-!    case (DIR_Z)
-!      i = mod(dir_k - 1, nx_padded/SZ)*SZ + dir_i
-!      j = 1 + (dir_k - 1)/(nx_padded/SZ)
-!      k = dir_j
-!    case (DIR_C)
-!      i = dir_i
-!      j = dir_j
-!      k = dir_k
-!    end select
     if(dir == DIR_X) then
         i = dir_j
         j = mod(dir_k - 1, ny_padded/SZ)*SZ + dir_i
@@ -63,24 +45,6 @@ contains
     integer, intent(in) :: i, j, k                     ! cartesian indices
     integer, intent(in) :: dir                        ! direction of the application storage indices
     integer, intent(in) :: SZ, nx_padded, ny_padded, nz_padded ! dimensions of the block
-!    select case (dir)
-!    case (DIR_X)
-!      dir_i = mod(j - 1, SZ) + 1
-!      dir_j = i
-!      dir_k = (ny_padded/SZ)*(k - 1) + 1 + (j - 1)/SZ
-!    case (DIR_Y)
-!      dir_i = mod(i - 1, SZ) + 1
-!      dir_j = j
-!      dir_k = (nx_padded/SZ)*(k - 1) + 1 + (i - 1)/SZ
-!    case (DIR_Z)
-!      dir_i = mod(i - 1, SZ) + 1
-!      dir_j = k
-!      dir_k = (nx_padded/SZ)*(j - 1) + 1 + (i - 1)/SZ
-!    case (DIR_C)
-!      dir_i = i
-!      dir_j = j
-!      dir_k = k
-!    end select
     if(dir == DIR_X) then
       dir_i = mod(j - 1, SZ) + 1
       dir_j = i
