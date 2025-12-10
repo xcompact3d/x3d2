@@ -29,7 +29,7 @@ module m_ibm
     class(mesh_t), pointer :: mesh => null()
     type(allocator_t), pointer :: host_allocator => null()
     integer :: iibm = 0
-    type(field_t), pointer :: ep1 => null()
+    class(field_t), pointer :: ep1 => null()
   contains
     procedure :: body
   end type ibm_t
@@ -51,7 +51,7 @@ contains
 
     integer :: dims(3)
     real(dp), allocatable :: field_data(:, :, :)
-    type(field_t), pointer :: ep1
+    class(field_t), pointer :: ep1
     type(reader_session_t) :: reader_session
     character(len=*), parameter :: ibm_file = "ibm.bp"
     integer(i8) :: start_dims(3), count_dims(3), iibm_i8
