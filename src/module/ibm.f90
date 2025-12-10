@@ -87,6 +87,7 @@ contains
       ! Get and fill a block on the host
       ! The order of the data is corrected in the loop below
       ep1 => ibm%host_allocator%get_block(DIR_C)
+      call ep1%fill(1.0_dp)
       do i = 1, dims(1)
         do j = 1, dims(2)
           do k = 1, dims(3)
