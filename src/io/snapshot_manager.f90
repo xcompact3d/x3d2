@@ -293,10 +293,6 @@ contains
 
     call MPI_Comm_rank(comm, myrank, ierr)
 
-    ! Open the file (ADIOS2 handles whether it's new or existing)
-    call self%snapshot_writer%open(filename, comm)
-
-    ! Only rank 0 does file check for informational printing
     if (myrank == 0) then
       inquire(file=trim(filename), exist=file_exists)
       if (file_exists) then
@@ -305,6 +301,8 @@ contains
         print *, 'Creating new snapshot file: ', trim(filename)
       end if
     end if
+
+    call self%snapshot_writer%open(filename, comm)
 
     self%is_snapshot_file_open = .true.
   end subroutine open_snapshot_file
