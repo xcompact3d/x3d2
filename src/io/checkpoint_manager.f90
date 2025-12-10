@@ -323,7 +323,8 @@ contains
       call writer_session%write_data( &
         trim(field_names(i_field)), &
         self%field_buffers(i_field)%buffer, &
-        start_dims=output_start, count_dims=output_count &
+        self%last_output_shape, &
+        output_start, output_count &
         )
     end do
   end subroutine write_fields

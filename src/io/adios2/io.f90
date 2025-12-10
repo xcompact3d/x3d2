@@ -468,40 +468,21 @@ contains
     character(len=*), intent(in) :: variable_name
     real(dp), intent(in) :: array(:, :, :)
     class(io_file_t), intent(inout) :: file_handle
-    integer(i8), intent(in), optional :: shape_dims(3)
-    integer(i8), intent(in), optional :: start_dims(3)
-    integer(i8), intent(in), optional :: count_dims(3)
+    integer(i8), intent(in) :: shape_dims(3)
+    integer(i8), intent(in) :: start_dims(3)
+    integer(i8), intent(in) :: count_dims(3)
 
     type(adios2_variable) :: var
     integer :: ierr
-    integer(i8) :: local_shape(3), local_start(3), local_count(3)
 
     select type (file_handle)
     type is (io_adios2_file_t)
-      if (present(shape_dims)) then
-        local_shape = shape_dims
-      else
-        local_shape = int(shape(array), i8)
-      end if
-
-      if (present(start_dims)) then
-        local_start = start_dims
-      else
-        local_start = 0_i8
-      end if
-
-      if (present(count_dims)) then
-        local_count = count_dims
-      else
-        local_count = int(shape(array), i8)
-      end if
-
       call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
 
       if (ierr /= adios2_found) then
         call adios2_define_variable(var, self%io_handle, variable_name, &
-                                    adios2_type_dp, 3, local_shape, &
-                                    local_start, local_count, &
+                                    adios2_type_dp, 3, shape_dims, &
+                                    start_dims, count_dims, &
                                     adios2_constant_dims, ierr)
         call self%handle_error(ierr, "Error defining ADIOS2 3D array &
                                      & double precision real variable")

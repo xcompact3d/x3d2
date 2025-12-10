@@ -252,9 +252,9 @@ contains
     character(len=*), intent(in) :: variable_name
     real(dp), intent(in) :: array(:, :, :)
     class(io_file_t), intent(inout) :: file_handle
-    integer(i8), intent(in), optional :: shape_dims(3)
-    integer(i8), intent(in), optional :: start_dims(3)
-    integer(i8), intent(in), optional :: count_dims(3)
+    integer(i8), intent(in) :: shape_dims(3)
+    integer(i8), intent(in) :: start_dims(3)
+    integer(i8), intent(in) :: count_dims(3)
     ! silently ignore write operations
   end subroutine write_data_array_3d_dummy
 
