@@ -91,6 +91,9 @@ endif()
 
 list(APPEND SRC ${IOSRC})
 
+set(EXECUTABLE_OUTPUT_PATH "${PROJECT_BINARY_DIR}/bin")
+set(LIBRARY_OUTPUT_PATH "${PROJECT_BINARY_DIR}/lib")
+
 # Create the main library
 add_library(x3d2 STATIC ${SRC})
 target_include_directories(x3d2 INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
@@ -151,5 +154,3 @@ if(WITH_ADIOS2)
   target_link_libraries(xcompact PRIVATE adios2::fortran_mpi)
   target_compile_options(x3d2 PRIVATE "-DWITH_ADIOS2")
 endif()
-
-set(EXECUTABLE_OUTPUT_PATH "${PROJECT_BINARY_DIR}/bin")
