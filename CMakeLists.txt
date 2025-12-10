@@ -24,5 +24,6 @@ else()
   message(STATUS "ADIOS2 is disabled")
 endif()
 
+set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/include)
 add_subdirectory(src)
 add_subdirectory(tests)
