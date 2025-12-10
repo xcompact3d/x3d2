@@ -5,11 +5,11 @@ Checkpoint Parameters
 ~~~~~~~~~~~~~~~~~~~~~
 
 The checkpoint parameters control how the simulation saves its state for both restart purposes and visualisation. 
-These parameters are specified in the ``checkpoint`` namelist block in the input file.
+These parameters are specified in the ``checkpoint_params`` namelist block in the input file.
 
 .. code-block:: fortran
 
-   &checkpoint
+   &checkpoint_params
      checkpoint_freq = 1000
      snapshot_freq = 500
      keep_checkpoint = .false.
