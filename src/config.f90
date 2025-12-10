@@ -6,54 +6,86 @@ module m_config
 
   implicit none
 
-  integer, parameter :: n_species_max = 99
+  integer, parameter :: n_species_max = 99  !! Maximum number of transported species
 
   type, abstract :: base_config_t
-    !! All config types have a method read to initialise their data
+    !! Base abstract type for all configuration types.
+    !!
+    !! All config types have a deferred read method to initialise their data
+    !! from either a namelist file or a namelist string.
   contains
     procedure(read), deferred :: read
   end type base_config_t
 
   type, extends(base_config_t) :: domain_config_t
-    character(len=30) :: flow_case_name
-    real(dp) :: L_global(3)
-    integer :: dims_global(3), nproc_dir(3)
-    character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
-    character(len=20) :: stretching(3)
-    real(dp) :: beta(3)
+    !! Domain configuration type containing mesh and decomposition settings.
+    !!
+    !! This type stores all parameters related to the computational domain,
+    !! including global dimensions, boundary conditions, mesh stretching,
+    !! and MPI decomposition.
+    character(len=30) :: flow_case_name     !! Name of the flow case (e.g., 'channel', 'tgv', 'generic')
+    real(dp) :: L_global(3)                 !! Global domain lengths in each direction
+    integer :: dims_global(3)               !! Global number of grid points in each direction
+    integer :: nproc_dir(3)                 !! Number of processors in each direction
+    character(len=20) :: BC_x(2)            !! Boundary conditions in x-direction (lower, upper)
+    character(len=20) :: BC_y(2)            !! Boundary conditions in y-direction (lower, upper)
+    character(len=20) :: BC_z(2)            !! Boundary conditions in z-direction (lower, upper)
+    character(len=20) :: stretching(3)      !! Mesh stretching type in each direction
+    real(dp) :: beta(3)                     !! Stretching parameters in each direction
   contains
     procedure :: read => read_domain_nml
   end type domain_config_t
 
   type, extends(base_config_t) :: solver_config_t
-    real(dp) :: Re, dt
-    logical :: ibm_on
-    real(dp), dimension(:), allocatable :: pr_species
-    integer :: n_iters, n_output, n_species
-    logical :: lowmem_transeq, lowmem_fft
-    character(3) :: poisson_solver_type, time_intg
-    character(30) :: der1st_scheme, der2nd_scheme, &
-                     interpl_scheme, stagder_scheme
+    !! Solver configuration type containing numerical and physical parameters.
+    !!
+    !! This type stores parameters related to the numerical solver including
+    !! Reynolds number, time step, iteration counts, discretisation schemes,
+    !! and solver options.
+    real(dp) :: Re                          !! Reynolds number
+    real(dp) :: dt                          !! Time step size
+    logical :: ibm_on                       !! Flag to enable immersed boundary method
+    real(dp), dimension(:), allocatable :: pr_species  !! Prandtl numbers for each species
+    integer :: n_iters                      !! Total number of iterations
+    integer :: n_output                     !! Output frequency (every n_output iterations)
+    integer :: n_species                    !! Number of transported scalar species
+    logical :: lowmem_transeq               !! Use low-memory implementation for transport equation
+    logical :: lowmem_fft                   !! Use low-memory implementation for FFT
+    character(3) :: poisson_solver_type     !! Poisson solver type ('FFT' or 'CG')
+    character(3) :: time_intg               !! Time integration scheme (e.g., 'RK3', 'AB2')
+    character(30) :: der1st_scheme          !! First derivative scheme (e.g., 'compact6')
+    character(30) :: der2nd_scheme          !! Second derivative scheme (e.g., 'compact6')
+    character(30) :: interpl_scheme         !! Interpolation scheme (e.g., 'classic')
+    character(30) :: stagder_scheme         !! Staggered derivative scheme (e.g., 'compact6')
   contains
     procedure :: read => read_solver_nml
   end type solver_config_t
 
   type, extends(base_config_t) :: channel_config_t
-    real(dp) :: noise, omega_rot
-    logical :: rotation
-    integer :: n_rotate
+    !! Channel flow configuration type.
+    !!
+    !! This type contains parameters specific to channel flow simulations,
+    !! including initial perturbations and rotation effects.
+    real(dp) :: noise                       !! Initial noise amplitude for perturbations
+    real(dp) :: omega_rot                   !! Rotation rate for rotating channel flow
+    logical :: rotation                     !! Flag to enable rotation
+    integer :: n_rotate                     !! Number of directions to rotate
   contains
     procedure :: read => read_channel_nml
   end type channel_config_t
 
   type, extends(base_config_t) :: checkpoint_config_t
+    !! Checkpoint and snapshot configuration type.
+    !!
+    !! This type manages simulation restart and output settings including
+    !! checkpoint frequency, snapshot frequency, and file naming conventions.
     integer :: checkpoint_freq = 0                         !! Frequency of checkpointing (0 = off)
     integer :: snapshot_freq = 0                           !! Frequency of snapshots (0 = off)
     logical :: keep_checkpoint = .true.                    !! If false, only keep latest checkpoint
-    character(len=256) :: checkpoint_prefix = "checkpoint"
-    character(len=256) :: snapshot_prefix = "snapshot"
-    logical :: restart_from_checkpoint = .false.
-    character(len=256) :: restart_file = ""
+    character(len=256) :: checkpoint_prefix = "checkpoint" !! Filename prefix for checkpoint files
+    character(len=256) :: snapshot_prefix = "snapshot"     !! Filename prefix for snapshot files
+    logical :: restart_from_checkpoint = .false.           !! Flag to restart from a checkpoint
+    character(len=256) :: restart_file = ""                !! Path to checkpoint file for restart
     integer, dimension(3) :: output_stride = [2, 2, 2]     !! Spatial stride for snapshot output
     logical :: snapshot_sp = .false.                       !! if true, snapshot in single precision
   contains
@@ -78,11 +110,16 @@ module m_config
 contains
 
   subroutine read_domain_nml(self, nml_file, nml_string)
+    !! Read domain configuration from a namelist file or string.
+    !!
+    !! This subroutine reads the domain_settings namelist containing mesh
+    !! and domain decomposition parameters. Exactly one of nml_file or
+    !! nml_string must be provided.
     implicit none
 
-    class(domain_config_t) :: self
-    character(*), optional, intent(in) :: nml_file
-    character(*), optional, intent(in) :: nml_string
+    class(domain_config_t) :: self               !! Domain configuration object to populate
+    character(*), optional, intent(in) :: nml_file    !! Path to namelist file
+    character(*), optional, intent(in) :: nml_string  !! Namelist as a string
 
     integer :: unit
 
@@ -124,11 +161,16 @@ contains
   end subroutine read_domain_nml
 
   subroutine read_solver_nml(self, nml_file, nml_string)
+    !! Read solver configuration from a namelist file or string.
+    !!
+    !! This subroutine reads the solver_params namelist containing numerical
+    !! and physical parameters for the solver. Exactly one of nml_file or
+    !! nml_string must be provided.
     implicit none
 
-    class(solver_config_t) :: self
-    character(*), optional, intent(in) :: nml_file
-    character(*), optional, intent(in) :: nml_string
+    class(solver_config_t) :: self               !! Solver configuration object to populate
+    character(*), optional, intent(in) :: nml_file    !! Path to namelist file
+    character(*), optional, intent(in) :: nml_string  !! Namelist as a string
 
     integer :: unit
 
@@ -181,11 +223,16 @@ contains
   end subroutine read_solver_nml
 
   subroutine read_channel_nml(self, nml_file, nml_string)
+    !! Read channel flow configuration from a namelist file or string.
+    !!
+    !! This subroutine reads the channel_nml namelist containing parameters
+    !! specific to channel flow simulations. Exactly one of nml_file or
+    !! nml_string must be provided.
     implicit none
 
-    class(channel_config_t) :: self
-    character(*), optional, intent(in) :: nml_file
-    character(*), optional, intent(in) :: nml_string
+    class(channel_config_t) :: self              !! Channel configuration object to populate
+    character(*), optional, intent(in) :: nml_file    !! Path to namelist file
+    character(*), optional, intent(in) :: nml_string  !! Namelist as a string
 
     integer :: unit
 
@@ -217,11 +264,16 @@ contains
   end subroutine read_channel_nml
 
   subroutine read_checkpoint_nml(self, nml_file, nml_string)
+    !! Read checkpoint/snapshot configuration from a namelist file or string.
+    !!
+    !! This subroutine reads the checkpoint_params namelist containing settings
+    !! for checkpointing and snapshot output. Exactly one of nml_file or
+    !! nml_string must be provided. Uses default values if namelist is missing.
     implicit none
 
-    class(checkpoint_config_t) :: self
-    character(*), optional, intent(in) :: nml_file
-    character(*), optional, intent(in) :: nml_string
+    class(checkpoint_config_t) :: self           !! Checkpoint configuration object to populate
+    character(*), optional, intent(in) :: nml_file    !! Path to namelist file
+    character(*), optional, intent(in) :: nml_string  !! Namelist as a string
 
     integer :: unit, ierr
 

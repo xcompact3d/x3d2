@@ -1,4 +1,11 @@
 module m_allocator
+  !! Memory allocator module for managing field data blocks.
+  !!
+  !! This module provides an allocator type that manages a pool of memory blocks
+  !! (field_t objects) organised in a linked list. The allocator supports efficient
+  !! memory reuse by allowing blocks to be requested and released, minimizing
+  !! allocation/deallocation overhead during simulations.
+
   use iso_fortran_env, only: stderr => error_unit
 
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC
@@ -34,16 +41,18 @@ module m_allocator
      !! [[m_allocator(module):release_block(subroutine)]].  The
      !! released block is then pushed in front of the block list.
 
-    integer :: ngrid, sz
-    !> The id for the next allocated block.  This counter is
-    !> incremented each time a new block is allocated.
+    integer :: ngrid  !! Total number of grid points per block
+    integer :: sz     !! Block size for data reordering
+    !> The ID for the next allocated block. This counter is
+    !! incremented each time a new block is allocated.
     integer :: next_id = 0
-    !> padded dimensions and n_groups in all 'dir's
+    !> Padded dimensions in all directions [3 dims x 4 directions].
+    !! Dimensions are padded based on block size for efficient reordering.
     integer, private :: dims_padded_dir(3, 4)
+    !> Number of groups for reordering in each direction [x, y, z].
     integer, private :: n_groups_dir(3)
-    !> The pointer to the first block on the list.  Non associated if
-    !> the list is empty
-    ! TODO: Rename first to head
+    !> Pointer to the first block on the linked list. Non-associated if
+    !! the list is empty. (TODO: Rename first to head)
     class(field_t), pointer :: first => null()
   contains
     procedure :: get_block
@@ -62,8 +71,14 @@ module m_allocator
 contains
 
   function allocator_init(dims, sz) result(allocator)
-    integer, intent(in) :: dims(3), sz
-    type(allocator_t) :: allocator
+    !! Initialise an allocator for the given grid dimensions and block size.
+    !!
+    !! Creates a new allocator configured for the specified grid dimensions
+    !! with the given block size. Computes padded dimensions and number of
+    !! groups for efficient data reordering operations.
+    integer, intent(in) :: dims(3)    !! Grid dimensions [nx, ny, nz]
+    integer, intent(in) :: sz         !! Block size for reordering
+    type(allocator_t) :: allocator    !! Initialised allocator
 
     integer :: nx, ny, nz, nx_padded, ny_padded, nz_padded
 
@@ -205,21 +220,31 @@ contains
   end function get_block_ids
 
   function get_padded_dims(self, dir) result(dims)
+    !! Get padded dimensions for a specific direction.
+    !!
+    !! Returns the padded dimensions used for memory allocation in the
+    !! specified direction. Padding is applied to ensure efficient memory
+    !! access patterns and alignment.
     implicit none
 
-    class(allocator_t), intent(inout) :: self
-    integer, intent(in) :: dir
-    integer :: dims(3)
+    class(allocator_t), intent(inout) :: self  !! Allocator object
+    integer, intent(in) :: dir                 !! Direction (DIR_X, DIR_Y, DIR_Z, or DIR_C)
+    integer :: dims(3)                         !! Padded dimensions [nx_pad, ny_pad, nz_pad]
 
     dims = self%dims_padded_dir(1:3, dir)
   end function get_padded_dims
 
   function get_n_groups(self, dir) result(n_groups)
+    !! Get number of groups for data reordering in a direction.
+    !!
+    !! Returns the number of groups used for data reordering operations
+    !! in the specified direction. Groups are determined by the block size
+    !! and grid dimensions.
     implicit none
 
-    class(allocator_t), intent(inout) :: self
-    integer, intent(in) :: dir
-    integer :: n_groups
+    class(allocator_t), intent(inout) :: self  !! Allocator object
+    integer, intent(in) :: dir                 !! Direction (DIR_X, DIR_Y, or DIR_Z)
+    integer :: n_groups                        !! Number of groups
 
     n_groups = self%n_groups_dir(dir)
   end function get_n_groups
