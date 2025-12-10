@@ -112,6 +112,8 @@ module m_io_session
   contains
     ! Open/close operations
     procedure :: open => writer_session_open
+    procedure :: begin_step => writer_session_begin_step
+    procedure :: end_step => writer_session_end_step
     ! Generic write_data interface
     generic :: write_data => write_data_i8, write_data_integer, &
       write_data_real, write_data_array_3d
@@ -276,6 +278,22 @@ contains
       attribute_name, attribute_value, self%file &
       )
   end subroutine session_write_attribute
+
+  subroutine writer_session_begin_step(self)
+    !! Begin a new timestep for writing (used for time-series in single file)
+    class(writer_session_t), intent(inout) :: self
+
+    if (.not. self%is_open) error stop "IO session not open"
+    call self%file%begin_step()
+  end subroutine writer_session_begin_step
+
+  subroutine writer_session_end_step(self)
+    !! End the current timestep for writing
+    class(writer_session_t), intent(inout) :: self
+
+    if (.not. self%is_open) error stop "IO session not open"
+    call self%file%end_step()
+  end subroutine writer_session_end_step
 
   !> Finalisation for reader_session_t
   !! Called automatically when a reader_session_t goes out of scope
