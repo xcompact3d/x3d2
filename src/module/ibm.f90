@@ -49,7 +49,6 @@ contains
     type(allocator_t), target, intent(inout) :: host_allocator
     type(ibm_t) :: ibm
 
-    integer :: i, j, k
     integer :: dims(3)
     real(dp), allocatable :: field_data(:, :, :)
     class(field_t), pointer :: ep1
@@ -77,8 +76,8 @@ contains
       ! start_dims and count_dims are thus reversed
       ! The resulting output is in reversed order
       dims = mesh%get_dims(VERT)
-      start_dims = int(ibm%mesh%par%n_offset(3:1:-1), i8)
-      count_dims = int(dims(3:1:-1), i8)
+      start_dims = int(ibm%mesh%par%n_offset, i8)
+      count_dims = int(dims, i8)
 
       ! Allocate field_data with the expected (reversed) dimensions from the read
       allocate (field_data(count_dims(1), count_dims(2), count_dims(3)))
@@ -88,13 +87,7 @@ contains
       ! The order of the data is corrected in the loop below
       ep1 => ibm%host_allocator%get_block(DIR_C)
       call ep1%fill(1.0_dp)
-      do i = 1, dims(1)
-        do j = 1, dims(2)
-          do k = 1, dims(3)
-            ep1%data(i, j, k) = field_data(k, j, i)
-          end do
-        end do
-      end do
+      ep1%data(:, :, :) = field_data(:, :, :)
 
       ! Get a block on the device and move the data
       ibm%ep1 => ibm%backend%allocator%get_block(DIR_X)
