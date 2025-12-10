@@ -17,17 +17,6 @@ jobs:
 
     - uses: actions/checkout@v4
 
-    # We don't want to build openmpi each time this workflow is
-    # run. Setup caching of OpenMPI after it is built and installed.
-    # See "Caching dependencies to speed up workflows" on the GH
-    # actions docs.
-    - name: Cache OpenMPI
-      id: cache-openmpi
-      uses: actions/cache@v4
-      with:
-        path: openmpi-${{ env.OMPI_VERSION }}/installed
-        key: openmpi-${{ env.OMPI_VERSION }}
-
     - name: Cache ADIOS2
       id: cache-adios2
       uses: actions/cache@v4
@@ -37,19 +26,9 @@ jobs:
     - name: Display GCC version number
       run: gcc --version
 
-    - name: Build openmpi
-      if: steps.cache-openmpi.outputs.cache-hit != 'true'
+    - name: Install openmp
       run: |
-        wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-$OMPI_VERSION.tar.gz
-        tar -xf openmpi-$OMPI_VERSION.tar.gz
-        cd openmpi-$OMPI_VERSION/ && mkdir installed
-        ./configure --prefix=$(pwd)/installed
-        make all install
-
-    - name: Update Open MPI PATH
-      run: |
-        echo "$GITHUB_WORKSPACE/openmpi-${OMPI_VERSION}/installed/bin" \
-          >> $GITHUB_PATH
+        sudo apt install libomp-dev
 
     - name: Install MPI4PY
       run: |
