@@ -15,8 +15,13 @@ program test_omp_adamsbashforth
   use m_cuda_backend, only: cuda_backend_t
   use m_cuda_common, only: SZ
 #else
-  use m_omp_backend, only: omp_backend_t
   use m_omp_common, only: SZ
+#ifndef OMP_TGT
+  use m_omp_backend, only: omp_backend_t
+#else
+  use m_omptgt_backend, only: omptgt_backend_t
+  use m_omptgt_allocator, only: omptgt_allocator_t
+#endif
 #endif
 
   implicit none
@@ -48,8 +53,13 @@ program test_omp_adamsbashforth
   type(cuda_allocator_t), target :: cuda_allocator
   integer :: ndevs, devnum
 #else
-  type(omp_backend_t), target :: omp_backend
+#ifndef OMP_TGT
   type(allocator_t), target :: omp_allocator
+  type(omp_backend_t), target :: omp_backend
+#else
+  type(omptgt_allocator_t), target :: omptgt_allocator
+  type(omptgt_backend_t), target :: omptgt_backend
+#endif
 #endif
   class(time_intg_t), allocatable :: time_integrator
 
@@ -89,12 +99,22 @@ program test_omp_adamsbashforth
   backend => cuda_backend
   if (nrank == 0) print *, 'CUDA backend instantiated'
 #else
+#ifndef OMP_TGT
   omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
   allocator => omp_allocator
+#else
+  omptgt_allocator = omptgt_allocator_t(mesh%get_dims(VERT), SZ)
+  allocator => omptgt_allocator
+#endif
   if (nrank == 0) print *, 'OpenMP allocator instantiated'
 
+#ifndef OMP_TGT
   omp_backend = omp_backend_t(mesh, allocator)
   backend => omp_backend
+#else
+  omptgt_backend = omptgt_backend_t(mesh, allocator)
+  backend => omptgt_backend
+#endif
   if (nrank == 0) print *, 'OpenMP backend instantiated'
 #endif
 

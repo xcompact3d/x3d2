@@ -26,6 +26,7 @@ module m_omptgt_backend
     procedure :: copy_data_to_f => copy_data_to_f_omptgt
     procedure :: reorder => reorder_omptgt
     procedure :: vecadd => vecadd_omptgt
+    procedure :: veccopy => veccopy_omptgt
   end type
 
   interface omptgt_backend_t
@@ -44,6 +45,51 @@ contains
 
     backend%omp_backend_t = omp_backend_t(mesh, allocator)
   end function
+
+  subroutine veccopy_omptgt(self, dst, src)
+    
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: dst
+    class(field_t), intent(in) :: src
+
+    if (src%dir /= dst%dir) then
+      error stop "Called vector copy with incompatible fields"
+    end if
+    
+    select type(dst)
+    type is (omptgt_field_t)
+      select type(src)
+      type is (omptgt_field_t)
+        call veccopy_offload_(dst%data_tgt, src%data_tgt)
+      class default
+        error stop "Called omptgt vector copy with unsupported source vector"
+      end select
+    class default
+      error stop "Called omptgt vector copy with unsupported destination vector"
+    end select
+  end subroutine
+
+  subroutine veccopy_offload_(dst, src)
+
+    real(dp), dimension(:, :, :), intent(inout) :: dst
+    real(dp), dimension(:, :, :), intent(in) :: src
+
+    integer, dimension(3) :: n
+    integer :: i, j, k
+
+    n = shape(dst)
+
+    !$omp target teams distribute parallel do collapse(3) has_device_addr(dst, src)
+    do k = 1, n(3)
+      do j = 1, n(2)
+        do i = 1, n(1)
+          dst(i, j, k) = src(i, j, k)
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine
 
   subroutine vecadd_omptgt(self, a, x, b, y)
 
