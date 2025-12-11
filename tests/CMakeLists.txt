@@ -133,6 +133,7 @@ endif()
 
 if(${OMP_TGT})
   define_test(test_vecadd.f90 1 omp_tgt)
+  define_test(test_time_integrator.f90 1 omp_tgt)
   define_test(test_setget_field.f90 1 omp_tgt)
 endif()
 
