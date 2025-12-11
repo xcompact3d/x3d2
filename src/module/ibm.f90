@@ -49,7 +49,8 @@ contains
     type(allocator_t), target, intent(inout) :: host_allocator
     type(ibm_t) :: ibm
 
-    integer :: dims(3)
+    logical :: file_exists
+    integer :: ierr, dims(3)
     real(dp), allocatable :: field_data(:, :, :)
     class(field_t), pointer :: ep1
     type(reader_session_t) :: reader_session
@@ -59,6 +60,17 @@ contains
     ibm%backend => backend
     ibm%mesh => mesh
     ibm%host_allocator => host_allocator
+
+    ! Stop if the file is missing
+    if (mesh%par%is_root()) inquire (file=ibm_file, exist=file_exists)
+    call MPI_Bcast(file_exists, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
+    if (ierr /= 0 .or. (.not. file_exists)) then
+      if (mesh%par%is_root()) then
+        print *, 'ERROR: IBM file not found: ', trim(ibm_file), ierr
+      end if
+      call MPI_Abort(MPI_COMM_WORLD, 1, ierr)
+      return
+    end if
 
     ! Open a session to read the IBM configuration file
     call reader_session%open(ibm_file, MPI_COMM_WORLD)
@@ -79,12 +91,13 @@ contains
       start_dims = int(ibm%mesh%par%n_offset, i8)
       count_dims = int(dims, i8)
 
-      ! Allocate field_data with the expected (reversed) dimensions from the read
+      ! Allocate field_data
       allocate (field_data(count_dims(1), count_dims(2), count_dims(3)))
+
+      ! Read the vertex mask
       call reader_session%read_data("ep1", field_data, start_dims, count_dims)
 
       ! Get and fill a block on the host
-      ! The order of the data is corrected in the loop below
       ep1 => ibm%host_allocator%get_block(DIR_C)
       call ep1%fill(1.0_dp)
       ep1%data(:, :, :) = field_data(:, :, :)
