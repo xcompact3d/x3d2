@@ -120,7 +120,8 @@ contains
     class(omptgt_field_t) :: self
     real(dp), intent(in) :: c
 
-    call fill_omptgt_(self%p_data_tgt, c, size(self%p_data_tgt))
+    !call fill_omptgt_(self%p_data_tgt, c, size(self%p_data_tgt))
+    call fill_omptgt_3d_(self%data_tgt, c)
 
   end subroutine fill_omptgt
 
@@ -137,6 +138,26 @@ contains
     end do
     !$omp end target teams distribute parallel do
 
+  end subroutine
+
+  subroutine fill_omptgt_3d_(data_tgt, c)
+    real(dp), dimension(:, :, :), intent(inout) :: data_tgt
+    real(dp), intent(in) :: c
+
+    integer, dimension(3) :: n
+    integer :: i, j, k
+
+    n = shape(data_tgt)
+
+    !$omp target teams distribute parallel do collapse(3) has_device_addr(data_tgt)
+    do k = 1, n(3)
+      do j = 1, n(2)
+        do i = 1, n(1)
+          data_tgt(i, j, k) = c
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
   end subroutine
 
   function get_shape_omptgt(self) result(dims)
