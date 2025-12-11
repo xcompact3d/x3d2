@@ -237,8 +237,13 @@ contains
 
             raw_buffers(idx)%data = solver%time_integrator%olds(i, j)%ptr%data
 
+            ! Use -1 to signal local per-rank variables (not decomposed across ranks)
+            ! Each rank writes to its own uniquely named variable (with _rank suffix)
             call writer_session%write_data(trim(ranked_name), &
-                                           raw_buffers(idx)%data)
+                                           raw_buffers(idx)%data, &
+                                           [-1_i8, -1_i8, -1_i8], &
+                                           [-1_i8, -1_i8, -1_i8], &
+                                           int(padded_dims, i8))
           end do
         end do
 
