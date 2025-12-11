@@ -1,0 +1,1360 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>checkpoint_manager.f90 &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../program/xcompact.html">Program</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>checkpoint_manager.f90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 2.3% of total for source files.">213 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/checkpoint_manager.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">checkpoint_manager.f90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/m_checkpoint_manager.html">m_checkpoint_manager</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/checkpoint_manager.f90.html#src">checkpoint_manager.f90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~checkpoint_manager.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilecheckpoint_managerf90EfferentGraph" width="641pt" height="339pt"
+ viewBox="0.00 0.00 641.00 338.50" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph" class="graph" transform="scale(0.49 0.49) rotate(0) translate(4 688.85)">
+<title>sourcefile~~checkpoint_manager.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-688.85 1308,-688.85 1308,4 -4,4"/>
+<!-- sourcefile~checkpoint_manager.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~checkpoint_manager.f90</title>
+<polygon fill="none" stroke="black" points="1304,-502.22 1160,-502.22 1160,-478.22 1304,-478.22 1304,-502.22"/>
+<text text-anchor="middle" x="1232" y="-487.82" font-family="Helvetica,sans-Serif" font-size="10.50">checkpoint_manager.f90</text>
+</g>
+<!-- sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~common.f90~3</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/common.f90~3.html" xlink:title="common.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="80,-309.22 0,-309.22 0,-285.22 80,-285.22 80,-309.22"/>
+<text text-anchor="middle" x="40" y="-294.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">common.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M957,-642.22C926.71,-649.73 920.58,-656.99 890,-663.22 805.32,-680.45 782.69,-675.96 696.5,-682.22"/>
+</g>
+<!-- sourcefile~config.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node3" class="node">
+<title>sourcefile~config.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node3"><a xlink:href="../sourcefile/config.f90.html" xlink:title="config.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="865.5,-654.22 799.5,-654.22 799.5,-630.22 865.5,-630.22 865.5,-654.22"/>
+<text text-anchor="middle" x="832.5" y="-639.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">config.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~config.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M957,-642.22C930.5,-648.23 899.97,-648.29 875.89,-646.82"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="875.89,-643.31 865.66,-646.08 875.38,-650.29 875.89,-643.31"/>
+</g>
+<!-- sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node4" class="node">
+<title>sourcefile~field.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node4"><a xlink:href="../sourcefile/field.f90.html" xlink:title="field.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="348.5,-269.22 292.5,-269.22 292.5,-245.22 348.5,-245.22 348.5,-269.22"/>
+<text text-anchor="middle" x="320.5" y="-254.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">field.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1074,-450.22C914.9,-396.96 863.88,-461.77 696.5,-450.22"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M694.5,-450.22C568.97,-443.14 510.88,-478.85 417,-395.22 377.96,-360.44 416.06,-322.01 381,-283.22 374.85,-276.41 366.6,-271.31 358.2,-267.51"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="359.35,-264.2 348.76,-263.75 356.76,-270.7 359.35,-264.2"/>
+</g>
+<!-- sourcefile~io.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node5" class="node">
+<title>sourcefile~io.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node5"><a xlink:href="../sourcefile/io.f90.html" xlink:title="io.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="598,-654.22 544,-654.22 544,-630.22 598,-630.22 598,-654.22"/>
+<text text-anchor="middle" x="571" y="-639.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~io.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge4" class="edge">
+<title>sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~io.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1074,-586.22C1021.68,-608.46 1014.44,-629.63 959,-642.22"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M957,-642.22C926.57,-649.12 920.85,-625.94 890,-621.22 788.62,-605.7 667.32,-623.67 608.11,-634.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="607.29,-631.35 598.13,-636.68 608.61,-638.23 607.29,-631.35"/>
+</g>
+<!-- sourcefile~io_field_utils.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node6" class="node">
+<title>sourcefile~io_field_utils.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node6"><a xlink:href="../sourcefile/io_field_utils.f90.html" xlink:title="io_field_utils.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1124,-502.22 1026,-502.22 1026,-478.22 1124,-478.22 1124,-502.22"/>
+<text text-anchor="middle" x="1075" y="-487.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io_field_utils.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~io_field_utils.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge5" class="edge">
+<title>sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~io_field_utils.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1159.85,-490.22C1151.25,-490.22 1142.55,-490.22 1134.16,-490.22"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1134.13,-486.72 1124.13,-490.22 1134.13,-493.72 1134.13,-486.72"/>
+</g>
+<!-- sourcefile~io_session.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node7" class="node">
+<title>sourcefile~io_session.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node7"><a xlink:href="../sourcefile/io_session.f90.html" xlink:title="io_session.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="739,-578.22 652,-578.22 652,-554.22 739,-554.22 739,-578.22"/>
+<text text-anchor="middle" x="695.5" y="-563.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io_session.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~io_session.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge6" class="edge">
+<title>sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~io_session.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1217.78,-502.22C1192.51,-524.23 1134.64,-570.25 1076,-586.22"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1074,-586.22C1014.38,-602.45 838.24,-583.98 749.24,-573.08"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="749.44,-569.58 739.09,-571.82 748.58,-576.53 749.44,-569.58"/>
+</g>
+<!-- sourcefile~solver.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node8" class="node">
+<title>sourcefile~solver.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node8"><a xlink:href="../sourcefile/solver.f90.html" xlink:title="solver.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="990,-364.22 926,-364.22 926,-340.22 990,-340.22 990,-364.22"/>
+<text text-anchor="middle" x="958" y="-349.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">solver.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge7" class="edge">
+<title>sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1176.65,-478.18C1146.67,-471.04 1108.94,-461.25 1076,-450.22"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1074,-450.22C1031.28,-435.92 994.12,-396.69 974.29,-372.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="976.98,-370.18 968.01,-364.53 971.49,-374.54 976.98,-370.18"/>
+</g>
+<!-- sourcefile~config.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge8" class="edge">
+<title>sourcefile~config.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M803.72,-654.29C776.88,-665.02 734.78,-679.44 696.5,-682.22"/>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M694.5,-682.22C640.2,-686.16 625.85,-674.18 572,-682.22"/>
+</g>
+<!-- sourcefile~field.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge9" class="edge">
+<title>sourcefile~field.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M292.45,-254.52C262.51,-252.16 212.94,-250.1 171,-257.22"/>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge10" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M550.25,-654.38C527.79,-666.93 489.66,-684.39 454.5,-682.22"/>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M452.5,-682.22C391.74,-678.46 382.38,-642.22 321.5,-642.22"/>
+</g>
+<!-- sourcefile~io_base.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node12" class="node">
+<title>sourcefile~io_base.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node12"><a xlink:href="../sourcefile/io_base.f90.html" xlink:title="io_base.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="490,-654.22 417,-654.22 417,-630.22 490,-630.22 490,-654.22"/>
+<text text-anchor="middle" x="453.5" y="-639.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io_base.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~io_base.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge11" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~io_base.f90</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M543.79,-642.22C530.92,-642.22 515.04,-642.22 500.25,-642.22"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="500.24,-638.72 490.24,-642.22 500.24,-645.72 500.24,-638.72"/>
+</g>
+<!-- sourcefile~io_field_utils.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge12" class="edge">
+<title>sourcefile~io_field_utils.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M1047.13,-502.28C957.86,-542.05 671.21,-667.41 572,-682.22"/>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M570,-682.22C518.8,-685.9 505.74,-685.39 454.5,-682.22"/>
+</g>
+<!-- sourcefile~io_field_utils.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge13" class="edge">
+<title>sourcefile~io_field_utils.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M1025.63,-489.94C977.06,-489.63 900.09,-489.07 833.5,-488.22"/>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M831.5,-488.22C769.18,-487.17 758.68,-454.51 696.5,-450.22"/>
+</g>
+<!-- sourcefile~io_field_utils.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge15" class="edge">
+<title>sourcefile~io_field_utils.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M1045.65,-478.1C1038.72,-474.31 1031.68,-469.66 1026,-464.22 998.66,-438.02 978.46,-398.29 967.73,-373.87"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="970.85,-372.26 963.72,-364.42 964.41,-374.99 970.85,-372.26"/>
+</g>
+<!-- sourcefile~io_field_utils.f90&#45;&gt;sourcefile~io_base.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge14" class="edge">
+<title>sourcefile~io_field_utils.f90&#45;&gt;sourcefile~io_base.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M831.5,-488.22C760.07,-488.22 588.86,-554.29 526,-588.22 508.16,-597.85 506.18,-604.01 490,-616.22 486.57,-618.81 482.93,-621.51 479.35,-624.16"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="477.18,-621.41 471.19,-630.15 481.32,-627.05 477.18,-621.41"/>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge16" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M657.82,-578.27C633.64,-585.89 601.17,-595.54 572,-602.22"/>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M570,-602.22C519.96,-613.67 502.32,-583.56 454.5,-602.22"/>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~io.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge17" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~io.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M674.51,-578.23C667.37,-582.57 659.29,-587.56 652,-592.22 635.8,-602.57 632.28,-605.99 616,-616.22 611.51,-619.04 606.73,-621.95 602.02,-624.77"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="599.99,-621.9 593.18,-630.02 603.56,-627.93 599.99,-621.9"/>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~io_base.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge18" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~io_base.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M570,-602.22C543.87,-608.2 515.41,-618.01 493.28,-626.43"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="491.96,-623.18 483.9,-630.05 494.49,-629.71 491.96,-623.18"/>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge21" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M955.76,-339.97C950.59,-291.6 929.24,-114.57 890,-77.22 786.22,21.57 711.53,8.35 572,-24.22"/>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M570,-24.22C518.52,-40.65 504.23,-41.08 454.5,-62.22"/>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M452.5,-62.22C436.03,-69.22 430.77,-69.79 417,-81.22 364.83,-124.54 384.99,-176.38 321.5,-200.22"/>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M319.5,-200.22C253.32,-225.07 240.7,-245.39 171,-257.22"/>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M169,-257.22C138.81,-262.34 105.85,-272.76 80.94,-281.68"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="79.66,-278.42 71.47,-285.14 82.06,-284.99 79.66,-278.42"/>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~config.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge22" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~config.f90</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M951.85,-364.31C932.94,-408.71 867.17,-563.16 842.73,-620.54"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="839.37,-619.5 838.67,-630.07 845.81,-622.24 839.37,-619.5"/>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge23" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M831.5,-332.22C772.19,-323.16 756.48,-330.51 696.5,-332.22"/>
+</g>
+<!-- sourcefile~allocator.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node9" class="node">
+<title>sourcefile~allocator.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node9"><a xlink:href="../sourcefile/allocator.f90.html" xlink:title="allocator.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="610.5,-152.22 531.5,-152.22 531.5,-128.22 610.5,-128.22 610.5,-152.22"/>
+<text text-anchor="middle" x="571" y="-137.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allocator.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~allocator.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge19" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~allocator.f90</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M949.47,-340.07C938.29,-322.86 915.81,-291.24 890,-271.22 806.52,-206.48 686.55,-168.66 620.39,-151.46"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="621.2,-148.06 610.64,-148.98 619.47,-154.84 621.2,-148.06"/>
+</g>
+<!-- sourcefile~backend.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node10" class="node">
+<title>sourcefile~backend.f90~3</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node10"><a xlink:href="../sourcefile/backend.f90~3.html" xlink:title="backend.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="735,-304.22 656,-304.22 656,-280.22 735,-280.22 735,-304.22"/>
+<text text-anchor="middle" x="695.5" y="-289.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">backend.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~backend.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge20" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~backend.f90~3</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M925.81,-347.01C900.85,-342.88 864.96,-337.02 833.5,-332.22"/>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M831.5,-332.22C799.36,-327.31 764.17,-316.7 737.78,-307.65"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="738.72,-304.27 728.13,-304.27 736.41,-310.87 738.72,-304.27"/>
+</g>
+<!-- sourcefile~ibm.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node11" class="node">
+<title>sourcefile~ibm.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node11"><a xlink:href="../sourcefile/ibm.f90.html" xlink:title="ibm.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="859.5,-384.22 805.5,-384.22 805.5,-360.22 859.5,-360.22 859.5,-384.22"/>
+<text text-anchor="middle" x="832.5" y="-369.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ibm.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~ibm.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge24" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~ibm.f90</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M925.84,-357.26C908.75,-360.03 887.49,-363.47 869.68,-366.36"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="868.96,-362.93 859.64,-367.98 870.07,-369.84 868.96,-362.93"/>
+</g>
+<!-- sourcefile~mesh.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node13" class="node">
+<title>sourcefile~mesh.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node13"><a xlink:href="../sourcefile/mesh.f90.html" xlink:title="mesh.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="484.5,-386.22 422.5,-386.22 422.5,-362.22 484.5,-362.22 484.5,-386.22"/>
+<text text-anchor="middle" x="453.5" y="-371.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mesh.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge25" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M942.69,-364.24C929.83,-374.2 909.95,-387.6 890,-393.22 749,-432.94 572.25,-401.73 494.42,-384.15"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="495.08,-380.71 484.55,-381.87 493.51,-387.53 495.08,-380.71"/>
+</g>
+<!-- sourcefile~tdsops.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node14" class="node">
+<title>sourcefile~tdsops.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node14"><a xlink:href="../sourcefile/tdsops.f90.html" xlink:title="tdsops.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="487,-114.22 420,-114.22 420,-90.22 487,-90.22 487,-114.22"/>
+<text text-anchor="middle" x="453.5" y="-99.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tdsops.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~tdsops.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge26" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~tdsops.f90</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M570,-24.22C528.7,-33.85 523.85,-50.67 490,-76.22 486.57,-78.81 482.93,-81.51 479.35,-84.16"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="477.18,-81.41 471.19,-90.15 481.32,-87.05 477.18,-81.41"/>
+</g>
+<!-- sourcefile~time_integrator.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node15" class="node">
+<title>sourcefile~time_integrator.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node15"><a xlink:href="../sourcefile/time_integrator.f90.html" xlink:title="time_integrator.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="889.5,-304.22 775.5,-304.22 775.5,-280.22 889.5,-280.22 889.5,-304.22"/>
+<text text-anchor="middle" x="832.5" y="-289.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">time_integrator.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~time_integrator.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge27" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~time_integrator.f90</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M933.85,-340.2C921,-333.59 904.68,-325.32 890,-318.22 883.38,-315.02 876.29,-311.68 869.44,-308.51"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="870.87,-305.31 860.33,-304.31 867.95,-311.67 870.87,-305.31"/>
+</g>
+<!-- sourcefile~vector_calculus.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node16" class="node">
+<title>sourcefile~vector_calculus.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node16"><a xlink:href="../sourcefile/vector_calculus.f90.html" xlink:title="vector_calculus.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="890,-110.22 775,-110.22 775,-86.22 890,-86.22 890,-110.22"/>
+<text text-anchor="middle" x="832.5" y="-95.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vector_calculus.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~vector_calculus.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge28" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~vector_calculus.f90</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M956.81,-340.19C955.61,-303.33 947.19,-190.4 890,-124.22 887.18,-120.95 883.87,-118.08 880.28,-115.54"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="881.89,-112.43 871.52,-110.24 878.26,-118.41 881.89,-112.43"/>
+</g>
+<!-- sourcefile~allocator.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge29" class="edge">
+<title>sourcefile~allocator.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M548.22,-152.45C520.26,-167.99 473.13,-193.59 454.5,-200.22"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M452.5,-200.22C397.64,-219.72 376.01,-179.75 321.5,-200.22"/>
+</g>
+<!-- sourcefile~allocator.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge30" class="edge">
+<title>sourcefile~allocator.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M452.5,-200.22C418.99,-212.13 381.92,-228.58 355.79,-240.75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="354.25,-237.6 346.69,-245.02 357.23,-243.94 354.25,-237.6"/>
+</g>
+<!-- sourcefile~backend.f90~3&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge32" class="edge">
+<title>sourcefile~backend.f90~3&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M570,-218.22C523.37,-194.99 506.09,-245.44 454.5,-238.22"/>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M452.5,-238.22C392.46,-229.81 378.25,-178.91 321.5,-200.22"/>
+</g>
+<!-- sourcefile~backend.f90~3&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge33" class="edge">
+<title>sourcefile~backend.f90~3&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M655.86,-291.52C631.6,-291.72 599.75,-293.15 572,-298.22"/>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M570,-298.22C519.5,-307.43 505.51,-303.96 454.5,-298.22"/>
+</g>
+<!-- sourcefile~backend.f90~3&#45;&gt;sourcefile~allocator.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge31" class="edge">
+<title>sourcefile~backend.f90~3&#45;&gt;sourcefile~allocator.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M670.04,-280.09C663.7,-276.22 657.2,-271.54 652,-266.22 629.73,-243.43 633.04,-231.14 616,-204.22 606.6,-189.36 595.37,-173.04 586.6,-160.6"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="589.36,-158.43 580.72,-152.3 583.65,-162.48 589.36,-158.43"/>
+</g>
+<!-- sourcefile~backend.f90~3&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge34" class="edge">
+<title>sourcefile~backend.f90~3&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M570,-298.22C531.05,-305.32 494.35,-334.82 473.16,-354.9"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="470.53,-352.58 465.83,-362.08 475.43,-357.59 470.53,-352.58"/>
+</g>
+<!-- sourcefile~backend.f90~3&#45;&gt;sourcefile~tdsops.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge36" class="edge">
+<title>sourcefile~backend.f90~3&#45;&gt;sourcefile~tdsops.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M673.4,-280.05C666.46,-275.85 658.79,-271 652,-266.22 635.2,-254.39 633.59,-247.83 616,-237.22 597.76,-226.21 591.07,-227.71 572,-218.22"/>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M570,-218.22C525.2,-195.91 487.38,-149.4 468.14,-122.55"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="470.94,-120.44 462.34,-114.25 465.2,-124.46 470.94,-120.44"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node19" class="node">
+<title>sourcefile~poisson_fft.f90~2</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node19"><a xlink:href="../sourcefile/poisson_fft.f90~2.html" xlink:title="poisson_fft.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="616,-270.22 526,-270.22 526,-246.22 616,-246.22 616,-270.22"/>
+<text text-anchor="middle" x="571" y="-255.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">poisson_fft.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~3&#45;&gt;sourcefile~poisson_fft.f90~2 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge35" class="edge">
+<title>sourcefile~backend.f90~3&#45;&gt;sourcefile~poisson_fft.f90~2</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M655.74,-281.46C646.07,-278.78 635.54,-275.85 625.3,-273.01"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="626.19,-269.63 615.62,-270.32 624.32,-276.37 626.19,-269.63"/>
+</g>
+<!-- sourcefile~ibm.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge39" class="edge">
+<title>sourcefile~ibm.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M822.25,-384.31C806.89,-403.65 774.3,-441.64 739,-464.22 653.94,-518.61 613.49,-492.83 526,-543.22 490.3,-563.78 492.88,-587.25 454.5,-602.22"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M452.5,-602.22C394.39,-620.35 382.38,-642.22 321.5,-642.22"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M319.5,-642.22C152.96,-642.22 68.99,-395.79 46.99,-319.47"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="50.26,-318.18 44.19,-309.5 43.52,-320.07 50.26,-318.18"/>
+</g>
+<!-- sourcefile~ibm.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge40" class="edge">
+<title>sourcefile~ibm.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M805.14,-375.24C758.01,-380.03 656.33,-387.52 572,-374.22"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M570,-374.22C509.59,-362.95 515.65,-304.32 454.5,-298.22"/>
+</g>
+<!-- sourcefile~ibm.f90&#45;&gt;sourcefile~io_session.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge41" class="edge">
+<title>sourcefile~ibm.f90&#45;&gt;sourcefile~io_session.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M823.06,-384.35C800.52,-416.74 738.75,-505.5 710.7,-545.82"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="707.78,-543.88 704.94,-554.09 713.53,-547.88 707.78,-543.88"/>
+</g>
+<!-- sourcefile~ibm.f90&#45;&gt;sourcefile~allocator.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge37" class="edge">
+<title>sourcefile~ibm.f90&#45;&gt;sourcefile~allocator.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M805.31,-364.51C794.88,-360.41 783.39,-354.47 775,-346.22 748.64,-320.29 764.99,-297.51 739,-271.22 708.68,-240.54 686.44,-254.18 652,-228.22 625.98,-208.6 601.64,-179.72 586.79,-160.46"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="589.49,-158.22 580.67,-152.35 583.9,-162.44 589.49,-158.22"/>
+</g>
+<!-- sourcefile~ibm.f90&#45;&gt;sourcefile~backend.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge38" class="edge">
+<title>sourcefile~ibm.f90&#45;&gt;sourcefile~backend.f90~3</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M805.26,-361.65C795.51,-357.33 784.5,-351.99 775,-346.22 757.68,-335.69 755.67,-329.75 739,-318.22 734.94,-315.41 730.59,-312.57 726.27,-309.84"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="727.9,-306.73 717.55,-304.46 724.22,-312.69 727.9,-306.73"/>
+</g>
+<!-- sourcefile~ibm.f90&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge42" class="edge">
+<title>sourcefile~ibm.f90&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M570,-374.22C545.21,-370.31 517.04,-370.22 494.74,-371.15"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="494.43,-367.67 484.61,-371.66 494.78,-374.66 494.43,-367.67"/>
+</g>
+<!-- sourcefile~io_base.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge43" class="edge">
+<title>sourcefile~io_base.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M416.92,-642.22C390.57,-642.22 353.8,-642.22 321.5,-642.22"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge44" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M436.6,-361.94C412.95,-344.38 366.45,-312.54 321.5,-297.22"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M319.5,-297.22C303.33,-291.7 187.85,-254.36 171,-257.22"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge46" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M445.65,-362.04C434.39,-342.95 410.24,-305.84 381,-283.22 374.08,-277.86 365.88,-273.37 357.82,-269.7"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="359.08,-266.43 348.51,-265.77 356.36,-272.88 359.08,-266.43"/>
+</g>
+<!-- sourcefile~decomp_dummy.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node17" class="node">
+<title>sourcefile~decomp_dummy.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node17"><a xlink:href="../sourcefile/decomp_dummy.f90.html" xlink:title="decomp_dummy.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="381,-378.22 260,-378.22 260,-354.22 381,-354.22 381,-378.22"/>
+<text text-anchor="middle" x="320.5" y="-363.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">decomp_dummy.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~decomp_dummy.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge45" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~decomp_dummy.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M422.45,-372.38C413.02,-371.81 402.19,-371.14 391.2,-370.47"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="391.3,-366.97 381.1,-369.86 390.87,-373.96 391.3,-366.97"/>
+</g>
+<!-- sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_node18" class="node">
+<title>sourcefile~mesh_content.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~EfferentGraph_node18"><a xlink:href="../sourcefile/mesh_content.f90.html" xlink:title="mesh_content.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="224,-309.22 116,-309.22 116,-285.22 224,-285.22 224,-309.22"/>
+<text text-anchor="middle" x="170" y="-294.82" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mesh_content.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge47" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~mesh_content.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M319.5,-297.22C292.56,-288.04 261.24,-286.77 234.33,-288.31"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="233.97,-284.82 224.25,-289.02 234.47,-291.81 233.97,-284.82"/>
+</g>
+<!-- sourcefile~tdsops.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge48" class="edge">
+<title>sourcefile~tdsops.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M441.28,-114.27C420.21,-135.98 372.29,-181.15 321.5,-200.22"/>
+</g>
+<!-- sourcefile~time_integrator.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge51" class="edge">
+<title>sourcefile~time_integrator.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M813.93,-280.11C802.77,-272.42 788.03,-262.24 775,-253.22 758.98,-242.13 756.43,-236.91 739,-228.22 721.2,-219.34 713.11,-225.15 696.5,-214.22"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M694.5,-214.22C648.75,-184.1 660.9,-150.58 616,-119.22 600.4,-108.32 472.01,-54.77 454.5,-62.22"/>
+</g>
+<!-- sourcefile~time_integrator.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge52" class="edge">
+<title>sourcefile~time_integrator.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M802.92,-304.32C776.04,-314.82 734.36,-328.86 696.5,-332.22"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M694.5,-332.22C619.38,-338.89 600.5,-323.92 526,-312.22 494.01,-307.19 486.68,-301.84 454.5,-298.22"/>
+</g>
+<!-- sourcefile~time_integrator.f90&#45;&gt;sourcefile~allocator.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge49" class="edge">
+<title>sourcefile~time_integrator.f90&#45;&gt;sourcefile~allocator.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M694.5,-214.22C663.45,-193.78 626.85,-171.95 601.79,-157.34"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="603.52,-154.3 593.11,-152.3 600,-160.35 603.52,-154.3"/>
+</g>
+<!-- sourcefile~time_integrator.f90&#45;&gt;sourcefile~backend.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge50" class="edge">
+<title>sourcefile~time_integrator.f90&#45;&gt;sourcefile~backend.f90~3</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M775.42,-292.22C765.53,-292.22 755.29,-292.22 745.61,-292.22"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="745.35,-288.72 735.35,-292.22 745.35,-295.72 745.35,-288.72"/>
+</g>
+<!-- sourcefile~vector_calculus.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge55" class="edge">
+<title>sourcefile~vector_calculus.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M804.4,-86.14C777.53,-75.33 734.94,-61.32 696.5,-62.22"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M694.5,-62.22C640.07,-63.49 626.25,-57.63 572,-62.22"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M570,-62.22C518.85,-66.54 501.74,-42.14 454.5,-62.22"/>
+</g>
+<!-- sourcefile~vector_calculus.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge56" class="edge">
+<title>sourcefile~vector_calculus.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M786.72,-110.26C712.63,-130.75 568.51,-173.18 526,-204.22 483.61,-235.17 506.73,-303.43 454.5,-298.22"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M452.5,-298.22C419.71,-294.81 384.11,-283.11 358.31,-273.08"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="359.51,-269.79 348.92,-269.34 356.92,-276.29 359.51,-269.79"/>
+</g>
+<!-- sourcefile~vector_calculus.f90&#45;&gt;sourcefile~allocator.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge53" class="edge">
+<title>sourcefile~vector_calculus.f90&#45;&gt;sourcefile~allocator.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M694.5,-62.22C651.43,-63.22 611.29,-97.63 589.35,-120.4"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="586.62,-118.2 582.37,-127.9 591.75,-122.97 586.62,-118.2"/>
+</g>
+<!-- sourcefile~vector_calculus.f90&#45;&gt;sourcefile~backend.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge54" class="edge">
+<title>sourcefile~vector_calculus.f90&#45;&gt;sourcefile~backend.f90~3</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M823.06,-110.35C800.52,-142.74 738.75,-231.5 710.7,-271.82"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="707.78,-269.88 704.94,-280.09 713.53,-273.88 707.78,-269.88"/>
+</g>
+<!-- sourcefile~vector_calculus.f90&#45;&gt;sourcefile~tdsops.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge57" class="edge">
+<title>sourcefile~vector_calculus.f90&#45;&gt;sourcefile~tdsops.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M570,-62.22C540.95,-64.67 509.82,-76.01 487.21,-85.99"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="485.71,-82.82 478.07,-90.16 488.62,-89.19 485.71,-82.82"/>
+</g>
+<!-- sourcefile~decomp_dummy.f90&#45;&gt;sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge58" class="edge">
+<title>sourcefile~decomp_dummy.f90&#45;&gt;sourcefile~mesh_content.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M293.63,-354.2C269.51,-342.99 233.31,-326.17 206.49,-313.71"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="207.61,-310.37 197.07,-309.33 204.66,-316.72 207.61,-310.37"/>
+</g>
+<!-- sourcefile~mesh_content.f90&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge59" class="edge">
+<title>sourcefile~mesh_content.f90&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M115.83,-297.22C107.33,-297.22 98.57,-297.22 90.17,-297.22"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="90.15,-293.72 80.15,-297.22 90.15,-300.72 90.15,-293.72"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~common.f90~3 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge60" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~common.f90~3</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M525.95,-249.9C504.46,-246.02 478.18,-241.53 454.5,-238.22"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge61" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M551.4,-270.33C529.06,-283.51 490.14,-302.23 454.5,-298.22"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge62" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M546.09,-270.22C539.25,-274.2 532.02,-278.97 526,-284.22 502.36,-304.81 480.8,-334.03 467.68,-353.52"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="464.68,-351.71 462.1,-361.98 470.53,-355.56 464.68,-351.71"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~tdsops.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~EfferentGraph_edge63" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~tdsops.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M544.13,-246.02C537.71,-242.21 531.19,-237.57 526,-232.22 494.84,-200.08 473.03,-151.66 462.24,-123.88"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="465.44,-122.45 458.65,-114.32 458.89,-124.91 465.44,-122.45"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilecheckpoint_managerf90EfferentGraph = svgPanZoom('#sourcefilecheckpoint_managerf90EfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~checkpoint_manager.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilecheckpoint_managerf90AfferentGraph" width="640pt" height="131pt"
+ viewBox="0.00 0.00 640.00 131.19" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 127.19)">
+<title>sourcefile~~checkpoint_manager.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-127.19 636,-127.19 636,4 -4,4"/>
+<!-- sourcefile~checkpoint_manager.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~checkpoint_manager.f90</title>
+<polygon fill="none" stroke="black" points="144,-87 0,-87 0,-63 144,-63 144,-87"/>
+<text text-anchor="middle" x="72" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50">checkpoint_manager.f90</text>
+</g>
+<!-- sourcefile~io_manager.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~io_manager.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/io_manager.f90.html" xlink:title="io_manager.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="275,-87 180,-87 180,-63 275,-63 275,-87"/>
+<text text-anchor="middle" x="227.5" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io_manager.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_manager.f90&#45;&gt;sourcefile~checkpoint_manager.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~io_manager.f90&#45;&gt;sourcefile~checkpoint_manager.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M179.61,-75C171.56,-75 163,-75 154.35,-75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="154.19,-71.5 144.19,-75 154.19,-78.5 154.19,-71.5"/>
+</g>
+<!-- sourcefile~base_case.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~base_case.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/base_case.f90.html" xlink:title="base_case.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="399,-87 311,-87 311,-63 399,-63 399,-87"/>
+<text text-anchor="middle" x="355" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">base_case.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~base_case.f90&#45;&gt;sourcefile~io_manager.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~base_case.f90&#45;&gt;sourcefile~io_manager.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M310.81,-75C302.64,-75 293.99,-75 285.47,-75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="285.2,-71.5 275.2,-75 285.2,-78.5 285.2,-71.5"/>
+</g>
+<!-- sourcefile~channel.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~channel.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/channel.f90.html" xlink:title="channel.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="511,-108 435,-108 435,-84 511,-84 511,-108"/>
+<text text-anchor="middle" x="473" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">channel.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~channel.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~channel.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M434.98,-89.3C426.78,-87.81 417.94,-86.21 409.24,-84.64"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="409.6,-81.15 399.14,-82.81 408.36,-88.04 409.6,-81.15"/>
+</g>
+<!-- sourcefile~generic.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~generic.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/generic.f90.html" xlink:title="generic.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="509.5,-66 436.5,-66 436.5,-42 509.5,-42 509.5,-66"/>
+<text text-anchor="middle" x="473" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">generic.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~generic.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~generic.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M436.25,-60.47C427.65,-62.03 418.27,-63.73 409.06,-65.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="408.4,-61.96 399.18,-67.18 409.65,-68.84 408.4,-61.96"/>
+</g>
+<!-- sourcefile~tgv.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~tgv.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/tgv.f90.html" xlink:title="tgv.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="500,-24 446,-24 446,0 500,0 500,-24"/>
+<text text-anchor="middle" x="473" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tgv.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~tgv.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~tgv.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M449.63,-24.15C431.9,-33.78 406.91,-47.35 387.21,-58.05"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="385.41,-55.04 378.3,-62.89 388.76,-61.19 385.41,-55.04"/>
+</g>
+<!-- sourcefile~xcompact.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~xcompact.f90</title>
+<g id="a_sourcefile~~checkpoint_manager.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/xcompact.f90.html" xlink:title="xcompact.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="632,-87 547,-87 547,-63 632,-63 632,-87"/>
+<text text-anchor="middle" x="589.5" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">xcompact.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M571.98,-87.13C556.95,-97.37 533.7,-111.25 511,-117 478.26,-125.3 467.77,-125.17 435,-117 415.9,-112.24 396.36,-101.9 381.49,-92.68"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="383.18,-89.6 372.88,-87.13 379.39,-95.49 383.18,-89.6"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~channel.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~channel.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M546.84,-82.64C538.57,-84.16 529.82,-85.76 521.37,-87.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="520.47,-83.92 511.27,-89.16 521.73,-90.8 520.47,-83.92"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~generic.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~generic.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M546.84,-67.36C538.01,-65.74 528.65,-64.02 519.68,-62.38"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="520.24,-58.92 509.78,-60.56 518.98,-65.81 520.24,-58.92"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~tgv.f90 -->
+<g id="sourcefile~~checkpoint_manager.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~tgv.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M566.42,-62.85C548.92,-53.22 524.25,-39.65 504.81,-28.95"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="506.46,-25.86 496.01,-24.11 503.08,-32 506.46,-25.86"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="k">module </span><span class="n">m_checkpoint_manager</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="c">! @brief Manages the creation and restoration of simulation checkpoints</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="c">!! for restart capabilities.</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="c">!!</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="c">!! @details This module is responsible for periodically saving the full, unstrided</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="c">!! simulation state to a file. This allows a simulation to be stopped and resumed</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="c">!! from the exact state it was in.</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="c">!!</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="c">!! Key features include:</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="c">!! - Reading all checkpoint settings from a configuration file</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="c">!! - Periodically writing the full-resolution simulation state</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="c">!! - Handling the full logic for restarting a simulation from</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="c">!! a specified checkpoint file.</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="c">!! - A safe-write strategy that writes to a temporary file first,</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="c">!!   then atomically renames it to the final filename to</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="c">!! prevent corrupted checkpoints.</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="c">!! - Optional cleanup of old checkpoint files to conserve disk space.</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">  </span><span class="k">use </span><span class="n">mpi</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">MPI_COMM_WORLD</span><span class="p">,</span><span class="w"> </span><span class="n">MPI_Comm_rank</span><span class="p">,</span><span class="w"> </span><span class="n">MPI_Abort</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">  </span><span class="k">use </span><span class="n">m_common</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">dp</span><span class="p">,</span><span class="w"> </span><span class="n">i8</span><span class="p">,</span><span class="w"> </span><span class="n">DIR_C</span><span class="p">,</span><span class="w"> </span><span class="n">get_argument</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">  </span><span class="k">use </span><span class="n">m_field</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">  </span><span class="k">use </span><span class="n">m_solver</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">solver_t</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="w">  </span><span class="k">use </span><span class="n">m_io_session</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">reader_session_t</span><span class="p">,</span><span class="w"> </span><span class="n">writer_session_t</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">  </span><span class="k">use </span><span class="n">m_config</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">checkpoint_config_t</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">  </span><span class="k">use </span><span class="n">m_io_field_utils</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">field_buffer_map_t</span><span class="p">,</span><span class="w"> </span><span class="n">field_ptr_t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">                              </span><span class="n">setup_field_arrays</span><span class="p">,</span><span class="w"> </span><span class="n">cleanup_field_arrays</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">                              </span><span class="n">stride_data_to_buffer</span><span class="p">,</span><span class="w"> </span><span class="n">get_output_dimensions</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">                              </span><span class="n">prepare_field_buffers</span><span class="p">,</span><span class="w"> </span><span class="n">cleanup_field_buffers</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">                              </span><span class="n">write_single_field_to_buffer</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="w">  </span><span class="k">implicit none</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="k">  private</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="k">  public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">checkpoint_manager_t</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">  </span><span class="k">type</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">checkpoint_manager_t</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="n">checkpoint_config_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">config</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">last_checkpoint_step</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">full_resolution</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="n">field_buffer_map_t</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_buffers</span><span class="p">(:)</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">    </span><span class="kt">integer</span><span class="p">(</span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">last_shape_dims</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">last_stride_factors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">    </span><span class="kt">integer</span><span class="p">(</span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">last_output_shape</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="w">  </span><span class="k">contains</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="k">    procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">init</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="w">    </span><span class="k">procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">handle_restart</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="w">    </span><span class="k">procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">handle_checkpoint_step</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">    </span><span class="k">procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">is_restart</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">    </span><span class="k">procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">finalise</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="w">    </span><span class="k">procedure</span><span class="p">,</span><span class="w"> </span><span class="k">private</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">write_checkpoint</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">    </span><span class="k">procedure</span><span class="p">,</span><span class="w"> </span><span class="k">private</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">restart_checkpoint</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">    </span><span class="k">procedure</span><span class="p">,</span><span class="w"> </span><span class="k">private</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">write_fields</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">    </span><span class="k">procedure</span><span class="p">,</span><span class="w"> </span><span class="k">private</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cleanup_output_buffers</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">  </span><span class="k">end type </span><span class="n">checkpoint_manager_t</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="k">contains</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="k">  subroutine </span><span class="n">init</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">comm</span><span class="p">)</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">    </span><span class="c">!! Initialise checkpoint manager</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">checkpoint_manager_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">    </span><span class="n">self</span><span class="p">%</span><span class="n">config</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">checkpoint_config_t</span><span class="p">()</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">    </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">config</span><span class="p">%</span><span class="k">read</span><span class="p">(</span><span class="n">nml_file</span><span class="o">=</span><span class="n">get_argument</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">config</span><span class="p">%</span><span class="n">checkpoint_freq</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="k">      call </span><span class="n">configure_output</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">comm</span><span class="p">)</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="k">  end subroutine </span><span class="n">init</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">configure_output</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">comm</span><span class="p">)</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">    </span><span class="c">!! Configure checkpoint output settings</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">    </span><span class="k">use </span><span class="n">m_io_backend</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">get_default_backend</span><span class="p">,</span><span class="w"> </span><span class="n">IO_BACKEND_DUMMY</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">checkpoint_manager_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">myrank</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">    </span><span class="k">call </span><span class="n">MPI_Comm_rank</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">myrank</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">myrank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">get_default_backend</span><span class="p">()</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">IO_BACKEND_DUMMY</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="k">      print</span><span class="w"> </span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Checkpoint frequency: &#39;</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">config</span><span class="p">%</span><span class="n">checkpoint_freq</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">      </span><span class="k">print</span><span class="w"> </span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Keep all checkpoints: &#39;</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">config</span><span class="p">%</span><span class="n">keep_checkpoint</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">      </span><span class="k">print</span><span class="w"> </span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Checkpoint prefix: &#39;</span><span class="p">,</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">config</span><span class="p">%</span><span class="n">checkpoint_prefix</span><span class="p">)</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a><span class="k">  end subroutine </span><span class="n">configure_output</span>
+<a id="ln-86" name="ln-86" href="#ln-86"></a>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">  </span><span class="k">function </span><span class="n">is_restart</span><span class="p">(</span><span class="n">self</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">restart</span><span class="p">)</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">    </span><span class="c">!! Check if this is a restart run</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">checkpoint_manager_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">    </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">restart</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">    </span><span class="n">restart</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">config</span><span class="p">%</span><span class="n">restart_from_checkpoint</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">  </span><span class="k">end function </span><span class="n">is_restart</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">handle_restart</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">,</span><span class="w"> </span><span class="n">comm</span><span class="p">)</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="w">    </span><span class="c">!! Handle restart from checkpoint</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">checkpoint_manager_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">solver_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">solver</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<a id="ln-100" name="ln-100" href="#ln-100"></a>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">    </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">restart_file</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">restart_timestep</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">restart_time</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">    </span><span class="n">restart_file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">config</span><span class="p">%</span><span class="n">restart_file</span><span class="p">)</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">solver</span><span class="p">%</span><span class="n">mesh</span><span class="p">%</span><span class="n">par</span><span class="p">%</span><span class="n">is_root</span><span class="p">())</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="k">      print</span><span class="w"> </span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Restarting from checkpoint: &#39;</span><span class="p">,</span><span class="w"> </span><span class="n">restart_file</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="k">    call </span><span class="n">self</span><span class="p">%</span><span class="n">restart_checkpoint</span><span class="p">(</span><span class="n">solver</span><span class="p">,</span><span class="w"> </span><span class="n">restart_file</span><span class="p">,</span><span class="w"> </span><span class="n">restart_timestep</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">                                 </span><span class="n">restart_time</span><span class="p">,</span><span class="w"> </span><span class="n">comm</span><span class="p">)</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">    </span><span class="n">solver</span><span class="p">%</span><span class="n">current_iter</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">restart_timestep</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">solver</span><span class="p">%</span><span class="n">mesh</span><span class="p">%</span><span class="n">par</span><span class="p">%</span><span class="n">is_root</span><span class="p">())</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="k">      print</span><span class="w"> </span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Successfully restarted from checkpoint at iteration &#39;</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">        </span><span class="n">restart_timestep</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39; with time &#39;</span><span class="p">,</span><span class="w"> </span><span class="n">restart_time</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="k">  end subroutine </span><span class="n">handle_restart</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">handle_checkpoint_step</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">,</span><span class="w"> </span><span class="n">timestep</span><span class="p">,</span><span class="w"> </span><span class="n">comm</span><span class="p">)</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="w">    </span><span class="c">!! Handle checkpoint writing at a given timestep</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">checkpoint_manager_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">solver_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">solver</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">timestep</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_to_use</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="w">    </span><span class="n">comm_to_use</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">MPI_COMM_WORLD</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">comm</span><span class="p">))</span><span class="w"> </span><span class="n">comm_to_use</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="w">    </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">write_checkpoint</span><span class="p">(</span><span class="n">solver</span><span class="p">,</span><span class="w"> </span><span class="n">timestep</span><span class="p">,</span><span class="w"> </span><span class="n">comm_to_use</span><span class="p">)</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a><span class="w">  </span><span class="k">end subroutine </span><span class="n">handle_checkpoint_step</span>
+<a id="ln-135" name="ln-135" href="#ln-135"></a>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">write_checkpoint</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">,</span><span class="w"> </span><span class="n">timestep</span><span class="p">,</span><span class="w"> </span><span class="n">comm</span><span class="p">)</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">    </span><span class="c">!! Write a checkpoint file for simulation restart</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">checkpoint_manager_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">solver_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">solver</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">timestep</span>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="w">    </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="n">temp_filename</span><span class="p">,</span><span class="w"> </span><span class="n">old_filename</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">myrank</span>
+<a id="ln-145" name="ln-145" href="#ln-145"></a><span class="w">    </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_names</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;u&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;v&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;w&quot;</span><span class="p">]</span>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">simulation_time</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a><span class="w">    </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">file_exists</span>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="n">field_ptr_t</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_ptrs</span><span class="p">(:),</span><span class="w"> </span><span class="n">host_fields</span><span class="p">(:)</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">data_loc</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="n">writer_session_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">writer_session</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">config</span><span class="p">%</span><span class="n">checkpoint_freq</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="k">    if</span><span class="w"> </span><span class="p">(</span><span class="nb">mod</span><span class="p">(</span><span class="n">timestep</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">config</span><span class="p">%</span><span class="n">checkpoint_freq</span><span class="p">)</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="k">    call </span><span class="n">MPI_Comm_rank</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">myrank</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">    </span><span class="k">write</span><span class="w"> </span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;(A,A,I0.6,A)&#39;</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a><span class="w">      </span><span class="nb">trim</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">config</span><span class="p">%</span><span class="n">checkpoint_prefix</span><span class="p">),</span><span class="w"> </span><span class="s1">&#39;_&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">timestep</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;.bp&#39;</span>
+<a id="ln-159" name="ln-159" href="#ln-159"></a><span class="w">    </span><span class="k">write</span><span class="w"> </span><span class="p">(</span><span class="n">temp_filename</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;(A,A)&#39;</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">      </span><span class="nb">trim</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">config</span><span class="p">%</span><span class="n">checkpoint_prefix</span><span class="p">),</span><span class="w"> </span><span class="s1">&#39;_temp.bp&#39;</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="w">    </span><span class="k">call </span><span class="n">writer_session</span><span class="p">%</span><span class="k">open</span><span class="p">(</span><span class="n">temp_filename</span><span class="p">,</span><span class="w"> </span><span class="n">comm</span><span class="p">)</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">writer_session</span><span class="p">%</span><span class="n">is_session_functional</span><span class="p">()</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">myrank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a><span class="k">      print</span><span class="w"> </span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Writing checkpoint: &#39;</span><span class="p">,</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+<a id="ln-165" name="ln-165" href="#ln-165"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-166" name="ln-166" href="#ln-166"></a>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="k">    </span><span class="n">simulation_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">timestep</span><span class="o">*</span><span class="n">solver</span><span class="p">%</span><span class="n">dt</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">    </span><span class="n">data_loc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">u</span><span class="p">%</span><span class="n">data_loc</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="w">    </span><span class="k">call </span><span class="n">writer_session</span><span class="p">%</span><span class="n">write_data</span><span class="p">(</span><span class="s2">&quot;timestep&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">timestep</span><span class="p">)</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="w">    </span><span class="k">call </span><span class="n">writer_session</span><span class="p">%</span><span class="n">write_data</span><span class="p">(</span><span class="s2">&quot;time&quot;</span><span class="p">,</span><span class="w"> </span><span class="kt">real</span><span class="p">(</span><span class="n">simulation_time</span><span class="p">,</span><span class="w"> </span><span class="n">dp</span><span class="p">))</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="w">    </span><span class="k">call </span><span class="n">writer_session</span><span class="p">%</span><span class="n">write_data</span><span class="p">(</span><span class="s2">&quot;dt&quot;</span><span class="p">,</span><span class="w"> </span><span class="kt">real</span><span class="p">(</span><span class="n">solver</span><span class="p">%</span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">dp</span><span class="p">))</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a><span class="w">    </span><span class="k">call </span><span class="n">writer_session</span><span class="p">%</span><span class="n">write_data</span><span class="p">(</span><span class="s2">&quot;data_loc&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">data_loc</span><span class="p">)</span>
+<a id="ln-173" name="ln-173" href="#ln-173"></a>
+<a id="ln-174" name="ln-174" href="#ln-174"></a><span class="w">    </span><span class="k">call </span><span class="n">setup_field_arrays</span><span class="p">(</span><span class="n">solver</span><span class="p">,</span><span class="w"> </span><span class="n">field_names</span><span class="p">,</span><span class="w"> </span><span class="n">field_ptrs</span><span class="p">,</span><span class="w"> </span><span class="n">host_fields</span><span class="p">)</span>
+<a id="ln-175" name="ln-175" href="#ln-175"></a>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="w">    </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">write_fields</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="w">      </span><span class="n">field_names</span><span class="p">,</span><span class="w"> </span><span class="n">host_fields</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a><span class="w">      </span><span class="n">solver</span><span class="p">,</span><span class="w"> </span><span class="n">writer_session</span><span class="p">,</span><span class="w"> </span><span class="n">data_loc</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-179" name="ln-179" href="#ln-179"></a><span class="w">      </span><span class="p">)</span>
+<a id="ln-180" name="ln-180" href="#ln-180"></a>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="w">    </span><span class="k">call </span><span class="n">writer_session</span><span class="p">%</span><span class="k">close</span><span class="p">()</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a>
+<a id="ln-183" name="ln-183" href="#ln-183"></a><span class="w">    </span><span class="k">call </span><span class="n">cleanup_field_arrays</span><span class="p">(</span><span class="n">solver</span><span class="p">,</span><span class="w"> </span><span class="n">field_ptrs</span><span class="p">,</span><span class="w"> </span><span class="n">host_fields</span><span class="p">)</span>
+<a id="ln-184" name="ln-184" href="#ln-184"></a>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">myrank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a><span class="k">      inquire</span><span class="w"> </span><span class="p">(</span><span class="k">file</span><span class="o">=</span><span class="nb">trim</span><span class="p">(</span><span class="n">temp_filename</span><span class="p">),</span><span class="w"> </span><span class="n">exist</span><span class="o">=</span><span class="n">file_exists</span><span class="p">)</span>
+<a id="ln-187" name="ln-187" href="#ln-187"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">file_exists</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-188" name="ln-188" href="#ln-188"></a><span class="w">        </span><span class="c">! Move temporary file to final checkpoint filename</span>
+<a id="ln-189" name="ln-189" href="#ln-189"></a><span class="w">        </span><span class="k">call </span><span class="nb">execute_command_line</span><span class="p">(</span><span class="s1">&#39;mv &#39;</span><span class="o">//</span><span class="nb">trim</span><span class="p">(</span><span class="n">temp_filename</span><span class="p">)</span><span class="o">//</span><span class="s1">&#39; &#39;</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-190" name="ln-190" href="#ln-190"></a><span class="w">                                  </span><span class="nb">trim</span><span class="p">(</span><span class="n">filename</span><span class="p">))</span>
+<a id="ln-191" name="ln-191" href="#ln-191"></a>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">        </span><span class="k">inquire</span><span class="w"> </span><span class="p">(</span><span class="k">file</span><span class="o">=</span><span class="nb">trim</span><span class="p">(</span><span class="n">filename</span><span class="p">),</span><span class="w"> </span><span class="n">exist</span><span class="o">=</span><span class="n">file_exists</span><span class="p">)</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">file_exists</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="k">          print</span><span class="w"> </span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;ERROR: Checkpoint file not created: &#39;</span><span class="p">,</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a><span class="w">        </span><span class="k">end if</span>
+<a id="ln-196" name="ln-196" href="#ln-196"></a><span class="k">      else</span>
+<a id="ln-197" name="ln-197" href="#ln-197"></a><span class="w">        </span><span class="c">! temp file doesn&#39;t exist - skip file operations silently</span>
+<a id="ln-198" name="ln-198" href="#ln-198"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-199" name="ln-199" href="#ln-199"></a>
+<a id="ln-200" name="ln-200" href="#ln-200"></a><span class="w">      </span><span class="c">! Remove old checkpoint if configured to keep only the latest</span>
+<a id="ln-201" name="ln-201" href="#ln-201"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">config</span><span class="p">%</span><span class="n">keep_checkpoint</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-202" name="ln-202" href="#ln-202"></a><span class="w">          </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">last_checkpoint_step</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-203" name="ln-203" href="#ln-203"></a><span class="k">        write</span><span class="w"> </span><span class="p">(</span><span class="n">old_filename</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;(A,A,I0.6,A)&#39;</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-204" name="ln-204" href="#ln-204"></a><span class="w">          </span><span class="nb">trim</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">config</span><span class="p">%</span><span class="n">checkpoint_prefix</span><span class="p">),</span><span class="w"> </span><span class="s1">&#39;_&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-205" name="ln-205" href="#ln-205"></a><span class="w">          </span><span class="n">self</span><span class="p">%</span><span class="n">last_checkpoint_step</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;.bp&#39;</span>
+<a id="ln-206" name="ln-206" href="#ln-206"></a><span class="w">        </span><span class="k">inquire</span><span class="w"> </span><span class="p">(</span><span class="k">file</span><span class="o">=</span><span class="nb">trim</span><span class="p">(</span><span class="n">old_filename</span><span class="p">),</span><span class="w"> </span><span class="n">exist</span><span class="o">=</span><span class="n">file_exists</span><span class="p">)</span>
+<a id="ln-207" name="ln-207" href="#ln-207"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">file_exists</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-208" name="ln-208" href="#ln-208"></a><span class="k">          call </span><span class="nb">execute_command_line</span><span class="p">(</span><span class="s1">&#39;rm -rf &#39;</span><span class="o">//</span><span class="nb">trim</span><span class="p">(</span><span class="n">old_filename</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-209" name="ln-209" href="#ln-209"></a><span class="w">                                    </span><span class="n">exitstat</span><span class="o">=</span><span class="n">ierr</span><span class="p">)</span>
+<a id="ln-210" name="ln-210" href="#ln-210"></a><span class="w">          </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ierr</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-211" name="ln-211" href="#ln-211"></a><span class="k">            print</span><span class="w"> </span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;WARNING: failed to remove old checkpoint: &#39;</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-212" name="ln-212" href="#ln-212"></a><span class="w">              </span><span class="nb">trim</span><span class="p">(</span><span class="n">old_filename</span><span class="p">)</span>
+<a id="ln-213" name="ln-213" href="#ln-213"></a><span class="w">          </span><span class="k">end if</span>
+<a id="ln-214" name="ln-214" href="#ln-214"></a><span class="k">        end if</span>
+<a id="ln-215" name="ln-215" href="#ln-215"></a><span class="k">      end if</span>
+<a id="ln-216" name="ln-216" href="#ln-216"></a><span class="k">    end if</span>
+<a id="ln-217" name="ln-217" href="#ln-217"></a>
+<a id="ln-218" name="ln-218" href="#ln-218"></a><span class="k">    </span><span class="n">self</span><span class="p">%</span><span class="n">last_checkpoint_step</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">timestep</span>
+<a id="ln-219" name="ln-219" href="#ln-219"></a><span class="w">  </span><span class="k">end subroutine </span><span class="n">write_checkpoint</span>
+<a id="ln-220" name="ln-220" href="#ln-220"></a>
+<a id="ln-221" name="ln-221" href="#ln-221"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">restart_checkpoint</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-222" name="ln-222" href="#ln-222"></a><span class="w">    </span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">,</span><span class="w"> </span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="n">timestep</span><span class="p">,</span><span class="w"> </span><span class="n">restart_time</span><span class="p">,</span><span class="w"> </span><span class="n">comm</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-223" name="ln-223" href="#ln-223"></a><span class="w">    </span><span class="p">)</span>
+<a id="ln-224" name="ln-224" href="#ln-224"></a><span class="w">    </span><span class="c">!! Restart simulation state from checkpoint file</span>
+<a id="ln-225" name="ln-225" href="#ln-225"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">checkpoint_manager_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-226" name="ln-226" href="#ln-226"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">solver_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">solver</span>
+<a id="ln-227" name="ln-227" href="#ln-227"></a><span class="w">    </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">filename</span>
+<a id="ln-228" name="ln-228" href="#ln-228"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">timestep</span>
+<a id="ln-229" name="ln-229" href="#ln-229"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">restart_time</span>
+<a id="ln-230" name="ln-230" href="#ln-230"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<a id="ln-231" name="ln-231" href="#ln-231"></a>
+<a id="ln-232" name="ln-232" href="#ln-232"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="n">reader_session_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">reader_session</span>
+<a id="ln-233" name="ln-233" href="#ln-233"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ierr</span>
+<a id="ln-234" name="ln-234" href="#ln-234"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-235" name="ln-235" href="#ln-235"></a><span class="w">    </span><span class="kt">integer</span><span class="p">(</span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">start_dims</span><span class="p">,</span><span class="w"> </span><span class="n">count_dims</span>
+<a id="ln-236" name="ln-236" href="#ln-236"></a><span class="w">    </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_names</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;u&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;v&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;w&quot;</span><span class="p">]</span>
+<a id="ln-237" name="ln-237" href="#ln-237"></a><span class="w">    </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">file_exists</span>
+<a id="ln-238" name="ln-238" href="#ln-238"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">data_loc</span>
+<a id="ln-239" name="ln-239" href="#ln-239"></a>
+<a id="ln-240" name="ln-240" href="#ln-240"></a><span class="w">    </span><span class="k">inquire</span><span class="w"> </span><span class="p">(</span><span class="k">file</span><span class="o">=</span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="n">exist</span><span class="o">=</span><span class="n">file_exists</span><span class="p">)</span>
+<a id="ln-241" name="ln-241" href="#ln-241"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">file_exists</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-242" name="ln-242" href="#ln-242"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">solver</span><span class="p">%</span><span class="n">mesh</span><span class="p">%</span><span class="n">par</span><span class="p">%</span><span class="n">is_root</span><span class="p">())</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-243" name="ln-243" href="#ln-243"></a><span class="k">        print</span><span class="w"> </span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;ERROR: Checkpoint file not found: &#39;</span><span class="p">,</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+<a id="ln-244" name="ln-244" href="#ln-244"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-245" name="ln-245" href="#ln-245"></a><span class="k">      call </span><span class="n">MPI_Abort</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<a id="ln-246" name="ln-246" href="#ln-246"></a><span class="w">      </span><span class="k">return</span>
+<a id="ln-247" name="ln-247" href="#ln-247"></a><span class="k">    end if</span>
+<a id="ln-248" name="ln-248" href="#ln-248"></a>
+<a id="ln-249" name="ln-249" href="#ln-249"></a><span class="k">    call </span><span class="n">reader_session</span><span class="p">%</span><span class="k">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="n">comm</span><span class="p">)</span>
+<a id="ln-250" name="ln-250" href="#ln-250"></a><span class="w">    </span><span class="k">call </span><span class="n">reader_session</span><span class="p">%</span><span class="n">read_data</span><span class="p">(</span><span class="s2">&quot;timestep&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">timestep</span><span class="p">)</span>
+<a id="ln-251" name="ln-251" href="#ln-251"></a><span class="w">    </span><span class="k">call </span><span class="n">reader_session</span><span class="p">%</span><span class="n">read_data</span><span class="p">(</span><span class="s2">&quot;time&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">restart_time</span><span class="p">)</span>
+<a id="ln-252" name="ln-252" href="#ln-252"></a><span class="w">    </span><span class="k">call </span><span class="n">reader_session</span><span class="p">%</span><span class="n">read_data</span><span class="p">(</span><span class="s2">&quot;data_loc&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">data_loc</span><span class="p">)</span>
+<a id="ln-253" name="ln-253" href="#ln-253"></a>
+<a id="ln-254" name="ln-254" href="#ln-254"></a><span class="w">    </span><span class="n">dims</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">solver</span><span class="p">%</span><span class="n">mesh</span><span class="p">%</span><span class="n">get_dims</span><span class="p">(</span><span class="n">data_loc</span><span class="p">)</span>
+<a id="ln-255" name="ln-255" href="#ln-255"></a><span class="w">    </span><span class="n">start_dims</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">solver</span><span class="p">%</span><span class="n">mesh</span><span class="p">%</span><span class="n">par</span><span class="p">%</span><span class="n">n_offset</span><span class="p">,</span><span class="w"> </span><span class="n">i8</span><span class="p">)</span>
+<a id="ln-256" name="ln-256" href="#ln-256"></a><span class="w">    </span><span class="n">count_dims</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">dims</span><span class="p">,</span><span class="w"> </span><span class="n">i8</span><span class="p">)</span>
+<a id="ln-257" name="ln-257" href="#ln-257"></a>
+<a id="ln-258" name="ln-258" href="#ln-258"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">u</span><span class="p">%</span><span class="n">set_data_loc</span><span class="p">(</span><span class="n">data_loc</span><span class="p">)</span>
+<a id="ln-259" name="ln-259" href="#ln-259"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">v</span><span class="p">%</span><span class="n">set_data_loc</span><span class="p">(</span><span class="n">data_loc</span><span class="p">)</span>
+<a id="ln-260" name="ln-260" href="#ln-260"></a><span class="w">    </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">w</span><span class="p">%</span><span class="n">set_data_loc</span><span class="p">(</span><span class="n">data_loc</span><span class="p">)</span>
+<a id="ln-261" name="ln-261" href="#ln-261"></a>
+<a id="ln-262" name="ln-262" href="#ln-262"></a><span class="w">    </span><span class="k">block</span>
+<a id="ln-263" name="ln-263" href="#ln-263"></a><span class="k">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="p">,</span><span class="w"> </span><span class="k">target</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_data_u</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<a id="ln-264" name="ln-264" href="#ln-264"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="p">,</span><span class="w"> </span><span class="k">target</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_data_v</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<a id="ln-265" name="ln-265" href="#ln-265"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="p">,</span><span class="w"> </span><span class="k">target</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_data_w</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<a id="ln-266" name="ln-266" href="#ln-266"></a>
+<a id="ln-267" name="ln-267" href="#ln-267"></a><span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">field_data_u</span><span class="p">(</span><span class="n">count_dims</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">count_dims</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="n">count_dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)))</span>
+<a id="ln-268" name="ln-268" href="#ln-268"></a><span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">field_data_v</span><span class="p">(</span><span class="n">count_dims</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">count_dims</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="n">count_dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)))</span>
+<a id="ln-269" name="ln-269" href="#ln-269"></a><span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">field_data_w</span><span class="p">(</span><span class="n">count_dims</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">count_dims</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="n">count_dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)))</span>
+<a id="ln-270" name="ln-270" href="#ln-270"></a><span class="w">      </span><span class="k">call </span><span class="n">reader_session</span><span class="p">%</span><span class="n">read_data</span><span class="p">(</span><span class="s2">&quot;u&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">field_data_u</span><span class="p">)</span>
+<a id="ln-271" name="ln-271" href="#ln-271"></a><span class="w">      </span><span class="k">call </span><span class="n">reader_session</span><span class="p">%</span><span class="n">read_data</span><span class="p">(</span><span class="s2">&quot;v&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">field_data_v</span><span class="p">)</span>
+<a id="ln-272" name="ln-272" href="#ln-272"></a><span class="w">      </span><span class="k">call </span><span class="n">reader_session</span><span class="p">%</span><span class="n">read_data</span><span class="p">(</span><span class="s2">&quot;w&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">field_data_w</span><span class="p">)</span>
+<a id="ln-273" name="ln-273" href="#ln-273"></a><span class="w">      </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">set_field_data</span><span class="p">(</span><span class="n">solver</span><span class="p">%</span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">field_data_u</span><span class="p">)</span>
+<a id="ln-274" name="ln-274" href="#ln-274"></a><span class="w">      </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">set_field_data</span><span class="p">(</span><span class="n">solver</span><span class="p">%</span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">field_data_v</span><span class="p">)</span>
+<a id="ln-275" name="ln-275" href="#ln-275"></a><span class="w">      </span><span class="k">call </span><span class="n">solver</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">set_field_data</span><span class="p">(</span><span class="n">solver</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="n">field_data_w</span><span class="p">)</span>
+<a id="ln-276" name="ln-276" href="#ln-276"></a><span class="w">    </span><span class="k">end block</span>
+<a id="ln-277" name="ln-277" href="#ln-277"></a>
+<a id="ln-278" name="ln-278" href="#ln-278"></a><span class="k">    call </span><span class="n">reader_session</span><span class="p">%</span><span class="k">close</span><span class="p">()</span>
+<a id="ln-279" name="ln-279" href="#ln-279"></a><span class="w">  </span><span class="k">end subroutine </span><span class="n">restart_checkpoint</span>
+<a id="ln-280" name="ln-280" href="#ln-280"></a>
+<a id="ln-281" name="ln-281" href="#ln-281"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">write_fields</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-282" name="ln-282" href="#ln-282"></a><span class="w">    </span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">field_names</span><span class="p">,</span><span class="w"> </span><span class="n">host_fields</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">,</span><span class="w"> </span><span class="n">writer_session</span><span class="p">,</span><span class="w"> </span><span class="n">data_loc</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-283" name="ln-283" href="#ln-283"></a><span class="w">    </span><span class="p">)</span>
+<a id="ln-284" name="ln-284" href="#ln-284"></a><span class="w">    </span><span class="c">!! Write field data for checkpoints (no striding)</span>
+<a id="ln-285" name="ln-285" href="#ln-285"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">checkpoint_manager_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-286" name="ln-286" href="#ln-286"></a><span class="w">    </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">field_names</span>
+<a id="ln-287" name="ln-287" href="#ln-287"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_ptr_t</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:),</span><span class="w"> </span><span class="k">target</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">host_fields</span>
+<a id="ln-288" name="ln-288" href="#ln-288"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">solver_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">solver</span>
+<a id="ln-289" name="ln-289" href="#ln-289"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="n">writer_session_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">writer_session</span>
+<a id="ln-290" name="ln-290" href="#ln-290"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">data_loc</span>
+<a id="ln-291" name="ln-291" href="#ln-291"></a>
+<a id="ln-292" name="ln-292" href="#ln-292"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i_field</span>
+<a id="ln-293" name="ln-293" href="#ln-293"></a><span class="w">    </span><span class="kt">integer</span><span class="p">(</span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">output_start</span><span class="p">,</span><span class="w"> </span><span class="n">output_count</span>
+<a id="ln-294" name="ln-294" href="#ln-294"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">output_dims_local</span>
+<a id="ln-295" name="ln-295" href="#ln-295"></a>
+<a id="ln-296" name="ln-296" href="#ln-296"></a><span class="w">    </span><span class="c">! Prepare buffers for full resolution (no striding for checkpoints)</span>
+<a id="ln-297" name="ln-297" href="#ln-297"></a><span class="w">    </span><span class="k">call </span><span class="n">prepare_field_buffers</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-298" name="ln-298" href="#ln-298"></a><span class="w">      </span><span class="n">solver</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">full_resolution</span><span class="p">,</span><span class="w"> </span><span class="n">field_names</span><span class="p">,</span><span class="w"> </span><span class="n">data_loc</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-299" name="ln-299" href="#ln-299"></a><span class="w">      </span><span class="n">self</span><span class="p">%</span><span class="n">field_buffers</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">last_shape_dims</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">last_stride_factors</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-300" name="ln-300" href="#ln-300"></a><span class="w">      </span><span class="n">self</span><span class="p">%</span><span class="n">last_output_shape</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-301" name="ln-301" href="#ln-301"></a><span class="w">      </span><span class="p">)</span>
+<a id="ln-302" name="ln-302" href="#ln-302"></a>
+<a id="ln-303" name="ln-303" href="#ln-303"></a><span class="w">    </span><span class="c">! Calculate output dimensions for writing</span>
+<a id="ln-304" name="ln-304" href="#ln-304"></a><span class="w">    </span><span class="k">call </span><span class="n">get_output_dimensions</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-305" name="ln-305" href="#ln-305"></a><span class="w">      </span><span class="nb">int</span><span class="p">(</span><span class="n">solver</span><span class="p">%</span><span class="n">mesh</span><span class="p">%</span><span class="n">get_global_dims</span><span class="p">(</span><span class="n">data_loc</span><span class="p">),</span><span class="w"> </span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-306" name="ln-306" href="#ln-306"></a><span class="w">      </span><span class="nb">int</span><span class="p">(</span><span class="n">solver</span><span class="p">%</span><span class="n">mesh</span><span class="p">%</span><span class="n">par</span><span class="p">%</span><span class="n">n_offset</span><span class="p">,</span><span class="w"> </span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-307" name="ln-307" href="#ln-307"></a><span class="w">      </span><span class="nb">int</span><span class="p">(</span><span class="n">solver</span><span class="p">%</span><span class="n">mesh</span><span class="p">%</span><span class="n">get_dims</span><span class="p">(</span><span class="n">data_loc</span><span class="p">),</span><span class="w"> </span><span class="n">i8</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-308" name="ln-308" href="#ln-308"></a><span class="w">      </span><span class="n">self</span><span class="p">%</span><span class="n">full_resolution</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-309" name="ln-309" href="#ln-309"></a><span class="w">      </span><span class="n">self</span><span class="p">%</span><span class="n">last_output_shape</span><span class="p">,</span><span class="w"> </span><span class="n">output_start</span><span class="p">,</span><span class="w"> </span><span class="n">output_count</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-310" name="ln-310" href="#ln-310"></a><span class="w">      </span><span class="n">output_dims_local</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-311" name="ln-311" href="#ln-311"></a><span class="w">      </span><span class="n">self</span><span class="p">%</span><span class="n">last_shape_dims</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">last_stride_factors</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-312" name="ln-312" href="#ln-312"></a><span class="w">      </span><span class="n">self</span><span class="p">%</span><span class="n">last_output_shape</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-313" name="ln-313" href="#ln-313"></a><span class="w">      </span><span class="p">)</span>
+<a id="ln-314" name="ln-314" href="#ln-314"></a>
+<a id="ln-315" name="ln-315" href="#ln-315"></a><span class="w">    </span><span class="k">do </span><span class="n">i_field</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">field_names</span><span class="p">)</span>
+<a id="ln-316" name="ln-316" href="#ln-316"></a><span class="w">      </span><span class="k">call </span><span class="n">write_single_field_to_buffer</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-317" name="ln-317" href="#ln-317"></a><span class="w">        </span><span class="nb">trim</span><span class="p">(</span><span class="n">field_names</span><span class="p">(</span><span class="n">i_field</span><span class="p">)),</span><span class="w"> </span><span class="n">host_fields</span><span class="p">(</span><span class="n">i_field</span><span class="p">)%</span><span class="n">ptr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-318" name="ln-318" href="#ln-318"></a><span class="w">        </span><span class="n">solver</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">full_resolution</span><span class="p">,</span><span class="w"> </span><span class="n">data_loc</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-319" name="ln-319" href="#ln-319"></a><span class="w">        </span><span class="n">self</span><span class="p">%</span><span class="n">field_buffers</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">last_shape_dims</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">last_stride_factors</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-320" name="ln-320" href="#ln-320"></a><span class="w">        </span><span class="n">self</span><span class="p">%</span><span class="n">last_output_shape</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-321" name="ln-321" href="#ln-321"></a><span class="w">        </span><span class="p">)</span>
+<a id="ln-322" name="ln-322" href="#ln-322"></a>
+<a id="ln-323" name="ln-323" href="#ln-323"></a><span class="w">      </span><span class="k">call </span><span class="n">writer_session</span><span class="p">%</span><span class="n">write_data</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-324" name="ln-324" href="#ln-324"></a><span class="w">        </span><span class="nb">trim</span><span class="p">(</span><span class="n">field_names</span><span class="p">(</span><span class="n">i_field</span><span class="p">)),</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-325" name="ln-325" href="#ln-325"></a><span class="w">        </span><span class="n">self</span><span class="p">%</span><span class="n">field_buffers</span><span class="p">(</span><span class="n">i_field</span><span class="p">)%</span><span class="n">buffer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-326" name="ln-326" href="#ln-326"></a><span class="w">        </span><span class="n">self</span><span class="p">%</span><span class="n">last_output_shape</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-327" name="ln-327" href="#ln-327"></a><span class="w">        </span><span class="n">output_start</span><span class="p">,</span><span class="w"> </span><span class="n">output_count</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-328" name="ln-328" href="#ln-328"></a><span class="w">        </span><span class="p">)</span>
+<a id="ln-329" name="ln-329" href="#ln-329"></a><span class="w">    </span><span class="k">end do</span>
+<a id="ln-330" name="ln-330" href="#ln-330"></a><span class="k">  end subroutine </span><span class="n">write_fields</span>
+<a id="ln-331" name="ln-331" href="#ln-331"></a>
+<a id="ln-332" name="ln-332" href="#ln-332"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">cleanup_output_buffers</span><span class="p">(</span><span class="n">self</span><span class="p">)</span>
+<a id="ln-333" name="ln-333" href="#ln-333"></a><span class="w">    </span><span class="c">!! Clean up dynamic field buffers</span>
+<a id="ln-334" name="ln-334" href="#ln-334"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">checkpoint_manager_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-335" name="ln-335" href="#ln-335"></a>
+<a id="ln-336" name="ln-336" href="#ln-336"></a><span class="w">    </span><span class="k">call </span><span class="n">cleanup_field_buffers</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">field_buffers</span><span class="p">)</span>
+<a id="ln-337" name="ln-337" href="#ln-337"></a><span class="w">  </span><span class="k">end subroutine </span><span class="n">cleanup_output_buffers</span>
+<a id="ln-338" name="ln-338" href="#ln-338"></a>
+<a id="ln-339" name="ln-339" href="#ln-339"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">finalise</span><span class="p">(</span><span class="n">self</span><span class="p">)</span>
+<a id="ln-340" name="ln-340" href="#ln-340"></a><span class="w">    </span><span class="c">!! Clean up checkpoint manager</span>
+<a id="ln-341" name="ln-341" href="#ln-341"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">checkpoint_manager_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-342" name="ln-342" href="#ln-342"></a>
+<a id="ln-343" name="ln-343" href="#ln-343"></a><span class="w">    </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">cleanup_output_buffers</span><span class="p">()</span>
+<a id="ln-344" name="ln-344" href="#ln-344"></a><span class="w">  </span><span class="k">end subroutine </span><span class="n">finalise</span>
+<a id="ln-345" name="ln-345" href="#ln-345"></a>
+<a id="ln-346" name="ln-346" href="#ln-346"></a><span class="k">end module </span><span class="n">m_checkpoint_manager</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2025 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
