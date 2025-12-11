@@ -73,7 +73,33 @@ set(TRIDIAGSRC
   backend/omp/exec_dist.f90 
 )
 
-
+set(TRIDIAGCUDASRC
+  allocator.f90 #
+  common.f90 #
+  config.f90 #
+  poisson_fft.f90 #
+  tdsops.f90 #
+  time_integrator.f90 #
+  mesh.f90 #
+  mesh_content.f90 #
+  field.f90 #
+  vector_calculus.f90 #
+  backend/backend.f90 #
+  module/ibm.f90 #
+  backend/cuda/allocator.f90 #
+  backend/cuda/exec_dist.f90 #
+  backend/cuda/kernels/distributed.f90 #
+  backend/cuda/kernels/spectral_processing.f90 #
+  backend/cuda/sendrecv.f90 #
+  backend/cuda/tdsops.f90 #
+  decomp/decomp_2decompfft.f90 #
+  io/io_base.f90 #
+  io/io_session.f90 #
+  io/io_field_utils.f90 #
+  io/checkpoint_manager.f90 #
+  io/snapshot_manager.f90 #
+  io/dummy/io.f90
+)
 if(WITH_ADIOS2)
   list(APPEND IOSRC 
     io/adios2/io.f90
@@ -167,5 +193,18 @@ if(WITH_ADIOS2)
   target_compile_options(x3d2 PRIVATE "-DWITH_ADIOS2")
 endif()
 
+add_library(trid_cuda_backends OBJECT ${TRIDIAGCUDASRC})
+target_include_directories(trid_cuda_backends INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
+
 add_library(trid_backends OBJECT ${TRIDIAGSRC})
 target_include_directories(trid_backends INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
+
+# if CUDA compiler
+# We require to target link the backends for standalone tests for cuda
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
+  target_link_options(trid_cuda_backends INTERFACE "-cuda")
+  target_link_options(trid_cuda_backends INTERFACE "-cudalib=cufftmp")
+elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+  target_link_options(x3d2 INTERFACE -h omp)
+endif()
