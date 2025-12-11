@@ -46,8 +46,8 @@ program test_io_session
     call writer%write_data("timestep", timestep_write)
     call writer%write_data("time", time_write)
   end if
-  call writer%write_data("velocity_u", write_data, local_start, &
-    local_count, global_dims)
+  call writer%write_data("velocity_u", write_data, global_dims, &
+    local_start, local_count)
   call writer%close()
   
   call MPI_Barrier(MPI_COMM_WORLD, ierr)
