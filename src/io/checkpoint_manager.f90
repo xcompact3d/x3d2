@@ -16,7 +16,7 @@ module m_checkpoint_manager
 !! prevent corrupted checkpoints.
 !! - Optional cleanup of old checkpoint files to conserve disk space.
   use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Abort
-  use m_common, only: dp, i8, DIR_C, get_argument
+  use m_common, only: dp, i8, DIR_X, get_argument
   use m_field, only: field_t
   use m_solver, only: solver_t
   use m_io_session, only: reader_session_t, writer_session_t
@@ -28,6 +28,10 @@ module m_checkpoint_manager
                               write_single_field_to_buffer
 
   implicit none
+
+  type :: raw_old_field_buffer_t
+    real(dp), allocatable :: data(:, :, :)
+  end type raw_old_field_buffer_t
 
   private
   public :: checkpoint_manager_t
@@ -146,8 +150,10 @@ contains
     real(dp) :: simulation_time
     logical :: file_exists
     type(field_ptr_t), allocatable :: field_ptrs(:), host_fields(:)
-    integer :: data_loc
+    integer :: data_loc, is_ab, i, j, n_total_vars
     type(writer_session_t) :: writer_session
+    integer :: nolds_total, idx
+    character(len=16), allocatable :: old_field_names(:)
 
     if (self%config%checkpoint_freq <= 0) return
     if (mod(timestep, self%config%checkpoint_freq) /= 0) return
@@ -171,6 +177,8 @@ contains
     call writer_session%write_data("dt", real(solver%dt, dp))
     call writer_session%write_data("data_loc", data_loc)
 
+    n_total_vars = size(field_names)
+
     call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
 
     call self%write_fields( &
@@ -178,7 +186,85 @@ contains
       solver, writer_session, data_loc &
       )
 
-    call writer_session%close()
+    ! serialise time integrator metadata
+    if (solver%time_integrator%sname(1:2) == 'AB') then
+      is_ab = 1
+    else
+      is_ab = 0
+    end if
+    call writer_session%write_data('ti_is_ab', is_ab)
+    call writer_session%write_data('ti_order', solver%time_integrator%order)
+    call writer_session%write_data('ti_istep', solver%time_integrator%istep)
+    call writer_session%write_data('ti_nstep', solver%time_integrator%nstep)
+
+    ! for AB methods with order >1, keep derivative history olds(i,j)
+    if (is_ab == 1 .and. solver%time_integrator%order > 1) then
+      nolds_total = solver%time_integrator%nolds*n_total_vars
+      allocate (old_field_names(nolds_total))
+
+      ! Olds fields live in padded DIR_X layout. Persist the raw blocked data per rank
+      ! so that restarts can reconstruct the exact derivative history, including padding.
+      block
+        integer :: rank_id, ierr_local
+        integer :: padded_dims(3)
+        character(len=16) :: rank_suffix
+        character(len=64) :: ranked_name
+        type(raw_old_field_buffer_t), allocatable :: raw_buffers(:)
+
+        call MPI_Comm_rank(comm, rank_id, ierr_local)
+        write (rank_suffix, '("_rank",I0.6)') rank_id
+        allocate (raw_buffers(nolds_total))
+
+        idx = 0
+        do i = 1, n_total_vars
+          do j = 1, solver%time_integrator%nolds
+            idx = idx + 1
+            write (old_field_names(idx), '(A,"_rhs_old",I0)') &
+              trim(field_names(i)), j
+            write (ranked_name, '(A,A)') trim(old_field_names(idx)), &
+              trim(rank_suffix)
+
+            padded_dims = solver%time_integrator%olds(i, j)%ptr%get_shape()
+            if (allocated(raw_buffers(idx)%data)) then
+              if (any(shape(raw_buffers(idx)%data) /= padded_dims)) then
+                deallocate (raw_buffers(idx)%data)
+              end if
+            end if
+            if (.not. allocated(raw_buffers(idx)%data)) then
+              allocate (raw_buffers(idx)%data(padded_dims(1), &
+                                              padded_dims(2), padded_dims(3)))
+            end if
+
+            raw_buffers(idx)%data = solver%time_integrator%olds(i, j)%ptr%data
+
+            ! Use -1 to signal local per-rank variables (not decomposed across ranks)
+            ! Each rank writes to its own uniquely named variable (with _rank suffix)
+            call writer_session%write_data(trim(ranked_name), &
+                                           raw_buffers(idx)%data, &
+                                           [-1_i8, -1_i8, -1_i8], &
+                                           [-1_i8, -1_i8, -1_i8], &
+                                           int(padded_dims, i8))
+          end do
+        end do
+
+        ! Ensure ADIOS2 still sees a valid buffer until after close
+        call writer_session%close()
+        do idx = 1, nolds_total
+          if (allocated(raw_buffers(idx)%data)) then
+            deallocate (raw_buffers(idx)%data)
+          end if
+        end do
+        deallocate (raw_buffers)
+      end block
+    else
+      call writer_session%close()
+    end if
+
+    ! clean up buffers after session close (ADIOS2 deferred writes need them until end_step)
+    call self%cleanup_output_buffers()
+    if (allocated(old_field_names)) then
+      deallocate (old_field_names)
+    end if
 
     call cleanup_field_arrays(solver, field_ptrs, host_fields)
 
@@ -230,12 +316,19 @@ contains
     integer, intent(in) :: comm
 
     type(reader_session_t) :: reader_session
-    integer :: ierr
+    integer :: ierr, myrank, data_loc
     integer :: dims(3)
     integer(i8), dimension(3) :: start_dims, count_dims
-    character(len=*), parameter :: field_names(3) = ["u", "v", "w"]
+    character(len=*), parameter :: field_names(*) = ["u", "v", "w"]
     logical :: file_exists
-    integer :: data_loc
+    integer :: ti_is_ab, ti_order, ti_istep, ti_nstep
+    logical :: have_ti_meta
+    character(len=16), allocatable :: var_names(:)
+    integer :: n_total_vars
+    character(len=64) :: old_name
+    integer :: i, j
+
+    call MPI_Comm_rank(comm, myrank, ierr)
 
     inquire (file=filename, exist=file_exists)
     if (.not. file_exists) then
@@ -247,9 +340,24 @@ contains
     end if
 
     call reader_session%open(filename, comm)
+
     call reader_session%read_data("timestep", timestep)
     call reader_session%read_data("time", restart_time)
     call reader_session%read_data("data_loc", data_loc)
+    ! restore dt if present
+    block
+      real(dp) :: chk_dt
+      call reader_session%read_data("dt", chk_dt)
+      solver%dt = chk_dt
+    end block
+    ! attempt to read time integrator metadata
+    have_ti_meta = .true.
+    block
+      call reader_session%read_data('ti_is_ab', ti_is_ab)
+      call reader_session%read_data('ti_order', ti_order)
+      call reader_session%read_data('ti_istep', ti_istep)
+      call reader_session%read_data('ti_nstep', ti_nstep)
+    end block
 
     dims = solver%mesh%get_dims(data_loc)
     start_dims = int(solver%mesh%par%n_offset, i8)
@@ -264,16 +372,83 @@ contains
       real(dp), allocatable, target :: field_data_v(:, :, :)
       real(dp), allocatable, target :: field_data_w(:, :, :)
 
+      ! Zero velocity fields before restoring to ensure padding is initialized
+      call solver%u%fill(0.0_dp)
+      call solver%v%fill(0.0_dp)
+      call solver%w%fill(0.0_dp)
+
       allocate (field_data_u(count_dims(1), count_dims(2), count_dims(3)))
       allocate (field_data_v(count_dims(1), count_dims(2), count_dims(3)))
       allocate (field_data_w(count_dims(1), count_dims(2), count_dims(3)))
-      call reader_session%read_data("u", field_data_u)
-      call reader_session%read_data("v", field_data_v)
-      call reader_session%read_data("w", field_data_w)
+      call reader_session%read_data("u", field_data_u, start_dims=start_dims, &
+                                    count_dims=count_dims)
+      call reader_session%read_data("v", field_data_v, start_dims=start_dims, &
+                                    count_dims=count_dims)
+      call reader_session%read_data("w", field_data_w, start_dims=start_dims, &
+                                    count_dims=count_dims)
       call solver%backend%set_field_data(solver%u, field_data_u)
       call solver%backend%set_field_data(solver%v, field_data_v)
       call solver%backend%set_field_data(solver%w, field_data_w)
     end block
+
+    ! restore AB derivative history if metadata indicates AB and order>1
+    if (have_ti_meta) then
+      if (ti_is_ab == 1) then
+        solver%time_integrator%istep = ti_istep
+        solver%time_integrator%nstep = ti_nstep
+        if (solver%time_integrator%order /= ti_order) then
+          if (solver%mesh%par%is_root()) then
+            print *, 'WARNING: checkpoint AB order differs from current &
+                  & solver config; using checkpoint order'
+          end if
+          solver%time_integrator%order = ti_order
+        end if
+        if (ti_order > 1) then
+          ! Restore the raw padded derivative history per rank
+          block
+            character(len=16) :: rank_suffix
+            character(len=64) :: ranked_name
+            real(dp), allocatable, target :: old_field(:, :, :)
+            integer :: padded_dims(3)
+
+            n_total_vars = size(field_names)
+            allocate (var_names(n_total_vars))
+            var_names = field_names
+            write (rank_suffix, '("_rank",I0.6)') myrank
+            do i = 1, n_total_vars
+              do j = 1, solver%time_integrator%nolds
+                call solver%time_integrator%olds(i, j)%ptr%fill(0.0_dp)
+              end do
+            end do
+
+            do i = 1, n_total_vars
+              do j = 1, solver%time_integrator%nolds
+                write (old_name, '(A,"_rhs_old",I0)') trim(var_names(i)), j
+                write (ranked_name, '(A,A)') trim(old_name), trim(rank_suffix)
+
+                padded_dims = shape(solver%time_integrator%olds(i, j)%ptr%data)
+                if (allocated(old_field)) then
+                  if (any(shape(old_field) /= padded_dims)) then
+                    deallocate (old_field)
+                  end if
+                end if
+                if (.not. allocated(old_field)) then
+                  allocate (old_field(padded_dims(1), &
+                                      padded_dims(2), padded_dims(3)))
+                end if
+
+                ! Clear the buffer before reading
+                old_field = 0.0_dp
+                call reader_session%read_data(trim(ranked_name), old_field)
+                solver%time_integrator%olds(i, j)%ptr%data = old_field
+              end do
+            end do
+            if (allocated(old_field)) deallocate (old_field)
+            deallocate (var_names)
+          end block
+        end if
+      end if
+    end if
 
     call reader_session%close()
   end subroutine restart_checkpoint
@@ -344,4 +519,3 @@ contains
   end subroutine finalise
 
 end module m_checkpoint_manager
-
