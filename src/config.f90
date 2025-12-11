@@ -46,6 +46,12 @@ module m_config
     procedure :: read => read_channel_nml
   end type channel_config_t
 
+  type, extends(base_config_t) :: cylinder_config_t
+    real(dp) :: init_noise(3)
+  contains
+    procedure :: read => read_cylinder_nml
+  end type cylinder_config_t
+
   type, extends(base_config_t) :: checkpoint_config_t
     integer :: checkpoint_freq = 0                         !! Frequency of checkpointing (0 = off)
     integer :: snapshot_freq = 0                           !! Frequency of snapshots (0 = off)
@@ -214,6 +220,37 @@ contains
     self%n_rotate = n_rotate
 
   end subroutine read_channel_nml
+
+  subroutine read_cylinder_nml(self, nml_file, nml_string)
+    implicit none
+
+    class(cylinder_config_t) :: self
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
+
+    integer :: unit
+
+    real(dp) :: init_noise(3)
+
+    namelist /cylinder_nml/ init_noise
+
+    if (present(nml_file) .and. present(nml_string)) then
+      error stop 'Reading cylinder config failed! &
+                 &Provide only a file name or source, not both.'
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file)
+      read (unit, nml=cylinder_nml)
+      close (unit)
+    else if (present(nml_string)) then
+      read (nml_string, nml=cylinder_nml)
+    else
+      error stop 'Reading cylinder config failed! &
+                 &Provide at least one of the following: file name or source'
+    end if
+
+    self%init_noise = init_noise
+
+  end subroutine read_cylinder_nml
 
   subroutine read_checkpoint_nml(self, nml_file, nml_string)
     implicit none
