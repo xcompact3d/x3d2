@@ -31,6 +31,8 @@ module m_snapshot_manager
     integer, dimension(3) :: last_stride_factors = 0
     integer(i8), dimension(3) :: last_output_shape = 0
     character(len=4096) :: vtk_xml = ""
+    logical :: is_snapshot_file_open = .false.
+    type(writer_session_t) :: snapshot_writer
   contains
     procedure :: init
     procedure :: handle_snapshot_step
@@ -39,6 +41,8 @@ module m_snapshot_manager
     procedure, private :: write_fields
     procedure, private :: cleanup_output_buffers
     procedure, private :: generate_vtk_xml
+    procedure, private :: open_snapshot_file
+    procedure, private :: close_snapshot_file
   end type snapshot_manager_t
 
 contains
@@ -92,6 +96,8 @@ contains
 
   subroutine write_snapshot(self, solver, timestep, comm)
     !! Write a snapshot file for visualisation
+    !! Uses a persistent file that stays open across multiple snapshots
+    !! Each snapshot is written as a separate timestep in the file
     class(snapshot_manager_t), intent(inout) :: self
     class(solver_t), intent(in) :: solver
     integer, intent(in) :: timestep
@@ -106,7 +112,6 @@ contains
     real(dp), dimension(3) :: origin, original_spacing, output_spacing
     real(dp) :: simulation_time
     logical :: snapshot_uses_stride = .true.
-    type(writer_session_t) :: writer_session
     integer :: i
 
     if (self%config%snapshot_freq <= 0) return
@@ -114,8 +119,15 @@ contains
 
     call MPI_Comm_rank(comm, myrank, ierr)
 
-    write (filename, '(A,A,I0.6,A)') &
-      trim(self%config%snapshot_prefix), '_', timestep, '.bp'
+    write (filename, '(A,A)') trim(self%config%snapshot_prefix), '.bp'
+
+    ! Open snapshot file on first call (check for existence)
+    if (.not. self%is_snapshot_file_open) then
+      call self%open_snapshot_file(filename, comm)
+    else
+      ! For subsequent snapshots, begin a new step
+      call self%snapshot_writer%begin_step()
+    end if
 
     global_dims = solver%mesh%get_global_dims(VERT)
     origin = solver%mesh%get_coordinates(1, 1, 1)
@@ -137,32 +149,27 @@ contains
       output_shape_dims, field_names, origin, output_spacing &
       )
 
-    call writer_session%open(filename, comm)
-    if (writer_session%is_session_functional() .and. myrank == 0) then
-      print *, 'Creating snapshot file: ', trim(filename)
-    end if
-
-    ! Write VTK XML attributes for ParaView compatibility
-    if (myrank == 0) then
-      call writer_session%write_attribute("vtk.xml", self%vtk_xml)
-    end if
-
     simulation_time = timestep*solver%dt
-    if (writer_session%is_session_functional() .and. myrank == 0) then
+    if (self%snapshot_writer%is_session_functional() .and. myrank == 0) then
       print *, 'Writing snapshot for time =', simulation_time, &
         ' iteration =', timestep
     end if
 
-    call writer_session%write_data("time", real(simulation_time, dp))
+    ! Write VTK XML attributes for ParaView compatibility (only on first step)
+    if (timestep == self%config%snapshot_freq .and. myrank == 0) then
+      call self%snapshot_writer%write_attribute("vtk.xml", self%vtk_xml)
+    end if
+
+    call self%snapshot_writer%write_data("time", real(simulation_time, dp))
 
     call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
 
     call self%write_fields( &
       field_names, host_fields, &
-      solver, writer_session, solver%u%data_loc &
+      solver, self%snapshot_writer, solver%u%data_loc &
       )
 
-    call writer_session%close()
+    call self%snapshot_writer%end_step()
 
     call cleanup_field_arrays(solver, field_ptrs, host_fields)
   end subroutine write_snapshot
@@ -272,6 +279,43 @@ contains
     class(snapshot_manager_t), intent(inout) :: self
 
     call self%cleanup_output_buffers()
+    call self%close_snapshot_file()
   end subroutine finalise
+
+  subroutine open_snapshot_file(self, filename, comm)
+    !! Open a persistent snapshot file
+    !! ADIOS2 handles both creating new files and appending to existing ones
+    class(snapshot_manager_t), intent(inout) :: self
+    character(len=*), intent(in) :: filename
+    integer, intent(in) :: comm
+
+    logical :: file_exists
+    integer :: myrank, ierr
+
+    call MPI_Comm_rank(comm, myrank, ierr)
+
+    if (myrank == 0) then
+      inquire (file=trim(filename), exist=file_exists)
+      if (file_exists) then
+        print *, 'Appending to existing snapshot file: ', trim(filename)
+      else
+        print *, 'Creating new snapshot file: ', trim(filename)
+      end if
+    end if
+
+    call self%snapshot_writer%open(filename, comm)
+
+    self%is_snapshot_file_open = .true.
+  end subroutine open_snapshot_file
+
+  subroutine close_snapshot_file(self)
+    !! Close the persistent snapshot file
+    class(snapshot_manager_t), intent(inout) :: self
+
+    if (self%is_snapshot_file_open) then
+      call self%snapshot_writer%close()
+      self%is_snapshot_file_open = .false.
+    end if
+  end subroutine close_snapshot_file
 
 end module m_snapshot_manager
