@@ -294,7 +294,7 @@ contains
     call MPI_Comm_rank(comm, myrank, ierr)
 
     if (myrank == 0) then
-      inquire(file=trim(filename), exist=file_exists)
+      inquire (file=trim(filename), exist=file_exists)
       if (file_exists) then
         print *, 'Appending to existing snapshot file: ', trim(filename)
       else
