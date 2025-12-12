@@ -59,7 +59,7 @@ endfunction()
 
 define_test(test_allocator.f90 1 omp)
 define_test(test_mesh.f90 4 omp)
- if(WITH_2DECOMPFFT)
+if(WITH_2DECOMPFFT)
   define_test(test_fft.f90 4 omp)
  endif()
 define_test(test_reordering.f90 1 omp)
