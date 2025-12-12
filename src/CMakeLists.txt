@@ -74,31 +74,16 @@ set(TRIDIAGSRC
 )
 
 set(TRIDIAGCUDASRC
-  allocator.f90 #
-  common.f90 #
-  config.f90 #
-  poisson_fft.f90 #
-  tdsops.f90 #
-  time_integrator.f90 #
-  mesh.f90 #
-  mesh_content.f90 #
-  field.f90 #
-  vector_calculus.f90 #
-  backend/backend.f90 #
-  module/ibm.f90 #
-  backend/cuda/allocator.f90 #
-  backend/cuda/exec_dist.f90 #
-  backend/cuda/kernels/distributed.f90 #
-  backend/cuda/kernels/spectral_processing.f90 #
-  backend/cuda/sendrecv.f90 #
-  backend/cuda/tdsops.f90 #
-  decomp/decomp_2decompfft.f90 #
-  io/io_base.f90 #
-  io/io_session.f90 #
-  io/io_field_utils.f90 #
-  io/checkpoint_manager.f90 #
-  io/snapshot_manager.f90 #
-  io/dummy/io.f90
+  common.f90
+  field.f90
+  tdsops.f90
+  backend/cuda/common.f90
+  backend/cuda/exec_dist.f90
+  backend/cuda/exec_thom.f90
+  backend/cuda/kernels/distributed.f90
+  backend/cuda/kernels/thomas.f90
+  backend/cuda/sendrecv.f90
+  backend/cuda/tdsops.f90
 )
 if(WITH_ADIOS2)
   list(APPEND IOSRC 
