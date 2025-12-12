@@ -79,9 +79,7 @@ set(TRIDIAGCUDASRC
   tdsops.f90
   backend/cuda/common.f90
   backend/cuda/exec_dist.f90
-  backend/cuda/exec_thom.f90
   backend/cuda/kernels/distributed.f90
-  backend/cuda/kernels/thomas.f90
   backend/cuda/sendrecv.f90
   backend/cuda/tdsops.f90
 )
