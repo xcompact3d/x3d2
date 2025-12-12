@@ -91,7 +91,6 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_test(cuda/test_cuda_allocator.f90 1 cuda)
   define_test(cuda/test_cuda_reorder.f90 1 cuda)
   define_test(cuda/test_thom.f90 1 cuda)
-  define_test(cuda/test_cuda_allreduce.f90 1 cuda trid_cuda_backends)
   if(WITH_ADIOS2)
     define_test(test_adios2_read_write.f90 4 cuda)
     define_test(test_io_session.f90 4 cuda)

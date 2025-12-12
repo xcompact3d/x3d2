@@ -1,3 +1,19 @@
+function(define_backend backendname backendsrc)
+  add_library(${backendname} OBJECT ${${backendsrc}})
+  target_include_directories(${backendname} INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
+  # if CUDA compiler
+  # We require to target link the backends for standalone tests for cuda
+  if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
+    target_link_options(${backendname} INTERFACE "-cuda")
+    target_link_options(${backendname} INTERFACE "-cudalib=cufftmp")
+  elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+    target_link_options(${backendname} INTERFACE -h omp)
+  endif()
+endfunction()
+
+
+
 set(SRC
   allocator.f90
   common.f90
@@ -83,6 +99,8 @@ set(TRIDIAGCUDASRC
   backend/cuda/sendrecv.f90
   backend/cuda/tdsops.f90
 )
+
+
 if(WITH_ADIOS2)
   list(APPEND IOSRC 
     io/adios2/io.f90
@@ -176,18 +194,6 @@ if(WITH_ADIOS2)
   target_compile_options(x3d2 PRIVATE "-DWITH_ADIOS2")
 endif()
 
-add_library(trid_cuda_backends OBJECT ${TRIDIAGCUDASRC})
-target_include_directories(trid_cuda_backends INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
-
-add_library(trid_backends OBJECT ${TRIDIAGSRC})
-target_include_directories(trid_backends INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
-
-# if CUDA compiler
-# We require to target link the backends for standalone tests for cuda
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
-  target_link_options(trid_cuda_backends INTERFACE "-cuda")
-  target_link_options(trid_cuda_backends INTERFACE "-cudalib=cufftmp")
-elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
-  target_link_options(x3d2 INTERFACE -h omp)
-endif()
+# Define standalone tests dependencies
+define_backend(trid_cuda_backends TRIDIAGCUDASRC)
+define_backend(trid_backends TRIDIAGSRC)
