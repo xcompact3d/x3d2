@@ -64,7 +64,14 @@ contains
     ! Stop if the file is missing
     if (mesh%par%is_root()) inquire (file=ibm_file, exist=file_exists)
     call MPI_Bcast(file_exists, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
-    if (ierr /= 0 .or. (.not. file_exists)) then
+    if (ierr /= 0) then
+      if (mesh%par%is_root()) then
+        print *, 'ERROR: MPI_Bcast ', ierr
+      end if
+      call MPI_Abort(MPI_COMM_WORLD, 1, ierr)
+      return
+    end if
+    if(.not. file_exists) then
       if (mesh%par%is_root()) then
         print *, 'ERROR: IBM file not found: ', trim(ibm_file), ierr
       end if
