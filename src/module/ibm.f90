@@ -71,7 +71,7 @@ contains
       call MPI_Abort(MPI_COMM_WORLD, 1, ierr)
       return
     end if
-    if(.not. file_exists) then
+    if (.not. file_exists) then
       if (mesh%par%is_root()) then
         print *, 'ERROR: IBM file not found: ', trim(ibm_file), ierr
       end if
