@@ -604,6 +604,46 @@ contains
 
   end subroutine process_spectral_010_bw
 
+  attributes(global) subroutine enforce_periodicity_x(f_out, f_in, nx)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: f_out
+    real(dp), device, intent(in), dimension(:, :, :) :: f_in
+    integer, value, intent(in) :: nx
+
+    integer :: i, j, k
+
+    j = threadIdx%x
+    k = blockIdx%x
+
+    do i = 1, nx/2
+      f_out(i, j, k) = f_in(2*i - 1, j, k)
+    end do
+    do i = nx/2 + 1, nx
+      f_out(i, j, k) = f_in(2*nx - 2*i + 2, j, k)
+    end do
+
+  end subroutine enforce_periodicity_x
+
+  attributes(global) subroutine undo_periodicity_x(f_out, f_in, nx)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: f_out
+    real(dp), device, intent(in), dimension(:, :, :) :: f_in
+    integer, value, intent(in) :: nx
+
+    integer :: i, j, k
+
+    j = threadIdx%x
+    k = blockIdx%x
+
+    do i = 1, nx/2
+      f_out(2*i - 1, j, k) = f_in(i, j, k)
+      f_out(2*i, j, k) = f_in(nx - i + 1, j, k)
+    end do
+
+  end subroutine undo_periodicity_x
+
   attributes(global) subroutine enforce_periodicity_y(f_out, f_in, ny)
     implicit none
 
@@ -643,5 +683,45 @@ contains
     end do
 
   end subroutine undo_periodicity_y
+
+  attributes(global) subroutine enforce_periodicity_z(f_out, f_in, ny)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: f_out
+    real(dp), device, intent(in), dimension(:, :, :) :: f_in
+    integer, value, intent(in) :: ny
+
+    integer :: i, j, k
+
+    i = threadIdx%x
+    j = threadIdx%y
+
+    do k = 1, nz/2
+      f_out(i, j, k) = f_in(i, j, 2*k - 1)
+    end do
+    do k = nz/2 + 1, nz
+      f_out(i, j, k) = f_in(i, j, 2*nz - 2*k + 2)
+    end do
+
+  end subroutine enforce_periodicity_z
+
+  attributes(global) subroutine undo_periodicity_z(f_out, f_in, ny)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: f_out
+    real(dp), device, intent(in), dimension(:, :, :) :: f_in
+    integer, value, intent(in) :: ny
+
+    integer :: i, j, k
+
+    i = threadIdx%x
+    k = blockIdx%x
+
+    do j = 1, ny/2
+      f_out(i, 2*j - 1, k) = f_in(i, j, k)
+      f_out(i, 2*j, k) = f_in(i, ny - j + 1, k)
+    end do
+
+  end subroutine undo_periodicity_z
 
 end module m_cuda_spectral

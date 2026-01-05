@@ -15,7 +15,9 @@ module m_cuda_poisson_fft
   use m_cuda_allocator, only: cuda_field_t
   use m_cuda_spectral, only: memcpy3D, &
                              process_spectral_000, process_spectral_010, &
+                             enforce_periodicity_x, undo_periodicity_x &
                              enforce_periodicity_y, undo_periodicity_y, &
+                             enforce_periodicity_z, undo_periodicity_z, &
                              process_spectral_010_fw, &
                              process_spectral_010_poisson, &
                              process_spectral_010_bw
@@ -48,10 +50,16 @@ module m_cuda_poisson_fft
   contains
     procedure :: fft_forward => fft_forward_cuda
     procedure :: fft_backward => fft_backward_cuda
-    procedure :: fft_postprocess_000 => fft_postprocess_000_cuda
     procedure :: fft_postprocess_010 => fft_postprocess_010_cuda
+    procedure :: fft_postprocess_100 => fft_postprocess_100_cuda
+    procedure :: fft_postprocess_110 => fft_postprocess_110_cuda
+    procedure :: fft_postprocess_111 => fft_postprocess_111_cuda
+    procedure :: enforce_periodicity_x => enforce_periodicity_x_cuda
+    procedure :: undo_periodicity_x => undo_periodicity_x_cuda
     procedure :: enforce_periodicity_y => enforce_periodicity_y_cuda
     procedure :: undo_periodicity_y => undo_periodicity_y_cuda
+    procedure :: enforce_periodicity_z => enforce_periodicity_z_cuda
+    procedure :: undo_periodicity_z => undo_periodicity_z_cuda
   end type cuda_poisson_fft_t
 
   interface cuda_poisson_fft_t
@@ -388,6 +396,60 @@ contains
 
   end subroutine fft_postprocess_010_cuda
 
+  subroutine enforce_periodicity_x_cuda(self, f_out, f_in)
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f_out
+    class(field_t), intent(in) :: f_in
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_out_dev, f_in_dev
+    type(dim3) :: blocks, threads
+
+    select type (f_out)
+    type is (cuda_field_t)
+      f_out_dev => f_out%data_d
+    end select
+    select type (f_in)
+    type is (cuda_field_t)
+      f_in_dev => f_in%data_d
+    end select
+
+    blocks  = dim3(self%nz_loc, 1, 1)
+    threads = dim3(self%ny_loc, 1, 1)
+    call enforce_periodicity_x<<<blocks, threads>>>( & !&
+      f_out_dev, f_in_dev, self%nx_glob &
+      )
+
+  end subroutine enforce_periodicity_x_cuda
+
+  subroutine undo_periodicity_x_cuda(self, f_out, f_in)
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f_out
+    class(field_t), intent(in) :: f_in
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_out_dev, f_in_dev
+    type(dim3) :: blocks, threads
+
+    select type (f_out)
+    type is (cuda_field_t)
+      f_out_dev => f_out%data_d
+    end select
+    select type (f_in)
+    type is (cuda_field_t)
+      f_in_dev => f_in%data_d
+    end select
+
+    blocks = dim3(1, self%nz_loc, 1)
+    threads = dim3(1, self%ny_loc, 1)
+    call undo_periodicity_x<<<blocks, threads>>>( & !&
+      f_out_dev, f_in_dev, self%nx_glob &
+      )
+
+  end subroutine undo_periodicity_x_cuda
+
   subroutine enforce_periodicity_y_cuda(self, f_out, f_in)
     implicit none
 
@@ -441,5 +503,67 @@ contains
       )
 
   end subroutine undo_periodicity_y_cuda
+
+  subroutine enforce_periodicity_z_cuda(self, f_out, f_in)
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f_out
+    class(field_t), intent(in) :: f_in
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_out_dev, f_in_dev
+    type(dim3) :: blocks, threads
+
+    select type (f_out)
+    type is (cuda_field_t)
+      f_out_dev => f_out%data_d
+    end select
+    select type (f_in)
+    type is (cuda_field_t)
+      f_in_dev => f_in%data_d
+    end select
+
+    ! Single block (z is handled in-kernel)
+    blocks  = dim3(1, 1, 1)
+
+    ! 2D threads for (i,j)
+    threads = dim3(self%nx_loc, self%ny_loc, 1)
+
+    call enforce_periodicity_z<<<blocks, threads>>>( & !&
+      f_out_dev, f_in_dev, self%nz_glob &
+      )
+
+  end subroutine enforce_periodicity_z_cuda
+
+  subroutine undo_periodicity_z_cuda(self, f_out, f_in)
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f_out
+    class(field_t), intent(in) :: f_in
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_out_dev, f_in_dev
+    type(dim3) :: blocks, threads
+
+    select type (f_out)
+    type is (cuda_field_t)
+      f_out_dev => f_out%data_d
+    end select
+    select type (f_in)
+    type is (cuda_field_t)
+      f_in_dev => f_in%data_d
+    end select
+
+    ! Single block (z is handled in-kernel)
+    blocks  = dim3(1, 1, 1)
+
+    ! 2D threads for (i,j)
+    threads = dim3(self%nx_loc, self%ny_loc, 1)
+    
+    call undo_periodicity_y<<<blocks, threads>>>( & !&
+      f_out_dev, f_in_dev, self%nz_glob &
+      )
+
+  end subroutine undo_periodicity_z_cuda
 
 end module m_cuda_poisson_fft

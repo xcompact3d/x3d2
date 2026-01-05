@@ -45,8 +45,15 @@ module m_poisson_fft
     procedure(fft_backward), deferred :: fft_backward
     procedure(fft_postprocess), deferred :: fft_postprocess_000
     procedure(fft_postprocess), deferred :: fft_postprocess_010
+    procedure(fft_postprocess), deferred :: fft_postprocess_100
+    procedure(fft_postprocess), deferred :: fft_postprocess_110
+    procedure(fft_postprocess), deferred :: fft_postprocess_111
+    procedure(field_process), deferred :: enforce_periodicity_x
+    procedure(field_process), deferred :: undo_periodicity_x
     procedure(field_process), deferred :: enforce_periodicity_y
     procedure(field_process), deferred :: undo_periodicity_y
+    procedure(field_process), deferred :: enforce_periodicity_z
+    procedure(field_process), deferred :: undo_periodicity_z
     procedure :: base_init
     procedure :: solve_poisson
     procedure :: stretching_matrix
@@ -174,6 +181,12 @@ contains
         self%stretched_y = .true.
         call self%stretching_matrix(mesh%geo, xdirps, ydirps, zdirps)
       end if
+    else if ((.not. self%periodic_x) .and. (self%periodic_y) & .and. (self%periodic_z)) then
+      self%poisson => poisson_100
+    else if ((.not. self%periodic_x) .and. (.not. self%periodic_y) & .and. (self%periodic_z)) then
+      self%poisson => poisson_110
+    else if ((.not. self%periodic_x) .and. (.not. self%periodic_y) & .and. (.not. self%periodic_z)) then
+      self%poisson => poisson_111
     else
       error stop 'Requested BCs are not supported in FFT-based Poisson solver!'
     end if
@@ -186,7 +199,6 @@ contains
     class(field_t), intent(inout) :: f, temp
 
     call self%poisson(f, temp)
-
   end subroutine solve_poisson
 
   subroutine poisson_000(self, f, temp)
@@ -198,7 +210,6 @@ contains
     call self%fft_forward(f)
     call self%fft_postprocess_000
     call self%fft_backward(f)
-
   end subroutine poisson_000
 
   subroutine poisson_010(self, f, temp)
@@ -214,8 +225,58 @@ contains
     call self%fft_backward(temp)
 
     call self%undo_periodicity_y(f, temp)
-
   end subroutine poisson_010
+
+  subroutine poisson_100(self, f, temp)
+    implicit none
+
+    class(poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f, temp
+
+    call self%enforce_periodicity_x(temp, f)
+
+    call self%fft_forward(temp)
+    call self%fft_postprocess_100
+    call self%fft_backward(temp)
+
+    call self%undo_periodicity_x(f, temp)
+  end subroutine poisson_100
+
+  subroutine poisson_110(self, f, temp)
+    implicit none
+
+    class(poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f, temp
+
+    call self%enforce_periodicity_x(temp, f)
+    call self%enforce_periodicity_y(temp, f)
+
+    call self%fft_forward(temp)
+    call self%fft_postprocess_110
+    call self%fft_backward(temp)
+
+    call self%undo_periodicity_x(f, temp)
+    call self%undo_periodicity_y(f, temp)
+  end subroutine poisson_110
+
+  subroutine poisson_111(self, f, temp)
+    implicit none
+
+    class(poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f, temp
+
+    call self%enforce_periodicity_x(temp, f)
+    call self%enforce_periodicity_y(temp, f)
+    call self%enforce_periodicity_z(temp, f)
+
+    call self%fft_forward(temp)
+    call self%fft_postprocess_111
+    call self%fft_backward(temp)
+
+    call self%undo_periodicity_x(f, temp)
+    call self%undo_periodicity_y(f, temp)
+    call self%undo_periodicity_z(f, temp)
+  end subroutine poisson_111
 
   subroutine stretching_matrix(self, geo, xdirps, ydirps, zdirps)
     !! Stretching necessitates a special operation in spectral space.
