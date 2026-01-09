@@ -14,7 +14,7 @@ module m_cuda_poisson_fft
 
   use m_cuda_allocator, only: cuda_field_t
   use m_cuda_spectral, only: memcpy3D, &
-                             process_spectral_000, process_spectral_010, &
+                             process_spectral_000, process_spectral_010, process_spectral_100,&
                              enforce_periodicity_x, undo_periodicity_x &
                              enforce_periodicity_y, undo_periodicity_y, &
                              enforce_periodicity_z, undo_periodicity_z, &
