@@ -2,6 +2,12 @@ module m_mesh_content
 
   use m_common, only: dp, pi
   implicit none
+  type:: bound_t
+    !> Boundary condition names
+    character(len=20) :: x(2)
+    character(len=20) :: y(2)
+    character(len=20) :: z(2)
+  end type bound_t
 
   type :: geo_t
     !! Stores geometry information
@@ -25,6 +31,8 @@ module m_mesh_content
     real(dp), allocatable, dimension(:, :) :: vert_ds, vert_ds2, vert_d2s
     !> Stretching factors at midpoints
     real(dp), allocatable, dimension(:, :) :: midp_ds, midp_ds2, midp_d2s
+    !> Adding the boundary conditions for cos2pix case
+    type(bound_t) :: BC
   contains
     procedure :: obtain_coordinates
   end type
