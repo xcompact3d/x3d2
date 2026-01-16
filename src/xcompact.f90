@@ -11,6 +11,7 @@ program xcompact
   use m_case_cylinder, only: case_cylinder_t
   use m_case_generic, only: case_generic_t
   use m_case_tgv, only: case_tgv_t
+  use m_case_cos2pix, only: case_cos2pix_t
 
 #ifdef CUDA
   use m_cuda_allocator
@@ -84,6 +85,10 @@ program xcompact
                 domain_cfg%BC_z, domain_cfg%stretching, domain_cfg%beta, &
                 use_2decomp=use_2decomp)
 
+  mesh%geo%BC%x = domain_cfg%BC_x
+  mesh%geo%BC%y = domain_cfg%BC_y
+  mesh%geo%BC%z = domain_cfg%BC_z
+  
   ! get local vertex dimensions
   dims = mesh%get_dims(VERT)
 #ifdef CUDA
@@ -123,6 +128,9 @@ program xcompact
   case ('tgv')
     allocate (case_tgv_t :: flow_case)
     flow_case = case_tgv_t(backend, mesh, host_allocator)
+  case ('cos2pix')
+    allocate (case_cos2pix_t :: flow_case)
+    flow_case = case_cos2pix_t(backend, mesh, host_allocator)
   case default
     error stop 'Undefined flow_case.'
   end select
