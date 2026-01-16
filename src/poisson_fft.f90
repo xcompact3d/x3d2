@@ -45,6 +45,9 @@ module m_poisson_fft
     procedure(fft_backward), deferred :: fft_backward
     procedure(fft_postprocess), deferred :: fft_postprocess_000
     procedure(fft_postprocess), deferred :: fft_postprocess_010
+    procedure(fft_postprocess), deferred :: fft_postprocess_100
+    procedure(field_process), deferred :: enforce_periodicity_x
+    procedure(field_process), deferred :: undo_periodicity_x
     procedure(field_process), deferred :: enforce_periodicity_y
     procedure(field_process), deferred :: undo_periodicity_y
     procedure :: base_init
@@ -174,6 +177,12 @@ contains
         self%stretched_y = .true.
         call self%stretching_matrix(mesh%geo, xdirps, ydirps, zdirps)
       end if
+    else if ((.not. self%periodic_x) .and. (self%periodic_y) &
+             .and. (self%periodic_z)) then
+      if (mesh%par%nproc > 1) then
+        error stop 'Multiple ranks are not yet supported for non-periodic BCs!'
+      end if
+      self%poisson => poisson_100
     else
       error stop 'Requested BCs are not supported in FFT-based Poisson solver!'
     end if
@@ -200,6 +209,23 @@ contains
     call self%fft_backward(f)
 
   end subroutine poisson_000
+
+  subroutine poisson_100(self, f, temp)
+    implicit none
+
+    class(poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f, temp
+
+    call self%enforce_periodicity_x(temp, f)
+
+    call self%fft_forward(temp)
+    call self%fft_postprocess_100
+    call self%fft_backward(temp)
+
+    call self%undo_periodicity_x(f, temp)
+
+  end subroutine poisson_100
+
 
   subroutine poisson_010(self, f, temp)
     implicit none
