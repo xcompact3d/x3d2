@@ -8,6 +8,7 @@ program xcompact
   use m_config, only: domain_config_t, solver_config_t
   use m_mesh
   use m_case_channel, only: case_channel_t
+  use m_case_cylinder, only: case_cylinder_t
   use m_case_generic, only: case_generic_t
   use m_case_tgv, only: case_tgv_t
 
@@ -113,6 +114,9 @@ program xcompact
   case ('channel')
     allocate (case_channel_t :: flow_case)
     flow_case = case_channel_t(backend, mesh, host_allocator)
+  case ('cylinder')
+    allocate (case_cylinder_t :: flow_case)
+    flow_case = case_cylinder_t(backend, mesh, host_allocator)
   case ('generic')
     allocate (case_generic_t :: flow_case)
     flow_case = case_generic_t(backend, mesh, host_allocator)
