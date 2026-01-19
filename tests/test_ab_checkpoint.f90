@@ -32,7 +32,7 @@ program test_ab_checkpoint
   real(dp) :: L_global(3)
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
   type(old_history_t), allocatable :: olds_ref(:)
-  integer :: iter, idx, checkpoint_iter, nolds_total
+  integer :: iter, idx, checkpoint_iter, nolds_total, checkpoint_freq
   real(dp), parameter :: dt = 1.0e-3_dp
   real(dp), parameter :: tol = 1.0e-15_dp
   character(len=*), parameter :: ckpt_prefix = 'ab3_test_checkpoint'
@@ -59,8 +59,9 @@ program test_ab_checkpoint
   omp_backend = omp_backend_t(mesh, allocator)
   backend => omp_backend
 
+  checkpoint_freq = 5
   call init_solver(solver_cont, backend, mesh, allocator, dt)
-  call init_checkpoint_config(chk_mgr_write, ckpt_prefix, 5)
+  call init_checkpoint_config(chk_mgr_write, ckpt_prefix, checkpoint_freq)
 
   call setup_curr(curr, solver_cont)
   call allocate_derivs(allocator, deriv)
@@ -85,7 +86,7 @@ program test_ab_checkpoint
   call release_solver_fields(solver_cont)
 
   call init_solver(solver_restart, backend, mesh, allocator, dt)
-  call init_checkpoint_config(chk_mgr_restart, ckpt_prefix, 5)
+  call init_checkpoint_config(chk_mgr_restart, ckpt_prefix, checkpoint_freq)
   chk_mgr_restart%config%restart_from_checkpoint = .true.
   chk_mgr_restart%config%restart_file = trim(ckpt_prefix)//'_000005.bp'
 
@@ -261,8 +262,6 @@ contains
     integer :: ierr
     if (irank /= 0) return
     call execute_command_line('rm -rf '//trim(prefix)//'_*.bp', exitstat=ierr)
-    call execute_command_line('rm -f '//trim(prefix)//'_temp.bp', &
-                              exitstat=ierr)
   end subroutine cleanup_checkpoint_files
 
 end program test_ab_checkpoint
