@@ -223,18 +223,19 @@ contains
       & use concrete implementation"
   end subroutine write_data_integer
 
-  subroutine write_data_real(self, variable_name, value, file_handle)
+  subroutine write_data_real(self, variable_name, value, file_handle, use_sp)
     class(io_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
     real(dp), intent(in) :: value
     class(io_file_t), intent(inout) :: file_handle
+    logical, intent(in), optional :: use_sp
     error stop "write_data_real should not be called - &
       & use concrete implementation"
   end subroutine write_data_real
 
   subroutine write_data_array_3d( &
     self, variable_name, array, file_handle, &
-    shape_dims, start_dims, count_dims &
+    shape_dims, start_dims, count_dims, use_sp &
     )
     class(io_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
@@ -243,6 +244,7 @@ contains
     integer(i8), intent(in) :: shape_dims(3)
     integer(i8), intent(in) :: start_dims(3)
     integer(i8), intent(in) :: count_dims(3)
+    logical, intent(in), optional :: use_sp
     error stop "write_data_array_3d should not be called - &
       & use concrete implementation"
   end subroutine write_data_array_3d

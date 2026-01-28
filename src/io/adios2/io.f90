@@ -33,9 +33,9 @@ module m_io_backend
                     adios2_set_selection, adios2_put, &
                     adios2_get, adios2_remove_all_variables, &
                     adios2_found, adios2_constant_dims, &
-                    adios2_type_dp, adios2_type_integer4
+                    adios2_type_dp, adios2_type_integer4, adios2_type_real
   use mpi, only: MPI_COMM_NULL, MPI_Initialized, MPI_Comm_rank
-  use m_common, only: dp, i8
+  use m_common, only: dp, i8, sp, is_sp
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
                        io_mode_read, io_mode_write
 
@@ -114,6 +114,19 @@ contains
     backend = IO_BACKEND_ADIOS2
   end function get_default_backend
 
+  function get_adios2_vartype(use_sp) result(vartype)
+    logical, intent(in) :: use_sp    !! flag for single precision output
+    integer :: vartype
+
+    if (use_sp) then
+      vartype = adios2_type_real
+    else if (is_sp) then
+      vartype = adios2_type_real
+    else
+      vartype = adios2_type_dp
+    end if
+  end function get_adios2_vartype
+
   subroutine reader_init_adios2(self, comm, name)
     class(io_adios2_reader_t), intent(inout) :: self
     integer, intent(in) :: comm
@@ -127,7 +140,7 @@ contains
     call MPI_Initialized(is_mpi_initialised, ierr)
     if (.not. is_mpi_initialised) &
        call self%handle_error(1, "MPI must be initialised &
-                              & before calling ADIOS2 init")
+                              &before calling ADIOS2 init")
 
     self%comm = comm
     call MPI_Comm_rank(self%comm, comm_rank, ierr)
@@ -322,7 +335,7 @@ contains
     call MPI_Initialized(is_mpi_initialised, ierr)
     if (.not. is_mpi_initialised) &
        call self%handle_error(1, "MPI must be initialised &
-                              & before calling ADIOS2 init")
+                              &before calling ADIOS2 init")
 
     self%comm = comm
     call MPI_Comm_rank(self%comm, comm_rank, ierr)
@@ -362,7 +375,7 @@ contains
     if (mode == io_mode_write) then
       call adios2_remove_all_variables(self%io_handle, ierr)
       call self%handle_error(ierr, "Failed to remove old ADIOS2 variables &
-                             & before open")
+                             &before open")
     end if
 
     call adios2_open( &
@@ -431,14 +444,26 @@ contains
     end select
   end subroutine write_data_integer_adios2
 
-  subroutine write_data_real_adios2(self, variable_name, value, file_handle)
+  subroutine write_data_real_adios2(self, variable_name, value, file_handle, &
+                                     use_sp)
     class(io_adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
     real(dp), intent(in) :: value
     class(io_file_t), intent(inout) :: file_handle
+    logical, intent(in), optional :: use_sp
 
     type(adios2_variable) :: var
     integer :: ierr
+    integer :: vartype
+    real(sp) :: value_sp
+    logical :: convert_to_sp
+
+    ! Determine if we should convert to single precision
+    convert_to_sp = .false.
+    if (present(use_sp)) convert_to_sp = use_sp
+
+    ! Get the appropriate ADIOS2 variable type
+    vartype = get_adios2_vartype(convert_to_sp)
 
     select type (file_handle)
     type is (io_adios2_file_t)
@@ -446,15 +471,24 @@ contains
 
       if (ierr /= adios2_found) then
         call adios2_define_variable(var, self%io_handle, variable_name, &
-                                    adios2_type_dp, ierr)
-        call self%handle_error(ierr, "Error defining ADIOS2 scalar &
-                                     & double precision real variable")
+                                    vartype, ierr)
+        call self%handle_error(ierr, "Error defining ADIOS2 &
+                                     &scalar real variable")
       end if
 
-      call adios2_put( &
-        file_handle%engine, var, value, adios2_mode_deferred, ierr)
-      call self%handle_error(ierr, "Error writing ADIOS2 scalar &
-                                   & double precision real data")
+      ! Write data - convert to single precision if needed
+      if (convert_to_sp .and. .not. is_sp) then
+        value_sp = real(value, sp)
+        ! Use sync mode to ensure data is copied before value_sp goes out of scope
+        call adios2_put( &
+          file_handle%engine, var, value_sp, adios2_mode_sync, ierr)
+        call self%handle_error(ierr, "Error writing ADIOS2 scalar &
+                                     &single precision real data")
+      else
+        call adios2_put( &
+          file_handle%engine, var, value, adios2_mode_deferred, ierr)
+        call self%handle_error(ierr, "Error writing ADIOS2 scalar real data")
+      end if
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
     end select
@@ -462,7 +496,7 @@ contains
 
   subroutine write_data_array_3d_adios2( &
     self, variable_name, array, file_handle, &
-    shape_dims, start_dims, count_dims &
+    shape_dims, start_dims, count_dims, use_sp &
     )
     class(io_adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
@@ -471,9 +505,20 @@ contains
     integer(i8), intent(in) :: shape_dims(3)
     integer(i8), intent(in) :: start_dims(3)
     integer(i8), intent(in) :: count_dims(3)
+    logical, intent(in), optional :: use_sp
 
     type(adios2_variable) :: var
     integer :: ierr
+    integer :: vartype
+    real(sp), allocatable :: array_sp(:, :, :)
+    logical :: convert_to_sp
+
+    ! Determine if we should convert to single precision
+    convert_to_sp = .false.
+    if (present(use_sp)) convert_to_sp = use_sp
+
+    ! Get the appropriate ADIOS2 variable type
+    vartype = get_adios2_vartype(convert_to_sp)
 
     select type (file_handle)
     type is (io_adios2_file_t)
@@ -481,17 +526,30 @@ contains
 
       if (ierr /= adios2_found) then
         call adios2_define_variable(var, self%io_handle, variable_name, &
-                                    adios2_type_dp, 3, shape_dims, &
+                                    vartype, 3, shape_dims, &
                                     start_dims, count_dims, &
                                     adios2_constant_dims, ierr)
-        call self%handle_error(ierr, "Error defining ADIOS2 3D array &
-                                     & double precision real variable")
+        call self%handle_error(ierr, "Error defining ADIOS2 &
+                                     &3D array real variable")
       end if
 
-      call adios2_put( &
-        file_handle%engine, var, array, adios2_mode_deferred, ierr)
-      call self%handle_error(ierr, "Error writing ADIOS2 3D array &
-                                   & double precision real data")
+      ! Write data - convert to single precision if needed
+      if (convert_to_sp .and. .not. is_sp) then
+        ! Allocate temporary single precision buffer
+        allocate (array_sp(size(array, 1), size(array, 2), size(array, 3)))
+        array_sp = real(array, sp)
+        ! Use sync mode to ensure data is copied before buffer is deallocated
+        call adios2_put( &
+          file_handle%engine, var, array_sp, adios2_mode_sync, ierr)
+        deallocate (array_sp)
+        call self%handle_error(ierr, "Error writing ADIOS2 3D array &
+                                     &single precision real data")
+      else
+        call adios2_put( &
+          file_handle%engine, var, array, adios2_mode_deferred, ierr)
+        call self%handle_error(ierr, "Error writing ADIOS2 &
+                                     &3D array real data")
+      end if
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
     end select
@@ -539,7 +597,7 @@ contains
         attr, self%io_handle, attribute_name, values, num_elements, ierr)
       call self%handle_error( &
                              ierr, "Error defining ADIOS2 real &
-                             & array attribute " &
+                             &array attribute " &
                              //trim(attribute_name))
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
