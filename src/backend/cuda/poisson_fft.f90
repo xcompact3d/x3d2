@@ -144,11 +144,11 @@ contains
     ierr = cufftMpAttachComm(poisson_fft%plan3D_fw, CUFFT_COMM_MPI, &
                              MPI_COMM_WORLD)
     if (is_sp) then
-        ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_R2C, &
-                               worksize)
+      ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_R2C, &
+                             worksize)
     else
-        ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z, &
-                               worksize)
+      ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z, &
+                             worksize)
     end if
     if (ierr /= 0) then
       write (stderr, *), 'cuFFT Error Code: ', ierr
@@ -159,11 +159,11 @@ contains
     ierr = cufftMpAttachComm(poisson_fft%plan3D_bw, CUFFT_COMM_MPI, &
                              MPI_COMM_WORLD)
     if (is_sp) then
-        ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_C2R, &
-                               worksize)
+      ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_C2R, &
+                             worksize)
     else
-        ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D, &
-                               worksize)
+      ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D, &
+                             worksize)
     end if
     if (ierr /= 0) then
       write (stderr, *), 'cuFFT Error Code: ', ierr
