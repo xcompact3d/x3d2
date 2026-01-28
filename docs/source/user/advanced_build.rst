@@ -59,13 +59,52 @@ To use the built-in ADIOS2 (default behavior):
 Library Path Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you already have an ADIOS2 installation but want to use the version built by x3d2, you may need to set the library path to ensure that the correct ADIOS2 libraries are used at runtime:
+The project is configured to automatically download and build its own version of the ADIOS2 library. However, if you have another version of ADIOS2 already installed globally on your system, the runtime linker might mistakenly load the system's version.
+This can lead to ``undefined symbol`` errors if the system's ADIOS2 was built with a different compiler than the one used for this project, or with an incompatible MPI implementation.
+
+If you have ParaView installed, it often includes its own version of ADIOS2 which may conflict with the project's custom-built ADIOS2.
+
+Prepending to LD_LIBRARY_PATH
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The safest way to prioritise your project's ADIOS2 while keeping access to other system libraries:
+
+1. Navigate into your build directory:
+
+   .. code-block:: bash
+
+      cd <path-to-your-build-directory>
+
+2. Run commands by prepending the project's ADIOS2 library path:
+
+   .. code-block:: bash
+
+      # For test suite
+      LD_LIBRARY_PATH=./adios2-build/adios2-install/lib:$LD_LIBRARY_PATH make test
+
+      # For running with mpirun
+      LD_LIBRARY_PATH=./adios2-build/adios2-install/lib:$LD_LIBRARY_PATH mpirun -np 2 ./src/xcompact <input_file>
+
+Full Replacement (Aggressive Isolation)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you continue to experience conflicts even with prepending, you can completely replace ``LD_LIBRARY_PATH``:
 
 .. code-block:: bash
 
-   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/build/adios2/lib
+   # From build directory - replaces LD_LIBRARY_PATH entirely
+   LD_LIBRARY_PATH=./adios2-build/adios2-install/lib mpirun -np 2 ./src/xcompact <input_file>
 
-This is particularly important when using a custom-built ADIOS2 with a different MPI implementation than what's available system-wide.
+When to use this:
+
+- When prepending doesn't resolve the conflict
+- When you're certain your build uses RPATH for other dependencies (typical with modern CMake)
+
+Caution:
+
+- This removes all other paths from ``LD_LIBRARY_PATH``
+- Only use if you understand your executable's dependency structure
+- Your MPI, system libraries, etc. should be found via RPATH or system default paths
 
 Verifying Your Installation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -106,12 +145,32 @@ Common issues include:
 - MPI library mismatch between ADIOS2 and x3d2
 - Missing libraries (shown as "not found")
 
-If the wrong libraries are being loaded, adjust your ``LD_LIBRARY_PATH`` environment variable:
+Configuring Single Precision Mode
+---------------------------------
+
+x3d2 can be compiled to use single precision (32-bit) floating-point numbers as the default precision for all calculations, which can provide performance benefits and memory savings on some hardware.
+
+Enabling Single Precision
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To compile x3d2 in single precision mode, use the ``SINGLE_PREC`` CMake option:
 
 .. code-block:: bash
 
-   # To prioritise custom-built ADIOS2:
-   export LD_LIBRARY_PATH=$(pwd)/build/adios2/lib:$LD_LIBRARY_PATH
-   
-   # Or to prioritise system ADIOS2 (if needed):
-   export LD_LIBRARY_PATH=/usr/lib:/usr/local/lib:$LD_LIBRARY_PATH
+   cmake -DSINGLE_PREC=ON ..
+
+This will define the ``SINGLE_PREC`` preprocessor macro, causing the code to use single precision (``real32``) as the default floating-point type throughout the application.
+
+Single Precision and Snapshot Files
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+IO precision depends on two factors:
+
+1. Compile-time precision (``-DSINGLE_PREC=ON``): Controls simulation precision. All I/O (checkpoints and snapshots) uses the simulation precision.
+
+2. Runtime snapshot precision (``snapshot_sp=.true.`` in input file): Only available when compiled in double precision. Converts snapshots to single precision while keeping simulation and checkpoints in double precision.
+
+Available combinations:
+
+- Double precision simulation (default): checkpoints in double precision, snapshots configurable via ``snapshot_sp``
+- Single precision simulation (``-DSINGLE_PREC=ON``): all I/O in single precision, ``snapshot_sp`` ignored

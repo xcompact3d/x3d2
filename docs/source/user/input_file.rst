@@ -15,10 +15,11 @@ These parameters are specified in the ``checkpoint_params`` namelist block in th
      keep_checkpoint = .false.
      checkpoint_prefix = "checkpoint"
      snapshot_prefix = "snapshot"
+     snapshot_sp = .false.
      output_stride = 2, 2, 2
      restart_from_checkpoint = .false.
      restart_file = ""
-   /
+   /End
 
 ``checkpoint_freq``: Frequency (in timesteps) at which to save checkpoint files for simulation restart. Set to ``0`` to disable checkpointing.
   **Default:** ``0``
@@ -34,6 +35,9 @@ These parameters are specified in the ``checkpoint_params`` namelist block in th
 
 ``snapshot_prefix``: String prefix for visualisation snapshot filenames. Each snapshot will be named as ``<snapshot_prefix>_XXXXXX.bp``.
   **Default:** ``"snapshot"``
+
+``snapshot_sp``: Boolean flag to save visualisation snapshots in single precision (float) instead of double precision (double). This reduces file size but may lose some precision.
+**Default:** ``false`` (double precision)
 
 ``output_stride``: Three-element array specifying the spatial stride (subsampling) in ``X``, ``Y``, and ``Z`` directions for visualisation snapshots. Using values greater than ``1`` reduces file size and increases I/O performance, but decreases visualisation resolution.
   **Default:** ``[1, 1, 1]``

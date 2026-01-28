@@ -242,17 +242,18 @@ contains
     call self%writer%write_data(variable_name, value, self%file)
   end subroutine write_data_integer
 
-  subroutine write_data_real(self, variable_name, value)
+  subroutine write_data_real(self, variable_name, value, use_sp)
     class(writer_session_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
     real(dp), intent(in) :: value
+    logical, intent(in), optional :: use_sp
 
     if (.not. self%is_open) error stop "IO session not open"
-    call self%writer%write_data(variable_name, value, self%file)
+    call self%writer%write_data(variable_name, value, self%file, use_sp)
   end subroutine write_data_real
 
   subroutine write_data_array_3d( &
-    self, variable_name, array, shape_dims, start_dims, count_dims &
+    self, variable_name, array, shape_dims, start_dims, count_dims, use_sp &
     )
     class(writer_session_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
@@ -260,11 +261,12 @@ contains
     integer(i8), intent(in) :: shape_dims(3)
     integer(i8), intent(in) :: start_dims(3)
     integer(i8), intent(in) :: count_dims(3)
+    logical, intent(in), optional :: use_sp
 
     if (.not. self%is_open) error stop "IO session not open"
     call self%writer%write_data( &
       variable_name, array, self%file, &
-      shape_dims, start_dims, count_dims &
+      shape_dims, start_dims, count_dims, use_sp &
       )
   end subroutine write_data_array_3d
 

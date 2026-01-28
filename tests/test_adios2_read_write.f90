@@ -1,8 +1,9 @@
 program test_adios2
   use mpi
   use m_io_backend, only: allocate_io_writer, allocate_io_reader
-  use m_io_base, only: io_writer_t, io_reader_t, io_file_t, io_mode_write, io_mode_read
-  use m_common, only: dp, i8
+  use m_io_base, only: io_writer_t, io_reader_t, io_file_t, io_mode_write, &
+                       io_mode_read
+  use m_common, only: dp, i8, is_sp
   use iso_fortran_env, only: stderr => error_unit
   implicit none
 
@@ -20,7 +21,7 @@ program test_adios2
   ! application variables
   integer :: i, j, k, rank_id, inx = 3, iny = 4, inz = 2
   logical :: allpass = .true.
-  real(dp) :: expected
+  real(dp) :: expected, tolerance
 
   ! launch MPI
   call MPI_Init(ierr)
@@ -34,7 +35,8 @@ program test_adios2
   do k = 1, inz
     do j = 1, iny
       do i = 1, inx
-        data_write(i, j, k) = real(irank*inx*iny*inz + (k - 1)*inx*iny + (j - 1)*inx + (i - 1), dp)
+        data_write(i, j, k) = real(irank*inx*iny*inz + (k - 1)*inx*iny &
+                           + (j - 1)*inx + (i - 1), dp)
       end do
     end do
   end do
@@ -73,16 +75,24 @@ program test_adios2
     call adios2_reader%read_data("data3D", data_read, file, &
                                  start_dims=sel_start, count_dims=sel_count)
 
+    if (is_sp) then
+      tolerance = 1.e-6_dp
+    else
+      tolerance = 1.e-8_dp
+    end if
+
     ! verify data
     do k = 1, sel_count(3)
       do j = 1, sel_count(2)
         do i = 1, sel_count(1)
           ! calculate expected value based on original data pattern
           rank_id = (i - 1)/inx ! determine which rank wrote this data
-          expected = rank_id*inx*iny*inz + (k - 1)*inx*iny + (j - 1)*inx + mod(i - 1, inx)
-          if (abs(data_read(i, j, k) - expected) > 1.e-8_dp) then
+          expected = rank_id*inx*iny*inz + (k - 1)*inx*iny + &
+                     (j - 1)*inx + mod(i - 1, inx)
+          if (abs(data_read(i, j, k) - expected) > tolerance) then
             allpass = .false.
-            print *, "Data mismatch at (", i, ",", j, ",", k, "): ", data_read(i, j, k)
+            print *, "Data mismatch at (", i, ",", j, ",", k, "): ", &
+              data_read(i, j, k), " expected: ", expected
           end if
         end do
       end do
