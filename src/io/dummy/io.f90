@@ -237,7 +237,7 @@ contains
   end subroutine write_data_integer_dummy
 
   subroutine write_data_real_dummy(self, variable_name, value, file_handle, &
-                                    use_sp)
+                                   use_sp)
     class(io_dummy_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
     real(dp), intent(in) :: value
