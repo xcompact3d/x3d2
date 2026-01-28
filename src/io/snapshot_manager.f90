@@ -79,7 +79,7 @@ contains
       print *, 'Snapshot prefix: ', trim(self%config%snapshot_prefix)
       print *, 'Output stride: ', self%output_stride
       print *, 'Snapshot precision: ', merge('Single', 'Double', &
-        self%config%snapshot_sp)
+                                             self%config%snapshot_sp)
     end if
   end subroutine configure_output
 

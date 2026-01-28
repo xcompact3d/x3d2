@@ -445,7 +445,7 @@ contains
   end subroutine write_data_integer_adios2
 
   subroutine write_data_real_adios2(self, variable_name, value, file_handle, &
-                                     use_sp)
+                                    use_sp)
     class(io_adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
     real(dp), intent(in) :: value
