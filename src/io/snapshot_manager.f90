@@ -33,6 +33,7 @@ module m_snapshot_manager
     character(len=4096) :: vtk_xml = ""
     logical :: is_snapshot_file_open = .false.
     type(writer_session_t) :: snapshot_writer
+    logical :: convert_to_sp = .false.              !! Flag for single precision snapshots
   contains
     procedure :: init
     procedure :: handle_snapshot_step
@@ -71,11 +72,14 @@ contains
     call MPI_Comm_rank(comm, myrank, ierr)
 
     self%output_stride = self%config%output_stride
+    self%convert_to_sp = self%config%snapshot_sp
 
     if (myrank == 0 .and. get_default_backend() /= IO_BACKEND_DUMMY) then
       print *, 'Snapshot frequency: ', self%config%snapshot_freq
       print *, 'Snapshot prefix: ', trim(self%config%snapshot_prefix)
       print *, 'Output stride: ', self%output_stride
+      print *, 'Snapshot precision: ', merge('Single', 'Double', &
+        self%config%snapshot_sp)
     end if
   end subroutine configure_output
 
@@ -262,8 +266,8 @@ contains
         trim(field_names(i_field)), &
         self%field_buffers(i_field)%buffer, &
         self%last_output_shape, &
-        output_start, output_count &
-        )
+        output_start, output_count, &
+        self%convert_to_sp)
     end do
   end subroutine write_fields
 

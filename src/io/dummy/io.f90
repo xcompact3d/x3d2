@@ -236,17 +236,19 @@ contains
     ! silently ignore write operations
   end subroutine write_data_integer_dummy
 
-  subroutine write_data_real_dummy(self, variable_name, value, file_handle)
+  subroutine write_data_real_dummy(self, variable_name, value, file_handle, &
+                                    use_sp)
     class(io_dummy_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
     real(dp), intent(in) :: value
     class(io_file_t), intent(inout) :: file_handle
+    logical, intent(in), optional :: use_sp
     ! silently ignore write operations
   end subroutine write_data_real_dummy
 
   subroutine write_data_array_3d_dummy( &
     self, variable_name, array, file_handle, &
-    shape_dims, start_dims, count_dims &
+    shape_dims, start_dims, count_dims, use_sp &
     )
     class(io_dummy_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
@@ -255,6 +257,7 @@ contains
     integer(i8), intent(in) :: shape_dims(3)
     integer(i8), intent(in) :: start_dims(3)
     integer(i8), intent(in) :: count_dims(3)
+    logical, intent(in), optional :: use_sp
     ! silently ignore write operations
   end subroutine write_data_array_3d_dummy
 
