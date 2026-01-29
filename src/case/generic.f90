@@ -1,6 +1,26 @@
 module m_case_generic
-  !! An example case set up to run and sustain a freestream flow.
-  !! This is a good place to start for adding a new flow case.
+  !! Generic freestream flow case for general-purpose simulations.
+  !!
+  !! This module provides a minimal template for setting up custom flow
+  !! cases. It implements a simple uniform freestream flow (u=1, v=0, w=0)
+  !! with no forcing or boundary corrections.
+  !!
+  !! **Use Cases:**
+  !! - Starting point for implementing new flow cases
+  !! - Testing solver functionality with simple initial conditions
+  !! - Freestream simulations with immersed boundaries (add IBM via forcings)
+  !! - Custom flow setups requiring minimal default behaviour
+  !!
+  !! **Default Configuration:**
+  !! - Initial condition: Uniform flow u=1, v=w=0
+  !! - No boundary condition corrections
+  !! - No forcing terms
+  !! - No pre-correction
+  !! - Minimal postprocessing
+  !!
+  !! **Customisation:**
+  !! Users can extend this case or modify the procedures directly to implement
+  !! specific flow physics, boundary conditions, or forcing terms.
   use iso_fortran_env, only: stderr => error_unit
 
   use m_allocator, only: allocator_t
@@ -14,12 +34,13 @@ module m_case_generic
   implicit none
 
   type, extends(base_case_t) :: case_generic_t
+    !! Generic case with minimal default behaviour.
   contains
-    procedure :: boundary_conditions => boundary_conditions_generic
-    procedure :: initial_conditions => initial_conditions_generic
-    procedure :: forcings => forcings_generic
-    procedure :: pre_correction => pre_correction_generic
-    procedure :: postprocess => postprocess_generic
+    procedure :: boundary_conditions => boundary_conditions_generic !! No action (use domain BCs)
+    procedure :: initial_conditions => initial_conditions_generic   !! Uniform freestream
+    procedure :: forcings => forcings_generic                       !! No forcing
+    procedure :: pre_correction => pre_correction_generic           !! No correction
+    procedure :: postprocess => postprocess_generic                 !! Minimal diagnostics
   end type case_generic_t
 
   interface case_generic_t
@@ -29,12 +50,13 @@ module m_case_generic
 contains
 
   function case_generic_init(backend, mesh, host_allocator) result(flow_case)
+    !! Initialise generic flow case.
     implicit none
 
-    class(base_backend_t), target, intent(inout) :: backend
-    type(mesh_t), target, intent(inout) :: mesh
-    type(allocator_t), target, intent(inout) :: host_allocator
-    type(case_generic_t) :: flow_case
+    class(base_backend_t), target, intent(inout) :: backend         !! Computational backend
+    type(mesh_t), target, intent(inout) :: mesh                     !! Mesh with decomposition
+    type(allocator_t), target, intent(inout) :: host_allocator      !! Host memory allocator
+    type(case_generic_t) :: flow_case                               !! Initialised generic case
 
     call flow_case%case_init(backend, mesh, host_allocator)
 
@@ -48,9 +70,19 @@ contains
   end subroutine boundary_conditions_generic
 
   subroutine initial_conditions_generic(self)
+    !! Set initial velocity field for generic freestream case.
+    !!
+    !! Initialises a uniform flow field with:
+    !! - \( u = 1 \) (streamwise velocity)
+    !! - \( v = 0 \) (cross-stream velocity)
+    !! - \( w = 0 \) (spanwise velocity)
+    !!
+    !! All velocity components are located at vertices (VERT).
+    !! This simple uniform flow serves as a starting point that users
+    !! can modify for their specific applications.
     implicit none
 
-    class(case_generic_t) :: self
+    class(case_generic_t) :: self !! Generic case instance
 
     call self%solver%u%fill(1._dp)
     call self%solver%v%fill(0._dp)
