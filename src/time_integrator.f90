@@ -1,4 +1,26 @@
 module m_time_integrator
+  !! Time integration schemes for temporal advancement.
+  !!
+  !! This module provides explicit time integration methods for advancing
+  !! solutions in time. It supports two families of schemes:
+  !!
+  !! **1. Runge-Kutta (RK) Methods**
+  !! Multi-stage schemes that achieve high-order accuracy within a single
+  !! timestep. Supported orders: RK1 (Euler), RK2, RK3, RK4. Each stage
+  !! requires an evaluation of the right-hand side (derivative).
+  !!
+  !! **2. Adams-Bashforth (AB) Methods**
+  !! Multi-step schemes that use derivative information from previous
+  !! timesteps to achieve high-order accuracy. Supported orders: AB1, AB2,
+  !! AB3, AB4. These methods are more memory-efficient than RK schemes
+  !! for the same order of accuracy.
+  !!
+  !! The time_intg_t type encapsulates all integration state and provides
+  !! a unified interface through the step procedure pointer, which routes
+  !! to either runge_kutta() or adams_bashforth() based on the selected method.
+  !!
+  !! Old timestep/stage data is stored in the `olds` array and managed
+  !! automatically through rotation mechanisms for AB methods.
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X
@@ -9,19 +31,26 @@ module m_time_integrator
   private adams_bashforth, runge_kutta
 
   type :: time_intg_t
-    integer :: method, istep, istage, order, nstep, nstage, nvars, nolds
-    real(dp) :: coeffs(4, 4)
-    real(dp) :: rk_b(4, 4)
-    real(dp) :: rk_a(3, 3, 4)
-    character(len=3) :: sname
-    type(flist_t), allocatable :: olds(:, :)
-    class(base_backend_t), pointer :: backend
-    class(allocator_t), pointer :: allocator
-    procedure(stepper_func), pointer :: step => null()
+    integer :: method       !! Integration method identifier (unused, kept for compatibility)
+    integer :: istep        !! Current timestep number (for AB startup ramping)
+    integer :: istage       !! Current stage number within timestep (RK only)
+    integer :: order        !! Order of accuracy of the scheme (1-4)
+    integer :: nstep        !! Number of timesteps needed (AB: order, RK: 1)
+    integer :: nstage       !! Number of stages per timestep (AB: 1, RK: order)
+    integer :: nvars        !! Number of variables being integrated
+    integer :: nolds        !! Number of old derivatives/solutions to store
+    real(dp) :: coeffs(4, 4)  !! Adams-Bashforth coefficients [stage, order]
+    real(dp) :: rk_b(4, 4)    !! Runge-Kutta final weights [stage, order]
+    real(dp) :: rk_a(3, 3, 4) !! Runge-Kutta stage weights [from_stage, to_stage, order]
+    character(len=3) :: sname !! Scheme name (e.g., 'AB3', 'RK4')
+    type(flist_t), allocatable :: olds(:, :) !! Old derivatives/solutions [nvars, nolds]
+    class(base_backend_t), pointer :: backend    !! Computational backend for operations
+    class(allocator_t), pointer :: allocator     !! Memory allocator for field storage
+    procedure(stepper_func), pointer :: step => null() !! Function pointer to integration method
   contains
-    procedure :: finalize
-    procedure :: runge_kutta
-    procedure :: adams_bashforth
+    procedure :: finalize       !! Clean up and release allocated memory
+    procedure :: runge_kutta    !! Runge-Kutta time integration implementation
+    procedure :: adams_bashforth !! Adams-Bashforth time integration implementation
   end type time_intg_t
 
   interface time_intg_t
@@ -30,25 +59,34 @@ module m_time_integrator
 
   abstract interface
     subroutine stepper_func(self, curr, deriv, dt)
+      !! Abstract interface for time stepping functions.
+      !!
+      !! Defines the signature for integration methods (RK or AB).
+      !! Each method takes the current solution, its derivative, and
+      !! the timestep size, and updates the solution accordingly.
       import :: time_intg_t
       import :: dp
       import :: flist_t
       implicit none
 
-      class(time_intg_t), intent(inout) :: self
-      type(flist_t), intent(inout) :: curr(:)
-      type(flist_t), intent(in) :: deriv(:)
-      real(dp), intent(in) :: dt
+      class(time_intg_t), intent(inout) :: self  !! Time integrator state
+      type(flist_t), intent(inout) :: curr(:)    !! Current solution variables [nvars]
+      type(flist_t), intent(in) :: deriv(:)      !! Time derivatives of variables [nvars]
+      real(dp), intent(in) :: dt                 !! Timestep size
     end subroutine stepper_func
   end interface
 
 contains
 
   subroutine finalize(self)
+    !! Finalise time integrator and release allocated resources.
+    !!
+    !! Releases all field storage blocks used for storing old derivatives
+    !! or stage solutions, and deallocates the olds array.
     implicit none
 
     !type(time_intg_t), intent(inout) :: self
-    class(time_intg_t), intent(inout) :: self
+    class(time_intg_t), intent(inout) :: self !! Time integrator to finalise
 
     integer :: i, j
 
@@ -67,13 +105,32 @@ contains
   end subroutine finalize
 
   function init(backend, allocator, method, nvars)
+    !! Initialise time integrator with specified method and coefficients.
+    !!
+    !! This constructor configures the time integration scheme based on the
+    !! method string (e.g., 'AB3' or 'RK4'). It initialises all Runge-Kutta
+    !! and Adams-Bashforth coefficients for orders 1-4, then selects the
+    !! appropriate method and allocates storage for old derivatives or stages.
+    !!
+    !! **Supported Methods:**
+    !! - AB1, AB2, AB3, AB4: Adams-Bashforth (explicit multi-step)
+    !! - RK1, RK2, RK3, RK4: Runge-Kutta (explicit multi-stage)
+    !!
+    !! **RK Coefficients (Butcher tableau):**
+    !! - RK1: Forward Euler
+    !! - RK2: Midpoint method
+    !! - RK3: Strong Stability Preserving RK3 (SSP-RK3)
+    !! - RK4: Classical fourth-order Runge-Kutta
+    !!
+    !! **AB Coefficients:**
+    !! Derived from polynomial extrapolation of previous derivatives.
     implicit none
 
-    type(time_intg_t) :: init
-    class(base_backend_t), pointer :: backend
-    class(allocator_t), pointer :: allocator
-    character(3), intent(in) :: method
-    integer, intent(in) :: nvars
+    type(time_intg_t) :: init                         !! Initialised time integrator
+    class(base_backend_t), pointer :: backend         !! Computational backend
+    class(allocator_t), pointer :: allocator          !! Memory allocator
+    character(3), intent(in) :: method                !! Integration method ('AB3', 'RK4', etc.)
+    integer, intent(in) :: nvars                      !! Number of variables to integrate
 
     integer :: i, j, stat
 
@@ -160,12 +217,27 @@ contains
   end function init
 
   subroutine runge_kutta(self, curr, deriv, dt)
+    !! Advance solution using Runge-Kutta method.
+    !!
+    !! Implements explicit Runge-Kutta schemes of orders 1-4. The general
+    !! form for an s-stage RK method is:
+    !!
+    !! \[ k_i = f(t_n + c_i \Delta t, u_n + \Delta t \sum_{j=1}^{i-1} a_{ij} k_j) \]
+    !! \[ u_{n+1} = u_n + \Delta t \sum_{i=1}^{s} b_i k_i \]
+    !!
+    !! Where \( k_i \) are stage derivatives, \( a_{ij} \) are stage weights,
+    !! and \( b_i \) are final combination weights. This implementation stores
+    !! stage derivatives in `olds(:, 2:nstage+1)` and the initial solution in
+    !! `olds(:, 1)`.
+    !!
+    !! The subroutine is called once per stage. When `istage == nstage`, it
+    !! computes the final solution and resets the stage counter.
     implicit none
 
-    class(time_intg_t), intent(inout) :: self
-    type(flist_t), intent(inout) :: curr(:)
-    type(flist_t), intent(in) :: deriv(:)
-    real(dp), intent(in) :: dt
+    class(time_intg_t), intent(inout) :: self  !! Time integrator state
+    type(flist_t), intent(inout) :: curr(:)    !! Current solution (updated)
+    type(flist_t), intent(in) :: deriv(:)      !! Stage derivative
+    real(dp), intent(in) :: dt                 !! Timestep size
 
     integer :: i, j
 
@@ -219,12 +291,27 @@ contains
   end subroutine runge_kutta
 
   subroutine adams_bashforth(self, curr, deriv, dt)
+    !! Advance solution using Adams-Bashforth method.
+    !!
+    !! Implements explicit Adams-Bashforth schemes of orders 1-4. These
+    !! multi-step methods use derivatives from previous timesteps:
+    !!
+    !! \[ u_{n+1} = u_n + \Delta t \sum_{i=0}^{s-1} b_i f_{n-i} \]
+    !!
+    !! Where \( f_{n-i} \) are stored derivatives from previous steps and
+    !! \( b_i \) are the Adams-Bashforth coefficients. The method has an
+    !! automatic startup phase: for the first `order` steps, it uses a
+    !! lower-order scheme (e.g., AB2 uses AB1 on step 1, then AB2 on step 2+).
+    !!
+    !! Old derivatives are stored in `olds(:, 1:nstep-1)` and rotated after
+    !! each step. The current derivative is used directly and then stored
+    !! in `olds(:, 1)` for the next timestep.
     implicit none
 
-    class(time_intg_t), intent(inout) :: self
-    type(flist_t), intent(inout) :: curr(:)
-    type(flist_t), intent(in) :: deriv(:)
-    real(dp), intent(in) :: dt
+    class(time_intg_t), intent(inout) :: self  !! Time integrator state
+    type(flist_t), intent(inout) :: curr(:)    !! Current solution (updated)
+    type(flist_t), intent(in) :: deriv(:)      !! Current time derivative
+    real(dp), intent(in) :: dt                 !! Timestep size
 
     integer :: i, j
     integer :: nstep
@@ -266,10 +353,19 @@ contains
   end subroutine adams_bashforth
 
   subroutine rotate(sol, n)
+    !! Rotate pointer array for Adams-Bashforth old derivatives.
+    !!
+    !! Shifts pointers in the array to make room for a new derivative:
+    !! sol(i) <- sol(i-1) for i from n down to 2, and sol(1) gets the
+    !! old sol(n). This implements a circular buffer for old derivatives
+    !! without copying data - only pointers are reassigned.
+    !!
+    !! Example for n=3: [new, old1, old2] becomes [?, new, old1]
+    !! (where ? will be filled with the newest derivative)
     implicit none
 
-    type(flist_t), intent(inout) :: sol(:)
-    integer, intent(in) :: n
+    type(flist_t), intent(inout) :: sol(:)  !! Array of field list pointers to rotate
+    integer, intent(in) :: n                !! Number of elements to rotate
 
     integer :: i
     class(field_t), pointer :: ptr

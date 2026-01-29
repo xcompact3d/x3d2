@@ -1,4 +1,28 @@
 module m_vector_calculus
+  !! Vector calculus operators for finite-difference CFD.
+  !!
+  !! This module provides implementations of fundamental differential operators
+  !! (divergence, gradient, curl, Laplacian) on staggered and collocated grids.
+  !! All operators are built using high-order compact finite-difference schemes
+  !! from the tdsops module.
+  !!
+  !! **Key Features:**
+  !! - **Staggered grid support**: Operators handle transitions between cell centres
+  !!   (CELL) and vertices (VERT) through staged derivatives and interpolation
+  !! - **Data reordering**: Automatically manages pencil decomposition, reordering
+  !!   fields between X, Y, Z orientations as needed for derivatives
+  !! - **Memory efficiency**: Uses allocator blocks for temporary fields with
+  !!   careful release management to minimise memory footprint
+  !!
+  !! **Grid Conventions:**
+  !! - CELL (data_loc=CELL): Variables stored at cell centres (e.g., pressure)
+  !! - VERT (data_loc=VERT): Variables stored at cell vertices (e.g., velocity)
+  !! - Staggered operators (v2c, c2v) transition between these locations
+  !!
+  !! **Data Layouts:**
+  !! - DIR_X: Pencil decomposed in X direction (default for most operations)
+  !! - DIR_Y: Pencil decomposed in Y direction (for Y derivatives)
+  !! - DIR_Z: Pencil decomposed in Z direction (for Z derivatives)
   use iso_fortran_env, only: stderr => error_unit
 
   use m_allocator, only: allocator_t
@@ -11,13 +35,16 @@ module m_vector_calculus
   implicit none
 
   type :: vector_calculus_t
-    !! Defines vector calculus operators
-    class(base_backend_t), pointer :: backend
+    !! Container for vector calculus operators.
+    !!
+    !! Provides methods for computing curl, divergence, gradient, and Laplacian.
+    !! All operations are delegated to the backend for computational flexibility.
+    class(base_backend_t), pointer :: backend !! Computational backend (CPU/GPU)
   contains
-    procedure :: curl
-    procedure :: divergence_v2c
-    procedure :: gradient_c2v
-    procedure :: laplacian
+    procedure :: curl            !! Compute curl (vorticity) of vector field
+    procedure :: divergence_v2c  !! Compute divergence from vertices to cell centres
+    procedure :: gradient_c2v    !! Compute gradient from cell centres to vertices
+    procedure :: laplacian       !! Compute Laplacian of scalar field
   end type vector_calculus_t
 
   interface vector_calculus_t
@@ -27,10 +54,15 @@ module m_vector_calculus
 contains
 
   function init(backend) result(vector_calculus)
+    !! Initialise vector calculus module with computational backend.
+    !!
+    !! Simply stores a pointer to the backend, which provides access to
+    !! the allocator, reordering routines, and tridiagonal solvers needed
+    !! for computing derivatives.
     implicit none
 
-    class(base_backend_t), target, intent(inout) :: backend
-    type(vector_calculus_t) :: vector_calculus
+    class(base_backend_t), target, intent(inout) :: backend !! Computational backend
+    type(vector_calculus_t) :: vector_calculus              !! Initialised vector calculus object
 
     vector_calculus%backend => backend
 
@@ -142,21 +174,33 @@ contains
                             x_stagder_v2c, x_interpl_v2c, &
                             y_stagder_v2c, y_interpl_v2c, &
                             z_stagder_v2c, z_interpl_v2c)
-    !! Divergence of a vector field (u, v, w).
+    !! Compute divergence of a vector field from vertices to cell centres.
     !!
-    !! Evaluated at the cell centers (data_loc=CELL)
-    !! Input fields are at vertices (data_loc=VERT)
+    !! Computes:
+    !! \[ \nabla \cdot \mathbf{u} = \frac{\partial u}{\partial x} + 
+    !!    \frac{\partial v}{\partial y} + \frac{\partial w}{\partial z} \]
     !!
-    !! Input fields are in DIR_X data layout.
-    !! Output field is in DIR_Z data layout.
+    !! Input velocity components (u, v, w) are at vertices (VERT), and
+    !! divergence is evaluated at cell centres (CELL). This requires:
+    !! - **Staggered derivatives** in the aligned direction (e.g., du/dx uses x_stagder_v2c)
+    !! - **Interpolation** for cross terms (e.g., v and w interpolated in x direction)
+    !!
+    !! The algorithm proceeds dimension by dimension:
+    !! 1. Compute du/dx (staggered), interpolate dv/dx, dw/dx in DIR_X
+    !! 2. Reorder to DIR_Y, compute dv/dy (staggered), interpolate du/dy, dw/dy
+    !! 3. Reorder to DIR_Z, compute dw/dz (staggered), interpolate du/dz
+    !! 4. Sum all components: div = du/dx + dv/dy + dw/dz
+    !!
+    !! **Input:** All fields in DIR_X layout
+    !! **Output:** div_u in DIR_Z layout
     implicit none
 
-    class(vector_calculus_t) :: self
-    class(field_t), intent(inout) :: div_u
-    class(field_t), intent(in) :: u, v, w
-    class(tdsops_t), intent(in) :: x_stagder_v2c, x_interpl_v2c, &
-      y_stagder_v2c, y_interpl_v2c, &
-      z_stagder_v2c, z_interpl_v2c
+    class(vector_calculus_t) :: self     !! Vector calculus object
+    class(field_t), intent(inout) :: div_u !! Divergence output (CELL, DIR_Z)
+    class(field_t), intent(in) :: u, v, w  !! Velocity components (VERT, DIR_X)
+    class(tdsops_t), intent(in) :: x_stagder_v2c, x_interpl_v2c, & !! X operators
+      y_stagder_v2c, y_interpl_v2c, &   !! Y operators
+      z_stagder_v2c, z_interpl_v2c      !! Z operators
 
     class(field_t), pointer :: du_x, dv_x, dw_x, &
       u_y, v_y, w_y, du_y, dv_y, dw_y, &
@@ -248,21 +292,34 @@ contains
                           x_stagder_c2v, x_interpl_c2v, &
                           y_stagder_c2v, y_interpl_c2v, &
                           z_stagder_c2v, z_interpl_c2v)
-    !! Gradient of a scalar field 'p'.
+    !! Compute gradient of a scalar field from cell centres to vertices.
     !!
-    !! Evaluated at the vertices (data_loc=VERT)
-    !! Input field is at cell centers (data_loc=CELL)
+    !! Computes:
+    !! \[ \nabla p = \left( \frac{\partial p}{\partial x}, 
+    !!    \frac{\partial p}{\partial y}, \frac{\partial p}{\partial z} \right) \]
     !!
-    !! Input field is in DIR_Z data layout.
-    !! Output fields (dpdx, dpdy, dpdz) are in DIR_X data layout.
+    !! Input pressure p is at cell centres (CELL), and gradient components
+    !! are evaluated at vertices (VERT). This is the inverse operation of
+    !! divergence_v2c and is used in projection methods for incompressible flow.
+    !!
+    !! The algorithm proceeds in reverse order (Z→Y→X):
+    !! 1. Compute dp/dz (staggered), interpolate p in Z direction (DIR_Z)
+    !! 2. Reorder to DIR_Y, compute dp/dy (staggered), interpolate p and dpdz
+    !! 3. Reorder to DIR_X, compute dp/dx (staggered), interpolate dpdy and dpdz
+    !!
+    !! This reverse ordering optimises memory usage by minimising temporary
+    !! field allocations.
+    !!
+    !! **Input:** p in DIR_Z layout
+    !! **Output:** dpdx, dpdy, dpdz in DIR_X layout
     implicit none
 
-    class(vector_calculus_t) :: self
-    class(field_t), intent(inout) :: dpdx, dpdy, dpdz
-    class(field_t), intent(in) :: p
-    class(tdsops_t), intent(in) :: x_stagder_c2v, x_interpl_c2v, &
-      y_stagder_c2v, y_interpl_c2v, &
-      z_stagder_c2v, z_interpl_c2v
+    class(vector_calculus_t) :: self                      !! Vector calculus object
+    class(field_t), intent(inout) :: dpdx, dpdy, dpdz    !! Gradient components (VERT, DIR_X)
+    class(field_t), intent(in) :: p                       !! Scalar field (CELL, DIR_Z)
+    class(tdsops_t), intent(in) :: x_stagder_c2v, x_interpl_c2v, & !! X operators
+      y_stagder_c2v, y_interpl_c2v, &   !! Y operators
+      z_stagder_c2v, z_interpl_c2v      !! Z operators
 
     class(field_t), pointer :: p_sxy_z, dpdz_sxy_z, &
       p_sxy_y, dpdz_sxy_y, &
@@ -331,18 +388,31 @@ contains
   end subroutine gradient_c2v
 
   subroutine laplacian(self, lapl_u, u, x_der2nd, y_der2nd, z_der2nd)
-    !! Laplacian of a scalar field 'u'.
+    !! Compute Laplacian of a scalar field.
     !!
-    !! Evaluated at the data_loc defined by the input u field
+    !! Computes:
+    !! \[ \nabla^2 u = \frac{\partial^2 u}{\partial x^2} + 
+    !!    \frac{\partial^2 u}{\partial y^2} + \frac{\partial^2 u}{\partial z^2} \]
     !!
-    !! Input and output fields are in DIR_X layout.
+    !! The Laplacian is evaluated at the same grid location (CELL or VERT)
+    !! as the input field. This operator is used in diffusion terms and
+    !! Poisson equations.
+    !!
+    !! The algorithm computes second derivatives in each direction:
+    !! 1. Compute d²u/dx² directly in DIR_X
+    !! 2. Reorder to DIR_Y, compute d²u/dy², sum into result via sum_yintox
+    !! 3. Reorder to DIR_Z, compute d²u/dz², sum into result via sum_zintox
+    !!
+    !! The sum_yintox and sum_zintox operations add directional derivatives
+    !! directly into the DIR_X result field without additional reordering.
+    !!
+    !! **Input/Output:** All fields in DIR_X layout
     implicit none
 
-    class(vector_calculus_t) :: self
-    class(field_t), intent(inout) :: lapl_u
-    class(field_t), intent(in) :: u
-
-    class(tdsops_t), intent(in) :: x_der2nd, y_der2nd, z_der2nd
+    class(vector_calculus_t) :: self           !! Vector calculus object
+    class(field_t), intent(inout) :: lapl_u    !! Laplacian output (same data_loc as u, DIR_X)
+    class(field_t), intent(in) :: u            !! Scalar field (DIR_X)
+    class(tdsops_t), intent(in) :: x_der2nd, y_der2nd, z_der2nd !! Second derivative operators
 
     class(field_t), pointer :: u_y, d2u_y, u_z, d2u_z
 
