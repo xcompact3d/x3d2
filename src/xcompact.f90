@@ -1,4 +1,39 @@
 program xcompact
+  !! Main program for X3D2 CFD solver.
+  !!
+  !! X3D2 is a high-order finite-difference incompressible Navier-Stokes
+  !! solver based on Xcompact3D/Incompact3D. It solves the incompressible
+  !! Navier-Stokes equations using:
+  !! - **Compact finite differences** for spatial derivatives (4th-6th order)
+  !! - **Fractional-step method** for pressure-velocity coupling
+  !! - **FFT-based or iterative Poisson solvers** for pressure
+  !! - **Explicit time integration** (Runge-Kutta or Adams-Bashforth)
+  !!
+  !! **Program Flow:**
+  !! 1. Initialise MPI and determine rank/size
+  !! 2. Select computational backend (CUDA GPU or OpenMP CPU)
+  !! 3. Read configuration from input file (domain and solver parameters)
+  !! 4. Create mesh with domain decomposition (pencil decomposition)
+  !! 5. Instantiate allocator and backend for the selected platform
+  !! 6. Select and instantiate flow case (channel, TGV, generic, etc.)
+  !! 7. Run simulation via flow_case%run()
+  !! 8. Report timing and finalise MPI
+  !!
+  !! **Backend Options:**
+  !! - **CUDA**: GPU acceleration via NVIDIA CUDA (compile with -DCUDA)
+  !! - **OMP**: CPU parallelism via OpenMP threading
+  !!
+  !! **Input:** Namelist file specified as command-line argument (e.g., input.x3d)
+  !!
+  !! **Domain Decomposition:**
+  !! X3D2 supports two decomposition strategies:
+  !! - **2DECOMP&FFT**: External library used when FFT Poisson solver + OMP backend.
+  !!   Provides optimised pencil decomposition and FFT transforms. Cannot decompose
+  !!   in X-direction (nproc_dir(1) must be 1).
+  !! - **Generic**: Built-in X3D2 decomposition used for CUDA backend or when
+  !!   2DECOMP&FFT is unavailable. Can decompose in any direction (X, Y, Z).
+  !!
+  !! The decomposition is selected automatically based on backend and solver type.
   use mpi
 
   use m_allocator
@@ -22,30 +57,31 @@ program xcompact
 
   implicit none
 
-  class(base_backend_t), pointer :: backend
-  class(allocator_t), pointer :: allocator
-  type(allocator_t), pointer :: host_allocator
-  type(mesh_t), target :: mesh
-  class(base_case_t), allocatable :: flow_case
+  class(base_backend_t), pointer :: backend       !! Active computational backend (CUDA or OMP)
+  class(allocator_t), pointer :: allocator        !! Memory allocator for device/host
+  type(allocator_t), pointer :: host_allocator    !! Host memory allocator (for I/O, etc.)
+  type(mesh_t), target :: mesh                    !! Computational mesh with decomposition
+  class(base_case_t), allocatable :: flow_case    !! Flow case instance (polymorphic)
 
 #ifdef CUDA
-  type(cuda_backend_t), target :: cuda_backend
-  type(cuda_allocator_t), target :: cuda_allocator
-  integer :: ndevs, devnum
+  type(cuda_backend_t), target :: cuda_backend    !! CUDA backend implementation
+  type(cuda_allocator_t), target :: cuda_allocator !! CUDA device memory allocator
+  integer :: ndevs, devnum                         !! Number of GPUs, assigned device number
 #else
-  type(omp_backend_t), target :: omp_backend
+  type(omp_backend_t), target :: omp_backend       !! OpenMP backend implementation
 #endif
 
-  type(allocator_t), target :: omp_allocator
+  type(allocator_t), target :: omp_allocator       !! Host/CPU memory allocator
 
-  real(dp) :: t_start, t_end
+  real(dp) :: t_start, t_end                       !! CPU timing for performance measurement
 
-  type(domain_config_t) :: domain_cfg
-  type(solver_config_t) :: solver_cfg
-  character(32) :: backend_name
-  integer :: dims(3), nrank, nproc, ierr
-  logical :: use_2decomp
+  type(domain_config_t) :: domain_cfg              !! Domain configuration from input file
+  type(solver_config_t) :: solver_cfg              !! Solver configuration from input file
+  character(32) :: backend_name                    !! Backend name string ("CUDA" or "OMP")
+  integer :: dims(3), nrank, nproc, ierr           !! Dimensions, MPI rank/size, error code
+  logical :: use_2decomp                           !! Whether to use 2DECOMP&FFT library
 
+  ! Initialise MPI
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
@@ -74,7 +110,9 @@ program xcompact
     domain_cfg%nproc_dir = [1, 1, nproc]
   end if
 
-  ! Decide whether 2decomp is used or not
+  ! Select decomposition strategy:
+  ! - 2DECOMP&FFT: Used for FFT Poisson solver with OMP backend (optimised)
+  ! - Generic: Used for CUDA backend or non-FFT solvers (more flexible)
   use_2decomp = solver_cfg%poisson_solver_type == 'FFT' &
                 .and. trim(backend_name) == 'OMP'
 
