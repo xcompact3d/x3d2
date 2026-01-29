@@ -1,4 +1,35 @@
 module m_case_tgv
+  !! Taylor-Green vortex (TGV) case for validation and benchmarking.
+  !!
+  !! The Taylor-Green vortex is a canonical test case for incompressible
+  !! Navier-Stokes solvers. It features an analytically-defined initial
+  !! condition that transitions from laminar to turbulent flow, providing
+  !! a rigorous test of:
+  !! - Spatial discretisation accuracy
+  !! - Time integration stability
+  !! - Energy conservation properties
+  !! - Transition to turbulence physics
+  !!
+  !! **Initial Conditions:**
+  !! \[ u = \sin(x) \cos(y) \cos(z) \]
+  !! \[ v = -\cos(x) \sin(y) \cos(z) \]
+  !! \[ w = 0 \]
+  !!
+  !! This satisfies incompressibility (\( \nabla \cdot \mathbf{u} = 0 \)) exactly and is periodic
+  !! in all three directions.
+  !!
+  !! **Domain:**
+  !! Typically \( [0, 2\pi]^3 \) with periodic boundary conditions in all directions.
+  !!
+  !! **Validation Metrics:**
+  !! - Kinetic energy decay rate
+  !! - Enstrophy evolution
+  !! - Dissipation rate
+  !! - Vorticity dynamics
+  !!
+  !! **Reference:**
+  !! Taylor, G. I., & Green, A. E. (1937). Mechanism of the production of
+  !! small eddies from large ones. Proc. R. Soc. Lond. A, 158(895), 499-521.
   use iso_fortran_env, only: stderr => error_unit
 
   use m_allocator, only: allocator_t
@@ -12,12 +43,13 @@ module m_case_tgv
   implicit none
 
   type, extends(base_case_t) :: case_tgv_t
+    !! Taylor-Green vortex case (no additional state needed beyond base).
   contains
-    procedure :: boundary_conditions => boundary_conditions_tgv
-    procedure :: initial_conditions => initial_conditions_tgv
-    procedure :: forcings => forcings_tgv
-    procedure :: pre_correction => pre_correction_tgv
-    procedure :: postprocess => postprocess_tgv
+    procedure :: boundary_conditions => boundary_conditions_tgv !! No action (periodic BCs)
+    procedure :: initial_conditions => initial_conditions_tgv   !! Set TGV velocity field
+    procedure :: forcings => forcings_tgv                       !! No forcing
+    procedure :: pre_correction => pre_correction_tgv           !! No correction
+    procedure :: postprocess => postprocess_tgv                 !! Compute diagnostics
   end type case_tgv_t
 
   interface case_tgv_t
@@ -27,21 +59,27 @@ module m_case_tgv
 contains
 
   function case_tgv_init(backend, mesh, host_allocator) result(flow_case)
+    !! Initialise Taylor-Green vortex case.
     implicit none
 
-    class(base_backend_t), target, intent(inout) :: backend
-    type(mesh_t), target, intent(inout) :: mesh
-    type(allocator_t), target, intent(inout) :: host_allocator
-    type(case_tgv_t) :: flow_case
+    class(base_backend_t), target, intent(inout) :: backend         !! Computational backend
+    type(mesh_t), target, intent(inout) :: mesh                     !! Mesh with decomposition
+    type(allocator_t), target, intent(inout) :: host_allocator      !! Host memory allocator
+    type(case_tgv_t) :: flow_case                                   !! Initialised TGV case
 
     call flow_case%case_init(backend, mesh, host_allocator)
 
   end function case_tgv_init
 
   subroutine initial_conditions_tgv(self)
+    !! Set Taylor-Green vortex initial velocity field.
+    !!
+    !! Initialises the three velocity components according to the TGV
+    !! analytical solution. The field is exactly divergence-free and
+    !! periodic, making it ideal for testing solver accuracy.
     implicit none
 
-    class(case_tgv_t) :: self
+    class(case_tgv_t) :: self !! TGV case instance
 
     call self%set_init(self%solver%u, u_func)
     call self%set_init(self%solver%v, v_func)
@@ -54,19 +92,25 @@ contains
   end subroutine initial_conditions_tgv
 
   pure function u_func(coords) result(r)
+    !! Compute x-velocity component of TGV at given coordinates.
+    !!
+    !! \[ u = \sin(x) \cos(y) \cos(z) \]
     implicit none
 
-    real(dp), intent(in) :: coords(3)
-    real(dp) :: r
+    real(dp), intent(in) :: coords(3) !! Position [x, y, z]
+    real(dp) :: r                     !! Velocity component u
 
     r = sin(coords(1))*cos(coords(2))*cos(coords(3))
   end function u_func
 
   pure function v_func(coords) result(r)
+    !! Compute y-velocity component of TGV at given coordinates.
+    !!
+    !! \[ v = -\cos(x) \sin(y) \cos(z) \]
     implicit none
 
-    real(dp), intent(in) :: coords(3)
-    real(dp) :: r
+    real(dp), intent(in) :: coords(3) !! Position [x, y, z]
+    real(dp) :: r                     !! Velocity component v
 
     r = -cos(coords(1))*sin(coords(2))*cos(coords(3))
   end function v_func
