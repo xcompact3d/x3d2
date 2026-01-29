@@ -1,4 +1,9 @@
 module m_cuda_exec_dist
+  !! Distributed compact scheme execution on GPU.
+  !!
+  !! Orchestrates CUDA kernel launches and MPI halo exchange for distributed
+  !! compact finite difference schemes. Handles both generic derivative operations
+  !! and fused transport equation computation.
   use cudafor
   use mpi
 
@@ -17,21 +22,28 @@ contains
     du, u, u_recv_s, u_recv_e, du_send_s, du_send_e, du_recv_s, du_recv_e, &
     tdsops, nproc, pprev, pnext, blocks, threads &
     )
+    !! Execute distributed compact scheme derivative $du = d(u)$ on GPU.
+    !!
+    !! Calls distributed kernel, exchanges halo data for $2 \times 2$ boundary
+    !! systems, then applies substitution kernel.
     implicit none
 
     ! du = d(u)
-    real(dp), device, dimension(:, :, :), intent(out) :: du
-    real(dp), device, dimension(:, :, :), intent(in) :: u, u_recv_s, u_recv_e
 
     ! The ones below are intent(out) just so that we can write data in them,
     ! not because we actually need the data they store later where this
     ! subroutine is called. We absolutely don't care the data they pass back
+    real(dp), device, dimension(:, :, :), intent(out) :: du  !! Output: derivative
+    real(dp), device, dimension(:, :, :), intent(in) :: u  !! Input: field with local data
+    real(dp), device, dimension(:, :, :), intent(in) :: u_recv_s, u_recv_e  !! Halo data from neighbours
+
+    ! Temporary buffers for halo exchange (overwritten during computation)
     real(dp), device, dimension(:, :, :), intent(out) :: &
       du_send_s, du_send_e, du_recv_s, du_recv_e
 
-    type(cuda_tdsops_t), intent(in) :: tdsops
-    integer, intent(in) :: nproc, pprev, pnext
-    type(dim3), intent(in) :: blocks, threads
+    type(cuda_tdsops_t), intent(in) :: tdsops  !! Tridiagonal operators
+    integer, intent(in) :: nproc, pprev, pnext  !! MPI ranks (total, previous, next)
+    type(dim3), intent(in) :: blocks, threads  !! CUDA kernel configuration
 
     integer :: n_data
 
@@ -64,27 +76,28 @@ contains
     tdsops_du, tdsops_dud, tdsops_d2u, nu, nproc, pprev, pnext, &
     blocks, threads &
     )
+    !! Execute fused transport equation computation on GPU with distributed compact scheme.
+    !!
+    !! Computes $r\_du = -\frac{1}{2}(v \frac{\partial u}{\partial x} + \frac{\partial (uv)}{\partial x}) + \nu \frac{\partial^2 u}{\partial x^2}$
+    !! Launches distributed kernel for three operators (du, dud, d2u), exchanges halo data for all
+    !! boundary systems in one batch, then applies substitution kernel.
     implicit none
 
-    ! r_du = -1/2*(v*d1(u) + d1(u*v)) + nu*d2(u)
-    !> The result array, it is also used as temporary storage
-    real(dp), device, dimension(:, :, :), intent(out) :: r_du
-    real(dp), device, dimension(:, :, :), intent(in) :: u, u_recv_s, u_recv_e
-    real(dp), device, dimension(:, :, :), intent(in) :: v, v_recv_s, v_recv_e
+    real(dp), device, dimension(:, :, :), intent(out) :: r_du  !! Output: transport equation RHS
+    real(dp), device, dimension(:, :, :), intent(in) :: u, u_recv_s, u_recv_e  !! Field u with halos
+    real(dp), device, dimension(:, :, :), intent(in) :: v, v_recv_s, v_recv_e  !! Field v with halos
 
-    ! The ones below are intent(out) just so that we can write data in them,
-    ! not because we actually need the data they store later where this
-    ! subroutine is called. We absolutely don't care the data they pass back
+    ! Temporary storage for derivatives and halo exchange buffers
     real(dp), device, dimension(:, :, :), intent(out) :: dud, d2u
     real(dp), device, dimension(:, :, :), intent(out) :: &
       du_send_s, du_send_e, du_recv_s, du_recv_e, &
       dud_send_s, dud_send_e, dud_recv_s, dud_recv_e, &
       d2u_send_s, d2u_send_e, d2u_recv_s, d2u_recv_e
 
-    type(cuda_tdsops_t), intent(in) :: tdsops_du, tdsops_dud, tdsops_d2u
-    real(dp), intent(in) :: nu
-    integer, intent(in) :: nproc, pprev, pnext
-    type(dim3), intent(in) :: blocks, threads
+    type(cuda_tdsops_t), intent(in) :: tdsops_du, tdsops_dud, tdsops_d2u  !! Operators for each derivative
+    real(dp), intent(in) :: nu  !! Kinematic viscosity
+    integer, intent(in) :: nproc, pprev, pnext  !! MPI ranks
+    type(dim3), intent(in) :: blocks, threads  !! CUDA kernel configuration
 
     integer :: n_data
 

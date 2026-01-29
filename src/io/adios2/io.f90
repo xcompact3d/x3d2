@@ -1,24 +1,40 @@
 module m_io_backend
-!! @brief Provides ADIOS2-specific implementation of the I/O backend interface
-!!
-!! @details This module contains the concrete backend implementation for ADIOS2
-!! (ADaptive Input Output System v2) library. It acts as a translation layer
-!! converting generic I/O calls from the session interface into specific calls
-!! to the ADIOS2 API.
-!!
-!! The `adios2_reader_t` and `adios2_writer_t` types defined here extend the
-!! abstract base types from `m_io_base` and implement required procedures
-!!
-!! This backend leverages several key features of the underlying ADIOS2 library
-!! - engine abstraction - the same API can be used for different transport
-!! methods (e.g. BP4, BP5, HDF5)
-!! - Asynchronous I/O - by default ADIOS2 uses a deferred transport mode
-!! which can improve performance by overlapping computation and I/O
-!! - MPI integration - it is designed for large-scale paralle I/O and
-!! integrates with MPI, though serial operation is also supported
-!!
-!! @note This is an internal backend module and should never be used directly.
-!! All user interaction must go through `m_io_session`.
+  !! ADIOS2-specific implementation of the I/O backend interface.
+  !!
+  !! This module provides the concrete backend implementation for ADIOS2
+  !! (Adaptable Input Output System v2), a high-performance parallel I/O
+  !! library. It acts as a translation layer converting generic I/O calls
+  !! from the session interface into specific ADIOS2 API calls.
+  !!
+  !! **Architecture:**
+  !!
+  !! - Extends abstract base types from `m_io_base`
+  !! - Implements all required I/O procedures (init, open, read, write, etc.)
+  !! - Manages ADIOS2-specific objects (adios, io, engine)
+  !! - Handles step-based I/O for time-series data
+  !!
+  !! **ADIOS2 Features Leveraged:**
+  !!
+  !! - **Engine Abstraction**: Same API for different formats (BP4, BP5, HDF5)
+  !! - **Asynchronous I/O**: Deferred transport mode overlaps computation and I/O
+  !! - **MPI Integration**: Designed for large-scale parallel I/O
+  !! - **Variable/Attribute Management**: Efficient metadata handling
+  !! - **Hyperslab Selection**: Parallel distributed array I/O
+  !!
+  !! **Type Hierarchy:**
+  !!
+  !! ```
+  !! io_base (abstract)
+  !!   |-- io_reader_t (abstract)
+  !!   |     |-- io_adios2_reader_t (concrete)
+  !!   |-- io_writer_t (abstract)
+  !!   |     |-- io_adios2_writer_t (concrete)
+  !!   |-- io_file_t (abstract)
+  !!         |-- io_adios2_file_t (concrete)
+  !! ```
+  !!
+  !! **Note:** This is an internal backend module and should never be used
+  !! directly. All user interaction must go through `m_io_session`.
   use adios2, only: adios2_adios, adios2_io, adios2_engine, &
                     adios2_variable, adios2_attribute, &
                     adios2_mode_sync, adios2_mode_write, &
@@ -45,56 +61,71 @@ module m_io_backend
   public :: allocate_io_reader, allocate_io_writer
   public :: get_default_backend, IO_BACKEND_DUMMY, IO_BACKEND_ADIOS2
 
-  integer, parameter :: IO_BACKEND_DUMMY = 0
-  integer, parameter :: IO_BACKEND_ADIOS2 = 1
+  integer, parameter :: IO_BACKEND_DUMMY = 0   !! Dummy backend identifier
+  integer, parameter :: IO_BACKEND_ADIOS2 = 1  !! ADIOS2 backend identifier
 
   type, extends(io_reader_t) :: io_adios2_reader_t
+    !! ADIOS2 reader implementation for reading data from files.
+    !!
+    !! Manages ADIOS2 objects required for reading operations including
+    !! the global ADIOS handler, I/O object, and tracks step state for
+    !! time-series data reading.
     private
     type(adios2_adios) :: adios              !! ADIOS2 global handler
-    type(adios2_io) :: io_handle             !! ADIOS2 IO object for managing I/O
-    logical :: is_step_active = .false.      !! Flag to track if a step is active
-    integer :: comm = MPI_COMM_NULL          !! MPI communicator
+    type(adios2_io) :: io_handle             !! ADIOS2 I/O object for managing variables
+    logical :: is_step_active = .false.      !! Flag tracking if a step is active
+    integer :: comm = MPI_COMM_NULL          !! MPI communicator for parallel I/O
   contains
-    procedure :: init => reader_init_adios2
-    procedure :: open => reader_open_adios2
-    procedure :: read_data_i8 => read_data_i8_adios2
-    procedure :: read_data_integer => read_data_integer_adios2
-    procedure :: read_data_real => read_data_real_adios2
-    procedure :: read_data_array_3d => read_data_array_3d_adios2
-    procedure :: finalise => finalise_reader_adios2
-    procedure, private :: handle_error => handle_error_reader
+    procedure :: init => reader_init_adios2                 !! Initialise reader
+    procedure :: open => reader_open_adios2                 !! Open file for reading
+    procedure :: read_data_i8 => read_data_i8_adios2        !! Read 64-bit integer
+    procedure :: read_data_integer => read_data_integer_adios2 !! Read default integer
+    procedure :: read_data_real => read_data_real_adios2    !! Read double precision real
+    procedure :: read_data_array_3d => read_data_array_3d_adios2 !! Read 3D array with hyperslab
+    procedure :: finalise => finalise_reader_adios2         !! Finalise and clean up
+    procedure, private :: handle_error => handle_error_reader !! Error handling (internal)
   end type io_adios2_reader_t
 
   type, extends(io_writer_t) :: io_adios2_writer_t
+    !! ADIOS2 writer implementation for writing data to files.
+    !!
+    !! Manages ADIOS2 objects required for writing operations including
+    !! the global ADIOS handler, I/O object, and tracks step state for
+    !! time-series data writing.
     private
     type(adios2_adios) :: adios              !! ADIOS2 global handler
-    type(adios2_io) :: io_handle             !! ADIOS2 IO object for managing I/O
-    logical :: is_step_active = .false.      !! Flag to track if a step is active
-    integer :: comm = MPI_COMM_NULL          !! MPI communicator
+    type(adios2_io) :: io_handle             !! ADIOS2 I/O object for managing variables
+    logical :: is_step_active = .false.      !! Flag tracking if a step is active
+    integer :: comm = MPI_COMM_NULL          !! MPI communicator for parallel I/O
   contains
-    procedure :: init => writer_init_adios2
-    procedure :: open => writer_open_adios2
-    procedure :: write_data_i8 => write_data_i8_adios2
-    procedure :: write_data_integer => write_data_integer_adios2
-    procedure :: write_data_real => write_data_real_adios2
-    procedure :: write_data_array_3d => write_data_array_3d_adios2
-    procedure :: write_attribute_string => write_attribute_string_adios2
+    procedure :: init => writer_init_adios2                 !! Initialise writer
+    procedure :: open => writer_open_adios2                 !! Open file for writing
+    procedure :: write_data_i8 => write_data_i8_adios2      !! Write 64-bit integer
+    procedure :: write_data_integer => write_data_integer_adios2 !! Write default integer
+    procedure :: write_data_real => write_data_real_adios2  !! Write double precision real
+    procedure :: write_data_array_3d => write_data_array_3d_adios2 !! Write 3D array with hyperslab
+    procedure :: write_attribute_string => write_attribute_string_adios2 !! Write string attribute
     procedure :: write_attribute_array_1d_real => &
-      write_attribute_array_1d_real_adios2
-    procedure :: finalise => finalise_writer_adios2
-    procedure, private :: handle_error => handle_error_writer
+      write_attribute_array_1d_real_adios2                  !! Write 1D real array attribute
+    procedure :: finalise => finalise_writer_adios2         !! Finalise and clean up
+    procedure, private :: handle_error => handle_error_writer !! Error handling (internal)
   end type io_adios2_writer_t
 
   type, extends(io_file_t) :: io_adios2_file_t
+    !! ADIOS2 file handle for open file operations.
+    !!
+    !! Wraps the ADIOS2 engine object and manages step-based I/O for
+    !! time-series data. Tracks whether file is opened for reading or
+    !! writing and current step state.
     private
-    type(adios2_engine) :: engine            !! ADIOS2 engine for data reading/writing
-    logical :: is_step_active = .false.      !! Flag to track if a step is active
-    logical :: is_writer = .false.           !! Flag to track if this is for writing
+    type(adios2_engine) :: engine            !! ADIOS2 engine for data transport
+    logical :: is_step_active = .false.      !! Flag tracking if a step is active
+    logical :: is_writer = .false.           !! True if file opened for writing
   contains
-    procedure :: close => file_close_adios2
-    procedure :: begin_step => file_begin_step_adios2
-    procedure :: end_step => file_end_step_adios2
-    procedure, private :: handle_error => handle_error_file
+    procedure :: close => file_close_adios2              !! Close file and engine
+    procedure :: begin_step => file_begin_step_adios2    !! Begin new I/O step
+    procedure :: end_step => file_end_step_adios2        !! End current I/O step
+    procedure, private :: handle_error => handle_error_file !! Error handling (internal)
   end type io_adios2_file_t
 
 contains

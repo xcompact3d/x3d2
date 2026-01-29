@@ -1,14 +1,16 @@
 module m_ordering
+  !! Module for index conversion between application storage and Cartesian layouts.
+  !!
+  !! This module provides functions to convert between directional "application storage"
+  !! indices (optimised for cache locality) and Cartesian \( (i,j,k) \) indices. The application
+  !! storage layout arranges data in blocks oriented along a specific direction ( \( X, Y \), or \( Z \) )
+  !! to improve memory access patterns during computations.
 
   use m_common, only: dp, get_dirs_from_rdr, DIR_X, DIR_Y, DIR_Z, DIR_C
 
   implicit none
 
 contains
-   !!
-   !! "Application storage" stores spatial data with a directionality for better cache locality
-   !!  This set of functions converts indices from this application storage (_dir) to cartesian indices (_ijk)
-   !!
 
   pure subroutine get_index_ijk(i, j, k, dir_i, dir_j, dir_k, dir, &
                                 SZ, nx_padded, ny_padded, nz_padded)

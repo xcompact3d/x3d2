@@ -1,4 +1,14 @@
 module m_cuda_kernels_thom
+  !! CUDA kernels for Thomas algorithm-based tridiagonal solvers.
+  !!
+  !! Implements compact finite difference schemes using Thomas algorithm
+  !! for both periodic and non-periodic boundary conditions. Each thread
+  !! handles one pencil line through the domain.
+  !!
+  !! Variants:
+  !!
+  !! - `der_univ_thom`: Non-periodic boundaries with explicit near-boundary stencils
+  !! - `der_univ_thom_per`: Periodic boundaries with cyclic reduction
   use cudafor
 
   use m_common, only: dp
@@ -11,18 +21,24 @@ contains
     du, u, n_tds, n_rhs, coeffs_s, coeffs_e, coeffs, &
     thom_f, thom_s, thom_w, strch &
     )
+    !! Compute derivatives using Thomas algorithm with non-periodic boundaries.
+    !!
+    !! Forward pass: Apply compact stencil and eliminate sub-diagonal.
+    !! Backward pass: Back-substitution to solve tridiagonal system.
+    !! Near-boundary points use explicit stencils from coeffs_s/coeffs_e.
     implicit none
 
-    real(dp), device, intent(out), dimension(:, :, :) :: du
-    real(dp), device, intent(in), dimension(:, :, :) :: u
-    integer, value, intent(in) :: n_tds, n_rhs
-    real(dp), device, intent(in), dimension(:, :) :: coeffs_s, coeffs_e
-    real(dp), device, intent(in), dimension(:) :: coeffs
-    real(dp), device, intent(in), dimension(:) :: thom_f, thom_s, thom_w, strch
+    real(dp), device, intent(out), dimension(:, :, :) :: du  !! Output: Derivative field
+    real(dp), device, intent(in), dimension(:, :, :) :: u  !! Input: Field to differentiate
+    integer, value, intent(in) :: n_tds, n_rhs  !! Number of unknowns and RHS points
+    real(dp), device, intent(in), dimension(:, :) :: coeffs_s, coeffs_e  !! Start/end explicit stencil coefficients
+    real(dp), device, intent(in), dimension(:) :: coeffs  !! Bulk stencil coefficients (9-point)
+    real(dp), device, intent(in), dimension(:) :: thom_f, thom_s, &
+                                                  thom_w, strch  !! Thomas algorithm coefficients and stretching
 
-    integer :: i, j, b
+    integer :: i, j, b  !! Thread, loop, and block indices
 
-    real(dp) :: c_m4, c_m3, c_m2, c_m1, c_j, c_p1, c_p2, c_p3, c_p4, temp_du
+    real(dp) :: c_m4, c_m3, c_m2, c_m1, c_j, c_p1, c_p2, c_p3, c_p4, temp_du  !! Stencil coefficients and temporary
 
     i = threadIdx%x
     b = blockIdx%x
@@ -120,21 +136,26 @@ contains
   attributes(global) subroutine der_univ_thom_per( &
     du, u, n, coeffs, alpha, thom_f, thom_s, thom_w, thom_p, strch &
     )
+    !! Compute derivatives using Thomas algorithm with periodic boundaries.
+    !!
+    !! Forward pass: Apply periodic compact stencil with modulo indexing.
+    !! Backward pass: Standard back-substitution.
+    !! Periodic correction: Sherman-Morrison formula for cyclic system.
     implicit none
 
-    real(dp), device, intent(out), dimension(:, :, :) :: du
-    real(dp), device, intent(in), dimension(:, :, :) :: u
-    integer, value, intent(in) :: n
-    real(dp), device, intent(in), dimension(:) :: coeffs
-    real(dp), value, intent(in) :: alpha
+    real(dp), device, intent(out), dimension(:, :, :) :: du  !! Output: Derivative field
+    real(dp), device, intent(in), dimension(:, :, :) :: u  !! Input: Field to differentiate
+    integer, value, intent(in) :: n  !! Number of points in periodic direction
+    real(dp), device, intent(in), dimension(:) :: coeffs  !! Stencil coefficients (9-point)
+    real(dp), value, intent(in) :: alpha  !! Periodic coupling coefficient
     real(dp), device, intent(in), dimension(:) :: thom_f, thom_s, thom_w, &
-                                                  thom_p, strch
+                                                  thom_p, strch  !! Thomas and periodic correction coefficients
 
-    integer :: i, j, b
-    integer :: jm4, jm3, jm2, jm1, jp1, jp2, jp3, jp4
+    integer :: i, j, b  !! Thread, loop, and block indices
+    integer :: jm4, jm3, jm2, jm1, jp1, jp2, jp3, jp4  !! Periodic neighbor indices
 
-    real(dp) :: c_m4, c_m3, c_m2, c_m1, c_j, c_p1, c_p2, c_p3, c_p4
-    real(dp) :: temp_du, ss
+    real(dp) :: c_m4, c_m3, c_m2, c_m1, c_j, c_p1, c_p2, c_p3, c_p4  !! Stencil coefficients
+    real(dp) :: temp_du, ss  !! Temporary derivative and Sherman-Morrison correction
 
     i = threadIdx%x
     b = blockIdx%x

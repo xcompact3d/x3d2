@@ -1,20 +1,36 @@
 module m_checkpoint_manager
-! @brief Manages the creation and restoration of simulation checkpoints
-!! for restart capabilities.
-!!
-!! @details This module is responsible for periodically saving the full, unstrided
-!! simulation state to a file. This allows a simulation to be stopped and resumed
-!! from the exact state it was in.
-!!
-!! Key features include:
-!! - Reading all checkpoint settings from a configuration file
-!! - Periodically writing the full-resolution simulation state
-!! - Handling the full logic for restarting a simulation from
-!! a specified checkpoint file.
-!! - A safe-write strategy that writes to a temporary file first,
-!!   then atomically renames it to the final filename to
-!! prevent corrupted checkpoints.
-!! - Optional cleanup of old checkpoint files to conserve disk space.
+  !! Manages creation and restoration of simulation checkpoints for restart.
+  !!
+  !! This module is responsible for periodically saving the full simulation
+  !! state to checkpoint files and restoring from them for restarts. This
+  !! allows simulations to be stopped and resumed from the exact state.
+  !!
+  !! **Key Features:**
+  !!
+  !! - Configuration via namelist (checkpoint frequency, prefix, etc.)
+  !! - Periodic writing of full-resolution simulation state
+  !! - Complete restart logic from specified checkpoint file
+  !! - Safe-write strategy: temporary file then atomic rename
+  !! - Optional cleanup of old checkpoints to conserve disk space
+  !! - Stores velocity fields (\(u, v, w\)), timestep, and simulation time
+  !!
+  !! **Safe-Write Strategy:**
+  !!
+  !! To prevent corrupted checkpoints from crashes during write:
+  !!
+  !! 1. Write to temporary file (e.g., `checkpoint_0001000.tmp.bp`)
+  !! 2. Atomic rename to final name (`checkpoint_0001000.bp`)
+  !! 3. Optionally delete previous checkpoint if `keep_checkpoint=false`
+  !!
+  !! **Configuration:**
+  !!
+  !! Controlled via `checkpoint_config_t` read from input namelist:
+  !!
+  !! - `checkpoint_freq`: write interval (iterations)
+  !! - `keep_checkpoint`: retain all checkpoints vs overwrite old ones
+  !! - `checkpoint_prefix`: filename prefix
+  !! - `restart_from_checkpoint`: enable restart
+  !! - `restart_file`: checkpoint file to restart from
   use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Abort
   use m_common, only: dp, i8, DIR_X, get_argument
   use m_field, only: field_t
@@ -30,38 +46,48 @@ module m_checkpoint_manager
   implicit none
 
   type :: raw_old_field_buffer_t
-    real(dp), allocatable :: data(:, :, :)
+    !! Temporary buffer for field data (used internally).
+    real(dp), allocatable :: data(:, :, :) !! 3D array storage
   end type raw_old_field_buffer_t
 
   private
   public :: checkpoint_manager_t
 
   type :: checkpoint_manager_t
-    type(checkpoint_config_t) :: config
-    integer :: last_checkpoint_step = -1
-    integer, dimension(3) :: full_resolution = [1, 1, 1]
-    type(field_buffer_map_t), allocatable :: field_buffers(:)
-    integer(i8), dimension(3) :: last_shape_dims = 0
-    integer, dimension(3) :: last_stride_factors = 0
-    integer(i8), dimension(3) :: last_output_shape = 0
+    !! Manager for checkpoint file operations (writing and reading).
+    !!
+    !! Handles all aspects of checkpoint I/O including periodic writes
+    !! during simulation and restoration during restart. Maintains state
+    !! needed for consistent checkpoint operations across multiple writes.
+    type(checkpoint_config_t) :: config              !! Checkpoint configuration settings
+    integer :: last_checkpoint_step = -1             !! Timestep of last checkpoint written
+    integer, dimension(3) :: full_resolution = [1, 1, 1] !! Global domain resolution [nx, ny, nz]
+    type(field_buffer_map_t), allocatable :: field_buffers(:) !! Buffers for field data I/O
+    integer(i8), dimension(3) :: last_shape_dims = 0 !! Shape dimensions from last write
+    integer, dimension(3) :: last_stride_factors = 0 !! Stride factors from last write
+    integer(i8), dimension(3) :: last_output_shape = 0 !! Output shape from last write
   contains
-    procedure :: init
-    procedure :: handle_restart
-    procedure :: handle_checkpoint_step
-    procedure :: is_restart
-    procedure :: finalise
-    procedure, private :: write_checkpoint
-    procedure, private :: restart_checkpoint
-    procedure, private :: write_fields
-    procedure, private :: cleanup_output_buffers
+    procedure :: init                          !! Initialise checkpoint manager
+    procedure :: handle_restart                !! Restore from checkpoint file
+    procedure :: handle_checkpoint_step        !! Write checkpoint if needed at timestep
+    procedure :: is_restart                    !! Check if this is a restart run
+    procedure :: finalise                      !! Clean up and finalise
+    procedure, private :: write_checkpoint     !! Write checkpoint file (internal)
+    procedure, private :: restart_checkpoint   !! Read checkpoint file (internal)
+    procedure, private :: write_fields         !! Write field data to file (internal)
+    procedure, private :: cleanup_output_buffers !! Free output buffers (internal)
   end type checkpoint_manager_t
 
 contains
 
   subroutine init(self, comm)
-    !! Initialise checkpoint manager
-    class(checkpoint_manager_t), intent(inout) :: self
-    integer, intent(in) :: comm
+    !! Initialise checkpoint manager from configuration.
+    !!
+    !! Reads checkpoint settings from input namelist and configures
+    !! output if checkpoint frequency is positive. Prints checkpoint
+    !! settings on root process.
+    class(checkpoint_manager_t), intent(inout) :: self !! Checkpoint manager instance
+    integer, intent(in) :: comm                         !! MPI communicator
 
     self%config = checkpoint_config_t()
     call self%config%read(nml_file=get_argument(1))
@@ -72,10 +98,13 @@ contains
   end subroutine init
 
   subroutine configure_output(self, comm)
-    !! Configure checkpoint output settings
+    !! Configure and print checkpoint output settings.
+    !!
+    !! Displays checkpoint configuration on root process including
+    !! frequency, retention policy, and file prefix.
     use m_io_backend, only: get_default_backend, IO_BACKEND_DUMMY
-    class(checkpoint_manager_t), intent(inout) :: self
-    integer, intent(in) :: comm
+    class(checkpoint_manager_t), intent(inout) :: self !! Checkpoint manager instance
+    integer, intent(in) :: comm                         !! MPI communicator
 
     integer :: myrank, ierr
 
@@ -89,18 +118,25 @@ contains
   end subroutine configure_output
 
   function is_restart(self) result(restart)
-    !! Check if this is a restart run
-    class(checkpoint_manager_t), intent(in) :: self
-    logical :: restart
+    !! Check if this is a restart run.
+    !!
+    !! Queries configuration to determine if simulation should restart
+    !! from an existing checkpoint file.
+    class(checkpoint_manager_t), intent(in) :: self !! Checkpoint manager instance
+    logical :: restart                               !! True if restarting from checkpoint
 
     restart = self%config%restart_from_checkpoint
   end function is_restart
 
   subroutine handle_restart(self, solver, comm)
-    !! Handle restart from checkpoint
-    class(checkpoint_manager_t), intent(inout) :: self
-    class(solver_t), intent(inout) :: solver
-    integer, intent(in), optional :: comm
+    !! Restore solver state from checkpoint file.
+    !!
+    !! Reads velocity fields, timestep, and time from the checkpoint file
+    !! specified in configuration. Updates solver's current iteration counter.
+    !! Prints restart information on root process.
+    class(checkpoint_manager_t), intent(inout) :: self    !! Checkpoint manager instance
+    class(solver_t), intent(inout) :: solver              !! Solver to restore state into
+    integer, intent(in), optional :: comm                 !! MPI communicator (optional)
 
     character(len=256) :: restart_file
     integer :: restart_timestep
@@ -123,11 +159,15 @@ contains
   end subroutine handle_restart
 
   subroutine handle_checkpoint_step(self, solver, timestep, comm)
-    !! Handle checkpoint writing at a given timestep
-    class(checkpoint_manager_t), intent(inout) :: self
-    class(solver_t), intent(in) :: solver
-    integer, intent(in) :: timestep
-    integer, intent(in), optional :: comm
+    !! Write checkpoint if frequency condition is met.
+    !!
+    !! Checks if current timestep is a checkpoint interval (divisible by
+    !! checkpoint_freq) and writes checkpoint file if so. Called each
+    !! timestep from main simulation loop.
+    class(checkpoint_manager_t), intent(inout) :: self !! Checkpoint manager instance
+    class(solver_t), intent(in) :: solver              !! Solver containing current state
+    integer, intent(in) :: timestep                     !! Current timestep number
+    integer, intent(in), optional :: comm               !! MPI communicator (optional)
 
     integer :: comm_to_use
 
@@ -138,11 +178,26 @@ contains
   end subroutine handle_checkpoint_step
 
   subroutine write_checkpoint(self, solver, timestep, comm)
-    !! Write a checkpoint file for simulation restart
-    class(checkpoint_manager_t), intent(inout) :: self
-    class(solver_t), intent(in) :: solver
-    integer, intent(in) :: timestep
-    integer, intent(in) :: comm
+    !! Write checkpoint file using safe-write strategy (internal).
+    !!
+    !! Implements the checkpoint writing logic with atomic file operations
+    !! to prevent corruption. The procedure:
+    !! 1. Check if checkpoint is due (frequency condition)
+    !! 2. Write to temporary file (_temp.bp)
+    !! 3. Write metadata (timestep, time, dt, data location)
+    !! 4. Write velocity fields (u, v, w) via write_fields
+    !! 5. Write time integrator state (AB scheme coefficients if applicable)
+    !! 6. Close temporary file
+    !! 7. Atomic rename: temp file to final name
+    !! 8. Optionally delete previous checkpoint if keep_checkpoint=false
+    !!
+    !! **Safe-Write Strategy:** Writing to a temporary file and then renaming
+    !! ensures that if a crash occurs during write, the previous valid
+    !! checkpoint remains intact.
+    class(checkpoint_manager_t), intent(inout) :: self !! Checkpoint manager instance
+    class(solver_t), intent(in) :: solver              !! Solver with state to save
+    integer, intent(in) :: timestep                     !! Current timestep number
+    integer, intent(in) :: comm                         !! MPI communicator
 
     character(len=256) :: filename, temp_filename, old_filename
     integer :: ierr, myrank
@@ -307,13 +362,29 @@ contains
   subroutine restart_checkpoint( &
     self, solver, filename, timestep, restart_time, comm &
     )
-    !! Restart simulation state from checkpoint file
-    class(checkpoint_manager_t), intent(inout) :: self
-    class(solver_t), intent(inout) :: solver
-    character(len=*), intent(in) :: filename
-    integer, intent(out) :: timestep
-    real(dp), intent(out) :: restart_time
-    integer, intent(in) :: comm
+    !! Restore simulation state from checkpoint file (internal).
+    !!
+    !! Reads all data from checkpoint file and restores solver state:
+    !! 1. Verify checkpoint file exists (abort if missing)
+    !! 2. Open checkpoint file for reading
+    !! 3. Read metadata (timestep, time, dt, data location)
+    !! 4. Read time integrator state (AB coefficients, order, step counters)
+    !! 5. Read velocity fields (u, v, w) with correct dimensions
+    !! 6. Restore time integrator state including history (olds arrays)
+    !! 7. Set solver data location to match checkpoint
+    !!
+    !! **Data Location:** Checkpoint records whether fields were stored at
+    !! vertices (VERT) or cell centers (CELL), and restoration preserves this.
+    !!
+    !! **Time Integrator State:** For Adams-Bashforth schemes, restores the
+    !! history of old field values (du_olds, dv_olds, dw_olds) needed for
+    !! multi-step time integration.
+    class(checkpoint_manager_t), intent(inout) :: self !! Checkpoint manager instance
+    class(solver_t), intent(inout) :: solver           !! Solver to restore state into
+    character(len=*), intent(in) :: filename           !! Checkpoint file path
+    integer, intent(out) :: timestep                    !! Timestep from checkpoint
+    real(dp), intent(out) :: restart_time              !! Simulation time from checkpoint
+    integer, intent(in) :: comm                         !! MPI communicator
 
     type(reader_session_t) :: reader_session
     integer :: ierr, myrank, data_loc
@@ -456,13 +527,28 @@ contains
   subroutine write_fields( &
     self, field_names, host_fields, solver, writer_session, data_loc &
     )
-    !! Write field data for checkpoints (no striding)
-    class(checkpoint_manager_t), intent(inout) :: self
-    character(len=*), dimension(:), intent(in) :: field_names
-    class(field_ptr_t), dimension(:), target, intent(in) :: host_fields
-    class(solver_t), intent(in) :: solver
-    type(writer_session_t), intent(inout) :: writer_session
-    integer, intent(in) :: data_loc
+    !! Write velocity field data to checkpoint file (internal).
+    !!
+    !! Writes field data at full resolution (no striding for checkpoints).
+    !! The procedure:
+    !! 1. Prepare field buffers for full resolution output
+    !! 2. Calculate output dimensions and hyperslab selection
+    !! 3. For each field (u, v, w):
+    !!    - Copy field data to output buffer
+    !!    - Write buffer to file with proper hyperslab parameters
+    !!
+    !! **Full Resolution:** Unlike snapshots (which can be strided),
+    !! checkpoints always write full-resolution data to enable exact restart.
+    !!
+    !! **Parallel I/O:** Each MPI rank writes its local subdomain using
+    !! hyperslab selection (output_start, output_count) to assemble the
+    !! global field in the file.
+    class(checkpoint_manager_t), intent(inout) :: self      !! Checkpoint manager instance
+    character(len=*), dimension(:), intent(in) :: field_names !! Field names ["u", "v", "w"]
+    class(field_ptr_t), dimension(:), target, intent(in) :: host_fields !! Field pointers
+    class(solver_t), intent(in) :: solver                   !! Solver containing mesh info
+    type(writer_session_t), intent(inout) :: writer_session !! I/O writer session
+    integer, intent(in) :: data_loc                         !! Data location (VERT or CELL)
 
     integer :: i_field
     integer(i8), dimension(3) :: output_start, output_count
@@ -505,15 +591,22 @@ contains
   end subroutine write_fields
 
   subroutine cleanup_output_buffers(self)
-    !! Clean up dynamic field buffers
-    class(checkpoint_manager_t), intent(inout) :: self
+    !! Clean up dynamically allocated field buffers (internal).
+    !!
+    !! Frees memory allocated for field I/O buffers. Called during
+    !! finalisation to prevent memory leaks.
+    class(checkpoint_manager_t), intent(inout) :: self !! Checkpoint manager instance
 
     call cleanup_field_buffers(self%field_buffers)
   end subroutine cleanup_output_buffers
 
   subroutine finalise(self)
-    !! Clean up checkpoint manager
-    class(checkpoint_manager_t), intent(inout) :: self
+    !! Finalise checkpoint manager and free resources.
+    !!
+    !! Cleans up all dynamically allocated buffers. Should be called
+    !! at the end of simulation or when checkpoint manager is no longer
+    !! needed.
+    class(checkpoint_manager_t), intent(inout) :: self !! Checkpoint manager instance
 
     call self%cleanup_output_buffers()
   end subroutine finalise

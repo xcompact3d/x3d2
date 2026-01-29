@@ -1,4 +1,8 @@
 module m_cuda_exec_thom
+  !! Thomas algorithm execution on GPU for local tridiagonal systems.
+  !!
+  !! Dispatches to periodic or non-periodic Thomas kernels based on
+  !! boundary conditions. No MPI communication required.
   use cudafor
 
   use m_common, only: dp
@@ -10,12 +14,15 @@ module m_cuda_exec_thom
 contains
 
   subroutine exec_thom_tds_compact(du, u, tdsops, blocks, threads)
+    !! Execute Thomas algorithm for compact scheme derivative $du = d(u)$ on GPU.
+    !!
+    !! Selects periodic or non-periodic kernel variant based on operator configuration.
     implicit none
 
-    real(dp), device, dimension(:, :, :), intent(out) :: du
-    real(dp), device, dimension(:, :, :), intent(in) :: u
-    type(cuda_tdsops_t), intent(in) :: tdsops
-    type(dim3), intent(in) :: blocks, threads
+    real(dp), device, dimension(:, :, :), intent(out) :: du  !! Output: derivative
+    real(dp), device, dimension(:, :, :), intent(in) :: u  !! Input: field
+    type(cuda_tdsops_t), intent(in) :: tdsops  !! Tridiagonal operators
+    type(dim3), intent(in) :: blocks, threads  !! CUDA kernel configuration
 
     if (tdsops%periodic) then
       call der_univ_thom_per<<<blocks, threads>>>( & !&

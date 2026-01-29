@@ -1,4 +1,19 @@
 module m_exec_thom
+  !! Local Thomas algorithm execution for OMP backend.
+  !!
+  !! Provides parallel execution of compact finite difference schemes using
+  !! standard Thomas algorithm (tridiagonal solver). Used when domain is not
+  !! decomposed in the derivative direction (all data local to process).
+  !!
+  !! **Two variants:**
+  !!
+  !! - **Non-periodic:** Standard Thomas with arbitrary boundary conditions
+  !! - **Periodic:** Modified Thomas for cyclic tridiagonal systems
+  !!
+  !! **Parallelisation:** OpenMP over pencil groups (no MPI needed)
+  !!
+  !! **Contrast with distributed:** exec_dist handles multi-process case,
+  !! this module handles single-process-per-direction case.
 
   use m_common, only: dp
   use m_tdsops, only: tdsops_t
@@ -13,11 +28,22 @@ module m_exec_thom
 contains
 
   subroutine exec_thom_tds_compact(du, u, tdsops, n_groups)
+    !! Execute local Thomas algorithm for compact scheme.
+    !!
+    !! Applies compact finite difference operator using tridiagonal solver.
+    !! Chooses periodic or non-periodic variant based on operator configuration.
+    !! All computation local to process (no MPI communication).
+    !!
+    !! **Algorithm selection:**
+    !! - `periodic=.true.`: Sherman-Morrison formula for cyclic system
+    !! - `periodic=.false.`: Standard forward/backward Thomas algorithm
+    !!
+    !! **Parallelisation:** OpenMP parallel loop over pencil groups
 
-    real(dp), dimension(:, :, :), intent(out) :: du
-    real(dp), dimension(:, :, :), intent(in) :: u
-    type(tdsops_t), intent(in) :: tdsops
-    integer, intent(in) :: n_groups
+    real(dp), dimension(:, :, :), intent(out) :: du  !! Derivative output
+    real(dp), dimension(:, :, :), intent(in) :: u    !! Input field
+    type(tdsops_t), intent(in) :: tdsops             !! Compact scheme operator
+    integer, intent(in) :: n_groups                  !! Number of pencil groups
 
     integer :: k
 
