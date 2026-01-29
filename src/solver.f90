@@ -1,4 +1,18 @@
 module m_solver
+  !! Main solver module implementing the Incompact3D numerical algorithm.
+  !!
+  !! This module provides the high-level solver infrastructure for solving
+  !! incompressible Navier-Stokes equations using compact finite differences.
+  !! The solver orchestrates the transport equation (transeq), divergence,
+  !! Poisson solver, and gradient operations required for the fractional-step
+  !! projection method.
+  !!
+  !! The implementation supports:
+  !! - Multiple backend executors (CPU/GPU)
+  !! - Distributed and Thomas algorithm for derivatives
+  !! - Immersed boundary method (IBM)
+  !! - Multi-species transport
+  !! - Various time integration schemes
   use iso_fortran_env, only: stderr => error_unit
   use mpi
 
@@ -47,53 +61,65 @@ module m_solver
       !! method of the allocator can be used to make this field available
       !! for later use.
 
-    real(dp) :: dt, nu
-    real(dp), dimension(:), allocatable :: nu_species
-    integer :: n_iters, n_output
-    integer :: current_iter = 0
-    integer :: ngrid
-    integer :: nvars = 3
-    integer :: nspecies = 0
+    real(dp) :: dt                              !! Time step size
+    real(dp) :: nu                              !! Kinematic viscosity
+    real(dp), dimension(:), allocatable :: nu_species  !! Viscosities for multiple species
+    integer :: n_iters                          !! Total number of time iterations
+    integer :: n_output                         !! Output frequency (every nth iteration)
+    integer :: current_iter = 0                 !! Current iteration number
+    integer :: ngrid                            !! Total number of grid points
+    integer :: nvars = 3                        !! Number of velocity variables (u,v,w)
+    integer :: nspecies = 0                     !! Number of scalar species to transport
 
-    class(field_t), pointer :: u, v, w
-    type(flist_t), dimension(:), pointer :: species => null()
+    class(field_t), pointer :: u, v, w          !! Velocity field components
+    type(flist_t), dimension(:), pointer :: species => null()  !! Array of scalar species fields
 
-    class(base_backend_t), pointer :: backend
-    type(mesh_t), pointer :: mesh
-    type(time_intg_t) :: time_integrator
-    type(allocator_t), pointer :: host_allocator
-    type(dirps_t), pointer :: xdirps, ydirps, zdirps
-    type(vector_calculus_t) :: vector_calculus
-    type(ibm_t) :: ibm
-    logical :: ibm_on
-    procedure(poisson_solver), pointer :: poisson => null()
-    procedure(transport_equation), pointer :: transeq => null()
+    class(base_backend_t), pointer :: backend  !! Backend executor (CPU/GPU)
+    type(mesh_t), pointer :: mesh               !! Computational mesh
+    type(time_intg_t) :: time_integrator        !! Time integration scheme
+    type(allocator_t), pointer :: host_allocator  !! Memory allocator for host arrays
+    type(dirps_t), pointer :: xdirps, ydirps, zdirps  !! Tridiagonal operators in each direction
+    type(vector_calculus_t) :: vector_calculus  !! Vector calculus operations
+    type(ibm_t) :: ibm                          !! Immersed boundary method handler
+    logical :: ibm_on                           !! Flag to enable/disable IBM
+    procedure(poisson_solver), pointer :: poisson => null()  !! Poisson solver procedure pointer
+    procedure(transport_equation), pointer :: transeq => null()  !! Transport equation solver pointer
   contains
-    procedure :: transeq_species
-    procedure :: pressure_correction
-    procedure :: divergence_v2p
-    procedure :: gradient_p2v
-    procedure :: curl
+    procedure :: transeq_species       !! Compute transport equation for scalar species
+    procedure :: pressure_correction   !! Apply pressure correction to enforce incompressibility
+    procedure :: divergence_v2p        !! Compute divergence of velocity field
+    procedure :: gradient_p2v          !! Compute pressure gradient
+    procedure :: curl                  !! Compute curl (vorticity) of velocity field
   end type solver_t
 
   abstract interface
     subroutine poisson_solver(self, pressure, div_u)
+      !! Interface for Poisson solver implementations.
+      !!
+      !! Solves the Poisson equation \( \nabla^2 p = f \) where f is the
+      !! divergence of the intermediate velocity field.
       import :: solver_t
       import :: field_t
       implicit none
 
       class(solver_t) :: self
-      class(field_t), intent(inout) :: pressure
-      class(field_t), intent(in) :: div_u
+      class(field_t), intent(inout) :: pressure  !! Pressure field (solution)
+      class(field_t), intent(in) :: div_u         !! Velocity divergence (RHS)
     end subroutine poisson_solver
 
     subroutine transport_equation(self, rhs, variables)
+      !! Interface for transport equation implementations.
+      !!
+      !! Computes the right-hand side of the transport equation including
+      !! convection, diffusion, and any source terms. The momentum equations are:
+      !! \[ \frac{\partial \mathbf{u}}{\partial t} + (\mathbf{u} \cdot \nabla)\mathbf{u} = -\nabla p + \nu \nabla^2 \mathbf{u} \]
       import :: solver_t
       import :: flist_t
       implicit none
 
       class(solver_t) :: self
-      type(flist_t), intent(inout) :: rhs(:), variables(:)
+      type(flist_t), intent(inout) :: rhs(:)       !! Right-hand side terms (output)
+      type(flist_t), intent(inout) :: variables(:) !! Field variables (velocity components)
     end subroutine transport_equation
   end interface
 
@@ -104,12 +130,25 @@ module m_solver
 contains
 
   function init(backend, mesh, host_allocator) result(solver)
+    !! Initialise the solver with backend, mesh, and configuration.
+    !!
+    !! This function sets up the complete solver infrastructure including:
+    !! - Velocity field allocation (u, v, w)
+    !! - Tridiagonal operators for each direction (xdirps, ydirps, zdirps)
+    !! - Time integrator
+    !! - Poisson solver (FFT or CG)
+    !! - Transport equation solver (default or low-memory variant)
+    !! - Optional scalar species transport
+    !! - Optional immersed boundary method (IBM)
+    !!
+    !! All configuration is read from the namelist file specified as the first
+    !! command-line argument.
     implicit none
 
-    class(base_backend_t), target, intent(inout) :: backend
-    type(mesh_t), target, intent(inout) :: mesh
-    type(allocator_t), target, intent(inout) :: host_allocator
-    type(solver_t) :: solver
+    class(base_backend_t), target, intent(inout) :: backend     !! Backend executor (CPU/GPU)
+    type(mesh_t), target, intent(inout) :: mesh                  !! Computational mesh
+    type(allocator_t), target, intent(inout) :: host_allocator  !! Host memory allocator
+    type(solver_t) :: solver                                     !! Initialised solver object
 
     type(solver_config_t) :: solver_cfg
     integer :: i
@@ -208,11 +247,22 @@ contains
 
   subroutine allocate_tdsops(dirps, backend, mesh, der1st_scheme, &
                              der2nd_scheme, interpl_scheme, stagder_scheme)
-    type(dirps_t), intent(inout) :: dirps
-    class(base_backend_t), intent(in) :: backend
-    type(mesh_t), intent(in) :: mesh
-    character(*), intent(in) :: der1st_scheme, der2nd_scheme, &
-                                interpl_scheme, stagder_scheme
+    !! Allocate and initialise tridiagonal operators for a given direction.
+    !!
+    !! This subroutine creates the compact finite difference operators needed for:
+    !! - First derivatives (der1st)
+    !! - Second derivatives (der2nd)
+    !! - Interpolation (interpl)
+    !! - Staggered derivatives (stagder)
+    !!
+    !! Boundary conditions are determined from the mesh periodicity flags.
+    type(dirps_t), intent(inout) :: dirps           !! Direction-specific operator set
+    class(base_backend_t), intent(in) :: backend    !! Backend executor
+    type(mesh_t), intent(in) :: mesh                 !! Computational mesh
+    character(*), intent(in) :: der1st_scheme        !! First derivative scheme name
+    character(*), intent(in) :: der2nd_scheme        !! Second derivative scheme name
+    character(*), intent(in) :: interpl_scheme       !! Interpolation scheme name
+    character(*), intent(in) :: stagder_scheme       !! Staggered derivative scheme name
 
     integer :: dir, bc_start, bc_end, bc_mp_start, bc_mp_end, n_vert, n_cell, i
     real(dp) :: d
@@ -282,15 +332,23 @@ contains
   end subroutine
 
   subroutine transeq_default(self, rhs, variables)
-    !! Skew-symmetric form of convection-diffusion terms in the
-    !! incompressible Navier-Stokes momemtum equations, excluding
-    !! pressure terms.
-    !! Inputs from velocity grid and outputs to velocity grid.
+    !! Compute transport equation RHS using default (high-memory) algorithm.
+    !!
+    !! Evaluates the skew-symmetric form of convection-diffusion terms in the
+    !! incompressible Navier-Stokes momentum equations, excluding pressure:
+    !! \[ RHS = -(\mathbf{u} \cdot \nabla)\mathbf{u} + \nu \nabla^2 \mathbf{u} \]
+    !!
+    !! Uses skew-symmetric formulation for numerical stability:
+    !! \[ (\mathbf{u} \cdot \nabla)\mathbf{u} = \frac{1}{2}[(\mathbf{u} \cdot \nabla)\mathbf{u} + \nabla \cdot (\mathbf{u}\mathbf{u})] \]
+    !!
+    !! This version stores intermediate results for all velocity components,
+    !! providing better performance at the cost of higher memory usage.
+    !! Both inputs and outputs are on the velocity (vertex) grid.
     implicit none
 
     class(solver_t) :: self
-    type(flist_t), intent(inout) :: rhs(:)
-    type(flist_t), intent(inout) :: variables(:)
+    type(flist_t), intent(inout) :: rhs(:)         !! Right-hand side output (du/dt, dv/dt, dw/dt)
+    type(flist_t), intent(inout) :: variables(:)   !! Velocity components (u, v, w)
 
     class(field_t), pointer :: u_y, v_y, w_y, u_z, v_z, w_z, &
       du_y, dv_y, dw_y, du_z, dv_z, dw_z, &
@@ -382,12 +440,20 @@ contains
   end subroutine transeq_default
 
   subroutine transeq_lowmem(self, rhs, variables)
-    !! low memory version of the transport equation, roughly %2 slower overall
+    !! Compute transport equation RHS using low-memory algorithm.
+    !!
+    !! Evaluates the same skew-symmetric form as transeq_default but with
+    !! reduced memory footprint by reusing field storage. This approach is
+    !! approximately 2% slower but uses significantly less memory, which can
+    !! be important for large simulations or GPU implementations with limited
+    !! memory.
+    !!
+    !! See transeq_default for the mathematical formulation.
     implicit none
 
     class(solver_t) :: self
-    type(flist_t), intent(inout) :: rhs(:)
-    type(flist_t), intent(inout) :: variables(:)
+    type(flist_t), intent(inout) :: rhs(:)        !! Right-hand side output (du/dt, dv/dt, dw/dt)
+    type(flist_t), intent(inout) :: variables(:)  !! Velocity components (u, v, w)
 
     class(field_t), pointer :: u_y, v_y, w_y, u_z, v_z, w_z, &
       du_y, dv_y, dw_y, du_z, dv_z, dw_z, du, dv, dw, u, v, w
@@ -498,14 +564,20 @@ contains
   end subroutine transeq_lowmem
 
   subroutine transeq_species(self, rhs, variables)
-    !! Skew-symmetric form of convection-diffusion terms in the
-    !! species equation.
-    !! Inputs from velocity grid and outputs to velocity grid.
+    !! Compute transport equation for passive scalar species.
+    !!
+    !! Evaluates the convection-diffusion equation for transported scalars:
+    !! \[ \frac{\partial \phi}{\partial t} + (\mathbf{u} \cdot \nabla)\phi = \nu_\phi \nabla^2 \phi \]
+    !!
+    !! where \( \phi \) represents each scalar species, \( \nu_\phi \) is the
+    !! species diffusivity. Uses skew-symmetric form similar to momentum equations.
+    !! Velocity field must be available in self%u, self%v, self%w.
+    !! Both inputs and outputs are on the velocity (vertex) grid.
     implicit none
 
     class(solver_t) :: self
-    type(flist_t), intent(inout) :: rhs(:)
-    type(flist_t), intent(in) :: variables(:)
+    type(flist_t), intent(inout) :: rhs(:)       !! Right-hand side for species equations
+    type(flist_t), intent(in) :: variables(:)    !! Scalar species fields
 
     integer :: i
     class(field_t), pointer :: u, v, w, &
@@ -594,12 +666,18 @@ contains
   end subroutine transeq_species
 
   subroutine divergence_v2p(self, div_u, u, v, w)
-    !! Wrapper for divergence_v2p
+    !! Compute divergence of velocity field from vertex to cell centers.
+    !!
+    !! Calculates \( \nabla \cdot \mathbf{u} = \frac{\partial u}{\partial x} + \frac{\partial v}{\partial y} + \frac{\partial w}{\partial z} \)
+    !! using staggered derivatives and interpolation operators. The input velocity
+    !! components are on the vertex grid and the output divergence is on the cell-centered grid.
+    !!
+    !! For incompressible flow, this should be zero (up to numerical errors).
     implicit none
 
     class(solver_t) :: self
-    class(field_t), intent(inout) :: div_u
-    class(field_t), intent(in) :: u, v, w
+    class(field_t), intent(inout) :: div_u  !! Velocity divergence (output, cell-centered)
+    class(field_t), intent(in) :: u, v, w   !! Velocity components (input, vertex-centered)
 
     call self%vector_calculus%divergence_v2c( &
       div_u, u, v, w, &
@@ -611,12 +689,19 @@ contains
   end subroutine divergence_v2p
 
   subroutine gradient_p2v(self, dpdx, dpdy, dpdz, pressure)
-    !! Wrapper for gradient_p2v
+    !! Compute pressure gradient from cell centers to vertices.
+    !!
+    !! Calculates the pressure gradient components:
+    !! \[ \nabla p = \left( \frac{\partial p}{\partial x}, \frac{\partial p}{\partial y}, \frac{\partial p}{\partial z} \right) \]
+    !!
+    !! using staggered derivatives and interpolation operators. The input pressure
+    !! is on the cell-centered grid and the output gradient components are on the vertex grid.
+    !! This is used in the pressure correction step of the fractional-step method.
     implicit none
 
     class(solver_t) :: self
-    class(field_t), intent(inout) :: dpdx, dpdy, dpdz
-    class(field_t), intent(in) :: pressure
+    class(field_t), intent(inout) :: dpdx, dpdy, dpdz  !! Pressure gradient components (vertex-centered)
+    class(field_t), intent(in) :: pressure              !! Pressure field (cell-centered)
 
     call self%vector_calculus%gradient_c2v( &
       dpdx, dpdy, dpdz, pressure, &
@@ -628,7 +713,13 @@ contains
   end subroutine gradient_p2v
 
   subroutine curl(self, o_i_hat, o_j_hat, o_k_hat, u, v, w)
-    !! Wrapper for curl
+    !! Compute curl (vorticity) of the velocity field.
+    !!
+    !! Calculates the curl of velocity:
+    !! \[ \boldsymbol{\omega} = \nabla \times \mathbf{u} = \left( \frac{\partial w}{\partial y} - \frac{\partial v}{\partial z}, \frac{\partial u}{\partial z} - \frac{\partial w}{\partial x}, \frac{\partial v}{\partial x} - \frac{\partial u}{\partial y} \right) \]
+    !!
+    !! All fields are on the vertex grid. This is primarily used for
+    !! post-processing and visualisation of vorticity.
     implicit none
 
     class(solver_t) :: self
@@ -644,11 +735,23 @@ contains
   end subroutine curl
 
   subroutine poisson_fft(self, pressure, div_u)
+    !! Solve Poisson equation using Fast Fourier Transform method.
+    !!
+    !! Solves \( \nabla^2 p = f \) where f is the velocity divergence,
+    !! using FFT-based spectral method. This is very efficient for periodic
+    !! or Neumann boundary conditions and is the default/recommended solver.
+    !!
+    !! The solution process involves:
+    !! 1. Transform to 3D Cartesian data structure
+    !! 2. Apply FFT in periodic/Neumann directions
+    !! 3. Solve in spectral space
+    !! 4. Inverse FFT back to physical space
+    !! 5. Transform back to pencil decomposition
     implicit none
 
     class(solver_t) :: self
-    class(field_t), intent(inout) :: pressure
-    class(field_t), intent(in) :: div_u
+    class(field_t), intent(inout) :: pressure  !! Pressure field (solution)
+    class(field_t), intent(in) :: div_u        !! Velocity divergence (RHS)
 
     class(field_t), pointer :: p_temp, temp
 
@@ -671,11 +774,17 @@ contains
   end subroutine poisson_fft
 
   subroutine poisson_cg(self, pressure, div_u)
+    !! Solve Poisson equation using Conjugate Gradient method.
+    !!
+    !! This is a placeholder for iterative Poisson solver using CG method.
+    !! Currently sets pressure to zero for performance testing.
+    !! Will be fully implemented for cases where FFT is not suitable
+    !! (e.g., complex geometries or Dirichlet boundary conditions).
     implicit none
 
     class(solver_t) :: self
-    class(field_t), intent(inout) :: pressure
-    class(field_t), intent(in) :: div_u
+    class(field_t), intent(inout) :: pressure  !! Pressure field (solution)
+    class(field_t), intent(in) :: div_u        !! Velocity divergence (RHS)
 
     ! set the pressure field to 0 so that we can do performance tests easily
     ! this will be removed once the CG solver is implemented of course
@@ -684,10 +793,19 @@ contains
   end subroutine poisson_cg
 
   subroutine pressure_correction(self, u, v, w)
+    !! Apply pressure correction to enforce incompressibility constraint.
+    !!
+    !! Implements the projection step of the fractional-step method:
+    !! 1. Compute divergence of intermediate velocity: \( \nabla \cdot \mathbf{u}^* \)
+    !! 2. Solve Poisson equation: \( \nabla^2 p = \frac{1}{\Delta t} \nabla \cdot \mathbf{u}^* \)
+    !! 3. Correct velocity: \( \mathbf{u}^{n+1} = \mathbf{u}^* - \Delta t \nabla p \)
+    !!
+    !! After correction, the velocity field is divergence-free (incompressible).
+    !! If IBM is active, IBM forcing is applied after pressure correction.
     implicit none
 
     class(solver_t) :: self
-    class(field_t), intent(inout) :: u, v, w
+    class(field_t), intent(inout) :: u, v, w  !! Velocity components (corrected in-place)
 
     class(field_t), pointer :: div_u, pressure, dpdx, dpdy, dpdz
 
