@@ -4,6 +4,7 @@ module m_base_case
   !! This abstract base class provides the framework for implementing specific
   !! flow cases (channel, TGV, generic, etc.). New cases extend this class and
   !! override deferred procedures to specify:
+  !!
   !! - **Initial conditions**: Set velocity and other field initial states
   !! - **Boundary conditions**: Apply physical boundary conditions each timestep
   !! - **Forcing terms**: Add body forces or model-specific source terms
@@ -11,7 +12,9 @@ module m_base_case
   !! - **Postprocessing**: Compute statistics, output diagnostics, etc.
   !!
   !! **Simulation Workflow:**
+  !!
   !! The `run()` method orchestrates the time integration loop:
+  !!
   !! 1. Apply boundary conditions
   !! 2. Advance solution one timestep via solver%step()
   !! 3. Write checkpoints/snapshots (via checkpoint_mgr)
@@ -19,13 +22,16 @@ module m_base_case
   !! 5. Repeat until final time reached
   !!
   !! **Time Integration:**
+  !!
   !! Each timestep involves multiple stages (for RK) or steps (for AB):
+  !!
   !! - Transport equation (transeq) computes velocity derivatives
   !! - Forcing terms applied after transeq
   !! - Pre-correction modifies velocity (e.g., for immersed boundaries)
   !! - Pressure correction enforces incompressibility
   !!
   !! **Restart Capability:**
+  !!
   !! The checkpoint manager handles restart from saved states automatically
   !! if a restart file is detected.
   use m_allocator, only: allocator_t
@@ -77,7 +83,7 @@ module m_base_case
       !! Abstract interface for setting initial conditions.
       !!
       !! Called once during initialisation to set the initial state of velocity
-      !! and scalar fields. Implementations should populate u, v, w (and species
+      !! and scalar fields. Implementations should populate \(u, v, w\) (and species
       !! if present) with case-appropriate initial values.
       import :: base_case_t
       implicit none
@@ -275,10 +281,12 @@ contains
     !! \[ \nabla \cdot \mathbf{u} = 0 \]
     !!
     !! This diagnostic reports:
+    !!
     !! - **Maximum divergence**: Largest local violation of incompressibility
     !! - **Mean divergence**: Volume-averaged divergence (should be near machine zero)
     !!
     !! **Purpose:**
+    !!
     !! - Monitor quality of pressure correction (divergence should be ~ 1e-10 or smaller)
     !! - Detect numerical issues (large divergence indicates solver problems)
     !! - Verify proper boundary condition implementation
@@ -315,6 +323,7 @@ contains
     !! orchestrating all aspects of the simulation:
     !!
     !! **Each Timestep:**
+    !!
     !! 1. Apply boundary conditions
     !! 2. Compute derivatives and advance via time_integrator%step()
     !! 3. Handle checkpointing and snapshot output (via checkpoint_mgr)
@@ -322,12 +331,14 @@ contains
     !! 5. Print diagnostics (divergence, enstrophy)
     !!
     !! **Time Integration Stages:**
+    !!
     !! For multi-stage methods (RK), each timestep involves multiple stages.
     !! The solver%step() method handles the stage-by-stage advancement,
     !! calling transeq, forcings, pre_correction, and pressure_correction
     !! at appropriate points.
     !!
     !! **Restart Support:**
+    !!
     !! If a restart file is detected, continues from the saved iteration
     !! and time rather than starting from t=0.
     implicit none

@@ -6,18 +6,21 @@ module m_omp_kernels_dist
   !! MPI ranks to compute derivatives near subdomain boundaries.
   !!
   !! **Key Features:**
+  !!
   !! - 9-point stencil compact schemes (4th-6th order accuracy)
   !! - Explicit vectorisation with OpenMP SIMD directives
   !! - Near and far boundary treatments for non-periodic domains
   !! - Forward and backward elimination phases for distributed solves
   !!
   !! **Kernels:**
+  !!
   !! - `der_univ_dist`: Universal derivative (1st/2nd) with halo exchange
   !! - `interpl_dist`: Interpolation from cell to vertices or vice versa
   !!
   !! **Distributed Algorithm:**
   !! Compact schemes couple neighbouring points via implicit systems.
   !! In distributed memory:
+  !!
   !! 1. Near-boundary points use special coefficients incorporating halo data
   !! 2. Interior points use standard bulk coefficients
   !! 3. Modified Thomas algorithm handles cross-process dependencies

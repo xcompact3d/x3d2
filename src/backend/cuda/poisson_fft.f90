@@ -1,7 +1,7 @@
 module m_cuda_poisson_fft
   !! FFT-based Poisson solver on GPU using cuFFT.
   !!
-  !! Extends poisson_fft_t with device-resident spectral data and cuFFT plans.
+  !! Extends `poisson_fft_t` with device-resident spectral data and cuFFT plans.
   !! Handles forward/backward transforms, spectral post-processing for different
   !! boundary conditions, and periodic extensions.
   use iso_c_binding, only: c_loc, c_ptr, c_f_pointer, c_int, c_float, &

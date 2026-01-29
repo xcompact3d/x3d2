@@ -6,6 +6,7 @@ module m_exec_thom
   !! decomposed in the derivative direction (all data local to process).
   !!
   !! **Two variants:**
+  !!
   !! - **Non-periodic:** Standard Thomas with arbitrary boundary conditions
   !! - **Periodic:** Modified Thomas for cyclic tridiagonal systems
   !!

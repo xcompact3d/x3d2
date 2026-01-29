@@ -3,11 +3,12 @@ module m_solver
   !!
   !! This module provides the high-level solver infrastructure for solving
   !! incompressible Navier-Stokes equations using compact finite differences.
-  !! The solver orchestrates the transport equation (transeq), divergence,
+  !! The solver orchestrates the transport equation (`transeq`), divergence,
   !! Poisson solver, and gradient operations required for the fractional-step
   !! projection method.
   !!
   !! The implementation supports:
+  !!
   !! - Multiple backend executors (CPU/GPU)
   !! - Distributed and Thomas algorithm for derivatives
   !! - Immersed boundary method (IBM)

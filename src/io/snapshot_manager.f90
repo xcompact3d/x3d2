@@ -7,6 +7,7 @@ module m_snapshot_manager
   !! sufficient resolution for visualisation.
   !!
   !! **Key Differences from Checkpoints:**
+  !!
   !! - **Purpose**: Visualisation/analysis vs exact restart
   !! - **Resolution**: Can be strided (e.g., every 2nd point) vs full resolution
   !! - **Frequency**: Typically more frequent than checkpoints
@@ -14,16 +15,19 @@ module m_snapshot_manager
   !!   separate files per checkpoint
   !!
   !! **Features:**
+  !!
   !! - Configurable spatial striding to reduce output size
   !! - Persistent file handle (stays open across multiple writes)
   !! - Generates VTK-compatible XML for ParaView visualisation
   !! - Writes velocity fields at each snapshot interval
   !!
   !! **Configuration:**
+  !!
   !! Controlled via `checkpoint_config_t` read from input namelist:
-  !! - snapshot_freq: write interval (iterations)
-  !! - snapshot_prefix: filename prefix
-  !! - output_stride: spatial stride factors [sx, sy, sz]
+  !!
+  !! - `snapshot_freq`: write interval (iterations)
+  !! - `snapshot_prefix`: filename prefix
+  !! - `output_stride`: spatial stride factors [`sx`, `sy`, `sz`]
   use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank
   use m_common, only: dp, i8, DIR_C, VERT, get_argument
   use m_field, only: field_t
@@ -222,6 +226,7 @@ contains
     !! ADIOS2 files in ParaView without conversion.
     !!
     !! **VTK ImageData Format:**
+    !!
     !! - Defines structured rectilinear grid with uniform spacing
     !! - Extent: grid dimensions from 0 to N-1 in (z,y,x) order
     !! - Origin: physical coordinates of first grid point
@@ -367,6 +372,7 @@ contains
     !! the same file, enabling efficient time-series visualization.
     !!
     !! **Persistent File Strategy:**
+    !!
     !! - File opened once at first snapshot
     !! - Remains open for subsequent snapshots (append mode)
     !! - Each write adds a new timestep to the file

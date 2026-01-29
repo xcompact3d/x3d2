@@ -1,12 +1,12 @@
 module m_io_session
-!! @brief Provides high-level, session-based user interface for all I/O
-!! operations
+!! High-level, session-based user interface for all I/O operations.
 !!
-!! @details This module is the sole entry point for file reading and writing.
+!! This module is the sole entry point for file reading and writing.
 !! It abstracts away all backend details and provides a type-safe interface
 !! for all I/O tasks.
 !!
-!! Key features:
+!! **Key features:**
+!!
 !! - Type-safe sessions: specialised `reader_session_t` and `writer_session_t`
 !!   types for reading and writing operations, respectively.
 !! - Automatic backend selection: based on compile-time options
@@ -16,10 +16,11 @@ module m_io_session
 !! `open -> read/write -> close` workflow, with no need for manual file handle
 !!   management or explicit cleanup calls.
 !!
-!! @example
-!! A typical usage pattern for reading data and writing data:
+!! **Usage Example:**
 !!
-!! @code{.f90}
+!! A typical usage pattern for reading and writing data:
+!!
+!! ```fortran
 !! use m_io_session, only: writer_session_t, reader_session_t
 !!
 !! implicit none
@@ -39,9 +40,9 @@ module m_io_session
 !! call reader%read_data("temperature", temp_field)
 !! call reader%close()
 !! ! Note: reader is automatically cleaned up when it goes out of scope
-!! @endcode
+!! ```
 !!
-!! @note Users should only use the types provided by this module. The lower-level
+!! **Note:** Users should only use the types provided by this module. The lower-level
 !! modules like `m_io_base` and `m_io_backend` are internal components and should
 !! never be used directly in user code.
   use m_common, only: dp, i8
@@ -68,16 +69,19 @@ module m_io_session
     procedure :: close => session_base_close
   end type io_session_base_t
 
-  !> **PRIMARY TYPE FOR READING DATA** - Use this for all file reading operations
+  !> PRIMARY TYPE FOR READING DATA - Use this for all file reading operations
   !! This is the only interface users should use for reading data.
   !! Provides type-safe reading operations with automatic backend selection.
   !!
-  !! Usage example:
+  !! **Usage example:**
+  !!
+  !! ```fortran
   !!   type(reader_session_t) :: reader_session
   !!   call reader_session%open("checkpoint.bp", MPI_COMM_WORLD)
   !!   call reader_session%read_data("timestep", timestep)
   !!   call reader_session%read_data("velocity_u", u_field, start_dims, count_dims)
   !!   call reader_session%close()
+  !! ```
   type, extends(io_session_base_t) :: reader_session_t
     private
     class(io_reader_t), allocatable :: reader
@@ -94,18 +98,20 @@ module m_io_session
     final :: reader_session_finaliser
   end type reader_session_t
 
-  !> **PRIMARY TYPE FOR WRITING DATA** - Use this for all file writing operations
+  !> PRIMARY TYPE FOR WRITING DATA - Use this for all file writing operations
   !! This is the only interface users should use for writing data.
   !! Provides type-safe writing operations with automatic backend selection.
   !!
-  !! Usage example:
-  !!   type(writer_session_t) :: writer_session
-  !!   call writer_session%open("output.bp", MPI_COMM_WORLD)
-  !!   call writer_session%write_data("timestep", current_step)
-  !!   call writer_session%write_data("pressure", p_field, start_dims, count_dims)
-  !!   call writer_session%close()
-  !!   call writer_session%write_attribute("ParaView", "vtk_xml_content")
-  !!   call writer_session%close()
+  !! **Usage example:**
+  !!
+  !! ```fortran
+  !! type(writer_session_t) :: writer_session
+  !! call writer_session%open("output.bp", MPI_COMM_WORLD)
+  !! call writer_session%write_data("timestep", current_step)
+  !! call writer_session%write_data("pressure", p_field, start_dims, count_dims)
+  !! call writer_session%close()
+  !! call writer_session%write_attribute("ParaView", "vtk_xml_content")
+  !! ```
   type, extends(io_session_base_t) :: writer_session_t
     private
     class(io_writer_t), allocatable :: writer

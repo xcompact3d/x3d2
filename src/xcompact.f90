@@ -4,12 +4,14 @@ program xcompact
   !! X3D2 is a high-order finite-difference incompressible Navier-Stokes
   !! solver based on Xcompact3D/Incompact3D. It solves the incompressible
   !! Navier-Stokes equations using:
+  !!
   !! - **Compact finite differences** for spatial derivatives (4th-6th order)
   !! - **Fractional-step method** for pressure-velocity coupling
   !! - **FFT-based or iterative Poisson solvers** for pressure
   !! - **Explicit time integration** (Runge-Kutta or Adams-Bashforth)
   !!
   !! **Program Flow:**
+  !!
   !! 1. Initialise MPI and determine rank/size
   !! 2. Select computational backend (CUDA GPU or OpenMP CPU)
   !! 3. Read configuration from input file (domain and solver parameters)
@@ -20,16 +22,19 @@ program xcompact
   !! 8. Report timing and finalise MPI
   !!
   !! **Backend Options:**
+  !!
   !! - **CUDA**: GPU acceleration via NVIDIA CUDA (compile with -DCUDA)
   !! - **OMP**: CPU parallelism via OpenMP threading
   !!
   !! **Input:** Namelist file specified as command-line argument (e.g., input.x3d)
   !!
   !! **Domain Decomposition:**
+  !!
   !! X3D2 supports two decomposition strategies:
+  !!
   !! - **2DECOMP&FFT**: External library used when FFT Poisson solver + OMP backend.
   !!   Provides optimised pencil decomposition and FFT transforms. Cannot decompose
-  !!   in X-direction (nproc_dir(1) must be 1).
+  !!   in X-direction (`nproc_dir(1)` must be 1).
   !! - **Generic**: Built-in X3D2 decomposition used for CUDA backend or when
   !!   2DECOMP&FFT is unavailable. Can decompose in any direction (X, Y, Z).
   !!

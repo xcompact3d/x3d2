@@ -2,9 +2,10 @@ module m_mesh_content
   !! Module containing mesh content types for geometry, grid, and parallel decomposition.
   !!
   !! This module defines three main types:
-  !! - geo_t: Geometry information including coordinates and mesh stretching
-  !! - grid_t: Grid dimensions and boundary conditions
-  !! - par_t: Parallel domain decomposition information
+  !!
+  !! - `geo_t`: Geometry information including coordinates and mesh stretching
+  !! - `grid_t`: Grid dimensions and boundary conditions
+  !! - `par_t`: Parallel domain decomposition information
 
   use m_common, only: dp, pi
   implicit none

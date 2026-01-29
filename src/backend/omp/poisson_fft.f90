@@ -1,16 +1,18 @@
 module m_omp_poisson_fft
   !! FFT-based Poisson solver for OMP backend.
   !!
-  !! Solves $\nabla^2 \phi = f$ using spectral methods with 2DECOMP&FFT library.
+  !! Solves \(\nabla^2 \phi = f\) using spectral methods with 2DECOMP&FFT library.
   !! Transforms to Fourier space, solves diagonal system in spectral space,
   !! then transforms back to physical space.
   !!
   !! **Algorithm:**
-  !! 1. Forward FFT: physical $\rightarrow$ spectral space
-  !! 2. Spectral solve: $\phi_k = f_k / k^2$ (with modifications for boundary conditions)
-  !! 3. Backward FFT: spectral $\rightarrow$ physical space
+  !!
+  !! 1. Forward FFT: physical \(\rightarrow\) spectral space
+  !! 2. Spectral solve: \(\hat{\phi}_k = \hat{f}_k / k^2\) (with modifications for boundary conditions)
+  !! 3. Backward FFT: spectral \(\rightarrow\) physical space
   !!
   !! **Boundary conditions:**
+  !!
   !! - (0,0,0): Periodic in all directions
   !! - (0,1,0): Dirichlet in Y, periodic in X/Z (uses symmetry transform)
   !!

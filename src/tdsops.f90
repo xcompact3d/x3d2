@@ -4,21 +4,24 @@ module m_tdsops
   !! This module provides preprocessed tridiagonal operator arrays for
   !! solving compact finite difference schemes. It supports both distributed
   !! and Thomas algorithm implementations for computing:
+  !!
   !! - First and second derivatives
   !! - Interpolation between vertex and cell-centre grids
   !! - Staggered derivatives
   !!
   !! The operators are preprocessed based on:
+  !!
   !! - Grid spacing and optional stretching
   !! - Boundary conditions (periodic, Neumann, Dirichlet)
   !! - Numerical scheme (compact schemes of various orders)
   !! - Symmetry properties for free-slip boundaries
   !!
   !! The distributed algorithm is designed for parallel execution and consists of:
-  !! 1. Forward/backward elimination phase (dist_fw, dist_bw)
-  !! 2. Back-substitution phase (dist_sa, dist_sc)
   !!
-  !! The Thomas algorithm (thom_*) is used for serial execution or
+  !! 1. Forward/backward elimination phase (`dist_fw`, `dist_bw`)
+  !! 2. Back-substitution phase (`dist_sa`, `dist_sc`)
+  !!
+  !! The Thomas algorithm (`thom_*`) is used for serial execution or
   !! when the distributed approach is not suitable.
   use iso_fortran_env, only: stderr => error_unit
 

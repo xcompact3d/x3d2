@@ -6,13 +6,15 @@ module m_omp_exec_dist
   !! sweeps, and boundary system solves for multi-process compact operators.
   !!
   !! **Key features:**
+  !!
   !! - Forward/backward elimination with boundary coupling
   !! - Non-blocking MPI communication for 2x2 boundary systems
   !! - OpenMP parallelisation over pencil groups
   !! - Fused kernels for transport equation efficiency
   !!
   !! **Distributed algorithm:**
-  !! 1. Forward/backward sweep on local domain $\rightarrow$ generate boundary systems
+  !!
+  !! 1. Forward/backward sweep on local domain \(\rightarrow\) generate boundary systems
   !! 2. MPI exchange boundary data between neighbours
   !! 3. Solve coupled 2x2 systems at process interfaces
   !! 4. Substitution sweep to complete solution

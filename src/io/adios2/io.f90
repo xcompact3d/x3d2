@@ -7,12 +7,14 @@ module m_io_backend
   !! from the session interface into specific ADIOS2 API calls.
   !!
   !! **Architecture:**
+  !!
   !! - Extends abstract base types from `m_io_base`
   !! - Implements all required I/O procedures (init, open, read, write, etc.)
   !! - Manages ADIOS2-specific objects (adios, io, engine)
   !! - Handles step-based I/O for time-series data
   !!
   !! **ADIOS2 Features Leveraged:**
+  !!
   !! - **Engine Abstraction**: Same API for different formats (BP4, BP5, HDF5)
   !! - **Asynchronous I/O**: Deferred transport mode overlaps computation and I/O
   !! - **MPI Integration**: Designed for large-scale parallel I/O
@@ -20,6 +22,7 @@ module m_io_backend
   !! - **Hyperslab Selection**: Parallel distributed array I/O
   !!
   !! **Type Hierarchy:**
+  !!
   !! ```
   !! io_base (abstract)
   !!   |-- io_reader_t (abstract)

@@ -1,5 +1,5 @@
 module m_vector_calculus
-  !! Vector calculus operators for finite-difference CFD.
+  !! Vector calculus operators for finite-difference.
   !!
   !! This module provides implementations of fundamental differential operators
   !! (divergence, gradient, curl, Laplacian) on staggered and collocated grids.
@@ -7,22 +7,25 @@ module m_vector_calculus
   !! from the tdsops module.
   !!
   !! **Key Features:**
+  !!
   !! - **Staggered grid support**: Operators handle transitions between cell centres
-  !!   (CELL) and vertices (VERT) through staged derivatives and interpolation
+  !!   (`CELL`) and vertices (`VERT`) through staged derivatives and interpolation
   !! - **Data reordering**: Automatically manages pencil decomposition, reordering
-  !!   fields between X, Y, Z orientations as needed for derivatives
+  !!   fields between \( X, Y, Z \) orientations as needed for derivatives
   !! - **Memory efficiency**: Uses allocator blocks for temporary fields with
   !!   careful release management to minimise memory footprint
   !!
   !! **Grid Conventions:**
-  !! - CELL (data_loc=CELL): Variables stored at cell centres (e.g., pressure)
-  !! - VERT (data_loc=VERT): Variables stored at cell vertices (e.g., velocity)
-  !! - Staggered operators (v2c, c2v) transition between these locations
+  !!
+  !! - `CELL` (`data_loc=CELL`): Variables stored at cell centres (e.g., pressure)
+  !! - `VERT` (`data_loc=VERT`): Variables stored at cell vertices (e.g., velocity)
+  !! - Staggered operators (`v2c`, `c2v`) transition between these locations
   !!
   !! **Data Layouts:**
-  !! - DIR_X: Pencil decomposed in X direction (default for most operations)
-  !! - DIR_Y: Pencil decomposed in Y direction (for Y derivatives)
-  !! - DIR_Z: Pencil decomposed in Z direction (for Z derivatives)
+  !!
+  !! - `DIR_X`: Pencil decomposed in \( X \) direction (default for most operations)
+  !! - `DIR_Y`: Pencil decomposed in \( Y \) direction (for Y derivatives)
+  !! - `DIR_Z`: Pencil decomposed in \( Z \) direction (for Z derivatives)
   use iso_fortran_env, only: stderr => error_unit
 
   use m_allocator, only: allocator_t

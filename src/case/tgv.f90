@@ -5,12 +5,14 @@ module m_case_tgv
   !! Navier-Stokes solvers. It features an analytically-defined initial
   !! condition that transitions from laminar to turbulent flow, providing
   !! a rigorous test of:
+  !!
   !! - Spatial discretisation accuracy
   !! - Time integration stability
   !! - Energy conservation properties
   !! - Transition to turbulence physics
   !!
   !! **Initial Conditions:**
+  !!
   !! \[ u = \sin(x) \cos(y) \cos(z) \]
   !! \[ v = -\cos(x) \sin(y) \cos(z) \]
   !! \[ w = 0 \]
@@ -19,15 +21,18 @@ module m_case_tgv
   !! in all three directions.
   !!
   !! **Domain:**
+  !!
   !! Typically \( [0, 2\pi]^3 \) with periodic boundary conditions in all directions.
   !!
   !! **Validation Metrics:**
+  !!
   !! - Kinetic energy decay rate
   !! - Enstrophy evolution
   !! - Dissipation rate
   !! - Vorticity dynamics
   !!
   !! **Reference:**
+  !!
   !! Taylor, G. I., & Green, A. E. (1937). Mechanism of the production of
   !! small eddies from large ones. Proc. R. Soc. Lond. A, 158(895), 499-521.
   use iso_fortran_env, only: stderr => error_unit

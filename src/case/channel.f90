@@ -6,21 +6,25 @@ module m_case_channel
   !! to maintain a target bulk velocity.
   !!
   !! **Flow Configuration:**
-  !! - Domain: Periodic in X and Z, wall-bounded in Y
-  !! - Walls at y = 0 and y = L_y with no-slip boundary conditions
+  !!
+  !! - Domain: Periodic in \(X\) and \(Z\), wall-bounded in \(Y\)
+  !! - Walls at \(y = 0\) and \(y = L_y\) with no-slip boundary conditions
   !! - Mean pressure gradient maintains constant bulk velocity
   !! - Optional rotation forcing (Coriolis-like terms) for rotating channel
   !!
   !! **Initial Conditions:**
+  !!
   !! - Parabolic base profile: \( u = 1 - y^2 \)
   !! - Random perturbations with configurable amplitude (noise parameter)
   !! - Perturbations concentrated near centreline for faster transition
   !!
   !! **Boundary Conditions:**
-  !! - No-slip walls: u = v = w = 0 at y = 0 and y = L_y
+  !!
+  !! - No-slip walls: \( u = v = w = 0 \) at \( y = 0 \) and \( y = L_y \)
   !! - Enforces mean bulk velocity via volume shift (simulates pressure gradient)
   !!
   !! **Forcing:**
+  !!
   !! - Mean pressure gradient (constant in time, via bulk velocity constraint)
   !! - Optional Coriolis forcing for rotating channel flows
   use iso_fortran_env, only: stderr => error_unit

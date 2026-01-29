@@ -1,7 +1,7 @@
 module m_cuda_backend
   !! CUDA backend implementing GPU-accelerated solver operations.
   !!
-  !! Extends base_backend_t with GPU kernel launches and device memory
+  !! Extends `base_backend_t` with GPU kernel launches and device memory
   !! management. Transport equations, tridiagonal solves, FFT operations,
   !! and field manipulations execute on GPU.
   !!

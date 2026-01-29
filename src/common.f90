@@ -2,6 +2,7 @@ module m_common
   !! Common module containing global constants, parameters, and utility functions.
   !!
   !! This module provides:
+  !!
   !! - Precision definitions (single or double precision based on compilation flags)
   !! - Mathematical constants (e.g., \(\pi\))
   !! - Direction and reordering constants for domain decomposition

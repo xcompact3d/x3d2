@@ -7,7 +7,8 @@ module m_cuda_allocator
   !! expensive implicit host-device transfers that would kill performance.
   !!
   !! **Design rationale:**
-  !! - cuda_field_t extends field_t with device pointers (p_data_d, data_d)
+  !!
+  !! - `cuda_field_t` extends `field_t` with device pointers (`p_data_d`, `data_d`)
   !! - Maintains both 1D and 3D views of same memory for flexibility
   !! - Reference counting prevents premature deallocation
   !! - Block-based allocation reduces allocation overhead

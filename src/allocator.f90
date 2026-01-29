@@ -2,7 +2,7 @@ module m_allocator
   !! Memory allocator module for managing field data blocks.
   !!
   !! This module provides an allocator type that manages a pool of memory blocks
-  !! (field_t objects) organised in a linked list. The allocator supports efficient
+  !! (`field_t` objects) organised in a linked list. The allocator supports efficient
   !! memory reuse by allowing blocks to be requested and released, minimizing
   !! allocation/deallocation overhead during simulations.
 
