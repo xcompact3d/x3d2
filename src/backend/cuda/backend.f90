@@ -881,7 +881,8 @@ contains
     !! Copy boundary data into MPI send buffers using CUDA kernel.
     implicit none
 
-    real(dp), device, dimension(:, :, :), intent(out) :: u_send_s_dev, u_send_e_dev  !! Send buffers
+    real(dp), device, dimension(:, :, :), intent(out) :: u_send_s_dev, &
+                                                         u_send_e_dev  !! Send buffers
     real(dp), device, dimension(:, :, :), intent(in) :: u_dev  !! Source field
     integer, intent(in) :: n  !! Grid dimension
 
