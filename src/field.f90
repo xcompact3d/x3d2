@@ -1,7 +1,7 @@
 module m_field
   !! Field data structure module for managing computational grid data.
   !!
-  !! This module provides the field_t type for storing 3D scalar fields
+  !! This module provides the `field_t` type for storing 3D scalar fields
   !! on the computational grid. Fields can be organised in linked lists
   !! for memory management and support different data orientations
   !! (x-pencil, y-pencil, z-pencil).

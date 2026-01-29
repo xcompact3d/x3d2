@@ -6,27 +6,31 @@ module m_poisson_fft
   !! \[ \nabla^2 \phi = f \]
   !!
   !! **Solution Strategy:**
+  !!
   !! 1. **Forward FFT**: Transform RHS from physical to spectral space
   !! 2. **Spectral division**: Solve algebraically using wave numbers:
   !!    \( \hat{\phi} = \hat{f} / k^2 \)
   !! 3. **Backward FFT**: Transform solution back to physical space
   !!
   !! **Boundary Condition Support:**
+  !!
   !! - **Periodic (000)**: Fully periodic in all directions (standard FFT)
-  !! - **Mixed (010)**: Periodic in X/Z, non-periodic in Y (requires special handling)
+  !! - **Mixed (010)**: Periodic in \( X/Z \), non-periodic in \( Y \) (requires special handling)
   !!
   !! **Grid Stretching:**
-  !! - Uniform grids in X and Z (required for FFT)
-  !! - Y-direction stretching supported for 010 BCs via transformation matrices
+  !!
+  !! - Uniform grids in \( X \) and \( Z \) (required for FFT)
+  !! - \( Y \)-direction stretching supported for `010` BCs via transformation matrices
   !! - Stretching handled through spectral equivalence constants
   !!
   !! **Parallel Implementation:**
-  !! - Pencil decomposition in Y and Z directions (X must be undivided)
+  !!
+  !! - Pencil decomposition in \( Y \) and \( Z \) directions (\( X \) must be undivided)
   !! - Spectral space operations on permuted/transposed data layouts
   !! - Backend-specific FFT implementations (CPU/GPU)
   !!
   !! The module is abstract; concrete implementations provide FFT routines
-  !! via deferred procedures (fft_forward, fft_backward, fft_postprocess).
+  !! via deferred procedures (`fft_forward`, `fft_backward`, `fft_postprocess`).
   use m_common, only: dp, pi, CELL
   use m_field, only: field_t
   use m_mesh, only: mesh_t, geo_t

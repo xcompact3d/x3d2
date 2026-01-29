@@ -11,9 +11,10 @@ module m_omp_spectral
   !! **Reference:** JCP 228 (2009), 5989-6015, Section 4
   !!
   !! **Processing steps:**
-  !! 1. Forward spectral equivalence transform (physical $\rightarrow$ modified wavenumbers)
-  !! 2. Solve: $\hat{\phi}_k = -\hat{f}_k / k^2$
-  !! 3. Backward spectral equivalence transform (modified wavenumbers $\rightarrow$ physical)
+  !!
+  !! 1. Forward spectral equivalence transform (physical \(\rightarrow\) modified wavenumbers)
+  !! 2. Solve: \(\hat{\phi}_k = -\hat{f}_k / k^2\)
+  !! 3. Backward spectral equivalence transform (modified wavenumbers \(\rightarrow\) physical)
   use m_common, only: dp
   implicit none
 

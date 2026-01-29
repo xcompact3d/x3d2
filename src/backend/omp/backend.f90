@@ -6,11 +6,13 @@ module m_omp_backend
   !! abstract backend operations defined in `base_backend_t`.
   !!
   !! **Parallelisation Strategy:**
+  !!
   !! - **MPI**: Domain decomposition across nodes/processes
   !! - **OpenMP**: Thread parallelism within each MPI rank
   !! - **Hybrid MPI+OpenMP**: Enables efficient use of multi-core clusters
   !!
   !! **Key Features:**
+  !!
   !! - Compact finite difference operators (tridiagonal solves)
   !! - Halo exchange for distributed derivatives
   !! - FFT-based Poisson solver integration
@@ -18,14 +20,16 @@ module m_omp_backend
   !! - Optimised data reordering between decomposition directions
   !!
   !! **Memory Management:**
-  !! - Send/receive buffers for MPI halo exchange (u, v, w, du, dud, d2u)
+  !!
+  !! - Send/receive buffers for MPI halo exchange (`u`, `v`, `w`, `du`, `dud`, `d2u`)
   !! - Buffers sized based on largest decomposition direction
   !! - Persistent buffers to avoid repeated allocation
   !!
   !! **Solver Operations:**
-  !! - transeq: Transport equation terms with halo exchange
-  !! - tds_solve: Tridiagonal system solves (Thomas algorithm)
-  !! - reorder: Data layout transformations (DIR_X, DIR_Y, DIR_Z)
+  !!
+  !! - `transeq`: Transport equation terms with halo exchange
+  !! - `tds_solve`: Tridiagonal system solves (Thomas algorithm)
+  !! - `reorder`: Data layout transformations (`DIR_X`, `DIR_Y`, `DIR_Z`)
   !! - Field operations: copy, add, multiply, integrate, etc.
   !!
   !! **Note:** This backend requires 2DECOMP&FFT library for FFT operations

@@ -96,9 +96,9 @@ module m_config
     subroutine read(self, nml_file, nml_string) !&
       !! Assigns the member variables either from a file or text source.
       !!
-      !! nml_file can be an absolute or relative path
-      !! nml_string is a character string that contains the namelist.
-      !! For example, nml_string="&foobar_nml foo=0, bar='this'/"
+      !! `nml_file` can be an absolute or relative path
+      !! `nml_string` is a character string that contains the namelist.
+      !! For example, `nml_string="&foobar_nml foo=0, bar='this'/"`
       import :: base_config_t
 
       class(base_config_t) :: self
@@ -133,6 +133,8 @@ contains
 
     namelist /domain_settings/ flow_case_name, L_global, dims_global, &
       nproc_dir, BC_x, BC_y, BC_z, stretching, beta
+      !! Specifies the computational domain geometry, mesh resolution, boundary conditions,
+      !! and MPI decomposition for the simulation.
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading domain config failed! &
@@ -189,6 +191,8 @@ contains
       n_species, pr_species, lowmem_transeq, lowmem_fft, &
       time_intg, der1st_scheme, der2nd_scheme, interpl_scheme, &
       stagder_scheme, ibm_on
+      !! Specifies numerical solver settings including Reynolds number, time integration,
+      !! discretization schemes, and solver options for the Navier-Stokes equations.
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading solver config failed! &
@@ -241,6 +245,8 @@ contains
     integer :: n_rotate
 
     namelist /channel_nml/ noise, rotation, omega_rot, n_rotate
+      !! Specifies parameters specific to turbulent channel flow simulations,
+      !! including initial perturbations and optional rotation effects.
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading channel config failed! &
@@ -290,6 +296,8 @@ contains
     namelist /checkpoint_params/ checkpoint_freq, snapshot_freq, &
       keep_checkpoint, checkpoint_prefix, snapshot_prefix, &
       restart_from_checkpoint, restart_file, output_stride, snapshot_sp
+      !! Specifies checkpoint and snapshot settings for simulation output and restart,
+      !! including file naming, frequency, and spatial output stride.
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading checkpoint config failed! &
                  &Provide only a file name or source, not both.'

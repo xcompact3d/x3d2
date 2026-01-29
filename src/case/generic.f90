@@ -2,7 +2,7 @@ module m_case_generic
   !! Generic freestream flow case for general-purpose simulations.
   !!
   !! This module provides a minimal template for setting up custom flow
-  !! cases. It implements a simple uniform freestream flow (u=1, v=0, w=0)
+  !! cases. It implements a simple uniform freestream flow (\(u=1, v=0, w=0\))
   !! with no forcing or boundary corrections.
   !!
   !! **Use Cases:**
@@ -12,7 +12,7 @@ module m_case_generic
   !! - Custom flow setups requiring minimal default behaviour
   !!
   !! **Default Configuration:**
-  !! - Initial condition: Uniform flow u=1, v=w=0
+  !! - Initial condition: Uniform flow \(u=1, v=0, w=0\)
   !! - No boundary condition corrections
   !! - No forcing terms
   !! - No pre-correction

@@ -6,26 +6,31 @@ module m_checkpoint_manager
   !! allows simulations to be stopped and resumed from the exact state.
   !!
   !! **Key Features:**
+  !!
   !! - Configuration via namelist (checkpoint frequency, prefix, etc.)
   !! - Periodic writing of full-resolution simulation state
   !! - Complete restart logic from specified checkpoint file
   !! - Safe-write strategy: temporary file then atomic rename
   !! - Optional cleanup of old checkpoints to conserve disk space
-  !! - Stores velocity fields (u, v, w), timestep, and simulation time
+  !! - Stores velocity fields (\(u, v, w\)), timestep, and simulation time
   !!
   !! **Safe-Write Strategy:**
+  !!
   !! To prevent corrupted checkpoints from crashes during write:
-  !! 1. Write to temporary file (e.g., checkpoint_0001000.tmp.bp)
-  !! 2. Atomic rename to final name (checkpoint_0001000.bp)
-  !! 3. Optionally delete previous checkpoint if keep_checkpoint=false
+  !!
+  !! 1. Write to temporary file (e.g., `checkpoint_0001000.tmp.bp`)
+  !! 2. Atomic rename to final name (`checkpoint_0001000.bp`)
+  !! 3. Optionally delete previous checkpoint if `keep_checkpoint=false`
   !!
   !! **Configuration:**
+  !!
   !! Controlled via `checkpoint_config_t` read from input namelist:
-  !! - checkpoint_freq: write interval (iterations)
-  !! - keep_checkpoint: retain all checkpoints vs overwrite old ones
-  !! - checkpoint_prefix: filename prefix
-  !! - restart_from_checkpoint: enable restart
-  !! - restart_file: checkpoint file to restart from
+  !!
+  !! - `checkpoint_freq`: write interval (iterations)
+  !! - `keep_checkpoint`: retain all checkpoints vs overwrite old ones
+  !! - `checkpoint_prefix`: filename prefix
+  !! - `restart_from_checkpoint`: enable restart
+  !! - `restart_file`: checkpoint file to restart from
   use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Abort
   use m_common, only: dp, i8, DIR_X, get_argument
   use m_field, only: field_t

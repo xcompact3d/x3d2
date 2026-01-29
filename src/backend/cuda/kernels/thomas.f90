@@ -6,8 +6,9 @@ module m_cuda_kernels_thom
   !! handles one pencil line through the domain.
   !!
   !! Variants:
-  !! - der_univ_thom: Non-periodic boundaries with explicit near-boundary stencils
-  !! - der_univ_thom_per: Periodic boundaries with cyclic reduction
+  !!
+  !! - `der_univ_thom`: Non-periodic boundaries with explicit near-boundary stencils
+  !! - `der_univ_thom_per`: Periodic boundaries with cyclic reduction
   use cudafor
 
   use m_common, only: dp

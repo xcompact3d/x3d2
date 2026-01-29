@@ -1,7 +1,7 @@
 module m_cuda_tdsops
   !! GPU-resident tridiagonal operator coefficients.
   !!
-  !! Extends base tdsops_t with device memory copies of all coefficient
+  !! Extends base `tdsops_t` with device memory copies of all coefficient
   !! arrays. One-time upload to GPU avoids repeated host-device transfers
   !! during kernel execution, critical for performance.
   use iso_fortran_env, only: stderr => error_unit

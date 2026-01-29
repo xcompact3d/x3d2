@@ -1,7 +1,7 @@
 module m_mesh
   !! Mesh module providing high-level mesh management and query functions.
   !!
-  !! This module defines the mesh_t type which aggregates geometry, grid, and
+  !! This module defines the `mesh_t` type which aggregates geometry, grid, and
   !! parallel decomposition information. It provides methods to query mesh
   !! dimensions, coordinates, and other mesh properties for both global and
   !! local (per MPI rank) domains.

@@ -9,8 +9,8 @@ module m_cuda_sendrecv
   !! Without GPU-aware MPI, the implementation may stage through host
   !! memory automatically, still functional but with additional overhead.
   !!
-  !! - sendrecv_fields: Single field halo exchange
-  !! - sendrecv_3fields: Batch exchange for three fields (velocity components
+  !! - `sendrecv_fields`: Single field halo exchange
+  !! - `sendrecv_3fields`: Batch exchange for three fields (velocity components
   !!   or derivatives). Batching amortises MPI overhead and enables better
   !!   network utilisation.
   use cudafor

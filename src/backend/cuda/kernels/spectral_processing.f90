@@ -2,6 +2,7 @@ module m_cuda_spectral
   !! CUDA kernels for spectral space processing and FFT post-processing.
   !!
   !! This module contains kernels for:
+  !!
   !! - Post-processing spectral transforms (forward/backward)
   !! - Solving Poisson equations in spectral space
   !! - Enforcing and undoing periodicity in Y-direction

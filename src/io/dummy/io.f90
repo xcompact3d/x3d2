@@ -7,16 +7,19 @@ module m_io_backend
   !! I/O library.
   !!
   !! **Purpose:**
+  !!
   !! - Enables compilation without external I/O library dependencies
   !! - Provides informative error messages when I/O operations are attempted
   !! - Allows code structure to remain consistent regardless of I/O backend
   !!
   !! **Behaviour:**
+  !!
   !! - Write operations are silently ignored (no-op)
   !! - Read operations terminate with error message directing user to recompile
   !! - File open/close operations are tracked but perform no actual I/O
   !!
   !! **Use Cases:**
+  !!
   !! - Testing/debugging without I/O overhead
   !! - Systems where ADIOS2 is unavailable
   !! - Dry runs to validate simulation setup

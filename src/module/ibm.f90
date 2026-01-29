@@ -1,10 +1,10 @@
 module m_ibm
 !! This module implements the IBM capabilities.
 !!
-!! When iibm = 0, the IBM object is never used.
+!! When `iibm = 0`, the IBM object is never used.
 !!
-!! When iibm = 1, the basic IBM capability is used.
-!! It only requires ep1, a 3D field, as input.
+!! When `iibm = 1`, the basic IBM capability is used.
+!! It only requires `ep1`, a 3D field, as input.
 !! This field should be one (zero) in the fluid (solid)
 !! domain.
   use iso_fortran_env, only: stderr => error_unit
@@ -25,6 +25,45 @@ module m_ibm
   integer, parameter :: iibm_basic = 1
 
   type :: ibm_t
+    !! Immersed Boundary Method (IBM) for simulating flow around solid bodies.
+    !!
+    !! The IBM approach enables simulation of flows with complex solid geometries
+    !! without requiring body-fitted meshes. Instead, the solid geometry is
+    !! represented by a masking field (`ep1`) on a Cartesian grid.
+    !!
+    !! **Current Implementation (iibm = 1):**
+    !!
+    !! The basic IBM enforces zero velocity inside solid regions by multiplying
+    !! velocity components with the mask field `ep1`:
+    !!
+    !! - `ep1 = 1` in fluid regions → velocity unchanged
+    !! - `ep1 = 0` in solid regions → velocity set to zero
+    !!
+    !! This is applied before the pressure solve to ensure the divergence-free
+    !! constraint is satisfied only in the fluid domain.
+    !!
+    !! **Mask Field (ep1):**
+    !!
+    !! The `ep1` field defines the fluid/solid interface:
+    !!
+    !! - Values of 1.0 indicate fluid cells (no modification)
+    !! - Values of 0.0 indicate solid cells (velocity zeroed)
+    !! - Intermediate values (0 < ep1 < 1) represent interface cells
+    !!
+    !! **Future Extensions:**
+    !!
+    !! The current implementation sets velocity to zero in solid regions.
+    !! A more accurate IBM would set velocity to \(\Delta t \nabla p^n\)
+    !! before the pressure solve, then subtract \(\Delta t \nabla p^{n+1}\)
+    !! after reconstruction to properly enforce boundary conditions.
+    !!
+    !! **Components:**
+    !!
+    !! - `backend`: Computational backend for field operations
+    !! - `mesh`: Grid information
+    !! - `host_allocator`: Memory allocator for field storage
+    !! - `iibm`: IBM mode (0 = disabled, 1 = basic IBM)
+    !! - `ep1`: Mask field (1 in fluid, 0 in solid)
     class(base_backend_t), pointer :: backend => null()
     class(mesh_t), pointer :: mesh => null()
     type(allocator_t), pointer :: host_allocator => null()

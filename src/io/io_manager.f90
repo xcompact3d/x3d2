@@ -7,12 +7,14 @@ module m_io_manager
   !! delegates tasks to specialised checkpoint and snapshot managers.
   !!
   !! **Responsibilities:**
+  !!
   !! - Initialise checkpoint and snapshot managers
   !! - Coordinate restart from checkpoints
   !! - Orchestrate periodic checkpoint and snapshot writes
   !! - Finalise I/O operations and clean up resources
   !!
   !! **Usage Pattern:**
+  !!
   !! ```fortran
   !! type(io_manager_t) :: io_mgr
   !! call io_mgr%init(comm)

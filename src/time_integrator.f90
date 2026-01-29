@@ -15,7 +15,7 @@ module m_time_integrator
   !! AB3, AB4. These methods are more memory-efficient than RK schemes
   !! for the same order of accuracy.
   !!
-  !! The time_intg_t type encapsulates all integration state and provides
+  !! The `time_intg_t` type encapsulates all integration state and provides
   !! a unified interface through the step procedure pointer, which routes
   !! to either runge_kutta() or adams_bashforth() based on the selected method.
   !!
@@ -31,6 +31,45 @@ module m_time_integrator
   private adams_bashforth, runge_kutta
 
   type :: time_intg_t
+    !! Time integrator for explicit multi-step and multi-stage methods.
+    !!
+    !! This type encapsulates all data and methods needed for time integration
+    !! of ordinary differential equations (ODEs) arising from spatial discretization
+    !! of the Navier-Stokes equations:
+    !!
+    !! \[
+    !! \frac{d\mathbf{u}}{dt} = \mathbf{F}(\mathbf{u}, t)
+    !! \]
+    !!
+    !! where \(\mathbf{F}\) represents the spatial operators (advection, diffusion,
+    !! pressure gradient, etc.).
+    !!
+    !! **Supported Methods:**
+    !!
+    !! - **Adams-Bashforth (AB1-AB4)**: Explicit multi-step methods using
+    !!   previous timestep derivatives. Efficient (single evaluation per step)
+    !!   but requires startup procedure for higher orders.
+    !! - **Runge-Kutta (RK1-RK4)**: Explicit multi-stage methods using
+    !!   intermediate stages within a timestep. Self-starting but requires
+    !!   multiple evaluations per step.
+    !!
+    !! **Method Selection:**
+    !!
+    !! The `step` procedure pointer is bound at initialization to either
+    !! `runge_kutta()` or `adams_bashforth()` based on the method name
+    !! (e.g., "AB3" or "RK4"), enabling polymorphic time stepping.
+    !!
+    !! **Data Management:**
+    !!
+    !! - **AB methods**: Store previous timestep derivatives in `olds` array,
+    !!   rotated each timestep to maintain history
+    !! - **RK methods**: Store intermediate stage solutions in `olds` array,
+    !!   overwritten within each timestep
+    !!
+    !! **Startup Procedure (AB only):**
+    !!
+    !! Higher-order AB methods (AB2-AB4) ramp up from first-order during initial
+    !! timesteps until sufficient derivative history is available.
     integer :: method       !! Integration method identifier (unused, kept for compatibility)
     integer :: istep        !! Current timestep number (for AB startup ramping)
     integer :: istage       !! Current stage number within timestep (RK only)
