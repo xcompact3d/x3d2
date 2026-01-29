@@ -180,7 +180,7 @@ contains
     !! Compute divergence of a vector field from vertices to cell centres.
     !!
     !! Computes:
-    !! \[ \nabla \cdot \mathbf{u} = \frac{\partial u}{\partial x} + 
+    !! \[ \nabla \cdot \mathbf{u} = \frac{\partial u}{\partial x} +
     !!    \frac{\partial v}{\partial y} + \frac{\partial w}{\partial z} \]
     !!
     !! Input velocity components (u, v, w) are at vertices (VERT), and
@@ -298,7 +298,7 @@ contains
     !! Compute gradient of a scalar field from cell centres to vertices.
     !!
     !! Computes:
-    !! \[ \nabla p = \left( \frac{\partial p}{\partial x}, 
+    !! \[ \nabla p = \left( \frac{\partial p}{\partial x},
     !!    \frac{\partial p}{\partial y}, \frac{\partial p}{\partial z} \right) \]
     !!
     !! Input pressure p is at cell centres (CELL), and gradient components
@@ -394,7 +394,7 @@ contains
     !! Compute Laplacian of a scalar field.
     !!
     !! Computes:
-    !! \[ \nabla^2 u = \frac{\partial^2 u}{\partial x^2} + 
+    !! \[ \nabla^2 u = \frac{\partial^2 u}{\partial x^2} +
     !!    \frac{\partial^2 u}{\partial y^2} + \frac{\partial^2 u}{\partial z^2} \]
     !!
     !! The Laplacian is evaluated at the same grid location (CELL or VERT)

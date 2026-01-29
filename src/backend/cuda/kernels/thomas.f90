@@ -33,7 +33,8 @@ contains
     integer, value, intent(in) :: n_tds, n_rhs  !! Number of unknowns and RHS points
     real(dp), device, intent(in), dimension(:, :) :: coeffs_s, coeffs_e  !! Start/end explicit stencil coefficients
     real(dp), device, intent(in), dimension(:) :: coeffs  !! Bulk stencil coefficients (9-point)
-    real(dp), device, intent(in), dimension(:) :: thom_f, thom_s, thom_w, strch  !! Thomas algorithm coefficients and stretching
+    real(dp), device, intent(in), dimension(:) :: thom_f, thom_s, &
+                                                  thom_w, strch  !! Thomas algorithm coefficients and stretching
 
     integer :: i, j, b  !! Thread, loop, and block indices
 
