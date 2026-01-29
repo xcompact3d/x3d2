@@ -24,6 +24,7 @@ module m_common
   logical, parameter :: is_sp = .false.   !! Flag indicating double precision
 #endif
 
+  integer, parameter :: sp = kind(0.0e0)  !! Single precision kind parameter
   integer, parameter :: i8 = selected_int_kind(18)  !! Integer kind for 64-bit integers
 
   real(dp), parameter :: pi = 4*atan(1.0_dp)  !! Mathematical constant \(\pi\)
