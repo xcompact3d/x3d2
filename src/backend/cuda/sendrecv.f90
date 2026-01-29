@@ -1,4 +1,18 @@
 module m_cuda_sendrecv
+  !! MPI communication for CUDA backend using device pointers.
+  !!
+  !! Passes device pointers directly to MPI calls. With GPU-aware MPI
+  !! implementations (e.g., OpenMPI with CUDA support, MVAPICH2-GDR),
+  !! data transfers directly between GPU memories without staging through
+  !! host, reducing latency and increasing bandwidth.
+  !!
+  !! Without GPU-aware MPI, the implementation may stage through host
+  !! memory automatically, still functional but with additional overhead.
+  !!
+  !! - sendrecv_fields: Single field halo exchange
+  !! - sendrecv_3fields: Batch exchange for three fields (velocity components
+  !!   or derivatives). Batching amortises MPI overhead and enables better
+  !!   network utilisation.
   use cudafor
   use mpi
 
@@ -10,11 +24,21 @@ contains
 
   subroutine sendrecv_fields(f_recv_s, f_recv_e, f_send_s, f_send_e, &
                              n_data, nproc, prev, next)
+    !! Exchange boundary halos using MPI with device pointers.
+    !!
+    !! MPI_Isend/Irecv allows all four communications (send to prev/next,
+    !! receive from prev/next) to proceed concurrently, enabling network
+    !! pipelining. MPI_Waitall synchronises only when results needed.
+    !!
+    !! When nproc=1, data copied directly on device without MPI.
     implicit none
 
-    real(dp), device, dimension(:, :, :), intent(out) :: f_recv_s, f_recv_e
-    real(dp), device, dimension(:, :, :), intent(in) :: f_send_s, f_send_e
-    integer, intent(in) :: n_data, nproc, prev, next
+    real(dp), device, dimension(:, :, :), intent(out) :: f_recv_s, f_recv_e  !! Device receive buffers
+    real(dp), device, dimension(:, :, :), intent(in) :: f_send_s, f_send_e   !! Device send buffers
+    integer, intent(in) :: n_data    !! Number of data elements
+    integer, intent(in) :: nproc     !! Number of processes in direction
+    integer, intent(in) :: prev      !! Previous neighbour rank
+    integer, intent(in) :: next      !! Next neighbour rank
 
     integer :: req(4), err(4), ierr, tag = 1234
 
@@ -41,13 +65,22 @@ contains
     f1_send_s, f1_send_e, f2_send_s, f2_send_e, f3_send_s, f3_send_e, &
     n_data, nproc, prev, next &
     )
+    !! Exchange three fields simultaneously using batched MPI communication.
+    !!
+    !! Used for: (1) velocity component halos (u, v, w) before computing transport
+    !! equation, (2) derivative field halos (du, dud, d2u) in distributed compact
+    !! schemes. Batching all three fields amortises MPI setup overhead. Single
+    !! MPI_Waitall for all 12 operations reduces synchronisation points.
     implicit none
 
     real(dp), device, dimension(:, :, :), intent(out) :: &
-      f1_recv_s, f1_recv_e, f2_recv_s, f2_recv_e, f3_recv_s, f3_recv_e
+      f1_recv_s, f1_recv_e, f2_recv_s, f2_recv_e, f3_recv_s, f3_recv_e  !! Device receive buffers
     real(dp), device, dimension(:, :, :), intent(in) :: &
-      f1_send_s, f1_send_e, f2_send_s, f2_send_e, f3_send_s, f3_send_e
-    integer, intent(in) :: n_data, nproc, prev, next
+      f1_send_s, f1_send_e, f2_send_s, f2_send_e, f3_send_s, f3_send_e  !! Device send buffers
+    integer, intent(in) :: n_data    !! Number of data elements per field
+    integer, intent(in) :: nproc     !! Number of processes
+    integer, intent(in) :: prev      !! Previous neighbour rank
+    integer, intent(in) :: next      !! Next neighbour rank
 
     integer :: req(12), err(12), ierr, tag = 1234
 

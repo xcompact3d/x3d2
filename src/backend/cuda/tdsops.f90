@@ -1,4 +1,9 @@
 module m_cuda_tdsops
+  !! GPU-resident tridiagonal operator coefficients.
+  !!
+  !! Extends base tdsops_t with device memory copies of all coefficient
+  !! arrays. One-time upload to GPU avoids repeated host-device transfers
+  !! during kernel execution, critical for performance.
   use iso_fortran_env, only: stderr => error_unit
 
   use m_common, only: dp
@@ -7,18 +12,15 @@ module m_cuda_tdsops
   implicit none
 
   type, extends(tdsops_t) :: cuda_tdsops_t
-    !! CUDA extension of the Tridiagonal Solver Operators class.
-    !!
-    !! Regular tdsops_t class is initiated and the coefficient arrays are
-    !! copied into device arrays so that cuda kernels can use them.
+    !! Tridiagonal operators with device-resident coefficients.
     real(dp), device, allocatable :: dist_fw_dev(:), dist_bw_dev(:), &
                                      dist_sa_dev(:), dist_sc_dev(:), &
-                                     dist_af_dev(:)
+                                     dist_af_dev(:)  !! Distributed compact scheme coefficients
     real(dp), device, allocatable :: thom_f_dev(:), thom_s_dev(:), &
-                                     thom_w_dev(:), thom_p_dev(:)
-    real(dp), device, allocatable :: stretch_dev(:), stretch_correct_dev(:)
+                                     thom_w_dev(:), thom_p_dev(:)  !! Thomas algorithm coefficients
+    real(dp), device, allocatable :: stretch_dev(:), stretch_correct_dev(:)  !! Grid stretching factors
     real(dp), device, allocatable :: coeffs_dev(:), &
-                                     coeffs_s_dev(:, :), coeffs_e_dev(:, :)
+                                     coeffs_s_dev(:, :), coeffs_e_dev(:, :)  !! Finite difference stencils
   contains
   end type cuda_tdsops_t
 
@@ -32,11 +34,13 @@ contains
     n_tds, delta, operation, scheme, bc_start, bc_end, &
     stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
     ) result(tdsops)
-    !! Constructor function for the cuda_tdsops_t class.
-    !! See tdsops_t for details.
+    !! Initialise tridiagonal operators and upload to GPU.
+    !!
+    !! Computes coefficients on CPU via base tdsops_init, then copies
+    !! to device arrays for kernel access. See tdsops_t for parameters.
     implicit none
 
-    type(cuda_tdsops_t) :: tdsops !! return value of the function
+    type(cuda_tdsops_t) :: tdsops
 
     integer, intent(in) :: n_tds
     real(dp), intent(in) :: delta

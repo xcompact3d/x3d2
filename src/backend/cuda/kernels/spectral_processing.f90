@@ -1,4 +1,13 @@
 module m_cuda_spectral
+  !! CUDA kernels for spectral space processing and FFT post-processing.
+  !!
+  !! This module contains kernels for:
+  !! - Post-processing spectral transforms (forward/backward)
+  !! - Solving Poisson equations in spectral space
+  !! - Enforcing and undoing periodicity in Y-direction
+  !!
+  !! Implements spectral equivalence method from JCP 228 (2009), 5989-6015, Sec 4.
+  !! Handles both periodic (000) and non-periodic (010) boundary conditions.
   use cudafor
 
   use m_common, only: dp
@@ -8,14 +17,16 @@ module m_cuda_spectral
 contains
 
   attributes(global) subroutine memcpy3D(dst, src, nx, ny, nz)
-    !! Copy data between x3d2 padded arrays and cuFFTMp descriptors
+    !! Copy data between x3d2 padded arrays and cuFFTMp descriptors.
+    !!
+    !! Each thread handles one Y-Z plane position, looping over X.
     implicit none
 
-    real(dp), device, intent(inout), dimension(:, :, :) :: dst
-    real(dp), device, intent(in), dimension(:, :, :) :: src
-    integer, value, intent(in) :: nx, ny, nz
+    real(dp), device, intent(inout), dimension(:, :, :) :: dst  !! Output: Destination array
+    real(dp), device, intent(in), dimension(:, :, :) :: src  !! Input: Source array
+    integer, value, intent(in) :: nx, ny, nz  !! Grid dimensions
 
-    integer :: i, j, k
+    integer :: i, j, k  !! Loop and thread indices
 
     j = threadIdx%x + (blockIdx%x - 1)*blockDim%x !ny
     k = blockIdx%y !nz
@@ -34,23 +45,19 @@ contains
     !! Post-processes the divergence of velocity in spectral space, including
     !! scaling w.r.t. grid size.
     !!
-    !! Ref. JCP 228 (2009), 5989–6015, Sec 4
+    !! Performs forward post-processing, Poisson solve, and backward post-processing
+    !! using spectral equivalence method. Ref: JCP 228 (2009), 5989-6015, Sec 4.
     implicit none
 
-    !> Divergence of velocity in spectral space
-    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
-    !> Spectral equivalence constants
-    complex(dp), device, intent(in), dimension(:, :, :) :: waves
-    real(dp), device, intent(in), dimension(:) :: ax, bx, ay, by, az, bz
-    !> Grid size in spectral space
-    integer, value, intent(in) :: nx_spec, ny_spec
-    !> Offset in y direction in the permuted slabs in spectral space
-    integer, value, intent(in) :: y_sp_st
-    !> Grid size
-    integer, value, intent(in) :: nx, ny, nz
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u  !! In/out: Divergence of velocity in spectral space
+    complex(dp), device, intent(in), dimension(:, :, :) :: waves  !! Input: Spectral wavenumbers for Poisson solve
+    real(dp), device, intent(in), dimension(:) :: ax, bx, ay, by, az, bz  !! Input: Spectral equivalence constants
+    integer, value, intent(in) :: nx_spec, ny_spec  !! Spectral space grid size
+    integer, value, intent(in) :: y_sp_st  !! Y-direction offset in the permuted slabs in spectral space
+    integer, value, intent(in) :: nx, ny, nz  !! Physical space grid size
 
-    integer :: i, j, k, ix, iy, iz
-    real(dp) :: tmp_r, tmp_c, div_r, div_c
+    integer :: i, j, k, ix, iy, iz  !! Loop and spectral mode indices
+    real(dp) :: tmp_r, tmp_c, div_r, div_c  !! Temporary real/imaginary components
 
     j = threadIdx%x + (blockIdx%x - 1)*blockDim%x
     k = blockIdx%y ! nz_spec
@@ -130,26 +137,22 @@ contains
     div_u, waves, nx_spec, ny_spec, y_sp_st, nx, ny, nz, &
     ax, bx, ay, by, az, bz &
     )
-    !! Post-processes the divergence of velocity in spectral space, including
-    !! scaling w.r.t. grid size.
+    !! Post-process divergence field and solve Poisson equation in spectral space
+    !! for non-periodic boundary conditions in Y-direction (010).
     !!
-    !! Ref. JCP 228 (2009), 5989–6015, Sec 4
+    !! Performs forward post-processing with odd/even mode handling, Poisson solve,
+    !! and backward post-processing. Ref: JCP 228 (2009), 5989-6015, Sec 4.
     implicit none
 
-    !> Divergence of velocity in spectral space
-    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
-    !> Spectral equivalence constants
-    complex(dp), device, intent(in), dimension(:, :, :) :: waves
-    real(dp), device, intent(in), dimension(:) :: ax, bx, ay, by, az, bz
-    !> Grid size in spectral space
-    integer, value, intent(in) :: nx_spec, ny_spec
-    !> Offset in y direction in the permuted slabs in spectral space
-    integer, value, intent(in) :: y_sp_st
-    !> Grid size
-    integer, value, intent(in) :: nx, ny, nz
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u  !! In/out: Divergence field / pressure solution
+    complex(dp), device, intent(in), dimension(:, :, :) :: waves  !! Input: Spectral wavenumbers for Poisson solve
+    real(dp), device, intent(in), dimension(:) :: ax, bx, ay, by, az, bz  !! Input: Spectral equivalence constants
+    integer, value, intent(in) :: nx_spec, ny_spec  !! Spectral space grid size
+    integer, value, intent(in) :: y_sp_st  !! Y-direction offset in spectral slabs
+    integer, value, intent(in) :: nx, ny, nz  !! Physical space grid size
 
-    integer :: i, j, k, ix, iy, iz, iy_rev
-    real(dp) :: tmp_r, tmp_c, div_r, div_c, l_r, l_c, r_r, r_c
+    integer :: i, j, k, ix, iy, iz, iy_rev  !! Loop, spectral, and reversed mode indices
+    real(dp) :: tmp_r, tmp_c, div_r, div_c, l_r, l_c, r_r, r_c  !! Temporary components for left/right modes
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
     k = blockIdx%y ! nz_spec
@@ -288,25 +291,23 @@ contains
   attributes(global) subroutine process_spectral_010_fw( &
     div_u, nx_spec, ny_spec, y_sp_st, nx, ny, nz, ax, bx, ay, by, az, bz &
     )
-    !! Post-processes the divergence of velocity in spectral space, including
-    !! scaling w.r.t. grid size.
+    !! Forward post-processing only for non-periodic Y-direction (010).
     !!
-    !! Ref. JCP 228 (2009), 5989–6015, Sec 4
+    !! Performs normalisation, post-processing in X and Z, and odd/even mode handling
+    !! in Y. Used when Poisson solve and backward processing are separate steps.
     implicit none
 
-    !> Divergence of velocity in spectral space
-    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
-    !> Spectral equivalence constants
-    real(dp), device, intent(in), dimension(:) :: ax, bx, ay, by, az, bz
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u  !! In/out: Divergence field to post-process
+    real(dp), device, intent(in), dimension(:) :: ax, bx, ay, by, az, bz  !! Input: Spectral equivalence constants
     !> Grid size in spectral space
-    integer, value, intent(in) :: nx_spec, ny_spec
+    integer, value, intent(in) :: nx_spec, ny_spec  !! Spectral space grid size
     !> Offset in y direction in the permuted slabs in spectral space
-    integer, value, intent(in) :: y_sp_st
+    integer, value, intent(in) :: y_sp_st  !! Y-direction offset in spectral slabs
     !> Grid size
-    integer, value, intent(in) :: nx, ny, nz
+    integer, value, intent(in) :: nx, ny, nz  !! Physical space grid size
 
-    integer :: i, j, k, ix, iy, iz, iy_rev
-    real(dp) :: tmp_r, tmp_c, div_r, div_c, l_r, l_c, r_r, r_c
+    integer :: i, j, k, ix, iy, iz, iy_rev  !! Loop, spectral, and reversed mode indices
+    real(dp) :: tmp_r, tmp_c, div_r, div_c, l_r, l_c, r_r, r_c  !! Temporary real/imaginary components
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
     k = blockIdx%y ! nz_spec
@@ -368,22 +369,19 @@ contains
   attributes(global) subroutine process_spectral_010_poisson( &
     div_u, a_re, a_im, off, inc, nx_spec, n, nx, ny, nz &
     )
-    !! Solve the Poisson equation at cell centres with non-perioic BC along y
+    !! Solve Poisson equation for non-periodic Y-direction using pentadiagonal solver.
     !!
-    !! Ref. JCP 228 (2009), 5989–6015, Sec 4
+    !! Handles odd/even mode separation using offset and increment parameters.
+    !! Modifies pentadiagonal coefficients in-place during forward/backward passes.
     implicit none
 
-    !> Divergence of velocity in spectral space
-    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
-    !> Spectral equivalence constants
-    real(dp), device, intent(inout), dimension(:, :, :, :) :: a_re, a_im
-    !> offset and increment. increment is 2 when considering only odd or even
-    integer, value, intent(in) :: off, inc
-    !> Grid size in spectral space
-    integer, value, intent(in) :: nx_spec, n, nx, ny, nz
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u  !! In/out: RHS / Solution
+    real(dp), device, intent(inout), dimension(:, :, :, :) :: a_re, a_im  !! In/out: Pentadiagonal coefficients (real/imag)
+    integer, value, intent(in) :: off, inc  !! Offset and increment for odd/even modes
+    integer, value, intent(in) :: nx_spec, n, nx, ny, nz  !! Grid dimensions
 
-    integer :: i, j, k, jm, nm
-    real(dp) :: tmp_r, tmp_c, div_r, div_c, epsilon
+    integer :: i, j, k, jm, nm  !! Loop indices and mapped indices
+    real(dp) :: tmp_r, tmp_c, div_r, div_c, epsilon  !! Temporary variables and tolerance
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
     k = blockIdx%y ! nz_spec
@@ -527,25 +525,23 @@ contains
   attributes(global) subroutine process_spectral_010_bw( &
     div_u, nx_spec, ny_spec, y_sp_st, nx, ny, nz, ax, bx, ay, by, az, bz &
     )
-    !! Post-processes the divergence of velocity in spectral space, including
-    !! scaling w.r.t. grid size.
+    !! Backward post-processing only for non-periodic Y-direction (010).
     !!
-    !! Ref. JCP 228 (2009), 5989–6015, Sec 4
+    !! Performs odd/even mode recombination and post-processing in X and Z directions.
+    !! Completes the spectral-to-physical transformation after Poisson solve.
     implicit none
 
-    !> Divergence of velocity in spectral space
-    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
-    !> Spectral equivalence constants
-    real(dp), device, intent(in), dimension(:) :: ax, bx, ay, by, az, bz
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u  !! In/out: Solution field to post-process
+    real(dp), device, intent(in), dimension(:) :: ax, bx, ay, by, az, bz  !! Input: Spectral equivalence constants
     !> Grid size in spectral space
-    integer, value, intent(in) :: nx_spec, ny_spec
+    integer, value, intent(in) :: nx_spec, ny_spec  !! Spectral space grid size
     !> Offset in y direction in the permuted slabs in spectral space
-    integer, value, intent(in) :: y_sp_st
+    integer, value, intent(in) :: y_sp_st  !! Y-direction offset in spectral slabs
     !> Grid size
-    integer, value, intent(in) :: nx, ny, nz
+    integer, value, intent(in) :: nx, ny, nz  !! Physical space grid size
 
-    integer :: i, j, k, ix, iy, iz, iy_rev
-    real(dp) :: tmp_r, tmp_c, div_r, div_c, l_r, l_c, r_r, r_c
+    integer :: i, j, k, ix, iy, iz, iy_rev  !! Loop, spectral, and reversed mode indices
+    real(dp) :: tmp_r, tmp_c, div_r, div_c, l_r, l_c, r_r, r_c  !! Temporary real/imaginary components
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
     k = blockIdx%y ! nz_spec
@@ -605,13 +601,17 @@ contains
   end subroutine process_spectral_010_bw
 
   attributes(global) subroutine enforce_periodicity_y(f_out, f_in, ny)
+    !! Enforce Y-direction periodicity by reordering data for non-periodic transforms.
+    !!
+    !! Maps full domain [1:ny] to symmetric layout required by non-periodic FFT.
+    !! First half: odd points, second half: even points in reverse order.
     implicit none
 
-    real(dp), device, intent(out), dimension(:, :, :) :: f_out
-    real(dp), device, intent(in), dimension(:, :, :) :: f_in
-    integer, value, intent(in) :: ny
+    real(dp), device, intent(out), dimension(:, :, :) :: f_out  !! Output: Reordered field
+    real(dp), device, intent(in), dimension(:, :, :) :: f_in  !! Input: Original field
+    integer, value, intent(in) :: ny  !! Y-dimension size
 
-    integer :: i, j, k
+    integer :: i, j, k  !! Thread and loop indices
 
     i = threadIdx%x
     k = blockIdx%x
@@ -626,13 +626,17 @@ contains
   end subroutine enforce_periodicity_y
 
   attributes(global) subroutine undo_periodicity_y(f_out, f_in, ny)
+    !! Undo Y-direction periodicity reordering after non-periodic transforms.
+    !!
+    !! Inverse of enforce_periodicity_y: reconstructs original domain layout
+    !! from symmetric FFT ordering. Restores odd/even point positions.
     implicit none
 
-    real(dp), device, intent(out), dimension(:, :, :) :: f_out
-    real(dp), device, intent(in), dimension(:, :, :) :: f_in
-    integer, value, intent(in) :: ny
+    real(dp), device, intent(out), dimension(:, :, :) :: f_out  !! Output: Restored field
+    real(dp), device, intent(in), dimension(:, :, :) :: f_in  !! Input: Reordered field
+    integer, value, intent(in) :: ny  !! Y-dimension size
 
-    integer :: i, j, k
+    integer :: i, j, k  !! Thread and loop indices
 
     i = threadIdx%x
     k = blockIdx%x
