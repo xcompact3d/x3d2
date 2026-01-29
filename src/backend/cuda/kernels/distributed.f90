@@ -1,4 +1,9 @@
 module m_cuda_kernels_dist
+  !! CUDA kernels for distributed compact finite difference schemes.
+  !!
+  !! GPU kernels implementing forward and backward sweeps for compact schemes
+  !! across MPI domain boundaries. Handles stencil application using halo data,
+  !! forward elimination, and backward substitution for distributed tridiagonal systems.
   use cudafor
 
   use m_common, only: dp
@@ -11,16 +16,20 @@ contains
     du, send_u_s, send_u_e, u, u_s, u_e, &
     n_tds, n_rhs, coeffs_s, coeffs_e, coeffs, ffr, fbc, faf &
     )
+    !! CUDA kernel for distributed compact scheme forward sweep and boundary setup.
+    !!
+    !! Applies compact stencils using local data (u) and halo data (u_s, u_e) from
+    !! neighbours. Performs forward elimination and prepares boundary data for MPI exchange.
     implicit none
 
-    ! Arguments
-    real(dp), device, intent(out), dimension(:, :, :) :: du, send_u_s, &
-                                                         send_u_e
-    real(dp), device, intent(in), dimension(:, :, :) :: u, u_s, u_e
-    integer, value, intent(in) :: n_tds, n_rhs
-    real(dp), device, intent(in), dimension(:, :) :: coeffs_s, coeffs_e
-    real(dp), device, intent(in), dimension(:) :: coeffs
-    real(dp), device, intent(in), dimension(:) :: ffr, fbc, faf
+    real(dp), device, intent(out), dimension(:, :, :) :: du  !! Output: derivatives with forward elimination
+    real(dp), device, intent(out), dimension(:, :, :) :: send_u_s, send_u_e  !! Boundary data for MPI exchange
+    real(dp), device, intent(in), dimension(:, :, :) :: u  !! Input: local field data
+    real(dp), device, intent(in), dimension(:, :, :) :: u_s, u_e  !! Halo data from start/end neighbours
+    integer, value, intent(in) :: n_tds, n_rhs  !! Grid and RHS dimensions
+    real(dp), device, intent(in), dimension(:, :) :: coeffs_s, coeffs_e  !! Boundary stencil coefficients
+    real(dp), device, intent(in), dimension(:) :: coeffs  !! Bulk stencil coefficients
+    real(dp), device, intent(in), dimension(:) :: ffr, fbc, faf  !! Forward elimination factors
 
     ! Local variables
     integer :: i, j, b, k, lj
@@ -148,17 +157,22 @@ contains
 
   attributes(global) subroutine der_univ_subs(du, recv_u_s, recv_u_e, &
                                               n, dist_sa, dist_sc, strch)
+    !! Backward substitution for distributed compact scheme.
+    !!
+    !! Completes the tridiagonal solve using boundary solutions received from
+    !! neighbouring MPI ranks. Applies Sherman-Morrison-like correction for
+    !! distributed system using Toeplitz matrix symmetry properties.
     implicit none
 
     ! Arguments
-    real(dp), device, intent(out), dimension(:, :, :) :: du
-    real(dp), device, intent(in), dimension(:, :, :) :: recv_u_s, recv_u_e
-    real(dp), device, intent(in), dimension(:) :: dist_sa, dist_sc, strch
-    integer, value, intent(in) :: n
+    real(dp), device, intent(out), dimension(:, :, :) :: du  !! Output: Final derivative solution
+    real(dp), device, intent(in), dimension(:, :, :) :: recv_u_s, recv_u_e  !! Boundary solutions from neighbours
+    real(dp), device, intent(in), dimension(:) :: dist_sa, dist_sc, strch  !! Distributed coefficients and stretching
+    integer, value, intent(in) :: n  !! Number of local grid points
 
     ! Local variables
-    integer :: i, j, b
-    real(dp) :: ur, bl, recp, du_s, du_e
+    integer :: i, j, b  !! Thread, loop, and block indices
+    real(dp) :: ur, bl, recp, du_s, du_e  !! Upper-right, bottom-left, reciprocal, boundary solutions
 
     i = threadIdx%x
     b = blockIdx%x
@@ -201,39 +215,44 @@ contains
     dud_coeffs_s, dud_coeffs_e, dud_coeffs, dud_fw, dud_bw, dud_af, &
     d2u_coeffs_s, d2u_coeffs_e, d2u_coeffs, d2u_fw, d2u_bw, d2u_af &
     )
+    !! Distributed forward sweep for 3 fused transport equation derivatives.
+    !!
+    !! Computes du, dud (convective), and d2u simultaneously using independent
+    !! compact stencils. Performs forward elimination and prepares boundary data
+    !! for MPI exchange. Optimised for transport equation with convective terms.
     implicit none
 
     ! Arguments
-    real(dp), device, intent(out), dimension(:, :, :) :: du, dud, d2u
+    real(dp), device, intent(out), dimension(:, :, :) :: du, dud, d2u  !! Output: Three derivative fields
     real(dp), device, intent(out), dimension(:, :, :) :: &
-      send_du_s, send_du_e, send_dud_s, send_dud_e, send_d2u_s, send_d2u_e
+      send_du_s, send_du_e, send_dud_s, send_dud_e, send_d2u_s, send_d2u_e  !! Boundary data for MPI exchange
     real(dp), device, intent(in), dimension(:, :, :) :: u, u_s, u_e, &
-                                                        v, v_s, v_e
-    integer, value, intent(in) :: n_tds, n_rhs
+                                                        v, v_s, v_e  !! Input fields and halos
+    integer, value, intent(in) :: n_tds, n_rhs  !! Grid dimensions
     real(dp), device, intent(in) :: du_coeffs_s(:, :), du_coeffs_e(:, :), &
-                                    du_coeffs(:)
-    real(dp), device, intent(in) :: du_fw(:), du_bw(:), du_af(:)
+                                    du_coeffs(:)  !! du stencil coefficients
+    real(dp), device, intent(in) :: du_fw(:), du_bw(:), du_af(:)  !! du forward/backward/alpha factors
     real(dp), device, intent(in) :: dud_coeffs_s(:, :), dud_coeffs_e(:, :), &
-                                    dud_coeffs(:)
-    real(dp), device, intent(in) :: dud_fw(:), dud_bw(:), dud_af(:)
+                                    dud_coeffs(:)  !! dud stencil coefficients
+    real(dp), device, intent(in) :: dud_fw(:), dud_bw(:), dud_af(:)  !! dud forward/backward/alpha factors
     real(dp), device, intent(in) :: d2u_coeffs_s(:, :), d2u_coeffs_e(:, :), &
-                                    d2u_coeffs(:)
-    real(dp), device, intent(in) :: d2u_fw(:), d2u_bw(:), d2u_af(:)
+                                    d2u_coeffs(:)  !! d2u stencil coefficients
+    real(dp), device, intent(in) :: d2u_fw(:), d2u_bw(:), d2u_af(:)  !! d2u forward/backward/alpha factors
 
     ! Local variables
-    integer :: i, j, b
+    integer :: i, j, b  !! Thread, loop, and block indices
 
     real(dp) :: du_c_m4, du_c_m3, du_c_m2, du_c_m1, du_c_j, &
                 du_c_p1, du_c_p2, du_c_p3, du_c_p4, &
-                du_alpha, du_last_r
+                du_alpha, du_last_r  !! du stencil coefficients and factors
     real(dp) :: dud_c_m4, dud_c_m3, dud_c_m2, dud_c_m1, dud_c_j, &
                 dud_c_p1, dud_c_p2, dud_c_p3, dud_c_p4, &
-                dud_alpha, dud_last_r
+                dud_alpha, dud_last_r  !! dud stencil coefficients and factors
     real(dp) :: d2u_c_m4, d2u_c_m3, d2u_c_m2, d2u_c_m1, d2u_c_j, &
                 d2u_c_p1, d2u_c_p2, d2u_c_p3, d2u_c_p4, &
-                d2u_alpha, d2u_last_r
-    real(dp) :: temp_du, temp_dud, temp_d2u
-    real(dp) :: u_m4, u_m3, u_m2, u_m1, u_j, u_p1, u_p2, u_p3, u_p4
+                d2u_alpha, d2u_last_r  !! d2u stencil coefficients and factors
+    real(dp) :: temp_du, temp_dud, temp_d2u  !! Temporary derivative values
+    real(dp) :: u_m4, u_m3, u_m2, u_m1, u_j, u_p1, u_p2, u_p3, u_p4  !! Reused field values
     real(dp) :: v_m4, v_m3, v_m2, v_m1, v_j, v_p1, v_p2, v_p3, v_p4
     real(dp) :: old_du, old_dud, old_d2u
 
@@ -593,26 +612,31 @@ contains
     n, nu, du_sa, du_sc, du_strch, dud_sa, dud_sc, dud_strch, &
     d2u_sa, d2u_sc, d2u_strch, d2u_strch_cor &
     )
+    !! Backward substitution for 3 fused transport equation derivatives.
+    !!
+    !! Completes distributed tridiagonal solves for du, dud, d2u using boundary
+    !! solutions from neighbours. Combines results to form RHS of transport equation:
+    !! r_du = -conv*dud + nu*d2u. Applies Sherman-Morrison corrections for all three fields.
     implicit none
 
     ! Arguments
     !> The result array, it stores 'du' first then its overwritten
-    real(dp), device, intent(inout), dimension(:, :, :) :: r_du
-    real(dp), device, intent(in), dimension(:, :, :) :: conv, dud, d2u
+    real(dp), device, intent(inout), dimension(:, :, :) :: r_du  !! In/out: Stores du then overwritten with RHS
+    real(dp), device, intent(in), dimension(:, :, :) :: conv, dud, d2u  !! Input: Convection velocity and derivatives
     real(dp), device, intent(in), dimension(:, :, :) :: &
-      recv_du_s, recv_du_e, recv_dud_s, recv_dud_e, recv_d2u_s, recv_d2u_e
-    integer, value, intent(in) :: n
-    real(dp), value, intent(in) :: nu
+      recv_du_s, recv_du_e, recv_dud_s, recv_dud_e, recv_d2u_s, recv_d2u_e  !! Boundary solutions from neighbours
+    integer, value, intent(in) :: n  !! Number of local grid points
+    real(dp), value, intent(in) :: nu  !! Kinematic viscosity
     real(dp), device, intent(in), dimension(:) :: du_sa, du_sc, du_strch, &
                                                   dud_sa, dud_sc, dud_strch, &
                                                   d2u_sa, d2u_sc, d2u_strch, &
-                                                  d2u_strch_cor
+                                                  d2u_strch_cor  !! Distributed coefficients for all three fields
 
     ! Local variables
-    integer :: i, j, b
-    real(dp) :: ur, bl, recp
-    real(dp) :: du_temp, dud_temp, d2u_temp
-    real(dp) :: du_s, du_e, dud_s, dud_e, d2u_s, d2u_e
+    integer :: i, j, b  !! Thread, loop, and block indices
+    real(dp) :: ur, bl, recp  !! Upper-right, bottom-left, reciprocal for Sherman-Morrison
+    real(dp) :: du_temp, dud_temp, d2u_temp  !! Temporary derivative values
+    real(dp) :: du_s, du_e, dud_s, dud_e, d2u_s, d2u_e  !! Boundary solutions for all three fields
 
     i = threadIdx%x
     b = blockIdx%x

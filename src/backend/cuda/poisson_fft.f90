@@ -1,4 +1,9 @@
 module m_cuda_poisson_fft
+  !! FFT-based Poisson solver on GPU using cuFFT.
+  !!
+  !! Extends poisson_fft_t with device-resident spectral data and cuFFT plans.
+  !! Handles forward/backward transforms, spectral post-processing for different
+  !! boundary conditions, and periodic extensions.
   use iso_c_binding, only: c_loc, c_ptr, c_f_pointer, c_int, c_float, &
                            c_double_complex, c_float_complex
   use iso_fortran_env, only: stderr => error_unit
@@ -24,7 +29,7 @@ module m_cuda_poisson_fft
   implicit none
 
   type, extends(poisson_fft_t) :: cuda_poisson_fft_t
-    !! FFT based Poisson solver
+    !! GPU-accelerated FFT-based Poisson solver with device-resident spectral data.
 
     !> Local domain sized array storing the spectral equivalence constants
     complex(dp), device, allocatable, dimension(:, :, :) :: waves_dev
@@ -149,20 +154,28 @@ contains
 
   function init(mesh, xdirps, ydirps, zdirps, lowmem) &
     result(poisson_fft)
+    !! Initialise CUDA Poisson FFT solver with cuFFT plans and spectral arrays.
+    !!
+    !! Sets up 3D FFT plans, allocates device storage for wave numbers and
+    !! stretching operators, and configures 1D decomposition (Z in real space,
+    !! Y in spectral space).
     implicit none
 
-    type(mesh_t), intent(in) :: mesh
-    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
-    logical, optional, intent(in) :: lowmem
+    type(mesh_t), intent(in) :: mesh  !! Computational mesh
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps  !! Directional operators
+    logical, optional, intent(in) :: lowmem  !! Low memory mode flag
 
-    type(cuda_poisson_fft_t) :: poisson_fft
+    type(cuda_poisson_fft_t) :: poisson_fft  !! Initialised solver
 
-    integer :: nx, ny, nz
+    integer :: nx, ny, nz  !! Global grid dimensions
 
-    integer :: ierr
-    integer(int_ptr_kind()) :: worksize
+    integer :: ierr  !! Error code
+    integer(int_ptr_kind()) :: worksize  !! cuFFT workspace size
 
-    integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
+    integer :: dims_glob(3)  !! Global domain dimensions
+    integer :: dims_loc(3)  !! Local domain dimensions
+    integer :: n_spec(3)  !! Spectral space dimensions
+    integer :: n_sp_st(3)  !! Spectral space start indices
 
     ! 1D decomposition along Z in real domain, and along Y in spectral space
     if (mesh%par%nproc_dir(2) /= 1) print *, 'nproc_dir in y-dir must be 1'
@@ -282,19 +295,25 @@ contains
   end function init
 
   subroutine fft_forward_cuda(self, f)
+    !! Execute forward 3D FFT on device field.
+    !!
+    !! Copies padded field data into cuFFT descriptor storage and performs
+    !! forward transform using cuFFTMp.
     implicit none
 
     class(cuda_poisson_fft_t) :: self
-    class(field_t), intent(in) :: f
+    class(field_t), intent(in) :: f  !! Input field in real space
 
-    real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
-    real(dp), device, pointer :: f_ptr
-    type(c_ptr) :: f_c_ptr
+    real(dp), device, pointer :: padded_dev(:, :, :)  !! Padded field data
+    real(dp), device, pointer :: d_dev(:, :, :)  !! cuFFT descriptor data
+    real(dp), device, pointer :: f_ptr  !! Workaround device pointer for cuFFT
+    type(c_ptr) :: f_c_ptr  !! Intermediate C pointer for workaround
 
-    type(cudaXtDesc), pointer :: descriptor
+    type(cudaXtDesc), pointer :: descriptor  !! cuFFTMp descriptor
 
-    integer :: tsize, ierr
-    type(dim3) :: blocks, threads
+    integer :: tsize  !! Thread block size
+    integer :: ierr  !! Error code
+    type(dim3) :: blocks, threads  !! CUDA kernel configuration
 
     select type (f)
     type is (cuda_field_t)
@@ -340,19 +359,25 @@ contains
   end subroutine fft_forward_cuda
 
   subroutine fft_backward_cuda(self, f)
+    !! Execute backward 3D FFT and copy result to device field.
+    !!
+    !! Performs inverse transform using cuFFTMp and copies result from
+    !! descriptor storage back to field's device array.
     implicit none
 
     class(cuda_poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f
+    class(field_t), intent(inout) :: f  !! Output field in real space
 
-    real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
-    real(dp), device, pointer :: f_ptr
-    type(c_ptr) :: f_c_ptr
+    real(dp), device, pointer :: padded_dev(:, :, :)  !! Padded field data
+    real(dp), device, pointer :: d_dev(:, :, :)  !! cuFFT descriptor data
+    real(dp), device, pointer :: f_ptr  !! Workaround device pointer for cuFFT
+    type(c_ptr) :: f_c_ptr  !! Intermediate C pointer for workaround
 
-    type(cudaXtDesc), pointer :: descriptor
+    type(cudaXtDesc), pointer :: descriptor  !! cuFFTMp descriptor
 
-    integer :: tsize, ierr
-    type(dim3) :: blocks, threads
+    integer :: tsize  !! Thread block size
+    integer :: ierr  !! Error code
+    type(dim3) :: blocks, threads  !! CUDA kernel configuration
 
     select type (f)
     type is (cuda_field_t)
@@ -399,15 +424,19 @@ contains
   end subroutine fft_backward_cuda
 
   subroutine fft_postprocess_000_cuda(self)
+    !! Post-process spectral data for Dirichlet-Dirichlet-Dirichlet boundaries.
+    !!
+    !! Solves Poisson equation $\nabla^2 p = f$ in spectral space with homogeneous
+    !! Dirichlet boundaries in all directions.
     implicit none
 
     class(cuda_poisson_fft_t) :: self
 
-    type(cudaXtDesc), pointer :: descriptor
+    type(cudaXtDesc), pointer :: descriptor  !! cuFFTMp descriptor
 
-    complex(dp), device, dimension(:, :, :), pointer :: c_dev
-    type(dim3) :: blocks, threads
-    integer :: tsize
+    complex(dp), device, dimension(:, :, :), pointer :: c_dev  !! Spectral data
+    type(dim3) :: blocks, threads  !! CUDA kernel configuration
+    integer :: tsize  !! Thread block size
 
     ! tsize is different than SZ, because here we work on a 3D Cartesian
     ! data structure, and free to specify any suitable thread/block size.
@@ -438,15 +467,22 @@ contains
   end subroutine fft_postprocess_000_cuda
 
   subroutine fft_postprocess_010_cuda(self)
+    !! Post-process spectral data for Dirichlet-Neumann-Dirichlet boundaries.
+    !!
+    !! Solves Poisson equation $\nabla^2 p = f$ in spectral space with Dirichlet
+    !! boundaries in X and Z, Neumann in Y. Handles stretched meshes with
+    !! matrix solves in spectral space.
     implicit none
 
     class(cuda_poisson_fft_t) :: self
 
     type(cudaXtDesc), pointer :: descriptor
 
-    complex(dp), device, dimension(:, :, :), pointer :: c_dev
-    type(dim3) :: blocks, threads
-    integer :: tsize, off, inc
+    complex(dp), device, dimension(:, :, :), pointer :: c_dev  !! Spectral data
+    type(dim3) :: blocks, threads  !! CUDA kernel configuration
+    integer :: tsize  !! Thread block size
+    integer :: off  !! Array offset for odd/even modes
+    integer :: inc  !! Array increment stride
 
     ! tsize is different than SZ, because here we work on a 3D Cartesian
     ! data structure, and free to specify any suitable thread/block size.
@@ -542,14 +578,19 @@ contains
   end subroutine fft_postprocess_010_cuda
 
   subroutine enforce_periodicity_y_cuda(self, f_out, f_in)
+    !! Enforce periodic extension in Y for Neumann boundaries.
+    !!
+    !! Extends field from physical domain size to doubled periodic domain
+    !! by symmetry (f(y+L) = f(L-y)) for Neumann boundary FFTs.
     implicit none
 
     class(cuda_poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f_out
-    class(field_t), intent(in) :: f_in
+    class(field_t), intent(inout) :: f_out  !! Extended periodic field
+    class(field_t), intent(in) :: f_in  !! Original physical field
 
-    real(dp), device, pointer, dimension(:, :, :) :: f_out_dev, f_in_dev
-    type(dim3) :: blocks, threads
+    real(dp), device, pointer, dimension(:, :, :) :: f_out_dev  !! Output device data
+    real(dp), device, pointer, dimension(:, :, :) :: f_in_dev  !! Input device data
+    type(dim3) :: blocks, threads  !! CUDA kernel configuration
 
     select type (f_out)
     type is (cuda_field_t)
@@ -569,14 +610,19 @@ contains
   end subroutine enforce_periodicity_y_cuda
 
   subroutine undo_periodicity_y_cuda(self, f_out, f_in)
+    !! Extract physical domain from periodic extension in Y.
+    !!
+    !! Reverses enforce_periodicity_y by extracting original domain size
+    !! from doubled periodic field after inverse FFT.
     implicit none
 
     class(cuda_poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f_out
-    class(field_t), intent(in) :: f_in
+    class(field_t), intent(inout) :: f_out  !! Physical domain field
+    class(field_t), intent(in) :: f_in  !! Extended periodic field
 
-    real(dp), device, pointer, dimension(:, :, :) :: f_out_dev, f_in_dev
-    type(dim3) :: blocks, threads
+    real(dp), device, pointer, dimension(:, :, :) :: f_out_dev  !! Output device data
+    real(dp), device, pointer, dimension(:, :, :) :: f_in_dev  !! Input device data
+    type(dim3) :: blocks, threads  !! CUDA kernel configuration
 
     select type (f_out)
     type is (cuda_field_t)
