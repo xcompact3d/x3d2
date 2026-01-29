@@ -302,7 +302,7 @@ contains
     !! are evaluated at vertices (VERT). This is the inverse operation of
     !! divergence_v2c and is used in projection methods for incompressible flow.
     !!
-    !! The algorithm proceeds in reverse order (Z→Y→X):
+    !! The algorithm proceeds in reverse order (Z to Y to X):
     !! 1. Compute dp/dz (staggered), interpolate p in Z direction (DIR_Z)
     !! 2. Reorder to DIR_Y, compute dp/dy (staggered), interpolate p and dpdz
     !! 3. Reorder to DIR_X, compute dp/dx (staggered), interpolate dpdy and dpdz
@@ -399,9 +399,9 @@ contains
     !! Poisson equations.
     !!
     !! The algorithm computes second derivatives in each direction:
-    !! 1. Compute d²u/dx² directly in DIR_X
-    !! 2. Reorder to DIR_Y, compute d²u/dy², sum into result via sum_yintox
-    !! 3. Reorder to DIR_Z, compute d²u/dz², sum into result via sum_zintox
+    !! 1. Compute \( d^2u/dx^2 \) directly in DIR_X
+    !! 2. Reorder to DIR_Y, compute \( d^2u/dy^2 \), sum into result via sum_yintox
+    !! 3. Reorder to DIR_Z, compute \( d^2u/dz^2 \), sum into result via sum_zintox
     !!
     !! The sum_yintox and sum_zintox operations add directional derivatives
     !! directly into the DIR_X result field without additional reordering.

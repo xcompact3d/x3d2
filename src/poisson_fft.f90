@@ -266,9 +266,9 @@ contains
     !! Solve Poisson equation with fully periodic (000) boundary conditions.
     !!
     !! For periodic BCs in all directions, the solution procedure is:
-    !! 1. Forward FFT: f → f_hat
-    !! 2. Spectral division: f_hat / k² → solution_hat
-    !! 3. Backward FFT: solution_hat → solution
+    !! 1. Forward FFT: f to f_hat
+    !! 2. Spectral division: \( \hat{f} / k^2 \) gives solution_hat
+    !! 3. Backward FFT: solution_hat to solution
     !!
     !! This is the simplest case requiring no special handling for BCs.
     implicit none
@@ -287,9 +287,9 @@ contains
     !!
     !! For periodic in X/Z, non-periodic in Y, the solution procedure is:
     !! 1. Enforce artificial periodicity in Y using symmetry extension
-    !! 2. Forward FFT: f → f_hat
+    !! 2. Forward FFT: f to f_hat
     !! 3. Spectral division with stretching corrections (if grid is stretched)
-    !! 4. Backward FFT: solution_hat → solution
+    !! 4. Backward FFT: solution_hat to solution
     !! 5. Undo artificial periodicity to recover physical solution
     !!
     !! The symmetry extension doubles the domain size in Y to handle
