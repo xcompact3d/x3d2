@@ -1,20 +1,28 @@
 module m_io_backend
-!! @brief Provides a dummy, non-functional I/O backend for when an I/O backend
-!! is not available
-!!
-!! @details This module provides a fallback implementation of the I/O backend
-!! interface. It is used when no real I/O backend (e.g. ADIOS2) is enabled at
-!! compile time.
-!!
-!! The primary purpose of this dummy backend is to allow the full program to
-!! compile and link against the session interface (`m_io_session`) without
-!! requiring a functional I/O library.
-!!
-!! @warning This is a non-functional stub. Calling any of its I/O procedures
-!! will immediately terminate the program with an error message.
-!!
-!! @note If you require file I/O, you must recompile the code with a functional
-!! backend
+  !! Dummy (non-functional) I/O backend for when no real backend is available.
+  !!
+  !! This module provides a fallback implementation of the I/O backend
+  !! interface used when no real I/O backend (e.g., ADIOS2) is enabled at
+  !! compile time. It allows the code to compile and link without a functional
+  !! I/O library.
+  !!
+  !! **Purpose:**
+  !! - Enables compilation without external I/O library dependencies
+  !! - Provides informative error messages when I/O operations are attempted
+  !! - Allows code structure to remain consistent regardless of I/O backend
+  !!
+  !! **Behaviour:**
+  !! - Write operations are silently ignored (no-op)
+  !! - Read operations terminate with error message directing user to recompile
+  !! - File open/close operations are tracked but perform no actual I/O
+  !!
+  !! **Use Cases:**
+  !! - Testing/debugging without I/O overhead
+  !! - Systems where ADIOS2 is unavailable
+  !! - Dry runs to validate simulation setup
+  !!
+  !! **Warning:** This is a non-functional stub. If you require actual file I/O,
+  !! recompile with `-DWITH_ADIOS2=ON` to enable the ADIOS2 backend.
   use iso_fortran_env, only: stderr => error_unit
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, io_mode_read, &
                        io_mode_write
@@ -26,45 +34,48 @@ module m_io_backend
   public :: allocate_io_reader, allocate_io_writer
   public :: get_default_backend, IO_BACKEND_DUMMY, IO_BACKEND_ADIOS2
 
-  logical, save :: write_warning_shown = .false.
+  logical, save :: write_warning_shown = .false. !! Track if warning has been displayed
 
-  integer, parameter :: IO_BACKEND_DUMMY = 0
-  integer, parameter :: IO_BACKEND_ADIOS2 = 1
+  integer, parameter :: IO_BACKEND_DUMMY = 0   !! Dummy backend identifier
+  integer, parameter :: IO_BACKEND_ADIOS2 = 1  !! ADIOS2 backend identifier
 
   type, extends(io_file_t) :: io_dummy_file_t
-    logical :: is_open = .false.
+    !! Dummy file handle (tracks state but performs no I/O).
+    logical :: is_open = .false. !! File open state flag
   contains
-    procedure :: close => file_close_dummy
-    procedure :: begin_step => file_begin_step_dummy
-    procedure :: end_step => file_end_step_dummy
-    procedure :: is_file_functional => is_file_functional_dummy
+    procedure :: close => file_close_dummy                  !! Close file (no-op)
+    procedure :: begin_step => file_begin_step_dummy        !! Begin step (no-op)
+    procedure :: end_step => file_end_step_dummy            !! End step (no-op)
+    procedure :: is_file_functional => is_file_functional_dummy !! Check if functional
   end type io_dummy_file_t
 
   type, extends(io_reader_t) :: io_dummy_reader_t
-    logical :: initialised = .false.
+    !! Dummy reader (errors on read attempts).
+    logical :: initialised = .false. !! Initialisation state flag
   contains
-    procedure :: init => reader_init_dummy
-    procedure :: open => reader_open_dummy
-    procedure :: finalise => reader_finalise_dummy
-    procedure :: read_data_i8 => read_data_i8_dummy
-    procedure :: read_data_integer => read_data_integer_dummy
-    procedure :: read_data_real => read_data_real_dummy
-    procedure :: read_data_array_3d => read_data_array_3d_dummy
+    procedure :: init => reader_init_dummy                  !! Initialise reader
+    procedure :: open => reader_open_dummy                  !! Open file (returns non-functional handle)
+    procedure :: finalise => reader_finalise_dummy          !! Finalise (no-op)
+    procedure :: read_data_i8 => read_data_i8_dummy         !! Read i8 (errors)
+    procedure :: read_data_integer => read_data_integer_dummy !! Read integer (errors)
+    procedure :: read_data_real => read_data_real_dummy     !! Read real (errors)
+    procedure :: read_data_array_3d => read_data_array_3d_dummy !! Read 3D array (errors)
   end type io_dummy_reader_t
 
   type, extends(io_writer_t) :: io_dummy_writer_t
-    logical :: initialised = .false.
+    !! Dummy writer (silently ignores write operations).
+    logical :: initialised = .false. !! Initialisation state flag
   contains
-    procedure :: init => writer_init_dummy
-    procedure :: open => writer_open_dummy
-    procedure :: finalise => writer_finalise_dummy
-    procedure :: write_data_i8 => write_data_i8_dummy
-    procedure :: write_data_integer => write_data_integer_dummy
-    procedure :: write_data_real => write_data_real_dummy
-    procedure :: write_data_array_3d => write_data_array_3d_dummy
-    procedure :: write_attribute_string => write_attribute_string_dummy
+    procedure :: init => writer_init_dummy                  !! Initialise writer
+    procedure :: open => writer_open_dummy                  !! Open file (returns non-functional handle)
+    procedure :: finalise => writer_finalise_dummy          !! Finalise (no-op)
+    procedure :: write_data_i8 => write_data_i8_dummy       !! Write i8 (no-op)
+    procedure :: write_data_integer => write_data_integer_dummy !! Write integer (no-op)
+    procedure :: write_data_real => write_data_real_dummy   !! Write real (no-op)
+    procedure :: write_data_array_3d => write_data_array_3d_dummy !! Write 3D array (no-op)
+    procedure :: write_attribute_string => write_attribute_string_dummy !! Write string attribute (no-op)
     procedure :: write_attribute_array_1d_real => &
-      write_attribute_array_1d_real_dummy
+      write_attribute_array_1d_real_dummy                   !! Write 1D real array attribute (no-op)
   end type io_dummy_writer_t
 
 contains
