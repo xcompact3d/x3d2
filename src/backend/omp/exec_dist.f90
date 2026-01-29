@@ -1,4 +1,21 @@
 module m_omp_exec_dist
+  !! Distributed compact finite difference execution for OMP backend.
+  !!
+  !! Orchestrates parallel execution of distributed compact schemes across
+  !! MPI processes. Manages OpenMP threading, halo exchanges, forward/backward
+  !! sweeps, and boundary system solves for multi-process compact operators.
+  !!
+  !! **Key features:**
+  !! - Forward/backward elimination with boundary coupling
+  !! - Non-blocking MPI communication for 2x2 boundary systems
+  !! - OpenMP parallelisation over pencil groups
+  !! - Fused kernels for transport equation efficiency
+  !!
+  !! **Distributed algorithm:**
+  !! 1. Forward/backward sweep on local domain $\rightarrow$ generate boundary systems
+  !! 2. MPI exchange boundary data between neighbours
+  !! 3. Solve coupled 2x2 systems at process interfaces
+  !! 4. Substitution sweep to complete solution
   use mpi
 
   use m_common, only: dp
@@ -15,21 +32,34 @@ contains
   subroutine exec_dist_tds_compact( &
     du, u, u_recv_s, u_recv_e, du_send_s, du_send_e, du_recv_s, du_recv_e, &
     tdsops, nproc, pprev, pnext, n_groups)
+    !! Execute distributed compact finite difference operation.
+    !!
+    !! Applies compact scheme operator across multiple MPI processes using
+    !! distributed Thomas algorithm. Performs forward/backward elimination,
+    !! exchanges boundary systems via MPI, then completes with substitution.
+    !!
+    !! **Algorithm:**
+    !! 1. `der_univ_dist`: Forward/backward sweep $\rightarrow$ boundary 2x2 systems
+    !! 2. `sendrecv_fields`: MPI exchange boundary data with neighbours
+    !! 3. `der_univ_subs`: Solve boundaries $\rightarrow$ back-substitution
+    !!
+    !! **Parallelisation:** OpenMP over pencil groups, MPI across processes
     implicit none
 
     ! du = d(u)
-    real(dp), dimension(:, :, :), intent(out) :: du
-    real(dp), dimension(:, :, :), intent(in) :: u, u_recv_s, u_recv_e
+    real(dp), dimension(:, :, :), intent(out) :: du          !! Derivative output
+    real(dp), dimension(:, :, :), intent(in) :: u, u_recv_s, u_recv_e  !! Field and halos
 
     ! The ones below are intent(out) just so that we can write data in them,
     ! not because we actually need the data they store later where this
     ! subroutine is called. We absolutely don't care about the data they pass back
     real(dp), dimension(:, :, :), intent(out) :: &
-      du_send_s, du_send_e, du_recv_s, du_recv_e
+      du_send_s, du_send_e, du_recv_s, du_recv_e  !! Boundary system buffers (scratch)
 
-    type(tdsops_t), intent(in) :: tdsops
-    integer, intent(in) :: nproc, pprev, pnext
-    integer, intent(in) :: n_groups
+    type(tdsops_t), intent(in) :: tdsops  !! Compact scheme operator
+    integer, intent(in) :: nproc          !! Number of processes in direction
+    integer, intent(in) :: pprev, pnext   !! Previous/next neighbour ranks
+    integer, intent(in) :: n_groups       !! Number of pencil groups
 
     integer :: n_data
     integer :: k
@@ -71,31 +101,49 @@ contains
     u, u_recv_s, u_recv_e, &
     v, v_recv_s, v_recv_e, &
     tdsops_du, tdsops_dud, tdsops_d2u, nu, nproc, pprev, pnext, n_groups)
+    !! Execute distributed transport equation RHS calculation.
+    !!
+    !! Computes three compact derivative operations required for transport
+    !! equation in skew-symmetric form, then fuses final RHS assembly.
+    !! All three derivatives (du, d(u*v), d2u) computed in parallel with
+    !! single halo exchange pass.
+    !!
+    !! **Derivatives computed:**
+    !! - `du`: First derivative of u
+    !! - `dud`: First derivative of u*v (product computed locally with halos)
+    !! - `d2u`: Second derivative of u (viscous term)
+    !!
+    !! **Fused assembly:** Final RHS combines all three derivatives with
+    !! viscosity scaling in single kernel (der_univ_fused_subs).
+    !!
+    !! **Optimisation:** Product u*v computed on-the-fly to avoid storing
+    !! extra field. Reduces memory footprint.
 
     implicit none
 
     !> The result array, it is also used as temporary storage
-    real(dp), dimension(:, :, :), intent(out) :: rhs_du
+    real(dp), dimension(:, :, :), intent(out) :: rhs_du  !! Transport equation RHS output
     !> Temporary storage arrays
-    real(dp), dimension(:, :, :), intent(out) :: dud, d2u
+    real(dp), dimension(:, :, :), intent(out) :: dud, d2u  !! Product derivative and second derivative
 
     ! The ones below are intent(out) just so that we can write data in them,
     ! not because we actually need the data they store later where this
     ! subroutine is called. We absolutely don't care about the data they pass back
     real(dp), dimension(:, :, :), intent(out) :: &
-      du_send_s, du_send_e, du_recv_s, du_recv_e
+      du_send_s, du_send_e, du_recv_s, du_recv_e      !! Boundary buffers for du (scratch)
     real(dp), dimension(:, :, :), intent(out) :: &
-      dud_send_s, dud_send_e, dud_recv_s, dud_recv_e
+      dud_send_s, dud_send_e, dud_recv_s, dud_recv_e  !! Boundary buffers for dud (scratch)
     real(dp), dimension(:, :, :), intent(out) :: &
-      d2u_send_s, d2u_send_e, d2u_recv_s, d2u_recv_e
+      d2u_send_s, d2u_send_e, d2u_recv_s, d2u_recv_e  !! Boundary buffers for d2u (scratch)
 
-    real(dp), dimension(:, :, :), intent(in) :: u, u_recv_s, u_recv_e
-    real(dp), dimension(:, :, :), intent(in) :: v, v_recv_s, v_recv_e
+    real(dp), dimension(:, :, :), intent(in) :: u, u_recv_s, u_recv_e  !! Velocity component and halos
+    real(dp), dimension(:, :, :), intent(in) :: v, v_recv_s, v_recv_e  !! Convecting velocity and halos
 
-    type(tdsops_t), intent(in) :: tdsops_du, tdsops_dud, tdsops_d2u
-    real(dp), intent(in) :: nu
-    integer, intent(in) :: nproc, pprev, pnext
-    integer, intent(in) :: n_groups
+    type(tdsops_t), intent(in) :: tdsops_du, tdsops_dud, tdsops_d2u  !! Operators for each derivative
+    real(dp), intent(in) :: nu       !! Kinematic viscosity
+    integer, intent(in) :: nproc     !! Number of processes in direction
+    integer, intent(in) :: pprev, pnext  !! Previous/next neighbour ranks
+    integer, intent(in) :: n_groups  !! Number of pencil groups
 
     real(dp), dimension(:, :), allocatable :: ud, ud_recv_s, ud_recv_e
 
