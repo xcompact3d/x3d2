@@ -1,4 +1,19 @@
 module m_omp_spectral
+  !! Spectral space processing for FFT-based Poisson solver.
+  !!
+  !! Provides kernels for solving Poisson equation in Fourier space with
+  !! spectral equivalence transformations. Handles different boundary
+  !! condition combinations: fully periodic (000) and Dirichlet in Y (010).
+  !!
+  !! **Spectral equivalence:** Modified wavenumbers for finite-difference
+  !! grid (Lele 1992). Ensures spectral solver matches compact FD schemes.
+  !!
+  !! **Reference:** JCP 228 (2009), 5989-6015, Section 4
+  !!
+  !! **Processing steps:**
+  !! 1. Forward spectral equivalence transform (physical $\rightarrow$ modified wavenumbers)
+  !! 2. Solve: $\hat{\phi}_k = -\hat{f}_k / k^2$
+  !! 3. Backward spectral equivalence transform (modified wavenumbers $\rightarrow$ physical)
   use m_common, only: dp
   implicit none
 
@@ -8,22 +23,34 @@ contains
     div_u, waves, nx_spec, ny_spec, nz_spec, x_sp_st, y_sp_st, z_sp_st, &
     nx, ny, nz, ax, bx, ay, by, az, bz &
     )
-    !! Post-process div U* in spectral space for all periodic BCs.
+    !! Solve Poisson in spectral space for (0,0,0) boundary conditions.
     !!
-    !! Ref. JCP 228 (2009), 5989–6015, Sec 4
+    !! Processes fully periodic case. Applies spectral equivalence transforms
+    !! in all three directions, divides by squared wavenumber, then applies
+    !! inverse transforms.
+    !!
+    !! **Algorithm:**
+    !! 1. Normalise by grid size (FFT convention)
+    !! 2. Forward spectral equivalence: physical $\rightarrow$ modified waves (Z, Y, X order)
+    !! 3. Solve: $\phi_k = -f_k / k^2$ (handle zero mode specially)
+    !! 4. Backward spectral equivalence: modified waves $\rightarrow$ physical
+    !!
+    !! **Special case:** Zero wavenumber (k=0) set to zero to remove constant mode.
+    !!
+    !! **Ref.** JCP 228 (2009), 5989–6015, Sec 4
     implicit none
 
     !> Divergence of velocity in spectral space
-    complex(dp), intent(inout), dimension(:, :, :) :: div_u
+    complex(dp), intent(inout), dimension(:, :, :) :: div_u  !! In: RHS, Out: Solution
     !> Spectral equivalence constants
-    complex(dp), intent(in), dimension(:, :, :) :: waves
-    real(dp), intent(in), dimension(:) :: ax, bx, ay, by, az, bz
+    complex(dp), intent(in), dimension(:, :, :) :: waves  !! Modified wavenumbers squared
+    real(dp), intent(in), dimension(:) :: ax, bx, ay, by, az, bz  !! Spectral equivalence coefficients
     !> Grid size in spectral space
-    integer, intent(in) :: nx_spec, ny_spec, nz_spec
+    integer, intent(in) :: nx_spec, ny_spec, nz_spec  !! Local spectral dimensions
     !> Offsets in the permuted pencils in spectral space
-    integer, intent(in) :: x_sp_st, y_sp_st, z_sp_st
+    integer, intent(in) :: x_sp_st, y_sp_st, z_sp_st  !! Global offsets
     !> Global cell size
-    integer, intent(in) :: nx, ny, nz
+    integer, intent(in) :: nx, ny, nz  !! Global grid dimensions
 
     integer :: i, j, k, ix, iy, iz
     real(dp) :: tmp_r, tmp_c, div_r, div_c
@@ -109,22 +136,37 @@ contains
     div_u, waves, nx_spec, ny_spec, nz_spec, x_sp_st, y_sp_st, z_sp_st, &
     nx, ny, nz, ax, bx, ay, by, az, bz &
     )
-    !! Post-process div U* in spectral space, for non-periodic BC in y-dir.
+    !! Solve Poisson in spectral space for (0,1,0) boundary conditions.
     !!
-    !! Ref. JCP 228 (2009), 5989–6015, Sec 4
+    !! Processes Dirichlet in Y, periodic in X and Z. Uses sine series
+    !! in Y-direction (symmetry/antisymmetry transform) combined with
+    !! Fourier in X and Z.
+    !!
+    !! **Algorithm:**
+    !! 1. Normalise by grid size
+    !! 2. Forward spectral equivalence in Z and X (not Y, handled separately)
+    !! 3. Apply Y symmetry transform (combine left/right halves)
+    !! 4. Solve: $\phi_k = -f_k / k^2$
+    !! 5. Inverse Y symmetry transform
+    !! 6. Backward spectral equivalence in X and Z
+    !!
+    !! **Y-direction:** Sine series requires special symmetric processing
+    !! to maintain real-valued solution with Dirichlet BCs.
+    !!
+    !! **Ref.** JCP 228 (2009), 5989–6015, Sec 4
     implicit none
 
     !> Divergence of velocity in spectral space
-    complex(dp), intent(inout), dimension(:, :, :) :: div_u
+    complex(dp), intent(inout), dimension(:, :, :) :: div_u  !! In: RHS, Out: Solution
     !> Spectral equivalence constants
-    complex(dp), intent(in), dimension(:, :, :) :: waves
-    real(dp), intent(in), dimension(:) :: ax, bx, ay, by, az, bz
+    complex(dp), intent(in), dimension(:, :, :) :: waves  !! Modified wavenumbers squared
+    real(dp), intent(in), dimension(:) :: ax, bx, ay, by, az, bz  !! Spectral equivalence coefficients
     !> Grid size in spectral space
-    integer, intent(in) :: nx_spec, ny_spec, nz_spec
+    integer, intent(in) :: nx_spec, ny_spec, nz_spec  !! Local spectral dimensions
     !> Offsets in the permuted pencils in spectral space
-    integer, intent(in) :: x_sp_st, y_sp_st, z_sp_st
+    integer, intent(in) :: x_sp_st, y_sp_st, z_sp_st  !! Global offsets
     !> Global cell size
-    integer, intent(in) :: nx, ny, nz
+    integer, intent(in) :: nx, ny, nz  !! Global grid dimensions
 
     integer :: i, j, k, ix, iy, iz, iy_r
     real(dp) :: tmp_r, tmp_c, div_r, div_c, l_r, l_c, r_r, r_c

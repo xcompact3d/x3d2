@@ -1,4 +1,28 @@
 module m_omp_kernels_dist
+  !! Distributed compact finite difference kernels for OpenMP backend.
+  !!
+  !! This module implements high-performance kernels for distributed compact
+  !! finite difference operators. These operators require halo exchange across
+  !! MPI ranks to compute derivatives near subdomain boundaries.
+  !!
+  !! **Key Features:**
+  !! - 9-point stencil compact schemes (4th-6th order accuracy)
+  !! - Explicit vectorisation with OpenMP SIMD directives
+  !! - Near and far boundary treatments for non-periodic domains
+  !! - Forward and backward elimination phases for distributed solves
+  !!
+  !! **Kernels:**
+  !! - `der_univ_dist`: Universal derivative (1st/2nd) with halo exchange
+  !! - `interpl_dist`: Interpolation from cell to vertices or vice versa
+  !!
+  !! **Distributed Algorithm:**
+  !! Compact schemes couple neighbouring points via implicit systems.
+  !! In distributed memory:
+  !! 1. Near-boundary points use special coefficients incorporating halo data
+  !! 2. Interior points use standard bulk coefficients
+  !! 3. Modified Thomas algorithm handles cross-process dependencies
+  !!
+  !! **Performance:** Explicitly vectorized inner loops for SIMD execution.
   use omp_lib
 
   use m_common, only: dp
@@ -12,15 +36,24 @@ contains
     du, send_u_s, send_u_e, u, u_s, u_e, &
     n_tds, n_rhs, coeffs_s, coeffs_e, coeffs, ffr, fbc, faf &
     )
+    !! Compute distributed compact derivative (1st or 2nd order).
+    !!
+    !! Evaluates derivative using compact finite difference scheme across
+    !! distributed domain. Handles boundary points with halo data and applies
+    !! appropriate scaling factors.
+    !!
+    !! **Stencil:** 9-point compact scheme requiring 4-point halo on each side.
+    !! Near boundaries (first/last 4 points): use boundary-specific coefficients.
+    !! Interior: use uniform bulk coefficients for efficiency.
     implicit none
 
     ! Arguments
-    real(dp), intent(out), dimension(:, :) :: du, send_u_s, send_u_e
-    real(dp), intent(in), dimension(:, :) :: u, u_s, u_e
-    integer, intent(in) :: n_tds, n_rhs
-    real(dp), intent(in), dimension(:, :) :: coeffs_s, coeffs_e ! start/end
-    real(dp), intent(in), dimension(:) :: coeffs
-    real(dp), intent(in), dimension(:) :: ffr, fbc, faf
+    real(dp), intent(out), dimension(:, :) :: du, send_u_s, send_u_e !! Output derivative and send buffers
+    real(dp), intent(in), dimension(:, :) :: u, u_s, u_e !! Input field and halo data (start/end)
+    integer, intent(in) :: n_tds, n_rhs                   !! System sizes
+    real(dp), intent(in), dimension(:, :) :: coeffs_s, coeffs_e !! Boundary coefficients
+    real(dp), intent(in), dimension(:) :: coeffs          !! Bulk stencil coefficients
+    real(dp), intent(in), dimension(:) :: ffr, fbc, faf   !! Scaling factors
 
     ! Local variables
     integer :: i, j

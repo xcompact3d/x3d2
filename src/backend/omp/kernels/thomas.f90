@@ -1,4 +1,18 @@
 module m_omp_kernels_thom
+  !! Thomas algorithm kernels for local compact finite differences.
+  !!
+  !! Implements tridiagonal solvers for compact schemes when domain is
+  !! not decomposed in derivative direction. Provides both standard
+  !! (non-periodic) and cyclic (periodic) Thomas algorithm variants.
+  !!
+  !! **Thomas algorithm:** Standard forward elimination and backward
+  !! substitution for tridiagonal systems, O(n) complexity.
+  !!
+  !! **Periodic Thomas:** Sherman-Morrison formula to handle cyclic
+  !! tridiagonal systems arising from periodic boundary conditions.
+  !!
+  !! **Vectorisation:** Explicit SIMD directives for SZ-wide vectors,
+  !! processing multiple pencils simultaneously.
   use m_common, only: dp
   use m_omp_common, only: SZ
 
@@ -8,14 +22,32 @@ contains
 
   subroutine der_univ_thom(du, u, n_tds, n_rhs, coeffs_s, coeffs_e, coeffs, &
                            thom_f, thom_s, thom_w, strch)
+    !! Thomas algorithm for non-periodic compact finite differences.
+    !!
+    !! Solves tridiagonal system arising from compact scheme with arbitrary
+    !! boundary conditions. Uses standard forward elimination followed by
+    !! backward substitution.
+    !!
+    !! **Algorithm:**
+    !! 1. Forward pass: Eliminate lower diagonal, form modified RHS
+    !! 2. Backward pass: Back-substitution with grid stretching correction
+    !!
+    !! **Boundary treatment:** Special stencils at start (j=1..4) and
+    !! end (j=n-3..n) to handle non-periodic boundaries.
+    !!
+    !! **Stretching:** Applied during backward pass via `strch` array.
     implicit none
 
-    real(dp), dimension(:, :), intent(out) :: du
-    real(dp), dimension(:, :), intent(in) :: u
-    integer, intent(in) :: n_tds, n_rhs
-    real(dp), intent(in), dimension(:, :) :: coeffs_s, coeffs_e ! start/end
-    real(dp), intent(in), dimension(:) :: coeffs
-    real(dp), intent(in), dimension(:) :: thom_f, thom_s, thom_w, strch
+    real(dp), dimension(:, :), intent(out) :: du  !! Solution (derivative)
+    real(dp), dimension(:, :), intent(in) :: u    !! Input field
+    integer, intent(in) :: n_tds                  !! Number of unknowns (tridiagonal size)
+    integer, intent(in) :: n_rhs                  !! Number of RHS points (stencil size)
+    real(dp), intent(in), dimension(:, :) :: coeffs_s, coeffs_e  !! Start/end stencil coefficients
+    real(dp), intent(in), dimension(:) :: coeffs  !! Interior stencil coefficients (9-point)
+    real(dp), intent(in), dimension(:) :: thom_f  !! Forward elimination factors
+    real(dp), intent(in), dimension(:) :: thom_s  !! Subdiagonal elimination factors
+    real(dp), intent(in), dimension(:) :: thom_w  !! Diagonal weights for back-substitution
+    real(dp), intent(in), dimension(:) :: strch   !! Grid stretching correction factors
 
     integer :: i, j
     real(dp) :: c_m4, c_m3, c_m2, c_m1, c_j, c_p1, c_p2, c_p3, c_p4
@@ -132,14 +164,34 @@ contains
   subroutine der_univ_thom_per( &
     du, u, n, coeffs, alpha, thom_f, thom_s, thom_w, thom_p, strch &
     )
+    !! Periodic Thomas algorithm for cyclic tridiagonal systems.
+    !!
+    !! Solves compact scheme with periodic boundary conditions using
+    !! Sherman-Morrison formula. Handles wraparound coupling between
+    !! first and last grid points.
+    !!
+    !! **Algorithm:**
+    !! 1. Forward pass: Standard elimination with periodic indexing
+    !! 2. Backward pass: Standard back-substitution
+    !! 3. Periodic correction: Sherman-Morrison adjustment for cyclic coupling
+    !!
+    !! **Periodic indexing:** Uses modulo arithmetic for stencil access
+    !! to handle wraparound at domain boundaries.
+    !!
+    !! **Sherman-Morrison:** Adds rank-1 correction to handle tridiagonal
+    !! system modified by periodic coupling terms.
     implicit none
 
-    real(dp), dimension(:, :), intent(out) :: du
-    real(dp), dimension(:, :), intent(in) :: u
-    integer, intent(in) :: n
-    real(dp), intent(in), dimension(:) :: coeffs
-    real(dp), intent(in) :: alpha
-    real(dp), intent(in), dimension(:) :: thom_f, thom_s, thom_w, thom_p, strch
+    real(dp), dimension(:, :), intent(out) :: du  !! Solution (derivative)
+    real(dp), dimension(:, :), intent(in) :: u    !! Input field
+    integer, intent(in) :: n                      !! Number of grid points
+    real(dp), intent(in), dimension(:) :: coeffs  !! Stencil coefficients (9-point)
+    real(dp), intent(in) :: alpha                 !! Tridiagonal sub/super-diagonal value
+    real(dp), intent(in), dimension(:) :: thom_f  !! Forward elimination factors
+    real(dp), intent(in), dimension(:) :: thom_s  !! Subdiagonal elimination factors
+    real(dp), intent(in), dimension(:) :: thom_w  !! Diagonal weights
+    real(dp), intent(in), dimension(:) :: thom_p  !! Periodic correction vector
+    real(dp), intent(in), dimension(:) :: strch   !! Grid stretching correction factors
 
     integer :: i, j
     integer :: jm4, jm3, jm2, jm1, jp1, jp2, jp3, jp4
