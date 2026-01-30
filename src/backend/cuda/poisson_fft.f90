@@ -9,12 +9,12 @@ module m_cuda_poisson_fft
 
   use m_common, only: dp, CELL, is_sp
   use m_field, only: field_t
-  use m_mesh, only: mesh_t
+  use m_mesh
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t
 
   use m_cuda_allocator, only: cuda_field_t
-  use m_cuda_spectral, only: memcpy3D, &
+  use m_cuda_spectral, only: memcpy3D,memcpy3D_with_transpose,memcpy3D_with_transpose_back, &
                              process_spectral_000, process_spectral_010, &
                              process_spectral_100,  &
                              enforce_periodicity_x, undo_periodicity_x, &
@@ -55,7 +55,11 @@ module m_cuda_poisson_fft
     !> Standard cuFFT storage for single-GPU mode
     complex(dp), device, allocatable, dimension(:, :, :) :: c_dev
   contains
+    procedure :: fft_forward_010 => fft_forward_010_cuda
     procedure :: fft_forward => fft_forward_cuda
+    procedure :: fft_forward_100 => fft_forward_100_cuda
+    procedure :: fft_backward_010 => fft_backward_010_cuda
+    procedure :: fft_backward_100 => fft_backward_100_cuda
     procedure :: fft_backward => fft_backward_cuda
     procedure :: fft_postprocess_000 => fft_postprocess_000_cuda
     procedure :: fft_postprocess_010 => fft_postprocess_010_cuda
@@ -169,20 +173,58 @@ contains
 
     integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
 
+    integer :: axis_value
+    real(dp) :: L
+    character(len=1) :: axis
+
     ! 1D decomposition along Z in real domain, and along Y in spectral space
     if (mesh%par%nproc_dir(2) /= 1) print *, 'nproc_dir in y-dir must be 1'
 
     ! Work out the spectral dimensions in the permuted state
     dims_glob = mesh%get_global_dims(CELL)
     dims_loc = mesh%get_dims(CELL)
+    axis_value = 2
+    if(mesh%geo%BC%x(1) == 'dirichlet' .and. mesh%geo%BC%x(2) == 'dirichlet') then
+      L = mesh%geo%L(1)
+      axis = 'x'
+      axis_value = 1
+    else if(mesh%geo%BC%y(1) == 'dirichlet' .and. mesh%geo%BC%y(2) == 'dirichlet') then  
+      L = mesh%geo%L(2)
+      axis = 'y'
+      axis_value = 2
+    else if(mesh%geo%BC%z(1) == 'dirichlet' .and. mesh%geo%BC%z(2) == 'dirichlet') then  
+      L = mesh%geo%L(3)
+      axis = 'z'
+      axis_value = 3
+    end if
 
-    n_spec(1) = dims_loc(1)/2 + 1
-    n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
-    n_spec(3) = dims_glob(3)
 
-    n_sp_st(1) = 0
-    n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
-    n_sp_st(3) = 0
+    if( axis_value == 1) then
+      n_spec(1) = dims_loc(1)/2 + 1
+      n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
+      n_spec(3) = dims_glob(3)
+
+      n_sp_st(1) = 0
+      n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
+      n_sp_st(3) = 0
+    else if(axis_value == 2) then
+      n_spec(1) = dims_loc(1)/2 + 1
+      n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
+      n_spec(3) = dims_glob(3)
+
+      n_sp_st(1) = 0
+      n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
+      n_sp_st(3) = 0
+    else
+      error stop "not implemented yet!!"
+    end if
+
+            ! ===== DEBUG PRINTOUTS =====
+    print *, '===== POISSON INIT  DEBUG ====='
+    print *, 'n_sp_st(1)=', n_sp_st(1), ' n_sp_st(2)=', n_sp_st(2), ' n_sp_st(3)=', n_sp_st(3)
+    print *, 'n_spec(1)=', n_spec(1), ' n_spec(2)=', n_spec(2), ' n_spec(3)=', n_spec(3)
+    print *, '============================='
+    ! ===== END DEBUG =====
 
     call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
 
@@ -286,7 +328,7 @@ contains
 
   end function init
 
-  subroutine fft_forward_cuda(self, f)
+  subroutine fft_forward_010_cuda(self, f)
     implicit none
 
     class(cuda_poisson_fft_t) :: self
@@ -295,6 +337,161 @@ contains
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
     real(dp), device, pointer :: f_ptr
     type(c_ptr) :: f_c_ptr
+
+    type(cudaXtDesc), pointer :: descriptor
+
+    integer :: tsize, ierr
+    type(dim3) :: blocks, threads
+
+    select type (f)
+    type is (cuda_field_t)
+      padded_dev => f%data_d
+    end select
+
+    print *, "fwd – blocks = ", blocks
+    print *, "fwd – threads = ", threads
+
+    call memcpy3D<<<blocks, threads>>>(d_dev, padded_dev, & !&
+                                       self%nx_loc, self%ny_loc, self%nz_loc)
+
+    ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, &
+                                 CUFFT_FORWARD)
+
+    if (ierr /= 0) then
+      write (stderr, *), 'cuFFT Error Code: ', ierr
+      error stop 'Forward 3D FFT execution failed'
+    end if
+
+  end subroutine fft_forward_010_cuda
+
+  subroutine fft_backward_010_cuda(self, f)
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f
+
+    real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
+
+    type(cudaXtDesc), pointer :: descriptor
+
+    integer :: tsize, ierr
+    type(dim3) :: blocks, threads
+
+    ierr = cufftXtExecDescriptor(self%plan3D_bw, self%xtdesc, self%xtdesc, &
+                                 CUFFT_INVERSE)
+    if (ierr /= 0) then
+      write (stderr, *), 'cuFFT Error Code: ', ierr
+      error stop 'Backward 3D FFT execution failed'
+    end if
+
+    select type (f)
+    type is (cuda_field_t)
+      padded_dev => f%data_d
+    end select
+
+    call c_f_pointer(self%xtdesc%descriptor, descriptor)
+    call c_f_pointer(descriptor%data(1), d_dev, &
+                     [self%nx_loc + 2, self%ny_loc, self%nz_loc])
+
+    tsize = 16
+    blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
+    threads = dim3(tsize, 1, 1)
+    call memcpy3D<<<blocks, threads>>>(padded_dev, d_dev, & !&
+                                       self%nx_loc, self%ny_loc, self%nz_loc)
+
+  end subroutine fft_backward_010_cuda
+
+subroutine fft_forward_100_cuda(self, f)
+  !! Forward FFT for Dirichlet-X case
+  !! We transpose X<->Y so that the Dirichlet direction becomes the 
+  !! "Y" direction in the transposed space, then use the same FFT approach as 010
+  implicit none
+
+  class(cuda_poisson_fft_t) :: self
+  class(field_t), intent(in) :: f
+
+  real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
+  type(cudaXtDesc), pointer :: descriptor
+
+  integer :: tsize, ierr
+  type(dim3) :: blocks, threads
+
+  select type (f)
+  type is (cuda_field_t)
+    padded_dev => f%data_d
+  end select
+
+  call c_f_pointer(self%xtdesc%descriptor, descriptor)
+  
+  ! For 100 case with transposed FFT plan (ny, nx, nz):
+  ! The descriptor has shape (ny + 2, nx, nz) for R2C output
+  call c_f_pointer(descriptor%data(1), d_dev, &
+                   [self%ny_loc + 2, self%nx_loc, self%nz_loc])
+
+  tsize = 16
+  blocks = dim3((self%nx_loc - 1)/tsize + 1, self%nz_loc, 1)
+  threads = dim3(tsize, 1, 1)
+
+  print *, "fft_forward_100 – blocks = ", blocks
+  print *, "fft_forward_100 – threads = ", threads
+
+  ! Copy with transpose: src(nx,ny,nz) -> dst(ny,nx,nz)
+  call memcpy3D_with_transpose<<<blocks, threads>>>(d_dev, padded_dev, &
+                                                     self%nx_loc, self%ny_loc, self%nz_loc)
+
+  ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, CUFFT_FORWARD)
+
+  if (ierr /= 0) then
+    write(stderr, *), 'cuFFT Error Code: ', ierr
+    error stop 'Forward 3D FFT execution failed (100 case)'
+  end if
+
+end subroutine fft_forward_100_cuda
+
+subroutine fft_backward_100_cuda(self, f)
+  implicit none
+
+  class(cuda_poisson_fft_t) :: self
+  class(field_t), intent(inout) :: f
+
+  real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
+  type(cudaXtDesc), pointer :: descriptor
+
+  integer :: tsize, ierr
+  type(dim3) :: blocks, threads
+
+  ierr = cufftXtExecDescriptor(self%plan3D_bw, self%xtdesc, self%xtdesc, CUFFT_INVERSE)
+  if (ierr /= 0) then
+    write(stderr, *), 'cuFFT Error Code: ', ierr
+    error stop 'Backward 3D FFT execution failed (100 case)'
+  end if
+
+  select type (f)
+  type is (cuda_field_t)
+    padded_dev => f%data_d
+  end select
+
+  call c_f_pointer(self%xtdesc%descriptor, descriptor)
+  call c_f_pointer(descriptor%data(1), d_dev, &
+                   [self%ny_loc + 2, self%nx_loc, self%nz_loc])
+
+  tsize = 16
+  blocks = dim3((self%nx_loc - 1)/tsize + 1, self%nz_loc, 1)
+  threads = dim3(tsize, 1, 1)
+  
+  ! Copy with transpose back: src(ny,nx,nz) -> dst(nx,ny,nz)
+  call memcpy3D_with_transpose_back<<<blocks, threads>>>(padded_dev, d_dev, &
+                                                          self%nx_loc, self%ny_loc, self%nz_loc)
+
+end subroutine fft_backward_100_cuda
+
+  subroutine fft_forward_cuda(self, f)
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    class(field_t), intent(in) :: f
+
+    real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
 
     type(cudaXtDesc), pointer :: descriptor
 
@@ -316,7 +513,10 @@ contains
 
       call c_f_pointer(self%xtdesc%descriptor, descriptor)
       call c_f_pointer(descriptor%data(1), d_dev, &
-                       [self%nx_loc + 2, self%ny_loc, self%nz_loc])
+                       [self%nx_loc, self%ny_loc + 2, self%nz_loc])
+
+      print *, "fwd – blocks = ", blocks
+      print *, "fwd – threads = ", threads
 
       call memcpy3D<<<blocks, threads>>>(d_dev, padded_dev, & !&
                                          self%nx_loc, self%ny_loc, self%nz_loc)
@@ -402,7 +602,7 @@ contains
     ! Single-GPU path: data already in padded_dev from cufftExec
 
   end subroutine fft_backward_cuda
-
+  
   subroutine fft_postprocess_000_cuda(self)
     implicit none
 
@@ -461,17 +661,21 @@ contains
     ! tsize is different than SZ, because here we work on a 3D Cartesian
     ! data structure, and free to specify any suitable thread/block size.
     tsize = 16
-    blocks = dim3((self%ny_spec - 1)/tsize + 1, self%nz_spec, 1)
+    blocks = dim3((self%nx_spec - 1)/tsize + 1, self%nz_spec, 1)
     threads = dim3(tsize, 1, 1)
 
-    ! Postprocess div_u in spectral space
-    call process_spectral_100<<<blocks, threads>>>( & !&
-      c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%x_sp_st, &
-      self%nx_glob, self%ny_glob, self%nz_glob, &
-      self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
-      self%az_dev, self%bz_dev &
-      )
-
+  ! Call process_spectral_010 with swapped parameters:
+  ! - Swap nx <-> ny for grid sizes
+  ! - Swap ax,bx <-> ay,by for wave coefficients
+  ! - Use x_sp_st instead of y_sp_st for the offset
+  call process_spectral_010<<<blocks, threads>>>( &
+    c_dev, self%waves_dev, &
+    self%nx_spec, self%ny_spec, self%x_sp_st, &  ! spectral dims and offset
+    self%ny_glob, self%nx_glob, self%nz_glob, &  ! SWAP nx <-> ny
+    self%ay_dev, self%by_dev, &  ! First dim uses Y coefficients (was periodic Y)
+    self%ax_dev, self%bx_dev, &  ! Second dim uses X coefficients (Dirichlet X)
+    self%az_dev, self%bz_dev &   ! Third dim uses Z coefficients (unchanged)
+  )
   end subroutine fft_postprocess_100_cuda
 
 
