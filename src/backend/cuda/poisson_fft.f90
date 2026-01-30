@@ -55,19 +55,24 @@ module m_cuda_poisson_fft
     !> Standard cuFFT storage for single-GPU mode
     complex(dp), device, allocatable, dimension(:, :, :) :: c_dev
   contains
-    procedure :: fft_forward_010 => fft_forward_010_cuda
     procedure :: fft_forward => fft_forward_cuda
+    procedure :: fft_forward_010 => fft_forward_010_cuda
     procedure :: fft_forward_100 => fft_forward_100_cuda
+    ! procedure :: fft_forward_110 => fft_forward_110_cuda
+    procedure :: fft_backward => fft_backward_cuda
     procedure :: fft_backward_010 => fft_backward_010_cuda
     procedure :: fft_backward_100 => fft_backward_100_cuda
-    procedure :: fft_backward => fft_backward_cuda
+    ! procedure :: fft_backward_110 => fft_backward_110_cuda
     procedure :: fft_postprocess_000 => fft_postprocess_000_cuda
     procedure :: fft_postprocess_010 => fft_postprocess_010_cuda
-    procedure :: fft_postprocess_100 => fft_postprocess_100_cuda
+    procedure :: fft_postprocess_100 => fft_postprocess_100_cuda 
+    ! procedure :: fft_postprocess_110 => fft_postprocess_110_cuda
     procedure :: enforce_periodicity_x => enforce_periodicity_x_cuda
     procedure :: undo_periodicity_x => undo_periodicity_x_cuda
     procedure :: enforce_periodicity_y => enforce_periodicity_y_cuda
     procedure :: undo_periodicity_y => undo_periodicity_y_cuda
+    ! procedure :: enforce_periodicity_xy => enforce_periodicity_xy_cuda
+    ! procedure :: undo_periodicity_xy => undo_periodicity_xy_cuda
   end type cuda_poisson_fft_t
 
   interface cuda_poisson_fft_t
@@ -172,10 +177,12 @@ contains
     integer(int_ptr_kind()) :: worksize
 
     integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
+    logical :: periodic_x, periodic_y, periodic_z  ! Add local variables
 
-    integer :: axis_value
-    real(dp) :: L
-    character(len=1) :: axis
+    ! Get periodicity from mesh BEFORE base_init
+    periodic_x = mesh%grid%periodic_BC(1)
+    periodic_y = mesh%grid%periodic_BC(2)
+    periodic_z = mesh%grid%periodic_BC(3)
 
     ! 1D decomposition along Z in real domain, and along Y in spectral space
     if (mesh%par%nproc_dir(2) /= 1) print *, 'nproc_dir in y-dir must be 1'
@@ -183,23 +190,13 @@ contains
     ! Work out the spectral dimensions in the permuted state
     dims_glob = mesh%get_global_dims(CELL)
     dims_loc = mesh%get_dims(CELL)
-    axis_value = 2
-    if(mesh%geo%BC%x(1) == 'dirichlet' .and. mesh%geo%BC%x(2) == 'dirichlet') then
-      L = mesh%geo%L(1)
-      axis = 'x'
-      axis_value = 1
-    else if(mesh%geo%BC%y(1) == 'dirichlet' .and. mesh%geo%BC%y(2) == 'dirichlet') then  
-      L = mesh%geo%L(2)
-      axis = 'y'
-      axis_value = 2
-    else if(mesh%geo%BC%z(1) == 'dirichlet' .and. mesh%geo%BC%z(2) == 'dirichlet') then  
-      L = mesh%geo%L(3)
-      axis = 'z'
-      axis_value = 3
-    end if
+
+    print *, "-- periodic_x", periodic_x
+    print *, "-- periodic_y", periodic_y
+    print *, "-- periodic_z", periodic_z
 
 
-    if( axis_value == 1) then
+    if((.not. periodic_x) .and. periodic_y .and. periodic_z) then
       n_spec(1) = dims_loc(1)/2 + 1
       n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
       n_spec(3) = dims_glob(3)
@@ -207,7 +204,7 @@ contains
       n_sp_st(1) = 0
       n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
       n_sp_st(3) = 0
-    else if(axis_value == 2) then
+    else if(periodic_x .and. (.not. periodic_y) .and. periodic_z) then
       n_spec(1) = dims_loc(1)/2 + 1
       n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
       n_spec(3) = dims_glob(3)
@@ -215,6 +212,12 @@ contains
       n_sp_st(1) = 0
       n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
       n_sp_st(3) = 0
+    else if((.not. periodic_x) .and. (.not. periodic_y) .and. periodic_z) then  
+      ! 110 case: Dirichlet X, Dirichlet Y, Periodic Z
+      ! Standard spectral layout (no transpose needed)
+      n_spec(1) = dims_loc(1)/2 + 1  ! nx/2+1 (R2C)
+      n_spec(2) = dims_loc(2)         ! ny (full, Dirichlet)
+      n_spec(3) = dims_glob(3)        ! nz (periodic)
     else
       error stop "not implemented yet!!"
     end if

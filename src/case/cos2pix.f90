@@ -62,14 +62,14 @@ contains
     !! Detect which axis has Dirichlet boundary conditions
     class(case_cos2pix_t), intent(inout) :: self
 
-    associate(bc => self%solver%mesh%geo%BC, L => self%solver%mesh%geo%L)
-      if (bc%x(1) == 'dirichlet' .and. bc%x(2) == 'dirichlet') then
+    associate(bc => self%solver%mesh%grid%periodic_BC, L => self%solver%mesh%geo%L)
+      if (.not. bc(1)) then
         self%dirichlet_axis = 1
         self%domain_length = L(1)
-      else if (bc%y(1) == 'dirichlet' .and. bc%y(2) == 'dirichlet') then
+      else if (.not. bc(2)) then
         self%dirichlet_axis = 2
         self%domain_length = L(2)
-      else if (bc%z(1) == 'dirichlet' .and. bc%z(2) == 'dirichlet') then
+      else if (.not. bc(3)) then
         self%dirichlet_axis = 3
         self%domain_length = L(3)
       else
