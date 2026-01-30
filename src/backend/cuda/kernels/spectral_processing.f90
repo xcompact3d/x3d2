@@ -27,6 +27,52 @@ contains
     end if
   end subroutine memcpy3D
 
+  attributes(global) subroutine memcpy3D_with_transpose(dst, src, nx, ny, nz)
+  !! Copy with transpose: src(nx, ny, nz) -> dst(ny, nx, nz)
+  !! Used for 100 case forward FFT
+  implicit none
+
+  real(dp), device, intent(out), dimension(:, :, :) :: dst  ! (ny+2, nx, nz) but we only write (ny, nx, nz)
+  real(dp), device, intent(in), dimension(:, :, :) :: src   ! (nx, ny, nz)
+  integer, value, intent(in) :: nx, ny, nz
+
+  integer :: i, j, k
+
+  i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! iterates over nx
+  k = blockIdx%y  ! nz
+
+  if (i <= nx) then
+    do j = 1, ny
+      ! Transpose: dst(j, i, k) = src(i, j, k)
+      dst(j, i, k) = src(i, j, k)
+    end do
+  end if
+
+end subroutine memcpy3D_with_transpose
+
+attributes(global) subroutine memcpy3D_with_transpose_back(dst, src, nx, ny, nz)
+  !! Copy with transpose back: src(ny, nx, nz) -> dst(nx, ny, nz)
+  !! Used for 100 case backward FFT
+  implicit none
+
+  real(dp), device, intent(out), dimension(:, :, :) :: dst  ! (nx, ny, nz)
+  real(dp), device, intent(in), dimension(:, :, :) :: src   ! (ny+2, nx, nz) but we only read (ny, nx, nz)
+  integer, value, intent(in) :: nx, ny, nz
+
+  integer :: i, j, k
+
+  i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! iterates over nx
+  k = blockIdx%y  ! nz
+
+  if (i <= nx) then
+    do j = 1, ny
+      ! Transpose back: dst(i, j, k) = src(j, i, k)
+      dst(i, j, k) = src(j, i, k)
+    end do
+  end if
+
+end subroutine memcpy3D_with_transpose_back
+
   attributes(global) subroutine process_spectral_000( &
     div_u, waves, nx_spec, ny_spec, y_sp_st, nx, ny, nz, &
     ax, bx, ay, by, az, bz &
@@ -125,153 +171,6 @@ contains
     end if
 
   end subroutine process_spectral_000
-
-
-attributes(global) subroutine process_spectral_100( &
-    div_u, waves, nx_spec, ny_spec, x_sp_st, nx, ny, nz, &
-    ax, bx, ay, by, az, bz &
-    )
-    !! Post-processes for Dirichlet BC in x, periodic in y and z
-    implicit none
-
-    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
-    complex(dp), device, intent(in), dimension(:, :, :) :: waves
-    real(dp), device, intent(in), dimension(:) :: ax, bx, ay, by, az, bz
-    integer, value, intent(in) :: nx_spec, ny_spec
-    integer, value, intent(in) :: x_sp_st  ! offset in x for spectral space
-    integer, value, intent(in) :: nx, ny, nz
-
-    integer :: i, j, k, ix, iy, iz, ix_rev
-    real(dp) :: tmp_r, tmp_c, div_r, div_c, l_r, l_c, r_r, r_c
-
-
-    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x
-    k = blockIdx%y ! nz_spec
-
-    ! First pass: normalization + z and y post-processing (both periodic)
-    if (j <= ny_spec) then
-      do i = 1, nx_spec
-        ix = i + x_sp_st; iy = j; iz = k
-
-        ! normalisation
-        div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
-        div_c = aimag(div_u(i, j, k))/nx/ny/nz
-
-        ! postprocess in z (periodic)
-        tmp_r = div_r
-        tmp_c = div_c
-        div_r = tmp_r*bz(iz) + tmp_c*az(iz)
-        div_c = tmp_c*bz(iz) - tmp_r*az(iz)
-        if (iz > nz/2 + 1) div_r = -div_r
-        if (iz > nz/2 + 1) div_c = -div_c
-
-        ! postprocess in y (periodic)
-        tmp_r = div_r
-        tmp_c = div_c
-        div_r = tmp_r*by(iy) + tmp_c*ay(iy)
-        div_c = tmp_c*by(iy) - tmp_r*ay(iy)
-        if (iy > ny/2 + 1) div_r = -div_r
-        if (iy > ny/2 + 1) div_c = -div_c
-
-        div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
-      end do
-    end if
-
-    ! Second pass: x Dirichlet paired operation (forward)
-    if (j <= ny_spec) then
-      do i = 2, nx_spec/2 + 1
-        ix = i + x_sp_st
-        ix_rev = nx_spec - i + 2 + x_sp_st
-
-        l_r = real(div_u(i, j, k), kind=dp)
-        l_c = aimag(div_u(i, j, k))
-        r_r = real(div_u(nx_spec - i + 2, j, k), kind=dp)
-        r_c = aimag(div_u(nx_spec - i + 2, j, k))
-
-        div_u(i, j, k) = 0.5_dp*cmplx( &
-          l_r*bx(ix) + l_c*ax(ix) + r_r*bx(ix) - r_c*ax(ix), &
-          -l_r*ax(ix) + l_c*bx(ix) + r_r*ax(ix) + r_c*bx(ix), kind=dp)
-        div_u(nx_spec - i + 2, j, k) = 0.5_dp*cmplx( &
-          r_r*bx(ix_rev) + r_c*ax(ix_rev) + l_r*bx(ix_rev) - l_c*ax(ix_rev), &
-          -r_r*ax(ix_rev) + r_c*bx(ix_rev) + l_r*ax(ix_rev) + l_c*bx(ix_rev), &
-          kind=dp)
-      end do
-    end if
-
-    ! Solve Poisson
-    if (j <= ny_spec) then
-      do i = 1, nx_spec
-        div_r = real(div_u(i, j, k), kind=dp)
-        div_c = aimag(div_u(i, j, k))
-
-        tmp_r = real(waves(i, j, k), kind=dp)
-        tmp_c = aimag(waves(i, j, k))
-        if (abs(tmp_r) < 1.e-16_dp) then
-          div_r = 0._dp
-        else
-          div_r = -div_r/tmp_r
-        end if
-        if (abs(tmp_c) < 1.e-16_dp) then
-          div_c = 0._dp
-        else
-          div_c = -div_c/tmp_c
-        end if
-        div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
-        if (j == ny/2 + 1 .and. k == nz/2 + 1) div_u(i, j, k) = 0._dp
-      end do
-    end if
-
-    ! Backward pass: x Dirichlet paired operation
-    if (j <= ny_spec) then
-      do i = 2, nx_spec/2 + 1
-        ix = i + x_sp_st
-        ix_rev = nx_spec - i + 2 + x_sp_st
-
-        l_r = real(div_u(i, j, k), kind=dp)
-        l_c = aimag(div_u(i, j, k))
-        r_r = real(div_u(nx_spec - i + 2, j, k), kind=dp)
-        r_c = aimag(div_u(nx_spec - i + 2, j, k))
-
-        div_u(i, j, k) = cmplx( &
-          l_r*bx(ix) - l_c*ax(ix) + r_r*ax(ix) + r_c*bx(ix), &
-          l_r*ax(ix) + l_c*bx(ix) - r_r*bx(ix) + r_c*ax(ix), kind=dp)
-        div_u(nx_spec - i + 2, j, k) = cmplx( &
-          r_r*bx(ix_rev) - r_c*ax(ix_rev) + l_r*ax(ix_rev) + l_c*bx(ix_rev), &
-          r_r*ax(ix_rev) + r_c*bx(ix_rev) - l_r*bx(ix_rev) + l_c*ax(ix_rev), &
-          kind=dp)
-      end do
-    end if
-
-    ! Final pass: z and y backward post-processing
-    if (j <= ny_spec) then
-      do i = 1, nx_spec
-        ix = i + x_sp_st; iy = j; iz = k
-
-        div_r = real(div_u(i, j, k), kind=dp)
-        div_c = aimag(div_u(i, j, k))
-
-        ! post-process in z (periodic backward)
-        tmp_r = div_r
-        tmp_c = div_c
-        div_r = tmp_r*bz(iz) - tmp_c*az(iz)
-        div_c = tmp_c*bz(iz) + tmp_r*az(iz)
-        if (iz > nz/2 + 1) div_r = -div_r
-        if (iz > nz/2 + 1) div_c = -div_c
-
-        ! post-process in y (periodic backward)
-        tmp_r = div_r
-        tmp_c = div_c
-        div_r = tmp_r*by(iy) - tmp_c*ay(iy)
-        div_c = tmp_c*by(iy) + tmp_r*ay(iy)
-        if (iy > ny/2 + 1) div_r = -div_r
-        if (iy > ny/2 + 1) div_c = -div_c
-
-        div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
-      end do
-    end if
-  end subroutine process_spectral_100
-
-
 
   attributes(global) subroutine process_spectral_010( &
     div_u, waves, nx_spec, ny_spec, y_sp_st, nx, ny, nz, &
@@ -770,6 +669,10 @@ attributes(global) subroutine process_spectral_100( &
     do i = nx/2 + 1, nx
       f_out(i, j, k) = f_in(2*nx - 2*i + 2, j, k)
     end do
+    ! Debug: make enforce periodicity as just f_in => f_out
+    ! do i = 1, nx
+    !   f_out(i, j, k) = f_in(i, j, k)
+    ! end do
 
   end subroutine enforce_periodicity_x
 
@@ -789,6 +692,12 @@ attributes(global) subroutine process_spectral_100( &
       f_out(2*i - 1, j, k) = f_in(i, j, k)
       f_out(2*i, j, k) = f_in(nx - i + 1, j, k)
     end do
+
+
+      ! Debug: make undo periodicity as just f_in => f_out
+      ! do i = 1, nx
+      !   f_out(i, j, k) = f_in(i, j, k)
+      ! end do
 
   end subroutine undo_periodicity_x
 
@@ -812,6 +721,10 @@ attributes(global) subroutine process_spectral_100( &
     do j = ny/2 + 1, ny
       f_out(i, j, k) = f_in(i, 2*ny - 2*j + 2, k)
     end do
+    !! Debug: make enforce periodicity as just f_in => f_out
+    ! do j = 1, ny
+    !   f_out(i, j, k) = f_in(i, j, k)
+    ! end do
 
   end subroutine enforce_periodicity_y
 
@@ -832,6 +745,10 @@ attributes(global) subroutine process_spectral_100( &
       f_out(i, 2*j, k) = f_in(i, ny - j + 1, k)
     end do
 
+    ! Debug: make undo periodicity as just f_in => f_out
+    ! do j = 1, ny
+    !   f_out(i, j, k) = f_in(i, j, k)
+    ! end do
   end subroutine undo_periodicity_y
 
 end module m_cuda_spectral

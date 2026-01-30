@@ -14,13 +14,15 @@ module m_case_cos2pix
   !!
   !! NOTE: For y-Dirichlet BCs, dims_global(2) must be ODD (e.g., 65)
 
-  use m_allocator, only: allocator_t
-  use m_base_backend, only: base_backend_t
+  use m_allocator
+  use m_base_backend
   use m_base_case, only: base_case_t
-  use m_common, only: dp, VERT, DIR_C, DIR_X, DIR_Z, pi
+  use m_common, only: pi, dp, get_argument, DIR_C, VERT, CELL, &
+                      RDR_C2Z, RDR_C2X, RDR_Z2X
+  use m_config, only: domain_config_t, solver_config_t
   use m_field, only: field_t
-  use m_mesh, only: mesh_t
-  use m_solver, only: init
+  use m_mesh
+  use m_solver, only: solver_t
   implicit none
   
   type, extends(base_case_t) :: case_cos2pix_t
@@ -81,31 +83,37 @@ contains
   subroutine run_cos2pix(self)
     implicit none
     class(case_cos2pix_t), intent(inout) :: self
-    
     class(field_t), pointer :: u, v, w
     class(field_t), pointer :: div_u, pressure, dpdx, dpdy, dpdz
     class(field_t), pointer :: host_field
     real(dp) :: div_max, div_mean, p_max, p_mean
-    integer :: i, j, k, dims(3)
-    real(dp) :: xloc(3),dbg_xloc(3), axis_value, L
+    integer :: i, j, k, dims(3),axis_value
+    real(dp) :: xloc(3),dbg_xloc(3), L, error_norm
     character(len=1) :: axis
+    class(field_t), pointer :: f
+    class(field_t), pointer :: gradient_result
+    class(field_t), pointer :: f_final
+    class(field_t), pointer :: f_check
+    class(field_t), pointer :: f_final_check
+    class(field_t), pointer :: temp
+
 
     !! #TODO: 2D support for boundary conditions check
     if(self%solver%mesh%geo%BC%x(1) == 'dirichlet' .and. self%solver%mesh%geo%BC%x(2) == 'dirichlet') then
       L = self%solver%mesh%geo%L(1)
       axis = 'x'
-      axis_value = 0
+      axis_value = 1
     else if(self%solver%mesh%geo%BC%y(1) == 'dirichlet' .and. self%solver%mesh%geo%BC%y(2) == 'dirichlet') then  
       L = self%solver%mesh%geo%L(2)
       axis = 'y'
-      axis_value = 1
+      axis_value = 2
     else if(self%solver%mesh%geo%BC%z(1) == 'dirichlet' .and. self%solver%mesh%geo%BC%z(2) == 'dirichlet') then  
       L = self%solver%mesh%geo%L(3)
       axis = 'z'
-      axis_value = 2
+      axis_value = 3
     end if
-
-    dims = self%solver%mesh%get_dims(VERT)
+    print *, "[axis_value] = ", axis_value 
+    dims = self%solver%mesh%get_dims(CELL)
     
     if (self%solver%mesh%par%is_root()) then
       print *, ''
@@ -118,110 +126,121 @@ contains
       print *, 'Test: Create divergent velocity, correct it, verify div=0'
       print *, ''
     end if
-    
-    host_field => self%solver%host_allocator%get_block(DIR_C)
-    
-    ! Create u = 0
-    u => self%solver%backend%allocator%get_block(DIR_X)
-    call u%fill(0._dp)
 
 
-    ! Create v = cos(2*pi*[axis]/L[axis])
+! Device field
+f => self%solver%backend%allocator%get_block(DIR_C, CELL)
+f_check => self%solver%backend%allocator%get_block(DIR_X)
+! Host field
+host_field => self%solver%host_allocator%get_block(DIR_C)
+
+    ! Create p = cos(2*pi*[axis]/L[axis])
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          xloc = self%solver%mesh%get_coordinates(i, j, k)
-          host_field%data(i, j, k) = cos(2* pi * xloc(axis_value) / L)
+          xloc = self%solver%mesh%get_coordinates(i, j, k, CELL)
+          ! host_field%data(i, j, k) = cos(2* pi * xloc(axis_value) / L)
+          host_field%data(i, j, k) = cos(2._dp*xloc(axis_value)*pi / L)
         end do
       end do
     end do
-    v => self%solver%backend%allocator%get_block(DIR_X)
-    call self%solver%backend%set_field_data(v, host_field%data)
-    
-    ! Create w = 0
-    w => self%solver%backend%allocator%get_block(DIR_X)
-    call w%fill(0._dp)
-    
+
+    ! Sanity check
+    print*, 'cos\n'
+    if( axis_value == 1) then
+      do i = 1, dims(axis_value)
+        print *,  self%solver%mesh%geo%midp_coords(i, axis_value), (host_field%data(i,4,8)), (cos(2._dp * pi * self%solver%mesh%geo%midp_coords(i, axis_value))/(-4._dp * pi *pi))
+      end do
+    else if(axis_value == 2) then
+      do j = 1, dims(axis_value)
+        print *,  self%solver%mesh%geo%midp_coords(j, axis_value), (host_field%data(4,j,8)), (cos(2._dp * pi * self%solver%mesh%geo%midp_coords(j, axis_value))/(-4._dp * pi *pi))
+      end do
+    else
+      error stop "not implemented yet!!"
+    end if
+    ! Assign host_field to f and delete host_field
+    print *, "1"
+    call self%solver%backend%set_field_data(f, host_field%data, DIR_C)
+    print *, "2"
+    call f%set_data_loc(CELL)
+    print *, "3"
     call self%solver%host_allocator%release_block(host_field)
+print *, "4"
+    call self%solver%backend%reorder(f_check, f, RDR_C2X)
+print *, "5"
+    ! Step 1: Solve Poisson  
+    temp => self%solver%backend%allocator%get_block(DIR_C)
+    print *, "6"
+    ! solve poisson equation with FFT based approach
+    call self%solver%backend%poisson_fft%solve_poisson(f, temp)
+    print *, "7"
+    call self%solver%backend%allocator%release_block(temp)
+    print *, "8"
     
-    ! Step 1: Compute divergence
-    div_u => self%solver%backend%allocator%get_block(DIR_Z)
-    call self%solver%divergence_v2p(div_u, u, v, w)
-    
-    call div_u%set_data_loc(VERT)
-    call self%solver%backend%field_max_mean(div_max, div_mean, div_u)
-    if (self%solver%mesh%par%is_root()) then
-      print *, 'Step 1: Initial divergence'
-      print *, '  max|div(u,v,w)| =', div_max
-      print *, '  mean =', div_mean
-      print *, '  (expected max: pi/L', axis,' =', pi/L, ')'
-      print *, ''
+    host_field => self%solver%host_allocator%get_block(DIR_C)
+    print *, "9"
+    call self%solver%backend%get_field_data(host_field%data, f)
+    print*, 'last\n'    
+
+    if( axis_value == 1) then
+      do i = 1, dims(axis_value)
+        print *,  self%solver%mesh%geo%midp_coords(i, axis_value), (host_field%data(i,4,8)), (cos(2._dp * pi * self%solver%mesh%geo%midp_coords(i, axis_value))/(-4._dp * pi *pi))
+      end do
+    else if(axis_value == 2) then
+      do j = 1, dims(axis_value)
+        print *,  self%solver%mesh%geo%midp_coords(j, axis_value), (host_field%data(4,j,8)), (cos(2._dp * pi * self%solver%mesh%geo%midp_coords(j, axis_value))/(-4._dp * pi *pi))
+      end do
+    else
+      error stop "not implemented yet!!"
     end if
+    call self%solver%host_allocator%release_block(host_field)
+    ! Step 2: Compute gradient of pressure
+    gradient_result => self%solver%backend%allocator%get_block(DIR_Z)
+    call self%solver%backend%reorder(gradient_result, f, RDR_C2Z)
+    call self%solver%backend%allocator%release_block(f)
+
+    dpdx  => self%solver%backend%allocator%get_block(DIR_X)
+    dpdy  => self%solver%backend%allocator%get_block(DIR_X)
+    dpdz  => self%solver%backend%allocator%get_block(DIR_X)
+
     
-    ! Step 2: Solve Poisson
-    pressure => self%solver%backend%allocator%get_block(DIR_Z)
-    call self%solver%poisson(pressure, div_u)
-    call self%solver%backend%allocator%release_block(div_u)
+    call self%solver%gradient_p2v(dpdx, dpdy, dpdz,gradient_result)
     
-    call pressure%set_data_loc(VERT)
-    call self%solver%backend%field_max_mean(p_max, p_mean, pressure)
-    if (self%solver%mesh%par%is_root()) then
-      print *, 'Step 2: Pressure from Poisson solve'
-      print *, '  max|p| =', p_max
-      print *, '  mean(p) =', p_mean
-      print *, ''
-    end if
-    
-    ! Step 3: Compute gradient
-    dpdx => self%solver%backend%allocator%get_block(DIR_X)
-    dpdy => self%solver%backend%allocator%get_block(DIR_X)
-    dpdz => self%solver%backend%allocator%get_block(DIR_X)
-    call self%solver%gradient_p2v(dpdx, dpdy, dpdz, pressure)
-    call self%solver%backend%allocator%release_block(pressure)
-    
-    if (self%solver%mesh%par%is_root()) then
-      print *, 'Step 3: Computed pressure gradient'
-    end if
-    
-    ! Step 4: Correct velocity
-    call self%solver%backend%vecadd(-1._dp, dpdx, 1._dp, u)
-    call self%solver%backend%vecadd(-1._dp, dpdy, 1._dp, v)
-    call self%solver%backend%vecadd(-1._dp, dpdz, 1._dp, w)
-    
+    call self%solver%backend%allocator%release_block(gradient_result)
+
+    f_final => self%solver%backend%allocator%get_block(DIR_Z)
+    call self%solver%divergence_v2p(f_final, dpdx, dpdy, dpdz)
+
     call self%solver%backend%allocator%release_block(dpdx)
     call self%solver%backend%allocator%release_block(dpdy)
     call self%solver%backend%allocator%release_block(dpdz)
     
-    if (self%solver%mesh%par%is_root()) then
-      print *, 'Step 4: Corrected velocity'
-    end if
-    
-    ! Step 5: Compute divergence of corrected velocity
-    div_u => self%solver%backend%allocator%get_block(DIR_Z)
-    call self%solver%divergence_v2p(div_u, u, v, w)
-    
-    call div_u%set_data_loc(VERT)
-    call self%solver%backend%field_max_mean(div_max, div_mean, div_u)
-    
-    if (self%solver%mesh%par%is_root()) then
-      print *, ''
-      print *, '=== RESULTS ==='
-      print *, 'Divergence of corrected velocity:'
-      print *, '  max|div| =', div_max
-      print *, '  mean|div| =', div_mean
-      print *, ''
-      if (div_max < 1.0e-10_dp) then
-        print *, 'STATUS: TEST PASS! (div < 1e-10)'
-      else
-        print *, 'STATUS: TEST FAILED'
-      end if
-      print *, ''
-    end if
-    
-    call self%solver%backend%allocator%release_block(u)
-    call self%solver%backend%allocator%release_block(v)
-    call self%solver%backend%allocator%release_block(w)
-    call self%solver%backend%allocator%release_block(div_u)
+
+  f_final_check => self%solver%backend%allocator%get_block(DIR_X)
+  call self%solver%backend%reorder(f_final_check, f_final, RDR_Z2X)
+  call self%solver%backend%allocator%release_block(f_final)
+
+  call self%solver%backend%vecadd(-1._dp, f_check, 1._dp, f_final_check)
+
+  host_field => self%solver%host_allocator%get_block(DIR_C)
+
+  call self%solver%backend%get_field_data(host_field%data, f_final_check)
+  call self%solver%backend%allocator%release_block(f_final_check)
+  dims = self%solver%mesh%get_dims(CELL)
+  error_norm = norm2(host_field%data(1:dims(1), 1:dims(2), 1:dims(3)))/product(dims)
+  print*, 'norm', error_norm
+
+    call self%solver%backend%allocator%release_block(f_check)
+  call self%solver%host_allocator%release_block(host_field)
+
+
+  if (error_norm .gt. 1d-9) then
+    error stop 'div(grad(fft())) test failed!'
+  else
+    if (self%solver%mesh%par%is_root()) print *, "TEST PASS"
+  end if
+
+
     call self%case_finalise()
     
   end subroutine run_cos2pix

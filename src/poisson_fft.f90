@@ -8,6 +8,7 @@ module m_poisson_fft
 
   type, abstract :: poisson_fft_t
     !! FFT based Poisson solver
+    type(mesh_t), pointer :: mesh => null()
     !> Global dimensions
     integer :: nx_glob, ny_glob, nz_glob
     !> Local dimensions
@@ -41,7 +42,11 @@ module m_poisson_fft
     !> Procedure pointer to BC specific poisson solvers
     procedure(poisson_xxx), pointer :: poisson => null()
   contains
+    procedure(fft_forward), deferred :: fft_forward_010
     procedure(fft_forward), deferred :: fft_forward
+    procedure(fft_forward), deferred :: fft_forward_100
+    procedure(fft_backward), deferred :: fft_backward_010
+    procedure(fft_backward), deferred :: fft_backward_100
     procedure(fft_backward), deferred :: fft_backward
     procedure(fft_postprocess), deferred :: fft_postprocess_000
     procedure(fft_postprocess), deferred :: fft_postprocess_010
@@ -107,17 +112,20 @@ module m_poisson_fft
 
 contains
 
+
+
+
+
   subroutine base_init(self, mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
     implicit none
-
     class(poisson_fft_t) :: self
-    type(mesh_t), intent(in) :: mesh
+    type(mesh_t), intent(in), target :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     integer, dimension(3), intent(in) :: n_spec ! Size of the spectral pencil
     integer, dimension(3), intent(in) :: n_sp_st ! Offset of the spectral pencil
 
     integer :: dims(3)
-
+    self%mesh => mesh
     ! Decomposition is in y- and z-directions
     if (mesh%par%nproc_dir(1) /= 1) print *, 'nproc_dir in x-dir must be 1'
 
@@ -137,6 +145,16 @@ contains
     self%x_sp_st = n_sp_st(1)
     self%y_sp_st = n_sp_st(2)
     self%z_sp_st = n_sp_st(3)
+
+        ! ===== DEBUG PRINTOUTS =====
+    print *, '===== POISSON FFT DEBUG ====='
+    print *, 'Global dims:   nx_glob=', self%nx_glob, ' ny_glob=', self%ny_glob, ' nz_glob=', self%nz_glob
+    print *, 'Local dims:    nx_loc=', self%nx_loc, ' ny_loc=', self%ny_loc, ' nz_loc=', self%nz_loc
+    print *, 'Spectral dims: nx_spec=', self%nx_spec, ' ny_spec=', self%ny_spec, ' nz_spec=', self%nz_spec
+    print *, 'Spectral offset: x_sp_st=', self%x_sp_st, ' y_sp_st=', self%y_sp_st, ' z_sp_st=', self%z_sp_st
+    print *, 'Periodic BCs:  periodic_x=', self%periodic_x, ' periodic_y=', self%periodic_y, ' periodic_z=', self%periodic_z
+    print *, '============================='
+    ! ===== END DEBUG =====
 
     allocate (self%ax(self%nx_glob), self%bx(self%nx_glob))
     allocate (self%ay(self%ny_glob), self%by(self%ny_glob))
@@ -182,6 +200,8 @@ contains
       if (mesh%par%nproc > 1) then
         error stop 'Multiple ranks are not yet supported for non-periodic BCs!'
       end if
+
+
       self%poisson => poisson_100
     else
       error stop 'Requested BCs are not supported in FFT-based Poisson solver!'
@@ -190,7 +210,7 @@ contains
 
   subroutine solve_poisson(self, f, temp)
     implicit none
-
+    integer :: i 
     class(poisson_fft_t) :: self
     class(field_t), intent(inout) :: f, temp
 
@@ -212,15 +232,13 @@ contains
 
   subroutine poisson_100(self, f, temp)
     implicit none
-
     class(poisson_fft_t) :: self
     class(field_t), intent(inout) :: f, temp
-
+    integer :: i, j
     call self%enforce_periodicity_x(temp, f)
-
-    call self%fft_forward(temp)
+    call self%fft_forward_100(temp)
     call self%fft_postprocess_100
-    call self%fft_backward(temp)
+    call self%fft_backward_100(temp)
 
     call self%undo_periodicity_x(f, temp)
 
@@ -235,9 +253,9 @@ contains
 
     call self%enforce_periodicity_y(temp, f)
 
-    call self%fft_forward(temp)
+    call self%fft_forward_010(temp)
     call self%fft_postprocess_010
-    call self%fft_backward(temp)
+    call self%fft_backward_010(temp)
 
     call self%undo_periodicity_y(f, temp)
 
@@ -690,6 +708,7 @@ contains
           end do
         end do
       end do
+    
     else if (.not. (self%periodic_x .and. self%periodic_y .and. &
                     self%periodic_z)) then
       ! poisson 111
@@ -698,6 +717,49 @@ contains
       ! poisson 001, 011, 101
       error stop 'FFT Poisson solver does not support specified BCs!'
     end if
+
+    if (.not. self%periodic_x) then  ! 100 case
+  do k = 1, self%nz_spec
+    do j = 1, self%ny_spec  ! This iterates over X (Dirichlet)
+      do i = 1, self%nx_spec  ! This iterates over Y (periodic, R2C)
+        iy = i + self%y_sp_st  ! Use for ky (first dim after transpose)
+        ix = j + self%x_sp_st  ! Use for kx (second dim after transpose)
+        iz = k + self%z_sp_st
+        
+        ! Compute xtt, ytt, ztt using the ORIGINAL physical directions
+        ! but store in transposed array order
+        rlexs = real(self%exs(ix), kind=dp)*geo%d(1)  ! X wavenumber
+        rleys = real(self%eys(iy), kind=dp)*geo%d(2)  ! Y wavenumber
+        rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)  ! Z wavenumber
+        
+        ! ... compute xtt, ytt, ztt, xt1, yt1, zt1, xt2, yt2, zt2 as before ...
+                    xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
+                     + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
+                     + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
+                     + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
+            ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
+                     + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
+                     + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
+                     + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
+            ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
+                     + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
+                     + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
+                     + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
+
+            xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
+            yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
+            zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
+
+            xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
+            yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
+            zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
+            
+        xyzk = xt2 + yt2 + zt2
+        self%waves(i, j, k) = xyzk  ! Store in transposed order
+      end do
+    end do
+  end do
+end if
 
   end subroutine waves_set
 
