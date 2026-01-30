@@ -210,7 +210,7 @@ contains
 
   subroutine solve_poisson(self, f, temp)
     implicit none
-    integer :: i 
+
     class(poisson_fft_t) :: self
     class(field_t), intent(inout) :: f, temp
 
@@ -234,8 +234,9 @@ contains
     implicit none
     class(poisson_fft_t) :: self
     class(field_t), intent(inout) :: f, temp
-    integer :: i, j
+
     call self%enforce_periodicity_x(temp, f)
+
     call self%fft_forward_100(temp)
     call self%fft_postprocess_100
     call self%fft_backward_100(temp)
