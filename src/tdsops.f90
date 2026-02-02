@@ -96,9 +96,9 @@ contains
     logical, optional, intent(in) :: sym !! (==npaire), only for Neumann BCs
     real(dp), optional, intent(in) :: c_nu, nu0_nu !! params for hypervisc.
 #ifdef SINGLE_PREC
-    real(dp) :: tol = 1d-12
+    real(dp) :: tol = 1e-12
 #else
-    real(dp) :: tol = 1d-16
+    real(dp) :: tol = 1e-16
 #endif
 
     integer :: n, n_stencil
