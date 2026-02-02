@@ -95,6 +95,11 @@ contains
     character(*), optional, intent(in) :: from_to !! 'v2p' or 'p2v'
     logical, optional, intent(in) :: sym !! (==npaire), only for Neumann BCs
     real(dp), optional, intent(in) :: c_nu, nu0_nu !! params for hypervisc.
+#ifdef SINGLE_PREC
+    real(dp) :: tol = 1d-12
+#else
+    real(dp) :: tol = 1d-16
+#endif
 
     integer :: n, n_stencil
 
@@ -182,11 +187,7 @@ contains
       tdsops%move = 0
     end select
 
-#ifdef SINGLE_PREC
-    if (tdsops%dist_sa(n_tds) > 1d-12) then
-#else
-    if (tdsops%dist_sa(n_tds) > 1d-16) then
-#endif
+    if (tdsops%dist_sa(n_tds) > tol) then
       print *, 'There are ', n_tds, 'points in a subdomain, it may be too few!'
       print *, 'The entry distributed solver disregards in "' &
         //operation//'" operation is:', tdsops%dist_sa(n_tds)
