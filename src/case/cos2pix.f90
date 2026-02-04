@@ -107,7 +107,7 @@ contains
   end subroutine create_cosine_field
 
   function compute_error_norm(self, field) result(error_norm)
-    !! Compute normalized error norm
+    !! Compute normalized L2 error norm
     class(case_cos2pix_t), intent(in) :: self
     class(field_t), intent(in) :: field
     real(dp) :: error_norm
@@ -118,75 +118,365 @@ contains
     error_norm = norm2(field%data(1:dims(1), 1:dims(2), 1:dims(3))) / product(dims)
   end function compute_error_norm
 
-  subroutine print_field_comparison(self, host_field, label, n)
-    !! Print field values vs analytical solution for debugging
-    class(case_cos2pix_t), intent(in) :: self
-    class(field_t), intent(in) :: host_field
-    character(len=*), intent(in) :: label
-    integer, intent(in) :: n
+subroutine print_field_comparison(self, host_field, label, n, is_poisson_solution)
+  !! Print field values vs analytical solution for debugging
+  class(case_cos2pix_t), intent(in) :: self
+  class(field_t), intent(in) :: host_field
+  character(len=*), intent(in) :: label
+  integer, intent(in) :: n
+  logical, intent(in) :: is_poisson_solution
 
-    integer :: idx, dims(3)
-    integer :: Lx, Ly, Lz
-    integer :: bc_pattern
-    real(dp) :: coord, numerical, analytical, coord_x, coord_y, coord_z
-    real(dp) :: n_pi  ! n*pi factor
+  integer :: ix, iy, iz, dims(3)
+  real(dp) :: Lx, Ly, Lz
+  integer :: bc_pattern
+  real(dp) :: coord_x, coord_y, coord_z
+  real(dp) :: numerical, analytical
+  real(dp) :: kx, ky, kz
+  real(dp) :: val_z1, val_zk
+  real(dp) :: phi_100_analytical, phi_010_analytical, phi_110_analytical, phi_product
+  real(dp) :: error_sum, error_max, error_l2
+  integer :: count
 
-    if (.not. self%solver%mesh%par%is_root()) return
+  if (.not. self%solver%mesh%par%is_root()) return
 
-    dims = self%solver%mesh%get_dims(CELL)
-    n_pi = real(n, dp) * pi
+  dims = self%solver%mesh%get_dims(CELL)
 
+  ! Get domain lengths
+  Lx = self%solver%mesh%geo%L(1)
+  Ly = self%solver%mesh%geo%L(2)
+  Lz = self%solver%mesh%geo%L(3)
+
+  ! Wavenumbers
+  kx = real(n, dp) * pi / Lx
+  ky = real(n, dp) * pi / Ly
+  kz = real(n, dp) * pi / Lz
+
+  print *, ''
+  print *, '##################################################'
+  print *, label
+  print *, '##################################################'
+  print *, 'Domain: Lx=', Lx, ' Ly=', Ly, ' Lz=', Lz
+  print *, 'Grid: nx=', dims(1), ' ny=', dims(2), ' nz=', dims(3)
+  print *, 'Mode number n =', n
+  print *, 'kx =', kx, ' ky =', ky, ' kz =', kz
+
+  ! Convert to bit pattern: z + y*2 + x*4
+  bc_pattern = self%dirichlet_axis(3) + self%dirichlet_axis(2)*2 + self%dirichlet_axis(1)*4
+  print *, 'BC pattern: ', bc_pattern
+
+  select case (bc_pattern)
+
+  case (2)  ! [0,1,0] - y only (010 case)
     print *, ''
-    print *, label
-    print *, 'Testing cos(', n, '*pi*x/L)'
-    print *, 'Coordinate | Numerical | Analytical'
-    ! Convert to bit pattern: z + y*2 + x*4 gives values 0-7
-    ! This way [1,0,0] (x only) = 4, [0,1,0] (y only) = 2, [0,0,1] (z only) = 1
-    bc_pattern = self%dirichlet_axis(3) + self%dirichlet_axis(2)*2 + self%dirichlet_axis(1)*4
-    print *, bc_pattern
-    select case (bc_pattern)
-      case (2) ! [0,1,0] - y only
-        do idx = 1, dims(2)
-          coord = self%solver%mesh%geo%midp_coords(idx, 2)
-          numerical = host_field%data(4, idx, 8)
-          analytical = cos(n_pi * coord) / (-n_pi * n_pi)
-          print *, coord, numerical, analytical
-        end do
-      case (4) ![1,0,0] - x only
-        do idx = 1, dims(1)
-          coord = self%solver%mesh%geo%midp_coords(idx, 1)
-          numerical = host_field%data(idx, 4, 8)
-          analytical = cos(n_pi * coord) / (-n_pi * n_pi)
-          print *, coord, numerical, analytical
-        end do
-      case (6) ! [1,1,0] - x and y
-        Lx = 1
-        Ly = 1
+    print *, '=========================================='
+    print *, '010 Case: Dirichlet Y, Periodic X and Z'
+    print *, 'RHS: f = cos(ky*y)'
+    print *, 'Analytical: phi = -cos(ky*y) / ky^2'
+    print *, '=========================================='
+    print *, ''
+    
+    error_sum = 0._dp
+    error_max = 0._dp
+    count = 0
+    
+    ! Fixed x and z indices (middle of domain)
+    ix = dims(1) / 2
+    iz = dims(3) / 2
+    
+    print *, 'Sampling along Y at ix=', ix, ', iz=', iz
+    print *, ''
+    print '(A12, A16, A16, A16)', 'y-coord', 'Numerical', 'Analytical', 'Error'
+    print '(A12, A16, A16, A16)', '-------', '---------', '----------', '-----'
+    
+    do iy = 1, dims(2)
+      coord_y = self%solver%mesh%geo%midp_coords(iy, 2)
+      
+      ! Array access: data(x_index, y_index, z_index)
+      numerical = host_field%data(ix, iy, iz)
+      
+      if (is_poisson_solution) then
+        analytical = -cos(ky * coord_y) / (ky * ky)
+      else
+        analytical = cos(ky * coord_y)
+      end if
+      
+      error_sum = error_sum + (numerical - analytical)**2
+      error_max = max(error_max, abs(numerical - analytical))
+      count = count + 1
+      
+      print '(F12.6, 3ES16.6)', coord_y, numerical, analytical, abs(numerical - analytical)
+    end do
+    
+    error_l2 = sqrt(error_sum / count)
+    
+    print *, ''
+    print *, '010 Case Summary:'
+    print *, 'L2 error:  ', error_l2
+    print *, 'Max error: ', error_max
+    print *, '=========================================='
+
+  case (4)  ! [1,0,0] - x only (100 case)
+    print *, ''
+    print *, '=========================================='
+    print *, '100 Case: Dirichlet X, Periodic Y and Z'
+    print *, 'RHS: f = cos(kx*x)'
+    print *, 'Analytical: phi = -cos(kx*x) / kx^2'
+    print *, '=========================================='
+    print *, ''
+    
+    error_sum = 0._dp
+    error_max = 0._dp
+    count = 0
+    
+    ! Fixed y and z indices (middle of domain)
+    iy = dims(2) / 2
+    iz = dims(3) / 2
+    
+    print *, 'Sampling along X at iy=', iy, ', iz=', iz
+    print *, ''
+    print '(A12, A16, A16, A16)', 'x-coord', 'Numerical', 'Analytical', 'Error'
+    print '(A12, A16, A16, A16)', '-------', '---------', '----------', '-----'
+    
+    do ix = 1, dims(1)
+      coord_x = self%solver%mesh%geo%midp_coords(ix, 1)
+      
+      ! Array access: data(x_index, y_index, z_index)
+      numerical = host_field%data(ix, iy, iz)
+      
+      if (is_poisson_solution) then
+        analytical = -cos(kx * coord_x) / (kx * kx)
+      else
+        analytical = cos(kx * coord_x)
+      end if
+      
+      error_sum = error_sum + (numerical - analytical)**2
+      error_max = max(error_max, abs(numerical - analytical))
+      count = count + 1
+      
+      print '(F12.6, 3ES16.6)', coord_x, numerical, analytical, abs(numerical - analytical)
+    end do
+    
+    error_l2 = sqrt(error_sum / count)
+    
+    print *, ''
+    print *, '100 Case Summary:'
+    print *, 'L2 error:  ', error_l2
+    print *, 'Max error: ', error_max
+    print *, '=========================================='
+
+  case (6)  ! [1,1,0] - x and y (110 case)
+    print *, ''
+    print *, '=========================================='
+    print *, '110 Case: Dirichlet X and Y, Periodic Z'
+    print *, 'RHS: f = cos(kx*x) * cos(ky*y)'
+    print *, 'Analytical: phi = -cos(kx*x)*cos(ky*y) / (kx^2 + ky^2)'
+    print *, '=========================================='
+    print *, ''
+    print *, 'kx^2 = ', kx*kx
+    print *, 'ky^2 = ', ky*ky
+    print *, 'kx^2 + ky^2 = ', kx*kx + ky*ky
+    
+    ! =========================================================================
+    ! CHECK 1: Z-independence (solution should be constant in z)
+    ! =========================================================================
+    print *, ''
+    print *, '-------------------------------------------'
+    print *, 'CHECK 1: Z-independence'
+    print *, 'Solution should be constant across z-planes'
+    print *, '-------------------------------------------'
+    print *, ''
+    
+    ix = dims(1) / 2
+    iy = dims(2) / 2
+    
+    print *, 'Sampling at ix=', ix, ', iy=', iy
+    print *, ''
+    print '(A10, A20, A20)', 'z-plane', 'Value', 'Diff from z=1'
+    print '(A10, A20, A20)', '-------', '-----', '-------------'
+    
+    val_z1 = host_field%data(ix, iy, 1)
+    do iz = 1, dims(3)
+      val_zk = host_field%data(ix, iy, iz)
+      print '(I10, 2ES20.10)', iz, val_zk, abs(val_zk - val_z1)
+    end do
+    
+    ! =========================================================================
+    ! CHECK 2: Verify analytical product formula
+    ! =========================================================================
+    print *, ''
+    print *, '-------------------------------------------'
+    print *, 'CHECK 2: Analytical Product Formula'
+    print *, '-------------------------------------------'
+    print *, ''
+    print *, 'Verifying that:'
+    print *, '  phi_110 = phi_100 * phi_010 * (-1) * kx^2 * ky^2 / (kx^2 + ky^2)'
+    print *, ''
+    print *, 'where:'
+    print *, '  phi_100(x) = -cos(kx*x) / kx^2'
+    print *, '  phi_010(y) = -cos(ky*y) / ky^2'
+    print *, '  phi_110(x,y) = -cos(kx*x)*cos(ky*y) / (kx^2 + ky^2)'
+    print *, ''
+    print '(A8, A8, A14, A14, A14, A14, A14)', &
+          'x', 'y', 'phi_100', 'phi_010', 'Product', 'phi_110', 'Diff'
+    print '(A8, A8, A14, A14, A14, A14, A14)', &
+          '---', '---', '-------', '-------', '-------', '-------', '----'
+    
+    iz = dims(3) / 2
+    do iy = 1, dims(2), max(1, dims(2)/8)  ! Sample ~8 points
+      do ix = 1, dims(1), max(1, dims(1)/8)
+        coord_x = self%solver%mesh%geo%midp_coords(ix, 1)
+        coord_y = self%solver%mesh%geo%midp_coords(iy, 2)
         
-        print *, 'Printing along x-axis (at j=4, k=8):'
-        do idx = 1, dims(1)
-          coord_x = self%solver%mesh%geo%midp_coords(idx, 1)
-          coord_y = self%solver%mesh%geo%midp_coords(4, 2)
-          numerical = host_field%data(idx, 4, 8)
-          analytical = cos(n_pi * coord_x / Lx) * cos(n_pi * coord_y / Ly) &
-                       / (-n_pi * n_pi * (1.0_dp/(Lx*Lx) + 1.0_dp/(Ly*Ly)))
-          print *, coord_x, numerical, analytical
-        end do
+        ! Analytical 1D solutions at these coordinates
+        phi_100_analytical = -cos(kx * coord_x) / (kx * kx)
+        phi_010_analytical = -cos(ky * coord_y) / (ky * ky)
         
-        print *, ''
-        print *, 'Printing along y-axis (at i=4, k=8):'
-        do idx = 1, dims(2)
-          coord_x = self%solver%mesh%geo%midp_coords(4, 1)
-          coord_y = self%solver%mesh%geo%midp_coords(idx, 2)
-          numerical = host_field%data(4, idx, 8)
-          analytical = cos(n_pi * coord_x / Lx) * cos(n_pi * coord_y / Ly) &
-                       / (-n_pi * n_pi * (1.0_dp/(Lx*Lx) + 1.0_dp/(Ly*Ly)))
-          print *, coord_y, numerical, analytical
+        ! Product formula
+        phi_product = phi_100_analytical * phi_010_analytical * (-1._dp) &
+                      * (kx*kx * ky*ky) / (kx*kx + ky*ky)
+        
+        ! Direct 110 analytical
+        phi_110_analytical = -cos(kx * coord_x) * cos(ky * coord_y) / (kx*kx + ky*ky)
+        
+        print '(2F8.4, 5ES14.4)', coord_x, coord_y, &
+              phi_100_analytical, phi_010_analytical, phi_product, &
+              phi_110_analytical, abs(phi_product - phi_110_analytical)
+      end do
+    end do
+    
+    ! =========================================================================
+    ! CHECK 3: Numerical vs Analytical (sampled)
+    ! =========================================================================
+    print *, ''
+    print *, '-------------------------------------------'
+    print *, 'CHECK 3: Numerical vs Analytical (sampled)'
+    print *, '-------------------------------------------'
+    print *, ''
+    
+    iz = dims(3) / 2
+    print *, 'Sampling at z-plane iz=', iz
+    print *, ''
+    print '(A8, A8, A16, A16, A16)', 'x', 'y', 'Numerical', 'Analytical', 'Error'
+    print '(A8, A8, A16, A16, A16)', '---', '---', '---------', '----------', '-----'
+    
+    do iy = 1, dims(2), max(1, dims(2)/8)
+      do ix = 1, dims(1), max(1, dims(1)/8)
+        coord_x = self%solver%mesh%geo%midp_coords(ix, 1)
+        coord_y = self%solver%mesh%geo%midp_coords(iy, 2)
+        
+        numerical = host_field%data(ix, iy, iz)
+        
+        if (is_poisson_solution) then
+          analytical = -cos(kx * coord_x) * cos(ky * coord_y) / (kx*kx + ky*ky)
+        else
+          analytical = cos(kx * coord_x) * cos(ky * coord_y)
+        end if
+        
+        print '(2F8.4, 3ES16.6)', coord_x, coord_y, numerical, analytical, &
+              abs(numerical - analytical)
+      end do
+    end do
+    
+    ! =========================================================================
+    ! CHECK 4: Full error statistics (single z-plane)
+    ! =========================================================================
+    print *, ''
+    print *, '-------------------------------------------'
+    print *, 'CHECK 4: Error Statistics (z-midplane)'
+    print *, '-------------------------------------------'
+    print *, ''
+    
+    error_sum = 0._dp
+    error_max = 0._dp
+    count = 0
+    
+    iz = dims(3) / 2
+    do iy = 1, dims(2)
+      do ix = 1, dims(1)
+        coord_x = self%solver%mesh%geo%midp_coords(ix, 1)
+        coord_y = self%solver%mesh%geo%midp_coords(iy, 2)
+        
+        numerical = host_field%data(ix, iy, iz)
+        
+        if (is_poisson_solution) then
+          analytical = -cos(kx * coord_x) * cos(ky * coord_y) / (kx*kx + ky*ky)
+        else
+          analytical = cos(kx * coord_x) * cos(ky * coord_y)
+        end if
+        
+        error_sum = error_sum + (numerical - analytical)**2
+        error_max = max(error_max, abs(numerical - analytical))
+        count = count + 1
+      end do
+    end do
+    
+    error_l2 = sqrt(error_sum / count)
+    
+    print *, 'Z-plane:', iz
+    print *, 'Points evaluated:', count
+    print *, 'L2 error:  ', error_l2
+    print *, 'Max error: ', error_max
+    
+    ! =========================================================================
+    ! CHECK 5: Global error (all z-planes)
+    ! =========================================================================
+    print *, ''
+    print *, '-------------------------------------------'
+    print *, 'CHECK 5: Global Error (all z-planes)'
+    print *, '-------------------------------------------'
+    print *, ''
+    
+    error_sum = 0._dp
+    error_max = 0._dp
+    count = 0
+    
+    do iz = 1, dims(3)
+      do iy = 1, dims(2)
+        do ix = 1, dims(1)
+          coord_x = self%solver%mesh%geo%midp_coords(ix, 1)
+          coord_y = self%solver%mesh%geo%midp_coords(iy, 2)
+          
+          numerical = host_field%data(ix, iy, iz)
+          
+          if (is_poisson_solution) then
+            analytical = -cos(kx * coord_x) * cos(ky * coord_y) / (kx*kx + ky*ky)
+          else
+            analytical = cos(kx * coord_x) * cos(ky * coord_y)
+          end if
+          
+          error_sum = error_sum + (numerical - analytical)**2
+          error_max = max(error_max, abs(numerical - analytical))
+          count = count + 1
         end do
-      case (3)
-        error stop "Z-axis comparison not implemented"
-    end select
-  end subroutine print_field_comparison
+      end do
+    end do
+    
+    error_l2 = sqrt(error_sum / count)
+    
+    print *, 'Total points evaluated:', count
+    print *, 'Global L2 error:  ', error_l2
+    print *, 'Global Max error: ', error_max
+    
+    ! =========================================================================
+    ! SUMMARY
+    ! =========================================================================
+    print *, ''
+    print *, '=========================================='
+    print *, '110 CASE SUMMARY'
+    print *, '=========================================='
+    print *, 'L2 error:  ', error_l2
+    print *, 'Max error: ', error_max
+    print *, ''
+    print *, 'Expected: Similar to 100 and 010 cases (~0.02-0.03)'
+    print *, '=========================================='
+
+  case default
+    print *, 'BC pattern', bc_pattern, 'not implemented'
+    error stop "BC pattern not implemented"
+
+  end select
+
+end subroutine print_field_comparison
 
   subroutine run_single_test(self, n, test_passed)
     !! Run a single test with cos(n*pi*x/L)
@@ -218,7 +508,7 @@ contains
 
     ! Create test function f = cos(n*pi*x/L)
     call self%create_cosine_field(host_field, n)
-    call self%print_field_comparison(host_field, 'Initial cosine field:', n)
+    call self%print_field_comparison(host_field, 'Initial cosine field:', n, .false.)
 
     ! Transfer to device
     call self%solver%backend%set_field_data(f_device, host_field%data, DIR_C)
@@ -236,7 +526,7 @@ contains
     ! Debug: print Poisson solution
     host_field => self%solver%host_allocator%get_block(DIR_C)
     call self%solver%backend%get_field_data(host_field%data, f_device)
-    call self%print_field_comparison(host_field, 'Poisson solution:', n)
+    call self%print_field_comparison(host_field, 'Poisson solution:', n, .true.)
     call self%solver%host_allocator%release_block(host_field)
 
     ! Compute gradient of pressure
@@ -280,7 +570,7 @@ contains
     ! Report results
     if (self%solver%mesh%par%is_root()) then
       print *, ''
-      print *, 'Error:', error_norm
+      print *, 'Error norm (L2):', error_norm
       print *, 'Tolerance:      ', ERROR_TOLERANCE
       print *, ''
     end if

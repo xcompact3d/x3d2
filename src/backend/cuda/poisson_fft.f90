@@ -16,7 +16,7 @@ module m_cuda_poisson_fft
   use m_cuda_allocator, only: cuda_field_t
   use m_cuda_spectral, only: memcpy3D,memcpy3D_with_transpose,memcpy3D_with_transpose_back, &
                              process_spectral_000, process_spectral_010, &
-                             process_spectral_100,  &
+                             process_spectral_100, process_spectral_110, &
                              enforce_periodicity_x, undo_periodicity_x, &
                              enforce_periodicity_y, undo_periodicity_y, &
                              process_spectral_010_fw, &
@@ -58,21 +58,21 @@ module m_cuda_poisson_fft
     procedure :: fft_forward => fft_forward_cuda
     procedure :: fft_forward_010 => fft_forward_010_cuda
     procedure :: fft_forward_100 => fft_forward_100_cuda
-    ! procedure :: fft_forward_110 => fft_forward_110_cuda
+    procedure :: fft_forward_110 => fft_forward_110_cuda
     procedure :: fft_backward => fft_backward_cuda
     procedure :: fft_backward_010 => fft_backward_010_cuda
     procedure :: fft_backward_100 => fft_backward_100_cuda
-    ! procedure :: fft_backward_110 => fft_backward_110_cuda
+    procedure :: fft_backward_110 => fft_backward_110_cuda
     procedure :: fft_postprocess_000 => fft_postprocess_000_cuda
     procedure :: fft_postprocess_010 => fft_postprocess_010_cuda
     procedure :: fft_postprocess_100 => fft_postprocess_100_cuda 
-    ! procedure :: fft_postprocess_110 => fft_postprocess_110_cuda
+    procedure :: fft_postprocess_110 => fft_postprocess_110_cuda
     procedure :: enforce_periodicity_x => enforce_periodicity_x_cuda
     procedure :: undo_periodicity_x => undo_periodicity_x_cuda
     procedure :: enforce_periodicity_y => enforce_periodicity_y_cuda
     procedure :: undo_periodicity_y => undo_periodicity_y_cuda
-    ! procedure :: enforce_periodicity_xy => enforce_periodicity_xy_cuda
-    ! procedure :: undo_periodicity_xy => undo_periodicity_xy_cuda
+    procedure :: enforce_periodicity_xy => enforce_periodicity_xy_cuda
+    procedure :: undo_periodicity_xy => undo_periodicity_xy_cuda
   end type cuda_poisson_fft_t
 
   interface cuda_poisson_fft_t
@@ -191,11 +191,6 @@ contains
     dims_glob = mesh%get_global_dims(CELL)
     dims_loc = mesh%get_dims(CELL)
 
-    print *, "-- periodic_x", periodic_x
-    print *, "-- periodic_y", periodic_y
-    print *, "-- periodic_z", periodic_z
-
-
     if((.not. periodic_x) .and. periodic_y .and. periodic_z) then
       n_spec(1) = dims_loc(1)/2 + 1
       n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
@@ -216,8 +211,12 @@ contains
       ! 110 case: Dirichlet X, Dirichlet Y, Periodic Z
       ! Standard spectral layout (no transpose needed)
       n_spec(1) = dims_loc(1)/2 + 1  ! nx/2+1 (R2C)
-      n_spec(2) = dims_loc(2)         ! ny (full, Dirichlet)
-      n_spec(3) = dims_glob(3)        ! nz (periodic)
+      n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)    ! ny
+      n_spec(3) = dims_glob(3)        ! nz
+
+      n_sp_st(1) = 0
+      n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
+      n_sp_st(3) = 0
     else
       error stop "not implemented yet!!"
     end if
@@ -488,6 +487,85 @@ subroutine fft_backward_100_cuda(self, f)
 
 end subroutine fft_backward_100_cuda
 
+  subroutine fft_forward_110_cuda(self, f)
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    class(field_t), intent(in) :: f
+
+    real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
+
+    type(cudaXtDesc), pointer :: descriptor
+
+    integer :: tsize, ierr
+    type(dim3) :: blocks, threads
+
+    select type (f)
+    type is (cuda_field_t)
+      padded_dev => f%data_d
+    end select
+
+    call c_f_pointer(self%xtdesc%descriptor, descriptor)
+    call c_f_pointer(descriptor%data(1), d_dev, &
+                     [self%nx_loc + 2, self%ny_loc, self%nz_loc])
+
+    ! tsize is different than SZ, because here we work on a 3D Cartesian
+    ! data structure, and free to specify any suitable thread/block size.
+    tsize = 16
+    blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
+    threads = dim3(tsize, 1, 1)
+    print *, "fwd – blocks = ", blocks
+    print *, "fwd – threads = ", threads
+
+    call memcpy3D<<<blocks, threads>>>(d_dev, padded_dev, & !&
+                                       self%nx_loc, self%ny_loc, self%nz_loc)
+
+    ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, &
+                                 CUFFT_FORWARD)
+
+    if (ierr /= 0) then
+      write (stderr, *), 'cuFFT Error Code: ', ierr
+      error stop 'Forward 3D FFT execution failed'
+    end if
+
+  end subroutine fft_forward_110_cuda
+
+  subroutine fft_backward_110_cuda(self, f)
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f
+
+    real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
+
+    type(cudaXtDesc), pointer :: descriptor
+
+    integer :: tsize, ierr
+    type(dim3) :: blocks, threads
+
+    ierr = cufftXtExecDescriptor(self%plan3D_bw, self%xtdesc, self%xtdesc, &
+                                 CUFFT_INVERSE)
+    if (ierr /= 0) then
+      write (stderr, *), 'cuFFT Error Code: ', ierr
+      error stop 'Backward 3D FFT execution failed'
+    end if
+
+    select type (f)
+    type is (cuda_field_t)
+      padded_dev => f%data_d
+    end select
+
+    call c_f_pointer(self%xtdesc%descriptor, descriptor)
+    call c_f_pointer(descriptor%data(1), d_dev, &
+                     [self%nx_loc + 2, self%ny_loc, self%nz_loc])
+
+    tsize = 16
+    blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
+    threads = dim3(tsize, 1, 1)
+    call memcpy3D<<<blocks, threads>>>(padded_dev, d_dev, & !&
+                                       self%nx_loc, self%ny_loc, self%nz_loc)
+
+  end subroutine fft_backward_110_cuda
   subroutine fft_forward_cuda(self, f)
     implicit none
 
@@ -788,6 +866,107 @@ end subroutine fft_backward_100_cuda
   end subroutine fft_postprocess_010_cuda
 
 
+  subroutine fft_postprocess_110_cuda(self)
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+
+    type(cudaXtDesc), pointer :: descriptor
+
+    complex(dp), device, dimension(:, :, :), pointer :: c_dev
+    type(dim3) :: blocks, threads
+    integer :: tsize, off, inc
+
+    ! obtain a pointer to descriptor so that we can carry out postprocessing
+    call c_f_pointer(self%xtdesc%descriptor, descriptor)
+    call c_f_pointer(descriptor%data(1), c_dev, &
+                     [self%nx_spec, self%ny_spec, self%nz_spec])
+
+    ! tsize is different than SZ, because here we work on a 3D Cartesian
+    ! data structure, and free to specify any suitable thread/block size.
+    tsize = 16
+    blocks = dim3((self%nx_spec - 1)/tsize + 1, self%nz_spec, 1)
+    threads = dim3(tsize, 1, 1)
+
+    ! Postprocess div_u in spectral space
+    if (.not. self%stretched_y) then
+      call process_spectral_110<<<blocks, threads>>>( &
+        c_dev, self%waves_dev, &
+        self%nx_spec, self%ny_spec, &
+        self%x_sp_st, self%y_sp_st, &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax_dev, self%bx_dev, &
+        self%ay_dev, self%by_dev, &
+        self%az_dev, self%bz_dev &
+        )
+    else
+      call process_spectral_010_fw<<<blocks, threads>>>( & !&
+        c_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
+        self%az_dev, self%bz_dev &
+        )
+
+      ! if stretching in y is 'centred' or 'top-bottom'
+      if (self%stretched_y_sym) then
+        ! copy from host to device if lowmem else from device stores
+        if (self%lowmem) then
+          self%a_odd_re_dev = self%a_odd_re
+          self%a_odd_im_dev = self%a_odd_im
+          self%a_even_re_dev = self%a_even_re
+          self%a_even_im_dev = self%a_even_im
+        else
+          self%a_odd_re_dev = self%store_a_odd_re_dev
+          self%a_odd_im_dev = self%store_a_odd_im_dev
+          self%a_even_re_dev = self%store_a_even_re_dev
+          self%a_even_im_dev = self%store_a_even_im_dev
+        end if
+        ! start from the first odd entry
+        off = 0
+        ! and continue with odd ones
+        inc = 2
+        call process_spectral_010_poisson<<<blocks, threads>>>( & !&
+          c_dev, self%a_odd_re_dev, self%a_odd_im_dev, off, inc, &
+          self%nx_spec, self%ny_spec/2, &
+          self%nx_glob, self%ny_glob, self%nz_glob &
+          )
+        ! start from the first even entry, and continue with even ones
+        off = 1
+        call process_spectral_010_poisson<<<blocks, threads>>>( & !&
+          c_dev, self%a_even_re_dev, self%a_even_im_dev, off, inc, &
+          self%nx_spec, self%ny_spec/2, &
+          self%nx_glob, self%ny_glob, self%nz_glob &
+          )
+      !! if stretching in y is 'bottom'
+      else
+        ! copy from host to device if lowmem else from device stores
+        if (self%lowmem) then
+          self%a_re_dev = self%a_re
+          self%a_im_dev = self%a_im
+        else
+          self%a_re_dev = self%store_a_re_dev
+          self%a_im_dev = self%store_a_im_dev
+        end if
+        off = 0
+        inc = 1
+        ! start from the first entry and increment 1
+        call process_spectral_010_poisson<<<blocks, threads>>>( & !&
+          c_dev, self%a_re_dev, self%a_im_dev, off, inc, &
+          self%nx_spec, self%ny_spec, &
+          self%nx_glob, self%ny_glob, self%nz_glob &
+          )
+      end if
+
+      call process_spectral_010_bw<<<blocks, threads>>>( & !&
+        c_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
+        self%az_dev, self%bz_dev &
+        )
+    end if
+
+  end subroutine fft_postprocess_110_cuda
+
   subroutine enforce_periodicity_x_cuda(self, f_out, f_in)
     implicit none
 
@@ -896,5 +1075,92 @@ end subroutine fft_backward_100_cuda
       )
 
   end subroutine undo_periodicity_y_cuda
+
+  subroutine enforce_periodicity_xy_cuda(self, f_out, f_in, temp)
+  !! Apply odd-even separation in both X and Y directions
+  !! Two-pass: X folding first, then Y folding
+  implicit none
+
+  class(cuda_poisson_fft_t) :: self
+  class(field_t), intent(inout) :: f_out, temp
+  class(field_t), intent(in) :: f_in
+
+  real(dp), device, pointer, dimension(:, :, :) :: f_out_dev, f_in_dev, temp_dev
+  type(dim3) :: blocks, threads
+
+  select type (f_out)
+  type is (cuda_field_t)
+    f_out_dev => f_out%data_d
+  end select
+
+  select type (f_in)
+  type is (cuda_field_t)
+    f_in_dev => f_in%data_d
+  end select
+
+  select type (temp)
+  type is (cuda_field_t)
+    temp_dev => temp%data_d
+  end select
+
+  ! First pass: X folding (f_in -> temp)
+  blocks = dim3(self%nz_loc, 1, 1)
+  threads = dim3(self%ny_loc, 1, 1)
+  call enforce_periodicity_x<<<blocks, threads>>>( &
+    temp_dev, f_in_dev, self%nx_glob &
+    )
+
+  ! Second pass: Y folding (temp -> f_out)
+  blocks = dim3(self%nz_loc, 1, 1)
+  threads = dim3(self%nx_loc, 1, 1)
+  call enforce_periodicity_y<<<blocks, threads>>>( &
+    f_out_dev, temp_dev, self%ny_glob &
+    )
+
+end subroutine enforce_periodicity_xy_cuda
+
+
+subroutine undo_periodicity_xy_cuda(self, f_out, f_in, temp)
+  !! Undo odd-even separation in both X and Y directions
+  !! Two-pass: Y unfolding first, then X unfolding (reverse order)
+  implicit none
+
+  class(cuda_poisson_fft_t) :: self
+  class(field_t), intent(inout) :: f_out, temp
+  class(field_t), intent(in) :: f_in
+
+  real(dp), device, pointer, dimension(:, :, :) :: f_out_dev, f_in_dev, temp_dev
+  type(dim3) :: blocks, threads
+
+  select type (f_out)
+  type is (cuda_field_t)
+    f_out_dev => f_out%data_d
+  end select
+
+  select type (f_in)
+  type is (cuda_field_t)
+    f_in_dev => f_in%data_d
+  end select
+
+  select type (temp)
+  type is (cuda_field_t)
+    temp_dev => temp%data_d
+  end select
+
+  ! First pass: Y unfolding (f_in -> temp)
+  blocks = dim3(self%nz_loc, 1, 1)
+  threads = dim3(self%nx_loc, 1, 1)
+  call undo_periodicity_y<<<blocks, threads>>>( &
+    temp_dev, f_in_dev, self%ny_glob &
+    )
+
+  ! Second pass: X unfolding (temp -> f_out)
+  blocks = dim3(self%nz_loc, 1, 1)
+  threads = dim3(self%ny_loc, 1, 1)
+  call undo_periodicity_x<<<blocks, threads>>>( &
+    f_out_dev, temp_dev, self%nx_glob &
+    )
+
+end subroutine undo_periodicity_xy_cuda
 
 end module m_cuda_poisson_fft
