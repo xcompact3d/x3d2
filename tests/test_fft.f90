@@ -46,7 +46,15 @@ program test_fft
   real(dp) :: x, y, z
   real(dp) :: error_norm
   real(dp), dimension(3) :: xloc
+#ifdef SINGLE_PREC
+#ifdef CUDA
+  real(dp), parameter :: tol = 1e-06
+#else
+  real(dp), parameter :: tol = 1e-05
+#endif
+#else
   real(dp), parameter :: tol = 1e-10
+#endif
   logical :: use_2decomp
   real(dp), allocatable, dimension(:, :, :) :: input_data, output_data
 
