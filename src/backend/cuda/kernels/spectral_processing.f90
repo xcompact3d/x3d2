@@ -27,6 +27,52 @@ contains
     end if
   end subroutine memcpy3D
 
+  attributes(global) subroutine memcpy3D_with_transpose(dst, src, nx, ny, nz)
+  !! Copy with transpose: src(nx, ny, nz) -> dst(ny, nx, nz)
+  !! Used for 100 case forward FFT
+  implicit none
+
+  real(dp), device, intent(out), dimension(:, :, :) :: dst  ! (ny+2, nx, nz) but we only write (ny, nx, nz)
+  real(dp), device, intent(in), dimension(:, :, :) :: src   ! (nx, ny, nz)
+  integer, value, intent(in) :: nx, ny, nz
+
+  integer :: i, j, k
+
+  i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! iterates over nx
+  k = blockIdx%y  ! nz
+
+  if (i <= nx) then
+    do j = 1, ny
+      ! Transpose: dst(j, i, k) = src(i, j, k)
+      dst(j, i, k) = src(i, j, k)
+    end do
+  end if
+
+end subroutine memcpy3D_with_transpose
+
+attributes(global) subroutine memcpy3D_with_transpose_back(dst, src, nx, ny, nz)
+  !! Copy with transpose back: src(ny, nx, nz) -> dst(nx, ny, nz)
+  !! Used for 100 case backward FFT
+  implicit none
+
+  real(dp), device, intent(out), dimension(:, :, :) :: dst  ! (nx, ny, nz)
+  real(dp), device, intent(in), dimension(:, :, :) :: src   ! (ny+2, nx, nz) but we only read (ny, nx, nz)
+  integer, value, intent(in) :: nx, ny, nz
+
+  integer :: i, j, k
+
+  i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! iterates over nx
+  k = blockIdx%y  ! nz
+
+  if (i <= nx) then
+    do j = 1, ny
+      ! Transpose back: dst(i, j, k) = src(j, i, k)
+      dst(i, j, k) = src(j, i, k)
+    end do
+  end if
+
+end subroutine memcpy3D_with_transpose_back
+
   attributes(global) subroutine process_spectral_000( &
     div_u, waves, nx_spec, ny_spec, y_sp_st, nx, ny, nz, &
     ax, bx, ay, by, az, bz &
@@ -604,6 +650,59 @@ contains
 
   end subroutine process_spectral_010_bw
 
+
+  attributes(global) subroutine enforce_periodicity_x(f_out, f_in, nx)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: f_out
+    real(dp), device, intent(in), dimension(:, :, :) :: f_in
+    integer, value, intent(in) :: nx
+
+    integer :: i, j, k
+
+    j = threadIdx%x
+    k = blockIdx%x
+
+    do i = 1, nx/2
+      f_out(i, j, k) = f_in(2*i -1, j, k)
+    end do
+    do i = nx/2 + 1, nx
+      f_out(i, j, k) = f_in(2*nx - 2*i + 2, j, k)
+    end do
+    ! Debug: make enforce periodicity as just f_in => f_out
+    ! do i = 1, nx
+    !   f_out(i, j, k) = f_in(i, j, k)
+    ! end do
+
+  end subroutine enforce_periodicity_x
+
+  attributes(global) subroutine undo_periodicity_x(f_out, f_in, nx)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: f_out
+    real(dp), device, intent(in), dimension(:, :, :) :: f_in
+    integer, value, intent(in) :: nx
+
+    integer :: i, j, k
+
+    j = threadIdx%x
+    k = blockIdx%x
+
+    do i = 1, nx/2
+      f_out(2*i - 1, j, k) = f_in(i, j, k)
+      f_out(2*i, j, k) = f_in(nx - i + 1, j, k)
+    end do
+
+
+      ! Debug: make undo periodicity as just f_in => f_out
+      ! do i = 1, nx
+      !   f_out(i, j, k) = f_in(i, j, k)
+      ! end do
+
+  end subroutine undo_periodicity_x
+
+
+
   attributes(global) subroutine enforce_periodicity_y(f_out, f_in, ny)
     implicit none
 
@@ -622,6 +721,10 @@ contains
     do j = ny/2 + 1, ny
       f_out(i, j, k) = f_in(i, 2*ny - 2*j + 2, k)
     end do
+    !! Debug: make enforce periodicity as just f_in => f_out
+    ! do j = 1, ny
+    !   f_out(i, j, k) = f_in(i, j, k)
+    ! end do
 
   end subroutine enforce_periodicity_y
 
@@ -642,6 +745,10 @@ contains
       f_out(i, 2*j, k) = f_in(i, ny - j + 1, k)
     end do
 
+    ! Debug: make undo periodicity as just f_in => f_out
+    ! do j = 1, ny
+    !   f_out(i, j, k) = f_in(i, j, k)
+    ! end do
   end subroutine undo_periodicity_y
 
 end module m_cuda_spectral
