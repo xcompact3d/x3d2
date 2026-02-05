@@ -1006,19 +1006,22 @@ contains
     select type (f); type is (cuda_field_t); data = f%data_d; end select
   end subroutine copy_f_to_data_cuda
 
-  subroutine init_cuda_poisson_fft(self, mesh, xdirps, ydirps, zdirps, lowmem)
+  subroutine init_cuda_poisson_fft(self, mesh, xdirps, ydirps, zdirps, lowmem, &
+                                    use_cufftmp)
     implicit none
 
     class(cuda_backend_t) :: self
     type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
+    logical, optional, intent(in) :: use_cufftmp
 
     allocate (cuda_poisson_fft_t :: self%poisson_fft)
 
     select type (poisson_fft => self%poisson_fft)
     type is (cuda_poisson_fft_t)
-      poisson_fft = cuda_poisson_fft_t(mesh, xdirps, ydirps, zdirps, lowmem)
+      poisson_fft = cuda_poisson_fft_t(mesh, xdirps, ydirps, zdirps, lowmem, &
+                                       use_cufftmp)
     end select
 
   end subroutine init_cuda_poisson_fft

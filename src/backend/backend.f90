@@ -321,7 +321,8 @@ module m_base_backend
   end interface
 
   abstract interface
-    subroutine init_poisson_fft(self, mesh, xdirps, ydirps, zdirps, lowmem)
+    subroutine init_poisson_fft(self, mesh, xdirps, ydirps, zdirps, lowmem, &
+                                use_cufftmp)
       import :: base_backend_t
       import :: dirps_t
       import :: mesh_t
@@ -331,6 +332,7 @@ module m_base_backend
       type(mesh_t), intent(in) :: mesh
       type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
       logical, optional, intent(in) :: lowmem
+      logical, optional, intent(in) :: use_cufftmp
     end subroutine init_poisson_fft
   end interface
 

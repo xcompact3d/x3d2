@@ -183,7 +183,8 @@ contains
       if (solver%mesh%par%is_root()) print *, 'Poisson solver: FFT'
       call solver%backend%init_poisson_fft(solver%mesh, solver%xdirps, &
                                            solver%ydirps, solver%zdirps, &
-                                           solver_cfg%lowmem_fft)
+                                           solver_cfg%lowmem_fft, &
+                                           solver_cfg%use_cufftmp)
       solver%poisson => poisson_fft
     case ('CG')
       if (solver%mesh%par%is_root()) &
