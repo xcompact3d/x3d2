@@ -1,5 +1,6 @@
 module m_cuda_poisson_fft
-  use iso_c_binding, only: c_loc, c_ptr, c_f_pointer
+  use iso_c_binding, only: c_loc, c_ptr, c_f_pointer, c_int, c_float, &
+                            c_double_complex, c_float_complex
   use iso_fortran_env, only: stderr => error_unit
   use cudafor
   use cufftXt
@@ -63,6 +64,23 @@ module m_cuda_poisson_fft
   interface cuda_poisson_fft_t
     module procedure init
   end interface cuda_poisson_fft_t
+
+  ! Explicit C interfaces for cuFFT functions that nvfortran has trouble with
+  interface
+    integer(c_int) function cufftExecR2C_C(plan, idata, odata) bind(C, name='cufftExecR2C')
+      use iso_c_binding
+      integer(c_int), value :: plan
+      type(c_ptr), value :: idata
+      type(c_ptr), value :: odata
+    end function cufftExecR2C_C
+    
+    integer(c_int) function cufftExecC2R_C(plan, idata, odata) bind(C, name='cufftExecC2R')
+      use iso_c_binding
+      integer(c_int), value :: plan
+      type(c_ptr), value :: idata
+      type(c_ptr), value :: odata
+    end function cufftExecC2R_C
+  end interface
 
   private :: init
 
@@ -167,18 +185,15 @@ contains
     ierr = cufftCreate(poisson_fft%plan3D_fw)
     
     if (poisson_fft%use_cufftmp) then
-      ! Multi-GPU path using cuFFTMp (supports both single and double precision)
+      ! Multi-GPU path using cuFFTMp
       ierr = cufftMpAttachComm(poisson_fft%plan3D_fw, CUFFT_COMM_MPI, &
                                MPI_COMM_WORLD)
-      if (is_sp) then
-        ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_R2C, &
-                               worksize)
-      else
-        ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z, &
-                               worksize)
-      end if
+    end if
+    
+    if (is_sp) then
+      ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_R2C, &
+                             worksize)
     else
-      ! Single-GPU mode: only double precision (Fortran interface limitation)
       ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z, &
                              worksize)
     end if
@@ -190,18 +205,15 @@ contains
     ierr = cufftCreate(poisson_fft%plan3D_bw)
     
     if (poisson_fft%use_cufftmp) then
-      ! Multi-GPU path using cuFFTMp (supports both single and double precision)
+      ! Multi-GPU path using cuFFTMp
       ierr = cufftMpAttachComm(poisson_fft%plan3D_bw, CUFFT_COMM_MPI, &
                                MPI_COMM_WORLD)
-      if (is_sp) then
-        ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_C2R, &
-                               worksize)
-      else
-        ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D, &
-                               worksize)
-      end if
+    end if
+    
+    if (is_sp) then
+      ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_C2R, &
+                             worksize)
     else
-      ! Single-GPU mode: only double precision (Fortran interface limitation)
       ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D, &
                              worksize)
     end if
@@ -267,13 +279,16 @@ contains
                                    CUFFT_FORWARD)
     else
       ! Single-GPU path using standard cuFFT
-      ! Note: Currently only double precision is supported for single-GPU mode
-      ! The Fortran interface for cufftExecR2C/C2R has resolution issues
       ! Using padded_dev directly causes segfault, use pointer workaround
       f_c_ptr = c_loc(padded_dev)
       call c_f_pointer(f_c_ptr, f_ptr)
       
-      ierr = cufftExecD2Z(self%plan3D_fw, f_ptr, self%c_dev)
+      ! Use explicit C interface for single precision, Fortran interface for double
+      if (is_sp) then
+        ierr = cufftExecR2C_C(self%plan3D_fw, c_loc(f_ptr), c_loc(self%c_dev))
+      else
+        ierr = cufftexecd2z(self%plan3D_fw, f_ptr, self%c_dev)
+      end if
     end if
 
     if (ierr /= 0) then
@@ -309,12 +324,16 @@ contains
                                    CUFFT_INVERSE)
     else
       ! Single-GPU path using standard cuFFT
-      ! Note: Currently only double precision is supported for single-GPU mode
       ! Using padded_dev directly causes segfault, use pointer workaround
       f_c_ptr = c_loc(padded_dev)
       call c_f_pointer(f_c_ptr, f_ptr)
       
-      ierr = cufftExecZ2D(self%plan3D_bw, self%c_dev, f_ptr)
+      ! Use explicit C interface for single precision, Fortran interface for double
+      if (is_sp) then
+        ierr = cufftExecC2R_C(self%plan3D_bw, c_loc(self%c_dev), c_loc(f_ptr))
+      else
+        ierr = cufftexecz2d(self%plan3D_bw, self%c_dev, f_ptr)
+      end if
     end if
     
     if (ierr /= 0) then
