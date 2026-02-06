@@ -205,8 +205,30 @@ contains
                              worksize)
     end if
     if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Forward 3D FFT plan generation failed'
+      if (poisson_fft%use_cufftmp) then
+        ! cuFFTMp plan creation failed, retry with single-GPU cuFFT
+        if (mesh%par%is_root()) then
+          print *, 'cuFFTMp plan creation failed (error ', ierr, '), retrying with single-GPU cuFFT'
+        end if
+        poisson_fft%use_cufftmp = .false.
+        
+        ! Destroy the failed plan and recreate without cuFFTMp
+        ierr = cufftDestroy(poisson_fft%plan3D_fw)
+        ierr = cufftCreate(poisson_fft%plan3D_fw)
+        
+        if (is_sp) then
+          ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_R2C, &
+                                 worksize)
+        else
+          ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z, &
+                                 worksize)
+        end if
+      end if
+      
+      if (ierr /= 0) then
+        write (stderr, *), 'cuFFT Error Code: ', ierr
+        error stop 'Forward 3D FFT plan generation failed'
+      end if
     end if
 
     ierr = cufftCreate(poisson_fft%plan3D_bw)
@@ -232,8 +254,30 @@ contains
                              worksize)
     end if
     if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Backward 3D FFT plan generation failed'
+      if (poisson_fft%use_cufftmp) then
+        ! cuFFTMp plan creation failed, retry with single-GPU cuFFT
+        if (mesh%par%is_root()) then
+          print *, 'cuFFTMp plan creation failed (error ', ierr, '), retrying with single-GPU cuFFT'
+        end if
+        poisson_fft%use_cufftmp = .false.
+        
+        ! Destroy the failed plan and recreate without cuFFTMp
+        ierr = cufftDestroy(poisson_fft%plan3D_bw)
+        ierr = cufftCreate(poisson_fft%plan3D_bw)
+        
+        if (is_sp) then
+          ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_C2R, &
+                                 worksize)
+        else
+          ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D, &
+                                 worksize)
+        end if
+      end if
+      
+      if (ierr /= 0) then
+        write (stderr, *), 'cuFFT Error Code: ', ierr
+        error stop 'Backward 3D FFT plan generation failed'
+      end if
     end if
 
     ! Allocate storage - cuFFTMp uses xtdesc, single-GPU uses c_dev
