@@ -185,9 +185,16 @@ contains
     ierr = cufftCreate(poisson_fft%plan3D_fw)
     
     if (poisson_fft%use_cufftmp) then
-      ! Multi-GPU path using cuFFTMp
+      ! Multi-GPU path using cuFFTMp - try to attach MPI communicator
       ierr = cufftMpAttachComm(poisson_fft%plan3D_fw, CUFFT_COMM_MPI, &
                                MPI_COMM_WORLD)
+      if (ierr /= 0) then
+        ! cuFFTMp not available, fall back to single-GPU cuFFT
+        if (mesh%par%is_root()) then
+          print *, 'cuFFTMp attach failed (error ', ierr, '), falling back to single-GPU cuFFT'
+        end if
+        poisson_fft%use_cufftmp = .false.
+      end if
     end if
     
     if (is_sp) then
@@ -205,9 +212,16 @@ contains
     ierr = cufftCreate(poisson_fft%plan3D_bw)
     
     if (poisson_fft%use_cufftmp) then
-      ! Multi-GPU path using cuFFTMp
+      ! Multi-GPU path using cuFFTMp - try to attach MPI communicator
       ierr = cufftMpAttachComm(poisson_fft%plan3D_bw, CUFFT_COMM_MPI, &
                                MPI_COMM_WORLD)
+      if (ierr /= 0) then
+        ! cuFFTMp not available, fall back to single-GPU cuFFT
+        if (mesh%par%is_root()) then
+          print *, 'cuFFTMp attach failed (error ', ierr, '), falling back to single-GPU cuFFT'
+        end if
+        poisson_fft%use_cufftmp = .false.
+      end if
     end if
     
     if (is_sp) then
