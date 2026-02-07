@@ -89,7 +89,7 @@ module m_cuda_poisson_fft
 contains
 
   subroutine create_fft_plan(plan, use_cufftmp, nx, ny, nz, &
-                                           plan_type, is_root, plan_name)
+                             plan_type, is_root, plan_name)
     !! Helper subroutine to create FFT plan with automatic cuFFTMp fallback
     implicit none
 
@@ -226,27 +226,27 @@ contains
     ! Create forward FFT plan with automatic cuFFTMp detection/fallback
     if (is_sp) then
       call create_fft_plan(poisson_fft%plan3D_fw, &
-                                         poisson_fft%use_cufftmp, &
-                                         nx, ny, nz, CUFFT_R2C, &
-                                         mesh%par%is_root(), 'Forward')
+                           poisson_fft%use_cufftmp, &
+                           nx, ny, nz, CUFFT_R2C, &
+                           mesh%par%is_root(), 'Forward')
     else
       call create_fft_plan(poisson_fft%plan3D_fw, &
-                                         poisson_fft%use_cufftmp, &
-                                         nx, ny, nz, CUFFT_D2Z, &
-                                         mesh%par%is_root(), 'Forward')
+                           poisson_fft%use_cufftmp, &
+                           nx, ny, nz, CUFFT_D2Z, &
+                           mesh%par%is_root(), 'Forward')
     end if
 
     ! Create backward FFT plan with automatic cuFFTMp detection/fallback
     if (is_sp) then
       call create_fft_plan(poisson_fft%plan3D_bw, &
-                                         poisson_fft%use_cufftmp, &
-                                         nx, ny, nz, CUFFT_C2R, &
-                                         mesh%par%is_root(), 'Backward')
+                           poisson_fft%use_cufftmp, &
+                           nx, ny, nz, CUFFT_C2R, &
+                           mesh%par%is_root(), 'Backward')
     else
       call create_fft_plan(poisson_fft%plan3D_bw, &
-                                         poisson_fft%use_cufftmp, &
-                                         nx, ny, nz, CUFFT_Z2D, &
-                                         mesh%par%is_root(), 'Backward')
+                           poisson_fft%use_cufftmp, &
+                           nx, ny, nz, CUFFT_Z2D, &
+                           mesh%par%is_root(), 'Backward')
     end if
 
     ! Allocate storage - cuFFTMp uses xtdesc, single-GPU uses c_dev
