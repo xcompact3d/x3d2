@@ -1006,8 +1006,8 @@ contains
     select type (f); type is (cuda_field_t); data = f%data_d; end select
   end subroutine copy_f_to_data_cuda
 
-  subroutine init_cuda_poisson_fft(self, mesh, xdirps, ydirps, zdirps, lowmem, &
-                                    use_cufftmp)
+  subroutine init_cuda_poisson_fft(self, mesh, xdirps, ydirps, zdirps, &
+                                   lowmem, use_cufftmp)
     implicit none
 
     class(cuda_backend_t) :: self

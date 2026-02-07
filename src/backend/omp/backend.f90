@@ -845,7 +845,7 @@ contains
   end subroutine copy_f_to_data_omp
 
   subroutine init_omp_poisson_fft(self, mesh, xdirps, ydirps, zdirps, lowmem, &
-                                   use_cufftmp)
+                                  use_cufftmp)
 #ifdef WITH_2DECOMPFFT
     use m_omp_poisson_fft, only: omp_poisson_fft_t
 #endif
