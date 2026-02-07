@@ -88,14 +88,13 @@ module m_cuda_poisson_fft
 
 contains
 
-  function init(mesh, xdirps, ydirps, zdirps, lowmem, use_cufftmp) &
+  function init(mesh, xdirps, ydirps, zdirps, lowmem) &
     result(poisson_fft)
     implicit none
 
     type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
-    logical, optional, intent(in) :: use_cufftmp
 
     type(cuda_poisson_fft_t) :: poisson_fft
 
@@ -144,21 +143,8 @@ contains
     ! lowmem is .false. by default
     if (present(lowmem)) poisson_fft%lowmem = lowmem
 
-    ! Set whether to use cuFFTMp (multi-GPU) or cuFFT (single-GPU)
-    ! Default is .true. (use cuFFTMp)
-    if (present(use_cufftmp)) then
-      poisson_fft%use_cufftmp = use_cufftmp
-    else
-      poisson_fft%use_cufftmp = .true.
-    end if
-
-    if (mesh%par%is_root()) then
-      if (poisson_fft%use_cufftmp) then
-        print *, 'Using cuFFTMp for multi-GPU FFT'
-      else
-        print *, 'Using cuFFT for single-GPU FFT'
-      end if
-    end if
+    ! Try cuFFTMp (multi-GPU) first, with automatic fallback to cuFFT if not supported
+    poisson_fft%use_cufftmp = .true.
 
     ! if stretching in y is 'centred' or 'top-bottom'
     if (poisson_fft%stretched_y .and. poisson_fft%stretched_y_sym) then
@@ -300,6 +286,15 @@ contains
       allocate (poisson_fft%c_dev(poisson_fft%nx_spec, &
                                   poisson_fft%ny_spec, &
                                   poisson_fft%nz_spec))
+    end if
+
+    ! Print final status
+    if (mesh%par%is_root()) then
+      if (poisson_fft%use_cufftmp) then
+        print *, 'Using cuFFTMp for multi-GPU FFT'
+      else
+        print *, 'Using cuFFT for single-GPU FFT'
+      end if
     end if
 
   end function init

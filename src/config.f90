@@ -31,7 +31,6 @@ module m_config
     real(dp), dimension(:), allocatable :: pr_species
     integer :: n_iters, n_output, n_species
     logical :: lowmem_transeq, lowmem_fft
-    logical :: use_cufftmp  !! Use cuFFTMp for multi-GPU (default: .true.)
     character(3) :: poisson_solver_type, time_intg
     character(30) :: der1st_scheme, der2nd_scheme, &
                      interpl_scheme, stagder_scheme
@@ -139,15 +138,13 @@ contains
     integer :: n_iters, n_output, n_species = 0
     !> triggers the low memory implementations
     logical :: lowmem_transeq = .false., lowmem_fft = .false.
-    !> Use cuFFTMp for multi-GPU (default: .true.), if false use single-GPU cuFFT
-    logical :: use_cufftmp = .true.
     character(3) :: time_intg
     character(3) :: poisson_solver_type = 'FFT'
     character(30) :: der1st_scheme = 'compact6', der2nd_scheme = 'compact6', &
                      interpl_scheme = 'classic', stagder_scheme = 'compact6'
 
     namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
-      n_species, pr_species, lowmem_transeq, lowmem_fft, use_cufftmp, &
+      n_species, pr_species, lowmem_transeq, lowmem_fft, &
       time_intg, der1st_scheme, der2nd_scheme, interpl_scheme, &
       stagder_scheme, ibm_on
 
@@ -174,7 +171,6 @@ contains
     if (n_species > 0) self%pr_species = pr_species(1:n_species)
     self%lowmem_transeq = lowmem_transeq
     self%lowmem_fft = lowmem_fft
-    self%use_cufftmp = use_cufftmp
     self%poisson_solver_type = poisson_solver_type
     self%time_intg = time_intg
     self%der1st_scheme = der1st_scheme

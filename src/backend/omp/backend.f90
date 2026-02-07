@@ -844,8 +844,7 @@ contains
     data = f%data
   end subroutine copy_f_to_data_omp
 
-  subroutine init_omp_poisson_fft(self, mesh, xdirps, ydirps, zdirps, lowmem, &
-                                  use_cufftmp)
+  subroutine init_omp_poisson_fft(self, mesh, xdirps, ydirps, zdirps, lowmem)
 #ifdef WITH_2DECOMPFFT
     use m_omp_poisson_fft, only: omp_poisson_fft_t
 #endif
@@ -856,7 +855,6 @@ contains
     type(mesh_t), intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
-    logical, optional, intent(in) :: use_cufftmp  ! unused in OMP backend
 
 #ifdef WITH_2DECOMPFFT
     allocate (omp_poisson_fft_t :: self%poisson_fft)
