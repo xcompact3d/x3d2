@@ -84,9 +84,63 @@ module m_cuda_poisson_fft
     end function cufftExecC2R_C
   end interface
 
-  private :: init
+  private :: init, create_fft_plan
 
 contains
+
+  subroutine create_fft_plan(plan, use_cufftmp, nx, ny, nz, &
+                                           plan_type, is_root, plan_name)
+    !! Helper subroutine to create FFT plan with automatic cuFFTMp fallback
+    implicit none
+
+    integer, intent(inout) :: plan
+    logical, intent(inout) :: use_cufftmp
+    integer, intent(in) :: nx, ny, nz, plan_type
+    logical, intent(in) :: is_root
+    character(*), intent(in) :: plan_name
+
+    integer :: ierr
+    integer(int_ptr_kind()) :: worksize
+
+    ierr = cufftCreate(plan)
+
+    if (use_cufftmp) then
+      ! Try to attach MPI communicator for cuFFTMp
+      ierr = cufftMpAttachComm(plan, CUFFT_COMM_MPI, MPI_COMM_WORLD)
+      if (ierr /= 0) then
+        if (is_root) then
+          print *, 'cuFFTMp attach failed (error ', ierr, '), &
+                   &falling back to single-GPU cuFFT'
+        end if
+        use_cufftmp = .false.
+      end if
+    end if
+
+    ! Create the plan
+    ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
+
+    if (ierr /= 0) then
+      if (use_cufftmp) then
+        ! cuFFTMp plan creation failed, retry with single-GPU cuFFT
+        if (is_root) then
+          print *, 'cuFFTMp plan creation failed (error ', ierr, '), &
+                   &retrying with single-GPU cuFFT'
+        end if
+        use_cufftmp = .false.
+
+        ! Destroy the failed plan and recreate without cuFFTMp
+        ierr = cufftDestroy(plan)
+        ierr = cufftCreate(plan)
+        ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
+      end if
+
+      if (ierr /= 0) then
+        write (stderr, *), 'cuFFT Error Code: ', ierr
+        error stop trim(plan_name)//' 3D FFT plan generation failed'
+      end if
+    end if
+
+  end subroutine create_fft_plan
 
   function init(mesh, xdirps, ydirps, zdirps, lowmem) &
     result(poisson_fft)
@@ -169,107 +223,30 @@ contains
       end if
     end if
 
-    ! 3D FFT plans - use either cuFFTMp (multi-GPU) or cuFFT (single-GPU)
-    ierr = cufftCreate(poisson_fft%plan3D_fw)
-
-    if (poisson_fft%use_cufftmp) then
-      ! Multi-GPU path using cuFFTMp - try to attach MPI communicator
-      ierr = cufftMpAttachComm(poisson_fft%plan3D_fw, CUFFT_COMM_MPI, &
-                               MPI_COMM_WORLD)
-      if (ierr /= 0) then
-        ! cuFFTMp not available, fall back to single-GPU cuFFT
-        if (mesh%par%is_root()) then
-          print *, 'cuFFTMp attach failed (error ', ierr, '), &
-                   &falling back to single-GPU cuFFT'
-        end if
-        poisson_fft%use_cufftmp = .false.
-      end if
-    end if
-
+    ! Create forward FFT plan with automatic cuFFTMp detection/fallback
     if (is_sp) then
-      ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_R2C, &
-                             worksize)
+      call create_fft_plan(poisson_fft%plan3D_fw, &
+                                         poisson_fft%use_cufftmp, &
+                                         nx, ny, nz, CUFFT_R2C, &
+                                         mesh%par%is_root(), 'Forward')
     else
-      ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z, &
-                             worksize)
-    end if
-    if (ierr /= 0) then
-      if (poisson_fft%use_cufftmp) then
-        ! cuFFTMp plan creation failed, retry with single-GPU cuFFT
-        if (mesh%par%is_root()) then
-          print *, 'cuFFTMp plan creation failed (error ', ierr, '), &
-                   &retrying with single-GPU cuFFT'
-        end if
-        poisson_fft%use_cufftmp = .false.
-
-        ! Destroy the failed plan and recreate without cuFFTMp
-        ierr = cufftDestroy(poisson_fft%plan3D_fw)
-        ierr = cufftCreate(poisson_fft%plan3D_fw)
-
-        if (is_sp) then
-          ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, &
-                                 CUFFT_R2C, worksize)
-        else
-          ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, &
-                                 CUFFT_D2Z, worksize)
-        end if
-      end if
-
-      if (ierr /= 0) then
-        write (stderr, *), 'cuFFT Error Code: ', ierr
-        error stop 'Forward 3D FFT plan generation failed'
-      end if
+      call create_fft_plan(poisson_fft%plan3D_fw, &
+                                         poisson_fft%use_cufftmp, &
+                                         nx, ny, nz, CUFFT_D2Z, &
+                                         mesh%par%is_root(), 'Forward')
     end if
 
-    ierr = cufftCreate(poisson_fft%plan3D_bw)
-
-    if (poisson_fft%use_cufftmp) then
-      ! Multi-GPU path using cuFFTMp - try to attach MPI communicator
-      ierr = cufftMpAttachComm(poisson_fft%plan3D_bw, CUFFT_COMM_MPI, &
-                               MPI_COMM_WORLD)
-      if (ierr /= 0) then
-        ! cuFFTMp not available, fall back to single-GPU cuFFT
-        if (mesh%par%is_root()) then
-          print *, 'cuFFTMp attach failed (error ', ierr, '), &
-                   &falling back to single-GPU cuFFT'
-        end if
-        poisson_fft%use_cufftmp = .false.
-      end if
-    end if
-
+    ! Create backward FFT plan with automatic cuFFTMp detection/fallback
     if (is_sp) then
-      ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_C2R, &
-                             worksize)
+      call create_fft_plan(poisson_fft%plan3D_bw, &
+                                         poisson_fft%use_cufftmp, &
+                                         nx, ny, nz, CUFFT_C2R, &
+                                         mesh%par%is_root(), 'Backward')
     else
-      ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D, &
-                             worksize)
-    end if
-    if (ierr /= 0) then
-      if (poisson_fft%use_cufftmp) then
-        ! cuFFTMp plan creation failed, retry with single-GPU cuFFT
-        if (mesh%par%is_root()) then
-          print *, 'cuFFTMp plan creation failed (error ', ierr, '), &
-                   &retrying with single-GPU cuFFT'
-        end if
-        poisson_fft%use_cufftmp = .false.
-
-        ! Destroy the failed plan and recreate without cuFFTMp
-        ierr = cufftDestroy(poisson_fft%plan3D_bw)
-        ierr = cufftCreate(poisson_fft%plan3D_bw)
-
-        if (is_sp) then
-          ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, &
-                                 CUFFT_C2R, worksize)
-        else
-          ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, &
-                                 CUFFT_Z2D, worksize)
-        end if
-      end if
-
-      if (ierr /= 0) then
-        write (stderr, *), 'cuFFT Error Code: ', ierr
-        error stop 'Backward 3D FFT plan generation failed'
-      end if
+      call create_fft_plan(poisson_fft%plan3D_bw, &
+                                         poisson_fft%use_cufftmp, &
+                                         nx, ny, nz, CUFFT_Z2D, &
+                                         mesh%par%is_root(), 'Backward')
     end if
 
     ! Allocate storage - cuFFTMp uses xtdesc, single-GPU uses c_dev
