@@ -9,15 +9,17 @@ module m_case_cos2pix
   !!   5. Compute divergence: div(grad(p))
   !!   6. Verify: div(grad(p)) ≈ f (within tolerance)
   !!
-  !! Runs 6 test cases:
-  !!   TEST_COS_X  -> cos(n*pi*x)             for n = 2, 3
-  !!   TEST_COS_Y  -> cos(n*pi*y)             for n = 2, 3
-  !!   TEST_COS_XY -> cos(n*pi*x)*cos(n*pi*y) for n = 2, 3
+  !! Runs 8 test cases:
+  !!   TEST_COS_X   -> cos(n*pi*x)                          for n = 2, 3
+  !!   TEST_COS_Y   -> cos(n*pi*y)                          for n = 2, 3
+  !!   TEST_COS_XY  -> cos(n*pi*x)*cos(n*pi*y)              for n = 2, 3
+  !!   TEST_COS_XYZ -> cos(n*pi*x)*cos(n*pi*y)*cos(n*pi*z)  for n = 2, 3
   !!
   !! Analytical Poisson solutions (laplacian(p) = f):
-  !!   COS_X  : p = -cos(n*pi*x) / (n*pi)^2
-  !!   COS_Y  : p = -cos(n*pi*y) / (n*pi)^2
-  !!   COS_XY : p = -cos(n*pi*x)*cos(n*pi*y) / (2*(n*pi)^2)
+  !!   COS_X   : p = -cos(n*pi*x) / (n*pi)^2
+  !!   COS_Y   : p = -cos(n*pi*y) / (n*pi)^2
+  !!   COS_XY  : p = -cos(n*pi*x)*cos(n*pi*y) / (2*(n*pi)^2)
+  !!   COS_XYZ : p = -cos(n*pi*x)*cos(n*pi*y)*cos(n*pi*z) / (3*(n*pi)^2)
   !!
   !! NOTE: For Dirichlet BCs, dims_global along that axis must be ODD (e.g., 65)
 
@@ -36,9 +38,15 @@ module m_case_cos2pix
   real(dp), parameter :: ERROR_TOLERANCE = 1.0e-11_dp
 
   ! Test type identifiers
-  integer, parameter :: TEST_COS_X  = 1
-  integer, parameter :: TEST_COS_Y  = 2
-  integer, parameter :: TEST_COS_XY = 3
+  integer, parameter :: TEST_COS_X   = 1
+  integer, parameter :: TEST_COS_Y   = 2
+  integer, parameter :: TEST_COS_XY  = 3
+  integer, parameter :: TEST_COS_XYZ = 4
+
+  ! Number of test types and wavenumbers
+  integer, parameter :: NUM_TYPES = 4
+  integer, parameter :: NUM_NS    = 2
+  integer, parameter :: NUM_TESTS = NUM_TYPES * NUM_NS
 
   type, extends(base_case_t) :: case_cos2pix_t
     private
@@ -75,18 +83,40 @@ contains
     integer, intent(in) :: test_type
     character(len=10) :: name
     select case (test_type)
-    case (TEST_COS_X);  name = 'COS_X'
-    case (TEST_COS_Y);  name = 'COS_Y'
-    case (TEST_COS_XY); name = 'COS_XY'
-    case default;        name = 'UNKNOWN'
+    case (TEST_COS_X);   name = 'COS_X     '
+    case (TEST_COS_Y);   name = 'COS_Y     '
+    case (TEST_COS_XY);  name = 'COS_XY    '
+    case (TEST_COS_XYZ); name = 'COS_XYZ   '
+    case default;         name = 'UNKNOWN   '
     end select
   end function test_type_name
 
+  pure function test_rhs_formula(test_type, n) result(formula)
+    integer, intent(in) :: test_type, n
+    character(len=60) :: formula
+    character(len=1)  :: cn
+
+    write(cn, '(I1)') n
+    select case (test_type)
+    case (TEST_COS_X)
+      formula = 'cos('//cn//'*pi*x)'
+    case (TEST_COS_Y)
+      formula = 'cos('//cn//'*pi*y)'
+    case (TEST_COS_XY)
+      formula = 'cos('//cn//'*pi*x)*cos('//cn//'*pi*y)'
+    case (TEST_COS_XYZ)
+      formula = 'cos('//cn//'*pi*x)*cos('//cn//'*pi*y)*cos('//cn//'*pi*z)'
+    case default
+      formula = '???'
+    end select
+  end function test_rhs_formula
+
   subroutine create_cosine_field(self, host_field, n, test_type)
     !! Create test field based on test_type:
-    !!   TEST_COS_X  -> cos(n*pi*x)
-    !!   TEST_COS_Y  -> cos(n*pi*y)
-    !!   TEST_COS_XY -> cos(n*pi*x) * cos(n*pi*y)
+    !!   TEST_COS_X   -> cos(n*pi*x)
+    !!   TEST_COS_Y   -> cos(n*pi*y)
+    !!   TEST_COS_XY  -> cos(n*pi*x) * cos(n*pi*y)
+    !!   TEST_COS_XYZ -> cos(n*pi*x) * cos(n*pi*y) * cos(n*pi*z)
     class(case_cos2pix_t), intent(in) :: self
     class(field_t), intent(inout) :: host_field
     integer, intent(in) :: n
@@ -110,6 +140,10 @@ contains
           case (TEST_COS_XY)
             host_field%data(i, j, k) = cos(n_pi * coords(1)) &
                                       * cos(n_pi * coords(2))
+          case (TEST_COS_XYZ)
+            host_field%data(i, j, k) = cos(n_pi * coords(1)) &
+                                      * cos(n_pi * coords(2)) &
+                                      * cos(n_pi * coords(3))
           end select
         end do
       end do
@@ -118,9 +152,10 @@ contains
 
   subroutine create_analytical_solution(self, host_field, n, test_type)
     !! Create the analytical Poisson solution for laplacian(p) = f:
-    !!   TEST_COS_X  : p = -cos(n*pi*x) / (n*pi)^2
-    !!   TEST_COS_Y  : p = -cos(n*pi*y) / (n*pi)^2
-    !!   TEST_COS_XY : p = -cos(n*pi*x)*cos(n*pi*y) / (2*(n*pi)^2)
+    !!   TEST_COS_X   : p = -cos(n*pi*x) / (n*pi)^2
+    !!   TEST_COS_Y   : p = -cos(n*pi*y) / (n*pi)^2
+    !!   TEST_COS_XY  : p = -cos(n*pi*x)*cos(n*pi*y) / (2*(n*pi)^2)
+    !!   TEST_COS_XYZ : p = -cos(n*pi*x)*cos(n*pi*y)*cos(n*pi*z) / (3*(n*pi)^2)
     class(case_cos2pix_t), intent(in) :: self
     class(field_t), intent(inout) :: host_field
     integer, intent(in) :: n
@@ -145,7 +180,12 @@ contains
           case (TEST_COS_XY)
             host_field%data(i, j, k) = -cos(n_pi * coords(1)) &
                                       * cos(n_pi * coords(2)) &
-                                      / (n_pi_sq + n_pi_sq)
+                                      / (2.0_dp * n_pi_sq)
+          case (TEST_COS_XYZ)
+            host_field%data(i, j, k) = -cos(n_pi * coords(1)) &
+                                      * cos(n_pi * coords(2)) &
+                                      * cos(n_pi * coords(3)) &
+                                      / (3.0_dp * n_pi_sq)
           end select
         end do
       end do
@@ -174,24 +214,28 @@ contains
     integer, intent(in) :: test_type
     logical, intent(in) :: is_poisson_solution
 
-    integer :: ix, iy, iz, dims(3)
+    integer :: ix, iy, iz, ii, dims(3)
     real(dp) :: n_pi
-    real(dp) :: coord_x, coord_y, numerical, analytical
+    real(dp) :: coord_x, coord_y, coord_z, numerical, analytical
 
     if (.not. self%solver%mesh%par%is_root()) return
 
     dims = self%solver%mesh%get_dims(CELL)
     n_pi = real(n, dp) * pi
 
-    print *, ''
-    print *, label
-    print *, 'Test type: ', test_type_name(test_type), '  n =', n
-    print *, '  n_pi =', n_pi
+    write(*, '(A)') ''
+    write(*, '(4X,A)') label
+    write(*, '(4X,A,A,A,I1)') &
+      'Test type : ', trim(test_type_name(test_type)), '   n = ', n
+    write(*, '(4X,A,ES12.5)') 'n*pi      = ', n_pi
 
     select case (test_type)
 
     case (TEST_COS_X)
-      print *, 'ix | x-coord | Numerical | Analytical'
+      write(*, '(A)') ''
+      write(*, '(6X,A)') &
+        '  ix    x-coord         Numerical           Analytical'
+      write(*, '(A)') ''
       iy = dims(2) / 2
       iz = dims(3) / 2
       do ix = 1, dims(1)
@@ -202,11 +246,14 @@ contains
         else
           analytical = cos(n_pi * coord_x)
         end if
-        print *, ix, coord_x, numerical, analytical
+        write(*, '(6X,I4,F12.6,2ES20.12)') ix, coord_x, numerical, analytical
       end do
 
     case (TEST_COS_Y)
-      print *, 'iy | y-coord | Numerical | Analytical'
+      write(*, '(A)') ''
+      write(*, '(6X,A)') &
+        '  iy    y-coord         Numerical           Analytical'
+      write(*, '(A)') ''
       ix = dims(1) / 2
       iz = dims(3) / 2
       do iy = 1, dims(2)
@@ -217,41 +264,68 @@ contains
         else
           analytical = cos(n_pi * coord_y)
         end if
-        print *, iy, coord_y, numerical, analytical
+        write(*, '(6X,I4,F12.6,2ES20.12)') iy, coord_y, numerical, analytical
       end do
 
     case (TEST_COS_XY)
-      print *, 'ix | x-coord | y-coord | Numerical | Analytical'
+      write(*, '(A)') ''
+      write(*, '(6X,A)') &
+        '  ix    x-coord      y-coord         Numerical           Analytical'
+      write(*, '(A)') ''
       iz = dims(3) / 2
-      iy = 0
-      do ix = 1, dims(1)
-        iy = iy + 1
-        coord_x = self%solver%mesh%geo%midp_coords(iy, 1)
-        coord_y = self%solver%mesh%geo%midp_coords(iy, 2)
-        numerical = host_field%data(iy, iy, iz)
+      do ii = 1, min(dims(1), dims(2))
+        coord_x = self%solver%mesh%geo%midp_coords(ii, 1)
+        coord_y = self%solver%mesh%geo%midp_coords(ii, 2)
+        numerical = host_field%data(ii, ii, iz)
         if (is_poisson_solution) then
           analytical = -cos(n_pi * coord_x) * cos(n_pi * coord_y) &
-                      / (n_pi*n_pi + n_pi*n_pi)
+                      / (2.0_dp * n_pi * n_pi)
         else
           analytical = cos(n_pi * coord_x) * cos(n_pi * coord_y)
         end if
-        print *, iy, coord_x, coord_y, numerical, analytical
+        write(*, '(6X,I4,2F12.6,2ES20.12)') &
+          ii, coord_x, coord_y, numerical, analytical
+      end do
+
+    case (TEST_COS_XYZ)
+      write(*, '(A)') ''
+      write(*, '(6X,A)') &
+        '  ii    x-coord      y-coord      z-coord' &
+        //'         Numerical           Analytical'
+      write(*, '(A)') ''
+      do ii = 1, min(dims(1), dims(2), dims(3))
+        coord_x = self%solver%mesh%geo%midp_coords(ii, 1)
+        coord_y = self%solver%mesh%geo%midp_coords(ii, 2)
+        coord_z = self%solver%mesh%geo%midp_coords(ii, 3)
+        numerical = host_field%data(ii, ii, ii)
+        if (is_poisson_solution) then
+          analytical = -cos(n_pi * coord_x) * cos(n_pi * coord_y) &
+                      * cos(n_pi * coord_z) / (3.0_dp * n_pi * n_pi)
+        else
+          analytical = cos(n_pi * coord_x) * cos(n_pi * coord_y) &
+                      * cos(n_pi * coord_z)
+        end if
+        write(*, '(6X,I4,3F12.6,2ES20.12)') &
+          ii, coord_x, coord_y, coord_z, numerical, analytical
       end do
 
     end select
 
   end subroutine print_field_comparison
 
-  subroutine run_single_test(self, n, test_type, test_passed)
+  subroutine run_single_test(self, n, test_type, test_passed, &
+                             poisson_err_out, divgrad_err_out)
     !! Run a single test with the given test_type and wavenumber n.
     !! Two checks are performed:
     !!   1. Poisson solution vs analytical (L2 norm of numerical - analytical)
     !!   2. div(grad(p)) vs original RHS f (L2 norm)
     !! Both must pass for the test to pass.
+    !! Error norms are returned for the summary table.
     class(case_cos2pix_t), intent(inout) :: self
     integer, intent(in) :: n
     integer, intent(in) :: test_type
     logical, intent(out) :: test_passed
+    real(dp), intent(out) :: poisson_err_out, divgrad_err_out
 
     class(field_t), pointer :: f_device, f_reference, f_result
     class(field_t), pointer :: host_field, host_analytical, temp
@@ -262,13 +336,16 @@ contains
 
     dims = self%solver%mesh%get_dims(CELL)
 
-    ! Print test info
+    ! Print test header
     if (self%solver%mesh%par%is_root()) then
-      print *, ''
-      print *, '-----------------------------------------'
-      print *, '  Testing ', test_type_name(test_type), ' with n =', n
-      print *, '-----------------------------------------'
-      print *, ''
+      write(*, '(A)') ''
+      write(*, '(4X,A,A,A,I1)') &
+        'Test  ', trim(test_type_name(test_type)), '   n = ', n
+      write(*, '(4X,A,A)') &
+        'RHS   f = ', trim(test_rhs_formula(test_type, n))
+      print *, "========================================="
+      write(*, '(A)') ''
+
     end if
 
     ! Allocate fields
@@ -293,11 +370,9 @@ contains
     call self%solver%backend%allocator%release_block(temp)
 
     ! ---- Check 1: Poisson solution vs analytical ----
-    ! Get numerical solution to host
     host_field => self%solver%host_allocator%get_block(DIR_C)
     call self%solver%backend%get_field_data(host_field%data, f_device)
 
-    ! Create analytical solution on host
     host_analytical => self%solver%host_allocator%get_block(DIR_C)
     call self%create_analytical_solution(host_analytical, n, test_type)
 
@@ -314,18 +389,15 @@ contains
     poisson_passed = (poisson_error_norm <= ERROR_TOLERANCE)
 
     if (self%solver%mesh%par%is_root()) then
-      print *, '[Poisson solve] Error norm (L2):', poisson_error_norm
-      print *, '[Poisson solve] Tolerance:      ', ERROR_TOLERANCE
-      if (poisson_passed) then
-        print *, '[Poisson solve] PASSED'
-      else
-        print *, '[Poisson solve] FAILED'
-      end if
-      print *, ''
+      write(*, '(6X,A)') 'Check 1  solve(f) = φ  vs  analytical'
+      write(*, '(6X,A,ES14.6)') '  L2 error  : ', poisson_error_norm
+      write(*, '(6X,A,ES14.6)') '  Tolerance : ', ERROR_TOLERANCE
+      write(*, '(6X,A,A)')      '  Status    : ', &
+        merge('PASSED', 'FAILED', poisson_passed)
+      write(*, '(A)') ''
     end if
 
     ! ---- Check 2: div(grad(p)) vs original RHS ----
-    ! Compute gradient of pressure
     gradient_input => self%solver%backend%allocator%get_block(DIR_Z)
     call self%solver%backend%reorder(gradient_input, f_device, RDR_C2Z)
     call self%solver%backend%allocator%release_block(f_device)
@@ -337,7 +409,6 @@ contains
     call self%solver%gradient_p2v(dpdx, dpdy, dpdz, gradient_input)
     call self%solver%backend%allocator%release_block(gradient_input)
 
-    ! Compute divergence of gradient
     f_result => self%solver%backend%allocator%get_block(DIR_Z)
     call self%solver%divergence_v2p(f_result, dpdx, dpdy, dpdz)
 
@@ -345,7 +416,6 @@ contains
     call self%solver%backend%allocator%release_block(dpdy)
     call self%solver%backend%allocator%release_block(dpdz)
 
-    ! Reorder result for comparison
     f_device => self%solver%backend%allocator%get_block(DIR_X)
     call self%solver%backend%reorder(f_device, f_result, RDR_Z2X)
     call self%solver%backend%allocator%release_block(f_result)
@@ -353,7 +423,6 @@ contains
     ! Compute error: div(grad(p)) - f
     call self%solver%backend%vecadd(-1.0_dp, f_reference, 1.0_dp, f_device)
 
-    ! Get error field to host and compute norm
     host_field => self%solver%host_allocator%get_block(DIR_C)
     call self%solver%backend%get_field_data(host_field%data, f_device)
     div_grad_error_norm = self%compute_error_norm(host_field)
@@ -366,100 +435,157 @@ contains
     div_grad_passed = (div_grad_error_norm <= ERROR_TOLERANCE)
 
     if (self%solver%mesh%par%is_root()) then
-      print *, '[div(grad(p))] Error norm (L2):', div_grad_error_norm
-      print *, '[div(grad(p))] Tolerance:      ', ERROR_TOLERANCE
-      if (div_grad_passed) then
-        print *, '[div(grad(p))] PASSED'
-      else
-        print *, '[div(grad(p))] FAILED'
-      end if
-      print *, ''
+      write(*, '(6X,A)') 'Check 2  div(grad(φ)) = f  (round-trip)'
+      write(*, '(6X,A,ES14.6)') '  L2 error  : ', div_grad_error_norm
+      write(*, '(6X,A,ES14.6)') '  Tolerance : ', ERROR_TOLERANCE
+      write(*, '(6X,A,A)')      '  Status    : ', &
+        merge('PASSED', 'FAILED', div_grad_passed)
+      write(*, '(A)') ''
     end if
 
     ! Both checks must pass
     test_passed = poisson_passed .and. div_grad_passed
-
-    if (self%solver%mesh%par%is_root()) then
-      if (test_passed) then
-        print *, 'TEST PASSED: ', test_type_name(test_type), ' n =', n
-      else
-        print *, 'TEST FAILED: ', test_type_name(test_type), ' n =', n
-      end if
-    end if
+    poisson_err_out = poisson_error_norm
+    divgrad_err_out = div_grad_error_norm
 
   end subroutine run_single_test
 
   subroutine run_cos2pix(self)
     class(case_cos2pix_t), intent(inout) :: self
 
-    integer :: dims(3), n, t
+    integer :: dims(3), n, t, idx
     logical :: passed, all_passed
-    logical :: results(6)
-    integer :: test_types(3), test_ns(2)
-    character(len=10) :: names(6)
-    integer :: idx
+    logical :: results(NUM_TESTS)
+    integer :: test_types(NUM_TYPES), test_ns(NUM_NS)
+    character(len=10) :: names(NUM_TESTS)
+    real(dp) :: poisson_errs(NUM_TESTS), divgrad_errs(NUM_TESTS)
 
     dims = self%solver%mesh%get_dims(CELL)
 
-    ! Print test info
+    ! Print banner and schematic
     if (self%solver%mesh%par%is_root()) then
-      print *, ''
-      print *, '========================================='
-      print *, '    POISSON SOLVER VALIDATION TEST'
-      print *, '========================================='
-      print *, ''
-      print *, 'Test: poisson_solve(f) ≈ analytical'
-      print *, '      div(grad(poisson_solve(f))) ≈ f'
-      print *, ''
-      print *, 'Grid dimensions:', dims
-      print *, ''
+      write(*, '(A)') ''
+      write(*, '(A)') &
+        '  ========================================================='
+      write(*, '(A)') &
+        '            POISSON SOLVER VALIDATION TEST                  '
+      write(*, '(A)') &
+        '  ========================================================='
+      write(*, '(A)') ''
+      write(*, '(4X,A)') 'Pipeline under test:'
+      write(*, '(A)') ''
+      write(*, '(4X,A)') &
+        'f  -->  solve(f) = φ  -->  grad(φ)  -->  div(grad(φ)) = f'
+      write(*, '(4X,A)') &
+        '           |                    |                  |'
+      write(*, '(4X,A)') &
+        '     "double integral"     1st derivative     1st derivative'
+      write(*, '(4X,A)') &
+        '     (inverse of ∇^2)                 (together = ∇^2'
+      write(*, '(4X,A)') &
+        '                                                = Laplacian)'
+      write(*, '(A)') ''
+      write(*, '(4X,A)') 'Verification checks (both must pass):'
+      write(*, '(6X,A)') 'Check 1 : φ matches known analytical solution'
+      write(*, '(6X,A)') 'Check 2 : div(grad(φ)) recovers original f'
+      write(*, '(A)') ''
+      write(*, '(4X,A,I4,A,I4,A,I4)') &
+        'Grid      : ', dims(1), ' x', dims(2), ' x', dims(3)
+      write(*, '(4X,A,ES10.3)') &
+        'Tolerance : ', ERROR_TOLERANCE
+      write(*, '(A)') ''
+
+      ! Test matrix as borderless table
+      write(*, '(4X,A)') 'Test matrix (8 cases):'
+      write(*, '(A)') ''
+      write(*, '(6X,A10,A6,A3,A)') &
+        'Type      ', '  n   ', '   ', 'RHS f(x,y,z)'
+      write(*, '(A)') ''
+      write(*, '(6X,A10,I6,A3,A)') 'COS_X     ', 2, '   ', 'cos(2*pi*x)'
+      write(*, '(6X,A10,I6,A3,A)') 'COS_Y     ', 2, '   ', 'cos(2*pi*y)'
+      write(*, '(6X,A10,I6,A3,A)') 'COS_XY    ', 2, '   ', &
+        'cos(2*pi*x)*cos(2*pi*y)'
+      write(*, '(6X,A10,I6,A3,A)') 'COS_XYZ   ', 2, '   ', &
+        'cos(2*pi*x)*cos(2*pi*y)*cos(2*pi*z)'
+      write(*, '(6X,A10,I6,A3,A)') 'COS_X     ', 3, '   ', 'cos(3*pi*x)'
+      write(*, '(6X,A10,I6,A3,A)') 'COS_Y     ', 3, '   ', 'cos(3*pi*y)'
+      write(*, '(6X,A10,I6,A3,A)') 'COS_XY    ', 3, '   ', &
+        'cos(3*pi*x)*cos(3*pi*y)'
+      write(*, '(6X,A10,I6,A3,A)') 'COS_XYZ   ', 3, '   ', &
+        'cos(3*pi*x)*cos(3*pi*y)*cos(3*pi*z)'
+      write(*, '(A)') ''
     end if
 
-    test_types = [TEST_COS_X, TEST_COS_Y, TEST_COS_XY]
+    test_types = [TEST_COS_X, TEST_COS_Y, TEST_COS_XY, TEST_COS_XYZ]
     test_ns = [2, 3]
 
     idx = 0
     all_passed = .true.
 
-    ! Run all 6 tests: for each n, run COS_X, COS_Y, COS_XY
-    do n = 1, 2
-      do t = 1, 3
+    ! Run all 8 tests: for each n, run COS_X, COS_Y, COS_XY, COS_XYZ
+    do n = 1, NUM_NS
+      do t = 1, NUM_TYPES
         idx = idx + 1
-        call self%run_single_test(test_ns(n), test_types(t), passed)
+        call self%run_single_test(test_ns(n), test_types(t), passed, &
+                                  poisson_errs(idx), divgrad_errs(idx))
         results(idx) = passed
         names(idx) = test_type_name(test_types(t))
         all_passed = all_passed .and. passed
       end do
     end do
 
-    ! Summary
+    ! Summary results table (borderless)
     if (self%solver%mesh%par%is_root()) then
-      print *, ''
-      print *, '========================================='
-      print *, '           TEST SUMMARY'
-      print *, '========================================='
-      print *, ''
+      write(*, '(A)') ''
+      write(*, '(A)') &
+        '  ========================================================='
+      write(*, '(A)') &
+        '                       TEST SUMMARY                        '
+      write(*, '(A)') &
+        '  ========================================================='
+      write(*, '(A)') ''
 
+      ! Column headers
+      write(*, '(6X,A10,A4,A16,A16,A10)') &
+        'Type      ', ' n  ', '  Poisson L2    ', '  div-grad L2   ', &
+        '  Status  '
+      write(*, '(A)') ''
+
+      ! Data rows
       idx = 0
-      do n = 1, 2
-        do t = 1, 3
+      do n = 1, NUM_NS
+        do t = 1, NUM_TYPES
           idx = idx + 1
-          print *, names(idx), ' n=', test_ns(n), ': ', &
-                   merge('PASSED', 'FAILED', results(idx))
+          write(*, '(6X,A10,I4,ES16.6,ES16.6,A4,A6)') &
+            names(idx), test_ns(n), &
+            poisson_errs(idx), divgrad_errs(idx), &
+            '    ', merge('PASSED', 'FAILED', results(idx))
         end do
+        ! Blank line between n=2 and n=3 groups
+        if (n < NUM_NS) write(*, '(A)') ''
       end do
 
-      print *, ''
+      write(*, '(A)') ''
+      write(*, '(6X,A,ES10.3)') 'Tolerance : ', ERROR_TOLERANCE
+      write(*, '(A)') ''
     end if
 
-    ! Check overall pass/fail
+    ! Final verdict
     if (.not. all_passed) then
+      if (self%solver%mesh%par%is_root()) then
+        write(*, '(4X,A)') '!! ONE OR MORE TESTS FAILED !!'
+        write(*, '(A)') ''
+      end if
       error stop 'TEST FAILED: One or more tests did not pass'
     else
       if (self%solver%mesh%par%is_root()) then
-        print *, '========================================='
-        print *, '          ALL TESTS PASSED'
-        print *, '========================================='
+        write(*, '(A)') &
+          '  ========================================================='
+        write(*, '(A)') &
+          '                    ALL TESTS PASSED                        '
+        write(*, '(A)') &
+          '  ========================================================='
+        write(*, '(A)') ''
       end if
     end if
 
