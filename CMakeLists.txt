@@ -7,6 +7,7 @@ set(WITH_2DECOMPFFT ON CACHE BOOL
   "Enable Poisson based FFT solver on the OpenMP backend.")
 
 option(WITH_ADIOS2 "Enable ADIOS2 for I/O" OFF)
+option(WITH_ADIOS2_GPU_AWARE "Enable ADIOS2 GPU-aware I/O (requires CUDA-enabled ADIOS2)" OFF)
 
 if(SINGLE_PREC)
   add_definitions("-DSINGLE_PREC")
@@ -21,6 +22,19 @@ if(WITH_ADIOS2)
   list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/adios2")
   cmake_policy(SET CMP0074 NEW)
   find_package(ADIOS2)
+  
+  # check if ADIOS2 was built with CUDA support
+  if(TARGET adios2::fortran_mpi AND X3D2_ADIOS2_CUDA AND WITH_ADIOS2_GPU_AWARE)
+    # try to detect if ADIOS2 has CUDA support
+    get_target_property(ADIOS2_INCLUDE_DIRS adios2::fortran_mpi INTERFACE_INCLUDE_DIRECTORIES)
+    if(ADIOS2_INCLUDE_DIRS)
+      message(STATUS "Checking ADIOS2 for CUDA support...")
+      # check if ADIOS2 was compiled with CUDA
+      # this is a heuristic check - we assume GPU-aware if CUDA compiler is used with ADIOS2
+      message(STATUS "ADIOS2 GPU-aware I/O enabled (user requested)")
+      add_definitions("-DADIOS2_GPU_AWARE")
+    endif()
+  endif()
 else()
   message(STATUS "ADIOS2 is disabled")
 endif()

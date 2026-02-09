@@ -34,6 +34,10 @@ module m_io_backend
                     adios2_get, adios2_remove_all_variables, &
                     adios2_found, adios2_constant_dims, &
                     adios2_type_dp, adios2_type_integer4, adios2_type_real
+#ifdef ADIOS2_GPU_AWARE
+  use adios2, only: adios2_set_memory_space, adios2_mem_cuda
+  use cudafor, only: cudaDeviceSynchronize
+#endif
   use mpi, only: MPI_COMM_NULL, MPI_Initialized, MPI_Comm_rank
   use m_common, only: dp, i8, sp, is_sp
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
@@ -71,6 +75,7 @@ module m_io_backend
     type(adios2_io) :: io_handle             !! ADIOS2 IO object for managing I/O
     logical :: is_step_active = .false.      !! Flag to track if a step is active
     integer :: comm = MPI_COMM_NULL          !! MPI communicator
+    logical :: use_gpu_aware = .false.       !! Flag for GPU-aware I/O
   contains
     procedure :: init => writer_init_adios2
     procedure :: open => writer_open_adios2
@@ -78,6 +83,9 @@ module m_io_backend
     procedure :: write_data_integer => write_data_integer_adios2
     procedure :: write_data_real => write_data_real_adios2
     procedure :: write_data_array_3d => write_data_array_3d_adios2
+#ifdef ADIOS2_GPU_AWARE
+    procedure :: write_data_array_3d_device => write_data_array_3d_device_adios2
+#endif
     procedure :: write_attribute_string => write_attribute_string_adios2
     procedure :: write_attribute_array_1d_real => &
       write_attribute_array_1d_real_adios2
@@ -554,6 +562,64 @@ contains
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
     end select
   end subroutine write_data_array_3d_adios2
+
+#ifdef ADIOS2_GPU_AWARE
+  subroutine write_data_array_3d_device_adios2( &
+    self, variable_name, array, file_handle, &
+    shape_dims, start_dims, count_dims, use_sp &
+    )
+    !! GPU-aware variant of write_data_array_3d for CUDA device arrays
+    !! This writes directly from GPU memory to ADIOS2 without host staging
+    class(io_adios2_writer_t), intent(inout) :: self
+    character(len=*), intent(in) :: variable_name
+    real(dp), device, intent(in) :: array(:, :, :)
+    class(io_file_t), intent(inout) :: file_handle
+    integer(i8), intent(in) :: shape_dims(3)
+    integer(i8), intent(in) :: start_dims(3)
+    integer(i8), intent(in) :: count_dims(3)
+    logical, intent(in), optional :: use_sp
+
+    type(adios2_variable) :: var
+    integer :: ierr
+    integer :: vartype
+    logical :: convert_to_sp
+
+    convert_to_sp = .false.
+    if (present(use_sp)) convert_to_sp = use_sp
+
+    vartype = get_adios2_vartype(convert_to_sp)
+
+    select type (file_handle)
+    type is (io_adios2_file_t)
+      call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
+
+      if (ierr /= adios2_found) then
+        call adios2_define_variable(var, self%io_handle, variable_name, &
+                                    vartype, 3, shape_dims, &
+                                    start_dims, count_dims, &
+                                    adios2_constant_dims, ierr)
+        call self%handle_error(ierr, "Error defining ADIOS2 &
+                                     &3D array real variable (GPU)")
+        
+        ! set memory space to CUDA device memory
+        call adios2_set_memory_space(var, adios2_mem_cuda, ierr)
+        call self%handle_error(ierr, "Error setting CUDA memory space for ADIOS2")
+      end if
+
+      ! synchronise CUDA device to ensure all kernels complete
+      ierr = cudaDeviceSynchronize()
+      call self%handle_error(ierr, "CUDA device synchronisation failed before write")
+
+      ! write directly from device memory
+      call adios2_put( &
+        file_handle%engine, var, array, adios2_mode_deferred, ierr)
+      call self%handle_error(ierr, "Error writing ADIOS2 &
+                                   &3D array from CUDA device")
+    class default
+      call self%handle_error(1, "Invalid file handle type for ADIOS2")
+    end select
+  end subroutine write_data_array_3d_device_adios2
+#endif
 
   subroutine write_attribute_string_adios2( &
     self, attribute_name, value, file_handle &
