@@ -21,6 +21,14 @@ module m_case_cos2pix
   !!   COS_XY  : p = -cos(n*pi*x)*cos(n*pi*y) / (2*(n*pi)^2)
   !!   COS_XYZ : p = -cos(n*pi*x)*cos(n*pi*y)*cos(n*pi*z) / (3*(n*pi)^2)
   !!
+  !! Verbosity control via environment variable:
+  !!   VERBOSE=1  -> print pointwise field comparisons (cosine & analytical)
+  !!   (default)  -> only print error norms and pass/fail status
+  !!
+  !! Usage:
+  !!   mpirun -n 1 ./build-gpu/bin/xcompact input.x3d              (quiet)
+  !!   VERBOSE=1 mpirun -n 1 ./build-gpu/bin/xcompact input.x3d    (verbose)
+  !!
   !! NOTE: For Dirichlet BCs, dims_global along that axis must be ODD (e.g., 65)
 
   use m_allocator
@@ -50,6 +58,7 @@ module m_case_cos2pix
 
   type, extends(base_case_t) :: case_cos2pix_t
     private
+    logical :: verbose = .false.
   contains
     procedure :: boundary_conditions => boundary_conditions_cos2pix
     procedure :: initial_conditions => initial_conditions_cos2pix
@@ -62,6 +71,7 @@ module m_case_cos2pix
     procedure, private :: compute_error_norm
     procedure, private :: print_field_comparison
     procedure, private :: run_single_test
+    procedure, private :: detect_verbose
   end type case_cos2pix_t
 
   interface case_cos2pix_t
@@ -78,6 +88,27 @@ contains
 
     call flow_case%case_init(backend, mesh, host_allocator)
   end function case_cos2pix_init
+
+  subroutine detect_verbose(self)
+    !! Read the VERBOSE environment variable to set debug output level.
+    !!   VERBOSE=1  -> verbose output (pointwise field comparisons)
+    !!   (unset/0)  -> quiet output   (error norms and status only)
+    class(case_cos2pix_t), intent(inout) :: self
+
+    character(len=16) :: env_val
+    integer :: stat
+
+    call get_environment_variable('VERBOSE', env_val, status=stat)
+    self%verbose = (stat == 0 .and. trim(env_val) == '1')
+
+    if (self%solver%mesh%par%is_root()) then
+      if (self%verbose) then
+        write(*, '(4X,A)') 'Verbose   : ON  (VERBOSE=1 detected)'
+      else
+        write(*, '(4X,A)') 'Verbose   : OFF (set VERBOSE=1 for field dumps)'
+      end if
+    end if
+  end subroutine detect_verbose
 
   pure function test_type_name(test_type) result(name)
     integer, intent(in) :: test_type
@@ -122,7 +153,7 @@ contains
     integer, intent(in) :: n
     integer, intent(in) :: test_type
 
-    integer :: i, j, k, dims(3)
+    integer :: i, j, k, dims(3),x
     real(dp) :: coords(3), n_pi
 
     dims = self%solver%mesh%get_dims(CELL)
@@ -204,20 +235,20 @@ contains
     error_norm = norm2(field%data(1:dims(1), 1:dims(2), 1:dims(3))) / product(dims)
   end function compute_error_norm
 
-  subroutine print_field_comparison(self, host_field, label, n, test_type, &
-                                    is_poisson_solution)
-    !! Print field values vs analytical solution for debugging
+subroutine print_field_comparison(self, host_field, host_analytical, &
+                                    label, n, test_type)
     class(case_cos2pix_t), intent(in) :: self
     class(field_t), intent(in) :: host_field
+    class(field_t), intent(in) :: host_analytical
     character(len=*), intent(in) :: label
     integer, intent(in) :: n
     integer, intent(in) :: test_type
-    logical, intent(in) :: is_poisson_solution
 
     integer :: ix, iy, iz, ii, dims(3)
     real(dp) :: n_pi
-    real(dp) :: coord_x, coord_y, coord_z, numerical, analytical
+    real(dp) :: coord_x, coord_y, coord_z
 
+    if (.not. self%verbose) return
     if (.not. self%solver%mesh%par%is_root()) return
 
     dims = self%solver%mesh%get_dims(CELL)
@@ -240,13 +271,8 @@ contains
       iz = dims(3) / 2
       do ix = 1, dims(1)
         coord_x = self%solver%mesh%geo%midp_coords(ix, 1)
-        numerical = host_field%data(ix, iy, iz)
-        if (is_poisson_solution) then
-          analytical = -cos(n_pi * coord_x) / (n_pi * n_pi)
-        else
-          analytical = cos(n_pi * coord_x)
-        end if
-        write(*, '(6X,I4,F12.6,2ES20.12)') ix, coord_x, numerical, analytical
+        write(*, '(6X,I4,F12.6,2ES20.12)') ix, coord_x, &
+          host_field%data(ix, iy, iz), host_analytical%data(ix, iy, iz)
       end do
 
     case (TEST_COS_Y)
@@ -258,13 +284,8 @@ contains
       iz = dims(3) / 2
       do iy = 1, dims(2)
         coord_y = self%solver%mesh%geo%midp_coords(iy, 2)
-        numerical = host_field%data(ix, iy, iz)
-        if (is_poisson_solution) then
-          analytical = -cos(n_pi * coord_y) / (n_pi * n_pi)
-        else
-          analytical = cos(n_pi * coord_y)
-        end if
-        write(*, '(6X,I4,F12.6,2ES20.12)') iy, coord_y, numerical, analytical
+        write(*, '(6X,I4,F12.6,2ES20.12)') iy, coord_y, &
+          host_field%data(ix, iy, iz), host_analytical%data(ix, iy, iz)
       end do
 
     case (TEST_COS_XY)
@@ -276,15 +297,8 @@ contains
       do ii = 1, min(dims(1), dims(2))
         coord_x = self%solver%mesh%geo%midp_coords(ii, 1)
         coord_y = self%solver%mesh%geo%midp_coords(ii, 2)
-        numerical = host_field%data(ii, ii, iz)
-        if (is_poisson_solution) then
-          analytical = -cos(n_pi * coord_x) * cos(n_pi * coord_y) &
-                      / (2.0_dp * n_pi * n_pi)
-        else
-          analytical = cos(n_pi * coord_x) * cos(n_pi * coord_y)
-        end if
-        write(*, '(6X,I4,2F12.6,2ES20.12)') &
-          ii, coord_x, coord_y, numerical, analytical
+        write(*, '(6X,I4,2F12.6,2ES20.12)') ii, coord_x, coord_y, &
+          host_field%data(ii, ii, iz), host_analytical%data(ii, ii, iz)
       end do
 
     case (TEST_COS_XYZ)
@@ -297,16 +311,8 @@ contains
         coord_x = self%solver%mesh%geo%midp_coords(ii, 1)
         coord_y = self%solver%mesh%geo%midp_coords(ii, 2)
         coord_z = self%solver%mesh%geo%midp_coords(ii, 3)
-        numerical = host_field%data(ii, ii, ii)
-        if (is_poisson_solution) then
-          analytical = -cos(n_pi * coord_x) * cos(n_pi * coord_y) &
-                      * cos(n_pi * coord_z) / (3.0_dp * n_pi * n_pi)
-        else
-          analytical = cos(n_pi * coord_x) * cos(n_pi * coord_y) &
-                      * cos(n_pi * coord_z)
-        end if
-        write(*, '(6X,I4,3F12.6,2ES20.12)') &
-          ii, coord_x, coord_y, coord_z, numerical, analytical
+        write(*, '(6X,I4,3F12.6,2ES20.12)') ii, coord_x, coord_y, coord_z, &
+          host_field%data(ii, ii, ii), host_analytical%data(ii, ii, ii)
       end do
 
     end select
@@ -330,7 +336,7 @@ contains
     class(field_t), pointer :: f_device, f_reference, f_result
     class(field_t), pointer :: host_field, host_analytical, temp
     class(field_t), pointer :: dpdx, dpdy, dpdz, gradient_input
-    integer :: dims(3)
+    integer :: dims(3), x
     real(dp) :: poisson_error_norm, div_grad_error_norm
     logical :: poisson_passed, div_grad_passed
 
@@ -343,9 +349,9 @@ contains
         'Test  ', trim(test_type_name(test_type)), '   n = ', n
       write(*, '(4X,A,A)') &
         'RHS   f = ', trim(test_rhs_formula(test_type, n))
-      print *, "========================================="
+      write(*, '(4X,A)') &
+        '========================================='
       write(*, '(A)') ''
-
     end if
 
     ! Allocate fields
@@ -369,14 +375,29 @@ contains
     call self%solver%backend%poisson_fft%solve_poisson(f_device, temp)
     call self%solver%backend%allocator%release_block(temp)
 
-    ! ---- Check 1: Poisson solution vs analytical ----
+! ---- Check 1: Poisson solution vs analytical ----
     host_field => self%solver%host_allocator%get_block(DIR_C)
     call self%solver%backend%get_field_data(host_field%data, f_device)
+
+    ! Remove arbitrary constant from numerical solution
+    host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) = &
+      host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) &
+      - host_field%data(1, 1, 1)
 
     host_analytical => self%solver%host_allocator%get_block(DIR_C)
     call self%create_analytical_solution(host_analytical, n, test_type)
 
-    ! Compute pointwise difference: host_field = numerical - analytical
+    ! Remove same constant from analytical solution
+    host_analytical%data(1:dims(1), 1:dims(2), 1:dims(3)) = &
+      host_analytical%data(1:dims(1), 1:dims(2), 1:dims(3)) &
+      - host_analytical%data(1, 1, 1)
+
+    ! Verbose: print the Poisson solution vs analytical (both shifted)
+    call self%print_field_comparison(host_field, host_analytical, &
+      'Poisson solution (numerical vs analytical, constant removed):', &
+      n, test_type)
+
+    ! Compute pointwise difference
     host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) = &
       host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) &
       - host_analytical%data(1:dims(1), 1:dims(2), 1:dims(3))
@@ -435,7 +456,7 @@ contains
     div_grad_passed = (div_grad_error_norm <= ERROR_TOLERANCE)
 
     if (self%solver%mesh%par%is_root()) then
-      write(*, '(6X,A)') 'Check 2  div(grad(φ)) = f  (round-trip)'
+      write(*, '(6X,A)') 'Check 2  ∇·(∇φ) = f  (round-trip)'
       write(*, '(6X,A,ES14.6)') '  L2 error  : ', div_grad_error_norm
       write(*, '(6X,A,ES14.6)') '  Tolerance : ', ERROR_TOLERANCE
       write(*, '(6X,A,A)')      '  Status    : ', &
@@ -462,6 +483,9 @@ contains
 
     dims = self%solver%mesh%get_dims(CELL)
 
+    ! Detect verbosity from environment
+    call self%detect_verbose()
+
     ! Print banner and schematic
     if (self%solver%mesh%par%is_root()) then
       write(*, '(A)') ''
@@ -475,19 +499,19 @@ contains
       write(*, '(4X,A)') 'Pipeline under test:'
       write(*, '(A)') ''
       write(*, '(4X,A)') &
-        'f  -->  solve(f) = φ  -->  grad(φ)  -->  div(grad(φ)) = f'
+        'f  -->  solve(f) = φ  -->  ∇φ  -->  ∇·(∇φ) = ∇²φ = f'
       write(*, '(4X,A)') &
-        '           |                    |                  |'
+        '          |                  |              |'
       write(*, '(4X,A)') &
-        '     "double integral"     1st derivative     1st derivative'
+        '    "double integral"   1st derivative  1st derivative'
       write(*, '(4X,A)') &
-        '     (inverse of ∇^2)                 (together = ∇^2'
+        '    (inverse of ∇²)                  (together = ∇²'
       write(*, '(4X,A)') &
-        '                                                = Laplacian)'
+        '                                        = Laplacian)'
       write(*, '(A)') ''
       write(*, '(4X,A)') 'Verification checks (both must pass):'
       write(*, '(6X,A)') 'Check 1 : φ matches known analytical solution'
-      write(*, '(6X,A)') 'Check 2 : div(grad(φ)) recovers original f'
+      write(*, '(6X,A)') 'Check 2 : ∇·(∇φ) recovers original f'
       write(*, '(A)') ''
       write(*, '(4X,A,I4,A,I4,A,I4)') &
         'Grid      : ', dims(1), ' x', dims(2), ' x', dims(3)
@@ -501,18 +525,19 @@ contains
       write(*, '(6X,A10,A6,A3,A)') &
         'Type      ', '  n   ', '   ', 'RHS f(x,y,z)'
       write(*, '(A)') ''
-      write(*, '(6X,A10,I6,A3,A)') 'COS_X     ', 2, '   ', 'cos(2*pi*x)'
-      write(*, '(6X,A10,I6,A3,A)') 'COS_Y     ', 2, '   ', 'cos(2*pi*y)'
+      write(*, '(6X,A10,I6,A3,A)') 'COS_X     ', 2, '   ', 'cos(2πx)'
+      write(*, '(6X,A10,I6,A3,A)') 'COS_Y     ', 2, '   ', 'cos(2πy)'
       write(*, '(6X,A10,I6,A3,A)') 'COS_XY    ', 2, '   ', &
-        'cos(2*pi*x)*cos(2*pi*y)'
+        'cos(2πx)·cos(2πy)'
       write(*, '(6X,A10,I6,A3,A)') 'COS_XYZ   ', 2, '   ', &
-        'cos(2*pi*x)*cos(2*pi*y)*cos(2*pi*z)'
-      write(*, '(6X,A10,I6,A3,A)') 'COS_X     ', 3, '   ', 'cos(3*pi*x)'
-      write(*, '(6X,A10,I6,A3,A)') 'COS_Y     ', 3, '   ', 'cos(3*pi*y)'
+        'cos(2πx)·cos(2πy)·cos(2πz)'
+      write(*, '(A)') ''
+      write(*, '(6X,A10,I6,A3,A)') 'COS_X     ', 3, '   ', 'cos(3πx)'
+      write(*, '(6X,A10,I6,A3,A)') 'COS_Y     ', 3, '   ', 'cos(3πy)'
       write(*, '(6X,A10,I6,A3,A)') 'COS_XY    ', 3, '   ', &
-        'cos(3*pi*x)*cos(3*pi*y)'
+        'cos(3πx)·cos(3πy)'
       write(*, '(6X,A10,I6,A3,A)') 'COS_XYZ   ', 3, '   ', &
-        'cos(3*pi*x)*cos(3*pi*y)*cos(3*pi*z)'
+        'cos(3πx)·cos(3πy)·cos(3πz)'
       write(*, '(A)') ''
     end if
 
@@ -547,7 +572,7 @@ contains
 
       ! Column headers
       write(*, '(6X,A10,A4,A16,A16,A10)') &
-        'Type      ', ' n  ', '  Poisson L2    ', '  div-grad L2   ', &
+        'Type      ', ' n  ', '  Poisson L2    ', '  ∇·(∇φ) L2     ', &
         '  Status  '
       write(*, '(A)') ''
 
