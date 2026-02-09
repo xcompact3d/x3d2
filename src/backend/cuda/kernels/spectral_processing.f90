@@ -688,14 +688,6 @@ end subroutine memcpy3D_with_transpose_back
         if (iz > nz/2 + 1) div_r = -div_r
         if (iz > nz/2 + 1) div_c = -div_c
 
-        ! postprocess in x
-        tmp_r = div_r
-        tmp_c = div_c
-        div_r = tmp_r*bx(ix) + tmp_c*ax(ix)
-        div_c = tmp_c*bx(ix) - tmp_r*ax(ix)
-        if (ix > nx/2 + 1) div_r = -div_r
-        if (ix > nx/2 + 1) div_c = -div_c
-
         ! update the entry
         div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
       end do
@@ -787,14 +779,6 @@ end subroutine memcpy3D_with_transpose_back
         div_c = tmp_c*bz(iz) + tmp_r*az(iz)
         if (iz > nz/2 + 1) div_r = -div_r
         if (iz > nz/2 + 1) div_c = -div_c
-
-        ! post-process in x
-        tmp_r = div_r
-        tmp_c = div_c
-        div_r = tmp_r*bx(ix) - tmp_c*ax(ix)
-        div_c = tmp_c*bx(ix) + tmp_r*ax(ix)
-        if (ix > nx/2 + 1) div_r = -div_r
-        if (ix > nx/2 + 1) div_c = -div_c
 
         ! update the entry
         div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
