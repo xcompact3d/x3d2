@@ -245,6 +245,22 @@ contains
 
   end subroutine poisson_000
 
+  subroutine poisson_010(self, f, temp)
+    implicit none
+
+    class(poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f, temp
+
+    call self%enforce_periodicity_y(temp, f)
+
+    call self%fft_forward_010(temp)
+    call self%fft_postprocess_010
+    call self%fft_backward_010(temp)
+
+    call self%undo_periodicity_y(f, temp)
+
+  end subroutine poisson_010
+
   subroutine poisson_100(self, f, temp)
     implicit none
     class(poisson_fft_t) :: self
@@ -267,32 +283,20 @@ contains
   class(field_t), intent(inout) :: f, temp
 
   ! Apply periodicity enforcement for both X and Y
-  call self%enforce_periodicity_xy(temp, f, temp)  ! Note: may need separate temp2
+  call self%enforce_periodicity_x(temp, f)
+  call self%enforce_periodicity_y(f, temp)  
   
-  call self%fft_forward_110(temp)
+  call self%fft_forward_110(f)
   call self%fft_postprocess_110
-  call self%fft_backward_110(temp)
+  call self%fft_backward_110(f)
   
   ! Undo periodicity for both X and Y
-  call self%undo_periodicity_xy(f, temp, temp)  ! Note: may need separate temp2
+  call self%undo_periodicity_y(temp, f)
+  call self%undo_periodicity_x(f, temp)
 
-end subroutine poisson_110
+  end subroutine poisson_110
 
-  subroutine poisson_010(self, f, temp)
-    implicit none
 
-    class(poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f, temp
-
-    call self%enforce_periodicity_y(temp, f)
-
-    call self%fft_forward_010(temp)
-    call self%fft_postprocess_010
-    call self%fft_backward_010(temp)
-
-    call self%undo_periodicity_y(f, temp)
-
-  end subroutine poisson_010
 
   subroutine stretching_matrix(self, geo, xdirps, ydirps, zdirps)
     !! Stretching necessitates a special operation in spectral space.

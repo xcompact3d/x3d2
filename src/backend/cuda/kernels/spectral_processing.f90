@@ -670,58 +670,40 @@ end subroutine memcpy3D_with_transpose_back
     real(dp) :: ll_r, ll_c, lr_r, lr_c, rl_r, rl_c, rr_r, rr_c
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
-    k = blockIdx%y  ! nz
+    k = blockIdx%y ! nz_spec
 
-    ! First pass: normalization + z post-processing (periodic)
     if (i <= nx_spec) then
       do j = 1, ny_spec
-        ix = i + x_sp_st; iy = j + y_sp_st; iz = k
+        ix = i; iy = j + y_sp_st; iz = k
 
-        ! Normalization
-        div_r = real(div_u(i, j, k), kind=dp) / nx / ny / nz
-        div_c = aimag(div_u(i, j, k)) / nx / ny / nz
+        ! normalisation
+        div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
+        div_c = aimag(div_u(i, j, k))/nx/ny/nz
 
-        ! Post-process in z (periodic)
+        ! postprocess in z
         tmp_r = div_r
         tmp_c = div_c
         div_r = tmp_r*bz(iz) + tmp_c*az(iz)
         div_c = tmp_c*bz(iz) - tmp_r*az(iz)
-        if (iz > nz/2 + 1) then
-          div_r = -div_r
-          div_c = -div_c
-        end if
+        if (iz > nz/2 + 1) div_r = -div_r
+        if (iz > nz/2 + 1) div_c = -div_c
 
+        ! postprocess in x
+        tmp_r = div_r
+        tmp_c = div_c
+        div_r = tmp_r*bx(ix) + tmp_c*ax(ix)
+        div_c = tmp_c*bx(ix) - tmp_r*ax(ix)
+        if (ix > nx/2 + 1) div_r = -div_r
+        if (ix > nx/2 + 1) div_c = -div_c
+
+        ! update the entry
         div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
       end do
     end if
 
-    ! Second pass: X Dirichlet paired operation (forward)
-    if (i <= nx_spec) then
-      do j = 1, ny_spec
-        if (i >= 2 .and. i <= nx_spec/2 + 1) then
-          ix = i + x_sp_st
-          ix_rev = nx_spec - i + 2 + x_sp_st
-
-          l_r = real(div_u(i, j, k), kind=dp)
-          l_c = aimag(div_u(i, j, k))
-          r_r = real(div_u(nx_spec - i + 2, j, k), kind=dp)
-          r_c = aimag(div_u(nx_spec - i + 2, j, k))
-
-          div_u(i, j, k) = 0.5_dp * cmplx( &
-            l_r*bx(ix) + l_c*ax(ix) + r_r*bx(ix) - r_c*ax(ix), &
-            -l_r*ax(ix) + l_c*bx(ix) + r_r*ax(ix) + r_c*bx(ix), kind=dp)
-          
-          div_u(nx_spec - i + 2, j, k) = 0.5_dp * cmplx( &
-            r_r*bx(ix_rev) + r_c*ax(ix_rev) + l_r*bx(ix_rev) - l_c*ax(ix_rev), &
-            -r_r*ax(ix_rev) + r_c*bx(ix_rev) + l_r*ax(ix_rev) + l_c*bx(ix_rev), kind=dp)
-        end if
-      end do
-    end if
-
-    ! Third pass: Y Dirichlet paired operation (forward)
     if (i <= nx_spec) then
       do j = 2, ny_spec/2 + 1
-        iy = j + y_sp_st
+        ix = i; iy = j + y_sp_st; iz = k
         iy_rev = ny_spec - j + 2 + y_sp_st
 
         l_r = real(div_u(i, j, k), kind=dp)
@@ -729,13 +711,16 @@ end subroutine memcpy3D_with_transpose_back
         r_r = real(div_u(i, ny_spec - j + 2, k), kind=dp)
         r_c = aimag(div_u(i, ny_spec - j + 2, k))
 
-        div_u(i, j, k) = 0.5_dp * cmplx( &
-          l_r*by(iy) + l_c*ay(iy) + r_r*by(iy) - r_c*ay(iy), &
-          -l_r*ay(iy) + l_c*by(iy) + r_r*ay(iy) + r_c*by(iy), kind=dp)
-        
-        div_u(i, ny_spec - j + 2, k) = 0.5_dp * cmplx( &
-          r_r*by(iy_rev) + r_c*ay(iy_rev) + l_r*by(iy_rev) - l_c*ay(iy_rev), &
-          -r_r*ay(iy_rev) + r_c*by(iy_rev) + l_r*ay(iy_rev) + l_c*by(iy_rev), kind=dp)
+        ! update the entry
+        div_u(i, j, k) = 0.5_dp*cmplx( & !&
+         l_r*by(iy) + l_c*ay(iy) + r_r*by(iy) - r_c*ay(iy), &
+         -l_r*ay(iy) + l_c*by(iy) + r_r*ay(iy) + r_c*by(iy), kind=dp &
+         )
+        div_u(i, ny_spec - j + 2, k) = 0.5_dp*cmplx( & !&
+         r_r*by(iy_rev) + r_c*ay(iy_rev) + l_r*by(iy_rev) - l_c*ay(iy_rev), &
+         -r_r*ay(iy_rev) + r_c*by(iy_rev) + l_r*ay(iy_rev) + l_c*by(iy_rev), &
+         kind=dp &
+         )
       end do
     end if
 
@@ -750,21 +735,24 @@ end subroutine memcpy3D_with_transpose_back
         if (abs(tmp_r) < 1.e-16_dp) then
           div_r = 0._dp
         else
-          div_r = -div_r / tmp_r
+          div_r = -div_r/tmp_r
         end if
         if (abs(tmp_c) < 1.e-16_dp) then
           div_c = 0._dp
         else
-          div_c = -div_c / tmp_c
+          div_c = -div_c/tmp_c
         end if
+
+        ! update the entry
         div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
+        if (i == nx/2 + 1 .and. k == nz/2 + 1) div_u(i, j, k) = 0._dp
       end do
     end if
 
-    ! Backward pass: Y Dirichlet paired operation
+    ! post-process backward
     if (i <= nx_spec) then
       do j = 2, ny_spec/2 + 1
-        iy = j + y_sp_st
+        ix = i; iy = j + y_sp_st; iz = k
         iy_rev = ny_spec - j + 2 + y_sp_st
 
         l_r = real(div_u(i, j, k), kind=dp)
@@ -772,60 +760,46 @@ end subroutine memcpy3D_with_transpose_back
         r_r = real(div_u(i, ny_spec - j + 2, k), kind=dp)
         r_c = aimag(div_u(i, ny_spec - j + 2, k))
 
-        div_u(i, j, k) = cmplx( &
+        ! update the entry
+        div_u(i, j, k) = cmplx( & !&
           l_r*by(iy) - l_c*ay(iy) + r_r*ay(iy) + r_c*by(iy), &
-          l_r*ay(iy) + l_c*by(iy) - r_r*by(iy) + r_c*ay(iy), kind=dp)
-        
-        div_u(i, ny_spec - j + 2, k) = cmplx( &
+          l_r*ay(iy) + l_c*by(iy) - r_r*by(iy) + r_c*ay(iy), kind=dp &
+          )
+        div_u(i, ny_spec - j + 2, k) = cmplx( & !&
           r_r*by(iy_rev) - r_c*ay(iy_rev) + l_r*ay(iy_rev) + l_c*by(iy_rev), &
-          r_r*ay(iy_rev) + r_c*by(iy_rev) - l_r*by(iy_rev) + l_c*ay(iy_rev), kind=dp)
+          r_r*ay(iy_rev) + r_c*by(iy_rev) - l_r*by(iy_rev) + l_c*ay(iy_rev), &
+          kind=dp &
+          )
       end do
     end if
 
-    ! Backward pass: X Dirichlet paired operation
     if (i <= nx_spec) then
       do j = 1, ny_spec
-        if (i >= 2 .and. i <= nx_spec/2 + 1) then
-          ix = i + x_sp_st
-          ix_rev = nx_spec - i + 2 + x_sp_st
-
-          l_r = real(div_u(i, j, k), kind=dp)
-          l_c = aimag(div_u(i, j, k))
-          r_r = real(div_u(nx_spec - i + 2, j, k), kind=dp)
-          r_c = aimag(div_u(nx_spec - i + 2, j, k))
-
-          div_u(i, j, k) = cmplx( &
-            l_r*bx(ix) - l_c*ax(ix) + r_r*ax(ix) + r_c*bx(ix), &
-            l_r*ax(ix) + l_c*bx(ix) - r_r*bx(ix) + r_c*ax(ix), kind=dp)
-          
-          div_u(nx_spec - i + 2, j, k) = cmplx( &
-            r_r*bx(ix_rev) - r_c*ax(ix_rev) + l_r*ax(ix_rev) + l_c*bx(ix_rev), &
-            r_r*ax(ix_rev) + r_c*bx(ix_rev) - l_r*bx(ix_rev) + l_c*ax(ix_rev), kind=dp)
-        end if
-      end do
-    end if
-
-    ! Final pass: z backward post-processing (periodic)
-    if (i <= nx_spec) then
-      do j = 1, ny_spec
-        iz = k
+        ix = i; iy = j + y_sp_st; iz = k
 
         div_r = real(div_u(i, j, k), kind=dp)
         div_c = aimag(div_u(i, j, k))
 
+        ! post-process in z
         tmp_r = div_r
         tmp_c = div_c
         div_r = tmp_r*bz(iz) - tmp_c*az(iz)
         div_c = tmp_c*bz(iz) + tmp_r*az(iz)
-        if (iz > nz/2 + 1) then
-          div_r = -div_r
-          div_c = -div_c
-        end if
+        if (iz > nz/2 + 1) div_r = -div_r
+        if (iz > nz/2 + 1) div_c = -div_c
 
+        ! post-process in x
+        tmp_r = div_r
+        tmp_c = div_c
+        div_r = tmp_r*bx(ix) - tmp_c*ax(ix)
+        div_c = tmp_c*bx(ix) + tmp_r*ax(ix)
+        if (ix > nx/2 + 1) div_r = -div_r
+        if (ix > nx/2 + 1) div_c = -div_c
+
+        ! update the entry
         div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
       end do
     end if
-
 end subroutine process_spectral_110
 
 
@@ -929,66 +903,5 @@ end subroutine process_spectral_110
     ! end do
   end subroutine undo_periodicity_y
 
-  !  attributes(global) subroutine enforce_periodicity_xy_test(f_out, f_in, nx, ny)
-  !   !! Combined periodicity enforcement for 110 case
-  !   implicit none
-  !   real(dp), device, intent(out), dimension(:, :, :) :: f_out
-  !   real(dp), device, intent(in), dimension(:, :, :) :: f_in
-  !   integer, value, intent(in) :: nx, ny
-  !   integer :: i, j, k
 
-  !   i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
-  !   k = blockIdx%y
-
-  !   if (i <= nx) then
-  !     do j = 1, ny
-  !       f_out(i, j, k) = f_in(i, j, k)
-  !     end do
-  !   end if
-  ! end subroutine enforce_periodicity_xy
-
-  ! attributes(global) subroutine undo_periodicity_xy_test(f_out, f_in, nx, ny)
-  !   !! Combined periodicity undo for 110 case
-  !   implicit none
-  !   real(dp), device, intent(out), dimension(:, :, :) :: f_out
-  !   real(dp), device, intent(in), dimension(:, :, :) :: f_in
-  !   integer, value, intent(in) :: nx, ny
-  !   integer :: i, j, k
-
-  !   i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
-  !   k = blockIdx%y
-
-  !   if (i <= nx) then
-  !     do j = 1, ny
-  !       f_out(i, j, k) = f_in(i, j, k)
-  !     end do
-  !   end if
-  ! end subroutine undo_periodicity_xy
-
-!   subroutine enforce_periodicity_xy(self, f_out, f_in, temp)
-!   class(cuda_poisson_fft_t) :: self
-!   class(field_t), intent(inout) :: f_out, temp
-!   class(field_t), intent(in) :: f_in
-
-!   ! First pass: X folding
-!   call enforce_periodicity_x<<<blocks, threads>>>(temp%data_d, f_in%data_d, self%nx_loc)
-
-!   ! Second pass: Y folding
-!   call enforce_periodicity_y<<<blocks, threads>>>(f_out%data_d, temp%data_d, self%ny_loc)
-
-! end subroutine
-
-
-! subroutine undo_periodicity_xy(self, f_out, f_in, temp)
-!   class(cuda_poisson_fft_t) :: self
-!   class(field_t), intent(inout) :: f_out, temp
-!   class(field_t), intent(in) :: f_in
-
-!   ! First pass: Y unfolding
-!   call undo_periodicity_y<<<blocks, threads>>>(temp%data_d, f_in%data_d, self%ny_loc)
-
-!   ! Second pass: X unfolding
-!   call undo_periodicity_x<<<blocks, threads>>>(f_out%data_d, temp%data_d, self%nx_loc)
-
-! end subroutine
 end module m_cuda_spectral

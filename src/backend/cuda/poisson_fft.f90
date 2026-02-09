@@ -214,6 +214,16 @@ contains
       n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)    ! ny
       n_spec(3) = dims_glob(3)        ! nz
 
+      n_sp_st(1) = dims_loc(1)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
+      n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
+      n_sp_st(3) = 0
+    else if(periodic_x .and. periodic_y .and. periodic_z) then  
+      ! 000 case: Dirichlet X, Dirichlet Y, Periodic Z
+      ! Standard spectral layout (no transpose needed)
+      n_spec(1) = dims_loc(1)/2 + 1
+      n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
+      n_spec(3) = dims_glob(3)
+
       n_sp_st(1) = 0
       n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
       n_sp_st(3) = 0
@@ -350,8 +360,17 @@ contains
       padded_dev => f%data_d
     end select
 
-    print *, "fwd – blocks = ", blocks
-    print *, "fwd – threads = ", threads
+    call c_f_pointer(self%xtdesc%descriptor, descriptor)
+    call c_f_pointer(descriptor%data(1), d_dev, &
+                     [self%nx_loc + 2, self%ny_loc, self%nz_loc])
+
+    ! tsize is different than SZ, because here we work on a 3D Cartesian
+    ! data structure, and free to specify any suitable thread/block size.
+    tsize = 16
+    blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
+    threads = dim3(tsize, 1, 1)
+    ! print *, "fwd – blocks = ", blocks
+    ! print *, "fwd – threads = ", threads
 
     call memcpy3D<<<blocks, threads>>>(d_dev, padded_dev, & !&
                                        self%nx_loc, self%ny_loc, self%nz_loc)
@@ -434,8 +453,8 @@ subroutine fft_forward_100_cuda(self, f)
   blocks = dim3((self%nx_loc - 1)/tsize + 1, self%nz_loc, 1)
   threads = dim3(tsize, 1, 1)
 
-  print *, "fft_forward_100 – blocks = ", blocks
-  print *, "fft_forward_100 – threads = ", threads
+  ! print *, "fft_forward_100 – blocks = ", blocks
+  ! print *, "fft_forward_100 – threads = ", threads
 
   ! Copy with transpose: src(nx,ny,nz) -> dst(ny,nx,nz)
   call memcpy3D_with_transpose<<<blocks, threads>>>(d_dev, padded_dev, &
@@ -514,8 +533,8 @@ end subroutine fft_backward_100_cuda
     tsize = 16
     blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
     threads = dim3(tsize, 1, 1)
-    print *, "fwd – blocks = ", blocks
-    print *, "fwd – threads = ", threads
+    ! print *, "fwd – blocks = ", blocks
+    ! print *, "fwd – threads = ", threads
 
     call memcpy3D<<<blocks, threads>>>(d_dev, padded_dev, & !&
                                        self%nx_loc, self%ny_loc, self%nz_loc)
@@ -566,7 +585,7 @@ end subroutine fft_backward_100_cuda
                                        self%nx_loc, self%ny_loc, self%nz_loc)
 
   end subroutine fft_backward_110_cuda
-  subroutine fft_forward_cuda(self, f)
+    subroutine fft_forward_cuda(self, f)
     implicit none
 
     class(cuda_poisson_fft_t) :: self
