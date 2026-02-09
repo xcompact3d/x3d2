@@ -2,13 +2,22 @@ module m_case_cos2pix
   !! Poisson Solver Validation Test Case
   !!
   !! Validates the Poisson solver using the pressure_correction pattern:
-  !!   1. Create test function: f = cos(n*pi*x/L) along Dirichlet axis
+  !!   1. Create test function: f = cos(n*pi*x/L) along specified axes
   !!   2. Solve Poisson equation: laplacian(p) = f
-  !!   3. Compute gradient of solution: grad(p)
-  !!   4. Compute divergence: div(grad(p))
-  !!   5. Verify: div(grad(p)) ≈ f (within tolerance)
+  !!   3. Check numerical solution matches analytical solution (L2 norm)
+  !!   4. Compute gradient of solution: grad(p)
+  !!   5. Compute divergence: div(grad(p))
+  !!   6. Verify: div(grad(p)) ≈ f (within tolerance)
   !!
-  !! Tests both cos(2*pi*x) and cos(3*pi*x)
+  !! Runs 6 test cases:
+  !!   TEST_COS_X  -> cos(n*pi*x)             for n = 2, 3
+  !!   TEST_COS_Y  -> cos(n*pi*y)             for n = 2, 3
+  !!   TEST_COS_XY -> cos(n*pi*x)*cos(n*pi*y) for n = 2, 3
+  !!
+  !! Analytical Poisson solutions (laplacian(p) = f):
+  !!   COS_X  : p = -cos(n*pi*x) / (n*pi)^2
+  !!   COS_Y  : p = -cos(n*pi*y) / (n*pi)^2
+  !!   COS_XY : p = -cos(n*pi*x)*cos(n*pi*y) / (2*(n*pi)^2)
   !!
   !! NOTE: For Dirichlet BCs, dims_global along that axis must be ODD (e.g., 65)
 
@@ -26,10 +35,13 @@ module m_case_cos2pix
 
   real(dp), parameter :: ERROR_TOLERANCE = 1.0e-11_dp
 
+  ! Test type identifiers
+  integer, parameter :: TEST_COS_X  = 1
+  integer, parameter :: TEST_COS_Y  = 2
+  integer, parameter :: TEST_COS_XY = 3
+
   type, extends(base_case_t) :: case_cos2pix_t
     private
-    integer :: dirichlet_axis(3) = 0
-    real(dp) :: domain_length = 0.0_dp
   contains
     procedure :: boundary_conditions => boundary_conditions_cos2pix
     procedure :: initial_conditions => initial_conditions_cos2pix
@@ -37,8 +49,8 @@ module m_case_cos2pix
     procedure :: pre_correction => pre_correction_cos2pix
     procedure :: postprocess => postprocess_cos2pix
     procedure :: run => run_cos2pix
-    procedure, private :: detect_dirichlet_axis
     procedure, private :: create_cosine_field
+    procedure, private :: create_analytical_solution
     procedure, private :: compute_error_norm
     procedure, private :: print_field_comparison
     procedure, private :: run_single_test
@@ -59,52 +71,86 @@ contains
     call flow_case%case_init(backend, mesh, host_allocator)
   end function case_cos2pix_init
 
-  subroutine detect_dirichlet_axis(self)
-    !! Detect which axis has Dirichlet boundary conditions
-    class(case_cos2pix_t), intent(inout) :: self
-    associate(bc => self%solver%mesh%grid%periodic_BC, L => self%solver%mesh%geo%L)
-      if (.not. bc(1)) then
-        self%dirichlet_axis(1)= 1
-        self%domain_length = L(1)
-      end if
-      if (.not. bc(2)) then
-        self%dirichlet_axis(2) = 1
-        self%domain_length = L(2)
-      end if
-      if (.not. bc(3)) then
-        self%dirichlet_axis(3)= 1
-        self%domain_length = L(3)
-      end if
-    end associate
-  end subroutine detect_dirichlet_axis
+  pure function test_type_name(test_type) result(name)
+    integer, intent(in) :: test_type
+    character(len=10) :: name
+    select case (test_type)
+    case (TEST_COS_X);  name = 'COS_X'
+    case (TEST_COS_Y);  name = 'COS_Y'
+    case (TEST_COS_XY); name = 'COS_XY'
+    case default;        name = 'UNKNOWN'
+    end select
+  end function test_type_name
 
-  subroutine create_cosine_field(self, host_field, n)
-    !! Create test field: f = cos(n*pi*x/L) along Dirichlet axis
+  subroutine create_cosine_field(self, host_field, n, test_type)
+    !! Create test field based on test_type:
+    !!   TEST_COS_X  -> cos(n*pi*x)
+    !!   TEST_COS_Y  -> cos(n*pi*y)
+    !!   TEST_COS_XY -> cos(n*pi*x) * cos(n*pi*y)
     class(case_cos2pix_t), intent(in) :: self
     class(field_t), intent(inout) :: host_field
     integer, intent(in) :: n
+    integer, intent(in) :: test_type
 
-    integer :: i, j, k, dims(3), axis
-    real(dp) :: coords(3), arg, result
+    integer :: i, j, k, dims(3)
+    real(dp) :: coords(3), n_pi
 
     dims = self%solver%mesh%get_dims(CELL)
+    n_pi = real(n, dp) * pi
 
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
           coords = self%solver%mesh%get_coordinates(i, j, k, CELL)
-          result = 1.0_dp
-          do axis = 1, 3
-            if (self%dirichlet_axis(axis) == 1) then
-              arg = real(n, dp) * pi * coords(axis) / self%solver%mesh%geo%L(axis)
-              result = result * cos(arg)
-            end if
-          end do
-          host_field%data(i, j, k) = result
+          select case (test_type)
+          case (TEST_COS_X)
+            host_field%data(i, j, k) = cos(n_pi * coords(1))
+          case (TEST_COS_Y)
+            host_field%data(i, j, k) = cos(n_pi * coords(2))
+          case (TEST_COS_XY)
+            host_field%data(i, j, k) = cos(n_pi * coords(1)) &
+                                      * cos(n_pi * coords(2))
+          end select
         end do
       end do
     end do
   end subroutine create_cosine_field
+
+  subroutine create_analytical_solution(self, host_field, n, test_type)
+    !! Create the analytical Poisson solution for laplacian(p) = f:
+    !!   TEST_COS_X  : p = -cos(n*pi*x) / (n*pi)^2
+    !!   TEST_COS_Y  : p = -cos(n*pi*y) / (n*pi)^2
+    !!   TEST_COS_XY : p = -cos(n*pi*x)*cos(n*pi*y) / (2*(n*pi)^2)
+    class(case_cos2pix_t), intent(in) :: self
+    class(field_t), intent(inout) :: host_field
+    integer, intent(in) :: n
+    integer, intent(in) :: test_type
+
+    integer :: i, j, k, dims(3)
+    real(dp) :: coords(3), n_pi, n_pi_sq
+
+    dims = self%solver%mesh%get_dims(CELL)
+    n_pi = real(n, dp) * pi
+    n_pi_sq = n_pi * n_pi
+
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          coords = self%solver%mesh%get_coordinates(i, j, k, CELL)
+          select case (test_type)
+          case (TEST_COS_X)
+            host_field%data(i, j, k) = -cos(n_pi * coords(1)) / n_pi_sq
+          case (TEST_COS_Y)
+            host_field%data(i, j, k) = -cos(n_pi * coords(2)) / n_pi_sq
+          case (TEST_COS_XY)
+            host_field%data(i, j, k) = -cos(n_pi * coords(1)) &
+                                      * cos(n_pi * coords(2)) &
+                                      / (n_pi_sq + n_pi_sq)
+          end select
+        end do
+      end do
+    end do
+  end subroutine create_analytical_solution
 
   function compute_error_norm(self, field) result(error_norm)
     !! Compute normalized L2 error norm
@@ -118,118 +164,101 @@ contains
     error_norm = norm2(field%data(1:dims(1), 1:dims(2), 1:dims(3))) / product(dims)
   end function compute_error_norm
 
-subroutine print_field_comparison(self, host_field, label, n, is_poisson_solution)
-  !! Print field values vs analytical solution for debugging
-  class(case_cos2pix_t), intent(in) :: self
-  class(field_t), intent(in) :: host_field
-  character(len=*), intent(in) :: label
-  integer, intent(in) :: n
-  logical, intent(in) :: is_poisson_solution
+  subroutine print_field_comparison(self, host_field, label, n, test_type, &
+                                    is_poisson_solution)
+    !! Print field values vs analytical solution for debugging
+    class(case_cos2pix_t), intent(in) :: self
+    class(field_t), intent(in) :: host_field
+    character(len=*), intent(in) :: label
+    integer, intent(in) :: n
+    integer, intent(in) :: test_type
+    logical, intent(in) :: is_poisson_solution
 
-  integer :: ix, iy, iz, dims(3), bc_pattern
-  real(dp) :: Lx, Ly, Lz, n_pi
-  real(dp) :: coord_x, coord_y, numerical, analytical
-  real(dp) :: phi_100, phi_010, phi_product, phi_110
-  real(dp) :: phi_100_num, phi_010_num, phi_product_num
+    integer :: ix, iy, iz, dims(3)
+    real(dp) :: n_pi
+    real(dp) :: coord_x, coord_y, numerical, analytical
 
-  if (.not. self%solver%mesh%par%is_root()) return
+    if (.not. self%solver%mesh%par%is_root()) return
 
-  dims = self%solver%mesh%get_dims(CELL)
-  
-  n_pi = real(n, dp) * pi 
-  print *, "-- n_pi", n_pi
+    dims = self%solver%mesh%get_dims(CELL)
+    n_pi = real(n, dp) * pi
 
-  bc_pattern = self%dirichlet_axis(3) + self%dirichlet_axis(2)*2 + self%dirichlet_axis(1)*4
+    print *, ''
+    print *, label
+    print *, 'Test type: ', test_type_name(test_type), '  n =', n
+    print *, '  n_pi =', n_pi
 
-  print *, ''
-  print *, label
-  print *, 'BC pattern:', bc_pattern, ' n =', n
+    select case (test_type)
 
-  select case (bc_pattern)
-
-  case (2)  ! 010: Dirichlet Y
-    print *, 'y-coord | Numerical | Analytical'
-    ix = dims(1) / 2
-    iz = dims(3) / 2
-    do iy = 1, dims(2)
-      coord_y = self%solver%mesh%geo%midp_coords(iy, 2)
-      numerical = host_field%data(ix, iy, iz)
-      if (is_poisson_solution) then
-        analytical = -cos(n_pi * coord_y) / (n_pi * n_pi)
-      else
-        analytical = cos(n_pi * coord_y)
-      end if
-      print *, ix, iy, coord_y, numerical, analytical
-    end do
-
-  case (4)  ! 100: Dirichlet X
-    print *, 'x-coord | Numerical | Analytical'
-    iy = dims(2) / 2
-    iz = dims(3) / 2
-    do ix = 1, dims(1)
-      coord_x = self%solver%mesh%geo%midp_coords(ix, 1)
-      numerical = host_field%data(ix, iy, iz)
-      if (is_poisson_solution) then
-        analytical = -cos(n_pi * coord_x) / (n_pi * n_pi)
-      else
-        analytical = cos(n_pi * coord_x)
-      end if
-      print *, ix,iy, coord_x, numerical, analytical
-    end do
-
-  case (6)  ! 110: Dirichlet X and Y
-    print *, '  phi_110 = phi_100 * phi_010 * (-1) * n_pi^2 * n_pi^2 / (n_pi^2 + n_pi^2)'
-    print *, 'x-coord | y-coord | Numerical | Product | Analytical'
-    iz = dims(3) / 2
-    iy = 0
+    case (TEST_COS_X)
+      print *, 'ix | x-coord | Numerical | Analytical'
+      iy = dims(2) / 2
+      iz = dims(3) / 2
       do ix = 1, dims(1)
-        iy = iy + 1 ! use iy as counter 
-        coord_x = self%solver%mesh%geo%midp_coords(iy, 1)
-        coord_y = self%solver%mesh%geo%midp_coords(iy, 2)
-        
-        numerical = host_field%data(iy, iy, iz)
-        
+        coord_x = self%solver%mesh%geo%midp_coords(ix, 1)
+        numerical = host_field%data(ix, iy, iz)
         if (is_poisson_solution) then
-          ! Product formula
-          phi_100 = -cos(n_pi * coord_x) / (n_pi * n_pi)
-          phi_010 = -cos(n_pi * coord_y) / (n_pi * n_pi)
-          phi_product = phi_100 * phi_010 * (-1._dp) * (n_pi*n_pi * n_pi*n_pi) / (n_pi*n_pi + n_pi*n_pi)
-          
-
-          phi_100_num = host_field%data(ix, dims(2)/2, dims(3)/2)
-          phi_010_num = host_field%data(dims(1)/2, iy, dims(3)/2)
-          phi_product_num = phi_100_num * phi_010_num * (-1._dp) * (n_pi*n_pi * n_pi*n_pi) / (n_pi*n_pi + n_pi*n_pi)
-          
-          ! Direct analytical
-          analytical = -cos(n_pi * coord_x) * cos(n_pi * coord_y) / (n_pi*n_pi + n_pi*n_pi)
+          analytical = -cos(n_pi * coord_x) / (n_pi * n_pi)
         else
-          phi_product = 0._dp  ! Not applicable for RHS
-          analytical = cos(n_pi * coord_x) * cos(n_pi * coord_y)
+          analytical = cos(n_pi * coord_x)
         end if
-        
-        ! print *, coord_x, coord_y, numerical, phi_product_num, analytical, abs(phi_product - analytical)
-        print *, iy, coord_y, numerical, analytical !, abs(phi_product - analytical)
+        print *, ix, coord_x, numerical, analytical
       end do
 
+    case (TEST_COS_Y)
+      print *, 'iy | y-coord | Numerical | Analytical'
+      ix = dims(1) / 2
+      iz = dims(3) / 2
+      do iy = 1, dims(2)
+        coord_y = self%solver%mesh%geo%midp_coords(iy, 2)
+        numerical = host_field%data(ix, iy, iz)
+        if (is_poisson_solution) then
+          analytical = -cos(n_pi * coord_y) / (n_pi * n_pi)
+        else
+          analytical = cos(n_pi * coord_y)
+        end if
+        print *, iy, coord_y, numerical, analytical
+      end do
 
-  case default
-    print *, 'BC pattern not implemented'
-    
-  end select
+    case (TEST_COS_XY)
+      print *, 'ix | x-coord | y-coord | Numerical | Analytical'
+      iz = dims(3) / 2
+      iy = 0
+      do ix = 1, dims(1)
+        iy = iy + 1
+        coord_x = self%solver%mesh%geo%midp_coords(iy, 1)
+        coord_y = self%solver%mesh%geo%midp_coords(iy, 2)
+        numerical = host_field%data(iy, iy, iz)
+        if (is_poisson_solution) then
+          analytical = -cos(n_pi * coord_x) * cos(n_pi * coord_y) &
+                      / (n_pi*n_pi + n_pi*n_pi)
+        else
+          analytical = cos(n_pi * coord_x) * cos(n_pi * coord_y)
+        end if
+        print *, iy, coord_x, coord_y, numerical, analytical
+      end do
 
-end subroutine print_field_comparison
+    end select
 
-  subroutine run_single_test(self, n, test_passed)
-    !! Run a single test with cos(n*pi*x/L)
+  end subroutine print_field_comparison
+
+  subroutine run_single_test(self, n, test_type, test_passed)
+    !! Run a single test with the given test_type and wavenumber n.
+    !! Two checks are performed:
+    !!   1. Poisson solution vs analytical (L2 norm of numerical - analytical)
+    !!   2. div(grad(p)) vs original RHS f (L2 norm)
+    !! Both must pass for the test to pass.
     class(case_cos2pix_t), intent(inout) :: self
     integer, intent(in) :: n
+    integer, intent(in) :: test_type
     logical, intent(out) :: test_passed
 
     class(field_t), pointer :: f_device, f_reference, f_result
-    class(field_t), pointer :: host_field, temp
+    class(field_t), pointer :: host_field, host_analytical, temp
     class(field_t), pointer :: dpdx, dpdy, dpdz, gradient_input
     integer :: dims(3)
-    real(dp) :: error_norm
+    real(dp) :: poisson_error_norm, div_grad_error_norm
+    logical :: poisson_passed, div_grad_passed
 
     dims = self%solver%mesh%get_dims(CELL)
 
@@ -237,7 +266,7 @@ end subroutine print_field_comparison
     if (self%solver%mesh%par%is_root()) then
       print *, ''
       print *, '-----------------------------------------'
-      print *, '  Testing cos(', n, '*pi*x/L)'
+      print *, '  Testing ', test_type_name(test_type), ' with n =', n
       print *, '-----------------------------------------'
       print *, ''
     end if
@@ -247,9 +276,8 @@ end subroutine print_field_comparison
     f_reference => self%solver%backend%allocator%get_block(DIR_X)
     host_field => self%solver%host_allocator%get_block(DIR_C)
 
-    ! Create test function f = cos(n*pi*x/L)
-    call self%create_cosine_field(host_field, n)
-    call self%print_field_comparison(host_field, 'Initial cosine field:', n, .false.)
+    ! Create test function
+    call self%create_cosine_field(host_field, n, test_type)
 
     ! Transfer to device
     call self%solver%backend%set_field_data(f_device, host_field%data, DIR_C)
@@ -264,12 +292,39 @@ end subroutine print_field_comparison
     call self%solver%backend%poisson_fft%solve_poisson(f_device, temp)
     call self%solver%backend%allocator%release_block(temp)
 
-    ! Debug: print Poisson solution
+    ! ---- Check 1: Poisson solution vs analytical ----
+    ! Get numerical solution to host
     host_field => self%solver%host_allocator%get_block(DIR_C)
     call self%solver%backend%get_field_data(host_field%data, f_device)
-    call self%print_field_comparison(host_field, 'Poisson solution:', n, .true.)
+
+    ! Create analytical solution on host
+    host_analytical => self%solver%host_allocator%get_block(DIR_C)
+    call self%create_analytical_solution(host_analytical, n, test_type)
+
+    ! Compute pointwise difference: host_field = numerical - analytical
+    host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) = &
+      host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) &
+      - host_analytical%data(1:dims(1), 1:dims(2), 1:dims(3))
+
+    poisson_error_norm = self%compute_error_norm(host_field)
+
+    call self%solver%host_allocator%release_block(host_analytical)
     call self%solver%host_allocator%release_block(host_field)
 
+    poisson_passed = (poisson_error_norm <= ERROR_TOLERANCE)
+
+    if (self%solver%mesh%par%is_root()) then
+      print *, '[Poisson solve] Error norm (L2):', poisson_error_norm
+      print *, '[Poisson solve] Tolerance:      ', ERROR_TOLERANCE
+      if (poisson_passed) then
+        print *, '[Poisson solve] PASSED'
+      else
+        print *, '[Poisson solve] FAILED'
+      end if
+      print *, ''
+    end if
+
+    ! ---- Check 2: div(grad(p)) vs original RHS ----
     ! Compute gradient of pressure
     gradient_input => self%solver%backend%allocator%get_block(DIR_Z)
     call self%solver%backend%reorder(gradient_input, f_device, RDR_C2Z)
@@ -295,37 +350,40 @@ end subroutine print_field_comparison
     call self%solver%backend%reorder(f_device, f_result, RDR_Z2X)
     call self%solver%backend%allocator%release_block(f_result)
 
-    ! Compute error: result - reference
+    ! Compute error: div(grad(p)) - f
     call self%solver%backend%vecadd(-1.0_dp, f_reference, 1.0_dp, f_device)
 
     ! Get error field to host and compute norm
     host_field => self%solver%host_allocator%get_block(DIR_C)
     call self%solver%backend%get_field_data(host_field%data, f_device)
-    error_norm = self%compute_error_norm(host_field)
+    div_grad_error_norm = self%compute_error_norm(host_field)
 
     ! Cleanup
     call self%solver%backend%allocator%release_block(f_device)
     call self%solver%backend%allocator%release_block(f_reference)
     call self%solver%host_allocator%release_block(host_field)
 
-    ! Report results
+    div_grad_passed = (div_grad_error_norm <= ERROR_TOLERANCE)
+
     if (self%solver%mesh%par%is_root()) then
-      print *, ''
-      print *, 'Error norm (L2):', error_norm
-      print *, 'Tolerance:      ', ERROR_TOLERANCE
+      print *, '[div(grad(p))] Error norm (L2):', div_grad_error_norm
+      print *, '[div(grad(p))] Tolerance:      ', ERROR_TOLERANCE
+      if (div_grad_passed) then
+        print *, '[div(grad(p))] PASSED'
+      else
+        print *, '[div(grad(p))] FAILED'
+      end if
       print *, ''
     end if
 
-    ! Check pass/fail
-    test_passed = (error_norm <= ERROR_TOLERANCE)
+    ! Both checks must pass
+    test_passed = poisson_passed .and. div_grad_passed
 
-    if (.not. test_passed) then
-      if (self%solver%mesh%par%is_root()) then
-        print *, 'TEST FAILED for cos(', n, '*pi*x/L)'
-      end if
-    else
-      if (self%solver%mesh%par%is_root()) then
-        print *, 'TEST PASSED for cos(', n, '*pi*x/L)'
+    if (self%solver%mesh%par%is_root()) then
+      if (test_passed) then
+        print *, 'TEST PASSED: ', test_type_name(test_type), ' n =', n
+      else
+        print *, 'TEST FAILED: ', test_type_name(test_type), ' n =', n
       end if
     end if
 
@@ -334,11 +392,13 @@ end subroutine print_field_comparison
   subroutine run_cos2pix(self)
     class(case_cos2pix_t), intent(inout) :: self
 
-    integer :: dims(3)
-    logical :: test_passed_2, test_passed_3
+    integer :: dims(3), n, t
+    logical :: passed, all_passed
+    logical :: results(6)
+    integer :: test_types(3), test_ns(2)
+    character(len=10) :: names(6)
+    integer :: idx
 
-    ! Setup
-    call self%detect_dirichlet_axis()
     dims = self%solver%mesh%get_dims(CELL)
 
     ! Print test info
@@ -348,19 +408,29 @@ end subroutine print_field_comparison
       print *, '    POISSON SOLVER VALIDATION TEST'
       print *, '========================================='
       print *, ''
-      print *, 'Test: div(grad(poisson_solve(f))) ≈ f'
+      print *, 'Test: poisson_solve(f) ≈ analytical'
+      print *, '      div(grad(poisson_solve(f))) ≈ f'
       print *, ''
       print *, 'Grid dimensions:', dims
-      print *, 'Dirichlet axis: ', self%dirichlet_axis
-      print *, 'Domain length:  ', self%domain_length
       print *, ''
     end if
 
-    ! Run test for cos(2*pi*x)
-    call self%run_single_test(2, test_passed_2)
+    test_types = [TEST_COS_X, TEST_COS_Y, TEST_COS_XY]
+    test_ns = [2, 3]
 
-    ! Run test for cos(3*pi*x)
-    call self%run_single_test(3, test_passed_3)
+    idx = 0
+    all_passed = .true.
+
+    ! Run all 6 tests: for each n, run COS_X, COS_Y, COS_XY
+    do n = 1, 2
+      do t = 1, 3
+        idx = idx + 1
+        call self%run_single_test(test_ns(n), test_types(t), passed)
+        results(idx) = passed
+        names(idx) = test_type_name(test_types(t))
+        all_passed = all_passed .and. passed
+      end do
+    end do
 
     ! Summary
     if (self%solver%mesh%par%is_root()) then
@@ -369,13 +439,21 @@ end subroutine print_field_comparison
       print *, '           TEST SUMMARY'
       print *, '========================================='
       print *, ''
-      print *, 'cos(2*pi*x/L) test:', merge('PASSED', 'FAILED', test_passed_2)
-      print *, 'cos(3*pi*x/L) test:', merge('PASSED', 'FAILED', test_passed_3)
+
+      idx = 0
+      do n = 1, 2
+        do t = 1, 3
+          idx = idx + 1
+          print *, names(idx), ' n=', test_ns(n), ': ', &
+                   merge('PASSED', 'FAILED', results(idx))
+        end do
+      end do
+
       print *, ''
     end if
 
     ! Check overall pass/fail
-    if (.not. (test_passed_2 .and. test_passed_3)) then
+    if (.not. all_passed) then
       error stop 'TEST FAILED: One or more tests did not pass'
     else
       if (self%solver%mesh%par%is_root()) then
