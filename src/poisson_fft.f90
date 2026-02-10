@@ -125,10 +125,6 @@ module m_poisson_fft
 
 contains
 
-
-
-
-
   subroutine base_init(self, mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
     implicit none
     class(poisson_fft_t) :: self
@@ -159,7 +155,7 @@ contains
     self%y_sp_st = n_sp_st(2)
     self%z_sp_st = n_sp_st(3)
 
-        ! ===== DEBUG PRINTOUTS =====
+    ! ===== DEBUG PRINTOUTS =====
     print *, '===== POISSON FFT DEBUG ====='
     print *, 'Global dims:   nx_glob=', self%nx_glob, ' ny_glob=', self%ny_glob, ' nz_glob=', self%nz_glob
     print *, 'Local dims:    nx_loc=', self%nx_loc, ' ny_loc=', self%ny_loc, ' nz_loc=', self%nz_loc
@@ -216,7 +212,7 @@ contains
 
       self%poisson => poisson_100
     else if ((.not. self%periodic_x) .and. (.not. self%periodic_y) .and. (self%periodic_z)) then
-    self%poisson => poisson_110
+      self%poisson => poisson_110
 
     else
       error stop 'Requested BCs are not supported in FFT-based Poisson solver!'
@@ -277,26 +273,24 @@ contains
   end subroutine poisson_100
 
   subroutine poisson_110(self, f, temp)
-  implicit none
+    implicit none
 
-  class(poisson_fft_t) :: self
-  class(field_t), intent(inout) :: f, temp
+    class(poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f, temp
 
-  ! Apply periodicity enforcement for both X and Y
-  call self%enforce_periodicity_x(temp, f)
-  call self%enforce_periodicity_y(f, temp)  
-  
-  call self%fft_forward_110(f)
-  call self%fft_postprocess_110
-  call self%fft_backward_110(f)
-  
-  ! Undo periodicity for both X and Y
-  call self%undo_periodicity_y(temp, f)
-  call self%undo_periodicity_x(f, temp)
+    ! Apply periodicity enforcement for both X and Y
+    call self%enforce_periodicity_x(temp, f)
+    call self%enforce_periodicity_y(f, temp)
+
+    call self%fft_forward_110(f)
+    call self%fft_postprocess_110
+    call self%fft_backward_110(f)
+
+    ! Undo periodicity for both X and Y
+    call self%undo_periodicity_y(temp, f)
+    call self%undo_periodicity_x(f, temp)
 
   end subroutine poisson_110
-
-
 
   subroutine stretching_matrix(self, geo, xdirps, ydirps, zdirps)
     !! Stretching necessitates a special operation in spectral space.
@@ -677,139 +671,139 @@ contains
 
   end subroutine stretching_matrix
 
-subroutine waves_set(self, geo, xdirps, ydirps, zdirps)
+  subroutine waves_set(self, geo, xdirps, ydirps, zdirps)
   !! Spectral equivalence constants
   !!
   !! Ref. JCP 228 (2009), 5989–6015, Sec 4
-  implicit none
+    implicit none
 
-  class(poisson_fft_t) :: self
-  type(geo_t), intent(in) :: geo
-  type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    class(poisson_fft_t) :: self
+    type(geo_t), intent(in) :: geo
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
-  integer :: i, j, k, ix, iy, iz
-  real(dp) :: rlexs, rleys, rlezs, xtt, ytt, ztt, xt1, yt1, zt1
-  complex(dp) :: xt2, yt2, zt2, xyzk
+    integer :: i, j, k, ix, iy, iz
+    real(dp) :: rlexs, rleys, rlezs, xtt, ytt, ztt, xt1, yt1, zt1
+    complex(dp) :: xt2, yt2, zt2, xyzk
 
-  call wave_numbers( &
-    self%ax, self%bx, self%kx, self%exs, self%k2x, &
-    self%nx_glob, geo%L(1), geo%d(1), self%periodic_x, &
-    xdirps%stagder_v2p%a, xdirps%stagder_v2p%b, xdirps%stagder_v2p%alpha &
-    )
+    call wave_numbers( &
+      self%ax, self%bx, self%kx, self%exs, self%k2x, &
+      self%nx_glob, geo%L(1), geo%d(1), self%periodic_x, &
+      xdirps%stagder_v2p%a, xdirps%stagder_v2p%b, xdirps%stagder_v2p%alpha &
+      )
 
-  call wave_numbers( &
-    self%ay, self%by, self%ky, self%eys, self%k2y, &
-    self%ny_glob, geo%L(2), geo%d(2), self%periodic_y, &
-    ydirps%stagder_v2p%a, ydirps%stagder_v2p%b, ydirps%stagder_v2p%alpha &
-    )
+    call wave_numbers( &
+      self%ay, self%by, self%ky, self%eys, self%k2y, &
+      self%ny_glob, geo%L(2), geo%d(2), self%periodic_y, &
+      ydirps%stagder_v2p%a, ydirps%stagder_v2p%b, ydirps%stagder_v2p%alpha &
+      )
 
-  call wave_numbers( &
-    self%az, self%bz, self%kz, self%ezs, self%k2z, &
-    self%nz_glob, geo%L(3), geo%d(3), self%periodic_z, &
-    zdirps%stagder_v2p%a, zdirps%stagder_v2p%b, zdirps%stagder_v2p%alpha &
-    )
+    call wave_numbers( &
+      self%az, self%bz, self%kz, self%ezs, self%k2z, &
+      self%nz_glob, geo%L(3), geo%d(3), self%periodic_z, &
+      zdirps%stagder_v2p%a, zdirps%stagder_v2p%b, zdirps%stagder_v2p%alpha &
+      )
 
-  ! Determine which case we're in and compute waves accordingly
+    ! Determine which case we're in and compute waves accordingly
   if ((.not. self%periodic_x) .and. self%periodic_y .and. self%periodic_z) then
-    ! =========================================================================
-    ! 100 case: Dirichlet X, Periodic Y, Periodic Z
-    ! Uses TRANSPOSED indexing because data is transposed before FFT
-    ! =========================================================================
-    do k = 1, self%nz_spec
-      do j = 1, self%ny_spec  ! This iterates over X (Dirichlet) after transpose
-        do i = 1, self%nx_spec  ! This iterates over Y (periodic, R2C) after transpose
-          ! After transpose: array is (ny, nx, nz), R2C gives (ny/2+1, nx, nz)
-          ! So i indexes into Y direction, j indexes into X direction
-          iy = i + self%y_sp_st  ! Use for ky (first dim after transpose)
-          ix = j + self%x_sp_st  ! Use for kx (second dim after transpose)
-          iz = k + self%z_sp_st
+      ! =========================================================================
+      ! 100 case: Dirichlet X, Periodic Y, Periodic Z
+      ! Uses TRANSPOSED indexing because data is transposed before FFT
+      ! =========================================================================
+      do k = 1, self%nz_spec
+        do j = 1, self%ny_spec  ! This iterates over X (Dirichlet) after transpose
+          do i = 1, self%nx_spec  ! This iterates over Y (periodic, R2C) after transpose
+            ! After transpose: array is (ny, nx, nz), R2C gives (ny/2+1, nx, nz)
+            ! So i indexes into Y direction, j indexes into X direction
+            iy = i + self%y_sp_st  ! Use for ky (first dim after transpose)
+            ix = j + self%x_sp_st  ! Use for kx (second dim after transpose)
+            iz = k + self%z_sp_st
 
-          rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
-          rleys = real(self%eys(iy), kind=dp)*geo%d(2)
-          rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
+            rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
+            rleys = real(self%eys(iy), kind=dp)*geo%d(2)
+            rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
 
-          xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
-                   + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
-                   + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
-                   + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
-          ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
-                   + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
-                   + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
-                   + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
-          ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
-                   + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
-                   + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
-                   + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
+            xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
+                     + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
+                     + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
+                     + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
+            ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
+                     + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
+                     + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
+                     + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
+            ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
+                     + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
+                     + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
+                     + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
 
-          xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
-          yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
-          zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
+            xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
+            yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
+            zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
 
-          xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
-          yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
-          zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
+            xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
+            yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
+            zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
 
-          xyzk = xt2 + yt2 + zt2
-          self%waves(i, j, k) = xyzk
+            xyzk = xt2 + yt2 + zt2
+            self%waves(i, j, k) = xyzk
+          end do
         end do
       end do
-    end do
 
-  else if (self%periodic_z) then
-    ! =========================================================================
-    ! 000, 010, 110 cases: Periodic Z (standard indexing, no transpose)
-    ! 000: Periodic X, Periodic Y, Periodic Z
-    ! 010: Periodic X, Dirichlet Y, Periodic Z
-    ! 110: Dirichlet X, Dirichlet Y, Periodic Z
-    ! =========================================================================
-    do k = 1, self%nz_spec
-      do j = 1, self%ny_spec
-        do i = 1, self%nx_spec
-          ix = i + self%x_sp_st
-          iy = j + self%y_sp_st
-          iz = k + self%z_sp_st
+    else if (self%periodic_z) then
+      ! =========================================================================
+      ! 000, 010, 110 cases: Periodic Z (standard indexing, no transpose)
+      ! 000: Periodic X, Periodic Y, Periodic Z
+      ! 010: Periodic X, Dirichlet Y, Periodic Z
+      ! 110: Dirichlet X, Dirichlet Y, Periodic Z
+      ! =========================================================================
+      do k = 1, self%nz_spec
+        do j = 1, self%ny_spec
+          do i = 1, self%nx_spec
+            ix = i + self%x_sp_st
+            iy = j + self%y_sp_st
+            iz = k + self%z_sp_st
 
-          rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
-          rleys = real(self%eys(iy), kind=dp)*geo%d(2)
-          rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
+            rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
+            rleys = real(self%eys(iy), kind=dp)*geo%d(2)
+            rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
 
-          xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
-                   + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
-                   + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
-                   + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
-          ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
-                   + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
-                   + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
-                   + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
-          ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
-                   + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
-                   + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
-                   + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
+            xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
+                     + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
+                     + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
+                     + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
+            ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
+                     + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
+                     + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
+                     + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
+            ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
+                     + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
+                     + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
+                     + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
 
-          xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
-          yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
-          zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
+            xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
+            yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
+            zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
 
-          xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
-          yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
-          zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
+            xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
+            yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
+            zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
 
-          xyzk = xt2 + yt2 + zt2
-          self%waves(i, j, k) = xyzk
+            xyzk = xt2 + yt2 + zt2
+            self%waves(i, j, k) = xyzk
+          end do
         end do
       end do
-    end do
 
   else if (.not. (self%periodic_x .and. self%periodic_y .and. self%periodic_z)) then
-    ! poisson 111
-    error stop 'No support for all non-periodic BCs yet!'
+      ! poisson 111
+      error stop 'No support for all non-periodic BCs yet!'
 
-  else
-    ! poisson 001, 011, 101
-    error stop 'FFT Poisson solver does not support specified BCs!'
-  end if
+    else
+      ! poisson 001, 011, 101
+      error stop 'FFT Poisson solver does not support specified BCs!'
+    end if
 
-end subroutine waves_set
+  end subroutine waves_set
 
   subroutine wave_numbers(a, b, k, e, k2, n, L, d, periodic, c_a, c_b, c_alpha)
     implicit none

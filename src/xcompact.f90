@@ -84,7 +84,7 @@ program xcompact
                 domain_cfg%L_global, domain_cfg%BC_x, domain_cfg%BC_y, &
                 domain_cfg%BC_z, domain_cfg%stretching, domain_cfg%beta, &
                 use_2decomp=use_2decomp)
-  
+
   ! get local vertex dimensions
   dims = mesh%get_dims(VERT)
 #ifdef CUDA

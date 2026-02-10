@@ -46,15 +46,15 @@ module m_case_cos2pix
   real(dp), parameter :: ERROR_TOLERANCE = 1.0e-11_dp
 
   ! Test type identifiers
-  integer, parameter :: TEST_COS_X   = 1
-  integer, parameter :: TEST_COS_Y   = 2
-  integer, parameter :: TEST_COS_XY  = 3
+  integer, parameter :: TEST_COS_X = 1
+  integer, parameter :: TEST_COS_Y = 2
+  integer, parameter :: TEST_COS_XY = 3
   integer, parameter :: TEST_COS_XYZ = 4
 
   ! Number of test types and wavenumbers
   integer, parameter :: NUM_TYPES = 4
-  integer, parameter :: NUM_NS    = 2
-  integer, parameter :: NUM_TESTS = NUM_TYPES * NUM_NS
+  integer, parameter :: NUM_NS = 2
+  integer, parameter :: NUM_TESTS = NUM_TYPES*NUM_NS
 
   type, extends(base_case_t) :: case_cos2pix_t
     private
@@ -103,9 +103,9 @@ contains
 
     if (self%solver%mesh%par%is_root()) then
       if (self%verbose) then
-        write(*, '(4X,A)') 'Verbose   : ON  (VERBOSE=1 detected)'
+        write (*, '(4X,A)') 'Verbose   : ON  (VERBOSE=1 detected)'
       else
-        write(*, '(4X,A)') 'Verbose   : OFF (set VERBOSE=1 for field dumps)'
+        write (*, '(4X,A)') 'Verbose   : OFF (set VERBOSE=1 for field dumps)'
       end if
     end if
   end subroutine detect_verbose
@@ -114,20 +114,20 @@ contains
     integer, intent(in) :: test_type
     character(len=10) :: name
     select case (test_type)
-    case (TEST_COS_X);   name = 'COS_X     '
-    case (TEST_COS_Y);   name = 'COS_Y     '
-    case (TEST_COS_XY);  name = 'COS_XY    '
+    case (TEST_COS_X); name = 'COS_X     '
+    case (TEST_COS_Y); name = 'COS_Y     '
+    case (TEST_COS_XY); name = 'COS_XY    '
     case (TEST_COS_XYZ); name = 'COS_XYZ   '
-    case default;         name = 'UNKNOWN   '
+    case default; name = 'UNKNOWN   '
     end select
   end function test_type_name
 
   pure function test_rhs_formula(test_type, n) result(formula)
     integer, intent(in) :: test_type, n
     character(len=60) :: formula
-    character(len=1)  :: cn
+    character(len=1) :: cn
 
-    write(cn, '(I1)') n
+    write (cn, '(I1)') n
     select case (test_type)
     case (TEST_COS_X)
       formula = 'cos('//cn//'*pi*x)'
@@ -153,11 +153,11 @@ contains
     integer, intent(in) :: n
     integer, intent(in) :: test_type
 
-    integer :: i, j, k, dims(3),x
+    integer :: i, j, k, dims(3), x
     real(dp) :: coords(3), n_pi
 
     dims = self%solver%mesh%get_dims(CELL)
-    n_pi = real(n, dp) * pi
+    n_pi = real(n, dp)*pi
 
     do k = 1, dims(3)
       do j = 1, dims(2)
@@ -165,16 +165,16 @@ contains
           coords = self%solver%mesh%get_coordinates(i, j, k, CELL)
           select case (test_type)
           case (TEST_COS_X)
-            host_field%data(i, j, k) = cos(n_pi * coords(1))
+            host_field%data(i, j, k) = cos(n_pi*coords(1))
           case (TEST_COS_Y)
-            host_field%data(i, j, k) = cos(n_pi * coords(2))
+            host_field%data(i, j, k) = cos(n_pi*coords(2))
           case (TEST_COS_XY)
-            host_field%data(i, j, k) = cos(n_pi * coords(1)) &
-                                      * cos(n_pi * coords(2))
+            host_field%data(i, j, k) = cos(n_pi*coords(1)) &
+                                       *cos(n_pi*coords(2))
           case (TEST_COS_XYZ)
-            host_field%data(i, j, k) = cos(n_pi * coords(1)) &
-                                      * cos(n_pi * coords(2)) &
-                                      * cos(n_pi * coords(3))
+            host_field%data(i, j, k) = cos(n_pi*coords(1)) &
+                                       *cos(n_pi*coords(2)) &
+                                       *cos(n_pi*coords(3))
           end select
         end do
       end do
@@ -196,8 +196,8 @@ contains
     real(dp) :: coords(3), n_pi, n_pi_sq
 
     dims = self%solver%mesh%get_dims(CELL)
-    n_pi = real(n, dp) * pi
-    n_pi_sq = n_pi * n_pi
+    n_pi = real(n, dp)*pi
+    n_pi_sq = n_pi*n_pi
 
     do k = 1, dims(3)
       do j = 1, dims(2)
@@ -205,18 +205,18 @@ contains
           coords = self%solver%mesh%get_coordinates(i, j, k, CELL)
           select case (test_type)
           case (TEST_COS_X)
-            host_field%data(i, j, k) = -cos(n_pi * coords(1)) / n_pi_sq
+            host_field%data(i, j, k) = -cos(n_pi*coords(1))/n_pi_sq
           case (TEST_COS_Y)
-            host_field%data(i, j, k) = -cos(n_pi * coords(2)) / n_pi_sq
+            host_field%data(i, j, k) = -cos(n_pi*coords(2))/n_pi_sq
           case (TEST_COS_XY)
-            host_field%data(i, j, k) = -cos(n_pi * coords(1)) &
-                                      * cos(n_pi * coords(2)) &
-                                      / (2.0_dp * n_pi_sq)
+            host_field%data(i, j, k) = -cos(n_pi*coords(1)) &
+                                       *cos(n_pi*coords(2)) &
+                                       /(2.0_dp*n_pi_sq)
           case (TEST_COS_XYZ)
-            host_field%data(i, j, k) = -cos(n_pi * coords(1)) &
-                                      * cos(n_pi * coords(2)) &
-                                      * cos(n_pi * coords(3)) &
-                                      / (3.0_dp * n_pi_sq)
+            host_field%data(i, j, k) = -cos(n_pi*coords(1)) &
+                                       *cos(n_pi*coords(2)) &
+                                       *cos(n_pi*coords(3)) &
+                                       /(3.0_dp*n_pi_sq)
           end select
         end do
       end do
@@ -232,10 +232,10 @@ contains
     integer :: dims(3)
 
     dims = self%solver%mesh%get_dims(CELL)
-    error_norm = norm2(field%data(1:dims(1), 1:dims(2), 1:dims(3))) / product(dims)
+  error_norm = norm2(field%data(1:dims(1), 1:dims(2), 1:dims(3)))/product(dims)
   end function compute_error_norm
 
-subroutine print_field_comparison(self, host_field, host_analytical, &
+  subroutine print_field_comparison(self, host_field, host_analytical, &
                                     label, n, test_type)
     class(case_cos2pix_t), intent(in) :: self
     class(field_t), intent(in) :: host_field
@@ -252,66 +252,66 @@ subroutine print_field_comparison(self, host_field, host_analytical, &
     if (.not. self%solver%mesh%par%is_root()) return
 
     dims = self%solver%mesh%get_dims(CELL)
-    n_pi = real(n, dp) * pi
+    n_pi = real(n, dp)*pi
 
-    write(*, '(A)') ''
-    write(*, '(4X,A)') label
-    write(*, '(4X,A,A,A,I1)') &
+    write (*, '(A)') ''
+    write (*, '(4X,A)') label
+    write (*, '(4X,A,A,A,I1)') &
       'Test type : ', trim(test_type_name(test_type)), '   n = ', n
-    write(*, '(4X,A,ES12.5)') 'n*pi      = ', n_pi
+    write (*, '(4X,A,ES12.5)') 'n*pi      = ', n_pi
 
     select case (test_type)
 
     case (TEST_COS_X)
-      write(*, '(A)') ''
-      write(*, '(6X,A)') &
+      write (*, '(A)') ''
+      write (*, '(6X,A)') &
         '  ix    x-coord         Numerical           Analytical'
-      write(*, '(A)') ''
-      iy = dims(2) / 2
-      iz = dims(3) / 2
+      write (*, '(A)') ''
+      iy = dims(2)/2
+      iz = dims(3)/2
       do ix = 1, dims(1)
         coord_x = self%solver%mesh%geo%midp_coords(ix, 1)
-        write(*, '(6X,I4,F12.6,2ES20.12)') ix, coord_x, &
+        write (*, '(6X,I4,F12.6,2ES20.12)') ix, coord_x, &
           host_field%data(ix, iy, iz), host_analytical%data(ix, iy, iz)
       end do
 
     case (TEST_COS_Y)
-      write(*, '(A)') ''
-      write(*, '(6X,A)') &
+      write (*, '(A)') ''
+      write (*, '(6X,A)') &
         '  iy    y-coord         Numerical           Analytical'
-      write(*, '(A)') ''
-      ix = dims(1) / 2
-      iz = dims(3) / 2
+      write (*, '(A)') ''
+      ix = dims(1)/2
+      iz = dims(3)/2
       do iy = 1, dims(2)
         coord_y = self%solver%mesh%geo%midp_coords(iy, 2)
-        write(*, '(6X,I4,F12.6,2ES20.12)') iy, coord_y, &
+        write (*, '(6X,I4,F12.6,2ES20.12)') iy, coord_y, &
           host_field%data(ix, iy, iz), host_analytical%data(ix, iy, iz)
       end do
 
     case (TEST_COS_XY)
-      write(*, '(A)') ''
-      write(*, '(6X,A)') &
+      write (*, '(A)') ''
+      write (*, '(6X,A)') &
         '  ix    x-coord      y-coord         Numerical           Analytical'
-      write(*, '(A)') ''
-      iz = dims(3) / 2
+      write (*, '(A)') ''
+      iz = dims(3)/2
       do ii = 1, min(dims(1), dims(2))
         coord_x = self%solver%mesh%geo%midp_coords(ii, 1)
         coord_y = self%solver%mesh%geo%midp_coords(ii, 2)
-        write(*, '(6X,I4,2F12.6,2ES20.12)') ii, coord_x, coord_y, &
+        write (*, '(6X,I4,2F12.6,2ES20.12)') ii, coord_x, coord_y, &
           host_field%data(ii, ii, iz), host_analytical%data(ii, ii, iz)
       end do
 
     case (TEST_COS_XYZ)
-      write(*, '(A)') ''
-      write(*, '(6X,A)') &
+      write (*, '(A)') ''
+      write (*, '(6X,A)') &
         '  ii    x-coord      y-coord      z-coord' &
         //'         Numerical           Analytical'
-      write(*, '(A)') ''
+      write (*, '(A)') ''
       do ii = 1, min(dims(1), dims(2), dims(3))
         coord_x = self%solver%mesh%geo%midp_coords(ii, 1)
         coord_y = self%solver%mesh%geo%midp_coords(ii, 2)
         coord_z = self%solver%mesh%geo%midp_coords(ii, 3)
-        write(*, '(6X,I4,3F12.6,2ES20.12)') ii, coord_x, coord_y, coord_z, &
+        write (*, '(6X,I4,3F12.6,2ES20.12)') ii, coord_x, coord_y, coord_z, &
           host_field%data(ii, ii, ii), host_analytical%data(ii, ii, ii)
       end do
 
@@ -344,14 +344,14 @@ subroutine print_field_comparison(self, host_field, host_analytical, &
 
     ! Print test header
     if (self%solver%mesh%par%is_root()) then
-      write(*, '(A)') ''
-      write(*, '(4X,A,A,A,I1)') &
+      write (*, '(A)') ''
+      write (*, '(4X,A,A,A,I1)') &
         'Test  ', trim(test_type_name(test_type)), '   n = ', n
-      write(*, '(4X,A,A)') &
+      write (*, '(4X,A,A)') &
         'RHS   f = ', trim(test_rhs_formula(test_type, n))
-      write(*, '(4X,A)') &
+      write (*, '(4X,A)') &
         '========================================='
-      write(*, '(A)') ''
+      write (*, '(A)') ''
     end if
 
     ! Allocate fields
@@ -394,8 +394,8 @@ subroutine print_field_comparison(self, host_field, host_analytical, &
 
     ! Verbose: print the Poisson solution vs analytical (both shifted)
     call self%print_field_comparison(host_field, host_analytical, &
-      'Poisson solution (numerical vs analytical, constant removed):', &
-      n, test_type)
+             'Poisson solution (numerical vs analytical, constant removed):', &
+                                     n, test_type)
 
     ! Compute pointwise difference
     host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) = &
@@ -410,12 +410,12 @@ subroutine print_field_comparison(self, host_field, host_analytical, &
     poisson_passed = (poisson_error_norm <= ERROR_TOLERANCE)
 
     if (self%solver%mesh%par%is_root()) then
-      write(*, '(6X,A)') 'Check 1  solve(f) = φ  vs  analytical'
-      write(*, '(6X,A,ES14.6)') '  L2 error  : ', poisson_error_norm
-      write(*, '(6X,A,ES14.6)') '  Tolerance : ', ERROR_TOLERANCE
-      write(*, '(6X,A,A)')      '  Status    : ', &
+      write (*, '(6X,A)') 'Check 1  solve(f) = φ  vs  analytical'
+      write (*, '(6X,A,ES14.6)') '  L2 error  : ', poisson_error_norm
+      write (*, '(6X,A,ES14.6)') '  Tolerance : ', ERROR_TOLERANCE
+      write (*, '(6X,A,A)') '  Status    : ', &
         merge('PASSED', 'FAILED', poisson_passed)
-      write(*, '(A)') ''
+      write (*, '(A)') ''
     end if
 
     ! ---- Check 2: div(grad(p)) vs original RHS ----
@@ -456,12 +456,12 @@ subroutine print_field_comparison(self, host_field, host_analytical, &
     div_grad_passed = (div_grad_error_norm <= ERROR_TOLERANCE)
 
     if (self%solver%mesh%par%is_root()) then
-      write(*, '(6X,A)') 'Check 2  ∇·(∇φ) = f  (round-trip)'
-      write(*, '(6X,A,ES14.6)') '  L2 error  : ', div_grad_error_norm
-      write(*, '(6X,A,ES14.6)') '  Tolerance : ', ERROR_TOLERANCE
-      write(*, '(6X,A,A)')      '  Status    : ', &
+      write (*, '(6X,A)') 'Check 2  ∇·(∇φ) = f  (round-trip)'
+      write (*, '(6X,A,ES14.6)') '  L2 error  : ', div_grad_error_norm
+      write (*, '(6X,A,ES14.6)') '  Tolerance : ', ERROR_TOLERANCE
+      write (*, '(6X,A,A)') '  Status    : ', &
         merge('PASSED', 'FAILED', div_grad_passed)
-      write(*, '(A)') ''
+      write (*, '(A)') ''
     end if
 
     ! Both checks must pass
@@ -488,57 +488,57 @@ subroutine print_field_comparison(self, host_field, host_analytical, &
 
     ! Print banner and schematic
     if (self%solver%mesh%par%is_root()) then
-      write(*, '(A)') ''
-      write(*, '(A)') &
+      write (*, '(A)') ''
+      write (*, '(A)') &
         '  ========================================================='
-      write(*, '(A)') &
+      write (*, '(A)') &
         '            POISSON SOLVER VALIDATION TEST                  '
-      write(*, '(A)') &
+      write (*, '(A)') &
         '  ========================================================='
-      write(*, '(A)') ''
-      write(*, '(4X,A)') 'Pipeline under test:'
-      write(*, '(A)') ''
-      write(*, '(4X,A)') &
+      write (*, '(A)') ''
+      write (*, '(4X,A)') 'Pipeline under test:'
+      write (*, '(A)') ''
+      write (*, '(4X,A)') &
         'f  -->  solve(f) = φ  -->  ∇φ  -->  ∇·(∇φ) = ∇²φ = f'
-      write(*, '(4X,A)') &
+      write (*, '(4X,A)') &
         '          |                  |              |'
-      write(*, '(4X,A)') &
+      write (*, '(4X,A)') &
         '    "double integral"   1st derivative  1st derivative'
-      write(*, '(4X,A)') &
+      write (*, '(4X,A)') &
         '    (inverse of ∇²)                  (together = ∇²'
-      write(*, '(4X,A)') &
+      write (*, '(4X,A)') &
         '                                        = Laplacian)'
-      write(*, '(A)') ''
-      write(*, '(4X,A)') 'Verification checks (both must pass):'
-      write(*, '(6X,A)') 'Check 1 : φ matches known analytical solution'
-      write(*, '(6X,A)') 'Check 2 : ∇·(∇φ) recovers original f'
-      write(*, '(A)') ''
-      write(*, '(4X,A,I4,A,I4,A,I4)') &
+      write (*, '(A)') ''
+      write (*, '(4X,A)') 'Verification checks (both must pass):'
+      write (*, '(6X,A)') 'Check 1 : φ matches known analytical solution'
+      write (*, '(6X,A)') 'Check 2 : ∇·(∇φ) recovers original f'
+      write (*, '(A)') ''
+      write (*, '(4X,A,I4,A,I4,A,I4)') &
         'Grid      : ', dims(1), ' x', dims(2), ' x', dims(3)
-      write(*, '(4X,A,ES10.3)') &
+      write (*, '(4X,A,ES10.3)') &
         'Tolerance : ', ERROR_TOLERANCE
-      write(*, '(A)') ''
+      write (*, '(A)') ''
 
       ! Test matrix as borderless table
-      write(*, '(4X,A)') 'Test matrix (8 cases):'
-      write(*, '(A)') ''
-      write(*, '(6X,A10,A6,A3,A)') &
+      write (*, '(4X,A)') 'Test matrix (8 cases):'
+      write (*, '(A)') ''
+      write (*, '(6X,A10,A6,A3,A)') &
         'Type      ', '  n   ', '   ', 'RHS f(x,y,z)'
-      write(*, '(A)') ''
-      write(*, '(6X,A10,I6,A3,A)') 'COS_X     ', 2, '   ', 'cos(2πx)'
-      write(*, '(6X,A10,I6,A3,A)') 'COS_Y     ', 2, '   ', 'cos(2πy)'
-      write(*, '(6X,A10,I6,A3,A)') 'COS_XY    ', 2, '   ', &
+      write (*, '(A)') ''
+      write (*, '(6X,A10,I6,A3,A)') 'COS_X     ', 2, '   ', 'cos(2πx)'
+      write (*, '(6X,A10,I6,A3,A)') 'COS_Y     ', 2, '   ', 'cos(2πy)'
+      write (*, '(6X,A10,I6,A3,A)') 'COS_XY    ', 2, '   ', &
         'cos(2πx)·cos(2πy)'
-      write(*, '(6X,A10,I6,A3,A)') 'COS_XYZ   ', 2, '   ', &
+      write (*, '(6X,A10,I6,A3,A)') 'COS_XYZ   ', 2, '   ', &
         'cos(2πx)·cos(2πy)·cos(2πz)'
-      write(*, '(A)') ''
-      write(*, '(6X,A10,I6,A3,A)') 'COS_X     ', 3, '   ', 'cos(3πx)'
-      write(*, '(6X,A10,I6,A3,A)') 'COS_Y     ', 3, '   ', 'cos(3πy)'
-      write(*, '(6X,A10,I6,A3,A)') 'COS_XY    ', 3, '   ', &
+      write (*, '(A)') ''
+      write (*, '(6X,A10,I6,A3,A)') 'COS_X     ', 3, '   ', 'cos(3πx)'
+      write (*, '(6X,A10,I6,A3,A)') 'COS_Y     ', 3, '   ', 'cos(3πy)'
+      write (*, '(6X,A10,I6,A3,A)') 'COS_XY    ', 3, '   ', &
         'cos(3πx)·cos(3πy)'
-      write(*, '(6X,A10,I6,A3,A)') 'COS_XYZ   ', 3, '   ', &
+      write (*, '(6X,A10,I6,A3,A)') 'COS_XYZ   ', 3, '   ', &
         'cos(3πx)·cos(3πy)·cos(3πz)'
-      write(*, '(A)') ''
+      write (*, '(A)') ''
     end if
 
     test_types = [TEST_COS_X, TEST_COS_Y, TEST_COS_XY, TEST_COS_XYZ]
@@ -561,56 +561,56 @@ subroutine print_field_comparison(self, host_field, host_analytical, &
 
     ! Summary results table (borderless)
     if (self%solver%mesh%par%is_root()) then
-      write(*, '(A)') ''
-      write(*, '(A)') &
+      write (*, '(A)') ''
+      write (*, '(A)') &
         '  ========================================================='
-      write(*, '(A)') &
+      write (*, '(A)') &
         '                       TEST SUMMARY                        '
-      write(*, '(A)') &
+      write (*, '(A)') &
         '  ========================================================='
-      write(*, '(A)') ''
+      write (*, '(A)') ''
 
       ! Column headers
-      write(*, '(6X,A10,A4,A16,A16,A10)') &
+      write (*, '(6X,A10,A4,A16,A16,A10)') &
         'Type      ', ' n  ', '  Poisson L2    ', '  ∇·(∇φ) L2     ', &
         '  Status  '
-      write(*, '(A)') ''
+      write (*, '(A)') ''
 
       ! Data rows
       idx = 0
       do n = 1, NUM_NS
         do t = 1, NUM_TYPES
           idx = idx + 1
-          write(*, '(6X,A10,I4,ES16.6,ES16.6,A4,A6)') &
+          write (*, '(6X,A10,I4,ES16.6,ES16.6,A4,A6)') &
             names(idx), test_ns(n), &
             poisson_errs(idx), divgrad_errs(idx), &
             '    ', merge('PASSED', 'FAILED', results(idx))
         end do
         ! Blank line between n=2 and n=3 groups
-        if (n < NUM_NS) write(*, '(A)') ''
+        if (n < NUM_NS) write (*, '(A)') ''
       end do
 
-      write(*, '(A)') ''
-      write(*, '(6X,A,ES10.3)') 'Tolerance : ', ERROR_TOLERANCE
-      write(*, '(A)') ''
+      write (*, '(A)') ''
+      write (*, '(6X,A,ES10.3)') 'Tolerance : ', ERROR_TOLERANCE
+      write (*, '(A)') ''
     end if
 
     ! Final verdict
     if (.not. all_passed) then
       if (self%solver%mesh%par%is_root()) then
-        write(*, '(4X,A)') '!! ONE OR MORE TESTS FAILED !!'
-        write(*, '(A)') ''
+        write (*, '(4X,A)') '!! ONE OR MORE TESTS FAILED !!'
+        write (*, '(A)') ''
       end if
       error stop 'TEST FAILED: One or more tests did not pass'
     else
       if (self%solver%mesh%par%is_root()) then
-        write(*, '(A)') &
+        write (*, '(A)') &
           '  ========================================================='
-        write(*, '(A)') &
+        write (*, '(A)') &
           '                    ALL TESTS PASSED                        '
-        write(*, '(A)') &
+        write (*, '(A)') &
           '  ========================================================='
-        write(*, '(A)') ''
+        write (*, '(A)') ''
       end if
     end if
 
