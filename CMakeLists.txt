@@ -7,7 +7,6 @@ set(WITH_2DECOMPFFT ON CACHE BOOL
   "Enable Poisson based FFT solver on the OpenMP backend.")
 
 option(WITH_ADIOS2 "Enable ADIOS2 for I/O" OFF)
-option(WITH_ADIOS2_GPU_AWARE "Enable ADIOS2 GPU-aware I/O (requires CUDA-enabled ADIOS2)" OFF)
 
 if(SINGLE_PREC)
   add_definitions("-DSINGLE_PREC")
@@ -23,15 +22,21 @@ if(WITH_ADIOS2)
   cmake_policy(SET CMP0074 NEW)
   find_package(ADIOS2)
   
-  # check if ADIOS2 was built with CUDA support
-  if(TARGET adios2::fortran_mpi AND X3D2_ADIOS2_CUDA AND WITH_ADIOS2_GPU_AWARE)
-    # try to detect if ADIOS2 has CUDA support
-    get_target_property(ADIOS2_INCLUDE_DIRS adios2::fortran_mpi INTERFACE_INCLUDE_DIRECTORIES)
-    if(ADIOS2_INCLUDE_DIRS)
-      message(STATUS "Checking ADIOS2 for CUDA support...")
-      # check if ADIOS2 was compiled with CUDA
-      # this is a heuristic check - we assume GPU-aware if CUDA compiler is used with ADIOS2
-      message(STATUS "ADIOS2 GPU-aware I/O enabled (user requested)")
+  # Automatically enable GPU-aware I/O when using CUDA backend
+  if(TARGET adios2::fortran_mpi AND X3D2_ADIOS2_CUDA)
+    # Check if ADIOS2 has CUDA support
+    get_target_property(ADIOS2_LINK_LIBS adios2::fortran_mpi INTERFACE_LINK_LIBRARIES)
+    if(ADIOS2_LINK_LIBS)
+      string(FIND "${ADIOS2_LINK_LIBS}" "CUDA" ADIOS2_HAS_CUDA)
+      if(NOT ADIOS2_HAS_CUDA EQUAL -1)
+        message(STATUS "ADIOS2 GPU-aware I/O enabled (CUDA backend detected)")
+        add_definitions("-DADIOS2_GPU_AWARE")
+      else()
+        message(STATUS "ADIOS2 found but without CUDA support - using host-staged I/O")
+      endif()
+    else()
+      # Fallback: assume GPU-aware is available when using CUDA compiler
+      message(STATUS "ADIOS2 GPU-aware I/O enabled (CUDA compiler detected)")
       add_definitions("-DADIOS2_GPU_AWARE")
     endif()
   endif()

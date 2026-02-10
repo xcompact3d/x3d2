@@ -83,6 +83,7 @@ module m_io_backend
     procedure :: write_data_integer => write_data_integer_adios2
     procedure :: write_data_real => write_data_real_adios2
     procedure :: write_data_array_3d => write_data_array_3d_adios2
+    procedure :: write_field_from_solver => write_field_from_solver_adios2
 #ifdef ADIOS2_GPU_AWARE
     procedure :: write_data_array_3d_device => write_data_array_3d_device_adios2
 #endif
@@ -757,5 +758,62 @@ contains
       error stop
     end if
   end subroutine handle_error_file
+
+  subroutine write_field_from_solver_adios2( &
+    self, variable_name, field, file_handle, backend, &
+    shape_dims, start_dims, count_dims, use_sp &
+    )
+    !! Write field with automatic GPU-aware optimisation when available
+    use m_field, only: field_t
+#ifdef CUDA
+    use m_cuda_allocator, only: cuda_field_t
+    use m_cuda_backend, only: cuda_backend_t
+#endif
+    class(io_adios2_writer_t), intent(inout) :: self
+    character(len=*), intent(in) :: variable_name
+    class(*), intent(in) :: field
+    class(io_file_t), intent(inout) :: file_handle
+    class(*), intent(in) :: backend
+    integer(i8), intent(in) :: shape_dims(3)
+    integer(i8), intent(in) :: start_dims(3)
+    integer(i8), intent(in) :: count_dims(3)
+    logical, intent(in), optional :: use_sp
+
+#ifdef CUDA
+    ! CUDA backend: try GPU-aware path first, then host-staged fallback
+    select type (backend_typed => backend)
+    type is (cuda_backend_t)
+      select type (field_typed => field)
+      type is (cuda_field_t)
+#ifdef ADIOS2_GPU_AWARE
+        ! GPU-aware ADIOS2: write directly from device memory
+        call self%write_data_array_3d_device( &
+          variable_name, field_typed%data_d, &
+          file_handle, shape_dims, start_dims, count_dims, use_sp &
+        )
+        return
+#else
+        ! No GPU-aware ADIOS2: use host mirror
+        call self%write_data_array_3d( &
+          variable_name, field_typed%data, file_handle, &
+          shape_dims, start_dims, count_dims, use_sp &
+        )
+        return
+#endif
+      end select
+    end select
+#endif
+
+    ! Non-CUDA backend: standard host path
+    select type (field_typed => field)
+    type is (field_t)
+      call self%write_data_array_3d( &
+        variable_name, field_typed%data, file_handle, &
+        shape_dims, start_dims, count_dims, use_sp &
+      )
+    class default
+      error stop "write_field_from_solver: Unsupported field type"
+    end select
+  end subroutine write_field_from_solver_adios2
 
 end module m_io_backend

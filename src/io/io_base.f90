@@ -76,6 +76,7 @@ module m_io_base
     procedure :: write_data_integer
     procedure :: write_data_real
     procedure :: write_data_array_3d
+    procedure :: write_field_from_solver
     generic :: write_attribute => write_attribute_string, &
       write_attribute_array_1d_real
     procedure :: write_attribute_string
@@ -268,5 +269,25 @@ contains
     error stop "write_attribute_array_1d_real should not be called - &
       & use concrete implementation"
   end subroutine write_attribute_array_1d_real
+
+  subroutine write_field_from_solver( &
+    self, variable_name, field, file_handle, backend, &
+    shape_dims, start_dims, count_dims, use_sp &
+    )
+    !! Write field data directly, with backend-specific optimisations
+    !! Each backend implements this to use GPU-aware I/O when available
+    !! NOTE: field and backend are polymorphic - concrete types defined in implementations
+    class(io_writer_t), intent(inout) :: self
+    character(len=*), intent(in) :: variable_name
+    class(*), intent(in) :: field
+    class(io_file_t), intent(inout) :: file_handle
+    class(*), intent(in) :: backend
+    integer(i8), intent(in) :: shape_dims(3)
+    integer(i8), intent(in) :: start_dims(3)
+    integer(i8), intent(in) :: count_dims(3)
+    logical, intent(in), optional :: use_sp
+    error stop "write_field_from_solver should not be called - &
+      & use concrete implementation"
+  end subroutine write_field_from_solver
 
 end module m_io_base

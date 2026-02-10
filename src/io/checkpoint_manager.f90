@@ -465,42 +465,33 @@ contains
     integer, intent(in) :: data_loc
 
     integer :: i_field
-    integer(i8), dimension(3) :: output_start, output_count
-    integer, dimension(3) :: output_dims_local
+    integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
 
-    ! Prepare buffers for full resolution (no striding for checkpoints)
-    call prepare_field_buffers( &
-      solver, self%full_resolution, field_names, data_loc, &
-      self%field_buffers, self%last_shape_dims, self%last_stride_factors, &
-      self%last_output_shape &
-      )
+    ! Calculate dimensions for I/O
+    shape_dims = int(solver%mesh%get_global_dims(data_loc), i8)
+    start_dims = int(solver%mesh%par%n_offset, i8)
+    count_dims = int(solver%mesh%get_dims(data_loc), i8)
 
-    ! Calculate output dimensions for writing
-    call get_output_dimensions( &
-      int(solver%mesh%get_global_dims(data_loc), i8), &
-      int(solver%mesh%par%n_offset, i8), &
-      int(solver%mesh%get_dims(data_loc), i8), &
-      self%full_resolution, &
-      self%last_output_shape, output_start, output_count, &
-      output_dims_local, &
-      self%last_shape_dims, self%last_stride_factors, &
-      self%last_output_shape &
-      )
-
+    ! Checkpoints always write full resolution (no striding)
+    ! Backend automatically uses GPU-aware I/O when available
     do i_field = 1, size(field_names)
-      call write_single_field_to_buffer( &
-        trim(field_names(i_field)), host_fields(i_field)%ptr, &
-        solver, self%full_resolution, data_loc, &
-        self%field_buffers, self%last_shape_dims, self%last_stride_factors, &
-        self%last_output_shape &
+      select case (trim(field_names(i_field)))
+      case ("u")
+        call writer_session%writer%write_field_from_solver( &
+          "u", solver%u, writer_session%file, solver%backend, &
+          shape_dims, start_dims, count_dims, .false. &
         )
-
-      call writer_session%write_data( &
-        trim(field_names(i_field)), &
-        self%field_buffers(i_field)%buffer, &
-        self%last_output_shape, &
-        output_start, output_count &
+      case ("v")
+        call writer_session%writer%write_field_from_solver( &
+          "v", solver%v, writer_session%file, solver%backend, &
+          shape_dims, start_dims, count_dims, .false. &
         )
+      case ("w")
+        call writer_session%writer%write_field_from_solver( &
+          "w", solver%w, writer_session%file, solver%backend, &
+          shape_dims, start_dims, count_dims, .false. &
+        )
+      end select
     end do
   end subroutine write_fields
 

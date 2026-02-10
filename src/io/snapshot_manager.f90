@@ -232,9 +232,40 @@ contains
     integer, intent(in) :: data_loc
 
     integer :: i_field
-    integer(i8), dimension(3) :: output_start, output_count
+    integer(i8), dimension(3) :: output_start, output_count, shape_dims, count_dims
     integer, dimension(3) :: output_dims_local
 
+    ! Calculate dimensions for I/O
+    shape_dims = int(solver%mesh%get_global_dims(data_loc), i8)
+    output_start = int(solver%mesh%par%n_offset, i8)
+    count_dims = int(solver%mesh%get_dims(data_loc), i8)
+
+    ! Write fields directly when no striding - backend uses GPU-aware I/O when available
+    if (all(self%output_stride == 1)) then
+      ! No striding - can potentially use direct device I/O
+      do i_field = 1, size(field_names)
+        select case (trim(field_names(i_field)))
+        case ("u")
+          call writer_session%writer%write_field_from_solver( &
+            "u", solver%u, writer_session%file, solver%backend, &
+            shape_dims, output_start, count_dims, self%convert_to_sp &
+          )
+        case ("v")
+          call writer_session%writer%write_field_from_solver( &
+            "v", solver%v, writer_session%file, solver%backend, &
+            shape_dims, output_start, count_dims, self%convert_to_sp &
+          )
+        case ("w")
+          call writer_session%writer%write_field_from_solver( &
+            "w", solver%w, writer_session%file, solver%backend, &
+            shape_dims, output_start, count_dims, self%convert_to_sp &
+          )
+        end select
+      end do
+      return
+    end if
+
+    ! Fallback: host-staged path with striding
     ! Prepare buffers with striding for snapshots
     call prepare_field_buffers( &
       solver, self%output_stride, field_names, data_loc, &
