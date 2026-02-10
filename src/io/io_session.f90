@@ -59,7 +59,7 @@ module m_io_session
   !> Base type for common session functionality
   type :: io_session_base_t
     private
-    class(io_file_t), allocatable :: file
+    class(io_file_t), allocatable, public :: file
     logical :: is_open = .false.
     logical :: is_functional = .true.  ! false for dummy I/O
   contains
@@ -108,7 +108,7 @@ module m_io_session
   !!   call writer_session%close()
   type, extends(io_session_base_t) :: writer_session_t
     private
-    class(io_writer_t), allocatable :: writer
+    class(io_writer_t), allocatable, public :: writer
   contains
     ! Open/close operations
     procedure :: open => writer_session_open
