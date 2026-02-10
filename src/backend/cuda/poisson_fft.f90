@@ -415,27 +415,25 @@ contains
     blocks = dim3((self%ny_spec - 1)/tsize + 1, self%nz_spec, 1)
     threads = dim3(tsize, 1, 1)
 
-    ! Postprocess div_u in spectral space
+    ! Get pointer to the appropriate FFT data storage
     if (self%use_cufftmp) then
       ! Multi-GPU path: get pointer from xtdesc
       call c_f_pointer(self%xtdesc%descriptor, descriptor)
       call c_f_pointer(descriptor%data(1), c_dev, &
                        [self%nx_spec, self%ny_spec, self%nz_spec])
-      call process_spectral_000<<<blocks, threads>>>( & !&
-        c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
-        self%nx_glob, self%ny_glob, self%nz_glob, &
-        self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
-        self%az_dev, self%bz_dev &
-        )
     else
-      ! Single-GPU path: directly use c_dev array
-      call process_spectral_000<<<blocks, threads>>>( & !&
-        self%c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
-        self%nx_glob, self%ny_glob, self%nz_glob, &
-        self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
-        self%az_dev, self%bz_dev &
-        )
+      ! Single-GPU path: get pointer to self%c_dev
+      call c_f_pointer(c_loc(self%c_dev), c_dev, &
+                       [self%nx_spec, self%ny_spec, self%nz_spec])
     end if
+
+    ! Postprocess div_u in spectral space
+    call process_spectral_000<<<blocks, threads>>>( & !&
+      c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+      self%nx_glob, self%ny_glob, self%nz_glob, &
+      self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
+      self%az_dev, self%bz_dev &
+      )
 
   end subroutine fft_postprocess_000_cuda
 
@@ -456,46 +454,33 @@ contains
     blocks = dim3((self%nx_spec - 1)/tsize + 1, self%nz_spec, 1)
     threads = dim3(tsize, 1, 1)
 
-    ! Postprocess div_u in spectral space
+    ! Get pointer to the appropriate FFT data storage
     if (self%use_cufftmp) then
       ! Multi-GPU path: get pointer from xtdesc
       call c_f_pointer(self%xtdesc%descriptor, descriptor)
       call c_f_pointer(descriptor%data(1), c_dev, &
                        [self%nx_spec, self%ny_spec, self%nz_spec])
+    else
+      ! Single-GPU path: get pointer to self%c_dev
+      call c_f_pointer(c_loc(self%c_dev), c_dev, &
+                       [self%nx_spec, self%ny_spec, self%nz_spec])
     end if
 
+    ! Postprocess div_u in spectral space
     if (.not. self%stretched_y) then
-      if (self%use_cufftmp) then
-        call process_spectral_010<<<blocks, threads>>>( & !&
-          c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
-          self%nx_glob, self%ny_glob, self%nz_glob, &
-          self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
-          self%az_dev, self%bz_dev &
-          )
-      else
-        call process_spectral_010<<<blocks, threads>>>( & !&
-          self%c_dev, self%waves_dev, self%nx_spec, self%ny_spec, &
-          self%y_sp_st, self%nx_glob, self%ny_glob, self%nz_glob, &
-          self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
-          self%az_dev, self%bz_dev &
-          )
-      end if
+      call process_spectral_010<<<blocks, threads>>>( & !&
+        c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
+        self%az_dev, self%bz_dev &
+        )
     else
-      if (self%use_cufftmp) then
-        call process_spectral_010_fw<<<blocks, threads>>>( & !&
-          c_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
-          self%nx_glob, self%ny_glob, self%nz_glob, &
-          self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
-          self%az_dev, self%bz_dev &
-          )
-      else
-        call process_spectral_010_fw<<<blocks, threads>>>( & !&
-          self%c_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
-          self%nx_glob, self%ny_glob, self%nz_glob, &
-          self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
-          self%az_dev, self%bz_dev &
-          )
-      end if
+      call process_spectral_010_fw<<<blocks, threads>>>( & !&
+        c_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
+        self%az_dev, self%bz_dev &
+        )
 
       ! if stretching in y is 'centred' or 'top-bottom'
       if (self%stretched_y_sym) then
@@ -511,38 +496,21 @@ contains
           self%a_even_re_dev = self%store_a_even_re_dev
           self%a_even_im_dev = self%store_a_even_im_dev
         end if
-        ! start from the first odd entry
+        ! start from the first odd entry and continue with odd ones
         off = 0
-        ! and continue with odd ones
         inc = 2
-        if (self%use_cufftmp) then
-          call process_spectral_010_poisson<<<blocks, threads>>>( & !&
-            c_dev, self%a_odd_re_dev, self%a_odd_im_dev, off, inc, &
-            self%nx_spec, self%ny_spec/2, &
-            self%nx_glob, self%ny_glob, self%nz_glob &
-            )
-        else
-          call process_spectral_010_poisson<<<blocks, threads>>>( & !&
-            self%c_dev, self%a_odd_re_dev, self%a_odd_im_dev, off, inc, &
-            self%nx_spec, self%ny_spec/2, &
-            self%nx_glob, self%ny_glob, self%nz_glob &
-            )
-        end if
-        ! start from the first even entry, and continue with even ones
+        call process_spectral_010_poisson<<<blocks, threads>>>( & !&
+          c_dev, self%a_odd_re_dev, self%a_odd_im_dev, off, inc, &
+          self%nx_spec, self%ny_spec/2, &
+          self%nx_glob, self%ny_glob, self%nz_glob &
+          )
+        ! start from the first even entry and continue with even ones
         off = 1
-        if (self%use_cufftmp) then
-          call process_spectral_010_poisson<<<blocks, threads>>>( & !&
-            c_dev, self%a_even_re_dev, self%a_even_im_dev, off, inc, &
-            self%nx_spec, self%ny_spec/2, &
-            self%nx_glob, self%ny_glob, self%nz_glob &
-            )
-        else
-          call process_spectral_010_poisson<<<blocks, threads>>>( & !&
-            self%c_dev, self%a_even_re_dev, self%a_even_im_dev, off, inc, &
-            self%nx_spec, self%ny_spec/2, &
-            self%nx_glob, self%ny_glob, self%nz_glob &
-            )
-        end if
+        call process_spectral_010_poisson<<<blocks, threads>>>( & !&
+          c_dev, self%a_even_re_dev, self%a_even_im_dev, off, inc, &
+          self%nx_spec, self%ny_spec/2, &
+          self%nx_glob, self%ny_glob, self%nz_glob &
+          )
       !! if stretching in y is 'bottom'
       else
         ! copy from host to device if lowmem else from device stores
@@ -553,39 +521,22 @@ contains
           self%a_re_dev = self%store_a_re_dev
           self%a_im_dev = self%store_a_im_dev
         end if
+        ! start from the first entry and increment 1
         off = 0
         inc = 1
-        ! start from the first entry and increment 1
-        if (self%use_cufftmp) then
-          call process_spectral_010_poisson<<<blocks, threads>>>( & !&
-            c_dev, self%a_re_dev, self%a_im_dev, off, inc, &
-            self%nx_spec, self%ny_spec, &
-            self%nx_glob, self%ny_glob, self%nz_glob &
-            )
-        else
-          call process_spectral_010_poisson<<<blocks, threads>>>( & !&
-            self%c_dev, self%a_re_dev, self%a_im_dev, off, inc, &
-            self%nx_spec, self%ny_spec, &
-            self%nx_glob, self%ny_glob, self%nz_glob &
-            )
-        end if
+        call process_spectral_010_poisson<<<blocks, threads>>>( & !&
+          c_dev, self%a_re_dev, self%a_im_dev, off, inc, &
+          self%nx_spec, self%ny_spec, &
+          self%nx_glob, self%ny_glob, self%nz_glob &
+          )
       end if
 
-      if (self%use_cufftmp) then
-        call process_spectral_010_bw<<<blocks, threads>>>( & !&
-          c_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
-          self%nx_glob, self%ny_glob, self%nz_glob, &
-          self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
-          self%az_dev, self%bz_dev &
-          )
-      else
-        call process_spectral_010_bw<<<blocks, threads>>>( & !&
-          self%c_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
-          self%nx_glob, self%ny_glob, self%nz_glob, &
-          self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
-          self%az_dev, self%bz_dev &
-          )
-      end if
+      call process_spectral_010_bw<<<blocks, threads>>>( & !&
+        c_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
+        self%az_dev, self%bz_dev &
+        )
     end if
 
   end subroutine fft_postprocess_010_cuda
