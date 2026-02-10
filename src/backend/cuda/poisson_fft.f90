@@ -101,7 +101,9 @@ contains
 
     integer :: ierr
     integer(int_ptr_kind()) :: worksize
+    logical :: cufftmp_failed
 
+    cufftmp_failed = .false.
     ierr = cufftCreate(plan)
 
     if (use_cufftmp) then
@@ -109,31 +111,34 @@ contains
       ierr = cufftMpAttachComm(plan, CUFFT_COMM_MPI, MPI_COMM_WORLD)
       if (ierr /= 0) then
         if (is_root) then
-          print *, 'cuFFTMp attach failed (error ', ierr, '), &
-                   &falling back to single-GPU cuFFT'
+          print *, 'cuFFTMp: MPI attach failed (error ', ierr, ')'
+        end if
+        cufftmp_failed = .true.
+      else
+        ! MPI attach succeeded, create the plan
+        ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
+        if (ierr /= 0) then
+          if (is_root) then
+            print *, 'cuFFTMp: Plan creation failed (error ', ierr, ')'
+          end if
+          cufftmp_failed = .true.
+        end if
+      end if
+
+      ! if cuFFTMp failed at any stage, fall back to cuFFT
+      if (cufftmp_failed) then
+        if (is_root) then
+          print *, 'Falling back to single-GPU cuFFT'
         end if
         use_cufftmp = .false.
+        ierr = cufftDestroy(plan)
+        ierr = cufftCreate(plan)
       end if
     end if
 
-    ! Create the plan
-    ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
-
-    if (ierr /= 0) then
-      if (use_cufftmp) then
-        ! cuFFTMp plan creation failed, retry with single-GPU cuFFT
-        if (is_root) then
-          print *, 'cuFFTMp plan creation failed (error ', ierr, '), &
-                   &retrying with single-GPU cuFFT'
-        end if
-        use_cufftmp = .false.
-
-        ! Destroy the failed plan and recreate without cuFFTMp
-        ierr = cufftDestroy(plan)
-        ierr = cufftCreate(plan)
-        ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
-      end if
-
+    ! create plan with cuFFT
+    if (.not. use_cufftmp) then
+      ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
       if (ierr /= 0) then
         write (stderr, *), 'cuFFT Error Code: ', ierr
         error stop trim(plan_name)//' 3D FFT plan generation failed'
