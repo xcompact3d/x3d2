@@ -153,7 +153,7 @@ contains
     integer, intent(in) :: n
     integer, intent(in) :: test_type
 
-    integer :: i, j, k, dims(3), x
+    integer :: i, j, k, dims(3)
     real(dp) :: coords(3), n_pi
 
     dims = self%solver%mesh%get_dims(CELL)
@@ -336,7 +336,7 @@ contains
     class(field_t), pointer :: f_device, f_reference, f_result
     class(field_t), pointer :: host_field, host_analytical, temp
     class(field_t), pointer :: dpdx, dpdy, dpdz, gradient_input
-    integer :: dims(3), x
+    integer :: dims(3)
     real(dp) :: poisson_error_norm, div_grad_error_norm
     logical :: poisson_passed, div_grad_passed
 
