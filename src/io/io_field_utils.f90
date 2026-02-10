@@ -15,11 +15,6 @@ module m_io_field_utils
   use m_field, only: field_t
   use m_solver, only: solver_t
   use m_io_base, only: io_file_t, io_writer_t
-#ifdef ADIOS2_GPU_AWARE
-  use m_cuda_allocator, only: cuda_field_t
-  use m_io_backend, only: io_adios2_writer_t
-  use cudafor, only: cudaDeviceSynchronize
-#endif
 
   implicit none
 
@@ -30,9 +25,6 @@ module m_io_field_utils
   public :: setup_field_arrays, cleanup_field_arrays
   public :: prepare_field_buffers, write_single_field_to_buffer, &
             cleanup_field_buffers
-#ifdef ADIOS2_GPU_AWARE
-  public :: write_field_direct_device
-#endif
 
   type :: field_buffer_map_t
     ! Race-free field buffer mapping for async I/O operations.
@@ -439,45 +431,5 @@ contains
       deallocate (field_buffers)
     end if
   end subroutine cleanup_field_buffers
-
-#ifdef ADIOS2_GPU_AWARE
-  subroutine write_field_direct_device( &
-    field_name, cuda_field, solver, writer, file, &
-    shape_dims, start_dims, count_dims, use_sp &
-    )
-    !! Write field data directly from CUDA device memory to ADIOS2
-    !! This bypasses the host staging buffer for GPU-aware I/O
-    character(len=*), intent(in) :: field_name
-    type(cuda_field_t), intent(in) :: cuda_field
-    class(solver_t), intent(in) :: solver
-    class(io_writer_t), intent(inout) :: writer
-    class(io_file_t), intent(inout) :: file
-    integer(i8), dimension(3), intent(in) :: shape_dims
-    integer(i8), dimension(3), intent(in) :: start_dims
-    integer(i8), dimension(3), intent(in) :: count_dims
-    logical, intent(in), optional :: use_sp
-
-    integer :: ierr
-
-    ! synchronise CUDA device before write
-    ierr = cudaDeviceSynchronize()
-    if (ierr /= 0) then
-      print *, "CUDA synchronisation failed before GPU-aware write"
-      error stop
-    end if
-
-    ! use the GPU-aware write method (only for ADIOS2 backend)
-    select type (writer)
-    type is (io_adios2_writer_t)
-      call writer%write_data_array_3d_device( &
-        field_name, cuda_field%data_d, file, &
-        shape_dims, start_dims, count_dims, use_sp &
-        )
-    class default
-      print *, "ERROR: GPU-aware write requires ADIOS2 backend"
-      error stop
-    end select
-  end subroutine write_field_direct_device
-#endif
 
 end module m_io_field_utils
