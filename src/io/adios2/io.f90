@@ -34,9 +34,10 @@ module m_io_backend
                     adios2_get, adios2_remove_all_variables, &
                     adios2_found, adios2_constant_dims, &
                     adios2_type_dp, adios2_type_integer4, adios2_type_real
-#ifdef ADIOS2_GPU_AWARE
-  use adios2, only: adios2_set_memory_space, adios2_mem_cuda
-  use cudafor, only: cudaDeviceSynchronize
+#ifdef X3D2_ADIOS2_CUDA
+  use adios2, only: adios2_set_memory_space, adios2_memory_space_gpu
+  use iso_c_binding, only: c_ptr, c_int
+  use cudafor, only: cudaDeviceSynchronize, c_devloc, c_devptr
 #endif
   use mpi, only: MPI_COMM_NULL, MPI_Initialized, MPI_Comm_rank
   use m_common, only: dp, i8, sp, is_sp
@@ -75,7 +76,6 @@ module m_io_backend
     type(adios2_io) :: io_handle             !! ADIOS2 IO object for managing I/O
     logical :: is_step_active = .false.      !! Flag to track if a step is active
     integer :: comm = MPI_COMM_NULL          !! MPI communicator
-    logical :: use_gpu_aware = .false.       !! Flag for GPU-aware I/O
   contains
     procedure :: init => writer_init_adios2
     procedure :: open => writer_open_adios2
@@ -84,7 +84,7 @@ module m_io_backend
     procedure :: write_data_real => write_data_real_adios2
     procedure :: write_data_array_3d => write_data_array_3d_adios2
     procedure :: write_field_from_solver => write_field_from_solver_adios2
-#ifdef ADIOS2_GPU_AWARE
+#ifdef X3D2_ADIOS2_CUDA
     procedure :: write_data_array_3d_device => write_data_array_3d_device_adios2
 #endif
     procedure :: write_attribute_string => write_attribute_string_adios2
@@ -105,6 +105,24 @@ module m_io_backend
     procedure :: end_step => file_end_step_adios2
     procedure, private :: handle_error => handle_error_file
   end type io_adios2_file_t
+
+#ifdef X3D2_ADIOS2_CUDA
+  ! C wrapper for GPU-aware ADIOS2 put.
+  ! The engine and variable f2c handles are integer(8) in ADIOS2's
+  ! Fortran bindings. The C wrapper casts them to the opaque C types.
+  ! Memory space must be set to GPU via the native Fortran
+  ! adios2_set_memory_space before calling this.
+  interface
+    subroutine adios2_put_gpu(engine_f2c, variable_f2c, data, ierr) &
+      bind(C, name='adios2_put_gpu')
+      use iso_c_binding, only: c_ptr, c_int, c_int64_t
+      integer(c_int64_t), intent(in) :: engine_f2c
+      integer(c_int64_t), intent(in) :: variable_f2c
+      type(c_ptr), value :: data
+      integer(c_int), intent(out) :: ierr
+    end subroutine adios2_put_gpu
+  end interface
+#endif
 
 contains
 
@@ -564,16 +582,19 @@ contains
     end select
   end subroutine write_data_array_3d_adios2
 
-#ifdef ADIOS2_GPU_AWARE
+#ifdef X3D2_ADIOS2_CUDA
   subroutine write_data_array_3d_device_adios2( &
     self, variable_name, array, file_handle, &
     shape_dims, start_dims, count_dims, use_sp &
     )
-    !! GPU-aware variant of write_data_array_3d for CUDA device arrays
-    !! This writes directly from GPU memory to ADIOS2 without host staging
+    !! GPU-aware I/O: passes device pointer directly to ADIOS2.
+    !! Uses the native Fortran adios2_set_memory_space to tell ADIOS2
+    !! the buffer is on GPU, then calls a C wrapper for adios2_put
+    !! (the Fortran generic adios2_put does not accept device arrays).
+    !! Requires ADIOS2 built with -DADIOS2_USE_CUDA=ON.
     class(io_adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
-    real(dp), device, intent(in) :: array(:, :, :)
+    real(dp), device, target, intent(in) :: array(:, :, :)
     class(io_file_t), intent(inout) :: file_handle
     integer(i8), intent(in) :: shape_dims(3)
     integer(i8), intent(in) :: start_dims(3)
@@ -581,41 +602,42 @@ contains
     logical, intent(in), optional :: use_sp
 
     type(adios2_variable) :: var
-    integer :: ierr
-    integer :: vartype
+    type(c_devptr) :: devptr
+    type(c_ptr) :: device_ptr
+    integer :: ierr, vartype
     logical :: convert_to_sp
 
     convert_to_sp = .false.
     if (present(use_sp)) convert_to_sp = use_sp
-
     vartype = get_adios2_vartype(convert_to_sp)
+
+    ! Sync GPU to ensure all kernel writes complete
+    ierr = cudaDeviceSynchronize()
+    call self%handle_error(ierr, "CUDA sync failed before GPU-aware write")
 
     select type (file_handle)
     type is (io_adios2_file_t)
+      ! Define or inquire variable
       call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
-
       if (ierr /= adios2_found) then
         call adios2_define_variable(var, self%io_handle, variable_name, &
                                     vartype, 3, shape_dims, &
                                     start_dims, count_dims, &
                                     adios2_constant_dims, ierr)
-        call self%handle_error(ierr, "Error defining ADIOS2 &
-                                     &3D array real variable (GPU)")
-        
-        ! set memory space to CUDA device memory
-        call adios2_set_memory_space(var, adios2_mem_cuda, ierr)
-        call self%handle_error(ierr, "Error setting CUDA memory space for ADIOS2")
+        call self%handle_error(ierr, "Error defining ADIOS2 variable (GPU)")
       end if
 
-      ! synchronise CUDA device to ensure all kernels complete
-      ierr = cudaDeviceSynchronize()
-      call self%handle_error(ierr, "CUDA device synchronisation failed before write")
+      ! Tell ADIOS2 this variable holds GPU memory
+      call adios2_set_memory_space(var, adios2_memory_space_gpu, ierr)
+      call self%handle_error(ierr, "Error setting GPU memory space")
 
-      ! write directly from device memory
-      call adios2_put( &
-        file_handle%engine, var, array, adios2_mode_deferred, ierr)
-      call self%handle_error(ierr, "Error writing ADIOS2 &
-                                   &3D array from CUDA device")
+      ! Get device pointer and pass via C wrapper
+      devptr = c_devloc(array)
+      device_ptr = transfer(devptr, device_ptr)
+
+      call adios2_put_gpu(file_handle%engine%f2c, var%f2c, &
+                          device_ptr, ierr)
+      call self%handle_error(ierr, "Error in GPU-aware ADIOS2 put")
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
     end select
@@ -765,9 +787,8 @@ contains
     )
     !! Write field with automatic GPU-aware optimisation when available
     use m_field, only: field_t
-#ifdef CUDA
+#ifdef X3D2_ADIOS2_CUDA
     use m_cuda_allocator, only: cuda_field_t
-    use m_cuda_backend, only: cuda_backend_t
 #endif
     class(io_adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
@@ -779,36 +800,15 @@ contains
     integer(i8), intent(in) :: count_dims(3)
     logical, intent(in), optional :: use_sp
 
-#ifdef CUDA
-    ! CUDA backend: try GPU-aware path first, then host-staged fallback
-    select type (backend_typed => backend)
-    type is (cuda_backend_t)
-      select type (field_typed => field)
-      type is (cuda_field_t)
-#ifdef ADIOS2_GPU_AWARE
-        ! GPU-aware ADIOS2: write directly from device memory
-        call self%write_data_array_3d_device( &
-          variable_name, field_typed%data_d, &
-          file_handle, shape_dims, start_dims, count_dims, use_sp &
-        )
-        return
-#else
-        ! No GPU-aware ADIOS2: copy from device to host, then write
-        block
-          real(dp), allocatable, dimension(:,:,:) :: temp_host
-          ! Use count_dims to allocate correct size (not padded size)
-          allocate(temp_host(count_dims(1), count_dims(2), count_dims(3)))
-          ! Copy only the logical data (not padding)
-          temp_host = field_typed%data_d(1:count_dims(1), 1:count_dims(2), 1:count_dims(3))
-          call self%write_data_array_3d( &
-            variable_name, temp_host, file_handle, &
-            shape_dims, start_dims, count_dims, use_sp &
-          )
-          deallocate(temp_host)
-        end block
-        return
-#endif
-      end select
+#ifdef X3D2_ADIOS2_CUDA
+    ! GPU-aware ADIOS2: write directly from device memory
+    select type (field_typed => field)
+    type is (cuda_field_t)
+      call self%write_data_array_3d_device( &
+        variable_name, field_typed%data_d, &
+        file_handle, shape_dims, start_dims, count_dims, use_sp &
+      )
+      return
     end select
 #endif
 
