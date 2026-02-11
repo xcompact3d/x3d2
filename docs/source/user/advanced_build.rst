@@ -145,6 +145,47 @@ Common issues include:
 - MPI library mismatch between ADIOS2 and x3d2
 - Missing libraries (shown as "not found")
 
+Enabling GPU-Aware ADIOS2 I/O
+-----------------------------
+
+When running on NVIDIA GPUs, x3d2 can perform I/O directly from GPU memory, avoiding costly device-to-host transfers during checkpoint and snapshot operations.
+
+Requirements
+~~~~~~~~~~~~
+
+GPU-aware ADIOS2 I/O requires:
+
+- The NVHPC (or PGI) Fortran compiler
+- ADIOS2 built with CUDA support (``-DADIOS2_USE_CUDA=ON``)
+
+When using the built-in ADIOS2 (default), the build system automatically builds ADIOS2 with CUDA support when the NVHPC compiler is detected.
+
+Build Configuration
+~~~~~~~~~~~~~~~~~~~
+
+To enable GPU-aware I/O, pass the ``WITH_ADIOS2_GPU_AWARE`` option alongside ``WITH_ADIOS2``:
+
+.. code-block:: bash
+
+   cmake .. -DWITH_ADIOS2=ON -DWITH_ADIOS2_GPU_AWARE=ON
+
+When using the NVHPC compiler, the build system automatically detects CUDA support and sets ``X3D2_ADIOS2_CUDA=ON``. If you need to set it explicitly:
+
+.. code-block:: bash
+
+   cmake .. -DWITH_ADIOS2=ON -DWITH_ADIOS2_GPU_AWARE=ON -DX3D2_ADIOS2_CUDA=ON
+
+Using a System ADIOS2 with CUDA Support
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you have a system ADIOS2 installation that was built with ``-DADIOS2_USE_CUDA=ON``, you can use it directly:
+
+.. code-block:: bash
+
+   cmake .. -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DWITH_ADIOS2_GPU_AWARE=ON
+
+The build system will verify that the ``adios2::core_cuda`` target is available and report an error if it is not.
+
 Configuring Single Precision Mode
 ---------------------------------
 
