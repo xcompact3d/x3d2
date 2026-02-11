@@ -186,7 +186,9 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
     define_test(test_adios2_read_write.f90 4 cuda)
     define_test(test_io_session.f90 4 cuda)
     define_test(test_ab_checkpoint.f90 1 cuda)
-    define_test(cuda/test_cuda_gpu_aware_io.f90 4 cuda)
+    if(WITH_ADIOS2_GPU_AWARE)
+      define_test(cuda/test_cuda_gpu_aware_io.f90 4 cuda)
+    endif()
   endif()
   add_test(
     NAME ${test_name}
