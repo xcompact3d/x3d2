@@ -325,11 +325,11 @@ contains
       call c_f_pointer(f_c_ptr, f_ptr)
 
       ! Use explicit C interface for single precision, Fortran interface for double
-      if (is_sp) then
-        ierr = cufftExecR2C_C(self%plan3D_fw, c_loc(f_ptr), c_loc(self%c_dev))
-      else
-        ierr = cufftExecD2Z(self%plan3D_fw, f_ptr, self%c_dev)
-      end if
+#ifdef SINGLE_PREC
+      ierr = cufftExecR2C_C(self%plan3D_fw, c_loc(f_ptr), c_loc(self%c_dev))
+#else
+      ierr = cufftExecD2Z(self%plan3D_fw, f_ptr, self%c_dev)
+#endif
     end if
 
     if (ierr /= 0) then
@@ -370,11 +370,11 @@ contains
       call c_f_pointer(f_c_ptr, f_ptr)
 
       ! Use explicit C interface for single precision, Fortran interface for double
-      if (is_sp) then
-        ierr = cufftExecC2R_C(self%plan3D_bw, c_loc(self%c_dev), c_loc(f_ptr))
-      else
-        ierr = cufftexecz2d(self%plan3D_bw, self%c_dev, f_ptr)
-      end if
+#ifdef SINGLE_PREC
+      ierr = cufftExecC2R_C(self%plan3D_bw, c_loc(self%c_dev), c_loc(f_ptr))
+#else
+      ierr = cufftexecZ2D(self%plan3D_bw, self%c_dev, f_ptr)
+#endif
     end if
 
     if (ierr /= 0) then
