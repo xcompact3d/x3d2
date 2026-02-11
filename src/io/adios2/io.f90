@@ -793,11 +793,19 @@ contains
         )
         return
 #else
-        ! No GPU-aware ADIOS2: use host mirror
-        call self%write_data_array_3d( &
-          variable_name, field_typed%data, file_handle, &
-          shape_dims, start_dims, count_dims, use_sp &
-        )
+        ! No GPU-aware ADIOS2: copy from device to host, then write
+        block
+          real(dp), allocatable, dimension(:,:,:) :: temp_host
+          ! Use count_dims to allocate correct size (not padded size)
+          allocate(temp_host(count_dims(1), count_dims(2), count_dims(3)))
+          ! Copy only the logical data (not padding)
+          temp_host = field_typed%data_d(1:count_dims(1), 1:count_dims(2), 1:count_dims(3))
+          call self%write_data_array_3d( &
+            variable_name, temp_host, file_handle, &
+            shape_dims, start_dims, count_dims, use_sp &
+          )
+          deallocate(temp_host)
+        end block
         return
 #endif
       end select
