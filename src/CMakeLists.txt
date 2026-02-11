@@ -97,6 +97,27 @@ else()
   )
 endif()
 
+# Add CUDA sources first so CUDA modules are available when compiling I/O
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
+  list(APPEND SRC ${CUDASRC})
+  list(APPEND SRC backend/cuda/backend.f90)
+endif()
+
+# Add I/O sources after CUDA (I/O depends on CUDA modules)
+list(APPEND SRC ${IOSRC})
+
+# Decide whether 2decomp&fft is supported by the build
+find_package(decomp2d)
+
+if(WITH_2DECOMPFFT)
+  list(APPEND SRC ${2DECOMPFFTSRC})
+else()
+  list(APPEND SRC ${DUMMYDECOMPSRC})
+endif()
+
+list(APPEND SRC ${IOSRC})
+
 set(EXECUTABLE_OUTPUT_PATH "${PROJECT_BINARY_DIR}/bin")
 set(LIBRARY_OUTPUT_PATH "${PROJECT_BINARY_DIR}/lib")
 
@@ -106,6 +127,15 @@ set_target_properties(x3d2 PROPERTIES
   Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2")
 target_include_directories(x3d2 INTERFACE
   ${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2)
+
+# Explicit object file dependencies for parallel builds with Fortran modules
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
+  # io/adios2/io.f90 needs CUDA modules, so its object depends on CUDA object files
+  set_source_files_properties(io/adios2/io.f90 PROPERTIES
+    OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/x3d2.dir/backend/cuda/allocator.f90.o;${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/x3d2.dir/backend/cuda/backend.f90.o"
+  )
+endif()
 
 add_library(x3d2_backends STATIC ${BACKENDSRC})
 set_target_properties(x3d2_backends PROPERTIES
@@ -118,10 +148,20 @@ add_executable(xcompact xcompact.f90)
 target_link_libraries(xcompact PRIVATE x3d2_backends)
 target_link_libraries(xcompact PRIVATE x3d2)
 
-# 3. Set compiler specific flags and options
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
-         ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
-         ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
+# if CUDA compiler
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
+  set(CMAKE_Fortran_FLAGS "-cpp -cuda")
+  set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr -Ktrap=fp")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
+  target_link_options(x3d2 INTERFACE "-cuda")
+  target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
+
+  target_compile_options(x3d2 PRIVATE "-DCUDA")
+  target_compile_options(xcompact PRIVATE "-DCUDA")
+
+elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
+       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang")
   set(CMAKE_Fortran_FLAGS "-cpp -std=f2018")
   if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
