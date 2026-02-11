@@ -1,5 +1,6 @@
 module m_cuda_poisson_fft
-  use iso_c_binding, only: c_loc, c_ptr, c_f_pointer
+  use iso_c_binding, only: c_loc, c_ptr, c_f_pointer, c_int, c_float, &
+                           c_double_complex, c_float_complex
   use iso_fortran_env, only: stderr => error_unit
   use cudafor
   use cufftXt
@@ -43,8 +44,14 @@ module m_cuda_poisson_fft
     !> Forward and backward FFT transform plans
     integer :: plan3D_fw, plan3D_bw
 
-    !> cuFFTMp object manages decomposition and data storage
+    !> Flag to indicate whether cuFFTMp (multi-GPU) is used
+    logical :: use_cufftmp = .true.
+
+    !> cuFFTMp object manages decomposition and data storage (multi-GPU)
     type(cudaLibXtDesc), pointer :: xtdesc
+
+    !> Standard cuFFT storage for single-GPU mode
+    complex(dp), device, allocatable, dimension(:, :, :) :: c_dev
   contains
     procedure :: fft_forward => fft_forward_cuda
     procedure :: fft_backward => fft_backward_cuda
@@ -58,11 +65,90 @@ module m_cuda_poisson_fft
     module procedure init
   end interface cuda_poisson_fft_t
 
-  private :: init
+  ! Explicit C interfaces for cuFFT functions that nvfortran has trouble with
+  interface
+    integer(c_int) function cufftExecR2C_C(plan, idata, odata) &
+      bind(C, name='cufftExecR2C')
+      use iso_c_binding
+      integer(c_int), value :: plan
+      type(c_ptr), value :: idata
+      type(c_ptr), value :: odata
+    end function cufftExecR2C_C
+
+    integer(c_int) function cufftExecC2R_C(plan, idata, odata) &
+      bind(C, name='cufftExecC2R')
+      use iso_c_binding
+      integer(c_int), value :: plan
+      type(c_ptr), value :: idata
+      type(c_ptr), value :: odata
+    end function cufftExecC2R_C
+  end interface
+
+  private :: init, create_fft_plan
 
 contains
 
-  function init(mesh, xdirps, ydirps, zdirps, lowmem) result(poisson_fft)
+  subroutine create_fft_plan(plan, use_cufftmp, nx, ny, nz, &
+                             plan_type, is_root, plan_name)
+    !! Helper subroutine to create FFT plan with automatic cuFFTMp fallback
+    implicit none
+
+    integer, intent(inout) :: plan
+    logical, intent(inout) :: use_cufftmp
+    integer, intent(in) :: nx, ny, nz, plan_type
+    logical, intent(in) :: is_root
+    character(*), intent(in) :: plan_name
+
+    integer :: ierr
+    integer(int_ptr_kind()) :: worksize
+    logical :: cufftmp_failed
+
+    cufftmp_failed = .false.
+    ierr = cufftCreate(plan)
+
+    if (use_cufftmp) then
+      ! Try to attach MPI communicator for cuFFTMp
+      ierr = cufftMpAttachComm(plan, CUFFT_COMM_MPI, MPI_COMM_WORLD)
+      if (ierr /= 0) then
+        if (is_root) then
+          print *, 'cuFFTMp: MPI attach failed (error ', ierr, ')'
+        end if
+        cufftmp_failed = .true.
+      else
+        ! MPI attach succeeded, create the plan
+        ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
+        if (ierr /= 0) then
+          if (is_root) then
+            print *, 'cuFFTMp: Plan creation failed (error ', ierr, ')'
+          end if
+          cufftmp_failed = .true.
+        end if
+      end if
+
+      ! if cuFFTMp failed at any stage, fall back to cuFFT
+      if (cufftmp_failed) then
+        if (is_root) then
+          print *, 'Falling back to single-GPU cuFFT'
+        end if
+        use_cufftmp = .false.
+        ierr = cufftDestroy(plan)
+        ierr = cufftCreate(plan)
+      end if
+    end if
+
+    ! create plan with cuFFT
+    if (.not. use_cufftmp) then
+      ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
+      if (ierr /= 0) then
+        write (stderr, *), 'cuFFT Error Code: ', ierr
+        error stop trim(plan_name)//' 3D FFT plan generation failed'
+      end if
+    end if
+
+  end subroutine create_fft_plan
+
+  function init(mesh, xdirps, ydirps, zdirps, lowmem) &
+    result(poisson_fft)
     implicit none
 
     type(mesh_t), intent(in) :: mesh
@@ -116,6 +202,9 @@ contains
     ! lowmem is .false. by default
     if (present(lowmem)) poisson_fft%lowmem = lowmem
 
+    ! Try cuFFTMp (multi-GPU) first, with automatic fallback to cuFFT if not supported
+    poisson_fft%use_cufftmp = .true.
+
     ! if stretching in y is 'centred' or 'top-bottom'
     if (poisson_fft%stretched_y .and. poisson_fft%stretched_y_sym) then
       poisson_fft%a_odd_re_dev = poisson_fft%a_odd_re
@@ -139,43 +228,55 @@ contains
       end if
     end if
 
-    ! 3D plans
-    ierr = cufftCreate(poisson_fft%plan3D_fw)
-    ierr = cufftMpAttachComm(poisson_fft%plan3D_fw, CUFFT_COMM_MPI, &
-                             MPI_COMM_WORLD)
+    ! Create forward FFT plan with automatic cuFFTMp detection/fallback
     if (is_sp) then
-      ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_R2C, &
-                             worksize)
+      call create_fft_plan(poisson_fft%plan3D_fw, &
+                           poisson_fft%use_cufftmp, &
+                           nx, ny, nz, CUFFT_R2C, &
+                           mesh%par%is_root(), 'Forward')
     else
-      ierr = cufftMakePlan3D(poisson_fft%plan3D_fw, nz, ny, nx, CUFFT_D2Z, &
-                             worksize)
-    end if
-    if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Forward 3D FFT plan generation failed'
+      call create_fft_plan(poisson_fft%plan3D_fw, &
+                           poisson_fft%use_cufftmp, &
+                           nx, ny, nz, CUFFT_D2Z, &
+                           mesh%par%is_root(), 'Forward')
     end if
 
-    ierr = cufftCreate(poisson_fft%plan3D_bw)
-    ierr = cufftMpAttachComm(poisson_fft%plan3D_bw, CUFFT_COMM_MPI, &
-                             MPI_COMM_WORLD)
+    ! Create backward FFT plan with automatic cuFFTMp detection/fallback
     if (is_sp) then
-      ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_C2R, &
-                             worksize)
+      call create_fft_plan(poisson_fft%plan3D_bw, &
+                           poisson_fft%use_cufftmp, &
+                           nx, ny, nz, CUFFT_C2R, &
+                           mesh%par%is_root(), 'Backward')
     else
-      ierr = cufftMakePlan3D(poisson_fft%plan3D_bw, nz, ny, nx, CUFFT_Z2D, &
-                             worksize)
-    end if
-    if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Backward 3D FFT plan generation failed'
+      call create_fft_plan(poisson_fft%plan3D_bw, &
+                           poisson_fft%use_cufftmp, &
+                           nx, ny, nz, CUFFT_Z2D, &
+                           mesh%par%is_root(), 'Backward')
     end if
 
-    ! allocate storage for cuFFTMp
-    ierr = cufftXtMalloc(poisson_fft%plan3D_fw, poisson_fft%xtdesc, &
-                         CUFFT_XT_FORMAT_INPLACE)
-    if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'cufftXtMalloc failed'
+    ! Allocate storage - cuFFTMp uses xtdesc, single-GPU uses c_dev
+    if (poisson_fft%use_cufftmp) then
+      ! allocate storage for cuFFTMp
+      ierr = cufftXtMalloc(poisson_fft%plan3D_fw, poisson_fft%xtdesc, &
+                           CUFFT_XT_FORMAT_INPLACE)
+      if (ierr /= 0) then
+        write (stderr, *), 'cuFFT Error Code: ', ierr
+        error stop 'cufftXtMalloc failed'
+      end if
+    else
+      ! allocate storage for single-GPU cuFFT
+      allocate (poisson_fft%c_dev(poisson_fft%nx_spec, &
+                                  poisson_fft%ny_spec, &
+                                  poisson_fft%nz_spec))
+    end if
+
+    ! Print final status
+    if (mesh%par%is_root()) then
+      if (poisson_fft%use_cufftmp) then
+        print *, 'Using cuFFTMp for multi-GPU FFT'
+      else
+        print *, 'Using cuFFT for single-GPU FFT'
+      end if
     end if
 
   end function init
@@ -187,6 +288,8 @@ contains
     class(field_t), intent(in) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
+    real(dp), device, pointer :: f_ptr
+    type(c_ptr) :: f_c_ptr
 
     type(cudaXtDesc), pointer :: descriptor
 
@@ -198,21 +301,36 @@ contains
       padded_dev => f%data_d
     end select
 
-    call c_f_pointer(self%xtdesc%descriptor, descriptor)
-    call c_f_pointer(descriptor%data(1), d_dev, &
-                     [self%nx_loc + 2, self%ny_loc, self%nz_loc])
+    if (self%use_cufftmp) then
+      ! Multi-GPU path using cuFFTMp
+      ! tsize is different than SZ, because here we work on a 3D Cartesian
+      ! data structure, and free to specify any suitable thread/block size.
+      tsize = 16
+      blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
+      threads = dim3(tsize, 1, 1)
 
-    ! tsize is different than SZ, because here we work on a 3D Cartesian
-    ! data structure, and free to specify any suitable thread/block size.
-    tsize = 16
-    blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
-    threads = dim3(tsize, 1, 1)
+      call c_f_pointer(self%xtdesc%descriptor, descriptor)
+      call c_f_pointer(descriptor%data(1), d_dev, &
+                       [self%nx_loc + 2, self%ny_loc, self%nz_loc])
 
-    call memcpy3D<<<blocks, threads>>>(d_dev, padded_dev, & !&
-                                       self%nx_loc, self%ny_loc, self%nz_loc)
+      call memcpy3D<<<blocks, threads>>>(d_dev, padded_dev, & !&
+                                         self%nx_loc, self%ny_loc, self%nz_loc)
 
-    ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, &
-                                 CUFFT_FORWARD)
+      ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, &
+                                   CUFFT_FORWARD)
+    else
+      ! Single-GPU path using standard cuFFT
+      ! Using padded_dev directly causes segfault, use pointer workaround
+      f_c_ptr = c_loc(padded_dev)
+      call c_f_pointer(f_c_ptr, f_ptr)
+
+      ! Use explicit C interface for single precision, Fortran interface for double
+      if (is_sp) then
+        ierr = cufftExecR2C_C(self%plan3D_fw, c_loc(f_ptr), c_loc(self%c_dev))
+      else
+        ierr = cufftExecD2Z(self%plan3D_fw, f_ptr, self%c_dev)
+      end if
+    end if
 
     if (ierr /= 0) then
       write (stderr, *), 'cuFFT Error Code: ', ierr
@@ -228,33 +346,55 @@ contains
     class(field_t), intent(inout) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
+    real(dp), device, pointer :: f_ptr
+    type(c_ptr) :: f_c_ptr
 
     type(cudaXtDesc), pointer :: descriptor
 
     integer :: tsize, ierr
     type(dim3) :: blocks, threads
 
-    ierr = cufftXtExecDescriptor(self%plan3D_bw, self%xtdesc, self%xtdesc, &
-                                 CUFFT_INVERSE)
-    if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Backward 3D FFT execution failed'
-    end if
-
     select type (f)
     type is (cuda_field_t)
       padded_dev => f%data_d
     end select
 
-    call c_f_pointer(self%xtdesc%descriptor, descriptor)
-    call c_f_pointer(descriptor%data(1), d_dev, &
-                     [self%nx_loc + 2, self%ny_loc, self%nz_loc])
+    if (self%use_cufftmp) then
+      ! Multi-GPU path using cuFFTMp
+      ierr = cufftXtExecDescriptor(self%plan3D_bw, self%xtdesc, self%xtdesc, &
+                                   CUFFT_INVERSE)
+    else
+      ! Single-GPU path using standard cuFFT
+      ! Using padded_dev directly causes segfault, use pointer workaround
+      f_c_ptr = c_loc(padded_dev)
+      call c_f_pointer(f_c_ptr, f_ptr)
 
-    tsize = 16
-    blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
-    threads = dim3(tsize, 1, 1)
-    call memcpy3D<<<blocks, threads>>>(padded_dev, d_dev, & !&
-                                       self%nx_loc, self%ny_loc, self%nz_loc)
+      ! Use explicit C interface for single precision, Fortran interface for double
+      if (is_sp) then
+        ierr = cufftExecC2R_C(self%plan3D_bw, c_loc(self%c_dev), c_loc(f_ptr))
+      else
+        ierr = cufftexecz2d(self%plan3D_bw, self%c_dev, f_ptr)
+      end if
+    end if
+
+    if (ierr /= 0) then
+      write (stderr, *), 'cuFFT Error Code: ', ierr
+      error stop 'Backward 3D FFT execution failed'
+    end if
+
+    if (self%use_cufftmp) then
+      ! Multi-GPU path: copy from cuFFTMp storage
+      call c_f_pointer(self%xtdesc%descriptor, descriptor)
+      call c_f_pointer(descriptor%data(1), d_dev, &
+                       [self%nx_loc + 2, self%ny_loc, self%nz_loc])
+
+      tsize = 16
+      blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
+      threads = dim3(tsize, 1, 1)
+      call memcpy3D<<<blocks, threads>>>(padded_dev, d_dev, & !&
+                                         self%nx_loc, self%ny_loc, self%nz_loc)
+    end if
+    ! Single-GPU path: data already in padded_dev from cufftExec
 
   end subroutine fft_backward_cuda
 
@@ -269,16 +409,23 @@ contains
     type(dim3) :: blocks, threads
     integer :: tsize
 
-    ! obtain a pointer to descriptor so that we can carry out postprocessing
-    call c_f_pointer(self%xtdesc%descriptor, descriptor)
-    call c_f_pointer(descriptor%data(1), c_dev, &
-                     [self%nx_spec, self%ny_spec, self%nz_spec])
-
     ! tsize is different than SZ, because here we work on a 3D Cartesian
     ! data structure, and free to specify any suitable thread/block size.
     tsize = 16
     blocks = dim3((self%ny_spec - 1)/tsize + 1, self%nz_spec, 1)
     threads = dim3(tsize, 1, 1)
+
+    ! Get pointer to the appropriate FFT data storage
+    if (self%use_cufftmp) then
+      ! Multi-GPU path: get pointer from xtdesc
+      call c_f_pointer(self%xtdesc%descriptor, descriptor)
+      call c_f_pointer(descriptor%data(1), c_dev, &
+                       [self%nx_spec, self%ny_spec, self%nz_spec])
+    else
+      ! Single-GPU path: get pointer to self%c_dev
+      call c_f_pointer(c_loc(self%c_dev), c_dev, &
+                       [self%nx_spec, self%ny_spec, self%nz_spec])
+    end if
 
     ! Postprocess div_u in spectral space
     call process_spectral_000<<<blocks, threads>>>( & !&
@@ -301,16 +448,23 @@ contains
     type(dim3) :: blocks, threads
     integer :: tsize, off, inc
 
-    ! obtain a pointer to descriptor so that we can carry out postprocessing
-    call c_f_pointer(self%xtdesc%descriptor, descriptor)
-    call c_f_pointer(descriptor%data(1), c_dev, &
-                     [self%nx_spec, self%ny_spec, self%nz_spec])
-
     ! tsize is different than SZ, because here we work on a 3D Cartesian
     ! data structure, and free to specify any suitable thread/block size.
     tsize = 16
     blocks = dim3((self%nx_spec - 1)/tsize + 1, self%nz_spec, 1)
     threads = dim3(tsize, 1, 1)
+
+    ! Get pointer to the appropriate FFT data storage
+    if (self%use_cufftmp) then
+      ! Multi-GPU path: get pointer from xtdesc
+      call c_f_pointer(self%xtdesc%descriptor, descriptor)
+      call c_f_pointer(descriptor%data(1), c_dev, &
+                       [self%nx_spec, self%ny_spec, self%nz_spec])
+    else
+      ! Single-GPU path: get pointer to self%c_dev
+      call c_f_pointer(c_loc(self%c_dev), c_dev, &
+                       [self%nx_spec, self%ny_spec, self%nz_spec])
+    end if
 
     ! Postprocess div_u in spectral space
     if (.not. self%stretched_y) then
@@ -342,16 +496,15 @@ contains
           self%a_even_re_dev = self%store_a_even_re_dev
           self%a_even_im_dev = self%store_a_even_im_dev
         end if
-        ! start from the first odd entry
+        ! start from the first odd entry and continue with odd ones
         off = 0
-        ! and continue with odd ones
         inc = 2
         call process_spectral_010_poisson<<<blocks, threads>>>( & !&
           c_dev, self%a_odd_re_dev, self%a_odd_im_dev, off, inc, &
           self%nx_spec, self%ny_spec/2, &
           self%nx_glob, self%ny_glob, self%nz_glob &
           )
-        ! start from the first even entry, and continue with even ones
+        ! start from the first even entry and continue with even ones
         off = 1
         call process_spectral_010_poisson<<<blocks, threads>>>( & !&
           c_dev, self%a_even_re_dev, self%a_even_im_dev, off, inc, &
@@ -368,9 +521,9 @@ contains
           self%a_re_dev = self%store_a_re_dev
           self%a_im_dev = self%store_a_im_dev
         end if
+        ! start from the first entry and increment 1
         off = 0
         inc = 1
-        ! start from the first entry and increment 1
         call process_spectral_010_poisson<<<blocks, threads>>>( & !&
           c_dev, self%a_re_dev, self%a_im_dev, off, inc, &
           self%nx_spec, self%ny_spec, &
