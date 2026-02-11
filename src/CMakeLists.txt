@@ -73,13 +73,15 @@ else()
   )
 endif()
 
-list(APPEND SRC ${IOSRC})
-
+# Add CUDA sources first so CUDA modules are available when compiling I/O
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   list(APPEND SRC ${CUDASRC})
-  list(APPEND BACKENDSRC backend/cuda/backend.f90)
+  list(APPEND SRC backend/cuda/backend.f90)
 endif()
+
+# Add I/O sources after CUDA (I/O depends on CUDA modules)
+list(APPEND SRC ${IOSRC})
 
 # Decide whether 2decomp&fft is supported by the build
 find_package(decomp2d)
@@ -99,6 +101,15 @@ set(LIBRARY_OUTPUT_PATH "${PROJECT_BINARY_DIR}/lib")
 add_library(x3d2 STATIC ${SRC})
 target_include_directories(x3d2 INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
 
+# Explicit object file dependencies for parallel builds with Fortran modules
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
+  # io/adios2/io.f90 needs CUDA modules, so its object depends on CUDA object files
+  set_source_files_properties(io/adios2/io.f90 PROPERTIES
+    OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/x3d2.dir/backend/cuda/allocator.f90.o;${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/x3d2.dir/backend/cuda/backend.f90.o"
+  )
+endif()
+
 add_library(x3d2_backends STATIC ${BACKENDSRC})
 target_include_directories(x3d2_backends INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(x3d2_backends PRIVATE x3d2)
@@ -116,6 +127,7 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   target_link_options(x3d2 INTERFACE "-cuda")
   target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
 
+  target_compile_options(x3d2 PRIVATE "-DCUDA")
   target_compile_options(xcompact PRIVATE "-DCUDA")
 
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
