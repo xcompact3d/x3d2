@@ -58,6 +58,7 @@ module m_solver
     class(field_t), pointer :: u, v, w
     class(field_t), pointer :: pressure => null()      !! Pressure on CELL grid (DIR_Z)
     class(field_t), pointer :: pressure_vert => null() !! Pressure on VERT grid (DIR_X)
+    logical :: keep_pressure = .false.                 !! If true, persist pressure for output
     type(flist_t), dimension(:), pointer :: species => null()
 
     class(base_backend_t), pointer :: backend
@@ -692,18 +693,24 @@ contains
     class(solver_t) :: self
     class(field_t), intent(inout) :: u, v, w
 
-    class(field_t), pointer :: div_u, dpdx, dpdy, dpdz
+    class(field_t), pointer :: div_u, p, dpdx, dpdy, dpdz
 
     div_u => self%backend%allocator%get_block(DIR_Z)
 
     call self%divergence_v2p(div_u, u, v, w)
 
-    ! defer pressure field allocation until first call
-    if (.not. associated(self%pressure)) then
-      self%pressure => self%backend%allocator%get_block(DIR_Z, CELL)
+    if (self%keep_pressure) then
+      ! Persist pressure for snapshot output
+      if (.not. associated(self%pressure)) then
+        self%pressure => self%backend%allocator%get_block(DIR_Z, CELL)
+      end if
+      p => self%pressure
+    else
+      ! Temporary pressure, released after use
+      p => self%backend%allocator%get_block(DIR_Z)
     end if
 
-    call self%poisson(self%pressure, div_u)
+    call self%poisson(p, div_u)
 
     call self%backend%allocator%release_block(div_u)
 
@@ -711,7 +718,11 @@ contains
     dpdy => self%backend%allocator%get_block(DIR_X)
     dpdz => self%backend%allocator%get_block(DIR_X)
 
-    call self%gradient_p2v(dpdx, dpdy, dpdz, self%pressure)
+    call self%gradient_p2v(dpdx, dpdy, dpdz, p)
+
+    if (.not. self%keep_pressure) then
+      call self%backend%allocator%release_block(p)
+    end if
 
     ! velocity correction
     call self%backend%vecadd(-1._dp, dpdx, 1._dp, u)

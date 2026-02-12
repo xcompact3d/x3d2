@@ -95,6 +95,10 @@ contains
     self%solver = init(backend, mesh, host_allocator)
 
     call self%io_mgr%init(MPI_COMM_WORLD)
+
+    ! Tell the solver to persist pressure if output is enabled
+    self%solver%keep_pressure = self%io_mgr%snapshot_mgr%config%output_pressure
+
     if (self%io_mgr%is_restart()) then
       call self%io_mgr%handle_restart(self%solver, MPI_COMM_WORLD)
     else
