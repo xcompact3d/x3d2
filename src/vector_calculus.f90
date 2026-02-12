@@ -17,6 +17,7 @@ module m_vector_calculus
     procedure :: curl
     procedure :: divergence_v2c
     procedure :: gradient_c2v
+    procedure :: interpl_c2v
     procedure :: laplacian
   end type vector_calculus_t
 
@@ -329,6 +330,52 @@ contains
     call self%backend%allocator%release_block(dpdz_sx_x)
 
   end subroutine gradient_c2v
+
+  subroutine interpl_c2v(self, p_out, p, &
+                         x_interpl_c2v, y_interpl_c2v, z_interpl_c2v)
+    !! Interpolation of a scalar field from cell centres to vertices.
+    !!
+    !! Input field is at cell centres (data_loc=CELL) in DIR_Z layout.
+    !! Output field is at vertices (data_loc=VERT) in DIR_X layout.
+    implicit none
+
+    class(vector_calculus_t) :: self
+    class(field_t), intent(inout) :: p_out
+    class(field_t), intent(in) :: p
+    class(tdsops_t), intent(in) :: x_interpl_c2v, y_interpl_c2v, &
+      z_interpl_c2v
+
+    class(field_t), pointer :: p_sy_z, p_sy_y, p_out_y, p_out_x
+
+    if (p_out%dir /= DIR_X .or. p%dir /= DIR_Z) then
+      error stop 'Error in interpl_c2v input/output field dirs: &
+                  &output must be in DIR_X, input must be in DIR_Z layout.'
+    end if
+
+    ! z-direction interpolation
+    p_sy_z => self%backend%allocator%get_block(DIR_Z)
+    call self%backend%tds_solve(p_sy_z, p, z_interpl_c2v)
+
+    ! reorder Z -> Y
+    p_sy_y => self%backend%allocator%get_block(DIR_Y)
+    call self%backend%reorder(p_sy_y, p_sy_z, RDR_Z2Y)
+    call self%backend%allocator%release_block(p_sy_z)
+
+    ! y-direction interpolation
+    p_out_y => self%backend%allocator%get_block(DIR_Y)
+    call self%backend%tds_solve(p_out_y, p_sy_y, y_interpl_c2v)
+    call self%backend%allocator%release_block(p_sy_y)
+
+    ! reorder Y -> X
+    p_out_x => self%backend%allocator%get_block(DIR_X)
+    call self%backend%reorder(p_out_x, p_out_y, RDR_Y2X)
+    call self%backend%allocator%release_block(p_out_y)
+
+    ! x-direction interpolation
+    call self%backend%tds_solve(p_out, p_out_x, x_interpl_c2v)
+    call self%backend%allocator%release_block(p_out_x)
+
+  end subroutine interpl_c2v
 
   subroutine laplacian(self, lapl_u, u, x_der2nd, y_der2nd, z_der2nd)
     !! Laplacian of a scalar field 'u'.
