@@ -17,6 +17,7 @@ These parameters are specified in the ``checkpoint_params`` namelist block in th
      snapshot_prefix = "snapshot"
      snapshot_sp = .false.
      output_stride = 2, 2, 2
+     output_pressure = .false.
      restart_from_checkpoint = .false.
      restart_file = ""
    /End
@@ -41,6 +42,9 @@ These parameters are specified in the ``checkpoint_params`` namelist block in th
 
 ``output_stride``: Three-element array specifying the spatial stride (subsampling) in ``X``, ``Y``, and ``Z`` directions for visualisation snapshots. Using values greater than ``1`` reduces file size and increases I/O performance, but decreases visualisation resolution.
   **Default:** ``[1, 1, 1]``
+
+``output_pressure``: Boolean flag to include the pressure field in visualisation snapshots. When enabled, the pressure field is interpolated from its native cell-centred grid to the vertex grid (matching the velocity field locations) for ParaView compatibility. Note: pressure is not included in checkpoint files since it is a derived quantity recomputed from velocity.
+  **Default:** ``false``
 
 ``restart_from_checkpoint``: Boolean flag to restart the simulation from a checkpoint file.
   **Default:** ``false``
