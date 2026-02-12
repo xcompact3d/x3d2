@@ -16,7 +16,7 @@ module m_base_case
 
   type, abstract :: base_case_t
     class(solver_t), allocatable :: solver
-    type(io_manager_t) :: checkpoint_mgr
+    type(io_manager_t) :: io_mgr
   contains
     procedure(boundary_conditions), deferred :: boundary_conditions
     procedure(initial_conditions), deferred :: initial_conditions
@@ -94,9 +94,9 @@ contains
 
     self%solver = init(backend, mesh, host_allocator)
 
-    call self%checkpoint_mgr%init(MPI_COMM_WORLD)
-    if (self%checkpoint_mgr%is_restart()) then
-      call self%checkpoint_mgr%handle_restart(self%solver, MPI_COMM_WORLD)
+    call self%io_mgr%init(MPI_COMM_WORLD)
+    if (self%io_mgr%is_restart()) then
+      call self%io_mgr%handle_restart(self%solver, MPI_COMM_WORLD)
     else
       call self%initial_conditions()
     end if
@@ -108,7 +108,7 @@ contains
 
     if (self%solver%mesh%par%is_root()) print *, 'run end'
 
-    call self%checkpoint_mgr%finalise()
+    call self%io_mgr%finalise()
   end subroutine case_finalise
 
   subroutine set_init(self, field, field_func)
@@ -214,7 +214,7 @@ contains
     real(dp) :: t
     integer :: i, iter, sub_iter, start_iter
 
-    if (self%checkpoint_mgr%is_restart()) then
+    if (self%io_mgr%is_restart()) then
       t = self%solver%current_iter*self%solver%dt
       if (self%solver%mesh%par%is_root()) &
         ! for restarts current_iter is read from the checkpoint file
@@ -280,7 +280,15 @@ contains
         call self%postprocess(iter, t)
       end if
 
-      call self%checkpoint_mgr%handle_io_step(self%solver, &
+      ! Compute pressure on VERT grid for snapshot output if needed
+      if (self%io_mgr%snapshot_mgr%config%output_pressure .and. &
+          self%io_mgr%snapshot_mgr%config%snapshot_freq > 0 .and. &
+          mod(iter, self%io_mgr%snapshot_mgr%config%snapshot_freq) &
+          == 0) then
+        call self%solver%compute_pressure_vert()
+      end if
+
+      call self%io_mgr%handle_io_step(self%solver, &
                                               iter, MPI_COMM_WORLD)
     end do
 
