@@ -3,7 +3,7 @@ module m_omp_spectral
   !!
   !! Provides kernels for solving Poisson equation in Fourier space with
   !! spectral equivalence transformations. Handles different boundary
-  !! condition combinations: fully periodic (000) and Dirichlet in Y (010).
+  !! condition combinations: fully periodic (000) and non-periodic in Y (010).
   !!
   !! **Spectral equivalence:** Modified wavenumbers for finite-difference
   !! grid (Lele 1992). Ensures spectral solver matches compact FD schemes.
@@ -139,7 +139,7 @@ contains
     )
     !! Solve Poisson in spectral space for (0,1,0) boundary conditions.
     !!
-    !! Processes Dirichlet in Y, periodic in X and Z. Uses sine series
+    !! Processes non-periodic in Y, periodic in X and Z. Uses sine series
     !! in Y-direction (symmetry/antisymmetry transform) combined with
     !! Fourier in X and Z.
     !!
@@ -152,7 +152,7 @@ contains
     !! 6. Backward spectral equivalence in X and Z
     !!
     !! **Y-direction:** Sine series requires special symmetric processing
-    !! to maintain real-valued solution with Dirichlet BCs.
+    !! to maintain real-valued solution with non-periodic BCs.
     !!
     !! **Ref.** JCP 228 (2009), 5989–6015, Sec 4
     implicit none

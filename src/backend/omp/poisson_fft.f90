@@ -14,7 +14,7 @@ module m_omp_poisson_fft
   !! **Boundary conditions:**
   !!
   !! - (0,0,0): Periodic in all directions
-  !! - (0,1,0): Dirichlet in Y, periodic in X/Z (uses symmetry transform)
+  !! - (0,1,0): Non-periodic in Y, periodic in X/Z (uses symmetry transform)
   !!
   !! **Parallelisation:** MPI via 2DECOMP&FFT pencil decomposition
   !!
@@ -42,7 +42,7 @@ module m_omp_poisson_fft
     procedure :: fft_backward => fft_backward_omp         !! Transform to physical space
     procedure :: fft_postprocess_000 => fft_postprocess_000_omp  !! Spectral solve for (0,0,0) BCs
     procedure :: fft_postprocess_010 => fft_postprocess_010_omp  !! Spectral solve for (0,1,0) BCs
-    procedure :: enforce_periodicity_y => enforce_periodicity_y_omp  !! Symmetry transform for Y Dirichlet
+    procedure :: enforce_periodicity_y => enforce_periodicity_y_omp  !! Symmetry transform for Y non-periodic
     procedure :: undo_periodicity_y => undo_periodicity_y_omp        !! Inverse symmetry transform
   end type omp_poisson_fft_t
 
@@ -152,7 +152,7 @@ contains
   subroutine fft_postprocess_010_omp(self)
     !! Spectral solve for (0,1,0) boundary conditions.
     !!
-    !! Solves Poisson equation with Dirichlet BCs in Y-direction,
+    !! Solves Poisson equation with non-periodic BCs in Y-direction,
     !! periodic in X and Z. Uses modified wavenumbers accounting for
     !! symmetry transformation (sine series in Y).
     !!
@@ -171,11 +171,11 @@ contains
   end subroutine fft_postprocess_010_omp
 
   subroutine enforce_periodicity_y_omp(self, f_out, f_in)
-    !! Apply symmetry transform for Y Dirichlet boundary conditions.
+    !! Apply symmetry transform for Y non-periodic boundary conditions.
     !!
     !! Converts physical field to symmetric/antisymmetric representation
     !! suitable for sine series FFT. Used before forward FFT when Y-direction
-    !! has Dirichlet (non-periodic) BCs.
+    !! has non-periodic BCs.
     !!
     !! **Transformation:** Maps domain to symmetric extension for sine basis.
     implicit none
@@ -204,10 +204,10 @@ contains
   end subroutine enforce_periodicity_y_omp
 
   subroutine undo_periodicity_y_omp(self, f_out, f_in)
-    !! Inverse symmetry transform for Y Dirichlet boundary conditions.
+    !! Inverse symmetry transform for Y non-periodic boundary conditions.
     !!
     !! Converts symmetric/antisymmetric representation back to physical
-    !! field. Used after backward FFT when Y-direction has Dirichlet BCs.
+    !! field. Used after backward FFT when Y-direction has non-periodic BCs.
     !!
     !! **Transformation:** Extracts physical domain from symmetric extension.
     implicit none

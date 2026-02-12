@@ -424,10 +424,10 @@ contains
   end subroutine fft_backward_cuda
 
   subroutine fft_postprocess_000_cuda(self)
-    !! Post-process spectral data for Dirichlet-Dirichlet-Dirichlet boundaries.
+    !! Post-process spectral data for Periodic-Periodic-Periodic boundaries.
     !!
     !! Solves Poisson equation $\nabla^2 p = f$ in spectral space with homogeneous
-    !! Dirichlet boundaries in all directions.
+    !! Periodic boundaries in all directions.
     implicit none
 
     class(cuda_poisson_fft_t) :: self
@@ -467,10 +467,10 @@ contains
   end subroutine fft_postprocess_000_cuda
 
   subroutine fft_postprocess_010_cuda(self)
-    !! Post-process spectral data for Dirichlet-Neumann-Dirichlet boundaries.
+    !! Post-process spectral data for Periodic-Non-periodic-Periodic boundaries.
     !!
-    !! Solves Poisson equation $\nabla^2 p = f$ in spectral space with Dirichlet
-    !! boundaries in X and Z, Neumann in Y. Handles stretched meshes with
+    !! Solves Poisson equation $\nabla^2 p = f$ in spectral space with Periodic
+    !! boundaries in X and Z, non-periodic in Y. Handles stretched meshes with
     !! matrix solves in spectral space.
     implicit none
 
@@ -578,10 +578,10 @@ contains
   end subroutine fft_postprocess_010_cuda
 
   subroutine enforce_periodicity_y_cuda(self, f_out, f_in)
-    !! Enforce periodic extension in Y for Neumann boundaries.
+    !! Enforce periodic extension in Y for non-periodic boundaries.
     !!
     !! Extends field from physical domain size to doubled periodic domain
-    !! by symmetry (f(y+L) = f(L-y)) for Neumann boundary FFTs.
+    !! by symmetry (f(y+L) = f(L-y)) for non-periodic boundary FFTs.
     implicit none
 
     class(cuda_poisson_fft_t) :: self
