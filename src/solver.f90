@@ -56,6 +56,8 @@ module m_solver
     integer :: nspecies = 0
 
     class(field_t), pointer :: u, v, w
+    class(field_t), pointer :: pressure => null()      !! Pressure on CELL grid (DIR_Z)
+    class(field_t), pointer :: pressure_vert => null() !! Pressure on VERT grid (DIR_X)
     type(flist_t), dimension(:), pointer :: species => null()
 
     class(base_backend_t), pointer :: backend
@@ -71,6 +73,7 @@ module m_solver
   contains
     procedure :: transeq_species
     procedure :: pressure_correction
+    procedure :: compute_pressure_vert
     procedure :: divergence_v2p
     procedure :: gradient_p2v
     procedure :: curl
@@ -689,15 +692,18 @@ contains
     class(solver_t) :: self
     class(field_t), intent(inout) :: u, v, w
 
-    class(field_t), pointer :: div_u, pressure, dpdx, dpdy, dpdz
+    class(field_t), pointer :: div_u, dpdx, dpdy, dpdz
 
     div_u => self%backend%allocator%get_block(DIR_Z)
 
     call self%divergence_v2p(div_u, u, v, w)
 
-    pressure => self%backend%allocator%get_block(DIR_Z)
+    ! defer pressure field allocation until first call
+    if (.not. associated(self%pressure)) then
+      self%pressure => self%backend%allocator%get_block(DIR_Z, CELL)
+    end if
 
-    call self%poisson(pressure, div_u)
+    call self%poisson(self%pressure, div_u)
 
     call self%backend%allocator%release_block(div_u)
 
@@ -705,9 +711,7 @@ contains
     dpdy => self%backend%allocator%get_block(DIR_X)
     dpdz => self%backend%allocator%get_block(DIR_X)
 
-    call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
-
-    call self%backend%allocator%release_block(pressure)
+    call self%gradient_p2v(dpdx, dpdy, dpdz, self%pressure)
 
     ! velocity correction
     call self%backend%vecadd(-1._dp, dpdx, 1._dp, u)
@@ -719,5 +723,30 @@ contains
     call self%backend%allocator%release_block(dpdz)
 
   end subroutine pressure_correction
+
+  subroutine compute_pressure_vert(self)
+    !! Interpolates the pressure field from CELL (DIR_Z) to VERT (DIR_X)
+    !! for snapshot output. Must be called after pressure_correction.
+    implicit none
+
+    class(solver_t) :: self
+
+    if (.not. associated(self%pressure)) then
+      error stop 'compute_pressure_vert: pressure not yet computed'
+    end if
+
+    ! Lazy allocate pressure_vert on first call
+    if (.not. associated(self%pressure_vert)) then
+      self%pressure_vert => self%backend%allocator%get_block(DIR_X, VERT)
+    end if
+
+    call self%vector_calculus%interpl_c2v( &
+      self%pressure_vert, self%pressure, &
+      self%xdirps%interpl_p2v, &
+      self%ydirps%interpl_p2v, &
+      self%zdirps%interpl_p2v &
+      )
+
+  end subroutine compute_pressure_vert
 
 end module m_solver
