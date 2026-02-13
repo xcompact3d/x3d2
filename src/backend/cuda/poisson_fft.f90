@@ -16,7 +16,7 @@ module m_cuda_poisson_fft
   use m_cuda_allocator, only: cuda_field_t
   use m_cuda_spectral, only: memcpy3D,memcpy3D_with_transpose,memcpy3D_with_transpose_back, &
                              process_spectral_000, process_spectral_010, &
-                             process_spectral_100, process_spectral_110, &
+                             process_spectral_110, &
                              enforce_periodicity_x, undo_periodicity_x, &
                              enforce_periodicity_y, undo_periodicity_y, &
                              process_spectral_010_fw, &
@@ -192,6 +192,7 @@ contains
     dims_loc = mesh%get_dims(CELL)
 
     if ((.not. periodic_x) .and. periodic_y .and. periodic_z) then
+      ! 100 case: Non-Periodic X, Periodic Y, Periodic Z
       n_spec(1) = dims_loc(1)/2 + 1
       n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
       n_spec(3) = dims_glob(3)
@@ -200,6 +201,7 @@ contains
       n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
       n_sp_st(3) = 0
     else if (periodic_x .and. (.not. periodic_y) .and. periodic_z) then
+      ! 010 case: Periodic X, Non-Periodic Y, Periodic Z
       n_spec(1) = dims_loc(1)/2 + 1
       n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
       n_spec(3) = dims_glob(3)
@@ -208,7 +210,7 @@ contains
       n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
       n_sp_st(3) = 0
     else if ((.not. periodic_x) .and. (.not. periodic_y) .and. periodic_z) then
-      ! 110 case: Dirichlet X, Dirichlet Y, Periodic Z
+      ! 110 case: Non-Periodic X, Non-Periodic Y, Periodic Z
       ! Standard spectral layout (no transpose needed)
       n_spec(1) = dims_loc(1)/2 + 1  ! nx/2+1 (R2C)
       n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)    ! ny
@@ -218,7 +220,7 @@ contains
       n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
       n_sp_st(3) = 0
     else if (periodic_x .and. periodic_y .and. periodic_z) then
-      ! 000 case: Dirichlet X, Dirichlet Y, Periodic Z
+      ! 000 case: Periodic X, Periodic Y, Periodic Z
       ! Standard spectral layout (no transpose needed)
       n_spec(1) = dims_loc(1)/2 + 1
       n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
