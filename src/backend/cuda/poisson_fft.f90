@@ -768,7 +768,7 @@ contains
     ! - Swap nx <-> ny for grid sizes
     ! - Swap ax,bx <-> ay,by for wave coefficients
     ! - Use x_sp_st instead of y_sp_st for the offset
-    call process_spectral_010 <<<blocks, threads>>>( &
+    call process_spectral_010 <<<blocks, threads>>>( & !&
       c_dev, self%waves_dev, &
       self%nx_spec, self%ny_spec, self%x_sp_st, &  ! spectral dims and offset
       self%ny_glob, self%nx_glob, self%nz_glob, &  ! SWAP nx <-> ny
@@ -906,7 +906,7 @@ contains
 
     ! Postprocess div_u in spectral space
     if (.not. self%stretched_y) then
-      call process_spectral_110 <<<blocks, threads>>>( &
+      call process_spectral_110 <<<blocks, threads>>>( & !&
         c_dev, self%waves_dev, &
         self%nx_spec, self%ny_spec, &
         self%x_sp_st, self%y_sp_st, &
@@ -1121,14 +1121,14 @@ contains
     ! First pass: X folding (f_in -> temp)
     blocks = dim3(self%nz_loc, 1, 1)
     threads = dim3(self%ny_loc, 1, 1)
-    call enforce_periodicity_x <<<blocks, threads>>>( &
+    call enforce_periodicity_x <<<blocks, threads>>>( & !&
       temp_dev, f_in_dev, self%nx_glob &
       )
 
     ! Second pass: Y folding (temp -> f_out)
     blocks = dim3(self%nz_loc, 1, 1)
     threads = dim3(self%nx_loc, 1, 1)
-    call enforce_periodicity_y <<<blocks, threads>>>( &
+    call enforce_periodicity_y <<<blocks, threads>>>( & !&
       f_out_dev, temp_dev, self%ny_glob &
       )
 
@@ -1164,14 +1164,14 @@ contains
     ! First pass: Y unfolding (f_in -> temp)
     blocks = dim3(self%nz_loc, 1, 1)
     threads = dim3(self%nx_loc, 1, 1)
-    call undo_periodicity_y <<<blocks, threads>>>( &
+    call undo_periodicity_y <<<blocks, threads>>>( & !&
       temp_dev, f_in_dev, self%ny_glob &
       )
 
     ! Second pass: X unfolding (temp -> f_out)
     blocks = dim3(self%nz_loc, 1, 1)
     threads = dim3(self%ny_loc, 1, 1)
-    call undo_periodicity_x <<<blocks, threads>>>( &
+    call undo_periodicity_x <<<blocks, threads>>>( & !&
       f_out_dev, temp_dev, self%nx_glob &
       )
 
