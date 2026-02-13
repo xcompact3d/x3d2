@@ -27,7 +27,6 @@ set(SRC
   case/cylinder.f90
   case/generic.f90
   case/tgv.f90
-  case/cos2pix.f90
   module/ibm.f90
 )
 set(CUDASRC
