@@ -84,6 +84,8 @@ module m_io_backend
     procedure :: write_data_real => write_data_real_adios2
     procedure :: write_data_array_3d => write_data_array_3d_adios2
     procedure :: write_field_from_solver => write_field_from_solver_adios2
+    procedure :: supports_device_field_write => &
+      supports_device_field_write_adios2
 #ifdef X3D2_ADIOS2_CUDA
     procedure :: write_data_array_3d_device => write_data_array_3d_device_adios2
 #endif
@@ -780,6 +782,15 @@ contains
       error stop
     end if
   end subroutine handle_error_file
+
+  logical function supports_device_field_write_adios2(self)
+    class(io_adios2_writer_t), intent(in) :: self
+#ifdef X3D2_ADIOS2_CUDA
+    supports_device_field_write_adios2 = .true.
+#else
+    supports_device_field_write_adios2 = .false.
+#endif
+  end function supports_device_field_write_adios2
 
   subroutine write_field_from_solver_adios2( &
     self, variable_name, field, file_handle, backend, &
