@@ -154,6 +154,7 @@ contains
     type(writer_session_t) :: writer_session
     integer :: nolds_total, idx
     character(len=16), allocatable :: old_field_names(:)
+    logical :: use_device_write
 
     if (self%config%checkpoint_freq <= 0) return
     if (mod(timestep, self%config%checkpoint_freq) /= 0) return
@@ -179,7 +180,11 @@ contains
 
     n_total_vars = size(field_names)
 
-    call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
+    use_device_write = writer_session%writer%supports_device_field_write()
+
+    if (.not. use_device_write) then
+      call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
+    end if
 
     call self%write_fields( &
       field_names, host_fields, &
@@ -266,7 +271,9 @@ contains
       deallocate (old_field_names)
     end if
 
-    call cleanup_field_arrays(solver, field_ptrs, host_fields)
+    if (.not. use_device_write) then
+      call cleanup_field_arrays(solver, field_ptrs, host_fields)
+    end if
 
     if (myrank == 0) then
       inquire (file=trim(temp_filename), exist=file_exists)
@@ -459,13 +466,15 @@ contains
     !! Write field data for checkpoints (no striding)
     class(checkpoint_manager_t), intent(inout) :: self
     character(len=*), dimension(:), intent(in) :: field_names
-    class(field_ptr_t), dimension(:), target, intent(in) :: host_fields
+    class(field_ptr_t), dimension(:), target, intent(in), optional :: host_fields
     class(solver_t), intent(in) :: solver
     type(writer_session_t), intent(inout) :: writer_session
     integer, intent(in) :: data_loc
 
     integer :: i_field
     integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
+    class(field_t), pointer :: io_field
+    logical :: use_device_write
 
     ! Calculate dimensions for I/O
     shape_dims = int(solver%mesh%get_global_dims(data_loc), i8)
@@ -474,24 +483,35 @@ contains
 
     ! Checkpoints always write full resolution (no striding)
     ! Backend automatically uses GPU-aware I/O when available
+    use_device_write = writer_session%writer%supports_device_field_write()
     do i_field = 1, size(field_names)
       select case (trim(field_names(i_field)))
       case ("u")
-        call writer_session%writer%write_field_from_solver( &
-          "u", solver%u, writer_session%file, solver%backend, &
-          shape_dims, start_dims, count_dims, .false. &
-        )
+        if (use_device_write) then
+          io_field => solver%u
+        else
+          io_field => host_fields(i_field)%ptr
+        end if
       case ("v")
-        call writer_session%writer%write_field_from_solver( &
-          "v", solver%v, writer_session%file, solver%backend, &
-          shape_dims, start_dims, count_dims, .false. &
-        )
+        if (use_device_write) then
+          io_field => solver%v
+        else
+          io_field => host_fields(i_field)%ptr
+        end if
       case ("w")
-        call writer_session%writer%write_field_from_solver( &
-          "w", solver%w, writer_session%file, solver%backend, &
-          shape_dims, start_dims, count_dims, .false. &
-        )
+        if (use_device_write) then
+          io_field => solver%w
+        else
+          io_field => host_fields(i_field)%ptr
+        end if
+      case default
+        error stop "write_fields(checkpoint): Unknown field name"
       end select
+
+      call writer_session%writer%write_field_from_solver( &
+        trim(field_names(i_field)), io_field, writer_session%file, &
+        solver%backend, shape_dims, start_dims, count_dims, .false. &
+      )
     end do
   end subroutine write_fields
 

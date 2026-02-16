@@ -234,6 +234,8 @@ contains
     integer :: i_field
     integer(i8), dimension(3) :: output_start, output_count, shape_dims, count_dims
     integer, dimension(3) :: output_dims_local
+    class(field_t), pointer :: io_field
+    logical :: use_device_write
 
     ! Calculate dimensions for I/O
     shape_dims = int(solver%mesh%get_global_dims(data_loc), i8)
@@ -243,24 +245,36 @@ contains
     ! Write fields directly when no striding - backend uses GPU-aware I/O when available
     if (all(self%output_stride == 1)) then
       ! No striding - can potentially use direct device I/O
+      use_device_write = writer_session%writer%supports_device_field_write()
       do i_field = 1, size(field_names)
         select case (trim(field_names(i_field)))
         case ("u")
-          call writer_session%writer%write_field_from_solver( &
-            "u", solver%u, writer_session%file, solver%backend, &
-            shape_dims, output_start, count_dims, self%convert_to_sp &
-          )
+          if (use_device_write) then
+            io_field => solver%u
+          else
+            io_field => host_fields(i_field)%ptr
+          end if
         case ("v")
-          call writer_session%writer%write_field_from_solver( &
-            "v", solver%v, writer_session%file, solver%backend, &
-            shape_dims, output_start, count_dims, self%convert_to_sp &
-          )
+          if (use_device_write) then
+            io_field => solver%v
+          else
+            io_field => host_fields(i_field)%ptr
+          end if
         case ("w")
-          call writer_session%writer%write_field_from_solver( &
-            "w", solver%w, writer_session%file, solver%backend, &
-            shape_dims, output_start, count_dims, self%convert_to_sp &
-          )
+          if (use_device_write) then
+            io_field => solver%w
+          else
+            io_field => host_fields(i_field)%ptr
+          end if
+        case default
+          error stop "write_fields(snapshot): Unknown field name"
         end select
+
+        call writer_session%writer%write_field_from_solver( &
+          trim(field_names(i_field)), io_field, writer_session%file, &
+          solver%backend, shape_dims, output_start, count_dims, &
+          self%convert_to_sp &
+        )
       end do
       return
     end if
