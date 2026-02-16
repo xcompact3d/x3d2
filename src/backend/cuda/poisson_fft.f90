@@ -71,8 +71,6 @@ module m_cuda_poisson_fft
     procedure :: undo_periodicity_x => undo_periodicity_x_cuda
     procedure :: enforce_periodicity_y => enforce_periodicity_y_cuda
     procedure :: undo_periodicity_y => undo_periodicity_y_cuda
-    procedure :: enforce_periodicity_xy => enforce_periodicity_xy_cuda
-    procedure :: undo_periodicity_xy => undo_periodicity_xy_cuda
   end type cuda_poisson_fft_t
 
   interface cuda_poisson_fft_t
@@ -1092,91 +1090,5 @@ contains
       )
 
   end subroutine undo_periodicity_y_cuda
-
-  subroutine enforce_periodicity_xy_cuda(self, f_out, f_in, temp)
-  !! Apply odd-even separation in both X and Y directions
-  !! Two-pass: X folding first, then Y folding
-    implicit none
-
-    class(cuda_poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f_out, temp
-    class(field_t), intent(in) :: f_in
-
- real(dp), device, pointer, dimension(:, :, :) :: f_out_dev, f_in_dev, temp_dev
-    type(dim3) :: blocks, threads
-
-    select type (f_out)
-    type is (cuda_field_t)
-      f_out_dev => f_out%data_d
-    end select
-
-    select type (f_in)
-    type is (cuda_field_t)
-      f_in_dev => f_in%data_d
-    end select
-
-    select type (temp)
-    type is (cuda_field_t)
-      temp_dev => temp%data_d
-    end select
-
-    ! First pass: X folding (f_in -> temp)
-    blocks = dim3(self%nz_loc, 1, 1)
-    threads = dim3(self%ny_loc, 1, 1)
-    call enforce_periodicity_x <<<blocks, threads>>>( & !&
-      temp_dev, f_in_dev, self%nx_glob &
-      )
-
-    ! Second pass: Y folding (temp -> f_out)
-    blocks = dim3(self%nz_loc, 1, 1)
-    threads = dim3(self%nx_loc, 1, 1)
-    call enforce_periodicity_y <<<blocks, threads>>>( & !&
-      f_out_dev, temp_dev, self%ny_glob &
-      )
-
-  end subroutine enforce_periodicity_xy_cuda
-
-  subroutine undo_periodicity_xy_cuda(self, f_out, f_in, temp)
-  !! Undo odd-even separation in both X and Y directions
-  !! Two-pass: Y unfolding first, then X unfolding (reverse order)
-    implicit none
-
-    class(cuda_poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f_out, temp
-    class(field_t), intent(in) :: f_in
-
- real(dp), device, pointer, dimension(:, :, :) :: f_out_dev, f_in_dev, temp_dev
-    type(dim3) :: blocks, threads
-
-    select type (f_out)
-    type is (cuda_field_t)
-      f_out_dev => f_out%data_d
-    end select
-
-    select type (f_in)
-    type is (cuda_field_t)
-      f_in_dev => f_in%data_d
-    end select
-
-    select type (temp)
-    type is (cuda_field_t)
-      temp_dev => temp%data_d
-    end select
-
-    ! First pass: Y unfolding (f_in -> temp)
-    blocks = dim3(self%nz_loc, 1, 1)
-    threads = dim3(self%nx_loc, 1, 1)
-    call undo_periodicity_y <<<blocks, threads>>>( & !&
-      temp_dev, f_in_dev, self%ny_glob &
-      )
-
-    ! Second pass: X unfolding (temp -> f_out)
-    blocks = dim3(self%nz_loc, 1, 1)
-    threads = dim3(self%ny_loc, 1, 1)
-    call undo_periodicity_x <<<blocks, threads>>>( & !&
-      f_out_dev, temp_dev, self%nx_glob &
-      )
-
-  end subroutine undo_periodicity_xy_cuda
 
 end module m_cuda_poisson_fft

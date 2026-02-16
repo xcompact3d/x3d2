@@ -58,8 +58,6 @@ module m_poisson_fft
     procedure(field_process), deferred :: undo_periodicity_x
     procedure(field_process), deferred :: enforce_periodicity_y
     procedure(field_process), deferred :: undo_periodicity_y
-    procedure(field_process_2), deferred :: enforce_periodicity_xy
-    procedure(field_process_2), deferred :: undo_periodicity_xy
     procedure :: base_init
     procedure :: solve_poisson
     procedure :: stretching_matrix
@@ -113,14 +111,6 @@ module m_poisson_fft
       class(field_t), intent(inout) :: f_out
       class(field_t), intent(in) :: f_in
     end subroutine field_process
-    subroutine field_process_2(self, f_out, f_in, temp)
-      import :: poisson_fft_t
-      import :: field_t
-
-      class(poisson_fft_t) :: self
-      class(field_t), intent(inout) :: f_out, temp
-      class(field_t), intent(in) :: f_in
-    end subroutine field_process_2
   end interface
 
 contains
