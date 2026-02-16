@@ -1,10 +1,11 @@
 module m_io_field_utils
-!! @brief Provides common utilities and helper routines for field I/O
-!! operations
+!! Common utilities and helper routines for field I/O operations.
 !!
-!! @details This module contains a collection of procedures and derived
-!! types that handle the low-level tasks required for writing field data
-!! Its primary functionalities include:
+!! This module contains a collection of procedures and derived types that
+!! handle the low-level tasks required for writing field data.
+!!
+!! **Primary functionalities:**
+!!
 !! - Data sub-sampling (striding) - applying a stride to data to reduce the
 !! size of the output files
 !! - Parallel I/O calculations - determining correct global shapes,
@@ -27,14 +28,56 @@ module m_io_field_utils
             cleanup_field_buffers
 
   type :: field_buffer_map_t
-    ! Race-free field buffer mapping for async I/O operations.
-    ! Each field gets its own dedicated buffer to prevent data races
-    ! when multiple async write operations are in flight.
+    !! Named buffer for thread-safe asynchronous I/O operations.
+    !!
+    !! This type maps a field name to its dedicated memory buffer, preventing
+    !! data races when multiple asynchronous write operations are in flight
+    !! simultaneously.
+    !!
+    !! **Purpose:**
+    !!
+    !! During asynchronous I/O, fields are copied into persistent buffers that
+    !! remain valid while I/O operations execute in the background. Each field
+    !! gets its own buffer identified by name, ensuring:
+    !!
+    !! - **Thread safety**: No conflicts between concurrent writes
+    !! - **Data integrity**: Field data remains stable during async operations
+    !! - **Flexibility**: Supports strided/downsampled data for visualization
+    !!
+    !! **Workflow:**
+    !!
+    !! 1. `prepare_field_buffers`: Allocate buffers for all fields
+    !! 2. `write_single_field_to_buffer`: Copy field data into named buffer
+    !! 3. ADIOS2 writes from buffer (async, non-blocking)
+    !! 4. `cleanup_field_buffers`: Deallocate buffers when done
+    !!
+    !! **Components:**
+    !!
+    !! - `field_name`: Identifier for buffer lookup (e.g., "u", "v", "w", "p")
+    !! - `buffer`: 3D array holding field data (possibly strided)
     character(len=32) :: field_name
     real(dp), dimension(:, :, :), allocatable :: buffer
   end type field_buffer_map_t
 
   type :: field_ptr_t
+    !! Wrapper type for storing polymorphic field pointers in arrays.
+    !!
+    !! Fortran does not allow allocatable arrays of polymorphic pointers directly
+    !! (e.g., `class(field_t), pointer :: fields(:)`), so this wrapper type
+    !! enables creating arrays of field pointers:
+    !!
+    !! ```fortran
+    !! type(field_ptr_t), allocatable :: field_array(:)
+    !! ```
+    !!
+    !! **Use cases:**
+    !!
+    !! - Managing multiple fields for I/O operations
+    !! - Storing references to velocity components (u, v, w)
+    !! - Building lists of fields to write/read simultaneously
+    !!
+    !! **Note:** Each `field_ptr_t` holds a pointer to a `field_t` object;
+    !! the pointer can be null if not yet associated.
     class(field_t), pointer :: ptr => null()
   end type field_ptr_t
 

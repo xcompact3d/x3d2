@@ -1,80 +1,96 @@
 module m_mesh_content
+  !! Module containing mesh content types for geometry, grid, and parallel decomposition.
+  !!
+  !! This module defines three main types:
+  !!
+  !! - `geo_t`: Geometry information including coordinates and mesh stretching
+  !! - `grid_t`: Grid dimensions and boundary conditions
+  !! - `par_t`: Parallel domain decomposition information
 
   use m_common, only: dp, pi
   implicit none
 
   type :: geo_t
-    !! Stores geometry information
-    !> Origin: coordinates of vertex (1, 1, 1)
-    real(dp) :: origin(3)
-    !> size of a cell in each direction for a uniform mesh
-    real(dp) :: d(3)
-    !> Global dimensions of the domain in each direction
-    real(dp) :: L(3)
-    !> Global coordinates at vertices
-    real(dp), allocatable, dimension(:, :) :: vert_coords
-    !> Global coordinates at midpoints
-    real(dp), allocatable, dimension(:, :) :: midp_coords
-    !> Stretching type
-    character(len=20), dimension(3) :: stretching
-    !> Stretching
-    logical :: stretched(3)
-    !> Stretching parameters
-    real(dp) :: alpha(3), beta(3)
-    !> Stretching factors at vertices
+    !! Geometry information type for domain coordinates and mesh stretching.
+    !!
+    !! This type stores physical domain dimensions, coordinates at grid points,
+    !! and mesh stretching parameters. Coordinates and stretching factors are
+    !! stored for both vertex-centered and cell-centered locations.
+    real(dp) :: origin(3)  !! Coordinates of vertex (1, 1, 1)
+    real(dp) :: d(3)       !! Cell size in each direction for uniform mesh
+    real(dp) :: L(3)       !! Global domain dimensions in each direction
+    real(dp), allocatable, dimension(:, :) :: vert_coords  !! Global coordinates at vertices
+    real(dp), allocatable, dimension(:, :) :: midp_coords  !! Global coordinates at cell midpoints
+    character(len=20), dimension(3) :: stretching  !! Stretching type in each direction
+    logical :: stretched(3)     !! Whether each direction has stretching applied
+    real(dp) :: alpha(3)        !! Stretching parameter \(\alpha\) in each direction
+    real(dp) :: beta(3)         !! Stretching parameter \(\beta\) in each direction
+    !> Stretching factors at vertices: \(\frac{ds}{d\xi}\), \(\frac{d^2s}{d\xi^2}\), \(\frac{d^2\xi}{ds^2}\)
     real(dp), allocatable, dimension(:, :) :: vert_ds, vert_ds2, vert_d2s
-    !> Stretching factors at midpoints
+    !> Stretching factors at midpoints: \(\frac{ds}{d\xi}\), \(\frac{d^2s}{d\xi^2}\), \(\frac{d^2\xi}{ds^2}\)
     real(dp), allocatable, dimension(:, :) :: midp_ds, midp_ds2, midp_d2s
   contains
-    procedure :: obtain_coordinates
+    procedure :: obtain_coordinates  !! Compute coordinates and stretching factors
   end type
 
   type :: grid_t
-    !! Stores grid information
-    integer, dimension(3) :: global_vert_dims ! global number of vertices in each direction without padding (cartesian structure)
-    integer, dimension(3) :: global_cell_dims ! global number of cells in each direction without padding (cartesian structure)
-
-    integer, dimension(3) :: vert_dims ! local number of vertices in each direction without padding (cartesian structure)
-    integer, dimension(3) :: cell_dims ! local number of cells in each direction without padding (cartesian structure)
-    logical, dimension(3) :: periodic_BC ! Whether or not a direction has a periodic BC
-    integer, dimension(3, 2) :: BCs_global
-    integer, dimension(3, 2) :: BCs
+    !! Grid information type for mesh dimensions and boundary conditions.
+    !!
+    !! This type stores both global and local (per MPI rank) grid dimensions,
+    !! accounting for both vertex-centered and cell-centered data. It also
+    !! manages boundary condition information.
+    integer, dimension(3) :: global_vert_dims  !! Global number of vertices in each direction
+    integer, dimension(3) :: global_cell_dims  !! Global number of cells in each direction
+    integer, dimension(3) :: vert_dims         !! Local number of vertices in each direction
+    integer, dimension(3) :: cell_dims         !! Local number of cells in each direction
+    logical, dimension(3) :: periodic_BC       !! Whether each direction has periodic BC
+    integer, dimension(3, 2) :: BCs_global     !! Global boundary conditions (lower, upper) in each direction
+    integer, dimension(3, 2) :: BCs            !! Local subdomain boundary conditions (lower, upper)
   contains
-    procedure :: copy_cell2vert_dims  ! Copies cell_dims to vert_dims taking periodicity into account
-    procedure :: copy_vert2cell_dims  ! Copies vert_dims to cell_dims taking periodicity into account
+    procedure :: copy_cell2vert_dims  !! Copy cell_dims to vert_dims accounting for periodicity
+    procedure :: copy_vert2cell_dims  !! Copy vert_dims to cell_dims accounting for periodicity
   end type
 
   type :: par_t
-    !! Stores parallel domain related information
-    integer :: nrank ! local rank ID
-    integer :: nproc ! total number of ranks/proc participating in the domain decomposition
-    integer, dimension(3) :: nrank_dir ! local rank ID in each direction
-    integer, dimension(3) :: nproc_dir ! total number of proc in each direction
-    integer, dimension(3) :: n_offset  ! number of cells offset in each direction due to domain decomposition
-    integer, dimension(3) :: pnext ! rank ID of the previous rank in each direction
-    integer, dimension(3) :: pprev ! rank ID of the next rank in each direction
+    !! Parallel domain decomposition information type.
+    !!
+    !! This type stores all information related to MPI domain decomposition,
+    !! including rank IDs, processor grid layout, and neighbor communication
+    !! information for halo exchanges.
+    integer :: nrank                !! Local MPI rank ID (0-based)
+    integer :: nproc                !! Total number of MPI ranks
+    integer, dimension(3) :: nrank_dir   !! Local rank ID in each direction (0-based)
+    integer, dimension(3) :: nproc_dir   !! Number of processors in each direction
+    integer, dimension(3) :: n_offset    !! Cell offset in each direction due to decomposition
+    integer, dimension(3) :: pnext       !! Rank ID of next neighbor in each direction
+    integer, dimension(3) :: pprev       !! Rank ID of previous neighbor in each direction
   contains
-    procedure :: is_root ! returns if the current rank is the root rank
-    procedure :: compute_rank_pos_from_global ! fills in pnext, pprev and nrank_dir from global ranks map
+    procedure :: is_root                        !! Check if current rank is root (rank 0)
+    procedure :: compute_rank_pos_from_global   !! Compute rank position and neighbors from global map
   end type
 
 contains
 
   pure function is_root(self) result(is_root_rank)
-    !! Returns wether or not the current rank is the root rank
-    class(par_t), intent(in) :: self
-    logical :: is_root_rank
+    !! Check whether the current MPI rank is the root rank.
+    !!
+    !! The root rank is defined as rank 0 in the MPI communicator.
+    class(par_t), intent(in) :: self  !! Parallel decomposition object
+    logical :: is_root_rank           !! True if this is rank 0
 
     is_root_rank = (self%nrank == 0)
 
   end function
 
   pure subroutine compute_rank_pos_from_global(self, global_ranks)
-    !! From the global rank maps, fills in the rank position as well
-    !! as the previous and next rank in the `par` structure
-
-    class(par_t), intent(inout) :: self
-    integer, dimension(:, :, :), intent(in) :: global_ranks
+    !! Compute rank position and neighbor ranks from global rank map.
+    !!
+    !! From the 3D global rank map, this subroutine determines the position
+    !! of the current rank in the processor grid and identifies the previous
+    !! and next neighboring ranks in each direction for halo communication.
+    !! Periodic wrapping is applied for neighbor identification.
+    class(par_t), intent(inout) :: self                !! Parallel decomposition object to update
+    integer, dimension(:, :, :), intent(in) :: global_ranks  !! 3D map of MPI ranks
     integer, dimension(3) :: subd_pos, subd_pos_prev, subd_pos_next
     integer :: dir, nproc
 
@@ -102,10 +118,13 @@ contains
   end subroutine
 
   pure subroutine copy_vert2cell_dims(self, par)
-    !! Copies vert_dims information to cell_dims taking
-    !! periodicity into account
-    class(grid_t), intent(inout) :: self
-    type(par_t), intent(in) :: par
+    !! Copy vertex dimensions to cell dimensions accounting for periodicity.
+    !!
+    !! For periodic boundaries, vertex and cell dimensions are equal. For
+    !! non-periodic boundaries on the last domain, cell dimensions are one
+    !! less than vertex dimensions.
+    class(grid_t), intent(inout) :: self  !! Grid object to update
+    type(par_t), intent(in) :: par        !! Parallel decomposition info
     integer :: dir
     logical :: is_last_domain
 
@@ -121,10 +140,13 @@ contains
   end subroutine
 
   pure subroutine copy_cell2vert_dims(self, par)
-    !! Copies cell_dims information to vert_dims taking
-    !! periodicity into account
-    class(grid_t), intent(inout) :: self
-    type(par_t), intent(in) :: par
+    !! Copy cell dimensions to vertex dimensions accounting for periodicity.
+    !!
+    !! For periodic boundaries, vertex and cell dimensions are equal. For
+    !! non-periodic boundaries on the last domain, vertex dimensions are one
+    !! more than cell dimensions.
+    class(grid_t), intent(inout) :: self  !! Grid object to update
+    type(par_t), intent(in) :: par        !! Parallel decomposition info
     integer :: dir
     logical :: is_last_domain
 
@@ -140,10 +162,17 @@ contains
   end subroutine
 
   subroutine obtain_coordinates(self, vert_dims, cell_dims, n_offset)
-    !! Obtains global coordinates for all the vertices and midpoints
+    !! Compute global coordinates and stretching factors for grid points.
+    !!
+    !! This subroutine calculates coordinates at both vertex-centered and
+    !! cell-centered locations, supporting both uniform and stretched meshes.
+    !! For stretched meshes, it also computes the stretching factors
+    !! \(\frac{ds}{d\xi}\), \(\frac{d^2s}{d\xi^2}\), and \(\frac{d^2\xi}{ds^2}\).
     implicit none
-    class(geo_t) :: self
-    integer, intent(in) :: vert_dims(3), cell_dims(3), n_offset(3)
+    class(geo_t) :: self                      !! Geometry object to populate
+    integer, intent(in) :: vert_dims(3)       !! Local vertex dimensions
+    integer, intent(in) :: cell_dims(3)       !! Local cell dimensions
+    integer, intent(in) :: n_offset(3)        !! Cell offset due to domain decomposition
 
     integer :: dir, i, i_glob
     real(dp) :: L_inf, alpha, beta, r, const, s, yeta_vt, yeta_mp, coord

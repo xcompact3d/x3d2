@@ -1,4 +1,28 @@
 module m_tdsops
+  !! Tridiagonal solver operators for compact finite differences.
+  !!
+  !! This module provides preprocessed tridiagonal operator arrays for
+  !! solving compact finite difference schemes. It supports both distributed
+  !! and Thomas algorithm implementations for computing:
+  !!
+  !! - First and second derivatives
+  !! - Interpolation between vertex and cell-centre grids
+  !! - Staggered derivatives
+  !!
+  !! The operators are preprocessed based on:
+  !!
+  !! - Grid spacing and optional stretching
+  !! - Boundary conditions (periodic, Neumann, Dirichlet)
+  !! - Numerical scheme (compact schemes of various orders)
+  !! - Symmetry properties for free-slip boundaries
+  !!
+  !! The distributed algorithm is designed for parallel execution and consists of:
+  !!
+  !! 1. Forward/backward elimination phase (`dist_fw`, `dist_bw`)
+  !! 2. Back-substitution phase (`dist_sa`, `dist_sc`)
+  !!
+  !! The Thomas algorithm (`thom_*`) is used for serial execution or
+  !! when the distributed approach is not suitable.
   use iso_fortran_env, only: stderr => error_unit
 
   use m_common, only: dp, pi, VERT, CELL, &
@@ -24,21 +48,35 @@ module m_tdsops
       !! This class does not know about the current rank or its relative
       !! location among other ranks. All the operator arrays here are used when
       !! executing a distributed tridiagonal solver phase one or two.
-    real(dp), allocatable, dimension(:) :: dist_fw, dist_bw, & !! fw/bw phase
-                                           dist_sa, dist_sc, & !! back subs.
-                                           dist_af !! the auxiliary factors
-    real(dp), allocatable, dimension(:) :: thom_f, thom_s, thom_w, thom_p
-    real(dp), allocatable :: stretch(:), stretch_correct(:)
-    real(dp), allocatable :: coeffs(:), coeffs_s(:, :), coeffs_e(:, :)
-    real(dp) :: alpha, a, b, c = 0._dp, d = 0._dp !! Compact scheme coeffs
-    logical :: periodic
-    integer :: n_tds !! Tridiagonal system size
-    integer :: n_rhs !! Right-hand-side builder size
-    integer :: move = 0 !! move between vertices and cell centres
-    integer :: n_halo !! number of halo points
+    real(dp), allocatable, dimension(:) :: dist_fw     !! Forward elimination coefficients (distributed)
+    real(dp), allocatable, dimension(:) :: dist_bw     !! Backward elimination coefficients (distributed)
+    real(dp), allocatable, dimension(:) :: dist_sa     !! Back-substitution coefficients A (distributed)
+    real(dp), allocatable, dimension(:) :: dist_sc     !! Back-substitution coefficients C (distributed)
+    real(dp), allocatable, dimension(:) :: dist_af     !! Auxiliary factors (distributed)
+    real(dp), allocatable, dimension(:) :: thom_f      !! Forward elimination factors (Thomas)
+    real(dp), allocatable, dimension(:) :: thom_s      !! Scaling factors (Thomas)
+    real(dp), allocatable, dimension(:) :: thom_w      !! Work array (Thomas)
+    real(dp), allocatable, dimension(:) :: thom_p      !! Precomputed products (Thomas)
+    real(dp), allocatable :: stretch(:)                !! Grid stretching coefficients
+    real(dp), allocatable :: stretch_correct(:)        !! Stretch correction for 2nd derivatives
+    real(dp), allocatable :: coeffs(:)                 !! RHS builder coefficients (interior)
+    real(dp), allocatable :: coeffs_s(:, :)            !! RHS builder coefficients (start boundary)
+    real(dp), allocatable :: coeffs_e(:, :)            !! RHS builder coefficients (end boundary)
+    real(dp) :: alpha                                  !! Compact scheme coefficient (LHS)
+    real(dp) :: a, b                                   !! Compact scheme coefficients (RHS)
+    real(dp) :: c = 0._dp, d = 0._dp                   !! Extended compact scheme coefficients
+    logical :: periodic                                !! Periodic boundary condition flag
+    integer :: n_tds                                   !! Tridiagonal system size
+    integer :: n_rhs                                   !! Right-hand-side builder size
+    integer :: move = 0                                !! Offset for vertex/cell-centre conversion
+    integer :: n_halo                                  !! Number of halo points
   contains
-    procedure :: deriv_1st, deriv_2nd, interpl_mid, stagder_1st
-    procedure :: preprocess_dist, preprocess_thom
+    procedure :: deriv_1st       !! Set up first derivative operator
+    procedure :: deriv_2nd       !! Set up second derivative operator
+    procedure :: interpl_mid     !! Set up interpolation operator
+    procedure :: stagder_1st     !! Set up staggered derivative operator
+    procedure :: preprocess_dist !! Preprocess for distributed algorithm
+    procedure :: preprocess_thom !! Preprocess for Thomas algorithm
   end type tdsops_t
 
   interface tdsops_t
@@ -49,10 +87,21 @@ module m_tdsops
     !! Directional tridiagonal solver container.
     !!
     !! This class contains the preprocessed tridiagonal solvers for operating
-    !! in each coordinate direction.
-    class(tdsops_t), allocatable :: der1st, der1st_sym, der2nd, der2nd_sym, &
-      stagder_v2p, stagder_p2v, interpl_v2p, interpl_p2v
-    integer :: dir
+    !! in a specific coordinate direction (x, y, or z). Each direction requires
+    !! different operators for:
+    !! - Regular and symmetric first derivatives
+    !! - Regular and symmetric second derivatives
+    !! - Staggered derivatives (vertex-to-cell and cell-to-vertex)
+    !! - Interpolation (vertex-to-cell and cell-to-vertex)
+    class(tdsops_t), allocatable :: der1st        !! First derivative operator
+    class(tdsops_t), allocatable :: der1st_sym    !! Symmetric first derivative operator
+    class(tdsops_t), allocatable :: der2nd        !! Second derivative operator
+    class(tdsops_t), allocatable :: der2nd_sym    !! Symmetric second derivative operator
+    class(tdsops_t), allocatable :: stagder_v2p   !! Staggered derivative (vertex to cell)
+    class(tdsops_t), allocatable :: stagder_p2v   !! Staggered derivative (cell to vertex)
+    class(tdsops_t), allocatable :: interpl_v2p   !! Interpolation (vertex to cell)
+    class(tdsops_t), allocatable :: interpl_p2v   !! Interpolation (cell to vertex)
+    integer :: dir                                 !! Direction index (DIR_X, DIR_Y, DIR_Z)
   end type dirps_t
 
 contains
@@ -61,44 +110,57 @@ contains
     n_tds, delta, operation, scheme, bc_start, bc_end, &
     stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
     ) result(tdsops)
-    !! Constructor function for the tdsops_t class.
+    !! Initialise and construct a tridiagonal operator.
     !!
-    !! 'n_tds', 'delta', 'operation', 'scheme', 'bc_start', and 'bc_end' are
-    !! necessary arguments. The remaining arguments are optional.
+    !! This function creates a preprocessed tridiagonal operator for compact
+    !! finite difference operations. Required arguments are 'n_tds', 'delta',
+    !! 'operation', 'scheme', 'bc_start', and 'bc_end'. Optional arguments
+    !! enable stretched grids, staggered operations, and boundary condition tuning.
     !!
-    !! 'stretch' is for obtaining the correct derivations in a stretched mesh
-    !! 'stretch_correct' is for correcting the second derivative with the first
+    !! **Operation types:**
+    !! - 'first-deriv': First derivative \( \frac{\partial f}{\partial x} \)
+    !! - 'second-deriv': Second derivative \( \frac{\partial^2 f}{\partial x^2} \)
+    !! - 'interpolate': Interpolation between grids
+    !! - 'stag-deriv': Staggered derivative (vertex ↔ cell)
     !!
-    !! 'from_to' is necessary for interpolation and staggared derivative, and
-    !! it can be 'v2p' or 'p2v'.
-    !! If the specific region the instance is operating is not a boundary
-    !! region, then 'bc_start' and 'bc_end' are BC_HALO.
+    !! **Boundary conditions:**
+    !! - BC_PERIODIC: Periodic boundaries
+    !! - BC_NEUMANN: Neumann (zero gradient) boundaries
+    !! - BC_DIRICHLET: Dirichlet (fixed value) boundaries
     !!
-    !! 'sym' is relevant when the BC is free-slip. If sym is .true. then it
-    !! means the field we operate on is assumed to be an even function
-    !! (symmetric, cos type) accross the boundary. If it is .false. it means
-    !! the field is assumed to be an odd function (anti-symmetric, sin type).
+    !! **Optional stretched grid support:**
+    !! 'stretch' provides stretching coefficients for non-uniform grids.
+    !! 'stretch_correct' applies correction for second derivatives on stretched grids.
     !!
-    !! 'c_nu', 'nu0_nu' are relevant when operation is second order
-    !! derivative and scheme is compact6-hyperviscous.
+    !! **Staggered operations:**
+    !! 'from_to' specifies direction: 'v2p' (vertex-to-cell) or 'p2v' (cell-to-vertex)
+    !!
+    !! **Symmetry for free-slip boundaries:**
+    !! 'sym' determines field symmetry at Neumann boundaries:
+    !! - .true. = symmetric (cos-type, even function)
+    !! - .false. = anti-symmetric (sin-type, odd function)
+    !!
+    !! **Hyperviscosity parameters:**
+    !! 'c_nu' and 'nu0_nu' are used for compact6-hyperviscous second derivatives
     implicit none
 
-    type(tdsops_t) :: tdsops !! return value of the function
+    type(tdsops_t) :: tdsops                         !! Constructed tridiagonal operator
 
-    integer, intent(in) :: n_tds !! Tridiagonal system size
-    real(dp), intent(in) :: delta !! Grid spacing
-    character(*), intent(in) :: operation, scheme
-    integer, intent(in) :: bc_start, bc_end !! Boundary Cond.
-    real(dp), optional, intent(in) :: stretch(:) !! Stretching coefficients
-    real(dp), optional, intent(in) :: stretch_correct(:) !! Stretch correction
-    integer, optional, intent(in) :: n_halo !! Number of halo cells
-    character(*), optional, intent(in) :: from_to !! 'v2p' or 'p2v'
-    logical, optional, intent(in) :: sym !! (==npaire), only for Neumann BCs
-    real(dp), optional, intent(in) :: c_nu, nu0_nu !! params for hypervisc.
+    integer, intent(in) :: n_tds                     !! Tridiagonal system size
+    real(dp), intent(in) :: delta                    !! Grid spacing
+    character(*), intent(in) :: operation            !! Operation type
+    character(*), intent(in) :: scheme               !! Numerical scheme name
+    integer, intent(in) :: bc_start, bc_end          !! Boundary conditions
+    real(dp), optional, intent(in) :: stretch(:)     !! Grid stretching coefficients
+    real(dp), optional, intent(in) :: stretch_correct(:)  !! Stretch correction
+    integer, optional, intent(in) :: n_halo          !! Number of halo cells
+    character(*), optional, intent(in) :: from_to    !! Staggering: 'v2p' or 'p2v'
+    logical, optional, intent(in) :: sym             !! Symmetry for Neumann BCs
+    real(dp), optional, intent(in) :: c_nu, nu0_nu   !! Hyperviscosity parameters
 #ifdef SINGLE_PREC
-    real(dp) :: tol = 1e-12
+    real(dp) :: tol = 1e-12                          !! Tolerance for checking small coefficients in single precision
 #else
-    real(dp) :: tol = 1e-16
+    real(dp) :: tol = 1e-16                          !! Tolerance for checking small coefficients in double precision
 #endif
 
     integer :: n, n_stencil
@@ -197,13 +259,28 @@ contains
   end function tdsops_init
 
   subroutine deriv_1st(self, delta, scheme, bc_start, bc_end, sym)
+    !! Set up first derivative operator.
+    !!
+    !! Configures the compact finite difference operator for computing first
+    !! derivatives \( \frac{\partial f}{\partial x} \). Supports various compact
+    !! schemes with different orders of accuracy:
+    !!
+    !! **Supported schemes:**
+    !! - 'compact6': 6th-order accuracy
+    !! - 'compact6-exp': 6th-order with exponential profile
+    !! - 'compact6-hyp': 6th-order with hyperbolic profile
+    !!
+    !! The operator is built for the tridiagonal system:
+    !! \[ \alpha f'_{i-1} + f'_i + \alpha f'_{i+1} = a \frac{f_{i+1} - f_{i-1}}{2\Delta x} + b \frac{f_{i+2} - f_{i-2}}{4\Delta x} \]
+    !!
+    !! Boundary conditions modify the stencil near domain boundaries.
     implicit none
 
-    class(tdsops_t), intent(inout) :: self
-    real(dp), intent(in) :: delta
-    character(*), intent(in) :: scheme
-    integer, intent(in) :: bc_start, bc_end
-    logical, optional, intent(in) :: sym
+    class(tdsops_t), intent(inout) :: self     !! Tridiagonal operator (modified in-place)
+    real(dp), intent(in) :: delta               !! Grid spacing
+    character(*), intent(in) :: scheme          !! Scheme name
+    integer, intent(in) :: bc_start, bc_end     !! Boundary conditions
+    logical, optional, intent(in) :: sym        !! Symmetry flag for Neumann BCs
 
     real(dp), allocatable :: dist_b(:)
     real(dp) :: alpha, afi, bfi
@@ -344,14 +421,30 @@ contains
 
   subroutine deriv_2nd(self, delta, scheme, bc_start, bc_end, sym, &
                        c_nu, nu0_nu)
+    !! Set up second derivative operator.
+    !!
+    !! Configures the compact finite difference operator for computing second
+    !! derivatives \( \frac{\partial^2 f}{\partial x^2} \). Supports various compact
+    !! schemes with different orders of accuracy and optional hyperviscosity.
+    !!
+    !! **Supported schemes:**
+    !! - 'compact6': 6th-order accuracy
+    !! - 'compact6-hyperviscous': 6th-order with selective hyperviscosity
+    !!
+    !! The operator is built for the tridiagonal system:
+    !! \[ \alpha f''_{i-1} + f''_i + \alpha f''_{i+1} = a \frac{f_{i+1} - 2f_i + f_{i-1}}{\Delta x^2} + b \frac{f_{i+2} - 2f_i + f_{i-2}}{4\Delta x^2} \]
+    !!
+    !! **Hyperviscosity:** Optional 'c_nu' and 'nu0_nu' parameters enable selective
+    !! damping of high-frequency modes for numerical stability.
     implicit none
 
-    class(tdsops_t), intent(inout) :: self
-    real(dp), intent(in) :: delta
-    character(*), intent(in) :: scheme
-    integer, intent(in) :: bc_start, bc_end
-    logical, optional, intent(in) :: sym
-    real(dp), optional, intent(in) :: c_nu, nu0_nu
+    class(tdsops_t), intent(inout) :: self     !! Tridiagonal operator (modified in-place)
+    real(dp), intent(in) :: delta               !! Grid spacing
+    character(*), intent(in) :: scheme          !! Scheme name
+    integer, intent(in) :: bc_start, bc_end     !! Boundary conditions
+    logical, optional, intent(in) :: sym        !! Symmetry flag for Neumann BCs
+    real(dp), optional, intent(in) :: c_nu      !! Hyperviscosity coefficient
+    real(dp), optional, intent(in) :: nu0_nu    !! Hyperviscosity parameter
 
     real(dp), allocatable :: dist_b(:)
     real(dp) :: alpha, asi, bsi, csi, dsi
@@ -556,12 +649,29 @@ contains
   end subroutine deriv_2nd
 
   subroutine interpl_mid(self, scheme, from_to, bc_start, bc_end, sym)
+    !! Set up interpolation operator between vertex and cell grids.
+    !!
+    !! Configures the compact interpolation operator for transferring data
+    !! between staggered grids (vertex-centred ↔ cell-centred). Uses compact
+    !! schemes for high-order accuracy.
+    !!
+    !! **Supported schemes:**
+    !! - 'compact6': 6th-order interpolation
+    !! - 'classic': Classical 2nd-order interpolation
+    !!
+    !! **Direction:**
+    !! - 'v2p': Vertex to cell-centre (pressure point)
+    !! - 'p2v': Cell-centre to vertex
+    !!
+    !! The interpolation is critical for maintaining consistency between
+    !! velocity and pressure grids in staggered arrangements.
     implicit none
 
-    class(tdsops_t), intent(inout) :: self
-    character(*), intent(in) :: scheme, from_to
-    integer, intent(in) :: bc_start, bc_end
-    logical, optional, intent(in) :: sym
+    class(tdsops_t), intent(inout) :: self     !! Tridiagonal operator (modified in-place)
+    character(*), intent(in) :: scheme          !! Interpolation scheme name
+    character(*), intent(in) :: from_to         !! Direction: 'v2p' or 'p2v'
+    integer, intent(in) :: bc_start, bc_end     !! Boundary conditions
+    logical, optional, intent(in) :: sym        !! Symmetry flag for Neumann BCs
 
     real(dp), allocatable :: dist_b(:)
     real(dp) :: alpha, aici, bici, cici, dici
@@ -702,13 +812,32 @@ contains
   end subroutine interpl_mid
 
   subroutine stagder_1st(self, delta, scheme, from_to, bc_start, bc_end, sym)
+    !! Set up staggered first derivative operator.
+    !!
+    !! Configures the compact operator for computing first derivatives on
+    !! staggered grids, where the derivative is computed at a different grid
+    !! location than the input data.
+    !!
+    !! **Supported schemes:**
+    !! - 'compact6': 6th-order staggered derivative
+    !! - 'classic': Classical 2nd-order staggered derivative
+    !!
+    !! **Direction:**
+    !! - 'v2p': Derivative from vertex grid to cell-centre grid
+    !! - 'p2v': Derivative from cell-centre grid to vertex grid
+    !!
+    !! Staggered derivatives are essential for:
+    !! - Computing divergence and gradient on staggered grids
+    !! - Maintaining numerical stability in pressure-velocity coupling
+    !! - Accurate representation of boundary conditions
     implicit none
 
-    class(tdsops_t), intent(inout) :: self
-    real(dp), intent(in) :: delta
-    character(*), intent(in) :: scheme, from_to
-    integer, intent(in) :: bc_start, bc_end
-    logical, optional, intent(in) :: sym
+    class(tdsops_t), intent(inout) :: self     !! Tridiagonal operator (modified in-place)
+    real(dp), intent(in) :: delta               !! Grid spacing
+    character(*), intent(in) :: scheme          !! Scheme name
+    character(*), intent(in) :: from_to         !! Direction: 'v2p' or 'p2v'
+    integer, intent(in) :: bc_start, bc_end     !! Boundary conditions
+    logical, optional, intent(in) :: sym        !! Symmetry flag for Neumann BCs
 
     real(dp), allocatable :: dist_b(:)
     real(dp) :: alpha, aci, bci
@@ -810,11 +939,23 @@ contains
   end subroutine stagder_1st
 
   subroutine preprocess_dist(self, dist_b)
+    !! Preprocess tridiagonal system for distributed algorithm.
+    !!
+    !! This subroutine preprocesses the tridiagonal matrix coefficients for
+    !! use in the distributed (parallel) tridiagonal solver algorithm. The
+    !! preprocessing follows Algorithm 3 from:
+    !! Reference: DOI: 10.1109/MCSE.2021.3130544
+    !!
+    !! The distributed algorithm consists of two phases:
+    !! 1. **Forward/backward elimination**: Reduces the system in parallel subdomains
+    !! 2. **Back-substitution**: Applies corrections from neighbouring ranks
+    !!
+    !! This preprocessing computes the coefficients (dist_fw, dist_bw, dist_sa,
+    !! dist_sc, dist_af) needed for both phases, enabling efficient parallel execution.
     implicit none
 
-    class(tdsops_t), intent(inout) :: self
-
-    real(dp), dimension(:), intent(in) :: dist_b
+    class(tdsops_t), intent(inout) :: self     !! Tridiagonal operator (modified in-place)
+    real(dp), dimension(:), intent(in) :: dist_b  !! Diagonal coefficients of tridiagonal system
 
     integer :: i
 
@@ -869,10 +1010,24 @@ contains
   end subroutine preprocess_dist
 
   subroutine preprocess_thom(self, b)
+    !! Preprocess tridiagonal system for Thomas algorithm.
+    !!
+    !! This subroutine preprocesses the tridiagonal matrix coefficients for
+    !! use in the Thomas algorithm (serial tridiagonal solver). The Thomas
+    !! algorithm is a simplified form of Gaussian elimination optimised for
+    !! tridiagonal systems.
+    !!
+    !! The preprocessing performs forward elimination on the coefficients:
+    !! \( c'_i = c_i / (b_i - a_i \cdot c'_{i-1}) \)
+    !! \( d'_i = (d_i - a_i \cdot d'_{i-1}) / (b_i - a_i \cdot c'_{i-1}) \)
+    !!
+    !! This enables efficient back-substitution during the solve phase. This
+    !! algorithm is used within individual MPI ranks when the distributed
+    !! algorithm is employed, or for the entire domain in serial execution.
     implicit none
 
-    class(tdsops_t), intent(inout) :: self
-    real(dp), dimension(:), intent(in) :: b
+    class(tdsops_t), intent(inout) :: self     !! Tridiagonal operator (modified in-place)
+    real(dp), dimension(:), intent(in) :: b    !! Diagonal coefficients of tridiagonal system
 
     integer :: i, n
 

@@ -1,4 +1,14 @@
 module m_cuda_backend
+  !! CUDA backend implementing GPU-accelerated solver operations.
+  !!
+  !! Extends `base_backend_t` with GPU kernel launches and device memory
+  !! management. Transport equations, tridiagonal solves, FFT operations,
+  !! and field manipulations execute on GPU.
+  !!
+  !! **MPI Communication:** Halo exchange passes device pointers directly to
+  !! MPI calls. With GPU-aware MPI implementations (OpenMPI with CUDA support,
+  !! MVAPICH2-GDR), data transfers directly between GPU memories. Without
+  !! GPU-aware MPI, the implementation stages through host memory automatically.
   use iso_fortran_env, only: stderr => error_unit
   use cudafor
   use mpi
@@ -35,6 +45,10 @@ module m_cuda_backend
   private :: transeq_halo_exchange, transeq_dist_component
 
   type, extends(base_backend_t) :: cuda_backend_t
+    !! GPU backend with device communication buffers and kernel configurations.
+    !!
+    !! Extends [[m_base_backend(module):base_backend_t(type)]] with CUDA-specific
+    !! implementations and device memory buffers for halo exchange.
     !character(len=*), parameter :: name = 'cuda'
     real(dp), device, allocatable, dimension(:, :, :) :: &
       u_recv_s_dev, u_recv_e_dev, u_send_s_dev, u_send_e_dev, &
@@ -78,11 +92,16 @@ module m_cuda_backend
 contains
 
   function init(mesh, allocator) result(backend)
+    !! Initialise CUDA backend with kernel configurations and communication buffers.
+    !!
+    !! Sets up CUDA thread blocks ([[m_cuda_common(module):SZ(variable)]] threads per
+    !! warp-aligned block) and allocates device buffers for halo exchange. Buffer size
+    !! accommodates largest pencil direction to support all three orientations.
     implicit none
 
-    type(mesh_t), target, intent(inout) :: mesh
-    class(allocator_t), target, intent(inout) :: allocator
-    type(cuda_backend_t) :: backend
+    type(mesh_t), target, intent(inout) :: mesh  !! Computational mesh
+    class(allocator_t), target, intent(inout) :: allocator  !! GPU memory allocator
+    type(cuda_backend_t) :: backend  !! Initialised CUDA backend
 
     type(cuda_poisson_fft_t) :: cuda_poisson_fft
     integer :: n_groups
@@ -140,19 +159,25 @@ contains
     self, tdsops, n_tds, delta, operation, scheme, bc_start, bc_end, &
     stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
     )
+    !! Allocate and initialise CUDA tridiagonal operators.
+    !!
+    !! Implements [[m_base_backend(module):alloc_tdsops(interface)]] for GPU.
+    !! Allocates [[m_cuda_tdsops(module):cuda_tdsops_t(type)]] with device-resident
+    !! coefficient arrays.
     implicit none
 
     class(cuda_backend_t) :: self
-    class(tdsops_t), allocatable, intent(inout) :: tdsops
-    integer, intent(in) :: n_tds
-    real(dp), intent(in) :: delta
-    character(*), intent(in) :: operation, scheme
-    integer, intent(in) :: bc_start, bc_end
-    real(dp), optional, intent(in) :: stretch(:), stretch_correct(:)
-    integer, optional, intent(in) :: n_halo
-    character(*), optional, intent(in) :: from_to
-    logical, optional, intent(in) :: sym
-    real(dp), optional, intent(in) :: c_nu, nu0_nu
+    class(tdsops_t), allocatable, intent(inout) :: tdsops  !! Output: allocated CUDA operators
+    integer, intent(in) :: n_tds  !! Number of tridiagonal systems
+    real(dp), intent(in) :: delta  !! Grid spacing
+    character(*), intent(in) :: operation  !! Operation type (derivative/interpolation)
+    character(*), intent(in) :: scheme  !! Scheme name
+    integer, intent(in) :: bc_start, bc_end  !! Boundary condition flags
+    real(dp), optional, intent(in) :: stretch(:), stretch_correct(:)  !! Grid stretching factors
+    integer, optional, intent(in) :: n_halo  !! Halo width for distributed schemes
+    character(*), optional, intent(in) :: from_to  !! Interpolation direction
+    logical, optional, intent(in) :: sym  !! Symmetry flag
+    real(dp), optional, intent(in) :: c_nu, nu0_nu  !! Viscosity parameters
 
     allocate (cuda_tdsops_t :: tdsops)
 
@@ -166,13 +191,18 @@ contains
   end subroutine alloc_cuda_tdsops
 
   subroutine transeq_x_cuda(self, du, dv, dw, u, v, w, nu, dirps)
+    !! Compute transport equation in x-direction using CUDA.
+    !!
+    !! Implements [[m_base_backend(module):transeq_ders(interface)]].
+    !! Routes to distributed or Thomas algorithm based on
+    !! [[m_tdsops(module):dirps_t(type)]] configuration.
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(inout) :: du, dv, dw
-    class(field_t), intent(in) :: u, v, w
-    real(dp), intent(in) :: nu
-    type(dirps_t), intent(in) :: dirps
+    class(field_t), intent(inout) :: du, dv, dw  !! Output: RHS contributions
+    class(field_t), intent(in) :: u, v, w  !! Input: velocity components
+    real(dp), intent(in) :: nu  !! Kinematic viscosity
+    type(dirps_t), intent(in) :: dirps  !! Directional operators
 
     call self%transeq_cuda_dist(du, dv, dw, u, v, w, nu, dirps, &
                                 self%xblocks, self%xthreads)
@@ -180,13 +210,17 @@ contains
   end subroutine transeq_x_cuda
 
   subroutine transeq_y_cuda(self, du, dv, dw, u, v, w, nu, dirps)
+    !! Compute transport equation in y-direction using CUDA.
+    !!
+    !! Implements [[m_base_backend(module):transeq_ders(interface)]].
+    !! Arguments reordered (v, u, w) to match y-pencil orientation.
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(inout) :: du, dv, dw
-    class(field_t), intent(in) :: u, v, w
-    real(dp), intent(in) :: nu
-    type(dirps_t), intent(in) :: dirps
+    class(field_t), intent(inout) :: du, dv, dw  !! Output: RHS contributions
+    class(field_t), intent(in) :: u, v, w  !! Input: velocity components
+    real(dp), intent(in) :: nu  !! Kinematic viscosity
+    type(dirps_t), intent(in) :: dirps  !! Directional operators
 
     ! u, v, w is reordered so that we pass v, u, w
     call self%transeq_cuda_dist(dv, du, dw, v, u, w, nu, dirps, &
@@ -195,13 +229,17 @@ contains
   end subroutine transeq_y_cuda
 
   subroutine transeq_z_cuda(self, du, dv, dw, u, v, w, nu, dirps)
+    !! Compute transport equation in z-direction using CUDA.
+    !!
+    !! Implements [[m_base_backend(module):transeq_ders(interface)]].
+    !! Arguments reordered (w, u, v) to match z-pencil orientation.
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(inout) :: du, dv, dw
-    class(field_t), intent(in) :: u, v, w
-    real(dp), intent(in) :: nu
-    type(dirps_t), intent(in) :: dirps
+    class(field_t), intent(inout) :: du, dv, dw  !! Output: RHS contributions
+    class(field_t), intent(in) :: u, v, w  !! Input: velocity components
+    real(dp), intent(in) :: nu  !! Kinematic viscosity
+    type(dirps_t), intent(in) :: dirps  !! Directional operators
 
     ! u, v, w is reordered so that we pass w, u, v
     call self%transeq_cuda_dist(dw, du, dv, w, u, v, nu, dirps, &
@@ -212,16 +250,19 @@ contains
   subroutine transeq_species_cuda(self, dspec, uvw, spec, nu, dirps, sync)
     !! Compute the convection and diffusion for the given field
     !! in the given direction.
-    !! Halo exchange for the given field is necessary
-    !! When sync is true, halo exchange of momentum is necessary
+    !!
+    !! Implements [[m_base_backend(module):transeq_ders_spec(interface)]].
+    !! Halo exchange for the given field is necessary.
+    !! When sync is true, halo exchange of momentum is necessary.
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(inout) :: dspec
-    class(field_t), intent(in) :: uvw, spec
-    real(dp), intent(in) :: nu
-    type(dirps_t), intent(in) :: dirps
-    logical, intent(in) :: sync
+    class(field_t), intent(inout) :: dspec  !! Output: RHS contribution for species
+    class(field_t), intent(in) :: uvw  !! Input: velocity component in transport direction
+    class(field_t), intent(in) :: spec  !! Input: species concentration field
+    real(dp), intent(in) :: nu  !! Diffusivity (kinematic viscosity)
+    type(dirps_t), intent(in) :: dirps  !! Directional operators
+    logical, intent(in) :: sync  !! If true, also exchange momentum halos
 
     integer :: n_groups
     type(cuda_tdsops_t), pointer :: der1st, der1st_sym, der2nd, der2nd_sym
@@ -282,14 +323,19 @@ contains
 
   subroutine transeq_cuda_dist(self, du, dv, dw, u, v, w, nu, dirps, &
                                blocks, threads)
+    !! Compute transport equation using distributed compact scheme on GPU.
+    !!
+    !! Handles halo exchange with [[m_cuda_sendrecv(module):sendrecv_3fields(interface)]],
+    !! launches [[m_cuda_exec_dist(module):exec_dist_transeq_3fused(interface)]] kernel,
+    !! and gathers derivatives.
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(inout) :: du, dv, dw
-    class(field_t), intent(in) :: u, v, w
-    real(dp), intent(in) :: nu
-    type(dirps_t), intent(in) :: dirps
-    type(dim3), intent(in) :: blocks, threads
+    class(field_t), intent(inout) :: du, dv, dw  !! Output: RHS contributions
+    class(field_t), intent(in) :: u, v, w  !! Input: velocity components
+    real(dp), intent(in) :: nu  !! Kinematic viscosity
+    type(dirps_t), intent(in) :: dirps  !! Directional operators
+    type(dim3), intent(in) :: blocks, threads  !! CUDA kernel configuration
 
     real(dp), device, pointer, dimension(:, :, :) :: u_dev, v_dev, w_dev, &
                                                      du_dev, dv_dev, dw_dev
@@ -342,9 +388,13 @@ contains
   end subroutine transeq_cuda_dist
 
   subroutine transeq_halo_exchange(self, u_dev, v_dev, w_dev, dir)
+    !! Exchange velocity field halos using MPI with device pointers.
+    !!
+    !! Packs boundary data into communication buffers and exchanges with
+    !! neighbouring ranks. Uses sendrecv_3fields for batched communication.
     class(cuda_backend_t) :: self
-    real(dp), device, dimension(:, :, :), intent(in) :: u_dev, v_dev, w_dev
-    integer, intent(in) :: dir
+    real(dp), device, dimension(:, :, :), intent(in) :: u_dev, v_dev, w_dev  !! Velocity components on device
+    integer, intent(in) :: dir  !! Direction for halo exchange
     integer :: n, nproc_dir, pprev, pnext
     integer :: n_groups
 
@@ -376,20 +426,21 @@ contains
                                     conv_recv_s_dev, conv_recv_e_dev, &
                                     tdsops_du, tdsops_dud, tdsops_d2u, &
                                     dir, blocks, threads)
-    !! Computes RHS_x^u following:
+    !! Compute transport equation RHS component using distributed compact schemes.
     !!
-    !! rhs_x^u = -0.5*(conv*du/dx + d(u*conv)/dx) + nu*d2u/dx2
+    !! Computes: $\text{rhs} = -\frac{1}{2}(\text{conv} \frac{\partial u}{\partial x} + \frac{\partial (u \cdot \text{conv})}{\partial x}) + \nu \frac{\partial^2 u}{\partial x^2}$
     class(cuda_backend_t) :: self
-    !> The result field, it is also used as temporary storage
-    real(dp), device, dimension(:, :, :), intent(out) :: rhs_du_dev
-    real(dp), device, dimension(:, :, :), intent(in) :: u_dev, conv_dev
-    real(dp), intent(in) :: nu
+    real(dp), device, dimension(:, :, :), intent(out) :: rhs_du_dev  !! Output: transport equation RHS
+    real(dp), device, dimension(:, :, :), intent(in) :: u_dev  !! Input: velocity component field
+    real(dp), device, dimension(:, :, :), intent(in) :: conv_dev  !! Input: convecting velocity field
+    real(dp), intent(in) :: nu  !! Kinematic viscosity
     real(dp), device, dimension(:, :, :), intent(in) :: &
-      u_recv_s_dev, u_recv_e_dev, &
-      conv_recv_s_dev, conv_recv_e_dev
-    class(cuda_tdsops_t), intent(in) :: tdsops_du, tdsops_dud, tdsops_d2u
-    integer, intent(in) :: dir
-    type(dim3), intent(in) :: blocks, threads
+      u_recv_s_dev, u_recv_e_dev  !! Halo data for u from neighbours
+    real(dp), device, dimension(:, :, :), intent(in) :: &
+      conv_recv_s_dev, conv_recv_e_dev  !! Halo data for conv from neighbours
+    class(cuda_tdsops_t), intent(in) :: tdsops_du, tdsops_dud, tdsops_d2u  !! Operators for derivatives
+    integer, intent(in) :: dir  !! Direction index
+    type(dim3), intent(in) :: blocks, threads  !! CUDA kernel configuration
 
     class(field_t), pointer :: dud, d2u
 
@@ -425,25 +476,31 @@ contains
   end subroutine transeq_dist_component
 
   subroutine transeq_cuda_thom(self, du, dv, dw, u, v, w, dirps)
-      !! Thomas algorithm implementation. So much more easier than the
-      !! distributed algorithm. It is intended to work only on a single rank
-      !! so there is no MPI communication.
+    !! Compute transport equation using Thomas algorithm.
+    !!
+    !! Simpler than distributed scheme - no MPI communication, uses
+    !! [[m_cuda_exec_thom(module):exec_thom_tds_compact(interface)]] kernel.
+    !! Intended for single-rank execution only.
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(inout) :: du, dv, dw
-    class(field_t), intent(in) :: u, v, w
-    type(dirps_t), intent(in) :: dirps
+    class(field_t), intent(inout) :: du, dv, dw  !! Output: RHS contributions
+    class(field_t), intent(in) :: u, v, w  !! Input: velocity components
+    type(dirps_t), intent(in) :: dirps  !! Directional operators
 
   end subroutine transeq_cuda_thom
 
   subroutine tds_solve_cuda(self, du, u, tdsops)
+    !! Solve tridiagonal systems using CUDA kernels.
+    !!
+    !! Implements [[m_base_backend(module):tds_solve(interface)]].
+    !! Dispatches to appropriate CUDA kernel based on pencil direction.
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(inout) :: du
-    class(field_t), intent(in) :: u
-    class(tdsops_t), intent(in) :: tdsops
+    class(field_t), intent(inout) :: du  !! Output: solution
+    class(field_t), intent(in) :: u  !! Input: RHS
+    class(tdsops_t), intent(in) :: tdsops  !! Tridiagonal operators
 
     type(dim3) :: blocks, threads
 
@@ -464,13 +521,17 @@ contains
   end subroutine tds_solve_cuda
 
   subroutine tds_solve_dist(self, du, u, tdsops, blocks, threads)
+    !! Solve distributed tridiagonal systems using CUDA kernels and MPI.
+    !!
+    !! Performs forward sweep, exchanges boundary data via MPI (using device
+    !! pointers for potential GPU-aware MPI benefit), then backward substitution.
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(inout) :: du
-    class(field_t), intent(in) :: u
-    class(tdsops_t), intent(in) :: tdsops
-    type(dim3), intent(in) :: blocks, threads
+    class(field_t), intent(inout) :: du  !! Output: solution
+    class(field_t), intent(in) :: u  !! Input: RHS
+    class(tdsops_t), intent(in) :: tdsops  !! Tridiagonal operators
+    type(dim3), intent(in) :: blocks, threads  !! CUDA kernel configuration
 
     real(dp), device, pointer, dimension(:, :, :) :: du_dev, u_dev
 
@@ -512,12 +573,16 @@ contains
   end subroutine tds_solve_dist
 
   subroutine reorder_cuda(self, u_o, u_i, direction)
+    !! Reorder field data between pencil orientations using CUDA kernels.
+    !!
+    !! Implements [[m_base_backend(module):reorder(interface)]].
+    !! Calls appropriate [[m_cuda_kernels_reorder(module)]] kernel based on direction.
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(inout) :: u_o
-    class(field_t), intent(in) :: u_i
-    integer, intent(in) :: direction
+    class(field_t), intent(inout) :: u_o  !! Output: reordered field
+    class(field_t), intent(in) :: u_i  !! Input: source field
+    integer, intent(in) :: direction  !! Reordering direction (RDR_X2Y, RDR_Y2Z, etc)
 
     real(dp), device, pointer, dimension(:, :, :) :: u_o_d, u_i_d, u_temp_d
     class(field_t), pointer :: u_temp
@@ -632,9 +697,12 @@ contains
   end subroutine reorder_cuda
 
   subroutine sum_yintox_cuda(self, u, u_y)
+    !! Sum y-pencil field into x-pencil using CUDA kernel.
     implicit none
 
     class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: u  !! Output: x-pencil result
+    class(field_t), intent(in) :: u_y  !! Input: y-pencil field to sum
     class(field_t), intent(inout) :: u
     class(field_t), intent(in) :: u_y
 
@@ -654,9 +722,12 @@ contains
   end subroutine sum_yintox_cuda
 
   subroutine sum_zintox_cuda(self, u, u_z)
+    !! Sum z-pencil field into x-pencil using CUDA kernel.
     implicit none
 
     class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: u  !! Output: x-pencil result
+    class(field_t), intent(in) :: u_z  !! Input: z-pencil field to sum
     class(field_t), intent(inout) :: u
     class(field_t), intent(in) :: u_z
 
@@ -676,11 +747,15 @@ contains
   end subroutine sum_zintox_cuda
 
   subroutine veccopy_cuda(self, dst, src)
+    !! Copy field data using CUDA kernel.
+    !!
+    !! Implements [[m_base_backend(module):veccopy(interface)]].
+    !! Uses [[m_cuda_kernels_fieldops(module):buffer_copy(interface)]] kernel.
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(inout) :: dst
-    class(field_t), intent(in) :: src
+    class(field_t), intent(inout) :: dst  !! Output: destination field
+    class(field_t), intent(in) :: src  !! Input: source field
 
     real(dp), device, pointer, dimension(:, :, :) :: dst_d, src_d
     type(dim3) :: blocks, threads
@@ -697,10 +772,14 @@ contains
   end subroutine veccopy_cuda
 
   subroutine vecadd_cuda(self, a, x, b, y)
+    !! Compute linear combination $y = ax + by$ using CUDA kernel.
+    !!
+    !! Implements [[m_base_backend(module):vecadd(interface)]].
+    !! Uses [[m_cuda_kernels_fieldops(module):axpby(interface)]] kernel.
     implicit none
 
     class(cuda_backend_t) :: self
-    real(dp), intent(in) :: a
+    real(dp), intent(in) :: a  !! Scalar coefficient for x
     class(field_t), intent(in) :: x
     real(dp), intent(in) :: b
     class(field_t), intent(inout) :: y
@@ -720,10 +799,15 @@ contains
   end subroutine vecadd_cuda
 
   subroutine vecmult_cuda(self, y, x)
-    !! [[m_base_backend(module):vecmult(interface)]]
+    !! Compute element-wise product $y = x \cdot y$ using CUDA kernel.
+    !!
+    !! Implements [[m_base_backend(module):vecmult(interface)]].
+    !! Uses [[m_cuda_kernels_fieldops(module):pwmul(interface)]] kernel.
     implicit none
 
     class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: y  !! Input/Output: multiplied in-place
+    class(field_t), intent(in) :: x  !! Input: multiplier
     class(field_t), intent(inout) :: y
     class(field_t), intent(in) :: x
     real(dp), device, pointer, dimension(:, :, :) :: x_d, y_d
@@ -741,11 +825,14 @@ contains
   end subroutine vecmult_cuda
 
   real(dp) function scalar_product_cuda(self, x, y) result(s)
-    !! [[m_base_backend(module):scalar_product(interface)]]
+    !! Compute global scalar product $\langle x, y \rangle$ using CUDA kernel and MPI reduction.
+    !!
+    !! Implements [[m_base_backend(module):scalar_product(interface)]].
+    !! Uses [[m_cuda_kernels_fieldops(module):scalar_product(interface)]] kernel.
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(in) :: x, y
+    class(field_t), intent(in) :: x, y  !! Input fields
 
     real(dp), device, pointer, dimension(:, :, :) :: x_d, y_d
     real(dp), device, allocatable :: sum_d
@@ -791,12 +878,13 @@ contains
   end function scalar_product_cuda
 
   subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n)
+    !! Copy boundary data into MPI send buffers using CUDA kernel.
     implicit none
 
     real(dp), device, dimension(:, :, :), intent(out) :: u_send_s_dev, &
-                                                         u_send_e_dev
-    real(dp), device, dimension(:, :, :), intent(in) :: u_dev
-    integer, intent(in) :: n
+                                                         u_send_e_dev  !! Send buffers
+    real(dp), device, dimension(:, :, :), intent(in) :: u_dev  !! Source field
+    integer, intent(in) :: n  !! Grid dimension
 
     type(dim3) :: blocks, threads
     integer :: n_halo = 4
@@ -809,13 +897,16 @@ contains
   end subroutine copy_into_buffers
 
   subroutine field_max_mean_cuda(self, max_val, mean_val, f, enforced_data_loc)
-    !! [[m_base_backend(module):field_max_mean(interface)]]
+    !! Compute field maximum and mean using CUDA kernel and MPI reductions.
+    !!
+    !! Implements [[m_base_backend(module):field_max_mean(interface)]].
+    !! Uses [[m_cuda_kernels_fieldops(module):field_max_sum(interface)]] kernel.
     implicit none
 
     class(cuda_backend_t) :: self
-    real(dp), intent(out) :: max_val, mean_val
-    class(field_t), intent(in) :: f
-    integer, optional, intent(in) :: enforced_data_loc
+    real(dp), intent(out) :: max_val, mean_val  !! Output: global maximum and mean
+    class(field_t), intent(in) :: f  !! Input field
+    integer, optional, intent(in) :: enforced_data_loc  !! Override field data location
 
     real(dp), device, pointer, dimension(:, :, :) :: f_d
     real(dp), device, allocatable :: max_d, sum_d
@@ -871,11 +962,15 @@ contains
   end subroutine field_max_mean_cuda
 
   subroutine field_scale_cuda(self, f, a)
+    !! Scale field by constant $f = a \cdot f$ using CUDA kernel.
+    !!
+    !! Implements [[m_base_backend(module):field_ops(interface)]] (field_scale binding).
+    !! Uses [[m_cuda_kernels_fieldops(module):field_scale(interface)]] kernel.
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(in) :: f
-    real(dp), intent(in) :: a
+    class(field_t), intent(in) :: f  !! Field to scale in-place
+    real(dp), intent(in) :: a  !! Scaling factor
 
     real(dp), device, pointer, dimension(:, :, :) :: f_d
     type(dim3) :: blocks, threads
@@ -891,11 +986,15 @@ contains
   end subroutine field_scale_cuda
 
   subroutine field_shift_cuda(self, f, a)
+    !! Shift field by constant $f = f + a$ using CUDA kernel.
+    !!
+    !! Implements [[m_base_backend(module):field_ops(interface)]] (field_shift binding).
+    !! Uses [[m_cuda_kernels_fieldops(module):field_shift(interface)]] kernel.
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(in) :: f
-    real(dp), intent(in) :: a
+    class(field_t), intent(in) :: f  !! Field to shift in-place
+    real(dp), intent(in) :: a  !! Shift amount
 
     real(dp), device, pointer, dimension(:, :, :) :: f_d
     type(dim3) :: blocks, threads
@@ -911,13 +1010,13 @@ contains
   end subroutine field_shift_cuda
 
   subroutine field_set_face_cuda(self, f, c_start, c_end, face)
-    !! [[m_base_backend(module):field_set_face(subroutine)]]
+    !! Set boundary face values using CUDA kernel.
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(inout) :: f
-    real(dp), intent(in) :: c_start, c_end
-    integer, intent(in) :: face
+    class(field_t), intent(inout) :: f  !! Field to modify
+    real(dp), intent(in) :: c_start, c_end  !! Values for start and end faces
+    integer, intent(in) :: face  !! Face identifier (X_FACE, Y_FACE, Z_FACE)
 
     real(dp), device, pointer, dimension(:, :, :) :: f_d
     type(dim3) :: blocks, threads
@@ -952,11 +1051,14 @@ contains
   end subroutine field_set_face_cuda
 
   real(dp) function field_volume_integral_cuda(self, f) result(s)
-    !! volume integral of a field
+    !! Compute volume integral using CUDA kernel and MPI reduction.
+    !!
+    !! Implements [[m_base_backend(module):field_reduce(interface)]].
+    !! Uses [[m_cuda_kernels_fieldops(module):volume_integral(interface)]] kernel.
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(in) :: f
+    class(field_t), intent(in) :: f  !! Input field
 
     real(dp), device, pointer, dimension(:, :, :) :: f_d
     real(dp), device, allocatable :: integral_d
@@ -991,28 +1093,34 @@ contains
   end function field_volume_integral_cuda
 
   subroutine copy_data_to_f_cuda(self, f, data)
+    !! Copy host array to device field.
     class(cuda_backend_t), intent(inout) :: self
-    class(field_t), intent(inout) :: f
-    real(dp), dimension(:, :, :), intent(inout) :: data
+    class(field_t), intent(inout) :: f  !! Target device field
+    real(dp), dimension(:, :, :), intent(inout) :: data  !! Source host array
 
     select type (f); type is (cuda_field_t); f%data_d = data; end select
   end subroutine copy_data_to_f_cuda
 
   subroutine copy_f_to_data_cuda(self, data, f)
+    !! Copy device field to host array.
     class(cuda_backend_t), intent(inout) :: self
-    real(dp), dimension(:, :, :), intent(out) :: data
-    class(field_t), intent(in) :: f
+    real(dp), dimension(:, :, :), intent(out) :: data  !! Target host array
+    class(field_t), intent(in) :: f  !! Source device field
 
     select type (f); type is (cuda_field_t); data = f%data_d; end select
   end subroutine copy_f_to_data_cuda
 
   subroutine init_cuda_poisson_fft(self, mesh, xdirps, ydirps, zdirps, lowmem)
+    !! Initialise CUDA FFT Poisson solver.
+    !!
+    !! Implements [[m_base_backend(module):init_poisson_fft(interface)]].
+    !! Allocates [[m_cuda_poisson_fft(module):cuda_poisson_fft_t(type)]] instance.
     implicit none
 
     class(cuda_backend_t) :: self
-    type(mesh_t), intent(in) :: mesh
-    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
-    logical, optional, intent(in) :: lowmem
+    type(mesh_t), intent(in) :: mesh  !! Computational mesh
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps  !! Directional operators
+    logical, optional, intent(in) :: lowmem  !! Low memory mode flag
 
     allocate (cuda_poisson_fft_t :: self%poisson_fft)
 
@@ -1024,8 +1132,9 @@ contains
   end subroutine init_cuda_poisson_fft
 
   subroutine resolve_field_t(u_dev, u)
-    real(dp), device, pointer, dimension(:, :, :), intent(out) :: u_dev
-    class(field_t), intent(in) :: u
+    !! Helper to extract device pointer from cuda_field_t.
+    real(dp), device, pointer, dimension(:, :, :), intent(out) :: u_dev  !! Device pointer
+    class(field_t), intent(in) :: u  !! Field object
 
     select type (u)
     type is (cuda_field_t)

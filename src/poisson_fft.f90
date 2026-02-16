@@ -1,4 +1,36 @@
 module m_poisson_fft
+  !! FFT-based spectral Poisson solver for incompressible flow.
+  !!
+  !! This module implements fast Fourier transform (FFT) based solvers for
+  !! the Poisson equation:
+  !! \[ \nabla^2 \phi = f \]
+  !!
+  !! **Solution Strategy:**
+  !!
+  !! 1. **Forward FFT**: Transform RHS from physical to spectral space
+  !! 2. **Spectral division**: Solve algebraically using wave numbers:
+  !!    \( \hat{\phi} = \hat{f} / k^2 \)
+  !! 3. **Backward FFT**: Transform solution back to physical space
+  !!
+  !! **Boundary Condition Support:**
+  !!
+  !! - **Periodic (000)**: Fully periodic in all directions (standard FFT)
+  !! - **Mixed (010)**: Periodic in \( X/Z \), non-periodic in \( Y \) (requires special handling)
+  !!
+  !! **Grid Stretching:**
+  !!
+  !! - Uniform grids in \( X \) and \( Z \) (required for FFT)
+  !! - \( Y \)-direction stretching supported for `010` BCs via transformation matrices
+  !! - Stretching handled through spectral equivalence constants
+  !!
+  !! **Parallel Implementation:**
+  !!
+  !! - Pencil decomposition in \( Y \) and \( Z \) directions (\( X \) must be undivided)
+  !! - Spectral space operations on permuted/transposed data layouts
+  !! - Backend-specific FFT implementations (CPU/GPU)
+  !!
+  !! The module is abstract; concrete implementations provide FFT routines
+  !! via deferred procedures (`fft_forward`, `fft_backward`, `fft_postprocess`).
   use m_common, only: dp, pi, CELL
   use m_field, only: field_t
   use m_mesh, only: mesh_t, geo_t
@@ -7,111 +39,151 @@ module m_poisson_fft
   implicit none
 
   type, abstract :: poisson_fft_t
-    !! FFT based Poisson solver
-    !> Global dimensions
+    !! Abstract base type for FFT-based Poisson solvers.
+    !!
+    !! Concrete backend implementations (OMP, CUDA) extend this type
+    !! and provide FFT library integration (FFTW, cuFFT, etc.).
+    !> Global dimensions (full domain)
     integer :: nx_glob, ny_glob, nz_glob
-    !> Local dimensions
+    !> Local dimensions (subdomain on this rank)
     integer :: nx_loc, ny_loc, nz_loc
-    !> Local dimensions in the permuted slabs
+    !> Local dimensions in the permuted slabs (after transpose for FFT)
     integer :: nx_perm, ny_perm, nz_perm
-    !> Local dimensions in the permuted slabs in spectral space
+    !> Local dimensions in the permuted slabs in spectral space (complex)
     integer :: nx_spec, ny_spec, nz_spec
-    !> Offset in y and z directions in the permuted slabs in spectral space
+    !> Offset in x, y, z directions in the spectral space pencil
     integer :: x_sp_st, y_sp_st, z_sp_st
-    !> Local domain sized array storing the spectral equivalence constants
+    !> Local spectral equivalence constants (modified wave numbers)
     complex(dp), allocatable, dimension(:, :, :) :: waves
-    !> Wave numbers in x, y, and z
+    !> Tridiagonal coefficients for wave number computation (real part)
     real(dp), allocatable, dimension(:) :: ax, bx, ay, by, az, bz
-    !> Wave numbers in x, y, and z
+    !> Complex wave numbers and their squares for each direction
     complex(dp), allocatable, dimension(:) :: kx, ky, kz, exs, eys, ezs, &
                                               k2x, k2y, k2z
-    !> Staggared grid transformation
+    !> Staggered grid transformation coefficients (real and imaginary parts)
     real(dp), allocatable, dimension(:) :: trans_x_re, trans_x_im, &
                                            trans_y_re, trans_y_im, &
                                            trans_z_re, trans_z_im
-    !> Periodicity in x, y, and z
+    !> Periodicity flags for each direction
     logical :: periodic_x, periodic_y, periodic_z, &
-               stretched_y = .false., stretched_y_sym
-    !> Stretching operator matrices
+               stretched_y = .false., stretched_y_sym  !! Y-direction stretching
+    !> Stretching transformation matrices (odd/even modes, real/imaginary)
     real(dp), allocatable, dimension(:, :, :, :) :: a_odd_re, a_odd_im, &
                                                     a_even_re, a_even_im, &
                                                     a_re, a_im
-    !> lowmem option, only used in CUDA backend
+    !> Low memory mode flag (used for GPU backends to reduce memory usage)
     logical :: lowmem = .false.
-    !> Procedure pointer to BC specific poisson solvers
+    !> Procedure pointer to BC-specific Poisson solver implementation
     procedure(poisson_xxx), pointer :: poisson => null()
   contains
-    procedure(fft_forward), deferred :: fft_forward
-    procedure(fft_backward), deferred :: fft_backward
-    procedure(fft_postprocess), deferred :: fft_postprocess_000
-    procedure(fft_postprocess), deferred :: fft_postprocess_010
-    procedure(field_process), deferred :: enforce_periodicity_y
-    procedure(field_process), deferred :: undo_periodicity_y
-    procedure :: base_init
-    procedure :: solve_poisson
-    procedure :: stretching_matrix
-    procedure :: waves_set
-    procedure :: get_km
-    procedure :: get_km_re
-    procedure :: get_km_im
+    procedure(fft_forward), deferred :: fft_forward           !! Forward FFT (deferred)
+    procedure(fft_backward), deferred :: fft_backward         !! Backward FFT (deferred)
+    procedure(fft_postprocess), deferred :: fft_postprocess_000 !! Postprocess for 000 BCs
+    procedure(fft_postprocess), deferred :: fft_postprocess_010 !! Postprocess for 010 BCs
+    procedure(field_process), deferred :: enforce_periodicity_y !! Enforce Y periodicity
+    procedure(field_process), deferred :: undo_periodicity_y    !! Undo Y periodicity
+    procedure :: base_init           !! Initialise Poisson solver
+    procedure :: solve_poisson       !! Main interface to solve Poisson equation
+    procedure :: stretching_matrix   !! Compute stretching transformation matrices
+    procedure :: waves_set           !! Compute spectral equivalence constants
+    procedure :: get_km              !! Get complex wave number
+    procedure :: get_km_re           !! Get real part of wave number
+    procedure :: get_km_im           !! Get imaginary part of wave number
   end type poisson_fft_t
 
   abstract interface
     subroutine fft_forward(self, f_in)
+      !! Abstract interface for forward FFT transform.
+      !!
+      !! Transforms field from physical space to spectral space.
+      !! Implementation is backend-specific (FFTW, cuFFT, etc.).
       import :: poisson_fft_t
       import :: field_t
       implicit none
 
-      class(poisson_fft_t) :: self
-      class(field_t), intent(in) :: f_in
+      class(poisson_fft_t) :: self      !! Poisson solver instance
+      class(field_t), intent(in) :: f_in !! Input field in physical space
     end subroutine fft_forward
 
     subroutine fft_backward(self, f_out)
+      !! Abstract interface for backward (inverse) FFT transform.
+      !!
+      !! Transforms field from spectral space back to physical space.
+      !! Implementation is backend-specific (FFTW, cuFFT, etc.).
       import :: poisson_fft_t
       import :: field_t
       implicit none
 
-      class(poisson_fft_t) :: self
-      class(field_t), intent(inout) :: f_out
+      class(poisson_fft_t) :: self           !! Poisson solver instance
+      class(field_t), intent(inout) :: f_out !! Output field in physical space
     end subroutine fft_backward
 
     subroutine fft_postprocess(self)
+      !! Abstract interface for spectral space postprocessing.
+      !!
+      !! Applies spectral division and any BC-specific operations
+      !! in Fourier space. Different implementations for different
+      !! boundary condition combinations (000, 010, etc.).
       import :: poisson_fft_t
       implicit none
 
-      class(poisson_fft_t) :: self
+      class(poisson_fft_t) :: self !! Poisson solver instance
     end subroutine fft_postprocess
   end interface
 
   abstract interface
     subroutine poisson_xxx(self, f, temp)
+      !! Abstract interface for complete Poisson solve.
+      !!
+      !! Orchestrates forward FFT, postprocessing, and backward FFT.
+      !! Different implementations for different BC combinations.
       import :: poisson_fft_t
       import :: field_t
 
-      class(poisson_fft_t) :: self
-      class(field_t), intent(inout) :: f, temp
+      class(poisson_fft_t) :: self                !! Poisson solver instance
+      class(field_t), intent(inout) :: f, temp    !! Field and temporary storage
     end subroutine poisson_xxx
 
     subroutine field_process(self, f_out, f_in)
+      !! Abstract interface for field processing operations.
+      !!
+      !! Used for enforcing or undoing periodicity in non-periodic
+      !! directions (e.g., Y direction for 010 BCs).
       import :: poisson_fft_t
       import :: field_t
 
-      class(poisson_fft_t) :: self
-      class(field_t), intent(inout) :: f_out
-      class(field_t), intent(in) :: f_in
+      class(poisson_fft_t) :: self             !! Poisson solver instance
+      class(field_t), intent(inout) :: f_out   !! Output field
+      class(field_t), intent(in) :: f_in       !! Input field
     end subroutine field_process
   end interface
 
 contains
 
   subroutine base_init(self, mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
+    !! Initialise FFT-based Poisson solver with mesh and decomposition info.
+    !!
+    !! Sets up:
+    !! - Domain dimensions (global and local)
+    !! - Periodicity flags from boundary conditions
+    !! - Spectral space dimensions and offsets
+    !! - Wave number arrays and spectral equivalence constants
+    !! - Stretching matrices (if Y-direction is stretched)
+    !! - Function pointer to appropriate BC-specific solver
+    !!
+    !! **Restrictions:**
+    !! - X-direction must not be decomposed (nproc_dir(1) must be 1)
+    !! - Only Y-direction stretching is supported
+    !! - Currently supports 000 (fully periodic) and 010 (Y non-periodic) BCs
+    !!
+    !! **Note:** 010 BCs with multiple MPI ranks not yet supported.
     implicit none
 
-    class(poisson_fft_t) :: self
-    type(mesh_t), intent(in) :: mesh
-    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
-    integer, dimension(3), intent(in) :: n_spec ! Size of the spectral pencil
-    integer, dimension(3), intent(in) :: n_sp_st ! Offset of the spectral pencil
+    class(poisson_fft_t) :: self                  !! Poisson solver instance
+    type(mesh_t), intent(in) :: mesh              !! Mesh object with grid and decomposition
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps !! Directional operators
+    integer, dimension(3), intent(in) :: n_spec   !! Size of the spectral pencil [nx, ny, nz]
+    integer, dimension(3), intent(in) :: n_sp_st  !! Offset of the spectral pencil [x, y, z]
 
     integer :: dims(3)
 
@@ -180,20 +252,33 @@ contains
   end subroutine base_init
 
   subroutine solve_poisson(self, f, temp)
+    !! Main interface to solve Poisson equation.
+    !!
+    !! Delegates to the BC-specific solver function pointed to by
+    !! self%poisson (either poisson_000 or poisson_010). This provides
+    !! a uniform interface regardless of boundary conditions.
     implicit none
 
-    class(poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f, temp
+    class(poisson_fft_t) :: self                !! Poisson solver instance
+    class(field_t), intent(inout) :: f, temp    !! Field to solve (RHS in, solution out), temporary
 
     call self%poisson(f, temp)
 
   end subroutine solve_poisson
 
   subroutine poisson_000(self, f, temp)
+    !! Solve Poisson equation with fully periodic (000) boundary conditions.
+    !!
+    !! For periodic BCs in all directions, the solution procedure is:
+    !! 1. Forward FFT: f to f_hat
+    !! 2. Spectral division: \( \hat{f} / k^2 \) gives solution_hat
+    !! 3. Backward FFT: solution_hat to solution
+    !!
+    !! This is the simplest case requiring no special handling for BCs.
     implicit none
 
-    class(poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f, temp
+    class(poisson_fft_t) :: self                !! Poisson solver instance
+    class(field_t), intent(inout) :: f, temp    !! Field (RHS in, solution out), temporary (unused)
 
     call self%fft_forward(f)
     call self%fft_postprocess_000
@@ -202,10 +287,21 @@ contains
   end subroutine poisson_000
 
   subroutine poisson_010(self, f, temp)
+    !! Solve Poisson equation with mixed (010) boundary conditions.
+    !!
+    !! For periodic in X/Z, non-periodic in Y, the solution procedure is:
+    !! 1. Enforce artificial periodicity in Y using symmetry extension
+    !! 2. Forward FFT: f to f_hat
+    !! 3. Spectral division with stretching corrections (if grid is stretched)
+    !! 4. Backward FFT: solution_hat to solution
+    !! 5. Undo artificial periodicity to recover physical solution
+    !!
+    !! The symmetry extension doubles the domain size in Y to handle
+    !! non-periodic BCs via FFT.
     implicit none
 
-    class(poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f, temp
+    class(poisson_fft_t) :: self                !! Poisson solver instance
+    class(field_t), intent(inout) :: f, temp    !! Field (RHS in, solution out), temporary
 
     call self%enforce_periodicity_y(temp, f)
 
