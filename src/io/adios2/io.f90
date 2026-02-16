@@ -27,7 +27,7 @@ module m_io_backend
                     adios2_init, adios2_finalize, &
                     adios2_declare_io, adios2_set_engine, &
                     adios2_open, adios2_close, &
-                    adios2_begin_step, adios2_end_step, &
+                    adios2_begin_step, adios2_end_step, adios2_perform_puts, &
                     adios2_define_variable, adios2_inquire_variable, &
                     adios2_define_attribute, &
                     adios2_set_selection, adios2_put, &
@@ -607,6 +607,7 @@ contains
     type(c_devptr) :: devptr
     type(c_ptr) :: device_ptr
     integer :: ierr, vartype
+    real(sp), allocatable, device, target :: array_sp(:, :, :)
     logical :: convert_to_sp
 
     convert_to_sp = .false.
@@ -634,12 +635,25 @@ contains
       call self%handle_error(ierr, "Error setting GPU memory space")
 
       ! Get device pointer and pass via C wrapper
-      devptr = c_devloc(array)
+      if (convert_to_sp .and. .not. is_sp) then
+        allocate (array_sp(size(array, 1), size(array, 2), size(array, 3)))
+        array_sp = real(array, sp)
+        devptr = c_devloc(array_sp)
+      else
+        devptr = c_devloc(array)
+      end if
+
       device_ptr = transfer(devptr, device_ptr)
 
       call adios2_put_gpu(file_handle%engine%f2c, var%f2c, &
                           device_ptr, ierr)
       call self%handle_error(ierr, "Error in GPU-aware ADIOS2 put")
+
+      if (allocated(array_sp)) then
+        call adios2_perform_puts(file_handle%engine, ierr)
+        call self%handle_error(ierr, "Error performing puts for SP conversion")
+        deallocate (array_sp)
+      end if
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
     end select
