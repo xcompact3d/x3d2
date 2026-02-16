@@ -28,7 +28,7 @@ module m_io_backend
                     adios2_declare_io, adios2_set_engine, &
                     adios2_open, adios2_close, &
                     adios2_begin_step, adios2_end_step, adios2_perform_puts, &
-                    adios2_define_variable, adios2_inquire_variable, &
+                    adios2_define_variable, adios2_inquire_variable, adios2_variable_type, &
                     adios2_define_attribute, &
                     adios2_set_selection, adios2_put, &
                     adios2_get, adios2_remove_all_variables, &
@@ -43,6 +43,7 @@ module m_io_backend
   use m_common, only: dp, i8, sp, is_sp
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
                        io_mode_read, io_mode_write
+  use iso_c_binding, only: c_double, c_float
 
   implicit none
 
@@ -271,6 +272,9 @@ contains
 
     type(adios2_variable) :: var
     integer :: ierr
+    integer :: vtype
+    real(c_double) :: val_dp_temp
+    real(c_float) :: val_sp_temp
 
     select type (file_handle)
     type is (io_adios2_file_t)
@@ -278,8 +282,20 @@ contains
       call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
 
       if (ierr == adios2_found) then
-        call adios2_get(file_handle%engine, var, value, adios2_mode_sync, ierr)
-        call self%handle_error(ierr, "Failed to read variable "//variable_name)
+        call adios2_variable_type(vtype, var, ierr)
+
+        if (vtype == adios2_type_dp) then
+           ! file is double precision
+           call adios2_get(file_handle%engine, var, val_dp_temp, adios2_mode_sync, ierr)
+           value = real(val_dp_temp, dp)
+        else if (vtype == adios2_type_real) then
+           ! file is single precision
+           call adios2_get(file_handle%engine, var, val_sp_temp, adios2_mode_sync, ierr)
+           value = real(val_sp_temp, dp)
+        else
+           call adios2_get(file_handle%engine, var, value, adios2_mode_sync, ierr)
+        end if
+        call self%handle_error(ierr, "Failed to read variable "//trim(variable_name))
       else
         call self%handle_error(1, "Variable " &
                                //trim(variable_name)//" not found in file")
@@ -304,6 +320,9 @@ contains
     type(adios2_variable) :: var
     integer :: ierr
     integer(i8) :: local_start(3), local_count(3)
+    integer :: vtype
+    real(c_double), allocatable :: arr_dp_temp(:, :, :)
+    real(c_float), allocatable :: arr_sp_temp(:, :, :)
 
     select type (file_handle)
     type is (io_adios2_file_t)
@@ -329,9 +348,25 @@ contains
                                  //trim(variable_name))
         end if
 
-        call adios2_get(file_handle%engine, var, array, adios2_mode_sync, ierr)
-        call self%handle_error(ierr, &
-                               "Failed to read variable "//trim(variable_name))
+        call adios2_variable_type(vtype, var, ierr)
+
+        if (vtype == adios2_type_dp) then
+           ! file is double precision
+           allocate(arr_dp_temp(local_count(1), local_count(2), local_count(3)))
+           call adios2_get(file_handle%engine, var, arr_dp_temp, adios2_mode_sync, ierr)
+           array = real(arr_dp_temp, dp)
+           deallocate(arr_dp_temp)
+        else if (vtype == adios2_type_real) then
+           ! file is single precision
+           allocate(arr_sp_temp(local_count(1), local_count(2), local_count(3)))
+           call adios2_get(file_handle%engine, var, arr_sp_temp, adios2_mode_sync, ierr)
+           array = real(arr_sp_temp, dp)
+           deallocate(arr_sp_temp)
+        else
+           call adios2_get(file_handle%engine, var, array, adios2_mode_sync, ierr)
+        end if
+
+        call self%handle_error(ierr, "Failed to read variable "//trim(variable_name))
       else
         call self%handle_error(1, "Variable " &
                                //trim(variable_name)//" not found in file")
