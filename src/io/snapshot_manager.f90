@@ -16,7 +16,7 @@ module m_snapshot_manager
                               setup_field_arrays, cleanup_field_arrays, &
                               stride_data_to_buffer, get_output_dimensions, &
                               prepare_field_buffers, cleanup_field_buffers, &
-                              write_single_field_to_buffer
+                              write_single_field_to_buffer, get_field_ptr
 
   implicit none
 
@@ -260,28 +260,11 @@ contains
       end if
 
       do i_field = 1, size(field_names)
-        select case (trim(field_names(i_field)))
-        case ("u")
-          if (use_device_write) then
-            io_field => solver%u
-          else
-            io_field => host_fields(i_field)%ptr
-          end if
-        case ("v")
-          if (use_device_write) then
-            io_field => solver%v
-          else
-            io_field => host_fields(i_field)%ptr
-          end if
-        case ("w")
-          if (use_device_write) then
-            io_field => solver%w
-          else
-            io_field => host_fields(i_field)%ptr
-          end if
-        case default
-          error stop "write_fields(snapshot): Unknown field name"
-        end select
+        if (use_device_write) then
+          io_field => get_field_ptr(solver, field_names(i_field))
+        else
+          io_field => host_fields(i_field)%ptr
+        end if
 
         call writer_session%write_field_from_solver( &
           trim(field_names(i_field)), io_field, solver%backend, &
