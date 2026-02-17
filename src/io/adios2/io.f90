@@ -89,6 +89,7 @@ module m_io_backend
       supports_device_field_write_adios2
 #ifdef X3D2_ADIOS2_CUDA
     procedure :: write_data_array_3d_device => write_data_array_3d_device_adios2
+    procedure :: sync_device => sync_device_adios2
 #endif
     procedure :: write_attribute_string => write_attribute_string_adios2
     procedure :: write_attribute_array_1d_real => &
@@ -650,10 +651,6 @@ contains
     if (present(use_sp)) convert_to_sp = use_sp
     vartype = get_adios2_vartype(convert_to_sp)
 
-    ! Sync GPU to ensure all kernel writes complete
-    ierr = cudaDeviceSynchronize()
-    call self%handle_error(ierr, "CUDA sync failed before GPU-aware write")
-
     select type (file_handle)
     type is (io_adios2_file_t)
       ! Define or inquire variable
@@ -842,6 +839,17 @@ contains
     supports_device_field_write_adios2 = .false.
 #endif
   end function supports_device_field_write_adios2
+
+#ifdef X3D2_ADIOS2_CUDA
+  subroutine sync_device_adios2(self)
+    !! Synchronise the GPU device before a batch of I/O operations.
+    !! Call once before writing multiple fields to avoid per-field syncs.
+    class(io_adios2_writer_t), intent(inout) :: self
+    integer :: ierr
+    ierr = cudaDeviceSynchronize()
+    if (ierr /= 0) error stop "cudaDeviceSynchronize failed before I/O"
+  end subroutine sync_device_adios2
+#endif
 
   subroutine write_field_from_solver_adios2( &
     self, variable_name, field, file_handle, backend, &
