@@ -233,7 +233,7 @@ contains
     !! Write field data with striding for snapshots
     class(snapshot_manager_t), intent(inout) :: self
     character(len=*), dimension(:), intent(in) :: field_names
-    class(field_ptr_t), dimension(:), target, intent(in) :: host_fields
+    class(field_ptr_t), dimension(:), target, intent(in), optional :: host_fields
     class(solver_t), intent(in) :: solver
     type(writer_session_t), intent(inout) :: writer_session
     integer, intent(in) :: data_loc
@@ -253,6 +253,12 @@ contains
     if (all(self%output_stride == 1)) then
       ! No striding - can potentially use direct device I/O
       use_device_write = writer_session%writer%supports_device_field_write()
+
+      if (.not. use_device_write .and. .not. present(host_fields)) then
+        error stop "write_fields(snapshot): host_fields required &
+          &when GPU-aware I/O is not available"
+      end if
+
       do i_field = 1, size(field_names)
         select case (trim(field_names(i_field)))
         case ("u")
@@ -286,7 +292,10 @@ contains
       return
     end if
 
-    ! Fallback: host-staged path with striding
+    ! Fallback: host-staged path with striding (requires host_fields)
+    if (.not. present(host_fields)) then
+      error stop "write_fields(snapshot): host_fields required for strided output"
+    end if
     ! Prepare buffers with striding for snapshots
     call prepare_field_buffers( &
       solver, self%output_stride, field_names, data_loc, &
