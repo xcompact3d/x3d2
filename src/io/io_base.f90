@@ -70,6 +70,7 @@ module m_io_base
     procedure :: open => base_writer_open
     procedure :: finalise => base_writer_finalise
     procedure :: supports_device_field_write => base_supports_device_field_write
+    procedure :: sync_device => base_sync_device
     generic :: write_data => write_data_i8, write_data_integer, &
       write_data_real, &
       write_data_array_3d
@@ -161,6 +162,13 @@ contains
     class(io_writer_t), intent(in) :: self
     base_supports_device_field_write = .false.
   end function base_supports_device_field_write
+
+  subroutine base_sync_device(self)
+    !! Ensure all device operations complete before I/O.
+    !! Does nothing for non-GPU backends. CUDA-aware backends override
+    !! this to call cudaDeviceSynchronize.
+    class(io_writer_t), intent(inout) :: self
+  end subroutine base_sync_device
 
   function base_is_file_functional(self) result(is_functional)
     class(io_file_t), intent(in) :: self

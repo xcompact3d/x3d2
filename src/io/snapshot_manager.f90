@@ -259,6 +259,9 @@ contains
           &when GPU-aware I/O is not available"
       end if
 
+      ! Sync device once before writing all fields
+      if (use_device_write) call writer_session%sync_device()
+
       do i_field = 1, size(field_names)
         if (use_device_write) then
           io_field => get_field_ptr(solver, field_names(i_field))
