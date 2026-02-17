@@ -21,11 +21,12 @@ void adios2_put_gpu(
     const int64_t *engine_f2c,
     const int64_t *variable_f2c,
     const void *data,
+    const int *mode,
     int *ierr)
 {
     adios2_engine *engine = (adios2_engine *)(*engine_f2c);
     adios2_variable *variable = (adios2_variable *)(*variable_f2c);
-    *ierr = (int)adios2_put(engine, variable, data, adios2_mode_sync);
+    *ierr = (int)adios2_put(engine, variable, data, (adios2_mode)*mode);
 }
 
 #ifdef __cplusplus
