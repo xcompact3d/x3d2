@@ -4,7 +4,7 @@ program test_cuda_gpu_aware_io
   !! 1. Write directly from device memory using GPU-aware ADIOS2 path
   !! 2. Verify data integrity by reading back and comparing
   use mpi
-  use m_common, only: dp, i8, DIR_C
+  use m_common, only: dp, i8, DIR_C, is_sp
   use m_allocator, only: field_t
   use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
   use m_io_backend, only: allocate_io_writer, allocate_io_reader
@@ -21,7 +21,7 @@ program test_cuda_gpu_aware_io
   class(io_file_t), allocatable :: file
 
   ! MPI variables
-  integer :: ierr, irank, isize, dummy_backend
+  integer :: ierr, irank, isize
   integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
   integer(i8), dimension(3) :: sel_start, sel_count
   real(dp), dimension(:, :, :), allocatable :: data_write, data_read
@@ -76,14 +76,24 @@ program test_cuda_gpu_aware_io
   end if
 
   ! Write from device using GPU-aware path
-  ! dummy_backend is passed as class(*) — the GPU path dispatches on field type
-  dummy_backend = 0
   call allocate_io_writer(writer)
+
+  if (.not. writer%supports_device_field_write()) then
+    if (irank == 0) then
+      write(stderr, '(a)') 'GPU-aware ADIOS2 not available — skipping test'
+    end if
+    call allocator%release_block(cuda_field)
+    call allocator%destroy()
+    call MPI_Finalize(ierr)
+    stop
+  end if
+
   call writer%init(MPI_COMM_WORLD, "test_cuda_gpu_aware")
   file = writer%open("test_cuda_gpu_output.bp", io_mode_write, MPI_COMM_WORLD)
   call file%begin_step()
 
-  call writer%write_field_from_solver("velocity_x", cuda_field, file, dummy_backend, &
+  ! backend arg is class(*) — not used, dispatch is based on field type
+  call writer%write_field_from_solver("velocity_x", cuda_field, file, 0, &
                                       shape_dims, start_dims, count_dims)
 
   call file%end_step()
@@ -116,7 +126,11 @@ program test_cuda_gpu_aware_io
     call reader%finalise()
 
     ! Verify data
-    tolerance = 1.0e-12_dp
+    if (is_sp) then
+      tolerance = 1.0e-5_dp
+    else
+      tolerance = 1.0e-12_dp
+    end if
     do k = 1, sel_count(3)
       do j = 1, sel_count(2)
         do i = 1, sel_count(1)
@@ -140,11 +154,7 @@ program test_cuda_gpu_aware_io
   call allocator%release_block(cuda_field)
   call allocator%destroy()
 
-  ! Finalise
-  call MPI_Barrier(MPI_COMM_WORLD, ierr)
-  call MPI_Finalize(ierr)
-
-  ! Report final results
+  ! Report results before MPI_Finalise
   if (irank == 0) then
     if (allpass) then
       write(stderr, '(a)') 'CUDA GPU-AWARE I/O TEST PASSED!'
@@ -152,5 +162,8 @@ program test_cuda_gpu_aware_io
       error stop 'CUDA GPU-AWARE I/O TEST FAILED.'
     end if
   end if
+
+  call MPI_Barrier(MPI_COMM_WORLD, ierr)
+  call MPI_Finalize(ierr)
 
 end program test_cuda_gpu_aware_io
