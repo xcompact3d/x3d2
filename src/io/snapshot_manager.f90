@@ -191,7 +191,11 @@ contains
 
     call self%snapshot_writer%write_data("time", real(simulation_time, dp))
 
-    call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
+    ! Only copy device->host when GPU-aware I/O is not available or striding is needed
+    if (.not. (all(self%output_stride == 1) .and. &
+        self%snapshot_writer%writer%supports_device_field_write())) then
+      call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
+    end if
 
     call self%write_fields( &
       field_names, host_fields, &
@@ -200,8 +204,10 @@ contains
 
     call self%snapshot_writer%end_step()
 
-    call cleanup_field_arrays(solver, field_ptrs, host_fields)
-    deallocate (field_names)
+    if (.not. (all(self%output_stride == 1) .and. &
+        self%snapshot_writer%writer%supports_device_field_write())) then
+      call cleanup_field_arrays(solver, field_ptrs, host_fields)
+    end if
   end subroutine write_snapshot
 
   function get_snapshot_fields(config, nspecies) result(names)
