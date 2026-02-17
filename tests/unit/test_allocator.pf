@@ -1,0 +1,97 @@
+! Tests for m_allocator using pFUnit
+! Each subroutine is an isolated test case.
+
+@test
+subroutine test_initialisation()
+   use pFUnit_mod
+   use m_allocator, only: allocator_t
+   implicit none
+   
+   class(allocator_t), allocatable :: allocator
+   integer, allocatable :: l(:)
+
+   ! Setup
+   allocator = allocator_t([8, 8, 8], 8)
+
+   ! Verify free list is [0]
+   l = allocator%get_block_ids()
+   @assertEqual(1, size(l))
+   @assertEqual(0, l(1))
+end subroutine test_initialisation
+
+@test
+subroutine test_block_release_logic()
+   use pFUnit_mod
+   use m_allocator, only: allocator_t
+   use m_field, only: field_t
+   use m_common, only: DIR_X
+   implicit none
+   
+   class(allocator_t), allocatable :: allocator
+   class(field_t), pointer :: ptr1, ptr2
+   integer, allocatable :: l(:)
+   integer, dimension(2) :: expected_ids
+
+   ! Setup
+   allocator = allocator_t([8, 8, 8], 8)
+
+   ! Action: Get 2 blocks, release them
+   ptr1 => allocator%get_block(DIR_X)
+   ptr2 => allocator%get_block(DIR_X)
+   
+   call allocator%release_block(ptr2)
+   call allocator%release_block(ptr1)
+
+   ! Verify: IDs should be recycled in LIFO order (1, 2)
+   l = allocator%get_block_ids()
+   expected_ids = [1, 2]
+   @assertEqual(expected_ids, l)
+end subroutine test_block_release_logic
+
+@test
+subroutine test_stack_reuse()
+   use pFUnit_mod
+   use m_allocator, only: allocator_t
+   use m_field, only: field_t
+   use m_common, only: DIR_X
+   implicit none
+   
+   class(allocator_t), allocatable :: allocator
+   class(field_t), pointer :: ptr1, ptr2, ptr3
+   integer, allocatable :: l(:)
+   integer, dimension(2) :: expected_ids
+
+   allocator = allocator_t([8, 8, 8], 8)
+
+   ! Grab 3 blocks (1, 2, 3)
+   ptr1 => allocator%get_block(DIR_X)
+   ptr2 => allocator%get_block(DIR_X)
+   ptr3 => allocator%get_block(DIR_X)
+
+   ! Release them (Stack becomes [3, 2, 1])
+   call allocator%release_block(ptr3)
+   call allocator%release_block(ptr2)
+   call allocator%release_block(ptr1)
+
+   ! Grab 1 block (Should get 1, leaving [3, 2])
+   ptr1 => allocator%get_block(DIR_X)
+
+   ! Verify remaining free list is [2, 3]
+   l = allocator%get_block_ids()
+   expected_ids = [2, 3]
+   @assertEqual(expected_ids, l)
+end subroutine test_stack_reuse
+
+@test
+subroutine test_destruction()
+   use pFUnit_mod
+   use m_allocator, only: allocator_t
+   implicit none
+   
+   class(allocator_t), allocatable :: allocator
+
+   allocator = allocator_t([8, 8, 8], 8)
+   call allocator%destroy()
+
+   @assertEqual(0, allocator%next_id)
+end subroutine test_destruction

@@ -3,6 +3,10 @@ set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" CACHE STRING "comma separated li
 set(CMAKE_CTEST_NPROCS "4" CACHE STRING "number of process used in tests")
 
 function(define_test testfile np backend)
+  # Capture optional arguments passed to the function (e.g. input file or flags)
+  set(extra_args "${ARGN}")
+  string(REPLACE ";" " " extra_args_str "${extra_args}")
+
   get_filename_component(test_name ${testfile} NAME_WE)
   string(CONCAT test_name ${test_name} _ ${backend} _ ${np})
 
@@ -45,15 +49,30 @@ endif()
   endif()
 
   if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
-    add_test(NAME ${test_name} COMMAND "srun bin/${test_name}")
+    add_test(NAME ${test_name} COMMAND "srun bin/${test_name} ${extra_args_str}")
   else()
-    add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} bin/${test_name}")
+    add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} bin/${test_name} ${extra_args_str}")
   endif()
 
+  # default all tests defined via this function as 'unit' tests
+  set_tests_properties(${test_name} PROPERTIES LABELS "unit")
 endfunction()
 
-define_test(test_allocator.f90 1 omp)
-define_test(test_mesh.f90 4 omp)
+function(define_performance_test testfile np backend)
+  define_test(${testfile} ${np} ${backend} ${ARGN})
+  get_filename_component(test_name ${testfile} NAME_WE)
+  string(CONCAT test_name ${test_name} _ ${backend} _ ${np})
+  set_tests_properties(${test_name} PROPERTIES LABELS "performance")
+endfunction()
+
+function(define_regression_test testfile np backend)
+  define_test(${testfile} ${np} ${backend} ${ARGN})
+  get_filename_component(test_name ${testfile} NAME_WE)
+  string(CONCAT test_name ${test_name} _ ${backend} _ ${np})
+  set_tests_properties(${test_name} PROPERTIES LABELS "regression")
+endfunction()
+
+define_regression_test(regression/test_mesh.f90 4 omp)
 if(WITH_2DECOMPFFT)
   define_test(test_fft.f90 4 omp)
 endif()
@@ -99,26 +118,26 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_test(cuda/test_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
 endif()
 
-# --- pFUnit Integration (Refactoring for Testability) ---
+# pFUnit integration 
 find_package(pFUnit QUIET)
 
 if(pFUnit_FOUND)
-  # Enable pFUnit macros (pFUnit 4.x style)
-  # This allows writing .pf files with @test annotations
-  
+  # helper to define pFUnit tests
   function(define_pfunit_test test_source np)
     get_filename_component(test_name ${test_source} NAME_WE)
     
-    # pFUnit provides a CMake macro to handle preprocessing .pf -> .F90
+    # pFUnit macro to handle preprocessing .pf -> .f90
     add_pfunit_ctest(${test_name}
       TEST_SOURCE ${test_source}
       LINK_LIBRARIES x3d2
       TEST_NUM_PROCS ${np}
     )
+    # label as unit test
     set_tests_properties(${test_name} PROPERTIES LABELS "unit;pfunit")
   endfunction()
 
-  # Example of a refactored unit test
+  # register test
+  define_pfunit_test(unit/test_allocator.pf 1)
   define_pfunit_test(unit/test_pfunit_demo.pf 1)
 endif()
 
