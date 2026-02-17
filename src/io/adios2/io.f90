@@ -28,8 +28,8 @@ module m_io_backend
                     adios2_declare_io, adios2_set_engine, &
                     adios2_open, adios2_close, &
                     adios2_begin_step, adios2_end_step, adios2_perform_puts, &
-                    adios2_define_variable, adios2_inquire_variable, adios2_variable_type, &
-                    adios2_define_attribute, &
+                    adios2_define_variable, adios2_inquire_variable, &
+                    adios2_variable_type, adios2_define_attribute, &
                     adios2_set_selection, adios2_put, &
                     adios2_get, adios2_remove_all_variables, &
                     adios2_found, adios2_constant_dims, &
@@ -88,7 +88,8 @@ module m_io_backend
     procedure :: supports_device_field_write => &
       supports_device_field_write_adios2
 #ifdef X3D2_ADIOS2_CUDA
-    procedure :: write_data_array_3d_device => write_data_array_3d_device_adios2
+    procedure :: write_data_array_3d_device => &
+      write_data_array_3d_device_adios2
     procedure :: sync_device => sync_device_adios2
 #endif
     procedure :: write_attribute_string => write_attribute_string_adios2
@@ -287,17 +288,21 @@ contains
         call adios2_variable_type(vtype, var, ierr)
 
         if (vtype == adios2_type_dp) then
-           ! file is double precision
-           call adios2_get(file_handle%engine, var, val_dp_temp, adios2_mode_sync, ierr)
-           value = real(val_dp_temp, dp)
+          ! file is double precision
+          call adios2_get(file_handle%engine, var, val_dp_temp, &
+                          adios2_mode_sync, ierr)
+          value = real(val_dp_temp, dp)
         else if (vtype == adios2_type_real) then
-           ! file is single precision
-           call adios2_get(file_handle%engine, var, val_sp_temp, adios2_mode_sync, ierr)
-           value = real(val_sp_temp, dp)
+          ! file is single precision
+          call adios2_get(file_handle%engine, var, val_sp_temp, &
+                          adios2_mode_sync, ierr)
+          value = real(val_sp_temp, dp)
         else
-           call adios2_get(file_handle%engine, var, value, adios2_mode_sync, ierr)
+          call adios2_get(file_handle%engine, var, value, &
+                          adios2_mode_sync, ierr)
         end if
-        call self%handle_error(ierr, "Failed to read variable "//trim(variable_name))
+        call self%handle_error(ierr, "Failed to read variable " &
+                               //trim(variable_name))
       else
         call self%handle_error(1, "Variable " &
                                //trim(variable_name)//" not found in file")
@@ -353,22 +358,28 @@ contains
         call adios2_variable_type(vtype, var, ierr)
 
         if (vtype == adios2_type_dp) then
-           ! file is double precision
-           allocate(arr_dp_temp(local_count(1), local_count(2), local_count(3)))
-           call adios2_get(file_handle%engine, var, arr_dp_temp, adios2_mode_sync, ierr)
-           array = real(arr_dp_temp, dp)
-           deallocate(arr_dp_temp)
+          ! file is double precision
+          allocate (arr_dp_temp(local_count(1), local_count(2), &
+                                local_count(3)))
+          call adios2_get(file_handle%engine, var, arr_dp_temp, &
+                          adios2_mode_sync, ierr)
+          array = real(arr_dp_temp, dp)
+          deallocate (arr_dp_temp)
         else if (vtype == adios2_type_real) then
-           ! file is single precision
-           allocate(arr_sp_temp(local_count(1), local_count(2), local_count(3)))
-           call adios2_get(file_handle%engine, var, arr_sp_temp, adios2_mode_sync, ierr)
-           array = real(arr_sp_temp, dp)
-           deallocate(arr_sp_temp)
+          ! file is single precision
+          allocate (arr_sp_temp(local_count(1), local_count(2), &
+                                local_count(3)))
+          call adios2_get(file_handle%engine, var, arr_sp_temp, &
+                          adios2_mode_sync, ierr)
+          array = real(arr_sp_temp, dp)
+          deallocate (arr_sp_temp)
         else
-           call adios2_get(file_handle%engine, var, array, adios2_mode_sync, ierr)
+          call adios2_get(file_handle%engine, var, array, &
+                          adios2_mode_sync, ierr)
         end if
 
-        call self%handle_error(ierr, "Failed to read variable "//trim(variable_name))
+        call self%handle_error(ierr, "Failed to read variable " &
+                               //trim(variable_name))
       else
         call self%handle_error(1, "Variable " &
                                //trim(variable_name)//" not found in file")
@@ -686,7 +697,8 @@ contains
 
         call adios2_put_gpu(file_handle%engine%f2c, var%f2c, &
                             device_ptr, adios2_mode_deferred, ierr)
-        call self%handle_error(ierr, "Error in GPU-aware ADIOS2 put (deferred)")
+        call self%handle_error(ierr, "Error in GPU-aware ADIOS2 &
+                              &put (deferred)")
       end if
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
@@ -877,7 +889,7 @@ contains
       call self%write_data_array_3d_device( &
         variable_name, field_typed%data_d, &
         file_handle, shape_dims, start_dims, count_dims, use_sp &
-      )
+        )
       return
     end select
 #endif
@@ -888,7 +900,7 @@ contains
       call self%write_data_array_3d( &
         variable_name, field_typed%data, file_handle, &
         shape_dims, start_dims, count_dims, use_sp &
-      )
+        )
     class default
       error stop "write_field_from_solver: Unsupported field type"
     end select

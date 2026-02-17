@@ -168,7 +168,7 @@ contains
 
     ! Only copy device->host when GPU-aware I/O is not available or striding is needed
     if (.not. (all(self%output_stride == 1) .and. &
-        self%snapshot_writer%supports_device_field_write())) then
+               self%snapshot_writer%supports_device_field_write())) then
       call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
     end if
 
@@ -180,7 +180,7 @@ contains
     call self%snapshot_writer%end_step()
 
     if (.not. (all(self%output_stride == 1) .and. &
-        self%snapshot_writer%supports_device_field_write())) then
+               self%snapshot_writer%supports_device_field_write())) then
       call cleanup_field_arrays(solver, field_ptrs, host_fields)
     end if
   end subroutine write_snapshot
@@ -233,13 +233,15 @@ contains
     !! Write field data with striding for snapshots
     class(snapshot_manager_t), intent(inout) :: self
     character(len=*), dimension(:), intent(in) :: field_names
-    class(field_ptr_t), dimension(:), target, intent(in), optional :: host_fields
+    class(field_ptr_t), dimension(:), target, intent(in), optional :: &
+      host_fields
     class(solver_t), intent(in) :: solver
     type(writer_session_t), intent(inout) :: writer_session
     integer, intent(in) :: data_loc
 
     integer :: i_field
-    integer(i8), dimension(3) :: output_start, output_count, shape_dims, count_dims
+    integer(i8), dimension(3) :: output_start, output_count, shape_dims, &
+                                 count_dims
     integer, dimension(3) :: output_dims_local
     class(field_t), pointer :: io_field
     logical :: use_device_write
@@ -273,14 +275,15 @@ contains
           trim(field_names(i_field)), io_field, solver%backend, &
           shape_dims, output_start, count_dims, &
           self%convert_to_sp &
-        )
+          )
       end do
       return
     end if
 
     ! Fallback: host-staged path with striding (requires host_fields)
     if (.not. present(host_fields)) then
-      error stop "write_fields(snapshot): host_fields required for strided output"
+      error stop "write_fields(snapshot): &
+          &host_fields required for strided output"
     end if
     ! Prepare buffers with striding for snapshots
     call prepare_field_buffers( &

@@ -471,7 +471,8 @@ contains
     !! Write field data for checkpoints (no striding)
     class(checkpoint_manager_t), intent(inout) :: self
     character(len=*), dimension(:), intent(in) :: field_names
-    class(field_ptr_t), dimension(:), target, intent(in), optional :: host_fields
+    class(field_ptr_t), dimension(:), target, intent(in), optional :: &
+      host_fields
     class(solver_t), intent(in) :: solver
     type(writer_session_t), intent(inout) :: writer_session
     integer, intent(in) :: data_loc
@@ -508,7 +509,7 @@ contains
       call writer_session%write_field_from_solver( &
         trim(field_names(i_field)), io_field, solver%backend, &
         shape_dims, start_dims, count_dims, .false. &
-      )
+        )
     end do
   end subroutine write_fields
 
