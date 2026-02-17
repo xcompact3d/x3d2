@@ -125,6 +125,7 @@ module m_io_session
     ! Field-from-solver interface (GPU-aware when available)
     procedure :: write_field_from_solver => session_write_field_from_solver
     procedure :: supports_device_field_write => session_supports_device_field_write
+    procedure :: sync_device => session_sync_device
     ! Write attribute interface
     procedure :: write_attribute => session_write_attribute
     final :: writer_session_finaliser
@@ -310,6 +311,13 @@ contains
     class(writer_session_t), intent(in) :: self
     session_supports_device_field_write = self%writer%supports_device_field_write()
   end function session_supports_device_field_write
+
+  subroutine session_sync_device(self)
+    !! Synchronise device before a batch of field writes.
+    !! Does nothing for non-GPU backends.
+    class(writer_session_t), intent(inout) :: self
+    call self%writer%sync_device()
+  end subroutine session_sync_device
 
   subroutine writer_session_begin_step(self)
     !! Begin a new timestep for writing (used for time-series in single file)
