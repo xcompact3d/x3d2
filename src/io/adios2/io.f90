@@ -116,12 +116,13 @@ module m_io_backend
   ! Memory space must be set to GPU via the native Fortran
   ! adios2_set_memory_space before calling this.
   interface
-    subroutine adios2_put_gpu(engine_f2c, variable_f2c, data, ierr) &
+    subroutine adios2_put_gpu(engine_f2c, variable_f2c, data, mode, ierr) &
       bind(C, name='adios2_put_gpu')
       use iso_c_binding, only: c_ptr, c_int, c_int64_t
       integer(c_int64_t), intent(in) :: engine_f2c
       integer(c_int64_t), intent(in) :: variable_f2c
       type(c_ptr), value :: data
+      integer(c_int), intent(in) :: mode
       integer(c_int), intent(out) :: ierr
     end subroutine adios2_put_gpu
   end interface
@@ -670,24 +671,25 @@ contains
       call self%handle_error(ierr, "Error setting GPU memory space")
 
       ! Get device pointer and pass via C wrapper
+      ! Use sync mode only when converting dp->sp (temporary buffer must
+      ! be flushed before deallocation); deferred mode otherwise.
       if (convert_to_sp .and. .not. is_sp) then
         allocate (array_sp(size(array, 1), size(array, 2), size(array, 3)))
         array_sp = real(array, sp)
         devptr = c_devloc(array_sp)
+        device_ptr = transfer(devptr, device_ptr)
+
+        call adios2_put_gpu(file_handle%engine%f2c, var%f2c, &
+                            device_ptr, adios2_mode_sync, ierr)
+        call self%handle_error(ierr, "Error in GPU-aware ADIOS2 put (sync)")
+        deallocate (array_sp)
       else
         devptr = c_devloc(array)
-      end if
+        device_ptr = transfer(devptr, device_ptr)
 
-      device_ptr = transfer(devptr, device_ptr)
-
-      call adios2_put_gpu(file_handle%engine%f2c, var%f2c, &
-                          device_ptr, ierr)
-      call self%handle_error(ierr, "Error in GPU-aware ADIOS2 put")
-
-      if (allocated(array_sp)) then
-        call adios2_perform_puts(file_handle%engine, ierr)
-        call self%handle_error(ierr, "Error performing puts for SP conversion")
-        deallocate (array_sp)
+        call adios2_put_gpu(file_handle%engine%f2c, var%f2c, &
+                            device_ptr, adios2_mode_deferred, ierr)
+        call self%handle_error(ierr, "Error in GPU-aware ADIOS2 put (deferred)")
       end if
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
