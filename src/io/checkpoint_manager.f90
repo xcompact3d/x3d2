@@ -240,7 +240,10 @@ contains
                                               padded_dims(2), padded_dims(3)))
             end if
 
-            raw_buffers(idx)%data = solver%time_integrator%olds(i, j)%ptr%data
+            call solver%backend%get_field_data( &
+              raw_buffers(idx)%data, &
+              solver%time_integrator%olds(i, j)%ptr, &
+              solver%time_integrator%olds(i, j)%ptr%dir)
 
             ! Use -1 to signal local per-rank variables (not decomposed across ranks)
             ! Each rank writes to its own uniquely named variable (with _rank suffix)
@@ -433,7 +436,7 @@ contains
                 write (old_name, '(A,"_rhs_old",I0)') trim(var_names(i)), j
                 write (ranked_name, '(A,A)') trim(old_name), trim(rank_suffix)
 
-                padded_dims = shape(solver%time_integrator%olds(i, j)%ptr%data)
+                padded_dims = solver%time_integrator%olds(i, j)%ptr%get_shape()
                 if (allocated(old_field)) then
                   if (any(shape(old_field) /= padded_dims)) then
                     deallocate (old_field)
@@ -447,7 +450,9 @@ contains
                 ! Clear the buffer before reading
                 old_field = 0.0_dp
                 call reader_session%read_data(trim(ranked_name), old_field)
-                solver%time_integrator%olds(i, j)%ptr%data = old_field
+                call solver%backend%set_field_data( &
+                  solver%time_integrator%olds(i, j)%ptr, old_field, &
+                  solver%time_integrator%olds(i, j)%ptr%dir)
               end do
             end do
             if (allocated(old_field)) deallocate (old_field)
