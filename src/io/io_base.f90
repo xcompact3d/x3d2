@@ -69,7 +69,8 @@ module m_io_base
     procedure :: init => base_writer_init
     procedure :: open => base_writer_open
     procedure :: finalise => base_writer_finalise
-    procedure :: supports_device_field_write => base_supports_device_field_write
+    procedure :: supports_device_field_write => &
+      base_supports_device_field_write
     procedure :: sync_device => base_sync_device
     generic :: write_data => write_data_i8, write_data_integer, &
       write_data_real, &
