@@ -99,4 +99,27 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_test(cuda/test_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
 endif()
 
+# --- pFUnit Integration (Refactoring for Testability) ---
+find_package(pFUnit QUIET)
+
+if(pFUnit_FOUND)
+  # Enable pFUnit macros (pFUnit 4.x style)
+  # This allows writing .pf files with @test annotations
+  
+  function(define_pfunit_test test_source np)
+    get_filename_component(test_name ${test_source} NAME_WE)
+    
+    # pFUnit provides a CMake macro to handle preprocessing .pf -> .F90
+    add_pfunit_ctest(${test_name}
+      TEST_SOURCE ${test_source}
+      LINK_LIBRARIES x3d2
+      TEST_NUM_PROCS ${np}
+    )
+    set_tests_properties(${test_name} PROPERTIES LABELS "unit;pfunit")
+  endfunction()
+
+  # Example of a refactored unit test
+  define_pfunit_test(unit/test_pfunit_demo.pf 1)
+endif()
+
 set(EXECUTABLE_OUTPUT_PATH "bin")

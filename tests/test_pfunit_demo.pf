@@ -1,0 +1,22 @@
+! This is a pFUnit test file (.pf)
+! It allows testing specific subroutines in isolation.
+
+@test
+subroutine test_basic_assertion()
+   use pFUnit_mod
+   implicit none
+   
+   ! Verify that 1 equals 1 (Sanity check)
+   @assertEqual(1, 1)
+end subroutine
+
+@test
+subroutine test_mpi_rank_check()
+   use pFUnit_mod
+   use mpi
+   implicit none
+   integer :: rank, ierr
+   
+   call MPI_Comm_rank(MPI_COMM_WORLD, rank, ierr)
+   @assertTrue(rank >= 0)
+end subroutine
