@@ -489,6 +489,12 @@ contains
     ! Checkpoints always write full resolution (no striding)
     ! Backend automatically uses GPU-aware I/O when available
     use_device_write = writer_session%writer%supports_device_field_write()
+
+    if (.not. use_device_write .and. .not. present(host_fields)) then
+      error stop "write_fields(checkpoint): host_fields required &
+        &when GPU-aware I/O is not available"
+    end if
+
     do i_field = 1, size(field_names)
       select case (trim(field_names(i_field)))
       case ("u")
