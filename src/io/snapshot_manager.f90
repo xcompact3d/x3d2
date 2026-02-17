@@ -168,7 +168,7 @@ contains
 
     ! Only copy device->host when GPU-aware I/O is not available or striding is needed
     if (.not. (all(self%output_stride == 1) .and. &
-        self%snapshot_writer%writer%supports_device_field_write())) then
+        self%snapshot_writer%supports_device_field_write())) then
       call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
     end if
 
@@ -180,7 +180,7 @@ contains
     call self%snapshot_writer%end_step()
 
     if (.not. (all(self%output_stride == 1) .and. &
-        self%snapshot_writer%writer%supports_device_field_write())) then
+        self%snapshot_writer%supports_device_field_write())) then
       call cleanup_field_arrays(solver, field_ptrs, host_fields)
     end if
   end subroutine write_snapshot
@@ -252,7 +252,7 @@ contains
     ! Write fields directly when no striding - backend uses GPU-aware I/O when available
     if (all(self%output_stride == 1)) then
       ! No striding - can potentially use direct device I/O
-      use_device_write = writer_session%writer%supports_device_field_write()
+      use_device_write = writer_session%supports_device_field_write()
 
       if (.not. use_device_write .and. .not. present(host_fields)) then
         error stop "write_fields(snapshot): host_fields required &
@@ -283,9 +283,9 @@ contains
           error stop "write_fields(snapshot): Unknown field name"
         end select
 
-        call writer_session%writer%write_field_from_solver( &
-          trim(field_names(i_field)), io_field, writer_session%file, &
-          solver%backend, shape_dims, output_start, count_dims, &
+        call writer_session%write_field_from_solver( &
+          trim(field_names(i_field)), io_field, solver%backend, &
+          shape_dims, output_start, count_dims, &
           self%convert_to_sp &
         )
       end do

@@ -45,6 +45,7 @@ module m_io_session
 !! modules like `m_io_base` and `m_io_backend` are internal components and should
 !! never be used directly in user code.
   use m_common, only: dp, i8
+  use m_field, only: field_t
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
                        io_mode_read, io_mode_write
   use m_io_backend, only: allocate_io_reader, allocate_io_writer
@@ -59,7 +60,7 @@ module m_io_session
   !> Base type for common session functionality
   type :: io_session_base_t
     private
-    class(io_file_t), allocatable, public :: file
+    class(io_file_t), allocatable :: file
     logical :: is_open = .false.
     logical :: is_functional = .true.  ! false for dummy I/O
   contains
@@ -108,7 +109,7 @@ module m_io_session
   !!   call writer_session%close()
   type, extends(io_session_base_t) :: writer_session_t
     private
-    class(io_writer_t), allocatable, public :: writer
+    class(io_writer_t), allocatable :: writer
   contains
     ! Open/close operations
     procedure :: open => writer_session_open
@@ -121,6 +122,9 @@ module m_io_session
     procedure, private :: write_data_integer
     procedure, private :: write_data_real
     procedure, private :: write_data_array_3d
+    ! Field-from-solver interface (GPU-aware when available)
+    procedure :: write_field_from_solver => session_write_field_from_solver
+    procedure :: supports_device_field_write => session_supports_device_field_write
     ! Write attribute interface
     procedure :: write_attribute => session_write_attribute
     final :: writer_session_finaliser
@@ -280,6 +284,32 @@ contains
       attribute_name, attribute_value, self%file &
       )
   end subroutine session_write_attribute
+
+  subroutine session_write_field_from_solver( &
+    self, variable_name, field, backend, &
+    shape_dims, start_dims, count_dims, use_sp &
+    )
+    !! Write field data with backend-specific optimisations
+    class(writer_session_t), intent(inout) :: self
+    character(len=*), intent(in) :: variable_name
+    class(*), intent(in) :: field
+    class(*), intent(in) :: backend
+    integer(i8), intent(in) :: shape_dims(3)
+    integer(i8), intent(in) :: start_dims(3)
+    integer(i8), intent(in) :: count_dims(3)
+    logical, intent(in), optional :: use_sp
+
+    if (.not. self%is_open) error stop "IO session not open"
+    call self%writer%write_field_from_solver( &
+      variable_name, field, self%file, backend, &
+      shape_dims, start_dims, count_dims, use_sp &
+      )
+  end subroutine session_write_field_from_solver
+
+  logical function session_supports_device_field_write(self)
+    class(writer_session_t), intent(in) :: self
+    session_supports_device_field_write = self%writer%supports_device_field_write()
+  end function session_supports_device_field_write
 
   subroutine writer_session_begin_step(self)
     !! Begin a new timestep for writing (used for time-series in single file)
