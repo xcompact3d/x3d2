@@ -180,7 +180,7 @@ contains
 
     n_total_vars = size(field_names)
 
-    use_device_write = writer_session%writer%supports_device_field_write()
+    use_device_write = writer_session%supports_device_field_write()
 
     if (.not. use_device_write) then
       call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
@@ -488,7 +488,7 @@ contains
 
     ! Checkpoints always write full resolution (no striding)
     ! Backend automatically uses GPU-aware I/O when available
-    use_device_write = writer_session%writer%supports_device_field_write()
+    use_device_write = writer_session%supports_device_field_write()
 
     if (.not. use_device_write .and. .not. present(host_fields)) then
       error stop "write_fields(checkpoint): host_fields required &
@@ -519,9 +519,9 @@ contains
         error stop "write_fields(checkpoint): Unknown field name"
       end select
 
-      call writer_session%writer%write_field_from_solver( &
-        trim(field_names(i_field)), io_field, writer_session%file, &
-        solver%backend, shape_dims, start_dims, count_dims, .false. &
+      call writer_session%write_field_from_solver( &
+        trim(field_names(i_field)), io_field, solver%backend, &
+        shape_dims, start_dims, count_dims, .false. &
       )
     end do
   end subroutine write_fields
