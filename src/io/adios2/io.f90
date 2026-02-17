@@ -678,8 +678,8 @@ contains
 
         call adios2_put_gpu(file_handle%engine%f2c, var%f2c, &
                             device_ptr, adios2_mode_sync, ierr)
-        call self%handle_error(ierr, "Error in GPU-aware ADIOS2 put (sync)")
         deallocate (array_sp)
+        call self%handle_error(ierr, "Error in GPU-aware ADIOS2 put (sync)")
       else
         devptr = c_devloc(array)
         device_ptr = transfer(devptr, device_ptr)
