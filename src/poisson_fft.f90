@@ -202,6 +202,9 @@ contains
 
       self%poisson => poisson_100
     else if ((.not. self%periodic_x) .and. (.not. self%periodic_y) .and. (self%periodic_z)) then
+      if (mesh%par%nproc > 1) then
+        error stop 'Multiple ranks are not yet supported for non-periodic BCs!'
+      end if
       self%poisson => poisson_110
 
     else
