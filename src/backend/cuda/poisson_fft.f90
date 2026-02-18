@@ -56,13 +56,13 @@ module m_cuda_poisson_fft
     complex(dp), device, allocatable, dimension(:, :, :) :: c_dev
   contains
     procedure :: fft_forward => fft_forward_cuda
-    procedure :: fft_forward_010 => fft_forward_010_cuda
+    procedure :: fft_forward_010 => fft_forward_cuda
     procedure :: fft_forward_100 => fft_forward_100_cuda
-    procedure :: fft_forward_110 => fft_forward_110_cuda
+    procedure :: fft_forward_110 => fft_forward_cuda
     procedure :: fft_backward => fft_backward_cuda
-    procedure :: fft_backward_010 => fft_backward_010_cuda
+    procedure :: fft_backward_010 => fft_backward_cuda
     procedure :: fft_backward_100 => fft_backward_100_cuda
-    procedure :: fft_backward_110 => fft_backward_110_cuda
+    procedure :: fft_backward_110 => fft_backward_cuda
     procedure :: fft_postprocess_000 => fft_postprocess_000_cuda
     procedure :: fft_postprocess_010 => fft_postprocess_010_cuda
     procedure :: fft_postprocess_100 => fft_postprocess_100_cuda
@@ -415,6 +415,8 @@ contains
 
   end subroutine fft_backward_010_cuda
 
+
+
   subroutine fft_forward_100_cuda(self, f)
   !! Forward FFT for Dirichlet-X case
   !! We transpose X<->Y so that the Dirichlet direction becomes the
@@ -499,7 +501,7 @@ contains
 
   end subroutine fft_backward_100_cuda
 
-  subroutine fft_forward_110_cuda(self, f)
+  subroutine fft_forward_cuda(self, f)
     implicit none
 
     class(cuda_poisson_fft_t) :: self
@@ -517,55 +519,13 @@ contains
       padded_dev => f%data_d
     end select
 
-    call c_f_pointer(self%xtdesc%descriptor, descriptor)
-    call c_f_pointer(descriptor%data(1), d_dev, &
-                     [self%nx_loc + 2, self%ny_loc, self%nz_loc])
-
-    ! tsize is different than SZ, because here we work on a 3D Cartesian
-    ! data structure, and free to specify any suitable thread/block size.
-    tsize = 16
-    blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
-    threads = dim3(tsize, 1, 1)
-    ! print *, "fwd – blocks = ", blocks
-    ! print *, "fwd – threads = ", threads
-
-    call memcpy3D<<<blocks, threads>>>(d_dev, padded_dev, & !&
-                                       self%nx_loc, self%ny_loc, self%nz_loc)
-
-    ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, &
-                                 CUFFT_FORWARD)
-
-    if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Forward 3D FFT execution failed'
-    end if
-
-  end subroutine fft_forward_110_cuda
-
-  subroutine fft_backward_110_cuda(self, f)
-    implicit none
-
-    class(cuda_poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f
-
-    real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
-
-    type(cudaXtDesc), pointer :: descriptor
-
-    integer :: tsize, ierr
-    type(dim3) :: blocks, threads
-
-    ierr = cufftXtExecDescriptor(self%plan3D_bw, self%xtdesc, self%xtdesc, &
-                                 CUFFT_INVERSE)
-    if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Backward 3D FFT execution failed'
-    end if
-
-    select type (f)
-    type is (cuda_field_t)
-      padded_dev => f%data_d
-    end select
+    if (self%use_cufftmp) then
+      ! Multi-GPU path using cuFFTMp
+      ! tsize is different than SZ, because here we work on a 3D Cartesian
+      ! data structure, and free to specify any suitable thread/block size.
+      tsize = 16
+      blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
+      threads = dim3(tsize, 1, 1)
 
     call c_f_pointer(self%xtdesc%descriptor, descriptor)
     call c_f_pointer(descriptor%data(1), d_dev, &
