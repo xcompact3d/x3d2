@@ -826,10 +826,6 @@ attributes(global) subroutine memcpy3D_with_transpose_back(dst, src, nx, ny, nz)
     do i = nx/2 + 1, nx
       f_out(i, j, k) = f_in(2*nx - 2*i + 2, j, k)
     end do
-    ! Debug: make enforce periodicity as just f_in => f_out
-    ! do i = 1, nx
-    !   f_out(i, j, k) = f_in(i, j, k)
-    ! end do
 
   end subroutine enforce_periodicity_x
 
@@ -849,11 +845,6 @@ attributes(global) subroutine memcpy3D_with_transpose_back(dst, src, nx, ny, nz)
       f_out(2*i - 1, j, k) = f_in(i, j, k)
       f_out(2*i, j, k) = f_in(nx - i + 1, j, k)
     end do
-
-    ! Debug: make undo periodicity as just f_in => f_out
-    ! do i = 1, nx
-    !   f_out(i, j, k) = f_in(i, j, k)
-    ! end do
 
   end subroutine undo_periodicity_x
 
@@ -875,10 +866,6 @@ attributes(global) subroutine memcpy3D_with_transpose_back(dst, src, nx, ny, nz)
     do j = ny/2 + 1, ny
       f_out(i, j, k) = f_in(i, 2*ny - 2*j + 2, k)
     end do
-    !! Debug: make enforce periodicity as just f_in => f_out
-    ! do j = 1, ny
-    !   f_out(i, j, k) = f_in(i, j, k)
-    ! end do
 
   end subroutine enforce_periodicity_y
 
@@ -899,10 +886,6 @@ attributes(global) subroutine memcpy3D_with_transpose_back(dst, src, nx, ny, nz)
       f_out(i, 2*j, k) = f_in(i, ny - j + 1, k)
     end do
 
-    ! Debug: make undo periodicity as just f_in => f_out
-    ! do j = 1, ny
-    !   f_out(i, j, k) = f_in(i, j, k)
-    ! end do
   end subroutine undo_periodicity_y
 
 end module m_cuda_spectral

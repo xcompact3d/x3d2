@@ -145,16 +145,6 @@ contains
     self%y_sp_st = n_sp_st(2)
     self%z_sp_st = n_sp_st(3)
 
-    ! ===== DEBUG PRINTOUTS =====
-    print *, '===== POISSON FFT DEBUG ====='
-    print *, 'Global dims:   nx_glob=', self%nx_glob, ' ny_glob=', self%ny_glob, ' nz_glob=', self%nz_glob
-    print *, 'Local dims:    nx_loc=', self%nx_loc, ' ny_loc=', self%ny_loc, ' nz_loc=', self%nz_loc
-    print *, 'Spectral dims: nx_spec=', self%nx_spec, ' ny_spec=', self%ny_spec, ' nz_spec=', self%nz_spec
-    print *, 'Spectral offset: x_sp_st=', self%x_sp_st, ' y_sp_st=', self%y_sp_st, ' z_sp_st=', self%z_sp_st
-    print *, 'Periodic BCs:  periodic_x=', self%periodic_x, ' periodic_y=', self%periodic_y, ' periodic_z=', self%periodic_z
-    print *, '============================='
-    ! ===== END DEBUG =====
-
     allocate (self%ax(self%nx_glob), self%bx(self%nx_glob))
     allocate (self%ay(self%ny_glob), self%by(self%ny_glob))
     allocate (self%az(self%nz_glob), self%bz(self%nz_glob))

@@ -231,13 +231,6 @@ contains
       error stop "not implemented yet!!"
     end if
 
-    ! ===== DEBUG PRINTOUTS =====
-    print *, '===== POISSON INIT  DEBUG ====='
-    print *, 'n_sp_st(1)=', n_sp_st(1), ' n_sp_st(2)=', n_sp_st(2), ' n_sp_st(3)=', n_sp_st(3)
-    print *, 'n_spec(1)=', n_spec(1), ' n_spec(2)=', n_spec(2), ' n_spec(3)=', n_spec(3)
-    print *, '============================='
-    ! ===== END DEBUG =====
-
     call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
 
     nx = poisson_fft%nx_glob
