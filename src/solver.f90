@@ -75,6 +75,7 @@ module m_solver
     procedure :: transeq_species
     procedure :: pressure_correction
     procedure :: compute_pressure_vert
+    procedure :: rescale_pressure
     procedure :: divergence_v2p
     procedure :: gradient_p2v
     procedure :: curl
@@ -758,6 +759,22 @@ contains
       self%zdirps%interpl_p2v &
       )
 
+    call self%rescale_pressure(self%pressure_vert)
+
   end subroutine compute_pressure_vert
+
+  subroutine rescale_pressure(self, pressure)
+    !! Rescale pseudo-pressure to physical (kinematic) pressure.
+    !!
+    !! The Poisson solve returns \(p'\) where \(u^{n+1} = u* - \nabla{p'}\),
+    !! so \(p' = \frac{\Delta t}{\rho}p\). Divide by dt to recover p/rho.
+    implicit none
+
+    class(solver_t) :: self
+    class(field_t), intent(inout) :: pressure
+
+    call self%backend%vecadd(1._dp/self%dt, pressure, 0._dp, pressure)
+
+  end subroutine rescale_pressure
 
 end module m_solver
