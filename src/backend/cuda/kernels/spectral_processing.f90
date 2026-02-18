@@ -664,23 +664,27 @@ attributes(global) subroutine memcpy3D_with_transpose_back(dst, src, nx, ny, nz)
     integer, value, intent(in) :: x_sp_st, y_sp_st
     integer, value, intent(in) :: nx, ny, nz
 
-    integer :: i, j, k, ix, iy, iz, ix_rev, iy_rev
+    integer :: i, j, k, ix, iy, iz, iy_rev
     real(dp) :: tmp_r, tmp_c, div_r, div_c
     real(dp) :: l_r, l_c, r_r, r_c
-    real(dp) :: ll_r, ll_c, lr_r, lr_c, rl_r, rl_c, rr_r, rr_c
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
     k = blockIdx%y ! nz_spec
 
+    ! ================================================================
+    ! FORWARD PASS
+    ! ================================================================
+
+    ! Step 1: Normalise and periodic post-process in z
     if (i <= nx_spec) then
       do j = 1, ny_spec
-        ix = i; iy = j + y_sp_st; iz = k
+        ix = i + x_sp_st; iy = j + y_sp_st; iz = k
 
         ! normalisation
         div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
         div_c = aimag(div_u(i, j, k))/nx/ny/nz
 
-        ! postprocess in z
+        ! postprocess in z (periodic)
         tmp_r = div_r
         tmp_c = div_c
         div_r = tmp_r*bz(iz) + tmp_c*az(iz)
@@ -693,9 +697,10 @@ attributes(global) subroutine memcpy3D_with_transpose_back(dst, src, nx, ny, nz)
       end do
     end if
 
+    ! Step 2: Paired even/odd splitting for y (Dirichlet direction)
     if (i <= nx_spec) then
       do j = 2, ny_spec/2 + 1
-        ix = i; iy = j + y_sp_st; iz = k
+        iy = j + y_sp_st
         iy_rev = ny_spec - j + 2 + y_sp_st
 
         l_r = real(div_u(i, j, k), kind=dp)
@@ -716,9 +721,19 @@ attributes(global) subroutine memcpy3D_with_transpose_back(dst, src, nx, ny, nz)
       end do
     end if
 
-    ! Solve Poisson
+    ! NOTE: No x-direction paired splitting!
+    ! For the R2C FFT output, the x-direction Dirichlet BC is handled
+    ! implicitly through the waves_set.
+    ! The R2C output only contains nx/2+1 values (wavenumbers 0 to nx/2),
+    ! so there's no "pairing" to do
+
+    ! ================================================================
+    ! POISSON SOLVE
+    ! ================================================================
     if (i <= nx_spec) then
       do j = 1, ny_spec
+        ix = i + x_sp_st
+
         div_r = real(div_u(i, j, k), kind=dp)
         div_c = aimag(div_u(i, j, k))
 
@@ -737,14 +752,19 @@ attributes(global) subroutine memcpy3D_with_transpose_back(dst, src, nx, ny, nz)
 
         ! update the entry
         div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
-        if (i == nx/2 + 1 .and. k == nz/2 + 1) div_u(i, j, k) = 0._dp
+        ! Zero out the mode at (nx/2+1, *, nz/2+1) for uniqueness
+        if (ix == nx/2 + 1 .and. k == nz/2 + 1) div_u(i, j, k) = 0._dp
       end do
     end if
 
-    ! post-process backward
+    ! ================================================================
+    ! BACKWARD PASS
+    ! ================================================================
+
+    ! Step 1: Paired even/odd recombination for y (Dirichlet direction)
     if (i <= nx_spec) then
       do j = 2, ny_spec/2 + 1
-        ix = i; iy = j + y_sp_st; iz = k
+        iy = j + y_sp_st
         iy_rev = ny_spec - j + 2 + y_sp_st
 
         l_r = real(div_u(i, j, k), kind=dp)
@@ -765,9 +785,10 @@ attributes(global) subroutine memcpy3D_with_transpose_back(dst, src, nx, ny, nz)
       end do
     end if
 
+    ! Step 2: Periodic post-process in z (undo)
     if (i <= nx_spec) then
       do j = 1, ny_spec
-        ix = i; iy = j + y_sp_st; iz = k
+        iz = k
 
         div_r = real(div_u(i, j, k), kind=dp)
         div_c = aimag(div_u(i, j, k))
@@ -784,6 +805,7 @@ attributes(global) subroutine memcpy3D_with_transpose_back(dst, src, nx, ny, nz)
         div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
       end do
     end if
+
   end subroutine process_spectral_110
 
   attributes(global) subroutine enforce_periodicity_x(f_out, f_in, nx)

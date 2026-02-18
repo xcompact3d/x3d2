@@ -743,8 +743,8 @@ contains
       ! =========================================================================
       ! 000, 010, 110 cases: Periodic Z (standard indexing, no transpose)
       ! 000: Periodic X, Periodic Y, Periodic Z
-      ! 010: Periodic X, Dirichlet Y, Periodic Z
-      ! 110: Dirichlet X, Dirichlet Y, Periodic Z
+      ! 010: Periodic X, Non-Periodic Y, Periodic Z
+      ! 110: Non-Periodic X, Non-Periodic Y, Periodic Z
       ! =========================================================================
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec
