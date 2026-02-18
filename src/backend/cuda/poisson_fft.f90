@@ -178,6 +178,7 @@ contains
 
     integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
     logical :: periodic_x, periodic_y, periodic_z  ! Add local variables
+    logical :: fw_was_cufftmp
 
     ! Get periodicity from mesh BEFORE base_init
     periodic_x = mesh%grid%periodic_BC(1)
@@ -294,6 +295,7 @@ contains
                            nx, ny, nz, CUFFT_D2Z, &
                            mesh%par%is_root(), 'Forward')
     end if
+    fw_was_cufftmp = poisson_fft%use_cufftmp
 
     ! Create backward FFT plan with automatic cuFFTMp detection/fallback
     if (is_sp) then
@@ -306,6 +308,22 @@ contains
                            poisson_fft%use_cufftmp, &
                            nx, ny, nz, CUFFT_Z2D, &
                            mesh%par%is_root(), 'Backward')
+    end if
+
+    ! If backward plan forced fallback, rebuild forward plan in cuFFT mode too.
+    if (fw_was_cufftmp .and. (.not. poisson_fft%use_cufftmp)) then
+      ierr = cufftDestroy(poisson_fft%plan3D_fw)
+      if (is_sp) then
+        call create_fft_plan(poisson_fft%plan3D_fw, &
+                             poisson_fft%use_cufftmp, &
+                             nx, ny, nz, CUFFT_R2C, &
+                             mesh%par%is_root(), 'Forward')
+      else
+        call create_fft_plan(poisson_fft%plan3D_fw, &
+                             poisson_fft%use_cufftmp, &
+                             nx, ny, nz, CUFFT_D2Z, &
+                             mesh%par%is_root(), 'Forward')
+      end if
     end if
 
     ! Allocate storage - cuFFTMp uses xtdesc, cuFFT uses c_dev
