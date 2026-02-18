@@ -46,14 +46,16 @@ module m_cuda_poisson_fft
     !> Forward and backward FFT transform plans
     integer :: plan3D_fw, plan3D_bw
 
-    !> Flag to indicate whether cuFFTMp (multi-GPU) is used
+    !> Flag to indicate whether cuFFTMp is used
     logical :: use_cufftmp = .true.
 
-    !> cuFFTMp object manages decomposition and data storage (multi-GPU)
+    !> cuFFTMp object manages decomposition and data storage
     type(cudaLibXtDesc), pointer :: xtdesc
 
-    !> Standard cuFFT storage for single-GPU mode
+    !> Standard cuFFT storage
     complex(dp), device, allocatable, dimension(:, :, :) :: c_dev
+    !> Real workspace for 100-case transpose in cuFFT mode
+    real(dp), device, allocatable, dimension(:, :, :) :: rtmp_100_dev
   contains
     procedure :: fft_forward => fft_forward_cuda
     procedure :: fft_forward_010 => fft_forward_cuda
@@ -140,7 +142,7 @@ contains
       ! if cuFFTMp failed at any stage, fall back to cuFFT
       if (cufftmp_failed) then
         if (is_root) then
-          print *, 'Falling back to single-GPU cuFFT'
+          print *, 'Falling back to cuFFT'
         end if
         use_cufftmp = .false.
         ierr = cufftDestroy(plan)
@@ -254,7 +256,7 @@ contains
     ! lowmem is .false. by default
     if (present(lowmem)) poisson_fft%lowmem = lowmem
 
-    ! Try cuFFTMp (multi-GPU) first, with automatic fallback to cuFFT if not supported
+    ! Try cuFFTMp first, with automatic fallback to cuFFT if not supported
     poisson_fft%use_cufftmp = .true.
 
     ! if stretching in y is 'centred' or 'top-bottom'
@@ -306,7 +308,7 @@ contains
                            mesh%par%is_root(), 'Backward')
     end if
 
-    ! Allocate storage - cuFFTMp uses xtdesc, single-GPU uses c_dev
+    ! Allocate storage - cuFFTMp uses xtdesc, cuFFT uses c_dev
     if (poisson_fft%use_cufftmp) then
       ! allocate storage for cuFFTMp
       ierr = cufftXtMalloc(poisson_fft%plan3D_fw, poisson_fft%xtdesc, &
@@ -316,18 +318,24 @@ contains
         error stop 'cufftXtMalloc failed'
       end if
     else
-      ! allocate storage for single-GPU cuFFT
+      ! allocate storage for cuFFT
       allocate (poisson_fft%c_dev(poisson_fft%nx_spec, &
                                   poisson_fft%ny_spec, &
                                   poisson_fft%nz_spec))
+      ! 100 case requires explicit transpose around FFT
+      if ((.not. periodic_x) .and. periodic_y .and. periodic_z) then
+        allocate (poisson_fft%rtmp_100_dev(poisson_fft%ny_loc + 2, &
+                                           poisson_fft%nx_loc, &
+                                           poisson_fft%nz_loc))
+      end if
     end if
 
     ! Print final status
     if (mesh%par%is_root()) then
       if (poisson_fft%use_cufftmp) then
-        print *, 'Using cuFFTMp for multi-GPU FFT'
+        print *, 'Using cuFFTMp for FFT'
       else
-        print *, 'Using cuFFT for single-GPU FFT'
+        print *, 'Using cuFFT for FFT'
       end if
     end if
 
@@ -427,6 +435,8 @@ contains
     class(field_t), intent(in) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
+    real(dp), device, pointer :: f_ptr
+    type(c_ptr) :: f_c_ptr
     type(cudaXtDesc), pointer :: descriptor
 
     integer :: tsize, ierr
@@ -437,25 +447,43 @@ contains
       padded_dev => f%data_d
     end select
 
-    call c_f_pointer(self%xtdesc%descriptor, descriptor)
+    if (self%use_cufftmp) then
+      call c_f_pointer(self%xtdesc%descriptor, descriptor)
 
-    ! For 100 case with transposed FFT plan (ny, nx, nz):
-    ! The descriptor has shape (ny + 2, nx, nz) for R2C output
-    call c_f_pointer(descriptor%data(1), d_dev, &
-                     [self%ny_loc + 2, self%nx_loc, self%nz_loc])
+      ! For 100 case with transposed FFT plan (ny, nx, nz):
+      ! The descriptor has shape (ny + 2, nx, nz) for R2C output
+      call c_f_pointer(descriptor%data(1), d_dev, &
+                       [self%ny_loc + 2, self%nx_loc, self%nz_loc])
 
-    tsize = 16
-    blocks = dim3((self%nx_loc - 1)/tsize + 1, self%nz_loc, 1)
-    threads = dim3(tsize, 1, 1)
+      tsize = 16
+      blocks = dim3((self%nx_loc - 1)/tsize + 1, self%nz_loc, 1)
+      threads = dim3(tsize, 1, 1)
 
-    ! print *, "fft_forward_100 – blocks = ", blocks
-    ! print *, "fft_forward_100 – threads = ", threads
+      ! Copy with transpose: src(nx,ny,nz) -> dst(ny,nx,nz)
+      call memcpy3D_with_transpose<<<blocks, threads>>>(d_dev, padded_dev, &
+                                           self%nx_loc, self%ny_loc, self%nz_loc)
 
-    ! Copy with transpose: src(nx,ny,nz) -> dst(ny,nx,nz)
-    call memcpy3D_with_transpose<<<blocks, threads>>>(d_dev, padded_dev, &
-                                         self%nx_loc, self%ny_loc, self%nz_loc)
+      ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, &
+                                   CUFFT_FORWARD)
+    else
+      ! using standard cuFFT
+      ! Using padded_dev directly causes segfault, use pointer workaround
+      tsize = 16
+      blocks = dim3((self%nx_loc - 1)/tsize + 1, self%nz_loc, 1)
+      threads = dim3(tsize, 1, 1)
+      call memcpy3D_with_transpose<<<blocks, threads>>>(self%rtmp_100_dev, padded_dev, &
+                                           self%nx_loc, self%ny_loc, self%nz_loc)
 
-  ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, CUFFT_FORWARD)
+      f_c_ptr = c_loc(self%rtmp_100_dev)
+      call c_f_pointer(f_c_ptr, f_ptr)
+
+      ! Use explicit C interface for single precision, Fortran interface for double
+#ifdef SINGLE_PREC
+      ierr = cufftExecR2C_C(self%plan3D_fw, c_loc(f_ptr), c_loc(self%c_dev))
+#else
+      ierr = cufftExecD2Z(self%plan3D_fw, f_ptr, self%c_dev)
+#endif
+    end if
 
     if (ierr /= 0) then
       write (stderr, *), 'cuFFT Error Code: ', ierr
@@ -471,33 +499,59 @@ contains
     class(field_t), intent(inout) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
+    real(dp), device, pointer :: f_ptr
+    type(c_ptr) :: f_c_ptr
     type(cudaXtDesc), pointer :: descriptor
 
     integer :: tsize, ierr
     type(dim3) :: blocks, threads
-
-  ierr = cufftXtExecDescriptor(self%plan3D_bw, self%xtdesc, self%xtdesc, CUFFT_INVERSE)
-    if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Backward 3D FFT execution failed (100 case)'
-    end if
 
     select type (f)
     type is (cuda_field_t)
       padded_dev => f%data_d
     end select
 
-    call c_f_pointer(self%xtdesc%descriptor, descriptor)
-    call c_f_pointer(descriptor%data(1), d_dev, &
-                     [self%ny_loc + 2, self%nx_loc, self%nz_loc])
+    if (self%use_cufftmp) then
+      ierr = cufftXtExecDescriptor(self%plan3D_bw, self%xtdesc, self%xtdesc, &
+                                   CUFFT_INVERSE)
+    else
+      ! using standard cuFFT
+      ! Using padded_dev directly causes segfault, use pointer workaround
+      f_c_ptr = c_loc(self%rtmp_100_dev)
+      call c_f_pointer(f_c_ptr, f_ptr)
 
-    tsize = 16
-    blocks = dim3((self%nx_loc - 1)/tsize + 1, self%nz_loc, 1)
-    threads = dim3(tsize, 1, 1)
+      ! Use explicit C interface for single precision, Fortran interface for double
+#ifdef SINGLE_PREC
+      ierr = cufftExecC2R_C(self%plan3D_bw, c_loc(self%c_dev), c_loc(f_ptr))
+#else
+      ierr = cufftExecZ2D(self%plan3D_bw, self%c_dev, f_ptr)
+#endif
+    end if
 
-    ! Copy with transpose back: src(ny,nx,nz) -> dst(nx,ny,nz)
-    call memcpy3D_with_transpose_back<<<blocks, threads>>>(padded_dev, d_dev, &
-                                         self%nx_loc, self%ny_loc, self%nz_loc)
+    if (ierr /= 0) then
+      write (stderr, *), 'cuFFT Error Code: ', ierr
+      error stop 'Backward 3D FFT execution failed (100 case)'
+    end if
+
+    if (self%use_cufftmp) then
+      call c_f_pointer(self%xtdesc%descriptor, descriptor)
+      call c_f_pointer(descriptor%data(1), d_dev, &
+                       [self%ny_loc + 2, self%nx_loc, self%nz_loc])
+
+      tsize = 16
+      blocks = dim3((self%nx_loc - 1)/tsize + 1, self%nz_loc, 1)
+      threads = dim3(tsize, 1, 1)
+
+      ! Copy with transpose back: src(ny,nx,nz) -> dst(nx,ny,nz)
+      call memcpy3D_with_transpose_back<<<blocks, threads>>>(padded_dev, d_dev, &
+                                           self%nx_loc, self%ny_loc, self%nz_loc)
+    else
+      tsize = 16
+      blocks = dim3((self%nx_loc - 1)/tsize + 1, self%nz_loc, 1)
+      threads = dim3(tsize, 1, 1)
+      call memcpy3D_with_transpose_back<<<blocks, threads>>>(padded_dev, self%rtmp_100_dev, &
+                                           self%nx_loc, self%ny_loc, self%nz_loc)
+    end if
 
   end subroutine fft_backward_100_cuda
 
@@ -508,6 +562,8 @@ contains
     class(field_t), intent(in) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
+    real(dp), device, pointer :: f_ptr
+    type(c_ptr) :: f_c_ptr
 
     type(cudaXtDesc), pointer :: descriptor
 
@@ -520,44 +576,7 @@ contains
     end select
 
     if (self%use_cufftmp) then
-      ! Multi-GPU path using cuFFTMp
-      ! tsize is different than SZ, because here we work on a 3D Cartesian
-      ! data structure, and free to specify any suitable thread/block size.
-      tsize = 16
-      blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
-      threads = dim3(tsize, 1, 1)
-
-    call c_f_pointer(self%xtdesc%descriptor, descriptor)
-    call c_f_pointer(descriptor%data(1), d_dev, &
-                     [self%nx_loc + 2, self%ny_loc, self%nz_loc])
-
-    tsize = 16
-    blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
-    threads = dim3(tsize, 1, 1)
-    call memcpy3D<<<blocks, threads>>>(padded_dev, d_dev, & !&
-                                       self%nx_loc, self%ny_loc, self%nz_loc)
-
-  end subroutine fft_backward_110_cuda
-  subroutine fft_forward_cuda(self, f)
-    implicit none
-
-    class(cuda_poisson_fft_t) :: self
-    class(field_t), intent(in) :: f
-
-    real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
-
-    type(cudaXtDesc), pointer :: descriptor
-
-    integer :: tsize, ierr
-    type(dim3) :: blocks, threads
-
-    select type (f)
-    type is (cuda_field_t)
-      padded_dev => f%data_d
-    end select
-
-    if (self%use_cufftmp) then
-      ! Multi-GPU path using cuFFTMp
+      ! using cuFFTMp
       ! tsize is different than SZ, because here we work on a 3D Cartesian
       ! data structure, and free to specify any suitable thread/block size.
       tsize = 16
@@ -577,7 +596,7 @@ contains
       ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, &
                                    CUFFT_FORWARD)
     else
-      ! Single-GPU path using standard cuFFT
+      ! using standard cuFFT
       ! Using padded_dev directly causes segfault, use pointer workaround
       f_c_ptr = c_loc(padded_dev)
       call c_f_pointer(f_c_ptr, f_ptr)
@@ -618,11 +637,11 @@ contains
     end select
 
     if (self%use_cufftmp) then
-      ! Multi-GPU path using cuFFTMp
+      ! using cuFFTMp
       ierr = cufftXtExecDescriptor(self%plan3D_bw, self%xtdesc, self%xtdesc, &
                                    CUFFT_INVERSE)
     else
-      ! Single-GPU path using standard cuFFT
+      ! using standard cuFFT
       ! Using padded_dev directly causes segfault, use pointer workaround
       f_c_ptr = c_loc(padded_dev)
       call c_f_pointer(f_c_ptr, f_ptr)
@@ -641,7 +660,7 @@ contains
     end if
 
     if (self%use_cufftmp) then
-      ! Multi-GPU path: copy from cuFFTMp storage
+      ! cuFFTMp path: copy from cuFFTMp storage
       call c_f_pointer(self%xtdesc%descriptor, descriptor)
       call c_f_pointer(descriptor%data(1), d_dev, &
                        [self%nx_loc + 2, self%ny_loc, self%nz_loc])
@@ -652,7 +671,7 @@ contains
       call memcpy3D<<<blocks, threads>>>(padded_dev, d_dev, & !&
                                          self%nx_loc, self%ny_loc, self%nz_loc)
     end if
-    ! Single-GPU path: data already in padded_dev from cufftExec
+    ! data already in padded_dev from cufftExec
 
   end subroutine fft_backward_cuda
 
@@ -675,12 +694,12 @@ contains
 
     ! Get pointer to the appropriate FFT data storage
     if (self%use_cufftmp) then
-      ! Multi-GPU path: get pointer from xtdesc
+      ! cuFFTMp path: get pointer from xtdesc
       call c_f_pointer(self%xtdesc%descriptor, descriptor)
       call c_f_pointer(descriptor%data(1), c_dev, &
                        [self%nx_spec, self%ny_spec, self%nz_spec])
     else
-      ! Single-GPU path: get pointer to self%c_dev
+      ! cuFFT path: get pointer to self%c_dev
       call c_f_pointer(c_loc(self%c_dev), c_dev, &
                        [self%nx_spec, self%ny_spec, self%nz_spec])
     end if
@@ -706,10 +725,15 @@ contains
     type(dim3) :: blocks, threads
     integer :: tsize
 
-    ! obtain a pointer to descriptor so that we can carry out postprocessing
-    call c_f_pointer(self%xtdesc%descriptor, descriptor)
-    call c_f_pointer(descriptor%data(1), c_dev, &
-                     [self%nx_spec, self%ny_spec, self%nz_spec])
+    ! Get pointer to the appropriate FFT data storage
+    if (self%use_cufftmp) then
+      call c_f_pointer(self%xtdesc%descriptor, descriptor)
+      call c_f_pointer(descriptor%data(1), c_dev, &
+                       [self%nx_spec, self%ny_spec, self%nz_spec])
+    else
+      call c_f_pointer(c_loc(self%c_dev), c_dev, &
+                       [self%nx_spec, self%ny_spec, self%nz_spec])
+    end if
 
     ! tsize is different than SZ, because here we work on a 3D Cartesian
     ! data structure, and free to specify any suitable thread/block size.
@@ -750,12 +774,12 @@ contains
 
     ! Get pointer to the appropriate FFT data storage
     if (self%use_cufftmp) then
-      ! Multi-GPU path: get pointer from xtdesc
+      ! cuFFTMp path: get pointer from xtdesc
       call c_f_pointer(self%xtdesc%descriptor, descriptor)
       call c_f_pointer(descriptor%data(1), c_dev, &
                        [self%nx_spec, self%ny_spec, self%nz_spec])
     else
-      ! Single-GPU path: get pointer to self%c_dev
+      ! cuFFT path: get pointer to self%c_dev
       call c_f_pointer(c_loc(self%c_dev), c_dev, &
                        [self%nx_spec, self%ny_spec, self%nz_spec])
     end if
@@ -846,10 +870,15 @@ contains
     type(dim3) :: blocks, threads
     integer :: tsize, off, inc
 
-    ! obtain a pointer to descriptor so that we can carry out postprocessing
-    call c_f_pointer(self%xtdesc%descriptor, descriptor)
-    call c_f_pointer(descriptor%data(1), c_dev, &
-                     [self%nx_spec, self%ny_spec, self%nz_spec])
+    ! Get pointer to the appropriate FFT data storage
+    if (self%use_cufftmp) then
+      call c_f_pointer(self%xtdesc%descriptor, descriptor)
+      call c_f_pointer(descriptor%data(1), c_dev, &
+                       [self%nx_spec, self%ny_spec, self%nz_spec])
+    else
+      call c_f_pointer(c_loc(self%c_dev), c_dev, &
+                       [self%nx_spec, self%ny_spec, self%nz_spec])
+    end if
 
     ! tsize is different than SZ, because here we work on a 3D Cartesian
     ! data structure, and free to specify any suitable thread/block size.
