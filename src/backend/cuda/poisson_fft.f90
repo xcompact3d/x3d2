@@ -360,88 +360,6 @@ contains
 
   end function init
 
-  subroutine fft_forward_010_cuda(self, f)
-    implicit none
-
-    class(cuda_poisson_fft_t) :: self
-    class(field_t), intent(in) :: f
-
-    real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
-    real(dp), device, pointer :: f_ptr
-    type(c_ptr) :: f_c_ptr
-
-    type(cudaXtDesc), pointer :: descriptor
-
-    integer :: tsize, ierr
-    type(dim3) :: blocks, threads
-
-    select type (f)
-    type is (cuda_field_t)
-      padded_dev => f%data_d
-    end select
-
-    call c_f_pointer(self%xtdesc%descriptor, descriptor)
-    call c_f_pointer(descriptor%data(1), d_dev, &
-                     [self%nx_loc + 2, self%ny_loc, self%nz_loc])
-
-    ! tsize is different than SZ, because here we work on a 3D Cartesian
-    ! data structure, and free to specify any suitable thread/block size.
-    tsize = 16
-    blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
-    threads = dim3(tsize, 1, 1)
-
-    call memcpy3D<<<blocks, threads>>>( & !&
-      d_dev, padded_dev, self%nx_loc, self%ny_loc, self%nz_loc &
-      )
-
-    ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, &
-                                 CUFFT_FORWARD)
-
-    if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Forward 3D FFT execution failed'
-    end if
-
-  end subroutine fft_forward_010_cuda
-
-  subroutine fft_backward_010_cuda(self, f)
-    implicit none
-
-    class(cuda_poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f
-
-    real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
-
-    type(cudaXtDesc), pointer :: descriptor
-
-    integer :: tsize, ierr
-    type(dim3) :: blocks, threads
-
-    ierr = cufftXtExecDescriptor(self%plan3D_bw, self%xtdesc, self%xtdesc, &
-                                 CUFFT_INVERSE)
-    if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Backward 3D FFT execution failed'
-    end if
-
-    select type (f)
-    type is (cuda_field_t)
-      padded_dev => f%data_d
-    end select
-
-    call c_f_pointer(self%xtdesc%descriptor, descriptor)
-    call c_f_pointer(descriptor%data(1), d_dev, &
-                     [self%nx_loc + 2, self%ny_loc, self%nz_loc])
-
-    tsize = 16
-    blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
-    threads = dim3(tsize, 1, 1)
-    call memcpy3D<<<blocks, threads>>>( & !&
-      padded_dev, d_dev, self%nx_loc, self%ny_loc, self%nz_loc &
-      )
-
-  end subroutine fft_backward_010_cuda
-
   subroutine fft_forward_100_cuda(self, f)
   !! Forward FFT for Dirichlet-X case
   !! We transpose X<->Y so that the Dirichlet direction becomes the
@@ -607,7 +525,7 @@ contains
 
       call c_f_pointer(self%xtdesc%descriptor, descriptor)
       call c_f_pointer(descriptor%data(1), d_dev, &
-                       [self%nx_loc, self%ny_loc + 2, self%nz_loc])
+                       [self%nx_loc + 2, self%ny_loc, self%nz_loc])
 
       call memcpy3D<<<blocks, threads>>>( & !&
         d_dev, padded_dev, self%nx_loc, self%ny_loc, self%nz_loc &
@@ -618,6 +536,7 @@ contains
     else
       ! using standard cuFFT
       ! Using padded_dev directly causes segfault, use pointer workaround
+      print *, "-- standard"
       f_c_ptr = c_loc(padded_dev)
       call c_f_pointer(f_c_ptr, f_ptr)
 
@@ -678,7 +597,7 @@ contains
       write (stderr, *), 'cuFFT Error Code: ', ierr
       error stop 'Backward 3D FFT execution failed'
     end if
-
+    print *, "--debug self%use_cufftmp", self%use_cufftmp
     if (self%use_cufftmp) then
       ! cuFFTMp path: copy from cuFFTMp storage
       call c_f_pointer(self%xtdesc%descriptor, descriptor)
