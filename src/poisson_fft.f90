@@ -191,7 +191,8 @@ contains
       end if
 
       self%poisson => poisson_100
-    else if ((.not. self%periodic_x) .and. (.not. self%periodic_y) .and. (self%periodic_z)) then
+    else if ((.not. self%periodic_x) .and. (.not. self%periodic_y) &
+             .and. (self%periodic_z)) then
       if (mesh%par%nproc > 1) then
         error stop 'Multiple ranks are not yet supported for non-periodic BCs!'
       end if
@@ -687,9 +688,10 @@ contains
       )
 
     ! Determine which case we're in and compute waves accordingly
-  if ((.not. self%periodic_x) .and. self%periodic_y .and. self%periodic_z) then
+    if ((.not. self%periodic_x) .and. self%periodic_y .and. &
+        self%periodic_z) then
       ! =========================================================================
-      ! 100 case: Dirichlet X, Periodic Y, Periodic Z
+      ! 100 case: Non-periodic X, Periodic Y, Periodic Z
       ! Uses TRANSPOSED indexing because data is transposed before FFT
       ! =========================================================================
       do k = 1, self%nz_spec
@@ -777,7 +779,8 @@ contains
         end do
       end do
 
-  else if (.not. (self%periodic_x .and. self%periodic_y .and. self%periodic_z)) then
+    else if (.not. (self%periodic_x .and. self%periodic_y &
+                    .and. self%periodic_z)) then
       ! poisson 111
       error stop 'No support for all non-periodic BCs yet!'
 

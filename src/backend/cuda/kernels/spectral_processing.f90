@@ -50,7 +50,9 @@ contains
 
   end subroutine memcpy3D_with_transpose
 
-attributes(global) subroutine memcpy3D_with_transpose_back(dst, src, nx, ny, nz)
+  attributes(global) subroutine memcpy3D_with_transpose_back( &
+    dst, src, nx, ny, nz &
+    )
   !! Copy with transpose back: src(ny, nx, nz) -> dst(nx, ny, nz)
   !! Used for 100 case backward FFT
     implicit none

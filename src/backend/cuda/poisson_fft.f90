@@ -14,7 +14,8 @@ module m_cuda_poisson_fft
   use m_tdsops, only: dirps_t
 
   use m_cuda_allocator, only: cuda_field_t
-  use m_cuda_spectral, only: memcpy3D,memcpy3D_with_transpose,memcpy3D_with_transpose_back, &
+  use m_cuda_spectral, only: memcpy3D, memcpy3D_with_transpose, &
+                             memcpy3D_with_transpose_back, &
                              process_spectral_000, process_spectral_010, &
                              process_spectral_110, &
                              enforce_periodicity_x, undo_periodicity_x, &
@@ -388,11 +389,10 @@ contains
     tsize = 16
     blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
     threads = dim3(tsize, 1, 1)
-    ! print *, "fwd – blocks = ", blocks
-    ! print *, "fwd – threads = ", threads
 
-    call memcpy3D<<<blocks, threads>>>(d_dev, padded_dev, & !&
-                                       self%nx_loc, self%ny_loc, self%nz_loc)
+    call memcpy3D<<<blocks, threads>>>( & !&
+      d_dev, padded_dev, self%nx_loc, self%ny_loc, self%nz_loc &
+      )
 
     ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, &
                                  CUFFT_FORWARD)
@@ -436,12 +436,11 @@ contains
     tsize = 16
     blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
     threads = dim3(tsize, 1, 1)
-    call memcpy3D<<<blocks, threads>>>(padded_dev, d_dev, & !&
-                                       self%nx_loc, self%ny_loc, self%nz_loc)
+    call memcpy3D<<<blocks, threads>>>( & !&
+      padded_dev, d_dev, self%nx_loc, self%ny_loc, self%nz_loc &
+      )
 
   end subroutine fft_backward_010_cuda
-
-
 
   subroutine fft_forward_100_cuda(self, f)
   !! Forward FFT for Dirichlet-X case
@@ -478,8 +477,9 @@ contains
       threads = dim3(tsize, 1, 1)
 
       ! Copy with transpose: src(nx,ny,nz) -> dst(ny,nx,nz)
-      call memcpy3D_with_transpose<<<blocks, threads>>>(d_dev, padded_dev, &
-                                           self%nx_loc, self%ny_loc, self%nz_loc)
+      call memcpy3D_with_transpose<<<blocks, threads>>>( & !&
+        d_dev, padded_dev, self%nx_loc, self%ny_loc, self%nz_loc &
+        )
 
       ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, &
                                    CUFFT_FORWARD)
@@ -489,8 +489,10 @@ contains
       tsize = 16
       blocks = dim3((self%nx_loc - 1)/tsize + 1, self%nz_loc, 1)
       threads = dim3(tsize, 1, 1)
-      call memcpy3D_with_transpose<<<blocks, threads>>>(self%rtmp_100_dev, padded_dev, &
-                                           self%nx_loc, self%ny_loc, self%nz_loc)
+      call memcpy3D_with_transpose<<<blocks, threads>>>( & !&
+        self%rtmp_100_dev, padded_dev, self%nx_loc, self%ny_loc, &
+        self%nz_loc &
+        )
 
       f_c_ptr = c_loc(self%rtmp_100_dev)
       call c_f_pointer(f_c_ptr, f_ptr)
@@ -561,14 +563,16 @@ contains
       threads = dim3(tsize, 1, 1)
 
       ! Copy with transpose back: src(ny,nx,nz) -> dst(nx,ny,nz)
-      call memcpy3D_with_transpose_back<<<blocks, threads>>>(padded_dev, d_dev, &
-                                           self%nx_loc, self%ny_loc, self%nz_loc)
+      call memcpy3D_with_transpose_back<<<blocks, threads>>>( & !&
+        padded_dev, d_dev, self%nx_loc, self%ny_loc, self%nz_loc &
+        )
     else
       tsize = 16
       blocks = dim3((self%nx_loc - 1)/tsize + 1, self%nz_loc, 1)
       threads = dim3(tsize, 1, 1)
-      call memcpy3D_with_transpose_back<<<blocks, threads>>>(padded_dev, self%rtmp_100_dev, &
-                                           self%nx_loc, self%ny_loc, self%nz_loc)
+      call memcpy3D_with_transpose_back<<<blocks, threads>>>( & !&
+        padded_dev, self%rtmp_100_dev, self%nx_loc, self%ny_loc, self%nz_loc &
+        )
     end if
 
   end subroutine fft_backward_100_cuda
@@ -605,11 +609,9 @@ contains
       call c_f_pointer(descriptor%data(1), d_dev, &
                        [self%nx_loc, self%ny_loc + 2, self%nz_loc])
 
-      print *, "fwd – blocks = ", blocks
-      print *, "fwd – threads = ", threads
-
-      call memcpy3D<<<blocks, threads>>>(d_dev, padded_dev, & !&
-                                         self%nx_loc, self%ny_loc, self%nz_loc)
+      call memcpy3D<<<blocks, threads>>>( & !&
+        d_dev, padded_dev, self%nx_loc, self%ny_loc, self%nz_loc &
+        )
 
       ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, &
                                    CUFFT_FORWARD)
@@ -668,7 +670,7 @@ contains
 #ifdef SINGLE_PREC
       ierr = cufftExecC2R_C(self%plan3D_bw, c_loc(self%c_dev), c_loc(f_ptr))
 #else
-      ierr = cufftexecZ2D(self%plan3D_bw, self%c_dev, f_ptr)
+      ierr = cufftExecZ2D(self%plan3D_bw, self%c_dev, f_ptr)
 #endif
     end if
 
@@ -686,8 +688,9 @@ contains
       tsize = 16
       blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
       threads = dim3(tsize, 1, 1)
-      call memcpy3D<<<blocks, threads>>>(padded_dev, d_dev, & !&
-                                         self%nx_loc, self%ny_loc, self%nz_loc)
+      call memcpy3D<<<blocks, threads>>>( & !&
+        padded_dev, d_dev, self%nx_loc, self%ny_loc, self%nz_loc &
+        )
     end if
     ! data already in padded_dev from cufftExec
 
