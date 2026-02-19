@@ -536,7 +536,6 @@ contains
     else
       ! using standard cuFFT
       ! Using padded_dev directly causes segfault, use pointer workaround
-      print *, "-- standard"
       f_c_ptr = c_loc(padded_dev)
       call c_f_pointer(f_c_ptr, f_ptr)
 
@@ -597,7 +596,7 @@ contains
       write (stderr, *), 'cuFFT Error Code: ', ierr
       error stop 'Backward 3D FFT execution failed'
     end if
-    print *, "--debug self%use_cufftmp", self%use_cufftmp
+
     if (self%use_cufftmp) then
       ! cuFFTMp path: copy from cuFFTMp storage
       call c_f_pointer(self%xtdesc%descriptor, descriptor)
