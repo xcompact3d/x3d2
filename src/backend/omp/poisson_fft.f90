@@ -19,9 +19,19 @@ module m_omp_poisson_fft
     complex(dp), allocatable, dimension(:, :, :) :: c_x, c_y, c_z
   contains
     procedure :: fft_forward => fft_forward_omp
+    procedure :: fft_forward_010 => fft_forward_omp
+    procedure :: fft_forward_100 => fft_forward_100_omp
+    procedure :: fft_forward_110 => fft_forward_110_omp
     procedure :: fft_backward => fft_backward_omp
+    procedure :: fft_backward_010 => fft_backward_omp
+    procedure :: fft_backward_100 => fft_backward_100_omp
+    procedure :: fft_backward_110 => fft_backward_110_omp
     procedure :: fft_postprocess_000 => fft_postprocess_000_omp
     procedure :: fft_postprocess_010 => fft_postprocess_010_omp
+    procedure :: fft_postprocess_100 => fft_postprocess_100_omp
+    procedure :: fft_postprocess_110 => fft_postprocess_110_omp
+    procedure :: enforce_periodicity_x => enforce_periodicity_x_omp
+    procedure :: undo_periodicity_x => undo_periodicity_x_omp
     procedure :: enforce_periodicity_y => enforce_periodicity_y_omp
     procedure :: undo_periodicity_y => undo_periodicity_y_omp
   end type omp_poisson_fft_t
@@ -84,6 +94,36 @@ contains
 
   end subroutine fft_forward_omp
 
+  subroutine fft_forward_010_omp(self, f_in)
+    implicit none
+
+    class(omp_poisson_fft_t) :: self
+    class(field_t), intent(in) :: f_in
+
+    error stop 'OpenMP backend does not support fft_forward_010 yet!'
+
+  end subroutine fft_forward_010_omp
+
+  subroutine fft_forward_100_omp(self, f_in)
+    implicit none
+
+    class(omp_poisson_fft_t) :: self
+    class(field_t), intent(in) :: f_in
+
+    error stop 'OpenMP backend does not support fft_forward_100 yet!'
+
+  end subroutine fft_forward_100_omp
+
+  subroutine fft_forward_110_omp(self, f_in)
+    implicit none
+
+    class(omp_poisson_fft_t) :: self
+    class(field_t), intent(in) :: f_in
+
+    error stop 'OpenMP backend does not support fft_forward_110 yet!'
+
+  end subroutine fft_forward_110_omp
+
   subroutine fft_backward_omp(self, f_out)
     implicit none
 
@@ -93,6 +133,36 @@ contains
     call decomp_2d_fft_3d(self%c_x, f_out%data)
 
   end subroutine fft_backward_omp
+
+  subroutine fft_backward_010_omp(self, f_out)
+    implicit none
+
+    class(omp_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f_out
+
+    error stop 'OpenMP backend does not support fft_backward_010 yet!'
+
+  end subroutine fft_backward_010_omp
+
+  subroutine fft_backward_100_omp(self, f_out)
+    implicit none
+
+    class(omp_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f_out
+
+    error stop 'OpenMP backend does not support fft_backward_100 yet!'
+
+  end subroutine fft_backward_100_omp
+
+  subroutine fft_backward_110_omp(self, f_out)
+    implicit none
+
+    class(omp_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f_out
+
+    error stop 'OpenMP backend does not support fft_backward_110 yet!'
+
+  end subroutine fft_backward_110_omp
 
   subroutine fft_postprocess_000_omp(self)
     implicit none
@@ -121,6 +191,46 @@ contains
       )
 
   end subroutine fft_postprocess_010_omp
+
+  subroutine fft_postprocess_100_omp(self)
+    implicit none
+
+    class(omp_poisson_fft_t) :: self
+
+    error stop 'OpenMP backend does not support fft_postprocess_100 yet!'
+
+  end subroutine fft_postprocess_100_omp
+
+  subroutine fft_postprocess_110_omp(self)
+    implicit none
+
+    class(omp_poisson_fft_t) :: self
+
+    error stop 'OpenMP backend does not support fft_postprocess_110 yet!'
+
+  end subroutine fft_postprocess_110_omp
+
+  subroutine enforce_periodicity_x_omp(self, f_out, f_in)
+    implicit none
+
+    class(omp_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f_out
+    class(field_t), intent(in) :: f_in
+
+    error stop 'OpenMP backend does not support enforce_periodicity_x yet!'
+
+  end subroutine enforce_periodicity_x_omp
+
+  subroutine undo_periodicity_x_omp(self, f_out, f_in)
+    implicit none
+
+    class(omp_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f_out
+    class(field_t), intent(in) :: f_in
+
+    error stop 'OpenMP backend does not support undo_periodicity_x yet!'
+
+  end subroutine undo_periodicity_x_omp
 
   subroutine enforce_periodicity_y_omp(self, f_out, f_in)
     implicit none

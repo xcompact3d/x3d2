@@ -85,6 +85,7 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_test(test_vecadd.f90 1 cuda)
   define_test(test_time_integrator.f90 1 cuda)
   define_test(test_fft.f90 1 cuda)
+  define_test(test_poisson_bc.f90 1 cuda)
   define_test(cuda/test_cuda_allocator.f90 1 cuda)
   define_test(cuda/test_cuda_reorder.f90 1 cuda)
   define_test(cuda/test_thom.f90 1 cuda)

@@ -27,6 +27,54 @@ contains
     end if
   end subroutine memcpy3D
 
+  attributes(global) subroutine memcpy3D_with_transpose(dst, src, nx, ny, nz)
+  !! Copy with transpose: src(nx, ny, nz) -> dst(ny, nx, nz)
+  !! Used for 100 case forward FFT
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: dst  ! (ny+2, nx, nz) but we only write (ny, nx, nz)
+    real(dp), device, intent(in), dimension(:, :, :) :: src   ! (nx, ny, nz)
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, j, k
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! iterates over nx
+    k = blockIdx%y  ! nz
+
+    if (i <= nx) then
+      do j = 1, ny
+        ! Transpose: dst(j, i, k) = src(i, j, k)
+        dst(j, i, k) = src(i, j, k)
+      end do
+    end if
+
+  end subroutine memcpy3D_with_transpose
+
+  attributes(global) subroutine memcpy3D_with_transpose_back( &
+    dst, src, nx, ny, nz &
+    )
+  !! Copy with transpose back: src(ny, nx, nz) -> dst(nx, ny, nz)
+  !! Used for 100 case backward FFT
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: dst  ! (nx, ny, nz)
+    real(dp), device, intent(in), dimension(:, :, :) :: src   ! (ny+2, nx, nz) but we only read (ny, nx, nz)
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, j, k
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! iterates over nx
+    k = blockIdx%y  ! nz
+
+    if (i <= nx) then
+      do j = 1, ny
+        ! Transpose back: dst(i, j, k) = src(j, i, k)
+        dst(i, j, k) = src(j, i, k)
+      end do
+    end if
+
+  end subroutine memcpy3D_with_transpose_back
+
   attributes(global) subroutine process_spectral_000( &
     div_u, waves, nx_spec, ny_spec, y_sp_st, nx, ny, nz, &
     ax, bx, ay, by, az, bz &
@@ -604,6 +652,218 @@ contains
 
   end subroutine process_spectral_010_bw
 
+  attributes(global) subroutine process_spectral_110( &
+    div_u, waves, nx_spec, ny_spec, x_sp_st, y_sp_st, nx, ny, nz, &
+    ax, bx, ay, by, az, bz &
+    )
+    !! Post-processes for Dirichlet BC in X and Y, periodic in Z
+    implicit none
+
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
+    complex(dp), device, intent(in), dimension(:, :, :) :: waves
+    real(dp), device, intent(in), dimension(:) :: ax, bx, ay, by, az, bz
+    integer, value, intent(in) :: nx_spec, ny_spec
+    integer, value, intent(in) :: x_sp_st, y_sp_st
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, j, k, ix, iy, iz, iy_rev
+    real(dp) :: tmp_r, tmp_c, div_r, div_c
+    real(dp) :: l_r, l_c, r_r, r_c
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    k = blockIdx%y ! nz_spec
+
+    ! ================================================================
+    ! FORWARD PASS
+    ! ================================================================
+
+    ! Step 1: Normalise and periodic post-process in z
+    if (i <= nx_spec) then
+      do j = 1, ny_spec
+        ix = i + x_sp_st; iy = j + y_sp_st; iz = k
+
+        ! normalisation
+        div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
+        div_c = aimag(div_u(i, j, k))/nx/ny/nz
+
+        ! postprocess in z (periodic)
+        tmp_r = div_r
+        tmp_c = div_c
+        div_r = tmp_r*bz(iz) + tmp_c*az(iz)
+        div_c = tmp_c*bz(iz) - tmp_r*az(iz)
+        if (iz > nz/2 + 1) div_r = -div_r
+        if (iz > nz/2 + 1) div_c = -div_c
+
+        ! update the entry
+        div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
+      end do
+    end if
+
+    ! Step 2: Paired even/odd splitting for y (Dirichlet direction)
+    if (i <= nx_spec) then
+      do j = 2, ny_spec/2 + 1
+        iy = j + y_sp_st
+        iy_rev = ny_spec - j + 2 + y_sp_st
+
+        l_r = real(div_u(i, j, k), kind=dp)
+        l_c = aimag(div_u(i, j, k))
+        r_r = real(div_u(i, ny_spec - j + 2, k), kind=dp)
+        r_c = aimag(div_u(i, ny_spec - j + 2, k))
+
+        ! update the entry
+        div_u(i, j, k) = 0.5_dp*cmplx( & !&
+         l_r*by(iy) + l_c*ay(iy) + r_r*by(iy) - r_c*ay(iy), &
+         -l_r*ay(iy) + l_c*by(iy) + r_r*ay(iy) + r_c*by(iy), kind=dp &
+         )
+        div_u(i, ny_spec - j + 2, k) = 0.5_dp*cmplx( & !&
+         r_r*by(iy_rev) + r_c*ay(iy_rev) + l_r*by(iy_rev) - l_c*ay(iy_rev), &
+         -r_r*ay(iy_rev) + r_c*by(iy_rev) + l_r*ay(iy_rev) + l_c*by(iy_rev), &
+         kind=dp &
+         )
+      end do
+    end if
+
+    ! NOTE: No x-direction paired splitting!
+    ! For the R2C FFT output, the x-direction Dirichlet BC is handled
+    ! implicitly through the waves_set.
+    ! The R2C output only contains nx/2+1 values (wavenumbers 0 to nx/2),
+    ! so there's no "pairing" to do
+
+    ! ================================================================
+    ! POISSON SOLVE
+    ! ================================================================
+    if (i <= nx_spec) then
+      do j = 1, ny_spec
+        ix = i + x_sp_st
+
+        div_r = real(div_u(i, j, k), kind=dp)
+        div_c = aimag(div_u(i, j, k))
+
+        tmp_r = real(waves(i, j, k), kind=dp)
+        tmp_c = aimag(waves(i, j, k))
+        if (abs(tmp_r) < 1.e-16_dp) then
+          div_r = 0._dp
+        else
+          div_r = -div_r/tmp_r
+        end if
+        if (abs(tmp_c) < 1.e-16_dp) then
+          div_c = 0._dp
+        else
+          div_c = -div_c/tmp_c
+        end if
+
+        ! update the entry
+        div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
+        ! Zero out the mode at (nx/2+1, *, nz/2+1) for uniqueness
+        if (ix == nx/2 + 1 .and. k == nz/2 + 1) div_u(i, j, k) = 0._dp
+      end do
+    end if
+
+    ! ================================================================
+    ! BACKWARD PASS
+    ! ================================================================
+
+    ! Step 1: Paired even/odd recombination for y (Dirichlet direction)
+    if (i <= nx_spec) then
+      do j = 2, ny_spec/2 + 1
+        iy = j + y_sp_st
+        iy_rev = ny_spec - j + 2 + y_sp_st
+
+        l_r = real(div_u(i, j, k), kind=dp)
+        l_c = aimag(div_u(i, j, k))
+        r_r = real(div_u(i, ny_spec - j + 2, k), kind=dp)
+        r_c = aimag(div_u(i, ny_spec - j + 2, k))
+
+        ! update the entry
+        div_u(i, j, k) = cmplx( & !&
+          l_r*by(iy) - l_c*ay(iy) + r_r*ay(iy) + r_c*by(iy), &
+          l_r*ay(iy) + l_c*by(iy) - r_r*by(iy) + r_c*ay(iy), kind=dp &
+          )
+        div_u(i, ny_spec - j + 2, k) = cmplx( & !&
+          r_r*by(iy_rev) - r_c*ay(iy_rev) + l_r*ay(iy_rev) + l_c*by(iy_rev), &
+          r_r*ay(iy_rev) + r_c*by(iy_rev) - l_r*by(iy_rev) + l_c*ay(iy_rev), &
+          kind=dp &
+          )
+      end do
+    end if
+
+    ! Step 2: Periodic post-process in z (undo)
+    if (i <= nx_spec) then
+      do j = 1, ny_spec
+        iz = k
+
+        div_r = real(div_u(i, j, k), kind=dp)
+        div_c = aimag(div_u(i, j, k))
+
+        ! post-process in z
+        tmp_r = div_r
+        tmp_c = div_c
+        div_r = tmp_r*bz(iz) - tmp_c*az(iz)
+        div_c = tmp_c*bz(iz) + tmp_r*az(iz)
+        if (iz > nz/2 + 1) div_r = -div_r
+        if (iz > nz/2 + 1) div_c = -div_c
+
+        ! update the entry
+        div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
+      end do
+    end if
+
+  end subroutine process_spectral_110
+
+  attributes(global) subroutine enforce_periodicity_x(f_out, f_in, nx)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: f_out
+    real(dp), device, intent(in), dimension(:, :, :) :: f_in
+    integer, value, intent(in) :: nx
+
+    integer :: i, j, k, n2
+
+    j = threadIdx%x
+    k = blockIdx%x
+    n2 = nx/2
+
+    do i = 1, n2
+      f_out(i, j, k) = f_in(2*i - 1, j, k)
+    end do
+    if (mod(nx, 2) == 1) then
+      ! odd-size center entry
+      f_out(n2 + 1, j, k) = f_in(nx, j, k)
+      do i = n2 + 2, nx
+        f_out(i, j, k) = f_in(2*nx - 2*i + 2, j, k)
+      end do
+    else
+      do i = n2 + 1, nx
+        f_out(i, j, k) = f_in(2*nx - 2*i + 2, j, k)
+      end do
+    end if
+
+  end subroutine enforce_periodicity_x
+
+  attributes(global) subroutine undo_periodicity_x(f_out, f_in, nx)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: f_out
+    real(dp), device, intent(in), dimension(:, :, :) :: f_in
+    integer, value, intent(in) :: nx
+
+    integer :: i, j, k, n2
+
+    j = threadIdx%x
+    k = blockIdx%x
+    n2 = nx/2
+
+    do i = 1, n2
+      f_out(2*i - 1, j, k) = f_in(i, j, k)
+      f_out(2*i, j, k) = f_in(nx - i + 1, j, k)
+    end do
+    if (mod(nx, 2) == 1) then
+      ! odd-size center entry
+      f_out(nx, j, k) = f_in(n2 + 1, j, k)
+    end if
+
+  end subroutine undo_periodicity_x
+
   attributes(global) subroutine enforce_periodicity_y(f_out, f_in, ny)
     implicit none
 
@@ -611,17 +871,26 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: ny
 
-    integer :: i, j, k
+    integer :: i, j, k, n2
 
     i = threadIdx%x
     k = blockIdx%x
+    n2 = ny/2
 
-    do j = 1, ny/2
+    do j = 1, n2
       f_out(i, j, k) = f_in(i, 2*j - 1, k)
     end do
-    do j = ny/2 + 1, ny
-      f_out(i, j, k) = f_in(i, 2*ny - 2*j + 2, k)
-    end do
+    if (mod(ny, 2) == 1) then
+      ! odd-size center entry
+      f_out(i, n2 + 1, k) = f_in(i, ny, k)
+      do j = n2 + 2, ny
+        f_out(i, j, k) = f_in(i, 2*ny - 2*j + 2, k)
+      end do
+    else
+      do j = n2 + 1, ny
+        f_out(i, j, k) = f_in(i, 2*ny - 2*j + 2, k)
+      end do
+    end if
 
   end subroutine enforce_periodicity_y
 
@@ -632,15 +901,20 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: ny
 
-    integer :: i, j, k
+    integer :: i, j, k, n2
 
     i = threadIdx%x
     k = blockIdx%x
+    n2 = ny/2
 
-    do j = 1, ny/2
+    do j = 1, n2
       f_out(i, 2*j - 1, k) = f_in(i, j, k)
       f_out(i, 2*j, k) = f_in(i, ny - j + 1, k)
     end do
+    if (mod(ny, 2) == 1) then
+      ! odd-size center entry
+      f_out(i, ny, k) = f_in(i, n2 + 1, k)
+    end if
 
   end subroutine undo_periodicity_y
 
