@@ -107,7 +107,7 @@ program xcompact
   backend => omp_backend
   if (nrank == 0) print *, 'OpenMP backend instantiated'
 #endif
-
+  if (nrank == 0) print *, 'Dimensions: ', dims(1), dims(2), dims(3)
   if (nrank == 0) print *, 'Flow case: ', domain_cfg%flow_case_name
 
   select case (trim(domain_cfg%flow_case_name))
