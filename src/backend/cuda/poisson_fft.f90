@@ -55,8 +55,8 @@ module m_cuda_poisson_fft
 
     !> Standard cuFFT storage
     complex(dp), device, allocatable, dimension(:, :, :) :: c_dev
-    !> Real workspace for 100-case transpose in cuFFT mode
-    real(dp), device, allocatable, dimension(:, :, :) :: rtmp_100_dev
+    !> cuFFT real workspace (input/output of R2C/C2R)
+    real(dp), device, allocatable, dimension(:, :, :) :: r_dev
   contains
     procedure :: fft_forward => fft_forward_cuda
     procedure :: fft_forward_010 => fft_forward_cuda
@@ -178,7 +178,7 @@ contains
     integer(int_ptr_kind()) :: worksize
 
     integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
-    logical :: periodic_x, periodic_y, periodic_z  ! Add local variables
+    logical :: periodic_x, periodic_y, periodic_z
     logical :: fw_was_cufftmp
 
     ! Get periodicity from mesh BEFORE base_init
@@ -341,12 +341,9 @@ contains
       allocate (poisson_fft%c_dev(poisson_fft%nx_spec, &
                                   poisson_fft%ny_spec, &
                                   poisson_fft%nz_spec))
-      ! 100 case requires explicit transpose around FFT
-      if ((.not. periodic_x) .and. periodic_y .and. periodic_z) then
-        allocate (poisson_fft%rtmp_100_dev(poisson_fft%ny_loc + 2, &
-                                           poisson_fft%nx_loc, &
-                                           poisson_fft%nz_loc))
-      end if
+      allocate (poisson_fft%r_dev(poisson_fft%nx_loc, &
+                                  poisson_fft%ny_loc, &
+                                  poisson_fft%nz_loc))
     end if
 
     ! Print final status
@@ -361,8 +358,8 @@ contains
   end function init
 
   subroutine fft_forward_100_cuda(self, f)
-  !! Forward FFT for Dirichlet-X case
-  !! We transpose X<->Y so that the Dirichlet direction becomes the
+  !! Forward FFT for non-periodic-X case
+  !! We transpose X<->Y so that the non-periodic direction becomes the
   !! "Y" direction in the transposed space, then use the same FFT approach as 010
     implicit none
 
@@ -370,8 +367,6 @@ contains
     class(field_t), intent(in) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
-    real(dp), device, pointer :: f_ptr
-    type(c_ptr) :: f_c_ptr
     type(cudaXtDesc), pointer :: descriptor
 
     integer :: tsize, ierr
@@ -388,7 +383,7 @@ contains
       ! For 100 case with transposed FFT plan (ny, nx, nz):
       ! The descriptor has shape (ny + 2, nx, nz) for R2C output
       call c_f_pointer(descriptor%data(1), d_dev, &
-                       [self%ny_loc + 2, self%nx_loc, self%nz_loc])
+                       [2*(self%ny_loc/2 + 1), self%nx_loc, self%nz_loc])
 
       tsize = 16
       blocks = dim3((self%nx_loc - 1)/tsize + 1, self%nz_loc, 1)
@@ -402,24 +397,24 @@ contains
       ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, &
                                    CUFFT_FORWARD)
     else
-      ! using standard cuFFT
-      ! Using padded_dev directly causes segfault, use pointer workaround
+      ! using standard cuFFT with explicit real workspace
+      call c_f_pointer(c_loc(self%r_dev), d_dev, &
+                       [self%ny_loc, self%nx_loc, self%nz_loc])
+
       tsize = 16
       blocks = dim3((self%nx_loc - 1)/tsize + 1, self%nz_loc, 1)
       threads = dim3(tsize, 1, 1)
+
+      ! copy with transpose: src(nx,ny,nz) -> dst(ny,nx,nz)
       call memcpy3D_with_transpose<<<blocks, threads>>>( & !&
-        self%rtmp_100_dev, padded_dev, self%nx_loc, self%ny_loc, &
-        self%nz_loc &
+        d_dev, padded_dev, self%nx_loc, self%ny_loc, self%nz_loc &
         )
 
-      f_c_ptr = c_loc(self%rtmp_100_dev)
-      call c_f_pointer(f_c_ptr, f_ptr)
-
-      ! Use explicit C interface for single precision, Fortran interface for double
 #ifdef SINGLE_PREC
-      ierr = cufftExecR2C_C(self%plan3D_fw, c_loc(f_ptr), c_loc(self%c_dev))
+      ierr = cufftExecR2C_C(self%plan3D_fw, c_loc(self%r_dev), &
+                            c_loc(self%c_dev))
 #else
-      ierr = cufftExecD2Z(self%plan3D_fw, f_ptr, self%c_dev)
+      ierr = cufftExecD2Z(self%plan3D_fw, self%r_dev, self%c_dev)
 #endif
     end if
 
@@ -437,8 +432,6 @@ contains
     class(field_t), intent(inout) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
-    real(dp), device, pointer :: f_ptr
-    type(c_ptr) :: f_c_ptr
     type(cudaXtDesc), pointer :: descriptor
 
     integer :: tsize, ierr
@@ -453,16 +446,12 @@ contains
       ierr = cufftXtExecDescriptor(self%plan3D_bw, self%xtdesc, self%xtdesc, &
                                    CUFFT_INVERSE)
     else
-      ! using standard cuFFT
-      ! Using padded_dev directly causes segfault, use pointer workaround
-      f_c_ptr = c_loc(self%rtmp_100_dev)
-      call c_f_pointer(f_c_ptr, f_ptr)
-
-      ! Use explicit C interface for single precision, Fortran interface for double
+      ! using standard cuFFT with explicit real workspace
 #ifdef SINGLE_PREC
-      ierr = cufftExecC2R_C(self%plan3D_bw, c_loc(self%c_dev), c_loc(f_ptr))
+      ierr = cufftExecC2R_C(self%plan3D_bw, c_loc(self%c_dev), &
+                            c_loc(self%r_dev))
 #else
-      ierr = cufftExecZ2D(self%plan3D_bw, self%c_dev, f_ptr)
+      ierr = cufftExecZ2D(self%plan3D_bw, self%c_dev, self%r_dev)
 #endif
     end if
 
@@ -474,7 +463,7 @@ contains
     if (self%use_cufftmp) then
       call c_f_pointer(self%xtdesc%descriptor, descriptor)
       call c_f_pointer(descriptor%data(1), d_dev, &
-                       [self%ny_loc + 2, self%nx_loc, self%nz_loc])
+                       [2*(self%ny_loc/2 + 1), self%nx_loc, self%nz_loc])
 
       tsize = 16
       blocks = dim3((self%nx_loc - 1)/tsize + 1, self%nz_loc, 1)
@@ -485,11 +474,20 @@ contains
         padded_dev, d_dev, self%nx_loc, self%ny_loc, self%nz_loc &
         )
     else
+      ! ensure untouched padded/halo entries are deterministic
+      padded_dev = 0._dp
+
+      ! cast r_dev as (ny, nx, nz) real buffer
+      call c_f_pointer(c_loc(self%r_dev), d_dev, &
+                       [self%ny_loc, self%nx_loc, self%nz_loc])
+
       tsize = 16
       blocks = dim3((self%nx_loc - 1)/tsize + 1, self%nz_loc, 1)
       threads = dim3(tsize, 1, 1)
+
+      ! copy with transpose back: src(ny,nx,nz) -> dst(nx,ny,nz)
       call memcpy3D_with_transpose_back<<<blocks, threads>>>( & !&
-        padded_dev, self%rtmp_100_dev, self%nx_loc, self%ny_loc, self%nz_loc &
+        padded_dev, d_dev, self%nx_loc, self%ny_loc, self%nz_loc &
         )
     end if
 
@@ -502,8 +500,6 @@ contains
     class(field_t), intent(in) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
-    real(dp), device, pointer :: f_ptr
-    type(c_ptr) :: f_c_ptr
 
     type(cudaXtDesc), pointer :: descriptor
 
@@ -525,7 +521,7 @@ contains
 
       call c_f_pointer(self%xtdesc%descriptor, descriptor)
       call c_f_pointer(descriptor%data(1), d_dev, &
-                       [self%nx_loc + 2, self%ny_loc, self%nz_loc])
+                       [2*(self%nx_loc/2 + 1), self%ny_loc, self%nz_loc])
 
       call memcpy3D<<<blocks, threads>>>( & !&
         d_dev, padded_dev, self%nx_loc, self%ny_loc, self%nz_loc &
@@ -534,16 +530,23 @@ contains
       ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, &
                                    CUFFT_FORWARD)
     else
-      ! using standard cuFFT
-      ! Using padded_dev directly causes segfault, use pointer workaround
-      f_c_ptr = c_loc(padded_dev)
-      call c_f_pointer(f_c_ptr, f_ptr)
+      ! using standard cuFFT with explicit real workspace
+      call c_f_pointer(c_loc(self%r_dev), d_dev, &
+                       [self%nx_loc, self%ny_loc, self%nz_loc])
 
-      ! Use explicit C interface for single precision, Fortran interface for double
+      tsize = 16
+      blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
+      threads = dim3(tsize, 1, 1)
+
+      call memcpy3D<<<blocks, threads>>>( & !&
+        d_dev, padded_dev, self%nx_loc, self%ny_loc, self%nz_loc &
+        )
+
 #ifdef SINGLE_PREC
-      ierr = cufftExecR2C_C(self%plan3D_fw, c_loc(f_ptr), c_loc(self%c_dev))
+      ierr = cufftExecR2C_C(self%plan3D_fw, c_loc(self%r_dev), &
+                            c_loc(self%c_dev))
 #else
-      ierr = cufftExecD2Z(self%plan3D_fw, f_ptr, self%c_dev)
+      ierr = cufftExecD2Z(self%plan3D_fw, self%r_dev, self%c_dev)
 #endif
     end if
 
@@ -561,8 +564,6 @@ contains
     class(field_t), intent(inout) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
-    real(dp), device, pointer :: f_ptr
-    type(c_ptr) :: f_c_ptr
 
     type(cudaXtDesc), pointer :: descriptor
 
@@ -579,16 +580,12 @@ contains
       ierr = cufftXtExecDescriptor(self%plan3D_bw, self%xtdesc, self%xtdesc, &
                                    CUFFT_INVERSE)
     else
-      ! using standard cuFFT
-      ! Using padded_dev directly causes segfault, use pointer workaround
-      f_c_ptr = c_loc(padded_dev)
-      call c_f_pointer(f_c_ptr, f_ptr)
-
-      ! Use explicit C interface for single precision, Fortran interface for double
+      ! using standard cuFFT with explicit real workspace
 #ifdef SINGLE_PREC
-      ierr = cufftExecC2R_C(self%plan3D_bw, c_loc(self%c_dev), c_loc(f_ptr))
+      ierr = cufftExecC2R_C(self%plan3D_bw, c_loc(self%c_dev), &
+                            c_loc(self%r_dev))
 #else
-      ierr = cufftExecZ2D(self%plan3D_bw, self%c_dev, f_ptr)
+      ierr = cufftExecZ2D(self%plan3D_bw, self%c_dev, self%r_dev)
 #endif
     end if
 
@@ -598,19 +595,25 @@ contains
     end if
 
     if (self%use_cufftmp) then
-      ! cuFFTMp path: copy from cuFFTMp storage
+      ! cuFFTMp path: cast xtdesc as (nx+2, ny, nz) real buffer
       call c_f_pointer(self%xtdesc%descriptor, descriptor)
       call c_f_pointer(descriptor%data(1), d_dev, &
-                       [self%nx_loc + 2, self%ny_loc, self%nz_loc])
+                       [2*(self%nx_loc/2 + 1), self%ny_loc, self%nz_loc])
+    else
+      ! ensure untouched padded/halo entries are deterministic
+      padded_dev = 0._dp
 
-      tsize = 16
-      blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
-      threads = dim3(tsize, 1, 1)
-      call memcpy3D<<<blocks, threads>>>( & !&
-        padded_dev, d_dev, self%nx_loc, self%ny_loc, self%nz_loc &
-        )
+      ! cuFFT path: cast r_dev as (nx, ny, nz) real buffer
+      call c_f_pointer(c_loc(self%r_dev), d_dev, &
+                       [self%nx_loc, self%ny_loc, self%nz_loc])
     end if
-    ! data already in padded_dev from cufftExec
+
+    tsize = 16
+    blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
+    threads = dim3(tsize, 1, 1)
+    call memcpy3D<<<blocks, threads>>>( & !&
+      padded_dev, d_dev, self%nx_loc, self%ny_loc, self%nz_loc &
+      )
 
   end subroutine fft_backward_cuda
 
@@ -689,7 +692,7 @@ contains
       self%nx_spec, self%ny_spec, self%x_sp_st, &  ! spectral dims and offset
       self%ny_glob, self%nx_glob, self%nz_glob, &  ! SWAP nx <-> ny
       self%ay_dev, self%by_dev, &  ! First dim uses Y coefficients (was periodic Y)
-      self%ax_dev, self%bx_dev, &  ! Second dim uses X coefficients (Dirichlet X)
+      self%ax_dev, self%bx_dev, &  ! Second dim uses X coefficients (non-periodic X)
       self%az_dev, self%bz_dev &   ! Third dim uses Z coefficients (unchanged)
       )
   end subroutine fft_postprocess_100_cuda
@@ -925,6 +928,10 @@ contains
 
     blocks = dim3(self%nz_loc, 1, 1)
     threads = dim3(self%ny_loc, 1, 1)
+
+    ! cuFFT path can consume stale padded/halo entries.
+    if (.not. self%use_cufftmp) f_out_dev = 0._dp
+
     call enforce_periodicity_x<<<blocks, threads>>>( & !&
       f_out_dev, f_in_dev, self%nx_glob &
       )
@@ -952,6 +959,10 @@ contains
 
     blocks = dim3(self%nz_loc, 1, 1)
     threads = dim3(self%ny_loc, 1, 1)
+
+    ! cuFFT path can consume stale padded/halo entries.
+    if (.not. self%use_cufftmp) f_out_dev = 0._dp
+
     call undo_periodicity_x<<<blocks, threads>>>( & !&
       f_out_dev, f_in_dev, self%nx_glob &
       )
@@ -979,6 +990,10 @@ contains
 
     blocks = dim3(self%nz_loc, 1, 1)
     threads = dim3(self%nx_loc, 1, 1)
+
+    ! cuFFT path can consume stale padded/halo entries.
+    if (.not. self%use_cufftmp) f_out_dev = 0._dp
+
     call enforce_periodicity_y<<<blocks, threads>>>( & !&
       f_out_dev, f_in_dev, self%ny_glob &
       )
@@ -1006,6 +1021,10 @@ contains
 
     blocks = dim3(self%nz_loc, 1, 1)
     threads = dim3(self%nx_loc, 1, 1)
+
+    ! cuFFT path can consume stale padded/halo entries.
+    if (.not. self%use_cufftmp) f_out_dev = 0._dp
+
     call undo_periodicity_y<<<blocks, threads>>>( & !&
       f_out_dev, f_in_dev, self%ny_glob &
       )

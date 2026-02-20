@@ -817,17 +817,26 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: nx
 
-    integer :: i, j, k
+    integer :: i, j, k, n2
 
     j = threadIdx%x
     k = blockIdx%x
+    n2 = nx/2
 
-    do i = 1, nx/2
+    do i = 1, n2
       f_out(i, j, k) = f_in(2*i - 1, j, k)
     end do
-    do i = nx/2 + 1, nx
-      f_out(i, j, k) = f_in(2*nx - 2*i + 2, j, k)
-    end do
+    if (mod(nx, 2) == 1) then
+      ! odd-size center entry
+      f_out(n2 + 1, j, k) = f_in(nx, j, k)
+      do i = n2 + 2, nx
+        f_out(i, j, k) = f_in(2*nx - 2*i + 2, j, k)
+      end do
+    else
+      do i = n2 + 1, nx
+        f_out(i, j, k) = f_in(2*nx - 2*i + 2, j, k)
+      end do
+    end if
 
   end subroutine enforce_periodicity_x
 
@@ -838,15 +847,20 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: nx
 
-    integer :: i, j, k
+    integer :: i, j, k, n2
 
     j = threadIdx%x
     k = blockIdx%x
+    n2 = nx/2
 
-    do i = 1, nx/2
+    do i = 1, n2
       f_out(2*i - 1, j, k) = f_in(i, j, k)
       f_out(2*i, j, k) = f_in(nx - i + 1, j, k)
     end do
+    if (mod(nx, 2) == 1) then
+      ! odd-size center entry
+      f_out(nx, j, k) = f_in(n2 + 1, j, k)
+    end if
 
   end subroutine undo_periodicity_x
 
@@ -857,17 +871,26 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: ny
 
-    integer :: i, j, k
+    integer :: i, j, k, n2
 
     i = threadIdx%x
     k = blockIdx%x
+    n2 = ny/2
 
-    do j = 1, ny/2
+    do j = 1, n2
       f_out(i, j, k) = f_in(i, 2*j - 1, k)
     end do
-    do j = ny/2 + 1, ny
-      f_out(i, j, k) = f_in(i, 2*ny - 2*j + 2, k)
-    end do
+    if (mod(ny, 2) == 1) then
+      ! odd-size center entry
+      f_out(i, n2 + 1, k) = f_in(i, ny, k)
+      do j = n2 + 2, ny
+        f_out(i, j, k) = f_in(i, 2*ny - 2*j + 2, k)
+      end do
+    else
+      do j = n2 + 1, ny
+        f_out(i, j, k) = f_in(i, 2*ny - 2*j + 2, k)
+      end do
+    end if
 
   end subroutine enforce_periodicity_y
 
@@ -878,15 +901,20 @@ contains
     real(dp), device, intent(in), dimension(:, :, :) :: f_in
     integer, value, intent(in) :: ny
 
-    integer :: i, j, k
+    integer :: i, j, k, n2
 
     i = threadIdx%x
     k = blockIdx%x
+    n2 = ny/2
 
-    do j = 1, ny/2
+    do j = 1, n2
       f_out(i, 2*j - 1, k) = f_in(i, j, k)
       f_out(i, 2*j, k) = f_in(i, ny - j + 1, k)
     end do
+    if (mod(ny, 2) == 1) then
+      ! odd-size center entry
+      f_out(i, ny, k) = f_in(i, n2 + 1, k)
+    end if
 
   end subroutine undo_periodicity_y
 
