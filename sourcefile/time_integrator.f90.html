@@ -1,0 +1,1118 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>time_integrator.f90 &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../program/xcompact.html">Program</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>time_integrator.f90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 1.9% of total for source files.">187 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/time_integrator.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">time_integrator.f90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/m_time_integrator.html">m_time_integrator</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/time_integrator.f90.html#src">time_integrator.f90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~time_integrator.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefiletime_integratorf90EfferentGraph" width="641pt" height="189pt"
+ viewBox="0.00 0.00 641.00 189.13" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph" class="graph" transform="scale(0.71 0.71) rotate(0) translate(4 263.02)">
+<title>sourcefile~~time_integrator.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-263.02 901,-263.02 901,4 -4,4"/>
+<!-- sourcefile~time_integrator.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~time_integrator.f90</title>
+<polygon fill="none" stroke="black" points="897,-182.24 783,-182.24 783,-158.24 897,-158.24 897,-182.24"/>
+<text text-anchor="middle" x="840" y="-167.84" font-family="Helvetica,sans-Serif" font-size="10.50">time_integrator.f90</text>
+</g>
+<!-- sourcefile~allocator.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~allocator.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/allocator.f90.html" xlink:title="allocator.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="626.5,-221.24 547.5,-221.24 547.5,-197.24 626.5,-197.24 626.5,-221.24"/>
+<text text-anchor="middle" x="587" y="-206.84" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allocator.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~time_integrator.f90&#45;&gt;sourcefile~allocator.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~time_integrator.f90&#45;&gt;sourcefile~allocator.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M706.5,-209.24C683.75,-212.52 658.29,-212.94 636.82,-212.37"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="636.74,-208.86 626.62,-212.02 636.5,-215.86 636.74,-208.86"/>
+</g>
+<!-- sourcefile~backend.f90~2 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_node3" class="node">
+<title>sourcefile~backend.f90~2</title>
+<g id="a_sourcefile~~time_integrator.f90~~EfferentGraph_node3"><a xlink:href="../sourcefile/backend.f90~2.html" xlink:title="backend.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="747,-143.24 668,-143.24 668,-119.24 747,-119.24 747,-143.24"/>
+<text text-anchor="middle" x="707.5" y="-128.84" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">backend.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~time_integrator.f90&#45;&gt;sourcefile~backend.f90~2 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~time_integrator.f90&#45;&gt;sourcefile~backend.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M798.78,-158.22C785.52,-154.26 770.64,-149.81 756.84,-145.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="757.61,-142.27 747.02,-142.76 755.6,-148.97 757.61,-142.27"/>
+</g>
+<!-- sourcefile~common.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_node4" class="node">
+<title>sourcefile~common.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~EfferentGraph_node4"><a xlink:href="../sourcefile/common.f90.html" xlink:title="common.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="80,-161.24 0,-161.24 0,-137.24 80,-137.24 80,-161.24"/>
+<text text-anchor="middle" x="40" y="-146.84" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">common.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~time_integrator.f90&#45;&gt;sourcefile~common.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~time_integrator.f90&#45;&gt;sourcefile~common.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M706.5,-209.24C672.49,-214.43 665.91,-224.45 632,-230.24 500.52,-252.68 465.58,-240.32 332.5,-249.24"/>
+</g>
+<!-- sourcefile~field.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_node5" class="node">
+<title>sourcefile~field.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~EfferentGraph_node5"><a xlink:href="../sourcefile/field.f90.html" xlink:title="field.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="359.5,-221.24 303.5,-221.24 303.5,-197.24 359.5,-197.24 359.5,-221.24"/>
+<text text-anchor="middle" x="331.5" y="-206.84" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">field.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~time_integrator.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge4" class="edge">
+<title>sourcefile~time_integrator.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M808.2,-182.26C782.12,-191.75 743.49,-204.2 708.5,-209.24"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M706.5,-209.24C672.45,-214.15 665.74,-194.98 632,-188.24 562.42,-174.35 541.26,-148.2 473.5,-169.24"/>
+</g>
+<!-- sourcefile~allocator.f90&#45;&gt;sourcefile~common.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge5" class="edge">
+<title>sourcefile~allocator.f90&#45;&gt;sourcefile~common.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M471.5,-211.24C439.99,-213.52 433.48,-221.91 403,-230.24 371.7,-238.8 364.88,-247.07 332.5,-249.24"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M330.5,-249.24C259.77,-253.99 239.39,-267.89 171,-249.24"/>
+</g>
+<!-- sourcefile~allocator.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge6" class="edge">
+<title>sourcefile~allocator.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M547.42,-208.89C525.69,-208.95 498.05,-209.47 473.5,-211.24"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M471.5,-211.24C437.14,-213.73 397.87,-212.82 369.86,-211.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="369.87,-208.03 359.71,-211.02 369.52,-215.02 369.87,-208.03"/>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~allocator.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge7" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~allocator.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M688.24,-143.26C668.64,-156.16 637.3,-176.79 614.88,-191.55"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="612.9,-188.66 606.47,-197.08 616.75,-194.51 612.9,-188.66"/>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~common.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge8" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~common.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M700.04,-118.86C684.94,-91.57 644.25,-27.22 588,-9.24"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M586,-9.24C523.25,10.81 501.44,-7.25 439,-28.24 387.3,-45.63 386.9,-85.26 332.5,-89.24"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M330.5,-89.24C244.74,-94.92 147.31,-118.84 90.17,-134.71"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="89.01,-131.4 80.33,-137.48 90.9,-138.14 89.01,-131.4"/>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge9" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M586,-131.24C533.38,-135.35 523.9,-153.59 473.5,-169.24"/>
+</g>
+<!-- sourcefile~mesh.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_node6" class="node">
+<title>sourcefile~mesh.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~EfferentGraph_node6"><a xlink:href="../sourcefile/mesh.f90.html" xlink:title="mesh.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="503.5,-141.24 441.5,-141.24 441.5,-117.24 503.5,-117.24 503.5,-141.24"/>
+<text text-anchor="middle" x="472.5" y="-126.84" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mesh.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge10" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M667.75,-129.72C644.57,-129.19 614.56,-129.17 588,-131.24"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M586,-131.24C562.07,-133.11 535.19,-132.73 513.7,-131.82"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="513.78,-128.32 503.63,-131.34 513.45,-135.31 513.78,-128.32"/>
+</g>
+<!-- sourcefile~poisson_fft.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_node7" class="node">
+<title>sourcefile~poisson_fft.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~EfferentGraph_node7"><a xlink:href="../sourcefile/poisson_fft.f90.html" xlink:title="poisson_fft.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="632,-103.24 542,-103.24 542,-79.24 632,-79.24 632,-103.24"/>
+<text text-anchor="middle" x="587" y="-88.84" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">poisson_fft.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~poisson_fft.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge11" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~poisson_fft.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M670.95,-119.24C659.22,-115.28 646.01,-110.82 633.64,-106.65"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="634.53,-103.26 623.94,-103.37 632.29,-109.89 634.53,-103.26"/>
+</g>
+<!-- sourcefile~tdsops.f90~2 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_node8" class="node">
+<title>sourcefile~tdsops.f90~2</title>
+<g id="a_sourcefile~~time_integrator.f90~~EfferentGraph_node8"><a xlink:href="../sourcefile/tdsops.f90~2.html" xlink:title="tdsops.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="506,-61.24 439,-61.24 439,-37.24 506,-37.24 506,-61.24"/>
+<text text-anchor="middle" x="472.5" y="-46.84" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tdsops.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~2&#45;&gt;sourcefile~tdsops.f90~2 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge12" class="edge">
+<title>sourcefile~backend.f90~2&#45;&gt;sourcefile~tdsops.f90~2</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M586,-9.24C554.97,0.67 519.65,-16.66 496.99,-31.52"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="494.93,-28.69 488.68,-37.24 498.9,-34.45 494.93,-28.69"/>
+</g>
+<!-- sourcefile~field.f90&#45;&gt;sourcefile~common.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge13" class="edge">
+<title>sourcefile~field.f90&#45;&gt;sourcefile~common.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M303.23,-219.51C264.57,-233.48 195.79,-256 171,-249.24"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M169,-249.24C121.58,-236.31 79.4,-194.63 57.3,-169.35"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="59.74,-166.82 50.6,-161.47 54.41,-171.35 59.74,-166.82"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~common.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge14" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~common.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M447.95,-117.03C420.74,-104.21 374.33,-86.29 332.5,-89.24"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge16" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M456.46,-141.29C437.19,-156.7 405.91,-181.62 403,-183.24 392.52,-189.11 380.47,-194.12 369.32,-198.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="368.14,-194.83 359.82,-201.39 370.42,-201.45 368.14,-194.83"/>
+</g>
+<!-- sourcefile~decomp_2decompfft.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_node9" class="node">
+<title>sourcefile~decomp_2decompfft.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~EfferentGraph_node9"><a xlink:href="../sourcefile/decomp_2decompfft.f90.html" xlink:title="decomp_2decompfft.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="403,-141.24 260,-141.24 260,-117.24 403,-117.24 403,-141.24"/>
+<text text-anchor="middle" x="331.5" y="-126.84" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">decomp_2decompfft.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~decomp_2decompfft.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge15" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~decomp_2decompfft.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M441.34,-129.24C432.84,-129.24 423.16,-129.24 413.17,-129.24"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="413.1,-125.74 403.1,-129.24 413.1,-132.74 413.1,-125.74"/>
+</g>
+<!-- sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_node10" class="node">
+<title>sourcefile~mesh_content.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~EfferentGraph_node10"><a xlink:href="../sourcefile/mesh_content.f90.html" xlink:title="mesh_content.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="224,-161.24 116,-161.24 116,-137.24 224,-137.24 224,-161.24"/>
+<text text-anchor="middle" x="170" y="-146.84" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mesh_content.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge17" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~mesh_content.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M441.26,-140.63C429.5,-144.5 415.79,-148.33 403,-150.24 346.41,-158.72 281.17,-157.48 234.32,-154.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.52,-151.2 224.31,-154.06 234.07,-158.19 234.52,-151.2"/>
+</g>
+<!-- sourcefile~poisson_fft.f90&#45;&gt;sourcefile~common.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge18" class="edge">
+<title>sourcefile~poisson_fft.f90&#45;&gt;sourcefile~common.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M541.97,-88.81C491.36,-86.5 405.82,-84.07 332.5,-89.24"/>
+</g>
+<!-- sourcefile~poisson_fft.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge19" class="edge">
+<title>sourcefile~poisson_fft.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M563.49,-103.33C556.41,-107.45 548.7,-112.28 542,-117.24 511.29,-140 510,-157.91 473.5,-169.24"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M471.5,-169.24C437.01,-179.95 397.39,-191.26 369.3,-199.1"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="368.2,-195.78 359.51,-201.83 370.08,-202.52 368.2,-195.78"/>
+</g>
+<!-- sourcefile~poisson_fft.f90&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge20" class="edge">
+<title>sourcefile~poisson_fft.f90&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M550.4,-103.27C538.64,-107.24 525.47,-111.69 513.4,-115.77"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="511.93,-112.57 503.57,-119.08 514.17,-119.2 511.93,-112.57"/>
+</g>
+<!-- sourcefile~poisson_fft.f90&#45;&gt;sourcefile~tdsops.f90~2 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge21" class="edge">
+<title>sourcefile~poisson_fft.f90&#45;&gt;sourcefile~tdsops.f90~2</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M553.76,-79.21C541.76,-74.73 527.96,-69.57 515.22,-64.82"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="516.34,-61.5 505.74,-61.28 513.89,-68.06 516.34,-61.5"/>
+</g>
+<!-- sourcefile~tdsops.f90~2&#45;&gt;sourcefile~common.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge22" class="edge">
+<title>sourcefile~tdsops.f90~2&#45;&gt;sourcefile~common.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M442.86,-61.32C415.2,-72.05 371.83,-86.47 332.5,-89.24"/>
+</g>
+<!-- sourcefile~decomp_2decompfft.f90&#45;&gt;sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge23" class="edge">
+<title>sourcefile~decomp_2decompfft.f90&#45;&gt;sourcefile~mesh_content.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M259.61,-138.13C251.21,-139.18 242.68,-140.25 234.39,-141.29"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="233.92,-137.83 224.44,-142.54 234.79,-144.77 233.92,-137.83"/>
+</g>
+<!-- sourcefile~mesh_content.f90&#45;&gt;sourcefile~common.f90 -->
+<g id="sourcefile~~time_integrator.f90~~EfferentGraph_edge24" class="edge">
+<title>sourcefile~mesh_content.f90&#45;&gt;sourcefile~common.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M115.83,-149.24C107.33,-149.24 98.57,-149.24 90.17,-149.24"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="90.15,-145.74 80.15,-149.24 90.15,-152.74 90.15,-145.74"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefiletime_integratorf90EfferentGraph = svgPanZoom('#sourcefiletime_integratorf90EfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~time_integrator.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefiletime_integratorf90AfferentGraph" width="641pt" height="126pt"
+ viewBox="0.00 0.00 641.00 126.01" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph" class="graph" transform="scale(0.63 0.63) rotate(0) translate(4 197.31)">
+<title>sourcefile~~time_integrator.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-197.31 1020,-197.31 1020,4 -4,4"/>
+<!-- sourcefile~time_integrator.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~time_integrator.f90</title>
+<polygon fill="none" stroke="black" points="114,-127 0,-127 0,-103 114,-103 114,-127"/>
+<text text-anchor="middle" x="57" y="-112.6" font-family="Helvetica,sans-Serif" font-size="10.50">time_integrator.f90</text>
+</g>
+<!-- sourcefile~solver.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~solver.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/solver.f90.html" xlink:title="solver.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="214,-127 150,-127 150,-103 214,-103 214,-127"/>
+<text text-anchor="middle" x="182" y="-112.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">solver.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~solver.f90&#45;&gt;sourcefile~time_integrator.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~solver.f90&#45;&gt;sourcefile~time_integrator.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M149.96,-115C142.1,-115 133.35,-115 124.47,-115"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="124.42,-111.5 114.42,-115 124.42,-118.5 124.42,-111.5"/>
+</g>
+<!-- sourcefile~base_case.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~base_case.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/base_case.f90.html" xlink:title="base_case.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="783,-106 695,-106 695,-82 783,-82 783,-106"/>
+<text text-anchor="middle" x="739" y="-91.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">base_case.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~base_case.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~base_case.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M727.02,-106.01C706.82,-126.88 661.35,-168.34 612.5,-176"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M610.5,-176C474.17,-197.38 435.85,-200.29 300,-176"/>
+</g>
+<!-- sourcefile~io_manager.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~io_manager.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/io_manager.f90.html" xlink:title="io_manager.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="659,-106 564,-106 564,-82 659,-82 659,-106"/>
+<text text-anchor="middle" x="611.5" y="-91.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io_manager.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~base_case.f90&#45;&gt;sourcefile~io_manager.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~base_case.f90&#45;&gt;sourcefile~io_manager.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M694.81,-94C686.64,-94 677.99,-94 669.47,-94"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="669.2,-90.5 659.2,-94 669.2,-97.5 669.2,-90.5"/>
+</g>
+<!-- sourcefile~channel.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~channel.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/channel.f90.html" xlink:title="channel.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="895,-188 819,-188 819,-164 895,-164 895,-188"/>
+<text text-anchor="middle" x="857" y="-173.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">channel.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~channel.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~channel.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M818.84,-174.34C796.04,-173.73 766.28,-173.68 740,-176"/>
+</g>
+<!-- sourcefile~channel.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~channel.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M833.39,-163.84C828.56,-161.06 823.55,-158.03 819,-155 799.16,-141.8 777.83,-125.18 762.35,-112.62"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="764.35,-109.73 754.39,-106.11 759.91,-115.15 764.35,-109.73"/>
+</g>
+<!-- sourcefile~checkpoint_manager.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~checkpoint_manager.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/checkpoint_manager.f90.html" xlink:title="checkpoint_manager.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="528,-106 384,-106 384,-82 528,-82 528,-106"/>
+<text text-anchor="middle" x="456" y="-91.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">checkpoint_manager.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M421.81,-81.97C383.62,-68.73 323.19,-49.85 300,-54"/>
+</g>
+<!-- sourcefile~io_field_utils.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~io_field_utils.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/io_field_utils.f90.html" xlink:title="io_field_utils.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="348,-127 250,-127 250,-103 348,-103 348,-127"/>
+<text text-anchor="middle" x="299" y="-112.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io_field_utils.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~io_field_utils.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~io_field_utils.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M383.85,-103.64C375.25,-104.8 366.55,-105.98 358.16,-107.12"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="357.57,-103.67 348.13,-108.48 358.51,-110.61 357.57,-103.67"/>
+</g>
+<!-- sourcefile~cylinder.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~cylinder.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/cylinder.f90.html" xlink:title="cylinder.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="894,-146 820,-146 820,-122 894,-122 894,-146"/>
+<text text-anchor="middle" x="857" y="-131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cylinder.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~cylinder.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~cylinder.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M833.7,-146.02C810.91,-157.33 774.14,-172.99 740,-176"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M738,-176C682.44,-180.91 667.16,-164.89 612.5,-176"/>
+</g>
+<!-- sourcefile~cylinder.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~cylinder.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M821.2,-122C809.72,-118.04 796.79,-113.58 784.67,-109.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="785.77,-106.08 775.18,-106.13 783.49,-112.7 785.77,-106.08"/>
+</g>
+<!-- sourcefile~generic.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~generic.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/generic.f90.html" xlink:title="generic.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="893.5,-66 820.5,-66 820.5,-42 893.5,-42 893.5,-66"/>
+<text text-anchor="middle" x="857" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">generic.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~generic.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~generic.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M820.39,-52.38C797.4,-51.74 766.88,-51.63 740,-54"/>
+</g>
+<!-- sourcefile~generic.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~generic.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M821.2,-66C809.72,-69.96 796.79,-74.42 784.67,-78.6"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="783.49,-75.3 775.18,-81.87 785.77,-81.92 783.49,-75.3"/>
+</g>
+<!-- sourcefile~io_field_utils.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~io_field_utils.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M249.9,-115C241.41,-115 232.65,-115 224.37,-115"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="224.21,-111.5 214.21,-115 224.21,-118.5 224.21,-111.5"/>
+</g>
+<!-- sourcefile~io_manager.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~io_manager.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M578.75,-81.92C548.11,-71.18 500.15,-56.76 457,-54"/>
+</g>
+<!-- sourcefile~io_manager.f90&#45;&gt;sourcefile~checkpoint_manager.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~io_manager.f90&#45;&gt;sourcefile~checkpoint_manager.f90</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M563.61,-94C555.56,-94 547,-94 538.35,-94"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="538.19,-90.5 528.19,-94 538.19,-97.5 538.19,-90.5"/>
+</g>
+<!-- sourcefile~snapshot_manager.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~snapshot_manager.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/snapshot_manager.f90.html" xlink:title="snapshot_manager.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="522.5,-148 389.5,-148 389.5,-124 522.5,-124 522.5,-148"/>
+<text text-anchor="middle" x="456" y="-133.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">snapshot_manager.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_manager.f90&#45;&gt;sourcefile~snapshot_manager.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~io_manager.f90&#45;&gt;sourcefile~snapshot_manager.f90</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M566.51,-106.04C549.17,-110.78 529.08,-116.28 510.88,-121.26"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="509.72,-117.95 500.99,-123.96 511.56,-124.7 509.72,-117.95"/>
+</g>
+<!-- sourcefile~snapshot_manager.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~snapshot_manager.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M421.81,-148.03C383.62,-161.27 323.19,-180.15 300,-176"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M298,-176C263.43,-169.82 228.46,-148.67 206.31,-133"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="208.35,-130.15 198.2,-127.1 204.23,-135.81 208.35,-130.15"/>
+</g>
+<!-- sourcefile~snapshot_manager.f90&#45;&gt;sourcefile~io_field_utils.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~snapshot_manager.f90&#45;&gt;sourcefile~io_field_utils.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M389.27,-127.09C378.99,-125.7 368.44,-124.27 358.35,-122.9"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="358.81,-119.44 348.44,-121.56 357.87,-126.37 358.81,-119.44"/>
+</g>
+<!-- sourcefile~tgv.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~tgv.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/tgv.f90.html" xlink:title="tgv.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="884,-24 830,-24 830,0 884,0 884,-24"/>
+<text text-anchor="middle" x="857" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tgv.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~tgv.f90&#45;&gt;sourcefile~solver.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~tgv.f90&#45;&gt;sourcefile~solver.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M833.7,-24.02C810.91,-35.33 774.14,-50.99 740,-54"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M738,-54C613.6,-64.98 581.63,-61.98 457,-54"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M455,-54C386.3,-48.95 367.81,-41.87 300,-54"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M298,-54C263.43,-60.18 228.46,-81.33 206.31,-97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="204.23,-94.19 198.2,-102.9 208.35,-99.85 204.23,-94.19"/>
+</g>
+<!-- sourcefile~tgv.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~tgv.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M832.73,-24C828.04,-26.75 823.25,-29.81 819,-33 801.15,-46.39 800.66,-54.36 783,-68 779.15,-70.98 774.93,-73.89 770.69,-76.63"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="768.73,-73.73 762.07,-81.96 772.41,-79.68 768.73,-73.73"/>
+</g>
+<!-- sourcefile~xcompact.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_node12" class="node">
+<title>sourcefile~xcompact.f90</title>
+<g id="a_sourcefile~~time_integrator.f90~~AfferentGraph_node12"><a xlink:href="../sourcefile/xcompact.f90.html" xlink:title="xcompact.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1016,-106 931,-106 931,-82 1016,-82 1016,-106"/>
+<text text-anchor="middle" x="973.5" y="-91.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">xcompact.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M930.93,-94C892.44,-94 835,-94 793.18,-94"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="793.18,-90.5 783.18,-94 793.18,-97.5 793.18,-90.5"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~channel.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~channel.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M958.42,-106.14C943.25,-118.96 918.17,-139.44 895,-155 893.16,-156.24 891.24,-157.48 889.28,-158.69"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="887.42,-155.73 880.63,-163.87 891.01,-161.74 887.42,-155.73"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~cylinder.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~cylinder.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M938.15,-106C926.93,-109.92 914.3,-114.33 902.45,-118.47"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="901.01,-115.27 892.73,-121.87 903.32,-121.88 901.01,-115.27"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~generic.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~generic.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M938.15,-82C926.93,-78.08 914.3,-73.67 902.45,-69.53"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="903.32,-66.12 892.73,-66.13 901.01,-72.73 903.32,-66.12"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~tgv.f90 -->
+<g id="sourcefile~~time_integrator.f90~~AfferentGraph_edge24" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~tgv.f90</title>
+<path fill="none" stroke="#ff00aa" stroke-dasharray="5,2" d="M958.42,-81.86C943.25,-69.04 918.17,-48.56 895,-33 893.16,-31.76 891.24,-30.52 889.28,-29.31"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="891.01,-26.26 880.63,-24.13 887.42,-32.27 891.01,-26.26"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefiletime_integratorf90AfferentGraph = svgPanZoom('#sourcefiletime_integratorf90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="k">module </span><span class="n">m_time_integrator</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="w">  </span><span class="k">use </span><span class="n">m_allocator</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">allocator_t</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="w">  </span><span class="k">use </span><span class="n">m_base_backend</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">base_backend_t</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">  </span><span class="k">use </span><span class="n">m_common</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">dp</span><span class="p">,</span><span class="w"> </span><span class="n">DIR_X</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">  </span><span class="k">use </span><span class="n">m_field</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">field_t</span><span class="p">,</span><span class="w"> </span><span class="n">flist_t</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">  </span><span class="k">implicit none</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="k">  private </span><span class="n">adams_bashforth</span><span class="p">,</span><span class="w"> </span><span class="n">runge_kutta</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">  </span><span class="k">type</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">time_intg_t</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">method</span><span class="p">,</span><span class="w"> </span><span class="n">istep</span><span class="p">,</span><span class="w"> </span><span class="n">istage</span><span class="p">,</span><span class="w"> </span><span class="n">order</span><span class="p">,</span><span class="w"> </span><span class="n">nstep</span><span class="p">,</span><span class="w"> </span><span class="n">nstage</span><span class="p">,</span><span class="w"> </span><span class="n">nvars</span><span class="p">,</span><span class="w"> </span><span class="n">nolds</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">coeffs</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rk_b</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rk_a</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">    </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sname</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="n">flist_t</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">olds</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">backend</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">allocator_t</span><span class="p">),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">allocator</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">stepper_func</span><span class="p">),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">step</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="nb">null</span><span class="p">()</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">  </span><span class="k">contains</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="k">    procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">finalize</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">    </span><span class="k">procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">runge_kutta</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">    </span><span class="k">procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">adams_bashforth</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">  </span><span class="k">end type </span><span class="n">time_intg_t</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">  </span><span class="k">interface </span><span class="n">time_intg_t</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">    </span><span class="k">module procedure </span><span class="n">init</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">  </span><span class="k">end interface </span><span class="n">time_intg_t</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="w">  </span><span class="k">abstract interface</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="k">    subroutine </span><span class="n">stepper_func</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">curr</span><span class="p">,</span><span class="w"> </span><span class="n">deriv</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">time_intg_t</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dp</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">flist_t</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">      </span><span class="k">implicit none</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="k">      class</span><span class="p">(</span><span class="n">time_intg_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">flist_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">curr</span><span class="p">(:)</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">flist_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">deriv</span><span class="p">(:)</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">stepper_func</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="k">contains</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="k">  subroutine </span><span class="n">finalize</span><span class="p">(</span><span class="n">self</span><span class="p">)</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">    </span><span class="k">implicit none</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">    </span><span class="c">!type(time_intg_t), intent(inout) :: self</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">time_intg_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">    </span><span class="c">! Release all the storage for old timesteps</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">    </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">nvars</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="w">      </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">nolds</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">        </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">release_block</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">olds</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)%</span><span class="n">ptr</span><span class="p">)</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="k">    end do</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">    </span><span class="c">! deallocate memory</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">    </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">olds</span><span class="p">)</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">    </span><span class="k">print</span><span class="w"> </span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">sname</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39; time integrator deallocated&#39;</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">  </span><span class="k">end subroutine </span><span class="n">finalize</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="w">  </span><span class="k">function </span><span class="n">init</span><span class="p">(</span><span class="n">backend</span><span class="p">,</span><span class="w"> </span><span class="n">allocator</span><span class="p">,</span><span class="w"> </span><span class="n">method</span><span class="p">,</span><span class="w"> </span><span class="n">nvars</span><span class="p">)</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">    </span><span class="k">implicit none</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="k">    type</span><span class="p">(</span><span class="n">time_intg_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">init</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">base_backend_t</span><span class="p">),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">backend</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">allocator_t</span><span class="p">),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">allocator</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">    </span><span class="kt">character</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">method</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nvars</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="nb">stat</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">    </span><span class="c">! initialize Runge-Kutta coefficients</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">    </span><span class="c">! rk1</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">rk_a</span><span class="p">(:,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mf">0.0_dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">rk_a</span><span class="p">(:,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mf">0.0_dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">rk_a</span><span class="p">(:,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mf">0.0_dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">rk_b</span><span class="p">(:,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mf">1._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-86" name="ln-86" href="#ln-86"></a>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">    </span><span class="c">! rk2</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">rk_a</span><span class="p">(:,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mf">0.5_dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">rk_a</span><span class="p">(:,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mf">0.0_dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">rk_a</span><span class="p">(:,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mf">0.0_dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">rk_b</span><span class="p">(:,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">1._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">    </span><span class="c">! rk3</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">rk_a</span><span class="p">(:,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mf">0.5_dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">rk_a</span><span class="p">(:,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mf">0.0_dp</span><span class="p">,</span><span class="w"> </span><span class="mf">3._dp</span><span class="o">/</span><span class="mf">4._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">rk_a</span><span class="p">(:,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mf">0.0_dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">rk_b</span><span class="p">(:,</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">      </span><span class="p">[</span><span class="mf">2._dp</span><span class="o">/</span><span class="mf">9.0_dp</span><span class="p">,</span><span class="w"> </span><span class="mf">1._dp</span><span class="o">/</span><span class="mf">3._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">4._dp</span><span class="o">/</span><span class="mf">9._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">    </span><span class="c">! rk4</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">rk_a</span><span class="p">(:,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mf">0.5_dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">rk_a</span><span class="p">(:,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.5_dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">rk_a</span><span class="p">(:,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">1._dp</span><span class="p">]</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">rk_b</span><span class="p">(:,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">      </span><span class="p">[</span><span class="mf">1._dp</span><span class="o">/</span><span class="mf">6._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">1._dp</span><span class="o">/</span><span class="mf">3._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">1._dp</span><span class="o">/</span><span class="mf">3._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">1._dp</span><span class="o">/</span><span class="mf">6._dp</span><span class="p">]</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="w">    </span><span class="c">! initialize Adams-Bashforth coefficients</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">    </span><span class="c">! ab1</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">coeffs</span><span class="p">(:,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mf">1._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">    </span><span class="c">! ab2</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">coeffs</span><span class="p">(:,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mf">1.5_dp</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mf">0.5_dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="w">    </span><span class="c">! ab3</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">coeffs</span><span class="p">(:,</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="w">      </span><span class="p">[</span><span class="mi">2</span><span class="mf">3._dp</span><span class="o">/</span><span class="mi">1</span><span class="mf">2._dp</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mf">4._dp</span><span class="o">/</span><span class="mf">3._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">5._dp</span><span class="o">/</span><span class="mi">1</span><span class="mf">2._dp</span><span class="p">,</span><span class="w"> </span><span class="mf">0._dp</span><span class="p">]</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="w">    </span><span class="c">! ab4</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">coeffs</span><span class="p">(:,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">      </span><span class="p">[</span><span class="mi">5</span><span class="mf">5._dp</span><span class="o">/</span><span class="mi">2</span><span class="mf">4._dp</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">5</span><span class="mf">9._dp</span><span class="o">/</span><span class="mi">2</span><span class="mf">4._dp</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="mf">7._dp</span><span class="o">/</span><span class="mi">2</span><span class="mf">4._dp</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mf">3._dp</span><span class="o">/</span><span class="mf">8._dp</span><span class="p">]</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">    </span><span class="c">! set variables</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">backend</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">backend</span>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">allocator</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">allocator</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">sname</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">method</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">init</span><span class="p">%</span><span class="n">sname</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s1">&#39;AB&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="k">      read</span><span class="w"> </span><span class="p">(</span><span class="n">init</span><span class="p">%</span><span class="n">sname</span><span class="p">(</span><span class="mi">3</span><span class="p">:</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="n">iostat</span><span class="o">=</span><span class="nb">stat</span><span class="p">)</span><span class="w"> </span><span class="n">init</span><span class="p">%</span><span class="n">order</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">stat</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">error stop</span><span class="w"> </span><span class="s1">&#39;Error reading AB integration order&#39;</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">init</span><span class="p">%</span><span class="n">order</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">5</span><span class="p">)</span><span class="w"> </span><span class="k">error stop</span><span class="w"> </span><span class="s1">&#39;Integration order &gt;4 is not supported&#39;</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="w">      </span><span class="n">init</span><span class="p">%</span><span class="n">nstep</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">init</span><span class="p">%</span><span class="n">order</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a><span class="w">      </span><span class="n">init</span><span class="p">%</span><span class="n">nstage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="w">      </span><span class="n">init</span><span class="p">%</span><span class="n">nolds</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">init</span><span class="p">%</span><span class="n">nstep</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">      </span><span class="n">init</span><span class="p">%</span><span class="n">step</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">adams_bashforth</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="w">    </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">init</span><span class="p">%</span><span class="n">sname</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s1">&#39;RK&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="k">      read</span><span class="w"> </span><span class="p">(</span><span class="n">init</span><span class="p">%</span><span class="n">sname</span><span class="p">(</span><span class="mi">3</span><span class="p">:</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="n">iostat</span><span class="o">=</span><span class="nb">stat</span><span class="p">)</span><span class="w"> </span><span class="n">init</span><span class="p">%</span><span class="n">order</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">stat</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">error stop</span><span class="w"> </span><span class="s1">&#39;Error reading RK integration order&#39;</span>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">init</span><span class="p">%</span><span class="n">order</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">5</span><span class="p">)</span><span class="w"> </span><span class="k">error stop</span><span class="w"> </span><span class="s1">&#39;Integration order &gt;4 is not supported&#39;</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">      </span><span class="n">init</span><span class="p">%</span><span class="n">nstep</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">      </span><span class="n">init</span><span class="p">%</span><span class="n">nstage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">init</span><span class="p">%</span><span class="n">order</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">      </span><span class="n">init</span><span class="p">%</span><span class="n">nolds</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">init</span><span class="p">%</span><span class="n">nstage</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">      </span><span class="n">init</span><span class="p">%</span><span class="n">step</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">runge_kutta</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a><span class="w">    </span><span class="k">else</span>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="k">      print</span><span class="w"> </span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Integration method &#39;</span><span class="o">//</span><span class="n">init</span><span class="p">%</span><span class="n">sname</span><span class="o">//</span><span class="s1">&#39; is not defined&#39;</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a><span class="w">      </span><span class="k">error stop</span>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="k">    end if</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a>
+<a id="ln-145" name="ln-145" href="#ln-145"></a><span class="k">    </span><span class="n">init</span><span class="p">%</span><span class="n">nvars</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nvars</span>
+<a id="ln-146" name="ln-146" href="#ln-146"></a>
+<a id="ln-147" name="ln-147" href="#ln-147"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">istep</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="w">    </span><span class="n">init</span><span class="p">%</span><span class="n">istage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">    </span><span class="c">! allocate memory</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a><span class="w">    </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">init</span><span class="p">%</span><span class="n">olds</span><span class="p">(</span><span class="n">init</span><span class="p">%</span><span class="n">nvars</span><span class="p">,</span><span class="w"> </span><span class="n">init</span><span class="p">%</span><span class="n">nolds</span><span class="p">))</span>
+<a id="ln-152" name="ln-152" href="#ln-152"></a>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="w">    </span><span class="c">! Request all the storage for old timesteps</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="w">    </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">init</span><span class="p">%</span><span class="n">nvars</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="w">      </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">init</span><span class="p">%</span><span class="n">nolds</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="w">        </span><span class="n">init</span><span class="p">%</span><span class="n">olds</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)%</span><span class="n">ptr</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">allocator</span><span class="p">%</span><span class="n">get_block</span><span class="p">(</span><span class="n">DIR_X</span><span class="p">)</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a><span class="k">    end do</span>
+<a id="ln-159" name="ln-159" href="#ln-159"></a>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="k">  end function </span><span class="n">init</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">runge_kutta</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">curr</span><span class="p">,</span><span class="w"> </span><span class="n">deriv</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="w">    </span><span class="k">implicit none</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a>
+<a id="ln-165" name="ln-165" href="#ln-165"></a><span class="k">    class</span><span class="p">(</span><span class="n">time_intg_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-166" name="ln-166" href="#ln-166"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="n">flist_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">curr</span><span class="p">(:)</span>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="n">flist_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">deriv</span><span class="p">(:)</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a>
+<a id="ln-172" name="ln-172" href="#ln-172"></a><span class="w">    </span><span class="c">! update solution</span>
+<a id="ln-173" name="ln-173" href="#ln-173"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">istage</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">nstage</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-174" name="ln-174" href="#ln-174"></a><span class="k">      do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">nvars</span>
+<a id="ln-175" name="ln-175" href="#ln-175"></a><span class="w">        </span><span class="c">! update step solution from stage derivative</span>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">nstage</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="k">          call </span><span class="n">self</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">veccopy</span><span class="p">(</span><span class="n">curr</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">ptr</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">olds</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)%</span><span class="n">ptr</span><span class="p">)</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a><span class="w">        </span><span class="k">end if</span>
+<a id="ln-179" name="ln-179" href="#ln-179"></a>
+<a id="ln-180" name="ln-180" href="#ln-180"></a><span class="k">        do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">nstage</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="w">          </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">vecadd</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">rk_b</span><span class="p">(</span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">nstage</span><span class="p">)</span><span class="o">*</span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a><span class="w">                                   </span><span class="n">self</span><span class="p">%</span><span class="n">olds</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)%</span><span class="n">ptr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-183" name="ln-183" href="#ln-183"></a><span class="w">                                   </span><span class="mf">1._dp</span><span class="p">,</span><span class="w"> </span><span class="n">curr</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">ptr</span><span class="p">)</span>
+<a id="ln-184" name="ln-184" href="#ln-184"></a><span class="w">        </span><span class="k">end do</span>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="k">        call </span><span class="n">self</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">vecadd</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">rk_b</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">nstage</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">nstage</span><span class="p">)</span><span class="o">*</span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a><span class="w">                                 </span><span class="n">deriv</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">ptr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-187" name="ln-187" href="#ln-187"></a><span class="w">                                 </span><span class="mf">1._dp</span><span class="p">,</span><span class="w"> </span><span class="n">curr</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">ptr</span><span class="p">)</span>
+<a id="ln-188" name="ln-188" href="#ln-188"></a>
+<a id="ln-189" name="ln-189" href="#ln-189"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-190" name="ln-190" href="#ln-190"></a>
+<a id="ln-191" name="ln-191" href="#ln-191"></a><span class="w">      </span><span class="c">! reset stage counter</span>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">      </span><span class="n">self</span><span class="p">%</span><span class="n">istage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a><span class="w">    </span><span class="k">else</span>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="k">      do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">nvars</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a><span class="w">        </span><span class="c">! save step initial condition</span>
+<a id="ln-196" name="ln-196" href="#ln-196"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">istage</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-197" name="ln-197" href="#ln-197"></a><span class="k">          call </span><span class="n">self</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">veccopy</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">olds</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)%</span><span class="n">ptr</span><span class="p">,</span><span class="w"> </span><span class="n">curr</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">ptr</span><span class="p">)</span>
+<a id="ln-198" name="ln-198" href="#ln-198"></a><span class="w">        </span><span class="k">end if</span>
+<a id="ln-199" name="ln-199" href="#ln-199"></a>
+<a id="ln-200" name="ln-200" href="#ln-200"></a><span class="w">        </span><span class="c">! save stage derivative</span>
+<a id="ln-201" name="ln-201" href="#ln-201"></a><span class="w">        </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">veccopy</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">olds</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">istage</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)%</span><span class="n">ptr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-202" name="ln-202" href="#ln-202"></a><span class="w">                                  </span><span class="n">deriv</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">ptr</span><span class="p">)</span>
+<a id="ln-203" name="ln-203" href="#ln-203"></a>
+<a id="ln-204" name="ln-204" href="#ln-204"></a><span class="w">        </span><span class="c">! update stage solution</span>
+<a id="ln-205" name="ln-205" href="#ln-205"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">istage</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-206" name="ln-206" href="#ln-206"></a><span class="k">          call </span><span class="n">self</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">veccopy</span><span class="p">(</span><span class="n">curr</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">ptr</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">olds</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)%</span><span class="n">ptr</span><span class="p">)</span>
+<a id="ln-207" name="ln-207" href="#ln-207"></a><span class="w">        </span><span class="k">end if</span>
+<a id="ln-208" name="ln-208" href="#ln-208"></a><span class="k">        do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">istage</span>
+<a id="ln-209" name="ln-209" href="#ln-209"></a><span class="w">          </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">vecadd</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">rk_a</span><span class="p">(</span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">istage</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">nstage</span><span class="p">)</span><span class="o">*</span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-210" name="ln-210" href="#ln-210"></a><span class="w">                                   </span><span class="n">self</span><span class="p">%</span><span class="n">olds</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)%</span><span class="n">ptr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-211" name="ln-211" href="#ln-211"></a><span class="w">                                   </span><span class="mf">1._dp</span><span class="p">,</span><span class="w"> </span><span class="n">curr</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">ptr</span><span class="p">)</span>
+<a id="ln-212" name="ln-212" href="#ln-212"></a><span class="w">        </span><span class="k">end do</span>
+<a id="ln-213" name="ln-213" href="#ln-213"></a><span class="k">      end do</span>
+<a id="ln-214" name="ln-214" href="#ln-214"></a>
+<a id="ln-215" name="ln-215" href="#ln-215"></a><span class="w">      </span><span class="c">! increment stage counter</span>
+<a id="ln-216" name="ln-216" href="#ln-216"></a><span class="w">      </span><span class="n">self</span><span class="p">%</span><span class="n">istage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">istage</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-217" name="ln-217" href="#ln-217"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-218" name="ln-218" href="#ln-218"></a>
+<a id="ln-219" name="ln-219" href="#ln-219"></a><span class="k">  end subroutine </span><span class="n">runge_kutta</span>
+<a id="ln-220" name="ln-220" href="#ln-220"></a>
+<a id="ln-221" name="ln-221" href="#ln-221"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">adams_bashforth</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">curr</span><span class="p">,</span><span class="w"> </span><span class="n">deriv</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<a id="ln-222" name="ln-222" href="#ln-222"></a><span class="w">    </span><span class="k">implicit none</span>
+<a id="ln-223" name="ln-223" href="#ln-223"></a>
+<a id="ln-224" name="ln-224" href="#ln-224"></a><span class="k">    class</span><span class="p">(</span><span class="n">time_intg_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-225" name="ln-225" href="#ln-225"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="n">flist_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">curr</span><span class="p">(:)</span>
+<a id="ln-226" name="ln-226" href="#ln-226"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="n">flist_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">deriv</span><span class="p">(:)</span>
+<a id="ln-227" name="ln-227" href="#ln-227"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<a id="ln-228" name="ln-228" href="#ln-228"></a>
+<a id="ln-229" name="ln-229" href="#ln-229"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span>
+<a id="ln-230" name="ln-230" href="#ln-230"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nstep</span>
+<a id="ln-231" name="ln-231" href="#ln-231"></a>
+<a id="ln-232" name="ln-232" href="#ln-232"></a><span class="w">    </span><span class="n">nstep</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">istep</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">nstep</span><span class="p">)</span>
+<a id="ln-233" name="ln-233" href="#ln-233"></a><span class="w">    </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">nvars</span>
+<a id="ln-234" name="ln-234" href="#ln-234"></a><span class="w">      </span><span class="c">! update solution</span>
+<a id="ln-235" name="ln-235" href="#ln-235"></a><span class="w">      </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">vecadd</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">coeffs</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nstep</span><span class="p">)</span><span class="o">*</span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-236" name="ln-236" href="#ln-236"></a><span class="w">                               </span><span class="n">deriv</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">ptr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-237" name="ln-237" href="#ln-237"></a><span class="w">                               </span><span class="mf">1._dp</span><span class="p">,</span><span class="w"> </span><span class="n">curr</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">ptr</span><span class="p">)</span>
+<a id="ln-238" name="ln-238" href="#ln-238"></a><span class="w">      </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">nstep</span>
+<a id="ln-239" name="ln-239" href="#ln-239"></a><span class="w">        </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">vecadd</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">coeffs</span><span class="p">(</span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nstep</span><span class="p">)</span><span class="o">*</span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-240" name="ln-240" href="#ln-240"></a><span class="w">                                 </span><span class="n">self</span><span class="p">%</span><span class="n">olds</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)%</span><span class="n">ptr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-241" name="ln-241" href="#ln-241"></a><span class="w">                                 </span><span class="mf">1._dp</span><span class="p">,</span><span class="w"> </span><span class="n">curr</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">ptr</span><span class="p">)</span>
+<a id="ln-242" name="ln-242" href="#ln-242"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-243" name="ln-243" href="#ln-243"></a>
+<a id="ln-244" name="ln-244" href="#ln-244"></a><span class="w">      </span><span class="c">! rotate pointers</span>
+<a id="ln-245" name="ln-245" href="#ln-245"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">nstep</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">nstep</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-246" name="ln-246" href="#ln-246"></a><span class="w">        </span><span class="c">! for startup</span>
+<a id="ln-247" name="ln-247" href="#ln-247"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">istep</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-248" name="ln-248" href="#ln-248"></a><span class="k">          call </span><span class="n">rotate</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">olds</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">nstep</span><span class="p">)</span>
+<a id="ln-249" name="ln-249" href="#ln-249"></a><span class="w">        </span><span class="k">end if</span>
+<a id="ln-250" name="ln-250" href="#ln-250"></a><span class="k">      else</span>
+<a id="ln-251" name="ln-251" href="#ln-251"></a><span class="w">        </span><span class="c">! after startup</span>
+<a id="ln-252" name="ln-252" href="#ln-252"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">nstep</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-253" name="ln-253" href="#ln-253"></a><span class="k">          call </span><span class="n">rotate</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">olds</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">nstep</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-254" name="ln-254" href="#ln-254"></a><span class="w">        </span><span class="k">end if</span>
+<a id="ln-255" name="ln-255" href="#ln-255"></a><span class="k">      end if</span>
+<a id="ln-256" name="ln-256" href="#ln-256"></a>
+<a id="ln-257" name="ln-257" href="#ln-257"></a><span class="w">      </span><span class="c">! update olds(1) with new derivative</span>
+<a id="ln-258" name="ln-258" href="#ln-258"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">nstep</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-259" name="ln-259" href="#ln-259"></a><span class="k">        call </span><span class="n">self</span><span class="p">%</span><span class="n">backend</span><span class="p">%</span><span class="n">veccopy</span><span class="p">(</span><span class="n">self</span><span class="p">%</span><span class="n">olds</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)%</span><span class="n">ptr</span><span class="p">,</span><span class="w"> </span><span class="n">deriv</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">ptr</span><span class="p">)</span>
+<a id="ln-260" name="ln-260" href="#ln-260"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-261" name="ln-261" href="#ln-261"></a><span class="k">    end do</span>
+<a id="ln-262" name="ln-262" href="#ln-262"></a>
+<a id="ln-263" name="ln-263" href="#ln-263"></a><span class="w">    </span><span class="c">! increment step counter</span>
+<a id="ln-264" name="ln-264" href="#ln-264"></a><span class="w">    </span><span class="n">self</span><span class="p">%</span><span class="n">istep</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">istep</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-265" name="ln-265" href="#ln-265"></a>
+<a id="ln-266" name="ln-266" href="#ln-266"></a><span class="w">  </span><span class="k">end subroutine </span><span class="n">adams_bashforth</span>
+<a id="ln-267" name="ln-267" href="#ln-267"></a>
+<a id="ln-268" name="ln-268" href="#ln-268"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">rotate</span><span class="p">(</span><span class="n">sol</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">)</span>
+<a id="ln-269" name="ln-269" href="#ln-269"></a><span class="w">    </span><span class="k">implicit none</span>
+<a id="ln-270" name="ln-270" href="#ln-270"></a>
+<a id="ln-271" name="ln-271" href="#ln-271"></a><span class="k">    type</span><span class="p">(</span><span class="n">flist_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sol</span><span class="p">(:)</span>
+<a id="ln-272" name="ln-272" href="#ln-272"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n</span>
+<a id="ln-273" name="ln-273" href="#ln-273"></a>
+<a id="ln-274" name="ln-274" href="#ln-274"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span>
+<a id="ln-275" name="ln-275" href="#ln-275"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ptr</span>
+<a id="ln-276" name="ln-276" href="#ln-276"></a>
+<a id="ln-277" name="ln-277" href="#ln-277"></a><span class="w">    </span><span class="c">! rotate pointer</span>
+<a id="ln-278" name="ln-278" href="#ln-278"></a><span class="w">    </span><span class="n">ptr</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">sol</span><span class="p">(</span><span class="n">n</span><span class="p">)%</span><span class="n">ptr</span>
+<a id="ln-279" name="ln-279" href="#ln-279"></a><span class="w">    </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<a id="ln-280" name="ln-280" href="#ln-280"></a><span class="w">      </span><span class="n">sol</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">ptr</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">sol</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)%</span><span class="n">ptr</span>
+<a id="ln-281" name="ln-281" href="#ln-281"></a><span class="w">    </span><span class="k">end do</span>
+<a id="ln-282" name="ln-282" href="#ln-282"></a><span class="k">    </span><span class="n">sol</span><span class="p">(</span><span class="mi">1</span><span class="p">)%</span><span class="n">ptr</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">ptr</span>
+<a id="ln-283" name="ln-283" href="#ln-283"></a>
+<a id="ln-284" name="ln-284" href="#ln-284"></a><span class="w">  </span><span class="k">end subroutine </span><span class="n">rotate</span>
+<a id="ln-285" name="ln-285" href="#ln-285"></a>
+<a id="ln-286" name="ln-286" href="#ln-286"></a><span class="k">end module </span><span class="n">m_time_integrator</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,552 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>scalar_product_omp &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../program/xcompact.html">Program</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>scalar_product_omp
+      <small>Function</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.6% of total for procedures.">39 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/backend.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/backend.f90.html'>backend.f90</a></li>
+                <li class="breadcrumb-item"><a href='../module/m_omp_backend.html'>m_omp_backend</a></li>
+            <li class="breadcrumb-item active" aria-current="page">scalar_product_omp</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  function scalar_product_omp(self, x, y) result(s)  
+</h2>
+    
+
+    <p><a href="../module/m_base_backend.html">m_base_backend</a></p>
+
+    <h3>Type Bound</h3>
+    <p><a href='../type/omp_backend_t.html'>omp_backend_t</a></p>
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~52"></span>
+              class(<a href='../type/omp_backend_t.html'>omp_backend_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-x~3"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>x</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-y~3"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>y</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+      <h3>Return Value
+        <small>
+          <span class="anchor" id="variable-s"></span>
+          real(kind=dp)
+        </small>
+      </h3>
+      
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~scalar_product_omp~~CallsGraph Pages: 1 -->
+<svg id="procscalar_product_ompCallsGraph" width="641pt" height="154pt"
+ viewBox="0.00 0.00 641.00 154.40" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~scalar_product_omp~~CallsGraph" class="graph" transform="scale(0.56 0.56) rotate(0) translate(4 273)">
+<title>proc~~scalar_product_omp~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-273 1146,-273 1146,4 -4,4"/>
+<!-- proc~scalar_product_omp -->
+<g id="proc~~scalar_product_omp~~CallsGraph_node1" class="node">
+<title>proc~scalar_product_omp</title>
+<polygon fill="none" stroke="black" points="312,-191 0,-191 0,-167 312,-167 312,-191"/>
+<text text-anchor="middle" x="156" y="-176.6" font-family="Helvetica,sans-Serif" font-size="10.50">m_omp_backend::omp_backend_t%scalar_product_omp</text>
+</g>
+<!-- mpi_allreduce -->
+<g id="proc~~scalar_product_omp~~CallsGraph_node2" class="node">
+<title>mpi_allreduce</title>
+<polygon fill="#777777" stroke="#777777" points="533.5,-269 445.5,-269 445.5,-245 533.5,-245 533.5,-269"/>
+<text text-anchor="middle" x="489.5" y="-254.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_allreduce</text>
+</g>
+<!-- proc~scalar_product_omp&#45;&gt;mpi_allreduce -->
+<g id="proc~~scalar_product_omp~~CallsGraph_edge1" class="edge">
+<title>proc~scalar_product_omp&#45;&gt;mpi_allreduce</title>
+<path fill="none" stroke="#ff0000" d="M197.37,-191.04C235.86,-202.26 295.56,-219.03 348,-231 376.61,-237.53 408.78,-243.58 435.11,-248.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="434.82,-251.69 445.27,-249.95 436.01,-244.8 434.82,-251.69"/>
+</g>
+<!-- proc~get_block -->
+<g id="proc~~scalar_product_omp~~CallsGraph_node3" class="node">
+<title>proc~get_block</title>
+<g id="a_proc~~scalar_product_omp~~CallsGraph_node3"><a xlink:href="../proc/get_block.html" xlink:title="m_allocator::allocator_t%get_block">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="878,-234 678,-234 678,-210 878,-210 878,-234"/>
+<text text-anchor="middle" x="778" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_allocator::allocator_t%get_block</text>
+</a>
+</g>
+</g>
+<!-- proc~scalar_product_omp&#45;&gt;proc~get_block -->
+<g id="proc~~scalar_product_omp~~CallsGraph_edge2" class="edge">
+<title>proc~scalar_product_omp&#45;&gt;proc~get_block</title>
+<path fill="none" stroke="#ff0000" d="M307.64,-191.02C321.29,-192.05 334.9,-193.06 348,-194 456.67,-201.81 580.89,-209.82 667.6,-215.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="667.52,-218.76 677.72,-215.89 667.96,-211.77 667.52,-218.76"/>
+</g>
+<!-- proc~get_dims -->
+<g id="proc~~scalar_product_omp~~CallsGraph_node4" class="node">
+<title>proc~get_dims</title>
+<g id="a_proc~~scalar_product_omp~~CallsGraph_node4"><a xlink:href="../proc/get_dims.html" xlink:title="m_mesh::mesh_t%get_dims">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="570,-67 409,-67 409,-43 570,-43 570,-67"/>
+<text text-anchor="middle" x="489.5" y="-52.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_mesh::mesh_t%get_dims</text>
+</a>
+</g>
+</g>
+<!-- proc~scalar_product_omp&#45;&gt;proc~get_dims -->
+<g id="proc~~scalar_product_omp~~CallsGraph_edge3" class="edge">
+<title>proc~scalar_product_omp&#45;&gt;proc~get_dims</title>
+<path fill="none" stroke="#ff0000" d="M189.09,-167C249.49,-144.4 380,-95.58 446.99,-70.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="448.26,-73.79 456.4,-67.01 445.8,-67.23 448.26,-73.79"/>
+</g>
+<!-- proc~get_field_data -->
+<g id="proc~~scalar_product_omp~~CallsGraph_node5" class="node">
+<title>proc~get_field_data</title>
+<g id="a_proc~~scalar_product_omp~~CallsGraph_node5"><a xlink:href="../proc/get_field_data.html" xlink:title="m_base_backend::base_backend_t%get_field_data">
+<polygon fill="#d9534f" stroke="#d9534f" points="631,-151 348,-151 348,-127 631,-127 631,-151"/>
+<text text-anchor="middle" x="489.5" y="-136.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_base_backend::base_backend_t%get_field_data</text>
+</a>
+</g>
+</g>
+<!-- proc~scalar_product_omp&#45;&gt;proc~get_field_data -->
+<g id="proc~~scalar_product_omp~~CallsGraph_edge4" class="edge">
+<title>proc~scalar_product_omp&#45;&gt;proc~get_field_data</title>
+<path fill="none" stroke="#ff0000" d="M256.46,-167C295.05,-162.34 339.38,-156.99 378.89,-152.23"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="379.31,-155.7 388.82,-151.03 378.48,-148.75 379.31,-155.7"/>
+</g>
+<!-- proc~release_block -->
+<g id="proc~~scalar_product_omp~~CallsGraph_node6" class="node">
+<title>proc~release_block</title>
+<g id="a_proc~~scalar_product_omp~~CallsGraph_node6"><a xlink:href="../proc/release_block.html" xlink:title="m_allocator::allocator_t%release_block">
+<polygon fill="#d9534f" stroke="#d9534f" points="889,-192 667,-192 667,-168 889,-168 889,-192"/>
+<text text-anchor="middle" x="778" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_allocator::allocator_t%release_block</text>
+</a>
+</g>
+</g>
+<!-- proc~scalar_product_omp&#45;&gt;proc~release_block -->
+<g id="proc~~scalar_product_omp~~CallsGraph_edge5" class="edge">
+<title>proc~scalar_product_omp&#45;&gt;proc~release_block</title>
+<path fill="none" stroke="#ff0000" d="M312.25,-179.25C418.78,-179.42 558.09,-179.65 656.32,-179.81"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="656.58,-183.31 666.59,-179.82 656.59,-176.31 656.58,-183.31"/>
+</g>
+<!-- proc~create_block -->
+<g id="proc~~scalar_product_omp~~CallsGraph_node8" class="node">
+<title>proc~create_block</title>
+<g id="a_proc~~scalar_product_omp~~CallsGraph_node8"><a xlink:href="../proc/create_block.html" xlink:title="m_allocator::allocator_t%create_block">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1142,-255 925,-255 925,-231 1142,-231 1142,-255"/>
+<text text-anchor="middle" x="1033.5" y="-240.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_allocator::allocator_t%create_block</text>
+</a>
+</g>
+</g>
+<!-- proc~get_block&#45;&gt;proc~create_block -->
+<g id="proc~~scalar_product_omp~~CallsGraph_edge6" class="edge">
+<title>proc~get_block&#45;&gt;proc~create_block</title>
+<path fill="none" stroke="#cbff00" d="M878.1,-230.21C890.03,-231.2 902.31,-232.22 914.48,-233.22"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="914.41,-236.73 924.67,-234.07 914.99,-229.75 914.41,-236.73"/>
+</g>
+<!-- proc~set_shape -->
+<g id="proc~~scalar_product_omp~~CallsGraph_node11" class="node">
+<title>proc~set_shape</title>
+<g id="a_proc~~scalar_product_omp~~CallsGraph_node11"><a xlink:href="../proc/set_shape.html" xlink:title="m_field::field_t%set_shape">
+<polygon fill="#d9534f" stroke="#d9534f" points="1110.5,-213 956.5,-213 956.5,-189 1110.5,-189 1110.5,-213"/>
+<text text-anchor="middle" x="1033.5" y="-198.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_field::field_t%set_shape</text>
+</a>
+</g>
+</g>
+<!-- proc~get_block&#45;&gt;proc~set_shape -->
+<g id="proc~~scalar_product_omp~~CallsGraph_edge7" class="edge">
+<title>proc~get_block&#45;&gt;proc~set_shape</title>
+<path fill="none" stroke="#cbff00" d="M878.1,-213.79C900.52,-211.93 924.15,-209.98 946,-208.17"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="946.56,-211.63 956.23,-207.32 945.98,-204.66 946.56,-211.63"/>
+</g>
+<!-- proc~get_dims_dataloc -->
+<g id="proc~~scalar_product_omp~~CallsGraph_node9" class="node">
+<title>proc~get_dims_dataloc</title>
+<g id="a_proc~~scalar_product_omp~~CallsGraph_node9"><a xlink:href="../proc/get_dims_dataloc.html" xlink:title="m_mesh::get_dims_dataloc">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="857,-24 699,-24 699,0 857,0 857,-24"/>
+<text text-anchor="middle" x="778" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_mesh::get_dims_dataloc</text>
+</a>
+</g>
+</g>
+<!-- proc~get_dims&#45;&gt;proc~get_dims_dataloc -->
+<g id="proc~~scalar_product_omp~~CallsGraph_edge8" class="edge">
+<title>proc~get_dims&#45;&gt;proc~get_dims_dataloc</title>
+<path fill="none" stroke="#00ff66" d="M570.31,-43.02C607.09,-37.5 650.86,-30.93 688.64,-25.26"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="689.24,-28.71 698.61,-23.77 688.2,-21.79 689.24,-28.71"/>
+</g>
+<!-- proc~get_field_data&#45;&gt;proc~get_block -->
+<g id="proc~~scalar_product_omp~~CallsGraph_edge10" class="edge">
+<title>proc~get_field_data&#45;&gt;proc~get_block</title>
+<path fill="none" stroke="#0066ff" d="M520.36,-151.03C555.12,-164.67 614.47,-186.85 667,-201 676.2,-203.48 685.9,-205.78 695.58,-207.87"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="695.13,-211.36 705.64,-209.99 696.57,-204.51 695.13,-211.36"/>
+</g>
+<!-- proc~get_field_data&#45;&gt;proc~release_block -->
+<g id="proc~~scalar_product_omp~~CallsGraph_edge12" class="edge">
+<title>proc~get_field_data&#45;&gt;proc~release_block</title>
+<path fill="none" stroke="#0066ff" d="M574.52,-151.02C608.49,-155.88 647.84,-161.52 682.77,-166.52"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="682.58,-170.02 692.98,-167.98 683.57,-163.09 682.58,-170.02"/>
+</g>
+<!-- copy_f_to_data -->
+<g id="proc~~scalar_product_omp~~CallsGraph_node7" class="node">
+<title>copy_f_to_data</title>
+<polygon fill="#777777" stroke="#777777" points="824,-150 732,-150 732,-126 824,-126 824,-150"/>
+<text text-anchor="middle" x="778" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">copy_f_to_data</text>
+</g>
+<!-- proc~get_field_data&#45;&gt;copy_f_to_data -->
+<g id="proc~~scalar_product_omp~~CallsGraph_edge9" class="edge">
+<title>proc~get_field_data&#45;&gt;copy_f_to_data</title>
+<path fill="none" stroke="#0066ff" d="M631.23,-138.51C663.46,-138.4 695.87,-138.28 721.91,-138.19"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="721.94,-141.69 731.93,-138.16 721.91,-134.69 721.94,-141.69"/>
+</g>
+<!-- proc~get_rdr_from_dirs -->
+<g id="proc~~scalar_product_omp~~CallsGraph_node10" class="node">
+<title>proc~get_rdr_from_dirs</title>
+<g id="a_proc~~scalar_product_omp~~CallsGraph_node10"><a xlink:href="../proc/get_rdr_from_dirs.html" xlink:title="m_common::get_rdr_from_dirs">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="866,-108 690,-108 690,-84 866,-84 866,-108"/>
+<text text-anchor="middle" x="778" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_common::get_rdr_from_dirs</text>
+</a>
+</g>
+</g>
+<!-- proc~get_field_data&#45;&gt;proc~get_rdr_from_dirs -->
+<g id="proc~~scalar_product_omp~~CallsGraph_edge11" class="edge">
+<title>proc~get_field_data&#45;&gt;proc~get_rdr_from_dirs</title>
+<path fill="none" stroke="#0066ff" d="M570.69,-126.96C606.7,-121.56 649.36,-115.16 686.51,-109.58"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="687.46,-112.98 696.83,-108.03 686.42,-106.06 687.46,-112.98"/>
+</g>
+<!-- reorder -->
+<g id="proc~~scalar_product_omp~~CallsGraph_node12" class="node">
+<title>reorder</title>
+<polygon fill="#777777" stroke="#777777" points="805,-66 751,-66 751,-42 805,-42 805,-66"/>
+<text text-anchor="middle" x="778" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">reorder</text>
+</g>
+<!-- proc~get_field_data&#45;&gt;reorder -->
+<g id="proc~~scalar_product_omp~~CallsGraph_edge13" class="edge">
+<title>proc~get_field_data&#45;&gt;reorder</title>
+<path fill="none" stroke="#0066ff" d="M519.4,-126.91C553.98,-112.82 613.89,-89.6 667,-75 691.33,-68.31 719.26,-63.01 740.88,-59.41"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="741.64,-62.83 750.95,-57.77 740.52,-55.92 741.64,-62.83"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocscalar_product_ompCallsGraph = svgPanZoom('#procscalar_product_ompCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

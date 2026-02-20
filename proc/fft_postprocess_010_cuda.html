@@ -1,0 +1,419 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>fft_postprocess_010_cuda &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../program/xcompact.html">Program</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>fft_postprocess_010_cuda
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.8% of total for procedures.">52 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/poisson_fft.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/poisson_fft.f90~2.html'>poisson_fft.f90</a></li>
+                <li class="breadcrumb-item"><a href='../module/m_cuda_poisson_fft.html'>m_cuda_poisson_fft</a></li>
+            <li class="breadcrumb-item active" aria-current="page">fft_postprocess_010_cuda</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine fft_postprocess_010_cuda(self)  
+</h2>
+    
+
+    <p>if stretching in y is 'bottom'</p>
+
+    <h3>Type Bound</h3>
+    <p><a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a></p>
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~186"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~fft_postprocess_010_cuda~~CallsGraph Pages: 1 -->
+<svg id="procfft_postprocess_010_cudaCallsGraph" width="641pt" height="188pt"
+ viewBox="0.00 0.00 641.00 187.98" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~fft_postprocess_010_cuda~~CallsGraph" class="graph" transform="scale(0.94 0.94) rotate(0) translate(4 196)">
+<title>proc~~fft_postprocess_010_cuda~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-196 678,-196 678,4 -4,4"/>
+<!-- proc~fft_postprocess_010_cuda -->
+<g id="proc~~fft_postprocess_010_cuda~~CallsGraph_node1" class="node">
+<title>proc~fft_postprocess_010_cuda</title>
+<polygon fill="none" stroke="black" points="368,-108 0,-108 0,-84 368,-84 368,-108"/>
+<text text-anchor="middle" x="184" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50">m_cuda_poisson_fft::cuda_poisson_fft_t%fft_postprocess_010_cuda</text>
+</g>
+<!-- dim3 -->
+<g id="proc~~fft_postprocess_010_cuda~~CallsGraph_node2" class="node">
+<title>dim3</title>
+<polygon fill="#777777" stroke="#777777" points="566,-192 512,-192 512,-168 566,-168 566,-192"/>
+<text text-anchor="middle" x="539" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">dim3</text>
+</g>
+<!-- proc~fft_postprocess_010_cuda&#45;&gt;dim3 -->
+<g id="proc~~fft_postprocess_010_cuda~~CallsGraph_edge1" class="edge">
+<title>proc~fft_postprocess_010_cuda&#45;&gt;dim3</title>
+<path fill="none" stroke="#ff0000" d="M221.45,-108C264.63,-121.86 338.91,-144.6 404,-159 436.78,-166.25 474.61,-171.94 501.7,-175.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="501.51,-179.06 511.88,-176.89 502.42,-172.12 501.51,-179.06"/>
+</g>
+<!-- proc~process_spectral_010_bw -->
+<g id="proc~~fft_postprocess_010_cuda~~CallsGraph_node3" class="node">
+<title>proc~process_spectral_010_bw</title>
+<g id="a_proc~~fft_postprocess_010_cuda~~CallsGraph_node3"><a xlink:href="../proc/process_spectral_010_bw.html" xlink:title="m_cuda_spectral::process_spectral_010_bw">
+<polygon fill="#d9534f" stroke="#d9534f" points="661,-150 417,-150 417,-126 661,-126 661,-150"/>
+<text text-anchor="middle" x="539" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_spectral::process_spectral_010_bw</text>
+</a>
+</g>
+</g>
+<!-- proc~fft_postprocess_010_cuda&#45;&gt;proc~process_spectral_010_bw -->
+<g id="proc~~fft_postprocess_010_cuda~~CallsGraph_edge2" class="edge">
+<title>proc~fft_postprocess_010_cuda&#45;&gt;proc~process_spectral_010_bw</title>
+<path fill="none" stroke="#ff0000" d="M286.16,-108.04C330.19,-113.28 381.93,-119.43 427.02,-124.8"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="426.79,-128.29 437.14,-126 427.62,-121.34 426.79,-128.29"/>
+</g>
+<!-- proc~process_spectral_010_fw -->
+<g id="proc~~fft_postprocess_010_cuda~~CallsGraph_node4" class="node">
+<title>proc~process_spectral_010_fw</title>
+<g id="a_proc~~fft_postprocess_010_cuda~~CallsGraph_node4"><a xlink:href="../proc/process_spectral_010_fw.html" xlink:title="m_cuda_spectral::process_spectral_010_fw">
+<polygon fill="#d9534f" stroke="#d9534f" points="659.5,-108 418.5,-108 418.5,-84 659.5,-84 659.5,-108"/>
+<text text-anchor="middle" x="539" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_spectral::process_spectral_010_fw</text>
+</a>
+</g>
+</g>
+<!-- proc~fft_postprocess_010_cuda&#45;&gt;proc~process_spectral_010_fw -->
+<g id="proc~~fft_postprocess_010_cuda~~CallsGraph_edge3" class="edge">
+<title>proc~fft_postprocess_010_cuda&#45;&gt;proc~process_spectral_010_fw</title>
+<path fill="none" stroke="#ff0000" d="M368.22,-96C381.6,-96 394.93,-96 407.9,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="408.21,-99.5 418.21,-96 408.21,-92.5 408.21,-99.5"/>
+</g>
+<!-- proc~process_spectral_010_poisson -->
+<g id="proc~~fft_postprocess_010_cuda~~CallsGraph_node5" class="node">
+<title>proc~process_spectral_010_poisson</title>
+<g id="a_proc~~fft_postprocess_010_cuda~~CallsGraph_node5"><a xlink:href="../proc/process_spectral_010_poisson.html" xlink:title="m_cuda_spectral::process_spectral_010_poisson">
+<polygon fill="#d9534f" stroke="#d9534f" points="674,-66 404,-66 404,-42 674,-42 674,-66"/>
+<text text-anchor="middle" x="539" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_spectral::process_spectral_010_poisson</text>
+</a>
+</g>
+</g>
+<!-- proc~fft_postprocess_010_cuda&#45;&gt;proc~process_spectral_010_poisson -->
+<g id="proc~~fft_postprocess_010_cuda~~CallsGraph_edge4" class="edge">
+<title>proc~fft_postprocess_010_cuda&#45;&gt;proc~process_spectral_010_poisson</title>
+<path fill="none" stroke="#ff0000" d="M286.16,-83.96C330.19,-78.72 381.93,-72.57 427.02,-67.2"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="427.62,-70.66 437.14,-66 426.79,-63.71 427.62,-70.66"/>
+</g>
+<!-- proc~process_spectral_010~2 -->
+<g id="proc~~fft_postprocess_010_cuda~~CallsGraph_node6" class="node">
+<title>proc~process_spectral_010~2</title>
+<g id="a_proc~~fft_postprocess_010_cuda~~CallsGraph_node6"><a xlink:href="../proc/process_spectral_010~2.html" xlink:title="m_cuda_spectral::process_spectral_010">
+<polygon fill="#d9534f" stroke="#d9534f" points="651,-24 427,-24 427,0 651,0 651,-24"/>
+<text text-anchor="middle" x="539" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_spectral::process_spectral_010</text>
+</a>
+</g>
+</g>
+<!-- proc~fft_postprocess_010_cuda&#45;&gt;proc~process_spectral_010~2 -->
+<g id="proc~~fft_postprocess_010_cuda~~CallsGraph_edge5" class="edge">
+<title>proc~fft_postprocess_010_cuda&#45;&gt;proc~process_spectral_010~2</title>
+<path fill="none" stroke="#ff0000" d="M221.45,-84C264.63,-70.14 338.91,-47.4 404,-33 415.88,-30.37 428.43,-27.95 440.89,-25.75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="441.58,-29.18 450.85,-24.04 440.4,-22.29 441.58,-29.18"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocfft_postprocess_010_cudaCallsGraph = svgPanZoom('#procfft_postprocess_010_cudaCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
