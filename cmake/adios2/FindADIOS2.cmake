@@ -54,7 +54,7 @@ else()
     configure_file(
       "${CMAKE_CURRENT_LIST_DIR}/downloadBuildAdios2.cmake.in"
       "${CMAKE_CURRENT_BINARY_DIR}/adios2-build/CMakeLists.txt"
-      COPYONLY
+      @ONLY
     )
   
     # ensure that the build directory for the external project exists

@@ -69,6 +69,9 @@ module m_io_base
     procedure :: init => base_writer_init
     procedure :: open => base_writer_open
     procedure :: finalise => base_writer_finalise
+    procedure :: supports_device_field_write => &
+      base_supports_device_field_write
+    procedure :: sync_device => base_sync_device
     generic :: write_data => write_data_i8, write_data_integer, &
       write_data_real, &
       write_data_array_3d
@@ -76,6 +79,7 @@ module m_io_base
     procedure :: write_data_integer
     procedure :: write_data_real
     procedure :: write_data_array_3d
+    procedure :: write_field_from_solver
     generic :: write_attribute => write_attribute_string, &
       write_attribute_array_1d_real
     procedure :: write_attribute_string
@@ -154,6 +158,18 @@ contains
     error stop "base_writer_finalise should not be called - &
       & use concrete implementation"
   end subroutine base_writer_finalise
+
+  logical function base_supports_device_field_write(self)
+    class(io_writer_t), intent(in) :: self
+    base_supports_device_field_write = .false.
+  end function base_supports_device_field_write
+
+  subroutine base_sync_device(self)
+    !! Ensure all device operations complete before I/O.
+    !! Does nothing for non-GPU backends. CUDA-aware backends override
+    !! this to call cudaDeviceSynchronize.
+    class(io_writer_t), intent(inout) :: self
+  end subroutine base_sync_device
 
   function base_is_file_functional(self) result(is_functional)
     class(io_file_t), intent(in) :: self
@@ -268,5 +284,25 @@ contains
     error stop "write_attribute_array_1d_real should not be called - &
       & use concrete implementation"
   end subroutine write_attribute_array_1d_real
+
+  subroutine write_field_from_solver( &
+    self, variable_name, field, file_handle, backend, &
+    shape_dims, start_dims, count_dims, use_sp &
+    )
+    !! Write field data directly, with backend-specific optimisations
+    !! Each backend implements this to use GPU-aware I/O when available
+    !! NOTE: field and backend are polymorphic - concrete types defined in implementations
+    class(io_writer_t), intent(inout) :: self
+    character(len=*), intent(in) :: variable_name
+    class(*), intent(in) :: field
+    class(io_file_t), intent(inout) :: file_handle
+    class(*), intent(in) :: backend
+    integer(i8), intent(in) :: shape_dims(3)
+    integer(i8), intent(in) :: start_dims(3)
+    integer(i8), intent(in) :: count_dims(3)
+    logical, intent(in), optional :: use_sp
+    error stop "write_field_from_solver should not be called - &
+      & use concrete implementation"
+  end subroutine write_field_from_solver
 
 end module m_io_base

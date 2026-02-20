@@ -25,6 +25,7 @@ module m_io_field_utils
   public :: setup_field_arrays, cleanup_field_arrays
   public :: prepare_field_buffers, write_single_field_to_buffer, &
             cleanup_field_buffers
+  public :: get_field_ptr
 
   type :: field_buffer_map_t
     ! Race-free field buffer mapping for async I/O operations.
@@ -278,19 +279,7 @@ contains
     allocate (host_fields(num_fields))
 
     do i = 1, num_fields
-      select case (trim(field_names(i)))
-      case ("u")
-        field_ptrs(i)%ptr => solver%u
-      case ("v")
-        field_ptrs(i)%ptr => solver%v
-      case ("w")
-        field_ptrs(i)%ptr => solver%w
-      case default
-        if (solver%mesh%par%is_root()) then
-          print *, 'ERROR: Unknown field name: ', trim(field_names(i))
-        end if
-        error stop 1
-      end select
+      field_ptrs(i)%ptr => get_field_ptr(solver, field_names(i))
     end do
 
     do i = 1, num_fields
@@ -431,5 +420,25 @@ contains
       deallocate (field_buffers)
     end if
   end subroutine cleanup_field_buffers
+
+  function get_field_ptr(solver, field_name) result(ptr)
+    !! Resolve a field name to the corresponding solver field pointer.
+    !! Centralises the name-to-field mapping used by I/O managers.
+    class(solver_t), intent(in), target :: solver
+    character(len=*), intent(in) :: field_name
+    class(field_t), pointer :: ptr
+
+    select case (trim(field_name))
+    case ("u")
+      ptr => solver%u
+    case ("v")
+      ptr => solver%v
+    case ("w")
+      ptr => solver%w
+    case default
+      print *, 'ERROR: Unknown field name: ', trim(field_name)
+      error stop 1
+    end select
+  end function get_field_ptr
 
 end module m_io_field_utils
