@@ -28,3 +28,6 @@ endif()
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/include)
 add_subdirectory(src)
 add_subdirectory(tests)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(SelectBackend)
