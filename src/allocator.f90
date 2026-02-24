@@ -149,6 +149,7 @@ contains
 
     ! Apply bounds remapping based on requested direction
     call handle%set_shape(dims)
+
   end function get_block
 
   subroutine release_block(self, handle)
