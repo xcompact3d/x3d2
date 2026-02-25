@@ -293,7 +293,7 @@ contains
       end if
 
       call self%io_mgr%handle_io_step(self%solver, &
-                                              iter, MPI_COMM_WORLD)
+                                      iter, MPI_COMM_WORLD)
     end do
 
     call self%case_finalise
