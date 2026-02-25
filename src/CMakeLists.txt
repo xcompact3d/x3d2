@@ -120,6 +120,17 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
 
   target_compile_options(xcompact PRIVATE "-DCUDA")
 
+  if(WITH_ADIOS2_GPU_AWARE)
+    find_package(CUDAToolkit QUIET)
+    if(CUDAToolkit_FOUND)
+      target_link_libraries(x3d2 PUBLIC CUDA::nvToolsExt)
+      target_link_libraries(xcompact PRIVATE CUDA::nvToolsExt)
+    else()
+      target_link_libraries(x3d2 PUBLIC nvToolsExt)
+      target_link_libraries(xcompact PRIVATE nvToolsExt)
+    endif()
+  endif()
+
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang")
   set(CMAKE_Fortran_FLAGS "-cpp -std=f2018")
