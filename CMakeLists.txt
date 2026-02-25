@@ -10,19 +10,25 @@ find_package(OpenMP REQUIRED)
 option(WITH_ADIOS2 "Enable ADIOS2 for I/O" OFF)
 option(WITH_ADIOS2_GPU_AWARE "Enable GPU-aware I/O with ADIOS2 (requires X3D2_ADIOS2_CUDA=ON)" OFF)
 
-# Toggleable build type (default Release)
-if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-  set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose type of build" FORCE)
+if(WITH_ADIOS2_GPU_AWARE AND NOT WITH_ADIOS2)
+  message(FATAL_ERROR
+    "WITH_ADIOS2_GPU_AWARE=ON requires WITH_ADIOS2=ON")
 endif()
-set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug;Release")
 
-# Single precision option (default OFF)
-option(SINGLE_PREC "Enable single precision" OFF)
 if(SINGLE_PREC)
   add_definitions("-DSINGLE_PREC")
 endif()
 
 if(WITH_ADIOS2)
+  if(WITH_ADIOS2_GPU_AWARE AND
+     NOT (${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+          ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC"))
+    message(FATAL_ERROR
+      "WITH_ADIOS2_GPU_AWARE=ON requires the NVHPC/PGI Fortran compiler "
+      "(needs CUDA Fortran module cudafor). Current compiler: "
+      "${CMAKE_Fortran_COMPILER_ID}")
+  endif()
+
   # X3D2_ADIOS2_CUDA controls whether ADIOS2 is built with CUDA support
   # It can be set explicitly or auto-detected from compiler
   if(NOT DEFINED X3D2_ADIOS2_CUDA)
