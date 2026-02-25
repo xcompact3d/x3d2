@@ -67,6 +67,10 @@ if(WITH_ADIOS2)
   list(APPEND IOSRC 
     io/adios2/io.f90
   )
+  # Add C wrapper for GPU-aware I/O if enabled
+  if(WITH_ADIOS2_GPU_AWARE)
+    list(APPEND SRC io/adios2/c/adios2_cuda_wrapper.c)
+  endif()
 else()
   list(APPEND IOSRC 
   io/dummy/io.f90
@@ -89,8 +93,6 @@ if(WITH_2DECOMPFFT)
 else()
   list(APPEND SRC ${DUMMYDECOMPSRC})
 endif()
-
-list(APPEND SRC ${IOSRC})
 
 set(EXECUTABLE_OUTPUT_PATH "${PROJECT_BINARY_DIR}/bin")
 set(LIBRARY_OUTPUT_PATH "${PROJECT_BINARY_DIR}/lib")
@@ -117,6 +119,17 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
 
   target_compile_options(xcompact PRIVATE "-DCUDA")
+
+  if(WITH_ADIOS2_GPU_AWARE)
+    find_package(CUDAToolkit QUIET)
+    if(CUDAToolkit_FOUND)
+      target_link_libraries(x3d2 PUBLIC CUDA::nvToolsExt)
+      target_link_libraries(xcompact PRIVATE CUDA::nvToolsExt)
+    else()
+      target_link_libraries(x3d2 PUBLIC nvToolsExt)
+      target_link_libraries(xcompact PRIVATE nvToolsExt)
+    endif()
+  endif()
 
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang")
@@ -154,4 +167,10 @@ if(WITH_ADIOS2)
   target_link_libraries(x3d2 PRIVATE adios2::fortran_mpi)
   target_link_libraries(xcompact PRIVATE adios2::fortran_mpi)
   target_compile_options(x3d2 PRIVATE "-DWITH_ADIOS2")
+  
+  # GPU-aware I/O requires C API (called via iso_c_binding)
+  if(WITH_ADIOS2_GPU_AWARE)
+    target_link_libraries(x3d2 PRIVATE adios2::c_mpi)
+    target_link_libraries(xcompact PRIVATE adios2::c_mpi)
+  endif()
 endif()

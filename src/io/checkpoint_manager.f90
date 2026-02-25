@@ -25,7 +25,7 @@ module m_checkpoint_manager
                               setup_field_arrays, cleanup_field_arrays, &
                               stride_data_to_buffer, get_output_dimensions, &
                               prepare_field_buffers, cleanup_field_buffers, &
-                              write_single_field_to_buffer
+                              write_single_field_to_buffer, get_field_ptr
 
   implicit none
 
@@ -154,6 +154,7 @@ contains
     type(writer_session_t) :: writer_session
     integer :: nolds_total, idx
     character(len=16), allocatable :: old_field_names(:)
+    logical :: use_device_write
 
     if (self%config%checkpoint_freq <= 0) return
     if (mod(timestep, self%config%checkpoint_freq) /= 0) return
@@ -179,7 +180,11 @@ contains
 
     n_total_vars = size(field_names)
 
-    call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
+    use_device_write = writer_session%supports_device_field_write()
+
+    if (.not. use_device_write) then
+      call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
+    end if
 
     call self%write_fields( &
       field_names, host_fields, &
@@ -235,7 +240,10 @@ contains
                                               padded_dims(2), padded_dims(3)))
             end if
 
-            raw_buffers(idx)%data = solver%time_integrator%olds(i, j)%ptr%data
+            call solver%backend%get_field_data( &
+              raw_buffers(idx)%data, &
+              solver%time_integrator%olds(i, j)%ptr, &
+              solver%time_integrator%olds(i, j)%ptr%dir)
 
             ! Use -1 to signal local per-rank variables (not decomposed across ranks)
             ! Each rank writes to its own uniquely named variable (with _rank suffix)
@@ -266,7 +274,9 @@ contains
       deallocate (old_field_names)
     end if
 
-    call cleanup_field_arrays(solver, field_ptrs, host_fields)
+    if (.not. use_device_write) then
+      call cleanup_field_arrays(solver, field_ptrs, host_fields)
+    end if
 
     if (myrank == 0) then
       inquire (file=trim(temp_filename), exist=file_exists)
@@ -426,7 +436,7 @@ contains
                 write (old_name, '(A,"_rhs_old",I0)') trim(var_names(i)), j
                 write (ranked_name, '(A,A)') trim(old_name), trim(rank_suffix)
 
-                padded_dims = shape(solver%time_integrator%olds(i, j)%ptr%data)
+                padded_dims = solver%time_integrator%olds(i, j)%ptr%get_shape()
                 if (allocated(old_field)) then
                   if (any(shape(old_field) /= padded_dims)) then
                     deallocate (old_field)
@@ -440,7 +450,9 @@ contains
                 ! Clear the buffer before reading
                 old_field = 0.0_dp
                 call reader_session%read_data(trim(ranked_name), old_field)
-                solver%time_integrator%olds(i, j)%ptr%data = old_field
+                call solver%backend%set_field_data( &
+                  solver%time_integrator%olds(i, j)%ptr, old_field, &
+                  solver%time_integrator%olds(i, j)%ptr%dir)
               end do
             end do
             if (allocated(old_field)) deallocate (old_field)
@@ -459,47 +471,44 @@ contains
     !! Write field data for checkpoints (no striding)
     class(checkpoint_manager_t), intent(inout) :: self
     character(len=*), dimension(:), intent(in) :: field_names
-    class(field_ptr_t), dimension(:), target, intent(in) :: host_fields
+    class(field_ptr_t), dimension(:), target, intent(in), optional :: &
+      host_fields
     class(solver_t), intent(in) :: solver
     type(writer_session_t), intent(inout) :: writer_session
     integer, intent(in) :: data_loc
 
     integer :: i_field
-    integer(i8), dimension(3) :: output_start, output_count
-    integer, dimension(3) :: output_dims_local
+    integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
+    class(field_t), pointer :: io_field
+    logical :: use_device_write
 
-    ! Prepare buffers for full resolution (no striding for checkpoints)
-    call prepare_field_buffers( &
-      solver, self%full_resolution, field_names, data_loc, &
-      self%field_buffers, self%last_shape_dims, self%last_stride_factors, &
-      self%last_output_shape &
-      )
+    ! Calculate dimensions for I/O
+    shape_dims = int(solver%mesh%get_global_dims(data_loc), i8)
+    start_dims = int(solver%mesh%par%n_offset, i8)
+    count_dims = int(solver%mesh%get_dims(data_loc), i8)
 
-    ! Calculate output dimensions for writing
-    call get_output_dimensions( &
-      int(solver%mesh%get_global_dims(data_loc), i8), &
-      int(solver%mesh%par%n_offset, i8), &
-      int(solver%mesh%get_dims(data_loc), i8), &
-      self%full_resolution, &
-      self%last_output_shape, output_start, output_count, &
-      output_dims_local, &
-      self%last_shape_dims, self%last_stride_factors, &
-      self%last_output_shape &
-      )
+    ! Checkpoints always write full resolution (no striding)
+    ! Backend automatically uses GPU-aware I/O when available
+    use_device_write = writer_session%supports_device_field_write()
+
+    if (.not. use_device_write .and. .not. present(host_fields)) then
+      error stop "write_fields(checkpoint): host_fields required &
+        &when GPU-aware I/O is not available"
+    end if
+
+    ! Sync device once before writing all fields
+    if (use_device_write) call writer_session%sync_device()
 
     do i_field = 1, size(field_names)
-      call write_single_field_to_buffer( &
-        trim(field_names(i_field)), host_fields(i_field)%ptr, &
-        solver, self%full_resolution, data_loc, &
-        self%field_buffers, self%last_shape_dims, self%last_stride_factors, &
-        self%last_output_shape &
-        )
+      if (use_device_write) then
+        io_field => get_field_ptr(solver, field_names(i_field))
+      else
+        io_field => host_fields(i_field)%ptr
+      end if
 
-      call writer_session%write_data( &
-        trim(field_names(i_field)), &
-        self%field_buffers(i_field)%buffer, &
-        self%last_output_shape, &
-        output_start, output_count &
+      call writer_session%write_field_from_solver( &
+        trim(field_names(i_field)), io_field, solver%backend, &
+        shape_dims, start_dims, count_dims, .false. &
         )
     end do
   end subroutine write_fields
