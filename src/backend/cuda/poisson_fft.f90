@@ -203,8 +203,8 @@ end if
 
     if ((.not. periodic_x) .and. periodic_y .and. periodic_z) then
       ! 100 case: Non-Periodic X, Periodic Y, Periodic Z
-      n_spec(1) = dims_loc(1)/2 + 1
-      n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
+      n_spec(1) = dims_loc(2)/2 + 1
+      n_spec(2) = dims_loc(1)/mesh%par%nproc_dir(3)
       n_spec(3) = dims_glob(3)
 
       n_sp_st(1) = 0
