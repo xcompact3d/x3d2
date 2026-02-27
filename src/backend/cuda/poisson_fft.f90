@@ -50,6 +50,9 @@ module m_cuda_poisson_fft
     !> Flag to indicate whether cuFFTMp is used
     logical :: use_cufftmp = .true.
 
+    !> Flag for 100 case (transposed FFT)
+    logical :: is_100_case = .false.
+
     !> cuFFTMp object manages decomposition and data storage
     type(cudaLibXtDesc), pointer :: xtdesc
 
@@ -182,6 +185,11 @@ contains
     logical :: fw_was_cufftmp
 
     ! Get periodicity from mesh BEFORE base_init
+    ! Detect 100 case for transposed FFT plan
+    if ((.not. mesh%grid%periodic_BC(1)) .and. mesh%grid%periodic_BC(2) &
+        .and. mesh%grid%periodic_BC(3)) then
+      poisson_fft%is_100_case = .true.
+    end if
     periodic_x = mesh%grid%periodic_BC(1)
     periodic_y = mesh%grid%periodic_BC(2)
     periodic_z = mesh%grid%periodic_BC(3)
@@ -195,8 +203,8 @@ contains
 
     if ((.not. periodic_x) .and. periodic_y .and. periodic_z) then
       ! 100 case: Non-Periodic X, Periodic Y, Periodic Z
-      n_spec(1) = dims_loc(1)/2 + 1
-      n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
+      n_spec(1) = dims_loc(2)/2 + 1
+      n_spec(2) = dims_loc(1)/mesh%par%nproc_dir(3)
       n_spec(3) = dims_glob(3)
 
       n_sp_st(1) = 0
@@ -284,36 +292,22 @@ contains
       end if
     end if
 
-    ! Create forward FFT plan with automatic cuFFTMp detection/fallback
-    if (is_sp) then
-      call create_fft_plan(poisson_fft%plan3D_fw, &
-                           poisson_fft%use_cufftmp, &
-                           nx, ny, nz, CUFFT_R2C, &
-                           mesh%par%is_root(), 'Forward')
+! Create forward FFT plan with automatic cuFFTMp detection/fallback
+! For 100 case, data is transposed to (ny,nx,nz) before FFT,
+! so the plan must use swapped dimensions.
+    if (poisson_fft%is_100_case) then
+      if (is_sp) then
+        call create_fft_plan(poisson_fft%plan3D_fw, &
+                             poisson_fft%use_cufftmp, &
+                             ny, nx, nz, CUFFT_R2C, &
+                             mesh%par%is_root(), 'Forward')
+      else
+        call create_fft_plan(poisson_fft%plan3D_fw, &
+                             poisson_fft%use_cufftmp, &
+                             ny, nx, nz, CUFFT_D2Z, &
+                             mesh%par%is_root(), 'Forward')
+      end if
     else
-      call create_fft_plan(poisson_fft%plan3D_fw, &
-                           poisson_fft%use_cufftmp, &
-                           nx, ny, nz, CUFFT_D2Z, &
-                           mesh%par%is_root(), 'Forward')
-    end if
-    fw_was_cufftmp = poisson_fft%use_cufftmp
-
-    ! Create backward FFT plan with automatic cuFFTMp detection/fallback
-    if (is_sp) then
-      call create_fft_plan(poisson_fft%plan3D_bw, &
-                           poisson_fft%use_cufftmp, &
-                           nx, ny, nz, CUFFT_C2R, &
-                           mesh%par%is_root(), 'Backward')
-    else
-      call create_fft_plan(poisson_fft%plan3D_bw, &
-                           poisson_fft%use_cufftmp, &
-                           nx, ny, nz, CUFFT_Z2D, &
-                           mesh%par%is_root(), 'Backward')
-    end if
-
-    ! If backward plan forced fallback, rebuild forward plan in cuFFT mode too.
-    if (fw_was_cufftmp .and. (.not. poisson_fft%use_cufftmp)) then
-      ierr = cufftDestroy(poisson_fft%plan3D_fw)
       if (is_sp) then
         call create_fft_plan(poisson_fft%plan3D_fw, &
                              poisson_fft%use_cufftmp, &
@@ -324,6 +318,64 @@ contains
                              poisson_fft%use_cufftmp, &
                              nx, ny, nz, CUFFT_D2Z, &
                              mesh%par%is_root(), 'Forward')
+      end if
+    end if
+    fw_was_cufftmp = poisson_fft%use_cufftmp
+
+! Create backward FFT plan with automatic cuFFTMp detection/fallback
+    if (poisson_fft%is_100_case) then
+      if (is_sp) then
+        call create_fft_plan(poisson_fft%plan3D_bw, &
+                             poisson_fft%use_cufftmp, &
+                             ny, nx, nz, CUFFT_C2R, &
+                             mesh%par%is_root(), 'Backward')
+      else
+        call create_fft_plan(poisson_fft%plan3D_bw, &
+                             poisson_fft%use_cufftmp, &
+                             ny, nx, nz, CUFFT_Z2D, &
+                             mesh%par%is_root(), 'Backward')
+      end if
+    else
+      if (is_sp) then
+        call create_fft_plan(poisson_fft%plan3D_bw, &
+                             poisson_fft%use_cufftmp, &
+                             nx, ny, nz, CUFFT_C2R, &
+                             mesh%par%is_root(), 'Backward')
+      else
+        call create_fft_plan(poisson_fft%plan3D_bw, &
+                             poisson_fft%use_cufftmp, &
+                             nx, ny, nz, CUFFT_Z2D, &
+                             mesh%par%is_root(), 'Backward')
+      end if
+    end if
+
+! If backward plan forced fallback, rebuild forward plan in cuFFT mode too.
+    if (fw_was_cufftmp .and. (.not. poisson_fft%use_cufftmp)) then
+      ierr = cufftDestroy(poisson_fft%plan3D_fw)
+      if (poisson_fft%is_100_case) then
+        if (is_sp) then
+          call create_fft_plan(poisson_fft%plan3D_fw, &
+                               poisson_fft%use_cufftmp, &
+                               ny, nx, nz, CUFFT_R2C, &
+                               mesh%par%is_root(), 'Forward')
+        else
+          call create_fft_plan(poisson_fft%plan3D_fw, &
+                               poisson_fft%use_cufftmp, &
+                               ny, nx, nz, CUFFT_D2Z, &
+                               mesh%par%is_root(), 'Forward')
+        end if
+      else
+        if (is_sp) then
+          call create_fft_plan(poisson_fft%plan3D_fw, &
+                               poisson_fft%use_cufftmp, &
+                               nx, ny, nz, CUFFT_R2C, &
+                               mesh%par%is_root(), 'Forward')
+        else
+          call create_fft_plan(poisson_fft%plan3D_fw, &
+                               poisson_fft%use_cufftmp, &
+                               nx, ny, nz, CUFFT_D2Z, &
+                               mesh%par%is_root(), 'Forward')
+        end if
       end if
     end if
 
@@ -337,13 +389,20 @@ contains
         error stop 'cufftXtMalloc failed'
       end if
     else
-      ! allocate storage for cuFFT
+! allocate storage for cuFFT
       allocate (poisson_fft%c_dev(poisson_fft%nx_spec, &
                                   poisson_fft%ny_spec, &
                                   poisson_fft%nz_spec))
-      allocate (poisson_fft%r_dev(poisson_fft%nx_loc, &
-                                  poisson_fft%ny_loc, &
-                                  poisson_fft%nz_loc))
+      if (poisson_fft%is_100_case) then
+        ! 100 case: real workspace matches transposed layout (ny, nx, nz)
+        allocate (poisson_fft%r_dev(poisson_fft%ny_loc, &
+                                    poisson_fft%nx_loc, &
+                                    poisson_fft%nz_loc))
+      else
+        allocate (poisson_fft%r_dev(poisson_fft%nx_loc, &
+                                    poisson_fft%ny_loc, &
+                                    poisson_fft%nz_loc))
+      end if
     end if
 
     ! Print final status
