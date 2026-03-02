@@ -937,7 +937,10 @@ contains
 
     select case (face)
     case (X_FACE)
-      error stop 'Setting X_FACE is not yet supported.'
+      blocks = dim3((SZ - 1)/64 + 1, dims(2)*dims(3)/SZ, 1)
+      threads = dim3(64, 1, 1)
+      call field_set_x_face<<<blocks, threads>>>(f_d, c_start, c_end, &  !&
+                                                dims(1), dims(2), dims(3))
     case (Y_FACE)
       blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
       threads = dim3(64, 1, 1)
