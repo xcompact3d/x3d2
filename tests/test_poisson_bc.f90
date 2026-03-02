@@ -98,32 +98,32 @@ program test_poisson
 
   config_labels = ['000', '010', '100', '110']
 
-  ! ---- Config 000: all periodic (64 x 64 x 64) ----
-  dims_global = [64, 64, 64]
+  ! ---- Config 000: all periodic (128 x 64 x 32) ----
+  dims_global = [128, 64, 32]
   BC_x = ['periodic', 'periodic']
   BC_y = ['periodic', 'periodic']
   BC_z = ['periodic', 'periodic']
   call run_config(1, '000 (all periodic)', dims_global, &
                   BC_x, BC_y, BC_z)
 
-  ! ---- Config 010: y-dirichlet (64 x 65 x 64) ----
-  dims_global = [64, 65, 64]
+  ! ---- Config 010: y-dirichlet (128 x 65 x 32) ----
+  dims_global = [128, 65, 32]
   BC_x = ['periodic ', 'periodic ']
   BC_y = ['dirichlet', 'dirichlet']
   BC_z = ['periodic ', 'periodic ']
   call run_config(2, '010 (y-dirichlet)', dims_global, &
                   BC_x, BC_y, BC_z)
 
-  ! ---- Config 100: x-dirichlet (65 x 64 x 64) ----
-  dims_global = [65, 64, 64]
+  ! ---- Config 100: x-dirichlet (129 x 64 x 32) ----
+  dims_global = [129, 64, 32]
   BC_x = ['dirichlet', 'dirichlet']
   BC_y = ['periodic ', 'periodic ']
   BC_z = ['periodic ', 'periodic ']
   call run_config(3, '100 (x-dirichlet)', dims_global, &
                   BC_x, BC_y, BC_z)
 
-  ! ---- Config 110: x,y-dirichlet (65 x 65 x 64) ----
-  dims_global = [65, 65, 64]
+  ! ---- Config 110: x,y-dirichlet (129 x 257 x 64) ----
+  dims_global = [129, 257, 64]
   BC_x = ['dirichlet', 'dirichlet']
   BC_y = ['dirichlet', 'dirichlet']
   BC_z = ['periodic ', 'periodic ']
