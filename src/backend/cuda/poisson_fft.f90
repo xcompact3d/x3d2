@@ -48,7 +48,7 @@ module m_cuda_poisson_fft
     integer :: plan3D_fw, plan3D_bw
 
     !> Flag to indicate whether cuFFTMp is used
-    logical :: use_cufftmp = .true.
+    logical :: use_cufftmp = .false.
 
     !> Flag for cases
     logical :: is_000_case = .false.
@@ -198,8 +198,8 @@ contains
 
     ! Detect 100 case for transposed FFT plan
     poisson_fft%is_000_case = periodic_x .and. periodic_y .and. periodic_z
- poisson_fft%is_010_case = periodic_x .and. (.not. periodic_y) .and. periodic_z
- poisson_fft%is_100_case = (.not. periodic_x) .and. periodic_y .and. periodic_z
+    poisson_fft%is_010_case = periodic_x .and. (.not. periodic_y) .and. periodic_z
+    poisson_fft%is_100_case = (.not. periodic_x) .and. periodic_y .and. periodic_z
     poisson_fft%is_110_case = (.not. periodic_x) .and. (.not. periodic_y) .and. periodic_z
 
     ! 1D decomposition along Z in real domain, and along Y in spectral space
@@ -209,7 +209,6 @@ contains
     dims_glob = mesh%get_global_dims(CELL)
     dims_loc = mesh%get_dims(CELL)
 
-! 3. Assign values based on the specific case
     if (poisson_fft%is_100_case) then
       n_spec(1) = dims_loc(2)/2 + 1
       n_spec(2) = dims_loc(1)/mesh%par%nproc_dir(3)
@@ -285,7 +284,7 @@ contains
     if (present(lowmem)) poisson_fft%lowmem = lowmem
 
     ! Try cuFFTMp first, with automatic fallback to cuFFT if not supported
-    poisson_fft%use_cufftmp = .true.
+    poisson_fft%use_cufftmp = .false.
 
     ! if stretching in y is 'centred' or 'top-bottom'
     if (poisson_fft%stretched_y .and. poisson_fft%stretched_y_sym) then
