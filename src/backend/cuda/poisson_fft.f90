@@ -50,8 +50,11 @@ module m_cuda_poisson_fft
     !> Flag to indicate whether cuFFTMp is used
     logical :: use_cufftmp = .true.
 
-    !> Flag for 100 case (transposed FFT)
+    !> Flag for cases
+    logical :: is_000_case = .false.
+    logical :: is_010_case = .false.
     logical :: is_100_case = .false.
+    logical :: is_110_case = .false.
 
     !> cuFFTMp object manages decomposition and data storage
     type(cudaLibXtDesc), pointer :: xtdesc
@@ -178,21 +181,26 @@ contains
     integer :: nx, ny, nz
 
     integer :: ierr
-    integer(int_ptr_kind()) :: worksize
 
     integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
     logical :: periodic_x, periodic_y, periodic_z
     logical :: fw_was_cufftmp
 
+    ! FFT plan dimensions (100 case transposes data to ny, nx, nz)
+    integer :: fft_n1, fft_n2, fft_n1_loc, fft_n2_loc
+    ! FFT plan types determined by precision
+    integer :: fw_plan_type, bw_plan_type
+
     ! Get periodicity from mesh BEFORE base_init
-    ! Detect 100 case for transposed FFT plan
-    if ((.not. mesh%grid%periodic_BC(1)) .and. mesh%grid%periodic_BC(2) &
-        .and. mesh%grid%periodic_BC(3)) then
-      poisson_fft%is_100_case = .true.
-    end if
     periodic_x = mesh%grid%periodic_BC(1)
     periodic_y = mesh%grid%periodic_BC(2)
     periodic_z = mesh%grid%periodic_BC(3)
+
+    ! Detect 100 case for transposed FFT plan
+    poisson_fft%is_000_case = periodic_x .and. periodic_y .and. periodic_z
+ poisson_fft%is_010_case = periodic_x .and. (.not. periodic_y) .and. periodic_z
+ poisson_fft%is_100_case = (.not. periodic_x) .and. periodic_y .and. periodic_z
+    poisson_fft%is_110_case = (.not. periodic_x) .and. (.not. periodic_y) .and. periodic_z
 
     ! 1D decomposition along Z in real domain, and along Y in spectral space
     if (mesh%par%nproc_dir(2) /= 1) print *, 'nproc_dir in y-dir must be 1'
@@ -201,53 +209,63 @@ contains
     dims_glob = mesh%get_global_dims(CELL)
     dims_loc = mesh%get_dims(CELL)
 
-    if ((.not. periodic_x) .and. periodic_y .and. periodic_z) then
-      ! 100 case: Non-Periodic X, Periodic Y, Periodic Z
+! 3. Assign values based on the specific case
+    if (poisson_fft%is_100_case) then
       n_spec(1) = dims_loc(2)/2 + 1
       n_spec(2) = dims_loc(1)/mesh%par%nproc_dir(3)
-      n_spec(3) = dims_glob(3)
 
       n_sp_st(1) = 0
-      n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
-      n_sp_st(3) = 0
-    else if (periodic_x .and. (.not. periodic_y) .and. periodic_z) then
-      ! 010 case: Periodic X, Non-Periodic Y, Periodic Z
+      n_sp_st(2) = dims_loc(1)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
+
+    else if (poisson_fft%is_110_case) then
       n_spec(1) = dims_loc(1)/2 + 1
       n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
-      n_spec(3) = dims_glob(3)
-
-      n_sp_st(1) = 0
-      n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
-      n_sp_st(3) = 0
-    else if ((.not. periodic_x) .and. (.not. periodic_y) .and. periodic_z) then
-      ! 110 case: Non-Periodic X, Non-Periodic Y, Periodic Z
-      ! Standard spectral layout (no transpose needed)
-      n_spec(1) = dims_loc(1)/2 + 1  ! nx/2+1 (R2C)
-      n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)    ! ny
-      n_spec(3) = dims_glob(3)        ! nz
 
       n_sp_st(1) = dims_loc(1)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
       n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
-      n_sp_st(3) = 0
-    else if (periodic_x .and. periodic_y .and. periodic_z) then
-      ! 000 case: Periodic X, Periodic Y, Periodic Z
-      ! Standard spectral layout (no transpose needed)
+
+    else if (poisson_fft%is_010_case .or. poisson_fft%is_000_case) then
       n_spec(1) = dims_loc(1)/2 + 1
       n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
-      n_spec(3) = dims_glob(3)
 
       n_sp_st(1) = 0
       n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
-      n_sp_st(3) = 0
+
     else
-      error stop "not implemented yet!!"
+      error stop "Unsupported periodicity combination!!"
     end if
+
+    ! Common across all Z-periodic cases
+    n_spec(3) = dims_glob(3)
+    n_sp_st(3) = 0
 
     call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
 
     nx = poisson_fft%nx_glob
     ny = poisson_fft%ny_glob
     nz = poisson_fft%nz_glob
+
+    ! Determine FFT plan dimensions (100 case transposes data to ny, nx, nz)
+    if (poisson_fft%is_100_case) then
+      fft_n1 = ny
+      fft_n2 = nx
+      fft_n1_loc = dims_loc(2)
+      fft_n2_loc = dims_loc(1)
+    else
+      fft_n1 = nx
+      fft_n2 = ny
+      fft_n1_loc = dims_loc(1)
+      fft_n2_loc = dims_loc(2)
+    end if
+
+    ! Determine FFT plan types based on precision
+    if (is_sp) then
+      fw_plan_type = CUFFT_R2C
+      bw_plan_type = CUFFT_C2R
+    else
+      fw_plan_type = CUFFT_D2Z
+      bw_plan_type = CUFFT_Z2D
+    end if
 
     allocate (poisson_fft%waves_dev(poisson_fft%nx_spec, &
                                     poisson_fft%ny_spec, &
@@ -292,91 +310,23 @@ contains
       end if
     end if
 
-! Create forward FFT plan with automatic cuFFTMp detection/fallback
-! For 100 case, data is transposed to (ny,nx,nz) before FFT,
-! so the plan must use swapped dimensions.
-    if (poisson_fft%is_100_case) then
-      if (is_sp) then
-        call create_fft_plan(poisson_fft%plan3D_fw, &
-                             poisson_fft%use_cufftmp, &
-                             ny, nx, nz, CUFFT_R2C, &
-                             mesh%par%is_root(), 'Forward')
-      else
-        call create_fft_plan(poisson_fft%plan3D_fw, &
-                             poisson_fft%use_cufftmp, &
-                             ny, nx, nz, CUFFT_D2Z, &
-                             mesh%par%is_root(), 'Forward')
-      end if
-    else
-      if (is_sp) then
-        call create_fft_plan(poisson_fft%plan3D_fw, &
-                             poisson_fft%use_cufftmp, &
-                             nx, ny, nz, CUFFT_R2C, &
-                             mesh%par%is_root(), 'Forward')
-      else
-        call create_fft_plan(poisson_fft%plan3D_fw, &
-                             poisson_fft%use_cufftmp, &
-                             nx, ny, nz, CUFFT_D2Z, &
-                             mesh%par%is_root(), 'Forward')
-      end if
-    end if
+    ! Create forward FFT plan with automatic cuFFTMp detection/fallback
+    call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
+                         fft_n1, fft_n2, nz, fw_plan_type, &
+                         mesh%par%is_root(), 'Forward')
     fw_was_cufftmp = poisson_fft%use_cufftmp
 
-! Create backward FFT plan with automatic cuFFTMp detection/fallback
-    if (poisson_fft%is_100_case) then
-      if (is_sp) then
-        call create_fft_plan(poisson_fft%plan3D_bw, &
-                             poisson_fft%use_cufftmp, &
-                             ny, nx, nz, CUFFT_C2R, &
-                             mesh%par%is_root(), 'Backward')
-      else
-        call create_fft_plan(poisson_fft%plan3D_bw, &
-                             poisson_fft%use_cufftmp, &
-                             ny, nx, nz, CUFFT_Z2D, &
-                             mesh%par%is_root(), 'Backward')
-      end if
-    else
-      if (is_sp) then
-        call create_fft_plan(poisson_fft%plan3D_bw, &
-                             poisson_fft%use_cufftmp, &
-                             nx, ny, nz, CUFFT_C2R, &
-                             mesh%par%is_root(), 'Backward')
-      else
-        call create_fft_plan(poisson_fft%plan3D_bw, &
-                             poisson_fft%use_cufftmp, &
-                             nx, ny, nz, CUFFT_Z2D, &
-                             mesh%par%is_root(), 'Backward')
-      end if
-    end if
+    ! Create backward FFT plan with automatic cuFFTMp detection/fallback
+    call create_fft_plan(poisson_fft%plan3D_bw, poisson_fft%use_cufftmp, &
+                         fft_n1, fft_n2, nz, bw_plan_type, &
+                         mesh%par%is_root(), 'Backward')
 
-! If backward plan forced fallback, rebuild forward plan in cuFFT mode too.
+    ! If backward plan forced fallback, rebuild forward plan in cuFFT mode too.
     if (fw_was_cufftmp .and. (.not. poisson_fft%use_cufftmp)) then
       ierr = cufftDestroy(poisson_fft%plan3D_fw)
-      if (poisson_fft%is_100_case) then
-        if (is_sp) then
-          call create_fft_plan(poisson_fft%plan3D_fw, &
-                               poisson_fft%use_cufftmp, &
-                               ny, nx, nz, CUFFT_R2C, &
-                               mesh%par%is_root(), 'Forward')
-        else
-          call create_fft_plan(poisson_fft%plan3D_fw, &
-                               poisson_fft%use_cufftmp, &
-                               ny, nx, nz, CUFFT_D2Z, &
-                               mesh%par%is_root(), 'Forward')
-        end if
-      else
-        if (is_sp) then
-          call create_fft_plan(poisson_fft%plan3D_fw, &
-                               poisson_fft%use_cufftmp, &
-                               nx, ny, nz, CUFFT_R2C, &
-                               mesh%par%is_root(), 'Forward')
-        else
-          call create_fft_plan(poisson_fft%plan3D_fw, &
-                               poisson_fft%use_cufftmp, &
-                               nx, ny, nz, CUFFT_D2Z, &
-                               mesh%par%is_root(), 'Forward')
-        end if
-      end if
+      call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
+                           fft_n1, fft_n2, nz, fw_plan_type, &
+                           mesh%par%is_root(), 'Forward')
     end if
 
     ! Allocate storage - cuFFTMp uses xtdesc, cuFFT uses c_dev
@@ -389,20 +339,12 @@ contains
         error stop 'cufftXtMalloc failed'
       end if
     else
-! allocate storage for cuFFT
+      ! allocate storage for cuFFT
       allocate (poisson_fft%c_dev(poisson_fft%nx_spec, &
                                   poisson_fft%ny_spec, &
                                   poisson_fft%nz_spec))
-      if (poisson_fft%is_100_case) then
-        ! 100 case: real workspace matches transposed layout (ny, nx, nz)
-        allocate (poisson_fft%r_dev(poisson_fft%ny_loc, &
-                                    poisson_fft%nx_loc, &
-                                    poisson_fft%nz_loc))
-      else
-        allocate (poisson_fft%r_dev(poisson_fft%nx_loc, &
-                                    poisson_fft%ny_loc, &
-                                    poisson_fft%nz_loc))
-      end if
+      allocate (poisson_fft%r_dev(fft_n1_loc, fft_n2_loc, &
+                                  poisson_fft%nz_loc))
     end if
 
     ! Print final status
