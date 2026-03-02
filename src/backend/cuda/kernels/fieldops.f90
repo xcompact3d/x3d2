@@ -194,6 +194,25 @@ contains
 
   end subroutine field_set_y_face
 
+attributes(global) subroutine field_set_x_face(f, c_start, c_end, nx, ny, nz)
+    !! Set domain X_FACE to a constant
+    !! c_start at the left (x=1) and c_end at the right (x=nx)
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), value, intent(in) :: c_start, c_end
+    integer, value, intent(in) :: nx, ny, nz
+    integer :: i, b
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! 1 to SZ
+    b = blockIdx%y                                   ! 1 to total blocks in 3rd dim
+
+    if (i <= SZ) then
+        f(i, 1, b)  = c_start   ! left x face (x=1)
+        f(i, nx, b) = c_end     ! right x face (x=nx)
+    end if
+
+end subroutine field_set_x_face
   attributes(global) subroutine volume_integral(s, f, n, n_i_pad, n_j)
     implicit none
 
