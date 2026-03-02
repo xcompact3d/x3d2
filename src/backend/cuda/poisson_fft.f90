@@ -48,7 +48,7 @@ module m_cuda_poisson_fft
     integer :: plan3D_fw, plan3D_bw
 
     !> Flag to indicate whether cuFFTMp is used
-    logical :: use_cufftmp = .false.
+    logical :: use_cufftmp = .true.
 
     !> Flag for cases
     logical :: is_000_case = .false.
@@ -284,7 +284,7 @@ contains
     if (present(lowmem)) poisson_fft%lowmem = lowmem
 
     ! Try cuFFTMp first, with automatic fallback to cuFFT if not supported
-    poisson_fft%use_cufftmp = .false.
+    poisson_fft%use_cufftmp = .true.
 
     ! if stretching in y is 'centred' or 'top-bottom'
     if (poisson_fft%stretched_y .and. poisson_fft%stretched_y_sym) then
@@ -381,7 +381,7 @@ contains
       call c_f_pointer(self%xtdesc%descriptor, descriptor)
 
       ! For 100 case with transposed FFT plan (ny, nx, nz):
-      ! The descriptor has shape (ny + 2, nx, nz) for R2C output
+      ! The descriptor has shape (2*(ny/2 +1), nx, nz) for R2C output (see: issue #279)
       call c_f_pointer(descriptor%data(1), d_dev, &
                        [2*(self%ny_loc/2 + 1), self%nx_loc, self%nz_loc])
 
