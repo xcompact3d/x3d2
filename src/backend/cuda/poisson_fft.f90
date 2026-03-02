@@ -197,10 +197,14 @@ contains
     periodic_z = mesh%grid%periodic_BC(3)
 
     ! Detect 100 case for transposed FFT plan
-    poisson_fft%is_000_case = periodic_x .and. periodic_y .and. periodic_z
-    poisson_fft%is_010_case = periodic_x .and. (.not. periodic_y) .and. periodic_z
-    poisson_fft%is_100_case = (.not. periodic_x) .and. periodic_y .and. periodic_z
-    poisson_fft%is_110_case = (.not. periodic_x) .and. (.not. periodic_y) .and. periodic_z
+    poisson_fft%is_000_case = periodic_x .and. periodic_y &
+                              .and. periodic_z
+    poisson_fft%is_010_case = periodic_x .and. (.not. periodic_y) &
+                              .and. periodic_z
+    poisson_fft%is_100_case = (.not. periodic_x) .and. periodic_y &
+                              .and. periodic_z
+    poisson_fft%is_110_case = (.not. periodic_x) .and. (.not. periodic_y) &
+                              .and. periodic_z
 
     ! 1D decomposition along Z in real domain, and along Y in spectral space
     if (mesh%par%nproc_dir(2) /= 1) print *, 'nproc_dir in y-dir must be 1'
