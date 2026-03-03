@@ -1,30 +1,4 @@
 module m_case_cylinder
-  !! Cylinder flow case using IBM (Immersed Boundary Method).
-  !!
-  !! Algorithm (projection / fractional-step method):
-  !!   1. Define initial conditions for velocity (uniform + noise)
-  !!   TIME LOOP (U^m -> U^{m+1}):
-  !!     2. Store BCs in 2D fields (faces) using velocity U^m
-  !!     3. Convective-diffusive (transport) terms computed via transeq
-  !!     4. Forcings (IBM handled by solver when ibm_on=.true.)
-  !!     5. Time integration  U^m -> U*
-  !!     6. Apply BC via pre-correction on velocity U* (using faces)
-  !!     7. IBM body forcing on U* (handled by solver)
-  !!     8. Divergence of U* (intermediate velocity)
-  !!     9. Poisson equation to get pressure: nabla^2 p = div(U*)
-  !!    10. Pressure gradients (cell -> face)
-  !!    11. Correction: U^{m+1} = U* - nabla p
-  !!    12. Check divergence ~ zero (machine precision)
-  !!     - Post-processing
-  !!   END TIME LOOP
-  !!
-  !! Outflow BC uses the advective (convective) condition:
-  !!   du/dt + Uc * du/dx = 0
-  !! Discretised as:
-  !!   u_N^{n+1} = u_N^n - Uc * dt/dx * (u_N^n - u_{N-1}^n)
-  !!
-  !! Note: BCs on U* must be applied BEFORE solving the Poisson equation.
-  !! The cylinder is represented via the solver's built-in IBM (ibm_on=.true.).
 
   use iso_fortran_env, only: stderr => error_unit
   use mpi
@@ -50,7 +24,7 @@ module m_case_cylinder
     procedure :: forcings => forcings_cylinder
     procedure :: pre_correction => pre_correction_cylinder
     procedure :: postprocess => postprocess_cylinder
-    procedure :: apply_outflow_convective
+    procedure :: apply_outflow
   end type case_cylinder_t
 
   interface case_cylinder_t
@@ -78,7 +52,6 @@ contains
 
   ! ==========================================================================
   ! Initial Conditions: uniform flow u=1, v=0, w=0 with localized noise
-  ! to help trigger vortex shedding behind the cylinder.
   ! ==========================================================================
   subroutine initial_conditions_cylinder(self)
     implicit none
@@ -133,60 +106,82 @@ contains
   ! ==========================================================================
   ! Convective outflow BC for a single field:
   !   du/dt + Uc * du/dx = 0
-  ! Discretised (backward Euler in time, backward difference in space):
-  !   u_N^{n+1} = u_N^n - Uc * dt/dx * (u_N^n - u_{N-1}^n)
-  !
-  ! Also sets the inflow (left) face to the specified value.
-  !
   ! This copies the field to host, updates both faces, then copies back.
   ! ==========================================================================
-  subroutine apply_outflow_convective(self, fld, inflow_val)
+subroutine apply_outflow(self, fld, inflow_val)
     implicit none
     class(case_cylinder_t) :: self
     class(field_t), intent(inout) :: fld
     real(dp), intent(in) :: inflow_val
 
-    class(field_t), pointer :: host_fld
-    integer :: dims(3), nx
-    real(dp) :: cfl  ! Uc * dt / dx
+    class(field_t), pointer :: host_fld, host_u
+    integer :: dims(3), nx, j, k, ierr
+    real(dp) :: cfl, uxmin, uxmax, Uc
+    real(dp) :: dx, dt
 
     dims = self%solver%mesh%get_dims(VERT)
     nx = dims(1)
+    dx = self%solver%mesh%geo%d(1)
+    dt = self%solver%dt
 
-    ! Courant number for the outflow advection
-    cfl = U_conv*self%solver%dt/self%solver%mesh%geo%d(1)
+    ! --- Get u field on host to compute convection velocity ---
+    host_u => self%solver%host_allocator%get_block(DIR_C)
+    call self%solver%backend%get_field_data(host_u%data, self%solver%u)
 
-    ! Copy field from device to host
+    ! --- Compute min/max of u at nx-1 (like Xcompact3d) ---
+    uxmax = -huge(1._dp)
+    uxmin =  huge(1._dp)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        if (host_u%data(nx - 1, j, k) > uxmax) uxmax = host_u%data(nx - 1, j, k)
+        if (host_u%data(nx - 1, j, k) < uxmin) uxmin = host_u%data(nx - 1, j, k)
+      end do
+    end do
+
+    call self%solver%host_allocator%release_block(host_u)
+
+    ! Global reduction across all MPI ranks
+    call MPI_ALLREDUCE(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, MPI_MAX, &
+                       MPI_COMM_WORLD, ierr)
+    call MPI_ALLREDUCE(MPI_IN_PLACE, uxmin, 1, MPI_X3D2_DP, MPI_MIN, &
+                       MPI_COMM_WORLD, ierr)
+
+    ! Convection velocity: use max velocity (safest for stability)
+    Uc = uxmax
+
+    ! CFL for the outflow advection
+    cfl = Uc*dt/dx
+
+    ! --- Copy field from device to host ---
     host_fld => self%solver%host_allocator%get_block(DIR_C)
     call self%solver%backend%get_field_data(host_fld%data, fld)
 
-    ! Inflow (left face): set to prescribed value
+    ! Inflow (left face): Dirichlet
     host_fld%data(1, :, :) = inflow_val
 
-    ! Outflow (right face): advective BC
-    ! u_N^{n+1} = u_N^n - cfl * (u_N^n - u_{N-1}^n)
+    ! Outflow (right face): convective BC
     host_fld%data(nx, :, :) = host_fld%data(nx, :, :) &
-                  - cfl*(host_fld%data(nx, :, :) - host_fld%data(nx - 1, :, :))
+        - cfl*(host_fld%data(nx, :, :) - host_fld%data(nx - 1, :, :))
 
     ! Copy back to device
     call self%solver%backend%set_field_data(fld, host_fld%data)
 
     call self%solver%host_allocator%release_block(host_fld)
 
-  end subroutine apply_outflow_convective
+  end subroutine apply_outflow
 
   ! ==========================================================================
   ! Boundary Conditions: applied to U^m at the start of each substep.
   ! Inflow (i=1): u=1, v=0, w=0  (Dirichlet)
-  ! Outflow (i=nx): convective BC for u, fixed v=0, w=0
+  ! Outflow (i=nx): for u, fixed v=0, w=0
   ! ==========================================================================
   subroutine boundary_conditions_cylinder(self)
     implicit none
     class(case_cylinder_t) :: self
     ! ! u: inflow = 1, outflow = convective
-    ! call self%apply_outflow_convective(self%solver%u, 1._dp)
+    call self%apply_outflow(self%solver%u, 1._dp)
     ! u, v and w: fixed on both faces
-    call self%solver%backend%field_set_face(self%solver%u, 1._dp, 1._dp, X_FACE)
+    ! call self%solver%backend%field_set_face(self%solver%u, 1._dp, 1._dp, X_FACE)
     call self%solver%backend%field_set_face(self%solver%v, 0._dp, 0._dp, X_FACE)
     call self%solver%backend%field_set_face(self%solver%w, 0._dp, 0._dp, X_FACE)
 
@@ -195,7 +190,6 @@ contains
   ! ==========================================================================
   ! Pre-correction: enforce BCs on U* (intermediate velocity) at faces
   ! before the Poisson pressure solve.
-  ! This is critical — BCs on U* must be applied BEFORE nabla^2 p = div(U*).
   ! ==========================================================================
   subroutine pre_correction_cylinder(self, u, v, w)
     implicit none
@@ -204,10 +198,10 @@ contains
 
 
     ! ! u: inflow = 1, outflow = convective
-    ! call self%apply_outflow_convective(u, 1._dp)
+    call self%apply_outflow(u, 1._dp)
 
     ! v and w: fixed on both faces
-    call self%solver%backend%field_set_face(u, 1._dp, 1._dp, X_FACE)
+    ! call self%solver%backend%field_set_face(u, 1._dp, 1._dp, X_FACE)
     call self%solver%backend%field_set_face(v, 0._dp, 0._dp, X_FACE)
     call self%solver%backend%field_set_face(w, 0._dp, 0._dp, X_FACE)
 
