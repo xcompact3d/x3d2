@@ -1,3 +1,19 @@
+function(define_backend backendname backendsrc)
+  add_library(${backendname} OBJECT ${${backendsrc}})
+  target_include_directories(${backendname} INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
+  # if CUDA compiler
+  # We require to target link the backends for standalone tests for cuda
+  if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
+    target_link_options(${backendname} INTERFACE "-cuda")
+    target_link_options(${backendname} INTERFACE "-cudalib=cufftmp")
+  elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+    target_link_options(${backendname} INTERFACE -h omp)
+  endif()
+endfunction()
+
+
+
 set(SRC
   allocator.f90
   common.f90
@@ -62,6 +78,29 @@ set(IOSRC
   io/snapshot_manager.f90
   io/io_manager.f90
 )
+
+# Building Tridiagonal Solver Standalone
+set(TRIDIAGSRC
+  common.f90 
+  tdsops.f90
+  field.f90 
+  backend/omp/common.f90 
+  backend/omp/sendrecv.f90 
+  backend/omp/kernels/distributed.f90 
+  backend/omp/exec_dist.f90 
+)
+
+set(TRIDIAGCUDASRC
+  common.f90
+  field.f90
+  tdsops.f90
+  backend/cuda/common.f90
+  backend/cuda/exec_dist.f90
+  backend/cuda/kernels/distributed.f90
+  backend/cuda/sendrecv.f90
+  backend/cuda/tdsops.f90
+)
+
 
 if(WITH_ADIOS2)
   list(APPEND IOSRC 
@@ -155,3 +194,7 @@ if(WITH_ADIOS2)
   target_link_libraries(xcompact PRIVATE adios2::fortran_mpi)
   target_compile_options(x3d2 PRIVATE "-DWITH_ADIOS2")
 endif()
+
+# Define standalone tests dependencies
+define_backend(trid_cuda_backends TRIDIAGCUDASRC)
+define_backend(trid_backends TRIDIAGSRC)
