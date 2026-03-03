@@ -80,6 +80,9 @@ contains
       print *, 'Output stride: ', self%output_stride
       print *, 'Snapshot precision: ', merge('Single', 'Double', &
                                              self%config%snapshot_sp)
+      if (self%config%output_pressure) then
+        print *, 'Pressure output: Enabled'
+      end if
     end if
   end subroutine configure_output
 
@@ -107,7 +110,7 @@ contains
     integer, intent(in) :: timestep
     integer, intent(in) :: comm
 
-    character(len=*), parameter :: field_names(*) = ["u", "v", "w"]
+    character(len=32), allocatable :: field_names(:)
     integer :: myrank, ierr
     character(len=256) :: filename
     integer(i8), dimension(3) :: output_shape_dims
@@ -120,6 +123,13 @@ contains
 
     if (self%config%snapshot_freq <= 0) return
     if (mod(timestep, self%config%snapshot_freq) /= 0) return
+
+    ! Build field names list based on configuration
+    if (self%config%output_pressure) then
+      field_names = [character(len=32) :: "u", "v", "w", "p"]
+    else
+      field_names = [character(len=32) :: "u", "v", "w"]
+    end if
 
     call MPI_Comm_rank(comm, myrank, ierr)
 
@@ -176,6 +186,7 @@ contains
     call self%snapshot_writer%end_step()
 
     call cleanup_field_arrays(solver, field_ptrs, host_fields)
+    deallocate (field_names)
   end subroutine write_snapshot
 
   subroutine generate_vtk_xml(self, dims, fields, origin, spacing)

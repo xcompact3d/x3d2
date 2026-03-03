@@ -56,6 +56,9 @@ module m_solver
     integer :: nspecies = 0
 
     class(field_t), pointer :: u, v, w
+    class(field_t), pointer :: pressure => null()      !! Pressure on CELL grid (DIR_Z)
+    class(field_t), pointer :: pressure_vert => null() !! Pressure on VERT grid (DIR_X)
+    logical :: keep_pressure = .false.                 !! If true, persist pressure for output
     type(flist_t), dimension(:), pointer :: species => null()
 
     class(base_backend_t), pointer :: backend
@@ -71,6 +74,8 @@ module m_solver
   contains
     procedure :: transeq_species
     procedure :: pressure_correction
+    procedure :: compute_pressure_vert
+    procedure :: rescale_pressure
     procedure :: divergence_v2p
     procedure :: gradient_p2v
     procedure :: curl
@@ -689,15 +694,24 @@ contains
     class(solver_t) :: self
     class(field_t), intent(inout) :: u, v, w
 
-    class(field_t), pointer :: div_u, pressure, dpdx, dpdy, dpdz
+    class(field_t), pointer :: div_u, p, dpdx, dpdy, dpdz
 
     div_u => self%backend%allocator%get_block(DIR_Z)
 
     call self%divergence_v2p(div_u, u, v, w)
 
-    pressure => self%backend%allocator%get_block(DIR_Z)
+    if (self%keep_pressure) then
+      ! Persist pressure for snapshot output
+      if (.not. associated(self%pressure)) then
+        self%pressure => self%backend%allocator%get_block(DIR_Z, CELL)
+      end if
+      p => self%pressure
+    else
+      ! Temporary pressure, released after use
+      p => self%backend%allocator%get_block(DIR_Z)
+    end if
 
-    call self%poisson(pressure, div_u)
+    call self%poisson(p, div_u)
 
     call self%backend%allocator%release_block(div_u)
 
@@ -705,9 +719,11 @@ contains
     dpdy => self%backend%allocator%get_block(DIR_X)
     dpdz => self%backend%allocator%get_block(DIR_X)
 
-    call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
+    call self%gradient_p2v(dpdx, dpdy, dpdz, p)
 
-    call self%backend%allocator%release_block(pressure)
+    if (.not. self%keep_pressure) then
+      call self%backend%allocator%release_block(p)
+    end if
 
     ! velocity correction
     call self%backend%vecadd(-1._dp, dpdx, 1._dp, u)
@@ -719,5 +735,46 @@ contains
     call self%backend%allocator%release_block(dpdz)
 
   end subroutine pressure_correction
+
+  subroutine compute_pressure_vert(self)
+    !! Interpolates the pressure field from CELL (DIR_Z) to VERT (DIR_X)
+    !! for snapshot output. Must be called after pressure_correction.
+    implicit none
+
+    class(solver_t) :: self
+
+    if (.not. associated(self%pressure)) then
+      error stop 'compute_pressure_vert: pressure not yet computed'
+    end if
+
+    ! Lazy allocate pressure_vert on first call
+    if (.not. associated(self%pressure_vert)) then
+      self%pressure_vert => self%backend%allocator%get_block(DIR_X, VERT)
+    end if
+
+    call self%vector_calculus%interpl_c2v( &
+      self%pressure_vert, self%pressure, &
+      self%xdirps%interpl_p2v, &
+      self%ydirps%interpl_p2v, &
+      self%zdirps%interpl_p2v &
+      )
+
+    call self%rescale_pressure(self%pressure_vert)
+
+  end subroutine compute_pressure_vert
+
+  subroutine rescale_pressure(self, pressure)
+    !! Rescale pseudo-pressure to physical (kinematic) pressure.
+    !!
+    !! The Poisson solve returns \(p'\) where \(u^{n+1} = u* - \nabla{p'}\),
+    !! so \(p' = \frac{\Delta t}{\rho}p\). Divide by dt to recover p/rho.
+    implicit none
+
+    class(solver_t) :: self
+    class(field_t), intent(inout) :: pressure
+
+    call self%backend%vecadd(1._dp/self%dt, pressure, 0._dp, pressure)
+
+  end subroutine rescale_pressure
 
 end module m_solver

@@ -285,6 +285,15 @@ contains
         field_ptrs(i)%ptr => solver%v
       case ("w")
         field_ptrs(i)%ptr => solver%w
+      case ("p")
+        if (.not. associated(solver%pressure_vert)) then
+          if (solver%mesh%par%is_root()) then
+            print *, 'ERROR: pressure_vert not computed. &
+                     &Call compute_pressure_vert before writing snapshots.'
+          end if
+          error stop 1
+        end if
+        field_ptrs(i)%ptr => solver%pressure_vert
       case default
         if (solver%mesh%par%is_root()) then
           print *, 'ERROR: Unknown field name: ', trim(field_names(i))
