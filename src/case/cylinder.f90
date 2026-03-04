@@ -159,7 +159,7 @@ subroutine apply_outflow(self, fld, inflow_val)
     ! Inflow (left face): Dirichlet
     host_fld%data(1, :, :) = inflow_val
 
-    ! Outflow (right face): convective BC
+    ! Outflow (right face):  BC
     host_fld%data(nx, :, :) = host_fld%data(nx, :, :) &
         - cfl*(host_fld%data(nx, :, :) - host_fld%data(nx - 1, :, :))
 
@@ -178,12 +178,13 @@ subroutine apply_outflow(self, fld, inflow_val)
   subroutine boundary_conditions_cylinder(self)
     implicit none
     class(case_cylinder_t) :: self
-    ! ! u: inflow = 1, outflow = convective
-    call self%apply_outflow(self%solver%u, 1._dp)
+    ! ! u: inflow = 1
     ! u, v and w: fixed on both faces
-    ! call self%solver%backend%field_set_face(self%solver%u, 1._dp, 1._dp, X_FACE)
-    call self%solver%backend%field_set_face(self%solver%v, 0._dp, 0._dp, X_FACE)
-    call self%solver%backend%field_set_face(self%solver%w, 0._dp, 0._dp, X_FACE)
+    call self%apply_outflow(self%solver%u, 1._dp)
+    call self%apply_outflow(self%solver%v, 0._dp)
+    call self%apply_outflow(self%solver%w, 0._dp)
+    ! call self%solver%backend%field_set_face(self%solver%v, 0._dp, 0._dp, X_FACE)
+    ! call self%solver%backend%field_set_face(self%solver%w, 0._dp, 0._dp, X_FACE)
 
   end subroutine boundary_conditions_cylinder
 
@@ -199,11 +200,13 @@ subroutine apply_outflow(self, fld, inflow_val)
 
     ! ! u: inflow = 1, outflow = convective
     call self%apply_outflow(u, 1._dp)
+    call self%apply_outflow(v, 0._dp)
+    call self%apply_outflow(w, 0._dp)
 
     ! v and w: fixed on both faces
     ! call self%solver%backend%field_set_face(u, 1._dp, 1._dp, X_FACE)
-    call self%solver%backend%field_set_face(v, 0._dp, 0._dp, X_FACE)
-    call self%solver%backend%field_set_face(w, 0._dp, 0._dp, X_FACE)
+    ! call self%solver%backend%field_set_face(v, 0._dp, 0._dp, X_FACE)
+    ! call self%solver%backend%field_set_face(w, 0._dp, 0._dp, X_FACE)
 
   end subroutine pre_correction_cylinder
 
