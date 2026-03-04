@@ -94,7 +94,7 @@ contains
 
     self%solver = init(backend, mesh, host_allocator)
 
-    call self%io_mgr%init(MPI_COMM_WORLD)
+    call self%io_mgr%init(self%solver, MPI_COMM_WORLD)
 
     ! Tell the solver to persist pressure if output is enabled
     self%solver%keep_pressure = self%io_mgr%snapshot_mgr%config%output_pressure
@@ -277,6 +277,8 @@ contains
       end do
 
       self%solver%current_iter = iter
+
+      call self%io_mgr%update_stats(self%solver, iter)
 
       if (mod(iter, self%solver%n_output) == 0) then
         t = iter*self%solver%dt

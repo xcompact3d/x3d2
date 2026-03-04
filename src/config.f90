@@ -52,6 +52,15 @@ module m_config
     procedure :: read => read_cylinder_nml
   end type cylinder_config_t
 
+  type, extends(base_config_t) :: stats_config_t
+    integer :: initstat = 0          !! iteration to start accumulating (0 = disabled)
+    integer :: istatfreq = 1         !! accumulate every N steps
+    integer :: istatout = 0          !! write stats every N steps (0 = disabled)
+    character(len=256) :: stats_prefix = "statistics"
+  contains
+    procedure :: read => read_stats_nml
+  end type stats_config_t
+
   type, extends(base_config_t) :: checkpoint_config_t
     integer :: checkpoint_freq = 0                         !! Frequency of checkpointing (0 = off)
     integer :: snapshot_freq = 0                           !! Frequency of snapshots (0 = off)
@@ -309,6 +318,47 @@ contains
     self%snapshot_sp = snapshot_sp
     self%output_pressure = output_pressure
   end subroutine read_checkpoint_nml
+
+  subroutine read_stats_nml(self, nml_file, nml_string)
+    implicit none
+
+    class(stats_config_t) :: self
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
+
+    integer :: unit, ierr
+
+    integer :: initstat = 0
+    integer :: istatfreq = 1
+    integer :: istatout = 0
+    character(len=256) :: stats_prefix = "statistics"
+
+    namelist /stats_params/ initstat, istatfreq, istatout, stats_prefix
+
+    if (present(nml_file) .and. present(nml_string)) then
+      error stop 'Reading stats config failed! &
+                 &Provide only a file name or source, not both.'
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file, iostat=ierr)
+      if (ierr == 0) then
+        read (unit, nml=stats_params, iostat=ierr)
+        if (ierr /= 0 .and. ierr /= -1) &
+          print *, 'WARNING: Error in stats_params namelist, &
+          & using defaults'
+      end if
+      close (unit)
+    else if (present(nml_string)) then
+      read (nml_string, nml=stats_params)
+    else
+      error stop 'Reading stats config failed! &
+                 &Provide at least one of the following: file name or source'
+    end if
+
+    self%initstat = initstat
+    self%istatfreq = istatfreq
+    self%istatout = istatout
+    self%stats_prefix = stats_prefix
+  end subroutine read_stats_nml
 
 end module m_config
 
