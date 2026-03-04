@@ -8,3 +8,4 @@ User documentation
    theory.rst
    input_file.rst
    advanced_build.rst
+   paraview.rst

@@ -1,15 +1,15 @@
-Building ParaView with ADIOS2 for x3d2 Visualization
+Building ParaView with ADIOS2 for x3d2 Visualisation
 =====================================================
 
 Prerequisites
 -------------
 
-- **GCC** (tested with 14.2.0)
-- **CMake** (tested with 3.31.3)
-- **OpenMPI** (tested with 5.0.7-GCC-14.2.0)
-- **ParaView source** (tested with v6.0.1)
-- **x3d2** compiled with ADIOS2 (provides ADIOS2 v2.10.2 source)
-- **ffmpeg** (for video encoding)
+- GCC (tested with 14.2.0)
+- CMake (tested with 3.31.3)
+- OpenMPI (tested with 5.0.7-GCC-14.2.0)
+- ParaView source (tested with v6.0.1)
+- x3d2 compiled with ADIOS2 (provides ADIOS2 v2.10.2 source)
+- ffmpeg (for video encoding)
 
 .. note::
 
@@ -93,9 +93,9 @@ Step 3: Build ParaView
 Key CMake notes
 ^^^^^^^^^^^^^^^
 
-- ``PARAVIEW_ENABLE_ADIOS2=ON`` is **required** – without it, ``ADIOS2_DIR`` is silently ignored.
+- ``PARAVIEW_ENABLE_ADIOS2=ON`` is required – without it, ``ADIOS2_DIR`` is silently ignored.
 - ``ADIOS2_DIR`` must point to ``.../lib/cmake/adios2``, not just the install prefix.
-- Do **not** use ``nvc++`` to compile ParaView – it fails on VTK's template-heavy C++ code.
+- Do not use ``nvc++`` to compile ParaView – it fails on VTK's template-heavy C++ code.
 
 Step 4: Verify Installation
 ---------------------------
@@ -181,8 +181,8 @@ Step 6: Encode to MP4
 Troubleshooting
 ---------------
 
-- **ADIOS2_DIR unused warning:** You forgot ``-DPARAVIEW_ENABLE_ADIOS2=ON``.
-- **MPI init errors with /proj/nv/... paths:** ``OPAL_PREFIX`` is set to NVHPC path. Run ``unset OPAL_PREFIX``.
-- **nvc++ compile errors in VTK:** Use GCC instead. Rebuild ADIOS2 with GCC + OpenMPI.
-- **pvpython hangs:** Check MPI environment. Try ``export OMPI_MCA_btl=self,tcp``.
-- **No timesteps / wrong FrameWindow:** Use ``len(tk.TimestepValues)`` to get the actual count.
+- ADIOS2_DIR unused warning: You forgot ``-DPARAVIEW_ENABLE_ADIOS2=ON``.
+- MPI init errors with /proj/nv/... paths: ``OPAL_PREFIX`` is set to NVHPC path. Run ``unset OPAL_PREFIX``.
+- nvc++ compile errors in VTK: Use GCC instead. Rebuild ADIOS2 with GCC + OpenMPI.
+- pvpython hangs: Check MPI environment. Try ``export OMPI_MCA_btl=self,tcp``.
+- No timesteps / wrong FrameWindow: Use ``len(tk.TimestepValues)`` to get the actual count.
