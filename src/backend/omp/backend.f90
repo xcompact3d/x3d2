@@ -740,10 +740,13 @@ contains
     f%data = f%data + a
   end subroutine field_shift_omp
 
-  subroutine field_set_face_omp(self, f, c_start, c_end, face)
+subroutine field_set_face_omp(self, f, c_start, c_end, face, &
+                              bc_start, bc_end, cfl)
     !! [[m_base_backend(module):field_set_face(subroutine)]]
     implicit none
-
+integer, optional, intent(in) :: bc_start
+    integer, optional, intent(in) :: bc_end
+    real(dp), optional, intent(in) :: cfl
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: f
     real(dp), intent(in) :: c_start, c_end
