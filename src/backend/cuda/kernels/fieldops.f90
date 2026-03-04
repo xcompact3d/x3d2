@@ -194,24 +194,36 @@ contains
 
   end subroutine field_set_y_face
 
-attributes(global) subroutine field_set_x_face(f, c_start, c_end, nx, ny, nz)
-    !! Set domain X_FACE to a constant
-    !! c_start at the left (x=1) and c_end at the right (x=nx)
+attributes(global) subroutine field_set_x_face(f, c_start, c_end, &
+                                                bc_start, bc_end, cfl, &
+                                                nx, ny, nz)
     implicit none
-
     real(dp), device, intent(inout), dimension(:, :, :) :: f
-    real(dp), value, intent(in) :: c_start, c_end
+    real(dp), value, intent(in) :: c_start, c_end, cfl
+    integer, value, intent(in) :: bc_start, bc_end
     integer, value, intent(in) :: nx, ny, nz
     integer :: i, b
 
-    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! 1 to SZ
-    b = blockIdx%y                                   ! 1 to total blocks in 3rd dim
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    b = blockIdx%y
 
     if (i <= SZ) then
-        f(i, 1, b)  = c_start   ! left x face (x=1)
-        f(i, nx, b) = c_end     ! right x face (x=nx)
-    end if
+      ! --- Left face (x = 1) ---
+      select case (bc_start)
+      case (2)  ! BC_DIRICHLET
+        f(i, 1, b) = c_start
+      case (3)  ! BC_OUTFLOW
+        f(i, 1, b) = f(i, 1, b) - cfl*(f(i, 1, b) - f(i, 2, b))
+      end select
 
+      ! --- Right face (x = nx) ---
+      select case (bc_end)
+      case (2)  ! BC_DIRICHLET
+        f(i, nx, b) = c_end
+      case (3)  ! BC_OUTFLOW
+        f(i, nx, b) = f(i, nx, b) - cfl*(f(i, nx, b) - f(i, nx - 1, b))
+      end select
+    end if
 end subroutine field_set_x_face
   attributes(global) subroutine volume_integral(s, f, n, n_i_pad, n_j)
     implicit none
