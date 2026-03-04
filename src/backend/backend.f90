@@ -48,6 +48,7 @@ module m_base_backend
     procedure(field_ops), deferred :: field_shift
     procedure(field_reduce), deferred :: field_volume_integral
     procedure(field_set_face), deferred :: field_set_face
+    procedure(field_add_face), deferred :: field_add_face
     procedure(copy_data_to_f), deferred :: copy_data_to_f
     procedure(copy_f_to_data), deferred :: copy_f_to_data
     procedure(alloc_tdsops), deferred :: alloc_tdsops
@@ -248,9 +249,9 @@ module m_base_backend
     end subroutine field_max_mean
   end interface
 
-abstract interface
-subroutine field_set_face(self, f, c_start, c_end, face, &
-                          bc_start, bc_end, cfl)
+  abstract interface
+    subroutine field_set_face(self, f, c_start, c_end, face, &
+                              bc_start, bc_end, cfl)
       !! A field is a subdomain with a rectangular cuboid shape.
       !! It has 6 faces, and these faces are either a subdomain boundary
       !! or a global domain boundary based on the location of the subdomain.
@@ -271,8 +272,21 @@ subroutine field_set_face(self, f, c_start, c_end, face, &
       integer, optional, intent(in) :: bc_end
       real(dp), optional, intent(in) :: cfl
     end subroutine field_set_face
-end interface
-
+  end interface
+  abstract interface
+    subroutine field_add_face(self, f, c_start, c_end, face)
+      !! Add a constant to field faces.
+      !! c_start added to the start face, c_end added to the end face.
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: f
+      real(dp), intent(in) :: c_start, c_end
+      integer, intent(in) :: face
+    end subroutine field_add_face
+  end interface
   abstract interface
     subroutine copy_data_to_f(self, f, data)
          !! Copy the specialist data structure from device or host back

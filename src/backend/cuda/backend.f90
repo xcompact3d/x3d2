@@ -62,6 +62,7 @@ module m_cuda_backend
     procedure :: field_scale => field_scale_cuda
     procedure :: field_shift => field_shift_cuda
     procedure :: field_set_face => field_set_face_cuda
+    procedure :: field_add_face => field_add_face_cuda
     procedure :: field_volume_integral => field_volume_integral_cuda
     procedure :: copy_data_to_f => copy_data_to_f_cuda
     procedure :: copy_f_to_data => copy_f_to_data_cuda
@@ -910,7 +911,7 @@ contains
 
   end subroutine field_shift_cuda
 
-subroutine field_set_face_cuda(self, f, c_start, c_end, face, &
+  subroutine field_set_face_cuda(self, f, c_start, c_end, face, &
                                  bc_start, bc_end, cfl)
     implicit none
 
@@ -940,8 +941,8 @@ subroutine field_set_face_cuda(self, f, c_start, c_end, face, &
     cfl_val = 0._dp
 
     if (present(bc_start)) bc_s = bc_start
-    if (present(bc_end))   bc_e = bc_end
-    if (present(cfl))      cfl_val = cfl
+    if (present(bc_end)) bc_e = bc_end
+    if (present(cfl)) cfl_val = cfl
 
     ! --- Validate: if OUTFLOW requested, cfl must be provided ---
     if ((bc_s == BC_OUTFLOW .or. bc_e == BC_OUTFLOW) .and. &
@@ -979,7 +980,40 @@ subroutine field_set_face_cuda(self, f, c_start, c_end, face, &
     end select
 
   end subroutine field_set_face_cuda
+  subroutine field_add_face_cuda(self, f, c_start, c_end, face)
+    implicit none
 
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c_start, c_end
+    integer, intent(in) :: face
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    type(dim3) :: blocks, threads
+    integer :: dims(3)
+
+    if (f%dir /= DIR_X) then
+      error stop 'field_add_face is only supported for DIR_X fields.'
+    end if
+    if (f%data_loc == NULL_LOC) then
+      error stop 'field_add_face requires a valid data_loc.'
+    end if
+
+    call resolve_field_t(f_d, f)
+    dims = self%mesh%get_dims(f%data_loc)
+
+    select case (face)
+    case (X_FACE)
+      blocks = dim3((SZ - 1)/64 + 1, dims(2)*dims(3)/SZ, 1)
+      threads = dim3(64, 1, 1)
+      call field_add_x_face<<<blocks, threads>>>( &              !&
+          f_d, c_start, c_end, dims(1), dims(2), dims(3))
+
+    case default
+      error stop 'field_add_face: only X_FACE is currently supported.'
+    end select
+
+  end subroutine field_add_face_cuda
   real(dp) function field_volume_integral_cuda(self, f) result(s)
     !! volume integral of a field
     implicit none
