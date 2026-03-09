@@ -1,9 +1,10 @@
 module m_stats
   !! Online accumulation of flow field statistics.
   !!
-  !! Nine running means are maintained using the incremental update:
+  !! Running means are maintained using the incremental update:
   !! \[ \bar{x}_n = \bar{x}_{n-1} + \frac{x_n - \bar{x}_{n-1}}{n} \]
-  !! applied to \(u, v, w, u^2, v^2, w^2, uv, uw, vw\).
+  !! applied to \(u, v, w, u^2, v^2, w^2, uv, uw, vw\), plus pressure
+  !! mean and scalar statistics (\(\phi, \phi^2\)) when present.
   !! At write time the fluctuation quantities are derived:
   !! \[ u' = \sqrt{\max(0,\, \overline{u^2} - \bar{u}^2)}, \quad
   !!    \langle u'v' \rangle = \overline{uv} - \bar{u}\bar{v} \]
@@ -14,7 +15,7 @@ module m_stats
   !! Note: velocity fields must be at `VERT` data location when `update`
   !! is called (i.e. after `pressure_correction`).
   use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank
-  use m_common, only: dp, i8, DIR_C, VERT, get_argument
+  use m_common, only: dp, i8, DIR_C, DIR_X, VERT, get_argument
   use m_config, only: stats_config_t
   use m_field, only: field_t
   use m_solver, only: solver_t
@@ -40,11 +41,16 @@ module m_stats
     real(dp), allocatable :: uvmean(:, :, :)  !! \(\overline{uv}\)
     real(dp), allocatable :: uwmean(:, :, :)  !! \(\overline{uw}\)
     real(dp), allocatable :: vwmean(:, :, :)  !! \(\overline{vw}\)
+    !! Pressure mean
+    real(dp), allocatable :: pmean(:, :, :)
+    !! Scalar (species) statistics
+    integer :: nspecies = 0
+    real(dp), allocatable :: phimean(:, :, :, :)     !! \(\overline{\phi}\)
+    real(dp), allocatable :: phiphimean(:, :, :, :)  !! \(\overline{\phi^2}\)
   contains
     procedure :: init
     procedure :: update
     procedure :: write_stats
-    procedure :: handle_restart
     procedure :: finalise
   end type stats_manager_t
 
@@ -76,6 +82,18 @@ contains
     allocate (self%uwmean(dims(1), dims(2), dims(3)), source=0.0_dp)
     allocate (self%vwmean(dims(1), dims(2), dims(3)), source=0.0_dp)
 
+    if (solver%keep_pressure) then
+      allocate (self%pmean(dims(1), dims(2), dims(3)), source=0.0_dp)
+    end if
+
+    self%nspecies = solver%nspecies
+    if (self%nspecies > 0) then
+      allocate (self%phimean(dims(1), dims(2), dims(3), self%nspecies), &
+                source=0.0_dp)
+      allocate (self%phiphimean(dims(1), dims(2), dims(3), self%nspecies), &
+                source=0.0_dp)
+    end if
+
     call MPI_Comm_rank(comm, myrank, ierr)
     if (myrank == 0) then
       print *, 'Statistics: initstat=', self%config%initstat, &
@@ -91,8 +109,8 @@ contains
     class(solver_t), intent(in) :: solver
     integer, intent(in) :: iter
 
-    class(field_t), pointer :: u_tmp, v_tmp, w_tmp
-    integer :: dims(3)
+    class(field_t), pointer :: u_tmp, v_tmp, w_tmp, p_tmp, phi_tmp
+    integer :: dims(3), is
     real(dp) :: stat_inc
 
     if (.not. self%is_active) return
@@ -117,16 +135,42 @@ contains
       v => v_tmp%data(1:dims(1), 1:dims(2), 1:dims(3)), &
       w => w_tmp%data(1:dims(1), 1:dims(2), 1:dims(3)) &
       )
-      self%umean  = self%umean  + (u   - self%umean)  * stat_inc
-      self%vmean  = self%vmean  + (v   - self%vmean)  * stat_inc
-      self%wmean  = self%wmean  + (w   - self%wmean)  * stat_inc
-      self%uumean = self%uumean + (u*u - self%uumean) * stat_inc
-      self%vvmean = self%vvmean + (v*v - self%vvmean) * stat_inc
-      self%wwmean = self%wwmean + (w*w - self%wwmean) * stat_inc
-      self%uvmean = self%uvmean + (u*v - self%uvmean) * stat_inc
-      self%uwmean = self%uwmean + (u*w - self%uwmean) * stat_inc
-      self%vwmean = self%vwmean + (v*w - self%vwmean) * stat_inc
+      self%umean = self%umean + (u - self%umean)*stat_inc
+      self%vmean = self%vmean + (v - self%vmean)*stat_inc
+      self%wmean = self%wmean + (w - self%wmean)*stat_inc
+      self%uumean = self%uumean + (u*u - self%uumean)*stat_inc
+      self%vvmean = self%vvmean + (v*v - self%vvmean)*stat_inc
+      self%wwmean = self%wwmean + (w*w - self%wwmean)*stat_inc
+      self%uvmean = self%uvmean + (u*v - self%uvmean)*stat_inc
+      self%uwmean = self%uwmean + (u*w - self%uwmean)*stat_inc
+      self%vwmean = self%vwmean + (v*w - self%vwmean)*stat_inc
     end associate
+
+    ! Pressure mean (from pressure_vert, already on VERT grid)
+    if (allocated(self%pmean) .and. associated(solver%pressure_vert)) then
+      p_tmp => solver%host_allocator%get_block(DIR_C, VERT)
+      call solver%backend%get_field_data(p_tmp%data, solver%pressure_vert)
+      associate (p => p_tmp%data(1:dims(1), 1:dims(2), 1:dims(3)))
+        self%pmean = self%pmean + (p - self%pmean)*stat_inc
+      end associate
+      call solver%host_allocator%release_block(p_tmp)
+    end if
+
+    ! Scalar (species) statistics
+    do is = 1, self%nspecies
+      phi_tmp => solver%host_allocator%get_block(DIR_C, VERT)
+      call solver%backend%get_field_data(phi_tmp%data, &
+                                         solver%species(is)%ptr)
+      associate (phi => phi_tmp%data(1:dims(1), 1:dims(2), 1:dims(3)))
+        self%phimean(:, :, :, is) = &
+          self%phimean(:, :, :, is) &
+          + (phi - self%phimean(:, :, :, is))*stat_inc
+        self%phiphimean(:, :, :, is) = &
+          self%phiphimean(:, :, :, is) &
+          + (phi*phi - self%phiphimean(:, :, :, is))*stat_inc
+      end associate
+      call solver%host_allocator%release_block(phi_tmp)
+    end do
 
     call solver%host_allocator%release_block(u_tmp)
     call solver%host_allocator%release_block(v_tmp)
@@ -145,13 +189,15 @@ contains
     type(writer_session_t) :: writer_session
     character(len=256) :: filename
     integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
-    integer :: dims(3), myrank, ierr
+    integer :: dims(3), myrank, ierr, is
     real(dp), allocatable :: uprime(:, :, :)
     real(dp), allocatable :: vprime(:, :, :)
     real(dp), allocatable :: wprime(:, :, :)
     real(dp), allocatable :: uv(:, :, :)
     real(dp), allocatable :: uw(:, :, :)
     real(dp), allocatable :: vw(:, :, :)
+    real(dp), allocatable :: phiprime(:, :, :)
+    character(len=64) :: field_name
 
     if (.not. self%is_active) return
     if (self%config%istatout <= 0) return
@@ -188,11 +234,11 @@ contains
     end if
 
     call writer_session%write_data("sample_count", self%sample_count)
-    call writer_session%write_data("umean",  self%umean, &
+    call writer_session%write_data("umean", self%umean, &
                                    shape_dims, start_dims, count_dims)
-    call writer_session%write_data("vmean",  self%vmean, &
+    call writer_session%write_data("vmean", self%vmean, &
                                    shape_dims, start_dims, count_dims)
-    call writer_session%write_data("wmean",  self%wmean, &
+    call writer_session%write_data("wmean", self%wmean, &
                                    shape_dims, start_dims, count_dims)
     call writer_session%write_data("uprime", uprime, &
                                    shape_dims, start_dims, count_dims)
@@ -207,52 +253,53 @@ contains
     call writer_session%write_data("vwmean", vw, &
                                    shape_dims, start_dims, count_dims)
 
+    ! Pressure mean (only when output_pressure is enabled)
+    if (allocated(self%pmean)) then
+      call writer_session%write_data("pmean", self%pmean, &
+                                     shape_dims, start_dims, count_dims)
+    end if
+
+    ! Scalar statistics
+    if (self%nspecies > 0) then
+      allocate (phiprime(dims(1), dims(2), dims(3)))
+      do is = 1, self%nspecies
+        write (field_name, '(A,I0)') 'phimean_', is
+        call writer_session%write_data( &
+          trim(field_name), self%phimean(:, :, :, is), &
+          shape_dims, start_dims, count_dims &
+          )
+
+        phiprime = sqrt(max(0.0_dp, self%phiphimean(:, :, :, is) &
+                            - self%phimean(:, :, :, is)**2))
+        write (field_name, '(A,I0)') 'phiprime_', is
+        call writer_session%write_data( &
+          trim(field_name), phiprime, shape_dims, start_dims, count_dims &
+          )
+      end do
+      deallocate (phiprime)
+    end if
+
     call writer_session%close()
 
     deallocate (uprime, vprime, wprime, uv, uw, vw)
   end subroutine write_stats
 
-  subroutine handle_restart(self, solver, comm)
-    !! Zero-initialise all accumulators on restart, so statistics accumulate
-    !! from scratch rather than resuming from a previous run.
-    class(stats_manager_t), intent(inout) :: self
-    class(solver_t), intent(in) :: solver
-    integer, intent(in) :: comm
-
-    integer :: myrank, ierr
-
-    if (.not. self%is_active) return
-
-    call MPI_Comm_rank(comm, myrank, ierr)
-    if (myrank == 0) then
-      print *, 'Statistics: re-initialising accumulators for restart'
-    end if
-
-    self%sample_count = 0
-    self%umean  = 0.0_dp
-    self%vmean  = 0.0_dp
-    self%wmean  = 0.0_dp
-    self%uumean = 0.0_dp
-    self%vvmean = 0.0_dp
-    self%wwmean = 0.0_dp
-    self%uvmean = 0.0_dp
-    self%uwmean = 0.0_dp
-    self%vwmean = 0.0_dp
-  end subroutine handle_restart
-
   subroutine finalise(self)
     !! Deallocate all accumulator arrays.
     class(stats_manager_t), intent(inout) :: self
 
-    if (allocated(self%umean))  deallocate (self%umean)
-    if (allocated(self%vmean))  deallocate (self%vmean)
-    if (allocated(self%wmean))  deallocate (self%wmean)
+    if (allocated(self%umean)) deallocate (self%umean)
+    if (allocated(self%vmean)) deallocate (self%vmean)
+    if (allocated(self%wmean)) deallocate (self%wmean)
     if (allocated(self%uumean)) deallocate (self%uumean)
     if (allocated(self%vvmean)) deallocate (self%vvmean)
     if (allocated(self%wwmean)) deallocate (self%wwmean)
     if (allocated(self%uvmean)) deallocate (self%uvmean)
     if (allocated(self%uwmean)) deallocate (self%uwmean)
     if (allocated(self%vwmean)) deallocate (self%vwmean)
+    if (allocated(self%pmean)) deallocate (self%pmean)
+    if (allocated(self%phimean)) deallocate (self%phimean)
+    if (allocated(self%phiphimean)) deallocate (self%phiphimean)
   end subroutine finalise
 
 end module m_stats

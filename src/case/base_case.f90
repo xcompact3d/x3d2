@@ -97,7 +97,9 @@ contains
     call self%io_mgr%init(self%solver, MPI_COMM_WORLD)
 
     ! Tell the solver to persist pressure if output is enabled
-    self%solver%keep_pressure = self%io_mgr%snapshot_mgr%config%output_pressure
+    self%solver%keep_pressure = &
+      self%io_mgr%snapshot_mgr%config%output_pressure .and. &
+      self%io_mgr%snapshot_mgr%config%snapshot_freq > 0
 
     if (self%io_mgr%is_restart()) then
       call self%io_mgr%handle_restart(self%solver, MPI_COMM_WORLD)
@@ -278,20 +280,17 @@ contains
 
       self%solver%current_iter = iter
 
+      ! Compute pressure on VERT grid if output_pressure is enabled
+      if (self%solver%keep_pressure) then
+        call self%solver%compute_pressure_vert()
+      end if
+
       call self%io_mgr%update_stats(self%solver, iter)
 
       if (mod(iter, self%solver%n_output) == 0) then
         t = iter*self%solver%dt
 
         call self%postprocess(iter, t)
-      end if
-
-      ! Compute pressure on VERT grid for snapshot output if needed
-      if (self%io_mgr%snapshot_mgr%config%output_pressure .and. &
-          self%io_mgr%snapshot_mgr%config%snapshot_freq > 0 .and. &
-          mod(iter, self%io_mgr%snapshot_mgr%config%snapshot_freq) &
-          == 0) then
-        call self%solver%compute_pressure_vert()
       end if
 
       call self%io_mgr%handle_io_step(self%solver, &

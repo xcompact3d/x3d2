@@ -48,13 +48,7 @@ contains
     class(solver_t), intent(inout) :: solver
     integer, intent(in), optional :: comm
 
-    integer :: comm_to_use
-
-    comm_to_use = MPI_COMM_WORLD
-    if (present(comm)) comm_to_use = comm
-
     call self%checkpoint_mgr%handle_restart(solver, comm)
-    call self%stats_mgr%handle_restart(solver, comm_to_use)
   end subroutine io_handle_restart
 
   subroutine io_update_stats(self, solver, iter)
