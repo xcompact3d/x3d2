@@ -95,17 +95,12 @@ contains
   end subroutine initial_conditions_cylinder
 
   ! ==========================================================================
-  ! Compute outflow CFL number.
-  !
-  ! This is the ONE place we still touch the host: we copy only the u field
-  ! to extract max(u) at the penultimate x-station, then do an MPI reduction.
-  ! The result is a single scalar CFL passed to the GPU kernels.
-  !
-  ! TODO: Replace with a device-side reduction (cub::DeviceReduce or a
-  !       custom kernel over a single x-slice) to eliminate this transfer.
-  ! ==========================================================================
-! ==========================================================================
   ! Compute outflow CFL and flow rate correction from a single host copy of u.
+  !
+  ! Uses gdt from the time integrator instead of the full dt.
+  ! For AB schemes gdt == dt always.
+  ! For RK schemes gdt is the effective fractional timestep of the current
+  ! substep, matching how Xcompact3d uses gdt(itr) in its outflow routine.
   ! ==========================================================================
   subroutine compute_outflow_params(self, cfl, fl_correction)
     implicit none
@@ -115,13 +110,15 @@ contains
     class(field_t), pointer :: host_u
     integer :: dims(3), nx, j, k, ierr
     real(dp) :: uxmax, fl_in, fl_out, ny_nz
-    real(dp) :: dx, dt
+    real(dp) :: dx, gdt
 
     dims = self%solver%mesh%get_dims(VERT)
     nx = dims(1)
     dx = self%solver%mesh%geo%d(1)
-    dt = self%solver%dt
     ny_nz = real(dims(2)*dims(3), dp)
+
+    ! Use the effective substep timestep from the time integrator
+    gdt = self%solver%time_integrator%gdt
 
     host_u => self%solver%host_allocator%get_block(DIR_C)
     call self%solver%backend%get_field_data(host_u%data, self%solver%u)
@@ -151,7 +148,8 @@ contains
     fl_in = fl_in/ny_nz
     fl_out = fl_out/ny_nz
 
-    cfl = uxmax*dt/dx
+    ! Use gdt instead of dt — matches Xcompact3d: cx = uxmax*gdt(itr)/dx
+    cfl = uxmax*gdt/dx
     fl_correction = fl_in - fl_out
 
     ! --- Print flow rate statistics (root only) ---
@@ -162,14 +160,7 @@ contains
     end if
 
   end subroutine compute_outflow_params
-  ! ==========================================================================
-  ! Boundary Conditions: applied to U^m at the start of each substep.
-  !
-  ! Inflow  (left,  i=1):  Dirichlet  u=1, v=0, w=0
-  ! Outflow (right, i=nx): Convective du/dt + Uc*du/dx = 0
-  !
-  ! Everything runs on GPU via field_set_face — no per-field host round-trips.
-  ! ==========================================================================
+
   subroutine boundary_conditions_cylinder(self)
     implicit none
     class(case_cylinder_t) :: self
@@ -213,20 +204,13 @@ contains
       u, 0._dp, fl_correction, X_FACE)
   end subroutine pre_correction_cylinder
 
-  ! ==========================================================================
-  ! Forcings: empty — cylinder forcing is handled by the solver's IBM
-  ! ==========================================================================
   subroutine forcings_cylinder(self, du, dv, dw, iter)
     implicit none
     class(case_cylinder_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     integer, intent(in) :: iter
-    ! No additional forcing terms — IBM is handled by solver
   end subroutine forcings_cylinder
 
-  ! ==========================================================================
-  ! Post-processing: report enstrophy and divergence
-  ! ==========================================================================
   subroutine postprocess_cylinder(self, iter, t)
     implicit none
     class(case_cylinder_t) :: self
