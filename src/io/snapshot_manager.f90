@@ -125,6 +125,7 @@ contains
     if (self%config%snapshot_freq <= 0) return
     if (mod(timestep, self%config%snapshot_freq) /= 0) return
 
+    allocate (field_names(0))
     field_names = get_snapshot_fields(self%config)
 
     call MPI_Comm_rank(comm, myrank, ierr)
