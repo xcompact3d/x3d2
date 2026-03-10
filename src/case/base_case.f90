@@ -10,6 +10,7 @@ module m_base_case
   use m_mesh, only: mesh_t
   use m_solver, only: solver_t, init
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
+  use m_config, only: has_output_field
   use m_io_manager, only: io_manager_t
   use mpi, only: MPI_COMM_WORLD
 
@@ -99,8 +100,8 @@ contains
 
     ! Tell the solver to persist pressure if output is enabled
     self%solver%keep_pressure = &
-      self%io_mgr%snapshot_mgr%config%output_pressure .and. &
-      self%io_mgr%snapshot_mgr%config%snapshot_freq > 0
+      has_output_field(self%io_mgr%snapshot_mgr%config, 'pressure') &
+      .and. self%io_mgr%snapshot_mgr%config%snapshot_freq > 0
 
     if (self%io_mgr%is_restart()) then
       call self%io_mgr%handle_restart(self%solver, MPI_COMM_WORLD)
@@ -223,11 +224,11 @@ contains
     logical :: output_vorticity, output_qcriterion
 
     output_vorticity = &
-      self%io_mgr%snapshot_mgr%config%output_vorticity .and. &
-      self%io_mgr%snapshot_mgr%config%snapshot_freq > 0
+      has_output_field(self%io_mgr%snapshot_mgr%config, 'vorticity') &
+      .and. self%io_mgr%snapshot_mgr%config%snapshot_freq > 0
     output_qcriterion = &
-      self%io_mgr%snapshot_mgr%config%output_qcriterion .and. &
-      self%io_mgr%snapshot_mgr%config%snapshot_freq > 0
+      has_output_field(self%io_mgr%snapshot_mgr%config, 'qcriterion') &
+      .and. self%io_mgr%snapshot_mgr%config%snapshot_freq > 0
 
     if (self%io_mgr%is_restart()) then
       t = self%solver%current_iter*self%solver%dt

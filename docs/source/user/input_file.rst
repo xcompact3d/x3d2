@@ -17,9 +17,7 @@ These parameters are specified in the ``checkpoint_params`` namelist block in th
      snapshot_prefix = "snapshot"
      snapshot_sp = .false.
      output_stride = 2, 2, 2
-     output_pressure = .false.
-     output_vorticity = .false.
-     output_qcriterion = .false.
+     output_fields = 'pressure', 'vorticity', 'qcriterion'
      restart_from_checkpoint = .false.
      restart_file = ""
    /End
@@ -45,14 +43,14 @@ These parameters are specified in the ``checkpoint_params`` namelist block in th
 ``output_stride``: Three-element array specifying the spatial stride (subsampling) in ``X``, ``Y``, and ``Z`` directions for visualisation snapshots. Using values greater than ``1`` reduces file size and increases I/O performance, but decreases visualisation resolution.
   **Default:** ``[1, 1, 1]``
 
-``output_pressure``: Boolean flag to include the pressure field in visualisation snapshots. When enabled, the pressure field is interpolated from its native cell-centred grid to the vertex grid (matching the velocity field locations) for ParaView compatibility. Note: pressure is not included in checkpoint files since it is a derived quantity recomputed from velocity.
-  **Default:** ``false``
+``output_fields``: List of additional derived fields to include in visualisation snapshots. Velocity components (``u``, ``v``, ``w``) are always written. Supported field names:
 
-``output_vorticity``: Boolean flag to include the vorticity magnitude field (``vort``) in visualisation snapshots. The vorticity magnitude is computed as :math:`|\omega| = \sqrt{\omega_x^2 + \omega_y^2 + \omega_z^2}` from the full velocity gradient tensor. When both ``output_vorticity`` and ``output_qcriterion`` are enabled, the velocity gradient is computed only once.
-  **Default:** ``false``
+  - ``'pressure'`` — Pressure field, interpolated from its native cell-centred grid to the vertex grid for ParaView compatibility. Not included in checkpoint files since it is recomputed from velocity.
+  - ``'vorticity'`` — Vorticity magnitude :math:`|\omega| = \sqrt{\omega_x^2 + \omega_y^2 + \omega_z^2}`, computed from the full velocity gradient tensor.
+  - ``'qcriterion'`` — Q-criterion :math:`Q = -\frac{1}{2} \sum_{ij} \frac{\partial u_i}{\partial x_j} \frac{\partial u_j}{\partial x_i}`, identifying vortical structures (positive Q indicates rotation-dominated regions).
 
-``output_qcriterion``: Boolean flag to include the Q-criterion field (``qcrit``) in visualisation snapshots. The Q-criterion is defined as :math:`Q = -\frac{1}{2} \sum_{ij} \frac{\partial u_i}{\partial x_j} \frac{\partial u_j}{\partial x_i}`, which identifies vortical structures (positive Q indicates rotation-dominated regions).
-  **Default:** ``false``
+  When both ``'vorticity'`` and ``'qcriterion'`` are requested, the velocity gradient tensor is computed only once.
+  **Default:** (empty — only velocity is written)
 
 ``restart_from_checkpoint``: Boolean flag to restart the simulation from a checkpoint file.
   **Default:** ``false``
@@ -112,7 +110,7 @@ Statistics are written to separate ADIOS2 ``.bp`` files (e.g. ``statistics_00100
 - ``uvmean``, ``uwmean``, ``vwmean`` — Reynolds stresses: :math:`\langle u'v' \rangle = \overline{uv} - \bar{u}\bar{v}`
 - ``sample_count`` — number of samples accumulated
 
-**Pressure statistics** (when ``output_pressure = .true.`` in ``checkpoint_params``):
+**Pressure statistics** (when ``'pressure'`` is in ``output_fields`` in ``checkpoint_params``):
 
 - ``pmean`` — time-averaged pressure field
 

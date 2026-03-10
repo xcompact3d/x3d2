@@ -8,6 +8,8 @@ module m_config
 
   integer, parameter :: n_species_max = 99
 
+  integer, parameter :: MAX_OUTPUT_FIELDS = 10
+
   type, abstract :: base_config_t
     !! All config types have a method read to initialise their data
   contains
@@ -71,9 +73,7 @@ module m_config
     character(len=256) :: restart_file = ""
     integer, dimension(3) :: output_stride = [2, 2, 2]     !! Spatial stride for snapshot output
     logical :: snapshot_sp = .false.                       !! if true, snapshot in single precision
-    logical :: output_pressure = .false.                   !! if true, include pressure in snapshots
-    logical :: output_vorticity = .false.                   !! if true, include vorticity magnitude in snapshots
-    logical :: output_qcriterion = .false.                  !! if true, include Q-criterion in snapshots
+    character(len=32) :: output_fields(MAX_OUTPUT_FIELDS) = '' !! additional fields for snapshot output
   contains
     procedure :: read => read_checkpoint_nml
   end type checkpoint_config_t
@@ -283,14 +283,12 @@ contains
     character(len=256) :: restart_file = ""
     integer, dimension(3) :: output_stride = [1, 1, 1]
     logical :: snapshot_sp = .false.
-    logical :: output_pressure = .false.
-    logical :: output_vorticity = .false.
-    logical :: output_qcriterion = .false.
+    character(len=32) :: output_fields(MAX_OUTPUT_FIELDS) = ''
 
     namelist /checkpoint_params/ checkpoint_freq, snapshot_freq, &
       keep_checkpoint, checkpoint_prefix, snapshot_prefix, &
       restart_from_checkpoint, restart_file, output_stride, snapshot_sp, &
-      output_pressure, output_vorticity, output_qcriterion
+      output_fields
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading checkpoint config failed! &
                  &Provide only a file name or source, not both.'
@@ -320,9 +318,7 @@ contains
     self%restart_file = restart_file
     self%output_stride = output_stride
     self%snapshot_sp = snapshot_sp
-    self%output_pressure = output_pressure
-    self%output_vorticity = output_vorticity
-    self%output_qcriterion = output_qcriterion
+    self%output_fields = output_fields
   end subroutine read_checkpoint_nml
 
   subroutine read_stats_nml(self, nml_file, nml_string)
@@ -365,6 +361,14 @@ contains
     self%istatout = istatout
     self%stats_prefix = stats_prefix
   end subroutine read_stats_nml
+
+  pure logical function has_output_field(config, name)
+    !! Check whether a field name is present in the output_fields list.
+    type(checkpoint_config_t), intent(in) :: config
+    character(*), intent(in) :: name
+
+    has_output_field = any(config%output_fields == name)
+  end function has_output_field
 
 end module m_config
 
