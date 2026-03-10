@@ -24,7 +24,7 @@ module m_stats
   implicit none
 
   private
-  public :: stats_manager_t
+  public :: stats_manager_t, accumulate_mean
 
   type :: stats_manager_t
     type(stats_config_t) :: config
@@ -57,6 +57,17 @@ module m_stats
   end type stats_manager_t
 
 contains
+
+  pure subroutine accumulate_mean(mean, val, stat_inc)
+    !! Incremental running-mean update:
+    !! \( \bar{x}_n = \bar{x}_{n-1} + (x_n - \bar{x}_{n-1})/n \)
+    !! where `stat_inc = 1/n`.
+    real(dp), intent(inout) :: mean(:, :, :)
+    real(dp), intent(in) :: val(:, :, :)
+    real(dp), intent(in) :: stat_inc
+
+    mean = mean + (val - mean)*stat_inc
+  end subroutine accumulate_mean
 
   subroutine init(self, solver, comm)
     !! Initialise the statistics manager: read config and allocate accumulators.
@@ -137,15 +148,15 @@ contains
       v => v_tmp%data(1:dims(1), 1:dims(2), 1:dims(3)), &
       w => w_tmp%data(1:dims(1), 1:dims(2), 1:dims(3)) &
       )
-      self%umean = self%umean + (u - self%umean)*stat_inc
-      self%vmean = self%vmean + (v - self%vmean)*stat_inc
-      self%wmean = self%wmean + (w - self%wmean)*stat_inc
-      self%uumean = self%uumean + (u*u - self%uumean)*stat_inc
-      self%vvmean = self%vvmean + (v*v - self%vvmean)*stat_inc
-      self%wwmean = self%wwmean + (w*w - self%wwmean)*stat_inc
-      self%uvmean = self%uvmean + (u*v - self%uvmean)*stat_inc
-      self%uwmean = self%uwmean + (u*w - self%uwmean)*stat_inc
-      self%vwmean = self%vwmean + (v*w - self%vwmean)*stat_inc
+      call accumulate_mean(self%umean, u, stat_inc)
+      call accumulate_mean(self%vmean, v, stat_inc)
+      call accumulate_mean(self%wmean, w, stat_inc)
+      call accumulate_mean(self%uumean, u*u, stat_inc)
+      call accumulate_mean(self%vvmean, v*v, stat_inc)
+      call accumulate_mean(self%wwmean, w*w, stat_inc)
+      call accumulate_mean(self%uvmean, u*v, stat_inc)
+      call accumulate_mean(self%uwmean, u*w, stat_inc)
+      call accumulate_mean(self%vwmean, v*w, stat_inc)
     end associate
 
     ! Pressure mean (from pressure_vert, already on VERT grid)
@@ -153,7 +164,7 @@ contains
       p_tmp => solver%host_allocator%get_block(DIR_C, VERT)
       call solver%backend%get_field_data(p_tmp%data, solver%pressure_vert)
       associate (p => p_tmp%data(1:dims(1), 1:dims(2), 1:dims(3)))
-        self%pmean = self%pmean + (p - self%pmean)*stat_inc
+        call accumulate_mean(self%pmean, p, stat_inc)
       end associate
       call solver%host_allocator%release_block(p_tmp)
     end if
@@ -164,12 +175,8 @@ contains
       call solver%backend%get_field_data(phi_tmp%data, &
                                          solver%species(is)%ptr)
       associate (phi => phi_tmp%data(1:dims(1), 1:dims(2), 1:dims(3)))
-        self%phimean(:, :, :, is) = &
-          self%phimean(:, :, :, is) &
-          + (phi - self%phimean(:, :, :, is))*stat_inc
-        self%phiphimean(:, :, :, is) = &
-          self%phiphimean(:, :, :, is) &
-          + (phi*phi - self%phiphimean(:, :, :, is))*stat_inc
+        call accumulate_mean(self%phimean(:, :, :, is), phi, stat_inc)
+        call accumulate_mean(self%phiphimean(:, :, :, is), phi*phi, stat_inc)
       end associate
       call solver%host_allocator%release_block(phi_tmp)
     end do

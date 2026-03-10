@@ -1,8 +1,8 @@
 program test_statistics
-  !! Unit tests for the flow field statistics accumulation logic in m_stats.
-  !! No I/O required.
+  !! Unit tests for the accumulate_mean subroutine in m_stats.
 
   use m_common, only: dp
+  use m_stats, only: accumulate_mean
   use mpi
 
   implicit none
@@ -24,10 +24,10 @@ contains
 
   subroutine test_constant_field()
     !! Constant field c=1: umean==1, uprime==0.
-    !! c=1 is chosen so that c^2 is exact in floating-point.
     real(dp), parameter :: c = 1.0_dp
     integer, parameter :: n_samples = 100
-    real(dp) :: umean, uumean, uprime, stat_inc
+    real(dp) :: umean(1, 1, 1), uumean(1, 1, 1), val(1, 1, 1)
+    real(dp) :: uprime, stat_inc
     integer :: n
     real(dp), parameter :: tol = 1.0e-12_dp
 
@@ -35,14 +35,17 @@ contains
 
     do n = 1, n_samples
       stat_inc = 1.0_dp/n
-      umean  = umean  + (c   - umean)  * stat_inc
-      uumean = uumean + (c*c - uumean) * stat_inc
+      val(1, 1, 1) = c
+      call accumulate_mean(umean, val, stat_inc)
+      val(1, 1, 1) = c*c
+      call accumulate_mean(uumean, val, stat_inc)
     end do
 
-    uprime = sqrt(max(0.0_dp, uumean - umean**2))
+    uprime = sqrt(max(0.0_dp, uumean(1, 1, 1) - umean(1, 1, 1)**2))
 
-    if (abs(umean - c) > tol) then
-      print *, 'FAIL test_constant_field: umean =', umean, 'expected', c
+    if (abs(umean(1, 1, 1) - c) > tol) then
+      print *, 'FAIL test_constant_field: umean =', umean(1, 1, 1), &
+        'expected', c
       error stop 'test_constant_field: umean /= constant'
     end if
     if (abs(uprime) > tol) then
@@ -52,9 +55,10 @@ contains
   end subroutine test_constant_field
 
   subroutine test_known_mean()
-    !! Values 1..N: Welford mean must equal (N+1)/2.
+    !! Values 1..N: mean must equal (N+1)/2.
     integer, parameter :: n_samples = 50
-    real(dp) :: umean, stat_inc, expected
+    real(dp) :: umean(1, 1, 1), val(1, 1, 1)
+    real(dp) :: stat_inc, expected
     integer :: n
     real(dp), parameter :: tol = 1.0e-12_dp
 
@@ -63,11 +67,13 @@ contains
 
     do n = 1, n_samples
       stat_inc = 1.0_dp/n
-      umean = umean + (real(n, dp) - umean)*stat_inc
+      val(1, 1, 1) = real(n, dp)
+      call accumulate_mean(umean, val, stat_inc)
     end do
 
-    if (abs(umean - expected) > tol) then
-      print *, 'FAIL test_known_mean: umean =', umean, 'expected', expected
+    if (abs(umean(1, 1, 1) - expected) > tol) then
+      print *, 'FAIL test_known_mean: umean =', umean(1, 1, 1), &
+        'expected', expected
       error stop 'test_known_mean: mean /= analytical mean'
     end if
   end subroutine test_known_mean
@@ -75,23 +81,26 @@ contains
   subroutine test_rms_nonzero()
     !! Alternating -1/+1: mean==0, uprime==1.
     integer, parameter :: n_samples = 200
-    real(dp) :: umean, uumean, uprime, stat_inc, val
+    real(dp) :: umean(1, 1, 1), uumean(1, 1, 1), val(1, 1, 1)
+    real(dp) :: uprime, stat_inc
     integer :: n
     real(dp), parameter :: tol = 1.0e-10_dp
 
     umean = 0.0_dp; uumean = 0.0_dp
 
     do n = 1, n_samples
-      val = merge(1.0_dp, -1.0_dp, mod(n, 2) == 0)
+      val(1, 1, 1) = merge(1.0_dp, -1.0_dp, mod(n, 2) == 0)
       stat_inc = 1.0_dp/n
-      umean  = umean  + (val     - umean)  * stat_inc
-      uumean = uumean + (val*val - uumean) * stat_inc
+      call accumulate_mean(umean, val, stat_inc)
+      val(1, 1, 1) = val(1, 1, 1)**2
+      call accumulate_mean(uumean, val, stat_inc)
     end do
 
-    uprime = sqrt(max(0.0_dp, uumean - umean**2))
+    uprime = sqrt(max(0.0_dp, uumean(1, 1, 1) - umean(1, 1, 1)**2))
 
-    if (abs(umean) > tol) then
-      print *, 'FAIL test_rms_nonzero: umean =', umean, 'expected 0'
+    if (abs(umean(1, 1, 1)) > tol) then
+      print *, 'FAIL test_rms_nonzero: umean =', umean(1, 1, 1), &
+        'expected 0'
       error stop 'test_rms_nonzero: mean of alternating series /= 0'
     end if
     if (abs(uprime - 1.0_dp) > tol) then
@@ -104,7 +113,9 @@ contains
     !! u=v=1..N: Reynolds stress <u'v'> = <uv> - <u><v> must equal var(u).
     !! u=-v: Reynolds stress must equal -var(u).
     integer, parameter :: n_samples = 100
-    real(dp) :: umean, vmean, uumean, uvmean, stat_inc
+    real(dp) :: umean(1, 1, 1), vmean(1, 1, 1)
+    real(dp) :: uumean(1, 1, 1), uvmean(1, 1, 1)
+    real(dp) :: val(1, 1, 1), stat_inc
     real(dp) :: uprime2, reynolds_stress
     integer :: n
     real(dp), parameter :: tol = 1.0e-10_dp
@@ -115,14 +126,16 @@ contains
 
     do n = 1, n_samples
       stat_inc = 1.0_dp/n
-      umean  = umean  + (real(n, dp)          - umean)  * stat_inc
-      vmean  = vmean  + (real(n, dp)          - vmean)  * stat_inc
-      uumean = uumean + (real(n, dp)**2       - uumean) * stat_inc
-      uvmean = uvmean + (real(n, dp)**2       - uvmean) * stat_inc
+      val(1, 1, 1) = real(n, dp)
+      call accumulate_mean(umean, val, stat_inc)
+      call accumulate_mean(vmean, val, stat_inc)
+      val(1, 1, 1) = real(n, dp)**2
+      call accumulate_mean(uumean, val, stat_inc)
+      call accumulate_mean(uvmean, val, stat_inc)
     end do
 
-    uprime2 = uumean - umean**2
-    reynolds_stress = uvmean - umean*vmean
+    uprime2 = uumean(1, 1, 1) - umean(1, 1, 1)**2
+    reynolds_stress = uvmean(1, 1, 1) - umean(1, 1, 1)*vmean(1, 1, 1)
 
     if (abs(reynolds_stress - uprime2) > tol*abs(uprime2)) then
       print *, 'FAIL test_reynolds_stress: <u''v''> /= var(u) for u==v'
@@ -135,14 +148,18 @@ contains
 
     do n = 1, n_samples
       stat_inc = 1.0_dp/n
-      umean  = umean  + (real(n, dp)          - umean)  * stat_inc
-      vmean  = vmean  + (-real(n, dp)         - vmean)  * stat_inc
-      uumean = uumean + (real(n, dp)**2       - uumean) * stat_inc
-      uvmean = uvmean + (-real(n, dp)**2      - uvmean) * stat_inc
+      val(1, 1, 1) = real(n, dp)
+      call accumulate_mean(umean, val, stat_inc)
+      val(1, 1, 1) = -real(n, dp)
+      call accumulate_mean(vmean, val, stat_inc)
+      val(1, 1, 1) = real(n, dp)**2
+      call accumulate_mean(uumean, val, stat_inc)
+      val(1, 1, 1) = -real(n, dp)**2
+      call accumulate_mean(uvmean, val, stat_inc)
     end do
 
-    uprime2 = uumean - umean**2
-    reynolds_stress = uvmean - umean*vmean
+    uprime2 = uumean(1, 1, 1) - umean(1, 1, 1)**2
+    reynolds_stress = uvmean(1, 1, 1) - umean(1, 1, 1)*vmean(1, 1, 1)
 
     if (abs(reynolds_stress + uprime2) > tol*abs(uprime2)) then
       print *, 'FAIL test_reynolds_stress: <u''v''> /= -var(u) for u==-v'
