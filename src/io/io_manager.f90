@@ -48,7 +48,7 @@ contains
     class(solver_t), intent(inout) :: solver
     integer, intent(in), optional :: comm
 
-    call self%checkpoint_mgr%handle_restart(solver, comm)
+    call self%checkpoint_mgr%handle_restart(solver, comm, self%stats_mgr)
   end subroutine io_handle_restart
 
   subroutine io_update_stats(self, solver, iter)
@@ -70,7 +70,9 @@ contains
     comm_to_use = MPI_COMM_WORLD
     if (present(comm)) comm_to_use = comm
 
-    call self%checkpoint_mgr%handle_checkpoint_step(solver, timestep, comm)
+    call self%checkpoint_mgr%handle_checkpoint_step( &
+      solver, timestep, comm, self%stats_mgr &
+      )
     call self%snapshot_mgr%handle_snapshot_step(solver, timestep, comm)
     call self%stats_mgr%write_stats(solver, timestep, comm_to_use)
   end subroutine io_handle_step

@@ -19,7 +19,7 @@ module m_stats
   use m_config, only: stats_config_t
   use m_field, only: field_t
   use m_solver, only: solver_t
-  use m_io_session, only: writer_session_t
+  use m_io_session, only: writer_session_t, reader_session_t
 
   implicit none
 
@@ -51,6 +51,8 @@ module m_stats
     procedure :: init
     procedure :: update
     procedure :: write_stats
+    procedure :: write_checkpoint
+    procedure :: read_checkpoint
     procedure :: finalise
   end type stats_manager_t
 
@@ -283,6 +285,148 @@ contains
 
     deallocate (uprime, vprime, wprime, uv, uw, vw)
   end subroutine write_stats
+
+  subroutine write_checkpoint(self, solver, writer_session)
+    !! Write running means into an already-open checkpoint session.
+    !! Saves all accumulator arrays and sample_count so that
+    !! statistics can be resumed exactly after a restart.
+    class(stats_manager_t), intent(inout) :: self
+    class(solver_t), intent(in) :: solver
+    type(writer_session_t), intent(inout) :: writer_session
+
+    integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
+    integer :: dims(3), is
+    character(len=64) :: field_name
+
+    if (.not. self%is_active) return
+
+    dims = solver%mesh%get_dims(VERT)
+    shape_dims = int(solver%mesh%get_global_dims(VERT), i8)
+    start_dims = int(solver%mesh%par%n_offset, i8)
+    count_dims = int(dims, i8)
+
+    call writer_session%write_data("stats_sample_count", self%sample_count)
+
+    ! First moments
+    call writer_session%write_data("stats_umean", self%umean, &
+                                   shape_dims, start_dims, count_dims)
+    call writer_session%write_data("stats_vmean", self%vmean, &
+                                   shape_dims, start_dims, count_dims)
+    call writer_session%write_data("stats_wmean", self%wmean, &
+                                   shape_dims, start_dims, count_dims)
+
+    ! Second moments
+    call writer_session%write_data("stats_uumean", self%uumean, &
+                                   shape_dims, start_dims, count_dims)
+    call writer_session%write_data("stats_vvmean", self%vvmean, &
+                                   shape_dims, start_dims, count_dims)
+    call writer_session%write_data("stats_wwmean", self%wwmean, &
+                                   shape_dims, start_dims, count_dims)
+    call writer_session%write_data("stats_uvmean", self%uvmean, &
+                                   shape_dims, start_dims, count_dims)
+    call writer_session%write_data("stats_uwmean", self%uwmean, &
+                                   shape_dims, start_dims, count_dims)
+    call writer_session%write_data("stats_vwmean", self%vwmean, &
+                                   shape_dims, start_dims, count_dims)
+
+    ! Pressure mean
+    if (allocated(self%pmean)) then
+      call writer_session%write_data("stats_pmean", self%pmean, &
+                                     shape_dims, start_dims, count_dims)
+    end if
+
+    ! Scalar statistics
+    do is = 1, self%nspecies
+      write (field_name, '(A,I0)') 'stats_phimean_', is
+      call writer_session%write_data( &
+        trim(field_name), self%phimean(:, :, :, is), &
+        shape_dims, start_dims, count_dims &
+        )
+      write (field_name, '(A,I0)') 'stats_phiphimean_', is
+      call writer_session%write_data( &
+        trim(field_name), self%phiphimean(:, :, :, is), &
+        shape_dims, start_dims, count_dims &
+        )
+    end do
+  end subroutine write_checkpoint
+
+  subroutine read_checkpoint(self, solver, reader_session)
+    !! Restore running means from an already-open checkpoint session.
+    !! If stats were not present in the checkpoint, statistics start fresh.
+    class(stats_manager_t), intent(inout) :: self
+    class(solver_t), intent(in) :: solver
+    type(reader_session_t), intent(inout) :: reader_session
+
+    integer(i8), dimension(3) :: start_dims, count_dims
+    integer :: dims(3), myrank, ierr, is
+    character(len=64) :: field_name
+
+    if (.not. self%is_active) return
+
+    call MPI_Comm_rank(MPI_COMM_WORLD, myrank, ierr)
+
+    dims = solver%mesh%get_dims(VERT)
+    start_dims = int(solver%mesh%par%n_offset, i8)
+    count_dims = int(dims, i8)
+
+    call reader_session%read_data("stats_sample_count", self%sample_count)
+
+    ! First moments
+    call reader_session%read_data("stats_umean", self%umean, &
+                                  start_dims=start_dims, &
+                                  count_dims=count_dims)
+    call reader_session%read_data("stats_vmean", self%vmean, &
+                                  start_dims=start_dims, &
+                                  count_dims=count_dims)
+    call reader_session%read_data("stats_wmean", self%wmean, &
+                                  start_dims=start_dims, &
+                                  count_dims=count_dims)
+
+    ! Second moments
+    call reader_session%read_data("stats_uumean", self%uumean, &
+                                  start_dims=start_dims, &
+                                  count_dims=count_dims)
+    call reader_session%read_data("stats_vvmean", self%vvmean, &
+                                  start_dims=start_dims, &
+                                  count_dims=count_dims)
+    call reader_session%read_data("stats_wwmean", self%wwmean, &
+                                  start_dims=start_dims, &
+                                  count_dims=count_dims)
+    call reader_session%read_data("stats_uvmean", self%uvmean, &
+                                  start_dims=start_dims, &
+                                  count_dims=count_dims)
+    call reader_session%read_data("stats_uwmean", self%uwmean, &
+                                  start_dims=start_dims, &
+                                  count_dims=count_dims)
+    call reader_session%read_data("stats_vwmean", self%vwmean, &
+                                  start_dims=start_dims, &
+                                  count_dims=count_dims)
+
+    ! Pressure mean
+    if (allocated(self%pmean)) then
+      call reader_session%read_data("stats_pmean", self%pmean, &
+                                    start_dims=start_dims, &
+                                    count_dims=count_dims)
+    end if
+
+    ! Scalar statistics
+    do is = 1, self%nspecies
+      write (field_name, '(A,I0)') 'stats_phimean_', is
+      call reader_session%read_data( &
+        trim(field_name), self%phimean(:, :, :, is), &
+        start_dims=start_dims, count_dims=count_dims &
+        )
+      write (field_name, '(A,I0)') 'stats_phiphimean_', is
+      call reader_session%read_data( &
+        trim(field_name), self%phiphimean(:, :, :, is), &
+        start_dims=start_dims, count_dims=count_dims &
+        )
+    end do
+
+    if (myrank == 0) then
+      print *, 'Stats checkpoint restored: sample_count=', self%sample_count
+    end if
+  end subroutine read_checkpoint
 
   subroutine finalise(self)
     !! Deallocate all accumulator arrays.
