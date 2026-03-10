@@ -72,6 +72,8 @@ module m_config
     integer, dimension(3) :: output_stride = [2, 2, 2]     !! Spatial stride for snapshot output
     logical :: snapshot_sp = .false.                       !! if true, snapshot in single precision
     logical :: output_pressure = .false.                   !! if true, include pressure in snapshots
+    logical :: output_vorticity = .false.                   !! if true, include vorticity magnitude in snapshots
+    logical :: output_qcriterion = .false.                  !! if true, include Q-criterion in snapshots
   contains
     procedure :: read => read_checkpoint_nml
   end type checkpoint_config_t
@@ -282,11 +284,13 @@ contains
     integer, dimension(3) :: output_stride = [1, 1, 1]
     logical :: snapshot_sp = .false.
     logical :: output_pressure = .false.
+    logical :: output_vorticity = .false.
+    logical :: output_qcriterion = .false.
 
     namelist /checkpoint_params/ checkpoint_freq, snapshot_freq, &
       keep_checkpoint, checkpoint_prefix, snapshot_prefix, &
       restart_from_checkpoint, restart_file, output_stride, snapshot_sp, &
-      output_pressure
+      output_pressure, output_vorticity, output_qcriterion
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading checkpoint config failed! &
                  &Provide only a file name or source, not both.'
@@ -317,6 +321,8 @@ contains
     self%output_stride = output_stride
     self%snapshot_sp = snapshot_sp
     self%output_pressure = output_pressure
+    self%output_vorticity = output_vorticity
+    self%output_qcriterion = output_qcriterion
   end subroutine read_checkpoint_nml
 
   subroutine read_stats_nml(self, nml_file, nml_string)

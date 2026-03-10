@@ -7,6 +7,7 @@ set(SRC
   ordering.f90
   poisson_fft.f90
   solver.f90
+  postprocess.f90
   tdsops.f90
   time_integrator.f90
   ordering.f90

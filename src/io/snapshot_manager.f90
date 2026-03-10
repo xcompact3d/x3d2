@@ -83,6 +83,12 @@ contains
       if (self%config%output_pressure) then
         print *, 'Pressure output: Enabled'
       end if
+      if (self%config%output_vorticity) then
+        print *, 'Vorticity magnitude output: Enabled'
+      end if
+      if (self%config%output_qcriterion) then
+        print *, 'Q-criterion output: Enabled'
+      end if
     end if
   end subroutine configure_output
 
@@ -124,12 +130,7 @@ contains
     if (self%config%snapshot_freq <= 0) return
     if (mod(timestep, self%config%snapshot_freq) /= 0) return
 
-    ! Build field names list based on configuration
-    if (self%config%output_pressure) then
-      field_names = [character(len=32) :: "u", "v", "w", "p"]
-    else
-      field_names = [character(len=32) :: "u", "v", "w"]
-    end if
+    field_names = get_snapshot_fields(self%config)
 
     call MPI_Comm_rank(comm, myrank, ierr)
 
@@ -188,6 +189,28 @@ contains
     call cleanup_field_arrays(solver, field_ptrs, host_fields)
     deallocate (field_names)
   end subroutine write_snapshot
+
+  function get_snapshot_fields(config) result(names)
+    !! Build the list of field names for snapshot output
+    type(checkpoint_config_t), intent(in) :: config
+    character(len=32), allocatable :: names(:)
+
+    character(len=32) :: tmp(6)
+    integer :: n
+
+    n = 3
+    tmp(1:3) = [character(len=32) :: "u", "v", "w"]
+    if (config%output_pressure) then
+      n = n + 1; tmp(n) = "p"
+    end if
+    if (config%output_vorticity) then
+      n = n + 1; tmp(n) = "vort"
+    end if
+    if (config%output_qcriterion) then
+      n = n + 1; tmp(n) = "qcrit"
+    end if
+    names = tmp(1:n)
+  end function get_snapshot_fields
 
   subroutine generate_vtk_xml(self, dims, fields, origin, spacing)
     !! Generate VTK XML string for ImageData format for ParaView's ADIOS2VTXReader

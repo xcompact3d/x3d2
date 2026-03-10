@@ -294,6 +294,26 @@ contains
           error stop 1
         end if
         field_ptrs(i)%ptr => solver%pressure_vert
+      case ("vort")
+        if (.not. associated(solver%vort)) then
+          if (solver%mesh%par%is_root()) then
+            print *, 'ERROR: vorticity not computed. &
+                     &Enable output_vorticity and &
+                     &ensure snapshot_freq > 0.'
+          end if
+          error stop 1
+        end if
+        field_ptrs(i)%ptr => solver%vort
+      case ("qcrit")
+        if (.not. associated(solver%qcrit)) then
+          if (solver%mesh%par%is_root()) then
+            print *, 'ERROR: Q-criterion not computed. &
+                     &Enable output_qcriterion and &
+                     &ensure snapshot_freq > 0.'
+          end if
+          error stop 1
+        end if
+        field_ptrs(i)%ptr => solver%qcrit
       case default
         if (solver%mesh%par%is_root()) then
           print *, 'ERROR: Unknown field name: ', trim(field_names(i))
