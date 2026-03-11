@@ -1004,7 +1004,6 @@ contains
 
   end subroutine process_spectral_110_z_bw
 
-
   attributes(global) subroutine enforce_periodicity_x(f_out, f_in, nx)
     implicit none
 
