@@ -733,7 +733,7 @@ contains
       end do
 
     else if ((.not. self%periodic_x) .and. self%periodic_y .and. &
-        self%periodic_z) then
+             self%periodic_z) then
       ! =========================================================================
       ! 100 case: Non-periodic X, Periodic Y, Periodic Z
       ! Uses TRANSPOSED indexing because data is transposed before FFT
