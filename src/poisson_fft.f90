@@ -58,6 +58,8 @@ module m_poisson_fft
     procedure(field_process), deferred :: undo_periodicity_x
     procedure(field_process), deferred :: enforce_periodicity_y
     procedure(field_process), deferred :: undo_periodicity_y
+    procedure(field_process), deferred :: enforce_periodicity_xy
+    procedure(field_process), deferred :: undo_periodicity_xy
     procedure :: base_init
     procedure :: solve_poisson
     procedure :: stretching_matrix
@@ -262,17 +264,13 @@ contains
     class(poisson_fft_t) :: self
     class(field_t), intent(inout) :: f, temp
 
-    ! Apply periodicity enforcement for both X and Y
-    call self%enforce_periodicity_x(temp, f)
-    call self%enforce_periodicity_y(f, temp)
+    call self%enforce_periodicity_xy(temp, f)
 
-    call self%fft_forward_110(f)
+    call self%fft_forward_110(temp)
     call self%fft_postprocess_110
-    call self%fft_backward_110(f)
+    call self%fft_backward_110(temp)
 
-    ! Undo periodicity for both X and Y
-    call self%undo_periodicity_y(temp, f)
-    call self%undo_periodicity_x(f, temp)
+    call self%undo_periodicity_xy(f, temp)
 
   end subroutine poisson_110
 

@@ -75,6 +75,50 @@ contains
 
   end subroutine memcpy3D_with_transpose_back
 
+  attributes(global) subroutine real_to_complex_3D(dst, src, nx, ny, nz)
+    !! Copy real array to complex array (imag = 0)
+    !! Used for C2C forward FFT (110 case)
+    implicit none
+
+    complex(dp), device, intent(out), dimension(:, :, :) :: dst
+    real(dp), device, intent(in), dimension(:, :, :) :: src
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, j, k
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    k = blockIdx%y
+
+    if (j <= ny) then
+      do i = 1, nx
+        dst(i, j, k) = cmplx(src(i, j, k), 0._dp, kind=dp)
+      end do
+    end if
+
+  end subroutine real_to_complex_3D
+
+  attributes(global) subroutine complex_to_real_3D(dst, src, nx, ny, nz)
+    !! Copy real part of complex array to real array
+    !! Used for C2C backward FFT (110 case)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: dst
+    complex(dp), device, intent(in), dimension(:, :, :) :: src
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, j, k
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    k = blockIdx%y
+
+    if (j <= ny) then
+      do i = 1, nx
+        dst(i, j, k) = real(src(i, j, k), kind=dp)
+      end do
+    end if
+
+  end subroutine complex_to_real_3D
+
   attributes(global) subroutine process_spectral_000( &
     div_u, waves, nx_spec, ny_spec, y_sp_st, nx, ny, nz, &
     ax, bx, ay, by, az, bz &
@@ -652,35 +696,27 @@ contains
 
   end subroutine process_spectral_010_bw
 
-  attributes(global) subroutine process_spectral_110( &
-    div_u, waves, nx_spec, ny_spec, x_sp_st, y_sp_st, nx, ny, nz, &
-    ax, bx, ay, by, az, bz &
+  attributes(global) subroutine process_spectral_110_norm_z( &
+    div_u, nx_spec, ny_spec, nx, ny, nz, az, bz &
     )
-    !! Post-processes for Dirichlet BC in X and Y, periodic in Z
+    !! 110 forward step 1: normalise + Z periodic post-process
+    !! No cross-thread writes — each thread only writes to its own (i,j,k).
     implicit none
 
     complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
-    complex(dp), device, intent(in), dimension(:, :, :) :: waves
-    real(dp), device, intent(in), dimension(:) :: ax, bx, ay, by, az, bz
+    real(dp), device, intent(in), dimension(:) :: az, bz
     integer, value, intent(in) :: nx_spec, ny_spec
-    integer, value, intent(in) :: x_sp_st, y_sp_st
     integer, value, intent(in) :: nx, ny, nz
 
-    integer :: i, j, k, ix, iy, iz, iy_rev
+    integer :: i, j, k, iz
     real(dp) :: tmp_r, tmp_c, div_r, div_c
-    real(dp) :: l_r, l_c, r_r, r_c
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
-    k = blockIdx%y ! nz_spec
+    k = blockIdx%y
 
-    ! ================================================================
-    ! FORWARD PASS
-    ! ================================================================
-
-    ! Step 1: Normalise and periodic post-process in z
     if (i <= nx_spec) then
       do j = 1, ny_spec
-        ix = i + x_sp_st; iy = j + y_sp_st; iz = k
+        iz = k
 
         ! normalisation
         div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
@@ -694,12 +730,81 @@ contains
         if (iz > nz/2 + 1) div_r = -div_r
         if (iz > nz/2 + 1) div_c = -div_c
 
-        ! update the entry
         div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
       end do
     end if
 
-    ! Step 2: Paired even/odd splitting for y (Dirichlet direction)
+  end subroutine process_spectral_110_norm_z
+
+  attributes(global) subroutine process_spectral_110_x_pair_fw( &
+    div_u, nx_spec, ny_spec, x_sp_st, ax, bx &
+    )
+    !! 110 forward step 2: X paired even/odd split
+    !! Cross-thread writes: thread i writes to ix_pair = nx_spec-i+2.
+    !! MUST be a separate kernel launch from step 1 (global barrier).
+    !! Race-free within this kernel: only threads with i in [2, nx_spec/2+1]
+    !! execute, and their pairs have i > nx_spec/2+1 so they don't execute.
+    implicit none
+
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
+    real(dp), device, intent(in), dimension(:) :: ax, bx
+    integer, value, intent(in) :: nx_spec, ny_spec
+    integer, value, intent(in) :: x_sp_st
+
+    integer :: i, j, k, ix, ix_pair
+    real(dp) :: l_r, l_c, r_r, r_c
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    k = blockIdx%y
+
+    if (i >= 2 .and. i <= nx_spec/2 + 1) then
+      ix = i + x_sp_st
+      ix_pair = nx_spec - i + 2
+      do j = 1, ny_spec
+        l_r = real(div_u(i, j, k), kind=dp)
+        l_c = aimag(div_u(i, j, k))
+        r_r = real(div_u(ix_pair, j, k), kind=dp)
+        r_c = aimag(div_u(ix_pair, j, k))
+
+        div_u(i, j, k) = 0.5_dp*cmplx( & !&
+          l_r*bx(ix) + l_c*ax(ix) + r_r*bx(ix) - r_c*ax(ix), &
+          -l_r*ax(ix) + l_c*bx(ix) + r_r*ax(ix) + r_c*bx(ix), kind=dp &
+          )
+        div_u(ix_pair, j, k) = 0.5_dp*cmplx( & !&
+          r_r*bx(ix_pair + x_sp_st) + r_c*ax(ix_pair + x_sp_st) &
+            + l_r*bx(ix_pair + x_sp_st) - l_c*ax(ix_pair + x_sp_st), &
+          -r_r*ax(ix_pair + x_sp_st) + r_c*bx(ix_pair + x_sp_st) &
+            + l_r*ax(ix_pair + x_sp_st) + l_c*bx(ix_pair + x_sp_st), &
+          kind=dp &
+          )
+      end do
+    end if
+
+  end subroutine process_spectral_110_x_pair_fw
+
+  attributes(global) subroutine process_spectral_110_y_poisson( &
+    div_u, waves, nx_spec, ny_spec, x_sp_st, y_sp_st, nx, nz, ay, by &
+    )
+    !! 110 forward step 3 + Poisson solve + backward step 1 combined:
+    !! Y paired split → Poisson divide → Y paired recombine
+    !! No cross-thread writes — j loops serially per thread.
+    implicit none
+
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
+    complex(dp), device, intent(in), dimension(:, :, :) :: waves
+    real(dp), device, intent(in), dimension(:) :: ay, by
+    integer, value, intent(in) :: nx_spec, ny_spec
+    integer, value, intent(in) :: x_sp_st, y_sp_st
+    integer, value, intent(in) :: nx, nz
+
+    integer :: i, j, k, ix, iy, iy_rev
+    real(dp) :: tmp_r, tmp_c, div_r, div_c
+    real(dp) :: l_r, l_c, r_r, r_c
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    k = blockIdx%y
+
+    ! Y paired split (forward)
     if (i <= nx_spec) then
       do j = 2, ny_spec/2 + 1
         iy = j + y_sp_st
@@ -710,28 +815,19 @@ contains
         r_r = real(div_u(i, ny_spec - j + 2, k), kind=dp)
         r_c = aimag(div_u(i, ny_spec - j + 2, k))
 
-        ! update the entry
         div_u(i, j, k) = 0.5_dp*cmplx( & !&
-         l_r*by(iy) + l_c*ay(iy) + r_r*by(iy) - r_c*ay(iy), &
-         -l_r*ay(iy) + l_c*by(iy) + r_r*ay(iy) + r_c*by(iy), kind=dp &
-         )
+          l_r*by(iy) + l_c*ay(iy) + r_r*by(iy) - r_c*ay(iy), &
+          -l_r*ay(iy) + l_c*by(iy) + r_r*ay(iy) + r_c*by(iy), kind=dp &
+          )
         div_u(i, ny_spec - j + 2, k) = 0.5_dp*cmplx( & !&
-         r_r*by(iy_rev) + r_c*ay(iy_rev) + l_r*by(iy_rev) - l_c*ay(iy_rev), &
-         -r_r*ay(iy_rev) + r_c*by(iy_rev) + l_r*ay(iy_rev) + l_c*by(iy_rev), &
-         kind=dp &
-         )
+          r_r*by(iy_rev) + r_c*ay(iy_rev) + l_r*by(iy_rev) - l_c*ay(iy_rev), &
+          -r_r*ay(iy_rev) + r_c*by(iy_rev) + l_r*ay(iy_rev) + l_c*by(iy_rev), &
+          kind=dp &
+          )
       end do
     end if
 
-    ! NOTE: No x-direction paired splitting!
-    ! For the R2C FFT output, the x-direction Dirichlet BC is handled
-    ! implicitly through the waves_set.
-    ! The R2C output only contains nx/2+1 values (wavenumbers 0 to nx/2),
-    ! so there's no "pairing" to do
-
-    ! ================================================================
-    ! POISSON SOLVE
-    ! ================================================================
+    ! Poisson solve
     if (i <= nx_spec) then
       do j = 1, ny_spec
         ix = i + x_sp_st
@@ -752,18 +848,12 @@ contains
           div_c = -div_c/tmp_c
         end if
 
-        ! update the entry
         div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
-        ! Zero out the mode at (nx/2+1, *, nz/2+1) for uniqueness
         if (ix == nx/2 + 1 .and. k == nz/2 + 1) div_u(i, j, k) = 0._dp
       end do
     end if
 
-    ! ================================================================
-    ! BACKWARD PASS
-    ! ================================================================
-
-    ! Step 1: Paired even/odd recombination for y (Dirichlet direction)
+    ! Y paired recombine (backward)
     if (i <= nx_spec) then
       do j = 2, ny_spec/2 + 1
         iy = j + y_sp_st
@@ -787,7 +877,68 @@ contains
       end do
     end if
 
-    ! Step 2: Periodic post-process in z (undo)
+  end subroutine process_spectral_110_y_poisson
+
+  attributes(global) subroutine process_spectral_110_x_pair_bw( &
+    div_u, nx_spec, ny_spec, x_sp_st, ax, bx &
+    )
+    !! 110 backward step 2: X paired even/odd recombine
+    !! Cross-thread writes — MUST be a separate kernel launch.
+    implicit none
+
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
+    real(dp), device, intent(in), dimension(:) :: ax, bx
+    integer, value, intent(in) :: nx_spec, ny_spec
+    integer, value, intent(in) :: x_sp_st
+
+    integer :: i, j, k, ix, ix_pair
+    real(dp) :: l_r, l_c, r_r, r_c
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    k = blockIdx%y
+
+    if (i >= 2 .and. i <= nx_spec/2 + 1) then
+      ix = i + x_sp_st
+      ix_pair = nx_spec - i + 2
+      do j = 1, ny_spec
+        l_r = real(div_u(i, j, k), kind=dp)
+        l_c = aimag(div_u(i, j, k))
+        r_r = real(div_u(ix_pair, j, k), kind=dp)
+        r_c = aimag(div_u(ix_pair, j, k))
+
+        div_u(i, j, k) = cmplx( & !&
+          l_r*bx(ix) - l_c*ax(ix) + r_r*ax(ix) + r_c*bx(ix), &
+          l_r*ax(ix) + l_c*bx(ix) - r_r*bx(ix) + r_c*ax(ix), kind=dp &
+          )
+        div_u(ix_pair, j, k) = cmplx( & !&
+          r_r*bx(ix_pair + x_sp_st) - r_c*ax(ix_pair + x_sp_st) &
+            + l_r*ax(ix_pair + x_sp_st) + l_c*bx(ix_pair + x_sp_st), &
+          r_r*ax(ix_pair + x_sp_st) + r_c*bx(ix_pair + x_sp_st) &
+            - l_r*bx(ix_pair + x_sp_st) + l_c*ax(ix_pair + x_sp_st), &
+          kind=dp &
+          )
+      end do
+    end if
+
+  end subroutine process_spectral_110_x_pair_bw
+
+  attributes(global) subroutine process_spectral_110_z_bw( &
+    div_u, nx_spec, ny_spec, nz, az, bz &
+    )
+    !! 110 backward step 3: Z periodic undo
+    !! No cross-thread writes.
+    implicit none
+
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
+    real(dp), device, intent(in), dimension(:) :: az, bz
+    integer, value, intent(in) :: nx_spec, ny_spec, nz
+
+    integer :: i, j, k, iz
+    real(dp) :: tmp_r, tmp_c, div_r, div_c
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    k = blockIdx%y
+
     if (i <= nx_spec) then
       do j = 1, ny_spec
         iz = k
@@ -803,12 +954,11 @@ contains
         if (iz > nz/2 + 1) div_r = -div_r
         if (iz > nz/2 + 1) div_c = -div_c
 
-        ! update the entry
         div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
       end do
     end if
 
-  end subroutine process_spectral_110
+  end subroutine process_spectral_110_z_bw
 
   attributes(global) subroutine enforce_periodicity_x(f_out, f_in, nx)
     implicit none
@@ -917,5 +1067,87 @@ contains
     end if
 
   end subroutine undo_periodicity_y
+
+  attributes(global) subroutine enforce_periodicity_xy(f_out, f_in, nx, ny)
+    !! Combined X and Y periodicity enforcement (interleave shuffle).
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: f_out
+    real(dp), device, intent(in), dimension(:, :, :) :: f_in
+    integer, value, intent(in) :: nx, ny
+
+    integer :: i, j, k
+    integer :: n2x, n2y
+    integer :: src_i, src_j
+
+    n2x = nx/2
+    n2y = ny/2
+
+    k = blockIdx%x
+    j = (blockIdx%y - 1)*blockDim%x + threadIdx%x
+    if (j > ny) return
+
+    if (j <= n2y) then
+      src_j = 2*j - 1
+    else if (mod(ny, 2) == 1 .and. j == n2y + 1) then
+      src_j = ny
+    else
+      src_j = 2*ny - 2*j + 2
+    end if
+
+    do i = 1, nx
+      if (i <= n2x) then
+        src_i = 2*i - 1
+      else if (mod(nx, 2) == 1 .and. i == n2x + 1) then
+        src_i = nx
+      else
+        src_i = 2*nx - 2*i + 2
+      end if
+
+      f_out(i, j, k) = f_in(src_i, src_j, k)
+    end do
+
+  end subroutine enforce_periodicity_xy
+
+  attributes(global) subroutine undo_periodicity_xy(f_out, f_in, nx, ny)
+    !! Combined X and Y periodicity undo (reverse interleave shuffle).
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: f_out
+    real(dp), device, intent(in), dimension(:, :, :) :: f_in
+    integer, value, intent(in) :: nx, ny
+
+    integer :: i, j, k
+    integer :: n2x, n2y
+    integer :: src_i, src_j
+
+    n2x = nx/2
+    n2y = ny/2
+
+    k = blockIdx%x
+    j = (blockIdx%y - 1)*blockDim%x + threadIdx%x
+    if (j > ny) return
+
+    if (mod(ny, 2) == 1 .and. j == ny) then
+      src_j = n2y + 1
+    else if (mod(j, 2) == 1) then
+      src_j = (j + 1)/2
+    else
+      src_j = ny - j/2 + 1
+    end if
+
+    do i = 1, nx
+      if (mod(nx, 2) == 1 .and. i == nx) then
+        src_i = n2x + 1
+      else if (mod(i, 2) == 1) then
+        src_i = (i + 1)/2
+      else
+        src_i = nx - i/2 + 1
+      end if
+
+      f_out(i, j, k) = f_in(src_i, src_j, k)
+    end do
+
+  end subroutine undo_periodicity_xy
 
 end module m_cuda_spectral
