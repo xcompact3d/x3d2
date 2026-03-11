@@ -16,9 +16,15 @@ module m_cuda_poisson_fft
   use m_cuda_allocator, only: cuda_field_t
   use m_cuda_spectral, only: memcpy3D, memcpy3D_with_transpose, &
                              memcpy3D_with_transpose_back, &
-                             real_to_complex_3D, complex_to_real_3D, &
+                             transpose_xyz_to_zxy, transpose_zxy_to_xyz, &
                              process_spectral_000, process_spectral_010, &
-                             process_spectral_110, &
+                             process_spectral_110_norm_z, &
+                             process_spectral_110_x_pair_fw, &
+                             process_spectral_110_y_pair_fw, &
+                             process_spectral_110_poisson, &
+                             process_spectral_110_y_pair_bw, &
+                             process_spectral_110_x_pair_bw, &
+                             process_spectral_110_z_bw, &
                              enforce_periodicity_x, undo_periodicity_x, &
                              enforce_periodicity_y, undo_periodicity_y, &
                              enforce_periodicity_xy, undo_periodicity_xy, &
@@ -46,10 +52,8 @@ module m_cuda_poisson_fft
     real(dp), device, allocatable, dimension(:, :, :, :) :: &
       a_odd_re_dev, a_odd_im_dev, a_even_re_dev, a_even_im_dev, &
       a_re_dev, a_im_dev
-    !> Forward and backward FFT transform plans (R2C/C2R)
+    !> Forward and backward FFT transform plans
     integer :: plan3D_fw, plan3D_bw
-    !> C2C FFT plan for 110 case
-    integer :: plan3D_c2c
 
     !> Flag to indicate whether cuFFTMp is used
     logical :: use_cufftmp = .true.
@@ -63,12 +67,12 @@ module m_cuda_poisson_fft
     !> cuFFTMp object manages decomposition and data storage
     type(cudaLibXtDesc), pointer :: xtdesc
 
-    !> Standard cuFFT storage (R2C/C2R)
+    !> Standard cuFFT storage
     complex(dp), device, allocatable, dimension(:, :, :) :: c_dev
     !> cuFFT real workspace (input/output of R2C/C2R)
     real(dp), device, allocatable, dimension(:, :, :) :: r_dev
-    !> C2C complex workspace for 110 case (full nx*ny*nz)
-    complex(dp), device, allocatable, dimension(:, :, :) :: c2c_dev
+    !> Transposed real workspace for 110 case (nz, nx, ny)
+    real(dp), device, allocatable, dimension(:, :, :) :: r_dev_110
   contains
     procedure :: fft_forward => fft_forward_cuda
     procedure :: fft_forward_010 => fft_forward_cuda
@@ -194,14 +198,9 @@ contains
     logical :: periodic_x, periodic_y, periodic_z
     logical :: fw_was_cufftmp
 
-    ! FFT plan dimensions (100 case transposes data to ny, nx, nz)
-    integer :: fft_n1, fft_n2, fft_n1_loc, fft_n2_loc
-    ! FFT plan types determined by precision
-    integer :: fw_plan_type, bw_plan_type, c2c_plan_type
+    integer :: fft_n1, fft_n2, fft_n3, fft_n1_loc, fft_n2_loc
+    integer :: fw_plan_type, bw_plan_type
 
-    integer(int_ptr_kind()) :: worksize
-
-    ! Get periodicity from mesh BEFORE base_init
     periodic_x = mesh%grid%periodic_BC(1)
     periodic_y = mesh%grid%periodic_BC(2)
     periodic_z = mesh%grid%periodic_BC(3)
@@ -231,12 +230,15 @@ contains
       n_sp_st(2) = dims_loc(1)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
 
     else if (poisson_fft%is_110_case) then
-      ! C2C: full X spectrum, no R2C halving
-      n_spec(1) = dims_loc(1)
-      n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
+      ! R2C Z-transpose: spectral array is (nz/2+1, nx, ny)
+      ! dim1 = Z R2C modes, dim2 = X full spectrum, dim3 = Y full spectrum
+      n_spec(1) = dims_glob(3)/2 + 1
+      n_spec(2) = dims_loc(1)
+      n_spec(3) = dims_loc(2)
 
-      n_sp_st(1) = dims_loc(1)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
-      n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
+      n_sp_st(1) = 0
+      n_sp_st(2) = 0
+      n_sp_st(3) = 0
 
     else if (poisson_fft%is_010_case .or. poisson_fft%is_000_case) then
       n_spec(1) = dims_loc(1)/2 + 1
@@ -249,9 +251,10 @@ contains
       error stop "Unsupported periodicity combination!!"
     end if
 
-    ! Common across all Z-periodic cases
-    n_spec(3) = dims_glob(3)
-    n_sp_st(3) = 0
+    if (.not. poisson_fft%is_110_case) then
+      n_spec(3) = dims_glob(3)
+      n_sp_st(3) = 0
+    end if
 
     call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
 
@@ -260,29 +263,26 @@ contains
     nz = poisson_fft%nz_glob
 
     ! Determine FFT plan dimensions
-    ! 100: transpose X<->Y, FFT on (ny, nx, nz)
-    ! All others (000, 010, 110): FFT on (nx, ny, nz)
     if (poisson_fft%is_100_case) then
-      fft_n1 = ny
-      fft_n2 = nx
-      fft_n1_loc = dims_loc(2)
-      fft_n2_loc = dims_loc(1)
+      ! 100: transpose X<->Y, FFT on (ny, nx, nz)
+      fft_n1 = ny; fft_n2 = nx; fft_n3 = nz
+      fft_n1_loc = dims_loc(2); fft_n2_loc = dims_loc(1)
+    else if (poisson_fft%is_110_case) then
+      ! 110: transpose to (nz, nx, ny), R2C along Z
+      fft_n1 = nz; fft_n2 = nx; fft_n3 = ny
+      fft_n1_loc = dims_glob(3); fft_n2_loc = dims_loc(1)
     else
-      fft_n1 = nx
-      fft_n2 = ny
-      fft_n1_loc = dims_loc(1)
-      fft_n2_loc = dims_loc(2)
+      ! 000, 010: FFT on (nx, ny, nz)
+      fft_n1 = nx; fft_n2 = ny; fft_n3 = nz
+      fft_n1_loc = dims_loc(1); fft_n2_loc = dims_loc(2)
     end if
 
-    ! Determine FFT plan types based on precision
     if (is_sp) then
       fw_plan_type = CUFFT_R2C
       bw_plan_type = CUFFT_C2R
-      c2c_plan_type = CUFFT_C2C
     else
       fw_plan_type = CUFFT_D2Z
       bw_plan_type = CUFFT_Z2D
-      c2c_plan_type = CUFFT_Z2Z
     end if
 
     allocate (poisson_fft%waves_dev(poisson_fft%nx_spec, &
@@ -329,45 +329,44 @@ contains
     end if
 
     if (poisson_fft%is_110_case) then
-      ! ---- 110 case: use C2C FFT (no cuFFTMp for non-periodic BCs) ----
+      ! 110: R2C with Z-transpose, no cuFFTMp for non-periodic BCs
       poisson_fft%use_cufftmp = .false.
 
-      ! Create C2C plan directly (no cuFFTMp attempt)
-      ierr = cufftCreate(poisson_fft%plan3D_c2c)
-      ierr = cufftMakePlan3D(poisson_fft%plan3D_c2c, nz, ny, nx, &
-                             c2c_plan_type, worksize)
-      if (ierr /= 0) then
-        write (stderr, *), 'cuFFT Error Code: ', ierr
-        error stop 'C2C 3D FFT plan generation failed (110 case)'
-      end if
+      call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
+                           fft_n1, fft_n2, fft_n3, fw_plan_type, &
+                           mesh%par%is_root(), 'Forward 110')
+      call create_fft_plan(poisson_fft%plan3D_bw, poisson_fft%use_cufftmp, &
+                           fft_n1, fft_n2, fft_n3, bw_plan_type, &
+                           mesh%par%is_root(), 'Backward 110')
 
-      ! Allocate C2C complex workspace (full nx*ny*nz)
-      allocate (poisson_fft%c2c_dev(fft_n1_loc, fft_n2_loc, &
-                                    poisson_fft%nz_loc))
+      ! Transposed real workspace (nz, nx, ny)
+      allocate (poisson_fft%r_dev_110(nz, nx, ny))
+      ! Spectral complex workspace (nz/2+1, nx, ny)
+      allocate (poisson_fft%c_dev(poisson_fft%nx_spec, &
+                                  poisson_fft%ny_spec, &
+                                  poisson_fft%nz_spec))
 
       if (mesh%par%is_root()) then
-        print *, 'Using cuFFT C2C for FFT (110 case)'
+        print *, 'Using cuFFT R2C (Z-transpose) for FFT (110 case)'
       end if
 
     else
-      ! ---- All other cases: R2C/C2R FFT with cuFFTMp fallback ----
-
-      ! Create forward FFT plan with automatic cuFFTMp detection/fallback
+      ! All other cases: standard R2C/C2R with cuFFTMp fallback
       call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
-                           fft_n1, fft_n2, nz, fw_plan_type, &
+                           fft_n1, fft_n2, fft_n3, fw_plan_type, &
                            mesh%par%is_root(), 'Forward')
       fw_was_cufftmp = poisson_fft%use_cufftmp
 
       ! Create backward FFT plan with automatic cuFFTMp detection/fallback
       call create_fft_plan(poisson_fft%plan3D_bw, poisson_fft%use_cufftmp, &
-                           fft_n1, fft_n2, nz, bw_plan_type, &
+                           fft_n1, fft_n2, fft_n3, bw_plan_type, &
                            mesh%par%is_root(), 'Backward')
 
       ! If backward plan forced fallback, rebuild forward plan too
       if (fw_was_cufftmp .and. (.not. poisson_fft%use_cufftmp)) then
         ierr = cufftDestroy(poisson_fft%plan3D_fw)
         call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
-                             fft_n1, fft_n2, nz, fw_plan_type, &
+                             fft_n1, fft_n2, fft_n3, fw_plan_type, &
                              mesh%par%is_root(), 'Forward')
       end if
 
@@ -400,15 +399,14 @@ contains
   end function init
 
   subroutine fft_forward_110_cuda(self, f)
-    !! Forward C2C FFT for 110 case
-    !! Copies real data to complex array (imag=0), then executes C2C forward
+    !! Forward FFT for 110 case: transpose (nx,ny,nz)→(nz,nx,ny) then R2C
     implicit none
 
     class(cuda_poisson_fft_t) :: self
     class(field_t), intent(in) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :)
-    integer :: tsize, ierr
+    integer :: ierr, tpb
     type(dim3) :: blocks, threads
 
     select type (f)
@@ -416,41 +414,39 @@ contains
       padded_dev => f%data_d
     end select
 
-    ! Copy real data to complex array
-    tsize = 16
-    blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
-    threads = dim3(tsize, 1, 1)
+    ! Transpose (nx, ny, nz) → (nz, nx, ny)
+    tpb = min(self%ny_loc, 256)
+    blocks = dim3(self%nz_loc, (self%ny_loc - 1)/tpb + 1, 1)
+    threads = dim3(tpb, 1, 1)
 
-    call real_to_complex_3D<<<blocks, threads>>>( & !&
-      self%c2c_dev, padded_dev, self%nx_loc, self%ny_loc, self%nz_loc &
+    call transpose_xyz_to_zxy<<<blocks, threads>>>( & !&
+      self%r_dev_110, padded_dev, self%nx_loc, self%ny_loc, self%nz_loc &
       )
 
-    ! Execute C2C forward FFT
+    ! R2C FFT on transposed data
 #ifdef SINGLE_PREC
-    ierr = cufftExecC2C(self%plan3D_c2c, self%c2c_dev, self%c2c_dev, &
-                        CUFFT_FORWARD)
+    ierr = cufftExecR2C_C(self%plan3D_fw, c_loc(self%r_dev_110), &
+                          c_loc(self%c_dev))
 #else
-    ierr = cufftExecZ2Z(self%plan3D_c2c, self%c2c_dev, self%c2c_dev, &
-                        CUFFT_FORWARD)
+    ierr = cufftExecD2Z(self%plan3D_fw, self%r_dev_110, self%c_dev)
 #endif
 
     if (ierr /= 0) then
       write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Forward C2C 3D FFT execution failed (110 case)'
+      error stop 'Forward R2C FFT failed (110 Z-transpose case)'
     end if
 
   end subroutine fft_forward_110_cuda
 
   subroutine fft_backward_110_cuda(self, f)
-    !! Backward C2C FFT for 110 case
-    !! Executes C2C backward, then copies real part to output field
+    !! Backward FFT for 110 case: C2R then transpose (nz,nx,ny)→(nx,ny,nz)
     implicit none
 
     class(cuda_poisson_fft_t) :: self
     class(field_t), intent(inout) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :)
-    integer :: tsize, ierr
+    integer :: ierr, tpb
     type(dim3) :: blocks, threads
 
     select type (f)
@@ -458,29 +454,28 @@ contains
       padded_dev => f%data_d
     end select
 
-    ! Execute C2C backward FFT
+    ! C2R FFT
 #ifdef SINGLE_PREC
-    ierr = cufftExecC2C(self%plan3D_c2c, self%c2c_dev, self%c2c_dev, &
-                        CUFFT_INVERSE)
+    ierr = cufftExecC2R_C(self%plan3D_bw, c_loc(self%c_dev), &
+                          c_loc(self%r_dev_110))
 #else
-    ierr = cufftExecZ2Z(self%plan3D_c2c, self%c2c_dev, self%c2c_dev, &
-                        CUFFT_INVERSE)
+    ierr = cufftExecZ2D(self%plan3D_bw, self%c_dev, self%r_dev_110)
 #endif
 
     if (ierr /= 0) then
       write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Backward C2C 3D FFT execution failed (110 case)'
+      error stop 'Backward C2R FFT failed (110 Z-transpose case)'
     end if
 
-    ! Copy real part back to field
+    ! Transpose (nz, nx, ny) → (nx, ny, nz)
     padded_dev = 0._dp
 
-    tsize = 16
-    blocks = dim3((self%ny_loc - 1)/tsize + 1, self%nz_loc, 1)
-    threads = dim3(tsize, 1, 1)
+    tpb = min(self%ny_loc, 256)
+    blocks = dim3(self%nz_loc, (self%ny_loc - 1)/tpb + 1, 1)
+    threads = dim3(tpb, 1, 1)
 
-    call complex_to_real_3D<<<blocks, threads>>>( & !&
-      padded_dev, self%c2c_dev, self%nx_loc, self%ny_loc, self%nz_loc &
+    call transpose_zxy_to_xyz<<<blocks, threads>>>( & !&
+      padded_dev, self%r_dev_110, self%nx_loc, self%ny_loc, self%nz_loc &
       )
 
   end subroutine fft_backward_110_cuda
@@ -929,71 +924,70 @@ contains
 
   end subroutine fft_postprocess_010_cuda
 
-! =============================================================================
-! Updated fft_postprocess_110_cuda for m_cuda_poisson_fft
-!
-! Replaces single kernel launch with 5 sequential launches.
-! Each launch is an implicit global barrier, preventing the race condition
-! where the X paired split (cross-thread-block writes) could corrupt data
-! that other blocks haven't finished reading from the Z normalization step.
-!
-! Launch sequence:
-!   1. process_spectral_110_norm_z     — normalise + Z periodic (no races)
-!   2. process_spectral_110_x_pair_fw  — X paired split (cross-block writes)
-!   3. process_spectral_110_y_poisson  — Y pair + Poisson + Y unpair (serial j)
-!   4. process_spectral_110_x_pair_bw  — X paired recombine (cross-block writes)
-!   5. process_spectral_110_z_bw       — Z periodic undo (no races)
-! =============================================================================
-
   subroutine fft_postprocess_110_cuda(self)
+    !! Spectral post-processing for 110 case (R2C Z-transpose)
+    !! 7 separate kernel launches to avoid cross-block race conditions.
+    !! Spectral array is (nz/2+1, nx, ny) = (nx_spec, ny_spec, nz_spec).
+    !! Thread i→X (ny_spec), blockIdx%y k→Y (nz_spec), serial j→Z (nx_spec).
     implicit none
 
     class(cuda_poisson_fft_t) :: self
 
     type(dim3) :: blocks, threads
-    integer :: tsize
+    integer :: tsize, nz_h
+
+    nz_h = self%nx_spec  ! = nz/2+1 (1st dim of spectral array)
 
     tsize = 16
-    blocks = dim3((self%nx_spec - 1)/tsize + 1, self%nz_spec, 1)
+    ! threads over X (ny_spec = nx), blocks over Y (nz_spec = ny)
+    blocks = dim3((self%ny_spec - 1)/tsize + 1, self%nz_spec, 1)
     threads = dim3(tsize, 1, 1)
 
-    ! Step 1: normalise + Z periodic post-process
+    ! Step 1: normalise + Z periodic forward
     call process_spectral_110_norm_z<<<blocks, threads>>>( & !&
-      self%c2c_dev, &
-      self%nx_spec, self%ny_spec, &
-      self%nx_glob, self%ny_glob, self%nz_glob, &
+      self%c_dev, nz_h, &
+      self%ny_spec, self%nz_spec, self%nz_glob, &
       self%az_dev, self%bz_dev &
       )
 
-    ! Step 2: X paired even/odd split (global barrier before cross-block writes)
+    ! Step 2: X paired split (forward)
     call process_spectral_110_x_pair_fw<<<blocks, threads>>>( & !&
-      self%c2c_dev, &
-      self%nx_spec, self%ny_spec, &
-      self%x_sp_st, &
+      self%c_dev, nz_h, &
+      self%ny_spec, self%nz_spec, self%x_sp_st, &
       self%ax_dev, self%bx_dev &
       )
 
-    ! Step 3: Y paired split + Poisson solve + Y paired recombine
-    call process_spectral_110_y_poisson<<<blocks, threads>>>( & !&
-      self%c2c_dev, self%waves_dev, &
-      self%nx_spec, self%ny_spec, &
-      self%x_sp_st, self%y_sp_st, &
-      self%nx_glob, self%nz_glob, &
+    ! Step 3: Y paired split (forward)
+    call process_spectral_110_y_pair_fw<<<blocks, threads>>>( & !&
+      self%c_dev, nz_h, &
+      self%ny_spec, self%nz_spec, self%y_sp_st, &
       self%ay_dev, self%by_dev &
       )
 
-    ! Step 4: X paired even/odd recombine (global barrier before cross-block writes)
+    ! Step 4: Poisson solve
+    call process_spectral_110_poisson<<<blocks, threads>>>( & !&
+      self%c_dev, self%waves_dev, nz_h, &
+      self%ny_spec, self%nz_spec, self%nz_glob, self%x_sp_st &
+      )
+
+    ! Step 5: Y paired recombine (backward)
+    call process_spectral_110_y_pair_bw<<<blocks, threads>>>( & !&
+      self%c_dev, nz_h, &
+      self%ny_spec, self%nz_spec, self%y_sp_st, &
+      self%ay_dev, self%by_dev &
+      )
+
+    ! Step 6: X paired recombine (backward)
     call process_spectral_110_x_pair_bw<<<blocks, threads>>>( & !&
-      self%c2c_dev, &
-      self%nx_spec, self%ny_spec, &
-      self%x_sp_st, &
+      self%c_dev, nz_h, &
+      self%ny_spec, self%nz_spec, self%x_sp_st, &
       self%ax_dev, self%bx_dev &
       )
 
-    ! Step 5: Z periodic undo
+    ! Step 7: Z periodic undo (backward)
     call process_spectral_110_z_bw<<<blocks, threads>>>( & !&
-      self%c2c_dev, &
-      self%nx_spec, self%ny_spec, self%nz_glob, &
+      self%c_dev, nz_h, &
+      self%ny_spec, self%nz_spec, self%nz_glob, &
       self%az_dev, self%bz_dev &
       )
 
