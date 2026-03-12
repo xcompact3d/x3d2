@@ -972,14 +972,14 @@ contains
   end subroutine process_spectral_110_x_pair_bw
 
   attributes(global) subroutine process_spectral_110_z_bw( &
-    div_u, nz_h, nx, ny, nz, az, bz &
+    div_u, nz_h, nx, ny, az, bz &
     )
     !! Step 7 (backward): Z periodic undo
     implicit none
 
     complex(dp), device, intent(inout), dimension(:, :, :) :: div_u ! (nz/2+1, nx, ny)
     real(dp), device, intent(in), dimension(:) :: az, bz
-    integer, value, intent(in) :: nz_h, nx, ny, nz
+    integer, value, intent(in) :: nz_h, nx, ny
 
     integer :: i, j, k
     real(dp) :: tmp_r, tmp_c, div_r, div_c

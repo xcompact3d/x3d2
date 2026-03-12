@@ -340,7 +340,7 @@ contains
                            mesh%par%is_root(), 'Backward 110')
 
       ! Transposed real workspace (nz, nx, ny)
-      allocate (poisson_fft%r_dev_110(nz, nx, ny))
+      allocate (poisson_fft%r_dev_110(fft_n1, fft_n2, fft_n3))
       ! Spectral complex workspace (nz/2+1, nx, ny)
       allocate (poisson_fft%c_dev(poisson_fft%nx_spec, &
                                   poisson_fft%ny_spec, &
@@ -987,7 +987,7 @@ contains
     ! Step 7: Z periodic undo (backward)
     call process_spectral_110_z_bw<<<blocks, threads>>>( & !&
       self%c_dev, nz_h, &
-      self%ny_spec, self%nz_spec, self%nz_glob, &
+      self%ny_spec, self%nz_spec, &
       self%az_dev, self%bz_dev &
       )
 
