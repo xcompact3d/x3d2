@@ -11,7 +11,8 @@ module m_snapshot_manager
   use m_field, only: field_t
   use m_solver, only: solver_t
   use m_io_session, only: writer_session_t
-  use m_config, only: checkpoint_config_t, has_output_field
+  use m_config, only: checkpoint_config_t, has_output_field, &
+                      NUM_SNAPSHOT_FIELDS
   use m_io_field_utils, only: field_buffer_map_t, field_ptr_t, &
                               setup_field_arrays, cleanup_field_arrays, &
                               stride_data_to_buffer, get_output_dimensions, &
@@ -191,7 +192,7 @@ contains
     type(checkpoint_config_t), intent(in) :: config
     character(len=32), allocatable :: names(:)
 
-    character(len=32) :: tmp(6)
+    character(len=32) :: tmp(NUM_SNAPSHOT_FIELDS)
     integer :: n
 
     n = 3

@@ -8,7 +8,12 @@ module m_config
 
   integer, parameter :: n_species_max = 99
 
+  !! Maximum number of additional (non-mandatory) output fields in a snapshot
   integer, parameter :: MAX_OUTPUT_FIELDS = 10
+  !! Total number of possible snapshot fields: 3 mandatory (u,v,w) + 3 optional
+  !! (pressure, vorticity, qcriterion). Must be updated if new optional fields
+  !! are added to get_snapshot_fields in snapshot_manager.f90.
+  integer, parameter :: NUM_SNAPSHOT_FIELDS = 6
 
   type, abstract :: base_config_t
     !! All config types have a method read to initialise their data

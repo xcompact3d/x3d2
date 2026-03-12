@@ -71,9 +71,9 @@ contains
     if (present(comm)) comm_to_use = comm
 
     call self%checkpoint_mgr%handle_checkpoint_step( &
-      solver, timestep, comm, self%stats_mgr &
+      solver, timestep, comm_to_use, self%stats_mgr &
       )
-    call self%snapshot_mgr%handle_snapshot_step(solver, timestep, comm)
+    call self%snapshot_mgr%handle_snapshot_step(solver, timestep, comm_to_use)
     call self%stats_mgr%write_stats(solver, timestep, comm_to_use)
   end subroutine io_handle_step
 
