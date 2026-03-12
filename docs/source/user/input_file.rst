@@ -17,7 +17,7 @@ These parameters are specified in the ``checkpoint_params`` namelist block in th
      snapshot_prefix = "snapshot"
      snapshot_sp = .false.
      output_stride = 2, 2, 2
-     output_pressure = .false.
+     output_fields = 'pressure', 'vorticity', 'qcriterion'
      restart_from_checkpoint = .false.
      restart_file = ""
    /End
@@ -43,8 +43,14 @@ These parameters are specified in the ``checkpoint_params`` namelist block in th
 ``output_stride``: Three-element array specifying the spatial stride (subsampling) in ``X``, ``Y``, and ``Z`` directions for visualisation snapshots. Using values greater than ``1`` reduces file size and increases I/O performance, but decreases visualisation resolution.
   **Default:** ``[1, 1, 1]``
 
-``output_pressure``: Boolean flag to include the pressure field in visualisation snapshots. When enabled, the pressure field is interpolated from its native cell-centred grid to the vertex grid (matching the velocity field locations) for ParaView compatibility. Note: pressure is not included in checkpoint files since it is a derived quantity recomputed from velocity.
-  **Default:** ``false``
+``output_fields``: List of additional derived fields to include in visualisation snapshots. Velocity components (``u``, ``v``, ``w``) are always written. Supported field names:
+
+  - ``'pressure'`` — Pressure field, interpolated from its native cell-centred grid to the vertex grid for ParaView compatibility. Not included in checkpoint files since it is recomputed from velocity.
+  - ``'vorticity'`` — Vorticity magnitude :math:`|\omega| = \sqrt{\omega_x^2 + \omega_y^2 + \omega_z^2}`, computed from the full velocity gradient tensor.
+  - ``'qcriterion'`` — Q-criterion :math:`Q = -\frac{1}{2} \sum_{ij} \frac{\partial u_i}{\partial x_j} \frac{\partial u_j}{\partial x_i}`, identifying vortical structures (positive Q indicates rotation-dominated regions).
+
+  When both ``'vorticity'`` and ``'qcriterion'`` are requested, the velocity gradient tensor is computed only once.
+  **Default:** (empty — only velocity is written)
 
 ``restart_from_checkpoint``: Boolean flag to restart the simulation from a checkpoint file.
   **Default:** ``false``
@@ -64,3 +70,53 @@ The checkpoint system uses ADIOS2 BP format for I/O which provides:
 - Visualisation files can use strided (lower resolution) output for performance
 
 To view snapshot files in ParaView, open the generated ``.bp`` files using the ADIOS2 reader plugin.
+
+Statistics Parameters
+~~~~~~~~~~~~~~~~~~~~~
+
+The statistics parameters control the accumulation and output of time-averaged flow statistics.
+These parameters are specified in the ``stats_params`` namelist block in the input file.
+
+.. code-block:: fortran
+
+   &stats_params
+     initstat = 0
+     istatfreq = 1
+     istatout = 0
+     stats_prefix = "statistics"
+   /
+
+``initstat``: Timestep at which to begin accumulating statistics. Statistics are not collected before this iteration. Set to ``0`` to disable statistics entirely.
+  **Default:** ``0``
+
+``istatfreq``: Frequency (in timesteps) at which statistics are accumulated. A value of ``1`` means statistics are accumulated every timestep; a value of ``N`` means every N-th timestep.
+  **Default:** ``1``
+
+``istatout``: Frequency (in timesteps) at which accumulated statistics are written to file. Set to ``0`` to disable output.
+  **Default:** ``0``
+
+``stats_prefix``: String prefix for statistics output filenames.
+  **Default:** ``"statistics"``
+
+Output Fields
+^^^^^^^^^^^^^
+
+Statistics are written to separate ADIOS2 ``.bp`` files (e.g. ``statistics_001000.bp``), independent of the snapshot system. The output contains:
+
+**Velocity statistics** (always present):
+
+- ``umean``, ``vmean``, ``wmean`` — time-averaged velocity components
+- ``uprime``, ``vprime``, ``wprime`` — RMS velocity fluctuations: :math:`u' = \sqrt{\max(0,\, \overline{u^2} - \bar{u}^2)}`
+- ``uvmean``, ``uwmean``, ``vwmean`` — Reynolds stresses: :math:`\langle u'v' \rangle = \overline{uv} - \bar{u}\bar{v}`
+- ``sample_count`` — number of samples accumulated
+
+**Pressure statistics** (when ``'pressure'`` is in ``output_fields`` in ``checkpoint_params``):
+
+- ``pmean`` — time-averaged pressure field
+
+**Scalar statistics** (when ``n_species > 0`` in ``solver_params``):
+
+- ``phimean_N`` — time-averaged scalar field for species N
+- ``phiprime_N`` — RMS scalar fluctuation for species N
+
+Accumulation uses Welford's numerically stable online algorithm. Statistics always restart from scratch — they are not saved in checkpoint files.

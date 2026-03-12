@@ -8,6 +8,13 @@ module m_config
 
   integer, parameter :: n_species_max = 99
 
+  !! Maximum number of additional (non-mandatory) output fields in a snapshot
+  integer, parameter :: MAX_OUTPUT_FIELDS = 10
+  !! Total number of possible snapshot fields: 3 mandatory (u,v,w) + 3 optional
+  !! (pressure, vorticity, qcriterion). Must be updated if new optional fields
+  !! are added to get_snapshot_fields in snapshot_manager.f90.
+  integer, parameter :: NUM_SNAPSHOT_FIELDS = 6
+
   type, abstract :: base_config_t
     !! All config types have a method read to initialise their data
   contains
@@ -52,6 +59,15 @@ module m_config
     procedure :: read => read_cylinder_nml
   end type cylinder_config_t
 
+  type, extends(base_config_t) :: stats_config_t
+    integer :: initstat = 0          !! iteration to start accumulating (0 = disabled)
+    integer :: istatfreq = 1         !! accumulate every N steps
+    integer :: istatout = 0          !! write stats every N steps (0 = disabled)
+    character(len=256) :: stats_prefix = "statistics"
+  contains
+    procedure :: read => read_stats_nml
+  end type stats_config_t
+
   type, extends(base_config_t) :: checkpoint_config_t
     integer :: checkpoint_freq = 0                         !! Frequency of checkpointing (0 = off)
     integer :: snapshot_freq = 0                           !! Frequency of snapshots (0 = off)
@@ -62,7 +78,7 @@ module m_config
     character(len=256) :: restart_file = ""
     integer, dimension(3) :: output_stride = [2, 2, 2]     !! Spatial stride for snapshot output
     logical :: snapshot_sp = .false.                       !! if true, snapshot in single precision
-    logical :: output_pressure = .false.                   !! if true, include pressure in snapshots
+    character(len=32) :: output_fields(MAX_OUTPUT_FIELDS) = '' !! additional fields for snapshot output
   contains
     procedure :: read => read_checkpoint_nml
   end type checkpoint_config_t
@@ -272,12 +288,12 @@ contains
     character(len=256) :: restart_file = ""
     integer, dimension(3) :: output_stride = [1, 1, 1]
     logical :: snapshot_sp = .false.
-    logical :: output_pressure = .false.
+    character(len=32) :: output_fields(MAX_OUTPUT_FIELDS) = ''
 
     namelist /checkpoint_params/ checkpoint_freq, snapshot_freq, &
       keep_checkpoint, checkpoint_prefix, snapshot_prefix, &
       restart_from_checkpoint, restart_file, output_stride, snapshot_sp, &
-      output_pressure
+      output_fields
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading checkpoint config failed! &
                  &Provide only a file name or source, not both.'
@@ -307,8 +323,57 @@ contains
     self%restart_file = restart_file
     self%output_stride = output_stride
     self%snapshot_sp = snapshot_sp
-    self%output_pressure = output_pressure
+    self%output_fields = output_fields
   end subroutine read_checkpoint_nml
+
+  subroutine read_stats_nml(self, nml_file, nml_string)
+    implicit none
+
+    class(stats_config_t) :: self
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
+
+    integer :: unit, ierr
+
+    integer :: initstat = 0
+    integer :: istatfreq = 1
+    integer :: istatout = 0
+    character(len=256) :: stats_prefix = "statistics"
+
+    namelist /stats_params/ initstat, istatfreq, istatout, stats_prefix
+
+    if (present(nml_file) .and. present(nml_string)) then
+      error stop 'Reading stats config failed! &
+                 &Provide only a file name or source, not both.'
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file, iostat=ierr)
+      if (ierr == 0) then
+        read (unit, nml=stats_params, iostat=ierr)
+        if (ierr /= 0 .and. ierr /= -1) &
+          print *, 'WARNING: Error in stats_params namelist, &
+          & using defaults'
+      end if
+      close (unit)
+    else if (present(nml_string)) then
+      read (nml_string, nml=stats_params)
+    else
+      error stop 'Reading stats config failed! &
+                 &Provide at least one of the following: file name or source'
+    end if
+
+    self%initstat = initstat
+    self%istatfreq = istatfreq
+    self%istatout = istatout
+    self%stats_prefix = stats_prefix
+  end subroutine read_stats_nml
+
+  pure logical function has_output_field(config, name)
+    !! Check whether a field name is present in the output_fields list.
+    type(checkpoint_config_t), intent(in) :: config
+    character(*), intent(in) :: name
+
+    has_output_field = any(config%output_fields == name)
+  end function has_output_field
 
 end module m_config
 

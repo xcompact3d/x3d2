@@ -7,6 +7,7 @@ set(SRC
   ordering.f90
   poisson_fft.f90
   solver.f90
+  postprocess.f90
   tdsops.f90
   time_integrator.f90
   ordering.f90
@@ -60,6 +61,7 @@ set(IOSRC
   io/io_field_utils.f90
   io/checkpoint_manager.f90
   io/snapshot_manager.f90
+  io/stats.f90
   io/io_manager.f90
 )
 

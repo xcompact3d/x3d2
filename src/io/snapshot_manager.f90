@@ -11,7 +11,8 @@ module m_snapshot_manager
   use m_field, only: field_t
   use m_solver, only: solver_t
   use m_io_session, only: writer_session_t
-  use m_config, only: checkpoint_config_t
+  use m_config, only: checkpoint_config_t, has_output_field, &
+                      NUM_SNAPSHOT_FIELDS
   use m_io_field_utils, only: field_buffer_map_t, field_ptr_t, &
                               setup_field_arrays, cleanup_field_arrays, &
                               stride_data_to_buffer, get_output_dimensions, &
@@ -80,8 +81,9 @@ contains
       print *, 'Output stride: ', self%output_stride
       print *, 'Snapshot precision: ', merge('Single', 'Double', &
                                              self%config%snapshot_sp)
-      if (self%config%output_pressure) then
-        print *, 'Pressure output: Enabled'
+      if (any(self%config%output_fields /= '')) then
+        print *, 'Additional output fields: ', &
+          trim(adjustl(join_output_fields(self%config%output_fields)))
       end if
     end if
   end subroutine configure_output
@@ -124,12 +126,8 @@ contains
     if (self%config%snapshot_freq <= 0) return
     if (mod(timestep, self%config%snapshot_freq) /= 0) return
 
-    ! Build field names list based on configuration
-    if (self%config%output_pressure) then
-      field_names = [character(len=32) :: "u", "v", "w", "p"]
-    else
-      field_names = [character(len=32) :: "u", "v", "w"]
-    end if
+    allocate (field_names(0))
+    field_names = get_snapshot_fields(self%config)
 
     call MPI_Comm_rank(comm, myrank, ierr)
 
@@ -188,6 +186,28 @@ contains
     call cleanup_field_arrays(solver, field_ptrs, host_fields)
     deallocate (field_names)
   end subroutine write_snapshot
+
+  function get_snapshot_fields(config) result(names)
+    !! Build the list of field names for snapshot output
+    type(checkpoint_config_t), intent(in) :: config
+    character(len=32), allocatable :: names(:)
+
+    character(len=32) :: tmp(NUM_SNAPSHOT_FIELDS)
+    integer :: n
+
+    n = 3
+    tmp(1:3) = [character(len=32) :: "u", "v", "w"]
+    if (has_output_field(config, 'pressure')) then
+      n = n + 1; tmp(n) = "p"
+    end if
+    if (has_output_field(config, 'vorticity')) then
+      n = n + 1; tmp(n) = "vort"
+    end if
+    if (has_output_field(config, 'qcriterion')) then
+      n = n + 1; tmp(n) = "qcrit"
+    end if
+    names = tmp(1:n)
+  end function get_snapshot_fields
 
   subroutine generate_vtk_xml(self, dims, fields, origin, spacing)
     !! Generate VTK XML string for ImageData format for ParaView's ADIOS2VTXReader
@@ -332,5 +352,20 @@ contains
       self%is_snapshot_file_open = .false.
     end if
   end subroutine close_snapshot_file
+
+  function join_output_fields(fields) result(str)
+    !! Join non-empty output field names into a comma-separated string.
+    use m_config, only: MAX_OUTPUT_FIELDS
+    character(len=32), intent(in) :: fields(MAX_OUTPUT_FIELDS)
+    character(len=256) :: str
+    integer :: i
+
+    str = ''
+    do i = 1, MAX_OUTPUT_FIELDS
+      if (fields(i) == '') cycle
+      if (len_trim(str) > 0) str = trim(str)//', '
+      str = trim(str)//trim(fields(i))
+    end do
+  end function join_output_fields
 
 end module m_snapshot_manager

@@ -21,6 +21,7 @@ module m_checkpoint_manager
   use m_solver, only: solver_t
   use m_io_session, only: reader_session_t, writer_session_t
   use m_config, only: checkpoint_config_t
+  use m_stats, only: stats_manager_t
   use m_io_field_utils, only: field_buffer_map_t, field_ptr_t, &
                               setup_field_arrays, cleanup_field_arrays, &
                               stride_data_to_buffer, get_output_dimensions, &
@@ -96,11 +97,12 @@ contains
     restart = self%config%restart_from_checkpoint
   end function is_restart
 
-  subroutine handle_restart(self, solver, comm)
+  subroutine handle_restart(self, solver, comm, stats_mgr)
     !! Handle restart from checkpoint
     class(checkpoint_manager_t), intent(inout) :: self
     class(solver_t), intent(inout) :: solver
     integer, intent(in), optional :: comm
+    type(stats_manager_t), intent(inout), optional :: stats_mgr
 
     character(len=256) :: restart_file
     integer :: restart_timestep
@@ -112,7 +114,7 @@ contains
     end if
 
     call self%restart_checkpoint(solver, restart_file, restart_timestep, &
-                                 restart_time, comm)
+                                 restart_time, comm, stats_mgr)
 
     solver%current_iter = restart_timestep
 
@@ -122,27 +124,29 @@ contains
     end if
   end subroutine handle_restart
 
-  subroutine handle_checkpoint_step(self, solver, timestep, comm)
+  subroutine handle_checkpoint_step(self, solver, timestep, comm, stats_mgr)
     !! Handle checkpoint writing at a given timestep
     class(checkpoint_manager_t), intent(inout) :: self
     class(solver_t), intent(in) :: solver
     integer, intent(in) :: timestep
     integer, intent(in), optional :: comm
+    type(stats_manager_t), intent(inout), optional :: stats_mgr
 
     integer :: comm_to_use
 
     comm_to_use = MPI_COMM_WORLD
     if (present(comm)) comm_to_use = comm
 
-    call self%write_checkpoint(solver, timestep, comm_to_use)
+    call self%write_checkpoint(solver, timestep, comm_to_use, stats_mgr)
   end subroutine handle_checkpoint_step
 
-  subroutine write_checkpoint(self, solver, timestep, comm)
+  subroutine write_checkpoint(self, solver, timestep, comm, stats_mgr)
     !! Write a checkpoint file for simulation restart
     class(checkpoint_manager_t), intent(inout) :: self
     class(solver_t), intent(in) :: solver
     integer, intent(in) :: timestep
     integer, intent(in) :: comm
+    type(stats_manager_t), intent(inout), optional :: stats_mgr
 
     character(len=256) :: filename, temp_filename, old_filename
     integer :: ierr, myrank
@@ -197,6 +201,11 @@ contains
     call writer_session%write_data('ti_istep', solver%time_integrator%istep)
     call writer_session%write_data('ti_nstep', solver%time_integrator%nstep)
 
+    ! Write stats running means into the same checkpoint
+    if (present(stats_mgr)) then
+      call stats_mgr%write_checkpoint(solver, writer_session)
+    end if
+
     ! for AB methods with order >1, keep derivative history olds(i,j)
     if (is_ab == 1 .and. solver%time_integrator%order > 1) then
       nolds_total = solver%time_integrator%nolds*n_total_vars
@@ -235,7 +244,10 @@ contains
                                               padded_dims(2), padded_dims(3)))
             end if
 
-            raw_buffers(idx)%data = solver%time_integrator%olds(i, j)%ptr%data
+            call solver%backend%get_field_data( &
+              raw_buffers(idx)%data, &
+              solver%time_integrator%olds(i, j)%ptr, &
+              solver%time_integrator%olds(i, j)%ptr%dir)
 
             ! Use -1 to signal local per-rank variables (not decomposed across ranks)
             ! Each rank writes to its own uniquely named variable (with _rank suffix)
@@ -305,7 +317,7 @@ contains
   end subroutine write_checkpoint
 
   subroutine restart_checkpoint( &
-    self, solver, filename, timestep, restart_time, comm &
+    self, solver, filename, timestep, restart_time, comm, stats_mgr &
     )
     !! Restart simulation state from checkpoint file
     class(checkpoint_manager_t), intent(inout) :: self
@@ -314,6 +326,7 @@ contains
     integer, intent(out) :: timestep
     real(dp), intent(out) :: restart_time
     integer, intent(in) :: comm
+    type(stats_manager_t), intent(inout), optional :: stats_mgr
 
     type(reader_session_t) :: reader_session
     integer :: ierr, myrank, data_loc
@@ -426,7 +439,7 @@ contains
                 write (old_name, '(A,"_rhs_old",I0)') trim(var_names(i)), j
                 write (ranked_name, '(A,A)') trim(old_name), trim(rank_suffix)
 
-                padded_dims = shape(solver%time_integrator%olds(i, j)%ptr%data)
+                padded_dims = solver%time_integrator%olds(i, j)%ptr%get_shape()
                 if (allocated(old_field)) then
                   if (any(shape(old_field) /= padded_dims)) then
                     deallocate (old_field)
@@ -440,7 +453,9 @@ contains
                 ! Clear the buffer before reading
                 old_field = 0.0_dp
                 call reader_session%read_data(trim(ranked_name), old_field)
-                solver%time_integrator%olds(i, j)%ptr%data = old_field
+                call solver%backend%set_field_data( &
+                  solver%time_integrator%olds(i, j)%ptr, old_field, &
+                  solver%time_integrator%olds(i, j)%ptr%dir)
               end do
             end do
             if (allocated(old_field)) deallocate (old_field)
@@ -448,6 +463,11 @@ contains
           end block
         end if
       end if
+    end if
+
+    ! Restore stats running means from the same checkpoint
+    if (present(stats_mgr)) then
+      call stats_mgr%read_checkpoint(solver, reader_session)
     end if
 
     call reader_session%close()
