@@ -9,6 +9,8 @@ module m_base_case
   use m_field, only: field_t, flist_t
   use m_mesh, only: mesh_t
   use m_solver, only: solver_t, init
+  use m_postprocess, only: compute_derived_fields, compute_pressure_vert
+  use m_config, only: has_output_field
   use m_io_manager, only: io_manager_t
   use mpi, only: MPI_COMM_WORLD
 
@@ -94,10 +96,12 @@ contains
 
     self%solver = init(backend, mesh, host_allocator)
 
-    call self%io_mgr%init(MPI_COMM_WORLD)
+    call self%io_mgr%init(self%solver, MPI_COMM_WORLD)
 
     ! Tell the solver to persist pressure if output is enabled
-    self%solver%keep_pressure = self%io_mgr%snapshot_mgr%config%output_pressure
+    self%solver%keep_pressure = &
+      has_output_field(self%io_mgr%snapshot_mgr%config, 'pressure') &
+      .and. self%io_mgr%snapshot_mgr%config%snapshot_freq > 0
 
     if (self%io_mgr%is_restart()) then
       call self%io_mgr%handle_restart(self%solver, MPI_COMM_WORLD)
@@ -217,6 +221,14 @@ contains
 
     real(dp) :: t
     integer :: i, iter, sub_iter, start_iter
+    logical :: output_vorticity, output_qcriterion
+
+    output_vorticity = &
+      has_output_field(self%io_mgr%snapshot_mgr%config, 'vorticity') &
+      .and. self%io_mgr%snapshot_mgr%config%snapshot_freq > 0
+    output_qcriterion = &
+      has_output_field(self%io_mgr%snapshot_mgr%config, 'qcriterion') &
+      .and. self%io_mgr%snapshot_mgr%config%snapshot_freq > 0
 
     if (self%io_mgr%is_restart()) then
       t = self%solver%current_iter*self%solver%dt
@@ -278,18 +290,24 @@ contains
 
       self%solver%current_iter = iter
 
+      ! Compute pressure on VERT grid if output_pressure is enabled
+      if (self%solver%keep_pressure) then
+        call compute_pressure_vert(self%solver)
+      end if
+
+      ! Compute postprocess fields (vorticity magnitude, Q-criterion)
+      if (output_vorticity .or. output_qcriterion) then
+        call compute_derived_fields(self%solver, &
+                                    output_vorticity, &
+                                    output_qcriterion)
+      end if
+
+      call self%io_mgr%update_stats(self%solver, iter)
+
       if (mod(iter, self%solver%n_output) == 0) then
         t = iter*self%solver%dt
 
         call self%postprocess(iter, t)
-      end if
-
-      ! Compute pressure on VERT grid for snapshot output if needed
-      if (self%io_mgr%snapshot_mgr%config%output_pressure .and. &
-          self%io_mgr%snapshot_mgr%config%snapshot_freq > 0 .and. &
-          mod(iter, self%io_mgr%snapshot_mgr%config%snapshot_freq) &
-          == 0) then
-        call self%solver%compute_pressure_vert()
       end if
 
       call self%io_mgr%handle_io_step(self%solver, &
