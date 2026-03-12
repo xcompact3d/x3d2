@@ -9,7 +9,7 @@ module m_cuda_backend
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC, &
-                      X_FACE, Y_FACE, Z_FACE
+                      X_FACE, Y_FACE, Z_FACE, BC_DIRICHLET, BC_OUTFLOW
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t, tdsops_t
@@ -62,6 +62,7 @@ module m_cuda_backend
     procedure :: field_scale => field_scale_cuda
     procedure :: field_shift => field_shift_cuda
     procedure :: field_set_face => field_set_face_cuda
+    procedure :: field_add_face => field_add_face_cuda
     procedure :: field_volume_integral => field_volume_integral_cuda
     procedure :: copy_data_to_f => copy_data_to_f_cuda
     procedure :: copy_f_to_data => copy_f_to_data_cuda
@@ -910,8 +911,76 @@ contains
 
   end subroutine field_shift_cuda
 
-  subroutine field_set_face_cuda(self, f, c_start, c_end, face)
-    !! [[m_base_backend(module):field_set_face(subroutine)]]
+  subroutine field_set_face_cuda(self, f, c_start, c_end, face, &
+                                 bc_start, bc_end, cfl)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c_start, c_end
+    integer, intent(in) :: face
+    integer, optional, intent(in) :: bc_start, bc_end
+    real(dp), optional, intent(in) :: cfl
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    type(dim3) :: blocks, threads
+    integer :: dims(3)
+    integer :: bc_s, bc_e
+    real(dp) :: cfl_val
+
+    if (f%dir /= DIR_X) then
+      error stop 'Setting a field face is only supported for DIR_X fields.'
+    end if
+    if (f%data_loc == NULL_LOC) then
+      error stop 'field_set_face requires a valid data_loc.'
+    end if
+
+    ! --- Resolve optional arguments with safe defaults ---
+    bc_s = BC_DIRICHLET
+    bc_e = BC_DIRICHLET
+    cfl_val = 0._dp
+
+    if (present(bc_start)) bc_s = bc_start
+    if (present(bc_end)) bc_e = bc_end
+    if (present(cfl)) cfl_val = cfl
+
+    ! --- Validate: if OUTFLOW requested, cfl must be provided ---
+    if ((bc_s == BC_OUTFLOW .or. bc_e == BC_OUTFLOW) .and. &
+        (.not. present(cfl))) then
+      error stop 'field_set_face: BC_OUTFLOW requires cfl argument.'
+    end if
+
+    call resolve_field_t(f_d, f)
+    dims = self%mesh%get_dims(f%data_loc)
+
+    select case (face)
+    case (X_FACE)
+      blocks = dim3((SZ - 1)/64 + 1, dims(2)*dims(3)/SZ, 1)
+      threads = dim3(64, 1, 1)
+      call field_set_x_face<<<blocks, threads>>>( &              !&
+          f_d, c_start, c_end, bc_s, bc_e, cfl_val, &
+          dims(1), dims(2), dims(3))
+
+    case (Y_FACE)
+      if (present(bc_start) .or. present(bc_end)) then
+        if (bc_s /= BC_DIRICHLET .or. bc_e /= BC_DIRICHLET) then
+          error stop 'field_set_face: Y_FACE only supports BC_DIRICHLET.'
+        end if
+      end if
+      blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
+      threads = dim3(64, 1, 1)
+      call field_set_y_face<<<blocks, threads>>>( &              !&
+          f_d, c_start, c_end, dims(1), dims(2), dims(3))
+
+    case (Z_FACE)
+      error stop 'Setting Z_FACE is not yet supported.'
+
+    case default
+      error stop 'face is undefined.'
+    end select
+
+  end subroutine field_set_face_cuda
+  subroutine field_add_face_cuda(self, f, c_start, c_end, face)
     implicit none
 
     class(cuda_backend_t) :: self
@@ -921,36 +990,30 @@ contains
 
     real(dp), device, pointer, dimension(:, :, :) :: f_d
     type(dim3) :: blocks, threads
-    integer :: dims(3), nx, ny, nz
+    integer :: dims(3)
 
     if (f%dir /= DIR_X) then
-      error stop 'Setting a field face is only supported for DIR_X fields.'
+      error stop 'field_add_face is only supported for DIR_X fields.'
     end if
-
     if (f%data_loc == NULL_LOC) then
-      error stop 'field_set_face require a valid data_loc.'
+      error stop 'field_add_face requires a valid data_loc.'
     end if
 
     call resolve_field_t(f_d, f)
-
     dims = self%mesh%get_dims(f%data_loc)
 
     select case (face)
     case (X_FACE)
-      error stop 'Setting X_FACE is not yet supported.'
-    case (Y_FACE)
-      blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
+      blocks = dim3((SZ - 1)/64 + 1, dims(2)*dims(3)/SZ, 1)
       threads = dim3(64, 1, 1)
-      call field_set_y_face<<<blocks, threads>>>(f_d, c_start, c_end, & !&
-                                                 dims(1), dims(2), dims(3))
-    case (Z_FACE)
-      error stop 'Setting Z_FACE is not yet supported.'
+      call field_add_x_face<<<blocks, threads>>>( &              !&
+          f_d, c_start, c_end, dims(1), dims(2), dims(3))
+
     case default
-      error stop 'face is undefined.'
+      error stop 'field_add_face: only X_FACE is currently supported.'
     end select
 
-  end subroutine field_set_face_cuda
-
+  end subroutine field_add_face_cuda
   real(dp) function field_volume_integral_cuda(self, f) result(s)
     !! volume integral of a field
     implicit none
