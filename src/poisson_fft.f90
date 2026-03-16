@@ -17,8 +17,8 @@ module m_poisson_fft
     integer :: nx_perm, ny_perm, nz_perm
     !> Local dimensions in the permuted slabs in spectral space
     integer :: nx_spec, ny_spec, nz_spec
-    !> Offset in y and z directions in the permuted slabs in spectral space
-    integer :: x_sp_st, y_sp_st, z_sp_st
+    !> Offset per spectral dimension (dim1, dim2, dim3) in spectral space
+    integer :: sp_st(3)
     !> Local domain sized array storing the spectral equivalence constants
     complex(dp), allocatable, dimension(:, :, :) :: waves
     !> Wave numbers in x, y, and z
@@ -143,9 +143,7 @@ contains
     self%periodic_y = mesh%grid%periodic_BC(2)
     self%periodic_z = mesh%grid%periodic_BC(3)
 
-    self%x_sp_st = n_sp_st(1)
-    self%y_sp_st = n_sp_st(2)
-    self%z_sp_st = n_sp_st(3)
+    self%sp_st = n_sp_st
 
     allocate (self%ax(self%nx_glob), self%bx(self%nx_glob))
     allocate (self%ay(self%ny_glob), self%by(self%ny_glob))
@@ -331,7 +329,7 @@ contains
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
             if (iy == 1) then
               km_a1 = self%get_km(ix, 2, iz)
             else if (iy == self%ny_spec) then
@@ -362,7 +360,7 @@ contains
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
 
             self%a_re(i, j, k, 4) = &
               a0*a1*self%get_km_re(ix, iy + 1, iz) &
@@ -378,7 +376,7 @@ contains
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec - 2
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
 
             self%a_re(i, j, k, 5) = -a1*a1*self%get_km_re(ix, iy + 1, iz) &
                                     *self%get_km_re(ix, iy + 2, iz)
@@ -392,7 +390,7 @@ contains
       do k = 1, self%nz_spec
         do j = 2, self%ny_spec
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
 
             self%a_re(i, j, k, 2) = a0*a1*self%get_km_re(ix, iy - 1, iz) &
                                     *(self%get_km_re(ix, iy, iz) &
@@ -408,7 +406,7 @@ contains
       do k = 1, self%nz_spec
         do j = 3, self%ny_spec
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
 
             self%a_re(i, j, k, 1) = -a1*a1*self%get_km_re(ix, iy - 1, iz) &
                                     *self%get_km_re(ix, iy - 2, iz)
@@ -448,7 +446,7 @@ contains
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec/2
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
             iy_od = 2*iy - 1
             iy_ev = 2*iy
             c1_od = a0*a0
@@ -506,7 +504,7 @@ contains
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec/2
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
             iy_od = 2*iy - 1
             iy_ev = 2*iy
             c1_od = a0*a1
@@ -548,7 +546,7 @@ contains
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec/2 - 2
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
             iy_od = 2*iy - 1
             iy_ev = 2*iy
             c1_od = a1*a1
@@ -576,7 +574,7 @@ contains
       do k = 1, self%nz_spec
         do j = 2, self%ny_spec/2
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
             iy_od = 2*iy - 1
             iy_ev = 2*iy
             c1_od = a0*a1
@@ -616,7 +614,7 @@ contains
       do k = 1, self%nz_spec
         do j = 3, self%ny_spec/2
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
             iy_od = 2*iy - 1
             iy_ev = 2*iy
             self%a_odd_re(i, j, k, 1) = &
@@ -637,7 +635,7 @@ contains
 
       do k = 1, self%nz_spec
         do i = 1, self%nx_spec
-          ix = i + self%x_sp_st; iz = k + self%z_sp_st
+          ix = i + self%sp_st(1); iz = k + self%sp_st(3)
           if (get_real(self%k2x(ix)) < 1e-15 &
               .and. get_real(self%k2z(iz)) < 1e-15) then
             self%a_odd_re(i, 1, k, 3) = 1._dp
@@ -697,9 +695,9 @@ contains
       do k = 1, self%nz_spec     ! Y modes
         do j = 1, self%ny_spec   ! X modes
           do i = 1, self%nx_spec ! Z R2C modes
-            iz = i + self%x_sp_st
-            ix = j + self%y_sp_st
-            iy = k + self%z_sp_st
+            iz = i + self%sp_st(1)
+            ix = j + self%sp_st(2)
+            iy = k + self%sp_st(3)
 
             rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
             rleys = real(self%eys(iy), kind=dp)*geo%d(2)
@@ -741,9 +739,9 @@ contains
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec  ! This iterates over X (Dirichlet) after transpose
           do i = 1, self%nx_spec  ! This iterates over Y (periodic, R2C) after transpose
-            iy = i + self%x_sp_st
-            ix = j + self%y_sp_st
-            iz = k + self%z_sp_st
+            iy = i + self%sp_st(1)
+            ix = j + self%sp_st(2)
+            iz = k + self%sp_st(3)
 
             rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
             rleys = real(self%eys(iy), kind=dp)*geo%d(2)
@@ -785,9 +783,9 @@ contains
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st
-            iy = j + self%y_sp_st
-            iz = k + self%z_sp_st
+            ix = i + self%sp_st(1)
+            iy = j + self%sp_st(2)
+            iz = k + self%sp_st(3)
 
             rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
             rleys = real(self%eys(iy), kind=dp)*geo%d(2)
