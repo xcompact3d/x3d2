@@ -340,7 +340,7 @@ contains
                            mesh%par%is_root(), 'Backward 110')
 
       ! Transposed real workspace (nz, nx, ny)
-      allocate (poisson_fft%r_dev_110(fft_n1, fft_n2, fft_n3))
+      allocate (poisson_fft%r_dev_110(nz, nx, ny))
       ! Spectral complex workspace (nz/2+1, nx, ny)
       allocate (poisson_fft%c_dev(poisson_fft%nx_spec, &
                                   poisson_fft%ny_spec, &
@@ -771,7 +771,7 @@ contains
 
     ! Postprocess div_u in spectral space
     call process_spectral_000<<<blocks, threads>>>( & !&
-      c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+      c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%sp_st(2), &
       self%nx_glob, self%ny_glob, self%nz_glob, &
       self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
       self%az_dev, self%bz_dev &
@@ -809,10 +809,10 @@ contains
     ! Call process_spectral_010 with swapped parameters:
     ! - Swap nx <-> ny for grid sizes
     ! - Swap ax,bx <-> ay,by for wave coefficients
-    ! - Use x_sp_st instead of y_sp_st for the offset
+    ! - Use sp_st(2) for the dim2 offset (X modes after transpose)
     call process_spectral_010 <<<blocks, threads>>>( & !&
       c_dev, self%waves_dev, &
-      self%nx_spec, self%ny_spec, self%x_sp_st, &  ! spectral dims and offset
+      self%nx_spec, self%ny_spec, self%sp_st(2), &  ! spectral dims and dim2 offset
       self%ny_glob, self%nx_glob, self%nz_glob, &  ! SWAP nx <-> ny
       self%ay_dev, self%by_dev, &  ! First dim uses Y coefficients (was periodic Y)
       self%ax_dev, self%bx_dev, &  ! Second dim uses X coefficients (non-periodic X)
@@ -852,14 +852,14 @@ contains
     ! Postprocess div_u in spectral space
     if (.not. self%stretched_y) then
       call process_spectral_010<<<blocks, threads>>>( & !&
-        c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+        c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%sp_st(2), &
         self%nx_glob, self%ny_glob, self%nz_glob, &
         self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
         self%az_dev, self%bz_dev &
         )
     else
       call process_spectral_010_fw<<<blocks, threads>>>( & !&
-        c_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+        c_dev, self%nx_spec, self%ny_spec, self%sp_st(2), &
         self%nx_glob, self%ny_glob, self%nz_glob, &
         self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
         self%az_dev, self%bz_dev &
@@ -915,7 +915,7 @@ contains
       end if
 
       call process_spectral_010_bw<<<blocks, threads>>>( & !&
-        c_dev, self%nx_spec, self%ny_spec, self%y_sp_st, &
+        c_dev, self%nx_spec, self%ny_spec, self%sp_st(2), &
         self%nx_glob, self%ny_glob, self%nz_glob, &
         self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
         self%az_dev, self%bz_dev &
@@ -953,41 +953,41 @@ contains
     ! Step 2: X paired split (forward)
     call process_spectral_110_x_pair_fw<<<blocks, threads>>>( & !&
       self%c_dev, nz_h, &
-      self%ny_spec, self%nz_spec, self%x_sp_st, &
+      self%ny_spec, self%nz_spec, self%sp_st(2), &
       self%ax_dev, self%bx_dev &
       )
 
     ! Step 3: Y paired split (forward)
     call process_spectral_110_y_pair_fw<<<blocks, threads>>>( & !&
       self%c_dev, nz_h, &
-      self%ny_spec, self%nz_spec, self%y_sp_st, &
+      self%ny_spec, self%nz_spec, self%sp_st(3), &
       self%ay_dev, self%by_dev &
       )
 
     ! Step 4: Poisson solve
     call process_spectral_110_poisson<<<blocks, threads>>>( & !&
       self%c_dev, self%waves_dev, nz_h, &
-      self%ny_spec, self%nz_spec, self%nz_glob, self%x_sp_st &
+      self%ny_spec, self%nz_spec, self%nz_glob, self%sp_st(2) &
       )
 
     ! Step 5: Y paired recombine (backward)
     call process_spectral_110_y_pair_bw<<<blocks, threads>>>( & !&
       self%c_dev, nz_h, &
-      self%ny_spec, self%nz_spec, self%y_sp_st, &
+      self%ny_spec, self%nz_spec, self%sp_st(3), &
       self%ay_dev, self%by_dev &
       )
 
     ! Step 6: X paired recombine (backward)
     call process_spectral_110_x_pair_bw<<<blocks, threads>>>( & !&
       self%c_dev, nz_h, &
-      self%ny_spec, self%nz_spec, self%x_sp_st, &
+      self%ny_spec, self%nz_spec, self%sp_st(2), &
       self%ax_dev, self%bx_dev &
       )
 
     ! Step 7: Z periodic undo (backward)
     call process_spectral_110_z_bw<<<blocks, threads>>>( & !&
       self%c_dev, nz_h, &
-      self%ny_spec, self%nz_spec, &
+      self%ny_spec, self%nz_spec, self%nz_glob, &
       self%az_dev, self%bz_dev &
       )
 

@@ -173,7 +173,7 @@ contains
 
     call process_spectral_000( &
       self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
-      self%x_sp_st, self%y_sp_st, self%z_sp_st, &
+      self%sp_st(1), self%sp_st(2), self%sp_st(3), &
       self%nx_glob, self%ny_glob, self%nz_glob, &
       self%ax, self%bx, self%ay, self%by, self%az, self%bz &
       )
@@ -187,7 +187,7 @@ contains
 
     call process_spectral_010( &
       self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
-      self%x_sp_st, self%y_sp_st, self%z_sp_st, &
+      self%sp_st(1), self%sp_st(2), self%sp_st(3), &
       self%nx_glob, self%ny_glob, self%nz_glob, &
       self%ax, self%bx, self%ay, self%by, self%az, self%bz &
       )
