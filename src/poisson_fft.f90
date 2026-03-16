@@ -697,9 +697,9 @@ contains
       do k = 1, self%nz_spec     ! Y modes
         do j = 1, self%ny_spec   ! X modes
           do i = 1, self%nx_spec ! Z R2C modes
-            iz = i + self%z_sp_st
-            ix = j + self%x_sp_st
-            iy = k + self%y_sp_st
+            iz = i + self%x_sp_st
+            ix = j + self%y_sp_st
+            iy = k + self%z_sp_st
 
             rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
             rleys = real(self%eys(iy), kind=dp)*geo%d(2)
@@ -741,8 +741,8 @@ contains
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec  ! This iterates over X (Dirichlet) after transpose
           do i = 1, self%nx_spec  ! This iterates over Y (periodic, R2C) after transpose
-            iy = i + self%y_sp_st
-            ix = j + self%x_sp_st
+            iy = i + self%x_sp_st
+            ix = j + self%y_sp_st
             iz = k + self%z_sp_st
 
             rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
