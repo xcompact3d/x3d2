@@ -773,7 +773,8 @@ contains
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! X index
     k = blockIdx%y                                   ! Y index
-
+    ! Note: when i == nx/2+1 (even nx), ix_pair == i (Nyquist self-pair).
+    ! Both writes produce the same result, second is a harmless overwrite.
     if (i >= 2 .and. i <= nx/2 + 1 .and. k <= ny) then
       ix = i + x_sp_st
       ix_pair = nx - i + 2
