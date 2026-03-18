@@ -40,7 +40,7 @@ module m_ibm
 
 contains
 
-function init(backend, mesh, host_allocator) result(ibm)
+  function init(backend, mesh, host_allocator) result(ibm)
     implicit none
 
     class(base_backend_t), target, intent(inout) :: backend
