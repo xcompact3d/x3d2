@@ -175,23 +175,73 @@ endif()
 find_package(pFUnit QUIET)
 
 if(pFUnit_FOUND)
-  # helper to define pFUnit tests
+  # Helper to define pFUnit tests with optional backend support.
+  # Usage: define_pfunit_test(source.pf np [backend])
+  # backend defaults to "omp" if not specified.
   function(define_pfunit_test test_source np)
+    set(backend "omp")
+    if(ARGC GREATER 2)
+      set(backend ${ARGV2})
+    endif()
+
     get_filename_component(test_name ${test_source} NAME_WE)
 
-    # pFUnit macro to handle preprocessing .pf -> .f90
-    add_pfunit_ctest(${test_name}
-      TEST_SOURCE ${test_source}
-      LINK_LIBRARIES x3d2
-      TEST_NUM_PROCS ${np}
-    )
-    # label as unit test
-    set_tests_properties(${test_name} PROPERTIES LABELS "unit;pfunit")
+    # pFUnit macro: preprocesses .pf -> .F90, creates executable and CTest
+    if(${np} GREATER 1)
+      add_pfunit_ctest(${test_name}
+        TEST_SOURCES ${test_source}
+        LINK_LIBRARIES x3d2 x3d2_backends x3d2_test_utils
+        MAX_PES ${np}
+      )
+    else()
+      add_pfunit_ctest(${test_name}
+        TEST_SOURCES ${test_source}
+        LINK_LIBRARIES x3d2 x3d2_backends x3d2_test_utils
+      )
+    endif()
+
+    # Ensure pFUnit targets can find x3d2 module files
+    target_include_directories(${test_name} PRIVATE ${PROJECT_BINARY_DIR}/include)
+
+    # pFUnit's add_test uses CMAKE_CURRENT_BINARY_DIR as the executable path,
+    # so override RUNTIME_OUTPUT_DIRECTORY to match (not "bin" subdirectory)
+    set_target_properties(${test_name} PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+    # Always link against pfunit (MPI-enabled) library for MpiTestMethod support
+    target_link_libraries(${test_name} PFUNIT::pfunit)
+
+    # Add backend-specific compile options after target creation
+    if(${backend} STREQUAL cuda)
+      target_compile_options(${test_name} PRIVATE "-cpp" "-cuda" "-DCUDA")
+      target_link_options(${test_name} PRIVATE "-cuda")
+    else()
+      if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+        target_compile_options(${test_name} PRIVATE "-cpp")
+        if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
+          target_compile_options(${test_name} PRIVATE "-fallow-argument-mismatch")
+        endif()
+      endif()
+      find_package(OpenMP REQUIRED)
+      target_link_libraries(${test_name} OpenMP::OpenMP_Fortran)
+    endif()
+
+    find_package(MPI REQUIRED)
+    target_link_libraries(${test_name} MPI::MPI_Fortran)
+
+    if(WITH_2DECOMPFFT)
+      target_link_libraries(${test_name} decomp2d)
+    endif()
+
+    set_tests_properties(${test_name} PROPERTIES LABELS "unit;pfunit;${backend}")
   endfunction()
 
   # register pFUnit tests
   define_pfunit_test(unit/test_allocator.pf 1)
   define_pfunit_test(unit/test_pfunit_demo.pf 1)
+  define_pfunit_test(unit/test_reorder_map.pf 1)
+  define_pfunit_test(unit/test_statistics.pf 1)
+  define_pfunit_test(unit/test_mesh.pf 4)
 endif()
 
 set(EXECUTABLE_OUTPUT_PATH "bin")

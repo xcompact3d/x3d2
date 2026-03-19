@@ -3,20 +3,20 @@
 
 @test
 subroutine test_basic_assertion()
-   use pFUnit_mod
+   use funit
    implicit none
-   
+
    ! Verify that 1 equals 1 (Sanity check)
    @assertEqual(1, 1)
 end subroutine
 
 @test
-subroutine test_mpi_rank_check()
-   use pFUnit_mod
-   use mpi
+subroutine test_real_comparison()
+   use funit
    implicit none
-   integer :: rank, ierr
-   
-   call MPI_Comm_rank(MPI_COMM_WORLD, rank, ierr)
-   @assertTrue(rank >= 0)
+   real(kind=selected_real_kind(15)) :: a, b
+
+   a = 1.0d0
+   b = 1.0d0 + 1.0d-15
+   @assertEqual(a, b, 1.0d-12, 'reals should be approximately equal')
 end subroutine

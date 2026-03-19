@@ -22,8 +22,8 @@ program perf_omp_thom
 
   ! Performance configuration
   n_glob = 512
-  n_groups = 512*512/SZ
-  n_iters = 1000
+  n_groups = 128*128/SZ
+  n_iters = 500
   n_warmup = 10
   n = n_glob
   ndof = n_glob*n_groups*SZ
