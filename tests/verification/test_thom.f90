@@ -5,6 +5,7 @@ program test_thom
   use cudafor
 #else
   use omp_lib
+<<<<<<<< HEAD:tests/unit/test_thom.f90
 #endif
   use m_common, only: dp, nbytes, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
 #ifdef CUDA
@@ -12,6 +13,9 @@ program test_thom
   use m_cuda_exec_thom, only: exec_thom_tds_compact
   use m_cuda_tdsops, only: tdsops_t => cuda_tdsops_t, tdsops_init => cuda_tdsops_init
 #else
+========
+  use m_common, only: dp, pi, BC_PERIODIC, BC_DIRICHLET
+>>>>>>>> 0d54766 (split into performance and verification tests):tests/verification/test_omp_thom.f90
   use m_omp_common, only: SZ
   use m_tdsops, only: tdsops_t, tdsops_init
   use m_exec_thom, only: exec_thom_tds_compact
@@ -25,6 +29,7 @@ program test_thom
 #endif
   integer :: i, j, k
   integer :: n_glob, n, n_groups
+<<<<<<<< HEAD:tests/unit/test_thom.f90
   integer :: n_iters
   integer :: ndof
   integer :: ierr
@@ -35,13 +40,13 @@ program test_thom
   real(dp), device, allocatable, dimension(:, :, :) :: u_dev, du_dev
 #endif
   real(dp) :: dx, dx_per, norm_du
+========
+
+  real(dp), dimension(:, :, :), allocatable :: u, du
+  real(dp) :: dx, dx_per
+>>>>>>>> 0d54766 (split into performance and verification tests):tests/verification/test_omp_thom.f90
 
   type(tdsops_t) :: tdsops
-
-  !! Performance test
-  ! n_glob = 512
-  ! n_groups = 512 * 512 / SZ
-  ! n_iters = 1000
 
   !! Verification test
 #ifdef CUDA
@@ -51,10 +56,12 @@ program test_thom
 #else
   n_glob = 1024
   n_groups = 64*64/SZ
+<<<<<<<< HEAD:tests/unit/test_thom.f90
   n_iters = 1
 #endif
+========
+>>>>>>>> 0d54766 (split into performance and verification tests):tests/verification/test_omp_thom.f90
   n = n_glob
-  ndof = n_glob*n_groups*SZ
 
   allocate (u(SZ, n, n_groups), du(SZ, n, n_groups))
 #ifdef CUDA
@@ -75,16 +82,20 @@ program test_thom
     end do
   end do
 
+<<<<<<<< HEAD:tests/unit/test_thom.f90
 #ifdef CUDA
   ! move data to device
   u_dev = u
 #endif
 
   ! preprocess the operator and coefficient arrays
+========
+>>>>>>>> 0d54766 (split into performance and verification tests):tests/verification/test_omp_thom.f90
   tdsops = tdsops_init(n, dx_per, &
                        operation="second-deriv", scheme="compact6", &
                        bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
 
+<<<<<<<< HEAD:tests/unit/test_thom.f90
 #ifdef CUDA
   blocks = dim3(n_groups, 1, 1)
   threads = dim3(SZ, 1, 1)
@@ -120,6 +131,9 @@ program test_thom
 #else
   call checkperf(tend - tstart, n_iters, ndof, 3.0_dp)
 #endif
+========
+  call exec_thom_tds_compact(du, u, tdsops, n_groups)
+>>>>>>>> 0d54766 (split into performance and verification tests):tests/verification/test_omp_thom.f90
   call checkerr(u, du, 1.0e-8_dp)
 
   !! Dirichlet case
@@ -133,16 +147,20 @@ program test_thom
     end do
   end do
 
+<<<<<<<< HEAD:tests/unit/test_thom.f90
 #ifdef CUDA
   ! move data to device
   u_dev = u
 #endif
 
   ! preprocess the operator and coefficient arrays
+========
+>>>>>>>> 0d54766 (split into performance and verification tests):tests/verification/test_omp_thom.f90
   tdsops = tdsops_init(n, dx, &
                        operation="second-deriv", scheme="compact6", &
                        bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET)
 
+<<<<<<<< HEAD:tests/unit/test_thom.f90
 #ifdef CUDA
   call cpu_time(tstart)
 #else
@@ -173,16 +191,20 @@ program test_thom
 #else
   call checkperf(tend - tstart, n_iters, ndof, 3.0_dp)
 #endif
+========
+  call exec_thom_tds_compact(du, u, tdsops, n_groups)
+>>>>>>>> 0d54766 (split into performance and verification tests):tests/verification/test_omp_thom.f90
   call checkerr(u, du, 1.0e-8_dp)
 
   if (allpass) then
-      print *, 'ALL TESTS PASSED SUCCESSFULLY.'
+    print *, 'ALL TESTS PASSED SUCCESSFULLY.'
   else
     error stop 'SOME TESTS FAILED.'
   end if
 
 contains
 
+<<<<<<<< HEAD:tests/unit/test_thom.f90
   subroutine checkperf(trun, n_iters, ndof, consumed_bw)
     implicit none
 
@@ -215,6 +237,8 @@ contains
 
   end subroutine checkperf
 
+========
+>>>>>>>> 0d54766 (split into performance and verification tests):tests/verification/test_omp_thom.f90
   subroutine checkerr(u, du, tol)
 
     real(dp), dimension(:, :, :), intent(in) :: u, du

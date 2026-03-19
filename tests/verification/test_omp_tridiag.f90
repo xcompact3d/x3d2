@@ -8,8 +8,6 @@ program test_omp_tridiag
   use m_omp_common, only: SZ
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_exec_dist, only: exec_dist_tds_compact
-  use m_field, only: field_t
-
   use m_tdsops, only: tdsops_t, tdsops_init
 
   implicit none
@@ -17,7 +15,6 @@ program test_omp_tridiag
   logical :: allpass = .true.
 
   real(dp), allocatable, dimension(:, :, :) :: u, du
-  class(field_t), pointer :: u_field, du_field
   real(dp), allocatable, dimension(:, :, :) :: u_recv_s, u_recv_e, &
                                                u_send_s, u_send_e
 
@@ -37,12 +34,9 @@ program test_omp_tridiag
   integer :: n, n_groups, j, n_halo, n_iters, n_loc
   integer :: n_glob
   integer :: nrank, nproc, pprev, pnext
-  integer :: ierr, memClockRt, memBusWidth
-  real(dp), dimension(3) :: L_global
-  integer, dimension(3) :: dims_global, nproc_dir
+  integer :: ierr
 
   real(dp) :: dx, dx_per, dx_pi, norm_du, tol = 1d-8, tstart, tend
-  real(dp) :: achievedBW, deviceBW, achievedBWmax, achievedBWmin
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
@@ -337,30 +331,6 @@ program test_omp_tridiag
     else
       write (stderr, '(a)') 'Check 2nd ders, hyperviscous, dir-neu... passed'
     end if
-  end if
-
-  ! =========================================================================
-  ! BW utilisation and performance checks
-  ! 3 in the first phase, 2 in the second phase, so 5 in total
-  achievedBW = 5._dp*n_iters*n*n_groups*SZ*dp/(tend - tstart)
-  call MPI_Allreduce(achievedBW, achievedBWmax, 1, MPI_X3D2_DP, &
-                     MPI_MAX, MPI_COMM_WORLD, ierr)
-  call MPI_Allreduce(achievedBW, achievedBWmin, 1, MPI_X3D2_DP, &
-                     MPI_MIN, MPI_COMM_WORLD, ierr)
-  if (nrank == 0) then
-    print'(a, f8.3, a)', 'Achieved BW min: ', achievedBWmin/2**30, ' GiB/s'
-    print'(a, f8.3, a)', 'Achieved BW max: ', achievedBWmax/2**30, ' GiB/s'
-  end if
-
-  memClockRt = 3200
-  memBusWidth = 64
-  deviceBW = 2*memBusWidth/8._dp*memClockRt*1000000
-
-  if (nrank == 0) then
-    print'(a, f8.3, a)', 'Available BW:   ', deviceBW/2**30, &
-      ' GiB/s (per NUMA zone on ARCHER2)'
-    print'(a, f5.2)', 'Effective BW util min: %', achievedBWmin/deviceBW*100
-    print'(a, f5.2)', 'Effective BW util max: %', achievedBWmax/deviceBW*100
   end if
 
   if (allpass) then

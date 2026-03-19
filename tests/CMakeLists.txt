@@ -2,6 +2,20 @@
 set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" CACHE STRING "comma separated list of arguments to pass to ctest")
 set(CMAKE_CTEST_NPROCS "4" CACHE STRING "number of process used in tests")
 
+# ===========================================================================
+# Shared test utilities library
+# ===========================================================================
+add_library(x3d2_test_utils STATIC common/m_test_utils.f90)
+target_link_libraries(x3d2_test_utils PRIVATE x3d2)
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+  target_compile_options(x3d2_test_utils PRIVATE "-eF")
+else()
+  target_compile_options(x3d2_test_utils PRIVATE "-cpp")
+endif()
+
+# ===========================================================================
+# Base test definition function
+# ===========================================================================
 function(define_test testfile np backend)
   # Capture optional arguments passed to the function (e.g. input file or flags)
   set(extra_args "${ARGN}")
@@ -32,6 +46,7 @@ function(define_test testfile np backend)
   endif()
   target_link_libraries(${test_name} PRIVATE x3d2)
   target_link_libraries(${test_name} PRIVATE x3d2_backends)
+  target_link_libraries(${test_name} PRIVATE x3d2_test_utils)
 
 if(WITH_2DECOMPFFT)
   find_package(decomp2d REQUIRED)
@@ -54,29 +69,37 @@ endif()
     add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} bin/${test_name} ${extra_args_str}")
   endif()
 
-  # default all tests defined via this function as 'unit' tests
-  set_tests_properties(${test_name} PROPERTIES LABELS "unit")
+  # default label includes backend
+  set_tests_properties(${test_name} PROPERTIES LABELS "unit;${backend}")
+endfunction()
+
+# ===========================================================================
+# Specialized test definition functions with category labels
+# ===========================================================================
+function(define_verification_test testfile np backend)
+  define_test(${testfile} ${np} ${backend} ${ARGN})
+  get_filename_component(test_name ${testfile} NAME_WE)
+  string(CONCAT test_name ${test_name} _ ${backend} _ ${np})
+  set_tests_properties(${test_name} PROPERTIES LABELS "verification;${backend}")
 endfunction()
 
 function(define_performance_test testfile np backend)
   define_test(${testfile} ${np} ${backend} ${ARGN})
   get_filename_component(test_name ${testfile} NAME_WE)
   string(CONCAT test_name ${test_name} _ ${backend} _ ${np})
-  set_tests_properties(${test_name} PROPERTIES LABELS "performance")
+  set_tests_properties(${test_name} PROPERTIES LABELS "performance;${backend}")
 endfunction()
 
 function(define_regression_test testfile np backend)
   define_test(${testfile} ${np} ${backend} ${ARGN})
   get_filename_component(test_name ${testfile} NAME_WE)
   string(CONCAT test_name ${test_name} _ ${backend} _ ${np})
-  set_tests_properties(${test_name} PROPERTIES LABELS "regression")
+  set_tests_properties(${test_name} PROPERTIES LABELS "regression;${backend}")
 endfunction()
 
-# omp backend shared tests
-if(WITH_2DECOMPFFT)
-  define_test(unit/test_fft.f90 4 omp)
-endif()
-define_test(unit/test_time_integrator.f90 1 omp)
+# ===========================================================================
+# Unit tests (fast, isolated component tests)
+# ===========================================================================
 define_test(unit/test_reordering.f90 1 omp)
 define_test(unit/test_reordering.f90 2 omp)
 define_test(unit/test_reordering.f90 4 omp)
@@ -88,35 +111,53 @@ define_test(unit/test_sum_intox.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(unit/test_setget_field.f90 1 omp)
 define_test(unit/test_statistics.f90 1 omp)
 
-# omp backend-specific tests
-define_test(unit/test_omp_tridiag.f90 ${CMAKE_CTEST_NPROCS} omp)
-define_test(unit/test_omp_thom.f90 1 omp)
-define_test(unit/test_omp_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
-define_test(unit/test_omp_transeq_species.f90 ${CMAKE_CTEST_NPROCS} omp)
-define_test(unit/test_omp_dist_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
-
 if(WITH_ADIOS2)
   define_test(unit/test_adios2_read_write.f90 4 omp)
   define_test(unit/test_io_session.f90 4 omp)
   define_test(unit/test_ab_checkpoint.f90 1 omp)
 endif()
 
-# cuda backend shared tests
+# ===========================================================================
+# Verification tests (numerical correctness vs analytical solutions)
+# ===========================================================================
+define_verification_test(verification/test_omp_thom.f90 1 omp)
+define_verification_test(verification/test_omp_tridiag.f90 ${CMAKE_CTEST_NPROCS} omp)
+define_verification_test(verification/test_omp_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
+define_verification_test(verification/test_omp_transeq_species.f90 ${CMAKE_CTEST_NPROCS} omp)
+define_verification_test(verification/test_omp_dist_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
+define_verification_test(verification/test_time_integrator.f90 1 omp)
+if(WITH_2DECOMPFFT)
+  define_verification_test(verification/test_fft.f90 4 omp)
+endif()
+
+# ===========================================================================
+# Performance tests (benchmarks, excluded from CI)
+# ===========================================================================
+define_performance_test(performance/perf_omp_thom.f90 1 omp)
+define_performance_test(performance/perf_omp_tridiag.f90 ${CMAKE_CTEST_NPROCS} omp)
+
+# ===========================================================================
+# CUDA backend tests
+# ===========================================================================
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
-  # shared tests
+
+  # CUDA unit tests
   define_test(unit/test_reordering.f90 1 cuda)
   define_test(unit/test_vecadd.f90 1 cuda)
-  define_test(unit/test_time_integrator.f90 1 cuda)
-  define_test(unit/test_fft.f90 1 cuda)
-  define_test(unit/test_poisson_bc.f90 1 cuda)
-
-  # cuda backend-specific tests
   define_test(unit/test_cuda_allocator.f90 1 cuda)
   define_test(unit/test_cuda_reorder.f90 1 cuda)
-  define_test(unit/test_cuda_thom.f90 1 cuda)
-  define_test(unit/test_cuda_tridiag.f90 ${CMAKE_CTEST_NPROCS} cuda)
-  define_test(unit/test_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
+
+  # CUDA verification tests
+  define_verification_test(verification/test_time_integrator.f90 1 cuda)
+  define_verification_test(verification/test_fft.f90 1 cuda)
+  define_verification_test(verification/test_poisson_bc.f90 1 cuda)
+  define_verification_test(verification/test_cuda_thom.f90 1 cuda)
+  define_verification_test(verification/test_cuda_tridiag.f90 ${CMAKE_CTEST_NPROCS} cuda)
+  define_verification_test(verification/test_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
+
+  # CUDA performance tests
+  define_performance_test(performance/perf_cuda_thom.f90 1 cuda)
 
   if(WITH_ADIOS2)
     define_test(unit/test_adios2_read_write.f90 4 cuda)
@@ -128,14 +169,16 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   endif()
 endif()
 
-# pFUnit integration 
+# ===========================================================================
+# pFUnit integration
+# ===========================================================================
 find_package(pFUnit QUIET)
 
 if(pFUnit_FOUND)
   # helper to define pFUnit tests
   function(define_pfunit_test test_source np)
     get_filename_component(test_name ${test_source} NAME_WE)
-    
+
     # pFUnit macro to handle preprocessing .pf -> .f90
     add_pfunit_ctest(${test_name}
       TEST_SOURCE ${test_source}
@@ -146,7 +189,7 @@ if(pFUnit_FOUND)
     set_tests_properties(${test_name} PROPERTIES LABELS "unit;pfunit")
   endfunction()
 
-  # register test
+  # register pFUnit tests
   define_pfunit_test(unit/test_allocator.pf 1)
   define_pfunit_test(unit/test_pfunit_demo.pf 1)
 endif()
