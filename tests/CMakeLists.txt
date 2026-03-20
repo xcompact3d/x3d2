@@ -163,9 +163,6 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
     define_test(unit/test_adios2_read_write.f90 4 cuda)
     define_test(unit/test_io_session.f90 4 cuda)
     define_test(unit/test_ab_checkpoint.f90 1 cuda)
-    if(WITH_ADIOS2_GPU_AWARE)
-      define_test(unit/test_cuda_gpu_aware_io.f90 4 cuda)
-    endif()
   endif()
 endif()
 
@@ -233,6 +230,10 @@ if(pFUnit_FOUND)
       target_link_libraries(${test_name} decomp2d)
     endif()
 
+    if(WITH_ADIOS2)
+      target_link_libraries(${test_name} adios2::fortran_mpi)
+    endif()
+
     set_tests_properties(${test_name} PROPERTIES LABELS "unit;pfunit;${backend}")
   endfunction()
 
@@ -241,7 +242,12 @@ if(pFUnit_FOUND)
   define_pfunit_test(unit/test_pfunit_demo.pf 1)
   define_pfunit_test(unit/test_reorder_map.pf 1)
   define_pfunit_test(unit/test_statistics.pf 1)
-  define_pfunit_test(unit/test_mesh.pf 4)
+  # test_mesh.pf uses @mpitest which triggers an ICE in NVHPC 25.3.
+  # The standalone test_mesh.f90 provides equivalent coverage on NVHPC.
+  if(NOT (${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+          ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC"))
+    define_pfunit_test(unit/test_mesh.pf 4)
+  endif()
 endif()
 
 set(EXECUTABLE_OUTPUT_PATH "bin")

@@ -1,10 +1,11 @@
 program perf_cuda_thom
 
   use cudafor
-  use m_common, only: dp, nbytes, pi, BC_PERIODIC, BC_DIRICHLET
+  use m_common, only: dp, pi, BC_PERIODIC, BC_DIRICHLET
   use m_cuda_common, only: SZ
   use m_cuda_exec_thom, only: exec_thom_tds_compact
   use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
+  use m_test_utils, only: report_perf
 
   implicit none
 
@@ -17,7 +18,6 @@ program perf_cuda_thom
   real(dp), allocatable, dimension(:, :, :) :: u
   real(dp), device, allocatable, dimension(:, :, :) :: u_dev, du_dev
   real(dp) :: dx_per, dx
-  real(dp) :: achievedBW
   integer :: memClockRt, memBusWidth
 
   type(cuda_tdsops_t) :: tdsops
@@ -72,10 +72,7 @@ program perf_cuda_thom
   ierr = cudaDeviceSynchronize()
   call cpu_time(tend)
 
-  achievedBW = 6.0_dp*n_iters*ndof*nbytes/(tend - tstart)
-  print '(a, f10.6, a, f10.3, a)', &
-    'PERF_METRIC: cuda_thom_periodic time=', tend - tstart, &
-    's bw=', achievedBW/real(2**30, dp), ' GiB/s'
+  call report_perf('cuda_thom_periodic', tend - tstart, n_iters, ndof, 6.0_dp)
 
   ! Dirichlet case benchmark
   do k = 1, n_block
@@ -104,10 +101,7 @@ program perf_cuda_thom
   ierr = cudaDeviceSynchronize()
   call cpu_time(tend)
 
-  achievedBW = 4.0_dp*n_iters*ndof*nbytes/(tend - tstart)
-  print '(a, f10.6, a, f10.3, a)', &
-    'PERF_METRIC: cuda_thom_dirichlet time=', tend - tstart, &
-    's bw=', achievedBW/real(2**30, dp), ' GiB/s'
+  call report_perf('cuda_thom_dirichlet', tend - tstart, n_iters, ndof, 4.0_dp)
 
   ! Device BW reference
   print '(a, f10.3, a)', 'PERF_METRIC: device_bw ref=', &

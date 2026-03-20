@@ -20,7 +20,7 @@ class X3D2UnitTests(X3D2BuildMixin, rfm.RegressionTest):
     executable = 'ctest'
     executable_opts = ['-L', 'unit', '--output-on-failure', '--timeout', '120']
 
-    @run_before('sanity')
+    @rfm.run_before('sanity')
     def set_sanity_patterns(self):
         self.sanity_patterns = sn.assert_found(
             r'100% tests passed', self.stdout
@@ -35,7 +35,7 @@ class X3D2VerificationTests(X3D2BuildMixin, rfm.RegressionTest):
         '-L', 'verification', '--output-on-failure', '--timeout', '300'
     ]
 
-    @run_before('sanity')
+    @rfm.run_before('sanity')
     def set_sanity_patterns(self):
         self.sanity_patterns = sn.assert_found(
             r'100% tests passed', self.stdout
@@ -47,13 +47,13 @@ class X3D2PerfThom(X3D2BuildMixin, rfm.RegressionTest):
     """Thomas algorithm bandwidth benchmark"""
     executable = 'bin/perf_omp_thom_omp_1'
 
-    @run_before('sanity')
+    @rfm.run_before('sanity')
     def set_sanity_patterns(self):
         self.sanity_patterns = sn.assert_found(
             r'PERF_METRIC: omp_thom_periodic', self.stdout
         )
 
-    @run_before('performance')
+    @rfm.run_before('performance')
     def set_perf_patterns(self):
         self.perf_patterns = {
             'periodic_bw': sn.extractsingle(
@@ -80,13 +80,13 @@ class X3D2PerfTridiag(X3D2BuildMixin, rfm.RegressionTest):
     num_tasks = 4
     executable = 'bin/perf_omp_tridiag_omp_4'
 
-    @run_before('sanity')
+    @rfm.run_before('sanity')
     def set_sanity_patterns(self):
         self.sanity_patterns = sn.assert_found(
             r'PERF_METRIC: omp_tridiag_periodic', self.stdout
         )
 
-    @run_before('performance')
+    @rfm.run_before('performance')
     def set_perf_patterns(self):
         self.perf_patterns = {
             'bw_min': sn.extractsingle(
