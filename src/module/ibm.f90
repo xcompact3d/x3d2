@@ -41,7 +41,6 @@ module m_ibm
 contains
 
   function init(backend, mesh, host_allocator) result(ibm)
-    !! Initialize the basic IBM
     implicit none
 
     class(base_backend_t), target, intent(inout) :: backend
@@ -54,12 +53,31 @@ contains
     real(dp), allocatable :: field_data(:, :, :)
     class(field_t), pointer :: ep1
     type(reader_session_t) :: reader_session
-    character(len=*), parameter :: ibm_file = "ibm.bp"
+    character(len=16) :: ibm_file
+    character(len=3) :: case_suffix
+    logical :: periodic_x, periodic_y, periodic_z
     integer(i8) :: start_dims(3), count_dims(3), iibm_i8
 
     ibm%backend => backend
     ibm%mesh => mesh
     ibm%host_allocator => host_allocator
+
+    ! Derive periodicity case from mesh
+    periodic_x = mesh%grid%periodic_BC(1)
+    periodic_y = mesh%grid%periodic_BC(2)
+    periodic_z = mesh%grid%periodic_BC(3)
+
+    ! Build suffix like "000", "010", "100", "110"
+    case_suffix(1:1) = '0'; if (.not. periodic_x) case_suffix(1:1) = '1'
+    case_suffix(2:2) = '0'; if (.not. periodic_y) case_suffix(2:2) = '1'
+    case_suffix(3:3) = '0'; if (.not. periodic_z) case_suffix(3:3) = '1'
+
+    ibm_file = "ibm_"//case_suffix//".bp"
+
+    ! Print which file is being read
+    if (mesh%par%is_root()) then
+      print *, 'IBM: reading ', trim(ibm_file)
+    end if
 
     ! Stop if the file is missing
     if (mesh%par%is_root()) inquire (file=ibm_file, exist=file_exists)
