@@ -17,8 +17,8 @@ module m_poisson_fft
     integer :: nx_perm, ny_perm, nz_perm
     !> Local dimensions in the permuted slabs in spectral space
     integer :: nx_spec, ny_spec, nz_spec
-    !> Offset in y and z directions in the permuted slabs in spectral space
-    integer :: x_sp_st, y_sp_st, z_sp_st
+    !> Offset per spectral dimension (dim1, dim2, dim3) in spectral space
+    integer :: sp_st(3)
     !> Local domain sized array storing the spectral equivalence constants
     complex(dp), allocatable, dimension(:, :, :) :: waves
     !> Wave numbers in x, y, and z
@@ -58,6 +58,8 @@ module m_poisson_fft
     procedure(field_process), deferred :: undo_periodicity_x
     procedure(field_process), deferred :: enforce_periodicity_y
     procedure(field_process), deferred :: undo_periodicity_y
+    procedure(field_process), deferred :: enforce_periodicity_xy
+    procedure(field_process), deferred :: undo_periodicity_xy
     procedure :: base_init
     procedure :: solve_poisson
     procedure :: stretching_matrix
@@ -141,9 +143,7 @@ contains
     self%periodic_y = mesh%grid%periodic_BC(2)
     self%periodic_z = mesh%grid%periodic_BC(3)
 
-    self%x_sp_st = n_sp_st(1)
-    self%y_sp_st = n_sp_st(2)
-    self%z_sp_st = n_sp_st(3)
+    self%sp_st = n_sp_st
 
     allocate (self%ax(self%nx_glob), self%bx(self%nx_glob))
     allocate (self%ay(self%ny_glob), self%by(self%ny_glob))
@@ -262,17 +262,13 @@ contains
     class(poisson_fft_t) :: self
     class(field_t), intent(inout) :: f, temp
 
-    ! Apply periodicity enforcement for both X and Y
-    call self%enforce_periodicity_x(temp, f)
-    call self%enforce_periodicity_y(f, temp)
+    call self%enforce_periodicity_xy(temp, f)
 
-    call self%fft_forward_110(f)
+    call self%fft_forward_110(temp)
     call self%fft_postprocess_110
-    call self%fft_backward_110(f)
+    call self%fft_backward_110(temp)
 
-    ! Undo periodicity for both X and Y
-    call self%undo_periodicity_y(temp, f)
-    call self%undo_periodicity_x(f, temp)
+    call self%undo_periodicity_xy(f, temp)
 
   end subroutine poisson_110
 
@@ -333,7 +329,7 @@ contains
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
             if (iy == 1) then
               km_a1 = self%get_km(ix, 2, iz)
             else if (iy == self%ny_spec) then
@@ -364,7 +360,7 @@ contains
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
 
             self%a_re(i, j, k, 4) = &
               a0*a1*self%get_km_re(ix, iy + 1, iz) &
@@ -380,7 +376,7 @@ contains
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec - 2
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
 
             self%a_re(i, j, k, 5) = -a1*a1*self%get_km_re(ix, iy + 1, iz) &
                                     *self%get_km_re(ix, iy + 2, iz)
@@ -394,7 +390,7 @@ contains
       do k = 1, self%nz_spec
         do j = 2, self%ny_spec
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
 
             self%a_re(i, j, k, 2) = a0*a1*self%get_km_re(ix, iy - 1, iz) &
                                     *(self%get_km_re(ix, iy, iz) &
@@ -410,7 +406,7 @@ contains
       do k = 1, self%nz_spec
         do j = 3, self%ny_spec
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
 
             self%a_re(i, j, k, 1) = -a1*a1*self%get_km_re(ix, iy - 1, iz) &
                                     *self%get_km_re(ix, iy - 2, iz)
@@ -450,7 +446,7 @@ contains
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec/2
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
             iy_od = 2*iy - 1
             iy_ev = 2*iy
             c1_od = a0*a0
@@ -508,7 +504,7 @@ contains
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec/2
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
             iy_od = 2*iy - 1
             iy_ev = 2*iy
             c1_od = a0*a1
@@ -550,7 +546,7 @@ contains
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec/2 - 2
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
             iy_od = 2*iy - 1
             iy_ev = 2*iy
             c1_od = a1*a1
@@ -578,7 +574,7 @@ contains
       do k = 1, self%nz_spec
         do j = 2, self%ny_spec/2
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
             iy_od = 2*iy - 1
             iy_ev = 2*iy
             c1_od = a0*a1
@@ -618,7 +614,7 @@ contains
       do k = 1, self%nz_spec
         do j = 3, self%ny_spec/2
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st; iy = j + self%y_sp_st; iz = k + self%z_sp_st
+            ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
             iy_od = 2*iy - 1
             iy_ev = 2*iy
             self%a_odd_re(i, j, k, 1) = &
@@ -639,7 +635,7 @@ contains
 
       do k = 1, self%nz_spec
         do i = 1, self%nx_spec
-          ix = i + self%x_sp_st; iz = k + self%z_sp_st
+          ix = i + self%sp_st(1); iz = k + self%sp_st(3)
           if (get_real(self%k2x(ix)) < 1e-15 &
               .and. get_real(self%k2z(iz)) < 1e-15) then
             self%a_odd_re(i, 1, k, 3) = 1._dp
@@ -687,9 +683,55 @@ contains
       zdirps%stagder_v2p%a, zdirps%stagder_v2p%b, zdirps%stagder_v2p%alpha &
       )
 
-    ! Determine which case we're in and compute waves accordingly
-    if ((.not. self%periodic_x) .and. self%periodic_y .and. &
+    if ((.not. self%periodic_x) .and. (.not. self%periodic_y) .and. &
         self%periodic_z) then
+      ! =========================================================================
+      ! 110 case: Non-periodic X, Non-periodic Y, Periodic Z
+      ! Uses Z-TRANSPOSED layout: spectral array is (nz/2+1, nx, ny)
+      !   dim1 (i) indexes Z R2C modes  → use kz, ez
+      !   dim2 (j) indexes X modes      → use kx, ex
+      !   dim3 (k) indexes Y modes      → use ky, ey
+      ! =========================================================================
+      do k = 1, self%nz_spec     ! Y modes
+        do j = 1, self%ny_spec   ! X modes
+          do i = 1, self%nx_spec ! Z R2C modes
+            iz = i + self%sp_st(1)
+            ix = j + self%sp_st(2)
+            iy = k + self%sp_st(3)
+
+            rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
+            rleys = real(self%eys(iy), kind=dp)*geo%d(2)
+            rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
+
+            xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
+                     + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
+                     + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
+                     + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
+            ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
+                     + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
+                     + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
+                     + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
+            ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
+                     + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
+                     + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
+                     + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
+
+            xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
+            yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
+            zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
+
+            xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
+            yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
+            zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
+
+            xyzk = xt2 + yt2 + zt2
+            self%waves(i, j, k) = xyzk
+          end do
+        end do
+      end do
+
+    else if ((.not. self%periodic_x) .and. self%periodic_y .and. &
+             self%periodic_z) then
       ! =========================================================================
       ! 100 case: Non-periodic X, Periodic Y, Periodic Z
       ! Uses TRANSPOSED indexing because data is transposed before FFT
@@ -697,11 +739,9 @@ contains
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec  ! This iterates over X (Dirichlet) after transpose
           do i = 1, self%nx_spec  ! This iterates over Y (periodic, R2C) after transpose
-            ! After transpose: array is (ny, nx, nz), R2C gives (ny/2+1, nx, nz)
-            ! So i indexes into Y direction, j indexes into X direction
-            iy = i + self%y_sp_st  ! Use for ky (first dim after transpose)
-            ix = j + self%x_sp_st  ! Use for kx (second dim after transpose)
-            iz = k + self%z_sp_st
+            iy = i + self%sp_st(1)
+            ix = j + self%sp_st(2)
+            iz = k + self%sp_st(3)
 
             rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
             rleys = real(self%eys(iy), kind=dp)*geo%d(2)
@@ -736,17 +776,16 @@ contains
 
     else if (self%periodic_z) then
       ! =========================================================================
-      ! 000, 010, 110 cases: Periodic Z (standard indexing, no transpose)
+      ! 000, 010 cases: Periodic Z (standard indexing, no transpose)
       ! 000: Periodic X, Periodic Y, Periodic Z
       ! 010: Periodic X, Non-Periodic Y, Periodic Z
-      ! 110: Non-Periodic X, Non-Periodic Y, Periodic Z
       ! =========================================================================
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec
           do i = 1, self%nx_spec
-            ix = i + self%x_sp_st
-            iy = j + self%y_sp_st
-            iz = k + self%z_sp_st
+            ix = i + self%sp_st(1)
+            iy = j + self%sp_st(2)
+            iz = k + self%sp_st(3)
 
             rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
             rleys = real(self%eys(iy), kind=dp)*geo%d(2)

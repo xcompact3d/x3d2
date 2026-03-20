@@ -46,6 +46,7 @@ module m_omp_backend
     procedure :: field_scale => field_scale_omp
     procedure :: field_shift => field_shift_omp
     procedure :: field_set_face => field_set_face_omp
+    procedure :: field_add_face => field_add_face_omp
     procedure :: field_volume_integral => field_volume_integral_omp
     procedure :: copy_data_to_f => copy_data_to_f_omp
     procedure :: copy_f_to_data => copy_f_to_data_omp
@@ -740,10 +741,13 @@ contains
     f%data = f%data + a
   end subroutine field_shift_omp
 
-  subroutine field_set_face_omp(self, f, c_start, c_end, face)
+  subroutine field_set_face_omp(self, f, c_start, c_end, face, &
+                                bc_start, bc_end, cfl)
     !! [[m_base_backend(module):field_set_face(subroutine)]]
     implicit none
-
+    integer, optional, intent(in) :: bc_start
+    integer, optional, intent(in) :: bc_end
+    real(dp), optional, intent(in) :: cfl
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: f
     real(dp), intent(in) :: c_start, c_end
@@ -782,7 +786,15 @@ contains
     end select
 
   end subroutine field_set_face_omp
+  subroutine field_add_face_omp(self, f, c_start, c_end, face)
+    implicit none
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c_start, c_end
+    integer, intent(in) :: face
 
+    error stop 'field_add_face_omp: not yet implemented.'
+  end subroutine field_add_face_omp
   real(dp) function field_volume_integral_omp(self, f) result(s)
     !! volume integral of a field
     implicit none
