@@ -14,7 +14,7 @@ program perf_omp_thom
   integer :: n_iters, n_warmup
   integer :: ndof
 
-  real(kind(0.0d0)) :: tstart, tend
+  real(dp) :: tstart, tend
   real(dp), dimension(:, :, :), allocatable :: u, du
   real(dp) :: dx_per, dx
 
