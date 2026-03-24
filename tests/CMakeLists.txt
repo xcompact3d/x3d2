@@ -3,7 +3,7 @@ set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" CACHE STRING "comma separated li
 set(CMAKE_CTEST_NPROCS "4" CACHE STRING "number of process used in tests")
 
 # Shared test utilities library
-add_library(x3d2_test_utils STATIC common/m_test_utils.f90)
+add_library(x3d2_test_utils STATIC common/test_utils.f90)
 target_link_libraries(x3d2_test_utils PRIVATE x3d2)
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
   target_compile_options(x3d2_test_utils PRIVATE "-eF")
@@ -122,7 +122,7 @@ if(WITH_2DECOMPFFT)
 endif()
 
 # Performance tests (benchmarks, excluded from CI)
-define_performance_test(performance/perf_omp_thom.f90 1 omp)
+define_performance_test(performance/perf_thom.f90 1 omp)
 define_performance_test(performance/perf_omp_tridiag.f90 ${CMAKE_CTEST_NPROCS} omp)
 
 # CUDA backend tests
@@ -136,6 +136,7 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_test(unit/test_cuda_reorder.f90 1 cuda)
 
   # CUDA verification tests
+  define_verification_test(verification/test_thom.f90 1 cuda)
   define_verification_test(verification/test_time_integrator.f90 1 cuda)
   define_verification_test(verification/test_fft.f90 1 cuda)
   define_verification_test(verification/test_poisson_bc.f90 1 cuda)
@@ -143,7 +144,10 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_verification_test(verification/test_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
 
   # CUDA performance tests
-  define_performance_test(performance/perf_cuda_thom.f90 1 cuda)
+  define_performance_test(performance/perf_thom.f90 1 cuda)
+  define_performance_test(performance/perf_cuda_reorder.f90 1 cuda)
+  define_performance_test(performance/perf_cuda_tridiag.f90 ${CMAKE_CTEST_NPROCS} cuda)
+  define_performance_test(performance/perf_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
 
   if(WITH_ADIOS2)
     define_test(unit/test_adios2_read_write.f90 4 cuda)

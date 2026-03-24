@@ -1,7 +1,6 @@
 program test_omp_tridiag
   use iso_fortran_env, only: stderr => error_unit
   use mpi
-  use omp_lib
 
   use m_common, only: dp, pi, MPI_X3D2_DP, &
                       BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
@@ -36,7 +35,7 @@ program test_omp_tridiag
   integer :: nrank, nproc, pprev, pnext
   integer :: ierr
 
-  real(dp) :: dx, dx_per, dx_pi, norm_du, tol = 1d-8, tstart, tend
+  real(dp) :: dx, dx_per, dx_pi, norm_du, tol = 1d-8
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
@@ -95,16 +94,11 @@ program test_omp_tridiag
 
   call set_u(u, sin_0_2pi_per, n, n_groups)
 
-  tstart = omp_get_wtime()
-
   call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
                   u_recv_s, u_recv_e, u_send_s, u_send_e, &
                   recv_s, recv_e, send_s, send_e, &
                   nproc, pprev, pnext &
                   )
-
-  tend = omp_get_wtime()
-  if (nrank == 0) print *, 'Total time', tend - tstart
 
   call check_error_norm(du, sin_0_2pi_per, n, n_glob, n_groups, 1, norm_du)
   if (nrank == 0) print *, 'error norm second-deriv periodic', norm_du
@@ -434,4 +428,3 @@ contains
   end subroutine check_error_norm
 
 end program test_omp_tridiag
-

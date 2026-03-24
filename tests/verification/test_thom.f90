@@ -1,12 +1,9 @@
 program test_thom
 
-  use iso_fortran_env, only: stderr => error_unit
 #ifdef CUDA
   use cudafor
-#else
-  use omp_lib
 #endif
-  use m_common, only: dp, nbytes, pi, BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
+  use m_common, only: dp, pi, BC_PERIODIC, BC_DIRICHLET
 #ifdef CUDA
   use m_cuda_common, only: SZ
   use m_cuda_exec_thom, only: exec_thom_tds_compact
@@ -16,8 +13,10 @@ program test_thom
   use m_tdsops, only: tdsops_t, tdsops_init
   use m_exec_thom, only: exec_thom_tds_compact
 #endif
+  use m_test_utils, only: checkerr
   implicit none
 
+  real(dp), parameter :: residual_tol = 1.0e-8_dp
   logical :: allpass = .true.
 
 #ifdef CUDA
@@ -25,36 +24,23 @@ program test_thom
 #endif
   integer :: i, j, k
   integer :: n_glob, n, n_groups
-  integer :: n_iters
-  integer :: ndof
-  integer :: ierr
 
-  real(kind(0.0d0)) :: tstart, tend
   real(dp), allocatable, dimension(:, :, :) :: u, du
 #ifdef CUDA
   real(dp), device, allocatable, dimension(:, :, :) :: u_dev, du_dev
 #endif
-  real(dp) :: dx, dx_per, norm_du
+  real(dp) :: dx, dx_per
 
   type(tdsops_t) :: tdsops
 
-  !! Performance test
-  ! n_glob = 512
-  ! n_groups = 512 * 512 / SZ
-  ! n_iters = 1000
-
-  !! Verification test
 #ifdef CUDA
   n_glob = 1024
-  n_groups = 512*512/SZ
-  n_iters = 100
+  n_groups = 128*128/SZ
 #else
   n_glob = 1024
   n_groups = 64*64/SZ
-  n_iters = 1
 #endif
   n = n_glob
-  ndof = n_glob*n_groups*SZ
 
   allocate (u(SZ, n, n_groups), du(SZ, n, n_groups))
 #ifdef CUDA
@@ -89,38 +75,18 @@ program test_thom
   blocks = dim3(n_groups, 1, 1)
   threads = dim3(SZ, 1, 1)
 #endif
-
 #ifdef CUDA
-  call cpu_time(tstart)
+  call exec_thom_tds_compact(du_dev, u_dev, tdsops, blocks, threads)
 #else
-  tstart = omp_get_wtime()
+  call exec_thom_tds_compact(du, u, tdsops, n_groups)
 #endif
-  do i = 1, n_iters
-#ifdef CUDA
-    call exec_thom_tds_compact(du_dev, u_dev, tdsops, blocks, threads)
-#else
-    call exec_thom_tds_compact(du, u, tdsops, n_groups)
-#endif
-  end do
-#ifdef CUDA
-  call cpu_time(tend)
-#else
-  tend = omp_get_wtime()
-#endif
-  print *, "Total time", tend - tstart
 
 #ifdef CUDA
   ! move data to host
   du = du_dev
 #endif
 
-#ifdef CUDA
-  ! 2 in fw pass, 2 in bw pass, 2 in final periodic pass: 6 in total
-  call checkperf(tend - tstart, n_iters, ndof, 6._dp)
-#else
-  call checkperf(tend - tstart, n_iters, ndof, 3.0_dp)
-#endif
-  call checkerr(u, du, 1.0e-8_dp)
+  call checkerr(u, du, residual_tol, 'thom_periodic', allpass)
 
   !! Dirichlet case
   print *, "=== Testing Dirichlet case ==="
@@ -144,98 +110,22 @@ program test_thom
                        bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET)
 
 #ifdef CUDA
-  call cpu_time(tstart)
+  call exec_thom_tds_compact(du_dev, u_dev, tdsops, blocks, threads)
 #else
-  tstart = omp_get_wtime()
+  call exec_thom_tds_compact(du, u, tdsops, n_groups)
 #endif
-  do i = 1, n_iters
-#ifdef CUDA
-    call exec_thom_tds_compact(du_dev, u_dev, tdsops, blocks, threads)
-#else
-    call exec_thom_tds_compact(du, u, tdsops, n_groups)
-#endif
-  end do
-#ifdef CUDA
-  call cpu_time(tend)
-#else
-  tend = omp_get_wtime()
-#endif
-  print *, "Total time", tend - tstart
 
 #ifdef CUDA
   ! move data to host
   du = du_dev
 #endif
 
-#ifdef CUDA
-  ! 2 in fw pass, 2 in bw pass: 4 in total
-  call checkperf(tend - tstart, n_iters, ndof, 4._dp)
-#else
-  call checkperf(tend - tstart, n_iters, ndof, 3.0_dp)
-#endif
-  call checkerr(u, du, 1.0e-8_dp)
+  call checkerr(u, du, residual_tol, 'thom_dirichlet', allpass)
 
   if (allpass) then
       print *, 'ALL TESTS PASSED SUCCESSFULLY.'
   else
     error stop 'SOME TESTS FAILED.'
   end if
-
-contains
-
-  subroutine checkperf(trun, n_iters, ndof, consumed_bw)
-    implicit none
-
-    real(kind(0.0d0)), intent(in) :: trun
-    integer, intent(in) :: n_iters
-    integer, intent(in) :: ndof
-    real(dp), intent(in) :: consumed_bw
-
-    integer :: ierr
-    integer :: memClockRt, memBusWidth
-    real(dp) :: achievedBW, deviceBW
-
-#ifdef CUDA
-    ierr = cudaDeviceGetAttribute(memClockRt, cudaDevAttrMemoryClockRate, 0)
-    ierr = cudaDeviceGetAttribute(memBusWidth, &
-                                  cudaDevAttrGlobalMemoryBusWidth, 0)
-#else
-    memClockRt = 3200000
-    memBusWidth = 64
-#endif
-
-    ! BW utilisation and performance checks
-    achievedBW = consumed_bw*n_iters*ndof*nbytes/trun
-    deviceBW = 2.0_dp*memBusWidth/nbytes*memClockRt*(10**3)
-
-    print *, "Check performance:"
-    print'(a, f8.3, a)', 'Achieved BW: ', achievedBW/2**30, ' GiB/s'
-    print'(a, f8.3, a)', 'Device BW:   ', deviceBW/2**30, ' GiB/s'
-    print'(a, f5.2)', 'Effective BW util: %', achievedBW/deviceBW*100
-
-  end subroutine checkperf
-
-  subroutine checkerr(u, du, tol)
-
-    real(dp), dimension(:, :, :), intent(in) :: u, du
-    real(dp), intent(in) :: tol
-
-    real(dp) :: norm_du
-
-    norm_du = sum((u + du)**2)/n_glob/n_groups/SZ
-    norm_du = sqrt(norm_du)
-
-    print *, "Check error:"
-    print *, "min:", minval(u + du), "max: ", maxval(u + du)
-    print *, "error norm", norm_du
-
-    if (norm_du > tol) then
-      print *, "Check second derivatives... FAILED"
-      allpass = .false.
-    else
-      print *, "Check second derivatives... PASSED"
-    end if
-
-  end subroutine checkerr
 
 end program test_thom

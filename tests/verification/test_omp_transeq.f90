@@ -5,9 +5,8 @@ program test_omp_transeq
   use m_allocator, only: allocator_t, field_t
   use m_common, only: dp, pi, MPI_X3D2_DP, DIR_X, DIR_Y, DIR_Z, VERT
   use m_omp_common, only: SZ
-  use m_omp_sendrecv, only: sendrecv_fields
-  use m_omp_backend, only: omp_backend_t, transeq_x_omp, base_backend_t
-  use m_tdsops, only: dirps_t, tdsops_t
+  use m_omp_backend, only: omp_backend_t, transeq_x_omp
+  use m_tdsops, only: dirps_t
   use m_solver, only: allocate_tdsops
   use m_mesh, only: mesh_t
 
@@ -26,9 +25,8 @@ program test_omp_transeq
   integer :: nrank, nproc
   integer :: ierr
 
-  real(dp) :: dx_per, nu, norm_du, tol = 1d-8, tstart, tend
+  real(dp) :: dx_per, nu, norm_du, tol = 1d-8
 
-  class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
 
   type(omp_backend_t), target :: omp_backend
@@ -62,7 +60,6 @@ program test_omp_transeq
   print *, 'OpenMP allocator instantiated'
 
   omp_backend = omp_backend_t(mesh, allocator)
-  backend => omp_backend
   print *, 'OpenMP backend instantiated'
 
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
@@ -95,11 +92,7 @@ program test_omp_transeq
   call allocate_tdsops(xdirps, omp_backend, mesh, &
                        'compact6', 'compact6', 'classic', 'compact6')
 
-  call cpu_time(tstart)
   call transeq_x_omp(omp_backend, du, dv, dw, u, v, w, nu, xdirps)
-  call cpu_time(tend)
-
-  if (nrank == 0) print *, 'Total time', tend - tstart
 
   allocate (r_u(SZ, n, n_groups))
 
@@ -134,4 +127,3 @@ program test_omp_transeq
   call MPI_Finalize(ierr)
 
 end program test_omp_transeq
-
