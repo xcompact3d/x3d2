@@ -6,6 +6,8 @@ module m_cuda_sendrecv
 
   implicit none
 
+  integer(kind=cuda_stream_kind), parameter :: default_stream = 0
+
 contains
 
   subroutine sendrecv_fields(f_recv_s, f_recv_e, f_send_s, f_send_e, &
@@ -22,6 +24,9 @@ contains
       f_recv_s = f_send_e
       f_recv_e = f_send_s
     else
+      ! Ensure the send buffers are ready before MPI touches device memory.
+      ierr = cudaStreamSynchronize(default_stream)
+
       call MPI_Isend(f_send_s, n_data, MPI_X3D2_DP, &
                      prev, tag, MPI_COMM_WORLD, req(1), err(1))
       call MPI_Irecv(f_recv_e, n_data, MPI_X3D2_DP, &
@@ -59,6 +64,9 @@ contains
       f3_recv_s = f3_send_e
       f3_recv_e = f3_send_s
     else
+      ! Ensure the send buffers are ready before MPI touches device memory.
+      ierr = cudaStreamSynchronize(default_stream)
+
       call MPI_Isend(f1_send_s, n_data, MPI_X3D2_DP, &
                      prev, tag, MPI_COMM_WORLD, req(1), err(1))
       call MPI_Irecv(f1_recv_e, n_data, MPI_X3D2_DP, &
