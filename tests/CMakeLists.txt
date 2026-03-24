@@ -111,7 +111,7 @@ if(WITH_ADIOS2)
 endif()
 
 # Verification tests (numerical correctness vs analytical solutions)
-define_verification_test(verification/test_omp_thom.f90 1 omp)
+define_verification_test(verification/test_thom.f90 1 omp)
 define_verification_test(verification/test_omp_tridiag.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_verification_test(verification/test_omp_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_verification_test(verification/test_omp_transeq_species.f90 ${CMAKE_CTEST_NPROCS} omp)
@@ -139,7 +139,6 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_verification_test(verification/test_time_integrator.f90 1 cuda)
   define_verification_test(verification/test_fft.f90 1 cuda)
   define_verification_test(verification/test_poisson_bc.f90 1 cuda)
-  define_verification_test(verification/test_cuda_thom.f90 1 cuda)
   define_verification_test(verification/test_cuda_tridiag.f90 ${CMAKE_CTEST_NPROCS} cuda)
   define_verification_test(verification/test_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
 
