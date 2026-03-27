@@ -71,7 +71,7 @@ contains
     call backend%base_init()
 
     select type (allocator)
-    type is (allocator_t)
+    class is (allocator_t)
       ! class level access to the allocator
       backend%allocator => allocator
     end select
