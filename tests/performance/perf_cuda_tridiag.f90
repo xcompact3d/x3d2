@@ -33,11 +33,12 @@ program perf_cuda_tridiag
   real(dp) :: dx_per
 
   call initialise_mpi()
+  call select_device()
   call configure_benchmark()
   call allocate_fields()
   call setup_backend()
   call run_case('periodic', dx_per, periodic_bw)
-  call finalise_benchmark()
+  call finalise()
 
 contains
 
@@ -73,12 +74,14 @@ contains
     allocate (du_recv_s_dev(SZ, 1, n_block), du_recv_e_dev(SZ, 1, n_block))
   end subroutine allocate_fields
 
-  subroutine setup_backend()
-    integer :: i, j, k
-
+  subroutine select_device()
     ierr = cudaGetDeviceCount(ndevs)
     ierr = cudaSetDevice(mod(nrank, ndevs))
     ierr = cudaGetDevice(devnum)
+  end subroutine select_device
+
+  subroutine setup_backend()
+    integer :: i, j, k
 
     do k = 1, n_block
       do j = 1, n
@@ -199,8 +202,8 @@ contains
     call cpu_time(t)
   end subroutine stop_timer
 
-  subroutine finalise_benchmark()
+  subroutine finalise()
     call MPI_Finalize(ierr)
-  end subroutine finalise_benchmark
+  end subroutine finalise
 
 end program perf_cuda_tridiag
