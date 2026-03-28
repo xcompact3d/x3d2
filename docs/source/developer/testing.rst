@@ -106,8 +106,9 @@ Running tests
 
 .. code-block:: bash
 
-   $ cmake --build --preset gnu-debug
+   $ FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
    $ cd build
+   $ make
    $ ctest -R test_example --output-on-failure
 
 Common CTest commands:
