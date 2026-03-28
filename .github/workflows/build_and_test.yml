@@ -55,7 +55,7 @@ jobs:
       run: make -C build-debug
 
     - name: Run unit and verification tests
-      run: cd build-debug && ctest -L "unit|verification" --output-on-failure
+      run:  ctest  --test-dir build-debug -L "unit|verification" --output-on-failure
 
     - name: Configure Release build
       run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
@@ -64,7 +64,7 @@ jobs:
       run: make -C build
 
     - name: Run unit and verification tests
-      run: cd build && ctest -L "unit|verification" --output-on-failure
+      run: ctest --test-dir build -L "unit|verification" --output-on-failure
 
     - name: Configure Debug build (single precision)
       run: FC=mpif90 cmake -S . -B build-single-debug -DCMAKE_BUILD_TYPE=Debug -DSINGLE_PREC=ON -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
