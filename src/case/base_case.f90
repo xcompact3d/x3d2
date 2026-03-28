@@ -5,7 +5,8 @@ module m_base_case
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, DIR_X, DIR_Z, DIR_C, VERT
+  use m_common, only: dp, DIR_X, DIR_C, VERT
+  use m_monitoring, only: monitoring_t
   use m_field, only: field_t, flist_t
   use m_mesh, only: mesh_t
   use m_solver, only: solver_t, init
@@ -19,6 +20,7 @@ module m_base_case
   type, abstract :: base_case_t
     class(solver_t), allocatable :: solver
     type(io_manager_t) :: io_mgr
+    type(monitoring_t) :: monitoring
   contains
     procedure(boundary_conditions), deferred :: boundary_conditions
     procedure(initial_conditions), deferred :: initial_conditions
@@ -29,8 +31,6 @@ module m_base_case
     procedure :: case_finalise
     procedure :: set_init
     procedure :: run
-    procedure :: print_enstrophy
-    procedure :: print_div_max_mean
   end type base_case_t
 
   abstract interface
@@ -109,6 +109,8 @@ contains
       call self%initial_conditions()
     end if
 
+    call self%monitoring%init(self%solver)
+
   end subroutine case_init
 
   subroutine case_finalise(self)
@@ -116,6 +118,7 @@ contains
 
     if (self%solver%mesh%par%is_root()) print *, 'run end'
 
+    call self%monitoring%finalise()
     call self%io_mgr%finalise()
   end subroutine case_finalise
 
@@ -157,57 +160,6 @@ contains
     call self%solver%host_allocator%release_block(field_init)
 
   end subroutine set_init
-
-  subroutine print_enstrophy(self, u, v, w)
-    !! Reports the enstrophy
-    implicit none
-
-    class(base_case_t), intent(in) :: self
-    class(field_t), intent(in) :: u, v, w
-
-    class(field_t), pointer :: du, dv, dw
-    real(dp) :: enstrophy
-
-    du => self%solver%backend%allocator%get_block(DIR_X, VERT)
-    dv => self%solver%backend%allocator%get_block(DIR_X, VERT)
-    dw => self%solver%backend%allocator%get_block(DIR_X, VERT)
-
-    call self%solver%curl(du, dv, dw, u, v, w)
-
-    enstrophy = 0.5_dp*(self%solver%backend%scalar_product(du, du) &
-                        + self%solver%backend%scalar_product(dv, dv) &
-                        + self%solver%backend%scalar_product(dw, dw)) &
-                /self%solver%ngrid
-
-    if (self%solver%mesh%par%is_root()) print *, 'enstrophy:', enstrophy
-
-    call self%solver%backend%allocator%release_block(du)
-    call self%solver%backend%allocator%release_block(dv)
-    call self%solver%backend%allocator%release_block(dw)
-
-  end subroutine print_enstrophy
-
-  subroutine print_div_max_mean(self, u, v, w)
-    !! Reports the div(u) at cell centres
-    implicit none
-
-    class(base_case_t), intent(in) :: self
-    class(field_t), intent(in) :: u, v, w
-
-    class(field_t), pointer :: div_u
-    real(dp) :: div_u_max, div_u_mean
-
-    div_u => self%solver%backend%allocator%get_block(DIR_Z)
-
-    call self%solver%divergence_v2p(div_u, u, v, w)
-
-    call self%solver%backend%field_max_mean(div_u_max, div_u_mean, div_u)
-    if (self%solver%mesh%par%is_root()) &
-      print *, 'div u max mean:', div_u_max, div_u_mean
-
-    call self%solver%backend%allocator%release_block(div_u)
-
-  end subroutine print_div_max_mean
 
   subroutine run(self)
     !! Runs the solver forwards in time from t=t_0 to t=T, performing
