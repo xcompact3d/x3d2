@@ -30,312 +30,333 @@ program test_omp_tridiag
 
   integer :: bc_start, bc_end
 
-  integer :: n, n_groups, j, n_halo, n_iters, n_loc
+  integer :: n, n_groups, n_halo, n_iters, n_loc
   integer :: n_glob
   integer :: nrank, nproc, pprev, pnext
   integer :: ierr
 
   real(dp) :: dx, dx_per, dx_pi, norm_du, tol = 1d-8
 
-  call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-  call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-  if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
-
-  pnext = modulo(nrank - nproc + 1, nproc)
-  pprev = modulo(nrank - 1, nproc)
-
-  n_glob = 1024
-  n = n_glob/nproc
-  n_groups = 64*64/SZ
-  n_iters = 1
-
-  allocate (u(SZ, n, n_groups), du(SZ, n, n_groups))
-
-  dx_per = 2*pi/n_glob
-  dx = 2*pi/(n_glob - 1)
-  dx_pi = pi/(n_glob - 1)
-
-  allocate (sin_0_2pi_per(n), cos_0_2pi_per(n))
-  allocate (sin_0_2pi(n), cos_0_2pi(n))
-  allocate (cos_0_pi(n), cos_0_pi_stag(n))
-  allocate (sin_0_pi(n), sin_0_pi_stag(n))
-  allocate (cos_0_2pi_stag(n), sin_0_2pi_stag(n))
-  do j = 1, n
-    sin_0_2pi_per(j) = sin(((j - 1) + nrank*n)*dx_per)
-    cos_0_2pi_per(j) = cos(((j - 1) + nrank*n)*dx_per)
-    sin_0_2pi(j) = sin(((j - 1) + nrank*n)*dx)
-    cos_0_2pi(j) = cos(((j - 1) + nrank*n)*dx)
-    cos_0_pi(j) = cos(((j - 1) + nrank*n)*dx_pi)
-    cos_0_pi_stag(j) = cos(((j - 1) + nrank*n)*dx_pi + dx_pi/2._dp)
-    sin_0_pi(j) = sin(((j - 1) + nrank*n)*dx_pi)
-    sin_0_pi_stag(j) = sin(((j - 1) + nrank*n)*dx_pi + dx_pi/2._dp)
-    cos_0_2pi_stag(j) = cos(((j - 1) + nrank*n)*dx + dx/2._dp)
-    sin_0_2pi_stag(j) = sin(((j - 1) + nrank*n)*dx + dx/2._dp)
-  end do
-
-  n_halo = 4
-
-  ! arrays for exchanging data between ranks
-  allocate (u_send_s(SZ, n_halo, n_groups))
-  allocate (u_send_e(SZ, n_halo, n_groups))
-  allocate (u_recv_s(SZ, n_halo, n_groups))
-  allocate (u_recv_e(SZ, n_halo, n_groups))
-
-  allocate (send_s(SZ, 1, n_groups), send_e(SZ, 1, n_groups))
-  allocate (recv_s(SZ, 1, n_groups), recv_e(SZ, 1, n_groups))
-
-  ! =========================================================================
-  ! second derivative with periodic BC
-  tdsops = tdsops_init(n, dx_per, operation='second-deriv', &
-                       scheme='compact6', &
-                       bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
-
-  call set_u(u, sin_0_2pi_per, n, n_groups)
-
-  call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
-                  u_recv_s, u_recv_e, u_send_s, u_send_e, &
-                  recv_s, recv_e, send_s, send_e, &
-                  nproc, pprev, pnext &
-                  )
-
-  call check_error_norm(du, sin_0_2pi_per, n, n_glob, n_groups, 1, norm_du)
-  if (nrank == 0) print *, 'error norm second-deriv periodic', norm_du
-
-  if (nrank == 0) then
-    if (norm_du > tol) then
-      allpass = .false.
-      write (stderr, '(a)') 'Check 2nd derivatives, periodic BCs... failed'
-    else
-      write (stderr, '(a)') 'Check 2nd derivatives, periodic BCs... passed'
-    end if
-  end if
-
-  ! =========================================================================
-  ! first derivative with periodic BC
-  tdsops = tdsops_init(n, dx_per, operation='first-deriv', scheme='compact6', &
-                       bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
-
-  call set_u(u, sin_0_2pi_per, n, n_groups)
-
-  call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
-                  u_recv_s, u_recv_e, u_send_s, u_send_e, &
-                  recv_s, recv_e, send_s, send_e, &
-                  nproc, pprev, pnext &
-                  )
-
-  call check_error_norm(du, cos_0_2pi_per, n, n_glob, n_groups, -1, norm_du)
-  if (nrank == 0) print *, 'error norm first-deriv periodic', norm_du
-
-  if (nrank == 0) then
-    if (norm_du > tol) then
-      allpass = .false.
-      write (stderr, '(a)') 'Check 1st derivatives, periodic BCs... failed'
-    else
-      write (stderr, '(a)') 'Check 1st derivatives, periodic BCs... passed'
-    end if
-  end if
-
-  ! =========================================================================
-  ! first derivative with dirichlet and neumann
-  if (nrank == 0) then
-    bc_start = BC_DIRICHLET
-  else
-    bc_start = BC_HALO
-  end if
-  if (nrank == nproc - 1) then
-    bc_end = BC_NEUMANN
-  else
-    bc_end = BC_HALO
-  end if
-
-  tdsops = tdsops_init(n, dx, operation='first-deriv', scheme='compact6', &
-                       bc_start=bc_start, bc_end=bc_end, &
-                       sym=.false.)
-
-  call set_u(u, sin_0_2pi, n, n_groups)
-
-  call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
-                  u_recv_s, u_recv_e, u_send_s, u_send_e, &
-                  recv_s, recv_e, send_s, send_e, &
-                  nproc, pprev, pnext &
-                  )
-
-  call check_error_norm(du, cos_0_2pi, n, n_glob, n_groups, -1, norm_du)
-  if (nrank == 0) print *, 'error norm first deriv dir-neu', norm_du
-
-  if (nrank == 0) then
-    if (norm_du > tol) then
-      allpass = .false.
-      write (stderr, '(a)') 'Check 1st derivatives, dir-neu... failed'
-    else
-      write (stderr, '(a)') 'Check 1st derivatives, dir-neu... passed'
-    end if
-  end if
-
-  ! =========================================================================
-  ! stag interpolate 'v2p' with neumann sym
-  if (nrank == 0) then
-    bc_start = BC_NEUMANN
-  else
-    bc_start = BC_HALO
-  end if
-  n_loc = n
-  if (nrank == nproc - 1) n_loc = n - 1
-  tdsops = tdsops_init(n_loc, dx_pi, operation='interpolate', &
-                       scheme='classic', &
-                       bc_start=bc_start, bc_end=bc_end, &
-                       from_to='v2p')
-
-  ! stag-interpolate v2p requires an even, cos-type function
-  call set_u(u, cos_0_pi, n, n_groups)
-
-  call run_kernel(n_iters, n_groups, u, du, tdsops, n_loc, &
-                  u_recv_s, u_recv_e, u_send_s, u_send_e, &
-                  recv_s, recv_e, send_s, send_e, &
-                  nproc, pprev, pnext &
-                  )
-
-  call check_error_norm(du, cos_0_pi_stag, n_loc, n_glob, n_groups, &
-                        -1, norm_du)
-  if (nrank == 0) print *, 'error norm interpolate v2p', norm_du
-
-  if (nrank == 0) then
-    if (norm_du > tol) then
-      allpass = .false.
-      write (stderr, '(a)') 'Check interpolation "v2p"... failed'
-    else
-      write (stderr, '(a)') 'Check interpolation "v2p"... passed'
-    end if
-  end if
-
-  ! =========================================================================
-  ! stag interpolate 'p2v' with neumann sym
-  n_loc = n
-  if (nrank == nproc - 1) n_loc = n - 1
-  tdsops = tdsops_init(n, dx_pi, operation='interpolate', scheme='classic', &
-                       bc_start=bc_start, bc_end=bc_end, &
-                       from_to='p2v')
-
-  ! stag-interpolate p2v requires an even, cos-type function
-  call set_u(u, cos_0_pi_stag, n_loc, n_groups)
-
-  call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
-                  u_recv_s, u_recv_e, u_send_s, u_send_e, &
-                  recv_s, recv_e, send_s, send_e, &
-                  nproc, pprev, pnext &
-                  )
-
-  call check_error_norm(du, cos_0_pi, n, n_glob, n_groups, -1, norm_du)
-  if (nrank == 0) print *, 'error norm interpolate p2v', norm_du
-
-  if (nrank == 0) then
-    if (norm_du > tol) then
-      allpass = .false.
-      write (stderr, '(a)') 'Check interpolation "p2v"... failed'
-    else
-      write (stderr, '(a)') 'Check interpolation "p2v"... passed'
-    end if
-  end if
-
-  ! =========================================================================
-  ! stag derivative 'v2p' with neumann anti-sym
-  n_loc = n
-  if (nrank == nproc - 1) n_loc = n - 1
-  tdsops = tdsops_init(n_loc, dx_pi, operation='stag-deriv', &
-                       scheme='compact6', &
-                       bc_start=bc_start, bc_end=bc_end, &
-                       from_to='v2p')
-
-  ! stag-derivative v2p requires an odd, sin-type function
-  call set_u(u, sin_0_pi, n, n_groups)
-
-  call run_kernel(n_iters, n_groups, u, du, tdsops, n_loc, &
-                  u_recv_s, u_recv_e, u_send_s, u_send_e, &
-                  recv_s, recv_e, send_s, send_e, &
-                  nproc, pprev, pnext &
-                  )
-
-  call check_error_norm(du, cos_0_pi_stag, n_loc, n_glob, n_groups, &
-                        -1, norm_du)
-  if (nrank == 0) print *, 'error norm stag derivative v2p', norm_du
-
-  if (nrank == 0) then
-    if (norm_du > tol) then
-      allpass = .false.
-      write (stderr, '(a)') 'Check stag derivative "v2p"... failed'
-    else
-      write (stderr, '(a)') 'Check stag derivative "v2p"... passed'
-    end if
-  end if
-
-  ! =========================================================================
-  ! stag derivative 'p2v' with neumann sym
-  n_loc = n
-  if (nrank == nproc - 1) n_loc = n - 1
-  tdsops = tdsops_init(n, dx_pi, operation='stag-deriv', scheme='compact6', &
-                       bc_start=bc_start, bc_end=bc_end, &
-                       from_to='p2v')
-
-  ! stag-derivative p2v requires an even, cos-type function
-  call set_u(u, cos_0_pi_stag, n_loc, n_groups)
-
-  call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
-                  u_recv_s, u_recv_e, u_send_s, u_send_e, &
-                  recv_s, recv_e, send_s, send_e, &
-                  nproc, pprev, pnext &
-                  )
-
-  call check_error_norm(du, sin_0_pi, n_loc, n_glob, n_groups, 1, norm_du)
-  if (nrank == 0) print *, 'error norm stag derivative p2v', norm_du
-
-  if (nrank == 0) then
-    if (norm_du > tol) then
-      allpass = .false.
-      write (stderr, '(a)') 'Check stag derivative "p2v"... failed'
-    else
-      write (stderr, '(a)') 'Check stag derivative "p2v"... passed'
-    end if
-  end if
-
-  ! =========================================================================
-  ! second derivative and hyperviscousity on with dirichlet and neumann
-  ! c_nu = 0.22 and nu0_nu = 63 results in alpha = 0.40869111947709036
-  tdsops = tdsops_init(n, dx, operation='second-deriv', &
-                       scheme='compact6-hyperviscous', &
-                       bc_start=bc_start, bc_end=bc_end, &
-                       sym=.false., c_nu=0.22_dp, nu0_nu=63._dp)
-
-  call set_u(u, sin_0_2pi, n, n_groups)
-
-  call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
-                  u_recv_s, u_recv_e, u_send_s, u_send_e, &
-                  recv_s, recv_e, send_s, send_e, &
-                  nproc, pprev, pnext &
-                  )
-
-  call check_error_norm(du, sin_0_2pi, n, n_glob, n_groups, 1, norm_du)
-  if (nrank == 0) print *, 'error norm hyperviscous', norm_du
-
-  if (nrank == 0) then
-    if (norm_du > tol) then
-      allpass = .false.
-      write (stderr, '(a)') 'Check 2nd ders, hyperviscous, dir-neu... failed'
-    else
-      write (stderr, '(a)') 'Check 2nd ders, hyperviscous, dir-neu... passed'
-    end if
-  end if
-
-  if (allpass) then
-    if (nrank == 0) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-  else
-    error stop 'SOME TESTS FAILED.'
-  end if
-
-  call MPI_Finalize(ierr)
+  call initialise_mpi()
+  call setup_geometry()
+  call allocate_fields()
+  call initialise_input()
+  call run_all_cases()
+  call finalise()
 
 contains
+
+  subroutine initialise_mpi()
+    call MPI_Init(ierr)
+    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
+    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+
+    if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
+
+    pnext = modulo(nrank - nproc + 1, nproc)
+    pprev = modulo(nrank - 1, nproc)
+  end subroutine initialise_mpi
+
+  subroutine setup_geometry()
+    n_glob = 1024
+    n = n_glob/nproc
+    n_groups = 64*64/SZ
+    n_iters = 1
+    n_halo = 4
+
+    dx_per = 2*pi/n_glob
+    dx = 2*pi/(n_glob - 1)
+    dx_pi = pi/(n_glob - 1)
+  end subroutine setup_geometry
+
+  subroutine allocate_fields()
+    allocate (u(SZ, n, n_groups), du(SZ, n, n_groups))
+
+    ! arrays for exchanging data between ranks
+    allocate (u_send_s(SZ, n_halo, n_groups))
+    allocate (u_send_e(SZ, n_halo, n_groups))
+    allocate (u_recv_s(SZ, n_halo, n_groups))
+    allocate (u_recv_e(SZ, n_halo, n_groups))
+
+    allocate (send_s(SZ, 1, n_groups), send_e(SZ, 1, n_groups))
+    allocate (recv_s(SZ, 1, n_groups), recv_e(SZ, 1, n_groups))
+
+    allocate (sin_0_2pi_per(n), cos_0_2pi_per(n))
+    allocate (sin_0_2pi(n), cos_0_2pi(n))
+    allocate (cos_0_pi(n), cos_0_pi_stag(n))
+    allocate (sin_0_pi(n), sin_0_pi_stag(n))
+    allocate (cos_0_2pi_stag(n), sin_0_2pi_stag(n))
+  end subroutine allocate_fields
+
+  subroutine initialise_input()
+    integer :: j
+
+    do j = 1, n
+      sin_0_2pi_per(j) = sin(((j - 1) + nrank*n)*dx_per)
+      cos_0_2pi_per(j) = cos(((j - 1) + nrank*n)*dx_per)
+      sin_0_2pi(j) = sin(((j - 1) + nrank*n)*dx)
+      cos_0_2pi(j) = cos(((j - 1) + nrank*n)*dx)
+      cos_0_pi(j) = cos(((j - 1) + nrank*n)*dx_pi)
+      cos_0_pi_stag(j) = cos(((j - 1) + nrank*n)*dx_pi + dx_pi/2._dp)
+      sin_0_pi(j) = sin(((j - 1) + nrank*n)*dx_pi)
+      sin_0_pi_stag(j) = sin(((j - 1) + nrank*n)*dx_pi + dx_pi/2._dp)
+      cos_0_2pi_stag(j) = cos(((j - 1) + nrank*n)*dx + dx/2._dp)
+      sin_0_2pi_stag(j) = sin(((j - 1) + nrank*n)*dx + dx/2._dp)
+    end do
+  end subroutine initialise_input
+
+  subroutine run_all_cases()
+    ! =========================================================================
+    ! second derivative with periodic BC
+    tdsops = tdsops_init(n, dx_per, operation='second-deriv', &
+                         scheme='compact6', &
+                         bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
+
+    call set_u(u, sin_0_2pi_per, n, n_groups)
+
+    call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
+                    u_recv_s, u_recv_e, u_send_s, u_send_e, &
+                    recv_s, recv_e, send_s, send_e, &
+                    nproc, pprev, pnext &
+                    )
+
+    call check_error_norm(du, sin_0_2pi_per, n, n_glob, n_groups, 1, norm_du)
+    if (nrank == 0) print *, 'error norm second-deriv periodic', norm_du
+
+    if (nrank == 0) then
+      if (norm_du > tol) then
+        allpass = .false.
+        write (stderr, '(a)') 'Check 2nd derivatives, periodic BCs... failed'
+      else
+        write (stderr, '(a)') 'Check 2nd derivatives, periodic BCs... passed'
+      end if
+    end if
+
+    ! =========================================================================
+    ! first derivative with periodic BC
+    tdsops = tdsops_init(n, dx_per, operation='first-deriv', scheme='compact6', &
+                         bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
+
+    call set_u(u, sin_0_2pi_per, n, n_groups)
+
+    call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
+                    u_recv_s, u_recv_e, u_send_s, u_send_e, &
+                    recv_s, recv_e, send_s, send_e, &
+                    nproc, pprev, pnext &
+                    )
+
+    call check_error_norm(du, cos_0_2pi_per, n, n_glob, n_groups, -1, norm_du)
+    if (nrank == 0) print *, 'error norm first-deriv periodic', norm_du
+
+    if (nrank == 0) then
+      if (norm_du > tol) then
+        allpass = .false.
+        write (stderr, '(a)') 'Check 1st derivatives, periodic BCs... failed'
+      else
+        write (stderr, '(a)') 'Check 1st derivatives, periodic BCs... passed'
+      end if
+    end if
+
+    ! =========================================================================
+    ! first derivative with dirichlet and neumann
+    if (nrank == 0) then
+      bc_start = BC_DIRICHLET
+    else
+      bc_start = BC_HALO
+    end if
+    if (nrank == nproc - 1) then
+      bc_end = BC_NEUMANN
+    else
+      bc_end = BC_HALO
+    end if
+
+    tdsops = tdsops_init(n, dx, operation='first-deriv', scheme='compact6', &
+                         bc_start=bc_start, bc_end=bc_end, &
+                         sym=.false.)
+
+    call set_u(u, sin_0_2pi, n, n_groups)
+
+    call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
+                    u_recv_s, u_recv_e, u_send_s, u_send_e, &
+                    recv_s, recv_e, send_s, send_e, &
+                    nproc, pprev, pnext &
+                    )
+
+    call check_error_norm(du, cos_0_2pi, n, n_glob, n_groups, -1, norm_du)
+    if (nrank == 0) print *, 'error norm first deriv dir-neu', norm_du
+
+    if (nrank == 0) then
+      if (norm_du > tol) then
+        allpass = .false.
+        write (stderr, '(a)') 'Check 1st derivatives, dir-neu... failed'
+      else
+        write (stderr, '(a)') 'Check 1st derivatives, dir-neu... passed'
+      end if
+    end if
+
+    ! =========================================================================
+    ! stag interpolate 'v2p' with neumann sym
+    if (nrank == 0) then
+      bc_start = BC_NEUMANN
+    else
+      bc_start = BC_HALO
+    end if
+    n_loc = n
+    if (nrank == nproc - 1) n_loc = n - 1
+    tdsops = tdsops_init(n_loc, dx_pi, operation='interpolate', &
+                         scheme='classic', &
+                         bc_start=bc_start, bc_end=bc_end, &
+                         from_to='v2p')
+
+    ! stag-interpolate v2p requires an even, cos-type function
+    call set_u(u, cos_0_pi, n, n_groups)
+
+    call run_kernel(n_iters, n_groups, u, du, tdsops, n_loc, &
+                    u_recv_s, u_recv_e, u_send_s, u_send_e, &
+                    recv_s, recv_e, send_s, send_e, &
+                    nproc, pprev, pnext &
+                    )
+
+    call check_error_norm(du, cos_0_pi_stag, n_loc, n_glob, n_groups, &
+                          -1, norm_du)
+    if (nrank == 0) print *, 'error norm interpolate v2p', norm_du
+
+    if (nrank == 0) then
+      if (norm_du > tol) then
+        allpass = .false.
+        write (stderr, '(a)') 'Check interpolation "v2p"... failed'
+      else
+        write (stderr, '(a)') 'Check interpolation "v2p"... passed'
+      end if
+    end if
+
+    ! =========================================================================
+    ! stag interpolate 'p2v' with neumann sym
+    n_loc = n
+    if (nrank == nproc - 1) n_loc = n - 1
+    tdsops = tdsops_init(n, dx_pi, operation='interpolate', scheme='classic', &
+                         bc_start=bc_start, bc_end=bc_end, &
+                         from_to='p2v')
+
+    ! stag-interpolate p2v requires an even, cos-type function
+    call set_u(u, cos_0_pi_stag, n_loc, n_groups)
+
+    call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
+                    u_recv_s, u_recv_e, u_send_s, u_send_e, &
+                    recv_s, recv_e, send_s, send_e, &
+                    nproc, pprev, pnext &
+                    )
+
+    call check_error_norm(du, cos_0_pi, n, n_glob, n_groups, -1, norm_du)
+    if (nrank == 0) print *, 'error norm interpolate p2v', norm_du
+
+    if (nrank == 0) then
+      if (norm_du > tol) then
+        allpass = .false.
+        write (stderr, '(a)') 'Check interpolation "p2v"... failed'
+      else
+        write (stderr, '(a)') 'Check interpolation "p2v"... passed'
+      end if
+    end if
+
+    ! =========================================================================
+    ! stag derivative 'v2p' with neumann anti-sym
+    n_loc = n
+    if (nrank == nproc - 1) n_loc = n - 1
+    tdsops = tdsops_init(n_loc, dx_pi, operation='stag-deriv', &
+                         scheme='compact6', &
+                         bc_start=bc_start, bc_end=bc_end, &
+                         from_to='v2p')
+
+    ! stag-derivative v2p requires an odd, sin-type function
+    call set_u(u, sin_0_pi, n, n_groups)
+
+    call run_kernel(n_iters, n_groups, u, du, tdsops, n_loc, &
+                    u_recv_s, u_recv_e, u_send_s, u_send_e, &
+                    recv_s, recv_e, send_s, send_e, &
+                    nproc, pprev, pnext &
+                    )
+
+    call check_error_norm(du, cos_0_pi_stag, n_loc, n_glob, n_groups, &
+                          -1, norm_du)
+    if (nrank == 0) print *, 'error norm stag derivative v2p', norm_du
+
+    if (nrank == 0) then
+      if (norm_du > tol) then
+        allpass = .false.
+        write (stderr, '(a)') 'Check stag derivative "v2p"... failed'
+      else
+        write (stderr, '(a)') 'Check stag derivative "v2p"... passed'
+      end if
+    end if
+
+    ! =========================================================================
+    ! stag derivative 'p2v' with neumann sym
+    n_loc = n
+    if (nrank == nproc - 1) n_loc = n - 1
+    tdsops = tdsops_init(n, dx_pi, operation='stag-deriv', scheme='compact6', &
+                         bc_start=bc_start, bc_end=bc_end, &
+                         from_to='p2v')
+
+    ! stag-derivative p2v requires an even, cos-type function
+    call set_u(u, cos_0_pi_stag, n_loc, n_groups)
+
+    call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
+                    u_recv_s, u_recv_e, u_send_s, u_send_e, &
+                    recv_s, recv_e, send_s, send_e, &
+                    nproc, pprev, pnext &
+                    )
+
+    call check_error_norm(du, sin_0_pi, n_loc, n_glob, n_groups, 1, norm_du)
+    if (nrank == 0) print *, 'error norm stag derivative p2v', norm_du
+
+    if (nrank == 0) then
+      if (norm_du > tol) then
+        allpass = .false.
+        write (stderr, '(a)') 'Check stag derivative "p2v"... failed'
+      else
+        write (stderr, '(a)') 'Check stag derivative "p2v"... passed'
+      end if
+    end if
+
+    ! =========================================================================
+    ! second derivative and hyperviscousity on with dirichlet and neumann
+    ! c_nu = 0.22 and nu0_nu = 63 results in alpha = 0.40869111947709036
+    tdsops = tdsops_init(n, dx, operation='second-deriv', &
+                         scheme='compact6-hyperviscous', &
+                         bc_start=bc_start, bc_end=bc_end, &
+                         sym=.false., c_nu=0.22_dp, nu0_nu=63._dp)
+
+    call set_u(u, sin_0_2pi, n, n_groups)
+
+    call run_kernel(n_iters, n_groups, u, du, tdsops, n, &
+                    u_recv_s, u_recv_e, u_send_s, u_send_e, &
+                    recv_s, recv_e, send_s, send_e, &
+                    nproc, pprev, pnext &
+                    )
+
+    call check_error_norm(du, sin_0_2pi, n, n_glob, n_groups, 1, norm_du)
+    if (nrank == 0) print *, 'error norm hyperviscous', norm_du
+
+    if (nrank == 0) then
+      if (norm_du > tol) then
+        allpass = .false.
+        write (stderr, '(a)') 'Check 2nd ders, hyperviscous, dir-neu... failed'
+      else
+        write (stderr, '(a)') 'Check 2nd ders, hyperviscous, dir-neu... passed'
+      end if
+    end if
+  end subroutine run_all_cases
+
+  subroutine finalise()
+    if (allpass) then
+      if (nrank == 0) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
+    else
+      error stop 'SOME TESTS FAILED.'
+    end if
+
+    call MPI_Finalize(ierr)
+  end subroutine finalise
 
   subroutine run_kernel(n_iters, n_groups, u, du, tdsops, n, &
                         u_recv_s, u_recv_e, u_send_s, u_send_e, &

@@ -31,7 +31,7 @@ program perf_omp_tridiag
   call configure_benchmark()
   call allocate_fields()
   call run_case('periodic', dx_per, periodic_bw)
-  call finalise_benchmark()
+  call finalise()
 
 contains
 
@@ -165,8 +165,8 @@ contains
     t = omp_get_wtime()
   end subroutine stop_timer
 
-  subroutine finalise_benchmark()
+  subroutine finalise()
     call MPI_Finalize(ierr)
-  end subroutine finalise_benchmark
+  end subroutine finalise
 
 end program perf_omp_tridiag
