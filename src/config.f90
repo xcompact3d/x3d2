@@ -13,7 +13,7 @@ module m_config
   !! Total number of possible snapshot fields: 3 mandatory (u,v,w) + 3 optional
   !! (pressure, vorticity, qcriterion). Must be updated if new optional fields
   !! are added to get_snapshot_fields in snapshot_manager.f90.
-  integer, parameter :: NUM_SNAPSHOT_FIELDS = 6
+  integer, parameter :: NUM_SNAPSHOT_FIELDS = 7
 
   type, abstract :: base_config_t
     !! All config types have a method read to initialise their data

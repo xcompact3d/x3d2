@@ -206,6 +206,9 @@ contains
     if (has_output_field(config, 'qcriterion')) then
       n = n + 1; tmp(n) = "qcrit"
     end if
+    if (has_output_field(config, 'ibm')) then
+      n = n + 1; tmp(n) = "ibm"
+    end if
     names = tmp(1:n)
   end function get_snapshot_fields
 
