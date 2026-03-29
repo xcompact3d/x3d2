@@ -318,7 +318,7 @@ contains
         if (.not. solver%ibm_on .or. .not. associated(solver%ibm%ep1)) then
           if (solver%mesh%par%is_root()) then
             print *, 'ERROR: IBM mask not available. &
-                     &Enable ibm_on in solver_params.'
+                     &Enable ibm_on in the input file.'
           end if
           error stop 1
         end if
