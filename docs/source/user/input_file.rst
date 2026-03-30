@@ -17,7 +17,7 @@ These parameters are specified in the ``checkpoint_params`` namelist block in th
      snapshot_prefix = "snapshot"
      snapshot_sp = .false.
      output_stride = 2, 2, 2
-     output_fields = 'pressure', 'vorticity', 'qcriterion'
+     output_fields = 'pressure', 'vorticity', 'qcriterion', 'species'
      restart_from_checkpoint = .false.
      restart_file = ""
    /End
@@ -43,12 +43,13 @@ These parameters are specified in the ``checkpoint_params`` namelist block in th
 ``output_stride``: Three-element array specifying the spatial stride (subsampling) in ``X``, ``Y``, and ``Z`` directions for visualisation snapshots. Using values greater than ``1`` reduces file size and increases I/O performance, but decreases visualisation resolution.
   **Default:** ``[1, 1, 1]``
 
-``output_fields``: List of additional derived fields to include in visualisation snapshots. Velocity components (``u``, ``v``, ``w``) are always written. Supported field names:
+``output_fields``: List of additional fields to include in visualisation snapshots. Velocity components (``u``, ``v``, ``w``) are always written. Supported field names:
 
   - ``'pressure'`` — Pressure field, interpolated from its native cell-centred grid to the vertex grid for ParaView compatibility. Not included in checkpoint files since it is recomputed from velocity.
   - ``'vorticity'`` — Vorticity magnitude :math:`|\omega| = \sqrt{\omega_x^2 + \omega_y^2 + \omega_z^2}`, computed from the full velocity gradient tensor.
   - ``'qcriterion'`` — Q-criterion :math:`Q = -\frac{1}{2} \sum_{ij} \frac{\partial u_i}{\partial x_j} \frac{\partial u_j}{\partial x_i}`, identifying vortical structures (positive Q indicates rotation-dominated regions).
   - ``'ibm'`` — Immersed boundary method mask field (``ep1``). Values are ``1`` in the fluid domain and ``0`` in the solid domain. Requires ``ibm_on = .true.`` in the input file.
+  - ``'species'`` — All transported species fields. In the input file, set ``n_species = N`` with ``N > 0`` and provide ``pr_species = ...`` in ``solver_params``, then add ``'species'`` to ``output_fields``. Snapshots then include ``phi_1`` through ``phi_N``.
 
   When both ``'vorticity'`` and ``'qcriterion'`` are requested, the velocity gradient tensor is computed only once.
   **Default:** (empty — only velocity is written)

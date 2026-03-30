@@ -264,6 +264,29 @@ contains
       )
   end subroutine generate_coordinates
 
+  logical function parse_species_snapshot_field(field_name, species_index)
+    !! Parse snapshot field names of the form ``phi_N``.
+    character(len=*), intent(in) :: field_name
+    integer, intent(out) :: species_index
+
+    integer :: field_name_len, ios
+
+    parse_species_snapshot_field = .false.
+    species_index = 0
+
+    field_name_len = len_trim(field_name)
+    if (field_name_len <= 4) return
+    if (field_name(1:4) /= 'phi_') return
+
+    read (field_name(5:field_name_len), *, iostat=ios) species_index
+    if (ios /= 0 .or. species_index < 1) then
+      species_index = 0
+      return
+    end if
+
+    parse_species_snapshot_field = .true.
+  end function parse_species_snapshot_field
+
   subroutine setup_field_arrays( &
     solver, field_names, field_ptrs, host_fields &
     )
@@ -271,64 +294,85 @@ contains
     character(len=*), dimension(:), intent(in) :: field_names
     type(field_ptr_t), allocatable, intent(out) :: field_ptrs(:)
     type(field_ptr_t), allocatable, intent(out) :: host_fields(:)
-    integer :: i, num_fields
+    integer :: i, num_fields, species_index
+    character(len=32) :: field_name
 
     num_fields = size(field_names)
     allocate (field_ptrs(num_fields))
     allocate (host_fields(num_fields))
 
     do i = 1, num_fields
-      select case (trim(field_names(i)))
-      case ("u")
-        field_ptrs(i)%ptr => solver%u
-      case ("v")
-        field_ptrs(i)%ptr => solver%v
-      case ("w")
-        field_ptrs(i)%ptr => solver%w
-      case ("p")
-        if (.not. associated(solver%pressure_vert)) then
+      field_name = trim(field_names(i))
+
+      if (parse_species_snapshot_field(field_name, species_index)) then
+        if (species_index > solver%nspecies .or. .not. associated(solver%species)) then
           if (solver%mesh%par%is_root()) then
-            print *, 'ERROR: pressure_vert not computed. &
-                     &Call compute_pressure_vert before writing snapshots.'
+            print *, 'ERROR: Species snapshot field out of range: ', &
+                     trim(field_name)
           end if
           error stop 1
         end if
-        field_ptrs(i)%ptr => solver%pressure_vert
-      case ("vort")
-        if (.not. associated(solver%vort)) then
+        if (.not. associated(solver%species(species_index)%ptr)) then
           if (solver%mesh%par%is_root()) then
-            print *, 'ERROR: vorticity not computed. &
-                     &Enable output_vorticity and &
-                     &ensure snapshot_freq > 0.'
+            print *, 'ERROR: Species field not available: ', &
+                     trim(field_name)
           end if
           error stop 1
         end if
-        field_ptrs(i)%ptr => solver%vort
-      case ("qcrit")
-        if (.not. associated(solver%qcrit)) then
+        field_ptrs(i)%ptr => solver%species(species_index)%ptr
+      else
+        select case (field_name)
+        case ("u")
+          field_ptrs(i)%ptr => solver%u
+        case ("v")
+          field_ptrs(i)%ptr => solver%v
+        case ("w")
+          field_ptrs(i)%ptr => solver%w
+        case ("p")
+          if (.not. associated(solver%pressure_vert)) then
+            if (solver%mesh%par%is_root()) then
+              print *, 'ERROR: pressure_vert not computed. &
+                       &Call compute_pressure_vert before writing snapshots.'
+            end if
+            error stop 1
+          end if
+          field_ptrs(i)%ptr => solver%pressure_vert
+        case ("vort")
+          if (.not. associated(solver%vort)) then
+            if (solver%mesh%par%is_root()) then
+              print *, 'ERROR: vorticity not computed. &
+                       &Enable output_vorticity and &
+                       &ensure snapshot_freq > 0.'
+            end if
+            error stop 1
+          end if
+          field_ptrs(i)%ptr => solver%vort
+        case ("qcrit")
+          if (.not. associated(solver%qcrit)) then
+            if (solver%mesh%par%is_root()) then
+              print *, 'ERROR: Q-criterion not computed. &
+                       &Enable output_qcriterion and &
+                       &ensure snapshot_freq > 0.'
+            end if
+            error stop 1
+          end if
+          field_ptrs(i)%ptr => solver%qcrit
+        case ("ibm")
+          if (.not. solver%ibm_on .or. .not. associated(solver%ibm%ep1)) then
+            if (solver%mesh%par%is_root()) then
+              print *, 'ERROR: IBM mask not available. &
+                       &Enable ibm_on in the input file.'
+            end if
+            error stop 1
+          end if
+          field_ptrs(i)%ptr => solver%ibm%ep1
+        case default
           if (solver%mesh%par%is_root()) then
-            print *, 'ERROR: Q-criterion not computed. &
-                     &Enable output_qcriterion and &
-                     &ensure snapshot_freq > 0.'
+            print *, 'ERROR: Unknown field name: ', trim(field_name)
           end if
           error stop 1
-        end if
-        field_ptrs(i)%ptr => solver%qcrit
-      case ("ibm")
-        if (.not. solver%ibm_on .or. .not. associated(solver%ibm%ep1)) then
-          if (solver%mesh%par%is_root()) then
-            print *, 'ERROR: IBM mask not available. &
-                     &Enable ibm_on in the input file.'
-          end if
-          error stop 1
-        end if
-        field_ptrs(i)%ptr => solver%ibm%ep1
-      case default
-        if (solver%mesh%par%is_root()) then
-          print *, 'ERROR: Unknown field name: ', trim(field_names(i))
-        end if
-        error stop 1
-      end select
+        end select
+      end if
     end do
 
     do i = 1, num_fields
