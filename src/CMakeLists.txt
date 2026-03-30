@@ -150,6 +150,7 @@ target_link_libraries(xcompact PRIVATE OpenMP::OpenMP_Fortran)
 
 find_package(MPI REQUIRED)
 target_link_libraries(x3d2 PRIVATE MPI::MPI_Fortran)
+target_link_libraries(x3d2_backends PRIVATE MPI::MPI_Fortran)
 target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
 
 if(WITH_ADIOS2)

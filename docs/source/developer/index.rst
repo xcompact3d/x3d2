@@ -18,6 +18,7 @@ We encourage developers to contribute their changes back to the x3d2 project. Th
    tooling
    dev_environment
    build
+   testing
    style
    writing_docs
 
