@@ -314,6 +314,15 @@ contains
           error stop 1
         end if
         field_ptrs(i)%ptr => solver%qcrit
+      case ("ibm")
+        if (.not. solver%ibm_on .or. .not. associated(solver%ibm%ep1)) then
+          if (solver%mesh%par%is_root()) then
+            print *, 'ERROR: IBM mask not available. &
+                     &Enable ibm_on in the input file.'
+          end if
+          error stop 1
+        end if
+        field_ptrs(i)%ptr => solver%ibm%ep1
       case default
         if (solver%mesh%par%is_root()) then
           print *, 'ERROR: Unknown field name: ', trim(field_names(i))
