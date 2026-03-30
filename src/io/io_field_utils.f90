@@ -305,17 +305,18 @@ contains
       field_name = trim(field_names(i))
 
       if (parse_species_snapshot_field(field_name, species_index)) then
-        if (species_index > solver%nspecies .or. .not. associated(solver%species)) then
+        if (species_index > solver%nspecies .or. &
+            .not. associated(solver%species)) then
           if (solver%mesh%par%is_root()) then
             print *, 'ERROR: Species snapshot field out of range: ', &
-                     trim(field_name)
+              trim(field_name)
           end if
           error stop 1
         end if
         if (.not. associated(solver%species(species_index)%ptr)) then
           if (solver%mesh%par%is_root()) then
             print *, 'ERROR: Species field not available: ', &
-                     trim(field_name)
+              trim(field_name)
           end if
           error stop 1
         end if
