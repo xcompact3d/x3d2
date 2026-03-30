@@ -10,8 +10,8 @@ module m_config
 
   !! Maximum number of additional (non-mandatory) output fields in a snapshot
   integer, parameter :: MAX_OUTPUT_FIELDS = 10
-  !! Total number of possible snapshot fields: 3 mandatory (u,v,w) + 3 optional
-  !! (pressure, vorticity, qcriterion). Must be updated if new optional fields
+  !! Total number of possible snapshot fields: 3 mandatory (u,v,w) + 4 optional
+  !! (pressure, vorticity, qcriterion, ibm mask). Must be updated if new optional fields
   !! are added to get_snapshot_fields in snapshot_manager.f90.
   integer, parameter :: NUM_SNAPSHOT_FIELDS = 7
 
