@@ -8,12 +8,10 @@ module m_config
 
   integer, parameter :: n_species_max = 99
 
-  !! Maximum number of additional (non-mandatory) output fields in a snapshot
+  !! Maximum number of additional snapshot output fields accepted from the
+  !! input file. Some entries, such as ``species``, can expand to multiple
+  !! written snapshot fields.
   integer, parameter :: MAX_OUTPUT_FIELDS = 10
-  !! Total number of possible snapshot fields: 3 mandatory (u,v,w) + 4 optional
-  !! (pressure, vorticity, qcriterion, ibm mask). Must be updated if new optional fields
-  !! are added to get_snapshot_fields in snapshot_manager.f90.
-  integer, parameter :: NUM_SNAPSHOT_FIELDS = 7
 
   type, abstract :: base_config_t
     !! All config types have a method read to initialise their data
@@ -78,7 +76,7 @@ module m_config
     character(len=256) :: restart_file = ""
     integer, dimension(3) :: output_stride = [2, 2, 2]     !! Spatial stride for snapshot output
     logical :: snapshot_sp = .false.                       !! if true, snapshot in single precision
-    character(len=32) :: output_fields(MAX_OUTPUT_FIELDS) = '' !! additional fields for snapshot output
+    character(len=32) :: output_fields(MAX_OUTPUT_FIELDS) = '' !! additional snapshot output fields
   contains
     procedure :: read => read_checkpoint_nml
   end type checkpoint_config_t
@@ -376,4 +374,3 @@ contains
   end function has_output_field
 
 end module m_config
-

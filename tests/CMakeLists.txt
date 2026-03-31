@@ -102,6 +102,7 @@ define_test(unit/test_vecadd.f90 1 omp)
 define_test(unit/test_scalar_product.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(unit/test_sum_intox.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(unit/test_setget_field.f90 1 omp)
+define_test(unit/test_snapshot_species_fields.f90 1 omp)
 define_test(unit/test_statistics.f90 1 omp)
 
 if(WITH_ADIOS2)

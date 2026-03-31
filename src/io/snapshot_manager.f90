@@ -11,8 +11,7 @@ module m_snapshot_manager
   use m_field, only: field_t
   use m_solver, only: solver_t
   use m_io_session, only: writer_session_t
-  use m_config, only: checkpoint_config_t, has_output_field, &
-                      NUM_SNAPSHOT_FIELDS
+  use m_config, only: checkpoint_config_t, has_output_field
   use m_io_field_utils, only: field_buffer_map_t, field_ptr_t, &
                               setup_field_arrays, cleanup_field_arrays, &
                               stride_data_to_buffer, get_output_dimensions, &
@@ -31,7 +30,7 @@ module m_snapshot_manager
     integer(i8), dimension(3) :: last_shape_dims = 0
     integer, dimension(3) :: last_stride_factors = 0
     integer(i8), dimension(3) :: last_output_shape = 0
-    character(len=4096) :: vtk_xml = ""
+    character(len=:), allocatable :: vtk_xml
     logical :: is_snapshot_file_open = .false.
     type(writer_session_t) :: snapshot_writer
     logical :: convert_to_sp = .false.              !! Flag for single precision snapshots
@@ -126,10 +125,19 @@ contains
     if (self%config%snapshot_freq <= 0) return
     if (mod(timestep, self%config%snapshot_freq) /= 0) return
 
-    allocate (field_names(0))
-    field_names = get_snapshot_fields(self%config)
-
     call MPI_Comm_rank(comm, myrank, ierr)
+
+    if (has_output_field(self%config, 'species')) then
+      if (solver%nspecies <= 0) then
+        if (myrank == 0) then
+          print *, 'ERROR: species snapshot output requested, &
+                   &but no transported species are configured.'
+        end if
+        error stop 1
+      end if
+    end if
+
+    field_names = get_snapshot_fields(self%config, solver%nspecies)
 
     write (filename, '(A,A)') trim(self%config%snapshot_prefix), '.bp'
 
@@ -187,29 +195,51 @@ contains
     deallocate (field_names)
   end subroutine write_snapshot
 
-  function get_snapshot_fields(config) result(names)
-    !! Build the list of field names for snapshot output
+  function get_snapshot_fields(config, nspecies) result(names)
+    !! Build the list of field names written to each snapshot.
     type(checkpoint_config_t), intent(in) :: config
+    integer, intent(in) :: nspecies
     character(len=32), allocatable :: names(:)
 
-    character(len=32) :: tmp(NUM_SNAPSHOT_FIELDS)
-    integer :: n
+    integer :: n, num_fields, is
+    logical :: include_pressure, include_vorticity
+    logical :: include_qcriterion, include_ibm, include_species
+
+    include_pressure = has_output_field(config, 'pressure')
+    include_vorticity = has_output_field(config, 'vorticity')
+    include_qcriterion = has_output_field(config, 'qcriterion')
+    include_ibm = has_output_field(config, 'ibm')
+    include_species = has_output_field(config, 'species')
+
+    num_fields = 3
+    if (include_pressure) num_fields = num_fields + 1
+    if (include_vorticity) num_fields = num_fields + 1
+    if (include_qcriterion) num_fields = num_fields + 1
+    if (include_ibm) num_fields = num_fields + 1
+    if (include_species) num_fields = num_fields + nspecies
+
+    allocate (names(num_fields))
 
     n = 3
-    tmp(1:3) = [character(len=32) :: "u", "v", "w"]
-    if (has_output_field(config, 'pressure')) then
-      n = n + 1; tmp(n) = "p"
+    names(1:3) = [character(len=32) :: "u", "v", "w"]
+    if (include_pressure) then
+      n = n + 1; names(n) = "p"
     end if
-    if (has_output_field(config, 'vorticity')) then
-      n = n + 1; tmp(n) = "vort"
+    if (include_vorticity) then
+      n = n + 1; names(n) = "vort"
     end if
-    if (has_output_field(config, 'qcriterion')) then
-      n = n + 1; tmp(n) = "qcrit"
+    if (include_qcriterion) then
+      n = n + 1; names(n) = "qcrit"
     end if
-    if (has_output_field(config, 'ibm')) then
-      n = n + 1; tmp(n) = "ibm"
+    if (include_ibm) then
+      n = n + 1; names(n) = "ibm"
     end if
-    names = tmp(1:n)
+    if (include_species) then
+      do is = 1, nspecies
+        n = n + 1
+        write (names(n), '(A,I0)') 'phi_', is
+      end do
+    end if
   end function get_snapshot_fields
 
   subroutine generate_vtk_xml(self, dims, fields, origin, spacing)
@@ -219,7 +249,7 @@ contains
     character(len=*), dimension(:), intent(in) :: fields
     real(dp), dimension(3), intent(in) :: origin, spacing
 
-    character(len=4096) :: xml
+    character(len=:), allocatable :: xml
     character(len=96) :: extent_str, origin_str, spacing_str
     integer :: i
 
