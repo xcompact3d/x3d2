@@ -7,8 +7,8 @@ program perf_cuda_transeq
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused
   use m_cuda_sendrecv, only: sendrecv_fields
   use m_cuda_tdsops, only: cuda_tdsops_t
-  use m_test_utils, only: write_perf_minmax_metrics, write_perf_minmax_summary, &
-                          write_device_bw_metric
+  use m_test_utils, only: write_perf_minmax_metrics, &
+                          write_perf_minmax_summary, write_device_bw_metric
 
   implicit none
 
@@ -18,8 +18,8 @@ program perf_cuda_transeq
   real(dp), allocatable :: u(:, :, :), v(:, :, :)
   real(dp), device, allocatable :: u_dev(:, :, :), v_dev(:, :, :)
   real(dp), device, allocatable :: r_u_dev(:, :, :), dud_dev(:, :, :), d2u_dev(:, :, :)
-  real(dp), device, allocatable :: du_recv_s_dev(:, :, :), du_recv_e_dev(:, :, :)
-  real(dp), device, allocatable :: du_send_s_dev(:, :, :), du_send_e_dev(:, :, :)
+real(dp), device, allocatable :: du_recv_s_dev(:, :, :), du_recv_e_dev(:, :, :)
+real(dp), device, allocatable :: du_send_s_dev(:, :, :), du_send_e_dev(:, :, :)
   real(dp), device, allocatable :: dud_recv_s_dev(:, :, :), dud_recv_e_dev(:, :, :)
   real(dp), device, allocatable :: dud_send_s_dev(:, :, :), dud_send_e_dev(:, :, :)
   real(dp), device, allocatable :: d2u_recv_s_dev(:, :, :), d2u_recv_e_dev(:, :, :)
@@ -77,10 +77,10 @@ contains
     allocate (u_dev(SZ, n, n_block), v_dev(SZ, n, n_block))
     allocate (r_u_dev(SZ, n, n_block), dud_dev(SZ, n, n_block), d2u_dev(SZ, n, n_block))
 
-    allocate (u_send_s_dev(SZ, n_halo, n_block), u_send_e_dev(SZ, n_halo, n_block))
-    allocate (u_recv_s_dev(SZ, n_halo, n_block), u_recv_e_dev(SZ, n_halo, n_block))
-    allocate (v_send_s_dev(SZ, n_halo, n_block), v_send_e_dev(SZ, n_halo, n_block))
-    allocate (v_recv_s_dev(SZ, n_halo, n_block), v_recv_e_dev(SZ, n_halo, n_block))
+allocate (u_send_s_dev(SZ, n_halo, n_block), u_send_e_dev(SZ, n_halo, n_block))
+allocate (u_recv_s_dev(SZ, n_halo, n_block), u_recv_e_dev(SZ, n_halo, n_block))
+allocate (v_send_s_dev(SZ, n_halo, n_block), v_send_e_dev(SZ, n_halo, n_block))
+allocate (v_recv_s_dev(SZ, n_halo, n_block), v_recv_e_dev(SZ, n_halo, n_block))
 
     allocate (du_send_s_dev(SZ, 1, n_block), du_send_e_dev(SZ, 1, n_block))
     allocate (du_recv_s_dev(SZ, 1, n_block), du_recv_e_dev(SZ, 1, n_block))
@@ -120,7 +120,8 @@ contains
     blocks = dim3(n_block, 1, 1)
     threads = dim3(SZ, 1, 1)
 
-    ierr = cudaDeviceGetAttribute(memClockRt, cudaDevAttrMemoryClockRate, devnum)
+    ierr = cudaDeviceGetAttribute(memClockRt, cudaDevAttrMemoryClockRate, &
+                                  devnum)
     ierr = cudaDeviceGetAttribute(memBusWidth, cudaDevAttrGlobalMemoryBusWidth, devnum)
   end subroutine setup_backend
 
@@ -153,7 +154,7 @@ contains
     if (nrank == 0) then
       call write_perf_minmax_metrics(trim(backend_label)//'_transeq_'//trim(case_name), &
                                      tend - tstart, &
-                                     trim(backend_label)//'_transeq_'//trim(case_name)//'_bw', &
+                    trim(backend_label)//'_transeq_'//trim(case_name)//'_bw', &
                                      achieved_bw_min, achieved_bw_max)
       call write_perf_minmax_summary(achieved_bw_min, achieved_bw_max, &
                                      memClockRt, memBusWidth)
@@ -202,7 +203,8 @@ contains
                                   dud_recv_s_dev, dud_recv_e_dev, &
                                   d2u_send_s_dev, d2u_send_e_dev, &
                                   d2u_recv_s_dev, d2u_recv_e_dev, &
-                                  der1st, der1st, der2nd, nu, nproc, pprev, pnext, &
+                                  der1st, der1st, der2nd, nu, nproc, &
+                                  pprev, pnext, &
                                   blocks, threads)
   end subroutine run_kernel
 

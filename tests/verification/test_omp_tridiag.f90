@@ -134,7 +134,8 @@ contains
 
     ! =========================================================================
     ! first derivative with periodic BC
-    tdsops = tdsops_init(n, dx_per, operation='first-deriv', scheme='compact6', &
+    tdsops = tdsops_init(n, dx_per, operation='first-deriv', &
+                         scheme='compact6', &
                          bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
 
     call set_u(u, sin_0_2pi_per, n, n_groups)
