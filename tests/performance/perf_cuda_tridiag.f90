@@ -7,8 +7,8 @@ program perf_cuda_tridiag
   use m_cuda_exec_dist, only: exec_dist_tds_compact
   use m_cuda_sendrecv, only: sendrecv_fields
   use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
-  use m_test_utils, only: write_perf_minmax_metrics, write_perf_minmax_summary, &
-                          write_device_bw_metric
+  use m_test_utils, only: write_perf_minmax_metrics, &
+                          write_perf_minmax_summary, write_device_bw_metric
 
   implicit none
 
@@ -19,8 +19,10 @@ program perf_cuda_tridiag
   real(dp), device, allocatable :: u_dev(:, :, :), du_dev(:, :, :)
   real(dp), device, allocatable :: u_recv_s_dev(:, :, :), u_recv_e_dev(:, :, :)
   real(dp), device, allocatable :: u_send_s_dev(:, :, :), u_send_e_dev(:, :, :)
-  real(dp), device, allocatable :: du_send_s_dev(:, :, :), du_send_e_dev(:, :, :)
-  real(dp), device, allocatable :: du_recv_s_dev(:, :, :), du_recv_e_dev(:, :, :)
+  real(dp), device, allocatable :: du_send_s_dev(:, :, :)
+  real(dp), device, allocatable :: du_send_e_dev(:, :, :)
+  real(dp), device, allocatable :: du_recv_s_dev(:, :, :)
+  real(dp), device, allocatable :: du_recv_e_dev(:, :, :)
 
   type(cuda_tdsops_t) :: tdsops
 
@@ -68,8 +70,10 @@ contains
     allocate (u(SZ, n, n_block))
     allocate (u_dev(SZ, n, n_block), du_dev(SZ, n, n_block))
 
-    allocate (u_send_s_dev(SZ, n_halo, n_block), u_send_e_dev(SZ, n_halo, n_block))
-    allocate (u_recv_s_dev(SZ, n_halo, n_block), u_recv_e_dev(SZ, n_halo, n_block))
+    allocate (u_send_s_dev(SZ, n_halo, n_block), &
+              u_send_e_dev(SZ, n_halo, n_block))
+    allocate (u_recv_s_dev(SZ, n_halo, n_block), &
+              u_recv_e_dev(SZ, n_halo, n_block))
     allocate (du_send_s_dev(SZ, 1, n_block), du_send_e_dev(SZ, 1, n_block))
     allocate (du_recv_s_dev(SZ, 1, n_block), du_recv_e_dev(SZ, 1, n_block))
   end subroutine allocate_fields
@@ -99,7 +103,8 @@ contains
     blocks = dim3(n_block, 1, 1)
     threads = dim3(SZ, 1, 1)
 
-    ierr = cudaDeviceGetAttribute(memClockRt, cudaDevAttrMemoryClockRate, devnum)
+    ierr = cudaDeviceGetAttribute(memClockRt, cudaDevAttrMemoryClockRate, &
+                                  devnum)
     ierr = cudaDeviceGetAttribute(memBusWidth, cudaDevAttrGlobalMemoryBusWidth, devnum)
   end subroutine setup_backend
 
@@ -132,7 +137,8 @@ contains
     if (nrank == 0) then
       call write_perf_minmax_metrics(trim(backend_label)//'_tridiag_'//trim(case_name), &
                                      tend - tstart, &
-                                     trim(backend_label)//'_tridiag_'//trim(case_name)//'_bw', &
+                                     trim(backend_label)//'_tridiag_'// &
+                                     trim(case_name)//'_bw', &
                                      achieved_bw_min, achieved_bw_max)
       call write_perf_minmax_summary(achieved_bw_min, achieved_bw_max, &
                                      memClockRt, memBusWidth)

@@ -40,11 +40,11 @@ module m_omptgt_allocator
     procedure :: get_shape => get_shape_omptgt
     procedure :: set_shape => set_shape_omptgt
   end type omptgt_field_t
-  
+
   interface omptgt_field_t
     module procedure omptgt_field_init
   end interface omptgt_field_t
-  
+
 contains
 
   ! Constructor for the OMP target offload allocator
@@ -63,7 +63,7 @@ contains
     class(field_t), pointer :: ptr
 
     self%next_id = self%next_id + 1
-    allocate(newblock_tgt)
+    allocate (newblock_tgt)
     newblock_tgt = omptgt_field_t(self%ngrid, next, id=self%next_id)
     ptr => newblock_tgt
 
@@ -80,16 +80,16 @@ contains
     f%id = id
 
     f%dev_id = omp_get_default_device()
-    f%dev_ptr = omp_target_alloc(ngrid * c_sizeof(0.0_dp), f%dev_id)
+    f%dev_ptr = omp_target_alloc(ngrid*c_sizeof(0.0_dp), f%dev_id)
     call c_f_pointer(f%dev_ptr, f%p_data_tgt, shape=[ngrid])
-    
+
   end function omptgt_field_init
 
   subroutine omptgt_field_destroy(self)
     class(omptgt_field_t) :: self
 
-    nullify(self%data_tgt)
-    nullify(self%p_data_tgt)
+    nullify (self%data_tgt)
+    nullify (self%p_data_tgt)
     call omp_target_free(self%dev_ptr, self%dev_id)
   end subroutine
 
@@ -105,8 +105,8 @@ contains
         exit
       end if
 
-      select type(ptr)
-      type is(omptgt_field_t)
+      select type (ptr)
+      type is (omptgt_field_t)
         call ptr%destroy()
       end select
 
@@ -131,7 +131,7 @@ contains
     integer, intent(in) :: n
 
     integer :: i
-    
+
     !$omp target teams distribute parallel do has_device_addr(p_data_tgt)
     do i = 1, n
       p_data_tgt(i) = c
@@ -176,4 +176,4 @@ contains
   end subroutine
 
 end module m_omptgt_allocator
-  
+

@@ -233,25 +233,25 @@ contains
   subroutine initialise_test()
 
 #ifdef CUDA
-  cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => cuda_allocator
-  host_allocator = allocator_t(mesh%get_dims(VERT), SZ)
+    cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
+    allocator => cuda_allocator
+    host_allocator = allocator_t(mesh%get_dims(VERT), SZ)
 
-  cuda_backend = cuda_backend_t(mesh, allocator)
-  backend => cuda_backend
+    cuda_backend = cuda_backend_t(mesh, allocator)
+    backend => cuda_backend
 #else
-  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
+    omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
 #ifdef OMP_TGT
-  omptgt_allocator = omptgt_allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => omptgt_allocator
-  omptgt_backend = omptgt_backend_t(mesh, allocator)
-  backend => omptgt_backend
+    omptgt_allocator = omptgt_allocator_t(mesh%get_dims(VERT), SZ)
+    allocator => omptgt_allocator
+    omptgt_backend = omptgt_backend_t(mesh, allocator)
+    backend => omptgt_backend
 #else
-  allocator => omp_allocator
-  omp_backend = omp_backend_t(mesh, allocator)
-  backend => omp_backend
+    allocator => omp_allocator
+    omp_backend = omp_backend_t(mesh, allocator)
+    backend => omp_backend
 #endif
-  host_allocator => omp_allocator
+    host_allocator => omp_allocator
 #endif
 
   end subroutine

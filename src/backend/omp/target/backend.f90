@@ -39,7 +39,7 @@ module m_omptgt_backend
 contains
 
   type(omptgt_backend_t) function omptgt_backend_init(mesh, allocator) result(backend)
-    
+
     type(mesh_t), target, intent(inout) :: mesh
     class(allocator_t), target, intent(inout) :: allocator
 
@@ -47,7 +47,7 @@ contains
   end function
 
   subroutine veccopy_omptgt(self, dst, src)
-    
+
     class(omptgt_backend_t) :: self
     class(field_t), intent(inout) :: dst
     class(field_t), intent(in) :: src
@@ -55,17 +55,17 @@ contains
     if (src%dir /= dst%dir) then
       error stop "Called vector copy with incompatible fields"
     end if
-    
-    select type(dst)
+
+    select type (dst)
     type is (omptgt_field_t)
-      select type(src)
+      select type (src)
       type is (omptgt_field_t)
         call veccopy_offload_(dst%data_tgt, src%data_tgt)
       class default
         error stop "Called omptgt vector copy with unsupported source vector"
       end select
     class default
-      error stop "Called omptgt vector copy with unsupported destination vector"
+     error stop "Called omptgt vector copy with unsupported destination vector"
     end select
   end subroutine
 
@@ -103,9 +103,9 @@ contains
       error stop "Called vector add with incompatible fields"
     end if
 
-    select type(x)
-    type is(omptgt_field_t)
-      select type(y)
+    select type (x)
+    type is (omptgt_field_t)
+      select type (y)
       type is (omptgt_field_t)
         call vecadd_offload(self, a, x, b, y)
       class default
@@ -146,7 +146,7 @@ contains
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          y(i, j, k) = a * x(i, j, k) + b * y(i, j, k)
+          y(i, j, k) = a*x(i, j, k) + b*y(i, j, k)
         end do
       end do
     end do
@@ -163,8 +163,8 @@ contains
     dims = self%allocator%get_padded_dims(f%dir)
 
     ! XXX: This could be improved following cuda/backend.f90:resolve_field_t()
-    select type(f)
-    type is(omptgt_field_t)
+    select type (f)
+    type is (omptgt_field_t)
       call copy_data_to_f_omptgt_(f%data_tgt, data, dims)
     class default
       error stop "Unsupported"
@@ -191,7 +191,7 @@ contains
     !$omp end target teams loop
 
   end subroutine
-    
+
   subroutine copy_f_to_data_omptgt(self, data, f)
     class(omptgt_backend_t), intent(inout) :: self
     real(dp), dimension(:, :, :), intent(out) :: data
@@ -201,13 +201,13 @@ contains
 
     dims = self%allocator%get_padded_dims(f%dir)
 
-    select type(f)
-    type is(omptgt_field_t)
+    select type (f)
+    type is (omptgt_field_t)
       call copy_f_to_data_omptgt_(data, f%data_tgt, dims)
     class default
       error stop "Unsupported"
     end select
-    
+
   end subroutine copy_f_to_data_omptgt
 
   subroutine copy_f_to_data_omptgt_(data, f_arr, dims)
@@ -242,10 +242,10 @@ contains
     call get_dirs_from_rdr(dir_from, dir_to, direction)
 
     ! XXX: This could be improved following cuda/backend.f90:resolve_field_t()
-    select type(u_)
-    type is(omptgt_field_t)
-      select type(u)
-      type is(omptgt_field_t)
+    select type (u_)
+    type is (omptgt_field_t)
+      select type (u)
+      type is (omptgt_field_t)
         call reorder_omptgt_dd(u_%data_tgt, u%data_tgt, dims, dir_from, dir_to, cart_padded)
       class default
         call reorder_omptgt_dh(u_%data_tgt, u%data, dims, dir_from, dir_to, cart_padded)
