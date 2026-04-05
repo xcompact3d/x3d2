@@ -34,6 +34,8 @@ module m_omp_poisson_fft
     procedure :: undo_periodicity_x => undo_periodicity_x_omp
     procedure :: enforce_periodicity_y => enforce_periodicity_y_omp
     procedure :: undo_periodicity_y => undo_periodicity_y_omp
+    procedure :: enforce_periodicity_xy => enforce_periodicity_xy_omp
+    procedure :: undo_periodicity_xy => undo_periodicity_xy_omp
   end type omp_poisson_fft_t
 
   interface omp_poisson_fft_t
@@ -171,7 +173,7 @@ contains
 
     call process_spectral_000( &
       self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
-      self%x_sp_st, self%y_sp_st, self%z_sp_st, &
+      self%sp_st(1), self%sp_st(2), self%sp_st(3), &
       self%nx_glob, self%ny_glob, self%nz_glob, &
       self%ax, self%bx, self%ay, self%by, self%az, self%bz &
       )
@@ -185,7 +187,7 @@ contains
 
     call process_spectral_010( &
       self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
-      self%x_sp_st, self%y_sp_st, self%z_sp_st, &
+      self%sp_st(1), self%sp_st(2), self%sp_st(3), &
       self%nx_glob, self%ny_glob, self%nz_glob, &
       self%ax, self%bx, self%ay, self%by, self%az, self%bz &
       )
@@ -231,6 +233,28 @@ contains
     error stop 'OpenMP backend does not support undo_periodicity_x yet!'
 
   end subroutine undo_periodicity_x_omp
+
+  subroutine enforce_periodicity_xy_omp(self, f_out, f_in)
+    implicit none
+
+    class(omp_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f_out
+    class(field_t), intent(in) :: f_in
+
+    error stop 'OpenMP backend does not support enforce_periodicity_xy yet!'
+
+  end subroutine enforce_periodicity_xy_omp
+
+  subroutine undo_periodicity_xy_omp(self, f_out, f_in)
+    implicit none
+
+    class(omp_poisson_fft_t) :: self
+    class(field_t), intent(inout) :: f_out
+    class(field_t), intent(in) :: f_in
+
+    error stop 'OpenMP backend does not support undo_periodicity_xy yet!'
+
+  end subroutine undo_periodicity_xy_omp
 
   subroutine enforce_periodicity_y_omp(self, f_out, f_in)
     implicit none
