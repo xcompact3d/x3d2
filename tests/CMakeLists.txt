@@ -142,6 +142,7 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_verification_test(verification/test_fft.f90 1 cuda)
   define_verification_test(verification/test_poisson_bc.f90 1 cuda)
   define_verification_test(verification/test_cuda_tridiag.f90 ${CMAKE_CTEST_NPROCS} cuda)
+  define_verification_test(verification/test_cuda_penta.f90 ${CMAKE_CTEST_NPROCS} cuda)
   define_verification_test(verification/test_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
 
   # CUDA performance tests
