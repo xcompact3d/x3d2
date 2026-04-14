@@ -701,7 +701,7 @@ contains
     implicit none
 
     real(dp), device, intent(out), dimension(:, :, :) :: du
-    real(dp), device, intent(in), dimension(:, :, :)  :: u, u_s, u_e
+    real(dp), device, intent(in), dimension(:, :, :) :: u, u_s, u_e
     integer, value, intent(in) :: n_tds, n_rhs
     real(dp), device, intent(in), dimension(:, :) :: coeffs_s, coeffs_e
     real(dp), device, intent(in), dimension(:) :: coeffs
@@ -716,7 +716,7 @@ contains
 
     ! Load bulk stencil coefficients into registers (indices 2..8 of 9-element array)
     c_m3 = coeffs(2); c_m2 = coeffs(3); c_m1 = coeffs(4)
-    c_j  = coeffs(5)
+    c_j = coeffs(5)
     c_p1 = coeffs(6); c_p2 = coeffs(7); c_p3 = coeffs(8)
 
     ! ── Build RHS ──────────────────────────────────────────────────────────

@@ -143,7 +143,7 @@ contains
     implicit none
 
     real(dp), device, dimension(:, :, :), intent(out) :: du
-    real(dp), device, dimension(:, :, :), intent(in)  :: u, u_recv_s, u_recv_e
+    real(dp), device, dimension(:, :, :), intent(in) :: u, u_recv_s, u_recv_e
 
     type(cuda_tdsops_t), intent(in) :: tdsops
     type(dim3), intent(in) :: blocks, threads
