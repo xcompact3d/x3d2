@@ -31,14 +31,16 @@ module m_tdsops
     real(dp), allocatable :: stretch(:), stretch_correct(:)
     real(dp), allocatable :: coeffs(:), coeffs_s(:, :), coeffs_e(:, :)
     real(dp) :: alpha, a, b, c = 0._dp, d = 0._dp !! Compact scheme coeffs
+    real(dp) :: beta = 0._dp !! LHS 2nd off-diagonal (pentadiag LHS only)
     logical :: periodic
+    logical :: pentadiag = .false. !! .true. for pentadiagonal LHS schemes
     integer :: n_tds !! Tridiagonal system size
     integer :: n_rhs !! Right-hand-side builder size
     integer :: move = 0 !! move between vertices and cell centres
     integer :: n_halo !! number of halo points
   contains
     procedure :: deriv_1st, deriv_2nd, interpl_mid, stagder_1st
-    procedure :: preprocess_dist, preprocess_thom
+    procedure :: preprocess_dist, preprocess_penta_dist, preprocess_thom
   end type tdsops_t
 
   interface tdsops_t
@@ -187,7 +189,10 @@ contains
       tdsops%move = 0
     end select
 
-    if (tdsops%dist_sa(n_tds) > tol) then
+    ! For pentadiag schemes, dist_sa holds the l2 (sub-2) LU factor, not the
+    ! distributed-algorithm reduction coefficient. Skip the distributed-solver
+    ! health check in that case.
+    if (.not. tdsops%pentadiag .and. tdsops%dist_sa(n_tds) > tol) then
       print *, 'There are ', n_tds, 'points in a subdomain, it may be too few!'
       print *, 'The entry distributed solver disregards in "' &
         //operation//'" operation is:', tdsops%dist_sa(n_tds)
@@ -206,7 +211,7 @@ contains
     logical, optional, intent(in) :: sym
 
     real(dp), allocatable :: dist_b(:)
-    real(dp) :: alpha, afi, bfi
+    real(dp) :: alpha, afi, bfi, cfi
     integer :: i, n, n_halo
     logical :: symmetry
 
@@ -225,23 +230,37 @@ contains
       alpha = 1._dp/3._dp
       afi = 7._dp/9._dp/delta
       bfi = 1._dp/36._dp/delta
+      cfi = 0._dp
+    case ('compact10_penta')
+      ! Lele (1992) Table 1, 10th-order pentadiagonal first derivative.
+      ! LHS: beta*f'_{i-2} + alpha*f'_{i-1} + f'_i + alpha*f'_{i+1} + beta*f'_{i+2}
+      ! RHS: a*(f_{i+1}-f_{i-1})/(2h) + b*(f_{i+2}-f_{i-2})/(4h) + c*(f_{i+3}-f_{i-3})/(6h)
+      ! Coefficients match Compack3D (Song et al. 2022, COEF_A/B/C in benchmark).
+      self%pentadiag = .true.
+      alpha = 1._dp/2._dp
+      self%beta = 1._dp/20._dp
+      afi = 17._dp/24._dp/delta   ! a/(2h): a=17/12
+      bfi = 101._dp/600._dp/delta ! b/(4h): b=101/150
+      cfi = 1._dp/600._dp/delta   ! c/(6h): c=1/100
     case default
       error stop 'scheme is not defined'
     end select
 
     self%alpha = alpha
-    self%a = afi; self%b = bfi
+    self%a = afi; self%b = bfi; self%c = cfi
 
-    self%coeffs(:) = [0._dp, 0._dp, -bfi, -afi, &
+    self%coeffs(:) = [0._dp, -cfi, -bfi, -afi, &
                       0._dp, &
-                      afi, bfi, 0._dp, 0._dp]
+                      afi, bfi, cfi, 0._dp]
 
     do i = 1, self%n_halo
       self%coeffs_s(:, i) = self%coeffs(:)
       self%coeffs_e(:, i) = self%coeffs(:)
     end do
 
-    self%dist_sa(:) = alpha; self%dist_sc(:) = alpha
+    if (.not. self%pentadiag) then
+      self%dist_sa(:) = alpha; self%dist_sc(:) = alpha
+    end if
 
     n = self%n_tds
     n_halo = self%n_halo
@@ -337,8 +356,12 @@ contains
       self%coeffs_e(:, n_halo - 1) = self%coeffs_e(:, n_halo - 1)/delta
     end select
 
-    call self%preprocess_thom(dist_b)
-    call self%preprocess_dist(dist_b)
+    if (self%pentadiag) then
+      call self%preprocess_penta_dist()
+    else
+      call self%preprocess_thom(dist_b)
+      call self%preprocess_dist(dist_b)
+    end if
 
   end subroutine deriv_1st
 
@@ -905,6 +928,61 @@ contains
     end do
 
   end subroutine preprocess_thom
+
+  subroutine preprocess_penta_dist(self)
+    !! LU preprocessing for non-periodic pentadiagonal Thomas algorithm.
+    !!
+    !! System: beta*x_{i-2} + alpha*x_{i-1} + x_i + alpha*x_{i+1} + beta*x_{i+2} = r_i
+    !!
+    !! After LU factorization, L has lower factors l1 (sub-1) and l2 (sub-2);
+    !! U has diagonal d, upper-1 factor u1, and upper-2 = beta (constant).
+    !!
+    !! Array meanings (repurposed for pentadiag, differ from tridiag usage):
+    !!   dist_fw(i) = 1/d_i   -- inverse pivot for forward substitution
+    !!   dist_af(i) = l1_i    -- lower-1 (alpha) elimination factor
+    !!   dist_sa(i) = l2_i    -- lower-2 (beta) elimination factor
+    !!   dist_bw(i) = u1_i    -- upper-1 factor for backward substitution
+    !!   self%beta  = const   -- upper-2 factor (beta, constant for all rows)
+    implicit none
+
+    class(tdsops_t), intent(inout) :: self
+
+    integer :: i
+    real(dp) :: alp, bet, l2_i, l1_i, d_i
+
+    alp = self%alpha
+    bet = self%beta
+
+    ! Row 1: no prior rows to eliminate
+    self%dist_sa(1) = 0._dp
+    self%dist_af(1) = 0._dp
+    self%dist_fw(1) = 1._dp          ! d_1 = 1
+    self%dist_bw(1) = alp            ! u1_1 = alpha
+
+    ! Row 2: eliminate alpha*x_1 only (no beta row available yet)
+    self%dist_sa(2) = 0._dp
+    self%dist_af(2) = alp            ! l1_2 = alpha/d_1 = alpha
+    d_i = 1._dp - alp*alp           ! d_2 = 1 - l1_2*u1_1
+    self%dist_fw(2) = 1._dp/d_i
+    self%dist_bw(2) = alp*(1._dp - bet)  ! u1_2 = alpha - l1_2*beta
+
+    ! Rows 3..n: eliminate beta (sub-2) then alpha (sub-1)
+    ! Key identity: dist_fw(k) = 1/d_k, so l2 = beta/d_{i-2} = beta*dist_fw(i-2)
+    do i = 3, self%n_tds
+      l2_i = bet*self%dist_fw(i - 2)   ! = beta / d_{i-2}
+      l1_i = (alp - l2_i*self%dist_bw(i - 2))*self%dist_fw(i - 1)
+      d_i = (1._dp - l2_i*bet) - l1_i*self%dist_bw(i - 1)
+
+      self%dist_sa(i) = l2_i
+      self%dist_af(i) = l1_i
+      self%dist_fw(i) = 1._dp/d_i
+      self%dist_bw(i) = alp - l1_i*bet  ! u1_i = alpha - l1_i*beta
+    end do
+
+    ! dist_sc is not used in the pentadiag kernel path
+    self%dist_sc(:) = 0._dp
+
+  end subroutine preprocess_penta_dist
 
 end module m_tdsops
 

@@ -684,4 +684,149 @@ contains
 
   end subroutine transeq_3fused_subs
 
+  attributes(global) subroutine der_penta_full( &
+    du, u, u_s, u_e, n_tds, n_rhs, &
+    coeffs_s, coeffs_e, coeffs, &
+    ffr, faf, fsa, fbw, beta_lhs &
+    )
+    !! Full (forward + backward) non-periodic pentadiagonal Thomas solve.
+    !!
+    !! First builds the RHS from u using the same 9-element stencil as
+    !! der_univ_dist (ffr/faf/fsa computed by preprocess_penta_dist).
+    !! Then performs forward elimination (5-band LU) and backward substitution
+    !! (upper-3 band) in-place.
+    !!
+    !! This is a single-GPU kernel; multi-GPU periodic extension requires
+    !! a distributed pentadiag reduction (future work).
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: du
+    real(dp), device, intent(in), dimension(:, :, :)  :: u, u_s, u_e
+    integer, value, intent(in) :: n_tds, n_rhs
+    real(dp), device, intent(in), dimension(:, :) :: coeffs_s, coeffs_e
+    real(dp), device, intent(in), dimension(:) :: coeffs
+    real(dp), device, intent(in), dimension(:) :: ffr, faf, fsa, fbw
+    real(dp), value, intent(in) :: beta_lhs
+
+    integer :: i, j, b
+    real(dp) :: c_m3, c_m2, c_m1, c_j, c_p1, c_p2, c_p3
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    ! Load bulk stencil coefficients into registers (indices 2..8 of 9-element array)
+    c_m3 = coeffs(2); c_m2 = coeffs(3); c_m1 = coeffs(4)
+    c_j  = coeffs(5)
+    c_p1 = coeffs(6); c_p2 = coeffs(7); c_p3 = coeffs(8)
+
+    ! ── Build RHS ──────────────────────────────────────────────────────────
+    ! Boundary rows (j=1..4) use coeffs_s; interior uses bulk coeffs;
+    ! last 4 rows use coeffs_e. Halo arrays u_s/u_e supply wrap-around values.
+    du(i, 1, b) = coeffs_s(1, 1)*u_s(i, 1, b) &
+                  + coeffs_s(2, 1)*u_s(i, 2, b) &
+                  + coeffs_s(3, 1)*u_s(i, 3, b) &
+                  + coeffs_s(4, 1)*u_s(i, 4, b) &
+                  + coeffs_s(5, 1)*u(i, 1, b) &
+                  + coeffs_s(6, 1)*u(i, 2, b) &
+                  + coeffs_s(7, 1)*u(i, 3, b) &
+                  + coeffs_s(8, 1)*u(i, 4, b) &
+                  + coeffs_s(9, 1)*u(i, 5, b)
+    du(i, 2, b) = coeffs_s(1, 2)*u_s(i, 2, b) &
+                  + coeffs_s(2, 2)*u_s(i, 3, b) &
+                  + coeffs_s(3, 2)*u_s(i, 4, b) &
+                  + coeffs_s(4, 2)*u(i, 1, b) &
+                  + coeffs_s(5, 2)*u(i, 2, b) &
+                  + coeffs_s(6, 2)*u(i, 3, b) &
+                  + coeffs_s(7, 2)*u(i, 4, b) &
+                  + coeffs_s(8, 2)*u(i, 5, b) &
+                  + coeffs_s(9, 2)*u(i, 6, b)
+    du(i, 3, b) = coeffs_s(1, 3)*u_s(i, 3, b) &
+                  + coeffs_s(2, 3)*u_s(i, 4, b) &
+                  + coeffs_s(3, 3)*u(i, 1, b) &
+                  + coeffs_s(4, 3)*u(i, 2, b) &
+                  + coeffs_s(5, 3)*u(i, 3, b) &
+                  + coeffs_s(6, 3)*u(i, 4, b) &
+                  + coeffs_s(7, 3)*u(i, 5, b) &
+                  + coeffs_s(8, 3)*u(i, 6, b) &
+                  + coeffs_s(9, 3)*u(i, 7, b)
+    du(i, 4, b) = coeffs_s(1, 4)*u_s(i, 4, b) &
+                  + coeffs_s(2, 4)*u(i, 1, b) &
+                  + coeffs_s(3, 4)*u(i, 2, b) &
+                  + coeffs_s(4, 4)*u(i, 3, b) &
+                  + coeffs_s(5, 4)*u(i, 4, b) &
+                  + coeffs_s(6, 4)*u(i, 5, b) &
+                  + coeffs_s(7, 4)*u(i, 6, b) &
+                  + coeffs_s(8, 4)*u(i, 7, b) &
+                  + coeffs_s(9, 4)*u(i, 8, b)
+    do j = 5, n_rhs - 4
+      du(i, j, b) = c_m3*u(i, j - 3, b) + c_m2*u(i, j - 2, b) &
+                    + c_m1*u(i, j - 1, b) + c_j*u(i, j, b) &
+                    + c_p1*u(i, j + 1, b) + c_p2*u(i, j + 2, b) &
+                    + c_p3*u(i, j + 3, b)
+    end do
+    j = n_rhs - 3
+    du(i, j, b) = coeffs_e(1, 1)*u(i, j - 4, b) &
+                  + coeffs_e(2, 1)*u(i, j - 3, b) &
+                  + coeffs_e(3, 1)*u(i, j - 2, b) &
+                  + coeffs_e(4, 1)*u(i, j - 1, b) &
+                  + coeffs_e(5, 1)*u(i, j, b) &
+                  + coeffs_e(6, 1)*u(i, j + 1, b) &
+                  + coeffs_e(7, 1)*u(i, j + 2, b) &
+                  + coeffs_e(8, 1)*u(i, j + 3, b) &
+                  + coeffs_e(9, 1)*u_e(i, 1, b)
+    j = n_rhs - 2
+    du(i, j, b) = coeffs_e(1, 2)*u(i, j - 4, b) &
+                  + coeffs_e(2, 2)*u(i, j - 3, b) &
+                  + coeffs_e(3, 2)*u(i, j - 2, b) &
+                  + coeffs_e(4, 2)*u(i, j - 1, b) &
+                  + coeffs_e(5, 2)*u(i, j, b) &
+                  + coeffs_e(6, 2)*u(i, j + 1, b) &
+                  + coeffs_e(7, 2)*u(i, j + 2, b) &
+                  + coeffs_e(8, 2)*u_e(i, 1, b) &
+                  + coeffs_e(9, 2)*u_e(i, 2, b)
+    j = n_rhs - 1
+    du(i, j, b) = coeffs_e(1, 3)*u(i, j - 4, b) &
+                  + coeffs_e(2, 3)*u(i, j - 3, b) &
+                  + coeffs_e(3, 3)*u(i, j - 2, b) &
+                  + coeffs_e(4, 3)*u(i, j - 1, b) &
+                  + coeffs_e(5, 3)*u(i, j, b) &
+                  + coeffs_e(6, 3)*u(i, j + 1, b) &
+                  + coeffs_e(7, 3)*u_e(i, 1, b) &
+                  + coeffs_e(8, 3)*u_e(i, 2, b) &
+                  + coeffs_e(9, 3)*u_e(i, 3, b)
+    j = n_rhs
+    du(i, j, b) = coeffs_e(1, 4)*u(i, j - 4, b) &
+                  + coeffs_e(2, 4)*u(i, j - 3, b) &
+                  + coeffs_e(3, 4)*u(i, j - 2, b) &
+                  + coeffs_e(4, 4)*u(i, j - 1, b) &
+                  + coeffs_e(5, 4)*u(i, j, b) &
+                  + coeffs_e(6, 4)*u_e(i, 1, b) &
+                  + coeffs_e(7, 4)*u_e(i, 2, b) &
+                  + coeffs_e(8, 4)*u_e(i, 3, b) &
+                  + coeffs_e(9, 4)*u_e(i, 4, b)
+
+    ! ── Forward substitution (5-band LU) ───────────────────────────────────
+    ! du(i,j,b) <- (du_j - l1_j*du_{j-1} - l2_j*du_{j-2}) / d_j
+    ! ffr(j) = 1/d_j,  faf(j) = l1_j,  fsa(j) = l2_j
+    du(i, 1, b) = du(i, 1, b)*ffr(1)   ! row 1: no prior rows
+    du(i, 2, b) = (du(i, 2, b) - faf(2)*du(i, 1, b))*ffr(2)
+    do j = 3, n_rhs
+      du(i, j, b) = (du(i, j, b) &
+                     - faf(j)*du(i, j - 1, b) &
+                     - fsa(j)*du(i, j - 2, b))*ffr(j)
+    end do
+
+    ! ── Backward substitution (upper-3 band: u1 and u2=beta_lhs=const) ────
+    ! x_n = r'_n already in du(i,n,b)
+    ! x_{n-1}: subtract u1_{n-1}*x_n
+    du(i, n_tds - 1, b) = du(i, n_tds - 1, b) - fbw(n_tds - 1)*du(i, n_tds, b)
+    ! x_j = r'_j - u1_j*x_{j+1} - beta*x_{j+2}
+    do j = n_tds - 2, 1, -1
+      du(i, j, b) = du(i, j, b) &
+                    - fbw(j)*du(i, j + 1, b) &
+                    - beta_lhs*du(i, j + 2, b)
+    end do
+
+  end subroutine der_penta_full
+
 end module m_cuda_kernels_dist

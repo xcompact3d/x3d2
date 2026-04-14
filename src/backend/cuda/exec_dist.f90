@@ -5,6 +5,7 @@ module m_cuda_exec_dist
   use m_common, only: dp
   use m_cuda_common, only: SZ
   use m_cuda_kernels_dist, only: der_univ_dist, der_univ_subs, &
+                                 der_penta_full, &
                                  transeq_3fused_dist, transeq_3fused_subs
   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
   use m_cuda_tdsops, only: cuda_tdsops_t
@@ -128,5 +129,33 @@ contains
       )
 
   end subroutine exec_dist_transeq_3fused
+
+  subroutine exec_dist_penta_compact( &
+    du, u, u_recv_s, u_recv_e, &
+    tdsops, blocks, threads &
+    )
+    !! Single-GPU non-periodic pentadiagonal compact-FD solve.
+    !!
+    !! Calls der_penta_full which does the complete forward+backward Thomas
+    !! (5-band LU) in one kernel launch. No MPI exchange needed for single-GPU.
+    !! For multi-GPU periodic extension, a distributed pentadiag reduction
+    !! algorithm would be required (future work).
+    implicit none
+
+    real(dp), device, dimension(:, :, :), intent(out) :: du
+    real(dp), device, dimension(:, :, :), intent(in)  :: u, u_recv_s, u_recv_e
+
+    type(cuda_tdsops_t), intent(in) :: tdsops
+    type(dim3), intent(in) :: blocks, threads
+
+    call der_penta_full<<<blocks, threads>>>( & !&
+      du, u, u_recv_s, u_recv_e, &
+      tdsops%n_tds, tdsops%n_rhs, &
+      tdsops%coeffs_s_dev, tdsops%coeffs_e_dev, tdsops%coeffs_dev, &
+      tdsops%dist_fw_dev, tdsops%dist_af_dev, tdsops%dist_sa_dev, &
+      tdsops%dist_bw_dev, real(tdsops%beta, dp) &
+      )
+
+  end subroutine exec_dist_penta_compact
 
 end module m_cuda_exec_dist

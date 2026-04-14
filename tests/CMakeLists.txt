@@ -148,6 +148,7 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_performance_test(performance/perf_thom.f90 1 cuda)
   define_performance_test(performance/perf_cuda_reorder.f90 1 cuda)
   define_performance_test(performance/perf_cuda_tridiag.f90 ${CMAKE_CTEST_NPROCS} cuda)
+  define_performance_test(performance/perf_cuda_penta.f90 ${CMAKE_CTEST_NPROCS} cuda)
   define_performance_test(performance/perf_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
 
   if(WITH_ADIOS2)
