@@ -153,7 +153,7 @@ contains
       tdsops%n_tds, tdsops%n_rhs, &
       tdsops%coeffs_s_dev, tdsops%coeffs_e_dev, tdsops%coeffs_dev, &
       tdsops%dist_fw_dev, tdsops%dist_af_dev, tdsops%dist_sa_dev, &
-      tdsops%dist_bw_dev, real(tdsops%beta, dp) &
+      tdsops%dist_bw_dev, real(tdsops%beta, dp), real(tdsops%beta_lhs_s, dp) &
       )
 
   end subroutine exec_dist_penta_compact

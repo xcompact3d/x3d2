@@ -687,7 +687,7 @@ contains
   attributes(global) subroutine der_penta_full( &
     du, u, u_s, u_e, n_tds, n_rhs, &
     coeffs_s, coeffs_e, coeffs, &
-    ffr, faf, fsa, fbw, beta_lhs &
+    ffr, faf, fsa, fbw, beta_lhs, beta_lhs_s &
     )
     !! Full (forward + backward) non-periodic pentadiagonal Thomas solve.
     !!
@@ -707,6 +707,7 @@ contains
     real(dp), device, intent(in), dimension(:) :: coeffs
     real(dp), device, intent(in), dimension(:) :: ffr, faf, fsa, fbw
     real(dp), value, intent(in) :: beta_lhs
+    real(dp), value, intent(in) :: beta_lhs_s !! j=1 beta (0 sym=True, 2β sym=False, β default)
 
     integer :: i, j, b
     real(dp) :: c_m3, c_m2, c_m1, c_j, c_p1, c_p2, c_p3
@@ -821,11 +822,16 @@ contains
     ! x_{n-1}: subtract u1_{n-1}*x_n
     du(i, n_tds - 1, b) = du(i, n_tds - 1, b) - fbw(n_tds - 1)*du(i, n_tds, b)
     ! x_j = r'_j - u1_j*x_{j+1} - beta*x_{j+2}
-    do j = n_tds - 2, 1, -1
+    do j = n_tds - 2, 2, -1
       du(i, j, b) = du(i, j, b) &
                     - fbw(j)*du(i, j + 1, b) &
                     - beta_lhs*du(i, j + 2, b)
     end do
+    ! j=1 peeled: use beta_lhs_s (BC_NEUMANN boundary beta, equals beta_lhs by default)
+    ! Assumes n_tds >= 3, which holds for compact10_penta (n_halo=4).
+    du(i, 1, b) = du(i, 1, b) &
+                  - fbw(1)*du(i, 2, b) &
+                  - beta_lhs_s*du(i, 3, b)
 
   end subroutine der_penta_full
 

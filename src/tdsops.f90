@@ -32,6 +32,7 @@ module m_tdsops
     real(dp), allocatable :: coeffs(:), coeffs_s(:, :), coeffs_e(:, :)
     real(dp) :: alpha, a, b, c = 0._dp, d = 0._dp !! Compact scheme coeffs
     real(dp) :: beta = 0._dp !! LHS 2nd off-diagonal (pentadiag LHS only)
+    real(dp) :: beta_lhs_s = 0._dp !! j=1 backward-sub beta (0/2β Neumann, β otherwise)
     logical :: periodic
     logical :: pentadiag = .false. !! .true. for pentadiagonal LHS schemes
     integer :: n_tds !! Tridiagonal system size
@@ -280,30 +281,67 @@ contains
 
     select case (bc_start)
     case (BC_NEUMANN)
-      if (symmetry) then
-        ! sym == .true.; d(uu)/dx, dv/dx, dw/dx
-        !                d(vv)/dy, du/dy, dw/dy
-        !                d(ww)/dz, du/dz, dv/dz
-        self%dist_sa(1) = 0._dp
-        self%dist_sc(1) = 0._dp
-        self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
-                               0._dp, &
-                               0._dp, 0._dp, 0._dp, 0._dp]
-        self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, -afi, &
-                               -bfi, &
-                               afi, bfi, 0._dp, 0._dp]
+      if (.not. self%pentadiag) then
+        if (symmetry) then
+          ! sym == .true.; d(uu)/dx, dv/dx, dw/dx
+          !                d(vv)/dy, du/dy, dw/dy
+          !                d(ww)/dz, du/dz, dv/dz
+          self%dist_sa(1) = 0._dp
+          self%dist_sc(1) = 0._dp
+          self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
+                                 0._dp, &
+                                 0._dp, 0._dp, 0._dp, 0._dp]
+          self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, -afi, &
+                                 -bfi, &
+                                 afi, bfi, 0._dp, 0._dp]
+        else
+          ! sym == .false.; d(uv)/dx, d(uw)/dx, du/dx
+          !                 d(vu)/dy, d(vw)/dy, dv/dy
+          !                 d(wu)/dz, d(wv)/dz, dw/dz
+          self%dist_sa(1) = 0._dp
+          self%dist_sc(1) = 2*alpha
+          self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
+                                 0._dp, &
+                                 2*afi, 2*bfi, 0._dp, 0._dp]
+          self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, -afi, &
+                                 bfi, &
+                                 afi, bfi, 0._dp, 0._dp]
+        end if
       else
-        ! sym == .false.; d(uv)/dx, d(uw)/dx, du/dx
-        !                 d(vu)/dy, d(vw)/dy, dv/dy
-        !                 d(wu)/dz, d(wv)/dz, dw/dz
-        self%dist_sa(1) = 0._dp
-        self%dist_sc(1) = 2*alpha
-        self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
-                               0._dp, &
-                               2*afi, 2*bfi, 0._dp, 0._dp]
-        self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, -afi, &
-                               bfi, &
-                               afi, bfi, 0._dp, 0._dp]
+        ! compact10_penta BC_NEUMANN: mirror-extension stencils.
+        ! Rows 1-3 use ghost-cell reflection; row 4 keeps interior stencil.
+        ! No halo positions (positions 1-4) are referenced by these stencils.
+        if (symmetry) then
+          ! Even extension at start wall: f_{1-k} = f_{1+k}
+          ! LHS row 1 is set to 1*f'_1 = 0 by preprocess_penta_dist.
+          ! Row 1 RHS = 0 (f' is odd, vanishes at the wall by symmetry).
+          self%coeffs_s(:, 1) = 0._dp
+          ! Row 2: substitute f_0=f_2, f_{-1}=f_3 into interior stencil.
+          self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, -afi, &
+                                 -bfi, &
+                                 afi - cfi, bfi, cfi, 0._dp]
+          ! Row 3: substitute f_0=f_2 into interior stencil.
+          self%coeffs_s(:, 3) = [0._dp, 0._dp, -bfi, &
+                                 -(afi + cfi), 0._dp, &
+                                 afi, bfi, cfi, 0._dp]
+          ! Row 4: interior stencil (position 1 = 0, no ghost cell access).
+        else
+          ! Odd extension at start wall: f_{1-k} = -f_{1+k}
+          ! LHS row 1 becomes f'_1 + 2α*f'_2 + 2β*f'_3 via preprocess_penta_dist.
+          ! Row 1: substitute f_0=-f_2, f_{-1}=-f_3, f_{-2}=-f_4.
+          self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
+                                 0._dp, &
+                                 2*afi, 2*bfi, 2*cfi, 0._dp]
+          ! Row 2: substitute f_0=-f_2, f_{-1}=-f_3.
+          self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, -afi, &
+                                 bfi, &
+                                 afi + cfi, bfi, cfi, 0._dp]
+          ! Row 3: substitute f_0=-f_2.
+          self%coeffs_s(:, 3) = [0._dp, 0._dp, -bfi, &
+                                 cfi - afi, 0._dp, &
+                                 afi, bfi, cfi, 0._dp]
+          ! Row 4: interior stencil (position 1 = 0, no ghost cell access).
+        end if
       end if
     case (BC_DIRICHLET)
       if (.not. self%pentadiag) then
@@ -345,30 +383,65 @@ contains
 
     select case (bc_end)
     case (BC_NEUMANN)
-      if (symmetry) then
-        ! sym == .true.; d(uu)/dx, dv/dx, dw/dx
-        !                d(vv)/dy, du/dy, dw/dy
-        !                d(ww)/dz, du/dz, dv/dz
-        self%dist_sa(n) = 0._dp
-        self%dist_sc(n) = 0._dp
-        self%coeffs_e(:, n_halo) = [0._dp, 0._dp, 0._dp, 0._dp, &
-                                    0._dp, &
-                                    0._dp, 0._dp, 0._dp, 0._dp]
-        self%coeffs_e(:, n_halo - 1) = [0._dp, 0._dp, -bfi, -afi, &
-                                        bfi, &
-                                        afi, 0._dp, 0._dp, 0._dp]
+      if (.not. self%pentadiag) then
+        if (symmetry) then
+          ! sym == .true.; d(uu)/dx, dv/dx, dw/dx
+          !                d(vv)/dy, du/dy, dw/dy
+          !                d(ww)/dz, du/dz, dv/dz
+          self%dist_sa(n) = 0._dp
+          self%dist_sc(n) = 0._dp
+          self%coeffs_e(:, n_halo) = [0._dp, 0._dp, 0._dp, 0._dp, &
+                                      0._dp, &
+                                      0._dp, 0._dp, 0._dp, 0._dp]
+          self%coeffs_e(:, n_halo - 1) = [0._dp, 0._dp, -bfi, -afi, &
+                                          bfi, &
+                                          afi, 0._dp, 0._dp, 0._dp]
+        else
+          ! sym == .false.; d(uv)/dx, d(uw)/dx, du/dx
+          !                 d(vu)/dy, d(vw)/dy, dv/dy
+          !                 d(wu)/dz, d(wv)/dz, dw/dz
+          self%dist_sa(n) = 2*alpha
+          self%dist_sc(n) = 0._dp
+          self%coeffs_e(:, n_halo) = [0._dp, 0._dp, -2*bfi, -2*afi, &
+                                      0._dp, &
+                                      0._dp, 0._dp, 0._dp, 0._dp]
+          self%coeffs_e(:, n_halo - 1) = [0._dp, 0._dp, -bfi, -afi, &
+                                          -bfi, &
+                                          afi, 0._dp, 0._dp, 0._dp]
+        end if
       else
-        ! sym == .false.; d(uv)/dx, d(uw)/dx, du/dx
-        !                 d(vu)/dy, d(vw)/dy, dv/dy
-        !                 d(wu)/dz, d(wv)/dz, dw/dz
-        self%dist_sa(n) = 2*alpha
-        self%dist_sc(n) = 0._dp
-        self%coeffs_e(:, n_halo) = [0._dp, 0._dp, -2*bfi, -2*afi, &
-                                    0._dp, &
-                                    0._dp, 0._dp, 0._dp, 0._dp]
-        self%coeffs_e(:, n_halo - 1) = [0._dp, 0._dp, -bfi, -afi, &
-                                        -bfi, &
-                                        afi, 0._dp, 0._dp, 0._dp]
+        ! compact10_penta BC_NEUMANN end boundary: antisymmetric mirror of start.
+        ! Rows n, n-1, n-2 use ghost-cell reflection; row n-3 keeps interior stencil.
+        if (symmetry) then
+          ! Even extension at end wall: f_{n+k} = f_{n-k}
+          ! LHS row n is set to 1*f'_n = 0 by preprocess_penta_dist.
+          self%coeffs_e(:, n_halo) = 0._dp
+          ! Row n-1: substitute f_{n+1}=f_{n-1}, f_{n+2}=f_{n-2}.
+          self%coeffs_e(:, n_halo - 1) = [0._dp, -cfi, -bfi, &
+                                          cfi - afi, bfi, &
+                                          afi, 0._dp, 0._dp, 0._dp]
+          ! Row n-2: substitute f_{n+1}=f_{n-1}.
+          self%coeffs_e(:, n_halo - 2) = [0._dp, -cfi, -bfi, &
+                                          -afi, 0._dp, &
+                                          afi + cfi, bfi, 0._dp, 0._dp]
+          ! Row n-3: interior stencil (already set above).
+        else
+          ! Odd extension at end wall: f_{n+k} = -f_{n-k}
+          ! LHS row n sub-diagonals are doubled by preprocess_penta_dist.
+          ! Row n: substitute f_{n+1}=-f_{n-1}, f_{n+2}=-f_{n-2}, f_{n+3}=-f_{n-3}.
+          self%coeffs_e(:, n_halo) = [0._dp, -2*cfi, -2*bfi, &
+                                      -2*afi, 0._dp, &
+                                      0._dp, 0._dp, 0._dp, 0._dp]
+          ! Row n-1: substitute f_{n+1}=-f_{n-1}, f_{n+2}=-f_{n-2}.
+          self%coeffs_e(:, n_halo - 1) = [0._dp, -cfi, -bfi, &
+                                          -(afi + cfi), -bfi, &
+                                          afi, 0._dp, 0._dp, 0._dp]
+          ! Row n-2: substitute f_{n+1}=-f_{n-1}.
+          self%coeffs_e(:, n_halo - 2) = [0._dp, -cfi, -bfi, &
+                                          -afi, 0._dp, &
+                                          afi - cfi, bfi, 0._dp, 0._dp]
+          ! Row n-3: interior stencil (already set above).
+        end if
       end if
     case (BC_DIRICHLET)
       if (.not. self%pentadiag) then
@@ -405,7 +478,7 @@ contains
     end select
 
     if (self%pentadiag) then
-      call self%preprocess_penta_dist()
+      call self%preprocess_penta_dist(bc_start, bc_end, symmetry)
     else
       call self%preprocess_thom(dist_b)
       call self%preprocess_dist(dist_b)
@@ -977,7 +1050,7 @@ contains
 
   end subroutine preprocess_thom
 
-  subroutine preprocess_penta_dist(self)
+  subroutine preprocess_penta_dist(self, bc_start, bc_end, symmetry)
     !! LU preprocessing for non-periodic pentadiagonal Thomas algorithm.
     !!
     !! System: beta*x_{i-2} + alpha*x_{i-1} + x_i + alpha*x_{i+1} + beta*x_{i+2} = r_i
@@ -990,42 +1063,85 @@ contains
     !!   dist_af(i) = l1_i    -- lower-1 (alpha) elimination factor
     !!   dist_sa(i) = l2_i    -- lower-2 (beta) elimination factor
     !!   dist_bw(i) = u1_i    -- upper-1 factor for backward substitution
-    !!   self%beta  = const   -- upper-2 factor (beta, constant for all rows)
+    !!   self%beta  = const   -- upper-2 factor (beta, constant for interior rows)
+    !!
+    !! BC_NEUMANN modifications:
+    !!   sym=True  start: row 1 → f'_1 = 0  (u1_1 = 0); beta_lhs_s = 0
+    !!   sym=False start: row 1 → f'_1 + 2α*f'_2 + 2β*f'_3 (u1_1 = 2α); beta_lhs_s = 2β
+    !!   sym=True  end:   row n → f'_n = 0  (l1_n = l2_n = 0, d_n = 1)
+    !!   sym=False end:   row n → sub-diagonals doubled (2α, 2β)
     implicit none
 
     class(tdsops_t), intent(inout) :: self
+    integer, intent(in) :: bc_start, bc_end
+    logical, intent(in) :: symmetry
 
-    integer :: i
-    real(dp) :: alp, bet, l2_i, l1_i, d_i
+    integer :: i, n
+    real(dp) :: alp, bet, u1_1, l2_i, l1_i, d_i
 
     alp = self%alpha
     bet = self%beta
+    n = self%n_tds
+
+    ! Determine effective upper-1 for row 1 and j=1 backward-sub beta.
+    if (bc_start == BC_NEUMANN) then
+      if (symmetry) then
+        u1_1 = 0._dp           ! row 1 equation: f'_1 = 0
+        self%beta_lhs_s = 0._dp
+      else
+        u1_1 = 2._dp*alp       ! row 1 LHS: f'_1 + 2α*f'_2 + 2β*f'_3
+        self%beta_lhs_s = 2._dp*bet
+      end if
+    else
+      u1_1 = alp
+      self%beta_lhs_s = bet
+    end if
 
     ! Row 1: no prior rows to eliminate
     self%dist_sa(1) = 0._dp
     self%dist_af(1) = 0._dp
-    self%dist_fw(1) = 1._dp          ! d_1 = 1
-    self%dist_bw(1) = alp            ! u1_1 = alpha
+    self%dist_fw(1) = 1._dp    ! d_1 = 1
+    self%dist_bw(1) = u1_1     ! u1_1 = modified or alpha
 
-    ! Row 2: eliminate alpha*x_1 only (no beta row available yet)
+    ! Row 2: eliminate u1_1*x_1 only (no beta row available yet)
     self%dist_sa(2) = 0._dp
-    self%dist_af(2) = alp            ! l1_2 = alpha/d_1 = alpha
-    d_i = 1._dp - alp*alp           ! d_2 = 1 - l1_2*u1_1
+    self%dist_af(2) = alp                    ! l1_2 = alpha/d_1 = alpha
+    d_i = 1._dp - alp*u1_1                  ! d_2 = 1 - l1_2*u1_1
     self%dist_fw(2) = 1._dp/d_i
-    self%dist_bw(2) = alp*(1._dp - bet)  ! u1_2 = alpha - l1_2*beta
+    self%dist_bw(2) = alp*(1._dp - bet)     ! u1_2 = alpha - l1_2*beta
 
     ! Rows 3..n: eliminate beta (sub-2) then alpha (sub-1)
     ! Key identity: dist_fw(k) = 1/d_k, so l2 = beta/d_{i-2} = beta*dist_fw(i-2)
-    do i = 3, self%n_tds
-      l2_i = bet*self%dist_fw(i - 2)   ! = beta / d_{i-2}
+    do i = 3, n
+      l2_i = bet*self%dist_fw(i - 2)
       l1_i = (alp - l2_i*self%dist_bw(i - 2))*self%dist_fw(i - 1)
       d_i = (1._dp - l2_i*bet) - l1_i*self%dist_bw(i - 1)
 
       self%dist_sa(i) = l2_i
       self%dist_af(i) = l1_i
       self%dist_fw(i) = 1._dp/d_i
-      self%dist_bw(i) = alp - l1_i*bet  ! u1_i = alpha - l1_i*beta
+      self%dist_bw(i) = alp - l1_i*bet   ! u1_i = alpha - l1_i*beta
     end do
+
+    ! BC_NEUMANN end boundary: override row n LU factors.
+    if (bc_end == BC_NEUMANN) then
+      if (symmetry) then
+        ! Row n → f'_n = 0: zero sub-diagonals, pivot=1.
+        self%dist_sa(n) = 0._dp
+        self%dist_af(n) = 0._dp
+        self%dist_fw(n) = 1._dp
+        self%dist_bw(n) = 0._dp
+      else
+        ! Row n sub-diagonals doubled: a_{n,n-2}=2β, a_{n,n-1}=2α.
+        l2_i = 2._dp*bet*self%dist_fw(n - 2)
+        l1_i = (2._dp*alp - l2_i*self%dist_bw(n - 2))*self%dist_fw(n - 1)
+        d_i = 1._dp - l2_i*bet - l1_i*self%dist_bw(n - 1)
+        self%dist_sa(n) = l2_i
+        self%dist_af(n) = l1_i
+        self%dist_fw(n) = 1._dp/d_i
+        self%dist_bw(n) = alp - l1_i*bet
+      end if
+    end if
 
     ! dist_sc is not used in the pentadiag kernel path
     self%dist_sc(:) = 0._dp
