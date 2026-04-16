@@ -296,20 +296,41 @@ contains
                                afi, bfi, 0._dp, 0._dp]
       end if
     case (BC_DIRICHLET)
-      ! first line
-      self%dist_sa(1) = 0._dp
-      self%dist_sc(1) = 2._dp
-      self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
-                             -2.5_dp, &
-                             2._dp, 0.5_dp, 0._dp, 0._dp]
-      self%coeffs_s(:, 1) = self%coeffs_s(:, 1)/delta
-      ! second line
-      self%dist_sa(2) = 0.25_dp
-      self%dist_sc(2) = 0.25_dp
-      self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, -0.75_dp, &
-                             0._dp, &
-                             0.75_dp, 0._dp, 0._dp, 0._dp]
-      self%coeffs_s(:, 2) = self%coeffs_s(:, 2)/delta
+      if (.not. self%pentadiag) then
+        ! first line (compact6 tridiag)
+        self%dist_sa(1) = 0._dp
+        self%dist_sc(1) = 2._dp
+        self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
+                               -2.5_dp, &
+                               2._dp, 0.5_dp, 0._dp, 0._dp]
+        self%coeffs_s(:, 1) = self%coeffs_s(:, 1)/delta
+        ! second line
+        self%dist_sa(2) = 0.25_dp
+        self%dist_sc(2) = 0.25_dp
+        self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, -0.75_dp, &
+                               0._dp, &
+                               0.75_dp, 0._dp, 0._dp, 0._dp]
+        self%coeffs_s(:, 2) = self%coeffs_s(:, 2)/delta
+      else
+        ! compact10_penta: rows 1-2 use one-sided boundary stencils.
+        ! Derived so that LHS (natural non-periodic truncation) + RHS is
+        ! consistent to 4th order.  Rows 3-4 keep the interior stencil
+        ! set above; for homogeneous Dirichlet the f_0=0 halo contributes
+        ! zero through the interior -cfi coefficient.
+        !
+        ! Row 1: LHS is f'_1 + alpha*f'_2 + beta*f'_3 (no sub-diagonal).
+        self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
+                               -277._dp/120._dp, &
+                               15._dp/4._dp, -12._dp/5._dp, &
+                               71._dp/60._dp, -9._dp/40._dp]
+        self%coeffs_s(:, 1) = self%coeffs_s(:, 1)/delta
+        ! Row 2: LHS is alpha*f'_1 + f'_2 + alpha*f'_3 + beta*f'_4.
+        self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, &
+                               -301._dp/240._dp, 103._dp/120._dp, &
+                               -3._dp/40._dp, 13._dp/24._dp, &
+                               -17._dp/240._dp, 0._dp]
+        self%coeffs_s(:, 2) = self%coeffs_s(:, 2)/delta
+      end if
     end select
 
     select case (bc_end)
@@ -340,20 +361,37 @@ contains
                                         afi, 0._dp, 0._dp, 0._dp]
       end if
     case (BC_DIRICHLET)
-      ! last line
-      self%dist_sa(n) = 2._dp
-      self%dist_sc(n) = 0._dp
-      self%coeffs_e(:, n_halo) = [0._dp, 0._dp, -0.5_dp, -2._dp, &
-                                  2.5_dp, &
-                                  0._dp, 0._dp, 0._dp, 0._dp]
-      self%coeffs_e(:, n_halo) = self%coeffs_e(:, n_halo)/delta
-      ! second last line
-      self%dist_sa(n - 1) = 0.25_dp
-      self%dist_sc(n - 1) = 0.25_dp
-      self%coeffs_e(:, n_halo - 1) = [0._dp, 0._dp, 0._dp, -0.75_dp, &
-                                      0._dp, &
-                                      0.75_dp, 0._dp, 0._dp, 0._dp]
-      self%coeffs_e(:, n_halo - 1) = self%coeffs_e(:, n_halo - 1)/delta
+      if (.not. self%pentadiag) then
+        ! last line (compact6 tridiag)
+        self%dist_sa(n) = 2._dp
+        self%dist_sc(n) = 0._dp
+        self%coeffs_e(:, n_halo) = [0._dp, 0._dp, -0.5_dp, -2._dp, &
+                                    2.5_dp, &
+                                    0._dp, 0._dp, 0._dp, 0._dp]
+        self%coeffs_e(:, n_halo) = self%coeffs_e(:, n_halo)/delta
+        ! second last line
+        self%dist_sa(n - 1) = 0.25_dp
+        self%dist_sc(n - 1) = 0.25_dp
+        self%coeffs_e(:, n_halo - 1) = [0._dp, 0._dp, 0._dp, -0.75_dp, &
+                                        0._dp, &
+                                        0.75_dp, 0._dp, 0._dp, 0._dp]
+        self%coeffs_e(:, n_halo - 1) = self%coeffs_e(:, n_halo - 1)/delta
+      else
+        ! compact10_penta: antisymmetric mirror of start boundary stencils.
+        ! Row n: backward-biased mirror of row-1 start stencil.
+        self%coeffs_e(:, n_halo) = [9._dp/40._dp, &
+                                    -71._dp/60._dp, 12._dp/5._dp, &
+                                    -15._dp/4._dp, 277._dp/120._dp, &
+                                    0._dp, 0._dp, 0._dp, 0._dp]
+        self%coeffs_e(:, n_halo) = self%coeffs_e(:, n_halo)/delta
+        ! Row n-1: backward-biased mirror of row-2 start stencil.
+        self%coeffs_e(:, n_halo - 1) = [0._dp, &
+                                        17._dp/240._dp, -13._dp/24._dp, &
+                                        3._dp/40._dp, -103._dp/120._dp, &
+                                        301._dp/240._dp, &
+                                        0._dp, 0._dp, 0._dp]
+        self%coeffs_e(:, n_halo - 1) = self%coeffs_e(:, n_halo - 1)/delta
+      end if
     end select
 
     if (self%pentadiag) then
