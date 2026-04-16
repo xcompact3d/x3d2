@@ -236,6 +236,16 @@ contains
       ! LHS: beta*f'_{i-2} + alpha*f'_{i-1} + f'_i + alpha*f'_{i+1} + beta*f'_{i+2}
       ! RHS: a*(f_{i+1}-f_{i-1})/(2h) + b*(f_{i+2}-f_{i-2})/(4h) + c*(f_{i+3}-f_{i-3})/(6h)
       ! Coefficients match Compack3D (Song et al. 2022, COEF_A/B/C in benchmark).
+      !
+      ! NOTE: the Thomas solver used here is non-periodic.  Periodic BCs
+      ! require a Sherman-Morrison-Woodbury correction (future work).
+      ! Using BC_PERIODIC with this scheme silently drops the wrap-around
+      ! LHS coupling terms and produces O(1) errors — guard against it.
+      if (bc_start == BC_PERIODIC .or. bc_end == BC_PERIODIC) then
+        error stop 'compact10_penta does not support BC_PERIODIC: the &
+                   &pentadiagonal Thomas solver is non-periodic. Use &
+                   &BC_DIRICHLET or BC_NEUMANN.'
+      end if
       self%pentadiag = .true.
       alpha = 1._dp/2._dp
       self%beta = 1._dp/20._dp
