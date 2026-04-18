@@ -4,7 +4,7 @@ module m_omp_exec_dist
   use m_common, only: dp
   use m_omp_common, only: SZ
   use m_omp_kernels_dist, only: der_univ_dist, der_univ_subs, &
-                                der_univ_fused_subs
+                                der_univ_fused_subs, der_penta_full
   use m_tdsops, only: tdsops_t
   use m_omp_sendrecv, only: sendrecv_fields
 
@@ -183,6 +183,33 @@ contains
     !$omp end parallel do
 
   end subroutine exec_dist_transeq_compact
+
+  subroutine exec_dist_penta_compact( &
+    du, u, u_recv_s, u_recv_e, tdsops, n_groups)
+    !! Single-pass non-periodic pentadiagonal compact-FD solve on CPU.
+    !! No MPI exchange is needed; each group is solved independently.
+    implicit none
+
+    real(dp), dimension(:, :, :), intent(out) :: du
+    real(dp), dimension(:, :, :), intent(in) :: u, u_recv_s, u_recv_e
+    type(tdsops_t), intent(in) :: tdsops
+    integer, intent(in) :: n_groups
+
+    integer :: k
+
+    !$omp parallel do
+    do k = 1, n_groups
+      call der_penta_full( &
+        du(:, :, k), u(:, :, k), u_recv_s(:, :, k), u_recv_e(:, :, k), &
+        tdsops%n_tds, tdsops%n_rhs, &
+        tdsops%coeffs_s, tdsops%coeffs_e, tdsops%coeffs, &
+        tdsops%dist_fw, tdsops%dist_af, tdsops%dist_sa, tdsops%dist_bw, &
+        tdsops%beta, tdsops%beta_lhs_s &
+        )
+    end do
+    !$omp end parallel do
+
+  end subroutine exec_dist_penta_compact
 
 end module m_omp_exec_dist
 
