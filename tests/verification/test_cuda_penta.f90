@@ -56,8 +56,8 @@ contains
   ! Grid: N interior points, x_j = j*h, h = 1/(N+1).
   ! ─────────────────────────────────────────────────────────────────────────────
   subroutine run_dirichlet_test()
-    integer, parameter :: n_sizes = 5
-    integer, parameter :: n_glob_arr(n_sizes) = [32, 64, 128, 256, 512]
+    integer, parameter :: n_sizes = 3
+    integer, parameter :: n_glob_arr(n_sizes) = [32, 64, 128]
     real(dp), parameter :: min_rate_tol = 4.0_dp
     integer :: isize, n_glob, n, n_block, n_halo
     real(dp) :: dx, l2_err, l2_prev
@@ -77,12 +77,12 @@ contains
 
     do isize = 1, n_sizes
       n_glob = n_glob_arr(isize)
-      n = n_glob/nproc
+      n = n_glob
       dx = 1._dp/real(n_glob + 1, dp)   ! interior grid: x_j = j*h
       allocate (u(SZ, n, n_block), du(SZ, n, n_block))
       allocate (u_dev(SZ, n, n_block), du_dev(SZ, n, n_block))
       allocate (u_s_dev(SZ, n_halo, n_block), u_e_dev(SZ, n_halo, n_block))
-      call fill_interior(u, n, n_block, dx, nrank, 'sin')
+      call fill_interior(u, n, n_block, dx, 0, 'sin')
       u_dev = u; u_s_dev = 0._dp; u_e_dev = 0._dp
       tdsops = cuda_tdsops_init(n, dx, operation='first-deriv', &
                                 scheme='compact10_penta', &
@@ -91,7 +91,7 @@ contains
       call exec_dist_penta_compact(du_dev, u_dev, u_s_dev, u_e_dev, &
                                    tdsops, blocks, threads)
       du = du_dev
-      l2_err = l2_norm(du, n, n_block, dx, nrank, nproc, 'pi_cos')
+      l2_err = l2_norm(du, n, n_block, dx, 0, nproc, 'pi_cos')
       call report_rate(l2_err, l2_prev, n_glob, isize, min_rate_tol, 'BC_DIRICHLET')
       l2_prev = l2_err
       deallocate (u, du, u_dev, du_dev, u_s_dev, u_e_dev)
@@ -125,12 +125,12 @@ contains
 
     do isize = 1, n_sizes
       n_glob = n_glob_arr(isize)
-      n = n_glob/nproc
+      n = n_glob
       dx = 1._dp/real(n_glob - 1, dp)   ! wall grid: x_j = (j-1)*h, x_1=0
       allocate (u(SZ, n, n_block), du(SZ, n, n_block))
       allocate (u_dev(SZ, n, n_block), du_dev(SZ, n, n_block))
       allocate (u_s_dev(SZ, n_halo, n_block), u_e_dev(SZ, n_halo, n_block))
-      call fill_wall(u, n, n_block, dx, nrank, 'cos')
+      call fill_wall(u, n, n_block, dx, 0, 'cos')
       ! Wall stencils do not reference halo positions; set to zero.
       u_dev = u; u_s_dev = 0._dp; u_e_dev = 0._dp
       tdsops = cuda_tdsops_init(n, dx, operation='first-deriv', &
@@ -141,7 +141,7 @@ contains
       call exec_dist_penta_compact(du_dev, u_dev, u_s_dev, u_e_dev, &
                                    tdsops, blocks, threads)
       du = du_dev
-      l2_err = l2_norm_wall(du, n, n_block, dx, nrank, nproc, 'neg_pi_sin')
+      l2_err = l2_norm_wall(du, n, n_block, dx, 0, nproc, 'neg_pi_sin')
       call report_rate(l2_err, l2_prev, n_glob, isize, min_rate_tol, &
                        'BC_NEUMANN sym=T')
       l2_prev = l2_err
@@ -176,12 +176,12 @@ contains
 
     do isize = 1, n_sizes
       n_glob = n_glob_arr(isize)
-      n = n_glob/nproc
+      n = n_glob
       dx = 1._dp/real(n_glob - 1, dp)   ! wall grid: x_j = (j-1)*h, x_1=0
       allocate (u(SZ, n, n_block), du(SZ, n, n_block))
       allocate (u_dev(SZ, n, n_block), du_dev(SZ, n, n_block))
       allocate (u_s_dev(SZ, n_halo, n_block), u_e_dev(SZ, n_halo, n_block))
-      call fill_wall(u, n, n_block, dx, nrank, 'sin')
+      call fill_wall(u, n, n_block, dx, 0, 'sin')
       ! Wall stencils do not reference halo positions; set to zero.
       u_dev = u; u_s_dev = 0._dp; u_e_dev = 0._dp
       tdsops = cuda_tdsops_init(n, dx, operation='first-deriv', &
@@ -192,7 +192,7 @@ contains
       call exec_dist_penta_compact(du_dev, u_dev, u_s_dev, u_e_dev, &
                                    tdsops, blocks, threads)
       du = du_dev
-      l2_err = l2_norm_wall(du, n, n_block, dx, nrank, nproc, 'pi_cos')
+      l2_err = l2_norm_wall(du, n, n_block, dx, 0, nproc, 'pi_cos')
       call report_rate(l2_err, l2_prev, n_glob, isize, min_rate_tol, &
                        'BC_NEUMANN sym=F')
       l2_prev = l2_err

@@ -806,32 +806,31 @@ contains
                   + coeffs_e(8, 4)*u_e(i, 3, b) &
                   + coeffs_e(9, 4)*u_e(i, 4, b)
 
-    ! ── Forward substitution (5-band LU) ───────────────────────────────────
-    ! du(i,j,b) <- (du_j - l1_j*du_{j-1} - l2_j*du_{j-2}) / d_j
-    ! ffr(j) = 1/d_j,  faf(j) = l1_j,  fsa(j) = l2_j
-    du(i, 1, b) = du(i, 1, b)*ffr(1)   ! row 1: no prior rows
-    du(i, 2, b) = (du(i, 2, b) - faf(2)*du(i, 1, b))*ffr(2)
+    ! ── Forward substitution (L-solve: no division, L diagonal = 1) ─────────
+    ! y_j = r_j - l1_j*y_{j-1} - l2_j*y_{j-2}
+    ! faf(j) = l1_j,  fsa(j) = l2_j  (row 1 unchanged: no prior rows)
+    du(i, 2, b) = du(i, 2, b) - faf(2)*du(i, 1, b)
     do j = 3, n_rhs
-      du(i, j, b) = (du(i, j, b) &
-                     - faf(j)*du(i, j - 1, b) &
-                     - fsa(j)*du(i, j - 2, b))*ffr(j)
+      du(i, j, b) = du(i, j, b) &
+                    - faf(j)*du(i, j - 1, b) &
+                    - fsa(j)*du(i, j - 2, b)
     end do
 
-    ! ── Backward substitution (upper-3 band: u1 and u2=beta_lhs=const) ────
-    ! x_n = r'_n already in du(i,n,b)
-    ! x_{n-1}: subtract u1_{n-1}*x_n
-    du(i, n_tds - 1, b) = du(i, n_tds - 1, b) - fbw(n_tds - 1)*du(i, n_tds, b)
-    ! x_j = r'_j - u1_j*x_{j+1} - beta*x_{j+2}
+    ! ── Backward substitution (U-solve: divide by d_j = 1/ffr(j)) ──────────
+    ! x_n = y_n / d_n;  x_{n-1} = (y_{n-1} - u1_{n-1}*x_n) / d_{n-1}
+    ! x_j = (y_j - u1_j*x_{j+1} - beta*x_{j+2}) / d_j
+    du(i, n_tds, b) = du(i, n_tds, b)*ffr(n_tds)
+    du(i, n_tds - 1, b) = (du(i, n_tds - 1, b) &
+                            - fbw(n_tds - 1)*du(i, n_tds, b))*ffr(n_tds - 1)
     do j = n_tds - 2, 2, -1
-      du(i, j, b) = du(i, j, b) &
-                    - fbw(j)*du(i, j + 1, b) &
-                    - beta_lhs*du(i, j + 2, b)
+      du(i, j, b) = (du(i, j, b) &
+                     - fbw(j)*du(i, j + 1, b) &
+                     - beta_lhs*du(i, j + 2, b))*ffr(j)
     end do
-    ! j=1 peeled: use beta_lhs_s (BC_NEUMANN boundary beta, equals beta_lhs by default)
-    ! Assumes n_tds >= 3, which holds for compact10_penta (n_halo=4).
-    du(i, 1, b) = du(i, 1, b) &
-                  - fbw(1)*du(i, 2, b) &
-                  - beta_lhs_s*du(i, 3, b)
+    ! j=1 peeled: use beta_lhs_s (0 for BC_NEUMANN sym=T, 2β for sym=F, β default)
+    du(i, 1, b) = (du(i, 1, b) &
+                   - fbw(1)*du(i, 2, b) &
+                   - beta_lhs_s*du(i, 3, b))*ffr(1)
 
   end subroutine der_penta_full
 

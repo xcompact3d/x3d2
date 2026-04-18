@@ -308,39 +308,41 @@ contains
                                  afi, bfi, 0._dp, 0._dp]
         end if
       else
-        ! compact10_penta BC_NEUMANN: mirror-extension stencils.
-        ! Rows 1-3 use ghost-cell reflection; row 4 keeps interior stencil.
-        ! No halo positions (positions 1-4) are referenced by these stencils.
+        ! compact10_penta BC_NEUMANN: Vandermonde stencils consistent with the
+        ! ghost-extended LHS (preprocess_penta_dist incorporates the ghost term
+        ! β*f'_0 into the diagonal at row 2 and row n-1).
         if (symmetry) then
-          ! Even extension at start wall: f_{1-k} = f_{1+k}
-          ! LHS row 1 is set to 1*f'_1 = 0 by preprocess_penta_dist.
-          ! Row 1 RHS = 0 (f' is odd, vanishes at the wall by symmetry).
+          ! sym=T: f' odd (f'_0=-f'_2). Row 1 RHS=0 (f'_1=0).
+          ! Row 2 effective LHS (ghost absorbed, f'_1=0): (1-β)*f'_2+α*f'_3+β*f'_4
+          !   → sum=1+α=3/2. Row 3 effective LHS (f'_1=0): α*f'_2+f'_3+α*f'_4+β*f'_5
+          !   → sum=1+2α+β=41/20.
           self%coeffs_s(:, 1) = 0._dp
-          ! Row 2: substitute f_0=f_2, f_{-1}=f_3 into interior stencil.
-          self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, -afi, &
-                                 -bfi, &
-                                 afi - cfi, bfi, cfi, 0._dp]
-          ! Row 3: substitute f_0=f_2 into interior stencil.
-          self%coeffs_s(:, 3) = [0._dp, 0._dp, -bfi, &
-                                 -(afi + cfi), 0._dp, &
-                                 afi, bfi, cfi, 0._dp]
-          ! Row 4: interior stencil (position 1 = 0, no ghost cell access).
+          self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, -1._dp/5._dp, &
+                                 -11._dp/10._dp, &
+                                 27._dp/20._dp, -1._dp/10._dp, 1._dp/20._dp, 0._dp]
+          self%coeffs_s(:, 2) = self%coeffs_s(:, 2)/delta
+          self%coeffs_s(:, 3) = [0._dp, 0._dp, -17._dp/240._dp, &
+                                 -9._dp/10._dp, 3._dp/20._dp, &
+                                 19._dp/30._dp, 3._dp/16._dp, 0._dp, 0._dp]
+          self%coeffs_s(:, 3) = self%coeffs_s(:, 3)/delta
         else
-          ! Odd extension at start wall: f_{1-k} = -f_{1+k}
-          ! LHS row 1 becomes f'_1 + 2α*f'_2 + 2β*f'_3 via preprocess_penta_dist.
-          ! Row 1: substitute f_0=-f_2, f_{-1}=-f_3, f_{-2}=-f_4.
+          ! sym=F: f' even (f'_0=+f'_2). Row 1 LHS: f'_1+2α*f'_2+2β*f'_3
+          !   → sum=1+2α+2β=21/10.
+          ! Row 2 effective LHS (ghost absorbed): α*f'_1+(1+β)*f'_2+α*f'_3+β*f'_4
+          !   → sum=1+2α+2β=21/10.
+          ! Row 3 LHS: full interior → sum=1+2α+2β=21/10.
           self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
-                                 0._dp, &
-                                 2*afi, 2*bfi, 2*cfi, 0._dp]
-          ! Row 2: substitute f_0=-f_2, f_{-1}=-f_3.
-          self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, -afi, &
-                                 bfi, &
-                                 afi + cfi, bfi, cfi, 0._dp]
-          ! Row 3: substitute f_0=-f_2.
-          self%coeffs_s(:, 3) = [0._dp, 0._dp, -bfi, &
-                                 cfi - afi, 0._dp, &
-                                 afi, bfi, cfi, 0._dp]
-          ! Row 4: interior stencil (position 1 = 0, no ghost cell access).
+                                 -93._dp/40._dp, &
+                                 31._dp/10._dp, -3._dp/2._dp, 9._dp/10._dp, -7._dp/40._dp]
+          self%coeffs_s(:, 1) = self%coeffs_s(:, 1)/delta
+          self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, -19._dp/15._dp, &
+                                 49._dp/60._dp, &
+                                 0._dp, 31._dp/60._dp, -1._dp/15._dp, 0._dp]
+          self%coeffs_s(:, 2) = self%coeffs_s(:, 2)/delta
+          self%coeffs_s(:, 3) = [0._dp, 0._dp, -7._dp/40._dp, &
+                                 -7._dp/10._dp, 0._dp, &
+                                 7._dp/10._dp, 7._dp/40._dp, 0._dp, 0._dp]
+          self%coeffs_s(:, 3) = self%coeffs_s(:, 3)/delta
         end if
       end if
     case (BC_DIRICHLET)
@@ -367,10 +369,11 @@ contains
         ! zero through the interior -cfi coefficient.
         !
         ! Row 1: LHS is f'_1 + alpha*f'_2 + beta*f'_3 (no sub-diagonal).
+        ! Coefficients satisfy sum(c_k)=0, sum(k*c_k)=1+alpha+beta=31/20.
         self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
-                               -277._dp/120._dp, &
-                               15._dp/4._dp, -12._dp/5._dp, &
-                               71._dp/60._dp, -9._dp/40._dp]
+                               -529._dp/240._dp, &
+                               71._dp/20._dp, -9._dp/4._dp, &
+                               67._dp/60._dp, -17._dp/80._dp]
         self%coeffs_s(:, 1) = self%coeffs_s(:, 1)/delta
         ! Row 2: LHS is alpha*f'_1 + f'_2 + alpha*f'_3 + beta*f'_4.
         self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, &
@@ -410,37 +413,31 @@ contains
                                           afi, 0._dp, 0._dp, 0._dp]
         end if
       else
-        ! compact10_penta BC_NEUMANN end boundary: antisymmetric mirror of start.
-        ! Rows n, n-1, n-2 use ghost-cell reflection; row n-3 keeps interior stencil.
+        ! compact10_penta BC_NEUMANN end boundary: antisymmetric mirror of start
+        ! Vandermonde stencils (updated to match ghost-extended LHS).
         if (symmetry) then
-          ! Even extension at end wall: f_{n+k} = f_{n-k}
-          ! LHS row n is set to 1*f'_n = 0 by preprocess_penta_dist.
           self%coeffs_e(:, n_halo) = 0._dp
-          ! Row n-1: substitute f_{n+1}=f_{n-1}, f_{n+2}=f_{n-2}.
-          self%coeffs_e(:, n_halo - 1) = [0._dp, -cfi, -bfi, &
-                                          cfi - afi, bfi, &
-                                          afi, 0._dp, 0._dp, 0._dp]
-          ! Row n-2: substitute f_{n+1}=f_{n-1}.
-          self%coeffs_e(:, n_halo - 2) = [0._dp, -cfi, -bfi, &
-                                          -afi, 0._dp, &
-                                          afi + cfi, bfi, 0._dp, 0._dp]
-          ! Row n-3: interior stencil (already set above).
+          self%coeffs_e(:, n_halo - 1) = [0._dp, -1._dp/20._dp, 1._dp/10._dp, &
+                                          -27._dp/20._dp, 11._dp/10._dp, &
+                                          1._dp/5._dp, 0._dp, 0._dp, 0._dp]
+          self%coeffs_e(:, n_halo - 1) = self%coeffs_e(:, n_halo - 1)/delta
+          self%coeffs_e(:, n_halo - 2) = [0._dp, 0._dp, -3._dp/16._dp, &
+                                          -19._dp/30._dp, -3._dp/20._dp, &
+                                          9._dp/10._dp, 17._dp/240._dp, 0._dp, 0._dp]
+          self%coeffs_e(:, n_halo - 2) = self%coeffs_e(:, n_halo - 2)/delta
         else
-          ! Odd extension at end wall: f_{n+k} = -f_{n-k}
-          ! LHS row n sub-diagonals are doubled by preprocess_penta_dist.
-          ! Row n: substitute f_{n+1}=-f_{n-1}, f_{n+2}=-f_{n-2}, f_{n+3}=-f_{n-3}.
-          self%coeffs_e(:, n_halo) = [0._dp, -2*cfi, -2*bfi, &
-                                      -2*afi, 0._dp, &
+          self%coeffs_e(:, n_halo) = [7._dp/40._dp, -9._dp/10._dp, 3._dp/2._dp, &
+                                      -31._dp/10._dp, 93._dp/40._dp, &
                                       0._dp, 0._dp, 0._dp, 0._dp]
-          ! Row n-1: substitute f_{n+1}=-f_{n-1}, f_{n+2}=-f_{n-2}.
-          self%coeffs_e(:, n_halo - 1) = [0._dp, -cfi, -bfi, &
-                                          -(afi + cfi), -bfi, &
-                                          afi, 0._dp, 0._dp, 0._dp]
-          ! Row n-2: substitute f_{n+1}=-f_{n-1}.
-          self%coeffs_e(:, n_halo - 2) = [0._dp, -cfi, -bfi, &
-                                          -afi, 0._dp, &
-                                          afi - cfi, bfi, 0._dp, 0._dp]
-          ! Row n-3: interior stencil (already set above).
+          self%coeffs_e(:, n_halo) = self%coeffs_e(:, n_halo)/delta
+          self%coeffs_e(:, n_halo - 1) = [0._dp, 1._dp/15._dp, -31._dp/60._dp, &
+                                          0._dp, -49._dp/60._dp, &
+                                          19._dp/15._dp, 0._dp, 0._dp, 0._dp]
+          self%coeffs_e(:, n_halo - 1) = self%coeffs_e(:, n_halo - 1)/delta
+          self%coeffs_e(:, n_halo - 2) = [0._dp, 0._dp, -7._dp/40._dp, &
+                                          -7._dp/10._dp, 0._dp, &
+                                          7._dp/10._dp, 7._dp/40._dp, 0._dp, 0._dp]
+          self%coeffs_e(:, n_halo - 2) = self%coeffs_e(:, n_halo - 2)/delta
         end if
       end if
     case (BC_DIRICHLET)
@@ -462,9 +459,9 @@ contains
       else
         ! compact10_penta: antisymmetric mirror of start boundary stencils.
         ! Row n: backward-biased mirror of row-1 start stencil.
-        self%coeffs_e(:, n_halo) = [9._dp/40._dp, &
-                                    -71._dp/60._dp, 12._dp/5._dp, &
-                                    -15._dp/4._dp, 277._dp/120._dp, &
+        self%coeffs_e(:, n_halo) = [17._dp/80._dp, &
+                                    -67._dp/60._dp, 9._dp/4._dp, &
+                                    -71._dp/20._dp, 529._dp/240._dp, &
                                     0._dp, 0._dp, 0._dp, 0._dp]
         self%coeffs_e(:, n_halo) = self%coeffs_e(:, n_halo)/delta
         ! Row n-1: backward-biased mirror of row-2 start stencil.
@@ -1104,15 +1101,35 @@ contains
     self%dist_bw(1) = u1_1     ! u1_1 = modified or alpha
 
     ! Row 2: eliminate u1_1*x_1 only (no beta row available yet)
+    ! For BC_NEUMANN, the ghost f' extension modifies the diagonal at row 2:
+    !   sym=T (f' odd extension: f'_0=-f'_2): A[2,2] = 1-β
+    !   sym=F (f' even extension: f'_0=+f'_2): A[2,2] = 1+β
+    !   Otherwise (Dirichlet or interior): A[2,2] = 1
     self%dist_sa(2) = 0._dp
     self%dist_af(2) = alp                    ! l1_2 = alpha/d_1 = alpha
-    d_i = 1._dp - alp*u1_1                  ! d_2 = 1 - l1_2*u1_1
+    if (bc_start == BC_NEUMANN) then
+      if (symmetry) then
+        d_i = (1._dp - bet) - alp*u1_1
+      else
+        d_i = (1._dp + bet) - alp*u1_1
+      end if
+    else
+      d_i = 1._dp - alp*u1_1
+    end if
     self%dist_fw(2) = 1._dp/d_i
-    self%dist_bw(2) = alp*(1._dp - bet)     ! u1_2 = alpha - l1_2*beta
+    self%dist_bw(2) = alp - alp*self%beta_lhs_s  ! u1_2 = alpha - l1_2*A[1,3]
 
-    ! Rows 3..n: eliminate beta (sub-2) then alpha (sub-1)
-    ! Key identity: dist_fw(k) = 1/d_k, so l2 = beta/d_{i-2} = beta*dist_fw(i-2)
-    do i = 3, n
+    ! Row 3: U[1,3] = beta_lhs_s (not beta), so l2*U[1,3] uses beta_lhs_s here.
+    l2_i = bet*self%dist_fw(1)
+    l1_i = (alp - l2_i*self%dist_bw(1))*self%dist_fw(2)
+    d_i = (1._dp - l2_i*self%beta_lhs_s) - l1_i*self%dist_bw(2)
+    self%dist_sa(3) = l2_i
+    self%dist_af(3) = l1_i
+    self%dist_fw(3) = 1._dp/d_i
+    self%dist_bw(3) = alp - l1_i*bet
+
+    ! Rows 4..n: U[i-2,i] = beta (interior rows), standard formula.
+    do i = 4, n
       l2_i = bet*self%dist_fw(i - 2)
       l1_i = (alp - l2_i*self%dist_bw(i - 2))*self%dist_fw(i - 1)
       d_i = (1._dp - l2_i*bet) - l1_i*self%dist_bw(i - 1)
@@ -1120,11 +1137,27 @@ contains
       self%dist_sa(i) = l2_i
       self%dist_af(i) = l1_i
       self%dist_fw(i) = 1._dp/d_i
-      self%dist_bw(i) = alp - l1_i*bet   ! u1_i = alpha - l1_i*beta
+      self%dist_bw(i) = alp - l1_i*bet
     end do
 
-    ! BC_NEUMANN end boundary: override row n LU factors.
+    ! BC_NEUMANN end boundary: fix row n-1 diagonal, then override row n.
+    ! The ghost at n+1 modifies A[n-1,n-1] symmetrically to the start boundary:
+    !   sym=T (f'_{n+1}=-f'_{n-1}): A[n-1,n-1] = 1-β
+    !   sym=F (f'_{n+1}=+f'_{n-1}): A[n-1,n-1] = 1+β
     if (bc_end == BC_NEUMANN) then
+      i = n - 1
+      l2_i = bet*self%dist_fw(i - 2)
+      l1_i = (alp - l2_i*self%dist_bw(i - 2))*self%dist_fw(i - 1)
+      if (symmetry) then
+        d_i = (1._dp - bet - l2_i*bet) - l1_i*self%dist_bw(i - 1)
+      else
+        d_i = (1._dp + bet - l2_i*bet) - l1_i*self%dist_bw(i - 1)
+      end if
+      self%dist_sa(i) = l2_i
+      self%dist_af(i) = l1_i
+      self%dist_fw(i) = 1._dp/d_i
+      self%dist_bw(i) = alp - l1_i*bet
+
       if (symmetry) then
         ! Row n → f'_n = 0: zero sub-diagonals, pivot=1.
         self%dist_sa(n) = 0._dp
