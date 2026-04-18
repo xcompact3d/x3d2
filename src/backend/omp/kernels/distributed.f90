@@ -336,4 +336,130 @@ contains
 
   end subroutine der_univ_fused_subs
 
+  subroutine der_penta_full( &
+    du, u, u_s, u_e, n_tds, n_rhs, &
+    coeffs_s, coeffs_e, coeffs, &
+    ffr, faf, fsa, fbw, beta_lhs, beta_lhs_s &
+    )
+    !! Full (forward + backward) non-periodic pentadiagonal Thomas solve on CPU.
+    !! Mirrors the CUDA der_penta_full kernel; operates on 2D (SZ, n) arrays.
+    implicit none
+
+    real(dp), intent(out), dimension(:, :) :: du
+    real(dp), intent(in), dimension(:, :) :: u, u_s, u_e
+    integer, intent(in) :: n_tds, n_rhs
+    real(dp), intent(in), dimension(:, :) :: coeffs_s, coeffs_e
+    real(dp), intent(in), dimension(:) :: coeffs
+    real(dp), intent(in), dimension(:) :: ffr, faf, fsa, fbw
+    real(dp), intent(in) :: beta_lhs, beta_lhs_s
+
+    integer :: i, j
+    real(dp) :: c_m3, c_m2, c_m1, c_j, c_p1, c_p2, c_p3
+
+    c_m3 = coeffs(2); c_m2 = coeffs(3); c_m1 = coeffs(4)
+    c_j = coeffs(5)
+    c_p1 = coeffs(6); c_p2 = coeffs(7); c_p3 = coeffs(8)
+
+    ! ── Build RHS ──────────────────────────────────────────────────────────────
+    !$omp simd
+    do i = 1, SZ
+      du(i, 1) = coeffs_s(1, 1)*u_s(i, 1) + coeffs_s(2, 1)*u_s(i, 2) &
+                 + coeffs_s(3, 1)*u_s(i, 3) + coeffs_s(4, 1)*u_s(i, 4) &
+                 + coeffs_s(5, 1)*u(i, 1) + coeffs_s(6, 1)*u(i, 2) &
+                 + coeffs_s(7, 1)*u(i, 3) + coeffs_s(8, 1)*u(i, 4) &
+                 + coeffs_s(9, 1)*u(i, 5)
+      du(i, 2) = coeffs_s(1, 2)*u_s(i, 2) + coeffs_s(2, 2)*u_s(i, 3) &
+                 + coeffs_s(3, 2)*u_s(i, 4) + coeffs_s(4, 2)*u(i, 1) &
+                 + coeffs_s(5, 2)*u(i, 2) + coeffs_s(6, 2)*u(i, 3) &
+                 + coeffs_s(7, 2)*u(i, 4) + coeffs_s(8, 2)*u(i, 5) &
+                 + coeffs_s(9, 2)*u(i, 6)
+      du(i, 3) = coeffs_s(1, 3)*u_s(i, 3) + coeffs_s(2, 3)*u_s(i, 4) &
+                 + coeffs_s(3, 3)*u(i, 1) + coeffs_s(4, 3)*u(i, 2) &
+                 + coeffs_s(5, 3)*u(i, 3) + coeffs_s(6, 3)*u(i, 4) &
+                 + coeffs_s(7, 3)*u(i, 5) + coeffs_s(8, 3)*u(i, 6) &
+                 + coeffs_s(9, 3)*u(i, 7)
+      du(i, 4) = coeffs_s(1, 4)*u_s(i, 4) + coeffs_s(2, 4)*u(i, 1) &
+                 + coeffs_s(3, 4)*u(i, 2) + coeffs_s(4, 4)*u(i, 3) &
+                 + coeffs_s(5, 4)*u(i, 4) + coeffs_s(6, 4)*u(i, 5) &
+                 + coeffs_s(7, 4)*u(i, 6) + coeffs_s(8, 4)*u(i, 7) &
+                 + coeffs_s(9, 4)*u(i, 8)
+    end do
+    !$omp end simd
+    do j = 5, n_rhs - 4
+      !$omp simd
+      do i = 1, SZ
+        du(i, j) = c_m3*u(i, j - 3) + c_m2*u(i, j - 2) &
+                   + c_m1*u(i, j - 1) + c_j*u(i, j) &
+                   + c_p1*u(i, j + 1) + c_p2*u(i, j + 2) &
+                   + c_p3*u(i, j + 3)
+      end do
+      !$omp end simd
+    end do
+    !$omp simd
+    do i = 1, SZ
+      j = n_rhs - 3
+      du(i, j) = coeffs_e(1, 1)*u(i, j - 4) + coeffs_e(2, 1)*u(i, j - 3) &
+                 + coeffs_e(3, 1)*u(i, j - 2) + coeffs_e(4, 1)*u(i, j - 1) &
+                 + coeffs_e(5, 1)*u(i, j) + coeffs_e(6, 1)*u(i, j + 1) &
+                 + coeffs_e(7, 1)*u(i, j + 2) + coeffs_e(8, 1)*u(i, j + 3) &
+                 + coeffs_e(9, 1)*u_e(i, 1)
+      j = n_rhs - 2
+      du(i, j) = coeffs_e(1, 2)*u(i, j - 4) + coeffs_e(2, 2)*u(i, j - 3) &
+                 + coeffs_e(3, 2)*u(i, j - 2) + coeffs_e(4, 2)*u(i, j - 1) &
+                 + coeffs_e(5, 2)*u(i, j) + coeffs_e(6, 2)*u(i, j + 1) &
+                 + coeffs_e(7, 2)*u(i, j + 2) + coeffs_e(8, 2)*u_e(i, 1) &
+                 + coeffs_e(9, 2)*u_e(i, 2)
+      j = n_rhs - 1
+      du(i, j) = coeffs_e(1, 3)*u(i, j - 4) + coeffs_e(2, 3)*u(i, j - 3) &
+                 + coeffs_e(3, 3)*u(i, j - 2) + coeffs_e(4, 3)*u(i, j - 1) &
+                 + coeffs_e(5, 3)*u(i, j) + coeffs_e(6, 3)*u(i, j + 1) &
+                 + coeffs_e(7, 3)*u_e(i, 1) + coeffs_e(8, 3)*u_e(i, 2) &
+                 + coeffs_e(9, 3)*u_e(i, 3)
+      j = n_rhs
+      du(i, j) = coeffs_e(1, 4)*u(i, j - 4) + coeffs_e(2, 4)*u(i, j - 3) &
+                 + coeffs_e(3, 4)*u(i, j - 2) + coeffs_e(4, 4)*u(i, j - 1) &
+                 + coeffs_e(5, 4)*u(i, j) + coeffs_e(6, 4)*u_e(i, 1) &
+                 + coeffs_e(7, 4)*u_e(i, 2) + coeffs_e(8, 4)*u_e(i, 3) &
+                 + coeffs_e(9, 4)*u_e(i, 4)
+    end do
+    !$omp end simd
+
+    ! ── Forward substitution (L-solve: no division, L diagonal = 1) ────────────
+    !$omp simd
+    do i = 1, SZ
+      du(i, 2) = du(i, 2) - faf(2)*du(i, 1)
+    end do
+    !$omp end simd
+    do j = 3, n_rhs
+      !$omp simd
+      do i = 1, SZ
+        du(i, j) = du(i, j) - faf(j)*du(i, j - 1) - fsa(j)*du(i, j - 2)
+      end do
+      !$omp end simd
+    end do
+
+    ! ── Backward substitution (U-solve: divide by d_j = 1/ffr(j)) ─────────────
+    !$omp simd
+    do i = 1, SZ
+      du(i, n_tds) = du(i, n_tds)*ffr(n_tds)
+      du(i, n_tds - 1) = (du(i, n_tds - 1) - fbw(n_tds - 1)*du(i, n_tds)) &
+                         *ffr(n_tds - 1)
+    end do
+    !$omp end simd
+    do j = n_tds - 2, 2, -1
+      !$omp simd
+      do i = 1, SZ
+        du(i, j) = (du(i, j) - fbw(j)*du(i, j + 1) &
+                    - beta_lhs*du(i, j + 2))*ffr(j)
+      end do
+      !$omp end simd
+    end do
+    !$omp simd
+    do i = 1, SZ
+      du(i, 1) = (du(i, 1) - fbw(1)*du(i, 2) - beta_lhs_s*du(i, 3))*ffr(1)
+    end do
+    !$omp end simd
+
+  end subroutine der_penta_full
+
 end module m_omp_kernels_dist
