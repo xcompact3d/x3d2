@@ -90,10 +90,9 @@ if(OMP_TGT)
   list(APPEND BACKENDSRC backend/omp/target/backend.f90)
 endif()
 
-# Decide whether 2decomp&fft is supported by the build
-find_package(decomp2d)
-
 if(WITH_2DECOMPFFT)
+  # Decide whether 2decomp&fft is supported by the build
+  find_package(decomp2d)
   list(APPEND SRC ${2DECOMPFFTSRC})
 else()
   list(APPEND SRC ${DUMMYDECOMPSRC})
