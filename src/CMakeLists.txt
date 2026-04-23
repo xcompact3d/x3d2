@@ -127,7 +127,8 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   target_compile_options(xcompact PRIVATE "-DCUDA")
 
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
-       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang")
+       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
+       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
   set(CMAKE_Fortran_FLAGS "-cpp -std=f2018")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math")
