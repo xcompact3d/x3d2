@@ -954,7 +954,7 @@ subroutine field_set_face_cuda(self, f, c_start, c_end, face, &
 
     select case (face)
     case (X_FACE)
-      blocks = dim3((SZ - 1)/64 + 1, dims(2)*dims(3)/SZ, 1)
+      blocks = dim3((SZ - 1)/64 + 1, ((dims(2) - 1)/SZ + 1)*dims(3), 1)
       threads = dim3(64, 1, 1)
       call field_set_x_face<<<blocks, threads>>>( &              !&
           f_d, c_start, c_end, bc_s, bc_e, cfl_val, &

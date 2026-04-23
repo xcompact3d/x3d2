@@ -195,35 +195,47 @@ contains
   end subroutine field_set_y_face
 
 attributes(global) subroutine field_set_x_face(f, c_start, c_end, &
-                                                bc_start, bc_end, cfl, &
-                                                nx, ny, nz)
-    implicit none
-    real(dp), device, intent(inout), dimension(:, :, :) :: f
-    real(dp), value, intent(in) :: c_start, c_end, cfl
-    integer, value, intent(in) :: bc_start, bc_end
-    integer, value, intent(in) :: nx, ny, nz
-    integer :: i, b
+                                               bc_start, bc_end, cfl, &
+                                               nx, ny, nz)
+  implicit none
+  real(dp), device, intent(inout), dimension(:, :, :) :: f
+  real(dp), value, intent(in) :: c_start, c_end, cfl
+  integer, value, intent(in) :: bc_start, bc_end
+  integer, value, intent(in) :: nx, ny, nz
+  integer :: i, b, n_mod, n_y_blocks, y_block, i_max
 
-    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
-    b = blockIdx%y
+  i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! 1..SZ
+  b = blockIdx%y                                 ! 1..n_y_blocks*nz
 
-    if (i <= SZ) then
-      ! --- Left face (x = 1) ---
-      select case (bc_start)
-      case (2)  ! BC_DIRICHLET
-        f(i, 1, b) = c_start
-      case (3)  ! BC_OUTFLOW
-        f(i, 1, b) = f(i, 1, b) - cfl*(f(i, 1, b) - f(i, 2, b))
-      end select
+  n_mod = mod(ny - 1, SZ) + 1
+  n_y_blocks = (ny - 1)/SZ + 1
 
-      ! --- Right face (x = nx) ---
-      select case (bc_end)
-      case (2)  ! BC_DIRICHLET
-        f(i, nx, b) = c_end
-      case (3)  ! BC_OUTFLOW
-        f(i, nx, b) = f(i, nx, b) - cfl*(f(i, nx, b) - f(i, nx - 1, b))
-      end select
-    end if
+  ! Determine if this b is the last y-block (padding present)
+  ! With b = (y_block - 1)*nz + z, y_block = (b - 1)/nz + 1
+  y_block = (b - 1)/nz + 1
+  if (y_block == n_y_blocks) then
+    i_max = n_mod    ! last y-block: only i in [1, n_mod] are real
+  else
+    i_max = SZ       ! interior y-blocks: all i in [1, SZ] are real
+  end if
+
+  if (i <= i_max) then
+    ! --- Left face (j = 1) ---
+    select case (bc_start)
+    case (2)
+      f(i, 1, b) = c_start
+    case (3)
+      ! f(i, 1, b) = f(i, 1, b) - cfl*(f(i, 1, b) - f(i, 2, b))
+    end select
+
+    ! --- Right face (j = nx) ---
+    select case (bc_end)
+    case (2)
+      f(i, nx, b) = c_end
+    case (3)
+      f(i, nx, b) = f(i, nx, b) - cfl*(f(i, nx, b) - f(i, nx - 1, b))
+    end select
+  end if
 end subroutine field_set_x_face
   attributes(global) subroutine volume_integral(s, f, n, n_i_pad, n_j)
     implicit none
