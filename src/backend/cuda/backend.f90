@@ -9,7 +9,7 @@ module m_cuda_backend
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC, &
-                      X_FACE, Y_FACE, Z_FACE, BC_DIRICHLET, BC_OUTFLOW
+                      X_FACE, Y_FACE, Z_FACE, BC_DIRICHLET
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t, tdsops_t
@@ -911,7 +911,7 @@ contains
   end subroutine field_shift_cuda
 
 subroutine field_set_face_cuda(self, f, c_start, c_end, face, &
-                                 bc_start, bc_end, cfl)
+                                 bc_start, bc_end)
     implicit none
 
     class(cuda_backend_t) :: self
@@ -919,13 +919,13 @@ subroutine field_set_face_cuda(self, f, c_start, c_end, face, &
     real(dp), intent(in) :: c_start, c_end
     integer, intent(in) :: face
     integer, optional, intent(in) :: bc_start, bc_end
-    real(dp), optional, intent(in) :: cfl
+
 
     real(dp), device, pointer, dimension(:, :, :) :: f_d
     type(dim3) :: blocks, threads
     integer :: dims(3)
     integer :: bc_s, bc_e
-    real(dp) :: cfl_val
+
 
     if (f%dir /= DIR_X) then
       error stop 'Setting a field face is only supported for DIR_X fields.'
@@ -937,17 +937,11 @@ subroutine field_set_face_cuda(self, f, c_start, c_end, face, &
     ! --- Resolve optional arguments with safe defaults ---
     bc_s = BC_DIRICHLET
     bc_e = BC_DIRICHLET
-    cfl_val = 0._dp
+
 
     if (present(bc_start)) bc_s = bc_start
     if (present(bc_end))   bc_e = bc_end
-    if (present(cfl))      cfl_val = cfl
 
-    ! --- Validate: if OUTFLOW requested, cfl must be provided ---
-    if ((bc_s == BC_OUTFLOW .or. bc_e == BC_OUTFLOW) .and. &
-        (.not. present(cfl))) then
-      error stop 'field_set_face: BC_OUTFLOW requires cfl argument.'
-    end if
 
     call resolve_field_t(f_d, f)
     dims = self%mesh%get_dims(f%data_loc)
@@ -957,7 +951,7 @@ subroutine field_set_face_cuda(self, f, c_start, c_end, face, &
       blocks = dim3((SZ - 1)/64 + 1, ((dims(2) - 1)/SZ + 1)*dims(3), 1)
       threads = dim3(64, 1, 1)
       call field_set_x_face<<<blocks, threads>>>( &              !&
-          f_d, c_start, c_end, bc_s, bc_e, cfl_val, &
+          f_d, c_start, c_end, bc_s, bc_e, &
           dims(1), dims(2), dims(3))
 
     case (Y_FACE)

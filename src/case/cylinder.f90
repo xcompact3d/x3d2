@@ -5,7 +5,7 @@ module m_case_cylinder
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
   use m_common, only: dp, MPI_X3D2_DP, get_argument, DIR_C, DIR_X, &
-                       VERT, CELL, X_FACE, BC_DIRICHLET, BC_OUTFLOW
+                       VERT, CELL, X_FACE, BC_DIRICHLET
   use m_field, only: field_t
   use m_config, only: cylinder_config_t
   use m_mesh, only: mesh_t
@@ -20,7 +20,7 @@ module m_case_cylinder
     procedure :: forcings => forcings_cylinder
     procedure :: pre_correction => pre_correction_cylinder
     procedure :: postprocess => postprocess_cylinder
-    procedure :: compute_outflow_cfl
+    procedure :: compute_outflow_params
   end type case_cylinder_t
 
   interface case_cylinder_t
@@ -95,19 +95,19 @@ contains
   end subroutine initial_conditions_cylinder
 
   ! ==========================================================================
-  ! Compute outflow CFL number.
+  ! Compute outflow velocity number.
   !
   ! This is the ONE place we still touch the host: we copy only the u field
   ! to extract max(u) at the penultimate x-station, then do an MPI reduction.
-  ! The result is a single scalar CFL passed to the GPU kernels.
+  ! The result is a single scalar velocity passed to the GPU kernels.
   !
   ! TODO: Replace with a device-side reduction (cub::DeviceReduce or a
   !       custom kernel over a single x-slice) to eliminate this transfer.
   ! ==========================================================================
-  function compute_outflow_cfl(self) result(cfl)
+  subroutine compute_outflow_params(self, out_vel)
     implicit none
     class(case_cylinder_t) :: self
-    real(dp) :: cfl
+    real(dp) :: out_vel
 
     class(field_t), pointer :: host_u
     integer :: dims(3), nx, j, k, ierr
@@ -137,8 +137,8 @@ contains
     call MPI_ALLREDUCE(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, MPI_MAX, &
                        MPI_COMM_WORLD, ierr)
 
-    cfl = uxmax * dt / dx
-  end function compute_outflow_cfl
+    out_vel = uxmax * dt / dx
+  end subroutine compute_outflow_params
 
   ! ==========================================================================
   ! Boundary Conditions: applied to U^m at the start of each substep.
@@ -151,24 +151,18 @@ contains
   subroutine boundary_conditions_cylinder(self)
     implicit none
     class(case_cylinder_t) :: self
-    real(dp) :: cfl
+    real(dp) :: out_vel
 
-    cfl = self%compute_outflow_cfl()
+    call self%compute_outflow_params(out_vel)
 
-    ! u: Dirichlet inflow = 1, convective outflow
     call self%solver%backend%field_set_face( &
-        self%solver%u, 1._dp, 0._dp, X_FACE, &
-        bc_start=BC_DIRICHLET, bc_end=BC_OUTFLOW, cfl=cfl)
+        self%solver%u, 1._dp, out_vel, X_FACE)
 
-    ! v: Dirichlet inflow = 0, convective outflow
     call self%solver%backend%field_set_face( &
-        self%solver%v, 0._dp, 0._dp, X_FACE, &
-        bc_start=BC_DIRICHLET, bc_end=BC_OUTFLOW, cfl=cfl)
+        self%solver%v, 0._dp, out_vel, X_FACE)
 
-    ! w: Dirichlet inflow = 0, convective outflow
     call self%solver%backend%field_set_face( &
-        self%solver%w, 0._dp, 0._dp, X_FACE, &
-        bc_start=BC_DIRICHLET, bc_end=BC_OUTFLOW, cfl=cfl)
+        self%solver%w, 0._dp, out_vel, X_FACE) 
   end subroutine boundary_conditions_cylinder
 
   ! ==========================================================================
@@ -179,21 +173,18 @@ contains
     implicit none
     class(case_cylinder_t) :: self
     class(field_t), intent(inout) :: u, v, w
-    real(dp) :: cfl
+    real(dp) :: out_vel
 
-    cfl = self%compute_outflow_cfl()
-
-    call self%solver%backend%field_set_face( &
-        u, 1._dp, 0._dp, X_FACE, &
-        bc_start=BC_DIRICHLET, bc_end=BC_OUTFLOW, cfl=cfl)
+    call self%compute_outflow_params(out_vel)
 
     call self%solver%backend%field_set_face( &
-        v, 0._dp, 0._dp, X_FACE, &
-        bc_start=BC_DIRICHLET, bc_end=BC_OUTFLOW, cfl=cfl)
+        u, 1._dp, out_vel, X_FACE)
 
     call self%solver%backend%field_set_face( &
-        w, 0._dp, 0._dp, X_FACE, &
-        bc_start=BC_DIRICHLET, bc_end=BC_OUTFLOW, cfl=cfl)
+        v, 0._dp, out_vel, X_FACE)
+
+    call self%solver%backend%field_set_face( &
+        w, 0._dp, out_vel, X_FACE) 
   end subroutine pre_correction_cylinder
 
   ! ==========================================================================

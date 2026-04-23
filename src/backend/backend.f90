@@ -250,7 +250,7 @@ module m_base_backend
 
 abstract interface
 subroutine field_set_face(self, f, c_start, c_end, face, &
-                          bc_start, bc_end, cfl)
+                          bc_start, bc_end)
       !! A field is a subdomain with a rectangular cuboid shape.
       !! It has 6 faces, and these faces are either a subdomain boundary
       !! or a global domain boundary based on the location of the subdomain.
@@ -258,7 +258,6 @@ subroutine field_set_face(self, f, c_start, c_end, face, &
       !! 'c_start' and 'c_end' for faces at opposite sides.
       !! 'face' is one of X_FACE, Y_FACE, Z_FACE from common.f90
       !! Optionally, bc_start/bc_end select the BC type (default BC_DIRICHLET).
-      !! When BC_OUTFLOW is used, 'cfl' must be provided.
       import :: base_backend_t
       import :: dp
       import :: field_t
@@ -269,7 +268,6 @@ subroutine field_set_face(self, f, c_start, c_end, face, &
       integer, intent(in) :: face
       integer, optional, intent(in) :: bc_start
       integer, optional, intent(in) :: bc_end
-      real(dp), optional, intent(in) :: cfl
     end subroutine field_set_face
 end interface
 

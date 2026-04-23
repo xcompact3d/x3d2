@@ -195,11 +195,11 @@ contains
   end subroutine field_set_y_face
 
 attributes(global) subroutine field_set_x_face(f, c_start, c_end, &
-                                               bc_start, bc_end, cfl, &
+                                               bc_start, bc_end, &
                                                nx, ny, nz)
   implicit none
   real(dp), device, intent(inout), dimension(:, :, :) :: f
-  real(dp), value, intent(in) :: c_start, c_end, cfl
+  real(dp), value, intent(in) :: c_start, c_end
   integer, value, intent(in) :: bc_start, bc_end
   integer, value, intent(in) :: nx, ny, nz
   integer :: i, b, n_mod, n_y_blocks, y_block, i_max
@@ -222,18 +222,12 @@ attributes(global) subroutine field_set_x_face(f, c_start, c_end, &
   if (i <= i_max) then
     ! --- Left face (j = 1) ---
     select case (bc_start)
-    case (2)
       f(i, 1, b) = c_start
-    case (3)
-      ! f(i, 1, b) = f(i, 1, b) - cfl*(f(i, 1, b) - f(i, 2, b))
     end select
 
     ! --- Right face (j = nx) ---
     select case (bc_end)
-    case (2)
-      f(i, nx, b) = c_end
-    case (3)
-      f(i, nx, b) = f(i, nx, b) - cfl*(f(i, nx, b) - f(i, nx - 1, b))
+      f(i, nx, b) = f(i, nx, b) - c_end*(f(i, nx, b) - f(i, nx - 1, b))
     end select
   end if
 end subroutine field_set_x_face
