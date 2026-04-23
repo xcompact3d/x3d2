@@ -39,10 +39,21 @@ function(define_test testfile np backend)
     endif()
     find_package(OpenMP REQUIRED)
     target_link_libraries(${test_name} PRIVATE OpenMP::OpenMP_Fortran)
+
+    if(${backend} STREQUAL omp_tgt)
+      # Note this is somewhat of a hack - hardcoded to build against MI300A
+      target_compile_options(${test_name} PRIVATE "-fopenmp")
+      target_compile_options(${test_name} PRIVATE "-DOMP_TGT")
+      target_link_options(${test_name} PRIVATE "-fopenmp")
+      if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+        target_compile_options(${test_name} PRIVATE "--offload-arch=gfx942")
+        target_link_options(${test_name} PRIVATE "--offload-arch=gfx942")
+      endif()
+    endif()
   endif()
-  target_link_libraries(${test_name} PRIVATE x3d2)
   target_link_libraries(${test_name} PRIVATE x3d2_backends)
   target_link_libraries(${test_name} PRIVATE x3d2_test_utils)
+  target_link_libraries(${test_name} PRIVATE x3d2)
 
 if(WITH_2DECOMPFFT)
   find_package(decomp2d REQUIRED)
@@ -120,6 +131,15 @@ define_verification_test(verification/test_omp_dist_transeq.f90 ${CMAKE_CTEST_NP
 define_verification_test(verification/test_time_integrator.f90 1 omp)
 if(WITH_2DECOMPFFT)
   define_verification_test(verification/test_fft.f90 4 omp)
+endif()
+
+if(${OMP_TGT})
+  # OMP TGT unit tests
+  define_test(unit/test_vecadd.f90 1 omp_tgt)
+  define_test(unit/test_setget_field.f90 1 omp_tgt)
+
+  # OMP TGT verification tests
+  define_test(verification/test_time_integrator.f90 1 omp_tgt)
 endif()
 
 # Performance tests (benchmarks, excluded from CI)

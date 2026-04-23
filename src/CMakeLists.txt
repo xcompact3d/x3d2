@@ -10,7 +10,6 @@ set(SRC
   postprocess.f90
   tdsops.f90
   time_integrator.f90
-  ordering.f90
   mesh.f90
   mesh_content.f90
   field.f90
@@ -46,6 +45,9 @@ set(CUDASRC
 )
 set(BACKENDSRC
   backend/omp/backend.f90
+  )
+set(OMPTGTSRC # For OMP offloading
+  backend/omp/target/allocator.f90
   )
 set(2DECOMPFFTSRC
   backend/omp/poisson_fft.f90
@@ -83,10 +85,14 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   list(APPEND BACKENDSRC backend/cuda/backend.f90)
 endif()
 
-# Decide whether 2decomp&fft is supported by the build
-find_package(decomp2d)
+if(OMP_TGT)
+  list(APPEND SRC ${OMPTGTSRC})
+  list(APPEND BACKENDSRC backend/omp/target/backend.f90)
+endif()
 
 if(WITH_2DECOMPFFT)
+  # Decide whether 2decomp&fft is supported by the build
+  find_package(decomp2d)
   list(APPEND SRC ${2DECOMPFFTSRC})
 else()
   list(APPEND SRC ${DUMMYDECOMPSRC})
@@ -106,8 +112,8 @@ target_include_directories(x3d2_backends INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(x3d2_backends PRIVATE x3d2)
 
 add_executable(xcompact xcompact.f90)
-target_link_libraries(xcompact PRIVATE x3d2)
 target_link_libraries(xcompact PRIVATE x3d2_backends)
+target_link_libraries(xcompact PRIVATE x3d2)
 
 # if CUDA compiler
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
@@ -121,15 +127,21 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   target_compile_options(xcompact PRIVATE "-DCUDA")
 
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
-       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang")
+       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
+       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
   set(CMAKE_Fortran_FLAGS "-cpp -std=f2018")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math")
+  if (OMP_TGT)
+    # A bit of a hack - hardcoded for MI300A
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp --offload-arch=gfx942")
+  endif()
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
   set(CMAKE_Fortran_FLAGS "-eF -M878") # -M878 suppresses WARNING multiple module includes (not useful)
   set(CMAKE_Fortran_FLAGS_DEBUG "-G2 -O0")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3")
   target_link_options(x3d2 INTERFACE -h omp)
+  target_link_options(x3d2_backends INTERFACE -h omp)
 endif()
 
 if(WITH_2DECOMPFFT)

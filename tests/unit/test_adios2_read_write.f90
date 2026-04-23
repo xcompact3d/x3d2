@@ -36,7 +36,7 @@ program test_adios2
     do j = 1, iny
       do i = 1, inx
         data_write(i, j, k) = real(irank*inx*iny*inz + (k - 1)*inx*iny &
-                           + (j - 1)*inx + (i - 1), dp)
+                                   + (j - 1)*inx + (i - 1), dp)
       end do
     end do
   end do
@@ -103,11 +103,11 @@ program test_adios2
 
     if (allocated(data_read)) deallocate (data_read)
     call adios2_reader%finalise()
-    if (allocated(adios2_reader)) deallocate(adios2_reader)
+    if (allocated(adios2_reader)) deallocate (adios2_reader)
   end if
 
   ! cleanup writer
-  if (allocated(adios2_writer)) deallocate(adios2_writer)
+  if (allocated(adios2_writer)) deallocate (adios2_writer)
 
   ! Cleanup and finalize
   call MPI_Barrier(MPI_COMM_WORLD, ierr)
