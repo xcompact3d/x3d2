@@ -44,6 +44,7 @@ module m_base_backend
     procedure(vecmult), deferred :: vecmult
     procedure(scalar_product), deferred :: scalar_product
     procedure(field_max_mean), deferred :: field_max_mean
+    procedure(slice_max_sum), deferred :: slice_max_sum
     procedure(field_ops), deferred :: field_scale
     procedure(field_ops), deferred :: field_shift
     procedure(field_reduce), deferred :: field_volume_integral
@@ -248,6 +249,19 @@ module m_base_backend
     end subroutine field_max_mean
   end interface
 
+  abstract interface
+  subroutine slice_max_sum(self, max_val, sum_val, f, i_slice, enforced_data_loc)
+    !! Reduces a single slice of f at index i_slice along f's DIR axis.
+    !! Returns signed max (not abs) and signed sum. No division by count.
+    !! Caller is responsible for MPI_Allreduce across ranks.
+    import :: base_backend_t, field_t, dp
+    class(base_backend_t) :: self
+    real(dp), intent(out) :: max_val, sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    integer, optional, intent(in) :: enforced_data_loc
+  end subroutine slice_max_sum
+end interface
 abstract interface
 subroutine field_set_face(self, f, c_start, c_end, face, &
                           bc_start, bc_end, fl_correction)

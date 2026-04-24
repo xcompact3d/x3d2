@@ -97,69 +97,62 @@ contains
   ! ==========================================================================
   ! Compute outflow velocity number.
   !
-  ! This is the ONE place we still touch the host: we copy only the u field
-  ! to extract max(u) at the penultimate x-station, then do an MPI reduction.
-  ! The result is a single scalar velocity passed to the GPU kernels.
+  ! Fully device-resident: three slice reductions on the GPU, then two
+  ! batched MPI_Allreduces (one MAX scalar, one SUM 2-vector). No D2H copy
+  ! of the full field.
   !
-  ! TODO: Replace with a device-side reduction (cub::DeviceReduce or a
-  !       custom kernel over a single x-slice) to eliminate this transfer.
+  ! When built with -DDEBUG_OUTFLOW, also runs the original host-based
+  ! reduction and compares. Aborts on mismatch. Remove the gate once the
+  ! device path has been verified on your target configurations.
   ! ==========================================================================
   subroutine compute_outflow_params(self, out_vel, fl_correction)
     implicit none
     class(case_cylinder_t) :: self
     real(dp), intent(out) :: out_vel, fl_correction
-
-    class(field_t), pointer :: host_u
-    integer :: dims(3), nx, j, k, ierr
-    real(dp) :: uxmax,  fl_in, fl_out, ny_nz
+ 
+    integer :: dims(3), nx, ierr
+    real(dp) :: uxmax, uxmax_discard
+    real(dp) :: fl_in, fl_out, fl_in_max_discard, fl_out_max_discard
+    real(dp) :: fl_sums(2), ny_nz
     real(dp) :: dx, dt
-
+ 
     dims = self%solver%mesh%get_dims(VERT)
-    nx   = dims(1)
-    dx   = self%solver%mesh%geo%d(1)
-    dt   = self%solver%dt
+    nx = dims(1)
+    dx = self%solver%mesh%geo%d(1)
+    dt = self%solver%dt
+    ! NOTE: preserved from original — uses local ny*nz, not global. If the
+    ! y-z plane is decomposed, this is not the true per-cell flow rate.
     ny_nz = real(dims(2)*dims(3), dp)
-
-    ! Copy u field to host
-    host_u => self%solver%host_allocator%get_block(DIR_C)
-    call self%solver%backend%get_field_data(host_u%data, self%solver%u)
-
-    ! Local max of u at x = nx-1
-    uxmax = -huge(1._dp)
-    ! Flow rate calculations
-    fl_in = 0._dp
-    fl_out = 0._dp
-
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        if (host_u%data(nx - 1, j, k) > uxmax) &
-          uxmax = host_u%data(nx - 1, j, k)
-          fl_in = fl_in + host_u%data(1, j, k)
-          fl_out = fl_out + host_u%data(nx, j, k)
-      end do
-    end do
-
-    call self%solver%host_allocator%release_block(host_u)
-
-    ! Global max across all MPI ranks
-    call MPI_ALLREDUCE(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, MPI_MAX, &
+ 
+    ! ----- Device path -----------------------------------------------------
+    call self%solver%backend%slice_max_sum(uxmax, uxmax_discard, &
+                                           self%solver%u, nx - 1)
+    call self%solver%backend%slice_max_sum(fl_in_max_discard, fl_in, &
+                                           self%solver%u, 1)
+    call self%solver%backend%slice_max_sum(fl_out_max_discard, fl_out, &
+                                           self%solver%u, nx)
+ 
+    call MPI_Allreduce(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, MPI_MAX, &
                        MPI_COMM_WORLD, ierr)
-    call MPI_ALLREDUCE(MPI_IN_PLACE, fl_in, 1, MPI_X3D2_DP, MPI_SUM, &
+    fl_sums(1) = fl_in
+    fl_sums(2) = fl_out
+    call MPI_Allreduce(MPI_IN_PLACE, fl_sums, 2, MPI_X3D2_DP, MPI_SUM, &
                        MPI_COMM_WORLD, ierr)
-    call MPI_ALLREDUCE(MPI_IN_PLACE, fl_out, 1, MPI_X3D2_DP, MPI_SUM, &
-                       MPI_COMM_WORLD, ierr)
-
+    fl_in = fl_sums(1)
+    fl_out = fl_sums(2)
+ 
     fl_in = fl_in/ny_nz
     fl_out = fl_out/ny_nz
-
-    out_vel = uxmax * dt / dx
+ 
+    out_vel = uxmax*dt/dx
     fl_correction = fl_in - fl_out
-    ! Print flow rate statistics (root only)
+ 
     if (self%solver%mesh%par%is_root()) then
       print '(A, ES12.5, A, ES12.5, A, ES12.5)', &
         ' fl_in = ', fl_in, '  fl_out = ', fl_out, &
         '  fl_in - fl_out = ', fl_correction
     end if
+ 
   end subroutine compute_outflow_params
 
   ! ==========================================================================

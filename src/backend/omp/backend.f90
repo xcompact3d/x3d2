@@ -43,6 +43,7 @@ module m_omp_backend
     procedure :: vecmult => vecmult_omp
     procedure :: scalar_product => scalar_product_omp
     procedure :: field_max_mean => field_max_mean_omp
+    procedure :: slice_max_sum => slice_max_sum_omp
     procedure :: field_scale => field_scale_omp
     procedure :: field_shift => field_shift_omp
     procedure :: field_set_face => field_set_face_omp
@@ -719,6 +720,77 @@ contains
                        MPI_SUM, MPI_COMM_WORLD, ierr)
 
   end subroutine field_max_mean_omp
+
+  ! =========================================================================
+  ! Add to the OMP backend module, next to field_max_mean_omp
+  ! =========================================================================
+
+  subroutine slice_max_sum_omp(self, max_val, sum_val, f, i_slice, &
+                               enforced_data_loc)
+    !! [[m_base_backend(module):slice_max_sum(interface)]]
+    implicit none
+    class(omp_backend_t) :: self
+    real(dp), intent(out) :: max_val, sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    integer, optional, intent(in) :: enforced_data_loc
+
+    real(dp) :: val, max_p, sum_p
+    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j
+    integer :: i, j, k, k_i, k_j
+
+    if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
+      error stop 'The input field to omp::slice_max_sum does not have a &
+                  &valid f%data_loc. You may enforce a data_loc of your &
+                  &choice as last argument to carry on at your own risk!'
+    end if
+
+    if (present(enforced_data_loc)) then
+      data_loc = enforced_data_loc
+    else
+      data_loc = f%data_loc
+    end if
+
+    dims = self%mesh%get_dims(data_loc)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    if (f%dir == DIR_X) then
+      n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (f%dir == DIR_Y) then
+      n = dims(2); n_j = dims(1); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (f%dir == DIR_Z) then
+      n = dims(3); n_j = dims(1); n_i = dims(2); n_i_pad = dims_padded(2)
+    else
+      error stop 'slice_max_sum does not support DIR_C fields!'
+    end if
+
+    if (i_slice < 1 .or. i_slice > n) then
+      error stop 'slice_max_sum: i_slice out of range'
+    end if
+
+    j = i_slice
+    sum_p = 0._dp
+    max_p = -huge(1._dp)
+
+    !$omp parallel do collapse(2) reduction(+:sum_p) reduction(max:max_p) &
+    !$omp private(k, val)
+    do k_j = 1, (n_j - 1)/SZ + 1
+      do k_i = 1, n_i
+        k = k_j + (k_i - 1)*((n_j - 1)/SZ + 1)
+        do i = 1, min(SZ, n_j - (k_j - 1)*SZ)
+          val = f%data(i, j, k)
+          sum_p = sum_p + val
+          max_p = max(max_p, val)
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+    ! Rank-local values; caller is responsible for MPI_Allreduce.
+    max_val = max_p
+    sum_val = sum_p
+
+  end subroutine slice_max_sum_omp
 
   subroutine field_scale_omp(self, f, a)
     implicit none

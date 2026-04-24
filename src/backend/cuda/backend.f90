@@ -59,6 +59,7 @@ module m_cuda_backend
     procedure :: vecmult => vecmult_cuda
     procedure :: scalar_product => scalar_product_cuda
     procedure :: field_max_mean => field_max_mean_cuda
+    procedure :: slice_max_sum => slice_max_sum_cuda
     procedure :: field_scale => field_scale_cuda
     procedure :: field_shift => field_shift_cuda
     procedure :: field_set_face => field_set_face_cuda
@@ -869,6 +870,89 @@ contains
                        MPI_SUM, MPI_COMM_WORLD, ierr)
 
   end subroutine field_max_mean_cuda
+
+
+  attributes(global) subroutine slice_max_sum_kernel(max_f, sum_f, f, &
+                                                     i_slice, n_i_pad, n_j)
+    !! Reduces a single slice f(i_slice, :, :) (in the kernel's packed-pencil
+    !! indexing). Signed max/sum, no abs. One thread per (y, z) point.
+    implicit none
+    real(dp), device, intent(inout) :: max_f, sum_f
+    real(dp), device, intent(in), dimension(:, :, :) :: f
+    integer, value, intent(in) :: i_slice, n_i_pad, n_j
+    real(dp) :: val
+    integer :: i, b, b_i, b_j, ierr
+ 
+    i = threadIdx%x
+    b_i = blockIdx%x
+    b_j = blockIdx%y
+    b = b_i + (b_j - 1)*n_i_pad
+ 
+    if (i + (b_j - 1)*blockDim%x <= n_j) then
+      val = f(i, i_slice, b)
+      ierr = atomicadd(sum_f, val)
+      ierr = atomicmax(max_f, val)
+    end if
+  end subroutine slice_max_sum_kernel
+ 
+  subroutine slice_max_sum_cuda(self, max_val, sum_val, f, i_slice, &
+                                enforced_data_loc)
+    !! [[m_base_backend(module):slice_max_sum(interface)]]
+    implicit none
+    class(cuda_backend_t) :: self
+    real(dp), intent(out) :: max_val, sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    integer, optional, intent(in) :: enforced_data_loc
+ 
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    real(dp), device, allocatable :: max_d, sum_d
+    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j
+    type(dim3) :: blocks, threads
+ 
+    if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
+      error stop 'The input field to cuda::slice_max_sum does not have a &
+                  &valid f%data_loc. You may enforce a data_loc of your &
+                  &choice as last argument to carry on at your own risk!'
+    end if
+ 
+    if (present(enforced_data_loc)) then
+      data_loc = enforced_data_loc
+    else
+      data_loc = f%data_loc
+    end if
+ 
+    dims = self%mesh%get_dims(data_loc)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+ 
+    if (f%dir == DIR_X) then
+      n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (f%dir == DIR_Y) then
+      n = dims(2); n_j = dims(1); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (f%dir == DIR_Z) then
+      n = dims(3); n_j = dims(2); n_i = dims(1); n_i_pad = dims_padded(1)
+    else
+      error stop 'slice_max_sum does not support DIR_C fields!'
+    end if
+ 
+    if (i_slice < 1 .or. i_slice > n) then
+      error stop 'slice_max_sum: i_slice out of range'
+    end if
+ 
+    call resolve_field_t(f_d, f)
+    allocate (max_d, sum_d)
+    max_d = -huge(1._dp); sum_d = 0._dp
+ 
+    blocks = dim3(n_i, (n_j - 1)/SZ + 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call slice_max_sum_kernel<<<blocks, threads>>>(max_d, sum_d, f_d, & !&
+                                                   i_slice, n_i_pad, n_j)
+ 
+    ! Rank-local values; caller is responsible for MPI_Allreduce.
+    max_val = max_d
+    sum_val = sum_d
+ 
+  end subroutine slice_max_sum_cuda
 
   subroutine field_scale_cuda(self, f, a)
     implicit none
