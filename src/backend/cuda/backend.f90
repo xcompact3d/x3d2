@@ -9,7 +9,7 @@ module m_cuda_backend
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC, &
-                      X_FACE, Y_FACE, Z_FACE
+                      X_FACE, Y_FACE, Z_FACE, BC_DIRICHLET
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t, tdsops_t
@@ -59,6 +59,7 @@ module m_cuda_backend
     procedure :: vecmult => vecmult_cuda
     procedure :: scalar_product => scalar_product_cuda
     procedure :: field_max_mean => field_max_mean_cuda
+    procedure :: slice_max_sum => slice_max_sum_cuda
     procedure :: field_scale => field_scale_cuda
     procedure :: field_shift => field_shift_cuda
     procedure :: field_set_face => field_set_face_cuda
@@ -870,6 +871,89 @@ contains
 
   end subroutine field_max_mean_cuda
 
+
+  attributes(global) subroutine slice_max_sum_kernel(max_f, sum_f, f, &
+                                                     i_slice, n_i_pad, n_j)
+    !! Reduces a single slice f(i_slice, :, :) (in the kernel's packed-pencil
+    !! indexing). Signed max/sum, no abs. One thread per (y, z) point.
+    implicit none
+    real(dp), device, intent(inout) :: max_f, sum_f
+    real(dp), device, intent(in), dimension(:, :, :) :: f
+    integer, value, intent(in) :: i_slice, n_i_pad, n_j
+    real(dp) :: val
+    integer :: i, b, b_i, b_j, ierr
+ 
+    i = threadIdx%x
+    b_i = blockIdx%x
+    b_j = blockIdx%y
+    b = b_i + (b_j - 1)*n_i_pad
+ 
+    if (i + (b_j - 1)*blockDim%x <= n_j) then
+      val = f(i, i_slice, b)
+      ierr = atomicadd(sum_f, val)
+      ierr = atomicmax(max_f, val)
+    end if
+  end subroutine slice_max_sum_kernel
+ 
+  subroutine slice_max_sum_cuda(self, max_val, sum_val, f, i_slice, &
+                                enforced_data_loc)
+    !! [[m_base_backend(module):slice_max_sum(interface)]]
+    implicit none
+    class(cuda_backend_t) :: self
+    real(dp), intent(out) :: max_val, sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    integer, optional, intent(in) :: enforced_data_loc
+ 
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    real(dp), device, allocatable :: max_d, sum_d
+    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j
+    type(dim3) :: blocks, threads
+ 
+    if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
+      error stop 'The input field to cuda::slice_max_sum does not have a &
+                  &valid f%data_loc. You may enforce a data_loc of your &
+                  &choice as last argument to carry on at your own risk!'
+    end if
+ 
+    if (present(enforced_data_loc)) then
+      data_loc = enforced_data_loc
+    else
+      data_loc = f%data_loc
+    end if
+ 
+    dims = self%mesh%get_dims(data_loc)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+ 
+    if (f%dir == DIR_X) then
+      n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (f%dir == DIR_Y) then
+      n = dims(2); n_j = dims(1); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (f%dir == DIR_Z) then
+      n = dims(3); n_j = dims(2); n_i = dims(1); n_i_pad = dims_padded(1)
+    else
+      error stop 'slice_max_sum does not support DIR_C fields!'
+    end if
+ 
+    if (i_slice < 1 .or. i_slice > n) then
+      error stop 'slice_max_sum: i_slice out of range'
+    end if
+ 
+    call resolve_field_t(f_d, f)
+    allocate (max_d, sum_d)
+    max_d = -huge(1._dp); sum_d = 0._dp
+ 
+    blocks = dim3(n_i, (n_j - 1)/SZ + 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call slice_max_sum_kernel<<<blocks, threads>>>(max_d, sum_d, f_d, & !&
+                                                   i_slice, n_i_pad, n_j)
+ 
+    ! Rank-local values; caller is responsible for MPI_Allreduce.
+    max_val = max_d
+    sum_val = sum_d
+ 
+  end subroutine slice_max_sum_cuda
+
   subroutine field_scale_cuda(self, f, a)
     implicit none
 
@@ -910,41 +994,66 @@ contains
 
   end subroutine field_shift_cuda
 
-  subroutine field_set_face_cuda(self, f, c_start, c_end, face)
-    !! [[m_base_backend(module):field_set_face(subroutine)]]
+subroutine field_set_face_cuda(self, f, c_start, c_end, face, &
+                                 bc_start, bc_end, fl_correction)
     implicit none
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: f
     real(dp), intent(in) :: c_start, c_end
     integer, intent(in) :: face
+    integer, optional, intent(in) :: bc_start, bc_end
+    real(dp), optional, intent(in) :: fl_correction
 
     real(dp), device, pointer, dimension(:, :, :) :: f_d
     type(dim3) :: blocks, threads
-    integer :: dims(3), nx, ny, nz
+    integer :: dims(3)
+    integer :: bc_s, bc_e
+    real(dp) :: fl_correction_val
+
 
     if (f%dir /= DIR_X) then
       error stop 'Setting a field face is only supported for DIR_X fields.'
     end if
-
     if (f%data_loc == NULL_LOC) then
-      error stop 'field_set_face require a valid data_loc.'
+      error stop 'field_set_face requires a valid data_loc.'
     end if
 
-    call resolve_field_t(f_d, f)
+    ! --- Resolve optional arguments with safe defaults ---
+    bc_s = BC_DIRICHLET
+    bc_e = BC_DIRICHLET
+    fl_correction_val = 0._dp
 
+    if (present(bc_start)) bc_s = bc_start
+    if (present(bc_end))   bc_e = bc_end
+    if (present(fl_correction))      fl_correction_val = fl_correction
+
+
+    call resolve_field_t(f_d, f)
     dims = self%mesh%get_dims(f%data_loc)
 
     select case (face)
     case (X_FACE)
-      error stop 'Setting X_FACE is not yet supported.'
+      blocks = dim3((SZ - 1)/64 + 1, ((dims(2) - 1)/SZ + 1)*dims(3), 1)
+      threads = dim3(64, 1, 1)
+      call field_set_x_face<<<blocks, threads>>>( &              !&
+          f_d, c_start, c_end, bc_s, bc_e, fl_correction_val, &
+          dims(1), dims(2), dims(3))
+
     case (Y_FACE)
+      if (present(bc_start) .or. present(bc_end)) then
+        if (bc_s /= BC_DIRICHLET .or. bc_e /= BC_DIRICHLET) then
+          error stop 'field_set_face: Y_FACE only supports BC_DIRICHLET.'
+        end if
+      end if
       blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
       threads = dim3(64, 1, 1)
-      call field_set_y_face<<<blocks, threads>>>(f_d, c_start, c_end, & !&
-                                                 dims(1), dims(2), dims(3))
+      call field_set_y_face<<<blocks, threads>>>( &              !&
+          f_d, c_start, c_end, fl_correction_val, dims(1), dims(2), dims(3))
+
     case (Z_FACE)
       error stop 'Setting Z_FACE is not yet supported.'
+
     case default
       error stop 'face is undefined.'
     end select

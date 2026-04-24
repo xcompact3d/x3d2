@@ -13,6 +13,7 @@ module m_time_integrator
     real(dp) :: coeffs(4, 4)
     real(dp) :: rk_b(4, 4)
     real(dp) :: rk_a(3, 3, 4)
+    real(dp) :: gdt  !! Effective timestep for the current substep
     character(len=3) :: sname
     type(flist_t), allocatable :: olds(:, :)
     class(base_backend_t), pointer :: backend
@@ -121,6 +122,9 @@ contains
     init%allocator => allocator
     init%sname = method
 
+    ! initialise gdt to zero; it will be set properly in step routines
+    init%gdt = 0._dp
+
     if (init%sname(1:2) == 'AB') then
       read (init%sname(3:3), *, iostat=stat) init%order
       if (stat /= 0) error stop 'Error reading AB integration order'
@@ -168,6 +172,14 @@ contains
     real(dp), intent(in) :: dt
 
     integer :: i, j
+
+    ! Set gdt: the effective sub-timestep for the current stage.
+    !
+    ! In Xcompact3d, gdt(itr) is the fractional dt used in boundary
+    ! conditions (e.g. convective outflow: cx = uxmax * gdt / dx).
+    ! Each RK sub-timestep advances the solution by b(istage) * dt,
+    ! and sum(b) = 1 so that sum(gdt) = dt over a full step.
+    self%gdt = self%rk_b(self%istage, self%nstage)*dt
 
     ! update solution
     if (self%istage == self%nstage) then
@@ -228,6 +240,10 @@ contains
 
     integer :: i, j
     integer :: nstep
+
+    ! For Adams-Bashforth, there is only one stage per step,
+    ! so gdt is always the full dt.
+    self%gdt = dt
 
     nstep = min(self%istep, self%nstep)
     do i = 1, self%nvars

@@ -493,7 +493,7 @@ contains
         !                d2u/dz2, d2v/dz2
         self%dist_sa(n) = 2*alpha
         self%dist_sc(n) = 0._dp
-        self%coeffs_e(:, 4) = [dsi, csi, bsi, asi, &
+        self%coeffs_e(:, 4) = [2*dsi, 2*csi, 2*bsi, 2*asi, &
                                -2*asi - 2*bsi - 2*csi - 2*dsi, &
                                0._dp, 0._dp, 0._dp, 0._dp]
         self%coeffs_e(:, 3) = [dsi, csi, bsi + dsi, asi + csi, &

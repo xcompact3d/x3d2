@@ -44,6 +44,7 @@ module m_base_backend
     procedure(vecmult), deferred :: vecmult
     procedure(scalar_product), deferred :: scalar_product
     procedure(field_max_mean), deferred :: field_max_mean
+    procedure(slice_max_sum), deferred :: slice_max_sum
     procedure(field_ops), deferred :: field_scale
     procedure(field_ops), deferred :: field_shift
     procedure(field_reduce), deferred :: field_volume_integral
@@ -249,24 +250,41 @@ module m_base_backend
   end interface
 
   abstract interface
-    subroutine field_set_face(self, f, c_start, c_end, face)
+  subroutine slice_max_sum(self, max_val, sum_val, f, i_slice, enforced_data_loc)
+    !! Reduces a single slice of f at index i_slice along f's DIR axis.
+    !! Returns signed max (not abs) and signed sum. No division by count.
+    !! Caller is responsible for MPI_Allreduce across ranks.
+    import :: base_backend_t, field_t, dp
+    class(base_backend_t) :: self
+    real(dp), intent(out) :: max_val, sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    integer, optional, intent(in) :: enforced_data_loc
+  end subroutine slice_max_sum
+end interface
+abstract interface
+subroutine field_set_face(self, f, c_start, c_end, face, &
+                          bc_start, bc_end, fl_correction)
       !! A field is a subdomain with a rectangular cuboid shape.
       !! It has 6 faces, and these faces are either a subdomain boundary
       !! or a global domain boundary based on the location of the subdomain.
       !! This subroutine allows us to set any of these faces to a value,
       !! 'c_start' and 'c_end' for faces at opposite sides.
       !! 'face' is one of X_FACE, Y_FACE, Z_FACE from common.f90
+      !! Optionally, bc_start/bc_end select the BC type (default BC_DIRICHLET).
       import :: base_backend_t
       import :: dp
       import :: field_t
       implicit none
-
       class(base_backend_t) :: self
       class(field_t), intent(inout) :: f
       real(dp), intent(in) :: c_start, c_end
       integer, intent(in) :: face
+      integer, optional, intent(in) :: bc_start
+      integer, optional, intent(in) :: bc_end
+      real(dp), optional, intent(in) :: fl_correction
     end subroutine field_set_face
-  end interface
+end interface
 
   abstract interface
     subroutine copy_data_to_f(self, f, data)

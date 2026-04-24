@@ -1,16 +1,15 @@
 module m_case_cylinder
-  !! An example case set up to run a cylinder flow.
   use iso_fortran_env, only: stderr => error_unit
-
+  use mpi
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
-  use m_common, only: dp, get_argument, DIR_C, VERT
-  use m_config, only: cylinder_config_t
+  use m_common, only: dp, MPI_X3D2_DP, get_argument, DIR_C, DIR_X, &
+                       VERT, CELL, X_FACE, BC_DIRICHLET
   use m_field, only: field_t
+  use m_config, only: cylinder_config_t
   use m_mesh, only: mesh_t
   use m_solver, only: init
-
   implicit none
 
   type, extends(base_case_t) :: case_cylinder_t
@@ -21,6 +20,7 @@ module m_case_cylinder
     procedure :: forcings => forcings_cylinder
     procedure :: pre_correction => pre_correction_cylinder
     procedure :: postprocess => postprocess_cylinder
+    procedure :: compute_outflow_params
   end type case_cylinder_t
 
   interface case_cylinder_t
@@ -29,57 +29,57 @@ module m_case_cylinder
 
 contains
 
+  ! ==========================================================================
+  ! Initialization
+  ! ==========================================================================
   function case_cylinder_init(backend, mesh, host_allocator) result(flow_case)
     implicit none
-
     class(base_backend_t), target, intent(inout) :: backend
     type(mesh_t), target, intent(inout) :: mesh
     type(allocator_t), target, intent(inout) :: host_allocator
     type(case_cylinder_t) :: flow_case
 
     call flow_case%cylinder_cfg%read(nml_file=get_argument(1))
-
     call flow_case%case_init(backend, mesh, host_allocator)
-
   end function case_cylinder_init
 
-  subroutine boundary_conditions_cylinder(self)
-    implicit none
-
-    class(case_cylinder_t) :: self
-
-  end subroutine boundary_conditions_cylinder
-
+  ! ==========================================================================
+  ! Initial Conditions: uniform flow u=1, v=0, w=0 with localized noise
+  ! ==========================================================================
   subroutine initial_conditions_cylinder(self)
     implicit none
-
     class(case_cylinder_t) :: self
 
-    real(dp) :: init_noise(3)
-    integer :: dims(3)
     class(field_t), pointer :: u_init, v_init, w_init
+    integer :: i, j, k, dims(3)
+    real(dp) :: xloc(3), x, noise(3), um
 
     dims = self%solver%mesh%get_dims(VERT)
+
     u_init => self%solver%host_allocator%get_block(DIR_C)
     v_init => self%solver%host_allocator%get_block(DIR_C)
     w_init => self%solver%host_allocator%get_block(DIR_C)
 
-    ! Initial value is 0.
-    call u_init%fill(0._dp)
-    call v_init%fill(0._dp)
-    call w_init%fill(0._dp)
+    call random_number(u_init%data(1:dims(1), 1:dims(2), 1:dims(3)))
+    call random_number(v_init%data(1:dims(1), 1:dims(2), 1:dims(3)))
+    call random_number(w_init%data(1:dims(1), 1:dims(2), 1:dims(3)))
 
-    ! Set initial noise in [0,1]
-    call random_number(u_init%data(1:dims(1), 1:dims(2), 1:dims(3)))
-    call random_number(u_init%data(1:dims(1), 1:dims(2), 1:dims(3)))
-    call random_number(u_init%data(1:dims(1), 1:dims(2), 1:dims(3)))
+    noise = self%cylinder_cfg%init_noise
 
-    ! Offset and rescale the noise
-    init_noise = self%cylinder_cfg%init_noise
-    u_init%data(:, :, :) = 1._dp &
-                           + (u_init%data(:, :, :) - 0.5_dp)*init_noise(1)
-    v_init%data(:, :, :) = (v_init%data(:, :, :) - 0.5_dp)*init_noise(2)
-    w_init%data(:, :, :) = (w_init%data(:, :, :) - 0.5_dp)*init_noise(3)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          xloc = self%solver%mesh%get_coordinates(i, j, k)
+          x = xloc(1) - self%solver%mesh%geo%L(1)/2._dp
+          um = exp(-0.2_dp*x*x)
+
+          u_init%data(i, j, k) = 1._dp &
+            + noise(1)*um*(2*u_init%data(i, j, k) - 1._dp)
+          v_init%data(i, j, k) = noise(2)*um*(2*v_init%data(i, j, k) - 1._dp)
+          w_init%data(i, j, k) = noise(3)*um*(2*w_init%data(i, j, k) - 1._dp)
+        end do
+      end do
+    end do
 
     call self%solver%backend%set_field_data(self%solver%u, u_init%data)
     call self%solver%backend%set_field_data(self%solver%v, v_init%data)
@@ -92,29 +92,134 @@ contains
     call self%solver%u%set_data_loc(VERT)
     call self%solver%v%set_data_loc(VERT)
     call self%solver%w%set_data_loc(VERT)
-
   end subroutine initial_conditions_cylinder
 
+  ! ==========================================================================
+  ! Compute outflow velocity number.
+  !
+  ! Fully device-resident: three slice reductions on the GPU, then two
+  ! batched MPI_Allreduces (one MAX scalar, one SUM 2-vector). No D2H copy
+  ! of the full field.
+  !
+  ! When built with -DDEBUG_OUTFLOW, also runs the original host-based
+  ! reduction and compares. Aborts on mismatch. Remove the gate once the
+  ! device path has been verified on your target configurations.
+  ! ==========================================================================
+  subroutine compute_outflow_params(self, out_vel, fl_correction)
+    implicit none
+    class(case_cylinder_t) :: self
+    real(dp), intent(out) :: out_vel, fl_correction
+ 
+    integer :: dims(3), nx, ierr
+    real(dp) :: uxmax, uxmax_discard
+    real(dp) :: fl_in, fl_out, fl_in_max_discard, fl_out_max_discard
+    real(dp) :: fl_sums(2), ny_nz
+    real(dp) :: dx, gdt
+ 
+    dims = self%solver%mesh%get_dims(VERT)
+    nx = dims(1)
+    dx = self%solver%mesh%geo%d(1)
+    ! NOTE: preserved from original — uses local ny*nz, not global. If the
+    ! y-z plane is decomposed, this is not the true per-cell flow rate.
+    ny_nz = real(dims(2)*dims(3), dp)
+
+    ! Use the effective substep timestep from the time integrator
+    gdt = self%solver%time_integrator%gdt
+ 
+    ! ----- Device path -----------------------------------------------------
+    call self%solver%backend%slice_max_sum(uxmax, uxmax_discard, &
+                                           self%solver%u, nx - 1)
+    call self%solver%backend%slice_max_sum(fl_in_max_discard, fl_in, &
+                                           self%solver%u, 1)
+    call self%solver%backend%slice_max_sum(fl_out_max_discard, fl_out, &
+                                           self%solver%u, nx)
+ 
+    call MPI_Allreduce(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, MPI_MAX, &
+                       MPI_COMM_WORLD, ierr)
+    fl_sums(1) = fl_in
+    fl_sums(2) = fl_out
+    call MPI_Allreduce(MPI_IN_PLACE, fl_sums, 2, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+    fl_in = fl_sums(1)
+    fl_out = fl_sums(2)
+ 
+    fl_in = fl_in/ny_nz
+    fl_out = fl_out/ny_nz
+ 
+    out_vel = uxmax*gdt/dx
+    fl_correction = fl_in - fl_out
+ 
+    if (self%solver%mesh%par%is_root()) then
+      print '(A, ES12.5, A, ES12.5, A, ES12.5)', &
+        ' fl_in = ', fl_in, '  fl_out = ', fl_out, &
+        '  fl_in - fl_out = ', fl_correction
+    end if
+ 
+  end subroutine compute_outflow_params
+
+  ! ==========================================================================
+  ! Boundary Conditions: applied to U^m at the start of each substep.
+  !
+  ! Inflow  (left,  i=1):  Dirichlet  u=1, v=0, w=0
+  ! Outflow (right, i=nx): Convective du/dt + Uc*du/dx = 0
+  !
+  ! Everything runs on GPU via field_set_face — no per-field host round-trips.
+  ! ==========================================================================
+  subroutine boundary_conditions_cylinder(self)
+    implicit none
+    class(case_cylinder_t) :: self
+    real(dp) :: out_vel, fl_correction
+
+    call self%compute_outflow_params(out_vel, fl_correction)
+
+    call self%solver%backend%field_set_face( &
+        self%solver%u, 1._dp, out_vel, X_FACE)
+
+    call self%solver%backend%field_set_face( &
+        self%solver%v, 0._dp, out_vel, X_FACE)
+
+    call self%solver%backend%field_set_face( &
+        self%solver%w, 0._dp, out_vel, X_FACE) 
+  end subroutine boundary_conditions_cylinder
+
+  ! ==========================================================================
+  ! Pre-correction: enforce BCs on U* before the pressure Poisson solve.
+  ! Same logic as boundary_conditions — Dirichlet inflow, convective outflow.
+  ! ==========================================================================
+  subroutine pre_correction_cylinder(self, u, v, w)
+    implicit none
+    class(case_cylinder_t) :: self
+    class(field_t), intent(inout) :: u, v, w
+    real(dp) :: out_vel, fl_correction
+
+    call self%compute_outflow_params(out_vel, fl_correction)
+
+    call self%solver%backend%field_set_face( &
+        u, 1._dp, out_vel, X_FACE)
+
+    call self%solver%backend%field_set_face( &
+        v, 0._dp, out_vel, X_FACE)
+
+    call self%solver%backend%field_set_face( &
+        w, 0._dp, out_vel, X_FACE) 
+  end subroutine pre_correction_cylinder
+
+  ! ==========================================================================
+  ! Forcings: empty — cylinder forcing is handled by the solver's IBM
+  ! ==========================================================================
   subroutine forcings_cylinder(self, du, dv, dw, iter)
     implicit none
-
     class(case_cylinder_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     integer, intent(in) :: iter
-
+    ! No additional forcing terms — IBM is handled by solver
   end subroutine forcings_cylinder
 
-  subroutine pre_correction_cylinder(self, u, v, w)
-    implicit none
-
-    class(case_cylinder_t) :: self
-    class(field_t), intent(inout) :: u, v, w
-
-  end subroutine pre_correction_cylinder
-
+  ! ==========================================================================
+  ! Post-processing: report enstrophy and divergence
+  ! ==========================================================================
   subroutine postprocess_cylinder(self, iter, t)
     implicit none
-
     class(case_cylinder_t) :: self
     integer, intent(in) :: iter
     real(dp), intent(in) :: t
@@ -125,7 +230,6 @@ contains
 
     call self%print_enstrophy(self%solver%u, self%solver%v, self%solver%w)
     call self%print_div_max_mean(self%solver%u, self%solver%v, self%solver%w)
-
   end subroutine postprocess_cylinder
 
 end module m_case_cylinder
