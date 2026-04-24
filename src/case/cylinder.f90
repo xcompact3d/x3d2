@@ -104,19 +104,21 @@ contains
   ! TODO: Replace with a device-side reduction (cub::DeviceReduce or a
   !       custom kernel over a single x-slice) to eliminate this transfer.
   ! ==========================================================================
-  subroutine compute_outflow_params(self, out_vel)
+  subroutine compute_outflow_params(self, out_vel, fl_correction)
     implicit none
     class(case_cylinder_t) :: self
-    real(dp) :: out_vel
+    real(dp), intent(out) :: out_vel, fl_correction
 
     class(field_t), pointer :: host_u
     integer :: dims(3), nx, j, k, ierr
-    real(dp) :: uxmax, dx, dt
+    real(dp) :: uxmax,  fl_in, fl_out, ny_nz
+    real(dp) :: dx, dt
 
     dims = self%solver%mesh%get_dims(VERT)
     nx   = dims(1)
     dx   = self%solver%mesh%geo%d(1)
     dt   = self%solver%dt
+    ny_nz = real(dims(2)*dims(3), dp)
 
     ! Copy u field to host
     host_u => self%solver%host_allocator%get_block(DIR_C)
@@ -124,10 +126,16 @@ contains
 
     ! Local max of u at x = nx-1
     uxmax = -huge(1._dp)
+    ! Flow rate calculations
+    fl_in = 0._dp
+    fl_out = 0._dp
+
     do k = 1, dims(3)
       do j = 1, dims(2)
         if (host_u%data(nx - 1, j, k) > uxmax) &
           uxmax = host_u%data(nx - 1, j, k)
+          fl_in = fl_in + host_u%data(1, j, k)
+          fl_out = fl_out + host_u%data(nx, j, k)
       end do
     end do
 
@@ -136,8 +144,22 @@ contains
     ! Global max across all MPI ranks
     call MPI_ALLREDUCE(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, MPI_MAX, &
                        MPI_COMM_WORLD, ierr)
+    call MPI_ALLREDUCE(MPI_IN_PLACE, fl_in, 1, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+    call MPI_ALLREDUCE(MPI_IN_PLACE, fl_out, 1, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+
+    fl_in = fl_in/ny_nz
+    fl_out = fl_out/ny_nz
 
     out_vel = uxmax * dt / dx
+    fl_correction = fl_in - fl_out
+    ! Print flow rate statistics (root only)
+    if (self%solver%mesh%par%is_root()) then
+      print '(A, ES12.5, A, ES12.5, A, ES12.5)', &
+        ' fl_in = ', fl_in, '  fl_out = ', fl_out, &
+        '  fl_in - fl_out = ', fl_correction
+    end if
   end subroutine compute_outflow_params
 
   ! ==========================================================================
@@ -151,9 +173,9 @@ contains
   subroutine boundary_conditions_cylinder(self)
     implicit none
     class(case_cylinder_t) :: self
-    real(dp) :: out_vel
+    real(dp) :: out_vel, fl_correction
 
-    call self%compute_outflow_params(out_vel)
+    call self%compute_outflow_params(out_vel, fl_correction)
 
     call self%solver%backend%field_set_face( &
         self%solver%u, 1._dp, out_vel, X_FACE)
@@ -173,9 +195,9 @@ contains
     implicit none
     class(case_cylinder_t) :: self
     class(field_t), intent(inout) :: u, v, w
-    real(dp) :: out_vel
+    real(dp) :: out_vel, fl_correction
 
-    call self%compute_outflow_params(out_vel)
+    call self%compute_outflow_params(out_vel, fl_correction)
 
     call self%solver%backend%field_set_face( &
         u, 1._dp, out_vel, X_FACE)

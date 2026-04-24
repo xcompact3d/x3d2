@@ -170,13 +170,13 @@ contains
 
   end subroutine field_max_sum
 
-  attributes(global) subroutine field_set_y_face(f, c_start, c_end, nx, ny, nz)
+  attributes(global) subroutine field_set_y_face(f, c_start, c_end, fl_correction, nx, ny, nz)
     !! Set domain Y_FACE to a constant
     !! c_start at the bottom and c_end at the top
     implicit none
 
     real(dp), device, intent(inout), dimension(:, :, :) :: f
-    real(dp), value, intent(in) :: c_start, c_end
+    real(dp), value, intent(in) :: c_start, c_end, fl_correction
     integer, value, intent(in) :: nx, ny, nz
 
     integer :: i, j, b, n_mod, b_end
@@ -195,11 +195,11 @@ contains
   end subroutine field_set_y_face
 
 attributes(global) subroutine field_set_x_face(f, c_start, c_end, &
-                                               bc_start, bc_end, &
+                                               bc_start, bc_end, fl_correction, &
                                                nx, ny, nz)
   implicit none
   real(dp), device, intent(inout), dimension(:, :, :) :: f
-  real(dp), value, intent(in) :: c_start, c_end
+  real(dp), value, intent(in) :: c_start, c_end, fl_correction
   integer, value, intent(in) :: bc_start, bc_end
   integer, value, intent(in) :: nx, ny, nz
   integer :: i, b, n_mod, n_y_blocks, y_block, i_max
@@ -227,7 +227,7 @@ attributes(global) subroutine field_set_x_face(f, c_start, c_end, &
 
     ! --- Right face (j = nx) ---
     select case (bc_end)
-      f(i, nx, b) = f(i, nx, b) - c_end*(f(i, nx, b) - f(i, nx - 1, b))
+      f(i, nx, b) = f(i, nx, b) - c_end*(f(i, nx, b) - f(i, nx - 1, b)) + fl_correction
     end select
   end if
 end subroutine field_set_x_face

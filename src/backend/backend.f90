@@ -250,7 +250,7 @@ module m_base_backend
 
 abstract interface
 subroutine field_set_face(self, f, c_start, c_end, face, &
-                          bc_start, bc_end)
+                          bc_start, bc_end, fl_correction)
       !! A field is a subdomain with a rectangular cuboid shape.
       !! It has 6 faces, and these faces are either a subdomain boundary
       !! or a global domain boundary based on the location of the subdomain.
@@ -268,6 +268,7 @@ subroutine field_set_face(self, f, c_start, c_end, face, &
       integer, intent(in) :: face
       integer, optional, intent(in) :: bc_start
       integer, optional, intent(in) :: bc_end
+      real(dp), optional, intent(in) :: fl_correction
     end subroutine field_set_face
 end interface
 

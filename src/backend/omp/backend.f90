@@ -741,7 +741,7 @@ contains
   end subroutine field_shift_omp
 
 subroutine field_set_face_omp(self, f, c_start, c_end, face, &
-                              bc_start, bc_end)
+                              bc_start, bc_end, fl_correction)
     !! [[m_base_backend(module):field_set_face(subroutine)]]
     implicit none
 integer, optional, intent(in) :: bc_start
@@ -749,6 +749,7 @@ integer, optional, intent(in) :: bc_start
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: f
     real(dp), intent(in) :: c_start, c_end
+    real(dp), intent(in) :: fl_correction
     integer, intent(in) :: face
 
     integer :: dims(3), k, j, i_mod, k_end
@@ -773,7 +774,8 @@ integer, optional, intent(in) :: bc_start
         k_end = k + (dims(2) - 1)/SZ*dims(3)
         do j = 1, dims(1)
           f%data(1, j, k) = c_start
-          f%data(i_mod, j, k_end) = c_end
+          ! TODO: fix these from OpenMP looking at CUDA implementation
+          f%data(i_mod, j, k_end) = c_end + fl_correction
         end do
       end do
       !$omp end parallel do
