@@ -1,10 +1,11 @@
 program test_cuda_penta
   !! Verification test for the compact10_penta pentadiagonal first-derivative.
   !!
-  !! Runs three grid-refinement convergence studies:
-  !!   1. BC_DIRICHLET: f = sin(pi*x), x in (0,1), require rate >= 4.
-  !!   2. BC_NEUMANN sym=.true.:  f = cos(pi*x), require machine precision.
-  !!   3. BC_NEUMANN sym=.false.: f = sin(pi*x), require machine precision.
+  !! Runs four grid-refinement convergence studies:
+  !!   1. BC_DIRICHLET: f = sin^3(pi*x),    require rate >= 4.
+  !!   2. BC_NEUMANN sym=.true.:  f = cos(10*pi*x), require rate >= 9.
+  !!   3. BC_NEUMANN sym=.false.: f = sin(10*pi*x), require rate >= 9.
+  !!   4. BC_PERIODIC: f = sin(2*pi*x)+0.3*cos(4*pi*x), require rate >= 9.
   !!
   !! BC_DIRICHLET uses compact one-sided closures (4th-order, same alpha/beta as
   !! interior) at boundary rows (rows 1-2 and N-1..N); halo cells unused.
@@ -105,12 +106,13 @@ contains
   end subroutine run_dirichlet_test
 
   ! ─────────────────────────────────────────────────────────────────────────────
-  ! BC_NEUMANN sym=.true.: f = cos(pi*x), f' = -pi*sin(pi*x).
+  ! BC_NEUMANN sym=.true.: f = cos(10*pi*x), f' = -10*pi*sin(10*pi*x).
   ! Ghost: even extension about x=0 and x=1 (f(-kh)=f(kh)).
+  ! cos(10*pi*x) has natural even symmetry at both walls so extension is exact.
   ! ─────────────────────────────────────────────────────────────────────────────
   subroutine run_neumann_sym_true()
-    integer, parameter :: n_sizes = 5
-    integer, parameter :: n_glob_arr(n_sizes) = [32, 64, 128, 256, 512]
+    integer, parameter :: n_sizes = 4
+    integer, parameter :: n_glob_arr(n_sizes) = [64, 128, 256, 512]
     real(dp), parameter :: min_rate_tol = 9.0_dp
     integer :: isize, n_glob, n, n_block, n_halo
     real(dp) :: dx, l2_err, l2_prev
@@ -124,7 +126,7 @@ contains
 
     if (nrank == 0) then
       print '(a)', ''
-      print '(a)', 'BC_NEUMANN sym=.true.: f = cos(pi*x)+0.1*cos(3*pi*x) on [0,1]'
+      print '(a)', 'BC_NEUMANN sym=.true.: f = cos(10*pi*x) on [0,1]'
       print '(a6, a16, a10)', 'N', 'L2 error', 'Rate'
     end if
 
@@ -136,7 +138,7 @@ contains
       allocate (u_s(SZ, n_halo, n_block), u_e(SZ, n_halo, n_block))
       allocate (u_dev(SZ, n, n_block), du_dev(SZ, n, n_block))
       allocate (u_s_dev(SZ, n_halo, n_block), u_e_dev(SZ, n_halo, n_block))
-      call fill_wall(u, n, n_block, dx, 0, 'cos_multi')
+      call fill_wall(u, n, n_block, dx, 0, 'cos10')
       ! Start ghost: even extension about x=0 (f(-kh)=f(kh), x_1=0).
       u_s(:, 4, :) = u(:, 2, :)      ! f(-h)  = f(h)  = u_2
       u_s(:, 3, :) = u(:, 3, :)      ! f(-2h) = f(2h) = u_3
@@ -156,7 +158,7 @@ contains
       call exec_dist_penta_compact(du_dev, u_dev, u_s_dev, u_e_dev, &
                                    tdsops, blocks, threads)
       du = du_dev
-      l2_err = l2_norm_wall(du, n, n_block, dx, 0, nproc, 'neg_pi_sin_multi')
+      l2_err = l2_norm_wall(du, n, n_block, dx, 0, nproc, 'neg10pi_sin10')
       call report_rate(l2_err, l2_prev, n_glob, isize, min_rate_tol, &
                        'BC_NEUMANN sym=T')
       l2_prev = l2_err
@@ -165,12 +167,13 @@ contains
   end subroutine run_neumann_sym_true
 
   ! ─────────────────────────────────────────────────────────────────────────────
-  ! BC_NEUMANN sym=.false.: f = sin(pi*x), f' = pi*cos(pi*x).
+  ! BC_NEUMANN sym=.false.: f = sin(10*pi*x), f' = 10*pi*cos(10*pi*x).
   ! Ghost: odd extension about x=0 and x=1 (f(-kh)=-f(kh)).
+  ! sin(10*pi*x) has natural odd symmetry at both walls so extension is exact.
   ! ─────────────────────────────────────────────────────────────────────────────
   subroutine run_neumann_sym_false()
-    integer, parameter :: n_sizes = 5
-    integer, parameter :: n_glob_arr(n_sizes) = [32, 64, 128, 256, 512]
+    integer, parameter :: n_sizes = 4
+    integer, parameter :: n_glob_arr(n_sizes) = [64, 128, 256, 512]
     real(dp), parameter :: min_rate_tol = 9.0_dp
     integer :: isize, n_glob, n, n_block, n_halo
     real(dp) :: dx, l2_err, l2_prev
@@ -184,7 +187,7 @@ contains
 
     if (nrank == 0) then
       print '(a)', ''
-      print '(a)', 'BC_NEUMANN sym=.false.: f = sin(pi*x)+0.1*sin(3*pi*x) on [0,1]'
+      print '(a)', 'BC_NEUMANN sym=.false.: f = sin(10*pi*x) on [0,1]'
       print '(a6, a16, a10)', 'N', 'L2 error', 'Rate'
     end if
 
@@ -196,7 +199,7 @@ contains
       allocate (u_s(SZ, n_halo, n_block), u_e(SZ, n_halo, n_block))
       allocate (u_dev(SZ, n, n_block), du_dev(SZ, n, n_block))
       allocate (u_s_dev(SZ, n_halo, n_block), u_e_dev(SZ, n_halo, n_block))
-      call fill_wall(u, n, n_block, dx, 0, 'sin_multi')
+      call fill_wall(u, n, n_block, dx, 0, 'sin10')
       ! Start ghost: odd extension about x=0 (f(-kh)=-f(kh), x_1=0).
       u_s(:, 4, :) = -u(:, 2, :)     ! f(-h)  = -f(h)  = -u_2
       u_s(:, 3, :) = -u(:, 3, :)     ! f(-2h) = -f(2h) = -u_3
@@ -216,7 +219,7 @@ contains
       call exec_dist_penta_compact(du_dev, u_dev, u_s_dev, u_e_dev, &
                                    tdsops, blocks, threads)
       du = du_dev
-      l2_err = l2_norm_wall(du, n, n_block, dx, 0, nproc, 'pi_cos_multi')
+      l2_err = l2_norm_wall(du, n, n_block, dx, 0, nproc, '10pi_cos10')
       call report_rate(l2_err, l2_prev, n_glob, isize, min_rate_tol, &
                        'BC_NEUMANN sym=F')
       l2_prev = l2_err
@@ -266,8 +269,8 @@ contains
           select case (func)
           case ('sin');       u(i, j, k) = sin(pi*x)
           case ('cos');       u(i, j, k) = cos(pi*x)
-          case ('cos_multi'); u(i, j, k) = cos(pi*x) + 0.1_dp*cos(3._dp*pi*x)
-          case ('sin_multi'); u(i, j, k) = sin(pi*x) + 0.1_dp*sin(3._dp*pi*x)
+          case ('cos10');      u(i, j, k) = cos(10._dp*pi*x)
+          case ('sin10');      u(i, j, k) = sin(10._dp*pi*x)
           end select
         end do
       end do
@@ -328,8 +331,8 @@ contains
     case ('pi_cos');          exact_deriv = pi*cos(pi*x)
     case ('neg_pi_sin');      exact_deriv = -pi*sin(pi*x)
     case ('3pi_sin2cos');     exact_deriv = 3._dp*pi*sin(pi*x)**2*cos(pi*x)
-    case ('neg_pi_sin_multi'); exact_deriv = -pi*sin(pi*x) - 0.3_dp*pi*sin(3._dp*pi*x)
-    case ('pi_cos_multi');    exact_deriv = pi*cos(pi*x) + 0.3_dp*pi*cos(3._dp*pi*x)
+    case ('neg10pi_sin10');   exact_deriv = -10._dp*pi*sin(10._dp*pi*x)
+    case ('10pi_cos10');      exact_deriv = 10._dp*pi*cos(10._dp*pi*x)
     case ('per_deriv');       exact_deriv = 2._dp*pi*cos(2._dp*pi*x) &
                                             - 1.2_dp*pi*sin(4._dp*pi*x)
     end select
