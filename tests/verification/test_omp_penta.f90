@@ -46,19 +46,20 @@ contains
   ! Uses compact one-sided closures (4th-order) at rows 1-2 and N-1..N; halos unused.
   ! ─────────────────────────────────────────────────────────────────────────────
   subroutine run_dirichlet_test()
-    integer, parameter :: n_sizes = 3
-    integer, parameter :: n_glob_arr(n_sizes) = [32, 64, 128]
-    real(dp), parameter :: min_rate_tol = 4.0_dp
+    integer, parameter :: n_sizes = 5
+    integer, parameter :: n_glob_arr(n_sizes) = [32, 64, 128, 256, 512]
+    integer, parameter :: min_rate_tol = 4
+    integer, parameter :: n_skip = 2   ! boundary rows with 4th-order closures
     integer :: isize, n_glob, n, n_block, n_halo
-    real(dp) :: dx, l2_err, l2_prev
+    real(dp) :: dx, l2_err, l2_prev, l2_int, l2_int_prev
     real(dp), allocatable, dimension(:, :, :) :: u, du, u_s, u_e
     type(tdsops_t) :: tdsops
 
-    n_block = 1; n_halo = 4; l2_prev = 0._dp
+    n_block = 1; n_halo = 4; l2_prev = 0._dp; l2_int_prev = 0._dp
 
     if (nrank == 0) then
       print '(a)', ''
-      print '(a)', 'BC_DIRICHLET: f = sin^3(pi*x) on (0,1)'
+      print '(a)', 'BC_DIRICHLET: f = sin^3(pi*x) on (0,1)  [global L2]'
       print '(a6, a16, a10)', 'N', 'L2 error', 'Rate'
     end if
 
@@ -69,7 +70,6 @@ contains
       allocate (u(SZ, n, n_block), du(SZ, n, n_block))
       allocate (u_s(SZ, n_halo, n_block), u_e(SZ, n_halo, n_block))
       call fill_interior(u, n, n_block, dx, 0, 'sin3')
-      ! Halo cells unused for BC_DIRICHLET (compact one-sided closures at boundary rows).
       u_s(:, :, :) = 0._dp
       u_e(:, :, :) = 0._dp
       tdsops = tdsops_init(n, dx, operation='first-deriv', &
@@ -77,8 +77,45 @@ contains
                            bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET)
       call exec_dist_penta_compact(du, u, u_s, u_e, tdsops, n_block)
       l2_err = l2_norm(du, n, n_block, dx, 0, nproc, '3pi_sin2cos')
-      call report_rate(l2_err, l2_prev, n_glob, isize, min_rate_tol, 'BC_DIRICHLET')
+      call report_rate(l2_err, l2_prev, n_glob, isize, real(min_rate_tol, dp), &
+                       'BC_DIRICHLET')
       l2_prev = l2_err
+      l2_int = l2_norm_interior(du, n, n_block, dx, 0, nproc, '3pi_sin2cos', n_skip)
+      l2_int_prev = l2_int   ! stored for interior table below
+      deallocate (u, du, u_s, u_e)
+    end do
+
+    ! ---- Interior-only table (skip n_skip rows at each end, diagnostic only) ----
+    if (nrank == 0) then
+      print '(a)', ''
+      print '(a,i0,a)', 'BC_DIRICHLET: interior only (skip ', n_skip, &
+                         ' rows each end)  [diagnostic, no pass/fail]'
+      print '(a6, a16, a10)', 'N', 'L2 error', 'Rate'
+    end if
+    l2_int_prev = 0._dp
+    do isize = 1, n_sizes
+      n_glob = n_glob_arr(isize)
+      n = n_glob
+      dx = 1._dp/real(n_glob + 1, dp)
+      allocate (u(SZ, n, n_block), du(SZ, n, n_block))
+      allocate (u_s(SZ, n_halo, n_block), u_e(SZ, n_halo, n_block))
+      call fill_interior(u, n, n_block, dx, 0, 'sin3')
+      u_s(:, :, :) = 0._dp
+      u_e(:, :, :) = 0._dp
+      tdsops = tdsops_init(n, dx, operation='first-deriv', &
+                           scheme='compact10_penta', &
+                           bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET)
+      call exec_dist_penta_compact(du, u, u_s, u_e, tdsops, n_block)
+      l2_int = l2_norm_interior(du, n, n_block, dx, 0, nproc, '3pi_sin2cos', n_skip)
+      if (nrank == 0) then
+        if (isize == 1) then
+          print '(i6, es16.4, a10)', n_glob, l2_int, '   ---'
+        else
+          print '(i6, es16.4, f10.2)', n_glob, l2_int, &
+            log(l2_int_prev/l2_int)/log(2.0_dp)
+        end if
+      end if
+      l2_int_prev = l2_int
       deallocate (u, du, u_s, u_e)
     end do
   end subroutine run_dirichlet_test
@@ -255,6 +292,29 @@ contains
                        MPI_COMM_WORLD, ierr)
     l2_norm = sqrt(global_sum/real(n*nproc*n_block, dp))
   end function l2_norm
+
+  real(dp) function l2_norm_interior(du, n, n_block, dx, nrank, nproc, deriv, n_skip)
+    !! L2 error on interior grid, skipping n_skip points at each end.
+    real(dp), intent(in) :: du(SZ, n, n_block)
+    integer, intent(in) :: n, n_block, nrank, nproc, n_skip
+    real(dp), intent(in) :: dx
+    character(*), intent(in) :: deriv
+    integer :: j, k, n_pts
+    real(dp) :: x, err, sum_sq, global_sum
+    sum_sq = 0._dp
+    n_pts = 0
+    do k = 1, n_block
+      do j = n_skip + 1, n - n_skip
+        x = real(nrank*n + j, dp)*dx
+        err = du(1, j, k) - exact_deriv(x, deriv)
+        sum_sq = sum_sq + err*err
+        n_pts = n_pts + 1
+      end do
+    end do
+    call MPI_Allreduce(sum_sq, global_sum, 1, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+    l2_norm_interior = sqrt(global_sum/real(n_pts*nproc, dp))
+  end function l2_norm_interior
 
   real(dp) function l2_norm_wall(du, n, n_block, dx, nrank, nproc, deriv)
     real(dp), intent(in) :: du(SZ, n, n_block)
