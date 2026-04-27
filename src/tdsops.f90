@@ -307,43 +307,6 @@ contains
                                  bfi, &
                                  afi, bfi, 0._dp, 0._dp]
         end if
-      else
-        ! compact10_penta BC_NEUMANN: Vandermonde stencils consistent with the
-        ! ghost-extended LHS (preprocess_penta_dist incorporates the ghost term
-        ! β*f'_0 into the diagonal at row 2 and row n-1).
-        if (symmetry) then
-          ! sym=T: f' odd (f'_0=-f'_2). Row 1 RHS=0 (f'_1=0).
-          ! Row 2 effective LHS (ghost absorbed, f'_1=0): (1-β)*f'_2+α*f'_3+β*f'_4
-          !   → sum=1+α=3/2. Row 3 effective LHS (f'_1=0): α*f'_2+f'_3+α*f'_4+β*f'_5
-          !   → sum=1+2α+β=41/20.
-          self%coeffs_s(:, 1) = 0._dp
-          self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, -1._dp/5._dp, &
-                                 -11._dp/10._dp, &
-                                 27._dp/20._dp, -1._dp/10._dp, 1._dp/20._dp, 0._dp]
-          self%coeffs_s(:, 2) = self%coeffs_s(:, 2)/delta
-          self%coeffs_s(:, 3) = [0._dp, 0._dp, -17._dp/240._dp, &
-                                 -9._dp/10._dp, 3._dp/20._dp, &
-                                 19._dp/30._dp, 3._dp/16._dp, 0._dp, 0._dp]
-          self%coeffs_s(:, 3) = self%coeffs_s(:, 3)/delta
-        else
-          ! sym=F: f' even (f'_0=+f'_2). Row 1 LHS: f'_1+2α*f'_2+2β*f'_3
-          !   → sum=1+2α+2β=21/10.
-          ! Row 2 effective LHS (ghost absorbed): α*f'_1+(1+β)*f'_2+α*f'_3+β*f'_4
-          !   → sum=1+2α+2β=21/10.
-          ! Row 3 LHS: full interior → sum=1+2α+2β=21/10.
-          self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
-                                 -93._dp/40._dp, &
-                                 31._dp/10._dp, -3._dp/2._dp, 9._dp/10._dp, -7._dp/40._dp]
-          self%coeffs_s(:, 1) = self%coeffs_s(:, 1)/delta
-          self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, -19._dp/15._dp, &
-                                 49._dp/60._dp, &
-                                 0._dp, 31._dp/60._dp, -1._dp/15._dp, 0._dp]
-          self%coeffs_s(:, 2) = self%coeffs_s(:, 2)/delta
-          self%coeffs_s(:, 3) = [0._dp, 0._dp, -7._dp/40._dp, &
-                                 -7._dp/10._dp, 0._dp, &
-                                 7._dp/10._dp, 7._dp/40._dp, 0._dp, 0._dp]
-          self%coeffs_s(:, 3) = self%coeffs_s(:, 3)/delta
-        end if
       end if
     case (BC_DIRICHLET)
       if (.not. self%pentadiag) then
@@ -362,20 +325,13 @@ contains
                                0.75_dp, 0._dp, 0._dp, 0._dp]
         self%coeffs_s(:, 2) = self%coeffs_s(:, 2)/delta
       else
-        ! compact10_penta: rows 1-2 use one-sided boundary stencils.
-        ! Derived so that LHS (natural non-periodic truncation) + RHS is
-        ! consistent to 4th order.  Rows 3-4 keep the interior stencil
-        ! set above; for homogeneous Dirichlet the f_0=0 halo contributes
-        ! zero through the interior -cfi coefficient.
-        !
-        ! Row 1: LHS is f'_1 + alpha*f'_2 + beta*f'_3 (no sub-diagonal).
-        ! Coefficients satisfy sum(c_k)=0, sum(k*c_k)=1+alpha+beta=31/20.
+        ! compact10_penta: rows 1-2 use compact one-sided closures (same α,β as
+        ! interior; 4th-order). Ghost halos unused for Dirichlet (u_s=0).
         self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
                                -529._dp/240._dp, &
                                71._dp/20._dp, -9._dp/4._dp, &
                                67._dp/60._dp, -17._dp/80._dp]
         self%coeffs_s(:, 1) = self%coeffs_s(:, 1)/delta
-        ! Row 2: LHS is alpha*f'_1 + f'_2 + alpha*f'_3 + beta*f'_4.
         self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, &
                                -301._dp/240._dp, 103._dp/120._dp, &
                                -3._dp/40._dp, 13._dp/24._dp, &
@@ -412,33 +368,6 @@ contains
                                           -bfi, &
                                           afi, 0._dp, 0._dp, 0._dp]
         end if
-      else
-        ! compact10_penta BC_NEUMANN end boundary: antisymmetric mirror of start
-        ! Vandermonde stencils (updated to match ghost-extended LHS).
-        if (symmetry) then
-          self%coeffs_e(:, n_halo) = 0._dp
-          self%coeffs_e(:, n_halo - 1) = [0._dp, -1._dp/20._dp, 1._dp/10._dp, &
-                                          -27._dp/20._dp, 11._dp/10._dp, &
-                                          1._dp/5._dp, 0._dp, 0._dp, 0._dp]
-          self%coeffs_e(:, n_halo - 1) = self%coeffs_e(:, n_halo - 1)/delta
-          self%coeffs_e(:, n_halo - 2) = [0._dp, 0._dp, -3._dp/16._dp, &
-                                          -19._dp/30._dp, -3._dp/20._dp, &
-                                          9._dp/10._dp, 17._dp/240._dp, 0._dp, 0._dp]
-          self%coeffs_e(:, n_halo - 2) = self%coeffs_e(:, n_halo - 2)/delta
-        else
-          self%coeffs_e(:, n_halo) = [7._dp/40._dp, -9._dp/10._dp, 3._dp/2._dp, &
-                                      -31._dp/10._dp, 93._dp/40._dp, &
-                                      0._dp, 0._dp, 0._dp, 0._dp]
-          self%coeffs_e(:, n_halo) = self%coeffs_e(:, n_halo)/delta
-          self%coeffs_e(:, n_halo - 1) = [0._dp, 1._dp/15._dp, -31._dp/60._dp, &
-                                          0._dp, -49._dp/60._dp, &
-                                          19._dp/15._dp, 0._dp, 0._dp, 0._dp]
-          self%coeffs_e(:, n_halo - 1) = self%coeffs_e(:, n_halo - 1)/delta
-          self%coeffs_e(:, n_halo - 2) = [0._dp, 0._dp, -7._dp/40._dp, &
-                                          -7._dp/10._dp, 0._dp, &
-                                          7._dp/10._dp, 7._dp/40._dp, 0._dp, 0._dp]
-          self%coeffs_e(:, n_halo - 2) = self%coeffs_e(:, n_halo - 2)/delta
-        end if
       end if
     case (BC_DIRICHLET)
       if (.not. self%pentadiag) then
@@ -457,19 +386,16 @@ contains
                                         0.75_dp, 0._dp, 0._dp, 0._dp]
         self%coeffs_e(:, n_halo - 1) = self%coeffs_e(:, n_halo - 1)/delta
       else
-        ! compact10_penta: antisymmetric mirror of start boundary stencils.
-        ! Row n: backward-biased mirror of row-1 start stencil.
-        self%coeffs_e(:, n_halo) = [17._dp/80._dp, &
-                                    -67._dp/60._dp, 9._dp/4._dp, &
-                                    -71._dp/20._dp, 529._dp/240._dp, &
+        ! compact10_penta: rows N, N-1 use compact one-sided closures (mirrored).
+        self%coeffs_e(:, n_halo) = [17._dp/80._dp, -67._dp/60._dp, &
+                                    9._dp/4._dp, -71._dp/20._dp, &
+                                    529._dp/240._dp, &
                                     0._dp, 0._dp, 0._dp, 0._dp]
         self%coeffs_e(:, n_halo) = self%coeffs_e(:, n_halo)/delta
-        ! Row n-1: backward-biased mirror of row-2 start stencil.
-        self%coeffs_e(:, n_halo - 1) = [0._dp, &
-                                        17._dp/240._dp, -13._dp/24._dp, &
-                                        3._dp/40._dp, -103._dp/120._dp, &
-                                        301._dp/240._dp, &
-                                        0._dp, 0._dp, 0._dp]
+        self%coeffs_e(:, n_halo - 1) = [0._dp, 17._dp/240._dp, &
+                                        -13._dp/24._dp, 3._dp/40._dp, &
+                                        -103._dp/120._dp, &
+                                        301._dp/240._dp, 0._dp, 0._dp, 0._dp]
         self%coeffs_e(:, n_halo - 1) = self%coeffs_e(:, n_halo - 1)/delta
       end if
     end select
@@ -1089,7 +1015,7 @@ contains
         u1_1 = 2._dp*alp       ! row 1 LHS: f'_1 + 2α*f'_2 + 2β*f'_3
         self%beta_lhs_s = 2._dp*bet
       end if
-    else
+    else  ! BC_DIRICHLET: compact one-sided closures use same α, β as interior
       u1_1 = alp
       self%beta_lhs_s = bet
     end if
@@ -1113,7 +1039,7 @@ contains
       else
         d_i = (1._dp + bet) - alp*u1_1
       end if
-    else
+    else  ! BC_DIRICHLET: interior diagonal at row 2
       d_i = 1._dp - alp*u1_1
     end if
     self%dist_fw(2) = 1._dp/d_i
