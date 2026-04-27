@@ -58,7 +58,7 @@ contains
 
     if (nrank == 0) then
       print '(a)', ''
-      print '(a)', 'BC_DIRICHLET: f = sin(pi*x) on (0,1)'
+      print '(a)', 'BC_DIRICHLET: f = sin^3(pi*x) on (0,1)'
       print '(a6, a16, a10)', 'N', 'L2 error', 'Rate'
     end if
 
@@ -68,7 +68,7 @@ contains
       dx = 1._dp/real(n_glob + 1, dp)
       allocate (u(SZ, n, n_block), du(SZ, n, n_block))
       allocate (u_s(SZ, n_halo, n_block), u_e(SZ, n_halo, n_block))
-      call fill_interior(u, n, n_block, dx, 0, 'sin')
+      call fill_interior(u, n, n_block, dx, 0, 'sin3')
       ! Halo cells unused for BC_DIRICHLET (compact one-sided closures at boundary rows).
       u_s(:, :, :) = 0._dp
       u_e(:, :, :) = 0._dp
@@ -76,7 +76,7 @@ contains
                            scheme='compact10_penta', &
                            bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET)
       call exec_dist_penta_compact(du, u, u_s, u_e, tdsops, n_block)
-      l2_err = l2_norm(du, n, n_block, dx, 0, nproc, 'pi_cos')
+      l2_err = l2_norm(du, n, n_block, dx, 0, nproc, '3pi_sin2cos')
       call report_rate(l2_err, l2_prev, n_glob, isize, min_rate_tol, 'BC_DIRICHLET')
       l2_prev = l2_err
       deallocate (u, du, u_s, u_e)
@@ -100,7 +100,7 @@ contains
 
     if (nrank == 0) then
       print '(a)', ''
-      print '(a)', 'BC_NEUMANN sym=.true.: f = cos(pi*x) on [0,1]'
+      print '(a)', 'BC_NEUMANN sym=.true.: f = cos(pi*x)+0.1*cos(3*pi*x) on [0,1]'
       print '(a6, a16, a10)', 'N', 'L2 error', 'Rate'
     end if
 
@@ -110,7 +110,7 @@ contains
       dx = 1._dp/real(n_glob - 1, dp)
       allocate (u(SZ, n, n_block), du(SZ, n, n_block))
       allocate (u_s(SZ, n_halo, n_block), u_e(SZ, n_halo, n_block))
-      call fill_wall(u, n, n_block, dx, 0, 'cos')
+      call fill_wall(u, n, n_block, dx, 0, 'cos_multi')
       ! Start ghost: even extension about x=0 (f(-kh)=f(kh), x_1=0).
       u_s(:, 4, :) = u(:, 2, :)     ! f(-h)  = f(h)  = u_2
       u_s(:, 3, :) = u(:, 3, :)     ! f(-2h) = f(2h) = u_3
@@ -126,7 +126,7 @@ contains
                            bc_start=BC_NEUMANN, bc_end=BC_NEUMANN, &
                            sym=.true.)
       call exec_dist_penta_compact(du, u, u_s, u_e, tdsops, n_block)
-      l2_err = l2_norm_wall(du, n, n_block, dx, 0, nproc, 'neg_pi_sin')
+      l2_err = l2_norm_wall(du, n, n_block, dx, 0, nproc, 'neg_pi_sin_multi')
       call report_rate(l2_err, l2_prev, n_glob, isize, min_rate_tol, &
                        'BC_NEUMANN sym=T')
       l2_prev = l2_err
@@ -151,7 +151,7 @@ contains
 
     if (nrank == 0) then
       print '(a)', ''
-      print '(a)', 'BC_NEUMANN sym=.false.: f = sin(pi*x) on [0,1]'
+      print '(a)', 'BC_NEUMANN sym=.false.: f = sin(pi*x)+0.1*sin(3*pi*x) on [0,1]'
       print '(a6, a16, a10)', 'N', 'L2 error', 'Rate'
     end if
 
@@ -161,7 +161,7 @@ contains
       dx = 1._dp/real(n_glob - 1, dp)
       allocate (u(SZ, n, n_block), du(SZ, n, n_block))
       allocate (u_s(SZ, n_halo, n_block), u_e(SZ, n_halo, n_block))
-      call fill_wall(u, n, n_block, dx, 0, 'sin')
+      call fill_wall(u, n, n_block, dx, 0, 'sin_multi')
       ! Start ghost: odd extension about x=0 (f(-kh)=-f(kh), x_1=0).
       u_s(:, 4, :) = -u(:, 2, :)     ! f(-h)  = -f(h)  = -u_2
       u_s(:, 3, :) = -u(:, 3, :)     ! f(-2h) = -f(2h) = -u_3
@@ -177,7 +177,7 @@ contains
                            bc_start=BC_NEUMANN, bc_end=BC_NEUMANN, &
                            sym=.false.)
       call exec_dist_penta_compact(du, u, u_s, u_e, tdsops, n_block)
-      l2_err = l2_norm_wall(du, n, n_block, dx, 0, nproc, 'pi_cos')
+      l2_err = l2_norm_wall(du, n, n_block, dx, 0, nproc, 'pi_cos_multi')
       call report_rate(l2_err, l2_prev, n_glob, isize, min_rate_tol, &
                        'BC_NEUMANN sym=F')
       l2_prev = l2_err
@@ -201,8 +201,9 @@ contains
         x = real(nrank*n + j, dp)*dx
         do i = 1, SZ
           select case (func)
-          case ('sin'); u(i, j, k) = sin(pi*x)
-          case ('cos'); u(i, j, k) = cos(pi*x)
+          case ('sin');       u(i, j, k) = sin(pi*x)
+          case ('cos');       u(i, j, k) = cos(pi*x)
+          case ('sin3');      u(i, j, k) = sin(pi*x)**3
           end select
         end do
       end do
@@ -221,8 +222,10 @@ contains
         x = real(nrank*n + j - 1, dp)*dx
         do i = 1, SZ
           select case (func)
-          case ('sin'); u(i, j, k) = sin(pi*x)
-          case ('cos'); u(i, j, k) = cos(pi*x)
+          case ('sin');       u(i, j, k) = sin(pi*x)
+          case ('cos');       u(i, j, k) = cos(pi*x)
+          case ('cos_multi'); u(i, j, k) = cos(pi*x) + 0.1_dp*cos(3._dp*pi*x)
+          case ('sin_multi'); u(i, j, k) = sin(pi*x) + 0.1_dp*sin(3._dp*pi*x)
           end select
         end do
       end do
@@ -277,8 +280,11 @@ contains
     real(dp), intent(in) :: x
     character(*), intent(in) :: which
     select case (which)
-    case ('pi_cos');     exact_deriv = pi*cos(pi*x)
-    case ('neg_pi_sin'); exact_deriv = -pi*sin(pi*x)
+    case ('pi_cos');          exact_deriv = pi*cos(pi*x)
+    case ('neg_pi_sin');      exact_deriv = -pi*sin(pi*x)
+    case ('3pi_sin2cos');     exact_deriv = 3._dp*pi*sin(pi*x)**2*cos(pi*x)
+    case ('neg_pi_sin_multi'); exact_deriv = -pi*sin(pi*x) - 0.3_dp*pi*sin(3._dp*pi*x)
+    case ('pi_cos_multi');    exact_deriv = pi*cos(pi*x) + 0.3_dp*pi*cos(3._dp*pi*x)
     end select
   end function exact_deriv
 
