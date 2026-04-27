@@ -284,7 +284,7 @@ contains
 
   end subroutine undo_periodicity_y_omp
 
-    subroutine enforce_periodicity_xy_omp(self, f_out, f_in)
+  subroutine enforce_periodicity_xy_omp(self, f_out, f_in)
     implicit none
 
     class(omp_poisson_fft_t) :: self
@@ -295,7 +295,7 @@ contains
 
   end subroutine enforce_periodicity_xy_omp
 
-    subroutine undo_periodicity_xy_omp(self, f_out, f_in)
+  subroutine undo_periodicity_xy_omp(self, f_out, f_in)
     implicit none
 
     class(omp_poisson_fft_t) :: self

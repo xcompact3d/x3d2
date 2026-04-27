@@ -812,7 +812,7 @@ contains
     f%data = f%data + a
   end subroutine field_shift_omp
 
- subroutine field_set_face_omp(self, f, c_start, c_end, face, &
+  subroutine field_set_face_omp(self, f, c_start, c_end, face, &
                                 bc_start, bc_end, fl_correction)
     !! [[m_base_backend(module):field_set_face(subroutine)]]
     implicit none

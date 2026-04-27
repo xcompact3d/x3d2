@@ -5,7 +5,7 @@ module m_case_cylinder
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
   use m_common, only: dp, MPI_X3D2_DP, get_argument, DIR_C, DIR_X, &
-                       VERT, CELL, X_FACE, BC_DIRICHLET
+                      VERT, CELL, X_FACE, BC_DIRICHLET
   use m_field, only: field_t
   use m_config, only: cylinder_config_t
   use m_mesh, only: mesh_t
@@ -74,7 +74,7 @@ contains
           um = exp(-0.2_dp*x*x)
 
           u_init%data(i, j, k) = 1._dp &
-            + noise(1)*um*(2*u_init%data(i, j, k) - 1._dp)
+                                 + noise(1)*um*(2*u_init%data(i, j, k) - 1._dp)
           v_init%data(i, j, k) = noise(2)*um*(2*v_init%data(i, j, k) - 1._dp)
           w_init%data(i, j, k) = noise(3)*um*(2*w_init%data(i, j, k) - 1._dp)
         end do
@@ -109,13 +109,13 @@ contains
     implicit none
     class(case_cylinder_t) :: self
     real(dp), intent(out) :: out_vel, fl_correction
- 
+
     integer :: dims(3), nx, ierr
     real(dp) :: uxmax, uxmax_discard
     real(dp) :: fl_in, fl_out, fl_in_max_discard, fl_out_max_discard
     real(dp) :: fl_sums(2), ny_nz
     real(dp) :: dx, gdt
- 
+
     dims = self%solver%mesh%get_dims(VERT)
     nx = dims(1)
     dx = self%solver%mesh%geo%d(1)
@@ -125,7 +125,7 @@ contains
 
     ! Use the effective substep timestep from the time integrator
     gdt = self%solver%time_integrator%gdt
- 
+
     ! ----- Device path -----------------------------------------------------
     call self%solver%backend%slice_max_sum(uxmax, uxmax_discard, &
                                            self%solver%u, nx - 1)
@@ -133,7 +133,7 @@ contains
                                            self%solver%u, 1)
     call self%solver%backend%slice_max_sum(fl_out_max_discard, fl_out, &
                                            self%solver%u, nx)
- 
+
     call MPI_Allreduce(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, MPI_MAX, &
                        MPI_COMM_WORLD, ierr)
     fl_sums(1) = fl_in
@@ -142,19 +142,19 @@ contains
                        MPI_COMM_WORLD, ierr)
     fl_in = fl_sums(1)
     fl_out = fl_sums(2)
- 
+
     fl_in = fl_in/ny_nz
     fl_out = fl_out/ny_nz
- 
+
     out_vel = uxmax*gdt/dx
     fl_correction = fl_in - fl_out
- 
+
     if (self%solver%mesh%par%is_root()) then
       print '(A, ES12.5, A, ES12.5, A, ES12.5)', &
         ' fl_in = ', fl_in, '  fl_out = ', fl_out, &
         '  fl_in - fl_out = ', fl_correction
     end if
- 
+
   end subroutine compute_outflow_params
 
   ! ==========================================================================
@@ -173,13 +173,13 @@ contains
     call self%compute_outflow_params(out_vel, fl_correction)
 
     call self%solver%backend%field_set_face( &
-        self%solver%u, 1._dp, out_vel, X_FACE)
+      self%solver%u, 1._dp, out_vel, X_FACE)
 
     call self%solver%backend%field_set_face( &
-        self%solver%v, 0._dp, out_vel, X_FACE)
+      self%solver%v, 0._dp, out_vel, X_FACE)
 
     call self%solver%backend%field_set_face( &
-        self%solver%w, 0._dp, out_vel, X_FACE) 
+      self%solver%w, 0._dp, out_vel, X_FACE)
   end subroutine boundary_conditions_cylinder
 
   ! ==========================================================================
@@ -195,13 +195,13 @@ contains
     call self%compute_outflow_params(out_vel, fl_correction)
 
     call self%solver%backend%field_set_face( &
-        u, 1._dp, out_vel, X_FACE)
+      u, 1._dp, out_vel, X_FACE)
 
     call self%solver%backend%field_set_face( &
-        v, 0._dp, out_vel, X_FACE)
+      v, 0._dp, out_vel, X_FACE)
 
     call self%solver%backend%field_set_face( &
-        w, 0._dp, out_vel, X_FACE) 
+      w, 0._dp, out_vel, X_FACE)
   end subroutine pre_correction_cylinder
 
   ! ==========================================================================

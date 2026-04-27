@@ -250,21 +250,21 @@ module m_base_backend
   end interface
 
   abstract interface
-  subroutine slice_max_sum(self, max_val, sum_val, f, i_slice, enforced_data_loc)
+subroutine slice_max_sum(self, max_val, sum_val, f, i_slice, enforced_data_loc)
     !! Reduces a single slice of f at index i_slice along f's DIR axis.
     !! Returns signed max (not abs) and signed sum. No division by count.
     !! Caller is responsible for MPI_Allreduce across ranks.
-    import :: base_backend_t, field_t, dp
-    class(base_backend_t) :: self
-    real(dp), intent(out) :: max_val, sum_val
-    class(field_t), intent(in) :: f
-    integer, intent(in) :: i_slice
-    integer, optional, intent(in) :: enforced_data_loc
-  end subroutine slice_max_sum
-end interface
-abstract interface
-subroutine field_set_face(self, f, c_start, c_end, face, &
-                          bc_start, bc_end, fl_correction)
+      import :: base_backend_t, field_t, dp
+      class(base_backend_t) :: self
+      real(dp), intent(out) :: max_val, sum_val
+      class(field_t), intent(in) :: f
+      integer, intent(in) :: i_slice
+      integer, optional, intent(in) :: enforced_data_loc
+    end subroutine slice_max_sum
+  end interface
+  abstract interface
+    subroutine field_set_face(self, f, c_start, c_end, face, &
+                              bc_start, bc_end, fl_correction)
       !! A field is a subdomain with a rectangular cuboid shape.
       !! It has 6 faces, and these faces are either a subdomain boundary
       !! or a global domain boundary based on the location of the subdomain.
@@ -284,7 +284,7 @@ subroutine field_set_face(self, f, c_start, c_end, face, &
       integer, optional, intent(in) :: bc_end
       real(dp), optional, intent(in) :: fl_correction
     end subroutine field_set_face
-end interface
+  end interface
 
   abstract interface
     subroutine copy_data_to_f(self, f, data)
