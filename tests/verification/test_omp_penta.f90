@@ -13,9 +13,9 @@ program test_omp_penta
   use iso_fortran_env, only: stderr => error_unit
   use mpi
 
-  use m_common, only: dp, pi, MPI_X3D2_DP, BC_DIRICHLET, BC_NEUMANN
+  use m_common, only: dp, pi, MPI_X3D2_DP, BC_PERIODIC, BC_DIRICHLET, BC_NEUMANN
   use m_omp_common, only: SZ
-  use m_omp_exec_dist, only: exec_dist_penta_compact
+  use m_omp_exec_dist, only: exec_dist_penta_compact, exec_dist_penta_periodic
   use m_tdsops, only: tdsops_t, tdsops_init
 
   implicit none
@@ -31,6 +31,7 @@ program test_omp_penta
   call run_dirichlet_test()
   call run_neumann_sym_true()
   call run_neumann_sym_false()
+  call run_periodic_test()
 
   if (allpass) then
     if (nrank == 0) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
@@ -241,6 +242,7 @@ contains
           case ('sin');       u(i, j, k) = sin(pi*x)
           case ('cos');       u(i, j, k) = cos(pi*x)
           case ('sin3');      u(i, j, k) = sin(pi*x)**3
+          case ('sin_per');   u(i, j, k) = sin(2._dp*pi*x) + 0.3_dp*cos(4._dp*pi*x)
           end select
         end do
       end do
@@ -345,8 +347,59 @@ contains
     case ('3pi_sin2cos');     exact_deriv = 3._dp*pi*sin(pi*x)**2*cos(pi*x)
     case ('neg_pi_sin_multi'); exact_deriv = -pi*sin(pi*x) - 0.3_dp*pi*sin(3._dp*pi*x)
     case ('pi_cos_multi');    exact_deriv = pi*cos(pi*x) + 0.3_dp*pi*cos(3._dp*pi*x)
+    case ('per_deriv');       exact_deriv = 2._dp*pi*cos(2._dp*pi*x) &
+                                            - 1.2_dp*pi*sin(4._dp*pi*x)
     end select
   end function exact_deriv
+
+  ! ─────────────────────────────────────────────────────────────────────────────
+  ! BC_PERIODIC: f = sin(2πx)+0.3cos(4πx). Grid: x_j=j/n, j=1..n, h=1/n.
+  ! SMW rank-4 correction restores full 10th-order accuracy.
+  ! ─────────────────────────────────────────────────────────────────────────────
+  subroutine run_periodic_test()
+    integer, parameter :: n_sizes = 4
+    integer, parameter :: n_glob_arr(n_sizes) = [32, 64, 128, 256]
+    real(dp), parameter :: min_rate_tol = 9.0_dp
+    integer :: isize, n_glob, n, n_block, n_halo
+    real(dp) :: dx, l2_err, l2_prev
+    real(dp), allocatable, dimension(:, :, :) :: u, du, u_s, u_e
+    type(tdsops_t) :: tdsops
+
+    n_block = 1; n_halo = 4; l2_prev = 0._dp
+
+    if (nrank == 0) then
+      print '(a)', ''
+      print '(a)', 'BC_PERIODIC: f = sin(2πx)+0.3cos(4πx) on [0,1)'
+      print '(a6, a16, a10)', 'N', 'L2 error', 'Rate'
+    end if
+
+    do isize = 1, n_sizes
+      n_glob = n_glob_arr(isize)
+      n = n_glob
+      dx = 1._dp/real(n_glob, dp)
+      allocate (u(SZ, n, n_block), du(SZ, n, n_block))
+      allocate (u_s(SZ, n_halo, n_block), u_e(SZ, n_halo, n_block))
+      call fill_interior(u, n, n_block, dx, 0, 'sin_per')
+      ! Periodic halos: u_s wraps the end of u back to the start.
+      u_s(:, 4, :) = u(:, n, :)       ! x_{j-1} for j=1: x_{n}  -> u_n
+      u_s(:, 3, :) = u(:, n - 1, :)   ! x_{j-2} for j=1: x_{n-1}
+      u_s(:, 2, :) = u(:, n - 2, :)   ! x_{j-3} for j=1: x_{n-2}
+      u_s(:, 1, :) = u(:, n - 3, :)   ! x_{j-4} for j=1: x_{n-3}
+      u_e(:, 1, :) = u(:, 1, :)       ! x_{j+1} for j=n: x_1 (wrap)
+      u_e(:, 2, :) = u(:, 2, :)       ! x_{j+2} for j=n: x_2
+      u_e(:, 3, :) = u(:, 3, :)       ! x_{j+3} for j=n: x_3
+      u_e(:, 4, :) = u(:, 4, :)       ! x_{j+4} for j=n: x_4
+      tdsops = tdsops_init(n, dx, operation='first-deriv', &
+                           scheme='compact10_penta', &
+                           bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
+      call exec_dist_penta_periodic(du, u, u_s, u_e, tdsops, n_block)
+      l2_err = l2_norm(du, n, n_block, dx, 0, nproc, 'per_deriv')
+      call report_rate(l2_err, l2_prev, n_glob, isize, min_rate_tol, &
+                       'BC_PERIODIC')
+      l2_prev = l2_err
+      deallocate (u, du, u_s, u_e)
+    end do
+  end subroutine run_periodic_test
 
   ! ─────────────────────────────────────────────────────────────────────────────
   ! Print one convergence-table row and check the rate.

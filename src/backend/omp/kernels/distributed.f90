@@ -462,4 +462,232 @@ contains
 
   end subroutine der_penta_full
 
+  subroutine der_penta_periodic( &
+    du, u, u_s, u_e, n_tds, n_rhs, &
+    coeffs_s, coeffs_e, coeffs, &
+    ffr, faf, fsa, fbw, beta_lhs, beta_lhs_s, &
+    alp, bet &
+    )
+    !! Cyclic pentadiagonal compact solve via Sherman-Morrison-Woodbury rank-4 correction.
+    !! A_cyc = A_np + U*W^T where U = [e_1,e_2,e_{n-1},e_n] and W^T encodes the four
+    !! corner coupling pairs; A_np is the non-periodic Thomas factorisation in (ffr,...).
+    implicit none
+
+    real(dp), intent(out), dimension(:, :) :: du
+    real(dp), intent(in), dimension(:, :) :: u, u_s, u_e
+    integer, intent(in) :: n_tds, n_rhs
+    real(dp), intent(in), dimension(:, :) :: coeffs_s, coeffs_e
+    real(dp), intent(in), dimension(:) :: coeffs
+    real(dp), intent(in), dimension(:) :: ffr, faf, fsa, fbw
+    real(dp), intent(in) :: beta_lhs, beta_lhs_s, alp, bet
+
+    integer :: i, j, k
+    real(dp) :: c_m3, c_m2, c_m1, c_j, c_p1, c_p2, c_p3
+    real(dp) :: Z(n_tds, 4)   ! Z(:,k) = A_np^{-1}*e_{pk}; p=[1,2,n-1,n]
+    real(dp) :: M_lu(4, 4)     ! M = I + W^T*Z, factored in-place (Doolittle)
+    real(dp) :: c4(SZ, 4)      ! per-lane SMW correction coefficients
+
+    c_m3 = coeffs(2); c_m2 = coeffs(3); c_m1 = coeffs(4)
+    c_j = coeffs(5)
+    c_p1 = coeffs(6); c_p2 = coeffs(7); c_p3 = coeffs(8)
+
+    ! ── Build RHS (coeffs_s/e = interior stencil for BC_PERIODIC) ─────────────
+    !$omp simd
+    do i = 1, SZ
+      du(i, 1) = coeffs_s(1, 1)*u_s(i, 1) + coeffs_s(2, 1)*u_s(i, 2) &
+                 + coeffs_s(3, 1)*u_s(i, 3) + coeffs_s(4, 1)*u_s(i, 4) &
+                 + coeffs_s(5, 1)*u(i, 1) + coeffs_s(6, 1)*u(i, 2) &
+                 + coeffs_s(7, 1)*u(i, 3) + coeffs_s(8, 1)*u(i, 4) &
+                 + coeffs_s(9, 1)*u(i, 5)
+      du(i, 2) = coeffs_s(1, 2)*u_s(i, 2) + coeffs_s(2, 2)*u_s(i, 3) &
+                 + coeffs_s(3, 2)*u_s(i, 4) + coeffs_s(4, 2)*u(i, 1) &
+                 + coeffs_s(5, 2)*u(i, 2) + coeffs_s(6, 2)*u(i, 3) &
+                 + coeffs_s(7, 2)*u(i, 4) + coeffs_s(8, 2)*u(i, 5) &
+                 + coeffs_s(9, 2)*u(i, 6)
+      du(i, 3) = coeffs_s(1, 3)*u_s(i, 3) + coeffs_s(2, 3)*u_s(i, 4) &
+                 + coeffs_s(3, 3)*u(i, 1) + coeffs_s(4, 3)*u(i, 2) &
+                 + coeffs_s(5, 3)*u(i, 3) + coeffs_s(6, 3)*u(i, 4) &
+                 + coeffs_s(7, 3)*u(i, 5) + coeffs_s(8, 3)*u(i, 6) &
+                 + coeffs_s(9, 3)*u(i, 7)
+      du(i, 4) = coeffs_s(1, 4)*u_s(i, 4) + coeffs_s(2, 4)*u(i, 1) &
+                 + coeffs_s(3, 4)*u(i, 2) + coeffs_s(4, 4)*u(i, 3) &
+                 + coeffs_s(5, 4)*u(i, 4) + coeffs_s(6, 4)*u(i, 5) &
+                 + coeffs_s(7, 4)*u(i, 6) + coeffs_s(8, 4)*u(i, 7) &
+                 + coeffs_s(9, 4)*u(i, 8)
+    end do
+    !$omp end simd
+    do j = 5, n_rhs - 4
+      !$omp simd
+      do i = 1, SZ
+        du(i, j) = c_m3*u(i, j - 3) + c_m2*u(i, j - 2) &
+                   + c_m1*u(i, j - 1) + c_j*u(i, j) &
+                   + c_p1*u(i, j + 1) + c_p2*u(i, j + 2) &
+                   + c_p3*u(i, j + 3)
+      end do
+      !$omp end simd
+    end do
+    !$omp simd
+    do i = 1, SZ
+      j = n_rhs - 3
+      du(i, j) = coeffs_e(1, 1)*u(i, j - 4) + coeffs_e(2, 1)*u(i, j - 3) &
+                 + coeffs_e(3, 1)*u(i, j - 2) + coeffs_e(4, 1)*u(i, j - 1) &
+                 + coeffs_e(5, 1)*u(i, j) + coeffs_e(6, 1)*u(i, j + 1) &
+                 + coeffs_e(7, 1)*u(i, j + 2) + coeffs_e(8, 1)*u(i, j + 3) &
+                 + coeffs_e(9, 1)*u_e(i, 1)
+      j = n_rhs - 2
+      du(i, j) = coeffs_e(1, 2)*u(i, j - 4) + coeffs_e(2, 2)*u(i, j - 3) &
+                 + coeffs_e(3, 2)*u(i, j - 2) + coeffs_e(4, 2)*u(i, j - 1) &
+                 + coeffs_e(5, 2)*u(i, j) + coeffs_e(6, 2)*u(i, j + 1) &
+                 + coeffs_e(7, 2)*u(i, j + 2) + coeffs_e(8, 2)*u_e(i, 1) &
+                 + coeffs_e(9, 2)*u_e(i, 2)
+      j = n_rhs - 1
+      du(i, j) = coeffs_e(1, 3)*u(i, j - 4) + coeffs_e(2, 3)*u(i, j - 3) &
+                 + coeffs_e(3, 3)*u(i, j - 2) + coeffs_e(4, 3)*u(i, j - 1) &
+                 + coeffs_e(5, 3)*u(i, j) + coeffs_e(6, 3)*u(i, j + 1) &
+                 + coeffs_e(7, 3)*u_e(i, 1) + coeffs_e(8, 3)*u_e(i, 2) &
+                 + coeffs_e(9, 3)*u_e(i, 3)
+      j = n_rhs
+      du(i, j) = coeffs_e(1, 4)*u(i, j - 4) + coeffs_e(2, 4)*u(i, j - 3) &
+                 + coeffs_e(3, 4)*u(i, j - 2) + coeffs_e(4, 4)*u(i, j - 1) &
+                 + coeffs_e(5, 4)*u(i, j) + coeffs_e(6, 4)*u_e(i, 1) &
+                 + coeffs_e(7, 4)*u_e(i, 2) + coeffs_e(8, 4)*u_e(i, 3) &
+                 + coeffs_e(9, 4)*u_e(i, 4)
+    end do
+    !$omp end simd
+
+    ! ── Forward substitution: du = L^{-1}*rhs ─────────────────────────────────
+    !$omp simd
+    do i = 1, SZ
+      du(i, 2) = du(i, 2) - faf(2)*du(i, 1)
+    end do
+    !$omp end simd
+    do j = 3, n_tds
+      !$omp simd
+      do i = 1, SZ
+        du(i, j) = du(i, j) - faf(j)*du(i, j - 1) - fsa(j)*du(i, j - 2)
+      end do
+      !$omp end simd
+    end do
+
+    ! ── Backward substitution: du = U^{-1}*(L^{-1}*rhs) = y ──────────────────
+    !$omp simd
+    do i = 1, SZ
+      du(i, n_tds) = du(i, n_tds)*ffr(n_tds)
+      du(i, n_tds - 1) = (du(i, n_tds - 1) - fbw(n_tds - 1)*du(i, n_tds)) &
+                         *ffr(n_tds - 1)
+    end do
+    !$omp end simd
+    do j = n_tds - 2, 2, -1
+      !$omp simd
+      do i = 1, SZ
+        du(i, j) = (du(i, j) - fbw(j)*du(i, j + 1) &
+                    - beta_lhs*du(i, j + 2))*ffr(j)
+      end do
+      !$omp end simd
+    end do
+    !$omp simd
+    do i = 1, SZ
+      du(i, 1) = (du(i, 1) - fbw(1)*du(i, 2) - beta_lhs_s*du(i, 3))*ffr(1)
+    end do
+    !$omp end simd
+
+    ! ── Compute Z(:,k) = A_np^{-1}*e_{pk}; p = [1, 2, n-1, n] ───────────────
+    do k = 1, 4
+      Z(:, k) = 0._dp
+      select case (k)
+      case (1); Z(1, k) = 1._dp
+      case (2); Z(2, k) = 1._dp
+      case (3); Z(n_tds - 1, k) = 1._dp
+      case (4); Z(n_tds, k) = 1._dp
+      end select
+      Z(2, k) = Z(2, k) - faf(2)*Z(1, k)
+      do j = 3, n_tds
+        Z(j, k) = Z(j, k) - faf(j)*Z(j - 1, k) - fsa(j)*Z(j - 2, k)
+      end do
+      Z(n_tds, k) = Z(n_tds, k)*ffr(n_tds)
+      Z(n_tds - 1, k) = (Z(n_tds - 1, k) - fbw(n_tds - 1)*Z(n_tds, k)) &
+                        *ffr(n_tds - 1)
+      do j = n_tds - 2, 2, -1
+        Z(j, k) = (Z(j, k) - fbw(j)*Z(j + 1, k) - beta_lhs*Z(j + 2, k))*ffr(j)
+      end do
+      Z(1, k) = (Z(1, k) - fbw(1)*Z(2, k) - beta_lhs_s*Z(3, k))*ffr(1)
+    end do
+
+    ! ── Form M = I + W^T*Z ─────────────────────────────────────────────────────
+    ! W^T row 1: bet*e_{n-1}^T + alp*e_n^T  (cyclic coupling of row 1)
+    ! W^T row 2: bet*e_n^T
+    ! W^T row 3: bet*e_1^T                   (cyclic coupling of row n-1)
+    ! W^T row 4: alp*e_1^T + bet*e_2^T       (cyclic coupling of row n)
+    M_lu = 0._dp
+    M_lu(1, 1) = 1._dp; M_lu(2, 2) = 1._dp
+    M_lu(3, 3) = 1._dp; M_lu(4, 4) = 1._dp
+    do k = 1, 4
+      M_lu(1, k) = M_lu(1, k) + bet*Z(n_tds - 1, k) + alp*Z(n_tds, k)
+      M_lu(2, k) = M_lu(2, k) + bet*Z(n_tds, k)
+      M_lu(3, k) = M_lu(3, k) + bet*Z(1, k)
+      M_lu(4, k) = M_lu(4, k) + alp*Z(1, k) + bet*Z(2, k)
+    end do
+
+    ! ── LU factorize M (Doolittle, 4×4, no pivoting) ──────────────────────────
+    M_lu(2, 1) = M_lu(2, 1)/M_lu(1, 1)
+    M_lu(3, 1) = M_lu(3, 1)/M_lu(1, 1)
+    M_lu(4, 1) = M_lu(4, 1)/M_lu(1, 1)
+    M_lu(2, 2) = M_lu(2, 2) - M_lu(2, 1)*M_lu(1, 2)
+    M_lu(3, 2) = M_lu(3, 2) - M_lu(3, 1)*M_lu(1, 2)
+    M_lu(4, 2) = M_lu(4, 2) - M_lu(4, 1)*M_lu(1, 2)
+    M_lu(2, 3) = M_lu(2, 3) - M_lu(2, 1)*M_lu(1, 3)
+    M_lu(3, 3) = M_lu(3, 3) - M_lu(3, 1)*M_lu(1, 3)
+    M_lu(4, 3) = M_lu(4, 3) - M_lu(4, 1)*M_lu(1, 3)
+    M_lu(2, 4) = M_lu(2, 4) - M_lu(2, 1)*M_lu(1, 4)
+    M_lu(3, 4) = M_lu(3, 4) - M_lu(3, 1)*M_lu(1, 4)
+    M_lu(4, 4) = M_lu(4, 4) - M_lu(4, 1)*M_lu(1, 4)
+    M_lu(3, 2) = M_lu(3, 2)/M_lu(2, 2)
+    M_lu(4, 2) = M_lu(4, 2)/M_lu(2, 2)
+    M_lu(3, 3) = M_lu(3, 3) - M_lu(3, 2)*M_lu(2, 3)
+    M_lu(4, 3) = M_lu(4, 3) - M_lu(4, 2)*M_lu(2, 3)
+    M_lu(3, 4) = M_lu(3, 4) - M_lu(3, 2)*M_lu(2, 4)
+    M_lu(4, 4) = M_lu(4, 4) - M_lu(4, 2)*M_lu(2, 4)
+    M_lu(4, 3) = M_lu(4, 3)/M_lu(3, 3)
+    M_lu(4, 4) = M_lu(4, 4) - M_lu(4, 3)*M_lu(3, 4)
+
+    ! ── Per-lane: c4 = M^{-1} * (W^T * y) ────────────────────────────────────
+    !$omp simd
+    do i = 1, SZ
+      c4(i, 1) = bet*du(i, n_tds - 1) + alp*du(i, n_tds)
+      c4(i, 2) = bet*du(i, n_tds)
+      c4(i, 3) = bet*du(i, 1)
+      c4(i, 4) = alp*du(i, 1) + bet*du(i, 2)
+    end do
+    !$omp end simd
+    !$omp simd
+    do i = 1, SZ
+      c4(i, 2) = c4(i, 2) - M_lu(2, 1)*c4(i, 1)
+      c4(i, 3) = c4(i, 3) - M_lu(3, 1)*c4(i, 1) - M_lu(3, 2)*c4(i, 2)
+      c4(i, 4) = c4(i, 4) - M_lu(4, 1)*c4(i, 1) - M_lu(4, 2)*c4(i, 2) &
+                 - M_lu(4, 3)*c4(i, 3)
+    end do
+    !$omp end simd
+    !$omp simd
+    do i = 1, SZ
+      c4(i, 4) = c4(i, 4)/M_lu(4, 4)
+      c4(i, 3) = (c4(i, 3) - M_lu(3, 4)*c4(i, 4))/M_lu(3, 3)
+      c4(i, 2) = (c4(i, 2) - M_lu(2, 3)*c4(i, 3) - M_lu(2, 4)*c4(i, 4)) &
+                 /M_lu(2, 2)
+      c4(i, 1) = (c4(i, 1) - M_lu(1, 2)*c4(i, 2) - M_lu(1, 3)*c4(i, 3) &
+                 - M_lu(1, 4)*c4(i, 4))/M_lu(1, 1)
+    end do
+    !$omp end simd
+
+    ! ── Apply correction: du = y - Z * c4 ─────────────────────────────────────
+    do j = 1, n_tds
+      !$omp simd
+      do i = 1, SZ
+        du(i, j) = du(i, j) - Z(j, 1)*c4(i, 1) - Z(j, 2)*c4(i, 2) &
+                   - Z(j, 3)*c4(i, 3) - Z(j, 4)*c4(i, 4)
+      end do
+      !$omp end simd
+    end do
+
+  end subroutine der_penta_periodic
+
 end module m_omp_kernels_dist
