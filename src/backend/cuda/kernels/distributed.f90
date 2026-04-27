@@ -834,4 +834,239 @@ contains
 
   end subroutine der_penta_full
 
+  attributes(global) subroutine der_penta_periodic( &
+    du, u, u_s, u_e, n_tds, n_rhs, &
+    coeffs_s, coeffs_e, coeffs, &
+    ffr, faf, fsa, fbw, beta_lhs, beta_lhs_s, &
+    alp, bet &
+    )
+    !! Periodic pentadiagonal Thomas solve via Sherman-Morrison-Woodbury rank-4.
+    !!
+    !! A_cyc = A_np + U*C; U=[e_1|e_2|e_{n-1}|e_n]; C encodes 6 corner entries.
+    !! Thread 1 computes Z_sh(:,k)=A_np^{-1}*e_{pk} and shares via syncthreads.
+    !! Each lane then forms M=I+C*Z, solves M*c=C*y, applies du -= Z*c.
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: du
+    real(dp), device, intent(in), dimension(:, :, :) :: u, u_s, u_e
+    integer, value, intent(in) :: n_tds, n_rhs
+    real(dp), device, intent(in), dimension(:, :) :: coeffs_s, coeffs_e
+    real(dp), device, intent(in), dimension(:) :: coeffs
+    real(dp), device, intent(in), dimension(:) :: ffr, faf, fsa, fbw
+    real(dp), value, intent(in) :: beta_lhs, beta_lhs_s, alp, bet
+
+    integer, parameter :: PENTA_N_MAX = 1024
+    real(dp), shared :: Z_sh(PENTA_N_MAX, 4)
+
+    integer :: i, j, b, kcol, p
+    real(dp) :: c_m3, c_m2, c_m1, c_j, c_p1, c_p2, c_p3
+    real(dp) :: M_lu(4, 4)
+    real(dp) :: tmp1, tmp2, tmp3, tmp4
+    real(dp) :: c4_1, c4_2, c4_3, c4_4
+    integer :: pos(4)
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    c_m3 = coeffs(2); c_m2 = coeffs(3); c_m1 = coeffs(4)
+    c_j = coeffs(5)
+    c_p1 = coeffs(6); c_p2 = coeffs(7); c_p3 = coeffs(8)
+
+    ! ── Build RHS ──────────────────────────────────────────────────────────
+    ! For BC_PERIODIC coeffs_s/e == interior stencil; halos carry periodic extension.
+    du(i, 1, b) = coeffs_s(1, 1)*u_s(i, 1, b) &
+                  + coeffs_s(2, 1)*u_s(i, 2, b) &
+                  + coeffs_s(3, 1)*u_s(i, 3, b) &
+                  + coeffs_s(4, 1)*u_s(i, 4, b) &
+                  + coeffs_s(5, 1)*u(i, 1, b) &
+                  + coeffs_s(6, 1)*u(i, 2, b) &
+                  + coeffs_s(7, 1)*u(i, 3, b) &
+                  + coeffs_s(8, 1)*u(i, 4, b) &
+                  + coeffs_s(9, 1)*u(i, 5, b)
+    du(i, 2, b) = coeffs_s(1, 2)*u_s(i, 2, b) &
+                  + coeffs_s(2, 2)*u_s(i, 3, b) &
+                  + coeffs_s(3, 2)*u_s(i, 4, b) &
+                  + coeffs_s(4, 2)*u(i, 1, b) &
+                  + coeffs_s(5, 2)*u(i, 2, b) &
+                  + coeffs_s(6, 2)*u(i, 3, b) &
+                  + coeffs_s(7, 2)*u(i, 4, b) &
+                  + coeffs_s(8, 2)*u(i, 5, b) &
+                  + coeffs_s(9, 2)*u(i, 6, b)
+    du(i, 3, b) = coeffs_s(1, 3)*u_s(i, 3, b) &
+                  + coeffs_s(2, 3)*u_s(i, 4, b) &
+                  + coeffs_s(3, 3)*u(i, 1, b) &
+                  + coeffs_s(4, 3)*u(i, 2, b) &
+                  + coeffs_s(5, 3)*u(i, 3, b) &
+                  + coeffs_s(6, 3)*u(i, 4, b) &
+                  + coeffs_s(7, 3)*u(i, 5, b) &
+                  + coeffs_s(8, 3)*u(i, 6, b) &
+                  + coeffs_s(9, 3)*u(i, 7, b)
+    du(i, 4, b) = coeffs_s(1, 4)*u_s(i, 4, b) &
+                  + coeffs_s(2, 4)*u(i, 1, b) &
+                  + coeffs_s(3, 4)*u(i, 2, b) &
+                  + coeffs_s(4, 4)*u(i, 3, b) &
+                  + coeffs_s(5, 4)*u(i, 4, b) &
+                  + coeffs_s(6, 4)*u(i, 5, b) &
+                  + coeffs_s(7, 4)*u(i, 6, b) &
+                  + coeffs_s(8, 4)*u(i, 7, b) &
+                  + coeffs_s(9, 4)*u(i, 8, b)
+    do j = 5, n_rhs - 4
+      du(i, j, b) = c_m3*u(i, j - 3, b) + c_m2*u(i, j - 2, b) &
+                    + c_m1*u(i, j - 1, b) + c_j*u(i, j, b) &
+                    + c_p1*u(i, j + 1, b) + c_p2*u(i, j + 2, b) &
+                    + c_p3*u(i, j + 3, b)
+    end do
+    j = n_rhs - 3
+    du(i, j, b) = coeffs_e(1, 1)*u(i, j - 4, b) &
+                  + coeffs_e(2, 1)*u(i, j - 3, b) &
+                  + coeffs_e(3, 1)*u(i, j - 2, b) &
+                  + coeffs_e(4, 1)*u(i, j - 1, b) &
+                  + coeffs_e(5, 1)*u(i, j, b) &
+                  + coeffs_e(6, 1)*u(i, j + 1, b) &
+                  + coeffs_e(7, 1)*u(i, j + 2, b) &
+                  + coeffs_e(8, 1)*u(i, j + 3, b) &
+                  + coeffs_e(9, 1)*u_e(i, 1, b)
+    j = n_rhs - 2
+    du(i, j, b) = coeffs_e(1, 2)*u(i, j - 4, b) &
+                  + coeffs_e(2, 2)*u(i, j - 3, b) &
+                  + coeffs_e(3, 2)*u(i, j - 2, b) &
+                  + coeffs_e(4, 2)*u(i, j - 1, b) &
+                  + coeffs_e(5, 2)*u(i, j, b) &
+                  + coeffs_e(6, 2)*u(i, j + 1, b) &
+                  + coeffs_e(7, 2)*u(i, j + 2, b) &
+                  + coeffs_e(8, 2)*u_e(i, 1, b) &
+                  + coeffs_e(9, 2)*u_e(i, 2, b)
+    j = n_rhs - 1
+    du(i, j, b) = coeffs_e(1, 3)*u(i, j - 4, b) &
+                  + coeffs_e(2, 3)*u(i, j - 3, b) &
+                  + coeffs_e(3, 3)*u(i, j - 2, b) &
+                  + coeffs_e(4, 3)*u(i, j - 1, b) &
+                  + coeffs_e(5, 3)*u(i, j, b) &
+                  + coeffs_e(6, 3)*u(i, j + 1, b) &
+                  + coeffs_e(7, 3)*u_e(i, 1, b) &
+                  + coeffs_e(8, 3)*u_e(i, 2, b) &
+                  + coeffs_e(9, 3)*u_e(i, 3, b)
+    j = n_rhs
+    du(i, j, b) = coeffs_e(1, 4)*u(i, j - 4, b) &
+                  + coeffs_e(2, 4)*u(i, j - 3, b) &
+                  + coeffs_e(3, 4)*u(i, j - 2, b) &
+                  + coeffs_e(4, 4)*u(i, j - 1, b) &
+                  + coeffs_e(5, 4)*u(i, j, b) &
+                  + coeffs_e(6, 4)*u_e(i, 1, b) &
+                  + coeffs_e(7, 4)*u_e(i, 2, b) &
+                  + coeffs_e(8, 4)*u_e(i, 3, b) &
+                  + coeffs_e(9, 4)*u_e(i, 4, b)
+
+    ! ── Thomas forward + backward: y = A_np^{-1} * rhs, stored in du ───────
+    du(i, 2, b) = du(i, 2, b) - faf(2)*du(i, 1, b)
+    do j = 3, n_rhs
+      du(i, j, b) = du(i, j, b) &
+                    - faf(j)*du(i, j - 1, b) &
+                    - fsa(j)*du(i, j - 2, b)
+    end do
+    du(i, n_tds, b) = du(i, n_tds, b)*ffr(n_tds)
+    du(i, n_tds - 1, b) = (du(i, n_tds - 1, b) &
+                            - fbw(n_tds - 1)*du(i, n_tds, b))*ffr(n_tds - 1)
+    do j = n_tds - 2, 2, -1
+      du(i, j, b) = (du(i, j, b) &
+                     - fbw(j)*du(i, j + 1, b) &
+                     - beta_lhs*du(i, j + 2, b))*ffr(j)
+    end do
+    du(i, 1, b) = (du(i, 1, b) &
+                   - fbw(1)*du(i, 2, b) &
+                   - beta_lhs_s*du(i, 3, b))*ffr(1)
+
+    ! ── Thread 1 fills Z_sh columns (4 delta-RHS Thomas solves) ─────────────
+    if (i == 1) then
+      pos(1) = 1; pos(2) = 2; pos(3) = n_tds - 1; pos(4) = n_tds
+      do kcol = 1, 4
+        p = pos(kcol)
+        Z_sh(1:n_tds, kcol) = 0._dp
+        Z_sh(p, kcol) = 1._dp
+        Z_sh(2, kcol) = Z_sh(2, kcol) - faf(2)*Z_sh(1, kcol)
+        do j = 3, n_tds
+          Z_sh(j, kcol) = Z_sh(j, kcol) &
+                          - faf(j)*Z_sh(j - 1, kcol) - fsa(j)*Z_sh(j - 2, kcol)
+        end do
+        Z_sh(n_tds, kcol) = Z_sh(n_tds, kcol)*ffr(n_tds)
+        Z_sh(n_tds - 1, kcol) = (Z_sh(n_tds - 1, kcol) &
+                                  - fbw(n_tds - 1)*Z_sh(n_tds, kcol))*ffr(n_tds - 1)
+        do j = n_tds - 2, 2, -1
+          Z_sh(j, kcol) = (Z_sh(j, kcol) &
+                           - fbw(j)*Z_sh(j + 1, kcol) &
+                           - bet*Z_sh(j + 2, kcol))*ffr(j)
+        end do
+        Z_sh(1, kcol) = (Z_sh(1, kcol) &
+                         - fbw(1)*Z_sh(2, kcol) &
+                         - beta_lhs_s*Z_sh(3, kcol))*ffr(1)
+      end do
+    end if
+    call syncthreads()
+
+    ! ── All lanes: form M = I + C*Z (4×4) ────────────────────────────────
+    M_lu(1, 1) = 1._dp + bet*Z_sh(n_tds - 1, 1) + alp*Z_sh(n_tds, 1)
+    M_lu(1, 2) = bet*Z_sh(n_tds - 1, 2) + alp*Z_sh(n_tds, 2)
+    M_lu(1, 3) = bet*Z_sh(n_tds - 1, 3) + alp*Z_sh(n_tds, 3)
+    M_lu(1, 4) = bet*Z_sh(n_tds - 1, 4) + alp*Z_sh(n_tds, 4)
+    M_lu(2, 1) = bet*Z_sh(n_tds, 1)
+    M_lu(2, 2) = 1._dp + bet*Z_sh(n_tds, 2)
+    M_lu(2, 3) = bet*Z_sh(n_tds, 3)
+    M_lu(2, 4) = bet*Z_sh(n_tds, 4)
+    M_lu(3, 1) = bet*Z_sh(1, 1)
+    M_lu(3, 2) = bet*Z_sh(1, 2)
+    M_lu(3, 3) = 1._dp + bet*Z_sh(1, 3)
+    M_lu(3, 4) = bet*Z_sh(1, 4)
+    M_lu(4, 1) = alp*Z_sh(1, 1) + bet*Z_sh(2, 1)
+    M_lu(4, 2) = alp*Z_sh(1, 2) + bet*Z_sh(2, 2)
+    M_lu(4, 3) = alp*Z_sh(1, 3) + bet*Z_sh(2, 3)
+    M_lu(4, 4) = 1._dp + alp*Z_sh(1, 4) + bet*Z_sh(2, 4)
+
+    ! ── Doolittle LU factorisation of M (no pivoting, in registers) ────────
+    M_lu(2, 1) = M_lu(2, 1)/M_lu(1, 1)
+    M_lu(2, 2) = M_lu(2, 2) - M_lu(2, 1)*M_lu(1, 2)
+    M_lu(2, 3) = M_lu(2, 3) - M_lu(2, 1)*M_lu(1, 3)
+    M_lu(2, 4) = M_lu(2, 4) - M_lu(2, 1)*M_lu(1, 4)
+    M_lu(3, 1) = M_lu(3, 1)/M_lu(1, 1)
+    M_lu(3, 2) = M_lu(3, 2) - M_lu(3, 1)*M_lu(1, 2)
+    M_lu(3, 3) = M_lu(3, 3) - M_lu(3, 1)*M_lu(1, 3)
+    M_lu(3, 4) = M_lu(3, 4) - M_lu(3, 1)*M_lu(1, 4)
+    M_lu(3, 2) = M_lu(3, 2)/M_lu(2, 2)
+    M_lu(3, 3) = M_lu(3, 3) - M_lu(3, 2)*M_lu(2, 3)
+    M_lu(3, 4) = M_lu(3, 4) - M_lu(3, 2)*M_lu(2, 4)
+    M_lu(4, 1) = M_lu(4, 1)/M_lu(1, 1)
+    M_lu(4, 2) = M_lu(4, 2) - M_lu(4, 1)*M_lu(1, 2)
+    M_lu(4, 3) = M_lu(4, 3) - M_lu(4, 1)*M_lu(1, 3)
+    M_lu(4, 4) = M_lu(4, 4) - M_lu(4, 1)*M_lu(1, 4)
+    M_lu(4, 2) = M_lu(4, 2)/M_lu(2, 2)
+    M_lu(4, 3) = M_lu(4, 3) - M_lu(4, 2)*M_lu(2, 3)
+    M_lu(4, 4) = M_lu(4, 4) - M_lu(4, 2)*M_lu(2, 4)
+    M_lu(4, 3) = M_lu(4, 3)/M_lu(3, 3)
+    M_lu(4, 4) = M_lu(4, 4) - M_lu(4, 3)*M_lu(3, 4)
+
+    ! ── Per-lane: form rhs4 = C*y, then solve M*c4 = rhs4 ─────────────────
+    tmp1 = bet*du(i, n_tds - 1, b) + alp*du(i, n_tds, b)
+    tmp2 = bet*du(i, n_tds, b)
+    tmp3 = bet*du(i, 1, b)
+    tmp4 = alp*du(i, 1, b) + bet*du(i, 2, b)
+
+    ! Forward substitution L*c' = rhs4 (unit diagonal)
+    tmp2 = tmp2 - M_lu(2, 1)*tmp1
+    tmp3 = tmp3 - M_lu(3, 1)*tmp1 - M_lu(3, 2)*tmp2
+    tmp4 = tmp4 - M_lu(4, 1)*tmp1 - M_lu(4, 2)*tmp2 - M_lu(4, 3)*tmp3
+
+    ! Backward substitution U*c = c'
+    c4_4 = tmp4/M_lu(4, 4)
+    c4_3 = (tmp3 - M_lu(3, 4)*c4_4)/M_lu(3, 3)
+    c4_2 = (tmp2 - M_lu(2, 3)*c4_3 - M_lu(2, 4)*c4_4)/M_lu(2, 2)
+    c4_1 = (tmp1 - M_lu(1, 2)*c4_2 - M_lu(1, 3)*c4_3 - M_lu(1, 4)*c4_4)/M_lu(1, 1)
+
+    ! ── Apply SMW correction: du -= Z * c4 ────────────────────────────────
+    do j = 1, n_tds
+      du(i, j, b) = du(i, j, b) &
+                    - Z_sh(j, 1)*c4_1 - Z_sh(j, 2)*c4_2 &
+                    - Z_sh(j, 3)*c4_3 - Z_sh(j, 4)*c4_4
+    end do
+
+  end subroutine der_penta_periodic
+
 end module m_cuda_kernels_dist

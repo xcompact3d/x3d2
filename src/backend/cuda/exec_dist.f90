@@ -5,7 +5,7 @@ module m_cuda_exec_dist
   use m_common, only: dp
   use m_cuda_common, only: SZ
   use m_cuda_kernels_dist, only: der_univ_dist, der_univ_subs, &
-                                 der_penta_full, &
+                                 der_penta_full, der_penta_periodic, &
                                  transeq_3fused_dist, transeq_3fused_subs
   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
   use m_cuda_tdsops, only: cuda_tdsops_t
@@ -157,5 +157,30 @@ contains
       )
 
   end subroutine exec_dist_penta_compact
+
+  subroutine exec_dist_penta_periodic( &
+    du, u, u_recv_s, u_recv_e, &
+    tdsops, blocks, threads &
+    )
+    !! Cyclic pentadiagonal compact-FD solve via Sherman-Morrison-Woodbury.
+    !! Halos u_recv_s/e must be set to periodic-extension values by the caller.
+    implicit none
+
+    real(dp), device, dimension(:, :, :), intent(out) :: du
+    real(dp), device, dimension(:, :, :), intent(in) :: u, u_recv_s, u_recv_e
+
+    type(cuda_tdsops_t), intent(in) :: tdsops
+    type(dim3), intent(in) :: blocks, threads
+
+    call der_penta_periodic<<<blocks, threads>>>( & !&
+      du, u, u_recv_s, u_recv_e, &
+      tdsops%n_tds, tdsops%n_rhs, &
+      tdsops%coeffs_s_dev, tdsops%coeffs_e_dev, tdsops%coeffs_dev, &
+      tdsops%dist_fw_dev, tdsops%dist_af_dev, tdsops%dist_sa_dev, &
+      tdsops%dist_bw_dev, real(tdsops%beta, dp), real(tdsops%beta_lhs_s, dp), &
+      real(tdsops%alpha, dp), real(tdsops%beta, dp) &
+      )
+
+  end subroutine exec_dist_penta_periodic
 
 end module m_cuda_exec_dist

@@ -20,9 +20,9 @@ program test_cuda_penta
   use cudafor
   use mpi
 
-  use m_common, only: dp, pi, MPI_X3D2_DP, BC_DIRICHLET, BC_NEUMANN
+  use m_common, only: dp, pi, MPI_X3D2_DP, BC_DIRICHLET, BC_NEUMANN, BC_PERIODIC
   use m_cuda_common, only: SZ
-  use m_cuda_exec_dist, only: exec_dist_penta_compact
+  use m_cuda_exec_dist, only: exec_dist_penta_compact, exec_dist_penta_periodic
   use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
 
   implicit none
@@ -35,6 +35,7 @@ program test_cuda_penta
   call run_dirichlet_test()
   call run_neumann_sym_true()
   call run_neumann_sym_false()
+  call run_periodic_test()
   call finalise()
 
 contains
@@ -243,6 +244,7 @@ contains
           case ('sin');       u(i, j, k) = sin(pi*x)
           case ('cos');       u(i, j, k) = cos(pi*x)
           case ('sin3');      u(i, j, k) = sin(pi*x)**3
+          case ('sin_per');   u(i, j, k) = sin(2._dp*pi*x) + 0.3_dp*cos(4._dp*pi*x)
           end select
         end do
       end do
@@ -328,8 +330,88 @@ contains
     case ('3pi_sin2cos');     exact_deriv = 3._dp*pi*sin(pi*x)**2*cos(pi*x)
     case ('neg_pi_sin_multi'); exact_deriv = -pi*sin(pi*x) - 0.3_dp*pi*sin(3._dp*pi*x)
     case ('pi_cos_multi');    exact_deriv = pi*cos(pi*x) + 0.3_dp*pi*cos(3._dp*pi*x)
+    case ('per_deriv');       exact_deriv = 2._dp*pi*cos(2._dp*pi*x) &
+                                            - 1.2_dp*pi*sin(4._dp*pi*x)
     end select
   end function exact_deriv
+
+  ! ─────────────────────────────────────────────────────────────────────────────
+  ! BC_PERIODIC: f = sin(2*pi*x) + 0.3*cos(4*pi*x), x in [0,1), periodic.
+  ! Grid: N equispaced points, x_j = (j-1)*h, h = 1/N; x_N = (N-1)*h.
+  ! Halos: u_s(:,4)=u(:,N), u_s(:,3)=u(:,N-1), ...; u_e(:,1)=u(:,1), etc.
+  ! ─────────────────────────────────────────────────────────────────────────────
+  subroutine run_periodic_test()
+    integer, parameter :: n_sizes = 4
+    integer, parameter :: n_glob_arr(n_sizes) = [8, 16, 32, 64]
+    real(dp), parameter :: min_rate_tol = 9.0_dp
+    integer :: isize, n_glob, n, n_block, n_halo
+    real(dp) :: dx, l2_err, l2_prev
+    real(dp), allocatable, dimension(:, :, :) :: u, du, u_s, u_e
+    real(dp), device, allocatable, dimension(:, :, :) :: u_dev, du_dev
+    real(dp), device, allocatable, dimension(:, :, :) :: u_s_dev, u_e_dev
+    type(cuda_tdsops_t) :: tdsops
+    type(dim3) :: blocks, threads
+
+    n_block = 1; n_halo = 4; l2_prev = 0._dp
+
+    if (nrank == 0) then
+      print '(a)', ''
+      print '(a)', 'BC_PERIODIC: f = sin(2*pi*x) + 0.3*cos(4*pi*x) on [0,1)'
+      print '(a6, a16, a10)', 'N', 'L2 error', 'Rate'
+    end if
+
+    do isize = 1, n_sizes
+      n_glob = n_glob_arr(isize)
+      n = n_glob
+      dx = 1._dp/real(n_glob, dp)   ! periodic grid: x_j = (j-1)*h, h = 1/N
+      allocate (u(SZ, n, n_block), du(SZ, n, n_block))
+      allocate (u_s(SZ, n_halo, n_block), u_e(SZ, n_halo, n_block))
+      allocate (u_dev(SZ, n, n_block), du_dev(SZ, n, n_block))
+      allocate (u_s_dev(SZ, n_halo, n_block), u_e_dev(SZ, n_halo, n_block))
+      call fill_interior(u, n, n_block, dx, 0, 'sin_per')
+      ! Periodic halos: wrap start from end of domain, end from start.
+      u_s(:, 4, :) = u(:, n, :)
+      u_s(:, 3, :) = u(:, n - 1, :)
+      u_s(:, 2, :) = u(:, n - 2, :)
+      u_s(:, 1, :) = u(:, n - 3, :)
+      u_e(:, 1, :) = u(:, 1, :)
+      u_e(:, 2, :) = u(:, 2, :)
+      u_e(:, 3, :) = u(:, 3, :)
+      u_e(:, 4, :) = u(:, 4, :)
+      u_dev = u; u_s_dev = u_s; u_e_dev = u_e
+      tdsops = cuda_tdsops_init(n, dx, operation='first-deriv', &
+                                scheme='compact10_penta', &
+                                bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
+      blocks = dim3(n_block, 1, 1); threads = dim3(SZ, 1, 1)
+      call exec_dist_penta_periodic(du_dev, u_dev, u_s_dev, u_e_dev, &
+                                    tdsops, blocks, threads)
+      du = du_dev
+      l2_err = l2_norm(du, n, n_block, dx, 0, nproc, 'per_deriv')
+      if (nrank == 0) then
+        if (isize == 1) then
+          print '(i6, es16.4, a10)', n_glob, l2_err, '   ---'
+        else
+          if (l2_prev > 0._dp .and. l2_err > 0._dp) then
+            block
+              real(dp) :: rate
+              rate = log(l2_prev/l2_err)/log(2.0_dp)
+              print '(i6, es16.4, f10.2)', n_glob, l2_err, rate
+              if (rate < min_rate_tol) then
+                allpass = .false.
+                write (stderr, '(a, f5.2, a, f4.1, a)') &
+                  'BC_PERIODIC convergence check... failed (rate = ', rate, &
+                  ', expected >= ', min_rate_tol, ')'
+              end if
+            end block
+          else
+            print '(i6, es16.4, a10)', n_glob, l2_err, '  <eps'
+          end if
+        end if
+      end if
+      l2_prev = l2_err
+      deallocate (u, du, u_s, u_e, u_dev, du_dev, u_s_dev, u_e_dev)
+    end do
+  end subroutine run_periodic_test
 
   ! ─────────────────────────────────────────────────────────────────────────────
   ! Print one convergence-table row and check the rate.
