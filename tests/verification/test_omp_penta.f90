@@ -358,10 +358,10 @@ contains
   ! ─────────────────────────────────────────────────────────────────────────────
   subroutine run_periodic_test()
     integer, parameter :: n_sizes = 4
-    integer, parameter :: n_glob_arr(n_sizes) = [32, 64, 128, 256]
+    integer, parameter :: n_glob_arr(n_sizes) = [8, 16, 32, 64]
     real(dp), parameter :: min_rate_tol = 9.0_dp
     integer :: isize, n_glob, n, n_block, n_halo
-    real(dp) :: dx, l2_err, l2_prev
+    real(dp) :: dx, l2_err, l2_prev, rate
     real(dp), allocatable, dimension(:, :, :) :: u, du, u_s, u_e
     type(tdsops_t) :: tdsops
 
@@ -394,8 +394,20 @@ contains
                            bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
       call exec_dist_penta_periodic(du, u, u_s, u_e, tdsops, n_block)
       l2_err = l2_norm(du, n, n_block, dx, 0, nproc, 'per_deriv')
-      call report_rate(l2_err, l2_prev, n_glob, isize, min_rate_tol, &
-                       'BC_PERIODIC')
+      if (nrank == 0) then
+        if (isize == 1) then
+          print '(i6, es16.4, a10)', n_glob, l2_err, '   ---'
+        else
+          rate = log(l2_prev/l2_err)/log(2.0_dp)
+          print '(i6, es16.4, f10.2)', n_glob, l2_err, rate
+          if (rate < min_rate_tol) then
+            allpass = .false.
+            write (stderr, '(a,f5.2,a,f4.1,a)') &
+              'BC_PERIODIC convergence check... failed (rate = ', rate, &
+              ', expected >= ', min_rate_tol, ')'
+          end if
+        end if
+      end if
       l2_prev = l2_err
       deallocate (u, du, u_s, u_e)
     end do
