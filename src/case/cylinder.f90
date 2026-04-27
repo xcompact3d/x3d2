@@ -114,15 +114,17 @@ contains
     real(dp) :: uxmax, uxmax_discard
     real(dp) :: fl_in, fl_out, fl_in_max_discard, fl_out_max_discard
     real(dp) :: fl_sums(2), ny_nz
-    real(dp) :: dx, dt
+    real(dp) :: dx, gdt
  
     dims = self%solver%mesh%get_dims(VERT)
     nx = dims(1)
     dx = self%solver%mesh%geo%d(1)
-    dt = self%solver%dt
     ! NOTE: preserved from original — uses local ny*nz, not global. If the
     ! y-z plane is decomposed, this is not the true per-cell flow rate.
     ny_nz = real(dims(2)*dims(3), dp)
+
+    ! Use the effective substep timestep from the time integrator
+    gdt = self%solver%time_integrator%gdt
  
     ! ----- Device path -----------------------------------------------------
     call self%solver%backend%slice_max_sum(uxmax, uxmax_discard, &
@@ -144,7 +146,7 @@ contains
     fl_in = fl_in/ny_nz
     fl_out = fl_out/ny_nz
  
-    out_vel = uxmax*dt/dx
+    out_vel = uxmax*gdt/dx
     fl_correction = fl_in - fl_out
  
     if (self%solver%mesh%par%is_root()) then
