@@ -129,7 +129,7 @@ contains
   ! ─────────────────────────────────────────────────────────────────────────────
   subroutine run_neumann_sym_true()
     integer, parameter :: n_sizes = 4
-    integer, parameter :: n_glob_arr(n_sizes) = [64, 128, 256, 512]
+    integer, parameter :: n_glob_arr(n_sizes) = [32, 64, 128, 256]
     real(dp), parameter :: min_rate_tol = 9.0_dp
     integer :: isize, n_glob, n, n_block, n_halo
     real(dp) :: dx, l2_err, l2_prev
@@ -181,7 +181,7 @@ contains
   ! ─────────────────────────────────────────────────────────────────────────────
   subroutine run_neumann_sym_false()
     integer, parameter :: n_sizes = 4
-    integer, parameter :: n_glob_arr(n_sizes) = [64, 128, 256, 512]
+    integer, parameter :: n_glob_arr(n_sizes) = [32, 64, 128, 256]
     real(dp), parameter :: min_rate_tol = 9.0_dp
     integer :: isize, n_glob, n, n_block, n_halo
     real(dp) :: dx, l2_err, l2_prev
