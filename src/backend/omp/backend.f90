@@ -812,11 +812,11 @@ contains
     f%data = f%data + a
   end subroutine field_shift_omp
 
-  subroutine field_set_face_omp(self, f, c_start, c_end, face, &
+ subroutine field_set_face_omp(self, f, c_start, c_end, face, &
                                 bc_start, bc_end, fl_correction)
     !! [[m_base_backend(module):field_set_face(subroutine)]]
     implicit none
- 
+
     class(omp_backend_t) :: self
     class(field_t), intent(inout) :: f
     real(dp), intent(in) :: c_start, c_end
@@ -824,48 +824,35 @@ contains
     integer, optional, intent(in) :: bc_start
     integer, optional, intent(in) :: bc_end
     real(dp), optional, intent(in) :: fl_correction
- 
-    integer :: dims(3), k, j, n_mod, k_end
+
+    integer :: dims(3), k, j, i_mod, k_end
     real(dp) :: fl_corr
- 
+
     if (f%dir /= DIR_X) then
       error stop 'Setting a field face is only supported for DIR_X fields.'
     end if
- 
+
     if (f%data_loc == NULL_LOC) then
       error stop 'field_set_face require a valid data_loc.'
     end if
- 
+
     fl_corr = 0._dp
     if (present(fl_correction)) fl_corr = fl_correction
- 
+
     dims = self%mesh%get_dims(f%data_loc)
- 
+
     select case (face)
     case (X_FACE)
       error stop 'Setting X_FACE is not yet supported.'
     case (Y_FACE)
-      n_mod = mod(dims(2) - 1, SZ) + 1
+      i_mod = mod(dims(2) - 1, SZ) + 1
       !$omp parallel do private(k_end)
       do k = 1, dims(3)
         k_end = k + (dims(2) - 1)/SZ*dims(3)
         do j = 1, dims(1)
-          ! Inflow Dirichlet at y=1
           f%data(1, j, k) = c_start
- 
-          ! Outflow CFL update at y=ny
-          if (n_mod > 1) then
-            f%data(n_mod, j, k_end) = f%data(n_mod, j, k_end) &
-                                      - c_end*(f%data(n_mod, j, k_end) &
-                                               - f%data(n_mod - 1, j, k_end)) &
-                                      + fl_corr
-          else
-            ! n_mod == 1: y=ny-1 lives at lane SZ of row-1 bundle k
-            f%data(n_mod, j, k_end) = f%data(n_mod, j, k_end) &
-                                      - c_end*(f%data(n_mod, j, k_end) &
-                                               - f%data(SZ, j, k)) &
-                                      + fl_corr
-          end if
+          ! TODO: fix these from OpenMP looking at CUDA implementation
+          f%data(i_mod, j, k_end) = c_end
         end do
       end do
       !$omp end parallel do
@@ -874,7 +861,7 @@ contains
     case default
       error stop 'face is undefined.'
     end select
- 
+
   end subroutine field_set_face_omp
 
   real(dp) function field_volume_integral_omp(self, f) result(s)
