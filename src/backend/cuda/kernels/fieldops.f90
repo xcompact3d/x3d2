@@ -222,15 +222,22 @@ contains
     if (i <= i_max) then
       ! --- Left face (j = 1) ---
       select case (bc_start)
-        f(i, 1, b) = c_start
+        case (1) ! BC_NEUMANN
+          !this can be empty for now future TODO
+        case (2) ! BC_DIRICHLET
+          f(i, 1, b) = c_start
       end select
 
       ! --- Right face (j = nx) ---
       select case (bc_end)
-      f(i, nx, b) = f(i, nx, b) - c_end*(f(i, nx, b) - f(i, nx - 1, b)) + fl_correction
+        case (1) !BC_NEUMANN
+          !this can be empty for now future TODO
+        case (2) ! BC_DIRICHLET
+          f(i, nx, b) = f(i, nx, b) - c_end*(f(i, nx, b) - f(i, nx - 1, b)) + fl_correction
       end select
     end if
   end subroutine field_set_x_face
+  
   attributes(global) subroutine volume_integral(s, f, n, n_i_pad, n_j)
     implicit none
 
