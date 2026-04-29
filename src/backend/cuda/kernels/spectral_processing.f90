@@ -101,7 +101,7 @@ contains
   end subroutine transpose_xyz_to_zxy
 
   attributes(global) subroutine transpose_zxy_to_xyz(dst, src, nx, ny, nz)
-    !! Transpose back: src(nz, nx, ny) → dst(nx, ny, nz)
+    !! Transpose back: src(nz, nx, ny) -> dst(nx, ny, nz)
     !! Used after C2R FFT for 110 case.
     !!
     !! Launch: blocks=dim3(nz, (ny-1)/tpb+1, 1), threads=dim3(tpb,1,1)

@@ -688,9 +688,9 @@ contains
       ! =========================================================================
       ! 110 case: Non-periodic X, Non-periodic Y, Periodic Z
       ! Uses Z-TRANSPOSED layout: spectral array is (nz/2+1, nx, ny)
-      !   dim1 (i) indexes Z R2C modes  → use kz, ez
-      !   dim2 (j) indexes X modes      → use kx, ex
-      !   dim3 (k) indexes Y modes      → use ky, ey
+      !   dim1 (i) indexes Z R2C modes  -> use kz, ez
+      !   dim2 (j) indexes X modes      -> use kx, ex
+      !   dim3 (k) indexes Y modes      -> use ky, ey
       ! =========================================================================
       do k = 1, self%nz_spec     ! Y modes
         do j = 1, self%ny_spec   ! X modes

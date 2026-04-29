@@ -399,7 +399,7 @@ contains
   end function init
 
   subroutine fft_forward_110_cuda(self, f)
-    !! Forward FFT for 110 case: transpose (nx,ny,nz)→(nz,nx,ny) then R2C
+    !! Forward FFT for 110 case: transpose (nx,ny,nz)->(nz,nx,ny) then R2C
     implicit none
 
     class(cuda_poisson_fft_t) :: self
@@ -414,7 +414,7 @@ contains
       padded_dev => f%data_d
     end select
 
-    ! Transpose (nx, ny, nz) → (nz, nx, ny)
+    ! Transpose (nx, ny, nz) -> (nz, nx, ny)
     tpb = min(self%ny_loc, 256)
     blocks = dim3(self%nz_loc, (self%ny_loc - 1)/tpb + 1, 1)
     threads = dim3(tpb, 1, 1)
@@ -439,7 +439,7 @@ contains
   end subroutine fft_forward_110_cuda
 
   subroutine fft_backward_110_cuda(self, f)
-    !! Backward FFT for 110 case: C2R then transpose (nz,nx,ny)→(nx,ny,nz)
+    !! Backward FFT for 110 case: C2R then transpose (nz,nx,ny)->(nx,ny,nz)
     implicit none
 
     class(cuda_poisson_fft_t) :: self
@@ -467,7 +467,7 @@ contains
       error stop 'Backward C2R FFT failed (110 Z-transpose case)'
     end if
 
-    ! Transpose (nz, nx, ny) → (nx, ny, nz)
+    ! Transpose (nz, nx, ny) -> (nx, ny, nz)
     padded_dev = 0._dp
 
     tpb = min(self%ny_loc, 256)
@@ -927,7 +927,7 @@ contains
     !! Spectral post-processing for 110 case (R2C Z-transpose)
     !! 7 separate kernel launches to avoid cross-block race conditions.
     !! Spectral array is (nz/2+1, nx, ny) = (nx_spec, ny_spec, nz_spec).
-    !! Thread i→X (ny_spec), blockIdx%y k→Y (nz_spec), serial j→Z (nx_spec).
+    !! Thread i->X (ny_spec), blockIdx%y k->Y (nz_spec), serial j->Z (nx_spec).
     implicit none
 
     class(cuda_poisson_fft_t) :: self
