@@ -14,6 +14,9 @@ module m_case_cylinder
 
   type, extends(base_case_t) :: case_cylinder_t
     type(cylinder_config_t) :: cylinder_cfg
+    real(dp) :: out_vel_cached = 0._dp
+    real(dp) :: fl_correction_cached = 0._dp
+    logical :: outflow_params_valid = .false.
   contains
     procedure :: boundary_conditions => boundary_conditions_cylinder
     procedure :: initial_conditions => initial_conditions_cylinder
@@ -21,6 +24,7 @@ module m_case_cylinder
     procedure :: pre_correction => pre_correction_cylinder
     procedure :: postprocess => postprocess_cylinder
     procedure :: compute_outflow_params
+    procedure :: apply_outflow_bc_cylinder
   end type case_cylinder_t
 
   interface case_cylinder_t
@@ -157,6 +161,20 @@ contains
 
   end subroutine compute_outflow_params
 
+  subroutine apply_outflow_bc_cylinder(self, u, v, w)
+    implicit none
+    class(case_cylinder_t) :: self
+    class(field_t), intent(inout) :: u, v, w
+    real(dp) :: out_vel, fl_correction
+
+    call self%compute_outflow_params(out_vel, fl_correction)
+    call self%solver%backend%field_set_face(u, 1._dp, out_vel, X_FACE, &
+                                            bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, fl_correction=fl_correction)
+    call self%solver%backend%field_set_face(v, 0._dp, out_vel, X_FACE, &
+                                            bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, fl_correction=fl_correction)
+    call self%solver%backend%field_set_face(w, 0._dp, out_vel, X_FACE, &
+                                            bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, fl_correction=fl_correction)
+  end subroutine apply_outflow_bc_cylinder
   ! ==========================================================================
   ! Boundary Conditions: applied to U^m at the start of each substep.
   !
@@ -166,20 +184,10 @@ contains
   ! Everything runs on GPU via field_set_face — no per-field host round-trips.
   ! ==========================================================================
   subroutine boundary_conditions_cylinder(self)
+    !! TODO: This would be changed in the future PR to calculate the field_set_face values
     implicit none
     class(case_cylinder_t) :: self
-    real(dp) :: out_vel, fl_correction
-
-    call self%compute_outflow_params(out_vel, fl_correction)
-
-    call self%solver%backend%field_set_face( &
-      self%solver%u, 1._dp, out_vel, X_FACE, fl_correction=fl_correction)
-
-    call self%solver%backend%field_set_face( &
-      self%solver%v, 0._dp, out_vel, X_FACE, fl_correction=fl_correction)
-
-    call self%solver%backend%field_set_face( &
-      self%solver%w, 0._dp, out_vel, X_FACE, fl_correction=fl_correction)
+    call self%apply_outflow_bc_cylinder(self%solver%u, self%solver%v, self%solver%w)
   end subroutine boundary_conditions_cylinder
 
   ! ==========================================================================
@@ -190,18 +198,7 @@ contains
     implicit none
     class(case_cylinder_t) :: self
     class(field_t), intent(inout) :: u, v, w
-    real(dp) :: out_vel, fl_correction
-
-    call self%compute_outflow_params(out_vel, fl_correction)
-
-    call self%solver%backend%field_set_face( &
-      u, 1._dp, out_vel, X_FACE, fl_correction=fl_correction)
-
-    call self%solver%backend%field_set_face( &
-      v, 0._dp, out_vel, X_FACE, fl_correction=fl_correction)
-
-    call self%solver%backend%field_set_face( &
-      w, 0._dp, out_vel, X_FACE,fl_correction=fl_correction)
+    call self%apply_outflow_bc_cylinder(u, v, w)
   end subroutine pre_correction_cylinder
 
   ! ==========================================================================
