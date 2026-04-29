@@ -173,13 +173,13 @@ contains
     call self%compute_outflow_params(out_vel, fl_correction)
 
     call self%solver%backend%field_set_face( &
-      self%solver%u, 1._dp, out_vel, X_FACE)
+      self%solver%u, 1._dp, out_vel, X_FACE, fl_correction=fl_correction)
 
     call self%solver%backend%field_set_face( &
-      self%solver%v, 0._dp, out_vel, X_FACE)
+      self%solver%v, 0._dp, out_vel, X_FACE, fl_correction=fl_correction)
 
     call self%solver%backend%field_set_face( &
-      self%solver%w, 0._dp, out_vel, X_FACE)
+      self%solver%w, 0._dp, out_vel, X_FACE, fl_correction=fl_correction)
   end subroutine boundary_conditions_cylinder
 
   ! ==========================================================================
@@ -195,13 +195,13 @@ contains
     call self%compute_outflow_params(out_vel, fl_correction)
 
     call self%solver%backend%field_set_face( &
-      u, 1._dp, out_vel, X_FACE)
+      u, 1._dp, out_vel, X_FACE, fl_correction=fl_correction)
 
     call self%solver%backend%field_set_face( &
-      v, 0._dp, out_vel, X_FACE)
+      v, 0._dp, out_vel, X_FACE, fl_correction=fl_correction)
 
     call self%solver%backend%field_set_face( &
-      w, 0._dp, out_vel, X_FACE)
+      w, 0._dp, out_vel, X_FACE,fl_correction=fl_correction)
   end subroutine pre_correction_cylinder
 
   ! ==========================================================================
