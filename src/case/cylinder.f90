@@ -170,16 +170,16 @@ contains
       self%out_vel_cached = out_vel
       self%flow_rate_diff_cached = flow_rate_diff
     end if
-    associate(cfg => self%cylinder_cfg)
+    associate (cfg => self%cylinder_cfg)
       ! Outflow BC: out_vel is the convective velocity (uxmax * gdt / dx),
       ! used as c_end multiplier in the convective outflow scheme
       ! bc_start sets the Dirichlet inflow values.
-      call self%solver%backend%field_set_face(u, cfg%bc_start_u, out_vel, X_FACE, &
-                                              bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, flow_rate_diff=flow_rate_diff)
-      call self%solver%backend%field_set_face(v, cfg%bc_start_v, out_vel, X_FACE, &
-                                              bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, flow_rate_diff=flow_rate_diff)
-      call self%solver%backend%field_set_face(w, cfg%bc_start_w, out_vel, X_FACE, &
-                                              bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, flow_rate_diff=flow_rate_diff)
+  call self%solver%backend%field_set_face(u, cfg%bc_start_u, out_vel, X_FACE, &
+     bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, flow_rate_diff=flow_rate_diff)
+  call self%solver%backend%field_set_face(v, cfg%bc_start_v, out_vel, X_FACE, &
+     bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, flow_rate_diff=flow_rate_diff)
+  call self%solver%backend%field_set_face(w, cfg%bc_start_w, out_vel, X_FACE, &
+     bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, flow_rate_diff=flow_rate_diff)
     end associate
   end subroutine apply_outflow_bc_cylinder
   ! ==========================================================================
