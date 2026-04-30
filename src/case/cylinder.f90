@@ -116,7 +116,7 @@ contains
 
     integer :: dims(3), nx, ierr
     real(dp) :: uxmax, uxmax_discard
-    real(dp) :: fl_in, fl_out, fl_in_max_discard, fl_out_max_discard
+    real(dp) :: flow_rate_in, flow_rate_out, flow_rate_in_max_discard, flow_rate_out_max_discard
     real(dp) :: fl_sums(2), ny_nz
     real(dp) :: dx, gdt
 
@@ -133,25 +133,25 @@ contains
     ! ----- Device path -----------------------------------------------------
     call self%solver%backend%slice_max_sum(uxmax, uxmax_discard, &
                                            self%solver%u, nx - 1)
-    call self%solver%backend%slice_max_sum(fl_in_max_discard, fl_in, &
+    call self%solver%backend%slice_max_sum(flow_rate_in_max_discard, flow_rate_in, &
                                            self%solver%u, 1)
-    call self%solver%backend%slice_max_sum(fl_out_max_discard, fl_out, &
+    call self%solver%backend%slice_max_sum(flow_rate_out_max_discard, flow_rate_out, &
                                            self%solver%u, nx)
 
     call MPI_Allreduce(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, MPI_MAX, &
                        MPI_COMM_WORLD, ierr)
-    fl_sums(1) = fl_in
-    fl_sums(2) = fl_out
+    fl_sums(1) = flow_rate_in
+    fl_sums(2) = flow_rate_out
     call MPI_Allreduce(MPI_IN_PLACE, fl_sums, 2, MPI_X3D2_DP, MPI_SUM, &
                        MPI_COMM_WORLD, ierr)
-    fl_in = fl_sums(1)
-    fl_out = fl_sums(2)
+    flow_rate_in = fl_sums(1)
+    flow_rate_out = fl_sums(2)
 
-    fl_in = fl_in/ny_nz
-    fl_out = fl_out/ny_nz
+    flow_rate_in = flow_rate_in/ny_nz
+    flow_rate_out = flow_rate_out/ny_nz
 
     out_vel = uxmax*gdt/dx
-    flow_rate_diff = fl_in - fl_out
+    flow_rate_diff = flow_rate_in - flow_rate_out
 
   end subroutine compute_outflow_params
 
