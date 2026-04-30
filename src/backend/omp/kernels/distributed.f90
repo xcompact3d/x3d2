@@ -674,7 +674,7 @@ contains
       c4(i, 2) = (c4(i, 2) - M_lu(2, 3)*c4(i, 3) - M_lu(2, 4)*c4(i, 4)) &
                  /M_lu(2, 2)
       c4(i, 1) = (c4(i, 1) - M_lu(1, 2)*c4(i, 2) - M_lu(1, 3)*c4(i, 3) &
-                 - M_lu(1, 4)*c4(i, 4))/M_lu(1, 1)
+                  - M_lu(1, 4)*c4(i, 4))/M_lu(1, 1)
     end do
     !$omp end simd
 
