@@ -171,8 +171,9 @@ contains
   end subroutine field_max_sum
 
   attributes(global) subroutine field_set_y_face(f, c_start, c_end, flow_rate_diff, nx, ny, nz)
-    !! Set domain Y_FACE to a constant
-    !! c_start at the bottom and c_end at the top
+  !! Set domain Y_FACE boundary values.
+  !! c_start: Dirichlet value applied at the bottom face (j = 1)
+  !! c_end:   Dirichlet value applied at the top face (j = ny)
     implicit none
 
     real(dp), device, intent(inout), dimension(:, :, :) :: f
@@ -194,9 +195,13 @@ contains
 
   end subroutine field_set_y_face
 
-  attributes(global) subroutine field_set_x_face(f, c_start, c_end, &
-                                             bc_start, bc_end, flow_rate_diff, &
-                                                 nx, ny, nz)
+attributes(global) subroutine field_set_x_face(f, c_start, c_end, &
+                                               bc_start, bc_end, flow_rate_diff, &
+                                               nx, ny, nz)
+  !! Set domain X_FACE boundary values.
+  !! c_start: Dirichlet value applied at the left face (i = 1)
+  !! c_end:   convective velocity Uc = uxmax * gdt / dx,
+  !!          used as multiplier in the outflow scheme du/dt + Uc*du/dx = 0
     implicit none
     real(dp), device, intent(inout), dimension(:, :, :) :: f
     real(dp), value, intent(in) :: c_start, c_end, flow_rate_diff
