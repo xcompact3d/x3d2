@@ -153,12 +153,6 @@ contains
     out_vel = uxmax*gdt/dx
     fl_correction = fl_in - fl_out
 
-    if (self%solver%mesh%par%is_root()) then
-      print '(A, ES12.5, A, ES12.5, A, ES12.5)', &
-        ' fl_in = ', fl_in, '  fl_out = ', fl_out, &
-        '  fl_in - fl_out = ', fl_correction
-    end if
-
   end subroutine compute_outflow_params
 
   subroutine apply_outflow_bc_cylinder(self, u, v, w)
@@ -167,7 +161,15 @@ contains
     class(field_t), intent(inout) :: u, v, w
     real(dp) :: out_vel, fl_correction
 
-    call self%compute_outflow_params(out_vel, fl_correction)
+    if (self%outflow_params_valid) then
+      out_vel = self%out_vel_cached
+      fl_correction = self%fl_correction_cached
+      self%outflow_params_valid = .false.
+    else
+      call self%compute_outflow_params(out_vel, fl_correction)
+      self%out_vel_cached = out_vel
+      self%fl_correction_cached = fl_correction
+    end if
     associate(cfg => self%cylinder_cfg)
       call self%solver%backend%field_set_face(u, cfg%bc_start_u, out_vel, X_FACE, &
                                               bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, fl_correction=fl_correction)
@@ -186,10 +188,10 @@ contains
   ! Everything runs on GPU via field_set_face — no per-field host round-trips.
   ! ==========================================================================
   subroutine boundary_conditions_cylinder(self)
-    !! TODO: This would be changed in the future PR to calculate the field_set_face values
     implicit none
     class(case_cylinder_t) :: self
     call self%apply_outflow_bc_cylinder(self%solver%u, self%solver%v, self%solver%w)
+    self%outflow_params_valid = .true.
   end subroutine boundary_conditions_cylinder
 
   ! ==========================================================================
@@ -225,8 +227,10 @@ contains
 
     if (self%solver%mesh%par%is_root()) then
       print *, 'time =', t, 'iteration =', iter
+      print '(A, ES12.5, A, ES12.5)', &
+        ' out_vel = ', self%out_vel_cached, &
+        '  fl_correction = ', self%fl_correction_cached
     end if
-
     call self%print_enstrophy(self%solver%u, self%solver%v, self%solver%w)
     call self%print_div_max_mean(self%solver%u, self%solver%v, self%solver%w)
   end subroutine postprocess_cylinder
