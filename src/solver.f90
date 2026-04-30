@@ -253,7 +253,8 @@ contains
       )
     call backend%alloc_tdsops( &
       dirps%der1st_sym, n_vert, d, 'first-deriv', der1st_scheme, &
-      bc_start, bc_end, stretch=mesh%geo%vert_ds(1:n_vert, dir) &
+      bc_start, bc_end, stretch=mesh%geo%vert_ds(1:n_vert, dir), &
+      sym=.true. &
       )
     call backend%alloc_tdsops( &
       dirps%der2nd, n_vert, d, 'second-deriv', der2nd_scheme, &
@@ -263,7 +264,8 @@ contains
     call backend%alloc_tdsops( &
       dirps%der2nd_sym, n_vert, d, 'second-deriv', der2nd_scheme, &
       bc_start, bc_end, stretch=mesh%geo%vert_ds2(1:n_vert, dir), &
-      stretch_correct=mesh%geo%vert_d2s(1:n_vert, dir) &
+      stretch_correct=mesh%geo%vert_d2s(1:n_vert, dir), &
+      sym=.true. &
       )
     call backend%alloc_tdsops( &
       dirps%stagder_v2p, n_cell, d, 'stag-deriv', stagder_scheme, &

@@ -1,6 +1,6 @@
 # Generate the IBM file
 
-PYTHONPATH=~/opt/adios2/build/local/lib/python3.12/dist-packages/ python3 ~/opt/py4x3d2/tests/run.py -v --iibm 1 --dx 1 --dy 1 --dz 1 --nx 256 --ny 128 --nz 32 --save --cyl 6.4 64 64 16 0 0 1
+PYTHONPATH=~/opt/adios2/build/local/lib/python3.12/dist-packages/ python3 ~/opt/py4x3d2/tests/run.py -v --iibm 1 --dx 1 --dy 1 --dz 1 --nx 257 --ny 128 --nz 32 --save --cyl 6.4 64 64 16 0 0 1
 
 This produces `ibm.bp` in the current directory. Before running the case, it must be moved to the `x3d2` directory and renamed according to the Poisson solver used.
  

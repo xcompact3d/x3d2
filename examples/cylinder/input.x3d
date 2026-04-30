@@ -3,16 +3,16 @@
 flow_case_name = 'cylinder'
 
 ! Global domain length
-L_global = 20d0, 12d0, 1d0
+L_global = 20d0, 12d0, 6d0
 
 ! Global number of cells in each direction
-dims_global = 256, 128, 32
+dims_global = 257, 128, 32
 
 ! Domain decomposition in each direction
 nproc_dir = 1, 1, 1
 
 ! BC options are 'periodic' | 'neumann' | 'dirichlet'
-BC_x = 'periodic', 'periodic'
+BC_x = 'dirichlet', 'dirichlet'
 BC_y = 'periodic', 'periodic'
 BC_z = 'periodic', 'periodic'
 /End
@@ -21,7 +21,7 @@ BC_z = 'periodic', 'periodic'
 Re = 300d0
 time_intg = 'AB3' ! 'AB[1-4]' | 'RK[1-4]'
 dt = 0.0075d0
-n_iters = 3000
+n_iters = 30000
 n_output = 1
 poisson_solver_type = 'FFT' ! 'FFT' | 'CG'
 der1st_scheme = 'compact6'
@@ -36,5 +36,5 @@ snapshot_freq = 50
 /End
 
 &cylinder_nml
-init_noise = 0.125 0.125 0.
+init_noise = 0. 0. 0. ! 0.125 0. 0.
 /End
