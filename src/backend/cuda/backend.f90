@@ -994,7 +994,7 @@ contains
   end subroutine field_shift_cuda
 
   subroutine field_set_face_cuda(self, f, c_start, c_end, face, &
-                                 bc_start, bc_end, fl_correction)
+                                 bc_start, bc_end, flow_rate_diff)
     implicit none
 
     class(cuda_backend_t) :: self
@@ -1002,13 +1002,13 @@ contains
     real(dp), intent(in) :: c_start, c_end
     integer, intent(in) :: face
     integer, optional, intent(in) :: bc_start, bc_end
-    real(dp), optional, intent(in) :: fl_correction
+    real(dp), optional, intent(in) :: flow_rate_diff
 
     real(dp), device, pointer, dimension(:, :, :) :: f_d
     type(dim3) :: blocks, threads
     integer :: dims(3)
     integer :: bc_s, bc_e
-    real(dp) :: fl_correction_val
+    real(dp) :: flow_rate_diff_val
 
     if (f%dir /= DIR_X) then
       error stop 'Setting a field face is only supported for DIR_X fields.'
@@ -1020,11 +1020,11 @@ contains
     ! --- Resolve optional arguments with safe defaults ---
     bc_s = BC_DIRICHLET
     bc_e = BC_DIRICHLET
-    fl_correction_val = 0._dp
+    flow_rate_diff_val = 0._dp
 
     if (present(bc_start)) bc_s = bc_start
     if (present(bc_end)) bc_e = bc_end
-    if (present(fl_correction)) fl_correction_val = fl_correction
+    if (present(flow_rate_diff)) flow_rate_diff_val = flow_rate_diff
 
     call resolve_field_t(f_d, f)
     dims = self%mesh%get_dims(f%data_loc)
@@ -1034,7 +1034,7 @@ contains
       blocks = dim3((SZ - 1)/64 + 1, ((dims(2) - 1)/SZ + 1)*dims(3), 1)
       threads = dim3(64, 1, 1)
       call field_set_x_face<<<blocks, threads>>>( &              !&
-          f_d, c_start, c_end, bc_s, bc_e, fl_correction_val, &
+          f_d, c_start, c_end, bc_s, bc_e, flow_rate_diff_val, &
           dims(1), dims(2), dims(3))
 
     case (Y_FACE)
@@ -1046,7 +1046,7 @@ contains
       blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
       threads = dim3(64, 1, 1)
       call field_set_y_face<<<blocks, threads>>>( &              !&
-          f_d, c_start, c_end, fl_correction_val, dims(1), dims(2), dims(3))
+          f_d, c_start, c_end, flow_rate_diff_val, dims(1), dims(2), dims(3))
 
     case (Z_FACE)
       error stop 'Setting Z_FACE is not yet supported.'

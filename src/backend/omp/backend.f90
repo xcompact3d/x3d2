@@ -813,7 +813,7 @@ contains
   end subroutine field_shift_omp
 
   subroutine field_set_face_omp(self, f, c_start, c_end, face, &
-                                bc_start, bc_end, fl_correction)
+                                bc_start, bc_end, flow_rate_diff)
     !! [[m_base_backend(module):field_set_face(subroutine)]]
     implicit none
 
@@ -823,7 +823,7 @@ contains
     integer, intent(in) :: face
     integer, optional, intent(in) :: bc_start
     integer, optional, intent(in) :: bc_end
-    real(dp), optional, intent(in) :: fl_correction
+    real(dp), optional, intent(in) :: flow_rate_diff
 
     integer :: dims(3), k, j, i_mod, k_end
     real(dp) :: fl_corr
@@ -837,7 +837,7 @@ contains
     end if
 
     fl_corr = 0._dp
-    if (present(fl_correction)) fl_corr = fl_correction
+    if (present(flow_rate_diff)) fl_corr = flow_rate_diff
 
     dims = self%mesh%get_dims(f%data_loc)
 

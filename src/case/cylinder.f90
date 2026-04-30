@@ -15,7 +15,7 @@ module m_case_cylinder
   type, extends(base_case_t) :: case_cylinder_t
     type(cylinder_config_t) :: cylinder_cfg
     real(dp) :: out_vel_cached = 0._dp
-    real(dp) :: fl_correction_cached = 0._dp
+    real(dp) :: flow_rate_diff_cached = 0._dp
     logical :: outflow_params_valid = .false.
   contains
     procedure :: boundary_conditions => boundary_conditions_cylinder
@@ -109,10 +109,10 @@ contains
   ! reduction and compares. Aborts on mismatch. Remove the gate once the
   ! device path has been verified on your target configurations.
   ! ==========================================================================
-  subroutine compute_outflow_params(self, out_vel, fl_correction)
+  subroutine compute_outflow_params(self, out_vel, flow_rate_diff)
     implicit none
     class(case_cylinder_t) :: self
-    real(dp), intent(out) :: out_vel, fl_correction
+    real(dp), intent(out) :: out_vel, flow_rate_diff
 
     integer :: dims(3), nx, ierr
     real(dp) :: uxmax, uxmax_discard
@@ -151,7 +151,7 @@ contains
     fl_out = fl_out/ny_nz
 
     out_vel = uxmax*gdt/dx
-    fl_correction = fl_in - fl_out
+    flow_rate_diff = fl_in - fl_out
 
   end subroutine compute_outflow_params
 
@@ -159,24 +159,24 @@ contains
     implicit none
     class(case_cylinder_t) :: self
     class(field_t), intent(inout) :: u, v, w
-    real(dp) :: out_vel, fl_correction
+    real(dp) :: out_vel, flow_rate_diff
 
     if (self%outflow_params_valid) then
       out_vel = self%out_vel_cached
-      fl_correction = self%fl_correction_cached
+      flow_rate_diff = self%flow_rate_diff_cached
       self%outflow_params_valid = .false.
     else
-      call self%compute_outflow_params(out_vel, fl_correction)
+      call self%compute_outflow_params(out_vel, flow_rate_diff)
       self%out_vel_cached = out_vel
-      self%fl_correction_cached = fl_correction
+      self%flow_rate_diff_cached = flow_rate_diff
     end if
     associate(cfg => self%cylinder_cfg)
       call self%solver%backend%field_set_face(u, cfg%bc_start_u, out_vel, X_FACE, &
-                                              bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, fl_correction=fl_correction)
+                                              bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, flow_rate_diff=flow_rate_diff)
       call self%solver%backend%field_set_face(v, cfg%bc_start_v, out_vel, X_FACE, &
-                                              bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, fl_correction=fl_correction)
+                                              bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, flow_rate_diff=flow_rate_diff)
       call self%solver%backend%field_set_face(w, cfg%bc_start_w, out_vel, X_FACE, &
-                                              bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, fl_correction=fl_correction)
+                                              bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, flow_rate_diff=flow_rate_diff)
     end associate
   end subroutine apply_outflow_bc_cylinder
   ! ==========================================================================
@@ -229,7 +229,7 @@ contains
       print *, 'time =', t, 'iteration =', iter
       print '(A, ES12.5, A, ES12.5)', &
         ' out_vel = ', self%out_vel_cached, &
-        '  fl_correction = ', self%fl_correction_cached
+        '  flow_rate_diff = ', self%flow_rate_diff_cached
     end if
     call self%print_enstrophy(self%solver%u, self%solver%v, self%solver%w)
     call self%print_div_max_mean(self%solver%u, self%solver%v, self%solver%w)
