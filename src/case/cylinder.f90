@@ -168,12 +168,14 @@ contains
     real(dp) :: out_vel, fl_correction
 
     call self%compute_outflow_params(out_vel, fl_correction)
-    call self%solver%backend%field_set_face(u, 1._dp, out_vel, X_FACE, &
-                                            bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, fl_correction=fl_correction)
-    call self%solver%backend%field_set_face(v, 0._dp, out_vel, X_FACE, &
-                                            bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, fl_correction=fl_correction)
-    call self%solver%backend%field_set_face(w, 0._dp, out_vel, X_FACE, &
-                                            bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, fl_correction=fl_correction)
+    associate(cfg => self%cylinder_cfg)
+      call self%solver%backend%field_set_face(u, cfg%bc_start_u, out_vel, X_FACE, &
+                                              bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, fl_correction=fl_correction)
+      call self%solver%backend%field_set_face(v, cfg%bc_start_v, out_vel, X_FACE, &
+                                              bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, fl_correction=fl_correction)
+      call self%solver%backend%field_set_face(w, cfg%bc_start_w, out_vel, X_FACE, &
+                                              bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, fl_correction=fl_correction)
+    end associate
   end subroutine apply_outflow_bc_cylinder
   ! ==========================================================================
   ! Boundary Conditions: applied to U^m at the start of each substep.
