@@ -170,7 +170,8 @@ contains
 
   end subroutine field_max_sum
 
-  attributes(global) subroutine field_set_y_face(f, c_start, c_end, flow_rate_diff, nx, ny, nz)
+  attributes(global) subroutine field_set_y_face( &
+    f, c_start, c_end, flow_rate_diff, nx, ny, nz)
   !! Set domain Y_FACE boundary values.
   !! c_start: Dirichlet value applied at the bottom face (j = 1)
   !! c_end:   Dirichlet value applied at the top face (j = ny)
@@ -195,9 +196,8 @@ contains
 
   end subroutine field_set_y_face
 
-  attributes(global) subroutine field_set_x_face(f, c_start, c_end, &
-                                            bc_start, bc_end, flow_rate_diff, &
-                                                 nx, ny, nz)
+  attributes(global) subroutine field_set_x_face( &
+    f, c_start, c_end, bc_start, bc_end, flow_rate_diff, nx, ny, nz)
   !! Set domain X_FACE boundary values.
   !! c_start: Dirichlet value applied at the left face (i = 1)
   !! c_end:   convective velocity Uc = uxmax * gdt / dx,
@@ -238,7 +238,9 @@ contains
       case (1) !BC_NEUMANN
         !this can be empty for now future TODO
       case (2) ! BC_DIRICHLET
-          f(i, nx, b) = f(i, nx, b) - c_end*(f(i, nx, b) - f(i, nx - 1, b)) + flow_rate_diff
+        f(i, nx, b) = f(i, nx, b) &
+                      - c_end*(f(i, nx, b) - f(i, nx - 1, b)) &
+                      + flow_rate_diff
       end select
     end if
   end subroutine field_set_x_face
