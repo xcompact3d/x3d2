@@ -116,7 +116,8 @@ contains
 
     integer :: dims(3), nx, ierr
     real(dp) :: uxmax, uxmax_discard
-    real(dp) :: flow_rate_in, flow_rate_out, flow_rate_in_max_discard, flow_rate_out_max_discard
+    real(dp) :: flow_rate_in, flow_rate_out
+    real(dp) :: flow_rate_in_max_discard, flow_rate_out_max_discard
     real(dp) :: fl_sums(2), ny_nz
     real(dp) :: dx, gdt
 
@@ -131,15 +132,15 @@ contains
     gdt = self%solver%time_integrator%gdt
 
     ! ----- Device path -----------------------------------------------------
-    call self%solver%backend%slice_max_sum(uxmax, uxmax_discard, &
-                                           self%solver%u, nx - 1)
-    call self%solver%backend%slice_max_sum(flow_rate_in_max_discard, flow_rate_in, &
-                                           self%solver%u, 1)
-    call self%solver%backend%slice_max_sum(flow_rate_out_max_discard, flow_rate_out, &
-                                           self%solver%u, nx)
+    call self%solver%backend%slice_max_sum( &
+      uxmax, uxmax_discard, self%solver%u, nx - 1)
+    call self%solver%backend%slice_max_sum( &
+      flow_rate_in_max_discard, flow_rate_in, self%solver%u, 1)
+    call self%solver%backend%slice_max_sum( &
+      flow_rate_out_max_discard, flow_rate_out, self%solver%u, nx)
 
-    call MPI_Allreduce(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, MPI_MAX, &
-                       MPI_COMM_WORLD, ierr)
+    call MPI_Allreduce(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, &
+                       MPI_MAX, MPI_COMM_WORLD, ierr)
     fl_sums(1) = flow_rate_in
     fl_sums(2) = flow_rate_out
     call MPI_Allreduce(MPI_IN_PLACE, fl_sums, 2, MPI_X3D2_DP, MPI_SUM, &
@@ -174,12 +175,18 @@ contains
       ! Outflow BC: out_vel is the convective velocity (uxmax * gdt / dx),
       ! used as c_end multiplier in the convective outflow scheme
       ! bc_start sets the Dirichlet inflow values.
-  call self%solver%backend%field_set_face(u, cfg%bc_start_u, out_vel, X_FACE, &
-     bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, flow_rate_diff=flow_rate_diff)
-  call self%solver%backend%field_set_face(v, cfg%bc_start_v, out_vel, X_FACE, &
-     bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, flow_rate_diff=flow_rate_diff)
-  call self%solver%backend%field_set_face(w, cfg%bc_start_w, out_vel, X_FACE, &
-     bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, flow_rate_diff=flow_rate_diff)
+      call self%solver%backend%field_set_face( &
+        u, cfg%bc_start_u, out_vel, X_FACE, &
+        bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
+        flow_rate_diff=flow_rate_diff)
+      call self%solver%backend%field_set_face( &
+        v, cfg%bc_start_v, out_vel, X_FACE, &
+        bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
+        flow_rate_diff=flow_rate_diff)
+      call self%solver%backend%field_set_face( &
+        w, cfg%bc_start_w, out_vel, X_FACE, &
+        bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
+        flow_rate_diff=flow_rate_diff)
     end associate
   end subroutine apply_outflow_bc_cylinder
   ! ==========================================================================
@@ -193,7 +200,8 @@ contains
   subroutine boundary_conditions_cylinder(self)
     implicit none
     class(case_cylinder_t) :: self
-    call self%apply_outflow_bc_cylinder(self%solver%u, self%solver%v, self%solver%w)
+    call self%apply_outflow_bc_cylinder(self%solver%u, self%solver%v, &
+                                        self%solver%w)
     self%outflow_params_valid = .true.
   end subroutine boundary_conditions_cylinder
 
