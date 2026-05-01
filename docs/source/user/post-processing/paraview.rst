@@ -9,7 +9,7 @@ building ADIOS2 and ParaView with the flags required to read x3d2 output.
 .. note::
 
    If you already have a ParaView installation with ADIOS2 support (check
-   *Help → About* for the ``VTK::IOADIOS2`` module), you can skip this guide
+   *Help -> About* for the ``VTK::IOADIOS2`` module), you can skip this guide
    entirely.
 
 Prerequisites

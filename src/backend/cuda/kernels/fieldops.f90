@@ -170,13 +170,15 @@ contains
 
   end subroutine field_max_sum
 
-  attributes(global) subroutine field_set_y_face(f, c_start, c_end, nx, ny, nz)
-    !! Set domain Y_FACE to a constant
-    !! c_start at the bottom and c_end at the top
+  attributes(global) subroutine field_set_y_face( &
+    f, c_start, c_end, flow_rate_diff, nx, ny, nz)
+  !! Set domain Y_FACE boundary values.
+  !! c_start: Dirichlet value applied at the bottom face (j = 1)
+  !! c_end:   Dirichlet value applied at the top face (j = ny)
     implicit none
 
     real(dp), device, intent(inout), dimension(:, :, :) :: f
-    real(dp), value, intent(in) :: c_start, c_end
+    real(dp), value, intent(in) :: c_start, c_end, flow_rate_diff
     integer, value, intent(in) :: nx, ny, nz
 
     integer :: i, j, b, n_mod, b_end
@@ -193,6 +195,55 @@ contains
     end if
 
   end subroutine field_set_y_face
+
+  attributes(global) subroutine field_set_x_face( &
+    f, c_start, c_end, bc_start, bc_end, flow_rate_diff, nx, ny, nz)
+  !! Set domain X_FACE boundary values.
+  !! c_start: Dirichlet value applied at the left face (i = 1)
+  !! c_end:   convective velocity Uc = uxmax * gdt / dx,
+  !!          used as multiplier in the outflow scheme du/dt + Uc*du/dx = 0
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), value, intent(in) :: c_start, c_end, flow_rate_diff
+    integer, value, intent(in) :: bc_start, bc_end
+    integer, value, intent(in) :: nx, ny, nz
+    integer :: i, b, n_mod, n_y_blocks, y_block, i_max
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! 1..SZ
+    b = blockIdx%y                                 ! 1..n_y_blocks*nz
+
+    n_mod = mod(ny - 1, SZ) + 1
+    n_y_blocks = (ny - 1)/SZ + 1
+
+    ! Determine if this b is the last y-block (padding present)
+    ! With b = (y_block - 1)*nz + z, y_block = (b - 1)/nz + 1
+    y_block = (b - 1)/nz + 1
+    if (y_block == n_y_blocks) then
+      i_max = n_mod    ! last y-block: only i in [1, n_mod] are real
+    else
+      i_max = SZ       ! interior y-blocks: all i in [1, SZ] are real
+    end if
+
+    if (i <= i_max) then
+      ! --- Left face (j = 1) ---
+      select case (bc_start)
+      case (1) ! BC_NEUMANN
+        !this can be empty for now future TODO
+      case (2) ! BC_DIRICHLET
+        f(i, 1, b) = c_start
+      end select
+
+      ! --- Right face (j = nx) ---
+      select case (bc_end)
+      case (1) !BC_NEUMANN
+        !this can be empty for now future TODO
+      case (2) ! BC_DIRICHLET
+        f(i, nx, b) = f(i, nx, b) &
+                      - c_end*(f(i, nx, b) - f(i, nx - 1, b)) &
+                      + flow_rate_diff
+      end select
+    end if
+  end subroutine field_set_x_face
 
   attributes(global) subroutine volume_integral(s, f, n, n_i_pad, n_j)
     implicit none
