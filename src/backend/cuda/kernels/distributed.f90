@@ -990,7 +990,8 @@ contains
         end do
         Z_sh(n_tds, kcol) = Z_sh(n_tds, kcol)*ffr(n_tds)
         Z_sh(n_tds - 1, kcol) = (Z_sh(n_tds - 1, kcol) &
-                             - fbw(n_tds - 1)*Z_sh(n_tds, kcol))*ffr(n_tds - 1)
+                                 - fbw(n_tds - 1)*Z_sh(n_tds, kcol)) &
+                                *ffr(n_tds - 1)
         do j = n_tds - 2, 2, -1
           Z_sh(j, kcol) = (Z_sh(j, kcol) &
                            - fbw(j)*Z_sh(j + 1, kcol) &
@@ -1058,7 +1059,8 @@ contains
     c4_4 = tmp4/M_lu(4, 4)
     c4_3 = (tmp3 - M_lu(3, 4)*c4_4)/M_lu(3, 3)
     c4_2 = (tmp2 - M_lu(2, 3)*c4_3 - M_lu(2, 4)*c4_4)/M_lu(2, 2)
- c4_1 = (tmp1 - M_lu(1, 2)*c4_2 - M_lu(1, 3)*c4_3 - M_lu(1, 4)*c4_4)/M_lu(1, 1)
+    c4_1 = (tmp1 - M_lu(1, 2)*c4_2 - M_lu(1, 3)*c4_3 &
+            - M_lu(1, 4)*c4_4)/M_lu(1, 1)
 
     ! ── Apply SMW correction: du -= Z * c4 ────────────────────────────────
     do j = 1, n_tds
