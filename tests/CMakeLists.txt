@@ -114,6 +114,7 @@ endif()
 # Verification tests (numerical correctness vs analytical solutions)
 define_verification_test(verification/test_thom.f90 1 omp)
 define_verification_test(verification/test_omp_tridiag.f90 ${CMAKE_CTEST_NPROCS} omp)
+define_verification_test(verification/test_omp_penta.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_verification_test(verification/test_omp_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_verification_test(verification/test_omp_transeq_species.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_verification_test(verification/test_omp_dist_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
@@ -142,12 +143,14 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_verification_test(verification/test_fft.f90 1 cuda)
   define_verification_test(verification/test_poisson_bc.f90 1 cuda)
   define_verification_test(verification/test_cuda_tridiag.f90 ${CMAKE_CTEST_NPROCS} cuda)
+  define_verification_test(verification/test_cuda_penta.f90 ${CMAKE_CTEST_NPROCS} cuda)
   define_verification_test(verification/test_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
 
   # CUDA performance tests
   define_performance_test(performance/perf_thom.f90 1 cuda)
   define_performance_test(performance/perf_cuda_reorder.f90 1 cuda)
   define_performance_test(performance/perf_cuda_tridiag.f90 ${CMAKE_CTEST_NPROCS} cuda)
+  define_performance_test(performance/perf_cuda_penta.f90 ${CMAKE_CTEST_NPROCS} cuda)
   define_performance_test(performance/perf_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
 
   if(WITH_ADIOS2)
