@@ -77,8 +77,8 @@ contains
       bw_max/real(2**30, dp), ' GiB/s'
   end subroutine write_perf_minmax_metrics
 
-  subroutine write_perf_summary(time, n_iters, ndof, consumed_bw, mem_clock_rt, &
-                                mem_bus_width)
+  subroutine write_perf_summary(time, n_iters, ndof, consumed_bw, &
+                                mem_clock_rt, mem_bus_width)
     real(dp), intent(in) :: time
     integer, intent(in) :: n_iters
     integer, intent(in) :: ndof
@@ -143,8 +143,8 @@ contains
       deviceBW/real(2**30, dp), ' GiB/s'
   end subroutine write_device_bw_metric
 
-  pure real(dp) function compute_achieved_bw(time, n_iters, ndof, consumed_bw) &
-    result(achievedBW)
+  pure real(dp) function compute_achieved_bw(time, n_iters, ndof, &
+                                             consumed_bw) result(achievedBW)
     real(dp), intent(in) :: time
     integer, intent(in) :: n_iters
     integer, intent(in) :: ndof

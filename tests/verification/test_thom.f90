@@ -123,7 +123,7 @@ program test_thom
   call checkerr(u, du, residual_tol, 'thom_dirichlet', allpass)
 
   if (allpass) then
-      print *, 'ALL TESTS PASSED SUCCESSFULLY.'
+    print *, 'ALL TESTS PASSED SUCCESSFULLY.'
   else
     error stop 'SOME TESTS FAILED.'
   end if

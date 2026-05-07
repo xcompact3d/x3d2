@@ -286,7 +286,7 @@ contains
         idx = idx + 1
 
         all_xfail(idx, config_id) = is_expected_fail( &
-          test_ns(n), test_types(t), x_periodic, y_periodic, z_periodic)
+                 test_ns(n), test_types(t), x_periodic, y_periodic, z_periodic)
 
         call run_single_test(backend, host_allocator, mesh, &
                              xdirps, ydirps, zdirps, vector_calculus, &
@@ -356,7 +356,7 @@ contains
 
   pure function is_expected_fail(n_wave, test_type, &
                                  x_periodic, y_periodic, z_periodic) &
-                                 result(xfail)
+    result(xfail)
     !! Determine if a test is expected to fail.
     !!
     !! n=3 on even-sized periodic grids (64 cells) does not resolve
