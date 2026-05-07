@@ -137,6 +137,7 @@ if(${OMP_TGT})
   # OMP TGT unit tests
   define_test(unit/test_vecadd.f90 1 omp_tgt)
   define_test(unit/test_setget_field.f90 1 omp_tgt)
+  define_test(unit/test_omptgt_allocator.f90 1 omp_tgt)
 
   # OMP TGT verification tests
   define_test(verification/test_time_integrator.f90 1 omp_tgt)

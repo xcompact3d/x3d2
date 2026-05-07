@@ -3,9 +3,8 @@ program test_allocator_omptgt
 
   use m_allocator, only: allocator_t, field_t
   use m_common, only: dp, pi, DIR_X
-  use m_mesh, only: mesh_t
 
-  use m_omptg_allocator, only: omptgt_allocator_t
+  use m_omptgt_allocator, only: omptgt_allocator_t
 
   implicit none
 
@@ -14,7 +13,6 @@ program test_allocator_omptgt
   real(dp) :: L_global(3)
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
   class(allocator_t), allocatable :: allocator
-  class(mesh_t), allocatable :: mesh
   class(field_t), pointer :: ptr1, ptr2, ptr3
   integer, allocatable :: l(:)
   integer :: ierr
@@ -29,9 +27,8 @@ program test_allocator_omptgt
   BC_y = ['periodic', 'periodic']
   BC_z = ['periodic', 'periodic']
 
-  mesh = mesh_t(dims, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
-  allocator = omptgt_allocator_t(mesh, 8)
+  allocator = omptgt_allocator_t(dims, 8)
 
   allpass = .true.
 
