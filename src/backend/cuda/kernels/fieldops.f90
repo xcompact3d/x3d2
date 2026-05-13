@@ -195,7 +195,36 @@ contains
     end if
 
   end subroutine field_set_y_face
+attributes(global) subroutine field_set_y_face_from_field( &
+  f, f_start, flow_rate_diff, nx, ny, nz)
+!! Set domain Y_FACE boundary values from another field.
+!! Both f and f_start are DIR_X VERT pencil-layout. Only the bottom
+!! (j = 1) and top (j = ny) y-pencil planes of f_start are read.
+!!
+!! Launch convention matches field_set_y_face exactly:
+!!   threads = dim3(64, 1, 1)
+!!   blocks  = dim3((nx-1)/64 + 1, nz, 1)
+  implicit none
 
+  real(dp), device, intent(inout), dimension(:, :, :) :: f
+  real(dp), device, intent(in),    dimension(:, :, :) :: f_start
+  real(dp), value, intent(in) :: flow_rate_diff
+  integer, value, intent(in) :: nx, ny, nz
+
+  integer :: j, b, n_mod, b_end
+
+  j = threadIdx%x + (blockIdx%x - 1)*blockDim%x ! from 1 to nx
+  b = blockIdx%y ! from 1 to nz
+
+  n_mod = mod(ny - 1, SZ) + 1
+  b_end = b + (ny - 1)/SZ*nz
+
+  if (j <= nx) then
+    f(1, j, b) = f_start(1, j, b)
+    f(n_mod, j, b_end) = f_start(n_mod, j, b_end)
+  end if
+
+end subroutine field_set_y_face_from_field
   attributes(global) subroutine field_set_x_face( &
     f, c_start, c_end, bc_start, bc_end, flow_rate_diff, nx, ny, nz)
   !! Set domain X_FACE boundary values.
