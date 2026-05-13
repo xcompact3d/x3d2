@@ -245,6 +245,66 @@ contains
     end if
   end subroutine field_set_x_face
 
+  attributes(global) subroutine field_set_x_face_from_field( &
+    f, f_start, c_end, bc_start, bc_end, flow_rate_diff, nx, ny, nz)
+  !! Set domain X_FACE boundary values with a spatially-varying inlet.
+  !!
+  !! Both `f` and `f_start` are DIR_X VERT fields with shape
+  !! (SZ, nx, n_y_blocks*nz). The inlet plane is pencil index 1 of each,
+  !! so f(i, 1, b) <- f_start(i, 1, b) for every real (i, b). Only the
+  !! i = 1 pencil-index plane of f_start is read; the rest is ignored.
+  !!
+  !! Launch convention (matches field_set_x_face exactly):
+  !!   threads = dim3(64, 1, 1)
+  !!   blocks  = dim3((SZ-1)/64 + 1, n_y_blocks*nz, 1)
+  !! Threads beyond the real pencil width (SZ in interior y-blocks,
+  !! n_mod in the last y-block) are masked out by the i_max guard.
+  !!
+  !! c_end is the convective velocity Uc = uxmax * gdt / dx used in the
+  !! outflow scheme du/dt + Uc*du/dx = 0 at the right face.
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), device, intent(in),    dimension(:, :, :) :: f_start
+    real(dp), value, intent(in) :: c_end, flow_rate_diff
+    integer, value, intent(in) :: bc_start, bc_end
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, b, n_mod, n_y_blocks, y_block, i_max
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! 1..SZ (or n_mod)
+    b = blockIdx%y                                 ! 1..n_y_blocks*nz
+
+    n_mod = mod(ny - 1, SZ) + 1
+    n_y_blocks = (ny - 1)/SZ + 1
+    y_block = (b - 1)/nz + 1
+
+    if (y_block == n_y_blocks) then
+      i_max = n_mod    ! last y-block: only i in [1, n_mod] are real
+    else
+      i_max = SZ       ! interior y-blocks: all i in [1, SZ] are real
+    end if
+
+    if (i <= i_max) then
+      ! --- Left face (pencil index 1, i.e. global x = 1) ---
+      select case (bc_start)
+      case (1) ! BC_NEUMANN
+        ! future TODO
+      case (2) ! BC_DIRICHLET
+        f(i, 1, b) = f_start(i, 1, b)
+      end select
+
+      ! --- Right face (pencil index nx, i.e. global x = nx) ---
+      select case (bc_end)
+      case (1) ! BC_NEUMANN
+        ! future TODO
+      case (2) ! BC_DIRICHLET
+        f(i, nx, b) = f(i, nx, b) &
+                      - c_end*(f(i, nx, b) - f(i, nx - 1, b)) &
+                      + flow_rate_diff
+      end select
+    end if
+  end subroutine field_set_x_face_from_field
+
   attributes(global) subroutine volume_integral(s, f, n, n_i_pad, n_j)
     implicit none
 
