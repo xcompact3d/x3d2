@@ -160,7 +160,7 @@ contains
     implicit none
     class(case_cylinder_t) :: self
 
-      class(field_t), pointer :: hu, hv, hw
+    class(field_t), pointer :: hu, hv, hw
     integer :: j, k, dims(3)
     real(dp) :: noise(3), um, half_L
 
@@ -194,12 +194,11 @@ contains
     hv => self%solver%host_allocator%get_block(DIR_C)
     hw => self%solver%host_allocator%get_block(DIR_C)
 
-
     do k = 1, dims(3)
       do j = 1, dims(2)
         hu%data(1, j, k) = 1._dp + noise(1)*um*(2._dp*hu%data(1, j, k) - 1._dp)
-        hv%data(1, j, k) =          noise(2)*um*(2._dp*hv%data(1, j, k) - 1._dp)
-        hw%data(1, j, k) =          noise(3)*um*(2._dp*hw%data(1, j, k) - 1._dp)
+        hv%data(1, j, k) = noise(2)*um*(2._dp*hv%data(1, j, k) - 1._dp)
+        hw%data(1, j, k) = noise(3)*um*(2._dp*hw%data(1, j, k) - 1._dp)
       end do
     end do
 

@@ -287,8 +287,8 @@ module m_base_backend
       real(dp), optional, intent(in) :: flow_rate_diff
     end subroutine field_set_face
 
-      subroutine field_set_face_from_field(self, f, f_start, c_end, face, &
-                                      bc_start, bc_end, flow_rate_diff)
+    subroutine field_set_face_from_field(self, f, f_start, c_end, face, &
+                                         bc_start, bc_end, flow_rate_diff)
       !! As field_set_face but with a spatially-varying inlet face field
       !! instead of a scalar c_start.
       import :: base_backend_t

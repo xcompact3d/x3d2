@@ -249,7 +249,7 @@ contains
 
     real(dp) :: init_noise(3)
     real(dp) :: inlet_noise(3)
-    
+
     namelist /cylinder_nml/ init_noise, inlet_noise
 
     if (present(nml_file) .and. present(nml_string)) then

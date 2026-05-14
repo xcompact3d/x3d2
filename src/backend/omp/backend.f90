@@ -864,54 +864,55 @@ contains
     end select
 
   end subroutine field_set_face_omp
-subroutine field_set_face_from_field_omp(self, f, f_start, c_end, face, &
-                                         bc_start, bc_end, flow_rate_diff)
-  implicit none
-  class(omp_backend_t) :: self
-  class(field_t), intent(inout) :: f
-  class(field_t), intent(in) :: f_start
-  real(dp), intent(in) :: c_end
-  integer, intent(in) :: face
-  integer, optional, intent(in) :: bc_start, bc_end
-  real(dp), optional, intent(in) :: flow_rate_diff
-  integer :: dims(3), k, j, i, i_max, n_mod, n_y_blocks, y_block, k_end
-  real(dp) :: flow_rate_diff_val
+  subroutine field_set_face_from_field_omp(self, f, f_start, c_end, face, &
+                                           bc_start, bc_end, flow_rate_diff)
+    implicit none
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    class(field_t), intent(in) :: f_start
+    real(dp), intent(in) :: c_end
+    integer, intent(in) :: face
+    integer, optional, intent(in) :: bc_start, bc_end
+    real(dp), optional, intent(in) :: flow_rate_diff
+    integer :: dims(3), k, j, i, i_max, n_mod, n_y_blocks, y_block, k_end
+    real(dp) :: flow_rate_diff_val
 
-  if (f%dir /= DIR_X) &
-    error stop 'field_set_face_from_field: only supported for DIR_X fields.'
-  if (f%data_loc == NULL_LOC) &
-    error stop 'field_set_face_from_field: requires a valid data_loc.'
-  if (face /= X_FACE) &
-    error stop 'field_set_face_from_field: only X_FACE supported.'
+    if (f%dir /= DIR_X) &
+      error stop 'field_set_face_from_field: only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_set_face_from_field: requires a valid data_loc.'
+    if (face /= X_FACE) &
+      error stop 'field_set_face_from_field: only X_FACE supported.'
 
-  flow_rate_diff_val = 0._dp
-  if (present(flow_rate_diff)) flow_rate_diff_val = flow_rate_diff
+    flow_rate_diff_val = 0._dp
+    if (present(flow_rate_diff)) flow_rate_diff_val = flow_rate_diff
 
-  dims = self%mesh%get_dims(f%data_loc)
-  n_mod = mod(dims(2) - 1, SZ) + 1
-  n_y_blocks = (dims(2) - 1)/SZ + 1
+    dims = self%mesh%get_dims(f%data_loc)
+    n_mod = mod(dims(2) - 1, SZ) + 1
+    n_y_blocks = (dims(2) - 1)/SZ + 1
 
-  !$omp parallel do private(k_end, y_block, i_max)
-  do k = 1, n_y_blocks*dims(3)
-    y_block = (k - 1)/dims(3) + 1
-    k_end = k
-    if (y_block == n_y_blocks) then
-      i_max = n_mod
-    else
-      i_max = SZ
-    end if
-    do i = 1, i_max
-      ! left face: spatially-varying Dirichlet from f_start at i=1
-      f%data(i, 1, k) = f_start%data(i, 1, k)
-      ! right face: convective outflow
-      f%data(i, dims(1), k_end) = f%data(i, dims(1), k_end) &
-        - c_end*(f%data(i, dims(1), k_end) - f%data(i, dims(1) - 1, k_end)) &
-        + flow_rate_diff_val
+    !$omp parallel do private(k_end, y_block, i_max)
+    do k = 1, n_y_blocks*dims(3)
+      y_block = (k - 1)/dims(3) + 1
+      k_end = k
+      if (y_block == n_y_blocks) then
+        i_max = n_mod
+      else
+        i_max = SZ
+      end if
+      do i = 1, i_max
+        ! left face: spatially-varying Dirichlet from f_start at i=1
+        f%data(i, 1, k) = f_start%data(i, 1, k)
+        ! right face: convective outflow
+        f%data(i, dims(1), k_end) = f%data(i, dims(1), k_end) &
+                                    - c_end*(f%data(i, dims(1), k_end) &
+                                             - f%data(i, dims(1) - 1, k_end)) &
+                                    + flow_rate_diff_val
+      end do
     end do
-  end do
-  !$omp end parallel do
+    !$omp end parallel do
 
-end subroutine field_set_face_from_field_omp
+  end subroutine field_set_face_from_field_omp
 
   real(dp) function field_volume_integral_omp(self, f) result(s)
     !! volume integral of a field
