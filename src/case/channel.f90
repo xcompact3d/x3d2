@@ -16,17 +16,15 @@ module m_case_channel
 
   type, extends(base_case_t) :: case_channel_t
     type(channel_config_t) :: channel_cfg
-    ! Persistent device BC fields (DIR_X, VERT) for the no-slip y-walls.
-    ! Allocated on the first call to define_BC_channel, then refilled
-    ! every substep with fresh random noise. Released only at program end.
-    class(field_t), pointer :: bc_start_u_y => null()
-    class(field_t), pointer :: bc_start_v_y => null()
-    class(field_t), pointer :: bc_start_w_y => null()
+    ! The persistent device BC fields (DIR_X, VERT) for the no-slip
+    ! y-walls (bc_start_u/v/w_y) live on base_case_t. They are allocated
+    ! on the first call to define_BC_channel, then refilled every substep
+    ! with fresh random noise. Released only at program end.
   contains
-    procedure :: boundary_conditions => define_BC_channel
+    procedure :: define_BC => define_BC_channel
     procedure :: initial_conditions => initial_conditions_channel
     procedure :: forcings => forcings_channel
-    procedure :: pre_correction => apply_BC_channel
+    procedure :: apply_BC => apply_BC_channel
     procedure :: postprocess => postprocess_channel
   end type case_channel_t
 

@@ -14,20 +14,18 @@ module m_case_cylinder
 
   type, extends(base_case_t) :: case_cylinder_t
     type(cylinder_config_t) :: cylinder_cfg
-    real(dp) :: out_vel_cached = 0._dp
-    real(dp) :: flow_rate_diff_cached = 0._dp
-    logical :: outflow_params_valid = .false.
-    ! Persistent device BC fields (DIR_X, VERT). Allocated on the first
-    ! call to define_BC_cylinder, then refilled every substep (cheap
-    ! upload, no allocator churn). Released only at program end.
-    class(field_t), pointer :: bc_start_u_x => null()
-    class(field_t), pointer :: bc_start_v_x => null()
-    class(field_t), pointer :: bc_start_w_x => null()
+    real(dp) :: out_vel = 0._dp
+    real(dp) :: flow_rate_diff = 0._dp
+    ! The persistent device BC fields (DIR_X, VERT) for the inlet
+    ! plane (bc_start_u/v/w_x) live on base_case_t. They are allocated
+    ! on the first call to define_BC_cylinder, then refilled every
+    ! substep (cheap upload, no allocator churn). Released only at
+    ! program end.
   contains
-    procedure :: boundary_conditions => define_BC_cylinder
+    procedure :: define_BC => define_BC_cylinder
     procedure :: initial_conditions => initial_conditions_cylinder
     procedure :: forcings => forcings_cylinder
-    procedure :: pre_correction => apply_BC_cylinder
+    procedure :: apply_BC => apply_BC_cylinder
     procedure :: postprocess => postprocess_cylinder
     procedure :: compute_outflow_params
   end type case_cylinder_t
@@ -171,6 +169,16 @@ contains
     half_L = self%solver%mesh%geo%L(1)/2._dp
     um = exp(-0.2_dp*half_L*half_L)
 
+    ! Sample outflow params from solver%u once per substep, stored on self
+    ! so apply_BC (later in the substep) and postprocess can both read them.
+    ! Note: these are sampled pre-step here, whereas the old layout sampled
+    ! them post-step inside apply_BC; the resulting BC parameters drift by
+    ! one substep relative to the stamp.
+
+    ! TODO: remove cache data when the PR#300 merges in or add a commit
+    !      to fix it here too accordingly
+    call self%compute_outflow_params(self%out_vel, self%flow_rate_diff)
+
     ! Allocate persistent device BC fields on first call.
     if (.not. associated(self%bc_start_u_x)) then
       self%bc_start_u_x => self%solver%backend%allocator%get_block(DIR_X, VERT)
@@ -213,31 +221,19 @@ contains
     implicit none
     class(case_cylinder_t) :: self
     class(field_t), intent(inout) :: u, v, w
-    real(dp) :: out_vel, flow_rate_diff
-
-    ! Compute fresh every substep from the current solver%u. No cache —
-    ! the cache only made sense when boundary_conditions and pre_correction
-    ! shared the same values within one substep; with BC application only
-    ! here, a cache is used to pass the values to the postprocess.
-
-    ! TODO: remove cache data when the PR#300 merges in or add a commit
-    !      to fix it here too accordingly
-    call self%compute_outflow_params(out_vel, flow_rate_diff)
-    self%out_vel_cached = out_vel
-    self%flow_rate_diff_cached = flow_rate_diff
 
     call self%solver%backend%field_set_face_from_field( &
-      u, self%bc_start_u_x, out_vel, X_FACE, &
+      u, self%bc_start_u_x, self%out_vel, X_FACE, &
       bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
-      flow_rate_diff=flow_rate_diff)
+      flow_rate_diff=self%flow_rate_diff)
     call self%solver%backend%field_set_face_from_field( &
-      v, self%bc_start_v_x, out_vel, X_FACE, &
+      v, self%bc_start_v_x, self%out_vel, X_FACE, &
       bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
-      flow_rate_diff=flow_rate_diff)
+      flow_rate_diff=self%flow_rate_diff)
     call self%solver%backend%field_set_face_from_field( &
-      w, self%bc_start_w_x, out_vel, X_FACE, &
+      w, self%bc_start_w_x, self%out_vel, X_FACE, &
       bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
-      flow_rate_diff=flow_rate_diff)
+      flow_rate_diff=self%flow_rate_diff)
   end subroutine apply_BC_cylinder
 
   ! ==========================================================================
@@ -262,8 +258,8 @@ contains
     if (self%solver%mesh%par%is_root()) then
       print *, 'time =', t, 'iteration =', iter
       print '(A, ES12.5, A, ES12.5)', &
-        ' out_vel = ', self%out_vel_cached, &
-        '  flow_rate_diff = ', self%flow_rate_diff_cached
+        ' out_vel = ', self%out_vel, &
+        '  flow_rate_diff = ', self%flow_rate_diff
     end if
     call self%print_enstrophy(self%solver%u, self%solver%v, self%solver%w)
     call self%print_div_max_mean(self%solver%u, self%solver%v, self%solver%w)

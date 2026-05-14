@@ -19,11 +19,27 @@ module m_base_case
   type, abstract :: base_case_t
     class(solver_t), allocatable :: solver
     type(io_manager_t) :: io_mgr
+    ! Persistent device BC fields (DIR_X, VERT), shared across all cases.
+    ! Allocated by the derived case on first use, refilled per substep,
+    ! released only at program end. A given case populates only the
+    ! face/end pairs it needs; the rest stay null().
+    class(field_t), pointer :: bc_start_u_x => null()
+    class(field_t), pointer :: bc_start_v_x => null()
+    class(field_t), pointer :: bc_start_w_x => null()
+    class(field_t), pointer :: bc_end_u_x => null()
+    class(field_t), pointer :: bc_end_v_x => null()
+    class(field_t), pointer :: bc_end_w_x => null()
+    class(field_t), pointer :: bc_start_u_y => null()
+    class(field_t), pointer :: bc_start_v_y => null()
+    class(field_t), pointer :: bc_start_w_y => null()
+    class(field_t), pointer :: bc_end_u_y => null()
+    class(field_t), pointer :: bc_end_v_y => null()
+    class(field_t), pointer :: bc_end_w_y => null()
   contains
-    procedure(boundary_conditions), deferred :: boundary_conditions
+    procedure(define_BC), deferred :: define_BC
     procedure(initial_conditions), deferred :: initial_conditions
     procedure(forcings), deferred :: forcings
-    procedure(pre_correction), deferred :: pre_correction
+    procedure(apply_BC), deferred :: apply_BC
     procedure(postprocess), deferred :: postprocess
     procedure :: case_init
     procedure :: case_finalise
@@ -34,13 +50,13 @@ module m_base_case
   end type base_case_t
 
   abstract interface
-    subroutine boundary_conditions(self)
+    subroutine define_BC(self)
       !! Applies case-specific boundary coinditions
       import :: base_case_t
       implicit none
 
       class(base_case_t) :: self
-    end subroutine boundary_conditions
+    end subroutine define_BC
 
     subroutine initial_conditions(self)
       !! Sets case-specific initial conditions
@@ -61,7 +77,7 @@ module m_base_case
       integer, intent(in) :: iter
     end subroutine forcings
 
-    subroutine pre_correction(self, u, v, w)
+    subroutine apply_BC(self, u, v, w)
       !! Applies case-specific pre-correction to the velocity fields before
       !! pressure correction
       import :: base_case_t
@@ -70,7 +86,7 @@ module m_base_case
 
       class(base_case_t) :: self
       class(field_t), intent(inout) :: u, v, w
-    end subroutine pre_correction
+    end subroutine apply_BC
 
     subroutine postprocess(self, iter, t)
       !! Triggers case-specific postprocessings at user specified intervals
@@ -260,7 +276,7 @@ contains
     do iter = start_iter, self%solver%n_iters
       do sub_iter = 1, self%solver%time_integrator%nstage
         ! first apply case-specific BCs
-        call self%boundary_conditions()
+        call self%define_BC()
 
         do i = 1, self%solver%nvars
           deriv(i)%ptr => self%solver%backend%allocator%get_block(DIR_X)
@@ -278,7 +294,7 @@ contains
           call self%solver%backend%allocator%release_block(deriv(i)%ptr)
         end do
 
-        call self%pre_correction(self%solver%u, self%solver%v, self%solver%w)
+        call self%apply_BC(self%solver%u, self%solver%v, self%solver%w)
         if (self%solver%ibm_on) then
           call self%solver%ibm%body(self%solver%u, self%solver%v, &
                                     self%solver%w)
