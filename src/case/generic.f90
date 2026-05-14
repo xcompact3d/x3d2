@@ -15,10 +15,10 @@ module m_case_generic
 
   type, extends(base_case_t) :: case_generic_t
   contains
-    procedure :: boundary_conditions => boundary_conditions_generic
+    procedure :: define_BC => define_BC_generic
     procedure :: initial_conditions => initial_conditions_generic
     procedure :: forcings => forcings_generic
-    procedure :: pre_correction => pre_correction_generic
+    procedure :: apply_BC => apply_BC_generic
     procedure :: postprocess => postprocess_generic
   end type case_generic_t
 
@@ -40,12 +40,12 @@ contains
 
   end function case_generic_init
 
-  subroutine boundary_conditions_generic(self)
+  subroutine define_BC_generic(self)
     implicit none
 
     class(case_generic_t) :: self
 
-  end subroutine boundary_conditions_generic
+  end subroutine define_BC_generic
 
   subroutine initial_conditions_generic(self)
     implicit none
@@ -71,13 +71,13 @@ contains
 
   end subroutine forcings_generic
 
-  subroutine pre_correction_generic(self, u, v, w)
+  subroutine apply_BC_generic(self, u, v, w)
     implicit none
 
     class(case_generic_t) :: self
     class(field_t), intent(inout) :: u, v, w
 
-  end subroutine pre_correction_generic
+  end subroutine apply_BC_generic
 
   subroutine postprocess_generic(self, iter, t)
     implicit none

@@ -13,10 +13,10 @@ module m_case_tgv
 
   type, extends(base_case_t) :: case_tgv_t
   contains
-    procedure :: boundary_conditions => boundary_conditions_tgv
+    procedure :: define_BC => define_BC_tgv
     procedure :: initial_conditions => initial_conditions_tgv
     procedure :: forcings => forcings_tgv
-    procedure :: pre_correction => pre_correction_tgv
+    procedure :: apply_BC => apply_BC_tgv
     procedure :: postprocess => postprocess_tgv
   end type case_tgv_t
 
@@ -71,13 +71,13 @@ contains
     r = -cos(coords(1))*sin(coords(2))*cos(coords(3))
   end function v_func
 
-  subroutine boundary_conditions_tgv(self)
+  subroutine define_BC_tgv(self)
     implicit none
 
     class(case_tgv_t) :: self
 
     ! do nothing for TGV case
-  end subroutine boundary_conditions_tgv
+  end subroutine define_BC_tgv
 
   subroutine forcings_tgv(self, du, dv, dw, iter)
     implicit none
@@ -89,14 +89,14 @@ contains
     ! do nothing for TGV case
   end subroutine forcings_tgv
 
-  subroutine pre_correction_tgv(self, u, v, w)
+  subroutine apply_BC_tgv(self, u, v, w)
     implicit none
 
     class(case_tgv_t) :: self
     class(field_t), intent(inout) :: u, v, w
 
     ! do nothing for TGV case
-  end subroutine pre_correction_tgv
+  end subroutine apply_BC_tgv
 
   subroutine postprocess_tgv(self, iter, t)
     implicit none
