@@ -874,7 +874,7 @@ contains
     integer, intent(in) :: face
     integer, optional, intent(in) :: bc_start, bc_end
     real(dp), optional, intent(in) :: flow_rate_diff
-    integer :: dims(3), k, j, i, i_max, n_mod, n_y_blocks, y_block, k_end
+    integer :: dims(3), k, i, i_max, n_mod, n_y_blocks, y_block, k_end
     real(dp) :: flow_rate_diff_val
 
     if (f%dir /= DIR_X) &
