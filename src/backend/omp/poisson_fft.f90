@@ -284,25 +284,89 @@ contains
 
   end subroutine undo_periodicity_y_omp
 
-  subroutine enforce_periodicity_xy_omp(self, f_out, f_in)
+subroutine enforce_periodicity_xy_omp(self, f_out, f_in)
+    !! Combined X and Y periodicity enforcement (interleave shuffle).
+    !! Port of the CUDA kernel: pure index reordering, no FFT.
     implicit none
 
     class(omp_poisson_fft_t) :: self
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
-    error stop 'OpenMP backend does not support enforce_periodicity_xy yet!'
+    integer :: i, j, k, n2x, n2y, src_i, src_j
+    integer :: nx, ny
+
+    nx = self%nx_glob
+    ny = self%ny_glob
+    n2x = nx/2
+    n2y = ny/2
+
+    !$omp parallel do collapse(2) private(i, j, src_i, src_j)
+    do k = 1, self%nz_loc
+      do j = 1, ny
+        if (j <= n2y) then
+          src_j = 2*j - 1
+        else if (mod(ny, 2) == 1 .and. j == n2y + 1) then
+          src_j = ny
+        else
+          src_j = 2*ny - 2*j + 2
+        end if
+        do i = 1, nx
+          if (i <= n2x) then
+            src_i = 2*i - 1
+          else if (mod(nx, 2) == 1 .and. i == n2x + 1) then
+            src_i = nx
+          else
+            src_i = 2*nx - 2*i + 2
+          end if
+          f_out%data(i, j, k) = f_in%data(src_i, src_j, k)
+        end do
+      end do
+    end do
+    !$omp end parallel do
 
   end subroutine enforce_periodicity_xy_omp
 
   subroutine undo_periodicity_xy_omp(self, f_out, f_in)
+    !! Combined X and Y periodicity undo (reverse interleave shuffle).
+    !! Port of the CUDA kernel: pure index reordering, no FFT.
     implicit none
 
     class(omp_poisson_fft_t) :: self
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
-    error stop 'OpenMP backend does not support undo_periodicity_xy yet!'
+    integer :: i, j, k, n2x, n2y, src_i, src_j
+    integer :: nx, ny
+
+    nx = self%nx_glob
+    ny = self%ny_glob
+    n2x = nx/2
+    n2y = ny/2
+
+    !$omp parallel do collapse(2) private(i, j, src_i, src_j)
+    do k = 1, self%nz_loc
+      do j = 1, ny
+        if (mod(ny, 2) == 1 .and. j == ny) then
+          src_j = n2y + 1
+        else if (mod(j, 2) == 1) then
+          src_j = (j + 1)/2
+        else
+          src_j = ny - j/2 + 1
+        end if
+        do i = 1, nx
+          if (mod(nx, 2) == 1 .and. i == nx) then
+            src_i = n2x + 1
+          else if (mod(i, 2) == 1) then
+            src_i = (i + 1)/2
+          else
+            src_i = nx - i/2 + 1
+          end if
+          f_out%data(i, j, k) = f_in%data(src_i, src_j, k)
+        end do
+      end do
+    end do
+    !$omp end parallel do
 
   end subroutine undo_periodicity_xy_omp
 end module m_omp_poisson_fft
