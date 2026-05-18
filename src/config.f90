@@ -44,7 +44,9 @@ module m_config
   end type solver_config_t
 
   type, extends(base_config_t) :: channel_config_t
-    real(dp) :: noise, omega_rot
+    real(dp) :: omega_rot
+    real(dp) :: init_noise(3)
+    real(dp) :: inlet_noise(3)
     logical :: rotation
     integer :: n_rotate
   contains
@@ -53,9 +55,7 @@ module m_config
 
   type, extends(base_config_t) :: cylinder_config_t
     real(dp) :: init_noise(3)
-    real(dp) :: bc_start_u = 1._dp
-    real(dp) :: bc_start_v = 0._dp
-    real(dp) :: bc_start_w = 0._dp
+    real(dp) :: inlet_noise(3)
   contains
     procedure :: read => read_cylinder_nml
   end type cylinder_config_t
@@ -213,11 +213,14 @@ contains
 
     integer :: unit
 
-    real(dp) :: noise, omega_rot
+    real(dp) :: init_noise(3)
+    real(dp) :: inlet_noise(3)
+    real(dp) :: omega_rot
     logical :: rotation
     integer :: n_rotate
 
-    namelist /channel_nml/ noise, rotation, omega_rot, n_rotate
+    namelist /channel_nml/ init_noise, inlet_noise, &
+      rotation, omega_rot, n_rotate
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading channel config failed! &
@@ -233,7 +236,8 @@ contains
                  &Provide at least one of the following: file name or source'
     end if
 
-    self%noise = noise
+    self%init_noise = init_noise
+    self%inlet_noise = inlet_noise
     self%rotation = rotation
     self%omega_rot = omega_rot
     self%n_rotate = n_rotate
@@ -250,11 +254,9 @@ contains
     integer :: unit
 
     real(dp) :: init_noise(3)
-    real(dp) :: bc_start_u = 1._dp
-    real(dp) :: bc_start_v = 0._dp
-    real(dp) :: bc_start_w = 0._dp
+    real(dp) :: inlet_noise(3)
 
-    namelist /cylinder_nml/ init_noise, bc_start_u, bc_start_v, bc_start_w
+    namelist /cylinder_nml/ init_noise, inlet_noise
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading cylinder config failed! &
@@ -271,9 +273,7 @@ contains
     end if
 
     self%init_noise = init_noise
-    self%bc_start_u = bc_start_u
-    self%bc_start_v = bc_start_v
-    self%bc_start_w = bc_start_w
+    self%inlet_noise = inlet_noise
 
   end subroutine read_cylinder_nml
 

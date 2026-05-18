@@ -49,6 +49,7 @@ module m_base_backend
     procedure(field_ops), deferred :: field_shift
     procedure(field_reduce), deferred :: field_volume_integral
     procedure(field_set_face), deferred :: field_set_face
+    procedure(field_set_face_from_field), deferred :: field_set_face_from_field
     procedure(copy_data_to_f), deferred :: copy_data_to_f
     procedure(copy_f_to_data), deferred :: copy_f_to_data
     procedure(alloc_tdsops), deferred :: alloc_tdsops
@@ -285,6 +286,24 @@ module m_base_backend
       integer, optional, intent(in) :: bc_end
       real(dp), optional, intent(in) :: flow_rate_diff
     end subroutine field_set_face
+
+    subroutine field_set_face_from_field(self, f, f_start, c_end, face, &
+                                         bc_start, bc_end, flow_rate_diff)
+      !! As field_set_face but with a spatially-varying inlet face field
+      !! instead of a scalar c_start.
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: f
+      class(field_t), intent(in) :: f_start
+      real(dp), intent(in) :: c_end
+      integer, intent(in) :: face
+      integer, optional, intent(in) :: bc_start
+      integer, optional, intent(in) :: bc_end
+      real(dp), optional, intent(in) :: flow_rate_diff
+    end subroutine field_set_face_from_field
   end interface
 
   abstract interface
