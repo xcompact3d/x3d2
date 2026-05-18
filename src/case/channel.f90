@@ -63,11 +63,10 @@ contains
 
     class(field_t), pointer :: hu, hv, hw
     real(dp) :: can, ub
-    real(dp) :: noise
+    real(dp) :: noise(3)
     integer :: i, k, dims(3)
     integer :: ierr
 
-    ! --- 1. Bulk-flow correction (unchanged from original) ---
     ub = self%solver%backend%field_volume_integral(self%solver%u)
 
     ub = ub/(product(self%solver%mesh%get_global_dims(CELL)))
@@ -78,9 +77,9 @@ contains
 
     call self%solver%backend%field_shift(self%solver%u, can)
 
-    ! --- 2. Refresh Y_FACE BC fields ---
+    ! Refresh Y_FACE BC fields
     dims = self%solver%mesh%get_dims(VERT)
-    noise = self%channel_cfg%noise
+    noise = self%channel_cfg%inlet_noise
 
     ! Allocate persistent device BC fields on first call.
     if (.not. associated(self%bc_start_u_y)) then
@@ -109,13 +108,13 @@ contains
     ! Fill the two y-wall planes; the kernel reads no other j.
     do k = 1, dims(3)
       do i = 1, dims(1)
-        hu%data(i, 1, k) = noise*(2._dp*hu%data(i, 1, k) - 1._dp)
-        hv%data(i, 1, k) = noise*(2._dp*hv%data(i, 1, k) - 1._dp)
-        hw%data(i, 1, k) = noise*(2._dp*hw%data(i, 1, k) - 1._dp)
+        hu%data(i, 1, k) = noise(1)*(2._dp*hu%data(i, 1, k) - 1._dp)
+        hv%data(i, 1, k) = noise(2)*(2._dp*hv%data(i, 1, k) - 1._dp)
+        hw%data(i, 1, k) = noise(3)*(2._dp*hw%data(i, 1, k) - 1._dp)
 
-        hu%data(i, dims(2), k) = noise*(2._dp*hu%data(i, dims(2), k) - 1._dp)
-        hv%data(i, dims(2), k) = noise*(2._dp*hv%data(i, dims(2), k) - 1._dp)
-        hw%data(i, dims(2), k) = noise*(2._dp*hw%data(i, dims(2), k) - 1._dp)
+        hu%data(i, dims(2), k) = noise(1)*(2._dp*hu%data(i, dims(2), k) - 1._dp)
+        hv%data(i, dims(2), k) = noise(2)*(2._dp*hv%data(i, dims(2), k) - 1._dp)
+        hw%data(i, dims(2), k) = noise(3)*(2._dp*hw%data(i, dims(2), k) - 1._dp)
       end do
     end do
 
@@ -137,7 +136,7 @@ contains
     class(field_t), pointer :: u_init, v_init, w_init
 
     integer :: i, j, k, dims(3)
-    real(dp) :: xloc(3), y, noise, um
+    real(dp) :: xloc(3), y, noise(3), um
 
     dims = self%solver%mesh%get_dims(VERT)
     u_init => self%solver%host_allocator%get_block(DIR_C)
@@ -148,7 +147,7 @@ contains
     call random_number(v_init%data(1:dims(1), 1:dims(2), 1:dims(3)))
     call random_number(w_init%data(1:dims(1), 1:dims(2), 1:dims(3)))
 
-    noise = self%channel_cfg%noise
+    noise = self%channel_cfg%inlet_noise(3)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -157,9 +156,9 @@ contains
           um = exp(-0.2_dp*y*y)
 
           u_init%data(i, j, k) = 1._dp - y*y &
-                                 + noise*um*(2*u_init%data(i, j, k) - 1._dp)
-          v_init%data(i, j, k) = noise*um*(2*v_init%data(i, j, k) - 1._dp)
-          w_init%data(i, j, k) = noise*um*(2*w_init%data(i, j, k) - 1._dp)
+                                 + noise(1)*um*(2*u_init%data(i, j, k) - 1._dp)
+          v_init%data(i, j, k) = noise(2)*um*(2*v_init%data(i, j, k) - 1._dp)
+          w_init%data(i, j, k) = noise(3)*um*(2*w_init%data(i, j, k) - 1._dp)
         end do
       end do
     end do

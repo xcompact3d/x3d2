@@ -44,7 +44,9 @@ module m_config
   end type solver_config_t
 
   type, extends(base_config_t) :: channel_config_t
-    real(dp) :: noise, omega_rot
+    real(dp) :: omega_rot
+    real(dp) :: init_noise(3)
+    real(dp) :: inlet_noise(3)
     logical :: rotation
     integer :: n_rotate
   contains
@@ -211,11 +213,14 @@ contains
 
     integer :: unit
 
-    real(dp) :: noise, omega_rot
+    real(dp) :: init_noise(3)
+    real(dp) :: inlet_noise(3)
+    real(dp) :: omega_rot
+    real(dp) :: 
     logical :: rotation
     integer :: n_rotate
 
-    namelist /channel_nml/ noise, rotation, omega_rot, n_rotate
+    namelist /channel_nml/ init_noise, inlet_noise, rotation, omega_rot, n_rotate
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading channel config failed! &
@@ -231,7 +236,8 @@ contains
                  &Provide at least one of the following: file name or source'
     end if
 
-    self%noise = noise
+    self%init_noise = init_noise
+    self%inlet_noise = inlet_noise
     self%rotation = rotation
     self%omega_rot = omega_rot
     self%n_rotate = n_rotate
