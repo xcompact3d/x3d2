@@ -216,11 +216,12 @@ contains
     real(dp) :: init_noise(3)
     real(dp) :: inlet_noise(3)
     real(dp) :: omega_rot
-    real(dp) :: 
+    real(dp) ::
     logical :: rotation
     integer :: n_rotate
 
-    namelist /channel_nml/ init_noise, inlet_noise, rotation, omega_rot, n_rotate
+    namelist /channel_nml/ init_noise, inlet_noise, &
+      rotation, omega_rot, n_rotate
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading channel config failed! &

@@ -112,9 +112,12 @@ contains
         hv%data(i, 1, k) = noise(2)*(2._dp*hv%data(i, 1, k) - 1._dp)
         hw%data(i, 1, k) = noise(3)*(2._dp*hw%data(i, 1, k) - 1._dp)
 
-        hu%data(i, dims(2), k) = noise(1)*(2._dp*hu%data(i, dims(2), k) - 1._dp)
-        hv%data(i, dims(2), k) = noise(2)*(2._dp*hv%data(i, dims(2), k) - 1._dp)
-        hw%data(i, dims(2), k) = noise(3)*(2._dp*hw%data(i, dims(2), k) - 1._dp)
+        hu%data(i, dims(2), k) = &
+          noise(1)*(2._dp*hu%data(i, dims(2), k) - 1._dp)
+        hv%data(i, dims(2), k) = &
+          noise(2)*(2._dp*hv%data(i, dims(2), k) - 1._dp)
+        hw%data(i, dims(2), k) = &
+          noise(3)*(2._dp*hw%data(i, dims(2), k) - 1._dp)
       end do
     end do
 
