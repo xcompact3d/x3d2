@@ -39,6 +39,11 @@ module m_poisson_fft
                                                     a_re, a_im
     !> lowmem option, only used in CUDA backend
     logical :: lowmem = .false.
+    !> Which spectral layout this engine uses for `waves` and the
+    !> spectral postprocess kernels. .false. is the CUDA-native layout
+    !> with the R2C-folded axis at dim1; .true. is the OMP/2decomp
+    !> layout with the R2C-folded axis at dim3.
+    logical :: omp_layout = .false.
     !> Procedure pointer to BC specific poisson solvers
     procedure(poisson_xxx), pointer :: poisson => null()
   contains
@@ -685,50 +690,97 @@ contains
 
     if ((.not. self%periodic_x) .and. (.not. self%periodic_y) .and. &
         self%periodic_z) then
-      ! =========================================================================
-      ! 110 case: Non-periodic X, Non-periodic Y, Periodic Z
-      ! Uses Z-TRANSPOSED layout: spectral array is (nz/2+1, nx, ny)
-      !   dim1 (i) indexes Z R2C modes  -> use kz, ez
-      !   dim2 (j) indexes X modes      -> use kx, ex
-      !   dim3 (k) indexes Y modes      -> use ky, ey
-      ! =========================================================================
-      do k = 1, self%nz_spec     ! Y modes
-        do j = 1, self%ny_spec   ! X modes
-          do i = 1, self%nx_spec ! Z R2C modes
-            iz = i + self%sp_st(1)
-            ix = j + self%sp_st(2)
-            iy = k + self%sp_st(3)
+      if (self%omp_layout) then
+        ! =====================================================================
+        ! 110 OMP layout: spectral array is (nx, ny, nz/2+1)
+        !   dim1 (i) -> X modes
+        !   dim2 (j) -> Y modes
+        !   dim3 (k) -> Z R2C modes
+        ! Layout difference vs CUDA below: only the iz/ix/iy mapping and the
+        ! loop labels; the wave-number arithmetic is identical.
+        ! =====================================================================
+        do k = 1, self%nz_spec     ! Z R2C modes
+          do j = 1, self%ny_spec   ! Y modes
+            do i = 1, self%nx_spec ! X modes
+              ix = i + self%sp_st(1)
+              iy = j + self%sp_st(2)
+              iz = k + self%sp_st(3)
 
-            rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
-            rleys = real(self%eys(iy), kind=dp)*geo%d(2)
-            rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
+              rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
+              rleys = real(self%eys(iy), kind=dp)*geo%d(2)
+              rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
 
-            xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
-                     + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
-                     + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
-                     + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
-            ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
-                     + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
-                     + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
-                     + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
-            ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
-                     + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
-                     + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
-                     + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
+              xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
+                       + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
+                       + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
+                       + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
+              ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
+                       + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
+                       + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
+                       + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
+              ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
+                       + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
+                       + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
+                       + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
 
-            xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
-            yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
-            zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
+              xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
+              yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
+              zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
 
-            xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
-            yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
-            zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
+              xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
+              yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
+              zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
 
-            xyzk = xt2 + yt2 + zt2
-            self%waves(i, j, k) = xyzk
+              xyzk = xt2 + yt2 + zt2
+              self%waves(i, j, k) = xyzk
+            end do
           end do
         end do
-      end do
+      else
+        ! =====================================================================
+        ! 110 CUDA layout: spectral array is (nz/2+1, nx, ny)
+        !   dim1 (i) indexes Z R2C modes  -> use kz, ez
+        !   dim2 (j) indexes X modes      -> use kx, ex
+        !   dim3 (k) indexes Y modes      -> use ky, ey
+        ! =====================================================================
+        do k = 1, self%nz_spec     ! Y modes
+          do j = 1, self%ny_spec   ! X modes
+            do i = 1, self%nx_spec ! Z R2C modes
+              iz = i + self%sp_st(1)
+              ix = j + self%sp_st(2)
+              iy = k + self%sp_st(3)
+
+              rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
+              rleys = real(self%eys(iy), kind=dp)*geo%d(2)
+              rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
+
+              xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
+                       + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
+                       + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
+                       + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
+              ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
+                       + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
+                       + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
+                       + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
+              ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
+                       + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
+                       + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
+                       + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
+
+              xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
+              yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
+              zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
+
+              xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
+              yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
+              zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
+
+              xyzk = xt2 + yt2 + zt2
+              self%waves(i, j, k) = xyzk
+            end do
+          end do
+        end do
+      end if
 
     else if ((.not. self%periodic_x) .and. self%periodic_y .and. &
              self%periodic_z) then

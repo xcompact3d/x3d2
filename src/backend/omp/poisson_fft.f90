@@ -97,6 +97,10 @@ contains
     ! Converts a start position into an offset
     istart(:) = istart(:) - 1
 
+    ! Tell the base class which spectral layout we're using so waves_set
+    ! produces a waves array indexed (x_mode, y_mode, z_mode), matching
+    ! the (nx, ny, nz/2+1) shape 2decomp gives us with PHYSICAL_IN_Z.
+    poisson_fft%omp_layout = .true.
     call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps, isize, istart)
 
     if (mesh%geo%stretched(2)) then
