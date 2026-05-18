@@ -216,7 +216,6 @@ contains
     real(dp) :: init_noise(3)
     real(dp) :: inlet_noise(3)
     real(dp) :: omega_rot
-    real(dp) ::
     logical :: rotation
     integer :: n_rotate
 
