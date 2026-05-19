@@ -10,7 +10,14 @@ module m_omp_poisson_fft
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t
 
-  use m_omp_spectral, only: process_spectral_000, process_spectral_010
+  use m_omp_spectral, only: process_spectral_000, process_spectral_010, &
+                            process_spectral_110_norm_z, &
+                            process_spectral_110_x_pair_fw, &
+                            process_spectral_110_y_pair_fw, &
+                            process_spectral_110_poisson, &
+                            process_spectral_110_y_pair_bw, &
+                            process_spectral_110_x_pair_bw, &
+                            process_spectral_110_z_bw
 
   implicit none
 
@@ -262,20 +269,26 @@ subroutine fft_roundtrip_check(self, f_in)
   end subroutine fft_forward_110_omp
 
   subroutine fft_backward_110_omp(self, f_out)
-    !! Backward FFT for the 110 case. Mirrors fft_backward_110_cuda:
-    !! dedicated wrapper, copies back through self%r_x.
     implicit none
-
     class(omp_poisson_fft_t) :: self
     class(field_t), intent(inout) :: f_out
 
     call decomp_2d_fft_3d(self%c_x, self%r_x)
-    ! Copy back from the contiguous workspace into the logical region of
-    ! the allocator-padded destination buffer. Padded entries of
-    ! f_out%data are left untouched.
+    ! Zero the full padded buffer before writing back the logical region.
+    ! The allocator leaves stale values in the padding (up to ~600x the
+    ! logical-region magnitude in the cylinder case), and the solver reads
+    ! the whole padded array when applying the pressure correction.
+    f_out%data = 0._dp
     call copy_contig_to_logical(f_out%data, self%r_x, &
                                 self%nx_loc, self%ny_loc, self%nz_loc)
 
+    ! TEMP DIAGNOSTIC
+    if (self%mesh%par%is_root()) then
+      print '(A,ES12.5)', ' bwd max|f_out| logical: ', &
+        maxval(abs(f_out%data(1:self%nx_loc, 1:self%ny_loc, 1:self%nz_loc)))
+      print '(A,ES12.5)', ' bwd max|f_out| padded:  ', &
+        maxval(abs(f_out%data))
+    end if
   end subroutine fft_backward_110_omp
 
   subroutine copy_logical_to_contig(dst, src, nx, ny, nz)
@@ -438,11 +451,67 @@ subroutine fft_roundtrip_check(self, f_in)
   end subroutine fft_postprocess_100_omp
 
   subroutine fft_postprocess_110_omp(self)
+    !! Spectral post-processing for the 110 case (OMP).
+    !! Mirrors fft_postprocess_110_cuda: same seven phases, but each
+    !! phase is one OMP parallel-do block working on the natural
+    !! (nx, ny, nz/2+1) layout that 2decomp's PHYSICAL_IN_Z gives us.
+    !! Implicit join at the end of each parallel-do provides the
+    !! barrier the non-local pair dependencies need between phases.
     implicit none
-
     class(omp_poisson_fft_t) :: self
 
-    error stop 'OpenMP backend does not support fft_postprocess_110 yet!'
+    integer :: nz_h
+
+    nz_h = self%nz_spec   ! = nz/2+1 in this layout
+
+    ! Step 1: normalise + Z periodic forward
+    call process_spectral_110_norm_z( &
+      self%c_x, self%nx_spec, self%ny_spec, nz_h, self%nz_glob, &
+      self%az, self%bz)
+      if (self%mesh%par%is_root()) print '(A,ES12.5)', ' after norm_z    max|c_x|=', maxval(abs(real(self%c_x)))
+
+
+    ! Step 2: X paired split (forward)
+    call process_spectral_110_x_pair_fw( &
+      self%c_x, self%nx_spec, self%ny_spec, nz_h, self%sp_st(1), &
+      self%ax, self%bx)
+      if (self%mesh%par%is_root()) print '(A,ES12.5)', ' after x_pair_fw max|c_x|=', maxval(abs(real(self%c_x)))
+
+
+    ! Step 3: Y paired split (forward)
+    call process_spectral_110_y_pair_fw( &
+      self%c_x, self%nx_spec, self%ny_spec, nz_h, self%sp_st(2), &
+      self%ay, self%by)
+      if (self%mesh%par%is_root()) print '(A,ES12.5)', ' after y_pair_fw max|c_x|=', maxval(abs(real(self%c_x)))
+
+
+    ! Step 4: Poisson solve
+    call process_spectral_110_poisson( &
+      self%c_x, self%waves, self%nx_spec, self%ny_spec, nz_h, &
+      self%nz_glob, self%sp_st(1))
+      if (self%mesh%par%is_root()) print '(A,ES12.5)', ' after poisson   max|c_x|=', maxval(abs(real(self%c_x)))
+
+
+
+    ! Step 5: Y paired recombine (backward)
+    call process_spectral_110_y_pair_bw( &
+      self%c_x, self%nx_spec, self%ny_spec, nz_h, self%sp_st(2), &
+      self%ay, self%by)
+      if (self%mesh%par%is_root()) print '(A,ES12.5)', ' after y_pair_bw max|c_x|=', maxval(abs(real(self%c_x)))
+
+
+    ! Step 6: X paired recombine (backward)
+    call process_spectral_110_x_pair_bw( &
+      self%c_x, self%nx_spec, self%ny_spec, nz_h, self%sp_st(1), &
+      self%ax, self%bx)
+      if (self%mesh%par%is_root()) print '(A,ES12.5)', ' after x_pair_bw max|c_x|=', maxval(abs(real(self%c_x)))
+
+
+    ! Step 7: Z periodic undo (backward)
+    call process_spectral_110_z_bw( &
+      self%c_x, self%nx_spec, self%ny_spec, nz_h, &
+      self%az, self%bz)
+      if (self%mesh%par%is_root()) print '(A,ES12.5)', ' after z_bw      max|c_x|=', maxval(abs(real(self%c_x)))
 
   end subroutine fft_postprocess_110_omp
 
