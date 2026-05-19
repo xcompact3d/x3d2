@@ -692,50 +692,52 @@ contains
 
   subroutine pressure_correction(self, u, v, w)
     implicit none
-
     class(solver_t) :: self
     class(field_t), intent(inout) :: u, v, w
-
     class(field_t), pointer :: div_u, p, dpdx, dpdy, dpdz
 
     div_u => self%backend%allocator%get_block(DIR_Z)
-
     call self%divergence_v2p(div_u, u, v, w)
 
+    if (self%mesh%par%is_root()) print '(A, ES12.5)', &
+      '   [press_corr] maxabs div_u = ', maxval(abs(div_u%data))
+
     if (self%keep_pressure) then
-      ! Persist pressure for snapshot output
       if (.not. associated(self%pressure)) then
         self%pressure => self%backend%allocator%get_block(DIR_Z, CELL)
       end if
       p => self%pressure
     else
-      ! Temporary pressure, released after use
       p => self%backend%allocator%get_block(DIR_Z)
     end if
-
     call self%poisson(p, div_u)
-
     call self%backend%allocator%release_block(div_u)
+
+    if (self%mesh%par%is_root()) print '(A, ES12.5)', &
+      '   [press_corr] maxabs p     = ', maxval(abs(p%data))
 
     dpdx => self%backend%allocator%get_block(DIR_X)
     dpdy => self%backend%allocator%get_block(DIR_X)
     dpdz => self%backend%allocator%get_block(DIR_X)
-
+    dpdx%data = 0._dp
+    dpdy%data = 0._dp
+    dpdz%data = 0._dp
     call self%gradient_p2v(dpdx, dpdy, dpdz, p)
+
+    if (self%mesh%par%is_root()) print '(A, ES12.5, A, ES12.5, A, ES12.5)', &
+      '   [press_corr] maxabs grad p x/y/z = ', maxval(abs(dpdx%data)), &
+      ' / ', maxval(abs(dpdy%data)), ' / ', maxval(abs(dpdz%data))
 
     if (.not. self%keep_pressure) then
       call self%backend%allocator%release_block(p)
     end if
 
-    ! velocity correction
     call self%backend%vecadd(-1._dp, dpdx, 1._dp, u)
     call self%backend%vecadd(-1._dp, dpdy, 1._dp, v)
     call self%backend%vecadd(-1._dp, dpdz, 1._dp, w)
-
     call self%backend%allocator%release_block(dpdx)
     call self%backend%allocator%release_block(dpdy)
     call self%backend%allocator%release_block(dpdz)
-
   end subroutine pressure_correction
 
 end module m_solver

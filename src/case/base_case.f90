@@ -284,24 +284,65 @@ contains
 
         call self%solver%transeq(deriv, curr)
 
+        if (self%solver%mesh%par%is_root()) then
+          print '(A, I0, A, ES12.5, A, ES12.5, A, ES12.5)', &
+            ' [iter ', iter, '] after transeq: maxabs du/dv/dw = ', &
+            maxval(abs(deriv(1)%ptr%data)), ' / ', &
+            maxval(abs(deriv(2)%ptr%data)), ' / ', &
+            maxval(abs(deriv(3)%ptr%data))
+        end if
+
         ! models that introduce source terms handled here
         call self%forcings(deriv(1)%ptr, deriv(2)%ptr, deriv(3)%ptr, iter)
 
         ! time integration
         call self%solver%time_integrator%step(curr, deriv, self%solver%dt)
 
+        if (self%solver%mesh%par%is_root()) then
+          print '(A, I0, A, ES12.5, A, ES12.5, A, ES12.5)', &
+            ' [iter ', iter, '] after step:    maxabs u /v /w  = ', &
+            maxval(abs(self%solver%u%data)), ' / ', &
+            maxval(abs(self%solver%v%data)), ' / ', &
+            maxval(abs(self%solver%w%data))
+        end if
+
         do i = 1, self%solver%nvars
           call self%solver%backend%allocator%release_block(deriv(i)%ptr)
         end do
 
         call self%apply_BC(self%solver%u, self%solver%v, self%solver%w)
+
+        if (self%solver%mesh%par%is_root()) then
+          print '(A, I0, A, ES12.5, A, ES12.5, A, ES12.5)', &
+            ' [iter ', iter, '] after apply_BC: maxabs u/v/w = ', &
+            maxval(abs(self%solver%u%data)), ' / ', &
+            maxval(abs(self%solver%v%data)), ' / ', &
+            maxval(abs(self%solver%w%data))
+        end if
+
         if (self%solver%ibm_on) then
           call self%solver%ibm%body(self%solver%u, self%solver%v, &
                                     self%solver%w)
         end if
 
+        if (self%solver%mesh%par%is_root()) then
+          print '(A, I0, A, ES12.5, A, ES12.5, A, ES12.5)', &
+            ' [iter ', iter, '] after IBM:      maxabs u/v/w = ', &
+            maxval(abs(self%solver%u%data)), ' / ', &
+            maxval(abs(self%solver%v%data)), ' / ', &
+            maxval(abs(self%solver%w%data))
+        end if
+
         call self%solver%pressure_correction(self%solver%u, self%solver%v, &
                                              self%solver%w)
+
+        if (self%solver%mesh%par%is_root()) then
+          print '(A, I0, A, ES12.5, A, ES12.5, A, ES12.5)', &
+            ' [iter ', iter, '] after press_corr: maxabs u/v/w = ', &
+            maxval(abs(self%solver%u%data)), ' / ', &
+            maxval(abs(self%solver%v%data)), ' / ', &
+            maxval(abs(self%solver%w%data))
+        end if
       end do
 
       self%solver%current_iter = iter

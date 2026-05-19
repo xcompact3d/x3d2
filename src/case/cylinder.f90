@@ -233,6 +233,11 @@ contains
       w, self%bc_start_w_x, self%out_vel, X_FACE, &
       bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
       flow_rate_diff=self%flow_rate_diff)
+
+      print '(A, ES12.5, A, ES12.5, A, ES12.5)', &
+  ' apply_BC: maxabs u/v/w = ', maxval(abs(u%data)), &
+  ' / ', maxval(abs(v%data)), &
+  ' / ', maxval(abs(w%data))
   end subroutine apply_BC_cylinder
 
   ! ==========================================================================

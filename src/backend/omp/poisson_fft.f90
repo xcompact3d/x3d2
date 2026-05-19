@@ -281,6 +281,10 @@ subroutine fft_roundtrip_check(self, f_in)
     f_out%data = 0._dp
     call copy_contig_to_logical(f_out%data, self%r_x, &
                                 self%nx_loc, self%ny_loc, self%nz_loc)
+    if (self%mesh%par%is_root()) then
+      print '(A, ES12.5)', '   [fft_back] maxabs f_out%data (post-copy) = ', &
+        maxval(abs(f_out%data))
+    end if
 
     ! TEMP DIAGNOSTIC
     if (self%mesh%par%is_root()) then
@@ -289,6 +293,8 @@ subroutine fft_roundtrip_check(self, f_in)
       print '(A,ES12.5)', ' bwd max|f_out| padded:  ', &
         maxval(abs(f_out%data))
     end if
+
+    
   end subroutine fft_backward_110_omp
 
   subroutine copy_logical_to_contig(dst, src, nx, ny, nz)
@@ -604,6 +610,12 @@ subroutine enforce_periodicity_xy_omp(self, f_out, f_in)
     n2x = nx/2
     n2y = ny/2
 
+    ! Zero the entire padded array to match the CUDA path. Without this,
+    ! stale values in the padded region (left over from previous block
+    ! reuse by the allocator) can be read by downstream operators that
+    ! walk the full padded extent, e.g. gradient_p2v.
+    f_out%data = 0._dp
+
     !$omp parallel do collapse(2) private(i, j, src_i, src_j)
     do k = 1, self%nz_loc
       do j = 1, ny
@@ -646,6 +658,12 @@ subroutine enforce_periodicity_xy_omp(self, f_out, f_in)
     ny = self%ny_glob
     n2x = nx/2
     n2y = ny/2
+
+    ! Zero the entire padded array to match the CUDA path. Without this,
+    ! stale values in the padded region (left over from previous block
+    ! reuse by the allocator) can be read by downstream operators that
+    ! walk the full padded extent, e.g. gradient_p2v.
+    f_out%data = 0._dp
 
     !$omp parallel do collapse(2) private(i, j, src_i, src_j)
     do k = 1, self%nz_loc
