@@ -5,10 +5,10 @@ module m_solver
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, get_argument, &
-                      RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
-                      RDR_Z2C, RDR_C2Z, &
-                      DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL, &
-                      BC_NEUMANN, BC_DIRICHLET
+                    RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
+                    RDR_Z2C, RDR_C2Z, &
+                    DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL, &
+                    BC_NEUMANN, BC_DIRICHLET
   use m_config, only: solver_config_t
   use m_field, only: field_t, flist_t
   use m_ibm, only: ibm_t
@@ -649,33 +649,24 @@ contains
       )
 
   end subroutine curl
-
-  subroutine poisson_fft(self, pressure, div_u)
+subroutine poisson_fft(self, pressure, div_u)
     implicit none
-
     class(solver_t) :: self
     class(field_t), intent(inout) :: pressure
     class(field_t), intent(in) :: div_u
-
     class(field_t), pointer :: p_temp, temp
-
     ! reorder into 3D Cartesian data structure
     p_temp => self%backend%allocator%get_block(DIR_C)
     call self%backend%reorder(p_temp, div_u, RDR_Z2C)
 
     temp => self%backend%allocator%get_block(DIR_C)
-
     ! solve poisson equation with FFT based approach
     call self%backend%poisson_fft%solve_poisson(p_temp, temp)
-
     call self%backend%allocator%release_block(temp)
-
     ! reorder back to our specialist data structure from 3D Cartesian
     call self%backend%reorder(pressure, p_temp, RDR_C2Z)
-
     call self%backend%allocator%release_block(p_temp)
-
-  end subroutine poisson_fft
+end subroutine poisson_fft
 
   subroutine poisson_cg(self, pressure, div_u)
     implicit none
@@ -695,12 +686,8 @@ contains
     class(solver_t) :: self
     class(field_t), intent(inout) :: u, v, w
     class(field_t), pointer :: div_u, p, dpdx, dpdy, dpdz
-
     div_u => self%backend%allocator%get_block(DIR_Z)
     call self%divergence_v2p(div_u, u, v, w)
-
-    if (self%mesh%par%is_root()) print '(A, ES12.5)', &
-      '   [press_corr] maxabs div_u = ', maxval(abs(div_u%data))
 
     if (self%keep_pressure) then
       if (.not. associated(self%pressure)) then
@@ -713,8 +700,6 @@ contains
     call self%poisson(p, div_u)
     call self%backend%allocator%release_block(div_u)
 
-    if (self%mesh%par%is_root()) print '(A, ES12.5)', &
-      '   [press_corr] maxabs p     = ', maxval(abs(p%data))
 
     dpdx => self%backend%allocator%get_block(DIR_X)
     dpdy => self%backend%allocator%get_block(DIR_X)
@@ -723,10 +708,6 @@ contains
     dpdy%data = 0._dp
     dpdz%data = 0._dp
     call self%gradient_p2v(dpdx, dpdy, dpdz, p)
-
-    if (self%mesh%par%is_root()) print '(A, ES12.5, A, ES12.5, A, ES12.5)', &
-      '   [press_corr] maxabs grad p x/y/z = ', maxval(abs(dpdx%data)), &
-      ' / ', maxval(abs(dpdy%data)), ' / ', maxval(abs(dpdz%data))
 
     if (.not. self%keep_pressure) then
       call self%backend%allocator%release_block(p)

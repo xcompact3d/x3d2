@@ -352,6 +352,14 @@ contains
       call du%set_data_loc(move_data_loc(u%data_loc, u%dir, tdsops%move))
     end if
 
+    ! Zero the output block before solving. The underlying kernel
+    ! (exec_dist_tds_compact via der_univ_dist) writes only the first
+    ! tdsops%n_tds entries along the tridiag axis of each pencil, so
+    ! the X-direction-padding portion of each pencil is left at
+    ! whatever the allocator block previously held. Without zeroing,
+    ! stale values bleed into downstream stencil reads.
+    du%data = 0._dp
+
     call tds_solve_dist(self, du, u, tdsops)
 
   end subroutine tds_solve_omp
