@@ -13,7 +13,7 @@ The file is a comma-separated CSV with a header line:
 
 .. code-block:: text
 
-   # time, enstrophy, ke, eps, div_u_max, div_u_mean
+   # time, enstrophy, div_u_max, div_u_mean
 
 Each subsequent row contains one record per output step.
 
@@ -33,23 +33,12 @@ Quantities
    * - ``enstrophy``
      - Spatially-averaged enstrophy
      - :math:`\mathcal{E} = \frac{1}{2N} \sum |\nabla \times \mathbf{u}|^2`
-   * - ``ke``
-     - Spatially-averaged kinetic energy
-     - :math:`E_k = \frac{1}{2N} \sum (u^2 + v^2 + w^2)`
-   * - ``eps``
-     - Dissipation rate (2nd derivative form)
-     - :math:`\varepsilon = -\frac{\nu}{N} \sum \mathbf{u} \cdot \nabla^2 \mathbf{u}`
    * - ``div_u_max``
      - Maximum of :math:`|\nabla \cdot \mathbf{u}|`
      - Divergence-free check
    * - ``div_u_mean``
      - Mean of :math:`|\nabla \cdot \mathbf{u}|`
      - Divergence-free check
-
-.. note::
-
-   The dissipation rate uses the second-derivative form, which is
-   equivalent to the strain-rate form for periodic flows.
 
 .. note::
 
@@ -69,25 +58,21 @@ Example: plotting with Python
    import pandas as pd
    import matplotlib.pyplot as plt
 
-   df = pd.read_csv("monitoring.csv", comment="#")
-   df.columns = df.columns.str.strip()
+   columns = ["time", "enstrophy", "div_u_max", "div_u_mean"]
+   df = pd.read_csv("monitoring.csv", comment="#", names=columns)
 
-   fig, axes = plt.subplots(2, 2, figsize=(10, 6))
+   fig, axes = plt.subplots(3, 1, figsize=(8, 8), sharex=True)
 
-   axes[0, 0].plot(df["time"], df["enstrophy"])
-   axes[0, 0].set_ylabel("Enstrophy")
+   axes[0].plot(df["time"], df["enstrophy"])
+   axes[0].set_ylabel("Enstrophy")
 
-   axes[0, 1].plot(df["time"], df["ke"])
-   axes[0, 1].set_ylabel("Kinetic energy")
+   axes[1].plot(df["time"], df["div_u_max"])
+   axes[1].set_ylabel("div(u) max")
 
-   axes[1, 0].plot(df["time"], df["eps"])
-   axes[1, 0].set_ylabel("Dissipation rate")
+   axes[2].plot(df["time"], df["div_u_mean"])
+   axes[2].set_ylabel("div(u) mean")
 
-   axes[1, 1].plot(df["time"], df["div_u_max"])
-   axes[1, 1].set_ylabel("div(u) max")
-
-   for ax in axes.flat:
-       ax.set_xlabel("Time")
+   axes[-1].set_xlabel("Time")
 
    plt.tight_layout()
    plt.savefig("monitoring.png")
