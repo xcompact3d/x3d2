@@ -46,7 +46,7 @@ contains
     real(dp), intent(in) :: t
     class(field_t), intent(in) :: u, v, w
 
-    class(field_t), pointer :: du, dv, dw, div_u, lapl
+    class(field_t), pointer :: du, dv, dw, div_u
     real(dp) :: enstrophy, div_u_max, div_u_mean
 
     !! Enstrophy: \( \mathcal{E} = \frac{1}{2N} \sum |\nabla \times \mathbf{u}|^2 \)
