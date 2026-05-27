@@ -317,6 +317,18 @@ contains
     dud => self%allocator%get_block(dir)
     d2u => self%allocator%get_block(dir)
 
+    ! Zero output and scratch blocks before solving. The underlying
+    ! kernel (exec_dist_transeq_compact via der_univ_dist) writes only
+    ! the first tdsops%n_tds entries along the tridiag axis of each
+    ! pencil, so the X-direction-padding portion of rhs_du, dud and
+    ! d2u is left at whatever the allocator block previously held.
+    ! Stale values in dud and d2u are then read by the second pass
+    ! (der_univ_fused_subs) and stenciled into rhs_du, producing a
+    ! spurious O(1) signal in the cylinder 110 case.
+    rhs_du%data = 0._dp
+    dud%data = 0._dp
+    d2u%data = 0._dp
+
     call exec_dist_transeq_compact( &
       rhs_du%data, dud%data, d2u%data, &
       self%du_send_s, self%du_send_e, self%du_recv_s, self%du_recv_e, &
