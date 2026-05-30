@@ -894,7 +894,7 @@ contains
     integer, intent(in) :: face
     integer, optional, intent(in) :: bc_start, bc_end
     real(dp), optional, intent(in) :: flow_rate_diff
-    integer :: dims(3), k, i, i_max, n_mod, n_y_blocks, y_block, k_end
+    integer :: dims(3), k, i, i_max, n_y_blocks, y_block, k_end
     real(dp) :: flow_rate_diff_val
 
     if (f%dir /= DIR_X) &
@@ -908,18 +908,23 @@ contains
     if (present(flow_rate_diff)) flow_rate_diff_val = flow_rate_diff
 
     dims = self%mesh%get_dims(f%data_loc)
-    n_mod = mod(dims(2) - 1, SZ) + 1
     n_y_blocks = (dims(2) - 1)/SZ + 1
 
     !$omp parallel do private(k_end, y_block, i_max)
     do k = 1, n_y_blocks*dims(3)
       y_block = (k - 1)/dims(3) + 1
       k_end = k
-      if (y_block == n_y_blocks) then
-        i_max = n_mod
-      else
-        i_max = SZ
-      end if
+      ! Write the full SIMD width on every block, including the final
+      ! partial one. The fields are stored (SZ, n_tds, n_groups), so the
+      ! first index always has SZ slots. The trailing lanes of the last
+      ! y-block are padding (no valid cell), but transeq_x reads them
+      ! through its SIMD stencil. Leaving them as uninitialised allocator
+      ! memory seeded a tiny (~1e-15) non-zero value at the boundary plane,
+      ! which transeq_x then differentiated and amplified into an unstable
+      ! mode that diverged to NaN over a few hundred iterations on the OMP
+      ! backend. Writing the boundary value into the padding lanes keeps
+      ! them defined and harmless.
+      i_max = SZ
       do i = 1, i_max
         ! left face: spatially-varying Dirichlet from f_start at i=1
         f%data(i, 1, k) = f_start%data(i, 1, k)
