@@ -928,6 +928,16 @@ contains
     self%dist_sa(1) = self%dist_fw(1)*self%dist_sa(1)
     self%dist_sc(1) = -self%dist_fw(1)*self%dist_sc(1)*self%dist_sc(2)
 
+    ! dist_fw(2) and the final two dist_bw entries are not written by the
+    ! sweeps above (the forward pass starts dist_fw at i=3, the backward
+    ! pass writes dist_bw down to index 2). The current tridiagonal kernels
+    ! do not read these slots, but leaving them unassigned is undefined
+    ! behaviour and makes cross-backend state comparisons spuriously differ.
+    ! Define them explicitly.
+    self%dist_fw(2) = 0._dp
+    self%dist_bw(self%n_tds - 1) = 0._dp
+    self%dist_bw(self%n_tds) = 0._dp
+
   end subroutine preprocess_dist
 
   subroutine preprocess_thom(self, b)
@@ -1101,6 +1111,7 @@ contains
     self%dist_sc(:) = 0._dp
 
   end subroutine preprocess_penta_dist
+
 
 end module m_tdsops
 
