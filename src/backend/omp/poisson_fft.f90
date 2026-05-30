@@ -192,10 +192,6 @@ subroutine fft_roundtrip_check(self, f_in)
       end do
     end do
 
-    if (self%mesh%par%is_root()) then
-      print '(A, ES12.5)', ' FFT round-trip max abs diff: ', max_diff
-    end if
-
     deallocate (r_tmp, c_tmp)
 
   end subroutine fft_roundtrip_check
@@ -281,20 +277,8 @@ subroutine fft_roundtrip_check(self, f_in)
     f_out%data = 0._dp
     call copy_contig_to_logical(f_out%data, self%r_x, &
                                 self%nx_loc, self%ny_loc, self%nz_loc)
-    if (self%mesh%par%is_root()) then
-      print '(A, ES12.5)', '   [fft_back] maxabs f_out%data (post-copy) = ', &
-        maxval(abs(f_out%data))
-    end if
 
-    ! TEMP DIAGNOSTIC
-    if (self%mesh%par%is_root()) then
-      print '(A,ES12.5)', ' bwd max|f_out| logical: ', &
-        maxval(abs(f_out%data(1:self%nx_loc, 1:self%ny_loc, 1:self%nz_loc)))
-      print '(A,ES12.5)', ' bwd max|f_out| padded:  ', &
-        maxval(abs(f_out%data))
-    end if
 
-    
   end subroutine fft_backward_110_omp
 
   subroutine copy_logical_to_contig(dst, src, nx, ny, nz)
@@ -380,9 +364,6 @@ subroutine fft_roundtrip_check(self, f_in)
       end do
     end do
 
-    if (self%mesh%par%is_root()) then
-      print '(A, ES12.5)', ' FFT round-trip max abs diff (110): ', max_diff
-    end if
 
     deallocate (r_in, r_out, c_tmp)
 
@@ -474,28 +455,28 @@ subroutine fft_roundtrip_check(self, f_in)
     call process_spectral_110_norm_z( &
       self%c_x, self%nx_spec, self%ny_spec, nz_h, self%nz_glob, &
       self%az, self%bz)
-      if (self%mesh%par%is_root()) print '(A,ES12.5)', ' after norm_z    max|c_x|=', maxval(abs(real(self%c_x)))
+
 
 
     ! Step 2: X paired split (forward)
     call process_spectral_110_x_pair_fw( &
       self%c_x, self%nx_spec, self%ny_spec, nz_h, self%sp_st(1), &
       self%ax, self%bx)
-      if (self%mesh%par%is_root()) print '(A,ES12.5)', ' after x_pair_fw max|c_x|=', maxval(abs(real(self%c_x)))
+
 
 
     ! Step 3: Y paired split (forward)
     call process_spectral_110_y_pair_fw( &
       self%c_x, self%nx_spec, self%ny_spec, nz_h, self%sp_st(2), &
       self%ay, self%by)
-      if (self%mesh%par%is_root()) print '(A,ES12.5)', ' after y_pair_fw max|c_x|=', maxval(abs(real(self%c_x)))
+
 
 
     ! Step 4: Poisson solve
     call process_spectral_110_poisson( &
       self%c_x, self%waves, self%nx_spec, self%ny_spec, nz_h, &
       self%nz_glob, self%sp_st(1))
-      if (self%mesh%par%is_root()) print '(A,ES12.5)', ' after poisson   max|c_x|=', maxval(abs(real(self%c_x)))
+
 
 
 
@@ -503,21 +484,21 @@ subroutine fft_roundtrip_check(self, f_in)
     call process_spectral_110_y_pair_bw( &
       self%c_x, self%nx_spec, self%ny_spec, nz_h, self%sp_st(2), &
       self%ay, self%by)
-      if (self%mesh%par%is_root()) print '(A,ES12.5)', ' after y_pair_bw max|c_x|=', maxval(abs(real(self%c_x)))
+
 
 
     ! Step 6: X paired recombine (backward)
     call process_spectral_110_x_pair_bw( &
       self%c_x, self%nx_spec, self%ny_spec, nz_h, self%sp_st(1), &
       self%ax, self%bx)
-      if (self%mesh%par%is_root()) print '(A,ES12.5)', ' after x_pair_bw max|c_x|=', maxval(abs(real(self%c_x)))
+
 
 
     ! Step 7: Z periodic undo (backward)
     call process_spectral_110_z_bw( &
       self%c_x, self%nx_spec, self%ny_spec, nz_h, &
       self%az, self%bz)
-      if (self%mesh%par%is_root()) print '(A,ES12.5)', ' after z_bw      max|c_x|=', maxval(abs(real(self%c_x)))
+
 
   end subroutine fft_postprocess_110_omp
 
