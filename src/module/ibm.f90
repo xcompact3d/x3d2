@@ -123,14 +123,7 @@ contains
       call reader_session%read_data("ep1", field_data, start_dims, count_dims)
 
       ! Get and fill a block on the host
-      ! Get a host block sized for vertices (matches u/v/w)
-ep1 => ibm%host_allocator%get_block(DIR_X, VERT)
-call ep1%fill(1.0_dp)
-ep1%data(1:dims(1), 1:dims(2), 1:dims(3)) = field_data(:, :, :)
-
-! Device block also vertex-sized DIR_X
-ibm%ep1 => ibm%backend%allocator%get_block(DIR_X, VERT)
-call ibm%backend%set_field_data(ibm%ep1, ep1%data)
+      ep1 => ibm%host_allocator%get_block(DIR_C)
       call ep1%fill(1.0_dp)
       ep1%data(:, :, :) = field_data(:, :, :)
 
