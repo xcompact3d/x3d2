@@ -222,6 +222,9 @@ contains
     real(dp) :: t
     integer :: i, iter, sub_iter, start_iter
     logical :: output_vorticity, output_qcriterion
+    real(dp) :: t_start, t_step0, t_step1, t_end
+    real(dp) :: t_total
+    logical  :: do_report
 
     output_vorticity = &
       has_output_field(self%io_mgr%snapshot_mgr%config, 'vorticity') &
@@ -257,7 +260,19 @@ contains
       curr(3 + i)%ptr => self%solver%species(i)%ptr
     end do
 
+    call cpu_time(t_start)
+    
     do iter = start_iter, self%solver%n_iters
+      ! nested guard so mod() is never evaluated when n_output == 0
+      do_report = (iter == start_iter .or. iter == self%solver%n_iters)
+      if (self%solver%n_output > 0) then
+        if (mod(iter, self%solver%n_output) == 0) do_report = .true.
+      end if
+      do_report = do_report .and. self%solver%mesh%par%is_root()
+      
+      if (do_report) then
+        call cpu_time(t_step0)
+      end if
       do sub_iter = 1, self%solver%time_integrator%nstage
         ! first apply case-specific BCs
         call self%boundary_conditions()
@@ -304,16 +319,28 @@ contains
 
       call self%io_mgr%update_stats(self%solver, iter)
 
-      if (mod(iter, self%solver%n_output) == 0) then
+        ! guard skips the first step and avoids the divide-by-zero in the ETA.
+      if (do_report .and. iter > start_iter) then
+        call cpu_time(t_step1)
+        print *, 'Time for this time step (s):', real(t_step1 - t_step0)
         t = iter*self%solver%dt
-
         call self%postprocess(iter, t)
       end if
-
       call self%io_mgr%handle_io_step(self%solver, &
                                       iter, MPI_COMM_WORLD)
     end do
 
+    ! total + averaged-per-step over the whole run
+    call cpu_time(t_end)
+    t_total = t_end - t_start
+    if (self%solver%mesh%par%is_root()) then
+      print *, '==========================================================='
+      print *, 'Averaged time per step (s):', &
+        real(t_total/(self%solver%n_iters - (start_iter - 1)), 4)
+      print *, 'Total wallclock (s):', real(t_total, 4)
+      print *, 'Total wallclock (m):', real(t_total/60.0_dp, 4)
+      print *, 'Total wallclock (h):', real(t_total/3600.0_dp, 4)
+    end if
     call self%case_finalise
 
     ! deallocate memory
