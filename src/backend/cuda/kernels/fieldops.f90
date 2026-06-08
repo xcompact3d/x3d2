@@ -196,7 +196,7 @@ contains
 
   end subroutine field_set_y_face
   attributes(global) subroutine field_set_y_face_from_field( &
-    f, f_start, flow_rate_diff, nx, ny, nz)
+    f, f_start, nx, ny, nz)
 !! Set domain Y_FACE boundary values from another field.
 !! Both f and f_start are DIR_X VERT pencil-layout. Only the bottom
 !! (j = 1) and top (j = ny) y-pencil planes of f_start are read.
@@ -208,7 +208,6 @@ contains
 
     real(dp), device, intent(inout), dimension(:, :, :) :: f
     real(dp), device, intent(in), dimension(:, :, :) :: f_start
-    real(dp), value, intent(in) :: flow_rate_diff
     integer, value, intent(in) :: nx, ny, nz
 
     integer :: j, b, n_mod, b_end

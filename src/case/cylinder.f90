@@ -5,7 +5,7 @@ module m_case_cylinder
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
   use m_common, only: dp, MPI_X3D2_DP, get_argument, DIR_C, DIR_X, &
-                      VERT, CELL, X_FACE, BC_DIRICHLET
+                      VERT, X_FACE, BC_DIRICHLET
   use m_field, only: field_t
   use m_config, only: cylinder_config_t
   use m_mesh, only: mesh_t
@@ -193,6 +193,13 @@ contains
     hu => self%solver%host_allocator%get_block(DIR_C)
     hv => self%solver%host_allocator%get_block(DIR_C)
     hw => self%solver%host_allocator%get_block(DIR_C)
+
+    ! Fill the inlet plane with random numbers in [0, 1); the loop below
+    ! maps these onto noise in [-1, 1). Blocks returned by get_block are
+    ! uninitialised, so this must run before the read-modify-write below.
+    call random_number(hu%data(1, 1:dims(2), 1:dims(3)))
+    call random_number(hv%data(1, 1:dims(2), 1:dims(3)))
+    call random_number(hw%data(1, 1:dims(2), 1:dims(3)))
 
     do k = 1, dims(3)
       do j = 1, dims(2)

@@ -1099,10 +1099,9 @@ contains
     call resolve_field_t(f_d, f)
     call resolve_field_t(f_start_d, f_start)
 
-    ! NOTE: NULL_LOC == VERT == 0 in this codebase, so guarding on
-    ! data_loc /= NULL_LOC would reject legitimate VERT fields. We use
-    ! VERT here unconditionally, matching how the BC fields are built
-    ! in the case setup.
+    ! The BC fields are always built as VERT in the case setup, so we
+    ! query the dims with VERT unconditionally here (in common.f90
+    ! NULL_LOC = -1 and VERT = 0, so the two are distinct).
     dims = self%mesh%get_dims(VERT)
 
     select case (face)
@@ -1123,7 +1122,7 @@ contains
       blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
       threads = dim3(64, 1, 1)
       call field_set_y_face_from_field<<<blocks, threads>>>( &      !&
-          f_d, f_start_d, flow_rate_diff_val, dims(1), dims(2), dims(3))
+          f_d, f_start_d, dims(1), dims(2), dims(3))
 
     case (Z_FACE)
       error stop 'field_set_face_from_field: Z_FACE is not yet supported.'

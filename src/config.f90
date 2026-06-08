@@ -222,6 +222,10 @@ contains
     namelist /channel_nml/ init_noise, inlet_noise, &
       rotation, omega_rot, n_rotate
 
+    ! Default to no noise if the namelist omits these entries.
+    init_noise = 0._dp
+    inlet_noise = 0._dp
+
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading channel config failed! &
                  &Provide only a file name or source, not both.'
@@ -257,6 +261,10 @@ contains
     real(dp) :: inlet_noise(3)
 
     namelist /cylinder_nml/ init_noise, inlet_noise
+
+    ! Default to no noise if the namelist omits these entries.
+    init_noise = 0._dp
+    inlet_noise = 0._dp
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading cylinder config failed! &
