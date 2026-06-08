@@ -61,6 +61,20 @@ module m_config
     procedure :: read => read_cylinder_nml
   end type cylinder_config_t
 
+  type, extends(base_config_t) :: wind_turbine_config_t
+    !! Configuration for the wind-turbine carrier case. Inflow/outflow and
+    !! initial noise mirror the cylinder case; the turbine block selects and
+    !! drives the turbine forcing model.
+    real(dp) :: init_noise(3) = 0._dp
+    real(dp) :: bc_start_u = 1._dp   !! uniform inflow u (Dirichlet at i=1)
+    real(dp) :: bc_start_v = 0._dp
+    real(dp) :: bc_start_w = 0._dp
+    integer :: iturbine = 0          !! 0: none, 1: actuator line, 2: disc
+    integer :: iturboutput = 1       !! turbine diagnostics output frequency
+  contains
+    procedure :: read => read_wind_turbine_nml
+  end type wind_turbine_config_t
+
   type, extends(base_config_t) :: stats_config_t
     integer :: initstat = 0          !! iteration to start accumulating (0 = disabled)
     integer :: istatfreq = 1         !! accumulate every N steps
@@ -290,6 +304,48 @@ contains
     self%inlet_noise = inlet_noise
 
   end subroutine read_cylinder_nml
+
+  subroutine read_wind_turbine_nml(self, nml_file, nml_string)
+    implicit none
+
+    class(wind_turbine_config_t) :: self
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
+
+    integer :: unit
+
+    real(dp) :: init_noise(3) = 0._dp
+    real(dp) :: bc_start_u = 1._dp
+    real(dp) :: bc_start_v = 0._dp
+    real(dp) :: bc_start_w = 0._dp
+    integer :: iturbine = 0
+    integer :: iturboutput = 1
+
+    namelist /wind_turbine_nml/ init_noise, bc_start_u, bc_start_v, &
+      bc_start_w, iturbine, iturboutput
+
+    if (present(nml_file) .and. present(nml_string)) then
+      error stop 'Reading wind_turbine config failed! &
+                 &Provide only a file name or source, not both.'
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file)
+      read (unit, nml=wind_turbine_nml)
+      close (unit)
+    else if (present(nml_string)) then
+      read (nml_string, nml=wind_turbine_nml)
+    else
+      error stop 'Reading wind_turbine config failed! &
+                 &Provide at least one of the following: file name or source'
+    end if
+
+    self%init_noise = init_noise
+    self%bc_start_u = bc_start_u
+    self%bc_start_v = bc_start_v
+    self%bc_start_w = bc_start_w
+    self%iturbine = iturbine
+    self%iturboutput = iturboutput
+
+  end subroutine read_wind_turbine_nml
 
   subroutine read_checkpoint_nml(self, nml_file, nml_string)
     implicit none
