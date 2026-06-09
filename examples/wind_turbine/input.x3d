@@ -14,7 +14,7 @@ nproc_dir = 1, 1, 1
 ! BC options are 'periodic' | 'neumann' | 'dirichlet'
 ! x: inflow (dirichlet) / convective outflow (dirichlet)
 ! y, z: periodic
-! Same layout as the cylinder case. The legacy two_turbines case uses free-slip
+! Same layout as the cylinder case. The two_turbines case uses free-slip
 ! walls in y and z (wind-tunnel walls), but the FFT Poisson solver requires z to
 ! be periodic and only supports a single MPI rank for non-periodic directions,
 ! so periodic y/z is the supported choice here (only x is non-periodic).
@@ -49,6 +49,9 @@ init_noise = 0.0d0, 0.0d0, 0.0d0
 bc_start_u = 10.0d0   ! uniform inflow velocity
 bc_start_v = 0.0d0
 bc_start_w = 0.0d0
-iturbine = 1          ! 1: actuator line, 2: disc; dummy until landed
+iturbine = 2          ! 1: actuator line, 2: disc
 iturboutput = 20
+adm_coords = 'discs.ad'
+rho_air = 1.2d0
+T_relax = -1.0d0      ! negative disables the ADM velocity filter
 /End

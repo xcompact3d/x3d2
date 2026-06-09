@@ -83,6 +83,9 @@ module m_config
     real(dp) :: bc_start_w = 0._dp
     integer :: iturbine = 0          !! 0: none, 1: actuator line, 2: disc
     integer :: iturboutput = 1       !! turbine diagnostics output frequency
+    character(len=256) :: adm_coords = '' !! actuator-disc (.ad) coords file
+    real(dp) :: rho_air = 1._dp      !! air density used in thrust/power
+    real(dp) :: T_relax = -1._dp     !! ADM velocity-filter time; < 0 disables
   contains
     procedure :: read => read_wind_turbine_nml
   end type wind_turbine_config_t
@@ -390,9 +393,12 @@ contains
     real(dp) :: bc_start_w = 0._dp
     integer :: iturbine = 0
     integer :: iturboutput = 1
+    character(len=256) :: adm_coords = ''
+    real(dp) :: rho_air = 1._dp
+    real(dp) :: T_relax = -1._dp
 
     namelist /wind_turbine_nml/ init_noise, bc_start_u, bc_start_v, &
-      bc_start_w, iturbine, iturboutput
+      bc_start_w, iturbine, iturboutput, adm_coords, rho_air, T_relax
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading wind_turbine config failed! &
@@ -414,6 +420,9 @@ contains
     self%bc_start_w = bc_start_w
     self%iturbine = iturbine
     self%iturboutput = iturboutput
+    self%adm_coords = adm_coords
+    self%rho_air = rho_air
+    self%T_relax = T_relax
 
   end subroutine read_wind_turbine_nml
 
