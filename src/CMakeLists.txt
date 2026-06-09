@@ -7,7 +7,8 @@ set(SRC
   ordering.f90
   poisson_fft.f90
   solver.f90
-  postprocess.f90
+  postprocess/postprocess.f90
+  postprocess/monitoring.f90
   tdsops.f90
   time_integrator.f90
   ordering.f90
@@ -114,6 +115,9 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   set(CMAKE_Fortran_FLAGS "-cpp -cuda")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr -Ktrap=fp")
+  # Note: -Ktrap=fp traps FP exceptions process-wide. On some NVIDIA GPUs (for example RTX A4000)
+  # it was giving a divide-by-zero inside cuFFTMp's PTX-JIT compiler during Poisson FFT plan creation
+  # This is a JIT quirk (not an issue with cuFFTMp or bug in x3d2). Remove this flag if you encounter this error
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
   target_link_options(x3d2 INTERFACE "-cuda")
   target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
@@ -124,7 +128,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang")
   set(CMAKE_Fortran_FLAGS "-cpp -std=f2018")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
-  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -floop-optimize -march=native")
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
   set(CMAKE_Fortran_FLAGS "-eF -M878") # -M878 suppresses WARNING multiple module includes (not useful)
   set(CMAKE_Fortran_FLAGS_DEBUG "-G2 -O0")
