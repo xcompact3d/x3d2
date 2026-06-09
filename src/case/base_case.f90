@@ -256,10 +256,12 @@ contains
 
       call self%io_mgr%update_stats(self%solver, iter)
 
-      if (mod(iter, self%solver%n_output) == 0) then
-        t = iter*self%solver%dt
+      if (self%solver%n_output > 0) then
+        if (mod(iter, self%solver%n_output) == 0) then
+          t = iter*self%solver%dt
 
-        call self%postprocess(iter, t)
+          call self%postprocess(iter, t)
+        end if
       end if
 
       call self%io_mgr%handle_io_step(self%solver, &
