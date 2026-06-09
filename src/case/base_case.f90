@@ -5,7 +5,7 @@ module m_base_case
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, DIR_X, DIR_C, VERT
+  use m_common, only: dp, DIR_X, DIR_C, VERT, MPI_X3D2_DP
   use m_monitoring, only: monitoring_t
   use m_field, only: field_t, flist_t
   use m_mesh, only: mesh_t
@@ -13,7 +13,7 @@ module m_base_case
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
   use m_config, only: has_output_field
   use m_io_manager, only: io_manager_t
-  use mpi, only: MPI_COMM_WORLD
+  use mpi, only: MPI_COMM_WORLD, MPI_Wtime, MPI_Reduce, MPI_MAX
 
   implicit none
 
@@ -161,7 +161,7 @@ contains
 
   end subroutine set_init
 
-  subroutine run(self)
+subroutine run(self)
     !! Runs the solver forwards in time from t=t_0 to t=T, performing
     !! postprocessing/IO and reporting diagnostics.
     implicit none
@@ -174,9 +174,10 @@ contains
     real(dp) :: t
     integer :: i, iter, sub_iter, start_iter
     logical :: output_vorticity, output_qcriterion
-    real(dp) :: t_start, t_step0, t_step1, t_end
-    real(dp) :: t_total
-    logical :: do_report
+    real(dp) :: t_start, t_end, t_total_local, t_total
+    real(dp) :: t_step0, t_step1, t_step_local, t_step
+    logical :: do_timing_report, is_root
+    integer :: ierr
 
     output_vorticity = &
       has_output_field(self%io_mgr%snapshot_mgr%config, 'vorticity') &
@@ -191,6 +192,10 @@ contains
         ! for restarts current_iter is read from the checkpoint file
         print *, 'Continuing from iteration:', &
         self%solver%current_iter, 'at time ', t
+      if (self%solver%n_iters <= self%solver%current_iter) then
+        error stop &
+          'Restart requires n_iters greater than the restart iteration.'
+      end if
     else
       self%solver%current_iter = 0
       if (self%solver%mesh%par%is_root()) print *, 'initial conditions'
@@ -212,18 +217,23 @@ contains
       curr(3 + i)%ptr => self%solver%species(i)%ptr
     end do
 
-    call cpu_time(t_start)
+    is_root = self%solver%mesh%par%is_root()
+    t_start = MPI_Wtime()
 
     do iter = start_iter, self%solver%n_iters
-      ! nested guard so mod() is never evaluated when n_output == 0
-      do_report = (iter == start_iter .or. iter == self%solver%n_iters)
+      ! Report per-step timing on the final step and on every n_output-th
+      ! step. This is computed identically on every rank so that the
+      ! reduction below stays collective; the nested guard keeps mod()
+      ! from being evaluated when n_output is 0.
+      do_timing_report = (iter == self%solver%n_iters)
       if (self%solver%n_output > 0) then
-        if (mod(iter, self%solver%n_output) == 0) do_report = .true.
+        if (mod(iter, self%solver%n_output) == 0) do_timing_report = .true.
       end if
-      do_report = do_report .and. self%solver%mesh%par%is_root()
 
-      if (do_report) then
-        call cpu_time(t_step0)
+      ! Skip the first step: it carries one-off setup costs that would
+      ! make the per-step figure unrepresentative.
+      if (do_timing_report .and. iter > start_iter) then
+        t_step0 = MPI_Wtime()
       end if
       do sub_iter = 1, self%solver%time_integrator%nstage
         ! first apply case-specific BCs
@@ -255,6 +265,20 @@ contains
                                              self%solver%w)
       end do
 
+      ! All ranks measure and reduce; only root prints. Gating the
+      ! measurement on is_root would break the collective MPI_Reduce.
+      if (do_timing_report .and. iter > start_iter) then
+        t_step1 = MPI_Wtime()
+        t_step_local = t_step1 - t_step0
+
+        call MPI_Reduce(t_step_local, t_step, 1, MPI_X3D2_DP, MPI_MAX, &
+                        0, MPI_COMM_WORLD, ierr)
+
+        if (is_root) then
+          print *, 'Time for this time step (s):', real(t_step, 4)
+        end if
+      end if
+
       self%solver%current_iter = iter
 
       ! Compute pressure on VERT grid if output_pressure is enabled
@@ -283,9 +307,13 @@ contains
     end do
 
     ! total + averaged-per-step over the whole run
-    call cpu_time(t_end)
-    t_total = t_end - t_start
-    if (self%solver%mesh%par%is_root()) then
+    t_end = MPI_Wtime()
+    t_total_local = t_end - t_start
+
+    call MPI_Reduce(t_total_local, t_total, 1, MPI_X3D2_DP, MPI_MAX, &
+                    0, MPI_COMM_WORLD, ierr)
+
+    if (is_root) then
       print *, '==========================================================='
       print *, 'Averaged time per step (s):', &
         real(t_total/(self%solver%n_iters - (start_iter - 1)), 4)
