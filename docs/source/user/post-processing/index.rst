@@ -7,4 +7,5 @@ simulation output.
 .. toctree::
    :maxdepth: 2
 
+   monitoring.rst
    paraview.rst
