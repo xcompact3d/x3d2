@@ -179,6 +179,9 @@ subroutine run(self)
     logical :: do_timing_report, is_root
     integer :: ierr
 
+    ! Error: ‘t_step0’ may be used uninitialized in this function [-Werror=maybe-uninitialized]
+    t_step0 = 0.0_dp
+
     output_vorticity = &
       has_output_field(self%io_mgr%snapshot_mgr%config, 'vorticity') &
       .and. self%io_mgr%snapshot_mgr%config%snapshot_freq > 0
