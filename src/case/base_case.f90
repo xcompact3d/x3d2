@@ -161,7 +161,7 @@ contains
 
   end subroutine set_init
 
-subroutine run(self)
+  subroutine run(self)
     !! Runs the solver forwards in time from t=t_0 to t=T, performing
     !! postprocessing/IO and reporting diagnostics.
     implicit none
@@ -174,8 +174,11 @@ subroutine run(self)
     real(dp) :: t
     integer :: i, iter, sub_iter, start_iter
     logical :: output_vorticity, output_qcriterion
-    real(dp) :: t_start, t_end, t_total_local, t_total
-    real(dp) :: t_step0, t_step1, t_step_local, t_step
+    ! t_start/t_end/t_step0/t_step1 hold raw MPI_Wtime readings, which
+    ! are double precision; subtract in double, then convert
+    ! it to the working precision.
+    double precision :: t_start, t_end, t_step0, t_step1
+    real(dp) :: t_total_local, t_total, t_step_local, t_step
     logical :: do_timing_report, is_root
     integer :: ierr
 
@@ -272,7 +275,7 @@ subroutine run(self)
       ! measurement on is_root would break the collective MPI_Reduce.
       if (do_timing_report .and. iter > start_iter) then
         t_step1 = MPI_Wtime()
-        t_step_local = t_step1 - t_step0
+        t_step_local = real(t_step1 - t_step0, 4)
 
         call MPI_Reduce(t_step_local, t_step, 1, MPI_X3D2_DP, MPI_MAX, &
                         0, MPI_COMM_WORLD, ierr)
@@ -311,7 +314,7 @@ subroutine run(self)
 
     ! total + averaged-per-step over the whole run
     t_end = MPI_Wtime()
-    t_total_local = t_end - t_start
+    t_total_local = real(t_end - t_start, 4)
 
     call MPI_Reduce(t_total_local, t_total, 1, MPI_X3D2_DP, MPI_MAX, &
                     0, MPI_COMM_WORLD, ierr)
