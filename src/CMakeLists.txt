@@ -115,6 +115,9 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   set(CMAKE_Fortran_FLAGS "-cpp -cuda")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr -Ktrap=fp")
+  # Note: -Ktrap=fp traps FP exceptions process-wide. On some NVIDIA GPUs (for example RTX A4000)
+  # it was giving a divide-by-zero inside cuFFTMp's PTX-JIT compiler during Poisson FFT plan creation
+  # This is a JIT quirk (not an issue with cuFFTMp or bug in x3d2). Remove this flag if you encounter this error
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
   target_link_options(x3d2 INTERFACE "-cuda")
   target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
