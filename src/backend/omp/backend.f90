@@ -874,16 +874,14 @@ contains
     integer, intent(in) :: face
     integer, optional, intent(in) :: bc_start, bc_end
     real(dp), optional, intent(in) :: flow_rate_diff
-    integer :: dims(3), k, i, i_max, n_mod, n_y_blocks, y_block, k_end
+    integer :: dims(3), k, i, j, z, i_max, n_mod, n_y_blocks, y_block, &
+               k_start, k_end
     real(dp) :: flow_rate_diff_val
 
     if (f%dir /= DIR_X) &
       error stop 'field_set_face_from_field: only supported for DIR_X fields.'
     if (f%data_loc == NULL_LOC) &
       error stop 'field_set_face_from_field: requires a valid data_loc.'
-    if (face /= X_FACE) &
-      error stop 'field_set_face_from_field: only X_FACE supported.'
-
     flow_rate_diff_val = 0._dp
     if (present(flow_rate_diff)) flow_rate_diff_val = flow_rate_diff
 
@@ -891,26 +889,47 @@ contains
     n_mod = mod(dims(2) - 1, SZ) + 1
     n_y_blocks = (dims(2) - 1)/SZ + 1
 
-    !$omp parallel do private(k_end, y_block, i_max)
-    do k = 1, n_y_blocks*dims(3)
-      y_block = (k - 1)/dims(3) + 1
-      k_end = k
-      if (y_block == n_y_blocks) then
-        i_max = n_mod
-      else
-        i_max = SZ
-      end if
-      do i = 1, i_max
-        ! left face: spatially-varying Dirichlet from f_start at i=1
-        f%data(i, 1, k) = f_start%data(i, 1, k)
-        ! right face: convective outflow
-        f%data(i, dims(1), k_end) = f%data(i, dims(1), k_end) &
-                                    - c_end*(f%data(i, dims(1), k_end) &
-                                             - f%data(i, dims(1) - 1, k_end)) &
-                                    + flow_rate_diff_val
+    select case (face)
+    case (X_FACE)
+
+     !$omp parallel do private(k_end, y_block, i_max)
+      do k = 1, n_y_blocks*dims(3)
+        ! OMP DIR_X ordering: dir_k = n_y_blocks*(z - 1) + y_block,
+        ! so the y-block is the fast-varying component (see get_index_dir)
+        y_block = mod(k - 1, n_y_blocks) + 1
+        k_end = k
+        if (y_block == n_y_blocks) then
+          i_max = n_mod
+        else
+          i_max = SZ
+        end if
+        do i = 1, i_max
+          ! left face: spatially-varying Dirichlet from f_start at i=1
+          f%data(i, 1, k) = f_start%data(i, 1, k)
+          ! right face: convective outflow
+          f%data(i, dims(1), k_end) = f%data(i, dims(1), k_end) &
+                                      - c_end*(f%data(i, dims(1), k_end) &
+                                               - f%data(i, dims(1) - 1, k_end)) &
+                                      + flow_rate_diff_val
+        end do
       end do
-    end do
-    !$omp end parallel do
+      !$omp end parallel do
+    case (Y_FACE)
+      !$omp parallel do private(k_start, k_end)
+      do z = 1, dims(3)
+        ! bottom wall (y = 1) and top wall (y = ny) in OMP DIR_X ordering
+        k_start = 1 + (z - 1)*n_y_blocks
+        k_end = n_y_blocks + (z - 1)*n_y_blocks
+        do j = 1, dims(1)
+          f%data(1, j, k_start) = f_start%data(1, j, k_start)
+          f%data(n_mod, j, k_end) = f_start%data(n_mod, j, k_end)
+        end do
+      end do
+      !$omp end parallel do
+
+    case default
+      error stop 'field_set_face_from_field: only X_FACE and Y_FACE supported.'
+    end select
 
   end subroutine field_set_face_from_field_omp
 
