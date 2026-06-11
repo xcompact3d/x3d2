@@ -9,12 +9,13 @@ module m_case_wind_turbine
   !! The inflow/outflow boundary treatment mirrors m_case_cylinder. BCs are
   !! dirichlet/periodic/periodic for the same reason cylinder uses them: the FFT
   !! Poisson solver requires z periodic and only supports a single rank for
-  !! non-periodic directions. The legacy two_turbines case uses free-slip walls
+  !! non-periodic directions. The two_turbines case uses free-slip walls
   !! in y and z (wind-tunnel walls), which the FFT solver cannot currently do.
   use iso_fortran_env, only: stderr => error_unit
   use mpi
 
   use m_allocator, only: allocator_t
+  use m_adm, only: adm_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
   use m_common, only: dp, MPI_X3D2_DP, get_argument, DIR_C, DIR_X, &
@@ -69,11 +70,17 @@ contains
       ! Actuator line model - falls back to dummy until landed.
       allocate (turbine_dummy_t :: flow_case%turbine)
     case (2)
-      ! Actuator disc model - falls back to dummy until landed.
+      allocate (adm_t :: flow_case%turbine)
+      select type (turbine => flow_case%turbine)
+      type is (adm_t)
+        turbine%coords_file = flow_case%wt_cfg%adm_coords
+        turbine%rho_air = flow_case%wt_cfg%rho_air
+        turbine%T_relax = flow_case%wt_cfg%T_relax
+      end select
+    case (0)
       allocate (turbine_dummy_t :: flow_case%turbine)
     case default
-      ! iturbine = 0: no turbine forcing.
-      allocate (turbine_dummy_t :: flow_case%turbine)
+      error stop 'Unsupported wind turbine model selected.'
     end select
 
     call flow_case%turbine%init(flow_case%solver%backend, &
