@@ -90,8 +90,8 @@ contains
       print *, 'time =', t, 'iteration =', iter
     end if
 
-    call self%print_enstrophy(self%solver%u, self%solver%v, self%solver%w)
-    call self%print_div_max_mean(self%solver%u, self%solver%v, self%solver%w)
+    call self%monitoring%write_step( &
+      self%solver, t, self%solver%u, self%solver%v, self%solver%w)
 
   end subroutine postprocess_generic
 

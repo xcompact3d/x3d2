@@ -267,8 +267,10 @@ contains
         ' out_vel = ', self%out_vel, &
         '  flow_rate_diff = ', self%flow_rate_diff
     end if
-    call self%print_enstrophy(self%solver%u, self%solver%v, self%solver%w)
-    call self%print_div_max_mean(self%solver%u, self%solver%v, self%solver%w)
+
+    call self%monitoring%write_step( &
+      self%solver, t, self%solver%u, self%solver%v, self%solver%w)
+
   end subroutine postprocess_cylinder
 
 end module m_case_cylinder

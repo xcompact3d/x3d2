@@ -39,14 +39,13 @@ contains
       v_y, dvdy_y, v_z, dvdz_z, &
       w_y, dwdy_y, w_z, dwdz_z
 
-    ! Lazily allocate output fields
+    ! Allocate output fields on first use
     if (output_vorticity .and. .not. associated(solver%vort)) &
       solver%vort => solver%backend%allocator%get_block(DIR_X, VERT)
     if (output_qcriterion .and. .not. associated(solver%qcrit)) &
       solver%qcrit => solver%backend%allocator%get_block(DIR_X, VERT)
 
-    ! --- Compute all 9 velocity gradient components ---
-
+    ! Compute all 9 velocity gradient components
     ! du/dx (x-derivative in x-pencil, no reorder needed)
     dudx => solver%backend%allocator%get_block(DIR_X)
     call solver%backend%tds_solve(dudx, solver%u, &
@@ -133,8 +132,10 @@ contains
     ! dvdx, dvdy_x, dvdz_x
     ! dwdx, dwdy_x, dwdz_x
 
-    ! Vorticity magnitude:
-    ! |w| = sqrt((dw/dy-dv/dz)^2+(du/dz-dw/dx)^2+(dv/dx-du/dy)^2)
+    !! Vorticity magnitude:
+    !! \( |\boldsymbol{\omega}| = \sqrt{(\partial w/\partial y - \partial v/\partial z)^2
+    !! + (\partial u/\partial z - \partial w/\partial x)^2
+    !! + (\partial v/\partial x - \partial u/\partial y)^2} \)
     if (output_vorticity) then
       solver%vort%data = sqrt( &
                          (dwdy_x%data - dvdz_x%data)**2 + &
@@ -143,9 +144,9 @@ contains
                          )
     end if
 
-    ! Q-criterion:
-    ! Q = -0.5*(dudx^2+dvdy^2+dwdz^2)
-    !     - dudy*dvdx - dudz*dwdx - dvdz*dwdy
+    !! Q-criterion:
+    !! \( Q = -\frac{1}{2}(u_{x}^2 + v_{y}^2 + w_{z}^2)
+    !! - u_{y}v_{x} - u_{z}w_{x} - v_{z}w_{y} \)
     if (output_qcriterion) then
       solver%qcrit%data = &
         -0.5_dp*(dudx%data**2 &
@@ -181,7 +182,7 @@ contains
       error stop 'compute_pressure_vert: pressure not yet computed'
     end if
 
-    ! Lazy allocate pressure_vert on first call
+    ! Allocate pressure_vert on first use
     if (.not. associated(solver%pressure_vert)) then
       solver%pressure_vert => &
         solver%backend%allocator%get_block(DIR_X, VERT)

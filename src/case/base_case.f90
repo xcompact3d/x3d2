@@ -5,20 +5,22 @@ module m_base_case
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, DIR_X, DIR_Z, DIR_C, VERT
+  use m_common, only: dp, DIR_X, DIR_C, VERT, MPI_X3D2_DP
+  use m_monitoring, only: monitoring_t
   use m_field, only: field_t, flist_t
   use m_mesh, only: mesh_t
   use m_solver, only: solver_t, init
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
   use m_config, only: has_output_field
   use m_io_manager, only: io_manager_t
-  use mpi, only: MPI_COMM_WORLD
+  use mpi, only: MPI_COMM_WORLD, MPI_Wtime, MPI_Reduce, MPI_MAX
 
   implicit none
 
   type, abstract :: base_case_t
     class(solver_t), allocatable :: solver
     type(io_manager_t) :: io_mgr
+    type(monitoring_t) :: monitoring
     ! Persistent device BC fields (DIR_X, VERT), shared across all cases.
     ! Allocated by the derived case on first use, refilled per substep,
     ! released only at program end. A given case populates only the
@@ -35,6 +37,7 @@ module m_base_case
     class(field_t), pointer :: bc_end_u_y => null()
     class(field_t), pointer :: bc_end_v_y => null()
     class(field_t), pointer :: bc_end_w_y => null()
+    
   contains
     procedure(define_BC), deferred :: define_BC
     procedure(initial_conditions), deferred :: initial_conditions
@@ -45,8 +48,6 @@ module m_base_case
     procedure :: case_finalise
     procedure :: set_init
     procedure :: run
-    procedure :: print_enstrophy
-    procedure :: print_div_max_mean
   end type base_case_t
 
   abstract interface
@@ -125,6 +126,8 @@ contains
       call self%initial_conditions()
     end if
 
+    call self%monitoring%init(self%solver)
+
   end subroutine case_init
 
   subroutine case_finalise(self)
@@ -132,6 +135,7 @@ contains
 
     if (self%solver%mesh%par%is_root()) print *, 'run end'
 
+    call self%monitoring%finalise()
     call self%io_mgr%finalise()
   end subroutine case_finalise
 
@@ -174,57 +178,6 @@ contains
 
   end subroutine set_init
 
-  subroutine print_enstrophy(self, u, v, w)
-    !! Reports the enstrophy
-    implicit none
-
-    class(base_case_t), intent(in) :: self
-    class(field_t), intent(in) :: u, v, w
-
-    class(field_t), pointer :: du, dv, dw
-    real(dp) :: enstrophy
-
-    du => self%solver%backend%allocator%get_block(DIR_X, VERT)
-    dv => self%solver%backend%allocator%get_block(DIR_X, VERT)
-    dw => self%solver%backend%allocator%get_block(DIR_X, VERT)
-
-    call self%solver%curl(du, dv, dw, u, v, w)
-
-    enstrophy = 0.5_dp*(self%solver%backend%scalar_product(du, du) &
-                        + self%solver%backend%scalar_product(dv, dv) &
-                        + self%solver%backend%scalar_product(dw, dw)) &
-                /self%solver%ngrid
-
-    if (self%solver%mesh%par%is_root()) print *, 'enstrophy:', enstrophy
-
-    call self%solver%backend%allocator%release_block(du)
-    call self%solver%backend%allocator%release_block(dv)
-    call self%solver%backend%allocator%release_block(dw)
-
-  end subroutine print_enstrophy
-
-  subroutine print_div_max_mean(self, u, v, w)
-    !! Reports the div(u) at cell centres
-    implicit none
-
-    class(base_case_t), intent(in) :: self
-    class(field_t), intent(in) :: u, v, w
-
-    class(field_t), pointer :: div_u
-    real(dp) :: div_u_max, div_u_mean
-
-    div_u => self%solver%backend%allocator%get_block(DIR_Z)
-
-    call self%solver%divergence_v2p(div_u, u, v, w)
-
-    call self%solver%backend%field_max_mean(div_u_max, div_u_mean, div_u)
-    if (self%solver%mesh%par%is_root()) &
-      print *, 'div u max mean:', div_u_max, div_u_mean
-
-    call self%solver%backend%allocator%release_block(div_u)
-
-  end subroutine print_div_max_mean
-
   subroutine run(self)
     !! Runs the solver forwards in time from t=t_0 to t=T, performing
     !! postprocessing/IO and reporting diagnostics.
@@ -238,6 +191,16 @@ contains
     real(dp) :: t
     integer :: i, iter, sub_iter, start_iter
     logical :: output_vorticity, output_qcriterion
+    ! t_start/t_end/t_step0/t_step1 hold raw MPI_Wtime readings, which
+    ! are double precision; subtract in double, then convert
+    ! it to the working precision.
+    double precision :: t_start, t_end, t_step0, t_step1
+    real(dp) :: t_total_local, t_total, t_step_local, t_step
+    logical :: do_timing_report, is_root
+    integer :: ierr
+
+    ! Error: ‘t_step0’ may be used uninitialized in this function [-Werror=maybe-uninitialized]
+    t_step0 = 0.0_dp
 
     output_vorticity = &
       has_output_field(self%io_mgr%snapshot_mgr%config, 'vorticity') &
@@ -252,6 +215,10 @@ contains
         ! for restarts current_iter is read from the checkpoint file
         print *, 'Continuing from iteration:', &
         self%solver%current_iter, 'at time ', t
+      if (self%solver%n_iters <= self%solver%current_iter) then
+        error stop &
+          'Restart requires n_iters greater than the restart iteration.'
+      end if
     else
       self%solver%current_iter = 0
       if (self%solver%mesh%par%is_root()) print *, 'initial conditions'
@@ -273,7 +240,24 @@ contains
       curr(3 + i)%ptr => self%solver%species(i)%ptr
     end do
 
+    is_root = self%solver%mesh%par%is_root()
+    t_start = MPI_Wtime()
+
     do iter = start_iter, self%solver%n_iters
+      ! Report per-step timing on the final step and on every n_output-th
+      ! step. This is computed identically on every rank so that the
+      ! reduction below stays collective; the nested guard keeps mod()
+      ! from being evaluated when n_output is 0.
+      do_timing_report = (iter == self%solver%n_iters)
+      if (self%solver%n_output > 0) then
+        if (mod(iter, self%solver%n_output) == 0) do_timing_report = .true.
+      end if
+
+      ! Skip the first step: it carries one-off setup costs that would
+      ! make the per-step figure unrepresentative.
+      if (do_timing_report .and. iter > start_iter) then
+        t_step0 = MPI_Wtime()
+      end if
       do sub_iter = 1, self%solver%time_integrator%nstage
         ! first apply case-specific BCs
         call self%define_BC()
@@ -304,6 +288,20 @@ contains
                                              self%solver%w)
       end do
 
+      ! All ranks measure and reduce; only root prints. Gating the
+      ! measurement on is_root would break the collective MPI_Reduce.
+      if (do_timing_report .and. iter > start_iter) then
+        t_step1 = MPI_Wtime()
+        t_step_local = real(t_step1 - t_step0, 4)
+
+        call MPI_Reduce(t_step_local, t_step, 1, MPI_X3D2_DP, MPI_MAX, &
+                        0, MPI_COMM_WORLD, ierr)
+
+        if (is_root) then
+          print *, 'Time for this time step (s):', real(t_step, 4)
+        end if
+      end if
+
       self%solver%current_iter = iter
 
       ! Compute pressure on VERT grid if output_pressure is enabled
@@ -320,16 +318,32 @@ contains
 
       call self%io_mgr%update_stats(self%solver, iter)
 
-      if (mod(iter, self%solver%n_output) == 0) then
-        t = iter*self%solver%dt
+      if (self%solver%n_output > 0) then
+        if (mod(iter, self%solver%n_output) == 0) then
+          t = iter*self%solver%dt
 
-        call self%postprocess(iter, t)
+          call self%postprocess(iter, t)
+        end if
       end if
-
       call self%io_mgr%handle_io_step(self%solver, &
                                       iter, MPI_COMM_WORLD)
     end do
 
+    ! total + averaged-per-step over the whole run
+    t_end = MPI_Wtime()
+    t_total_local = real(t_end - t_start, 4)
+
+    call MPI_Reduce(t_total_local, t_total, 1, MPI_X3D2_DP, MPI_MAX, &
+                    0, MPI_COMM_WORLD, ierr)
+
+    if (is_root) then
+      print *, '==========================================================='
+      print *, 'Averaged time per step (s):', &
+        real(t_total/(self%solver%n_iters - (start_iter - 1)), 4)
+      print *, 'Total wallclock (s):', real(t_total, 4)
+      print *, 'Total wallclock (m):', real(t_total/60.0_dp, 4)
+      print *, 'Total wallclock (h):', real(t_total/3600.0_dp, 4)
+    end if
     call self%case_finalise
 
     ! deallocate memory
