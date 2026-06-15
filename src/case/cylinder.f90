@@ -5,7 +5,7 @@ module m_case_cylinder
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
   use m_common, only: dp, MPI_X3D2_DP, get_argument, DIR_C, DIR_X, &
-                      VERT, CELL, X_FACE, BC_DIRICHLET
+                      VERT, X_FACE, BC_DIRICHLET
   use m_field, only: field_t
   use m_config, only: cylinder_config_t
   use m_mesh, only: mesh_t
@@ -14,17 +14,20 @@ module m_case_cylinder
 
   type, extends(base_case_t) :: case_cylinder_t
     type(cylinder_config_t) :: cylinder_cfg
-    real(dp) :: out_vel_cached = 0._dp
-    real(dp) :: flow_rate_diff_cached = 0._dp
-    logical :: outflow_params_valid = .false.
+    real(dp) :: out_vel = 0._dp
+    real(dp) :: flow_rate_diff = 0._dp
+    ! The persistent device BC fields (DIR_X, VERT) for the inlet
+    ! plane (bc_start_u/v/w_x) live on base_case_t. They are allocated
+    ! on the first call to define_BC_cylinder, then refilled every
+    ! substep (cheap upload, no allocator churn). Released only at
+    ! program end.
   contains
-    procedure :: boundary_conditions => boundary_conditions_cylinder
+    procedure :: define_BC => define_BC_cylinder
     procedure :: initial_conditions => initial_conditions_cylinder
     procedure :: forcings => forcings_cylinder
-    procedure :: pre_correction => pre_correction_cylinder
+    procedure :: apply_BC => apply_BC_cylinder
     procedure :: postprocess => postprocess_cylinder
     procedure :: compute_outflow_params
-    procedure :: apply_outflow_bc_cylinder
   end type case_cylinder_t
 
   interface case_cylinder_t
@@ -99,15 +102,9 @@ contains
   end subroutine initial_conditions_cylinder
 
   ! ==========================================================================
-  ! Compute outflow velocity number.
-  !
-  ! Fully device-resident: three slice reductions on the GPU, then two
-  ! batched MPI_Allreduces (one MAX scalar, one SUM 2-vector). No D2H copy
-  ! of the full field.
-  !
-  ! When built with -DDEBUG_OUTFLOW, also runs the original host-based
-  ! reduction and compares. Aborts on mismatch. Remove the gate once the
-  ! device path has been verified on your target configurations.
+  ! Compute outflow velocity number and inlet/outlet flow-rate imbalance.
+  ! Three slice reductions on the GPU, two batched MPI_Allreduces (MAX
+  ! scalar, SUM 2-vector). No D2H copy of the full field.
   ! ==========================================================================
   subroutine compute_outflow_params(self, out_vel, flow_rate_diff)
     implicit none
@@ -124,14 +121,11 @@ contains
     dims = self%solver%mesh%get_dims(VERT)
     nx = dims(1)
     dx = self%solver%mesh%geo%d(1)
-    ! NOTE: preserved from original — uses local ny*nz, not global. If the
+    ! NOTE: preserved from original -- uses local ny*nz, not global. If the
     ! y-z plane is decomposed, this is not the true per-cell flow rate.
     ny_nz = real(dims(2)*dims(3), dp)
-
-    ! Use the effective substep timestep from the time integrator
     gdt = self%solver%time_integrator%gdt
 
-    ! ----- Device path -----------------------------------------------------
     call self%solver%backend%slice_max_sum( &
       uxmax, uxmax_discard, self%solver%u, nx - 1)
     call self%solver%backend%slice_max_sum( &
@@ -145,86 +139,117 @@ contains
     fl_sums(2) = flow_rate_out
     call MPI_Allreduce(MPI_IN_PLACE, fl_sums, 2, MPI_X3D2_DP, MPI_SUM, &
                        MPI_COMM_WORLD, ierr)
-    flow_rate_in = fl_sums(1)
-    flow_rate_out = fl_sums(2)
-
-    flow_rate_in = flow_rate_in/ny_nz
-    flow_rate_out = flow_rate_out/ny_nz
+    flow_rate_in = fl_sums(1)/ny_nz
+    flow_rate_out = fl_sums(2)/ny_nz
 
     out_vel = uxmax*gdt/dx
     flow_rate_diff = flow_rate_in - flow_rate_out
-
   end subroutine compute_outflow_params
 
-  subroutine apply_outflow_bc_cylinder(self, u, v, w)
+  ! ==========================================================================
+  ! Boundary Conditions hook (called per substep before transeq).
+  ! Sets up / refreshes the inflow profile fields. No writes to
+  ! solver%u/v/w here.
+  !
+  ! Mirrors initial_conditions structurally, but at a single x-plane:
+  !   u  = 1 + noise(1) * um * (2r - 1)
+  !   v  = 0 + noise(2) * um * (2r - 1)
+  !   w  = 0 + noise(3) * um * (2r - 1)
+  ! ==========================================================================
+  subroutine define_BC_cylinder(self)
     implicit none
     class(case_cylinder_t) :: self
-    class(field_t), intent(inout) :: u, v, w
-    real(dp) :: out_vel, flow_rate_diff
 
-    if (self%outflow_params_valid) then
-      out_vel = self%out_vel_cached
-      flow_rate_diff = self%flow_rate_diff_cached
-      self%outflow_params_valid = .false.
-    else
-      call self%compute_outflow_params(out_vel, flow_rate_diff)
-      self%out_vel_cached = out_vel
-      self%flow_rate_diff_cached = flow_rate_diff
+    class(field_t), pointer :: hu, hv, hw
+    integer :: j, k, dims(3)
+    real(dp) :: noise(3), um, half_L
+
+    dims = self%solver%mesh%get_dims(VERT)
+    noise = self%cylinder_cfg%inlet_noise
+    half_L = self%solver%mesh%geo%L(1)/2._dp
+    um = exp(-0.2_dp*half_L*half_L)
+
+    ! Sample outflow params from solver%u once per substep, stored on self
+    ! so apply_BC (later in the substep) and postprocess can both read them.
+    ! Note: these are sampled pre-step here, whereas the old layout sampled
+    ! them post-step inside apply_BC; the resulting BC parameters drift by
+    ! one substep relative to the stamp.
+
+    ! TODO: remove cache data when the PR#300 merges in or add a commit
+    !      to fix it here too accordingly
+    call self%compute_outflow_params(self%out_vel, self%flow_rate_diff)
+
+    ! Allocate persistent device BC fields on first call.
+    if (.not. associated(self%bc_start_u_x)) then
+      self%bc_start_u_x => self%solver%backend%allocator%get_block(DIR_X, VERT)
+      self%bc_start_v_x => self%solver%backend%allocator%get_block(DIR_X, VERT)
+      self%bc_start_w_x => self%solver%backend%allocator%get_block(DIR_X, VERT)
+      call self%bc_start_u_x%set_data_loc(VERT)
+      call self%bc_start_v_x%set_data_loc(VERT)
+      call self%bc_start_w_x%set_data_loc(VERT)
     end if
-    associate (cfg => self%cylinder_cfg)
-      ! Outflow BC: out_vel is the convective velocity (uxmax * gdt / dx),
-      ! used as c_end multiplier in the convective outflow scheme
-      ! bc_start sets the Dirichlet inflow values.
-      call self%solver%backend%field_set_face( &
-        u, cfg%bc_start_u, out_vel, X_FACE, &
-        bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
-        flow_rate_diff=flow_rate_diff)
-      call self%solver%backend%field_set_face( &
-        v, cfg%bc_start_v, out_vel, X_FACE, &
-        bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
-        flow_rate_diff=flow_rate_diff)
-      call self%solver%backend%field_set_face( &
-        w, cfg%bc_start_w, out_vel, X_FACE, &
-        bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
-        flow_rate_diff=flow_rate_diff)
-    end associate
-  end subroutine apply_outflow_bc_cylinder
-  ! ==========================================================================
-  ! Boundary Conditions: applied to U^m at the start of each substep.
-  !
-  ! Inflow  (left,  i=1):  Dirichlet  u=1, v=0, w=0
-  ! Outflow (right, i=nx): Convective du/dt + Uc*du/dx = 0
-  !
-  ! Everything runs on GPU via field_set_face — no per-field host round-trips.
-  ! ==========================================================================
-  subroutine boundary_conditions_cylinder(self)
-    implicit none
-    class(case_cylinder_t) :: self
-    call self%apply_outflow_bc_cylinder(self%solver%u, self%solver%v, &
-                                        self%solver%w)
-    self%outflow_params_valid = .true.
-  end subroutine boundary_conditions_cylinder
+
+    ! Build the inflow profile in DIR_C host buffers, then upload.
+    hu => self%solver%host_allocator%get_block(DIR_C)
+    hv => self%solver%host_allocator%get_block(DIR_C)
+    hw => self%solver%host_allocator%get_block(DIR_C)
+
+    ! Fill the inlet plane with random numbers in [0, 1); the loop below
+    ! maps these onto noise in [-1, 1). Blocks returned by get_block are
+    ! uninitialised, so this must run before the read-modify-write below.
+    call random_number(hu%data(1, 1:dims(2), 1:dims(3)))
+    call random_number(hv%data(1, 1:dims(2), 1:dims(3)))
+    call random_number(hw%data(1, 1:dims(2), 1:dims(3)))
+
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        hu%data(1, j, k) = 1._dp + noise(1)*um*(2._dp*hu%data(1, j, k) - 1._dp)
+        hv%data(1, j, k) = noise(2)*um*(2._dp*hv%data(1, j, k) - 1._dp)
+        hw%data(1, j, k) = noise(3)*um*(2._dp*hw%data(1, j, k) - 1._dp)
+      end do
+    end do
+
+    call self%solver%backend%set_field_data(self%bc_start_u_x, hu%data)
+    call self%solver%backend%set_field_data(self%bc_start_v_x, hv%data)
+    call self%solver%backend%set_field_data(self%bc_start_w_x, hw%data)
+
+    call self%solver%host_allocator%release_block(hu)
+    call self%solver%host_allocator%release_block(hv)
+    call self%solver%host_allocator%release_block(hw)
+  end subroutine define_BC_cylinder
 
   ! ==========================================================================
-  ! Pre-correction: enforce BCs on U* before the pressure Poisson solve.
-  ! Same logic as boundary_conditions — Dirichlet inflow, convective outflow.
+  ! Pre-correction (called per substep after the integrator step):
+  ! enforce inflow Dirichlet from bc_start_u_x/v/w on the inlet plane and the
+  ! convective outflow update on the right face.
   ! ==========================================================================
-  subroutine pre_correction_cylinder(self, u, v, w)
+  subroutine apply_BC_cylinder(self, u, v, w)
     implicit none
     class(case_cylinder_t) :: self
     class(field_t), intent(inout) :: u, v, w
-    call self%apply_outflow_bc_cylinder(u, v, w)
-  end subroutine pre_correction_cylinder
+
+    call self%solver%backend%field_set_face_from_field( &
+      u, self%bc_start_u_x, self%out_vel, X_FACE, &
+      bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
+      flow_rate_diff=self%flow_rate_diff)
+    call self%solver%backend%field_set_face_from_field( &
+      v, self%bc_start_v_x, self%out_vel, X_FACE, &
+      bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
+      flow_rate_diff=self%flow_rate_diff)
+    call self%solver%backend%field_set_face_from_field( &
+      w, self%bc_start_w_x, self%out_vel, X_FACE, &
+      bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
+      flow_rate_diff=self%flow_rate_diff)
+  end subroutine apply_BC_cylinder
 
   ! ==========================================================================
-  ! Forcings: empty — cylinder forcing is handled by the solver's IBM
+  ! Forcings: empty -- cylinder forcing is handled by the solver's IBM
   ! ==========================================================================
   subroutine forcings_cylinder(self, du, dv, dw, iter)
     implicit none
     class(case_cylinder_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     integer, intent(in) :: iter
-    ! No additional forcing terms — IBM is handled by solver
   end subroutine forcings_cylinder
 
   ! ==========================================================================
@@ -239,8 +264,8 @@ contains
     if (self%solver%mesh%par%is_root()) then
       print *, 'time =', t, 'iteration =', iter
       print '(A, ES12.5, A, ES12.5)', &
-        ' out_vel = ', self%out_vel_cached, &
-        '  flow_rate_diff = ', self%flow_rate_diff_cached
+        ' out_vel = ', self%out_vel, &
+        '  flow_rate_diff = ', self%flow_rate_diff
     end if
 
     call self%monitoring%write_step( &

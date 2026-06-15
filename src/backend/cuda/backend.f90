@@ -24,6 +24,9 @@ module m_cuda_backend
   use m_cuda_kernels_fieldops, only: axpby, buffer_copy, field_scale, &
                                      field_shift, scalar_product, &
                                      field_max_sum, field_set_y_face, &
+                                     field_set_x_face, &
+                                     field_set_x_face_from_field, &
+                                     field_set_y_face_from_field, &
                                      pwmul, volume_integral
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
@@ -63,6 +66,7 @@ module m_cuda_backend
     procedure :: field_scale => field_scale_cuda
     procedure :: field_shift => field_shift_cuda
     procedure :: field_set_face => field_set_face_cuda
+    procedure :: field_set_face_from_field => field_set_face_from_field_cuda
     procedure :: field_volume_integral => field_volume_integral_cuda
     procedure :: copy_data_to_f => copy_data_to_f_cuda
     procedure :: copy_f_to_data => copy_f_to_data_cuda
@@ -1057,6 +1061,78 @@ contains
 
   end subroutine field_set_face_cuda
 
+  subroutine field_set_face_from_field_cuda(self, f, f_start, c_end, face, &
+                                            bc_start, bc_end, flow_rate_diff)
+    !! Set a face of `f` using values supplied by another field `f_start`.
+    !! Both fields must be DIR_X VERT pencil-layout. X_FACE uses the inlet
+    !! plane (pencil index 1) of f_start plus a convective outflow update
+    !! at the right face. Y_FACE copies the bottom and top y-pencil planes
+    !! of f_start onto the corresponding planes of f (Dirichlet only).
+    implicit none
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    class(field_t), intent(in) :: f_start
+    real(dp), intent(in) :: c_end
+    integer, intent(in) :: face
+    integer, optional, intent(in) :: bc_start, bc_end
+    real(dp), optional, intent(in) :: flow_rate_diff
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d, f_start_d
+    type(dim3) :: blocks, threads
+    integer :: dims(3)
+    integer :: bc_s, bc_e
+    real(dp) :: flow_rate_diff_val
+
+    if (f%dir /= DIR_X) &
+      error stop 'field_set_face_from_field: only supported for DIR_X fields.'
+    if (f_start%dir /= DIR_X) &
+      error stop 'field_set_face_from_field: f_start must be DIR_X.'
+
+    ! Defaults - same convention as field_set_face_cuda
+    bc_s = BC_DIRICHLET
+    bc_e = BC_DIRICHLET
+    flow_rate_diff_val = 0._dp
+    if (present(bc_start)) bc_s = bc_start
+    if (present(bc_end)) bc_e = bc_end
+    if (present(flow_rate_diff)) flow_rate_diff_val = flow_rate_diff
+
+    call resolve_field_t(f_d, f)
+    call resolve_field_t(f_start_d, f_start)
+
+    ! The BC fields are always built as VERT in the case setup, so we
+    ! query the dims with VERT unconditionally here (in common.f90
+    ! NULL_LOC = -1 and VERT = 0, so the two are distinct).
+    dims = self%mesh%get_dims(VERT)
+
+    select case (face)
+    case (X_FACE)
+      ! Same launch shape as field_set_x_face - one thread per (i, b)
+      ! in the inlet plane, padded out to 64 threads per block.
+      blocks = dim3((SZ - 1)/64 + 1, ((dims(2) - 1)/SZ + 1)*dims(3), 1)
+      threads = dim3(64, 1, 1)
+      call field_set_x_face_from_field<<<blocks, threads>>>( &      !&
+          f_d, f_start_d, c_end, bc_s, bc_e, flow_rate_diff_val, &
+          dims(1), dims(2), dims(3))
+
+    case (Y_FACE)
+      if (bc_s /= BC_DIRICHLET .or. bc_e /= BC_DIRICHLET) then
+        error stop &
+          'field_set_face_from_field: Y_FACE only supports BC_DIRICHLET.'
+      end if
+      blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
+      threads = dim3(64, 1, 1)
+      call field_set_y_face_from_field<<<blocks, threads>>>( &      !&
+          f_d, f_start_d, dims(1), dims(2), dims(3))
+
+    case (Z_FACE)
+      error stop 'field_set_face_from_field: Z_FACE is not yet supported.'
+
+    case default
+      error stop 'field_set_face_from_field: face is undefined.'
+    end select
+
+  end subroutine field_set_face_from_field_cuda
+
   real(dp) function field_volume_integral_cuda(self, f) result(s)
     !! volume integral of a field
     implicit none
@@ -1141,4 +1217,3 @@ contains
   end subroutine resolve_field_t
 
 end module m_cuda_backend
-
