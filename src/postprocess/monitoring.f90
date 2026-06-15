@@ -8,13 +8,14 @@ module m_monitoring
 
   use m_common, only: dp, DIR_X, DIR_Z, VERT
   use m_field, only: field_t
+  use m_scalar_series, only: scalar_series_t
   use m_solver, only: solver_t
 
   implicit none
 
   type :: monitoring_t
-    integer, private :: file_unit = -1
     logical, private :: is_root = .false.
+    type(scalar_series_t), private :: series
   contains
     procedure :: init
     procedure :: write_step
@@ -23,18 +24,22 @@ module m_monitoring
 
 contains
 
-  subroutine init(self, solver)
+  subroutine init(self, solver, append)
     class(monitoring_t), intent(inout) :: self
     class(solver_t), intent(in) :: solver
+    logical, intent(in), optional :: append
+
+    logical :: append_output
+    character(len=16), parameter :: columns(3) = &
+                                    ['enstrophy      ', &
+                                     'div_u_max      ', &
+                                     'div_u_mean     ']
 
     self%is_root = solver%mesh%par%is_root()
-
-    if (self%is_root) then
-      open (newunit=self%file_unit, file='monitoring.csv', &
-            status='replace', action='write')
-      write (self%file_unit, '(A)') &
-        '# time, enstrophy, div_u_max, div_u_mean'
-    end if
+    append_output = .false.
+    if (present(append)) append_output = append
+    call self%series%init('monitoring.csv', &
+                          columns, self%is_root, append_output)
 
   end subroutine init
 
@@ -79,9 +84,7 @@ contains
       print *, 'enstrophy:', enstrophy
       print *, 'div u max mean:', div_u_max, div_u_mean
 
-      write (self%file_unit, '(ES20.12,3(",",ES20.12))') &
-        t, enstrophy, div_u_max, div_u_mean
-      flush (self%file_unit)
+      call self%series%write_step(t, [enstrophy, div_u_max, div_u_mean])
     end if
 
   end subroutine write_step
@@ -89,10 +92,7 @@ contains
   subroutine finalise(self)
     class(monitoring_t), intent(inout) :: self
 
-    if (self%is_root .and. self%file_unit /= -1) then
-      close (self%file_unit)
-      self%file_unit = -1
-    end if
+    call self%series%finalise()
 
   end subroutine finalise
 

@@ -9,6 +9,7 @@ set(SRC
   solver.f90
   postprocess/postprocess.f90
   postprocess/monitoring.f90
+  postprocess/scalar_series.f90
   tdsops.f90
   time_integrator.f90
   ordering.f90
@@ -61,6 +62,7 @@ set(IOSRC
   io/io_session.f90
   io/io_field_utils.f90
   io/checkpoint_manager.f90
+  io/checkpoint_state.f90
   io/snapshot_manager.f90
   io/stats.f90
   io/io_manager.f90
