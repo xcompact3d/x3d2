@@ -37,7 +37,7 @@ module m_base_case
     class(field_t), pointer :: bc_end_u_y => null()
     class(field_t), pointer :: bc_end_v_y => null()
     class(field_t), pointer :: bc_end_w_y => null()
-    
+
   contains
     procedure(define_BC), deferred :: define_BC
     procedure(initial_conditions), deferred :: initial_conditions

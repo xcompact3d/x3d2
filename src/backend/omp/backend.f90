@@ -892,7 +892,7 @@ contains
     select case (face)
     case (X_FACE)
 
-     !$omp parallel do private(k_end, y_block, i_max)
+      !$omp parallel do private(k_end, y_block, i_max)
       do k = 1, n_y_blocks*dims(3)
         ! OMP DIR_X ordering: dir_k = n_y_blocks*(z - 1) + y_block,
         ! so the y-block is the fast-varying component (see get_index_dir)
@@ -909,7 +909,7 @@ contains
           ! right face: convective outflow
           f%data(i, dims(1), k_end) = f%data(i, dims(1), k_end) &
                                       - c_end*(f%data(i, dims(1), k_end) &
-                                               - f%data(i, dims(1) - 1, k_end)) &
+                                             - f%data(i, dims(1) - 1, k_end)) &
                                       + flow_rate_diff_val
         end do
       end do
