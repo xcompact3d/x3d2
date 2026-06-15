@@ -1,6 +1,9 @@
 set(cmake_minimum_version 3.10)
 cmake_minimum_required(VERSION ${cmake_minimum_version})
 project(x3d2 LANGUAGES Fortran CXX C)
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
 enable_testing()
 
 set(WITH_2DECOMPFFT ON CACHE BOOL
