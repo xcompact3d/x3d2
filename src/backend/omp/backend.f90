@@ -907,10 +907,10 @@ contains
           ! left face: spatially-varying Dirichlet from f_start at i=1
           f%data(i, 1, k) = f_start%data(i, 1, k)
           ! right face: convective outflow
-          f%data(i, dims(1), k_end) = f%data(i, dims(1), k_end) &
-                                      - c_end*(f%data(i, dims(1), k_end) &
-                                             - f%data(i, dims(1) - 1, k_end)) &
-                                      + flow_rate_diff_val
+          associate (fd => f%data(i, dims(1), k_end), &
+                     fd1 => f%data(i, dims(1) - 1, k_end))
+            fd = fd - c_end*(fd - fd1) + flow_rate_diff_val
+          end associate
         end do
       end do
       !$omp end parallel do
