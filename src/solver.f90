@@ -220,7 +220,7 @@ contains
     character(*), intent(in) :: der1st_scheme, der2nd_scheme, &
                                 interpl_scheme, stagder_scheme
     !! hyperviscous (iSVV) der2nd params; only required when der2nd_scheme is
-    !! 'compact6-hyperviscous'. 
+    !! 'compact6-hyperviscous'.
     real(dp), optional, intent(in) :: c_nu, nu0_nu
 
     integer :: dir, bc_start, bc_end, bc_mp_start, bc_mp_end, n_vert, n_cell, i
