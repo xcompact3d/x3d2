@@ -35,10 +35,10 @@ module m_case_wind_turbine
     real(dp) :: flow_rate_diff_cached = 0._dp
     logical :: outflow_params_valid = .false.
   contains
-    procedure :: boundary_conditions => boundary_conditions_wind_turbine
+    procedure :: define_BC => define_BC_wind_turbine
     procedure :: initial_conditions => initial_conditions_wind_turbine
     procedure :: forcings => forcings_wind_turbine
-    procedure :: pre_correction => pre_correction_wind_turbine
+    procedure :: apply_BC => apply_BC_wind_turbine
     procedure :: postprocess => postprocess_wind_turbine
     procedure :: compute_outflow_params
     procedure :: apply_outflow_bc
@@ -208,19 +208,19 @@ contains
     end associate
   end subroutine apply_outflow_bc
 
-  subroutine boundary_conditions_wind_turbine(self)
+  subroutine define_BC_wind_turbine(self)
     implicit none
     class(case_wind_turbine_t) :: self
     call self%apply_outflow_bc(self%solver%u, self%solver%v, self%solver%w)
     self%outflow_params_valid = .true.
-  end subroutine boundary_conditions_wind_turbine
+  end subroutine define_BC_wind_turbine
 
-  subroutine pre_correction_wind_turbine(self, u, v, w)
+  subroutine apply_BC_wind_turbine(self, u, v, w)
     implicit none
     class(case_wind_turbine_t) :: self
     class(field_t), intent(inout) :: u, v, w
     call self%apply_outflow_bc(u, v, w)
-  end subroutine pre_correction_wind_turbine
+  end subroutine apply_BC_wind_turbine
 
   ! Forcings: advance the turbine model and accumulate its momentum source.
   subroutine forcings_wind_turbine(self, du, dv, dw, iter)
@@ -252,8 +252,8 @@ contains
     if (self%solver%mesh%par%is_root()) then
       print *, 'time =', t, 'iteration =', iter
     end if
-    call self%print_enstrophy(self%solver%u, self%solver%v, self%solver%w)
-    call self%print_div_max_mean(self%solver%u, self%solver%v, self%solver%w)
+    call self%monitoring%write_step( &
+      self%solver, t, self%solver%u, self%solver%v, self%solver%w)
   end subroutine postprocess_wind_turbine
 
 end module m_case_wind_turbine
