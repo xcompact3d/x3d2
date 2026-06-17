@@ -21,6 +21,7 @@ module m_checkpoint_manager
   use m_solver, only: solver_t
   use m_io_session, only: reader_session_t, writer_session_t
   use m_config, only: checkpoint_config_t
+  use m_checkpoint_state, only: checkpoint_state_t
   use m_stats, only: stats_manager_t
   use m_io_field_utils, only: field_buffer_map_t, field_ptr_t, &
                               setup_field_arrays, cleanup_field_arrays, &
@@ -49,6 +50,7 @@ module m_checkpoint_manager
     procedure :: init
     procedure :: handle_restart
     procedure :: handle_checkpoint_step
+    procedure :: restore_state
     procedure :: is_restart
     procedure :: finalise
     procedure, private :: write_checkpoint
@@ -124,29 +126,37 @@ contains
     end if
   end subroutine handle_restart
 
-  subroutine handle_checkpoint_step(self, solver, timestep, comm, stats_mgr)
+  subroutine handle_checkpoint_step( &
+    self, solver, timestep, comm, stats_mgr, checkpoint_state &
+    )
     !! Handle checkpoint writing at a given timestep
     class(checkpoint_manager_t), intent(inout) :: self
     class(solver_t), intent(in) :: solver
     integer, intent(in) :: timestep
     integer, intent(in), optional :: comm
     type(stats_manager_t), intent(inout), optional :: stats_mgr
+    class(checkpoint_state_t), intent(inout), optional :: checkpoint_state
 
     integer :: comm_to_use
 
     comm_to_use = MPI_COMM_WORLD
     if (present(comm)) comm_to_use = comm
 
-    call self%write_checkpoint(solver, timestep, comm_to_use, stats_mgr)
+    call self%write_checkpoint( &
+      solver, timestep, comm_to_use, stats_mgr, checkpoint_state &
+      )
   end subroutine handle_checkpoint_step
 
-  subroutine write_checkpoint(self, solver, timestep, comm, stats_mgr)
+  subroutine write_checkpoint( &
+    self, solver, timestep, comm, stats_mgr, checkpoint_state &
+    )
     !! Write a checkpoint file for simulation restart
     class(checkpoint_manager_t), intent(inout) :: self
     class(solver_t), intent(in) :: solver
     integer, intent(in) :: timestep
     integer, intent(in) :: comm
     type(stats_manager_t), intent(inout), optional :: stats_mgr
+    class(checkpoint_state_t), intent(inout), optional :: checkpoint_state
 
     character(len=256) :: filename, temp_filename, old_filename
     integer :: ierr, myrank
@@ -204,6 +214,9 @@ contains
     ! Write stats running means into the same checkpoint
     if (present(stats_mgr)) then
       call stats_mgr%write_checkpoint(solver, writer_session)
+    end if
+    if (present(checkpoint_state)) then
+      call checkpoint_state%write_checkpoint(writer_session)
     end if
 
     ! for AB methods with order >1, keep derivative history olds(i,j)
@@ -315,6 +328,20 @@ contains
 
     self%last_checkpoint_step = timestep
   end subroutine write_checkpoint
+
+  subroutine restore_state(self, checkpoint_state, comm)
+    !! Restore registered case/model state after that object has been created.
+    class(checkpoint_manager_t), intent(inout) :: self
+    class(checkpoint_state_t), intent(inout) :: checkpoint_state
+    integer, intent(in) :: comm
+
+    type(reader_session_t) :: reader_session
+
+    if (.not. self%config%restart_from_checkpoint) return
+    call reader_session%open(trim(self%config%restart_file), comm)
+    call checkpoint_state%read_checkpoint(reader_session)
+    call reader_session%close()
+  end subroutine restore_state
 
   subroutine restart_checkpoint( &
     self, solver, filename, timestep, restart_time, comm, stats_mgr &
