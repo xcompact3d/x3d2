@@ -31,7 +31,7 @@ module m_case_wind_turbine
 
   type, extends(base_case_t) :: case_wind_turbine_t
     type(wind_turbine_config_t) :: wt_cfg
-    class(turbine_model_t), allocatable :: turbine
+    class(turbine_model_t), pointer :: turbine => null()
     real(dp) :: out_vel_cached = 0._dp
     real(dp) :: flow_rate_diff_cached = 0._dp
     logical :: outflow_params_valid = .false.
@@ -41,6 +41,7 @@ module m_case_wind_turbine
     procedure :: forcings => forcings_wind_turbine
     procedure :: apply_BC => apply_BC_wind_turbine
     procedure :: postprocess => postprocess_wind_turbine
+    procedure :: finalise_case_specific => finalise_wind_turbine
     procedure :: compute_outflow_params
     procedure :: apply_outflow_bc
   end type case_wind_turbine_t
@@ -76,6 +77,8 @@ contains
         turbine%coords_file = flow_case%wt_cfg%adm_coords
         turbine%rho_air = flow_case%wt_cfg%rho_air
         turbine%T_relax = flow_case%wt_cfg%T_relax
+        turbine%stats_start = max(1, flow_case%io_mgr%stats_mgr%config%initstat)
+        turbine%stats_freq = max(1, flow_case%io_mgr%stats_mgr%config%istatfreq)
       end select
     case (0)
       allocate (turbine_dummy_t :: flow_case%turbine)
@@ -87,6 +90,10 @@ contains
                                 flow_case%solver%mesh, &
                                 flow_case%solver%host_allocator, &
                                 flow_case%solver%dt)
+    call flow_case%io_mgr%register_checkpoint_state(flow_case%turbine)
+    call flow_case%turbine%setup_output( &
+      flow_case%solver%mesh%par%is_root(), flow_case%io_mgr%is_restart() &
+      )
   end function case_wind_turbine_init
 
   ! Initial Conditions: uniform inflow with localised noise
@@ -252,8 +259,10 @@ contains
     integer, intent(in) :: iter
     real(dp), intent(in) :: t
 
-    if (mod(iter, self%wt_cfg%iturboutput) == 0) then
-      call self%turbine%write_output(iter, self%solver%mesh%par%is_root())
+    if (self%wt_cfg%iturboutput > 0) then
+      if (iter > 0 .and. mod(iter, self%wt_cfg%iturboutput) == 0) then
+        call self%turbine%write_output(iter, self%solver%mesh%par%is_root())
+      end if
     end if
 
     if (self%solver%mesh%par%is_root()) then
@@ -262,5 +271,13 @@ contains
     call self%monitoring%write_step( &
       self%solver, t, self%solver%u, self%solver%v, self%solver%w)
   end subroutine postprocess_wind_turbine
+
+  subroutine finalise_wind_turbine(self)
+    class(case_wind_turbine_t) :: self
+
+    call self%turbine%finalise()
+    call self%io_mgr%unregister_checkpoint_state()
+    deallocate (self%turbine)
+  end subroutine finalise_wind_turbine
 
 end module m_case_wind_turbine

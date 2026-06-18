@@ -1,4 +1,6 @@
 program test_adm
+  !! Tests ADM velocity sampling, filtering, force projection, running means,
+  !! and scalar-output columns independently of the checkpoint backend.
   use mpi
 
   use m_adm, only: adm_t
@@ -32,6 +34,7 @@ program test_adm
   type(adm_t) :: adm
   class(field_t), pointer :: u, v, w, du, dv, dw, host_data
   character(len=8) :: periodic_bcs(2)
+  character(len=512) :: output_header
   integer :: ierr, nrank
   real(dp) :: expected_speed, expected_thrust, sum_du, sum_dv, sum_dw, tol
   logical :: allpass
@@ -71,6 +74,7 @@ program test_adm
   adm%rho_air = 1.225_dp
   adm%T_relax = 1._dp
   call adm%init(backend, mesh, host_allocator, 0.01_dp)
+  call adm%setup_output(nrank == 0, .false.)
 
   u => allocator%get_block(DIR_X, VERT)
   v => allocator%get_block(DIR_X, VERT)
@@ -135,12 +139,24 @@ program test_adm
   allpass = allpass &
             .and. close_enough(adm%disc(1)%U_disc, 20._dp, tol) &
             .and. close_enough(adm%disc(1)%U_disc_filt, expected_speed, tol) &
+            .and. adm%sample_count == 2 &
+            .and. close_enough(adm%disc(1)%U_disc_mean, &
+                               0.5_dp*(10._dp + expected_speed), tol) &
             .and. close_enough(adm%disc(1)%thrust, expected_thrust, tol) &
             .and. close_enough(adm%disc(1)%power, &
                                expected_speed*expected_thrust, tol) &
             .and. close_enough(sum_du, -expected_thrust/adm%rho_air, tol)
 
+  call adm%write_output(2, nrank == 0)
+  call adm%finalise()
+
   if (nrank == 0) then
+    open (unit=11, file='disc1.adm', status='old', action='read')
+    read (11, '(A)') output_header
+    close (11, status='delete')
+    allpass = allpass &
+              .and. index(output_header, 'U_disc_filt') > 0 &
+              .and. index(output_header, 'thrust_mean') > 0
     open (unit=10, file='test_adm.ad', status='old')
     close (10, status='delete')
     if (allpass) then

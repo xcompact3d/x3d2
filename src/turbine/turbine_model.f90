@@ -16,17 +16,20 @@ module m_turbine_model
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp
+  use m_checkpoint_state, only: checkpoint_state_t
   use m_field, only: field_t
   use m_mesh, only: mesh_t
 
   implicit none
 
-  type, abstract :: turbine_model_t
+  type, abstract, extends(checkpoint_state_t) :: turbine_model_t
   contains
     procedure(init_iface), deferred :: init
     procedure(update_iface), deferred :: update
     procedure(project_forces_iface), deferred :: project_forces
     procedure(write_output_iface), deferred :: write_output
+    procedure(setup_output_iface), deferred :: setup_output
+    procedure(finalise_iface), deferred :: finalise
   end type turbine_model_t
 
   abstract interface
@@ -73,6 +76,17 @@ module m_turbine_model
       integer, intent(in) :: iter
       logical, intent(in) :: is_root
     end subroutine write_output_iface
+
+    subroutine setup_output_iface(self, is_root, append)
+      import :: turbine_model_t
+      class(turbine_model_t), intent(inout) :: self
+      logical, intent(in) :: is_root, append
+    end subroutine setup_output_iface
+
+    subroutine finalise_iface(self)
+      import :: turbine_model_t
+      class(turbine_model_t), intent(inout) :: self
+    end subroutine finalise_iface
   end interface
 
 end module m_turbine_model

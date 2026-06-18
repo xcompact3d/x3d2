@@ -91,7 +91,9 @@ module m_adm
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, pi, MPI_X3D2_DP, DIR_X, DIR_C, VERT
   use m_field, only: field_t
+  use m_io_session, only: reader_session_t, writer_session_t
   use m_mesh, only: mesh_t
+  use m_scalar_series, only: scalar_series_t
   use m_turbine_model, only: turbine_model_t
 
   implicit none
@@ -104,7 +106,11 @@ module m_adm
     real(dp) :: rot_N(3)          !! unit rotor-axis vector
     real(dp) :: U_disc = 0._dp       !! instantaneous disc-averaged speed
     real(dp) :: U_disc_filt = 0._dp  !! filtered disc-averaged speed
-    real(dp) :: thrust, power     !! instantaneous thrust and power
+    real(dp) :: thrust = 0._dp    !! instantaneous thrust
+    real(dp) :: power = 0._dp     !! instantaneous power
+    real(dp) :: U_disc_mean = 0._dp
+    real(dp) :: thrust_mean = 0._dp
+    real(dp) :: power_mean = 0._dp
     class(field_t), pointer :: gamma_disc => null() !! smearing kernel (DIR_X)
   end type actuator_disc_t
 
@@ -115,10 +121,15 @@ module m_adm
     real(dp) :: cell_vol
     real(dp) :: dt
     real(dp) :: last_update_time = -huge(1._dp)
+    integer :: current_iter = 0
+    integer :: stats_start = 1
+    integer :: stats_freq = 1
+    integer :: sample_count = 0
     logical :: filter_initialized = .false.
     logical :: recompute_forces = .true.
     character(len=256) :: coords_file = ''
     type(actuator_disc_t), allocatable :: disc(:)
+    type(scalar_series_t), allocatable :: output(:)
     class(base_backend_t), pointer :: backend => null()
     type(mesh_t), pointer :: mesh => null()
     type(allocator_t), pointer :: host_allocator => null()
@@ -127,6 +138,10 @@ module m_adm
     procedure :: update => update_adm
     procedure :: project_forces => project_forces_adm
     procedure :: write_output => write_output_adm
+    procedure :: setup_output => setup_output_adm
+    procedure :: write_checkpoint => write_checkpoint_adm
+    procedure :: read_checkpoint => read_checkpoint_adm
+    procedure :: finalise => finalise_adm
   end type adm_t
 
 contains
@@ -256,6 +271,7 @@ contains
     self%recompute_forces = t /= self%last_update_time
     self%last_update_time = t
     self%dt = dt
+    self%current_iter = nint(t/dt)
   end subroutine update_adm
 
   subroutine project_forces_adm(self, du, dv, dw, u, v, w)
@@ -266,7 +282,17 @@ contains
 
     integer :: t
     real(dp) :: u_avg, v_avg, w_avg, rot_N(3), C_T_prime
-    real(dp) :: coeff_x, coeff_y, coeff_z, filter_weight
+    real(dp) :: coeff_x, coeff_y, coeff_z, filter_weight, stat_inc
+    logical :: accumulate_stats
+
+    accumulate_stats = self%recompute_forces &
+                       .and. self%current_iter >= self%stats_start &
+                       .and. mod(self%current_iter - self%stats_start, &
+                                self%stats_freq) == 0
+    if (accumulate_stats) then
+      self%sample_count = self%sample_count + 1
+      stat_inc = 1._dp/real(self%sample_count, dp)
+    end if
 
     do t = 1, self%n_turb
       rot_N(:) = self%disc(t)%rot_N(:)
@@ -296,6 +322,18 @@ contains
         self%disc(t)%thrust = 0.5_dp*self%rho_air*C_T_prime &
                               *self%disc(t)%U_disc_filt**2*self%disc(t)%area
         self%disc(t)%power = self%disc(t)%thrust*self%disc(t)%U_disc_filt
+
+        if (accumulate_stats) then
+          self%disc(t)%U_disc_mean = self%disc(t)%U_disc_mean &
+                                     + stat_inc*(self%disc(t)%U_disc_filt &
+                                                 - self%disc(t)%U_disc_mean)
+          self%disc(t)%thrust_mean = self%disc(t)%thrust_mean &
+                                     + stat_inc*(self%disc(t)%thrust &
+                                                 - self%disc(t)%thrust_mean)
+          self%disc(t)%power_mean = self%disc(t)%power_mean &
+                                    + stat_inc*(self%disc(t)%power &
+                                                - self%disc(t)%power_mean)
+        end if
       end if
 
       ! Project the thrust acceleration (opposing the inflow) onto the momentum
@@ -320,6 +358,7 @@ contains
     integer, intent(in) :: iter
     logical, intent(in) :: is_root
     integer :: t
+    real(dp) :: values(7)
 
     if (.not. is_root) return
     do t = 1, self%n_turb
@@ -327,8 +366,112 @@ contains
         ': U_disc_filt = ', self%disc(t)%U_disc_filt, &
         '  thrust = ', self%disc(t)%thrust, &
         '  power = ', self%disc(t)%power
+      if (allocated(self%output)) then
+        values = [self%disc(t)%U_disc, self%disc(t)%U_disc_filt, &
+                  self%disc(t)%power, self%disc(t)%thrust, &
+                  self%disc(t)%U_disc_mean, self%disc(t)%power_mean, &
+                  self%disc(t)%thrust_mean]
+        call self%output(t)%write_step(real(iter, dp)*self%dt, values)
+      end if
     end do
   end subroutine write_output_adm
+
+  subroutine setup_output_adm(self, is_root, append)
+    class(adm_t), intent(inout) :: self
+    logical, intent(in) :: is_root, append
+
+    character(len=32) :: filename
+    character(len=16), parameter :: columns(7) = &
+      ['U_disc          ', 'U_disc_filt     ', 'power           ', &
+       'thrust          ', 'U_disc_mean     ', 'power_mean      ', &
+       'thrust_mean     ']
+    integer :: t
+
+    allocate (self%output(self%n_turb))
+    do t = 1, self%n_turb
+      write (filename, '("disc",I0,".adm")') t
+      call self%output(t)%init(filename, columns, is_root, append)
+    end do
+  end subroutine setup_output_adm
+
+  subroutine write_checkpoint_adm(self, writer)
+    class(adm_t), intent(inout) :: self
+    type(writer_session_t), intent(inout) :: writer
+
+    character(len=64) :: name
+    integer :: t
+
+    call writer%write_data('adm_n_turb', self%n_turb)
+    call writer%write_data('adm_sample_count', self%sample_count)
+    do t = 1, self%n_turb
+      write (name, '("adm_U_disc_",I0)') t
+      call writer%write_data(trim(name), self%disc(t)%U_disc)
+      write (name, '("adm_U_disc_filt_",I0)') t
+      call writer%write_data(trim(name), self%disc(t)%U_disc_filt)
+      write (name, '("adm_power_",I0)') t
+      call writer%write_data(trim(name), self%disc(t)%power)
+      write (name, '("adm_thrust_",I0)') t
+      call writer%write_data(trim(name), self%disc(t)%thrust)
+      write (name, '("adm_U_disc_mean_",I0)') t
+      call writer%write_data(trim(name), self%disc(t)%U_disc_mean)
+      write (name, '("adm_power_mean_",I0)') t
+      call writer%write_data(trim(name), self%disc(t)%power_mean)
+      write (name, '("adm_thrust_mean_",I0)') t
+      call writer%write_data(trim(name), self%disc(t)%thrust_mean)
+    end do
+  end subroutine write_checkpoint_adm
+
+  subroutine read_checkpoint_adm(self, reader)
+    class(adm_t), intent(inout) :: self
+    type(reader_session_t), intent(inout) :: reader
+
+    character(len=64) :: name
+    integer :: checkpoint_n_turb, t
+
+    call reader%read_data('adm_n_turb', checkpoint_n_turb)
+    if (checkpoint_n_turb /= self%n_turb) then
+      error stop 'ADM: checkpoint turbine count does not match configuration.'
+    end if
+    call reader%read_data('adm_sample_count', self%sample_count)
+    do t = 1, self%n_turb
+      write (name, '("adm_U_disc_",I0)') t
+      call reader%read_data(trim(name), self%disc(t)%U_disc)
+      write (name, '("adm_U_disc_filt_",I0)') t
+      call reader%read_data(trim(name), self%disc(t)%U_disc_filt)
+      write (name, '("adm_power_",I0)') t
+      call reader%read_data(trim(name), self%disc(t)%power)
+      write (name, '("adm_thrust_",I0)') t
+      call reader%read_data(trim(name), self%disc(t)%thrust)
+      write (name, '("adm_U_disc_mean_",I0)') t
+      call reader%read_data(trim(name), self%disc(t)%U_disc_mean)
+      write (name, '("adm_power_mean_",I0)') t
+      call reader%read_data(trim(name), self%disc(t)%power_mean)
+      write (name, '("adm_thrust_mean_",I0)') t
+      call reader%read_data(trim(name), self%disc(t)%thrust_mean)
+    end do
+    self%filter_initialized = .true.
+  end subroutine read_checkpoint_adm
+
+  subroutine finalise_adm(self)
+    class(adm_t), intent(inout) :: self
+
+    integer :: t
+
+    if (allocated(self%output)) then
+      do t = 1, size(self%output)
+        call self%output(t)%finalise()
+      end do
+      deallocate (self%output)
+    end if
+    if (allocated(self%disc)) then
+      do t = 1, size(self%disc)
+        if (associated(self%disc(t)%gamma_disc)) then
+          call self%backend%allocator%release_block(self%disc(t)%gamma_disc)
+        end if
+      end do
+      deallocate (self%disc)
+    end if
+  end subroutine finalise_adm
 
   subroutine read_ad_file(filename, disc_params)
     !! Read turbine disc parameters from a `.ad` file. Format: one header line
