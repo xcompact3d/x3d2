@@ -6,6 +6,8 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 enable_testing()
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/decomp2d")
+
 set(WITH_2DECOMPFFT ON CACHE BOOL
   "Enable Poisson based FFT solver on the OpenMP backend.")
 

@@ -86,9 +86,6 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   list(APPEND BACKENDSRC backend/cuda/backend.f90)
 endif()
 
-# Decide whether 2decomp&fft is supported by the build
-find_package(decomp2d)
-
 if(WITH_2DECOMPFFT)
   list(APPEND SRC ${2DECOMPFFTSRC})
 else()
@@ -140,11 +137,9 @@ endif()
 
 if(WITH_2DECOMPFFT)
   message(STATUS "Using the FFT poisson solver with 2decomp&fft support on the OpenMP backend")
-  set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
   find_package(decomp2d REQUIRED)
-  include_directories(${decomp2d_INCLUDE_DIRS})
-  target_link_libraries(decomp2d)
   target_link_libraries(x3d2 PRIVATE decomp2d)
+  target_link_libraries(x3d2_backends PRIVATE decomp2d)
   target_compile_options(x3d2 PRIVATE "-DWITH_2DECOMPFFT")
   target_compile_options(x3d2_backends PRIVATE "-DWITH_2DECOMPFFT")
 endif()
