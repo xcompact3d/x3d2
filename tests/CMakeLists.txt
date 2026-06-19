@@ -140,6 +140,7 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
 
   # CUDA verification tests
   define_verification_test(verification/test_thom.f90 1 cuda)
+  define_verification_test(verification/test_memory_estimate.f90 1 cuda)
   define_verification_test(verification/test_time_integrator.f90 1 cuda)
   define_verification_test(verification/test_fft.f90 1 cuda)
   define_verification_test(verification/test_poisson_bc.f90 1 cuda)
