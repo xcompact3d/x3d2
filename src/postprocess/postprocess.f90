@@ -6,7 +6,7 @@ module m_postprocess
   !! and visualisation (e.g. pressure on the vertex grid, vorticity
   !! magnitude, Q-criterion).
 
-  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, VERT, &
+  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Z2X
   use m_field, only: field_t
   use m_solver, only: solver_t
@@ -38,6 +38,11 @@ contains
       u_y, dudy_y, u_z, dudz_z, &
       v_y, dvdy_y, v_z, dvdz_z, &
       w_y, dwdy_y, w_z, dwdz_z
+    class(field_t), pointer :: &
+      dudx_h, dudy_h, dudz_h, &
+      dvdx_h, dvdy_h, dvdz_h, &
+      dwdx_h, dwdy_h, dwdz_h, &
+      vort_h, qcrit_h
 
     ! Allocate output fields on first use
     if (output_vorticity .and. .not. associated(solver%vort)) &
@@ -132,30 +137,66 @@ contains
     ! dvdx, dvdy_x, dvdz_x
     ! dwdx, dwdy_x, dwdz_x
 
+    dudx_h => solver%host_allocator%get_block(DIR_C, dudx%data_loc)
+    dudy_h => solver%host_allocator%get_block(DIR_C, dudy_x%data_loc)
+    dudz_h => solver%host_allocator%get_block(DIR_C, dudz_x%data_loc)
+    dvdx_h => solver%host_allocator%get_block(DIR_C, dvdx%data_loc)
+    dvdy_h => solver%host_allocator%get_block(DIR_C, dvdy_x%data_loc)
+    dvdz_h => solver%host_allocator%get_block(DIR_C, dvdz_x%data_loc)
+    dwdx_h => solver%host_allocator%get_block(DIR_C, dwdx%data_loc)
+    dwdy_h => solver%host_allocator%get_block(DIR_C, dwdy_x%data_loc)
+    dwdz_h => solver%host_allocator%get_block(DIR_C, dwdz_x%data_loc)
+
+    call solver%backend%get_field_data(dudx_h%data, dudx, DIR_C)
+    call solver%backend%get_field_data(dudy_h%data, dudy_x, DIR_C)
+    call solver%backend%get_field_data(dudz_h%data, dudz_x, DIR_C)
+    call solver%backend%get_field_data(dvdx_h%data, dvdx, DIR_C)
+    call solver%backend%get_field_data(dvdy_h%data, dvdy_x, DIR_C)
+    call solver%backend%get_field_data(dvdz_h%data, dvdz_x, DIR_C)
+    call solver%backend%get_field_data(dwdx_h%data, dwdx, DIR_C)
+    call solver%backend%get_field_data(dwdy_h%data, dwdy_x, DIR_C)
+    call solver%backend%get_field_data(dwdz_h%data, dwdz_x, DIR_C)
+
     !! Vorticity magnitude:
     !! \( |\boldsymbol{\omega}| = \sqrt{(\partial w/\partial y - \partial v/\partial z)^2
     !! + (\partial u/\partial z - \partial w/\partial x)^2
     !! + (\partial v/\partial x - \partial u/\partial y)^2} \)
     if (output_vorticity) then
-      solver%vort%data = sqrt( &
-                         (dwdy_x%data - dvdz_x%data)**2 + &
-                         (dudz_x%data - dwdx%data)**2 + &
-                         (dvdx%data - dudy_x%data)**2 &
-                         )
+      vort_h => solver%host_allocator%get_block(DIR_C, solver%vort%data_loc)
+      vort_h%data = sqrt( &
+                     (dwdy_h%data - dvdz_h%data)**2 + &
+                     (dudz_h%data - dwdx_h%data)**2 + &
+                     (dvdx_h%data - dudy_h%data)**2 &
+                     )
+      call solver%backend%set_field_data(solver%vort, vort_h%data, DIR_C)
+      call solver%host_allocator%release_block(vort_h)
     end if
 
     !! Q-criterion:
     !! \( Q = -\frac{1}{2}(u_{x}^2 + v_{y}^2 + w_{z}^2)
     !! - u_{y}v_{x} - u_{z}w_{x} - v_{z}w_{y} \)
     if (output_qcriterion) then
-      solver%qcrit%data = &
-        -0.5_dp*(dudx%data**2 &
-                 + dvdy_x%data**2 &
-                 + dwdz_x%data**2) &
-        - dudy_x%data*dvdx%data &
-        - dudz_x%data*dwdx%data &
-        - dvdz_x%data*dwdy_x%data
+      qcrit_h => solver%host_allocator%get_block(DIR_C, solver%qcrit%data_loc)
+      qcrit_h%data = &
+        -0.5_dp*(dudx_h%data**2 &
+                 + dvdy_h%data**2 &
+                 + dwdz_h%data**2) &
+        - dudy_h%data*dvdx_h%data &
+        - dudz_h%data*dwdx_h%data &
+        - dvdz_h%data*dwdy_h%data
+      call solver%backend%set_field_data(solver%qcrit, qcrit_h%data, DIR_C)
+      call solver%host_allocator%release_block(qcrit_h)
     end if
+
+    call solver%host_allocator%release_block(dudx_h)
+    call solver%host_allocator%release_block(dudy_h)
+    call solver%host_allocator%release_block(dudz_h)
+    call solver%host_allocator%release_block(dvdx_h)
+    call solver%host_allocator%release_block(dvdy_h)
+    call solver%host_allocator%release_block(dvdz_h)
+    call solver%host_allocator%release_block(dwdx_h)
+    call solver%host_allocator%release_block(dwdy_h)
+    call solver%host_allocator%release_block(dwdz_h)
 
     ! Release all gradient fields
     call solver%backend%allocator%release_block(dudx)
