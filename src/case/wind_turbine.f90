@@ -34,7 +34,6 @@ module m_case_wind_turbine
     class(turbine_model_t), pointer :: turbine => null()
     real(dp) :: out_vel_cached = 0._dp
     real(dp) :: flow_rate_diff_cached = 0._dp
-    logical :: outflow_params_valid = .false.
   contains
     procedure :: define_BC => define_BC_wind_turbine
     procedure :: initial_conditions => initial_conditions_wind_turbine
@@ -43,7 +42,6 @@ module m_case_wind_turbine
     procedure :: postprocess => postprocess_wind_turbine
     procedure :: finalise_case_specific => finalise_wind_turbine
     procedure :: compute_outflow_params
-    procedure :: apply_outflow_bc
   end type case_wind_turbine_t
 
   interface case_wind_turbine_t
@@ -191,49 +189,89 @@ contains
 
   end subroutine compute_outflow_params
 
-  subroutine apply_outflow_bc(self, u, v, w)
-    implicit none
-    class(case_wind_turbine_t) :: self
-    class(field_t), intent(inout) :: u, v, w
-    real(dp) :: out_vel, flow_rate_diff
-
-    if (self%outflow_params_valid) then
-      out_vel = self%out_vel_cached
-      flow_rate_diff = self%flow_rate_diff_cached
-      self%outflow_params_valid = .false.
-    else
-      call self%compute_outflow_params(out_vel, flow_rate_diff)
-      self%out_vel_cached = out_vel
-      self%flow_rate_diff_cached = flow_rate_diff
-    end if
-    associate (cfg => self%wt_cfg)
-      call self%solver%backend%field_set_face( &
-        u, cfg%bc_start_u, out_vel, X_FACE, &
-        bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
-        flow_rate_diff=flow_rate_diff)
-      call self%solver%backend%field_set_face( &
-        v, cfg%bc_start_v, out_vel, X_FACE, &
-        bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
-        flow_rate_diff=flow_rate_diff)
-      call self%solver%backend%field_set_face( &
-        w, cfg%bc_start_w, out_vel, X_FACE, &
-        bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
-        flow_rate_diff=flow_rate_diff)
-    end associate
-  end subroutine apply_outflow_bc
-
   subroutine define_BC_wind_turbine(self)
+    !! Boundary Conditions hook (called per substep before transeq).
+    !! Mirrors initial_conditions structurally, but at a single x-plane:
+    !!   u  = bc_start_u + inlet_noise(1) * um * (2r - 1)
+    !!   v  = bc_start_v + inlet_noise(2) * um * (2r - 1)
+    !!   w  = bc_start_w + inlet_noise(3) * um * (2r - 1)
     implicit none
     class(case_wind_turbine_t) :: self
-    call self%apply_outflow_bc(self%solver%u, self%solver%v, self%solver%w)
-    self%outflow_params_valid = .true.
+
+    class(field_t), pointer :: hu, hv, hw
+    integer :: j, k, dims(3)
+    real(dp) :: noise(3), um, half_L
+
+    dims = self%solver%mesh%get_dims(VERT)
+    noise = self%wt_cfg%inlet_noise
+    half_L = self%solver%mesh%geo%L(1)/2._dp
+    um = exp(-0.2_dp*half_L*half_L)
+
+    ! Sample outflow params from solver%u once per substep
+    call self%compute_outflow_params(self%out_vel_cached, &
+                                     self%flow_rate_diff_cached)
+
+    ! Allocate persistent device BC fields on first call
+    if (.not. associated(self%bc_start_u_x)) then
+      self%bc_start_u_x => self%solver%backend%allocator%get_block(DIR_X, VERT)
+      self%bc_start_v_x => self%solver%backend%allocator%get_block(DIR_X, VERT)
+      self%bc_start_w_x => self%solver%backend%allocator%get_block(DIR_X, VERT)
+      call self%bc_start_u_x%set_data_loc(VERT)
+      call self%bc_start_v_x%set_data_loc(VERT)
+      call self%bc_start_w_x%set_data_loc(VERT)
+    end if
+
+    ! Build the inflow profile in DIR_C host buffers, then upload
+    hu => self%solver%host_allocator%get_block(DIR_C)
+    hv => self%solver%host_allocator%get_block(DIR_C)
+    hw => self%solver%host_allocator%get_block(DIR_C)
+
+    ! Fill the inlet plane with random numbers in [0, 1); the loop below
+    ! maps these onto noise in [-1, 1)
+    call random_number(hu%data(1, 1:dims(2), 1:dims(3)))
+    call random_number(hv%data(1, 1:dims(2), 1:dims(3)))
+    call random_number(hw%data(1, 1:dims(2), 1:dims(3)))
+
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        hu%data(1, j, k) = self%wt_cfg%bc_start_u &
+                         + noise(1)*um*(2._dp*hu%data(1, j, k) - 1._dp)
+        hv%data(1, j, k) = self%wt_cfg%bc_start_v &
+                         + noise(2)*um*(2._dp*hv%data(1, j, k) - 1._dp)
+        hw%data(1, j, k) = self%wt_cfg%bc_start_w &
+                         + noise(3)*um*(2._dp*hw%data(1, j, k) - 1._dp)
+      end do
+    end do
+
+    call self%solver%backend%set_field_data(self%bc_start_u_x, hu%data)
+    call self%solver%backend%set_field_data(self%bc_start_v_x, hv%data)
+    call self%solver%backend%set_field_data(self%bc_start_w_x, hw%data)
+
+    call self%solver%host_allocator%release_block(hu)
+    call self%solver%host_allocator%release_block(hv)
+    call self%solver%host_allocator%release_block(hw)
   end subroutine define_BC_wind_turbine
 
   subroutine apply_BC_wind_turbine(self, u, v, w)
+    !! Pre-correction (called per substep after the integrator step):
+    !! Enforce inflow Dirichlet from bc_start_u_x/v/w on the inlet plane and the
+    !! convective outflow update on the right face.
     implicit none
     class(case_wind_turbine_t) :: self
     class(field_t), intent(inout) :: u, v, w
-    call self%apply_outflow_bc(u, v, w)
+
+    call self%solver%backend%field_set_face_from_field( &
+      u, self%bc_start_u_x, self%out_vel_cached, X_FACE, &
+      bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
+      flow_rate_diff=self%flow_rate_diff_cached)
+    call self%solver%backend%field_set_face_from_field( &
+      v, self%bc_start_v_x, self%out_vel_cached, X_FACE, &
+      bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
+      flow_rate_diff=self%flow_rate_diff_cached)
+    call self%solver%backend%field_set_face_from_field( &
+      w, self%bc_start_w_x, self%out_vel_cached, X_FACE, &
+      bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET, &
+      flow_rate_diff=self%flow_rate_diff_cached)
   end subroutine apply_BC_wind_turbine
 
   ! Forcings: advance the turbine model and accumulate its momentum source.

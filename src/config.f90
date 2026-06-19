@@ -78,6 +78,7 @@ module m_config
     !! initial noise mirror the cylinder case; the turbine block selects and
     !! drives the turbine forcing model.
     real(dp) :: init_noise(3) = 0._dp
+    real(dp) :: inlet_noise(3) = 0._dp  !! perturbation applied at inlet each substep
     real(dp) :: bc_start_u = 1._dp   !! uniform inflow u (Dirichlet at i=1)
     real(dp) :: bc_start_v = 0._dp
     real(dp) :: bc_start_w = 0._dp
@@ -388,6 +389,7 @@ contains
     integer :: unit
 
     real(dp) :: init_noise(3) = 0._dp
+    real(dp) :: inlet_noise(3) = 0._dp
     real(dp) :: bc_start_u = 1._dp
     real(dp) :: bc_start_v = 0._dp
     real(dp) :: bc_start_w = 0._dp
@@ -397,7 +399,7 @@ contains
     real(dp) :: rho_air = 1._dp
     real(dp) :: T_relax = -1._dp
 
-    namelist /wind_turbine_nml/ init_noise, bc_start_u, bc_start_v, &
+    namelist /wind_turbine_nml/ init_noise, inlet_noise, bc_start_u, bc_start_v, &
       bc_start_w, iturbine, iturboutput, adm_coords, rho_air, T_relax
 
     if (present(nml_file) .and. present(nml_string)) then
@@ -415,6 +417,7 @@ contains
     end if
 
     self%init_noise = init_noise
+    self%inlet_noise = inlet_noise
     self%bc_start_u = bc_start_u
     self%bc_start_v = bc_start_v
     self%bc_start_w = bc_start_w
