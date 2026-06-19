@@ -1,4 +1,4 @@
-set(cmake_minimum_version 3.10)
+set(cmake_minimum_version 3.11)
 cmake_minimum_required(VERSION ${cmake_minimum_version})
 project(x3d2 LANGUAGES Fortran CXX C)
 if(NOT CMAKE_BUILD_TYPE)

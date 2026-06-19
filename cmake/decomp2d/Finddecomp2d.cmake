@@ -1,9 +1,18 @@
 # - Find the 2decomp-fft library
+set(decomp2d_git_tag "v2.0.3")
+string(REPLACE "/" "-" decomp2d_git_tag_dir "${decomp2d_git_tag}")
+
+if(SINGLE_PREC)
+  set(decomp2d_install_dir "${CMAKE_CURRENT_BINARY_DIR}/decomp2d-opt-sp-${decomp2d_git_tag_dir}")
+else()
+  set(decomp2d_install_dir "${CMAKE_CURRENT_BINARY_DIR}/decomp2d-opt-dp-${decomp2d_git_tag_dir}")
+endif()
+
 find_package(decomp2d CONFIG
-             PATHS ${CMAKE_CURRENT_BINARY_DIR}/decomp2d-opt
+             PATHS ${decomp2d_install_dir}
              QUIET)
 if (decomp2d_FOUND)
-  message(STATUS "2decomp-fft FOUND")
+  message(STATUS "2decomp-fft FOUND in ${decomp2d_install_dir}")
 else(decomp2d_FOUND)
   message(STATUS "2decomp-fft PATH not available we'll try to download and install")
 
@@ -29,7 +38,7 @@ else(decomp2d_FOUND)
   if(result)
       message(FATAL_ERROR "Build step for 2decomp-fft failed: ${result}")
   endif()
-  set(D2D_ROOT ${CMAKE_CURRENT_BINARY_DIR}/decomp2d-opt)
+  set(D2D_ROOT ${decomp2d_install_dir})
 
   find_package(decomp2d REQUIRED CONFIG
           PATHS ${D2D_ROOT}

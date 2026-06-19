@@ -50,11 +50,15 @@ if (USE_SYSTEM_ADIOS2)
 else()
   message(STATUS "USE_SYSTEM_ADIOS2 is OFF; building ADIOS2 from source...")
 
+    # Compute paths for ADIOS2 external project
+    set(adios2_src_dir "${CMAKE_CURRENT_BINARY_DIR}/adios2-src")
+    set(adios2_binary_dir "${CMAKE_CURRENT_BINARY_DIR}/adios2-subbuild")
+    set(adios2_install_dir "${CMAKE_CURRENT_BINARY_DIR}/adios2-install")
+
     # copy the external project script into a subdirectory of the build tree
     configure_file(
       "${CMAKE_CURRENT_LIST_DIR}/downloadBuildAdios2.cmake.in"
       "${CMAKE_CURRENT_BINARY_DIR}/adios2-build/CMakeLists.txt"
-      COPYONLY
     )
   
     # ensure that the build directory for the external project exists
@@ -83,7 +87,7 @@ else()
     endif()
   
     # set the local ADIOS2 root to where our external project installed ADIOS2
-    set(ADIOS2_ROOT "${CMAKE_CURRENT_BINARY_DIR}/adios2-build/adios2-install")
+    set(ADIOS2_ROOT "${adios2_install_dir}")
   
     # re-run find_package to load ADIOS2 from the local install
     find_package(ADIOS2 REQUIRED PATHS "${ADIOS2_ROOT}" NO_DEFAULT_PATH)
@@ -92,4 +96,19 @@ else()
     else()
       message(FATAL_ERROR "ADIOS2 not found after auto-build!")
     endif()
+endif()
+
+# Make the imported targets global so sibling directories (e.g. tests/) can
+# link them.
+if(TARGET adios2_c)
+  get_target_property(_adios2_c_is_global adios2_c IMPORTED_GLOBAL)
+  if(NOT _adios2_c_is_global)
+    set_target_properties(adios2_c PROPERTIES IMPORTED_GLOBAL TRUE)
+  endif()
+endif()
+if(TARGET adios2_fortran)
+  get_target_property(_adios2_fortran_is_global adios2_fortran IMPORTED_GLOBAL)
+  if(NOT _adios2_fortran_is_global)
+    set_target_properties(adios2_fortran PROPERTIES IMPORTED_GLOBAL TRUE)
+  endif()
 endif()
