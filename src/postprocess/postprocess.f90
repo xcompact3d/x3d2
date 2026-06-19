@@ -164,10 +164,10 @@ contains
     if (output_vorticity) then
       vort_h => solver%host_allocator%get_block(DIR_C, solver%vort%data_loc)
       vort_h%data = sqrt( &
-                     (dwdy_h%data - dvdz_h%data)**2 + &
-                     (dudz_h%data - dwdx_h%data)**2 + &
-                     (dvdx_h%data - dudy_h%data)**2 &
-                     )
+                    (dwdy_h%data - dvdz_h%data)**2 + &
+                    (dudz_h%data - dwdx_h%data)**2 + &
+                    (dvdx_h%data - dudy_h%data)**2 &
+                    )
       call solver%backend%set_field_data(solver%vort, vort_h%data, DIR_C)
       call solver%host_allocator%release_block(vort_h)
     end if
