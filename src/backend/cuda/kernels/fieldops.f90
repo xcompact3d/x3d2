@@ -156,8 +156,9 @@ contains
     b = blockIdx%x
 
     do j = 1, n
-      qcrit(i, j, b) = -0.5_dp*(dudx(i, j, b)**2 + dvdy(i, j, b)**2 + &
-                                dwdz(i, j, b)**2) - &
+      qcrit(i, j, b) = -0.5_dp*(dudx(i, j, b)*dudx(i, j, b) + &
+                                dvdy(i, j, b)*dvdy(i, j, b) + &
+                                dwdz(i, j, b)*dwdz(i, j, b)) - &
                        dudy(i, j, b)*dvdx(i, j, b) - &
                        dudz(i, j, b)*dwdx(i, j, b) - &
                        dvdz(i, j, b)*dwdy(i, j, b)
