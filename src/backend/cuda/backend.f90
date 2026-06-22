@@ -750,11 +750,11 @@ contains
   end subroutine vecmult_cuda
 
   subroutine compute_vorticity_cuda( &
-    self, vort, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(inout) :: vort
+    class(field_t), intent(inout) :: field_out
     class(field_t), intent(in) :: dudx, dudy, dudz
     class(field_t), intent(in) :: dvdx, dvdy, dvdz
     class(field_t), intent(in) :: dwdx, dwdy, dwdz
@@ -764,7 +764,7 @@ contains
     type(dim3) :: blocks, threads
     integer :: n
 
-    call resolve_field_t(vort_d, vort)
+    call resolve_field_t(vort_d, field_out)
     call resolve_field_t(dudy_d, dudy)
     call resolve_field_t(dudz_d, dudz)
     call resolve_field_t(dvdx_d, dvdx)
@@ -781,11 +781,11 @@ contains
   end subroutine compute_vorticity_cuda
 
   subroutine compute_qcriterion_cuda( &
-    self, qcrit, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
     implicit none
 
     class(cuda_backend_t) :: self
-    class(field_t), intent(inout) :: qcrit
+    class(field_t), intent(inout) :: field_out
     class(field_t), intent(in) :: dudx, dudy, dudz
     class(field_t), intent(in) :: dvdx, dvdy, dvdz
     class(field_t), intent(in) :: dwdx, dwdy, dwdz
@@ -796,7 +796,7 @@ contains
     type(dim3) :: blocks, threads
     integer :: n
 
-    call resolve_field_t(qcrit_d, qcrit)
+    call resolve_field_t(qcrit_d, field_out)
     call resolve_field_t(dudx_d, dudx)
     call resolve_field_t(dudy_d, dudy)
     call resolve_field_t(dudz_d, dudz)

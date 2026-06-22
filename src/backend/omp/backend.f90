@@ -564,35 +564,35 @@ contains
   end subroutine vecmult_omp
 
   subroutine compute_vorticity_omp( &
-    self, vort, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
     implicit none
 
     class(omp_backend_t) :: self
-    class(field_t), intent(inout) :: vort
+    class(field_t), intent(inout) :: field_out
     class(field_t), intent(in) :: dudx, dudy, dudz
     class(field_t), intent(in) :: dvdx, dvdy, dvdz
     class(field_t), intent(in) :: dwdx, dwdy, dwdz
 
-    vort%data = sqrt((dwdy%data - dvdz%data)**2 + &
-                     (dudz%data - dwdx%data)**2 + &
-                     (dvdx%data - dudy%data)**2)
+    field_out%data = sqrt((dwdy%data - dvdz%data)**2 + &
+                          (dudz%data - dwdx%data)**2 + &
+                          (dvdx%data - dudy%data)**2)
 
   end subroutine compute_vorticity_omp
 
   subroutine compute_qcriterion_omp( &
-    self, qcrit, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
     implicit none
 
     class(omp_backend_t) :: self
-    class(field_t), intent(inout) :: qcrit
+    class(field_t), intent(inout) :: field_out
     class(field_t), intent(in) :: dudx, dudy, dudz
     class(field_t), intent(in) :: dvdx, dvdy, dvdz
     class(field_t), intent(in) :: dwdx, dwdy, dwdz
 
-    qcrit%data = -0.5_dp*(dudx%data**2 + dvdy%data**2 + dwdz%data**2) - &
-                 dudy%data*dvdx%data - &
-                 dudz%data*dwdx%data - &
-                 dvdz%data*dwdy%data
+    field_out%data = -0.5_dp*(dudx%data**2 + dvdy%data**2 + dwdz%data**2) - &
+                     dudy%data*dvdx%data - &
+                     dudz%data*dwdx%data - &
+                     dvdz%data*dwdy%data
 
   end subroutine compute_qcriterion_omp
 
