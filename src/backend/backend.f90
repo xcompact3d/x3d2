@@ -50,6 +50,8 @@ module m_base_backend
     procedure(field_reduce), deferred :: field_volume_integral
     procedure(field_set_face), deferred :: field_set_face
     procedure(field_set_face_from_field), deferred :: field_set_face_from_field
+    procedure(derive_field_from_gradients), deferred :: compute_vorticity
+    procedure(derive_field_from_gradients), deferred :: compute_qcriterion
     procedure(copy_data_to_f), deferred :: copy_data_to_f
     procedure(copy_f_to_data), deferred :: copy_f_to_data
     procedure(alloc_tdsops), deferred :: alloc_tdsops
@@ -304,6 +306,22 @@ module m_base_backend
       integer, optional, intent(in) :: bc_end
       real(dp), optional, intent(in) :: flow_rate_diff
     end subroutine field_set_face_from_field
+  end interface
+
+  abstract interface
+    subroutine derive_field_from_gradients( &
+      self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+      !! Computes derived fields (vorticity, qcriterion) from velocity gradients
+      import :: base_backend_t
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: field_out
+      class(field_t), intent(in) :: dudx, dudy, dudz
+      class(field_t), intent(in) :: dvdx, dvdy, dvdz
+      class(field_t), intent(in) :: dwdx, dwdy, dwdz
+    end subroutine derive_field_from_gradients
   end interface
 
   abstract interface
