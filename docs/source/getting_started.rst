@@ -32,7 +32,7 @@ You can install Open MPI using your package manager. For Ubuntu, this can be obt
 CMake
 ^^^^^
 
-To build x3d2, you will need CMake version 3.20 and above. You can download the latest version from the `CMake website <https://cmake.org/download/>`_. Alternatively, you can install it using your package manager. For Ubuntu, this can be obtained using:
+To build x3d2, you will need CMake version 3.11 and above (3.20+ recommended). You can download the latest version from the `CMake website <https://cmake.org/download/>`_. Alternatively, you can install it using your package manager. For Ubuntu, this can be obtained using:
 
 .. code-block:: bash
 
@@ -149,7 +149,7 @@ You must build Open MPI from source to ensure it is compatible with GNU compiler
 CMake
 ^^^^^
 
-To build x3d2, you will need CMake version 3.20 and above. You can download the latest version from the `CMake website <https://cmake.org/download/>`_. Alternatively, you can install it using Homebrew:
+To build x3d2, you will need CMake version 3.11 and above (3.20+ recommended). You can download the latest version from the `CMake website <https://cmake.org/download/>`_. Alternatively, you can install it using Homebrew:
 
 .. code-block:: bash
 
