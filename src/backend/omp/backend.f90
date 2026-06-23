@@ -573,9 +573,12 @@ contains
     class(field_t), intent(in) :: dvdx, dvdy, dvdz
     class(field_t), intent(in) :: dwdx, dwdy, dwdz
 
-    field_out%data = sqrt((dwdy%data - dvdz%data)**2 + &
-                          (dudz%data - dwdx%data)**2 + &
-                          (dvdx%data - dudy%data)**2)
+    real(dp) :: wx, wy, wz
+
+    wx = dwdy%data - dvdz%data
+    wy = dudz%data - dwdx%data
+    wz = dvdx%data - dudy%data
+    field_out%data = sqrt(wx*wx + wy*wy + wz*wz)
 
   end subroutine compute_vorticity_omp
 
@@ -589,7 +592,9 @@ contains
     class(field_t), intent(in) :: dvdx, dvdy, dvdz
     class(field_t), intent(in) :: dwdx, dwdy, dwdz
 
-    field_out%data = -0.5_dp*(dudx%data**2 + dvdy%data**2 + dwdz%data**2) - &
+    field_out%data = -0.5_dp*(dudx%data*dudx%data + &
+                              dvdy%data*dvdy%data + &
+                              dwdz%data*dwdz%data) - &
                      dudy%data*dvdx%data - &
                      dudz%data*dwdx%data - &
                      dvdz%data*dwdy%data
