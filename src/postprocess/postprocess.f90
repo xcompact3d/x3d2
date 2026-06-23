@@ -38,7 +38,6 @@ contains
       u_y, dudy_y, u_z, dudz_z, &
       v_y, dvdy_y, v_z, dvdz_z, &
       w_y, dwdy_y, w_z, dwdz_z
-
     ! Allocate output fields on first use
     if (output_vorticity .and. .not. associated(solver%vort)) &
       solver%vort => solver%backend%allocator%get_block(DIR_X, VERT)
@@ -137,24 +136,18 @@ contains
     !! + (\partial u/\partial z - \partial w/\partial x)^2
     !! + (\partial v/\partial x - \partial u/\partial y)^2} \)
     if (output_vorticity) then
-      solver%vort%data = sqrt( &
-                         (dwdy_x%data - dvdz_x%data)**2 + &
-                         (dudz_x%data - dwdx%data)**2 + &
-                         (dvdx%data - dudy_x%data)**2 &
-                         )
+      call solver%backend%compute_vorticity( &
+        solver%vort, dudx, dudy_x, dudz_x, dvdx, dvdy_x, dvdz_x, &
+        dwdx, dwdy_x, dwdz_x)
     end if
 
     !! Q-criterion:
     !! \( Q = -\frac{1}{2}(u_{x}^2 + v_{y}^2 + w_{z}^2)
     !! - u_{y}v_{x} - u_{z}w_{x} - v_{z}w_{y} \)
     if (output_qcriterion) then
-      solver%qcrit%data = &
-        -0.5_dp*(dudx%data**2 &
-                 + dvdy_x%data**2 &
-                 + dwdz_x%data**2) &
-        - dudy_x%data*dvdx%data &
-        - dudz_x%data*dwdx%data &
-        - dvdz_x%data*dwdy_x%data
+      call solver%backend%compute_qcriterion( &
+        solver%qcrit, dudx, dudy_x, dudz_x, dvdx, dvdy_x, dvdz_x, &
+        dwdx, dwdy_x, dwdz_x)
     end if
 
     ! Release all gradient fields
