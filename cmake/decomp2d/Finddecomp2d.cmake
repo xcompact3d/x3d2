@@ -8,8 +8,14 @@ else()
   set(decomp2d_install_dir "${CMAKE_CURRENT_BINARY_DIR}/decomp2d-opt-dp-${decomp2d_git_tag_dir}")
 endif()
 
+# find_package() caches decomp2d_DIR, so a previous precision can otherwise
+# satisfy this lookup even when decomp2d_install_dir has changed.
+unset(decomp2d_DIR CACHE)
+unset(decomp2d_DIR)
+
 find_package(decomp2d CONFIG
              PATHS ${decomp2d_install_dir}
+             NO_DEFAULT_PATH
              QUIET)
 if (decomp2d_FOUND)
   message(STATUS "2decomp-fft FOUND in ${decomp2d_install_dir}")
