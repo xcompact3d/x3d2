@@ -399,7 +399,6 @@ contains
     integer :: i, j, k
     integer :: out_i, out_j, out_k
     integer :: base_i, base_j, base_k, str_i, str_j, str_k
-    integer :: ka, kb
     integer :: dir_from, dir_to
 
     dims = self%allocator%get_padded_dims(u%dir)
