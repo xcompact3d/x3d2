@@ -400,23 +400,51 @@ contains
     integer, dimension(3) :: dims, cart_padded
     integer :: i, j, k
     integer :: out_i, out_j, out_k
+    integer :: base_i, base_j, base_k, str_i, str_j, str_k
     integer :: dir_from, dir_to
 
     dims = self%allocator%get_padded_dims(u%dir)
     cart_padded = self%allocator%get_padded_dims(DIR_C)
     call get_dirs_from_rdr(dir_from, dir_to, direction)
 
-    !$omp parallel do private(out_i, out_j, out_k) collapse(2)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          call get_index_reordering(out_i, out_j, out_k, i, j, k, &
+    ! The reordering map is affine in the leading index only when that leading
+    ! dimension is SZ (a directional field): then the index stays within one
+    ! SZ block and never crosses a mod/division boundary, so evaluate the map
+    ! at i=1 and i=2 once per (j, k) to recover the base and stride, then run a
+    ! plain inner loop with no per element index call. For a DIR_C input the
+    ! leading dimension is nx_padded, the single block assumption fails (e.g.
+    ! RDR_C2Z), so fall back to the exact per element map there.
+    if (dims(1) == SZ) then
+      !$omp parallel do collapse(2) private(i, out_i, out_j, out_k, base_i, base_j, base_k, str_i, str_j, str_k)
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          call get_index_reordering(base_i, base_j, base_k, 1, j, k, &
                                     dir_from, dir_to, SZ, cart_padded)
-          u_%data(out_i, out_j, out_k) = u%data(i, j, k)
+          call get_index_reordering(str_i, str_j, str_k, 2, j, k, &
+                                    dir_from, dir_to, SZ, cart_padded)
+          str_i = str_i - base_i; str_j = str_j - base_j; str_k = str_k - base_k
+          do i = 1, dims(1)
+            out_i = base_i + (i - 1)*str_i
+            out_j = base_j + (i - 1)*str_j
+            out_k = base_k + (i - 1)*str_k
+            u_%data(out_i, out_j, out_k) = u%data(i, j, k)
+          end do
         end do
       end do
-    end do
-    !$omp end parallel do
+      !$omp end parallel do
+    else
+      !$omp parallel do private(out_i, out_j, out_k) collapse(2)
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          do i = 1, dims(1)
+            call get_index_reordering(out_i, out_j, out_k, i, j, k, &
+                                      dir_from, dir_to, SZ, cart_padded)
+            u_%data(out_i, out_j, out_k) = u%data(i, j, k)
+          end do
+        end do
+      end do
+      !$omp end parallel do
+    end if
 
     ! reorder keeps the data_loc the same
     call u_%set_data_loc(u%data_loc)
@@ -456,23 +484,45 @@ contains
     integer, dimension(3) :: dims, cart_padded
     integer :: i, j, k    ! Working indices
     integer :: ii, jj, kk ! Transpose indices
+    integer :: base_i, base_j, base_k, str_i, str_j, str_k
 
     dir_from = DIR_X
 
     dims = self%allocator%get_padded_dims(u%dir)
     cart_padded = self%allocator%get_padded_dims(DIR_C)
 
-    !$omp parallel do private(i, ii, jj, kk) collapse(2)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          call get_index_reordering(ii, jj, kk, i, j, k, &
+    ! Same trick as reorder_omp, with the same SZ guard.
+    if (dims(1) == SZ) then
+      !$omp parallel do collapse(2) private(i, ii, jj, kk, base_i, base_j, base_k, str_i, str_j, str_k)
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          call get_index_reordering(base_i, base_j, base_k, 1, j, k, &
                                     dir_from, dir_to, SZ, cart_padded)
-          u%data(i, j, k) = u%data(i, j, k) + u_%data(ii, jj, kk)
+          call get_index_reordering(str_i, str_j, str_k, 2, j, k, &
+                                    dir_from, dir_to, SZ, cart_padded)
+          str_i = str_i - base_i; str_j = str_j - base_j; str_k = str_k - base_k
+          do i = 1, dims(1)
+            ii = base_i + (i - 1)*str_i
+            jj = base_j + (i - 1)*str_j
+            kk = base_k + (i - 1)*str_k
+            u%data(i, j, k) = u%data(i, j, k) + u_%data(ii, jj, kk)
+          end do
         end do
       end do
-    end do
-    !$omp end parallel do
+      !$omp end parallel do
+    else
+      !$omp parallel do private(i, ii, jj, kk) collapse(2)
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          do i = 1, dims(1)
+            call get_index_reordering(ii, jj, kk, i, j, k, &
+                                      dir_from, dir_to, SZ, cart_padded)
+            u%data(i, j, k) = u%data(i, j, k) + u_%data(ii, jj, kk)
+          end do
+        end do
+      end do
+      !$omp end parallel do
+    end if
 
   end subroutine sum_intox_omp
 
