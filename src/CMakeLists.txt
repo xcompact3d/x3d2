@@ -18,6 +18,8 @@ set(SRC
   field.f90
   vector_calculus.f90
   backend/backend.f90
+  turbine/turbine_model.f90
+  turbine/turbine_dummy.f90
   backend/omp/common.f90
   backend/omp/kernels/distributed.f90
   backend/omp/kernels/spectral_processing.f90
@@ -30,6 +32,7 @@ set(SRC
   case/cylinder.f90
   case/generic.f90
   case/tgv.f90
+  case/wind_turbine.f90
   module/ibm.f90
 )
 set(CUDASRC

@@ -1,0 +1,54 @@
+&domain_settings
+! Flow case
+flow_case_name = 'wind_turbine'
+
+! Global domain length
+L_global = 8.8d0, 1.8d0, 3.4d0
+
+! Global number of cells in each direction
+dims_global = 129, 33, 65
+
+! Domain decomposition in each direction
+nproc_dir = 1, 1, 1
+
+! BC options are 'periodic' | 'neumann' | 'dirichlet'
+! x: inflow (dirichlet) / convective outflow (dirichlet)
+! y, z: periodic
+! Same layout as the cylinder case. The legacy two_turbines case uses free-slip
+! walls in y and z (wind-tunnel walls), but the FFT Poisson solver requires z to
+! be periodic and only supports a single MPI rank for non-periodic directions,
+! so periodic y/z is the supported choice here (only x is non-periodic).
+BC_x = 'dirichlet', 'dirichlet'
+BC_y = 'periodic', 'periodic'
+BC_z = 'periodic', 'periodic'
+/End
+
+&solver_params
+Re = 45000d0
+time_intg = 'AB3' ! 'AB[1-4]' | 'RK[1-4]'
+dt = 0.001d0
+n_iters = 100
+n_output = 10
+poisson_solver_type = 'FFT' ! 'FFT' | 'CG'
+der1st_scheme = 'compact6'
+! iSVV (hyperviscous) dissipation - the LES model the two_turbines case uses
+der2nd_scheme = 'compact6-hyperviscous' ! 'compact6' | 'compact6-hyperviscous'
+c_nu = 0.44d0
+nu0_nu = 20d0
+interpl_scheme = 'classic'
+stagder_scheme = 'compact6'
+ibm_on = F
+/End
+
+&checkpoint_params
+snapshot_freq = 50
+/End
+
+&wind_turbine_nml
+init_noise = 0.0d0, 0.0d0, 0.0d0
+bc_start_u = 10.0d0   ! uniform inflow velocity
+bc_start_v = 0.0d0
+bc_start_w = 0.0d0
+iturbine = 1          ! 1: actuator line, 2: disc; dummy until landed
+iturboutput = 20
+/End
