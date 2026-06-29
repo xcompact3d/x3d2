@@ -1,5 +1,5 @@
 # - Find the 2decomp-fft library
-set(decomp2d_git_tag "v2.0.3")
+set(decomp2d_git_tag "v2.0.3.1")
 string(REPLACE "/" "-" decomp2d_git_tag_dir "${decomp2d_git_tag}")
 
 if(SINGLE_PREC)
