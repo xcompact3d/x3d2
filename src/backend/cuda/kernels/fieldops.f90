@@ -116,6 +116,56 @@ contains
 
   end subroutine field_shift
 
+  attributes(global) subroutine vorticity_from_gradients( &
+    vort, dudy, dudz, dvdx, dvdz, dwdx, dwdy, n)
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: vort
+    real(dp), device, intent(in), dimension(:, :, :) :: &
+      dudy, dudz, dvdx, dvdz, dwdx, dwdy
+    integer, value, intent(in) :: n
+
+    integer :: i, j, b
+    real(dp) :: wx, wy, wz
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      wx = dwdy(i, j, b) - dvdz(i, j, b)
+      wy = dudz(i, j, b) - dwdx(i, j, b)
+      wz = dvdx(i, j, b) - dudy(i, j, b)
+      vort(i, j, b) = sqrt(wx*wx + wy*wy + wz*wz)
+    end do
+
+  end subroutine vorticity_from_gradients
+
+  attributes(global) subroutine qcriterion_from_gradients( &
+    qcrit, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz, n)
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: qcrit
+    real(dp), device, intent(in), dimension(:, :, :) :: dudx, dudy, dudz
+    real(dp), device, intent(in), dimension(:, :, :) :: dvdx, dvdy, dvdz
+    real(dp), device, intent(in), dimension(:, :, :) :: dwdx, dwdy, dwdz
+    integer, value, intent(in) :: n
+
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      qcrit(i, j, b) = -0.5_dp*(dudx(i, j, b)*dudx(i, j, b) + &
+                                dvdy(i, j, b)*dvdy(i, j, b) + &
+                                dwdz(i, j, b)*dwdz(i, j, b)) - &
+                       dudy(i, j, b)*dvdx(i, j, b) - &
+                       dudz(i, j, b)*dwdx(i, j, b) - &
+                       dvdz(i, j, b)*dwdy(i, j, b)
+    end do
+
+  end subroutine qcriterion_from_gradients
+
   attributes(global) subroutine scalar_product(s, x, y, n, n_i_pad, n_j)
     implicit none
 

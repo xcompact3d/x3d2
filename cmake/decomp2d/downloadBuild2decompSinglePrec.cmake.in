@@ -1,6 +1,6 @@
 # downloadBuild2decompSinglePrec.cmake.in
 #
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION @cmake_minimum_version@)
 
 project(downloadBuild2decomp NONE)
 
@@ -8,9 +8,12 @@ include(ExternalProject)
 
 ExternalProject_Add(downloadBuild2decomp
     GIT_REPOSITORY    "https://github.com/xcompact3d/2decomp-fft"
-    GIT_TAG           "v2.0.3"
-    CMAKE_ARGS        "-DDOUBLE_PRECISION=OFF"
+    GIT_TAG           "@decomp2d_git_tag@"
     SOURCE_DIR        "${CMAKE_CURRENT_BINARY_DIR}/decomp2d-src"
-    INSTALL_DIR       "${CMAKE_CURRENT_BINARY_DIR}/decomp2d-opt"
+    BINARY_DIR        "${CMAKE_CURRENT_BINARY_DIR}/decomp2d-build"
+    INSTALL_DIR       "@decomp2d_install_dir@"
+    CMAKE_ARGS        "-DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>"
+                      "-DCMAKE_BUILD_TYPE=@CMAKE_BUILD_TYPE@"
+                      "-DDOUBLE_PRECISION=OFF"
     TEST_COMMAND      ""
 )

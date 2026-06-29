@@ -27,7 +27,9 @@ module m_cuda_backend
                                      field_set_x_face, &
                                      field_set_x_face_from_field, &
                                      field_set_y_face_from_field, &
-                                     pwmul, volume_integral
+                                     pwmul, volume_integral, &
+                                     vorticity_from_gradients, &
+                                     qcriterion_from_gradients
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
                                     reorder_c2x, reorder_x2c, &
@@ -67,6 +69,8 @@ module m_cuda_backend
     procedure :: field_shift => field_shift_cuda
     procedure :: field_set_face => field_set_face_cuda
     procedure :: field_set_face_from_field => field_set_face_from_field_cuda
+    procedure :: compute_vorticity => compute_vorticity_cuda
+    procedure :: compute_qcriterion => compute_qcriterion_cuda
     procedure :: field_volume_integral => field_volume_integral_cuda
     procedure :: copy_data_to_f => copy_data_to_f_cuda
     procedure :: copy_f_to_data => copy_f_to_data_cuda
@@ -744,6 +748,73 @@ contains
     call pwmul<<<blocks, threads>>>(y_d, x_d, n) !&
 
   end subroutine vecmult_cuda
+
+  subroutine compute_vorticity_cuda( &
+    self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: field_out
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    real(dp), device, pointer, dimension(:, :, :) :: &
+      vort_d, dudy_d, dudz_d, dvdx_d, dvdz_d, dwdx_d, dwdy_d
+    type(dim3) :: blocks, threads
+    integer :: n
+
+    call resolve_field_t(vort_d, field_out)
+    call resolve_field_t(dudy_d, dudy)
+    call resolve_field_t(dudz_d, dudz)
+    call resolve_field_t(dvdx_d, dvdx)
+    call resolve_field_t(dvdz_d, dvdz)
+    call resolve_field_t(dwdx_d, dwdx)
+    call resolve_field_t(dwdy_d, dwdy)
+
+    n = size(vort_d, dim=2)
+    blocks = dim3(size(vort_d, dim=3), 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call vorticity_from_gradients<<<blocks, threads>>>( &
+      vort_d, dudy_d, dudz_d, dvdx_d, dvdz_d, dwdx_d, dwdy_d, n) !&
+
+  end subroutine compute_vorticity_cuda
+
+  subroutine compute_qcriterion_cuda( &
+    self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: field_out
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    real(dp), device, pointer, dimension(:, :, :) :: &
+      qcrit_d, dudx_d, dudy_d, dudz_d, dvdx_d, dvdy_d, dvdz_d, dwdx_d, &
+      dwdy_d, dwdz_d
+    type(dim3) :: blocks, threads
+    integer :: n
+
+    call resolve_field_t(qcrit_d, field_out)
+    call resolve_field_t(dudx_d, dudx)
+    call resolve_field_t(dudy_d, dudy)
+    call resolve_field_t(dudz_d, dudz)
+    call resolve_field_t(dvdx_d, dvdx)
+    call resolve_field_t(dvdy_d, dvdy)
+    call resolve_field_t(dvdz_d, dvdz)
+    call resolve_field_t(dwdx_d, dwdx)
+    call resolve_field_t(dwdy_d, dwdy)
+    call resolve_field_t(dwdz_d, dwdz)
+
+    n = size(qcrit_d, dim=2)
+    blocks = dim3(size(qcrit_d, dim=3), 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call qcriterion_from_gradients<<<blocks, threads>>>( &
+      qcrit_d, dudx_d, dudy_d, dudz_d, dvdx_d, dvdy_d, dvdz_d, dwdx_d, &
+      dwdy_d, dwdz_d, n) !&
+
+  end subroutine compute_qcriterion_cuda
 
   real(dp) function scalar_product_cuda(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]

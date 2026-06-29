@@ -1,10 +1,12 @@
-set(cmake_minimum_version 3.10)
+set(cmake_minimum_version 3.11)
 cmake_minimum_required(VERSION ${cmake_minimum_version})
 project(x3d2 LANGUAGES Fortran CXX C)
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 enable_testing()
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/decomp2d")
 
 set(WITH_2DECOMPFFT ON CACHE BOOL
   "Enable Poisson based FFT solver on the OpenMP backend.")

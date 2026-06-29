@@ -48,6 +48,8 @@ module m_omp_backend
     procedure :: field_shift => field_shift_omp
     procedure :: field_set_face => field_set_face_omp
     procedure :: field_set_face_from_field => field_set_face_from_field_omp
+    procedure :: compute_vorticity => compute_vorticity_omp
+    procedure :: compute_qcriterion => compute_qcriterion_omp
     procedure :: field_volume_integral => field_volume_integral_omp
     procedure :: copy_data_to_f => copy_data_to_f_omp
     procedure :: copy_f_to_data => copy_f_to_data_omp
@@ -610,6 +612,41 @@ contains
     !$omp end parallel do
 
   end subroutine vecmult_omp
+
+  subroutine compute_vorticity_omp( &
+    self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: field_out
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    field_out%data = sqrt((dwdy%data - dvdz%data)*(dwdy%data - dvdz%data) + &
+                          (dudz%data - dwdx%data)*(dudz%data - dwdx%data) + &
+                          (dvdx%data - dudy%data)*(dvdx%data - dudy%data))
+
+  end subroutine compute_vorticity_omp
+
+  subroutine compute_qcriterion_omp( &
+    self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: field_out
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    field_out%data = -0.5_dp*(dudx%data*dudx%data + &
+                              dvdy%data*dvdy%data + &
+                              dwdz%data*dwdz%data) - &
+                     dudy%data*dvdx%data - &
+                     dudz%data*dwdx%data - &
+                     dvdz%data*dwdy%data
+
+  end subroutine compute_qcriterion_omp
 
   real(dp) function scalar_product_omp(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]
