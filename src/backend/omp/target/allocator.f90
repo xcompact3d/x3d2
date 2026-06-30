@@ -4,8 +4,8 @@
 
 module m_omptgt_allocator
 
-  use iso_c_binding, only: c_ptr, c_f_pointer, c_sizeof
-  use omp_lib, only: omp_target_alloc, omp_target_free, omp_get_default_device
+  use iso_c_binding, only: c_ptr, c_f_pointer, c_sizeof, c_associated, c_null_ptr
+  use omp_lib, only: omp_target_alloc, omp_target_free, omp_get_default_device, omp_get_num_devices, omp_get_initial_device
 
   use m_common, only: dp
 
@@ -31,14 +31,14 @@ module m_omptgt_allocator
   type, extends(field_t) :: omptgt_field_t
     ! A device-resident field
     integer, private :: dev_id
-    type(c_ptr), private :: dev_ptr
+    type(c_ptr), private :: dev_ptr = c_null_ptr
     real(dp), pointer, private :: p_data_tgt(:) => null()
     real(dp), pointer, contiguous :: data_tgt(:, :, :) => null()
   contains
-    procedure :: destroy => omptgt_field_destroy
     procedure :: fill => fill_omptgt
     procedure :: get_shape => get_shape_omptgt
     procedure :: set_shape => set_shape_omptgt
+    final :: omptgt_field_destroy
   end type omptgt_field_t
 
   interface omptgt_field_t
@@ -80,40 +80,24 @@ contains
     f%id = id
 
     f%dev_id = omp_get_default_device()
+    if (f%dev_id == omp_get_initial_device()) then
+      error stop "Device ID is HOST"
+    end if
+
     f%dev_ptr = omp_target_alloc(ngrid*c_sizeof(0.0_dp), f%dev_id)
     call c_f_pointer(f%dev_ptr, f%p_data_tgt, shape=[ngrid])
 
   end function omptgt_field_init
 
   subroutine omptgt_field_destroy(self)
-    class(omptgt_field_t) :: self
+    type(omptgt_field_t) :: self
 
     nullify (self%data_tgt)
     nullify (self%p_data_tgt)
-    call omp_target_free(self%dev_ptr, self%dev_id)
-  end subroutine
-
-  ! Deallocates device-resident memory before deallocating the base type
-  subroutine destroy(self)
-    class(omptgt_allocator_t) :: self
-
-    class(field_t), pointer :: ptr
-
-    ptr => self%first
-    do
-      if (.not. associated(ptr)) then
-        exit
-      end if
-
-      select type (ptr)
-      type is (omptgt_field_t)
-        call ptr%destroy()
-      end select
-
-      ptr => ptr%next
-    end do
-
-    call self%allocator_t%destroy()
+    
+    if (c_associated(self%dev_ptr)) then
+      call omp_target_free(self%dev_ptr, self%dev_id)
+    end if
   end subroutine
 
   subroutine fill_omptgt(self, c)
