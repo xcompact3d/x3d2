@@ -130,7 +130,12 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
   set(CMAKE_Fortran_FLAGS "-cpp -std=f2018")
-  set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
+  if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
+      ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
+    set(CMAKE_Fortran_FLAGS_DEBUG "-g -Wall -Wno-ambiguous-structure-constructor -Werror")
+  else()
+    set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
+  endif()
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math")
   if (OMP_TGT)
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp --offload-arch=${OMP_TGT_ARCH}")
