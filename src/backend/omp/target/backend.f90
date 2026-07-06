@@ -38,7 +38,8 @@ module m_omptgt_backend
 
 contains
 
-  type(omptgt_backend_t) function omptgt_backend_init(mesh, allocator) result(backend)
+  type(omptgt_backend_t) function omptgt_backend_init(mesh, allocator) &
+    result(backend)
 
     type(mesh_t), target, intent(inout) :: mesh
     class(allocator_t), target, intent(inout) :: allocator
@@ -65,7 +66,8 @@ contains
         error stop "Called omptgt vector copy with unsupported source vector"
       end select
     class default
-     error stop "Called omptgt vector copy with unsupported destination vector"
+      error stop &
+        "Called omptgt vector copy with unsupported destination vector"
     end select
   end subroutine
 
@@ -246,9 +248,11 @@ contains
     type is (omptgt_field_t)
       select type (u)
       type is (omptgt_field_t)
-        call reorder_omptgt_dd(u_%data_tgt, u%data_tgt, dims, dir_from, dir_to, cart_padded)
+        call reorder_omptgt_dd(u_%data_tgt, u%data_tgt, dims, dir_from, &
+                               dir_to, cart_padded)
       class default
-        call reorder_omptgt_dh(u_%data_tgt, u%data, dims, dir_from, dir_to, cart_padded)
+        call reorder_omptgt_dh(u_%data_tgt, u%data, dims, dir_from, dir_to, &
+                               cart_padded)
       end select
     class default
       error stop "Unsupported"

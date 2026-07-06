@@ -4,8 +4,11 @@
 
 module m_omptgt_allocator
 
-  use iso_c_binding, only: c_ptr, c_f_pointer, c_sizeof, c_associated, c_null_ptr
-  use omp_lib, only: omp_target_alloc, omp_target_free, omp_get_default_device, omp_get_num_devices, omp_get_initial_device
+  use iso_c_binding, only: c_ptr, c_f_pointer, &
+                           c_sizeof, c_associated, c_null_ptr
+  use omp_lib, only: omp_target_alloc, omp_target_free, &
+                     omp_get_default_device, omp_get_num_devices, &
+                     omp_get_initial_device
 
   use m_common, only: dp
 
@@ -58,8 +61,8 @@ contains
     class(field_t), pointer :: ptr
 
     self%next_id = self%next_id + 1
-    allocate(omptgt_field_t :: ptr)
-    select type(ptr)
+    allocate (omptgt_field_t :: ptr)
+    select type (ptr)
     type is (omptgt_field_t)
       call omptgt_field_init(self%ngrid, next, id=self%next_id, f=ptr)
     class default
@@ -94,7 +97,7 @@ contains
 
     nullify (self%data_tgt)
     nullify (self%p_data_tgt)
-    
+
     if (c_associated(self%dev_ptr)) then
       call omp_target_free(self%dev_ptr, self%dev_id)
     end if
