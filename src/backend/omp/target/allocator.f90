@@ -41,10 +41,6 @@ module m_omptgt_allocator
     final :: omptgt_field_destroy
   end type omptgt_field_t
 
-  interface omptgt_field_t
-    module procedure omptgt_field_init
-  end interface omptgt_field_t
-
 contains
 
   ! Constructor for the OMP target offload allocator
@@ -59,21 +55,25 @@ contains
   function create_block_omptgt(self, next) result(ptr)
     class(omptgt_allocator_t), intent(inout) :: self
     class(field_t), pointer, intent(in) :: next
-    type(omptgt_field_t), pointer :: newblock_tgt
     class(field_t), pointer :: ptr
 
     self%next_id = self%next_id + 1
-    allocate (newblock_tgt)
-    newblock_tgt = omptgt_field_t(self%ngrid, next, id=self%next_id)
-    ptr => newblock_tgt
+    allocate(omptgt_field_t :: ptr)
+    select type(ptr)
+    type is (omptgt_field_t)
+      call omptgt_field_init(self%ngrid, next, id=self%next_id, f=ptr)
+    class default
+      error stop "Allocation failed to set type"
+    end select
 
   end function create_block_omptgt
 
   ! Constructs a device-resident field
-  type(omptgt_field_t) function omptgt_field_init(ngrid, next, id) result(f)
+  subroutine omptgt_field_init(ngrid, next, id, f)
     integer, intent(in) :: ngrid
     class(field_t), pointer, intent(in) :: next
     integer, intent(in) :: id
+    type(omptgt_field_t) :: f
 
     f%refcount = 0
     f%next => next
@@ -87,7 +87,7 @@ contains
     f%dev_ptr = omp_target_alloc(ngrid*c_sizeof(0.0_dp), f%dev_id)
     call c_f_pointer(f%dev_ptr, f%p_data_tgt, shape=[ngrid])
 
-  end function omptgt_field_init
+  end subroutine omptgt_field_init
 
   subroutine omptgt_field_destroy(self)
     type(omptgt_field_t) :: self
@@ -116,11 +116,11 @@ contains
 
     integer :: i
 
-    !$omp target teams distribute parallel do has_device_addr(p_data_tgt)
+    !$omp target teams loop has_device_addr(p_data_tgt)
     do i = 1, n
       p_data_tgt(i) = c
     end do
-    !$omp end target teams distribute parallel do
+    !$omp end target teams loop
 
   end subroutine
 
@@ -133,7 +133,7 @@ contains
 
     n = shape(data_tgt)
 
-    !$omp target teams distribute parallel do collapse(3) has_device_addr(data_tgt)
+    !$omp target teams loop collapse(3) has_device_addr(data_tgt)
     do k = 1, n(3)
       do j = 1, n(2)
         do i = 1, n(1)
@@ -141,7 +141,7 @@ contains
         end do
       end do
     end do
-    !$omp end target teams distribute parallel do
+    !$omp end target teams loop
   end subroutine
 
   function get_shape_omptgt(self) result(dims)
