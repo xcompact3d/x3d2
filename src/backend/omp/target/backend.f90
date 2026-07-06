@@ -79,7 +79,7 @@ contains
 
     n = shape(dst)
 
-    !$omp target teams distribute parallel do collapse(3) has_device_addr(dst, src)
+    !$omp target teams loop collapse(3) has_device_addr(dst, src)
     do k = 1, n(3)
       do j = 1, n(2)
         do i = 1, n(1)
@@ -87,7 +87,7 @@ contains
         end do
       end do
     end do
-    !$omp end target teams distribute parallel do
+    !$omp end target teams loop
 
   end subroutine
 
@@ -142,7 +142,7 @@ contains
 
     integer :: i, j, k
 
-    !$omp target teams distribute parallel do collapse(3) has_device_addr(x, y)
+    !$omp target teams loop collapse(3) has_device_addr(x, y)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -150,7 +150,7 @@ contains
         end do
       end do
     end do
-    !$omp end target teams distribute parallel do
+    !$omp end target teams loop
   end subroutine
 
   subroutine copy_data_to_f_omptgt(self, f, data)
@@ -217,7 +217,7 @@ contains
 
     integer :: i, j, k
 
-    !$omp target teams distribute parallel do collapse(3) map(from:data) has_device_addr(f_arr)
+    !$omp target teams loop collapse(3) map(from:data) has_device_addr(f_arr)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -225,7 +225,7 @@ contains
         end do
       end do
     end do
-    !$omp end target teams distribute parallel do
+    !$omp end target teams loop
 
   end subroutine
 
@@ -269,7 +269,7 @@ contains
     integer :: i, j, k
     integer :: out_i, out_j, out_k
 
-    !$omp target teams distribute parallel do private(out_i, out_j, out_k) collapse(3) has_device_addr(u_, u)
+    !$omp target teams loop collapse(3) private(out_i, out_j, out_k) has_device_addr(u_, u)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -279,7 +279,7 @@ contains
         end do
       end do
     end do
-    !$omp end target teams distribute parallel do
+    !$omp end target teams loop
 
   end subroutine
 
@@ -293,7 +293,7 @@ contains
     integer :: i, j, k
     integer :: out_i, out_j, out_k
 
-    !$omp target teams distribute parallel do private(out_i, out_j, out_k) collapse(3) map(to:u) has_device_addr(u_)
+    !$omp target teams loop collapse(3) private(out_i, out_j, out_k) map(to:u) has_device_addr(u_)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -303,7 +303,7 @@ contains
         end do
       end do
     end do
-    !$omp end target teams distribute parallel do
+    !$omp end target teams loop
 
   end subroutine
 
