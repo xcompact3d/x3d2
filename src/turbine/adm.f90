@@ -282,7 +282,7 @@ contains
 
     integer :: t
     real(dp) :: u_avg, v_avg, w_avg, rot_N(3), C_T_prime
-    real(dp) :: coeff_x, coeff_y, coeff_z, filter_weight, stat_inc
+    real(dp) :: coeff_x, coeff_y, coeff_z, filter_weight, stat_inc, U_thrust
     logical :: accumulate_stats
 
     accumulate_stats = self%recompute_forces &
@@ -297,16 +297,16 @@ contains
     do t = 1, self%n_turb
       rot_N(:) = self%disc(t)%rot_N(:)
 
-      if (self%recompute_forces) then
-        ! Disc-averaged velocity: gamma is normalised, so the scalar product is
-        ! the weighted average. scalar_product already reduces over MPI ranks.
-        u_avg = self%backend%scalar_product(self%disc(t)%gamma_disc, u)
-        v_avg = self%backend%scalar_product(self%disc(t)%gamma_disc, v)
-        w_avg = self%backend%scalar_product(self%disc(t)%gamma_disc, w)
-        self%disc(t)%U_disc = u_avg*rot_N(1) + v_avg*rot_N(2) &
-                              - w_avg*rot_N(3)
+      ! Always recompute U_disc from the current stage velocity so the force
+      ! is consistent with each RK substage.
+      u_avg = self%backend%scalar_product(self%disc(t)%gamma_disc, u)
+      v_avg = self%backend%scalar_product(self%disc(t)%gamma_disc, v)
+      w_avg = self%backend%scalar_product(self%disc(t)%gamma_disc, w)
+      self%disc(t)%U_disc = u_avg*rot_N(1) + v_avg*rot_N(2) &
+                            - w_avg*rot_N(3)
 
-        ! ADM time relaxation (first-order low-pass filter).
+      if (self%recompute_forces) then
+        ! First substage: advance the time filter.
         if (.not. self%filter_initialized .or. self%T_relax < 0._dp) then
           self%disc(t)%U_disc_filt = self%disc(t)%U_disc
         else
@@ -316,24 +316,29 @@ contains
                                      + (1._dp - filter_weight) &
                                      *self%disc(t)%U_disc_filt
         end if
+        U_thrust = self%disc(t)%U_disc_filt
+      else
+        ! Subsequent RK substages: filter not advanced; use instantaneous
+        ! U_disc so the thrust tracks the current stage velocity.
+        U_thrust = self%disc(t)%U_disc
+      end if
 
-        ! Thrust from the local (Calaf-style) thrust coefficient.
-        C_T_prime = self%disc(t)%C_T/(1._dp - self%disc(t)%alpha)**2
-        self%disc(t)%thrust = 0.5_dp*self%rho_air*C_T_prime &
-                              *self%disc(t)%U_disc_filt**2*self%disc(t)%area
-        self%disc(t)%power = self%disc(t)%thrust*self%disc(t)%U_disc_filt
+      ! Thrust from the local (Calaf-style) thrust coefficient.
+      C_T_prime = self%disc(t)%C_T/(1._dp - self%disc(t)%alpha)**2
+      self%disc(t)%thrust = 0.5_dp*self%rho_air*C_T_prime &
+                            *U_thrust**2*self%disc(t)%area
+      self%disc(t)%power = self%disc(t)%thrust*U_thrust
 
-        if (accumulate_stats) then
-          self%disc(t)%U_disc_mean = self%disc(t)%U_disc_mean &
-                                     + stat_inc*(self%disc(t)%U_disc_filt &
-                                                 - self%disc(t)%U_disc_mean)
-          self%disc(t)%thrust_mean = self%disc(t)%thrust_mean &
-                                     + stat_inc*(self%disc(t)%thrust &
-                                                 - self%disc(t)%thrust_mean)
-          self%disc(t)%power_mean = self%disc(t)%power_mean &
-                                    + stat_inc*(self%disc(t)%power &
-                                                - self%disc(t)%power_mean)
-        end if
+      if (accumulate_stats) then
+        self%disc(t)%U_disc_mean = self%disc(t)%U_disc_mean &
+                                   + stat_inc*(self%disc(t)%U_disc_filt &
+                                               - self%disc(t)%U_disc_mean)
+        self%disc(t)%thrust_mean = self%disc(t)%thrust_mean &
+                                   + stat_inc*(self%disc(t)%thrust &
+                                               - self%disc(t)%thrust_mean)
+        self%disc(t)%power_mean = self%disc(t)%power_mean &
+                                  + stat_inc*(self%disc(t)%power &
+                                              - self%disc(t)%power_mean)
       end if
 
       ! Project the thrust acceleration (opposing the inflow) onto the momentum
