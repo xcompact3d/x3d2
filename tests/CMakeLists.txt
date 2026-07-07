@@ -142,7 +142,7 @@ if(${OMP_TGT})
   define_test(unit/test_omptgt_allocator.f90 1 omp_tgt)
 
   # OMP TGT verification tests
-  define_test(verification/test_time_integrator.f90 1 omp_tgt)
+  define_verification_test(verification/test_time_integrator.f90 1 omp_tgt)
 endif()
 
 # Performance tests (benchmarks, excluded from CI)
