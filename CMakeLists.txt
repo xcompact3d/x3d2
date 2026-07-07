@@ -33,6 +33,13 @@ endif()
 set(OMP_TGT OFF CACHE BOOL
   "Enable OpenMP target offloading.")
 set(OMP_TGT_ARCH "" CACHE STRING "Target architecture for OpenMP offloading, e.g. gfx942")
+if (${OMP_TGT} AND NOT
+    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+  if ("${OMP_TGT_ARCH}" STREQUAL "")
+    message(FATAL_ERROR
+      "OMP_TGT=ON requires setting OMP_TGT_ARCH=<arch> for this compiler")
+  endif()
+endif()
 
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/include)
 add_subdirectory(src)
