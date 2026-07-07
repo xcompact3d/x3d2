@@ -141,8 +141,8 @@ contains
         dwdx, dwdy_x, dwdz_x)
     end if
 
-    !! Q-criterion:
-    !! \( Q = -\frac{1}{2}(u_{x}^2 + v_{y}^2 + w_{z}^2)
+    !! Q-criterion (second invariant of the velocity-gradient tensor):
+    !! \( Q = \frac{1}{2}(u_x+v_y+w_z)^2 - \frac{1}{2}(u_{x}^2 + v_{y}^2 + w_{z}^2)
     !! - u_{y}v_{x} - u_{z}w_{x} - v_{z}w_{y} \)
     if (output_qcriterion) then
       call solver%backend%compute_qcriterion( &
