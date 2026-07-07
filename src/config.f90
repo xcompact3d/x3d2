@@ -87,6 +87,9 @@ module m_config
     character(len=256) :: adm_coords = '' !! actuator-disc (.ad) coords file
     real(dp) :: rho_air = 1._dp      !! air density used in thrust/power
     real(dp) :: T_relax = -1._dp     !! ADM velocity-filter time; < 0 disables
+    logical :: sponge_on = .false.   !! enable outflow sponge/relaxation zone
+    real(dp) :: sponge_start = 0._dp !! x where the sponge ramp begins
+    real(dp) :: sponge_strength = 0._dp !! max relaxation rate sigma_max (1/time)
   contains
     procedure :: read => read_wind_turbine_nml
   end type wind_turbine_config_t
@@ -398,9 +401,13 @@ contains
     character(len=256) :: adm_coords = ''
     real(dp) :: rho_air = 1._dp
     real(dp) :: T_relax = -1._dp
+    logical :: sponge_on = .false.
+    real(dp) :: sponge_start = 0._dp
+    real(dp) :: sponge_strength = 0._dp
 
     namelist /wind_turbine_nml/ init_noise, inlet_noise, bc_start_u, bc_start_v, &
-      bc_start_w, iturbine, iturboutput, adm_coords, rho_air, T_relax
+      bc_start_w, iturbine, iturboutput, adm_coords, rho_air, T_relax, &
+      sponge_on, sponge_start, sponge_strength
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading wind_turbine config failed! &
@@ -426,6 +433,9 @@ contains
     self%adm_coords = adm_coords
     self%rho_air = rho_air
     self%T_relax = T_relax
+    self%sponge_on = sponge_on
+    self%sponge_start = sponge_start
+    self%sponge_strength = sponge_strength
 
   end subroutine read_wind_turbine_nml
 

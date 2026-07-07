@@ -28,6 +28,7 @@ module m_cuda_backend
                                      field_set_x_face, &
                                      field_set_x_face_from_field, &
                                      field_set_y_face_from_field, &
+                                     add_scalar_x_face, &
                                      pwmul, volume_integral, &
                                      vorticity_from_gradients, &
                                      qcriterion_from_gradients, &
@@ -73,6 +74,7 @@ module m_cuda_backend
     procedure :: field_shift => field_shift_cuda
     procedure :: field_set_face => field_set_face_cuda
     procedure :: field_set_face_from_field => field_set_face_from_field_cuda
+    procedure :: field_add_const_x_face => field_add_const_x_face_cuda
     procedure :: compute_vorticity => compute_vorticity_cuda
     procedure :: compute_qcriterion => compute_qcriterion_cuda
     procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_cuda
@@ -1062,12 +1064,12 @@ contains
 
   end subroutine field_max_mean_cuda
 
-  attributes(global) subroutine slice_max_sum_kernel(max_f, sum_f, f, &
+  attributes(global) subroutine slice_max_sum_kernel(max_f, sum_f, min_f, f, &
                                                      i_slice, n_i_pad, n_j)
     !! Reduces a single slice f(i_slice, :, :) (in the kernel's packed-pencil
-    !! indexing). Signed max/sum, no abs. One thread per (y, z) point.
+    !! indexing). Signed max/min/sum, no abs. One thread per (y, z) point.
     implicit none
-    real(dp), device, intent(inout) :: max_f, sum_f
+    real(dp), device, intent(inout) :: max_f, sum_f, min_f
     real(dp), device, intent(in), dimension(:, :, :) :: f
     integer, value, intent(in) :: i_slice, n_i_pad, n_j
     real(dp) :: val
@@ -1082,11 +1084,12 @@ contains
       val = f(i, i_slice, b)
       ierr = atomicadd(sum_f, val)
       ierr = atomicmax(max_f, val)
+      ierr = atomicmin(min_f, val)
     end if
   end subroutine slice_max_sum_kernel
 
   subroutine slice_max_sum_cuda(self, max_val, sum_val, f, i_slice, &
-                                enforced_data_loc)
+                                enforced_data_loc, min_val)
     !! [[m_base_backend(module):slice_max_sum(interface)]]
     implicit none
     class(cuda_backend_t) :: self
@@ -1094,9 +1097,10 @@ contains
     class(field_t), intent(in) :: f
     integer, intent(in) :: i_slice
     integer, optional, intent(in) :: enforced_data_loc
+    real(dp), optional, intent(out) :: min_val
 
     real(dp), device, pointer, dimension(:, :, :) :: f_d
-    real(dp), device, allocatable :: max_d, sum_d
+    real(dp), device, allocatable :: max_d, sum_d, min_d
     integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j
     type(dim3) :: blocks, threads
 
@@ -1130,17 +1134,18 @@ contains
     end if
 
     call resolve_field_t(f_d, f)
-    allocate (max_d, sum_d)
-    max_d = -huge(1._dp); sum_d = 0._dp
+    allocate (max_d, sum_d, min_d)
+    max_d = -huge(1._dp); sum_d = 0._dp; min_d = huge(1._dp)
 
     blocks = dim3(n_i, (n_j - 1)/SZ + 1, 1)
     threads = dim3(SZ, 1, 1)
-    call slice_max_sum_kernel<<<blocks, threads>>>(max_d, sum_d, f_d, & !&
+    call slice_max_sum_kernel<<<blocks, threads>>>(max_d, sum_d, min_d, f_d, & !&
                                                    i_slice, n_i_pad, n_j)
 
     ! Rank-local values; caller is responsible for MPI_Allreduce.
     max_val = max_d
     sum_val = sum_d
+    if (present(min_val)) min_val = min_d
 
   end subroutine slice_max_sum_cuda
 
@@ -1319,6 +1324,40 @@ contains
     end select
 
   end subroutine field_set_face_from_field_cuda
+
+  subroutine field_add_const_x_face_cuda(self, f, c, at_end)
+    !! [[m_base_backend(module):field_add_const_x_face(interface)]]
+    implicit none
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c
+    logical, intent(in) :: at_end
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    type(dim3) :: blocks, threads
+    integer :: dims(3), i_plane
+
+    if (f%dir /= DIR_X) &
+      error stop 'field_add_const_x_face: only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_add_const_x_face: requires a valid data_loc.'
+
+    call resolve_field_t(f_d, f)
+    dims = self%mesh%get_dims(f%data_loc)
+
+    if (at_end) then
+      i_plane = dims(1)   ! global x = nx (outlet)
+    else
+      i_plane = 1         ! global x = 1  (inlet)
+    end if
+
+    ! Same launch shape as field_set_x_face - one thread per (i, b).
+    blocks = dim3((SZ - 1)/64 + 1, ((dims(2) - 1)/SZ + 1)*dims(3), 1)
+    threads = dim3(64, 1, 1)
+    call add_scalar_x_face<<<blocks, threads>>>( &      !&
+        f_d, c, i_plane, dims(1), dims(2), dims(3))
+
+  end subroutine field_add_const_x_face_cuda
 
   real(dp) function field_volume_integral_cuda(self, f) result(s)
     !! volume integral of a field

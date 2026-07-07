@@ -117,6 +117,7 @@ contains
     real(dp) :: flow_rate_in_max_discard, flow_rate_out_max_discard
     real(dp) :: fl_sums(2), ny_nz
     real(dp) :: dx, gdt
+    integer :: gdims(3)
 
     dims = self%solver%mesh%get_dims(VERT)
     nx = dims(1)

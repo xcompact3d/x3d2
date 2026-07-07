@@ -51,6 +51,7 @@ module m_base_backend
     procedure(field_reduce), deferred :: field_volume_integral
     procedure(field_set_face), deferred :: field_set_face
     procedure(field_set_face_from_field), deferred :: field_set_face_from_field
+    procedure(field_add_const_x_face), deferred :: field_add_const_x_face
     procedure(derive_field_from_gradients), deferred :: compute_vorticity
     procedure(derive_field_from_gradients), deferred :: compute_qcriterion
     procedure(smagorinsky_from_gradients), deferred :: compute_smagorinsky_nut
@@ -287,16 +288,18 @@ module m_base_backend
 
   abstract interface
     subroutine slice_max_sum(self, max_val, sum_val, f, &
-                             i_slice, enforced_data_loc)
+                             i_slice, enforced_data_loc, min_val)
     !! Reduces a single slice of f at index i_slice along f's DIR axis.
     !! Returns signed max (not abs) and signed sum. No division by count.
-    !! Caller is responsible for MPI_Allreduce across ranks.
+    !! If min_val is present, the signed minimum over the slice is also
+    !! returned. Caller is responsible for MPI_Allreduce across ranks.
       import :: base_backend_t, field_t, dp
       class(base_backend_t) :: self
       real(dp), intent(out) :: max_val, sum_val
       class(field_t), intent(in) :: f
       integer, intent(in) :: i_slice
       integer, optional, intent(in) :: enforced_data_loc
+      real(dp), optional, intent(out) :: min_val
     end subroutine slice_max_sum
   end interface
   abstract interface
@@ -339,6 +342,24 @@ module m_base_backend
       integer, optional, intent(in) :: bc_end
       real(dp), optional, intent(in) :: flow_rate_diff
     end subroutine field_set_face_from_field
+
+    subroutine field_add_const_x_face(self, f, c, at_end)
+      !! Adds a uniform constant `c` to one x-normal face plane of a DIR_X
+      !! field, in place. Used to enforce exact outlet mass conservation:
+      !! after the convective outflow update, the outlet-plane mean is
+      !! shifted uniformly so that it matches the prescribed inlet mean
+      !! (mirrors Incompact3d's `bxxn = bxxn - ut + ut1`).
+      !! at_end = .true.  -> the x = nx plane (outlet)
+      !! at_end = .false. -> the x = 1  plane (inlet)
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: f
+      real(dp), intent(in) :: c
+      logical, intent(in) :: at_end
+    end subroutine field_add_const_x_face
   end interface
 
   abstract interface
