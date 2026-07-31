@@ -29,7 +29,7 @@ contains
     real(dp) :: umean(1, 1, 1), uumean(1, 1, 1), val(1, 1, 1)
     real(dp) :: uprime, stat_inc
     integer :: n
-    real(dp), parameter :: tol = 1.0e-12_dp
+    real(dp), parameter :: tol = 1.0e4_dp*epsilon(1.0_dp)
 
     umean = 0.0_dp; uumean = 0.0_dp
 
@@ -60,7 +60,7 @@ contains
     real(dp) :: umean(1, 1, 1), val(1, 1, 1)
     real(dp) :: stat_inc, expected
     integer :: n
-    real(dp), parameter :: tol = 1.0e-12_dp
+    real(dp), parameter :: tol = 1.0e4_dp*epsilon(1.0_dp)
 
     umean = 0.0_dp
     expected = (n_samples + 1)/2.0_dp
@@ -84,7 +84,7 @@ contains
     real(dp) :: umean(1, 1, 1), uumean(1, 1, 1), val(1, 1, 1)
     real(dp) :: uprime, stat_inc
     integer :: n
-    real(dp), parameter :: tol = 1.0e-10_dp
+    real(dp), parameter :: tol = 1.0e4_dp*epsilon(1.0_dp)
 
     umean = 0.0_dp; uumean = 0.0_dp
 
@@ -118,7 +118,7 @@ contains
     real(dp) :: val(1, 1, 1), stat_inc
     real(dp) :: uprime2, reynolds_stress
     integer :: n
-    real(dp), parameter :: tol = 1.0e-10_dp
+    real(dp), parameter :: tol = 1.0e4_dp*epsilon(1.0_dp)
 
     ! Perfectly correlated: u == v
     umean = 0.0_dp; vmean = 0.0_dp

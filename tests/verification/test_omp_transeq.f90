@@ -23,7 +23,14 @@ program test_omp_transeq
   integer :: ierr
   integer, dimension(3) :: dims_global
 
-  real(dp) :: dx_per, nu, norm_du, tol = 1d-8
+  real(dp) :: dx_per, nu, norm_du
+  ! Roundoff floor of the second-derivative term is ~eps/dx^2, which at
+  ! 96^3 cells is ~1e-4 in single precision.
+#ifdef SINGLE_PREC
+  real(dp) :: tol = 5e-3
+#else
+  real(dp) :: tol = 1d-8
+#endif
 
   class(allocator_t), pointer :: allocator
 

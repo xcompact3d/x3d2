@@ -16,7 +16,14 @@ program test_thom
   use m_test_utils, only: checkerr
   implicit none
 
+  ! The second-derivative roundoff floor is ~eps/dx^2: at n=1024 this is
+  ! ~3e-3 in single precision (~6e-12 in double), so the tolerance must
+  ! account for it.
+#ifdef SINGLE_PREC
+  real(dp), parameter :: residual_tol = 5.0e-2_dp
+#else
   real(dp), parameter :: residual_tol = 1.0e-8_dp
+#endif
   logical :: allpass = .true.
 
 #ifdef CUDA

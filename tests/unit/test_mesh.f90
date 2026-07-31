@@ -20,7 +20,9 @@ program test_mesh
   integer, dimension(3) :: dims_check
   integer :: ierr, nrank, nproc
   integer :: n_cell, n_vert, n_x_face
-  real(dp), parameter :: eps = 1e-8
+  ! -ffast-math reciprocal division can be ~1 ulp off even for exactly
+  ! representable results, so the tolerance must scale with the precision
+  real(dp), parameter :: eps = 1000*epsilon(1._dp)
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
