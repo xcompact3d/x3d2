@@ -33,14 +33,15 @@ module m_omptgt_allocator
 
   type, extends(field_t) :: omptgt_field_t
     ! A device-resident field
+    integer, private :: n
+    integer, dimension(3), private :: dims
     integer, private :: dev_id
     type(c_ptr), private :: dev_ptr = c_null_ptr
-    real(dp), pointer, private :: p_data_tgt(:) => null()
-    real(dp), pointer, contiguous :: data_tgt(:, :, :) => null()
   contains
     procedure :: fill => fill_omptgt
     procedure :: get_shape => get_shape_omptgt
     procedure :: set_shape => set_shape_omptgt
+    procedure :: get_dev_ptr
     final :: omptgt_field_destroy
   end type omptgt_field_t
 
@@ -87,16 +88,14 @@ contains
       error stop "Device ID is HOST"
     end if
 
-    f%dev_ptr = omp_target_alloc(ngrid*c_sizeof(0.0_dp), f%dev_id)
-    call c_f_pointer(f%dev_ptr, f%p_data_tgt, shape=[ngrid])
+    f%n = ngrid
+    f%dims = -1
+    f%dev_ptr = omp_target_alloc(f%n*c_sizeof(0.0_dp), f%dev_id)
 
   end subroutine omptgt_field_init
 
   subroutine omptgt_field_destroy(self)
     type(omptgt_field_t) :: self
-
-    nullify (self%data_tgt)
-    nullify (self%p_data_tgt)
 
     if (c_associated(self%dev_ptr)) then
       call omp_target_free(self%dev_ptr, self%dev_id)
@@ -107,60 +106,76 @@ contains
     class(omptgt_field_t) :: self
     real(dp), intent(in) :: c
 
-    !call fill_omptgt_(self%p_data_tgt, c, size(self%p_data_tgt))
-    call fill_omptgt_3d_(self%data_tgt, c)
+    call fill_omptgt_(self%dev_ptr, c, self%n)
+    !call fill_omptgt_3d_(self%dev_ptr, c)
 
   end subroutine fill_omptgt
 
-  subroutine fill_omptgt_(p_data_tgt, c, n)
-    real(dp), dimension(:), intent(inout) :: p_data_tgt
+  subroutine fill_omptgt_(dev_ptr, c, n)
+    type(c_ptr), intent(inout) :: dev_ptr
     real(dp), intent(in) :: c
     integer, intent(in) :: n
 
+    real(dp), dimension(:), pointer :: p_data_tgt
     integer :: i
 
-    !$omp target teams loop has_device_addr(p_data_tgt)
+    !$omp target teams is_device_ptr(dev_ptr)
+    call c_f_pointer(dev_ptr, p_data_tgt, shape=[n])
+    !$omp loop
     do i = 1, n
       p_data_tgt(i) = c
     end do
-    !$omp end target teams loop
+    !$omp end loop
+    !$omp end target teams
 
   end subroutine
 
-  subroutine fill_omptgt_3d_(data_tgt, c)
-    real(dp), dimension(:, :, :), intent(inout) :: data_tgt
-    real(dp), intent(in) :: c
+  !!subroutine fill_omptgt_3d_(dev_ptr, c)
+  !!  type(c_ptr), intent(inout) :: dev_ptr
+  !!  real(dp), intent(in) :: c
 
-    integer, dimension(3) :: n
-    integer :: i, j, k
+  !!  real(dp), dimension(:,:,:), pointer :: p_data_tgt
+  !!  integer, dimension(3) :: n
+  !!  integer :: i, j, k
 
-    n = shape(data_tgt)
+  !!  n = shape(data_tgt)
 
-    !$omp target teams loop collapse(3) has_device_addr(data_tgt)
-    do k = 1, n(3)
-      do j = 1, n(2)
-        do i = 1, n(1)
-          data_tgt(i, j, k) = c
-        end do
-      end do
-    end do
-    !$omp end target teams loop
-  end subroutine
+  !!  !$omp target teams loop collapse(3) is_device_ptr(dev_ptr)
+  !!  call c_f_pointer(dev_ptr, p_data_tgt, shape=n)
+  !!  do k = 1, n(3)
+  !!    do j = 1, n(2)
+  !!      do i = 1, n(1)
+  !!        p_data_tgt(i, j, k) = c
+  !!      end do
+  !!    end do
+  !!  end do
+  !!  !$omp end target teams loop
+  !!end subroutine
 
   function get_shape_omptgt(self) result(dims)
     class(omptgt_field_t) :: self
     integer :: dims(3)
 
-    dims = shape(self%data_tgt)
+    dims = self%dims
   end function
 
   subroutine set_shape_omptgt(self, dims)
     class(omptgt_field_t) :: self
     integer, intent(in) :: dims(3)
 
-    call c_f_pointer(self%dev_ptr, self%data_tgt, shape=dims)
+    if (product(dims) < self%n) then
+      self%dims = dims
+    else
+      error stop "Trying to set shape of field greater than capacity"
+    end if
 
   end subroutine
+
+  type(c_ptr) function get_dev_ptr(self) result(ptr)
+    class(omptgt_field_t) :: self
+
+    ptr = self%dev_ptr
+  end function
 
 end module m_omptgt_allocator
 

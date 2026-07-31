@@ -6,6 +6,8 @@
 
 module m_omptgt_backend
 
+  use iso_c_binding, only: c_ptr, c_f_pointer
+
   use m_common, only: dp, DIR_C, get_dirs_from_rdr
 
   use m_allocator, only: allocator_t
@@ -61,7 +63,7 @@ contains
     type is (omptgt_field_t)
       select type (src)
       type is (omptgt_field_t)
-        call veccopy_offload_(dst%data_tgt, src%data_tgt)
+        call veccopy_offload_(dst%get_dev_ptr(), dst%get_shape(), src%get_dev_ptr(), src%get_shape())
       class default
         error stop "Called omptgt vector copy with unsupported source vector"
       end select
@@ -71,25 +73,33 @@ contains
     end select
   end subroutine
 
-  subroutine veccopy_offload_(dst, src)
+  subroutine veccopy_offload_(cp_dst, n_dst, cp_src, n_src)
+    type(c_ptr), intent(inout) :: cp_dst
+    type(c_ptr), intent(in) :: cp_src
+    integer, dimension(3), intent(in) :: n_dst, n_src
 
-    real(dp), dimension(:, :, :), intent(inout) :: dst
-    real(dp), dimension(:, :, :), intent(in) :: src
+    real(dp), dimension(:, :, :), pointer :: dst
+    real(dp), dimension(:, :, :), pointer :: src
 
-    integer, dimension(3) :: n
     integer :: i, j, k
 
-    n = shape(dst)
+    if (any(n_src < n_dst)) then
+      error stop "SRC array is smaller than destination"
+    end if
 
-    !$omp target teams loop collapse(3) has_device_addr(dst, src)
-    do k = 1, n(3)
-      do j = 1, n(2)
-        do i = 1, n(1)
+    !$omp target teams is_device_ptr(cp_dst, cp_src)
+    call c_f_pointer(cp_dst, dst, shape=n_dst)
+    call c_f_pointer(cp_src, src, shape=n_src)
+    !$omp loop collapse(3)
+    do k = 1, n_dst(3)
+      do j = 1, n_dst(2)
+        do i = 1, n_dst(1)
           dst(i, j, k) = src(i, j, k)
         end do
       end do
     end do
-    !$omp end target teams loop
+    !$omp end loop
+    !$omp end target teams
 
   end subroutine
 
