@@ -32,7 +32,13 @@ program test_cuda_transeq
   integer :: ierr, ndevs, devnum
 
   type(dim3) :: blocks, threads
+  ! The diffusion term's roundoff floor is ~eps/dx^2: at n=512 this is
+  ! ~8e-4 in single precision, so the tolerance must account for it.
+#ifdef SINGLE_PREC
+  real(dp), parameter :: residual_tol = 2.0e-2_dp
+#else
   real(dp), parameter :: residual_tol = 1.0e-8_dp
+#endif
   real(dp) :: dx_per, nu, norm_du
 
   call initialise_mpi()
