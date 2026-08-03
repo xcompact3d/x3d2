@@ -155,6 +155,7 @@ contains
   function get_shape_omptgt(self) result(dims)
     class(omptgt_field_t) :: self
     integer :: dims(3)
+    !$omp declare target
 
     dims = self%dims
   end function

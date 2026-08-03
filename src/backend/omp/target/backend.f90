@@ -137,32 +137,31 @@ contains
     real(dp), intent(in) :: b
     type(omptgt_field_t), intent(inout) :: y
 
+    type(c_ptr) :: cp_x, cp_y
+    real(dp), dimension(:,:,:), pointer :: p_x, p_y
+
     integer, dimension(3) :: dims
+    integer :: i, j, k
 
     dims = self%allocator%get_padded_dims(x%dir)
 
-    call vecadd_offload_(dims, a, x%data_tgt, b, y%data_tgt)
+    cp_x = x%get_dev_ptr()
+    cp_y = y%get_dev_ptr()
 
-  end subroutine
-
-  subroutine vecadd_offload_(dims, a, x, b, y)
-    integer, dimension(3), intent(in) :: dims
-    real(dp), intent(in) :: a
-    real(dp), dimension(:, :, :), intent(in) :: x
-    real(dp), intent(in) :: b
-    real(dp), dimension(:, :, :), intent(inout) :: y
-
-    integer :: i, j, k
-
-    !$omp target teams loop collapse(3) has_device_addr(x, y)
+    !$omp target teams is_device_ptr(cp_x, cp_y)
+    call c_f_pointer(cp_x, p_x, shape=x%get_shape())
+    call c_f_pointer(cp_y, p_y, shape=y%get_shape())
+    !$omp loop collapse(3)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          y(i, j, k) = a*x(i, j, k) + b*y(i, j, k)
+          p_y(i, j, k) = a*p_x(i, j, k) + b*p_y(i, j, k)
         end do
       end do
     end do
-    !$omp end target teams loop
+    !$omp end loop
+    !$omp end target teams
+
   end subroutine
 
   subroutine copy_data_to_f_omptgt(self, f, data)
@@ -170,76 +169,67 @@ contains
     class(field_t), intent(inout) :: f
     real(dp), dimension(:, :, :), intent(in) :: data
 
+    type(c_ptr) :: f_dev_ptr
+    real(dp), dimension(:,:,:), pointer :: p_f
     integer, dimension(3) :: dims
+    integer :: i, j, k
 
     dims = self%allocator%get_padded_dims(f%dir)
 
     ! XXX: This could be improved following cuda/backend.f90:resolve_field_t()
     select type (f)
     type is (omptgt_field_t)
-      call copy_data_to_f_omptgt_(f%data_tgt, data, dims)
+      f_dev_ptr = f%get_dev_ptr()
+      !$omp target teams map(to:data) is_device_ptr(f_dev_ptr)
+      call c_f_pointer(f_dev_ptr, p_f, shape=f%get_shape())
+      !$omp loop collapse(3)
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          do i = 1, dims(1)
+            p_f(i, j, k) = data(i, j, k)
+          end do
+        end do
+      end do
+      !$omp end loop
+      !$omp end target teams
     class default
       error stop "Unsupported"
     end select
 
   end subroutine copy_data_to_f_omptgt
 
-  subroutine copy_data_to_f_omptgt_(f_arr, d, dims)
-    real(dp), dimension(:, :, :), intent(inout) :: f_arr
-    real(dp), dimension(:, :, :), intent(in) :: d
-    integer, dimension(3), intent(in) :: dims
-
-    integer :: i, j, k
-
-    ! XXX: This could be improved following cuda/backend.f90:resolve_field_t()
-    !$omp target teams loop collapse(3) map(to:d) has_device_addr(f_arr)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          f_arr(i, j, k) = d(i, j, k)
-        end do
-      end do
-    end do
-    !$omp end target teams loop
-
-  end subroutine
-
   subroutine copy_f_to_data_omptgt(self, data, f)
     class(omptgt_backend_t), intent(inout) :: self
     real(dp), dimension(:, :, :), intent(out) :: data
     class(field_t), intent(in) :: f
 
+    type(c_ptr) :: f_dev_ptr
+    real(dp), dimension(:,:,:), pointer :: p_f
     integer, dimension(3) :: dims
+    integer :: i, j, k
 
     dims = self%allocator%get_padded_dims(f%dir)
 
     select type (f)
     type is (omptgt_field_t)
-      call copy_f_to_data_omptgt_(data, f%data_tgt, dims)
+      f_dev_ptr = f%get_dev_ptr()
+      !$omp target teams map(from:data) is_device_ptr(f_dev_ptr)
+      call c_f_pointer(f_dev_ptr, p_f, shape=f%get_shape())
+      !$omp loop collapse(3)
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          do i = 1, dims(1)
+            data(i, j, k) = p_f(i, j, k)
+          end do
+        end do
+      end do
+      !$omp end loop
+      !$omp end target teams
     class default
       error stop "Unsupported"
     end select
 
   end subroutine copy_f_to_data_omptgt
-
-  subroutine copy_f_to_data_omptgt_(data, f_arr, dims)
-    real(dp), dimension(:, :, :), intent(out) :: data
-    real(dp), dimension(:, :, :), intent(in) :: f_arr
-    integer, dimension(3), intent(in) :: dims
-
-    integer :: i, j, k
-
-    !$omp target teams loop collapse(3) map(from:data) has_device_addr(f_arr)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          data(i, j, k) = f_arr(i, j, k)
-        end do
-      end do
-    end do
-    !$omp end target teams loop
-
-  end subroutine
 
   subroutine reorder_omptgt(self, u_, u, direction)
     class(omptgt_backend_t) :: self
@@ -258,10 +248,10 @@ contains
     type is (omptgt_field_t)
       select type (u)
       type is (omptgt_field_t)
-        call reorder_omptgt_dd(u_%data_tgt, u%data_tgt, dims, dir_from, &
+        call reorder_omptgt_dd(u_, u, dims, dir_from, &
                                dir_to, cart_padded)
       class default
-        call reorder_omptgt_dh(u_%data_tgt, u%data, dims, dir_from, dir_to, &
+        call reorder_omptgt_dh(u_, u%data, dims, dir_from, dir_to, &
                                cart_padded)
       end select
     class default
@@ -274,50 +264,64 @@ contains
   end subroutine reorder_omptgt
 
   subroutine reorder_omptgt_dd(u_, u, dims, dir_from, dir_to, cart_padded)
-    real(dp), dimension(:, :, :), pointer :: u_
-    real(dp), dimension(:, :, :), pointer, intent(in) :: u
+    type(omptgt_field_t) :: u_
+    type(omptgt_field_t), intent(in) :: u
     integer, dimension(3), intent(in) :: dims
     integer, intent(in) :: dir_from, dir_to
     integer, dimension(3), intent(in) :: cart_padded
 
+    type(c_ptr) :: cp_u_, cp_u
+    real(dp), dimension(:,:,:), pointer :: p_u_, p_u
     integer :: i, j, k
     integer :: out_i, out_j, out_k
 
-    !$omp target teams loop collapse(3) private(out_i, out_j, out_k) has_device_addr(u_, u)
+    cp_u_ = u_%get_dev_ptr()
+    cp_u = u%get_dev_ptr()
+    !$omp target teams is_device_ptr(cp_u_, cp_u)
+    call c_f_pointer(cp_u_, p_u_, shape=u_%get_shape())
+    call c_f_pointer(cp_u, p_u, shape=u%get_shape())
+    !$omp loop collapse(3) private(out_i, out_j, out_k)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
           call get_index_reordering(out_i, out_j, out_k, i, j, k, &
                                     dir_from, dir_to, SZ, cart_padded)
-          u_(out_i, out_j, out_k) = u(i, j, k)
+          p_u_(out_i, out_j, out_k) = p_u(i, j, k)
         end do
       end do
     end do
-    !$omp end target teams loop
+    !$omp end loop
+    !$omp end target teams
 
   end subroutine
 
   subroutine reorder_omptgt_dh(u_, u, dims, dir_from, dir_to, cart_padded)
-    real(dp), dimension(:, :, :), pointer :: u_
+    type(omptgt_field_t) :: u_
     real(dp), dimension(:, :, :), pointer, intent(in) :: u
     integer, dimension(3), intent(in) :: dims
     integer, intent(in) :: dir_from, dir_to
     integer, dimension(3), intent(in) :: cart_padded
 
+    type(c_ptr) :: cp_u_
+    real(dp), dimension(:,:,:), pointer :: p_u_
     integer :: i, j, k
     integer :: out_i, out_j, out_k
 
-    !$omp target teams loop collapse(3) private(out_i, out_j, out_k) map(to:u) has_device_addr(u_)
+    cp_u_ = u_%get_dev_ptr()
+    !$omp target teams map(to:u) is_device_ptr(cp_u_)
+    call c_f_pointer(cp_u_, p_u_, shape=u_%get_shape())
+    !$omp loop collapse(3) private(out_i, out_j, out_k)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
           call get_index_reordering(out_i, out_j, out_k, i, j, k, &
                                     dir_from, dir_to, SZ, cart_padded)
-          u_(out_i, out_j, out_k) = u(i, j, k)
+          p_u_(out_i, out_j, out_k) = u(i, j, k)
         end do
       end do
     end do
-    !$omp end target teams loop
+    !$omp end loop
+    !$omp end target teams
 
   end subroutine
 
