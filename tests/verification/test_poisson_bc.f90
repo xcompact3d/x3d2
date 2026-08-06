@@ -59,7 +59,15 @@ program test_poisson
   integer, parameter :: NUM_CONFIGS = 4
   integer, parameter :: TOTAL_TESTS = NUM_CONFIGS*NUM_TESTS
 
+  ! The single precision tolerance must sit between the roundoff floor of
+  ! the passing cases (~3e-7 in this normalised norm, norm2/N) and the
+  ! n=3 periodic aliasing error (~2.4e-6) that the XFAIL logic relies on
+  ! detecting; a looser tolerance turns XFAILs into unexpected passes.
+#ifdef SINGLE_PREC
+  real(dp), parameter :: ERROR_TOLERANCE = 1.0e-6_dp
+#else
   real(dp), parameter :: ERROR_TOLERANCE = 1.0e-11_dp
+#endif
 
   integer :: nrank, nproc, ierr
   integer :: ic, idx

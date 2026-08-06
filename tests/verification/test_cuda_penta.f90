@@ -394,7 +394,8 @@ contains
         if (isize == 1) then
           print '(i6, es16.4, a10)', n_glob, l2_err, '   ---'
         else
-          if (l2_prev > 0._dp .and. l2_err > 0._dp) then
+          if (l2_prev > converged_tol(n_glob) &
+              .and. l2_err > converged_tol(n_glob)) then
             block
               real(dp) :: rate
               rate = log(l2_prev/l2_err)/log(2.0_dp)
@@ -427,7 +428,7 @@ contains
     if (nrank /= 0) return
     if (isize == 1) then
       print '(i6, es16.4, a10)', n_glob, l2_err, '   ---'
-    else if (l2_err < 1e-12_dp) then
+    else if (l2_err < converged_tol(n_glob)) then
       print '(i6, es16.4, a10)', n_glob, l2_err, '  <eps'
     else
       rate = log(l2_prev/l2_err)/log(2.0_dp)
@@ -440,6 +441,16 @@ contains
       end if
     end if
   end subroutine report_rate
+
+  real(dp) pure function converged_tol(n_glob)
+    !! Error level below which the truncation error is hidden by roundoff
+    !! and a convergence rate can no longer be measured.  The roundoff
+    !! floor of a first-derivative L2 error at resolution n is ~eps*n
+    !! (roundoff eps amplified by 1/dx = n), with a 20x safety margin.
+    integer, intent(in) :: n_glob
+    converged_tol = max(1e-12_dp, &
+                        20._dp*epsilon(1._dp)*real(n_glob, dp))
+  end function converged_tol
 
   subroutine finalise()
     if (allpass) then

@@ -5,6 +5,12 @@ module m_cuda_spectral
 
   implicit none
 
+  ! Threshold below which a spectral coefficient is treated as zero. Must
+  ! scale with the working precision: single-precision roundoff leaves
+  ! ~1e-13 noise in wave numbers that should vanish (e.g. Nyquist modes),
+  ! and dividing by that noise corrupts the pressure field.
+  real(dp), parameter :: eps_wave = epsilon(1._dp)
+
 contains
 
   attributes(global) subroutine memcpy3D(dst, src, nx, ny, nz)
@@ -186,7 +192,7 @@ contains
         ! Solve Poisson
         tmp_r = real(waves(i, j, k), kind=dp)
         tmp_c = aimag(waves(i, j, k))
-        if ((tmp_r < 1.e-16_dp) .or. (tmp_c < 1.e-16_dp)) then
+        if ((tmp_r < eps_wave) .or. (tmp_c < eps_wave)) then
           div_r = 0._dp; div_c = 0._dp
         else
           div_r = -div_r/tmp_r
@@ -311,12 +317,12 @@ contains
 
         tmp_r = real(waves(i, j, k), kind=dp)
         tmp_c = aimag(waves(i, j, k))
-        if (abs(tmp_r) < 1.e-16_dp) then
+        if (abs(tmp_r) < eps_wave) then
           div_r = 0._dp
         else
           div_r = -div_r/tmp_r
         end if
-        if (abs(tmp_c) < 1.e-16_dp) then
+        if (abs(tmp_c) < eps_wave) then
           div_c = 0._dp
         else
           div_c = -div_c/tmp_c
@@ -480,12 +486,10 @@ contains
     integer, value, intent(in) :: nx_spec, n, nx, ny, nz
 
     integer :: i, j, k, jm, nm
-    real(dp) :: tmp_r, tmp_c, div_r, div_c, epsilon
+    real(dp) :: tmp_r, tmp_c, div_r, div_c
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
     k = blockIdx%y ! nz_spec
-
-    epsilon = 1.e-16_dp
 
     ! Solve Poisson
     if (i <= nx_spec) then
@@ -498,11 +502,11 @@ contains
         jm = inc*j + off - inc/2
         ! eliminate diag-1
         tmp_r = 0._dp
-        if (abs(a_re(i, j, k, 3)) > epsilon) then
+        if (abs(a_re(i, j, k, 3)) > eps_wave) then
           tmp_r = a_re(i, j + 1, k, 2)/a_re(i, j, k, 3)
         end if
         tmp_c = 0._dp
-        if (abs(a_im(i, j, k, 3)) > epsilon) then
+        if (abs(a_im(i, j, k, 3)) > eps_wave) then
           tmp_c = a_im(i, j + 1, k, 2)/a_im(i, j, k, 3)
         end if
         div_r = real(div_u(i, jm + inc, k) - tmp_r*div_u(i, jm, k), kind=dp)
@@ -516,11 +520,11 @@ contains
 
         ! eliminate diag-2
         tmp_r = 0._dp
-        if (abs(a_re(i, j, k, 3)) > epsilon) then
+        if (abs(a_re(i, j, k, 3)) > eps_wave) then
           tmp_r = a_re(i, j + 2, k, 1)/a_re(i, j, k, 3)
         end if
         tmp_c = 0._dp
-        if (abs(a_im(i, j, k, 3)) > epsilon) then
+        if (abs(a_im(i, j, k, 3)) > eps_wave) then
           tmp_c = a_im(i, j + 2, k, 1)/a_im(i, j, k, 3)
         end if
         div_r = real(div_u(i, jm + 2*inc, k) - tmp_r*div_u(i, jm, k), kind=dp)
@@ -534,12 +538,12 @@ contains
       end do
 
       ! handle the last row
-      if (abs(a_re(i, n - 1, k, 3)) > epsilon) then
+      if (abs(a_re(i, n - 1, k, 3)) > eps_wave) then
         tmp_r = a_re(i, n, k, 2)/a_re(i, n - 1, k, 3)
       else
         tmp_r = 0._dp
       end if
-      if (abs(a_im(i, n - 1, k, 3)) > epsilon) then
+      if (abs(a_im(i, n - 1, k, 3)) > eps_wave) then
         tmp_c = a_im(i, n, k, 2)/a_im(i, n - 1, k, 3)
       else
         tmp_c = 0._dp
@@ -549,7 +553,7 @@ contains
 
       ! j mapping based on odd/even for last point j=n
       nm = inc*n + off - inc/2
-      if (abs(div_r) > epsilon) then
+      if (abs(div_r) > eps_wave) then
         tmp_r = tmp_r/div_r
         div_r = real(div_u(i, nm, k), kind=dp)/div_r &
                 - tmp_r*real(div_u(i, nm - inc, k), kind=dp)
@@ -557,7 +561,7 @@ contains
         tmp_r = 0._dp
         div_r = 0._dp
       end if
-      if (abs(div_c) > epsilon) then
+      if (abs(div_c) > eps_wave) then
         tmp_c = tmp_c/div_c
         div_c = aimag(div_u(i, nm, k))/div_c &
                 - tmp_c*aimag(div_u(i, nm - inc, k))
@@ -567,12 +571,12 @@ contains
       end if
       div_u(i, nm, k) = cmplx(div_r, div_c, kind=dp)
 
-      if (abs(a_re(i, n - 1, k, 3)) > epsilon) then
+      if (abs(a_re(i, n - 1, k, 3)) > eps_wave) then
         tmp_r = 1._dp/a_re(i, n - 1, k, 3)
       else
         tmp_r = 0._dp
       end if
-      if (abs(a_im(i, n - 1, k, 3)) > epsilon) then
+      if (abs(a_im(i, n - 1, k, 3)) > eps_wave) then
         tmp_c = 1._dp/a_im(i, n - 1, k, 3)
       else
         tmp_c = 0._dp
@@ -596,12 +600,12 @@ contains
       do j = n - 2, 1, -1
         ! j mapping based on odd/even
         jm = inc*j + off - inc/2
-        if (abs(a_re(i, j, k, 3)) > epsilon) then
+        if (abs(a_re(i, j, k, 3)) > eps_wave) then
           tmp_r = 1._dp/a_re(i, j, k, 3)
         else
           tmp_r = 0._dp
         end if
-        if (abs(a_im(i, j, k, 3)) > epsilon) then
+        if (abs(a_im(i, j, k, 3)) > eps_wave) then
           tmp_c = 1._dp/a_im(i, j, k, 3)
         else
           tmp_c = 0._dp
@@ -869,12 +873,12 @@ contains
 
         tmp_r = real(waves(j, i, k), kind=dp)
         tmp_c = aimag(waves(j, i, k))
-        if (abs(tmp_r) < 1.e-16_dp) then
+        if (abs(tmp_r) < eps_wave) then
           div_r = 0._dp
         else
           div_r = -div_r/tmp_r
         end if
-        if (abs(tmp_c) < 1.e-16_dp) then
+        if (abs(tmp_c) < eps_wave) then
           div_c = 0._dp
         else
           div_c = -div_c/tmp_c
