@@ -491,7 +491,6 @@ contains
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
     k = blockIdx%y ! nz_spec
 
-
     ! Solve Poisson
     if (i <= nx_spec) then
       ! Forward pass for the pentadiagonal matrix
