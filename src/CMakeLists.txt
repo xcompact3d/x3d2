@@ -7,6 +7,7 @@ set(SRC
   ordering.f90
   poisson_fft.f90
   solver.f90
+  les/les.f90
   postprocess/postprocess.f90
   postprocess/monitoring.f90
   postprocess/scalar_series.f90
