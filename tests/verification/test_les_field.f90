@@ -5,10 +5,10 @@ program test_les_field
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
   use m_config, only: les_config_t
-  use m_field, only: field_t
+  use m_field, only: field_t, flist_t
   use m_les, only: les_t, filter_width, wall_damped_mixing_length
   use m_mesh, only: mesh_t
-  use m_solver, only: allocate_tdsops
+  use m_solver, only: solver_t, allocate_tdsops, transeq_default
   use m_tdsops, only: dirps_t
 
 #ifdef CUDA
@@ -32,9 +32,11 @@ program test_les_field
   type(allocator_t), target :: omp_allocator
   type(omp_backend_t), target :: omp_backend
 #endif
-  type(dirps_t) :: xdirps, ydirps, zdirps
+  type(dirps_t), target :: xdirps, ydirps, zdirps
   type(les_config_t) :: config
   type(les_t) :: les, les_wall
+  type(solver_t) :: solver
+  type(flist_t) :: rhs(3), variables(3)
   class(field_t), pointer :: u, v, w, rhs_u, rhs_v, rhs_w
 
   integer, parameter :: dims_global(3) = [32, 33, 32]
@@ -139,6 +141,15 @@ program test_les_field
   call check_error('smooth-wall nut', abs(nut_data(1, 1, 1)), &
                    tolerance, all_pass)
 
+  config%wall_damping = .false.
+  solver%backend => backend
+  solver%mesh => mesh
+  solver%xdirps => xdirps
+  solver%ydirps => ydirps
+  solver%zdirps => zdirps
+  solver%les = les_t(config)
+  solver%nu = 0._dp
+
   ! For u=(a/2)y^2, div(2*nut*S)_x=2*(Cs*Delta)^2*a^2*y.
   u_data = 0._dp
   do k = 1, dims(3)
@@ -157,8 +168,13 @@ program test_les_field
   call rhs_u%fill(0._dp)
   call rhs_v%fill(0._dp)
   call rhs_w%fill(0._dp)
-  call les%apply_sgs_stress(backend, mesh, rhs_u, rhs_v, rhs_w, u, v, w, &
-                            xdirps, ydirps, zdirps)
+  rhs(1)%ptr => rhs_u
+  rhs(2)%ptr => rhs_v
+  rhs(3)%ptr => rhs_w
+  variables(1)%ptr => u
+  variables(2)%ptr => v
+  variables(3)%ptr => w
+  call transeq_default(solver, rhs, variables)
 
   call backend%get_field_data(nut_data, rhs_u)
   max_error = 0._dp
@@ -171,18 +187,21 @@ program test_les_field
       end do
     end do
   end do
-  call check_error('SGS stress divergence', max_error, &
+  call check_error('solver-coupled SGS stress divergence', max_error, &
                    10._dp*tolerance, all_pass)
 
   call backend%get_field_data(nut_data, rhs_v)
   call check_error('SGS y-momentum cross-coupling', &
-                   maxval(abs(nut_data)), 10._dp*tolerance, all_pass)
+                   maxval(abs(nut_data(1:dims(1), 1:dims(2), 1:dims(3)))), &
+                   10._dp*tolerance, all_pass)
   call backend%get_field_data(nut_data, rhs_w)
   call check_error('SGS z-momentum cross-coupling', &
-                   maxval(abs(nut_data)), 10._dp*tolerance, all_pass)
+                   maxval(abs(nut_data(1:dims(1), 1:dims(2), 1:dims(3)))), &
+                   10._dp*tolerance, all_pass)
 
   call les%finalise(backend)
   call les_wall%finalise(backend)
+  call solver%finalise()
   call allocator%release_block(u)
   call allocator%release_block(v)
   call allocator%release_block(w)

@@ -5,10 +5,11 @@ LES Parameters
 ~~~~~~~~~~~~~~
 
 The explicit large-eddy simulation (LES) parameters are specified in the
-``les_params`` namelist block. The current implementation computes the
-Smagorinsky eddy-viscosity field on the OpenMP and CUDA backends. Coupling its
-stress divergence to the momentum equations is under development; until that
-coupling is complete, selecting ``'smagorinsky'`` does not alter a simulation.
+optional ``les_params`` namelist block. Selecting ``'smagorinsky'`` computes
+the eddy-viscosity field and adds the SGS stress divergence to the momentum
+right-hand side at every Runge--Kutta stage or Adams--Bashforth step. This is
+supported on the OpenMP and CUDA backends. If the block is omitted, LES
+defaults to ``model = 'none'`` and the momentum equations are unchanged.
 
 .. code-block:: fortran
 
