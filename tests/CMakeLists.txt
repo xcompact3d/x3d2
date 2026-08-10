@@ -111,6 +111,7 @@ define_test(unit/test_mesh.f90 4 omp)
 define_test(unit/test_reorder_map.f90 1 omp)
 define_test(unit/test_vecadd.f90 1 omp)
 define_test(unit/test_scalar_product.f90 ${CMAKE_CTEST_NPROCS} omp)
+define_test(unit/test_kinetic_energy.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(unit/test_sum_intox.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(unit/test_setget_field.f90 1 omp)
 define_test(unit/test_snapshot_species_fields.f90 1 omp)
@@ -159,6 +160,7 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   # CUDA unit tests
   define_test(unit/test_reordering.f90 1 cuda)
   define_test(unit/test_vecadd.f90 1 cuda)
+  define_test(unit/test_kinetic_energy.f90 1 cuda)
   define_test(unit/test_cuda_allocator.f90 1 cuda)
   define_test(unit/test_cuda_reorder.f90 1 cuda)
 

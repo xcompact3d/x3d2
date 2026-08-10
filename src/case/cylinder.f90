@@ -253,7 +253,7 @@ contains
   end subroutine forcings_cylinder
 
   ! ==========================================================================
-  ! Post-processing: report enstrophy and divergence
+  ! Post-processing: report global monitoring quantities
   ! ==========================================================================
   subroutine postprocess_cylinder(self, iter, t)
     implicit none

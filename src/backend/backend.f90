@@ -43,6 +43,7 @@ module m_base_backend
     procedure(vecadd), deferred :: vecadd
     procedure(vecmult), deferred :: vecmult
     procedure(scalar_product), deferred :: scalar_product
+    procedure(vector_norm_squared_op), deferred :: vector_norm_squared
     procedure(field_max_mean), deferred :: field_max_mean
     procedure(slice_max_sum), deferred :: slice_max_sum
     procedure(field_ops), deferred :: field_scale
@@ -226,6 +227,19 @@ module m_base_backend
       class(base_backend_t) :: self
       class(field_t), intent(in) :: x, y
     end function scalar_product
+  end interface
+
+  abstract interface
+    real(dp) function vector_norm_squared_op(self, a, b, c) result(norm_squared)
+      !! Computes the global discrete squared norm of a three-component field.
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(in) :: a, b, c
+    end function vector_norm_squared_op
   end interface
 
   abstract interface

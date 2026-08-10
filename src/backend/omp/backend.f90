@@ -42,6 +42,7 @@ module m_omp_backend
     procedure :: vecadd => vecadd_omp
     procedure :: vecmult => vecmult_omp
     procedure :: scalar_product => scalar_product_omp
+    procedure :: vector_norm_squared => vector_norm_squared_omp
     procedure :: field_max_mean => field_max_mean_omp
     procedure :: slice_max_sum => slice_max_sum_omp
     procedure :: field_scale => field_scale_omp
@@ -784,6 +785,55 @@ contains
                        ierr)
 
   end function scalar_product_omp
+
+  real(dp) function vector_norm_squared_omp(self, a, b, c) &
+    result(norm_squared)
+    !! Global sum of a**2 + b**2 + c**2, with one MPI reduction.
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(in) :: a, b, c
+
+    real(dp) :: local_sum, pencil_sum
+    integer :: dims(3), stacked
+    integer :: i, j, k, k_i, k_j, ierr
+
+    if (a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
+        c%data_loc == NULL_LOC) then
+      error stop 'You must set data_loc before computing a vector norm.'
+    end if
+    if (a%data_loc /= b%data_loc .or. a%data_loc /= c%data_loc) then
+      error stop 'Vector-norm fields must use the same data location.'
+    end if
+    if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) then
+      error stop 'Vector-norm fields must use DIR_X layout.'
+    end if
+
+    dims = self%mesh%get_dims(a%data_loc)
+    stacked = (dims(2) - 1)/SZ + 1
+
+    local_sum = 0._dp
+    !$omp parallel do collapse(2) reduction(+:local_sum) private(k, pencil_sum)
+    do k_j = 1, stacked
+      do k_i = 1, dims(3)
+        k = k_j + (k_i - 1)*stacked
+        pencil_sum = 0._dp
+        do j = 1, dims(1)
+          !$omp simd reduction(+:pencil_sum)
+          do i = 1, min(SZ, dims(2) - (k_j - 1)*SZ)
+            pencil_sum = pencil_sum + a%data(i, j, k)**2 + &
+                         b%data(i, j, k)**2 + c%data(i, j, k)**2
+          end do
+          !$omp end simd
+        end do
+        local_sum = local_sum + pencil_sum
+      end do
+    end do
+    !$omp end parallel do
+
+    call MPI_Allreduce(local_sum, norm_squared, 1, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+  end function vector_norm_squared_omp
 
   subroutine copy_into_buffers(u_send_s, u_send_e, u, n, n_groups)
     implicit none

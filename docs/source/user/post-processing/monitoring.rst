@@ -13,7 +13,7 @@ The file is a comma-separated CSV with a header line:
 
 .. code-block:: text
 
-   # time, enstrophy, div_u_max, div_u_mean
+   # time, kinetic_energy, enstrophy, div_u_max, div_u_mean
 
 Each subsequent row contains one record per output step.
 
@@ -30,6 +30,9 @@ Quantities
    * - ``time``
      - Simulation time
      - :math:`t`
+   * - ``kinetic_energy``
+     - Spatially-averaged kinetic energy
+     - :math:`E_k = \frac{1}{2N} \sum |\mathbf{u}|^2`
    * - ``enstrophy``
      - Spatially-averaged enstrophy
      - :math:`\mathcal{E} = \frac{1}{2N} \sum |\nabla \times \mathbf{u}|^2`
@@ -39,6 +42,15 @@ Quantities
    * - ``div_u_mean``
      - Mean of :math:`|\nabla \cdot \mathbf{u}|`
      - Divergence-free check
+
+.. note::
+
+   For a freely decaying periodic flow such as Taylor--Green vortex, the
+   kinetic-energy decay rate is
+   :math:`\varepsilon = -\mathrm{d}E_k/\mathrm{d}t`.  In LES this includes
+   the effects of molecular, subgrid-scale, and any numerical dissipation,
+   whereas an estimate based only on enstrophy does not include the
+   subgrid-scale contribution.
 
 .. note::
 
@@ -58,19 +70,23 @@ Example: plotting with Python
    import pandas as pd
    import matplotlib.pyplot as plt
 
-   columns = ["time", "enstrophy", "div_u_max", "div_u_mean"]
+   columns = ["time", "kinetic_energy", "enstrophy",
+              "div_u_max", "div_u_mean"]
    df = pd.read_csv("monitoring.csv", comment="#", names=columns)
 
-   fig, axes = plt.subplots(3, 1, figsize=(8, 8), sharex=True)
+   fig, axes = plt.subplots(4, 1, figsize=(8, 10), sharex=True)
 
-   axes[0].plot(df["time"], df["enstrophy"])
-   axes[0].set_ylabel("Enstrophy")
+   axes[0].plot(df["time"], df["kinetic_energy"])
+   axes[0].set_ylabel("Kinetic energy")
 
-   axes[1].plot(df["time"], df["div_u_max"])
-   axes[1].set_ylabel("div(u) max")
+   axes[1].plot(df["time"], df["enstrophy"])
+   axes[1].set_ylabel("Enstrophy")
 
-   axes[2].plot(df["time"], df["div_u_mean"])
-   axes[2].set_ylabel("div(u) mean")
+   axes[2].plot(df["time"], df["div_u_max"])
+   axes[2].set_ylabel("div(u) max")
+
+   axes[3].plot(df["time"], df["div_u_mean"])
+   axes[3].set_ylabel("div(u) mean")
 
    axes[-1].set_xlabel("Time")
 

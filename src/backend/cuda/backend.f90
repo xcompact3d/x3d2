@@ -23,6 +23,7 @@ module m_cuda_backend
   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
   use m_cuda_kernels_fieldops, only: axpby, buffer_copy, field_scale, &
                                      field_shift, scalar_product, &
+                                     vector_norm_squared, &
                                      field_max_sum, field_set_y_face, &
                                      field_set_x_face, &
                                      field_set_x_face_from_field, &
@@ -65,6 +66,7 @@ module m_cuda_backend
     procedure :: vecadd => vecadd_cuda
     procedure :: vecmult => vecmult_cuda
     procedure :: scalar_product => scalar_product_cuda
+    procedure :: vector_norm_squared => vector_norm_squared_cuda
     procedure :: field_max_mean => field_max_mean_cuda
     procedure :: slice_max_sum => slice_max_sum_cuda
     procedure :: field_scale => field_scale_cuda
@@ -935,6 +937,50 @@ contains
                        MPI_COMM_WORLD, ierr)
 
   end function scalar_product_cuda
+
+  real(dp) function vector_norm_squared_cuda(self, a, b, c) &
+    result(norm_squared)
+    !! Global sum of a**2 + b**2 + c**2, with one MPI reduction.
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(in) :: a, b, c
+
+    real(dp), device, pointer, dimension(:, :, :) :: a_d, b_d, c_d
+    real(dp), device, allocatable :: norm_squared_d
+    real(dp) :: local_sum
+    integer :: dims(3), dims_padded(3), ierr
+    type(dim3) :: blocks, threads
+
+    if (a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
+        c%data_loc == NULL_LOC) then
+      error stop 'You must set data_loc before computing a vector norm.'
+    end if
+    if (a%data_loc /= b%data_loc .or. a%data_loc /= c%data_loc) then
+      error stop 'Vector-norm fields must use the same data location.'
+    end if
+    if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) then
+      error stop 'Vector-norm fields must use DIR_X layout.'
+    end if
+
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    allocate (norm_squared_d)
+    norm_squared_d = 0._dp
+    dims = self%mesh%get_dims(a%data_loc)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    blocks = dim3(dims(3), (dims(2) - 1)/SZ + 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call vector_norm_squared<<<blocks, threads>>>( & !&
+      norm_squared_d, a_d, b_d, c_d, dims(1), dims_padded(3), dims(2))
+
+    local_sum = norm_squared_d
+    call MPI_Allreduce(local_sum, norm_squared, 1, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+  end function vector_norm_squared_cuda
 
   subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n)
     implicit none
