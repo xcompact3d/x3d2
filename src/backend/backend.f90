@@ -53,6 +53,7 @@ module m_base_backend
     procedure(derive_field_from_gradients), deferred :: compute_vorticity
     procedure(derive_field_from_gradients), deferred :: compute_qcriterion
     procedure(smagorinsky_from_gradients), deferred :: compute_smagorinsky_nut
+    procedure(sgs_stress_from_gradients), deferred :: compute_sgs_stress
     procedure(copy_data_to_f), deferred :: copy_data_to_f
     procedure(copy_f_to_data), deferred :: copy_f_to_data
     procedure(alloc_tdsops), deferred :: alloc_tdsops
@@ -81,6 +82,22 @@ module m_base_backend
       real(dp), intent(in) :: nu
       type(dirps_t), intent(in) :: dirps
     end subroutine transeq_ders
+  end interface
+
+  abstract interface
+    subroutine sgs_stress_from_gradients( &
+      self, stress, nut, gradient_a, gradient_b, scale_a, scale_b)
+      !! Forms nut*(scale_a*gradient_a + scale_b*gradient_b).
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: stress
+      class(field_t), intent(in) :: nut, gradient_a, gradient_b
+      real(dp), intent(in) :: scale_a, scale_b
+    end subroutine sgs_stress_from_gradients
   end interface
 
   abstract interface
