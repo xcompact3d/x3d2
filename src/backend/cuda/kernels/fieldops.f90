@@ -249,6 +249,32 @@ contains
 
   end subroutine scalar_product
 
+  attributes(global) subroutine vector_norm_squared(s, a, b, c, &
+                                                    n, n_i_pad, n_j)
+    implicit none
+
+    real(dp), device, intent(inout) :: s
+    real(dp), device, intent(in), dimension(:, :, :) :: a, b, c
+    integer, value, intent(in) :: n, n_i_pad, n_j
+
+    real(dp) :: pencil_sum
+    integer :: i, j, pencil, block_i, block_j, ierr
+
+    i = threadIdx%x
+    block_i = blockIdx%x
+    block_j = blockIdx%y
+    pencil = block_i + (block_j - 1)*n_i_pad
+
+    pencil_sum = 0._dp
+    if (i + (block_j - 1)*blockDim%x <= n_j) then
+      do j = 1, n
+        pencil_sum = pencil_sum + a(i, j, pencil)**2 + &
+                     b(i, j, pencil)**2 + c(i, j, pencil)**2
+      end do
+    end if
+    ierr = atomicadd(s, pencil_sum)
+  end subroutine vector_norm_squared
+
   attributes(global) subroutine field_max_sum(max_f, sum_f, f, n, n_i_pad, n_j)
     implicit none
 
