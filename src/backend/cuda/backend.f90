@@ -29,7 +29,8 @@ module m_cuda_backend
                                      field_set_y_face_from_field, &
                                      pwmul, volume_integral, &
                                      vorticity_from_gradients, &
-                                     qcriterion_from_gradients
+                                     qcriterion_from_gradients, &
+                                     smagorinsky_from_gradients
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
                                     reorder_c2x, reorder_x2c, &
@@ -71,6 +72,7 @@ module m_cuda_backend
     procedure :: field_set_face_from_field => field_set_face_from_field_cuda
     procedure :: compute_vorticity => compute_vorticity_cuda
     procedure :: compute_qcriterion => compute_qcriterion_cuda
+    procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_cuda
     procedure :: field_volume_integral => field_volume_integral_cuda
     procedure :: copy_data_to_f => copy_data_to_f_cuda
     procedure :: copy_f_to_data => copy_f_to_data_cuda
@@ -815,6 +817,45 @@ contains
       dwdy_d, dwdz_d, n) !&
 
   end subroutine compute_qcriterion_cuda
+
+  subroutine compute_smagorinsky_nut_cuda( &
+    self, nut, mixing_length_sq, dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+    dwdx, dwdy, dwdz)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: nut
+    class(field_t), intent(in) :: mixing_length_sq
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    real(dp), device, pointer, dimension(:, :, :) :: &
+      nut_d, mixing_length_sq_d, dudx_d, dudy_d, dudz_d, &
+      dvdx_d, dvdy_d, dvdz_d, dwdx_d, dwdy_d, dwdz_d
+    type(dim3) :: blocks, threads
+    integer :: n
+
+    call resolve_field_t(nut_d, nut)
+    call resolve_field_t(mixing_length_sq_d, mixing_length_sq)
+    call resolve_field_t(dudx_d, dudx)
+    call resolve_field_t(dudy_d, dudy)
+    call resolve_field_t(dudz_d, dudz)
+    call resolve_field_t(dvdx_d, dvdx)
+    call resolve_field_t(dvdy_d, dvdy)
+    call resolve_field_t(dvdz_d, dvdz)
+    call resolve_field_t(dwdx_d, dwdx)
+    call resolve_field_t(dwdy_d, dwdy)
+    call resolve_field_t(dwdz_d, dwdz)
+
+    n = size(nut_d, dim=2)
+    blocks = dim3(size(nut_d, dim=3), 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call smagorinsky_from_gradients<<<blocks, threads>>>( &
+      nut_d, mixing_length_sq_d, dudx_d, dudy_d, dudz_d, &
+      dvdx_d, dvdy_d, dvdz_d, dwdx_d, dwdy_d, dwdz_d, n) !&
+
+  end subroutine compute_smagorinsky_nut_cuda
 
   real(dp) function scalar_product_cuda(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]

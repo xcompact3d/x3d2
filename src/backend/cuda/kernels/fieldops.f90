@@ -166,6 +166,39 @@ contains
 
   end subroutine qcriterion_from_gradients
 
+  attributes(global) subroutine smagorinsky_from_gradients( &
+    nut, mixing_length_sq, dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+    dwdx, dwdy, dwdz, n)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: nut
+    real(dp), device, intent(in), dimension(:, :, :) :: mixing_length_sq
+    real(dp), device, intent(in), dimension(:, :, :) :: dudx, dudy, dudz
+    real(dp), device, intent(in), dimension(:, :, :) :: dvdx, dvdy, dvdz
+    real(dp), device, intent(in), dimension(:, :, :) :: dwdx, dwdy, dwdz
+    integer, value, intent(in) :: n
+
+    real(dp) :: sij_sq
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      if (mixing_length_sq(i, j, b) > 0._dp) then
+        sij_sq = dudx(i, j, b)**2 + dvdy(i, j, b)**2 + &
+                 dwdz(i, j, b)**2 + &
+                 0.5_dp*(dudy(i, j, b) + dvdx(i, j, b))**2 + &
+                 0.5_dp*(dudz(i, j, b) + dwdx(i, j, b))**2 + &
+                 0.5_dp*(dvdz(i, j, b) + dwdy(i, j, b))**2
+        nut(i, j, b) = mixing_length_sq(i, j, b)*sqrt(2._dp*sij_sq)
+      else
+        nut(i, j, b) = 0._dp
+      end if
+    end do
+
+  end subroutine smagorinsky_from_gradients
+
   attributes(global) subroutine scalar_product(s, x, y, n, n_i_pad, n_j)
     implicit none
 
