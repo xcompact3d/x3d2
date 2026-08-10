@@ -9,9 +9,10 @@ module m_solver
                       RDR_Z2C, RDR_C2Z, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL, &
                       BC_NEUMANN, BC_DIRICHLET
-  use m_config, only: solver_config_t
+  use m_config, only: solver_config_t, les_config_t
   use m_field, only: field_t, flist_t
   use m_ibm, only: ibm_t
+  use m_les, only: les_t
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t
   use m_time_integrator, only: time_intg_t
@@ -70,11 +71,14 @@ module m_solver
     type(dirps_t), pointer :: xdirps, ydirps, zdirps
     type(vector_calculus_t) :: vector_calculus
     type(ibm_t) :: ibm
+    type(les_t) :: les
     logical :: ibm_on
     procedure(poisson_solver), pointer :: poisson => null()
     procedure(transport_equation), pointer :: transeq => null()
   contains
     procedure :: transeq_species
+    procedure :: apply_les
+    procedure :: finalise
     procedure :: pressure_correction
     procedure :: divergence_v2p
     procedure :: gradient_p2v
@@ -117,6 +121,7 @@ contains
     type(solver_t) :: solver
 
     type(solver_config_t) :: solver_cfg
+    type(les_config_t) :: les_cfg
     integer :: i
 
     solver%backend => backend
@@ -135,6 +140,10 @@ contains
     solver%w => solver%backend%allocator%get_block(DIR_X)
 
     call solver_cfg%read(nml_file=get_argument(1))
+    call les_cfg%read(nml_file=get_argument(1))
+    solver%les = les_t(les_cfg)
+    if (solver%mesh%par%is_root()) &
+      print *, 'LES model: ', trim(solver%les%model)
 
     ! Add transported species
     solver%nspecies = solver_cfg%n_species
@@ -381,6 +390,8 @@ contains
     call self%backend%allocator%release_block(dv_z)
     call self%backend%allocator%release_block(dw_z)
 
+    call self%apply_les(rhs, variables)
+
     ! Convection-diffusion for species
     if (self%nspecies > 0) then
       call self%transeq_species(rhs(4:), variables)
@@ -497,12 +508,34 @@ contains
     self%v => v
     self%w => w
 
+    call self%apply_les(rhs, variables)
+
     ! Convection-diffusion for species
     if (self%nspecies > 0) then
       call self%transeq_species(rhs(4:), variables)
     end if
 
   end subroutine transeq_lowmem
+
+  subroutine apply_les(self, rhs, variables)
+    !! Add the configured explicit SGS closure to the momentum RHS.
+    class(solver_t), intent(inout) :: self
+    type(flist_t), intent(inout) :: rhs(:)
+    type(flist_t), intent(in) :: variables(:)
+
+    call self%les%apply_sgs_stress( &
+      self%backend, self%mesh, &
+      rhs(1)%ptr, rhs(2)%ptr, rhs(3)%ptr, &
+      variables(1)%ptr, variables(2)%ptr, variables(3)%ptr, &
+      self%xdirps, self%ydirps, self%zdirps)
+  end subroutine apply_les
+
+  subroutine finalise(self)
+    !! Release resources owned by the solver and its runtime models.
+    class(solver_t), intent(inout) :: self
+
+    call self%les%finalise(self%backend)
+  end subroutine finalise
 
   subroutine transeq_species(self, rhs, variables)
     !! Skew-symmetric form of convection-diffusion terms in the

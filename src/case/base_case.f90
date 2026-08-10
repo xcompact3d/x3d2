@@ -137,6 +137,7 @@ contains
 
     call self%monitoring%finalise()
     call self%io_mgr%finalise()
+    call self%solver%finalise()
   end subroutine case_finalise
 
   subroutine set_init(self, field, field_func)

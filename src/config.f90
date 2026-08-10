@@ -221,7 +221,7 @@ contains
     character(*), optional, intent(in) :: nml_file
     character(*), optional, intent(in) :: nml_string
 
-    integer :: unit
+    integer :: unit, ierr
     character(len=20) :: model
     real(dp) :: smagorinsky_constant, wall_damping_n, von_karman_constant
     real(dp) :: roughness_length
@@ -240,9 +240,13 @@ contains
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading LES config failed! Provide only a file name or source.'
     else if (present(nml_file)) then
-      open (newunit=unit, file=nml_file)
-      read (unit, nml=les_params)
+      open (newunit=unit, file=nml_file, iostat=ierr)
+      if (ierr /= 0) error stop 'Opening LES config file failed.'
+      read (unit, nml=les_params, iostat=ierr)
       close (unit)
+      ! Existing input files may omit this optional namelist. End-of-file
+      ! therefore selects the defaults, while a malformed block remains fatal.
+      if (ierr > 0) error stop 'Reading LES config failed.'
     else if (present(nml_string)) then
       read (nml_string, nml=les_params)
     else
