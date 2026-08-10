@@ -43,6 +43,18 @@ module m_config
     procedure :: read => read_solver_nml
   end type solver_config_t
 
+  type, extends(base_config_t) :: les_config_t
+    !! Configuration for explicit sub-grid-scale modelling.
+    character(len=20) :: model = 'none'
+    real(dp) :: smagorinsky_constant = 0.14_dp
+    logical :: wall_damping = .false.
+    real(dp) :: wall_damping_n = 3._dp
+    real(dp) :: von_karman_constant = 0.4_dp
+    real(dp) :: roughness_length = 0._dp
+  contains
+    procedure :: read => read_les_nml
+  end type les_config_t
+
   type, extends(base_config_t) :: channel_config_t
     real(dp) :: omega_rot
     real(dp) :: init_noise(3)
@@ -203,6 +215,59 @@ contains
     self%stagder_scheme = stagder_scheme
 
   end subroutine read_solver_nml
+
+  subroutine read_les_nml(self, nml_file, nml_string)
+    class(les_config_t) :: self
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
+
+    integer :: unit
+    character(len=20) :: model
+    real(dp) :: smagorinsky_constant, wall_damping_n, von_karman_constant
+    real(dp) :: roughness_length
+    logical :: wall_damping
+
+    namelist /les_params/ model, smagorinsky_constant, wall_damping, &
+      wall_damping_n, von_karman_constant, roughness_length
+
+    model = self%model
+    smagorinsky_constant = self%smagorinsky_constant
+    wall_damping = self%wall_damping
+    wall_damping_n = self%wall_damping_n
+    von_karman_constant = self%von_karman_constant
+    roughness_length = self%roughness_length
+
+    if (present(nml_file) .and. present(nml_string)) then
+      error stop 'Reading LES config failed! Provide only a file name or source.'
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file)
+      read (unit, nml=les_params)
+      close (unit)
+    else if (present(nml_string)) then
+      read (nml_string, nml=les_params)
+    else
+      error stop 'Reading LES config failed! Provide a file name or source.'
+    end if
+
+    select case (trim(model))
+    case ('none', 'smagorinsky')
+    case default
+      error stop 'Unknown LES model. Use "none" or "smagorinsky".'
+    end select
+    if (smagorinsky_constant <= 0._dp) &
+      error stop 'smagorinsky_constant must be positive.'
+    if (von_karman_constant <= 0._dp .or. wall_damping_n <= 0._dp) &
+      error stop 'LES wall-damping constants must be positive.'
+    if (roughness_length < 0._dp) &
+      error stop 'roughness_length must not be negative.'
+
+    self%model = trim(model)
+    self%smagorinsky_constant = smagorinsky_constant
+    self%wall_damping = wall_damping
+    self%wall_damping_n = wall_damping_n
+    self%von_karman_constant = von_karman_constant
+    self%roughness_length = roughness_length
+  end subroutine read_les_nml
 
   subroutine read_channel_nml(self, nml_file, nml_string)
     implicit none

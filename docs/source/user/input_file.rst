@@ -1,6 +1,71 @@
 Input Parameters
 ----------------
 
+LES Parameters
+~~~~~~~~~~~~~~
+
+The explicit large-eddy simulation (LES) parameters are specified in the
+``les_params`` namelist block. The current implementation provides the shared
+Smagorinsky and wall-damping relations; computation of the field and its
+coupling to the momentum equations are under development. Until that coupling
+is complete, selecting ``'smagorinsky'`` does not alter a simulation.
+
+.. code-block:: fortran
+
+   &les_params
+     model = 'none'
+     smagorinsky_constant = 0.14
+     wall_damping = .false.
+     wall_damping_n = 3.0
+     von_karman_constant = 0.4
+     roughness_length = 0.0
+   /
+
+``model``: Explicit SGS model selector. Supported values are ``'none'`` and
+``'smagorinsky'``.
+  **Default:** ``'none'``
+
+``smagorinsky_constant``: Smagorinsky coefficient :math:`C_s`. Without wall
+damping, the mixing length is :math:`\ell_s=C_s\Delta`, where the local filter
+width is :math:`\Delta=(\Delta x\,\Delta y\,\Delta z)^{1/3}`. The eddy viscosity
+is
+
+.. math::
+
+   \nu_t = \ell_s^2 |S|, \qquad
+   |S| = \sqrt{2 S_{ij}S_{ij}}, \qquad
+   S_{ij} = \frac{1}{2}\left(
+     \frac{\partial u_i}{\partial x_j} +
+     \frac{\partial u_j}{\partial x_i}\right).
+
+  **Default:** ``0.14``
+
+``wall_damping``: Enables the Mason--Thomson mixing-length blend used by
+Incompact3d. For wall distance :math:`y` and roughness length :math:`z_0`,
+
+.. math::
+
+   \ell_s = \Delta\left[C_s^{-n} +
+   \left(\frac{\kappa(y+z_0)}{\Delta}\right)^{-n}\right]^{-1/n}.
+
+For a smooth wall (``roughness_length = 0``), this makes ``nut`` tend to zero
+at the wall and approach the undamped Smagorinsky value away from it.
+  **Default:** ``.false.``
+
+``wall_damping_n``: Exponent :math:`n` in the Mason--Thomson blend.
+  **Default:** ``3.0``
+
+``von_karman_constant``: von Karman constant :math:`\kappa` used by the
+wall-damping length scale.
+  **Default:** ``0.4``
+
+``roughness_length``: Aerodynamic roughness length :math:`z_0` in the same
+units as the mesh coordinates. Use ``0.0`` for a smooth wall.
+  **Default:** ``0.0``
+
+The Smagorinsky, wall-damping, and von Karman constants must be positive;
+``roughness_length`` must be non-negative.
+
 Checkpoint Parameters
 ~~~~~~~~~~~~~~~~~~~~~
 
