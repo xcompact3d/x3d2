@@ -29,6 +29,7 @@ module m_les
   contains
     procedure :: nut_from_gradient
     procedure :: compute_nut
+    procedure :: apply_sgs_stress
     procedure :: finalise
   end type les_t
 
@@ -165,6 +166,80 @@ contains
       call initialise_mixing_length(self, backend, mesh)
     end if
 
+    call compute_velocity_gradients( &
+      backend, u, v, w, xdirps, ydirps, zdirps, &
+      dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+
+    call backend%compute_smagorinsky_nut( &
+      self%nut, self%mixing_length_sq, &
+      dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+
+    call release_velocity_gradients( &
+      backend, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+  end subroutine compute_nut
+
+  subroutine apply_sgs_stress(self, backend, mesh, du, dv, dw, u, v, w, &
+                              xdirps, ydirps, zdirps)
+    !! Add div(2*nut*S_ij) to the momentum right-hand-side fields.
+    class(les_t), intent(inout) :: self
+    class(base_backend_t), intent(inout) :: backend
+    type(mesh_t), intent(in) :: mesh
+    class(field_t), intent(inout) :: du, dv, dw
+    class(field_t), intent(in) :: u, v, w
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+
+    class(field_t), pointer :: dudx, dudy, dudz
+    class(field_t), pointer :: dvdx, dvdy, dvdz
+    class(field_t), pointer :: dwdx, dwdy, dwdz
+
+    if (trim(self%model) == 'none') return
+    if (trim(self%model) /= 'smagorinsky') &
+      error stop 'Unsupported LES model in apply_sgs_stress.'
+    if (du%dir /= DIR_X .or. dv%dir /= DIR_X .or. dw%dir /= DIR_X) then
+      error stop 'LES momentum RHS fields must use DIR_X layout.'
+    end if
+    if (u%dir /= DIR_X .or. v%dir /= DIR_X .or. w%dir /= DIR_X) then
+      error stop 'LES velocity fields must use DIR_X layout.'
+    end if
+
+    if (.not. associated(self%nut)) &
+      self%nut => backend%allocator%get_block(DIR_X, VERT)
+    if (.not. associated(self%mixing_length_sq)) then
+      self%mixing_length_sq => backend%allocator%get_block(DIR_X, VERT)
+      call initialise_mixing_length(self, backend, mesh)
+    end if
+
+    call compute_velocity_gradients( &
+      backend, u, v, w, xdirps, ydirps, zdirps, &
+      dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    call backend%compute_smagorinsky_nut( &
+      self%nut, self%mixing_length_sq, &
+      dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+
+    call add_normal_stress(backend, du, self%nut, dudx, xdirps)
+    call add_normal_stress(backend, dv, self%nut, dvdy, ydirps)
+    call add_normal_stress(backend, dw, self%nut, dwdz, zdirps)
+    call add_shear_stress( &
+      backend, du, ydirps, dv, xdirps, self%nut, dudy, dvdx)
+    call add_shear_stress( &
+      backend, du, zdirps, dw, xdirps, self%nut, dudz, dwdx)
+    call add_shear_stress( &
+      backend, dv, zdirps, dw, ydirps, self%nut, dvdz, dwdy)
+
+    call release_velocity_gradients( &
+      backend, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+  end subroutine apply_sgs_stress
+
+  subroutine compute_velocity_gradients( &
+    backend, u, v, w, xdirps, ydirps, zdirps, &
+    dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    class(base_backend_t), intent(inout) :: backend
+    class(field_t), intent(in) :: u, v, w
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    class(field_t), pointer, intent(out) :: dudx, dudy, dudz
+    class(field_t), pointer, intent(out) :: dvdx, dvdy, dvdz
+    class(field_t), pointer, intent(out) :: dwdx, dwdy, dwdz
+
     call derivative_to_x(backend, dudx, u, xdirps)
     call derivative_to_x(backend, dvdx, v, xdirps)
     call derivative_to_x(backend, dwdx, w, xdirps)
@@ -174,10 +249,14 @@ contains
     call derivative_to_x(backend, dudz, u, zdirps)
     call derivative_to_x(backend, dvdz, v, zdirps)
     call derivative_to_x(backend, dwdz, w, zdirps)
+  end subroutine compute_velocity_gradients
 
-    call backend%compute_smagorinsky_nut( &
-      self%nut, self%mixing_length_sq, &
-      dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+  subroutine release_velocity_gradients( &
+    backend, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    class(base_backend_t), intent(inout) :: backend
+    class(field_t), pointer, intent(inout) :: dudx, dudy, dudz
+    class(field_t), pointer, intent(inout) :: dvdx, dvdy, dvdz
+    class(field_t), pointer, intent(inout) :: dwdx, dwdy, dwdz
 
     call backend%allocator%release_block(dudx)
     call backend%allocator%release_block(dudy)
@@ -188,7 +267,52 @@ contains
     call backend%allocator%release_block(dwdx)
     call backend%allocator%release_block(dwdy)
     call backend%allocator%release_block(dwdz)
-  end subroutine compute_nut
+  end subroutine release_velocity_gradients
+
+  subroutine add_normal_stress(backend, rhs, nut, gradient, direction)
+    class(base_backend_t), intent(inout) :: backend
+    class(field_t), intent(inout) :: rhs
+    class(field_t), intent(in) :: nut, gradient
+    type(dirps_t), intent(in) :: direction
+
+    class(field_t), pointer :: stress
+
+    stress => backend%allocator%get_block(DIR_X, VERT)
+    call backend%compute_sgs_stress( &
+      stress, nut, gradient, gradient, 2._dp, 0._dp)
+    call add_stress_derivative(backend, rhs, stress, direction)
+    call backend%allocator%release_block(stress)
+  end subroutine add_normal_stress
+
+  subroutine add_shear_stress( &
+    backend, rhs_a, direction_a, rhs_b, direction_b, nut, gradient_a, gradient_b)
+    class(base_backend_t), intent(inout) :: backend
+    class(field_t), intent(inout) :: rhs_a, rhs_b
+    type(dirps_t), intent(in) :: direction_a, direction_b
+    class(field_t), intent(in) :: nut, gradient_a, gradient_b
+
+    class(field_t), pointer :: stress
+
+    stress => backend%allocator%get_block(DIR_X, VERT)
+    call backend%compute_sgs_stress( &
+      stress, nut, gradient_a, gradient_b, 1._dp, 1._dp)
+    call add_stress_derivative(backend, rhs_a, stress, direction_a)
+    call add_stress_derivative(backend, rhs_b, stress, direction_b)
+    call backend%allocator%release_block(stress)
+  end subroutine add_shear_stress
+
+  subroutine add_stress_derivative(backend, rhs, stress, direction)
+    class(base_backend_t), intent(inout) :: backend
+    class(field_t), intent(inout) :: rhs
+    class(field_t), intent(in) :: stress
+    type(dirps_t), intent(in) :: direction
+
+    class(field_t), pointer :: derivative
+
+    call derivative_to_x(backend, derivative, stress, direction)
+    call backend%vecadd(1._dp, derivative, 1._dp, rhs)
+    call backend%allocator%release_block(derivative)
+  end subroutine add_stress_derivative
 
   subroutine derivative_to_x(backend, derivative, velocity, dirps)
     class(base_backend_t), intent(inout) :: backend

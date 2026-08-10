@@ -35,12 +35,13 @@ program test_les_field
   type(dirps_t) :: xdirps, ydirps, zdirps
   type(les_config_t) :: config
   type(les_t) :: les, les_wall
-  class(field_t), pointer :: u, v, w
+  class(field_t), pointer :: u, v, w, rhs_u, rhs_v, rhs_w
 
   integer, parameter :: dims_global(3) = [32, 33, 32]
   integer, parameter :: nproc_dir(3) = [1, 1, 1]
   real(dp), parameter :: lengths(3) = [1._dp, 1._dp, 1._dp]
   real(dp), parameter :: shear = 2.5_dp
+  real(dp), parameter :: curvature = 1.75_dp
   character(len=9), parameter :: bc_periodic(2) = &
     ['periodic ', 'periodic ']
   character(len=9), parameter :: bc_wall(2) = &
@@ -138,11 +139,56 @@ program test_les_field
   call check_error('smooth-wall nut', abs(nut_data(1, 1, 1)), &
                    tolerance, all_pass)
 
+  ! For u=(a/2)y^2, div(2*nut*S)_x=2*(Cs*Delta)^2*a^2*y.
+  u_data = 0._dp
+  do k = 1, dims(3)
+    do j = 1, dims(2)
+      do i = 1, dims(1)
+        u_data(i, j, k) = &
+          0.5_dp*curvature*mesh%geo%vert_coords(j, 2)**2
+      end do
+    end do
+  end do
+  call backend%set_field_data(u, u_data)
+
+  rhs_u => allocator%get_block(DIR_X, VERT)
+  rhs_v => allocator%get_block(DIR_X, VERT)
+  rhs_w => allocator%get_block(DIR_X, VERT)
+  call rhs_u%fill(0._dp)
+  call rhs_v%fill(0._dp)
+  call rhs_w%fill(0._dp)
+  call les%apply_sgs_stress(backend, mesh, rhs_u, rhs_v, rhs_w, u, v, w, &
+                            xdirps, ydirps, zdirps)
+
+  call backend%get_field_data(nut_data, rhs_u)
+  max_error = 0._dp
+  do k = 1, dims(3)
+    do j = 1, dims(2)
+      expected = 2._dp*(config%smagorinsky_constant*delta)**2* &
+                 curvature**2*mesh%geo%vert_coords(j, 2)
+      do i = 1, dims(1)
+        max_error = max(max_error, abs(nut_data(i, j, k) - expected))
+      end do
+    end do
+  end do
+  call check_error('SGS stress divergence', max_error, &
+                   10._dp*tolerance, all_pass)
+
+  call backend%get_field_data(nut_data, rhs_v)
+  call check_error('SGS y-momentum cross-coupling', &
+                   maxval(abs(nut_data)), 10._dp*tolerance, all_pass)
+  call backend%get_field_data(nut_data, rhs_w)
+  call check_error('SGS z-momentum cross-coupling', &
+                   maxval(abs(nut_data)), 10._dp*tolerance, all_pass)
+
   call les%finalise(backend)
   call les_wall%finalise(backend)
   call allocator%release_block(u)
   call allocator%release_block(v)
   call allocator%release_block(w)
+  call allocator%release_block(rhs_u)
+  call allocator%release_block(rhs_v)
+  call allocator%release_block(rhs_w)
   deallocate (u_data, nut_data)
 
   if (.not. all_pass) error stop 'FAIL'

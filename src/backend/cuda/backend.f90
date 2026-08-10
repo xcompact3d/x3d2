@@ -30,7 +30,8 @@ module m_cuda_backend
                                      pwmul, volume_integral, &
                                      vorticity_from_gradients, &
                                      qcriterion_from_gradients, &
-                                     smagorinsky_from_gradients
+                                     smagorinsky_from_gradients, &
+                                     sgs_stress_from_gradients
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
                                     reorder_c2x, reorder_x2c, &
@@ -73,6 +74,7 @@ module m_cuda_backend
     procedure :: compute_vorticity => compute_vorticity_cuda
     procedure :: compute_qcriterion => compute_qcriterion_cuda
     procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_cuda
+    procedure :: compute_sgs_stress => compute_sgs_stress_cuda
     procedure :: field_volume_integral => field_volume_integral_cuda
     procedure :: copy_data_to_f => copy_data_to_f_cuda
     procedure :: copy_f_to_data => copy_f_to_data_cuda
@@ -856,6 +858,33 @@ contains
       dvdx_d, dvdy_d, dvdz_d, dwdx_d, dwdy_d, dwdz_d, n) !&
 
   end subroutine compute_smagorinsky_nut_cuda
+
+  subroutine compute_sgs_stress_cuda( &
+    self, stress, nut, gradient_a, gradient_b, scale_a, scale_b)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: stress
+    class(field_t), intent(in) :: nut, gradient_a, gradient_b
+    real(dp), intent(in) :: scale_a, scale_b
+
+    real(dp), device, pointer, dimension(:, :, :) :: &
+      stress_d, nut_d, gradient_a_d, gradient_b_d
+    type(dim3) :: blocks, threads
+    integer :: n
+
+    call resolve_field_t(stress_d, stress)
+    call resolve_field_t(nut_d, nut)
+    call resolve_field_t(gradient_a_d, gradient_a)
+    call resolve_field_t(gradient_b_d, gradient_b)
+
+    n = size(stress_d, dim=2)
+    blocks = dim3(size(stress_d, dim=3), 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call sgs_stress_from_gradients<<<blocks, threads>>>( &
+      stress_d, nut_d, gradient_a_d, gradient_b_d, &
+      scale_a, scale_b, n) !&
+  end subroutine compute_sgs_stress_cuda
 
   real(dp) function scalar_product_cuda(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]

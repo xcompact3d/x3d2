@@ -199,6 +199,31 @@ contains
 
   end subroutine smagorinsky_from_gradients
 
+  attributes(global) subroutine sgs_stress_from_gradients( &
+    stress, nut, gradient_a, gradient_b, scale_a, scale_b, n)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: stress
+    real(dp), device, intent(in), dimension(:, :, :) :: &
+      nut, gradient_a, gradient_b
+    real(dp), value, intent(in) :: scale_a, scale_b
+    integer, value, intent(in) :: n
+
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      if (nut(i, j, b) > 0._dp) then
+        stress(i, j, b) = nut(i, j, b)*( &
+          scale_a*gradient_a(i, j, b) + scale_b*gradient_b(i, j, b))
+      else
+        stress(i, j, b) = 0._dp
+      end if
+    end do
+  end subroutine sgs_stress_from_gradients
+
   attributes(global) subroutine scalar_product(s, x, y, n, n_i_pad, n_j)
     implicit none
 

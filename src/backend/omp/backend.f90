@@ -51,6 +51,7 @@ module m_omp_backend
     procedure :: compute_vorticity => compute_vorticity_omp
     procedure :: compute_qcriterion => compute_qcriterion_omp
     procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_omp
+    procedure :: compute_sgs_stress => compute_sgs_stress_omp
     procedure :: field_volume_integral => field_volume_integral_omp
     procedure :: copy_data_to_f => copy_data_to_f_omp
     procedure :: copy_f_to_data => copy_f_to_data_omp
@@ -691,6 +692,35 @@ contains
     !$omp end parallel do
 
   end subroutine compute_smagorinsky_nut_omp
+
+  subroutine compute_sgs_stress_omp( &
+    self, stress, nut, gradient_a, gradient_b, scale_a, scale_b)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: stress
+    class(field_t), intent(in) :: nut, gradient_a, gradient_b
+    real(dp), intent(in) :: scale_a, scale_b
+    integer :: i, j, k
+
+    !$omp parallel do collapse(2)
+    do k = 1, size(stress%data, 3)
+      do j = 1, size(stress%data, 2)
+        !$omp simd
+        do i = 1, size(stress%data, 1)
+          if (nut%data(i, j, k) > 0._dp) then
+            stress%data(i, j, k) = nut%data(i, j, k)*( &
+              scale_a*gradient_a%data(i, j, k) + &
+              scale_b*gradient_b%data(i, j, k))
+          else
+            stress%data(i, j, k) = 0._dp
+          end if
+        end do
+        !$omp end simd
+      end do
+    end do
+    !$omp end parallel do
+  end subroutine compute_sgs_stress_omp
 
   real(dp) function scalar_product_omp(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]
