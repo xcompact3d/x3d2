@@ -52,6 +52,7 @@ module m_base_backend
     procedure(field_set_face_from_field), deferred :: field_set_face_from_field
     procedure(derive_field_from_gradients), deferred :: compute_vorticity
     procedure(derive_field_from_gradients), deferred :: compute_qcriterion
+    procedure(smagorinsky_from_gradients), deferred :: compute_smagorinsky_nut
     procedure(copy_data_to_f), deferred :: copy_data_to_f
     procedure(copy_f_to_data), deferred :: copy_f_to_data
     procedure(alloc_tdsops), deferred :: alloc_tdsops
@@ -322,6 +323,24 @@ module m_base_backend
       class(field_t), intent(in) :: dvdx, dvdy, dvdz
       class(field_t), intent(in) :: dwdx, dwdy, dwdz
     end subroutine derive_field_from_gradients
+  end interface
+
+  abstract interface
+    subroutine smagorinsky_from_gradients( &
+      self, nut, mixing_length_sq, dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+      dwdx, dwdy, dwdz)
+      !! Computes nut=l_s^2*sqrt(2*S_ij*S_ij) from velocity gradients.
+      import :: base_backend_t
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: nut
+      class(field_t), intent(in) :: mixing_length_sq
+      class(field_t), intent(in) :: dudx, dudy, dudz
+      class(field_t), intent(in) :: dvdx, dvdy, dvdz
+      class(field_t), intent(in) :: dwdx, dwdy, dwdz
+    end subroutine smagorinsky_from_gradients
   end interface
 
   abstract interface

@@ -50,6 +50,7 @@ module m_omp_backend
     procedure :: field_set_face_from_field => field_set_face_from_field_omp
     procedure :: compute_vorticity => compute_vorticity_omp
     procedure :: compute_qcriterion => compute_qcriterion_omp
+    procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_omp
     procedure :: field_volume_integral => field_volume_integral_omp
     procedure :: copy_data_to_f => copy_data_to_f_omp
     procedure :: copy_f_to_data => copy_f_to_data_omp
@@ -648,6 +649,49 @@ contains
 
   end subroutine compute_qcriterion_omp
 
+  subroutine compute_smagorinsky_nut_omp( &
+    self, nut, mixing_length_sq, dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+    dwdx, dwdy, dwdz)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: nut
+    class(field_t), intent(in) :: mixing_length_sq
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    real(dp) :: sij_sq
+    integer :: i, j, k
+
+    !$omp parallel do private(sij_sq) collapse(2)
+    do k = 1, size(nut%data, 3)
+      do j = 1, size(nut%data, 2)
+        !$omp simd private(sij_sq)
+        do i = 1, size(nut%data, 1)
+          if (mixing_length_sq%data(i, j, k) > 0._dp) then
+            sij_sq = dudx%data(i, j, k)**2 + &
+                     dvdy%data(i, j, k)**2 + &
+                     dwdz%data(i, j, k)**2 + &
+                     0.5_dp*(dudy%data(i, j, k) + &
+                             dvdx%data(i, j, k))**2 + &
+                     0.5_dp*(dudz%data(i, j, k) + &
+                             dwdx%data(i, j, k))**2 + &
+                     0.5_dp*(dvdz%data(i, j, k) + &
+                             dwdy%data(i, j, k))**2
+            nut%data(i, j, k) = mixing_length_sq%data(i, j, k)* &
+                                 sqrt(2._dp*sij_sq)
+          else
+            nut%data(i, j, k) = 0._dp
+          end if
+        end do
+        !$omp end simd
+      end do
+    end do
+    !$omp end parallel do
+
+  end subroutine compute_smagorinsky_nut_omp
+
   real(dp) function scalar_product_omp(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]
     implicit none
@@ -1108,4 +1152,3 @@ contains
   end subroutine init_omp_poisson_fft
 
 end module m_omp_backend
-

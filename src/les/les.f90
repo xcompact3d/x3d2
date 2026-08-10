@@ -1,11 +1,15 @@
 module m_les
   !! Shared physics for explicit eddy-viscosity LES models.
   !!
-  !! The field-level implementation will use backend derivative and pointwise
-  !! operations.  Keeping these scalar relations here gives both backends one
-  !! definition of the model and makes the closure independently testable.
-  use m_common, only: dp
+  !! Derivatives and data movement are orchestrated here, while pointwise
+  !! operations are dispatched to the selected computational backend.
+  use m_base_backend, only: base_backend_t
+  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, &
+                      RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Z2X
   use m_config, only: les_config_t
+  use m_field, only: field_t
+  use m_mesh, only: mesh_t
+  use m_tdsops, only: dirps_t
 
   implicit none
 
@@ -20,8 +24,12 @@ module m_les
     real(dp) :: wall_damping_n = 3._dp
     real(dp) :: von_karman_constant = 0.4_dp
     real(dp) :: roughness_length = 0._dp
+    class(field_t), pointer :: nut => null()
+    class(field_t), pointer :: mixing_length_sq => null()
   contains
     procedure :: nut_from_gradient
+    procedure :: compute_nut
+    procedure :: finalise
   end type les_t
 
   interface les_t
@@ -121,5 +129,170 @@ contains
     end if
     nut = smagorinsky_nut(velocity_gradient, length)
   end function nut_from_gradient
+
+  subroutine compute_nut(self, backend, mesh, u, v, w, &
+                         xdirps, ydirps, zdirps)
+    !! Compute the Smagorinsky eddy-viscosity field in DIR_X layout.
+    class(les_t), intent(inout) :: self
+    class(base_backend_t), intent(inout) :: backend
+    type(mesh_t), intent(in) :: mesh
+    class(field_t), intent(in) :: u, v, w
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+
+    class(field_t), pointer :: dudx, dudy, dudz
+    class(field_t), pointer :: dvdx, dvdy, dvdz
+    class(field_t), pointer :: dwdx, dwdy, dwdz
+
+    if (u%dir /= DIR_X .or. v%dir /= DIR_X .or. w%dir /= DIR_X) then
+      error stop 'LES velocity fields must use DIR_X layout.'
+    end if
+
+    if (.not. associated(self%nut)) then
+      self%nut => backend%allocator%get_block(DIR_X, VERT)
+    end if
+
+    select case (trim(self%model))
+    case ('none')
+      call self%nut%fill(0._dp)
+      return
+    case ('smagorinsky')
+    case default
+      error stop 'Unsupported LES model in compute_nut.'
+    end select
+
+    if (.not. associated(self%mixing_length_sq)) then
+      self%mixing_length_sq => backend%allocator%get_block(DIR_X, VERT)
+      call initialise_mixing_length(self, backend, mesh)
+    end if
+
+    call derivative_to_x(backend, dudx, u, xdirps)
+    call derivative_to_x(backend, dvdx, v, xdirps)
+    call derivative_to_x(backend, dwdx, w, xdirps)
+    call derivative_to_x(backend, dudy, u, ydirps)
+    call derivative_to_x(backend, dvdy, v, ydirps)
+    call derivative_to_x(backend, dwdy, w, ydirps)
+    call derivative_to_x(backend, dudz, u, zdirps)
+    call derivative_to_x(backend, dvdz, v, zdirps)
+    call derivative_to_x(backend, dwdz, w, zdirps)
+
+    call backend%compute_smagorinsky_nut( &
+      self%nut, self%mixing_length_sq, &
+      dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+
+    call backend%allocator%release_block(dudx)
+    call backend%allocator%release_block(dudy)
+    call backend%allocator%release_block(dudz)
+    call backend%allocator%release_block(dvdx)
+    call backend%allocator%release_block(dvdy)
+    call backend%allocator%release_block(dvdz)
+    call backend%allocator%release_block(dwdx)
+    call backend%allocator%release_block(dwdy)
+    call backend%allocator%release_block(dwdz)
+  end subroutine compute_nut
+
+  subroutine derivative_to_x(backend, derivative, velocity, dirps)
+    class(base_backend_t), intent(inout) :: backend
+    class(field_t), pointer, intent(out) :: derivative
+    class(field_t), intent(in) :: velocity
+    type(dirps_t), intent(in) :: dirps
+
+    class(field_t), pointer :: velocity_dir, derivative_dir
+
+    derivative => backend%allocator%get_block(DIR_X)
+    select case (dirps%dir)
+    case (DIR_X)
+      call backend%tds_solve(derivative, velocity, dirps%der1st)
+    case (DIR_Y)
+      velocity_dir => backend%allocator%get_block(DIR_Y)
+      derivative_dir => backend%allocator%get_block(DIR_Y)
+      call backend%reorder(velocity_dir, velocity, RDR_X2Y)
+      call backend%tds_solve(derivative_dir, velocity_dir, dirps%der1st)
+      call backend%reorder(derivative, derivative_dir, RDR_Y2X)
+      call backend%allocator%release_block(velocity_dir)
+      call backend%allocator%release_block(derivative_dir)
+    case (DIR_Z)
+      velocity_dir => backend%allocator%get_block(DIR_Z)
+      derivative_dir => backend%allocator%get_block(DIR_Z)
+      call backend%reorder(velocity_dir, velocity, RDR_X2Z)
+      call backend%tds_solve(derivative_dir, velocity_dir, dirps%der1st)
+      call backend%reorder(derivative, derivative_dir, RDR_Z2X)
+      call backend%allocator%release_block(velocity_dir)
+      call backend%allocator%release_block(derivative_dir)
+    case default
+      error stop 'Invalid derivative direction in LES.'
+    end select
+  end subroutine derivative_to_x
+
+  subroutine initialise_mixing_length(self, backend, mesh)
+    class(les_t), intent(in) :: self
+    class(base_backend_t), intent(inout) :: backend
+    type(mesh_t), intent(in) :: mesh
+
+    real(dp), allocatable :: mixing_data(:, :, :)
+    real(dp) :: delta, length, spacing(3), wall_distance, y_lower
+    integer :: dims(3), dims_padded(3), i, j, k
+
+    dims = mesh%get_dims(VERT)
+    dims_padded = backend%allocator%get_padded_dims(DIR_C)
+    allocate (mixing_data(dims_padded(1), dims_padded(2), dims_padded(3)))
+    mixing_data = 0._dp
+
+    y_lower = 0._dp
+    if (trim(mesh%geo%stretching(2)) == 'centred') &
+      y_lower = -0.5_dp*mesh%geo%L(2)
+
+    do k = 1, dims(3)
+      spacing(3) = spacing_at_vertex(mesh, k, 3, dims(3))
+      do j = 1, dims(2)
+        spacing(2) = spacing_at_vertex(mesh, j, 2, dims(2))
+        wall_distance = max(mesh%geo%vert_coords(j, 2) - y_lower, 0._dp)
+        do i = 1, dims(1)
+          spacing(1) = spacing_at_vertex(mesh, i, 1, dims(1))
+          delta = filter_width(spacing)
+          length = self%smagorinsky_constant*delta
+          if (self%wall_damping) then
+            length = wall_damped_mixing_length( &
+              delta, wall_distance, self%smagorinsky_constant, &
+              self%von_karman_constant, self%wall_damping_n, &
+              self%roughness_length)
+          end if
+          mixing_data(i, j, k) = length**2
+        end do
+      end do
+    end do
+
+    call backend%set_field_data(self%mixing_length_sq, mixing_data)
+    deallocate (mixing_data)
+  end subroutine initialise_mixing_length
+
+  pure real(dp) function spacing_at_vertex(mesh, index, direction, n) &
+    result(spacing)
+    type(mesh_t), intent(in) :: mesh
+    integer, intent(in) :: index, direction, n
+
+    if (.not. mesh%geo%stretched(direction) .or. n == 1) then
+      spacing = mesh%geo%d(direction)
+    else if (index < n) then
+      spacing = abs(mesh%geo%vert_coords(index + 1, direction) - &
+                    mesh%geo%vert_coords(index, direction))
+    else
+      spacing = abs(mesh%geo%vert_coords(index, direction) - &
+                    mesh%geo%vert_coords(index - 1, direction))
+    end if
+  end function spacing_at_vertex
+
+  subroutine finalise(self, backend)
+    class(les_t), intent(inout) :: self
+    class(base_backend_t), intent(inout) :: backend
+
+    if (associated(self%nut)) then
+      call backend%allocator%release_block(self%nut)
+      nullify (self%nut)
+    end if
+    if (associated(self%mixing_length_sq)) then
+      call backend%allocator%release_block(self%mixing_length_sq)
+      nullify (self%mixing_length_sq)
+    end if
+  end subroutine finalise
 
 end module m_les
