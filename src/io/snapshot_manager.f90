@@ -120,6 +120,7 @@ contains
     real(dp), dimension(3) :: origin, original_spacing, output_spacing
     real(dp) :: simulation_time
     logical :: snapshot_uses_stride = .true.
+    logical :: first_step_of_run
     integer :: i
 
     if (self%config%snapshot_freq <= 0) return
@@ -142,7 +143,8 @@ contains
     write (filename, '(A,A)') trim(self%config%snapshot_prefix), '.bp'
 
     ! Open snapshot file on first call (check for existence)
-    if (.not. self%is_snapshot_file_open) then
+    first_step_of_run = .not. self%is_snapshot_file_open
+    if (first_step_of_run) then
       call self%open_snapshot_file(filename, comm)
     else
       ! For subsequent snapshots, begin a new step
@@ -175,8 +177,10 @@ contains
         ' iteration =', timestep
     end if
 
-    ! Write VTK XML attributes for ParaView compatibility (only on first step)
-    if (timestep == self%config%snapshot_freq .and. myrank == 0) then
+    ! Write VTK XML attribute for ParaView compatibility on the first step of
+    ! this run (fresh or restarted) so the file is always tagged, independent
+    ! of the absolute timestep at which snapshot output begins.
+    if (first_step_of_run .and. myrank == 0) then
       call self%snapshot_writer%write_attribute("vtk.xml", self%vtk_xml)
     end if
 
