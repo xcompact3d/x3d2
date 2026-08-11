@@ -163,7 +163,7 @@ if(WITH_2DECOMPFFT)
   target_compile_options(x3d2_backends PRIVATE "-DWITH_2DECOMPFFT")
 endif()
 
-find_package(OpenMP REQUIRED)
+# OpenMP is resolved once at the top level (see the root CMakeLists.txt).
 target_link_libraries(x3d2 PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(x3d2_backends PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(xcompact PRIVATE OpenMP::OpenMP_Fortran)
