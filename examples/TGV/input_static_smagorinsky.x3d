@@ -6,10 +6,10 @@ flow_case_name = 'tgv'
 L_global = 6.283185307179586d0, 6.283185307179586d0, 6.283185307179586d0
 
 ! Global number of cells in each direction
-dims_global = 256, 256, 256
+dims_global = 160, 160, 160
 
 ! Domain decomposition in each direction
-nproc_dir = 1, 1, 2
+nproc_dir = 1, 1, 1
 
 ! BC options are 'periodic' | 'neumann' | 'dirichlet'
 BC_x = 'periodic', 'periodic'
@@ -18,14 +18,23 @@ BC_z = 'periodic', 'periodic'
 /End
 
 &solver_params
-Re = 1600d0
-time_intg = 'AB3' ! 'AB[1-4]' | 'RK[1-4]'
-dt = 0.001d0
-n_iters = 20000
-n_output = 100
+Re = 5000d0
+time_intg = 'RK3' ! 'AB[1-4]' | 'RK[1-4]'
+dt = 0.0025d0
+n_iters = 8000
+
+! Write monitoring every 0.02 time units, matching the DNS reference data.
+n_output = 8
+
 poisson_solver_type = 'FFT' ! 'FFT' | 'CG'
 der1st_scheme = 'compact6'
 der2nd_scheme = 'compact6' ! 'compact6' | 'compact6-hyperviscous'
-interpl_scheme = 'classic' ! 'classic' | 'optimised' | 'aggressive'
+interpl_scheme = 'aggressive' ! 'classic' | 'optimised' | 'aggressive'
 stagder_scheme = 'compact6'
+/End
+
+&les_params
+model = 'smagorinsky'
+smagorinsky_constant = 0.1d0
+wall_damping = .false.
 /End
