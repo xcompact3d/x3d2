@@ -216,8 +216,9 @@ contains
 
     do j = 1, n
       if (nut(i, j, b) > 0._dp) then
-        stress(i, j, b) = nut(i, j, b)*( &
-          scale_a*gradient_a(i, j, b) + scale_b*gradient_b(i, j, b))
+        stress(i, j, b) = nut(i, j, b)* &
+                          (scale_a*gradient_a(i, j, b) &
+                           + scale_b*gradient_b(i, j, b))
       else
         stress(i, j, b) = 0._dp
       end if

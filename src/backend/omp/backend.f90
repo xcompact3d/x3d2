@@ -682,7 +682,7 @@ contains
                      0.5_dp*(dvdz%data(i, j, k) + &
                              dwdy%data(i, j, k))**2
             nut%data(i, j, k) = mixing_length_sq%data(i, j, k)* &
-                                 sqrt(2._dp*sij_sq)
+                                sqrt(2._dp*sij_sq)
           else
             nut%data(i, j, k) = 0._dp
           end if
@@ -711,8 +711,8 @@ contains
         do i = 1, size(stress%data, 1)
           if (nut%data(i, j, k) > 0._dp) then
             stress%data(i, j, k) = nut%data(i, j, k)*( &
-              scale_a*gradient_a%data(i, j, k) + &
-              scale_b*gradient_b%data(i, j, k))
+                                   scale_a*gradient_a%data(i, j, k) + &
+                                   scale_b*gradient_b%data(i, j, k))
           else
             stress%data(i, j, k) = 0._dp
           end if
