@@ -238,7 +238,8 @@ contains
     roughness_length = self%roughness_length
 
     if (present(nml_file) .and. present(nml_string)) then
-      error stop 'Reading LES config failed! Provide only a file name or source.'
+      error stop 'Reading LES config failed! &
+                 & Provide only a file name or source.'
     else if (present(nml_file)) then
       open (newunit=unit, file=nml_file, iostat=ierr)
       if (ierr /= 0) error stop 'Opening LES config file failed.'

@@ -80,8 +80,8 @@ contains
   end function strain_rate_magnitude
 
   pure real(dp) function wall_damped_mixing_length( &
-    delta, wall_distance, smagorinsky_constant, von_karman_constant, exponent, &
-    roughness_length) result(length)
+    delta, wall_distance, smagorinsky_constant, von_karman_constant, &
+    exponent, roughness_length) result(length)
     !! Mason-Thomson blend used by Incompact3d's ABL Smagorinsky path.
     real(dp), intent(in) :: delta, wall_distance, smagorinsky_constant
     real(dp), intent(in) :: von_karman_constant, exponent, roughness_length
@@ -124,9 +124,11 @@ contains
         nut = 0._dp
         return
       end if
-      length = wall_damped_mixing_length(delta, wall_distance, &
-        self%smagorinsky_constant, self%von_karman_constant, &
-        self%wall_damping_n, self%roughness_length)
+      length = wall_damped_mixing_length( &
+               delta, wall_distance, &
+               self%smagorinsky_constant, self%von_karman_constant, &
+               self%wall_damping_n, self%roughness_length &
+               )
     end if
     nut = smagorinsky_nut(velocity_gradient, length)
   end function nut_from_gradient
@@ -285,7 +287,9 @@ contains
   end subroutine add_normal_stress
 
   subroutine add_shear_stress( &
-    backend, rhs_a, direction_a, rhs_b, direction_b, nut, gradient_a, gradient_b)
+    backend, rhs_a, direction_a, rhs_b, &
+    direction_b, nut, gradient_a, gradient_b &
+    )
     class(base_backend_t), intent(inout) :: backend
     class(field_t), intent(inout) :: rhs_a, rhs_b
     type(dirps_t), intent(in) :: direction_a, direction_b
@@ -376,9 +380,9 @@ contains
           length = self%smagorinsky_constant*delta
           if (self%wall_damping) then
             length = wall_damped_mixing_length( &
-              delta, wall_distance, self%smagorinsky_constant, &
-              self%von_karman_constant, self%wall_damping_n, &
-              self%roughness_length)
+                     delta, wall_distance, self%smagorinsky_constant, &
+                     self%von_karman_constant, self%wall_damping_n, &
+                     self%roughness_length)
           end if
           mixing_data(i, j, k) = length**2
         end do

@@ -230,7 +230,8 @@ module m_base_backend
   end interface
 
   abstract interface
-    real(dp) function vector_norm_squared_op(self, a, b, c) result(norm_squared)
+    real(dp) function vector_norm_squared_op(self, a, b, c) &
+      result(norm_squared)
       !! Computes the global discrete squared norm of a three-component field.
       import :: base_backend_t
       import :: dp
