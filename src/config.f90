@@ -198,7 +198,7 @@ contains
     character(30) :: der1st_scheme = 'compact6', der2nd_scheme = 'compact6', &
                      interpl_scheme = 'classic', stagder_scheme = 'compact6'
     !> hyperviscous (iSVV) der2nd parameters; only used when der2nd_scheme is
-    !> 'compact6-hyperviscous' (legacy cnu, nu0nu). Harmless defaults otherwise.
+    !> 'compact6-hyperviscous' (Incompact3d cnu, nu0nu). Harmless defaults otherwise.
     real(dp) :: c_nu = 0.44_dp, nu0_nu = 0._dp
 
     namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &

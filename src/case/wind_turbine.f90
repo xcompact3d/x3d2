@@ -258,14 +258,14 @@ contains
     !! an exact uniform mass correction to the outlet, reproducing the
     !! Incompact3d treatment (outflow + pre_correc).
     !!
-    !! Steps (mirroring legacy exactly):
+    !! Steps (mirroring Incompact3d exactly):
     !!  1. cx = 0.5*(uxmax + uxmin)*gdt/dx from the post-integration field.
     !!  2. Convective outflow at x=nx and Dirichlet inflow at x=1 for u,v,w
     !!     (no correction yet):  u(nx) = u(nx) - cx*(u(nx) - u(nx-1)).
     !!  3. Measure the inlet mean (from the prescribed Dirichlet plane) and
     !!     the outlet mean AFTER the convective update, then shift the outlet
     !!     plane of u uniformly so mean(u_outlet) = mean(u_inlet) exactly
-    !!     (legacy: bxxn = bxxn - ut + ut1). Applied to u only.
+    !!     (Incompact3d: bxxn = bxxn - ut + ut1). Applied to u only.
     implicit none
     class(case_wind_turbine_t) :: self
     class(field_t), intent(inout) :: u, v, w
@@ -296,7 +296,7 @@ contains
       w, self%bc_start_w_x, out_vel, X_FACE, &
       bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET)
 
-    ! Exact mass conservation (legacy bxxn = bxxn - ut + ut1):
+    ! Exact mass conservation (Incompact3d bxxn = bxxn - ut + ut1):
     ! ut1 = mean of the prescribed inlet plane (bc_start_u_x at x=1),
     ! ut  = mean of the outlet plane AFTER the convective update (u at x=nx).
     call self%solver%backend%slice_max_sum( &
