@@ -288,7 +288,7 @@ contains
     accumulate_stats = self%recompute_forces &
                        .and. self%current_iter >= self%stats_start &
                        .and. mod(self%current_iter - self%stats_start, &
-                                self%stats_freq) == 0
+                                 self%stats_freq) == 0
     if (accumulate_stats) then
       self%sample_count = self%sample_count + 1
       stat_inc = 1._dp/real(self%sample_count, dp)
@@ -387,9 +387,13 @@ contains
 
     character(len=32) :: filename
     character(len=16), parameter :: columns(7) = &
-      ['U_disc          ', 'U_disc_filt     ', 'power           ', &
-       'thrust          ', 'U_disc_mean     ', 'power_mean      ', &
-       'thrust_mean     ']
+                                    ['U_disc          ', &
+                                     'U_disc_filt     ', &
+                                     'power           ', &
+                                     'thrust          ', &
+                                     'U_disc_mean     ', &
+                                     'power_mean      ', &
+                                     'thrust_mean     ']
     integer :: t
 
     allocate (self%output(self%n_turb))

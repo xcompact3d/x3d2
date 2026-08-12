@@ -399,8 +399,9 @@ contains
     real(dp) :: rho_air = 1._dp
     real(dp) :: T_relax = -1._dp
 
-    namelist /wind_turbine_nml/ init_noise, inlet_noise, bc_start_u, bc_start_v, &
-      bc_start_w, iturbine, iturboutput, adm_coords, rho_air, T_relax
+    namelist /wind_turbine_nml/ init_noise, inlet_noise, bc_start_u, &
+      bc_start_v, bc_start_w, iturbine, iturboutput, adm_coords, &
+      rho_air, T_relax
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading wind_turbine config failed! &

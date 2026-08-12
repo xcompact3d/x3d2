@@ -644,13 +644,13 @@ contains
     class(field_t), intent(in) :: dwdx, dwdy, dwdz
 
     field_out%data = 0.5_dp*(dudx%data + dvdy%data + dwdz%data) &
-                  *(dudx%data + dvdy%data + dwdz%data) - &
-             0.5_dp*(dudx%data*dudx%data + &
-                 dvdy%data*dvdy%data + &
-                 dwdz%data*dwdz%data) - &
-             dudy%data*dvdx%data - &
-             dudz%data*dwdx%data - &
-             dvdz%data*dwdy%data
+                     *(dudx%data + dvdy%data + dwdz%data) - &
+                     0.5_dp*(dudx%data*dudx%data + &
+                             dvdy%data*dvdy%data + &
+                             dwdz%data*dwdz%data) - &
+                     dudy%data*dvdx%data - &
+                     dudz%data*dwdx%data - &
+                     dvdz%data*dwdy%data
 
   end subroutine compute_qcriterion_omp
 

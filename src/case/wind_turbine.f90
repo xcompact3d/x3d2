@@ -77,8 +77,10 @@ contains
         turbine%coords_file = flow_case%wt_cfg%adm_coords
         turbine%rho_air = flow_case%wt_cfg%rho_air
         turbine%T_relax = flow_case%wt_cfg%T_relax
-        turbine%stats_start = max(1, flow_case%io_mgr%stats_mgr%config%initstat)
-        turbine%stats_freq = max(1, flow_case%io_mgr%stats_mgr%config%istatfreq)
+        turbine%stats_start = &
+          max(1, flow_case%io_mgr%stats_mgr%config%initstat)
+        turbine%stats_freq = &
+          max(1, flow_case%io_mgr%stats_mgr%config%istatfreq)
       end select
     case (0)
       allocate (turbine_dummy_t :: flow_case%turbine)
@@ -235,11 +237,11 @@ contains
     do k = 1, dims(3)
       do j = 1, dims(2)
         hu%data(1, j, k) = self%wt_cfg%bc_start_u &
-                         + noise(1)*um*(2._dp*hu%data(1, j, k) - 1._dp)
+                           + noise(1)*um*(2._dp*hu%data(1, j, k) - 1._dp)
         hv%data(1, j, k) = self%wt_cfg%bc_start_v &
-                         + noise(2)*um*(2._dp*hv%data(1, j, k) - 1._dp)
+                           + noise(2)*um*(2._dp*hv%data(1, j, k) - 1._dp)
         hw%data(1, j, k) = self%wt_cfg%bc_start_w &
-                         + noise(3)*um*(2._dp*hw%data(1, j, k) - 1._dp)
+                           + noise(3)*um*(2._dp*hw%data(1, j, k) - 1._dp)
       end do
     end do
 
