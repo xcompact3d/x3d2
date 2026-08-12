@@ -137,6 +137,15 @@ contains
     call self%finalise_case_specific()
     if (self%solver%mesh%par%is_root()) print *, 'run end'
 
+    ! release the persistent inflow-BC planes allocated by cases that use
+    ! them
+    if (associated(self%bc_start_u_x)) &
+      call self%solver%backend%allocator%release_block(self%bc_start_u_x)
+    if (associated(self%bc_start_v_x)) &
+      call self%solver%backend%allocator%release_block(self%bc_start_v_x)
+    if (associated(self%bc_start_w_x)) &
+      call self%solver%backend%allocator%release_block(self%bc_start_w_x)
+
     call self%monitoring%finalise()
     call self%io_mgr%finalise()
     call self%solver%finalise()

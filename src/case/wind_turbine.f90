@@ -62,6 +62,10 @@ contains
     call flow_case%wt_cfg%read(nml_file=get_argument(1))
     call flow_case%case_init(backend, mesh, host_allocator)
 
+    ! Seed the RNG deterministically, offset by rank, so inlet-noise runs are
+    ! reproducible for a fixed decomposition while ranks stay decorrelated.
+    call seed_rng(flow_case%solver%mesh%par%nrank)
+
     ! Select and initialise the turbine forcing model. This is the only place
     ! the iturbine switch lives; downstream the case calls the polymorphic
     ! turbine object with no branching.
@@ -97,6 +101,20 @@ contains
     ! Optional outflow sponge/relaxation zone (off by default).
     call flow_case%init_sponge()
   end function case_wind_turbine_init
+
+  subroutine seed_rng(nrank)
+    !! Deterministic, rank-offset seeding of the intrinsic RNG.
+    integer, intent(in) :: nrank
+    ! Odd multiplier that spreads the seed array over distinct values.
+    integer, parameter :: seed_stride = 37
+    integer :: seed_size, s
+    integer, allocatable :: seed(:)
+
+    call random_seed(size=seed_size)
+    allocate (seed(seed_size))
+    seed = [(seed_stride*s + 1, s=1, seed_size)] + nrank
+    call random_seed(put=seed)
+  end subroutine seed_rng
 
   ! Initial Conditions: uniform inflow with localised noise
   subroutine initial_conditions_wind_turbine(self)
@@ -188,13 +206,15 @@ contains
     class(field_t), pointer :: hu, hv, hw
     integer :: j, k, dims(3)
     real(dp) :: noise(3), um
+    logical :: first_call
 
     dims = self%solver%mesh%get_dims(VERT)
     noise = self%wt_cfg%inlet_noise
     um = abs(self%wt_cfg%bc_start_u)
 
     ! Allocate persistent device BC fields on first call
-    if (.not. associated(self%bc_start_u_x)) then
+    first_call = .not. associated(self%bc_start_u_x)
+    if (first_call) then
       self%bc_start_u_x => self%solver%backend%allocator%get_block(DIR_X, VERT)
       self%bc_start_v_x => self%solver%backend%allocator%get_block(DIR_X, VERT)
       self%bc_start_w_x => self%solver%backend%allocator%get_block(DIR_X, VERT)
@@ -202,6 +222,10 @@ contains
       call self%bc_start_v_x%set_data_loc(VERT)
       call self%bc_start_w_x%set_data_loc(VERT)
     end if
+
+    ! A noise-free inlet is constant in time: build it once and reuse. Only a
+    ! noisy inlet needs refreshing every substep.
+    if (.not. first_call .and. all(noise == 0._dp)) return
 
     ! Build the inflow profile in DIR_C host buffers, then upload
     hu => self%solver%host_allocator%get_block(DIR_C)
