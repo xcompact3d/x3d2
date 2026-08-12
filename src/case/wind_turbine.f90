@@ -32,7 +32,6 @@ module m_case_wind_turbine
   type, extends(base_case_t) :: case_wind_turbine_t
     type(wind_turbine_config_t) :: wt_cfg
     class(turbine_model_t), pointer :: turbine => null()
-    class(field_t), pointer :: sponge_sigma => null() !! outflow relaxation rate
   contains
     procedure :: define_BC => define_BC_wind_turbine
     procedure :: initial_conditions => initial_conditions_wind_turbine
@@ -41,8 +40,6 @@ module m_case_wind_turbine
     procedure :: postprocess => postprocess_wind_turbine
     procedure :: finalise_case_specific => finalise_wind_turbine
     procedure :: compute_outflow_params
-    procedure :: init_sponge
-    procedure :: apply_sponge
   end type case_wind_turbine_t
 
   interface case_wind_turbine_t
@@ -97,9 +94,6 @@ contains
     call flow_case%turbine%setup_output( &
       flow_case%solver%mesh%par%is_root(), flow_case%io_mgr%is_restart() &
       )
-
-    ! Optional outflow sponge/relaxation zone (off by default).
-    call flow_case%init_sponge()
   end function case_wind_turbine_init
 
   subroutine seed_rng(nrank)
@@ -330,83 +324,7 @@ contains
     call self%turbine%project_forces(du, dv, dw, &
                                      self%solver%u, self%solver%v, &
                                      self%solver%w)
-
-    ! Outflow sponge: relax (u,v,w) toward the freestream near the outlet to
-    ! damp the turbine wake before it reaches the convective outflow boundary
-    ! and reflects. Adds a source term -sigma(x)*(q - q_ref) to each momentum
-    ! RHS; the subsequent pressure correction restores divergence-free flow.
-    if (self%wt_cfg%sponge_on) then
-      call self%apply_sponge(du, self%solver%u, self%wt_cfg%bc_start_u)
-      call self%apply_sponge(dv, self%solver%v, self%wt_cfg%bc_start_v)
-      call self%apply_sponge(dw, self%solver%w, self%wt_cfg%bc_start_w)
-    end if
   end subroutine forcings_wind_turbine
-
-  ! Build the outflow-sponge relaxation-rate field sigma(x). The rate is zero
-  ! upstream of sponge_start and ramps quadratically to sponge_strength at the
-  ! outlet (x = L_x), giving a smooth (C1) onset that avoids reflections.
-  subroutine init_sponge(self)
-    implicit none
-    class(case_wind_turbine_t) :: self
-
-    class(field_t), pointer :: sigma_host
-    integer :: i, j, k, dims(3)
-    real(dp) :: coords(3), x0, xL, s, sigma_max
-
-    if (.not. self%wt_cfg%sponge_on) return
-
-    x0 = self%wt_cfg%sponge_start
-    xL = self%solver%mesh%geo%L(1)
-    sigma_max = self%wt_cfg%sponge_strength
-
-    if (xL <= x0) error stop 'wind_turbine sponge: sponge_start >= L_x.'
-
-    dims = self%solver%mesh%get_dims(VERT)
-    sigma_host => self%solver%host_allocator%get_block(DIR_C)
-    sigma_host%data(:, :, :) = 0._dp
-
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          coords = self%solver%mesh%get_coordinates(i, j, k)
-          if (coords(1) > x0) then
-            s = (coords(1) - x0)/(xL - x0)   ! normalised 0..1
-            sigma_host%data(i, j, k) = sigma_max*s*s
-          end if
-        end do
-      end do
-    end do
-
-    self%sponge_sigma => self%solver%backend%allocator%get_block(DIR_X, VERT)
-    call self%sponge_sigma%set_data_loc(VERT)
-    call self%solver%backend%set_field_data(self%sponge_sigma, sigma_host%data)
-
-    call self%solver%host_allocator%release_block(sigma_host)
-
-    if (self%solver%mesh%par%is_root()) then
-      print *, 'Outflow sponge enabled: start =', x0, &
-        ' strength =', sigma_max
-    end if
-  end subroutine init_sponge
-
-  ! Apply one component of the sponge relaxation to a momentum RHS:
-  !   dq = dq - sigma(x)*(q - q_ref)
-  subroutine apply_sponge(self, dq, q, q_ref)
-    implicit none
-    class(case_wind_turbine_t) :: self
-    class(field_t), intent(inout) :: dq
-    class(field_t), intent(in) :: q
-    real(dp), intent(in) :: q_ref
-
-    class(field_t), pointer :: tmp
-
-    tmp => self%solver%backend%allocator%get_block(DIR_X, VERT)
-    call self%solver%backend%veccopy(tmp, q)        ! tmp = q
-    if (q_ref /= 0._dp) call self%solver%backend%field_shift(tmp, -q_ref)
-    call self%solver%backend%vecmult(tmp, self%sponge_sigma) ! tmp = sigma*(q-q_ref)
-    call self%solver%backend%vecadd(-1._dp, tmp, 1._dp, dq)  ! dq -= sigma*(q-q_ref)
-    call self%solver%backend%allocator%release_block(tmp)
-  end subroutine apply_sponge
 
   ! Post-processing: turbine diagnostics + flow diagnostics.
   subroutine postprocess_wind_turbine(self, iter, t)
@@ -430,11 +348,6 @@ contains
 
   subroutine finalise_wind_turbine(self)
     class(case_wind_turbine_t) :: self
-
-    if (associated(self%sponge_sigma)) then
-      call self%solver%backend%allocator%release_block(self%sponge_sigma)
-      self%sponge_sigma => null()
-    end if
 
     call self%turbine%finalise()
     call self%io_mgr%unregister_checkpoint_state()
