@@ -1,7 +1,7 @@
 &domain_settings
 flow_case_name = 'wind_turbine'
 
-! Dimensional domain (metres) for the NREL-5MW-scale D=126m rotors.
+! Dimensional domain in metres; rotor diameter D = 126 m (see discs.ad).
 L_global = 2898.0d0, 500.0d0, 1008.0d0
 
 ! dx~6.3m -> ~20 cells across the D=126m rotor. Resolves the wake so the
@@ -20,8 +20,9 @@ BC_z = 'periodic', 'periodic'
 /End
 
 &solver_params
-! LES eddy-viscosity Re: matches nu_SVV of the non-dim two_turbines case
-! (Re_nd=45000, D_nd=1, U_nd=10) -> Re_dim = 45000*(1*10)/(126*8) ~ 446.
+! Effective (LES) Reynolds number based on rotor diameter and inflow speed.
+! It is deliberately low so the ~6 m mesh resolves the energy-containing scales;
+! the compact6-hyperviscous scheme below supplies the sub-grid dissipation.
 Re = 450.0d0
 ! RK3: larger stability region than AB3; damps marginally-resolved grid-scale
 ! modes that otherwise drive exponential blow-up.
@@ -33,7 +34,7 @@ n_iters = 4000
 n_output = 50
 poisson_solver_type = 'FFT'
 der1st_scheme = 'compact6'
-! iSVV (hyperviscous) dissipation - the implicit LES the two_turbines case uses.
+! compact6-hyperviscous adds implicit-LES (iSVV) dissipation at the grid scale.
 der2nd_scheme = 'compact6-hyperviscous'
 c_nu = 0.44d0
 nu0_nu = 500.0d0
@@ -56,8 +57,9 @@ output_fields = 'vorticity', 'qcriterion'
 /End
 
 &wind_turbine_nml
-! No whole-field noise: on this coarse mesh it aliases at the grid scale and
-! drives blow-up.
+! init_noise perturbs the whole field at t=0; on this mesh that injects energy
+! at the smallest resolved scales and can destabilise start-up. Keep it off and
+! seed turbulence at the inlet instead.
 init_noise = 0.0d0, 0.0d0, 0.0d0
 ! Seed turbulence only at the inlet plane; it develops physically through the
 ! shear layers.
