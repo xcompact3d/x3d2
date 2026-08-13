@@ -266,8 +266,9 @@ contains
     class(adm_t), intent(inout) :: self
     real(dp), intent(in) :: t, dt
 
-    ! Compute ADM once per physical timestep, before its
-    ! Runge-Kutta substage loop. Reuse the resulting thrust at repeated stages.
+    ! Advance the ADM time filter once per physical timestep (first substage).
+    ! On repeated substages the filter is frozen, but U_disc and the thrust are
+    ! still recomputed from the current substage velocity.
     self%recompute_forces = t /= self%last_update_time
     self%last_update_time = t
     self%dt = dt

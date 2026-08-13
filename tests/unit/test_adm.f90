@@ -107,12 +107,13 @@ program test_adm
   allpass = close_enough(adm%disc(1)%U_disc, 10._dp, tol) &
             .and. close_enough(adm%disc(1)%U_disc_filt, 10._dp, tol) &
             .and. close_enough(adm%disc(1)%thrust, expected_thrust, tol) &
-            .and. close_enough(adm%disc(1)%power, 10._dp*expected_thrust, tol) &
+           .and. close_enough(adm%disc(1)%power, 10._dp*expected_thrust, tol) &
             .and. close_enough(sum_du, -expected_thrust/adm%rho_air, tol) &
             .and. close_enough(sum_dv, 0._dp, tol) &
             .and. close_enough(sum_dw, 0._dp, tol)
 
-  ! A repeated RK stage at the same physical time reuses the force.
+  ! A repeated RK stage at the same physical time: the filter is not advanced,
+  ! but U_disc and the thrust track the current substage velocity.
   host_data%data = 20._dp
   call backend%set_field_data(u, host_data%data)
   call backend%vecadd(0._dp, adm%disc(1)%gamma_disc, 0._dp, du)
@@ -120,9 +121,12 @@ program test_adm
   call backend%vecadd(0._dp, adm%disc(1)%gamma_disc, 0._dp, dw)
   call adm%update(0.01_dp, 0.01_dp)
   call adm%project_forces(du, dv, dw, u, v, w)
+  expected_thrust = 0.5_dp*adm%rho_air &
+                    *(0.75_dp/(1._dp - 0.25_dp)**2) &
+                    *20._dp**2*pi*0.5_dp**2/4._dp
   sum_du = backend%field_volume_integral(du)*adm%cell_vol
   allpass = allpass &
-            .and. close_enough(adm%disc(1)%U_disc, 10._dp, tol) &
+            .and. close_enough(adm%disc(1)%U_disc, 20._dp, tol) &
             .and. close_enough(sum_du, -expected_thrust/adm%rho_air, tol)
 
   ! The next physical timestep exercises the T_relax filter.
