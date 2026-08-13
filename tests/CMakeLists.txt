@@ -41,7 +41,7 @@ function(define_test testfile np backend)
         set(CMAKE_Fortran_FLAGS_DEBUG "-g -Wall -Wno-ambiguous-structure-constructor -Werror")
       endif()
     endif()
-    find_package(OpenMP REQUIRED)
+    # OpenMP is resolved once at the top level (see the root CMakeLists.txt).
     target_link_libraries(${test_name} PRIVATE OpenMP::OpenMP_Fortran)
 
     if(${backend} STREQUAL omp_tgt)

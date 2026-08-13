@@ -42,5 +42,21 @@ if (${OMP_TGT} AND NOT
 endif()
 
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/include)
+
+# Resolve OpenMP once here so src/ and tests/ share a single import target.
+find_package(OpenMP REQUIRED)
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR
+   CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
+  # FindOpenMP probing nvfortran with -cuda pulls the CUDA runtime into the OpenMP
+  # target with cudadevrt not last -> nvlink "unexpected object after cudadevrt".
+  # Drop them; the per-target -cuda link option relinks them with cudadevrt last.
+  get_target_property(_omp_fortran_libs OpenMP::OpenMP_Fortran INTERFACE_LINK_LIBRARIES)
+  if(_omp_fortran_libs)
+    list(FILTER _omp_fortran_libs EXCLUDE REGEX "cuda")
+    set_target_properties(OpenMP::OpenMP_Fortran PROPERTIES
+      INTERFACE_LINK_LIBRARIES "${_omp_fortran_libs}")
+  endif()
+endif()
+
 add_subdirectory(src)
 add_subdirectory(tests)
