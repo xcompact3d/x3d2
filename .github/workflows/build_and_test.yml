@@ -56,8 +56,8 @@ jobs:
     - name: Build test
       run: make -C build-debug
 
-    - name: Run unit and verification tests
-      run:  ctest  --test-dir build-debug -L "unit|verification" --output-on-failure
+    - name: Run unit, verification and regression tests
+      run:  ctest  --test-dir build-debug -L "unit|verification|regression" --output-on-failure
 
     - name: Configure Release build
       run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON

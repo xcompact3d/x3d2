@@ -2,6 +2,9 @@
 set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" CACHE STRING "comma separated list of arguments to pass to ctest")
 set(CMAKE_CTEST_NPROCS "4" CACHE STRING "number of process used in tests")
 
+option(WITH_NIGHTLY_REGRESSION
+  "Register the heavier nightly regression cases (excluded from PR CI)." OFF)
+
 # Shared test utilities library
 add_library(x3d2_test_utils STATIC common/test_utils.f90)
 target_link_libraries(x3d2_test_utils PRIVATE x3d2)
@@ -102,6 +105,31 @@ function(define_regression_test testfile np backend)
   set_tests_properties(${test_name} PROPERTIES LABELS "regression;${backend}")
 endfunction()
 
+# Full-case regression: run the xcompact solver on a small input file and diff
+# the resulting monitoring.csv against a committed golden file. To (re)generate
+# a golden after an intentional numerics change, run the case once and pass
+# --bless to compare_monitoring.py (see that script's docstring). Golden files
+# are only reproducible for a fixed compiler/precision/rank-count, so bless them
+# in the same environment CI uses.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+function(define_regression_case_test case_name input_file golden_file np backend)
+  set(test_name regression_${case_name}_${backend}_${np})
+  set(work_dir ${CMAKE_CURRENT_BINARY_DIR}/regression/${test_name})
+  file(MAKE_DIRECTORY ${work_dir})
+  set(comparator ${CMAKE_CURRENT_SOURCE_DIR}/regression/compare_monitoring.py)
+  set(input ${CMAKE_CURRENT_SOURCE_DIR}/regression/${input_file})
+  set(golden ${CMAKE_CURRENT_SOURCE_DIR}/regression/${golden_file})
+  add_test(
+    NAME ${test_name}
+    COMMAND sh -c
+      "mpirun --oversubscribe -np ${np} $<TARGET_FILE:xcompact> ${input} && \
+       ${Python3_EXECUTABLE} ${comparator} golden \
+       --produced monitoring.csv --golden ${golden}"
+    WORKING_DIRECTORY ${work_dir})
+  set_tests_properties(${test_name} PROPERTIES LABELS "regression;${backend}")
+endfunction()
+
 # Unit tests (fast, isolated component tests)
 define_test(unit/test_allocator.f90 1 omp)
 define_test(unit/test_reordering.f90 1 omp)
@@ -137,6 +165,26 @@ define_verification_test(verification/test_les_field.f90 1 omp)
 if(WITH_2DECOMPFFT)
   define_verification_test(verification/test_fft.f90 4 omp)
 endif()
+
+# Regression smoke test: fast full-solver TGV vs golden monitoring.csv.
+# These reuse the main xcompact binary, whose backend follows the compiler
+# (NVHPC/PGI -> CUDA). The committed goldens are CPU/OMP output, so only
+# register them for a CPU OMP build; a CUDA golden would drive a separate case.
+set(_cpu_omp_backend TRUE)
+if((CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR
+    CMAKE_Fortran_COMPILER_ID STREQUAL "PGI") OR OMP_TGT)
+  set(_cpu_omp_backend FALSE)
+endif()
+
+if(WITH_2DECOMPFFT AND _cpu_omp_backend)
+  define_regression_case_test(tgv_smoke tgv_smoke.x3d tgv_smoke_golden_omp.csv 2 omp)
+endif()
+
+# Heavier nightly regression case (opt-in; kept out of PR CI to stay fast).
+if(WITH_2DECOMPFFT AND _cpu_omp_backend AND WITH_NIGHTLY_REGRESSION)
+  define_regression_case_test(tgv_nightly tgv_nightly.x3d tgv_nightly_golden_omp.csv 2 omp)
+endif()
+unset(_cpu_omp_backend)
 
 if(${OMP_TGT})
   # OMP TGT unit tests
