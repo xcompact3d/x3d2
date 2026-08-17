@@ -72,6 +72,23 @@ module m_config
     procedure :: read => read_cylinder_nml
   end type cylinder_config_t
 
+  type, extends(base_config_t) :: abl_config_t
+    real(dp) :: z0 = 0.1_dp            !! aerodynamic roughness length
+    real(dp) :: u_star = 0._dp         !! friction velocity
+    real(dp) :: delta = 1._dp          !! boundary-layer depth
+    real(dp) :: kappa = 0.41_dp        !! von Karman constant
+    real(dp) :: u_geo(3) = 0._dp       !! geostrophic wind UG
+    real(dp) :: coriolis_freq = 0._dp  !! Coriolis frequency f
+    real(dp) :: init_noise(3) = 0._dp
+    real(dp) :: u_bulk = 0._dp         !! target bulk velocity (mass_conserve)
+    logical :: pressure_gradient = .false.
+    logical :: coriolis = .false.
+    logical :: mass_conserve = .false.
+    logical :: damping = .false.
+  contains
+    procedure :: read => read_abl_nml
+  end type abl_config_t
+
   type, extends(base_config_t) :: stats_config_t
     integer :: initstat = 0          !! iteration to start accumulating (0 = disabled)
     integer :: istatfreq = 1         !! accumulate every N steps
@@ -354,6 +371,72 @@ contains
     self%inlet_noise = inlet_noise
 
   end subroutine read_cylinder_nml
+
+  subroutine read_abl_nml(self, nml_file, nml_string)
+    implicit none
+
+    class(abl_config_t) :: self
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
+
+    integer :: unit
+
+    real(dp) :: z0, u_star, delta, kappa
+    real(dp) :: u_geo(3), coriolis_freq, init_noise(3), u_bulk
+    logical :: pressure_gradient, coriolis, mass_conserve, damping
+
+    namelist /abl_nml/ z0, u_star, delta, kappa, u_geo, coriolis_freq, &
+      init_noise, u_bulk, pressure_gradient, coriolis, mass_conserve, damping
+
+    ! Defaults
+    z0 = 0.1_dp
+    u_star = 0._dp
+    delta = 1._dp
+    kappa = 0.41_dp
+    u_geo = 0._dp
+    coriolis_freq = 0._dp
+    init_noise = 0._dp
+    u_bulk = 0._dp
+    pressure_gradient = .false.
+    coriolis = .false.
+    mass_conserve = .false.
+    damping = .false.
+
+    if (present(nml_file) .and. present(nml_string)) then
+      error stop 'Reading ABL config failed! &
+                 &Provide only a file name or source, not both.'
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file)
+      read (unit, nml=abl_nml)
+      close (unit)
+    else if (present(nml_string)) then
+      read (nml_string, nml=abl_nml)
+    else
+      error stop 'Reading ABL config failed! &
+                 &Provide at least one of the following: file name or source'
+    end if
+
+    ! At least one driving mechanism must be enabled (damping is a sponge,
+    ! not a driver).
+    if (.not. (pressure_gradient .or. coriolis .or. mass_conserve)) then
+      error stop 'ABL config error: enable at least one driving mechanism &
+                 &(pressure_gradient, coriolis or mass_conserve).'
+    end if
+
+    self%z0 = z0
+    self%u_star = u_star
+    self%delta = delta
+    self%kappa = kappa
+    self%u_geo = u_geo
+    self%coriolis_freq = coriolis_freq
+    self%init_noise = init_noise
+    self%u_bulk = u_bulk
+    self%pressure_gradient = pressure_gradient
+    self%coriolis = coriolis
+    self%mass_conserve = mass_conserve
+    self%damping = damping
+
+  end subroutine read_abl_nml
 
   subroutine read_checkpoint_nml(self, nml_file, nml_string)
     implicit none
