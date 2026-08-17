@@ -11,7 +11,7 @@ module m_abl
 !! in commit 3.
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, VERT
+  use m_common, only: dp, pi, DIR_C, DIR_X, VERT
   use m_config, only: abl_config_t
   use m_field, only: field_t
   use m_mesh, only: mesh_t
@@ -27,10 +27,14 @@ module m_abl
     type(allocator_t), pointer :: host_allocator => null()
     type(abl_config_t) :: cfg
     real(dp) :: dt = 0._dp
+    ! Cached Rayleigh damping coefficient field (coeff*lambda(y)), built once.
+    class(field_t), pointer :: damp_coeff => null()
   contains
     procedure :: initialise
     procedure :: apply_forcing
     procedure :: apply_wall_model
+    procedure :: apply_damping
+    procedure :: build_damping
   end type abl_t
 
   interface abl_t
@@ -58,17 +62,58 @@ contains
   end function init
 
   subroutine initialise(self, u, v, w)
-    !! Sets the t=0 velocity profile.
+    !! Sets the t=0 velocity profile: log-law when the drive is pressure-
+    !! gradient / mass-conserve, otherwise the geostrophic wind, plus noise
+    !! (Incompact3d init_abl, 68-92).
     implicit none
 
     class(abl_t) :: self
     class(field_t), intent(inout) :: u, v, w
 
-    ! Placeholder zero field; the log-law/geostrophic profile lands in
-    ! issue #317 commit 2.
-    call u%fill(0._dp)
-    call v%fill(0._dp)
-    call w%fill(0._dp)
+    class(field_t), pointer :: hu, hv, hw
+    integer :: i, j, k, dims(3)
+    real(dp) :: coords(3), y, prof, noise(3)
+    logical :: log_law
+
+    dims = self%mesh%get_dims(VERT)
+
+    hu => self%host_allocator%get_block(DIR_C)
+    hv => self%host_allocator%get_block(DIR_C)
+    hw => self%host_allocator%get_block(DIR_C)
+
+    call random_number(hu%data(1:dims(1), 1:dims(2), 1:dims(3)))
+    call random_number(hv%data(1:dims(1), 1:dims(2), 1:dims(3)))
+    call random_number(hw%data(1:dims(1), 1:dims(2), 1:dims(3)))
+
+    noise = self%cfg%init_noise
+    log_law = self%cfg%pressure_gradient .or. self%cfg%mass_conserve
+
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          coords = self%mesh%get_coordinates(i, j, k)
+          y = coords(2)
+          if (log_law) then
+            prof = self%cfg%u_star/self%cfg%kappa &
+                   *log((y + self%cfg%z0)/self%cfg%z0)
+          else
+            prof = self%cfg%u_geo(1)
+          end if
+          hu%data(i, j, k) = prof &
+                             *(1._dp + noise(1)*(2._dp*hu%data(i, j, k) - 1._dp))
+          hv%data(i, j, k) = noise(2)*(2._dp*hv%data(i, j, k) - 1._dp)
+          hw%data(i, j, k) = noise(3)*(2._dp*hw%data(i, j, k) - 1._dp)
+        end do
+      end do
+    end do
+
+    call self%backend%set_field_data(u, hu%data)
+    call self%backend%set_field_data(v, hv%data)
+    call self%backend%set_field_data(w, hw%data)
+
+    call self%host_allocator%release_block(hu)
+    call self%host_allocator%release_block(hv)
+    call self%host_allocator%release_block(hw)
 
     call u%set_data_loc(VERT)
     call v%set_data_loc(VERT)
@@ -77,17 +122,120 @@ contains
   end subroutine initialise
 
   subroutine apply_forcing(self, du, dv, dw, u, v, w)
-    !! Adds the ABL driving forces to the momentum RHS each substep.
+    !! Adds the ABL driving forces to the momentum RHS each substep
+    !! (Incompact3d momentum_forcing_abl, 296-320).
     implicit none
 
     class(abl_t) :: self
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
 
-    ! Pressure-gradient / Coriolis / damping forcing lands in issue #317
-    ! commit 2.
+    real(dp) :: f
+
+    f = self%cfg%coriolis_freq
+
+    ! Driving force: pressure gradient, or the geostrophic-balance term when
+    ! the pressure gradient is off.
+    if (self%cfg%pressure_gradient) then
+      call self%backend%field_shift(du, self%cfg%u_star**2/self%cfg%delta)
+    else if (self%cfg%coriolis) then
+      call self%backend%field_shift(du, -f*self%cfg%u_geo(3))
+      call self%backend%field_shift(dw, f*self%cfg%u_geo(1))
+    end if
+
+    ! Coriolis on the resolved field.
+    if (self%cfg%coriolis) then
+      call self%backend%vecadd(f, w, 1._dp, du)
+      call self%backend%vecadd(-f, u, 1._dp, dw)
+    end if
+
+    ! Rayleigh damping layer near the domain top.
+    if (self%cfg%damping) then
+      call self%apply_damping(du, dv, dw, u, v, w)
+    end if
 
   end subroutine apply_forcing
+
+  subroutine apply_damping(self, du, dv, dw, u, v, w)
+    !! Rayleigh sponge relaxing the flow toward the reference profile over the
+    !! top damping layer (Incompact3d damping_zone, neutral branch).
+    implicit none
+
+    class(abl_t) :: self
+    class(field_t), intent(inout) :: du, dv, dw
+    class(field_t), intent(in) :: u, v, w
+
+    class(field_t), pointer :: tmp
+    real(dp) :: u_ref
+
+    if (.not. associated(self%damp_coeff)) call self%build_damping()
+
+    u_ref = self%cfg%u_star/self%cfg%kappa*log(self%cfg%delta/self%cfg%z0)
+
+    tmp => self%backend%allocator%get_block(DIR_X, VERT)
+
+    call self%backend%veccopy(tmp, u)
+    call self%backend%field_shift(tmp, -u_ref)
+    call self%backend%vecmult(tmp, self%damp_coeff)
+    call self%backend%vecadd(-1._dp, tmp, 1._dp, du)
+
+    call self%backend%veccopy(tmp, v)
+    call self%backend%field_shift(tmp, -self%cfg%u_geo(2))
+    call self%backend%vecmult(tmp, self%damp_coeff)
+    call self%backend%vecadd(-1._dp, tmp, 1._dp, dv)
+
+    call self%backend%veccopy(tmp, w)
+    call self%backend%field_shift(tmp, -self%cfg%u_geo(3))
+    call self%backend%vecmult(tmp, self%damp_coeff)
+    call self%backend%vecadd(-1._dp, tmp, 1._dp, dw)
+
+    call self%backend%allocator%release_block(tmp)
+
+  end subroutine apply_damping
+
+  subroutine build_damping(self)
+    !! Precomputes the damping coefficient coeff*lambda(y), constant in x/z.
+    implicit none
+
+    class(abl_t) :: self
+
+    class(field_t), pointer :: h
+    integer :: i, j, k, dims(3)
+    real(dp) :: coords(3), y, coeff, dheight, ylo, yhi, lambda
+    real(dp), parameter :: wvar = 15._dp
+
+    self%damp_coeff => self%backend%allocator%get_block(DIR_X, VERT)
+    call self%damp_coeff%set_data_loc(VERT)
+
+    h => self%host_allocator%get_block(DIR_C)
+    dims = self%mesh%get_dims(VERT)
+
+    dheight = 0.1_dp*self%cfg%delta
+    coeff = wvar*self%cfg%u_star/self%cfg%delta
+    ylo = self%cfg%delta - 0.5_dp*dheight
+    yhi = self%cfg%delta + 0.5_dp*dheight
+
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          coords = self%mesh%get_coordinates(i, j, k)
+          y = coords(2)
+          if (y >= yhi) then
+            lambda = 1._dp
+          else if (y >= ylo) then
+            lambda = 0.5_dp*(1._dp - cos(pi*(y - ylo)/dheight))
+          else
+            lambda = 0._dp
+          end if
+          h%data(i, j, k) = coeff*lambda
+        end do
+      end do
+    end do
+
+    call self%backend%set_field_data(self%damp_coeff, h%data)
+    call self%host_allocator%release_block(h)
+
+  end subroutine build_damping
 
   subroutine apply_wall_model(self, u, v, w, nut)
     !! Imposes the neutral log-law wall stress at the bottom face, blended
