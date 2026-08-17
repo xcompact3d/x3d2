@@ -6,7 +6,7 @@ module m_case_abl
   use m_abl, only: abl_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
-  use m_common, only: dp, get_argument, VERT
+  use m_common, only: dp, get_argument, MPI_X3D2_DP, CELL, VERT
   use m_config, only: abl_config_t, solver_config_t
   use m_field, only: field_t
   use m_mesh, only: mesh_t
@@ -65,9 +65,25 @@ contains
 
     class(case_abl_t) :: self
 
-    ! Free-slip y-walls are handled by the Poisson solver via the mesh BCs.
-    ! The wall model (and mass-conserve correction) wire in here in later
-    ! issue #317 commits.
+    real(dp) :: ub, target_mean, can, ly
+    integer :: ierr
+
+    ! Constant-flow-rate correction (Incompact3d forceabl); mirrors the channel
+    ! bulk-velocity shift, targeting the log-law flow rate. Free-slip y-walls
+    ! are otherwise handled by the Poisson solver; the wall model wires in
+    ! here in issue #317 commit 3.
+    if (self%abl_cfg%mass_conserve) then
+      ly = self%solver%mesh%geo%L(2)
+      ub = self%solver%backend%field_volume_integral(self%solver%u)
+      ub = ub/product(self%solver%mesh%get_global_dims(CELL))
+      call MPI_Allreduce(MPI_IN_PLACE, ub, 1, MPI_X3D2_DP, &
+                         MPI_SUM, MPI_COMM_WORLD, ierr)
+      target_mean = self%abl_cfg%u_star/self%abl_cfg%kappa &
+                    *(ly*log(self%abl_cfg%delta/self%abl_cfg%z0) &
+                      - self%abl_cfg%delta)/ly
+      can = target_mean - ub
+      call self%solver%backend%field_shift(self%solver%u, can)
+    end if
 
   end subroutine define_BC_abl
 
