@@ -82,15 +82,15 @@ endif()
 
 list(APPEND SRC ${IOSRC})
 
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
-  list(APPEND SRC ${CUDASRC})
-  list(APPEND BACKENDSRC backend/cuda/backend.f90)
-endif()
-
 if(OMP_TGT)
   list(APPEND SRC ${OMPTGTSRC})
   list(APPEND BACKENDSRC backend/omp/target/backend.f90)
+else()
+  if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+     ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
+    list(APPEND SRC ${CUDASRC})
+    list(APPEND BACKENDSRC backend/cuda/backend.f90)
+  endif()
 endif()
 
 if(WITH_2DECOMPFFT)
@@ -121,7 +121,12 @@ target_link_libraries(xcompact PRIVATE x3d2)
 # if CUDA compiler
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
-  set(CMAKE_Fortran_FLAGS "-cpp -cuda")
+  if (NOT OMP_TGT)
+    set(CMAKE_Fortran_FLAGS "-cpp -cuda")
+    target_compile_options(xcompact PRIVATE "-DCUDA")
+  else()
+    set(CMAKE_Fortran_FLAGS "-cpp")
+  endif()
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr -Ktrap=fp")
   # Note: -Ktrap=fp traps FP exceptions process-wide. On some NVIDIA GPUs (for example RTX A4000)
   # it was giving a divide-by-zero inside cuFFTMp's PTX-JIT compiler during Poisson FFT plan creation
@@ -129,8 +134,6 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
   target_link_options(x3d2 INTERFACE "-cuda")
   target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
-
-  target_compile_options(xcompact PRIVATE "-DCUDA")
 
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
