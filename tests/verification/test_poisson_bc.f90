@@ -33,6 +33,7 @@ program test_poisson
   use m_solver, only: allocate_tdsops
   use m_tdsops, only: dirps_t
   use m_vector_calculus, only: vector_calculus_t
+  use m_test_utils, only: finalise_test
 
 #ifdef CUDA
   use cudafor
@@ -206,15 +207,7 @@ program test_poisson
     end do
   end do
 
-  if (allpass) then
-    if (nrank == 0) then
-      write (stderr, '(A)') 'ALL TESTS PASSED SUCCESSFULLY.'
-    end if
-  else
-    error stop 'SOME TESTS FAILED.'
-  end if
-
-  call MPI_Finalize(ierr)
+  call finalise_test(allpass, nrank)
 
 contains
 

@@ -9,7 +9,7 @@ program test_omp_transeq_species
   use m_tdsops, only: dirps_t
   use m_solver, only: allocate_tdsops
   use m_mesh, only: mesh_t
-  use m_test_utils, only: initialise_mpi
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
@@ -46,7 +46,7 @@ program test_omp_transeq_species
   call initialise_input()
   call run_kernel()
   call check_result()
-  call finalise()
+  call finalise_test(allpass, nrank)
 
 contains
 
@@ -146,15 +146,5 @@ contains
     end if
 
   end subroutine check_result
-
-  subroutine finalise()
-    if (allpass) then
-      if (nrank == 0) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-    else
-      error stop 'SOME TESTS FAILED.'
-    end if
-
-    call MPI_Finalize(ierr)
-  end subroutine finalise
 
 end program test_omp_transeq_species

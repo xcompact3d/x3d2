@@ -7,6 +7,7 @@ program test_cuda_reorder
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
                                     reorder_c2x, reorder_x2c
+  use m_test_utils, only: finalise_test
 
   implicit none
 
@@ -128,10 +129,6 @@ program test_cuda_reorder
     write (stderr, '(a)') 'Check reorder x2c and c2x... passed'
   end if
 
-  if (allpass) then
-    write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-  else
-    error stop 'SOME TESTS FAILED.'
-  end if
+  call finalise_test(allpass, finalize_mpi=.false.)
 
 end program test_cuda_reorder

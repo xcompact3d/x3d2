@@ -6,6 +6,7 @@ program test_mesh
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_common, only: DIR_X, pi, dp, CELL, DIR_C, DIR_Y, DIR_Z, VERT, Z_FACE
+  use m_test_utils, only: finalise_test
 
   implicit none
 
@@ -47,13 +48,7 @@ program test_mesh
   call run_test_mesh(.true., allpass)
 #endif
 
-  if (allpass) then
-    write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-  else
-    error stop 'SOME TESTS FAILED.'
-  end if
-
-  call MPI_Finalize(ierr)
+  call finalise_test(allpass, nrank)
 
 contains
 

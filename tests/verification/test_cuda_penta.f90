@@ -25,7 +25,7 @@ program test_cuda_penta
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_penta_compact, exec_dist_penta_periodic
   use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
-  use m_test_utils, only: initialise_mpi
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
@@ -39,7 +39,7 @@ program test_cuda_penta
   call run_neumann_sym_true()
   call run_neumann_sym_false()
   call run_periodic_test()
-  call finalise()
+  call finalise_test(allpass, nrank)
 
 contains
 
@@ -447,14 +447,5 @@ contains
     converged_tol = max(1e-12_dp, &
                         20._dp*epsilon(1._dp)*real(n_glob, dp))
   end function converged_tol
-
-  subroutine finalise()
-    if (allpass) then
-      if (nrank == 0) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-    else
-      error stop 'SOME TESTS FAILED.'
-    end if
-    call MPI_Finalize(ierr)
-  end subroutine finalise
 
 end program test_cuda_penta

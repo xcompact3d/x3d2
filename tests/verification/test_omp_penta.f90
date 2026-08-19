@@ -18,6 +18,7 @@ program test_omp_penta
   use m_omp_common, only: SZ
   use m_omp_exec_dist, only: exec_dist_penta_compact, exec_dist_penta_periodic
   use m_tdsops, only: tdsops_t, tdsops_init
+  use m_test_utils, only: finalise_test
 
   implicit none
 
@@ -34,12 +35,7 @@ program test_omp_penta
   call run_neumann_sym_false()
   call run_periodic_test()
 
-  if (allpass) then
-    if (nrank == 0) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-  else
-    error stop 'SOME TESTS FAILED.'
-  end if
-  call MPI_Finalize(ierr)
+  call finalise_test(allpass, nrank)
 
 contains
 

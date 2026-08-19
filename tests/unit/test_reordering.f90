@@ -12,6 +12,7 @@ program test_reorder
 
   use m_ordering, only: get_index_dir, get_index_ijk
   use m_mesh, only: mesh_t
+  use m_test_utils, only: finalise_test
 
 #ifdef CUDA
   use cudafor
@@ -169,13 +170,7 @@ program test_reorder
   call backend%reorder(u_x, u_y, RDR_Y2X)
   call check_reorder(allpass, u_x, u_x_original, "testing Z2Y and Y2X failed")
 
-  if (allpass) then
-    if (nrank == 0) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-  else
-    error stop 'SOME TESTS FAILED.'
-  end if
-
-  call MPI_Finalize(ierr)
+  call finalise_test(allpass, nrank)
 
 contains
 

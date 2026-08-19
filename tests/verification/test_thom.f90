@@ -13,7 +13,7 @@ program test_thom
   use m_tdsops, only: tdsops_t, tdsops_init
   use m_exec_thom, only: exec_thom_tds_compact
 #endif
-  use m_test_utils, only: checkerr
+  use m_test_utils, only: checkerr, finalise_test
   implicit none
 
   ! The second-derivative roundoff floor is ~eps/dx^2: at n=1024 this is
@@ -129,10 +129,6 @@ program test_thom
 
   call checkerr(u, du, residual_tol, 'thom_dirichlet', allpass)
 
-  if (allpass) then
-    print *, 'ALL TESTS PASSED SUCCESSFULLY.'
-  else
-    error stop 'SOME TESTS FAILED.'
-  end if
+  call finalise_test(allpass, finalize_mpi=.false.)
 
 end program test_thom

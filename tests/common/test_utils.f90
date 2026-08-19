@@ -1,10 +1,11 @@
 module m_test_utils
   use mpi
+  use iso_fortran_env, only: stderr => error_unit
   use m_common, only: dp, nbytes
   implicit none
 
   private
-  public :: initialise_mpi, checkerr, &
+  public :: initialise_mpi, finalise_test, checkerr, &
             write_perf_metric, write_perf_minmax_metrics, &
             write_perf_summary, write_perf_minmax_summary, &
             write_device_bw_metric
@@ -26,6 +27,33 @@ contains
     if (present(pprev)) pprev = modulo(nrank - 1, nproc)
     if (present(pnext)) pnext = modulo(nrank - nproc + 1, nproc)
   end subroutine initialise_mpi
+
+  subroutine finalise_test(allpass, nrank, finalize_mpi)
+    !! Report the aggregate test result and finalise MPI, aborting via
+    !! `error stop` (non-zero exit status) if any check failed. When nrank is
+    !! given, the success message is only printed by rank 0. Set finalize_mpi
+    !! to .false. for serial tests that never called MPI_Init.
+    logical, intent(in) :: allpass
+    integer, optional, intent(in) :: nrank
+    logical, optional, intent(in) :: finalize_mpi
+
+    integer :: ierr
+    logical :: is_root, do_finalize
+
+    is_root = .true.
+    if (present(nrank)) is_root = (nrank == 0)
+
+    do_finalize = .true.
+    if (present(finalize_mpi)) do_finalize = finalize_mpi
+
+    if (allpass) then
+      if (is_root) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
+    else
+      error stop 'SOME TESTS FAILED.'
+    end if
+
+    if (do_finalize) call MPI_Finalize(ierr)
+  end subroutine finalise_test
 
   subroutine check_norm(norm, tol, label, allpass)
     real(dp), intent(in) :: norm

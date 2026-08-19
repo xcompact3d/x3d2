@@ -8,6 +8,7 @@ program test_omp_adamsbashforth
   use m_base_backend, only: base_backend_t
   use m_time_integrator, only: time_intg_t
   use m_field, only: flist_t
+  use m_test_utils, only: finalise_test
 #ifdef CUDA
   use cudafor
 
@@ -198,12 +199,6 @@ program test_omp_adamsbashforth
   end do
 
   ! check if all tests are passing
-  if (allpass) then
-    write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-  else
-    error stop 'SOME TESTS FAILED.'
-  end if
-
   call allocator%release_block(sol(1)%ptr)
   call allocator%release_block(deriv(1)%ptr)
 
@@ -212,8 +207,7 @@ program test_omp_adamsbashforth
   deallocate (deriv)
   deallocate (norm)
 
-  ! finalize MPI
-  call MPI_Finalize(ierr)
+  call finalise_test(allpass)
 
 contains
   function dahlquist_rhs(u)
