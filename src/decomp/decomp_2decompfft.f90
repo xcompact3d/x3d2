@@ -15,8 +15,8 @@ contains
   subroutine decomposition_2decomp(grid, par)
     !! Performs 2D mesh decomposition using 2decomp&fft
     use m_mesh_content, only: par_t, grid_t
-    use decomp_2d, only: decomp_2d_init, DECOMP_2D_COMM_CART_X, xsize, xstart
-    use decomp_2d_mpi, only: nrank, nproc
+    use decomp_2d, only: decomp_2d_init, xsize, xstart
+    use decomp_2d_mpi, only: nrank, nproc, DECOMP_2D_COMM_CART_X
 
     class(grid_t), intent(inout) :: grid
     class(par_t), intent(inout) :: par
