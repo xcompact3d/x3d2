@@ -4,26 +4,15 @@ program test_reorder
 
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
-  use m_tdsops, only: dirps_t
 
   use m_common, only: dp, pi, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
 
+  use m_backend_runtime, only: backend_runtime_t, backend_sz
   use m_ordering, only: get_index_dir, get_index_ijk
   use m_mesh, only: mesh_t
   use m_test_utils, only: finalise_test
-
-#ifdef CUDA
-  use cudafor
-
-  use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
-  use m_cuda_backend, only: cuda_backend_t
-  use m_cuda_common, only: SZ
-#else
-  use m_omp_common, only: SZ
-  use m_omp_backend, only: omp_backend_t
-#endif
 
   implicit none
 
@@ -40,34 +29,19 @@ program test_reorder
 
   real(dp) :: dx, dx_per
 
+  type(backend_runtime_t), target :: runtime
   class(base_backend_t), pointer :: backend
-  class(mesh_t), allocatable :: mesh
+  type(mesh_t), target :: mesh
   class(allocator_t), pointer :: allocator
-  type(dirps_t), target :: xdirps, ydirps, zdirps
   integer, dimension(3) :: dims_padded, dims_global, nproc_dir
   real(dp), dimension(3) :: L_global
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
   logical :: pass_X, pass_Y, pass_Z
 
-#ifdef CUDA
-  type(cuda_backend_t), target :: cuda_backend
-  type(cuda_allocator_t), target :: cuda_allocator
-  integer :: ndevs, devnum
-#else
-  type(omp_backend_t), target :: omp_backend
-  type(allocator_t), target :: omp_allocator
-#endif
-
   ! Initialise variables and arrays
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-#ifdef CUDA
-  ierr = cudaGetDeviceCount(ndevs)
-  ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robin
-  ierr = cudaGetDevice(devnum)
-#endif
 
   ! Global number of cells in each direction
   dims_global = [64, 64, 96]
@@ -84,23 +58,13 @@ program test_reorder
 
   mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
-#ifdef CUDA
-  cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => cuda_allocator
-  print *, 'CUDA allocator instantiated'
-
-  cuda_backend = cuda_backend_t(mesh, allocator)
-  backend => cuda_backend
-  print *, 'CUDA backend instantiated'
-#else
-  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => omp_allocator
-  print *, 'OpenMP allocator instantiated'
-
-  omp_backend = omp_backend_t(mesh, allocator)
-  backend => omp_backend
-  print *, 'OpenMP backend instantiated'
-#endif
+  call runtime%init(mesh)
+  allocator => runtime%allocator
+  backend => runtime%backend
+  if (nrank == 0) then
+    print *, trim(runtime%backend_name), 'allocator instantiated'
+    print *, trim(runtime%backend_name), 'backend instantiated'
+  end if
 
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
   pass_X = .true.
@@ -113,11 +77,14 @@ program test_reorder
   do k = 1, mesh%get_n(DIR_Z, VERT)
     do j = 1, mesh%get_n(DIR_Y, VERT)
       do i = 1, mesh%get_n(DIR_X, VERT)
-        call test_index_reversing(pass_X, i, j, k, DIR_X, SZ, dims_padded(1), &
+        call test_index_reversing(pass_X, i, j, k, DIR_X, backend_sz, &
+                                  dims_padded(1), &
                                   dims_padded(2), dims_padded(3))
-        call test_index_reversing(pass_Y, i, j, k, DIR_Y, SZ, dims_padded(1), &
+        call test_index_reversing(pass_Y, i, j, k, DIR_Y, backend_sz, &
+                                  dims_padded(1), &
                                   dims_padded(2), dims_padded(3))
-        call test_index_reversing(pass_Z, i, j, k, DIR_Z, SZ, dims_padded(1), &
+        call test_index_reversing(pass_Z, i, j, k, DIR_Z, backend_sz, &
+                                  dims_padded(1), &
                                   dims_padded(2), dims_padded(3))
       end do
     end do
@@ -136,23 +103,11 @@ program test_reorder
 
   dims(:) = allocator%get_padded_dims(DIR_X)
   allocate (u_array(dims(1), dims(2), dims(3)))
-
-  call random_number(u_array)
-
-#ifdef CUDA
   allocate (temp_1(dims(1), dims(2), dims(3)))
   allocate (temp_2(dims(1), dims(2), dims(3)))
 
-  select type (u_x_original)
-  type is (cuda_field_t)
-    u_x_original%data_d = u_array
-  end select
-#else
-  select type (u_x_original)
-  type is (field_t)
-    u_x_original%data = u_array
-  end select
-#endif
+  call random_number(u_array)
+  call backend%set_field_data(u_x_original, u_array, DIR_X)
 
   call backend%reorder(u_y, u_x_original, RDR_X2Y)
   call backend%reorder(u_x, u_y, RDR_Y2X)
@@ -198,20 +153,13 @@ contains
     character(len=*), intent(in) :: message
     real(dp) :: tol = 1d-8
 
-#ifdef CUDA
-    select type (a); type is (cuda_field_t); temp_1 = a%data_d; end select
-    select type (b); type is (cuda_field_t); temp_2 = b%data_d; end select
-    if (norm2(temp_1 - temp_2) > tol) then
+    call backend%get_field_data(temp_1, a, DIR_X)
+    call backend%get_field_data(temp_2, b, DIR_X)
+    if (norm2(temp_1(:, 1:mesh%get_n(DIR_X, VERT), :) - &
+              temp_2(:, 1:mesh%get_n(DIR_X, VERT), :)) > tol) then
       allpass = .false.
       write (stderr, '(a)') message
     end if
-#else
-    if (norm2(a%data(:, 1:mesh%get_n(DIR_X, VERT), :) - &
-              b%data(:, 1:mesh%get_n(DIR_X, VERT), :)) > tol) then
-      allpass = .false.
-      write (stderr, '(a)') message
-    end if
-#endif
 
   end subroutine
 
