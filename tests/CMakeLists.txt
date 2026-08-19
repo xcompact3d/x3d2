@@ -8,6 +8,10 @@ option(WITH_NIGHTLY_REGRESSION
 # Shared test utilities library
 add_library(x3d2_test_utils STATIC common/test_utils.f90)
 target_link_libraries(x3d2_test_utils PRIVATE x3d2)
+set_target_properties(x3d2_test_utils PROPERTIES
+  Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_test_utils")
+target_include_directories(x3d2_test_utils INTERFACE
+  "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_test_utils")
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
   target_compile_options(x3d2_test_utils PRIVATE "-eF")
 else()
@@ -23,7 +27,10 @@ function(define_test testfile np backend)
   get_filename_component(test_name ${testfile} NAME_WE)
   string(CONCAT test_name ${test_name} _ ${backend} _ ${np})
 
-  add_executable(${test_name} ${testfile})
+  add_executable(${test_name} ${testfile}
+                 ${CMAKE_SOURCE_DIR}/src/backend/backend_runtime.f90)
+  set_target_properties(${test_name} PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/${test_name}")
 
   if(${backend} STREQUAL cuda)
     target_compile_options(${test_name} PRIVATE "-cpp")
