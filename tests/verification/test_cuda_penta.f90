@@ -25,13 +25,15 @@ program test_cuda_penta
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_penta_compact, exec_dist_penta_periodic
   use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
+  use m_test_utils, only: initialise_mpi
 
   implicit none
 
   logical :: allpass = .true.
   integer :: nrank, nproc, ierr, ndevs, devnum
 
-  call initialise_mpi()
+  call initialise_mpi(nrank, nproc)
+  if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
   call select_device()
   call run_dirichlet_test()
   call run_neumann_sym_true()
@@ -41,12 +43,6 @@ program test_cuda_penta
 
 contains
 
-  subroutine initialise_mpi()
-    call MPI_Init(ierr)
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-    if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
-  end subroutine initialise_mpi
 
   subroutine select_device()
     ierr = cudaGetDeviceCount(ndevs)

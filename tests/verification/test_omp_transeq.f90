@@ -9,6 +9,7 @@ program test_omp_transeq
   use m_tdsops, only: dirps_t
   use m_solver, only: allocate_tdsops
   use m_mesh, only: mesh_t
+  use m_test_utils, only: initialise_mpi
 
   implicit none
 
@@ -38,7 +39,8 @@ program test_omp_transeq
   type(allocator_t), target :: omp_allocator
   type(dirps_t) :: xdirps, ydirps, zdirps
 
-  call initialise_mpi()
+  call initialise_mpi(nrank, nproc)
+  if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
   call setup_mesh()
   call setup_backend()
   call initialise_input()
@@ -48,14 +50,6 @@ program test_omp_transeq
 
 contains
 
-  subroutine initialise_mpi()
-    ! Initialise variables and arrays
-    call MPI_Init(ierr)
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-    if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
-  end subroutine initialise_mpi
 
   subroutine setup_mesh()
     integer, dimension(3) :: nproc_dir

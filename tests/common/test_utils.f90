@@ -1,13 +1,31 @@
 module m_test_utils
+  use mpi
   use m_common, only: dp, nbytes
   implicit none
 
   private
-  public :: checkerr, write_perf_metric, write_perf_minmax_metrics, &
+  public :: initialise_mpi, checkerr, &
+            write_perf_metric, write_perf_minmax_metrics, &
             write_perf_summary, write_perf_minmax_summary, &
             write_device_bw_metric
 
 contains
+
+  subroutine initialise_mpi(nrank, nproc, pprev, pnext)
+    !! Initialise MPI and return the rank and communicator size. Optionally
+    !! return the neighbouring ranks for a 1D periodic decomposition.
+    integer, intent(out) :: nrank, nproc
+    integer, optional, intent(out) :: pprev, pnext
+
+    integer :: ierr
+
+    call MPI_Init(ierr)
+    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
+    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+
+    if (present(pprev)) pprev = modulo(nrank - 1, nproc)
+    if (present(pnext)) pnext = modulo(nrank - nproc + 1, nproc)
+  end subroutine initialise_mpi
 
   subroutine check_norm(norm, tol, label, allpass)
     real(dp), intent(in) :: norm

@@ -7,7 +7,7 @@ program perf_cuda_transeq
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused
   use m_cuda_sendrecv, only: sendrecv_fields
   use m_cuda_tdsops, only: cuda_tdsops_t
-  use m_test_utils, only: write_perf_minmax_metrics, &
+  use m_test_utils, only: initialise_mpi, write_perf_minmax_metrics, &
                           write_perf_minmax_summary, write_device_bw_metric
 
   implicit none
@@ -39,7 +39,8 @@ real(dp), device, allocatable :: du_send_s_dev(:, :, :), du_send_e_dev(:, :, :)
   type(dim3) :: blocks, threads
   real(dp) :: dx_per, nu
 
-  call initialise_mpi()
+  call initialise_mpi(nrank, nproc, pprev, pnext)
+  if (nrank == 0) print *, 'Performance benchmark with', nproc, 'ranks'
   call select_device()
   call configure_benchmark()
   call allocate_fields()
@@ -48,17 +49,6 @@ real(dp), device, allocatable :: du_send_s_dev(:, :, :), du_send_e_dev(:, :, :)
   call finalise()
 
 contains
-
-  subroutine initialise_mpi()
-    call MPI_Init(ierr)
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-    if (nrank == 0) print *, 'Performance benchmark with', nproc, 'ranks'
-
-    pnext = modulo(nrank - nproc + 1, nproc)
-    pprev = modulo(nrank - 1, nproc)
-  end subroutine initialise_mpi
 
   subroutine configure_benchmark()
     n_glob = 512

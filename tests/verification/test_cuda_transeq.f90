@@ -8,6 +8,7 @@ program test_cuda_transeq
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused
   use m_cuda_sendrecv, only: sendrecv_fields
   use m_cuda_tdsops, only: cuda_tdsops_t
+  use m_test_utils, only: initialise_mpi
 
   implicit none
 
@@ -41,7 +42,8 @@ program test_cuda_transeq
 #endif
   real(dp) :: dx_per, nu, norm_du
 
-  call initialise_mpi()
+  call initialise_mpi(nrank, nproc, pprev, pnext)
+  if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
   call select_device()
   call setup_geometry()
   call allocate_fields()
@@ -53,17 +55,6 @@ program test_cuda_transeq
 
 contains
 
-  subroutine initialise_mpi()
-    call MPI_Init(ierr)
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-    if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
-
-    !print*, 'I am rank', nrank, 'I am running on device', devnum
-    pnext = modulo(nrank - nproc + 1, nproc)
-    pprev = modulo(nrank - 1, nproc)
-  end subroutine initialise_mpi
 
   subroutine select_device()
     ierr = cudaGetDeviceCount(ndevs)
