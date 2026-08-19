@@ -10,6 +10,10 @@ module m_backend_runtime
   use m_cuda_allocator, only: cuda_allocator_t
   use m_cuda_backend, only: cuda_backend_t
   use m_cuda_common, only: SZ
+#elif defined(OMP_TGT)
+  use m_omp_common, only: SZ
+  use m_omptgt_allocator, only: omptgt_allocator_t
+  use m_omptgt_backend, only: omptgt_backend_t
 #else
   use m_omp_backend, only: omp_backend_t
   use m_omp_common, only: SZ
@@ -38,6 +42,9 @@ module m_backend_runtime
 #ifdef CUDA
     type(cuda_backend_t) :: cuda_backend
     type(cuda_allocator_t) :: cuda_allocator
+#elif defined(OMP_TGT)
+    type(omptgt_backend_t) :: omptgt_backend
+    type(omptgt_allocator_t) :: omptgt_allocator
 #else
     type(omp_backend_t) :: omp_backend
     type(allocator_t) :: omp_allocator
@@ -55,17 +62,21 @@ contains
     logical, optional, intent(in) :: separate_host_allocator
 
     integer :: dims(3)
+#if !defined(CUDA) && !defined(OMP_TGT)
     logical :: need_separate_host_allocator
+#endif
 
 #ifdef CUDA
     integer :: ierr, nrank, ndevs, devnum
 #endif
 
     dims = mesh%grid%vert_dims
+#if !defined(CUDA) && !defined(OMP_TGT)
     need_separate_host_allocator = .false.
     if (present(separate_host_allocator)) then
       need_separate_host_allocator = separate_host_allocator
     end if
+#endif
 
 #ifdef CUDA
     call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
@@ -87,6 +98,17 @@ contains
     self%host_allocator => self%host_allocator_storage
     self%cuda_backend = cuda_backend_t(mesh, self%allocator)
     self%backend => self%cuda_backend
+#elif defined(OMP_TGT)
+    self%backend_name = 'OMP_TGT'
+    self%omptgt_allocator = omptgt_allocator_t(dims, SZ)
+    self%allocator => self%omptgt_allocator
+    ! omp_tgt manages offload memory, so always use a separate host
+    ! allocator (the omptgt allocator cannot be aliased by a plain
+    ! type(allocator_t) pointer).
+    self%host_allocator_storage = allocator_t(dims, SZ)
+    self%host_allocator => self%host_allocator_storage
+    self%omptgt_backend = omptgt_backend_t(mesh, self%allocator)
+    self%backend => self%omptgt_backend
 #else
     self%backend_name = 'OMP'
     self%omp_allocator = allocator_t(dims, SZ)
