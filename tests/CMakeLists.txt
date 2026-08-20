@@ -219,6 +219,7 @@ if((${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_test(unit/test_reordering.f90 1 cuda)
   define_test(unit/test_vecadd.f90 1 cuda)
   define_test(unit/test_kinetic_energy.f90 1 cuda)
+  define_test(unit/test_setget_field.f90 1 cuda)
   define_test(unit/test_cuda_allocator.f90 1 cuda)
   define_test(unit/test_cuda_reorder.f90 1 cuda)
 

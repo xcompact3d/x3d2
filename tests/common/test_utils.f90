@@ -5,7 +5,7 @@ module m_test_utils
   implicit none
 
   private
-  public :: initialise_mpi, finalise_test, checkerr, &
+  public :: initialise_mpi, finalise_test, global_all, global_sum, checkerr, &
             write_perf_metric, write_perf_minmax_metrics, &
             write_perf_summary, write_perf_minmax_summary, &
             write_device_bw_metric
@@ -27,6 +27,26 @@ contains
     if (present(pprev)) pprev = modulo(nrank - 1, nproc)
     if (present(pnext)) pnext = modulo(nrank - nproc + 1, nproc)
   end subroutine initialise_mpi
+
+  subroutine global_all(value)
+    !! Replace a local logical value with the logical AND across all ranks.
+    logical, intent(inout) :: value
+
+    integer :: ierr
+
+    call MPI_Allreduce(MPI_IN_PLACE, value, 1, MPI_LOGICAL, MPI_LAND, &
+                       MPI_COMM_WORLD, ierr)
+  end subroutine global_all
+
+  subroutine global_sum(value)
+    !! Replace a local integer value with the sum across all ranks.
+    integer, intent(inout) :: value
+
+    integer :: ierr
+
+    call MPI_Allreduce(MPI_IN_PLACE, value, 1, MPI_INTEGER, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+  end subroutine global_sum
 
   subroutine finalise_test(allpass, nrank, finalize_mpi)
     !! Report the aggregate test result and finalise MPI, aborting via

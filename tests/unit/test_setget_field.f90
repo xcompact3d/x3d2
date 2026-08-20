@@ -1,52 +1,27 @@
 program test_setget_field
 
-  use mpi
-
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, DIR_C, DIR_X, DIR_Y, DIR_Z, VERT
-#ifdef CUDA
-  use m_cuda_allocator, only: cuda_allocator_t
-  use m_cuda_backend, only: cuda_backend_t
-  use m_cuda_common, only: SZ
-#else
-#ifndef OMP_TGT
-  use m_omp_backend, only: omp_backend_t
-#else
-  use m_omptgt_backend, only: omptgt_backend_t
-  use m_omptgt_allocator, only: omptgt_allocator_t
-#endif
-  use m_omp_common, only: SZ
-#endif
+  use m_backend_runtime, only: backend_runtime_t
+  use m_common, only: dp, DIR_C, DIR_X, VERT
   use m_mesh, only: mesh_t
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
+  type(backend_runtime_t), target :: runtime
   class(allocator_t), pointer :: allocator
   class(base_backend_t), pointer :: backend
-#ifdef CUDA
-  type(cuda_allocator_t), target :: cuda_allocator
-  type(cuda_backend_t), target :: cuda_backend
-#else
-#ifndef OMP_TGT
-  type(allocator_t), target :: omp_allocator
-  type(omp_backend_t), target :: omp_backend
-#else
-  type(omptgt_allocator_t), target :: omptgt_allocator
-  type(omptgt_backend_t), target :: omptgt_backend
-#endif
-#endif
-  type(mesh_t) :: mesh
+  type(mesh_t), target :: mesh
 
   class(field_t), pointer :: fld, fld_c
   real(dp), dimension(:, :, :), allocatable :: arr
   integer, dimension(3) :: shape_c
 
-  integer :: irank
-  integer :: ierr
+  integer :: nrank, nproc
+  logical :: allpass
 
-  call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
+  call initialise_mpi(nrank, nproc)
 
   print *, "Initialised MPI"
 
@@ -57,24 +32,9 @@ program test_setget_field
 
   print *, "Initialised mesh"
 
-#ifdef CUDA
-  cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => cuda_allocator
-#else
-#ifndef OMP_TGT
-  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => omp_allocator
-
-  omp_backend = omp_backend_t(mesh, allocator)
-  backend => omp_backend
-#else
-  omptgt_allocator = omptgt_allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => omptgt_allocator
-
-  omptgt_backend = omptgt_backend_t(mesh, allocator)
-  backend => omptgt_backend
-#endif
-#endif
+  call runtime%init(mesh)
+  allocator => runtime%allocator
+  backend => runtime%backend
 
   print *, "Initialised backend"
 
@@ -91,14 +51,17 @@ program test_setget_field
 
   print *, "Set field data"
 
+  allpass = .true.
   if (fld%data_loc /= VERT) then
-    error stop "Field location was changed by set_field_data"
+    print *, "Field location was changed by set_field_data"
+    allpass = .false.
   end if
 
   arr = 0.0_dp
   call backend%get_field_data(arr, fld)
   if (any(arr /= 1.0_dp)) then
-    error stop "Getting/setting field data failed"
+    print *, "Getting/setting field data failed"
+    allpass = .false.
   end if
 
   print *, "Get field data"
@@ -107,10 +70,6 @@ program test_setget_field
   call backend%allocator%release_block(fld)
   call backend%allocator%release_block(fld_c)
 
-  call MPI_Barrier(MPI_COMM_WORLD, ierr)
-  call MPI_Finalize(ierr)
-  if (irank == 0) then
-    print *, "PASS"
-  end if
+  call finalise_test(allpass, nrank)
 
 end program test_setget_field
