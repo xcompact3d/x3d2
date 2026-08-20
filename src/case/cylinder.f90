@@ -111,7 +111,7 @@ contains
     class(case_cylinder_t) :: self
     real(dp), intent(out) :: out_vel, flow_rate_diff
 
-    integer :: dims(3), nx, ierr
+    integer :: dims(3), dims_glob(3), nx, ierr
     real(dp) :: uxmax, uxmax_discard
     real(dp) :: flow_rate_in, flow_rate_out
     real(dp) :: flow_rate_in_max_discard, flow_rate_out_max_discard
@@ -121,9 +121,11 @@ contains
     dims = self%solver%mesh%get_dims(VERT)
     nx = dims(1)
     dx = self%solver%mesh%geo%d(1)
-    ! NOTE: preserved from original -- uses local ny*nz, not global. If the
-    ! y-z plane is decomposed, this is not the true per-cell flow rate.
-    ny_nz = real(dims(2)*dims(3), dp)
+    ! The slice sums are rank local and the Allreduce below adds them up
+    ! across the whole y-z plane, so the divisor is the global vertex count
+    ! in y and z rather than this rank's share of it.
+    dims_glob = self%solver%mesh%get_global_dims(VERT)
+    ny_nz = real(dims_glob(2)*dims_glob(3), dp)
     gdt = self%solver%time_integrator%gdt
 
     call self%solver%backend%slice_max_sum( &

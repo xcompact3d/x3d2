@@ -435,7 +435,7 @@ module m_base_backend
       implicit none
 
       class(base_backend_t) :: self
-      type(mesh_t), intent(in) :: mesh
+      type(mesh_t), target, intent(in) :: mesh
       type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
       logical, optional, intent(in) :: lowmem
     end subroutine init_poisson_fft

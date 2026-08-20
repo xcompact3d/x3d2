@@ -14,6 +14,7 @@ module m_cuda_poisson_fft
   use m_tdsops, only: dirps_t
 
   use m_cuda_allocator, only: cuda_field_t
+  use m_cuda_sendrecv, only: default_stream
   use m_cuda_spectral, only: memcpy3D, memcpy3D_with_transpose, &
                              memcpy3D_with_transpose_back, &
                              transpose_xyz_to_zxy, transpose_zxy_to_xyz, &
@@ -30,7 +31,12 @@ module m_cuda_poisson_fft
                              enforce_periodicity_xy, undo_periodicity_xy, &
                              process_spectral_010_fw, &
                              process_spectral_010_poisson, &
-                             process_spectral_010_bw
+                             process_spectral_010_bw, &
+                             process_spectral_100, &
+                             process_spectral_100_fw, &
+                             process_spectral_100_pair_fw, &
+                             process_spectral_100_pair_bw, &
+                             pack_spectral_plane
 
   implicit none
 
@@ -73,6 +79,14 @@ module m_cuda_poisson_fft
     real(dp), device, allocatable, dimension(:, :, :) :: r_dev
     !> Transposed real workspace for 110 case (nz, nx, ny)
     real(dp), device, allocatable, dimension(:, :, :) :: r_dev_110
+    !> dim2 mirror of the local spectral slab, used by the 100 case to
+    !> reach the paired split partner that lives on another rank
+    complex(dp), device, allocatable, dimension(:, :, :) :: c_mirror_dev
+    !> The single dim2 plane that falls outside the mirrored slab
+    complex(dp), device, allocatable, dimension(:, :) :: c_plane_send_dev, &
+                                                         c_plane_recv_dev
+    !> Ranks holding the mirror slab and the extra mirror plane
+    integer :: mirror_slab_rank = 0, mirror_plane_rank = 0
   contains
     procedure :: fft_forward => fft_forward_cuda
     procedure :: fft_forward_010 => fft_forward_cuda
@@ -92,6 +106,7 @@ module m_cuda_poisson_fft
     procedure :: undo_periodicity_y => undo_periodicity_y_cuda
     procedure :: enforce_periodicity_xy => enforce_periodicity_xy_cuda
     procedure :: undo_periodicity_xy => undo_periodicity_xy_cuda
+    procedure :: exchange_mirror_100
   end type cuda_poisson_fft_t
 
   interface cuda_poisson_fft_t
@@ -184,7 +199,7 @@ contains
     result(poisson_fft)
     implicit none
 
-    type(mesh_t), intent(in) :: mesh
+    type(mesh_t), target, intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
 
@@ -290,6 +305,27 @@ contains
                                     poisson_fft%nz_spec))
     poisson_fft%waves_dev = poisson_fft%waves
 
+    ! The 100 case pairs each dim2 spectral mode with its mirror, which
+    ! cuFFTMp may place on another rank. Slab index r of P owns global
+    ! dim2 modes [r*m + 1, (r + 1)*m] with m = ny_spec, and the mirror of
+    ! that range is slab P - 1 - r shifted up by one plane, so the extra
+    ! plane comes from slab P - r. Both partners are symmetric.
+    if (poisson_fft%is_100_case .and. mesh%par%nproc > 1) then
+      poisson_fft%mirror_slab_rank = mesh%par%nproc_dir(3) - 1 &
+                                     - mesh%par%nrank_dir(3)
+      poisson_fft%mirror_plane_rank = mod(mesh%par%nproc_dir(3) &
+                                          - mesh%par%nrank_dir(3), &
+                                          mesh%par%nproc_dir(3))
+
+      allocate (poisson_fft%c_mirror_dev(poisson_fft%nx_spec, &
+                                         poisson_fft%ny_spec, &
+                                         poisson_fft%nz_spec))
+      allocate (poisson_fft%c_plane_send_dev(poisson_fft%nx_spec, &
+                                             poisson_fft%nz_spec))
+      allocate (poisson_fft%c_plane_recv_dev(poisson_fft%nx_spec, &
+                                             poisson_fft%nz_spec))
+    end if
+
     allocate (poisson_fft%ax_dev(nx), poisson_fft%bx_dev(nx))
     allocate (poisson_fft%ay_dev(ny), poisson_fft%by_dev(ny))
     allocate (poisson_fft%az_dev(nz), poisson_fft%bz_dev(nz))
@@ -393,6 +429,24 @@ contains
         else
           print *, 'Using cuFFT for FFT'
         end if
+      end if
+    end if
+
+    ! exchange_mirror_100 relies on cuFFTMp handing out the dim2 modes as
+    ! equal sized blocks in rank order, so check that here rather than
+    ! producing a quietly wrong pressure field.
+    if (poisson_fft%is_100_case .and. mesh%par%nproc > 1) then
+      if (.not. poisson_fft%use_cufftmp) then
+        error stop 'The 100 case on multiple ranks needs cuFFTMp, plain &
+                    &cuFFT cannot decompose the transform.'
+      end if
+      if (mod(dims_loc(1), mesh%par%nproc_dir(3)) /= 0) then
+        error stop 'The 100 case on multiple ranks needs the number of x &
+                    &cells to divide by the number of ranks.'
+      end if
+      if (mesh%par%nrank /= mesh%par%nrank_dir(3)) then
+        error stop 'The 100 case mirror exchange assumes the MPI rank &
+                    &matches the z slab index.'
       end if
     end if
 
@@ -805,19 +859,132 @@ contains
     blocks = dim3((self%nx_spec - 1)/tsize + 1, self%nz_spec, 1)
     threads = dim3(tsize, 1, 1)
 
-    ! Call process_spectral_010 with swapped parameters:
+    ! Note the spectral component names describe the 010 layout, so in
+    ! the 100 case nx_spec counts Y (R2C) modes, ny_spec counts the local
+    ! X modes, and sp_st(2) is the X mode offset.
+    if (self%mesh%par%nproc == 1) then
+      call process_spectral_100<<<blocks, threads>>>( & !&
+        c_dev, self%waves_dev, &
+        self%nx_spec, self%ny_spec, self%sp_st(2), &
+        self%ny_glob, self%nx_glob, self%nz_glob, &
+        self%ay_dev, self%by_dev, &  ! dim1, periodic Y
+        self%ax_dev, self%bx_dev, &  ! dim2, non-periodic X
+        self%az_dev, self%bz_dev &   ! dim3, Z
+        )
+      return
+    end if
+
+    ! On multiple ranks the X paired split reaches its partner through a
+    ! mirror exchange, so the same work is staged across three launches.
+    ! These take dim1/dim2 arguments rather than physical directions:
     ! - Swap nx <-> ny for grid sizes
     ! - Swap ax,bx <-> ay,by for wave coefficients
     ! - Use sp_st(2) for the dim2 offset (X modes after transpose)
-    call process_spectral_010 <<<blocks, threads>>>( & !&
-      c_dev, self%waves_dev, &
-      self%nx_spec, self%ny_spec, self%sp_st(2), &  ! spectral dims and dim2 offset
+
+    ! Stage 1: normalisation, then the Y (R2C) and Z postprocess
+    call process_spectral_100_fw<<<blocks, threads>>>( & !&
+      c_dev, self%nx_spec, self%ny_spec, &
       self%ny_glob, self%nx_glob, self%nz_glob, &  ! SWAP nx <-> ny
-      self%ay_dev, self%by_dev, &  ! First dim uses Y coefficients (was periodic Y)
-      self%ax_dev, self%bx_dev, &  ! Second dim uses X coefficients (non-periodic X)
-      self%az_dev, self%bz_dev &   ! Third dim uses Z coefficients (unchanged)
+      self%ay_dev, self%by_dev, &  ! dim1 uses Y coefficients
+      self%az_dev, self%bz_dev &   ! dim3 uses Z coefficients
+      )
+
+    ! Fetch the X pairing partners that live on other ranks
+    call self%exchange_mirror_100(c_dev)
+
+    ! Stage 2: X paired split (forward), then the Poisson solve
+    call process_spectral_100_pair_fw<<<blocks, threads>>>( & !&
+      c_dev, self%c_mirror_dev, self%c_plane_recv_dev, self%waves_dev, &
+      self%nx_spec, self%ny_spec, self%sp_st(2), &  ! dims and dim2 offset
+      self%ny_glob, self%nz_glob, &  ! SWAP nx <-> ny
+      self%ax_dev, self%bx_dev &  ! dim2 uses X coefficients
+      )
+
+    ! Stage 2 rewrote every mode, so the mirror is stale and is refreshed
+    call self%exchange_mirror_100(c_dev)
+
+    ! Stage 3: X paired recombination (backward), then the Y and Z
+    ! postprocess
+    call process_spectral_100_pair_bw<<<blocks, threads>>>( & !&
+      c_dev, self%c_mirror_dev, self%c_plane_recv_dev, &
+      self%nx_spec, self%ny_spec, self%sp_st(2), &  ! dims and dim2 offset
+      self%ny_glob, self%nz_glob, &  ! SWAP nx <-> ny
+      self%ay_dev, self%by_dev, &  ! dim1 uses Y coefficients
+      self%ax_dev, self%bx_dev, &  ! dim2 uses X coefficients
+      self%az_dev, self%bz_dev &   ! dim3 uses Z coefficients
       )
   end subroutine fft_postprocess_100_cuda
+
+  subroutine exchange_mirror_100(self, c_dev)
+    !! Fills c_mirror_dev and c_plane_recv_dev with the dim2 mirror of the
+    !! local spectral slab, so that the 100 paired split can read its
+    !! partner mode without going looking for it in another rank's memory.
+    !!
+    !! Slab index r of P owns global dim2 modes [r*m + 1, (r + 1)*m], with
+    !! m = ny_spec. Local mode j pairs with global mode
+    !! (P - r)*m - j + 2, which is local mode m - j + 2 of slab P - 1 - r
+    !! for j >= 2, and the first mode of slab P - r for j = 1. One slab
+    !! sized exchange plus one plane sized exchange therefore covers the
+    !! whole pairing, and both partners are symmetric so the rank that
+    !! sends is the rank that receives.
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    complex(dp), device, dimension(:, :, :), intent(in) :: c_dev
+
+    type(dim3) :: blocks, threads
+    integer :: tsize, n_slab, n_plane, mpi_cplx, nrank, ierr
+    integer :: tag_slab = 2345, tag_plane = 2346
+
+    ! MPI cannot take the first dim2 plane strided out of c_dev, so pack it
+    tsize = 16
+    blocks = dim3((self%nx_spec - 1)/tsize + 1, self%nz_spec, 1)
+    threads = dim3(tsize, 1, 1)
+    call pack_spectral_plane<<<blocks, threads>>>( & !&
+      self%c_plane_send_dev, c_dev, self%nx_spec, self%nz_spec &
+      )
+
+    nrank = self%mesh%par%nrank
+
+    if (is_sp) then
+      mpi_cplx = MPI_COMPLEX
+    else
+      mpi_cplx = MPI_DOUBLE_COMPLEX
+    end if
+
+    n_slab = self%nx_spec*self%ny_spec*self%nz_spec
+    n_plane = self%nx_spec*self%nz_spec
+
+    ! Make sure the staged kernel and the packing above have landed before
+    ! MPI reads the device buffers.
+    if (self%mesh%par%nproc > 1) then
+      ierr = cudaStreamSynchronize(default_stream)
+    end if
+
+    ! On a single rank, and on the middle rank when P is odd, the mirror
+    ! is the local slab itself. It is still copied out rather than read in
+    ! place, so that the pairing kernels always see pre-update values.
+    if (self%mirror_slab_rank == nrank) then
+      self%c_mirror_dev = c_dev
+    else
+      call MPI_Sendrecv(c_dev, n_slab, mpi_cplx, &
+                        self%mirror_slab_rank, tag_slab, &
+                        self%c_mirror_dev, n_slab, mpi_cplx, &
+                        self%mirror_slab_rank, tag_slab, &
+                        MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
+    end if
+
+    if (self%mirror_plane_rank == nrank) then
+      self%c_plane_recv_dev = self%c_plane_send_dev
+    else
+      call MPI_Sendrecv(self%c_plane_send_dev, n_plane, mpi_cplx, &
+                        self%mirror_plane_rank, tag_plane, &
+                        self%c_plane_recv_dev, n_plane, mpi_cplx, &
+                        self%mirror_plane_rank, tag_plane, &
+                        MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
+    end if
+
+  end subroutine exchange_mirror_100
 
   subroutine fft_postprocess_010_cuda(self)
     implicit none
