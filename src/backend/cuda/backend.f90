@@ -17,6 +17,7 @@ module m_cuda_backend
   use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused, exec_dist_tds_compact
+  use m_cuda_exec_thom, only: exec_thom_tds_compact
   use m_cuda_poisson_fft, only: cuda_poisson_fft_t
   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
   use m_cuda_tdsops, only: cuda_tdsops_t
@@ -59,6 +60,7 @@ module m_cuda_backend
     procedure :: transeq_z => transeq_z_cuda
     procedure :: transeq_species => transeq_species_cuda
     procedure :: tds_solve => tds_solve_cuda
+    procedure :: thom_solve => thom_solve_cuda
     procedure :: reorder => reorder_cuda
     procedure :: sum_yintox => sum_yintox_cuda
     procedure :: sum_zintox => sum_zintox_cuda
@@ -81,6 +83,8 @@ module m_cuda_backend
     procedure :: copy_data_to_f => copy_data_to_f_cuda
     procedure :: copy_f_to_data => copy_f_to_data_cuda
     procedure :: init_poisson_fft => init_cuda_poisson_fft
+    procedure :: sync => sync_cuda
+    procedure :: get_device_bw_info => get_device_bw_info_cuda
     procedure :: transeq_cuda_dist
     procedure :: transeq_cuda_thom
     procedure :: tds_solve_dist
@@ -179,6 +183,33 @@ contains
     end select
 
   end subroutine alloc_cuda_tdsops
+
+  subroutine sync_cuda(self)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    integer :: ierr
+
+    ierr = cudaDeviceSynchronize()
+
+  end subroutine sync_cuda
+
+  subroutine get_device_bw_info_cuda(self, mem_clock_rt, mem_bus_width, &
+                                     available)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    integer, intent(out) :: mem_clock_rt
+    integer, intent(out) :: mem_bus_width
+    logical, intent(out) :: available
+    integer :: ierr
+
+    ierr = cudaDeviceGetAttribute(mem_clock_rt, cudaDevAttrMemoryClockRate, 0)
+    ierr = cudaDeviceGetAttribute(mem_bus_width, &
+                                  cudaDevAttrGlobalMemoryBusWidth, 0)
+    available = .true.
+
+  end subroutine get_device_bw_info_cuda
 
   subroutine transeq_x_cuda(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
@@ -477,6 +508,43 @@ contains
     call tds_solve_dist(self, du, u, tdsops, blocks, threads)
 
   end subroutine tds_solve_cuda
+
+  subroutine thom_solve_cuda(self, du, u, tdsops)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: du
+    class(field_t), intent(in) :: u
+    class(tdsops_t), intent(in) :: tdsops
+
+    real(dp), device, pointer, dimension(:, :, :) :: du_dev, u_dev
+    type(cuda_tdsops_t), pointer :: tdsops_dev
+    type(dim3) :: blocks, threads
+
+    if (u%dir /= du%dir) then
+      error stop 'DIR mismatch between fields in thom_solve.'
+    end if
+
+    blocks = dim3(self%allocator%get_n_groups(u%dir), 1, 1)
+    threads = dim3(SZ, 1, 1)
+
+    if (u%data_loc /= NULL_LOC) then
+      call du%set_data_loc(move_data_loc(u%data_loc, u%dir, tdsops%move))
+    end if
+
+    call resolve_field_t(du_dev, du)
+    call resolve_field_t(u_dev, u)
+
+    select type (tdsops)
+    type is (cuda_tdsops_t)
+      tdsops_dev => tdsops
+    class default
+      error stop 'Expected cuda_tdsops_t in thom_solve_cuda.'
+    end select
+
+    call exec_thom_tds_compact(du_dev, u_dev, tdsops_dev, blocks, threads)
+
+  end subroutine thom_solve_cuda
 
   subroutine tds_solve_dist(self, du, u, tdsops, blocks, threads)
     implicit none
