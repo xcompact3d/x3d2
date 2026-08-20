@@ -7,7 +7,8 @@ program perf_omp_tridiag
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_exec_dist, only: exec_dist_tds_compact
   use m_tdsops, only: tdsops_t, tdsops_init
-  use m_test_utils, only: initialise_mpi, write_perf_minmax_metrics
+  use m_test_utils, only: initialise_mpi, finalise_test, &
+                          write_perf_minmax_metrics
 
   implicit none
 
@@ -32,7 +33,7 @@ program perf_omp_tridiag
   call configure_benchmark()
   call allocate_fields()
   call run_case('periodic', dx_per, periodic_bw)
-  call finalise()
+  call finalise_test(.true., nrank)
 
 contains
 
@@ -154,9 +155,5 @@ contains
 
     t = omp_get_wtime()
   end subroutine stop_timer
-
-  subroutine finalise()
-    call MPI_Finalize(ierr)
-  end subroutine finalise
 
 end program perf_omp_tridiag

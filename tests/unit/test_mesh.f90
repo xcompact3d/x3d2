@@ -1,12 +1,11 @@
 program test_mesh
-  use mpi
   use iso_fortran_env, only: stderr => error_unit
 
   use m_allocator, only: allocator_t
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_common, only: DIR_X, pi, dp, CELL, DIR_C, DIR_Y, DIR_Z, VERT, Z_FACE
-  use m_test_utils, only: finalise_test
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
@@ -19,15 +18,13 @@ program test_mesh
   class(field_t), pointer :: ptr1, ptr2, ptr3
   integer, dimension(3) :: dims
   integer, dimension(3) :: dims_check
-  integer :: ierr, nrank, nproc
+  integer :: nrank, nproc
   integer :: n_cell, n_vert, n_x_face
   ! -ffast-math reciprocal division can be ~1 ulp off even for exactly
   ! representable results, so the tolerance must scale with the precision
   real(dp), parameter :: eps = 1000*epsilon(1._dp)
 
-  call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-  call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+  call initialise_mpi(nrank, nproc)
 
   allpass = .true.
 

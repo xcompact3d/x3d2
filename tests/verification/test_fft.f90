@@ -127,10 +127,6 @@ program test_fft
     if (mesh%par%is_root()) then
       print *, "error in FFT result, error norm=", error_norm
     end if
-  else
-    if (mesh%par%is_root()) then
-      print *, "TEST PASS"
-    end if
   end if
 
   call allocator%release_block(input_field)

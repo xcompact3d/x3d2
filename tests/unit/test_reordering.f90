@@ -1,7 +1,5 @@
 program test_reorder
   use iso_fortran_env, only: stderr => error_unit
-  use mpi
-
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
 
@@ -12,7 +10,7 @@ program test_reorder
   use m_backend_runtime, only: backend_runtime_t, backend_sz
   use m_ordering, only: get_index_dir, get_index_ijk
   use m_mesh, only: mesh_t
-  use m_test_utils, only: finalise_test
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
@@ -25,7 +23,7 @@ program test_reorder
   integer :: dims(3)
 
   integer :: nrank, nproc
-  integer :: ierr, i, j, k
+  integer :: i, j, k
 
   real(dp) :: dx, dx_per
 
@@ -39,9 +37,7 @@ program test_reorder
   logical :: pass_X, pass_Y, pass_Z
 
   ! Initialise variables and arrays
-  call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-  call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+  call initialise_mpi(nrank, nproc)
 
   ! Global number of cells in each direction
   dims_global = [64, 64, 96]
@@ -164,4 +160,3 @@ contains
   end subroutine
 
 end program test_reorder
-
