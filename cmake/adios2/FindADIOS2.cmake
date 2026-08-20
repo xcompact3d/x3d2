@@ -18,7 +18,9 @@
 #   ADIOS2_ROOT_DIR - Directory where ADIOS2 is installed (when USE_SYSTEM_ADIOS2=ON)
 option(USE_SYSTEM_ADIOS2 "Use system-installed ADIOS2" OFF)
 set(ADIOS2_ROOT_DIR "" CACHE PATH "Directory where ADIOS2 is installed (optional)")
-set(adios2_git_tag "v2.10.2")
+set(CUDA_ARCH "" CACHE STRING
+  "CUDA architecture(s) for the ADIOS2 build (e.g. 80). Empty selects native detection.")
+set(adios2_git_tag "v2.12.1")
 string(REPLACE "/" "-" adios2_git_tag_dir "${adios2_git_tag}")
 
 if(NOT USE_SYSTEM_ADIOS2 AND ADIOS2_ROOT_DIR)
@@ -75,6 +77,20 @@ else()
 
     # ensure that the build directory for the external project exists
     file(MAKE_DIRECTORY "${adios2_driver_dir}")
+
+    # ADIOS2 defaults CMAKE_CUDA_ARCHITECTURES to 52 (Maxwell) when unset, which
+    # CUDA >= 13 no longer supports. Forward an explicit architecture so ADIOS2's
+    # CUDA sources build for the target GPU. CUDA_ARCH may be set to a specific
+    # value (e.g. 80); otherwise fall back to native detection.
+    if(X3D2_ADIOS2_CUDA)
+      if(CUDA_ARCH)
+        set(x3d2_adios2_cuda_arch "${CUDA_ARCH}")
+      else()
+        set(x3d2_adios2_cuda_arch "native")
+      endif()
+    else()
+      set(x3d2_adios2_cuda_arch "")
+    endif()
 
     # copy the external project script into a subdirectory of the build tree
     configure_file(

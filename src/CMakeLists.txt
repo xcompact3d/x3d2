@@ -122,10 +122,13 @@ target_link_libraries(xcompact PRIVATE x3d2)
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   set(CMAKE_Fortran_FLAGS "-cpp -cuda")
-  set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr -Ktrap=fp")
-  # Note: -Ktrap=fp traps FP exceptions process-wide. On some NVIDIA GPUs (for example RTX A4000)
-  # it was giving a divide-by-zero inside cuFFTMp's PTX-JIT compiler during Poisson FFT plan creation
-  # This is a JIT quirk (not an issue with cuFFTMp or bug in x3d2). Remove this flag if you encounter this error
+  set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr")
+  # Opt-in: -Ktrap=fp traps FP exceptions process-wide, turning benign FP ops in
+  # linked libs (cuFFTMp PTX-JIT, HPC-X/UCX at MPI_Init) into fatal SIGFPEs.
+  option(CUDA_DEBUG_FP_TRAP "Trap FP exceptions in the CUDA debug build (-Ktrap=fp)" OFF)
+  if(CUDA_DEBUG_FP_TRAP)
+    set(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG} -Ktrap=fp")
+  endif()
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
   target_link_options(x3d2 INTERFACE "-cuda")
   target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")

@@ -56,6 +56,20 @@ To use the built-in ADIOS2 (default behavior):
 
    -DWITH_ADIOS2=ON
 
+CUDA Architecture for the ADIOS2 Build
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When x3d2 is built with the NVHPC compiler, the built-in ADIOS2 is compiled with 
+CUDA support. By default its CUDA sources are built for the architecture of the 
+GPU present at configure time (``native`` detection). If you are building on a 
+node without a visible GPU (for example a GPU-less login or build node), ``native`` 
+cannot probe the hardware, so set the target architecture explicitly with 
+the ``CUDA_ARCH`` CMake option:
+
+.. code-block:: bash
+
+   -DCUDA_ARCH=80
+
 Library Path Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -174,3 +188,20 @@ Available combinations:
 
 - Double precision simulation (default): checkpoints in double precision, snapshots configurable via ``snapshot_sp``
 - Single precision simulation (``-DSINGLE_PREC=ON``): all I/O in single precision, ``snapshot_sp`` ignored
+
+Debugging the CUDA Backend
+--------------------------
+
+FP Exception Trapping
+~~~~~~~~~~~~~~~~~~~~~~
+
+The NVHPC debug build omits ``-Ktrap=fp`` by default. Because it traps floating-point exceptions 
+process-wide, benign FP operations inside linked libraries (for example cuFFTMp's PTX-JIT during 
+Poisson plan creation, or HPC-X/UCX in ``ucp_worker_iface_open`` during ``MPI_Init``) can raise 
+a fatal ``SIGFPE`` that is unrelated to x3d2. To enable trapping when hunting a genuine FP bug 
+in x3d2's own kernels, use the ``CUDA_DEBUG_FP_TRAP`` CMake option:
+
+.. code-block:: bash
+
+   -DCUDA_DEBUG_FP_TRAP=ON
+
