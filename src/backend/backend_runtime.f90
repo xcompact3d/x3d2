@@ -56,6 +56,27 @@ module m_backend_runtime
 
 contains
 
+#ifdef CUDA
+  subroutine select_cuda_device(nrank, devnum)
+    !! Select a CUDA device round-robin by MPI rank.  The optional result
+    !! returns the device that CUDA reports as current after selection.
+    integer, intent(in) :: nrank
+    integer, optional, intent(out) :: devnum
+
+    integer :: ierr, ndevs, selected_device
+
+    ierr = cudaGetDeviceCount(ndevs)
+    if (ndevs < 1) then
+      error stop 'select_cuda_device: no CUDA devices available'
+    end if
+
+    ierr = cudaSetDevice(mod(nrank, ndevs))
+    ierr = cudaGetDevice(selected_device)
+
+    if (present(devnum)) devnum = selected_device
+  end subroutine select_cuda_device
+#endif
+
   subroutine init(self, mesh, separate_host_allocator)
     class(backend_runtime_t), target, intent(inout) :: self
     type(mesh_t), target, intent(inout) :: mesh
@@ -67,7 +88,7 @@ contains
 #endif
 
 #ifdef CUDA
-    integer :: ierr, nrank, ndevs, devnum
+    integer :: ierr, nrank
 #endif
 
     dims = mesh%grid%vert_dims
@@ -80,12 +101,7 @@ contains
 
 #ifdef CUDA
     call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    ierr = cudaGetDeviceCount(ndevs)
-    if (ndevs < 1) then
-      error stop 'backend_runtime_t%init: no CUDA devices available'
-    end if
-    ierr = cudaSetDevice(mod(nrank, ndevs))
-    ierr = cudaGetDevice(devnum)
+    call select_cuda_device(nrank)
 
     self%backend_name = 'CUDA'
     self%cuda_allocator = cuda_allocator_t(dims, SZ)

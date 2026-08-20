@@ -8,6 +8,7 @@ program test_cuda_transeq
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused
   use m_cuda_sendrecv, only: sendrecv_fields
   use m_cuda_tdsops, only: cuda_tdsops_t
+  use m_backend_runtime, only: select_cuda_device
   use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
@@ -30,7 +31,7 @@ program test_cuda_transeq
 
   integer :: n, n_block, n_halo, n_glob
   integer :: nrank, nproc, pprev, pnext
-  integer :: ierr, ndevs, devnum
+  integer :: ierr
 
   type(dim3) :: blocks, threads
   ! The diffusion term's roundoff floor is ~eps/dx^2: at n=512 this is
@@ -44,7 +45,7 @@ program test_cuda_transeq
 
   call initialise_mpi(nrank, nproc, pprev, pnext)
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
-  call select_device()
+  call select_cuda_device(nrank)
   call setup_geometry()
   call allocate_fields()
   call initialise_input()
@@ -54,13 +55,6 @@ program test_cuda_transeq
   call finalise_test(allpass, nrank)
 
 contains
-
-
-  subroutine select_device()
-    ierr = cudaGetDeviceCount(ndevs)
-    ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robine
-    ierr = cudaGetDevice(devnum)
-  end subroutine select_device
 
   subroutine setup_geometry()
     n_glob = 512

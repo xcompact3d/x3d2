@@ -7,7 +7,8 @@ program test_cuda_reorder
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
                                     reorder_c2x, reorder_x2c
-  use m_test_utils, only: finalise_test
+  use m_backend_runtime, only: select_cuda_device
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
@@ -19,9 +20,13 @@ program test_cuda_reorder
 
   integer :: n_block
   integer :: nx, ny, nz
+  integer :: nrank, nproc
 
   type(dim3) :: blocks, threads
   real(dp) :: norm_u
+
+  call initialise_mpi(nrank, nproc)
+  call select_cuda_device(nrank)
 
   nx = 256; ny = 256; nz = 256
   n_block = ny*nz/SZ
@@ -129,6 +134,6 @@ program test_cuda_reorder
     write (stderr, '(a)') 'Check reorder x2c and c2x... passed'
   end if
 
-  call finalise_test(allpass, finalize_mpi=.false.)
+  call finalise_test(allpass, nrank)
 
 end program test_cuda_reorder

@@ -7,7 +7,10 @@ program perf_cuda_transeq
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused
   use m_cuda_sendrecv, only: sendrecv_fields
   use m_cuda_tdsops, only: cuda_tdsops_t
-  use m_test_utils, only: initialise_mpi, write_perf_minmax_metrics, &
+  use m_backend_runtime, only: select_cuda_device
+  use m_test_utils, only: initialise_mpi, finalise_test, global_all, &
+                          check_status, &
+                          write_perf_minmax_metrics, &
                           write_perf_minmax_summary, write_device_bw_metric
 
   implicit none
@@ -34,19 +37,22 @@ real(dp), device, allocatable :: du_send_s_dev(:, :, :), du_send_e_dev(:, :, :)
   integer :: n, n_block, n_halo, n_iters, n_warmup, n_glob, ndof, nrank, nproc
   integer :: pprev, pnext
   integer :: ierr
-  integer :: ndevs, devnum
+  integer :: devnum
   integer :: memClockRt, memBusWidth
   type(dim3) :: blocks, threads
   real(dp) :: dx_per, nu
+  logical :: allpass = .true.
 
   call initialise_mpi(nrank, nproc, pprev, pnext)
   if (nrank == 0) print *, 'Performance benchmark with', nproc, 'ranks'
-  call select_device()
+  call select_cuda_device(nrank, devnum)
   call configure_benchmark()
   call allocate_fields()
   call setup_backend()
-  call run_case('periodic', dx_per, periodic_bw)
-  call finalise()
+  call global_all(allpass)
+  if (allpass) call run_case('periodic', dx_per, periodic_bw)
+  call global_all(allpass)
+  call finalise_test(allpass, nrank)
 
 contains
 
@@ -80,12 +86,6 @@ allocate (v_recv_s_dev(SZ, n_halo, n_block), v_recv_e_dev(SZ, n_halo, n_block))
     allocate (d2u_recv_s_dev(SZ, 1, n_block), d2u_recv_e_dev(SZ, 1, n_block))
   end subroutine allocate_fields
 
-  subroutine select_device()
-    ierr = cudaGetDeviceCount(ndevs)
-    ierr = cudaSetDevice(mod(nrank, ndevs))
-    ierr = cudaGetDevice(devnum)
-  end subroutine select_device
-
   subroutine setup_backend()
     integer :: i, j, k
 
@@ -112,7 +112,9 @@ allocate (v_recv_s_dev(SZ, n_halo, n_block), v_recv_e_dev(SZ, n_halo, n_block))
 
     ierr = cudaDeviceGetAttribute(memClockRt, cudaDevAttrMemoryClockRate, &
                                   devnum)
+    call check_status(ierr, 'query CUDA memory clock rate', allpass)
     ierr = cudaDeviceGetAttribute(memBusWidth, cudaDevAttrGlobalMemoryBusWidth, devnum)
+    call check_status(ierr, 'query CUDA memory bus width', allpass)
   end subroutine setup_backend
 
   subroutine run_case(case_name, delta, consumed_bw)
@@ -130,12 +132,14 @@ allocate (v_recv_s_dev(SZ, n_halo, n_block), v_recv_e_dev(SZ, n_halo, n_block))
       call run_kernel()
     end do
     call sync_backend()
+    if (.not. allpass) return
 
     call start_timer(tstart)
     do iter = 1, n_iters
       call run_kernel()
     end do
     call sync_backend()
+    if (.not. allpass) return
     call stop_timer(tend)
 
     call collect_perf_stats(tend - tstart, consumed_bw, achieved_bw, &
@@ -216,7 +220,9 @@ allocate (v_recv_s_dev(SZ, n_halo, n_block), v_recv_e_dev(SZ, n_halo, n_block))
 
   subroutine sync_backend()
     ierr = cudaDeviceSynchronize()
+    call check_status(ierr, 'synchronise CUDA device', allpass)
     call MPI_Barrier(MPI_COMM_WORLD, ierr)
+    call global_all(allpass)
   end subroutine sync_backend
 
   subroutine start_timer(t)
@@ -230,9 +236,5 @@ allocate (v_recv_s_dev(SZ, n_halo, n_block), v_recv_e_dev(SZ, n_halo, n_block))
 
     call cpu_time(t)
   end subroutine stop_timer
-
-  subroutine finalise()
-    call MPI_Finalize(ierr)
-  end subroutine finalise
 
 end program perf_cuda_transeq

@@ -8,6 +8,7 @@ program test_cuda_tridiag
   use m_cuda_exec_dist, only: exec_dist_tds_compact
   use m_cuda_sendrecv, only: sendrecv_fields
   use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
+  use m_backend_runtime, only: select_cuda_device
   use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
@@ -25,7 +26,7 @@ program test_cuda_tridiag
 
   integer :: n, n_block, n_halo, n_glob
   integer :: nrank, nproc, pprev, pnext
-  integer :: ierr, ndevs, devnum
+  integer :: ierr
 
   type(dim3) :: blocks, threads
   ! The second-derivative roundoff floor is ~eps/dx^2: at n=1024 this is
@@ -40,7 +41,7 @@ program test_cuda_tridiag
 
   call initialise_mpi(nrank, nproc, pprev, pnext)
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
-  call select_device()
+  call select_cuda_device(nrank)
   call setup_geometry()
   call allocate_fields()
   call initialise_input()
@@ -50,13 +51,6 @@ program test_cuda_tridiag
   call finalise_test(allpass, nrank)
 
 contains
-
-
-  subroutine select_device()
-    ierr = cudaGetDeviceCount(ndevs)
-    ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robin
-    ierr = cudaGetDevice(devnum)
-  end subroutine select_device
 
   subroutine setup_geometry()
     n_glob = 512*2

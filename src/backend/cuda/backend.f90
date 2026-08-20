@@ -202,11 +202,13 @@ contains
     integer, intent(out) :: mem_clock_rt
     integer, intent(out) :: mem_bus_width
     logical, intent(out) :: available
-    integer :: ierr
+    integer :: ierr, devnum
 
-    ierr = cudaDeviceGetAttribute(mem_clock_rt, cudaDevAttrMemoryClockRate, 0)
+    ierr = cudaGetDevice(devnum)
+    ierr = cudaDeviceGetAttribute(mem_clock_rt, cudaDevAttrMemoryClockRate, &
+                                  devnum)
     ierr = cudaDeviceGetAttribute(mem_bus_width, &
-                                  cudaDevAttrGlobalMemoryBusWidth, 0)
+                                  cudaDevAttrGlobalMemoryBusWidth, devnum)
     available = .true.
 
   end subroutine get_device_bw_info_cuda

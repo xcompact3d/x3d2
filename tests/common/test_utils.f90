@@ -5,7 +5,8 @@ module m_test_utils
   implicit none
 
   private
-  public :: initialise_mpi, finalise_test, global_all, global_sum, checkerr, &
+  public :: initialise_mpi, finalise_test, global_all, global_sum, &
+            check_status, checkerr, &
             write_perf_metric, write_perf_minmax_metrics, &
             write_perf_summary, write_perf_minmax_summary, &
             write_device_bw_metric
@@ -47,6 +48,19 @@ contains
     call MPI_Allreduce(MPI_IN_PLACE, value, 1, MPI_INTEGER, MPI_SUM, &
                        MPI_COMM_WORLD, ierr)
   end subroutine global_sum
+
+  subroutine check_status(status, label, allpass)
+    !! Mark a test or benchmark as failed when an API returns a non-zero
+    !! status code. The caller decides where ranks must synchronise allpass.
+    integer, intent(in) :: status
+    character(len=*), intent(in) :: label
+    logical, intent(inout) :: allpass
+
+    if (status /= 0) then
+      write (stderr, '(a,": status=",i0)') trim(label), status
+      allpass = .false.
+    end if
+  end subroutine check_status
 
   subroutine finalise_test(allpass, nrank, finalize_mpi)
     !! Report the aggregate test result and finalise MPI, aborting via
