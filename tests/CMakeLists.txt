@@ -150,9 +150,12 @@ define_performance_test(performance/perf_thom.f90 1 omp)
 define_performance_test(performance/perf_omp_tridiag.f90 ${CMAKE_CTEST_NPROCS} omp)
 
 # CUDA backend tests
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
-   NOT ${OMP_TGT})
+# Parenthesise the compiler-ID check so NOT OMP_TGT gates both PGI and NVHPC;
+# without it CMake precedence (NOT > AND > OR) leaves an OpenMP-target build
+# able to pick up CUDA tests.
+if((${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
+    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC") AND
+   NOT OMP_TGT)
 
   # CUDA unit tests
   define_test(unit/test_reordering.f90 1 cuda)
