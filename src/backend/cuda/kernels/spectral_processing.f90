@@ -703,7 +703,7 @@ contains
       end do
     end if
 
-    end subroutine process_spectral_010_bw
+  end subroutine process_spectral_010_bw
 
   attributes(global) subroutine process_spectral_100( &
     div_u, waves, ny_spec, nx_spec, x_sp_st, ny, nx, nz, &
