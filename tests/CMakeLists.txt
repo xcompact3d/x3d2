@@ -119,6 +119,7 @@ define_test(unit/test_output_scalars.f90 1 omp)
 
 if(WITH_ADIOS2)
   define_test(unit/test_adios2_read_write.f90 4 omp)
+  define_test(unit/test_adios2_mixed_precision.f90 1 omp)
   define_test(unit/test_io_session.f90 4 omp)
   define_test(unit/test_ab_checkpoint.f90 1 omp)
 endif()
