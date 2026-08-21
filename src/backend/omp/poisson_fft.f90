@@ -49,7 +49,7 @@ contains
   function init(mesh, xdirps, ydirps, zdirps, lowmem) result(poisson_fft)
     implicit none
 
-    type(mesh_t), intent(in) :: mesh
+    type(mesh_t), target, intent(in) :: mesh
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
     integer, dimension(3) :: istart, iend, isize

@@ -1213,7 +1213,7 @@ contains
     implicit none
 
     class(omp_backend_t) :: self
-    type(mesh_t), intent(in) :: mesh
+    type(mesh_t), target, intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
 
