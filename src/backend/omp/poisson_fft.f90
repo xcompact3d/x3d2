@@ -1,8 +1,11 @@
 module m_omp_poisson_fft
 
   use decomp_2d_constants, only: PHYSICAL_IN_X
+  use decomp_2d, only: decomp_info, decomp_info_init, get_decomp_dims, &
+                       transpose_x_to_y, transpose_y_to_x, &
+                       transpose_z_to_y, transpose_y_to_z
   use decomp_2d_fft, only: decomp_2d_fft_init, decomp_2d_fft_3d, &
-                           decomp_2d_fft_get_size
+                           decomp_2d_fft_get_size, decomp_2d_fft_get_sp
 
   use m_common, only: dp, CELL
   use m_field, only: field_t
@@ -19,6 +22,23 @@ module m_omp_poisson_fft
     complex(dp), allocatable, dimension(:, :, :) :: c_x, c_y, c_z
     !> Non-periodic in x, periodic in y and z
     logical :: is_100_case = .false.
+    !> 2decomp processor grid. p_row splits y in the x-pencil, p_col splits z.
+    integer :: p_row = 1, p_col = 1
+    !> Cell sized decomposition driving the x-y transpose in the 100 case.
+    !! decomp_main is built on vertex dims, which differ from the cell dims
+    !! the Poisson solver works on, so this case needs its own.
+    type(decomp_info) :: ph_cell
+    !> Y-pencil staging buffers, only needed when y is decomposed.
+    real(dp), allocatable, dimension(:, :, :) :: r_xp, r_yp
+    !> Spectral decomposition, and its y-pencil staging buffers. The FFT
+    !! leaves the spectral slab in a z-pencil, where dim2 (the x modes) is
+    !! split across p_col. The paired split in the postprocess couples a
+    !! mode with its mirror in that same direction, so it needs dim2 whole.
+    !! The y-pencil of the very same decomposition has dim2 complete for any
+    !! processor grid, so 2decomp's own transpose delivers exactly the
+    !! layout the pairing wants. waves is redistributed once, at init.
+    type(decomp_info), pointer :: sp => null()
+    complex(dp), allocatable, dimension(:, :, :) :: c_pair, waves_pair
     !> Exact sized, x-y transposed real work buffer for the 100 case.
     !! The FFT is initialised with the x and y dimensions swapped so that
     !! the r2c transform runs along the periodic y direction and the
@@ -64,7 +84,7 @@ contains
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
     integer, dimension(3) :: istart, iend, isize
-    integer :: dims(3)
+    integer :: dims(3), grid_dims(2)
 
     type(omp_poisson_fft_t) :: poisson_fft
 
@@ -83,9 +103,12 @@ contains
                               .and. mesh%grid%periodic_BC(2) &
                               .and. mesh%grid%periodic_BC(3)
 
-    if (poisson_fft%is_100_case .and. mesh%par%nproc > 1) then
-      error stop 'OpenMP backend supports the 100 Poisson case on a single &
-                  &rank only!'
+    if (poisson_fft%is_100_case) then
+      ! get_decomp_dims returns the 2decomp processor grid (p_row, p_col).
+      grid_dims = get_decomp_dims()
+      poisson_fft%p_row = grid_dims(1)
+      poisson_fft%p_col = grid_dims(2)
+
     end if
 
     ! Work out the spectral dimensions in the permuted state.
@@ -112,8 +135,37 @@ contains
                               poisson_fft%nz_spec))
 
     if (poisson_fft%is_100_case) then
-      allocate (poisson_fft%r_tr(poisson_fft%ny_loc, poisson_fft%nx_loc, &
-                                 poisson_fft%nz_loc))
+      if (poisson_fft%p_row > 1) then
+        ! Reaching the transposed x-pencil takes a real redistribution once
+        ! y is split: x-pencil -> 2decomp y-pencil -> local dim1/dim2 swap.
+        call decomp_info_init(dims(1), dims(2), dims(3), poisson_fft%ph_cell)
+        allocate (poisson_fft%r_xp(poisson_fft%ph_cell%xsz(1), &
+                                   poisson_fft%ph_cell%xsz(2), &
+                                   poisson_fft%ph_cell%xsz(3)))
+        allocate (poisson_fft%r_yp(poisson_fft%ph_cell%ysz(1), &
+                                   poisson_fft%ph_cell%ysz(2), &
+                                   poisson_fft%ph_cell%ysz(3)))
+        allocate (poisson_fft%r_tr(poisson_fft%ph_cell%ysz(2), &
+                                   poisson_fft%ph_cell%ysz(1), &
+                                   poisson_fft%ph_cell%ysz(3)))
+      else
+        ! p_row == 1 makes the y-pencil identical to the x-pencil, so the
+        ! swap alone reaches the transposed x-pencil with no communication.
+        allocate (poisson_fft%r_tr(poisson_fft%ny_loc, poisson_fft%nx_loc, &
+                                   poisson_fft%nz_loc))
+      end if
+
+      if (poisson_fft%p_col > 1) then
+        poisson_fft%sp => decomp_2d_fft_get_sp()
+        allocate (poisson_fft%c_pair(poisson_fft%sp%ysz(1), &
+                                  poisson_fft%sp%ysz(2), &
+                                  poisson_fft%sp%ysz(3)))
+        allocate (poisson_fft%waves_pair(poisson_fft%sp%ysz(1), &
+                                      poisson_fft%sp%ysz(2), &
+                                      poisson_fft%sp%ysz(3)))
+        call transpose_z_to_y(poisson_fft%waves, poisson_fft%waves_pair, &
+                              poisson_fft%sp)
+      end if
     end if
 
   end function init
@@ -148,17 +200,45 @@ contains
     class(omp_poisson_fft_t) :: self
     class(field_t), intent(in) :: f_in
 
-    integer :: i, j, k
+    integer :: i, j, k, n1, n2, n3
 
-    !$omp parallel do collapse(2)
-    do k = 1, self%nz_loc
-      do i = 1, self%nx_loc
-        do j = 1, self%ny_loc
-          self%r_tr(j, i, k) = f_in%data(i, j, k)
+    if (self%p_row > 1) then
+      ! Strip the SZ padding into an exact x-pencil, redistribute to the
+      ! y-pencil, then swap dim1 and dim2 locally.
+      !$omp parallel do collapse(2)
+      do k = 1, self%ph_cell%xsz(3)
+        do j = 1, self%ph_cell%xsz(2)
+          do i = 1, self%ph_cell%xsz(1)
+            self%r_xp(i, j, k) = f_in%data(i, j, k)
+          end do
         end do
       end do
-    end do
-    !$omp end parallel do
+      !$omp end parallel do
+
+      call transpose_x_to_y(self%r_xp, self%r_yp, self%ph_cell)
+
+      n1 = self%ph_cell%ysz(1); n2 = self%ph_cell%ysz(2)
+      n3 = self%ph_cell%ysz(3)
+      !$omp parallel do collapse(2)
+      do k = 1, n3
+        do i = 1, n1
+          do j = 1, n2
+            self%r_tr(j, i, k) = self%r_yp(i, j, k)
+          end do
+        end do
+      end do
+      !$omp end parallel do
+    else
+      !$omp parallel do collapse(2)
+      do k = 1, self%nz_loc
+        do i = 1, self%nx_loc
+          do j = 1, self%ny_loc
+            self%r_tr(j, i, k) = f_in%data(i, j, k)
+          end do
+        end do
+      end do
+      !$omp end parallel do
+    end if
 
     call decomp_2d_fft_3d(self%r_tr, self%c_x)
 
@@ -203,19 +283,45 @@ contains
     class(omp_poisson_fft_t) :: self
     class(field_t), intent(inout) :: f_out
 
-    integer :: i, j, k
+    integer :: i, j, k, n1, n2, n3
 
     call decomp_2d_fft_3d(self%c_x, self%r_tr)
 
-    !$omp parallel do collapse(2)
-    do k = 1, self%nz_loc
-      do j = 1, self%ny_loc
-        do i = 1, self%nx_loc
-          f_out%data(i, j, k) = self%r_tr(j, i, k)
+    if (self%p_row > 1) then
+      n1 = self%ph_cell%ysz(1); n2 = self%ph_cell%ysz(2)
+      n3 = self%ph_cell%ysz(3)
+      !$omp parallel do collapse(2)
+      do k = 1, n3
+        do j = 1, n2
+          do i = 1, n1
+            self%r_yp(i, j, k) = self%r_tr(j, i, k)
+          end do
         end do
       end do
-    end do
-    !$omp end parallel do
+      !$omp end parallel do
+
+      call transpose_y_to_x(self%r_yp, self%r_xp, self%ph_cell)
+
+      !$omp parallel do collapse(2)
+      do k = 1, self%ph_cell%xsz(3)
+        do j = 1, self%ph_cell%xsz(2)
+          do i = 1, self%ph_cell%xsz(1)
+            f_out%data(i, j, k) = self%r_xp(i, j, k)
+          end do
+        end do
+      end do
+      !$omp end parallel do
+    else
+      !$omp parallel do collapse(2)
+      do k = 1, self%nz_loc
+        do j = 1, self%ny_loc
+          do i = 1, self%nx_loc
+            f_out%data(i, j, k) = self%r_tr(j, i, k)
+          end do
+        end do
+      end do
+      !$omp end parallel do
+    end if
 
   end subroutine fft_backward_100_omp
 
@@ -277,12 +383,25 @@ contains
 
     class(omp_poisson_fft_t) :: self
 
-    call process_spectral_010( &
-      self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
-      self%sp_st(1), self%sp_st(2), self%sp_st(3), &
-      self%ny_glob, self%nx_glob, self%nz_glob, &
-      self%ay, self%by, self%ax, self%bx, self%az, self%bz &
-      )
+    if (self%p_col > 1) then
+      ! Hop to the y-pencil, where dim2 is whole, pair there, and hop back.
+      call transpose_z_to_y(self%c_x, self%c_pair, self%sp)
+      call process_spectral_010( &
+        self%c_pair, self%waves_pair, self%sp%ysz(1), self%sp%ysz(2), &
+        self%sp%ysz(3), self%sp%yst(1) - 1, self%sp%yst(2) - 1, &
+        self%sp%yst(3) - 1, &
+        self%ny_glob, self%nx_glob, self%nz_glob, &
+        self%ay, self%by, self%ax, self%bx, self%az, self%bz &
+        )
+      call transpose_y_to_z(self%c_pair, self%c_x, self%sp)
+    else
+      call process_spectral_010( &
+        self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
+        self%sp_st(1), self%sp_st(2), self%sp_st(3), &
+        self%ny_glob, self%nx_glob, self%nz_glob, &
+        self%ay, self%by, self%ax, self%bx, self%az, self%bz &
+        )
+    end if
 
   end subroutine fft_postprocess_100_omp
 
