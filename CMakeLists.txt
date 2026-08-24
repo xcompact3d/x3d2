@@ -58,5 +58,12 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR
   endif()
 endif()
 
+# Give the imported target the link option FindOpenMP omits: every target that
+# links OpenMP::OpenMP_Fortran picks it up, executables and tests alike.
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" AND OpenMP_Fortran_FLAGS)
+  set_property(TARGET OpenMP::OpenMP_Fortran APPEND PROPERTY
+    INTERFACE_LINK_OPTIONS "SHELL:${OpenMP_Fortran_FLAGS}")
+endif()
+
 add_subdirectory(src)
 add_subdirectory(tests)
