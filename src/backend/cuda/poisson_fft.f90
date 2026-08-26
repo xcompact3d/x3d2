@@ -32,7 +32,6 @@ module m_cuda_poisson_fft
                              process_spectral_010_fw, &
                              process_spectral_010_poisson, &
                              process_spectral_010_bw, &
-                             process_spectral_100, &
                              process_spectral_100_fw, &
                              process_spectral_100_pair_fw, &
                              process_spectral_100_pair_bw, &
@@ -863,12 +862,17 @@ contains
 
     ! Note the spectral component names describe the 010 layout, so in
     ! the 100 case nx_spec counts Y (R2C) modes, ny_spec counts the local
-    ! X modes, and sp_st(2) is the X mode offset.
+    ! X modes, and sp_st(2) is the X mode offset. On a single rank the X
+    ! paired split reads its partner straight out of div_u, which is what
+    ! the 010 kernel already does, so it is reused with swapped arguments:
+    ! - Swap nx <-> ny for grid sizes
+    ! - Swap ax,bx <-> ay,by for wave coefficients
+    ! - Use sp_st(2) for the dim2 offset (X modes after transpose)
     if (self%mesh%par%nproc == 1) then
-      call process_spectral_100<<<blocks, threads>>>( & !&
+      call process_spectral_010<<<blocks, threads>>>( & !&
         c_dev, self%waves_dev, &
         self%nx_spec, self%ny_spec, self%sp_st(2), &
-        self%ny_glob, self%nx_glob, self%nz_glob, &
+        self%ny_glob, self%nx_glob, self%nz_glob, &  ! SWAP nx <-> ny
         self%ay_dev, self%by_dev, &  ! dim1, periodic Y
         self%ax_dev, self%bx_dev, &  ! dim2, non-periodic X
         self%az_dev, self%bz_dev &   ! dim3, Z
@@ -878,10 +882,7 @@ contains
 
     ! On multiple ranks the X paired split reaches its partner through a
     ! mirror exchange, so the same work is staged across three launches.
-    ! These take dim1/dim2 arguments rather than physical directions:
-    ! - Swap nx <-> ny for grid sizes
-    ! - Swap ax,bx <-> ay,by for wave coefficients
-    ! - Use sp_st(2) for the dim2 offset (X modes after transpose)
+    ! The same argument swap as above applies.
 
     ! Stage 1: normalisation, then the Y (R2C) and Z postprocess
     call process_spectral_100_fw<<<blocks, threads>>>( & !&
