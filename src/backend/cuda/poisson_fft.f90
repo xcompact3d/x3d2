@@ -232,11 +232,22 @@ contains
 
     ! 1D decomposition along Z in real domain, and along Y in spectral space
     if (mesh%par%nproc_dir(2) /= 1) print *, 'nproc_dir in y-dir must be 1'
+    if (poisson_fft%is_100_case .and. mesh%par%nproc > 1) then
+      if (mesh%par%nproc_dir(1) /= 1 .or. mesh%par%nproc_dir(2) /= 1) then
+        error stop 'The 100 case on multiple ranks needs a 1D z &
+                    &decomposition, nproc_dir must be [1, 1, nproc].'
+      end if
+    end if
 
     ! Work out the spectral dimensions in the permuted state
     dims_glob = mesh%get_global_dims(CELL)
     dims_loc = mesh%get_dims(CELL)
-
+    if (poisson_fft%is_100_case .and. mesh%par%nproc > 1) then
+      if (mod(dims_loc(1), mesh%par%nproc_dir(3)) /= 0) then
+        error stop 'The 100 case on multiple ranks needs the number of x &
+                    &cells to divide by the number of ranks.'
+      end if
+    end if
     if (poisson_fft%is_100_case) then
       n_spec(1) = dims_loc(2)/2 + 1
       n_spec(2) = dims_loc(1)/mesh%par%nproc_dir(3)
@@ -432,22 +443,13 @@ contains
       end if
     end if
 
-    ! exchange_mirror_100 relies on cuFFTMp handing out the dim2 modes as
-    ! equal sized blocks in rank order, so check that here rather than
-    ! producing a quietly wrong pressure field.
-    if (poisson_fft%is_100_case .and. mesh%par%nproc > 1) then
-      if (.not. poisson_fft%use_cufftmp) then
-        error stop 'The 100 case on multiple ranks needs cuFFTMp, plain &
-                    &cuFFT cannot decompose the transform.'
-      end if
-      if (mod(dims_loc(1), mesh%par%nproc_dir(3)) /= 0) then
-        error stop 'The 100 case on multiple ranks needs the number of x &
-                    &cells to divide by the number of ranks.'
-      end if
-      if (mesh%par%nrank /= mesh%par%nrank_dir(3)) then
-        error stop 'The 100 case mirror exchange assumes the MPI rank &
-                    &matches the z slab index.'
-      end if
+    ! use_cufftmp is only settled once create_fft_plan has run, because plain
+    ! cuFFT is a fallback taken inside it, so unlike the decomposition checks
+    ! above this one cannot move ahead of the plans.
+    if (poisson_fft%is_100_case .and. mesh%par%nproc > 1 &
+        .and. (.not. poisson_fft%use_cufftmp)) then
+      error stop 'The 100 case on multiple ranks needs cuFFTMp, plain &
+                  &cuFFT cannot decompose the transform.'
     end if
 
   end function init
@@ -933,7 +935,7 @@ contains
     complex(dp), device, dimension(:, :, :), intent(in) :: c_dev
 
     type(dim3) :: blocks, threads
-    integer :: tsize, n_slab, n_plane, mpi_cplx, nrank, ierr
+    integer :: tsize, n_slab, n_plane, mpi_cplx, nrank, ierr, ierr_mpi
     integer :: tag_slab = 2345, tag_plane = 2346
 
     ! MPI cannot take the first dim2 plane strided out of c_dev, so pack it
@@ -956,14 +958,17 @@ contains
     n_plane = self%nx_spec*self%nz_spec
 
     ! Make sure the staged kernel and the packing above have landed before
-    ! MPI reads the device buffers.
-    if (self%mesh%par%nproc > 1) then
-      ierr = cudaStreamSynchronize(default_stream)
+    ! MPI reads the device buffers. This is only reached on multiple ranks,
+    ! fft_postprocess_100_cuda returns early for the single rank path.
+    ierr = cudaStreamSynchronize(default_stream)
+    if (ierr /= cudaSuccess) then
+      error stop 'Stream synchronisation before the 100 mirror exchange &
+                  &failed, the device buffers may not be ready.'
     end if
 
-    ! On a single rank, and on the middle rank when P is odd, the mirror
-    ! is the local slab itself. It is still copied out rather than read in
-    ! place, so that the pairing kernels always see pre-update values.
+    ! On the middle rank when P is odd the mirror is the local slab itself.
+    ! It is still copied out rather than read in place, so that the pairing
+    ! kernels always see pre-update values.
     if (self%mirror_slab_rank == nrank) then
       self%c_mirror_dev = c_dev
     else
@@ -971,7 +976,10 @@ contains
                         self%mirror_slab_rank, tag_slab, &
                         self%c_mirror_dev, n_slab, mpi_cplx, &
                         self%mirror_slab_rank, tag_slab, &
-                        MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
+                        MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr_mpi)
+      if (ierr_mpi /= MPI_SUCCESS) then
+        error stop 'The 100 mirror slab exchange failed.'
+      end if
     end if
 
     if (self%mirror_plane_rank == nrank) then
@@ -981,7 +989,10 @@ contains
                         self%mirror_plane_rank, tag_plane, &
                         self%c_plane_recv_dev, n_plane, mpi_cplx, &
                         self%mirror_plane_rank, tag_plane, &
-                        MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
+                        MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr_mpi)
+      if (ierr_mpi /= MPI_SUCCESS) then
+        error stop 'The 100 mirror slab exchange failed.'
+      end if
     end if
 
   end subroutine exchange_mirror_100
