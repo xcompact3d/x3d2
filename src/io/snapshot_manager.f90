@@ -6,8 +6,9 @@ module m_snapshot_manager
 !! data to files intended for analysis and visualisation
 !! Unlike checkpoints, which are always full-resolution for exact restarts,
 !! snapshots can be strided to reduce file size.
-  use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank
-  use m_common, only: dp, i8, DIR_C, VERT, get_argument
+  use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Allreduce, MPI_IN_PLACE, &
+                 MPI_MIN, MPI_SUCCESS
+  use m_common, only: dp, i8, MPI_X3D2_DP, DIR_C, VERT, get_argument
   use m_field, only: field_t
   use m_solver, only: solver_t
   use m_io_session, only: writer_session_t
@@ -120,6 +121,7 @@ contains
     real(dp), dimension(3) :: origin, original_spacing, output_spacing
     real(dp) :: simulation_time
     logical :: snapshot_uses_stride = .true.
+    logical :: is_first_snapshot_of_run
     integer :: i
 
     if (self%config%snapshot_freq <= 0) return
@@ -142,32 +144,13 @@ contains
     write (filename, '(A,A)') trim(self%config%snapshot_prefix), '.bp'
 
     ! Open snapshot file on first call (check for existence)
-    if (.not. self%is_snapshot_file_open) then
+    is_first_snapshot_of_run = .not. self%is_snapshot_file_open
+    if (is_first_snapshot_of_run) then
       call self%open_snapshot_file(filename, comm)
     else
       ! For subsequent snapshots, begin a new step
       call self%snapshot_writer%begin_step()
     end if
-
-    global_dims = solver%mesh%get_global_dims(VERT)
-    origin = solver%mesh%get_coordinates(1, 1, 1)
-    original_spacing = solver%mesh%geo%d
-
-    if (snapshot_uses_stride) then
-      output_spacing = original_spacing*real(self%output_stride, dp)
-      do i = 1, size(global_dims)
-        output_dims(i) = (global_dims(i) + self%output_stride(i) - 1)/ &
-                         self%output_stride(i)
-      end do
-    else
-      output_spacing = original_spacing
-      output_dims = global_dims
-    end if
-    output_shape_dims = int(output_dims, i8)
-
-    call self%generate_vtk_xml( &
-      output_shape_dims, field_names, origin, output_spacing &
-      )
 
     simulation_time = timestep*solver%dt
     if (self%snapshot_writer%is_session_functional() .and. myrank == 0) then
@@ -175,8 +158,34 @@ contains
         ' iteration =', timestep
     end if
 
-    ! Write VTK XML attributes for ParaView compatibility (only on first step)
-    if (timestep == self%config%snapshot_freq .and. myrank == 0) then
+    ! Embed identical VTK XML metadata on every rank when the dataset opens.
+    ! The reduction finds the global origin without assuming how ranks map to
+    ! mesh subdomains.
+    if (is_first_snapshot_of_run) then
+      global_dims = solver%mesh%get_global_dims(VERT)
+      origin = solver%mesh%get_coordinates(1, 1, 1)
+      call MPI_Allreduce( &
+        MPI_IN_PLACE, origin, size(origin), MPI_X3D2_DP, MPI_MIN, comm, ierr &
+        )
+      if (ierr /= MPI_SUCCESS) &
+        error stop "Failed to determine global snapshot origin"
+      original_spacing = solver%mesh%geo%d
+
+      if (snapshot_uses_stride) then
+        output_spacing = original_spacing*real(self%output_stride, dp)
+        do i = 1, size(global_dims)
+          output_dims(i) = (global_dims(i) + self%output_stride(i) - 1)/ &
+                           self%output_stride(i)
+        end do
+      else
+        output_spacing = original_spacing
+        output_dims = global_dims
+      end if
+      output_shape_dims = int(output_dims, i8)
+
+      call self%generate_vtk_xml( &
+        output_shape_dims, field_names, origin, output_spacing &
+        )
       call self%snapshot_writer%write_attribute("vtk.xml", self%vtk_xml)
     end if
 
