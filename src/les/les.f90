@@ -27,6 +27,7 @@ module m_les
     class(field_t), pointer :: nut => null()
     class(field_t), pointer :: mixing_length_sq => null()
   contains
+    procedure :: mixing_length
     procedure :: nut_from_gradient
     procedure :: compute_nut
     procedure :: apply_sgs_stress
@@ -98,30 +99,29 @@ contains
   end function wall_damped_mixing_length
 
   pure real(dp) function smagorinsky_nut( &
-    velocity_gradient, mixing_length) result(nut)
+    velocity_gradient, length) result(nut)
     real(dp), intent(in) :: velocity_gradient(3, 3)
-    real(dp), intent(in) :: mixing_length
+    real(dp), intent(in) :: length
 
-    nut = mixing_length**2*strain_rate_magnitude(velocity_gradient)
+    nut = length**2*strain_rate_magnitude(velocity_gradient)
   end function smagorinsky_nut
 
-  pure real(dp) function nut_from_gradient( &
-    self, velocity_gradient, spacing, wall_distance) result(nut)
+  pure real(dp) function mixing_length( &
+    self, spacing, wall_distance) result(length)
+    !! Smagorinsky mixing length, optionally Mason-Thomson wall-damped.
+    !!
+    !! Returns zero when wall damping is requested without a wall distance,
+    !! which in turn zeroes the eddy viscosity built from it.
     class(les_t), intent(in) :: self
-    real(dp), intent(in) :: velocity_gradient(3, 3), spacing(3)
+    real(dp), intent(in) :: spacing(3)
     real(dp), optional, intent(in) :: wall_distance
-    real(dp) :: delta, length
-
-    if (trim(self%model) == 'none') then
-      nut = 0._dp
-      return
-    end if
+    real(dp) :: delta
 
     delta = filter_width(spacing)
     length = self%smagorinsky_constant*delta
     if (self%wall_damping) then
       if (.not. present(wall_distance)) then
-        nut = 0._dp
+        length = 0._dp
         return
       end if
       length = wall_damped_mixing_length( &
@@ -130,7 +130,21 @@ contains
                self%wall_damping_n, self%roughness_length &
                )
     end if
-    nut = smagorinsky_nut(velocity_gradient, length)
+  end function mixing_length
+
+  pure real(dp) function nut_from_gradient( &
+    self, velocity_gradient, spacing, wall_distance) result(nut)
+    class(les_t), intent(in) :: self
+    real(dp), intent(in) :: velocity_gradient(3, 3), spacing(3)
+    real(dp), optional, intent(in) :: wall_distance
+
+    if (trim(self%model) == 'none') then
+      nut = 0._dp
+      return
+    end if
+
+    nut = smagorinsky_nut(velocity_gradient, &
+                          self%mixing_length(spacing, wall_distance))
   end function nut_from_gradient
 
   subroutine compute_nut(self, backend, mesh, u, v, w, &
@@ -357,7 +371,7 @@ contains
     type(mesh_t), intent(in) :: mesh
 
     real(dp), allocatable :: mixing_data(:, :, :)
-    real(dp) :: delta, length, spacing(3), wall_distance, y_lower
+    real(dp) :: spacing(3), wall_distance, y_lower
     integer :: dims(3), dims_padded(3), i, j, k
 
     dims = mesh%get_dims(VERT)
@@ -376,15 +390,7 @@ contains
         wall_distance = max(mesh%geo%vert_coords(j, 2) - y_lower, 0._dp)
         do i = 1, dims(1)
           spacing(1) = spacing_at_vertex(mesh, i, 1, dims(1))
-          delta = filter_width(spacing)
-          length = self%smagorinsky_constant*delta
-          if (self%wall_damping) then
-            length = wall_damped_mixing_length( &
-                     delta, wall_distance, self%smagorinsky_constant, &
-                     self%von_karman_constant, self%wall_damping_n, &
-                     self%roughness_length)
-          end if
-          mixing_data(i, j, k) = length**2
+          mixing_data(i, j, k) = self%mixing_length(spacing, wall_distance)**2
         end do
       end do
     end do
