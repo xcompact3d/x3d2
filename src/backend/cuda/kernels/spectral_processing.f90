@@ -386,7 +386,7 @@ contains
     !> Grid size
     integer, value, intent(in) :: nx, ny, nz
 
-        integer :: i, j, k, ix, iy, iz, iy_rev
+    integer :: i, j, k, ix, iy, iz, iy_rev
     real(dp) :: div_r, div_c
     complex(dp) :: own, partner
 
@@ -490,7 +490,7 @@ contains
     !> Grid size
     integer, value, intent(in) :: nx, ny, nz
 
-        integer :: i, j, k, ix, iy, iz, iy_rev
+    integer :: i, j, k, ix, iy, iz, iy_rev
     real(dp) :: div_r, div_c
     complex(dp) :: own, partner
 
@@ -706,7 +706,7 @@ contains
     !> Grid size
     integer, value, intent(in) :: nx, ny, nz
 
-        integer :: i, j, k, ix, iy, iz, iy_rev
+    integer :: i, j, k, ix, iy, iz, iy_rev
     real(dp) :: div_r, div_c
     complex(dp) :: own, partner
 
