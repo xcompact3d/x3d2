@@ -125,7 +125,12 @@ contains
       ! Get and fill a block on the host
       ep1 => ibm%host_allocator%get_block(DIR_C)
       call ep1%fill(1.0_dp)
-      ep1%data(:, :, :) = field_data(:, :, :)
+      ! The allocator pads the block up to a multiple of SZ in x and y, so
+      ! ep1%data is bigger than the vertex sized field read from the file.
+      ! Assigning (:, :, :) to (:, :, :) is therefore non conforming and
+      ! reads past the end of field_data, so the copy is restricted to the
+      ! unpadded extents
+      ep1%data(1:dims(1), 1:dims(2), 1:dims(3)) = field_data(:, :, :)
 
       ! Get a block on the device and move the data
       ibm%ep1 => ibm%backend%allocator%get_block(DIR_X)

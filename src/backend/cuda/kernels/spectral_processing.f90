@@ -13,6 +13,141 @@ module m_cuda_spectral
 
 contains
 
+  ! ------------------------------------------------------------------
+  ! SHARED POINTWISE TRANSFORMS
+  !
+  ! The 010 and 100 cases run the same algebra on transposed data, so
+  ! these hold the single copy of it. Named by dimension rather than by
+  ! physical direction: dim1 is the R2C direction, dim2 is the paired
+  ! non-periodic one, dim3 is the remaining periodic one.
+  ! ------------------------------------------------------------------
+
+  attributes(device) subroutine postprocess_dim13_fw(div_r, div_c, i1, i3, &
+                                                     n1, n3, a1, b1, a3, b3)
+    !! Forward postprocess of one spectral entry in dim3 then dim1.
+    implicit none
+
+    real(dp), intent(inout) :: div_r, div_c
+    integer, intent(in) :: i1, i3, n1, n3
+    real(dp), intent(in) :: a1(*), b1(*), a3(*), b3(*)
+
+    real(dp) :: tmp_r, tmp_c
+
+    tmp_r = div_r
+    tmp_c = div_c
+    div_r = tmp_r*b3(i3) + tmp_c*a3(i3)
+    div_c = tmp_c*b3(i3) - tmp_r*a3(i3)
+    if (i3 > n3/2 + 1) div_r = -div_r
+    if (i3 > n3/2 + 1) div_c = -div_c
+
+    tmp_r = div_r
+    tmp_c = div_c
+    div_r = tmp_r*b1(i1) + tmp_c*a1(i1)
+    div_c = tmp_c*b1(i1) - tmp_r*a1(i1)
+    if (i1 > n1/2 + 1) div_r = -div_r
+    if (i1 > n1/2 + 1) div_c = -div_c
+
+  end subroutine postprocess_dim13_fw
+
+  attributes(device) subroutine postprocess_dim13_bw(div_r, div_c, i1, i3, &
+                                                     n1, n3, a1, b1, a3, b3)
+    !! Backward counterpart of postprocess_dim13_fw.
+    implicit none
+
+    real(dp), intent(inout) :: div_r, div_c
+    integer, intent(in) :: i1, i3, n1, n3
+    real(dp), intent(in) :: a1(*), b1(*), a3(*), b3(*)
+
+    real(dp) :: tmp_r, tmp_c
+
+    tmp_r = div_r
+    tmp_c = div_c
+    div_r = tmp_r*b3(i3) - tmp_c*a3(i3)
+    div_c = tmp_c*b3(i3) + tmp_r*a3(i3)
+    if (i3 > n3/2 + 1) div_r = -div_r
+    if (i3 > n3/2 + 1) div_c = -div_c
+
+    tmp_r = div_r
+    tmp_c = div_c
+    div_r = tmp_r*b1(i1) - tmp_c*a1(i1)
+    div_c = tmp_c*b1(i1) + tmp_r*a1(i1)
+    if (i1 > n1/2 + 1) div_r = -div_r
+    if (i1 > n1/2 + 1) div_c = -div_c
+
+  end subroutine postprocess_dim13_bw
+
+  attributes(device) function pair_fw(own, partner, i2, a2, b2) result(res)
+    !! Forward paired split of one dim2 mode against its mirror. The rule
+    !! is symmetric, so the partner entry is pair_fw(partner, own, i2_rev).
+    implicit none
+
+    complex(dp), intent(in) :: own, partner
+    integer, intent(in) :: i2
+    real(dp), intent(in) :: a2(*), b2(*)
+    complex(dp) :: res
+
+    real(dp) :: l_r, l_c, r_r, r_c
+
+    l_r = real(own, kind=dp)
+    l_c = aimag(own)
+    r_r = real(partner, kind=dp)
+    r_c = aimag(partner)
+
+    res = 0.5_dp*cmplx( & !&
+      l_r*b2(i2) + l_c*a2(i2) + r_r*b2(i2) - r_c*a2(i2), &
+      -l_r*a2(i2) + l_c*b2(i2) + r_r*a2(i2) + r_c*b2(i2), kind=dp &
+      )
+
+  end function pair_fw
+
+  attributes(device) function pair_bw(own, partner, i2, a2, b2) result(res)
+    !! Backward counterpart of pair_fw, symmetric in the same way.
+    implicit none
+
+    complex(dp), intent(in) :: own, partner
+    integer, intent(in) :: i2
+    real(dp), intent(in) :: a2(*), b2(*)
+    complex(dp) :: res
+
+    real(dp) :: l_r, l_c, r_r, r_c
+
+    l_r = real(own, kind=dp)
+    l_c = aimag(own)
+    r_r = real(partner, kind=dp)
+    r_c = aimag(partner)
+
+    res = cmplx( & !&
+      l_r*b2(i2) - l_c*a2(i2) + r_r*a2(i2) + r_c*b2(i2), &
+      l_r*a2(i2) + l_c*b2(i2) - r_r*b2(i2) + r_c*a2(i2), kind=dp &
+      )
+
+  end function pair_bw
+
+  attributes(device) subroutine poisson_divide(div_r, div_c, wave)
+    !! Divide one entry by its spectral equivalence constant, with the
+    !! eps_wave guard that keeps roundoff noise out of the pressure field.
+    implicit none
+
+    real(dp), intent(inout) :: div_r, div_c
+    complex(dp), intent(in) :: wave
+
+    real(dp) :: tmp_r, tmp_c
+
+    tmp_r = real(wave, kind=dp)
+    tmp_c = aimag(wave)
+    if (abs(tmp_r) < eps_wave) then
+      div_r = 0._dp
+    else
+      div_r = -div_r/tmp_r
+    end if
+    if (abs(tmp_c) < eps_wave) then
+      div_c = 0._dp
+    else
+      div_c = -div_c/tmp_c
+    end if
+
+  end subroutine poisson_divide
+
   attributes(global) subroutine memcpy3D(dst, src, nx, ny, nz)
     !! Copy data between x3d2 padded arrays and cuFFTMp descriptors
     implicit none
@@ -252,34 +387,22 @@ contains
     integer, value, intent(in) :: nx, ny, nz
 
     integer :: i, j, k, ix, iy, iz, iy_rev
-    real(dp) :: tmp_r, tmp_c, div_r, div_c, l_r, l_c, r_r, r_c
+    real(dp) :: div_r, div_c
+    complex(dp) :: own, partner
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
     k = blockIdx%y ! nz_spec
 
     if (i <= nx_spec) then
       do j = 1, ny_spec
-        ix = i; iy = j + y_sp_st; iz = k
+        ix = i; iz = k
 
         ! normalisation
         div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
         div_c = aimag(div_u(i, j, k))/nx/ny/nz
 
-        ! postprocess in z
-        tmp_r = div_r
-        tmp_c = div_c
-        div_r = tmp_r*bz(iz) + tmp_c*az(iz)
-        div_c = tmp_c*bz(iz) - tmp_r*az(iz)
-        if (iz > nz/2 + 1) div_r = -div_r
-        if (iz > nz/2 + 1) div_c = -div_c
-
-        ! postprocess in x
-        tmp_r = div_r
-        tmp_c = div_c
-        div_r = tmp_r*bx(ix) + tmp_c*ax(ix)
-        div_c = tmp_c*bx(ix) - tmp_r*ax(ix)
-        if (ix > nx/2 + 1) div_r = -div_r
-        if (ix > nx/2 + 1) div_c = -div_c
+        call postprocess_dim13_fw(div_r, div_c, ix, iz, nx, nz, &
+                                  ax, bx, az, bz)
 
         ! update the entry
         div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
@@ -288,24 +411,16 @@ contains
 
     if (i <= nx_spec) then
       do j = 2, ny_spec/2 + 1
-        ix = i; iy = j + y_sp_st; iz = k
+        iy = j + y_sp_st
         iy_rev = ny_spec - j + 2 + y_sp_st
 
-        l_r = real(div_u(i, j, k), kind=dp)
-        l_c = aimag(div_u(i, j, k))
-        r_r = real(div_u(i, ny_spec - j + 2, k), kind=dp)
-        r_c = aimag(div_u(i, ny_spec - j + 2, k))
+        ! both entries are read before either is written
+        own = div_u(i, j, k)
+        partner = div_u(i, ny_spec - j + 2, k)
 
         ! update the entry
-        div_u(i, j, k) = 0.5_dp*cmplx( & !&
-         l_r*by(iy) + l_c*ay(iy) + r_r*by(iy) - r_c*ay(iy), &
-         -l_r*ay(iy) + l_c*by(iy) + r_r*ay(iy) + r_c*by(iy), kind=dp &
-         )
-        div_u(i, ny_spec - j + 2, k) = 0.5_dp*cmplx( & !&
-         r_r*by(iy_rev) + r_c*ay(iy_rev) + l_r*by(iy_rev) - l_c*ay(iy_rev), &
-         -r_r*ay(iy_rev) + r_c*by(iy_rev) + l_r*ay(iy_rev) + l_c*by(iy_rev), &
-         kind=dp &
-         )
+        div_u(i, j, k) = pair_fw(own, partner, iy, ay, by)
+        div_u(i, ny_spec - j + 2, k) = pair_fw(partner, own, iy_rev, ay, by)
       end do
     end if
 
@@ -315,18 +430,7 @@ contains
         div_r = real(div_u(i, j, k), kind=dp)
         div_c = aimag(div_u(i, j, k))
 
-        tmp_r = real(waves(i, j, k), kind=dp)
-        tmp_c = aimag(waves(i, j, k))
-        if (abs(tmp_r) < eps_wave) then
-          div_r = 0._dp
-        else
-          div_r = -div_r/tmp_r
-        end if
-        if (abs(tmp_c) < eps_wave) then
-          div_c = 0._dp
-        else
-          div_c = -div_c/tmp_c
-        end if
+        call poisson_divide(div_r, div_c, waves(i, j, k))
 
         ! update the entry
         div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
@@ -337,49 +441,27 @@ contains
     ! post-process backward
     if (i <= nx_spec) then
       do j = 2, ny_spec/2 + 1
-        ix = i; iy = j + y_sp_st; iz = k
+        iy = j + y_sp_st
         iy_rev = ny_spec - j + 2 + y_sp_st
 
-        l_r = real(div_u(i, j, k), kind=dp)
-        l_c = aimag(div_u(i, j, k))
-        r_r = real(div_u(i, ny_spec - j + 2, k), kind=dp)
-        r_c = aimag(div_u(i, ny_spec - j + 2, k))
+        own = div_u(i, j, k)
+        partner = div_u(i, ny_spec - j + 2, k)
 
         ! update the entry
-        div_u(i, j, k) = cmplx( & !&
-          l_r*by(iy) - l_c*ay(iy) + r_r*ay(iy) + r_c*by(iy), &
-          l_r*ay(iy) + l_c*by(iy) - r_r*by(iy) + r_c*ay(iy), kind=dp &
-          )
-        div_u(i, ny_spec - j + 2, k) = cmplx( & !&
-          r_r*by(iy_rev) - r_c*ay(iy_rev) + l_r*ay(iy_rev) + l_c*by(iy_rev), &
-          r_r*ay(iy_rev) + r_c*by(iy_rev) - l_r*by(iy_rev) + l_c*ay(iy_rev), &
-          kind=dp &
-          )
+        div_u(i, j, k) = pair_bw(own, partner, iy, ay, by)
+        div_u(i, ny_spec - j + 2, k) = pair_bw(partner, own, iy_rev, ay, by)
       end do
     end if
 
     if (i <= nx_spec) then
       do j = 1, ny_spec
-        ix = i; iy = j + y_sp_st; iz = k
+        ix = i; iz = k
 
         div_r = real(div_u(i, j, k), kind=dp)
         div_c = aimag(div_u(i, j, k))
 
-        ! post-process in z
-        tmp_r = div_r
-        tmp_c = div_c
-        div_r = tmp_r*bz(iz) - tmp_c*az(iz)
-        div_c = tmp_c*bz(iz) + tmp_r*az(iz)
-        if (iz > nz/2 + 1) div_r = -div_r
-        if (iz > nz/2 + 1) div_c = -div_c
-
-        ! post-process in x
-        tmp_r = div_r
-        tmp_c = div_c
-        div_r = tmp_r*bx(ix) - tmp_c*ax(ix)
-        div_c = tmp_c*bx(ix) + tmp_r*ax(ix)
-        if (ix > nx/2 + 1) div_r = -div_r
-        if (ix > nx/2 + 1) div_c = -div_c
+        call postprocess_dim13_bw(div_r, div_c, ix, iz, nx, nz, &
+                                  ax, bx, az, bz)
 
         ! update the entry
         div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
@@ -409,34 +491,22 @@ contains
     integer, value, intent(in) :: nx, ny, nz
 
     integer :: i, j, k, ix, iy, iz, iy_rev
-    real(dp) :: tmp_r, tmp_c, div_r, div_c, l_r, l_c, r_r, r_c
+    real(dp) :: div_r, div_c
+    complex(dp) :: own, partner
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
     k = blockIdx%y ! nz_spec
 
     if (i <= nx_spec) then
       do j = 1, ny_spec
-        ix = i; iy = j + y_sp_st; iz = k
+        ix = i; iz = k
 
         ! normalisation
         div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
         div_c = aimag(div_u(i, j, k))/nx/ny/nz
 
-        ! postprocess in z
-        tmp_r = div_r
-        tmp_c = div_c
-        div_r = tmp_r*bz(iz) + tmp_c*az(iz)
-        div_c = tmp_c*bz(iz) - tmp_r*az(iz)
-        if (iz > nz/2 + 1) div_r = -div_r
-        if (iz > nz/2 + 1) div_c = -div_c
-
-        ! postprocess in x
-        tmp_r = div_r
-        tmp_c = div_c
-        div_r = tmp_r*bx(ix) + tmp_c*ax(ix)
-        div_c = tmp_c*bx(ix) - tmp_r*ax(ix)
-        if (ix > nx/2 + 1) div_r = -div_r
-        if (ix > nx/2 + 1) div_c = -div_c
+        call postprocess_dim13_fw(div_r, div_c, ix, iz, nx, nz, &
+                                  ax, bx, az, bz)
 
         ! update the entry
         div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
@@ -445,24 +515,15 @@ contains
 
     if (i <= nx_spec) then
       do j = 2, ny_spec/2 + 1
-        ix = i; iy = j + y_sp_st; iz = k
+        iy = j + y_sp_st
         iy_rev = ny_spec - j + 2 + y_sp_st
 
-        l_r = real(div_u(i, j, k), kind=dp)
-        l_c = aimag(div_u(i, j, k))
-        r_r = real(div_u(i, ny_spec - j + 2, k), kind=dp)
-        r_c = aimag(div_u(i, ny_spec - j + 2, k))
+        own = div_u(i, j, k)
+        partner = div_u(i, ny_spec - j + 2, k)
 
         ! update the entry
-        div_u(i, j, k) = 0.5_dp*cmplx( & !&
-         l_r*by(iy) + l_c*ay(iy) + r_r*by(iy) - r_c*ay(iy), &
-         -l_r*ay(iy) + l_c*by(iy) + r_r*ay(iy) + r_c*by(iy), kind=dp &
-         )
-        div_u(i, ny_spec - j + 2, k) = 0.5_dp*cmplx( & !&
-         r_r*by(iy_rev) + r_c*ay(iy_rev) + l_r*by(iy_rev) - l_c*ay(iy_rev), &
-         -r_r*ay(iy_rev) + r_c*by(iy_rev) + l_r*ay(iy_rev) + l_c*by(iy_rev), &
-         kind=dp &
-         )
+        div_u(i, j, k) = pair_fw(own, partner, iy, ay, by)
+        div_u(i, ny_spec - j + 2, k) = pair_fw(partner, own, iy_rev, ay, by)
       end do
     end if
 
@@ -646,7 +707,8 @@ contains
     integer, value, intent(in) :: nx, ny, nz
 
     integer :: i, j, k, ix, iy, iz, iy_rev
-    real(dp) :: tmp_r, tmp_c, div_r, div_c, l_r, l_c, r_r, r_c
+    real(dp) :: div_r, div_c
+    complex(dp) :: own, partner
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
     k = blockIdx%y ! nz_spec
@@ -654,49 +716,27 @@ contains
     ! post-process backward
     if (i <= nx_spec) then
       do j = 2, ny_spec/2 + 1
-        ix = i; iy = j + y_sp_st; iz = k
+        iy = j + y_sp_st
         iy_rev = ny_spec - j + 2 + y_sp_st
 
-        l_r = real(div_u(i, j, k), kind=dp)
-        l_c = aimag(div_u(i, j, k))
-        r_r = real(div_u(i, ny_spec - j + 2, k), kind=dp)
-        r_c = aimag(div_u(i, ny_spec - j + 2, k))
+        own = div_u(i, j, k)
+        partner = div_u(i, ny_spec - j + 2, k)
 
         ! update the entry
-        div_u(i, j, k) = cmplx( & !&
-          l_r*by(iy) - l_c*ay(iy) + r_r*ay(iy) + r_c*by(iy), &
-          l_r*ay(iy) + l_c*by(iy) - r_r*by(iy) + r_c*ay(iy), kind=dp &
-          )
-        div_u(i, ny_spec - j + 2, k) = cmplx( & !&
-          r_r*by(iy_rev) - r_c*ay(iy_rev) + l_r*ay(iy_rev) + l_c*by(iy_rev), &
-          r_r*ay(iy_rev) + r_c*by(iy_rev) - l_r*by(iy_rev) + l_c*ay(iy_rev), &
-          kind=dp &
-          )
+        div_u(i, j, k) = pair_bw(own, partner, iy, ay, by)
+        div_u(i, ny_spec - j + 2, k) = pair_bw(partner, own, iy_rev, ay, by)
       end do
     end if
 
     if (i <= nx_spec) then
       do j = 1, ny_spec
-        ix = i; iy = j + y_sp_st; iz = k
+        ix = i; iz = k
 
         div_r = real(div_u(i, j, k), kind=dp)
         div_c = aimag(div_u(i, j, k))
 
-        ! post-process in z
-        tmp_r = div_r
-        tmp_c = div_c
-        div_r = tmp_r*bz(iz) - tmp_c*az(iz)
-        div_c = tmp_c*bz(iz) + tmp_r*az(iz)
-        if (iz > nz/2 + 1) div_r = -div_r
-        if (iz > nz/2 + 1) div_c = -div_c
-
-        ! post-process in x
-        tmp_r = div_r
-        tmp_c = div_c
-        div_r = tmp_r*bx(ix) - tmp_c*ax(ix)
-        div_c = tmp_c*bx(ix) + tmp_r*ax(ix)
-        if (ix > nx/2 + 1) div_r = -div_r
-        if (ix > nx/2 + 1) div_c = -div_c
+        call postprocess_dim13_bw(div_r, div_c, ix, iz, nx, nz, &
+                                  ax, bx, az, bz)
 
         ! update the entry
         div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
@@ -704,6 +744,218 @@ contains
     end if
 
   end subroutine process_spectral_010_bw
+
+  ! ------------------------------------------------------------------
+  ! 100 SPECTRAL KERNELS, MULTIPLE RANKS (3 staged launches)
+  !
+  ! Staged form of the 100 postprocess. The X paired split couples
+  ! mode ix with mode n - ix + 2, so once X is distributed over ranks
+  ! the partner value sits on another GPU. Splitting the single 100
+  ! kernel into three launches leaves room for a mirror exchange either
+  ! side of the Poisson solve, and the pairing then reads its partner
+  ! from that mirror instead of from div_u itself.
+  !
+  ! Every rank updates only the modes it owns. The 010 pairing rule is
+  ! symmetric, new(iy) = f(own(iy), partner(n - iy + 2), iy), so nothing
+  ! has to be sent back afterwards.
+  !
+  ! mirror holds the partner rank's slab and is read in reverse as
+  ! mirror(i, ny_spec - j + 2, k). Local j = 1 maps one plane past the
+  ! end of that slab and is supplied separately in mirror_plane(i, k).
+  ! Global mode 1 is self paired and is left alone, exactly as the 010
+  ! loop starting at j = 2 leaves it.
+  !
+  ! These keep the dim1/dim2 naming of the 010 kernels rather than the
+  ! physical directions, so dim1 is the periodic R2C direction (Y here)
+  ! and dim2 is the non-periodic one (X here).
+  ! ------------------------------------------------------------------
+
+  attributes(global) subroutine process_spectral_100_fw( &
+    div_u, nx_spec, ny_spec, nx, ny, nz, ax, bx, az, bz &
+    )
+    !! Stage 1 (forward): normalisation followed by the dim3 and dim1
+    !! postprocess. Every mode is handled on its own here.
+    implicit none
+
+    !> Divergence of velocity in spectral space
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
+    real(dp), device, intent(in), dimension(:) :: ax, bx, az, bz
+    !> Grid size in spectral space
+    integer, value, intent(in) :: nx_spec, ny_spec
+    !> Grid size
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, j, k, ix, iz
+    real(dp) :: div_r, div_c
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    k = blockIdx%y ! nz_spec
+
+    if (i <= nx_spec) then
+      do j = 1, ny_spec
+        ix = i; iz = k
+
+        ! normalisation
+        div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
+        div_c = aimag(div_u(i, j, k))/nx/ny/nz
+
+        call postprocess_dim13_fw(div_r, div_c, ix, iz, nx, nz, &
+                                  ax, bx, az, bz)
+
+        ! update the entry
+        div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
+      end do
+    end if
+
+  end subroutine process_spectral_100_fw
+
+  attributes(global) subroutine process_spectral_100_pair_fw( &
+    div_u, mirror, mirror_plane, waves, nx_spec, ny_spec, y_sp_st, &
+    nx, nz, ay, by &
+    )
+    !! Stage 2 (forward): the dim2 paired split, then the Poisson solve.
+    implicit none
+
+    !> Divergence of velocity in spectral space
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
+    !> dim2 mirror of the local slab, and the single plane below it
+    complex(dp), device, intent(in), dimension(:, :, :) :: mirror
+    complex(dp), device, intent(in), dimension(:, :) :: mirror_plane
+    !> Spectral equivalence constants
+    complex(dp), device, intent(in), dimension(:, :, :) :: waves
+    real(dp), device, intent(in), dimension(:) :: ay, by
+    !> Grid size in spectral space
+    integer, value, intent(in) :: nx_spec, ny_spec
+    !> Offset in the paired direction in the permuted slabs in spectral space
+    integer, value, intent(in) :: y_sp_st
+    !> Grid size
+    integer, value, intent(in) :: nx, nz
+
+    integer :: i, j, k, iy
+    real(dp) :: div_r, div_c
+    complex(dp) :: partner
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    k = blockIdx%y ! nz_spec
+
+    if (i <= nx_spec) then
+      do j = 1, ny_spec
+        iy = j + y_sp_st
+
+        ! global mode 1 is self paired, the 010 loop never touches it
+        if (iy /= 1) then
+          if (j == 1) then
+            partner = mirror_plane(i, k)
+          else
+            partner = mirror(i, ny_spec - j + 2, k)
+          end if
+
+          ! update the entry, only this rank's own mode
+          div_u(i, j, k) = pair_fw(div_u(i, j, k), partner, iy, ay, by)
+        end if
+      end do
+    end if
+
+    ! Solve Poisson
+    if (i <= nx_spec) then
+      do j = 1, ny_spec
+        div_r = real(div_u(i, j, k), kind=dp)
+        div_c = aimag(div_u(i, j, k))
+
+        call poisson_divide(div_r, div_c, waves(i, j, k))
+
+        ! update the entry
+        div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
+        if (i == nx/2 + 1 .and. k == nz/2 + 1) div_u(i, j, k) = 0._dp
+      end do
+    end if
+
+  end subroutine process_spectral_100_pair_fw
+
+  attributes(global) subroutine process_spectral_100_pair_bw( &
+    div_u, mirror, mirror_plane, nx_spec, ny_spec, y_sp_st, &
+    nx, nz, ax, bx, ay, by, az, bz &
+    )
+    !! Stage 3 (backward): the dim2 paired recombination, then the dim3
+    !! and dim1 postprocess.
+    implicit none
+
+    !> Divergence of velocity in spectral space
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u
+    !> dim2 mirror of the local slab, and the single plane below it
+    complex(dp), device, intent(in), dimension(:, :, :) :: mirror
+    complex(dp), device, intent(in), dimension(:, :) :: mirror_plane
+    real(dp), device, intent(in), dimension(:) :: ax, bx, ay, by, az, bz
+    !> Grid size in spectral space
+    integer, value, intent(in) :: nx_spec, ny_spec
+    !> Offset in the paired direction in the permuted slabs in spectral space
+    integer, value, intent(in) :: y_sp_st
+    !> Grid size
+    integer, value, intent(in) :: nx, nz
+
+    integer :: i, j, k, ix, iy, iz
+    real(dp) :: div_r, div_c
+    complex(dp) :: partner
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    k = blockIdx%y ! nz_spec
+
+    ! postprocess backward
+    if (i <= nx_spec) then
+      do j = 1, ny_spec
+        iy = j + y_sp_st
+
+        ! global mode 1 is self paired, the 010 loop never touches it
+        if (iy /= 1) then
+          if (j == 1) then
+            partner = mirror_plane(i, k)
+          else
+            partner = mirror(i, ny_spec - j + 2, k)
+          end if
+
+          ! update the entry, only this rank's own mode
+          div_u(i, j, k) = pair_bw(div_u(i, j, k), partner, iy, ay, by)
+        end if
+      end do
+    end if
+
+    if (i <= nx_spec) then
+      do j = 1, ny_spec
+        ix = i; iz = k
+
+        div_r = real(div_u(i, j, k), kind=dp)
+        div_c = aimag(div_u(i, j, k))
+
+        call postprocess_dim13_bw(div_r, div_c, ix, iz, nx, nz, &
+                                  ax, bx, az, bz)
+
+        ! update the entry
+        div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
+      end do
+    end if
+
+  end subroutine process_spectral_100_pair_bw
+
+  attributes(global) subroutine pack_spectral_plane( &
+    plane, div_u, nx_spec, nz_spec &
+    )
+    !! Copies the first dim2 plane of the local spectral slab into a
+    !! contiguous buffer so it can be handed to MPI.
+    implicit none
+
+    complex(dp), device, intent(out), dimension(:, :) :: plane
+    complex(dp), device, intent(in), dimension(:, :, :) :: div_u
+    !> Grid size in spectral space
+    integer, value, intent(in) :: nx_spec, nz_spec
+
+    integer :: i, k
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    k = blockIdx%y ! nz_spec
+
+    if (i <= nx_spec .and. k <= nz_spec) plane(i, k) = div_u(i, 1, k)
+
+  end subroutine pack_spectral_plane
 
 ! ------------------------------------------------------------------
   ! 110 SPECTRAL KERNELS (7 separate launches)

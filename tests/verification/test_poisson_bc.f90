@@ -70,7 +70,10 @@ program test_poisson
 #endif
 
   integer :: nrank, nproc, ierr
-  integer :: ic, idx
+  integer :: ic, idx, iarg
+  character(len=32) :: arg
+  character(len=3) :: only_config
+  logical :: config_run(NUM_CONFIGS)
   logical :: allpass
   character(32) :: backend_name
 
@@ -106,12 +109,36 @@ program test_poisson
 
   config_labels = ['000', '010', '100', '110']
 
+  ! Optional --config <label> restricts the run to one configuration. This
+  ! is what lets a multi rank run exercise 100 without tripping the single
+  ! rank stops still in place for 010 and 110 in src/poisson_fft.f90. With
+  ! no argument every configuration runs, as before.
+  only_config = 'all'
+  do iarg = 1, command_argument_count() - 1
+    call get_command_argument(iarg, arg)
+    if (trim(arg) == '--config') then
+      call get_command_argument(iarg + 1, arg)
+      only_config = trim(arg)
+    end if
+  end do
+
+  do ic = 1, NUM_CONFIGS
+    config_run(ic) = (only_config == 'all' &
+                      .or. only_config == config_labels(ic))
+  end do
+
+  ! A skipped configuration must not register as a failure in the verdict
+  all_results = .true.
+  all_xfail = .false.
+  all_poisson_errs = 0.0_dp
+  all_divgrad_errs = 0.0_dp
+
   ! ---- Config 000: all periodic (128 x 64 x 32) ----
   dims_global = [128, 64, 32]
   BC_x = ['periodic', 'periodic']
   BC_y = ['periodic', 'periodic']
   BC_z = ['periodic', 'periodic']
-  call run_config(1, '000 (all periodic)', dims_global, &
+  if (config_run(1)) call run_config(1, '000 (all periodic)', dims_global, &
                   BC_x, BC_y, BC_z)
 
   ! ---- Config 010: y-dirichlet (128 x 65 x 32) ----
@@ -119,15 +146,21 @@ program test_poisson
   BC_x = ['periodic ', 'periodic ']
   BC_y = ['dirichlet', 'dirichlet']
   BC_z = ['periodic ', 'periodic ']
-  call run_config(2, '010 (y-dirichlet)', dims_global, &
+  if (config_run(2)) call run_config(2, '010 (y-dirichlet)', dims_global, &
                   BC_x, BC_y, BC_z)
 
-  ! ---- Config 100: x-dirichlet (129 x 64 x 32) ----
-  dims_global = [129, 64, 32]
+  ! ---- Config 100: x-dirichlet (129 x 64 x 128) ----
+  !
+  ! z carries the decomposition, so it needs enough cells per subdomain for
+  ! the distributed compact operators. At 32 cells over 2 ranks the discarded
+  ! coupling in "interpolate" is 6.2e-08, which puts a 8.7e-11 floor under the
+  ! div(grad(p)) check against a 1e-11 tolerance. 128 keeps 64 cells per rank
+  ! at 2 ranks, matching the >=64 rule of thumb used elsewhere.
+  dims_global = [129, 64, 128]
   BC_x = ['dirichlet', 'dirichlet']
   BC_y = ['periodic ', 'periodic ']
   BC_z = ['periodic ', 'periodic ']
-  call run_config(3, '100 (x-dirichlet)', dims_global, &
+  if (config_run(3)) call run_config(3, '100 (x-dirichlet)', dims_global, &
                   BC_x, BC_y, BC_z)
 
   ! ---- Config 110: x,y-dirichlet (129 x 257 x 64) ----
@@ -135,7 +168,7 @@ program test_poisson
   BC_x = ['dirichlet', 'dirichlet']
   BC_y = ['dirichlet', 'dirichlet']
   BC_z = ['periodic ', 'periodic ']
-  call run_config(4, '110 (x,y-dirichlet)', dims_global, &
+  if (config_run(4)) call run_config(4, '110 (x,y-dirichlet)', dims_global, &
                   BC_x, BC_y, BC_z)
 
   ! ---- Grand summary ----
@@ -153,6 +186,7 @@ program test_poisson
       '  DivGrad L2  ', 'Result', 'Expected', ''
     write (stderr, '(A)') ''
     do ic = 1, NUM_CONFIGS
+      if (.not. config_run(ic)) cycle
       call print_config_results(ic)
       if (ic < NUM_CONFIGS) write (stderr, '(A)') ''
     end do
