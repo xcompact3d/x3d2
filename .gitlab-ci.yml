@@ -48,13 +48,13 @@ stages:
     - echo "Build tests"
     - make -C build-debug
     - echo "Run the tests"
-    - if [ "${RUN_TEST}" == "ON" ]; then cd build-debug && ctest -L "unit|verification" --output-on-failure && cd ..; fi
+    - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build-debug -L "unit|verification" --output-on-failure; fi
     - echo "Configure Release build"
     - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
     - echo "Build tests"
     - make -C build
     - echo "Run the tests"
-    - if [ "${RUN_TEST}" == "ON" ]; then cd build && ctest -L "unit|verification" --output-on-failure && cd ..; fi
+    - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build -L "unit|verification" --output-on-failure; fi
   tags:
     - gpu
 
