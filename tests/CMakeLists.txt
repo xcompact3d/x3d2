@@ -189,20 +189,33 @@ endif()
 
 # The divergence columns are a "stays at round-off" assertion, not a value to
 # reproduce, so they are bounded absolutely rather than diffed (see the
-# comparator docstring). The ceilings are per case because the two differ by
-# four orders: the smoke case peaks at 8.7e-10 and the nightly at 3.3e-14.
-# Each is set about an order above the observed maximum, which leaves room for
+# comparator docstring). Round-off is what the ceiling tracks, so it depends on
+# the working precision, and on the case: in double the smoke case peaks at
+# 8.7e-10 and the nightly at 3.3e-14, while in single both sit at ~4e-6. Each
+# is set about an order above the observed maximum, which leaves room for
 # compiler variation while staying far below any real loss of solenoidality.
+# The golden itself is double precision in both cases -- the diffed columns
+# agree to ~2e-7 relative in single, well inside rtol.
+if(SINGLE_PREC)
+  set(_smoke_ceilings --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
+  set(_nightly_ceilings --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
+else()
+  set(_smoke_ceilings --ceiling div_u_max=1e-8 --ceiling div_u_mean=1e-9)
+  set(_nightly_ceilings --ceiling div_u_max=1e-12 --ceiling div_u_mean=1e-13)
+endif()
+
 if(WITH_2DECOMPFFT AND _cpu_omp_backend)
   define_regression_case_test(tgv_smoke tgv_smoke.x3d tgv_smoke_golden_omp.csv 2 omp
-    --ceiling div_u_max=1e-8 --ceiling div_u_mean=1e-9)
+    ${_smoke_ceilings})
 endif()
 
 # Heavier nightly regression case (opt-in; kept out of PR CI to stay fast).
 if(WITH_2DECOMPFFT AND _cpu_omp_backend AND WITH_NIGHTLY_REGRESSION)
   define_regression_case_test(tgv_nightly tgv_nightly.x3d tgv_nightly_golden_omp.csv 2 omp
-    --ceiling div_u_max=1e-12 --ceiling div_u_mean=1e-13)
+    ${_nightly_ceilings})
 endif()
+unset(_smoke_ceilings)
+unset(_nightly_ceilings)
 unset(_cpu_omp_backend)
 
 if(${OMP_TGT})

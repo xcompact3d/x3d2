@@ -87,11 +87,15 @@ def compare_golden(produced: Path, golden: Path, rtol: float, atol: float,
 
     # Rows are matched by index, so bail early with a clear message if the time
     # columns disagree rather than emitting a cascade of value mismatches.
+    # This guards row *alignment*, where a mismatch is a whole output interval,
+    # so it uses the same tolerance as everything else. A tighter bound would
+    # not catch anything extra and would trip on representation alone: float32
+    # writes t=0.05 as 4.999999701977e-02, which is not a disagreement.
     if "time" in prod_cols and "time" in gold_cols:
         prod_t = column("time", prod_cols, prod_rows)
         gold_t = column("time", gold_cols, gold_rows)
         for i, (pt, gt) in enumerate(zip(prod_t, gold_t)):
-            if abs(pt - gt) > 1e-9 + 1e-9 * abs(gt):
+            if abs(pt - gt) > atol + rtol * abs(gt):
                 print(
                     f"FAIL: time column misaligned at row {i}: "
                     f"produced t={pt:.12e} vs golden t={gt:.12e}",
