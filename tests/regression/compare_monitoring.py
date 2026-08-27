@@ -10,6 +10,16 @@ quantities such as divergence (via ``atol``). This is the day-to-day "did any
 commit change the numbers" guard. Physics validation against reference data is
 performed separately and manually.
 
+Ceilings
+    ``--ceiling COLUMN=VALUE`` checks a column against an absolute bound and
+    skips its element-wise diff. Use it for quantities whose stored value is
+    round-off rather than signal. The divergence columns are a "stays at
+    zero" assertion: diffing them against a reference to ``rtol`` is checking
+    noise, which happens to be reproducible in double precision and is not at
+    float32, where they move by 10-20% between builds of the same compiler. A
+    ceiling states the real assertion and holds across compilers and
+    precisions.
+
 Blessing
     Passing ``--bless`` copies the produced file to the golden path and exits
     0. This is the *only* way to write a golden: a ``--golden`` path that does
@@ -62,7 +72,8 @@ def column(name: str, columns: list[str], rows: list[list[float]]) -> list[float
     return [row[idx] for row in rows]
 
 
-def compare_golden(produced: Path, golden: Path, rtol: float, atol: float) -> int:
+def compare_golden(produced: Path, golden: Path, rtol: float, atol: float,
+                   ceilings: dict[str, float]) -> int:
     prod_cols, prod_rows = read_monitoring(produced)
     gold_cols, gold_rows = read_monitoring(golden)
 
@@ -88,6 +99,15 @@ def compare_golden(produced: Path, golden: Path, rtol: float, atol: float) -> in
                 )
                 return 1
 
+    unknown = [c for c in ceilings if c not in prod_cols]
+    if unknown:
+        print(
+            "FAIL: --ceiling names column(s) not in the produced output: "
+            + ", ".join(unknown),
+            file=sys.stderr,
+        )
+        return 1
+
     missing = [c for c in gold_cols if c not in prod_cols]
     if missing:
         print(
@@ -99,7 +119,37 @@ def compare_golden(produced: Path, golden: Path, rtol: float, atol: float) -> in
 
     failures = 0
     worst = (0.0, "", -1)  # (excess, column, row)
+
+    # Ceiling columns assert "this stayed at round-off" rather than "this
+    # reproduces a stored value", so they are never diffed against the golden.
+    for name, limit in ceilings.items():
+        for i, p in enumerate(column(name, prod_cols, prod_rows)):
+            if math.isfinite(p) and abs(p) <= limit:
+                continue
+            failures += 1
+            if not math.isfinite(p):
+                if worst[2] == -1:
+                    worst = (math.inf, name, i)
+                if failures <= 10:
+                    print(
+                        f"FAIL: {name} row {i}: non-finite value "
+                        f"(produced={p})",
+                        file=sys.stderr,
+                    )
+                continue
+            excess = abs(p) - limit
+            if excess > worst[0]:
+                worst = (excess, name, i)
+            if failures <= 10:
+                print(
+                    f"FAIL: {name} row {i}: produced={p:.12e} exceeds "
+                    f"ceiling {limit:.3e}",
+                    file=sys.stderr,
+                )
+
     for name in gold_cols:
+        if name in ceilings:
+            continue
         prod = column(name, prod_cols, prod_rows)
         gold = column(name, gold_cols, gold_rows)
         for i, (p, g) in enumerate(zip(prod, gold)):
@@ -130,17 +180,22 @@ def compare_golden(produced: Path, golden: Path, rtol: float, atol: float) -> in
 
     if failures:
         print(
-            f"FAIL: {failures} value(s) exceeded tolerance "
+            f"FAIL: {failures} value(s) exceeded tolerance or ceiling "
             f"(rtol={rtol:g}, atol={atol:g}); worst: column '{worst[1]}' "
             f"row {worst[2]}",
             file=sys.stderr,
         )
         return 1
 
-    print(
-        f"PASS: {len(gold_cols)} column(s) x {len(prod_rows)} row(s) "
+    diffed = [c for c in gold_cols if c not in ceilings]
+    summary = (
+        f"PASS: {len(diffed)} column(s) x {len(prod_rows)} row(s) "
         f"within tolerance (rtol={rtol:g}, atol={atol:g})"
     )
+    if ceilings:
+        bounds = ", ".join(f"{n}<={v:g}" for n, v in ceilings.items())
+        summary += f"; {len(ceilings)} within ceiling ({bounds})"
+    print(summary)
     return 0
 
 
@@ -154,6 +209,10 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--golden", type=Path, required=True)
     g.add_argument("--rtol", type=float, default=1e-4)
     g.add_argument("--atol", type=float, default=1e-10)
+    g.add_argument(
+        "--ceiling", action="append", default=[], metavar="COLUMN=VALUE",
+        help="bound COLUMN absolutely instead of diffing it against the golden"
+    )
     g.add_argument("--bless", action="store_true", help="write produced as golden")
 
     args = parser.parse_args(argv)
@@ -175,7 +234,29 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    return compare_golden(args.produced, args.golden, args.rtol, args.atol)
+    ceilings: dict[str, float] = {}
+    for item in args.ceiling:
+        name, sep, value = item.partition("=")
+        name = name.strip()
+        if not sep or not name:
+            print(
+                f"FAIL: --ceiling expects COLUMN=VALUE, got {item!r}",
+                file=sys.stderr,
+            )
+            return 1
+        try:
+            ceilings[name] = float(value)
+        except ValueError:
+            print(
+                f"FAIL: --ceiling value for {name!r} is not a number: "
+                f"{value!r}",
+                file=sys.stderr,
+            )
+            return 1
+
+    return compare_golden(
+        args.produced, args.golden, args.rtol, args.atol, ceilings
+    )
 
 
 if __name__ == "__main__":

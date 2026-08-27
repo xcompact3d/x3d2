@@ -114,6 +114,10 @@ endfunction()
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 function(define_regression_case_test case_name input_file golden_file np backend)
+  # Trailing arguments are passed through to the comparator (e.g. --ceiling).
+  set(extra_args "${ARGN}")
+  string(REPLACE ";" " " extra_args_str "${extra_args}")
+
   set(test_name regression_${case_name}_${backend}_${np})
   set(work_dir ${CMAKE_CURRENT_BINARY_DIR}/regression/${test_name})
   file(MAKE_DIRECTORY ${work_dir})
@@ -132,7 +136,7 @@ function(define_regression_case_test case_name input_file golden_file np backend
     COMMAND sh -c
       "${launcher} $<TARGET_FILE:xcompact> ${input} && \
        ${Python3_EXECUTABLE} ${comparator} golden \
-       --produced monitoring.csv --golden ${golden}"
+       --produced monitoring.csv --golden ${golden} ${extra_args_str}"
     WORKING_DIRECTORY ${work_dir})
   set_tests_properties(${test_name} PROPERTIES LABELS "regression;${backend}")
 endfunction()
@@ -183,13 +187,21 @@ if((CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR
   set(_cpu_omp_backend FALSE)
 endif()
 
+# The divergence columns are a "stays at round-off" assertion, not a value to
+# reproduce, so they are bounded absolutely rather than diffed (see the
+# comparator docstring). The ceilings are per case because the two differ by
+# four orders: the smoke case peaks at 8.7e-10 and the nightly at 3.3e-14.
+# Each is set about an order above the observed maximum, which leaves room for
+# compiler variation while staying far below any real loss of solenoidality.
 if(WITH_2DECOMPFFT AND _cpu_omp_backend)
-  define_regression_case_test(tgv_smoke tgv_smoke.x3d tgv_smoke_golden_omp.csv 2 omp)
+  define_regression_case_test(tgv_smoke tgv_smoke.x3d tgv_smoke_golden_omp.csv 2 omp
+    --ceiling div_u_max=1e-8 --ceiling div_u_mean=1e-9)
 endif()
 
 # Heavier nightly regression case (opt-in; kept out of PR CI to stay fast).
 if(WITH_2DECOMPFFT AND _cpu_omp_backend AND WITH_NIGHTLY_REGRESSION)
-  define_regression_case_test(tgv_nightly tgv_nightly.x3d tgv_nightly_golden_omp.csv 2 omp)
+  define_regression_case_test(tgv_nightly tgv_nightly.x3d tgv_nightly_golden_omp.csv 2 omp
+    --ceiling div_u_max=1e-12 --ceiling div_u_mean=1e-13)
 endif()
 unset(_cpu_omp_backend)
 
