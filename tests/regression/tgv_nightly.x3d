@@ -1,0 +1,30 @@
+&domain_settings
+! Larger TGV case for the nightly regression run: 64^3, 2000 steps (t=10),
+! which carries the flow through the dissipation build-up. Still a self-
+! consistent golden regression (tight tolerance vs our own committed output),
+! NOT a DNS-resolved validation case.
+flow_case_name = 'tgv'
+
+L_global = 6.283185307179586d0, 6.283185307179586d0, 6.283185307179586d0
+
+dims_global = 64, 64, 64
+
+nproc_dir = 1, 1, 2
+
+BC_x = 'periodic', 'periodic'
+BC_y = 'periodic', 'periodic'
+BC_z = 'periodic', 'periodic'
+/End
+
+&solver_params
+Re = 1600d0
+time_intg = 'AB3'
+dt = 0.005d0
+n_iters = 2000
+n_output = 100
+poisson_solver_type = 'FFT'
+der1st_scheme = 'compact6'
+der2nd_scheme = 'compact6'
+interpl_scheme = 'classic'
+stagder_scheme = 'compact6'
+/End

@@ -1,0 +1,65 @@
+name: Nightly regression
+
+# Full-size regression: run the solver on a larger TGV case and diff the
+# resulting monitoring.csv against the committed golden (tight tolerance). This
+# is a "did any merge change our numbers" guard, not a DNS validation -- physics
+# validation against published data is done manually, only when a numerical
+# scheme changes (not on every PR). Timing is a tracked-but-non-gating metric.
+
+on:
+  schedule:
+    # 02:30 UTC every day. Runs on the default branch.
+    - cron: '30 2 * * *'
+  workflow_dispatch: {}
+
+# Never let two nightly runs overlap.
+concurrency:
+  group: nightly-regression
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    # GitHub-hosted CPU runner. For the resolved GPU run, point this at a
+    # self-hosted GPU runner and build with the NVHPC/CUDA toolchain instead
+    # (the golden files are backend-specific, so bless a *_cuda.csv alongside).
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OpenMPI
+        run: sudo apt-get update && sudo apt-get install -y openmpi-bin libopenmpi-dev
+
+      - name: Configure (GNU, double precision, nightly regression on)
+        run: >-
+          FC=mpif90 cmake -S . -B build-nightly
+          -DCMAKE_BUILD_TYPE=Debug
+          -DWITH_ADIOS2=OFF
+          -DWITH_NIGHTLY_REGRESSION=ON
+
+      - name: Build
+        run: make -C build-nightly xcompact && make -C build-nightly
+
+      - name: Run regression tests
+        run: |
+          set -o pipefail
+          ctest --test-dir build-nightly -L regression --output-on-failure \
+            2>&1 | tee build-nightly/ctest.log
+
+      # Non-gating: surface per-step timing so a sustained slow-down is visible
+      # in the run log without failing the build on noisy CI timing.
+      - name: Report timing (non-gating)
+        if: always()
+        run: |
+          echo "## Nightly regression timing" >> "$GITHUB_STEP_SUMMARY"
+          grep "Averaged time per step" \
+            build-nightly/Testing/Temporary/LastTest.log \
+            >> "$GITHUB_STEP_SUMMARY" || true
+
+      # Keep the produced series so a failing diff can be inspected / re-blessed.
+      - name: Upload monitoring output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-monitoring
+          path: build-nightly/tests/regression/**/monitoring.csv
+          if-no-files-found: ignore
