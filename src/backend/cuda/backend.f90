@@ -34,7 +34,7 @@ module m_cuda_backend
                                      vorticity_from_gradients, &
                                      qcriterion_from_gradients, &
                                      smagorinsky_from_gradients, &
-                                     sgs_stress_from_gradients
+                                     sgs_stress_from_gradients, neutral_wall_flux
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
                                     reorder_c2x, reorder_x2c, &
@@ -80,6 +80,7 @@ module m_cuda_backend
     procedure :: compute_qcriterion => compute_qcriterion_cuda
     procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_cuda
     procedure :: compute_sgs_stress => compute_sgs_stress_cuda
+    procedure :: apply_neutral_wall_flux => apply_neutral_wall_flux_cuda
     procedure :: field_volume_integral => field_volume_integral_cuda
     procedure :: copy_data_to_f => copy_data_to_f_cuda
     procedure :: copy_f_to_data => copy_f_to_data_cuda
@@ -958,6 +959,51 @@ contains
       stress_d, nut_d, gradient_a_d, gradient_b_d, &
       scale_a, scale_b, n) !&
   end subroutine compute_sgs_stress_cuda
+
+  subroutine apply_neutral_wall_flux_cuda( &
+    self, sgs_u, sgs_v, sgs_w, u, w, nut, &
+    dudy, dvdx, dwdy, dvdz, kappa, roughness_length, sampling_height)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: sgs_u, sgs_v, sgs_w
+    class(field_t), intent(in) :: u, w, nut
+    class(field_t), intent(in) :: dudy, dvdx, dwdy, dvdz
+    real(dp), intent(in) :: kappa, roughness_length, sampling_height
+
+    real(dp), device, pointer, dimension(:, :, :) :: &
+      sgs_u_d, sgs_v_d, sgs_w_d, u_d, w_d, nut_d, &
+      dudy_d, dvdx_d, dwdy_d, dvdz_d
+    type(dim3) :: blocks, threads
+    integer :: dims(3)
+    real(dp) :: drag_coeff
+
+    if (self%mesh%par%nrank_dir(2) /= 0) return
+    if (sampling_height <= roughness_length) &
+      error stop 'ABL wall sampling height must exceed roughness length.'
+
+    dims = self%mesh%get_dims(VERT)
+    if (dims(2) < 3) error stop 'ABL wall model requires at least 3 y vertices.'
+    drag_coeff = (kappa/log(sampling_height/roughness_length))**2
+
+    call resolve_field_t(sgs_u_d, sgs_u)
+    call resolve_field_t(sgs_v_d, sgs_v)
+    call resolve_field_t(sgs_w_d, sgs_w)
+    call resolve_field_t(u_d, u)
+    call resolve_field_t(w_d, w)
+    call resolve_field_t(nut_d, nut)
+    call resolve_field_t(dudy_d, dudy)
+    call resolve_field_t(dvdx_d, dvdx)
+    call resolve_field_t(dwdy_d, dwdy)
+    call resolve_field_t(dvdz_d, dvdz)
+
+    blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
+    threads = dim3(64, 1, 1)
+    call neutral_wall_flux<<<blocks, threads>>>( &
+      sgs_u_d, sgs_v_d, sgs_w_d, u_d, w_d, nut_d, &
+      dudy_d, dvdx_d, dwdy_d, dvdz_d, drag_coeff, sampling_height, &
+      dims(1), dims(2))
+  end subroutine apply_neutral_wall_flux_cuda
 
   real(dp) function scalar_product_cuda(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]
