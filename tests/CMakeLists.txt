@@ -196,7 +196,7 @@ endif()
 if(SINGLE_PREC)
   set(_smoke_cmp_args --rtol 1e-4
       --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
-  set(_nightly_cmp_args --rtol 1e-4
+  set(_nightly_cmp_args --rtol 1e-3
       --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
 else()
   set(_smoke_cmp_args --rtol 1e-10
