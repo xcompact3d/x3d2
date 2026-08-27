@@ -24,6 +24,9 @@ module m_les
     real(dp) :: wall_damping_n = 3._dp
     real(dp) :: von_karman_constant = 0.4_dp
     real(dp) :: roughness_length = 0._dp
+    logical :: neutral_wall_model = .false.
+    real(dp) :: wall_model_kappa = 0.4_dp
+    real(dp) :: wall_model_roughness = 0._dp
     class(field_t), pointer :: nut => null()
     class(field_t), pointer :: mixing_length_sq => null()
   contains
@@ -31,6 +34,7 @@ module m_les
     procedure :: nut_from_gradient
     procedure :: compute_nut
     procedure :: apply_sgs_stress
+    procedure :: configure_neutral_wall
     procedure :: finalise
   end type les_t
 
@@ -147,6 +151,28 @@ contains
                           self%mixing_length(spacing, wall_distance))
   end function nut_from_gradient
 
+  subroutine configure_neutral_wall(self, kappa, roughness_length)
+    class(les_t), intent(inout) :: self
+    real(dp), intent(in) :: kappa, roughness_length
+
+    if (trim(self%model) /= 'smagorinsky') &
+      error stop 'The neutral ABL wall model requires Smagorinsky LES.'
+    if (.not. self%wall_damping) &
+      error stop 'The neutral ABL wall model requires LES wall damping.'
+    if (kappa <= 0._dp .or. roughness_length <= 0._dp) &
+      error stop 'ABL wall-model constants must be positive.'
+    if (abs(self%von_karman_constant - kappa) > &
+        100._dp*epsilon(1._dp)*max(1._dp, abs(kappa))) &
+      error stop 'ABL and LES von Karman constants must match.'
+    if (abs(self%roughness_length - roughness_length) > &
+        100._dp*epsilon(1._dp)*max(1._dp, abs(roughness_length))) &
+      error stop 'ABL and LES roughness lengths must match.'
+
+    self%neutral_wall_model = .true.
+    self%wall_model_kappa = kappa
+    self%wall_model_roughness = roughness_length
+  end subroutine configure_neutral_wall
+
   subroutine compute_nut(self, backend, mesh, u, v, w, &
                          xdirps, ydirps, zdirps)
     !! Compute the Smagorinsky eddy-viscosity field in DIR_X layout.
@@ -159,6 +185,8 @@ contains
     class(field_t), pointer :: dudx, dudy, dudz
     class(field_t), pointer :: dvdx, dvdy, dvdz
     class(field_t), pointer :: dwdx, dwdy, dwdz
+    class(field_t), pointer :: sgs_du, sgs_dv, sgs_dw
+    real(dp) :: sampling_height
 
     if (u%dir /= DIR_X .or. v%dir /= DIR_X .or. w%dir /= DIR_X) then
       error stop 'LES velocity fields must use DIR_X layout.'
@@ -232,19 +260,62 @@ contains
       self%nut, self%mixing_length_sq, &
       dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
 
-    call add_normal_stress(backend, du, self%nut, dudx, xdirps)
-    call add_normal_stress(backend, dv, self%nut, dvdy, ydirps)
-    call add_normal_stress(backend, dw, self%nut, dwdz, zdirps)
-    call add_shear_stress( &
-      backend, du, ydirps, dv, xdirps, self%nut, dudy, dvdx)
-    call add_shear_stress( &
-      backend, du, zdirps, dw, xdirps, self%nut, dudz, dwdx)
-    call add_shear_stress( &
-      backend, dv, zdirps, dw, ydirps, self%nut, dvdz, dwdy)
+    if (self%neutral_wall_model) then
+      ! Keep the SGS contribution separate until the bottom boundary has been
+      ! replaced. This prevents the wall model from overwriting convection or
+      ! molecular diffusion already present in du/dv/dw.
+      sgs_du => backend%allocator%get_block(DIR_X, VERT)
+      sgs_dv => backend%allocator%get_block(DIR_X, VERT)
+      sgs_dw => backend%allocator%get_block(DIR_X, VERT)
+      call sgs_du%fill(0._dp)
+      call sgs_dv%fill(0._dp)
+      call sgs_dw%fill(0._dp)
+
+      call add_sgs_terms(backend, sgs_du, sgs_dv, sgs_dw, self%nut, &
+                         dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+                         dwdx, dwdy, dwdz, xdirps, ydirps, zdirps)
+
+      sampling_height = 0.5_dp*abs(mesh%geo%vert_coords(2, 2) - &
+                                   mesh%geo%vert_coords(1, 2))
+      call backend%apply_neutral_wall_flux( &
+        sgs_du, sgs_dv, sgs_dw, u, w, self%nut, &
+        dudy, dvdx, dwdy, dvdz, self%wall_model_kappa, &
+        self%wall_model_roughness, sampling_height)
+
+      call backend%vecadd(1._dp, sgs_du, 1._dp, du)
+      call backend%vecadd(1._dp, sgs_dv, 1._dp, dv)
+      call backend%vecadd(1._dp, sgs_dw, 1._dp, dw)
+      call backend%allocator%release_block(sgs_du)
+      call backend%allocator%release_block(sgs_dv)
+      call backend%allocator%release_block(sgs_dw)
+    else
+      call add_sgs_terms(backend, du, dv, dw, self%nut, &
+                         dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+                         dwdx, dwdy, dwdz, xdirps, ydirps, zdirps)
+    end if
 
     call release_velocity_gradients( &
       backend, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
   end subroutine apply_sgs_stress
+
+  subroutine add_sgs_terms(backend, du, dv, dw, nut, &
+                           dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+                           dwdx, dwdy, dwdz, xdirps, ydirps, zdirps)
+    class(base_backend_t), intent(inout) :: backend
+    class(field_t), intent(inout) :: du, dv, dw
+    class(field_t), intent(in) :: nut
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+
+    call add_normal_stress(backend, du, nut, dudx, xdirps)
+    call add_normal_stress(backend, dv, nut, dvdy, ydirps)
+    call add_normal_stress(backend, dw, nut, dwdz, zdirps)
+    call add_shear_stress(backend, du, ydirps, dv, xdirps, nut, dudy, dvdx)
+    call add_shear_stress(backend, du, zdirps, dw, xdirps, nut, dudz, dwdx)
+    call add_shear_stress(backend, dv, zdirps, dw, ydirps, nut, dvdz, dwdy)
+  end subroutine add_sgs_terms
 
   subroutine compute_velocity_gradients( &
     backend, u, v, w, xdirps, ydirps, zdirps, &

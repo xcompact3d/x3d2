@@ -56,6 +56,7 @@ module m_omp_backend
     procedure :: compute_qcriterion => compute_qcriterion_omp
     procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_omp
     procedure :: compute_sgs_stress => compute_sgs_stress_omp
+    procedure :: apply_neutral_wall_flux => apply_neutral_wall_flux_omp
     procedure :: field_volume_integral => field_volume_integral_omp
     procedure :: copy_data_to_f => copy_data_to_f_omp
     procedure :: copy_f_to_data => copy_f_to_data_omp
@@ -770,6 +771,64 @@ contains
     end do
     !$omp end parallel do
   end subroutine compute_sgs_stress_omp
+
+  subroutine apply_neutral_wall_flux_omp( &
+    self, sgs_u, sgs_v, sgs_w, u, w, nut, &
+    dudy, dvdx, dwdy, dvdz, kappa, roughness_length, sampling_height)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: sgs_u, sgs_v, sgs_w
+    class(field_t), intent(in) :: u, w, nut
+    class(field_t), intent(in) :: dudy, dvdx, dwdy, dvdz
+    real(dp), intent(in) :: kappa, roughness_length, sampling_height
+
+    integer :: dims(3), i, z, k_start, n_y_blocks
+    real(dp) :: u_sample, w_sample, speed, tau_x, tau_z
+    real(dp) :: sxy_2, sxy_3, syz_2, syz_3, drag_coeff
+
+    if (self%mesh%par%nrank_dir(2) /= 0) return
+    if (sampling_height <= roughness_length) &
+      error stop 'ABL wall sampling height must exceed roughness length.'
+
+    dims = self%mesh%get_dims(VERT)
+    if (dims(2) < 3) error stop 'ABL wall model requires at least 3 y vertices.'
+    n_y_blocks = (dims(2) - 1)/SZ + 1
+    drag_coeff = (kappa/log(sampling_height/roughness_length))**2
+
+    !$omp parallel do private(k_start, u_sample, w_sample, speed, tau_x, &
+    !$omp& tau_z, sxy_2, sxy_3, syz_2, syz_3)
+    do z = 1, dims(3)
+      k_start = 1 + (z - 1)*n_y_blocks
+      do i = 1, dims(1)
+        u_sample = 0.5_dp*(u%data(1, i, k_start) + u%data(2, i, k_start))
+        w_sample = 0.5_dp*(w%data(1, i, k_start) + w%data(2, i, k_start))
+        speed = sqrt(u_sample**2 + w_sample**2)
+        tau_x = -drag_coeff*u_sample*speed
+        tau_z = -drag_coeff*w_sample*speed
+
+        sxy_2 = 0.5_dp*(dudy%data(2, i, k_start) + &
+                         dvdx%data(2, i, k_start))
+        sxy_3 = 0.5_dp*(dudy%data(3, i, k_start) + &
+                         dvdx%data(3, i, k_start))
+        syz_2 = 0.5_dp*(dwdy%data(2, i, k_start) + &
+                         dvdz%data(2, i, k_start))
+        syz_3 = 0.5_dp*(dwdy%data(3, i, k_start) + &
+                         dvdz%data(3, i, k_start))
+
+        sgs_u%data(1, i, k_start) = -( &
+          -0.5_dp*(-2._dp*nut%data(3, i, k_start)*sxy_3) + &
+          2._dp*(-2._dp*nut%data(2, i, k_start)*sxy_2) - &
+          1.5_dp*tau_x)/(2._dp*sampling_height)
+        sgs_v%data(1, i, k_start) = 0._dp
+        sgs_w%data(1, i, k_start) = -( &
+          -0.5_dp*(-2._dp*nut%data(3, i, k_start)*syz_3) + &
+          2._dp*(-2._dp*nut%data(2, i, k_start)*syz_2) - &
+          1.5_dp*tau_z)/(2._dp*sampling_height)
+      end do
+    end do
+    !$omp end parallel do
+  end subroutine apply_neutral_wall_flux_omp
 
   real(dp) function scalar_product_omp(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]

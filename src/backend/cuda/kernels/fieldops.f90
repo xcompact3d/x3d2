@@ -225,6 +225,50 @@ contains
     end do
   end subroutine sgs_stress_from_gradients
 
+  attributes(global) subroutine neutral_wall_flux( &
+    sgs_u, sgs_v, sgs_w, u, w, nut, dudy, dvdx, dwdy, dvdz, &
+    drag_coeff, sampling_height, nx, ny)
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: sgs_u, sgs_v, sgs_w
+    real(dp), device, intent(in), dimension(:, :, :) :: u, w, nut
+    real(dp), device, intent(in), dimension(:, :, :) :: dudy, dvdx, dwdy, dvdz
+    real(dp), value, intent(in) :: drag_coeff, sampling_height
+    integer, value, intent(in) :: nx, ny
+
+    integer :: i, z, b, n_y_blocks
+    real(dp) :: u_sample, w_sample, speed, tau_x, tau_z
+    real(dp) :: sxy_2, sxy_3, syz_2, syz_3
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    z = blockIdx%y
+    n_y_blocks = (ny - 1)/SZ + 1
+    b = 1 + (z - 1)*n_y_blocks
+
+    if (i <= nx) then
+      u_sample = 0.5_dp*(u(1, i, b) + u(2, i, b))
+      w_sample = 0.5_dp*(w(1, i, b) + w(2, i, b))
+      speed = sqrt(u_sample**2 + w_sample**2)
+      tau_x = -drag_coeff*u_sample*speed
+      tau_z = -drag_coeff*w_sample*speed
+
+      sxy_2 = 0.5_dp*(dudy(2, i, b) + dvdx(2, i, b))
+      sxy_3 = 0.5_dp*(dudy(3, i, b) + dvdx(3, i, b))
+      syz_2 = 0.5_dp*(dwdy(2, i, b) + dvdz(2, i, b))
+      syz_3 = 0.5_dp*(dwdy(3, i, b) + dvdz(3, i, b))
+
+      sgs_u(1, i, b) = -( &
+        -0.5_dp*(-2._dp*nut(3, i, b)*sxy_3) + &
+        2._dp*(-2._dp*nut(2, i, b)*sxy_2) - &
+        1.5_dp*tau_x)/(2._dp*sampling_height)
+      sgs_v(1, i, b) = 0._dp
+      sgs_w(1, i, b) = -( &
+        -0.5_dp*(-2._dp*nut(3, i, b)*syz_3) + &
+        2._dp*(-2._dp*nut(2, i, b)*syz_2) - &
+        1.5_dp*tau_z)/(2._dp*sampling_height)
+    end if
+  end subroutine neutral_wall_flux
+
   attributes(global) subroutine scalar_product(s, x, y, n, n_i_pad, n_j)
     implicit none
 
