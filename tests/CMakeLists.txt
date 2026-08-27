@@ -187,35 +187,36 @@ if((CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR
   set(_cpu_omp_backend FALSE)
 endif()
 
-# The divergence columns are a "stays at round-off" assertion, not a value to
-# reproduce, so they are bounded absolutely rather than diffed (see the
-# comparator docstring). Round-off is what the ceiling tracks, so it depends on
-# the working precision, and on the case: in double the smoke case peaks at
-# 8.7e-10 and the nightly at 3.3e-14, while in single both sit at ~4e-6. Each
-# is set about an order above the observed maximum, which leaves room for
-# compiler variation while staying far below any real loss of solenoidality.
-# The golden itself is double precision in both cases -- the diffed columns
-# agree to ~2e-7 relative in single, well inside rtol.
+# div_u is a "stays at round-off" assertion, so it is bounded absolutely rather
+# than diffed (see the comparator docstring). Round-off tracks the working
+# precision, and the case, so the ceilings do too; rtol tracks precision
+# because it sets what the suite can detect. The golden is double precision for
+# both. If a CI compiler drifts past these, the failure prints the observed
+# |diff| -- loosen to that, not back to the 1e-4 default.
 if(SINGLE_PREC)
-  set(_smoke_ceilings --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
-  set(_nightly_ceilings --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
+  set(_smoke_cmp_args --rtol 1e-4
+      --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
+  set(_nightly_cmp_args --rtol 1e-4
+      --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
 else()
-  set(_smoke_ceilings --ceiling div_u_max=1e-8 --ceiling div_u_mean=1e-9)
-  set(_nightly_ceilings --ceiling div_u_max=1e-12 --ceiling div_u_mean=1e-13)
+  set(_smoke_cmp_args --rtol 1e-10
+      --ceiling div_u_max=1e-8 --ceiling div_u_mean=1e-9)
+  set(_nightly_cmp_args --rtol 1e-10
+      --ceiling div_u_max=1e-12 --ceiling div_u_mean=1e-13)
 endif()
 
 if(WITH_2DECOMPFFT AND _cpu_omp_backend)
   define_regression_case_test(tgv_smoke tgv_smoke.x3d tgv_smoke_golden_omp.csv 2 omp
-    ${_smoke_ceilings})
+    ${_smoke_cmp_args})
 endif()
 
 # Heavier nightly regression case (opt-in; kept out of PR CI to stay fast).
 if(WITH_2DECOMPFFT AND _cpu_omp_backend AND WITH_NIGHTLY_REGRESSION)
   define_regression_case_test(tgv_nightly tgv_nightly.x3d tgv_nightly_golden_omp.csv 2 omp
-    ${_nightly_ceilings})
+    ${_nightly_cmp_args})
 endif()
-unset(_smoke_ceilings)
-unset(_nightly_ceilings)
+unset(_smoke_cmp_args)
+unset(_nightly_cmp_args)
 unset(_cpu_omp_backend)
 
 if(${OMP_TGT})
