@@ -120,10 +120,17 @@ function(define_regression_case_test case_name input_file golden_file np backend
   set(comparator ${CMAKE_CURRENT_SOURCE_DIR}/regression/compare_monitoring.py)
   set(input ${CMAKE_CURRENT_SOURCE_DIR}/regression/${input_file})
   set(golden ${CMAKE_CURRENT_SOURCE_DIR}/regression/${golden_file})
+  # Match the launcher define_test() uses: Cray machines are Slurm-driven and
+  # have no mpirun, so an mpirun-based test cannot start there at all.
+  if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+    set(launcher "srun -n ${np}")
+  else()
+    set(launcher "mpirun --oversubscribe -np ${np}")
+  endif()
   add_test(
     NAME ${test_name}
     COMMAND sh -c
-      "mpirun --oversubscribe -np ${np} $<TARGET_FILE:xcompact> ${input} && \
+      "${launcher} $<TARGET_FILE:xcompact> ${input} && \
        ${Python3_EXECUTABLE} ${comparator} golden \
        --produced monitoring.csv --golden ${golden}"
     WORKING_DIRECTORY ${work_dir})
