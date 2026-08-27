@@ -11,8 +11,10 @@ commit change the numbers" guard. Physics validation against reference data is
 performed separately and manually.
 
 Blessing
-    Passing ``--bless`` (or pointing ``--golden`` at a non-existent file in
-    ``golden`` mode) copies the produced file to the golden path and exits 0.
+    Passing ``--bless`` copies the produced file to the golden path and exits
+    0. This is the *only* way to write a golden: a ``--golden`` path that does
+    not exist is a failure, so a typo or a rename cannot quietly turn the
+    regression guard off.
     Use this to (re)generate the reference in the *same* environment that CI
     runs in — golden files are only reproducible for a fixed
     compiler/precision/rank-count. New columns are compared only once they
@@ -156,11 +158,23 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    if args.bless or not args.golden.exists():
+    if args.bless:
         args.golden.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(args.produced, args.golden)
         print(f"BLESSED: wrote golden {args.golden}")
         return 0
+
+    # Never bless implicitly: under CTest a missing golden would otherwise be
+    # an unconditional pass that also writes a new reference into the source
+    # tree, leaving a permanently green test that compares nothing.
+    if not args.golden.exists():
+        print(
+            f"FAIL: golden file not found: {args.golden}\n"
+            "      Check the path, or pass --bless to create it deliberately.",
+            file=sys.stderr,
+        )
+        return 1
+
     return compare_golden(args.produced, args.golden, args.rtol, args.atol)
 
 
