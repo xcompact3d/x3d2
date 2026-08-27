@@ -937,6 +937,7 @@ contains
 
     type(dim3) :: blocks, threads
     integer :: tsize, n_slab, n_plane, mpi_cplx, nrank, ierr, ierr_mpi
+    integer :: ierr_abort
     integer :: tag_slab = 2345, tag_plane = 2346
 
     ! MPI cannot take the first dim2 plane strided out of c_dev, so pack it
@@ -963,8 +964,13 @@ contains
     ! fft_postprocess_100_cuda returns early for the single rank path.
     ierr = cudaStreamSynchronize(default_stream)
     if (ierr /= cudaSuccess) then
-      error stop 'Stream synchronisation before the 100 mirror exchange &
-                  &failed, the device buffers may not be ready.'
+      ! This failure is per rank, and the partners are about to block in
+      ! MPI_Sendrecv waiting for a rank that is on its way out, so tear the
+      ! job down rather than leaving them there.
+      write (stderr, '(a,i0)') &
+        'CUDA synchronisation before the 100 mirror exchange failed: ', ierr
+      flush (stderr)
+      call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
     end if
 
     ! On the middle rank when P is odd the mirror is the local slab itself.
@@ -979,7 +985,10 @@ contains
                         self%mirror_slab_rank, tag_slab, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr_mpi)
       if (ierr_mpi /= MPI_SUCCESS) then
-        error stop 'The 100 mirror slab exchange failed.'
+        write (stderr, '(a,i0)') &
+          'The 100 mirror slab exchange failed: ', ierr_mpi
+        flush (stderr)
+        call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
       end if
     end if
 
@@ -992,7 +1001,10 @@ contains
                         self%mirror_plane_rank, tag_plane, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr_mpi)
       if (ierr_mpi /= MPI_SUCCESS) then
-        error stop 'The 100 mirror slab exchange failed.'
+        write (stderr, '(a,i0)') &
+          'The 100 mirror plane exchange failed: ', ierr_mpi
+        flush (stderr)
+        call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
       end if
     end if
 
