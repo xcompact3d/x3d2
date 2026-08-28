@@ -34,6 +34,7 @@ set(SRC
   case/generic.f90
   case/tgv.f90
   abl/abl.f90
+  abl/diagnostics.f90
   module/ibm.f90
 )
 set(BACKENDSRC

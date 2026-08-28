@@ -81,6 +81,8 @@ module m_config
     real(dp) :: coriolis_freq = 0._dp  !! Coriolis frequency f
     real(dp) :: init_noise(3) = 0._dp
     real(dp) :: u_bulk = 0._dp         !! target bulk velocity (mass_conserve)
+    integer :: profile_start_iter = -1 !! first profile sample (-1 = disabled)
+    character(len=256) :: profile_file = 'abl_profile.csv'
     logical :: pressure_gradient = .false.
     logical :: coriolis = .false.
     logical :: mass_conserve = .false.
@@ -383,10 +385,13 @@ contains
 
     real(dp) :: z0, u_star, delta, kappa
     real(dp) :: u_geo(3), coriolis_freq, init_noise(3), u_bulk
+    integer :: profile_start_iter
+    character(len=256) :: profile_file
     logical :: pressure_gradient, coriolis, mass_conserve, damping
 
     namelist /abl_nml/ z0, u_star, delta, kappa, u_geo, coriolis_freq, &
-      init_noise, u_bulk, pressure_gradient, coriolis, mass_conserve, damping
+      init_noise, u_bulk, profile_start_iter, profile_file, &
+      pressure_gradient, coriolis, mass_conserve, damping
 
     ! Defaults
     z0 = 0.1_dp
@@ -397,6 +402,8 @@ contains
     coriolis_freq = 0._dp
     init_noise = 0._dp
     u_bulk = 0._dp
+    profile_start_iter = -1
+    profile_file = 'abl_profile.csv'
     pressure_gradient = .false.
     coriolis = .false.
     mass_conserve = .false.
@@ -424,6 +431,8 @@ contains
     self%coriolis_freq = coriolis_freq
     self%init_noise = init_noise
     self%u_bulk = u_bulk
+    self%profile_start_iter = profile_start_iter
+    self%profile_file = trim(profile_file)
     self%pressure_gradient = pressure_gradient
     self%coriolis = coriolis
     self%mass_conserve = mass_conserve
@@ -449,6 +458,12 @@ contains
 
     if (any(config%init_noise < 0._dp)) &
       error stop 'ABL config error: init_noise must not be negative.'
+
+    if (config%profile_start_iter < -1) &
+      error stop 'ABL config error: profile_start_iter must be -1 or greater.'
+    if (config%profile_start_iter >= 0 .and. &
+        len_trim(config%profile_file) == 0) &
+      error stop 'ABL config error: profile_file must not be empty.'
   end subroutine validate_abl_config
 
   subroutine read_checkpoint_nml(self, nml_file, nml_string)
