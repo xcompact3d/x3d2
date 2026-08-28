@@ -24,9 +24,8 @@ module m_les
     real(dp) :: wall_damping_n = 3._dp
     real(dp) :: von_karman_constant = 0.4_dp
     real(dp) :: roughness_length = 0._dp
-    logical :: neutral_wall_model = .false.
-    real(dp) :: wall_model_kappa = 0.4_dp
-    real(dp) :: wall_model_roughness = 0._dp
+    logical :: abl_wall_boundary_enabled = .false.
+    real(dp) :: abl_wall_sampling_height = 0._dp
     class(field_t), pointer :: nut => null()
     class(field_t), pointer :: mixing_length_sq => null()
   contains
@@ -34,7 +33,7 @@ module m_les
     procedure :: nut_from_gradient
     procedure :: compute_nut
     procedure :: apply_sgs_stress
-    procedure :: configure_neutral_wall
+    procedure :: configure_abl_wall_boundary
     procedure :: finalise
   end type les_t
 
@@ -151,27 +150,25 @@ contains
                           self%mixing_length(spacing, wall_distance))
   end function nut_from_gradient
 
-  subroutine configure_neutral_wall(self, kappa, roughness_length)
+  subroutine configure_abl_wall_boundary( &
+    self, kappa, roughness_length, sampling_height)
     class(les_t), intent(inout) :: self
-    real(dp), intent(in) :: kappa, roughness_length
+    real(dp), intent(in) :: kappa, roughness_length, sampling_height
 
     if (trim(self%model) /= 'smagorinsky') &
       error stop 'The neutral ABL wall model requires Smagorinsky LES.'
     if (.not. self%wall_damping) &
       error stop 'The neutral ABL wall model requires LES wall damping.'
-    if (kappa <= 0._dp .or. roughness_length <= 0._dp) &
-      error stop 'ABL wall-model constants must be positive.'
-    if (abs(self%von_karman_constant - kappa) > &
-        100._dp*epsilon(1._dp)*max(1._dp, abs(kappa))) &
-      error stop 'ABL and LES von Karman constants must match.'
-    if (abs(self%roughness_length - roughness_length) > &
-        100._dp*epsilon(1._dp)*max(1._dp, abs(roughness_length))) &
-      error stop 'ABL and LES roughness lengths must match.'
+    if (associated(self%mixing_length_sq)) &
+      error stop 'Configure the ABL wall boundary before applying LES.'
 
-    self%neutral_wall_model = .true.
-    self%wall_model_kappa = kappa
-    self%wall_model_roughness = roughness_length
-  end subroutine configure_neutral_wall
+    ! ABL owns the wall properties. LES consumes the same values for its
+    ! Mason-Thomson damping and for the wall-boundary correction.
+    self%von_karman_constant = kappa
+    self%roughness_length = roughness_length
+    self%abl_wall_boundary_enabled = .true.
+    self%abl_wall_sampling_height = sampling_height
+  end subroutine configure_abl_wall_boundary
 
   subroutine compute_nut(self, backend, mesh, u, v, w, &
                          xdirps, ydirps, zdirps)
@@ -185,8 +182,6 @@ contains
     class(field_t), pointer :: dudx, dudy, dudz
     class(field_t), pointer :: dvdx, dvdy, dvdz
     class(field_t), pointer :: dwdx, dwdy, dwdz
-    class(field_t), pointer :: sgs_du, sgs_dv, sgs_dw
-    real(dp) :: sampling_height
 
     if (u%dir /= DIR_X .or. v%dir /= DIR_X .or. w%dir /= DIR_X) then
       error stop 'LES velocity fields must use DIR_X layout.'
@@ -235,6 +230,7 @@ contains
     class(field_t), pointer :: dudx, dudy, dudz
     class(field_t), pointer :: dvdx, dvdy, dvdz
     class(field_t), pointer :: dwdx, dwdy, dwdz
+    class(field_t), pointer :: sgs_du, sgs_dv, sgs_dw
 
     if (trim(self%model) == 'none') return
     if (trim(self%model) /= 'smagorinsky') &
@@ -260,7 +256,7 @@ contains
       self%nut, self%mixing_length_sq, &
       dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
 
-    if (self%neutral_wall_model) then
+    if (self%abl_wall_boundary_enabled) then
       ! Keep the SGS contribution separate until the bottom boundary has been
       ! replaced. This prevents the wall model from overwriting convection or
       ! molecular diffusion already present in du/dv/dw.
@@ -275,12 +271,10 @@ contains
                          dudx, dudy, dudz, dvdx, dvdy, dvdz, &
                          dwdx, dwdy, dwdz, xdirps, ydirps, zdirps)
 
-      sampling_height = 0.5_dp*abs(mesh%geo%vert_coords(2, 2) - &
-                                   mesh%geo%vert_coords(1, 2))
-      call backend%apply_neutral_wall_flux( &
+      call backend%apply_abl_wall_boundary_correction( &
         sgs_du, sgs_dv, sgs_dw, u, w, self%nut, &
-        dudy, dvdx, dwdy, dvdz, self%wall_model_kappa, &
-        self%wall_model_roughness, sampling_height)
+        dudy, dvdx, dwdy, dvdz, self%von_karman_constant, &
+        self%roughness_length, self%abl_wall_sampling_height)
 
       call backend%vecadd(1._dp, sgs_du, 1._dp, du)
       call backend%vecadd(1._dp, sgs_dv, 1._dp, dv)

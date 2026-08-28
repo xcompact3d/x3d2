@@ -48,6 +48,7 @@ contains
                           flow_case%abl_cfg, solver_cfg%dt)
 
     call flow_case%case_init(backend, mesh, host_allocator)
+    call flow_case%abl%configure_wall_boundary_correction(flow_case%solver%les)
 
   end function case_abl_init
 
@@ -78,9 +79,13 @@ contains
       ub = ub/product(self%solver%mesh%get_global_dims(CELL))
       call MPI_Allreduce(MPI_IN_PLACE, ub, 1, MPI_X3D2_DP, &
                          MPI_SUM, MPI_COMM_WORLD, ierr)
-      target_mean = self%abl_cfg%u_star/self%abl_cfg%kappa &
-                    *(ly*log(self%abl_cfg%delta/self%abl_cfg%z0) &
-                      - self%abl_cfg%delta)/ly
+      if (self%abl_cfg%u_bulk > 0._dp) then
+        target_mean = self%abl_cfg%u_bulk
+      else
+        target_mean = self%abl_cfg%u_star/self%abl_cfg%kappa &
+                      *(ly*log(self%abl_cfg%delta/self%abl_cfg%z0) &
+                        - self%abl_cfg%delta)/ly
+      end if
       can = target_mean - ub
       call self%solver%backend%field_shift(self%solver%u, can)
     end if

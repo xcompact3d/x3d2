@@ -225,7 +225,7 @@ contains
     end do
   end subroutine sgs_stress_from_gradients
 
-  attributes(global) subroutine neutral_wall_flux( &
+  attributes(global) subroutine abl_wall_boundary_correction( &
     sgs_u, sgs_v, sgs_w, u, w, nut, dudy, dvdx, dwdy, dvdz, &
     drag_coeff, sampling_height, nx, ny)
     implicit none
@@ -258,16 +258,16 @@ contains
       syz_3 = 0.5_dp*(dwdy(3, i, b) + dvdz(3, i, b))
 
       sgs_u(1, i, b) = -( &
-        -0.5_dp*(-2._dp*nut(3, i, b)*sxy_3) + &
-        2._dp*(-2._dp*nut(2, i, b)*sxy_2) - &
-        1.5_dp*tau_x)/(2._dp*sampling_height)
+                       -0.5_dp*(-2._dp*nut(3, i, b)*sxy_3) + &
+                       2._dp*(-2._dp*nut(2, i, b)*sxy_2) - &
+                       1.5_dp*tau_x)/(2._dp*sampling_height)
       sgs_v(1, i, b) = 0._dp
       sgs_w(1, i, b) = -( &
-        -0.5_dp*(-2._dp*nut(3, i, b)*syz_3) + &
-        2._dp*(-2._dp*nut(2, i, b)*syz_2) - &
-        1.5_dp*tau_z)/(2._dp*sampling_height)
+                       -0.5_dp*(-2._dp*nut(3, i, b)*syz_3) + &
+                       2._dp*(-2._dp*nut(2, i, b)*syz_2) - &
+                       1.5_dp*tau_z)/(2._dp*sampling_height)
     end if
-  end subroutine neutral_wall_flux
+  end subroutine abl_wall_boundary_correction
 
   attributes(global) subroutine scalar_product(s, x, y, n, n_i_pad, n_j)
     implicit none

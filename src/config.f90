@@ -416,13 +416,6 @@ contains
                  &Provide at least one of the following: file name or source'
     end if
 
-    ! At least one driving mechanism must be enabled (damping is a sponge,
-    ! not a driver).
-    if (.not. (pressure_gradient .or. coriolis .or. mass_conserve)) then
-      error stop 'ABL config error: enable at least one driving mechanism &
-                 &(pressure_gradient, coriolis or mass_conserve).'
-    end if
-
     self%z0 = z0
     self%u_star = u_star
     self%delta = delta
@@ -436,7 +429,27 @@ contains
     self%mass_conserve = mass_conserve
     self%damping = damping
 
+    call validate_abl_config(self)
+
   end subroutine read_abl_nml
+
+  subroutine validate_abl_config(config)
+    !! Validate relationships between ABL namelist values in one place.
+    type(abl_config_t), intent(in) :: config
+
+    ! Damping is a sponge rather than a driving mechanism.
+    if (.not. (config%pressure_gradient .or. config%coriolis .or. &
+               config%mass_conserve)) &
+      error stop 'ABL config error: enable pressure_gradient, coriolis, &
+                 &or mass_conserve.'
+
+    if (config%z0 <= 0._dp .or. config%delta <= config%z0 .or. &
+        config%kappa <= 0._dp) &
+      error stop 'ABL config error: require delta > z0 > 0 and kappa > 0.'
+
+    if (any(config%init_noise < 0._dp)) &
+      error stop 'ABL config error: init_noise must not be negative.'
+  end subroutine validate_abl_config
 
   subroutine read_checkpoint_nml(self, nml_file, nml_string)
     implicit none

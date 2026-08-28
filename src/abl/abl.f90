@@ -5,16 +5,16 @@ module m_abl
 !! ABL physics and is owned by a case; it never uses `m_solver`/`m_base_case`,
 !! taking fields/mesh/coords in (same pattern as `m_ibm`).
 !!
-!! This skeleton provides the type, `init`, and the three physics entry points.
-!! `initialise`/`apply_forcing` are filled in issue #317 commit 2;
-!! `apply_wall_model` is blocked on the LES `nut` field (issue #321) and lands
-!! in commit 3.
+!! The neutral rough-wall model is configured here and evaluated as part of
+!! the LES SGS divergence, where it can replace the bottom-plane SGS flux
+!! without overwriting other momentum terms.
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, pi, DIR_C, DIR_X, VERT
   use m_config, only: abl_config_t
   use m_field, only: field_t
   use m_mesh, only: mesh_t
+  use m_les, only: les_t
 
   implicit none
 
@@ -32,7 +32,7 @@ module m_abl
   contains
     procedure :: initialise
     procedure :: apply_forcing
-    procedure :: apply_wall_model
+    procedure :: configure_wall_boundary_correction
     procedure :: apply_damping
     procedure :: build_damping
   end type abl_t
@@ -99,8 +99,9 @@ contains
           else
             prof = self%cfg%u_geo(1)
           end if
-          hu%data(i, j, k) = prof &
-                             *(1._dp + noise(1)*(2._dp*hu%data(i, j, k) - 1._dp))
+          hu%data(i, j, k) = prof* &
+                             (1._dp + noise(1)* &
+                              (2._dp*hu%data(i, j, k) - 1._dp))
           hv%data(i, j, k) = noise(2)*(2._dp*hv%data(i, j, k) - 1._dp)
           hw%data(i, j, k) = noise(3)*(2._dp*hw%data(i, j, k) - 1._dp)
         end do
@@ -237,18 +238,25 @@ contains
 
   end subroutine build_damping
 
-  subroutine apply_wall_model(self, u, v, w, nut)
-    !! Imposes the neutral log-law wall stress at the bottom face, blended
-    !! with the resolved SGS stress `nut`.
+  subroutine configure_wall_boundary_correction(self, les)
+    !! Configure the neutral ABL wall-boundary correction in the LES closure.
     implicit none
 
-    class(abl_t) :: self
-    class(field_t), intent(inout) :: u, v, w
-    class(field_t), intent(in) :: nut
+    class(abl_t), intent(in) :: self
+    type(les_t), intent(inout) :: les
+    real(dp) :: sampling_height
+    integer :: dims(3)
 
-    ! Wall model is blocked on the LES `nut` field (issue #321) and lands in
-    ! issue #317 commit 3.
+    dims = self%mesh%get_dims(VERT)
+    if (dims(2) < 3) &
+      error stop 'ABL wall-boundary correction requires at least 3 y vertices.'
+    sampling_height = 0.5_dp*abs(self%mesh%geo%vert_coords(2, 2) &
+                                 - self%mesh%geo%vert_coords(1, 2))
+    if (sampling_height <= self%cfg%z0) &
+      error stop 'ABL first-cell sampling height must exceed z0.'
 
-  end subroutine apply_wall_model
+    call les%configure_abl_wall_boundary( &
+      self%cfg%kappa, self%cfg%z0, sampling_height)
+  end subroutine configure_wall_boundary_correction
 
 end module m_abl
