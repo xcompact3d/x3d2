@@ -1,11 +1,11 @@
 module m_omp_poisson_fft
 
   use decomp_2d_constants, only: PHYSICAL_IN_X
-  use decomp_2d, only: decomp_info, decomp_info_init, get_decomp_dims, &
+  use decomp_2d, only: decomp_info, get_decomp_dims, &
                        transpose_x_to_y, transpose_y_to_x, &
                        transpose_z_to_y, transpose_y_to_z
   use decomp_2d_fft, only: decomp_2d_fft_init, decomp_2d_fft_3d, &
-                           decomp_2d_fft_get_size, decomp_2d_fft_get_sp
+                           decomp_2d_fft_get_ph, decomp_2d_fft_get_sp
 
   use m_common, only: dp, CELL
   use m_field, only: field_t
@@ -24,12 +24,14 @@ module m_omp_poisson_fft
     logical :: is_100_case = .false.
     !> 2decomp processor grid. p_row splits y in the x-pencil, p_col splits z.
     integer :: p_row = 1, p_col = 1
-    !> Cell sized decomposition driving the x-y transpose in the 100 case.
-    !! decomp_main is built on vertex dims, which differ from the cell dims
-    !! the Poisson solver works on, so this case needs its own.
-    type(decomp_info) :: ph_cell
-    !> Y-pencil staging buffers, only needed when y is decomposed.
-    real(dp), allocatable, dimension(:, :, :) :: r_xp, r_yp
+    !> Physical space decomposition owned by the FFT. The 100 case builds
+    !! the transform on the swapped cell grid (ny, nx, nz), so ph%xsz is
+    !! exactly the layout the transform reads, and ph%ysz is what a local
+    !! dim1/dim2 swap of the untransposed x-pencil lands on. decomp_main
+    !! cannot serve here because it is built on vertex dims.
+    type(decomp_info), pointer :: ph => null()
+    !> Y-pencil staging buffer of ph, only needed when y is decomposed.
+    real(dp), allocatable, dimension(:, :, :) :: r_yp
     !> Spectral decomposition, and its y-pencil staging buffers. The FFT
     !! leaves the spectral slab in a z-pencil, where dim2 (the x modes) is
     !! split across p_col. The paired split in the postprocess couples a
@@ -37,6 +39,9 @@ module m_omp_poisson_fft
     !! The y-pencil of the very same decomposition has dim2 complete for any
     !! processor grid, so 2decomp's own transpose delivers exactly the
     !! layout the pairing wants. waves is redistributed once, at init.
+    !! sp is associated for every case, since init also reads the spectral
+    !! slab extents from it, but c_pair and waves_pair exist only when the
+    !! pairing actually needs the hop.
     type(decomp_info), pointer :: sp => null()
     complex(dp), allocatable, dimension(:, :, :) :: c_pair, waves_pair
     !> Exact sized, x-y transposed real work buffer for the 100 case.
@@ -83,7 +88,6 @@ contains
     type(mesh_t), target, intent(in) :: mesh
     class(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
-    integer, dimension(3) :: istart, iend, isize
     integer :: dims(3), grid_dims(2)
 
     type(omp_poisson_fft_t) :: poisson_fft
@@ -103,28 +107,25 @@ contains
                               .and. mesh%grid%periodic_BC(2) &
                               .and. mesh%grid%periodic_BC(3)
 
-    if (poisson_fft%is_100_case) then
-      ! get_decomp_dims returns the 2decomp processor grid (p_row, p_col).
-      grid_dims = get_decomp_dims()
-      poisson_fft%p_row = grid_dims(1)
-      poisson_fft%p_col = grid_dims(2)
-
-    end if
-
     ! Work out the spectral dimensions in the permuted state.
     ! The 100 case initialises the transform with x and y swapped, so the
     ! spectral slab comes back as (ny/2 + 1, nx, nz). That is the layout
     ! waves_set builds for this case, so the base class needs no changes.
     if (poisson_fft%is_100_case) then
+      ! get_decomp_dims returns the 2decomp processor grid (p_row, p_col).
+      grid_dims = get_decomp_dims()
+      poisson_fft%p_row = grid_dims(1)
+      poisson_fft%p_col = grid_dims(2)
       call decomp_2d_fft_init(PHYSICAL_IN_X, dims(2), dims(1), dims(3))
     else
       call decomp_2d_fft_init(PHYSICAL_IN_X, dims(1), dims(2), dims(3))
     end if
-    call decomp_2d_fft_get_size(istart, iend, isize)
-    ! Converts a start position into an offset
-    istart(:) = istart(:) - 1
-
-    call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps, isize, istart)
+    ! For PHYSICAL_IN_X the spectral slab is a z-pencil of sp, which is all
+    ! decomp_2d_fft_get_size hands back. Read sp directly, subtracting one
+    ! to convert the start position into an offset.
+    poisson_fft%sp => decomp_2d_fft_get_sp()
+    call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps, &
+                               poisson_fft%sp%zsz, poisson_fft%sp%zst - 1)
 
     if (mesh%geo%stretched(2)) then
       error stop 'OpenMP backends FFT based Poisson solver does not support&
@@ -135,19 +136,16 @@ contains
                               poisson_fft%nz_spec))
 
     if (poisson_fft%is_100_case) then
+      poisson_fft%ph => decomp_2d_fft_get_ph()
       if (poisson_fft%p_row > 1) then
         ! Reaching the transposed x-pencil takes a real redistribution once
-        ! y is split: x-pencil -> 2decomp y-pencil -> local dim1/dim2 swap.
-        call decomp_info_init(dims(1), dims(2), dims(3), poisson_fft%ph_cell)
-        allocate (poisson_fft%r_xp(poisson_fft%ph_cell%xsz(1), &
-                                   poisson_fft%ph_cell%xsz(2), &
-                                   poisson_fft%ph_cell%xsz(3)))
-        allocate (poisson_fft%r_yp(poisson_fft%ph_cell%ysz(1), &
-                                   poisson_fft%ph_cell%ysz(2), &
-                                   poisson_fft%ph_cell%ysz(3)))
-        allocate (poisson_fft%r_tr(poisson_fft%ph_cell%ysz(2), &
-                                   poisson_fft%ph_cell%ysz(1), &
-                                   poisson_fft%ph_cell%ysz(3)))
+        ! y is split: local dim1/dim2 swap -> y-pencil of ph -> x-pencil.
+        allocate (poisson_fft%r_yp(poisson_fft%ph%ysz(1), &
+                                   poisson_fft%ph%ysz(2), &
+                                   poisson_fft%ph%ysz(3)))
+        allocate (poisson_fft%r_tr(poisson_fft%ph%xsz(1), &
+                                   poisson_fft%ph%xsz(2), &
+                                   poisson_fft%ph%xsz(3)))
       else
         ! p_row == 1 makes the y-pencil identical to the x-pencil, so the
         ! swap alone reaches the transposed x-pencil with no communication.
@@ -156,7 +154,6 @@ contains
       end if
 
       if (poisson_fft%p_col > 1) then
-        poisson_fft%sp => decomp_2d_fft_get_sp()
         allocate (poisson_fft%c_pair(poisson_fft%sp%ysz(1), &
                                   poisson_fft%sp%ysz(2), &
                                   poisson_fft%sp%ysz(3)))
@@ -203,31 +200,21 @@ contains
     integer :: i, j, k, n1, n2, n3
 
     if (self%p_row > 1) then
-      ! Strip the SZ padding into an exact x-pencil, redistribute to the
-      ! y-pencil, then swap dim1 and dim2 locally.
-      !$omp parallel do collapse(2)
-      do k = 1, self%ph_cell%xsz(3)
-        do j = 1, self%ph_cell%xsz(2)
-          do i = 1, self%ph_cell%xsz(1)
-            self%r_xp(i, j, k) = f_in%data(i, j, k)
-          end do
-        end do
-      end do
-      !$omp end parallel do
-
-      call transpose_x_to_y(self%r_xp, self%r_yp, self%ph_cell)
-
-      n1 = self%ph_cell%ysz(1); n2 = self%ph_cell%ysz(2)
-      n3 = self%ph_cell%ysz(3)
+      ! Strip the SZ padding and swap dim1 and dim2 in one pass, which
+      ! lands on the y-pencil of ph, then redistribute to its x-pencil.
+      n1 = self%ph%ysz(1); n2 = self%ph%ysz(2)
+      n3 = self%ph%ysz(3)
       !$omp parallel do collapse(2)
       do k = 1, n3
-        do i = 1, n1
-          do j = 1, n2
-            self%r_tr(j, i, k) = self%r_yp(i, j, k)
+        do i = 1, n2
+          do j = 1, n1
+            self%r_yp(j, i, k) = f_in%data(i, j, k)
           end do
         end do
       end do
       !$omp end parallel do
+
+      call transpose_y_to_x(self%r_yp, self%r_tr, self%ph)
     else
       !$omp parallel do collapse(2)
       do k = 1, self%nz_loc
@@ -288,25 +275,15 @@ contains
     call decomp_2d_fft_3d(self%c_x, self%r_tr)
 
     if (self%p_row > 1) then
-      n1 = self%ph_cell%ysz(1); n2 = self%ph_cell%ysz(2)
-      n3 = self%ph_cell%ysz(3)
+      call transpose_x_to_y(self%r_tr, self%r_yp, self%ph)
+
+      n1 = self%ph%ysz(1); n2 = self%ph%ysz(2)
+      n3 = self%ph%ysz(3)
       !$omp parallel do collapse(2)
       do k = 1, n3
-        do j = 1, n2
-          do i = 1, n1
-            self%r_yp(i, j, k) = self%r_tr(j, i, k)
-          end do
-        end do
-      end do
-      !$omp end parallel do
-
-      call transpose_y_to_x(self%r_yp, self%r_xp, self%ph_cell)
-
-      !$omp parallel do collapse(2)
-      do k = 1, self%ph_cell%xsz(3)
-        do j = 1, self%ph_cell%xsz(2)
-          do i = 1, self%ph_cell%xsz(1)
-            f_out%data(i, j, k) = self%r_xp(i, j, k)
+        do j = 1, n1
+          do i = 1, n2
+            f_out%data(i, j, k) = self%r_yp(j, i, k)
           end do
         end do
       end do
