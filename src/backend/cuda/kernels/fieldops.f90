@@ -226,18 +226,19 @@ contains
   end subroutine sgs_stress_from_gradients
 
   attributes(global) subroutine abl_wall_boundary_correction( &
-    sgs_u, sgs_v, sgs_w, u, w, nut, dudy, dvdx, dwdy, dvdz, &
-    drag_coeff, sampling_height, nx, ny)
+    sgs_u, sgs_v, sgs_w, nut, dudy, dvdx, dwdy, dvdz, &
+    wall_u_sample, wall_w_sample, drag_coeff, sampling_height, nx, ny)
     implicit none
 
     real(dp), device, intent(inout), dimension(:, :, :) :: sgs_u, sgs_v, sgs_w
-    real(dp), device, intent(in), dimension(:, :, :) :: u, w, nut
+    real(dp), device, intent(in), dimension(:, :, :) :: nut
     real(dp), device, intent(in), dimension(:, :, :) :: dudy, dvdx, dwdy, dvdz
+    real(dp), value, intent(in) :: wall_u_sample, wall_w_sample
     real(dp), value, intent(in) :: drag_coeff, sampling_height
     integer, value, intent(in) :: nx, ny
 
     integer :: i, z, b, n_y_blocks
-    real(dp) :: u_sample, w_sample, speed, tau_x, tau_z
+    real(dp) :: speed, tau_x, tau_z
     real(dp) :: sxy_2, sxy_3, syz_2, syz_3
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
@@ -246,11 +247,9 @@ contains
     b = 1 + (z - 1)*n_y_blocks
 
     if (i <= nx) then
-      u_sample = 0.5_dp*(u(1, i, b) + u(2, i, b))
-      w_sample = 0.5_dp*(w(1, i, b) + w(2, i, b))
-      speed = sqrt(u_sample**2 + w_sample**2)
-      tau_x = -drag_coeff*u_sample*speed
-      tau_z = -drag_coeff*w_sample*speed
+      speed = sqrt(wall_u_sample**2 + wall_w_sample**2)
+      tau_x = -drag_coeff*wall_u_sample*speed
+      tau_z = -drag_coeff*wall_w_sample*speed
 
       sxy_2 = 0.5_dp*(dudy(2, i, b) + dvdx(2, i, b))
       sxy_3 = 0.5_dp*(dudy(3, i, b) + dvdx(3, i, b))
