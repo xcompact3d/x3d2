@@ -1156,7 +1156,7 @@ contains
     integer, optional, intent(in) :: bc_end
     real(dp), optional, intent(in) :: flow_rate_diff
 
-    integer :: dims(3), k, j, i_mod, k_end
+    integer :: dims(3), k, j, i_mod, k_start, k_end
     real(dp) :: fl_corr
 
     if (f%dir /= DIR_X) then
@@ -1176,13 +1176,14 @@ contains
     case (X_FACE)
       error stop 'Setting X_FACE is not yet supported.'
     case (Y_FACE)
+      ! DIR_X groups are ordered y-block fastest: b = (z-1)*n_y_blocks + yb.
       i_mod = mod(dims(2) - 1, SZ) + 1
-      !$omp parallel do private(k_end)
+      !$omp parallel do private(k_start, k_end)
       do k = 1, dims(3)
-        k_end = k + (dims(2) - 1)/SZ*dims(3)
+        k_start = 1 + (k - 1)*((dims(2) - 1)/SZ + 1)
+        k_end = k*((dims(2) - 1)/SZ + 1)
         do j = 1, dims(1)
-          f%data(1, j, k) = c_start
-          ! TODO: fix these from OpenMP looking at CUDA implementation
+          f%data(1, j, k_start) = c_start
           f%data(i_mod, j, k_end) = c_end
         end do
       end do
