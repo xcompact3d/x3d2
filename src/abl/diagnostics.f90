@@ -120,7 +120,7 @@ contains
     profile = profile/real(plane_count, dp)
 
     drag_coeff = (self%cfg%kappa/log( &
-      0.5_dp*self%mesh%geo%d(2)/self%cfg%z0))**2
+                  0.5_dp*self%mesh%geo%d(2)/self%cfg%z0))**2
     u_sample = 0.5_dp*(profile(1, 1) + profile(1, 2))
     w_sample = 0.5_dp*(profile(3, 1) + profile(3, 2))
     speed = sqrt(u_sample**2 + w_sample**2)
@@ -168,7 +168,7 @@ contains
     do j = 1, size(profile, 2)
       y = self%mesh%geo%vert_coords(j, 2)
       u_log = neutral_log_law( &
-        y, self%cfg%u_star, self%cfg%kappa, self%cfg%z0)
+              y, self%cfg%u_star, self%cfg%kappa, self%cfg%z0)
       write (unit, '(ES20.12,4(",",ES20.12))') &
         y, profile(1, j), profile(2, j), profile(3, j), u_log
     end do
