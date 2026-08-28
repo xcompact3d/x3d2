@@ -78,7 +78,7 @@ module m_cuda_poisson_fft
     real(dp), device, allocatable, dimension(:, :, :) :: r_dev
     !> Transposed real workspace for 110 case (nz, nx, ny)
     real(dp), device, allocatable, dimension(:, :, :) :: r_dev_110
-        !> dim2 mirror of the local spectral slab, used by the 100 case to
+    !> dim2 mirror of the local spectral slab, used by the 100 case to
     !> reach the paired split partner that lives on another rank
     complex(dp), device, allocatable, dimension(:, :, :) :: c_mirror_dev
     !> Staging copy of the local slab, sent in place of c_dev itself.
@@ -336,7 +336,7 @@ contains
                                           - mesh%par%nrank_dir(3), &
                                           mesh%par%nproc_dir(3))
 
-            allocate (poisson_fft%c_mirror_dev(poisson_fft%nx_spec, &
+      allocate (poisson_fft%c_mirror_dev(poisson_fft%nx_spec, &
                                          poisson_fft%ny_spec, &
                                          poisson_fft%nz_spec))
       allocate (poisson_fft%c_slab_send_dev(poisson_fft%nx_spec, &
@@ -956,9 +956,9 @@ contains
     tsize = 16
     blocks = dim3((self%nx_spec - 1)/tsize + 1, self%nz_spec, 1)
     threads = dim3(tsize, 1, 1)
-        call pack_spectral_plane<<<blocks, threads>>>( & !&
-      self%c_plane_send_dev, c_dev, self%nx_spec, self%nz_spec &
-      )
+    call pack_spectral_plane<<<blocks, threads>>>( & !&
+  self%c_plane_send_dev, c_dev, self%nx_spec, self%nz_spec &
+  )
 
     nrank = self%mesh%par%nrank
 
