@@ -55,7 +55,8 @@ module m_base_backend
     procedure(derive_field_from_gradients), deferred :: compute_qcriterion
     procedure(smagorinsky_from_gradients), deferred :: compute_smagorinsky_nut
     procedure(sgs_stress_from_gradients), deferred :: compute_sgs_stress
-    procedure(neutral_wall_flux), deferred :: apply_neutral_wall_flux
+    procedure(abl_wall_boundary_correction), deferred :: &
+      apply_abl_wall_boundary_correction
     procedure(copy_data_to_f), deferred :: copy_data_to_f
     procedure(copy_f_to_data), deferred :: copy_f_to_data
     procedure(alloc_tdsops), deferred :: alloc_tdsops
@@ -89,7 +90,7 @@ module m_base_backend
   end interface
 
   abstract interface
-    subroutine neutral_wall_flux( &
+    subroutine abl_wall_boundary_correction( &
       self, sgs_u, sgs_v, sgs_w, u, w, nut, &
       dudy, dvdx, dwdy, dvdz, kappa, roughness_length, sampling_height)
       !! Replace the bottom-plane SGS momentum divergence with the neutral
@@ -106,7 +107,7 @@ module m_base_backend
       class(field_t), intent(in) :: u, w, nut
       class(field_t), intent(in) :: dudy, dvdx, dwdy, dvdz
       real(dp), intent(in) :: kappa, roughness_length, sampling_height
-    end subroutine neutral_wall_flux
+    end subroutine abl_wall_boundary_correction
   end interface
 
   abstract interface
