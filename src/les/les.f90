@@ -11,7 +11,7 @@ module m_les
   use m_config, only: les_config_t
   use m_field, only: field_t
   use m_mesh, only: mesh_t
-  use m_tdsops, only: dirps_t
+  use m_tdsops, only: dirps_t, tdsops_t
 
   implicit none
 
@@ -359,15 +359,18 @@ contains
     class(field_t), pointer, intent(out) :: dvdx, dvdy, dvdz
     class(field_t), pointer, intent(out) :: dwdx, dwdy, dwdz
 
-    call derivative_to_x(backend, dudx, u, xdirps)
-    call derivative_to_x(backend, dvdx, v, xdirps)
-    call derivative_to_x(backend, dwdx, w, xdirps)
-    call derivative_to_x(backend, dudy, u, ydirps)
-    call derivative_to_x(backend, dvdy, v, ydirps)
-    call derivative_to_x(backend, dwdy, w, ydirps)
-    call derivative_to_x(backend, dudz, u, zdirps)
-    call derivative_to_x(backend, dvdz, v, zdirps)
-    call derivative_to_x(backend, dwdz, w, zdirps)
+    ! The wall-normal component is odd across a free-slip (Neumann) boundary
+    ! while the tangential components are even, so the along-direction
+    ! derivative uses the plain operator and the cross ones the sym variant.
+    call derivative_to_x(backend, dudx, u, xdirps, sym=.false.)
+    call derivative_to_x(backend, dvdx, v, xdirps, sym=.true.)
+    call derivative_to_x(backend, dwdx, w, xdirps, sym=.true.)
+    call derivative_to_x(backend, dudy, u, ydirps, sym=.true.)
+    call derivative_to_x(backend, dvdy, v, ydirps, sym=.false.)
+    call derivative_to_x(backend, dwdy, w, ydirps, sym=.true.)
+    call derivative_to_x(backend, dudz, u, zdirps, sym=.true.)
+    call derivative_to_x(backend, dvdz, v, zdirps, sym=.true.)
+    call derivative_to_x(backend, dwdz, w, zdirps, sym=.false.)
   end subroutine compute_velocity_gradients
 
   subroutine release_velocity_gradients( &
@@ -399,7 +402,8 @@ contains
     stress => backend%allocator%get_block(DIR_X, VERT)
     call backend%compute_sgs_stress( &
       stress, nut, gradient, gradient, 2._dp, 0._dp)
-    call add_stress_derivative(backend, rhs, stress, direction)
+    ! tau_ii is even across a free-slip boundary in direction i.
+    call add_stress_derivative(backend, rhs, stress, direction, sym=.true.)
     call backend%allocator%release_block(stress)
   end subroutine add_normal_stress
 
@@ -417,41 +421,56 @@ contains
     stress => backend%allocator%get_block(DIR_X, VERT)
     call backend%compute_sgs_stress( &
       stress, nut, gradient_a, gradient_b, 1._dp, 1._dp)
-    call add_stress_derivative(backend, rhs_a, stress, direction_a)
-    call add_stress_derivative(backend, rhs_b, stress, direction_b)
+    ! tau_ij (i/=j) is odd across a free-slip boundary in directions i and j.
+    call add_stress_derivative(backend, rhs_a, stress, direction_a, &
+                               sym=.false.)
+    call add_stress_derivative(backend, rhs_b, stress, direction_b, &
+                               sym=.false.)
     call backend%allocator%release_block(stress)
   end subroutine add_shear_stress
 
-  subroutine add_stress_derivative(backend, rhs, stress, direction)
+  subroutine add_stress_derivative(backend, rhs, stress, direction, sym)
     class(base_backend_t), intent(inout) :: backend
     class(field_t), intent(inout) :: rhs
     class(field_t), intent(in) :: stress
     type(dirps_t), intent(in) :: direction
+    logical, intent(in) :: sym
 
     class(field_t), pointer :: derivative
 
-    call derivative_to_x(backend, derivative, stress, direction)
+    call derivative_to_x(backend, derivative, stress, direction, sym)
     call backend%vecadd(1._dp, derivative, 1._dp, rhs)
     call backend%allocator%release_block(derivative)
   end subroutine add_stress_derivative
 
-  subroutine derivative_to_x(backend, derivative, velocity, dirps)
+  subroutine derivative_to_x(backend, derivative, velocity, dirps, sym)
     class(base_backend_t), intent(inout) :: backend
     class(field_t), pointer, intent(out) :: derivative
     class(field_t), intent(in) :: velocity
-    type(dirps_t), intent(in) :: dirps
+    type(dirps_t), target, intent(in) :: dirps
+    !! Parity of the differentiated field across a free-slip (Neumann)
+    !! boundary: .true. selects the even (sym) operator, .false. the odd one.
+    !! Irrelevant for periodic and Dirichlet boundaries.
+    logical, intent(in) :: sym
 
     class(field_t), pointer :: velocity_dir, derivative_dir
+    class(tdsops_t), pointer :: der1st
+
+    if (sym) then
+      der1st => dirps%der1st_sym
+    else
+      der1st => dirps%der1st
+    end if
 
     derivative => backend%allocator%get_block(DIR_X)
     select case (dirps%dir)
     case (DIR_X)
-      call backend%tds_solve(derivative, velocity, dirps%der1st)
+      call backend%tds_solve(derivative, velocity, der1st)
     case (DIR_Y)
       velocity_dir => backend%allocator%get_block(DIR_Y)
       derivative_dir => backend%allocator%get_block(DIR_Y)
       call backend%reorder(velocity_dir, velocity, RDR_X2Y)
-      call backend%tds_solve(derivative_dir, velocity_dir, dirps%der1st)
+      call backend%tds_solve(derivative_dir, velocity_dir, der1st)
       call backend%reorder(derivative, derivative_dir, RDR_Y2X)
       call backend%allocator%release_block(velocity_dir)
       call backend%allocator%release_block(derivative_dir)
@@ -459,7 +478,7 @@ contains
       velocity_dir => backend%allocator%get_block(DIR_Z)
       derivative_dir => backend%allocator%get_block(DIR_Z)
       call backend%reorder(velocity_dir, velocity, RDR_X2Z)
-      call backend%tds_solve(derivative_dir, velocity_dir, dirps%der1st)
+      call backend%tds_solve(derivative_dir, velocity_dir, der1st)
       call backend%reorder(derivative, derivative_dir, RDR_Z2X)
       call backend%allocator%release_block(velocity_dir)
       call backend%allocator%release_block(derivative_dir)

@@ -237,14 +237,15 @@ contains
     real(dp), value, intent(in) :: drag_coeff, sampling_height
     integer, value, intent(in) :: nx, ny
 
-    integer :: i, z, b, n_y_blocks
+    integer :: i, z, b
     real(dp) :: speed, tau_x, tau_z
     real(dp) :: sxy_2, sxy_3, syz_2, syz_3
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
     z = blockIdx%y
-    n_y_blocks = (ny - 1)/SZ + 1
-    b = 1 + (z - 1)*n_y_blocks
+    ! DIR_X groups are ordered z fastest: b = (y_block - 1)*nz + z, so the
+    ! wall-adjacent pencils (y_block = 1) live in groups 1..nz.
+    b = z
 
     if (i <= nx) then
       speed = sqrt(wall_u_sample**2 + wall_w_sample**2)
@@ -364,6 +365,8 @@ contains
     j = threadIdx%x + (blockIdx%x - 1)*blockDim%x ! from 1 to nx
     b = blockIdx%y ! from 1 to nz
 
+    ! DIR_X groups are ordered z fastest: b = (y_block - 1)*nz + z, so the
+    ! bottom face lives in groups 1..nz and the top face nz*(n_y_blocks-1)+z.
     n_mod = mod(ny - 1, SZ) + 1
     b_end = b + (ny - 1)/SZ*nz
 

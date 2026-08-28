@@ -7,7 +7,7 @@ module m_case_abl
   use m_abl_diagnostics, only: abl_diagnostics_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
-  use m_common, only: dp, get_argument, MPI_X3D2_DP, CELL, VERT
+  use m_common, only: dp, get_argument, MPI_X3D2_DP, CELL, VERT, Y_FACE
   use m_config, only: abl_config_t, solver_config_t
   use m_field, only: field_t
   use m_mesh, only: mesh_t
@@ -114,7 +114,11 @@ contains
     class(case_abl_t) :: self
     class(field_t), intent(inout) :: u, v, w
 
-    ! Free-slip; nothing to stamp onto the velocity fields.
+    ! Slip walls: u and w are free, but impermeability must be enforced
+    ! explicitly. The Neumann pressure BC gives a zero projection correction
+    ! on the boundary planes, so without this stamp the wall-normal velocity
+    ! there integrates freely and feeds an unstable uniform-divergence mode.
+    call self%solver%backend%field_set_face(v, 0._dp, 0._dp, Y_FACE)
 
   end subroutine apply_BC_abl
 
