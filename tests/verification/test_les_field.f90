@@ -38,6 +38,7 @@ program test_les_field
   type(solver_t) :: solver
   type(flist_t) :: rhs(3), variables(3)
   class(field_t), pointer :: u, v, w, rhs_u, rhs_v, rhs_w
+  class(field_t), pointer :: wall_nut, dudy, dvdx, dwdy, dvdz
 
   integer, parameter :: dims_global(3) = [32, 33, 32]
   integer, parameter :: nproc_dir(3) = [1, 1, 1]
@@ -51,6 +52,8 @@ program test_les_field
 
   real(dp), allocatable :: u_data(:, :, :), nut_data(:, :, :)
   real(dp) :: delta, expected, length, max_error, spacing(3), tolerance
+  real(dp) :: sampling_height, roughness, kappa, drag_coeff
+  real(dp) :: tau_x, tau_z, expected_x, expected_z
   integer :: dims(3), dims_padded(3), i, j, k, ierr
   logical :: all_pass
 
@@ -199,6 +202,72 @@ program test_les_field
                    maxval(abs(nut_data(1:dims(1), 1:dims(2), 1:dims(3)))), &
                    10._dp*tolerance, all_pass)
 
+  ! ABL rough-wall correction. Use constant fields with prescribed shear
+  ! components so the legacy second-order boundary formula is analytical.
+  wall_nut => allocator%get_block(DIR_X, VERT)
+  dudy => allocator%get_block(DIR_X, VERT)
+  dvdx => allocator%get_block(DIR_X, VERT)
+  dwdy => allocator%get_block(DIR_X, VERT)
+  dvdz => allocator%get_block(DIR_X, VERT)
+
+  u_data = 4._dp
+  call backend%set_field_data(u, u_data)
+  u_data = 3._dp
+  call backend%set_field_data(w, u_data)
+  u_data = 0._dp
+  call backend%set_field_data(v, u_data)
+  call backend%set_field_data(dvdx, u_data)
+  call backend%set_field_data(dvdz, u_data)
+
+  u_data = 0.2_dp
+  u_data(:, 3, :) = 0.3_dp
+  call backend%set_field_data(wall_nut, u_data)
+  u_data = 2._dp
+  u_data(:, 3, :) = 4._dp
+  call backend%set_field_data(dudy, u_data)
+  u_data = 6._dp
+  u_data(:, 3, :) = 8._dp
+  call backend%set_field_data(dwdy, u_data)
+
+  call rhs_u%fill(7._dp)
+  call rhs_v%fill(7._dp)
+  call rhs_w%fill(7._dp)
+
+  sampling_height = 0.5_dp*mesh%geo%d(2)
+  roughness = 0.001_dp
+  kappa = 0.4_dp
+  drag_coeff = (kappa/log(sampling_height/roughness))**2
+  tau_x = -drag_coeff*4._dp*5._dp
+  tau_z = -drag_coeff*3._dp*5._dp
+  expected_x = -( &
+    -0.5_dp*(-2._dp*0.3_dp*2._dp) + &
+    2._dp*(-2._dp*0.2_dp*1._dp) - 1.5_dp*tau_x) &
+    /(2._dp*sampling_height)
+  expected_z = -( &
+    -0.5_dp*(-2._dp*0.3_dp*4._dp) + &
+    2._dp*(-2._dp*0.2_dp*3._dp) - 1.5_dp*tau_z) &
+    /(2._dp*sampling_height)
+
+  call backend%apply_abl_wall_boundary_correction( &
+    rhs_u, rhs_v, rhs_w, u, w, wall_nut, dudy, dvdx, dwdy, dvdz, &
+    kappa, roughness, sampling_height)
+
+  call backend%get_field_data(nut_data, rhs_u)
+  call check_error('ABL wall-boundary x correction', &
+                   maxval(abs(nut_data(1:dims(1), 1, 1:dims(3)) - expected_x)), &
+                   tolerance, all_pass)
+  call check_error('ABL wall-boundary x interior preserved', &
+                   maxval(abs(nut_data(1:dims(1), 2:dims(2), 1:dims(3)) - &
+                              7._dp)), tolerance, all_pass)
+  call backend%get_field_data(nut_data, rhs_v)
+  call check_error('ABL wall-boundary y correction', &
+                   maxval(abs(nut_data(1:dims(1), 1, 1:dims(3)))), &
+                   tolerance, all_pass)
+  call backend%get_field_data(nut_data, rhs_w)
+  call check_error('ABL wall-boundary z correction', &
+                   maxval(abs(nut_data(1:dims(1), 1, 1:dims(3)) - expected_z)), &
+                   tolerance, all_pass)
+
   call les%finalise(backend)
   call les_wall%finalise(backend)
   call solver%finalise()
@@ -208,6 +277,11 @@ program test_les_field
   call allocator%release_block(rhs_u)
   call allocator%release_block(rhs_v)
   call allocator%release_block(rhs_w)
+  call allocator%release_block(wall_nut)
+  call allocator%release_block(dudy)
+  call allocator%release_block(dvdx)
+  call allocator%release_block(dwdy)
+  call allocator%release_block(dvdz)
   deallocate (u_data, nut_data)
 
   if (.not. all_pass) error stop 'FAIL'
