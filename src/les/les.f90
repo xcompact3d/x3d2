@@ -4,8 +4,10 @@ module m_les
   !! Derivatives and data movement are orchestrated here, while pointwise
   !! operations are dispatched to the selected computational backend.
   use m_base_backend, only: base_backend_t
+  use mpi, only: MPI_COMM_WORLD, MPI_Allreduce, MPI_IN_PLACE, MPI_SUM
+
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, &
-                      RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Z2X
+                      MPI_X3D2_DP, RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Z2X
   use m_config, only: les_config_t
   use m_field, only: field_t
   use m_mesh, only: mesh_t
@@ -15,7 +17,7 @@ module m_les
 
   private
   public :: les_t, smagorinsky_nut, strain_rate_magnitude, &
-            filter_width, wall_damped_mixing_length
+            filter_width, wall_damped_mixing_length, horizontal_wall_velocity
 
   type :: les_t
     character(len=20) :: model = 'none'
@@ -231,6 +233,7 @@ contains
     class(field_t), pointer :: dvdx, dvdy, dvdz
     class(field_t), pointer :: dwdx, dwdy, dwdz
     class(field_t), pointer :: sgs_du, sgs_dv, sgs_dw
+    real(dp) :: wall_u_sample, wall_w_sample
 
     if (trim(self%model) == 'none') return
     if (trim(self%model) /= 'smagorinsky') &
@@ -271,9 +274,12 @@ contains
                          dudx, dudy, dudz, dvdx, dvdy, dvdz, &
                          dwdx, dwdy, dwdz, xdirps, ydirps, zdirps)
 
+      call horizontal_wall_velocity( &
+        backend, mesh, u, w, wall_u_sample, wall_w_sample)
+
       call backend%apply_abl_wall_boundary_correction( &
-        sgs_du, sgs_dv, sgs_dw, u, w, self%nut, &
-        dudy, dvdx, dwdy, dvdz, self%von_karman_constant, &
+        sgs_du, sgs_dv, sgs_dw, self%nut, dudy, dvdx, dwdy, dvdz, &
+        wall_u_sample, wall_w_sample, self%von_karman_constant, &
         self%roughness_length, self%abl_wall_sampling_height)
 
       call backend%vecadd(1._dp, sgs_du, 1._dp, du)
@@ -291,6 +297,38 @@ contains
     call release_velocity_gradients( &
       backend, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
   end subroutine apply_sgs_stress
+
+  subroutine horizontal_wall_velocity(backend, mesh, u, w, u_sample, w_sample)
+    !! Legacy iwallmodel=1 convention: horizontally average the velocity at
+    !! y=dy/2 before evaluating the neutral wall stress.
+    class(base_backend_t), intent(inout) :: backend
+    type(mesh_t), intent(in) :: mesh
+    class(field_t), intent(in) :: u, w
+    real(dp), intent(out) :: u_sample, w_sample
+
+    class(field_t), pointer :: u_y, w_y
+    real(dp) :: unused_max, wall_sums(4)
+    integer :: dims(3), ierr
+
+    u_y => backend%allocator%get_block(DIR_Y, VERT)
+    w_y => backend%allocator%get_block(DIR_Y, VERT)
+    call backend%reorder(u_y, u, RDR_X2Y)
+    call backend%reorder(w_y, w, RDR_X2Y)
+
+    call backend%slice_max_sum(unused_max, wall_sums(1), u_y, 1)
+    call backend%slice_max_sum(unused_max, wall_sums(2), u_y, 2)
+    call backend%slice_max_sum(unused_max, wall_sums(3), w_y, 1)
+    call backend%slice_max_sum(unused_max, wall_sums(4), w_y, 2)
+    call MPI_Allreduce(MPI_IN_PLACE, wall_sums, size(wall_sums), MPI_X3D2_DP, &
+                       MPI_SUM, MPI_COMM_WORLD, ierr)
+
+    dims = mesh%get_global_dims(VERT)
+    u_sample = 0.5_dp*sum(wall_sums(1:2))/real(dims(1)*dims(3), dp)
+    w_sample = 0.5_dp*sum(wall_sums(3:4))/real(dims(1)*dims(3), dp)
+
+    call backend%allocator%release_block(u_y)
+    call backend%allocator%release_block(w_y)
+  end subroutine horizontal_wall_velocity
 
   subroutine add_sgs_terms(backend, du, dv, dw, nut, &
                            dudx, dudy, dudz, dvdx, dvdy, dvdz, &

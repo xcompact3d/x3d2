@@ -91,8 +91,8 @@ module m_base_backend
 
   abstract interface
     subroutine abl_wall_boundary_correction( &
-      self, sgs_u, sgs_v, sgs_w, u, w, nut, &
-      dudy, dvdx, dwdy, dvdz, kappa, roughness_length, sampling_height)
+      self, sgs_u, sgs_v, sgs_w, nut, dudy, dvdx, dwdy, dvdz, &
+      wall_u_sample, wall_w_sample, kappa, roughness_length, sampling_height)
       !! Replace the bottom-plane SGS momentum divergence with the neutral
       !! rough-wall flux. The caller supplies a field containing only SGS
       !! contributions, so replacing its boundary values cannot overwrite
@@ -104,8 +104,8 @@ module m_base_backend
 
       class(base_backend_t) :: self
       class(field_t), intent(inout) :: sgs_u, sgs_v, sgs_w
-      class(field_t), intent(in) :: u, w, nut
-      class(field_t), intent(in) :: dudy, dvdx, dwdy, dvdz
+      class(field_t), intent(in) :: nut, dudy, dvdx, dwdy, dvdz
+      real(dp), intent(in) :: wall_u_sample, wall_w_sample
       real(dp), intent(in) :: kappa, roughness_length, sampling_height
     end subroutine abl_wall_boundary_correction
   end interface

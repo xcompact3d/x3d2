@@ -963,18 +963,18 @@ contains
   end subroutine compute_sgs_stress_cuda
 
   subroutine apply_abl_wall_boundary_correction_cuda( &
-    self, sgs_u, sgs_v, sgs_w, u, w, nut, &
-    dudy, dvdx, dwdy, dvdz, kappa, roughness_length, sampling_height)
+    self, sgs_u, sgs_v, sgs_w, nut, dudy, dvdx, dwdy, dvdz, &
+    wall_u_sample, wall_w_sample, kappa, roughness_length, sampling_height)
     implicit none
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: sgs_u, sgs_v, sgs_w
-    class(field_t), intent(in) :: u, w, nut
-    class(field_t), intent(in) :: dudy, dvdx, dwdy, dvdz
+    class(field_t), intent(in) :: nut, dudy, dvdx, dwdy, dvdz
+    real(dp), intent(in) :: wall_u_sample, wall_w_sample
     real(dp), intent(in) :: kappa, roughness_length, sampling_height
 
     real(dp), device, pointer, dimension(:, :, :) :: &
-      sgs_u_d, sgs_v_d, sgs_w_d, u_d, w_d, nut_d, &
+      sgs_u_d, sgs_v_d, sgs_w_d, nut_d, &
       dudy_d, dvdx_d, dwdy_d, dvdz_d
     type(dim3) :: blocks, threads
     integer :: dims(3)
@@ -988,8 +988,6 @@ contains
     call resolve_field_t(sgs_u_d, sgs_u)
     call resolve_field_t(sgs_v_d, sgs_v)
     call resolve_field_t(sgs_w_d, sgs_w)
-    call resolve_field_t(u_d, u)
-    call resolve_field_t(w_d, w)
     call resolve_field_t(nut_d, nut)
     call resolve_field_t(dudy_d, dudy)
     call resolve_field_t(dvdx_d, dvdx)
@@ -999,8 +997,9 @@ contains
     blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
     threads = dim3(64, 1, 1)
     call abl_wall_boundary_correction<<<blocks, threads>>>( & !&
-      sgs_u_d, sgs_v_d, sgs_w_d, u_d, w_d, nut_d, &
-      dudy_d, dvdx_d, dwdy_d, dvdz_d, drag_coeff, sampling_height, &
+      sgs_u_d, sgs_v_d, sgs_w_d, nut_d, &
+      dudy_d, dvdx_d, dwdy_d, dvdz_d, wall_u_sample, wall_w_sample, &
+      drag_coeff, sampling_height, &
       dims(1), dims(2))
   end subroutine apply_abl_wall_boundary_correction_cuda
 

@@ -6,7 +6,8 @@ program test_les_field
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
   use m_config, only: les_config_t
   use m_field, only: field_t, flist_t
-  use m_les, only: les_t, filter_width, wall_damped_mixing_length
+  use m_les, only: les_t, filter_width, horizontal_wall_velocity, &
+                   wall_damped_mixing_length
   use m_mesh, only: mesh_t
   use m_solver, only: solver_t, allocate_tdsops, transeq_default
   use m_tdsops, only: dirps_t
@@ -54,6 +55,7 @@ program test_les_field
   real(dp) :: delta, expected, length, max_error, spacing(3), tolerance
   real(dp) :: sampling_height, roughness, kappa, drag_coeff
   real(dp) :: tau_x, tau_z, expected_x, expected_z
+  real(dp) :: wall_u_mean, wall_w_mean
   integer :: dims(3), dims_padded(3), i, j, k, ierr
   logical :: all_pass
 
@@ -210,6 +212,27 @@ program test_les_field
   dwdy => allocator%get_block(DIR_X, VERT)
   dvdz => allocator%get_block(DIR_X, VERT)
 
+  ! Incompact3d's default iwallmodel=1 evaluates one horizontally averaged
+  ! wall velocity. Exercise the shared reduction with nonuniform columns.
+  do k = 1, dims(3)
+    do j = 1, dims(2)
+      do i = 1, dims(1)
+        u_data(i, j, k) = real(i, dp)
+        nut_data(i, j, k) = 2._dp*real(i, dp)
+      end do
+    end do
+  end do
+  call backend%set_field_data(u, u_data)
+  call backend%set_field_data(w, nut_data)
+  call horizontal_wall_velocity( &
+    backend, mesh, u, w, wall_u_mean, wall_w_mean)
+  call check_error('ABL horizontally averaged wall u', &
+                   abs(wall_u_mean - 0.5_dp*real(dims(1) + 1, dp)), &
+                   tolerance, all_pass)
+  call check_error('ABL horizontally averaged wall w', &
+                   abs(wall_w_mean - real(dims(1) + 1, dp)), &
+                   tolerance, all_pass)
+
   u_data = 4._dp
   call backend%set_field_data(u, u_data)
   u_data = 3._dp
@@ -249,8 +272,8 @@ program test_les_field
     /(2._dp*sampling_height)
 
   call backend%apply_abl_wall_boundary_correction( &
-    rhs_u, rhs_v, rhs_w, u, w, wall_nut, dudy, dvdx, dwdy, dvdz, &
-    kappa, roughness, sampling_height)
+    rhs_u, rhs_v, rhs_w, wall_nut, dudy, dvdx, dwdy, dvdz, &
+    4._dp, 3._dp, kappa, roughness, sampling_height)
 
   call backend%get_field_data(nut_data, rhs_u)
   call check_error('ABL wall-boundary x correction', &
