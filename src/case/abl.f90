@@ -4,6 +4,7 @@ module m_case_abl
 
   use m_allocator, only: allocator_t
   use m_abl, only: abl_t
+  use m_abl_diagnostics, only: abl_diagnostics_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
   use m_common, only: dp, get_argument, MPI_X3D2_DP, CELL, VERT
@@ -17,6 +18,7 @@ module m_case_abl
   type, extends(base_case_t) :: case_abl_t
     type(abl_config_t) :: abl_cfg
     type(abl_t) :: abl
+    type(abl_diagnostics_t) :: diagnostics
   contains
     procedure :: define_BC => define_BC_abl
     procedure :: initial_conditions => initial_conditions_abl
@@ -49,6 +51,8 @@ contains
 
     call flow_case%case_init(backend, mesh, host_allocator)
     call flow_case%abl%configure_wall_boundary_correction(flow_case%solver%les)
+    flow_case%diagnostics = abl_diagnostics_t( &
+                            backend, mesh, host_allocator, flow_case%abl_cfg)
 
   end function case_abl_init
 
@@ -127,6 +131,8 @@ contains
 
     call self%monitoring%write_step( &
       self%solver, t, self%solver%u, self%solver%v, self%solver%w)
+    call self%diagnostics%sample( &
+      iter, t, self%solver%u, self%solver%v, self%solver%w)
 
   end subroutine postprocess_abl
 
