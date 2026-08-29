@@ -13,7 +13,7 @@ module m_solver
   use m_ibm, only: ibm_t
   use m_les, only: les_t
   use m_mesh, only: mesh_t
-  use m_tdsops, only: dirps_t
+  use m_tdsops, only: dirps_t, tdsops_t
   use m_time_integrator, only: time_intg_t
   use m_vector_calculus, only: vector_calculus_t
 
@@ -72,11 +72,13 @@ module m_solver
     type(ibm_t) :: ibm
     type(les_t) :: les
     logical :: ibm_on
+    logical :: spatial_filter = .false. !! explicit low-pass filter on velocity
     procedure(poisson_solver), pointer :: poisson => null()
     procedure(transport_equation), pointer :: transeq => null()
   contains
     procedure :: transeq_species
     procedure :: apply_les
+    procedure :: apply_spatial_filter
     procedure :: finalise
     procedure :: pressure_correction
     procedure :: divergence_v2p
@@ -174,22 +176,44 @@ contains
     solver%n_output = solver_cfg%n_output
     solver%ngrid = product(solver%mesh%get_global_dims(VERT))
 
-    ! Allocate and set the tdsops
-    call allocate_tdsops( &
-      solver%xdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
-      solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
-      solver_cfg%stagder_scheme &
-      )
-    call allocate_tdsops( &
-      solver%ydirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
-      solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
-      solver_cfg%stagder_scheme &
-      )
-    call allocate_tdsops( &
-      solver%zdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
-      solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
-      solver_cfg%stagder_scheme &
-      )
+    ! Allocate and set the tdsops. The filter operators are only built when
+    ! the case asks for them, so cases that do not filter carry no extra state.
+    solver%spatial_filter = solver_cfg%spatial_filter
+    if (solver%spatial_filter) then
+      if (solver%mesh%par%is_root()) &
+        print *, 'Spatial filter on, alpha =', solver_cfg%filter_alpha
+      call allocate_tdsops( &
+        solver%xdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
+        solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
+        solver_cfg%stagder_scheme, filter_alpha=solver_cfg%filter_alpha &
+        )
+      call allocate_tdsops( &
+        solver%ydirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
+        solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
+        solver_cfg%stagder_scheme, filter_alpha=solver_cfg%filter_alpha &
+        )
+      call allocate_tdsops( &
+        solver%zdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
+        solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
+        solver_cfg%stagder_scheme, filter_alpha=solver_cfg%filter_alpha &
+        )
+    else
+      call allocate_tdsops( &
+        solver%xdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
+        solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
+        solver_cfg%stagder_scheme &
+        )
+      call allocate_tdsops( &
+        solver%ydirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
+        solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
+        solver_cfg%stagder_scheme &
+        )
+      call allocate_tdsops( &
+        solver%zdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
+        solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
+        solver_cfg%stagder_scheme &
+        )
+    end if
 
     select case (trim(solver_cfg%poisson_solver_type))
     case ('FFT')
@@ -220,12 +244,16 @@ contains
   end function init
 
   subroutine allocate_tdsops(dirps, backend, mesh, der1st_scheme, &
-                             der2nd_scheme, interpl_scheme, stagder_scheme)
+                             der2nd_scheme, interpl_scheme, stagder_scheme, &
+                             filter_alpha)
     type(dirps_t), intent(inout) :: dirps
     class(base_backend_t), intent(in) :: backend
     type(mesh_t), intent(in) :: mesh
     character(*), intent(in) :: der1st_scheme, der2nd_scheme, &
                                 interpl_scheme, stagder_scheme
+    !! When present, also build the low-pass filter operators for this
+    !! direction. Absent means the case does not filter.
+    real(dp), optional, intent(in) :: filter_alpha
 
     integer :: dir, bc_start, bc_end, bc_mp_start, bc_mp_end, n_vert, n_cell, i
     real(dp) :: d
@@ -293,6 +321,19 @@ contains
       dirps%interpl_p2v, n_vert, d, 'interpolate', interpl_scheme, &
       bc_mp_start, bc_mp_end, from_to='p2v', stretch=[(1._dp, i=1, n_vert)] &
       )
+
+    if (present(filter_alpha)) then
+      ! Same parity split as the first derivatives: the component along this
+      ! direction is odd across a free-slip boundary, the other two even.
+      call backend%alloc_tdsops( &
+        dirps%lowpass, n_vert, d, 'filter', der1st_scheme, &
+        bc_start, bc_end, filter_alpha=filter_alpha &
+        )
+      call backend%alloc_tdsops( &
+        dirps%lowpass_sym, n_vert, d, 'filter', der1st_scheme, &
+        bc_start, bc_end, sym=.true., filter_alpha=filter_alpha &
+        )
+    end if
 
   end subroutine
 
@@ -515,6 +556,91 @@ contains
     end if
 
   end subroutine transeq_lowmem
+
+  subroutine apply_spatial_filter(self)
+    !! Apply the explicit low-pass filter to the velocity, as Incompact3d does
+    !! for wall-modelled ABL runs (ifilter=1, C_filter).
+    !!
+    !! Compact schemes cannot dissipate the 2*dx mode and the staggered
+    !! pressure projection cannot see it, yet the collocated derivatives in
+    !! the skew-symmetric convection do. Left alone that mode drives the
+    !! collocated divergence away from zero, and the u*div(u) half of the
+    !! convection then acts as a spurious momentum source.
+    class(solver_t), intent(inout) :: self
+
+    if (.not. self%spatial_filter) return
+
+    call filter_field(self, self%u, self%xdirps, self%ydirps, self%zdirps, 1)
+    call filter_field(self, self%v, self%xdirps, self%ydirps, self%zdirps, 2)
+    call filter_field(self, self%w, self%xdirps, self%ydirps, self%zdirps, 3)
+
+  end subroutine apply_spatial_filter
+
+  subroutine filter_field(self, f, xdirps, ydirps, zdirps, component)
+    !! Filter one velocity component in all three directions, in place.
+    !!
+    !! Across a free-slip boundary the component along that direction is odd
+    !! and the other two are even, the same parity split the first derivatives
+    !! use, so `component` selects which operator each direction applies.
+    class(solver_t), intent(inout) :: self
+    class(field_t), intent(inout) :: f
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    integer, intent(in) :: component
+
+    call filter_in_dir(self, f, xdirps, component == 1)
+    call filter_in_dir(self, f, ydirps, component == 2)
+    call filter_in_dir(self, f, zdirps, component == 3)
+
+  end subroutine filter_field
+
+  subroutine filter_in_dir(self, f, dirps, is_normal)
+    !! Filter a DIR_X field along one direction, in place.
+    class(solver_t), intent(inout) :: self
+    class(field_t), intent(inout) :: f
+    type(dirps_t), target, intent(in) :: dirps
+    !! .true. when f is the component along dirps%dir, which is the odd one
+    !! across a free-slip boundary.
+    logical, intent(in) :: is_normal
+
+    class(field_t), pointer :: f_dir, filtered_dir, filtered
+    class(tdsops_t), pointer :: op
+
+    if (is_normal) then
+      op => dirps%lowpass
+    else
+      op => dirps%lowpass_sym
+    end if
+
+    select case (dirps%dir)
+    case (DIR_X)
+      filtered => self%backend%allocator%get_block(DIR_X, f%data_loc)
+      call self%backend%tds_solve(filtered, f, op)
+      call self%backend%veccopy(f, filtered)
+      call self%backend%allocator%release_block(filtered)
+    case (DIR_Y, DIR_Z)
+      f_dir => self%backend%allocator%get_block(dirps%dir)
+      filtered_dir => self%backend%allocator%get_block(dirps%dir)
+      filtered => self%backend%allocator%get_block(DIR_X, f%data_loc)
+      if (dirps%dir == DIR_Y) then
+        call self%backend%reorder(f_dir, f, RDR_X2Y)
+      else
+        call self%backend%reorder(f_dir, f, RDR_X2Z)
+      end if
+      call self%backend%tds_solve(filtered_dir, f_dir, op)
+      if (dirps%dir == DIR_Y) then
+        call self%backend%reorder(filtered, filtered_dir, RDR_Y2X)
+      else
+        call self%backend%reorder(filtered, filtered_dir, RDR_Z2X)
+      end if
+      call self%backend%veccopy(f, filtered)
+      call self%backend%allocator%release_block(f_dir)
+      call self%backend%allocator%release_block(filtered_dir)
+      call self%backend%allocator%release_block(filtered)
+    case default
+      error stop 'Invalid direction in spatial filter.'
+    end select
+
+  end subroutine filter_in_dir
 
   subroutine apply_les(self, rhs, variables)
     !! Add the configured explicit SGS closure to the momentum RHS.

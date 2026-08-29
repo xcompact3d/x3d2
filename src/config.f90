@@ -36,6 +36,8 @@ module m_config
     real(dp), dimension(:), allocatable :: pr_species
     integer :: n_iters, n_output, n_species
     logical :: lowmem_transeq, lowmem_fft
+    logical :: spatial_filter          !! explicit low-pass filter on velocity
+    real(dp) :: filter_alpha           !! filter parameter, -0.5 < alpha < 0.5
     character(3) :: poisson_solver_type, time_intg
     character(30) :: der1st_scheme, der2nd_scheme, &
                      interpl_scheme, stagder_scheme
@@ -193,12 +195,23 @@ contains
     integer :: n_iters, n_output, n_species = 0
     !> triggers the low memory implementations
     logical :: lowmem_transeq = .false., lowmem_fft = .false.
+    !! Explicit low-pass filter on the velocity, off by default. Needed by
+    !! wall-modelled ABL runs, where the 2*dx mode the compact schemes cannot
+    !! dissipate otherwise breaks momentum conservation in the convection.
+    logical :: spatial_filter = .false.
+    !! Incompact3d uses 0.49, but it solves the filter with a full Thomas
+    !! algorithm. x3d2's distributed solver truncates, and the filter system
+    !! is only marginally diagonally dominant as alpha -> 0.5, so 0.49 leaves
+    !! a 1e-3 error at zero wavenumber on 32 points per rank. 0.4 removes the
+    !! 2*dx mode just as exactly while staying well within the solver.
+    real(dp) :: filter_alpha = 0.4_dp
     character(3) :: time_intg
     character(3) :: poisson_solver_type = 'FFT'
     character(30) :: der1st_scheme = 'compact6', der2nd_scheme = 'compact6', &
                      interpl_scheme = 'classic', stagder_scheme = 'compact6'
 
     namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
+      spatial_filter, filter_alpha, &
       n_species, pr_species, lowmem_transeq, lowmem_fft, &
       time_intg, der1st_scheme, der2nd_scheme, interpl_scheme, &
       stagder_scheme, ibm_on
@@ -221,6 +234,8 @@ contains
     self%dt = dt
     self%n_iters = n_iters
     self%n_output = n_output
+    self%spatial_filter = spatial_filter
+    self%filter_alpha = filter_alpha
     self%ibm_on = ibm_on
     self%n_species = n_species
     if (n_species > 0) self%pr_species = pr_species(1:n_species)
