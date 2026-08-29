@@ -14,6 +14,12 @@ time_intg = 'AB3'
 dt = 0.8d0
 n_iters = 100000
 n_output = 50
+! Explicit low-pass filter on the velocity, as Incompact3d does for ABL runs.
+! Removes the 2*dx mode the compact schemes cannot dissipate and the staggered
+! projection cannot see; without it the skew-symmetric convection leaks mean
+! momentum and the boundary layer decays away.
+spatial_filter = T
+filter_alpha = 0.4d0
 poisson_solver_type = 'FFT'
 der1st_scheme = 'compact6'
 der2nd_scheme = 'compact6'

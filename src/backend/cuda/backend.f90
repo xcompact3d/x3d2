@@ -161,7 +161,8 @@ contains
 
   subroutine alloc_cuda_tdsops( &
     self, tdsops, n_tds, delta, operation, scheme, bc_start, bc_end, &
-    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
+    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu, &
+    filter_alpha &
     )
     implicit none
 
@@ -176,6 +177,7 @@ contains
     character(*), optional, intent(in) :: from_to
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
+    real(dp), optional, intent(in) :: filter_alpha
 
     allocate (cuda_tdsops_t :: tdsops)
 
@@ -183,7 +185,7 @@ contains
     type is (cuda_tdsops_t)
       tdsops = cuda_tdsops_t(n_tds, delta, operation, scheme, bc_start, &
                              bc_end, stretch, stretch_correct, n_halo, &
-                             from_to, sym, c_nu, nu0_nu)
+                             from_to, sym, c_nu, nu0_nu, filter_alpha)
     end select
 
   end subroutine alloc_cuda_tdsops

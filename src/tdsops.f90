@@ -40,7 +40,7 @@ module m_tdsops
     integer :: move = 0 !! move between vertices and cell centres
     integer :: n_halo !! number of halo points
   contains
-    procedure :: deriv_1st, deriv_2nd, interpl_mid, stagder_1st
+    procedure :: deriv_1st, deriv_2nd, interpl_mid, stagder_1st, lowpass
     procedure :: preprocess_dist, preprocess_penta_dist, preprocess_thom
   end type tdsops_t
 
@@ -54,7 +54,8 @@ module m_tdsops
     !! This class contains the preprocessed tridiagonal solvers for operating
     !! in each coordinate direction.
     class(tdsops_t), allocatable :: der1st, der1st_sym, der2nd, der2nd_sym, &
-      stagder_v2p, stagder_p2v, interpl_v2p, interpl_p2v
+      stagder_v2p, stagder_p2v, interpl_v2p, interpl_p2v, &
+      lowpass, lowpass_sym
     integer :: dir
   end type dirps_t
 
@@ -62,7 +63,8 @@ contains
 
   function tdsops_init( &
     n_tds, delta, operation, scheme, bc_start, bc_end, &
-    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
+    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu, &
+    filter_alpha &
     ) result(tdsops)
     !! Constructor function for the tdsops_t class.
     !!
@@ -98,6 +100,7 @@ contains
     character(*), optional, intent(in) :: from_to !! 'v2p' or 'p2v'
     logical, optional, intent(in) :: sym !! (==npaire), only for Neumann BCs
     real(dp), optional, intent(in) :: c_nu, nu0_nu !! params for hypervisc.
+    real(dp), optional, intent(in) :: filter_alpha !! low-pass filter parameter
 #ifdef SINGLE_PREC
     real(dp) :: tol = 1e-12
 #else
@@ -177,6 +180,10 @@ contains
       call tdsops%interpl_mid(scheme, from_to, bc_start, bc_end, sym)
     else if (operation == 'stag-deriv') then
       call tdsops%stagder_1st(delta, scheme, from_to, bc_start, bc_end, sym)
+    else if (operation == 'filter') then
+      if (.not. present(filter_alpha)) &
+        error stop 'filter operation requires filter_alpha'
+      call tdsops%lowpass(filter_alpha, bc_start, bc_end, sym)
     else
       error stop 'operation is not defined'
     end if
@@ -403,6 +410,180 @@ contains
     end if
 
   end subroutine deriv_1st
+
+  subroutine lowpass(self, af, bc_start, bc_end, sym)
+    !! Tridiagonal low-pass filter, matching Incompact3d's `filter`.
+    !!
+    !! Motheau & Abraham (JCP 2016) tridiagonal filtering with the
+    !! coefficients of Gaitonde & Visbal (1998):
+    !!
+    !!   af*fh(i-1) + fh(i) + af*fh(i+1) =
+    !!     a*f(i) + b*(f(i+1)+f(i-1)) + c*(f(i+2)+f(i-2)) + d*(f(i+3)+f(i-3))
+    !!
+    !! where b, c and d already absorb the halving. The transfer function
+    !! vanishes at k*dx = pi for any admissible af, so the 2*dx mode is
+    !! removed outright; af controls only how sharply the cut-off is
+    !! approached. af must lie in (-0.5, 0.5), and af -> 0.5 is the sharpest,
+    !! leaving resolved scales essentially untouched.
+    !!
+    !! This is what keeps the collocated divergence small enough that the
+    !! skew-symmetric convection conserves momentum: compact schemes cannot
+    !! dissipate the 2*dx mode, and the staggered pressure projection cannot
+    !! see it.
+    implicit none
+
+    class(tdsops_t), intent(inout) :: self
+    real(dp), intent(in) :: af !! filter parameter, -0.5 < af < 0.5
+    integer, intent(in) :: bc_start, bc_end
+    logical, optional, intent(in) :: sym
+
+    real(dp), allocatable :: dist_b(:)
+    real(dp) :: ai, bi, ci, di
+    real(dp) :: a2, b2, c2, d2, a3, b3, c3, d3, e3, f3
+    real(dp) :: s
+    integer :: i, n, n_halo
+    logical :: symmetry
+
+    if (self%n_halo < 3) error stop 'Low-pass filter requires n_halo >= 3'
+    if (abs(af) >= 0.5_dp) error stop 'Low-pass filter needs -0.5 < af < 0.5'
+
+    if (present(sym)) then
+      symmetry = sym
+    else
+      symmetry = .false.
+    end if
+
+    n = self%n_tds
+    n_halo = self%n_halo
+
+    ! Interior stencil (Gaitonde & Visbal); b, c, d carry the factor 1/2.
+    ai = (11._dp + 10._dp*af)/16._dp
+    bi = 0.5_dp*(15._dp + 34._dp*af)/32._dp
+    ci = 0.5_dp*(-3._dp + 6._dp*af)/16._dp
+    di = 0.5_dp*(1._dp - 2._dp*af)/32._dp
+
+    self%alpha = af
+    self%a = ai; self%b = bi; self%c = ci; self%d = di
+
+    self%coeffs(:) = [0._dp, di, ci, bi, &
+                      ai, &
+                      bi, ci, di, 0._dp]
+
+    do i = 1, n_halo
+      self%coeffs_s(:, i) = self%coeffs(:)
+      self%coeffs_e(:, i) = self%coeffs(:)
+    end do
+
+    self%dist_sa(:) = af; self%dist_sc(:) = af
+
+    allocate (dist_b(self%n_rhs))
+    dist_b(:) = 1._dp
+
+    ! A free-slip boundary reflects the stencil: an even field folds points
+    ! back with a plus sign, an odd field with a minus sign and vanishes on
+    ! the boundary itself. s carries that sign.
+    if (symmetry) then
+      s = 1._dp
+    else
+      s = -1._dp
+    end if
+
+    select case (bc_start)
+    case (BC_NEUMANN)
+      if (symmetry) then
+        ! f(0)=f(2), f(-1)=f(3), f(-2)=f(4)
+        self%dist_sa(1) = 0._dp
+        self%dist_sc(1) = 2._dp*af
+        self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
+                               ai, &
+                               2._dp*bi, 2._dp*ci, 2._dp*di, 0._dp]
+      else
+        ! An odd field is zero on the boundary, so row 1 states fh(1) = 0.
+        self%dist_sa(1) = 0._dp
+        self%dist_sc(1) = 0._dp
+        self%coeffs_s(:, 1) = 0._dp
+      end if
+      self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, bi, &
+                             ai + s*ci, &
+                             bi + s*di, ci, di, 0._dp]
+      self%coeffs_s(:, 3) = [0._dp, 0._dp, ci, bi + s*di, &
+                             ai, &
+                             bi, ci, di, 0._dp]
+    case (BC_DIRICHLET)
+      ! Boundary point unfiltered; points 2 and 3 use the one-sided third-
+      ! and fifth-order closures.
+      a2 = 1._dp/8._dp + 3._dp/4._dp*af
+      b2 = 5._dp/8._dp + 3._dp/4._dp*af
+      c2 = 3._dp/8._dp + af/4._dp
+      d2 = -1._dp/8._dp + af/4._dp
+      a3 = -1._dp/32._dp + af/16._dp
+      b3 = 5._dp/32._dp + 11._dp/16._dp*af
+      c3 = 11._dp/16._dp + 5._dp*af/8._dp
+      d3 = 5._dp/16._dp + 3._dp*af/8._dp
+      e3 = -5._dp/32._dp + 5._dp*af/16._dp
+      f3 = 1._dp/32._dp - af/16._dp
+
+      self%dist_sa(1) = 0._dp
+      self%dist_sc(1) = 0._dp
+      self%coeffs_s(:, 1) = [0._dp, 0._dp, 0._dp, 0._dp, &
+                             1._dp, &
+                             0._dp, 0._dp, 0._dp, 0._dp]
+      self%coeffs_s(:, 2) = [0._dp, 0._dp, 0._dp, a2, &
+                             b2, &
+                             c2, d2, 0._dp, 0._dp]
+      self%coeffs_s(:, 3) = [0._dp, 0._dp, a3, b3, &
+                             c3, &
+                             d3, e3, f3, 0._dp]
+    end select
+
+    select case (bc_end)
+    case (BC_NEUMANN)
+      if (symmetry) then
+        self%dist_sa(n) = 2._dp*af
+        self%dist_sc(n) = 0._dp
+        self%coeffs_e(:, n_halo) = [0._dp, 2._dp*di, 2._dp*ci, 2._dp*bi, &
+                                    ai, &
+                                    0._dp, 0._dp, 0._dp, 0._dp]
+      else
+        self%dist_sa(n) = 0._dp
+        self%dist_sc(n) = 0._dp
+        self%coeffs_e(:, n_halo) = 0._dp
+      end if
+      self%coeffs_e(:, n_halo - 1) = [0._dp, di, ci, bi + s*di, &
+                                      ai + s*ci, &
+                                      bi, 0._dp, 0._dp, 0._dp]
+      self%coeffs_e(:, n_halo - 2) = [0._dp, di, ci, bi, &
+                                      ai, &
+                                      bi + s*di, ci, 0._dp, 0._dp]
+    case (BC_DIRICHLET)
+      a2 = 1._dp/8._dp + 3._dp/4._dp*af
+      b2 = 5._dp/8._dp + 3._dp/4._dp*af
+      c2 = 3._dp/8._dp + af/4._dp
+      d2 = -1._dp/8._dp + af/4._dp
+      a3 = -1._dp/32._dp + af/16._dp
+      b3 = 5._dp/32._dp + 11._dp/16._dp*af
+      c3 = 11._dp/16._dp + 5._dp*af/8._dp
+      d3 = 5._dp/16._dp + 3._dp*af/8._dp
+      e3 = -5._dp/32._dp + 5._dp*af/16._dp
+      f3 = 1._dp/32._dp - af/16._dp
+
+      self%dist_sa(n) = 0._dp
+      self%dist_sc(n) = 0._dp
+      self%coeffs_e(:, n_halo) = [0._dp, 0._dp, 0._dp, 0._dp, &
+                                  1._dp, &
+                                  0._dp, 0._dp, 0._dp, 0._dp]
+      self%coeffs_e(:, n_halo - 1) = [0._dp, 0._dp, d2, c2, &
+                                      b2, &
+                                      a2, 0._dp, 0._dp, 0._dp]
+      self%coeffs_e(:, n_halo - 2) = [0._dp, f3, e3, d3, &
+                                      c3, &
+                                      b3, a3, 0._dp, 0._dp]
+    end select
+
+    call self%preprocess_thom(dist_b)
+    call self%preprocess_dist(dist_b)
+
+  end subroutine lowpass
 
   subroutine deriv_2nd(self, delta, scheme, bc_start, bc_end, sym, &
                        c_nu, nu0_nu)

@@ -125,7 +125,8 @@ contains
 
   subroutine alloc_omp_tdsops( &
     self, tdsops, n_tds, delta, operation, scheme, bc_start, bc_end, &
-    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
+    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu, &
+    filter_alpha &
     )
     implicit none
 
@@ -140,6 +141,7 @@ contains
     character(*), optional, intent(in) :: from_to
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
+    real(dp), optional, intent(in) :: filter_alpha
 
     allocate (tdsops_t :: tdsops)
 
@@ -147,7 +149,7 @@ contains
     type is (tdsops_t)
       tdsops = tdsops_t(n_tds, delta, operation, scheme, bc_start, bc_end, &
                         stretch, stretch_correct, n_halo, from_to, sym, &
-                        c_nu, nu0_nu)
+                        c_nu, nu0_nu, filter_alpha)
     end select
 
   end subroutine alloc_omp_tdsops

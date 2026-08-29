@@ -452,7 +452,8 @@ module m_base_backend
   abstract interface
     subroutine alloc_tdsops( &
       self, tdsops, n_tds, delta, operation, scheme, bc_start, bc_end, &
-      stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
+      stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu, &
+    filter_alpha &
       )
       import :: base_backend_t
       import :: dp
@@ -470,6 +471,7 @@ module m_base_backend
       character(*), optional, intent(in) :: from_to
       logical, optional, intent(in) :: sym
       real(dp), optional, intent(in) :: c_nu, nu0_nu
+    real(dp), optional, intent(in) :: filter_alpha
     end subroutine alloc_tdsops
   end interface
 

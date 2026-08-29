@@ -281,6 +281,7 @@ define_verification_test(verification/test_omp_transeq_species.f90 ${CMAKE_CTEST
 define_verification_test(verification/test_omp_dist_transeq.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_verification_test(verification/test_time_integrator.f90 1 omp)
 define_verification_test(verification/test_les_field.f90 1 omp)
+define_verification_test(verification/test_filter.f90 1 omp)
 if(WITH_2DECOMPFFT)
   define_verification_test(verification/test_fft.f90 4 omp)
   define_verification_test(verification/test_poisson_bc.f90 1 omp --config 010)
@@ -353,6 +354,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   define_verification_test(verification/test_cuda_penta.f90 ${CMAKE_CTEST_NPROCS} cuda)
   define_verification_test(verification/test_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
   define_verification_test(verification/test_les_field.f90 1 cuda)
+  define_verification_test(verification/test_filter.f90 1 cuda)
 
   # CUDA performance tests
   define_performance_test(performance/perf_thom.f90 1 cuda)
