@@ -11,6 +11,7 @@ module m_abl_diagnostics
   use m_common, only: dp, DIR_C, MPI_X3D2_DP, VERT
   use m_config, only: abl_config_t
   use m_field, only: field_t
+  use m_les, only: neutral_wall_stress
   use m_mesh, only: mesh_t
 
   implicit none
@@ -84,9 +85,8 @@ contains
 
     class(field_t), pointer :: hu, hv, hw
     real(dp), allocatable :: profile(:, :)
-    real(dp) :: wall_stress(2), drag_coeff
-    real(dp) :: u_sample, w_sample, speed
-    integer :: dims(3), plane_count, ierr
+    real(dp) :: wall_stress(2), sampling_height
+    integer :: dims(3), plane_count, ierr, sample_plane
     integer :: i, j, k
 
     if (self%cfg%profile_start_iter < 0) return
@@ -119,13 +119,18 @@ contains
                        MPI_SUM, MPI_COMM_WORLD, ierr)
     profile = profile/real(plane_count, dp)
 
-    drag_coeff = (self%cfg%kappa/log( &
-                  0.5_dp*self%mesh%geo%d(2)/self%cfg%z0))**2
-    u_sample = 0.5_dp*(profile(1, 1) + profile(1, 2))
-    w_sample = 0.5_dp*(profile(3, 1) + profile(3, 2))
-    speed = sqrt(u_sample**2 + w_sample**2)
-    wall_stress(1) = -drag_coeff*u_sample*speed
-    wall_stress(2) = -drag_coeff*w_sample*speed
+    ! Diagnose the wall stress with exactly the law and sampling height the
+    ! wall model applies, so this reports what the solver did rather than a
+    ! second, independent estimate. Vertex 1 is the wall, so a sampling height
+    ! of dsampling*dy is vertex nint(dsampling) + 1.
+    sample_plane = nint(self%cfg%dsampling) + 1
+    sample_plane = min(max(sample_plane, 2), dims(2))
+    sampling_height = self%mesh%geo%vert_coords(sample_plane, 2) &
+                      - self%mesh%geo%vert_coords(1, 2)
+    call neutral_wall_stress(profile(1, sample_plane), &
+                             profile(3, sample_plane), self%cfg%kappa, &
+                             self%cfg%z0, sampling_height, &
+                             wall_stress(1), wall_stress(2))
 
     self%sample_count = self%sample_count + 1
     if (self%sample_count == 1) self%first_time = time

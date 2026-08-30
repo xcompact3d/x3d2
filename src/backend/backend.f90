@@ -55,8 +55,6 @@ module m_base_backend
     procedure(derive_field_from_gradients), deferred :: compute_qcriterion
     procedure(smagorinsky_from_gradients), deferred :: compute_smagorinsky_nut
     procedure(sgs_stress_from_gradients), deferred :: compute_sgs_stress
-    procedure(abl_wall_boundary_correction), deferred :: &
-      apply_abl_wall_boundary_correction
     procedure(copy_data_to_f), deferred :: copy_data_to_f
     procedure(copy_f_to_data), deferred :: copy_f_to_data
     procedure(alloc_tdsops), deferred :: alloc_tdsops
@@ -90,24 +88,6 @@ module m_base_backend
   end interface
 
   abstract interface
-    subroutine abl_wall_boundary_correction( &
-      self, sgs_u, sgs_v, sgs_w, nut, dudy, dvdx, dwdy, dvdz, &
-      wall_u_sample, wall_w_sample, kappa, roughness_length, sampling_height)
-      !! Replace the bottom-plane SGS momentum divergence with the neutral
-      !! rough-wall flux. The caller supplies a field containing only SGS
-      !! contributions, so replacing its boundary values cannot overwrite
-      !! convection, molecular diffusion, or case forcing.
-      import :: base_backend_t
-      import :: dp
-      import :: field_t
-      implicit none
-
-      class(base_backend_t) :: self
-      class(field_t), intent(inout) :: sgs_u, sgs_v, sgs_w
-      class(field_t), intent(in) :: nut, dudy, dvdx, dwdy, dvdz
-      real(dp), intent(in) :: wall_u_sample, wall_w_sample
-      real(dp), intent(in) :: kappa, roughness_length, sampling_height
-    end subroutine abl_wall_boundary_correction
   end interface
 
   abstract interface

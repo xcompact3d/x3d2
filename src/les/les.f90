@@ -6,7 +6,7 @@ module m_les
   use m_base_backend, only: base_backend_t
   use mpi, only: MPI_COMM_WORLD, MPI_Allreduce, MPI_IN_PLACE, MPI_SUM
 
-  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, &
+  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, Y_FACE, &
                       MPI_X3D2_DP, RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Z2X
   use m_config, only: les_config_t
   use m_field, only: field_t
@@ -17,7 +17,8 @@ module m_les
 
   private
   public :: les_t, smagorinsky_nut, strain_rate_magnitude, &
-            filter_width, wall_damped_mixing_length, horizontal_wall_velocity
+            filter_width, wall_damped_mixing_length, &
+            horizontal_wall_velocity, neutral_wall_stress
 
   type :: les_t
     character(len=20) :: model = 'none'
@@ -28,6 +29,8 @@ module m_les
     real(dp) :: roughness_length = 0._dp
     logical :: abl_wall_boundary_enabled = .false.
     real(dp) :: abl_wall_sampling_height = 0._dp
+    !! y-vertex the wall model samples the velocity at (1 is the wall).
+    integer :: abl_wall_sample_plane = 2
     class(field_t), pointer :: nut => null()
     class(field_t), pointer :: mixing_length_sq => null()
   contains
@@ -153,9 +156,10 @@ contains
   end function nut_from_gradient
 
   subroutine configure_abl_wall_boundary( &
-    self, kappa, roughness_length, sampling_height)
+    self, kappa, roughness_length, sampling_height, sample_plane)
     class(les_t), intent(inout) :: self
     real(dp), intent(in) :: kappa, roughness_length, sampling_height
+    integer, intent(in) :: sample_plane
 
     if (trim(self%model) /= 'smagorinsky') &
       error stop 'The neutral ABL wall model requires Smagorinsky LES.'
@@ -163,13 +167,16 @@ contains
       error stop 'The neutral ABL wall model requires LES wall damping.'
     if (associated(self%mixing_length_sq)) &
       error stop 'Configure the ABL wall boundary before applying LES.'
+    if (sample_plane < 2) &
+      error stop 'The ABL wall model must sample above the no-slip floor.'
 
     ! ABL owns the wall properties. LES consumes the same values for its
-    ! Mason-Thomson damping and for the wall-boundary correction.
+    ! Mason-Thomson damping and for the wall stress.
     self%von_karman_constant = kappa
     self%roughness_length = roughness_length
     self%abl_wall_boundary_enabled = .true.
     self%abl_wall_sampling_height = sampling_height
+    self%abl_wall_sample_plane = sample_plane
   end subroutine configure_abl_wall_boundary
 
   subroutine compute_nut(self, backend, mesh, u, v, w, &
@@ -232,8 +239,7 @@ contains
     class(field_t), pointer :: dudx, dudy, dudz
     class(field_t), pointer :: dvdx, dvdy, dvdz
     class(field_t), pointer :: dwdx, dwdy, dwdz
-    class(field_t), pointer :: sgs_du, sgs_dv, sgs_dw
-    real(dp) :: wall_u_sample, wall_w_sample
+    real(dp) :: wall_u_sample, wall_w_sample, wall_tau_x, wall_tau_z
 
     if (trim(self%model) == 'none') return
     if (trim(self%model) /= 'smagorinsky') &
@@ -260,54 +266,49 @@ contains
       dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
 
     if (self%abl_wall_boundary_enabled) then
-      ! Keep the SGS contribution separate until the bottom boundary has been
-      ! replaced. This prevents the wall model from overwriting convection or
-      ! molecular diffusion already present in du/dv/dw.
-      sgs_du => backend%allocator%get_block(DIR_X, VERT)
-      sgs_dv => backend%allocator%get_block(DIR_X, VERT)
-      sgs_dw => backend%allocator%get_block(DIR_X, VERT)
-      call sgs_du%fill(0._dp)
-      call sgs_dv%fill(0._dp)
-      call sgs_dw%fill(0._dp)
-
-      call add_sgs_terms(backend, sgs_du, sgs_dv, sgs_dw, self%nut, &
-                         dudx, dudy, dudz, dvdx, dvdy, dvdz, &
-                         dwdx, dwdy, dwdz, xdirps, ydirps, zdirps)
-
+      ! Substitute the modelled wall stress into tau_xy and tau_yz at the
+      ! floor before differentiating, rather than overwriting the stress
+      ! divergence afterwards. The divergence then telescopes to
+      ! tau(lid) - tau(floor), so the momentum the wall model removes is
+      ! exactly the momentum the flow loses (Incompact3d iconserv=1).
       call horizontal_wall_velocity( &
-        backend, mesh, u, w, wall_u_sample, wall_w_sample)
-
-      call backend%apply_abl_wall_boundary_correction( &
-        sgs_du, sgs_dv, sgs_dw, self%nut, dudy, dvdx, dwdy, dvdz, &
+        backend, mesh, u, w, self%abl_wall_sample_plane, &
+        wall_u_sample, wall_w_sample)
+      call neutral_wall_stress( &
         wall_u_sample, wall_w_sample, self%von_karman_constant, &
-        self%roughness_length, self%abl_wall_sampling_height)
-
-      call backend%vecadd(1._dp, sgs_du, 1._dp, du)
-      call backend%vecadd(1._dp, sgs_dv, 1._dp, dv)
-      call backend%vecadd(1._dp, sgs_dw, 1._dp, dw)
-      call backend%allocator%release_block(sgs_du)
-      call backend%allocator%release_block(sgs_dv)
-      call backend%allocator%release_block(sgs_dw)
+        self%roughness_length, self%abl_wall_sampling_height, &
+        wall_tau_x, wall_tau_z)
     else
-      call add_sgs_terms(backend, du, dv, dw, self%nut, &
-                         dudx, dudy, dudz, dvdx, dvdy, dvdz, &
-                         dwdx, dwdy, dwdz, xdirps, ydirps, zdirps)
+      wall_tau_x = 0._dp
+      wall_tau_z = 0._dp
     end if
+
+    call add_sgs_terms(backend, du, dv, dw, self%nut, &
+                       dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+                       dwdx, dwdy, dwdz, xdirps, ydirps, zdirps, &
+                       self%abl_wall_boundary_enabled, &
+                       wall_tau_x, wall_tau_z)
 
     call release_velocity_gradients( &
       backend, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
   end subroutine apply_sgs_stress
 
-  subroutine horizontal_wall_velocity(backend, mesh, u, w, u_sample, w_sample)
+  subroutine horizontal_wall_velocity(backend, mesh, u, w, sample_plane, &
+                                      u_sample, w_sample)
     !! Legacy iwallmodel=1 convention: horizontally average the velocity at
-    !! y=dy/2 before evaluating the neutral wall stress.
+    !! the sampling height before evaluating the neutral wall stress.
+    !!
+    !! The floor is no-slip, so the sample must be taken off the wall
+    !! (Incompact3d samples at dsampling*dy); averaging in the wall plane
+    !! itself would simply dilute it towards zero.
     class(base_backend_t), intent(inout) :: backend
     type(mesh_t), intent(in) :: mesh
     class(field_t), intent(in) :: u, w
+    integer, intent(in) :: sample_plane
     real(dp), intent(out) :: u_sample, w_sample
 
     class(field_t), pointer :: u_y, w_y
-    real(dp) :: unused_max, wall_sums(4)
+    real(dp) :: unused_max, wall_sums(2)
     integer :: dims(3), ierr
 
     u_y => backend%allocator%get_block(DIR_Y, VERT)
@@ -315,16 +316,14 @@ contains
     call backend%reorder(u_y, u, RDR_X2Y)
     call backend%reorder(w_y, w, RDR_X2Y)
 
-    call backend%slice_max_sum(unused_max, wall_sums(1), u_y, 1)
-    call backend%slice_max_sum(unused_max, wall_sums(2), u_y, 2)
-    call backend%slice_max_sum(unused_max, wall_sums(3), w_y, 1)
-    call backend%slice_max_sum(unused_max, wall_sums(4), w_y, 2)
+    call backend%slice_max_sum(unused_max, wall_sums(1), u_y, sample_plane)
+    call backend%slice_max_sum(unused_max, wall_sums(2), w_y, sample_plane)
     call MPI_Allreduce(MPI_IN_PLACE, wall_sums, size(wall_sums), MPI_X3D2_DP, &
                        MPI_SUM, MPI_COMM_WORLD, ierr)
 
     dims = mesh%get_global_dims(VERT)
-    u_sample = 0.5_dp*sum(wall_sums(1:2))/real(dims(1)*dims(3), dp)
-    w_sample = 0.5_dp*sum(wall_sums(3:4))/real(dims(1)*dims(3), dp)
+    u_sample = wall_sums(1)/real(dims(1)*dims(3), dp)
+    w_sample = wall_sums(2)/real(dims(1)*dims(3), dp)
 
     call backend%allocator%release_block(u_y)
     call backend%allocator%release_block(w_y)
@@ -332,7 +331,8 @@ contains
 
   subroutine add_sgs_terms(backend, du, dv, dw, nut, &
                            dudx, dudy, dudz, dvdx, dvdy, dvdz, &
-                           dwdx, dwdy, dwdz, xdirps, ydirps, zdirps)
+                           dwdx, dwdy, dwdz, xdirps, ydirps, zdirps, &
+                           abl_wall, wall_tau_x, wall_tau_z)
     class(base_backend_t), intent(inout) :: backend
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: nut
@@ -340,14 +340,38 @@ contains
     class(field_t), intent(in) :: dvdx, dvdy, dvdz
     class(field_t), intent(in) :: dwdx, dwdy, dwdz
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    logical, intent(in) :: abl_wall
+    real(dp), intent(in) :: wall_tau_x, wall_tau_z
 
     call add_normal_stress(backend, du, nut, dudx, xdirps)
     call add_normal_stress(backend, dv, nut, dvdy, ydirps)
     call add_normal_stress(backend, dw, nut, dwdz, zdirps)
-    call add_shear_stress(backend, du, ydirps, dv, xdirps, nut, dudy, dvdx)
-    call add_shear_stress(backend, du, zdirps, dw, xdirps, nut, dudz, dwdx)
-    call add_shear_stress(backend, dv, zdirps, dw, ydirps, nut, dvdz, dwdy)
+    ! tau_xy and tau_yz carry the wall stress; tau_xz does not touch the floor.
+    call add_shear_stress(backend, du, ydirps, dv, xdirps, nut, dudy, dvdx, &
+                          abl_wall, wall_tau_x)
+    call add_shear_stress(backend, du, zdirps, dw, xdirps, nut, dudz, dwdx, &
+                          .false., 0._dp)
+    call add_shear_stress(backend, dv, zdirps, dw, ydirps, nut, dvdz, dwdy, &
+                          abl_wall, wall_tau_z)
   end subroutine add_sgs_terms
+
+  pure subroutine neutral_wall_stress(u_sample, w_sample, kappa, &
+                                      roughness_length, sampling_height, &
+                                      tau_x, tau_z)
+    !! Neutral rough-wall drag law. Returns the wall value of the SGS stress
+    !! tau_xy (and tau_yz), signed so that a positive sample gives a positive
+    !! stress and hence a momentum sink once differentiated.
+    real(dp), intent(in) :: u_sample, w_sample, kappa
+    real(dp), intent(in) :: roughness_length, sampling_height
+    real(dp), intent(out) :: tau_x, tau_z
+
+    real(dp) :: drag_coeff, speed
+
+    drag_coeff = (kappa/log(sampling_height/roughness_length))**2
+    speed = sqrt(u_sample**2 + w_sample**2)
+    tau_x = drag_coeff*u_sample*speed
+    tau_z = drag_coeff*w_sample*speed
+  end subroutine neutral_wall_stress
 
   subroutine compute_velocity_gradients( &
     backend, u, v, w, xdirps, ydirps, zdirps, &
@@ -409,18 +433,28 @@ contains
 
   subroutine add_shear_stress( &
     backend, rhs_a, direction_a, rhs_b, &
-    direction_b, nut, gradient_a, gradient_b &
+    direction_b, nut, gradient_a, gradient_b, &
+    stamp_wall, wall_tau &
     )
     class(base_backend_t), intent(inout) :: backend
     class(field_t), intent(inout) :: rhs_a, rhs_b
     type(dirps_t), intent(in) :: direction_a, direction_b
     class(field_t), intent(in) :: nut, gradient_a, gradient_b
+    !! When set, replace the floor value of this stress with the modelled
+    !! wall stress before differentiating, so the wall flux is carried by
+    !! the same operator that transports it in the interior.
+    logical, intent(in) :: stamp_wall
+    real(dp), intent(in) :: wall_tau
 
     class(field_t), pointer :: stress
 
     stress => backend%allocator%get_block(DIR_X, VERT)
     call backend%compute_sgs_stress( &
       stress, nut, gradient_a, gradient_b, 1._dp, 1._dp)
+    if (stamp_wall) then
+      ! Floor gets the modelled stress; the free-slip lid carries none.
+      call backend%field_set_face(stress, wall_tau, 0._dp, Y_FACE)
+    end if
     ! tau_ij (i/=j) is odd across a free-slip boundary in directions i and j.
     call add_stress_derivative(backend, rhs_a, stress, direction_a, &
                                sym=.false.)

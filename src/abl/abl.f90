@@ -239,24 +239,34 @@ contains
   end subroutine build_damping
 
   subroutine configure_wall_boundary_correction(self, les)
-    !! Configure the neutral ABL wall-boundary correction in the LES closure.
+    !! Configure the neutral ABL wall model in the LES closure.
+    !!
+    !! The floor is no-slip, so the velocity driving the drag law is sampled
+    !! at dsampling*dy above it, matching Incompact3d's wall_sgs_noslip.
     implicit none
 
     class(abl_t), intent(in) :: self
     type(les_t), intent(inout) :: les
-    real(dp) :: sampling_height
-    integer :: dims(3)
+    real(dp) :: dy, sampling_height
+    integer :: dims(3), sample_plane
 
     dims = self%mesh%get_dims(VERT)
     if (dims(2) < 3) &
-      error stop 'ABL wall-boundary correction requires at least 3 y vertices.'
-    sampling_height = 0.5_dp*abs(self%mesh%geo%vert_coords(2, 2) &
-                                 - self%mesh%geo%vert_coords(1, 2))
+      error stop 'ABL wall model requires at least 3 y vertices.'
+
+    dy = abs(self%mesh%geo%vert_coords(2, 2) &
+             - self%mesh%geo%vert_coords(1, 2))
+    ! Vertex 1 is the wall, so a sampling height of n*dy is vertex n+1.
+    sample_plane = nint(self%cfg%dsampling) + 1
+    if (sample_plane < 2 .or. sample_plane > dims(2)) &
+      error stop 'ABL dsampling puts the wall-model sample outside the domain.'
+    sampling_height = self%mesh%geo%vert_coords(sample_plane, 2) &
+                      - self%mesh%geo%vert_coords(1, 2)
     if (sampling_height <= self%cfg%z0) &
-      error stop 'ABL first-cell sampling height must exceed z0.'
+      error stop 'ABL wall-model sampling height must exceed z0.'
 
     call les%configure_abl_wall_boundary( &
-      self%cfg%kappa, self%cfg%z0, sampling_height)
+      self%cfg%kappa, self%cfg%z0, sampling_height, sample_plane)
   end subroutine configure_wall_boundary_correction
 
 end module m_abl

@@ -34,8 +34,7 @@ module m_cuda_backend
                                      vorticity_from_gradients, &
                                      qcriterion_from_gradients, &
                                      smagorinsky_from_gradients, &
-                                     sgs_stress_from_gradients, &
-                                     abl_wall_boundary_correction
+                                     sgs_stress_from_gradients
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
                                     reorder_c2x, reorder_x2c, &
@@ -81,8 +80,6 @@ module m_cuda_backend
     procedure :: compute_qcriterion => compute_qcriterion_cuda
     procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_cuda
     procedure :: compute_sgs_stress => compute_sgs_stress_cuda
-    procedure :: apply_abl_wall_boundary_correction => &
-      apply_abl_wall_boundary_correction_cuda
     procedure :: field_volume_integral => field_volume_integral_cuda
     procedure :: copy_data_to_f => copy_data_to_f_cuda
     procedure :: copy_f_to_data => copy_f_to_data_cuda
@@ -964,46 +961,6 @@ contains
       scale_a, scale_b, n) !&
   end subroutine compute_sgs_stress_cuda
 
-  subroutine apply_abl_wall_boundary_correction_cuda( &
-    self, sgs_u, sgs_v, sgs_w, nut, dudy, dvdx, dwdy, dvdz, &
-    wall_u_sample, wall_w_sample, kappa, roughness_length, sampling_height)
-    implicit none
-
-    class(cuda_backend_t) :: self
-    class(field_t), intent(inout) :: sgs_u, sgs_v, sgs_w
-    class(field_t), intent(in) :: nut, dudy, dvdx, dwdy, dvdz
-    real(dp), intent(in) :: wall_u_sample, wall_w_sample
-    real(dp), intent(in) :: kappa, roughness_length, sampling_height
-
-    real(dp), device, pointer, dimension(:, :, :) :: &
-      sgs_u_d, sgs_v_d, sgs_w_d, nut_d, &
-      dudy_d, dvdx_d, dwdy_d, dvdz_d
-    type(dim3) :: blocks, threads
-    integer :: dims(3)
-    real(dp) :: drag_coeff
-
-    if (self%mesh%par%nrank_dir(2) /= 0) return
-
-    dims = self%mesh%get_dims(VERT)
-    drag_coeff = (kappa/log(sampling_height/roughness_length))**2
-
-    call resolve_field_t(sgs_u_d, sgs_u)
-    call resolve_field_t(sgs_v_d, sgs_v)
-    call resolve_field_t(sgs_w_d, sgs_w)
-    call resolve_field_t(nut_d, nut)
-    call resolve_field_t(dudy_d, dudy)
-    call resolve_field_t(dvdx_d, dvdx)
-    call resolve_field_t(dwdy_d, dwdy)
-    call resolve_field_t(dvdz_d, dvdz)
-
-    blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
-    threads = dim3(64, 1, 1)
-    call abl_wall_boundary_correction<<<blocks, threads>>>( & !&
-      sgs_u_d, sgs_v_d, sgs_w_d, nut_d, &
-      dudy_d, dvdx_d, dwdy_d, dvdz_d, wall_u_sample, wall_w_sample, &
-      drag_coeff, sampling_height, &
-      dims(1), dims(2))
-  end subroutine apply_abl_wall_boundary_correction_cuda
 
   real(dp) function scalar_product_cuda(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]
@@ -1347,15 +1304,16 @@ contains
           dims(1), dims(2), dims(3))
 
     case (Y_FACE)
-      if (present(bc_start) .or. present(bc_end)) then
-        if (bc_s /= BC_DIRICHLET .or. bc_e /= BC_DIRICHLET) then
-          error stop 'field_set_face: Y_FACE only supports BC_DIRICHLET.'
-        end if
-      end if
+      ! Only Dirichlet faces carry a prescribed value; a non-Dirichlet face
+      ! is left untouched so the two y-faces can differ (ABL: no-slip floor,
+      ! free-slip lid). Both default to Dirichlet, preserving the historical
+      ! behaviour of writing both faces.
       blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
       threads = dim3(64, 1, 1)
       call field_set_y_face<<<blocks, threads>>>( &              !&
-          f_d, c_start, c_end, flow_rate_diff_val, dims(1), dims(2), dims(3))
+          f_d, c_start, c_end, bc_s == BC_DIRICHLET, &
+          bc_e == BC_DIRICHLET, flow_rate_diff_val, &
+          dims(1), dims(2), dims(3))
 
     case (Z_FACE)
       error stop 'Setting Z_FACE is not yet supported.'
