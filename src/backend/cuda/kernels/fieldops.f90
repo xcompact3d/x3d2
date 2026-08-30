@@ -225,49 +225,6 @@ contains
     end do
   end subroutine sgs_stress_from_gradients
 
-  attributes(global) subroutine abl_wall_boundary_correction( &
-    sgs_u, sgs_v, sgs_w, nut, dudy, dvdx, dwdy, dvdz, &
-    wall_u_sample, wall_w_sample, drag_coeff, sampling_height, nx, ny)
-    implicit none
-
-    real(dp), device, intent(inout), dimension(:, :, :) :: sgs_u, sgs_v, sgs_w
-    real(dp), device, intent(in), dimension(:, :, :) :: nut
-    real(dp), device, intent(in), dimension(:, :, :) :: dudy, dvdx, dwdy, dvdz
-    real(dp), value, intent(in) :: wall_u_sample, wall_w_sample
-    real(dp), value, intent(in) :: drag_coeff, sampling_height
-    integer, value, intent(in) :: nx, ny
-
-    integer :: i, z, b
-    real(dp) :: speed, tau_x, tau_z
-    real(dp) :: sxy_2, sxy_3, syz_2, syz_3
-
-    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
-    z = blockIdx%y
-    ! DIR_X groups are ordered z fastest: b = (y_block - 1)*nz + z, so the
-    ! wall-adjacent pencils (y_block = 1) live in groups 1..nz.
-    b = z
-
-    if (i <= nx) then
-      speed = sqrt(wall_u_sample**2 + wall_w_sample**2)
-      tau_x = -drag_coeff*wall_u_sample*speed
-      tau_z = -drag_coeff*wall_w_sample*speed
-
-      sxy_2 = 0.5_dp*(dudy(2, i, b) + dvdx(2, i, b))
-      sxy_3 = 0.5_dp*(dudy(3, i, b) + dvdx(3, i, b))
-      syz_2 = 0.5_dp*(dwdy(2, i, b) + dvdz(2, i, b))
-      syz_3 = 0.5_dp*(dwdy(3, i, b) + dvdz(3, i, b))
-
-      sgs_u(1, i, b) = -( &
-                       -0.5_dp*(-2._dp*nut(3, i, b)*sxy_3) + &
-                       2._dp*(-2._dp*nut(2, i, b)*sxy_2) - &
-                       1.5_dp*tau_x)/(2._dp*sampling_height)
-      sgs_v(1, i, b) = 0._dp
-      sgs_w(1, i, b) = -( &
-                       -0.5_dp*(-2._dp*nut(3, i, b)*syz_3) + &
-                       2._dp*(-2._dp*nut(2, i, b)*syz_2) - &
-                       1.5_dp*tau_z)/(2._dp*sampling_height)
-    end if
-  end subroutine abl_wall_boundary_correction
 
   attributes(global) subroutine scalar_product(s, x, y, n, n_i_pad, n_j)
     implicit none
@@ -350,14 +307,17 @@ contains
   end subroutine field_max_sum
 
   attributes(global) subroutine field_set_y_face( &
-    f, c_start, c_end, flow_rate_diff, nx, ny, nz)
+    f, c_start, c_end, set_start, set_end, flow_rate_diff, nx, ny, nz)
   !! Set domain Y_FACE boundary values.
   !! c_start: Dirichlet value applied at the bottom face (j = 1)
   !! c_end:   Dirichlet value applied at the top face (j = ny)
+  !! set_start/set_end: whether that face carries a prescribed value at all,
+  !! so the two y-faces can differ (ABL: no-slip floor, free-slip lid).
     implicit none
 
     real(dp), device, intent(inout), dimension(:, :, :) :: f
     real(dp), value, intent(in) :: c_start, c_end, flow_rate_diff
+    logical, value, intent(in) :: set_start, set_end
     integer, value, intent(in) :: nx, ny, nz
 
     integer :: i, j, b, n_mod, b_end
@@ -371,8 +331,8 @@ contains
     b_end = b + (ny - 1)/SZ*nz
 
     if (j <= nx) then
-      f(1, j, b) = c_start
-      f(n_mod, j, b_end) = c_end
+      if (set_start) f(1, j, b) = c_start
+      if (set_end) f(n_mod, j, b_end) = c_end
     end if
 
   end subroutine field_set_y_face

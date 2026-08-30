@@ -1,6 +1,6 @@
 program test_boundary_planes
-  !! Boundary-plane writes must land on the intended y-planes and leave every
-  !! other plane untouched.
+  !! Face stamping must land on the intended y-planes and leave every other
+  !! plane untouched.
   !!
   !! DIR_X fields are (SZ, nx, n_groups) with SZ consecutive y-vertices in the
   !! first index, but the two backends order the groups differently:
@@ -43,8 +43,6 @@ program test_boundary_planes
   type(omp_backend_t), target :: omp_backend
 #endif
   class(field_t), pointer :: f, f_start
-  class(field_t), pointer :: nut, dudy, dvdx, dwdy, dvdz
-  class(field_t), pointer :: sgs_u, sgs_v, sgs_w
 
   ! ny is not a multiple of either backend's SZ, so the last y-block is
   ! partially filled and the group orderings do not coincide.
@@ -57,9 +55,7 @@ program test_boundary_planes
   real(dp), parameter :: sentinel = 7._dp, bottom = -1._dp, top = -2._dp
 
   real(dp), allocatable :: data(:, :, :), expected(:, :, :)
-  real(dp) :: tolerance, sampling_height, roughness, kappa, drag_coeff
-  real(dp) :: nut_2, nut_3, dudy_2, dudy_3, dwdy_2, dwdy_3
-  real(dp) :: wall_u, wall_w, speed, tau_x, tau_z, expect_x, expect_z
+  real(dp) :: tolerance
   integer :: dims(3), dims_padded(3), i, j, k, ierr
   logical :: all_pass
 
@@ -125,78 +121,8 @@ program test_boundary_planes
   call check_planes('field_set_face_from_field', data, expected, dims, &
                     tolerance, all_pass)
 
-  ! --- ABL wall model: only the wall plane may be rewritten -----------------
-  ! Constant inputs make the legacy second-order boundary formula analytical.
-  nut => allocator%get_block(DIR_X, VERT)
-  dudy => allocator%get_block(DIR_X, VERT)
-  dvdx => allocator%get_block(DIR_X, VERT)
-  dwdy => allocator%get_block(DIR_X, VERT)
-  dvdz => allocator%get_block(DIR_X, VERT)
-
-  nut_2 = 0.2_dp; nut_3 = 0.3_dp
-  dudy_2 = 2._dp; dudy_3 = 4._dp
-  dwdy_2 = 6._dp; dwdy_3 = 8._dp
-
-  call set_wall_planes(nut, nut_2, nut_3)
-  call set_wall_planes(dudy, dudy_2, dudy_3)
-  call set_wall_planes(dwdy, dwdy_2, dwdy_3)
-  call dvdx%fill(0._dp)
-  call dvdz%fill(0._dp)
-
-  wall_u = 4._dp
-  wall_w = 3._dp
-  sampling_height = 0.5_dp*mesh%geo%d(2)
-  roughness = 0.001_dp
-  kappa = 0.4_dp
-  drag_coeff = (kappa/log(sampling_height/roughness))**2
-  speed = sqrt(wall_u**2 + wall_w**2)
-  tau_x = -drag_coeff*wall_u*speed
-  tau_z = -drag_coeff*wall_w*speed
-  ! sxy = (dudy + dvdx)/2 and syz = (dwdy + dvdz)/2 on y-planes 2 and 3.
-  expect_x = -(-0.5_dp*(-2._dp*nut_3*0.5_dp*dudy_3) &
-               + 2._dp*(-2._dp*nut_2*0.5_dp*dudy_2) &
-               - 1.5_dp*tau_x)/(2._dp*sampling_height)
-  expect_z = -(-0.5_dp*(-2._dp*nut_3*0.5_dp*dwdy_3) &
-               + 2._dp*(-2._dp*nut_2*0.5_dp*dwdy_2) &
-               - 1.5_dp*tau_z)/(2._dp*sampling_height)
-
-  sgs_u => allocator%get_block(DIR_X, VERT)
-  sgs_v => allocator%get_block(DIR_X, VERT)
-  sgs_w => allocator%get_block(DIR_X, VERT)
-  call sgs_u%fill(sentinel)
-  call sgs_v%fill(sentinel)
-  call sgs_w%fill(sentinel)
-
-  call backend%apply_abl_wall_boundary_correction( &
-    sgs_u, sgs_v, sgs_w, nut, dudy, dvdx, dwdy, dvdz, &
-    wall_u, wall_w, kappa, roughness, sampling_height)
-
-  expected = sentinel
-  expected(:, 1, :) = expect_x
-  call backend%get_field_data(data, sgs_u)
-  call check_planes('ABL wall correction x', data, expected, dims, &
-                    tolerance, all_pass)
-
-  expected(:, 1, :) = 0._dp
-  call backend%get_field_data(data, sgs_v)
-  call check_planes('ABL wall correction y', data, expected, dims, &
-                    tolerance, all_pass)
-
-  expected(:, 1, :) = expect_z
-  call backend%get_field_data(data, sgs_w)
-  call check_planes('ABL wall correction z', data, expected, dims, &
-                    tolerance, all_pass)
-
   call allocator%release_block(f)
   call allocator%release_block(f_start)
-  call allocator%release_block(nut)
-  call allocator%release_block(dudy)
-  call allocator%release_block(dvdx)
-  call allocator%release_block(dwdy)
-  call allocator%release_block(dvdz)
-  call allocator%release_block(sgs_u)
-  call allocator%release_block(sgs_v)
-  call allocator%release_block(sgs_w)
   deallocate (data, expected)
 
   if (.not. all_pass) error stop 'FAIL'
@@ -204,21 +130,6 @@ program test_boundary_planes
   call MPI_Finalize(ierr)
 
 contains
-
-  subroutine set_wall_planes(field, value_2, value_3)
-    !! Zero everywhere except y-planes 2 and 3, which the wall model reads.
-    class(field_t), intent(inout) :: field
-    real(dp), intent(in) :: value_2, value_3
-
-    real(dp), allocatable :: plane_data(:, :, :)
-
-    allocate (plane_data(dims_padded(1), dims_padded(2), dims_padded(3)))
-    plane_data = 0._dp
-    plane_data(1:dims(1), 2, 1:dims(3)) = value_2
-    plane_data(1:dims(1), 3, 1:dims(3)) = value_3
-    call backend%set_field_data(field, plane_data)
-    deallocate (plane_data)
-  end subroutine set_wall_planes
 
   subroutine check_planes(label, actual, want, extents, tol, pass)
     !! Compare every y-plane separately so a failure names the stray plane.

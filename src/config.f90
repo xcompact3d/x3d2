@@ -79,6 +79,7 @@ module m_config
     real(dp) :: u_star = 0._dp         !! friction velocity
     real(dp) :: delta = 1._dp          !! boundary-layer depth
     real(dp) :: kappa = 0.41_dp        !! von Karman constant
+    real(dp) :: dsampling = 3._dp      !! wall-model sampling height, in dy
     real(dp) :: u_geo(3) = 0._dp       !! geostrophic wind UG
     real(dp) :: coriolis_freq = 0._dp  !! Coriolis frequency f
     real(dp) :: init_noise(3) = 0._dp
@@ -398,13 +399,14 @@ contains
 
     integer :: unit
 
-    real(dp) :: z0, u_star, delta, kappa
+    real(dp) :: z0, u_star, delta, kappa, dsampling
     real(dp) :: u_geo(3), coriolis_freq, init_noise(3), u_bulk
     integer :: profile_start_iter
     character(len=256) :: profile_file
     logical :: pressure_gradient, coriolis, mass_conserve, damping
 
-    namelist /abl_nml/ z0, u_star, delta, kappa, u_geo, coriolis_freq, &
+    namelist /abl_nml/ z0, u_star, delta, kappa, dsampling, &
+      u_geo, coriolis_freq, &
       init_noise, u_bulk, profile_start_iter, profile_file, &
       pressure_gradient, coriolis, mass_conserve, damping
 
@@ -413,6 +415,7 @@ contains
     u_star = 0._dp
     delta = 1._dp
     kappa = 0.41_dp
+    dsampling = 3._dp
     u_geo = 0._dp
     coriolis_freq = 0._dp
     init_noise = 0._dp
@@ -442,6 +445,7 @@ contains
     self%u_star = u_star
     self%delta = delta
     self%kappa = kappa
+    self%dsampling = dsampling
     self%u_geo = u_geo
     self%coriolis_freq = coriolis_freq
     self%init_noise = init_noise
