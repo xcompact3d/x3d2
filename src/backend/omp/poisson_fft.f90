@@ -155,11 +155,11 @@ contains
 
       if (poisson_fft%p_col > 1) then
         allocate (poisson_fft%c_pair(poisson_fft%sp%ysz(1), &
-                                  poisson_fft%sp%ysz(2), &
-                                  poisson_fft%sp%ysz(3)))
+                                     poisson_fft%sp%ysz(2), &
+                                     poisson_fft%sp%ysz(3)))
         allocate (poisson_fft%waves_pair(poisson_fft%sp%ysz(1), &
-                                      poisson_fft%sp%ysz(2), &
-                                      poisson_fft%sp%ysz(3)))
+                                         poisson_fft%sp%ysz(2), &
+                                         poisson_fft%sp%ysz(3)))
         call transpose_z_to_y(poisson_fft%waves, poisson_fft%waves_pair, &
                               poisson_fft%sp)
       end if
