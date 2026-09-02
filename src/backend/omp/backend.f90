@@ -49,6 +49,7 @@ module m_omp_backend
     procedure :: field_shift => field_shift_omp
     procedure :: field_set_face => field_set_face_omp
     procedure :: field_set_face_from_field => field_set_face_from_field_omp
+    procedure :: field_add_const_x_face => field_add_const_x_face_omp
     procedure :: compute_vorticity => compute_vorticity_omp
     procedure :: compute_qcriterion => compute_qcriterion_omp
     procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_omp
@@ -642,9 +643,11 @@ contains
     class(field_t), intent(in) :: dvdx, dvdy, dvdz
     class(field_t), intent(in) :: dwdx, dwdy, dwdz
 
-    field_out%data = -0.5_dp*(dudx%data*dudx%data + &
-                              dvdy%data*dvdy%data + &
-                              dwdz%data*dwdz%data) - &
+    field_out%data = 0.5_dp*(dudx%data + dvdy%data + dwdz%data) &
+                     *(dudx%data + dvdy%data + dwdz%data) - &
+                     0.5_dp*(dudx%data*dudx%data + &
+                             dvdy%data*dvdy%data + &
+                             dwdz%data*dwdz%data) - &
                      dudy%data*dvdx%data - &
                      dudz%data*dwdx%data - &
                      dvdz%data*dwdy%data
@@ -938,7 +941,7 @@ contains
   ! =========================================================================
 
   subroutine slice_max_sum_omp(self, max_val, sum_val, f, i_slice, &
-                               enforced_data_loc)
+                               enforced_data_loc, min_val)
     !! [[m_base_backend(module):slice_max_sum(interface)]]
     implicit none
     class(omp_backend_t) :: self
@@ -946,8 +949,9 @@ contains
     class(field_t), intent(in) :: f
     integer, intent(in) :: i_slice
     integer, optional, intent(in) :: enforced_data_loc
+    real(dp), optional, intent(out) :: min_val
 
-    real(dp) :: val, max_p, sum_p
+    real(dp) :: val, max_p, sum_p, min_p
     integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j
     integer :: i, j, k, k_i, k_j
 
@@ -983,9 +987,10 @@ contains
     j = i_slice
     sum_p = 0._dp
     max_p = -huge(1._dp)
+    min_p = huge(1._dp)
 
     !$omp parallel do collapse(2) reduction(+:sum_p) reduction(max:max_p) &
-    !$omp private(k, val)
+    !$omp reduction(min:min_p) private(k, val)
     do k_j = 1, (n_j - 1)/SZ + 1
       do k_i = 1, n_i
         k = k_j + (k_i - 1)*((n_j - 1)/SZ + 1)
@@ -993,6 +998,7 @@ contains
           val = f%data(i, j, k)
           sum_p = sum_p + val
           max_p = max(max_p, val)
+          min_p = min(min_p, val)
         end do
       end do
     end do
@@ -1001,6 +1007,7 @@ contains
     ! Rank-local values; caller is responsible for MPI_Allreduce.
     max_val = max_p
     sum_val = sum_p
+    if (present(min_val)) min_val = min_p
 
   end subroutine slice_max_sum_omp
 
@@ -1143,6 +1150,47 @@ contains
     end select
 
   end subroutine field_set_face_from_field_omp
+
+  subroutine field_add_const_x_face_omp(self, f, c, at_end)
+    !! [[m_base_backend(module):field_add_const_x_face(interface)]]
+    implicit none
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c
+    logical, intent(in) :: at_end
+    integer :: dims(3), k, i, i_plane, i_max, n_mod, n_y_blocks, y_block
+
+    if (f%dir /= DIR_X) &
+      error stop 'field_add_const_x_face: only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_add_const_x_face: requires a valid data_loc.'
+
+    dims = self%mesh%get_dims(f%data_loc)
+    n_mod = mod(dims(2) - 1, SZ) + 1
+    n_y_blocks = (dims(2) - 1)/SZ + 1
+
+    if (at_end) then
+      i_plane = dims(1)   ! global x = nx (outlet)
+    else
+      i_plane = 1         ! global x = 1  (inlet)
+    end if
+
+    !$omp parallel do private(y_block, i_max)
+    do k = 1, n_y_blocks*dims(3)
+      ! OMP DIR_X ordering: the y-block is the fast-varying component
+      y_block = mod(k - 1, n_y_blocks) + 1
+      if (y_block == n_y_blocks) then
+        i_max = n_mod
+      else
+        i_max = SZ
+      end if
+      do i = 1, i_max
+        f%data(i, i_plane, k) = f%data(i, i_plane, k) + c
+      end do
+    end do
+    !$omp end parallel do
+
+  end subroutine field_add_const_x_face_omp
 
   real(dp) function field_volume_integral_omp(self, f) result(s)
     !! volume integral of a field

@@ -151,14 +151,17 @@ contains
     integer, value, intent(in) :: n
 
     integer :: i, j, b
+    real(dp) :: divu
 
     i = threadIdx%x
     b = blockIdx%x
 
     do j = 1, n
-      qcrit(i, j, b) = -0.5_dp*(dudx(i, j, b)*dudx(i, j, b) + &
-                                dvdy(i, j, b)*dvdy(i, j, b) + &
-                                dwdz(i, j, b)*dwdz(i, j, b)) - &
+      divu = dudx(i, j, b) + dvdy(i, j, b) + dwdz(i, j, b)
+      qcrit(i, j, b) = 0.5_dp*divu*divu - &
+                       0.5_dp*(dudx(i, j, b)*dudx(i, j, b) + &
+                               dvdy(i, j, b)*dvdy(i, j, b) + &
+                               dwdz(i, j, b)*dwdz(i, j, b)) - &
                        dudy(i, j, b)*dvdx(i, j, b) - &
                        dudz(i, j, b)*dwdx(i, j, b) - &
                        dvdz(i, j, b)*dwdy(i, j, b)
@@ -467,6 +470,41 @@ contains
       end select
     end if
   end subroutine field_set_x_face_from_field
+
+  attributes(global) subroutine add_scalar_x_face( &
+    f, c, i_plane, nx, ny, nz)
+  !! Adds a uniform constant `c` to a single x-normal plane (pencil index
+  !! i_plane) of a DIR_X VERT field, in place.
+  !!
+  !! Launch convention (matches field_set_x_face exactly):
+  !!   threads = dim3(64, 1, 1)
+  !!   blocks  = dim3((SZ-1)/64 + 1, n_y_blocks*nz, 1)
+  !! Threads beyond the real pencil width (SZ in interior y-blocks,
+  !! n_mod in the last y-block) are masked out by the i_max guard.
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), value, intent(in) :: c
+    integer, value, intent(in) :: i_plane, nx, ny, nz
+
+    integer :: i, b, n_mod, n_y_blocks, y_block, i_max
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! 1..SZ (or n_mod)
+    b = blockIdx%y                                 ! 1..n_y_blocks*nz
+
+    n_mod = mod(ny - 1, SZ) + 1
+    n_y_blocks = (ny - 1)/SZ + 1
+    y_block = (b - 1)/nz + 1
+
+    if (y_block == n_y_blocks) then
+      i_max = n_mod    ! last y-block: only i in [1, n_mod] are real
+    else
+      i_max = SZ       ! interior y-blocks: all i in [1, SZ] are real
+    end if
+
+    if (i <= i_max) then
+      f(i, i_plane, b) = f(i, i_plane, b) + c
+    end if
+  end subroutine add_scalar_x_face
 
   attributes(global) subroutine volume_integral(s, f, n, n_i_pad, n_j)
     implicit none

@@ -11,6 +11,7 @@ program xcompact
   use m_case_cylinder, only: case_cylinder_t
   use m_case_generic, only: case_generic_t
   use m_case_tgv, only: case_tgv_t
+  use m_case_wind_turbine, only: case_wind_turbine_t
 
 #ifdef CUDA
   use m_cuda_allocator
@@ -121,6 +122,9 @@ program xcompact
   case ('tgv')
     allocate (case_tgv_t :: flow_case)
     flow_case = case_tgv_t(backend, mesh, host_allocator)
+  case ('wind_turbine')
+    allocate (case_wind_turbine_t :: flow_case)
+    flow_case = case_wind_turbine_t(backend, mesh, host_allocator)
   case default
     error stop 'Undefined flow_case.'
   end select

@@ -113,7 +113,7 @@ These parameters are specified in the ``checkpoint_params`` namelist block in th
 
   - ``'pressure'`` — Pressure field, interpolated from its native cell-centred grid to the vertex grid for ParaView compatibility. Not included in checkpoint files since it is recomputed from velocity.
   - ``'vorticity'`` — Vorticity magnitude :math:`|\omega| = \sqrt{\omega_x^2 + \omega_y^2 + \omega_z^2}`, computed from the full velocity gradient tensor.
-  - ``'qcriterion'`` — Q-criterion :math:`Q = -\frac{1}{2} \sum_{ij} \frac{\partial u_i}{\partial x_j} \frac{\partial u_j}{\partial x_i}`, identifying vortical structures (positive Q indicates rotation-dominated regions).
+  - ``'qcriterion'`` — Q-criterion :math:`Q = \frac{1}{2}(\nabla \cdot \mathbf{u})^2 - \frac{1}{2} \sum_{ij} \frac{\partial u_i}{\partial x_j} \frac{\partial u_j}{\partial x_i}`, identifying vortical structures (positive Q indicates rotation-dominated regions). The :math:`(\nabla \cdot \mathbf{u})^2` term is the general second-invariant form; it vanishes for divergence-free flow but is retained for numerical accuracy.
   - ``'ibm'`` — Immersed boundary method mask field (``ep1``). Values are ``1`` in the fluid domain and ``0`` in the solid domain. Requires ``ibm_on = .true.`` in the input file.
   - ``'species'`` — All transported species fields. In the input file, set ``n_species = N`` with ``N > 0`` and provide ``pr_species = ...`` in ``solver_params``, then add ``'species'`` to ``output_fields``. Snapshots then include ``phi_1`` through ``phi_N``.
 
@@ -188,3 +188,90 @@ Statistics are written to separate ADIOS2 ``.bp`` files (e.g. ``statistics_00100
 - ``phiprime_N`` — RMS scalar fluctuation for species N
 
 Accumulation uses Welford's numerically stable online algorithm. Statistics always restart from scratch — they are not saved in checkpoint files.
+
+Wind Turbine Parameters
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+The wind turbine parameters configure the ``wind_turbine`` flow case: a uniform
+inflow / convective outflow domain with an optional turbine forcing model.
+These parameters are specified in the ``wind_turbine_nml`` namelist block and are
+only read when ``flow_case_name = 'wind_turbine'``.
+
+.. code-block:: fortran
+
+   &wind_turbine_nml
+     init_noise = 0.0d0, 0.0d0, 0.0d0
+     inlet_noise = 0.02d0, 0.0d0, 0.0d0
+     bc_start_u = 8.0d0
+     bc_start_v = 0.0d0
+     bc_start_w = 0.0d0
+     iturbine = 2
+     iturboutput = 50
+     adm_coords = 'discs.ad'
+     rho_air = 1.2d0
+     T_relax = 1.1291d0
+   /End
+
+``init_noise``: Three-element array giving the amplitude of random noise added to the whole velocity field in the initial condition, per component (``u``, ``v``, ``w``). Scaled by ``bc_start_u``.
+  **Default:** ``[0, 0, 0]``
+
+``inlet_noise``: Three-element array giving the amplitude of random noise applied to the inlet (Dirichlet) plane every substep, per component. Scaled by ``bc_start_u``. This is the recommended way to seed transition: turbulence develops physically through the wake shear layers rather than aliasing at the grid scale. A non-zero value regenerates the inlet perturbation each substep; the RNG is seeded deterministically (offset by MPI rank) so runs are reproducible for a fixed decomposition.
+  **Default:** ``[0, 0, 0]``
+
+``bc_start_u``, ``bc_start_v``, ``bc_start_w``: Uniform inflow velocity components enforced as a Dirichlet condition at the inlet plane (``x = 1``).
+  **Default:** ``bc_start_u = 1``, ``bc_start_v = 0``, ``bc_start_w = 0``
+
+``iturbine``: Selects the turbine forcing model.
+
+  - ``0`` — no turbine forcing.
+  - ``1`` — actuator line model. Not yet implemented: selecting it runs the case with no turbine forcing (equivalent to ``0``).
+  - ``2`` — actuator disc model (ADM); see below.
+
+  **Default:** ``0``
+
+``iturboutput``: Frequency (in timesteps) at which turbine diagnostics are written. Set to ``0`` to disable.
+  **Default:** ``1``
+
+``adm_coords``: Path to the actuator-disc coordinates file (``.ad``) read when ``iturbine = 2``. See `Actuator disc file`_.
+  **Default:** ``""`` (empty)
+
+``rho_air``: Air density used in the ADM thrust and power diagnostics. The projected momentum force is divided by ``rho_air`` so it is a true acceleration; with ``rho_air = 1`` this matches the Incompact3d convention.
+  **Default:** ``1``
+
+``T_relax``: Time constant of the ADM first-order low-pass filter applied to the disc-averaged velocity. A negative value disables the filter (the instantaneous disc velocity is used).
+  **Default:** ``-1`` (disabled)
+
+Actuator Disc Model (ADM)
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When ``iturbine = 2``, each disc applies a thrust force computed from a thrust
+coefficient and the disc-averaged inflow velocity, spread onto the grid with a
+super-Gaussian smearing kernel. The thrust and power are
+
+.. math::
+
+   C_T' = \frac{C_T}{(1-a)^2}, \qquad
+   T = \tfrac{1}{2}\, \rho_\text{air}\, C_T'\, A\, U_F^2, \qquad
+   P = T\, U_F,
+
+where :math:`A = \pi D^2/4`, :math:`a` is the induction factor, and
+:math:`U_F` is the (optionally filtered) disc-averaged velocity.
+
+Per-disc diagnostics are written to ``disc<N>.adm`` files (one per disc) with
+columns for the instantaneous and filtered disc velocity, power, thrust, and
+their running means. The ADM state is saved to and restored from checkpoints.
+
+.. _Actuator disc file:
+
+**Actuator disc file** (``.ad``): a header line followed by one row per disc:
+
+.. code-block:: text
+
+   CoR_x CoR_y CoR_z Yaw_deg Tilt_deg RotorDiam C_T alpha
+   252.0 250.0 504.0 0.0 0.0 126.0 0.75 0.17095
+   1134.0 250.0 504.0 0.0 0.0 126.0 0.75 0.17095
+
+The columns are the disc centre (``CoR_x``, ``CoR_y``, ``CoR_z``), the yaw and
+tilt angles in degrees, the rotor diameter, the thrust coefficient ``C_T``, and
+the induction factor ``alpha``.
+

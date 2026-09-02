@@ -153,6 +153,7 @@ define_test(unit/test_scalar_product.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(unit/test_kinetic_energy.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(unit/test_sum_intox.f90 ${CMAKE_CTEST_NPROCS} omp)
 define_test(unit/test_setget_field.f90 1 omp)
+define_test(unit/test_adm.f90 1 omp)
 define_test(unit/test_snapshot_species_fields.f90 1 omp)
 define_test(unit/test_statistics.f90 1 omp)
 define_test(unit/test_output_scalars.f90 1 omp)
@@ -162,6 +163,7 @@ if(WITH_ADIOS2)
   define_test(unit/test_adios2_read_write.f90 4 omp)
   define_test(unit/test_io_session.f90 4 omp)
   define_test(unit/test_ab_checkpoint.f90 1 omp)
+  define_test(unit/test_adm_checkpoint.f90 1 omp)
 endif()
 
 # Verification tests (numerical correctness vs analytical solutions)
@@ -249,6 +251,7 @@ if((${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_test(unit/test_kinetic_energy.f90 1 cuda)
   define_test(unit/test_cuda_allocator.f90 1 cuda)
   define_test(unit/test_cuda_reorder.f90 1 cuda)
+  define_test(unit/test_adm.f90 1 cuda)
 
   # CUDA verification tests
   define_verification_test(verification/test_thom.f90 1 cuda)
