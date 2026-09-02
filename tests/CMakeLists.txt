@@ -191,12 +191,14 @@ endif()
 # than diffed (see the comparator docstring). Round-off tracks the working
 # precision, and the case, so the ceilings do too; rtol tracks precision
 # because it sets what the suite can detect. The golden is double precision for
-# both. If a CI compiler drifts past these, the failure prints the observed
-# |diff| -- loosen to that, not back to the 1e-4 default.
+# both. The single-precision tolerances leave roughly an order of magnitude or
+# more above the largest observed cross-build differences while retaining useful
+# regression sensitivity. If a CI compiler drifts past these, the failure prints
+# the observed |diff| so the tolerance can be revisited empirically.
 if(SINGLE_PREC)
-  set(_smoke_cmp_args --rtol 1e-4
+  set(_smoke_cmp_args --rtol 1e-5
       --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
-  set(_nightly_cmp_args --rtol 1e-3
+  set(_nightly_cmp_args --rtol 1e-4
       --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
 else()
   set(_smoke_cmp_args --rtol 1e-10
