@@ -48,13 +48,25 @@ stages:
     - echo "Build tests"
     - make -C build-debug
     - echo "Run the tests"
-    - if [ "${RUN_TEST}" == "ON" ]; then cd build-debug && ctest -L "unit|verification" --output-on-failure && cd ..; fi
+    - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build-debug -L "unit|verification" --output-on-failure --output-junit ctest-junit.xml; fi
     - echo "Configure Release build"
     - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
     - echo "Build tests"
     - make -C build
     - echo "Run the tests"
-    - if [ "${RUN_TEST}" == "ON" ]; then cd build && ctest -L "unit|verification" --output-on-failure && cd ..; fi
+    - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build -L "unit|verification" --output-on-failure --output-junit ctest-junit.xml; fi
+  # Surface individual test results in the pipeline's Tests tab. Without a
+  # report GitLab shows "Tests 0" and a failing test is only visible by
+  # scrolling the raw job log. ctest still sets the job's exit status, so this
+  # is purely additive. Paths are relative to the build dir --output-junit was
+  # given, so they sit inside build-debug/ and build/.
+  artifacts:
+    when: always
+    expire_in: 1 month
+    reports:
+      junit:
+        - build-debug/ctest-junit.xml
+        - build/ctest-junit.xml
   tags:
     - gpu
 
@@ -93,7 +105,7 @@ build-and-test-single-prec:
     ADIOS2_VERSION: 2.10.2
     EXTRA_MODULE: "adios2"
     SINGLE_PREC: "ON"
-    RUN_TEST: "OFF"
+    RUN_TEST: "ON"
 
 build-and-test-cuda:
   <<: *build-and-test-template

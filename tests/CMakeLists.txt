@@ -114,18 +114,29 @@ endfunction()
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 function(define_regression_case_test case_name input_file golden_file np backend)
+  # Trailing arguments are passed through to the comparator (e.g. --ceiling).
+  set(extra_args "${ARGN}")
+  string(REPLACE ";" " " extra_args_str "${extra_args}")
+
   set(test_name regression_${case_name}_${backend}_${np})
   set(work_dir ${CMAKE_CURRENT_BINARY_DIR}/regression/${test_name})
   file(MAKE_DIRECTORY ${work_dir})
   set(comparator ${CMAKE_CURRENT_SOURCE_DIR}/regression/compare_monitoring.py)
   set(input ${CMAKE_CURRENT_SOURCE_DIR}/regression/${input_file})
   set(golden ${CMAKE_CURRENT_SOURCE_DIR}/regression/${golden_file})
+  # Match the launcher define_test() uses: Cray machines are Slurm-driven and
+  # have no mpirun, so an mpirun-based test cannot start there at all.
+  if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+    set(launcher "srun -n ${np}")
+  else()
+    set(launcher "mpirun --oversubscribe -np ${np}")
+  endif()
   add_test(
     NAME ${test_name}
     COMMAND sh -c
-      "mpirun --oversubscribe -np ${np} $<TARGET_FILE:xcompact> ${input} && \
+      "${launcher} $<TARGET_FILE:xcompact> ${input} && \
        ${Python3_EXECUTABLE} ${comparator} golden \
-       --produced monitoring.csv --golden ${golden}"
+       --produced monitoring.csv --golden ${golden} ${extra_args_str}"
     WORKING_DIRECTORY ${work_dir})
   set_tests_properties(${test_name} PROPERTIES LABELS "regression;${backend}")
 endfunction()
@@ -176,14 +187,38 @@ if((CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR
   set(_cpu_omp_backend FALSE)
 endif()
 
+# div_u is a "stays at round-off" assertion, so it is bounded absolutely rather
+# than diffed (see the comparator docstring). Round-off tracks the working
+# precision, and the case, so the ceilings do too; rtol tracks precision
+# because it sets what the suite can detect. The golden is double precision for
+# both. The single-precision tolerances leave roughly an order of magnitude or
+# more above the largest observed cross-build differences while retaining useful
+# regression sensitivity. If a CI compiler drifts past these, the failure prints
+# the observed |diff| so the tolerance can be revisited empirically.
+if(SINGLE_PREC)
+  set(_smoke_cmp_args --rtol 1e-5
+      --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
+  set(_nightly_cmp_args --rtol 1e-4
+      --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
+else()
+  set(_smoke_cmp_args --rtol 1e-10
+      --ceiling div_u_max=1e-8 --ceiling div_u_mean=1e-9)
+  set(_nightly_cmp_args --rtol 1e-10
+      --ceiling div_u_max=1e-12 --ceiling div_u_mean=1e-13)
+endif()
+
 if(WITH_2DECOMPFFT AND _cpu_omp_backend)
-  define_regression_case_test(tgv_smoke tgv_smoke.x3d tgv_smoke_golden_omp.csv 2 omp)
+  define_regression_case_test(tgv_smoke tgv_smoke.x3d tgv_smoke_golden_omp.csv 2 omp
+    ${_smoke_cmp_args})
 endif()
 
 # Heavier nightly regression case (opt-in; kept out of PR CI to stay fast).
 if(WITH_2DECOMPFFT AND _cpu_omp_backend AND WITH_NIGHTLY_REGRESSION)
-  define_regression_case_test(tgv_nightly tgv_nightly.x3d tgv_nightly_golden_omp.csv 2 omp)
+  define_regression_case_test(tgv_nightly tgv_nightly.x3d tgv_nightly_golden_omp.csv 2 omp
+    ${_nightly_cmp_args})
 endif()
+unset(_smoke_cmp_args)
+unset(_nightly_cmp_args)
 unset(_cpu_omp_backend)
 
 if(${OMP_TGT})
