@@ -870,7 +870,7 @@ contains
     integer, optional, intent(in) :: enforced_data_loc
 
     real(dp) :: val, max_p, sum_p, max_pncl, sum_pncl
-    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j
+    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_groups_pad, n_j
     integer :: i, j, k, k_i, k_j, ierr
 
     if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
@@ -888,12 +888,20 @@ contains
     dims = self%mesh%get_dims(data_loc)
     dims_padded = self%allocator%get_padded_dims(DIR_C)
 
+    ! n_groups_pad is the stride between successive outer entries in the
+    ! group index, and it comes from the padded extent of the grouped
+    ! dimension, not the unpadded one (see get_index_dir in m_ordering).
+    ! The two agree only when that dimension needs no padding, so using the
+    ! unpadded count walks into other groups as soon as it does.
     if (f%dir == DIR_X) then
-      n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
+      n = dims(1); n_j = dims(2); n_i = dims(3)
+      n_groups_pad = dims_padded(2)/SZ
     else if (f%dir == DIR_Y) then
-      n = dims(2); n_j = dims(1); n_i = dims(3); n_i_pad = dims_padded(3)
+      n = dims(2); n_j = dims(1); n_i = dims(3)
+      n_groups_pad = dims_padded(1)/SZ
     else if (f%dir == DIR_Z) then
-      n = dims(3); n_j = dims(1); n_i = dims(2); n_i_pad = dims_padded(2)
+      n = dims(3); n_j = dims(1); n_i = dims(2)
+      n_groups_pad = dims_padded(1)/SZ
     else
       error stop 'field_max_mean does not support DIR_C fields!'
     end if
@@ -904,7 +912,7 @@ contains
     !$omp private(k, val, sum_pncl, max_pncl)
     do k_j = 1, (n_j - 1)/SZ + 1 ! loop over stacked groups
       do k_i = 1, n_i
-        k = k_j + (k_i - 1)*((n_j - 1)/SZ + 1)
+        k = k_j + (k_i - 1)*n_groups_pad
         sum_pncl = 0._dp
         max_pncl = 0._dp
         do j = 1, n
@@ -948,7 +956,7 @@ contains
     integer, optional, intent(in) :: enforced_data_loc
 
     real(dp) :: val, max_p, sum_p
-    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j
+    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_groups_pad, n_j
     integer :: i, j, k, k_i, k_j
 
     if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
@@ -966,12 +974,16 @@ contains
     dims = self%mesh%get_dims(data_loc)
     dims_padded = self%allocator%get_padded_dims(DIR_C)
 
+    ! See the note on n_groups_pad in field_max_mean_omp above.
     if (f%dir == DIR_X) then
-      n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
+      n = dims(1); n_j = dims(2); n_i = dims(3)
+      n_groups_pad = dims_padded(2)/SZ
     else if (f%dir == DIR_Y) then
-      n = dims(2); n_j = dims(1); n_i = dims(3); n_i_pad = dims_padded(3)
+      n = dims(2); n_j = dims(1); n_i = dims(3)
+      n_groups_pad = dims_padded(1)/SZ
     else if (f%dir == DIR_Z) then
-      n = dims(3); n_j = dims(1); n_i = dims(2); n_i_pad = dims_padded(2)
+      n = dims(3); n_j = dims(1); n_i = dims(2)
+      n_groups_pad = dims_padded(1)/SZ
     else
       error stop 'slice_max_sum does not support DIR_C fields!'
     end if
@@ -988,7 +1000,7 @@ contains
     !$omp private(k, val)
     do k_j = 1, (n_j - 1)/SZ + 1
       do k_i = 1, n_i
-        k = k_j + (k_i - 1)*((n_j - 1)/SZ + 1)
+        k = k_j + (k_i - 1)*n_groups_pad
         do i = 1, min(SZ, n_j - (k_j - 1)*SZ)
           val = f%data(i, j, k)
           sum_p = sum_p + val
