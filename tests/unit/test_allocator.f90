@@ -1,10 +1,10 @@
 program test_allocator
-  use mpi
   use iso_fortran_env, only: stderr => error_unit
 
   use m_allocator, only: allocator_t
   use m_field, only: field_t
   use m_common, only: DIR_X, pi, dp
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
@@ -15,9 +15,9 @@ program test_allocator
   class(allocator_t), allocatable :: allocator
   class(field_t), pointer :: ptr1, ptr2, ptr3
   integer, allocatable :: l(:)
-  integer :: ierr
+  integer :: nrank, nproc
 
-  call MPI_Init(ierr)
+  call initialise_mpi(nrank, nproc)
 
   allocator = allocator_t([8, 8, 8], 8)
 
@@ -76,11 +76,5 @@ program test_allocator
 
   call allocator%destroy()
 
-  if (allpass) then
-    write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-  else
-    error stop 'SOME TESTS FAILED.'
-  end if
-
-  call MPI_Finalize(ierr)
+  call finalise_test(allpass, nrank)
 end program test_allocator

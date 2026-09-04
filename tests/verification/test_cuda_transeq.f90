@@ -8,6 +8,8 @@ program test_cuda_transeq
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused
   use m_cuda_sendrecv, only: sendrecv_fields
   use m_cuda_tdsops, only: cuda_tdsops_t
+  use m_backend_runtime, only: select_cuda_device
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
@@ -29,7 +31,7 @@ program test_cuda_transeq
 
   integer :: n, n_block, n_halo, n_glob
   integer :: nrank, nproc, pprev, pnext
-  integer :: ierr, ndevs, devnum
+  integer :: ierr
 
   type(dim3) :: blocks, threads
   ! The diffusion term's roundoff floor is ~eps/dx^2: at n=512 this is
@@ -41,35 +43,18 @@ program test_cuda_transeq
 #endif
   real(dp) :: dx_per, nu, norm_du
 
-  call initialise_mpi()
-  call select_device()
+  call initialise_mpi(nrank, nproc, pprev, pnext)
+  if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
+  call select_cuda_device(nrank)
   call setup_geometry()
   call allocate_fields()
   call initialise_input()
   call setup_backend()
   call run_kernel()
   call check_result()
-  call finalise()
+  call finalise_test(allpass, nrank)
 
 contains
-
-  subroutine initialise_mpi()
-    call MPI_Init(ierr)
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-    if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
-
-    !print*, 'I am rank', nrank, 'I am running on device', devnum
-    pnext = modulo(nrank - nproc + 1, nproc)
-    pprev = modulo(nrank - 1, nproc)
-  end subroutine initialise_mpi
-
-  subroutine select_device()
-    ierr = cudaGetDeviceCount(ndevs)
-    ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robine
-    ierr = cudaGetDevice(devnum)
-  end subroutine select_device
 
   subroutine setup_geometry()
     n_glob = 512
@@ -189,15 +174,5 @@ contains
     end if
 
   end subroutine check_result
-
-  subroutine finalise()
-    if (allpass) then
-      if (nrank == 0) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-    else
-      error stop 'SOME TESTS FAILED.'
-    end if
-
-    call MPI_Finalize(ierr)
-  end subroutine finalise
 
 end program test_cuda_transeq

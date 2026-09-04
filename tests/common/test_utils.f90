@@ -1,13 +1,97 @@
 module m_test_utils
+  use mpi
+  use iso_fortran_env, only: stderr => error_unit
   use m_common, only: dp, nbytes
   implicit none
 
   private
-  public :: checkerr, write_perf_metric, write_perf_minmax_metrics, &
+  public :: initialise_mpi, finalise_test, global_all, global_sum, &
+            check_status, checkerr, &
+            write_perf_metric, write_perf_minmax_metrics, &
             write_perf_summary, write_perf_minmax_summary, &
             write_device_bw_metric
 
 contains
+
+  subroutine initialise_mpi(nrank, nproc, pprev, pnext)
+    !! Initialise MPI and return the rank and communicator size. Optionally
+    !! return the neighbouring ranks for a 1D periodic decomposition.
+    integer, intent(out) :: nrank, nproc
+    integer, optional, intent(out) :: pprev, pnext
+
+    integer :: ierr
+
+    call MPI_Init(ierr)
+    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
+    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+
+    if (present(pprev)) pprev = modulo(nrank - 1, nproc)
+    if (present(pnext)) pnext = modulo(nrank - nproc + 1, nproc)
+  end subroutine initialise_mpi
+
+  subroutine global_all(value)
+    !! Replace a local logical value with the logical AND across all ranks.
+    logical, intent(inout) :: value
+
+    integer :: ierr
+
+    call MPI_Allreduce(MPI_IN_PLACE, value, 1, MPI_LOGICAL, MPI_LAND, &
+                       MPI_COMM_WORLD, ierr)
+  end subroutine global_all
+
+  subroutine global_sum(value)
+    !! Replace a local integer value with the sum across all ranks.
+    integer, intent(inout) :: value
+
+    integer :: ierr
+
+    call MPI_Allreduce(MPI_IN_PLACE, value, 1, MPI_INTEGER, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+  end subroutine global_sum
+
+  subroutine check_status(status, label, allpass)
+    !! Mark a test or benchmark as failed when an API returns a non-zero
+    !! status code. The caller decides where ranks must synchronise allpass.
+    integer, intent(in) :: status
+    character(len=*), intent(in) :: label
+    logical, intent(inout) :: allpass
+
+    if (status /= 0) then
+      write (stderr, '(a,": status=",i0)') trim(label), status
+      allpass = .false.
+    end if
+  end subroutine check_status
+
+  subroutine finalise_test(allpass, nrank, finalize_mpi)
+    !! Aggregate and report the test result, then finalise MPI before exiting
+    !! with a non-zero status if any check failed. When nrank is given, the
+    !! success message is only printed by rank 0. Set finalize_mpi to .false.
+    !! for serial tests that never called MPI_Init.
+    logical, intent(in) :: allpass
+    integer, optional, intent(in) :: nrank
+    logical, optional, intent(in) :: finalize_mpi
+
+    integer :: ierr
+    logical :: is_root, do_finalize, test_pass
+
+    is_root = .true.
+    if (present(nrank)) is_root = (nrank == 0)
+
+    do_finalize = .true.
+    if (present(finalize_mpi)) do_finalize = finalize_mpi
+
+    test_pass = allpass
+    if (do_finalize) then
+      call global_all(test_pass)
+      call MPI_Finalize(ierr)
+    end if
+
+    if (test_pass) then
+      if (is_root) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
+    else
+      error stop 'SOME TESTS FAILED.'
+    end if
+  end subroutine finalise_test
 
   subroutine check_norm(norm, tol, label, allpass)
     real(dp), intent(in) :: norm

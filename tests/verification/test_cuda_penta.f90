@@ -25,34 +25,24 @@ program test_cuda_penta
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_penta_compact, exec_dist_penta_periodic
   use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
+  use m_backend_runtime, only: select_cuda_device
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
   logical :: allpass = .true.
-  integer :: nrank, nproc, ierr, ndevs, devnum
+  integer :: nrank, nproc, ierr
 
-  call initialise_mpi()
-  call select_device()
+  call initialise_mpi(nrank, nproc)
+  if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
+  call select_cuda_device(nrank)
   call run_dirichlet_test()
   call run_neumann_sym_true()
   call run_neumann_sym_false()
   call run_periodic_test()
-  call finalise()
+  call finalise_test(allpass, nrank)
 
 contains
-
-  subroutine initialise_mpi()
-    call MPI_Init(ierr)
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-    if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
-  end subroutine initialise_mpi
-
-  subroutine select_device()
-    ierr = cudaGetDeviceCount(ndevs)
-    ierr = cudaSetDevice(mod(nrank, ndevs))
-    ierr = cudaGetDevice(devnum)
-  end subroutine select_device
 
   ! ─────────────────────────────────────────────────────────────────────────────
   ! BC_DIRICHLET: f = sin(pi*x), f' = pi*cos(pi*x).
@@ -451,14 +441,5 @@ contains
     converged_tol = max(1e-12_dp, &
                         20._dp*epsilon(1._dp)*real(n_glob, dp))
   end function converged_tol
-
-  subroutine finalise()
-    if (allpass) then
-      if (nrank == 0) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-    else
-      error stop 'SOME TESTS FAILED.'
-    end if
-    call MPI_Finalize(ierr)
-  end subroutine finalise
 
 end program test_cuda_penta

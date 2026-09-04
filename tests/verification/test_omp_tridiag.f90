@@ -8,6 +8,7 @@ program test_omp_tridiag
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_exec_dist, only: exec_dist_tds_compact
   use m_tdsops, only: tdsops_t, tdsops_init
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
@@ -45,25 +46,16 @@ program test_omp_tridiag
   real(dp) :: tol = 1d-8, tol_2nd = 1d-8, tol_hyper = 1d-8
 #endif
 
-  call initialise_mpi()
+  call initialise_mpi(nrank, nproc, pprev, pnext)
+  if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
   call setup_geometry()
   call allocate_fields()
   call initialise_input()
   call run_all_cases()
-  call finalise()
+  call finalise_test(allpass, nrank)
 
 contains
 
-  subroutine initialise_mpi()
-    call MPI_Init(ierr)
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-    if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
-
-    pnext = modulo(nrank - nproc + 1, nproc)
-    pprev = modulo(nrank - 1, nproc)
-  end subroutine initialise_mpi
 
   subroutine setup_geometry()
     n_glob = 1024
@@ -356,16 +348,6 @@ contains
       end if
     end if
   end subroutine run_all_cases
-
-  subroutine finalise()
-    if (allpass) then
-      if (nrank == 0) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-    else
-      error stop 'SOME TESTS FAILED.'
-    end if
-
-    call MPI_Finalize(ierr)
-  end subroutine finalise
 
   subroutine run_kernel(n_iters, n_groups, u, du, tdsops, n, &
                         u_recv_s, u_recv_e, u_send_s, u_send_e, &
