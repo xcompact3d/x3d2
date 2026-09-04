@@ -18,6 +18,46 @@ else()
   target_compile_options(x3d2_test_utils PRIVATE "-cpp")
 endif()
 
+# Build the backend-dependent test runtime once per backend. A single build can
+# contain CPU, CUDA, and OpenMP-target tests, so each variant needs its own 
+# preprocessor definitions and module directory.
+function(define_test_backend_runtime backend)
+  set(runtime_target x3d2_test_runtime_${backend})
+  if(TARGET ${runtime_target})
+    return()
+  endif()
+
+  add_library(${runtime_target} STATIC common/backend_runtime.f90)
+  set_target_properties(${runtime_target} PROPERTIES
+    Fortran_MODULE_DIRECTORY
+      "${CMAKE_CURRENT_BINARY_DIR}/modules/${runtime_target}")
+  target_include_directories(${runtime_target} INTERFACE
+    "${CMAKE_CURRENT_BINARY_DIR}/modules/${runtime_target}")
+
+  if(${backend} STREQUAL cuda)
+    target_compile_options(${runtime_target} PRIVATE "-cpp" "-cuda" "-DCUDA")
+    target_link_options(${runtime_target} INTERFACE "-cuda")
+  else()
+    if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+      target_compile_options(${runtime_target} PRIVATE "-eF")
+    else()
+      target_compile_options(${runtime_target} PRIVATE "-cpp")
+    endif()
+    if(${backend} STREQUAL omp_tgt)
+      target_compile_options(${runtime_target} PRIVATE "-fopenmp" "-DOMP_TGT")
+      target_link_options(${runtime_target} INTERFACE "-fopenmp")
+      if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+        target_compile_options(${runtime_target} PRIVATE
+          "--offload-arch=${OMP_TGT_ARCH}")
+        target_link_options(${runtime_target} INTERFACE
+          "--offload-arch=${OMP_TGT_ARCH}")
+      endif()
+    endif()
+  endif()
+
+  target_link_libraries(${runtime_target} PRIVATE x3d2_backends x3d2)
+endfunction()
+
 # Base test definition function
 function(define_test testfile np backend)
   # Capture optional arguments passed to the function (e.g. input file or flags)
@@ -27,8 +67,8 @@ function(define_test testfile np backend)
   get_filename_component(test_name ${testfile} NAME_WE)
   string(CONCAT test_name ${test_name} _ ${backend} _ ${np})
 
-  add_executable(${test_name} ${testfile}
-                 ${CMAKE_SOURCE_DIR}/src/backend/backend_runtime.f90)
+  define_test_backend_runtime(${backend})
+  add_executable(${test_name} ${testfile})
   set_target_properties(${test_name} PROPERTIES
     Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/${test_name}")
 
@@ -65,6 +105,7 @@ function(define_test testfile np backend)
       endif()
     endif()
   endif()
+  target_link_libraries(${test_name} PRIVATE x3d2_test_runtime_${backend})
   target_link_libraries(${test_name} PRIVATE x3d2_backends)
   target_link_libraries(${test_name} PRIVATE x3d2_test_utils)
   target_link_libraries(${test_name} PRIVATE x3d2)

@@ -78,7 +78,7 @@ contains
       n_groups = 512*512/backend_sz
       n_iters = 1000
     else
-      backend_label = 'omp '
+      backend_label = 'omp'
       periodic_bw = 3.0_dp
       dirichlet_bw = 3.0_dp
       n_groups = 128*128/backend_sz

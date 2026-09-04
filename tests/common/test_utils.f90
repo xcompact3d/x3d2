@@ -63,16 +63,16 @@ contains
   end subroutine check_status
 
   subroutine finalise_test(allpass, nrank, finalize_mpi)
-    !! Report the aggregate test result and finalise MPI, aborting via
-    !! `error stop` (non-zero exit status) if any check failed. When nrank is
-    !! given, the success message is only printed by rank 0. Set finalize_mpi
-    !! to .false. for serial tests that never called MPI_Init.
+    !! Aggregate and report the test result, then finalise MPI before exiting
+    !! with a non-zero status if any check failed. When nrank is given, the
+    !! success message is only printed by rank 0. Set finalize_mpi to .false.
+    !! for serial tests that never called MPI_Init.
     logical, intent(in) :: allpass
     integer, optional, intent(in) :: nrank
     logical, optional, intent(in) :: finalize_mpi
 
     integer :: ierr
-    logical :: is_root, do_finalize
+    logical :: is_root, do_finalize, test_pass
 
     is_root = .true.
     if (present(nrank)) is_root = (nrank == 0)
@@ -80,13 +80,17 @@ contains
     do_finalize = .true.
     if (present(finalize_mpi)) do_finalize = finalize_mpi
 
-    if (allpass) then
+    test_pass = allpass
+    if (do_finalize) then
+      call global_all(test_pass)
+      call MPI_Finalize(ierr)
+    end if
+
+    if (test_pass) then
       if (is_root) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
     else
       error stop 'SOME TESTS FAILED.'
     end if
-
-    if (do_finalize) call MPI_Finalize(ierr)
   end subroutine finalise_test
 
   subroutine check_norm(norm, tol, label, allpass)

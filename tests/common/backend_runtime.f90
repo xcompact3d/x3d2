@@ -3,6 +3,7 @@ module m_backend_runtime
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
+  use m_common, only: VERT
   use m_mesh, only: mesh_t
 
 #ifdef CUDA
@@ -30,7 +31,7 @@ module m_backend_runtime
 #endif
 
   type :: backend_runtime_t
-    !! Convenience wrapper that creates the correct backend and allocator
+    !! Test helper that creates the correct backend and allocator
     !! for the current build.  The pointer components (backend, allocator,
     !! host_allocator) alias concrete members of this same object, so
     !! instances must be declared with the TARGET attribute and must
@@ -91,7 +92,7 @@ contains
     integer :: ierr, nrank
 #endif
 
-    dims = mesh%grid%vert_dims
+    dims = mesh%get_dims(VERT)
 #if !defined(CUDA) && !defined(OMP_TGT)
     need_separate_host_allocator = .false.
     if (present(separate_host_allocator)) then
