@@ -5,7 +5,8 @@ option(WITH_NIGHTLY_REGRESSION
   "Register the heavier nightly regression cases (excluded from PR CI)." OFF)
 
 # Shared test utilities library
-add_library(x3d2_test_utils STATIC common/test_utils.f90)
+add_library(x3d2_test_utils STATIC common/test_utils.f90
+                                    common/test_memory_sizing.f90)
 target_link_libraries(x3d2_test_utils PRIVATE x3d2)
 set_target_properties(x3d2_test_utils PROPERTIES
   Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_test_utils")
