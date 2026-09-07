@@ -4,9 +4,10 @@
 
 module m_omptgt_allocator
 
-  use iso_c_binding, only: c_ptr, c_f_pointer, &
+  use iso_c_binding, only: c_ptr, c_f_pointer, c_size_t, &
                            c_sizeof, c_associated, c_null_ptr
   use omp_lib, only: omp_target_alloc, omp_target_free, &
+                     omp_target_associate_ptr, omp_target_disassociate_ptr, &
                      omp_get_default_device, omp_get_num_devices, &
                      omp_get_initial_device
 
@@ -79,10 +80,15 @@ contains
     integer, intent(in) :: id
     type(omptgt_field_t) :: f
 
+    integer :: ierr
+
     f%refcount = 0
     f%next => next
     f%id = id
 
+    if (omp_get_num_devices() < 1) then
+      error stop "No OpenMP target device available, was offloading enabled?"
+    end if
     f%dev_id = omp_get_default_device()
     if (f%dev_id == omp_get_initial_device()) then
       error stop "Device ID is HOST"
@@ -91,13 +97,35 @@ contains
     f%n = ngrid
     f%dims = -1
     f%dev_ptr = omp_target_alloc(f%n*c_sizeof(0.0_dp), f%dev_id)
+    if (.not. c_associated(f%dev_ptr)) then
+      error stop "omp_target_alloc failed"
+    end if
+
+    ! Register the buffer with the runtime as being its own host counterpart.
+    !
+    ! Kernels reach this memory through a Fortran pointer built by
+    ! c_f_pointer(dev_ptr, ...), i.e. a host pointer whose value *is* the
+    ! device address. Compilers are free to implicitly map such a pointer
+    ! tofrom on a target construct (nvfortran does), which copies the pointee
+    ! to and from the device using the device address as the host address.
+    ! Self-associating makes that lookup find the buffer already present, so
+    ! the implicit map is a no-op instead of a bogus transfer.
+    ierr = omp_target_associate_ptr(f%dev_ptr, f%dev_ptr, &
+                                    f%n*c_sizeof(0.0_dp), 0_c_size_t, &
+                                    f%dev_id)
+    if (ierr /= 0) then
+      error stop "omp_target_associate_ptr failed"
+    end if
 
   end subroutine omptgt_field_init
 
   subroutine omptgt_field_destroy(self)
     type(omptgt_field_t) :: self
 
+    integer :: ierr
+
     if (c_associated(self%dev_ptr)) then
+      ierr = omp_target_disassociate_ptr(self%dev_ptr, self%dev_id)
       call omp_target_free(self%dev_ptr, self%dev_id)
     end if
   end subroutine
@@ -119,14 +147,12 @@ contains
     real(dp), dimension(:), pointer :: p_data_tgt
     integer :: i
 
-    !$omp target teams is_device_ptr(dev_ptr)
     call c_f_pointer(dev_ptr, p_data_tgt, shape=[n])
-    !$omp loop
+    !$omp target teams loop is_device_ptr(dev_ptr)
     do i = 1, n
       p_data_tgt(i) = c
     end do
-    !$omp end loop
-    !$omp end target teams
+    !$omp end target teams loop
 
   end subroutine
 
@@ -164,7 +190,7 @@ contains
     class(omptgt_field_t) :: self
     integer, intent(in) :: dims(3)
 
-    if (product(dims) < self%n) then
+    if (product(dims) <= self%n) then
       self%dims = dims
     else
       error stop "Trying to set shape of field greater than capacity"

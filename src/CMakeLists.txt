@@ -125,7 +125,12 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
     set(CMAKE_Fortran_FLAGS "-cpp -cuda")
     target_compile_options(xcompact PRIVATE "-DCUDA")
   else()
-    set(CMAKE_Fortran_FLAGS "-cpp")
+    # nvfortran spells target offloading -mp=gpu; plain -mp (what
+    # OpenMP::OpenMP_Fortran adds) is host-only and silently runs target
+    # regions on the host, where device pointers are invalid.
+    set(CMAKE_Fortran_FLAGS "-cpp -mp=gpu -gpu=${OMP_TGT_ARCH}")
+    target_link_options(x3d2 INTERFACE "-mp=gpu")
+    target_link_options(x3d2_backends INTERFACE "-mp=gpu")
   endif()
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr -Ktrap=fp")
   # Note: -Ktrap=fp traps FP exceptions process-wide. On some NVIDIA GPUs (for example RTX A4000)

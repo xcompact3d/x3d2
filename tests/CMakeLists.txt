@@ -45,15 +45,20 @@ function(define_test testfile np backend)
     target_link_libraries(${test_name} PRIVATE OpenMP::OpenMP_Fortran)
 
     if(${backend} STREQUAL omp_tgt)
-      # Note this is somewhat of a hack - hardcoded to build against MI300A
-      target_compile_options(${test_name} PRIVATE "-fopenmp")
       target_compile_options(${test_name} PRIVATE "-DOMP_TGT")
-      target_link_options(${test_name} PRIVATE "-fopenmp")
-      if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray" AND
-         NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
-         NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
-        target_compile_options(${test_name} PRIVATE "--offload-arch=${OMP_TGT_ARCH}")
-        target_link_options(${test_name} PRIVATE "--offload-arch=${OMP_TGT_ARCH}")
+      if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" OR
+         ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+        # nvfortran needs -mp=gpu; plain -mp/-fopenmp is host-only OpenMP and
+        # silently runs target regions on the host against device pointers.
+        target_compile_options(${test_name} PRIVATE "-mp=gpu" "-gpu=${OMP_TGT_ARCH}")
+        target_link_options(${test_name} PRIVATE "-mp=gpu" "-gpu=${OMP_TGT_ARCH}")
+      else()
+        target_compile_options(${test_name} PRIVATE "-fopenmp")
+        target_link_options(${test_name} PRIVATE "-fopenmp")
+        if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+          target_compile_options(${test_name} PRIVATE "--offload-arch=${OMP_TGT_ARCH}")
+          target_link_options(${test_name} PRIVATE "--offload-arch=${OMP_TGT_ARCH}")
+        endif()
       endif()
     endif()
   endif()

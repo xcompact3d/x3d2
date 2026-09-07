@@ -87,10 +87,9 @@ contains
       error stop "SRC array is smaller than destination"
     end if
 
-    !$omp target teams is_device_ptr(cp_dst, cp_src)
     call c_f_pointer(cp_dst, dst, shape=n_dst)
     call c_f_pointer(cp_src, src, shape=n_src)
-    !$omp loop collapse(3)
+    !$omp target teams loop collapse(3) is_device_ptr(cp_dst, cp_src)
     do k = 1, n_dst(3)
       do j = 1, n_dst(2)
         do i = 1, n_dst(1)
@@ -98,8 +97,7 @@ contains
         end do
       end do
     end do
-    !$omp end loop
-    !$omp end target teams
+    !$omp end target teams loop
 
   end subroutine
 
@@ -148,10 +146,9 @@ contains
     cp_x = x%get_dev_ptr()
     cp_y = y%get_dev_ptr()
 
-    !$omp target teams is_device_ptr(cp_x, cp_y)
     call c_f_pointer(cp_x, p_x, shape=x%get_shape())
     call c_f_pointer(cp_y, p_y, shape=y%get_shape())
-    !$omp loop collapse(3)
+    !$omp target teams loop collapse(3) is_device_ptr(cp_x, cp_y)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -159,8 +156,7 @@ contains
         end do
       end do
     end do
-    !$omp end loop
-    !$omp end target teams
+    !$omp end target teams loop
 
   end subroutine
 
@@ -180,9 +176,8 @@ contains
     select type (f)
     type is (omptgt_field_t)
       f_dev_ptr = f%get_dev_ptr()
-      !$omp target teams map(to:data) is_device_ptr(f_dev_ptr)
       call c_f_pointer(f_dev_ptr, p_f, shape=f%get_shape())
-      !$omp loop collapse(3)
+      !$omp target teams loop collapse(3) map(to:data) is_device_ptr(f_dev_ptr)
       do k = 1, dims(3)
         do j = 1, dims(2)
           do i = 1, dims(1)
@@ -190,8 +185,7 @@ contains
           end do
         end do
       end do
-      !$omp end loop
-      !$omp end target teams
+      !$omp end target teams loop
     class default
       error stop "Unsupported"
     end select
@@ -213,9 +207,9 @@ contains
     select type (f)
     type is (omptgt_field_t)
       f_dev_ptr = f%get_dev_ptr()
-      !$omp target teams map(from:data) is_device_ptr(f_dev_ptr)
       call c_f_pointer(f_dev_ptr, p_f, shape=f%get_shape())
-      !$omp loop collapse(3)
+      !$omp target teams loop collapse(3) map(from:data) &
+      !$omp   is_device_ptr(f_dev_ptr)
       do k = 1, dims(3)
         do j = 1, dims(2)
           do i = 1, dims(1)
@@ -223,8 +217,7 @@ contains
           end do
         end do
       end do
-      !$omp end loop
-      !$omp end target teams
+      !$omp end target teams loop
     class default
       error stop "Unsupported"
     end select
@@ -277,10 +270,10 @@ contains
 
     cp_u_ = u_%get_dev_ptr()
     cp_u = u%get_dev_ptr()
-    !$omp target teams is_device_ptr(cp_u_, cp_u)
     call c_f_pointer(cp_u_, p_u_, shape=u_%get_shape())
     call c_f_pointer(cp_u, p_u, shape=u%get_shape())
-    !$omp loop collapse(3) private(out_i, out_j, out_k)
+    !$omp target teams distribute parallel do collapse(3) &
+    !$omp   private(out_i, out_j, out_k) is_device_ptr(cp_u_, cp_u)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -290,8 +283,7 @@ contains
         end do
       end do
     end do
-    !$omp end loop
-    !$omp end target teams
+    !$omp end target teams distribute parallel do
 
   end subroutine
 
@@ -308,9 +300,10 @@ contains
     integer :: out_i, out_j, out_k
 
     cp_u_ = u_%get_dev_ptr()
-    !$omp target teams map(to:u) is_device_ptr(cp_u_)
     call c_f_pointer(cp_u_, p_u_, shape=u_%get_shape())
-    !$omp loop collapse(3) private(out_i, out_j, out_k)
+    ! See the note in reorder_omptgt_dd on `distribute parallel do`.
+    !$omp target teams distribute parallel do collapse(3) &
+    !$omp   private(out_i, out_j, out_k) map(to:u) is_device_ptr(cp_u_)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -320,8 +313,7 @@ contains
         end do
       end do
     end do
-    !$omp end loop
-    !$omp end target teams
+    !$omp end target teams distribute parallel do
 
   end subroutine
 
