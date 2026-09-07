@@ -47,6 +47,7 @@ module m_base_case
     procedure :: case_init
     procedure :: case_finalise
     procedure :: set_init
+    procedure :: substep
     procedure :: run
   end type base_case_t
 
@@ -179,6 +180,50 @@ contains
 
   end subroutine set_init
 
+  subroutine substep(self, curr, deriv, iter)
+    !! One time-integrator sub-stage: case-specific BCs, transeq, forcings,
+    !! time integration, case BC re-application, IBM body force, and
+    !! pressure correction. Extracted from run()'s per-sub-stage loop body
+    !! so the same allocation path can be driven directly (e.g. by the
+    !! memory-estimate probe) without going through the full time loop,
+    !! I/O cadence, or diagnostics.
+    implicit none
+
+    class(base_case_t), intent(inout) :: self
+    type(flist_t), intent(inout) :: curr(:), deriv(:)
+    integer, intent(in) :: iter
+
+    integer :: i
+
+    ! first apply case-specific BCs
+    call self%define_BC()
+
+    do i = 1, self%solver%nvars
+      deriv(i)%ptr => self%solver%backend%allocator%get_block(DIR_X)
+    end do
+
+    call self%solver%transeq(deriv, curr)
+
+    ! models that introduce source terms handled here
+    call self%forcings(deriv(1)%ptr, deriv(2)%ptr, deriv(3)%ptr, iter)
+
+    ! time integration
+    call self%solver%time_integrator%step(curr, deriv, self%solver%dt)
+
+    do i = 1, self%solver%nvars
+      call self%solver%backend%allocator%release_block(deriv(i)%ptr)
+    end do
+
+    call self%apply_BC(self%solver%u, self%solver%v, self%solver%w)
+    if (self%solver%ibm_on) then
+      call self%solver%ibm%body(self%solver%u, self%solver%v, &
+                                self%solver%w)
+    end if
+
+    call self%solver%pressure_correction(self%solver%u, self%solver%v, &
+                                         self%solver%w)
+  end subroutine substep
+
   subroutine run(self)
     !! Runs the solver forwards in time from t=t_0 to t=T, performing
     !! postprocessing/IO and reporting diagnostics.
@@ -260,33 +305,7 @@ contains
         t_step0 = MPI_Wtime()
       end if
       do sub_iter = 1, self%solver%time_integrator%nstage
-        ! first apply case-specific BCs
-        call self%define_BC()
-
-        do i = 1, self%solver%nvars
-          deriv(i)%ptr => self%solver%backend%allocator%get_block(DIR_X)
-        end do
-
-        call self%solver%transeq(deriv, curr)
-
-        ! models that introduce source terms handled here
-        call self%forcings(deriv(1)%ptr, deriv(2)%ptr, deriv(3)%ptr, iter)
-
-        ! time integration
-        call self%solver%time_integrator%step(curr, deriv, self%solver%dt)
-
-        do i = 1, self%solver%nvars
-          call self%solver%backend%allocator%release_block(deriv(i)%ptr)
-        end do
-
-        call self%apply_BC(self%solver%u, self%solver%v, self%solver%w)
-        if (self%solver%ibm_on) then
-          call self%solver%ibm%body(self%solver%u, self%solver%v, &
-                                    self%solver%w)
-        end if
-
-        call self%solver%pressure_correction(self%solver%u, self%solver%v, &
-                                             self%solver%w)
+        call self%substep(curr, deriv, iter)
       end do
 
       ! All ranks measure and reduce; only root prints. Gating the
