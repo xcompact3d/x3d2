@@ -3,7 +3,7 @@ program test_io_session
   use mpi
   use m_common, only: dp, i8
   use m_io_session, only: writer_session_t, reader_session_t
-  use iso_fortran_env, only: stderr => error_unit
+  use m_test_utils, only: initialise_mpi, finalise_test, global_all
   implicit none
 
   integer, parameter, dimension(3) :: local_dims = [8, 6, 1]
@@ -22,9 +22,7 @@ program test_io_session
   logical :: allpass = .true.
   integer :: i, j, k
 
-  call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
-  call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+  call initialise_mpi(irank, nproc)
 
   ! setup global domain dimensions
   global_dims = [int(local_dims(1), i8), int(local_dims(2), i8), &
@@ -93,19 +91,11 @@ program test_io_session
     if (.not. allpass) exit
   end do
 
-  call MPI_Allreduce(MPI_IN_PLACE, allpass, 1, MPI_LOGICAL, &
-                     MPI_LAND, MPI_COMM_WORLD, ierr)
+  call global_all(allpass)
 
   ! cleanup
   if (irank == 0) call execute_command_line("rm -rf "//test_file)
 
-  call MPI_Finalize(ierr)
-
-  if (allpass) then
-    if (irank == 0) write (stderr, &
-                        '(a)') 'PARALLEL I/O SESSION TEST PASSED SUCCESSFULLY.'
-  else
-    error stop 'PARALLEL I/O SESSION TEST FAILED.'
-  end if
+  call finalise_test(allpass, irank)
 
 end program test_io_session

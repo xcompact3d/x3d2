@@ -5,6 +5,7 @@ program test_allocator_omptgt
   use m_common, only: dp, pi, DIR_X
 
   use m_omptgt_allocator, only: omptgt_allocator_t
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
@@ -15,9 +16,9 @@ program test_allocator_omptgt
   class(allocator_t), allocatable :: allocator
   class(field_t), pointer :: ptr1, ptr2, ptr3
   integer, allocatable :: l(:)
-  integer :: ierr
+  integer :: nrank, nproc
 
-  call MPI_Init(ierr)
+  call initialise_mpi(nrank, nproc)
 
   dims = [8, 8, 8]
   nproc_dir = [1, 1, 1]
@@ -88,5 +89,5 @@ program test_allocator_omptgt
 
   call allocator%destroy()
 
-  call MPI_Finalize(ierr)
+  call finalise_test(allpass, nrank)
 end program test_allocator_omptgt

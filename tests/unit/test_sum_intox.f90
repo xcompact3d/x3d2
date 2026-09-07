@@ -6,37 +6,25 @@ program test_sum_intox
 
   use m_allocator
   use m_base_backend
-#ifdef CUDA
-  use m_cuda_common, only: SZ
-#else
-  use m_omp_backend
-  use m_omp_common, only: SZ
-#endif
+  use m_backend_runtime, only: backend_runtime_t, backend_sz
+  use m_test_utils, only: initialise_mpi, finalise_test, global_all
 
   implicit none
 
   integer, parameter :: nx = 17, ny = 32, nz = 59
   real(dp), parameter :: lx = 1.618, ly = 3.141529, lz = 1.729
 
+  type(backend_runtime_t), target :: runtime
   class(base_backend_t), pointer :: backend
-  class(allocator_t), pointer :: allocator
-#ifdef CUDA
-#else
-  type(omp_backend_t), target :: omp_backend
-  type(allocator_t), target :: omp_allocator
-#endif
 
-  type(mesh_t) :: mesh
+  type(mesh_t), target :: mesh
 
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
   integer :: nrank, nproc
-  integer :: ierr
 
   logical :: test_pass = .true.
 
-  call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-  call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+  call initialise_mpi(nrank, nproc)
 
   BC_x = ['periodic', 'periodic']
   BC_y = ['periodic', 'periodic']
@@ -47,24 +35,13 @@ program test_sum_intox
                 [lx, ly, lz], &
                 BC_x, BC_y, BC_z)
 
-#ifdef CUDA
-#else
-  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => omp_allocator
-  omp_backend = omp_backend_t(mesh, allocator)
-  backend => omp_backend
-#endif
+  call runtime%init(mesh)
+  backend => runtime%backend
 
   call runtest("YintoX", DIR_Y)
   call runtest("ZintoX", DIR_Z)
 
-  if (nrank == 0) then
-    if (.not. test_pass) then
-      error stop "Test failed"
-    end if
-  end if
-
-  call MPI_Finalize(ierr)
+  call finalise_test(test_pass, nrank)
 
 contains
 
@@ -97,10 +74,10 @@ contains
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          call get_index_dir(ii, jj, kk, i, j, k, DIR_X, SZ, &
+          call get_index_dir(ii, jj, kk, i, j, k, DIR_X, backend_sz, &
                              dims(1), dims(2), dims(3))
           a%data(ii, jj, kk) = ctr
-          call get_index_dir(ii, jj, kk, i, j, k, dir_from, SZ, &
+          call get_index_dir(ii, jj, kk, i, j, k, dir_from, backend_sz, &
                              dims(1), dims(2), dims(3))
           b%data(ii, jj, kk) = -ctr
           ctr = ctr + 1
@@ -115,9 +92,7 @@ contains
     end if
 
     check_pass = .not. ((minval(a%data) /= 0) .or. (maxval(a%data) /= 0))
-    call MPI_Allreduce(MPI_IN_PLACE, check_pass, 1, &
-                       MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
-                       ierr)
+    call global_all(check_pass)
     test_pass = test_pass .and. check_pass
 
     if (nrank == 0) then

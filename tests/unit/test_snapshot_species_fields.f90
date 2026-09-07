@@ -1,7 +1,4 @@
 program test_snapshot_species_fields
-  use iso_fortran_env, only: stderr => error_unit
-  use mpi
-
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X, VERT
@@ -11,6 +8,7 @@ program test_snapshot_species_fields
   use m_omp_backend, only: omp_backend_t
   use m_omp_common, only: SZ
   use m_solver, only: solver_t
+  use m_test_utils, only: initialise_mpi, finalise_test, global_all
 
   implicit none
 
@@ -26,12 +24,11 @@ program test_snapshot_species_fields
   type(field_ptr_t), allocatable :: field_ptrs(:), host_fields(:)
   character(len=32) :: field_names(3)
 
-  integer :: ierr, irank
+  integer :: irank, nproc
   integer :: dims(3)
   logical :: allpass
 
-  call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
+  call initialise_mpi(irank, nproc)
 
   allpass = .true.
 
@@ -73,15 +70,8 @@ program test_snapshot_species_fields
   call cleanup_field_arrays(solver, field_ptrs, host_fields)
   call release_solver_fields(solver)
 
-  call MPI_Finalize(ierr)
-
-  if (irank == 0) then
-    if (allpass) then
-      write (stderr, '(a)') 'Snapshot species field test passed.'
-    else
-      error stop 'Snapshot species field test failed.'
-    end if
-  end if
+  call global_all(allpass)
+  call finalise_test(allpass, irank)
 
 contains
 

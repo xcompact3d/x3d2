@@ -13,8 +13,11 @@ program perf_cuda_penta
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_penta_compact
   use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
-  use m_test_utils, only: write_perf_minmax_metrics, write_perf_minmax_summary, &
-                          write_device_bw_metric
+  use m_backend_runtime, only: select_cuda_device
+  use m_test_utils, only: initialise_mpi, finalise_test, global_all, &
+                          check_status, &
+                          write_perf_minmax_metrics, &
+                          write_perf_minmax_summary, write_device_bw_metric
 
   implicit none
 
@@ -31,35 +34,28 @@ program perf_cuda_penta
   integer :: n, n_block, n_halo, n_iters, n_warmup, n_glob, ndof, nrank, nproc
   integer :: pprev, pnext
   integer :: ierr
-  integer :: ndevs, devnum
+  integer :: devnum
   integer :: memClockRt, memBusWidth
   type(dim3) :: blocks, threads
   real(dp) :: dx
+  logical :: allpass = .true.
 
-  call initialise_mpi()
-  call select_device()
+  call initialise_mpi(nrank, nproc, pprev, pnext)
+  if (nrank == 0) then
+    print *, 'Performance benchmark for compact10_penta (Lele 10 penta 1st-deriv)'
+    print *, 'Scheme: alpha=0.5 beta=0.05, non-periodic, single-GPU Thomas'
+    print *, 'Ranks:', nproc
+  end if
+  call select_cuda_device(nrank, devnum)
   call configure_benchmark()
   call allocate_fields()
   call setup_backend()
-  call run_case('penta_lele10_nonper', dx, penta_bw)
-  call finalise()
+  call global_all(allpass)
+  if (allpass) call run_case('penta_lele10_nonper', dx, penta_bw)
+  call global_all(allpass)
+  call finalise_test(allpass, nrank)
 
 contains
-
-  subroutine initialise_mpi()
-    call MPI_Init(ierr)
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-    if (nrank == 0) then
-      print *, 'Performance benchmark for compact10_penta (Lele 10 penta 1st-deriv)'
-      print *, 'Scheme: alpha=0.5 beta=0.05, non-periodic, single-GPU Thomas'
-      print *, 'Ranks:', nproc
-    end if
-
-    pnext = modulo(nrank - nproc + 1, nproc)
-    pprev = modulo(nrank - 1, nproc)
-  end subroutine initialise_mpi
 
   subroutine configure_benchmark()
     n_glob = 1024
@@ -81,12 +77,6 @@ contains
     u_recv_s_dev = 0._dp
     u_recv_e_dev = 0._dp
   end subroutine allocate_fields
-
-  subroutine select_device()
-    ierr = cudaGetDeviceCount(ndevs)
-    ierr = cudaSetDevice(mod(nrank, ndevs))
-    ierr = cudaGetDevice(devnum)
-  end subroutine select_device
 
   subroutine setup_backend()
     integer :: i, j, k
@@ -111,7 +101,9 @@ contains
     threads = dim3(SZ, 1, 1)
 
     ierr = cudaDeviceGetAttribute(memClockRt, cudaDevAttrMemoryClockRate, devnum)
+    call check_status(ierr, 'query CUDA memory clock rate', allpass)
     ierr = cudaDeviceGetAttribute(memBusWidth, cudaDevAttrGlobalMemoryBusWidth, devnum)
+    call check_status(ierr, 'query CUDA memory bus width', allpass)
   end subroutine setup_backend
 
   subroutine run_case(case_name, delta, consumed_bw)
@@ -129,12 +121,14 @@ contains
       call run_kernel()
     end do
     call sync_backend()
+    if (.not. allpass) return
 
     call start_timer(tstart)
     do iter = 1, n_iters
       call run_kernel()
     end do
     call sync_backend()
+    if (.not. allpass) return
     call stop_timer(tend)
 
     call collect_perf_stats(tend - tstart, consumed_bw, achieved_bw, &
@@ -190,7 +184,9 @@ contains
 
   subroutine sync_backend()
     ierr = cudaDeviceSynchronize()
+    call check_status(ierr, 'synchronise CUDA device', allpass)
     call MPI_Barrier(MPI_COMM_WORLD, ierr)
+    call global_all(allpass)
   end subroutine sync_backend
 
   subroutine start_timer(t)
@@ -204,9 +200,5 @@ contains
 
     call cpu_time(t)
   end subroutine stop_timer
-
-  subroutine finalise()
-    call MPI_Finalize(ierr)
-  end subroutine finalise
 
 end program perf_cuda_penta

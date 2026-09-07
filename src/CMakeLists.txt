@@ -109,10 +109,16 @@ set(LIBRARY_OUTPUT_PATH "${PROJECT_BINARY_DIR}/lib")
 
 # Create the main library
 add_library(x3d2 STATIC ${SRC})
-target_include_directories(x3d2 INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
+set_target_properties(x3d2 PROPERTIES
+  Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2")
+target_include_directories(x3d2 INTERFACE
+  ${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2)
 
 add_library(x3d2_backends STATIC ${BACKENDSRC})
-target_include_directories(x3d2_backends INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
+set_target_properties(x3d2_backends PROPERTIES
+  Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_backends")
+target_include_directories(x3d2_backends INTERFACE
+  ${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_backends)
 target_link_libraries(x3d2_backends PRIVATE x3d2)
 
 add_executable(xcompact xcompact.f90)

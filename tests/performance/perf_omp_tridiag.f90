@@ -7,7 +7,8 @@ program perf_omp_tridiag
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_exec_dist, only: exec_dist_tds_compact
   use m_tdsops, only: tdsops_t, tdsops_init
-  use m_test_utils, only: write_perf_minmax_metrics
+  use m_test_utils, only: initialise_mpi, finalise_test, &
+                          write_perf_minmax_metrics
 
   implicit none
 
@@ -27,24 +28,14 @@ program perf_omp_tridiag
   integer :: ierr
   real(dp) :: dx_per
 
-  call initialise_mpi()
+  call initialise_mpi(nrank, nproc, pprev, pnext)
+  if (nrank == 0) print *, 'Performance benchmark with', nproc, 'ranks'
   call configure_benchmark()
   call allocate_fields()
   call run_case('periodic', dx_per, periodic_bw)
-  call finalise()
+  call finalise_test(.true., nrank)
 
 contains
-
-  subroutine initialise_mpi()
-    call MPI_Init(ierr)
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-    if (nrank == 0) print *, 'Performance benchmark with', nproc, 'ranks'
-
-    pnext = modulo(nrank - nproc + 1, nproc)
-    pprev = modulo(nrank - 1, nproc)
-  end subroutine initialise_mpi
 
   subroutine configure_benchmark()
     n_glob = 1024
@@ -164,9 +155,5 @@ contains
 
     t = omp_get_wtime()
   end subroutine stop_timer
-
-  subroutine finalise()
-    call MPI_Finalize(ierr)
-  end subroutine finalise
 
 end program perf_omp_tridiag

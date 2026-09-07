@@ -36,6 +36,7 @@ module m_base_backend
     procedure(transeq_ders), deferred :: transeq_z
     procedure(transeq_ders_spec), deferred :: transeq_species
     procedure(tds_solve), deferred :: tds_solve
+    procedure(tds_solve), deferred :: thom_solve
     procedure(reorder), deferred :: reorder
     procedure(sum_intox), deferred :: sum_yintox
     procedure(sum_intox), deferred :: sum_zintox
@@ -59,6 +60,8 @@ module m_base_backend
     procedure(copy_f_to_data), deferred :: copy_f_to_data
     procedure(alloc_tdsops), deferred :: alloc_tdsops
     procedure(init_poisson_fft), deferred :: init_poisson_fft
+    procedure(sync_backend), deferred :: sync
+    procedure(device_bw_info), deferred :: get_device_bw_info
     procedure :: base_init
     procedure :: get_field_data
     procedure :: set_field_data
@@ -140,6 +143,27 @@ module m_base_backend
       class(field_t), intent(in) :: u
       class(tdsops_t), intent(in) :: tdsops
     end subroutine tds_solve
+  end interface
+
+  abstract interface
+    subroutine sync_backend(self)
+      import :: base_backend_t
+      implicit none
+
+      class(base_backend_t) :: self
+    end subroutine sync_backend
+  end interface
+
+  abstract interface
+    subroutine device_bw_info(self, mem_clock_rt, mem_bus_width, available)
+      import :: base_backend_t
+      implicit none
+
+      class(base_backend_t) :: self
+      integer, intent(out) :: mem_clock_rt
+      integer, intent(out) :: mem_bus_width
+      logical, intent(out) :: available
+    end subroutine device_bw_info
   end interface
 
   abstract interface

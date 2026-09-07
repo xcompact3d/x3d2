@@ -4,25 +4,12 @@
 
 program test_vecadd
 
-  use MPI
-
-  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
+  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z
   use m_mesh, only: mesh_t
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
-#ifdef CUDA
-  use m_cuda_common, only: SZ
-  use m_cuda_allocator, only: cuda_allocator_t
-  use m_cuda_backend, only: cuda_backend_t
-#else
-  use m_omp_common, only: SZ
-#ifndef OMP_TGT
-  use m_omp_backend, only: omp_backend_t
-#else
-  use m_omptgt_backend, only: omptgt_backend_t
-  use m_omptgt_allocator, only: omptgt_allocator_t
-#endif
-#endif
+  use m_backend_runtime, only: backend_runtime_t
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
@@ -30,23 +17,11 @@ program test_vecadd
   character(len=5), dimension(3), parameter :: dirnames = &
                                                ["DIR_X", "DIR_Y", "DIR_Z"]
 
-  class(mesh_t), allocatable :: mesh
+  type(mesh_t), target :: mesh
+  type(backend_runtime_t), target :: runtime
   class(allocator_t), pointer :: allocator => null()
+  type(allocator_t), pointer :: host_allocator => null()
   class(base_backend_t), pointer :: backend => null()
-#ifdef CUDA
-  type(cuda_allocator_t), target :: cuda_allocator
-  type(allocator_t), target :: host_allocator
-  type(cuda_backend_t), target :: cuda_backend
-#else
-  type(allocator_t), target :: omp_allocator
-  type(allocator_t), pointer :: host_allocator
-#ifndef OMP_TGT
-  type(omp_backend_t), target :: omp_backend
-#else
-  type(omptgt_allocator_t), target :: omptgt_allocator
-  type(omptgt_backend_t), target :: omptgt_backend
-#endif
-#endif
   class(field_t), pointer :: a => null()
   class(field_t), pointer :: b => null()
   class(field_t), pointer :: c => null()
@@ -57,12 +32,12 @@ program test_vecadd
   real(dp), dimension(3) :: L_global
   character(len=8), dimension(2) :: BC_x, BC_y, BC_z
 
-  integer :: ierr
+  integer :: nrank, nproc
 
   logical :: test_pass
   integer :: d
 
-  call MPI_Init(ierr)
+  call initialise_mpi(nrank, nproc)
 
   dims_global = [32, 32, 32]
   L_global = [1.0, 1.0, 1.0]
@@ -93,15 +68,18 @@ program test_vecadd
   call allocator%release_block(c)
   call allocator%release_block(z)
 
-  if (test_pass) then
-    print *, "PASS"
-  else
-    error stop "FAIL"
-  end if
-
-  call MPI_Finalize(ierr)
+  call finalise_test(test_pass, nrank)
 
 contains
+
+  subroutine initialise_test()
+
+    call runtime%init(mesh)
+    allocator => runtime%allocator
+    host_allocator => runtime%host_allocator
+    backend => runtime%backend
+
+  end subroutine initialise_test
 
   subroutine test_add_zero(d)
 
@@ -230,32 +208,6 @@ contains
 
   end subroutine
 
-  subroutine initialise_test()
-
-#ifdef CUDA
-    cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
-    allocator => cuda_allocator
-    host_allocator = allocator_t(mesh%get_dims(VERT), SZ)
-
-    cuda_backend = cuda_backend_t(mesh, allocator)
-    backend => cuda_backend
-#else
-    omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
-#ifdef OMP_TGT
-    omptgt_allocator = omptgt_allocator_t(mesh%get_dims(VERT), SZ)
-    allocator => omptgt_allocator
-    omptgt_backend = omptgt_backend_t(mesh, allocator)
-    backend => omptgt_backend
-#else
-    allocator => omp_allocator
-    omp_backend = omp_backend_t(mesh, allocator)
-    backend => omp_backend
-#endif
-    host_allocator => omp_allocator
-#endif
-
-  end subroutine
-
   subroutine initialise_data(a, b, c, z, d)
 
     integer, intent(in) :: d
@@ -306,4 +258,3 @@ contains
   end subroutine initialise_data
 
 end program test_vecadd
-

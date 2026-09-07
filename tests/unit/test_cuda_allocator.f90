@@ -5,6 +5,8 @@ program test_allocator_cuda
   use m_common, only: dp, pi, DIR_X
 
   use m_cuda_allocator, only: cuda_allocator_t
+  use m_backend_runtime, only: select_cuda_device
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
@@ -12,9 +14,10 @@ program test_allocator_cuda
   class(allocator_t), allocatable :: allocator
   class(field_t), pointer :: ptr1, ptr2, ptr3
   integer, allocatable :: l(:)
-  integer :: ierr
+  integer :: nrank, nproc
 
-  call MPI_Init(ierr)
+  call initialise_mpi(nrank, nproc)
+  call select_cuda_device(nrank)
 
   allocator = cuda_allocator_t([8, 8, 8], 8)
 
@@ -73,5 +76,5 @@ program test_allocator_cuda
 
   call allocator%destroy()
 
-  call MPI_Finalize(ierr)
+  call finalise_test(allpass, nrank)
 end program test_allocator_cuda

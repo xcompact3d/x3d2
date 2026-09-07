@@ -13,6 +13,7 @@ module m_omp_backend
 
   use m_omp_common, only: SZ
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
+  use m_exec_thom, only: exec_thom_tds_compact
   use m_omp_sendrecv, only: sendrecv_fields
 
   implicit none
@@ -35,6 +36,7 @@ module m_omp_backend
     procedure :: transeq_z => transeq_z_omp
     procedure :: transeq_species => transeq_species_omp
     procedure :: tds_solve => tds_solve_omp
+    procedure :: thom_solve => thom_solve_omp
     procedure :: reorder => reorder_omp
     procedure :: sum_yintox => sum_yintox_omp
     procedure :: sum_zintox => sum_zintox_omp
@@ -57,6 +59,8 @@ module m_omp_backend
     procedure :: copy_data_to_f => copy_data_to_f_omp
     procedure :: copy_f_to_data => copy_f_to_data_omp
     procedure :: init_poisson_fft => init_omp_poisson_fft
+    procedure :: sync => sync_omp
+    procedure :: get_device_bw_info => get_device_bw_info_omp
     procedure :: transeq_omp_dist
   end type omp_backend_t
 
@@ -144,6 +148,28 @@ contains
     end select
 
   end subroutine alloc_omp_tdsops
+
+  subroutine sync_omp(self)
+    implicit none
+
+    class(omp_backend_t) :: self
+
+  end subroutine sync_omp
+
+  subroutine get_device_bw_info_omp(self, mem_clock_rt, mem_bus_width, &
+                                    available)
+    implicit none
+
+    class(omp_backend_t) :: self
+    integer, intent(out) :: mem_clock_rt
+    integer, intent(out) :: mem_bus_width
+    logical, intent(out) :: available
+
+    mem_clock_rt = 0
+    mem_bus_width = 0
+    available = .false.
+
+  end subroutine get_device_bw_info_omp
 
   subroutine transeq_x_omp(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
@@ -360,6 +386,27 @@ contains
     call tds_solve_dist(self, du, u, tdsops)
 
   end subroutine tds_solve_omp
+
+  subroutine thom_solve_omp(self, du, u, tdsops)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: du
+    class(field_t), intent(in) :: u
+    class(tdsops_t), intent(in) :: tdsops
+
+    if (u%dir /= du%dir) then
+      error stop 'DIR mismatch between fields in thom_solve.'
+    end if
+
+    if (u%data_loc /= NULL_LOC) then
+      call du%set_data_loc(move_data_loc(u%data_loc, u%dir, tdsops%move))
+    end if
+
+    call exec_thom_tds_compact(du%data, u%data, tdsops, &
+                               self%allocator%get_n_groups(u%dir))
+
+  end subroutine thom_solve_omp
 
   subroutine tds_solve_dist(self, du, u, tdsops)
     implicit none

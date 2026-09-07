@@ -6,7 +6,10 @@ program perf_cuda_reorder
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
                                     reorder_c2x, reorder_x2c
-  use m_test_utils, only: write_perf_metric, write_perf_summary, &
+  use m_backend_runtime, only: select_cuda_device
+  use m_test_utils, only: initialise_mpi, finalise_test, global_all, &
+                          check_status, &
+                          write_perf_metric, write_perf_summary, &
                           write_device_bw_metric
 
   implicit none
@@ -29,12 +32,17 @@ program perf_cuda_reorder
 
   integer :: ierr
   integer :: n_block, ndof
+  integer :: nrank, nproc, devnum
   integer :: memClockRt, memBusWidth
   real(dp), allocatable :: u_i(:, :, :)
   real(dp), device, allocatable :: u_i_d(:, :, :), u_o_d(:, :, :), &
                                    u_temp_d(:, :, :)
   real(dp), device, allocatable :: u_c_d(:, :, :)
   type(dim3) :: blocks, threads
+  logical :: allpass = .true.
+
+  call initialise_mpi(nrank, nproc)
+  call select_cuda_device(nrank, devnum)
 
   n_block = ny*nz/SZ
   ndof = nx*ny*nz
@@ -47,20 +55,26 @@ program perf_cuda_reorder
   call random_number(u_i)
   u_i_d = u_i
 
-  ierr = cudaDeviceGetAttribute(memClockRt, cudaDevAttrMemoryClockRate, 0)
+  ierr = cudaDeviceGetAttribute(memClockRt, cudaDevAttrMemoryClockRate, &
+                                devnum)
+  call check_status(ierr, 'query CUDA memory clock rate', allpass)
   ierr = cudaDeviceGetAttribute(memBusWidth, &
-                                cudaDevAttrGlobalMemoryBusWidth, 0)
+                                cudaDevAttrGlobalMemoryBusWidth, devnum)
+  call check_status(ierr, 'query CUDA memory bus width', allpass)
+  call global_all(allpass)
 
-  call run_case('cuda_reorder_x2y', CASE_X2Y)
-  call run_case('cuda_reorder_x2z', CASE_X2Z)
-  call run_case('cuda_reorder_y2x', CASE_Y2X)
-  call run_case('cuda_reorder_y2z', CASE_Y2Z)
-  call run_case('cuda_reorder_z2x', CASE_Z2X)
-  call run_case('cuda_reorder_z2y', CASE_Z2Y)
-  call run_case('cuda_reorder_x2c', CASE_X2C)
-  call run_case('cuda_reorder_c2x', CASE_C2X)
+  if (allpass) call run_case('cuda_reorder_x2y', CASE_X2Y)
+  if (allpass) call run_case('cuda_reorder_x2z', CASE_X2Z)
+  if (allpass) call run_case('cuda_reorder_y2x', CASE_Y2X)
+  if (allpass) call run_case('cuda_reorder_y2z', CASE_Y2Z)
+  if (allpass) call run_case('cuda_reorder_z2x', CASE_Z2X)
+  if (allpass) call run_case('cuda_reorder_z2y', CASE_Z2Y)
+  if (allpass) call run_case('cuda_reorder_x2c', CASE_X2C)
+  if (allpass) call run_case('cuda_reorder_c2x', CASE_C2X)
 
-  call write_device_bw_metric(memClockRt, memBusWidth)
+  if (allpass) call write_device_bw_metric(memClockRt, memBusWidth)
+  call global_all(allpass)
+  call finalise_test(allpass, nrank)
 
 contains
 
@@ -74,17 +88,20 @@ contains
     print *, 'Performance test:', trim(label)
 
     call prepare_input(case_id)
+    if (.not. allpass) return
 
     do iter = 1, n_warmup
       call launch_kernel(case_id)
     end do
     call sync_device()
+    if (.not. allpass) return
 
     call cpu_time(tstart)
     do iter = 1, n_iters
       call launch_kernel(case_id)
     end do
     call sync_device()
+    if (.not. allpass) return
     call cpu_time(tend)
 
     call write_perf_metric(label, tend - tstart, n_iters, ndof, consumed_bw)
@@ -157,6 +174,8 @@ contains
 
   subroutine sync_device()
     ierr = cudaDeviceSynchronize()
+    call check_status(ierr, 'synchronise CUDA device', allpass)
+    call global_all(allpass)
   end subroutine sync_device
 
 end program perf_cuda_reorder

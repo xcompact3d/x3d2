@@ -4,7 +4,7 @@ program test_adios2
   use m_io_base, only: io_writer_t, io_reader_t, io_file_t, io_mode_write, &
                        io_mode_read
   use m_common, only: dp, i8, is_sp
-  use iso_fortran_env, only: stderr => error_unit
+  use m_test_utils, only: initialise_mpi, finalise_test, global_all
   implicit none
 
   ! ADIOS2 handlers
@@ -24,9 +24,7 @@ program test_adios2
   real(dp) :: expected, tolerance
 
   ! launch MPI
-  call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
-  call MPI_Comm_size(MPI_COMM_WORLD, isize, ierr)
+  call initialise_mpi(irank, isize)
 
   ! data initialisation
   allocate (data_write(inx, iny, inz))
@@ -111,15 +109,7 @@ program test_adios2
 
   ! Cleanup and finalize
   call MPI_Barrier(MPI_COMM_WORLD, ierr)
-  call MPI_Finalize(ierr)
-
-  ! Test result
-  if (irank == 0) then
-    if (allpass) then
-      write (stderr, '(a)') 'ADIOS2 TEST PASSED SUCCESSFULLY.'
-    else
-      error stop 'ADIOS2 TEST FAILED.'
-    end if
-  end if
+  call global_all(allpass)
+  call finalise_test(allpass, irank)
 
 end program test_adios2

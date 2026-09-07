@@ -11,6 +11,7 @@ program test_ab_checkpoint
   use m_solver, only: solver_t
   use m_omp_backend, only: omp_backend_t
   use m_omp_common, only: SZ
+  use m_test_utils, only: initialise_mpi, finalise_test, global_all
 
   implicit none
 
@@ -27,7 +28,7 @@ program test_ab_checkpoint
   type(checkpoint_manager_t) :: chk_mgr_write, chk_mgr_restart
   type(flist_t), allocatable :: curr(:)
   type(flist_t), allocatable :: deriv(:)
-  integer :: ierr, irank, nproc
+  integer :: irank, nproc
   integer :: dims_global(3), nproc_dir(3)
   real(dp) :: L_global(3)
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
@@ -39,9 +40,7 @@ program test_ab_checkpoint
   logical :: allpass
   real(dp) :: diff
 
-  call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
-  call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+  call initialise_mpi(irank, nproc)
 
   allpass = .true.
 
@@ -120,15 +119,8 @@ program test_ab_checkpoint
     deallocate (olds_ref)
   end if
 
-  call MPI_Finalize(ierr)
-
-  if (irank == 0) then
-    if (allpass) then
-      write (stderr, '(a)') 'AB checkpoint test passed.'
-    else
-      error stop 'AB checkpoint test failed.'
-    end if
-  end if
+  call global_all(allpass)
+  call finalise_test(allpass, irank)
 
 contains
 

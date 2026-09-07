@@ -18,15 +18,14 @@ program test_omp_penta
   use m_omp_common, only: SZ
   use m_omp_exec_dist, only: exec_dist_penta_compact, exec_dist_penta_periodic
   use m_tdsops, only: tdsops_t, tdsops_init
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
   logical :: allpass = .true.
   integer :: nrank, nproc, ierr
 
-  call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-  call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+  call initialise_mpi(nrank, nproc)
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
   call run_dirichlet_test()
@@ -34,12 +33,7 @@ program test_omp_penta
   call run_neumann_sym_false()
   call run_periodic_test()
 
-  if (allpass) then
-    if (nrank == 0) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-  else
-    error stop 'SOME TESTS FAILED.'
-  end if
-  call MPI_Finalize(ierr)
+  call finalise_test(allpass, nrank)
 
 contains
 
