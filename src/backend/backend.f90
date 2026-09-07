@@ -50,6 +50,7 @@ module m_base_backend
     procedure(field_ops), deferred :: field_shift
     procedure(field_reduce), deferred :: field_volume_integral
     procedure(field_set_face), deferred :: field_set_face
+    procedure(field_set_y_plane), deferred :: field_set_y_plane
     procedure(field_set_face_from_field), deferred :: field_set_face_from_field
     procedure(derive_field_from_gradients), deferred :: compute_vorticity
     procedure(derive_field_from_gradients), deferred :: compute_qcriterion
@@ -347,6 +348,23 @@ module m_base_backend
       integer, optional, intent(in) :: bc_end
       real(dp), optional, intent(in) :: flow_rate_diff
     end subroutine field_set_face
+
+    subroutine field_set_y_plane(self, f, c, plane)
+      !! Set one interior y-plane of a DIR_X field to a constant.
+      !!
+      !! field_set_face reaches only the two boundary planes. The neutral ABL
+      !! wall model needs the first plane above a no-slip floor, where the
+      !! resolved gradient would otherwise contribute a second, spurious
+      !! stress on top of the modelled one.
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: f
+      real(dp), intent(in) :: c
+      integer, intent(in) :: plane !! 1-based y-vertex index
+    end subroutine field_set_y_plane
 
     subroutine field_set_face_from_field(self, f, f_start, c_end, face, &
                                          bc_start, bc_end, flow_rate_diff)

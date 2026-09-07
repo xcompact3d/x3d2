@@ -27,7 +27,7 @@ module m_cuda_backend
                                      field_shift, scalar_product, &
                                      vector_norm_squared, &
                                      field_max_sum, field_set_y_face, &
-                                     field_set_x_face, &
+                                     field_set_x_face, field_set_y_plane, &
                                      field_set_x_face_from_field, &
                                      field_set_y_face_from_field, &
                                      pwmul, volume_integral, &
@@ -75,6 +75,7 @@ module m_cuda_backend
     procedure :: field_scale => field_scale_cuda
     procedure :: field_shift => field_shift_cuda
     procedure :: field_set_face => field_set_face_cuda
+    procedure :: field_set_y_plane => field_set_y_plane_cuda
     procedure :: field_set_face_from_field => field_set_face_from_field_cuda
     procedure :: compute_vorticity => compute_vorticity_cuda
     procedure :: compute_qcriterion => compute_qcriterion_cuda
@@ -1323,6 +1324,41 @@ contains
     end select
 
   end subroutine field_set_face_cuda
+
+  subroutine field_set_y_plane_cuda(self, f, c, plane)
+    !! [[m_base_backend(module):field_set_y_plane(subroutine)]]
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c
+    integer, intent(in) :: plane
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    type(dim3) :: blocks, threads
+    integer :: dims(3), y_block, i_in_block, group_offset
+
+    if (f%dir /= DIR_X) &
+      error stop 'field_set_y_plane is only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_set_y_plane requires a valid data_loc.'
+
+    call resolve_field_t(f_d, f)
+    dims = self%mesh%get_dims(f%data_loc)
+    if (plane < 1 .or. plane > dims(2)) &
+      error stop 'field_set_y_plane: plane outside the domain.'
+
+    ! CUDA DIR_X ordering: group = nz*(y_block - 1) + z.
+    y_block = (plane - 1)/SZ + 1
+    i_in_block = mod(plane - 1, SZ) + 1
+    group_offset = dims(3)*(y_block - 1)
+
+    blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
+    threads = dim3(64, 1, 1)
+    call field_set_y_plane<<<blocks, threads>>>( &                !&
+        f_d, c, i_in_block, group_offset, dims(1))
+
+  end subroutine field_set_y_plane_cuda
 
   subroutine field_set_face_from_field_cuda(self, f, f_start, c_end, face, &
                                             bc_start, bc_end, flow_rate_diff)
