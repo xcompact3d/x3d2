@@ -6,11 +6,11 @@ program test_filter
   !! properties that matter are its transfer function at the two ends of the
   !! spectrum: it must leave smooth fields alone and annihilate the sawtooth.
   !!
-  !! The zero-wavenumber check also pins down how large alpha may be. The
+  !! The zero-wavenumber check is also what pins the solver choice. The
   !! filter's tridiagonal system has diagonal 1 and off-diagonals alpha, so it
-  !! is only marginally diagonally dominant as alpha approaches 0.5, and the
-  !! distributed solver's truncation then shows up as a DC error: at 32 points
-  !! per rank it is 1e-9 for alpha=0.4 but 1e-3 for Incompact3d's 0.49.
+  !! is only marginally diagonally dominant at Incompact3d's alpha = 0.49; the
+  !! distributed solver's truncation then leaves a 1e-3 DC error, which is why
+  !! the filter is solved with Thomas where the direction is not decomposed.
   use mpi
 
   use m_allocator, only: allocator_t
@@ -49,7 +49,7 @@ program test_filter
   integer, parameter :: dims_global(3) = [32, 33, 32]
   integer, parameter :: nproc_dir(3) = [1, 1, 1]
   real(dp), parameter :: lengths(3) = [1._dp, 1._dp, 1._dp]
-  real(dp), parameter :: filter_alpha = 0.4_dp
+  real(dp), parameter :: filter_alpha = 0.49_dp
   character(len=9), parameter :: bc_per(2) = ['periodic ', 'periodic ']
   character(len=9), parameter :: bc_slip(2) = ['neumann  ', 'neumann  ']
 
@@ -61,10 +61,10 @@ program test_filter
   call MPI_Init(ierr)
   all_pass = .true.
   tolerance = 1000._dp*epsilon(1._dp)
-  ! Zero wavenumber is where the distributed solver's truncation shows, so it
-  ! cannot be held to machine precision. This bound still catches a wrong
-  ! stencil, which would miss unity by order 1e-2 or more.
-  dc_tolerance = 1e-8_dp
+  ! Solved with Thomas, so zero wavenumber is exact to round-off. It was 1e-3
+  ! under the distributed solver at this alpha, which is what motivated the
+  ! Thomas path.
+  dc_tolerance = 1e-11_dp
 
   mesh = mesh_t(dims_global, nproc_dir, lengths, bc_per, bc_slip, bc_per)
   dims = mesh%get_dims(VERT)

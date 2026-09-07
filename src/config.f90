@@ -200,12 +200,13 @@ contains
     !! wall-modelled ABL runs, where the 2*dx mode the compact schemes cannot
     !! dissipate otherwise breaks momentum conservation in the convection.
     logical :: spatial_filter = .false.
-    !! Incompact3d uses 0.49, but it solves the filter with a full Thomas
-    !! algorithm. x3d2's distributed solver truncates, and the filter system
-    !! is only marginally diagonally dominant as alpha -> 0.5, so 0.49 leaves
-    !! a 1e-3 error at zero wavenumber on 32 points per rank. 0.4 removes the
-    !! 2*dx mode just as exactly while staying well within the solver.
-    real(dp) :: filter_alpha = 0.4_dp
+    !! Incompact3d's value. Smaller alpha is far more dissipative: at 0.40 the
+    !! filter damps every resolved wavenumber about ten times harder per
+    !! application than at 0.49, which over a long run scrubs out the smallest
+    !! resolved eddies. The filter's system is only marginally diagonally
+    !! dominant here, so it is solved with Thomas rather than the distributed
+    !! algorithm wherever the direction is not decomposed.
+    real(dp) :: filter_alpha = 0.49_dp
     character(3) :: time_intg
     character(3) :: poisson_solver_type = 'FFT'
     character(30) :: der1st_scheme = 'compact6', der2nd_scheme = 'compact6', &
