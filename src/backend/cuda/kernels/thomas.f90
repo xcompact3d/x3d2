@@ -144,11 +144,23 @@ contains
     c_j = coeffs(5)
     c_p1 = coeffs(6); c_p2 = coeffs(7); c_p3 = coeffs(8); c_p4 = coeffs(9)
 
-    do j = 1, n
+    ! j = 1 is peeled out of the forward sweep. Its jm1 wraps to n, and
+    ! du(i, n, b) has not been written yet at that point, so the sweep would
+    ! read whatever the output block last held. thom_s(1) is zero, but the
+    ! padded lanes of a recycled block routinely carry NaN and 0*NaN is NaN,
+    ! which then propagates down the whole line.
+    temp_du = c_m4*u(i, n - 3, b) + c_m3*u(i, n - 2, b) &
+              + c_m2*u(i, n - 1, b) + c_m1*u(i, n, b) &
+              + c_j*u(i, 1, b) &
+              + c_p1*u(i, 2, b) + c_p2*u(i, 3, b) &
+              + c_p3*u(i, 4, b) + c_p4*u(i, 5, b)
+    du(i, 1, b) = temp_du
+
+    do j = 2, n
       jm4 = modulo(j - 5, n) + 1
       jm3 = modulo(j - 4, n) + 1
       jm2 = modulo(j - 3, n) + 1
-      jm1 = modulo(j - 2, n) + 1
+      jm1 = j - 1
       jp1 = modulo(j - n, n) + 1
       jp2 = modulo(j - n + 1, n) + 1
       jp3 = modulo(j - n + 2, n) + 1
