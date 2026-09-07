@@ -51,6 +51,7 @@ module m_omp_backend
     procedure :: field_scale => field_scale_omp
     procedure :: field_shift => field_shift_omp
     procedure :: field_set_face => field_set_face_omp
+    procedure :: field_set_y_plane => field_set_y_plane_omp
     procedure :: field_set_face_from_field => field_set_face_from_field_omp
     procedure :: compute_vorticity => compute_vorticity_omp
     procedure :: compute_qcriterion => compute_qcriterion_omp
@@ -1151,6 +1152,42 @@ contains
     end select
 
   end subroutine field_set_face_omp
+  subroutine field_set_y_plane_omp(self, f, c, plane)
+    !! [[m_base_backend(module):field_set_y_plane(subroutine)]]
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c
+    integer, intent(in) :: plane
+
+    integer :: dims(3), k, j, n_y_blocks, y_block, i_in_block, group
+
+    if (f%dir /= DIR_X) &
+      error stop 'field_set_y_plane is only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_set_y_plane requires a valid data_loc.'
+
+    dims = self%mesh%get_dims(f%data_loc)
+    if (plane < 1 .or. plane > dims(2)) &
+      error stop 'field_set_y_plane: plane outside the domain.'
+
+    ! OMP DIR_X ordering: group = n_y_blocks*(z - 1) + y_block.
+    n_y_blocks = (dims(2) - 1)/SZ + 1
+    y_block = (plane - 1)/SZ + 1
+    i_in_block = mod(plane - 1, SZ) + 1
+
+    !$omp parallel do private(group)
+    do k = 1, dims(3)
+      group = n_y_blocks*(k - 1) + y_block
+      do j = 1, dims(1)
+        f%data(i_in_block, j, group) = c
+      end do
+    end do
+    !$omp end parallel do
+
+  end subroutine field_set_y_plane_omp
+
   subroutine field_set_face_from_field_omp(self, f, f_start, c_end, face, &
                                            bc_start, bc_end, flow_rate_diff)
     implicit none

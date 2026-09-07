@@ -56,7 +56,8 @@ program test_boundary_planes
 
   real(dp), allocatable :: data(:, :, :), expected(:, :, :)
   real(dp) :: tolerance
-  integer :: dims(3), dims_padded(3), i, j, k, ierr
+  integer :: dims(3), dims_padded(3), i, j, k, ierr, plane
+  character(len=48) :: label
   logical :: all_pass
 
   call MPI_Init(ierr)
@@ -120,6 +121,19 @@ program test_boundary_planes
   call backend%get_field_data(data, f)
   call check_planes('field_set_face_from_field', data, expected, dims, &
                     tolerance, all_pass)
+
+  ! --- field_set_y_plane: one interior plane, nothing else ------------------
+  ! The wall model writes the first plane above the floor, so this must reach
+  ! an interior plane with the same per-backend group ordering as the faces.
+  do plane = 2, dims(2) - 1, 17
+    call f%fill(sentinel)
+    call backend%field_set_y_plane(f, bottom, plane)
+    call backend%get_field_data(data, f)
+    expected = sentinel
+    expected(:, plane, :) = bottom
+    write (label, '(a,i0)') 'field_set_y_plane at y-plane ', plane
+    call check_planes(trim(label), data, expected, dims, tolerance, all_pass)
+  end do
 
   call allocator%release_block(f)
   call allocator%release_block(f_start)

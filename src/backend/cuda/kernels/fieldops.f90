@@ -336,6 +336,26 @@ contains
     end if
 
   end subroutine field_set_y_face
+  attributes(global) subroutine field_set_y_plane(f, c, i_in_block, &
+                                                  group_offset, nx)
+  !! Set one interior y-plane to a constant. The caller resolves the plane
+  !! into its position within a y-block and the group offset for that block,
+  !! so this kernel stays free of layout arithmetic.
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), value, intent(in) :: c
+    integer, value, intent(in) :: i_in_block, group_offset, nx
+
+    integer :: j, b
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x ! from 1 to nx
+    b = group_offset + blockIdx%y ! z fastest within the y-block
+
+    if (j <= nx) f(i_in_block, j, b) = c
+
+  end subroutine field_set_y_plane
+
   attributes(global) subroutine field_set_y_face_from_field( &
     f, f_start, nx, ny, nz)
 !! Set domain Y_FACE boundary values from another field.
