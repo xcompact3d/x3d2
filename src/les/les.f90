@@ -343,14 +343,18 @@ contains
     logical, intent(in) :: abl_wall
     real(dp), intent(in) :: wall_tau_x, wall_tau_z
 
-    call add_normal_stress(backend, du, nut, dudx, xdirps)
-    call add_normal_stress(backend, dv, nut, dvdy, ydirps)
-    call add_normal_stress(backend, dw, nut, dwdz, zdirps)
-    ! tau_xy and tau_yz carry the wall stress; tau_xz does not touch the floor.
+    ! On the first plane above a no-slip floor the whole SGS stress tensor is
+    ! replaced, as Incompact3d does in sgs_mom_conservative: tau_xy and tau_yz
+    ! take the modelled wall stress, and the remaining four components are
+    ! cleared so the resolved gradient across the no-slip condition cannot add
+    ! a second stress there.
+    call add_normal_stress(backend, du, nut, dudx, xdirps, abl_wall)
+    call add_normal_stress(backend, dv, nut, dvdy, ydirps, abl_wall)
+    call add_normal_stress(backend, dw, nut, dwdz, zdirps, abl_wall)
     call add_shear_stress(backend, du, ydirps, dv, xdirps, nut, dudy, dvdx, &
                           abl_wall, wall_tau_x)
     call add_shear_stress(backend, du, zdirps, dw, xdirps, nut, dudz, dwdx, &
-                          .false., 0._dp)
+                          abl_wall, 0._dp)
     call add_shear_stress(backend, dv, zdirps, dw, ydirps, nut, dvdz, dwdy, &
                           abl_wall, wall_tau_z)
   end subroutine add_sgs_terms
@@ -415,17 +419,21 @@ contains
     call backend%allocator%release_block(dwdz)
   end subroutine release_velocity_gradients
 
-  subroutine add_normal_stress(backend, rhs, nut, gradient, direction)
+  subroutine add_normal_stress(backend, rhs, nut, gradient, direction, &
+                               stamp_wall)
     class(base_backend_t), intent(inout) :: backend
     class(field_t), intent(inout) :: rhs
     class(field_t), intent(in) :: nut, gradient
     type(dirps_t), intent(in) :: direction
+    !! When set, clear this stress on the first plane above a no-slip floor.
+    logical, intent(in) :: stamp_wall
 
     class(field_t), pointer :: stress
 
     stress => backend%allocator%get_block(DIR_X, VERT)
     call backend%compute_sgs_stress( &
       stress, nut, gradient, gradient, 2._dp, 0._dp)
+    if (stamp_wall) call backend%field_set_y_plane(stress, 0._dp, 2)
     ! tau_ii is even across a free-slip boundary in direction i.
     call add_stress_derivative(backend, rhs, stress, direction, sym=.true.)
     call backend%allocator%release_block(stress)
@@ -452,8 +460,13 @@ contains
     call backend%compute_sgs_stress( &
       stress, nut, gradient_a, gradient_b, 1._dp, 1._dp)
     if (stamp_wall) then
-      ! Floor gets the modelled stress; the free-slip lid carries none.
-      call backend%field_set_face(stress, wall_tau, 0._dp, Y_FACE)
+      ! Substitute the modelled stress at the first vertex above the no-slip
+      ! floor, as Incompact3d does (te1/th1 at index 2 in
+      ! sgs_mom_conservative). That is where the resolved gradient across the
+      ! no-slip condition would otherwise produce a second, spurious stress on
+      ! top of the modelled one. The free-slip lid carries no stress, and its
+      ! odd closure ignores the boundary value, so it is left alone.
+      call backend%field_set_y_plane(stress, wall_tau, 2)
     end if
     ! tau_ij (i/=j) is odd across a free-slip boundary in directions i and j.
     call add_stress_derivative(backend, rhs_a, stress, direction_a, &
