@@ -29,7 +29,8 @@ program test_memory_estimate
   use cudafor, only: cudaMemGetInfo, cuda_count_kind, &
                      cudaGetDeviceCount, cudaSetDevice, cudaGetDevice
   use m_common, only: dp, i8, VERT, nbytes
-  use m_config, only: domain_config_t, solver_config_t
+  use m_config, only: domain_config_t, solver_config_t, has_output_field
+  use m_postprocess, only: compute_derived_fields, compute_pressure_vert
   use m_mesh, only: mesh_t
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
@@ -226,6 +227,7 @@ contains
     real(dp) :: overhead, w_local, per_gpu, spec_delta_gib, mirror_gib
     integer(i8) :: spec_bytes_1
     logical :: multi_gpu_supported
+    character(len=5) :: gpu_status
 
     if (irank /= 0) return
 
@@ -321,6 +323,19 @@ contains
         '   ', w_local, '   +', overhead + spec_delta_gib + mirror_gib, &
         '  = ', per_gpu, ' GiB'
       if (per_gpu > total_gib) print '(a)', '        ** EXCEEDS card memory **'
+
+      ! Machine-readable counterpart of the row above, one per printed ng -
+      ! absence of a MEMGPU line for a given ng IS the "not runnable there"
+      ! signal, so driver scripts do not need a separate flag to parse.
+      ! status=OK means overhead was measured (fits); status=FLOOR means the
+      ! full grid was too big to build here, so per_gpu_gib is the exact
+      ! workspace floor only, a lower bound, not a full estimate.
+      gpu_status = 'FLOOR'
+      if (fits) gpu_status = 'OK'
+      print '(a,i0,a,i0,a,i0,a,i0,a,f0.3,a,a)', &
+        'MEMGPU ng=', ng, ' local_dims=', local_dims(1), 'x', &
+        local_dims(2), 'x', local_dims(3), ' per_gpu_gib=', per_gpu, &
+        ' status=', trim(gpu_status)
     end do
     print '(a)', '-----------------------------------------------------------'
   end subroutine report_per_gpu
@@ -337,7 +352,9 @@ contains
     !! same way a real xcompact run captures them: channel/cylinder's
     !! lazily-allocated BC ghost blocks (define_BC_channel/cylinder), and
     !! anything gated by the input's I/O config (keep_pressure,
-    !! vorticity/Q-criterion derived fields via postprocess).
+    !! vorticity/Q-criterion derived fields via the per-iteration
+    !! compute_pressure_vert/compute_derived_fields calls mirrored below,
+    !! immediately after substep - these are NOT part of postprocess()).
     !!
     !! case_channel_init and friends re-read get_argument(1) (the process's
     !! own CLI argument) rather than taking domain_cfg as a parameter; this
@@ -367,10 +384,13 @@ contains
     character(len=16) :: ibm_file
     character(len=3) :: bc_suffix
     logical :: ibm_file_exists
+    logical :: output_vorticity, output_qcriterion
 
     ibm_missing = .false.
     npeak = 0
     dev_used = 0._dp
+    output_vorticity = .false.
+    output_qcriterion = .false.
 
     mesh = mesh_t(dims_in, [1, 1, 1], domain_cfg%L_global, &
                   domain_cfg%BC_x, domain_cfg%BC_y, domain_cfg%BC_z, &
@@ -441,13 +461,28 @@ contains
       curr(3 + i)%ptr => flow_case%solver%species(i)%ptr
     end do
 
-    ! Mirrors run()'s pre-loop call: drives keep_pressure/vorticity/
-    ! Q-criterion postprocessing allocations the same way a real run does.
+    ! Mirrors run()'s pre-loop call to the case-specific postprocess hook.
     call flow_case%postprocess(0, 0._dp)
 
     ! One real sub-stage drives the allocator to the same high-water mark a
     ! full time step would reach; field values are irrelevant to memory.
     call flow_case%substep(curr, deriv, 1)
+
+    ! Mirrors run()'s per-iteration postprocessing calls (base_case.f90,
+    ! immediately after the sub-stage loop): keep_pressure and
+    ! vorticity/Q-criterion allocations are gated HERE, not inside
+    ! postprocess() above, so they must be driven separately to be
+    ! captured - postprocess(0,.) alone does not reach them.
+    if (flow_case%solver%keep_pressure) call compute_pressure_vert(flow_case%solver)
+    if (has_output_field(flow_case%io_mgr%snapshot_mgr%config, 'vorticity') &
+        .and. flow_case%io_mgr%snapshot_mgr%config%snapshot_freq > 0) &
+      output_vorticity = .true.
+    if (has_output_field(flow_case%io_mgr%snapshot_mgr%config, 'qcriterion') &
+        .and. flow_case%io_mgr%snapshot_mgr%config%snapshot_freq > 0) &
+      output_qcriterion = .true.
+    if (output_vorticity .or. output_qcriterion) &
+      call compute_derived_fields(flow_case%solver, output_vorticity, &
+                                  output_qcriterion)
 
     npeak = allocator%next_id
     call query_used_gib(dev_used)
