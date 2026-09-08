@@ -12,6 +12,8 @@ module m_backend_runtime
   use m_cuda_backend, only: cuda_backend_t
   use m_cuda_common, only: SZ
 #elif defined(OMP_TGT)
+  use omp_lib, only: omp_get_num_devices, omp_set_default_device, &
+                     omp_get_default_device
   use m_omp_common, only: SZ
   use m_omptgt_allocator, only: omptgt_allocator_t
   use m_omptgt_backend, only: omptgt_backend_t
@@ -78,12 +80,12 @@ contains
   end subroutine select_device
 #elif defined(OMP_TGT)
   subroutine select_device(nrank, devnum)
-    !! Select a CUDA device round-robin by MPI rank.  The optional result
-    !! returns the device that CUDA reports as current after selection.
+    !! Select an OpenMP target device round-robin by MPI rank.  The optional
+    !! result returns the device OpenMP reports as default after selection.
     integer, intent(in) :: nrank
     integer, optional, intent(out) :: devnum
 
-    integer :: ierr, ndevs, selected_device
+    integer :: ndevs, selected_device
 
     ndevs = omp_get_num_devices()
     if (ndevs < 1) then
