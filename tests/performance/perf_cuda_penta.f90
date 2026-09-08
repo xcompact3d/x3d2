@@ -13,7 +13,7 @@ program perf_cuda_penta
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_penta_compact
   use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
-  use m_backend_runtime, only: select_cuda_device
+  use m_backend_runtime, only: select_device
   use m_test_utils, only: initialise_mpi, finalise_test, global_all, &
                           check_status, &
                           write_perf_minmax_metrics, &
@@ -46,7 +46,7 @@ program perf_cuda_penta
     print *, 'Scheme: alpha=0.5 beta=0.05, non-periodic, single-GPU Thomas'
     print *, 'Ranks:', nproc
   end if
-  call select_cuda_device(nrank, devnum)
+  call select_device(nrank, devnum)
   call configure_benchmark()
   call allocate_fields()
   call setup_backend()

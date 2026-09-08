@@ -12,6 +12,8 @@ module m_backend_runtime
   use m_cuda_backend, only: cuda_backend_t
   use m_cuda_common, only: SZ
 #elif defined(OMP_TGT)
+  use omp_lib, only: omp_get_num_devices, omp_set_default_device, &
+                     omp_get_default_device
   use m_omp_common, only: SZ
   use m_omptgt_allocator, only: omptgt_allocator_t
   use m_omptgt_backend, only: omptgt_backend_t
@@ -58,7 +60,7 @@ module m_backend_runtime
 contains
 
 #ifdef CUDA
-  subroutine select_cuda_device(nrank, devnum)
+  subroutine select_device(nrank, devnum)
     !! Select a CUDA device round-robin by MPI rank.  The optional result
     !! returns the device that CUDA reports as current after selection.
     integer, intent(in) :: nrank
@@ -68,14 +70,33 @@ contains
 
     ierr = cudaGetDeviceCount(ndevs)
     if (ndevs < 1) then
-      error stop 'select_cuda_device: no CUDA devices available'
+      error stop 'select_device: no CUDA devices available'
     end if
 
     ierr = cudaSetDevice(mod(nrank, ndevs))
     ierr = cudaGetDevice(selected_device)
 
     if (present(devnum)) devnum = selected_device
-  end subroutine select_cuda_device
+  end subroutine select_device
+#elif defined(OMP_TGT)
+  subroutine select_device(nrank, devnum)
+    !! Select an OpenMP target device round-robin by MPI rank.  The optional
+    !! result returns the device OpenMP reports as default after selection.
+    integer, intent(in) :: nrank
+    integer, optional, intent(out) :: devnum
+
+    integer :: ndevs, selected_device
+
+    ndevs = omp_get_num_devices()
+    if (ndevs < 1) then
+      error stop 'select_device: no TGT devices available'
+    end if
+
+    call omp_set_default_device(mod(nrank, ndevs))
+    selected_device = omp_get_default_device()
+
+    if (present(devnum)) devnum = selected_device
+  end subroutine select_device
 #endif
 
   subroutine init(self, mesh, separate_host_allocator)
@@ -88,7 +109,7 @@ contains
     logical :: need_separate_host_allocator
 #endif
 
-#ifdef CUDA
+#if defined(CUDA) || defined(OMP_TGT)
     integer :: ierr, nrank
 #endif
 
@@ -102,7 +123,7 @@ contains
 
 #ifdef CUDA
     call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call select_cuda_device(nrank)
+    call select_device(nrank)
 
     self%backend_name = 'CUDA'
     self%cuda_allocator = cuda_allocator_t(dims, SZ)
@@ -116,6 +137,9 @@ contains
     self%cuda_backend = cuda_backend_t(mesh, self%allocator)
     self%backend => self%cuda_backend
 #elif defined(OMP_TGT)
+    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
+    call select_device(nrank)
+
     self%backend_name = 'OMP_TGT'
     self%omptgt_allocator = omptgt_allocator_t(dims, SZ)
     self%allocator => self%omptgt_allocator

@@ -8,7 +8,7 @@ program test_cuda_tridiag
   use m_cuda_exec_dist, only: exec_dist_tds_compact
   use m_cuda_sendrecv, only: sendrecv_fields
   use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
-  use m_backend_runtime, only: select_cuda_device
+  use m_backend_runtime, only: select_device
   use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
@@ -41,7 +41,7 @@ program test_cuda_tridiag
 
   call initialise_mpi(nrank, nproc, pprev, pnext)
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
-  call select_cuda_device(nrank)
+  call select_device(nrank)
   call setup_geometry()
   call allocate_fields()
   call initialise_input()

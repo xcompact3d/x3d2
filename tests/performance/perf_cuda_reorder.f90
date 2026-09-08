@@ -6,7 +6,7 @@ program perf_cuda_reorder
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
                                     reorder_c2x, reorder_x2c
-  use m_backend_runtime, only: select_cuda_device
+  use m_backend_runtime, only: select_device
   use m_test_utils, only: initialise_mpi, finalise_test, global_all, &
                           check_status, &
                           write_perf_metric, write_perf_summary, &
@@ -42,7 +42,7 @@ program perf_cuda_reorder
   logical :: allpass = .true.
 
   call initialise_mpi(nrank, nproc)
-  call select_cuda_device(nrank, devnum)
+  call select_device(nrank, devnum)
 
   n_block = ny*nz/SZ
   ndof = nx*ny*nz
