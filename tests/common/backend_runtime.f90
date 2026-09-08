@@ -70,7 +70,7 @@ contains
 
     ierr = cudaGetDeviceCount(ndevs)
     if (ndevs < 1) then
-      error stop 'select_cuda_device: no CUDA devices available'
+      error stop 'select_device: no CUDA devices available'
     end if
 
     ierr = cudaSetDevice(mod(nrank, ndevs))
@@ -109,7 +109,7 @@ contains
     logical :: need_separate_host_allocator
 #endif
 
-#ifdef CUDA
+#if defined(CUDA) || defined(OMP_TGT)
     integer :: ierr, nrank
 #endif
 
