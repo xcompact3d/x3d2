@@ -58,7 +58,7 @@ module m_backend_runtime
 contains
 
 #ifdef CUDA
-  subroutine select_cuda_device(nrank, devnum)
+  subroutine select_device(nrank, devnum)
     !! Select a CUDA device round-robin by MPI rank.  The optional result
     !! returns the device that CUDA reports as current after selection.
     integer, intent(in) :: nrank
@@ -75,7 +75,26 @@ contains
     ierr = cudaGetDevice(selected_device)
 
     if (present(devnum)) devnum = selected_device
-  end subroutine select_cuda_device
+  end subroutine select_device
+#elif defined(OMP_TGT)
+  subroutine select_device(nrank, devnum)
+    !! Select a CUDA device round-robin by MPI rank.  The optional result
+    !! returns the device that CUDA reports as current after selection.
+    integer, intent(in) :: nrank
+    integer, optional, intent(out) :: devnum
+
+    integer :: ierr, ndevs, selected_device
+
+    ndevs = omp_get_num_devices()
+    if (ndevs < 1) then
+      error stop 'select_device: no TGT devices available'
+    end if
+
+    call omp_set_default_device(mod(nrank, ndevs))
+    selected_device = omp_get_default_device()
+
+    if (present(devnum)) devnum = selected_device
+  end subroutine select_device
 #endif
 
   subroutine init(self, mesh, separate_host_allocator)
