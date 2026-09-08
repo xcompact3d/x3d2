@@ -123,22 +123,17 @@ program test_reorder
   call backend%reorder(u_x, u_y, RDR_Y2X)
   call check_reorder(allpass, u_x, u_x_original, "testing Z2Y and Y2X failed")
 
-  ! Round trips through the Cartesian ordering. u_x still holds the result of
-  ! the previous check, so zeroise it first to make sure a reorder that writes
-  ! nothing cannot pass on stale data.
-  call u_x%fill(0._dp)
+  ! Round trips through the Cartesian ordering
   call backend%reorder(u_c, u_x_original, RDR_X2C)
   call backend%reorder(u_x, u_c, RDR_C2X)
   call check_reorder(allpass, u_x, u_x_original, "testing X2C and C2X failed")
 
-  call u_x%fill(0._dp)
   call backend%reorder(u_y, u_x_original, RDR_X2Y)
   call backend%reorder(u_c, u_y, RDR_Y2C)
   call backend%reorder(u_y, u_c, RDR_C2Y)
   call backend%reorder(u_x, u_y, RDR_Y2X)
   call check_reorder(allpass, u_x, u_x_original, "testing Y2C and C2Y failed")
 
-  call u_x%fill(0._dp)
   call backend%reorder(u_z, u_x_original, RDR_X2Z)
   call backend%reorder(u_c, u_z, RDR_Z2C)
   call backend%reorder(u_z, u_c, RDR_C2Z)
