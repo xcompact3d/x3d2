@@ -123,7 +123,7 @@ contains
 
 #ifdef CUDA
     call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call select_cuda_device(nrank)
+    call select_device(nrank)
 
     self%backend_name = 'CUDA'
     self%cuda_allocator = cuda_allocator_t(dims, SZ)
@@ -137,6 +137,9 @@ contains
     self%cuda_backend = cuda_backend_t(mesh, self%allocator)
     self%backend => self%cuda_backend
 #elif defined(OMP_TGT)
+    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
+    call select_device(nrank)
+
     self%backend_name = 'OMP_TGT'
     self%omptgt_allocator = omptgt_allocator_t(dims, SZ)
     self%allocator => self%omptgt_allocator

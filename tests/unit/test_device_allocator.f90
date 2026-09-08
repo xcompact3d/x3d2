@@ -2,8 +2,7 @@ program test_allocator_device
   use iso_fortran_env, only: stderr => error_unit
 
   use m_allocator, only: allocator_t, field_t
-  use m_common, only: dp, pi, DIR_X
-  use m_allocator, only: allocator_t,
+  use m_common, only: DIR_X
   use m_backend_runtime, only: select_device
   use m_test_utils, only: initialise_mpi, finalise_test
 
