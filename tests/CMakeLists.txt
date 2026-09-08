@@ -272,7 +272,9 @@ unset(_cpu_omp_backend)
 
 if(${OMP_TGT})
   # OMP TGT unit tests
+  # define_test(unit/test_reordering.f90 1 omp_tgt)
   define_test(unit/test_vecadd.f90 1 omp_tgt)
+  # define_test(unit/test_kinetic_energy.f90 1 omp_tgt)
   define_test(unit/test_setget_field.f90 1 omp_tgt)
   define_test(unit/test_device_allocator.f90 1 omp_tgt)
 
