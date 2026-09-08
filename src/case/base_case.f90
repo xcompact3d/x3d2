@@ -46,6 +46,7 @@ module m_base_case
     procedure(postprocess), deferred :: postprocess
     procedure :: case_init
     procedure :: case_finalise
+    procedure :: finalise_case_specific => finalise_case_specific_default
     procedure :: set_init
     procedure :: run
   end type base_case_t
@@ -126,19 +127,33 @@ contains
       call self%initial_conditions()
     end if
 
-    call self%monitoring%init(self%solver)
+    call self%monitoring%init(self%solver, append=self%io_mgr%is_restart())
 
   end subroutine case_init
 
   subroutine case_finalise(self)
     class(base_case_t) :: self
 
+    call self%finalise_case_specific()
     if (self%solver%mesh%par%is_root()) print *, 'run end'
+
+    ! release the persistent inflow-BC planes allocated by cases that use
+    ! them
+    if (associated(self%bc_start_u_x)) &
+      call self%solver%backend%allocator%release_block(self%bc_start_u_x)
+    if (associated(self%bc_start_v_x)) &
+      call self%solver%backend%allocator%release_block(self%bc_start_v_x)
+    if (associated(self%bc_start_w_x)) &
+      call self%solver%backend%allocator%release_block(self%bc_start_w_x)
 
     call self%monitoring%finalise()
     call self%io_mgr%finalise()
     call self%solver%finalise()
   end subroutine case_finalise
+
+  subroutine finalise_case_specific_default(self)
+    class(base_case_t) :: self
+  end subroutine finalise_case_specific_default
 
   subroutine set_init(self, field, field_func)
     implicit none

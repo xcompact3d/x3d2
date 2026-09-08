@@ -39,6 +39,7 @@ module m_config
     character(3) :: poisson_solver_type, time_intg
     character(30) :: der1st_scheme, der2nd_scheme, &
                      interpl_scheme, stagder_scheme
+    real(dp) :: c_nu, nu0_nu !! hyperviscous (iSVV) der2nd parameters
   contains
     procedure :: read => read_solver_nml
   end type solver_config_t
@@ -71,6 +72,24 @@ module m_config
   contains
     procedure :: read => read_cylinder_nml
   end type cylinder_config_t
+
+  type, extends(base_config_t) :: wind_turbine_config_t
+    !! Configuration for the wind-turbine carrier case. Inflow/outflow and
+    !! initial noise mirror the cylinder case; the turbine block selects and
+    !! drives the turbine forcing model.
+    real(dp) :: init_noise(3) = 0._dp
+    real(dp) :: inlet_noise(3) = 0._dp  !! perturbation applied at inlet each substep
+    real(dp) :: bc_start_u = 1._dp   !! uniform inflow u (Dirichlet at i=1)
+    real(dp) :: bc_start_v = 0._dp
+    real(dp) :: bc_start_w = 0._dp
+    integer :: iturbine = 0          !! 0: none, 1: actuator line, 2: disc
+    integer :: iturboutput = 1       !! turbine diagnostics output frequency
+    character(len=256) :: adm_coords = '' !! actuator-disc (.ad) coords file
+    real(dp) :: rho_air = 1._dp      !! air density used in thrust/power
+    real(dp) :: T_relax = -1._dp     !! ADM velocity-filter time; < 0 disables
+  contains
+    procedure :: read => read_wind_turbine_nml
+  end type wind_turbine_config_t
 
   type, extends(base_config_t) :: stats_config_t
     integer :: initstat = 0          !! iteration to start accumulating (0 = disabled)
@@ -178,11 +197,14 @@ contains
     character(3) :: poisson_solver_type = 'FFT'
     character(30) :: der1st_scheme = 'compact6', der2nd_scheme = 'compact6', &
                      interpl_scheme = 'classic', stagder_scheme = 'compact6'
+    !> hyperviscous (iSVV) der2nd parameters; only used when der2nd_scheme is
+    !> 'compact6-hyperviscous' (Incompact3d cnu, nu0nu). Harmless defaults otherwise.
+    real(dp) :: c_nu = 0.44_dp, nu0_nu = 0._dp
 
     namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
       n_species, pr_species, lowmem_transeq, lowmem_fft, &
       time_intg, der1st_scheme, der2nd_scheme, interpl_scheme, &
-      stagder_scheme, ibm_on
+      stagder_scheme, ibm_on, c_nu, nu0_nu
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading solver config failed! &
@@ -213,6 +235,8 @@ contains
     self%der2nd_scheme = der2nd_scheme
     self%interpl_scheme = interpl_scheme
     self%stagder_scheme = stagder_scheme
+    self%c_nu = c_nu
+    self%nu0_nu = nu0_nu
 
   end subroutine read_solver_nml
 
@@ -354,6 +378,57 @@ contains
     self%inlet_noise = inlet_noise
 
   end subroutine read_cylinder_nml
+
+  subroutine read_wind_turbine_nml(self, nml_file, nml_string)
+    implicit none
+
+    class(wind_turbine_config_t) :: self
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
+
+    integer :: unit
+
+    real(dp) :: init_noise(3) = 0._dp
+    real(dp) :: inlet_noise(3) = 0._dp
+    real(dp) :: bc_start_u = 1._dp
+    real(dp) :: bc_start_v = 0._dp
+    real(dp) :: bc_start_w = 0._dp
+    integer :: iturbine = 0
+    integer :: iturboutput = 1
+    character(len=256) :: adm_coords = ''
+    real(dp) :: rho_air = 1._dp
+    real(dp) :: T_relax = -1._dp
+
+    namelist /wind_turbine_nml/ init_noise, inlet_noise, bc_start_u, &
+      bc_start_v, bc_start_w, iturbine, iturboutput, adm_coords, &
+      rho_air, T_relax
+
+    if (present(nml_file) .and. present(nml_string)) then
+      error stop 'Reading wind_turbine config failed! &
+                 &Provide only a file name or source, not both.'
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file)
+      read (unit, nml=wind_turbine_nml)
+      close (unit)
+    else if (present(nml_string)) then
+      read (nml_string, nml=wind_turbine_nml)
+    else
+      error stop 'Reading wind_turbine config failed! &
+                 &Provide at least one of the following: file name or source'
+    end if
+
+    self%init_noise = init_noise
+    self%inlet_noise = inlet_noise
+    self%bc_start_u = bc_start_u
+    self%bc_start_v = bc_start_v
+    self%bc_start_w = bc_start_w
+    self%iturbine = iturbine
+    self%iturboutput = iturboutput
+    self%adm_coords = adm_coords
+    self%rho_air = rho_air
+    self%T_relax = T_relax
+
+  end subroutine read_wind_turbine_nml
 
   subroutine read_checkpoint_nml(self, nml_file, nml_string)
     implicit none
