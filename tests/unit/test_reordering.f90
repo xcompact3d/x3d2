@@ -5,6 +5,7 @@ program test_reorder
 
   use m_common, only: dp, pi, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
+                      RDR_X2C, RDR_Y2C, RDR_Z2C, RDR_C2X, RDR_C2Y, RDR_C2Z, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
 
   use m_backend_runtime, only: backend_runtime_t, backend_sz
@@ -15,7 +16,7 @@ program test_reorder
   implicit none
 
   logical :: allpass = .true.
-  class(field_t), pointer :: u_x, u_y, u_z
+  class(field_t), pointer :: u_x, u_y, u_z, u_c
   class(field_t), pointer :: u_x_original
 
   real(dp), allocatable, dimension(:, :, :) :: u_array, temp_1, temp_2
@@ -95,6 +96,7 @@ program test_reorder
   u_x => allocator%get_block(DIR_X)
   u_y => allocator%get_block(DIR_Y)
   u_z => allocator%get_block(DIR_Z)
+  u_c => allocator%get_block(DIR_C)
   u_x_original => allocator%get_block(DIR_X)
 
   dims(:) = allocator%get_padded_dims(DIR_X)
@@ -120,6 +122,23 @@ program test_reorder
   call backend%reorder(u_y, u_z, RDR_Z2Y)
   call backend%reorder(u_x, u_y, RDR_Y2X)
   call check_reorder(allpass, u_x, u_x_original, "testing Z2Y and Y2X failed")
+
+  ! Round trips through the Cartesian ordering
+  call backend%reorder(u_c, u_x_original, RDR_X2C)
+  call backend%reorder(u_x, u_c, RDR_C2X)
+  call check_reorder(allpass, u_x, u_x_original, "testing X2C and C2X failed")
+
+  call backend%reorder(u_y, u_x_original, RDR_X2Y)
+  call backend%reorder(u_c, u_y, RDR_Y2C)
+  call backend%reorder(u_y, u_c, RDR_C2Y)
+  call backend%reorder(u_x, u_y, RDR_Y2X)
+  call check_reorder(allpass, u_x, u_x_original, "testing Y2C and C2Y failed")
+
+  call backend%reorder(u_z, u_x_original, RDR_X2Z)
+  call backend%reorder(u_c, u_z, RDR_Z2C)
+  call backend%reorder(u_z, u_c, RDR_C2Z)
+  call backend%reorder(u_x, u_z, RDR_Z2X)
+  call check_reorder(allpass, u_x, u_x_original, "testing Z2C and C2Z failed")
 
   call finalise_test(allpass, nrank)
 
