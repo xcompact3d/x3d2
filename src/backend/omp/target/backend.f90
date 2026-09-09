@@ -6,7 +6,8 @@
 
 module m_omptgt_backend
 
-  use m_common, only: dp, DIR_C, get_dirs_from_rdr
+  use m_common, only: dp, DIR_C, get_dirs_from_rdr, &
+                      RDR_C2X, RDR_X2C, RDR_X2Y, RDR_Y2X, RDR_X2Z, RDR_Z2X
 
   use m_allocator, only: allocator_t
   use m_mesh, only: mesh_t
@@ -17,6 +18,9 @@ module m_omptgt_backend
   use m_omp_backend, only: omp_backend_t
 
   use m_omptgt_allocator, only: omptgt_field_t
+  use m_omptgt_kernels_reorder, only: reorder_omptgt_c2x, reorder_omptgt_x2c, &
+                                      reorder_omptgt_x2y, reorder_omptgt_y2x, &
+                                      reorder_omptgt_x2z, reorder_omptgt_z2x
 
   implicit none
 
@@ -248,8 +252,8 @@ contains
     type is (omptgt_field_t)
       select type (u)
       type is (omptgt_field_t)
-        call reorder_omptgt_dd(u_%data_tgt, u%data_tgt, dims, dir_from, &
-                               dir_to, cart_padded)
+        call reorder_offload(u_%data_tgt, u%data_tgt, direction, dims, &
+                             dir_from, dir_to, cart_padded)
       class default
         call reorder_omptgt_dh(u_%data_tgt, u%data, dims, dir_from, dir_to, &
                                cart_padded)
@@ -263,7 +267,50 @@ contains
 
   end subroutine reorder_omptgt
 
+  subroutine reorder_offload(u_, u, direction, dims, dir_from, dir_to, &
+                             cart_padded)
+    !! Picks a kernel for a device to device reorder.
+    !!
+    !! Directional storages differ in which cartesian direction their leading
+    !! dimension runs along: DIR_C, DIR_Y and DIR_Z run theirs along x, DIR_X
+    !! runs its along y. A reorder between DIR_X and any other direction
+    !! therefore transposes, and gets a kernel that stages the data through a
+    !! tile in team-shared memory so that both the read and the write stay
+    !! contiguous. The rest are contiguous on both sides already and go
+    !! through the generic index map.
+    real(dp), dimension(:, :, :), pointer :: u_
+    real(dp), dimension(:, :, :), pointer, intent(in) :: u
+    integer, intent(in) :: direction
+    integer, dimension(3), intent(in) :: dims
+    integer, intent(in) :: dir_from, dir_to
+    integer, dimension(3), intent(in) :: cart_padded
+
+    integer :: nx, ny, nz
+
+    nx = cart_padded(1); ny = cart_padded(2); nz = cart_padded(3)
+
+    select case (direction)
+    case (RDR_C2X)
+      call reorder_omptgt_c2x(u_, u, nx, ny, nz)
+    case (RDR_X2C)
+      call reorder_omptgt_x2c(u_, u, nx, ny, nz)
+    case (RDR_X2Y)
+      call reorder_omptgt_x2y(u_, u, nx, ny, nz)
+    case (RDR_Y2X)
+      call reorder_omptgt_y2x(u_, u, nx, ny, nz)
+    case (RDR_X2Z)
+      call reorder_omptgt_x2z(u_, u, nx, ny, nz)
+    case (RDR_Z2X)
+      call reorder_omptgt_z2x(u_, u, nx, ny, nz)
+    case default
+      call reorder_omptgt_dd(u_, u, dims, dir_from, dir_to, cart_padded)
+    end select
+
+  end subroutine reorder_offload
+
   subroutine reorder_omptgt_dd(u_, u, dims, dir_from, dir_to, cart_padded)
+    !! Generic device to device reorder: walks the input and maps each index
+    !! individually. Used for the reorders that need no transpose.
     real(dp), dimension(:, :, :), pointer :: u_
     real(dp), dimension(:, :, :), pointer, intent(in) :: u
     integer, dimension(3), intent(in) :: dims
