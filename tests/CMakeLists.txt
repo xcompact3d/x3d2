@@ -1,4 +1,3 @@
-
 set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" CACHE STRING "comma separated list of arguments to pass to ctest")
 set(CMAKE_CTEST_NPROCS "4" CACHE STRING "number of process used in tests")
 
