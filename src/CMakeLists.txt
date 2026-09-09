@@ -141,6 +141,9 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
 
   target_compile_options(xcompact PRIVATE "-DCUDA")
+  if (OMP_TGT)
+    add_definitions("-DOMP_TGT_NVIDIA")
+  endif()
 
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
@@ -155,6 +158,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -floop-optimize -march=native")
   if (OMP_TGT)
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp --offload-arch=${OMP_TGT_ARCH}")
+    add_definitions("-DOMP_TGT_AMD")
   endif()
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
   set(CMAKE_Fortran_FLAGS "-eF -M878") # -M878 suppresses WARNING multiple module includes (not useful)
@@ -162,6 +166,9 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3")
   target_link_options(x3d2 INTERFACE -h omp)
   target_link_options(x3d2_backends INTERFACE -h omp)
+  if (OMP_TGT)
+    add_definitions("-DOMP_TGT_AMD")
+  endif()
 endif()
 
 if(WITH_2DECOMPFFT)

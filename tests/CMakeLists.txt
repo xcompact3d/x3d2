@@ -1,4 +1,3 @@
-
 set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" CACHE STRING "comma separated list of arguments to pass to ctest")
 set(CMAKE_CTEST_NPROCS "4" CACHE STRING "number of process used in tests")
 
@@ -272,7 +271,7 @@ unset(_cpu_omp_backend)
 
 if(${OMP_TGT})
   # OMP TGT unit tests
-  # define_test(unit/test_reordering.f90 1 omp_tgt)
+  define_test(unit/test_reordering.f90 1 omp_tgt)
   define_test(unit/test_vecadd.f90 1 omp_tgt)
   # define_test(unit/test_kinetic_energy.f90 1 omp_tgt)
   define_test(unit/test_setget_field.f90 1 omp_tgt)
@@ -305,7 +304,7 @@ if((${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_verification_test(verification/test_thom.f90 1 cuda)
   define_verification_test(verification/test_time_integrator.f90 1 cuda)
   define_verification_test(verification/test_fft.f90 1 cuda)
-    define_verification_test(verification/test_poisson_bc.f90 1 cuda)
+  define_verification_test(verification/test_poisson_bc.f90 1 cuda)
   define_verification_test(verification/test_poisson_bc.f90 2 cuda --config 100)
   define_verification_test(verification/test_cuda_tridiag.f90 ${CMAKE_CTEST_NPROCS} cuda)
   define_verification_test(verification/test_cuda_penta.f90 ${CMAKE_CTEST_NPROCS} cuda)
