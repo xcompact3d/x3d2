@@ -17,11 +17,18 @@
 !!
 !! The tile is declared private to the `teams` construct, so all the threads of
 !! a team work on one copy of it, and the implicit barrier that ends the first
-!! worksharing loop makes the fill complete before the drain reads it. Whether
-!! that copy lands in the device's shared memory is left to the compiler;
-!! OpenMP 5.0 can ask for it explicitly with
-!! `allocate(omp_pteam_mem_alloc: tile)`, which not every compiler this backend
-!! builds with accepts yet.
+!! worksharing loop makes the fill complete before the drain reads it.
+!!
+!! `target`, `teams` and `distribute` are written as three separate directives
+!! rather than as one combined construct, which matters here: a clause on a
+!! combined construct is applied to every constituent construct that accepts
+!! it, and all three accept `private`. That would leave the number of copies of
+!! the tile up to the compiler - one per kernel launch, one per team, or one
+!! per thread - and only one per team is correct. Splitting the directives leaves
+!! `teams` as the only construct the clause can attach to. Whether that copy
+!! then lands in the device's shared memory is left to the compiler; OpenMP 5.0
+!! can ask for it explicitly with `allocate(omp_pteam_mem_alloc: tile)`, which
+!! not every compiler this backend builds with accepts yet.
 !!
 !! Only the transposing reorders are here, i.e. those between DIR_X and any
 !! other direction. C2Y, C2Z, Y2Z and their inverses keep the leading dimension
@@ -50,8 +57,9 @@ contains
     real(dp) :: tile(SZ, SZ)
     integer :: i, j, b_x, b_y, k
 
-    !$omp target teams distribute collapse(3) private(tile) &
-    !$omp   has_device_addr(u_x, u_c)
+    !$omp target has_device_addr(u_x, u_c)
+    !$omp teams private(tile)
+    !$omp distribute collapse(3)
     do k = 1, nz
       do b_y = 1, ny/SZ
         do b_x = 1, nx/SZ
@@ -74,7 +82,9 @@ contains
         end do
       end do
     end do
-    !$omp end target teams distribute
+    !$omp end distribute
+    !$omp end teams
+    !$omp end target
 
   end subroutine reorder_omptgt_c2x
 
@@ -86,8 +96,9 @@ contains
     real(dp) :: tile(SZ, SZ)
     integer :: i, j, b_x, b_y, k
 
-    !$omp target teams distribute collapse(3) private(tile) &
-    !$omp   has_device_addr(u_c, u_x)
+    !$omp target has_device_addr(u_c, u_x)
+    !$omp teams private(tile)
+    !$omp distribute collapse(3)
     do k = 1, nz
       do b_y = 1, ny/SZ
         do b_x = 1, nx/SZ
@@ -110,7 +121,9 @@ contains
         end do
       end do
     end do
-    !$omp end target teams distribute
+    !$omp end distribute
+    !$omp end teams
+    !$omp end target
 
   end subroutine reorder_omptgt_x2c
 
@@ -122,8 +135,9 @@ contains
     real(dp) :: tile(SZ, SZ)
     integer :: i, j, b_x, b_y, k
 
-    !$omp target teams distribute collapse(3) private(tile) &
-    !$omp   has_device_addr(u_y, u_x)
+    !$omp target has_device_addr(u_y, u_x)
+    !$omp teams private(tile)
+    !$omp distribute collapse(3)
     do k = 1, nz
       do b_y = 1, ny/SZ
         do b_x = 1, nx/SZ
@@ -146,7 +160,9 @@ contains
         end do
       end do
     end do
-    !$omp end target teams distribute
+    !$omp end distribute
+    !$omp end teams
+    !$omp end target
 
   end subroutine reorder_omptgt_x2y
 
@@ -158,8 +174,9 @@ contains
     real(dp) :: tile(SZ, SZ)
     integer :: i, j, b_x, b_y, k
 
-    !$omp target teams distribute collapse(3) private(tile) &
-    !$omp   has_device_addr(u_x, u_y)
+    !$omp target has_device_addr(u_x, u_y)
+    !$omp teams private(tile)
+    !$omp distribute collapse(3)
     do k = 1, nz
       do b_y = 1, ny/SZ
         do b_x = 1, nx/SZ
@@ -182,7 +199,9 @@ contains
         end do
       end do
     end do
-    !$omp end target teams distribute
+    !$omp end distribute
+    !$omp end teams
+    !$omp end target
 
   end subroutine reorder_omptgt_y2x
 
@@ -194,8 +213,9 @@ contains
     real(dp) :: tile(SZ, SZ)
     integer :: i, j, b_x, b_y, k
 
-    !$omp target teams distribute collapse(3) private(tile) &
-    !$omp   has_device_addr(u_z, u_x)
+    !$omp target has_device_addr(u_z, u_x)
+    !$omp teams private(tile)
+    !$omp distribute collapse(3)
     do k = 1, nz
       do b_y = 1, ny/SZ
         do b_x = 1, nx/SZ
@@ -218,7 +238,9 @@ contains
         end do
       end do
     end do
-    !$omp end target teams distribute
+    !$omp end distribute
+    !$omp end teams
+    !$omp end target
 
   end subroutine reorder_omptgt_x2z
 
@@ -230,8 +252,9 @@ contains
     real(dp) :: tile(SZ, SZ)
     integer :: i, j, b_x, b_y, k
 
-    !$omp target teams distribute collapse(3) private(tile) &
-    !$omp   has_device_addr(u_x, u_z)
+    !$omp target has_device_addr(u_x, u_z)
+    !$omp teams private(tile)
+    !$omp distribute collapse(3)
     do k = 1, nz
       do b_y = 1, ny/SZ
         do b_x = 1, nx/SZ
@@ -254,7 +277,9 @@ contains
         end do
       end do
     end do
-    !$omp end target teams distribute
+    !$omp end distribute
+    !$omp end teams
+    !$omp end target
 
   end subroutine reorder_omptgt_z2x
 
