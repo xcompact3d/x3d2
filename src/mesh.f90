@@ -358,4 +358,15 @@ contains
     end select
   end function
 
+  pure logical function periodic_dir(bc_pair) result(is_periodic)
+    !! A direction is periodic only if BOTH ends are 'periodic' - mirrors
+    !! the classification done in mesh_init (lines 65-88), exposed as a
+    !! standalone pure function so callers with only BC strings (no mesh_t,
+    !! e.g. static memory estimation) don't have to duplicate this rule.
+    character(len=*), intent(in) :: bc_pair(2)
+
+    is_periodic = trim(bc_pair(1)) == 'periodic' .and. &
+                  trim(bc_pair(2)) == 'periodic'
+  end function periodic_dir
+
 end module m_mesh
