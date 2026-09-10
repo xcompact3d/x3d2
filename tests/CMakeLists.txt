@@ -5,8 +5,7 @@ option(WITH_NIGHTLY_REGRESSION
   "Register the heavier nightly regression cases (excluded from PR CI)." OFF)
 
 # Shared test utilities library
-add_library(x3d2_test_utils STATIC common/test_utils.f90
-                                    common/test_memory_sizing.f90)
+add_library(x3d2_test_utils STATIC common/test_utils.f90)
 target_link_libraries(x3d2_test_utils PRIVATE x3d2)
 set_target_properties(x3d2_test_utils PROPERTIES
   Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_test_utils")
@@ -300,6 +299,39 @@ if((${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_test(unit/test_kinetic_energy.f90 1 cuda)
   define_test(unit/test_setget_field.f90 1 cuda)
   define_test(unit/test_device_allocator.f90 1 cuda)
+
+  # x3d2-memcheck regression tests: run the already-built binary against a
+  # few example inputs and check its printed output, rather than compiling
+  # a bespoke Fortran test program. "static" checks the tool runs and
+  # prints a verdict with no GPU FFT plan query; "build" additionally
+  # checks its real --build measurement (Tier 3) completes and the static
+  # estimate is close to it (the CHECK line) with no calibration drift (no
+  # WARNING line) - this is the "is the guess close to the actual run"
+  # check. PASS_REGULAR_EXPRESSION makes ctest ignore the process exit
+  # code (x3d2-memcheck's own exit code is the verdict: 0/1/2 for
+  # FITS/BORDERLINE/DOES_NOT_FIT, none of which should fail a correctly-
+  # working test run). TGV/generic/channel are the three example inputs
+  # that build unattended - cylinder needs an external IBM mask file not
+  # in the repo, foil is not tracked here.
+  function(define_memcheck_test case mode)
+    set(name memcheck_${mode}_${case})
+    set(input ${CMAKE_SOURCE_DIR}/examples/${case}/input.x3d)
+    add_test(NAME ${name} COMMAND sh -c
+      "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${input} --${mode}")
+    set_tests_properties(${name} PROPERTIES LABELS "verification;cuda")
+    if(${mode} STREQUAL build)
+      set_tests_properties(${name} PROPERTIES
+        PASS_REGULAR_EXPRESSION "CHECK ng=1: .* - OK"
+        FAIL_REGULAR_EXPRESSION "WARNING: peak_fields_lookup|MISMATCH")
+    else()
+      set_tests_properties(${name} PROPERTIES
+        PASS_REGULAR_EXPRESSION "Requested nproc_dir gives ng=")
+    endif()
+  endfunction()
+  foreach(memcheck_case TGV generic channel)
+    define_memcheck_test(${memcheck_case} static)
+    define_memcheck_test(${memcheck_case} build)
+  endforeach()
 
   # CUDA verification tests
   define_verification_test(verification/test_thom.f90 1 cuda)

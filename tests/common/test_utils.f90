@@ -1,7 +1,7 @@
 module m_test_utils
   use mpi
   use iso_fortran_env, only: stderr => error_unit
-  use m_common, only: dp, i8, nbytes
+  use m_common, only: dp, nbytes
   implicit none
 
   private
@@ -9,7 +9,7 @@ module m_test_utils
             check_status, checkerr, &
             write_perf_metric, write_perf_minmax_metrics, &
             write_perf_summary, write_perf_minmax_summary, &
-            write_device_bw_metric, padded_dim, padded_cells
+            write_device_bw_metric
 
 contains
 
@@ -243,24 +243,5 @@ contains
 
     deviceBW = 2.0_dp*mem_bus_width/nbytes*mem_clock_rt*(10**3)
   end function compute_device_bw
-
-  pure integer function padded_dim(n, sz) result(n_padded)
-    !! Smallest multiple of sz that is >= n. Mirrors the x/y padding in
-    !! allocator_init (m_allocator); z is never padded so is not covered here.
-    integer, intent(in) :: n, sz
-
-    n_padded = n - 1 + mod(-(n - 1), sz) + sz
-  end function padded_dim
-
-  pure function padded_cells(dims, sz) result(n)
-    !! Cell count of one padded field at dims (x, y padded to sz, z untouched).
-    !! i8 so callers can multiply by field count/nbytes without overflow, as
-    !! the allocator's own int32 ngrid does for very large grids.
-    integer, intent(in) :: dims(3), sz
-    integer(i8) :: n
-
-    n = int(padded_dim(dims(1), sz), i8)*int(padded_dim(dims(2), sz), i8) &
-       *int(dims(3), i8)
-  end function padded_cells
 
 end module m_test_utils
