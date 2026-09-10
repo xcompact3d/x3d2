@@ -6,6 +6,7 @@ set(SRC
   mpi.f90
   field.f90
   mesh.f90
+  memory_estimate.f90
   ordering.f90
   poisson_fft.f90
   solver.f90
@@ -49,6 +50,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     backend/cuda/kernels/reorder.f90
     backend/cuda/kernels/spectral_processing.f90
     backend/cuda/kernels/thomas.f90
+    backend/cuda/memory_estimate_cuda.f90
     backend/cuda/poisson_fft.f90
     backend/cuda/sendrecv.f90
     backend/cuda/tdsops.f90
@@ -176,6 +178,14 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     target_link_options(x3d2 INTERFACE "-cudalib=cufft")
   endif()
   target_compile_options(xcompact PRIVATE "-DCUDA")
+
+  # x3d2-memcheck (the static memory estimator) needs m_cuda_memory_estimate
+  # and m_cuda_common, so only exists for the CUDA backend.
+  add_executable(x3d2-memcheck memcheck.f90)
+  target_link_libraries(x3d2-memcheck PRIVATE x3d2_backends)
+  target_link_libraries(x3d2-memcheck PRIVATE x3d2)
+  target_compile_options(x3d2-memcheck PRIVATE "-DCUDA")
+
   # NVTX ranges label the ADIOS2 write paths in Nsight Systems (see
   # io/nvtx.f90). Without ADIOS2 there is no output to label.
   if(WITH_ADIOS2)
@@ -222,14 +232,27 @@ if(WITH_2DECOMPFFT)
   target_compile_options(x3d2_backends PRIVATE "-DWITH_2DECOMPFFT")
 endif()
 
+if(TARGET x3d2-memcheck)
+  target_link_libraries(x3d2-memcheck PRIVATE MPI::MPI_Fortran)
+endif()
+
 if(WITH_ADIOS2)
   target_link_libraries(x3d2 PRIVATE ${ADIOS2_FORTRAN_TARGET})
   target_link_libraries(xcompact PRIVATE ${ADIOS2_FORTRAN_TARGET})
   target_compile_options(x3d2 PRIVATE "-DWITH_ADIOS2")
 
+  # x3d2-memcheck's --build path now builds a real case (m_case_*), which
+  # needs ADIOS2 the same way xcompact does.
+  if(TARGET x3d2-memcheck)
+    target_link_libraries(x3d2-memcheck PRIVATE ${ADIOS2_FORTRAN_TARGET})
+  endif()
+
   # GPU-aware I/O requires C API (called via iso_c_binding)
   if(WITH_ADIOS2_GPU_AWARE)
     target_link_libraries(x3d2 PRIVATE ${ADIOS2_C_TARGET})
     target_link_libraries(xcompact PRIVATE ${ADIOS2_C_TARGET})
+    if(TARGET x3d2-memcheck)
+      target_link_libraries(x3d2-memcheck PRIVATE ${ADIOS2_C_TARGET})
+    endif()
   endif()
 endif()
