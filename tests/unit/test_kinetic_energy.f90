@@ -5,31 +5,18 @@ program test_kinetic_energy
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
+  use m_backend_runtime, only: backend_runtime_t
   use m_common, only: dp, DIR_X, VERT
   use m_field, only: field_t
   use m_mesh, only: mesh_t
 
-#ifdef CUDA
-  use m_cuda_allocator, only: cuda_allocator_t
-  use m_cuda_backend, only: cuda_backend_t
-  use m_cuda_common, only: SZ
-#else
-  use m_omp_backend, only: omp_backend_t
-  use m_omp_common, only: SZ
-#endif
-
   implicit none
 
   type(mesh_t), target :: mesh
+  type(backend_runtime_t), target :: runtime
   class(allocator_t), pointer :: allocator
+  type(allocator_t), pointer :: host_allocator => null()
   class(base_backend_t), pointer :: backend
-#ifdef CUDA
-  type(cuda_allocator_t), target :: cuda_allocator
-  type(cuda_backend_t), target :: cuda_backend
-#else
-  type(allocator_t), target :: omp_allocator
-  type(omp_backend_t), target :: omp_backend
-#endif
   class(field_t), pointer :: u, v, w
 
   integer :: dims_global(3), nproc_dir(3)
@@ -53,17 +40,10 @@ program test_kinetic_energy
   mesh = mesh_t(dims_global, nproc_dir, lengths, &
                 periodic, periodic, periodic)
 
-#ifdef CUDA
-  cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => cuda_allocator
-  cuda_backend = cuda_backend_t(mesh, allocator)
-  backend => cuda_backend
-#else
-  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => omp_allocator
-  omp_backend = omp_backend_t(mesh, allocator)
-  backend => omp_backend
-#endif
+  call runtime%init(mesh)
+  allocator => runtime%allocator
+  host_allocator => runtime%host_allocator
+  backend => runtime%backend
 
   u => allocator%get_block(DIR_X, VERT)
   v => allocator%get_block(DIR_X, VERT)
