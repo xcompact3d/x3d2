@@ -276,6 +276,7 @@ if(${OMP_TGT})
   define_test(unit/test_kinetic_energy.f90 1 omp_tgt)
   define_test(unit/test_setget_field.f90 1 omp_tgt)
   define_test(unit/test_device_allocator.f90 1 omp_tgt)
+  define_test(unit/test_scalar_product.f90 1 omp_tgt)
 
   # OMP TGT verification tests
   define_verification_test(verification/test_time_integrator.f90 1 omp_tgt)
@@ -299,6 +300,7 @@ if((${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   define_test(unit/test_kinetic_energy.f90 1 cuda)
   define_test(unit/test_setget_field.f90 1 cuda)
   define_test(unit/test_device_allocator.f90 1 cuda)
+  define_test(unit/test_scalar_product.f90 1 cuda)
 
   # CUDA verification tests
   define_verification_test(verification/test_thom.f90 1 cuda)

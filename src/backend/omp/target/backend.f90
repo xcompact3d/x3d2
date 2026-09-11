@@ -8,7 +8,7 @@ module m_omptgt_backend
 
   use mpi
 
-  use m_common, only: dp, DIR_C, DIR_X, NULL_LOC, MPI_X3D2_DP, &
+  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC, MPI_X3D2_DP, &
                       get_dirs_from_rdr
 
   use m_allocator, only: allocator_t
@@ -30,6 +30,7 @@ module m_omptgt_backend
     procedure :: reorder => reorder_omptgt
     procedure :: vecadd => vecadd_omptgt
     procedure :: veccopy => veccopy_omptgt
+    procedure :: scalar_product => scalar_product_omptgt
     procedure :: vector_norm_squared => vector_norm_squared_omptgt
   end type
 
@@ -157,6 +158,77 @@ contains
       end do
     end do
     !$omp end target teams loop
+  end subroutine
+
+  real(dp) function scalar_product_omptgt(self, x, y) result(s)
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(in) :: x, y
+
+    real(dp) :: local_sum
+    integer :: dims(3), dims_padded(3), n, n_i, n_i_pad, n_j, ierr
+
+    if ((x%data_loc == NULL_LOC) .or. (y%data_loc == NULL_LOC)) then
+      error stop "You must set the data_loc before calling scalar product"
+    end if
+    if ((x%data_loc /= y%data_loc) .or. (x%dir /= y%dir)) then
+      error stop "Called scalar product with incompatible fields"
+    end if
+
+    dims = self%mesh%get_dims(x%data_loc)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    if (x%dir == DIR_X) then
+      n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (x%dir == DIR_Y) then
+      n = dims(2); n_j = dims(1); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (x%dir == DIR_Z) then
+      n = dims(3); n_j = dims(2); n_i = dims(1); n_i_pad = dims_padded(1)
+    else
+      error stop 'scalar_product_cuda does not support DIR_C fields!'
+    end if
+
+    select type (x)
+    type is (omptgt_field_t)
+      select type (y)
+      type is (omptgt_field_t)
+        call scalar_product_offload_(local_sum, x%data_tgt, y%data_tgt, &
+                n, n_j, n_i, n_i_pad)
+      class default
+        error stop "Called omptgt vector copy with unsupported source vector"
+      end select
+    class default
+      error stop "Called omptgt vector copy with unsupported source vector"
+    end select
+
+    call MPI_Allreduce(local_sum, s, 1, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+
+  end function scalar_product_omptgt
+
+  subroutine scalar_product_offload_(local_sum, x, y, n, n_i, n_i_pad, n_j)
+    real(dp), intent(out) :: local_sum
+    real(dp), dimension(:, :, :), intent(in) :: x, y
+    integer, intent(in) :: n, n_i, n_i_pad, n_j
+
+    integer :: i, j, k, k_i, k_j
+
+    local_sum = 0._dp
+    !$omp target teams distribute parallel do collapse(3) &
+    !$omp reduction(+:local_sum) private(j, k) &
+    !$omp has_device_addr(x, y)
+    do k_j = 1, (n_j - 1)/SZ + 1
+      do k_i = 1, n_i
+        do i = 1, SZ
+          k = k_j + (k_i - 1)*((n_j - 1)/SZ + 1)
+          do j = 1, n
+            local_sum = local_sum + x(i, j, k) * y(i, j, k)
+          end do
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
   end subroutine
 
   real(dp) function vector_norm_squared_omptgt(self, a, b, c) &
