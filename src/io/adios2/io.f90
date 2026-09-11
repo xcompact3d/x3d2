@@ -114,6 +114,8 @@ module m_io_backend
     procedure :: write_data_array_3d_device => &
       write_data_array_3d_device_adios2
     procedure :: sync_device => sync_device_adios2
+    procedure, private :: write_reordered_device_field => &
+      write_reordered_device_field_adios2
 #endif
     procedure :: write_attribute_string => write_attribute_string_adios2
     procedure :: write_attribute_array_1d_real => &
@@ -1092,7 +1094,7 @@ contains
 #ifdef X3D2_ADIOS2_CUDA
   subroutine write_data_array_3d_device_adios2( &
     self, variable_name, array, file_handle, &
-    shape_dims, start_dims, count_dims, use_sp &
+    shape_dims, start_dims, count_dims, use_sp, force_sync &
     )
     !! GPU-aware I/O: passes device pointer directly to ADIOS2.
     !! Uses the native Fortran adios2_set_memory_space to tell ADIOS2
@@ -1100,6 +1102,9 @@ contains
     !! directly (the Fortran generic adios2_put does not accept device
     !! arrays).
     !! Requires ADIOS2 built with -DADIOS2_USE_CUDA=ON.
+    !! force_sync forces adios2_mode_sync regardless of use_sp: pass it
+    !! when array is a temporary buffer that will be deallocated before
+    !! the next end_step/PerformPuts would otherwise flush a deferred put.
     class(io_adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
     real(dp), device, target, intent(in) :: array(:, :, :)
@@ -1108,11 +1113,13 @@ contains
     integer(i8), intent(in) :: start_dims(3)
     integer(i8), intent(in) :: count_dims(3)
     logical, intent(in), optional :: use_sp
+    logical, intent(in), optional :: force_sync
 
     type(adios2_variable) :: var
     type(c_devptr) :: devptr
     type(c_ptr) :: device_ptr
     integer :: ierr, vartype
+    integer :: put_mode
     real(sp), allocatable, device, target :: array_sp(:, :, :)
     logical :: convert_to_sp
     real(c_double) :: t0_put
@@ -1121,6 +1128,11 @@ contains
     convert_to_sp = .false.
     if (present(use_sp)) convert_to_sp = use_sp
     vartype = get_adios2_vartype(convert_to_sp)
+
+    put_mode = adios2_mode_deferred
+    if (present(force_sync)) then
+      if (force_sync) put_mode = adios2_mode_sync
+    end if
 
     select type (file_handle)
     type is (io_adios2_file_t)
@@ -1168,15 +1180,14 @@ contains
         call nvtx_push_if_enabled("ADIOS2_Put")
         ierr = adios2_put_c(transfer(file_handle%engine%f2c, c_null_ptr), &
                             transfer(var%f2c, c_null_ptr), device_ptr, &
-                            int(adios2_mode_deferred, c_int))
+                            int(put_mode, c_int))
         call nvtx_pop_if_enabled()
         if (file_handle%bench_enabled) then
           put_bytes = real(size(array, kind=i8), c_double) * &
                       bytes_real_dp
           call bench_record_put(file_handle, MPI_Wtime() - t0_put, put_bytes)
         end if
-        call self%handle_error(ierr, "Error in GPU-aware ADIOS2 &
-                              &put (deferred)")
+        call self%handle_error(ierr, "Error in GPU-aware ADIOS2 put")
       end if
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
@@ -1378,6 +1389,95 @@ contains
     ierr = cudaDeviceSynchronize()
     if (ierr /= 0) error stop "cudaDeviceSynchronize failed before I/O"
   end subroutine sync_device_adios2
+
+  subroutine write_reordered_device_field_adios2( &
+    self, variable_name, field, file_handle, backend, &
+    shape_dims, start_dims, count_dims, use_sp &
+    )
+    !! GPU-aware I/O: build a contiguous, unpadded (nx, ny, nz) device
+    !! buffer for `field` before handing it to ADIOS2, so the put always
+    !! matches shape_dims/count_dims instead of the field's padded
+    !! storage. A field already in DIR_C orientation is packed directly;
+    !! a DIR_X solver field (solver%u/v/w and the like) is first
+    !! reordered into a DIR_C scratch block on the device, mirroring the
+    !! device-side reorder that base_backend_t%get_field_data uses before
+    !! its device-to-host copy. The packed buffer is a temporary that is
+    !! deallocated as soon as this call returns, so the put is always
+    !! synchronous.
+    use m_field, only: field_t
+    use m_common, only: DIR_C, DIR_X, RDR_X2C
+    use m_base_backend, only: base_backend_t
+    use m_cuda_allocator, only: cuda_field_t
+    class(io_adios2_writer_t), intent(inout) :: self
+    character(len=*), intent(in) :: variable_name
+    type(cuda_field_t), intent(in) :: field
+    class(io_file_t), intent(inout) :: file_handle
+    class(*), intent(in) :: backend
+    integer(i8), intent(in) :: shape_dims(3)
+    integer(i8), intent(in) :: start_dims(3)
+    integer(i8), intent(in) :: count_dims(3)
+    logical, intent(in), optional :: use_sp
+
+    class(field_t), pointer :: field_c
+    real(dp), device, pointer, dimension(:, :, :) :: src_d
+    real(dp), device, allocatable :: packed_d(:, :, :)
+    integer :: nx, ny, nz, i, j, k
+
+    nx = int(count_dims(1)); ny = int(count_dims(2)); nz = int(count_dims(3))
+    allocate (packed_d(nx, ny, nz))
+
+    ! Element-wise device-to-device copy: NVFORTRAN rejects a plain
+    ! array-section assignment between two device arrays here ("more than
+    ! one reference to a device-resident object in assignment"), so pack
+    ! with a !$cuf kernel do loop, which NVFORTRAN compiles into an actual
+    ! device kernel (a plain "do concurrent" here runs on the host and
+    ! segfaults dereferencing device pointers).
+    select case (field%dir)
+    case (DIR_C)
+      ! Already Cartesian - just pack off the padding, no backend needed.
+      src_d => field%data_d
+      !$cuf kernel do(3) <<<*, *>>>
+      do k = 1, nz
+        do j = 1, ny
+          do i = 1, nx
+            packed_d(i, j, k) = src_d(i, j, k)
+          end do
+        end do
+      end do
+    case (DIR_X)
+      select type (backend_typed => backend)
+      class is (base_backend_t)
+        field_c => backend_typed%allocator%get_block(DIR_C)
+        call backend_typed%reorder(field_c, field, RDR_X2C)
+        select type (field_c)
+        type is (cuda_field_t)
+          src_d => field_c%data_d
+        end select
+        !$cuf kernel do(3) <<<*, *>>>
+        do k = 1, nz
+          do j = 1, ny
+            do i = 1, nx
+              packed_d(i, j, k) = src_d(i, j, k)
+            end do
+          end do
+        end do
+        call backend_typed%allocator%release_block(field_c)
+      class default
+        error stop "write_field_from_solver: GPU-aware I/O reorder &
+          &requires a base_backend_t backend"
+      end select
+    case default
+      error stop "write_field_from_solver: GPU-aware I/O does not &
+        &support this field orientation"
+    end select
+
+    call self%write_data_array_3d_device( &
+      variable_name, packed_d, file_handle, &
+      shape_dims, start_dims, count_dims, use_sp, force_sync=.true. &
+      )
+
+    deallocate (packed_d)
+  end subroutine write_reordered_device_field_adios2
 #endif
 
   subroutine write_field_from_solver_adios2( &
@@ -1403,19 +1503,21 @@ contains
 
 #ifdef X3D2_ADIOS2_CUDA
     if (runtime_gpu_write_mode /= gpu_write_mode_force_host) then
-      ! GPU-aware ADIOS2: write directly from device memory
+      ! GPU-aware ADIOS2: a cuda_field_t always takes the device path -
+      ! reorder (if needed) and pack happen entirely on the device, never
+      ! a silent fall back to a host write.
       select type (field_typed => field)
       type is (cuda_field_t)
-        call self%write_data_array_3d_device( &
-          variable_name, field_typed%data_d, &
-          file_handle, shape_dims, start_dims, count_dims, use_sp &
+        call self%write_reordered_device_field( &
+          variable_name, field_typed, file_handle, backend, &
+          shape_dims, start_dims, count_dims, use_sp &
           )
         return
       end select
     end if
 #endif
 
-    ! Non-CUDA backend: standard host path
+    ! Non-CUDA backend, or the explicit host override: standard host path.
     select type (field_typed => field)
     type is (field_t)
       call self%write_data_array_3d( &
