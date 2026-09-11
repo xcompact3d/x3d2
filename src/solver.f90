@@ -9,9 +9,10 @@ module m_solver
                       RDR_Z2C, RDR_C2Z, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL, &
                       BC_NEUMANN, BC_DIRICHLET
-  use m_config, only: solver_config_t
+  use m_config, only: solver_config_t, les_config_t
   use m_field, only: field_t, flist_t
   use m_ibm, only: ibm_t
+  use m_les, only: les_t
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t
   use m_time_integrator, only: time_intg_t
@@ -56,6 +57,11 @@ module m_solver
     integer :: nspecies = 0
 
     class(field_t), pointer :: u, v, w
+    class(field_t), pointer :: pressure => null()      !! Pressure on CELL grid (DIR_Z)
+    class(field_t), pointer :: pressure_vert => null() !! Pressure on VERT grid (DIR_X)
+    logical :: keep_pressure = .false.                 !! If true, persist pressure for output
+    class(field_t), pointer :: vort => null()  !! Vorticity magnitude on VERT grid
+    class(field_t), pointer :: qcrit => null() !! Q-criterion on VERT grid
     type(flist_t), dimension(:), pointer :: species => null()
 
     class(base_backend_t), pointer :: backend
@@ -65,11 +71,14 @@ module m_solver
     type(dirps_t), pointer :: xdirps, ydirps, zdirps
     type(vector_calculus_t) :: vector_calculus
     type(ibm_t) :: ibm
+    type(les_t) :: les
     logical :: ibm_on
     procedure(poisson_solver), pointer :: poisson => null()
     procedure(transport_equation), pointer :: transeq => null()
   contains
     procedure :: transeq_species
+    procedure :: apply_les
+    procedure :: finalise
     procedure :: pressure_correction
     procedure :: divergence_v2p
     procedure :: gradient_p2v
@@ -112,6 +121,7 @@ contains
     type(solver_t) :: solver
 
     type(solver_config_t) :: solver_cfg
+    type(les_config_t) :: les_cfg
     integer :: i
 
     solver%backend => backend
@@ -130,6 +140,10 @@ contains
     solver%w => solver%backend%allocator%get_block(DIR_X)
 
     call solver_cfg%read(nml_file=get_argument(1))
+    call les_cfg%read(nml_file=get_argument(1))
+    solver%les = les_t(les_cfg)
+    if (solver%mesh%par%is_root()) &
+      print *, 'LES model: ', trim(solver%les%model)
 
     ! Add transported species
     solver%nspecies = solver_cfg%n_species
@@ -248,7 +262,8 @@ contains
       )
     call backend%alloc_tdsops( &
       dirps%der1st_sym, n_vert, d, 'first-deriv', der1st_scheme, &
-      bc_start, bc_end, stretch=mesh%geo%vert_ds(1:n_vert, dir) &
+      bc_start, bc_end, stretch=mesh%geo%vert_ds(1:n_vert, dir), &
+      sym=.true. &
       )
     call backend%alloc_tdsops( &
       dirps%der2nd, n_vert, d, 'second-deriv', der2nd_scheme, &
@@ -258,7 +273,8 @@ contains
     call backend%alloc_tdsops( &
       dirps%der2nd_sym, n_vert, d, 'second-deriv', der2nd_scheme, &
       bc_start, bc_end, stretch=mesh%geo%vert_ds2(1:n_vert, dir), &
-      stretch_correct=mesh%geo%vert_d2s(1:n_vert, dir) &
+      stretch_correct=mesh%geo%vert_d2s(1:n_vert, dir), &
+      sym=.true. &
       )
     call backend%alloc_tdsops( &
       dirps%stagder_v2p, n_cell, d, 'stag-deriv', stagder_scheme, &
@@ -373,6 +389,8 @@ contains
     call self%backend%allocator%release_block(du_z)
     call self%backend%allocator%release_block(dv_z)
     call self%backend%allocator%release_block(dw_z)
+
+    call self%apply_les(rhs, variables)
 
     ! Convection-diffusion for species
     if (self%nspecies > 0) then
@@ -490,12 +508,34 @@ contains
     self%v => v
     self%w => w
 
+    call self%apply_les(rhs, variables)
+
     ! Convection-diffusion for species
     if (self%nspecies > 0) then
       call self%transeq_species(rhs(4:), variables)
     end if
 
   end subroutine transeq_lowmem
+
+  subroutine apply_les(self, rhs, variables)
+    !! Add the configured explicit SGS closure to the momentum RHS.
+    class(solver_t), intent(inout) :: self
+    type(flist_t), intent(inout) :: rhs(:)
+    type(flist_t), intent(in) :: variables(:)
+
+    call self%les%apply_sgs_stress( &
+      self%backend, self%mesh, &
+      rhs(1)%ptr, rhs(2)%ptr, rhs(3)%ptr, &
+      variables(1)%ptr, variables(2)%ptr, variables(3)%ptr, &
+      self%xdirps, self%ydirps, self%zdirps)
+  end subroutine apply_les
+
+  subroutine finalise(self)
+    !! Release resources owned by the solver and its runtime models.
+    class(solver_t), intent(inout) :: self
+
+    call self%les%finalise(self%backend)
+  end subroutine finalise
 
   subroutine transeq_species(self, rhs, variables)
     !! Skew-symmetric form of convection-diffusion terms in the
@@ -689,15 +729,24 @@ contains
     class(solver_t) :: self
     class(field_t), intent(inout) :: u, v, w
 
-    class(field_t), pointer :: div_u, pressure, dpdx, dpdy, dpdz
+    class(field_t), pointer :: div_u, p, dpdx, dpdy, dpdz
 
     div_u => self%backend%allocator%get_block(DIR_Z)
 
     call self%divergence_v2p(div_u, u, v, w)
 
-    pressure => self%backend%allocator%get_block(DIR_Z)
+    if (self%keep_pressure) then
+      ! Persist pressure for snapshot output
+      if (.not. associated(self%pressure)) then
+        self%pressure => self%backend%allocator%get_block(DIR_Z, CELL)
+      end if
+      p => self%pressure
+    else
+      ! Temporary pressure, released after use
+      p => self%backend%allocator%get_block(DIR_Z)
+    end if
 
-    call self%poisson(pressure, div_u)
+    call self%poisson(p, div_u)
 
     call self%backend%allocator%release_block(div_u)
 
@@ -705,9 +754,11 @@ contains
     dpdy => self%backend%allocator%get_block(DIR_X)
     dpdz => self%backend%allocator%get_block(DIR_X)
 
-    call self%gradient_p2v(dpdx, dpdy, dpdz, pressure)
+    call self%gradient_p2v(dpdx, dpdy, dpdz, p)
 
-    call self%backend%allocator%release_block(pressure)
+    if (.not. self%keep_pressure) then
+      call self%backend%allocator%release_block(p)
+    end if
 
     ! velocity correction
     call self%backend%vecadd(-1._dp, dpdx, 1._dp, u)

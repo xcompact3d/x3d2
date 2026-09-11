@@ -13,6 +13,7 @@ module m_omp_backend
 
   use m_omp_common, only: SZ
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
+  use m_exec_thom, only: exec_thom_tds_compact
   use m_omp_sendrecv, only: sendrecv_fields
 
   implicit none
@@ -35,6 +36,7 @@ module m_omp_backend
     procedure :: transeq_z => transeq_z_omp
     procedure :: transeq_species => transeq_species_omp
     procedure :: tds_solve => tds_solve_omp
+    procedure :: thom_solve => thom_solve_omp
     procedure :: reorder => reorder_omp
     procedure :: sum_yintox => sum_yintox_omp
     procedure :: sum_zintox => sum_zintox_omp
@@ -42,14 +44,23 @@ module m_omp_backend
     procedure :: vecadd => vecadd_omp
     procedure :: vecmult => vecmult_omp
     procedure :: scalar_product => scalar_product_omp
+    procedure :: vector_norm_squared => vector_norm_squared_omp
     procedure :: field_max_mean => field_max_mean_omp
+    procedure :: slice_max_sum => slice_max_sum_omp
     procedure :: field_scale => field_scale_omp
     procedure :: field_shift => field_shift_omp
     procedure :: field_set_face => field_set_face_omp
+    procedure :: field_set_face_from_field => field_set_face_from_field_omp
+    procedure :: compute_vorticity => compute_vorticity_omp
+    procedure :: compute_qcriterion => compute_qcriterion_omp
+    procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_omp
+    procedure :: compute_sgs_stress => compute_sgs_stress_omp
     procedure :: field_volume_integral => field_volume_integral_omp
     procedure :: copy_data_to_f => copy_data_to_f_omp
     procedure :: copy_f_to_data => copy_f_to_data_omp
     procedure :: init_poisson_fft => init_omp_poisson_fft
+    procedure :: sync => sync_omp
+    procedure :: get_device_bw_info => get_device_bw_info_omp
     procedure :: transeq_omp_dist
   end type omp_backend_t
 
@@ -71,7 +82,7 @@ contains
     call backend%base_init()
 
     select type (allocator)
-    type is (allocator_t)
+    class is (allocator_t)
       ! class level access to the allocator
       backend%allocator => allocator
     end select
@@ -137,6 +148,28 @@ contains
     end select
 
   end subroutine alloc_omp_tdsops
+
+  subroutine sync_omp(self)
+    implicit none
+
+    class(omp_backend_t) :: self
+
+  end subroutine sync_omp
+
+  subroutine get_device_bw_info_omp(self, mem_clock_rt, mem_bus_width, &
+                                    available)
+    implicit none
+
+    class(omp_backend_t) :: self
+    integer, intent(out) :: mem_clock_rt
+    integer, intent(out) :: mem_bus_width
+    logical, intent(out) :: available
+
+    mem_clock_rt = 0
+    mem_bus_width = 0
+    available = .false.
+
+  end subroutine get_device_bw_info_omp
 
   subroutine transeq_x_omp(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
@@ -354,6 +387,27 @@ contains
 
   end subroutine tds_solve_omp
 
+  subroutine thom_solve_omp(self, du, u, tdsops)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: du
+    class(field_t), intent(in) :: u
+    class(tdsops_t), intent(in) :: tdsops
+
+    if (u%dir /= du%dir) then
+      error stop 'DIR mismatch between fields in thom_solve.'
+    end if
+
+    if (u%data_loc /= NULL_LOC) then
+      call du%set_data_loc(move_data_loc(u%data_loc, u%dir, tdsops%move))
+    end if
+
+    call exec_thom_tds_compact(du%data, u%data, tdsops, &
+                               self%allocator%get_n_groups(u%dir))
+
+  end subroutine thom_solve_omp
+
   subroutine tds_solve_dist(self, du, u, tdsops)
     implicit none
 
@@ -396,23 +450,51 @@ contains
     integer, dimension(3) :: dims, cart_padded
     integer :: i, j, k
     integer :: out_i, out_j, out_k
+    integer :: base_i, base_j, base_k, str_i, str_j, str_k
     integer :: dir_from, dir_to
 
     dims = self%allocator%get_padded_dims(u%dir)
     cart_padded = self%allocator%get_padded_dims(DIR_C)
     call get_dirs_from_rdr(dir_from, dir_to, direction)
 
-    !$omp parallel do private(out_i, out_j, out_k) collapse(2)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          call get_index_reordering(out_i, out_j, out_k, i, j, k, &
+    ! The reordering map is affine in the leading index only when that leading
+    ! dimension is SZ (a directional field): then the index stays within one
+    ! SZ block and never crosses a mod/division boundary, so evaluate the map
+    ! at i=1 and i=2 once per (j, k) to recover the base and stride, then run a
+    ! plain inner loop with no per element index call. For a DIR_C input the
+    ! leading dimension is nx_padded, the single block assumption fails (e.g.
+    ! RDR_C2Z), so fall back to the exact per element map there.
+    if (dims(1) == SZ) then
+      !$omp parallel do collapse(2) private(i, out_i, out_j, out_k, base_i, base_j, base_k, str_i, str_j, str_k)
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          call get_index_reordering(base_i, base_j, base_k, 1, j, k, &
                                     dir_from, dir_to, SZ, cart_padded)
-          u_%data(out_i, out_j, out_k) = u%data(i, j, k)
+          call get_index_reordering(str_i, str_j, str_k, 2, j, k, &
+                                    dir_from, dir_to, SZ, cart_padded)
+          str_i = str_i - base_i; str_j = str_j - base_j; str_k = str_k - base_k
+          do i = 1, dims(1)
+            out_i = base_i + (i - 1)*str_i
+            out_j = base_j + (i - 1)*str_j
+            out_k = base_k + (i - 1)*str_k
+            u_%data(out_i, out_j, out_k) = u%data(i, j, k)
+          end do
         end do
       end do
-    end do
-    !$omp end parallel do
+      !$omp end parallel do
+    else
+      !$omp parallel do private(out_i, out_j, out_k) collapse(2)
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          do i = 1, dims(1)
+            call get_index_reordering(out_i, out_j, out_k, i, j, k, &
+                                      dir_from, dir_to, SZ, cart_padded)
+            u_%data(out_i, out_j, out_k) = u%data(i, j, k)
+          end do
+        end do
+      end do
+      !$omp end parallel do
+    end if
 
     ! reorder keeps the data_loc the same
     call u_%set_data_loc(u%data_loc)
@@ -452,23 +534,45 @@ contains
     integer, dimension(3) :: dims, cart_padded
     integer :: i, j, k    ! Working indices
     integer :: ii, jj, kk ! Transpose indices
+    integer :: base_i, base_j, base_k, str_i, str_j, str_k
 
     dir_from = DIR_X
 
     dims = self%allocator%get_padded_dims(u%dir)
     cart_padded = self%allocator%get_padded_dims(DIR_C)
 
-    !$omp parallel do private(i, ii, jj, kk) collapse(2)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          call get_index_reordering(ii, jj, kk, i, j, k, &
+    ! Same trick as reorder_omp, with the same SZ guard.
+    if (dims(1) == SZ) then
+      !$omp parallel do collapse(2) private(i, ii, jj, kk, base_i, base_j, base_k, str_i, str_j, str_k)
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          call get_index_reordering(base_i, base_j, base_k, 1, j, k, &
                                     dir_from, dir_to, SZ, cart_padded)
-          u%data(i, j, k) = u%data(i, j, k) + u_%data(ii, jj, kk)
+          call get_index_reordering(str_i, str_j, str_k, 2, j, k, &
+                                    dir_from, dir_to, SZ, cart_padded)
+          str_i = str_i - base_i; str_j = str_j - base_j; str_k = str_k - base_k
+          do i = 1, dims(1)
+            ii = base_i + (i - 1)*str_i
+            jj = base_j + (i - 1)*str_j
+            kk = base_k + (i - 1)*str_k
+            u%data(i, j, k) = u%data(i, j, k) + u_%data(ii, jj, kk)
+          end do
         end do
       end do
-    end do
-    !$omp end parallel do
+      !$omp end parallel do
+    else
+      !$omp parallel do private(i, ii, jj, kk) collapse(2)
+      do k = 1, dims(3)
+        do j = 1, dims(2)
+          do i = 1, dims(1)
+            call get_index_reordering(ii, jj, kk, i, j, k, &
+                                      dir_from, dir_to, SZ, cart_padded)
+            u%data(i, j, k) = u%data(i, j, k) + u_%data(ii, jj, kk)
+          end do
+        end do
+      end do
+      !$omp end parallel do
+    end if
 
   end subroutine sum_intox_omp
 
@@ -559,6 +663,113 @@ contains
 
   end subroutine vecmult_omp
 
+  subroutine compute_vorticity_omp( &
+    self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: field_out
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    field_out%data = sqrt((dwdy%data - dvdz%data)*(dwdy%data - dvdz%data) + &
+                          (dudz%data - dwdx%data)*(dudz%data - dwdx%data) + &
+                          (dvdx%data - dudy%data)*(dvdx%data - dudy%data))
+
+  end subroutine compute_vorticity_omp
+
+  subroutine compute_qcriterion_omp( &
+    self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: field_out
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    field_out%data = -0.5_dp*(dudx%data*dudx%data + &
+                              dvdy%data*dvdy%data + &
+                              dwdz%data*dwdz%data) - &
+                     dudy%data*dvdx%data - &
+                     dudz%data*dwdx%data - &
+                     dvdz%data*dwdy%data
+
+  end subroutine compute_qcriterion_omp
+
+  subroutine compute_smagorinsky_nut_omp( &
+    self, nut, mixing_length_sq, dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+    dwdx, dwdy, dwdz)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: nut
+    class(field_t), intent(in) :: mixing_length_sq
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    real(dp) :: sij_sq
+    integer :: i, j, k
+
+    !$omp parallel do private(sij_sq) collapse(2)
+    do k = 1, size(nut%data, 3)
+      do j = 1, size(nut%data, 2)
+        !$omp simd private(sij_sq)
+        do i = 1, size(nut%data, 1)
+          if (mixing_length_sq%data(i, j, k) > 0._dp) then
+            sij_sq = dudx%data(i, j, k)**2 + &
+                     dvdy%data(i, j, k)**2 + &
+                     dwdz%data(i, j, k)**2 + &
+                     0.5_dp*(dudy%data(i, j, k) + &
+                             dvdx%data(i, j, k))**2 + &
+                     0.5_dp*(dudz%data(i, j, k) + &
+                             dwdx%data(i, j, k))**2 + &
+                     0.5_dp*(dvdz%data(i, j, k) + &
+                             dwdy%data(i, j, k))**2
+            nut%data(i, j, k) = mixing_length_sq%data(i, j, k)* &
+                                sqrt(2._dp*sij_sq)
+          else
+            nut%data(i, j, k) = 0._dp
+          end if
+        end do
+        !$omp end simd
+      end do
+    end do
+    !$omp end parallel do
+
+  end subroutine compute_smagorinsky_nut_omp
+
+  subroutine compute_sgs_stress_omp( &
+    self, stress, nut, gradient_a, gradient_b, scale_a, scale_b)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: stress
+    class(field_t), intent(in) :: nut, gradient_a, gradient_b
+    real(dp), intent(in) :: scale_a, scale_b
+    integer :: i, j, k
+
+    !$omp parallel do collapse(2)
+    do k = 1, size(stress%data, 3)
+      do j = 1, size(stress%data, 2)
+        !$omp simd
+        do i = 1, size(stress%data, 1)
+          if (nut%data(i, j, k) > 0._dp) then
+            stress%data(i, j, k) = nut%data(i, j, k)*( &
+                                   scale_a*gradient_a%data(i, j, k) + &
+                                   scale_b*gradient_b%data(i, j, k))
+          else
+            stress%data(i, j, k) = 0._dp
+          end if
+        end do
+        !$omp end simd
+      end do
+    end do
+    !$omp end parallel do
+  end subroutine compute_sgs_stress_omp
+
   real(dp) function scalar_product_omp(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]
     implicit none
@@ -621,6 +832,55 @@ contains
                        ierr)
 
   end function scalar_product_omp
+
+  real(dp) function vector_norm_squared_omp(self, a, b, c) &
+    result(norm_squared)
+    !! Global sum of a**2 + b**2 + c**2, with one MPI reduction.
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(in) :: a, b, c
+
+    real(dp) :: local_sum, pencil_sum
+    integer :: dims(3), stacked
+    integer :: i, j, k, k_i, k_j, ierr
+
+    if (a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
+        c%data_loc == NULL_LOC) then
+      error stop 'You must set data_loc before computing a vector norm.'
+    end if
+    if (a%data_loc /= b%data_loc .or. a%data_loc /= c%data_loc) then
+      error stop 'Vector-norm fields must use the same data location.'
+    end if
+    if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) then
+      error stop 'Vector-norm fields must use DIR_X layout.'
+    end if
+
+    dims = self%mesh%get_dims(a%data_loc)
+    stacked = (dims(2) - 1)/SZ + 1
+
+    local_sum = 0._dp
+    !$omp parallel do collapse(2) reduction(+:local_sum) private(k, pencil_sum)
+    do k_j = 1, stacked
+      do k_i = 1, dims(3)
+        k = k_j + (k_i - 1)*stacked
+        pencil_sum = 0._dp
+        do j = 1, dims(1)
+          !$omp simd reduction(+:pencil_sum)
+          do i = 1, min(SZ, dims(2) - (k_j - 1)*SZ)
+            pencil_sum = pencil_sum + a%data(i, j, k)**2 + &
+                         b%data(i, j, k)**2 + c%data(i, j, k)**2
+          end do
+          !$omp end simd
+        end do
+        local_sum = local_sum + pencil_sum
+      end do
+    end do
+    !$omp end parallel do
+
+    call MPI_Allreduce(local_sum, norm_squared, 1, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+  end function vector_norm_squared_omp
 
   subroutine copy_into_buffers(u_send_s, u_send_e, u, n, n_groups)
     implicit none
@@ -720,6 +980,77 @@ contains
 
   end subroutine field_max_mean_omp
 
+  ! =========================================================================
+  ! Add to the OMP backend module, next to field_max_mean_omp
+  ! =========================================================================
+
+  subroutine slice_max_sum_omp(self, max_val, sum_val, f, i_slice, &
+                               enforced_data_loc)
+    !! [[m_base_backend(module):slice_max_sum(interface)]]
+    implicit none
+    class(omp_backend_t) :: self
+    real(dp), intent(out) :: max_val, sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    integer, optional, intent(in) :: enforced_data_loc
+
+    real(dp) :: val, max_p, sum_p
+    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j
+    integer :: i, j, k, k_i, k_j
+
+    if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
+      error stop 'The input field to omp::slice_max_sum does not have a &
+                  &valid f%data_loc. You may enforce a data_loc of your &
+                  &choice as last argument to carry on at your own risk!'
+    end if
+
+    if (present(enforced_data_loc)) then
+      data_loc = enforced_data_loc
+    else
+      data_loc = f%data_loc
+    end if
+
+    dims = self%mesh%get_dims(data_loc)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    if (f%dir == DIR_X) then
+      n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (f%dir == DIR_Y) then
+      n = dims(2); n_j = dims(1); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (f%dir == DIR_Z) then
+      n = dims(3); n_j = dims(1); n_i = dims(2); n_i_pad = dims_padded(2)
+    else
+      error stop 'slice_max_sum does not support DIR_C fields!'
+    end if
+
+    if (i_slice < 1 .or. i_slice > n) then
+      error stop 'slice_max_sum: i_slice out of range'
+    end if
+
+    j = i_slice
+    sum_p = 0._dp
+    max_p = -huge(1._dp)
+
+    !$omp parallel do collapse(2) reduction(+:sum_p) reduction(max:max_p) &
+    !$omp private(k, val)
+    do k_j = 1, (n_j - 1)/SZ + 1
+      do k_i = 1, n_i
+        k = k_j + (k_i - 1)*((n_j - 1)/SZ + 1)
+        do i = 1, min(SZ, n_j - (k_j - 1)*SZ)
+          val = f%data(i, j, k)
+          sum_p = sum_p + val
+          max_p = max(max_p, val)
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+    ! Rank-local values; caller is responsible for MPI_Allreduce.
+    max_val = max_p
+    sum_val = sum_p
+
+  end subroutine slice_max_sum_omp
+
   subroutine field_scale_omp(self, f, a)
     implicit none
 
@@ -740,7 +1071,8 @@ contains
     f%data = f%data + a
   end subroutine field_shift_omp
 
-  subroutine field_set_face_omp(self, f, c_start, c_end, face)
+  subroutine field_set_face_omp(self, f, c_start, c_end, face, &
+                                bc_start, bc_end, flow_rate_diff)
     !! [[m_base_backend(module):field_set_face(subroutine)]]
     implicit none
 
@@ -748,8 +1080,12 @@ contains
     class(field_t), intent(inout) :: f
     real(dp), intent(in) :: c_start, c_end
     integer, intent(in) :: face
+    integer, optional, intent(in) :: bc_start
+    integer, optional, intent(in) :: bc_end
+    real(dp), optional, intent(in) :: flow_rate_diff
 
     integer :: dims(3), k, j, i_mod, k_end
+    real(dp) :: fl_corr
 
     if (f%dir /= DIR_X) then
       error stop 'Setting a field face is only supported for DIR_X fields.'
@@ -758,6 +1094,9 @@ contains
     if (f%data_loc == NULL_LOC) then
       error stop 'field_set_face require a valid data_loc.'
     end if
+
+    fl_corr = 0._dp
+    if (present(flow_rate_diff)) fl_corr = flow_rate_diff
 
     dims = self%mesh%get_dims(f%data_loc)
 
@@ -771,6 +1110,7 @@ contains
         k_end = k + (dims(2) - 1)/SZ*dims(3)
         do j = 1, dims(1)
           f%data(1, j, k) = c_start
+          ! TODO: fix these from OpenMP looking at CUDA implementation
           f%data(i_mod, j, k_end) = c_end
         end do
       end do
@@ -782,6 +1122,74 @@ contains
     end select
 
   end subroutine field_set_face_omp
+  subroutine field_set_face_from_field_omp(self, f, f_start, c_end, face, &
+                                           bc_start, bc_end, flow_rate_diff)
+    implicit none
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    class(field_t), intent(in) :: f_start
+    real(dp), intent(in) :: c_end
+    integer, intent(in) :: face
+    integer, optional, intent(in) :: bc_start, bc_end
+    real(dp), optional, intent(in) :: flow_rate_diff
+    integer :: dims(3), k, i, j, z, i_max, n_mod, n_y_blocks, y_block, &
+               k_start, k_end
+    real(dp) :: flow_rate_diff_val
+
+    if (f%dir /= DIR_X) &
+      error stop 'field_set_face_from_field: only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_set_face_from_field: requires a valid data_loc.'
+    flow_rate_diff_val = 0._dp
+    if (present(flow_rate_diff)) flow_rate_diff_val = flow_rate_diff
+
+    dims = self%mesh%get_dims(f%data_loc)
+    n_mod = mod(dims(2) - 1, SZ) + 1
+    n_y_blocks = (dims(2) - 1)/SZ + 1
+
+    select case (face)
+    case (X_FACE)
+
+      !$omp parallel do private(k_end, y_block, i_max)
+      do k = 1, n_y_blocks*dims(3)
+        ! OMP DIR_X ordering: dir_k = n_y_blocks*(z - 1) + y_block,
+        ! so the y-block is the fast-varying component (see get_index_dir)
+        y_block = mod(k - 1, n_y_blocks) + 1
+        k_end = k
+        if (y_block == n_y_blocks) then
+          i_max = n_mod
+        else
+          i_max = SZ
+        end if
+        do i = 1, i_max
+          ! left face: spatially-varying Dirichlet from f_start at i=1
+          f%data(i, 1, k) = f_start%data(i, 1, k)
+          ! right face: convective outflow
+          associate (fd => f%data(i, dims(1), k_end), &
+                     fd1 => f%data(i, dims(1) - 1, k_end))
+            fd = fd - c_end*(fd - fd1) + flow_rate_diff_val
+          end associate
+        end do
+      end do
+      !$omp end parallel do
+    case (Y_FACE)
+      !$omp parallel do private(k_start, k_end)
+      do z = 1, dims(3)
+        ! bottom wall (y = 1) and top wall (y = ny) in OMP DIR_X ordering
+        k_start = 1 + (z - 1)*n_y_blocks
+        k_end = n_y_blocks + (z - 1)*n_y_blocks
+        do j = 1, dims(1)
+          f%data(1, j, k_start) = f_start%data(1, j, k_start)
+          f%data(n_mod, j, k_end) = f_start%data(n_mod, j, k_end)
+        end do
+      end do
+      !$omp end parallel do
+
+    case default
+      error stop 'field_set_face_from_field: only X_FACE and Y_FACE supported.'
+    end select
+
+  end subroutine field_set_face_from_field_omp
 
   real(dp) function field_volume_integral_omp(self, f) result(s)
     !! volume integral of a field
@@ -852,7 +1260,7 @@ contains
     implicit none
 
     class(omp_backend_t) :: self
-    type(mesh_t), intent(in) :: mesh
+    type(mesh_t), target, intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
 
@@ -871,4 +1279,3 @@ contains
   end subroutine init_omp_poisson_fft
 
 end module m_omp_backend
-

@@ -1,6 +1,72 @@
 Input Parameters
 ----------------
 
+LES Parameters
+~~~~~~~~~~~~~~
+
+The explicit large-eddy simulation (LES) parameters are specified in the
+optional ``les_params`` namelist block. Selecting ``'smagorinsky'`` computes
+the eddy-viscosity field and adds the SGS stress divergence to the momentum
+right-hand side at every Runge--Kutta stage or Adams--Bashforth step. This is
+supported on the OpenMP and CUDA backends. If the block is omitted, LES
+defaults to ``model = 'none'`` and the momentum equations are unchanged.
+
+.. code-block:: fortran
+
+   &les_params
+     model = 'none'
+     smagorinsky_constant = 0.14
+     wall_damping = .false.
+     wall_damping_n = 3.0
+     von_karman_constant = 0.4
+     roughness_length = 0.0
+   /
+
+``model``: Explicit SGS model selector. Supported values are ``'none'`` and
+``'smagorinsky'``.
+  **Default:** ``'none'``
+
+``smagorinsky_constant``: Smagorinsky coefficient :math:`C_s`. Without wall
+damping, the mixing length is :math:`\ell_s=C_s\Delta`, where the local filter
+width is :math:`\Delta=(\Delta x\,\Delta y\,\Delta z)^{1/3}`. The eddy viscosity
+is
+
+.. math::
+
+   \nu_t = \ell_s^2 |S|, \qquad
+   |S| = \sqrt{2 S_{ij}S_{ij}}, \qquad
+   S_{ij} = \frac{1}{2}\left(
+     \frac{\partial u_i}{\partial x_j} +
+     \frac{\partial u_j}{\partial x_i}\right).
+
+  **Default:** ``0.14``
+
+``wall_damping``: Enables the Mason--Thomson mixing-length blend used by
+Incompact3d. For wall distance :math:`y` and roughness length :math:`z_0`,
+
+.. math::
+
+   \ell_s = \Delta\left[C_s^{-n} +
+   \left(\frac{\kappa(y+z_0)}{\Delta}\right)^{-n}\right]^{-1/n}.
+
+For a smooth wall (``roughness_length = 0``), this makes ``nut`` tend to zero
+at the wall and approach the undamped Smagorinsky value away from it.
+  **Default:** ``.false.``
+
+``wall_damping_n``: Exponent :math:`n` in the Mason--Thomson blend.
+  **Default:** ``3.0``
+
+``von_karman_constant``: von Karman constant :math:`\kappa` used by the
+wall-damping length scale.
+  **Default:** ``0.4``
+
+``roughness_length``: Aerodynamic roughness length :math:`z_0` in the same
+units as the mesh coordinates. Use ``0.0`` for a smooth wall.
+  **Default:** ``0.0``
+
+The Smagorinsky, wall-damping, and von Karman constants must be positive;
+``roughness_length`` must be non-negative.
+
 Checkpoint Parameters
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -17,6 +83,7 @@ These parameters are specified in the ``checkpoint_params`` namelist block in th
      snapshot_prefix = "snapshot"
      snapshot_sp = .false.
      output_stride = 2, 2, 2
+     output_fields = 'pressure', 'vorticity', 'qcriterion', 'species'
      restart_from_checkpoint = .false.
      restart_file = ""
    /End
@@ -42,6 +109,17 @@ These parameters are specified in the ``checkpoint_params`` namelist block in th
 ``output_stride``: Three-element array specifying the spatial stride (subsampling) in ``X``, ``Y``, and ``Z`` directions for visualisation snapshots. Using values greater than ``1`` reduces file size and increases I/O performance, but decreases visualisation resolution.
   **Default:** ``[1, 1, 1]``
 
+``output_fields``: List of additional fields to include in visualisation snapshots. Velocity components (``u``, ``v``, ``w``) are always written. Supported field names:
+
+  - ``'pressure'`` — Pressure field, interpolated from its native cell-centred grid to the vertex grid for ParaView compatibility. Not included in checkpoint files since it is recomputed from velocity.
+  - ``'vorticity'`` — Vorticity magnitude :math:`|\omega| = \sqrt{\omega_x^2 + \omega_y^2 + \omega_z^2}`, computed from the full velocity gradient tensor.
+  - ``'qcriterion'`` — Q-criterion :math:`Q = -\frac{1}{2} \sum_{ij} \frac{\partial u_i}{\partial x_j} \frac{\partial u_j}{\partial x_i}`, identifying vortical structures (positive Q indicates rotation-dominated regions).
+  - ``'ibm'`` — Immersed boundary method mask field (``ep1``). Values are ``1`` in the fluid domain and ``0`` in the solid domain. Requires ``ibm_on = .true.`` in the input file.
+  - ``'species'`` — All transported species fields. In the input file, set ``n_species = N`` with ``N > 0`` and provide ``pr_species = ...`` in ``solver_params``, then add ``'species'`` to ``output_fields``. Snapshots then include ``phi_1`` through ``phi_N``.
+
+  When both ``'vorticity'`` and ``'qcriterion'`` are requested, the velocity gradient tensor is computed only once.
+  **Default:** (empty — only velocity is written)
+
 ``restart_from_checkpoint``: Boolean flag to restart the simulation from a checkpoint file.
   **Default:** ``false``
 
@@ -60,3 +138,53 @@ The checkpoint system uses ADIOS2 BP format for I/O which provides:
 - Visualisation files can use strided (lower resolution) output for performance
 
 To view snapshot files in ParaView, open the generated ``.bp`` files using the ADIOS2 reader plugin.
+
+Statistics Parameters
+~~~~~~~~~~~~~~~~~~~~~
+
+The statistics parameters control the accumulation and output of time-averaged flow statistics.
+These parameters are specified in the ``stats_params`` namelist block in the input file.
+
+.. code-block:: fortran
+
+   &stats_params
+     initstat = 0
+     istatfreq = 1
+     istatout = 0
+     stats_prefix = "statistics"
+   /
+
+``initstat``: Timestep at which to begin accumulating statistics. Statistics are not collected before this iteration. Set to ``0`` to disable statistics entirely.
+  **Default:** ``0``
+
+``istatfreq``: Frequency (in timesteps) at which statistics are accumulated. A value of ``1`` means statistics are accumulated every timestep; a value of ``N`` means every N-th timestep.
+  **Default:** ``1``
+
+``istatout``: Frequency (in timesteps) at which accumulated statistics are written to file. Set to ``0`` to disable output.
+  **Default:** ``0``
+
+``stats_prefix``: String prefix for statistics output filenames.
+  **Default:** ``"statistics"``
+
+Output Fields
+^^^^^^^^^^^^^
+
+Statistics are written to separate ADIOS2 ``.bp`` files (e.g. ``statistics_001000.bp``), independent of the snapshot system. The output contains:
+
+**Velocity statistics** (always present):
+
+- ``umean``, ``vmean``, ``wmean`` — time-averaged velocity components
+- ``uprime``, ``vprime``, ``wprime`` — RMS velocity fluctuations: :math:`u' = \sqrt{\max(0,\, \overline{u^2} - \bar{u}^2)}`
+- ``uvmean``, ``uwmean``, ``vwmean`` — Reynolds stresses: :math:`\langle u'v' \rangle = \overline{uv} - \bar{u}\bar{v}`
+- ``sample_count`` — number of samples accumulated
+
+**Pressure statistics** (when ``'pressure'`` is in ``output_fields`` in ``checkpoint_params``):
+
+- ``pmean`` — time-averaged pressure field
+
+**Scalar statistics** (when ``n_species > 0`` in ``solver_params``):
+
+- ``phimean_N`` — time-averaged scalar field for species N
+- ``phiprime_N`` — RMS scalar fluctuation for species N
+
+Accumulation uses Welford's numerically stable online algorithm. Statistics always restart from scratch — they are not saved in checkpoint files.

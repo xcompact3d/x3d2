@@ -39,8 +39,6 @@ program xcompact
 
   type(allocator_t), target :: omp_allocator
 
-  real(dp) :: t_start, t_end
-
   type(domain_config_t) :: domain_cfg
   type(solver_config_t) :: solver_cfg
   character(32) :: backend_name
@@ -128,13 +126,7 @@ program xcompact
   end select
   if (nrank == 0) print *, 'solver instantiated'
 
-  call cpu_time(t_start)
-
   call flow_case%run()
-
-  call cpu_time(t_end)
-
-  if (nrank == 0) print *, 'Time: ', t_end - t_start
 
   call MPI_Finalize(ierr)
 

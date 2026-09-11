@@ -8,6 +8,11 @@ module m_config
 
   integer, parameter :: n_species_max = 99
 
+  !! Maximum number of additional snapshot output fields accepted from the
+  !! input file. Some entries, such as ``species``, can expand to multiple
+  !! written snapshot fields.
+  integer, parameter :: MAX_OUTPUT_FIELDS = 10
+
   type, abstract :: base_config_t
     !! All config types have a method read to initialise their data
   contains
@@ -38,8 +43,22 @@ module m_config
     procedure :: read => read_solver_nml
   end type solver_config_t
 
+  type, extends(base_config_t) :: les_config_t
+    !! Configuration for explicit sub-grid-scale modelling.
+    character(len=20) :: model = 'none'
+    real(dp) :: smagorinsky_constant = 0.14_dp
+    logical :: wall_damping = .false.
+    real(dp) :: wall_damping_n = 3._dp
+    real(dp) :: von_karman_constant = 0.4_dp
+    real(dp) :: roughness_length = 0._dp
+  contains
+    procedure :: read => read_les_nml
+  end type les_config_t
+
   type, extends(base_config_t) :: channel_config_t
-    real(dp) :: noise, omega_rot
+    real(dp) :: omega_rot
+    real(dp) :: init_noise(3)
+    real(dp) :: inlet_noise(3)
     logical :: rotation
     integer :: n_rotate
   contains
@@ -48,9 +67,19 @@ module m_config
 
   type, extends(base_config_t) :: cylinder_config_t
     real(dp) :: init_noise(3)
+    real(dp) :: inlet_noise(3)
   contains
     procedure :: read => read_cylinder_nml
   end type cylinder_config_t
+
+  type, extends(base_config_t) :: stats_config_t
+    integer :: initstat = 0          !! iteration to start accumulating (0 = disabled)
+    integer :: istatfreq = 1         !! accumulate every N steps
+    integer :: istatout = 0          !! write stats every N steps (0 = disabled)
+    character(len=256) :: stats_prefix = "statistics"
+  contains
+    procedure :: read => read_stats_nml
+  end type stats_config_t
 
   type, extends(base_config_t) :: checkpoint_config_t
     integer :: checkpoint_freq = 0                         !! Frequency of checkpointing (0 = off)
@@ -62,6 +91,7 @@ module m_config
     character(len=256) :: restart_file = ""
     integer, dimension(3) :: output_stride = [2, 2, 2]     !! Spatial stride for snapshot output
     logical :: snapshot_sp = .false.                       !! if true, snapshot in single precision
+    character(len=32) :: output_fields(MAX_OUTPUT_FIELDS) = '' !! additional snapshot output fields
   contains
     procedure :: read => read_checkpoint_nml
   end type checkpoint_config_t
@@ -186,6 +216,64 @@ contains
 
   end subroutine read_solver_nml
 
+  subroutine read_les_nml(self, nml_file, nml_string)
+    class(les_config_t) :: self
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
+
+    integer :: unit, ierr
+    character(len=20) :: model
+    real(dp) :: smagorinsky_constant, wall_damping_n, von_karman_constant
+    real(dp) :: roughness_length
+    logical :: wall_damping
+
+    namelist /les_params/ model, smagorinsky_constant, wall_damping, &
+      wall_damping_n, von_karman_constant, roughness_length
+
+    model = self%model
+    smagorinsky_constant = self%smagorinsky_constant
+    wall_damping = self%wall_damping
+    wall_damping_n = self%wall_damping_n
+    von_karman_constant = self%von_karman_constant
+    roughness_length = self%roughness_length
+
+    if (present(nml_file) .and. present(nml_string)) then
+      error stop 'Reading LES config failed! &
+                 & Provide only a file name or source.'
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file, iostat=ierr)
+      if (ierr /= 0) error stop 'Opening LES config file failed.'
+      read (unit, nml=les_params, iostat=ierr)
+      close (unit)
+      ! Existing input files may omit this optional namelist. End-of-file
+      ! therefore selects the defaults, while a malformed block remains fatal.
+      if (ierr > 0) error stop 'Reading LES config failed.'
+    else if (present(nml_string)) then
+      read (nml_string, nml=les_params)
+    else
+      error stop 'Reading LES config failed! Provide a file name or source.'
+    end if
+
+    select case (trim(model))
+    case ('none', 'smagorinsky')
+    case default
+      error stop 'Unknown LES model. Use "none" or "smagorinsky".'
+    end select
+    if (smagorinsky_constant <= 0._dp) &
+      error stop 'smagorinsky_constant must be positive.'
+    if (von_karman_constant <= 0._dp .or. wall_damping_n <= 0._dp) &
+      error stop 'LES wall-damping constants must be positive.'
+    if (roughness_length < 0._dp) &
+      error stop 'roughness_length must not be negative.'
+
+    self%model = trim(model)
+    self%smagorinsky_constant = smagorinsky_constant
+    self%wall_damping = wall_damping
+    self%wall_damping_n = wall_damping_n
+    self%von_karman_constant = von_karman_constant
+    self%roughness_length = roughness_length
+  end subroutine read_les_nml
+
   subroutine read_channel_nml(self, nml_file, nml_string)
     implicit none
 
@@ -195,11 +283,18 @@ contains
 
     integer :: unit
 
-    real(dp) :: noise, omega_rot
+    real(dp) :: init_noise(3)
+    real(dp) :: inlet_noise(3)
+    real(dp) :: omega_rot
     logical :: rotation
     integer :: n_rotate
 
-    namelist /channel_nml/ noise, rotation, omega_rot, n_rotate
+    namelist /channel_nml/ init_noise, inlet_noise, &
+      rotation, omega_rot, n_rotate
+
+    ! Default to no noise if the namelist omits these entries.
+    init_noise = 0._dp
+    inlet_noise = 0._dp
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading channel config failed! &
@@ -215,7 +310,8 @@ contains
                  &Provide at least one of the following: file name or source'
     end if
 
-    self%noise = noise
+    self%init_noise = init_noise
+    self%inlet_noise = inlet_noise
     self%rotation = rotation
     self%omega_rot = omega_rot
     self%n_rotate = n_rotate
@@ -232,8 +328,13 @@ contains
     integer :: unit
 
     real(dp) :: init_noise(3)
+    real(dp) :: inlet_noise(3)
 
-    namelist /cylinder_nml/ init_noise
+    namelist /cylinder_nml/ init_noise, inlet_noise
+
+    ! Default to no noise if the namelist omits these entries.
+    init_noise = 0._dp
+    inlet_noise = 0._dp
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading cylinder config failed! &
@@ -250,6 +351,7 @@ contains
     end if
 
     self%init_noise = init_noise
+    self%inlet_noise = inlet_noise
 
   end subroutine read_cylinder_nml
 
@@ -271,10 +373,12 @@ contains
     character(len=256) :: restart_file = ""
     integer, dimension(3) :: output_stride = [1, 1, 1]
     logical :: snapshot_sp = .false.
+    character(len=32) :: output_fields(MAX_OUTPUT_FIELDS) = ''
 
     namelist /checkpoint_params/ checkpoint_freq, snapshot_freq, &
       keep_checkpoint, checkpoint_prefix, snapshot_prefix, &
-      restart_from_checkpoint, restart_file, output_stride, snapshot_sp
+      restart_from_checkpoint, restart_file, output_stride, snapshot_sp, &
+      output_fields
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading checkpoint config failed! &
                  &Provide only a file name or source, not both.'
@@ -304,7 +408,56 @@ contains
     self%restart_file = restart_file
     self%output_stride = output_stride
     self%snapshot_sp = snapshot_sp
+    self%output_fields = output_fields
   end subroutine read_checkpoint_nml
 
-end module m_config
+  subroutine read_stats_nml(self, nml_file, nml_string)
+    implicit none
 
+    class(stats_config_t) :: self
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
+
+    integer :: unit, ierr
+
+    integer :: initstat = 0
+    integer :: istatfreq = 1
+    integer :: istatout = 0
+    character(len=256) :: stats_prefix = "statistics"
+
+    namelist /stats_params/ initstat, istatfreq, istatout, stats_prefix
+
+    if (present(nml_file) .and. present(nml_string)) then
+      error stop 'Reading stats config failed! &
+                 &Provide only a file name or source, not both.'
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file, iostat=ierr)
+      if (ierr == 0) then
+        read (unit, nml=stats_params, iostat=ierr)
+        if (ierr /= 0 .and. ierr /= -1) &
+          print *, 'WARNING: Error in stats_params namelist, &
+          & using defaults'
+      end if
+      close (unit)
+    else if (present(nml_string)) then
+      read (nml_string, nml=stats_params)
+    else
+      error stop 'Reading stats config failed! &
+                 &Provide at least one of the following: file name or source'
+    end if
+
+    self%initstat = initstat
+    self%istatfreq = istatfreq
+    self%istatout = istatout
+    self%stats_prefix = stats_prefix
+  end subroutine read_stats_nml
+
+  pure logical function has_output_field(config, name)
+    !! Check whether a field name is present in the output_fields list.
+    type(checkpoint_config_t), intent(in) :: config
+    character(*), intent(in) :: name
+
+    has_output_field = any(config%output_fields == name)
+  end function has_output_field
+
+end module m_config

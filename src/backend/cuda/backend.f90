@@ -9,7 +9,7 @@ module m_cuda_backend
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC, &
-                      X_FACE, Y_FACE, Z_FACE
+                      X_FACE, Y_FACE, Z_FACE, BC_DIRICHLET
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t, tdsops_t
@@ -17,14 +17,23 @@ module m_cuda_backend
   use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused, exec_dist_tds_compact
+  use m_cuda_exec_thom, only: exec_thom_tds_compact
   use m_cuda_poisson_fft, only: cuda_poisson_fft_t
   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
   use m_cuda_tdsops, only: cuda_tdsops_t
   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
   use m_cuda_kernels_fieldops, only: axpby, buffer_copy, field_scale, &
                                      field_shift, scalar_product, &
+                                     vector_norm_squared, &
                                      field_max_sum, field_set_y_face, &
-                                     pwmul, volume_integral
+                                     field_set_x_face, &
+                                     field_set_x_face_from_field, &
+                                     field_set_y_face_from_field, &
+                                     pwmul, volume_integral, &
+                                     vorticity_from_gradients, &
+                                     qcriterion_from_gradients, &
+                                     smagorinsky_from_gradients, &
+                                     sgs_stress_from_gradients
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
                                     reorder_c2x, reorder_x2c, &
@@ -51,6 +60,7 @@ module m_cuda_backend
     procedure :: transeq_z => transeq_z_cuda
     procedure :: transeq_species => transeq_species_cuda
     procedure :: tds_solve => tds_solve_cuda
+    procedure :: thom_solve => thom_solve_cuda
     procedure :: reorder => reorder_cuda
     procedure :: sum_yintox => sum_yintox_cuda
     procedure :: sum_zintox => sum_zintox_cuda
@@ -58,14 +68,23 @@ module m_cuda_backend
     procedure :: vecadd => vecadd_cuda
     procedure :: vecmult => vecmult_cuda
     procedure :: scalar_product => scalar_product_cuda
+    procedure :: vector_norm_squared => vector_norm_squared_cuda
     procedure :: field_max_mean => field_max_mean_cuda
+    procedure :: slice_max_sum => slice_max_sum_cuda
     procedure :: field_scale => field_scale_cuda
     procedure :: field_shift => field_shift_cuda
     procedure :: field_set_face => field_set_face_cuda
+    procedure :: field_set_face_from_field => field_set_face_from_field_cuda
+    procedure :: compute_vorticity => compute_vorticity_cuda
+    procedure :: compute_qcriterion => compute_qcriterion_cuda
+    procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_cuda
+    procedure :: compute_sgs_stress => compute_sgs_stress_cuda
     procedure :: field_volume_integral => field_volume_integral_cuda
     procedure :: copy_data_to_f => copy_data_to_f_cuda
     procedure :: copy_f_to_data => copy_f_to_data_cuda
     procedure :: init_poisson_fft => init_cuda_poisson_fft
+    procedure :: sync => sync_cuda
+    procedure :: get_device_bw_info => get_device_bw_info_cuda
     procedure :: transeq_cuda_dist
     procedure :: transeq_cuda_thom
     procedure :: tds_solve_dist
@@ -164,6 +183,35 @@ contains
     end select
 
   end subroutine alloc_cuda_tdsops
+
+  subroutine sync_cuda(self)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    integer :: ierr
+
+    ierr = cudaDeviceSynchronize()
+
+  end subroutine sync_cuda
+
+  subroutine get_device_bw_info_cuda(self, mem_clock_rt, mem_bus_width, &
+                                     available)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    integer, intent(out) :: mem_clock_rt
+    integer, intent(out) :: mem_bus_width
+    logical, intent(out) :: available
+    integer :: ierr, devnum
+
+    ierr = cudaGetDevice(devnum)
+    ierr = cudaDeviceGetAttribute(mem_clock_rt, cudaDevAttrMemoryClockRate, &
+                                  devnum)
+    ierr = cudaDeviceGetAttribute(mem_bus_width, &
+                                  cudaDevAttrGlobalMemoryBusWidth, devnum)
+    available = .true.
+
+  end subroutine get_device_bw_info_cuda
 
   subroutine transeq_x_cuda(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
@@ -463,6 +511,43 @@ contains
 
   end subroutine tds_solve_cuda
 
+  subroutine thom_solve_cuda(self, du, u, tdsops)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: du
+    class(field_t), intent(in) :: u
+    class(tdsops_t), intent(in) :: tdsops
+
+    real(dp), device, pointer, dimension(:, :, :) :: du_dev, u_dev
+    type(cuda_tdsops_t), pointer :: tdsops_dev
+    type(dim3) :: blocks, threads
+
+    if (u%dir /= du%dir) then
+      error stop 'DIR mismatch between fields in thom_solve.'
+    end if
+
+    blocks = dim3(self%allocator%get_n_groups(u%dir), 1, 1)
+    threads = dim3(SZ, 1, 1)
+
+    if (u%data_loc /= NULL_LOC) then
+      call du%set_data_loc(move_data_loc(u%data_loc, u%dir, tdsops%move))
+    end if
+
+    call resolve_field_t(du_dev, du)
+    call resolve_field_t(u_dev, u)
+
+    select type (tdsops)
+    type is (cuda_tdsops_t)
+      tdsops_dev => tdsops
+    class default
+      error stop 'Expected cuda_tdsops_t in thom_solve_cuda.'
+    end select
+
+    call exec_thom_tds_compact(du_dev, u_dev, tdsops_dev, blocks, threads)
+
+  end subroutine thom_solve_cuda
+
   subroutine tds_solve_dist(self, du, u, tdsops, blocks, threads)
     implicit none
 
@@ -740,6 +825,139 @@ contains
 
   end subroutine vecmult_cuda
 
+  subroutine compute_vorticity_cuda( &
+    self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: field_out
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    real(dp), device, pointer, dimension(:, :, :) :: &
+      vort_d, dudy_d, dudz_d, dvdx_d, dvdz_d, dwdx_d, dwdy_d
+    type(dim3) :: blocks, threads
+    integer :: n
+
+    call resolve_field_t(vort_d, field_out)
+    call resolve_field_t(dudy_d, dudy)
+    call resolve_field_t(dudz_d, dudz)
+    call resolve_field_t(dvdx_d, dvdx)
+    call resolve_field_t(dvdz_d, dvdz)
+    call resolve_field_t(dwdx_d, dwdx)
+    call resolve_field_t(dwdy_d, dwdy)
+
+    n = size(vort_d, dim=2)
+    blocks = dim3(size(vort_d, dim=3), 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call vorticity_from_gradients<<<blocks, threads>>>( &
+      vort_d, dudy_d, dudz_d, dvdx_d, dvdz_d, dwdx_d, dwdy_d, n) !&
+
+  end subroutine compute_vorticity_cuda
+
+  subroutine compute_qcriterion_cuda( &
+    self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: field_out
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    real(dp), device, pointer, dimension(:, :, :) :: &
+      qcrit_d, dudx_d, dudy_d, dudz_d, dvdx_d, dvdy_d, dvdz_d, dwdx_d, &
+      dwdy_d, dwdz_d
+    type(dim3) :: blocks, threads
+    integer :: n
+
+    call resolve_field_t(qcrit_d, field_out)
+    call resolve_field_t(dudx_d, dudx)
+    call resolve_field_t(dudy_d, dudy)
+    call resolve_field_t(dudz_d, dudz)
+    call resolve_field_t(dvdx_d, dvdx)
+    call resolve_field_t(dvdy_d, dvdy)
+    call resolve_field_t(dvdz_d, dvdz)
+    call resolve_field_t(dwdx_d, dwdx)
+    call resolve_field_t(dwdy_d, dwdy)
+    call resolve_field_t(dwdz_d, dwdz)
+
+    n = size(qcrit_d, dim=2)
+    blocks = dim3(size(qcrit_d, dim=3), 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call qcriterion_from_gradients<<<blocks, threads>>>( &
+      qcrit_d, dudx_d, dudy_d, dudz_d, dvdx_d, dvdy_d, dvdz_d, dwdx_d, &
+      dwdy_d, dwdz_d, n) !&
+
+  end subroutine compute_qcriterion_cuda
+
+  subroutine compute_smagorinsky_nut_cuda( &
+    self, nut, mixing_length_sq, dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+    dwdx, dwdy, dwdz)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: nut
+    class(field_t), intent(in) :: mixing_length_sq
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    real(dp), device, pointer, dimension(:, :, :) :: &
+      nut_d, mixing_length_sq_d, dudx_d, dudy_d, dudz_d, &
+      dvdx_d, dvdy_d, dvdz_d, dwdx_d, dwdy_d, dwdz_d
+    type(dim3) :: blocks, threads
+    integer :: n
+
+    call resolve_field_t(nut_d, nut)
+    call resolve_field_t(mixing_length_sq_d, mixing_length_sq)
+    call resolve_field_t(dudx_d, dudx)
+    call resolve_field_t(dudy_d, dudy)
+    call resolve_field_t(dudz_d, dudz)
+    call resolve_field_t(dvdx_d, dvdx)
+    call resolve_field_t(dvdy_d, dvdy)
+    call resolve_field_t(dvdz_d, dvdz)
+    call resolve_field_t(dwdx_d, dwdx)
+    call resolve_field_t(dwdy_d, dwdy)
+    call resolve_field_t(dwdz_d, dwdz)
+
+    n = size(nut_d, dim=2)
+    blocks = dim3(size(nut_d, dim=3), 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call smagorinsky_from_gradients<<<blocks, threads>>>( &
+      nut_d, mixing_length_sq_d, dudx_d, dudy_d, dudz_d, &
+      dvdx_d, dvdy_d, dvdz_d, dwdx_d, dwdy_d, dwdz_d, n) !&
+
+  end subroutine compute_smagorinsky_nut_cuda
+
+  subroutine compute_sgs_stress_cuda( &
+    self, stress, nut, gradient_a, gradient_b, scale_a, scale_b)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: stress
+    class(field_t), intent(in) :: nut, gradient_a, gradient_b
+    real(dp), intent(in) :: scale_a, scale_b
+
+    real(dp), device, pointer, dimension(:, :, :) :: &
+      stress_d, nut_d, gradient_a_d, gradient_b_d
+    type(dim3) :: blocks, threads
+    integer :: n
+
+    call resolve_field_t(stress_d, stress)
+    call resolve_field_t(nut_d, nut)
+    call resolve_field_t(gradient_a_d, gradient_a)
+    call resolve_field_t(gradient_b_d, gradient_b)
+
+    n = size(stress_d, dim=2)
+    blocks = dim3(size(stress_d, dim=3), 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call sgs_stress_from_gradients<<<blocks, threads>>>( &
+      stress_d, nut_d, gradient_a_d, gradient_b_d, &
+      scale_a, scale_b, n) !&
+  end subroutine compute_sgs_stress_cuda
+
   real(dp) function scalar_product_cuda(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]
     implicit none
@@ -789,6 +1007,50 @@ contains
                        MPI_COMM_WORLD, ierr)
 
   end function scalar_product_cuda
+
+  real(dp) function vector_norm_squared_cuda(self, a, b, c) &
+    result(norm_squared)
+    !! Global sum of a**2 + b**2 + c**2, with one MPI reduction.
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(in) :: a, b, c
+
+    real(dp), device, pointer, dimension(:, :, :) :: a_d, b_d, c_d
+    real(dp), device, allocatable :: norm_squared_d
+    real(dp) :: local_sum
+    integer :: dims(3), dims_padded(3), ierr
+    type(dim3) :: blocks, threads
+
+    if (a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
+        c%data_loc == NULL_LOC) then
+      error stop 'You must set data_loc before computing a vector norm.'
+    end if
+    if (a%data_loc /= b%data_loc .or. a%data_loc /= c%data_loc) then
+      error stop 'Vector-norm fields must use the same data location.'
+    end if
+    if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) then
+      error stop 'Vector-norm fields must use DIR_X layout.'
+    end if
+
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    allocate (norm_squared_d)
+    norm_squared_d = 0._dp
+    dims = self%mesh%get_dims(a%data_loc)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    blocks = dim3(dims(3), (dims(2) - 1)/SZ + 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call vector_norm_squared<<<blocks, threads>>>( & !&
+      norm_squared_d, a_d, b_d, c_d, dims(1), dims_padded(3), dims(2))
+
+    local_sum = norm_squared_d
+    call MPI_Allreduce(local_sum, norm_squared, 1, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+  end function vector_norm_squared_cuda
 
   subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n)
     implicit none
@@ -870,6 +1132,88 @@ contains
 
   end subroutine field_max_mean_cuda
 
+  attributes(global) subroutine slice_max_sum_kernel(max_f, sum_f, f, &
+                                                     i_slice, n_i_pad, n_j)
+    !! Reduces a single slice f(i_slice, :, :) (in the kernel's packed-pencil
+    !! indexing). Signed max/sum, no abs. One thread per (y, z) point.
+    implicit none
+    real(dp), device, intent(inout) :: max_f, sum_f
+    real(dp), device, intent(in), dimension(:, :, :) :: f
+    integer, value, intent(in) :: i_slice, n_i_pad, n_j
+    real(dp) :: val
+    integer :: i, b, b_i, b_j, ierr
+
+    i = threadIdx%x
+    b_i = blockIdx%x
+    b_j = blockIdx%y
+    b = b_i + (b_j - 1)*n_i_pad
+
+    if (i + (b_j - 1)*blockDim%x <= n_j) then
+      val = f(i, i_slice, b)
+      ierr = atomicadd(sum_f, val)
+      ierr = atomicmax(max_f, val)
+    end if
+  end subroutine slice_max_sum_kernel
+
+  subroutine slice_max_sum_cuda(self, max_val, sum_val, f, i_slice, &
+                                enforced_data_loc)
+    !! [[m_base_backend(module):slice_max_sum(interface)]]
+    implicit none
+    class(cuda_backend_t) :: self
+    real(dp), intent(out) :: max_val, sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    integer, optional, intent(in) :: enforced_data_loc
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    real(dp), device, allocatable :: max_d, sum_d
+    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j
+    type(dim3) :: blocks, threads
+
+    if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
+      error stop 'The input field to cuda::slice_max_sum does not have a &
+                  &valid f%data_loc. You may enforce a data_loc of your &
+                  &choice as last argument to carry on at your own risk!'
+    end if
+
+    if (present(enforced_data_loc)) then
+      data_loc = enforced_data_loc
+    else
+      data_loc = f%data_loc
+    end if
+
+    dims = self%mesh%get_dims(data_loc)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    if (f%dir == DIR_X) then
+      n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (f%dir == DIR_Y) then
+      n = dims(2); n_j = dims(1); n_i = dims(3); n_i_pad = dims_padded(3)
+    else if (f%dir == DIR_Z) then
+      n = dims(3); n_j = dims(2); n_i = dims(1); n_i_pad = dims_padded(1)
+    else
+      error stop 'slice_max_sum does not support DIR_C fields!'
+    end if
+
+    if (i_slice < 1 .or. i_slice > n) then
+      error stop 'slice_max_sum: i_slice out of range'
+    end if
+
+    call resolve_field_t(f_d, f)
+    allocate (max_d, sum_d)
+    max_d = -huge(1._dp); sum_d = 0._dp
+
+    blocks = dim3(n_i, (n_j - 1)/SZ + 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call slice_max_sum_kernel<<<blocks, threads>>>(max_d, sum_d, f_d, & !&
+                                                   i_slice, n_i_pad, n_j)
+
+    ! Rank-local values; caller is responsible for MPI_Allreduce.
+    max_val = max_d
+    sum_val = sum_d
+
+  end subroutine slice_max_sum_cuda
+
   subroutine field_scale_cuda(self, f, a)
     implicit none
 
@@ -910,46 +1254,141 @@ contains
 
   end subroutine field_shift_cuda
 
-  subroutine field_set_face_cuda(self, f, c_start, c_end, face)
-    !! [[m_base_backend(module):field_set_face(subroutine)]]
+  subroutine field_set_face_cuda(self, f, c_start, c_end, face, &
+                                 bc_start, bc_end, flow_rate_diff)
     implicit none
 
     class(cuda_backend_t) :: self
     class(field_t), intent(inout) :: f
     real(dp), intent(in) :: c_start, c_end
     integer, intent(in) :: face
+    integer, optional, intent(in) :: bc_start, bc_end
+    real(dp), optional, intent(in) :: flow_rate_diff
 
     real(dp), device, pointer, dimension(:, :, :) :: f_d
     type(dim3) :: blocks, threads
-    integer :: dims(3), nx, ny, nz
+    integer :: dims(3)
+    integer :: bc_s, bc_e
+    real(dp) :: flow_rate_diff_val
 
     if (f%dir /= DIR_X) then
       error stop 'Setting a field face is only supported for DIR_X fields.'
     end if
-
     if (f%data_loc == NULL_LOC) then
-      error stop 'field_set_face require a valid data_loc.'
+      error stop 'field_set_face requires a valid data_loc.'
     end if
 
-    call resolve_field_t(f_d, f)
+    ! --- Resolve optional arguments with safe defaults ---
+    bc_s = BC_DIRICHLET
+    bc_e = BC_DIRICHLET
+    flow_rate_diff_val = 0._dp
 
+    if (present(bc_start)) bc_s = bc_start
+    if (present(bc_end)) bc_e = bc_end
+    if (present(flow_rate_diff)) flow_rate_diff_val = flow_rate_diff
+
+    call resolve_field_t(f_d, f)
     dims = self%mesh%get_dims(f%data_loc)
 
     select case (face)
     case (X_FACE)
-      error stop 'Setting X_FACE is not yet supported.'
+      blocks = dim3((SZ - 1)/64 + 1, ((dims(2) - 1)/SZ + 1)*dims(3), 1)
+      threads = dim3(64, 1, 1)
+      call field_set_x_face<<<blocks, threads>>>( &              !&
+          f_d, c_start, c_end, bc_s, bc_e, flow_rate_diff_val, &
+          dims(1), dims(2), dims(3))
+
     case (Y_FACE)
+      if (present(bc_start) .or. present(bc_end)) then
+        if (bc_s /= BC_DIRICHLET .or. bc_e /= BC_DIRICHLET) then
+          error stop 'field_set_face: Y_FACE only supports BC_DIRICHLET.'
+        end if
+      end if
       blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
       threads = dim3(64, 1, 1)
-      call field_set_y_face<<<blocks, threads>>>(f_d, c_start, c_end, & !&
-                                                 dims(1), dims(2), dims(3))
+      call field_set_y_face<<<blocks, threads>>>( &              !&
+          f_d, c_start, c_end, flow_rate_diff_val, dims(1), dims(2), dims(3))
+
     case (Z_FACE)
       error stop 'Setting Z_FACE is not yet supported.'
+
     case default
       error stop 'face is undefined.'
     end select
 
   end subroutine field_set_face_cuda
+
+  subroutine field_set_face_from_field_cuda(self, f, f_start, c_end, face, &
+                                            bc_start, bc_end, flow_rate_diff)
+    !! Set a face of `f` using values supplied by another field `f_start`.
+    !! Both fields must be DIR_X VERT pencil-layout. X_FACE uses the inlet
+    !! plane (pencil index 1) of f_start plus a convective outflow update
+    !! at the right face. Y_FACE copies the bottom and top y-pencil planes
+    !! of f_start onto the corresponding planes of f (Dirichlet only).
+    implicit none
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    class(field_t), intent(in) :: f_start
+    real(dp), intent(in) :: c_end
+    integer, intent(in) :: face
+    integer, optional, intent(in) :: bc_start, bc_end
+    real(dp), optional, intent(in) :: flow_rate_diff
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d, f_start_d
+    type(dim3) :: blocks, threads
+    integer :: dims(3)
+    integer :: bc_s, bc_e
+    real(dp) :: flow_rate_diff_val
+
+    if (f%dir /= DIR_X) &
+      error stop 'field_set_face_from_field: only supported for DIR_X fields.'
+    if (f_start%dir /= DIR_X) &
+      error stop 'field_set_face_from_field: f_start must be DIR_X.'
+
+    ! Defaults - same convention as field_set_face_cuda
+    bc_s = BC_DIRICHLET
+    bc_e = BC_DIRICHLET
+    flow_rate_diff_val = 0._dp
+    if (present(bc_start)) bc_s = bc_start
+    if (present(bc_end)) bc_e = bc_end
+    if (present(flow_rate_diff)) flow_rate_diff_val = flow_rate_diff
+
+    call resolve_field_t(f_d, f)
+    call resolve_field_t(f_start_d, f_start)
+
+    ! The BC fields are always built as VERT in the case setup, so we
+    ! query the dims with VERT unconditionally here (in common.f90
+    ! NULL_LOC = -1 and VERT = 0, so the two are distinct).
+    dims = self%mesh%get_dims(VERT)
+
+    select case (face)
+    case (X_FACE)
+      ! Same launch shape as field_set_x_face - one thread per (i, b)
+      ! in the inlet plane, padded out to 64 threads per block.
+      blocks = dim3((SZ - 1)/64 + 1, ((dims(2) - 1)/SZ + 1)*dims(3), 1)
+      threads = dim3(64, 1, 1)
+      call field_set_x_face_from_field<<<blocks, threads>>>( &      !&
+          f_d, f_start_d, c_end, bc_s, bc_e, flow_rate_diff_val, &
+          dims(1), dims(2), dims(3))
+
+    case (Y_FACE)
+      if (bc_s /= BC_DIRICHLET .or. bc_e /= BC_DIRICHLET) then
+        error stop &
+          'field_set_face_from_field: Y_FACE only supports BC_DIRICHLET.'
+      end if
+      blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
+      threads = dim3(64, 1, 1)
+      call field_set_y_face_from_field<<<blocks, threads>>>( &      !&
+          f_d, f_start_d, dims(1), dims(2), dims(3))
+
+    case (Z_FACE)
+      error stop 'field_set_face_from_field: Z_FACE is not yet supported.'
+
+    case default
+      error stop 'field_set_face_from_field: face is undefined.'
+    end select
+
+  end subroutine field_set_face_from_field_cuda
 
   real(dp) function field_volume_integral_cuda(self, f) result(s)
     !! volume integral of a field
@@ -1010,7 +1449,7 @@ contains
     implicit none
 
     class(cuda_backend_t) :: self
-    type(mesh_t), intent(in) :: mesh
+    type(mesh_t), target, intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
 
@@ -1035,4 +1474,3 @@ contains
   end subroutine resolve_field_t
 
 end module m_cuda_backend
-

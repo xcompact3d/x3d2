@@ -7,9 +7,12 @@ set(SRC
   ordering.f90
   poisson_fft.f90
   solver.f90
+  les/les.f90
+  postprocess/postprocess.f90
+  postprocess/monitoring.f90
+  postprocess/scalar_series.f90
   tdsops.f90
   time_integrator.f90
-  ordering.f90
   mesh.f90
   mesh_content.f90
   field.f90
@@ -46,6 +49,9 @@ set(CUDASRC
 set(BACKENDSRC
   backend/omp/backend.f90
   )
+set(OMPTGTSRC # For OMP offloading
+  backend/omp/target/allocator.f90
+  )
 set(2DECOMPFFTSRC
   backend/omp/poisson_fft.f90
   decomp/decomp_2decompfft.f90
@@ -59,7 +65,9 @@ set(IOSRC
   io/io_session.f90
   io/io_field_utils.f90
   io/checkpoint_manager.f90
+  io/checkpoint_state.f90
   io/snapshot_manager.f90
+  io/stats.f90
   io/io_manager.f90
 )
 
@@ -85,10 +93,14 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   list(APPEND BACKENDSRC backend/cuda/backend.f90)
 endif()
 
-# Decide whether 2decomp&fft is supported by the build
-find_package(decomp2d)
+if(OMP_TGT)
+  list(APPEND SRC ${OMPTGTSRC})
+  list(APPEND BACKENDSRC backend/omp/target/backend.f90)
+endif()
 
 if(WITH_2DECOMPFFT)
+  # Decide whether 2decomp&fft is supported by the build
+  find_package(decomp2d)
   list(APPEND SRC ${2DECOMPFFTSRC})
 else()
   list(APPEND SRC ${DUMMYDECOMPSRC})
@@ -99,26 +111,41 @@ set(LIBRARY_OUTPUT_PATH "${PROJECT_BINARY_DIR}/lib")
 
 # Create the main library
 add_library(x3d2 STATIC ${SRC})
-target_include_directories(x3d2 INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
+set_target_properties(x3d2 PROPERTIES
+  Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2")
+target_include_directories(x3d2 INTERFACE
+  ${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2)
 
 add_library(x3d2_backends STATIC ${BACKENDSRC})
-target_include_directories(x3d2_backends INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
+set_target_properties(x3d2_backends PROPERTIES
+  Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_backends")
+target_include_directories(x3d2_backends INTERFACE
+  ${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_backends)
 target_link_libraries(x3d2_backends PRIVATE x3d2)
 
 add_executable(xcompact xcompact.f90)
-target_link_libraries(xcompact PRIVATE x3d2)
 target_link_libraries(xcompact PRIVATE x3d2_backends)
+target_link_libraries(xcompact PRIVATE x3d2)
 
 # if CUDA compiler
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   set(CMAKE_Fortran_FLAGS "-cpp -cuda")
-  set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr -Ktrap=fp")
+  set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr")
+  # Opt-in: -Ktrap=fp traps FP exceptions process-wide, turning benign FP ops in
+  # linked libs (cuFFTMp PTX-JIT, HPC-X/UCX at MPI_Init) into fatal SIGFPEs.
+  option(CUDA_DEBUG_FP_TRAP "Trap FP exceptions in the CUDA debug build (-Ktrap=fp)" OFF)
+  if(CUDA_DEBUG_FP_TRAP)
+    set(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG} -Ktrap=fp")
+  endif()
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
   target_link_options(x3d2 INTERFACE "-cuda")
   target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
 
   target_compile_options(xcompact PRIVATE "-DCUDA")
+  if (OMP_TGT)
+    add_definitions("-DOMP_TGT_NVIDIA")
+  endif()
 
   if(WITH_ADIOS2_GPU_AWARE)
     find_package(CUDAToolkit QUIET)
@@ -132,35 +159,48 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   endif()
 
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
-       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang")
+       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
+       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
   set(CMAKE_Fortran_FLAGS "-cpp -std=f2018")
-  set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
-  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math")
+  if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
+      ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
+    set(CMAKE_Fortran_FLAGS_DEBUG "-g -Wall -Wno-ambiguous-structure-constructor -Werror")
+  else()
+    set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
+  endif()
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -floop-optimize -march=native")
+  if (OMP_TGT)
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp --offload-arch=${OMP_TGT_ARCH}")
+    add_definitions("-DOMP_TGT_AMD")
+  endif()
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
   set(CMAKE_Fortran_FLAGS "-eF -M878") # -M878 suppresses WARNING multiple module includes (not useful)
   set(CMAKE_Fortran_FLAGS_DEBUG "-G2 -O0")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3")
   target_link_options(x3d2 INTERFACE -h omp)
+  target_link_options(x3d2_backends INTERFACE -h omp)
+  if (OMP_TGT)
+    add_definitions("-DOMP_TGT_AMD")
+  endif()
 endif()
 
 if(WITH_2DECOMPFFT)
   message(STATUS "Using the FFT poisson solver with 2decomp&fft support on the OpenMP backend")
-  set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
   find_package(decomp2d REQUIRED)
-  include_directories(${decomp2d_INCLUDE_DIRS})
-  target_link_libraries(decomp2d)
   target_link_libraries(x3d2 PRIVATE decomp2d)
+  target_link_libraries(x3d2_backends PRIVATE decomp2d)
   target_compile_options(x3d2 PRIVATE "-DWITH_2DECOMPFFT")
   target_compile_options(x3d2_backends PRIVATE "-DWITH_2DECOMPFFT")
 endif()
 
-find_package(OpenMP REQUIRED)
+# OpenMP is resolved once at the top level (see the root CMakeLists.txt).
 target_link_libraries(x3d2 PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(x3d2_backends PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(xcompact PRIVATE OpenMP::OpenMP_Fortran)
 
 find_package(MPI REQUIRED)
 target_link_libraries(x3d2 PRIVATE MPI::MPI_Fortran)
+target_link_libraries(x3d2_backends PRIVATE MPI::MPI_Fortran)
 target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
 
 if(WITH_ADIOS2)

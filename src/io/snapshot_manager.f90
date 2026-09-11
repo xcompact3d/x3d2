@@ -6,12 +6,13 @@ module m_snapshot_manager
 !! data to files intended for analysis and visualisation
 !! Unlike checkpoints, which are always full-resolution for exact restarts,
 !! snapshots can be strided to reduce file size.
-  use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank
-  use m_common, only: dp, i8, DIR_C, VERT, get_argument
+  use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Allreduce, MPI_IN_PLACE, &
+                 MPI_MIN, MPI_SUCCESS
+  use m_common, only: dp, i8, MPI_X3D2_DP, DIR_C, VERT, get_argument
   use m_field, only: field_t
   use m_solver, only: solver_t
   use m_io_session, only: writer_session_t
-  use m_config, only: checkpoint_config_t
+  use m_config, only: checkpoint_config_t, has_output_field
   use m_io_field_utils, only: field_buffer_map_t, field_ptr_t, &
                               setup_field_arrays, cleanup_field_arrays, &
                               stride_data_to_buffer, get_output_dimensions, &
@@ -30,7 +31,7 @@ module m_snapshot_manager
     integer(i8), dimension(3) :: last_shape_dims = 0
     integer, dimension(3) :: last_stride_factors = 0
     integer(i8), dimension(3) :: last_output_shape = 0
-    character(len=4096) :: vtk_xml = ""
+    character(len=:), allocatable :: vtk_xml
     logical :: is_snapshot_file_open = .false.
     type(writer_session_t) :: snapshot_writer
     logical :: convert_to_sp = .false.              !! Flag for single precision snapshots
@@ -80,6 +81,10 @@ contains
       print *, 'Output stride: ', self%output_stride
       print *, 'Snapshot precision: ', merge('Single', 'Double', &
                                              self%config%snapshot_sp)
+      if (any(self%config%output_fields /= '')) then
+        print *, 'Additional output fields: ', &
+          trim(adjustl(join_output_fields(self%config%output_fields)))
+      end if
     end if
   end subroutine configure_output
 
@@ -107,7 +112,7 @@ contains
     integer, intent(in) :: timestep
     integer, intent(in) :: comm
 
-    character(len=*), parameter :: field_names(*) = ["u", "v", "w"]
+    character(len=32), allocatable :: field_names(:)
     integer :: myrank, ierr
     character(len=256) :: filename
     integer(i8), dimension(3) :: output_shape_dims
@@ -116,6 +121,7 @@ contains
     real(dp), dimension(3) :: origin, original_spacing, output_spacing
     real(dp) :: simulation_time
     logical :: snapshot_uses_stride = .true.
+    logical :: is_first_snapshot_of_run
     integer :: i
 
     if (self%config%snapshot_freq <= 0) return
@@ -123,35 +129,28 @@ contains
 
     call MPI_Comm_rank(comm, myrank, ierr)
 
+    if (has_output_field(self%config, 'species')) then
+      if (solver%nspecies <= 0) then
+        if (myrank == 0) then
+          print *, 'ERROR: species snapshot output requested, &
+                   &but no transported species are configured.'
+        end if
+        error stop 1
+      end if
+    end if
+
+    field_names = get_snapshot_fields(self%config, solver%nspecies)
+
     write (filename, '(A,A)') trim(self%config%snapshot_prefix), '.bp'
 
     ! Open snapshot file on first call (check for existence)
-    if (.not. self%is_snapshot_file_open) then
+    is_first_snapshot_of_run = .not. self%is_snapshot_file_open
+    if (is_first_snapshot_of_run) then
       call self%open_snapshot_file(filename, comm)
     else
       ! For subsequent snapshots, begin a new step
       call self%snapshot_writer%begin_step()
     end if
-
-    global_dims = solver%mesh%get_global_dims(VERT)
-    origin = solver%mesh%get_coordinates(1, 1, 1)
-    original_spacing = solver%mesh%geo%d
-
-    if (snapshot_uses_stride) then
-      output_spacing = original_spacing*real(self%output_stride, dp)
-      do i = 1, size(global_dims)
-        output_dims(i) = (global_dims(i) + self%output_stride(i) - 1)/ &
-                         self%output_stride(i)
-      end do
-    else
-      output_spacing = original_spacing
-      output_dims = global_dims
-    end if
-    output_shape_dims = int(output_dims, i8)
-
-    call self%generate_vtk_xml( &
-      output_shape_dims, field_names, origin, output_spacing &
-      )
 
     simulation_time = timestep*solver%dt
     if (self%snapshot_writer%is_session_functional() .and. myrank == 0) then
@@ -159,8 +158,34 @@ contains
         ' iteration =', timestep
     end if
 
-    ! Write VTK XML attributes for ParaView compatibility (only on first step)
-    if (timestep == self%config%snapshot_freq .and. myrank == 0) then
+    ! Embed identical VTK XML metadata on every rank when the dataset opens.
+    ! The reduction finds the global origin without assuming how ranks map to
+    ! mesh subdomains.
+    if (is_first_snapshot_of_run) then
+      global_dims = solver%mesh%get_global_dims(VERT)
+      origin = solver%mesh%get_coordinates(1, 1, 1)
+      call MPI_Allreduce( &
+        MPI_IN_PLACE, origin, size(origin), MPI_X3D2_DP, MPI_MIN, comm, ierr &
+        )
+      if (ierr /= MPI_SUCCESS) &
+        error stop "Failed to determine global snapshot origin"
+      original_spacing = solver%mesh%geo%d
+
+      if (snapshot_uses_stride) then
+        output_spacing = original_spacing*real(self%output_stride, dp)
+        do i = 1, size(global_dims)
+          output_dims(i) = (global_dims(i) + self%output_stride(i) - 1)/ &
+                           self%output_stride(i)
+        end do
+      else
+        output_spacing = original_spacing
+        output_dims = global_dims
+      end if
+      output_shape_dims = int(output_dims, i8)
+
+      call self%generate_vtk_xml( &
+        output_shape_dims, field_names, origin, output_spacing &
+        )
       call self%snapshot_writer%write_attribute("vtk.xml", self%vtk_xml)
     end if
 
@@ -183,7 +208,55 @@ contains
                self%snapshot_writer%supports_device_field_write())) then
       call cleanup_field_arrays(solver, field_ptrs, host_fields)
     end if
+    deallocate (field_names)
   end subroutine write_snapshot
+
+  function get_snapshot_fields(config, nspecies) result(names)
+    !! Build the list of field names written to each snapshot.
+    type(checkpoint_config_t), intent(in) :: config
+    integer, intent(in) :: nspecies
+    character(len=32), allocatable :: names(:)
+
+    integer :: n, num_fields, is
+    logical :: include_pressure, include_vorticity
+    logical :: include_qcriterion, include_ibm, include_species
+
+    include_pressure = has_output_field(config, 'pressure')
+    include_vorticity = has_output_field(config, 'vorticity')
+    include_qcriterion = has_output_field(config, 'qcriterion')
+    include_ibm = has_output_field(config, 'ibm')
+    include_species = has_output_field(config, 'species')
+
+    num_fields = 3
+    if (include_pressure) num_fields = num_fields + 1
+    if (include_vorticity) num_fields = num_fields + 1
+    if (include_qcriterion) num_fields = num_fields + 1
+    if (include_ibm) num_fields = num_fields + 1
+    if (include_species) num_fields = num_fields + nspecies
+
+    allocate (names(num_fields))
+
+    n = 3
+    names(1:3) = [character(len=32) :: "u", "v", "w"]
+    if (include_pressure) then
+      n = n + 1; names(n) = "p"
+    end if
+    if (include_vorticity) then
+      n = n + 1; names(n) = "vort"
+    end if
+    if (include_qcriterion) then
+      n = n + 1; names(n) = "qcrit"
+    end if
+    if (include_ibm) then
+      n = n + 1; names(n) = "ibm"
+    end if
+    if (include_species) then
+      do is = 1, nspecies
+        n = n + 1
+        write (names(n), '(A,I0)') 'phi_', is
+      end do
+    end if
+  end function get_snapshot_fields
 
   subroutine generate_vtk_xml(self, dims, fields, origin, spacing)
     !! Generate VTK XML string for ImageData format for ParaView's ADIOS2VTXReader
@@ -192,7 +265,7 @@ contains
     character(len=*), dimension(:), intent(in) :: fields
     real(dp), dimension(3), intent(in) :: origin, spacing
 
-    character(len=4096) :: xml
+    character(len=:), allocatable :: xml
     character(len=96) :: extent_str, origin_str, spacing_str
     integer :: i
 
@@ -371,5 +444,20 @@ contains
       self%is_snapshot_file_open = .false.
     end if
   end subroutine close_snapshot_file
+
+  function join_output_fields(fields) result(str)
+    !! Join non-empty output field names into a comma-separated string.
+    use m_config, only: MAX_OUTPUT_FIELDS
+    character(len=32), intent(in) :: fields(MAX_OUTPUT_FIELDS)
+    character(len=256) :: str
+    integer :: i
+
+    str = ''
+    do i = 1, MAX_OUTPUT_FIELDS
+      if (fields(i) == '') cycle
+      if (len_trim(str) > 0) str = trim(str)//', '
+      str = trim(str)//trim(fields(i))
+    end do
+  end function join_output_fields
 
 end module m_snapshot_manager

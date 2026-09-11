@@ -2,6 +2,12 @@ module m_omp_spectral
   use m_common, only: dp
   implicit none
 
+  ! Threshold below which a spectral coefficient is treated as zero. Must
+  ! scale with the working precision: single-precision roundoff leaves
+  ! ~1e-13 noise in wave numbers that should vanish (e.g. Nyquist modes),
+  ! and dividing by that noise corrupts the pressure field.
+  real(dp), parameter :: eps_wave = epsilon(1._dp)
+
 contains
 
   subroutine process_spectral_000( &
@@ -66,7 +72,7 @@ contains
           ! Solve Poisson
           tmp_r = real(waves(i, j, k), kind=dp)
           tmp_c = aimag(waves(i, j, k))
-          if ((tmp_r < 1.e-16_dp) .or. (tmp_c < 1.e-16_dp)) then
+          if ((tmp_r < eps_wave) .or. (tmp_c < eps_wave)) then
             div_r = 0._dp; div_c = 0._dp
           else
             div_r = -div_r/tmp_r
@@ -200,12 +206,12 @@ contains
 
           tmp_r = real(waves(i, j, k), kind=dp)
           tmp_c = aimag(waves(i, j, k))
-          if (abs(tmp_r) < 1.e-16_dp) then
+          if (abs(tmp_r) < eps_wave) then
             div_r = 0._dp
           else
             div_r = -div_r/tmp_r
           end if
-          if (abs(tmp_c) < 1.e-16_dp) then
+          if (abs(tmp_c) < eps_wave) then
             div_c = 0._dp
           else
             div_c = -div_c/tmp_c
