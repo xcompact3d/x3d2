@@ -521,6 +521,7 @@ contains
 
     integer :: i_field
     integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
+    integer, dimension(3) :: no_stride
     class(field_t), pointer :: io_field
     logical :: use_device_write
 
@@ -533,25 +534,48 @@ contains
     ! Backend automatically uses GPU-aware I/O when available
     use_device_write = writer_session%supports_device_field_write()
 
-    if (.not. use_device_write .and. .not. present(host_fields)) then
+    if (use_device_write) then
+      ! Sync device once before writing all fields
+      call writer_session%sync_device()
+
+      do i_field = 1, size(field_names)
+        io_field => get_field_ptr(solver, field_names(i_field))
+        call writer_session%write_field_from_solver( &
+          trim(field_names(i_field)), io_field, solver%backend, &
+          shape_dims, start_dims, count_dims, .false. &
+          )
+      end do
+      return
+    end if
+
+    ! Host fallback (GPU-aware I/O unavailable or explicitly disabled):
+    ! slice each padded host field down to its true (nx, ny, nz) extent
+    ! before handing it to ADIOS2, via the same buffer path the strided
+    ! snapshot writer uses.
+    if (.not. present(host_fields)) then
       error stop "write_fields(checkpoint): host_fields required &
         &when GPU-aware I/O is not available"
     end if
 
-    ! Sync device once before writing all fields
-    if (use_device_write) call writer_session%sync_device()
+    no_stride = [1, 1, 1]
+    call prepare_field_buffers( &
+      solver, no_stride, field_names, data_loc, &
+      self%field_buffers, self%last_shape_dims, self%last_stride_factors, &
+      self%last_output_shape &
+      )
 
     do i_field = 1, size(field_names)
-      if (use_device_write) then
-        io_field => get_field_ptr(solver, field_names(i_field))
-      else
-        io_field => host_fields(i_field)%ptr
-      end if
-
-      call writer_session%write_field_from_solver( &
-        trim(field_names(i_field)), io_field, solver%backend, &
-        shape_dims, start_dims, count_dims, .false. &
+      call write_single_field_to_buffer( &
+        trim(field_names(i_field)), host_fields(i_field)%ptr, &
+        solver, no_stride, data_loc, &
+        self%field_buffers, self%last_shape_dims, self%last_stride_factors, &
+        self%last_output_shape &
         )
+
+      call writer_session%write_data( &
+        trim(field_names(i_field)), &
+        self%field_buffers(i_field)%buffer, &
+        shape_dims, start_dims, count_dims)
     end do
   end subroutine write_fields
 

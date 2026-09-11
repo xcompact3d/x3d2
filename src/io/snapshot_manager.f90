@@ -324,25 +324,17 @@ contains
     output_start = int(solver%mesh%par%n_offset, i8)
     count_dims = int(solver%mesh%get_dims(data_loc), i8)
 
-    ! Write fields directly when no striding - backend uses GPU-aware I/O when available
-    if (all(self%output_stride == 1)) then
-      ! No striding - can potentially use direct device I/O
-      use_device_write = writer_session%supports_device_field_write()
-
-      if (.not. use_device_write .and. .not. present(host_fields)) then
-        error stop "write_fields(snapshot): host_fields required &
-          &when GPU-aware I/O is not available"
-      end if
-
+    ! No striding and GPU-aware I/O available - write directly from device.
+    ! (Striding, and the explicit host override, fall through to the
+    ! host-staged path below, which always slices to the true field
+    ! extent.)
+    use_device_write = writer_session%supports_device_field_write()
+    if (all(self%output_stride == 1) .and. use_device_write) then
       ! Sync device once before writing all fields
-      if (use_device_write) call writer_session%sync_device()
+      call writer_session%sync_device()
 
       do i_field = 1, size(field_names)
-        if (use_device_write) then
-          io_field => get_field_ptr(solver, field_names(i_field))
-        else
-          io_field => host_fields(i_field)%ptr
-        end if
+        io_field => get_field_ptr(solver, field_names(i_field))
 
         call writer_session%write_field_from_solver( &
           trim(field_names(i_field)), io_field, solver%backend, &
