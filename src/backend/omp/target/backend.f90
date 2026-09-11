@@ -191,16 +191,13 @@ contains
           call vector_norm_squared_offload_(local_sum, a%data_tgt, &
                                             b%data_tgt, c%data_tgt, dims)
         class default
-          error stop "Device/host fallback not yet implemented"
+          error stop "Called omptgt vector copy with unsupported source vector"
         end select
       class default
-        error stop "Device/host fallback not yet implemented"
+        error stop "Called omptgt vector copy with unsupported source vector"
       end select
     class default
-      ! All three fields are host-resident, defer to the host backend which
-      ! carries out its own MPI reduction.
-      norm_squared = self%omp_backend_t%vector_norm_squared(a, b, c)
-      return
+      error stop "Called omptgt vector copy with unsupported source vector"
     end select
 
     call MPI_Allreduce(local_sum, norm_squared, 1, MPI_X3D2_DP, MPI_SUM, &
