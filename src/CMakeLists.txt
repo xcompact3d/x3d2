@@ -75,10 +75,6 @@ if(WITH_ADIOS2)
   list(APPEND IOSRC 
     io/adios2/io.f90
   )
-  # Add C wrapper for GPU-aware I/O if enabled
-  if(WITH_ADIOS2_GPU_AWARE)
-    list(APPEND SRC io/adios2/c/adios2_cuda_wrapper.c)
-  endif()
 else()
   list(APPEND IOSRC 
   io/dummy/io.f90

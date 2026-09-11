@@ -46,7 +46,7 @@ module m_io_backend
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
                        io_mode_read, io_mode_write
   use iso_c_binding, only: c_double, c_int, c_char, c_null_char, &
-                           c_ptr, c_loc
+                           c_ptr, c_loc, c_null_ptr
 
   implicit none
 
@@ -156,21 +156,20 @@ module m_io_backend
   end type io_adios2_file_t
 
 #ifdef X3D2_ADIOS2_CUDA
-  ! C wrapper for GPU-aware ADIOS2 put.
-  ! The engine and variable f2c handles are integer(8) in ADIOS2's
-  ! Fortran bindings. The C wrapper casts them to the opaque C types.
-  ! Memory space must be set to GPU via the native Fortran
-  ! adios2_set_memory_space before calling this.
+  ! Direct binding to the ADIOS2 C API's adios2_put for GPU-aware writes.
+  ! The Fortran generic adios2_put does not accept device arrays, so the
+  ! engine and variable f2c handles (integer(8) in ADIOS2's Fortran
+  ! bindings) are transferred to the opaque C pointers adios2_put expects;
+  ! both are 8 bytes on x86_64. Memory space must be set to GPU via the
+  ! native Fortran adios2_set_memory_space before calling this.
   interface
-    subroutine adios2_put_gpu(engine_f2c, variable_f2c, data, mode, ierr) &
-      bind(C, name='adios2_put_gpu')
-      use iso_c_binding, only: c_ptr, c_int, c_int64_t
-      integer(c_int64_t), intent(in) :: engine_f2c
-      integer(c_int64_t), intent(in) :: variable_f2c
-      type(c_ptr), value :: data
-      integer(c_int), intent(in) :: mode
-      integer(c_int), intent(out) :: ierr
-    end subroutine adios2_put_gpu
+    function adios2_put_c(engine, variable, data, mode) &
+      bind(C, name='adios2_put') result(ierr)
+      import :: c_ptr, c_int
+      type(c_ptr), value :: engine, variable, data
+      integer(c_int), value :: mode
+      integer(c_int) :: ierr
+    end function adios2_put_c
 
     function nvtx_range_push_a(name) bind(C, name='nvtxRangePushA') &
       result(status)
@@ -1106,8 +1105,9 @@ contains
     )
     !! GPU-aware I/O: passes device pointer directly to ADIOS2.
     !! Uses the native Fortran adios2_set_memory_space to tell ADIOS2
-    !! the buffer is on GPU, then calls a C wrapper for adios2_put
-    !! (the Fortran generic adios2_put does not accept device arrays).
+    !! the buffer is on GPU, then calls the ADIOS2 C API's adios2_put
+    !! directly (the Fortran generic adios2_put does not accept device
+    !! arrays).
     !! Requires ADIOS2 built with -DADIOS2_USE_CUDA=ON.
     class(io_adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
@@ -1147,7 +1147,7 @@ contains
       call adios2_set_memory_space(var, adios2_memory_space_gpu, ierr)
       call self%handle_error(ierr, "Error setting GPU memory space")
 
-      ! Get device pointer and pass via C wrapper
+      ! Get device pointer and pass directly to the ADIOS2 C API
       ! Use sync mode only when converting dp->sp (temporary buffer must
       ! be flushed before deallocation); deferred mode otherwise.
       if (convert_to_sp .and. .not. is_sp) then
@@ -1158,8 +1158,9 @@ contains
 
         if (file_handle%bench_enabled) t0_put = MPI_Wtime()
         call nvtx_push_if_enabled("ADIOS2_Put")
-        call adios2_put_gpu(file_handle%engine%f2c, var%f2c, &
-                            device_ptr, adios2_mode_sync, ierr)
+        ierr = adios2_put_c(transfer(file_handle%engine%f2c, c_null_ptr), &
+                            transfer(var%f2c, c_null_ptr), device_ptr, &
+                            int(adios2_mode_sync, c_int))
         call nvtx_pop_if_enabled()
         if (file_handle%bench_enabled) then
           put_bytes = real(size(array_sp, kind=i8), c_double) * &
@@ -1174,8 +1175,9 @@ contains
 
         if (file_handle%bench_enabled) t0_put = MPI_Wtime()
         call nvtx_push_if_enabled("ADIOS2_Put")
-        call adios2_put_gpu(file_handle%engine%f2c, var%f2c, &
-                            device_ptr, adios2_mode_deferred, ierr)
+        ierr = adios2_put_c(transfer(file_handle%engine%f2c, c_null_ptr), &
+                            transfer(var%f2c, c_null_ptr), device_ptr, &
+                            int(adios2_mode_deferred, c_int))
         call nvtx_pop_if_enabled()
         if (file_handle%bench_enabled) then
           put_bytes = real(size(array, kind=i8), c_double) * &
