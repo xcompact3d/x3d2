@@ -882,6 +882,7 @@ contains
     real(c_double) :: t0_put
     real(c_double) :: put_bytes
 
+    t0_put = 0.0_c_double
     select type (file_handle)
     type is (io_adios2_file_t)
       call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
@@ -894,7 +895,7 @@ contains
                                "Error defining ADIOS2 scalar i8 variable")
       end if
 
-      t0_put = MPI_Wtime()
+      if (file_handle%bench_enabled) t0_put = MPI_Wtime()
       call nvtx_push_if_enabled("ADIOS2_Put")
       call adios2_put(file_handle%engine, var, value, adios2_mode_deferred, &
                       ierr)
@@ -920,6 +921,7 @@ contains
     real(c_double) :: t0_put
     real(c_double) :: put_bytes
 
+    t0_put = 0.0_c_double
     select type (file_handle)
     type is (io_adios2_file_t)
       call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
@@ -931,7 +933,7 @@ contains
                                "Error defining ADIOS2 scalar integer variable")
       end if
 
-      t0_put = MPI_Wtime()
+      if (file_handle%bench_enabled) t0_put = MPI_Wtime()
       call nvtx_push_if_enabled("ADIOS2_Put")
       call adios2_put(file_handle%engine, var, value, adios2_mode_deferred, &
                       ierr)
@@ -962,6 +964,7 @@ contains
     real(c_double) :: t0_put
     real(c_double) :: put_bytes
 
+    t0_put = 0.0_c_double
     ! Determine if we should convert to single precision
     convert_to_sp = .false.
     if (present(use_sp)) convert_to_sp = use_sp
@@ -984,7 +987,7 @@ contains
       if (convert_to_sp .and. .not. is_sp) then
         value_sp = real(value, sp)
         ! Use sync mode to ensure data is copied before value_sp goes out of scope
-        t0_put = MPI_Wtime()
+        if (file_handle%bench_enabled) t0_put = MPI_Wtime()
         call nvtx_push_if_enabled("ADIOS2_Put")
         call adios2_put(file_handle%engine, var, value_sp, adios2_mode_sync, &
                         ierr)
@@ -996,7 +999,7 @@ contains
         call self%handle_error(ierr, "Error writing ADIOS2 scalar &
                                      &single precision real data")
       else
-        t0_put = MPI_Wtime()
+        if (file_handle%bench_enabled) t0_put = MPI_Wtime()
         call nvtx_push_if_enabled("ADIOS2_Put")
         call adios2_put(file_handle%engine, var, value, &
                         adios2_mode_deferred, ierr)
@@ -1033,6 +1036,7 @@ contains
     real(c_double) :: t0_put
     real(c_double) :: put_bytes
 
+    t0_put = 0.0_c_double
     ! Determine if we should convert to single precision
     convert_to_sp = .false.
     if (present(use_sp)) convert_to_sp = use_sp
@@ -1059,7 +1063,7 @@ contains
         allocate (array_sp(size(array, 1), size(array, 2), size(array, 3)))
         array_sp = real(array, sp)
         ! Use sync mode to ensure data is copied before buffer is deallocated
-        t0_put = MPI_Wtime()
+        if (file_handle%bench_enabled) t0_put = MPI_Wtime()
         call nvtx_push_if_enabled("ADIOS2_Put")
         call adios2_put(file_handle%engine, var, array_sp, adios2_mode_sync, &
                         ierr)
@@ -1073,7 +1077,7 @@ contains
         call self%handle_error(ierr, "Error writing ADIOS2 3D array &
                                      &single precision real data")
       else
-        t0_put = MPI_Wtime()
+        if (file_handle%bench_enabled) t0_put = MPI_Wtime()
         call nvtx_push_if_enabled("ADIOS2_Put")
         call adios2_put(file_handle%engine, var, array, &
                         adios2_mode_deferred, ierr)
@@ -1125,6 +1129,7 @@ contains
     real(c_double) :: t0_put
     real(c_double) :: put_bytes
 
+    t0_put = 0.0_c_double
     convert_to_sp = .false.
     if (present(use_sp)) convert_to_sp = use_sp
     vartype = get_adios2_vartype(convert_to_sp)
@@ -1159,7 +1164,7 @@ contains
         devptr = c_devloc(array_sp)
         device_ptr = transfer(devptr, device_ptr)
 
-        t0_put = MPI_Wtime()
+        if (file_handle%bench_enabled) t0_put = MPI_Wtime()
         call nvtx_push_if_enabled("ADIOS2_Put")
         ierr = adios2_put_c(transfer(file_handle%engine%f2c, c_null_ptr), &
                             transfer(var%f2c, c_null_ptr), device_ptr, &
@@ -1176,7 +1181,7 @@ contains
         devptr = c_devloc(array)
         device_ptr = transfer(devptr, device_ptr)
 
-        t0_put = MPI_Wtime()
+        if (file_handle%bench_enabled) t0_put = MPI_Wtime()
         call nvtx_push_if_enabled("ADIOS2_Put")
         ierr = adios2_put_c(transfer(file_handle%engine%f2c, c_null_ptr), &
                             transfer(var%f2c, c_null_ptr), device_ptr, &
@@ -1260,10 +1265,11 @@ contains
     integer :: ierr
     real(c_double) :: t0_close
 
+    t0_close = 0.0_c_double
     if (self%is_step_active) call self%end_step()
 
     if (self%engine%valid) then
-      t0_close = MPI_Wtime()
+      if (self%is_writer .and. self%bench_enabled) t0_close = MPI_Wtime()
       call adios2_close(self%engine, ierr)
       if (self%is_writer .and. self%bench_enabled) then
         self%bench_close_time = self%bench_close_time + &
@@ -1312,9 +1318,10 @@ contains
     real(c_double) :: t0_end_step
     real(c_double) :: end_step_time_local
 
+    t0_end_step = 0.0_c_double
     if (.not. self%is_step_active) return
 
-    t0_end_step = MPI_Wtime()
+    if (self%is_writer .and. self%bench_enabled) t0_end_step = MPI_Wtime()
     if (self%is_writer) call nvtx_push_if_enabled("ADIOS2_EndStep")
     call adios2_end_step(self%engine, ierr)
     if (self%is_writer) call nvtx_pop_if_enabled()
