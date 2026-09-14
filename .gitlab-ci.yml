@@ -6,7 +6,10 @@ workflow:
     - if: $CI_COMMIT_BRANCH == "main" && $CI_PROJECT_PATH == "xcompact3d/x3d2"
     # Run pipeline on pull requests
     - if: $CI_PIPELINE_SOURCE == "external_pull_request_event"
-stages:
+    # Fallback: Catch-all block for standard pushes on branches
+    - if: $CI_PIPELINE_SOURCE == "push"
+      when: never
+  stages:
   - build-and-test
   - check-policies
 
