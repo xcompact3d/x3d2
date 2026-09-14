@@ -9,8 +9,6 @@ workflow:
     # Block push pipelines if they happen to originate from an external PR context
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_EXTERNAL_PULL_REQUEST_IID
       when: never
-    # Fallback: Run pipeline on ordinary branch pushes (no PR open yet)
-    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH != "main"
 stages:
   - build-and-test
   - check-policies
