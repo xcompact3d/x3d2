@@ -52,7 +52,7 @@ if (USE_SYSTEM_ADIOS2)
     "or set USE_SYSTEM_ADIOS2=OFF to auto-download.")
   endif()
 else()
-  if(X3D2_ADIOS2_CUDA)
+  if (${ENABLE_BACKEND} STREQUAL "CUDA")
     set(adios2_config_suffix "cuda")
   else()
     set(adios2_config_suffix "cpu")
@@ -82,7 +82,7 @@ else()
     # CUDA >= 13 no longer supports. Forward an explicit architecture so ADIOS2's
     # CUDA sources build for the target GPU. CUDA_ARCH may be set to a specific
     # value (e.g. 80); otherwise fall back to native detection.
-    if(X3D2_ADIOS2_CUDA)
+    if (${ENABLE_BACKEND} STREQUAL "CUDA")
       if(CUDA_ARCH)
         set(x3d2_adios2_cuda_arch "${CUDA_ARCH}")
       else()
