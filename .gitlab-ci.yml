@@ -34,13 +34,13 @@ stages:
     - export OMPI_ALLOW_RUN_AS_ROOT=1
     - export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
     - echo "Configure Debug build"
-    - FC=mpif90 cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
+    - FC=mpif90 cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug -DENABLE_BACKEND=${ENABLE_BACKEND} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
     - echo "Build tests"
     - make -C build-debug
     - echo "Run the tests"
     - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build-debug -L "unit|verification" --output-on-failure --output-junit ctest-junit.xml; fi
     - echo "Configure Release build"
-    - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
+    - FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DENABLE_BACKEND=${ENABLE_BACKEND} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
     - echo "Build tests"
     - make -C build
     - echo "Run the tests"
@@ -86,6 +86,7 @@ build-and-test:
     ADIOS2_VERSION: 2.10.2
     EXTRA_MODULE: "adios2"
     SINGLE_PREC: "OFF"
+    ENABLE_BACKEND: "OFF"
     RUN_TEST: "ON"
 
 build-and-test-single-prec:
@@ -95,6 +96,7 @@ build-and-test-single-prec:
     ADIOS2_VERSION: 2.10.2
     EXTRA_MODULE: "adios2"
     SINGLE_PREC: "ON"
+    ENABLE_BACKEND: "OFF"
     RUN_TEST: "ON"
 
 build-and-test-cuda:
@@ -104,6 +106,7 @@ build-and-test-cuda:
     ADIOS2_VERSION: 2.10.2
     EXTRA_MODULE: "adios2-nvfortran"
     SINGLE_PREC: "OFF"
+    ENABLE_BACKEND: "CUDA"
     RUN_TEST: "ON"
 
 build-and-test-cuda-single-prec:
@@ -113,6 +116,7 @@ build-and-test-cuda-single-prec:
     ADIOS2_VERSION: 2.10.2
     EXTRA_MODULE: "adios2-nvfortran"
     SINGLE_PREC: "ON"
+    ENABLE_BACKEND: "CUDA"
     RUN_TEST: "OFF"
     
 check-formatting:
