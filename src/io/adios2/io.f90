@@ -61,13 +61,13 @@ module m_io_backend
   integer, parameter :: gpu_write_mode_force_device = 1
   integer, parameter :: gpu_write_mode_force_host = 2
   real(c_double), parameter :: bytes_real_dp = &
-    real(storage_size(0.0_dp)/8, c_double)
+                               real(storage_size(0.0_dp)/8, c_double)
   real(c_double), parameter :: bytes_real_sp = &
-    real(storage_size(0.0_sp)/8, c_double)
+                               real(storage_size(0.0_sp)/8, c_double)
   real(c_double), parameter :: bytes_integer_default = &
-    real(storage_size(0)/8, c_double)
+                               real(storage_size(0)/8, c_double)
   real(c_double), parameter :: bytes_integer_i8 = &
-    real(storage_size(0_i8)/8, c_double)
+                               real(storage_size(0_i8)/8, c_double)
 
   logical, save :: runtime_options_initialised = .false.
   logical, save :: runtime_options_reported = .false.
@@ -441,7 +441,7 @@ contains
     step_bytes = sum_values(3)
 
     if (step_end_step_time > 0.0_c_double) then
-      step_throughput_gib_s = step_bytes/(1024.0_c_double**3) / &
+      step_throughput_gib_s = step_bytes/(1024.0_c_double**3)/ &
                               step_end_step_time
     else
       step_throughput_gib_s = 0.0_c_double
@@ -1074,7 +1074,7 @@ contains
                         ierr)
         call nvtx_pop_if_enabled()
         if (file_handle%bench_enabled) then
-          put_bytes = real(size(array_sp, kind=i8), c_double) * &
+          put_bytes = real(size(array_sp, kind=i8), c_double)* &
                       bytes_real_sp
           call bench_record_put(file_handle, MPI_Wtime() - t0_put, put_bytes)
         end if
@@ -1088,7 +1088,7 @@ contains
                         adios2_mode_deferred, ierr)
         call nvtx_pop_if_enabled()
         if (file_handle%bench_enabled) then
-          put_bytes = real(size(array, kind=i8), c_double) * &
+          put_bytes = real(size(array, kind=i8), c_double)* &
                       bytes_real_dp
           call bench_record_put(file_handle, MPI_Wtime() - t0_put, put_bytes)
         end if
@@ -1175,7 +1175,7 @@ contains
                             int(adios2_mode_sync, c_int))
         call nvtx_pop_if_enabled()
         if (file_handle%bench_enabled) then
-          put_bytes = real(size(array_sp, kind=i8), c_double) * &
+          put_bytes = real(size(array_sp, kind=i8), c_double)* &
                       bytes_real_sp
           call bench_record_put(file_handle, MPI_Wtime() - t0_put, put_bytes)
         end if
@@ -1192,7 +1192,7 @@ contains
                             int(put_mode, c_int))
         call nvtx_pop_if_enabled()
         if (file_handle%bench_enabled) then
-          put_bytes = real(size(array, kind=i8), c_double) * &
+          put_bytes = real(size(array, kind=i8), c_double)* &
                       bytes_real_dp
           call bench_record_put(file_handle, MPI_Wtime() - t0_put, put_bytes)
         end if
