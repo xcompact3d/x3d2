@@ -6,7 +6,8 @@ workflow:
     - if: $CI_COMMIT_BRANCH == "main" && $CI_PROJECT_PATH == "xcompact3d/x3d2"
     # Run pipeline on pull requests
     - if: $CI_PIPELINE_SOURCE == "external_pull_request_event"
-    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH != "main"
+    # Run pipeline on pushes ONLY IF there is no open pull request for this branch
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH != "main" && $CI_OPEN_MERGE_REQUESTS == null
 
 stages:
   - build-and-test
