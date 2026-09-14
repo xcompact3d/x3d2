@@ -129,7 +129,7 @@ target_link_libraries(xcompact PRIVATE x3d2)
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   set(CMAKE_Fortran_FLAGS "-cpp -cuda")
-  set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr")
+  set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds")
   # Opt-in: -Ktrap=fp traps FP exceptions process-wide, turning benign FP ops in
   # linked libs (cuFFTMp PTX-JIT, HPC-X/UCX at MPI_Init) into fatal SIGFPEs.
   option(CUDA_DEBUG_FP_TRAP "Trap FP exceptions in the CUDA debug build (-Ktrap=fp)" OFF)
