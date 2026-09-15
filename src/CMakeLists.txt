@@ -34,7 +34,7 @@ set(SRC
 )
 set(BACKENDSRC
   backend/omp/backend.f90
-  )
+)
 if (${ENABLE_BACKEND} STREQUAL "CUDA")
   list(APPEND SRC
     backend/cuda/allocator.f90
@@ -90,9 +90,8 @@ endif()
 
 list(APPEND SRC ${IOSRC})
 
+# Decide whether 2decomp&fft is supported by the build
 if(WITH_2DECOMPFFT)
-  # Decide whether 2decomp&fft is supported by the build
-  find_package(decomp2d)
   list(APPEND SRC ${2DECOMPFFTSRC})
 else()
   list(APPEND SRC ${DUMMYDECOMPSRC})
@@ -174,14 +173,12 @@ target_link_libraries(x3d2 PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(x3d2_backends PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(xcompact PRIVATE OpenMP::OpenMP_Fortran)
 
-find_package(MPI REQUIRED)
 target_link_libraries(x3d2 PRIVATE MPI::MPI_Fortran)
 target_link_libraries(x3d2_backends PRIVATE MPI::MPI_Fortran)
 target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
 
 if(WITH_2DECOMPFFT)
   message(STATUS "Using the FFT poisson solver with 2decomp&fft support on the OpenMP backend")
-  find_package(decomp2d REQUIRED)
   target_link_libraries(x3d2 PRIVATE decomp2d)
   target_link_libraries(x3d2_backends PRIVATE decomp2d)
   target_compile_options(x3d2 PRIVATE "-DWITH_2DECOMPFFT")

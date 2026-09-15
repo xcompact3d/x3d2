@@ -8,6 +8,9 @@ project(x3d2 LANGUAGES Fortran CXX C)
 # Require OpenMP 
 find_package(OpenMP REQUIRED)
 
+# Require MPI
+find_package(MPI REQUIRED)
+
 # Toggleable build type (default Release)
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose type of build" FORCE)
@@ -31,7 +34,7 @@ option(WITH_ADIOS2 "Enable ADIOS2 for I/O" OFF)
 set(WITH_2DECOMPFFT ON CACHE BOOL
   "Enable Poisson based FFT solver on the OpenMP backend.")
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/decomp2d")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/include)
 
@@ -87,6 +90,6 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" AND OpenMP_Fortran_FLAGS)
 endif()
 
 enable_testing()
-
+include(ThirdPartyDecomp2D)
 add_subdirectory(src)
 add_subdirectory(tests)
