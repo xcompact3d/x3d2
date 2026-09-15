@@ -1,8 +1,10 @@
 set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" CACHE STRING "comma separated list of arguments to pass to ctest")
+mark_as_advanced(CMAKE_CTEST_ARGUMENTS)
 set(CMAKE_CTEST_NPROCS "4" CACHE STRING "number of process used in tests")
-
+mark_as_advanced(CMAKE_CTEST_NPROCS)
 option(WITH_NIGHTLY_REGRESSION
   "Register the heavier nightly regression cases (excluded from PR CI)." OFF)
+mark_as_advanced(WITH_NIGHTLY_REGRESSION)
 
 # Shared test utilities library
 add_library(x3d2_test_utils STATIC common/test_utils.f90)
