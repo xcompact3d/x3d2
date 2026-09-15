@@ -6,11 +6,9 @@ workflow:
     - if: $CI_COMMIT_BRANCH == "main" && $CI_PROJECT_PATH == "xcompact3d/x3d2"
     # Run pipeline on pull requests
     - if: $CI_PIPELINE_SOURCE == "external_pull_request_event"
-    # Block push pipelines if they happen to originate from an external PR context
-    - if: $CI_PIPELINE_SOURCE == "push" && $CI_EXTERNAL_PULL_REQUEST_IID
-      when: never
-    # Fallback: Run pipeline on ordinary branch pushes (no PR open yet)
-    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH != "main"
+    # Manual runs
+    - if: $CI_PIPELINE_SOURCE == "web"
+
 stages:
   - build-and-test
   - check-policies
