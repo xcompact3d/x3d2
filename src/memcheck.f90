@@ -82,6 +82,13 @@ program x3d2_memcheck
   logical :: multi_gpu_supported
   integer :: peak_fields
   real(dp) :: card_gib
+  !> Set by parse_args() from --extensive <n> (0 = not requested, the
+  !> normal --build path of exactly 1 substep). build_and_measure() reads
+  !> this to decide how many RK sub-stages to drive before measuring;
+  !> report_measured_table()'s banner line and EXTENSIVE result line both
+  !> read measured_n_substeps afterwards to state the real count.
+  integer :: extensive_substeps = 0
+  integer :: measured_n_substeps
   !> Set by report()'s ng=1 row, used by run_tier3()'s CHECK line to
   !> compare the static estimate against the real --build measurement.
   real(dp) :: estimate_ng1_gib
@@ -171,13 +178,13 @@ program x3d2_memcheck
 contains
 
   subroutine parse_args()
-    integer :: i, nargs
+    integer :: i, nargs, iostat_n
     character(len=256) :: arg
     logical :: static_flag, build_flag
 
     nargs = command_argument_count()
     if (nargs < 1) error stop 'usage: x3d2-memcheck <input.x3d> &
-      &[--static | --build]'
+      &[--static | --build [--extensive <n_substeps>]]'
     ! The input file must stay positional argument 1: the real case
     ! constructors this tool calls under --build (case_channel_init,
     ! case_cylinder_init, solver_init) independently re-read
@@ -187,21 +194,33 @@ contains
 
     static_flag = .false.
     build_flag = .false.
-    do i = 2, nargs
+    i = 2
+    do while (i <= nargs)
       call get_command_argument(i, arg)
       select case (trim(arg))
       case ('--static')
         static_flag = .true.
       case ('--build')
         build_flag = .true.
+      case ('--extensive')
+        if (i == nargs) error stop 'x3d2-memcheck: --extensive needs a &
+          &positive integer substep count, e.g. --extensive 1000'
+        i = i + 1
+        call get_command_argument(i, arg)
+        read (arg, *, iostat=iostat_n) extensive_substeps
+        if (iostat_n /= 0 .or. extensive_substeps < 1) &
+          error stop 'x3d2-memcheck: --extensive needs a positive &
+            &integer substep count'
+        build_flag = .true.
       case default
         error stop 'x3d2-memcheck: unknown flag '//trim(arg)// &
-          ' (expected --static or --build)'
+          ' (expected --static, --build, or --extensive <n>)'
       end select
+      i = i + 1
     end do
     if (static_flag .and. build_flag) &
-      error stop 'x3d2-memcheck: --static and --build are mutually &
-        &exclusive (--static stops at Tier 1, --build adds Tier 3).'
+      error stop 'x3d2-memcheck: --static and --build/--extensive are &
+        &mutually exclusive (--static stops at Tier 1).'
 
     if (static_flag) then
       run_mode = 'STATIC'
@@ -670,9 +689,18 @@ contains
     end if
 
     print '(a)', '------------------------------------------------------------'
-    print '(a,i0,a,f0.2,a,f0.2,a)', 'Real build (1 GPU, one substep): &
-      &peak_fields measured ', measured_peak_fields, ', workspace ', &
-      workspace_gib_measured, ' GiB, used ', used_gib, ' GiB'
+    print '(a,i0,a,i0,a,f0.2,a,f0.2,a)', 'Real build (1 GPU, ', &
+      measured_n_substeps, ' substep(s)): peak_fields measured ', &
+      measured_peak_fields, ', workspace ', workspace_gib_measured, &
+      ' GiB, used ', used_gib, ' GiB'
+    ! Single machine-parseable line for --extensive sweeps (see
+    ! scripts/memcheck_extensive_sweep.sh), so a wrapper script comparing
+    ! several substep counts can grep one line per run instead of parsing
+    ! the whole table.
+    if (extensive_substeps > 0) &
+      print '(a,i0,a,i0,a,f0.3,a,f0.3)', 'EXTENSIVE result: substeps=', &
+        measured_n_substeps, ' peak_fields=', measured_peak_fields, &
+        ' used_gib=', used_gib, ' pct_card=', 100._dp*used_gib/card_gib
     call print_table_header()
 
     do k = 1, size(n_gpu_list)
@@ -716,10 +744,20 @@ contains
 
   subroutine build_and_measure(dims_in, npeak, dev_used, ibm_missing)
     !! Build the real flow case at dims_in on this single GPU (via the same
-    !! case-dispatch select case xcompact.f90 uses), run one
-    !! substep to drive the allocator to its work-field high-water mark,
-    !! and return that mark (npeak) plus the absolute device memory in use
-    !! (dev_used).
+    !! case-dispatch select case xcompact.f90 uses), run one (or, under
+    !! --extensive <n>, n) substep(s) to drive the allocator to its
+    !! work-field high-water mark, and return that mark (npeak) plus the
+    !! absolute device memory in use (dev_used).
+    !!
+    !! --extensive re-checks this same high-water mark against more RK
+    !! sub-stages, but only re-exercises the allocator's own pool - it does
+    !! NOT repeat the per-iteration I/O paths (compute_pressure_vert,
+    !! compute_derived_fields, io_mgr%update_stats, snapshot/checkpoint
+    !! writes) that a real xcompact run hits every iteration, so it cannot
+    !! catch a leak in those paths. See scripts/memcheck_extensive_sweep.sh
+    !! (this tool's own sweep, allocator-path regression guard only) vs.
+    !! scripts/memcheck_extensive_xcompact.sh (a real xcompact run polled
+    !! externally via nvidia-smi, which CAN catch an I/O-path leak).
     !!
     !! Driving the real flow_case_t (case_init, one postprocess(0,.) call,
     !! one substep) rather than a bespoke transeq/step/pressure_correction
@@ -753,6 +791,7 @@ contains
     class(base_case_t), allocatable :: flow_case
     type(flist_t), allocatable :: curr(:), deriv(:)
     integer :: dims(3), i
+    integer :: n_substeps, i_substep
     type(cuda_allocator_t), target :: cuda_allocator
     type(cuda_backend_t), target :: cuda_backend
     type(allocator_t), target :: host_allocator
@@ -840,7 +879,21 @@ contains
 
     ! One real sub-stage drives the allocator to the same high-water mark a
     ! full time step would reach; field values are irrelevant to memory.
-    call flow_case%substep(curr, deriv, 1)
+    ! --extensive <n> overrides the count (default 1) so the peak can be
+    ! re-checked against more sub-stages, e.g. to confirm no later-only
+    ! allocation path changes it. This only re-checks the allocator's own
+    ! pool (structurally leak-free - next_id is monotonic, get_block/
+    ! release_block just recycle a free list, see src/allocator.f90): it
+    ! never repeats the per-iteration I/O paths (compute_pressure_vert,
+    ! compute_derived_fields, io_mgr%update_stats, snapshot/checkpoint
+    ! writes) that a real xcompact run would hit on every iteration and
+    ! where an actual leak is far more likely to live.
+    n_substeps = 1
+    if (extensive_substeps > 0) n_substeps = extensive_substeps
+    do i_substep = 1, n_substeps
+      call flow_case%substep(curr, deriv, i_substep)
+    end do
+    measured_n_substeps = n_substeps
 
     ! Mirrors run()'s per-iteration postprocessing calls (base_case.f90,
     ! immediately after the sub-stage loop): keep_pressure and
