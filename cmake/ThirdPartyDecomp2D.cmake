@@ -63,6 +63,11 @@ if(WITH_2DECOMPFFT)
                         "-DDOUBLE_PRECISION=${DOUBLE_PRECISION}"
       BUILD_BYPRODUCTS  "${decomp2d_library}"
       TEST_COMMAND      ""
+      # The git update step carries no stamp, so it is always out of date and
+      # drags the configure, build and install steps with it on every `make`.
+      # Disconnecting it pins the checkout to the tag already cloned; re-fetch
+      # deliberately with the `2decomp-<version>-update` target.
+      UPDATE_DISCONNECTED TRUE
     )
 
     # The module files land here during the build, but the directory has to exist
