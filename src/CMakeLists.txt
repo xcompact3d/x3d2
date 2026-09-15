@@ -132,6 +132,9 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
     set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
   endif()
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -floop-optimize -march=native")
+elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" OR
+       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+  set(CMAKE_Fortran_FLAGS "-cpp")
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
   set(CMAKE_Fortran_FLAGS "-eF -M878") # -M878 suppresses WARNING multiple module includes (not useful)
   set(CMAKE_Fortran_FLAGS_DEBUG "-G2 -O0")
@@ -142,7 +145,7 @@ endif()
 
 # Backend specific flags and options
 if (${ENABLE_BACKEND} STREQUAL "CUDA")
-  set(CMAKE_Fortran_FLAGS "-cpp -cuda")
+  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cuda")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds")
   # Opt-in: -Ktrap=fp traps FP exceptions process-wide, turning benign FP ops in
   # linked libs (cuFFTMp PTX-JIT, HPC-X/UCX at MPI_Init) into fatal SIGFPEs.
