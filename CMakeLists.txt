@@ -1,6 +1,5 @@
 # Set mininum CMake requirement
-set(cmake_minimum_version 3.13)
-cmake_minimum_required(VERSION ${cmake_minimum_version})
+cmake_minimum_required(VERSION 3.13)
 
 # Define project languages
 project(x3d2 LANGUAGES Fortran CXX C)
@@ -30,9 +29,8 @@ set_property(CACHE ENABLE_BACKEND PROPERTY STRINGS OFF CUDA OMP_TGT)
 # ADIOS2 option (default OFF)
 option(WITH_ADIOS2 "Enable ADIOS2 for I/O" OFF)
 
-# FFT option (default on)
-set(WITH_2DECOMPFFT ON CACHE BOOL
-  "Enable Poisson based FFT solver on the OpenMP backend.")
+# FFT option (default ON)
+option(WITH_2DECOMPFFT "Enable Poisson based FFT solver on the OpenMP backend" ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 

@@ -1,3 +1,4 @@
+# 1. Set source files
 set(SRC
   allocator.f90
   common.f90
@@ -35,6 +36,7 @@ set(SRC
 set(BACKENDSRC
   backend/omp/backend.f90
 )
+# CUDA specific
 if (${ENABLE_BACKEND} STREQUAL "CUDA")
   list(APPEND SRC
     backend/cuda/allocator.f90
@@ -52,6 +54,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   )
   list(APPEND BACKENDSRC
     backend/cuda/backend.f90)
+# OMP TGT specific
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   list(APPEND SRC
     backend/omp/target/allocator.f90
@@ -60,15 +63,19 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
     backend/omp/target/backend.f90)
 endif()
 
-set(2DECOMPFFTSRC
-  backend/omp/poisson_fft.f90
-  decomp/decomp_2decompfft.f90
-)
-set(DUMMYDECOMPSRC
-  decomp/decomp_dummy.f90
-)
+# 2Decomp
+if(WITH_2DECOMPFFT)
+  list(APPEND SRC
+    backend/omp/poisson_fft.f90
+    decomp/decomp_2decompfft.f90
+  )
+else()
+  list(APPEND SRC
+    decomp/decomp_dummy.f90
+  )
+endif()
 
-set(IOSRC
+list(APPEND SRC 
   io/io_base.f90
   io/io_session.f90
   io/io_field_utils.f90
@@ -78,31 +85,22 @@ set(IOSRC
   io/stats.f90
   io/io_manager.f90
 )
+
+# ADIOS2
 if(WITH_ADIOS2)
-  list(APPEND IOSRC 
+  list(APPEND SRC 
     io/adios2/io.f90
   )
 else()
-  list(APPEND IOSRC 
+  list(APPEND SRC 
   io/dummy/io.f90
   )
 endif()
 
-list(APPEND SRC ${IOSRC})
-
-# Decide whether 2decomp&fft is supported by the build
-if(WITH_2DECOMPFFT)
-  list(APPEND SRC ${2DECOMPFFTSRC})
-else()
-  list(APPEND SRC ${DUMMYDECOMPSRC})
-endif()
-
-list(APPEND SRC ${IOSRC})
-
 set(EXECUTABLE_OUTPUT_PATH "${PROJECT_BINARY_DIR}/bin")
 set(LIBRARY_OUTPUT_PATH "${PROJECT_BINARY_DIR}/lib")
 
-# Create the main library
+# 2. Create the main library
 add_library(x3d2 STATIC ${SRC})
 set_target_properties(x3d2 PROPERTIES
   Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2")
@@ -120,7 +118,7 @@ add_executable(xcompact xcompact.f90)
 target_link_libraries(xcompact PRIVATE x3d2_backends)
 target_link_libraries(xcompact PRIVATE x3d2)
 
-# Set compiler specific flags and options
+# 3. Set compiler specific flags and options
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
          ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
          ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
@@ -145,7 +143,7 @@ else()
   message(FATAL_ERROR "Unsupported compiler")
 endif()
 
-# Backend specific flags and options
+# 4. Set backend specific flags and options
 if (${ENABLE_BACKEND} STREQUAL "CUDA")
   set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cuda")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds")
@@ -182,6 +180,7 @@ target_link_libraries(x3d2 PRIVATE MPI::MPI_Fortran)
 target_link_libraries(x3d2_backends PRIVATE MPI::MPI_Fortran)
 target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
 
+# 5. Set thirdparty libary dependencies
 if(WITH_2DECOMPFFT)
   message(STATUS "Using the FFT poisson solver with 2decomp&fft support on the OpenMP backend")
   target_link_libraries(x3d2 PRIVATE decomp2d)
