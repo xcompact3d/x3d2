@@ -141,6 +141,8 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3")
   target_link_options(x3d2 INTERFACE -h omp)
   target_link_options(x3d2_backends INTERFACE -h omp)
+else()
+  message(FATAL_ERROR "Unsupported compiler")
 endif()
 
 # Backend specific flags and options
