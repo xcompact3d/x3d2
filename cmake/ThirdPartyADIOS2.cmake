@@ -11,6 +11,7 @@ if(WITH_ADIOS2)
   option(USE_SYSTEM_ADIOS2 "Use system-installed ADIOS2" OFF)
   set(ADIOS2_ROOT_DIR "" CACHE PATH
     "Directory where ADIOS2 is installed, only used when USE_SYSTEM_ADIOS2=ON")
+
   mark_as_advanced(ADIOS2_ROOT_DIR)
 
   # find_package() caches ADIOS2_DIR, so a previous backend or a stale system
@@ -23,11 +24,12 @@ if(WITH_ADIOS2)
     if(ADIOS2_ROOT_DIR)
       message(STATUS "Looking for ADIOS2 in ${ADIOS2_ROOT_DIR}")
       find_package(ADIOS2 CONFIG
+                   COMPONENTS Fortran MPI
                    PATHS "${ADIOS2_ROOT_DIR}"
                    NO_DEFAULT_PATH
                    QUIET)
     else()
-      find_package(ADIOS2 CONFIG QUIET)
+      find_package(ADIOS2 CONFIG COMPONENTS Fortran MPI QUIET)
     endif()
 
     if(ADIOS2_FOUND)
@@ -54,6 +56,7 @@ if(WITH_ADIOS2)
       "${CMAKE_CURRENT_BINARY_DIR}/adios2-${adios2_config_suffix}-${adios2_version}")
 
     find_package(ADIOS2 CONFIG
+                 COMPONENTS Fortran MPI
                  PATHS "${adios2_install_dir}"
                  NO_DEFAULT_PATH
                  QUIET)
@@ -62,13 +65,13 @@ if(WITH_ADIOS2)
     else(ADIOS2_FOUND)
       message(STATUS "Building ADIOS2 from source")
 
-      # ADIOS2 defaults CMAKE_CUDA_ARCHITECTURES to 52 (Maxwell) when unset,
-      # which CUDA >= 13 no longer supports, so an architecture is always
-      # forwarded.  Native detection compiles for the GPU of the build machine.
-      set(CUDA_ARCH "native" CACHE STRING
-        "CUDA architecture(s) for the ADIOS2 build, e.g. 80")
-
       if(${ENABLE_BACKEND} STREQUAL "CUDA")
+        # ADIOS2 defaults CMAKE_CUDA_ARCHITECTURES to 52 (Maxwell) when unset,
+        # which CUDA >= 13 no longer supports, so an architecture is always
+        # forwarded.  Native detection compiles for the GPU of the build machine.
+        set(CUDA_ARCH "native" CACHE STRING
+          "CUDA architecture(s) for the ADIOS2 build, e.g. 80")
+
         set(adios2_cuda_args
           "-DADIOS2_USE_CUDA=ON"
           "-DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCH}")
