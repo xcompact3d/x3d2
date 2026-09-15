@@ -32,9 +32,7 @@ if(WITH_2DECOMPFFT)
   if (decomp2d_FOUND)
     message(STATUS "2decomp-fft FOUND in ${decomp2d_install_dir}")
   else(decomp2d_FOUND)
-    message(STATUS "2decomp-fft PATH not available we'll try to download and install")
-
-    include(ExternalProject)
+    message(STATUS "Building 2decomp-fft from source")
 
     if(SINGLE_PREC)
       set(DOUBLE_PRECISION OFF)
@@ -48,9 +46,12 @@ if(WITH_2DECOMPFFT)
     set(decomp2d_library
       "${decomp2d_install_dir}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}decomp2d${CMAKE_STATIC_LIBRARY_SUFFIX}")
 
+    include(ExternalProject)
+
     ExternalProject_Add(2decomp-${decomp2d_version}
       GIT_REPOSITORY    "https://github.com/xcompact3d/2decomp-fft"
       GIT_TAG           "${decomp2d_version}"
+      GIT_SHALLOW       TRUE
       SOURCE_DIR        "${CMAKE_CURRENT_BINARY_DIR}/decomp2d-src"
       BINARY_DIR        "${CMAKE_CURRENT_BINARY_DIR}/decomp2d-build"
       INSTALL_DIR       "${decomp2d_install_dir}"

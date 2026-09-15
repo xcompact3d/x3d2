@@ -38,19 +38,6 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/include)
 
-if(WITH_ADIOS2)
-  if (${ENABLE_BACKEND} STREQUAL "CUDA")
-    set(ADIOS2_USE_CUDA ON)
-  else()
-    set(ADIOS2_USE_CUDA OFF)
-  endif()
-  list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/adios2")
-  cmake_policy(SET CMP0074 NEW)
-  find_package(ADIOS2)
-else()
-  message(STATUS "ADIOS2 is disabled")
-endif()
-
 # Backend specific checks
 if (${ENABLE_BACKEND} STREQUAL "CUDA")
   if(NOT (CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI"))
@@ -90,6 +77,7 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" AND OpenMP_Fortran_FLAGS)
 endif()
 
 enable_testing()
+include(ThirdPartyADIOS2)
 include(ThirdPartyDecomp2D)
 add_subdirectory(src)
 add_subdirectory(tests)
