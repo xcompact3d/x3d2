@@ -113,7 +113,6 @@ function(define_test testfile np backend)
     target_link_libraries(${test_name} PRIVATE decomp2d)
   endif()
 
-  find_package(MPI REQUIRED)
   target_link_libraries(${test_name} PRIVATE MPI::MPI_Fortran)
 
   if(WITH_ADIOS2)

@@ -23,6 +23,7 @@ if(WITH_2DECOMPFFT)
   # satisfy this lookup even when decomp2d_install_dir has changed.
   unset(decomp2d_DIR CACHE)
   unset(decomp2d_DIR)
+  mark_as_advanced(decomp2d_DIR)
 
   find_package(decomp2d CONFIG
                PATHS ${decomp2d_install_dir}
