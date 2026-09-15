@@ -1,3 +1,4 @@
+# 1. Set source files
 set(SRC
   allocator.f90
   common.f90
@@ -32,35 +33,49 @@ set(SRC
   case/tgv.f90
   module/ibm.f90
 )
-set(CUDASRC
-  backend/cuda/allocator.f90
-  backend/cuda/common.f90
-  backend/cuda/exec_dist.f90
-  backend/cuda/exec_thom.f90
-  backend/cuda/kernels/distributed.f90
-  backend/cuda/kernels/fieldops.f90
-  backend/cuda/kernels/reorder.f90
-  backend/cuda/kernels/spectral_processing.f90
-  backend/cuda/kernels/thomas.f90
-  backend/cuda/poisson_fft.f90
-  backend/cuda/sendrecv.f90
-  backend/cuda/tdsops.f90
-)
 set(BACKENDSRC
   backend/omp/backend.f90
-  )
-set(OMPTGTSRC # For OMP offloading
-  backend/omp/target/allocator.f90
-  )
-set(2DECOMPFFTSRC
-  backend/omp/poisson_fft.f90
-  decomp/decomp_2decompfft.f90
 )
-set(DUMMYDECOMPSRC
-  decomp/decomp_dummy.f90
-)
+# CUDA specific
+if (${ENABLE_BACKEND} STREQUAL "CUDA")
+  list(APPEND SRC
+    backend/cuda/allocator.f90
+    backend/cuda/common.f90
+    backend/cuda/exec_dist.f90
+    backend/cuda/exec_thom.f90
+    backend/cuda/kernels/distributed.f90
+    backend/cuda/kernels/fieldops.f90
+    backend/cuda/kernels/reorder.f90
+    backend/cuda/kernels/spectral_processing.f90
+    backend/cuda/kernels/thomas.f90
+    backend/cuda/poisson_fft.f90
+    backend/cuda/sendrecv.f90
+    backend/cuda/tdsops.f90
+  )
+  list(APPEND BACKENDSRC
+    backend/cuda/backend.f90)
+# OMP TGT specific
+elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
+  list(APPEND SRC
+    backend/omp/target/allocator.f90
+  )
+  list(APPEND BACKENDSRC
+    backend/omp/target/backend.f90)
+endif()
 
-set(IOSRC
+# 2Decomp
+if(WITH_2DECOMPFFT)
+  list(APPEND SRC
+    backend/omp/poisson_fft.f90
+    decomp/decomp_2decompfft.f90
+  )
+else()
+  list(APPEND SRC
+    decomp/decomp_dummy.f90
+  )
+endif()
+
+list(APPEND SRC 
   io/io_base.f90
   io/io_session.f90
   io/io_field_utils.f90
@@ -71,43 +86,21 @@ set(IOSRC
   io/io_manager.f90
 )
 
+# ADIOS2
 if(WITH_ADIOS2)
-  list(APPEND IOSRC 
+  list(APPEND SRC 
     io/adios2/io.f90
   )
 else()
-  list(APPEND IOSRC 
+  list(APPEND SRC 
   io/dummy/io.f90
   )
 endif()
 
-list(APPEND SRC ${IOSRC})
-
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
-  list(APPEND SRC ${CUDASRC})
-  list(APPEND BACKENDSRC backend/cuda/backend.f90)
-endif()
-
-if(OMP_TGT)
-  list(APPEND SRC ${OMPTGTSRC})
-  list(APPEND BACKENDSRC backend/omp/target/backend.f90)
-endif()
-
-if(WITH_2DECOMPFFT)
-  # Decide whether 2decomp&fft is supported by the build
-  find_package(decomp2d)
-  list(APPEND SRC ${2DECOMPFFTSRC})
-else()
-  list(APPEND SRC ${DUMMYDECOMPSRC})
-endif()
-
-list(APPEND SRC ${IOSRC})
-
 set(EXECUTABLE_OUTPUT_PATH "${PROJECT_BINARY_DIR}/bin")
 set(LIBRARY_OUTPUT_PATH "${PROJECT_BINARY_DIR}/lib")
 
-# Create the main library
+# 2. Create the main library
 add_library(x3d2 STATIC ${SRC})
 set_target_properties(x3d2 PROPERTIES
   Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2")
@@ -125,10 +118,34 @@ add_executable(xcompact xcompact.f90)
 target_link_libraries(xcompact PRIVATE x3d2_backends)
 target_link_libraries(xcompact PRIVATE x3d2)
 
-# if CUDA compiler
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
-  set(CMAKE_Fortran_FLAGS "-cpp -cuda")
+# 3. Set compiler specific flags and options
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
+         ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
+         ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
+  set(CMAKE_Fortran_FLAGS "-cpp -std=f2018")
+  if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
+      ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
+    set(CMAKE_Fortran_FLAGS_DEBUG "-g -Wall -Wno-ambiguous-structure-constructor -Werror")
+  else()
+    set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
+  endif()
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -floop-optimize -march=native")
+elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" OR
+       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+  set(CMAKE_Fortran_FLAGS "-cpp")
+elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+  set(CMAKE_Fortran_FLAGS "-eF -M878") # -M878 suppresses WARNING multiple module includes (not useful)
+  set(CMAKE_Fortran_FLAGS_DEBUG "-G2 -O0")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3")
+  target_link_options(x3d2 INTERFACE -h omp)
+  target_link_options(x3d2_backends INTERFACE -h omp)
+else()
+  message(FATAL_ERROR "Unsupported compiler")
+endif()
+
+# 4. Set backend specific flags and options
+if (${ENABLE_BACKEND} STREQUAL "CUDA")
+  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cuda")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds")
   # Opt-in: -Ktrap=fp traps FP exceptions process-wide, turning benign FP ops in
   # linked libs (cuFFTMp PTX-JIT, HPC-X/UCX at MPI_Init) into fatal SIGFPEs.
@@ -139,45 +156,19 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
   target_link_options(x3d2 INTERFACE "-cuda")
   target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
-
   target_compile_options(xcompact PRIVATE "-DCUDA")
-  if (OMP_TGT)
+elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
+  if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
+    set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
     add_definitions("-DOMP_TGT_NVIDIA")
-  endif()
-
-elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
-       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
-       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
-  set(CMAKE_Fortran_FLAGS "-cpp -std=f2018")
-  if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
-      ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
-    set(CMAKE_Fortran_FLAGS_DEBUG "-g -Wall -Wno-ambiguous-structure-constructor -Werror")
-  else()
-    set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
-  endif()
-  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -floop-optimize -march=native")
-  if (OMP_TGT)
+  elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
+         ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
+         ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp --offload-arch=${OMP_TGT_ARCH}")
-    add_definitions("-DOMP_TGT_AMD")
+    add_definitions("-DOMP_TGT_AMD") # Assume AMD GPU
+  elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+    add_definitions("-DOMP_TGT_AMD") # Assume AMD GPU
   endif()
-elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
-  set(CMAKE_Fortran_FLAGS "-eF -M878") # -M878 suppresses WARNING multiple module includes (not useful)
-  set(CMAKE_Fortran_FLAGS_DEBUG "-G2 -O0")
-  set(CMAKE_Fortran_FLAGS_RELEASE "-O3")
-  target_link_options(x3d2 INTERFACE -h omp)
-  target_link_options(x3d2_backends INTERFACE -h omp)
-  if (OMP_TGT)
-    add_definitions("-DOMP_TGT_AMD")
-  endif()
-endif()
-
-if(WITH_2DECOMPFFT)
-  message(STATUS "Using the FFT poisson solver with 2decomp&fft support on the OpenMP backend")
-  find_package(decomp2d REQUIRED)
-  target_link_libraries(x3d2 PRIVATE decomp2d)
-  target_link_libraries(x3d2_backends PRIVATE decomp2d)
-  target_compile_options(x3d2 PRIVATE "-DWITH_2DECOMPFFT")
-  target_compile_options(x3d2_backends PRIVATE "-DWITH_2DECOMPFFT")
 endif()
 
 # OpenMP is resolved once at the top level (see the root CMakeLists.txt).
@@ -185,10 +176,18 @@ target_link_libraries(x3d2 PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(x3d2_backends PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(xcompact PRIVATE OpenMP::OpenMP_Fortran)
 
-find_package(MPI REQUIRED)
 target_link_libraries(x3d2 PRIVATE MPI::MPI_Fortran)
 target_link_libraries(x3d2_backends PRIVATE MPI::MPI_Fortran)
 target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
+
+# 5. Set thirdparty libary dependencies
+if(WITH_2DECOMPFFT)
+  message(STATUS "Using the FFT poisson solver with 2decomp&fft support on the OpenMP backend")
+  target_link_libraries(x3d2 PRIVATE decomp2d)
+  target_link_libraries(x3d2_backends PRIVATE decomp2d)
+  target_compile_options(x3d2 PRIVATE "-DWITH_2DECOMPFFT")
+  target_compile_options(x3d2_backends PRIVATE "-DWITH_2DECOMPFFT")
+endif()
 
 if(WITH_ADIOS2)
   target_link_libraries(x3d2 PRIVATE adios2::fortran_mpi)
