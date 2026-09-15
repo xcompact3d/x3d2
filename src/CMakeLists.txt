@@ -4,6 +4,7 @@ set(SRC
   config.f90
   field.f90
   mesh.f90
+  memory_estimate.f90
   ordering.f90
   poisson_fft.f90
   solver.f90
@@ -42,6 +43,7 @@ set(CUDASRC
   backend/cuda/kernels/reorder.f90
   backend/cuda/kernels/spectral_processing.f90
   backend/cuda/kernels/thomas.f90
+  backend/cuda/memory_estimate_cuda.f90
   backend/cuda/poisson_fft.f90
   backend/cuda/sendrecv.f90
   backend/cuda/tdsops.f90
@@ -145,6 +147,13 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
     add_definitions("-DOMP_TGT_NVIDIA")
   endif()
 
+  # x3d2-memcheck (the static memory estimator) needs m_cuda_memory_estimate
+  # and m_cuda_common, so only exists for the CUDA backend.
+  add_executable(x3d2-memcheck memcheck.f90)
+  target_link_libraries(x3d2-memcheck PRIVATE x3d2_backends)
+  target_link_libraries(x3d2-memcheck PRIVATE x3d2)
+  target_compile_options(x3d2-memcheck PRIVATE "-DCUDA")
+
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
@@ -190,8 +199,17 @@ target_link_libraries(x3d2 PRIVATE MPI::MPI_Fortran)
 target_link_libraries(x3d2_backends PRIVATE MPI::MPI_Fortran)
 target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
 
+if(TARGET x3d2-memcheck)
+  target_link_libraries(x3d2-memcheck PRIVATE MPI::MPI_Fortran)
+endif()
+
 if(WITH_ADIOS2)
   target_link_libraries(x3d2 PRIVATE adios2::fortran_mpi)
   target_link_libraries(xcompact PRIVATE adios2::fortran_mpi)
   target_compile_options(x3d2 PRIVATE "-DWITH_ADIOS2")
+  # x3d2-memcheck's --build path now builds a real case (m_case_*), which
+  # needs ADIOS2 the same way xcompact does.
+  if(TARGET x3d2-memcheck)
+    target_link_libraries(x3d2-memcheck PRIVATE adios2::fortran_mpi)
+  endif()
 endif()
