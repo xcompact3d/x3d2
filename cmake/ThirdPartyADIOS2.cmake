@@ -112,6 +112,11 @@ if(WITH_ADIOS2)
                           ${adios2_cuda_args}
         BUILD_BYPRODUCTS  "${adios2_fortran_library}" "${adios2_fortran_mpi_library}"
         TEST_COMMAND      ""
+        # The git update step carries no stamp, so it is always out of date and
+        # drags the configure, build and install steps with it on every `make`.
+        # Disconnecting it pins the checkout to the tag already cloned; re-fetch
+        # deliberately with the `adios2-<version>-update` target.
+        UPDATE_DISCONNECTED TRUE
       )
 
       # The module files land here during the build, but the directory has to
