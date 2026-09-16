@@ -9,14 +9,14 @@ module m_memory_estimate
   !! --build Tier 3 path; they live here so both that real build measurement
   !! and the static, no build Tiers 1-2 estimate can share them instead of
   !! duplicating them.
-  use m_common, only: i8, nbytes
+  use m_common, only: i8, nbytes, is_sp, sp
   use m_config, only: checkpoint_config_t, has_output_field
   implicit none
 
   private
   public :: padded_dim, padded_cells, cell_dims, spectral_slab_bytes, &
             mirror_buffer_bytes_100, output_field_active, &
-            peak_fields_lookup, halo_bytes
+            peak_fields_lookup, halo_bytes, gpu_io_staging_bytes
 
 contains
 
@@ -148,6 +148,54 @@ contains
     active = has_output_field(checkpoint_cfg, name) .and. &
              checkpoint_cfg%snapshot_freq > 0
   end function output_field_active
+
+  pure function gpu_io_staging_bytes(local_dims, checkpoint_cfg, device_write) &
+    result(bytes)
+    !! Device memory the GPU-aware ADIOS2 write path (src/io/adios2/io.f90,
+    !! write_device_field_adios2) holds on top of the solver's own peak: a
+    !! single reused staging buffer (file_handle%device_staging), sized to
+    !! one unpadded LOCAL field in whichever precision that write uses.
+    !! The buffer is grown, never shrunk (see write_device_field_adios2),
+    !! so its steady-state size is the LARGEST single write it is asked to
+    !! hold: the build precision whenever a checkpoint is enabled (always
+    !! native, and always at least as large as a single-precision
+    !! snapshot), otherwise whatever precision the snapshot uses.
+    !!
+    !! Zero when the device path cannot be taken: device_write false
+    !! (build without X3D2_ADIOS2_CUDA, or X3D2_ADIOS2_GPU_WRITE_MODE=
+    !! host), or neither a unit-stride snapshot nor a checkpoint is
+    !! enabled (striding falls back to the host path in
+    !! snapshot_manager.f90; checkpoints never stride).
+    !!
+    !! The DIR_X->DIR_C reorder borrows a block from the allocator free
+    !! list and is not counted here (measurements 2026-09-15 showed
+    !! exactly one field of growth).
+    integer, intent(in) :: local_dims(3)
+    type(checkpoint_config_t), intent(in) :: checkpoint_cfg
+    logical, intent(in) :: device_write
+    integer(i8) :: bytes
+
+    ! Bytes of one real(sp) value, needed only when the staging buffer is
+    ! sized for a single-precision snapshot rather than the build precision.
+    integer(i8), parameter :: sp_bytes = int(storage_size(0.0_sp)/8, i8)
+    integer(i8) :: n, element_bytes
+    logical :: snapshot_dev, checkpoint_dev
+
+    snapshot_dev = checkpoint_cfg%snapshot_freq > 0 .and. &
+                   all(checkpoint_cfg%output_stride == 1)
+    checkpoint_dev = checkpoint_cfg%checkpoint_freq > 0
+
+    if (.not. device_write .or. .not. (snapshot_dev .or. checkpoint_dev)) then
+      bytes = 0_i8
+      return
+    end if
+
+    n = int(local_dims(1), i8)*int(local_dims(2), i8)*int(local_dims(3), i8)
+    element_bytes = int(nbytes, i8)
+    if (.not. checkpoint_dev .and. snapshot_dev .and. &
+        checkpoint_cfg%snapshot_sp .and. .not. is_sp) element_bytes = sp_bytes
+    bytes = n*element_bytes
+  end function gpu_io_staging_bytes
 
   pure integer function peak_fields_lookup(flow_case_name, n_species, &
                                            les_on, ibm_on, &
