@@ -16,11 +16,21 @@ program x3d2_memcheck
   !!              separate test_memory_estimate_cuda_1 binary had to be run
   !!              by hand to confirm a BORDERLINE result).
   !!
+  !! Also estimates the GPU-aware ADIOS2 I/O staging buffer (one extra
+  !! unpadded local field held on the device while a snapshot/checkpoint
+  !! field is packed - src/io/adios2/io.f90) whenever a device-side write is
+  !! in play, added analytically via m_memory_estimate's
+  !! gpu_io_staging_bytes rather than measured, since --build's real case
+  !! never performs a snapshot/checkpoint write. Which mode is in play
+  !! follows the X3D2_ADIOS2_GPU_WRITE_MODE environment variable, resolved
+  !! the same way src/io/adios2/io.f90's own runtime option does (see
+  !! resolve_gpu_io_mode below).
+  !!
   !! Usage: x3d2-memcheck <input.x3d> [--static | --build]
   use mpi
   use cudafor, only: cudaMemGetInfo, cuda_count_kind, &
                      cudaGetDeviceCount, cudaSetDevice
-  use m_common, only: dp, i8, nbytes, VERT
+  use m_common, only: dp, i8, nbytes, VERT, is_sp
   use m_config, only: domain_config_t, solver_config_t, les_config_t, &
                       checkpoint_config_t
   use m_mesh, only: mesh_t, periodic_dir
@@ -28,7 +38,7 @@ program x3d2_memcheck
   use m_memory_estimate, only: padded_dim, padded_cells, cell_dims, &
                                spectral_slab_bytes, mirror_buffer_bytes_100, &
                                output_field_active, peak_fields_lookup, &
-                               halo_bytes
+                               halo_bytes, gpu_io_staging_bytes
   use m_cuda_memory_estimate, only: fft_workspace_bytes_query, &
                                     context_floor_bytes
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
@@ -133,6 +143,20 @@ program x3d2_memcheck
   !> peak_fields against m_memory_estimate's static peak_fields_lookup (see
   !> check_peak_fields_table).
   logical :: output_vorticity = .false., output_qcriterion = .false.
+  !> Set by resolve_gpu_io_mode() - whether this run's snapshot/checkpoint
+  !> writes would stage through a device buffer (true) or fall back to a
+  !> host copy (false) before reaching disk.
+  logical :: gpu_io_device_write = .false.
+  !> Resolved write mode name (mirrors runtime_gpu_write_mode_name in
+  !> src/io/adios2/io.f90): 'auto', 'gpu', or 'host'.
+  character(len=16) :: gpu_io_mode_name = 'auto'
+  !> Human-readable reason gpu_io_device_write is false, used by report()'s
+  !> GPU-aware IO staging line when there is no term to report.
+  character(len=64) :: gpu_io_reason = ''
+  !> GPU-aware IO staging term (GiB) at ng=1, captured by report()'s table
+  !> loop and consumed by run_tier3()'s CHECK line, which must exclude it -
+  !> the real --build never performs a snapshot/checkpoint write.
+  real(dp) :: io_staging_ng1_gib = 0._dp
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
@@ -144,6 +168,7 @@ program x3d2_memcheck
 
   call parse_args()
   call read_config()
+  call resolve_gpu_io_mode()
   call classify_bc()
   call query_card_gib()
 
@@ -238,6 +263,60 @@ contains
     call checkpoint_cfg%read(nml_file=trim(input_path))
     gdims = domain_cfg%dims_global
   end subroutine read_config
+
+  subroutine resolve_gpu_io_mode()
+    !! Resolve whether this run's snapshot/checkpoint writes would stage
+    !! through a device buffer. Mirrors init_runtime_options in
+    !! src/io/adios2/io.f90:296-313, which is private to the ADIOS2 writer
+    !! and belongs to PR 277, so it is not shared here - keep the two in
+    !! sync by hand if the env var contract changes.
+#ifdef X3D2_ADIOS2_CUDA
+    character(len=64) :: raw_value, mode_value
+    integer :: status, value_length
+
+    call get_environment_variable('X3D2_ADIOS2_GPU_WRITE_MODE', raw_value, &
+                                  length=value_length, status=status)
+    if (status /= 0 .or. value_length == 0) then
+      mode_value = 'auto'
+    else
+      mode_value = to_lower(adjustl(raw_value(1:min(value_length, &
+                                                     len(raw_value)))))
+    end if
+
+    select case (trim(mode_value))
+    case ('host', 'd2h', 'staged')
+      gpu_io_device_write = .false.
+      gpu_io_mode_name = 'host'
+      gpu_io_reason = 'write mode host'
+    case default
+      gpu_io_device_write = .true.
+      gpu_io_mode_name = trim(mode_value)
+    end select
+#else
+    gpu_io_device_write = .false.
+    gpu_io_mode_name = 'host'
+    gpu_io_reason = 'build lacks X3D2_ADIOS2_CUDA'
+#endif
+  end subroutine resolve_gpu_io_mode
+
+#ifdef X3D2_ADIOS2_CUDA
+  pure function to_lower(text) result(lowered)
+    !! Small private ASCII lower-caser for resolve_gpu_io_mode - not shared
+    !! with src/io/adios2/io.f90's to_lower_ascii, which is private to that
+    !! module (see resolve_gpu_io_mode's comment).
+    character(len=*), intent(in) :: text
+    character(len=len(text)) :: lowered
+    integer :: i, code
+
+    lowered = text
+    do i = 1, len(text)
+      code = iachar(lowered(i:i))
+      if (code >= iachar('A') .and. code <= iachar('Z')) then
+        lowered(i:i) = achar(code + 32)
+      end if
+    end do
+  end function to_lower
+#endif
 
   subroutine classify_bc()
     !! Mirrors src/backend/cuda/poisson_fft.f90:227-239's four-way split.
@@ -377,33 +456,42 @@ contains
   end subroutine ensure_fft_query
 
   subroutine estimate_for_ng(ng, per_gpu_gib, exact, verdict, workspace_gib, &
-                             overhead_gib)
+                             overhead_gib, io_gib)
     !! Tier 1 floor first; only calls into Tier 2 (a real, throwaway GPU
     !! FFT plan) when Tier 1 alone cannot already answer DOES_NOT_FIT, and
     !! never under --static. workspace_gib/overhead_gib (optional) are the
     !! same two-term breakdown the --build measured table reports:
     !! workspace = exact fields+halo+spectral+mirror (Tier 1, no GPU
-    !! needed); overhead = everything from the Tier 2 GPU query and the
-    !! hardware constants (worksize/xtdesc/heap/context).
+    !! needed); overhead = everything from the Tier 2 GPU query, the
+    !! hardware constants (worksize/xtdesc/heap/context), and the
+    !! GPU-aware IO staging term (also broken out on its own via the
+    !! optional io_gib, in GiB, for callers that need to track it apart
+    !! from context/FFT overhead - e.g. run_tier3()'s CHECK line, which
+    !! must exclude it since the real --build never performs a
+    !! snapshot/checkpoint write).
     integer, intent(in) :: ng
     real(dp), intent(out) :: per_gpu_gib
     logical, intent(out) :: exact
     character(len=12), intent(out) :: verdict
-    real(dp), intent(out), optional :: workspace_gib, overhead_gib
+    real(dp), intent(out), optional :: workspace_gib, overhead_gib, io_gib
 
     integer(i8) :: base_bytes, spec_bytes, worksize_bytes, floor_bytes, &
-                  xtdesc_bytes, heap_bytes, context_bytes
+                  xtdesc_bytes, heap_bytes, context_bytes, io_bytes
     logical :: used_cufftmp
-    real(dp) :: floor_gib
+    real(dp) :: floor_gib, io_gib_local
 
     base_bytes = fields_plus_halo_bytes(ng)
     spec_bytes = spectral_plus_mirror_bytes(ng)
+    io_bytes = gpu_io_staging_bytes([gdims(1), gdims(2), gdims(3)/ng], &
+                                    checkpoint_cfg, gpu_io_device_write)
+    io_gib_local = real(io_bytes, dp)/1024._dp**3
+    if (present(io_gib)) io_gib = io_gib_local
     if (present(workspace_gib)) &
       workspace_gib = real(base_bytes + spec_bytes, dp)/1024._dp**3
     ! Floor: assume cuFFTMp is used (the realistic case for every BC this
     ! solver ever attempts it for - see m_cuda_memory_estimate's 110 guard)
     ! since that gives the larger, safer lower bound.
-    floor_bytes = base_bytes + spec_bytes + &
+    floor_bytes = base_bytes + spec_bytes + io_bytes + &
                   context_floor_bytes(ng, .not. bc_is_110)
     floor_gib = real(floor_bytes, dp)/1024._dp**3
 
@@ -415,7 +503,7 @@ contains
       exact = .false.
       if (present(overhead_gib)) &
         overhead_gib = real(context_floor_bytes(ng, .not. bc_is_110), dp) &
-                       /1024._dp**3
+                       /1024._dp**3 + io_gib_local
       verdict = classify(per_gpu_gib, card_gib)
       return
     end if
@@ -426,7 +514,7 @@ contains
       verdict = 'DOES_NOT_FIT'
       if (present(overhead_gib)) &
         overhead_gib = real(context_floor_bytes(ng, .not. bc_is_110), dp) &
-                       /1024._dp**3
+                       /1024._dp**3 + io_gib_local
       return
     end if
 
@@ -458,27 +546,65 @@ contains
       xtdesc_bytes = 0_i8
     end if
     per_gpu_gib = real(base_bytes + spec_bytes + worksize_bytes + &
-                       xtdesc_bytes + heap_bytes + context_bytes, dp) &
-                 /1024._dp**3
+                       xtdesc_bytes + heap_bytes + context_bytes + &
+                       io_bytes, dp)/1024._dp**3
     exact = .true.
     if (present(overhead_gib)) &
       overhead_gib = real(worksize_bytes + xtdesc_bytes + heap_bytes + &
-                          context_bytes, dp)/1024._dp**3
+                          context_bytes, dp)/1024._dp**3 + io_gib_local
 
     verdict = classify(per_gpu_gib, card_gib)
   end subroutine estimate_for_ng
 
   subroutine report()
     integer :: k, ng, requested_ng, smallest_fits, local_dims(3)
-    real(dp) :: per_gpu_gib, requested_gib, workspace_gib, overhead_gib
-    logical :: exact
+    real(dp) :: per_gpu_gib, requested_gib, workspace_gib, overhead_gib, &
+               io_gib, mib
+    logical :: exact, unit_stride, snapshot_active, checkpoint_active
     character(len=12) :: verdict
+    character(len=64) :: what, io_none_reason
+    integer(i8) :: io_ng1_bytes
 
     print '(a)', '============================================================'
     print '(a,i0,a,i0,a,i0,a)', 'Input grid: ', gdims(1), 'x', gdims(2), &
       'x', gdims(3)
     print '(a,f0.2,a)', 'Card memory: ', card_gib, ' GiB'
     print '(a,i0)', 'peak_fields (static estimate): ', peak_fields
+
+    ! GPU-aware IO staging: computed directly at ng=1 (local_dims == gdims
+    ! there) so it is available here, ahead of the per-ng table below.
+    io_ng1_bytes = gpu_io_staging_bytes(gdims, checkpoint_cfg, &
+                                        gpu_io_device_write)
+    unit_stride = all(checkpoint_cfg%output_stride == 1)
+    snapshot_active = checkpoint_cfg%snapshot_freq > 0 .and. unit_stride
+    checkpoint_active = checkpoint_cfg%checkpoint_freq > 0
+    if (io_ng1_bytes > 0_i8) then
+      mib = real(io_ng1_bytes, dp)/1048576._dp
+      if (snapshot_active .and. checkpoint_active) then
+        what = 'snapshot at unit stride + checkpoint'
+      else if (checkpoint_active) then
+        what = 'checkpoint'
+      else
+        what = 'snapshot at unit stride'
+      end if
+      if (.not. checkpoint_active .and. checkpoint_cfg%snapshot_sp .and. &
+          .not. is_sp .and. snapshot_active) what = trim(what)//' (sp)'
+      print '(a,f0.1,a,a,a,a,a)', 'GPU-aware IO staging: ', mib, &
+        ' MiB/GPU at ng=1 (write mode ', trim(gpu_io_mode_name), ', ', &
+        trim(what), ')'
+    else
+      if (.not. gpu_io_device_write) then
+        io_none_reason = trim(gpu_io_reason)
+      else if (checkpoint_cfg%snapshot_freq > 0 .and. .not. unit_stride &
+              .and. checkpoint_cfg%checkpoint_freq == 0) then
+        io_none_reason = 'snapshot striding falls back to host path'
+      else
+        io_none_reason = 'no unit-stride snapshot and no checkpoint enabled'
+      end if
+      print '(a,a,a)', 'GPU-aware IO staging: none (', trim(io_none_reason), &
+        ')'
+    end if
+
     select case (trim(run_mode))
     case ('STATIC')
       print '(a)', 'Mode: static (Tier 1 only, no FFT plan query)'
@@ -521,11 +647,14 @@ contains
         cycle
       end if
       call estimate_for_ng(ng, per_gpu_gib, exact, verdict, workspace_gib, &
-                           overhead_gib)
+                           overhead_gib, io_gib)
       local_dims = [gdims(1), gdims(2), gdims(3)/ng]
       call print_table_row(ng, local_dims, workspace_gib, overhead_gib, &
                            per_gpu_gib, card_gib, verdict)
-      if (ng == 1) estimate_ng1_gib = per_gpu_gib
+      if (ng == 1) then
+        estimate_ng1_gib = per_gpu_gib
+        io_staging_ng1_gib = io_gib
+      end if
       if (smallest_fits == 0 .and. trim(verdict) == 'FITS') smallest_fits = ng
     end do
     print '(a)', '------------------------------------------------------------'
@@ -551,7 +680,8 @@ contains
     !! the card, exactly as this tool's real build probe always has, or if
     !! ibm_on=T and the matching mask file is not present in the working
     !! directory.
-    real(dp) :: ws_guess, used_gib, workspace_gib_measured, pct_error
+    real(dp) :: ws_guess, used_gib, workspace_gib_measured, pct_error, &
+               estimate_ng1_excl_io_gib
     integer :: measured_peak_fields
     logical :: ibm_missing
     character(len=12) :: measured_verdict
@@ -602,16 +732,25 @@ contains
                                workspace_gib_measured, measured_verdict)
     final_verdict = measured_verdict
 
-    pct_error = 100._dp*(estimate_ng1_gib - used_gib)/used_gib
-    if (abs(estimate_ng1_gib - used_gib) <= CHECK_TOLERANCE*used_gib) then
+    ! The real build above performs no snapshot/checkpoint write, so the
+    ! GPU-aware IO staging term (analytical only, never measured here) is
+    ! excluded from both the estimate compared and the printed CHECK line.
+    estimate_ng1_excl_io_gib = estimate_ng1_gib - io_staging_ng1_gib
+    pct_error = 100._dp*(estimate_ng1_excl_io_gib - used_gib)/used_gib
+    if (abs(estimate_ng1_excl_io_gib - used_gib) <= &
+        CHECK_TOLERANCE*used_gib) then
       print '(a,f0.2,a,f0.2,a,sp,f0.1,ss,a)', 'CHECK ng=1: estimated ', &
-        estimate_ng1_gib, ' GiB, measured ', used_gib, ' GiB (', &
+        estimate_ng1_excl_io_gib, ' GiB, measured ', used_gib, ' GiB (', &
         pct_error, '%) - OK (tolerance 5%)'
     else
       print '(a,f0.2,a,f0.2,a,sp,f0.1,ss,a)', 'CHECK ng=1: estimated ', &
-        estimate_ng1_gib, ' GiB, measured ', used_gib, ' GiB (', &
+        estimate_ng1_excl_io_gib, ' GiB, measured ', used_gib, ' GiB (', &
         pct_error, '%) - MISMATCH (tolerance 5%)'
     end if
+    if (io_staging_ng1_gib > 0._dp) &
+      print '(a,f0.1,a)', '  (GPU-aware IO staging ', &
+        io_staging_ng1_gib*1024._dp, ' MiB excluded from CHECK: the real &
+        &build performs no snapshot/checkpoint write.)'
   end subroutine run_tier3
 
   subroutine check_peak_fields_table(measured)
@@ -656,6 +795,9 @@ contains
     !! examples/TGV/input.x3d, 2026-09-10). multi_gpu_supported here uses
     !! the REAL use_cufftmp from the build just performed, more
     !! authoritative than the static table's Tier 2 plan-query signal.
+    !! The GPU-aware IO staging term (gpu_io_staging_bytes) is added the
+    !! same way, since the real build performs no snapshot/checkpoint write
+    !! and so never measures it directly.
     integer, intent(in) :: measured_peak_fields
     real(dp), intent(in) :: used_gib, workspace_gib_measured
     character(len=12), intent(out) :: requested_verdict
@@ -732,6 +874,10 @@ contains
         overhead_term = overhead_term + &
                         real(context_floor_bytes(ng, .true.) - &
                             context_floor_bytes(1, .true.), dp)/1024._dp**3
+      overhead_term = overhead_term + &
+                      real(gpu_io_staging_bytes(local_dims, checkpoint_cfg, &
+                                                gpu_io_device_write), dp) &
+                      /1024._dp**3
 
       per_gpu = w_local + overhead_term
       verdict = classify(per_gpu, card_gib)
@@ -754,7 +900,9 @@ contains
     !! NOT repeat the per-iteration I/O paths (compute_pressure_vert,
     !! compute_derived_fields, io_mgr%update_stats, snapshot/checkpoint
     !! writes) that a real xcompact run hits every iteration, so it cannot
-    !! catch a leak in those paths. See scripts/memcheck_extensive_sweep.sh
+    !! catch a leak in those paths. The GPU-aware ADIOS2 staging buffer is
+    !! therefore added analytically (gpu_io_staging_bytes) rather than
+    !! measured here. See scripts/memcheck_extensive_sweep.sh
     !! (this tool's own sweep, allocator-path regression guard only) vs.
     !! scripts/memcheck_extensive_xcompact.sh (a real xcompact run polled
     !! externally via nvidia-smi, which CAN catch an I/O-path leak).

@@ -279,6 +279,7 @@ define_test(unit/test_snapshot_species_fields.f90 1 omp)
 define_test(unit/test_statistics.f90 1 omp)
 define_test(unit/test_output_scalars.f90 1 omp)
 define_test(unit/test_les.f90 1 omp)
+define_test(unit/test_gpu_io_staging.f90 1 omp)
 
 if(WITH_ADIOS2)
   define_test(unit/test_adios2_read_write.f90 4 omp)
@@ -388,6 +389,23 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     define_memcheck_test(${memcheck_case} static)
     define_memcheck_test(${memcheck_case} build)
   endforeach()
+
+  # GPU-aware ADIOS2 device writes hold one extra unpadded local field on the
+  # device while a snapshot/checkpoint field is packed (src/io/adios2/io.f90);
+  # x3d2-memcheck adds that analytically. Only meaningful when the build has
+  # the device path compiled in.
+  if(WITH_ADIOS2_GPU_AWARE)
+    set(memcheck_gpuio_input ${CMAKE_SOURCE_DIR}/tests/memcheck/tgv_snapshot_stride1.x3d)
+    add_test(NAME memcheck_gpuio_static_TGV COMMAND sh -c
+      "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${memcheck_gpuio_input} --static")
+    set_tests_properties(memcheck_gpuio_static_TGV PROPERTIES LABELS "verification;cuda"
+      PASS_REGULAR_EXPRESSION "GPU-aware IO staging: 128.0 MiB/GPU")
+    add_test(NAME memcheck_gpuio_static_TGV_hostmode COMMAND sh -c
+      "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${memcheck_gpuio_input} --static")
+    set_tests_properties(memcheck_gpuio_static_TGV_hostmode PROPERTIES LABELS "verification;cuda"
+      ENVIRONMENT "X3D2_ADIOS2_GPU_WRITE_MODE=host"
+      PASS_REGULAR_EXPRESSION "GPU-aware IO staging: none \\(write mode host\\)")
+  endif()
 
   # CUDA verification tests
   define_verification_test(verification/test_thom.f90 1 cuda)
