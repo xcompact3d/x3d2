@@ -124,7 +124,11 @@ contains
     !! destroyed, mirroring init() exactly (src/backend/cuda/poisson_fft.
     !! f90:406-421 for the 110 case, :413-429 for the general case): the
     !! real solver keeps plan3D_fw and plan3D_bw alive for the whole run,
-    !! each with its own auto-allocated workspace.
+    !! each with its own auto-allocated workspace. If creating the backward
+    !! plan forces a cuFFTMp->cuFFT fallback after the forward plan already
+    !! built on cuFFTMp, the forward plan is destroyed and re-created on
+    !! plain cuFFT, mirroring init()'s own fw_was_cufftmp rebuild
+    !! (src/backend/cuda/poisson_fft.f90:429,437-442).
     !!
     !! Outputs:
     !!   worksize_bytes - forward+backward plan workspace, cuFFT's own
@@ -167,6 +171,7 @@ contains
     integer(int_ptr_kind()) :: worksize_fw, worksize_bw
     integer(kind=cuda_count_kind) :: free_before, free_after, total_b
     type(cudaLibXtDesc), pointer :: xtdesc
+    logical :: fw_was_cufftmp
 
     if (bc_is_100) then
       fft_n1 = cdims(2); fft_n2 = cdims(1); fft_n3 = cdims(3)
@@ -185,14 +190,24 @@ contains
     call create_fft_plan(plan_fw, used_cufftmp, fft_n1, fft_n2, fft_n3, &
                          fw_plan_type, is_root, 'memcheck probe fwd', &
                          worksize_fw)
+    fw_was_cufftmp = used_cufftmp
     ! If the forward plan fell back from cuFFTMp to plain cuFFT,
     ! used_cufftmp is now .false. - match it for the backward plan too, the
     ! same way init() rebuilds the forward plan on a backward-plan fallback
-    ! (src/backend/cuda/poisson_fft.f90:424-428) rather than running one
-    ! plan on cuFFTMp and the other on plain cuFFT.
+    ! (src/backend/cuda/poisson_fft.f90:424-428). The reverse case - the
+    ! backward plan's own cuFFTMp attach fails after the forward plan
+    ! already built on cuFFTMp - leaves the forward plan mismatched with
+    ! the now-false used_cufftmp flag, so it is destroyed and re-created on
+    ! plain cuFFT below, mirroring init()'s own fw_was_cufftmp rebuild.
     call create_fft_plan(plan_bw, used_cufftmp, fft_n1, fft_n2, fft_n3, &
                          bw_plan_type, is_root, 'memcheck probe bwd', &
                          worksize_bw)
+    if (fw_was_cufftmp .and. (.not. used_cufftmp)) then
+      ierr = cufftDestroy(plan_fw)
+      call create_fft_plan(plan_fw, used_cufftmp, fft_n1, fft_n2, fft_n3, &
+                           fw_plan_type, is_root, &
+                           'memcheck probe fwd (cuFFT rebuild)', worksize_fw)
+    end if
     ierr = cudaMemGetInfo(free_after, total_b)
     worksize_bytes = int(worksize_fw, i8) + int(worksize_bw, i8)
     heap_bytes = int(free_before, i8) - int(free_after, i8)
