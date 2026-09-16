@@ -391,6 +391,41 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     define_memcheck_test(${memcheck_case} build)
   endforeach()
 
+  # A real --build run must not clobber whatever CWD it was launched from,
+  # nor leave its scratch directory behind: enter_build_scratch/
+  # leave_build_scratch (src/memcheck.f90) exist because the real case build
+  # initialises monitoring (writes monitoring.csv) and calls postprocess(0),
+  # which clobbered a user's run directory on 2026-09-15.
+  add_test(NAME memcheck_build_scratch_protects_cwd COMMAND sh -c
+    "tmp=$(mktemp -d) && echo marker > \"$tmp/monitoring.csv\" && \
+     cd \"$tmp\" && \
+     mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck \
+       ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d --build; \
+     if grep -q marker monitoring.csv && \
+        ! ls -d x3d2-memcheck-build.* >/dev/null 2>&1; then \
+       echo SCRATCH_OK; else echo MISMATCH; fi")
+  set_tests_properties(memcheck_build_scratch_protects_cwd PROPERTIES
+    LABELS "verification;cuda"
+    PASS_REGULAR_EXPRESSION "SCRATCH_OK"
+    FAIL_REGULAR_EXPRESSION "MISMATCH")
+
+  # A relative input path must be mirrored into the scratch directory by
+  # symlink, rather than read from the CWD where monitoring.csv would
+  # otherwise land.
+  add_test(NAME memcheck_build_relative_input COMMAND sh -c
+    "tmp=$(mktemp -d) && \
+     cp ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d \"$tmp/input.x3d\" && \
+     cd \"$tmp\" && \
+     mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck \
+       input.x3d --build; \
+     if [ ! -e monitoring.csv ] && \
+        ! ls -d x3d2-memcheck-build.* >/dev/null 2>&1; then \
+       echo RELATIVE_OK; else echo MISMATCH; fi")
+  set_tests_properties(memcheck_build_relative_input PROPERTIES
+    LABELS "verification;cuda"
+    PASS_REGULAR_EXPRESSION "RELATIVE_OK"
+    FAIL_REGULAR_EXPRESSION "MISMATCH")
+
   # GPU-aware ADIOS2 device writes hold one extra unpadded local field on the
   # device while a snapshot/checkpoint field is packed (src/io/adios2/io.f90);
   # x3d2-memcheck adds that analytically. Only meaningful when the build has
