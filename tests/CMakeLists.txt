@@ -391,6 +391,15 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     define_memcheck_test(${memcheck_case} build)
   endforeach()
 
+  # Hiding every GPU from the process (CUDA_VISIBLE_DEVICES=) must be caught
+  # cleanly by the device checks in memcheck.f90's main program, not crash.
+  add_test(NAME memcheck_static_no_gpu COMMAND sh -c
+    "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d --static")
+  set_tests_properties(memcheck_static_no_gpu PROPERTIES
+    LABELS "verification;cuda"
+    ENVIRONMENT "CUDA_VISIBLE_DEVICES="
+    PASS_REGULAR_EXPRESSION "no usable CUDA device")
+
   # A real --build run must not clobber whatever CWD it was launched from,
   # nor leave its scratch directory behind: enter_build_scratch/
   # leave_build_scratch (src/memcheck.f90) exist because the real case build
