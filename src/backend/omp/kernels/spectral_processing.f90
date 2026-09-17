@@ -299,7 +299,7 @@ contains
     !! the caller passes the transposed buffer (dim1 = y modes, dim2 = x
     !! modes, dim3 = z), so this wrapper maps the global sizes nx <-> ny
     !! and the coefficient pairs ax, bx <-> ay, by onto process_spectral_010's
-    !! non-periodic-x convention before delegating to it.
+    !! non-periodic-y convention before delegating to it.
     implicit none
 
     !> Divergence of velocity in spectral space
