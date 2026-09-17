@@ -74,9 +74,15 @@ jobs:
     - name: Build tests (single precision)
       run: make -C build-single-debug
 
+    - name: Run unit and verification tests (single precision)
+      run: ctest --test-dir build-single-debug -L "unit|verification|regression" --output-on-failure
+
     - name: Configure Release build (single precision)
       run: FC=mpif90 cmake -S . -B build-single -DCMAKE_BUILD_TYPE=Release -DSINGLE_PREC=ON -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
 
     - name: Build tests (single precision)
       run: make -C build-single
+
+    - name: Run unit and verification tests (single precision)
+      run: ctest --test-dir build-single -L "unit|verification" --output-on-failure
 

@@ -2,10 +2,14 @@
 set(decomp2d_git_tag "v2.0.3.2")
 string(REPLACE "/" "-" decomp2d_git_tag_dir "${decomp2d_git_tag}")
 
-if(SINGLE_PREC)
-  set(decomp2d_install_dir "${CMAKE_CURRENT_BINARY_DIR}/decomp2d-opt-sp-${decomp2d_git_tag_dir}")
+if(NOT decomp2d_install_dir)
+    if(SINGLE_PREC)
+        set(decomp2d_install_dir "${CMAKE_CURRENT_BINARY_DIR}/decomp2d-opt-sp-${decomp2d_git_tag_dir}")
+    else()
+        set(decomp2d_install_dir "${CMAKE_CURRENT_BINARY_DIR}/decomp2d-opt-dp-${decomp2d_git_tag_dir}")
+    endif()
 else()
-  set(decomp2d_install_dir "${CMAKE_CURRENT_BINARY_DIR}/decomp2d-opt-dp-${decomp2d_git_tag_dir}")
+    message("Found decomp2d install directory: ${decomp2d_install_dir}")
 endif()
 
 # find_package() caches decomp2d_DIR, so a previous precision can otherwise

@@ -4,26 +4,25 @@ program test_output_scalars
   !! These checks validate the file-writing behavior shared by scalar time
   !! series outputs, including the infrastructure used by monitoring.csv.
   use iso_fortran_env, only: stderr => error_unit, iostat_end
-  use mpi
-
   use m_common, only: dp
   use m_scalar_series, only: scalar_series_t
+  use m_test_utils, only: initialise_mpi, finalise_test, global_all
 
   implicit none
 
-  integer :: ierr, irank
+  integer :: irank, nproc
+  logical :: allpass = .true.
 
-  call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
+  call initialise_mpi(irank, nproc)
 
   if (irank == 0) then
     call test_root_writes_named_columns()
     call test_append_adds_rows_without_header()
     call test_non_root_is_noop()
-    write (stderr, '(a)') 'Output scalar tests passed.'
   end if
 
-  call MPI_Finalize(ierr)
+  call global_all(allpass)
+  call finalise_test(allpass, irank)
 
 contains
 
@@ -47,22 +46,22 @@ contains
     call series%finalise()
 
     open (newunit=unit, file=filename, status='old', action='read', iostat=ios)
-    call assert_iostat_ok(ios, 'open root output')
+    if (.not. assert_iostat_ok(ios, 'open root output')) return
 
     read (unit, '(A)', iostat=ios) header
-    call assert_iostat_ok(ios, 'read root header')
+    if (.not. assert_iostat_ok(ios, 'read root header')) return
     call assert_equal(trim(header), '# time, lift, drag, moment', &
                       'root header')
 
     read (unit, *, iostat=ios) t, a, b, c
-    call assert_iostat_ok(ios, 'read first root row')
+    if (.not. assert_iostat_ok(ios, 'read first root row')) return
     call assert_close(t, 0.0_dp, 'first row time')
     call assert_close(a, 1.25_dp, 'first row lift')
     call assert_close(b, -2.5_dp, 'first row drag')
     call assert_close(c, 3.75_dp, 'first row moment')
 
     read (unit, *, iostat=ios) t, a, b, c
-    call assert_iostat_ok(ios, 'read second root row')
+    if (.not. assert_iostat_ok(ios, 'read second root row')) return
     call assert_close(t, 0.5_dp, 'second row time')
     call assert_close(a, 4.0_dp, 'second row lift')
     call assert_close(b, 5.5_dp, 'second row drag')
@@ -98,20 +97,20 @@ contains
     call series%finalise()
 
     open (newunit=unit, file=filename, status='old', action='read', iostat=ios)
-    call assert_iostat_ok(ios, 'open append output')
+    if (.not. assert_iostat_ok(ios, 'open append output')) return
 
     read (unit, '(A)', iostat=ios) header
-    call assert_iostat_ok(ios, 'read append header')
+    if (.not. assert_iostat_ok(ios, 'read append header')) return
     call assert_equal(trim(header), '# time, ke, enstrophy', 'append header')
 
     read (unit, *, iostat=ios) t, a, b
-    call assert_iostat_ok(ios, 'read first append row')
+    if (.not. assert_iostat_ok(ios, 'read first append row')) return
     call assert_close(t, 1.0_dp, 'first append row time')
     call assert_close(a, 10.0_dp, 'first append row ke')
     call assert_close(b, 20.0_dp, 'first append row enstrophy')
 
     read (unit, *, iostat=ios) t, a, b
-    call assert_iostat_ok(ios, 'read second append row')
+    if (.not. assert_iostat_ok(ios, 'read second append row')) return
     call assert_close(t, 2.0_dp, 'second append row time')
     call assert_close(a, 30.0_dp, 'second append row ke')
     call assert_close(b, 40.0_dp, 'second append row enstrophy')
@@ -140,7 +139,8 @@ contains
     inquire (file=filename, exist=exists)
     if (exists) then
       call remove_file(filename)
-      error stop 'non-root scalar series writer created a file'
+      write (stderr, '(a)') 'non-root scalar series writer created a file'
+      allpass = .false.
     end if
   end subroutine test_non_root_is_noop
 
@@ -157,19 +157,19 @@ contains
 
     open (newunit=unit, file=filename, status='old', action='readwrite', &
           iostat=ios)
-    call assert_iostat_ok(ios, 'open file for cleanup')
+    if (.not. assert_iostat_ok(ios, 'open file for cleanup')) return
     close (unit, status='delete')
   end subroutine remove_file
 
   subroutine assert_equal(actual, expected, label)
-    !! Compare two strings and stop the test with a useful diagnostic if they
+    !! Compare two strings and report a useful diagnostic if they
     !! differ. The label identifies which output field or line failed.
     character(len=*), intent(in) :: actual, expected, label
 
     if (actual /= expected) then
       write (stderr, '(a,": expected [",a,"], got [",a,"]")') &
         trim(label), expected, actual
-      error stop 'scalar series string assertion failed'
+      allpass = .false.
     end if
   end subroutine assert_equal
 
@@ -185,21 +185,22 @@ contains
     if (abs(actual - expected) > tol) then
       write (stderr, '(a,": expected ",ES20.12,", got ",ES20.12)') &
         trim(label), expected, actual
-      error stop 'scalar series numeric assertion failed'
+      allpass = .false.
     end if
   end subroutine assert_close
 
-  subroutine assert_iostat_ok(ios, label)
+  logical function assert_iostat_ok(ios, label)
     !! Check that a file operation completed successfully. Non-zero iostat
-    !! values are reported with context before stopping the test.
+    !! values are reported with context and make the test fail.
     integer, intent(in) :: ios
     character(len=*), intent(in) :: label
 
-    if (ios /= 0) then
+    assert_iostat_ok = ios == 0
+    if (.not. assert_iostat_ok) then
       write (stderr, '(a,": iostat=",i0)') trim(label), ios
-      error stop 'scalar series file operation failed'
+      allpass = .false.
     end if
-  end subroutine assert_iostat_ok
+  end function assert_iostat_ok
 
   subroutine assert_eof(ios, label)
     !! Check that reading past the expected rows reaches end-of-file. This
@@ -209,7 +210,7 @@ contains
 
     if (ios /= iostat_end) then
       write (stderr, '(a,": expected EOF, iostat=",i0)') trim(label), ios
-      error stop 'scalar series output had unexpected extra data'
+      allpass = .false.
     end if
   end subroutine assert_eof
 

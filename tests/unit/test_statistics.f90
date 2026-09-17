@@ -3,27 +3,27 @@ program test_statistics
 
   use m_common, only: dp
   use m_stats, only: accumulate_mean
-  use mpi
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
-  integer :: ierr
+  integer :: nrank, nproc
+  logical :: allpass = .true.
 
-  call MPI_Init(ierr)
+  call initialise_mpi(nrank, nproc)
 
-  call test_constant_field()
-  call test_known_mean()
-  call test_rms_nonzero()
-  call test_reynolds_stress()
+  call test_constant_field(allpass)
+  call test_known_mean(allpass)
+  call test_rms_nonzero(allpass)
+  call test_reynolds_stress(allpass)
 
-  print *, 'All statistics accumulation tests passed'
-
-  call MPI_Finalize(ierr)
+  call finalise_test(allpass, nrank)
 
 contains
 
-  subroutine test_constant_field()
+  subroutine test_constant_field(allpass)
     !! Constant field c=1: umean==1, uprime==0.
+    logical, intent(inout) :: allpass
     real(dp), parameter :: c = 1.0_dp
     integer, parameter :: n_samples = 100
     real(dp) :: umean(1, 1, 1), uumean(1, 1, 1), val(1, 1, 1)
@@ -46,16 +46,17 @@ contains
     if (abs(umean(1, 1, 1) - c) > tol) then
       print *, 'FAIL test_constant_field: umean =', umean(1, 1, 1), &
         'expected', c
-      error stop 'test_constant_field: umean /= constant'
+      allpass = .false.
     end if
     if (abs(uprime) > tol) then
       print *, 'FAIL test_constant_field: uprime =', uprime, 'expected 0'
-      error stop 'test_constant_field: uprime /= 0 for constant field'
+      allpass = .false.
     end if
   end subroutine test_constant_field
 
-  subroutine test_known_mean()
+  subroutine test_known_mean(allpass)
     !! Values 1..N: mean must equal (N+1)/2.
+    logical, intent(inout) :: allpass
     integer, parameter :: n_samples = 50
     real(dp) :: umean(1, 1, 1), val(1, 1, 1)
     real(dp) :: stat_inc, expected
@@ -74,12 +75,13 @@ contains
     if (abs(umean(1, 1, 1) - expected) > tol) then
       print *, 'FAIL test_known_mean: umean =', umean(1, 1, 1), &
         'expected', expected
-      error stop 'test_known_mean: mean /= analytical mean'
+      allpass = .false.
     end if
   end subroutine test_known_mean
 
-  subroutine test_rms_nonzero()
+  subroutine test_rms_nonzero(allpass)
     !! Alternating -1/+1: mean==0, uprime==1.
+    logical, intent(inout) :: allpass
     integer, parameter :: n_samples = 200
     real(dp) :: umean(1, 1, 1), uumean(1, 1, 1), val(1, 1, 1)
     real(dp) :: uprime, stat_inc
@@ -101,17 +103,18 @@ contains
     if (abs(umean(1, 1, 1)) > tol) then
       print *, 'FAIL test_rms_nonzero: umean =', umean(1, 1, 1), &
         'expected 0'
-      error stop 'test_rms_nonzero: mean of alternating series /= 0'
+      allpass = .false.
     end if
     if (abs(uprime - 1.0_dp) > tol) then
       print *, 'FAIL test_rms_nonzero: uprime =', uprime, 'expected 1'
-      error stop 'test_rms_nonzero: rms of alternating series /= 1'
+      allpass = .false.
     end if
   end subroutine test_rms_nonzero
 
-  subroutine test_reynolds_stress()
+  subroutine test_reynolds_stress(allpass)
     !! u=v=1..N: Reynolds stress <u'v'> = <uv> - <u><v> must equal var(u).
     !! u=-v: Reynolds stress must equal -var(u).
+    logical, intent(inout) :: allpass
     integer, parameter :: n_samples = 100
     real(dp) :: umean(1, 1, 1), vmean(1, 1, 1)
     real(dp) :: uumean(1, 1, 1), uvmean(1, 1, 1)
@@ -139,7 +142,7 @@ contains
 
     if (abs(reynolds_stress - uprime2) > tol*abs(uprime2)) then
       print *, 'FAIL test_reynolds_stress: <u''v''> /= var(u) for u==v'
-      error stop 'test_reynolds_stress: correlated case failed'
+      allpass = .false.
     end if
 
     ! Anticorrelated: u = -v
@@ -163,7 +166,7 @@ contains
 
     if (abs(reynolds_stress + uprime2) > tol*abs(uprime2)) then
       print *, 'FAIL test_reynolds_stress: <u''v''> /= -var(u) for u==-v'
-      error stop 'test_reynolds_stress: anticorrelated case failed'
+      allpass = .false.
     end if
   end subroutine test_reynolds_stress
 

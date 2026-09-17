@@ -1,33 +1,19 @@
 program test_omp_adamsbashforth
   use iso_fortran_env, only: stderr => error_unit
-  use mpi
 
-  use m_common, only: dp, pi, DIR_X, VERT
+  use m_common, only: dp, pi, DIR_X
   use m_mesh, only: mesh_t
-  use m_allocator, only: allocator_t, field_t
+  use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
+  use m_backend_runtime, only: backend_runtime_t
   use m_time_integrator, only: time_intg_t
   use m_field, only: flist_t
-#ifdef CUDA
-  use cudafor
-
-  use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
-  use m_cuda_backend, only: cuda_backend_t
-  use m_cuda_common, only: SZ
-#else
-  use m_omp_common, only: SZ
-#ifndef OMP_TGT
-  use m_omp_backend, only: omp_backend_t
-#else
-  use m_omptgt_backend, only: omptgt_backend_t
-  use m_omptgt_allocator, only: omptgt_allocator_t
-#endif
-#endif
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
   logical :: allpass = .true.
-  integer :: i, j, k, stage, istartup, nrank, nproc, ierr
+  integer :: i, j, k, stage, istartup, nrank, nproc
   integer :: nstep0 = 64, nstep, nrun = 3, nmethod = 8
   character(len=3) :: method(8)
   real(dp), allocatable, dimension(:) :: err
@@ -37,7 +23,6 @@ program test_omp_adamsbashforth
 #else
   real(dp) :: dt0 = 0.01_dp, dt, order
 #endif
-  real(dp) :: u0
   type(flist_t), allocatable :: sol(:)
   type(flist_t), allocatable :: deriv(:)
   real(dp), allocatable, dimension(:, :, :) :: data_array
@@ -45,34 +30,14 @@ program test_omp_adamsbashforth
   real(dp), dimension(3) :: L_global
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
 
+  type(backend_runtime_t), target :: runtime
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
-  class(mesh_t), allocatable :: mesh
-#ifdef CUDA
-  type(cuda_backend_t), target :: cuda_backend
-  type(cuda_allocator_t), target :: cuda_allocator
-  integer :: ndevs, devnum
-#else
-#ifndef OMP_TGT
-  type(allocator_t), target :: omp_allocator
-  type(omp_backend_t), target :: omp_backend
-#else
-  type(omptgt_allocator_t), target :: omptgt_allocator
-  type(omptgt_backend_t), target :: omptgt_backend
-#endif
-#endif
+  type(mesh_t), target :: mesh
   class(time_intg_t), allocatable :: time_integrator
 
   ! initialize MPI
-  call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-  call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-#ifdef CUDA
-  ierr = cudaGetDeviceCount(ndevs)
-  ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robin
-  ierr = cudaGetDevice(devnum)
-#endif
+  call initialise_mpi(nrank, nproc)
 
   ! Global number of cells in each direction
   dims_global = [1, 1, 1]
@@ -89,34 +54,13 @@ program test_omp_adamsbashforth
 
   mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
-  ! allocate object
-#ifdef CUDA
-  cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => cuda_allocator
-  if (nrank == 0) print *, 'CUDA allocator instantiated'
-
-  cuda_backend = cuda_backend_t(mesh, allocator)
-  backend => cuda_backend
-  if (nrank == 0) print *, 'CUDA backend instantiated'
-#else
-#ifndef OMP_TGT
-  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => omp_allocator
-#else
-  omptgt_allocator = omptgt_allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => omptgt_allocator
-#endif
-  if (nrank == 0) print *, 'OpenMP allocator instantiated'
-
-#ifndef OMP_TGT
-  omp_backend = omp_backend_t(mesh, allocator)
-  backend => omp_backend
-#else
-  omptgt_backend = omptgt_backend_t(mesh, allocator)
-  backend => omptgt_backend
-#endif
-  if (nrank == 0) print *, 'OpenMP backend instantiated'
-#endif
+  call runtime%init(mesh)
+  allocator => runtime%allocator
+  backend => runtime%backend
+  if (nrank == 0) then
+    print *, trim(runtime%backend_name), 'allocator instantiated'
+    print *, trim(runtime%backend_name), 'backend instantiated'
+  end if
 
   ! allocate memory
   allocate (sol(1))
@@ -198,12 +142,6 @@ program test_omp_adamsbashforth
   end do
 
   ! check if all tests are passing
-  if (allpass) then
-    write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-  else
-    error stop 'SOME TESTS FAILED.'
-  end if
-
   call allocator%release_block(sol(1)%ptr)
   call allocator%release_block(deriv(1)%ptr)
 
@@ -212,8 +150,7 @@ program test_omp_adamsbashforth
   deallocate (deriv)
   deallocate (norm)
 
-  ! finalize MPI
-  call MPI_Finalize(ierr)
+  call finalise_test(allpass, nrank)
 
 contains
   function dahlquist_rhs(u)
@@ -241,4 +178,3 @@ contains
   end function dahlquist_exact_sol
 
 end program test_omp_adamsbashforth
-

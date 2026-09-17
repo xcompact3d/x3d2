@@ -109,10 +109,16 @@ set(LIBRARY_OUTPUT_PATH "${PROJECT_BINARY_DIR}/lib")
 
 # Create the main library
 add_library(x3d2 STATIC ${SRC})
-target_include_directories(x3d2 INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
+set_target_properties(x3d2 PROPERTIES
+  Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2")
+target_include_directories(x3d2 INTERFACE
+  ${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2)
 
 add_library(x3d2_backends STATIC ${BACKENDSRC})
-target_include_directories(x3d2_backends INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
+set_target_properties(x3d2_backends PROPERTIES
+  Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_backends")
+target_include_directories(x3d2_backends INTERFACE
+  ${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_backends)
 target_link_libraries(x3d2_backends PRIVATE x3d2)
 
 add_executable(xcompact xcompact.f90)
@@ -123,7 +129,7 @@ target_link_libraries(xcompact PRIVATE x3d2)
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
   set(CMAKE_Fortran_FLAGS "-cpp -cuda")
-  set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr")
+  set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds")
   # Opt-in: -Ktrap=fp traps FP exceptions process-wide, turning benign FP ops in
   # linked libs (cuFFTMp PTX-JIT, HPC-X/UCX at MPI_Init) into fatal SIGFPEs.
   option(CUDA_DEBUG_FP_TRAP "Trap FP exceptions in the CUDA debug build (-Ktrap=fp)" OFF)
@@ -135,6 +141,9 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
   target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
 
   target_compile_options(xcompact PRIVATE "-DCUDA")
+  if (OMP_TGT)
+    add_definitions("-DOMP_TGT_NVIDIA")
+  endif()
 
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
@@ -149,6 +158,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -floop-optimize -march=native")
   if (OMP_TGT)
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp --offload-arch=${OMP_TGT_ARCH}")
+    add_definitions("-DOMP_TGT_AMD")
   endif()
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
   set(CMAKE_Fortran_FLAGS "-eF -M878") # -M878 suppresses WARNING multiple module includes (not useful)
@@ -156,6 +166,9 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3")
   target_link_options(x3d2 INTERFACE -h omp)
   target_link_options(x3d2_backends INTERFACE -h omp)
+  if (OMP_TGT)
+    add_definitions("-DOMP_TGT_AMD")
+  endif()
 endif()
 
 if(WITH_2DECOMPFFT)
