@@ -13,7 +13,8 @@ module m_omp_poisson_fft
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t
 
-  use m_omp_spectral, only: process_spectral_000, process_spectral_010
+  use m_omp_spectral, only: process_spectral_000, process_spectral_010, &
+                             process_spectral_100
 
   implicit none
 
@@ -345,12 +346,7 @@ contains
     !!
     !! After the x-y transpose applied by fft_forward_100_omp, dim1 holds
     !! the periodic y r2c modes and dim2 holds the non-periodic x modes.
-    !! That is the same arrangement process_spectral_010 already handles,
-    !! with x and y swapped, so this reuses that routine rather than
-    !! adding a second copy of the same maths. The swap is:
-    !!   global sizes nx <-> ny
-    !!   dim1 coefficients ax, bx -> ay, by
-    !!   dim2 coefficients ay, by -> ax, bx  (the paired direction)
+    !! process_spectral_100 handles that arrangement directly.
     !!
     !! The CUDA backend stages the equivalent work across three kernels so
     !! that a mode can fetch its pairing partner from another GPU. On a
@@ -363,20 +359,20 @@ contains
     if (self%p_col > 1) then
       ! Hop to the y-pencil, where dim2 is whole, pair there, and hop back.
       call transpose_z_to_y(self%c_x, self%c_pair, self%sp)
-      call process_spectral_010( &
+      call process_spectral_100( &
         self%c_pair, self%waves_pair, self%sp%ysz(1), self%sp%ysz(2), &
         self%sp%ysz(3), self%sp%yst(1) - 1, self%sp%yst(2) - 1, &
         self%sp%yst(3) - 1, &
-        self%ny_glob, self%nx_glob, self%nz_glob, &
-        self%ay, self%by, self%ax, self%bx, self%az, self%bz &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax, self%bx, self%ay, self%by, self%az, self%bz &
         )
       call transpose_y_to_z(self%c_pair, self%c_x, self%sp)
     else
-      call process_spectral_010( &
+      call process_spectral_100( &
         self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
         self%sp_st(1), self%sp_st(2), self%sp_st(3), &
-        self%ny_glob, self%nx_glob, self%nz_glob, &
-        self%ay, self%by, self%ax, self%bx, self%az, self%bz &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax, self%bx, self%ay, self%by, self%az, self%bz &
         )
     end if
 

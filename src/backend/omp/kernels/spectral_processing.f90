@@ -289,4 +289,37 @@ contains
 
   end subroutine process_spectral_010
 
+  subroutine process_spectral_100( &
+    div_u, waves, nx_spec, ny_spec, nz_spec, x_sp_st, y_sp_st, z_sp_st, &
+    nx, ny, nz, ax, bx, ay, by, az, bz &
+    )
+    !! Post-process div U* in spectral space, for non-periodic BC in x-dir.
+    !!
+    !! This is the process_spectral_010 arrangement with x and y swapped:
+    !! the caller passes the transposed buffer (dim1 = y modes, dim2 = x
+    !! modes, dim3 = z), so this wrapper maps the global sizes nx <-> ny
+    !! and the coefficient pairs ax, bx <-> ay, by onto process_spectral_010's
+    !! non-periodic-x convention before delegating to it.
+    implicit none
+
+    !> Divergence of velocity in spectral space
+    complex(dp), intent(inout), dimension(:, :, :) :: div_u
+    !> Spectral equivalence constants
+    complex(dp), intent(in), dimension(:, :, :) :: waves
+    real(dp), intent(in), dimension(:) :: ax, bx, ay, by, az, bz
+    !> Grid size in spectral space
+    integer, intent(in) :: nx_spec, ny_spec, nz_spec
+    !> Offsets in the permuted pencils in spectral space
+    integer, intent(in) :: x_sp_st, y_sp_st, z_sp_st
+    !> Global cell size
+    integer, intent(in) :: nx, ny, nz
+
+    call process_spectral_010(div_u=div_u, waves=waves, nx_spec=nx_spec, &
+                               ny_spec=ny_spec, nz_spec=nz_spec, &
+                               x_sp_st=x_sp_st, y_sp_st=y_sp_st, &
+                               z_sp_st=z_sp_st, nx=ny, ny=nx, nz=nz, &
+                               ax=ay, bx=by, ay=ax, by=bx, az=az, bz=bz)
+
+  end subroutine process_spectral_100
+
 end module m_omp_spectral
