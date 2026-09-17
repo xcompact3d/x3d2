@@ -1,61 +1,69 @@
-set(cmake_minimum_version 3.13)
-cmake_minimum_required(VERSION ${cmake_minimum_version})
+# Set mininum CMake requirement
+cmake_minimum_required(VERSION 3.13)
+
+# Define project languages
 project(x3d2 LANGUAGES Fortran CXX C)
 
-if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+# Require OpenMP 
+find_package(OpenMP REQUIRED)
+
+# Require MPI
+find_package(MPI REQUIRED)
+
+# Toggleable build type (default Release)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose type of build" FORCE)
 endif()
-enable_testing()
+set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug;Release")
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/decomp2d")
-
-set(WITH_2DECOMPFFT ON CACHE BOOL
-  "Enable Poisson based FFT solver on the OpenMP backend.")
-
-option(WITH_ADIOS2 "Enable ADIOS2 for I/O" OFF)
-
+# Single precision option (default OFF)
+option(SINGLE_PREC "Enable single precision" OFF)
 if(SINGLE_PREC)
   add_definitions("-DSINGLE_PREC")
 endif()
 
-if(WITH_ADIOS2)
-  set(X3D2_ADIOS2_CUDA OFF)
-  if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-     ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
-    set(X3D2_ADIOS2_CUDA ON)
-  endif()
-  list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/adios2")
-  cmake_policy(SET CMP0074 NEW)
-  find_package(ADIOS2)
-else()
-  message(STATUS "ADIOS2 is disabled")
-endif()
+# Backend for GPU offloading options (default OFF)
+set(ENABLE_BACKEND OFF CACHE STRING "")
+set_property(CACHE ENABLE_BACKEND PROPERTY STRINGS OFF CUDA OMP_TGT)
 
-set(OMP_TGT OFF CACHE BOOL
-  "Enable OpenMP target offloading.")
-set(OMP_TGT_ARCH "" CACHE STRING "Target architecture for OpenMP offloading, e.g. gfx942")
-if (${OMP_TGT} AND NOT
-    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
-  if ("${OMP_TGT_ARCH}" STREQUAL "")
-    message(FATAL_ERROR
-      "OMP_TGT=ON requires setting OMP_TGT_ARCH=<arch> for this compiler")
-  endif()
-endif()
+# ADIOS2 option (default OFF)
+option(WITH_ADIOS2 "Enable ADIOS2 for I/O" OFF)
+
+# FFT option (default ON)
+option(WITH_2DECOMPFFT "Enable Poisson based FFT solver on the OpenMP backend" ON)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/include)
 
-# Resolve OpenMP once here so src/ and tests/ share a single import target.
-find_package(OpenMP REQUIRED)
-if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR
-   CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
-  # FindOpenMP probing nvfortran with -cuda pulls the CUDA runtime into the OpenMP
-  # target with cudadevrt not last -> nvlink "unexpected object after cudadevrt".
-  # Drop them; the per-target -cuda link option relinks them with cudadevrt last.
-  get_target_property(_omp_fortran_libs OpenMP::OpenMP_Fortran INTERFACE_LINK_LIBRARIES)
-  if(_omp_fortran_libs)
-    list(FILTER _omp_fortran_libs EXCLUDE REGEX "cuda")
-    set_target_properties(OpenMP::OpenMP_Fortran PROPERTIES
-      INTERFACE_LINK_LIBRARIES "${_omp_fortran_libs}")
+# Backend specific checks
+if (${ENABLE_BACKEND} STREQUAL "CUDA")
+  if(NOT (CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI"))
+    message(FATAL_ERROR "CUDA backend require NVHPC and PGI compiler")
+  endif()
+elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
+  if("${OpenMP_Fortran_VERSION}" VERSION_LESS "5.0")
+    message(FATAL_ERROR "OpenMP version ${OpenMP_VERSION} is detected, but at least 5.0 is required with OMP_TGT.")
+  endif()
+  set(OMP_TGT_ARCH "" CACHE STRING "Target architecture for OpenMP offloading, e.g. gfx942")
+  if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
+     ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
+     ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
+    if ("${OMP_TGT_ARCH}" STREQUAL "")
+      message(FATAL_ERROR
+        "OMP_TGT=ON requires setting OMP_TGT_ARCH=<arch> for this compiler")
+    endif()
+  endif()
+ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
+    # FindOpenMP probing nvfortran with -cuda pulls the CUDA runtime into the OpenMP
+    # target with cudadevrt not last -> nvlink "unexpected object after cudadevrt".
+    # Drop them; the per-target -cuda link option relinks them with cudadevrt last.
+    get_target_property(_omp_fortran_libs OpenMP::OpenMP_Fortran INTERFACE_LINK_LIBRARIES)
+    if(_omp_fortran_libs)
+      list(FILTER _omp_fortran_libs EXCLUDE REGEX "cuda")
+      set_target_properties(OpenMP::OpenMP_Fortran PROPERTIES
+        INTERFACE_LINK_LIBRARIES "${_omp_fortran_libs}")
+    endif()
   endif()
 endif()
 
@@ -66,5 +74,8 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" AND OpenMP_Fortran_FLAGS)
     INTERFACE_LINK_OPTIONS "SHELL:${OpenMP_Fortran_FLAGS}")
 endif()
 
+enable_testing()
+include(ThirdPartyADIOS2)
+include(ThirdPartyDecomp2D)
 add_subdirectory(src)
 add_subdirectory(tests)
