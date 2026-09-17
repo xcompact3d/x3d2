@@ -219,7 +219,8 @@ contains
 
           ! update the entry
           div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
-          if (i == nx/2 + 1 .and. k == nz/2 + 1) div_u(i, j, k) = 0._dp
+          if (i + x_sp_st == nx/2 + 1 .and. k + z_sp_st == nz/2 + 1) &
+            div_u(i, j, k) = 0._dp
         end do
       end do
     end do
