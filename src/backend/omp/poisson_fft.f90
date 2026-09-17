@@ -14,7 +14,7 @@ module m_omp_poisson_fft
   use m_tdsops, only: dirps_t
 
   use m_omp_spectral, only: process_spectral_000, process_spectral_010, &
-                             process_spectral_100
+                            process_spectral_100
 
   implicit none
 

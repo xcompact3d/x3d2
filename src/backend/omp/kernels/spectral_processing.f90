@@ -315,10 +315,10 @@ contains
     integer, intent(in) :: nx, ny, nz
 
     call process_spectral_010(div_u=div_u, waves=waves, nx_spec=nx_spec, &
-                               ny_spec=ny_spec, nz_spec=nz_spec, &
-                               x_sp_st=x_sp_st, y_sp_st=y_sp_st, &
-                               z_sp_st=z_sp_st, nx=ny, ny=nx, nz=nz, &
-                               ax=ay, bx=by, ay=ax, by=bx, az=az, bz=bz)
+                              ny_spec=ny_spec, nz_spec=nz_spec, &
+                              x_sp_st=x_sp_st, y_sp_st=y_sp_st, &
+                              z_sp_st=z_sp_st, nx=ny, ny=nx, nz=nz, &
+                              ax=ay, bx=by, ay=ax, by=bx, az=az, bz=bz)
 
   end subroutine process_spectral_100
 
