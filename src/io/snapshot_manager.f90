@@ -194,7 +194,7 @@ contains
     use_device_write = .false.
     if (all(self%output_stride == 1)) then
       use_device_write = all_fields_support_device_write( &
-        self%snapshot_writer, solver, field_names)
+                         self%snapshot_writer, solver, field_names)
     end if
 
     ! Only copy device->host when every field supports GPU-aware I/O.

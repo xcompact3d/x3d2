@@ -195,7 +195,7 @@ contains
     n_total_vars = size(field_names)
 
     use_device_write = all_fields_support_device_write( &
-      writer_session, solver, field_names)
+                       writer_session, solver, field_names)
 
     if (.not. use_device_write) then
       call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
