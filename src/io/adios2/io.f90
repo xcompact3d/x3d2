@@ -281,44 +281,49 @@ contains
     integer :: status, value_length
     integer :: ierr, comm_rank
 
-    if (runtime_options_initialised) return
-    runtime_options_initialised = .true.
+    if (.not. runtime_options_initialised) then
+      runtime_options_initialised = .true.
 
-    runtime_bench_enabled = env_to_logical("X3D2_ADIOS2_IO_BENCH", .false.)
-    runtime_bench_verbose = env_to_logical("X3D2_ADIOS2_IO_BENCH_VERBOSE", &
-                                           .true.)
-    runtime_nvtx_enabled = env_to_logical("X3D2_ADIOS2_NVTX", .true.)
-    runtime_bench_warmup_steps = env_to_integer( &
-                                 "X3D2_ADIOS2_IO_BENCH_WARMUP", 2, 0)
+      runtime_bench_enabled = env_to_logical("X3D2_ADIOS2_IO_BENCH", .false.)
+      runtime_bench_verbose = env_to_logical("X3D2_ADIOS2_IO_BENCH_VERBOSE", &
+                                             .true.)
+      runtime_nvtx_enabled = env_to_logical("X3D2_ADIOS2_NVTX", .true.)
+      runtime_bench_warmup_steps = env_to_integer( &
+                                   "X3D2_ADIOS2_IO_BENCH_WARMUP", 2, 0)
 
-    runtime_gpu_write_mode = gpu_write_mode_auto
-    runtime_gpu_write_mode_name = "auto"
-    call get_environment_variable("X3D2_ADIOS2_GPU_WRITE_MODE", raw_value, &
-                                  length=value_length, status=status)
-    if (status == 0 .and. value_length > 0) then
-      mode_value = to_lower_ascii(adjustl(raw_value(1:value_length)))
-      select case (trim(mode_value))
-      case ("auto")
-        runtime_gpu_write_mode = gpu_write_mode_auto
-        runtime_gpu_write_mode_name = "auto"
-      case ("gpu", "device", "direct")
-        runtime_gpu_write_mode = gpu_write_mode_force_device
-        runtime_gpu_write_mode_name = "gpu"
-      case ("host", "d2h", "staged")
-        runtime_gpu_write_mode = gpu_write_mode_force_host
-        runtime_gpu_write_mode_name = "host"
-      case default
-        runtime_gpu_write_mode = gpu_write_mode_auto
-        runtime_gpu_write_mode_name = "auto"
-      end select
-    end if
-
-#ifndef X3D2_ADIOS2_CUDA
-    if (runtime_gpu_write_mode == gpu_write_mode_force_device) then
       runtime_gpu_write_mode = gpu_write_mode_auto
       runtime_gpu_write_mode_name = "auto"
-    end if
+      call get_environment_variable("X3D2_ADIOS2_GPU_WRITE_MODE", raw_value, &
+                                    length=value_length, status=status)
+      if (status == 0 .and. value_length > 0) then
+        mode_value = to_lower_ascii(adjustl(raw_value(1:value_length)))
+        select case (trim(mode_value))
+        case ("auto")
+          runtime_gpu_write_mode = gpu_write_mode_auto
+          runtime_gpu_write_mode_name = "auto"
+        case ("gpu", "device", "direct")
+          runtime_gpu_write_mode = gpu_write_mode_force_device
+          runtime_gpu_write_mode_name = "gpu"
+        case ("host", "d2h", "staged")
+          runtime_gpu_write_mode = gpu_write_mode_force_host
+          runtime_gpu_write_mode_name = "host"
+        case default
+          runtime_gpu_write_mode = gpu_write_mode_auto
+          runtime_gpu_write_mode_name = "auto"
+        end select
+      end if
+
+#ifndef X3D2_ADIOS2_CUDA
+      if (runtime_gpu_write_mode == gpu_write_mode_force_device) then
+        runtime_gpu_write_mode = gpu_write_mode_auto
+        runtime_gpu_write_mode_name = "auto"
+      end if
 #endif
+    end if
+
+    ! Capability queries are valid before writer initialisation. In that case
+    ! options can be parsed, but reporting must wait until a communicator exists.
+    if (comm == MPI_COMM_NULL .or. runtime_options_reported) return
 
     call MPI_Comm_rank(comm, comm_rank, ierr)
     if (ierr /= 0) return
