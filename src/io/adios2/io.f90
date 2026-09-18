@@ -1390,14 +1390,23 @@ contains
     end if
   end subroutine handle_error_file
 
-  logical function supports_device_field_write_adios2(self)
-    class(io_adios2_writer_t), intent(in) :: self
-    call init_runtime_options(self%comm)
+  logical function supports_device_field_write_adios2(self, field)
+    use m_field, only: field_t
 #ifdef X3D2_ADIOS2_CUDA
-    supports_device_field_write_adios2 = &
-      runtime_gpu_write_mode /= gpu_write_mode_force_host
-#else
+    use m_cuda_allocator, only: cuda_field_t
+#endif
+    class(io_adios2_writer_t), intent(in) :: self
+    class(field_t), intent(in) :: field
+
+    call init_runtime_options(self%comm)
     supports_device_field_write_adios2 = .false.
+#ifdef X3D2_ADIOS2_CUDA
+    if (runtime_gpu_write_mode /= gpu_write_mode_force_host) then
+      select type (field)
+      type is (cuda_field_t)
+        supports_device_field_write_adios2 = .true.
+      end select
+    end if
 #endif
   end function supports_device_field_write_adios2
 

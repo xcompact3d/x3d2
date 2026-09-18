@@ -18,6 +18,7 @@ program test_cuda_gpu_aware_io
   ! Test variables
   type(cuda_allocator_t) :: allocator
   class(field_t), pointer :: cuda_field
+  type(field_t) :: host_field
   class(io_writer_t), allocatable :: writer
   class(io_reader_t), allocatable :: reader
   class(io_file_t), allocatable :: file
@@ -79,7 +80,14 @@ program test_cuda_gpu_aware_io
   ! Write from device using GPU-aware path
   call allocate_io_writer(writer)
 
-  if (.not. writer%supports_device_field_write()) then
+  if (writer%supports_device_field_write(host_field)) then
+    allpass = .false.
+    if (irank == 0) then
+      write(stderr, '(a)') 'Host field incorrectly reported as GPU-writable'
+    end if
+  end if
+
+  if (.not. writer%supports_device_field_write(cuda_field)) then
     if (irank == 0) then
       write(stderr, '(a)') 'GPU-aware ADIOS2 not available — skipping test'
     end if

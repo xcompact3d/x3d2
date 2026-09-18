@@ -80,7 +80,7 @@ program test_cuda_gpu_aware_io_padded
 
   call allocate_io_writer(writer)
 
-  if (.not. writer%supports_device_field_write()) then
+  if (.not. writer%supports_device_field_write(u_x)) then
     if (irank == 0) then
       write (stderr, '(a)') 'GPU-aware ADIOS2 not available - skipping test'
     end if
