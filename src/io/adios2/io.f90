@@ -445,9 +445,9 @@ contains
     step_total_time = step_put_time + step_end_step_time
     step_bytes = sum_values(3)
 
-    if (step_end_step_time > 0.0_c_double) then
+    if (step_total_time > 0.0_c_double) then
       step_throughput_gib_s = step_bytes/(1024.0_c_double**3)/ &
-                              step_end_step_time
+                              step_total_time
     else
       step_throughput_gib_s = 0.0_c_double
     end if
@@ -488,7 +488,7 @@ contains
             "ADIOS2 bench step ", self%bench_step_counter, &
             ": put_max=", step_put_time, &
             " s end_step_max=", step_end_step_time, &
-            " s throughput=", step_throughput_gib_s, " GiB/s"
+            " s Put+EndStep throughput=", step_throughput_gib_s, " GiB/s"
         end if
       end if
     end if
@@ -555,7 +555,8 @@ contains
       avg_end_step, " s std=", std_end_step, " s"
     print '(A,ES11.3,A,ES11.3,A)', "  Put+EndStep (max rank): mean=", &
       avg_total, " s std=", std_total, " s"
-    print '(A,F10.3,A,F10.3)', "  Throughput (GiB/s): mean=", &
+    print '(A,F10.3,A,F10.3)', &
+      "  Put+EndStep throughput (GiB/s): mean=", &
       avg_throughput, " std=", std_throughput
     print '(A,F12.3,A)', "  Total data written (all ranks): ", total_gib, &
       " GiB"
