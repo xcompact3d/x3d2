@@ -295,7 +295,7 @@ contains
     character(len=*), dimension(:), intent(in) :: field_names
     type(field_ptr_t), allocatable, intent(out) :: field_ptrs(:)
     type(field_ptr_t), allocatable, intent(out) :: host_fields(:)
-    integer :: i, num_fields, species_index
+    integer :: i, num_fields
     character(len=32) :: field_name
 
     num_fields = size(field_names)
@@ -303,7 +303,8 @@ contains
     allocate (host_fields(num_fields))
 
     do i = 1, num_fields
-      field_ptrs(i)%ptr => get_field_ptr(solver, field_names(i))
+      field_name = trim(field_names(i))
+      field_ptrs(i)%ptr => get_field_ptr(solver, field_name)
     end do
 
     do i = 1, num_fields
@@ -448,9 +449,31 @@ contains
   function get_field_ptr(solver, field_name) result(ptr)
     !! Resolve a field name to the corresponding solver field pointer.
     !! Centralises the name-to-field mapping used by I/O managers.
-    class(solver_t), intent(in), target :: solver
+    class(solver_t), intent(in) :: solver
     character(len=*), intent(in) :: field_name
     class(field_t), pointer :: ptr
+    integer :: species_index
+
+    nullify (ptr)
+
+    if (parse_species_snapshot_field(field_name, species_index)) then
+      if (species_index > solver%nspecies .or. &
+          .not. associated(solver%species)) then
+        if (solver%mesh%par%is_root()) then
+          print *, 'ERROR: Species snapshot field out of range: ', &
+            trim(field_name)
+        end if
+        error stop 1
+      end if
+      if (.not. associated(solver%species(species_index)%ptr)) then
+        if (solver%mesh%par%is_root()) then
+          print *, 'ERROR: Species field not available: ', trim(field_name)
+        end if
+        error stop 1
+      end if
+      ptr => solver%species(species_index)%ptr
+      return
+    end if
 
     select case (trim(field_name))
     case ("u")
@@ -459,8 +482,46 @@ contains
       ptr => solver%v
     case ("w")
       ptr => solver%w
+    case ("p")
+      if (.not. associated(solver%pressure_vert)) then
+        if (solver%mesh%par%is_root()) then
+          print *, 'ERROR: pressure_vert not computed. &
+                   &Call compute_pressure_vert before writing snapshots.'
+        end if
+        error stop 1
+      end if
+      ptr => solver%pressure_vert
+    case ("vort")
+      if (.not. associated(solver%vort)) then
+        if (solver%mesh%par%is_root()) then
+          print *, 'ERROR: vorticity not computed. &
+                   &Enable output_vorticity and ensure snapshot_freq > 0.'
+        end if
+        error stop 1
+      end if
+      ptr => solver%vort
+    case ("qcrit")
+      if (.not. associated(solver%qcrit)) then
+        if (solver%mesh%par%is_root()) then
+          print *, 'ERROR: Q-criterion not computed. &
+                   &Enable output_qcriterion and ensure snapshot_freq > 0.'
+        end if
+        error stop 1
+      end if
+      ptr => solver%qcrit
+    case ("ibm")
+      if (.not. solver%ibm_on .or. .not. associated(solver%ibm%ep1)) then
+        if (solver%mesh%par%is_root()) then
+          print *, 'ERROR: IBM mask not available. &
+                   &Enable ibm_on in the input file.'
+        end if
+        error stop 1
+      end if
+      ptr => solver%ibm%ep1
     case default
-      print *, 'ERROR: Unknown field name: ', trim(field_name)
+      if (solver%mesh%par%is_root()) then
+        print *, 'ERROR: Unknown field name: ', trim(field_name)
+      end if
       error stop 1
     end select
   end function get_field_ptr
