@@ -308,10 +308,11 @@ contains
       )
   end subroutine session_write_field_from_solver
 
-  logical function session_supports_device_field_write(self)
+  logical function session_supports_device_field_write(self, field)
     class(writer_session_t), intent(in) :: self
+    class(field_t), intent(in) :: field
     session_supports_device_field_write = &
-      self%writer%supports_device_field_write()
+      self%writer%supports_device_field_write(field)
   end function session_supports_device_field_write
 
   subroutine session_sync_device(self)

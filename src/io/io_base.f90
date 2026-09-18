@@ -29,6 +29,7 @@ module m_io_base
 !! `m_io_session`.
 
   use m_common, only: dp, i8
+  use m_field, only: field_t
 
   implicit none
 
@@ -159,8 +160,9 @@ contains
       & use concrete implementation"
   end subroutine base_writer_finalise
 
-  logical function base_supports_device_field_write(self)
+  logical function base_supports_device_field_write(self, field)
     class(io_writer_t), intent(in) :: self
+    class(field_t), intent(in) :: field
     base_supports_device_field_write = .false.
   end function base_supports_device_field_write
 

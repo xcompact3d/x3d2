@@ -194,7 +194,8 @@ contains
 
     n_total_vars = size(field_names)
 
-    use_device_write = writer_session%supports_device_field_write()
+    use_device_write = all_fields_support_device_write( &
+      writer_session, solver, field_names)
 
     if (.not. use_device_write) then
       call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
@@ -202,7 +203,7 @@ contains
 
     call self%write_fields( &
       field_names, host_fields, &
-      solver, writer_session, data_loc &
+      solver, writer_session, data_loc, use_device_write &
       )
 
     ! serialise time integrator metadata
@@ -508,7 +509,8 @@ contains
   end subroutine restart_checkpoint
 
   subroutine write_fields( &
-    self, field_names, host_fields, solver, writer_session, data_loc &
+    self, field_names, host_fields, solver, writer_session, data_loc, &
+    use_device_write &
     )
     !! Write field data for checkpoints (no striding)
     class(checkpoint_manager_t), intent(inout) :: self
@@ -518,21 +520,17 @@ contains
     class(solver_t), intent(in) :: solver
     type(writer_session_t), intent(inout) :: writer_session
     integer, intent(in) :: data_loc
+    logical, intent(in) :: use_device_write
 
     integer :: i_field
     integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
     integer, dimension(3) :: no_stride
     class(field_t), pointer :: io_field
-    logical :: use_device_write
 
     ! Calculate dimensions for I/O
     shape_dims = int(solver%mesh%get_global_dims(data_loc), i8)
     start_dims = int(solver%mesh%par%n_offset, i8)
     count_dims = int(solver%mesh%get_dims(data_loc), i8)
-
-    ! Checkpoints always write full resolution (no striding)
-    ! Backend automatically uses GPU-aware I/O when available
-    use_device_write = writer_session%supports_device_field_write()
 
     if (use_device_write) then
       ! Sync device once before writing all fields
@@ -578,6 +576,24 @@ contains
         shape_dims, start_dims, count_dims)
     end do
   end subroutine write_fields
+
+  logical function all_fields_support_device_write( &
+    writer_session, solver, field_names &
+    )
+    type(writer_session_t), intent(in) :: writer_session
+    class(solver_t), intent(in) :: solver
+    character(len=*), dimension(:), intent(in) :: field_names
+
+    class(field_t), pointer :: io_field
+    integer :: i_field
+
+    all_fields_support_device_write = .false.
+    do i_field = 1, size(field_names)
+      io_field => get_field_ptr(solver, field_names(i_field))
+      if (.not. writer_session%supports_device_field_write(io_field)) return
+    end do
+    all_fields_support_device_write = .true.
+  end function all_fields_support_device_write
 
   subroutine cleanup_output_buffers(self)
     !! Clean up dynamic field buffers
