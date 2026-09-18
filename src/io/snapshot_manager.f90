@@ -17,7 +17,7 @@ module m_snapshot_manager
                               setup_field_arrays, cleanup_field_arrays, &
                               stride_data_to_buffer, get_output_dimensions, &
                               prepare_field_buffers, cleanup_field_buffers, &
-                              write_single_field_to_buffer
+                              write_single_field_to_buffer, get_field_ptr
 
   implicit none
 
@@ -121,7 +121,7 @@ contains
     real(dp), dimension(3) :: origin, original_spacing, output_spacing
     real(dp) :: simulation_time
     logical :: snapshot_uses_stride = .true.
-    logical :: is_first_snapshot_of_run
+    logical :: is_first_snapshot_of_run, use_device_write
     integer :: i
 
     if (self%config%snapshot_freq <= 0) return
@@ -191,16 +191,27 @@ contains
 
     call self%snapshot_writer%write_data("time", real(simulation_time, dp))
 
-    call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
+    use_device_write = .false.
+    if (all(self%output_stride == 1)) then
+      use_device_write = all_fields_support_device_write( &
+                         self%snapshot_writer, solver, field_names)
+    end if
+
+    ! Only copy device->host when every field supports GPU-aware I/O.
+    if (.not. use_device_write) then
+      call setup_field_arrays(solver, field_names, field_ptrs, host_fields)
+    end if
 
     call self%write_fields( &
       field_names, host_fields, &
-      solver, self%snapshot_writer, solver%u%data_loc &
+      solver, self%snapshot_writer, solver%u%data_loc, use_device_write &
       )
 
     call self%snapshot_writer%end_step()
 
-    call cleanup_field_arrays(solver, field_ptrs, host_fields)
+    if (.not. use_device_write) then
+      call cleanup_field_arrays(solver, field_ptrs, host_fields)
+    end if
     deallocate (field_names)
   end subroutine write_snapshot
 
@@ -294,20 +305,55 @@ contains
   end subroutine generate_vtk_xml
 
   subroutine write_fields( &
-    self, field_names, host_fields, solver, writer_session, data_loc &
+    self, field_names, host_fields, solver, writer_session, data_loc, &
+    use_device_write &
     )
     !! Write field data with striding for snapshots
     class(snapshot_manager_t), intent(inout) :: self
     character(len=*), dimension(:), intent(in) :: field_names
-    class(field_ptr_t), dimension(:), target, intent(in) :: host_fields
+    class(field_ptr_t), dimension(:), target, intent(in), optional :: &
+      host_fields
     class(solver_t), intent(in) :: solver
     type(writer_session_t), intent(inout) :: writer_session
     integer, intent(in) :: data_loc
+    logical, intent(in) :: use_device_write
 
     integer :: i_field
-    integer(i8), dimension(3) :: output_start, output_count
+    integer(i8), dimension(3) :: output_start, output_count, shape_dims, &
+                                 count_dims
     integer, dimension(3) :: output_dims_local
+    class(field_t), pointer :: io_field
 
+    ! Calculate dimensions for I/O
+    shape_dims = int(solver%mesh%get_global_dims(data_loc), i8)
+    output_start = int(solver%mesh%par%n_offset, i8)
+    count_dims = int(solver%mesh%get_dims(data_loc), i8)
+
+    ! No striding and GPU-aware I/O available - write directly from device.
+    ! (Striding, and the explicit host override, fall through to the
+    ! host-staged path below, which always slices to the true field
+    ! extent.)
+    if (use_device_write) then
+      ! Sync device once before writing all fields
+      call writer_session%sync_device()
+
+      do i_field = 1, size(field_names)
+        io_field => get_field_ptr(solver, field_names(i_field))
+
+        call writer_session%write_field_from_solver( &
+          trim(field_names(i_field)), io_field, solver%backend, &
+          shape_dims, output_start, count_dims, &
+          self%convert_to_sp &
+          )
+      end do
+      return
+    end if
+
+    ! Fallback: host-staged path with striding (requires host_fields)
+    if (.not. present(host_fields)) then
+      error stop "write_fields(snapshot): &
+          &host_fields required for strided output"
+    end if
     ! Prepare buffers with striding for snapshots
     call prepare_field_buffers( &
       solver, self%output_stride, field_names, data_loc, &
@@ -343,6 +389,24 @@ contains
         self%convert_to_sp)
     end do
   end subroutine write_fields
+
+  logical function all_fields_support_device_write( &
+    writer_session, solver, field_names &
+    )
+    type(writer_session_t), intent(in) :: writer_session
+    class(solver_t), intent(in) :: solver
+    character(len=*), dimension(:), intent(in) :: field_names
+
+    class(field_t), pointer :: io_field
+    integer :: i_field
+
+    all_fields_support_device_write = .false.
+    do i_field = 1, size(field_names)
+      io_field => get_field_ptr(solver, field_names(i_field))
+      if (.not. writer_session%supports_device_field_write(io_field)) return
+    end do
+    all_fields_support_device_write = .true.
+  end function all_fields_support_device_write
 
   subroutine cleanup_output_buffers(self)
     !! Clean up dynamic field buffers
