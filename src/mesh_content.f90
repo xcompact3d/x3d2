@@ -61,7 +61,7 @@ module m_mesh_content
 contains
 
   pure function is_root(self) result(is_root_rank)
-    !! Returns wether or not the current rank is the root rank
+    !! Returns whether or not the current rank is the root rank
     class(par_t), intent(in) :: self
     logical :: is_root_rank
 

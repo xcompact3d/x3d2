@@ -50,7 +50,7 @@ In some cases, you may need to build ADIOS2 specifically for use with x3d2. This
 - You don't have admin privileges to install ADIOS2 system-wide
 - You need specific ADIOS2 features not available in your system's version
 
-To use the built-in ADIOS2 (default behavior):
+To use the built-in ADIOS2 (default behaviour):
 
 .. code-block:: bash
 
