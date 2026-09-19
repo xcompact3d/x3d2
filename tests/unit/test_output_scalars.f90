@@ -1,7 +1,7 @@
 program test_output_scalars
   !! Unit tests for the scalar CSV output helper used by post-processing.
   !!
-  !! These checks validate the file-writing behavior shared by scalar time
+  !! These checks validate the file-writing behaviour shared by scalar time
   !! series outputs, including the infrastructure used by monitoring.csv.
   use iso_fortran_env, only: stderr => error_unit, iostat_end
   use m_common, only: dp
@@ -124,7 +124,7 @@ contains
 
   subroutine test_non_root_is_noop()
     !! Verify that non-root ranks do not create or write scalar output files.
-    !! This mirrors the intended root-only behavior used during MPI runs.
+    !! This mirrors the intended root-only behaviour used during MPI runs.
     type(scalar_series_t) :: series
     character(len=*), parameter :: filename = 'test_output_scalars_nonroot.csv'
     logical :: exists

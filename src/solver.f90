@@ -27,7 +27,7 @@ module m_solver
       !! are: transeq, divergence, poisson, and gradient.
       !!
       !! The operations these high level procedures require are provided by
-      !! the relavant backend implementations.
+      !! the relevant backend implementations.
       !!
       !! transeq procedure obtains the derivations in x, y, and z directions
       !! using the transeq_x, transeq_y, and transeq_z operations provided by
@@ -299,7 +299,7 @@ contains
 
   subroutine transeq_default(self, rhs, variables)
     !! Skew-symmetric form of convection-diffusion terms in the
-    !! incompressible Navier-Stokes momemtum equations, excluding
+    !! incompressible Navier-Stokes momentum equations, excluding
     !! pressure terms.
     !! Inputs from velocity grid and outputs to velocity grid.
     implicit none
