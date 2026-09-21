@@ -26,7 +26,7 @@ module m_poisson_fft
     !> Wave numbers in x, y, and z
     complex(dp), allocatable, dimension(:) :: kx, ky, kz, exs, eys, ezs, &
                                               k2x, k2y, k2z
-    !> Staggared grid transformation
+    !> Staggered grid transformation
     real(dp), allocatable, dimension(:) :: trans_x_re, trans_x_im, &
                                            trans_y_re, trans_y_im, &
                                            trans_z_re, trans_z_im

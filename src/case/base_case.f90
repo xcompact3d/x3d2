@@ -52,7 +52,7 @@ module m_base_case
 
   abstract interface
     subroutine define_BC(self)
-      !! Applies case-specific boundary coinditions
+      !! Applies case-specific boundary conditions
       import :: base_case_t
       implicit none
 
@@ -68,7 +68,7 @@ module m_base_case
     end subroutine initial_conditions
 
     subroutine forcings(self, du, dv, dw, iter)
-      !! Applies case-specific or model realated forcings after transeq
+      !! Applies case-specific or model related forcings after transeq
       import :: base_case_t
       import :: field_t
       implicit none

@@ -532,7 +532,7 @@ contains
   attributes(global) subroutine process_spectral_010_poisson( &
     div_u, a_re, a_im, off, inc, nx_spec, n, nx, ny, nz &
     )
-    !! Solve the Poisson equation at cell centres with non-perioic BC along y
+    !! Solve the Poisson equation at cell centres with non-periodic BC along y
     !!
     !! Ref. JCP 228 (2009), 5989–6015, Sec 4
     implicit none

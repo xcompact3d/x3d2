@@ -4,7 +4,7 @@ module m_io_manager
 !!
 !! @details This module acts as a facade to the I/O subsystem.
 !! Its purpose is to simplify the main simulation loop by providing
-!! a single point of contact for all I/O-related actions. The mainprogram only
+!! a single point of contact for all I/O-related actions. The main program only
 !! needs to interact with the `io_manager_t` type, which then delegates tasks
 !! to the specialised checkpoint, snapshot, and statistics managers.
   use mpi, only: MPI_COMM_WORLD

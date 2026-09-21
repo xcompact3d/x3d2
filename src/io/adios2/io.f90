@@ -14,7 +14,7 @@ module m_io_backend
 !! methods (e.g. BP4, BP5, HDF5)
 !! - Asynchronous I/O - by default ADIOS2 uses a deferred transport mode
 !! which can improve performance by overlapping computation and I/O
-!! - MPI integration - it is designed for large-scale paralle I/O and
+!! - MPI integration - it is designed for large-scale parallel I/O and
 !! integrates with MPI, though serial operation is also supported
 !!
 !! @note This is an internal backend module and should never be used directly.

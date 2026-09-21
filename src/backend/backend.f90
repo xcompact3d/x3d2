@@ -21,7 +21,7 @@ module m_base_backend
       !!
       !! All these high level operations solver class executes are
       !! defined here using the abstract interfaces. Every backend
-      !! implementation extends the present abstact backend class to
+      !! implementation extends the present abstract backend class to
       !! define the specifics of these operations based on the target
       !! architecture.
 
