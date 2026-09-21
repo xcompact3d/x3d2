@@ -45,6 +45,9 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   if("${OpenMP_Fortran_VERSION}" VERSION_LESS "5.0")
     message(FATAL_ERROR "OpenMP Fortran version ${OpenMP_Fortran_VERSION} is detected, but at least 5.0 is required with OMP_TGT.")
   endif()
+  if("${OpenMP_VERSION}" VERSION_LESS "5.0")
+    message(FATAL_ERROR "OpenMP Fortran version ${OpenMP_VERSION} is detected, but at least 5.0 is required with OMP_TGT.")
+  endif()
   set(OMP_TGT_ARCH "" CACHE STRING "Target architecture for OpenMP offloading, e.g. gfx942")
   if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
      ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
