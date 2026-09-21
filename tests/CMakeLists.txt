@@ -1,8 +1,10 @@
 set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" CACHE STRING "comma separated list of arguments to pass to ctest")
+mark_as_advanced(CMAKE_CTEST_ARGUMENTS)
 set(CMAKE_CTEST_NPROCS "4" CACHE STRING "number of process used in tests")
-
+mark_as_advanced(CMAKE_CTEST_NPROCS)
 option(WITH_NIGHTLY_REGRESSION
   "Register the heavier nightly regression cases (excluded from PR CI)." OFF)
+mark_as_advanced(WITH_NIGHTLY_REGRESSION)
 
 # Shared test utilities library
 add_library(x3d2_test_utils STATIC common/test_utils.f90)
@@ -43,9 +45,18 @@ function(define_test_backend_runtime backend)
       target_compile_options(${runtime_target} PRIVATE "-cpp")
     endif()
     if(${backend} STREQUAL omp_tgt)
-      target_compile_options(${runtime_target} PRIVATE "-fopenmp" "-DOMP_TGT")
-      target_link_options(${runtime_target} INTERFACE "-fopenmp")
-      if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+      target_compile_options(${runtime_target} PRIVATE "-DOMP_TGT")
+      if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" OR
+         ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+        target_compile_options(${runtime_target} PRIVATE "-mp=gpu")
+        target_link_options(${runtime_target} INTERFACE "-mp=gpu")
+      else()
+        target_compile_options(${runtime_target} PRIVATE "-fopenmp")
+        target_link_options(${runtime_target} INTERFACE "-fopenmp")
+      endif()
+      if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray" AND
+         NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
+         NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
         target_compile_options(${runtime_target} PRIVATE
           "--offload-arch=${OMP_TGT_ARCH}")
         target_link_options(${runtime_target} INTERFACE
@@ -95,10 +106,15 @@ function(define_test testfile np backend)
 
     if(${backend} STREQUAL omp_tgt)
       # Note this is somewhat of a hack - hardcoded to build against MI300A
-      target_compile_options(${test_name} PRIVATE "-fopenmp")
       target_compile_options(${test_name} PRIVATE "-DOMP_TGT")
-      target_link_options(${test_name} PRIVATE "-fopenmp")
-      if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+      if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
+         NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+        target_compile_options(${test_name} PRIVATE "-fopenmp")
+        target_link_options(${test_name} PRIVATE "-fopenmp")
+      endif()
+      if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray" AND
+         NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
+         NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
         target_compile_options(${test_name} PRIVATE "--offload-arch=${OMP_TGT_ARCH}")
         target_link_options(${test_name} PRIVATE "--offload-arch=${OMP_TGT_ARCH}")
       endif()
@@ -113,7 +129,6 @@ function(define_test testfile np backend)
     target_link_libraries(${test_name} PRIVATE decomp2d)
   endif()
 
-  find_package(MPI REQUIRED)
   target_link_libraries(${test_name} PRIVATE MPI::MPI_Fortran)
 
   if(WITH_ADIOS2)
@@ -230,8 +245,7 @@ endif()
 # (NVHPC/PGI -> CUDA). The committed goldens are CPU/OMP output, so only
 # register them for a CPU OMP build; a CUDA golden would drive a separate case.
 set(_cpu_omp_backend TRUE)
-if((CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR
-    CMAKE_Fortran_COMPILER_ID STREQUAL "PGI") OR OMP_TGT)
+if(ENABLE_BACKEND)
   set(_cpu_omp_backend FALSE)
 endif()
 
@@ -269,30 +283,12 @@ unset(_smoke_cmp_args)
 unset(_nightly_cmp_args)
 unset(_cpu_omp_backend)
 
-if(${OMP_TGT})
-  # OMP TGT unit tests
-  define_test(unit/test_reordering.f90 1 omp_tgt)
-  define_test(unit/test_vecadd.f90 1 omp_tgt)
-  define_test(unit/test_kinetic_energy.f90 1 omp_tgt)
-  define_test(unit/test_setget_field.f90 1 omp_tgt)
-  define_test(unit/test_device_allocator.f90 1 omp_tgt)
-
-  # OMP TGT verification tests
-  define_verification_test(verification/test_time_integrator.f90 1 omp_tgt)
-endif()
-
 # Performance tests (benchmarks, excluded from CI)
 define_performance_test(performance/perf_thom.f90 1 omp)
 define_performance_test(performance/perf_omp_tridiag.f90 ${CMAKE_CTEST_NPROCS} omp)
 
 # CUDA backend tests
-# Parenthesise the compiler-ID check so NOT OMP_TGT gates both PGI and NVHPC;
-# without it CMake precedence (NOT > AND > OR) leaves an OpenMP-target build
-# able to pick up CUDA tests.
-if((${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-    ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC") AND
-   NOT OMP_TGT)
-
+if (${ENABLE_BACKEND} STREQUAL "CUDA")
   # CUDA unit tests
   define_test(unit/test_reordering.f90 1 cuda)
   define_test(unit/test_vecadd.f90 1 cuda)
@@ -323,6 +319,16 @@ if((${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
     define_test(unit/test_io_session.f90 4 cuda)
     define_test(unit/test_ab_checkpoint.f90 1 cuda)
   endif()
+elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
+  # OMP TGT unit tests
+  define_test(unit/test_reordering.f90 1 omp_tgt)
+  define_test(unit/test_vecadd.f90 1 omp_tgt)
+  define_test(unit/test_kinetic_energy.f90 1 omp_tgt)
+  define_test(unit/test_setget_field.f90 1 omp_tgt)
+  define_test(unit/test_device_allocator.f90 1 omp_tgt)
+
+  # OMP TGT verification tests
+  define_verification_test(verification/test_time_integrator.f90 1 omp_tgt)
 endif()
 
 set(EXECUTABLE_OUTPUT_PATH "bin")
