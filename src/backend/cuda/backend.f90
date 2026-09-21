@@ -17,19 +17,23 @@ module m_cuda_backend
   use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused, exec_dist_tds_compact
+  use m_cuda_exec_thom, only: exec_thom_tds_compact
   use m_cuda_poisson_fft, only: cuda_poisson_fft_t
   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
   use m_cuda_tdsops, only: cuda_tdsops_t
   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
   use m_cuda_kernels_fieldops, only: axpby, buffer_copy, field_scale, &
                                      field_shift, scalar_product, &
+                                     vector_norm_squared, &
                                      field_max_sum, field_set_y_face, &
                                      field_set_x_face, &
                                      field_set_x_face_from_field, &
                                      field_set_y_face_from_field, &
                                      pwmul, volume_integral, &
                                      vorticity_from_gradients, &
-                                     qcriterion_from_gradients
+                                     qcriterion_from_gradients, &
+                                     smagorinsky_from_gradients, &
+                                     sgs_stress_from_gradients
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
                                     reorder_c2x, reorder_x2c, &
@@ -56,6 +60,7 @@ module m_cuda_backend
     procedure :: transeq_z => transeq_z_cuda
     procedure :: transeq_species => transeq_species_cuda
     procedure :: tds_solve => tds_solve_cuda
+    procedure :: thom_solve => thom_solve_cuda
     procedure :: reorder => reorder_cuda
     procedure :: sum_yintox => sum_yintox_cuda
     procedure :: sum_zintox => sum_zintox_cuda
@@ -63,6 +68,7 @@ module m_cuda_backend
     procedure :: vecadd => vecadd_cuda
     procedure :: vecmult => vecmult_cuda
     procedure :: scalar_product => scalar_product_cuda
+    procedure :: vector_norm_squared => vector_norm_squared_cuda
     procedure :: field_max_mean => field_max_mean_cuda
     procedure :: slice_max_sum => slice_max_sum_cuda
     procedure :: field_scale => field_scale_cuda
@@ -71,10 +77,14 @@ module m_cuda_backend
     procedure :: field_set_face_from_field => field_set_face_from_field_cuda
     procedure :: compute_vorticity => compute_vorticity_cuda
     procedure :: compute_qcriterion => compute_qcriterion_cuda
+    procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_cuda
+    procedure :: compute_sgs_stress => compute_sgs_stress_cuda
     procedure :: field_volume_integral => field_volume_integral_cuda
     procedure :: copy_data_to_f => copy_data_to_f_cuda
     procedure :: copy_f_to_data => copy_f_to_data_cuda
     procedure :: init_poisson_fft => init_cuda_poisson_fft
+    procedure :: sync => sync_cuda
+    procedure :: get_device_bw_info => get_device_bw_info_cuda
     procedure :: transeq_cuda_dist
     procedure :: transeq_cuda_thom
     procedure :: tds_solve_dist
@@ -173,6 +183,35 @@ contains
     end select
 
   end subroutine alloc_cuda_tdsops
+
+  subroutine sync_cuda(self)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    integer :: ierr
+
+    ierr = cudaDeviceSynchronize()
+
+  end subroutine sync_cuda
+
+  subroutine get_device_bw_info_cuda(self, mem_clock_rt, mem_bus_width, &
+                                     available)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    integer, intent(out) :: mem_clock_rt
+    integer, intent(out) :: mem_bus_width
+    logical, intent(out) :: available
+    integer :: ierr, devnum
+
+    ierr = cudaGetDevice(devnum)
+    ierr = cudaDeviceGetAttribute(mem_clock_rt, cudaDevAttrMemoryClockRate, &
+                                  devnum)
+    ierr = cudaDeviceGetAttribute(mem_bus_width, &
+                                  cudaDevAttrGlobalMemoryBusWidth, devnum)
+    available = .true.
+
+  end subroutine get_device_bw_info_cuda
 
   subroutine transeq_x_cuda(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
@@ -471,6 +510,43 @@ contains
     call tds_solve_dist(self, du, u, tdsops, blocks, threads)
 
   end subroutine tds_solve_cuda
+
+  subroutine thom_solve_cuda(self, du, u, tdsops)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: du
+    class(field_t), intent(in) :: u
+    class(tdsops_t), intent(in) :: tdsops
+
+    real(dp), device, pointer, dimension(:, :, :) :: du_dev, u_dev
+    type(cuda_tdsops_t), pointer :: tdsops_dev
+    type(dim3) :: blocks, threads
+
+    if (u%dir /= du%dir) then
+      error stop 'DIR mismatch between fields in thom_solve.'
+    end if
+
+    blocks = dim3(self%allocator%get_n_groups(u%dir), 1, 1)
+    threads = dim3(SZ, 1, 1)
+
+    if (u%data_loc /= NULL_LOC) then
+      call du%set_data_loc(move_data_loc(u%data_loc, u%dir, tdsops%move))
+    end if
+
+    call resolve_field_t(du_dev, du)
+    call resolve_field_t(u_dev, u)
+
+    select type (tdsops)
+    type is (cuda_tdsops_t)
+      tdsops_dev => tdsops
+    class default
+      error stop 'Expected cuda_tdsops_t in thom_solve_cuda.'
+    end select
+
+    call exec_thom_tds_compact(du_dev, u_dev, tdsops_dev, blocks, threads)
+
+  end subroutine thom_solve_cuda
 
   subroutine tds_solve_dist(self, du, u, tdsops, blocks, threads)
     implicit none
@@ -816,6 +892,72 @@ contains
 
   end subroutine compute_qcriterion_cuda
 
+  subroutine compute_smagorinsky_nut_cuda( &
+    self, nut, mixing_length_sq, dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+    dwdx, dwdy, dwdz)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: nut
+    class(field_t), intent(in) :: mixing_length_sq
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    real(dp), device, pointer, dimension(:, :, :) :: &
+      nut_d, mixing_length_sq_d, dudx_d, dudy_d, dudz_d, &
+      dvdx_d, dvdy_d, dvdz_d, dwdx_d, dwdy_d, dwdz_d
+    type(dim3) :: blocks, threads
+    integer :: n
+
+    call resolve_field_t(nut_d, nut)
+    call resolve_field_t(mixing_length_sq_d, mixing_length_sq)
+    call resolve_field_t(dudx_d, dudx)
+    call resolve_field_t(dudy_d, dudy)
+    call resolve_field_t(dudz_d, dudz)
+    call resolve_field_t(dvdx_d, dvdx)
+    call resolve_field_t(dvdy_d, dvdy)
+    call resolve_field_t(dvdz_d, dvdz)
+    call resolve_field_t(dwdx_d, dwdx)
+    call resolve_field_t(dwdy_d, dwdy)
+    call resolve_field_t(dwdz_d, dwdz)
+
+    n = size(nut_d, dim=2)
+    blocks = dim3(size(nut_d, dim=3), 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call smagorinsky_from_gradients<<<blocks, threads>>>( &
+      nut_d, mixing_length_sq_d, dudx_d, dudy_d, dudz_d, &
+      dvdx_d, dvdy_d, dvdz_d, dwdx_d, dwdy_d, dwdz_d, n) !&
+
+  end subroutine compute_smagorinsky_nut_cuda
+
+  subroutine compute_sgs_stress_cuda( &
+    self, stress, nut, gradient_a, gradient_b, scale_a, scale_b)
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: stress
+    class(field_t), intent(in) :: nut, gradient_a, gradient_b
+    real(dp), intent(in) :: scale_a, scale_b
+
+    real(dp), device, pointer, dimension(:, :, :) :: &
+      stress_d, nut_d, gradient_a_d, gradient_b_d
+    type(dim3) :: blocks, threads
+    integer :: n
+
+    call resolve_field_t(stress_d, stress)
+    call resolve_field_t(nut_d, nut)
+    call resolve_field_t(gradient_a_d, gradient_a)
+    call resolve_field_t(gradient_b_d, gradient_b)
+
+    n = size(stress_d, dim=2)
+    blocks = dim3(size(stress_d, dim=3), 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call sgs_stress_from_gradients<<<blocks, threads>>>( &
+      stress_d, nut_d, gradient_a_d, gradient_b_d, &
+      scale_a, scale_b, n) !&
+  end subroutine compute_sgs_stress_cuda
+
   real(dp) function scalar_product_cuda(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]
     implicit none
@@ -865,6 +1007,50 @@ contains
                        MPI_COMM_WORLD, ierr)
 
   end function scalar_product_cuda
+
+  real(dp) function vector_norm_squared_cuda(self, a, b, c) &
+    result(norm_squared)
+    !! Global sum of a**2 + b**2 + c**2, with one MPI reduction.
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(in) :: a, b, c
+
+    real(dp), device, pointer, dimension(:, :, :) :: a_d, b_d, c_d
+    real(dp), device, allocatable :: norm_squared_d
+    real(dp) :: local_sum
+    integer :: dims(3), dims_padded(3), ierr
+    type(dim3) :: blocks, threads
+
+    if (a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
+        c%data_loc == NULL_LOC) then
+      error stop 'You must set data_loc before computing a vector norm.'
+    end if
+    if (a%data_loc /= b%data_loc .or. a%data_loc /= c%data_loc) then
+      error stop 'Vector-norm fields must use the same data location.'
+    end if
+    if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) then
+      error stop 'Vector-norm fields must use DIR_X layout.'
+    end if
+
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    allocate (norm_squared_d)
+    norm_squared_d = 0._dp
+    dims = self%mesh%get_dims(a%data_loc)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    blocks = dim3(dims(3), (dims(2) - 1)/SZ + 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call vector_norm_squared<<<blocks, threads>>>( & !&
+      norm_squared_d, a_d, b_d, c_d, dims(1), dims_padded(3), dims(2))
+
+    local_sum = norm_squared_d
+    call MPI_Allreduce(local_sum, norm_squared, 1, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+  end function vector_norm_squared_cuda
 
   subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n)
     implicit none
@@ -1263,7 +1449,7 @@ contains
     implicit none
 
     class(cuda_backend_t) :: self
-    type(mesh_t), intent(in) :: mesh
+    type(mesh_t), target, intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
 

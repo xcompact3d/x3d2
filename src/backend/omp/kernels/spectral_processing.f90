@@ -2,6 +2,12 @@ module m_omp_spectral
   use m_common, only: dp
   implicit none
 
+  ! Threshold below which a spectral coefficient is treated as zero. Must
+  ! scale with the working precision: single-precision roundoff leaves
+  ! ~1e-13 noise in wave numbers that should vanish (e.g. Nyquist modes),
+  ! and dividing by that noise corrupts the pressure field.
+  real(dp), parameter :: eps_wave = epsilon(1._dp)
+
 contains
 
   subroutine process_spectral_000( &
@@ -66,7 +72,7 @@ contains
           ! Solve Poisson
           tmp_r = real(waves(i, j, k), kind=dp)
           tmp_c = aimag(waves(i, j, k))
-          if ((tmp_r < 1.e-16_dp) .or. (tmp_c < 1.e-16_dp)) then
+          if ((tmp_r < eps_wave) .or. (tmp_c < eps_wave)) then
             div_r = 0._dp; div_c = 0._dp
           else
             div_r = -div_r/tmp_r
@@ -200,12 +206,12 @@ contains
 
           tmp_r = real(waves(i, j, k), kind=dp)
           tmp_c = aimag(waves(i, j, k))
-          if (abs(tmp_r) < 1.e-16_dp) then
+          if (abs(tmp_r) < eps_wave) then
             div_r = 0._dp
           else
             div_r = -div_r/tmp_r
           end if
-          if (abs(tmp_c) < 1.e-16_dp) then
+          if (abs(tmp_c) < eps_wave) then
             div_c = 0._dp
           else
             div_c = -div_c/tmp_c
@@ -213,7 +219,8 @@ contains
 
           ! update the entry
           div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
-          if (i == nx/2 + 1 .and. k == nz/2 + 1) div_u(i, j, k) = 0._dp
+          if (i + x_sp_st == nx/2 + 1 .and. k + z_sp_st == nz/2 + 1) &
+            div_u(i, j, k) = 0._dp
         end do
       end do
     end do
@@ -281,5 +288,38 @@ contains
     !$omp end parallel do
 
   end subroutine process_spectral_010
+
+  subroutine process_spectral_100( &
+    div_u, waves, nx_spec, ny_spec, nz_spec, x_sp_st, y_sp_st, z_sp_st, &
+    nx, ny, nz, ax, bx, ay, by, az, bz &
+    )
+    !! Post-process div U* in spectral space, for non-periodic BC in x-dir.
+    !!
+    !! This is the process_spectral_010 arrangement with x and y swapped:
+    !! the caller passes the transposed buffer (dim1 = y modes, dim2 = x
+    !! modes, dim3 = z), so this wrapper maps the global sizes nx <-> ny
+    !! and the coefficient pairs ax, bx <-> ay, by onto process_spectral_010's
+    !! non-periodic-y convention before delegating to it.
+    implicit none
+
+    !> Divergence of velocity in spectral space
+    complex(dp), intent(inout), dimension(:, :, :) :: div_u
+    !> Spectral equivalence constants
+    complex(dp), intent(in), dimension(:, :, :) :: waves
+    real(dp), intent(in), dimension(:) :: ax, bx, ay, by, az, bz
+    !> Grid size in spectral space
+    integer, intent(in) :: nx_spec, ny_spec, nz_spec
+    !> Offsets in the permuted pencils in spectral space
+    integer, intent(in) :: x_sp_st, y_sp_st, z_sp_st
+    !> Global cell size
+    integer, intent(in) :: nx, ny, nz
+
+    call process_spectral_010(div_u=div_u, waves=waves, nx_spec=nx_spec, &
+                              ny_spec=ny_spec, nz_spec=nz_spec, &
+                              x_sp_st=x_sp_st, y_sp_st=y_sp_st, &
+                              z_sp_st=z_sp_st, nx=ny, ny=nx, nz=nz, &
+                              ax=ay, bx=by, ay=ax, by=bx, az=az, bz=bz)
+
+  end subroutine process_spectral_100
 
 end module m_omp_spectral

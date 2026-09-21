@@ -145,7 +145,7 @@ contains
                             z_stagder_v2c, z_interpl_v2c)
     !! Divergence of a vector field (u, v, w).
     !!
-    !! Evaluated at the cell centers (data_loc=CELL)
+    !! Evaluated at the cell centres (data_loc=CELL)
     !! Input fields are at vertices (data_loc=VERT)
     !!
     !! Input fields are in DIR_X data layout.
@@ -173,7 +173,7 @@ contains
     dv_x => self%backend%allocator%get_block(DIR_X)
     dw_x => self%backend%allocator%get_block(DIR_X)
 
-    ! Staggared der for u field in x
+    ! Staggered der for u field in x
     ! Interpolation for v field in x
     ! Interpolation for w field in x
     call self%backend%tds_solve(du_x, u, x_stagder_v2c)
@@ -252,7 +252,7 @@ contains
     !! Gradient of a scalar field 'p'.
     !!
     !! Evaluated at the vertices (data_loc=VERT)
-    !! Input field is at cell centers (data_loc=CELL)
+    !! Input field is at cell centres (data_loc=CELL)
     !!
     !! Input field is in DIR_Z data layout.
     !! Output fields (dpdx, dpdy, dpdz) are in DIR_X data layout.
@@ -279,7 +279,7 @@ contains
     p_sxy_z => self%backend%allocator%get_block(DIR_Z)
     dpdz_sxy_z => self%backend%allocator%get_block(DIR_Z)
 
-    ! Staggared der for p field in z
+    ! Staggered der for p field in z
     ! Interpolation for p field in z
     call self%backend%tds_solve(p_sxy_z, p, z_interpl_c2v)
     call self%backend%tds_solve(dpdz_sxy_z, p, z_stagder_c2v)

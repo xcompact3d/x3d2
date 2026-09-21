@@ -21,7 +21,7 @@ module m_base_backend
       !!
       !! All these high level operations solver class executes are
       !! defined here using the abstract interfaces. Every backend
-      !! implementation extends the present abstact backend class to
+      !! implementation extends the present abstract backend class to
       !! define the specifics of these operations based on the target
       !! architecture.
 
@@ -36,6 +36,7 @@ module m_base_backend
     procedure(transeq_ders), deferred :: transeq_z
     procedure(transeq_ders_spec), deferred :: transeq_species
     procedure(tds_solve), deferred :: tds_solve
+    procedure(tds_solve), deferred :: thom_solve
     procedure(reorder), deferred :: reorder
     procedure(sum_intox), deferred :: sum_yintox
     procedure(sum_intox), deferred :: sum_zintox
@@ -43,6 +44,7 @@ module m_base_backend
     procedure(vecadd), deferred :: vecadd
     procedure(vecmult), deferred :: vecmult
     procedure(scalar_product), deferred :: scalar_product
+    procedure(vector_norm_squared_op), deferred :: vector_norm_squared
     procedure(field_max_mean), deferred :: field_max_mean
     procedure(slice_max_sum), deferred :: slice_max_sum
     procedure(field_ops), deferred :: field_scale
@@ -52,10 +54,14 @@ module m_base_backend
     procedure(field_set_face_from_field), deferred :: field_set_face_from_field
     procedure(derive_field_from_gradients), deferred :: compute_vorticity
     procedure(derive_field_from_gradients), deferred :: compute_qcriterion
+    procedure(smagorinsky_from_gradients), deferred :: compute_smagorinsky_nut
+    procedure(sgs_stress_from_gradients), deferred :: compute_sgs_stress
     procedure(copy_data_to_f), deferred :: copy_data_to_f
     procedure(copy_f_to_data), deferred :: copy_f_to_data
     procedure(alloc_tdsops), deferred :: alloc_tdsops
     procedure(init_poisson_fft), deferred :: init_poisson_fft
+    procedure(sync_backend), deferred :: sync
+    procedure(device_bw_info), deferred :: get_device_bw_info
     procedure :: base_init
     procedure :: get_field_data
     procedure :: set_field_data
@@ -80,6 +86,22 @@ module m_base_backend
       real(dp), intent(in) :: nu
       type(dirps_t), intent(in) :: dirps
     end subroutine transeq_ders
+  end interface
+
+  abstract interface
+    subroutine sgs_stress_from_gradients( &
+      self, stress, nut, gradient_a, gradient_b, scale_a, scale_b)
+      !! Forms nut*(scale_a*gradient_a + scale_b*gradient_b).
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: stress
+      class(field_t), intent(in) :: nut, gradient_a, gradient_b
+      real(dp), intent(in) :: scale_a, scale_b
+    end subroutine sgs_stress_from_gradients
   end interface
 
   abstract interface
@@ -121,6 +143,27 @@ module m_base_backend
       class(field_t), intent(in) :: u
       class(tdsops_t), intent(in) :: tdsops
     end subroutine tds_solve
+  end interface
+
+  abstract interface
+    subroutine sync_backend(self)
+      import :: base_backend_t
+      implicit none
+
+      class(base_backend_t) :: self
+    end subroutine sync_backend
+  end interface
+
+  abstract interface
+    subroutine device_bw_info(self, mem_clock_rt, mem_bus_width, available)
+      import :: base_backend_t
+      implicit none
+
+      class(base_backend_t) :: self
+      integer, intent(out) :: mem_clock_rt
+      integer, intent(out) :: mem_bus_width
+      logical, intent(out) :: available
+    end subroutine device_bw_info
   end interface
 
   abstract interface
@@ -208,6 +251,20 @@ module m_base_backend
       class(base_backend_t) :: self
       class(field_t), intent(in) :: x, y
     end function scalar_product
+  end interface
+
+  abstract interface
+    real(dp) function vector_norm_squared_op(self, a, b, c) &
+      result(norm_squared)
+      !! Computes the global discrete squared norm of a three-component field.
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(in) :: a, b, c
+    end function vector_norm_squared_op
   end interface
 
   abstract interface
@@ -325,6 +382,24 @@ module m_base_backend
   end interface
 
   abstract interface
+    subroutine smagorinsky_from_gradients( &
+      self, nut, mixing_length_sq, dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+      dwdx, dwdy, dwdz)
+      !! Computes nut=l_s^2*sqrt(2*S_ij*S_ij) from velocity gradients.
+      import :: base_backend_t
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: nut
+      class(field_t), intent(in) :: mixing_length_sq
+      class(field_t), intent(in) :: dudx, dudy, dudz
+      class(field_t), intent(in) :: dvdx, dvdy, dvdz
+      class(field_t), intent(in) :: dwdx, dwdy, dwdz
+    end subroutine smagorinsky_from_gradients
+  end interface
+
+  abstract interface
     subroutine copy_data_to_f(self, f, data)
          !! Copy the specialist data structure from device or host back
          !! to a regular 3D data array in host memory.
@@ -384,7 +459,7 @@ module m_base_backend
       implicit none
 
       class(base_backend_t) :: self
-      type(mesh_t), intent(in) :: mesh
+      type(mesh_t), target, intent(in) :: mesh
       type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
       logical, optional, intent(in) :: lowmem
     end subroutine init_poisson_fft

@@ -4,11 +4,19 @@
 !!
 !! Note this extends the CPU (host) OpenMP backend with the intention of being able to use fallback implementations where necessary.
 
+#ifdef OMP_TGT_NVIDIA
+! NVHPC 25.3 accepts is_device_ptr but not has_device_addr for Fortran arrays.
+#define X3D2_DEVICE_ADDR_CLAUSE is_device_ptr
+#else
+#define X3D2_DEVICE_ADDR_CLAUSE has_device_addr
+#endif
+
 module m_omptgt_backend
 
-  use iso_c_binding, only: c_ptr, c_f_pointer
+  use mpi
 
-  use m_common, only: dp, DIR_C, get_dirs_from_rdr
+  use m_common, only: dp, DIR_C, DIR_X, NULL_LOC, MPI_X3D2_DP, &
+                      get_dirs_from_rdr
 
   use m_allocator, only: allocator_t
   use m_mesh, only: mesh_t
@@ -29,6 +37,7 @@ module m_omptgt_backend
     procedure :: reorder => reorder_omptgt
     procedure :: vecadd => vecadd_omptgt
     procedure :: veccopy => veccopy_omptgt
+    procedure :: vector_norm_squared => vector_norm_squared_omptgt
   end type
 
   interface omptgt_backend_t
@@ -63,7 +72,7 @@ contains
     type is (omptgt_field_t)
       select type (src)
       type is (omptgt_field_t)
-        call veccopy_offload_(dst%get_dev_ptr(), dst%get_shape(), src%get_dev_ptr(), src%get_shape())
+        call veccopy_offload_(dst%data_tgt, src%data_tgt)
       class default
         error stop "Called omptgt vector copy with unsupported source vector"
       end select
@@ -73,26 +82,20 @@ contains
     end select
   end subroutine
 
-  subroutine veccopy_offload_(cp_dst, n_dst, cp_src, n_src)
-    type(c_ptr), intent(inout) :: cp_dst
-    type(c_ptr), intent(in) :: cp_src
-    integer, dimension(3), intent(in) :: n_dst, n_src
+  subroutine veccopy_offload_(dst, src)
 
-    real(dp), dimension(:, :, :), pointer :: dst
-    real(dp), dimension(:, :, :), pointer :: src
+    real(dp), dimension(:, :, :), intent(inout) :: dst
+    real(dp), dimension(:, :, :), intent(in) :: src
 
+    integer, dimension(3) :: n
     integer :: i, j, k
 
-    if (any(n_src < n_dst)) then
-      error stop "SRC array is smaller than destination"
-    end if
+    n = shape(dst)
 
-    call c_f_pointer(cp_dst, dst, shape=n_dst)
-    call c_f_pointer(cp_src, src, shape=n_src)
-    !$omp target teams loop collapse(3) is_device_ptr(cp_dst, cp_src)
-    do k = 1, n_dst(3)
-      do j = 1, n_dst(2)
-        do i = 1, n_dst(1)
+    !$omp target teams loop collapse(3) X3D2_DEVICE_ADDR_CLAUSE(dst, src)
+    do k = 1, n(3)
+      do j = 1, n(2)
+        do i = 1, n(1)
           dst(i, j, k) = src(i, j, k)
         end do
       end do
@@ -135,28 +138,110 @@ contains
     real(dp), intent(in) :: b
     type(omptgt_field_t), intent(inout) :: y
 
-    type(c_ptr) :: cp_x, cp_y
-    real(dp), dimension(:,:,:), pointer :: p_x, p_y
-
     integer, dimension(3) :: dims
-    integer :: i, j, k
 
     dims = self%allocator%get_padded_dims(x%dir)
 
-    cp_x = x%get_dev_ptr()
-    cp_y = y%get_dev_ptr()
+    call vecadd_offload_(dims, a, x%data_tgt, b, y%data_tgt)
 
-    call c_f_pointer(cp_x, p_x, shape=x%get_shape())
-    call c_f_pointer(cp_y, p_y, shape=y%get_shape())
-    !$omp target teams loop collapse(3) is_device_ptr(cp_x, cp_y)
+  end subroutine
+
+  subroutine vecadd_offload_(dims, a, x, b, y)
+    integer, dimension(3), intent(in) :: dims
+    real(dp), intent(in) :: a
+    real(dp), dimension(:, :, :), intent(in) :: x
+    real(dp), intent(in) :: b
+    real(dp), dimension(:, :, :), intent(inout) :: y
+
+    integer :: i, j, k
+
+    !$omp target teams loop collapse(3) X3D2_DEVICE_ADDR_CLAUSE(x, y)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          p_y(i, j, k) = a*p_x(i, j, k) + b*p_y(i, j, k)
+          y(i, j, k) = a*x(i, j, k) + b*y(i, j, k)
         end do
       end do
     end do
     !$omp end target teams loop
+  end subroutine
+
+  real(dp) function vector_norm_squared_omptgt(self, a, b, c) &
+    result(norm_squared)
+    !! Global sum of a**2 + b**2 + c**2, with one MPI reduction.
+
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(in) :: a, b, c
+
+    real(dp) :: local_sum
+    integer :: dims(3), ierr
+
+    if (a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
+        c%data_loc == NULL_LOC) then
+      error stop 'You must set data_loc before computing a vector norm.'
+    end if
+    if (a%data_loc /= b%data_loc .or. a%data_loc /= c%data_loc) then
+      error stop 'Vector-norm fields must use the same data location.'
+    end if
+    if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) then
+      error stop 'Vector-norm fields must use DIR_X layout.'
+    end if
+
+    dims = self%mesh%get_dims(a%data_loc)
+
+    select type (a)
+    type is (omptgt_field_t)
+      select type (b)
+      type is (omptgt_field_t)
+        select type (c)
+        type is (omptgt_field_t)
+          call vector_norm_squared_offload_(local_sum, a%data_tgt, &
+                                            b%data_tgt, c%data_tgt, dims)
+        class default
+          error stop "Called omptgt vector copy with unsupported source vector"
+        end select
+      class default
+        error stop "Called omptgt vector copy with unsupported source vector"
+      end select
+    class default
+      error stop "Called omptgt vector copy with unsupported source vector"
+    end select
+
+    call MPI_Allreduce(local_sum, norm_squared, 1, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+
+  end function vector_norm_squared_omptgt
+
+  subroutine vector_norm_squared_offload_(local_sum, a, b, c, dims)
+    !! Rank-local sum of a**2 + b**2 + c**2 over the physical points only.
+    real(dp), intent(out) :: local_sum
+    real(dp), dimension(:, :, :), intent(in) :: a, b, c
+    integer, dimension(3), intent(in) :: dims
+
+    integer :: i, j, k, k_i, k_j, n_i, stacked
+
+    ! Pencils are stacked SZ points at a time along y, and a pencil group
+    ! index runs fastest within a given z station.
+    stacked = (dims(2) - 1)/SZ + 1
+
+    local_sum = 0._dp
+    !$omp target teams distribute parallel do collapse(3) &
+    !$omp reduction(+:local_sum) private(i, k, n_i) &
+    !$omp X3D2_DEVICE_ADDR_CLAUSE(a, b, c)
+    do k_j = 1, stacked
+      do k_i = 1, dims(3)
+        do j = 1, dims(1)
+          k = k_j + (k_i - 1)*stacked
+          ! The last group along y is partially filled with padding.
+          n_i = min(SZ, dims(2) - (k_j - 1)*SZ)
+          do i = 1, n_i
+            local_sum = local_sum + a(i, j, k)**2 + b(i, j, k)**2 &
+                        + c(i, j, k)**2
+          end do
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
 
   end subroutine
 
@@ -165,64 +250,76 @@ contains
     class(field_t), intent(inout) :: f
     real(dp), dimension(:, :, :), intent(in) :: data
 
-    type(c_ptr) :: f_dev_ptr
-    real(dp), dimension(:,:,:), pointer :: p_f
     integer, dimension(3) :: dims
-    integer :: i, j, k
 
     dims = self%allocator%get_padded_dims(f%dir)
 
     ! XXX: This could be improved following cuda/backend.f90:resolve_field_t()
     select type (f)
     type is (omptgt_field_t)
-      f_dev_ptr = f%get_dev_ptr()
-      call c_f_pointer(f_dev_ptr, p_f, shape=f%get_shape())
-      !$omp target teams loop collapse(3) map(to:data) is_device_ptr(f_dev_ptr)
-      do k = 1, dims(3)
-        do j = 1, dims(2)
-          do i = 1, dims(1)
-            p_f(i, j, k) = data(i, j, k)
-          end do
-        end do
-      end do
-      !$omp end target teams loop
+      call copy_data_to_f_omptgt_(f%data_tgt, data, dims)
     class default
       error stop "Unsupported"
     end select
 
   end subroutine copy_data_to_f_omptgt
 
+  subroutine copy_data_to_f_omptgt_(f_arr, d, dims)
+    real(dp), dimension(:, :, :), intent(inout) :: f_arr
+    real(dp), dimension(:, :, :), intent(in) :: d
+    integer, dimension(3), intent(in) :: dims
+
+    integer :: i, j, k
+
+    ! XXX: This could be improved following cuda/backend.f90:resolve_field_t()
+    !$omp target teams loop collapse(3) map(to:d) X3D2_DEVICE_ADDR_CLAUSE(f_arr)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          f_arr(i, j, k) = d(i, j, k)
+        end do
+      end do
+    end do
+    !$omp end target teams loop
+
+  end subroutine
+
   subroutine copy_f_to_data_omptgt(self, data, f)
     class(omptgt_backend_t), intent(inout) :: self
     real(dp), dimension(:, :, :), intent(out) :: data
     class(field_t), intent(in) :: f
 
-    type(c_ptr) :: f_dev_ptr
-    real(dp), dimension(:,:,:), pointer :: p_f
     integer, dimension(3) :: dims
-    integer :: i, j, k
 
     dims = self%allocator%get_padded_dims(f%dir)
 
     select type (f)
     type is (omptgt_field_t)
-      f_dev_ptr = f%get_dev_ptr()
-      call c_f_pointer(f_dev_ptr, p_f, shape=f%get_shape())
-      !$omp target teams loop collapse(3) map(from:data) &
-      !$omp   is_device_ptr(f_dev_ptr)
-      do k = 1, dims(3)
-        do j = 1, dims(2)
-          do i = 1, dims(1)
-            data(i, j, k) = p_f(i, j, k)
-          end do
-        end do
-      end do
-      !$omp end target teams loop
+      call copy_f_to_data_omptgt_(data, f%data_tgt, dims)
     class default
       error stop "Unsupported"
     end select
 
   end subroutine copy_f_to_data_omptgt
+
+  subroutine copy_f_to_data_omptgt_(data, f_arr, dims)
+    real(dp), dimension(:, :, :), intent(out) :: data
+    real(dp), dimension(:, :, :), intent(in) :: f_arr
+    integer, dimension(3), intent(in) :: dims
+
+    integer :: i, j, k
+
+    !$omp target teams loop collapse(3) map(from:data) X3D2_DEVICE_ADDR_CLAUSE(f_arr)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          data(i, j, k) = f_arr(i, j, k)
+        end do
+      end do
+    end do
+    !$omp end target teams loop
+
+  end subroutine
 
   subroutine reorder_omptgt(self, u_, u, direction)
     class(omptgt_backend_t) :: self
@@ -241,10 +338,10 @@ contains
     type is (omptgt_field_t)
       select type (u)
       type is (omptgt_field_t)
-        call reorder_omptgt_dd(u_, u, dims, dir_from, &
+        call reorder_omptgt_dd(u_%data_tgt, u%data_tgt, dims, dir_from, &
                                dir_to, cart_padded)
       class default
-        call reorder_omptgt_dh(u_, u%data, dims, dir_from, dir_to, &
+        call reorder_omptgt_dh(u_%data_tgt, u%data, dims, dir_from, dir_to, &
                                cart_padded)
       end select
     class default
@@ -257,63 +354,50 @@ contains
   end subroutine reorder_omptgt
 
   subroutine reorder_omptgt_dd(u_, u, dims, dir_from, dir_to, cart_padded)
-    type(omptgt_field_t) :: u_
-    type(omptgt_field_t), intent(in) :: u
-    integer, dimension(3), intent(in) :: dims
-    integer, intent(in) :: dir_from, dir_to
-    integer, dimension(3), intent(in) :: cart_padded
-
-    type(c_ptr) :: cp_u_, cp_u
-    real(dp), dimension(:,:,:), pointer :: p_u_, p_u
-    integer :: i, j, k
-    integer :: out_i, out_j, out_k
-
-    cp_u_ = u_%get_dev_ptr()
-    cp_u = u%get_dev_ptr()
-    call c_f_pointer(cp_u_, p_u_, shape=u_%get_shape())
-    call c_f_pointer(cp_u, p_u, shape=u%get_shape())
-    !$omp target teams distribute parallel do collapse(3) &
-    !$omp   private(out_i, out_j, out_k) is_device_ptr(cp_u_, cp_u)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          call get_index_reordering(out_i, out_j, out_k, i, j, k, &
-                                    dir_from, dir_to, SZ, cart_padded)
-          p_u_(out_i, out_j, out_k) = p_u(i, j, k)
-        end do
-      end do
-    end do
-    !$omp end target teams distribute parallel do
-
-  end subroutine
-
-  subroutine reorder_omptgt_dh(u_, u, dims, dir_from, dir_to, cart_padded)
-    type(omptgt_field_t) :: u_
+    real(dp), dimension(:, :, :), pointer :: u_
     real(dp), dimension(:, :, :), pointer, intent(in) :: u
     integer, dimension(3), intent(in) :: dims
     integer, intent(in) :: dir_from, dir_to
     integer, dimension(3), intent(in) :: cart_padded
 
-    type(c_ptr) :: cp_u_
-    real(dp), dimension(:,:,:), pointer :: p_u_
     integer :: i, j, k
     integer :: out_i, out_j, out_k
 
-    cp_u_ = u_%get_dev_ptr()
-    call c_f_pointer(cp_u_, p_u_, shape=u_%get_shape())
-    ! See the note in reorder_omptgt_dd on `distribute parallel do`.
-    !$omp target teams distribute parallel do collapse(3) &
-    !$omp   private(out_i, out_j, out_k) map(to:u) is_device_ptr(cp_u_)
+    !$omp target teams loop collapse(3) private(out_i, out_j, out_k) X3D2_DEVICE_ADDR_CLAUSE(u_, u)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
           call get_index_reordering(out_i, out_j, out_k, i, j, k, &
                                     dir_from, dir_to, SZ, cart_padded)
-          p_u_(out_i, out_j, out_k) = u(i, j, k)
+          u_(out_i, out_j, out_k) = u(i, j, k)
         end do
       end do
     end do
-    !$omp end target teams distribute parallel do
+    !$omp end target teams loop
+
+  end subroutine
+
+  subroutine reorder_omptgt_dh(u_, u, dims, dir_from, dir_to, cart_padded)
+    real(dp), dimension(:, :, :), pointer :: u_
+    real(dp), dimension(:, :, :), pointer, intent(in) :: u
+    integer, dimension(3), intent(in) :: dims
+    integer, intent(in) :: dir_from, dir_to
+    integer, dimension(3), intent(in) :: cart_padded
+
+    integer :: i, j, k
+    integer :: out_i, out_j, out_k
+
+    !$omp target teams loop collapse(3) private(out_i, out_j, out_k) map(to:u) X3D2_DEVICE_ADDR_CLAUSE(u_)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          call get_index_reordering(out_i, out_j, out_k, i, j, k, &
+                                    dir_from, dir_to, SZ, cart_padded)
+          u_(out_i, out_j, out_k) = u(i, j, k)
+        end do
+      end do
+    end do
+    !$omp end target teams loop
 
   end subroutine
 

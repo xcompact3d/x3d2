@@ -166,6 +166,65 @@ contains
 
   end subroutine qcriterion_from_gradients
 
+  attributes(global) subroutine smagorinsky_from_gradients( &
+    nut, mixing_length_sq, dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+    dwdx, dwdy, dwdz, n)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: nut
+    real(dp), device, intent(in), dimension(:, :, :) :: mixing_length_sq
+    real(dp), device, intent(in), dimension(:, :, :) :: dudx, dudy, dudz
+    real(dp), device, intent(in), dimension(:, :, :) :: dvdx, dvdy, dvdz
+    real(dp), device, intent(in), dimension(:, :, :) :: dwdx, dwdy, dwdz
+    integer, value, intent(in) :: n
+
+    real(dp) :: sij_sq
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      if (mixing_length_sq(i, j, b) > 0._dp) then
+        sij_sq = dudx(i, j, b)**2 + dvdy(i, j, b)**2 + &
+                 dwdz(i, j, b)**2 + &
+                 0.5_dp*(dudy(i, j, b) + dvdx(i, j, b))**2 + &
+                 0.5_dp*(dudz(i, j, b) + dwdx(i, j, b))**2 + &
+                 0.5_dp*(dvdz(i, j, b) + dwdy(i, j, b))**2
+        nut(i, j, b) = mixing_length_sq(i, j, b)*sqrt(2._dp*sij_sq)
+      else
+        nut(i, j, b) = 0._dp
+      end if
+    end do
+
+  end subroutine smagorinsky_from_gradients
+
+  attributes(global) subroutine sgs_stress_from_gradients( &
+    stress, nut, gradient_a, gradient_b, scale_a, scale_b, n)
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: stress
+    real(dp), device, intent(in), dimension(:, :, :) :: &
+      nut, gradient_a, gradient_b
+    real(dp), value, intent(in) :: scale_a, scale_b
+    integer, value, intent(in) :: n
+
+    integer :: i, j, b
+
+    i = threadIdx%x
+    b = blockIdx%x
+
+    do j = 1, n
+      if (nut(i, j, b) > 0._dp) then
+        stress(i, j, b) = nut(i, j, b)* &
+                          (scale_a*gradient_a(i, j, b) &
+                           + scale_b*gradient_b(i, j, b))
+      else
+        stress(i, j, b) = 0._dp
+      end if
+    end do
+  end subroutine sgs_stress_from_gradients
+
   attributes(global) subroutine scalar_product(s, x, y, n, n_i_pad, n_j)
     implicit none
 
@@ -190,6 +249,32 @@ contains
     ierr = atomicadd(s, s_pncl)
 
   end subroutine scalar_product
+
+  attributes(global) subroutine vector_norm_squared(s, a, b, c, &
+                                                    n, n_i_pad, n_j)
+    implicit none
+
+    real(dp), device, intent(inout) :: s
+    real(dp), device, intent(in), dimension(:, :, :) :: a, b, c
+    integer, value, intent(in) :: n, n_i_pad, n_j
+
+    real(dp) :: pencil_sum
+    integer :: i, j, pencil, block_i, block_j, ierr
+
+    i = threadIdx%x
+    block_i = blockIdx%x
+    block_j = blockIdx%y
+    pencil = block_i + (block_j - 1)*n_i_pad
+
+    pencil_sum = 0._dp
+    if (i + (block_j - 1)*blockDim%x <= n_j) then
+      do j = 1, n
+        pencil_sum = pencil_sum + a(i, j, pencil)**2 + &
+                     b(i, j, pencil)**2 + c(i, j, pencil)**2
+      end do
+    end if
+    ierr = atomicadd(s, pencil_sum)
+  end subroutine vector_norm_squared
 
   attributes(global) subroutine field_max_sum(max_f, sum_f, f, n, n_i_pad, n_j)
     implicit none

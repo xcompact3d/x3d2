@@ -23,27 +23,17 @@ program test_poisson
   !! NOTE: Dirichlet directions require odd dims_global (e.g. 65)
 
   use iso_fortran_env, only: stderr => error_unit
-  use mpi
 
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, pi, DIR_C, DIR_X, DIR_Y, DIR_Z, VERT, CELL, &
+  use m_backend_runtime, only: backend_runtime_t, backend_is_cuda
+  use m_common, only: dp, pi, DIR_C, DIR_X, DIR_Y, DIR_Z, CELL, &
                       RDR_C2Z, RDR_C2X, RDR_Z2X
   use m_mesh, only: mesh_t
   use m_solver, only: allocate_tdsops
   use m_tdsops, only: dirps_t
   use m_vector_calculus, only: vector_calculus_t
-
-#ifdef CUDA
-  use cudafor
-
-  use m_cuda_allocator, only: cuda_allocator_t
-  use m_cuda_backend, only: cuda_backend_t
-  use m_cuda_common, only: SZ
-#else
-  use m_omp_backend, only: omp_backend_t
-  use m_omp_common, only: SZ
-#endif
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
@@ -59,12 +49,22 @@ program test_poisson
   integer, parameter :: NUM_CONFIGS = 4
   integer, parameter :: TOTAL_TESTS = NUM_CONFIGS*NUM_TESTS
 
+  ! The single precision tolerance must sit between the roundoff floor of
+  ! the passing cases (~3e-7 in this normalised norm, norm2/N) and the
+  ! n=3 periodic aliasing error (~2.4e-6) that the XFAIL logic relies on
+  ! detecting; a looser tolerance turns XFAILs into unexpected passes.
+#ifdef SINGLE_PREC
+  real(dp), parameter :: ERROR_TOLERANCE = 1.0e-6_dp
+#else
   real(dp), parameter :: ERROR_TOLERANCE = 1.0e-11_dp
+#endif
 
-  integer :: nrank, nproc, ierr
-  integer :: ic, idx
+  integer :: nrank, nproc
+  integer :: ic, idx, iarg
+  character(len=32) :: arg
+  character(len=3) :: only_config
+  logical :: config_run(NUM_CONFIGS)
   logical :: allpass
-  character(32) :: backend_name
 
   ! Per-config results for final summary
   logical :: all_results(NUM_TESTS, NUM_CONFIGS)
@@ -78,32 +78,42 @@ program test_poisson
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
 
   ! Initialise MPI
-  call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-  call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+  call initialise_mpi(nrank, nproc)
 
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
-#ifdef CUDA
-  block
-    integer :: ndevs, devnum
-    ierr = cudaGetDeviceCount(ndevs)
-    ierr = cudaSetDevice(mod(nrank, ndevs))
-    ierr = cudaGetDevice(devnum)
-  end block
-  backend_name = "CUDA"
-#else
-  backend_name = "OMP"
-#endif
-
   config_labels = ['000', '010', '100', '110']
+
+  ! Optional --config <label> restricts the run to one configuration. This
+  ! is what lets a multi rank run exercise 100 without tripping the single
+  ! rank stops still in place for 010 and 110 in src/poisson_fft.f90. With
+  ! no argument every configuration runs, as before.
+  only_config = 'all'
+  do iarg = 1, command_argument_count() - 1
+    call get_command_argument(iarg, arg)
+    if (trim(arg) == '--config') then
+      call get_command_argument(iarg + 1, arg)
+      only_config = trim(arg)
+    end if
+  end do
+
+  do ic = 1, NUM_CONFIGS
+    config_run(ic) = (only_config == 'all' &
+                      .or. only_config == config_labels(ic))
+  end do
+
+  ! A skipped configuration must not register as a failure in the verdict
+  all_results = .true.
+  all_xfail = .false.
+  all_poisson_errs = 0.0_dp
+  all_divgrad_errs = 0.0_dp
 
   ! ---- Config 000: all periodic (128 x 64 x 32) ----
   dims_global = [128, 64, 32]
   BC_x = ['periodic', 'periodic']
   BC_y = ['periodic', 'periodic']
   BC_z = ['periodic', 'periodic']
-  call run_config(1, '000 (all periodic)', dims_global, &
+  if (config_run(1)) call run_config(1, '000 (all periodic)', dims_global, &
                   BC_x, BC_y, BC_z)
 
   ! ---- Config 010: y-dirichlet (128 x 65 x 32) ----
@@ -111,15 +121,21 @@ program test_poisson
   BC_x = ['periodic ', 'periodic ']
   BC_y = ['dirichlet', 'dirichlet']
   BC_z = ['periodic ', 'periodic ']
-  call run_config(2, '010 (y-dirichlet)', dims_global, &
+  if (config_run(2)) call run_config(2, '010 (y-dirichlet)', dims_global, &
                   BC_x, BC_y, BC_z)
 
-  ! ---- Config 100: x-dirichlet (129 x 64 x 32) ----
-  dims_global = [129, 64, 32]
+  ! ---- Config 100: x-dirichlet (129 x 64 x 128) ----
+  !
+  ! z carries the decomposition, so it needs enough cells per subdomain for
+  ! the distributed compact operators. At 32 cells over 2 ranks the discarded
+  ! coupling in "interpolate" is 6.2e-08, which puts a 8.7e-11 floor under the
+  ! div(grad(p)) check against a 1e-11 tolerance. 128 keeps 64 cells per rank
+  ! at 2 ranks, matching the >=64 rule of thumb used elsewhere.
+  dims_global = [129, 64, 128]
   BC_x = ['dirichlet', 'dirichlet']
   BC_y = ['periodic ', 'periodic ']
   BC_z = ['periodic ', 'periodic ']
-  call run_config(3, '100 (x-dirichlet)', dims_global, &
+  if (config_run(3)) call run_config(3, '100 (x-dirichlet)', dims_global, &
                   BC_x, BC_y, BC_z)
 
   ! ---- Config 110: x,y-dirichlet (129 x 257 x 64) ----
@@ -127,7 +143,7 @@ program test_poisson
   BC_x = ['dirichlet', 'dirichlet']
   BC_y = ['dirichlet', 'dirichlet']
   BC_z = ['periodic ', 'periodic ']
-  call run_config(4, '110 (x,y-dirichlet)', dims_global, &
+  if (config_run(4)) call run_config(4, '110 (x,y-dirichlet)', dims_global, &
                   BC_x, BC_y, BC_z)
 
   ! ---- Grand summary ----
@@ -145,6 +161,7 @@ program test_poisson
       '  DivGrad L2  ', 'Result', 'Expected', ''
     write (stderr, '(A)') ''
     do ic = 1, NUM_CONFIGS
+      if (.not. config_run(ic)) cycle
       call print_config_results(ic)
       if (ic < NUM_CONFIGS) write (stderr, '(A)') ''
     end do
@@ -164,15 +181,7 @@ program test_poisson
     end do
   end do
 
-  if (allpass) then
-    if (nrank == 0) then
-      write (stderr, '(A)') 'ALL TESTS PASSED SUCCESSFULLY.'
-    end if
-  else
-    error stop 'SOME TESTS FAILED.'
-  end if
-
-  call MPI_Finalize(ierr)
+  call finalise_test(allpass, nrank)
 
 contains
 
@@ -186,20 +195,12 @@ contains
     integer, intent(in) :: dims_global(3)
     character(len=*), intent(in) :: BC_x(2), BC_y(2), BC_z(2)
 
+    type(backend_runtime_t), target :: runtime
     class(base_backend_t), pointer :: backend
-    class(allocator_t), pointer :: allocator
     type(allocator_t), pointer :: host_allocator
     type(mesh_t), target :: mesh
     type(dirps_t), pointer :: xdirps, ydirps, zdirps
     type(vector_calculus_t) :: vector_calculus
-
-#ifdef CUDA
-    type(cuda_backend_t), target :: cuda_backend
-    type(cuda_allocator_t), target :: cuda_allocator
-#else
-    type(omp_backend_t), target :: omp_backend
-#endif
-    type(allocator_t), target :: omp_allocator
 
     integer :: nproc_dir(3)
     real(dp) :: L_global(3)
@@ -227,33 +228,15 @@ contains
     L_global = [1.0_dp, 1.0_dp, 1.0_dp]
 
     ! Decide whether 2decomp is used
-#ifdef CUDA
-    use_2decomp = .false.
-#else
-    use_2decomp = .true.
-#endif
+    use_2decomp = .not. backend_is_cuda
 
     mesh = mesh_t(dims_global, nproc_dir, L_global, &
                   BC_x, BC_y, BC_z, &
                   use_2decomp=use_2decomp)
 
-#ifdef CUDA
-    cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
-    allocator => cuda_allocator
-
-    omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
-    host_allocator => omp_allocator
-
-    cuda_backend = cuda_backend_t(mesh, allocator)
-    backend => cuda_backend
-#else
-    omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
-    allocator => omp_allocator
-    host_allocator => omp_allocator
-
-    omp_backend = omp_backend_t(mesh, allocator)
-    backend => omp_backend
-#endif
+    call runtime%init(mesh)
+    backend => runtime%backend
+    host_allocator => runtime%host_allocator
 
     ! Setup tdsops directly (like test_fft.f90)
     allocate (xdirps, ydirps, zdirps)

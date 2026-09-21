@@ -26,7 +26,7 @@ module m_poisson_fft
     !> Wave numbers in x, y, and z
     complex(dp), allocatable, dimension(:) :: kx, ky, kz, exs, eys, ezs, &
                                               k2x, k2y, k2z
-    !> Staggared grid transformation
+    !> Staggered grid transformation
     real(dp), allocatable, dimension(:) :: trans_x_re, trans_x_im, &
                                            trans_y_re, trans_y_im, &
                                            trans_z_re, trans_z_im
@@ -186,10 +186,10 @@ contains
       end if
     else if ((.not. self%periodic_x) .and. (self%periodic_y) &
              .and. (self%periodic_z)) then
-      if (mesh%par%nproc > 1) then
-        error stop 'Multiple ranks are not yet supported for non-periodic BCs!'
-      end if
-
+      ! The 100 case runs on multiple ranks in the CUDA backend, where the
+      ! spectral paired split reaches its partner mode through a mirror
+      ! exchange. The OpenMP backend has no 100 implementation at all and
+      ! stops at the first transform whatever the rank count.
       self%poisson => poisson_100
     else if ((.not. self%periodic_x) .and. (.not. self%periodic_y) &
              .and. (self%periodic_z)) then

@@ -25,34 +25,24 @@ program test_cuda_penta
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_penta_compact, exec_dist_penta_periodic
   use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
+  use m_backend_runtime, only: select_device
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
   logical :: allpass = .true.
-  integer :: nrank, nproc, ierr, ndevs, devnum
+  integer :: nrank, nproc, ierr
 
-  call initialise_mpi()
-  call select_device()
+  call initialise_mpi(nrank, nproc)
+  if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
+  call select_device(nrank)
   call run_dirichlet_test()
   call run_neumann_sym_true()
   call run_neumann_sym_false()
   call run_periodic_test()
-  call finalise()
+  call finalise_test(allpass, nrank)
 
 contains
-
-  subroutine initialise_mpi()
-    call MPI_Init(ierr)
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-    if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
-  end subroutine initialise_mpi
-
-  subroutine select_device()
-    ierr = cudaGetDeviceCount(ndevs)
-    ierr = cudaSetDevice(mod(nrank, ndevs))
-    ierr = cudaGetDevice(devnum)
-  end subroutine select_device
 
   ! ─────────────────────────────────────────────────────────────────────────────
   ! BC_DIRICHLET: f = sin(pi*x), f' = pi*cos(pi*x).
@@ -394,7 +384,8 @@ contains
         if (isize == 1) then
           print '(i6, es16.4, a10)', n_glob, l2_err, '   ---'
         else
-          if (l2_prev > 0._dp .and. l2_err > 0._dp) then
+          if (l2_prev > converged_tol(n_glob) &
+              .and. l2_err > converged_tol(n_glob)) then
             block
               real(dp) :: rate
               rate = log(l2_prev/l2_err)/log(2.0_dp)
@@ -427,7 +418,7 @@ contains
     if (nrank /= 0) return
     if (isize == 1) then
       print '(i6, es16.4, a10)', n_glob, l2_err, '   ---'
-    else if (l2_err < 1e-12_dp) then
+    else if (l2_err < converged_tol(n_glob)) then
       print '(i6, es16.4, a10)', n_glob, l2_err, '  <eps'
     else
       rate = log(l2_prev/l2_err)/log(2.0_dp)
@@ -441,13 +432,14 @@ contains
     end if
   end subroutine report_rate
 
-  subroutine finalise()
-    if (allpass) then
-      if (nrank == 0) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-    else
-      error stop 'SOME TESTS FAILED.'
-    end if
-    call MPI_Finalize(ierr)
-  end subroutine finalise
+  real(dp) pure function converged_tol(n_glob)
+    !! Error level below which the truncation error is hidden by roundoff
+    !! and a convergence rate can no longer be measured.  The roundoff
+    !! floor of a first-derivative L2 error at resolution n is ~eps*n
+    !! (roundoff eps amplified by 1/dx = n), with a 20x safety margin.
+    integer, intent(in) :: n_glob
+    converged_tol = max(1e-12_dp, &
+                        20._dp*epsilon(1._dp)*real(n_glob, dp))
+  end function converged_tol
 
 end program test_cuda_penta

@@ -13,6 +13,7 @@ module m_omp_backend
 
   use m_omp_common, only: SZ
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
+  use m_exec_thom, only: exec_thom_tds_compact
   use m_omp_sendrecv, only: sendrecv_fields
 
   implicit none
@@ -35,6 +36,7 @@ module m_omp_backend
     procedure :: transeq_z => transeq_z_omp
     procedure :: transeq_species => transeq_species_omp
     procedure :: tds_solve => tds_solve_omp
+    procedure :: thom_solve => thom_solve_omp
     procedure :: reorder => reorder_omp
     procedure :: sum_yintox => sum_yintox_omp
     procedure :: sum_zintox => sum_zintox_omp
@@ -42,6 +44,7 @@ module m_omp_backend
     procedure :: vecadd => vecadd_omp
     procedure :: vecmult => vecmult_omp
     procedure :: scalar_product => scalar_product_omp
+    procedure :: vector_norm_squared => vector_norm_squared_omp
     procedure :: field_max_mean => field_max_mean_omp
     procedure :: slice_max_sum => slice_max_sum_omp
     procedure :: field_scale => field_scale_omp
@@ -50,10 +53,14 @@ module m_omp_backend
     procedure :: field_set_face_from_field => field_set_face_from_field_omp
     procedure :: compute_vorticity => compute_vorticity_omp
     procedure :: compute_qcriterion => compute_qcriterion_omp
+    procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_omp
+    procedure :: compute_sgs_stress => compute_sgs_stress_omp
     procedure :: field_volume_integral => field_volume_integral_omp
     procedure :: copy_data_to_f => copy_data_to_f_omp
     procedure :: copy_f_to_data => copy_f_to_data_omp
     procedure :: init_poisson_fft => init_omp_poisson_fft
+    procedure :: sync => sync_omp
+    procedure :: get_device_bw_info => get_device_bw_info_omp
     procedure :: transeq_omp_dist
   end type omp_backend_t
 
@@ -141,6 +148,28 @@ contains
     end select
 
   end subroutine alloc_omp_tdsops
+
+  subroutine sync_omp(self)
+    implicit none
+
+    class(omp_backend_t) :: self
+
+  end subroutine sync_omp
+
+  subroutine get_device_bw_info_omp(self, mem_clock_rt, mem_bus_width, &
+                                    available)
+    implicit none
+
+    class(omp_backend_t) :: self
+    integer, intent(out) :: mem_clock_rt
+    integer, intent(out) :: mem_bus_width
+    logical, intent(out) :: available
+
+    mem_clock_rt = 0
+    mem_bus_width = 0
+    available = .false.
+
+  end subroutine get_device_bw_info_omp
 
   subroutine transeq_x_omp(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
@@ -357,6 +386,27 @@ contains
     call tds_solve_dist(self, du, u, tdsops)
 
   end subroutine tds_solve_omp
+
+  subroutine thom_solve_omp(self, du, u, tdsops)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: du
+    class(field_t), intent(in) :: u
+    class(tdsops_t), intent(in) :: tdsops
+
+    if (u%dir /= du%dir) then
+      error stop 'DIR mismatch between fields in thom_solve.'
+    end if
+
+    if (u%data_loc /= NULL_LOC) then
+      call du%set_data_loc(move_data_loc(u%data_loc, u%dir, tdsops%move))
+    end if
+
+    call exec_thom_tds_compact(du%data, u%data, tdsops, &
+                               self%allocator%get_n_groups(u%dir))
+
+  end subroutine thom_solve_omp
 
   subroutine tds_solve_dist(self, du, u, tdsops)
     implicit none
@@ -648,6 +698,78 @@ contains
 
   end subroutine compute_qcriterion_omp
 
+  subroutine compute_smagorinsky_nut_omp( &
+    self, nut, mixing_length_sq, dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+    dwdx, dwdy, dwdz)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: nut
+    class(field_t), intent(in) :: mixing_length_sq
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    real(dp) :: sij_sq
+    integer :: i, j, k
+
+    !$omp parallel do private(sij_sq) collapse(2)
+    do k = 1, size(nut%data, 3)
+      do j = 1, size(nut%data, 2)
+        !$omp simd private(sij_sq)
+        do i = 1, size(nut%data, 1)
+          if (mixing_length_sq%data(i, j, k) > 0._dp) then
+            sij_sq = dudx%data(i, j, k)**2 + &
+                     dvdy%data(i, j, k)**2 + &
+                     dwdz%data(i, j, k)**2 + &
+                     0.5_dp*(dudy%data(i, j, k) + &
+                             dvdx%data(i, j, k))**2 + &
+                     0.5_dp*(dudz%data(i, j, k) + &
+                             dwdx%data(i, j, k))**2 + &
+                     0.5_dp*(dvdz%data(i, j, k) + &
+                             dwdy%data(i, j, k))**2
+            nut%data(i, j, k) = mixing_length_sq%data(i, j, k)* &
+                                sqrt(2._dp*sij_sq)
+          else
+            nut%data(i, j, k) = 0._dp
+          end if
+        end do
+        !$omp end simd
+      end do
+    end do
+    !$omp end parallel do
+
+  end subroutine compute_smagorinsky_nut_omp
+
+  subroutine compute_sgs_stress_omp( &
+    self, stress, nut, gradient_a, gradient_b, scale_a, scale_b)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: stress
+    class(field_t), intent(in) :: nut, gradient_a, gradient_b
+    real(dp), intent(in) :: scale_a, scale_b
+    integer :: i, j, k
+
+    !$omp parallel do collapse(2)
+    do k = 1, size(stress%data, 3)
+      do j = 1, size(stress%data, 2)
+        !$omp simd
+        do i = 1, size(stress%data, 1)
+          if (nut%data(i, j, k) > 0._dp) then
+            stress%data(i, j, k) = nut%data(i, j, k)*( &
+                                   scale_a*gradient_a%data(i, j, k) + &
+                                   scale_b*gradient_b%data(i, j, k))
+          else
+            stress%data(i, j, k) = 0._dp
+          end if
+        end do
+        !$omp end simd
+      end do
+    end do
+    !$omp end parallel do
+  end subroutine compute_sgs_stress_omp
+
   real(dp) function scalar_product_omp(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]
     implicit none
@@ -711,6 +833,55 @@ contains
 
   end function scalar_product_omp
 
+  real(dp) function vector_norm_squared_omp(self, a, b, c) &
+    result(norm_squared)
+    !! Global sum of a**2 + b**2 + c**2, with one MPI reduction.
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(in) :: a, b, c
+
+    real(dp) :: local_sum, pencil_sum
+    integer :: dims(3), stacked
+    integer :: i, j, k, k_i, k_j, ierr
+
+    if (a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
+        c%data_loc == NULL_LOC) then
+      error stop 'You must set data_loc before computing a vector norm.'
+    end if
+    if (a%data_loc /= b%data_loc .or. a%data_loc /= c%data_loc) then
+      error stop 'Vector-norm fields must use the same data location.'
+    end if
+    if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) then
+      error stop 'Vector-norm fields must use DIR_X layout.'
+    end if
+
+    dims = self%mesh%get_dims(a%data_loc)
+    stacked = (dims(2) - 1)/SZ + 1
+
+    local_sum = 0._dp
+    !$omp parallel do collapse(2) reduction(+:local_sum) private(k, pencil_sum)
+    do k_j = 1, stacked
+      do k_i = 1, dims(3)
+        k = k_j + (k_i - 1)*stacked
+        pencil_sum = 0._dp
+        do j = 1, dims(1)
+          !$omp simd reduction(+:pencil_sum)
+          do i = 1, min(SZ, dims(2) - (k_j - 1)*SZ)
+            pencil_sum = pencil_sum + a%data(i, j, k)**2 + &
+                         b%data(i, j, k)**2 + c%data(i, j, k)**2
+          end do
+          !$omp end simd
+        end do
+        local_sum = local_sum + pencil_sum
+      end do
+    end do
+    !$omp end parallel do
+
+    call MPI_Allreduce(local_sum, norm_squared, 1, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+  end function vector_norm_squared_omp
+
   subroutine copy_into_buffers(u_send_s, u_send_e, u, n, n_groups)
     implicit none
 
@@ -746,7 +917,7 @@ contains
     integer, optional, intent(in) :: enforced_data_loc
 
     real(dp) :: val, max_p, sum_p, max_pncl, sum_pncl
-    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j
+    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_groups_pad, n_j
     integer :: i, j, k, k_i, k_j, ierr
 
     if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
@@ -764,12 +935,20 @@ contains
     dims = self%mesh%get_dims(data_loc)
     dims_padded = self%allocator%get_padded_dims(DIR_C)
 
+    ! n_groups_pad is the stride between successive outer entries in the
+    ! group index, and it comes from the padded extent of the grouped
+    ! dimension, not the unpadded one (see get_index_dir in m_ordering).
+    ! The two agree only when that dimension needs no padding, so using the
+    ! unpadded count walks into other groups as soon as it does.
     if (f%dir == DIR_X) then
-      n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
+      n = dims(1); n_j = dims(2); n_i = dims(3)
+      n_groups_pad = dims_padded(2)/SZ
     else if (f%dir == DIR_Y) then
-      n = dims(2); n_j = dims(1); n_i = dims(3); n_i_pad = dims_padded(3)
+      n = dims(2); n_j = dims(1); n_i = dims(3)
+      n_groups_pad = dims_padded(1)/SZ
     else if (f%dir == DIR_Z) then
-      n = dims(3); n_j = dims(1); n_i = dims(2); n_i_pad = dims_padded(2)
+      n = dims(3); n_j = dims(1); n_i = dims(2)
+      n_groups_pad = dims_padded(1)/SZ
     else
       error stop 'field_max_mean does not support DIR_C fields!'
     end if
@@ -780,7 +959,7 @@ contains
     !$omp private(k, val, sum_pncl, max_pncl)
     do k_j = 1, (n_j - 1)/SZ + 1 ! loop over stacked groups
       do k_i = 1, n_i
-        k = k_j + (k_i - 1)*((n_j - 1)/SZ + 1)
+        k = k_j + (k_i - 1)*n_groups_pad
         sum_pncl = 0._dp
         max_pncl = 0._dp
         do j = 1, n
@@ -824,7 +1003,7 @@ contains
     integer, optional, intent(in) :: enforced_data_loc
 
     real(dp) :: val, max_p, sum_p
-    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j
+    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_groups_pad, n_j
     integer :: i, j, k, k_i, k_j
 
     if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
@@ -842,12 +1021,16 @@ contains
     dims = self%mesh%get_dims(data_loc)
     dims_padded = self%allocator%get_padded_dims(DIR_C)
 
+    ! See the note on n_groups_pad in field_max_mean_omp above.
     if (f%dir == DIR_X) then
-      n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
+      n = dims(1); n_j = dims(2); n_i = dims(3)
+      n_groups_pad = dims_padded(2)/SZ
     else if (f%dir == DIR_Y) then
-      n = dims(2); n_j = dims(1); n_i = dims(3); n_i_pad = dims_padded(3)
+      n = dims(2); n_j = dims(1); n_i = dims(3)
+      n_groups_pad = dims_padded(1)/SZ
     else if (f%dir == DIR_Z) then
-      n = dims(3); n_j = dims(1); n_i = dims(2); n_i_pad = dims_padded(2)
+      n = dims(3); n_j = dims(1); n_i = dims(2)
+      n_groups_pad = dims_padded(1)/SZ
     else
       error stop 'slice_max_sum does not support DIR_C fields!'
     end if
@@ -864,7 +1047,7 @@ contains
     !$omp private(k, val)
     do k_j = 1, (n_j - 1)/SZ + 1
       do k_i = 1, n_i
-        k = k_j + (k_i - 1)*((n_j - 1)/SZ + 1)
+        k = k_j + (k_i - 1)*n_groups_pad
         do i = 1, min(SZ, n_j - (k_j - 1)*SZ)
           val = f%data(i, j, k)
           sum_p = sum_p + val
@@ -1089,7 +1272,7 @@ contains
     implicit none
 
     class(omp_backend_t) :: self
-    type(mesh_t), intent(in) :: mesh
+    type(mesh_t), target, intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
 
@@ -1108,4 +1291,3 @@ contains
   end subroutine init_omp_poisson_fft
 
 end module m_omp_backend
-

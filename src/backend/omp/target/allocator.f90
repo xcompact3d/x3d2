@@ -2,12 +2,18 @@
 !!
 !! Implements an allocator specialised to OMP target offloading
 
+#ifdef OMP_TGT_NVIDIA
+! NVHPC 25.3 accepts is_device_ptr but not has_device_addr for Fortran arrays.
+#define X3D2_DEVICE_ADDR_CLAUSE is_device_ptr
+#else
+#define X3D2_DEVICE_ADDR_CLAUSE has_device_addr
+#endif
+
 module m_omptgt_allocator
 
-  use iso_c_binding, only: c_ptr, c_f_pointer, c_size_t, &
+  use iso_c_binding, only: c_ptr, c_f_pointer, &
                            c_sizeof, c_associated, c_null_ptr
   use omp_lib, only: omp_target_alloc, omp_target_free, &
-                     omp_target_associate_ptr, omp_target_disassociate_ptr, &
                      omp_get_default_device, omp_get_num_devices, &
                      omp_get_initial_device
 
@@ -34,15 +40,14 @@ module m_omptgt_allocator
 
   type, extends(field_t) :: omptgt_field_t
     ! A device-resident field
-    integer, private :: n
-    integer, dimension(3), private :: dims
     integer, private :: dev_id
     type(c_ptr), private :: dev_ptr = c_null_ptr
+    real(dp), pointer, private :: p_data_tgt(:) => null()
+    real(dp), pointer, contiguous :: data_tgt(:, :, :) => null()
   contains
     procedure :: fill => fill_omptgt
     procedure :: get_shape => get_shape_omptgt
     procedure :: set_shape => set_shape_omptgt
-    procedure :: get_dev_ptr
     final :: omptgt_field_destroy
   end type omptgt_field_t
 
@@ -80,8 +85,6 @@ contains
     integer, intent(in) :: id
     type(omptgt_field_t) :: f
 
-    integer :: ierr
-
     f%refcount = 0
     f%next => next
     f%id = id
@@ -94,38 +97,22 @@ contains
       error stop "Device ID is HOST"
     end if
 
-    f%n = ngrid
-    f%dims = -1
-    f%dev_ptr = omp_target_alloc(f%n*c_sizeof(0.0_dp), f%dev_id)
+    f%dev_ptr = omp_target_alloc(ngrid*c_sizeof(0.0_dp), f%dev_id)
     if (.not. c_associated(f%dev_ptr)) then
       error stop "omp_target_alloc failed"
     end if
 
-    ! Register the buffer with the runtime as being its own host counterpart.
-    !
-    ! Kernels reach this memory through a Fortran pointer built by
-    ! c_f_pointer(dev_ptr, ...), i.e. a host pointer whose value *is* the
-    ! device address. Compilers are free to implicitly map such a pointer
-    ! tofrom on a target construct (nvfortran does), which copies the pointee
-    ! to and from the device using the device address as the host address.
-    ! Self-associating makes that lookup find the buffer already present, so
-    ! the implicit map is a no-op instead of a bogus transfer.
-    ierr = omp_target_associate_ptr(f%dev_ptr, f%dev_ptr, &
-                                    f%n*c_sizeof(0.0_dp), 0_c_size_t, &
-                                    f%dev_id)
-    if (ierr /= 0) then
-      error stop "omp_target_associate_ptr failed"
-    end if
+    call c_f_pointer(f%dev_ptr, f%p_data_tgt, shape=[ngrid])
 
   end subroutine omptgt_field_init
 
   subroutine omptgt_field_destroy(self)
     type(omptgt_field_t) :: self
 
-    integer :: ierr
+    nullify (self%data_tgt)
+    nullify (self%p_data_tgt)
 
     if (c_associated(self%dev_ptr)) then
-      ierr = omp_target_disassociate_ptr(self%dev_ptr, self%dev_id)
       call omp_target_free(self%dev_ptr, self%dev_id)
     end if
   end subroutine
@@ -134,21 +121,19 @@ contains
     class(omptgt_field_t) :: self
     real(dp), intent(in) :: c
 
-    call fill_omptgt_(self%dev_ptr, c, self%n)
-    !call fill_omptgt_3d_(self%dev_ptr, c)
+    !call fill_omptgt_(self%p_data_tgt, c, size(self%p_data_tgt))
+    call fill_omptgt_3d_(self%data_tgt, c)
 
   end subroutine fill_omptgt
 
-  subroutine fill_omptgt_(dev_ptr, c, n)
-    type(c_ptr), intent(inout) :: dev_ptr
+  subroutine fill_omptgt_(p_data_tgt, c, n)
+    real(dp), dimension(:), intent(inout) :: p_data_tgt
     real(dp), intent(in) :: c
     integer, intent(in) :: n
 
-    real(dp), dimension(:), pointer :: p_data_tgt
     integer :: i
 
-    call c_f_pointer(dev_ptr, p_data_tgt, shape=[n])
-    !$omp target teams loop is_device_ptr(dev_ptr)
+    !$omp target teams loop X3D2_DEVICE_ADDR_CLAUSE(p_data_tgt)
     do i = 1, n
       p_data_tgt(i) = c
     end do
@@ -156,53 +141,39 @@ contains
 
   end subroutine
 
-  !!subroutine fill_omptgt_3d_(dev_ptr, c)
-  !!  type(c_ptr), intent(inout) :: dev_ptr
-  !!  real(dp), intent(in) :: c
+  subroutine fill_omptgt_3d_(data_tgt, c)
+    real(dp), dimension(:, :, :), intent(inout) :: data_tgt
+    real(dp), intent(in) :: c
 
-  !!  real(dp), dimension(:,:,:), pointer :: p_data_tgt
-  !!  integer, dimension(3) :: n
-  !!  integer :: i, j, k
+    integer, dimension(3) :: n
+    integer :: i, j, k
 
-  !!  n = shape(data_tgt)
+    n = shape(data_tgt)
 
-  !!  !$omp target teams loop collapse(3) is_device_ptr(dev_ptr)
-  !!  call c_f_pointer(dev_ptr, p_data_tgt, shape=n)
-  !!  do k = 1, n(3)
-  !!    do j = 1, n(2)
-  !!      do i = 1, n(1)
-  !!        p_data_tgt(i, j, k) = c
-  !!      end do
-  !!    end do
-  !!  end do
-  !!  !$omp end target teams loop
-  !!end subroutine
+    !$omp target teams loop collapse(3) X3D2_DEVICE_ADDR_CLAUSE(data_tgt)
+    do k = 1, n(3)
+      do j = 1, n(2)
+        do i = 1, n(1)
+          data_tgt(i, j, k) = c
+        end do
+      end do
+    end do
+    !$omp end target teams loop
+  end subroutine
 
   function get_shape_omptgt(self) result(dims)
     class(omptgt_field_t) :: self
     integer :: dims(3)
-    !$omp declare target
 
-    dims = self%dims
+    dims = shape(self%data_tgt)
   end function
 
   subroutine set_shape_omptgt(self, dims)
     class(omptgt_field_t) :: self
     integer, intent(in) :: dims(3)
 
-    if (product(dims) <= self%n) then
-      self%dims = dims
-    else
-      error stop "Trying to set shape of field greater than capacity"
-    end if
+    call c_f_pointer(self%dev_ptr, self%data_tgt, shape=dims)
 
   end subroutine
 
-  type(c_ptr) function get_dev_ptr(self) result(ptr)
-    class(omptgt_field_t) :: self
-
-    ptr = self%dev_ptr
-  end function
-
 end module m_omptgt_allocator
-

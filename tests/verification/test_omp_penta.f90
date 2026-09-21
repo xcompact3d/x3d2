@@ -18,15 +18,14 @@ program test_omp_penta
   use m_omp_common, only: SZ
   use m_omp_exec_dist, only: exec_dist_penta_compact, exec_dist_penta_periodic
   use m_tdsops, only: tdsops_t, tdsops_init
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
   logical :: allpass = .true.
   integer :: nrank, nproc, ierr
 
-  call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-  call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+  call initialise_mpi(nrank, nproc)
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
   call run_dirichlet_test()
@@ -34,12 +33,7 @@ program test_omp_penta
   call run_neumann_sym_false()
   call run_periodic_test()
 
-  if (allpass) then
-    if (nrank == 0) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-  else
-    error stop 'SOME TESTS FAILED.'
-  end if
-  call MPI_Finalize(ierr)
+  call finalise_test(allpass, nrank)
 
 contains
 
@@ -400,6 +394,8 @@ contains
       if (nrank == 0) then
         if (isize == 1) then
           print '(i6, es16.4, a10)', n_glob, l2_err, '   ---'
+        else if (l2_err < converged_tol(n_glob)) then
+          print '(i6, es16.4, a10)', n_glob, l2_err, '  <eps'
         else
           rate = log(l2_prev/l2_err)/log(2.0_dp)
           print '(i6, es16.4, f10.2)', n_glob, l2_err, rate
@@ -427,7 +423,7 @@ contains
     if (nrank /= 0) return
     if (isize == 1) then
       print '(i6, es16.4, a10)', n_glob, l2_err, '   ---'
-    else if (l2_err < 1e-12_dp) then
+    else if (l2_err < converged_tol(n_glob)) then
       print '(i6, es16.4, a10)', n_glob, l2_err, '  <eps'
     else
       rate = log(l2_prev/l2_err)/log(2.0_dp)
@@ -440,5 +436,15 @@ contains
       end if
     end if
   end subroutine report_rate
+
+  real(dp) pure function converged_tol(n_glob)
+    !! Error level below which the truncation error is hidden by roundoff
+    !! and a convergence rate can no longer be measured.  The roundoff
+    !! floor of a first-derivative L2 error at resolution n is ~eps*n
+    !! (roundoff eps amplified by 1/dx = n), with a 20x safety margin.
+    integer, intent(in) :: n_glob
+    converged_tol = max(1e-12_dp, &
+                        20._dp*epsilon(1._dp)*real(n_glob, dp))
+  end function converged_tol
 
 end program test_omp_penta

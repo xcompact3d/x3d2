@@ -3,6 +3,7 @@ module m_monitoring
   !!
   !! Tracks the following quantities:
   !!
+  !! - Kinetic energy: \( E_k = \frac{1}{2N} \sum |\mathbf{u}|^2 \)
   !! - Enstrophy: \( \mathcal{E} = \frac{1}{2N} \sum |\nabla \times \mathbf{u}|^2 \)
   !! - Divergence: \( \max |\nabla \cdot \mathbf{u}| \) and mean (divergence-free check)
 
@@ -30,8 +31,9 @@ contains
     logical, intent(in), optional :: append
 
     logical :: append_output
-    character(len=16), parameter :: columns(3) = &
-                                    ['enstrophy      ', &
+    character(len=16), parameter :: columns(4) = &
+                                    ['kinetic_energy ', &
+                                     'enstrophy      ', &
                                      'div_u_max      ', &
                                      'div_u_mean     ']
 
@@ -52,7 +54,11 @@ contains
     class(field_t), intent(in) :: u, v, w
 
     class(field_t), pointer :: du, dv, dw, div_u
-    real(dp) :: enstrophy, div_u_max, div_u_mean
+    real(dp) :: kinetic_energy, enstrophy, div_u_max, div_u_mean
+
+    !! Kinetic energy: \( E_k = \frac{1}{2N} \sum |\mathbf{u}|^2 \)
+    kinetic_energy = 0.5_dp*solver%backend%vector_norm_squared(u, v, w) &
+                     /solver%ngrid
 
     !! Enstrophy: \( \mathcal{E} = \frac{1}{2N} \sum |\nabla \times \mathbf{u}|^2 \)
     du => solver%backend%allocator%get_block(DIR_X, VERT)
@@ -61,9 +67,7 @@ contains
 
     call solver%curl(du, dv, dw, u, v, w)
 
-    enstrophy = 0.5_dp*(solver%backend%scalar_product(du, du) &
-                        + solver%backend%scalar_product(dv, dv) &
-                        + solver%backend%scalar_product(dw, dw)) &
+    enstrophy = 0.5_dp*solver%backend%vector_norm_squared(du, dv, dw) &
                 /solver%ngrid
 
     call solver%backend%allocator%release_block(du)
@@ -81,10 +85,13 @@ contains
 
     ! Print to stdout and write to file (root only)
     if (self%is_root) then
+      print *, 'kinetic energy:', kinetic_energy
       print *, 'enstrophy:', enstrophy
       print *, 'div u max mean:', div_u_max, div_u_mean
 
-      call self%series%write_step(t, [enstrophy, div_u_max, div_u_mean])
+      call self%series%write_step(t, &
+                                  [kinetic_energy, enstrophy, &
+                                   div_u_max, div_u_mean])
     end if
 
   end subroutine write_step

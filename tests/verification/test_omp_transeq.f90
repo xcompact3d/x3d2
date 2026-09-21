@@ -9,6 +9,7 @@ program test_omp_transeq
   use m_tdsops, only: dirps_t
   use m_solver, only: allocate_tdsops
   use m_mesh, only: mesh_t
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
@@ -23,7 +24,14 @@ program test_omp_transeq
   integer :: ierr
   integer, dimension(3) :: dims_global
 
-  real(dp) :: dx_per, nu, norm_du, tol = 1d-8
+  real(dp) :: dx_per, nu, norm_du
+  ! Roundoff floor of the second-derivative term is ~eps/dx^2, which at
+  ! 96^3 cells is ~1e-4 in single precision.
+#ifdef SINGLE_PREC
+  real(dp) :: tol = 5e-3
+#else
+  real(dp) :: tol = 1d-8
+#endif
 
   class(allocator_t), pointer :: allocator
 
@@ -31,24 +39,17 @@ program test_omp_transeq
   type(allocator_t), target :: omp_allocator
   type(dirps_t) :: xdirps, ydirps, zdirps
 
-  call initialise_mpi()
+  call initialise_mpi(nrank, nproc)
+  if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
   call setup_mesh()
   call setup_backend()
   call initialise_input()
   call run_kernel()
   call check_result()
-  call finalise()
+  call finalise_test(allpass, nrank)
 
 contains
 
-  subroutine initialise_mpi()
-    ! Initialise variables and arrays
-    call MPI_Init(ierr)
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-    if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
-  end subroutine initialise_mpi
 
   subroutine setup_mesh()
     integer, dimension(3) :: nproc_dir
@@ -142,15 +143,5 @@ contains
     end if
 
   end subroutine check_result
-
-  subroutine finalise()
-    if (allpass) then
-      if (nrank == 0) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-    else
-      error stop 'SOME TESTS FAILED.'
-    end if
-
-    call MPI_Finalize(ierr)
-  end subroutine finalise
 
 end program test_omp_transeq

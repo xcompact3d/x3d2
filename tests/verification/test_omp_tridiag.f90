@@ -8,6 +8,7 @@ program test_omp_tridiag
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_exec_dist, only: exec_dist_tds_compact
   use m_tdsops, only: tdsops_t, tdsops_init
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
@@ -35,27 +36,26 @@ program test_omp_tridiag
   integer :: nrank, nproc, pprev, pnext
   integer :: ierr
 
-  real(dp) :: dx, dx_per, dx_pi, norm_du, tol = 1d-8
+  real(dp) :: dx, dx_per, dx_pi, norm_du
+  ! Single precision roundoff floors at n_glob=1024: ~eps/dx (~2e-5) for
+  ! first derivatives/interpolation, ~eps/dx^2 (~3e-3) for second
+  ! derivatives, and ~63x more for the hyperviscous operator (nu0_nu=63).
+#ifdef SINGLE_PREC
+  real(dp) :: tol = 1e-4, tol_2nd = 2e-2, tol_hyper = 2.0
+#else
+  real(dp) :: tol = 1d-8, tol_2nd = 1d-8, tol_hyper = 1d-8
+#endif
 
-  call initialise_mpi()
+  call initialise_mpi(nrank, nproc, pprev, pnext)
+  if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
   call setup_geometry()
   call allocate_fields()
   call initialise_input()
   call run_all_cases()
-  call finalise()
+  call finalise_test(allpass, nrank)
 
 contains
 
-  subroutine initialise_mpi()
-    call MPI_Init(ierr)
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-
-    if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
-
-    pnext = modulo(nrank - nproc + 1, nproc)
-    pprev = modulo(nrank - 1, nproc)
-  end subroutine initialise_mpi
 
   subroutine setup_geometry()
     n_glob = 1024
@@ -124,7 +124,7 @@ contains
     if (nrank == 0) print *, 'error norm second-deriv periodic', norm_du
 
     if (nrank == 0) then
-      if (norm_du > tol) then
+      if (norm_du > tol_2nd) then
         allpass = .false.
         write (stderr, '(a)') 'Check 2nd derivatives, periodic BCs... failed'
       else
@@ -340,7 +340,7 @@ contains
     if (nrank == 0) print *, 'error norm hyperviscous', norm_du
 
     if (nrank == 0) then
-      if (norm_du > tol) then
+      if (norm_du > tol_hyper) then
         allpass = .false.
         write (stderr, '(a)') 'Check 2nd ders, hyperviscous, dir-neu... failed'
       else
@@ -348,16 +348,6 @@ contains
       end if
     end if
   end subroutine run_all_cases
-
-  subroutine finalise()
-    if (allpass) then
-      if (nrank == 0) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-    else
-      error stop 'SOME TESTS FAILED.'
-    end if
-
-    call MPI_Finalize(ierr)
-  end subroutine finalise
 
   subroutine run_kernel(n_iters, n_groups, u, du, tdsops, n, &
                         u_recv_s, u_recv_e, u_send_s, u_send_e, &
