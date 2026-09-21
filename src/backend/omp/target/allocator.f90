@@ -3,7 +3,7 @@
 !! Implements an allocator specialised to OMP target offloading
 
 #ifdef OMP_TGT_NVIDIA
-! NVHPC 25.3 accepts is_device_ptr but not has_device_addr for Fortran arrays.
+! NVHPC accepts is_device_ptr but not has_device_addr for Fortran arrays.
 #define X3D2_DEVICE_ADDR_CLAUSE is_device_ptr
 #else
 #define X3D2_DEVICE_ADDR_CLAUSE has_device_addr

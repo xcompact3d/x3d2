@@ -5,10 +5,18 @@
 !! Note this extends the CPU (host) OpenMP backend with the intention of being able to use fallback implementations where necessary.
 
 #ifdef OMP_TGT_NVIDIA
-! NVHPC 25.3 accepts is_device_ptr but not has_device_addr for Fortran arrays.
+! NVHPC accepts is_device_ptr but not has_device_addr for Fortran arrays.
 #define X3D2_DEVICE_ADDR_CLAUSE is_device_ptr
+! NVHPC miscompiles a scalar listed in a private clause when it is then
+! passed by reference as an intent(out) argument to a declare target routine:
+! the callee is handed an invalid address, so the reordering indices come back
+! as garbage and the store off them faults with CUDA_ERROR_ILLEGAL_ADDRESS.
+! The indices are written before they are read in every iteration, so dropping
+! the clause and letting the compiler privatise them is safe here.
+#define X3D2_REORDER_PRIVATE_CLAUSE(x, y, z)
 #else
 #define X3D2_DEVICE_ADDR_CLAUSE has_device_addr
+#define X3D2_REORDER_PRIVATE_CLAUSE(x, y, z) private(x, y, z)
 #endif
 
 module m_omptgt_backend
@@ -363,7 +371,9 @@ contains
     integer :: i, j, k
     integer :: out_i, out_j, out_k
 
-    !$omp target teams loop collapse(3) private(out_i, out_j, out_k) X3D2_DEVICE_ADDR_CLAUSE(u_, u)
+    !$omp target teams loop collapse(3) &
+    !$omp X3D2_REORDER_PRIVATE_CLAUSE(out_i, out_j, out_k) &
+    !$omp X3D2_DEVICE_ADDR_CLAUSE(u_, u)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -387,7 +397,9 @@ contains
     integer :: i, j, k
     integer :: out_i, out_j, out_k
 
-    !$omp target teams loop collapse(3) private(out_i, out_j, out_k) map(to:u) X3D2_DEVICE_ADDR_CLAUSE(u_)
+    !$omp target teams loop collapse(3) &
+    !$omp X3D2_REORDER_PRIVATE_CLAUSE(out_i, out_j, out_k) &
+    !$omp map(to:u) X3D2_DEVICE_ADDR_CLAUSE(u_)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
