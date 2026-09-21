@@ -45,9 +45,18 @@ function(define_test_backend_runtime backend)
       target_compile_options(${runtime_target} PRIVATE "-cpp")
     endif()
     if(${backend} STREQUAL omp_tgt)
-      target_compile_options(${runtime_target} PRIVATE "-fopenmp" "-DOMP_TGT")
-      target_link_options(${runtime_target} INTERFACE "-fopenmp")
-      if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+      target_compile_options(${runtime_target} PRIVATE "-DOMP_TGT")
+      if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" OR
+         ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+        target_compile_options(${runtime_target} PRIVATE "-mp=gpu")
+        target_link_options(${runtime_target} INTERFACE "-mp=gpu")
+      else()
+        target_compile_options(${runtime_target} PRIVATE "-fopenmp")
+        target_link_options(${runtime_target} INTERFACE "-fopenmp")
+      endif()
+      if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray" AND
+         NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
+         NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
         target_compile_options(${runtime_target} PRIVATE
           "--offload-arch=${OMP_TGT_ARCH}")
         target_link_options(${runtime_target} INTERFACE
@@ -97,10 +106,15 @@ function(define_test testfile np backend)
 
     if(${backend} STREQUAL omp_tgt)
       # Note this is somewhat of a hack - hardcoded to build against MI300A
-      target_compile_options(${test_name} PRIVATE "-fopenmp")
       target_compile_options(${test_name} PRIVATE "-DOMP_TGT")
-      target_link_options(${test_name} PRIVATE "-fopenmp")
-      if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+      if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
+         NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+        target_compile_options(${test_name} PRIVATE "-fopenmp")
+        target_link_options(${test_name} PRIVATE "-fopenmp")
+      endif()
+      if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray" AND
+         NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
+         NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
         target_compile_options(${test_name} PRIVATE "--offload-arch=${OMP_TGT_ARCH}")
         target_link_options(${test_name} PRIVATE "--offload-arch=${OMP_TGT_ARCH}")
       endif()

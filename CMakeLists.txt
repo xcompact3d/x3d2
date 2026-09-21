@@ -43,7 +43,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   endif()
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   if("${OpenMP_Fortran_VERSION}" VERSION_LESS "5.0")
-    message(FATAL_ERROR "OpenMP version ${OpenMP_VERSION} is detected, but at least 5.0 is required with OMP_TGT.")
+    message(FATAL_ERROR "OpenMP Fortran version ${OpenMP_Fortran_VERSION} is detected, but at least 5.0 is required with OMP_TGT.")
   endif()
   set(OMP_TGT_ARCH "" CACHE STRING "Target architecture for OpenMP offloading, e.g. gfx942")
   if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
@@ -54,10 +54,14 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
         "OMP_TGT=ON requires setting OMP_TGT_ARCH=<arch> for this compiler")
     endif()
   endif()
- if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
-    # FindOpenMP probing nvfortran with -cuda pulls the CUDA runtime into the OpenMP
-    # target with cudadevrt not last -> nvlink "unexpected object after cudadevrt".
-    # Drop them; the per-target -cuda link option relinks them with cudadevrt last.
+  if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
+    # FindOpenMP supplies -mp, which targets the CPU with NVHPC.  Compile and
+    # link target regions for the GPU when this backend is selected.
+    set_target_properties(OpenMP::OpenMP_Fortran PROPERTIES
+      INTERFACE_COMPILE_OPTIONS "-mp=gpu"
+      INTERFACE_LINK_OPTIONS "-mp=gpu")
+    # FindOpenMP can pull CUDA runtime libraries into the target in an order
+    # that nvlink rejects.  Let -mp=gpu add them in the correct order.
     get_target_property(_omp_fortran_libs OpenMP::OpenMP_Fortran INTERFACE_LINK_LIBRARIES)
     if(_omp_fortran_libs)
       list(FILTER _omp_fortran_libs EXCLUDE REGEX "cuda")

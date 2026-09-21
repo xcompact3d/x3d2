@@ -2,6 +2,13 @@
 !!
 !! Implements an allocator specialised to OMP target offloading
 
+#ifdef OMP_TGT_NVIDIA
+! NVHPC 25.3 accepts is_device_ptr but not has_device_addr for Fortran arrays.
+#define X3D2_DEVICE_ADDR_CLAUSE is_device_ptr
+#else
+#define X3D2_DEVICE_ADDR_CLAUSE has_device_addr
+#endif
+
 module m_omptgt_allocator
 
   use iso_c_binding, only: c_ptr, c_f_pointer, &
@@ -119,7 +126,7 @@ contains
 
     integer :: i
 
-    !$omp target teams loop has_device_addr(p_data_tgt)
+    !$omp target teams loop X3D2_DEVICE_ADDR_CLAUSE(p_data_tgt)
     do i = 1, n
       p_data_tgt(i) = c
     end do
@@ -136,7 +143,7 @@ contains
 
     n = shape(data_tgt)
 
-    !$omp target teams loop collapse(3) has_device_addr(data_tgt)
+    !$omp target teams loop collapse(3) X3D2_DEVICE_ADDR_CLAUSE(data_tgt)
     do k = 1, n(3)
       do j = 1, n(2)
         do i = 1, n(1)
@@ -163,4 +170,3 @@ contains
   end subroutine
 
 end module m_omptgt_allocator
-
