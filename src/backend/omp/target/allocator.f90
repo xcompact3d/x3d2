@@ -34,15 +34,6 @@ module m_omptgt_allocator
   type, extends(field_t) :: omptgt_field_t
     !! A device-resident field.
     !!
-    !! The buffer is held as a bare device address rather than a Fortran
-    !! pointer. A pointer built by c_f_pointer(dev_ptr, ...) is a host pointer
-    !! whose value happens to be a device address, and naming such an array in
-    !! a target construct asks the compiler to map it: the mapping copies the
-    !! pointee using the device address as the host address. has_device_addr
-    !! says "already on the device", but NVHPC does not accept it for Fortran
-    !! arrays. Passing the c_ptr to is_device_ptr instead is plain OpenMP 5.0
-    !! that every supported compiler understands, so kernels take the address
-    !! and their shape and rebuild the pointer on the device side.
     integer, private :: n
     integer, dimension(3), private :: dims
     integer, private :: dev_id
