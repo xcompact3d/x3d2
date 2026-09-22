@@ -35,10 +35,10 @@ its own.
 OpenMP Target Offload Backend
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Requires a compiler reporting OpenMP 4.5 or newer. Cray, GNU and NVHPC/PGI are
-all supported. Each enables offload differently, and the build detects the
-compiler and applies what it needs, so no manual offload flags are required with
-any of them.
+Requires a compiler reporting OpenMP 4.5 or newer. Cray, GNU, NVHPC/PGI and
+Flang are all supported. Each enables offload differently, and the build
+detects the compiler and applies what it needs, so no manual offload flags are
+required with any of them.
 
 .. list-table::
    :header-rows: 1
@@ -59,6 +59,10 @@ any of them.
        supplies. Without that substitution the target regions compile but run
        on the host against device pointers.
      - Optional. When unset, the compiler targets the GPU of the build machine.
+   * - Flang
+     - ``-fopenmp --offload-arch=<arch>``, plus ``-fopenmp-version=50`` (see
+       `Building with Flang`_ below).
+     - Required. Configuring fails if it is unset.
 
 Where the compiler needs the architecture, set it at configure time:
 
@@ -67,9 +71,59 @@ Where the compiler needs the architecture, set it at configure time:
    -DENABLE_BACKEND=OMP_TGT -DOMP_TGT_ARCH=gfx942
 
 Vendor selection is automatic: the build defines ``OMP_TGT_NVIDIA`` for
-NVHPC/PGI and ``OMP_TGT_AMD`` for Cray and GNU, which selects the
-vendor-appropriate ``SZ`` parameter. Note that the GNU path assumes an AMD
-target.
+NVHPC/PGI and ``OMP_TGT_AMD`` for Cray, GNU and Flang, which selects the
+vendor-appropriate ``SZ`` parameter. Note that the GNU and Flang paths assume
+an AMD target.
+
+Building with Flang
+--------------------
+
+x3d2 builds with both upstream LLVM Flang and AMD's ROCm ``amdflang``; CMake
+reports either as a ``CMAKE_Fortran_COMPILER_ID`` of ``LLVMFlang`` or
+``Flang``, and the build treats the two identically.
+
+Minimum version
+~~~~~~~~~~~~~~~
+
+Compiling the OpenMP target offload backend (``ENABLE_BACKEND=OMP_TGT``)
+requires **flang-22 or newer**. Earlier releases cannot compile the OpenMP
+constructs used by the offload sources, even with the version flag described
+below. A CPU-only build (``ENABLE_BACKEND=OFF``) has no such requirement
+beyond a Flang release recent enough to support ``-std=f2018``.
+
+OpenMP version flag
+~~~~~~~~~~~~~~~~~~~~
+
+Flang defaults to parsing OpenMP 3.1, which rejects both ``declare target`` in
+a pure procedure (added in OpenMP 4.5) and the ``loop`` construct (added in
+OpenMP 5.0) that the sources use. The build always adds
+``-fopenmp-version=50`` for Flang, for both the CPU and ``OMP_TGT`` backends,
+so this does not need to be set manually.
+
+Locating the OpenMP runtime (``libomp.so``)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Flang links against ``libomp.so`` out of its own toolchain installation, which
+is usually not on the loader's default search path. Neither the Flang driver
+nor CMake's ``FindOpenMP`` (which reports only ``-fopenmp`` for Flang) leaves
+a library path behind for CMake to turn into an RPATH, so binaries would link
+successfully but fail to start with an error such as ``libomp.so: cannot open
+shared object file``.
+
+To avoid depending on ``LD_LIBRARY_PATH`` at runtime, the build locates
+``libomp.so`` itself and adds its directory to the RPATH of every target that
+links OpenMP. It first asks the compiler driver
+(``flang -print-file-name=libomp.so``), then falls back to searching
+``lib``/``lib64``/``lib/<triple>`` next to the compiler's install prefix,
+which covers both a plain LLVM install and the ROCm layout.
+
+If detection fails, configuring emits a warning and the resulting binaries
+will only run with ``libomp.so``'s directory on ``LD_LIBRARY_PATH``. Point the
+build at it directly instead:
+
+.. code-block:: bash
+
+   -DFLANG_OPENMP_RUNTIME_DIR=/path/to/directory/containing/libomp.so
 
 Building without MPI
 --------------------

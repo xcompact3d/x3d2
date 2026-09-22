@@ -15,8 +15,8 @@ your ``PATH``.
 The above is using ``Debug`` build, for release build use ``Release`` instead.
 
 A build with ``-DWITH_MPI=OFF`` takes the compiler itself rather than a wrapper,
-so name the one matching the backend (``gfortran``, ``nvfortran`` for
-``ENABLE_BACKEND=CUDA``, ``ftn`` on Cray):
+so name the one matching the backend (``gfortran``, ``flang``, ``nvfortran``
+for ``ENABLE_BACKEND=CUDA``, ``ftn`` on Cray):
 
 .. code-block:: console
 
