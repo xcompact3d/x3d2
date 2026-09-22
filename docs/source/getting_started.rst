@@ -29,6 +29,10 @@ You can install Open MPI using your package manager. For Ubuntu, this can be obt
 
    sudo apt install openmpi-bin libopenmpi-dev
 
+MPI is optional. Configuring with ``-DWITH_MPI=OFF`` builds a serial,
+single-rank executable that needs no MPI installation at all; see
+:doc:`user/advanced_build`.
+
 CMake
 ^^^^^
 
@@ -89,9 +93,12 @@ To compile x3d2 from source, follow these steps:
 ``CMAKE_BUILD_TYPE`` selects the build type (use ``Debug`` instead of
 ``Release`` for a debug build).
 
-x3d2 must be compiled with an MPI compiler wrapper, so point
-``CMAKE_Fortran_COMPILER`` at ``mpif90``. If you give a bare name rather than an
-absolute path, it has to be on your ``PATH``.
+A default build uses MPI, so point ``CMAKE_Fortran_COMPILER`` at an MPI compiler
+wrapper such as ``mpif90``. With ``-DWITH_MPI=OFF`` point it at the compiler
+itself instead of a wrapper: ``gfortran`` for GNU, ``nvfortran`` for the NVIDIA
+HPC SDK and therefore for ``ENABLE_BACKEND=CUDA``, or ``ftn`` on a Cray machine.
+If you give a bare name rather than an absolute path, it has to be on your
+``PATH``.
 
 .. note::
 
@@ -193,7 +200,9 @@ Build options
      - ``Release`` or ``Debug``.
    * - ``CMAKE_Fortran_COMPILER``
      - --
-     - The MPI Fortran wrapper to build with, normally ``mpif90``.
+     - The MPI Fortran wrapper to build with, normally ``mpif90``. With
+       ``WITH_MPI=OFF``, the compiler itself instead (``gfortran``,
+       ``nvfortran``, ``ftn``) rather than a wrapper.
    * - ``ENABLE_BACKEND``
      - ``OFF``
      - GPU backend to build: ``OFF``, ``CUDA`` or ``OMP_TGT``.
@@ -203,6 +212,9 @@ Build options
    * - ``SINGLE_PREC``
      - ``OFF``
      - Build in single precision.
+   * - ``WITH_MPI``
+     - ``ON``
+     - Build against MPI. ``OFF`` builds a serial, single-rank executable.
    * - ``WITH_2DECOMPFFT``
      - ``ON``
      - Build the FFT-based Poisson solver against 2decomp-fft.
@@ -210,8 +222,8 @@ Build options
      - ``OFF``
      - Enable ADIOS2 for checkpoint and snapshot I/O.
 
-See :doc:`user/advanced_build` for the ADIOS2, 2decomp-fft, single precision and
-CUDA debugging options in detail.
+See :doc:`user/advanced_build` for the MPI, ADIOS2, 2decomp-fft, single
+precision and CUDA debugging options in detail.
 
 Third-party dependencies
 ~~~~~~~~~~~~~~~~~~~~~~~~

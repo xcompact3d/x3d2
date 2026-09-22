@@ -1,5 +1,6 @@
 program perf_omp_tridiag
-  use mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_MAX, MPI_MIN, MPI_Allreduce, &
+                   MPI_Barrier
   use omp_lib
 
   use m_common, only: dp, nbytes, pi, MPI_X3D2_DP, BC_PERIODIC

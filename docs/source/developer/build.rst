@@ -14,6 +14,15 @@ your ``PATH``.
 
 The above is using ``Debug`` build, for release build use ``Release`` instead.
 
+A build with ``-DWITH_MPI=OFF`` takes the compiler itself rather than a wrapper,
+so name the one matching the backend (``gfortran``, ``nvfortran`` for
+``ENABLE_BACKEND=CUDA``, ``ftn`` on Cray):
+
+.. code-block:: console
+
+   $ cmake -S . -B build -DCMAKE_Fortran_COMPILER=nvfortran -DWITH_MPI=OFF \
+       -DENABLE_BACKEND=CUDA -DCMAKE_BUILD_TYPE=Debug
+
 .. note::
 
    Pass the compiler as a ``-D`` cache variable rather than through the ``FC``

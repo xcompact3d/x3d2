@@ -35,7 +35,7 @@ module m_io_backend
                     adios2_found, adios2_constant_dims, &
                     adios2_type_dp, adios2_type_integer4, adios2_type_real
   use iso_fortran_env, only: real64
-  use mpi, only: MPI_COMM_NULL, MPI_Initialized, MPI_Comm_rank
+  use m_mpi, only: MPI_COMM_NULL, MPI_Initialized, MPI_Comm_rank
   use m_common, only: dp, i8, sp, is_sp
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
                        io_mode_read, io_mode_write
@@ -128,6 +128,41 @@ contains
     end if
   end function get_adios2_vartype
 
+  subroutine init_adios2_handler(adios, comm, ierr)
+    !! Create the ADIOS2 handler for a communicator.
+    !!
+    !! An ADIOS2 built without MPI has no communicator-taking adios2_init at
+    !! all, so the difference is in the argument list and cannot be carried by
+    !! the value passed. The communicator still travels through x3d2's I/O
+    !! layer either way, and is simply dropped here in a serial build.
+    type(adios2_adios), intent(out) :: adios
+    integer, intent(in) :: comm
+    integer, intent(out) :: ierr
+
+#ifdef MPI
+    call adios2_init(adios, comm, ierr)
+#else
+    call adios2_init(adios, ierr)
+#endif
+  end subroutine init_adios2_handler
+
+  subroutine open_adios2_engine(engine, io_handle, filename, mode, comm, ierr)
+    !! Open an engine on a communicator, dropping it without MPI. See
+    !! init_adios2_handler above.
+    type(adios2_engine), intent(out) :: engine
+    type(adios2_io), intent(in) :: io_handle
+    character(len=*), intent(in) :: filename
+    integer, intent(in) :: mode
+    integer, intent(in) :: comm
+    integer, intent(out) :: ierr
+
+#ifdef MPI
+    call adios2_open(engine, io_handle, filename, mode, comm, ierr)
+#else
+    call adios2_open(engine, io_handle, filename, mode, ierr)
+#endif
+  end subroutine open_adios2_engine
+
   subroutine reader_init_adios2(self, comm, name)
     class(io_adios2_reader_t), intent(inout) :: self
     integer, intent(in) :: comm
@@ -148,7 +183,7 @@ contains
     call self%handle_error(ierr, "Failed to get MPI rank")
 
     ! create adios handler passing communicator
-    call adios2_init(self%adios, comm, ierr)
+    call init_adios2_handler(self%adios, comm, ierr)
     call self%handle_error(ierr, "Failed to initialise ADIOS2")
 
     ! declare IO process configuration inside adios
@@ -176,7 +211,7 @@ contains
     if (.not. self%io_handle%valid) &
       call self%handle_error(1, "ADIOS2 IO object is not valid")
 
-    call adios2_open( &
+    call open_adios2_engine( &
       temp_handle%engine, self%io_handle, filename, &
       adios2_mode_read, use_comm, ierr)
     call self%handle_error(ierr, "Failed to open ADIOS2 engine for reading")
@@ -395,7 +430,7 @@ contains
     call self%handle_error(ierr, "Failed to get MPI rank")
 
     ! create adios handler passing communicator
-    call adios2_init(self%adios, comm, ierr)
+    call init_adios2_handler(self%adios, comm, ierr)
     call self%handle_error(ierr, "Failed to initialise ADIOS2")
 
     ! declare IO process configuration inside adios
@@ -431,7 +466,7 @@ contains
                              &before open")
     end if
 
-    call adios2_open( &
+    call open_adios2_engine( &
       temp_handle%engine, self%io_handle, filename, &
       adios2_mode_write, use_comm, ierr)
     call self%handle_error(ierr, "Failed to open ADIOS2 engine for writing")

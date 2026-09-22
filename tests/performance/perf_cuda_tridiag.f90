@@ -1,6 +1,7 @@
 program perf_cuda_tridiag
   use cudafor
-  use mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_MAX, MPI_MIN, MPI_Allreduce, &
+                   MPI_Barrier
 
   use m_common, only: dp, nbytes, pi, MPI_X3D2_DP, BC_PERIODIC
   use m_cuda_common, only: SZ

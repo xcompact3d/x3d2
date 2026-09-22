@@ -15,7 +15,7 @@ module m_checkpoint_manager
   !!   then atomically renames it to the final filename to
   !! prevent corrupted checkpoints.
   !! - Optional cleanup of old checkpoint files to conserve disk space.
-  use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Abort
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Abort
   use m_common, only: dp, i8, DIR_X, get_argument
   use m_field, only: field_t
   use m_solver, only: solver_t
