@@ -326,6 +326,19 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     if(WITH_ADIOS2_GPU_AWARE)
       define_test(unit/test_cuda_gpu_aware_io.f90 4 cuda)
       define_test(unit/test_cuda_gpu_aware_io_padded.f90 4 cuda)
+      # Same test with deferred puts batched three at a time, so steps also
+      # flush with PerformPuts and reuse buffers within a step
+      add_test(NAME test_cuda_gpu_aware_io_padded_batched_cuda_4
+        COMMAND sh -c "mpirun --oversubscribe -np 4 bin/test_cuda_gpu_aware_io_padded_cuda_4 test_cuda_gpu_padded_batched_output.bp")
+      set_tests_properties(test_cuda_gpu_aware_io_padded_batched_cuda_4
+        PROPERTIES LABELS "unit;cuda"
+        ENVIRONMENT "X3D2_ADIOS2_GPU_BATCH_FIELDS=3")
+      # Deferred puts with no limit: every field of a step in flight
+      add_test(NAME test_cuda_gpu_aware_io_padded_deferred_cuda_4
+        COMMAND sh -c "mpirun --oversubscribe -np 4 bin/test_cuda_gpu_aware_io_padded_cuda_4 test_cuda_gpu_padded_deferred_output.bp")
+      set_tests_properties(test_cuda_gpu_aware_io_padded_deferred_cuda_4
+        PROPERTIES LABELS "unit;cuda"
+        ENVIRONMENT "X3D2_ADIOS2_GPU_BATCH_FIELDS=0")
     endif()
   endif()
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
