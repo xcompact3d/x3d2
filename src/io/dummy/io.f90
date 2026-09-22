@@ -19,6 +19,8 @@ module m_io_backend
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, io_mode_read, &
                        io_mode_write
   use m_common, only: dp, i8
+  use m_field, only: field_t
+  use m_base_backend, only: base_backend_t
 
   implicit none
 
@@ -295,9 +297,9 @@ contains
     !! Dummy implementation - just ignores write operations
     class(io_dummy_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
-    class(*), intent(in) :: field
+    class(field_t), intent(in) :: field
     class(io_file_t), intent(inout) :: file_handle
-    class(*), intent(in) :: backend
+    class(base_backend_t), intent(inout) :: backend
     integer(i8), intent(in) :: shape_dims(3)
     integer(i8), intent(in) :: start_dims(3)
     integer(i8), intent(in) :: count_dims(3)

@@ -31,6 +31,7 @@ module m_io_base
 
   use m_common, only: dp, i8
   use m_field, only: field_t
+  use m_base_backend, only: base_backend_t
 
   implicit none
 
@@ -73,7 +74,6 @@ module m_io_base
     procedure(writer_finalise), deferred :: finalise
     procedure :: supports_device_field_write => &
       base_supports_device_field_write
-    procedure :: sync_device => base_sync_device
     generic :: write_data => write_data_i8, write_data_integer, &
       write_data_real, &
       write_data_array_3d
@@ -220,15 +220,15 @@ module m_io_base
       self, variable_name, field, file_handle, backend, &
       shape_dims, start_dims, count_dims, use_sp &
       )
-      !! Write field data directly, with backend-specific optimisations.
-      !! field and backend are polymorphic - concrete types are resolved
-      !! by each implementation.
-      import :: io_writer_t, io_file_t, i8
+      !! Write the first count_dims points of a solver field. Backends
+      !! may write device-resident fields without staging through host
+      !! memory; `backend` provides the layout-aware packing for that.
+      import :: io_writer_t, io_file_t, field_t, base_backend_t, i8
       class(io_writer_t), intent(inout) :: self
       character(len=*), intent(in) :: variable_name
-      class(*), intent(in) :: field
+      class(field_t), intent(in) :: field
       class(io_file_t), intent(inout) :: file_handle
-      class(*), intent(in) :: backend
+      class(base_backend_t), intent(inout) :: backend
       integer(i8), intent(in) :: shape_dims(3)
       integer(i8), intent(in) :: start_dims(3)
       integer(i8), intent(in) :: count_dims(3)
@@ -258,19 +258,13 @@ module m_io_base
 
 contains
 
-  logical function base_supports_device_field_write(self, field)
+  logical function base_supports_device_field_write(self, field, backend)
     !! Default capability: fields are always staged through host memory.
     class(io_writer_t), intent(in) :: self
     class(field_t), intent(in) :: field
+    class(base_backend_t), intent(in) :: backend
     base_supports_device_field_write = .false.
   end function base_supports_device_field_write
-
-  subroutine base_sync_device(self)
-    !! Ensure all device operations complete before I/O.
-    !! Does nothing for non-GPU backends. CUDA-aware backends override
-    !! this to call cudaDeviceSynchronize.
-    class(io_writer_t), intent(inout) :: self
-  end subroutine base_sync_device
 
   function base_is_file_functional(self) result(is_functional)
     class(io_file_t), intent(in) :: self

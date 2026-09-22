@@ -17,6 +17,31 @@ module m_io_backend
 !! - MPI integration - it is designed for large-scale parallel I/O and
 !! integrates with MPI, though serial operation is also supported
 !!
+!! GPU-aware writes (built with WITH_ADIOS2_GPU_AWARE, which defines
+!! X3D2_ADIOS2_CUDA) hand device memory straight to ADIOS2:
+!! - the solver backend packs each field into a contiguous, unpadded device
+!!   buffer (`base_backend_t%export_field_to_device`), so this module needs
+!!   no knowledge of the backend's field layout or allocator types
+!! - staging buffers belong to the open file and are reused across fields
+!!   and steps, so no device memory is allocated per write
+!! - by default one staging buffer is used with synchronous puts. ADIOS2
+!!   2.12's BP5 engine copies GPU buffers during Put whatever mode is
+!!   requested, so extra buffers would cost device memory without overlap
+!! - X3D2_ADIOS2_GPU_BATCH_FIELDS > 1 (or 0) gives each field its own buffer
+!!   with deferred puts, consumed together at EndStep (or by PerformPuts
+!!   once N buffers are in flight), for engines that honour deferred GPU puts
+!!
+!! Runtime options, read from the environment when the first writer starts:
+!! - X3D2_ADIOS2_GPU_WRITE_MODE=auto|gpu|host (default auto): `host` forces
+!!   the device-to-host staged path even when GPU-aware writes are available
+!! - X3D2_ADIOS2_GPU_BATCH_FIELDS=N (default 1): device staging buffers in
+!!   flight; 1 means synchronous puts from one buffer, 0 means no limit
+!! - X3D2_ADIOS2_IO_BENCH=0|1 (default 0): time Put and EndStep per step and
+!!   print a summary when the file closes
+!! - X3D2_ADIOS2_IO_BENCH_WARMUP=N (default 2): steps excluded from the summary
+!! - X3D2_ADIOS2_IO_BENCH_VERBOSE=0|1 (default 1): also print every step
+!! - X3D2_ADIOS2_NVTX=0|1 (default 1): emit NVTX ranges in CUDA builds
+!!
 !! @note This is an internal backend module and should never be used directly.
 !! All user interaction must go through `m_io_session`.
   use adios2, only: adios2_adios, adios2_io, adios2_engine, &
@@ -36,17 +61,19 @@ module m_io_backend
                     adios2_type_dp, adios2_type_integer4, adios2_type_real
 #ifdef X3D2_ADIOS2_CUDA
   use adios2, only: adios2_set_memory_space, adios2_memory_space_gpu
-  use cudafor, only: cudaDeviceSynchronize, c_devloc, c_devptr
+  use cudafor, only: c_devloc, c_devptr
 #endif
   use iso_fortran_env, only: real64
   use mpi, only: MPI_COMM_NULL, MPI_Initialized, MPI_Comm_rank, &
                  MPI_Allreduce, MPI_SUM, MPI_MAX, &
                  MPI_DOUBLE_PRECISION, MPI_Wtime
-  use m_common, only: dp, i8, sp, is_sp
+  use m_common, only: dp, i8, sp, is_sp, DIR_C
+  use m_field, only: field_t
+  use m_base_backend, only: base_backend_t
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
                        io_mode_read, io_mode_write
-  use iso_c_binding, only: c_double, c_int, c_char, c_null_char, &
-                           c_ptr, c_loc, c_null_ptr
+  use iso_c_binding, only: c_double, c_int, c_int8_t, c_char, &
+                           c_null_char, c_ptr, c_loc, c_null_ptr
 
   implicit none
 
@@ -75,6 +102,7 @@ module m_io_backend
   logical, save :: runtime_bench_verbose = .true.
   logical, save :: runtime_nvtx_enabled = .true.
   integer, save :: runtime_bench_warmup_steps = 2
+  integer, save :: runtime_gpu_batch_fields = 1
   integer, save :: runtime_gpu_write_mode = gpu_write_mode_auto
   character(len=16), save :: runtime_gpu_write_mode_name = "auto"
 
@@ -111,12 +139,9 @@ module m_io_backend
     procedure :: write_field_from_solver => write_field_from_solver_adios2
     procedure :: supports_device_field_write => &
       supports_device_field_write_adios2
+    procedure, private :: write_host_array_3d => write_host_array_3d_adios2
 #ifdef X3D2_ADIOS2_CUDA
-    procedure :: write_data_array_3d_device => &
-      write_data_array_3d_device_adios2
-    procedure :: sync_device => sync_device_adios2
-    procedure, private :: write_reordered_device_field => &
-      write_reordered_device_field_adios2
+    procedure, private :: write_device_field => write_device_field_adios2
 #endif
     procedure :: write_attribute_string => write_attribute_string_adios2
     procedure :: write_attribute_array_1d_real => &
@@ -125,6 +150,12 @@ module m_io_backend
     procedure, private :: handle_error => handle_error_writer
   end type io_adios2_writer_t
 
+#ifdef X3D2_ADIOS2_CUDA
+  type :: device_staging_buffer_t
+    integer(c_int8_t), device, allocatable :: bytes(:)
+  end type device_staging_buffer_t
+
+#endif
   type, extends(io_file_t) :: io_adios2_file_t
     private
     type(adios2_engine) :: engine            !! ADIOS2 engine for data reading/writing
@@ -137,6 +168,14 @@ module m_io_backend
     integer :: bench_warmup_steps = 0
     integer :: bench_step_counter = 0
     integer :: bench_measured_steps = 0
+#ifdef X3D2_ADIOS2_CUDA
+    !> Device buffers referenced by deferred puts. The first
+    !> device_staging_in_use are in flight and are only reused once
+    !> EndStep or PerformPuts has consumed their puts.
+    type(device_staging_buffer_t), allocatable :: device_staging(:)
+    integer :: device_staging_in_use = 0
+    integer :: device_batch_limit = 1    !! 1 = sync puts, 0 = no limit
+#endif
     real(c_double) :: bench_step_put_time_local = 0.0_c_double
     real(c_double) :: bench_step_put_bytes_local = 0.0_c_double
     real(c_double) :: bench_sum_put_time = 0.0_c_double
@@ -290,6 +329,8 @@ contains
       runtime_nvtx_enabled = env_to_logical("X3D2_ADIOS2_NVTX", .true.)
       runtime_bench_warmup_steps = env_to_integer( &
                                    "X3D2_ADIOS2_IO_BENCH_WARMUP", 2, 0)
+      runtime_gpu_batch_fields = env_to_integer( &
+                                 "X3D2_ADIOS2_GPU_BATCH_FIELDS", 1, 0)
 
       runtime_gpu_write_mode = gpu_write_mode_auto
       runtime_gpu_write_mode_name = "auto"
@@ -333,6 +374,14 @@ contains
 #ifdef X3D2_ADIOS2_CUDA
       print '(A,A)', "ADIOS2 GPU write mode: ", &
         trim(runtime_gpu_write_mode_name)
+      if (runtime_gpu_batch_fields == 1) then
+        print '(A)', "ADIOS2 GPU puts: synchronous, one staging buffer"
+      else if (runtime_gpu_batch_fields > 1) then
+        print '(A,I0)', "ADIOS2 GPU puts: deferred, staging buffers: ", &
+          runtime_gpu_batch_fields
+      else
+        print '(A)', "ADIOS2 GPU puts: deferred, one staging buffer per field"
+      end if
 #else
       print '(A)', "ADIOS2 GPU write mode: host (CUDA path unavailable)"
 #endif
@@ -882,6 +931,9 @@ contains
     temp_handle%bench_enabled = runtime_bench_enabled
     temp_handle%bench_verbose = runtime_bench_verbose
     temp_handle%bench_warmup_steps = runtime_bench_warmup_steps
+#ifdef X3D2_ADIOS2_CUDA
+    temp_handle%device_batch_limit = runtime_gpu_batch_fields
+#endif
 
     file_handle = temp_handle
   end function writer_open_adios2
@@ -1034,6 +1086,8 @@ contains
     self, variable_name, array, file_handle, &
     shape_dims, start_dims, count_dims, use_sp &
     )
+    !! The caller keeps `array` alive until the step ends, so the put is
+    !! deferred.
     class(io_adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
     real(dp), intent(in) :: array(:, :, :)
@@ -1041,6 +1095,28 @@ contains
     integer(i8), intent(in) :: shape_dims(3)
     integer(i8), intent(in) :: start_dims(3)
     integer(i8), intent(in) :: count_dims(3)
+    logical, intent(in), optional :: use_sp
+
+    call self%write_host_array_3d( &
+      variable_name, array, file_handle, &
+      shape_dims, start_dims, count_dims, adios2_mode_deferred, use_sp &
+      )
+  end subroutine write_data_array_3d_adios2
+
+  subroutine write_host_array_3d_adios2( &
+    self, variable_name, array, file_handle, &
+    shape_dims, start_dims, count_dims, put_mode, use_sp &
+    )
+    !! Write a host array. `put_mode` applies to full-precision writes; a
+    !! single precision conversion uses a temporary and is always synchronous.
+    class(io_adios2_writer_t), intent(inout) :: self
+    character(len=*), intent(in) :: variable_name
+    real(dp), intent(in) :: array(:, :, :)
+    class(io_file_t), intent(inout) :: file_handle
+    integer(i8), intent(in) :: shape_dims(3)
+    integer(i8), intent(in) :: start_dims(3)
+    integer(i8), intent(in) :: count_dims(3)
+    integer, intent(in) :: put_mode
     logical, intent(in), optional :: use_sp
 
     type(adios2_variable) :: var
@@ -1094,8 +1170,7 @@ contains
       else
         if (file_handle%bench_enabled) t0_put = MPI_Wtime()
         call nvtx_push_if_enabled("ADIOS2_Put")
-        call adios2_put(file_handle%engine, var, array, &
-                        adios2_mode_deferred, ierr)
+        call adios2_put(file_handle%engine, var, array, put_mode, ierr)
         call nvtx_pop_if_enabled()
         if (file_handle%bench_enabled) then
           put_bytes = real(size(array, kind=i8), c_double)* &
@@ -1108,112 +1183,7 @@ contains
     class default
       call self%handle_error(1, "Invalid file handle type for ADIOS2")
     end select
-  end subroutine write_data_array_3d_adios2
-
-#ifdef X3D2_ADIOS2_CUDA
-  subroutine write_data_array_3d_device_adios2( &
-    self, variable_name, array, file_handle, &
-    shape_dims, start_dims, count_dims, use_sp, force_sync &
-    )
-    !! GPU-aware I/O: passes device pointer directly to ADIOS2.
-    !! Uses the native Fortran adios2_set_memory_space to tell ADIOS2
-    !! the buffer is on GPU, then calls the ADIOS2 C API's adios2_put
-    !! directly (the Fortran generic adios2_put does not accept device
-    !! arrays).
-    !! Requires ADIOS2 built with -DADIOS2_USE_CUDA=ON.
-    !! force_sync forces adios2_mode_sync regardless of use_sp: pass it
-    !! when array is a temporary buffer that will be deallocated before
-    !! the next end_step/PerformPuts would otherwise flush a deferred put.
-    class(io_adios2_writer_t), intent(inout) :: self
-    character(len=*), intent(in) :: variable_name
-    real(dp), device, target, intent(in) :: array(:, :, :)
-    class(io_file_t), intent(inout) :: file_handle
-    integer(i8), intent(in) :: shape_dims(3)
-    integer(i8), intent(in) :: start_dims(3)
-    integer(i8), intent(in) :: count_dims(3)
-    logical, intent(in), optional :: use_sp
-    logical, intent(in), optional :: force_sync
-
-    type(adios2_variable) :: var
-    type(c_devptr) :: devptr
-    type(c_ptr) :: device_ptr
-    integer :: ierr, vartype
-    integer :: put_mode
-    real(sp), allocatable, device, target :: array_sp(:, :, :)
-    logical :: convert_to_sp
-    real(c_double) :: t0_put
-    real(c_double) :: put_bytes
-
-    t0_put = 0.0_c_double
-    convert_to_sp = .false.
-    if (present(use_sp)) convert_to_sp = use_sp
-    vartype = get_adios2_vartype(convert_to_sp)
-
-    put_mode = adios2_mode_deferred
-    if (present(force_sync)) then
-      if (force_sync) put_mode = adios2_mode_sync
-    end if
-
-    select type (file_handle)
-    type is (io_adios2_file_t)
-      ! Define or inquire variable
-      call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
-      if (ierr /= adios2_found) then
-        call adios2_define_variable(var, self%io_handle, variable_name, &
-                                    vartype, 3, shape_dims, &
-                                    start_dims, count_dims, &
-                                    adios2_constant_dims, ierr)
-        call self%handle_error(ierr, "Error defining ADIOS2 variable (GPU)")
-      end if
-
-      ! Tell ADIOS2 this variable holds GPU memory
-      call adios2_set_memory_space(var, adios2_memory_space_gpu, ierr)
-      call self%handle_error(ierr, "Error setting GPU memory space")
-
-      ! Get device pointer and pass directly to the ADIOS2 C API
-      ! Use sync mode only when converting dp->sp (temporary buffer must
-      ! be flushed before deallocation); deferred mode otherwise.
-      if (convert_to_sp .and. .not. is_sp) then
-        allocate (array_sp(size(array, 1), size(array, 2), size(array, 3)))
-        array_sp = real(array, sp)
-        devptr = c_devloc(array_sp)
-        device_ptr = transfer(devptr, device_ptr)
-
-        if (file_handle%bench_enabled) t0_put = MPI_Wtime()
-        call nvtx_push_if_enabled("ADIOS2_Put")
-        ierr = adios2_put_c(transfer(file_handle%engine%f2c, c_null_ptr), &
-                            transfer(var%f2c, c_null_ptr), device_ptr, &
-                            int(adios2_mode_sync, c_int))
-        call nvtx_pop_if_enabled()
-        if (file_handle%bench_enabled) then
-          put_bytes = real(size(array_sp, kind=i8), c_double)* &
-                      bytes_real_sp
-          call bench_record_put(file_handle, MPI_Wtime() - t0_put, put_bytes)
-        end if
-        deallocate (array_sp)
-        call self%handle_error(ierr, "Error in GPU-aware ADIOS2 put (sync)")
-      else
-        devptr = c_devloc(array)
-        device_ptr = transfer(devptr, device_ptr)
-
-        if (file_handle%bench_enabled) t0_put = MPI_Wtime()
-        call nvtx_push_if_enabled("ADIOS2_Put")
-        ierr = adios2_put_c(transfer(file_handle%engine%f2c, c_null_ptr), &
-                            transfer(var%f2c, c_null_ptr), device_ptr, &
-                            int(put_mode, c_int))
-        call nvtx_pop_if_enabled()
-        if (file_handle%bench_enabled) then
-          put_bytes = real(size(array, kind=i8), c_double)* &
-                      bytes_real_dp
-          call bench_record_put(file_handle, MPI_Wtime() - t0_put, put_bytes)
-        end if
-        call self%handle_error(ierr, "Error in GPU-aware ADIOS2 put")
-      end if
-    class default
-      call self%handle_error(1, "Invalid file handle type for ADIOS2")
-    end select
-  end subroutine write_data_array_3d_device_adios2
-#endif
+  end subroutine write_host_array_3d_adios2
 
   subroutine write_attribute_string_adios2( &
     self, attribute_name, value, file_handle &
@@ -1301,6 +1271,11 @@ contains
       call nvtx_pop_if_enabled()
       self%nvtx_step_range_active = .false.
     end if
+#ifdef X3D2_ADIOS2_CUDA
+    ! adios2_close has consumed every put, so no buffer is in flight
+    if (allocated(self%device_staging)) deallocate (self%device_staging)
+    self%device_staging_in_use = 0
+#endif
   end subroutine file_close_adios2
 
   subroutine file_begin_step_adios2(self)
@@ -1341,6 +1316,10 @@ contains
     call adios2_end_step(self%engine, ierr)
     if (self%is_writer) call nvtx_pop_if_enabled()
     call self%handle_error(ierr, "Failed to end ADIOS2 step")
+#ifdef X3D2_ADIOS2_CUDA
+    ! EndStep has consumed the deferred puts; staging buffers can be reused
+    self%device_staging_in_use = 0
+#endif
 
     if (self%is_writer .and. self%bench_enabled) then
       end_step_time_local = MPI_Wtime() - t0_end_step
@@ -1391,173 +1370,216 @@ contains
     end if
   end subroutine handle_error_file
 
-  logical function supports_device_field_write_adios2(self, field)
-    use m_field, only: field_t
-#ifdef X3D2_ADIOS2_CUDA
-    use m_cuda_allocator, only: cuda_field_t
-#endif
+  logical function supports_device_field_write_adios2(self, field, backend)
     class(io_adios2_writer_t), intent(in) :: self
     class(field_t), intent(in) :: field
+    class(base_backend_t), intent(in) :: backend
 
     call init_runtime_options(self%comm)
     supports_device_field_write_adios2 = .false.
 #ifdef X3D2_ADIOS2_CUDA
     if (runtime_gpu_write_mode /= gpu_write_mode_force_host) then
-      select type (field)
-      type is (cuda_field_t)
-        supports_device_field_write_adios2 = .true.
-      end select
+      supports_device_field_write_adios2 = &
+        backend%supports_device_field_export(field)
     end if
 #endif
   end function supports_device_field_write_adios2
-
-#ifdef X3D2_ADIOS2_CUDA
-  subroutine sync_device_adios2(self)
-    !! Synchronise the GPU device before a batch of I/O operations.
-    !! Call once before writing multiple fields to avoid per-field syncs.
-    class(io_adios2_writer_t), intent(inout) :: self
-    integer :: ierr
-    ierr = cudaDeviceSynchronize()
-    if (ierr /= 0) error stop "cudaDeviceSynchronize failed before I/O"
-  end subroutine sync_device_adios2
-
-  subroutine write_reordered_device_field_adios2( &
-    self, variable_name, field, file_handle, backend, &
-    shape_dims, start_dims, count_dims, use_sp &
-    )
-    !! GPU-aware I/O: build a contiguous, unpadded (nx, ny, nz) device
-    !! buffer for `field` before handing it to ADIOS2, so the put always
-    !! matches shape_dims/count_dims instead of the field's padded
-    !! storage. A field already in DIR_C orientation is packed directly;
-    !! a DIR_X solver field (solver%u/v/w and the like) is first
-    !! reordered into a DIR_C scratch block on the device, mirroring the
-    !! device-side reorder that base_backend_t%get_field_data uses before
-    !! its device-to-host copy. The packed buffer is a temporary that is
-    !! deallocated as soon as this call returns, so the put is always
-    !! synchronous.
-    use m_field, only: field_t
-    use m_common, only: DIR_C, DIR_X, RDR_X2C
-    use m_base_backend, only: base_backend_t
-    use m_cuda_allocator, only: cuda_field_t
-    class(io_adios2_writer_t), intent(inout) :: self
-    character(len=*), intent(in) :: variable_name
-    type(cuda_field_t), intent(in) :: field
-    class(io_file_t), intent(inout) :: file_handle
-    class(*), intent(in) :: backend
-    integer(i8), intent(in) :: shape_dims(3)
-    integer(i8), intent(in) :: start_dims(3)
-    integer(i8), intent(in) :: count_dims(3)
-    logical, intent(in), optional :: use_sp
-
-    class(field_t), pointer :: field_c
-    real(dp), device, pointer, dimension(:, :, :) :: src_d
-    real(dp), device, allocatable :: packed_d(:, :, :)
-    integer :: nx, ny, nz, i, j, k
-
-    nx = int(count_dims(1)); ny = int(count_dims(2)); nz = int(count_dims(3))
-    allocate (packed_d(nx, ny, nz))
-
-    ! Element-wise device-to-device copy: NVFORTRAN rejects a plain
-    ! array-section assignment between two device arrays here ("more than
-    ! one reference to a device-resident object in assignment"), so pack
-    ! with a !$cuf kernel do loop, which NVFORTRAN compiles into an actual
-    ! device kernel (a plain "do concurrent" here runs on the host and
-    ! segfaults dereferencing device pointers).
-    select case (field%dir)
-    case (DIR_C)
-      ! Already Cartesian - just pack off the padding, no backend needed.
-      src_d => field%data_d
-      !$cuf kernel do(3) <<<*, *>>>
-      do k = 1, nz
-        do j = 1, ny
-          do i = 1, nx
-            packed_d(i, j, k) = src_d(i, j, k)
-          end do
-        end do
-      end do
-    case (DIR_X)
-      select type (backend_typed => backend)
-      class is (base_backend_t)
-        field_c => backend_typed%allocator%get_block(DIR_C)
-        call backend_typed%reorder(field_c, field, RDR_X2C)
-        select type (field_c)
-        type is (cuda_field_t)
-          src_d => field_c%data_d
-        end select
-        !$cuf kernel do(3) <<<*, *>>>
-        do k = 1, nz
-          do j = 1, ny
-            do i = 1, nx
-              packed_d(i, j, k) = src_d(i, j, k)
-            end do
-          end do
-        end do
-        call backend_typed%allocator%release_block(field_c)
-      class default
-        error stop "write_field_from_solver: GPU-aware I/O reorder &
-          &requires a base_backend_t backend"
-      end select
-    case default
-      error stop "write_field_from_solver: GPU-aware I/O does not &
-        &support this field orientation"
-    end select
-
-    call self%write_data_array_3d_device( &
-      variable_name, packed_d, file_handle, &
-      shape_dims, start_dims, count_dims, use_sp, force_sync=.true. &
-      )
-
-    deallocate (packed_d)
-  end subroutine write_reordered_device_field_adios2
-#endif
 
   subroutine write_field_from_solver_adios2( &
     self, variable_name, field, file_handle, backend, &
     shape_dims, start_dims, count_dims, use_sp &
     )
-    !! Write field with automatic GPU-aware optimisation when available
-    use m_field, only: field_t
-#ifdef X3D2_ADIOS2_CUDA
-    use m_cuda_allocator, only: cuda_field_t
-#endif
+    !! Write a solver field, straight from device memory when the backend
+    !! supports it and through a host copy otherwise.
     class(io_adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
-    class(*), intent(in) :: field
+    class(field_t), intent(in) :: field
     class(io_file_t), intent(inout) :: file_handle
-    class(*), intent(in) :: backend
+    class(base_backend_t), intent(inout) :: backend
     integer(i8), intent(in) :: shape_dims(3)
     integer(i8), intent(in) :: start_dims(3)
     integer(i8), intent(in) :: count_dims(3)
     logical, intent(in), optional :: use_sp
 
-    call init_runtime_options(self%comm)
+    real(dp), allocatable :: padded(:, :, :), packed(:, :, :)
+    integer :: dims_padded(3), nx, ny, nz
 
+    select type (file_handle)
+    type is (io_adios2_file_t)
 #ifdef X3D2_ADIOS2_CUDA
-    if (runtime_gpu_write_mode /= gpu_write_mode_force_host) then
-      ! GPU-aware ADIOS2: a cuda_field_t always takes the device path -
-      ! reorder (if needed) and pack happen entirely on the device, never
-      ! a silent fall back to a host write.
-      select type (field_typed => field)
-      type is (cuda_field_t)
-        call self%write_reordered_device_field( &
-          variable_name, field_typed, file_handle, backend, &
+      if (self%supports_device_field_write(field, backend)) then
+        call self%write_device_field( &
+          variable_name, field, file_handle, backend, &
           shape_dims, start_dims, count_dims, use_sp &
           )
         return
-      end select
-    end if
+      end if
 #endif
 
-    ! Non-CUDA backend, or the explicit host override: standard host path.
-    select type (field_typed => field)
-    type is (field_t)
-      call self%write_data_array_3d( &
-        variable_name, field_typed%data, file_handle, &
-        shape_dims, start_dims, count_dims, use_sp &
+      ! Host-staged path: copy out in Cartesian order, then drop the padding
+      nx = int(count_dims(1)); ny = int(count_dims(2)); nz = int(count_dims(3))
+      dims_padded = backend%allocator%get_padded_dims(DIR_C)
+      allocate (padded(dims_padded(1), dims_padded(2), dims_padded(3)))
+      call backend%get_field_data(padded, field)
+      allocate (packed(nx, ny, nz))
+      packed = padded(1:nx, 1:ny, 1:nz)
+      deallocate (padded)
+
+      ! packed is freed on return, so ADIOS2 must copy it now
+      call self%write_host_array_3d( &
+        variable_name, packed, file_handle, &
+        shape_dims, start_dims, count_dims, adios2_mode_sync, use_sp &
         )
     class default
-      error stop "write_field_from_solver: Unsupported field type"
+      call self%handle_error(1, "Invalid file handle type for ADIOS2")
     end select
   end subroutine write_field_from_solver_adios2
+
+#ifdef X3D2_ADIOS2_CUDA
+  subroutine write_device_field_adios2( &
+    self, variable_name, field, file_handle, backend, &
+    shape_dims, start_dims, count_dims, use_sp &
+    )
+    !! GPU-aware write: the backend packs the field (reorder, unpadding and
+    !! any precision conversion in one pass) into a staging buffer owned by
+    !! the open file, and ADIOS2 gets a put of that device buffer. With a
+    !! batch limit of 1 the put is synchronous and the buffer is free again
+    !! on return; otherwise the put is deferred and the buffer stays in
+    !! flight until EndStep or PerformPuts consumes it.
+    class(io_adios2_writer_t), intent(inout) :: self
+    character(len=*), intent(in) :: variable_name
+    class(field_t), intent(in) :: field
+    type(io_adios2_file_t), intent(inout) :: file_handle
+    class(base_backend_t), intent(inout) :: backend
+    integer(i8), intent(in) :: shape_dims(3)
+    integer(i8), intent(in) :: start_dims(3)
+    integer(i8), intent(in) :: count_dims(3)
+    logical, intent(in), optional :: use_sp
+
+    type(adios2_variable) :: var
+    type(c_ptr) :: staging
+    integer :: ierr, vartype, put_mode
+    integer(i8) :: element_bytes
+    logical :: output_sp, convert_to_sp, sync_put
+    real(c_double) :: t0_put
+
+    t0_put = 0.0_c_double
+    sync_put = file_handle%device_batch_limit == 1
+    if (sync_put) then
+      put_mode = adios2_mode_sync
+    else
+      put_mode = adios2_mode_deferred
+    end if
+    output_sp = .false.
+    if (present(use_sp)) output_sp = use_sp
+    vartype = get_adios2_vartype(output_sp)
+    convert_to_sp = output_sp .and. .not. is_sp
+    if (convert_to_sp) then
+      element_bytes = storage_size(0.0_sp)/8
+    else
+      element_bytes = storage_size(0.0_dp)/8
+    end if
+
+    call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
+    if (ierr /= adios2_found) then
+      call adios2_define_variable(var, self%io_handle, variable_name, &
+                                  vartype, 3, shape_dims, &
+                                  start_dims, count_dims, &
+                                  adios2_constant_dims, ierr)
+      call self%handle_error(ierr, "Error defining ADIOS2 variable (GPU)")
+    end if
+
+    call adios2_set_memory_space(var, adios2_memory_space_gpu, ierr)
+    call self%handle_error(ierr, "Error setting GPU memory space")
+
+    staging = acquire_device_staging(file_handle, &
+                                     product(count_dims)*element_bytes)
+
+    call nvtx_push_if_enabled("ADIOS2_DevicePack")
+    call backend%export_field_to_device(staging, field, int(count_dims), &
+                                        convert_to_sp)
+    call nvtx_pop_if_enabled()
+
+    if (file_handle%bench_enabled) t0_put = MPI_Wtime()
+    call nvtx_push_if_enabled("ADIOS2_Put")
+    ierr = adios2_put_c(transfer(file_handle%engine%f2c, c_null_ptr), &
+                        transfer(var%f2c, c_null_ptr), staging, &
+                        int(put_mode, c_int))
+    call nvtx_pop_if_enabled()
+    if (file_handle%bench_enabled) then
+      call bench_record_put(file_handle, MPI_Wtime() - t0_put, &
+                            real(product(count_dims)*element_bytes, c_double))
+    end if
+    call self%handle_error(ierr, "Error in GPU-aware ADIOS2 put")
+
+    ! A synchronous put has consumed the buffer, so it is free for reuse
+    if (sync_put) &
+      file_handle%device_staging_in_use = file_handle%device_staging_in_use - 1
+  end subroutine write_device_field_adios2
+
+  function acquire_device_staging(file_handle, nbytes) result(staging)
+    !! Return the device address of a staging buffer of at least nbytes
+    !! that no in-flight put references. When the batch limit is reached,
+    !! the pending puts are flushed first so their buffers can be reused.
+    type(io_adios2_file_t), intent(inout) :: file_handle
+    integer(i8), intent(in) :: nbytes
+    type(c_ptr) :: staging
+
+    type(device_staging_buffer_t), allocatable :: grown(:)
+    type(c_devptr) :: devptr
+    integer :: slot, i
+
+    if (file_handle%device_batch_limit > 0 .and. &
+        file_handle%device_staging_in_use >= file_handle%device_batch_limit) &
+      call flush_device_puts(file_handle)
+
+    slot = file_handle%device_staging_in_use + 1
+    if (.not. allocated(file_handle%device_staging)) then
+      allocate (file_handle%device_staging(max(slot, 8)))
+    else if (slot > size(file_handle%device_staging)) then
+      ! move_alloc keeps each buffer's device address, which in-flight puts
+      ! still reference
+      allocate (grown(2*size(file_handle%device_staging)))
+      do i = 1, size(file_handle%device_staging)
+        call move_alloc(file_handle%device_staging(i)%bytes, grown(i)%bytes)
+      end do
+      call move_alloc(grown, file_handle%device_staging)
+    end if
+
+    if (allocated(file_handle%device_staging(slot)%bytes)) then
+      if (size(file_handle%device_staging(slot)%bytes, kind=i8) < nbytes) &
+        deallocate (file_handle%device_staging(slot)%bytes)
+    end if
+    if (.not. allocated(file_handle%device_staging(slot)%bytes)) &
+      allocate (file_handle%device_staging(slot)%bytes(nbytes))
+
+    devptr = c_devloc(file_handle%device_staging(slot)%bytes)
+    staging = devptr%cptr
+    file_handle%device_staging_in_use = slot
+  end function acquire_device_staging
+
+  subroutine flush_device_puts(file_handle)
+    !! Have ADIOS2 consume all deferred puts now so every staging buffer
+    !! can be reused within the current step.
+    type(io_adios2_file_t), intent(inout) :: file_handle
+
+    integer :: ierr
+    real(c_double) :: t0_put
+
+    t0_put = 0.0_c_double
+    if (file_handle%device_staging_in_use == 0) return
+
+    if (file_handle%bench_enabled) t0_put = MPI_Wtime()
+    call nvtx_push_if_enabled("ADIOS2_PerformPuts")
+    call adios2_perform_puts(file_handle%engine, ierr)
+    call nvtx_pop_if_enabled()
+    if (file_handle%bench_enabled) then
+      call bench_record_put(file_handle, MPI_Wtime() - t0_put, 0.0_c_double)
+    end if
+    call file_handle%handle_error(ierr, "Failed to flush deferred ADIOS2 puts")
+
+    file_handle%device_staging_in_use = 0
+  end subroutine flush_device_puts
+#endif
 
 end module m_io_backend

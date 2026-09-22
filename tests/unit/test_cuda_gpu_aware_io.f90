@@ -6,17 +6,21 @@ program test_cuda_gpu_aware_io
   use mpi
   use m_common, only: dp, i8, DIR_C, is_sp
   use m_allocator, only: field_t
-  use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
+  use m_base_backend, only: base_backend_t
+  use m_cuda_allocator, only: cuda_field_t
+  use m_mesh, only: mesh_t
   use m_io_backend, only: allocate_io_writer, allocate_io_reader
   use m_io_base, only: io_writer_t, io_reader_t, io_file_t, &
                        io_mode_write, io_mode_read
-  use m_backend_runtime, only: select_device
+  use m_backend_runtime, only: backend_runtime_t
   use m_test_utils, only: initialise_mpi, finalise_test
   use iso_fortran_env, only: stderr => error_unit
   implicit none
 
   ! Test variables
-  type(cuda_allocator_t) :: allocator
+  type(backend_runtime_t), target :: runtime
+  class(base_backend_t), pointer :: backend
+  type(mesh_t), target :: mesh
   class(field_t), pointer :: cuda_field
   type(field_t) :: host_field
   class(io_writer_t), allocatable :: writer
@@ -34,30 +38,34 @@ program test_cuda_gpu_aware_io
   integer, dimension(3) :: field_shape
   logical :: allpass = .true.
   real(dp) :: expected, tolerance
+  character(len=20) :: BC(2)
 
   ! Initialise MPI
   call initialise_mpi(irank, isize)
-  call select_device(irank)
 
-  ! Initialise allocator with mesh dimensions
-  allocator = cuda_allocator_t([16, 16, 16], 2)
+  ! Each rank owns a 16^3 block; the backend packs the field for I/O
+  BC = ['periodic', 'periodic']
+  mesh = mesh_t([16, 16, 16*isize], [1, 1, isize], [1.0_dp, 1.0_dp, 1.0_dp], &
+                BC, BC, BC)
+  call runtime%init(mesh)
+  backend => runtime%backend
 
   ! Get a CUDA field and populate it via device assignment
-  cuda_field => allocator%get_block(DIR_C)
+  cuda_field => runtime%allocator%get_block(DIR_C)
   field_shape = cuda_field%get_shape()
 
   if (irank == 0) then
-    write(stderr, '(a,3i4)') 'Field dimensions (DIR_C): ', field_shape
+    write (stderr, '(a,3i4)') 'Field dimensions (DIR_C): ', field_shape
   end if
 
-  allocate(data_write(field_shape(1), field_shape(2), field_shape(3)))
+  allocate (data_write(field_shape(1), field_shape(2), field_shape(3)))
 
   ! Initialise data with unique pattern per rank
   do k = 1, field_shape(3)
     do j = 1, field_shape(2)
       do i = 1, field_shape(1)
-        data_write(i, j, k) = real(irank*1000 + (k-1)*field_shape(1)*field_shape(2) &
-                                   + (j-1)*field_shape(1) + (i-1), dp)
+data_write(i, j, k) = real(irank*1000 + (k - 1)*field_shape(1)*field_shape(2) &
+                                   + (j - 1)*field_shape(1) + (i - 1), dp)
       end do
     end do
   end do
@@ -74,25 +82,24 @@ program test_cuda_gpu_aware_io
   count_dims = [int(field_shape(1), i8), int(field_shape(2), i8), int(field_shape(3), i8)]
 
   if (irank == 0) then
-    write(stderr, '(a)') 'Testing GPU-aware write from device memory...'
+    write (stderr, '(a)') 'Testing GPU-aware write from device memory...'
   end if
 
   ! Write from device using GPU-aware path
   call allocate_io_writer(writer)
 
-  if (writer%supports_device_field_write(host_field)) then
+  if (writer%supports_device_field_write(host_field, backend)) then
     allpass = .false.
     if (irank == 0) then
-      write(stderr, '(a)') 'Host field incorrectly reported as GPU-writable'
+      write (stderr, '(a)') 'Host field incorrectly reported as GPU-writable'
     end if
   end if
 
-  if (.not. writer%supports_device_field_write(cuda_field)) then
+  if (.not. writer%supports_device_field_write(cuda_field, backend)) then
     if (irank == 0) then
-      write(stderr, '(a)') 'GPU-aware ADIOS2 not available — skipping test'
+      write (stderr, '(a)') 'GPU-aware ADIOS2 not available — skipping test'
     end if
-    call allocator%release_block(cuda_field)
-    call allocator%destroy()
+    call runtime%allocator%release_block(cuda_field)
     call MPI_Finalize(ierr)
     stop
   end if
@@ -101,8 +108,8 @@ program test_cuda_gpu_aware_io
   file = writer%open("test_cuda_gpu_output.bp", io_mode_write, MPI_COMM_WORLD)
   call file%begin_step()
 
-  ! backend arg is class(*) — not used, dispatch is based on field type
-  call writer%write_field_from_solver("velocity_x", cuda_field, file, 0, &
+  ! The whole padded DIR_C block is written, so the pack is a plain copy
+ call writer%write_field_from_solver("velocity_x", cuda_field, file, backend, &
                                       shape_dims, start_dims, count_dims)
 
   call file%end_step()
@@ -110,14 +117,14 @@ program test_cuda_gpu_aware_io
   call writer%finalise()
 
   if (irank == 0) then
-    write(stderr, '(a)') 'GPU-aware write completed'
+    write (stderr, '(a)') 'GPU-aware write completed'
   end if
 
-  deallocate(data_write)
+  deallocate (data_write)
 
   ! Read and verify (rank 0 only)
   if (irank == 0) then
-    write(stderr, '(a)') 'Verifying GPU-aware write...'
+    write (stderr, '(a)') 'Verifying GPU-aware write...'
     call allocate_io_reader(reader)
     call reader%init(MPI_COMM_SELF, "test_cuda_gpu_read")
     file = reader%open("test_cuda_gpu_output.bp", io_mode_read, MPI_COMM_SELF)
@@ -126,9 +133,9 @@ program test_cuda_gpu_aware_io
     sel_start = [0_i8, 0_i8, 0_i8]
     sel_count = [shape_dims(1), shape_dims(2), shape_dims(3)]
 
-    allocate(data_read(sel_count(1), sel_count(2), sel_count(3)))
+    allocate (data_read(sel_count(1), sel_count(2), sel_count(3)))
     call reader%read_data("velocity_x", data_read, file, &
-                         start_dims=sel_start, count_dims=sel_count)
+                          start_dims=sel_start, count_dims=sel_count)
 
     call file%end_step()
     call file%close()
@@ -143,12 +150,12 @@ program test_cuda_gpu_aware_io
     do k = 1, sel_count(3)
       do j = 1, sel_count(2)
         do i = 1, sel_count(1)
-          rank_id = (i-1)/field_shape(1)
-          expected = real(rank_id*1000 + (k-1)*field_shape(1)*field_shape(2) + &
-                         (j-1)*field_shape(1) + mod(i-1, field_shape(1)), dp)
+          rank_id = (i - 1)/field_shape(1)
+       expected = real(rank_id*1000 + (k - 1)*field_shape(1)*field_shape(2) + &
+                       (j - 1)*field_shape(1) + mod(i - 1, field_shape(1)), dp)
           if (abs(data_read(i, j, k) - expected) > tolerance) then
             allpass = .false.
-            write(stderr, '(a,3i4,a,f12.4,a,f12.4)') &
+            write (stderr, '(a,3i4,a,f12.4,a,f12.4)') &
               'ERROR: GPU-aware I/O mismatch at (', i, j, k, '): ', &
               data_read(i, j, k), ' expected: ', expected
           end if
@@ -156,12 +163,11 @@ program test_cuda_gpu_aware_io
       end do
     end do
 
-    deallocate(data_read)
+    deallocate (data_read)
   end if
 
   ! Cleanup
-  call allocator%release_block(cuda_field)
-  call allocator%destroy()
+  call runtime%allocator%release_block(cuda_field)
 
   call finalise_test(allpass, irank)
 

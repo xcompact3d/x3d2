@@ -80,7 +80,7 @@ program test_cuda_gpu_aware_io_padded
 
   call allocate_io_writer(writer)
 
-  if (.not. writer%supports_device_field_write(u_x)) then
+  if (.not. writer%supports_device_field_write(u_x, backend)) then
     if (irank == 0) then
       write (stderr, '(a)') 'GPU-aware ADIOS2 not available - skipping test'
     end if
@@ -111,7 +111,7 @@ program test_cuda_gpu_aware_io_padded
 
     allocate (data_read(nx, ny, nz))
     call reader%read_data("field_x", data_read, file, &
-                         start_dims=start_dims, count_dims=count_dims)
+                          start_dims=start_dims, count_dims=count_dims)
 
     call file%end_step()
     call file%close()

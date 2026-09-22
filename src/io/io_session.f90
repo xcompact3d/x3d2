@@ -46,6 +46,7 @@ module m_io_session
 !! never be used directly in user code.
   use m_common, only: dp, i8
   use m_field, only: field_t
+  use m_base_backend, only: base_backend_t
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
                        io_mode_read, io_mode_write
   use m_io_backend, only: allocate_io_reader, allocate_io_writer
@@ -126,7 +127,6 @@ module m_io_session
     procedure :: write_field_from_solver => session_write_field_from_solver
     procedure :: supports_device_field_write => &
       session_supports_device_field_write
-    procedure :: sync_device => session_sync_device
     ! Write attribute interface
     procedure :: write_attribute => session_write_attribute
     final :: writer_session_finaliser
@@ -294,8 +294,8 @@ contains
     !! Write field data with backend-specific optimisations
     class(writer_session_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
-    class(*), intent(in) :: field
-    class(*), intent(in) :: backend
+    class(field_t), intent(in) :: field
+    class(base_backend_t), intent(inout) :: backend
     integer(i8), intent(in) :: shape_dims(3)
     integer(i8), intent(in) :: start_dims(3)
     integer(i8), intent(in) :: count_dims(3)
@@ -308,19 +308,15 @@ contains
       )
   end subroutine session_write_field_from_solver
 
-  logical function session_supports_device_field_write(self, field)
+  logical function session_supports_device_field_write(self, field, backend)
+    !! Whether write_field_from_solver writes `field` straight from device
+    !! memory, without a device-to-host copy.
     class(writer_session_t), intent(in) :: self
     class(field_t), intent(in) :: field
+    class(base_backend_t), intent(in) :: backend
     session_supports_device_field_write = &
-      self%writer%supports_device_field_write(field)
+      self%writer%supports_device_field_write(field, backend)
   end function session_supports_device_field_write
-
-  subroutine session_sync_device(self)
-    !! Synchronise device before a batch of field writes.
-    !! Does nothing for non-GPU backends.
-    class(writer_session_t), intent(inout) :: self
-    call self%writer%sync_device()
-  end subroutine session_sync_device
 
   subroutine writer_session_begin_step(self)
     !! Begin a new timestep for writing (used for time-series in single file)

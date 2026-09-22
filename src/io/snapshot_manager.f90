@@ -334,8 +334,8 @@ contains
     ! host-staged path below, which always slices to the true field
     ! extent.)
     if (use_device_write) then
-      ! Sync device once before writing all fields
-      call writer_session%sync_device()
+      ! Let the solver's device work finish once before the batch
+      call solver%backend%sync()
 
       do i_field = 1, size(field_names)
         io_field => get_field_ptr(solver, field_names(i_field))
@@ -403,7 +403,8 @@ contains
     all_fields_support_device_write = .false.
     do i_field = 1, size(field_names)
       io_field => get_field_ptr(solver, field_names(i_field))
-      if (.not. writer_session%supports_device_field_write(io_field)) return
+      if (.not. writer_session%supports_device_field_write( &
+          io_field, solver%backend)) return
     end do
     all_fields_support_device_write = .true.
   end function all_fields_support_device_write
