@@ -129,7 +129,10 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
   else()
     set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
   endif()
-  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -floop-optimize -march=native")
+  if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
+     ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
+    set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -march=native")
+  endif()
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
   set(CMAKE_Fortran_FLAGS "-cpp")
