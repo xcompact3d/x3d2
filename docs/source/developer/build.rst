@@ -3,19 +3,27 @@ Building x3d2
 
 See :ref:`tooling` for details on the tool required to build x3d2.
 
-Start by configuring the build directory:
+Start by configuring the build directory, setting ``CMAKE_Fortran_COMPILER`` to
+the MPI compiler wrapper to build with (either from the NVIDIA HPC SDK or from
+Open MPI). If you give a bare name rather than an absolute path, it must be on
+your ``PATH``.
 
 .. code-block:: console
 
-   $ cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+   $ cmake -S . -B build -DCMAKE_Fortran_COMPILER=mpif90 -DCMAKE_BUILD_TYPE=Debug
 
 The above is using ``Debug`` build, for release build use ``Release`` instead.
 
-Set the ``FC`` environment variable to the compiler executable (this can either be from NVIDIA HPC SDK or Open MPI). If you specify a relative path, it must be present in your current ``PATH``.
+.. note::
 
-.. code-block:: bash
+   Pass the compiler as a ``-D`` cache variable rather than through the ``FC``
+   environment variable. CMake only reads ``FC`` on the first configure of a
+   fresh build directory, so ``export FC=...`` has no effect when re-configuring
+   an existing one.
 
-   $ FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+Select a GPU backend with ``-DENABLE_BACKEND=CUDA`` or ``-DENABLE_BACKEND=OMP_TGT``;
+the default ``OFF`` builds the CPU backend only. See :doc:`../user/advanced_build`
+for the full set of options.
 
 Once the build directory is configured, you can build the executable and run the tests as follows:
 
@@ -33,4 +41,4 @@ Note that ``make test`` is only a launcher for the ``ctest`` executable. By defa
 
 instead of ``make test``.
 
-The main executable will be built in the ``build/src`` directory as ``xcompact``.
+The main executable will be built in the ``build/bin`` directory as ``xcompact``.

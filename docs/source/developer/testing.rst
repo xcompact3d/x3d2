@@ -88,25 +88,35 @@ Add a line to ``tests/CMakeLists.txt`` using the function matching your category
    # Verification test, 4 MPI ranks, OMP backend
    define_verification_test(verification/test_example.f90 4 omp)
 
-   # Performance test, 1 MPI rank, CUDA backend (inside the NVHPC block)
+   # Performance test, 1 MPI rank, CUDA backend
+   # (inside the ENABLE_BACKEND STREQUAL "CUDA" block)
    define_performance_test(performance/perf_example.f90 1 cuda)
 
-For dual-backend tests, register twice — once in the OMP section and once inside the ``if(NVHPC)`` block:
+The backend argument is one of ``omp`` (CPU), ``cuda`` or ``omp_tgt``. Tests for
+a GPU backend must be registered inside the matching ``ENABLE_BACKEND`` block at
+the end of the file, since those sources are only compiled when that backend is
+selected.
+
+For dual-backend tests, register twice — once in the OMP section and once inside
+the relevant ``ENABLE_BACKEND`` block:
 
 .. code-block:: cmake
 
    # OMP section
    define_test(unit/test_example.f90 1 omp)
 
-   # Inside the NVHPC/PGI block
+   # Inside the ENABLE_BACKEND STREQUAL "CUDA" block
    define_test(unit/test_example.f90 1 cuda)
+
+   # Inside the ENABLE_BACKEND STREQUAL "OMP_TGT" block
+   define_test(unit/test_example.f90 1 omp_tgt)
 
 Running tests
 -------------
 
 .. code-block:: bash
 
-   $ FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+   $ cmake -S . -B build -DCMAKE_Fortran_COMPILER=mpif90 -DCMAKE_BUILD_TYPE=Debug
    $ cd build
    $ make
    $ ctest -R test_example --output-on-failure
@@ -126,6 +136,7 @@ Common CTest commands:
    # By backend
    $ ctest -L omp
    $ ctest -L cuda
+   $ ctest -L omp_tgt
 
    # List all tests without running
    $ ctest -N
@@ -135,6 +146,8 @@ Conventions
 
 - File naming: ``test_*.f90`` for unit/verification, ``perf_*.f90`` for performance.
 - Exit code: Call ``error stop 1`` on failure so CTest detects it.
-- Backend guards: Use ``#ifdef CUDA`` / ``#else`` / ``#endif`` for backend-specific code.
-- MPI: All tests call ``MPI_Init``/``MPI_Finalize``, even single-rank tests. Tests are launched with ``mpirun --oversubscribe -np <N>``.
+- Backend guards: Use ``#ifdef CUDA`` / ``#elif defined(OMP_TGT)`` / ``#else`` / ``#endif`` for backend-specific code.
+- MPI: All tests call ``MPI_Init``/``MPI_Finalize``, even single-rank tests. Tests are
+  launched with ``mpirun --oversubscribe -np <N>``, or with ``srun -n <N>`` when building
+  with the Cray compiler, since Cray machines are Slurm-driven and have no ``mpirun``.
 - Shared utilities: All tests automatically link against ``x3d2_test_utils`` (provides ``check_norm`` and ``report_perf``).

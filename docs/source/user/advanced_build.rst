@@ -1,6 +1,94 @@
 Advanced Build Configuration
 ============================
 
+This page covers the individual build options in detail. See
+:doc:`../getting_started` for the overall CMake workflow and a summary table of
+every option.
+
+Selecting a Backend
+-------------------
+
+``ENABLE_BACKEND`` chooses which GPU backend is compiled alongside the CPU
+(host OpenMP) backend, which is always built:
+
+.. code-block:: bash
+
+   -DENABLE_BACKEND=OFF       # CPU only (default)
+   -DENABLE_BACKEND=CUDA      # CUDA Fortran, NVHPC/PGI only
+   -DENABLE_BACKEND=OMP_TGT   # OpenMP target offload
+
+The setting decides which allocator and backend sources are compiled, which
+compiler and linker flags are applied, and which tests are registered. Building
+more than one GPU backend at a time is not supported.
+
+CUDA Backend
+~~~~~~~~~~~~
+
+Requires NVHPC or PGI; configuring fails with any other compiler. The build adds
+``-cuda`` and links ``cuFFTMp`` for the Poisson solver.
+
+OpenMP Target Offload Backend
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Requires a compiler reporting OpenMP 4.5 or newer. Cray, GNU and NVHPC/PGI are
+all supported. Each enables offload differently, and the build detects the
+compiler and applies what it needs, so no manual offload flags are required with
+any of them.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 16 44 40
+
+   * - Compiler
+     - Flags applied by the build
+     - ``OMP_TGT_ARCH``
+   * - Cray
+     - ``-eF`` when compiling and ``-h omp`` when linking.
+     - Not used. The offload target is selected by the Cray programming
+       environment rather than by CMake.
+   * - GNU
+     - ``-fopenmp`` and ``--offload-arch=<arch>``.
+     - Required. Configuring fails if it is unset.
+   * - NVHPC, PGI
+     - ``-mp=gpu``, replacing the host-only ``-mp`` that CMake's ``FindOpenMP``
+       supplies. Without that substitution the target regions compile but run
+       on the host against device pointers.
+     - Optional. When unset, the compiler targets the GPU of the build machine.
+
+Where the compiler needs the architecture, set it at configure time:
+
+.. code-block:: bash
+
+   -DENABLE_BACKEND=OMP_TGT -DOMP_TGT_ARCH=gfx942
+
+Vendor selection is automatic: the build defines ``OMP_TGT_NVIDIA`` for
+NVHPC/PGI and ``OMP_TGT_AMD`` for Cray and GNU, which selects the
+vendor-appropriate ``SZ`` parameter. Note that the GNU path assumes an AMD
+target.
+
+Configuring 2decomp-fft Support
+-------------------------------
+
+The FFT-based Poisson solver is built against `2decomp-fft
+<https://github.com/xcompact3d/2decomp-fft>`_ and is enabled by default. Disable
+it if you do not need the FFT Poisson solver, which also avoids the download:
+
+.. code-block:: bash
+
+   -DWITH_2DECOMPFFT=OFF
+
+By default the library is downloaded and built into the build tree, into a
+directory keyed by version and precision (``decomp2d-opt-dp-<version>``, or
+``-sp-`` for a ``SINGLE_PREC=ON`` build) so that a double and a single precision
+build do not collide. To use a pre-built installation instead, point
+``decomp2d_install_dir`` at its prefix:
+
+.. code-block:: bash
+
+   -Ddecomp2d_install_dir=/path/to/2decomp-fft/install
+
+The library must match the precision x3d2 is built with.
+
 Configuring ADIOS2 Support
 --------------------------
 
@@ -24,10 +112,16 @@ x3d2 provides two approaches for using ADIOS2:
 
 2. **System ADIOS2**: Use an existing ADIOS2 installation on your system.
 
+The built-in ADIOS2 is fetched and compiled *during the build*, not during
+configuration, so ``cmake -S . -B build`` returns quickly and the first
+``cmake --build build`` is what downloads and builds it. It is reused on
+subsequent builds; to deliberately re-fetch the pinned tag, build the
+``adios2-<version>-update`` target.
+
 Using an Existing ADIOS2 Installation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-By default, x3d2 will not use an ADIOS2 installation already present on your system. If you want to use an existing ADIOS2 installation, you need to set ``-DUSE_SYSTEM_ADIOS2=ON``.
+By default, x3d2 will not use an ADIOS2 installation already present on your system. If you want to use an existing ADIOS2 installation, you need to set ``-DUSE_SYSTEM_ADIOS2=ON``. Configuring fails if ``USE_SYSTEM_ADIOS2=ON`` but no installation is found.
 
 If ADIOS2 is installed in a standard location, no additional configuration is needed:
 
@@ -39,7 +133,7 @@ For custom installation locations, provide the path to CMake:
 
 .. code-block:: bash
 
-   -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DADIOS2_ROOT=/path/to/adios2/installation
+   -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DADIOS2_ROOT_DIR=/path/to/adios2/installation
 
 When to Build a Custom ADIOS2
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -59,12 +153,12 @@ To use the built-in ADIOS2 (default behaviour):
 CUDA Architecture for the ADIOS2 Build
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-When x3d2 is built with the NVHPC compiler, the built-in ADIOS2 is compiled with 
-CUDA support. By default its CUDA sources are built for the architecture of the 
-GPU present at configure time (``native`` detection). If you are building on a 
-node without a visible GPU (for example a GPU-less login or build node), ``native`` 
-cannot probe the hardware, so set the target architecture explicitly with 
-the ``CUDA_ARCH`` CMake option:
+When x3d2 is built with ``ENABLE_BACKEND=CUDA``, the built-in ADIOS2 is compiled
+with CUDA support. By default its CUDA sources are built for the architecture of
+the GPU present at configure time (``native`` detection). If you are building on
+a node without a visible GPU (for example a GPU-less login or build node),
+``native`` cannot probe the hardware, so set the target architecture explicitly
+with the ``CUDA_ARCH`` CMake option:
 
 .. code-block:: bash
 
@@ -77,6 +171,14 @@ The project is configured to automatically download and build its own version of
 This can lead to ``undefined symbol`` errors if the system's ADIOS2 was built with a different compiler than the one used for this project, or with an incompatible MPI implementation.
 
 If you have ParaView installed, it often includes its own version of ADIOS2 which may conflict with the project's custom-built ADIOS2.
+
+.. note::
+
+   The built-in ADIOS2 is installed into ``adios2-<config>-<version>`` inside
+   the build directory, where ``<config>`` is ``cuda`` for a
+   ``ENABLE_BACKEND=CUDA`` build and ``cpu`` otherwise. A CUDA-enabled ADIOS2
+   cannot be reused by a CPU build, which is why the two are kept apart. Adjust
+   the paths below to match your build.
 
 Prepending to LD_LIBRARY_PATH
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -94,10 +196,10 @@ The safest way to prioritise your project's ADIOS2 while keeping access to other
    .. code-block:: bash
 
       # For test suite
-      LD_LIBRARY_PATH=./adios2-build/adios2-install/lib:$LD_LIBRARY_PATH make test
+      LD_LIBRARY_PATH=./adios2-cpu-v2.12.1/lib:$LD_LIBRARY_PATH ctest
 
       # For running with mpirun
-      LD_LIBRARY_PATH=./adios2-build/adios2-install/lib:$LD_LIBRARY_PATH mpirun -np 2 ./src/xcompact <input_file>
+      LD_LIBRARY_PATH=./adios2-cpu-v2.12.1/lib:$LD_LIBRARY_PATH mpirun -np 2 ./bin/xcompact <input_file>
 
 Full Replacement (Aggressive Isolation)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -107,7 +209,7 @@ If you continue to experience conflicts even with prepending, you can completely
 .. code-block:: bash
 
    # From build directory - replaces LD_LIBRARY_PATH entirely
-   LD_LIBRARY_PATH=./adios2-build/adios2-install/lib mpirun -np 2 ./src/xcompact <input_file>
+   LD_LIBRARY_PATH=./adios2-cpu-v2.12.1/lib mpirun -np 2 ./bin/xcompact <input_file>
 
 When to use this:
 
@@ -127,7 +229,7 @@ The simplest way to verify your ADIOS2 installation is to run the test suite:
 
 .. code-block:: bash
 
-   make test
+   ctest
 
 This will run a set of tests including ADIOS2 functionality tests. Look for passing tests related to checkpoint I/O and ADIOS2 operations.
 
@@ -149,7 +251,7 @@ If you encounter issues with ADIOS2 libraries, you can check which libraries x3d
 
 .. code-block:: bash
 
-   ldd ./build/src/xcompact | grep adios2
+   ldd ./build/bin/xcompact | grep adios2
 
 This will show all the ADIOS2 libraries being loaded and their paths. Make sure they point to the expected location (either your system libraries or the custom-built ones).
 
@@ -171,7 +273,7 @@ To compile x3d2 in single precision mode, use the ``SINGLE_PREC`` CMake option:
 
 .. code-block:: bash
 
-   cmake -DSINGLE_PREC=ON ..
+   -DSINGLE_PREC=ON
 
 This will define the ``SINGLE_PREC`` preprocessor macro, causing the code to use single precision (``real32``) as the default floating-point type throughout the application.
 
