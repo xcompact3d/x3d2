@@ -78,6 +78,34 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" AND OpenMP_Fortran_FLAGS)
     INTERFACE_LINK_OPTIONS "SHELL:${OpenMP_Fortran_FLAGS}")
 endif()
 
+# Flang links libomp.so out of its own installation, which is not on the
+# loader's default search path, and neither the driver nor FindOpenMP (it
+# reports only -fopenmp here) leaves a library path behind for CMake to turn
+# into an RPATH.  Binaries then link but fail to start.  Ask the driver where
+# its libomp.so is and put that directory on the RPATH instead, so the build
+# does not depend on LD_LIBRARY_PATH being set.
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "LLVMFlang" OR
+   CMAKE_Fortran_COMPILER_ID STREQUAL "Flang")
+  execute_process(
+    COMMAND "${CMAKE_Fortran_COMPILER}" -print-file-name=libomp.so
+    OUTPUT_VARIABLE _flang_libomp
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET)
+  if(IS_ABSOLUTE "${_flang_libomp}" AND EXISTS "${_flang_libomp}")
+    get_filename_component(_flang_libomp_dir "${_flang_libomp}" DIRECTORY)
+    set_property(TARGET OpenMP::OpenMP_Fortran APPEND PROPERTY
+      INTERFACE_LINK_OPTIONS "LINKER:-rpath,${_flang_libomp_dir}")
+    message(STATUS "Flang OpenMP runtime found in ${_flang_libomp_dir}")
+  else()
+    message(WARNING
+      "Could not locate libomp.so for ${CMAKE_Fortran_COMPILER}. The built "
+      "binaries will only run with the flang runtime directory on "
+      "LD_LIBRARY_PATH.")
+  endif()
+  unset(_flang_libomp)
+  unset(_flang_libomp_dir)
+endif()
+
 enable_testing()
 include(ThirdPartyADIOS2)
 include(ThirdPartyDecomp2D)
