@@ -25,7 +25,12 @@ CUDA Backend
 ~~~~~~~~~~~~
 
 Requires NVHPC or PGI; configuring fails with any other compiler. The build adds
-``-cuda`` and links ``cuFFTMp`` for the Poisson solver.
+``-cuda``, and links the Poisson solver against ``cuFFTMp``
+(``-cudalib=cufftmp``) in an MPI build or against plain ``cuFFT``
+(``-cudalib=cufft``) without one. cuFFTMp distributes a single transform across
+ranks and its nvfortran wrapper calls ``MPI_Comm_f2c``, so it cannot be linked
+into a serial build; a serial build is one rank, which plain cuFFT handles on
+its own.
 
 OpenMP Target Offload Backend
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -76,16 +81,31 @@ as a single rank and needs no MPI installation or launcher:
 
    -DWITH_MPI=OFF
 
-``CMAKE_Fortran_COMPILER`` is then a plain compiler (``gfortran``, ``ftn``,
-``nvfortran``) rather than an MPI wrapper. The code still calls MPI
-unconditionally; ``src/mpi.f90`` supplies serial stand-ins for the MPI entities
-x3d2 uses, under which every collective is the identity, the rank is 0 and the
-communicator size is 1. Add new stubs there rather than guarding call sites.
+``CMAKE_Fortran_COMPILER`` is then the compiler itself rather than an MPI
+wrapper. Do not pass ``mpif90`` or ``mpifort`` here: the wrapper puts the MPI
+library back on the compile and link lines, which defeats the point of the
+option. Name the compiler that matches the backend, for example ``nvfortran``
+for ``ENABLE_BACKEND=CUDA``, ``ftn`` on a Cray machine, or ``gfortran`` for a
+CPU build with GNU:
 
-Two things follow from the single rank:
+.. code-block:: bash
+
+   cmake -S . -B build -DWITH_MPI=OFF \
+     -DCMAKE_Fortran_COMPILER=nvfortran -DENABLE_BACKEND=CUDA
+
+The code still calls MPI unconditionally; ``src/mpi.f90`` supplies serial
+stand-ins for the MPI entities x3d2 uses, under which every collective is the
+identity, the rank is 0 and the communicator size is 1. Add new stubs there
+rather than guarding call sites.
+
+Three things follow from the single rank:
 
 * ``WITH_2DECOMPFFT`` is forced off, because 2decomp-fft is an MPI library. The
   FFT-based Poisson solver is therefore unavailable in a serial build.
+* ``ENABLE_BACKEND=CUDA`` links plain ``cuFFT`` rather than ``cuFFTMp``, as
+  described under `CUDA Backend`_ above. This is transparent: the CUDA Poisson
+  solver already falls back to plain cuFFT at runtime wherever cuFFTMp is
+  unavailable.
 * Only the single-rank tests are registered, and they run the executable
   directly instead of through ``mpirun``.
 
