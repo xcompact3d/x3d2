@@ -86,6 +86,10 @@ if(WITH_ADIOS2)
         "${adios2_install_dir}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}adios2_fortran${CMAKE_SHARED_LIBRARY_SUFFIX}")
       set(adios2_fortran_mpi_library
         "${adios2_install_dir}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}adios2_fortran_mpi${CMAKE_SHARED_LIBRARY_SUFFIX}")
+      if(WITH_ADIOS2_GPU_AWARE)
+        set(adios2_c_mpi_library
+          "${adios2_install_dir}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}adios2_c_mpi${CMAKE_SHARED_LIBRARY_SUFFIX}")
+      endif()
 
       include(ExternalProject)
 
@@ -111,6 +115,7 @@ if(WITH_ADIOS2)
                           "-DADIOS2_USE_CURL=OFF"
                           ${adios2_cuda_args}
         BUILD_BYPRODUCTS  "${adios2_fortran_library}" "${adios2_fortran_mpi_library}"
+                          ${adios2_c_mpi_library}
         TEST_COMMAND      ""
         # The git update step carries no stamp, so it is always out of date and
         # drags the configure, build and install steps with it on every `make`.
@@ -136,6 +141,13 @@ if(WITH_ADIOS2)
       target_compile_definitions(adios2_fortran_mpi INTERFACE ADIOS2_USE_MPI)
       add_dependencies(adios2_fortran_mpi adios2-${adios2_version})
       add_library(adios2::fortran_mpi ALIAS adios2_fortran_mpi)
+      if(WITH_ADIOS2_GPU_AWARE)
+        add_library(adios2_c_mpi INTERFACE)
+        target_link_libraries(adios2_c_mpi INTERFACE
+          "${adios2_c_mpi_library}" MPI::MPI_C)
+        add_dependencies(adios2_c_mpi adios2-${adios2_version})
+        add_library(adios2::c_mpi ALIAS adios2_c_mpi)
+      endif()
     endif(ADIOS2_FOUND)
   endif()
 

@@ -274,22 +274,16 @@ GPU-aware ADIOS2 I/O requires:
 - The NVHPC (or PGI) Fortran compiler
 - ADIOS2 built with CUDA support (``-DADIOS2_USE_CUDA=ON``)
 
-When using the built-in ADIOS2 (default), the build system automatically builds ADIOS2 with CUDA support when the NVHPC compiler is detected.
+When using the built-in ADIOS2 (default), the build system builds ADIOS2 with CUDA support when ``ENABLE_BACKEND=CUDA`` is selected.
 
 Build Configuration
 ~~~~~~~~~~~~~~~~~~~
 
-To enable GPU-aware I/O, pass the ``WITH_ADIOS2_GPU_AWARE`` option alongside ``WITH_ADIOS2``:
+To enable GPU-aware I/O, select the CUDA backend and enable both ADIOS2 options:
 
 .. code-block:: bash
 
-   cmake .. -DWITH_ADIOS2=ON -DWITH_ADIOS2_GPU_AWARE=ON
-
-When using the NVHPC compiler, the build system automatically detects CUDA support and sets ``X3D2_ADIOS2_CUDA=ON``. If you need to set it explicitly:
-
-.. code-block:: bash
-
-   cmake .. -DWITH_ADIOS2=ON -DWITH_ADIOS2_GPU_AWARE=ON -DX3D2_ADIOS2_CUDA=ON
+   cmake .. -DENABLE_BACKEND=CUDA -DWITH_ADIOS2=ON -DWITH_ADIOS2_GPU_AWARE=ON
 
 Using a System ADIOS2 with CUDA Support
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -298,7 +292,7 @@ If you have a system ADIOS2 installation that was built with ``-DADIOS2_USE_CUDA
 
 .. code-block:: bash
 
-   cmake .. -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DWITH_ADIOS2_GPU_AWARE=ON
+   cmake .. -DENABLE_BACKEND=CUDA -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DWITH_ADIOS2_GPU_AWARE=ON
 
 The build system will verify that the ``adios2::core_cuda`` target is available and report an error if it is not.
 
@@ -347,4 +341,3 @@ in x3d2's own kernels, use the ``CUDA_DEBUG_FP_TRAP`` CMake option:
 .. code-block:: bash
 
    -DCUDA_DEBUG_FP_TRAP=ON
-

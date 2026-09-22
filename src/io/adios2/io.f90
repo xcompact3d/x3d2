@@ -38,6 +38,7 @@ module m_io_backend
   use adios2, only: adios2_set_memory_space, adios2_memory_space_gpu
   use cudafor, only: cudaDeviceSynchronize, c_devloc, c_devptr
 #endif
+  use iso_fortran_env, only: real64
   use mpi, only: MPI_COMM_NULL, MPI_Initialized, MPI_Comm_rank, &
                  MPI_Allreduce, MPI_SUM, MPI_MAX, &
                  MPI_DOUBLE_PRECISION, MPI_Wtime
@@ -681,10 +682,9 @@ contains
     class(io_file_t), intent(inout) :: file_handle
 
     type(adios2_variable) :: var
-    integer :: ierr
-    integer :: vtype
-    real(c_double) :: val_dp_temp
-    real(c_float) :: val_sp_temp
+    integer :: ierr, vartype
+    real(sp) :: value_sp
+    real(real64) :: value_dp
 
     select type (file_handle)
     type is (io_adios2_file_t)
@@ -692,24 +692,31 @@ contains
       call adios2_inquire_variable(var, self%io_handle, variable_name, ierr)
 
       if (ierr == adios2_found) then
-        call adios2_variable_type(vtype, var, ierr)
-
-        if (vtype == adios2_type_dp) then
-          ! file is double precision
-          call adios2_get(file_handle%engine, var, val_dp_temp, &
-                          adios2_mode_sync, ierr)
-          value = real(val_dp_temp, dp)
-        else if (vtype == adios2_type_real) then
-          ! file is single precision
-          call adios2_get(file_handle%engine, var, val_sp_temp, &
-                          adios2_mode_sync, ierr)
-          value = real(val_sp_temp, dp)
-        else
-          call adios2_get(file_handle%engine, var, value, &
-                          adios2_mode_sync, ierr)
-        end if
-        call self%handle_error(ierr, "Failed to read variable " &
+        call adios2_variable_type(vartype, var, ierr)
+        call self%handle_error(ierr, &
+                               "Failed to determine type of variable " &
                                //trim(variable_name))
+
+        if (vartype == get_adios2_vartype(.false.)) then
+          call adios2_get( &
+            file_handle%engine, var, value, adios2_mode_sync, ierr)
+        else if (vartype == adios2_type_real) then
+          call adios2_get( &
+            file_handle%engine, var, value_sp, adios2_mode_sync, ierr)
+          call self%handle_error( &
+            ierr, "Failed to read variable "//trim(variable_name))
+          value = real(value_sp, dp)
+        else if (vartype == adios2_type_dp) then
+          call adios2_get( &
+            file_handle%engine, var, value_dp, adios2_mode_sync, ierr)
+          call self%handle_error( &
+            ierr, "Failed to read variable "//trim(variable_name))
+          value = real(value_dp, dp)
+        else
+          call self%handle_error(1, "Variable "//trim(variable_name) &
+                                 //" is not a real type")
+        end if
+        call self%handle_error(ierr, "Failed to read variable "//variable_name)
       else
         call self%handle_error(1, "Variable " &
                                //trim(variable_name)//" not found in file")
@@ -734,9 +741,8 @@ contains
     type(adios2_variable) :: var
     integer :: ierr, vartype
     integer(i8) :: local_start(3), local_count(3)
-    integer :: vtype
-    real(c_double), allocatable :: arr_dp_temp(:, :, :)
-    real(c_float), allocatable :: arr_sp_temp(:, :, :)
+    real(sp), allocatable :: array_sp(:, :, :)
+    real(real64), allocatable :: array_dp(:, :, :)
 
     select type (file_handle)
     type is (io_adios2_file_t)
@@ -762,31 +768,34 @@ contains
                                  //trim(variable_name))
         end if
 
-        call adios2_variable_type(vtype, var, ierr)
-
-        if (vtype == adios2_type_dp) then
-          ! file is double precision
-          allocate (arr_dp_temp(local_count(1), local_count(2), &
-                                local_count(3)))
-          call adios2_get(file_handle%engine, var, arr_dp_temp, &
-                          adios2_mode_sync, ierr)
-          array = real(arr_dp_temp, dp)
-          deallocate (arr_dp_temp)
-        else if (vtype == adios2_type_real) then
-          ! file is single precision
-          allocate (arr_sp_temp(local_count(1), local_count(2), &
-                                local_count(3)))
-          call adios2_get(file_handle%engine, var, arr_sp_temp, &
-                          adios2_mode_sync, ierr)
-          array = real(arr_sp_temp, dp)
-          deallocate (arr_sp_temp)
-        else
-          call adios2_get(file_handle%engine, var, array, &
-                          adios2_mode_sync, ierr)
-        end if
-
-        call self%handle_error(ierr, "Failed to read variable " &
+        call adios2_variable_type(vartype, var, ierr)
+        call self%handle_error(ierr, &
+                               "Failed to determine type of variable " &
                                //trim(variable_name))
+
+        if (vartype == get_adios2_vartype(.false.)) then
+          call adios2_get( &
+            file_handle%engine, var, array, adios2_mode_sync, ierr)
+        else if (vartype == adios2_type_real) then
+          allocate (array_sp(size(array, 1), size(array, 2), size(array, 3)))
+          call adios2_get( &
+            file_handle%engine, var, array_sp, adios2_mode_sync, ierr)
+          call self%handle_error( &
+            ierr, "Failed to read variable "//trim(variable_name))
+          array = real(array_sp, dp)
+        else if (vartype == adios2_type_dp) then
+          allocate (array_dp(size(array, 1), size(array, 2), size(array, 3)))
+          call adios2_get( &
+            file_handle%engine, var, array_dp, adios2_mode_sync, ierr)
+          call self%handle_error( &
+            ierr, "Failed to read variable "//trim(variable_name))
+          array = real(array_dp, dp)
+        else
+          call self%handle_error(1, "Variable "//trim(variable_name) &
+                                 //" is not a real type")
+        end if
+        call self%handle_error(ierr, &
+                               "Failed to read variable "//trim(variable_name))
       else
         call self%handle_error(1, "Variable " &
                                //trim(variable_name)//" not found in file")

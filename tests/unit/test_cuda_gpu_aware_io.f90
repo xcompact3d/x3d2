@@ -10,6 +10,8 @@ program test_cuda_gpu_aware_io
   use m_io_backend, only: allocate_io_writer, allocate_io_reader
   use m_io_base, only: io_writer_t, io_reader_t, io_file_t, &
                        io_mode_write, io_mode_read
+  use m_backend_runtime, only: select_device
+  use m_test_utils, only: initialise_mpi, finalise_test
   use iso_fortran_env, only: stderr => error_unit
   implicit none
 
@@ -34,9 +36,8 @@ program test_cuda_gpu_aware_io
   real(dp) :: expected, tolerance
 
   ! Initialise MPI
-  call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
-  call MPI_Comm_size(MPI_COMM_WORLD, isize, ierr)
+  call initialise_mpi(irank, isize)
+  call select_device(irank)
 
   ! Initialise allocator with mesh dimensions
   allocator = cuda_allocator_t([16, 16, 16], 2)
@@ -162,16 +163,6 @@ program test_cuda_gpu_aware_io
   call allocator%release_block(cuda_field)
   call allocator%destroy()
 
-  ! Report results before MPI_Finalise
-  if (irank == 0) then
-    if (allpass) then
-      write(stderr, '(a)') 'CUDA GPU-AWARE I/O TEST PASSED!'
-    else
-      error stop 'CUDA GPU-AWARE I/O TEST FAILED.'
-    end if
-  end if
-
-  call MPI_Barrier(MPI_COMM_WORLD, ierr)
-  call MPI_Finalize(ierr)
+  call finalise_test(allpass, irank)
 
 end program test_cuda_gpu_aware_io

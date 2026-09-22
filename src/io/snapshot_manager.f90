@@ -212,6 +212,7 @@ contains
     if (.not. use_device_write) then
       call cleanup_field_arrays(solver, field_ptrs, host_fields)
     end if
+    deallocate (field_names)
   end subroutine write_snapshot
 
   function get_snapshot_fields(config, nspecies) result(names)

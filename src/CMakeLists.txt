@@ -75,7 +75,7 @@ else()
   )
 endif()
 
-list(APPEND SRC 
+list(APPEND SRC
   io/io_base.f90
   io/io_session.f90
   io/io_field_utils.f90
@@ -88,30 +88,13 @@ list(APPEND SRC
 
 # ADIOS2
 if(WITH_ADIOS2)
-  list(APPEND SRC 
+  list(APPEND SRC
     io/adios2/io.f90
   )
 else()
-  list(APPEND SRC 
+  list(APPEND SRC
   io/dummy/io.f90
   )
-endif()
-
-list(APPEND SRC ${IOSRC})
-
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
-  list(APPEND SRC ${CUDASRC})
-  list(APPEND BACKENDSRC backend/cuda/backend.f90)
-endif()
-
-# Decide whether 2decomp&fft is supported by the build
-find_package(decomp2d)
-
-if(WITH_2DECOMPFFT)
-  list(APPEND SRC ${2DECOMPFFTSRC})
-else()
-  list(APPEND SRC ${DUMMYDECOMPSRC})
 endif()
 
 set(EXECUTABLE_OUTPUT_PATH "${PROJECT_BINARY_DIR}/bin")
@@ -135,30 +118,10 @@ add_executable(xcompact xcompact.f90)
 target_link_libraries(xcompact PRIVATE x3d2_backends)
 target_link_libraries(xcompact PRIVATE x3d2)
 
-# if CUDA compiler
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
-  set(CMAKE_Fortran_FLAGS "-cpp -cuda")
-  set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds -Mchkptr -Ktrap=fp")
-  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
-  target_link_options(x3d2 INTERFACE "-cuda")
-  target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
-
-  target_compile_options(xcompact PRIVATE "-DCUDA")
-
-  if(WITH_ADIOS2_GPU_AWARE)
-    find_package(CUDAToolkit QUIET)
-    if(CUDAToolkit_FOUND)
-      target_link_libraries(x3d2 PUBLIC CUDA::nvToolsExt)
-      target_link_libraries(xcompact PRIVATE CUDA::nvToolsExt)
-    else()
-      target_link_libraries(x3d2 PUBLIC nvToolsExt)
-      target_link_libraries(xcompact PRIVATE nvToolsExt)
-    endif()
-  endif()
-
-elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
-       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang")
+# 3. Set compiler specific flags and options
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
+         ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
+         ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
   set(CMAKE_Fortran_FLAGS "-cpp -std=f2018")
   if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
@@ -194,6 +157,14 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   target_link_options(x3d2 INTERFACE "-cuda")
   target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
   target_compile_options(xcompact PRIVATE "-DCUDA")
+  if(WITH_ADIOS2_GPU_AWARE)
+    find_package(CUDAToolkit QUIET)
+    if(CUDAToolkit_FOUND AND TARGET CUDA::nvToolsExt)
+      target_link_libraries(x3d2 PUBLIC CUDA::nvToolsExt)
+    else()
+      target_link_libraries(x3d2 PUBLIC nvToolsExt)
+    endif()
+  endif()
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
     set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")

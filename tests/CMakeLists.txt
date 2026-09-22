@@ -172,23 +172,31 @@ function(define_regression_test testfile np backend)
   set_tests_properties(${test_name} PROPERTIES LABELS "regression;${backend}")
 endfunction()
 
-if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-   ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
-  define_test(test_reordering.f90 1 cuda)
-  define_test(test_vecadd.f90 1 cuda)
-  define_test(test_time_integrator.f90 1 cuda)
-  define_test(test_fft.f90 1 cuda)
-  define_test(test_poisson_bc.f90 1 cuda)
-  define_test(cuda/test_cuda_allocator.f90 1 cuda)
-  define_test(cuda/test_cuda_reorder.f90 1 cuda)
-  define_test(cuda/test_thom.f90 1 cuda)
-  if(WITH_ADIOS2)
-    define_test(test_adios2_read_write.f90 4 cuda)
-    define_test(test_io_session.f90 4 cuda)
-    define_test(test_ab_checkpoint.f90 1 cuda)
-    if(WITH_ADIOS2_GPU_AWARE)
-      define_test(cuda/test_cuda_gpu_aware_io.f90 4 cuda)
-    endif()
+# Full-case regression: run the xcompact solver on a small input file and diff
+# the resulting monitoring.csv against a committed golden file. To (re)generate
+# a golden after an intentional numerics change, run the case once and pass
+# --bless to compare_monitoring.py (see that script's docstring). Golden files
+# are only reproducible for a fixed compiler/precision/rank-count, so bless them
+# in the same environment CI uses.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+function(define_regression_case_test case_name input_file golden_file np backend)
+  # Trailing arguments are passed through to the comparator (e.g. --ceiling).
+  set(extra_args "${ARGN}")
+  string(REPLACE ";" " " extra_args_str "${extra_args}")
+
+  set(test_name regression_${case_name}_${backend}_${np})
+  set(work_dir ${CMAKE_CURRENT_BINARY_DIR}/regression/${test_name})
+  file(MAKE_DIRECTORY ${work_dir})
+  set(comparator ${CMAKE_CURRENT_SOURCE_DIR}/regression/compare_monitoring.py)
+  set(input ${CMAKE_CURRENT_SOURCE_DIR}/regression/${input_file})
+  set(golden ${CMAKE_CURRENT_SOURCE_DIR}/regression/${golden_file})
+  # Match the launcher define_test() uses: Cray machines are Slurm-driven and
+  # have no mpirun, so an mpirun-based test cannot start there at all.
+  if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+    set(launcher "srun -n ${np}")
+  else()
+    set(launcher "mpirun --oversubscribe -np ${np}")
   endif()
   add_test(
     NAME ${test_name}

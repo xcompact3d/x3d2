@@ -4,58 +4,46 @@ cmake_minimum_required(VERSION 3.13)
 # Define project languages
 project(x3d2 LANGUAGES Fortran CXX C)
 
-# Require OpenMP 
+# Require OpenMP
 find_package(OpenMP REQUIRED)
 
-option(WITH_ADIOS2 "Enable ADIOS2 for I/O" OFF)
-option(WITH_ADIOS2_GPU_AWARE "Enable GPU-aware I/O with ADIOS2 (requires X3D2_ADIOS2_CUDA=ON)" OFF)
+# Require MPI
+find_package(MPI REQUIRED)
 
-if(WITH_ADIOS2_GPU_AWARE AND NOT WITH_ADIOS2)
-  message(FATAL_ERROR
-    "WITH_ADIOS2_GPU_AWARE=ON requires WITH_ADIOS2=ON")
+# Toggleable build type (default Release)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose type of build" FORCE)
 endif()
+set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug;Release")
 
+# Single precision option (default OFF)
+option(SINGLE_PREC "Enable single precision" OFF)
 if(SINGLE_PREC)
   add_definitions("-DSINGLE_PREC")
 endif()
 
-if(WITH_ADIOS2)
-  if(WITH_ADIOS2_GPU_AWARE AND
-     NOT (${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-          ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC"))
-    message(FATAL_ERROR
-      "WITH_ADIOS2_GPU_AWARE=ON requires the NVHPC/PGI Fortran compiler "
-      "(needs CUDA Fortran module cudafor). Current compiler: "
-      "${CMAKE_Fortran_COMPILER_ID}")
-  endif()
+# Backend for GPU offloading options (default OFF)
+set(ENABLE_BACKEND OFF CACHE STRING "")
+set_property(CACHE ENABLE_BACKEND PROPERTY STRINGS OFF CUDA OMP_TGT)
 
-  # X3D2_ADIOS2_CUDA controls whether ADIOS2 is built with CUDA support
-  # It can be set explicitly or auto-detected from compiler
-  if(NOT DEFINED X3D2_ADIOS2_CUDA)
-    set(X3D2_ADIOS2_CUDA OFF)
-    if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR
-       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC")
-      set(X3D2_ADIOS2_CUDA ON)
-    endif()
+# ADIOS2 option (default OFF)
+option(WITH_ADIOS2 "Enable ADIOS2 for I/O" OFF)
+option(WITH_ADIOS2_GPU_AWARE "Enable GPU-aware ADIOS2 I/O with the CUDA backend" OFF)
+
+if(WITH_ADIOS2_GPU_AWARE)
+  if(NOT WITH_ADIOS2)
+    message(FATAL_ERROR "WITH_ADIOS2_GPU_AWARE=ON requires WITH_ADIOS2=ON")
   endif()
-  
-  message(STATUS "X3D2_ADIOS2_CUDA is set to: ${X3D2_ADIOS2_CUDA}")
-  list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/adios2")
-  cmake_policy(SET CMP0074 NEW)
-  find_package(ADIOS2)
-  
-  if(WITH_ADIOS2_GPU_AWARE)
-    if(NOT TARGET adios2::core_cuda)
-      message(FATAL_ERROR
-        "WITH_ADIOS2_GPU_AWARE=ON requires ADIOS2 built with CUDA support.\n"
-        "Use the NVHPC/PGI compiler (auto-detected) or set -DX3D2_ADIOS2_CUDA=ON")
-    endif()
-    message(STATUS "ADIOS2 GPU-aware I/O enabled")
-    add_definitions("-DX3D2_ADIOS2_CUDA")
+  if(NOT ENABLE_BACKEND STREQUAL "CUDA")
+    message(FATAL_ERROR "WITH_ADIOS2_GPU_AWARE=ON requires ENABLE_BACKEND=CUDA")
   endif()
-else()
-  message(STATUS "ADIOS2 is disabled")
+  add_compile_definitions(X3D2_ADIOS2_CUDA)
 endif()
+
+# FFT option (default ON)
+option(WITH_2DECOMPFFT "Enable Poisson based FFT solver on the OpenMP backend" ON)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/include)
 
@@ -104,5 +92,8 @@ endif()
 enable_testing()
 include(ThirdPartyADIOS2)
 include(ThirdPartyDecomp2D)
+if(WITH_ADIOS2_GPU_AWARE AND ADIOS2_FOUND AND NOT TARGET adios2::core_cuda)
+  message(FATAL_ERROR "WITH_ADIOS2_GPU_AWARE=ON requires CUDA-enabled ADIOS2")
+endif()
 add_subdirectory(src)
 add_subdirectory(tests)
