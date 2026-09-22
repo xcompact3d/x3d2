@@ -68,6 +68,15 @@ jobs:
     - name: Run unit and verification tests
       run: ctest --test-dir build -L "unit|verification" --output-on-failure
 
+    - name: Configure Release build (no mpi)
+      run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_MPI=OFF -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
+
+    - name: Build tests (no mpi)
+      run: make -C build
+
+    - name: Run unit and verification tests (no mpi)
+      run: ctest --test-dir build -L "unit|verification" --output-on-failure
+
     - name: Configure Debug build (single precision)
       run: FC=mpif90 cmake -S . -B build-single-debug -DCMAKE_BUILD_TYPE=Debug -DSINGLE_PREC=ON -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
 
