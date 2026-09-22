@@ -162,6 +162,15 @@ contains
     cufftmp_failed = .false.
     ierr = cufftCreate(plan)
 
+#ifndef MPI
+    ! cuFFTMp distributes a transform over MPI ranks, so a build without MPI
+    ! links plain cuFFT instead (see src/CMakeLists.txt) and has no cuFFTMp
+    ! entry points to call.  A serial build is one rank, which plain cuFFT
+    ! handles on its own.
+    use_cufftmp = .false.
+#endif
+
+#ifdef MPI
     if (use_cufftmp) then
       ! Try to attach MPI communicator for cuFFTMp
       ierr = cufftMpAttachComm(plan, CUFFT_COMM_MPI, MPI_COMM_WORLD)
@@ -191,6 +200,7 @@ contains
         ierr = cufftCreate(plan)
       end if
     end if
+#endif
 
     ! create plan with cuFFT
     if (.not. use_cufftmp) then

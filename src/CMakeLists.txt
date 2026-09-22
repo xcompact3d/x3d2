@@ -156,7 +156,15 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   endif()
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
   target_link_options(x3d2 INTERFACE "-cuda")
-  target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
+  # cuFFTMp distributes a transform over MPI ranks and its nvfortran wrapper
+  # calls MPI_Comm_f2c, so it cannot link into a build without MPI.  A serial
+  # build is one rank and links plain cuFFT instead: see create_fft_plan in
+  # backend/cuda/poisson_fft.f90 for the matching runtime path.
+  if(WITH_MPI)
+    target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
+  else()
+    target_link_options(x3d2 INTERFACE "-cudalib=cufft")
+  endif()
   target_compile_options(xcompact PRIVATE "-DCUDA")
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
