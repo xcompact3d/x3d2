@@ -1,4 +1,5 @@
 module m_abl
+  use iso_fortran_env, only: int64
 !! Reusable, backend-agnostic Atmospheric Boundary Layer driver.
 !!
 !! Ported from Incompact3d's `Case-ABL.f90` (itype=10). The driver owns the
@@ -71,7 +72,8 @@ contains
     class(field_t), intent(inout) :: u, v, w
 
     class(field_t), pointer :: hu, hv, hw
-    integer :: i, j, k, dims(3)
+    integer :: i, j, k, dims(3), seed_size, clock_count, date_values(8)
+    integer(int64) :: date_seed
     real(dp) :: coords(3), y, prof, noise(3)
     logical :: log_law
 
@@ -80,6 +82,25 @@ contains
     hu => self%host_allocator%get_block(DIR_C)
     hv => self%host_allocator%get_block(DIR_C)
     hw => self%host_allocator%get_block(DIR_C)
+
+    ! Match Incompact3d init_abl: seed each MPI rank from the clock before
+    ! drawing the three component fields in u, v, w order.
+    call system_clock(count=clock_count)
+    if (clock_count == 0) then
+      ! NVHPC can return zero for system_clock in some environments.
+      call date_and_time(values=date_values)
+      date_seed = int(date_values(1), int64)*10000000000000_int64 + &
+                  int(date_values(2), int64)*100000000000_int64 + &
+                  int(date_values(3), int64)*1000000000_int64 + &
+                  int(date_values(5), int64)*10000000_int64 + &
+                  int(date_values(6), int64)*100000_int64 + &
+                  int(date_values(7), int64)*1000_int64 + &
+                  int(date_values(8), int64)
+      clock_count = int(modulo(date_seed, 2147483647_int64))
+    end if
+    call random_seed(size=seed_size)
+    call random_seed(put=clock_count + 63946*(self%mesh%par%nrank + 1)* &
+                     [(i - 1, i = 1, seed_size)])
 
     call random_number(hu%data(1:dims(1), 1:dims(2), 1:dims(3)))
     call random_number(hv%data(1:dims(1), 1:dims(2), 1:dims(3)))
