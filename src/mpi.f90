@@ -96,10 +96,14 @@ contains
   end subroutine MPI_Finalize
 
   subroutine MPI_Initialized(flag, ierror)
+    !! Reported as initialised whether or not MPI_Init has been called. There
+    !! is no MPI environment to bring up here, so callers asking whether it is
+    !! safe to proceed always have their answer, and a library handed a
+    !! communicator never has to wait for one.
     logical, intent(out) :: flag
     integer, intent(out) :: ierror
 
-    flag = .false.
+    flag = .true.
     ierror = MPI_SUCCESS
   end subroutine MPI_Initialized
 

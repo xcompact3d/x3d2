@@ -89,6 +89,9 @@ Two things follow from the single rank:
 * Only the single-rank tests are registered, and they run the executable
   directly instead of through ``mpirun``.
 
+``WITH_ADIOS2`` still works: ADIOS2 is built without MPI to match, and x3d2
+uses its serial bindings. See :ref:`adios2-and-mpi` below.
+
 Configuring 2decomp-fft Support
 -------------------------------
 
@@ -157,6 +160,27 @@ For custom installation locations, provide the path to CMake:
 .. code-block:: bash
 
    -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DADIOS2_ROOT_DIR=/path/to/adios2/installation
+
+.. _adios2-and-mpi:
+
+ADIOS2 and MPI
+~~~~~~~~~~~~~~
+
+ADIOS2 follows ``WITH_MPI``. The built-in ADIOS2 is configured with
+``ADIOS2_USE_MPI`` to match, and the build links the Fortran bindings ADIOS2
+exports for that configuration: ``adios2::fortran_mpi`` with MPI,
+``adios2::fortran`` without it.
+
+The two must agree, because ADIOS2's ``adios2_init`` and ``adios2_open`` take a
+communicator only in an MPI build; without one they take no communicator at
+all, which is a difference in the argument list rather than in a value that
+could be passed through. x3d2 keeps the communicator flowing through its own
+I/O layer regardless and drops it in the two wrappers at the top of
+``src/io/adios2/io.f90``.
+
+With ``USE_SYSTEM_ADIOS2=ON`` in an MPI build, the MPI component is required,
+so configuring fails against a serial installation rather than failing to
+compile later.
 
 When to Build a Custom ADIOS2
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

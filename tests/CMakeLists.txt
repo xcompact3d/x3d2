@@ -153,7 +153,7 @@ function(define_test testfile np backend)
   endif()
 
   if(WITH_ADIOS2)
-    target_link_libraries(${test_name} PRIVATE adios2::fortran_mpi)
+    target_link_libraries(${test_name} PRIVATE ${ADIOS2_FORTRAN_TARGET})
   endif()
 
   if(NOT WITH_MPI)
