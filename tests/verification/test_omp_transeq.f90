@@ -1,6 +1,6 @@
 program test_omp_transeq
   use iso_fortran_env, only: stderr => error_unit
-  use mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
   use m_allocator, only: allocator_t, field_t
   use m_common, only: dp, pi, MPI_X3D2_DP, DIR_X, DIR_Y, DIR_Z, VERT

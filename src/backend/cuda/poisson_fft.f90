@@ -5,7 +5,8 @@ module m_cuda_poisson_fft
   use cudafor
   use cufftXt
   use cufft
-  use mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_COMPLEX, MPI_DOUBLE_COMPLEX, &
+                   MPI_STATUS_IGNORE, MPI_SUCCESS, MPI_Abort, MPI_Sendrecv
 
   use m_common, only: dp, CELL, is_sp
   use m_field, only: field_t
@@ -162,6 +163,15 @@ contains
     cufftmp_failed = .false.
     ierr = cufftCreate(plan)
 
+#ifndef MPI
+    ! cuFFTMp distributes a transform over MPI ranks, so a build without MPI
+    ! links plain cuFFT instead (see src/CMakeLists.txt) and has no cuFFTMp
+    ! entry points to call.  A serial build is one rank, which plain cuFFT
+    ! handles on its own.
+    use_cufftmp = .false.
+#endif
+
+#ifdef MPI
     if (use_cufftmp) then
       ! Try to attach MPI communicator for cuFFTMp
       ierr = cufftMpAttachComm(plan, CUFFT_COMM_MPI, MPI_COMM_WORLD)
@@ -191,6 +201,7 @@ contains
         ierr = cufftCreate(plan)
       end if
     end if
+#endif
 
     ! create plan with cuFFT
     if (.not. use_cufftmp) then
@@ -998,11 +1009,16 @@ contains
     if (self%mirror_slab_rank == nrank) then
       self%c_mirror_dev = c_dev
     else
+#ifdef MPI
       call MPI_Sendrecv(self%c_slab_send_dev, n_slab, mpi_cplx, &
                         self%mirror_slab_rank, tag_slab, &
                         self%c_mirror_dev, n_slab, mpi_cplx, &
                         self%mirror_slab_rank, tag_slab, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr_mpi)
+#else
+      error stop 'The 100 mirror slab exchange needs more than one rank, &
+                  &but this build was configured without MPI'
+#endif
       if (ierr_mpi /= MPI_SUCCESS) then
         write (stderr, '(a,i0)') &
           'The 100 mirror slab exchange failed: ', ierr_mpi
@@ -1014,11 +1030,16 @@ contains
     if (self%mirror_plane_rank == nrank) then
       self%c_plane_recv_dev = self%c_plane_send_dev
     else
+#ifdef MPI
       call MPI_Sendrecv(self%c_plane_send_dev, n_plane, mpi_cplx, &
                         self%mirror_plane_rank, tag_plane, &
                         self%c_plane_recv_dev, n_plane, mpi_cplx, &
                         self%mirror_plane_rank, tag_plane, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr_mpi)
+#else
+      error stop 'The 100 mirror plane exchange needs more than one rank, &
+                  &but this build was configured without MPI'
+#endif
       if (ierr_mpi /= MPI_SUCCESS) then
         write (stderr, '(a,i0)') &
           'The 100 mirror plane exchange failed: ', ierr_mpi

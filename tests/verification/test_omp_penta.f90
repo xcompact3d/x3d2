@@ -12,7 +12,7 @@ program test_omp_penta
   !! interior) at boundary rows; halos unused.  BC_NEUMANN uses mirror-ghost
   !! extension; halos filled with exact symmetric/antisymmetric extension.
   use iso_fortran_env, only: stderr => error_unit
-  use mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_SUM, MPI_Allreduce
 
   use m_common, only: dp, pi, MPI_X3D2_DP, BC_PERIODIC, BC_DIRICHLET, BC_NEUMANN
   use m_omp_common, only: SZ
