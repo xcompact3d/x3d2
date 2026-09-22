@@ -46,6 +46,8 @@ contains
 
   type(omptgt_backend_t) function omptgt_backend_init(mesh, allocator) &
     result(backend)
+    !! Constructs the backend on top of a host OpenMP backend, which supplies
+    !! the fallback implementations for anything not offloaded here.
 
     type(mesh_t), target, intent(inout) :: mesh
     class(allocator_t), target, intent(inout) :: allocator
@@ -54,6 +56,8 @@ contains
   end function
 
   subroutine veccopy_omptgt(self, dst, src)
+    !! Copies `src` into `dst`. Both fields must be device-resident and share
+    !! the same direction.
 
     class(omptgt_backend_t) :: self
     class(field_t), intent(inout) :: dst
@@ -79,6 +83,8 @@ contains
   end subroutine
 
   subroutine veccopy_offload_(dst_ptr, n_dst, src_ptr, n_src)
+    !! Offloaded kernel behind `veccopy_omptgt`, copying over the destination's
+    !! extents.
 
     type(c_ptr), intent(in) :: dst_ptr, src_ptr
     integer, dimension(3), intent(in) :: n_dst, n_src
@@ -107,6 +113,8 @@ contains
   end subroutine
 
   subroutine vecadd_omptgt(self, a, x, b, y)
+    !! Computes y = a*x + b*y, falling back to the host backend when the
+    !! fields are not device-resident.
 
     class(omptgt_backend_t) :: self
     real(dp), intent(in) :: a
@@ -133,6 +141,8 @@ contains
   end subroutine
 
   subroutine vecadd_offload(self, a, x, b, y)
+    !! Device implementation of `vecadd`, which looks up the padded extents of
+    !! the layout the fields are in.
 
     class(omptgt_backend_t) :: self
     real(dp), intent(in) :: a
@@ -150,6 +160,7 @@ contains
   end subroutine
 
   subroutine vecadd_offload_(dims, a, x_ptr, n_x, b, y_ptr, n_y)
+    !! Offloaded kernel evaluating y = a*x + b*y over the padded domain.
     integer, dimension(3), intent(in) :: dims
     real(dp), intent(in) :: a
     type(c_ptr), intent(in) :: x_ptr
@@ -266,6 +277,7 @@ contains
   end subroutine
 
   subroutine copy_data_to_f_omptgt(self, f, data)
+    !! Copies a host array into a device-resident field.
     class(omptgt_backend_t), intent(inout) :: self
     class(field_t), intent(inout) :: f
     real(dp), dimension(:, :, :), intent(in) :: data
@@ -285,6 +297,8 @@ contains
   end subroutine copy_data_to_f_omptgt
 
   subroutine copy_data_to_f_omptgt_(f_ptr, n_f, d, dims)
+    !! Offloaded kernel behind `copy_data_to_f`. The host array is mapped in
+    !! for the duration of the region, so this transfers over the bus.
     type(c_ptr), intent(in) :: f_ptr
     integer, dimension(3), intent(in) :: n_f
     real(dp), dimension(:, :, :), intent(in) :: d
@@ -310,6 +324,7 @@ contains
   end subroutine
 
   subroutine copy_f_to_data_omptgt(self, data, f)
+    !! Copies a device-resident field back into a host array.
     class(omptgt_backend_t), intent(inout) :: self
     real(dp), dimension(:, :, :), intent(out) :: data
     class(field_t), intent(in) :: f
@@ -328,6 +343,8 @@ contains
   end subroutine copy_f_to_data_omptgt
 
   subroutine copy_f_to_data_omptgt_(data, f_ptr, n_f, dims)
+    !! Offloaded kernel behind `copy_f_to_data`. The host array is mapped back
+    !! out of the region, so this transfers over the bus.
     real(dp), dimension(:, :, :), intent(out) :: data
     type(c_ptr), intent(in) :: f_ptr
     integer, dimension(3), intent(in) :: n_f
@@ -352,6 +369,9 @@ contains
   end subroutine
 
   subroutine reorder_omptgt(self, u_, u, direction)
+    !! Reorders `u` into `u_` between the two data layouts encoded in
+    !! `direction`, offloading either a device-to-device or, when the source
+    !! is a host field, a host-to-device reordering.
     class(omptgt_backend_t) :: self
     class(field_t), intent(inout) :: u_
     class(field_t), intent(in) :: u
@@ -410,6 +430,7 @@ contains
 
   subroutine reorder_omptgt_dd(u_ptr, n_u_, u_in_ptr, n_u, dims, dir_from, &
                                dir_to, cart_padded)
+    !! Offloaded reordering of one device-resident field into another.
     type(c_ptr), intent(in) :: u_ptr, u_in_ptr
     integer, dimension(3), intent(in) :: n_u_, n_u
     integer, dimension(3), intent(in) :: dims
@@ -437,6 +458,8 @@ contains
 
   subroutine reorder_omptgt_dh(u_ptr, n_u_, u, dims, dir_from, dir_to, &
                                cart_padded)
+    !! Offloaded reordering of a host field into a device-resident one; the
+    !! source array is mapped into the target region.
     type(c_ptr), intent(in) :: u_ptr
     integer, dimension(3), intent(in) :: n_u_
     real(dp), dimension(:, :, :), pointer, intent(in) :: u

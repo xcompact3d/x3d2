@@ -48,16 +48,18 @@ module m_omptgt_allocator
 
 contains
 
-  ! Constructor for the OMP target offload allocator
   type(omptgt_allocator_t) function omptgt_allocator_init(dims, sz) result(a)
+    !! Constructs the allocator, leaving the sizing of the memory blocks it
+    !! hands out to the base allocator.
     integer, intent(in) :: dims(3)
     integer, intent(in) :: sz
 
     a%allocator_t = allocator_t(dims, sz)
   end function omptgt_allocator_init
 
-  ! Allocates a device-resident block
   function create_block_omptgt(self, next) result(ptr)
+    !! Creates a new device-resident block and links it in front of `next` in
+    !! the allocator's list of blocks.
     class(omptgt_allocator_t), intent(inout) :: self
     class(field_t), pointer, intent(in) :: next
     class(field_t), pointer :: ptr
@@ -73,8 +75,10 @@ contains
 
   end function create_block_omptgt
 
-  ! Constructs a device-resident field
   subroutine omptgt_field_init(ngrid, next, id, f)
+    !! Initialises a field and allocates its `ngrid` points of storage on the
+    !! default target device. No device means offloading was not enabled at
+    !! build time, so this errors out rather than silently running on the host.
     integer, intent(in) :: ngrid
     class(field_t), pointer, intent(in) :: next
     integer, intent(in) :: id
@@ -102,6 +106,7 @@ contains
   end subroutine omptgt_field_init
 
   subroutine omptgt_field_destroy(self)
+    !! Frees the device allocation when the field is finalised.
     type(omptgt_field_t) :: self
 
     if (c_associated(self%dev_ptr)) then
@@ -111,6 +116,7 @@ contains
   end subroutine
 
   subroutine fill_omptgt(self, c)
+    !! Sets every point of the field, padding included, to the constant `c`.
     class(omptgt_field_t) :: self
     real(dp), intent(in) :: c
 
@@ -119,6 +125,8 @@ contains
   end subroutine fill_omptgt
 
   subroutine fill_omptgt_(dev_ptr, c, n)
+    !! Offloaded kernel behind `fill_omptgt`. Takes the device pointer rather
+    !! than the field so the target region needs no mapping.
     type(c_ptr), intent(in) :: dev_ptr
     real(dp), intent(in) :: c
     integer, intent(in) :: n
@@ -138,6 +146,8 @@ contains
   end subroutine
 
   function get_shape_omptgt(self) result(dims)
+    !! Returns the shape the field is currently viewed with, or -1s if
+    !! `set_shape` has not been called yet.
     class(omptgt_field_t) :: self
     integer :: dims(3)
 
@@ -145,6 +155,9 @@ contains
   end function
 
   subroutine set_shape_omptgt(self, dims)
+    !! Sets the shape the field is viewed with. Unlike the host and CUDA
+    !! fields there is no array pointer to reshape here, so this only records
+    !! the extents later used to cast the device pointer into an array.
     class(omptgt_field_t) :: self
     integer, intent(in) :: dims(3)
 
@@ -156,6 +169,8 @@ contains
   end subroutine
 
   type(c_ptr) function get_dev_ptr(self) result(ptr)
+    !! Returns the device pointer to the field's storage, for use in the
+    !! `is_device_ptr` clause of an offloaded region.
     class(omptgt_field_t) :: self
 
     ptr = self%dev_ptr
