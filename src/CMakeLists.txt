@@ -201,7 +201,7 @@ if(WITH_ADIOS2)
   target_link_libraries(x3d2 PRIVATE adios2::fortran_mpi)
   target_link_libraries(xcompact PRIVATE adios2::fortran_mpi)
   target_compile_options(x3d2 PRIVATE "-DWITH_ADIOS2")
-  
+
   # GPU-aware I/O requires C API (called via iso_c_binding)
   if(WITH_ADIOS2_GPU_AWARE)
     target_link_libraries(x3d2 PRIVATE adios2::c_mpi)
