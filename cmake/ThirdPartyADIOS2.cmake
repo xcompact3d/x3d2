@@ -106,7 +106,7 @@ if(WITH_ADIOS2)
                           "-DBUILD_TESTING=OFF"
                           "-DADIOS2_BUILD_EXAMPLES=OFF"
                           "-DADIOS2_USE_Fortran=ON"
-                          "-DADIOS2_USE_MPI=ON"
+			  "-DADIOS2_USE_MPI=${WITH_MPI}"
                           "-DADIOS2_USE_HDF5=OFF"
                           "-DADIOS2_USE_CURL=OFF"
                           ${adios2_cuda_args}
@@ -131,8 +131,10 @@ if(WITH_ADIOS2)
       add_library(adios2_fortran_mpi INTERFACE)
       target_include_directories(adios2_fortran_mpi INTERFACE
         "${adios2_install_dir}/include/adios2/fortran")
-      target_link_libraries(adios2_fortran_mpi INTERFACE
-        "${adios2_fortran_mpi_library}" "${adios2_fortran_library}" MPI::MPI_Fortran)
+      if (with_mpi)
+        target_link_libraries(adios2_fortran_mpi INTERFACE
+          "${adios2_fortran_mpi_library}" "${adios2_fortran_library}" MPI::MPI_Fortran)
+      endif()
       target_compile_definitions(adios2_fortran_mpi INTERFACE ADIOS2_USE_MPI)
       add_dependencies(adios2_fortran_mpi adios2-${adios2_version})
       add_library(adios2::fortran_mpi ALIAS adios2_fortran_mpi)
