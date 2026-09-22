@@ -25,7 +25,12 @@ CUDA Backend
 ~~~~~~~~~~~~
 
 Requires NVHPC or PGI; configuring fails with any other compiler. The build adds
-``-cuda`` and links ``cuFFTMp`` for the Poisson solver.
+``-cuda``, and links the Poisson solver against ``cuFFTMp``
+(``-cudalib=cufftmp``) in an MPI build or against plain ``cuFFT``
+(``-cudalib=cufft``) without one. cuFFTMp distributes a single transform across
+ranks and its nvfortran wrapper calls ``MPI_Comm_f2c``, so it cannot be linked
+into a serial build; a serial build is one rank, which plain cuFFT handles on
+its own.
 
 OpenMP Target Offload Backend
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -65,6 +70,47 @@ Vendor selection is automatic: the build defines ``OMP_TGT_NVIDIA`` for
 NVHPC/PGI and ``OMP_TGT_AMD`` for Cray and GNU, which selects the
 vendor-appropriate ``SZ`` parameter. Note that the GNU path assumes an AMD
 target.
+
+Building without MPI
+--------------------
+
+MPI is enabled by default. Turning it off builds a serial executable that runs
+as a single rank and needs no MPI installation or launcher:
+
+.. code-block:: bash
+
+   -DWITH_MPI=OFF
+
+``CMAKE_Fortran_COMPILER`` is then the compiler itself rather than an MPI
+wrapper. Do not pass ``mpif90`` or ``mpifort`` here: the wrapper puts the MPI
+library back on the compile and link lines, which defeats the point of the
+option. Name the compiler that matches the backend, for example ``nvfortran``
+for ``ENABLE_BACKEND=CUDA``, ``ftn`` on a Cray machine, or ``gfortran`` for a
+CPU build with GNU:
+
+.. code-block:: bash
+
+   cmake -S . -B build -DWITH_MPI=OFF \
+     -DCMAKE_Fortran_COMPILER=nvfortran -DENABLE_BACKEND=CUDA
+
+The code still calls MPI unconditionally; ``src/mpi.f90`` supplies serial
+stand-ins for the MPI entities x3d2 uses, under which every collective is the
+identity, the rank is 0 and the communicator size is 1. Add new stubs there
+rather than guarding call sites.
+
+Three things follow from the single rank:
+
+* ``WITH_2DECOMPFFT`` is forced off, because 2decomp-fft is an MPI library. The
+  FFT-based Poisson solver is therefore unavailable in a serial build.
+* ``ENABLE_BACKEND=CUDA`` links plain ``cuFFT`` rather than ``cuFFTMp``, as
+  described under `CUDA Backend`_ above. This is transparent: the CUDA Poisson
+  solver already falls back to plain cuFFT at runtime wherever cuFFTMp is
+  unavailable.
+* Only the single-rank tests are registered, and they run the executable
+  directly instead of through ``mpirun``.
+
+``WITH_ADIOS2`` still works: ADIOS2 is built without MPI to match, and x3d2
+uses its serial bindings. See :ref:`adios2-and-mpi` below.
 
 Configuring 2decomp-fft Support
 -------------------------------
@@ -134,6 +180,27 @@ For custom installation locations, provide the path to CMake:
 .. code-block:: bash
 
    -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DADIOS2_ROOT_DIR=/path/to/adios2/installation
+
+.. _adios2-and-mpi:
+
+ADIOS2 and MPI
+~~~~~~~~~~~~~~
+
+ADIOS2 follows ``WITH_MPI``. The built-in ADIOS2 is configured with
+``ADIOS2_USE_MPI`` to match, and the build links the Fortran bindings ADIOS2
+exports for that configuration: ``adios2::fortran_mpi`` with MPI,
+``adios2::fortran`` without it.
+
+The two must agree, because ADIOS2's ``adios2_init`` and ``adios2_open`` take a
+communicator only in an MPI build; without one they take no communicator at
+all, which is a difference in the argument list rather than in a value that
+could be passed through. x3d2 keeps the communicator flowing through its own
+I/O layer regardless and drops it in the two wrappers at the top of
+``src/io/adios2/io.f90``.
+
+With ``USE_SYSTEM_ADIOS2=ON`` in an MPI build, the MPI component is required,
+so configuring fails against a serial installation rather than failing to
+compile later.
 
 When to Build a Custom ADIOS2
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

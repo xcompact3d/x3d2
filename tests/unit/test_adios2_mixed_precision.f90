@@ -11,7 +11,7 @@ program test_adios2_mixed_precision
   use m_common, only: dp, i8, sp
   use m_io_backend, only: allocate_io_reader
   use m_io_base, only: io_reader_t, io_file_t, io_mode_read
-  use mpi, only: MPI_COMM_SELF, MPI_Init, MPI_Finalize
+  use m_mpi, only: MPI_COMM_SELF, MPI_Init, MPI_Finalize
 
   implicit none
 
@@ -107,7 +107,13 @@ contains
     start_dims = 0_i8
     count_dims = shape_dims
 
+#ifdef MPI
     call adios2_init(adios, MPI_COMM_SELF, ierr)
+#else
+    ! An ADIOS2 built without MPI takes no communicator (see the helpers in
+    ! src/io/adios2/io.f90).
+    call adios2_init(adios, ierr)
+#endif
     call check_adios2_error(ierr, "Failed to initialise writer")
     call adios2_declare_io(io, adios, "test_mixed_precision_write", ierr)
     call check_adios2_error(ierr, "Failed to declare writer IO")
@@ -129,8 +135,12 @@ contains
       start_dims, count_dims, adios2_constant_dims, ierr)
     call check_adios2_error(ierr, "Failed to define double-precision array")
 
+#ifdef MPI
     call adios2_open( &
       engine, io, output_filename, adios2_mode_write, MPI_COMM_SELF, ierr)
+#else
+    call adios2_open(engine, io, output_filename, adios2_mode_write, ierr)
+#endif
     call check_adios2_error(ierr, "Failed to open writer")
     call adios2_begin_step(engine, adios2_step_mode_append, ierr)
     call check_adios2_error(ierr, "Failed to begin writer step")

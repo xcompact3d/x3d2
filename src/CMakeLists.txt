@@ -3,6 +3,7 @@ set(SRC
   allocator.f90
   common.f90
   config.f90
+  mpi.f90
   field.f90
   mesh.f90
   ordering.f90
@@ -160,7 +161,15 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   endif()
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
   target_link_options(x3d2 INTERFACE "-cuda")
-  target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
+  # cuFFTMp distributes a transform over MPI ranks and its nvfortran wrapper
+  # calls MPI_Comm_f2c, so it cannot link into a build without MPI.  A serial
+  # build is one rank and links plain cuFFT instead: see create_fft_plan in
+  # backend/cuda/poisson_fft.f90 for the matching runtime path.
+  if(WITH_MPI)
+    target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
+  else()
+    target_link_options(x3d2 INTERFACE "-cudalib=cufft")
+  endif()
   target_compile_options(xcompact PRIVATE "-DCUDA")
   if(WITH_ADIOS2_GPU_AWARE)
     find_package(CUDAToolkit QUIET)
@@ -189,9 +198,11 @@ target_link_libraries(x3d2 PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(x3d2_backends PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(xcompact PRIVATE OpenMP::OpenMP_Fortran)
 
-target_link_libraries(x3d2 PRIVATE MPI::MPI_Fortran)
-target_link_libraries(x3d2_backends PRIVATE MPI::MPI_Fortran)
-target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
+if(WITH_MPI)
+  target_link_libraries(x3d2 PRIVATE MPI::MPI_Fortran)
+  target_link_libraries(x3d2_backends PRIVATE MPI::MPI_Fortran)
+  target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
+endif()
 
 # 5. Set thirdparty libary dependencies
 if(WITH_2DECOMPFFT)
@@ -203,13 +214,13 @@ if(WITH_2DECOMPFFT)
 endif()
 
 if(WITH_ADIOS2)
-  target_link_libraries(x3d2 PRIVATE adios2::fortran_mpi)
-  target_link_libraries(xcompact PRIVATE adios2::fortran_mpi)
+  target_link_libraries(x3d2 PRIVATE ${ADIOS2_FORTRAN_TARGET})
+  target_link_libraries(xcompact PRIVATE ${ADIOS2_FORTRAN_TARGET})
   target_compile_options(x3d2 PRIVATE "-DWITH_ADIOS2")
 
   # GPU-aware I/O requires C API (called via iso_c_binding)
   if(WITH_ADIOS2_GPU_AWARE)
-    target_link_libraries(x3d2 PRIVATE adios2::c_mpi)
-    target_link_libraries(xcompact PRIVATE adios2::c_mpi)
+    target_link_libraries(x3d2 PRIVATE ${ADIOS2_C_TARGET})
+    target_link_libraries(xcompact PRIVATE ${ADIOS2_C_TARGET})
   endif()
 endif()

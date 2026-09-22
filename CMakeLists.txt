@@ -7,8 +7,13 @@ project(x3d2 LANGUAGES Fortran CXX C)
 # Require OpenMP
 find_package(OpenMP REQUIRED)
 
-# Require MPI
-find_package(MPI REQUIRED)
+# MPI option (default ON).  A build without it is a single serial rank: see
+# src/mpi.f90, which stands in for the MPI entities the code uses.
+option(WITH_MPI "Enable MPI" ON)
+if(WITH_MPI)
+  find_package(MPI REQUIRED)
+  add_definitions("-DMPI")
+endif()
 
 # Toggleable build type (default Release)
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -42,6 +47,11 @@ endif()
 
 # FFT option (default ON)
 option(WITH_2DECOMPFFT "Enable Poisson based FFT solver on the OpenMP backend" ON)
+if(WITH_2DECOMPFFT AND NOT WITH_MPI)
+  message(STATUS
+    "2decomp-fft requires MPI: disabling WITH_2DECOMPFFT for this serial build")
+  set(WITH_2DECOMPFFT OFF)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 

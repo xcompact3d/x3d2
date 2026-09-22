@@ -1,5 +1,6 @@
 module m_omp_backend
-  use mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_MAX, MPI_SUM, &
+                   MPI_Allreduce
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t

@@ -13,7 +13,7 @@ module m_base_case
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
   use m_config, only: has_output_field
   use m_io_manager, only: io_manager_t
-  use mpi, only: MPI_COMM_WORLD, MPI_Wtime, MPI_Reduce, MPI_MAX
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Wtime, MPI_Reduce, MPI_MAX
 
   implicit none
 

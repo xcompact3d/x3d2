@@ -51,7 +51,7 @@ jobs:
           >> $GITHUB_PATH
 
     - name: Configure Debug build
-      run: FC=mpif90 cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
+      run: cmake -S . -B build-debug -DCMAKE_Fortran_COMPILER=mpif90 -DCMAKE_BUILD_TYPE=Debug -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
 
     - name: Build test
       run: make -C build-debug
@@ -60,7 +60,7 @@ jobs:
       run:  ctest  --test-dir build-debug -L "unit|verification|regression" --output-on-failure
 
     - name: Configure Release build
-      run: FC=mpif90 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
+      run: cmake -S . -B build -DCMAKE_Fortran_COMPILER=mpif90 -DCMAKE_BUILD_TYPE=Release -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
 
     - name: Build tests
       run: make -C build
@@ -68,8 +68,20 @@ jobs:
     - name: Run unit and verification tests
       run: ctest --test-dir build -L "unit|verification" --output-on-failure
 
+    # WITH_MPI=OFF builds against the compiler itself rather than an MPI
+    # wrapper, in its own build directory so that it does not inherit the MPI
+    # cache written by the Release configure above.
+    - name: Configure Release build (no mpi)
+      run: cmake -S . -B build-no-mpi -DCMAKE_Fortran_COMPILER=gfortran -DCMAKE_BUILD_TYPE=Release -DWITH_MPI=OFF -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
+
+    - name: Build tests (no mpi)
+      run: make -C build-no-mpi
+
+    - name: Run unit and verification tests (no mpi)
+      run: ctest --test-dir build-no-mpi -L "unit|verification" --output-on-failure
+
     - name: Configure Debug build (single precision)
-      run: FC=mpif90 cmake -S . -B build-single-debug -DCMAKE_BUILD_TYPE=Debug -DSINGLE_PREC=ON -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
+      run: cmake -S . -B build-single-debug -DCMAKE_Fortran_COMPILER=mpif90 -DCMAKE_BUILD_TYPE=Debug -DSINGLE_PREC=ON -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
 
     - name: Build tests (single precision)
       run: make -C build-single-debug
@@ -78,7 +90,7 @@ jobs:
       run: ctest --test-dir build-single-debug -L "unit|verification|regression" --output-on-failure
 
     - name: Configure Release build (single precision)
-      run: FC=mpif90 cmake -S . -B build-single -DCMAKE_BUILD_TYPE=Release -DSINGLE_PREC=ON -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
+      run: cmake -S . -B build-single -DCMAKE_Fortran_COMPILER=mpif90 -DCMAKE_BUILD_TYPE=Release -DSINGLE_PREC=ON -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON
 
     - name: Build tests (single precision)
       run: make -C build-single

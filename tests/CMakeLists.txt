@@ -2,6 +2,11 @@ set(CMAKE_CTEST_ARGUMENTS "--output-on-failure" CACHE STRING "comma separated li
 mark_as_advanced(CMAKE_CTEST_ARGUMENTS)
 set(CMAKE_CTEST_NPROCS "4" CACHE STRING "number of process used in tests")
 mark_as_advanced(CMAKE_CTEST_NPROCS)
+if(NOT WITH_MPI)
+  # A build without MPI is a single rank, so the parametrised tests run at one
+  # process and the explicitly multi-rank ones below are not registered at all.
+  set(CMAKE_CTEST_NPROCS 1)
+endif()
 option(WITH_NIGHTLY_REGRESSION
   "Register the heavier nightly regression cases (excluded from PR CI)." OFF)
 mark_as_advanced(WITH_NIGHTLY_REGRESSION)
@@ -9,9 +14,11 @@ mark_as_advanced(WITH_NIGHTLY_REGRESSION)
 # Shared test utilities library
 add_library(x3d2_test_utils STATIC common/test_utils.f90)
 target_link_libraries(x3d2_test_utils PRIVATE x3d2)
-# test_utils.f90 does `use mpi`, so it needs the MPI module path itself: x3d2
-# links MPI privately and does not pass it on.
-target_link_libraries(x3d2_test_utils PRIVATE MPI::MPI_Fortran)
+# test_utils.f90 reaches MPI through m_mpi, so with MPI enabled it needs the
+# MPI module path itself: x3d2 links MPI privately and does not pass it on.
+if(WITH_MPI)
+  target_link_libraries(x3d2_test_utils PRIVATE MPI::MPI_Fortran)
+endif()
 set_target_properties(x3d2_test_utils PROPERTIES
   Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_test_utils")
 target_include_directories(x3d2_test_utils INTERFACE
@@ -69,12 +76,19 @@ function(define_test_backend_runtime backend)
   endif()
 
   target_link_libraries(${runtime_target} PRIVATE x3d2_backends x3d2)
-  # backend_runtime.f90 does `use mpi` (see the note on x3d2_test_utils).
-  target_link_libraries(${runtime_target} PRIVATE MPI::MPI_Fortran)
+  # backend_runtime.f90 reaches MPI through m_mpi (see x3d2_test_utils above).
+  if(WITH_MPI)
+    target_link_libraries(${runtime_target} PRIVATE MPI::MPI_Fortran)
+  endif()
 endfunction()
 
 # Base test definition function
 function(define_test testfile np backend)
+  # Nothing can launch more than one rank without MPI.
+  if(NOT WITH_MPI AND NOT ${np} EQUAL 1)
+    return()
+  endif()
+
   # Capture optional arguments passed to the function (e.g. input file or flags)
   set(extra_args "${ARGN}")
   string(REPLACE ";" " " extra_args_str "${extra_args}")
@@ -134,13 +148,17 @@ function(define_test testfile np backend)
     target_link_libraries(${test_name} PRIVATE decomp2d)
   endif()
 
-  target_link_libraries(${test_name} PRIVATE MPI::MPI_Fortran)
-
-  if(WITH_ADIOS2)
-    target_link_libraries(${test_name} PRIVATE adios2::fortran_mpi)
+  if(WITH_MPI)
+    target_link_libraries(${test_name} PRIVATE MPI::MPI_Fortran)
   endif()
 
-  if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+  if(WITH_ADIOS2)
+    target_link_libraries(${test_name} PRIVATE ${ADIOS2_FORTRAN_TARGET})
+  endif()
+
+  if(NOT WITH_MPI)
+    add_test(NAME ${test_name} COMMAND sh -c "bin/${test_name} ${extra_args_str}")
+  elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
     add_test(NAME ${test_name} COMMAND "srun bin/${test_name} ${extra_args_str}")
   else()
     add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} bin/${test_name} ${extra_args_str}")
@@ -152,6 +170,11 @@ endfunction()
 
 # Specialised test definition functions with category labels
 function(define_verification_test testfile np backend)
+  # define_test() registers nothing for a multi-rank test in a serial build.
+  if(NOT WITH_MPI AND NOT ${np} EQUAL 1)
+    return()
+  endif()
+
   define_test(${testfile} ${np} ${backend} ${ARGN})
   get_filename_component(test_name ${testfile} NAME_WE)
   string(CONCAT test_name ${test_name} _ ${backend} _ ${np})
@@ -159,6 +182,11 @@ function(define_verification_test testfile np backend)
 endfunction()
 
 function(define_performance_test testfile np backend)
+  # define_test() registers nothing for a multi-rank test in a serial build.
+  if(NOT WITH_MPI AND NOT ${np} EQUAL 1)
+    return()
+  endif()
+
   define_test(${testfile} ${np} ${backend} ${ARGN})
   get_filename_component(test_name ${testfile} NAME_WE)
   string(CONCAT test_name ${test_name} _ ${backend} _ ${np})
@@ -166,6 +194,11 @@ function(define_performance_test testfile np backend)
 endfunction()
 
 function(define_regression_test testfile np backend)
+  # define_test() registers nothing for a multi-rank test in a serial build.
+  if(NOT WITH_MPI AND NOT ${np} EQUAL 1)
+    return()
+  endif()
+
   define_test(${testfile} ${np} ${backend} ${ARGN})
   get_filename_component(test_name ${testfile} NAME_WE)
   string(CONCAT test_name ${test_name} _ ${backend} _ ${np})
@@ -193,7 +226,12 @@ function(define_regression_case_test case_name input_file golden_file np backend
   set(golden ${CMAKE_CURRENT_SOURCE_DIR}/regression/${golden_file})
   # Match the launcher define_test() uses: Cray machines are Slurm-driven and
   # have no mpirun, so an mpirun-based test cannot start there at all.
-  if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+  if(NOT WITH_MPI)
+    if(NOT ${np} EQUAL 1)
+      return()
+    endif()
+    set(launcher "")
+  elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
     set(launcher "srun -n ${np}")
   else()
     set(launcher "mpirun --oversubscribe -np ${np}")

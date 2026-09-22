@@ -1,6 +1,5 @@
 module m_base_backend
   use iso_c_binding, only: c_ptr
-  use mpi
 
   use m_allocator, only: allocator_t
   use m_common, only: dp, DIR_C, get_rdr_from_dirs
