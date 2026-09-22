@@ -1,7 +1,7 @@
 module m_decomp
 !! Parallel decomposition provided by 2decomp&FFT
 
-  use mpi
+  use m_mpi
   implicit none
 
 contains

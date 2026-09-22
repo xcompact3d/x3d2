@@ -1,6 +1,6 @@
 module m_cuda_sendrecv
   use cudafor
-  use mpi
+  use m_mpi
 
   use m_common, only: dp, MPI_X3D2_DP
 
@@ -27,6 +27,7 @@ contains
       ! Ensure the send buffers are ready before MPI touches device memory.
       ierr = cudaStreamSynchronize(default_stream)
 
+#ifdef MPI
       call MPI_Isend(f_send_s, n_data, MPI_X3D2_DP, &
                      prev, tag, MPI_COMM_WORLD, req(1), err(1))
       call MPI_Irecv(f_recv_e, n_data, MPI_X3D2_DP, &
@@ -37,6 +38,7 @@ contains
                      prev, tag, MPI_COMM_WORLD, req(4), err(4))
 
       call MPI_Waitall(4, req, MPI_STATUSES_IGNORE, ierr)
+#endif
     end if
 
   end subroutine sendrecv_fields
@@ -67,6 +69,7 @@ contains
       ! Ensure the send buffers are ready before MPI touches device memory.
       ierr = cudaStreamSynchronize(default_stream)
 
+#ifdef MPI
       call MPI_Isend(f1_send_s, n_data, MPI_X3D2_DP, &
                      prev, tag, MPI_COMM_WORLD, req(1), err(1))
       call MPI_Irecv(f1_recv_e, n_data, MPI_X3D2_DP, &
@@ -95,6 +98,7 @@ contains
                      prev, tag, MPI_COMM_WORLD, req(12), err(12))
 
       call MPI_Waitall(12, req, MPI_STATUSES_IGNORE, ierr)
+#endif
     end if
 
   end subroutine sendrecv_3fields

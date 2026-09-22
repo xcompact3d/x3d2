@@ -193,7 +193,8 @@ Build options
      - ``Release`` or ``Debug``.
    * - ``CMAKE_Fortran_COMPILER``
      - --
-     - The MPI Fortran wrapper to build with, normally ``mpif90``.
+     - The MPI Fortran wrapper to build with, normally ``mpif90``. A plain
+       compiler with ``WITH_MPI=OFF``.
    * - ``ENABLE_BACKEND``
      - ``OFF``
      - GPU backend to build: ``OFF``, ``CUDA`` or ``OMP_TGT``.
@@ -203,6 +204,9 @@ Build options
    * - ``SINGLE_PREC``
      - ``OFF``
      - Build in single precision.
+   * - ``WITH_MPI``
+     - ``ON``
+     - Build against MPI. ``OFF`` builds a serial, single-rank executable.
    * - ``WITH_2DECOMPFFT``
      - ``ON``
      - Build the FFT-based Poisson solver against 2decomp-fft.
@@ -210,8 +214,8 @@ Build options
      - ``OFF``
      - Enable ADIOS2 for checkpoint and snapshot I/O.
 
-See :doc:`user/advanced_build` for the ADIOS2, 2decomp-fft, single precision and
-CUDA debugging options in detail.
+See :doc:`user/advanced_build` for the MPI, ADIOS2, 2decomp-fft, single
+precision and CUDA debugging options in detail.
 
 Third-party dependencies
 ~~~~~~~~~~~~~~~~~~~~~~~~

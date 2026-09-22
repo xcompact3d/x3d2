@@ -7,7 +7,7 @@ program perf_cuda_penta
   !!   alpha=0.5, beta=0.05  (LHS pentadiag)
   !!   a=17/12, b=101/150, c=1/100  (RHS stencil)
   use cudafor
-  use mpi
+  use m_mpi
 
   use m_common, only: dp, nbytes, pi, MPI_X3D2_DP, BC_PERIODIC
   use m_cuda_common, only: SZ

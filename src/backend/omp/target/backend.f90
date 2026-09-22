@@ -8,7 +8,7 @@ module m_omptgt_backend
 
   use iso_c_binding, only: c_ptr, c_f_pointer
 
-  use mpi
+  use m_mpi
 
   use m_common, only: dp, DIR_C, DIR_X, NULL_LOC, MPI_X3D2_DP, &
                       get_dirs_from_rdr

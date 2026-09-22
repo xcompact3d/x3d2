@@ -1,7 +1,7 @@
 program test_cuda_tridiag
   use iso_fortran_env, only: stderr => error_unit
   use cudafor
-  use mpi
+  use m_mpi
 
   use m_common, only: dp, pi, MPI_X3D2_DP, BC_PERIODIC
   use m_cuda_common, only: SZ

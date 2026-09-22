@@ -6,7 +6,7 @@ module m_snapshot_manager
 !! data to files intended for analysis and visualisation
 !! Unlike checkpoints, which are always full-resolution for exact restarts,
 !! snapshots can be strided to reduce file size.
-  use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Allreduce, MPI_IN_PLACE, &
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Allreduce, MPI_IN_PLACE, &
                  MPI_MIN, MPI_SUCCESS
   use m_common, only: dp, i8, MPI_X3D2_DP, DIR_C, VERT, get_argument
   use m_field, only: field_t

@@ -1,5 +1,5 @@
 program xcompact
-  use mpi
+  use m_mpi
 
   use m_allocator
   use m_base_backend

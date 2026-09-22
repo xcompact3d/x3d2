@@ -1,5 +1,5 @@
 module m_test_utils
-  use mpi
+  use m_mpi
   use iso_fortran_env, only: stderr => error_unit
   use m_common, only: dp, nbytes
   implicit none

@@ -11,7 +11,7 @@ program test_adios2_mixed_precision
   use m_common, only: dp, i8, sp
   use m_io_backend, only: allocate_io_reader
   use m_io_base, only: io_reader_t, io_file_t, io_mode_read
-  use mpi, only: MPI_COMM_SELF, MPI_Init, MPI_Finalize
+  use m_mpi, only: MPI_COMM_SELF, MPI_Init, MPI_Finalize
 
   implicit none
 

@@ -8,7 +8,7 @@ module m_ibm
 !! This field should be one (zero) in the fluid (solid)
 !! domain.
   use iso_fortran_env, only: stderr => error_unit
-  use mpi
+  use m_mpi
 
   use m_io_session, only: reader_session_t
   use m_allocator, only: allocator_t, field_t

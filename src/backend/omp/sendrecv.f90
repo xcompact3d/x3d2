@@ -1,5 +1,5 @@
 module m_omp_sendrecv
-  use mpi
+  use m_mpi
 
   use m_common, only: dp, MPI_X3D2_DP
 

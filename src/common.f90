@@ -1,5 +1,5 @@
 module m_common
-  use mpi
+  use m_mpi
 
   implicit none
 

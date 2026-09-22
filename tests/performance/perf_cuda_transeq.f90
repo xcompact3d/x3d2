@@ -1,6 +1,6 @@
 program perf_cuda_transeq
   use cudafor
-  use mpi
+  use m_mpi
 
   use m_common, only: dp, nbytes, pi, MPI_X3D2_DP, BC_PERIODIC
   use m_cuda_common, only: SZ

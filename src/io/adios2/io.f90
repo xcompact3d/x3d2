@@ -35,7 +35,7 @@ module m_io_backend
                     adios2_found, adios2_constant_dims, &
                     adios2_type_dp, adios2_type_integer4, adios2_type_real
   use iso_fortran_env, only: real64
-  use mpi, only: MPI_COMM_NULL, MPI_Initialized, MPI_Comm_rank
+  use m_mpi, only: MPI_COMM_NULL, MPI_Initialized, MPI_Comm_rank
   use m_common, only: dp, i8, sp, is_sp
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
                        io_mode_read, io_mode_write

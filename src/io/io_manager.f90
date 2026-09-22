@@ -7,7 +7,7 @@ module m_io_manager
 !! a single point of contact for all I/O-related actions. The main program only
 !! needs to interact with the `io_manager_t` type, which then delegates tasks
 !! to the specialised checkpoint, snapshot, and statistics managers.
-  use mpi, only: MPI_COMM_WORLD
+  use m_mpi, only: MPI_COMM_WORLD
   use m_checkpoint_manager, only: checkpoint_manager_t
   use m_checkpoint_state, only: checkpoint_state_t
   use m_snapshot_manager, only: snapshot_manager_t

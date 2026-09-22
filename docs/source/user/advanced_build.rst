@@ -66,6 +66,29 @@ NVHPC/PGI and ``OMP_TGT_AMD`` for Cray and GNU, which selects the
 vendor-appropriate ``SZ`` parameter. Note that the GNU path assumes an AMD
 target.
 
+Building without MPI
+--------------------
+
+MPI is enabled by default. Turning it off builds a serial executable that runs
+as a single rank and needs no MPI installation or launcher:
+
+.. code-block:: bash
+
+   -DWITH_MPI=OFF
+
+``CMAKE_Fortran_COMPILER`` is then a plain compiler (``gfortran``, ``ftn``,
+``nvfortran``) rather than an MPI wrapper. The code still calls MPI
+unconditionally; ``src/mpi.f90`` supplies serial stand-ins for the MPI entities
+x3d2 uses, under which every collective is the identity, the rank is 0 and the
+communicator size is 1. Add new stubs there rather than guarding call sites.
+
+Two things follow from the single rank:
+
+* ``WITH_2DECOMPFFT`` is forced off, because 2decomp-fft is an MPI library. The
+  FFT-based Poisson solver is therefore unavailable in a serial build.
+* Only the single-rank tests are registered, and they run the executable
+  directly instead of through ``mpirun``.
+
 Configuring 2decomp-fft Support
 -------------------------------
 

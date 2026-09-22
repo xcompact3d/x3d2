@@ -1,5 +1,5 @@
 program test_adios2
-  use mpi
+  use m_mpi
   use m_io_backend, only: allocate_io_writer, allocate_io_reader
   use m_io_base, only: io_writer_t, io_reader_t, io_file_t, io_mode_write, &
                        io_mode_read

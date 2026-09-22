@@ -1,7 +1,7 @@
 program test_kinetic_energy
   !! Verifies the one-pass global squared norm used for kinetic energy.
 
-  use mpi
+  use m_mpi
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t

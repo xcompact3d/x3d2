@@ -3,6 +3,7 @@ set(SRC
   allocator.f90
   common.f90
   config.f90
+  mpi.f90
   field.f90
   mesh.f90
   ordering.f90
@@ -176,9 +177,11 @@ target_link_libraries(x3d2 PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(x3d2_backends PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(xcompact PRIVATE OpenMP::OpenMP_Fortran)
 
-target_link_libraries(x3d2 PRIVATE MPI::MPI_Fortran)
-target_link_libraries(x3d2_backends PRIVATE MPI::MPI_Fortran)
-target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
+if(WITH_MPI)
+  target_link_libraries(x3d2 PRIVATE MPI::MPI_Fortran)
+  target_link_libraries(x3d2_backends PRIVATE MPI::MPI_Fortran)
+  target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
+endif()
 
 # 5. Set thirdparty libary dependencies
 if(WITH_2DECOMPFFT)

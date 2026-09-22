@@ -1,6 +1,6 @@
 module m_cuda_exec_dist
   use cudafor
-  use mpi
+  use m_mpi
 
   use m_common, only: dp
   use m_cuda_common, only: SZ

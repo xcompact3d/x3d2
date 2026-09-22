@@ -1,5 +1,5 @@
 program perf_thom
-  use mpi, only: MPI_Wtime
+  use m_mpi, only: MPI_Wtime
 
   use m_allocator, only: allocator_t, field_t
   use m_backend_runtime, only: backend_runtime_t, backend_is_cuda, backend_sz

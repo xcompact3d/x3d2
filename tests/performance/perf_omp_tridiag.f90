@@ -1,5 +1,5 @@
 program perf_omp_tridiag
-  use mpi
+  use m_mpi
   use omp_lib
 
   use m_common, only: dp, nbytes, pi, MPI_X3D2_DP, BC_PERIODIC
