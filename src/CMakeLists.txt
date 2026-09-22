@@ -91,6 +91,11 @@ if(WITH_ADIOS2)
   list(APPEND SRC
     io/adios2/io.f90
   )
+  if(WITH_ADIOS2_GPU_AWARE)
+    list(APPEND SRC
+      io/adios2/adios2_device_put.c
+    )
+  endif()
 else()
   list(APPEND SRC
   io/dummy/io.f90

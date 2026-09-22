@@ -72,8 +72,8 @@ module m_io_backend
   use m_base_backend, only: base_backend_t
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
                        io_mode_read, io_mode_write
-  use iso_c_binding, only: c_double, c_int, c_int8_t, c_char, &
-                           c_null_char, c_ptr, c_loc, c_null_ptr
+  use iso_c_binding, only: c_double, c_int, c_int8_t, c_int64_t, c_char, &
+                           c_null_char, c_ptr, c_loc
 
   implicit none
 
@@ -197,20 +197,18 @@ module m_io_backend
   end type io_adios2_file_t
 
 #ifdef X3D2_ADIOS2_CUDA
-  ! Direct binding to the ADIOS2 C API's adios2_put for GPU-aware writes.
-  ! The Fortran generic adios2_put does not accept device arrays, so the
-  ! engine and variable f2c handles (integer(8) in ADIOS2's Fortran
-  ! bindings) are transferred to the opaque C pointers adios2_put expects;
-  ! both are 8 bytes on x86_64. Memory space must be set to GPU via the
-  ! native Fortran adios2_set_memory_space before calling this.
   interface
-    function adios2_put_c(engine, variable, data, mode) &
-      bind(C, name='adios2_put') result(ierr)
-      import :: c_ptr, c_int
-      type(c_ptr), value :: engine, variable, data
+    function x3d2_adios2_put_device(engine, variable, data, mode) &
+      bind(C, name='x3d2_adios2_put_device') result(ierr)
+      !! adios2_put for a device buffer (see adios2_device_put.c). Takes the
+      !! engine and variable f2c handles by value; the variable's memory
+      !! space must already be set to GPU.
+      import :: c_int64_t, c_ptr, c_int
+      integer(c_int64_t), value :: engine, variable
+      type(c_ptr), value :: data
       integer(c_int), value :: mode
       integer(c_int) :: ierr
-    end function adios2_put_c
+    end function x3d2_adios2_put_device
 
     function nvtx_range_push_a(name) bind(C, name='nvtxRangePushA') &
       result(status)
@@ -1502,9 +1500,9 @@ contains
 
     if (file_handle%bench_enabled) t0_put = MPI_Wtime()
     call nvtx_push_if_enabled("ADIOS2_Put")
-    ierr = adios2_put_c(transfer(file_handle%engine%f2c, c_null_ptr), &
-                        transfer(var%f2c, c_null_ptr), staging, &
-                        int(put_mode, c_int))
+    ierr = x3d2_adios2_put_device(int(file_handle%engine%f2c, c_int64_t), &
+                                  int(var%f2c, c_int64_t), staging, &
+                                  int(put_mode, c_int))
     call nvtx_pop_if_enabled()
     if (file_handle%bench_enabled) then
       call bench_record_put(file_handle, MPI_Wtime() - t0_put, &
