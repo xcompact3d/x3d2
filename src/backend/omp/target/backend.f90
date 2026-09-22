@@ -4,14 +4,9 @@
 !!
 !! Note this extends the CPU (host) OpenMP backend with the intention of being able to use fallback implementations where necessary.
 
-#ifdef OMP_TGT_NVIDIA
-! NVHPC 25.3 accepts is_device_ptr but not has_device_addr for Fortran arrays.
-#define X3D2_DEVICE_ADDR_CLAUSE is_device_ptr
-#else
-#define X3D2_DEVICE_ADDR_CLAUSE has_device_addr
-#endif
-
 module m_omptgt_backend
+
+  use iso_c_binding, only: c_ptr, c_f_pointer
 
   use mpi
 
@@ -51,6 +46,8 @@ contains
 
   type(omptgt_backend_t) function omptgt_backend_init(mesh, allocator) &
     result(backend)
+    !! Constructs the backend on top of a host OpenMP backend, which supplies
+    !! the fallback implementations for anything not offloaded here.
 
     type(mesh_t), target, intent(inout) :: mesh
     class(allocator_t), target, intent(inout) :: allocator
@@ -59,6 +56,8 @@ contains
   end function
 
   subroutine veccopy_omptgt(self, dst, src)
+    !! Copies `src` into `dst`. Both fields must be device-resident and share
+    !! the same direction.
 
     class(omptgt_backend_t) :: self
     class(field_t), intent(inout) :: dst
@@ -72,7 +71,8 @@ contains
     type is (omptgt_field_t)
       select type (src)
       type is (omptgt_field_t)
-        call veccopy_offload_(dst%data_tgt, src%data_tgt)
+        call veccopy_offload_(dst%get_dev_ptr(), dst%get_shape(), &
+                              src%get_dev_ptr(), src%get_shape())
       class default
         error stop "Called omptgt vector copy with unsupported source vector"
       end select
@@ -82,29 +82,39 @@ contains
     end select
   end subroutine
 
-  subroutine veccopy_offload_(dst, src)
+  subroutine veccopy_offload_(dst_ptr, n_dst, src_ptr, n_src)
+    !! Offloaded kernel behind `veccopy_omptgt`, copying over the destination's
+    !! extents.
 
-    real(dp), dimension(:, :, :), intent(inout) :: dst
-    real(dp), dimension(:, :, :), intent(in) :: src
+    type(c_ptr), intent(in) :: dst_ptr, src_ptr
+    integer, dimension(3), intent(in) :: n_dst, n_src
 
-    integer, dimension(3) :: n
+    real(dp), dimension(:, :, :), pointer :: dst, src
     integer :: i, j, k
 
-    n = shape(dst)
+    if (any(n_src < n_dst)) then
+      error stop "Source field is smaller than the destination"
+    end if
 
-    !$omp target teams loop collapse(3) X3D2_DEVICE_ADDR_CLAUSE(dst, src)
-    do k = 1, n(3)
-      do j = 1, n(2)
-        do i = 1, n(1)
+    call c_f_pointer(dst_ptr, dst, shape=n_dst)
+    call c_f_pointer(src_ptr, src, shape=n_src)
+    !$omp target is_device_ptr(dst_ptr, src_ptr)
+    !$omp teams loop collapse(3)
+    do k = 1, n_dst(3)
+      do j = 1, n_dst(2)
+        do i = 1, n_dst(1)
           dst(i, j, k) = src(i, j, k)
         end do
       end do
     end do
-    !$omp end target teams loop
+    !$omp end teams loop
+    !$omp end target
 
   end subroutine
 
   subroutine vecadd_omptgt(self, a, x, b, y)
+    !! Computes y = a*x + b*y, falling back to the host backend when the
+    !! fields are not device-resident.
 
     class(omptgt_backend_t) :: self
     real(dp), intent(in) :: a
@@ -131,6 +141,8 @@ contains
   end subroutine
 
   subroutine vecadd_offload(self, a, x, b, y)
+    !! Device implementation of `vecadd`, which looks up the padded extents of
+    !! the layout the fields are in.
 
     class(omptgt_backend_t) :: self
     real(dp), intent(in) :: a
@@ -142,20 +154,28 @@ contains
 
     dims = self%allocator%get_padded_dims(x%dir)
 
-    call vecadd_offload_(dims, a, x%data_tgt, b, y%data_tgt)
+    call vecadd_offload_(dims, a, x%get_dev_ptr(), x%get_shape(), &
+                         b, y%get_dev_ptr(), y%get_shape())
 
   end subroutine
 
-  subroutine vecadd_offload_(dims, a, x, b, y)
+  subroutine vecadd_offload_(dims, a, x_ptr, n_x, b, y_ptr, n_y)
+    !! Offloaded kernel evaluating y = a*x + b*y over the padded domain.
     integer, dimension(3), intent(in) :: dims
     real(dp), intent(in) :: a
-    real(dp), dimension(:, :, :), intent(in) :: x
+    type(c_ptr), intent(in) :: x_ptr
+    integer, dimension(3), intent(in) :: n_x
     real(dp), intent(in) :: b
-    real(dp), dimension(:, :, :), intent(inout) :: y
+    type(c_ptr), intent(in) :: y_ptr
+    integer, dimension(3), intent(in) :: n_y
 
+    real(dp), dimension(:, :, :), pointer :: x, y
     integer :: i, j, k
 
-    !$omp target teams loop collapse(3) X3D2_DEVICE_ADDR_CLAUSE(x, y)
+    call c_f_pointer(x_ptr, x, shape=n_x)
+    call c_f_pointer(y_ptr, y, shape=n_y)
+    !$omp target is_device_ptr(x_ptr, y_ptr)
+    !$omp teams loop collapse(3)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -163,7 +183,8 @@ contains
         end do
       end do
     end do
-    !$omp end target teams loop
+    !$omp end teams loop
+    !$omp end target
   end subroutine
 
   real(dp) function vector_norm_squared_omptgt(self, a, b, c) &
@@ -195,8 +216,9 @@ contains
       type is (omptgt_field_t)
         select type (c)
         type is (omptgt_field_t)
-          call vector_norm_squared_offload_(local_sum, a%data_tgt, &
-                                            b%data_tgt, c%data_tgt, dims)
+          call vector_norm_squared_offload_( &
+            local_sum, a%get_dev_ptr(), b%get_dev_ptr(), c%get_dev_ptr(), &
+            a%get_shape(), dims)
         class default
           error stop "Called omptgt vector copy with unsupported source vector"
         end select
@@ -212,22 +234,30 @@ contains
 
   end function vector_norm_squared_omptgt
 
-  subroutine vector_norm_squared_offload_(local_sum, a, b, c, dims)
+  subroutine vector_norm_squared_offload_(local_sum, a_dev, b_dev, c_dev, &
+                                          n_fld, dims)
     !! Rank-local sum of a**2 + b**2 + c**2 over the physical points only.
     real(dp), intent(out) :: local_sum
-    real(dp), dimension(:, :, :), intent(in) :: a, b, c
+    ! Named *_dev rather than *_ptr so the third one does not shadow the
+    ! c_ptr type imported from iso_c_binding.
+    type(c_ptr), intent(in) :: a_dev, b_dev, c_dev
+    integer, dimension(3), intent(in) :: n_fld
     integer, dimension(3), intent(in) :: dims
 
+    real(dp), dimension(:, :, :), pointer :: a, b, c
     integer :: i, j, k, k_i, k_j, n_i, stacked
 
     ! Pencils are stacked SZ points at a time along y, and a pencil group
     ! index runs fastest within a given z station.
     stacked = (dims(2) - 1)/SZ + 1
 
+    call c_f_pointer(a_dev, a, shape=n_fld)
+    call c_f_pointer(b_dev, b, shape=n_fld)
+    call c_f_pointer(c_dev, c, shape=n_fld)
+
     local_sum = 0._dp
-    !$omp target teams distribute parallel do collapse(3) &
-    !$omp reduction(+:local_sum) private(i, k, n_i) &
-    !$omp X3D2_DEVICE_ADDR_CLAUSE(a, b, c)
+    !$omp target map(tofrom:local_sum) is_device_ptr(a_dev, b_dev, c_dev)
+    !$omp teams loop collapse(3) reduction(+:local_sum) private(i, k, n_i)
     do k_j = 1, stacked
       do k_i = 1, dims(3)
         do j = 1, dims(1)
@@ -241,11 +271,13 @@ contains
         end do
       end do
     end do
-    !$omp end target teams distribute parallel do
+    !$omp end teams loop
+    !$omp end target
 
   end subroutine
 
   subroutine copy_data_to_f_omptgt(self, f, data)
+    !! Copies a host array into a device-resident field.
     class(omptgt_backend_t), intent(inout) :: self
     class(field_t), intent(inout) :: f
     real(dp), dimension(:, :, :), intent(in) :: data
@@ -257,22 +289,28 @@ contains
     ! XXX: This could be improved following cuda/backend.f90:resolve_field_t()
     select type (f)
     type is (omptgt_field_t)
-      call copy_data_to_f_omptgt_(f%data_tgt, data, dims)
+      call copy_data_to_f_omptgt_(f%get_dev_ptr(), f%get_shape(), data, dims)
     class default
       error stop "Unsupported"
     end select
 
   end subroutine copy_data_to_f_omptgt
 
-  subroutine copy_data_to_f_omptgt_(f_arr, d, dims)
-    real(dp), dimension(:, :, :), intent(inout) :: f_arr
+  subroutine copy_data_to_f_omptgt_(f_ptr, n_f, d, dims)
+    !! Offloaded kernel behind `copy_data_to_f`. The host array is mapped in
+    !! for the duration of the region, so this transfers over the bus.
+    type(c_ptr), intent(in) :: f_ptr
+    integer, dimension(3), intent(in) :: n_f
     real(dp), dimension(:, :, :), intent(in) :: d
     integer, dimension(3), intent(in) :: dims
 
+    real(dp), dimension(:, :, :), pointer :: f_arr
     integer :: i, j, k
 
+    call c_f_pointer(f_ptr, f_arr, shape=n_f)
     ! XXX: This could be improved following cuda/backend.f90:resolve_field_t()
-    !$omp target teams loop collapse(3) map(to:d) X3D2_DEVICE_ADDR_CLAUSE(f_arr)
+    !$omp target map(to:d) is_device_ptr(f_ptr)
+    !$omp teams loop collapse(3)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -280,11 +318,13 @@ contains
         end do
       end do
     end do
-    !$omp end target teams loop
+    !$omp end teams loop
+    !$omp end target
 
   end subroutine
 
   subroutine copy_f_to_data_omptgt(self, data, f)
+    !! Copies a device-resident field back into a host array.
     class(omptgt_backend_t), intent(inout) :: self
     real(dp), dimension(:, :, :), intent(out) :: data
     class(field_t), intent(in) :: f
@@ -295,21 +335,27 @@ contains
 
     select type (f)
     type is (omptgt_field_t)
-      call copy_f_to_data_omptgt_(data, f%data_tgt, dims)
+      call copy_f_to_data_omptgt_(data, f%get_dev_ptr(), f%get_shape(), dims)
     class default
       error stop "Unsupported"
     end select
 
   end subroutine copy_f_to_data_omptgt
 
-  subroutine copy_f_to_data_omptgt_(data, f_arr, dims)
+  subroutine copy_f_to_data_omptgt_(data, f_ptr, n_f, dims)
+    !! Offloaded kernel behind `copy_f_to_data`. The host array is mapped back
+    !! out of the region, so this transfers over the bus.
     real(dp), dimension(:, :, :), intent(out) :: data
-    real(dp), dimension(:, :, :), intent(in) :: f_arr
+    type(c_ptr), intent(in) :: f_ptr
+    integer, dimension(3), intent(in) :: n_f
     integer, dimension(3), intent(in) :: dims
 
+    real(dp), dimension(:, :, :), pointer :: f_arr
     integer :: i, j, k
 
-    !$omp target teams loop collapse(3) map(from:data) X3D2_DEVICE_ADDR_CLAUSE(f_arr)
+    call c_f_pointer(f_ptr, f_arr, shape=n_f)
+    !$omp target map(from:data) is_device_ptr(f_ptr)
+    !$omp teams loop collapse(3)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
@@ -317,11 +363,15 @@ contains
         end do
       end do
     end do
-    !$omp end target teams loop
+    !$omp end teams loop
+    !$omp end target
 
   end subroutine
 
   subroutine reorder_omptgt(self, u_, u, direction)
+    !! Reorders `u` into `u_` between the two data layouts encoded in
+    !! `direction`, offloading either a device-to-device or, when the source
+    !! is a host field, a host-to-device reordering.
     class(omptgt_backend_t) :: self
     class(field_t), intent(inout) :: u_
     class(field_t), intent(in) :: u
@@ -338,11 +388,12 @@ contains
     type is (omptgt_field_t)
       select type (u)
       type is (omptgt_field_t)
-        call reorder_omptgt_dd(u_%data_tgt, u%data_tgt, dims, dir_from, &
-                               dir_to, cart_padded)
+        call reorder_omptgt_dd(u_%get_dev_ptr(), u_%get_shape(), &
+                               u%get_dev_ptr(), u%get_shape(), dims, &
+                               dir_from, dir_to, cart_padded)
       class default
-        call reorder_omptgt_dh(u_%data_tgt, u%data, dims, dir_from, dir_to, &
-                               cart_padded)
+        call reorder_omptgt_dh(u_%get_dev_ptr(), u_%get_shape(), u%data, &
+                               dims, dir_from, dir_to, cart_padded)
       end select
     class default
       error stop "Unsupported"
@@ -353,51 +404,84 @@ contains
 
   end subroutine reorder_omptgt
 
-  subroutine reorder_omptgt_dd(u_, u, dims, dir_from, dir_to, cart_padded)
-    real(dp), dimension(:, :, :), pointer :: u_
-    real(dp), dimension(:, :, :), pointer, intent(in) :: u
+  subroutine reorder_point(u_, u, i, j, k, dir_from, dir_to, cart_padded)
+    !$omp declare target
+    !! Moves one point into its reordered slot.
+    !!
+    !! The reordered indices are locals of this routine rather than scalars
+    !! privatised on the loop: an automatic local is per-call scratch by
+    !! definition, so no private clause is needed. That matters because NVHPC
+    !! miscompiles the private-clause spelling, handing get_index_reordering
+    !! an invalid address for its intent(out) arguments, so the indices come
+    !! back as garbage and the store off them faults.
+    real(dp), dimension(:, :, :), intent(inout) :: u_
+    real(dp), dimension(:, :, :), intent(in) :: u
+    integer, intent(in) :: i, j, k
+    integer, intent(in) :: dir_from, dir_to
+    integer, dimension(3), intent(in) :: cart_padded
+
+    integer :: out_i, out_j, out_k
+
+    call get_index_reordering(out_i, out_j, out_k, i, j, k, &
+                              dir_from, dir_to, SZ, cart_padded)
+    u_(out_i, out_j, out_k) = u(i, j, k)
+
+  end subroutine reorder_point
+
+  subroutine reorder_omptgt_dd(u_ptr, n_u_, u_in_ptr, n_u, dims, dir_from, &
+                               dir_to, cart_padded)
+    !! Offloaded reordering of one device-resident field into another.
+    type(c_ptr), intent(in) :: u_ptr, u_in_ptr
+    integer, dimension(3), intent(in) :: n_u_, n_u
     integer, dimension(3), intent(in) :: dims
     integer, intent(in) :: dir_from, dir_to
     integer, dimension(3), intent(in) :: cart_padded
 
+    real(dp), dimension(:, :, :), pointer :: u_, u
     integer :: i, j, k
-    integer :: out_i, out_j, out_k
 
-    !$omp target teams loop collapse(3) private(out_i, out_j, out_k) X3D2_DEVICE_ADDR_CLAUSE(u_, u)
+    call c_f_pointer(u_ptr, u_, shape=n_u_)
+    call c_f_pointer(u_in_ptr, u, shape=n_u)
+    !$omp target is_device_ptr(u_ptr, u_in_ptr)
+    !$omp teams loop collapse(3)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          call get_index_reordering(out_i, out_j, out_k, i, j, k, &
-                                    dir_from, dir_to, SZ, cart_padded)
-          u_(out_i, out_j, out_k) = u(i, j, k)
+          call reorder_point(u_, u, i, j, k, dir_from, dir_to, cart_padded)
         end do
       end do
     end do
-    !$omp end target teams loop
+    !$omp end teams loop
+    !$omp end target
 
   end subroutine
 
-  subroutine reorder_omptgt_dh(u_, u, dims, dir_from, dir_to, cart_padded)
-    real(dp), dimension(:, :, :), pointer :: u_
+  subroutine reorder_omptgt_dh(u_ptr, n_u_, u, dims, dir_from, dir_to, &
+                               cart_padded)
+    !! Offloaded reordering of a host field into a device-resident one; the
+    !! source array is mapped into the target region.
+    type(c_ptr), intent(in) :: u_ptr
+    integer, dimension(3), intent(in) :: n_u_
     real(dp), dimension(:, :, :), pointer, intent(in) :: u
     integer, dimension(3), intent(in) :: dims
     integer, intent(in) :: dir_from, dir_to
     integer, dimension(3), intent(in) :: cart_padded
 
+    real(dp), dimension(:, :, :), pointer :: u_
     integer :: i, j, k
-    integer :: out_i, out_j, out_k
 
-    !$omp target teams loop collapse(3) private(out_i, out_j, out_k) map(to:u) X3D2_DEVICE_ADDR_CLAUSE(u_)
+    call c_f_pointer(u_ptr, u_, shape=n_u_)
+    !$omp target map(to:u) is_device_ptr(u_ptr)
+    !$omp teams loop collapse(3)
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
-          call get_index_reordering(out_i, out_j, out_k, i, j, k, &
-                                    dir_from, dir_to, SZ, cart_padded)
-          u_(out_i, out_j, out_k) = u(i, j, k)
+          call reorder_point(u_, u, i, j, k, dir_from, dir_to, cart_padded)
         end do
       end do
     end do
-    !$omp end target teams loop
+    !$omp end teams loop
+    !$omp end target
 
   end subroutine
 

@@ -12,6 +12,7 @@ version 2.0.  This project is a rewrite of Xcompact3d leading to
 
 * Improved serial and parallel performance.
 * Support for NVIDIA GPU accelerators (using CUDA Fortran).
+* Support for NVIDIA and AMD GPU accelerators (using OpenMP target offload).
 * Improved modularity and testability.
 
 Contents:

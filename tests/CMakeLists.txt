@@ -9,6 +9,9 @@ mark_as_advanced(WITH_NIGHTLY_REGRESSION)
 # Shared test utilities library
 add_library(x3d2_test_utils STATIC common/test_utils.f90)
 target_link_libraries(x3d2_test_utils PRIVATE x3d2)
+# test_utils.f90 does `use mpi`, so it needs the MPI module path itself: x3d2
+# links MPI privately and does not pass it on.
+target_link_libraries(x3d2_test_utils PRIVATE MPI::MPI_Fortran)
 set_target_properties(x3d2_test_utils PROPERTIES
   Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_test_utils")
 target_include_directories(x3d2_test_utils INTERFACE
@@ -66,6 +69,8 @@ function(define_test_backend_runtime backend)
   endif()
 
   target_link_libraries(${runtime_target} PRIVATE x3d2_backends x3d2)
+  # backend_runtime.f90 does `use mpi` (see the note on x3d2_test_utils).
+  target_link_libraries(${runtime_target} PRIVATE MPI::MPI_Fortran)
 endfunction()
 
 # Base test definition function
