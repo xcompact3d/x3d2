@@ -1,6 +1,6 @@
 program test_io_session
   !! Unit test for parallel I/O session functionality using single shared file
-  use m_mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Barrier
   use m_common, only: dp, i8
   use m_io_session, only: writer_session_t, reader_session_t
   use m_test_utils, only: initialise_mpi, finalise_test, global_all

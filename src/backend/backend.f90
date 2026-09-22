@@ -1,5 +1,4 @@
 module m_base_backend
-  use m_mpi
 
   use m_allocator, only: allocator_t
   use m_common, only: dp, DIR_C, get_rdr_from_dirs

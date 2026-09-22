@@ -1,5 +1,4 @@
 module m_omp_exec_dist
-  use m_mpi
 
   use m_common, only: dp
   use m_omp_common, only: SZ

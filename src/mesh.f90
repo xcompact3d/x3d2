@@ -1,7 +1,7 @@
 module m_mesh
   use iso_fortran_env, only: stderr => error_unit
 
-  use m_mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Comm_size
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, &
                       CELL, VERT, X_FACE, Y_FACE, Z_FACE, &
                       X_EDGE, Y_EDGE, Z_EDGE, &

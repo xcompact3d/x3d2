@@ -1,6 +1,6 @@
 program test_ab_checkpoint
   use iso_fortran_env, only: stderr => error_unit
-  use m_mpi
+  use m_mpi, only: MPI_COMM_WORLD
   use m_common, only: dp, DIR_X, VERT
   use m_mesh, only: mesh_t
   use m_allocator, only: allocator_t

@@ -1,7 +1,9 @@
 program test_kinetic_energy
   !! Verifies the one-pass global squared norm used for kinetic energy.
 
-  use m_mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_LAND, MPI_LOGICAL, &
+                   MPI_Allreduce, MPI_Comm_rank, MPI_Comm_size, MPI_Finalize, &
+                   MPI_Init
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t

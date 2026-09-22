@@ -1,5 +1,6 @@
 program xcompact
-  use m_mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Comm_size, &
+                   MPI_Finalize, MPI_Init
 
   use m_allocator
   use m_base_backend

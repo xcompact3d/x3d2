@@ -1,5 +1,5 @@
 module m_common
-  use m_mpi
+  use m_mpi, only: MPI_DOUBLE_PRECISION, MPI_REAL
 
   implicit none
 

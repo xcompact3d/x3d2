@@ -19,7 +19,7 @@ program test_cuda_penta
   !!                 sym=F: odd  ghost  u_s(4)=-u(2), u_e(1)=-u(N-1), etc.
   use iso_fortran_env, only: stderr => error_unit
   use cudafor
-  use m_mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_SUM, MPI_Allreduce
 
   use m_common, only: dp, pi, MPI_X3D2_DP, BC_DIRICHLET, BC_NEUMANN, BC_PERIODIC
   use m_cuda_common, only: SZ

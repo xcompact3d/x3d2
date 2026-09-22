@@ -1,7 +1,8 @@
 module m_decomp
 !! Parallel decomposition provided by 2decomp&FFT
 
-  use m_mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_INTEGER, MPI_SUM, &
+                   MPI_Allreduce, MPI_Cart_coords, MPI_Comm_rank
   implicit none
 
 contains

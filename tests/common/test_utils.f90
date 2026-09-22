@@ -1,5 +1,7 @@
 module m_test_utils
-  use m_mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_INTEGER, MPI_LAND, &
+                   MPI_LOGICAL, MPI_SUM, MPI_Allreduce, MPI_Comm_rank, &
+                   MPI_Comm_size, MPI_Finalize, MPI_Init
   use iso_fortran_env, only: stderr => error_unit
   use m_common, only: dp, nbytes
   implicit none

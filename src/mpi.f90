@@ -35,7 +35,7 @@ module m_mpi
   public :: MPI_Init, MPI_Finalize, MPI_Initialized, MPI_Abort
   public :: MPI_Comm_rank, MPI_Comm_size, MPI_Barrier, MPI_Wtime
   public :: MPI_Bcast, MPI_Allreduce, MPI_Reduce
-  public :: MPI_Isend, MPI_Irecv, MPI_Waitall
+  public :: MPI_Isend, MPI_Irecv, MPI_Waitall, MPI_Sendrecv
 
   !> Handles are opaque in MPI, so the values only have to be distinct.
   integer, parameter :: MPI_COMM_NULL = 0
@@ -242,5 +242,22 @@ contains
 
     error stop 'MPI_Waitall called, but this build was configured without MPI'
   end subroutine MPI_Waitall
+
+  subroutine MPI_Sendrecv(sendbuf, sendcount, sendtype, dest, sendtag, &
+                          recvbuf, recvcount, recvtype, source, recvtag, &
+                          comm, status, ierror)
+    !! Reachable only where a call site has already branched on a rank count
+    !! above one, as the exchanges in the CUDA Poisson solver do. It exists so
+    !! that callers can name it in a `use m_mpi, only:` list that has to
+    !! compile in both builds.
+    type(*), dimension(..), intent(in) :: sendbuf
+    type(*), dimension(..), intent(inout) :: recvbuf
+    integer, intent(in) :: sendcount, sendtype, dest, sendtag
+    integer, intent(in) :: recvcount, recvtype, source, recvtag, comm
+    integer, intent(in) :: status(*)
+    integer, intent(out) :: ierror
+
+    error stop 'MPI_Sendrecv called, but this build was configured without MPI'
+  end subroutine MPI_Sendrecv
 #endif
 end module m_mpi

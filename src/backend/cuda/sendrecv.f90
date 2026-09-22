@@ -1,6 +1,7 @@
 module m_cuda_sendrecv
   use cudafor
-  use m_mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_STATUSES_IGNORE, MPI_Irecv, MPI_Isend, &
+                   MPI_Waitall
 
   use m_common, only: dp, MPI_X3D2_DP
 
