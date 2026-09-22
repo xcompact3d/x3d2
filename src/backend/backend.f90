@@ -1,4 +1,5 @@
 module m_base_backend
+  use iso_c_binding, only: c_ptr
   use mpi
 
   use m_allocator, only: allocator_t
@@ -65,6 +66,8 @@ module m_base_backend
     procedure :: base_init
     procedure :: get_field_data
     procedure :: set_field_data
+    procedure :: supports_device_field_export
+    procedure :: export_field_to_device
   end type base_backend_t
 
   abstract interface
@@ -539,5 +542,37 @@ contains
     end if
 
   end subroutine set_field_data
+
+  logical function supports_device_field_export(self, f)
+    !! Whether `export_field_to_device` can pack field `f` without staging
+    !! it through host memory. Backends without device memory keep this
+    !! default and report no support.
+    implicit none
+
+    class(base_backend_t), intent(in) :: self
+    class(field_t), intent(in) :: f
+
+    supports_device_field_export = .false.
+  end function supports_device_field_export
+
+  subroutine export_field_to_device(self, buffer, f, dims, to_sp)
+    !! Pack the first `dims` Cartesian points of field `f` into a
+    !! contiguous device buffer, in (i, j, k) order without padding.
+    !!
+    !! `buffer` is the device address of product(dims) elements, of kind
+    !! `sp` when `to_sp` is true and `dp` otherwise. The buffer holds the
+    !! complete result when this returns, so a library that reads device
+    !! memory outside the backend's stream can consume it directly.
+    !! Only called when `supports_device_field_export(f)` is true.
+    implicit none
+
+    class(base_backend_t) :: self
+    type(c_ptr), intent(in) :: buffer
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: dims(3)
+    logical, intent(in) :: to_sp
+
+    error stop "export_field_to_device is not supported by this backend"
+  end subroutine export_field_to_device
 
 end module m_base_backend
