@@ -7,7 +7,7 @@ module m_solver
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_Z2C, RDR_C2Z, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL, &
-                      BC_NEUMANN, BC_DIRICHLET
+                      X_FACE, Y_FACE, BC_NEUMANN, BC_DIRICHLET
   use m_config, only: solver_config_t, les_config_t
   use m_field, only: field_t, flist_t
   use m_ibm, only: ibm_t
@@ -59,6 +59,11 @@ module m_solver
     class(field_t), pointer :: pressure => null()      !! Pressure on CELL grid (DIR_Z)
     class(field_t), pointer :: pressure_vert => null() !! Pressure on VERT grid (DIR_X)
     logical :: keep_pressure = .false.                 !! If true, persist pressure for output
+    !> Last projection's velocity correction, kept when the mesh has a
+    !> Dirichlet face so precorrect_walls can reuse it
+    class(field_t), pointer :: dpdx_last => null()
+    class(field_t), pointer :: dpdy_last => null()
+    class(field_t), pointer :: dpdz_last => null()
     class(field_t), pointer :: vort => null()  !! Vorticity magnitude on VERT grid
     class(field_t), pointer :: qcrit => null() !! Q-criterion on VERT grid
     type(flist_t), dimension(:), pointer :: species => null()
@@ -81,6 +86,7 @@ module m_solver
     procedure :: apply_spatial_filter
     procedure :: finalise
     procedure :: pressure_correction
+    procedure :: precorrect_walls
     procedure :: divergence_v2p
     procedure :: gradient_p2v
     procedure :: curl
@@ -669,6 +675,11 @@ contains
     class(solver_t), intent(inout) :: self
 
     call self%les%finalise(self%backend)
+    if (associated(self%dpdx_last)) then
+      call self%backend%allocator%release_block(self%dpdx_last)
+      call self%backend%allocator%release_block(self%dpdy_last)
+      call self%backend%allocator%release_block(self%dpdz_last)
+    end if
   end subroutine finalise
 
   subroutine transeq_species(self, rhs, variables)
@@ -899,10 +910,58 @@ contains
     call self%backend%vecadd(-1._dp, dpdy, 1._dp, v)
     call self%backend%vecadd(-1._dp, dpdz, 1._dp, w)
 
-    call self%backend%allocator%release_block(dpdx)
-    call self%backend%allocator%release_block(dpdy)
-    call self%backend%allocator%release_block(dpdz)
+    if (any(self%mesh%grid%BCs_global == BC_DIRICHLET)) then
+      ! Keep this correction for the next precorrect_walls
+      if (associated(self%dpdx_last)) then
+        call self%backend%allocator%release_block(self%dpdx_last)
+        call self%backend%allocator%release_block(self%dpdy_last)
+        call self%backend%allocator%release_block(self%dpdz_last)
+      end if
+      self%dpdx_last => dpdx
+      self%dpdy_last => dpdy
+      self%dpdz_last => dpdz
+    else
+      call self%backend%allocator%release_block(dpdx)
+      call self%backend%allocator%release_block(dpdy)
+      call self%backend%allocator%release_block(dpdz)
+    end if
 
   end subroutine pressure_correction
+
+  subroutine precorrect_walls(self, u, v, w)
+    !! Incompact3d's pre_correc: on each Dirichlet face, add the previous
+    !! projection's tangential correction to the value set by the case. The
+    !! projection that follows then leaves the face at its prescribed value
+    !! plus dt*(grad p_old - grad p_new), instead of -dt*grad p_new.
+    !! Exact for AB, where every step uses the same dt; RK stages would need
+    !! Incompact3d's gdt ratio. Before the first projection (or after a
+    !! restart, as in Incompact3d) there is no correction to add.
+    implicit none
+
+    class(solver_t) :: self
+    class(field_t), intent(inout) :: u, v, w
+
+    integer :: bcs(3, 2)
+
+    if (.not. associated(self%dpdx_last)) return
+
+    ! Local BCs, so only the ranks that own a face touch it
+    bcs = self%mesh%grid%BCs
+    if (any(bcs(1, :) == BC_DIRICHLET)) then
+      call self%backend%field_add_face_from_field( &
+        v, self%dpdy_last, X_FACE, bcs(1, 1), bcs(1, 2))
+      call self%backend%field_add_face_from_field( &
+        w, self%dpdz_last, X_FACE, bcs(1, 1), bcs(1, 2))
+    end if
+    if (any(bcs(2, :) == BC_DIRICHLET)) then
+      call self%backend%field_add_face_from_field( &
+        u, self%dpdx_last, Y_FACE, bcs(2, 1), bcs(2, 2))
+      call self%backend%field_add_face_from_field( &
+        w, self%dpdz_last, Y_FACE, bcs(2, 1), bcs(2, 2))
+    end if
+    if (any(bcs(3, :) == BC_DIRICHLET)) &
+      error stop 'precorrect_walls: Dirichlet z-faces are not supported.'
+
+  end subroutine precorrect_walls
 
 end module m_solver

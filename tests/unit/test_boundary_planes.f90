@@ -17,7 +17,8 @@ program test_boundary_planes
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, DIR_X, DIR_C, VERT, Y_FACE
+  use m_common, only: dp, DIR_X, DIR_C, VERT, X_FACE, Y_FACE, &
+                      BC_DIRICHLET, BC_NEUMANN
   use m_field, only: field_t
   use m_mesh, only: mesh_t
 
@@ -121,6 +122,32 @@ program test_boundary_planes
   call backend%get_field_data(data, f)
   call check_planes('field_set_face_from_field', data, expected, dims, &
                     tolerance, all_pass)
+
+  ! --- field_add_face_from_field: plane values added on Dirichlet faces -----
+  ! The wall pre-correction adds onto the value the case has already set,
+  ! and must leave a non-Dirichlet face (the ABL's free-slip lid) alone.
+  call backend%get_field_data(data, f_start)
+  expected = sentinel
+  expected(:, 1, :) = sentinel + data(:, 1, :)
+
+  call f%fill(sentinel)
+  call backend%field_add_face_from_field(f, f_start, Y_FACE, &
+                                         BC_DIRICHLET, BC_NEUMANN)
+  call backend%get_field_data(data, f)
+  call check_planes('field_add_face_from_field Y_FACE', data, expected, &
+                    dims, tolerance, all_pass)
+
+  call backend%get_field_data(data, f_start)
+  expected = sentinel
+  expected(1, :, :) = sentinel + data(1, :, :)
+  expected(dims(1), :, :) = sentinel + data(dims(1), :, :)
+
+  call f%fill(sentinel)
+  call backend%field_add_face_from_field(f, f_start, X_FACE, &
+                                         BC_DIRICHLET, BC_DIRICHLET)
+  call backend%get_field_data(data, f)
+  call check_planes('field_add_face_from_field X_FACE', data, expected, &
+                    dims, tolerance, all_pass)
 
   ! --- field_set_y_plane: one interior plane, nothing else ------------------
   ! The wall model writes the first plane above the floor, so this must reach
