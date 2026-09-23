@@ -54,6 +54,7 @@ module m_omp_backend
     procedure :: field_set_y_plane => field_set_y_plane_omp
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_omp
     procedure :: field_set_face_from_field => field_set_face_from_field_omp
+    procedure :: field_add_face_from_field => field_add_face_from_field_omp
     procedure :: compute_vorticity => compute_vorticity_omp
     procedure :: compute_qcriterion => compute_qcriterion_omp
     procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_omp
@@ -1312,6 +1313,65 @@ contains
     end select
 
   end subroutine field_set_face_from_field_omp
+
+  subroutine field_add_face_from_field_omp(self, f, g, face, bc_start, bc_end)
+    !! [[m_base_backend(module):field_add_face_from_field(subroutine)]]
+    implicit none
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    class(field_t), intent(in) :: g
+    integer, intent(in) :: face, bc_start, bc_end
+
+    integer :: dims(3), k, i, j, z, i_max, n_mod, n_y_blocks, k_start, k_end
+    logical :: set_start, set_end
+
+    if (f%dir /= DIR_X .or. g%dir /= DIR_X) &
+      error stop 'field_add_face_from_field: only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_add_face_from_field: requires a valid data_loc.'
+
+    set_start = (bc_start == BC_DIRICHLET)
+    set_end = (bc_end == BC_DIRICHLET)
+
+    dims = self%mesh%get_dims(f%data_loc)
+    n_mod = mod(dims(2) - 1, SZ) + 1
+    n_y_blocks = (dims(2) - 1)/SZ + 1
+
+    select case (face)
+    case (X_FACE)
+      !$omp parallel do private(i_max)
+      do k = 1, n_y_blocks*dims(3)
+        ! y-block is the fast-varying component of the group index
+        if (mod(k - 1, n_y_blocks) + 1 == n_y_blocks) then
+          i_max = n_mod
+        else
+          i_max = SZ
+        end if
+        do i = 1, i_max
+          if (set_start) f%data(i, 1, k) = f%data(i, 1, k) + g%data(i, 1, k)
+          if (set_end) f%data(i, dims(1), k) = f%data(i, dims(1), k) &
+                                               + g%data(i, dims(1), k)
+        end do
+      end do
+      !$omp end parallel do
+    case (Y_FACE)
+      !$omp parallel do private(k_start, k_end)
+      do z = 1, dims(3)
+        k_start = 1 + (z - 1)*n_y_blocks
+        k_end = z*n_y_blocks
+        do j = 1, dims(1)
+          if (set_start) f%data(1, j, k_start) = f%data(1, j, k_start) &
+                                                 + g%data(1, j, k_start)
+          if (set_end) f%data(n_mod, j, k_end) = f%data(n_mod, j, k_end) &
+                                                 + g%data(n_mod, j, k_end)
+        end do
+      end do
+      !$omp end parallel do
+    case default
+      error stop 'field_add_face_from_field: only X_FACE and Y_FACE supported.'
+    end select
+
+  end subroutine field_add_face_from_field_omp
 
   real(dp) function field_volume_integral_omp(self, f) result(s)
     !! volume integral of a field

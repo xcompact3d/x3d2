@@ -522,6 +522,59 @@ contains
     end if
   end subroutine field_set_x_face_from_field
 
+  attributes(global) subroutine field_add_x_face_from_field( &
+    f, g, set_start, set_end, nx, ny, nz)
+  !! f += g on the x-faces (pencil index 1 and nx) flagged by
+  !! set_start/set_end. Launch as field_set_x_face_from_field.
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:, :, :) :: g
+    logical, value, intent(in) :: set_start, set_end
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, b, n_mod, i_max
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    b = blockIdx%y
+
+    ! Groups are z fast, so the last y-block is b > nz*(n_y_blocks - 1)
+    n_mod = mod(ny - 1, SZ) + 1
+    if ((b - 1)/nz + 1 == (ny - 1)/SZ + 1) then
+      i_max = n_mod
+    else
+      i_max = SZ
+    end if
+
+    if (i <= i_max) then
+      if (set_start) f(i, 1, b) = f(i, 1, b) + g(i, 1, b)
+      if (set_end) f(i, nx, b) = f(i, nx, b) + g(i, nx, b)
+    end if
+  end subroutine field_add_x_face_from_field
+
+  attributes(global) subroutine field_add_y_face_from_field( &
+    f, g, set_start, set_end, nx, ny, nz)
+  !! f += g on the y-faces (j = 1 and ny) flagged by set_start/set_end.
+  !! Launch as field_set_y_face.
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:, :, :) :: g
+    logical, value, intent(in) :: set_start, set_end
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: j, b, n_mod, b_end
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    b = blockIdx%y
+
+    n_mod = mod(ny - 1, SZ) + 1
+    b_end = b + (ny - 1)/SZ*nz
+
+    if (j <= nx) then
+      if (set_start) f(1, j, b) = f(1, j, b) + g(1, j, b)
+      if (set_end) f(n_mod, j, b_end) = f(n_mod, j, b_end) + g(n_mod, j, b_end)
+    end if
+  end subroutine field_add_y_face_from_field
+
   attributes(global) subroutine volume_integral(s, f, n, n_i_pad, n_j)
     implicit none
 

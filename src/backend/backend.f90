@@ -53,6 +53,7 @@ module m_base_backend
     procedure(field_set_y_plane), deferred :: field_set_y_plane
     procedure(field_set_abl_wall_stress), deferred :: field_set_abl_wall_stress
     procedure(field_set_face_from_field), deferred :: field_set_face_from_field
+    procedure(field_add_face_from_field), deferred :: field_add_face_from_field
     procedure(derive_field_from_gradients), deferred :: compute_vorticity
     procedure(derive_field_from_gradients), deferred :: compute_qcriterion
     procedure(smagorinsky_from_gradients), deferred :: compute_smagorinsky_nut
@@ -396,6 +397,18 @@ module m_base_backend
       integer, optional, intent(in) :: bc_end
       real(dp), optional, intent(in) :: flow_rate_diff
     end subroutine field_set_face_from_field
+
+    subroutine field_add_face_from_field(self, f, g, face, bc_start, bc_end)
+      !! Add the face planes of `g` onto those of `f`, on Dirichlet faces
+      !! only. Both fields are DIR_X; X_FACE and Y_FACE are supported.
+      import :: base_backend_t
+      import :: field_t
+      implicit none
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: f
+      class(field_t), intent(in) :: g
+      integer, intent(in) :: face, bc_start, bc_end
+    end subroutine field_add_face_from_field
   end interface
 
   abstract interface

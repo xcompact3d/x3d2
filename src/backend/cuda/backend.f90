@@ -31,6 +31,8 @@ module m_cuda_backend
                                      field_set_abl_wall_stress, &
                                      field_set_x_face_from_field, &
                                      field_set_y_face_from_field, &
+                                     field_add_x_face_from_field, &
+                                     field_add_y_face_from_field, &
                                      pwmul, volume_integral, &
                                      vorticity_from_gradients, &
                                      qcriterion_from_gradients, &
@@ -79,6 +81,7 @@ module m_cuda_backend
     procedure :: field_set_y_plane => field_set_y_plane_cuda
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_cuda
     procedure :: field_set_face_from_field => field_set_face_from_field_cuda
+    procedure :: field_add_face_from_field => field_add_face_from_field_cuda
     procedure :: compute_vorticity => compute_vorticity_cuda
     procedure :: compute_qcriterion => compute_qcriterion_cuda
     procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_cuda
@@ -1478,6 +1481,48 @@ contains
     end select
 
   end subroutine field_set_face_from_field_cuda
+
+  subroutine field_add_face_from_field_cuda(self, f, g, face, bc_start, bc_end)
+    !! [[m_base_backend(module):field_add_face_from_field(subroutine)]]
+    implicit none
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    class(field_t), intent(in) :: g
+    integer, intent(in) :: face, bc_start, bc_end
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d, g_d
+    type(dim3) :: blocks, threads
+    integer :: dims(3)
+    logical :: set_start, set_end
+
+    if (f%dir /= DIR_X .or. g%dir /= DIR_X) &
+      error stop 'field_add_face_from_field: only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_add_face_from_field: requires a valid data_loc.'
+
+    set_start = (bc_start == BC_DIRICHLET)
+    set_end = (bc_end == BC_DIRICHLET)
+
+    call resolve_field_t(f_d, f)
+    call resolve_field_t(g_d, g)
+
+    dims = self%mesh%get_dims(f%data_loc)
+    threads = dim3(64, 1, 1)
+
+    select case (face)
+    case (X_FACE)
+      blocks = dim3((SZ - 1)/64 + 1, ((dims(2) - 1)/SZ + 1)*dims(3), 1)
+      call field_add_x_face_from_field<<<blocks, threads>>>( &      !&
+          f_d, g_d, set_start, set_end, dims(1), dims(2), dims(3))
+    case (Y_FACE)
+      blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
+      call field_add_y_face_from_field<<<blocks, threads>>>( &      !&
+          f_d, g_d, set_start, set_end, dims(1), dims(2), dims(3))
+    case default
+      error stop 'field_add_face_from_field: only X_FACE and Y_FACE supported.'
+    end select
+
+  end subroutine field_add_face_from_field_cuda
 
   real(dp) function field_volume_integral_cuda(self, f) result(s)
     !! volume integral of a field

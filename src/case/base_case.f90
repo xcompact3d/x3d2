@@ -282,6 +282,8 @@ contains
         end do
 
         call self%apply_BC(self%solver%u, self%solver%v, self%solver%w)
+        call self%solver%precorrect_walls(self%solver%u, self%solver%v, &
+                                          self%solver%w)
         if (self%solver%ibm_on) then
           call self%solver%ibm%body(self%solver%u, self%solver%v, &
                                     self%solver%w)
