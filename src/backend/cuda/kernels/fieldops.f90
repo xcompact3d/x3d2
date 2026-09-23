@@ -335,6 +335,57 @@ contains
     end if
 
   end subroutine field_set_y_face
+  attributes(global) subroutine field_plane_partial_sums( &
+    partial, f, nx, ny, nz)
+  !! First pass of field_plane_sums: partial(j, z) is the sum over x of
+  !! y index j at z. Launch with threads = dim3(SZ, 1, 1) and
+  !! blocks = dim3(n_y_blocks, nz, 1).
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :) :: partial
+    real(dp), device, intent(in), dimension(:, :, :) :: f
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, j, k, b
+    real(dp) :: line_sum
+
+    i = threadIdx%x
+    j = i + (blockIdx%x - 1)*SZ
+    if (j > ny) return
+
+    ! DIR_X groups are ordered z fastest: b = (y_block - 1)*nz + z
+    b = (blockIdx%x - 1)*nz + blockIdx%y
+    line_sum = 0._dp
+    do k = 1, nx
+      line_sum = line_sum + f(i, k, b)
+    end do
+    partial(j, blockIdx%y) = line_sum
+
+  end subroutine field_plane_partial_sums
+
+  attributes(global) subroutine field_plane_sums_reduce(sums, partial, ny, nz)
+  !! Second pass of field_plane_sums: sums(j) = sum over z of partial(j, z),
+  !! in a fixed order. Launch with one thread per y index.
+    implicit none
+
+    real(dp), device, intent(out), dimension(:) :: sums
+    real(dp), device, intent(in), dimension(:, :) :: partial
+    integer, value, intent(in) :: ny, nz
+
+    integer :: j, z
+    real(dp) :: plane_sum
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    if (j > ny) return
+
+    plane_sum = 0._dp
+    do z = 1, nz
+      plane_sum = plane_sum + partial(j, z)
+    end do
+    sums(j) = plane_sum
+
+  end subroutine field_plane_sums_reduce
+
   attributes(global) subroutine field_set_y_plane(f, c, i_in_block, &
                                                   group_offset, nx)
   !! Set one interior y-plane to a constant. The caller resolves the plane

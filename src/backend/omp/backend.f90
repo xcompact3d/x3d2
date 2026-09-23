@@ -52,6 +52,7 @@ module m_omp_backend
     procedure :: field_shift => field_shift_omp
     procedure :: field_set_face => field_set_face_omp
     procedure :: field_set_y_plane => field_set_y_plane_omp
+    procedure :: field_plane_sums => field_plane_sums_omp
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_omp
     procedure :: field_set_face_from_field => field_set_face_from_field_omp
     procedure :: field_add_face_from_field => field_add_face_from_field_omp
@@ -1159,6 +1160,45 @@ contains
     end select
 
   end subroutine field_set_face_omp
+  subroutine field_plane_sums_omp(self, sums, f)
+    !! [[m_base_backend(module):field_plane_sums(subroutine)]]
+    implicit none
+
+    class(omp_backend_t) :: self
+    real(dp), intent(out) :: sums(:)
+    class(field_t), intent(in) :: f
+
+    integer :: dims(3), n_y_blocks, y_block, i, j, k, z
+    real(dp) :: plane_sum
+
+    if (f%dir /= DIR_X) &
+      error stop 'field_plane_sums is only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_plane_sums requires a valid data_loc.'
+
+    dims = self%mesh%get_dims(f%data_loc)
+    if (size(sums) < dims(2)) &
+      error stop 'field_plane_sums: sums is smaller than the y extent.'
+    n_y_blocks = (dims(2) - 1)/SZ + 1
+
+    ! OMP DIR_X ordering: group = n_y_blocks*(z - 1) + y_block. Each plane is
+    ! summed by one thread in a fixed order, so the result is reproducible.
+    !$omp parallel do private(y_block, i, k, plane_sum)
+    do j = 1, dims(2)
+      y_block = (j - 1)/SZ + 1
+      i = j - (y_block - 1)*SZ
+      plane_sum = 0._dp
+      do z = 1, dims(3)
+        do k = 1, dims(1)
+          plane_sum = plane_sum + f%data(i, k, n_y_blocks*(z - 1) + y_block)
+        end do
+      end do
+      sums(j) = plane_sum
+    end do
+    !$omp end parallel do
+
+  end subroutine field_plane_sums_omp
+
   subroutine field_set_y_plane_omp(self, f, c, plane)
     !! [[m_base_backend(module):field_set_y_plane(subroutine)]]
     implicit none

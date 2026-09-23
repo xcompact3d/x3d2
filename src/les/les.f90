@@ -16,7 +16,8 @@ module m_les
 
   private
   public :: les_t, smagorinsky_nut, strain_rate_magnitude, &
-            filter_width, wall_damped_mixing_length, neutral_wall_stress
+            filter_width, wall_damped_mixing_length, neutral_wall_stress, &
+            neutral_drag_coefficient
 
   type :: les_t
     character(len=20) :: model = 'none'
@@ -265,9 +266,9 @@ contains
 
     wall_drag_coeff = 0._dp
     if (self%abl_wall_boundary_enabled) then
-      wall_drag_coeff = (self%von_karman_constant &
-                         /log(self%abl_wall_sampling_height &
-                              /self%roughness_length))**2
+      wall_drag_coeff = neutral_drag_coefficient( &
+                        self%von_karman_constant, self%roughness_length, &
+                        self%abl_wall_sampling_height)
     end if
 
     call add_sgs_terms(backend, du, dv, dw, self%nut, &
@@ -328,11 +329,21 @@ contains
 
     real(dp) :: drag_coeff, speed
 
-    drag_coeff = (kappa/log(sampling_height/roughness_length))**2
+    drag_coeff = neutral_drag_coefficient(kappa, roughness_length, &
+                                          sampling_height)
     speed = sqrt(u_sample**2 + w_sample**2)
     tau_x = drag_coeff*u_sample*speed
     tau_z = drag_coeff*w_sample*speed
   end subroutine neutral_wall_stress
+
+  pure real(dp) function neutral_drag_coefficient( &
+    kappa, roughness_length, sampling_height) result(drag_coeff)
+    !! Neutral rough-wall drag coefficient, (kappa/ln(h/z0))**2, so that
+    !! the wall stress is drag_coeff*u*|u| at the sampling height h.
+    real(dp), intent(in) :: kappa, roughness_length, sampling_height
+
+    drag_coeff = (kappa/log(sampling_height/roughness_length))**2
+  end function neutral_drag_coefficient
 
   subroutine compute_velocity_gradients( &
     backend, u, v, w, xdirps, ydirps, zdirps, &

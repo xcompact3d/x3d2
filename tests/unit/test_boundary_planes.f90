@@ -149,6 +149,38 @@ program test_boundary_planes
   call check_planes('field_add_face_from_field X_FACE', data, expected, &
                     dims, tolerance, all_pass)
 
+  ! --- field_plane_sums: one sum per y-plane, over x and z -------------------
+  ! Each plane holds a different pattern, so a sum taken from the wrong plane,
+  ! or a group counted twice, cannot match.
+  block
+    real(dp), allocatable :: sums(:)
+    real(dp) :: want, worst
+
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          data(i, j, k) = 100._dp*real(i, dp) + real(k, dp) &
+                          + 0.5_dp*real(j, dp)
+        end do
+      end do
+    end do
+    call backend%set_field_data(f, data)
+    allocate (sums(dims(2)))
+    call backend%field_plane_sums(sums, f)
+
+    worst = 0._dp
+    do j = 1, dims(2)
+      want = sum(data(1:dims(1), j, 1:dims(3)))
+      worst = max(worst, abs(sums(j) - want)/abs(want))
+    end do
+    if (worst > tolerance) then
+      print *, 'FAIL: field_plane_sums relative error=', worst
+      all_pass = .false.
+    else
+      print *, 'PASS: field_plane_sums'
+    end if
+  end block
+
   ! --- field_set_y_plane: one interior plane, nothing else ------------------
   ! The wall model writes the first plane above the floor, so this must reach
   ! an interior plane with the same per-backend group ordering as the faces.
