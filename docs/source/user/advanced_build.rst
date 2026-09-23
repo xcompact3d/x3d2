@@ -17,6 +17,10 @@ Selecting a Backend
    -DENABLE_BACKEND=CUDA      # CUDA Fortran, NVHPC/PGI only
    -DENABLE_BACKEND=OMP_TGT   # OpenMP target offload
 
+Both GPU backends additionally require the target architecture in
+``BACKEND_ARCH`` (see the per-backend sections below); only the default ``OFF``
+builds without it.
+
 The setting decides which allocator and backend sources are compiled, which
 compiler and linker flags are applied, and which tests are registered. Building
 more than one GPU backend at a time is not supported.
@@ -24,8 +28,11 @@ more than one GPU backend at a time is not supported.
 CUDA Backend
 ~~~~~~~~~~~~
 
-Requires NVHPC or PGI; configuring fails with any other compiler. The build adds
-``-cuda``, and links the Poisson solver against ``cuFFTMp``
+Requires NVHPC or PGI; configuring fails with any other compiler. The compute
+capability is required and comes from ``BACKEND_ARCH``, given in NVIDIA's
+``sm_<cc>`` form; configuring fails if it is unset or does not start with
+``sm_``. The build adds ``-cuda -gpu=cc<cc>`` when compiling and linking, and
+links the Poisson solver against ``cuFFTMp``
 (``-cudalib=cufftmp``) in an MPI build or against plain ``cuFFT``
 (``-cudalib=cufft``) without one. cuFFTMp distributes a single transform across
 ranks and its nvfortran wrapper calls ``MPI_Comm_f2c``, so it cannot be linked
@@ -46,29 +53,31 @@ required with any of them.
 
    * - Compiler
      - Flags applied by the build
-     - ``OMP_TGT_ARCH``
+     - ``BACKEND_ARCH``
    * - Cray
      - ``-eF`` when compiling and ``-h omp`` when linking.
-     - Not used. The offload target is selected by the Cray programming
-       environment rather than by CMake.
+     - Must be set, but is not passed on: the offload target is selected by the
+       Cray programming environment rather than by CMake.
    * - GNU
      - ``-fopenmp`` and ``--offload-arch=<arch>``.
-     - Required. Configuring fails if it is unset.
+     - ``gfx<model>``. Configuring fails on any other form.
    * - NVHPC, PGI
-     - ``-mp=gpu``, replacing the host-only ``-mp`` that CMake's ``FindOpenMP``
-       supplies. Without that substitution the target regions compile but run
-       on the host against device pointers.
-     - Optional. When unset, the compiler targets the GPU of the build machine.
+     - ``-mp=gpu -gpu=cc<cc>``, replacing the host-only ``-mp`` that CMake's
+       ``FindOpenMP`` supplies. Without that substitution the target regions
+       compile but run on the host against device pointers.
+     - ``sm_<cc>``, translated to nvfortran's ``cc<cc>``. Configuring fails on
+       any other form.
    * - Flang
      - ``-fopenmp --offload-arch=<arch>``, plus ``-fopenmp-version=50`` (see
        `Building with Flang`_ below).
-     - Required. Configuring fails if it is unset.
+     - ``gfx<model>``. Configuring fails on any other form.
 
-Where the compiler needs the architecture, set it at configure time:
+``BACKEND_ARCH`` is required for every GPU build, whatever the compiler, and is
+set at configure time:
 
 .. code-block:: bash
 
-   -DENABLE_BACKEND=OMP_TGT -DOMP_TGT_ARCH=gfx942
+   -DENABLE_BACKEND=OMP_TGT -DBACKEND_ARCH=gfx942
 
 Vendor selection is automatic: the build defines ``OMP_TGT_NVIDIA`` for
 NVHPC/PGI and ``OMP_TGT_AMD`` for Cray, GNU and Flang, which selects the
@@ -145,7 +154,7 @@ CPU build with GNU:
 .. code-block:: bash
 
    cmake -S . -B build -DWITH_MPI=OFF \
-     -DCMAKE_Fortran_COMPILER=nvfortran -DENABLE_BACKEND=CUDA
+     -DCMAKE_Fortran_COMPILER=nvfortran -DENABLE_BACKEND=CUDA -DBACKEND_ARCH=sm_80
 
 The code still calls MPI unconditionally; ``src/mpi.f90`` supplies serial
 stand-ins for the MPI entities x3d2 uses, under which every collective is the
@@ -272,18 +281,14 @@ To use the built-in ADIOS2 (default behaviour):
    -DWITH_ADIOS2=ON
 
 CUDA Architecture for the ADIOS2 Build
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 When x3d2 is built with ``ENABLE_BACKEND=CUDA``, the built-in ADIOS2 is compiled
-with CUDA support. By default its CUDA sources are built for the architecture of
-the GPU present at configure time (``native`` detection). If you are building on
-a node without a visible GPU (for example a GPU-less login or build node),
-``native`` cannot probe the hardware, so set the target architecture explicitly
-with the ``CUDA_ARCH`` CMake option:
-
-.. code-block:: bash
-
-   -DCUDA_ARCH=80
+with CUDA support. It reuses ``BACKEND_ARCH``, stripped to the bare compute
+capability that ``CMAKE_CUDA_ARCHITECTURES`` expects, so ``-DBACKEND_ARCH=sm_80``
+builds ADIOS2's CUDA sources for ``80``. There is no separate option to set, and
+nothing is probed from the build machine, so a GPU-less login or build node
+configures the same way as a compute node.
 
 Library Path Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
