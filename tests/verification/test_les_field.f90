@@ -40,7 +40,7 @@ program test_les_field
   type(solver_t) :: solver
   type(flist_t) :: rhs(3), variables(3)
   class(field_t), pointer :: u, v, w, rhs_u, rhs_v, rhs_w
-  class(field_t), pointer :: wall_nut, dudy, dvdx, dwdy, dvdz
+  class(field_t), pointer :: wall_nut
 
   integer, parameter :: dims_global(3) = [32, 33, 32]
   integer, parameter :: nproc_dir(3) = [1, 1, 1]
@@ -204,13 +204,9 @@ program test_les_field
                    maxval(abs(nut_data(1:dims(1), 1:dims(2), 1:dims(3)))), &
                    10._dp*tolerance, all_pass)
 
-  ! ABL rough-wall correction. Use constant fields with prescribed shear
-  ! components so the legacy second-order boundary formula is analytical.
+  ! ABL rough-wall stress: the neutral drag law, and the per-column stress
+  ! the backend writes into the SGS stress plane.
   wall_nut => allocator%get_block(DIR_X, VERT)
-  dudy => allocator%get_block(DIR_X, VERT)
-  dvdx => allocator%get_block(DIR_X, VERT)
-  dwdy => allocator%get_block(DIR_X, VERT)
-  dvdz => allocator%get_block(DIR_X, VERT)
 
   ! Nonuniform columns for the local wall stress checks below; the field is
   ! constant in y, so the result does not depend on which plane is sampled.
@@ -282,10 +278,6 @@ program test_les_field
   call allocator%release_block(rhs_v)
   call allocator%release_block(rhs_w)
   call allocator%release_block(wall_nut)
-  call allocator%release_block(dudy)
-  call allocator%release_block(dvdx)
-  call allocator%release_block(dwdy)
-  call allocator%release_block(dvdz)
   deallocate (u_data, nut_data)
 
   if (.not. all_pass) error stop 'FAIL'

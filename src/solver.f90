@@ -129,6 +129,7 @@ contains
 
     type(solver_config_t) :: solver_cfg
     type(les_config_t) :: les_cfg
+    real(dp), allocatable :: filter_alpha
     integer :: i
 
     solver%backend => backend
@@ -183,43 +184,29 @@ contains
     solver%ngrid = product(solver%mesh%get_global_dims(VERT))
 
     ! Allocate and set the tdsops. The filter operators are only built when
-    ! the case asks for them, so cases that do not filter carry no extra state.
+    ! the case asks for them, so cases that do not filter carry no extra state:
+    ! an unallocated filter_alpha is passed as an absent optional argument.
     solver%spatial_filter = solver_cfg%spatial_filter
     if (solver%spatial_filter) then
+      filter_alpha = solver_cfg%filter_alpha
       if (solver%mesh%par%is_root()) &
-        print *, 'Spatial filter on, alpha =', solver_cfg%filter_alpha
-      call allocate_tdsops( &
-        solver%xdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
-        solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
-        solver_cfg%stagder_scheme, filter_alpha=solver_cfg%filter_alpha &
-        )
-      call allocate_tdsops( &
-        solver%ydirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
-        solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
-        solver_cfg%stagder_scheme, filter_alpha=solver_cfg%filter_alpha &
-        )
-      call allocate_tdsops( &
-        solver%zdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
-        solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
-        solver_cfg%stagder_scheme, filter_alpha=solver_cfg%filter_alpha &
-        )
-    else
-      call allocate_tdsops( &
-        solver%xdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
-        solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
-        solver_cfg%stagder_scheme &
-        )
-      call allocate_tdsops( &
-        solver%ydirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
-        solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
-        solver_cfg%stagder_scheme &
-        )
-      call allocate_tdsops( &
-        solver%zdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
-        solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
-        solver_cfg%stagder_scheme &
-        )
+        print *, 'Spatial filter on, alpha =', filter_alpha
     end if
+    call allocate_tdsops( &
+      solver%xdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
+      solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
+      solver_cfg%stagder_scheme, filter_alpha=filter_alpha &
+      )
+    call allocate_tdsops( &
+      solver%ydirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
+      solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
+      solver_cfg%stagder_scheme, filter_alpha=filter_alpha &
+      )
+    call allocate_tdsops( &
+      solver%zdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
+      solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
+      solver_cfg%stagder_scheme, filter_alpha=filter_alpha &
+      )
 
     select case (trim(solver_cfg%poisson_solver_type))
     case ('FFT')
@@ -619,6 +606,7 @@ contains
 
     class(field_t), pointer :: f_dir, filtered_dir, filtered
     class(tdsops_t), pointer :: op
+    integer :: to_dir, from_dir
 
     if (is_normal) then
       op => dirps%lowpass
@@ -633,24 +621,19 @@ contains
       call self%backend%veccopy(f, filtered)
       call self%backend%allocator%release_block(filtered)
     case (DIR_Y, DIR_Z)
+      if (dirps%dir == DIR_Y) then
+        to_dir = RDR_X2Y; from_dir = RDR_Y2X
+      else
+        to_dir = RDR_X2Z; from_dir = RDR_Z2X
+      end if
       f_dir => self%backend%allocator%get_block(dirps%dir)
       filtered_dir => self%backend%allocator%get_block(dirps%dir)
-      filtered => self%backend%allocator%get_block(DIR_X, f%data_loc)
-      if (dirps%dir == DIR_Y) then
-        call self%backend%reorder(f_dir, f, RDR_X2Y)
-      else
-        call self%backend%reorder(f_dir, f, RDR_X2Z)
-      end if
+      call self%backend%reorder(f_dir, f, to_dir)
       call self%backend%tds_solve(filtered_dir, f_dir, op)
-      if (dirps%dir == DIR_Y) then
-        call self%backend%reorder(filtered, filtered_dir, RDR_Y2X)
-      else
-        call self%backend%reorder(filtered, filtered_dir, RDR_Z2X)
-      end if
-      call self%backend%veccopy(f, filtered)
+      ! f is no longer needed, so the result goes straight back into it
+      call self%backend%reorder(f, filtered_dir, from_dir)
       call self%backend%allocator%release_block(f_dir)
       call self%backend%allocator%release_block(filtered_dir)
-      call self%backend%allocator%release_block(filtered)
     case default
       error stop 'Invalid direction in spatial filter.'
     end select

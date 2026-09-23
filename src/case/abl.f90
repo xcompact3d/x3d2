@@ -75,9 +75,8 @@ contains
     integer :: ierr
 
     ! Constant-flow-rate correction (Incompact3d forceabl); mirrors the channel
-    ! bulk-velocity shift, targeting the log-law flow rate. Free-slip y-walls
-    ! are otherwise handled by the Poisson solver; the wall model wires in
-    ! here in issue #317 commit 3.
+    ! bulk-velocity shift, targeting the log-law flow rate. The wall stress
+    ! is not applied here: the wall model supplies it to the SGS stress.
     if (self%abl_cfg%mass_conserve) then
       ly = self%solver%mesh%geo%L(2)
       ub = self%solver%backend%field_volume_integral(self%solver%u)
