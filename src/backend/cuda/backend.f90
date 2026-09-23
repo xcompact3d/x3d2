@@ -968,11 +968,10 @@ contains
     n = size(stress_d, dim=2)
     blocks = dim3(size(stress_d, dim=3), 1, 1)
     threads = dim3(SZ, 1, 1)
-    call sgs_stress_from_gradients<<<blocks, threads>>>( &
+    call sgs_stress_from_gradients<<<blocks, threads>>>( & !&
       stress_d, nut_d, gradient_a_d, gradient_b_d, &
       scale_a, scale_b, n) !&
   end subroutine compute_sgs_stress_cuda
-
 
   real(dp) function scalar_product_cuda(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]
