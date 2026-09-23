@@ -378,6 +378,12 @@ contains
     class(field_t), intent(in) :: u
     class(tdsops_t), intent(in) :: tdsops
 
+    ! Thomas is exact along an undecomposed line (see tdsops%prefer_thomas)
+    if (tdsops%prefer_thomas) then
+      call self%thom_solve(du, u, tdsops)
+      return
+    end if
+
     ! Check if direction matches for both in/out fields
     if (u%dir /= du%dir) then
       error stop 'DIR mismatch between fields in tds_solve.'
