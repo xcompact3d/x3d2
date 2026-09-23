@@ -35,6 +35,14 @@ module m_tdsops
     real(dp) :: beta_lhs_s = 0._dp !! j=1 backward-sub beta (0/2β Neumann, β otherwise)
     logical :: periodic
     logical :: pentadiag = .false. !! .true. for pentadiagonal LHS schemes
+    !! Solve with the serial Thomas algorithm instead of the distributed one.
+    !! The distributed solver truncates a neighbour's influence at the
+    !! subdomain edge, which is invisible for the well-conditioned derivative
+    !! operators but not for the low-pass filter, whose system is only
+    !! marginally diagonally dominant as alpha approaches 0.5. Thomas is
+    !! serial along the line, so this is only valid when the direction is not
+    !! decomposed.
+    logical :: prefer_thomas = .false.
     integer :: n_tds !! Tridiagonal system size
     integer :: n_rhs !! Right-hand-side builder size
     integer :: move = 0 !! move between vertices and cell centres

@@ -499,6 +499,12 @@ contains
 
     type(dim3) :: blocks, threads
 
+    ! Thomas is exact along an undecomposed line (see tdsops%prefer_thomas)
+    if (tdsops%prefer_thomas) then
+      call self%thom_solve(du, u, tdsops)
+      return
+    end if
+
     ! Check if direction matches for both in/out fields and dirps
     if (u%dir /= du%dir) then
       error stop 'DIR mismatch between fields in tds_solve.'

@@ -333,6 +333,15 @@ contains
         dirps%lowpass_sym, n_vert, d, 'filter', der1st_scheme, &
         bc_start, bc_end, sym=.true., filter_alpha=filter_alpha &
         )
+      ! The filter's system is only marginally diagonally dominant as
+      ! filter_alpha approaches 0.5, so the distributed solver's truncation
+      ! is no longer negligible: at Incompact3d's 0.49 it leaves a 1e-3 error
+      ! at zero wavenumber on 64 points. Solve it exactly with Thomas where
+      ! the direction is not decomposed; Thomas is serial along the line.
+      if (mesh%par%nproc_dir(dir) == 1) then
+        dirps%lowpass%prefer_thomas = .true.
+        dirps%lowpass_sym%prefer_thomas = .true.
+      end if
     end if
 
   end subroutine
