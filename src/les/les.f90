@@ -24,6 +24,8 @@ module m_les
     real(dp) :: smagorinsky_constant = 0.14_dp
     logical :: wall_damping = .false.
     real(dp) :: wall_damping_n = 3._dp
+    !> Wall properties for the Mason-Thomson damping: a smooth wall unless the
+    !> case supplies its own, as the ABL case does from its kappa and z0.
     real(dp) :: von_karman_constant = 0.4_dp
     real(dp) :: roughness_length = 0._dp
     logical :: abl_wall_boundary_enabled = .false.
@@ -55,8 +57,6 @@ contains
     les%smagorinsky_constant = config%smagorinsky_constant
     les%wall_damping = config%wall_damping
     les%wall_damping_n = config%wall_damping_n
-    les%von_karman_constant = config%von_karman_constant
-    les%roughness_length = config%roughness_length
   end function les_init
 
   pure real(dp) function filter_width(spacing) result(delta)
