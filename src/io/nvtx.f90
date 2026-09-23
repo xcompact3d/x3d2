@@ -35,14 +35,19 @@ contains
   logical function nvtx_enabled()
     !! Whether ranges are emitted: X3D2_NVTX (default on), read on first use.
     character(len=16) :: raw_value
-    integer :: status
+    integer :: status, i
 
     if (.not. initialised) then
       initialised = .true.
       call get_environment_variable("X3D2_NVTX", raw_value, status=status)
       if (status == 0) then
+        do i = 1, len(raw_value)
+          if (raw_value(i:i) >= "A" .and. raw_value(i:i) <= "Z") then
+            raw_value(i:i) = achar(iachar(raw_value(i:i)) + 32)
+          end if
+        end do
         select case (trim(adjustl(raw_value)))
-        case ("0", "false", "FALSE", "False", "no", "NO", "off", "OFF")
+        case ("0", "false", "no", "off")
           enabled = .false.
         end select
       end if
