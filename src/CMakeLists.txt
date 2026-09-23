@@ -1,33 +1,13 @@
 # 1. Set source files
 set(SRC
-  allocator.f90
-  common.f90
   config.f90
-  mpi.f90
-  field.f90
-  mesh.f90
-  ordering.f90
-  poisson_fft.f90
   solver.f90
   les/les.f90
   postprocess/postprocess.f90
   postprocess/monitoring.f90
   postprocess/scalar_series.f90
-  tdsops.f90
-  tdsops_setup.f90
   time_integrator.f90
-  mesh.f90
-  mesh_content.f90
-  field.f90
   vector_calculus.f90
-  backend/backend.f90
-  backend/omp/common.f90
-  backend/omp/kernels/distributed.f90
-  backend/omp/kernels/spectral_processing.f90
-  backend/omp/kernels/thomas.f90
-  backend/omp/sendrecv.f90
-  backend/omp/exec_dist.f90
-  backend/omp/exec_thom.f90
   case/base_case.f90
   case/channel.f90
   case/cylinder.f90
@@ -38,9 +18,33 @@ set(SRC
 set(BACKENDSRC
   backend/omp/backend.f90
 )
+# Poisson solver core: everything the standalone Poisson solve needs, split
+# out into its own library so it can be built/tested independently of the
+# rest of x3d2.
+set(POISSONSRC
+  mpi.f90
+  common.f90
+  field.f90
+  allocator.f90
+  mesh_content.f90
+  mesh.f90
+  ordering.f90
+  tdsops.f90
+  tdsops_setup.f90
+  poisson_fft.f90
+  backend/backend.f90
+  backend/omp/common.f90
+  backend/omp/sendrecv.f90
+  backend/omp/exec_dist.f90
+  backend/omp/exec_thom.f90
+  backend/omp/kernels/distributed.f90
+  backend/omp/kernels/thomas.f90
+  backend/omp/kernels/spectral_processing.f90
+)
+
 # CUDA specific
 if (${ENABLE_BACKEND} STREQUAL "CUDA")
-  list(APPEND SRC
+  list(APPEND POISSONSRC
     backend/cuda/allocator.f90
     backend/cuda/common.f90
     backend/cuda/exec_dist.f90
@@ -58,7 +62,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     backend/cuda/backend.f90)
 # OMP TGT specific
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
-  list(APPEND SRC
+  list(APPEND POISSONSRC
     backend/omp/target/allocator.f90
   )
   list(APPEND BACKENDSRC
@@ -67,12 +71,12 @@ endif()
 
 # 2Decomp
 if(WITH_2DECOMPFFT)
-  list(APPEND SRC
+  list(APPEND POISSONSRC
     backend/omp/poisson_fft.f90
     decomp/decomp_2decompfft.f90
   )
 else()
-  list(APPEND SRC
+  list(APPEND POISSONSRC
     decomp/decomp_dummy.f90
   )
 endif()
@@ -103,18 +107,25 @@ set(EXECUTABLE_OUTPUT_PATH "${PROJECT_BINARY_DIR}/bin")
 set(LIBRARY_OUTPUT_PATH "${PROJECT_BINARY_DIR}/lib")
 
 # 2. Create the main library
+add_library(x3d2_poisson STATIC ${POISSONSRC})
+set_target_properties(x3d2_poisson PROPERTIES
+  Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_poisson")
+target_include_directories(x3d2_poisson INTERFACE
+  ${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_poisson)
+
 add_library(x3d2 STATIC ${SRC})
 set_target_properties(x3d2 PROPERTIES
   Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2")
 target_include_directories(x3d2 INTERFACE
   ${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2)
+target_link_libraries(x3d2 PUBLIC x3d2_poisson)
 
 add_library(x3d2_backends STATIC ${BACKENDSRC})
 set_target_properties(x3d2_backends PROPERTIES
   Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_backends")
 target_include_directories(x3d2_backends INTERFACE
   ${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_backends)
-target_link_libraries(x3d2_backends PRIVATE x3d2)
+target_link_libraries(x3d2_backends PRIVATE x3d2_poisson)
 
 add_executable(xcompact xcompact.f90)
 target_link_libraries(xcompact PRIVATE x3d2_backends)
@@ -144,6 +155,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
   set(CMAKE_Fortran_FLAGS_DEBUG "-G2 -O0")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3")
   target_link_options(x3d2 INTERFACE -h omp)
+  target_link_options(x3d2_poisson INTERFACE -h omp)
   target_link_options(x3d2_backends INTERFACE -h omp)
 else()
   message(FATAL_ERROR "Unsupported compiler")
@@ -160,15 +172,16 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     set(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG} -Ktrap=fp")
   endif()
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
-  target_link_options(x3d2 INTERFACE "-cuda" "-gpu=cc${CUDA_ARCH}")
+  # The cuFFT/cuFFTMp code now lives in x3d2_poisson: link options move there.
+  target_link_options(x3d2_poisson INTERFACE "-cuda" "-gpu=cc${CUDA_ARCH}")
   # cuFFTMp distributes a transform over MPI ranks and its nvfortran wrapper
   # calls MPI_Comm_f2c, so it cannot link into a build without MPI.  A serial
   # build is one rank and links plain cuFFT instead: see create_fft_plan in
   # backend/cuda/poisson_fft.f90 for the matching runtime path.
   if(WITH_MPI)
-    target_link_options(x3d2 INTERFACE "-cudalib=cufftmp")
+    target_link_options(x3d2_poisson INTERFACE "-cudalib=cufftmp")
   else()
-    target_link_options(x3d2 INTERFACE "-cudalib=cufft")
+    target_link_options(x3d2_poisson INTERFACE "-cudalib=cufft")
   endif()
   target_compile_options(xcompact PRIVATE "-DCUDA")
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
@@ -187,11 +200,13 @@ endif()
 
 # OpenMP is resolved once at the top level (see the root CMakeLists.txt).
 target_link_libraries(x3d2 PRIVATE OpenMP::OpenMP_Fortran)
+target_link_libraries(x3d2_poisson PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(x3d2_backends PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(xcompact PRIVATE OpenMP::OpenMP_Fortran)
 
 if(WITH_MPI)
   target_link_libraries(x3d2 PRIVATE MPI::MPI_Fortran)
+  target_link_libraries(x3d2_poisson PRIVATE MPI::MPI_Fortran)
   target_link_libraries(x3d2_backends PRIVATE MPI::MPI_Fortran)
   target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
 endif()
@@ -199,9 +214,9 @@ endif()
 # 5. Set thirdparty libary dependencies
 if(WITH_2DECOMPFFT)
   message(STATUS "Using the FFT poisson solver with 2decomp&fft support on the OpenMP backend")
-  target_link_libraries(x3d2 PRIVATE decomp2d)
+  target_link_libraries(x3d2_poisson PRIVATE decomp2d)
   target_link_libraries(x3d2_backends PRIVATE decomp2d)
-  target_compile_options(x3d2 PRIVATE "-DWITH_2DECOMPFFT")
+  target_compile_options(x3d2_poisson PRIVATE "-DWITH_2DECOMPFFT")
   target_compile_options(x3d2_backends PRIVATE "-DWITH_2DECOMPFFT")
 endif()
 
