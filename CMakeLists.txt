@@ -61,6 +61,8 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   IF(NOT BACKEND_ARCH MATCHES "sm_")
     message(FATAL_ERROR "For Nvidia GPU, BACKEND_ARCH must be specified as sm_**")
   ENDIF()
+  # nvfortran names compute capabilities ccXX, not sm_XX: -gpu=cc80 for sm_80.
+  string(REPLACE "sm_" "cc" NVHPC_GPU_ARCH "${BACKEND_ARCH}")
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   if("${OpenMP_Fortran_VERSION}" VERSION_LESS "4.5")
     message(FATAL_ERROR "OpenMP Fortran version ${OpenMP_Fortran_VERSION} is detected, but at least 4.5 is required with OMP_TGT.")
@@ -76,11 +78,13 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
     IF(NOT BACKEND_ARCH MATCHES "sm_")
       message(FATAL_ERROR "For Nvidia GPU, BACKEND_ARCH must be specified as sm_**")
     ENDIF()
+    # nvfortran names compute capabilities ccXX, not sm_XX: -gpu=cc80 for sm_80.
+    string(REPLACE "sm_" "cc" NVHPC_GPU_ARCH "${BACKEND_ARCH}")
     # FindOpenMP supplies -mp, which targets the CPU with NVHPC.  Compile and
     # link target regions for the GPU when this backend is selected.
     set_target_properties(OpenMP::OpenMP_Fortran PROPERTIES
-      INTERFACE_COMPILE_OPTIONS "-mp=gpu"
-      INTERFACE_LINK_OPTIONS "-mp=gpu")
+      INTERFACE_COMPILE_OPTIONS "-mp=gpu;-gpu=${NVHPC_GPU_ARCH}"
+      INTERFACE_LINK_OPTIONS "-mp=gpu;-gpu=${NVHPC_GPU_ARCH}")
     # FindOpenMP can pull CUDA runtime libraries into the target in an order
     # that nvlink rejects.  Let -mp=gpu add them in the correct order.
     get_target_property(_omp_fortran_libs OpenMP::OpenMP_Fortran INTERFACE_LINK_LIBRARIES)
