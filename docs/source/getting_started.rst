@@ -155,15 +155,20 @@ used.
      - Compilers
      - Description
    * - ``OFF`` (default)
-     - Cray, GNU, NVHPC
+     - Cray, GNU, NVHPC, Flang
      - CPU only, using host OpenMP threading.
    * - ``CUDA``
      - NVHPC or PGI only
      - CUDA Fortran backend for NVIDIA GPUs. Configuring fails with any other
        compiler.
    * - ``OMP_TGT``
-     - Cray, GNU, NVHPC
+     - Cray, GNU, NVHPC, Flang
      - OpenMP target offload backend. Requires an OpenMP 4.5 or newer compiler.
+
+"Flang" covers both upstream LLVM Flang and AMD's ROCm ``amdflang``; CMake
+reports either as a ``CMAKE_Fortran_COMPILER_ID`` of ``LLVMFlang`` or
+``Flang``, and the build treats the two identically. See :doc:`user/advanced_build`
+for version requirements and Flang-specific notes.
 
 For example, to build the OpenMP target offload backend:
 
@@ -202,7 +207,7 @@ Build options
      - --
      - The MPI Fortran wrapper to build with, normally ``mpif90``. With
        ``WITH_MPI=OFF``, the compiler itself instead (``gfortran``,
-       ``nvfortran``, ``ftn``) rather than a wrapper.
+       ``nvfortran``, ``ftn``, ``flang``) rather than a wrapper.
    * - ``ENABLE_BACKEND``
      - ``OFF``
      - GPU backend to build: ``OFF``, ``CUDA`` or ``OMP_TGT``.

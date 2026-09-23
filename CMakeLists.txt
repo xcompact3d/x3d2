@@ -88,6 +88,60 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" AND OpenMP_Fortran_FLAGS)
     INTERFACE_LINK_OPTIONS "SHELL:${OpenMP_Fortran_FLAGS}")
 endif()
 
+# Flang links libomp.so out of its own installation, which is not on the
+# loader's default search path, and neither the driver nor FindOpenMP (it
+# reports only -fopenmp here) leaves a library path behind for CMake to turn
+# into an RPATH.  Binaries then link but fail to start.  Locate the runtime and
+# put its directory on the RPATH instead, so running the build does not depend
+# on LD_LIBRARY_PATH being set.
+set(FLANG_OPENMP_RUNTIME_DIR "" CACHE PATH
+  "Directory holding flang's libomp.so; detected automatically when empty")
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "LLVMFlang" OR
+   CMAKE_Fortran_COMPILER_ID STREQUAL "Flang")
+  set(_flang_libomp_dir "${FLANG_OPENMP_RUNTIME_DIR}")
+  if(NOT _flang_libomp_dir)
+    # Ask the driver first: it knows about resource and per-target directories
+    # that cannot be guessed from the install prefix alone.  It answers with the
+    # bare name when it cannot find the file, and some builds reject the option
+    # outright, so the result has to be checked rather than trusted.
+    execute_process(
+      COMMAND "${CMAKE_Fortran_COMPILER}" -print-file-name=libomp.so
+      OUTPUT_VARIABLE _flang_libomp
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET)
+    if(IS_ABSOLUTE "${_flang_libomp}" AND EXISTS "${_flang_libomp}")
+      get_filename_component(_flang_libomp_dir "${_flang_libomp}" DIRECTORY)
+    else()
+      # Fall back to searching the toolchain the driver was invoked from, which
+      # covers both a plain LLVM install (lib/, or lib/<triple>/ when OpenMP is
+      # built as an LLVM_ENABLE_RUNTIMES project) and the ROCm layout.
+      get_filename_component(_flang_root "${CMAKE_Fortran_COMPILER}" DIRECTORY)
+      get_filename_component(_flang_root "${_flang_root}" DIRECTORY)
+      file(GLOB _flang_libomp
+        "${_flang_root}/lib/libomp.so"
+        "${_flang_root}/lib64/libomp.so"
+        "${_flang_root}/lib/*/libomp.so")
+      if(_flang_libomp)
+        list(GET _flang_libomp 0 _flang_libomp)
+        get_filename_component(_flang_libomp_dir "${_flang_libomp}" DIRECTORY)
+      endif()
+      unset(_flang_root)
+    endif()
+    unset(_flang_libomp)
+  endif()
+  if(_flang_libomp_dir)
+    set_property(TARGET OpenMP::OpenMP_Fortran APPEND PROPERTY
+      INTERFACE_LINK_OPTIONS "LINKER:-rpath,${_flang_libomp_dir}")
+    message(STATUS "Flang OpenMP runtime found in ${_flang_libomp_dir}")
+  else()
+    message(WARNING
+      "Could not locate libomp.so for ${CMAKE_Fortran_COMPILER}. Point "
+      "FLANG_OPENMP_RUNTIME_DIR at the directory holding it, or the built "
+      "binaries will only run with that directory on LD_LIBRARY_PATH.")
+  endif()
+  unset(_flang_libomp_dir)
+endif()
+
 enable_testing()
 include(ThirdPartyADIOS2)
 include(ThirdPartyDecomp2D)
