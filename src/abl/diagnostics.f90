@@ -3,8 +3,8 @@ module m_abl_diagnostics
   !!
   !! This is deliberately separate from `abl_t`: the ABL driver owns physics,
   !! while this case-owned object owns validation state and CSV output.
-  use mpi, only: MPI_COMM_WORLD, MPI_Allreduce, MPI_IN_PLACE, MPI_INTEGER, &
-                 MPI_SUM
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Allreduce, MPI_IN_PLACE, MPI_INTEGER, &
+                   MPI_SUM
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
