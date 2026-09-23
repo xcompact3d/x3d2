@@ -99,7 +99,14 @@ set(FLANG_OPENMP_RUNTIME_DIR "" CACHE PATH
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "LLVMFlang" OR
    CMAKE_Fortran_COMPILER_ID STREQUAL "Flang")
   set(_flang_libomp_dir "${FLANG_OPENMP_RUNTIME_DIR}")
-  if(NOT _flang_libomp_dir)
+  if(_flang_libomp_dir)
+    if(NOT EXISTS "${_flang_libomp_dir}/libomp.so")
+      message(FATAL_ERROR
+        "FLANG_OPENMP_RUNTIME_DIR is set to ${_flang_libomp_dir}, but "
+        "libomp.so is not there. Point it at the directory holding the flang "
+        "OpenMP runtime, or leave it empty to detect it automatically.")
+    endif()
+  else()
     # Ask the driver first: it knows about resource and per-target directories
     # that cannot be guessed from the install prefix alone.  It answers with the
     # bare name when it cannot find the file, and some builds reject the option
