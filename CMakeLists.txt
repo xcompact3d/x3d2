@@ -124,14 +124,16 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "LLVMFlang" OR
       # built as an LLVM_ENABLE_RUNTIMES project) and the ROCm layout.
       get_filename_component(_flang_root "${CMAKE_Fortran_COMPILER}" DIRECTORY)
       get_filename_component(_flang_root "${_flang_root}" DIRECTORY)
-      file(GLOB _flang_libomp
-        "${_flang_root}/lib/libomp.so"
-        "${_flang_root}/lib64/libomp.so"
-        "${_flang_root}/lib/*/libomp.so")
-      if(_flang_libomp)
-        list(GET _flang_libomp 0 _flang_libomp)
-        get_filename_component(_flang_libomp_dir "${_flang_libomp}" DIRECTORY)
+      file(GLOB _flang_libomp_hints "${_flang_root}/lib/*")
+      find_library(FLANG_OPENMP_RUNTIME
+        NAMES omp
+        HINTS "${_flang_root}/lib" "${_flang_root}/lib64" ${_flang_libomp_hints}
+        NO_DEFAULT_PATH
+        DOC "Path to flang's OpenMP runtime library")
+      if(FLANG_OPENMP_RUNTIME)
+        get_filename_component(_flang_libomp_dir "${FLANG_OPENMP_RUNTIME}" DIRECTORY)
       endif()
+      unset(_flang_libomp_hints)
       unset(_flang_root)
     endif()
     unset(_flang_libomp)
