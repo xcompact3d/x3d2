@@ -15,6 +15,7 @@ module m_abl
   use m_config, only: abl_config_t
   use m_field, only: field_t
   use m_mesh, only: mesh_t
+  use m_mpi, only: MPI_COMM_WORLD, MPI_INTEGER, MPI_Bcast
   use m_les, only: les_t
 
   implicit none
@@ -72,8 +73,9 @@ contains
     class(field_t), intent(inout) :: u, v, w
 
     class(field_t), pointer :: hu, hv, hw
-    integer :: i, j, k, dims(3), seed_size, clock_count, date_values(8)
-    integer(int64) :: date_seed
+    integer :: i, j, k, dims(3), seed_size, date_values(8), base_seed, ierr
+    integer, allocatable :: seed(:)
+    integer(int64) :: clock, state
     real(dp) :: coords(3), y, prof, noise(3)
     logical :: log_law
 
@@ -83,24 +85,43 @@ contains
     hv => self%host_allocator%get_block(DIR_C)
     hw => self%host_allocator%get_block(DIR_C)
 
-    ! Match Incompact3d init_abl: seed each MPI rank from the clock before
-    ! drawing the three component fields in u, v, w order.
-    call system_clock(count=clock_count)
-    if (clock_count == 0) then
-      ! NVHPC can return zero for system_clock in some environments.
-      call date_and_time(values=date_values)
-      date_seed = int(date_values(1), int64)*10000000000000_int64 + &
-                  int(date_values(2), int64)*100000000000_int64 + &
-                  int(date_values(3), int64)*1000000000_int64 + &
-                  int(date_values(5), int64)*10000000_int64 + &
-                  int(date_values(6), int64)*100000_int64 + &
-                  int(date_values(7), int64)*1000_int64 + &
-                  int(date_values(8), int64)
-      clock_count = int(modulo(date_seed, 2147483647_int64))
+    ! As Incompact3d init_abl, each MPI rank draws its own noise stream, in
+    ! u, v, w order. With seed = 0 the base seed comes from rank 0's clock,
+    ! as in Incompact3d; it is reported so the run can be repeated. A fixed
+    ! seed repeats the noise for the same compiler and rank count only, as
+    ! random_number is processor dependent.
+    base_seed = self%cfg%seed
+    if (base_seed == 0) then
+      if (self%mesh%par%is_root()) then
+        call system_clock(count=clock)
+        if (clock <= 0) then
+          ! No usable clock: the standard gives -huge, some runtimes give 0
+          call date_and_time(values=date_values)
+          clock = ((((int(date_values(1), int64)*12 + date_values(2))*31 &
+                     + date_values(3))*24 + date_values(5))*60 &
+                   + date_values(6))*60000_int64 &
+                  + date_values(7)*1000_int64 + date_values(8)
+        end if
+        base_seed = 1 + int(modulo(clock, 2147483646_int64))
+      end if
+      call MPI_Bcast(base_seed, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
     end if
+    if (self%mesh%par%is_root()) print *, 'ABL noise seed:', base_seed
+
+    ! Spread the base seed and rank over the processor's seed with a MINSTD
+    ! generator. The integer arithmetic is done in int64 and every word lies
+    ! in [1, 2**31 - 2], so nothing overflows a default integer, however many
+    ! words the seed has or ranks the run uses, and it is never all zero.
     call random_seed(size=seed_size)
-    call random_seed(put=clock_count + 63946*(self%mesh%par%nrank + 1)* &
-                     [(i - 1, i=1, seed_size)])
+    allocate (seed(seed_size))
+    state = 1 + modulo(int(base_seed, int64) &
+                       + 63946_int64*(self%mesh%par%nrank + 1), &
+                       2147483646_int64)
+    do i = 1, seed_size
+      state = modulo(48271_int64*state, 2147483647_int64)
+      seed(i) = int(state)
+    end do
+    call random_seed(put=seed)
 
     call random_number(hu%data(1:dims(1), 1:dims(2), 1:dims(3)))
     call random_number(hv%data(1:dims(1), 1:dims(2), 1:dims(3)))

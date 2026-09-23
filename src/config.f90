@@ -83,6 +83,8 @@ module m_config
     real(dp) :: u_geo(3) = 0._dp       !! geostrophic wind UG
     real(dp) :: coriolis_freq = 0._dp  !! Coriolis frequency f
     real(dp) :: init_noise(3) = 0._dp
+    !> Seed for the initial noise; 0 draws one from the clock
+    integer :: seed = 0
     real(dp) :: u_bulk = 0._dp         !! target bulk velocity (mass_conserve)
     integer :: profile_start_iter = -1 !! first profile sample (-1 = disabled)
     character(len=256) :: profile_file = 'abl_profile.csv'
@@ -402,13 +404,13 @@ contains
 
     real(dp) :: z0, u_star, delta, kappa, dsampling
     real(dp) :: u_geo(3), coriolis_freq, init_noise(3), u_bulk
-    integer :: profile_start_iter
+    integer :: profile_start_iter, seed
     character(len=256) :: profile_file
     logical :: pressure_gradient, coriolis, mass_conserve, damping
 
     namelist /abl_nml/ z0, u_star, delta, kappa, dsampling, &
       u_geo, coriolis_freq, &
-      init_noise, u_bulk, profile_start_iter, profile_file, &
+      init_noise, seed, u_bulk, profile_start_iter, profile_file, &
       pressure_gradient, coriolis, mass_conserve, damping
 
     ! Defaults
@@ -420,6 +422,7 @@ contains
     u_geo = 0._dp
     coriolis_freq = 0._dp
     init_noise = 0._dp
+    seed = 0
     u_bulk = 0._dp
     profile_start_iter = -1
     profile_file = 'abl_profile.csv'
@@ -450,6 +453,7 @@ contains
     self%u_geo = u_geo
     self%coriolis_freq = coriolis_freq
     self%init_noise = init_noise
+    self%seed = seed
     self%u_bulk = u_bulk
     self%profile_start_iter = profile_start_iter
     self%profile_file = trim(profile_file)
@@ -478,6 +482,8 @@ contains
 
     if (any(config%init_noise < 0._dp)) &
       error stop 'ABL config error: init_noise must not be negative.'
+    if (config%seed < 0) &
+      error stop 'ABL config error: seed must not be negative.'
 
     if (config%profile_start_iter < -1) &
       error stop 'ABL config error: profile_start_iter must be -1 or greater.'
