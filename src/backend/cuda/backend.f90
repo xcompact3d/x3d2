@@ -249,7 +249,9 @@ contains
     if (f%dir == DIR_X) then
       call resolve_field_t(f_d, f)
       blocks = dim3((dims(1) + SZ - 1)/SZ, (dims(2) + SZ - 1)/SZ, dims(3))
-      threads = dim3(min(SZ, 32), min(SZ, 32), 1)
+      ! The kernels stride over the SZ x SZ tile by blockDim, so a short
+      ! block is enough; 32 x 32 exceeds the register budget per block.
+      threads = dim3(min(SZ, 32), min(SZ, 8), 1)
       if (to_sp) then
         call pack_x2c_sp<<<blocks, threads>>>(out_sp, f_d, dims(1), & !&
                                               dims(2), dims_padded(3))
@@ -277,6 +279,7 @@ contains
 
     ierr = cudaGetLastError()
     if (ierr /= cudaSuccess) then
+      print *, "CUDA error: ", trim(cudaGetErrorString(ierr))
       error stop "export_field_to_device: kernel launch failed"
     end if
 
