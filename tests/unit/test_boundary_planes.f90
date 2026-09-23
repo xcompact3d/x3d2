@@ -13,7 +13,7 @@ program test_boundary_planes
   !! orderings coincide when ny <= SZ, so ny here is deliberately larger than
   !! SZ on both backends (SZ is 32 on CUDA, 16 on OMP) and is not a multiple
   !! of either, which also exercises the partially-filled last y-block.
-  use mpi
+  use m_mpi, only: MPI_Init, MPI_Finalize
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t

@@ -11,7 +11,7 @@ program test_filter
   !! is only marginally diagonally dominant at Incompact3d's alpha = 0.49; the
   !! distributed solver's truncation then leaves a 1e-3 DC error, which is why
   !! the filter is solved with Thomas where the direction is not decomposed.
-  use mpi
+  use m_mpi, only: MPI_Init, MPI_Finalize
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
