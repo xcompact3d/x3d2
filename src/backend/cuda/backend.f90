@@ -32,6 +32,8 @@ module m_cuda_backend
                                      field_set_x_face_from_field, &
                                      field_set_y_face_from_field, &
                                      field_add_x_face_from_field, &
+                                     field_plane_partial_sums, &
+                                     field_plane_sums_reduce, &
                                      field_add_y_face_from_field, &
                                      pwmul, volume_integral, &
                                      vorticity_from_gradients, &
@@ -79,6 +81,7 @@ module m_cuda_backend
     procedure :: field_shift => field_shift_cuda
     procedure :: field_set_face => field_set_face_cuda
     procedure :: field_set_y_plane => field_set_y_plane_cuda
+    procedure :: field_plane_sums => field_plane_sums_cuda
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_cuda
     procedure :: field_set_face_from_field => field_set_face_from_field_cuda
     procedure :: field_add_face_from_field => field_add_face_from_field_cuda
@@ -1369,6 +1372,47 @@ contains
         f_d, c, i_in_block, group_offset, dims(1))
 
   end subroutine field_set_y_plane_cuda
+
+  subroutine field_plane_sums_cuda(self, sums, f)
+    !! [[m_base_backend(module):field_plane_sums(subroutine)]]
+    implicit none
+
+    class(cuda_backend_t) :: self
+    real(dp), intent(out) :: sums(:)
+    class(field_t), intent(in) :: f
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    real(dp), device, allocatable :: partial_d(:, :), sums_d(:)
+    type(dim3) :: blocks, threads
+    integer :: dims(3)
+
+    if (f%dir /= DIR_X) &
+      error stop 'field_plane_sums is only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_plane_sums requires a valid data_loc.'
+
+    dims = self%mesh%get_dims(f%data_loc)
+    if (size(sums) < dims(2)) &
+      error stop 'field_plane_sums: sums is smaller than the y extent.'
+
+    call resolve_field_t(f_d, f)
+    allocate (partial_d(dims(2), dims(3)), sums_d(dims(2)))
+
+    ! Sum along x for every (y, z) line, then over z for every y, each in a
+    ! fixed order so the result is reproducible.
+    blocks = dim3((dims(2) - 1)/SZ + 1, dims(3), 1)
+    threads = dim3(SZ, 1, 1)
+    call field_plane_partial_sums<<<blocks, threads>>>( &          !&
+      partial_d, f_d, dims(1), dims(2), dims(3))
+    blocks = dim3((dims(2) - 1)/64 + 1, 1, 1)
+    threads = dim3(64, 1, 1)
+    call field_plane_sums_reduce<<<blocks, threads>>>( &           !&
+      sums_d, partial_d, dims(2), dims(3))
+
+    sums(1:dims(2)) = sums_d
+    deallocate (partial_d, sums_d)
+
+  end subroutine field_plane_sums_cuda
 
   subroutine field_set_abl_wall_stress_cuda( &
     self, stress, u, w, sample_plane, stress_plane, drag_coeff, component)

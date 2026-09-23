@@ -6,12 +6,11 @@ module m_abl_diagnostics
   use m_mpi, only: MPI_COMM_WORLD, MPI_Allreduce, MPI_IN_PLACE, MPI_INTEGER, &
                    MPI_SUM
 
-  use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, DIR_C, MPI_X3D2_DP, VERT
+  use m_common, only: dp, DIR_X, MPI_X3D2_DP, VERT
   use m_config, only: abl_config_t
   use m_field, only: field_t
-  use m_les, only: neutral_wall_stress
+  use m_les, only: neutral_drag_coefficient
   use m_mesh, only: mesh_t
 
   implicit none
@@ -22,7 +21,6 @@ module m_abl_diagnostics
   type :: abl_diagnostics_t
     class(base_backend_t), pointer :: backend => null()
     type(mesh_t), pointer :: mesh => null()
-    type(allocator_t), pointer :: host_allocator => null()
     type(abl_config_t) :: cfg
     real(dp), allocatable :: profile_sum(:, :)
     real(dp) :: wall_stress_sum(2) = 0._dp
@@ -40,17 +38,15 @@ module m_abl_diagnostics
 
 contains
 
-  function init(backend, mesh, host_allocator, cfg) result(diagnostics)
+  function init(backend, mesh, cfg) result(diagnostics)
     class(base_backend_t), target, intent(inout) :: backend
     type(mesh_t), target, intent(inout) :: mesh
-    type(allocator_t), target, intent(inout) :: host_allocator
     type(abl_config_t), intent(in) :: cfg
     type(abl_diagnostics_t) :: diagnostics
     integer :: dims(3)
 
     diagnostics%backend => backend
     diagnostics%mesh => mesh
-    diagnostics%host_allocator => host_allocator
     diagnostics%cfg = cfg
 
     if (cfg%profile_start_iter < 0) return
@@ -78,46 +74,31 @@ contains
   end function friction_velocity
 
   subroutine sample(self, iter, time, u, v, w)
+    !! Accumulate the horizontally averaged velocity and wall stress. The
+    !! plane averages are formed on the device, so only one value per y-plane
+    !! is copied back rather than the whole velocity field.
     class(abl_diagnostics_t), intent(inout) :: self
     integer, intent(in) :: iter
     real(dp), intent(in) :: time
     class(field_t), intent(in) :: u, v, w
 
-    class(field_t), pointer :: hu, hv, hw
-    real(dp), allocatable :: profile(:, :)
-    real(dp) :: wall_stress(2), sampling_height, tau_x, tau_z
+    class(field_t), pointer :: stress
+    real(dp), allocatable :: profile(:, :), sums(:)
+    real(dp) :: wall_stress(2), sampling_height, drag_coeff
     integer :: dims(3), plane_count, ierr, sample_plane
-    integer :: i, j, k
 
     if (self%cfg%profile_start_iter < 0) return
     if (iter < self%cfg%profile_start_iter .or. iter == self%last_iter) return
 
     dims = self%mesh%get_dims(VERT)
-    allocate (profile(3, dims(2)), source=0._dp)
+    allocate (profile(3, dims(2)), sums(dims(2)))
 
-    hu => self%host_allocator%get_block(DIR_C, VERT)
-    hv => self%host_allocator%get_block(DIR_C, VERT)
-    hw => self%host_allocator%get_block(DIR_C, VERT)
-    call self%backend%get_field_data(hu%data, u)
-    call self%backend%get_field_data(hv%data, v)
-    call self%backend%get_field_data(hw%data, w)
-
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          profile(1, j) = profile(1, j) + hu%data(i, j, k)
-          profile(2, j) = profile(2, j) + hv%data(i, j, k)
-          profile(3, j) = profile(3, j) + hw%data(i, j, k)
-        end do
-      end do
-    end do
-
-    plane_count = dims(1)*dims(3)
-    call MPI_Allreduce(MPI_IN_PLACE, profile, size(profile), MPI_X3D2_DP, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
-    call MPI_Allreduce(MPI_IN_PLACE, plane_count, 1, MPI_INTEGER, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
-    profile = profile/real(plane_count, dp)
+    call self%backend%field_plane_sums(sums, u)
+    profile(1, :) = sums
+    call self%backend%field_plane_sums(sums, v)
+    profile(2, :) = sums
+    call self%backend%field_plane_sums(sums, w)
+    profile(3, :) = sums
 
     ! Apply the same pointwise drag law used by the SGS wall boundary, then
     ! average its stress over the horizontal plane. Averaging velocity first
@@ -126,18 +107,27 @@ contains
     sample_plane = min(max(sample_plane, 2), dims(2))
     sampling_height = self%mesh%geo%vert_coords(sample_plane, 2) &
                       - self%mesh%geo%vert_coords(1, 2)
-    wall_stress = 0._dp
-    do k = 1, dims(3)
-      do i = 1, dims(1)
-        call neutral_wall_stress( &
-          hu%data(i, sample_plane, k), hw%data(i, sample_plane, k), &
-          self%cfg%kappa, self%cfg%z0, sampling_height, tau_x, tau_z)
-        wall_stress(1) = wall_stress(1) + tau_x
-        wall_stress(2) = wall_stress(2) + tau_z
-      end do
-    end do
+    drag_coeff = neutral_drag_coefficient(self%cfg%kappa, self%cfg%z0, &
+                                          sampling_height)
+    stress => self%backend%allocator%get_block(DIR_X, VERT)
+    call self%backend%field_set_abl_wall_stress( &
+      stress, u, w, sample_plane, sample_plane, drag_coeff, 1)
+    call self%backend%field_plane_sums(sums, stress)
+    wall_stress(1) = sums(sample_plane)
+    call self%backend%field_set_abl_wall_stress( &
+      stress, u, w, sample_plane, sample_plane, drag_coeff, 3)
+    call self%backend%field_plane_sums(sums, stress)
+    wall_stress(2) = sums(sample_plane)
+    call self%backend%allocator%release_block(stress)
+
+    plane_count = dims(1)*dims(3)
+    call MPI_Allreduce(MPI_IN_PLACE, profile, size(profile), MPI_X3D2_DP, &
+                       MPI_SUM, MPI_COMM_WORLD, ierr)
     call MPI_Allreduce(MPI_IN_PLACE, wall_stress, size(wall_stress), &
                        MPI_X3D2_DP, MPI_SUM, MPI_COMM_WORLD, ierr)
+    call MPI_Allreduce(MPI_IN_PLACE, plane_count, 1, MPI_INTEGER, &
+                       MPI_SUM, MPI_COMM_WORLD, ierr)
+    profile = profile/real(plane_count, dp)
     wall_stress = wall_stress/real(plane_count, dp)
 
     self%sample_count = self%sample_count + 1
@@ -147,11 +137,6 @@ contains
     self%last_iter = iter
 
     call self%write_profile(time)
-
-    call self%host_allocator%release_block(hu)
-    call self%host_allocator%release_block(hv)
-    call self%host_allocator%release_block(hw)
-    deallocate (profile)
   end subroutine sample
 
   subroutine write_profile(self, time)

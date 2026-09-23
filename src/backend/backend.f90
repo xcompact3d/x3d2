@@ -46,6 +46,7 @@ module m_base_backend
     procedure(vector_norm_squared_op), deferred :: vector_norm_squared
     procedure(field_max_mean), deferred :: field_max_mean
     procedure(slice_max_sum), deferred :: slice_max_sum
+    procedure(field_plane_sums), deferred :: field_plane_sums
     procedure(field_ops), deferred :: field_scale
     procedure(field_ops), deferred :: field_shift
     procedure(field_reduce), deferred :: field_volume_integral
@@ -315,6 +316,20 @@ module m_base_backend
   end interface
 
   abstract interface
+    subroutine field_plane_sums(self, sums, f)
+      !! Sum a DIR_X field over x and z on every local y-plane:
+      !! sums(j) is the sum over the plane of y index j. The order of
+      !! summation is fixed, so the result is reproducible.
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      real(dp), intent(out) :: sums(:)
+      class(field_t), intent(in) :: f
+    end subroutine field_plane_sums
+
     subroutine slice_max_sum(self, max_val, sum_val, f, &
                              i_slice, enforced_data_loc)
     !! Reduces a single slice of f at index i_slice along f's DIR axis.

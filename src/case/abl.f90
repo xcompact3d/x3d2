@@ -52,8 +52,8 @@ contains
 
     call flow_case%case_init(backend, mesh, host_allocator)
     call flow_case%abl%configure_wall_boundary_correction(flow_case%solver%les)
-    flow_case%diagnostics = abl_diagnostics_t( &
-                            backend, mesh, host_allocator, flow_case%abl_cfg)
+    flow_case%diagnostics = abl_diagnostics_t(backend, mesh, &
+                                              flow_case%abl_cfg)
 
   end function case_abl_init
 
