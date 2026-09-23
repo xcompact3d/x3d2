@@ -24,9 +24,10 @@ module m_les
     real(dp) :: smagorinsky_constant = 0.14_dp
     logical :: wall_damping = .false.
     real(dp) :: wall_damping_n = 3._dp
-    !> Wall properties for the Mason-Thomson damping: a smooth wall unless the
-    !> case supplies its own, as the ABL case does from its kappa and z0.
-    real(dp) :: von_karman_constant = 0.4_dp
+    !> Wall the Mason-Thomson damping measures from, supplied by the case
+    !> through configure_wall_damping (the ABL case uses its kappa and z0)
+    logical :: wall_supplied = .false.
+    real(dp) :: von_karman_constant = 0._dp
     real(dp) :: roughness_length = 0._dp
     logical :: abl_wall_boundary_enabled = .false.
     real(dp) :: abl_wall_sampling_height = 0._dp
@@ -39,6 +40,7 @@ module m_les
     procedure :: nut_from_gradient
     procedure :: compute_nut
     procedure :: apply_sgs_stress
+    procedure :: configure_wall_damping
     procedure :: configure_abl_wall_boundary
     procedure :: finalise
   end type les_t
@@ -127,6 +129,9 @@ contains
     delta = filter_width(spacing)
     length = self%smagorinsky_constant*delta
     if (self%wall_damping) then
+      if (.not. self%wall_supplied) &
+        error stop 'LES wall damping needs a case that supplies the wall &
+                   &(currently only abl).'
       if (.not. present(wall_distance)) then
         length = 0._dp
         return
@@ -154,6 +159,25 @@ contains
                           self%mixing_length(spacing, wall_distance))
   end function nut_from_gradient
 
+  subroutine configure_wall_damping(self, kappa, roughness_length)
+    !! Supply the wall the Mason-Thomson damping measures from. The wall
+    !! distance is taken from the lower y boundary, so this suits cases with a
+    !! single wall there.
+    class(les_t), intent(inout) :: self
+    real(dp), intent(in) :: kappa, roughness_length
+
+    if (associated(self%mixing_length_sq)) &
+      error stop 'Configure the LES wall before applying LES.'
+    if (kappa <= 0._dp) &
+      error stop 'LES wall damping needs a positive von Karman constant.'
+    if (roughness_length < 0._dp) &
+      error stop 'LES wall damping needs a non-negative roughness length.'
+
+    self%von_karman_constant = kappa
+    self%roughness_length = roughness_length
+    self%wall_supplied = .true.
+  end subroutine configure_wall_damping
+
   subroutine configure_abl_wall_boundary( &
     self, kappa, roughness_length, sampling_height, sample_plane)
     class(les_t), intent(inout) :: self
@@ -164,15 +188,12 @@ contains
       error stop 'The neutral ABL wall model requires Smagorinsky LES.'
     if (.not. self%wall_damping) &
       error stop 'The neutral ABL wall model requires LES wall damping.'
-    if (associated(self%mixing_length_sq)) &
-      error stop 'Configure the ABL wall boundary before applying LES.'
     if (sample_plane < 2) &
       error stop 'The ABL wall model must sample above the no-slip floor.'
 
     ! ABL owns the wall properties. LES consumes the same values for its
     ! Mason-Thomson damping and for the wall stress.
-    self%von_karman_constant = kappa
-    self%roughness_length = roughness_length
+    call self%configure_wall_damping(kappa, roughness_length)
     self%abl_wall_boundary_enabled = .true.
     self%abl_wall_sampling_height = sampling_height
     self%abl_wall_sample_plane = sample_plane

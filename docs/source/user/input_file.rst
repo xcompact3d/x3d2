@@ -54,10 +54,8 @@ defaults to ``model = 'none'`` and the momentum equations are unchanged.
 
   The wall distance is measured from the lower ``y`` boundary, so wall damping
   suits cases with a single wall there. The case supplies :math:`\kappa` and
-  :math:`z_0` (the ``abl`` case uses its ``kappa`` and ``z0``); otherwise a
-  smooth wall is assumed, :math:`z_0 = 0` and :math:`\kappa = 0.4`, for which
-  ``nut`` tends to zero at the wall and approaches the undamped Smagorinsky
-  value away from it.
+  :math:`z_0`: currently only the ``abl`` case does, from its ``kappa`` and
+  ``z0``, and enabling wall damping in any other case stops with an error.
 
   **Default:** ``.false.``
 
