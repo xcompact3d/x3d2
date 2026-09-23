@@ -47,24 +47,35 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/include)
 
 # Backend specific checks
+if (${ENABLE_BACKEND} STREQUAL "CUDA" OR ${ENABLE_BACKEND} STREQUAL "OMP_TGT")
+  set(BACKEND_ARCH "" CACHE STRING "Target architecture for GPU offloading")
+  if ("${BACKEND_ARCH}" STREQUAL "")
+    message(FATAL_ERROR
+      "CUDA and OMP_TGT backend requires setting BACKEND_ARCH=<arch>")
+  endif()
+endif()
 if (${ENABLE_BACKEND} STREQUAL "CUDA")
   if(NOT (CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI"))
     message(FATAL_ERROR "CUDA backend require NVHPC and PGI compiler")
   endif()
+  IF(NOT BACKEND_ARCH MATCHES "sm_")
+    message(FATAL_ERROR "For Nvidia GPU, BACKEND_ARCH must be specified as sm_**")
+  ENDIF()
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   if("${OpenMP_Fortran_VERSION}" VERSION_LESS "4.5")
     message(FATAL_ERROR "OpenMP Fortran version ${OpenMP_Fortran_VERSION} is detected, but at least 4.5 is required with OMP_TGT.")
   endif()
-  set(OMP_TGT_ARCH "" CACHE STRING "Target architecture for OpenMP offloading, e.g. gfx942")
   if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
      ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
      ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
-    if ("${OMP_TGT_ARCH}" STREQUAL "")
-      message(FATAL_ERROR
-        "OMP_TGT=ON requires setting OMP_TGT_ARCH=<arch> for this compiler")
-    endif()
+    IF(NOT BACKEND_ARCH MATCHES "gfx*")
+      message(FATAL_ERROR "For AMD GPU, BACKEND_ARCH must be specified as gfx***")
+    ENDIF()
   endif()
   if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
+    IF(NOT BACKEND_ARCH MATCHES "sm_")
+      message(FATAL_ERROR "For Nvidia GPU, BACKEND_ARCH must be specified as sm_**")
+    ENDIF()
     # FindOpenMP supplies -mp, which targets the CPU with NVHPC.  Compile and
     # link target regions for the GPU when this backend is selected.
     set_target_properties(OpenMP::OpenMP_Fortran PROPERTIES

@@ -68,9 +68,9 @@ function(define_test_backend_runtime backend)
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
         target_compile_options(${runtime_target} PRIVATE
-          "--offload-arch=${OMP_TGT_ARCH}")
+          "--offload-arch=${BACKEND_ARCH}")
         target_link_options(${runtime_target} INTERFACE
-          "--offload-arch=${OMP_TGT_ARCH}")
+	  "--offload-arch=${BACKEND_ARCH}")
       endif()
     endif()
   endif()
@@ -134,8 +134,8 @@ function(define_test testfile np backend)
       if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray" AND
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
-        target_compile_options(${test_name} PRIVATE "--offload-arch=${OMP_TGT_ARCH}")
-        target_link_options(${test_name} PRIVATE "--offload-arch=${OMP_TGT_ARCH}")
+        target_compile_options(${test_name} PRIVATE "--offload-arch=${BACKEND_ARCH}")
+        target_link_options(${test_name} PRIVATE "--offload-arch=${BACKEND_ARCH}")
       endif()
     endif()
   endif()

@@ -85,15 +85,9 @@ if(WITH_ADIOS2)
       message(STATUS "Building ADIOS2 from source")
 
       if(${ENABLE_BACKEND} STREQUAL "CUDA")
-        # ADIOS2 defaults CMAKE_CUDA_ARCHITECTURES to 52 (Maxwell) when unset,
-        # which CUDA >= 13 no longer supports, so an architecture is always
-        # forwarded.  Native detection compiles for the GPU of the build machine.
-        set(CUDA_ARCH "native" CACHE STRING
-          "CUDA architecture(s) for the ADIOS2 build, e.g. 80")
-
         set(adios2_cuda_args
           "-DADIOS2_USE_CUDA=ON"
-          "-DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCH}")
+          "-DCMAKE_CUDA_ARCHITECTURES=${BACKEND_ARCH}")
       else()
         set(adios2_cuda_args "-DADIOS2_USE_CUDA=OFF")
       endif()
