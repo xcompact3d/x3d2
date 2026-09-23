@@ -51,8 +51,6 @@ module m_config
     real(dp) :: smagorinsky_constant = 0.14_dp
     logical :: wall_damping = .false.
     real(dp) :: wall_damping_n = 3._dp
-    real(dp) :: von_karman_constant = 0.4_dp
-    real(dp) :: roughness_length = 0._dp
   contains
     procedure :: read => read_les_nml
   end type les_config_t
@@ -261,19 +259,16 @@ contains
 
     integer :: unit, ierr
     character(len=20) :: model
-    real(dp) :: smagorinsky_constant, wall_damping_n, von_karman_constant
-    real(dp) :: roughness_length
+    real(dp) :: smagorinsky_constant, wall_damping_n
     logical :: wall_damping
 
     namelist /les_params/ model, smagorinsky_constant, wall_damping, &
-      wall_damping_n, von_karman_constant, roughness_length
+      wall_damping_n
 
     model = self%model
     smagorinsky_constant = self%smagorinsky_constant
     wall_damping = self%wall_damping
     wall_damping_n = self%wall_damping_n
-    von_karman_constant = self%von_karman_constant
-    roughness_length = self%roughness_length
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading LES config failed! &
@@ -299,17 +294,13 @@ contains
     end select
     if (smagorinsky_constant <= 0._dp) &
       error stop 'smagorinsky_constant must be positive.'
-    if (von_karman_constant <= 0._dp .or. wall_damping_n <= 0._dp) &
-      error stop 'LES wall-damping constants must be positive.'
-    if (roughness_length < 0._dp) &
-      error stop 'roughness_length must not be negative.'
+    if (wall_damping_n <= 0._dp) &
+      error stop 'wall_damping_n must be positive.'
 
     self%model = trim(model)
     self%smagorinsky_constant = smagorinsky_constant
     self%wall_damping = wall_damping
     self%wall_damping_n = wall_damping_n
-    self%von_karman_constant = von_karman_constant
-    self%roughness_length = roughness_length
   end subroutine read_les_nml
 
   subroutine read_channel_nml(self, nml_file, nml_string)
