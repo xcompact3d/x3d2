@@ -84,7 +84,7 @@ if(WITH_ADIOS2)
     else(ADIOS2_FOUND)
       message(STATUS "Building ADIOS2 from source")
 
-      if(${ENABLE_BACKEND} STREQUAL "CUDA")
+      if(ENABLE_BACKEND} AND (CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI"))
         set(adios2_cuda_args
           "-DADIOS2_USE_CUDA=ON"
           "-DCMAKE_CUDA_ARCHITECTURES=${BACKEND_ARCH}")
