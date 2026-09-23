@@ -99,7 +99,14 @@ set(FLANG_OPENMP_RUNTIME_DIR "" CACHE PATH
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "LLVMFlang" OR
    CMAKE_Fortran_COMPILER_ID STREQUAL "Flang")
   set(_flang_libomp_dir "${FLANG_OPENMP_RUNTIME_DIR}")
-  if(NOT _flang_libomp_dir)
+  if(_flang_libomp_dir)
+    if(NOT EXISTS "${_flang_libomp_dir}/libomp.so")
+      message(FATAL_ERROR
+        "FLANG_OPENMP_RUNTIME_DIR is set to ${_flang_libomp_dir}, but "
+        "libomp.so is not there. Point it at the directory holding the flang "
+        "OpenMP runtime, or leave it empty to detect it automatically.")
+    endif()
+  else()
     # Ask the driver first: it knows about resource and per-target directories
     # that cannot be guessed from the install prefix alone.  It answers with the
     # bare name when it cannot find the file, and some builds reject the option
@@ -117,14 +124,16 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "LLVMFlang" OR
       # built as an LLVM_ENABLE_RUNTIMES project) and the ROCm layout.
       get_filename_component(_flang_root "${CMAKE_Fortran_COMPILER}" DIRECTORY)
       get_filename_component(_flang_root "${_flang_root}" DIRECTORY)
-      file(GLOB _flang_libomp
-        "${_flang_root}/lib/libomp.so"
-        "${_flang_root}/lib64/libomp.so"
-        "${_flang_root}/lib/*/libomp.so")
-      if(_flang_libomp)
-        list(GET _flang_libomp 0 _flang_libomp)
-        get_filename_component(_flang_libomp_dir "${_flang_libomp}" DIRECTORY)
+      file(GLOB _flang_libomp_hints "${_flang_root}/lib/*")
+      find_library(FLANG_OPENMP_RUNTIME
+        NAMES omp
+        HINTS "${_flang_root}/lib" "${_flang_root}/lib64" ${_flang_libomp_hints}
+        NO_DEFAULT_PATH
+        DOC "Path to flang's OpenMP runtime library")
+      if(FLANG_OPENMP_RUNTIME)
+        get_filename_component(_flang_libomp_dir "${FLANG_OPENMP_RUNTIME}" DIRECTORY)
       endif()
+      unset(_flang_libomp_hints)
       unset(_flang_root)
     endif()
     unset(_flang_libomp)
