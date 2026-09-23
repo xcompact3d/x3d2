@@ -113,16 +113,17 @@ if(WITH_ADIOS2)
       endif()
 
       # GPU-aware writes go through the ADIOS2 C API, whose library follows the
-      # same MPI/serial split as the Fortran one.
+      # same MPI/serial split as the Fortran one: the MPI library holds only
+      # the MPI entry points, the rest (adios2_put, ...) stays in adios2_c.
       if(WITH_ADIOS2_GPU_AWARE)
-        if(WITH_MPI)
-          set(adios2_c_library
-            "${adios2_install_dir}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}adios2_c_mpi${CMAKE_SHARED_LIBRARY_SUFFIX}")
-        else()
-          set(adios2_c_library
-            "${adios2_install_dir}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}adios2_c${CMAKE_SHARED_LIBRARY_SUFFIX}")
-        endif()
+        set(adios2_c_library
+          "${adios2_install_dir}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}adios2_c${CMAKE_SHARED_LIBRARY_SUFFIX}")
         list(APPEND adios2_byproducts "${adios2_c_library}")
+        if(WITH_MPI)
+          set(adios2_c_mpi_library
+            "${adios2_install_dir}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}adios2_c_mpi${CMAKE_SHARED_LIBRARY_SUFFIX}")
+          list(APPEND adios2_byproducts "${adios2_c_mpi_library}")
+        endif()
       endif()
 
       include(ExternalProject)
@@ -189,7 +190,7 @@ if(WITH_ADIOS2)
           "${adios2_install_dir}/include")
         if(WITH_MPI)
           target_link_libraries(adios2_c_x3d2 INTERFACE
-            "${adios2_c_library}" MPI::MPI_C)
+            "${adios2_c_mpi_library}" "${adios2_c_library}" MPI::MPI_C)
         else()
           target_link_libraries(adios2_c_x3d2 INTERFACE "${adios2_c_library}")
         endif()
