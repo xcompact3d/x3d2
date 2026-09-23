@@ -181,15 +181,16 @@ compiler and supplies the flags it needs, so no manual offload flags are
 required with any of them.
 
 Both GPU backends need the target architecture, given with ``BACKEND_ARCH``.
-Configuring a GPU build fails if it is unset. NVIDIA targets are named
-``sm_<cc>`` and AMD targets ``gfx<model>``:
+Configuring a GPU build fails if it is unset. NVIDIA targets are named by their
+compute capability as ``ccXX``, the convention nvfortran uses, and AMD targets
+as ``gfx<model>``:
 
 .. code-block:: bash
 
    -DENABLE_BACKEND=OMP_TGT -DBACKEND_ARCH=gfx942   # AMD MI300X
-   -DENABLE_BACKEND=CUDA -DBACKEND_ARCH=sm_80       # NVIDIA A100
+   -DENABLE_BACKEND=CUDA -DBACKEND_ARCH=cc80        # NVIDIA A100
 
-The build translates the name into whatever the selected compiler expects, for
+The build passes the name to the selected compiler in the form it expects, for
 example ``-gpu=cc80`` for NVHPC and ``--offload-arch=gfx942`` for GNU and
 Flang. See :doc:`user/advanced_build` for the per-compiler details.
 
@@ -217,7 +218,7 @@ Build options
    * - ``BACKEND_ARCH``
      - --
      - Target GPU architecture, required whenever ``ENABLE_BACKEND`` is not
-       ``OFF``: ``sm_80`` (A100), ``sm_90`` (H100), ``gfx942`` (MI300X).
+       ``OFF``: ``cc80`` (A100), ``cc90`` (H100), ``gfx942`` (MI300X).
    * - ``SINGLE_PREC``
      - ``OFF``
      - Build in single precision.

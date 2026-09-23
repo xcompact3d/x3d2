@@ -21,7 +21,7 @@ for ``ENABLE_BACKEND=CUDA``, ``ftn`` on Cray):
 .. code-block:: console
 
    $ cmake -S . -B build -DCMAKE_Fortran_COMPILER=nvfortran -DWITH_MPI=OFF \
-       -DENABLE_BACKEND=CUDA -DBACKEND_ARCH=sm_80 -DCMAKE_BUILD_TYPE=Debug
+       -DENABLE_BACKEND=CUDA -DBACKEND_ARCH=cc80 -DCMAKE_BUILD_TYPE=Debug
 
 .. note::
 
@@ -32,7 +32,7 @@ for ``ENABLE_BACKEND=CUDA``, ``ftn`` on Cray):
 
 Select a GPU backend with ``-DENABLE_BACKEND=CUDA`` or ``-DENABLE_BACKEND=OMP_TGT``;
 the default ``OFF`` builds the CPU backend only. Either GPU backend also needs
-the target architecture in ``-DBACKEND_ARCH`` (``sm_80``, ``gfx942``, ...).
+the target architecture in ``-DBACKEND_ARCH`` (``cc80``, ``gfx942``, ...).
 See :doc:`../user/advanced_build` for the full set of options.
 
 Once the build directory is configured, you can build the executable and run the tests as follows:

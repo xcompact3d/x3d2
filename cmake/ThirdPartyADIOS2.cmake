@@ -95,8 +95,8 @@ if(WITH_ADIOS2)
       message(STATUS "Building ADIOS2 from source")
 
       if(adios2_with_cuda)
-        # CMAKE_CUDA_ARCHITECTURES takes the bare number, not nvcc's sm_XX.
-        string(REPLACE "sm_" "" adios2_cuda_arch "${BACKEND_ARCH}")
+        # CMAKE_CUDA_ARCHITECTURES takes the bare number, not nvfortran's ccXX.
+        string(REPLACE "cc" "" adios2_cuda_arch "${BACKEND_ARCH}")
         set(adios2_cuda_args
           "-DADIOS2_USE_CUDA=ON"
           "-DCMAKE_CUDA_ARCHITECTURES=${adios2_cuda_arch}")
