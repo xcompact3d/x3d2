@@ -52,6 +52,7 @@ module m_omp_backend
     procedure :: field_shift => field_shift_omp
     procedure :: field_set_face => field_set_face_omp
     procedure :: field_set_y_plane => field_set_y_plane_omp
+    procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_omp
     procedure :: field_set_face_from_field => field_set_face_from_field_omp
     procedure :: compute_vorticity => compute_vorticity_omp
     procedure :: compute_qcriterion => compute_qcriterion_omp
@@ -1193,6 +1194,55 @@ contains
     !$omp end parallel do
 
   end subroutine field_set_y_plane_omp
+
+  subroutine field_set_abl_wall_stress_omp( &
+    self, stress, u, w, sample_plane, stress_plane, drag_coeff, component)
+    !! [[m_base_backend(module):field_set_abl_wall_stress(subroutine)]]
+    implicit none
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: stress
+    class(field_t), intent(in) :: u, w
+    integer, intent(in) :: sample_plane, stress_plane, component
+    real(dp), intent(in) :: drag_coeff
+    integer :: dims(3), n_y_blocks, sample_block, stress_block
+    integer :: sample_i, stress_i, k, i, sample_group, stress_group
+    real(dp) :: us, ws, speed
+
+    if (stress%dir /= DIR_X .or. u%dir /= DIR_X .or. w%dir /= DIR_X) &
+      error stop 'ABL wall stress requires DIR_X fields.'
+    if (stress%data_loc /= VERT .or. u%data_loc /= VERT .or. &
+        w%data_loc /= VERT) &
+      error stop 'ABL wall stress requires vertex fields.'
+    dims = self%mesh%get_dims(VERT)
+    if (min(sample_plane, stress_plane) < 1 .or. &
+        max(sample_plane, stress_plane) > dims(2)) &
+      error stop 'ABL wall stress plane is outside the domain.'
+    if (component /= 1 .and. component /= 3) &
+      error stop 'Invalid ABL wall stress component.'
+
+    n_y_blocks = (dims(2) - 1)/SZ + 1
+    sample_block = (sample_plane - 1)/SZ + 1
+    stress_block = (stress_plane - 1)/SZ + 1
+    sample_i = mod(sample_plane - 1, SZ) + 1
+    stress_i = mod(stress_plane - 1, SZ) + 1
+
+    !$omp parallel do private(sample_group, stress_group, i, us, ws, speed)
+    do k = 1, dims(3)
+      sample_group = n_y_blocks*(k - 1) + sample_block
+      stress_group = n_y_blocks*(k - 1) + stress_block
+      do i = 1, dims(1)
+        us = u%data(sample_i, i, sample_group)
+        ws = w%data(sample_i, i, sample_group)
+        speed = sqrt(us**2 + ws**2)
+        if (component == 1) then
+          stress%data(stress_i, i, stress_group) = drag_coeff*us*speed
+        else
+          stress%data(stress_i, i, stress_group) = drag_coeff*ws*speed
+        end if
+      end do
+    end do
+    !$omp end parallel do
+  end subroutine field_set_abl_wall_stress_omp
 
   subroutine field_set_face_from_field_omp(self, f, f_start, c_end, face, &
                                            bc_start, bc_end, flow_rate_diff)

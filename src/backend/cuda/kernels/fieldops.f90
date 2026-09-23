@@ -356,6 +356,34 @@ contains
 
   end subroutine field_set_y_plane
 
+  attributes(global) subroutine field_set_abl_wall_stress( &
+    stress, u, w, drag_coeff, sample_i, stress_i, sample_offset, &
+    stress_offset, nx, component)
+  !! Drag law tau = drag_coeff*u_c*|u_h| from each column's own sampled
+  !! velocity, written into one stress plane (component 1: x, 3: z).
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: stress
+    real(dp), device, intent(in), dimension(:, :, :) :: u, w
+    real(dp), value, intent(in) :: drag_coeff
+    integer, value, intent(in) :: sample_i, stress_i, sample_offset
+    integer, value, intent(in) :: stress_offset, nx, component
+    integer :: i, sample_group, stress_group
+    real(dp) :: us, ws, speed
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    sample_group = sample_offset + blockIdx%y
+    stress_group = stress_offset + blockIdx%y
+    if (i > nx) return
+    us = u(sample_i, i, sample_group)
+    ws = w(sample_i, i, sample_group)
+    speed = sqrt(us**2 + ws**2)
+    if (component == 1) then
+      stress(stress_i, i, stress_group) = drag_coeff*us*speed
+    else
+      stress(stress_i, i, stress_group) = drag_coeff*ws*speed
+    end if
+  end subroutine field_set_abl_wall_stress
+
   attributes(global) subroutine field_set_y_face_from_field( &
     f, f_start, nx, ny, nz)
 !! Set domain Y_FACE boundary values from another field.

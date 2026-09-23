@@ -6,7 +6,7 @@ program test_les_field
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
   use m_config, only: les_config_t
   use m_field, only: field_t, flist_t
-  use m_les, only: les_t, filter_width, horizontal_wall_velocity, &
+  use m_les, only: les_t, filter_width, &
                    neutral_wall_stress, &
                    wall_damped_mixing_length
   use m_mesh, only: mesh_t
@@ -56,7 +56,6 @@ program test_les_field
   real(dp) :: delta, expected, length, max_error, spacing(3), tolerance
   real(dp) :: sampling_height, roughness, kappa, drag_coeff
   real(dp) :: tau_x, tau_z
-  real(dp) :: wall_u_mean, wall_w_mean
   integer :: dims(3), dims_padded(3), i, j, k, ierr
   logical :: all_pass
 
@@ -213,9 +212,8 @@ program test_les_field
   dwdy => allocator%get_block(DIR_X, VERT)
   dvdz => allocator%get_block(DIR_X, VERT)
 
-  ! Incompact3d samples one horizontally averaged velocity at dsampling*dy.
-  ! Exercise the shared reduction with nonuniform columns; the field is
-  ! constant in y, so the mean does not depend on which plane is named.
+  ! Nonuniform columns for the local wall stress checks below; the field is
+  ! constant in y, so the result does not depend on which plane is sampled.
   do k = 1, dims(3)
     do j = 1, dims(2)
       do i = 1, dims(1)
@@ -226,14 +224,6 @@ program test_les_field
   end do
   call backend%set_field_data(u, u_data)
   call backend%set_field_data(w, nut_data)
-  call horizontal_wall_velocity( &
-    backend, mesh, u, w, 4, wall_u_mean, wall_w_mean)
-  call check_error('ABL horizontally averaged wall u', &
-                   abs(wall_u_mean - 0.5_dp*real(dims(1) + 1, dp)), &
-                   tolerance, all_pass)
-  call check_error('ABL horizontally averaged wall w', &
-                   abs(wall_w_mean - real(dims(1) + 1, dp)), &
-                   tolerance, all_pass)
 
   ! The wall stress now enters the SGS stress field rather than overwriting
   ! the stress divergence, so what is worth pinning here is the drag law:
@@ -249,6 +239,33 @@ program test_les_field
                    abs(tau_x - drag_coeff*4._dp*5._dp), tolerance, all_pass)
   call check_error('neutral wall stress z', &
                    abs(tau_z - drag_coeff*3._dp*5._dp), tolerance, all_pass)
+  ! The active ABL wall stress must use each column's own velocity.
+  ! A plane-mean drag would be constant in i and fail this check.
+  call wall_nut%fill(0._dp)
+  call backend%field_set_abl_wall_stress( &
+    wall_nut, u, w, 4, 2, drag_coeff, 1)
+  call backend%get_field_data(nut_data, wall_nut)
+  max_error = 0._dp
+  do k = 1, dims(3)
+    do i = 1, dims(1)
+      expected = drag_coeff*real(i, dp)**2*sqrt(5._dp)
+      max_error = max(max_error, abs(nut_data(i, 2, k) - expected))
+    end do
+  end do
+  call check_error('local ABL tau_xy', max_error, tolerance, all_pass)
+
+  call backend%field_set_abl_wall_stress( &
+    wall_nut, u, w, 4, 2, drag_coeff, 3)
+  call backend%get_field_data(nut_data, wall_nut)
+  max_error = 0._dp
+  do k = 1, dims(3)
+    do i = 1, dims(1)
+      expected = 2._dp*drag_coeff*real(i, dp)**2*sqrt(5._dp)
+      max_error = max(max_error, abs(nut_data(i, 2, k) - expected))
+    end do
+  end do
+  call check_error('local ABL tau_yz', max_error, tolerance, all_pass)
+
   ! A wall at rest exerts no stress.
   call neutral_wall_stress(0._dp, 0._dp, kappa, roughness, sampling_height, &
                            tau_x, tau_z)

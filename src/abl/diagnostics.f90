@@ -85,7 +85,7 @@ contains
 
     class(field_t), pointer :: hu, hv, hw
     real(dp), allocatable :: profile(:, :)
-    real(dp) :: wall_stress(2), sampling_height
+    real(dp) :: wall_stress(2), sampling_height, tau_x, tau_z
     integer :: dims(3), plane_count, ierr, sample_plane
     integer :: i, j, k
 
@@ -119,18 +119,26 @@ contains
                        MPI_SUM, MPI_COMM_WORLD, ierr)
     profile = profile/real(plane_count, dp)
 
-    ! Diagnose the wall stress with exactly the law and sampling height the
-    ! wall model applies, so this reports what the solver did rather than a
-    ! second, independent estimate. Vertex 1 is the wall, so a sampling height
-    ! of dsampling*dy is vertex nint(dsampling) + 1.
+    ! Apply the same pointwise drag law used by the SGS wall boundary, then
+    ! average its stress over the horizontal plane. Averaging velocity first
+    ! would underreport the nonlinear stress in a turbulent field.
     sample_plane = nint(self%cfg%dsampling) + 1
     sample_plane = min(max(sample_plane, 2), dims(2))
     sampling_height = self%mesh%geo%vert_coords(sample_plane, 2) &
                       - self%mesh%geo%vert_coords(1, 2)
-    call neutral_wall_stress(profile(1, sample_plane), &
-                             profile(3, sample_plane), self%cfg%kappa, &
-                             self%cfg%z0, sampling_height, &
-                             wall_stress(1), wall_stress(2))
+    wall_stress = 0._dp
+    do k = 1, dims(3)
+      do i = 1, dims(1)
+        call neutral_wall_stress( &
+          hu%data(i, sample_plane, k), hw%data(i, sample_plane, k), &
+          self%cfg%kappa, self%cfg%z0, sampling_height, tau_x, tau_z)
+        wall_stress(1) = wall_stress(1) + tau_x
+        wall_stress(2) = wall_stress(2) + tau_z
+      end do
+    end do
+    call MPI_Allreduce(MPI_IN_PLACE, wall_stress, size(wall_stress), &
+                       MPI_X3D2_DP, MPI_SUM, MPI_COMM_WORLD, ierr)
+    wall_stress = wall_stress/real(plane_count, dp)
 
     self%sample_count = self%sample_count + 1
     if (self%sample_count == 1) self%first_time = time
