@@ -121,10 +121,10 @@ program test_les_field
                          expected))
   call check_error('constant-shear nut', max_error, tolerance, all_pass)
 
-  ! Without a case that supplies the wall, damping assumes a smooth wall
-  ! (z0 = 0) with kappa = 0.4.
+  ! Wall damping measures from a wall the case supplies: here a smooth one.
   config%wall_damping = .true.
   les_wall = les_t(config)
+  call les_wall%configure_wall_damping(0.4_dp, 0._dp)
   call les_wall%compute_nut(backend, mesh, u, v, w, &
                             xdirps, ydirps, zdirps)
   call backend%get_field_data(nut_data, les_wall%nut)
@@ -134,7 +134,8 @@ program test_les_field
     do j = 1, dims(2)
       length = wall_damped_mixing_length( &
         delta, mesh%geo%vert_coords(j, 2), &
-        config%smagorinsky_constant, 0.4_dp, config%wall_damping_n, 0._dp)
+        config%smagorinsky_constant, 0.4_dp, config%wall_damping_n, &
+        0._dp)
       expected = length**2*abs(shear)
       do i = 1, dims(1)
         max_error = max(max_error, abs(nut_data(i, j, k) - expected))
