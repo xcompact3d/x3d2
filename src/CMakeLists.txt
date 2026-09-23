@@ -136,6 +136,8 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
   if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
      ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
     set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -march=native")
+  else()
+    set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -floop-optimize -march=native")
   endif()
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
