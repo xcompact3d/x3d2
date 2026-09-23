@@ -208,6 +208,10 @@ Build options
      - The MPI Fortran wrapper to build with, normally ``mpif90``. With
        ``WITH_MPI=OFF``, the compiler itself instead (``gfortran``,
        ``nvfortran``, ``ftn``, ``flang``) rather than a wrapper.
+   * - ``CUDA_ARCH``
+     - ``80``
+     - CUDA compute capability for ``ENABLE_BACKEND=CUDA`` and the bundled
+       ADIOS2 build: ``80`` (A100), ``90`` (H100) or ``native``.
    * - ``ENABLE_BACKEND``
      - ``OFF``
      - GPU backend to build: ``OFF``, ``CUDA`` or ``OMP_TGT``.
