@@ -131,6 +131,10 @@ add_executable(xcompact xcompact.f90)
 target_link_libraries(xcompact PRIVATE x3d2_backends)
 target_link_libraries(xcompact PRIVATE x3d2)
 
+add_executable(x3d2_poisson_solver poisson_solver.f90)
+target_link_libraries(x3d2_poisson_solver PRIVATE x3d2_backends x3d2_poisson
+                      OpenMP::OpenMP_Fortran MPI::MPI_Fortran)
+
 # 3. Set compiler specific flags and options
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
          ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
@@ -184,7 +188,9 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     target_link_options(x3d2_poisson INTERFACE "-cudalib=cufft")
   endif()
   target_compile_options(xcompact PRIVATE "-DCUDA")
+  target_compile_options(x3d2_poisson_solver PRIVATE "-DCUDA")
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
+  target_compile_options(x3d2_poisson_solver PRIVATE "-DOMP_TGT")
   if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
     set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
     add_definitions("-DOMP_TGT_NVIDIA")
@@ -216,6 +222,7 @@ if(WITH_2DECOMPFFT)
   message(STATUS "Using the FFT poisson solver with 2decomp&fft support on the OpenMP backend")
   target_link_libraries(x3d2_poisson PRIVATE decomp2d)
   target_link_libraries(x3d2_backends PRIVATE decomp2d)
+  target_link_libraries(x3d2_poisson_solver PRIVATE decomp2d)
   target_compile_options(x3d2_poisson PRIVATE "-DWITH_2DECOMPFFT")
   target_compile_options(x3d2_backends PRIVATE "-DWITH_2DECOMPFFT")
 endif()
