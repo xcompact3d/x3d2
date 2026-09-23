@@ -782,7 +782,6 @@ contains
     !$omp end parallel do
   end subroutine compute_sgs_stress_omp
 
-
   real(dp) function scalar_product_omp(self, x, y) result(s)
     !! [[m_base_backend(module):scalar_product(interface)]]
     implicit none

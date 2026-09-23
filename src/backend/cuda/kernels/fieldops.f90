@@ -225,7 +225,6 @@ contains
     end do
   end subroutine sgs_stress_from_gradients
 
-
   attributes(global) subroutine scalar_product(s, x, y, n, n_i_pad, n_j)
     implicit none
 

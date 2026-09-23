@@ -100,7 +100,7 @@ contains
     end if
     call random_seed(size=seed_size)
     call random_seed(put=clock_count + 63946*(self%mesh%par%nrank + 1)* &
-                     [(i - 1, i = 1, seed_size)])
+                     [(i - 1, i=1, seed_size)])
 
     call random_number(hu%data(1:dims(1), 1:dims(2), 1:dims(3)))
     call random_number(hv%data(1:dims(1), 1:dims(2), 1:dims(3)))
