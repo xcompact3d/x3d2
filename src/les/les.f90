@@ -5,7 +5,7 @@ module m_les
   !! operations are dispatched to the selected computational backend.
   use m_base_backend, only: base_backend_t
 
-  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, Y_FACE, &
+  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Z2X
   use m_config, only: les_config_t
   use m_field, only: field_t
