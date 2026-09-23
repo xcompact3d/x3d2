@@ -50,6 +50,7 @@ program test_filter
   integer, parameter :: nproc_dir(3) = [1, 1, 1]
   real(dp), parameter :: lengths(3) = [1._dp, 1._dp, 1._dp]
   real(dp), parameter :: filter_alpha = 0.49_dp
+  real(dp), parameter :: constant = 3.75_dp
   character(len=9), parameter :: bc_per(2) = ['periodic ', 'periodic ']
   character(len=9), parameter :: bc_slip(2) = ['neumann  ', 'neumann  ']
 
@@ -60,11 +61,12 @@ program test_filter
 
   call MPI_Init(ierr)
   all_pass = .true.
-  tolerance = 1000._dp*epsilon(1._dp)
-  ! Solved with Thomas, so zero wavenumber is exact to round-off. It was 1e-3
-  ! under the distributed solver at this alpha, which is what motivated the
-  ! Thomas path.
-  dc_tolerance = 1e-11_dp
+  ! Solved with Thomas, so the filter is exact to round-off: a few epsilon in
+  ! either precision. It was 1e-3 under the distributed solver at this alpha,
+  ! which is what motivated the Thomas path, so 100 epsilon still separates
+  ! the two by more than an order of magnitude in single precision.
+  tolerance = 100._dp*epsilon(1._dp)
+  dc_tolerance = tolerance*constant
 
   mesh = mesh_t(dims_global, nproc_dir, lengths, bc_per, bc_slip, bc_per)
   dims = mesh%get_dims(VERT)
@@ -97,11 +99,11 @@ program test_filter
   ! --- A constant must pass through untouched -----------------------------
   ! The stencil weights sum to one, so the transfer function is exactly 1 at
   ! zero wavenumber. This also catches a sign slip in any boundary row.
-  d = 3.75_dp
+  d = constant
   call backend%set_field_data(f, d)
   call backend%tds_solve(filtered, f, xdirps%lowpass)
   call backend%get_field_data(d, filtered)
-  err = maxval(abs(d(1:dims(1), 1:dims(2), 1:dims(3)) - 3.75_dp))
+  err = maxval(abs(d(1:dims(1), 1:dims(2), 1:dims(3)) - constant))
   call check('constant preserved in x', err, dc_tolerance, all_pass)
 
   ! In y the operator acts along the y-pencil, so the field is reordered
@@ -111,13 +113,13 @@ program test_filter
     class(field_t), pointer :: f_y, filt_y
     f_y => allocator%get_block(DIR_Y)
     filt_y => allocator%get_block(DIR_Y)
-    d = 3.75_dp
+    d = constant
     call backend%set_field_data(f, d)
     call backend%reorder(f_y, f, RDR_X2Y)
     call backend%tds_solve(filt_y, f_y, ydirps%lowpass_sym)
     call backend%reorder(filtered, filt_y, RDR_Y2X)
     call backend%get_field_data(d, filtered)
-    err = maxval(abs(d(1:dims(1), 1:dims(2), 1:dims(3)) - 3.75_dp))
+    err = maxval(abs(d(1:dims(1), 1:dims(2), 1:dims(3)) - constant))
     call check('constant preserved in y (even)', err, dc_tolerance, all_pass)
     call allocator%release_block(f_y)
     call allocator%release_block(filt_y)
@@ -135,7 +137,7 @@ program test_filter
   call backend%tds_solve(filtered, f, xdirps%lowpass)
   call backend%get_field_data(d, filtered)
   amp_after = maxval(abs(d(1:dims(1), 1:dims(2), 1:dims(3))))
-  call check('2dx mode removed in x', amp_after, 1e-10_dp, all_pass)
+  call check('2dx mode removed in x', amp_after, tolerance, all_pass)
 
   ! --- A well-resolved mode must survive ----------------------------------
   ! Filtering is only acceptable if it leaves the physics alone; an 8-point
