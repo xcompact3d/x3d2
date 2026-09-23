@@ -5,7 +5,7 @@ program test_fft
   use m_base_backend, only: base_backend_t
   use m_backend_runtime, only: backend_runtime_t, backend_is_cuda
   use m_tdsops, only: dirps_t
-  use m_solver, only: allocate_tdsops
+  use m_tdsops_setup, only: allocate_tdsops
 
   use m_common, only: dp, pi, MPI_X3D2_DP, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, CELL

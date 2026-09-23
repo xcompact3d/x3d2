@@ -30,7 +30,7 @@ program test_poisson
   use m_common, only: dp, pi, DIR_C, DIR_X, DIR_Y, DIR_Z, CELL, &
                       RDR_C2Z, RDR_C2X, RDR_Z2X
   use m_mesh, only: mesh_t
-  use m_solver, only: allocate_tdsops
+  use m_tdsops_setup, only: allocate_tdsops
   use m_tdsops, only: dirps_t
   use m_vector_calculus, only: vector_calculus_t
   use m_test_utils, only: initialise_mpi, finalise_test
