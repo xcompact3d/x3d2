@@ -357,7 +357,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   define_performance_test(performance/perf_cuda_penta.f90 ${CMAKE_CTEST_NPROCS} cuda)
   define_performance_test(performance/perf_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
 
-  if(WITH_ADIOS2)
+  if(adios2_with_cuda)
     define_test(unit/test_adios2_read_write.f90 4 cuda)
     define_test(unit/test_io_session.f90 4 cuda)
     define_test(unit/test_ab_checkpoint.f90 1 cuda)
@@ -372,6 +372,12 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
 
   # OMP TGT verification tests
   define_verification_test(verification/test_time_integrator.f90 1 omp_tgt)
+
+  if(adios2_with_cuda)
+    define_test(unit/test_adios2_read_write.f90 4 omp_tgt)
+    define_test(unit/test_io_session.f90 4 omp_tgt)
+    define_test(unit/test_ab_checkpoint.f90 1 omp_tgt)
+  endif()
 endif()
 
 set(EXECUTABLE_OUTPUT_PATH "bin")
