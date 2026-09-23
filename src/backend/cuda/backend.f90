@@ -28,6 +28,7 @@ module m_cuda_backend
                                      vector_norm_squared, &
                                      field_max_sum, field_set_y_face, &
                                      field_set_x_face, field_set_y_plane, &
+                                     field_set_abl_wall_stress, &
                                      field_set_x_face_from_field, &
                                      field_set_y_face_from_field, &
                                      pwmul, volume_integral, &
@@ -76,6 +77,7 @@ module m_cuda_backend
     procedure :: field_shift => field_shift_cuda
     procedure :: field_set_face => field_set_face_cuda
     procedure :: field_set_y_plane => field_set_y_plane_cuda
+    procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_cuda
     procedure :: field_set_face_from_field => field_set_face_from_field_cuda
     procedure :: compute_vorticity => compute_vorticity_cuda
     procedure :: compute_qcriterion => compute_qcriterion_cuda
@@ -1365,6 +1367,45 @@ contains
         f_d, c, i_in_block, group_offset, dims(1))
 
   end subroutine field_set_y_plane_cuda
+
+  subroutine field_set_abl_wall_stress_cuda( &
+    self, stress, u, w, sample_plane, stress_plane, drag_coeff, component)
+    !! [[m_base_backend(module):field_set_abl_wall_stress(subroutine)]]
+    implicit none
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: stress
+    class(field_t), intent(in) :: u, w
+    integer, intent(in) :: sample_plane, stress_plane, component
+    real(dp), intent(in) :: drag_coeff
+    real(dp), device, pointer, dimension(:, :, :) :: stress_d, u_d, w_d
+    type(dim3) :: blocks, threads
+    integer :: dims(3), sample_i, stress_i, sample_offset, stress_offset
+
+    if (stress%dir /= DIR_X .or. u%dir /= DIR_X .or. w%dir /= DIR_X) &
+      error stop 'ABL wall stress requires DIR_X fields.'
+    if (stress%data_loc /= VERT .or. u%data_loc /= VERT .or. &
+        w%data_loc /= VERT) &
+      error stop 'ABL wall stress requires vertex fields.'
+    dims = self%mesh%get_dims(VERT)
+    if (min(sample_plane, stress_plane) < 1 .or. &
+        max(sample_plane, stress_plane) > dims(2)) &
+      error stop 'ABL wall stress plane is outside the domain.'
+    if (component /= 1 .and. component /= 3) &
+      error stop 'Invalid ABL wall stress component.'
+
+    call resolve_field_t(stress_d, stress)
+    call resolve_field_t(u_d, u)
+    call resolve_field_t(w_d, w)
+    sample_i = mod(sample_plane - 1, SZ) + 1
+    stress_i = mod(stress_plane - 1, SZ) + 1
+    sample_offset = dims(3)*((sample_plane - 1)/SZ)
+    stress_offset = dims(3)*((stress_plane - 1)/SZ)
+    blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
+    threads = dim3(64, 1, 1)
+    call field_set_abl_wall_stress<<<blocks, threads>>>( &      !&
+      stress_d, u_d, w_d, drag_coeff, sample_i, stress_i, &
+      sample_offset, stress_offset, dims(1), component)
+  end subroutine field_set_abl_wall_stress_cuda
 
   subroutine field_set_face_from_field_cuda(self, f, f_start, c_end, face, &
                                             bc_start, bc_end, flow_rate_diff)

@@ -51,6 +51,7 @@ module m_base_backend
     procedure(field_reduce), deferred :: field_volume_integral
     procedure(field_set_face), deferred :: field_set_face
     procedure(field_set_y_plane), deferred :: field_set_y_plane
+    procedure(field_set_abl_wall_stress), deferred :: field_set_abl_wall_stress
     procedure(field_set_face_from_field), deferred :: field_set_face_from_field
     procedure(derive_field_from_gradients), deferred :: compute_vorticity
     procedure(derive_field_from_gradients), deferred :: compute_qcriterion
@@ -365,6 +366,18 @@ module m_base_backend
       real(dp), intent(in) :: c
       integer, intent(in) :: plane !! 1-based y-vertex index
     end subroutine field_set_y_plane
+
+    subroutine field_set_abl_wall_stress(self, stress, u, w, sample_plane, &
+                                         stress_plane, drag_coeff, component)
+      !! Replace one SGS stress plane using the local sampled velocity.
+      import :: base_backend_t, field_t, dp
+      implicit none
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: stress
+      class(field_t), intent(in) :: u, w
+      integer, intent(in) :: sample_plane, stress_plane, component
+      real(dp), intent(in) :: drag_coeff
+    end subroutine field_set_abl_wall_stress
 
     subroutine field_set_face_from_field(self, f, f_start, c_end, face, &
                                          bc_start, bc_end, flow_rate_diff)

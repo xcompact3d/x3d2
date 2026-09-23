@@ -4,10 +4,9 @@ module m_les
   !! Derivatives and data movement are orchestrated here, while pointwise
   !! operations are dispatched to the selected computational backend.
   use m_base_backend, only: base_backend_t
-  use mpi, only: MPI_COMM_WORLD, MPI_Allreduce, MPI_IN_PLACE, MPI_SUM
 
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, Y_FACE, &
-                      MPI_X3D2_DP, RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Z2X
+                      RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Z2X
   use m_config, only: les_config_t
   use m_field, only: field_t
   use m_mesh, only: mesh_t
@@ -17,8 +16,7 @@ module m_les
 
   private
   public :: les_t, smagorinsky_nut, strain_rate_magnitude, &
-            filter_width, wall_damped_mixing_length, &
-            horizontal_wall_velocity, neutral_wall_stress
+            filter_width, wall_damped_mixing_length, neutral_wall_stress
 
   type :: les_t
     character(len=20) :: model = 'none'
@@ -239,7 +237,7 @@ contains
     class(field_t), pointer :: dudx, dudy, dudz
     class(field_t), pointer :: dvdx, dvdy, dvdz
     class(field_t), pointer :: dwdx, dwdy, dwdz
-    real(dp) :: wall_u_sample, wall_w_sample, wall_tau_x, wall_tau_z
+    real(dp) :: wall_drag_coeff
 
     if (trim(self%model) == 'none') return
     if (trim(self%model) /= 'smagorinsky') &
@@ -265,74 +263,28 @@ contains
       self%nut, self%mixing_length_sq, &
       dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
 
+    wall_drag_coeff = 0._dp
     if (self%abl_wall_boundary_enabled) then
-      ! Substitute the modelled wall stress into tau_xy and tau_yz at the
-      ! floor before differentiating, rather than overwriting the stress
-      ! divergence afterwards. The divergence then telescopes to
-      ! tau(lid) - tau(floor), so the momentum the wall model removes is
-      ! exactly the momentum the flow loses (Incompact3d iconserv=1).
-      call horizontal_wall_velocity( &
-        backend, mesh, u, w, self%abl_wall_sample_plane, &
-        wall_u_sample, wall_w_sample)
-      call neutral_wall_stress( &
-        wall_u_sample, wall_w_sample, self%von_karman_constant, &
-        self%roughness_length, self%abl_wall_sampling_height, &
-        wall_tau_x, wall_tau_z)
-    else
-      wall_tau_x = 0._dp
-      wall_tau_z = 0._dp
+      wall_drag_coeff = (self%von_karman_constant &
+                         /log(self%abl_wall_sampling_height &
+                              /self%roughness_length))**2
     end if
 
     call add_sgs_terms(backend, du, dv, dw, self%nut, &
                        dudx, dudy, dudz, dvdx, dvdy, dvdz, &
                        dwdx, dwdy, dwdz, xdirps, ydirps, zdirps, &
-                       self%abl_wall_boundary_enabled, &
-                       wall_tau_x, wall_tau_z)
+                       self%abl_wall_boundary_enabled, u, w, &
+                       self%abl_wall_sample_plane, wall_drag_coeff)
 
     call release_velocity_gradients( &
       backend, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
   end subroutine apply_sgs_stress
 
-  subroutine horizontal_wall_velocity(backend, mesh, u, w, sample_plane, &
-                                      u_sample, w_sample)
-    !! Legacy iwallmodel=1 convention: horizontally average the velocity at
-    !! the sampling height before evaluating the neutral wall stress.
-    !!
-    !! The floor is no-slip, so the sample must be taken off the wall
-    !! (Incompact3d samples at dsampling*dy); averaging in the wall plane
-    !! itself would simply dilute it towards zero.
-    class(base_backend_t), intent(inout) :: backend
-    type(mesh_t), intent(in) :: mesh
-    class(field_t), intent(in) :: u, w
-    integer, intent(in) :: sample_plane
-    real(dp), intent(out) :: u_sample, w_sample
-
-    class(field_t), pointer :: u_y, w_y
-    real(dp) :: unused_max, wall_sums(2)
-    integer :: dims(3), ierr
-
-    u_y => backend%allocator%get_block(DIR_Y, VERT)
-    w_y => backend%allocator%get_block(DIR_Y, VERT)
-    call backend%reorder(u_y, u, RDR_X2Y)
-    call backend%reorder(w_y, w, RDR_X2Y)
-
-    call backend%slice_max_sum(unused_max, wall_sums(1), u_y, sample_plane)
-    call backend%slice_max_sum(unused_max, wall_sums(2), w_y, sample_plane)
-    call MPI_Allreduce(MPI_IN_PLACE, wall_sums, size(wall_sums), MPI_X3D2_DP, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
-
-    dims = mesh%get_global_dims(VERT)
-    u_sample = wall_sums(1)/real(dims(1)*dims(3), dp)
-    w_sample = wall_sums(2)/real(dims(1)*dims(3), dp)
-
-    call backend%allocator%release_block(u_y)
-    call backend%allocator%release_block(w_y)
-  end subroutine horizontal_wall_velocity
-
   subroutine add_sgs_terms(backend, du, dv, dw, nut, &
                            dudx, dudy, dudz, dvdx, dvdy, dvdz, &
                            dwdx, dwdy, dwdz, xdirps, ydirps, zdirps, &
-                           abl_wall, wall_tau_x, wall_tau_z)
+                           abl_wall, wall_u, wall_w, &
+                           wall_sample_plane, wall_drag_coeff)
     class(base_backend_t), intent(inout) :: backend
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: nut
@@ -341,7 +293,9 @@ contains
     class(field_t), intent(in) :: dwdx, dwdy, dwdz
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, intent(in) :: abl_wall
-    real(dp), intent(in) :: wall_tau_x, wall_tau_z
+    class(field_t), intent(in) :: wall_u, wall_w
+    integer, intent(in) :: wall_sample_plane
+    real(dp), intent(in) :: wall_drag_coeff
 
     ! On the first plane above a no-slip floor the whole SGS stress tensor is
     ! replaced, as Incompact3d does in sgs_mom_conservative: tau_xy and tau_yz
@@ -352,11 +306,14 @@ contains
     call add_normal_stress(backend, dv, nut, dvdy, ydirps, abl_wall)
     call add_normal_stress(backend, dw, nut, dwdz, zdirps, abl_wall)
     call add_shear_stress(backend, du, ydirps, dv, xdirps, nut, dudy, dvdx, &
-                          abl_wall, wall_tau_x)
+                          abl_wall, 1, wall_u, wall_w, wall_sample_plane, &
+                          wall_drag_coeff)
     call add_shear_stress(backend, du, zdirps, dw, xdirps, nut, dudz, dwdx, &
-                          abl_wall, 0._dp)
+                          abl_wall, 0, wall_u, wall_w, wall_sample_plane, &
+                          wall_drag_coeff)
     call add_shear_stress(backend, dv, zdirps, dw, ydirps, nut, dvdz, dwdy, &
-                          abl_wall, wall_tau_z)
+                          abl_wall, 3, wall_u, wall_w, wall_sample_plane, &
+                          wall_drag_coeff)
   end subroutine add_sgs_terms
 
   pure subroutine neutral_wall_stress(u_sample, w_sample, kappa, &
@@ -442,7 +399,8 @@ contains
   subroutine add_shear_stress( &
     backend, rhs_a, direction_a, rhs_b, &
     direction_b, nut, gradient_a, gradient_b, &
-    stamp_wall, wall_tau &
+    stamp_wall, wall_component, wall_u, wall_w, wall_sample_plane, &
+    wall_drag_coeff &
     )
     class(base_backend_t), intent(inout) :: backend
     class(field_t), intent(inout) :: rhs_a, rhs_b
@@ -452,7 +410,11 @@ contains
     !! wall stress before differentiating, so the wall flux is carried by
     !! the same operator that transports it in the interior.
     logical, intent(in) :: stamp_wall
-    real(dp), intent(in) :: wall_tau
+    integer, intent(in) :: wall_component, wall_sample_plane
+    !! wall_component: 1 for tau_xy, 3 for tau_yz (drag law from the local
+    !! sampled velocity), 0 for tau_xz, which the wall does not carry
+    class(field_t), intent(in) :: wall_u, wall_w
+    real(dp), intent(in) :: wall_drag_coeff
 
     class(field_t), pointer :: stress
 
@@ -466,7 +428,13 @@ contains
       ! no-slip condition would otherwise produce a second, spurious stress on
       ! top of the modelled one. The free-slip lid carries no stress, and its
       ! odd closure ignores the boundary value, so it is left alone.
-      call backend%field_set_y_plane(stress, wall_tau, 2)
+      if (wall_component == 0) then
+        call backend%field_set_y_plane(stress, 0._dp, 2)
+      else
+        call backend%field_set_abl_wall_stress( &
+          stress, wall_u, wall_w, wall_sample_plane, 2, &
+          wall_drag_coeff, wall_component)
+      end if
     end if
     ! tau_ij (i/=j) is odd across a free-slip boundary in directions i and j.
     call add_stress_derivative(backend, rhs_a, stress, direction_a, &
