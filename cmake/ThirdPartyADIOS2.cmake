@@ -59,10 +59,20 @@ if(WITH_ADIOS2)
       message(WARNING "ADIOS2_ROOT_DIR is set but will be ignored because USE_SYSTEM_ADIOS2=OFF")
     endif()
 
+    # Both GPU backends offload to the device through CUDA when built with
+    # NVHPC, so both want a CUDA-enabled ADIOS2.  The AMD/Cray OMP_TGT paths use
+    # another compiler and get the plain CPU build.
+    if((${ENABLE_BACKEND} STREQUAL "CUDA" OR ${ENABLE_BACKEND} STREQUAL "OMP_TGT")
+       AND (CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI"))
+      set(adios2_with_cuda TRUE)
+    else()
+      set(adios2_with_cuda FALSE)
+    endif()
+
     # A CUDA-enabled ADIOS2 cannot be reused by a CPU build, and an MPI one
     # exports different Fortran bindings from a serial one, so each combination
     # gets its own install tree rather than overwriting the last.
-    if(${ENABLE_BACKEND} STREQUAL "CUDA")
+    if(adios2_with_cuda)
       set(adios2_config_suffix "cuda")
     else()
       set(adios2_config_suffix "cpu")
@@ -84,10 +94,12 @@ if(WITH_ADIOS2)
     else(ADIOS2_FOUND)
       message(STATUS "Building ADIOS2 from source")
 
-      if(ENABLE_BACKEND} AND (CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI"))
+      if(adios2_with_cuda)
+        # CMAKE_CUDA_ARCHITECTURES takes the bare number, not nvcc's sm_XX.
+        string(REPLACE "sm_" "" adios2_cuda_arch "${BACKEND_ARCH}")
         set(adios2_cuda_args
           "-DADIOS2_USE_CUDA=ON"
-          "-DCMAKE_CUDA_ARCHITECTURES=${BACKEND_ARCH}")
+          "-DCMAKE_CUDA_ARCHITECTURES=${adios2_cuda_arch}")
       else()
         set(adios2_cuda_args "-DADIOS2_USE_CUDA=OFF")
       endif()
