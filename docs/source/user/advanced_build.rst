@@ -399,9 +399,9 @@ The ADIOS2 backend reads these environment variables when the first writer start
    * - ``X3D2_ADIOS2_IO_BENCH_VERBOSE``
      - ``1``
      - ``1`` also prints the timings of every step, not only the summary.
-   * - ``X3D2_ADIOS2_NVTX``
+   * - ``X3D2_NVTX``
      - ``1``
-     - Emits NVTX ranges (``ADIOS2_Put``, ``ADIOS2_EndStep``, ``ADIOS2_DevicePack``, ...) for Nsight Systems. CUDA builds only.
+     - Emits NVTX ranges for Nsight Systems: ``ADIOS2_Put``, ``ADIOS2_EndStep`` and ``ADIOS2_DevicePack`` on the GPU-aware path, ``IO_HostStage`` and ``IO_HostPack`` on the host-staged path. CUDA builds only, with or without ADIOS2.
 
 Boolean options accept ``1/0``, ``true/false``, ``yes/no`` and ``on/off``. For example, to benchmark snapshot output without per-step lines:
 

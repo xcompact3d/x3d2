@@ -15,6 +15,7 @@ module m_io_field_utils
   use m_field, only: field_t
   use m_solver, only: solver_t
   use m_io_base, only: io_file_t, io_writer_t
+  use m_nvtx, only: nvtx_push, nvtx_pop
 
   implicit none
 
@@ -308,10 +309,12 @@ contains
     end do
 
     do i = 1, num_fields
+      call nvtx_push("IO_HostStage")
       host_fields(i)%ptr => solver%host_allocator%get_block( &
                             DIR_C, field_ptrs(i)%ptr%data_loc)
       call solver%backend%get_field_data( &
         host_fields(i)%ptr%data, field_ptrs(i)%ptr)
+      call nvtx_pop()
     end do
   end subroutine setup_field_arrays
 
@@ -421,11 +424,13 @@ contains
     end do
 
     if (buffer_found) then
+      call nvtx_push("IO_HostPack")
       call stride_data_to_buffer( &
         host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), dims, &
         stride_factors, field_buffers(buffer_idx)%buffer, &
         output_dims_local &
         )
+      call nvtx_pop()
     else
       print *, 'INTERNAL ERROR: No buffer found for field: ', trim(field_name)
       error stop 'Missing field buffer'

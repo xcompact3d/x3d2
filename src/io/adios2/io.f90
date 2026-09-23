@@ -40,7 +40,6 @@ module m_io_backend
 !!   print a summary when the file closes
 !! - X3D2_ADIOS2_IO_BENCH_WARMUP=N (default 2): steps excluded from the summary
 !! - X3D2_ADIOS2_IO_BENCH_VERBOSE=0|1 (default 1): also print every step
-!! - X3D2_ADIOS2_NVTX=0|1 (default 1): emit NVTX ranges in CUDA builds
 !!
 !! @note This is an internal backend module and should never be used directly.
 !! All user interaction must go through `m_io_session`.
@@ -69,6 +68,7 @@ module m_io_backend
                    MPI_DOUBLE_PRECISION, MPI_Wtime
   use m_common, only: dp, i8, sp, is_sp, DIR_C
   use m_field, only: field_t
+  use m_nvtx, only: nvtx_push, nvtx_pop, nvtx_enabled
   use m_base_backend, only: base_backend_t
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
                        io_mode_read, io_mode_write
@@ -100,7 +100,6 @@ module m_io_backend
   logical, save :: runtime_options_reported = .false.
   logical, save :: runtime_bench_enabled = .false.
   logical, save :: runtime_bench_verbose = .true.
-  logical, save :: runtime_nvtx_enabled = .true.
   integer, save :: runtime_bench_warmup_steps = 2
   integer, save :: runtime_gpu_batch_fields = 1
   integer, save :: runtime_gpu_write_mode = gpu_write_mode_auto
@@ -210,17 +209,6 @@ module m_io_backend
       integer(c_int) :: ierr
     end function x3d2_adios2_put_device
 
-    function nvtx_range_push_a(name) bind(C, name='nvtxRangePushA') &
-      result(status)
-      use iso_c_binding, only: c_ptr, c_int
-      type(c_ptr), value :: name
-      integer(c_int) :: status
-    end function nvtx_range_push_a
-
-    function nvtx_range_pop() bind(C, name='nvtxRangePop') result(status)
-      use iso_c_binding, only: c_int
-      integer(c_int) :: status
-    end function nvtx_range_pop
   end interface
 #endif
 
@@ -324,7 +312,6 @@ contains
       runtime_bench_enabled = env_to_logical("X3D2_ADIOS2_IO_BENCH", .false.)
       runtime_bench_verbose = env_to_logical("X3D2_ADIOS2_IO_BENCH_VERBOSE", &
                                              .true.)
-      runtime_nvtx_enabled = env_to_logical("X3D2_ADIOS2_NVTX", .true.)
       runtime_bench_warmup_steps = env_to_integer( &
                                    "X3D2_ADIOS2_IO_BENCH_WARMUP", 2, 0)
       runtime_gpu_batch_fields = env_to_integer( &
@@ -387,34 +374,9 @@ contains
         print '(A,I0)', "ADIOS2 I/O benchmark enabled; warm-up steps: ", &
           runtime_bench_warmup_steps
       end if
-      print '(A,L1)', "ADIOS2 NVTX markers enabled: ", runtime_nvtx_enabled
+      print '(A,L1)', "NVTX markers enabled: ", nvtx_enabled()
     end if
   end subroutine init_runtime_options
-
-  subroutine nvtx_push_if_enabled(range_name)
-    character(len=*), intent(in) :: range_name
-#ifdef X3D2_ADIOS2_CUDA
-    integer :: nvtx_status
-    character(kind=c_char), allocatable, target :: c_name(:)
-    integer :: i, n
-    if (runtime_nvtx_enabled) then
-      n = len_trim(range_name)
-      allocate (c_name(n + 1))
-      do i = 1, n
-        c_name(i) = achar(iachar(range_name(i:i)), kind=c_char)
-      end do
-      c_name(n + 1) = c_null_char
-      nvtx_status = nvtx_range_push_a(c_loc(c_name(1)))
-    end if
-#endif
-  end subroutine nvtx_push_if_enabled
-
-  subroutine nvtx_pop_if_enabled()
-#ifdef X3D2_ADIOS2_CUDA
-    integer :: nvtx_status
-    if (runtime_nvtx_enabled) nvtx_status = nvtx_range_pop()
-#endif
-  end subroutine nvtx_pop_if_enabled
 
   subroutine bench_reset_step(self)
     class(io_adios2_file_t), intent(inout) :: self
@@ -996,10 +958,10 @@ contains
       end if
 
       if (file_handle%bench_enabled) t0_put = MPI_Wtime()
-      call nvtx_push_if_enabled("ADIOS2_Put")
+      call nvtx_push("ADIOS2_Put")
       call adios2_put(file_handle%engine, var, value, adios2_mode_deferred, &
                       ierr)
-      call nvtx_pop_if_enabled()
+      call nvtx_pop()
       if (file_handle%bench_enabled) then
         put_bytes = bytes_integer_i8
         call bench_record_put(file_handle, MPI_Wtime() - t0_put, put_bytes)
@@ -1034,10 +996,10 @@ contains
       end if
 
       if (file_handle%bench_enabled) t0_put = MPI_Wtime()
-      call nvtx_push_if_enabled("ADIOS2_Put")
+      call nvtx_push("ADIOS2_Put")
       call adios2_put(file_handle%engine, var, value, adios2_mode_deferred, &
                       ierr)
-      call nvtx_pop_if_enabled()
+      call nvtx_pop()
       if (file_handle%bench_enabled) then
         put_bytes = bytes_integer_default
         call bench_record_put(file_handle, MPI_Wtime() - t0_put, put_bytes)
@@ -1088,10 +1050,10 @@ contains
         value_sp = real(value, sp)
         ! Use sync mode to ensure data is copied before value_sp goes out of scope
         if (file_handle%bench_enabled) t0_put = MPI_Wtime()
-        call nvtx_push_if_enabled("ADIOS2_Put")
+        call nvtx_push("ADIOS2_Put")
         call adios2_put(file_handle%engine, var, value_sp, adios2_mode_sync, &
                         ierr)
-        call nvtx_pop_if_enabled()
+        call nvtx_pop()
         if (file_handle%bench_enabled) then
           put_bytes = bytes_real_sp
           call bench_record_put(file_handle, MPI_Wtime() - t0_put, put_bytes)
@@ -1100,10 +1062,10 @@ contains
                                      &single precision real data")
       else
         if (file_handle%bench_enabled) t0_put = MPI_Wtime()
-        call nvtx_push_if_enabled("ADIOS2_Put")
+        call nvtx_push("ADIOS2_Put")
         call adios2_put(file_handle%engine, var, value, &
                         adios2_mode_deferred, ierr)
-        call nvtx_pop_if_enabled()
+        call nvtx_pop()
         if (file_handle%bench_enabled) then
           put_bytes = bytes_real_dp
           call bench_record_put(file_handle, MPI_Wtime() - t0_put, put_bytes)
@@ -1188,10 +1150,10 @@ contains
         array_sp = real(array, sp)
         ! Use sync mode to ensure data is copied before buffer is deallocated
         if (file_handle%bench_enabled) t0_put = MPI_Wtime()
-        call nvtx_push_if_enabled("ADIOS2_Put")
+        call nvtx_push("ADIOS2_Put")
         call adios2_put(file_handle%engine, var, array_sp, adios2_mode_sync, &
                         ierr)
-        call nvtx_pop_if_enabled()
+        call nvtx_pop()
         if (file_handle%bench_enabled) then
           put_bytes = real(size(array_sp, kind=i8), c_double)* &
                       bytes_real_sp
@@ -1202,9 +1164,9 @@ contains
                                      &single precision real data")
       else
         if (file_handle%bench_enabled) t0_put = MPI_Wtime()
-        call nvtx_push_if_enabled("ADIOS2_Put")
+        call nvtx_push("ADIOS2_Put")
         call adios2_put(file_handle%engine, var, array, put_mode, ierr)
-        call nvtx_pop_if_enabled()
+        call nvtx_pop()
         if (file_handle%bench_enabled) then
           put_bytes = real(size(array, kind=i8), c_double)* &
                       bytes_real_dp
@@ -1301,7 +1263,7 @@ contains
     end if
 
     if (self%nvtx_step_range_active) then
-      call nvtx_pop_if_enabled()
+      call nvtx_pop()
       self%nvtx_step_range_active = .false.
     end if
 #ifdef X3D2_ADIOS2_CUDA
@@ -1323,7 +1285,7 @@ contains
       call self%handle_error(ierr, "Error beginning ADIOS2 step for writing")
       if (self%bench_enabled) call bench_reset_step(self)
       if (.not. self%nvtx_step_range_active) then
-        call nvtx_push_if_enabled("ADIOS2_I/O_Step")
+        call nvtx_push("ADIOS2_I/O_Step")
         self%nvtx_step_range_active = .true.
       end if
     else
@@ -1345,9 +1307,9 @@ contains
     if (.not. self%is_step_active) return
 
     if (self%is_writer .and. self%bench_enabled) t0_end_step = MPI_Wtime()
-    if (self%is_writer) call nvtx_push_if_enabled("ADIOS2_EndStep")
+    if (self%is_writer) call nvtx_push("ADIOS2_EndStep")
     call adios2_end_step(self%engine, ierr)
-    if (self%is_writer) call nvtx_pop_if_enabled()
+    if (self%is_writer) call nvtx_pop()
     call self%handle_error(ierr, "Failed to end ADIOS2 step")
 #ifdef X3D2_ADIOS2_CUDA
     ! EndStep has consumed the deferred puts; staging buffers can be reused
@@ -1360,7 +1322,7 @@ contains
     end if
 
     if (self%nvtx_step_range_active) then
-      call nvtx_pop_if_enabled()
+      call nvtx_pop()
       self%nvtx_step_range_active = .false.
     end if
 
@@ -1528,17 +1490,17 @@ contains
     staging = acquire_device_staging(file_handle, &
                                      product(count_dims)*element_bytes)
 
-    call nvtx_push_if_enabled("ADIOS2_DevicePack")
+    call nvtx_push("ADIOS2_DevicePack")
     call backend%export_field_to_device(staging, field, int(count_dims), &
                                         convert_to_sp)
-    call nvtx_pop_if_enabled()
+    call nvtx_pop()
 
     if (file_handle%bench_enabled) t0_put = MPI_Wtime()
-    call nvtx_push_if_enabled("ADIOS2_Put")
+    call nvtx_push("ADIOS2_Put")
     ierr = x3d2_adios2_put_device(int(file_handle%engine%f2c, c_int64_t), &
                                   int(var%f2c, c_int64_t), staging, &
                                   int(put_mode, c_int))
-    call nvtx_pop_if_enabled()
+    call nvtx_pop()
     if (file_handle%bench_enabled) then
       call bench_record_put(file_handle, MPI_Wtime() - t0_put, &
                             real(product(count_dims)*element_bytes, c_double))
@@ -1603,9 +1565,9 @@ contains
     if (file_handle%device_staging_in_use == 0) return
 
     if (file_handle%bench_enabled) t0_put = MPI_Wtime()
-    call nvtx_push_if_enabled("ADIOS2_PerformPuts")
+    call nvtx_push("ADIOS2_PerformPuts")
     call adios2_perform_puts(file_handle%engine, ierr)
-    call nvtx_pop_if_enabled()
+    call nvtx_pop()
     if (file_handle%bench_enabled) then
       call bench_record_put(file_handle, MPI_Wtime() - t0_put, 0.0_c_double)
     end if

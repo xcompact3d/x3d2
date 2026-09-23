@@ -77,6 +77,7 @@ else()
 endif()
 
 list(APPEND SRC
+  io/nvtx.f90
   io/io_base.f90
   io/io_session.f90
   io/io_field_utils.f90
@@ -171,13 +172,13 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     target_link_options(x3d2 INTERFACE "-cudalib=cufft")
   endif()
   target_compile_options(xcompact PRIVATE "-DCUDA")
-  if(WITH_ADIOS2_GPU_AWARE)
-    find_package(CUDAToolkit QUIET)
-    if(CUDAToolkit_FOUND AND TARGET CUDA::nvToolsExt)
-      target_link_libraries(x3d2 PUBLIC CUDA::nvToolsExt)
-    else()
-      target_link_libraries(x3d2 PUBLIC nvToolsExt)
-    endif()
+  # NVTX ranges label the I/O paths in Nsight Systems (see io/nvtx.f90).
+  target_compile_definitions(x3d2 PRIVATE X3D2_NVTX)
+  find_package(CUDAToolkit QUIET)
+  if(CUDAToolkit_FOUND AND TARGET CUDA::nvToolsExt)
+    target_link_libraries(x3d2 PUBLIC CUDA::nvToolsExt)
+  else()
+    target_link_libraries(x3d2 PUBLIC nvToolsExt)
   endif()
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
