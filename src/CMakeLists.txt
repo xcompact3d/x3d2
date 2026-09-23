@@ -14,6 +14,7 @@ set(SRC
   postprocess/monitoring.f90
   postprocess/scalar_series.f90
   tdsops.f90
+  tdsops_setup.f90
   time_integrator.f90
   mesh.f90
   mesh_content.f90
