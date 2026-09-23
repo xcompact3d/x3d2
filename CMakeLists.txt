@@ -31,6 +31,11 @@ endif()
 set(ENABLE_BACKEND OFF CACHE STRING "")
 set_property(CACHE ENABLE_BACKEND PROPERTY STRINGS OFF CUDA OMP_TGT)
 
+set(CUDA_ARCH "80" CACHE STRING "CUDA compute capability for the CUDA backend and the bundled ADIOS2 build, e.g. 80, 90 or native")
+if(${ENABLE_BACKEND} STREQUAL "CUDA" AND NOT CUDA_ARCH)
+  message(FATAL_ERROR "CUDA_ARCH must not be empty, e.g. 80 or native")
+endif()
+
 # ADIOS2 option (default OFF)
 option(WITH_ADIOS2 "Enable ADIOS2 for I/O" OFF)
 

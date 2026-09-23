@@ -271,19 +271,19 @@ To use the built-in ADIOS2 (default behaviour):
 
    -DWITH_ADIOS2=ON
 
-CUDA Architecture for the ADIOS2 Build
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+CUDA Architecture
+~~~~~~~~~~~~~~~~~
 
-When x3d2 is built with ``ENABLE_BACKEND=CUDA``, the built-in ADIOS2 is compiled
-with CUDA support. By default its CUDA sources are built for the architecture of
-the GPU present at configure time (``native`` detection). If you are building on
-a node without a visible GPU (for example a GPU-less login or build node),
-``native`` cannot probe the hardware, so set the target architecture explicitly
-with the ``CUDA_ARCH`` CMake option:
+With ``ENABLE_BACKEND=CUDA``, ``CUDA_ARCH`` (default ``80``, A100) sets the
+compute capability for both the CUDA Fortran build (``-gpu=cc<arch>``) and the
+built-in ADIOS2 build (``CMAKE_CUDA_ARCHITECTURES``). Use ``90`` for an H100,
+or ``native`` to target the GPU visible at configure time, which fails on a
+GPU-less login or build node:
 
 .. code-block:: bash
 
-   -DCUDA_ARCH=80
+   -DCUDA_ARCH=80   # A100 (default)
+   -DCUDA_ARCH=90   # H100
 
 Library Path Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
