@@ -264,6 +264,7 @@ define_test(unit/test_output_scalars.f90 1 omp)
 define_test(unit/test_les.f90 1 omp)
 define_test(unit/test_abl_diagnostics.f90 1 omp)
 define_test(unit/test_boundary_planes.f90 1 omp)
+define_test(unit/test_abl_seed.f90 1 omp)
 
 if(WITH_ADIOS2)
   define_test(unit/test_adios2_read_write.f90 4 omp)
@@ -343,6 +344,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   define_test(unit/test_setget_field.f90 1 cuda)
   define_test(unit/test_device_allocator.f90 1 cuda)
   define_test(unit/test_boundary_planes.f90 1 cuda)
+  define_test(unit/test_abl_seed.f90 1 cuda)
 
   # CUDA verification tests
   define_verification_test(verification/test_thom.f90 1 cuda)
