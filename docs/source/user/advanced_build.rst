@@ -372,9 +372,9 @@ Snapshots and checkpoints use the GPU-aware path when every field to write lives
 
 For each field, one kernel packs the solver's padded, direction-ordered storage into a contiguous buffer of the field's true extent. The same kernel converts to single precision when ``snapshot_sp`` is set. The buffer belongs to the open output file and is reused, so no device memory is allocated per write.
 
-ADIOS2 2.12's BP5 engine copies GPU buffers to host during each ``Put``, even when a deferred put is requested. The default is therefore one staging buffer with synchronous puts. ``X3D2_ADIOS2_GPU_BATCH_FIELDS`` switches to deferred puts that keep several buffers alive until ``EndStep``. That only helps with an ADIOS2 engine that honours deferred GPU puts, and it costs one field of device memory per buffer.
+ADIOS2 2.12's BP5 engine copies GPU buffers to host during each ``Put``, even when a deferred put is requested, so puts are synchronous and one staging buffer serves every field.
 
-The staging buffer adds device memory equal to one output field of the local subdomain, for example 128 MiB for a 256³ double-precision field on one rank. Check that this fits alongside the solver before enabling larger batches.
+The staging buffer adds device memory equal to one output field of the local subdomain, for example 128 MiB for a 256³ double-precision field on one rank.
 
 At startup, rank 0 prints ``ADIOS2 GPU write mode: ...``, which confirms whether the GPU-aware path is active.
 
@@ -423,27 +423,18 @@ The ADIOS2 backend reads these environment variables when the first writer start
    * - ``X3D2_ADIOS2_GPU_WRITE_MODE``
      - ``auto``
      - ``auto`` (or ``gpu``) writes from device memory when possible. ``host`` always copies fields to host first, for example to compare the two paths.
-   * - ``X3D2_ADIOS2_GPU_BATCH_FIELDS``
-     - ``1``
-     - Device staging buffers in flight. ``1`` uses one buffer with synchronous puts. ``N > 1`` uses deferred puts and calls ``PerformPuts`` whenever ``N`` buffers are pending. ``0`` keeps one buffer per field until ``EndStep``.
    * - ``X3D2_ADIOS2_IO_BENCH``
      - ``0``
-     - ``1`` times ``Put`` and ``EndStep`` for every output step (maximum over ranks) and prints a summary with throughput when the file closes.
-   * - ``X3D2_ADIOS2_IO_BENCH_WARMUP``
-     - ``2``
-     - Number of initial steps excluded from the benchmark summary.
-   * - ``X3D2_ADIOS2_IO_BENCH_VERBOSE``
-     - ``1``
-     - ``1`` also prints the timings of every step, not only the summary.
+     - ``1`` times ``Put`` and ``EndStep`` for every output step (maximum over ranks) and prints a summary with throughput when the file closes. The first two steps of each file are left out of the summary, since they include one-off setup.
    * - ``X3D2_NVTX``
      - ``1``
      - Emits NVTX ranges for Nsight Systems: ``ADIOS2_Put``, ``ADIOS2_EndStep`` and ``ADIOS2_DevicePack`` on the GPU-aware path, ``IO_HostStage`` and ``IO_HostPack`` on the host-staged path. CUDA builds only, with or without ADIOS2.
 
-Boolean options accept ``1/0``, ``true/false``, ``yes/no`` and ``on/off``. For example, to benchmark snapshot output without per-step lines:
+Boolean options accept ``1/0``, ``true/false``, ``yes/no`` and ``on/off``. For example, to benchmark snapshot output:
 
 .. code-block:: bash
 
-   X3D2_ADIOS2_IO_BENCH=1 X3D2_ADIOS2_IO_BENCH_VERBOSE=0 mpirun -np 4 ./bin/xcompact <input_file>
+   X3D2_ADIOS2_IO_BENCH=1 mpirun -np 4 ./bin/xcompact <input_file>
 
 Profiling Output with Nsight Systems
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -22,24 +22,18 @@ module m_io_backend
 !! - the solver backend packs each field into a contiguous, unpadded device
 !!   buffer (`base_backend_t%export_field_to_device`), so this module needs
 !!   no knowledge of the backend's field layout or allocator types
-!! - staging buffers belong to the open file and are reused across fields
-!!   and steps, so no device memory is allocated per write
-!! - by default one staging buffer is used with synchronous puts. ADIOS2
-!!   2.12's BP5 engine copies GPU buffers during Put whatever mode is
-!!   requested, so extra buffers would cost device memory without overlap
-!! - X3D2_ADIOS2_GPU_BATCH_FIELDS > 1 (or 0) gives each field its own buffer
-!!   with deferred puts, consumed together at EndStep (or by PerformPuts
-!!   once N buffers are in flight), for engines that honour deferred GPU puts
+!! - one staging buffer belongs to the open file and is reused across
+!!   fields and steps, so no device memory is allocated per write
+!! - puts are synchronous: ADIOS2 2.12's BP5 engine copies GPU buffers
+!!   during Put whatever mode is requested, so the buffer is free again as
+!!   soon as the put returns
 !!
 !! Runtime options, read from the environment when the first writer starts:
 !! - X3D2_ADIOS2_GPU_WRITE_MODE=auto|gpu|host (default auto): `host` forces
 !!   the device-to-host staged path even when GPU-aware writes are available
-!! - X3D2_ADIOS2_GPU_BATCH_FIELDS=N (default 1): device staging buffers in
-!!   flight; 1 means synchronous puts from one buffer, 0 means no limit
 !! - X3D2_ADIOS2_IO_BENCH=0|1 (default 0): time Put and EndStep per step and
-!!   print a summary when the file closes
-!! - X3D2_ADIOS2_IO_BENCH_WARMUP=N (default 2): steps excluded from the summary
-!! - X3D2_ADIOS2_IO_BENCH_VERBOSE=0|1 (default 1): also print every step
+!!   print a summary when the file closes, excluding the first
+!!   bench_warmup_steps steps
 !!
 !! @note This is an internal backend module and should never be used directly.
 !! All user interaction must go through `m_io_session`.
@@ -51,7 +45,7 @@ module m_io_backend
                     adios2_init, adios2_finalize, &
                     adios2_declare_io, adios2_set_engine, &
                     adios2_open, adios2_close, &
-                    adios2_begin_step, adios2_end_step, adios2_perform_puts, &
+                    adios2_begin_step, adios2_end_step, &
                     adios2_define_variable, adios2_inquire_variable, &
                     adios2_variable_type, adios2_define_attribute, &
                     adios2_set_selection, adios2_put, &
@@ -99,9 +93,8 @@ module m_io_backend
   logical, save :: runtime_options_initialised = .false.
   logical, save :: runtime_options_reported = .false.
   logical, save :: runtime_bench_enabled = .false.
-  logical, save :: runtime_bench_verbose = .true.
-  integer, save :: runtime_bench_warmup_steps = 2
-  integer, save :: runtime_gpu_batch_fields = 1
+  !> Steps left out of the benchmark summary (first-write setup costs)
+  integer, parameter :: bench_warmup_steps = 2
   integer, save :: runtime_gpu_write_mode = gpu_write_mode_auto
   character(len=16), save :: runtime_gpu_write_mode_name = "auto"
 
@@ -149,12 +142,6 @@ module m_io_backend
     procedure, private :: handle_error => handle_error_writer
   end type io_adios2_writer_t
 
-#ifdef X3D2_ADIOS2_CUDA
-  type :: device_staging_buffer_t
-    integer(c_int8_t), device, allocatable :: bytes(:)
-  end type device_staging_buffer_t
-
-#endif
   type, extends(io_file_t) :: io_adios2_file_t
     private
     type(adios2_engine) :: engine            !! ADIOS2 engine for data reading/writing
@@ -163,17 +150,11 @@ module m_io_backend
     integer :: comm = MPI_COMM_NULL
     character(len=256) :: bench_file_name = ""
     logical :: bench_enabled = .false.
-    logical :: bench_verbose = .true.
-    integer :: bench_warmup_steps = 0
     integer :: bench_step_counter = 0
     integer :: bench_measured_steps = 0
 #ifdef X3D2_ADIOS2_CUDA
-    !> Device buffers referenced by deferred puts. The first
-    !> device_staging_in_use are in flight and are only reused once
-    !> EndStep or PerformPuts has consumed their puts.
-    type(device_staging_buffer_t), allocatable :: device_staging(:)
-    integer :: device_staging_in_use = 0
-    integer :: device_batch_limit = 1    !! 1 = sync puts, 0 = no limit
+    !> Packed field handed to ADIOS2; grown to the largest field written
+    integer(c_int8_t), device, allocatable :: device_staging(:)
 #endif
     real(c_double) :: bench_step_put_time_local = 0.0_c_double
     real(c_double) :: bench_step_put_bytes_local = 0.0_c_double
@@ -279,25 +260,6 @@ contains
     end select
   end function env_to_logical
 
-  integer function env_to_integer(name, default_value, min_value) result(value)
-    character(len=*), intent(in) :: name
-    integer, intent(in) :: default_value
-    integer, intent(in) :: min_value
-
-    character(len=64) :: raw_value
-    integer :: status, value_length, ios, parsed_value
-
-    value = default_value
-    call get_environment_variable(name, raw_value, length=value_length, &
-                                  status=status)
-    if (status /= 0 .or. value_length <= 0) return
-
-    read (raw_value(1:value_length), *, iostat=ios) parsed_value
-    if (ios /= 0) return
-
-    value = max(parsed_value, min_value)
-  end function env_to_integer
-
   subroutine init_runtime_options(comm)
     integer, intent(in) :: comm
 
@@ -310,12 +272,6 @@ contains
       runtime_options_initialised = .true.
 
       runtime_bench_enabled = env_to_logical("X3D2_ADIOS2_IO_BENCH", .false.)
-      runtime_bench_verbose = env_to_logical("X3D2_ADIOS2_IO_BENCH_VERBOSE", &
-                                             .true.)
-      runtime_bench_warmup_steps = env_to_integer( &
-                                   "X3D2_ADIOS2_IO_BENCH_WARMUP", 2, 0)
-      runtime_gpu_batch_fields = env_to_integer( &
-                                 "X3D2_ADIOS2_GPU_BATCH_FIELDS", 1, 0)
 
       runtime_gpu_write_mode = gpu_write_mode_auto
       runtime_gpu_write_mode_name = "auto"
@@ -359,20 +315,12 @@ contains
 #ifdef X3D2_ADIOS2_CUDA
       print '(A,A)', "ADIOS2 GPU write mode: ", &
         trim(runtime_gpu_write_mode_name)
-      if (runtime_gpu_batch_fields == 1) then
-        print '(A)', "ADIOS2 GPU puts: synchronous, one staging buffer"
-      else if (runtime_gpu_batch_fields > 1) then
-        print '(A,I0)', "ADIOS2 GPU puts: deferred, staging buffers: ", &
-          runtime_gpu_batch_fields
-      else
-        print '(A)', "ADIOS2 GPU puts: deferred, one staging buffer per field"
-      end if
 #else
       print '(A)', "ADIOS2 GPU write mode: host (CUDA path unavailable)"
 #endif
       if (runtime_bench_enabled) then
         print '(A,I0)', "ADIOS2 I/O benchmark enabled; warm-up steps: ", &
-          runtime_bench_warmup_steps
+          bench_warmup_steps
       end if
       print '(A,L1)', "NVTX markers enabled: ", nvtx_enabled()
     end if
@@ -431,7 +379,7 @@ contains
     real(c_double) :: step_bytes
     real(c_double) :: step_throughput_gib_s
     logical :: is_warmup
-    integer :: ierr, comm_rank
+    integer :: ierr
 
     if (.not. self%bench_enabled) return
 
@@ -461,7 +409,7 @@ contains
       step_throughput_gib_s = 0.0_c_double
     end if
 
-    is_warmup = self%bench_step_counter <= self%bench_warmup_steps
+    is_warmup = self%bench_step_counter <= bench_warmup_steps
     if (.not. is_warmup) then
       self%bench_measured_steps = self%bench_measured_steps + 1
       self%bench_sum_put_time = self%bench_sum_put_time + step_put_time
@@ -480,26 +428,6 @@ contains
                                          step_throughput_gib_s* &
                                          step_throughput_gib_s
       self%bench_sum_bytes = self%bench_sum_bytes + step_bytes
-    end if
-
-    if (self%bench_verbose) then
-      call MPI_Comm_rank(self%comm, comm_rank, ierr)
-      call self%handle_error(ierr, "Failed to get rank for ADIOS2 bench")
-
-      if (comm_rank == 0) then
-        if (is_warmup) then
-          print '(A,I0,A,ES11.3,A,ES11.3,A)', &
-            "ADIOS2 bench step ", self%bench_step_counter, &
-            " (warm-up): put_max=", step_put_time, &
-            " s end_step_max=", step_end_step_time, " s"
-        else
-          print '(A,I0,A,ES11.3,A,ES11.3,A,F10.3,A)', &
-            "ADIOS2 bench step ", self%bench_step_counter, &
-            ": put_max=", step_put_time, &
-            " s end_step_max=", step_end_step_time, &
-            " s Put+EndStep throughput=", step_throughput_gib_s, " GiB/s"
-        end if
-      end if
     end if
 
     call bench_reset_step(self)
@@ -528,7 +456,7 @@ contains
     print '(A,A)', "  File: ", trim(self%bench_file_name)
     print '(A,A)', "  GPU write mode: ", trim(runtime_gpu_write_mode_name)
     print '(A,I0)', "  Steps seen: ", self%bench_step_counter
-    print '(A,I0)', "  Warm-up steps discarded: ", self%bench_warmup_steps
+    print '(A,I0)', "  Warm-up steps discarded: ", bench_warmup_steps
 
     n = self%bench_measured_steps
     if (n <= 0) then
@@ -924,11 +852,6 @@ contains
     temp_handle%comm = use_comm
     temp_handle%bench_file_name = trim(filename)
     temp_handle%bench_enabled = runtime_bench_enabled
-    temp_handle%bench_verbose = runtime_bench_verbose
-    temp_handle%bench_warmup_steps = runtime_bench_warmup_steps
-#ifdef X3D2_ADIOS2_CUDA
-    temp_handle%device_batch_limit = runtime_gpu_batch_fields
-#endif
 
     file_handle = temp_handle
   end function writer_open_adios2
@@ -1267,9 +1190,7 @@ contains
       self%nvtx_step_range_active = .false.
     end if
 #ifdef X3D2_ADIOS2_CUDA
-    ! adios2_close has consumed every put, so no buffer is in flight
     if (allocated(self%device_staging)) deallocate (self%device_staging)
-    self%device_staging_in_use = 0
 #endif
   end subroutine file_close_adios2
 
@@ -1311,10 +1232,6 @@ contains
     call adios2_end_step(self%engine, ierr)
     if (self%is_writer) call nvtx_pop()
     call self%handle_error(ierr, "Failed to end ADIOS2 step")
-#ifdef X3D2_ADIOS2_CUDA
-    ! EndStep has consumed the deferred puts; staging buffers can be reused
-    self%device_staging_in_use = 0
-#endif
 
     if (self%is_writer .and. self%bench_enabled) then
       end_step_time_local = MPI_Wtime() - t0_end_step
@@ -1436,11 +1353,9 @@ contains
     shape_dims, start_dims, count_dims, use_sp &
     )
     !! GPU-aware write: the backend packs the field (reorder, unpadding and
-    !! any precision conversion in one pass) into a staging buffer owned by
-    !! the open file, and ADIOS2 gets a put of that device buffer. With a
-    !! batch limit of 1 the put is synchronous and the buffer is free again
-    !! on return; otherwise the put is deferred and the buffer stays in
-    !! flight until EndStep or PerformPuts consumes it.
+    !! any precision conversion in one pass) into the staging buffer owned
+    !! by the open file, and ADIOS2 gets a synchronous put of that device
+    !! buffer, which leaves it free for the next field.
     class(io_adios2_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: variable_name
     class(field_t), intent(in) :: field
@@ -1453,18 +1368,13 @@ contains
 
     type(adios2_variable) :: var
     type(c_ptr) :: staging
-    integer :: ierr, vartype, put_mode
-    integer(i8) :: element_bytes
-    logical :: output_sp, convert_to_sp, sync_put
+    type(c_devptr) :: devptr
+    integer :: ierr, vartype
+    integer(i8) :: element_bytes, nbytes
+    logical :: output_sp, convert_to_sp
     real(c_double) :: t0_put
 
     t0_put = 0.0_c_double
-    sync_put = file_handle%device_batch_limit == 1
-    if (sync_put) then
-      put_mode = adios2_mode_sync
-    else
-      put_mode = adios2_mode_deferred
-    end if
     output_sp = .false.
     if (present(use_sp)) output_sp = use_sp
     vartype = get_adios2_vartype(output_sp)
@@ -1487,8 +1397,15 @@ contains
     call adios2_set_memory_space(var, adios2_memory_space_gpu, ierr)
     call self%handle_error(ierr, "Error setting GPU memory space")
 
-    staging = acquire_device_staging(file_handle, &
-                                     product(count_dims)*element_bytes)
+    nbytes = product(count_dims)*element_bytes
+    if (allocated(file_handle%device_staging)) then
+      if (size(file_handle%device_staging, kind=i8) < nbytes) &
+        deallocate (file_handle%device_staging)
+    end if
+    if (.not. allocated(file_handle%device_staging)) &
+      allocate (file_handle%device_staging(nbytes))
+    devptr = c_devloc(file_handle%device_staging)
+    staging = devptr%cptr
 
     call nvtx_push("ADIOS2_DevicePack")
     call backend%export_field_to_device(staging, field, int(count_dims), &
@@ -1499,82 +1416,15 @@ contains
     call nvtx_push("ADIOS2_Put")
     ierr = x3d2_adios2_put_device(int(file_handle%engine%f2c, c_int64_t), &
                                   int(var%f2c, c_int64_t), staging, &
-                                  int(put_mode, c_int))
+                                  int(adios2_mode_sync, c_int))
     call nvtx_pop()
     if (file_handle%bench_enabled) then
       call bench_record_put(file_handle, MPI_Wtime() - t0_put, &
-                            real(product(count_dims)*element_bytes, c_double))
+                            real(nbytes, c_double))
     end if
     call self%handle_error(ierr, "Error in GPU-aware ADIOS2 put")
-
-    ! A synchronous put has consumed the buffer, so it is free for reuse
-    if (sync_put) &
-      file_handle%device_staging_in_use = file_handle%device_staging_in_use - 1
   end subroutine write_device_field_adios2
 
-  function acquire_device_staging(file_handle, nbytes) result(staging)
-    !! Return the device address of a staging buffer of at least nbytes
-    !! that no in-flight put references. When the batch limit is reached,
-    !! the pending puts are flushed first so their buffers can be reused.
-    type(io_adios2_file_t), intent(inout) :: file_handle
-    integer(i8), intent(in) :: nbytes
-    type(c_ptr) :: staging
-
-    type(device_staging_buffer_t), allocatable :: grown(:)
-    type(c_devptr) :: devptr
-    integer :: slot, i
-
-    if (file_handle%device_batch_limit > 0 .and. &
-        file_handle%device_staging_in_use >= file_handle%device_batch_limit) &
-      call flush_device_puts(file_handle)
-
-    slot = file_handle%device_staging_in_use + 1
-    if (.not. allocated(file_handle%device_staging)) then
-      allocate (file_handle%device_staging(max(slot, 8)))
-    else if (slot > size(file_handle%device_staging)) then
-      ! move_alloc keeps each buffer's device address, which in-flight puts
-      ! still reference
-      allocate (grown(2*size(file_handle%device_staging)))
-      do i = 1, size(file_handle%device_staging)
-        call move_alloc(file_handle%device_staging(i)%bytes, grown(i)%bytes)
-      end do
-      call move_alloc(grown, file_handle%device_staging)
-    end if
-
-    if (allocated(file_handle%device_staging(slot)%bytes)) then
-      if (size(file_handle%device_staging(slot)%bytes, kind=i8) < nbytes) &
-        deallocate (file_handle%device_staging(slot)%bytes)
-    end if
-    if (.not. allocated(file_handle%device_staging(slot)%bytes)) &
-      allocate (file_handle%device_staging(slot)%bytes(nbytes))
-
-    devptr = c_devloc(file_handle%device_staging(slot)%bytes)
-    staging = devptr%cptr
-    file_handle%device_staging_in_use = slot
-  end function acquire_device_staging
-
-  subroutine flush_device_puts(file_handle)
-    !! Have ADIOS2 consume all deferred puts now so every staging buffer
-    !! can be reused within the current step.
-    type(io_adios2_file_t), intent(inout) :: file_handle
-
-    integer :: ierr
-    real(c_double) :: t0_put
-
-    t0_put = 0.0_c_double
-    if (file_handle%device_staging_in_use == 0) return
-
-    if (file_handle%bench_enabled) t0_put = MPI_Wtime()
-    call nvtx_push("ADIOS2_PerformPuts")
-    call adios2_perform_puts(file_handle%engine, ierr)
-    call nvtx_pop()
-    if (file_handle%bench_enabled) then
-      call bench_record_put(file_handle, MPI_Wtime() - t0_put, 0.0_c_double)
-    end if
-    call file_handle%handle_error(ierr, "Failed to flush deferred ADIOS2 puts")
-
-    file_handle%device_staging_in_use = 0
-  end subroutine flush_device_puts
 #endif
 
 end module m_io_backend

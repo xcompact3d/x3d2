@@ -12,14 +12,10 @@ program test_cuda_gpu_aware_io_padded
   !! reorder/pack fix this fails (the raw padded field was put as if it
   !! were a contiguous Cartesian array); after the fix it passes exactly.
   !!
-  !! It also covers the batched deferred puts: DIR_X and DIR_C fields in
-  !! both precisions, more fields per step than the initial staging pool
-  !! holds, and two steps so staging buffers are reused after EndStep. Each
-  !! write gets new values in a field that an earlier, still deferred write
-  !! used, so every write must keep the values it saw even though ADIOS2
-  !! reads them at EndStep. (ADIOS2 2.12's BP5 copies GPU buffers during
-  !! Put regardless, so this guards the contract for engines that defer.)
-  !! Run with X3D2_ADIOS2_GPU_BATCH_FIELDS=0 or >1 for deferred puts.
+  !! It also covers staging buffer reuse: DIR_X and DIR_C fields in both
+  !! precisions, several fields per step, and two steps. Each write gets
+  !! new values in a field an earlier write used, so a write that read the
+  !! shared staging buffer too late would see the wrong values.
   !! An optional first argument overrides the output file name.
   use mpi
   use m_common, only: dp, i8, DIR_C, DIR_X, VERT, is_sp
