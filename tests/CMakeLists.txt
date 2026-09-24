@@ -116,6 +116,12 @@ function(define_test testfile np backend)
     if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
       target_compile_options(${test_name} PRIVATE "-eF")
       target_link_options(${test_name} PRIVATE -h omp)
+      # CCE 16 defines its internal $host_init$<proc>$<module>_ record both in
+      # the object of the module owning the procedure and in every object that
+      # uses it, and ld rejects the pair.  The records are zero-initialised .bss
+      # data, so letting ld keep one is benign.
+      target_link_options(${test_name} PRIVATE
+        "-Wl,--allow-multiple-definition")
     else()
       target_compile_options(${test_name} PRIVATE "-cpp")
       if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
