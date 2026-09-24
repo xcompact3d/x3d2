@@ -1,11 +1,16 @@
 program x3d2_poisson_solver
   !! Standalone driver for the Poisson solver, built and linked against only
   !! the modules the Poisson solve actually needs (see the x3d2_poisson
-  !! CMake target). It sets up a manufactured cosine problem (the COS_XYZ,
-  !! n = 2 case exercised by tests/verification/test_poisson_bc.f90), solves
-  !! it the requested number of times, and reports timing. Correctness of
-  !! the solve itself is checked separately by
-  !! tests/verification/test_poisson_bc.f90 across all four boundary
+  !! CMake target). It builds the mesh and FFT Poisson solver for the given
+  !! grid and boundary conditions, fills a fixed default right-hand side
+  !! (cos(2 pi x) cos(2 pi y) cos(2 pi z): zero mean, zero normal derivative
+  !! at any non-periodic wall, so valid for every supported boundary
+  !! condition combination), solves it the requested number of times, and
+  !! reports timing. Support for a user-supplied right-hand side is
+  !! planned. Note that 'dirichlet' here is the velocity boundary
+  !! condition; the pressure is solved with homogeneous Neumann walls in
+  !! that direction. Correctness of the solve itself is checked separately
+  !! by tests/verification/test_poisson_bc.f90 across all four boundary
   !! condition configurations.
   !!
   !! Usage: x3d2_poisson_solver nx ny nz [bc_x bc_y bc_z] [--repeat N]
@@ -44,7 +49,7 @@ program x3d2_poisson_solver
 
   implicit none
 
-  ! n = 2 cosine wavenumber of the COS_XYZ manufactured problem.
+  ! Wavenumber of the default right-hand side.
   integer, parameter :: N_WAVE = 2
 
   class(base_backend_t), pointer :: backend
@@ -158,7 +163,7 @@ program x3d2_poisson_solver
 
   call backend%init_poisson_fft(mesh, xdirps, ydirps, zdirps)
 
-  ! ---- Manufactured problem: COS_XYZ, n = 2 ----
+  ! ---- Default right-hand side ----
   n_pi = real(N_WAVE, dp)*pi
 
   f_device => backend%allocator%get_block(DIR_C, CELL)
@@ -169,7 +174,7 @@ program x3d2_poisson_solver
   sum_time = 0.0_dp
 
   do irep = 1, repeat_count
-    call fill_cosine_field(host_field)
+    call fill_rhs(host_field)
     call backend%set_field_data(f_device, host_field%data, DIR_C)
     call f_device%set_data_loc(CELL)
 
@@ -279,9 +284,10 @@ contains
     error stop 'invalid arguments'
   end subroutine usage_error
 
-  subroutine fill_cosine_field(host_field)
-    !! Fills host_field with the COS_XYZ RHS, using the host-associated
-    !! mesh, dims and n_pi.
+  subroutine fill_rhs(host_field)
+    !! Fills host_field with the default right-hand side, using the
+    !! host-associated mesh, dims and n_pi. This is the single place a
+    !! user-supplied right-hand side will replace.
     class(field_t), intent(inout) :: host_field
 
     integer :: i, j, k
@@ -297,6 +303,6 @@ contains
         end do
       end do
     end do
-  end subroutine fill_cosine_field
+  end subroutine fill_rhs
 
 end program x3d2_poisson_solver
