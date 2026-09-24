@@ -74,6 +74,8 @@ takes the following arguments:
 ``nx``, ``ny`` and ``nz`` are the global grid dimensions. Each of
 ``bc_x``, ``bc_y`` and ``bc_z`` is ``periodic`` (the default) or
 ``dirichlet``; a direction using ``dirichlet`` requires an odd grid size.
+``dirichlet`` here is the velocity boundary condition; the pressure is
+solved with homogeneous Neumann conditions in that direction.
 ``--repeat N`` sets how many times the solve is repeated (default 1). The
 backend used (OpenMP, CUDA or OpenMP target offload) follows whichever
 ``ENABLE_BACKEND`` the build was configured with. The OpenMP backend
@@ -81,13 +83,14 @@ currently supports only the ``000`` and ``100`` boundary condition cases.
 The ``010`` and ``110`` cases are not yet supported on OpenMP (the CUDA
 backend supports all four).
 
-The driver solves a manufactured cosine Poisson problem and reports the
-grid size, boundary conditions, rank count, backend, and the minimum and
-mean solve time over the requested number of repeats. It does not check
-correctness: that is covered separately by
-``tests/verification/test_poisson_bc.f90``, which verifies the Poisson
-solve against an analytical solution across all four boundary condition
-configurations. For example:
+The driver solves with a fixed default right-hand side,
+``cos(2 pi x) cos(2 pi y) cos(2 pi z)``; support for a user-supplied
+right-hand side is planned. It reports the grid size, boundary
+conditions, rank count, backend, and the minimum and mean solve time over
+the requested number of repeats. It does not check correctness: that is
+covered separately by ``tests/verification/test_poisson_bc.f90``, which
+verifies the Poisson solve against an analytical solution across all four
+boundary condition configurations. For example:
 
 .. code-block:: console
 
