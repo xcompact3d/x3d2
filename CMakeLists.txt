@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.13)
 # Define project languages
 project(x3d2 LANGUAGES Fortran CXX C)
 
-# Require OpenMP 
+# Require OpenMP
 find_package(OpenMP REQUIRED)
 
 # MPI option (default ON).  A build without it is a single serial rank: see
@@ -33,6 +33,17 @@ set_property(CACHE ENABLE_BACKEND PROPERTY STRINGS OFF CUDA OMP_TGT)
 
 # ADIOS2 option (default OFF)
 option(WITH_ADIOS2 "Enable ADIOS2 for I/O" OFF)
+option(WITH_ADIOS2_GPU_AWARE "Enable GPU-aware ADIOS2 I/O with the CUDA backend" OFF)
+
+if(WITH_ADIOS2_GPU_AWARE)
+  if(NOT WITH_ADIOS2)
+    message(FATAL_ERROR "WITH_ADIOS2_GPU_AWARE=ON requires WITH_ADIOS2=ON")
+  endif()
+  if(NOT ENABLE_BACKEND STREQUAL "CUDA")
+    message(FATAL_ERROR "WITH_ADIOS2_GPU_AWARE=ON requires ENABLE_BACKEND=CUDA")
+  endif()
+  add_compile_definitions(X3D2_ADIOS2_CUDA)
+endif()
 
 # FFT option (default ON)
 option(WITH_2DECOMPFFT "Enable Poisson based FFT solver on the OpenMP backend" ON)
@@ -165,5 +176,8 @@ endif()
 enable_testing()
 include(ThirdPartyADIOS2)
 include(ThirdPartyDecomp2D)
+if(WITH_ADIOS2_GPU_AWARE AND ADIOS2_FOUND AND NOT TARGET adios2::core_cuda)
+  message(FATAL_ERROR "WITH_ADIOS2_GPU_AWARE=ON requires CUDA-enabled ADIOS2")
+endif()
 add_subdirectory(src)
 add_subdirectory(tests)

@@ -19,6 +19,8 @@ module m_io_backend
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, io_mode_read, &
                        io_mode_write
   use m_common, only: dp, i8
+  use m_field, only: field_t
+  use m_base_backend, only: base_backend_t
 
   implicit none
 
@@ -62,6 +64,7 @@ module m_io_backend
     procedure :: write_data_integer => write_data_integer_dummy
     procedure :: write_data_real => write_data_real_dummy
     procedure :: write_data_array_3d => write_data_array_3d_dummy
+    procedure :: write_field_from_solver => write_field_from_solver_dummy
     procedure :: write_attribute_string => write_attribute_string_dummy
     procedure :: write_attribute_array_1d_real => &
       write_attribute_array_1d_real_dummy
@@ -286,5 +289,22 @@ contains
     class(io_file_t), intent(inout) :: file_handle
     ! silently ignore attribute writes
   end subroutine write_attribute_array_1d_real_dummy
+
+  subroutine write_field_from_solver_dummy( &
+    self, variable_name, field, file_handle, backend, &
+    shape_dims, start_dims, count_dims, use_sp &
+    )
+    !! Dummy implementation - just ignores write operations
+    class(io_dummy_writer_t), intent(inout) :: self
+    character(len=*), intent(in) :: variable_name
+    class(field_t), intent(in) :: field
+    class(io_file_t), intent(inout) :: file_handle
+    class(base_backend_t), intent(inout) :: backend
+    integer(i8), intent(in) :: shape_dims(3)
+    integer(i8), intent(in) :: start_dims(3)
+    integer(i8), intent(in) :: count_dims(3)
+    logical, intent(in), optional :: use_sp
+    ! silently ignore write operations
+  end subroutine write_field_from_solver_dummy
 
 end module m_io_backend
