@@ -3,7 +3,10 @@ program x3d2_poisson_solver
   !! the modules the Poisson solve actually needs (see the x3d2_poisson
   !! CMake target). It sets up a manufactured cosine problem (the COS_XYZ,
   !! n = 2 case exercised by tests/verification/test_poisson_bc.f90), solves
-  !! it the requested number of times, and reports timing and accuracy.
+  !! it the requested number of times, and reports timing. Correctness of
+  !! the solve itself is checked separately by
+  !! tests/verification/test_poisson_bc.f90 across all four boundary
+  !! condition configurations.
   !!
   !! Usage: x3d2_poisson_solver nx ny nz [bc_x bc_y bc_z] [--repeat N]
   !!   bc_x, bc_y, bc_z: 'periodic' (default) or 'dirichlet', applied to
@@ -41,12 +44,6 @@ program x3d2_poisson_solver
 
   implicit none
 
-#ifdef SINGLE_PREC
-  real(dp), parameter :: ERROR_TOLERANCE = 1.0e-6_dp
-#else
-  real(dp), parameter :: ERROR_TOLERANCE = 1.0e-11_dp
-#endif
-
   ! n = 2 cosine wavenumber of the COS_XYZ manufactured problem.
   integer, parameter :: N_WAVE = 2
 
@@ -77,10 +74,10 @@ program x3d2_poisson_solver
   character(len=9) :: BC_x(2), BC_y(2), BC_z(2)
   integer :: repeat_count, irep
   real(dp) :: t0, t1, elapsed, min_time, sum_time
-  real(dp) :: n_pi, n_pi_sq, error_norm
+  real(dp) :: n_pi
 
   class(field_t), pointer :: f_device, temp
-  class(field_t), pointer :: host_field, host_analytical
+  class(field_t), pointer :: host_field
 
   ! ---- MPI init ----
   call MPI_Init(ierr)
@@ -89,11 +86,6 @@ program x3d2_poisson_solver
 
   ! ---- Argument parsing ----
   call parse_arguments()
-
-  if (nrank == 0) then
-    print *, 'Parallel run with', nproc, 'ranks'
-    print *, 'Data precision is', dp
-  end if
 
   ! ---- Backend and allocator selection ----
   nproc_dir = [1, 1, nproc]
@@ -149,7 +141,7 @@ program x3d2_poisson_solver
   backend => omp_backend
 #endif
 
-  ! local cell dimensions, used for RHS/error field loops below
+  ! local cell dimensions, used for RHS field loops below
   dims = mesh%get_dims(CELL)
 
   ! ---- tdsops and Poisson FFT setup ----
@@ -168,7 +160,6 @@ program x3d2_poisson_solver
 
   ! ---- Manufactured problem: COS_XYZ, n = 2 ----
   n_pi = real(N_WAVE, dp)*pi
-  n_pi_sq = n_pi*n_pi
 
   f_device => backend%allocator%get_block(DIR_C, CELL)
   temp => backend%allocator%get_block(DIR_C)
@@ -193,30 +184,6 @@ program x3d2_poisson_solver
   end do
 
   call backend%allocator%release_block(temp)
-
-  ! ---- L2 error against the analytical solution ----
-  call backend%get_field_data(host_field%data, f_device)
-
-  ! Remove arbitrary constant (Poisson solution unique up to a constant)
-  host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) = &
-    host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) &
-    - host_field%data(1, 1, 1)
-
-  host_analytical => host_allocator%get_block(DIR_C)
-  call fill_analytical_field(host_analytical)
-
-  host_analytical%data(1:dims(1), 1:dims(2), 1:dims(3)) = &
-    host_analytical%data(1:dims(1), 1:dims(2), 1:dims(3)) &
-    - host_analytical%data(1, 1, 1)
-
-  host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) = &
-    host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) &
-    - host_analytical%data(1:dims(1), 1:dims(2), 1:dims(3))
-
-  error_norm = norm2(host_field%data(1:dims(1), 1:dims(2), 1:dims(3))) &
-              /product(dims)
-
-  call host_allocator%release_block(host_analytical)
   call host_allocator%release_block(host_field)
   call backend%allocator%release_block(f_device)
 
@@ -233,15 +200,6 @@ program x3d2_poisson_solver
     write (stderr, '(A,ES12.4,A)') 'Solve time (min):  ', min_time, ' s'
     write (stderr, '(A,ES12.4,A)') 'Solve time (mean): ', &
       sum_time/real(repeat_count, dp), ' s'
-    write (stderr, '(A,ES12.4)') 'L2 error: ', error_norm
-
-    if (error_norm <= ERROR_TOLERANCE) then
-      write (stderr, '(A)') 'PASS'
-    else
-      write (stderr, '(A)') 'FAIL'
-      call MPI_Finalize(ierr)
-      error stop 'Poisson solve accuracy check failed'
-    end if
   end if
 
   call MPI_Finalize(ierr)
@@ -262,17 +220,11 @@ contains
 
     if (nargs < 3) call usage_error()
 
-    call get_command_argument(1, arg)
-    read (arg, *, iostat=ios) dims_global(1)
-    if (ios /= 0 .or. dims_global(1) < 1) call usage_error()
-
-    call get_command_argument(2, arg)
-    read (arg, *, iostat=ios) dims_global(2)
-    if (ios /= 0 .or. dims_global(2) < 1) call usage_error()
-
-    call get_command_argument(3, arg)
-    read (arg, *, iostat=ios) dims_global(3)
-    if (ios /= 0 .or. dims_global(3) < 1) call usage_error()
+    do iarg = 1, 3
+      call get_command_argument(iarg, arg)
+      read (arg, *, iostat=ios) dims_global(iarg)
+      if (ios /= 0 .or. dims_global(iarg) < 1) call usage_error()
+    end do
 
     iarg = 4
     if (nargs >= iarg) then
@@ -282,9 +234,12 @@ contains
         call get_command_argument(iarg, bc_x_name)
         call get_command_argument(iarg + 1, bc_y_name)
         call get_command_argument(iarg + 2, bc_z_name)
-        if (.not. is_valid_bc(bc_x_name)) call usage_error()
-        if (.not. is_valid_bc(bc_y_name)) call usage_error()
-        if (.not. is_valid_bc(bc_z_name)) call usage_error()
+        if (trim(bc_x_name) /= 'periodic' .and. &
+            trim(bc_x_name) /= 'dirichlet') call usage_error()
+        if (trim(bc_y_name) /= 'periodic' .and. &
+            trim(bc_y_name) /= 'dirichlet') call usage_error()
+        if (trim(bc_z_name) /= 'periodic' .and. &
+            trim(bc_z_name) /= 'dirichlet') call usage_error()
         iarg = iarg + 3
       end if
     end if
@@ -313,13 +268,6 @@ contains
     BC_z = [bc_z_name, bc_z_name]
 
   end subroutine parse_arguments
-
-  pure function is_valid_bc(name) result(valid)
-    character(len=*), intent(in) :: name
-    logical :: valid
-
-    valid = (trim(name) == 'periodic' .or. trim(name) == 'dirichlet')
-  end function is_valid_bc
 
   subroutine usage_error()
     if (nrank == 0) then
@@ -350,26 +298,5 @@ contains
       end do
     end do
   end subroutine fill_cosine_field
-
-  subroutine fill_analytical_field(host_field)
-    !! Fills host_field with the COS_XYZ analytical Poisson solution, using
-    !! the host-associated mesh, dims, n_pi and n_pi_sq.
-    class(field_t), intent(inout) :: host_field
-
-    integer :: i, j, k
-    real(dp) :: coords(3)
-
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          coords = mesh%get_coordinates(i, j, k, CELL)
-          host_field%data(i, j, k) = -cos(n_pi*coords(1)) &
-                                     *cos(n_pi*coords(2)) &
-                                     *cos(n_pi*coords(3)) &
-                                     /(3.0_dp*n_pi_sq)
-        end do
-      end do
-    end do
-  end subroutine fill_analytical_field
 
 end program x3d2_poisson_solver
