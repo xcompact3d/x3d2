@@ -7,7 +7,7 @@ program test_omp_transeq_species
   use m_omp_common, only: SZ
   use m_omp_backend, only: omp_backend_t
   use m_tdsops, only: dirps_t
-  use m_solver, only: allocate_tdsops
+  use m_tdsops_setup, only: allocate_tdsops
   use m_mesh, only: mesh_t
   use m_test_utils, only: initialise_mpi, finalise_test
 

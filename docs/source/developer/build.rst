@@ -51,3 +51,44 @@ Note that ``make test`` is only a launcher for the ``ctest`` executable. By defa
 instead of ``make test``.
 
 The main executable will be built in the ``build/bin`` directory as ``xcompact``.
+
+Building the Standalone Poisson Solver
+---------------------------------------
+
+``x3d2_poisson_solver`` is a standalone driver for the FFT-based Poisson
+solver. Building it pulls in only the Poisson core library
+(``x3d2_poisson``), the backend it runs against and the driver itself,
+not the full x3d2 solver:
+
+.. code-block:: bash
+
+   $ cmake --build build --target x3d2_poisson_solver
+
+The resulting binary is written to ``build/bin/x3d2_poisson_solver`` and
+takes the following arguments:
+
+.. code-block:: console
+
+   x3d2_poisson_solver nx ny nz [bc_x bc_y bc_z] [--repeat N]
+
+``nx``, ``ny`` and ``nz`` are the global grid dimensions. Each of
+``bc_x``, ``bc_y`` and ``bc_z`` is ``periodic`` (the default) or
+``dirichlet``; a direction using ``dirichlet`` requires an odd grid size.
+``--repeat N`` sets how many times the solve is repeated (default 1). The
+backend used (OpenMP, CUDA or OpenMP target offload) follows whichever
+``ENABLE_BACKEND`` the build was configured with. The OpenMP backend
+currently supports only the ``000`` and ``100`` boundary condition cases.
+The ``010`` and ``110`` cases are not yet supported on OpenMP (the CUDA
+backend supports all four).
+
+The driver solves a manufactured cosine Poisson problem and reports the
+grid size, boundary conditions, rank count, backend, and the minimum and
+mean solve time over the requested number of repeats. It does not check
+correctness: that is covered separately by
+``tests/verification/test_poisson_bc.f90``, which verifies the Poisson
+solve against an analytical solution across all four boundary condition
+configurations. For example:
+
+.. code-block:: console
+
+   $ mpirun -np 2 build/bin/x3d2_poisson_solver 128 64 32 --repeat 5
