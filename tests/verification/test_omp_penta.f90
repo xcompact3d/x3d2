@@ -441,10 +441,18 @@ contains
     !! Error level below which the truncation error is hidden by roundoff
     !! and a convergence rate can no longer be measured.  The roundoff
     !! floor of a first-derivative L2 error at resolution n is ~eps*n
-    !! (roundoff eps amplified by 1/dx = n), with a 20x safety margin.
+    !! (roundoff eps amplified by 1/dx = n), with a safety margin.
+    !!
+    !! The margin has to cover how far the floor moves between compilers: the
+    !! N=256 BC_NEUMANN errors land at ~2e-13 under gfortran but at 1.2e-12
+    !! (sym=T) and 6.1e-12 (sym=F) under Cray ftn -O3, i.e. ~110*eps*n, while
+    !! the rates at the resolutions below are 10.2 either way.  20x let the
+    !! saturated Cray rows through and the measured "rate" of noise then failed
+    !! the check.  200x skips them and still leaves the N=128 rows, whose errors
+    !! are ~6x the threshold, checked.
     integer, intent(in) :: n_glob
     converged_tol = max(1e-12_dp, &
-                        20._dp*epsilon(1._dp)*real(n_glob, dp))
+                        200._dp*epsilon(1._dp)*real(n_glob, dp))
   end function converged_tol
 
 end program test_omp_penta
