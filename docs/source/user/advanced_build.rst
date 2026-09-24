@@ -244,6 +244,11 @@ For custom installation locations, provide the path to CMake:
 
    -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DADIOS2_ROOT_DIR=/path/to/adios2/installation
 
+Nothing is probed from the installation to tell whether it was built with CUDA,
+so say so with ``-DADIOS2_WITH_CUDA=ON``. This registers the ADIOS2 tests on a
+GPU build; it is ignored when ADIOS2 is built from source, where the build
+decides for itself.
+
 .. _adios2-and-mpi:
 
 ADIOS2 and MPI
@@ -283,8 +288,12 @@ To use the built-in ADIOS2 (default behaviour):
 CUDA Architecture for the ADIOS2 Build
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-When x3d2 is built with ``ENABLE_BACKEND=CUDA``, the built-in ADIOS2 is compiled
-with CUDA support. It reuses ``BACKEND_ARCH``, stripped to the bare compute
+The built-in ADIOS2 is compiled with CUDA support for either GPU backend
+(``ENABLE_BACKEND=CUDA`` or ``ENABLE_BACKEND=OMP_TGT``) when the Fortran
+compiler is NVHPC or PGI, since both offload through CUDA. The AMD/Cray
+``OMP_TGT`` paths use another compiler and get the plain CPU build.
+
+It reuses ``BACKEND_ARCH``, stripped to the bare compute
 capability that ``CMAKE_CUDA_ARCHITECTURES`` expects, so ``-DBACKEND_ARCH=cc80``
 builds ADIOS2's CUDA sources for ``80``. There is no separate option to set, and
 nothing is probed from the build machine, so a GPU-less login or build node
@@ -301,10 +310,12 @@ If you have ParaView installed, it often includes its own version of ADIOS2 whic
 .. note::
 
    The built-in ADIOS2 is installed into ``adios2-<config>-<version>`` inside
-   the build directory, where ``<config>`` is ``cuda`` for a
-   ``ENABLE_BACKEND=CUDA`` build and ``cpu`` otherwise. A CUDA-enabled ADIOS2
-   cannot be reused by a CPU build, which is why the two are kept apart. Adjust
-   the paths below to match your build.
+   the build directory, where ``<config>`` is ``cuda`` for a CUDA-enabled build
+   (see `CUDA Architecture for the ADIOS2 Build`_) and ``cpu`` otherwise, with
+   ``-serial`` appended in a ``WITH_MPI=OFF`` build. A CUDA-enabled ADIOS2
+   cannot be reused by a CPU build, and a serial one exports different Fortran
+   bindings, which is why each combination is kept apart. Adjust the paths below
+   to match your build.
 
 Prepending to LD_LIBRARY_PATH
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -399,10 +410,13 @@ Requirements
 
 GPU-aware ADIOS2 I/O requires:
 
+- ``ENABLE_BACKEND=CUDA``; configuring fails with any other backend, including
+  ``OMP_TGT``, which reaches ADIOS2 through the host-staged path even when
+  linked against a CUDA-enabled ADIOS2
 - The NVHPC (or PGI) Fortran compiler
 - ADIOS2 built with CUDA support (``-DADIOS2_USE_CUDA=ON``)
 
-When using the built-in ADIOS2 (default), the build system builds ADIOS2 with CUDA support when ``ENABLE_BACKEND=CUDA`` is selected.
+When using the built-in ADIOS2 (default), the build system builds ADIOS2 with CUDA support for any NVHPC/PGI GPU build.
 
 Build Configuration
 ~~~~~~~~~~~~~~~~~~~
