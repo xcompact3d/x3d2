@@ -428,7 +428,7 @@ The ADIOS2 backend reads these environment variables when the first writer start
      - ``1`` times ``Put`` and ``EndStep`` for every output step (maximum over ranks) and prints a summary with throughput when the file closes. The first two steps of each file are left out of the summary, since they include one-off setup.
    * - ``X3D2_NVTX``
      - ``1``
-     - Emits NVTX ranges for Nsight Systems: ``ADIOS2_Put``, ``ADIOS2_EndStep`` and ``ADIOS2_DevicePack`` on the GPU-aware path, ``IO_HostStage`` and ``IO_HostPack`` on the host-staged path. CUDA builds only, with or without ADIOS2.
+     - Emits NVTX ranges for Nsight Systems: ``ADIOS2_Put``, ``ADIOS2_EndStep`` and ``ADIOS2_DevicePack`` on the GPU-aware path, ``IO_HostStage`` and ``IO_HostPack`` on the host-staged path. CUDA builds with ADIOS2 only.
 
 Boolean options accept ``1/0``, ``true/false``, ``yes/no`` and ``on/off``. For example, to benchmark snapshot output:
 
@@ -439,7 +439,7 @@ Boolean options accept ``1/0``, ``true/false``, ``yes/no`` and ``on/off``. For e
 Profiling Output with Nsight Systems
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-CUDA builds label each output step with NVTX ranges, so the two write paths can be compared on a timeline:
+CUDA builds with ADIOS2 label each output step with NVTX ranges, so the two write paths can be compared on a timeline:
 
 .. code-block:: bash
 

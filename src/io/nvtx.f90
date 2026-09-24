@@ -1,7 +1,7 @@
 module m_nvtx
 !! NVTX ranges for profiling I/O with Nsight Systems.
 !!
-!! Compiled in for CUDA backend builds (X3D2_NVTX), where they label both
+!! Compiled in for CUDA builds with ADIOS2 (X3D2_NVTX), where they label both
 !! the GPU-aware and the host-staged write paths; a no-op otherwise. Set
 !! X3D2_NVTX=0 at runtime to turn them off.
   use iso_c_binding, only: c_char, c_null_char, c_ptr, c_loc, c_int
