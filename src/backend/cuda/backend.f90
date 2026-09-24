@@ -1,4 +1,5 @@
 module m_cuda_backend
+  use iso_c_binding, only: c_ptr
   use iso_fortran_env, only: stderr => error_unit
   use cudafor
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_MAX, MPI_SUM, &
@@ -6,7 +7,7 @@ module m_cuda_backend
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, MPI_X3D2_DP, move_data_loc, &
+  use m_common, only: dp, sp, MPI_X3D2_DP, move_data_loc, get_rdr_from_dirs, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_C2X, RDR_C2Y, RDR_C2Z, RDR_X2C, RDR_Y2C, RDR_Z2C, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC, &
@@ -38,6 +39,8 @@ module m_cuda_backend
   use m_cuda_kernels_reorder, only: reorder_x2y, reorder_x2z, reorder_y2x, &
                                     reorder_y2z, reorder_z2x, reorder_z2y, &
                                     reorder_c2x, reorder_x2c, &
+                                    pack_x2c_dp, pack_x2c_sp, &
+                                    pack_c_dp, pack_c_sp, &
                                     sum_yintox, sum_zintox
 
   implicit none
@@ -85,6 +88,9 @@ module m_cuda_backend
     procedure :: copy_f_to_data => copy_f_to_data_cuda
     procedure :: init_poisson_fft => init_cuda_poisson_fft
     procedure :: sync => sync_cuda
+    procedure :: supports_device_field_export => &
+      supports_device_field_export_cuda
+    procedure :: export_field_to_device => export_field_to_device_cuda
     procedure :: get_device_bw_info => get_device_bw_info_cuda
     procedure :: transeq_cuda_dist
     procedure :: transeq_cuda_thom
@@ -194,6 +200,98 @@ contains
     ierr = cudaDeviceSynchronize()
 
   end subroutine sync_cuda
+
+  logical function supports_device_field_export_cuda(self, f)
+    implicit none
+
+    class(cuda_backend_t), intent(in) :: self
+    class(field_t), intent(in) :: f
+
+    select type (f)
+    type is (cuda_field_t)
+      supports_device_field_export_cuda = .true.
+    class default
+      supports_device_field_export_cuda = .false.
+    end select
+
+  end function supports_device_field_export_cuda
+
+  subroutine export_field_to_device_cuda(self, buffer, f, dims, to_sp)
+    !! DIR_X fields are reordered and unpadded by a single kernel. DIR_C
+    !! fields are unpadded directly, and DIR_Y/DIR_Z fields are reordered
+    !! to DIR_C first. Precision conversion happens in the same kernel.
+    implicit none
+
+    class(cuda_backend_t) :: self
+    type(c_ptr), intent(in) :: buffer
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: dims(3)
+    logical, intent(in) :: to_sp
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d, out_dp
+    real(sp), device, pointer, dimension(:, :, :) :: out_sp
+    class(field_t), pointer :: f_c
+    type(dim3) :: blocks, threads
+    integer :: dims_padded(3), ierr
+
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+    if (any(dims < 1) .or. any(dims > dims_padded)) then
+      error stop "export_field_to_device: dims exceed the field extent"
+    end if
+
+    if (to_sp) then
+      call c_f_pointer(c_devptr(buffer), out_sp, dims)
+    else
+      call c_f_pointer(c_devptr(buffer), out_dp, dims)
+    end if
+
+    f_c => null()
+    if (f%dir == DIR_X) then
+      call resolve_field_t(f_d, f)
+      blocks = dim3((dims(1) + SZ - 1)/SZ, (dims(2) + SZ - 1)/SZ, dims(3))
+      ! The kernels stride over the SZ x SZ tile by blockDim, so a short
+      ! block is enough; 32 x 32 exceeds the register budget per block.
+      threads = dim3(min(SZ, 32), min(SZ, 8), 1)
+      if (to_sp) then
+        call pack_x2c_sp<<<blocks, threads>>>(out_sp, f_d, dims(1), & !&
+                                              dims(2), dims_padded(3))
+      else
+        call pack_x2c_dp<<<blocks, threads>>>(out_dp, f_d, dims(1), & !&
+                                              dims(2), dims_padded(3))
+      end if
+    else
+      if (f%dir == DIR_C) then
+        call resolve_field_t(f_d, f)
+      else
+        f_c => self%allocator%get_block(DIR_C)
+        call self%reorder(f_c, f, get_rdr_from_dirs(f%dir, DIR_C))
+        call resolve_field_t(f_d, f_c)
+      end if
+
+      blocks = dim3((dims(1) + SZ - 1)/SZ, dims(2), dims(3))
+      threads = dim3(SZ, 1, 1)
+      if (to_sp) then
+        call pack_c_sp<<<blocks, threads>>>(out_sp, f_d, dims(1), dims(2)) !&
+      else
+        call pack_c_dp<<<blocks, threads>>>(out_dp, f_d, dims(1), dims(2)) !&
+      end if
+    end if
+
+    ierr = cudaGetLastError()
+    if (ierr /= cudaSuccess) then
+      print *, "CUDA error: ", trim(cudaGetErrorString(ierr))
+      error stop "export_field_to_device: kernel launch failed"
+    end if
+
+    ! Complete the pack before a consumer on another stream reads it.
+    ierr = cudaStreamSynchronize(cudaforGetDefaultStream())
+    if (ierr /= cudaSuccess) then
+      error stop "export_field_to_device: stream synchronisation failed"
+    end if
+
+    if (associated(f_c)) call self%allocator%release_block(f_c)
+
+  end subroutine export_field_to_device_cuda
 
   subroutine get_device_bw_info_cuda(self, mem_clock_rt, mem_bus_width, &
                                      available)

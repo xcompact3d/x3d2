@@ -382,6 +382,128 @@ Common issues include:
 - MPI library mismatch between ADIOS2 and x3d2
 - Missing libraries (shown as "not found")
 
+Enabling GPU-Aware ADIOS2 I/O
+-----------------------------
+
+When running on NVIDIA GPUs, x3d2 can hand fields to ADIOS2 directly from GPU memory for checkpoints and snapshots. Each field is packed into its output layout by a GPU kernel, replacing the reordering and repacking the host-staged path does on the CPU.
+
+This does not remove the device-to-host transfer. Output files live on the host file system, so ADIOS2's BP5 engine copies each packed GPU buffer into its host serialisation buffer during ``Put``, and the same volume of data crosses PCIe as with host-staged output. The saving is the CPU work and host memory traffic around that copy.
+
+Requirements
+~~~~~~~~~~~~
+
+GPU-aware ADIOS2 I/O requires:
+
+- The NVHPC (or PGI) Fortran compiler
+- ADIOS2 built with CUDA support (``-DADIOS2_USE_CUDA=ON``)
+
+When using the built-in ADIOS2 (default), the build system builds ADIOS2 with CUDA support when ``ENABLE_BACKEND=CUDA`` is selected.
+
+Build Configuration
+~~~~~~~~~~~~~~~~~~~
+
+To enable GPU-aware I/O, select the CUDA backend and enable both ADIOS2 options:
+
+.. code-block:: bash
+
+   cmake .. -DENABLE_BACKEND=CUDA -DWITH_ADIOS2=ON -DWITH_ADIOS2_GPU_AWARE=ON
+
+Using a System ADIOS2 with CUDA Support
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you have a system ADIOS2 installation that was built with ``-DADIOS2_USE_CUDA=ON``, you can use it directly:
+
+.. code-block:: bash
+
+   cmake .. -DENABLE_BACKEND=CUDA -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DWITH_ADIOS2_GPU_AWARE=ON
+
+The build system will verify that the ``adios2::core_cuda`` target is available and report an error if it is not.
+
+How Fields Are Written
+~~~~~~~~~~~~~~~~~~~~~~
+
+Snapshots and checkpoints use the GPU-aware path when every field to write lives in device memory and no output stride is set. Strided snapshots, and any field the backend cannot pack on the device, go through the host-staged path instead.
+
+For each field, one kernel packs the solver's padded, direction-ordered storage into a contiguous buffer of the field's true extent. The same kernel converts to single precision when ``snapshot_sp`` is set. The buffer belongs to the open output file and is reused, so no device memory is allocated per write.
+
+ADIOS2 2.12's BP5 engine copies GPU buffers to host during each ``Put``, even when a deferred put is requested, so puts are synchronous and one staging buffer serves every field.
+
+The staging buffer adds device memory equal to one output field of the local subdomain, for example 128 MiB for a 256³ double-precision field on one rank.
+
+At startup, rank 0 prints ``ADIOS2 GPU write mode: ...``, which confirms whether the GPU-aware path is active.
+
+Expected Performance
+~~~~~~~~~~~~~~~~~~~~
+
+The gain grows with output frequency and with the cost of CPU-side copies on the host. Strided snapshots take the host-staged path and see no gain. Checkpoints are never strided and always benefit.
+
+As an example, a 256³ Taylor–Green vortex with IBM in double precision, run for 20 steps on one RTX A4000 with a snapshot every step at ``output_stride = 1, 1, 1`` and a checkpoint every 5 steps:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 20 20 20
+
+   * - Run
+     - Total (s)
+     - I/O (s)
+     - Peak GPU memory (MiB)
+   * - Solver only, no output
+     - 29.2
+     - n/a
+     - 3621
+   * - Host-staged output
+     - 76.6
+     - 47.3
+     - 3621
+   * - GPU-aware output
+     - 52.6
+     - 23.4
+     - 3879
+
+I/O time roughly halves, and one snapshot step goes from about 1.5 s to 0.58 s. The time ADIOS2 spends writing the file is the same in both runs. With ``output_stride = 2, 2, 2`` in the same case, the gain is about 5%, all from the checkpoints.
+
+Runtime Options
+~~~~~~~~~~~~~~~
+
+The ADIOS2 backend reads these environment variables when the first writer starts, and rank 0 prints the selected options. ``X3D2_NVTX`` is read separately, the first time an NVTX range is emitted.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 15 55
+
+   * - Variable
+     - Default
+     - Effect
+   * - ``X3D2_ADIOS2_GPU_WRITE_MODE``
+     - ``auto``
+     - ``auto`` (or ``gpu``) writes from device memory when possible. ``host`` always copies fields to host first, for example to compare the two paths.
+   * - ``X3D2_ADIOS2_IO_BENCH``
+     - ``0``
+     - ``1`` times ``Put`` and ``EndStep`` for every output step (maximum over ranks) and prints a summary with throughput when the file closes. The first two steps of each file are left out of the summary, since they include one-off setup.
+   * - ``X3D2_NVTX``
+     - ``1``
+     - Emits NVTX ranges for Nsight Systems: ``ADIOS2_Put``, ``ADIOS2_EndStep`` and ``ADIOS2_DevicePack`` on the GPU-aware path, ``IO_HostStage`` and ``IO_HostPack`` on the host-staged path. CUDA builds with ADIOS2 only.
+
+Boolean options accept ``1/0``, ``true/false``, ``yes/no`` and ``on/off``. For example, to benchmark snapshot output:
+
+.. code-block:: bash
+
+   X3D2_ADIOS2_IO_BENCH=1 mpirun -np 4 ./bin/xcompact <input_file>
+
+Profiling Output with Nsight Systems
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+CUDA builds with ADIOS2 label each output step with NVTX ranges, so the two write paths can be compared on a timeline:
+
+.. code-block:: bash
+
+   nsys profile -t cuda,nvtx -o gpu_io mpirun -np 1 ./bin/xcompact <input_file>
+   nsys-ui gpu_io.nsys-rep
+
+Each output step appears as ``ADIOS2_I/O_Step``. On the GPU-aware path it contains a short ``ADIOS2_DevicePack`` kernel and an ``ADIOS2_Put`` per field. The Put is mostly ADIOS2's device-to-host copy. On the host-staged path it contains ``IO_HostStage`` (device-to-host copy and reordering on the CPU) and ``IO_HostPack`` (copy into the write buffer) per field, then ``ADIOS2_Put``. Both end with ``ADIOS2_EndStep``, where ADIOS2 writes the file.
+
+To compare the paths with a GPU-aware build only, profile a second run with ``X3D2_ADIOS2_GPU_WRITE_MODE=host``.
+
 Configuring Single Precision Mode
 ---------------------------------
 
@@ -427,4 +549,3 @@ in x3d2's own kernels, use the ``CUDA_DEBUG_FP_TRAP`` CMake option:
 .. code-block:: bash
 
    -DCUDA_DEBUG_FP_TRAP=ON
-
