@@ -281,6 +281,27 @@ define_verification_test(verification/test_time_integrator.f90 1 omp)
 define_verification_test(verification/test_les_field.f90 1 omp)
 if(WITH_2DECOMPFFT)
   define_verification_test(verification/test_fft.f90 4 omp)
+
+  # test_poisson_bc covers all four boundary condition configurations. Only
+  # one np=1 omp registration can go through define_verification_test (it
+  # would collide on the executable/test name otherwise), so config 000
+  # goes through it and the other three configs reuse that same executable.
+  define_verification_test(verification/test_poisson_bc.f90 1 omp --config 000)
+  # Configs 010 and 110 fail on the OMP backend until OMP support merges.
+  add_test(NAME test_poisson_bc_omp_1_010
+           COMMAND sh -c "mpirun --oversubscribe -np 1 bin/test_poisson_bc_omp_1 --config 010")
+  set_tests_properties(test_poisson_bc_omp_1_010 PROPERTIES LABELS "verification;omp")
+  add_test(NAME test_poisson_bc_omp_1_100
+           COMMAND sh -c "mpirun --oversubscribe -np 1 bin/test_poisson_bc_omp_1 --config 100")
+  set_tests_properties(test_poisson_bc_omp_1_100 PROPERTIES LABELS "verification;omp")
+  add_test(NAME test_poisson_bc_omp_1_110
+           COMMAND sh -c "mpirun --oversubscribe -np 1 bin/test_poisson_bc_omp_1 --config 110")
+  set_tests_properties(test_poisson_bc_omp_1_110 PROPERTIES LABELS "verification;omp")
+
+  # Standalone Poisson solver smoke test (OMP backend).
+  add_test(NAME poisson_solver_standalone_000_omp
+           COMMAND sh -c "mpirun --oversubscribe -np 2 ../bin/x3d2_poisson_solver 128 64 32")
+  set_tests_properties(poisson_solver_standalone_000_omp PROPERTIES LABELS "unit;standalone")
 endif()
 
 # Regression smoke test: fast full-solver TGV vs golden monitoring.csv.
@@ -345,6 +366,12 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   define_verification_test(verification/test_fft.f90 1 cuda)
   define_verification_test(verification/test_poisson_bc.f90 1 cuda)
   define_verification_test(verification/test_poisson_bc.f90 2 cuda --config 100)
+
+  # Standalone Poisson solver smoke test (CUDA backend).
+  add_test(NAME poisson_solver_standalone_000_cuda
+           COMMAND sh -c "mpirun --oversubscribe -np 2 ../bin/x3d2_poisson_solver 128 64 32")
+  set_tests_properties(poisson_solver_standalone_000_cuda PROPERTIES LABELS "unit;standalone")
+
   define_verification_test(verification/test_cuda_tridiag.f90 ${CMAKE_CTEST_NPROCS} cuda)
   define_verification_test(verification/test_cuda_penta.f90 ${CMAKE_CTEST_NPROCS} cuda)
   define_verification_test(verification/test_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
