@@ -74,6 +74,7 @@ module m_mpi
     module procedure allreduce_in_place
     module procedure allreduce_r32
     module procedure allreduce_r64
+    module procedure allreduce_r64_1d
   end interface MPI_Allreduce
 
   interface MPI_Reduce
@@ -190,6 +191,17 @@ contains
     recvbuf = sendbuf
     ierror = MPI_SUCCESS
   end subroutine allreduce_r64
+
+  subroutine allreduce_r64_1d(sendbuf, recvbuf, count, datatype, op, comm, &
+                              ierror)
+    real(real64), intent(in) :: sendbuf(:)
+    real(real64), intent(out) :: recvbuf(:)
+    integer, intent(in) :: count, datatype, op, comm
+    integer, intent(out) :: ierror
+
+    recvbuf(1:count) = sendbuf(1:count)
+    ierror = MPI_SUCCESS
+  end subroutine allreduce_r64_1d
 
   subroutine reduce_r32(sendbuf, recvbuf, count, datatype, op, root, comm, &
                         ierror)

@@ -18,9 +18,11 @@ if(WITH_ADIOS2)
   if(WITH_MPI)
     set(adios2_components Fortran MPI)
     set(ADIOS2_FORTRAN_TARGET adios2::fortran_mpi)
+    set(ADIOS2_C_TARGET adios2::c_mpi)
   else()
     set(adios2_components Fortran)
     set(ADIOS2_FORTRAN_TARGET adios2::fortran)
+    set(ADIOS2_C_TARGET adios2::c)
   endif()
 
   option(USE_SYSTEM_ADIOS2 "Use system-installed ADIOS2" OFF)
@@ -107,6 +109,20 @@ if(WITH_ADIOS2)
         list(APPEND adios2_byproducts "${adios2_fortran_mpi_library}")
       endif()
 
+      # GPU-aware writes go through the ADIOS2 C API, whose library follows the
+      # same MPI/serial split as the Fortran one: the MPI library holds only
+      # the MPI entry points, the rest (adios2_put, ...) stays in adios2_c.
+      if(WITH_ADIOS2_GPU_AWARE)
+        set(adios2_c_library
+          "${adios2_install_dir}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}adios2_c${CMAKE_SHARED_LIBRARY_SUFFIX}")
+        list(APPEND adios2_byproducts "${adios2_c_library}")
+        if(WITH_MPI)
+          set(adios2_c_mpi_library
+            "${adios2_install_dir}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}adios2_c_mpi${CMAKE_SHARED_LIBRARY_SUFFIX}")
+          list(APPEND adios2_byproducts "${adios2_c_mpi_library}")
+        endif()
+      endif()
+
       include(ExternalProject)
 
       ExternalProject_Add(adios2-${adios2_version}
@@ -142,6 +158,7 @@ if(WITH_ADIOS2)
       # The module files land here during the build, but the directory has to
       # exist before it can be used as an include directory.
       file(MAKE_DIRECTORY "${adios2_install_dir}/include/adios2/fortran")
+      file(MAKE_DIRECTORY "${adios2_install_dir}/include")
 
       # Stands in for the package config that is not installed yet, exporting
       # what it would export.  Its dependency on the external project is
@@ -161,6 +178,22 @@ if(WITH_ADIOS2)
       endif()
       add_dependencies(adios2_fortran_x3d2 adios2-${adios2_version})
       add_library(${ADIOS2_FORTRAN_TARGET} ALIAS adios2_fortran_x3d2)
+
+      # The C API is consumed by x3d2's own C source, so it carries the
+      # install's C headers as well as the library.
+      if(WITH_ADIOS2_GPU_AWARE)
+        add_library(adios2_c_x3d2 INTERFACE)
+        target_include_directories(adios2_c_x3d2 INTERFACE
+          "${adios2_install_dir}/include")
+        if(WITH_MPI)
+          target_link_libraries(adios2_c_x3d2 INTERFACE
+            "${adios2_c_mpi_library}" "${adios2_c_library}" MPI::MPI_C)
+        else()
+          target_link_libraries(adios2_c_x3d2 INTERFACE "${adios2_c_library}")
+        endif()
+        add_dependencies(adios2_c_x3d2 adios2-${adios2_version})
+        add_library(${ADIOS2_C_TARGET} ALIAS adios2_c_x3d2)
+      endif()
     endif(ADIOS2_FOUND)
   endif()
 
@@ -168,7 +201,7 @@ if(WITH_ADIOS2)
   # to let sibling directories (e.g. tests/) link them.  The interface library
   # built above needs no promotion: its alias is global already.
   if(ADIOS2_FOUND)
-    foreach(adios2_target adios2::c adios2::fortran adios2::fortran_mpi)
+    foreach(adios2_target adios2::c adios2::c_mpi adios2::fortran adios2::fortran_mpi)
       if(TARGET ${adios2_target})
         get_target_property(adios2_target_is_global ${adios2_target} IMPORTED_GLOBAL)
         if(NOT adios2_target_is_global)
