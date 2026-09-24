@@ -68,8 +68,8 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
      ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
      ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
-    IF(NOT BACKEND_ARCH MATCHES "gfx*")
-      message(FATAL_ERROR "For AMD GPU, BACKEND_ARCH must be specified as gfx***")
+    IF(NOT BACKEND_ARCH MATCHES "^gfx[0-9]+[a-f]?$")
+      message(FATAL_ERROR "For AMD GPU, BACKEND_ARCH must be specified as gfxXXX")
     ENDIF()
   endif()
   if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
