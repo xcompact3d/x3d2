@@ -51,7 +51,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA" OR ${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   set(BACKEND_ARCH "" CACHE STRING "Target GPU architecture, e.g. cc80 for NVIDIA or gfx942 for AMD")
   if ("${BACKEND_ARCH}" STREQUAL "")
     message(FATAL_ERROR
-      "CUDA and OMP_TGT backend requires setting BACKEND_ARCH=<arch>")
+       "CUDA and OMP_TGT backends require BACKEND_ARCH=<arch> (replaces CUDA_ARCH / OMP_TGT_ARCH), e.g. cc80 or gfx942")
   endif()
 endif()
 if (${ENABLE_BACKEND} STREQUAL "CUDA")
