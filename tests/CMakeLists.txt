@@ -56,6 +56,7 @@ function(define_test_backend_runtime backend)
       target_compile_options(${runtime_target} PRIVATE "-cpp")
     endif()
     if(${backend} STREQUAL omp_tgt)
+      target_compile_options(${runtime_target} PRIVATE "-DOMP_TGT")
       if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" OR
          ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
         target_compile_options(${runtime_target} PRIVATE "-mp=gpu")
