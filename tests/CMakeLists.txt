@@ -14,6 +14,7 @@ mark_as_advanced(WITH_NIGHTLY_REGRESSION)
 # Shared test utilities library
 add_library(x3d2_test_utils STATIC common/test_utils.f90)
 target_link_libraries(x3d2_test_utils PRIVATE x3d2)
+target_link_libraries(x3d2_test_utils PRIVATE OpenMP::OpenMP_Fortran)
 # test_utils.f90 reaches MPI through m_mpi, so with MPI enabled it needs the
 # MPI module path itself: x3d2 links MPI privately and does not pass it on.
 if(WITH_MPI)
@@ -75,6 +76,12 @@ function(define_test_backend_runtime backend)
   endif()
 
   target_link_libraries(${runtime_target} PRIVATE x3d2_backends x3d2)
+  # Match the OpenMP flags of the executables using this module (see
+  # x3d2_test_utils above).  The CUDA tests build without OpenMP, so this
+  # runtime does too.
+  if(NOT ${backend} STREQUAL cuda)
+    target_link_libraries(${runtime_target} PRIVATE OpenMP::OpenMP_Fortran)
+  endif()
   # backend_runtime.f90 reaches MPI through m_mpi (see x3d2_test_utils above).
   if(WITH_MPI)
     target_link_libraries(${runtime_target} PRIVATE MPI::MPI_Fortran)
@@ -108,7 +115,7 @@ function(define_test testfile np backend)
   else()
     if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
       target_compile_options(${test_name} PRIVATE "-eF")
-      target_link_options(${test_name} INTERFACE -h omp)
+      target_link_options(${test_name} PRIVATE -h omp)
     else()
       target_compile_options(${test_name} PRIVATE "-cpp")
       if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
