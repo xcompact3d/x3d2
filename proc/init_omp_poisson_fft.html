@@ -1,0 +1,703 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>init_omp_poisson_fft &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../program/xcompact.html">Program</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>init_omp_poisson_fft
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">14 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/backend.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/backend.f90.html'>backend.f90</a></li>
+                <li class="breadcrumb-item"><a href='../module/m_omp_backend.html'>m_omp_backend</a></li>
+            <li class="breadcrumb-item active" aria-current="page">init_omp_poisson_fft</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine init_omp_poisson_fft(self, mesh, xdirps, ydirps, zdirps, lowmem)  
+</h2>
+        <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item"><a href='../module/m_omp_poisson_fft.html'>m_omp_poisson_fft</a></li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~init_omp_poisson_fft~~UsesGraph Pages: 1 -->
+<svg id="procinit_omp_poisson_fftUsesGraph" width="641pt" height="188pt"
+ viewBox="0.00 0.00 641.00 187.73" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~init_omp_poisson_fft~~UsesGraph" class="graph" transform="scale(0.51 0.51) rotate(0) translate(4 360.91)">
+<title>proc~~init_omp_poisson_fft~~UsesGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-360.91 1242,-360.91 1242,4 -4,4"/>
+<!-- proc~init_omp_poisson_fft -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_node1" class="node">
+<title>proc~init_omp_poisson_fft</title>
+<polygon fill="none" stroke="black" points="1238,-252.91 925,-252.91 925,-228.91 1238,-228.91 1238,-252.91"/>
+<text text-anchor="middle" x="1081.5" y="-238.51" font-family="Helvetica,sans-Serif" font-size="10.50">m_omp_backend::omp_backend_t%init_omp_poisson_fft</text>
+</g>
+<!-- module~m_omp_poisson_fft -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_node2" class="node">
+<title>module~m_omp_poisson_fft</title>
+<g id="a_proc~~init_omp_poisson_fft~~UsesGraph_node2"><a xlink:href="../module/m_omp_poisson_fft.html" xlink:title="m_omp_poisson_fft">
+<polygon fill="#337ab7" stroke="#337ab7" points="889,-252.91 774,-252.91 774,-228.91 889,-228.91 889,-252.91"/>
+<text text-anchor="middle" x="831.5" y="-238.51" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_omp_poisson_fft</text>
+</a>
+</g>
+</g>
+<!-- proc~init_omp_poisson_fft&#45;&gt;module~m_omp_poisson_fft -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge1" class="edge">
+<title>proc~init_omp_poisson_fft&#45;&gt;module~m_omp_poisson_fft</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M924.85,-240.91C916.02,-240.91 907.42,-240.91 899.25,-240.91"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="899.14,-237.41 889.14,-240.91 899.14,-244.41 899.14,-237.41"/>
+</g>
+<!-- decomp_2d -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_node3" class="node">
+<title>decomp_2d</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="710,-356.91 635,-356.91 635,-332.91 710,-332.91 710,-356.91"/>
+<text text-anchor="middle" x="672.5" y="-342.51" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">decomp_2d</text>
+</g>
+<!-- module~m_omp_poisson_fft&#45;&gt;decomp_2d -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge2" class="edge">
+<title>module~m_omp_poisson_fft&#45;&gt;decomp_2d</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M820.05,-253.09C804.06,-270.99 771.83,-304.41 738,-323.91 732.38,-327.16 726.18,-329.98 719.93,-332.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="718.36,-329.25 710.12,-335.9 720.71,-335.84 718.36,-329.25"/>
+</g>
+<!-- decomp_2d_constants -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_node4" class="node">
+<title>decomp_2d_constants</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="738,-314.91 607,-314.91 607,-290.91 738,-290.91 738,-314.91"/>
+<text text-anchor="middle" x="672.5" y="-300.51" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">decomp_2d_constants</text>
+</g>
+<!-- module~m_omp_poisson_fft&#45;&gt;decomp_2d_constants -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge3" class="edge">
+<title>module~m_omp_poisson_fft&#45;&gt;decomp_2d_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M805.27,-252.93C786.84,-261.51 761.13,-273.05 738,-281.91 732.91,-283.86 727.56,-285.79 722.2,-287.65"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="720.96,-284.37 712.61,-290.89 723.2,-291 720.96,-284.37"/>
+</g>
+<!-- decomp_2d_fft -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_node5" class="node">
+<title>decomp_2d_fft</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="718,-272.91 627,-272.91 627,-248.91 718,-248.91 718,-272.91"/>
+<text text-anchor="middle" x="672.5" y="-258.51" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">decomp_2d_fft</text>
+</g>
+<!-- module~m_omp_poisson_fft&#45;&gt;decomp_2d_fft -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge4" class="edge">
+<title>module~m_omp_poisson_fft&#45;&gt;decomp_2d_fft</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M773.82,-248.13C758.98,-250.02 743,-252.06 728.26,-253.94"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="727.76,-250.47 718.28,-255.21 728.64,-257.42 727.76,-250.47"/>
+</g>
+<!-- module~m_common -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_node6" class="node">
+<title>module~m_common</title>
+<g id="a_proc~~init_omp_poisson_fft~~UsesGraph_node6"><a xlink:href="../module/m_common.html" xlink:title="m_common">
+<polygon fill="#337ab7" stroke="#337ab7" points="296,-152.91 220,-152.91 220,-128.91 296,-128.91 296,-152.91"/>
+<text text-anchor="middle" x="258" y="-138.51" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_common</text>
+</a>
+</g>
+</g>
+<!-- module~m_omp_poisson_fft&#45;&gt;module~m_common -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge5" class="edge">
+<title>module~m_omp_poisson_fft&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M827.06,-228.82C814.69,-188.13 768.11,-56.84 673.5,-22.91"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M671.5,-22.91C527.48,28.74 470.99,-15.96 332,-79.91 310.68,-89.72 290.53,-107.44 276.83,-121.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="273.94,-119.22 269.54,-128.86 278.99,-124.06 273.94,-119.22"/>
+</g>
+<!-- module~m_field -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_node7" class="node">
+<title>module~m_field</title>
+<g id="a_proc~~init_omp_poisson_fft~~UsesGraph_node7"><a xlink:href="../module/m_field.html" xlink:title="m_field">
+<polygon fill="#337ab7" stroke="#337ab7" points="410.5,-192.91 356.5,-192.91 356.5,-168.91 410.5,-168.91 410.5,-192.91"/>
+<text text-anchor="middle" x="383.5" y="-178.51" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_field</text>
+</a>
+</g>
+</g>
+<!-- module~m_omp_poisson_fft&#45;&gt;module~m_field -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge6" class="edge">
+<title>module~m_omp_poisson_fft&#45;&gt;module~m_field</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M773.95,-232.36C744.14,-228.19 706.92,-223.52 673.5,-220.91"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M671.5,-220.91C626.01,-217.36 616.09,-206.9 571,-199.91 518.97,-191.85 458.21,-186.39 420.54,-183.46"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="420.79,-179.97 410.56,-182.7 420.26,-186.95 420.79,-179.97"/>
+</g>
+<!-- module~m_mesh -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_node8" class="node">
+<title>module~m_mesh</title>
+<g id="a_proc~~init_omp_poisson_fft~~UsesGraph_node8"><a xlink:href="../module/m_mesh.html" xlink:title="m_mesh">
+<polygon fill="#337ab7" stroke="#337ab7" points="550,-112.91 492,-112.91 492,-88.91 550,-88.91 550,-112.91"/>
+<text text-anchor="middle" x="521" y="-98.51" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_mesh</text>
+</a>
+</g>
+</g>
+<!-- module~m_omp_poisson_fft&#45;&gt;module~m_mesh -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge7" class="edge">
+<title>module~m_omp_poisson_fft&#45;&gt;module~m_mesh</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M671.5,-22.91C620.87,-4.76 565.91,-52.84 538.91,-81.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="536.24,-79.17 532.07,-88.91 541.4,-83.9 536.24,-79.17"/>
+</g>
+<!-- module~m_omp_spectral -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_node9" class="node">
+<title>module~m_omp_spectral</title>
+<g id="a_proc~~init_omp_poisson_fft~~UsesGraph_node9"><a xlink:href="../module/m_omp_spectral.html" xlink:title="m_omp_spectral">
+<polygon fill="#337ab7" stroke="#337ab7" points="571,-232.91 471,-232.91 471,-208.91 571,-208.91 571,-232.91"/>
+<text text-anchor="middle" x="521" y="-218.51" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_omp_spectral</text>
+</a>
+</g>
+</g>
+<!-- module~m_omp_poisson_fft&#45;&gt;module~m_omp_spectral -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge8" class="edge">
+<title>module~m_omp_poisson_fft&#45;&gt;module~m_omp_spectral</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M671.5,-220.91C641.87,-219.06 608.87,-218.86 581.43,-219.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="581.15,-215.71 571.2,-219.37 581.25,-222.71 581.15,-215.71"/>
+</g>
+<!-- module~m_poisson_fft -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_node10" class="node">
+<title>module~m_poisson_fft</title>
+<g id="a_proc~~init_omp_poisson_fft~~UsesGraph_node10"><a xlink:href="../module/m_poisson_fft.html" xlink:title="m_poisson_fft">
+<polygon fill="#337ab7" stroke="#337ab7" points="715,-152.91 630,-152.91 630,-128.91 715,-128.91 715,-152.91"/>
+<text text-anchor="middle" x="672.5" y="-138.51" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_poisson_fft</text>
+</a>
+</g>
+</g>
+<!-- module~m_omp_poisson_fft&#45;&gt;module~m_poisson_fft -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge9" class="edge">
+<title>module~m_omp_poisson_fft&#45;&gt;module~m_poisson_fft</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M811.56,-228.85C784.1,-211.36 733.03,-178.83 701.3,-158.62"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="702.82,-155.44 692.51,-153.02 699.06,-161.34 702.82,-155.44"/>
+</g>
+<!-- module~m_tdsops -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_node11" class="node">
+<title>module~m_tdsops</title>
+<g id="a_proc~~init_omp_poisson_fft~~UsesGraph_node11"><a xlink:href="../module/m_tdsops.html" xlink:title="m_tdsops">
+<polygon fill="#337ab7" stroke="#337ab7" points="415,-272.91 352,-272.91 352,-248.91 415,-248.91 415,-272.91"/>
+<text text-anchor="middle" x="383.5" y="-258.51" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_tdsops</text>
+</a>
+</g>
+</g>
+<!-- module~m_omp_poisson_fft&#45;&gt;module~m_tdsops -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge10" class="edge">
+<title>module~m_omp_poisson_fft&#45;&gt;module~m_tdsops</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M671.5,-220.91C625.96,-218.06 616.09,-234.92 571,-241.91 521.17,-249.64 463.34,-254.97 425.45,-257.98"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="425.02,-254.5 415.32,-258.77 425.56,-261.48 425.02,-254.5"/>
+</g>
+<!-- module~m_mpi -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_node14" class="node">
+<title>module~m_mpi</title>
+<g id="a_proc~~init_omp_poisson_fft~~UsesGraph_node14"><a xlink:href="../module/m_mpi.html" xlink:title="m_mpi">
+<polygon fill="#337ab7" stroke="#337ab7" points="184,-92.91 130,-92.91 130,-68.91 184,-68.91 184,-92.91"/>
+<text text-anchor="middle" x="157" y="-78.51" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_mpi</text>
+</a>
+</g>
+</g>
+<!-- module~m_common&#45;&gt;module~m_mpi -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge11" class="edge">
+<title>module~m_common&#45;&gt;module~m_mpi</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M236.97,-128.77C222.61,-120.07 203.05,-108.22 186.99,-98.48"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="188.37,-95.23 178,-93.04 184.74,-101.21 188.37,-95.23"/>
+</g>
+<!-- module~m_field&#45;&gt;module~m_common -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge12" class="edge">
+<title>module~m_field&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M356.31,-172.43C341.75,-167.71 323.19,-161.7 306.19,-156.2"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="306.99,-152.78 296.4,-153.03 304.83,-159.44 306.99,-152.78"/>
+</g>
+<!-- module~m_mesh&#45;&gt;module~m_common -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge14" class="edge">
+<title>module~m_mesh&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M492.11,-112.99C465.17,-123.72 422.91,-138.13 384.5,-140.91"/>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M382.5,-140.91C357.37,-142.73 329.29,-142.88 306.26,-142.51"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="306.14,-139.01 296.07,-142.31 306,-146 306.14,-139.01"/>
+</g>
+<!-- module~m_mesh&#45;&gt;module~m_field -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge15" class="edge">
+<title>module~m_mesh&#45;&gt;module~m_field</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M495.35,-112.93C487.41,-117.08 478.68,-121.94 471,-126.91 453.98,-137.93 452.08,-144 435,-154.91 429.99,-158.11 424.55,-161.24 419.15,-164.16"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="417.43,-161.11 410.19,-168.85 420.67,-167.31 417.43,-161.11"/>
+</g>
+<!-- iso_fortran_env -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_node12" class="node">
+<title>iso_fortran_env</title>
+<g id="a_proc~~init_omp_poisson_fft~~UsesGraph_node12"><a xlink:href="http://fortranwiki.org/fortran/show/iso_fortran_env" xlink:title="iso_fortran_env">
+<polygon fill="#337ab7" stroke="#337ab7" points="94,-113.91 0,-113.91 0,-89.91 94,-89.91 94,-113.91"/>
+<text text-anchor="middle" x="47" y="-99.51" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">iso_fortran_env</text>
+</a>
+</g>
+</g>
+<!-- module~m_mesh&#45;&gt;iso_fortran_env -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge13" class="edge">
+<title>module~m_mesh&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M491.87,-92.95C475.41,-88.55 454.16,-83.3 435,-79.91 357.52,-66.22 337.68,-60.91 259,-60.91"/>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M257,-60.91C200.61,-58.45 184.49,-45.18 130,-59.91 112.12,-64.75 110.45,-72.39 94,-80.91 91.12,-82.41 88.1,-83.91 85.06,-85.38"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="83.49,-82.26 75.95,-89.7 86.48,-88.58 83.49,-82.26"/>
+</g>
+<!-- module~m_mesh_content -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_node13" class="node">
+<title>module~m_mesh_content</title>
+<g id="a_proc~~init_omp_poisson_fft~~UsesGraph_node13"><a xlink:href="../module/m_mesh_content.html" xlink:title="m_mesh_content">
+<polygon fill="#337ab7" stroke="#337ab7" points="435,-112.91 332,-112.91 332,-88.91 435,-88.91 435,-112.91"/>
+<text text-anchor="middle" x="383.5" y="-98.51" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_mesh_content</text>
+</a>
+</g>
+</g>
+<!-- module~m_mesh&#45;&gt;module~m_mesh_content -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge16" class="edge">
+<title>module~m_mesh&#45;&gt;module~m_mesh_content</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M491.92,-100.91C478.38,-100.91 461.57,-100.91 445.3,-100.91"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="445.27,-97.41 435.27,-100.91 445.27,-104.41 445.27,-97.41"/>
+</g>
+<!-- module~m_mesh&#45;&gt;module~m_mpi -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge17" class="edge">
+<title>module~m_mesh&#45;&gt;module~m_mpi</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M257,-60.91C235.84,-60.91 212.64,-65.36 194.01,-70.05"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="192.95,-66.71 184.18,-72.66 194.75,-73.48 192.95,-66.71"/>
+</g>
+<!-- module~m_omp_spectral&#45;&gt;module~m_common -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge18" class="edge">
+<title>module~m_omp_spectral&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M470.95,-223.69C431.84,-224.11 376.45,-220.62 332,-201.91 310.04,-192.67 289.64,-174.47 276.03,-160.34"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="278.56,-157.93 269.19,-153 273.44,-162.7 278.56,-157.93"/>
+</g>
+<!-- module~m_poisson_fft&#45;&gt;module~m_common -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge19" class="edge">
+<title>module~m_poisson_fft&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M629.88,-136.84C599.67,-134.86 557.97,-134.18 522,-140.91"/>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M520,-140.91C460.81,-151.99 444.57,-136.57 384.5,-140.91"/>
+</g>
+<!-- module~m_poisson_fft&#45;&gt;module~m_field -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge20" class="edge">
+<title>module~m_poisson_fft&#45;&gt;module~m_field</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M520,-140.91C485.58,-147.35 447.41,-159.05 420.38,-168.14"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="418.93,-164.94 410.59,-171.48 421.19,-171.56 418.93,-164.94"/>
+</g>
+<!-- module~m_poisson_fft&#45;&gt;module~m_mesh -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge21" class="edge">
+<title>module~m_poisson_fft&#45;&gt;module~m_mesh</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M629.86,-129.77C607.93,-123.9 581.24,-116.76 559.89,-111.05"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="560.76,-107.66 550.19,-108.46 558.95,-114.42 560.76,-107.66"/>
+</g>
+<!-- module~m_poisson_fft&#45;&gt;module~m_tdsops -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge22" class="edge">
+<title>module~m_poisson_fft&#45;&gt;module~m_tdsops</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M520,-140.91C490.96,-146.35 431.46,-208.56 401.93,-241.19"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="399.17,-239.02 395.1,-248.8 404.38,-243.7 399.17,-239.02"/>
+</g>
+<!-- module~m_tdsops&#45;&gt;module~m_common -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge24" class="edge">
+<title>module~m_tdsops&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#ff00aa" stroke-dasharray="5,2" d="M353.9,-248.91C346.36,-245.04 338.52,-240.33 332,-234.91 306.5,-213.74 284.29,-182.19 271.26,-161.58"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="274.17,-159.63 265.94,-152.96 268.22,-163.31 274.17,-159.63"/>
+</g>
+<!-- module~m_tdsops&#45;&gt;iso_fortran_env -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge23" class="edge">
+<title>module~m_tdsops&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff00aa" stroke-dasharray="5,2" d="M357.08,-248.83C297.79,-220.65 150.27,-150.52 82.74,-118.43"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="83.91,-115.11 73.38,-113.98 80.91,-121.43 83.91,-115.11"/>
+</g>
+<!-- module~m_mesh_content&#45;&gt;module~m_common -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge25" class="edge">
+<title>module~m_mesh_content&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M345.45,-112.91C332.99,-116.95 318.93,-121.5 305.82,-125.75"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="304.46,-122.51 296.03,-128.92 306.62,-129.17 304.46,-122.51"/>
+</g>
+<!-- module~m_mpi&#45;&gt;iso_fortran_env -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge26" class="edge">
+<title>module~m_mpi&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M129.86,-86C122.05,-87.51 113.19,-89.24 104.23,-90.98"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="103.29,-87.6 94.14,-92.94 104.63,-94.47 103.29,-87.6"/>
+</g>
+<!-- mpi -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_node15" class="node">
+<title>mpi</title>
+<g id="a_proc~~init_omp_poisson_fft~~UsesGraph_node15"><a xlink:href="http://www.mpi-forum.org/docs/mpi-3.1/mpi31-report/node410.htm" xlink:title="mpi">
+<polygon fill="#337ab7" stroke="#337ab7" points="74,-71.91 20,-71.91 20,-47.91 74,-47.91 74,-71.91"/>
+<text text-anchor="middle" x="47" y="-57.51" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi</text>
+</a>
+</g>
+</g>
+<!-- module~m_mpi&#45;&gt;mpi -->
+<g id="proc~~init_omp_poisson_fft~~UsesGraph_edge27" class="edge">
+<title>module~m_mpi&#45;&gt;mpi</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M129.86,-75.83C116.16,-73.17 99.17,-69.86 84.23,-66.96"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="84.76,-63.5 74.28,-65.02 83.43,-70.37 84.76,-63.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocinit_omp_poisson_fftUsesGraph = svgPanZoom('#procinit_omp_poisson_fftUsesGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+
+
+    <h3>Type Bound</h3>
+    <p><a href='../type/omp_backend_t.html'>omp_backend_t</a></p>
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~183"></span>
+              class(<a href='../type/omp_backend_t.html'>omp_backend_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mesh~9"></span>
+              type(<a href='../type/mesh_t.html'>mesh_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              target
+            </td>
+            <td>::</td>
+            <td><strong>mesh</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-xdirps~6"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>xdirps</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ydirps~6"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ydirps</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zdirps~6"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zdirps</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lowmem~4"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lowmem</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

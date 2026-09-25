@@ -1,0 +1,1390 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>backend.f90 &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../program/xcompact.html">Program</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>backend.f90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 2.0% of total for source files.">305 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/backend.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">backend.f90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/m_omptgt_backend.html">m_omptgt_backend</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/backend.f90~4.html#src">backend.f90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>! src/backend/omp/target/backend.f90</p>
+<p>OpenMP target offload backend implementation.</p>
+<p>Note this extends the CPU (host) OpenMP backend with the intention of being able to use fallback implementations where necessary.</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~backend.f90~4~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilebackendf904EfferentGraph" width="641pt" height="422pt"
+ viewBox="0.00 0.00 641.00 421.69" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~backend.f90~4~~EfferentGraph" class="graph" transform="scale(0.56 0.56) rotate(0) translate(4 745.96)">
+<title>sourcefile~~backend.f90~4~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-745.96 1136,-745.96 1136,4 -4,4"/>
+<!-- sourcefile~backend.f90~4 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node1" class="node">
+<title>sourcefile~backend.f90~4</title>
+<polygon fill="none" stroke="black" points="1132,-439.71 1053,-439.71 1053,-415.71 1132,-415.71 1132,-439.71"/>
+<text text-anchor="middle" x="1092.5" y="-425.31" font-family="Helvetica,sans-Serif" font-size="10.50">backend.f90</text>
+</g>
+<!-- sourcefile~allocator.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node2" class="node">
+<title>sourcefile~allocator.f90</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node2"><a xlink:href="../sourcefile/allocator.f90.html" xlink:title="allocator.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="770,-672.71 691,-672.71 691,-648.71 770,-648.71 770,-672.71"/>
+<text text-anchor="middle" x="730.5" y="-658.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allocator.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~4&#45;&gt;sourcefile~allocator.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~backend.f90~4&#45;&gt;sourcefile~allocator.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M856,-658.71C831.13,-656.95 803.4,-657.18 780.43,-657.96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="780.1,-654.47 770.24,-658.36 780.37,-661.47 780.1,-654.47"/>
+</g>
+<!-- sourcefile~allocator.f90~3 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node3" class="node">
+<title>sourcefile~allocator.f90~3</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node3"><a xlink:href="../sourcefile/allocator.f90~3.html" xlink:title="allocator.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="643.5,-634.71 564.5,-634.71 564.5,-610.71 643.5,-610.71 643.5,-634.71"/>
+<text text-anchor="middle" x="604" y="-620.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allocator.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~4&#45;&gt;sourcefile~allocator.f90~3 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~backend.f90~4&#45;&gt;sourcefile~allocator.f90~3</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M729.5,-620.71C704.97,-615.31 677.05,-615.22 653.88,-616.74"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="653.3,-613.27 643.6,-617.54 653.84,-620.25 653.3,-613.27"/>
+</g>
+<!-- sourcefile~backend.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node4" class="node">
+<title>sourcefile~backend.f90</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node4"><a xlink:href="../sourcefile/backend.f90.html" xlink:title="backend.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1017,-439.71 938,-439.71 938,-415.71 1017,-415.71 1017,-439.71"/>
+<text text-anchor="middle" x="977.5" y="-425.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">backend.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~4&#45;&gt;sourcefile~backend.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~backend.f90~4&#45;&gt;sourcefile~backend.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1052.93,-427.71C1044.75,-427.71 1036,-427.71 1027.49,-427.71"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1027.28,-424.21 1017.28,-427.71 1027.28,-431.21 1027.28,-424.21"/>
+</g>
+<!-- sourcefile~common.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node5" class="node">
+<title>sourcefile~common.f90</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node5"><a xlink:href="../sourcefile/common.f90.html" xlink:title="common.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="491.5,-278.71 411.5,-278.71 411.5,-254.71 491.5,-254.71 491.5,-278.71"/>
+<text text-anchor="middle" x="451.5" y="-264.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">common.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~4&#45;&gt;sourcefile~common.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge4" class="edge">
+<title>sourcefile~backend.f90~4&#45;&gt;sourcefile~common.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1083.59,-415.48C1060.11,-380.08 987.14,-276.41 902,-218.71 820.31,-163.34 768.39,-118.94 685,-171.71 653.42,-191.69 675.88,-221.74 649,-247.71 633.68,-262.5 625.56,-261.13 605,-266.71"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M603,-266.71C569.99,-275.37 531.5,-275.19 501.7,-272.94"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="501.81,-269.44 491.54,-272.07 501.21,-276.41 501.81,-269.44"/>
+</g>
+<!-- sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node6" class="node">
+<title>sourcefile~common.f90~2</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node6"><a xlink:href="../sourcefile/common.f90~2.html" xlink:title="common.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="170,-400.71 90,-400.71 90,-376.71 170,-376.71 170,-400.71"/>
+<text text-anchor="middle" x="130" y="-386.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">common.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~4&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge5" class="edge">
+<title>sourcefile~backend.f90~4&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M976.5,-658.71C941.3,-683.05 942.3,-705.31 902,-719.71 839.3,-742.1 802.44,-762.84 452.5,-700.71"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M450.5,-700.71C411.16,-695.5 310.04,-683.12 276,-662.71"/>
+</g>
+<!-- sourcefile~field.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node7" class="node">
+<title>sourcefile~field.f90</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node7"><a xlink:href="../sourcefile/field.f90.html" xlink:title="field.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="479.5,-634.71 423.5,-634.71 423.5,-610.71 479.5,-610.71 479.5,-634.71"/>
+<text text-anchor="middle" x="451.5" y="-620.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">field.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~4&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge6" class="edge">
+<title>sourcefile~backend.f90~4&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M976.5,-658.71C933.18,-688.67 910.54,-662.43 858,-658.71"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M856,-658.71C798.29,-654.62 788,-633.14 731.5,-620.71"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M729.5,-620.71C673,-608.27 662.38,-575.31 605,-582.71"/>
+</g>
+<!-- sourcefile~mesh.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node8" class="node">
+<title>sourcefile~mesh.f90</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node8"><a xlink:href="../sourcefile/mesh.f90.html" xlink:title="mesh.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="635,-554.71 573,-554.71 573,-530.71 635,-530.71 635,-554.71"/>
+<text text-anchor="middle" x="604" y="-540.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mesh.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~4&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge7" class="edge">
+<title>sourcefile~backend.f90~4&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1089.95,-439.94C1084.13,-480.02 1059.6,-607.78 978.5,-658.71"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M976.5,-658.71C922.24,-692.78 792.86,-488.28 731.5,-506.71"/>
+</g>
+<!-- sourcefile~mpi.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node9" class="node">
+<title>sourcefile~mpi.f90</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node9"><a xlink:href="../sourcefile/mpi.f90.html" xlink:title="mpi.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="54,-400.71 0,-400.71 0,-376.71 54,-376.71 54,-400.71"/>
+<text text-anchor="middle" x="27" y="-386.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~4&#45;&gt;sourcefile~mpi.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge8" class="edge">
+<title>sourcefile~backend.f90~4&#45;&gt;sourcefile~mpi.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M450.5,-700.71C373.62,-690.52 353.55,-701.62 276,-700.71"/>
+</g>
+<!-- sourcefile~ordering.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node10" class="node">
+<title>sourcefile~ordering.f90</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node10"><a xlink:href="../sourcefile/ordering.f90.html" xlink:title="ordering.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="896.5,-710.71 817.5,-710.71 817.5,-686.71 896.5,-686.71 896.5,-710.71"/>
+<text text-anchor="middle" x="857" y="-696.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ordering.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~4&#45;&gt;sourcefile~ordering.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge9" class="edge">
+<title>sourcefile~backend.f90~4&#45;&gt;sourcefile~ordering.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M976.5,-658.71C955.12,-672.13 928.71,-681.62 906.25,-687.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="905.31,-684.6 896.57,-690.58 907.14,-691.35 905.31,-684.6"/>
+</g>
+<!-- sourcefile~allocator.f90&#45;&gt;sourcefile~allocator.f90~3 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge10" class="edge">
+<title>sourcefile~allocator.f90&#45;&gt;sourcefile~allocator.f90~3</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M690.79,-648.89C678.96,-645.28 665.8,-641.27 653.42,-637.48"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="654.27,-634.09 643.69,-634.51 652.23,-640.78 654.27,-634.09"/>
+</g>
+<!-- sourcefile~allocator.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge11" class="edge">
+<title>sourcefile~allocator.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M603,-662.71C536.22,-658.88 519.39,-662.56 452.5,-662.71"/>
+</g>
+<!-- sourcefile~allocator.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge12" class="edge">
+<title>sourcefile~allocator.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M690.77,-662.79C666.19,-663.75 633.7,-664.35 605,-662.71"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M603,-662.71C563.23,-660.43 519.38,-647.52 489.33,-636.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="490.28,-633.6 479.69,-633.51 487.92,-640.19 490.28,-633.6"/>
+</g>
+<!-- sourcefile~allocator.f90&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge13" class="edge">
+<title>sourcefile~allocator.f90&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M703.32,-648.57C696.83,-644.75 690.24,-640.1 685,-634.71 661.72,-610.73 672.22,-592.74 649,-568.71 646.17,-565.78 642.94,-563.06 639.54,-560.57"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="641.16,-557.45 630.88,-554.89 637.32,-563.3 641.16,-557.45"/>
+</g>
+<!-- sourcefile~allocator.f90~3&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge14" class="edge">
+<title>sourcefile~allocator.f90~3&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M575.02,-634.78C545.23,-646.52 496.43,-662.61 452.5,-662.71"/>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M450.5,-662.71C372.94,-662.88 342.51,-702.59 276,-662.71"/>
+</g>
+<!-- sourcefile~allocator.f90~3&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge15" class="edge">
+<title>sourcefile~allocator.f90~3&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M564.24,-622.71C541.39,-622.71 512.6,-622.71 489.97,-622.71"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="489.73,-619.21 479.73,-622.71 489.73,-626.21 489.73,-619.21"/>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~allocator.f90~3 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge16" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~allocator.f90~3</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M969.85,-439.73C958.43,-459.35 933.27,-498.28 902,-520.71 836.47,-567.69 806.73,-553.69 731.5,-582.71"/>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~common.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge18" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~common.f90</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M856,-232.71C811.13,-200.33 785.71,-221.62 731.5,-232.71"/>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M729.5,-232.71C673.3,-244.2 660.36,-251.7 605,-266.71"/>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge19" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M937.83,-419.68C870.42,-406.57 726.93,-382.62 605,-388.71"/>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge22" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M856,-506.71C828.98,-517.02 758.56,-534.49 731.5,-544.71"/>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge23" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M963.59,-439.93C949.34,-452.97 925.32,-473.64 902,-487.71 883.76,-498.71 877.9,-499.11 858,-506.71"/>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M856,-506.71C804.31,-526.44 784.49,-490.79 731.5,-506.71"/>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~mpi.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge24" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~mpi.f90</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M975.04,-415.51C966.38,-349.18 915.62,-34.71 731.5,-34.71 731.5,-34.71 731.5,-34.71 450.5,-34.71 308.5,-34.71 250.14,42.55 131,-34.71"/>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M129,-34.71C73.18,-74.24 40.1,-295.15 30.75,-366.49"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="27.25,-366.24 29.46,-376.6 34.2,-367.13 27.25,-366.24"/>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~ordering.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge25" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~ordering.f90</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M975.85,-439.82C973.23,-478.09 960.52,-598.26 902,-672.71 899.67,-675.67 896.9,-678.37 893.9,-680.8"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="891.75,-678.04 885.58,-686.65 895.77,-683.77 891.75,-678.04"/>
+</g>
+<!-- sourcefile~backend.f90~3 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node11" class="node">
+<title>sourcefile~backend.f90~3</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node11"><a xlink:href="../sourcefile/backend.f90~3.html" xlink:title="backend.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="896.5,-478.71 817.5,-478.71 817.5,-454.71 896.5,-454.71 896.5,-478.71"/>
+<text text-anchor="middle" x="857" y="-464.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">backend.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~backend.f90~3 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge17" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~backend.f90~3</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M939.98,-439.73C928.72,-443.43 916.16,-447.56 904.33,-451.46"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="903.01,-448.21 894.6,-454.66 905.2,-454.86 903.01,-448.21"/>
+</g>
+<!-- sourcefile~exec_dist.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node13" class="node">
+<title>sourcefile~exec_dist.f90~2</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node13"><a xlink:href="../sourcefile/exec_dist.f90~2.html" xlink:title="exec_dist.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="771.5,-204.71 689.5,-204.71 689.5,-180.71 771.5,-180.71 771.5,-204.71"/>
+<text text-anchor="middle" x="730.5" y="-190.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">exec_dist.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~exec_dist.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge20" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~exec_dist.f90~2</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M856,-232.71C834.17,-216.96 805.86,-207.21 781.75,-201.3"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="782.23,-197.82 771.7,-198.99 780.67,-204.64 782.23,-197.82"/>
+</g>
+<!-- sourcefile~exec_thom.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node14" class="node">
+<title>sourcefile~exec_thom.f90~2</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node14"><a xlink:href="../sourcefile/exec_thom.f90~2.html" xlink:title="exec_thom.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="776,-322.71 685,-322.71 685,-298.71 776,-298.71 776,-322.71"/>
+<text text-anchor="middle" x="730.5" y="-308.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">exec_thom.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~exec_thom.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge21" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~exec_thom.f90~2</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M856,-232.71C821.61,-207.89 812.1,-262.45 776,-284.71 771.45,-287.51 766.6,-290.42 761.84,-293.24"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="759.76,-290.4 752.9,-298.48 763.3,-296.44 759.76,-290.4"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~3 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node16" class="node">
+<title>sourcefile~poisson_fft.f90~3</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node16"><a xlink:href="../sourcefile/poisson_fft.f90~3.html" xlink:title="poisson_fft.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="902,-360.71 812,-360.71 812,-336.71 902,-336.71 902,-360.71"/>
+<text text-anchor="middle" x="857" y="-346.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">poisson_fft.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~poisson_fft.f90~3 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge26" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~poisson_fft.f90~3</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M960.21,-415.51C945.3,-404.5 922.5,-388.02 902,-374.71 897.56,-371.82 892.79,-368.87 888.1,-366.03"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="889.64,-362.88 879.26,-360.78 886.07,-368.9 889.64,-362.88"/>
+</g>
+<!-- sourcefile~sendrecv.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node17" class="node">
+<title>sourcefile~sendrecv.f90~2</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node17"><a xlink:href="../sourcefile/sendrecv.f90~2.html" xlink:title="sendrecv.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="315,-86.71 235,-86.71 235,-62.71 315,-62.71 315,-86.71"/>
+<text text-anchor="middle" x="275" y="-72.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sendrecv.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~sendrecv.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge27" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~sendrecv.f90~2</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M972.77,-415.3C961.64,-380.47 925.14,-281.15 858,-232.71"/>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M856,-232.71C800.37,-192.56 834.26,-136.92 776,-100.71 653.43,-24.52 596.4,-83.6 452.5,-72.71"/>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M450.5,-72.71C408.44,-70 360.57,-70.82 325.61,-72.14"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="325.05,-68.66 315.2,-72.56 325.34,-75.65 325.05,-68.66"/>
+</g>
+<!-- sourcefile~tdsops.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node18" class="node">
+<title>sourcefile~tdsops.f90</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node18"><a xlink:href="../sourcefile/tdsops.f90.html" xlink:title="tdsops.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="637.5,-318.71 570.5,-318.71 570.5,-294.71 637.5,-294.71 637.5,-318.71"/>
+<text text-anchor="middle" x="604" y="-304.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tdsops.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90&#45;&gt;sourcefile~tdsops.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge28" class="edge">
+<title>sourcefile~backend.f90&#45;&gt;sourcefile~tdsops.f90</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M729.5,-232.71C688.69,-241.05 684.27,-258.55 649,-280.71 644.51,-283.52 639.73,-286.44 635.02,-289.26"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="632.99,-286.39 626.18,-294.51 636.56,-292.41 632.99,-286.39"/>
+</g>
+<!-- sourcefile~common.f90~2&#45;&gt;sourcefile~mpi.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge29" class="edge">
+<title>sourcefile~common.f90~2&#45;&gt;sourcefile~mpi.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M89.95,-388.71C81.52,-388.71 72.64,-388.71 64.32,-388.71"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="64.15,-385.21 54.15,-388.71 64.15,-392.21 64.15,-385.21"/>
+</g>
+<!-- sourcefile~field.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge30" class="edge">
+<title>sourcefile~field.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M423.49,-631.04C377.71,-644.86 288.59,-670.26 276,-662.71"/>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M274,-662.71C179.93,-606.3 144.91,-465.27 134.62,-410.73"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="138.04,-409.97 132.83,-400.74 131.15,-411.2 138.04,-409.97"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge31" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M591.98,-530.49C568.91,-505.83 512.64,-450.45 452.5,-426.71"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M450.5,-426.71C413.59,-412.13 315.42,-384.15 276,-388.71"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge33" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M581.18,-554.87C573.99,-559.06 566.04,-563.92 559,-568.71 542.24,-580.11 540.72,-586.86 523,-596.71 512.5,-602.54 500.44,-607.54 489.3,-611.55"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="488.12,-608.25 479.8,-614.82 490.4,-614.87 488.12,-608.25"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~mpi.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge35" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~mpi.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M572.54,-550.72C511.61,-566.76 380.47,-601.31 380,-601.71 351.51,-625.27 371.52,-652.01 344,-676.71 320.15,-698.11 308.05,-701.09 276,-700.71"/>
+</g>
+<!-- sourcefile~decomp_2decompfft.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node12" class="node">
+<title>sourcefile~decomp_2decompfft.f90</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node12"><a xlink:href="../sourcefile/decomp_2decompfft.f90.html" xlink:title="decomp_2decompfft.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="523,-554.71 380,-554.71 380,-530.71 523,-530.71 523,-554.71"/>
+<text text-anchor="middle" x="451.5" y="-540.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">decomp_2decompfft.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~decomp_2decompfft.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge32" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~decomp_2decompfft.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M572.91,-542.71C561.31,-542.71 547.44,-542.71 533.31,-542.71"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="533.01,-539.21 523.01,-542.71 533.01,-546.21 533.01,-539.21"/>
+</g>
+<!-- sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node15" class="node">
+<title>sourcefile~mesh_content.f90</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node15"><a xlink:href="../sourcefile/mesh_content.f90.html" xlink:title="mesh_content.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="329,-440.71 221,-440.71 221,-416.71 329,-416.71 329,-440.71"/>
+<text text-anchor="middle" x="275" y="-426.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mesh_content.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge34" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~mesh_content.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M450.5,-426.71C415.51,-412.9 373.42,-412.95 339.34,-416.67"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="338.54,-413.24 329.04,-417.93 339.39,-420.19 338.54,-413.24"/>
+</g>
+<!-- sourcefile~ordering.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge36" class="edge">
+<title>sourcefile~ordering.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#ff00aa" stroke-dasharray="5,2" d="M817.49,-696.55C760.8,-693.23 651.58,-686.21 559,-676.71 511.51,-671.83 500.24,-662.6 452.5,-662.71"/>
+</g>
+<!-- sourcefile~backend.f90~3&#45;&gt;sourcefile~allocator.f90~3 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge37" class="edge">
+<title>sourcefile~backend.f90~3&#45;&gt;sourcefile~allocator.f90~3</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M830.12,-478.89C823.7,-482.7 817.18,-487.35 812,-492.71 788.78,-516.74 799.68,-535.14 776,-558.71 760.07,-574.56 752.47,-574.62 731.5,-582.71"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M729.5,-582.71C704.66,-592.28 676.46,-601.48 653.19,-608.63"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="652.09,-605.31 643.54,-611.57 654.12,-612.01 652.09,-605.31"/>
+</g>
+<!-- sourcefile~backend.f90~3&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge38" class="edge">
+<title>sourcefile~backend.f90~3&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M817.39,-464.61C782.57,-462.31 730.07,-457.81 685,-449.71 579.85,-430.81 559.26,-384.69 452.5,-388.71"/>
+</g>
+<!-- sourcefile~backend.f90~3&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge39" class="edge">
+<title>sourcefile~backend.f90~3&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M834.18,-478.87C826.99,-483.06 819.04,-487.92 812,-492.71 795.24,-504.11 792.98,-509.63 776,-520.71 757.18,-532.98 752.52,-536.77 731.5,-544.71"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M729.5,-544.71C675.37,-565.13 662.38,-575.31 605,-582.71"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M603,-582.71C563.37,-587.82 519.34,-600.36 489.19,-610.05"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="487.95,-606.77 479.53,-613.21 490.12,-613.43 487.95,-606.77"/>
+</g>
+<!-- sourcefile~backend.f90~3&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge40" class="edge">
+<title>sourcefile~backend.f90~3&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M819.89,-478.71C795.09,-486.85 761.4,-497.73 731.5,-506.71"/>
+</g>
+<!-- sourcefile~backend.f90~3&#45;&gt;sourcefile~tdsops.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge42" class="edge">
+<title>sourcefile~backend.f90~3&#45;&gt;sourcefile~tdsops.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M850.43,-454.46C842.07,-436.07 825.78,-400.21 812,-369.71 795.95,-334.17 803.83,-317.01 776,-289.71 760.65,-274.65 752.2,-276.53 731.5,-270.71"/>
+</g>
+<!-- sourcefile~poisson_fft.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node20" class="node">
+<title>sourcefile~poisson_fft.f90</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node20"><a xlink:href="../sourcefile/poisson_fft.f90.html" xlink:title="poisson_fft.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="775.5,-440.71 685.5,-440.71 685.5,-416.71 775.5,-416.71 775.5,-440.71"/>
+<text text-anchor="middle" x="730.5" y="-426.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">poisson_fft.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~3&#45;&gt;sourcefile~poisson_fft.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge41" class="edge">
+<title>sourcefile~backend.f90~3&#45;&gt;sourcefile~poisson_fft.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M817.29,-454.89C805.69,-451.35 792.8,-447.42 780.62,-443.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="781.63,-440.35 771.04,-440.78 779.59,-447.04 781.63,-440.35"/>
+</g>
+<!-- sourcefile~decomp_2decompfft.f90&#45;&gt;sourcefile~mpi.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge44" class="edge">
+<title>sourcefile~decomp_2decompfft.f90&#45;&gt;sourcefile~mpi.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M400.1,-554.86C392.67,-558.38 385.63,-562.9 380,-568.71 344.79,-605.04 379.46,-640.62 344,-676.71 321.54,-699.57 307.13,-693.08 276,-700.71"/>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M274,-700.71C128.73,-736.3 53.06,-487.76 33.31,-410.88"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="36.62,-409.69 30.8,-400.83 29.83,-411.38 36.62,-409.69"/>
+</g>
+<!-- sourcefile~decomp_2decompfft.f90&#45;&gt;sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge43" class="edge">
+<title>sourcefile~decomp_2decompfft.f90&#45;&gt;sourcefile~mesh_content.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M431.83,-530.51C400.86,-510.28 338.78,-469.72 303.03,-446.36"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="304.83,-443.36 294.54,-440.82 301,-449.22 304.83,-443.36"/>
+</g>
+<!-- sourcefile~exec_dist.f90~2&#45;&gt;sourcefile~common.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge45" class="edge">
+<title>sourcefile~exec_dist.f90~2&#45;&gt;sourcefile~common.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M707.37,-204.77C700.1,-208.96 692.07,-213.83 685,-218.71 668.08,-230.37 666.59,-237.09 649,-247.71 630.76,-258.71 625.56,-261.13 605,-266.71"/>
+</g>
+<!-- sourcefile~exec_dist.f90~2&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge46" class="edge">
+<title>sourcefile~exec_dist.f90~2&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M689.34,-184.72C664.63,-181.29 632.53,-179.51 605,-186.71"/>
+</g>
+<!-- sourcefile~exec_dist.f90~2&#45;&gt;sourcefile~sendrecv.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge48" class="edge">
+<title>sourcefile~exec_dist.f90~2&#45;&gt;sourcefile~sendrecv.f90~2</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M711.76,-180.58C669.33,-152.61 557.65,-85.01 452.5,-72.71"/>
+</g>
+<!-- sourcefile~exec_dist.f90~2&#45;&gt;sourcefile~tdsops.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge49" class="edge">
+<title>sourcefile~exec_dist.f90~2&#45;&gt;sourcefile~tdsops.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M703.42,-204.94C696.92,-208.76 690.31,-213.38 685,-218.71 662.5,-241.27 671.44,-258.09 649,-280.71 645.98,-283.75 642.52,-286.58 638.91,-289.15"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="636.83,-286.33 630.33,-294.7 640.63,-292.21 636.83,-286.33"/>
+</g>
+<!-- sourcefile~distributed.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node19" class="node">
+<title>sourcefile~distributed.f90~2</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node19"><a xlink:href="../sourcefile/distributed.f90~2.html" xlink:title="distributed.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="649,-238.71 559,-238.71 559,-214.71 649,-214.71 649,-238.71"/>
+<text text-anchor="middle" x="604" y="-224.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">distributed.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~exec_dist.f90~2&#45;&gt;sourcefile~distributed.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge47" class="edge">
+<title>sourcefile~exec_dist.f90~2&#45;&gt;sourcefile~distributed.f90~2</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M689.42,-203.65C679.73,-206.3 669.2,-209.17 658.98,-211.96"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="658.04,-208.59 649.32,-214.6 659.88,-215.35 658.04,-208.59"/>
+</g>
+<!-- sourcefile~exec_thom.f90~2&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge50" class="edge">
+<title>sourcefile~exec_thom.f90~2&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M718.91,-322.77C699.01,-344.05 653.66,-386.28 605,-388.71"/>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M603,-388.71C536.19,-392.04 519.34,-386.19 452.5,-388.71"/>
+</g>
+<!-- sourcefile~exec_thom.f90~2&#45;&gt;sourcefile~tdsops.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge51" class="edge">
+<title>sourcefile~exec_thom.f90~2&#45;&gt;sourcefile~tdsops.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M684.9,-309.27C672.82,-308.89 659.76,-308.47 647.77,-308.08"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="647.68,-304.58 637.57,-307.75 647.45,-311.57 647.68,-304.58"/>
+</g>
+<!-- sourcefile~thomas.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node22" class="node">
+<title>sourcefile~thomas.f90~2</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node22"><a xlink:href="../sourcefile/thomas.f90~2.html" xlink:title="thomas.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="640.5,-360.71 567.5,-360.71 567.5,-336.71 640.5,-336.71 640.5,-360.71"/>
+<text text-anchor="middle" x="604" y="-346.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">thomas.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~exec_thom.f90~2&#45;&gt;sourcefile~thomas.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge52" class="edge">
+<title>sourcefile~exec_thom.f90~2&#45;&gt;sourcefile~thomas.f90~2</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M690.11,-322.73C677.5,-326.58 663.45,-330.87 650.45,-334.83"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="649.3,-331.52 640.76,-337.79 651.35,-338.22 649.3,-331.52"/>
+</g>
+<!-- sourcefile~mesh_content.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge53" class="edge">
+<title>sourcefile~mesh_content.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M231.1,-416.71C215.15,-412.25 196.94,-407.15 180.46,-402.54"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="181.03,-399.07 170.46,-399.74 179.14,-405.81 181.03,-399.07"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge54" class="edge">
+<title>sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M729.5,-114.71C671.41,-88.03 666.84,-170.53 605,-186.71"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M603,-186.71C536.04,-204.22 515.22,-197.45 452.5,-226.71"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M450.5,-226.71C421.09,-240.43 406.74,-227.31 380,-245.71 315.26,-290.25 354.07,-379.69 276,-388.71"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M274,-388.71C243.06,-392.28 208.09,-392.35 180.48,-391.49"/>
+<polygon fill="#003fff" stroke="#003fff" points="180.41,-387.99 170.29,-391.13 180.15,-394.99 180.41,-387.99"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge55" class="edge">
+<title>sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M811.78,-360.23C738.02,-380.25 594.48,-422.96 559,-460.71 525.79,-496.04 550.59,-523.82 523,-563.71 511.8,-579.9 495.02,-594.19 480.64,-604.65"/>
+<polygon fill="#003fff" stroke="#003fff" points="478.25,-602.05 472.06,-610.65 482.26,-607.78 478.25,-602.05"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge56" class="edge">
+<title>sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M851.85,-361.08C839.78,-394.57 801.07,-485.81 731.5,-506.71"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M729.5,-506.71C701.28,-515.18 669.35,-524.41 644.89,-531.4"/>
+<polygon fill="#003fff" stroke="#003fff" points="643.9,-528.04 635.24,-534.15 645.82,-534.77 643.9,-528.04"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~tdsops.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge59" class="edge">
+<title>sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~tdsops.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M842.72,-336.68C821.23,-318.14 776.68,-283.4 731.5,-270.71"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M729.5,-270.71C696.27,-261.37 658.16,-276.15 632.95,-289.49"/>
+<polygon fill="#003fff" stroke="#003fff" points="631,-286.57 623.96,-294.49 634.4,-292.69 631,-286.57"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~poisson_fft.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge57" class="edge">
+<title>sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~poisson_fft.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M837.09,-360.86C816.22,-374.27 782.45,-395.97 758.73,-411.21"/>
+<polygon fill="#003fff" stroke="#003fff" points="756.7,-408.35 750.18,-416.7 760.48,-414.24 756.7,-408.35"/>
+</g>
+<!-- sourcefile~spectral_processing.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_node21" class="node">
+<title>sourcefile~spectral_processing.f90</title>
+<g id="a_sourcefile~~backend.f90~4~~EfferentGraph_node21"><a xlink:href="../sourcefile/spectral_processing.f90.html" xlink:title="spectral_processing.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="344,-244.71 206,-244.71 206,-220.71 344,-220.71 344,-244.71"/>
+<text text-anchor="middle" x="275" y="-230.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">spectral_processing.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~spectral_processing.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge58" class="edge">
+<title>sourcefile~poisson_fft.f90~3&#45;&gt;sourcefile~spectral_processing.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M850.77,-336.7C834.5,-299.4 785.29,-187.07 776,-171.71 759.37,-144.2 761.02,-127.41 731.5,-114.71"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M729.5,-114.71C573.99,-47.8 371.64,-167.64 301.36,-214.83"/>
+<polygon fill="#003fff" stroke="#003fff" points="299.37,-211.95 293.08,-220.47 303.31,-217.73 299.37,-211.95"/>
+</g>
+<!-- sourcefile~sendrecv.f90~2&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge60" class="edge">
+<title>sourcefile~sendrecv.f90~2&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M267.56,-87.05C255.18,-110.92 227.4,-165.14 206,-211.71 180.6,-266.98 153.35,-333.27 139.76,-366.87"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="136.34,-366 135.85,-376.58 142.83,-368.61 136.34,-366"/>
+</g>
+<!-- sourcefile~sendrecv.f90~2&#45;&gt;sourcefile~mpi.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge61" class="edge">
+<title>sourcefile~sendrecv.f90~2&#45;&gt;sourcefile~mpi.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M240.92,-62.66C201.66,-48.81 140.3,-28.68 131,-34.71"/>
+</g>
+<!-- sourcefile~tdsops.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge62" class="edge">
+<title>sourcefile~tdsops.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M576.78,-318.82C570.89,-321.66 564.7,-324.72 559,-327.71 510.69,-353.03 507.01,-386.65 452.5,-388.71"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M450.5,-388.71C373,-391.62 353.04,-379.81 276,-388.71"/>
+</g>
+<!-- sourcefile~distributed.f90~2&#45;&gt;sourcefile~common.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge63" class="edge">
+<title>sourcefile~distributed.f90~2&#45;&gt;sourcefile~common.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M558.66,-238.49C540.65,-243.28 519.79,-248.82 501.35,-253.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="500.43,-250.35 491.67,-256.3 502.23,-257.11 500.43,-250.35"/>
+</g>
+<!-- sourcefile~distributed.f90~2&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge64" class="edge">
+<title>sourcefile~distributed.f90~2&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M558.72,-217.18C527.55,-212.69 485.65,-211.24 452.5,-226.71"/>
+</g>
+<!-- sourcefile~poisson_fft.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge65" class="edge">
+<title>sourcefile~poisson_fft.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M708.11,-416.65C683.81,-404.2 642.64,-386.83 605,-388.71"/>
+</g>
+<!-- sourcefile~poisson_fft.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge66" class="edge">
+<title>sourcefile~poisson_fft.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M700.1,-440.79C664.47,-456.29 603.67,-485.52 559,-521.71 539.89,-537.18 540.49,-546.42 523,-563.71 508.43,-578.11 490.75,-592.9 476.73,-604.07"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="474.23,-601.58 468.55,-610.52 478.57,-607.08 474.23,-601.58"/>
+</g>
+<!-- sourcefile~poisson_fft.f90&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge67" class="edge">
+<title>sourcefile~poisson_fft.f90&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M720.31,-440.86C706.29,-458.88 678.1,-493.09 649,-516.71 645.24,-519.76 641.08,-522.7 636.86,-525.42"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="634.94,-522.5 628.23,-530.7 638.59,-528.47 634.94,-522.5"/>
+</g>
+<!-- sourcefile~poisson_fft.f90&#45;&gt;sourcefile~tdsops.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge68" class="edge">
+<title>sourcefile~poisson_fft.f90&#45;&gt;sourcefile~tdsops.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M722.46,-416.67C709.95,-396.11 682,-353.94 649,-327.71 647.41,-326.44 645.73,-325.23 643.99,-324.07"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="645.36,-320.81 634.97,-318.74 641.8,-326.84 645.36,-320.81"/>
+</g>
+<!-- sourcefile~spectral_processing.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge69" class="edge">
+<title>sourcefile~spectral_processing.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M262.78,-244.95C238.14,-271.83 179.1,-336.23 149.13,-368.93"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="146.35,-366.79 142.17,-376.52 151.51,-371.52 146.35,-366.79"/>
+</g>
+<!-- sourcefile~thomas.f90~2&#45;&gt;sourcefile~common.f90 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge70" class="edge">
+<title>sourcefile~thomas.f90~2&#45;&gt;sourcefile~common.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M576.78,-336.59C570.89,-333.76 564.7,-330.69 559,-327.71 532.37,-313.75 502.73,-296.64 481.5,-284.1"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="483.05,-280.95 472.67,-278.86 479.48,-286.97 483.05,-280.95"/>
+</g>
+<!-- sourcefile~thomas.f90~2&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~backend.f90~4~~EfferentGraph_edge71" class="edge">
+<title>sourcefile~thomas.f90~2&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M573.34,-360.78C543.41,-371.96 495.59,-387.08 452.5,-388.71"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilebackendf904EfferentGraph = svgPanZoom('#sourcefilebackendf904EfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!!! src/backend/omp/target/backend.f90</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="c">!!</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="c">!! OpenMP target offload backend implementation.</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="c">!!</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="c">!! Note this extends the CPU (host) OpenMP backend with the intention of being able to use fallback implementations where necessary.</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="k">module </span><span class="n">m_omptgt_backend</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">  </span><span class="k">use </span><span class="nb">iso_c_binding</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="kt">c_ptr</span><span class="p">,</span><span class="w"> </span><span class="nb">c_f_pointer</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="nb">  </span><span class="k">use </span><span class="n">m_mpi</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">MPI_COMM_WORLD</span><span class="p">,</span><span class="w"> </span><span class="n">MPI_SUM</span><span class="p">,</span><span class="w"> </span><span class="n">MPI_Allreduce</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">  </span><span class="k">use </span><span class="n">m_common</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">dp</span><span class="p">,</span><span class="w"> </span><span class="n">DIR_C</span><span class="p">,</span><span class="w"> </span><span class="n">DIR_X</span><span class="p">,</span><span class="w"> </span><span class="n">NULL_LOC</span><span class="p">,</span><span class="w"> </span><span class="n">MPI_X3D2_DP</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">                      </span><span class="n">get_dirs_from_rdr</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">  </span><span class="k">use </span><span class="n">m_allocator</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">allocator_t</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">  </span><span class="k">use </span><span class="n">m_mesh</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">mesh_t</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">  </span><span class="k">use </span><span class="n">m_field</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">field_t</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">  </span><span class="k">use </span><span class="n">m_ordering</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">get_index_reordering</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">  </span><span class="k">use </span><span class="n">m_omp_common</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">SZ</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="w">  </span><span class="k">use </span><span class="n">m_omp_backend</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">omp_backend_t</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">  </span><span class="k">use </span><span class="n">m_omptgt_allocator</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">omptgt_field_t</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">  </span><span class="k">implicit none</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="k">  type</span><span class="p">,</span><span class="w"> </span><span class="k">extends</span><span class="p">(</span><span class="n">omp_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">omptgt_backend_t</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">  </span><span class="k">contains</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="k">    procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">copy_f_to_data</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">copy_f_to_data_omptgt</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="w">    </span><span class="k">procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">copy_data_to_f</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">copy_data_to_f_omptgt</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">    </span><span class="k">procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">reorder</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">reorder_omptgt</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="w">    </span><span class="k">procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">vecadd</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">vecadd_omptgt</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">    </span><span class="k">procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">veccopy</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">veccopy_omptgt</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">    </span><span class="k">procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">vector_norm_squared</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">vector_norm_squared_omptgt</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">  </span><span class="k">end type</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="k">  interface </span><span class="n">omptgt_backend_t</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="w">    </span><span class="k">module procedure </span><span class="n">omptgt_backend_init</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="k">  private</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="k">  public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">omptgt_backend_t</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="k">contains</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="k">  type</span><span class="p">(</span><span class="n">omptgt_backend_t</span><span class="p">)</span><span class="w"> </span><span class="k">function </span><span class="n">omptgt_backend_init</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span><span class="w"> </span><span class="n">allocator</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">    </span><span class="k">result</span><span class="p">(</span><span class="n">backend</span><span class="p">)</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="w">    </span><span class="c">!! Constructs the backend on top of a host OpenMP backend, which supplies</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">    </span><span class="c">!! the fallback implementations for anything not offloaded here.</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="n">mesh_t</span><span class="p">),</span><span class="w"> </span><span class="k">target</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mesh</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">allocator_t</span><span class="p">),</span><span class="w"> </span><span class="k">target</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">allocator</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">    </span><span class="n">backend</span><span class="p">%</span><span class="n">omp_backend_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">omp_backend_t</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span><span class="w"> </span><span class="n">allocator</span><span class="p">)</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">  </span><span class="k">end function</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="k">  subroutine </span><span class="n">veccopy_omptgt</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">dst</span><span class="p">,</span><span class="w"> </span><span class="n">src</span><span class="p">)</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">    </span><span class="c">!! Copies `src` into `dst`. Both fields must be device-resident and share</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">    </span><span class="c">!! the same direction.</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">omptgt_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dst</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">src</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">src</span><span class="p">%</span><span class="n">dir</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">dst</span><span class="p">%</span><span class="n">dir</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="k">      error stop</span><span class="w"> </span><span class="s2">"Called vector copy with incompatible fields"</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="k">    select type</span><span class="w"> </span><span class="p">(</span><span class="n">dst</span><span class="p">)</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">    </span><span class="k">type is</span><span class="w"> </span><span class="p">(</span><span class="n">omptgt_field_t</span><span class="p">)</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">      </span><span class="k">select type</span><span class="w"> </span><span class="p">(</span><span class="n">src</span><span class="p">)</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">      </span><span class="k">type is</span><span class="w"> </span><span class="p">(</span><span class="n">omptgt_field_t</span><span class="p">)</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">        </span><span class="k">call </span><span class="n">veccopy_offload_</span><span class="p">(</span><span class="n">dst</span><span class="p">%</span><span class="n">get_dev_ptr</span><span class="p">(),</span><span class="w"> </span><span class="n">dst</span><span class="p">%</span><span class="n">get_shape</span><span class="p">(),</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">                              </span><span class="n">src</span><span class="p">%</span><span class="n">get_dev_ptr</span><span class="p">(),</span><span class="w"> </span><span class="n">src</span><span class="p">%</span><span class="n">get_shape</span><span class="p">())</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">      </span><span class="k">class </span><span class="n">default</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">        </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"Called omptgt vector copy with unsupported source vector"</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">      </span><span class="k">end select</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="k">    class </span><span class="n">default</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">      </span><span class="k">error stop</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">        </span><span class="s2">"Called omptgt vector copy with unsupported destination vector"</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">    </span><span class="k">end select</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="k">  end subroutine</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a>
+<a id="ln-85" name="ln-85" href="#ln-85"></a><span class="k">  subroutine </span><span class="n">veccopy_offload_</span><span class="p">(</span><span class="n">dst_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">n_dst</span><span class="p">,</span><span class="w"> </span><span class="n">src_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">n_src</span><span class="p">)</span>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">    </span><span class="c">!! Offloaded kernel behind `veccopy_omptgt`, copying over the destination's</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">    </span><span class="c">!! extents.</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="kt">c_ptr</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dst_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">src_ptr</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_dst</span><span class="p">,</span><span class="w"> </span><span class="n">n_src</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dst</span><span class="p">,</span><span class="w"> </span><span class="n">src</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">any</span><span class="p">(</span><span class="n">n_src</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">n_dst</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="k">      error stop</span><span class="w"> </span><span class="s2">"Source field is smaller than the destination"</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a>
+<a id="ln-99" name="ln-99" href="#ln-99"></a><span class="k">    call </span><span class="nb">c_f_pointer</span><span class="p">(</span><span class="n">dst_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">dst</span><span class="p">,</span><span class="w"> </span><span class="nb">shape</span><span class="o">=</span><span class="n">n_dst</span><span class="p">)</span>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">    </span><span class="k">call </span><span class="nb">c_f_pointer</span><span class="p">(</span><span class="n">src_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">src</span><span class="p">,</span><span class="w"> </span><span class="nb">shape</span><span class="o">=</span><span class="n">n_src</span><span class="p">)</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">    </span><span class="c">!$omp target is_device_ptr(dst_ptr, src_ptr)</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">    </span><span class="c">!$omp teams loop collapse(3)</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">    </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n_dst</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="w">      </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n_dst</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">        </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n_dst</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="w">          </span><span class="n">dst</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">src</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="w">        </span><span class="k">end do</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="k">      end do</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="k">    end do</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">    </span><span class="c">!$omp end teams loop</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">    </span><span class="c">!$omp end target</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">  </span><span class="k">end subroutine</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="k">  subroutine </span><span class="n">vecadd_omptgt</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="p">)</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">    </span><span class="c">!! Computes y = a*x + b*y, falling back to the host backend when the</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">    </span><span class="c">!! fields are not device-resident.</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">omptgt_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a</span>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">x</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">b</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">y</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">x</span><span class="p">%</span><span class="n">dir</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">y</span><span class="p">%</span><span class="n">dir</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="k">      error stop</span><span class="w"> </span><span class="s2">"Called vector add with incompatible fields"</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a>
+<a id="ln-129" name="ln-129" href="#ln-129"></a><span class="k">    select type</span><span class="w"> </span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="w">    </span><span class="k">type is</span><span class="w"> </span><span class="p">(</span><span class="n">omptgt_field_t</span><span class="p">)</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">      </span><span class="k">select type</span><span class="w"> </span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="w">      </span><span class="k">type is</span><span class="w"> </span><span class="p">(</span><span class="n">omptgt_field_t</span><span class="p">)</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="w">        </span><span class="k">call </span><span class="n">vecadd_offload</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="p">)</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a><span class="w">      </span><span class="k">class </span><span class="n">default</span>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="w">        </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"Device/host fallback not yet implemented"</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">      </span><span class="k">end select</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="k">    class </span><span class="n">default</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">      </span><span class="k">call </span><span class="n">self</span><span class="p">%</span><span class="n">omp_backend_t</span><span class="p">%</span><span class="n">vecadd</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="p">)</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">    </span><span class="k">end select</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="k">  end subroutine</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="k">  subroutine </span><span class="n">vecadd_offload</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="p">)</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a><span class="w">    </span><span class="c">!! Device implementation of `vecadd`, which looks up the padded extents of</span>
+<a id="ln-145" name="ln-145" href="#ln-145"></a><span class="w">    </span><span class="c">!! the layout the fields are in.</span>
+<a id="ln-146" name="ln-146" href="#ln-146"></a>
+<a id="ln-147" name="ln-147" href="#ln-147"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">omptgt_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="n">omptgt_field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">x</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">b</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="n">omptgt_field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">y</span>
+<a id="ln-152" name="ln-152" href="#ln-152"></a>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dims</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="w">    </span><span class="n">dims</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_padded_dims</span><span class="p">(</span><span class="n">x</span><span class="p">%</span><span class="n">dir</span><span class="p">)</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">    </span><span class="k">call </span><span class="n">vecadd_offload_</span><span class="p">(</span><span class="n">dims</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">%</span><span class="n">get_dev_ptr</span><span class="p">(),</span><span class="w"> </span><span class="n">x</span><span class="p">%</span><span class="n">get_shape</span><span class="p">(),</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a><span class="w">                         </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="p">%</span><span class="n">get_dev_ptr</span><span class="p">(),</span><span class="w"> </span><span class="n">y</span><span class="p">%</span><span class="n">get_shape</span><span class="p">())</span>
+<a id="ln-159" name="ln-159" href="#ln-159"></a>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">  </span><span class="k">end subroutine</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="k">  subroutine </span><span class="n">vecadd_offload_</span><span class="p">(</span><span class="n">dims</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">x_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">n_x</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">y_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">n_y</span><span class="p">)</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="w">    </span><span class="c">!! Offloaded kernel evaluating y = a*x + b*y over the padded domain.</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dims</span>
+<a id="ln-165" name="ln-165" href="#ln-165"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a</span>
+<a id="ln-166" name="ln-166" href="#ln-166"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="kt">c_ptr</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">x_ptr</span>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_x</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">b</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="kt">c_ptr</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">y_ptr</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_y</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a>
+<a id="ln-172" name="ln-172" href="#ln-172"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">y</span>
+<a id="ln-173" name="ln-173" href="#ln-173"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<a id="ln-174" name="ln-174" href="#ln-174"></a>
+<a id="ln-175" name="ln-175" href="#ln-175"></a><span class="w">    </span><span class="k">call </span><span class="nb">c_f_pointer</span><span class="p">(</span><span class="n">x_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="nb">shape</span><span class="o">=</span><span class="n">n_x</span><span class="p">)</span>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="w">    </span><span class="k">call </span><span class="nb">c_f_pointer</span><span class="p">(</span><span class="n">y_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="p">,</span><span class="w"> </span><span class="nb">shape</span><span class="o">=</span><span class="n">n_y</span><span class="p">)</span>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="w">    </span><span class="c">!$omp target is_device_ptr(x_ptr, y_ptr)</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a><span class="w">    </span><span class="c">!$omp teams loop collapse(3)</span>
+<a id="ln-179" name="ln-179" href="#ln-179"></a><span class="w">    </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-180" name="ln-180" href="#ln-180"></a><span class="w">      </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="w">        </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a><span class="w">          </span><span class="n">y</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">a</span><span class="o">*</span><span class="n">x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b</span><span class="o">*</span><span class="n">y</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-183" name="ln-183" href="#ln-183"></a><span class="w">        </span><span class="k">end do</span>
+<a id="ln-184" name="ln-184" href="#ln-184"></a><span class="k">      end do</span>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="k">    end do</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a><span class="w">    </span><span class="c">!$omp end teams loop</span>
+<a id="ln-187" name="ln-187" href="#ln-187"></a><span class="w">    </span><span class="c">!$omp end target</span>
+<a id="ln-188" name="ln-188" href="#ln-188"></a><span class="w">  </span><span class="k">end subroutine</span>
+<a id="ln-189" name="ln-189" href="#ln-189"></a>
+<a id="ln-190" name="ln-190" href="#ln-190"></a><span class="k">  </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span><span class="w"> </span><span class="k">function </span><span class="n">vector_norm_squared_omptgt</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-191" name="ln-191" href="#ln-191"></a><span class="w">    </span><span class="k">result</span><span class="p">(</span><span class="n">norm_squared</span><span class="p">)</span>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">    </span><span class="c">!! Global sum of a**2 + b**2 + c**2, with one MPI reduction.</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">omptgt_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>
+<a id="ln-196" name="ln-196" href="#ln-196"></a>
+<a id="ln-197" name="ln-197" href="#ln-197"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">local_sum</span>
+<a id="ln-198" name="ln-198" href="#ln-198"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="n">ierr</span>
+<a id="ln-199" name="ln-199" href="#ln-199"></a>
+<a id="ln-200" name="ln-200" href="#ln-200"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">a</span><span class="p">%</span><span class="n">data_loc</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">NULL_LOC</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">b</span><span class="p">%</span><span class="n">data_loc</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">NULL_LOC</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-201" name="ln-201" href="#ln-201"></a><span class="w">        </span><span class="n">c</span><span class="p">%</span><span class="n">data_loc</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">NULL_LOC</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-202" name="ln-202" href="#ln-202"></a><span class="k">      error stop</span><span class="w"> </span><span class="s1">'You must set data_loc before computing a vector norm.'</span>
+<a id="ln-203" name="ln-203" href="#ln-203"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-204" name="ln-204" href="#ln-204"></a><span class="k">    if</span><span class="w"> </span><span class="p">(</span><span class="n">a</span><span class="p">%</span><span class="n">data_loc</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">b</span><span class="p">%</span><span class="n">data_loc</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">a</span><span class="p">%</span><span class="n">data_loc</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">data_loc</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-205" name="ln-205" href="#ln-205"></a><span class="k">      error stop</span><span class="w"> </span><span class="s1">'Vector-norm fields must use the same data location.'</span>
+<a id="ln-206" name="ln-206" href="#ln-206"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-207" name="ln-207" href="#ln-207"></a><span class="k">    if</span><span class="w"> </span><span class="p">(</span><span class="n">a</span><span class="p">%</span><span class="n">dir</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">DIR_X</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">b</span><span class="p">%</span><span class="n">dir</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">DIR_X</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">dir</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">DIR_X</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-208" name="ln-208" href="#ln-208"></a><span class="k">      error stop</span><span class="w"> </span><span class="s1">'Vector-norm fields must use DIR_X layout.'</span>
+<a id="ln-209" name="ln-209" href="#ln-209"></a><span class="w">    </span><span class="k">end if</span>
+<a id="ln-210" name="ln-210" href="#ln-210"></a>
+<a id="ln-211" name="ln-211" href="#ln-211"></a><span class="k">    </span><span class="n">dims</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">mesh</span><span class="p">%</span><span class="n">get_dims</span><span class="p">(</span><span class="n">a</span><span class="p">%</span><span class="n">data_loc</span><span class="p">)</span>
+<a id="ln-212" name="ln-212" href="#ln-212"></a>
+<a id="ln-213" name="ln-213" href="#ln-213"></a><span class="w">    </span><span class="k">select type</span><span class="w"> </span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<a id="ln-214" name="ln-214" href="#ln-214"></a><span class="w">    </span><span class="k">type is</span><span class="w"> </span><span class="p">(</span><span class="n">omptgt_field_t</span><span class="p">)</span>
+<a id="ln-215" name="ln-215" href="#ln-215"></a><span class="w">      </span><span class="k">select type</span><span class="w"> </span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+<a id="ln-216" name="ln-216" href="#ln-216"></a><span class="w">      </span><span class="k">type is</span><span class="w"> </span><span class="p">(</span><span class="n">omptgt_field_t</span><span class="p">)</span>
+<a id="ln-217" name="ln-217" href="#ln-217"></a><span class="w">        </span><span class="k">select type</span><span class="w"> </span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+<a id="ln-218" name="ln-218" href="#ln-218"></a><span class="w">        </span><span class="k">type is</span><span class="w"> </span><span class="p">(</span><span class="n">omptgt_field_t</span><span class="p">)</span>
+<a id="ln-219" name="ln-219" href="#ln-219"></a><span class="w">          </span><span class="k">call </span><span class="n">vector_norm_squared_offload_</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-220" name="ln-220" href="#ln-220"></a><span class="w">            </span><span class="n">local_sum</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">%</span><span class="n">get_dev_ptr</span><span class="p">(),</span><span class="w"> </span><span class="n">b</span><span class="p">%</span><span class="n">get_dev_ptr</span><span class="p">(),</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">get_dev_ptr</span><span class="p">(),</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-221" name="ln-221" href="#ln-221"></a><span class="w">            </span><span class="n">a</span><span class="p">%</span><span class="n">get_shape</span><span class="p">(),</span><span class="w"> </span><span class="n">dims</span><span class="p">)</span>
+<a id="ln-222" name="ln-222" href="#ln-222"></a><span class="w">        </span><span class="k">class </span><span class="n">default</span>
+<a id="ln-223" name="ln-223" href="#ln-223"></a><span class="w">          </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"Called omptgt vector copy with unsupported source vector"</span>
+<a id="ln-224" name="ln-224" href="#ln-224"></a><span class="w">        </span><span class="k">end select</span>
+<a id="ln-225" name="ln-225" href="#ln-225"></a><span class="k">      class </span><span class="n">default</span>
+<a id="ln-226" name="ln-226" href="#ln-226"></a><span class="w">        </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"Called omptgt vector copy with unsupported source vector"</span>
+<a id="ln-227" name="ln-227" href="#ln-227"></a><span class="w">      </span><span class="k">end select</span>
+<a id="ln-228" name="ln-228" href="#ln-228"></a><span class="k">    class </span><span class="n">default</span>
+<a id="ln-229" name="ln-229" href="#ln-229"></a><span class="w">      </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"Called omptgt vector copy with unsupported source vector"</span>
+<a id="ln-230" name="ln-230" href="#ln-230"></a><span class="w">    </span><span class="k">end select</span>
+<a id="ln-231" name="ln-231" href="#ln-231"></a>
+<a id="ln-232" name="ln-232" href="#ln-232"></a><span class="k">    call </span><span class="n">MPI_Allreduce</span><span class="p">(</span><span class="n">local_sum</span><span class="p">,</span><span class="w"> </span><span class="n">norm_squared</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">MPI_X3D2_DP</span><span class="p">,</span><span class="w"> </span><span class="n">MPI_SUM</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-233" name="ln-233" href="#ln-233"></a><span class="w">                       </span><span class="n">MPI_COMM_WORLD</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<a id="ln-234" name="ln-234" href="#ln-234"></a>
+<a id="ln-235" name="ln-235" href="#ln-235"></a><span class="w">  </span><span class="k">end function </span><span class="n">vector_norm_squared_omptgt</span>
+<a id="ln-236" name="ln-236" href="#ln-236"></a>
+<a id="ln-237" name="ln-237" href="#ln-237"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">vector_norm_squared_offload_</span><span class="p">(</span><span class="n">local_sum</span><span class="p">,</span><span class="w"> </span><span class="n">a_dev</span><span class="p">,</span><span class="w"> </span><span class="n">b_dev</span><span class="p">,</span><span class="w"> </span><span class="n">c_dev</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-238" name="ln-238" href="#ln-238"></a><span class="w">                                          </span><span class="n">n_fld</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">)</span>
+<a id="ln-239" name="ln-239" href="#ln-239"></a><span class="w">    </span><span class="c">!! Rank-local sum of a**2 + b**2 + c**2 over the physical points only.</span>
+<a id="ln-240" name="ln-240" href="#ln-240"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">local_sum</span>
+<a id="ln-241" name="ln-241" href="#ln-241"></a><span class="w">    </span><span class="c">! Named *_dev rather than *_ptr so the third one does not shadow the</span>
+<a id="ln-242" name="ln-242" href="#ln-242"></a><span class="w">    </span><span class="c">! c_ptr type imported from iso_c_binding.</span>
+<a id="ln-243" name="ln-243" href="#ln-243"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="kt">c_ptr</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a_dev</span><span class="p">,</span><span class="w"> </span><span class="n">b_dev</span><span class="p">,</span><span class="w"> </span><span class="n">c_dev</span>
+<a id="ln-244" name="ln-244" href="#ln-244"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_fld</span>
+<a id="ln-245" name="ln-245" href="#ln-245"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dims</span>
+<a id="ln-246" name="ln-246" href="#ln-246"></a>
+<a id="ln-247" name="ln-247" href="#ln-247"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>
+<a id="ln-248" name="ln-248" href="#ln-248"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">k_i</span><span class="p">,</span><span class="w"> </span><span class="n">k_j</span><span class="p">,</span><span class="w"> </span><span class="n">n_i</span><span class="p">,</span><span class="w"> </span><span class="n">stacked</span>
+<a id="ln-249" name="ln-249" href="#ln-249"></a>
+<a id="ln-250" name="ln-250" href="#ln-250"></a><span class="w">    </span><span class="c">! Pencils are stacked SZ points at a time along y, and a pencil group</span>
+<a id="ln-251" name="ln-251" href="#ln-251"></a><span class="w">    </span><span class="c">! index runs fastest within a given z station.</span>
+<a id="ln-252" name="ln-252" href="#ln-252"></a><span class="w">    </span><span class="n">stacked</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">dims</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="n">SZ</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-253" name="ln-253" href="#ln-253"></a>
+<a id="ln-254" name="ln-254" href="#ln-254"></a><span class="w">    </span><span class="k">call </span><span class="nb">c_f_pointer</span><span class="p">(</span><span class="n">a_dev</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="nb">shape</span><span class="o">=</span><span class="n">n_fld</span><span class="p">)</span>
+<a id="ln-255" name="ln-255" href="#ln-255"></a><span class="w">    </span><span class="k">call </span><span class="nb">c_f_pointer</span><span class="p">(</span><span class="n">b_dev</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="nb">shape</span><span class="o">=</span><span class="n">n_fld</span><span class="p">)</span>
+<a id="ln-256" name="ln-256" href="#ln-256"></a><span class="w">    </span><span class="k">call </span><span class="nb">c_f_pointer</span><span class="p">(</span><span class="n">c_dev</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="nb">shape</span><span class="o">=</span><span class="n">n_fld</span><span class="p">)</span>
+<a id="ln-257" name="ln-257" href="#ln-257"></a>
+<a id="ln-258" name="ln-258" href="#ln-258"></a><span class="w">    </span><span class="n">local_sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0._dp</span>
+<a id="ln-259" name="ln-259" href="#ln-259"></a><span class="w">    </span><span class="c">!$omp target map(tofrom:local_sum) is_device_ptr(a_dev, b_dev, c_dev)</span>
+<a id="ln-260" name="ln-260" href="#ln-260"></a><span class="w">    </span><span class="c">!$omp teams loop collapse(3) reduction(+:local_sum) private(i, k, n_i)</span>
+<a id="ln-261" name="ln-261" href="#ln-261"></a><span class="w">    </span><span class="k">do </span><span class="n">k_j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">stacked</span>
+<a id="ln-262" name="ln-262" href="#ln-262"></a><span class="w">      </span><span class="k">do </span><span class="n">k_i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-263" name="ln-263" href="#ln-263"></a><span class="w">        </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-264" name="ln-264" href="#ln-264"></a><span class="w">          </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k_j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">k_i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">stacked</span>
+<a id="ln-265" name="ln-265" href="#ln-265"></a><span class="w">          </span><span class="c">! The last group along y is partially filled with padding.</span>
+<a id="ln-266" name="ln-266" href="#ln-266"></a><span class="w">          </span><span class="n">n_i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">SZ</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">k_j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">SZ</span><span class="p">)</span>
+<a id="ln-267" name="ln-267" href="#ln-267"></a><span class="w">          </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n_i</span>
+<a id="ln-268" name="ln-268" href="#ln-268"></a><span class="w">            </span><span class="n">local_sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">local_sum</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">a</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-269" name="ln-269" href="#ln-269"></a><span class="w">                        </span><span class="o">+</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span>
+<a id="ln-270" name="ln-270" href="#ln-270"></a><span class="w">          </span><span class="k">end do</span>
+<a id="ln-271" name="ln-271" href="#ln-271"></a><span class="k">        end do</span>
+<a id="ln-272" name="ln-272" href="#ln-272"></a><span class="k">      end do</span>
+<a id="ln-273" name="ln-273" href="#ln-273"></a><span class="k">    end do</span>
+<a id="ln-274" name="ln-274" href="#ln-274"></a><span class="w">    </span><span class="c">!$omp end teams loop</span>
+<a id="ln-275" name="ln-275" href="#ln-275"></a><span class="w">    </span><span class="c">!$omp end target</span>
+<a id="ln-276" name="ln-276" href="#ln-276"></a>
+<a id="ln-277" name="ln-277" href="#ln-277"></a><span class="w">  </span><span class="k">end subroutine</span>
+<a id="ln-278" name="ln-278" href="#ln-278"></a>
+<a id="ln-279" name="ln-279" href="#ln-279"></a><span class="k">  subroutine </span><span class="n">copy_data_to_f_omptgt</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="k">data</span><span class="p">)</span>
+<a id="ln-280" name="ln-280" href="#ln-280"></a><span class="w">    </span><span class="c">!! Copies a host array into a device-resident field.</span>
+<a id="ln-281" name="ln-281" href="#ln-281"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">omptgt_backend_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-282" name="ln-282" href="#ln-282"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f</span>
+<a id="ln-283" name="ln-283" href="#ln-283"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">data</span>
+<a id="ln-284" name="ln-284" href="#ln-284"></a>
+<a id="ln-285" name="ln-285" href="#ln-285"></a><span class="k">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dims</span>
+<a id="ln-286" name="ln-286" href="#ln-286"></a>
+<a id="ln-287" name="ln-287" href="#ln-287"></a><span class="w">    </span><span class="n">dims</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_padded_dims</span><span class="p">(</span><span class="n">f</span><span class="p">%</span><span class="n">dir</span><span class="p">)</span>
+<a id="ln-288" name="ln-288" href="#ln-288"></a>
+<a id="ln-289" name="ln-289" href="#ln-289"></a><span class="w">    </span><span class="c">! XXX: This could be improved following cuda/backend.f90:resolve_field_t()</span>
+<a id="ln-290" name="ln-290" href="#ln-290"></a><span class="w">    </span><span class="k">select type</span><span class="w"> </span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+<a id="ln-291" name="ln-291" href="#ln-291"></a><span class="w">    </span><span class="k">type is</span><span class="w"> </span><span class="p">(</span><span class="n">omptgt_field_t</span><span class="p">)</span>
+<a id="ln-292" name="ln-292" href="#ln-292"></a><span class="w">      </span><span class="k">call </span><span class="n">copy_data_to_f_omptgt_</span><span class="p">(</span><span class="n">f</span><span class="p">%</span><span class="n">get_dev_ptr</span><span class="p">(),</span><span class="w"> </span><span class="n">f</span><span class="p">%</span><span class="n">get_shape</span><span class="p">(),</span><span class="w"> </span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">)</span>
+<a id="ln-293" name="ln-293" href="#ln-293"></a><span class="w">    </span><span class="k">class </span><span class="n">default</span>
+<a id="ln-294" name="ln-294" href="#ln-294"></a><span class="w">      </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"Unsupported"</span>
+<a id="ln-295" name="ln-295" href="#ln-295"></a><span class="w">    </span><span class="k">end select</span>
+<a id="ln-296" name="ln-296" href="#ln-296"></a>
+<a id="ln-297" name="ln-297" href="#ln-297"></a><span class="k">  end subroutine </span><span class="n">copy_data_to_f_omptgt</span>
+<a id="ln-298" name="ln-298" href="#ln-298"></a>
+<a id="ln-299" name="ln-299" href="#ln-299"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">copy_data_to_f_omptgt_</span><span class="p">(</span><span class="n">f_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">n_f</span><span class="p">,</span><span class="w"> </span><span class="n">d</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">)</span>
+<a id="ln-300" name="ln-300" href="#ln-300"></a><span class="w">    </span><span class="c">!! Offloaded kernel behind `copy_data_to_f`. The host array is mapped in</span>
+<a id="ln-301" name="ln-301" href="#ln-301"></a><span class="w">    </span><span class="c">!! for the duration of the region, so this transfers over the bus.</span>
+<a id="ln-302" name="ln-302" href="#ln-302"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="kt">c_ptr</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f_ptr</span>
+<a id="ln-303" name="ln-303" href="#ln-303"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_f</span>
+<a id="ln-304" name="ln-304" href="#ln-304"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">d</span>
+<a id="ln-305" name="ln-305" href="#ln-305"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dims</span>
+<a id="ln-306" name="ln-306" href="#ln-306"></a>
+<a id="ln-307" name="ln-307" href="#ln-307"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f_arr</span>
+<a id="ln-308" name="ln-308" href="#ln-308"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<a id="ln-309" name="ln-309" href="#ln-309"></a>
+<a id="ln-310" name="ln-310" href="#ln-310"></a><span class="w">    </span><span class="k">call </span><span class="nb">c_f_pointer</span><span class="p">(</span><span class="n">f_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">f_arr</span><span class="p">,</span><span class="w"> </span><span class="nb">shape</span><span class="o">=</span><span class="n">n_f</span><span class="p">)</span>
+<a id="ln-311" name="ln-311" href="#ln-311"></a><span class="w">    </span><span class="c">! XXX: This could be improved following cuda/backend.f90:resolve_field_t()</span>
+<a id="ln-312" name="ln-312" href="#ln-312"></a><span class="w">    </span><span class="c">!$omp target map(to:d) is_device_ptr(f_ptr)</span>
+<a id="ln-313" name="ln-313" href="#ln-313"></a><span class="w">    </span><span class="c">!$omp teams loop collapse(3)</span>
+<a id="ln-314" name="ln-314" href="#ln-314"></a><span class="w">    </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-315" name="ln-315" href="#ln-315"></a><span class="w">      </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<a id="ln-316" name="ln-316" href="#ln-316"></a><span class="w">        </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-317" name="ln-317" href="#ln-317"></a><span class="w">          </span><span class="n">f_arr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">d</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-318" name="ln-318" href="#ln-318"></a><span class="w">        </span><span class="k">end do</span>
+<a id="ln-319" name="ln-319" href="#ln-319"></a><span class="k">      end do</span>
+<a id="ln-320" name="ln-320" href="#ln-320"></a><span class="k">    end do</span>
+<a id="ln-321" name="ln-321" href="#ln-321"></a><span class="w">    </span><span class="c">!$omp end teams loop</span>
+<a id="ln-322" name="ln-322" href="#ln-322"></a><span class="w">    </span><span class="c">!$omp end target</span>
+<a id="ln-323" name="ln-323" href="#ln-323"></a>
+<a id="ln-324" name="ln-324" href="#ln-324"></a><span class="w">  </span><span class="k">end subroutine</span>
+<a id="ln-325" name="ln-325" href="#ln-325"></a>
+<a id="ln-326" name="ln-326" href="#ln-326"></a><span class="k">  subroutine </span><span class="n">copy_f_to_data_omptgt</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">)</span>
+<a id="ln-327" name="ln-327" href="#ln-327"></a><span class="w">    </span><span class="c">!! Copies a device-resident field back into a host array.</span>
+<a id="ln-328" name="ln-328" href="#ln-328"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">omptgt_backend_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-329" name="ln-329" href="#ln-329"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">data</span>
+<a id="ln-330" name="ln-330" href="#ln-330"></a><span class="k">    class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f</span>
+<a id="ln-331" name="ln-331" href="#ln-331"></a>
+<a id="ln-332" name="ln-332" href="#ln-332"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dims</span>
+<a id="ln-333" name="ln-333" href="#ln-333"></a>
+<a id="ln-334" name="ln-334" href="#ln-334"></a><span class="w">    </span><span class="n">dims</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_padded_dims</span><span class="p">(</span><span class="n">f</span><span class="p">%</span><span class="n">dir</span><span class="p">)</span>
+<a id="ln-335" name="ln-335" href="#ln-335"></a>
+<a id="ln-336" name="ln-336" href="#ln-336"></a><span class="w">    </span><span class="k">select type</span><span class="w"> </span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+<a id="ln-337" name="ln-337" href="#ln-337"></a><span class="w">    </span><span class="k">type is</span><span class="w"> </span><span class="p">(</span><span class="n">omptgt_field_t</span><span class="p">)</span>
+<a id="ln-338" name="ln-338" href="#ln-338"></a><span class="w">      </span><span class="k">call </span><span class="n">copy_f_to_data_omptgt_</span><span class="p">(</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">%</span><span class="n">get_dev_ptr</span><span class="p">(),</span><span class="w"> </span><span class="n">f</span><span class="p">%</span><span class="n">get_shape</span><span class="p">(),</span><span class="w"> </span><span class="n">dims</span><span class="p">)</span>
+<a id="ln-339" name="ln-339" href="#ln-339"></a><span class="w">    </span><span class="k">class </span><span class="n">default</span>
+<a id="ln-340" name="ln-340" href="#ln-340"></a><span class="w">      </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"Unsupported"</span>
+<a id="ln-341" name="ln-341" href="#ln-341"></a><span class="w">    </span><span class="k">end select</span>
+<a id="ln-342" name="ln-342" href="#ln-342"></a>
+<a id="ln-343" name="ln-343" href="#ln-343"></a><span class="k">  end subroutine </span><span class="n">copy_f_to_data_omptgt</span>
+<a id="ln-344" name="ln-344" href="#ln-344"></a>
+<a id="ln-345" name="ln-345" href="#ln-345"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">copy_f_to_data_omptgt_</span><span class="p">(</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">f_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">n_f</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">)</span>
+<a id="ln-346" name="ln-346" href="#ln-346"></a><span class="w">    </span><span class="c">!! Offloaded kernel behind `copy_f_to_data`. The host array is mapped back</span>
+<a id="ln-347" name="ln-347" href="#ln-347"></a><span class="w">    </span><span class="c">!! out of the region, so this transfers over the bus.</span>
+<a id="ln-348" name="ln-348" href="#ln-348"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">data</span>
+<a id="ln-349" name="ln-349" href="#ln-349"></a><span class="k">    type</span><span class="p">(</span><span class="kt">c_ptr</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f_ptr</span>
+<a id="ln-350" name="ln-350" href="#ln-350"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_f</span>
+<a id="ln-351" name="ln-351" href="#ln-351"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dims</span>
+<a id="ln-352" name="ln-352" href="#ln-352"></a>
+<a id="ln-353" name="ln-353" href="#ln-353"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f_arr</span>
+<a id="ln-354" name="ln-354" href="#ln-354"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<a id="ln-355" name="ln-355" href="#ln-355"></a>
+<a id="ln-356" name="ln-356" href="#ln-356"></a><span class="w">    </span><span class="k">call </span><span class="nb">c_f_pointer</span><span class="p">(</span><span class="n">f_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">f_arr</span><span class="p">,</span><span class="w"> </span><span class="nb">shape</span><span class="o">=</span><span class="n">n_f</span><span class="p">)</span>
+<a id="ln-357" name="ln-357" href="#ln-357"></a><span class="w">    </span><span class="c">!$omp target map(from:data) is_device_ptr(f_ptr)</span>
+<a id="ln-358" name="ln-358" href="#ln-358"></a><span class="w">    </span><span class="c">!$omp teams loop collapse(3)</span>
+<a id="ln-359" name="ln-359" href="#ln-359"></a><span class="w">    </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-360" name="ln-360" href="#ln-360"></a><span class="w">      </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<a id="ln-361" name="ln-361" href="#ln-361"></a><span class="w">        </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-362" name="ln-362" href="#ln-362"></a><span class="w">          </span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">f_arr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-363" name="ln-363" href="#ln-363"></a><span class="w">        </span><span class="k">end do</span>
+<a id="ln-364" name="ln-364" href="#ln-364"></a><span class="k">      end do</span>
+<a id="ln-365" name="ln-365" href="#ln-365"></a><span class="k">    end do</span>
+<a id="ln-366" name="ln-366" href="#ln-366"></a><span class="w">    </span><span class="c">!$omp end teams loop</span>
+<a id="ln-367" name="ln-367" href="#ln-367"></a><span class="w">    </span><span class="c">!$omp end target</span>
+<a id="ln-368" name="ln-368" href="#ln-368"></a>
+<a id="ln-369" name="ln-369" href="#ln-369"></a><span class="w">  </span><span class="k">end subroutine</span>
+<a id="ln-370" name="ln-370" href="#ln-370"></a>
+<a id="ln-371" name="ln-371" href="#ln-371"></a><span class="k">  subroutine </span><span class="n">reorder_omptgt</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">u_</span><span class="p">,</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">direction</span><span class="p">)</span>
+<a id="ln-372" name="ln-372" href="#ln-372"></a><span class="w">    </span><span class="c">!! Reorders `u` into `u_` between the two data layouts encoded in</span>
+<a id="ln-373" name="ln-373" href="#ln-373"></a><span class="w">    </span><span class="c">!! `direction`, offloading either a device-to-device or, when the source</span>
+<a id="ln-374" name="ln-374" href="#ln-374"></a><span class="w">    </span><span class="c">!! is a host field, a host-to-device reordering.</span>
+<a id="ln-375" name="ln-375" href="#ln-375"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">omptgt_backend_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-376" name="ln-376" href="#ln-376"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_</span>
+<a id="ln-377" name="ln-377" href="#ln-377"></a><span class="w">    </span><span class="k">class</span><span class="p">(</span><span class="n">field_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u</span>
+<a id="ln-378" name="ln-378" href="#ln-378"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">direction</span>
+<a id="ln-379" name="ln-379" href="#ln-379"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dims</span><span class="p">,</span><span class="w"> </span><span class="n">cart_padded</span>
+<a id="ln-380" name="ln-380" href="#ln-380"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dir_from</span><span class="p">,</span><span class="w"> </span><span class="n">dir_to</span>
+<a id="ln-381" name="ln-381" href="#ln-381"></a>
+<a id="ln-382" name="ln-382" href="#ln-382"></a><span class="w">    </span><span class="n">dims</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_padded_dims</span><span class="p">(</span><span class="n">u</span><span class="p">%</span><span class="n">dir</span><span class="p">)</span>
+<a id="ln-383" name="ln-383" href="#ln-383"></a><span class="w">    </span><span class="n">cart_padded</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">self</span><span class="p">%</span><span class="n">allocator</span><span class="p">%</span><span class="n">get_padded_dims</span><span class="p">(</span><span class="n">DIR_C</span><span class="p">)</span>
+<a id="ln-384" name="ln-384" href="#ln-384"></a><span class="w">    </span><span class="k">call </span><span class="n">get_dirs_from_rdr</span><span class="p">(</span><span class="n">dir_from</span><span class="p">,</span><span class="w"> </span><span class="n">dir_to</span><span class="p">,</span><span class="w"> </span><span class="n">direction</span><span class="p">)</span>
+<a id="ln-385" name="ln-385" href="#ln-385"></a>
+<a id="ln-386" name="ln-386" href="#ln-386"></a><span class="w">    </span><span class="c">! XXX: This could be improved following cuda/backend.f90:resolve_field_t()</span>
+<a id="ln-387" name="ln-387" href="#ln-387"></a><span class="w">    </span><span class="k">select type</span><span class="w"> </span><span class="p">(</span><span class="n">u_</span><span class="p">)</span>
+<a id="ln-388" name="ln-388" href="#ln-388"></a><span class="w">    </span><span class="k">type is</span><span class="w"> </span><span class="p">(</span><span class="n">omptgt_field_t</span><span class="p">)</span>
+<a id="ln-389" name="ln-389" href="#ln-389"></a><span class="w">      </span><span class="k">select type</span><span class="w"> </span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
+<a id="ln-390" name="ln-390" href="#ln-390"></a><span class="w">      </span><span class="k">type is</span><span class="w"> </span><span class="p">(</span><span class="n">omptgt_field_t</span><span class="p">)</span>
+<a id="ln-391" name="ln-391" href="#ln-391"></a><span class="w">        </span><span class="k">call </span><span class="n">reorder_omptgt_dd</span><span class="p">(</span><span class="n">u_</span><span class="p">%</span><span class="n">get_dev_ptr</span><span class="p">(),</span><span class="w"> </span><span class="n">u_</span><span class="p">%</span><span class="n">get_shape</span><span class="p">(),</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-392" name="ln-392" href="#ln-392"></a><span class="w">                               </span><span class="n">u</span><span class="p">%</span><span class="n">get_dev_ptr</span><span class="p">(),</span><span class="w"> </span><span class="n">u</span><span class="p">%</span><span class="n">get_shape</span><span class="p">(),</span><span class="w"> </span><span class="n">dims</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-393" name="ln-393" href="#ln-393"></a><span class="w">                               </span><span class="n">dir_from</span><span class="p">,</span><span class="w"> </span><span class="n">dir_to</span><span class="p">,</span><span class="w"> </span><span class="n">cart_padded</span><span class="p">)</span>
+<a id="ln-394" name="ln-394" href="#ln-394"></a><span class="w">      </span><span class="k">class </span><span class="n">default</span>
+<a id="ln-395" name="ln-395" href="#ln-395"></a><span class="w">        </span><span class="k">call </span><span class="n">reorder_omptgt_dh</span><span class="p">(</span><span class="n">u_</span><span class="p">%</span><span class="n">get_dev_ptr</span><span class="p">(),</span><span class="w"> </span><span class="n">u_</span><span class="p">%</span><span class="n">get_shape</span><span class="p">(),</span><span class="w"> </span><span class="n">u</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-396" name="ln-396" href="#ln-396"></a><span class="w">                               </span><span class="n">dims</span><span class="p">,</span><span class="w"> </span><span class="n">dir_from</span><span class="p">,</span><span class="w"> </span><span class="n">dir_to</span><span class="p">,</span><span class="w"> </span><span class="n">cart_padded</span><span class="p">)</span>
+<a id="ln-397" name="ln-397" href="#ln-397"></a><span class="w">      </span><span class="k">end select</span>
+<a id="ln-398" name="ln-398" href="#ln-398"></a><span class="k">    class </span><span class="n">default</span>
+<a id="ln-399" name="ln-399" href="#ln-399"></a><span class="w">      </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"Unsupported"</span>
+<a id="ln-400" name="ln-400" href="#ln-400"></a><span class="w">    </span><span class="k">end select</span>
+<a id="ln-401" name="ln-401" href="#ln-401"></a>
+<a id="ln-402" name="ln-402" href="#ln-402"></a><span class="w">    </span><span class="c">! reorder keeps the data_loc the same</span>
+<a id="ln-403" name="ln-403" href="#ln-403"></a><span class="w">    </span><span class="k">call </span><span class="n">u_</span><span class="p">%</span><span class="n">set_data_loc</span><span class="p">(</span><span class="n">u</span><span class="p">%</span><span class="n">data_loc</span><span class="p">)</span>
+<a id="ln-404" name="ln-404" href="#ln-404"></a>
+<a id="ln-405" name="ln-405" href="#ln-405"></a><span class="w">  </span><span class="k">end subroutine </span><span class="n">reorder_omptgt</span>
+<a id="ln-406" name="ln-406" href="#ln-406"></a>
+<a id="ln-407" name="ln-407" href="#ln-407"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">reorder_point</span><span class="p">(</span><span class="n">u_</span><span class="p">,</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">dir_from</span><span class="p">,</span><span class="w"> </span><span class="n">dir_to</span><span class="p">,</span><span class="w"> </span><span class="n">cart_padded</span><span class="p">)</span>
+<a id="ln-408" name="ln-408" href="#ln-408"></a><span class="w">    </span><span class="c">!$omp declare target</span>
+<a id="ln-409" name="ln-409" href="#ln-409"></a><span class="w">    </span><span class="c">!! Moves one point into its reordered slot.</span>
+<a id="ln-410" name="ln-410" href="#ln-410"></a><span class="w">    </span><span class="c">!!</span>
+<a id="ln-411" name="ln-411" href="#ln-411"></a><span class="w">    </span><span class="c">!! The reordered indices are locals of this routine rather than scalars</span>
+<a id="ln-412" name="ln-412" href="#ln-412"></a><span class="w">    </span><span class="c">!! privatised on the loop: an automatic local is per-call scratch by</span>
+<a id="ln-413" name="ln-413" href="#ln-413"></a><span class="w">    </span><span class="c">!! definition, so no private clause is needed. That matters because NVHPC</span>
+<a id="ln-414" name="ln-414" href="#ln-414"></a><span class="w">    </span><span class="c">!! miscompiles the private-clause spelling, handing get_index_reordering</span>
+<a id="ln-415" name="ln-415" href="#ln-415"></a><span class="w">    </span><span class="c">!! an invalid address for its intent(out) arguments, so the indices come</span>
+<a id="ln-416" name="ln-416" href="#ln-416"></a><span class="w">    </span><span class="c">!! back as garbage and the store off them faults.</span>
+<a id="ln-417" name="ln-417" href="#ln-417"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_</span>
+<a id="ln-418" name="ln-418" href="#ln-418"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u</span>
+<a id="ln-419" name="ln-419" href="#ln-419"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<a id="ln-420" name="ln-420" href="#ln-420"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dir_from</span><span class="p">,</span><span class="w"> </span><span class="n">dir_to</span>
+<a id="ln-421" name="ln-421" href="#ln-421"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cart_padded</span>
+<a id="ln-422" name="ln-422" href="#ln-422"></a>
+<a id="ln-423" name="ln-423" href="#ln-423"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">out_i</span><span class="p">,</span><span class="w"> </span><span class="n">out_j</span><span class="p">,</span><span class="w"> </span><span class="n">out_k</span>
+<a id="ln-424" name="ln-424" href="#ln-424"></a>
+<a id="ln-425" name="ln-425" href="#ln-425"></a><span class="w">    </span><span class="k">call </span><span class="n">get_index_reordering</span><span class="p">(</span><span class="n">out_i</span><span class="p">,</span><span class="w"> </span><span class="n">out_j</span><span class="p">,</span><span class="w"> </span><span class="n">out_k</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-426" name="ln-426" href="#ln-426"></a><span class="w">                              </span><span class="n">dir_from</span><span class="p">,</span><span class="w"> </span><span class="n">dir_to</span><span class="p">,</span><span class="w"> </span><span class="n">SZ</span><span class="p">,</span><span class="w"> </span><span class="n">cart_padded</span><span class="p">)</span>
+<a id="ln-427" name="ln-427" href="#ln-427"></a><span class="w">    </span><span class="n">u_</span><span class="p">(</span><span class="n">out_i</span><span class="p">,</span><span class="w"> </span><span class="n">out_j</span><span class="p">,</span><span class="w"> </span><span class="n">out_k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">u</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-428" name="ln-428" href="#ln-428"></a>
+<a id="ln-429" name="ln-429" href="#ln-429"></a><span class="w">  </span><span class="k">end subroutine </span><span class="n">reorder_point</span>
+<a id="ln-430" name="ln-430" href="#ln-430"></a>
+<a id="ln-431" name="ln-431" href="#ln-431"></a><span class="w">  </span><span class="k">subroutine </span><span class="n">reorder_omptgt_dd</span><span class="p">(</span><span class="n">u_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">n_u_</span><span class="p">,</span><span class="w"> </span><span class="n">u_in_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">n_u</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">,</span><span class="w"> </span><span class="n">dir_from</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-432" name="ln-432" href="#ln-432"></a><span class="w">                               </span><span class="n">dir_to</span><span class="p">,</span><span class="w"> </span><span class="n">cart_padded</span><span class="p">)</span>
+<a id="ln-433" name="ln-433" href="#ln-433"></a><span class="w">    </span><span class="c">!! Offloaded reordering of one device-resident field into another.</span>
+<a id="ln-434" name="ln-434" href="#ln-434"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="kt">c_ptr</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">u_in_ptr</span>
+<a id="ln-435" name="ln-435" href="#ln-435"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_u_</span><span class="p">,</span><span class="w"> </span><span class="n">n_u</span>
+<a id="ln-436" name="ln-436" href="#ln-436"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dims</span>
+<a id="ln-437" name="ln-437" href="#ln-437"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dir_from</span><span class="p">,</span><span class="w"> </span><span class="n">dir_to</span>
+<a id="ln-438" name="ln-438" href="#ln-438"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cart_padded</span>
+<a id="ln-439" name="ln-439" href="#ln-439"></a>
+<a id="ln-440" name="ln-440" href="#ln-440"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_</span><span class="p">,</span><span class="w"> </span><span class="n">u</span>
+<a id="ln-441" name="ln-441" href="#ln-441"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<a id="ln-442" name="ln-442" href="#ln-442"></a>
+<a id="ln-443" name="ln-443" href="#ln-443"></a><span class="w">    </span><span class="k">call </span><span class="nb">c_f_pointer</span><span class="p">(</span><span class="n">u_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">u_</span><span class="p">,</span><span class="w"> </span><span class="nb">shape</span><span class="o">=</span><span class="n">n_u_</span><span class="p">)</span>
+<a id="ln-444" name="ln-444" href="#ln-444"></a><span class="w">    </span><span class="k">call </span><span class="nb">c_f_pointer</span><span class="p">(</span><span class="n">u_in_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="nb">shape</span><span class="o">=</span><span class="n">n_u</span><span class="p">)</span>
+<a id="ln-445" name="ln-445" href="#ln-445"></a><span class="w">    </span><span class="c">!$omp target is_device_ptr(u_ptr, u_in_ptr)</span>
+<a id="ln-446" name="ln-446" href="#ln-446"></a><span class="w">    </span><span class="c">!$omp teams loop collapse(3)</span>
+<a id="ln-447" name="ln-447" href="#ln-447"></a><span class="w">    </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-448" name="ln-448" href="#ln-448"></a><span class="w">      </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<a id="ln-449" name="ln-449" href="#ln-449"></a><span class="w">        </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-450" name="ln-450" href="#ln-450"></a><span class="w">          </span><span class="k">call </span><span class="n">reorder_point</span><span class="p">(</span><span class="n">u_</span><span class="p">,</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">dir_from</span><span class="p">,</span><span class="w"> </span><span class="n">dir_to</span><span class="p">,</span><span class="w"> </span><span class="n">cart_padded</span><span class="p">)</span>
+<a id="ln-451" name="ln-451" href="#ln-451"></a><span class="w">        </span><span class="k">end do</span>
+<a id="ln-452" name="ln-452" href="#ln-452"></a><span class="k">      end do</span>
+<a id="ln-453" name="ln-453" href="#ln-453"></a><span class="k">    end do</span>
+<a id="ln-454" name="ln-454" href="#ln-454"></a><span class="w">    </span><span class="c">!$omp end teams loop</span>
+<a id="ln-455" name="ln-455" href="#ln-455"></a><span class="w">    </span><span class="c">!$omp end target</span>
+<a id="ln-456" name="ln-456" href="#ln-456"></a>
+<a id="ln-457" name="ln-457" href="#ln-457"></a><span class="w">  </span><span class="k">end subroutine</span>
+<a id="ln-458" name="ln-458" href="#ln-458"></a>
+<a id="ln-459" name="ln-459" href="#ln-459"></a><span class="k">  subroutine </span><span class="n">reorder_omptgt_dh</span><span class="p">(</span><span class="n">u_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">n_u_</span><span class="p">,</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">,</span><span class="w"> </span><span class="n">dir_from</span><span class="p">,</span><span class="w"> </span><span class="n">dir_to</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-460" name="ln-460" href="#ln-460"></a><span class="w">                               </span><span class="n">cart_padded</span><span class="p">)</span>
+<a id="ln-461" name="ln-461" href="#ln-461"></a><span class="w">    </span><span class="c">!! Offloaded reordering of a host field into a device-resident one; the</span>
+<a id="ln-462" name="ln-462" href="#ln-462"></a><span class="w">    </span><span class="c">!! source array is mapped into the target region.</span>
+<a id="ln-463" name="ln-463" href="#ln-463"></a><span class="w">    </span><span class="k">type</span><span class="p">(</span><span class="kt">c_ptr</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_ptr</span>
+<a id="ln-464" name="ln-464" href="#ln-464"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_u_</span>
+<a id="ln-465" name="ln-465" href="#ln-465"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">pointer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u</span>
+<a id="ln-466" name="ln-466" href="#ln-466"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dims</span>
+<a id="ln-467" name="ln-467" href="#ln-467"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dir_from</span><span class="p">,</span><span class="w"> </span><span class="n">dir_to</span>
+<a id="ln-468" name="ln-468" href="#ln-468"></a><span class="w">    </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">dimension</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cart_padded</span>
+<a id="ln-469" name="ln-469" href="#ln-469"></a>
+<a id="ln-470" name="ln-470" href="#ln-470"></a><span class="w">    </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">),</span><span class="w"> </span><span class="k">dimension</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_</span>
+<a id="ln-471" name="ln-471" href="#ln-471"></a><span class="w">    </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<a id="ln-472" name="ln-472" href="#ln-472"></a>
+<a id="ln-473" name="ln-473" href="#ln-473"></a><span class="w">    </span><span class="k">call </span><span class="nb">c_f_pointer</span><span class="p">(</span><span class="n">u_ptr</span><span class="p">,</span><span class="w"> </span><span class="n">u_</span><span class="p">,</span><span class="w"> </span><span class="nb">shape</span><span class="o">=</span><span class="n">n_u_</span><span class="p">)</span>
+<a id="ln-474" name="ln-474" href="#ln-474"></a><span class="w">    </span><span class="c">!$omp target map(to:u) is_device_ptr(u_ptr)</span>
+<a id="ln-475" name="ln-475" href="#ln-475"></a><span class="w">    </span><span class="c">!$omp teams loop collapse(3)</span>
+<a id="ln-476" name="ln-476" href="#ln-476"></a><span class="w">    </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="ln-477" name="ln-477" href="#ln-477"></a><span class="w">      </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<a id="ln-478" name="ln-478" href="#ln-478"></a><span class="w">        </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">dims</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-479" name="ln-479" href="#ln-479"></a><span class="w">          </span><span class="k">call </span><span class="n">reorder_point</span><span class="p">(</span><span class="n">u_</span><span class="p">,</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">dir_from</span><span class="p">,</span><span class="w"> </span><span class="n">dir_to</span><span class="p">,</span><span class="w"> </span><span class="n">cart_padded</span><span class="p">)</span>
+<a id="ln-480" name="ln-480" href="#ln-480"></a><span class="w">        </span><span class="k">end do</span>
+<a id="ln-481" name="ln-481" href="#ln-481"></a><span class="k">      end do</span>
+<a id="ln-482" name="ln-482" href="#ln-482"></a><span class="k">    end do</span>
+<a id="ln-483" name="ln-483" href="#ln-483"></a><span class="w">    </span><span class="c">!$omp end teams loop</span>
+<a id="ln-484" name="ln-484" href="#ln-484"></a><span class="w">    </span><span class="c">!$omp end target</span>
+<a id="ln-485" name="ln-485" href="#ln-485"></a>
+<a id="ln-486" name="ln-486" href="#ln-486"></a><span class="w">  </span><span class="k">end subroutine</span>
+<a id="ln-487" name="ln-487" href="#ln-487"></a>
+<a id="ln-488" name="ln-488" href="#ln-488"></a><span class="k">end module</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

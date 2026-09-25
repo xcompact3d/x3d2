@@ -1,0 +1,3804 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>m_cuda_poisson_fft &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../program/xcompact.html">Program</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>m_cuda_poisson_fft
+      <small>Module</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 5.1% of total for modules and submodules.">762 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/poisson_fft.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/poisson_fft.f90~2.html'>poisson_fft.f90</a></li>
+            <li class="breadcrumb-item active" aria-current="page">m_cuda_poisson_fft</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+
+  <div class="row">
+    <div class="col-md-3">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#inters-0"
+         aria-expanded="false" aria-controls="inters-0">
+         <h4 class="card-header bg-primary text-white">Interfaces</h4>
+      </a>
+      <div id="inters-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#interface-cuda_poisson_fft_t">cuda_poisson_fft_t</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#interface-cufftexecr2c_c">cufftExecR2C_C</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#interface-cufftexecc2r_c">cufftExecC2R_C</a>
+        </div>
+      </div>
+    </div>
+
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#types-0"
+         aria-expanded="false" aria-controls="types-0">
+         <h4 class="card-header bg-primary text-white">Derived Types</h4>
+      </a>
+      <div id="types-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#type-cuda_poisson_fft_t">cuda_poisson_fft_t</a>
+        </div>
+      </div>
+    </div>
+
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#subs-0"
+         aria-expanded="false" aria-controls="subs-0">
+         <h4 class="card-header bg-primary text-white">Subroutines</h4>
+      </a>
+      <div id="subs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-fft_forward_110_cuda">fft_forward_110_cuda</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-fft_backward_110_cuda">fft_backward_110_cuda</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-fft_forward_100_cuda">fft_forward_100_cuda</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-fft_backward_100_cuda">fft_backward_100_cuda</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-fft_forward_cuda">fft_forward_cuda</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-fft_backward_cuda">fft_backward_cuda</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-fft_postprocess_000_cuda">fft_postprocess_000_cuda</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-fft_postprocess_100_cuda">fft_postprocess_100_cuda</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-exchange_mirror_100">exchange_mirror_100</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-fft_postprocess_010_cuda">fft_postprocess_010_cuda</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-fft_postprocess_110_cuda">fft_postprocess_110_cuda</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-enforce_periodicity_x_cuda">enforce_periodicity_x_cuda</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-undo_periodicity_x_cuda">undo_periodicity_x_cuda</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-enforce_periodicity_y_cuda">enforce_periodicity_y_cuda</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-undo_periodicity_y_cuda">undo_periodicity_y_cuda</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-enforce_periodicity_xy_cuda">enforce_periodicity_xy_cuda</a>
+            <a class="list-group-item" href="../module/m_cuda_poisson_fft.html#proc-undo_periodicity_xy_cuda">undo_periodicity_xy_cuda</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+
+    <div class="col-md-9" id='text'>
+      
+<br>          <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item"><a href='m_poisson_fft.html'>m_poisson_fft</a></li>
+                  <li class="list-inline-item"><a href='m_cuda_spectral.html'>m_cuda_spectral</a></li>
+                  <li class="list-inline-item">cufft</li>
+                  <li class="list-inline-item">cudafor</li>
+                  <li class="list-inline-item"><a href='http://fortranwiki.org/fortran/show/iso_c_binding'>iso_c_binding</a></li>
+                  <li class="list-inline-item"><a href='m_common.html'>m_common</a></li>
+                  <li class="list-inline-item"><a href='m_field.html'>m_field</a></li>
+                  <li class="list-inline-item"><a href='m_mesh.html'>m_mesh</a></li>
+                  <li class="list-inline-item"><a href='m_cuda_allocator.html'>m_cuda_allocator</a></li>
+                  <li class="list-inline-item"><a href='m_cuda_sendrecv.html'>m_cuda_sendrecv</a></li>
+                  <li class="list-inline-item">cufftXt</li>
+                  <li class="list-inline-item"><a href='m_mpi.html'>m_mpi</a></li>
+                  <li class="list-inline-item"><a href='m_tdsops.html'>m_tdsops</a></li>
+                  <li class="list-inline-item"><a href='http://fortranwiki.org/fortran/show/iso_fortran_env'>iso_fortran_env</a></li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~m_cuda_poisson_fft~~UsesGraph Pages: 1 -->
+<svg id="modulem_cuda_poisson_fftUsesGraph" width="641pt" height="465pt"
+ viewBox="0.00 0.00 641.00 465.34" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~m_cuda_poisson_fft~~UsesGraph" class="graph" transform="scale(0.75 0.75) rotate(0) translate(4 614.52)">
+<title>module~~m_cuda_poisson_fft~~UsesGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-614.52 848,-614.52 848,4 -4,4"/>
+<!-- module~m_cuda_poisson_fft -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node1" class="node">
+<title>module~m_cuda_poisson_fft</title>
+<polygon fill="none" stroke="black" points="844,-371.74 727,-371.74 727,-347.74 844,-347.74 844,-371.74"/>
+<text text-anchor="middle" x="785.5" y="-357.34" font-family="Helvetica,sans-Serif" font-size="10.50">m_cuda_poisson_fft</text>
+</g>
+<!-- cudafor -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node2" class="node">
+<title>cudafor</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="536,-373.74 482,-373.74 482,-349.74 536,-349.74 536,-373.74"/>
+<text text-anchor="middle" x="509" y="-359.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cudafor</text>
+</g>
+<!-- module~m_cuda_poisson_fft&#45;&gt;cudafor -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge1" class="edge">
+<title>module~m_cuda_poisson_fft&#45;&gt;cudafor</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M726.96,-360.16C672.55,-360.56 592.58,-361.14 546.46,-361.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="546.3,-357.97 536.32,-361.55 546.35,-364.97 546.3,-357.97"/>
+</g>
+<!-- cufft -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node3" class="node">
+<title>cufft</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="664,-575.74 610,-575.74 610,-551.74 664,-551.74 664,-575.74"/>
+<text text-anchor="middle" x="637" y="-561.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cufft</text>
+</g>
+<!-- module~m_cuda_poisson_fft&#45;&gt;cufft -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge2" class="edge">
+<title>module~m_cuda_poisson_fft&#45;&gt;cufft</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M781.54,-371.83C773.05,-404.07 745.64,-493.06 691,-542.74 686.05,-547.24 680.02,-550.83 673.82,-553.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="672.08,-550.6 664.08,-557.55 674.67,-557.1 672.08,-550.6"/>
+</g>
+<!-- cufftXt -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node4" class="node">
+<title>cufftXt</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="664,-533.74 610,-533.74 610,-509.74 664,-509.74 664,-533.74"/>
+<text text-anchor="middle" x="637" y="-519.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cufftXt</text>
+</g>
+<!-- module~m_cuda_poisson_fft&#45;&gt;cufftXt -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge3" class="edge">
+<title>module~m_cuda_poisson_fft&#45;&gt;cufftXt</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M779.41,-372.12C767.72,-399.15 736.4,-463.93 691,-500.74 685.9,-504.87 679.89,-508.27 673.79,-511.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="672.19,-507.91 664.22,-514.89 674.8,-514.4 672.19,-507.91"/>
+</g>
+<!-- iso_c_binding -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node5" class="node">
+<title>iso_c_binding</title>
+<g id="a_module~~m_cuda_poisson_fft~~UsesGraph_node5"><a xlink:href="http://fortranwiki.org/fortran/show/iso_c_binding" xlink:title="iso_c_binding">
+<polygon fill="#337ab7" stroke="#337ab7" points="679,-491.74 595,-491.74 595,-467.74 679,-467.74 679,-491.74"/>
+<text text-anchor="middle" x="637" y="-477.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">iso_c_binding</text>
+</a>
+</g>
+</g>
+<!-- module~m_cuda_poisson_fft&#45;&gt;iso_c_binding -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge4" class="edge">
+<title>module~m_cuda_poisson_fft&#45;&gt;iso_c_binding</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M774.64,-372.01C758.66,-391.3 725.42,-429.06 691,-453.74 686.42,-457.02 681.36,-460.1 676.24,-462.9"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="674.33,-459.94 667.05,-467.63 677.54,-466.17 674.33,-459.94"/>
+</g>
+<!-- iso_fortran_env -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node6" class="node">
+<title>iso_fortran_env</title>
+<g id="a_module~~m_cuda_poisson_fft~~UsesGraph_node6"><a xlink:href="http://fortranwiki.org/fortran/show/iso_fortran_env" xlink:title="iso_fortran_env">
+<polygon fill="#337ab7" stroke="#337ab7" points="94,-155.74 0,-155.74 0,-131.74 94,-131.74 94,-155.74"/>
+<text text-anchor="middle" x="47" y="-141.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">iso_fortran_env</text>
+</a>
+</g>
+</g>
+<!-- module~m_cuda_poisson_fft&#45;&gt;iso_fortran_env -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge5" class="edge">
+<title>module~m_cuda_poisson_fft&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M783.27,-347.55C778.67,-307.95 759.07,-181.33 691,-108.74 630.71,-44.45 597.86,-34.7 510,-27.74"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M508,-27.74C475.3,-19.34 468.43,-11.45 435,-6.74 356.99,4.26 331.32,3.5 259,-27.74"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M257,-27.74C204.91,-48.33 212.7,-93.66 158,-105.74"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M156,-105.74C132.15,-111.01 106.31,-119.97 85.89,-127.87"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="84.34,-124.72 76.33,-131.65 86.91,-131.23 84.34,-124.72"/>
+</g>
+<!-- module~m_common -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node7" class="node">
+<title>module~m_common</title>
+<g id="a_module~~m_cuda_poisson_fft~~UsesGraph_node7"><a xlink:href="../module/m_common.html" xlink:title="m_common">
+<polygon fill="#337ab7" stroke="#337ab7" points="296,-235.74 220,-235.74 220,-211.74 296,-211.74 296,-235.74"/>
+<text text-anchor="middle" x="258" y="-221.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_common</text>
+</a>
+</g>
+</g>
+<!-- module~m_cuda_poisson_fft&#45;&gt;module~m_common -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge6" class="edge">
+<title>module~m_cuda_poisson_fft&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M771.17,-371.88C754.07,-386.6 722.78,-410.68 691,-420.74 614.93,-444.8 396.01,-463.36 332,-415.74 276.96,-374.79 263.42,-286.97 260.09,-245.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="263.57,-245.52 259.4,-235.78 256.59,-245.99 263.57,-245.52"/>
+</g>
+<!-- module~m_cuda_allocator -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node8" class="node">
+<title>module~m_cuda_allocator</title>
+<g id="a_module~~m_cuda_poisson_fft~~UsesGraph_node8"><a xlink:href="../module/m_cuda_allocator.html" xlink:title="m_cuda_allocator">
+<polygon fill="#337ab7" stroke="#337ab7" points="690.5,-246.74 583.5,-246.74 583.5,-222.74 690.5,-222.74 690.5,-246.74"/>
+<text text-anchor="middle" x="637" y="-232.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_allocator</text>
+</a>
+</g>
+</g>
+<!-- module~m_cuda_poisson_fft&#45;&gt;module~m_cuda_allocator -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge7" class="edge">
+<title>module~m_cuda_poisson_fft&#45;&gt;module~m_cuda_allocator</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M774.15,-347.46C757.78,-328.48 724.31,-291.52 691,-265.74 684.6,-260.78 677.33,-256.04 670.28,-251.82"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="671.94,-248.74 661.53,-246.78 668.44,-254.81 671.94,-248.74"/>
+</g>
+<!-- module~m_cuda_sendrecv -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node9" class="node">
+<title>module~m_cuda_sendrecv</title>
+<g id="a_module~~m_cuda_poisson_fft~~UsesGraph_node9"><a xlink:href="../module/m_cuda_sendrecv.html" xlink:title="m_cuda_sendrecv">
+<polygon fill="#337ab7" stroke="#337ab7" points="691,-411.74 583,-411.74 583,-387.74 691,-387.74 691,-411.74"/>
+<text text-anchor="middle" x="637" y="-397.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_sendrecv</text>
+</a>
+</g>
+</g>
+<!-- module~m_cuda_poisson_fft&#45;&gt;module~m_cuda_sendrecv -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge8" class="edge">
+<title>module~m_cuda_poisson_fft&#45;&gt;module~m_cuda_sendrecv</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M740.55,-371.74C725.26,-375.91 707.94,-380.64 691.94,-385.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="690.9,-381.67 682.18,-387.68 692.75,-388.42 690.9,-381.67"/>
+</g>
+<!-- module~m_cuda_spectral -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node10" class="node">
+<title>module~m_cuda_spectral</title>
+<g id="a_module~~m_cuda_poisson_fft~~UsesGraph_node10"><a xlink:href="../module/m_cuda_spectral.html" xlink:title="m_cuda_spectral">
+<polygon fill="#337ab7" stroke="#337ab7" points="688.5,-331.74 585.5,-331.74 585.5,-307.74 688.5,-307.74 688.5,-331.74"/>
+<text text-anchor="middle" x="637" y="-317.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_spectral</text>
+</a>
+</g>
+</g>
+<!-- module~m_cuda_poisson_fft&#45;&gt;module~m_cuda_spectral -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge9" class="edge">
+<title>module~m_cuda_poisson_fft&#45;&gt;module~m_cuda_spectral</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M740.55,-347.74C725.26,-343.56 707.94,-338.83 691.94,-334.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="692.75,-331.06 682.18,-331.8 690.9,-337.81 692.75,-331.06"/>
+</g>
+<!-- module~m_field -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node11" class="node">
+<title>module~m_field</title>
+<g id="a_module~~m_cuda_poisson_fft~~UsesGraph_node11"><a xlink:href="../module/m_field.html" xlink:title="m_field">
+<polygon fill="#337ab7" stroke="#337ab7" points="410.5,-275.74 356.5,-275.74 356.5,-251.74 410.5,-251.74 410.5,-275.74"/>
+<text text-anchor="middle" x="383.5" y="-261.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_field</text>
+</a>
+</g>
+</g>
+<!-- module~m_cuda_poisson_fft&#45;&gt;module~m_field -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge10" class="edge">
+<title>module~m_cuda_poisson_fft&#45;&gt;module~m_field</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M770.43,-347.49C753.06,-333.14 722,-309.91 691,-298.74 598.03,-265.24 479.85,-261.85 421.1,-262.57"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="420.78,-259.07 410.84,-262.74 420.9,-266.07 420.78,-259.07"/>
+</g>
+<!-- module~m_mesh -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node12" class="node">
+<title>module~m_mesh</title>
+<g id="a_module~~m_cuda_poisson_fft~~UsesGraph_node12"><a xlink:href="../module/m_mesh.html" xlink:title="m_mesh">
+<polygon fill="#337ab7" stroke="#337ab7" points="538,-137.74 480,-137.74 480,-113.74 538,-113.74 538,-137.74"/>
+<text text-anchor="middle" x="509" y="-123.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_mesh</text>
+</a>
+</g>
+</g>
+<!-- module~m_cuda_poisson_fft&#45;&gt;module~m_mesh -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge11" class="edge">
+<title>module~m_cuda_poisson_fft&#45;&gt;module~m_mesh</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M779.49,-347.58C767.75,-320.35 735.98,-253.74 691,-213.74 668.39,-193.63 593.54,-160.46 547.47,-141.1"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="548.69,-137.81 538.11,-137.19 545.99,-144.27 548.69,-137.81"/>
+</g>
+<!-- module~m_mpi -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node13" class="node">
+<title>module~m_mpi</title>
+<g id="a_module~~m_cuda_poisson_fft~~UsesGraph_node13"><a xlink:href="../module/m_mpi.html" xlink:title="m_mpi">
+<polygon fill="#337ab7" stroke="#337ab7" points="184,-216.74 130,-216.74 130,-192.74 184,-192.74 184,-216.74"/>
+<text text-anchor="middle" x="157" y="-202.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_mpi</text>
+</a>
+</g>
+</g>
+<!-- module~m_cuda_poisson_fft&#45;&gt;module~m_mpi -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge12" class="edge">
+<title>module~m_cuda_poisson_fft&#45;&gt;module~m_mpi</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M783.86,-371.86C781.04,-411.02 766.3,-534.49 691,-584.74 543.78,-682.98 343.94,-472.63 259,-401.74"/>
+</g>
+<!-- module~m_poisson_fft -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node14" class="node">
+<title>module~m_poisson_fft</title>
+<g id="a_module~~m_cuda_poisson_fft~~UsesGraph_node14"><a xlink:href="../module/m_poisson_fft.html" xlink:title="m_poisson_fft">
+<polygon fill="#337ab7" stroke="#337ab7" points="679.5,-141.74 594.5,-141.74 594.5,-117.74 679.5,-117.74 679.5,-141.74"/>
+<text text-anchor="middle" x="637" y="-127.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_poisson_fft</text>
+</a>
+</g>
+</g>
+<!-- module~m_cuda_poisson_fft&#45;&gt;module~m_poisson_fft -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge13" class="edge">
+<title>module~m_cuda_poisson_fft&#45;&gt;module~m_poisson_fft</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M781.21,-347.38C771.89,-314.29 742.62,-222.27 691,-163.74 685.51,-157.51 678.61,-151.99 671.63,-147.3"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="673.17,-144.13 662.83,-141.81 669.46,-150.07 673.17,-144.13"/>
+</g>
+<!-- module~m_tdsops -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node15" class="node">
+<title>module~m_tdsops</title>
+<g id="a_module~~m_cuda_poisson_fft~~UsesGraph_node15"><a xlink:href="../module/m_tdsops.html" xlink:title="m_tdsops">
+<polygon fill="#337ab7" stroke="#337ab7" points="415,-39.74 352,-39.74 352,-15.74 415,-15.74 415,-39.74"/>
+<text text-anchor="middle" x="383.5" y="-25.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_tdsops</text>
+</a>
+</g>
+</g>
+<!-- module~m_cuda_poisson_fft&#45;&gt;module~m_tdsops -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge14" class="edge">
+<title>module~m_cuda_poisson_fft&#45;&gt;module~m_tdsops</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M508,-27.74C480.44,-25.56 449.32,-25.57 425.21,-26.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="424.91,-22.63 415,-26.4 425.1,-29.63 424.91,-22.63"/>
+</g>
+<!-- module~m_common&#45;&gt;module~m_mpi -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge15" class="edge">
+<title>module~m_common&#45;&gt;module~m_mpi</title>
+<path fill="none" stroke="#00ff24" stroke-dasharray="5,2" d="M219.85,-216.61C211.43,-214.99 202.49,-213.28 194.11,-211.67"/>
+<polygon fill="#00ff24" stroke="#00ff24" points="194.71,-208.22 184.23,-209.77 193.39,-215.1 194.71,-208.22"/>
+</g>
+<!-- module~m_cuda_allocator&#45;&gt;module~m_common -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge17" class="edge">
+<title>module~m_cuda_allocator&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M508,-245.74C448.45,-257.18 443.87,-316.07 384.5,-303.74"/>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M382.5,-303.74C359.02,-298.86 352.72,-296.82 332,-284.74 312.2,-273.19 292.42,-256.24 278.45,-243.14"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="280.58,-240.33 270.94,-235.94 275.74,-245.38 280.58,-240.33"/>
+</g>
+<!-- module~m_cuda_allocator&#45;&gt;module~m_field -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge18" class="edge">
+<title>module~m_cuda_allocator&#45;&gt;module~m_field</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M583.25,-236.92C560.56,-238.48 533.83,-241.16 510,-245.74"/>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M508,-245.74C478.77,-251.36 445.35,-256.13 420.65,-259.35"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="420.11,-255.89 410.64,-260.63 421,-262.83 420.11,-255.89"/>
+</g>
+<!-- module~m_cuda_allocator&#45;&gt;module~m_mesh -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge19" class="edge">
+<title>module~m_cuda_allocator&#45;&gt;module~m_mesh</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M618.99,-222.43C608.19,-214.26 594.19,-203 583,-191.74 564.95,-173.57 566.49,-163.36 547,-146.74 545.69,-145.62 544.3,-144.53 542.88,-143.47"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="544.64,-140.44 534.37,-137.81 540.76,-146.26 544.64,-140.44"/>
+</g>
+<!-- module~m_allocator -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node16" class="node">
+<title>module~m_allocator</title>
+<g id="a_module~~m_cuda_poisson_fft~~UsesGraph_node16"><a xlink:href="../module/m_allocator.html" xlink:title="m_allocator">
+<polygon fill="#337ab7" stroke="#337ab7" points="547,-179.74 471,-179.74 471,-155.74 547,-155.74 547,-179.74"/>
+<text text-anchor="middle" x="509" y="-165.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_allocator</text>
+</a>
+</g>
+</g>
+<!-- module~m_cuda_allocator&#45;&gt;module~m_allocator -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge16" class="edge">
+<title>module~m_cuda_allocator&#45;&gt;module~m_allocator</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M613.18,-222.61C593.2,-211.98 563.97,-196.44 541.71,-184.6"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="543.12,-181.39 532.65,-179.78 539.83,-187.57 543.12,-181.39"/>
+</g>
+<!-- module~m_cuda_sendrecv&#45;&gt;cudafor -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge20" class="edge">
+<title>module~m_cuda_sendrecv&#45;&gt;cudafor</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M596.13,-387.72C580.05,-382.86 561.62,-377.31 545.95,-372.58"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="546.69,-369.15 536.11,-369.61 544.67,-375.85 546.69,-369.15"/>
+</g>
+<!-- module~m_cuda_sendrecv&#45;&gt;module~m_common -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge21" class="edge">
+<title>module~m_cuda_sendrecv&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M582.55,-409.6C530.63,-417.01 450.23,-422.68 384.5,-401.74"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M382.5,-401.74C314.34,-376.08 278.63,-287.39 265.28,-245.71"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="268.57,-244.5 262.29,-235.97 261.88,-246.55 268.57,-244.5"/>
+</g>
+<!-- module~m_cuda_sendrecv&#45;&gt;module~m_mpi -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge22" class="edge">
+<title>module~m_cuda_sendrecv&#45;&gt;module~m_mpi</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M382.5,-401.74C331.13,-382.4 301.14,-436.91 259,-401.74"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M257,-401.74C200.62,-354.68 173.14,-267.51 162.91,-226.78"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="166.31,-225.95 160.58,-217.04 159.5,-227.58 166.31,-225.95"/>
+</g>
+<!-- module~m_cuda_spectral&#45;&gt;cudafor -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge23" class="edge">
+<title>module~m_cuda_spectral&#45;&gt;cudafor</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M599.89,-331.77C582.87,-337.45 562.63,-344.2 545.66,-349.85"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="544.48,-346.56 536.1,-353.04 546.7,-353.2 544.48,-346.56"/>
+</g>
+<!-- module~m_cuda_spectral&#45;&gt;module~m_common -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge24" class="edge">
+<title>module~m_cuda_spectral&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M585.34,-320.68C534.15,-320.66 453.04,-317.97 384.5,-303.74"/>
+</g>
+<!-- module~m_field&#45;&gt;module~m_common -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge25" class="edge">
+<title>module~m_field&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#0024ff" stroke-dasharray="5,2" d="M356.31,-255.26C341.75,-250.54 323.19,-244.53 306.19,-239.02"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="306.99,-235.6 296.4,-235.85 304.83,-242.26 306.99,-235.6"/>
+</g>
+<!-- module~m_mesh&#45;&gt;iso_fortran_env -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge26" class="edge">
+<title>module~m_mesh&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M257,-105.74C214.26,-116.19 200.82,-95.63 158,-105.74"/>
+</g>
+<!-- module~m_mesh&#45;&gt;module~m_common -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge27" class="edge">
+<title>module~m_mesh&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M486.79,-137.79C466.21,-149.45 437.7,-165.56 435,-166.74 392.5,-185.33 341.94,-201.09 305.94,-211.29"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="304.88,-207.95 296.19,-214.02 306.76,-214.7 304.88,-207.95"/>
+</g>
+<!-- module~m_mesh&#45;&gt;module~m_field -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge28" class="edge">
+<title>module~m_mesh&#45;&gt;module~m_field</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M481.26,-137.94C477.48,-140.46 473.91,-143.39 471,-146.74 442.46,-179.56 464.2,-205.5 435,-237.74 430.66,-242.54 425.22,-246.58 419.54,-249.95"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="417.75,-246.93 410.53,-254.68 421.01,-253.13 417.75,-246.93"/>
+</g>
+<!-- module~m_mesh&#45;&gt;module~m_mpi -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge30" class="edge">
+<title>module~m_mesh&#45;&gt;module~m_mpi</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M479.96,-117.98C433.42,-106.33 337.58,-87.52 259,-105.74"/>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M257,-105.74C215.99,-115.77 185.06,-157.75 169.41,-183.72"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="166.32,-182.06 164.34,-192.47 172.38,-185.57 166.32,-182.06"/>
+</g>
+<!-- module~m_mesh_content -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node17" class="node">
+<title>module~m_mesh_content</title>
+<g id="a_module~~m_cuda_poisson_fft~~UsesGraph_node17"><a xlink:href="../module/m_mesh_content.html" xlink:title="m_mesh_content">
+<polygon fill="#337ab7" stroke="#337ab7" points="435,-157.74 332,-157.74 332,-133.74 435,-133.74 435,-157.74"/>
+<text text-anchor="middle" x="383.5" y="-143.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_mesh_content</text>
+</a>
+</g>
+</g>
+<!-- module~m_mesh&#45;&gt;module~m_mesh_content -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge29" class="edge">
+<title>module~m_mesh&#45;&gt;module~m_mesh_content</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M479.98,-130.28C469.63,-131.95 457.47,-133.92 445.36,-135.88"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="444.54,-132.47 435.23,-137.52 445.66,-139.38 444.54,-132.47"/>
+</g>
+<!-- module~m_mpi&#45;&gt;iso_fortran_env -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge31" class="edge">
+<title>module~m_mpi&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#b600ff" stroke-dasharray="5,2" d="M134.66,-192.69C118.54,-183.58 96.19,-170.96 78.23,-160.81"/>
+<polygon fill="#b600ff" stroke="#b600ff" points="79.72,-157.64 69.29,-155.77 76.28,-163.73 79.72,-157.64"/>
+</g>
+<!-- mpi -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_node18" class="node">
+<title>mpi</title>
+<g id="a_module~~m_cuda_poisson_fft~~UsesGraph_node18"><a xlink:href="http://www.mpi-forum.org/docs/mpi-3.1/mpi31-report/node410.htm" xlink:title="mpi">
+<polygon fill="#337ab7" stroke="#337ab7" points="74,-216.74 20,-216.74 20,-192.74 74,-192.74 74,-216.74"/>
+<text text-anchor="middle" x="47" y="-202.34" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi</text>
+</a>
+</g>
+</g>
+<!-- module~m_mpi&#45;&gt;mpi -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge32" class="edge">
+<title>module~m_mpi&#45;&gt;mpi</title>
+<path fill="none" stroke="#b600ff" stroke-dasharray="5,2" d="M129.86,-204.74C116.29,-204.74 99.5,-204.74 84.66,-204.74"/>
+<polygon fill="#b600ff" stroke="#b600ff" points="84.28,-201.24 74.28,-204.74 84.28,-208.24 84.28,-201.24"/>
+</g>
+<!-- module~m_poisson_fft&#45;&gt;module~m_common -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge33" class="edge">
+<title>module~m_poisson_fft&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M508,-67.74C429.56,-43.08 398.71,-76.68 332,-124.74 303.63,-145.18 281.68,-179.98 269.55,-202.41"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="266.35,-200.98 264.82,-211.46 272.55,-204.22 266.35,-200.98"/>
+</g>
+<!-- module~m_poisson_fft&#45;&gt;module~m_field -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge34" class="edge">
+<title>module~m_poisson_fft&#45;&gt;module~m_field</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M619.42,-141.84C601.9,-154.37 573.23,-174.11 547,-188.74 504.65,-212.37 453.53,-235.07 420.08,-249.18"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="418.59,-246.01 410.72,-253.11 421.29,-252.47 418.59,-246.01"/>
+</g>
+<!-- module~m_poisson_fft&#45;&gt;module~m_mesh -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge35" class="edge">
+<title>module~m_poisson_fft&#45;&gt;module~m_mesh</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M594.39,-128.42C579.51,-127.95 562.82,-127.42 548.24,-126.95"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="548.15,-123.45 538.05,-126.63 547.93,-130.45 548.15,-123.45"/>
+</g>
+<!-- module~m_poisson_fft&#45;&gt;module~m_tdsops -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge36" class="edge">
+<title>module~m_poisson_fft&#45;&gt;module~m_tdsops</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M616.28,-117.66C592.13,-103.43 549.54,-80.17 510,-67.74"/>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M508,-67.74C480.13,-58.98 448.81,-48.83 424.69,-40.95"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="425.75,-37.62 415.16,-37.83 423.57,-44.27 425.75,-37.62"/>
+</g>
+<!-- module~m_tdsops&#45;&gt;iso_fortran_env -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge37" class="edge">
+<title>module~m_tdsops&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff006d" stroke-dasharray="5,2" d="M351.96,-21.22C326.1,-17.19 288.62,-14.94 259,-27.74"/>
+</g>
+<!-- module~m_tdsops&#45;&gt;module~m_common -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge38" class="edge">
+<title>module~m_tdsops&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#ff006d" stroke-dasharray="5,2" d="M351.87,-39.25C344.68,-43.03 337.51,-47.83 332,-53.74 310.84,-76.43 280.05,-161.68 266.21,-202.15"/>
+<polygon fill="#ff006d" stroke="#ff006d" points="262.89,-201.04 263,-211.63 269.52,-203.29 262.89,-201.04"/>
+</g>
+<!-- module~m_allocator&#45;&gt;iso_fortran_env -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge39" class="edge">
+<title>module~m_allocator&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M481.56,-179.87C445.67,-196.32 385.81,-223.67 384.5,-223.74"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M382.5,-223.74C326.23,-226.87 212.85,-92.78 158,-105.74"/>
+</g>
+<!-- module~m_allocator&#45;&gt;module~m_common -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge40" class="edge">
+<title>module~m_allocator&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M382.5,-223.74C357.34,-225.14 329.26,-225.25 306.24,-224.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="306.1,-221.47 296.05,-224.81 305.99,-228.46 306.1,-221.47"/>
+</g>
+<!-- module~m_allocator&#45;&gt;module~m_field -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge41" class="edge">
+<title>module~m_allocator&#45;&gt;module~m_field</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M488.8,-179.76C482.83,-183.88 476.41,-188.72 471,-193.74 452.49,-210.94 454.64,-221.85 435,-237.74 430.33,-241.51 425.03,-244.96 419.66,-248.03"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="417.84,-245.03 410.66,-252.82 421.13,-251.21 417.84,-245.03"/>
+</g>
+<!-- module~m_mesh_content&#45;&gt;module~m_common -->
+<g id="module~~m_cuda_poisson_fft~~UsesGraph_edge42" class="edge">
+<title>module~m_mesh_content&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M357.45,-157.74C349.21,-161.93 340.08,-166.81 332,-171.74 314.94,-182.13 296.64,-195.18 282.63,-205.6"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="280.39,-202.9 274.5,-211.7 284.6,-208.49 280.39,-202.9"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulem_cuda_poisson_fftUsesGraph = svgPanZoom('#modulem_cuda_poisson_fftUsesGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+          <div class="card">
+      <h3 class="card-header card-title bg-light">Used by</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~m_cuda_poisson_fft~~UsedByGraph Pages: 1 -->
+<svg id="modulem_cuda_poisson_fftUsedByGraph" width="368pt" height="32pt"
+ viewBox="0.00 0.00 368.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~m_cuda_poisson_fft~~UsedByGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>module~~m_cuda_poisson_fft~~UsedByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 364,-28 364,4 -4,4"/>
+<!-- module~m_cuda_poisson_fft -->
+<g id="module~~m_cuda_poisson_fft~~UsedByGraph_node1" class="node">
+<title>module~m_cuda_poisson_fft</title>
+<polygon fill="none" stroke="black" points="117,-24 0,-24 0,0 117,0 117,-24"/>
+<text text-anchor="middle" x="58.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">m_cuda_poisson_fft</text>
+</g>
+<!-- module~m_cuda_backend -->
+<g id="module~~m_cuda_poisson_fft~~UsedByGraph_node2" class="node">
+<title>module~m_cuda_backend</title>
+<g id="a_module~~m_cuda_poisson_fft~~UsedByGraph_node2"><a xlink:href="../module/m_cuda_backend.html" xlink:title="m_cuda_backend">
+<polygon fill="#337ab7" stroke="#337ab7" points="259,-24 153,-24 153,0 259,0 259,-24"/>
+<text text-anchor="middle" x="206" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_backend</text>
+</a>
+</g>
+</g>
+<!-- module~m_cuda_backend&#45;&gt;module~m_cuda_poisson_fft -->
+<g id="module~~m_cuda_poisson_fft~~UsedByGraph_edge1" class="edge">
+<title>module~m_cuda_backend&#45;&gt;module~m_cuda_poisson_fft</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M152.88,-12C144.56,-12 135.84,-12 127.22,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="127.18,-8.5 117.18,-12 127.18,-15.5 127.18,-8.5"/>
+</g>
+<!-- program~xcompact -->
+<g id="module~~m_cuda_poisson_fft~~UsedByGraph_node3" class="node">
+<title>program~xcompact</title>
+<g id="a_module~~m_cuda_poisson_fft~~UsedByGraph_node3"><a xlink:href="../program/xcompact.html" xlink:title="xcompact">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="360,-24 295,-24 295,0 360,0 360,-24"/>
+<text text-anchor="middle" x="327.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">xcompact</text>
+</a>
+</g>
+</g>
+<!-- program~xcompact&#45;&gt;module~m_cuda_backend -->
+<g id="module~~m_cuda_poisson_fft~~UsedByGraph_edge2" class="edge">
+<title>program~xcompact&#45;&gt;module~m_cuda_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M294.79,-12C286.94,-12 278.25,-12 269.48,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="269.2,-8.5 259.2,-12 269.2,-15.5 269.2,-8.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsedByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsedByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+      <br>
+
+
+
+
+        <section>
+          <h2>Interfaces</h2>
+              <div class="card">
+    <div class="card-header bg-light codesum">
+      <span class="anchor" id="interface-cuda_poisson_fft_t"></span>
+      <h3>public        interface <a href='../interface/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a> 
+      </h3>
+    </div>
+    <ul class="list-group">
+          <li class="list-group-item">
+                <h3>
+    private  function init(mesh, xdirps, ydirps, zdirps, lowmem) result(poisson_fft)  
+
+    </h3>
+  <p>if stretching in y is 'bottom'</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mesh~6"></span>
+              type(<a href='../type/mesh_t.html'>mesh_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              target
+            </td>
+            <td>::</td>
+            <td><strong>mesh</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-xdirps~4"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>xdirps</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ydirps~4"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ydirps</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zdirps~4"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zdirps</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lowmem~2"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lowmem</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>type(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)</small>
+    </h4>
+    
+
+          </li>
+    </ul>
+  </div>
+
+              <div class="card">
+    <div class="card-header bg-light codesum">
+      <span class="anchor" id="interface-cufftexecr2c_c"></span>
+      <h3>        interface
+      </h3>
+    </div>
+    <ul class="list-group">
+        <li class="list-group-item">
+              <h3>
+    public  function cufftExecR2C_C(plan, idata, odata) bind(C, name='cufftExecR2C')  
+
+    </h3>
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-plan"></span>
+              integer(kind=c_int),
+            </td>
+<td></td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>plan</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idata"></span>
+              type(c_ptr),
+            </td>
+<td></td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>idata</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-odata"></span>
+              type(c_ptr),
+            </td>
+<td></td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>odata</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer(kind=c_int)</small>
+    </h4>
+    
+
+        </li>
+    </ul>
+  </div>
+
+              <div class="card">
+    <div class="card-header bg-light codesum">
+      <span class="anchor" id="interface-cufftexecc2r_c"></span>
+      <h3>        interface
+      </h3>
+    </div>
+    <ul class="list-group">
+        <li class="list-group-item">
+              <h3>
+    public  function cufftExecC2R_C(plan, idata, odata) bind(C, name='cufftExecC2R')  
+
+    </h3>
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-plan~2"></span>
+              integer(kind=c_int),
+            </td>
+<td></td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>plan</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idata~2"></span>
+              type(c_ptr),
+            </td>
+<td></td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>idata</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-odata~2"></span>
+              type(c_ptr),
+            </td>
+<td></td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>odata</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer(kind=c_int)</small>
+    </h4>
+    
+
+        </li>
+    </ul>
+  </div>
+
+        </section>
+        <br>
+
+
+        <section>
+          <h2>Derived Types</h2>
+              <div class="card">
+    <div class="card-header codesum">
+      <span class="anchor" id="type-cuda_poisson_fft_t"></span>
+      <h3>
+        type, public, extends(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)&nbsp;::&nbsp;
+        <a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>
+        
+      </h3>
+    </div>
+    <div class="card-body">
+      <p>FFT based Poisson solver</p>
+
+        <h4>Components</h4>
+          <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mesh~4"></span>
+              type(<a href='../type/mesh_t.html'>mesh_t</a>),
+            </td>
+              <td>public,</td>
+            <td>
+              pointer
+            </td>
+            <td>::</td>
+            <td><strong>mesh</strong></td>
+<td>=&gt; </td>
+                <td>null()</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_glob"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_glob</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Global dimensions</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_glob"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_glob</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Global dimensions</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz_glob"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz_glob</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Global dimensions</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_loc"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_loc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_loc"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_loc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz_loc"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz_loc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_perm"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_perm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions in the permuted slabs</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_perm"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_perm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions in the permuted slabs</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz_perm"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz_perm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions in the permuted slabs</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_spec"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_spec</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions in the permuted slabs in spectral space</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_spec"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_spec</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions in the permuted slabs in spectral space</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz_spec"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz_spec</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions in the permuted slabs in spectral space</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sp_st"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sp_st</strong>(3)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Offset per spectral dimension (dim1, dim2, dim3) in spectral space</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-waves"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>waves</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local domain sized array storing the spectral equivalence constants</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ax"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>ax</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bx"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>bx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ay"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>ay</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-by"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>by</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-az"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>az</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bz"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>bz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kx"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>kx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ky"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>ky</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kz"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>kz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-exs"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>exs</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eys"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>eys</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ezs"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>ezs</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k2x"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>k2x</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k2y"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>k2y</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k2z"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>k2z</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-trans_x_re"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>trans_x_re</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Staggered grid transformation</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-trans_x_im"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>trans_x_im</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Staggered grid transformation</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-trans_y_re"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>trans_y_re</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Staggered grid transformation</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-trans_y_im"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>trans_y_im</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Staggered grid transformation</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-trans_z_re"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>trans_z_re</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Staggered grid transformation</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-trans_z_im"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>trans_z_im</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Staggered grid transformation</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-periodic_x"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>periodic_x</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Periodicity in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-periodic_y"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>periodic_y</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Periodicity in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-periodic_z"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>periodic_z</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Periodicity in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stretched_y"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>stretched_y</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p>Periodicity in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stretched_y_sym"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>stretched_y_sym</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Periodicity in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_odd_re"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_odd_re</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_odd_im"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_odd_im</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_even_re"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_even_re</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_even_im"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_even_im</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_re"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_re</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_im"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_im</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lowmem"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lowmem</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p>lowmem option, only used in CUDA backend</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-poisson"></span>
+              procedure(<a href='../interface/poisson_xxx.html'>poisson_xxx</a>),
+            </td>
+              <td>public,</td>
+            <td>
+              pointer
+            </td>
+            <td>::</td>
+            <td><strong>poisson</strong></td>
+<td>=&gt; </td>
+                <td>null()</td>
+            <td>
+<p>Procedure pointer to BC specific poisson solvers</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-waves_dev"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>waves_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local domain sized array storing the spectral equivalence constants</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ax_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>ax_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bx_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>bx_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ay_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>ay_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-by_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>by_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-az_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>az_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bz_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>bz_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-store_a_odd_re_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>store_a_odd_re_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices stores</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-store_a_odd_im_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>store_a_odd_im_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices stores</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-store_a_even_re_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>store_a_even_re_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices stores</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-store_a_even_im_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>store_a_even_im_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices stores</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-store_a_re_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>store_a_re_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices stores</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-store_a_im_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>store_a_im_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices stores</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_odd_re_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_odd_re_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_odd_im_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_odd_im_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_even_re_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_even_re_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_even_im_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_even_im_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_re_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_re_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_im_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_im_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-plan3d_fw"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>plan3D_fw</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Forward and backward FFT transform plans</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-plan3d_bw"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>plan3D_bw</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Forward and backward FFT transform plans</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-use_cufftmp"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>use_cufftmp</strong></td>
+<td> =</td>
+                <td>.true.</td>
+            <td>
+<p>Flag to indicate whether cuFFTMp is used</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_000_case"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_000_case</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p>Flag for cases</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_010_case"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_010_case</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_100_case"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_100_case</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_110_case"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_110_case</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-xtdesc"></span>
+              type(cudaLibXtDesc),
+            </td>
+              <td>public,</td>
+            <td>
+              pointer
+            </td>
+            <td>::</td>
+            <td><strong>xtdesc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>cuFFTMp object manages decomposition and data storage</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_dev"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>c_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Standard cuFFT storage</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-r_dev"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>r_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>cuFFT real workspace (input/output of R2C/C2R)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-r_dev_110"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>r_dev_110</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Transposed real workspace for 110 case (nz, nx, ny)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_mirror_dev"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>c_mirror_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>dim2 mirror of the local spectral slab, used by the 100 case to
+reach the paired split partner that lives on another rank</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_slab_send_dev"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>c_slab_send_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Staging copy of the local slab, sent in place of c_dev itself.
+In the cuFFTMp path c_dev is a c_f_pointer onto descriptor%data(1),
+which is cufftXtMalloc memory and therefore lives in the NVSHMEM
+symmetric heap. UCX does not reliably classify such a pointer as
+device memory: when it falls back to the host CMA transport it calls
+process_vm_readv on it and the job aborts with EFAULT. Copying into
+ordinary device memory first makes the exchange independent of which
+transport UCX happens to select.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_plane_send_dev"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :)
+            </td>
+            <td>::</td>
+            <td><strong>c_plane_send_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>The single dim2 plane that falls outside the mirrored slab</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_plane_recv_dev"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              device, allocatable, dimension(:, :)
+            </td>
+            <td>::</td>
+            <td><strong>c_plane_recv_dev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>The single dim2 plane that falls outside the mirrored slab</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mirror_slab_rank"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mirror_slab_rank</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Ranks holding the mirror slab and the extra mirror plane</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mirror_plane_rank"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mirror_plane_rank</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Ranks holding the mirror slab and the extra mirror plane</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+        <h4>Constructor</h4>
+          
+        <table class="table table-striped varlist">
+          <tbody>
+                <tr>
+                  <td>
+                        private
+
+                    
+                    function
+                    <strong>init</strong>
+                    (mesh, xdirps, ydirps, zdirps, lowmem)
+                  </td>
+                  <td><p>if stretching in y is 'bottom'</p></td>
+                </tr>
+          </tbody>
+        </table>
+
+
+        <h4>Type-Bound Procedures</h4>
+        <table class="table table-striped varlist">
+          <tbody>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-base_init'>base_init</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-solve_poisson'>solve_poisson</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-stretching_matrix'>stretching_matrix</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-waves_set'>waves_set</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-get_km'>get_km</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-get_km_re'>get_km_re</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-get_km_im'>get_km_im</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-fft_forward~2'>fft_forward</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/fft_forward_cuda.html'>fft_forward_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-fft_forward_010~2'>fft_forward_010</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/fft_forward_cuda.html'>fft_forward_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-fft_forward_100~2'>fft_forward_100</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/fft_forward_100_cuda.html'>fft_forward_100_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-fft_forward_110~2'>fft_forward_110</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/fft_forward_110_cuda.html'>fft_forward_110_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-fft_backward~2'>fft_backward</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/fft_backward_cuda.html'>fft_backward_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-fft_backward_010~2'>fft_backward_010</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/fft_backward_cuda.html'>fft_backward_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-fft_backward_100~2'>fft_backward_100</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/fft_backward_100_cuda.html'>fft_backward_100_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-fft_backward_110~2'>fft_backward_110</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/fft_backward_110_cuda.html'>fft_backward_110_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-fft_postprocess_000~2'>fft_postprocess_000</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/fft_postprocess_000_cuda.html'>fft_postprocess_000_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-fft_postprocess_010~2'>fft_postprocess_010</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/fft_postprocess_010_cuda.html'>fft_postprocess_010_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-fft_postprocess_100~2'>fft_postprocess_100</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/fft_postprocess_100_cuda.html'>fft_postprocess_100_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-fft_postprocess_110~2'>fft_postprocess_110</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/fft_postprocess_110_cuda.html'>fft_postprocess_110_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-enforce_periodicity_x~2'>enforce_periodicity_x</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/enforce_periodicity_x_cuda.html'>enforce_periodicity_x_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-undo_periodicity_x~2'>undo_periodicity_x</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/undo_periodicity_x_cuda.html'>undo_periodicity_x_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-enforce_periodicity_y~2'>enforce_periodicity_y</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/enforce_periodicity_y_cuda.html'>enforce_periodicity_y_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-undo_periodicity_y~2'>undo_periodicity_y</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/undo_periodicity_y_cuda.html'>undo_periodicity_y_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-enforce_periodicity_xy~2'>enforce_periodicity_xy</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/enforce_periodicity_xy_cuda.html'>enforce_periodicity_xy_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-undo_periodicity_xy~2'>undo_periodicity_xy</a></strong> => <a href='/home/runner/work/x3d2/x3d2/docs/api-docs/proc/undo_periodicity_xy_cuda.html'>undo_periodicity_xy_cuda</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/cuda_poisson_fft_t.html#boundprocedure-exchange_mirror_100'>exchange_mirror_100</a></strong></td>
+                  <td></td>
+              </tr>
+          </tbody>
+        </table>
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+        <section>
+          <h2>Subroutines</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-fft_forward_110_cuda"></span> <h3>public  subroutine <a href='../proc/fft_forward_110_cuda.html'>fft_forward_110_cuda</a>(self, f)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Forward FFT for 110 case: transpose (nx,ny,nz)-&gt;(nz,nx,ny) then R2C</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~106"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~16"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-fft_backward_110_cuda"></span> <h3>public  subroutine <a href='../proc/fft_backward_110_cuda.html'>fft_backward_110_cuda</a>(self, f)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Backward FFT for 110 case: C2R then transpose (nz,nx,ny)-&gt;(nx,ny,nz)</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~107"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~17"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-fft_forward_100_cuda"></span> <h3>public  subroutine <a href='../proc/fft_forward_100_cuda.html'>fft_forward_100_cuda</a>(self, f)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Forward FFT for non-periodic-X case
+We transpose X&lt;-&gt;Y so that the non-periodic direction becomes the
+"Y" direction in the transposed space, then use the same FFT approach as 010</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~108"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~18"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-fft_backward_100_cuda"></span> <h3>public  subroutine <a href='../proc/fft_backward_100_cuda.html'>fft_backward_100_cuda</a>(self, f)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~109"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~19"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-fft_forward_cuda"></span> <h3>public  subroutine <a href='../proc/fft_forward_cuda.html'>fft_forward_cuda</a>(self, f)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~110"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~20"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-fft_backward_cuda"></span> <h3>public  subroutine <a href='../proc/fft_backward_cuda.html'>fft_backward_cuda</a>(self, f)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~111"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~21"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-fft_postprocess_000_cuda"></span> <h3>public  subroutine <a href='../proc/fft_postprocess_000_cuda.html'>fft_postprocess_000_cuda</a>(self)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~112"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-fft_postprocess_100_cuda"></span> <h3>public  subroutine <a href='../proc/fft_postprocess_100_cuda.html'>fft_postprocess_100_cuda</a>(self)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~113"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-exchange_mirror_100"></span> <h3>public  subroutine <a href='../proc/exchange_mirror_100.html'>exchange_mirror_100</a>(self, c_dev)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Fills c_mirror_dev and c_plane_recv_dev with the dim2 mirror of the
+local spectral slab, so that the 100 paired split can read its
+partner mode without going looking for it in another rank's memory.</p><a href="../proc/exchange_mirror_100.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~114"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_dev~4"></span>
+              complex(kind=dp),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              device, dimension(:, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>c_dev</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-fft_postprocess_010_cuda"></span> <h3>public  subroutine <a href='../proc/fft_postprocess_010_cuda.html'>fft_postprocess_010_cuda</a>(self)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>if stretching in y is 'bottom'</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~115"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-fft_postprocess_110_cuda"></span> <h3>public  subroutine <a href='../proc/fft_postprocess_110_cuda.html'>fft_postprocess_110_cuda</a>(self)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Spectral post-processing for 110 case (R2C Z-transpose)
+7 separate kernel launches to avoid cross-block race conditions.
+Spectral array is (nz/2+1, nx, ny) = (nx_spec, ny_spec, nz_spec).
+Thread i-&gt;X (ny_spec), blockIdx%y k-&gt;Y (nz_spec), serial j-&gt;Z (nx_spec).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~116"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-enforce_periodicity_x_cuda"></span> <h3>public  subroutine <a href='../proc/enforce_periodicity_x_cuda.html'>enforce_periodicity_x_cuda</a>(self, f_out, f_in)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~117"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_out~3"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_out</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_in~3"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_in</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-undo_periodicity_x_cuda"></span> <h3>public  subroutine <a href='../proc/undo_periodicity_x_cuda.html'>undo_periodicity_x_cuda</a>(self, f_out, f_in)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~118"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_out~4"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_out</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_in~4"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_in</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-enforce_periodicity_y_cuda"></span> <h3>public  subroutine <a href='../proc/enforce_periodicity_y_cuda.html'>enforce_periodicity_y_cuda</a>(self, f_out, f_in)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~119"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_out~5"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_out</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_in~5"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_in</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-undo_periodicity_y_cuda"></span> <h3>public  subroutine <a href='../proc/undo_periodicity_y_cuda.html'>undo_periodicity_y_cuda</a>(self, f_out, f_in)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~120"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_out~6"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_out</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_in~6"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_in</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-enforce_periodicity_xy_cuda"></span> <h3>public  subroutine <a href='../proc/enforce_periodicity_xy_cuda.html'>enforce_periodicity_xy_cuda</a>(self, f_out, f_in)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~121"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_out~7"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_out</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_in~7"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_in</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-undo_periodicity_xy_cuda"></span> <h3>public  subroutine <a href='../proc/undo_periodicity_xy_cuda.html'>undo_periodicity_xy_cuda</a>(self, f_out, f_in)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~122"></span>
+              class(<a href='../type/cuda_poisson_fft_t.html'>cuda_poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_out~8"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_out</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_in~8"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_in</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
