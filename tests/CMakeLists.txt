@@ -138,7 +138,6 @@ function(define_test testfile np backend)
 
     if(${backend} STREQUAL omp_tgt)
       target_compile_options(${test_name} PRIVATE "-DOMP_TGT")
-      # Note this is somewhat of a hack - hardcoded to build against MI300A
       if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
         target_compile_options(${test_name} PRIVATE "-fopenmp")
