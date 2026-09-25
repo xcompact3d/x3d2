@@ -118,6 +118,7 @@ endif()
 # on LD_LIBRARY_PATH being set.
 set(FLANG_OPENMP_RUNTIME_DIR "" CACHE PATH
   "Directory holding flang's libomp.so; detected automatically when empty")
+mark_as_advanced(FLANG_OPENMP_RUNTIME_DIR)
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "LLVMFlang" OR
    CMAKE_Fortran_COMPILER_ID STREQUAL "Flang")
   set(_flang_libomp_dir "${FLANG_OPENMP_RUNTIME_DIR}")
