@@ -496,7 +496,9 @@ contains
     ! up to a multiple of SZ and reorder copies the whole padded extent back
     ! out to the pressure field, so the untouched entries have to be cleared
     ! rather than left holding whatever the recycled block came with.
+    !$omp parallel workshare
     f_out%data = 0._dp
+    !$omp end parallel workshare
 
     !$omp parallel do collapse(2)
     do k = 1, self%nz_loc
@@ -632,7 +634,9 @@ contains
     ! whole padded extent back out to the pressure field, so the
     ! untouched entries have to be cleared rather than left holding
     ! whatever the recycled block came with.
+    !$omp parallel workshare
     f_out%data = 0._dp
+    !$omp end parallel workshare
 
     ! The gather arithmetic (n2x, n2y and the src_i/src_j mapping below)
     ! stays in global terms: it is a property of the global line, and the
