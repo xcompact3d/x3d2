@@ -76,7 +76,8 @@ else()
   )
 endif()
 
-list(APPEND SRC 
+list(APPEND SRC
+  io/nvtx.f90
   io/io_base.f90
   io/io_session.f90
   io/io_field_utils.f90
@@ -89,11 +90,16 @@ list(APPEND SRC
 
 # ADIOS2
 if(WITH_ADIOS2)
-  list(APPEND SRC 
+  list(APPEND SRC
     io/adios2/io.f90
   )
+  if(WITH_ADIOS2_GPU_AWARE)
+    list(APPEND SRC
+      io/adios2/adios2_device_put.c
+    )
+  endif()
 else()
-  list(APPEND SRC 
+  list(APPEND SRC
   io/dummy/io.f90
   )
 endif()
@@ -170,6 +176,17 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     target_link_options(x3d2 INTERFACE "-cudalib=cufft")
   endif()
   target_compile_options(xcompact PRIVATE "-DCUDA")
+  # NVTX ranges label the ADIOS2 write paths in Nsight Systems (see
+  # io/nvtx.f90). Without ADIOS2 there is no output to label.
+  if(WITH_ADIOS2)
+    target_compile_definitions(x3d2 PRIVATE X3D2_NVTX)
+    find_package(CUDAToolkit QUIET)
+    if(CUDAToolkit_FOUND AND TARGET CUDA::nvToolsExt)
+      target_link_libraries(x3d2 PUBLIC CUDA::nvToolsExt)
+    else()
+      target_link_libraries(x3d2 PUBLIC nvToolsExt)
+    endif()
+  endif()
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   add_definitions("-DOMP_TGT")
   if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
@@ -209,4 +226,10 @@ if(WITH_ADIOS2)
   target_link_libraries(x3d2 PRIVATE ${ADIOS2_FORTRAN_TARGET})
   target_link_libraries(xcompact PRIVATE ${ADIOS2_FORTRAN_TARGET})
   target_compile_options(x3d2 PRIVATE "-DWITH_ADIOS2")
+
+  # GPU-aware I/O requires C API (called via iso_c_binding)
+  if(WITH_ADIOS2_GPU_AWARE)
+    target_link_libraries(x3d2 PRIVATE ${ADIOS2_C_TARGET})
+    target_link_libraries(xcompact PRIVATE ${ADIOS2_C_TARGET})
+  endif()
 endif()

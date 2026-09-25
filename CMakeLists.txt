@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.13)
 # Define project languages
 project(x3d2 LANGUAGES Fortran CXX C)
 
-# Require OpenMP 
+# Require OpenMP
 find_package(OpenMP REQUIRED)
 
 # MPI option (default ON).  A build without it is a single serial rank: see
@@ -33,6 +33,17 @@ set_property(CACHE ENABLE_BACKEND PROPERTY STRINGS OFF CUDA OMP_TGT)
 
 # ADIOS2 option (default OFF)
 option(WITH_ADIOS2 "Enable ADIOS2 for I/O" OFF)
+option(WITH_ADIOS2_GPU_AWARE "Enable GPU-aware ADIOS2 I/O with the CUDA backend" OFF)
+
+if(WITH_ADIOS2_GPU_AWARE)
+  if(NOT WITH_ADIOS2)
+    message(FATAL_ERROR "WITH_ADIOS2_GPU_AWARE=ON requires WITH_ADIOS2=ON")
+  endif()
+  if(NOT ENABLE_BACKEND STREQUAL "CUDA")
+    message(FATAL_ERROR "WITH_ADIOS2_GPU_AWARE=ON requires ENABLE_BACKEND=CUDA")
+  endif()
+  add_compile_definitions(X3D2_ADIOS2_CUDA)
+endif()
 
 # FFT option (default ON)
 option(WITH_2DECOMPFFT "Enable Poisson based FFT solver on the OpenMP backend" ON)
@@ -51,16 +62,16 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA" OR ${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   set(BACKEND_ARCH "" CACHE STRING "Target GPU architecture, e.g. cc80 for NVIDIA or gfx942 for AMD")
   if ("${BACKEND_ARCH}" STREQUAL "")
     message(FATAL_ERROR
-      "CUDA and OMP_TGT backend requires setting BACKEND_ARCH=<arch>")
+       "CUDA and OMP_TGT backends require BACKEND_ARCH=<arch> (replaces CUDA_ARCH / OMP_TGT_ARCH), e.g. cc80 or gfx942")
   endif()
 endif()
 if (${ENABLE_BACKEND} STREQUAL "CUDA")
   if(NOT (CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI"))
     message(FATAL_ERROR "CUDA backend require NVHPC and PGI compiler")
   endif()
-  IF(NOT BACKEND_ARCH MATCHES "^cc[0-9]+$")
+  if(NOT BACKEND_ARCH MATCHES "^cc[0-9]+$")
     message(FATAL_ERROR "For Nvidia GPU, BACKEND_ARCH must be specified as ccXX")
-  ENDIF()
+  endif()
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   if("${OpenMP_Fortran_VERSION}" VERSION_LESS "4.5")
     message(FATAL_ERROR "OpenMP Fortran version ${OpenMP_Fortran_VERSION} is detected, but at least 4.5 is required with OMP_TGT.")
@@ -68,14 +79,14 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
      ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
      ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
-    IF(NOT BACKEND_ARCH MATCHES "gfx*")
-      message(FATAL_ERROR "For AMD GPU, BACKEND_ARCH must be specified as gfx***")
-    ENDIF()
+    if(NOT BACKEND_ARCH MATCHES "^gfx[0-9]+[a-f]?$")
+      message(FATAL_ERROR "For AMD GPU, BACKEND_ARCH must be specified as gfxXXX")
+    endif()
   endif()
   if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
-    IF(NOT BACKEND_ARCH MATCHES "^cc[0-9]+$")
+    if(NOT BACKEND_ARCH MATCHES "^cc[0-9]+$")
       message(FATAL_ERROR "For Nvidia GPU, BACKEND_ARCH must be specified as ccXX")
-    ENDIF()
+    endif()
     # FindOpenMP supplies -mp, which targets the CPU with NVHPC.  Compile and
     # link target regions for the GPU when this backend is selected.
     set_target_properties(OpenMP::OpenMP_Fortran PROPERTIES
@@ -107,6 +118,7 @@ endif()
 # on LD_LIBRARY_PATH being set.
 set(FLANG_OPENMP_RUNTIME_DIR "" CACHE PATH
   "Directory holding flang's libomp.so; detected automatically when empty")
+mark_as_advanced(FLANG_OPENMP_RUNTIME_DIR)
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "LLVMFlang" OR
    CMAKE_Fortran_COMPILER_ID STREQUAL "Flang")
   set(_flang_libomp_dir "${FLANG_OPENMP_RUNTIME_DIR}")
@@ -165,5 +177,8 @@ endif()
 enable_testing()
 include(ThirdPartyADIOS2)
 include(ThirdPartyDecomp2D)
+if(WITH_ADIOS2_GPU_AWARE AND ADIOS2_FOUND AND NOT TARGET adios2::core_cuda)
+  message(FATAL_ERROR "WITH_ADIOS2_GPU_AWARE=ON requires CUDA-enabled ADIOS2")
+endif()
 add_subdirectory(src)
 add_subdirectory(tests)

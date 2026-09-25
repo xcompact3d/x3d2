@@ -41,13 +41,13 @@ stages:
     # itself for a WITH_MPI=OFF one, where the wrapper would put MPI back on
     # the compile and link lines. Each job sets it.
     - echo "Configure Debug build"
-    - cmake -S . -B build-debug -DCMAKE_Fortran_COMPILER=${FORTRAN_COMPILER} -DCMAKE_BUILD_TYPE=Debug -DENABLE_BACKEND=${ENABLE_BACKEND} -DWITH_MPI=${WITH_MPI} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
+    - cmake -S . -B build-debug -DCMAKE_Fortran_COMPILER=${FORTRAN_COMPILER} -DCMAKE_BUILD_TYPE=Debug -DENABLE_BACKEND=${ENABLE_BACKEND} -DBACKEND_ARCH=${BACKEND_ARCH} -DWITH_MPI=${WITH_MPI} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
     - echo "Build tests"
     - make -C build-debug
     - echo "Run the tests"
     - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build-debug -L "unit|verification" --output-on-failure --output-junit ctest-junit.xml; fi
     - echo "Configure Release build"
-    - cmake -S . -B build -DCMAKE_Fortran_COMPILER=${FORTRAN_COMPILER} -DCMAKE_BUILD_TYPE=Release -DENABLE_BACKEND=${ENABLE_BACKEND} -DWITH_MPI=${WITH_MPI} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
+    - cmake -S . -B build -DCMAKE_Fortran_COMPILER=${FORTRAN_COMPILER} -DCMAKE_BUILD_TYPE=Release -DENABLE_BACKEND=${ENABLE_BACKEND} -DBACKEND_ARCH=${BACKEND_ARCH} -DWITH_MPI=${WITH_MPI} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
     - echo "Build tests"
     - make -C build
     - echo "Run the tests"
@@ -96,6 +96,7 @@ build-and-test:
     WITH_MPI: "ON"
     FORTRAN_COMPILER: "mpif90"
     ENABLE_BACKEND: "OFF"
+    BACKEND_ARCH: ""
     RUN_TEST: "ON"
 
 build-and-test-no-mpi:
@@ -108,6 +109,7 @@ build-and-test-no-mpi:
     WITH_MPI: "OFF"
     FORTRAN_COMPILER: "gfortran"
     ENABLE_BACKEND: "OFF"
+    BACKEND_ARCH: ""
     RUN_TEST: "ON"
 
 build-and-test-single-prec:
@@ -120,6 +122,7 @@ build-and-test-single-prec:
     WITH_MPI: "ON"
     FORTRAN_COMPILER: "mpif90"
     ENABLE_BACKEND: "OFF"
+    BACKEND_ARCH: ""
     RUN_TEST: "ON"
 
 build-and-test-cuda:
@@ -132,6 +135,7 @@ build-and-test-cuda:
     WITH_MPI: "ON"
     FORTRAN_COMPILER: "mpif90"
     ENABLE_BACKEND: "CUDA"
+    BACKEND_ARCH: "cc86"
     RUN_TEST: "ON"
 
 build-and-test-cuda-single-prec:
@@ -144,6 +148,7 @@ build-and-test-cuda-single-prec:
     WITH_MPI: "ON"
     FORTRAN_COMPILER: "mpif90"
     ENABLE_BACKEND: "CUDA"
+    BACKEND_ARCH: "cc86"
     RUN_TEST: "OFF"
 
 build-and-test-omp_tgt:
@@ -156,6 +161,7 @@ build-and-test-omp_tgt:
     WITH_MPI: "ON"
     FORTRAN_COMPILER: "mpif90"
     ENABLE_BACKEND: "OMP_TGT"
+    BACKEND_ARCH: "cc86"
     RUN_TEST: "ON"
 
 check-formatting:
