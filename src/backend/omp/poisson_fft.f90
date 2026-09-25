@@ -431,10 +431,11 @@ contains
     class(omp_poisson_fft_t) :: self
 
     call process_spectral_110( &
-      self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
-      self%sp_st(1), self%sp_st(2), self%sp_st(3), &
-      self%nx_glob, self%ny_glob, self%nz_glob, &
-      self%ax, self%bx, self%ay, self%by, self%az, self%bz &
+      div_u=self%c_x, waves=self%waves, &
+      n1=self%nx_spec, n2=self%ny_spec, n3=self%nz_spec, &
+      st1=self%sp_st(1), st2=self%sp_st(2), st3=self%sp_st(3), &
+      nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+      ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, az=self%az, bz=self%bz &
       )
 
   end subroutine fft_postprocess_110_omp

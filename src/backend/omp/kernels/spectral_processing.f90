@@ -323,7 +323,7 @@ contains
   end subroutine process_spectral_100
 
   subroutine process_spectral_110_fw( &
-    div_u, n1, n2, n3, st1, st2, st3, nx, ny, nz, ax, bx, az, bz &
+    div_u, n1, n2, n3, st1, st2, nx, ny, nz, ax, bx, az, bz &
     )
     !! Forward third of the spectral post-process for the 110 case
     !! (non-periodic x and y, periodic z, R2C Z-transpose layout):
@@ -342,7 +342,7 @@ contains
     !> Local extents of div_u
     integer, intent(in) :: n1, n2, n3
     !> Offsets of the local block within the global spectral array
-    integer, intent(in) :: st1, st2, st3
+    integer, intent(in) :: st1, st2
     !> Global cell size
     integer, intent(in) :: nx, ny, nz
 
@@ -374,10 +374,10 @@ contains
     ! X paired even/odd split (forward)
     !$omp parallel do private(ix, ix_pair, l_r, l_c, r_r, r_c) collapse(3)
     do k = 1, n3
-      do j = 2, nx/2 + 1
+      do j = 2, n2/2 + 1
         do i = 1, n1
           ix = j + st2
-          ix_pair = nx - j + 2
+          ix_pair = n2 - j + 2
 
           l_r = real(div_u(i, j, k), kind=dp)
           l_c = aimag(div_u(i, j, k))
@@ -432,11 +432,11 @@ contains
 
     ! Y paired even/odd split (forward)
     !$omp parallel do private(iy, iy_pair, l_r, l_c, r_r, r_c) collapse(3)
-    do k = 2, ny/2 + 1
+    do k = 2, n3/2 + 1
       do j = 1, n2
         do i = 1, n1
           iy = k + st3
-          iy_pair = ny - k + 2
+          iy_pair = n3 - k + 2
 
           l_r = real(div_u(i, j, k), kind=dp)
           l_c = aimag(div_u(i, j, k))
@@ -492,11 +492,11 @@ contains
 
     ! Y paired even/odd recombine (backward)
     !$omp parallel do private(iy, iy_pair, l_r, l_c, r_r, r_c) collapse(3)
-    do k = 2, ny/2 + 1
+    do k = 2, n3/2 + 1
       do j = 1, n2
         do i = 1, n1
           iy = k + st3
-          iy_pair = ny - k + 2
+          iy_pair = n3 - k + 2
 
           l_r = real(div_u(i, j, k), kind=dp)
           l_c = aimag(div_u(i, j, k))
@@ -522,7 +522,7 @@ contains
   end subroutine process_spectral_110_solve
 
   subroutine process_spectral_110_bw( &
-    div_u, n1, n2, n3, st1, st2, st3, nx, ny, nz, ax, bx, az, bz &
+    div_u, n1, n2, n3, st1, st2, nx, ny, nz, ax, bx, az, bz &
     )
     !! Backward third of the spectral post-process for the 110 case: the
     !! X paired even/odd recombine, then the Z periodic post-process
@@ -540,7 +540,7 @@ contains
     !> Local extents of div_u
     integer, intent(in) :: n1, n2, n3
     !> Offsets of the local block within the global spectral array
-    integer, intent(in) :: st1, st2, st3
+    integer, intent(in) :: st1, st2
     !> Global cell size
     integer, intent(in) :: nx, ny, nz
 
@@ -550,10 +550,10 @@ contains
     ! X paired even/odd recombine (backward)
     !$omp parallel do private(ix, ix_pair, l_r, l_c, r_r, r_c) collapse(3)
     do k = 1, n3
-      do j = 2, nx/2 + 1
+      do j = 2, n2/2 + 1
         do i = 1, n1
           ix = j + st2
-          ix_pair = nx - j + 2
+          ix_pair = n2 - j + 2
 
           l_r = real(div_u(i, j, k), kind=dp)
           l_c = aimag(div_u(i, j, k))
@@ -621,12 +621,20 @@ contains
     !> Global cell size
     integer, intent(in) :: nx, ny, nz
 
-    call process_spectral_110_fw(div_u, n1, n2, n3, st1, st2, st3, &
-                                 nx, ny, nz, ax, bx, az, bz)
-    call process_spectral_110_solve(div_u, waves, n1, n2, n3, st1, st2, st3, &
-                                    nx, ny, nz, ay, by)
-    call process_spectral_110_bw(div_u, n1, n2, n3, st1, st2, st3, &
-                                 nx, ny, nz, ax, bx, az, bz)
+    ! The paired x/y splits index the mirror mode globally, so dims 2 and 3
+    ! must hold the full x and y mode ranges (single rank only for now).
+    if (n2 /= nx .or. n3 /= ny .or. st2 /= 0 .or. st3 /= 0) &
+      error stop 'process_spectral_110: dims 2 and 3 must span full nx, ny'
+
+    call process_spectral_110_fw(div_u=div_u, n1=n1, n2=n2, n3=n3, &
+                                 st1=st1, st2=st2, nx=nx, ny=ny, nz=nz, &
+                                 ax=ax, bx=bx, az=az, bz=bz)
+    call process_spectral_110_solve(div_u=div_u, waves=waves, n1=n1, n2=n2, &
+                                    n3=n3, st1=st1, st2=st2, st3=st3, &
+                                    nx=nx, ny=ny, nz=nz, ay=ay, by=by)
+    call process_spectral_110_bw(div_u=div_u, n1=n1, n2=n2, n3=n3, &
+                                 st1=st1, st2=st2, nx=nx, ny=ny, nz=nz, &
+                                 ax=ax, bx=bx, az=az, bz=bz)
 
   end subroutine process_spectral_110
 
