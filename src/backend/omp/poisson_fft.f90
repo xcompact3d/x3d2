@@ -14,7 +14,7 @@ module m_omp_poisson_fft
   use m_tdsops, only: dirps_t
 
   use m_omp_spectral, only: process_spectral_000, process_spectral_010, &
-                            process_spectral_100
+                            process_spectral_100, process_spectral_110
 
   implicit none
 
@@ -23,6 +23,8 @@ module m_omp_poisson_fft
     complex(dp), allocatable, dimension(:, :, :) :: c_x, c_y, c_z
     !> Non-periodic in x, periodic in y and z
     logical :: is_100_case = .false.
+    !> Non-periodic in x and y, periodic in z
+    logical :: is_110_case = .false.
     !> 2decomp processor grid. p_row splits y in the x-pencil, p_col splits z.
     integer :: p_row = 1, p_col = 1
     !> Physical space decomposition owned by the FFT. The 100 case builds
@@ -107,6 +109,9 @@ contains
     poisson_fft%is_100_case = (.not. mesh%grid%periodic_BC(1)) &
                               .and. mesh%grid%periodic_BC(2) &
                               .and. mesh%grid%periodic_BC(3)
+    poisson_fft%is_110_case = (.not. mesh%grid%periodic_BC(1)) &
+                              .and. (.not. mesh%grid%periodic_BC(2)) &
+                              .and. mesh%grid%periodic_BC(3)
 
     ! Work out the spectral dimensions in the permuted state.
     ! The 100 case initialises the transform with x and y swapped, so the
@@ -118,6 +123,8 @@ contains
       poisson_fft%p_row = grid_dims(1)
       poisson_fft%p_col = grid_dims(2)
       call decomp_2d_fft_init(PHYSICAL_IN_X, dims(2), dims(1), dims(3))
+    else if (poisson_fft%is_110_case) then
+      call decomp_2d_fft_init(PHYSICAL_IN_X, dims(3), dims(1), dims(2))
     else
       call decomp_2d_fft_init(PHYSICAL_IN_X, dims(1), dims(2), dims(3))
     end if
@@ -164,6 +171,12 @@ contains
         call transpose_z_to_y(poisson_fft%waves, poisson_fft%waves_pair, &
                               poisson_fft%sp)
       end if
+    else if (poisson_fft%is_110_case) then
+      if (poisson_fft%nx_loc /= poisson_fft%nx_glob .or. &
+          poisson_fft%ny_loc /= poisson_fft%ny_glob) &
+        error stop 'OpenMP 110 Poisson case supports a single rank only'
+      allocate (poisson_fft%r_tr(poisson_fft%nz_loc, poisson_fft%nx_loc, &
+                                 poisson_fft%ny_loc))
     end if
 
   end function init
@@ -233,12 +246,28 @@ contains
   end subroutine fft_forward_100_omp
 
   subroutine fft_forward_110_omp(self, f_in)
+    !! Forward FFT for the non-periodic x and y case. Transposes the
+    !! physical field (nx, ny, nz) to (nz, nx, ny) so that the r2c
+    !! transform runs along the periodic z direction, then transforms
+    !! with the plan set up in init.
     implicit none
 
     class(omp_poisson_fft_t) :: self
     class(field_t), intent(in) :: f_in
 
-    error stop 'OpenMP backend does not support fft_forward_110 yet!'
+    integer :: i, j, k
+
+    !$omp parallel do collapse(2)
+    do k = 1, self%nz_loc
+      do j = 1, self%ny_loc
+        do i = 1, self%nx_loc
+          self%r_tr(k, i, j) = f_in%data(i, j, k)
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+    call decomp_2d_fft_3d(self%r_tr, self%c_x)
 
   end subroutine fft_forward_110_omp
 
@@ -304,12 +333,28 @@ contains
   end subroutine fft_backward_100_omp
 
   subroutine fft_backward_110_omp(self, f_out)
+    !! Backward FFT for the non-periodic x and y case, undoing the
+    !! transpose applied by fft_forward_110_omp. Only the unpadded
+    !! extents are written, which is all undo_periodicity_xy_omp goes on
+    !! to read.
     implicit none
 
     class(omp_poisson_fft_t) :: self
     class(field_t), intent(inout) :: f_out
 
-    error stop 'OpenMP backend does not support fft_backward_110 yet!'
+    integer :: i, j, k
+
+    call decomp_2d_fft_3d(self%c_x, self%r_tr)
+
+    !$omp parallel do collapse(2)
+    do k = 1, self%nz_loc
+      do j = 1, self%ny_loc
+        do i = 1, self%nx_loc
+          f_out%data(i, j, k) = self%r_tr(k, i, j)
+        end do
+      end do
+    end do
+    !$omp end parallel do
 
   end subroutine fft_backward_110_omp
 
@@ -379,11 +424,22 @@ contains
   end subroutine fft_postprocess_100_omp
 
   subroutine fft_postprocess_110_omp(self)
+    !! Post-process div U* in spectral space for the non-periodic x and y
+    !! case. After the (nx, ny, nz) -> (nz, nx, ny) transpose applied by
+    !! fft_forward_110_omp, dim1 holds the periodic z r2c modes, dim2
+    !! holds the non-periodic x modes and dim3 holds the non-periodic y
+    !! modes, which process_spectral_110 handles directly.
     implicit none
 
     class(omp_poisson_fft_t) :: self
 
-    error stop 'OpenMP backend does not support fft_postprocess_110 yet!'
+    call process_spectral_110( &
+      div_u=self%c_x, waves=self%waves, &
+      n1=self%nx_spec, n2=self%ny_spec, n3=self%nz_spec, &
+      st1=self%sp_st(1), st2=self%sp_st(2), st3=self%sp_st(3), &
+      nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+      ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, az=self%az, bz=self%bz &
+      )
 
   end subroutine fft_postprocess_110_omp
 
@@ -440,7 +496,9 @@ contains
     ! up to a multiple of SZ and reorder copies the whole padded extent back
     ! out to the pressure field, so the untouched entries have to be cleared
     ! rather than left holding whatever the recycled block came with.
+    !$omp parallel workshare
     f_out%data = 0._dp
+    !$omp end parallel workshare
 
     !$omp parallel do collapse(2)
     do k = 1, self%nz_loc
@@ -510,24 +568,104 @@ contains
   end subroutine undo_periodicity_y_omp
 
   subroutine enforce_periodicity_xy_omp(self, f_out, f_in)
+    !! Gathers the non-periodic x and y lines into periodic ones so that
+    !! a plain FFT can stand in for the cosine transform in both
+    !! directions.
     implicit none
 
     class(omp_poisson_fft_t) :: self
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
-    error stop 'OpenMP backend does not support enforce_periodicity_xy yet!'
+    integer :: i, j, k, n2x, n2y
+    integer :: src_i, src_j
+
+    n2x = self%nx_glob/2
+    n2y = self%ny_glob/2
+
+    ! The gather arithmetic (n2x, n2y and the src_i/src_j mapping below)
+    ! stays in global terms: it is a property of the global line, and the
+    ! init guard for the 110 case makes nx_loc == nx_glob, ny_loc == ny_glob.
+    !$omp parallel do private(src_i, src_j) collapse(2)
+    do k = 1, self%nz_loc
+      do j = 1, self%ny_loc
+        if (j <= n2y) then
+          src_j = 2*j - 1
+        else if (mod(self%ny_glob, 2) == 1 .and. j == n2y + 1) then
+          src_j = self%ny_glob
+        else
+          src_j = 2*self%ny_glob - 2*j + 2
+        end if
+
+        do i = 1, self%nx_loc
+          if (i <= n2x) then
+            src_i = 2*i - 1
+          else if (mod(self%nx_glob, 2) == 1 .and. i == n2x + 1) then
+            src_i = self%nx_glob
+          else
+            src_i = 2*self%nx_glob - 2*i + 2
+          end if
+
+          f_out%data(i, j, k) = f_in%data(src_i, src_j, k)
+        end do
+      end do
+    end do
+    !$omp end parallel do
 
   end subroutine enforce_periodicity_xy_omp
 
   subroutine undo_periodicity_xy_omp(self, f_out, f_in)
+    !! Scatters the gathered x and y lines back to their original
+    !! ordering.
     implicit none
 
     class(omp_poisson_fft_t) :: self
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
-    error stop 'OpenMP backend does not support undo_periodicity_xy yet!'
+    integer :: i, j, k, n2x, n2y
+    integer :: src_i, src_j
+
+    n2x = self%nx_glob/2
+    n2y = self%ny_glob/2
+
+    ! The gathered ordering only covers 1..nx_glob and 1..ny_glob, but
+    ! the block is padded up to a multiple of SZ and reorder copies the
+    ! whole padded extent back out to the pressure field, so the
+    ! untouched entries have to be cleared rather than left holding
+    ! whatever the recycled block came with.
+    !$omp parallel workshare
+    f_out%data = 0._dp
+    !$omp end parallel workshare
+
+    ! The gather arithmetic (n2x, n2y and the src_i/src_j mapping below)
+    ! stays in global terms: it is a property of the global line, and the
+    ! init guard for the 110 case makes nx_loc == nx_glob, ny_loc == ny_glob.
+    !$omp parallel do private(src_i, src_j) collapse(2)
+    do k = 1, self%nz_loc
+      do j = 1, self%ny_loc
+        if (mod(self%ny_glob, 2) == 1 .and. j == self%ny_glob) then
+          src_j = n2y + 1
+        else if (mod(j, 2) == 1) then
+          src_j = (j + 1)/2
+        else
+          src_j = self%ny_glob - j/2 + 1
+        end if
+
+        do i = 1, self%nx_loc
+          if (mod(self%nx_glob, 2) == 1 .and. i == self%nx_glob) then
+            src_i = n2x + 1
+          else if (mod(i, 2) == 1) then
+            src_i = (i + 1)/2
+          else
+            src_i = self%nx_glob - i/2 + 1
+          end if
+
+          f_out%data(i, j, k) = f_in%data(src_i, src_j, k)
+        end do
+      end do
+    end do
+    !$omp end parallel do
 
   end subroutine undo_periodicity_xy_omp
 end module m_omp_poisson_fft

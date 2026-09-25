@@ -322,4 +322,320 @@ contains
 
   end subroutine process_spectral_100
 
+  subroutine process_spectral_110_fw( &
+    div_u, n1, n2, n3, st1, st2, nx, ny, nz, ax, bx, az, bz &
+    )
+    !! Forward third of the spectral post-process for the 110 case
+    !! (non-periodic x and y, periodic z, R2C Z-transpose layout):
+    !! normalise, Z periodic post-process forward, then the X paired
+    !! even/odd split.
+    !!
+    !! Layout: div_u(n1, n2, n3) with dim1 = Z r2c modes (az, bz), dim2 =
+    !! X modes (ax, bx), dim3 = Y modes. Dim2 must span the whole global
+    !! x range (nx), which the caller guarantees, since the X pairing
+    !! writes both a mode and its mirror in the same pass.
+    implicit none
+
+    !> Divergence of velocity in spectral space, (nz/2+1, nx, ny) layout
+    complex(dp), intent(inout), dimension(:, :, :) :: div_u
+    real(dp), intent(in), dimension(:) :: ax, bx, az, bz
+    !> Local extents of div_u
+    integer, intent(in) :: n1, n2, n3
+    !> Offsets of the local block within the global spectral array
+    integer, intent(in) :: st1, st2
+    !> Global cell size
+    integer, intent(in) :: nx, ny, nz
+
+    integer :: i, j, k, iz, ix, ix_pair
+    real(dp) :: tmp_r, tmp_c, div_r, div_c, l_r, l_c, r_r, r_c
+
+    ! normalise + Z periodic post-process (forward). No sign flip: dim1
+    ! never exceeds nz/2+1.
+    !$omp parallel do private(iz, div_r, div_c, tmp_r, tmp_c) collapse(3)
+    do k = 1, n3
+      do j = 1, n2
+        do i = 1, n1
+          iz = i + st1
+
+          div_r = real(div_u(i, j, k), kind=dp)/nx/ny/nz
+          div_c = aimag(div_u(i, j, k))/nx/ny/nz
+
+          tmp_r = div_r
+          tmp_c = div_c
+          div_r = tmp_r*bz(iz) + tmp_c*az(iz)
+          div_c = tmp_c*bz(iz) - tmp_r*az(iz)
+
+          div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+    ! X paired even/odd split (forward)
+    !$omp parallel do private(ix, ix_pair, l_r, l_c, r_r, r_c) collapse(3)
+    do k = 1, n3
+      do j = 2, n2/2 + 1
+        do i = 1, n1
+          ix = j + st2
+          ix_pair = n2 - j + 2
+
+          l_r = real(div_u(i, j, k), kind=dp)
+          l_c = aimag(div_u(i, j, k))
+          r_r = real(div_u(i, ix_pair, k), kind=dp)
+          r_c = aimag(div_u(i, ix_pair, k))
+
+          div_u(i, j, k) = 0.5_dp*cmplx( & !&
+            l_r*bx(ix) + l_c*ax(ix) + r_r*bx(ix) - r_c*ax(ix), &
+            -l_r*ax(ix) + l_c*bx(ix) + r_r*ax(ix) + r_c*bx(ix), kind=dp &
+            )
+          div_u(i, ix_pair, k) = 0.5_dp*cmplx( & !&
+            r_r*bx(ix_pair + st2) + r_c*ax(ix_pair + st2) &
+              + l_r*bx(ix_pair + st2) - l_c*ax(ix_pair + st2), &
+            -r_r*ax(ix_pair + st2) + r_c*bx(ix_pair + st2) &
+              + l_r*ax(ix_pair + st2) + l_c*bx(ix_pair + st2), &
+            kind=dp &
+            )
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+  end subroutine process_spectral_110_fw
+
+  subroutine process_spectral_110_solve( &
+    div_u, waves, n1, n2, n3, st1, st2, st3, nx, ny, nz, ay, by &
+    )
+    !! Middle third of the spectral post-process for the 110 case: the Y
+    !! paired even/odd split, the Poisson divide, and the Y paired
+    !! even/odd recombine.
+    !!
+    !! Layout: div_u(n1, n2, n3) with dim1 = Z r2c modes, dim2 = X modes,
+    !! dim3 = Y modes (ay, by). Dim3 must span the whole global y range
+    !! (ny), which the caller guarantees, since the Y pairing writes both
+    !! a mode and its mirror in the same pass.
+    implicit none
+
+    !> Divergence of velocity in spectral space, (nz/2+1, nx, ny) layout
+    complex(dp), intent(inout), dimension(:, :, :) :: div_u
+    !> Spectral equivalence constants, (nz/2+1, nx, ny) layout
+    complex(dp), intent(in), dimension(:, :, :) :: waves
+    real(dp), intent(in), dimension(:) :: ay, by
+    !> Local extents of div_u
+    integer, intent(in) :: n1, n2, n3
+    !> Offsets of the local block within the global spectral array
+    integer, intent(in) :: st1, st2, st3
+    !> Global cell size
+    integer, intent(in) :: nx, ny, nz
+
+    integer :: i, j, k, iy, iy_pair
+    real(dp) :: div_r, div_c, tmp_r, tmp_c, l_r, l_c, r_r, r_c
+
+    ! Y paired even/odd split (forward)
+    !$omp parallel do private(iy, iy_pair, l_r, l_c, r_r, r_c) collapse(3)
+    do k = 2, n3/2 + 1
+      do j = 1, n2
+        do i = 1, n1
+          iy = k + st3
+          iy_pair = n3 - k + 2
+
+          l_r = real(div_u(i, j, k), kind=dp)
+          l_c = aimag(div_u(i, j, k))
+          r_r = real(div_u(i, j, iy_pair), kind=dp)
+          r_c = aimag(div_u(i, j, iy_pair))
+
+          div_u(i, j, k) = 0.5_dp*cmplx( & !&
+            l_r*by(iy) + l_c*ay(iy) + r_r*by(iy) - r_c*ay(iy), &
+            -l_r*ay(iy) + l_c*by(iy) + r_r*ay(iy) + r_c*by(iy), kind=dp &
+            )
+          div_u(i, j, iy_pair) = 0.5_dp*cmplx( & !&
+            r_r*by(iy_pair + st3) + r_c*ay(iy_pair + st3) &
+              + l_r*by(iy_pair + st3) - l_c*ay(iy_pair + st3), &
+            -r_r*ay(iy_pair + st3) + r_c*by(iy_pair + st3) &
+              + l_r*ay(iy_pair + st3) + l_c*by(iy_pair + st3), &
+            kind=dp &
+            )
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+    ! Solve Poisson
+    !$omp parallel do private(div_r, div_c, tmp_r, tmp_c) collapse(3)
+    do k = 1, n3
+      do j = 1, n2
+        do i = 1, n1
+          div_r = real(div_u(i, j, k), kind=dp)
+          div_c = aimag(div_u(i, j, k))
+
+          tmp_r = real(waves(i, j, k), kind=dp)
+          tmp_c = aimag(waves(i, j, k))
+          if (abs(tmp_r) < eps_wave) then
+            div_r = 0._dp
+          else
+            div_r = -div_r/tmp_r
+          end if
+          if (abs(tmp_c) < eps_wave) then
+            div_c = 0._dp
+          else
+            div_c = -div_c/tmp_c
+          end if
+
+          ! update the entry
+          div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
+          ! Zero Nyquist modes
+          if (j + st2 == nx/2 + 1 .and. i + st1 == nz/2 + 1) &
+            div_u(i, j, k) = 0._dp
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+    ! Y paired even/odd recombine (backward)
+    !$omp parallel do private(iy, iy_pair, l_r, l_c, r_r, r_c) collapse(3)
+    do k = 2, n3/2 + 1
+      do j = 1, n2
+        do i = 1, n1
+          iy = k + st3
+          iy_pair = n3 - k + 2
+
+          l_r = real(div_u(i, j, k), kind=dp)
+          l_c = aimag(div_u(i, j, k))
+          r_r = real(div_u(i, j, iy_pair), kind=dp)
+          r_c = aimag(div_u(i, j, iy_pair))
+
+          div_u(i, j, k) = cmplx( & !&
+            l_r*by(iy) - l_c*ay(iy) + r_r*ay(iy) + r_c*by(iy), &
+            l_r*ay(iy) + l_c*by(iy) - r_r*by(iy) + r_c*ay(iy), kind=dp &
+            )
+          div_u(i, j, iy_pair) = cmplx( & !&
+            r_r*by(iy_pair + st3) - r_c*ay(iy_pair + st3) &
+              + l_r*ay(iy_pair + st3) + l_c*by(iy_pair + st3), &
+            r_r*ay(iy_pair + st3) + r_c*by(iy_pair + st3) &
+              - l_r*by(iy_pair + st3) + l_c*ay(iy_pair + st3), &
+            kind=dp &
+            )
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+  end subroutine process_spectral_110_solve
+
+  subroutine process_spectral_110_bw( &
+    div_u, n1, n2, n3, st1, st2, nx, ny, nz, ax, bx, az, bz &
+    )
+    !! Backward third of the spectral post-process for the 110 case: the
+    !! X paired even/odd recombine, then the Z periodic post-process
+    !! backward.
+    !!
+    !! Layout: div_u(n1, n2, n3) with dim1 = Z r2c modes (az, bz), dim2 =
+    !! X modes (ax, bx), dim3 = Y modes. Dim2 must span the whole global
+    !! x range (nx), which the caller guarantees, since the X pairing
+    !! writes both a mode and its mirror in the same pass.
+    implicit none
+
+    !> Divergence of velocity in spectral space, (nz/2+1, nx, ny) layout
+    complex(dp), intent(inout), dimension(:, :, :) :: div_u
+    real(dp), intent(in), dimension(:) :: ax, bx, az, bz
+    !> Local extents of div_u
+    integer, intent(in) :: n1, n2, n3
+    !> Offsets of the local block within the global spectral array
+    integer, intent(in) :: st1, st2
+    !> Global cell size
+    integer, intent(in) :: nx, ny, nz
+
+    integer :: i, j, k, iz, ix, ix_pair
+    real(dp) :: tmp_r, tmp_c, div_r, div_c, l_r, l_c, r_r, r_c
+
+    ! X paired even/odd recombine (backward)
+    !$omp parallel do private(ix, ix_pair, l_r, l_c, r_r, r_c) collapse(3)
+    do k = 1, n3
+      do j = 2, n2/2 + 1
+        do i = 1, n1
+          ix = j + st2
+          ix_pair = n2 - j + 2
+
+          l_r = real(div_u(i, j, k), kind=dp)
+          l_c = aimag(div_u(i, j, k))
+          r_r = real(div_u(i, ix_pair, k), kind=dp)
+          r_c = aimag(div_u(i, ix_pair, k))
+
+          div_u(i, j, k) = cmplx( & !&
+            l_r*bx(ix) - l_c*ax(ix) + r_r*ax(ix) + r_c*bx(ix), &
+            l_r*ax(ix) + l_c*bx(ix) - r_r*bx(ix) + r_c*ax(ix), kind=dp &
+            )
+          div_u(i, ix_pair, k) = cmplx( & !&
+            r_r*bx(ix_pair + st2) - r_c*ax(ix_pair + st2) &
+              + l_r*ax(ix_pair + st2) + l_c*bx(ix_pair + st2), &
+            r_r*ax(ix_pair + st2) + r_c*bx(ix_pair + st2) &
+              - l_r*bx(ix_pair + st2) + l_c*ax(ix_pair + st2), &
+            kind=dp &
+            )
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+    ! Z periodic post-process (backward). No sign flip: dim1 never
+    ! exceeds nz/2+1.
+    !$omp parallel do private(iz, div_r, div_c, tmp_r, tmp_c) collapse(3)
+    do k = 1, n3
+      do j = 1, n2
+        do i = 1, n1
+          iz = i + st1
+
+          div_r = real(div_u(i, j, k), kind=dp)
+          div_c = aimag(div_u(i, j, k))
+
+          tmp_r = div_r
+          tmp_c = div_c
+          div_r = tmp_r*bz(iz) - tmp_c*az(iz)
+          div_c = tmp_c*bz(iz) + tmp_r*az(iz)
+
+          div_u(i, j, k) = cmplx(div_r, div_c, kind=dp)
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+  end subroutine process_spectral_110_bw
+
+  subroutine process_spectral_110( &
+    div_u, waves, n1, n2, n3, st1, st2, st3, nx, ny, nz, &
+    ax, bx, ay, by, az, bz &
+    )
+    !! Post-process div U* in spectral space, for non-periodic BC in both
+    !! x- and y-directions (R2C Z-transpose layout: dim1 = Z r2c modes,
+    !! dim2 = X modes, dim3 = Y modes).
+    implicit none
+
+    !> Divergence of velocity in spectral space, (nz/2+1, nx, ny) layout
+    complex(dp), intent(inout), dimension(:, :, :) :: div_u
+    !> Spectral equivalence constants, (nz/2+1, nx, ny) layout
+    complex(dp), intent(in), dimension(:, :, :) :: waves
+    real(dp), intent(in), dimension(:) :: ax, bx, ay, by, az, bz
+    !> Local extents of div_u
+    integer, intent(in) :: n1, n2, n3
+    !> Offsets of the local block within the global spectral array
+    integer, intent(in) :: st1, st2, st3
+    !> Global cell size
+    integer, intent(in) :: nx, ny, nz
+
+    ! The paired x/y splits index the mirror mode globally, so dims 2 and 3
+    ! must hold the full x and y mode ranges (single rank only for now).
+    if (n2 /= nx .or. n3 /= ny .or. st2 /= 0 .or. st3 /= 0) &
+      error stop 'process_spectral_110: dims 2 and 3 must span full nx, ny'
+
+    call process_spectral_110_fw(div_u=div_u, n1=n1, n2=n2, n3=n3, &
+                                 st1=st1, st2=st2, nx=nx, ny=ny, nz=nz, &
+                                 ax=ax, bx=bx, az=az, bz=bz)
+    call process_spectral_110_solve(div_u=div_u, waves=waves, n1=n1, n2=n2, &
+                                    n3=n3, st1=st1, st2=st2, st3=st3, &
+                                    nx=nx, ny=ny, nz=nz, ay=ay, by=by)
+    call process_spectral_110_bw(div_u=div_u, n1=n1, n2=n2, n3=n3, &
+                                 st1=st1, st2=st2, nx=nx, ny=ny, nz=nz, &
+                                 ax=ax, bx=bx, az=az, bz=bz)
+
+  end subroutine process_spectral_110
+
 end module m_omp_spectral
