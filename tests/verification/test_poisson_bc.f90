@@ -67,6 +67,12 @@ program test_poisson
   ! grids. A looser tolerance here, about 2x the observed OpenMP maximum,
   ! keeps Check 2 meaningful without disturbing the Poisson tolerance
   ! above, which the n=3 aliasing (XFAIL) detection depends on.
+  !
+  ! The higher OpenMP roundoff traces to the FFT engine: this build uses
+  ! 2decomp's generic FFT engine (the build does not forward FFT_Choice to
+  ! the 2decomp sub-build), whose single precision roundoff on config 110
+  ! is about 10x FFTW's (Check 2 measured at 2.4e-6 with the generic
+  ! engine vs 2.2e-7 with FFTW, both below the tolerance above).
 #ifdef SINGLE_PREC
   real(dp), parameter :: DIVGRAD_TOLERANCE = 1.0e-5_dp
 #else
