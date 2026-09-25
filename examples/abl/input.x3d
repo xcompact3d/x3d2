@@ -1,0 +1,62 @@
+&domain_settings
+! Flow case
+flow_case_name = 'abl'
+
+! Global domain length (Lx x Ly x Lz), wall-normal is y.
+! Neutral ABL box: pi*H x H x pi*H, H = 1000 m.
+L_global = 3141.592653589793d0, 1000d0, 3141.592653589793d0
+
+! Global number of cells in each direction
+dims_global = 32, 33, 32
+
+! Domain decomposition in each direction
+nproc_dir = 1, 1, 1
+
+! BC options are 'periodic' | 'neumann' | 'dirichlet'
+! Periodic in x/z; no-slip floor and free-slip lid in the wall-normal y.
+BC_x = 'periodic', 'periodic'
+BC_y = 'dirichlet', 'neumann'
+BC_z = 'periodic', 'periodic'
+/End
+
+&solver_params
+Re = 1000d0
+time_intg = 'AB3' ! 'AB[1-4]' | 'RK[1-4]'
+dt = 0.05d0
+n_iters = 10
+n_output = 5
+! Explicit low-pass filter on the velocity, as Incompact3d does for ABL runs.
+! Removes the 2*dx mode the compact schemes cannot dissipate and the staggered
+! projection cannot see; without it the skew-symmetric convection leaks mean
+! momentum and the boundary layer decays away.
+spatial_filter = T
+filter_alpha = 0.49d0
+poisson_solver_type = 'FFT' ! 'FFT' | 'CG'
+der1st_scheme = 'compact6'
+der2nd_scheme = 'compact6'
+interpl_scheme = 'classic'
+stagder_scheme = 'compact6'
+/End
+
+&les_params
+! Static Smagorinsky closure with the Mason-Thomson rough-wall damping used
+! by the neutral ABL validation case.
+model = 'smagorinsky'
+smagorinsky_constant = 0.14d0
+wall_damping = T
+wall_damping_n = 3d0
+/End
+
+&abl_nml
+! Physical parameters (Deskos 2019 neutral ABL)
+z0 = 0.1d0
+u_star = 0.45d0
+delta = 1000d0
+kappa = 0.41d0
+
+! Driving mechanism toggles (at least one must be enabled)
+pressure_gradient = T
+coriolis = F
+mass_conserve = F
+damping = F
+/End

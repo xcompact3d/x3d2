@@ -30,7 +30,8 @@ contains
 
   function cuda_tdsops_init( &
     n_tds, delta, operation, scheme, bc_start, bc_end, &
-    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
+    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu, &
+    filter_alpha &
     ) result(tdsops)
     !! Constructor function for the cuda_tdsops_t class.
     !! See tdsops_t for details.
@@ -47,12 +48,13 @@ contains
     character(*), optional, intent(in) :: from_to
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
+    real(dp), optional, intent(in) :: filter_alpha
 
     integer :: n, n_stencil
 
     tdsops%tdsops_t = tdsops_init(n_tds, delta, operation, scheme, bc_start, &
                                   bc_end, stretch, stretch_correct, n_halo, &
-                                  from_to, sym, c_nu, nu0_nu)
+                                  from_to, sym, c_nu, nu0_nu, filter_alpha)
 
     n = tdsops%n_rhs
     allocate (tdsops%dist_fw_dev(n), tdsops%dist_bw_dev(n))

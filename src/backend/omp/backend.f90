@@ -6,7 +6,7 @@ module m_omp_backend
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, MPI_X3D2_DP, get_dirs_from_rdr, move_data_loc, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC, &
-                      X_FACE, Y_FACE, Z_FACE, VERT
+                      X_FACE, Y_FACE, Z_FACE, VERT, BC_DIRICHLET
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_ordering, only: get_index_reordering
@@ -51,7 +51,11 @@ module m_omp_backend
     procedure :: field_scale => field_scale_omp
     procedure :: field_shift => field_shift_omp
     procedure :: field_set_face => field_set_face_omp
+    procedure :: field_set_y_plane => field_set_y_plane_omp
+    procedure :: field_plane_sums => field_plane_sums_omp
+    procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_omp
     procedure :: field_set_face_from_field => field_set_face_from_field_omp
+    procedure :: field_add_face_from_field => field_add_face_from_field_omp
     procedure :: compute_vorticity => compute_vorticity_omp
     procedure :: compute_qcriterion => compute_qcriterion_omp
     procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_omp
@@ -123,7 +127,8 @@ contains
 
   subroutine alloc_omp_tdsops( &
     self, tdsops, n_tds, delta, operation, scheme, bc_start, bc_end, &
-    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
+    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu, &
+    filter_alpha &
     )
     implicit none
 
@@ -138,6 +143,7 @@ contains
     character(*), optional, intent(in) :: from_to
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
+    real(dp), optional, intent(in) :: filter_alpha
 
     allocate (tdsops_t :: tdsops)
 
@@ -145,7 +151,7 @@ contains
     type is (tdsops_t)
       tdsops = tdsops_t(n_tds, delta, operation, scheme, bc_start, bc_end, &
                         stretch, stretch_correct, n_halo, from_to, sym, &
-                        c_nu, nu0_nu)
+                        c_nu, nu0_nu, filter_alpha)
     end select
 
   end subroutine alloc_omp_tdsops
@@ -374,6 +380,12 @@ contains
     class(field_t), intent(inout) :: du
     class(field_t), intent(in) :: u
     class(tdsops_t), intent(in) :: tdsops
+
+    ! Thomas is exact along an undecomposed line (see tdsops%prefer_thomas)
+    if (tdsops%prefer_thomas) then
+      call self%thom_solve(du, u, tdsops)
+      return
+    end if
 
     ! Check if direction matches for both in/out fields
     if (u%dir /= du%dir) then
@@ -1097,8 +1109,9 @@ contains
     integer, optional, intent(in) :: bc_end
     real(dp), optional, intent(in) :: flow_rate_diff
 
-    integer :: dims(3), k, j, i_mod, k_end
+    integer :: dims(3), k, j, i_mod, k_start, k_end, bc_s, bc_e
     real(dp) :: fl_corr
+    logical :: set_start, set_end
 
     if (f%dir /= DIR_X) then
       error stop 'Setting a field face is only supported for DIR_X fields.'
@@ -1111,20 +1124,32 @@ contains
     fl_corr = 0._dp
     if (present(flow_rate_diff)) fl_corr = flow_rate_diff
 
+    ! Only Dirichlet faces carry a prescribed value. Defaulting both to
+    ! Dirichlet keeps the historical behaviour of writing both faces, while
+    ! passing a non-Dirichlet BC leaves that face untouched -- needed where
+    ! the two y-faces differ, as in the ABL (no-slip floor, free-slip lid).
+    bc_s = BC_DIRICHLET
+    bc_e = BC_DIRICHLET
+    if (present(bc_start)) bc_s = bc_start
+    if (present(bc_end)) bc_e = bc_end
+    set_start = (bc_s == BC_DIRICHLET)
+    set_end = (bc_e == BC_DIRICHLET)
+
     dims = self%mesh%get_dims(f%data_loc)
 
     select case (face)
     case (X_FACE)
       error stop 'Setting X_FACE is not yet supported.'
     case (Y_FACE)
+      ! DIR_X groups are ordered y-block fastest: b = (z-1)*n_y_blocks + yb.
       i_mod = mod(dims(2) - 1, SZ) + 1
-      !$omp parallel do private(k_end)
+      !$omp parallel do private(k_start, k_end)
       do k = 1, dims(3)
-        k_end = k + (dims(2) - 1)/SZ*dims(3)
+        k_start = 1 + (k - 1)*((dims(2) - 1)/SZ + 1)
+        k_end = k*((dims(2) - 1)/SZ + 1)
         do j = 1, dims(1)
-          f%data(1, j, k) = c_start
-          ! TODO: fix these from OpenMP looking at CUDA implementation
-          f%data(i_mod, j, k_end) = c_end
+          if (set_start) f%data(1, j, k_start) = c_start
+          if (set_end) f%data(i_mod, j, k_end) = c_end
         end do
       end do
       !$omp end parallel do
@@ -1135,6 +1160,130 @@ contains
     end select
 
   end subroutine field_set_face_omp
+  subroutine field_plane_sums_omp(self, sums, f)
+    !! [[m_base_backend(module):field_plane_sums(subroutine)]]
+    implicit none
+
+    class(omp_backend_t) :: self
+    real(dp), intent(out) :: sums(:)
+    class(field_t), intent(in) :: f
+
+    integer :: dims(3), n_y_blocks, y_block, i, j, k, z
+    real(dp) :: plane_sum
+
+    if (f%dir /= DIR_X) &
+      error stop 'field_plane_sums is only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_plane_sums requires a valid data_loc.'
+
+    dims = self%mesh%get_dims(f%data_loc)
+    if (size(sums) < dims(2)) &
+      error stop 'field_plane_sums: sums is smaller than the y extent.'
+    n_y_blocks = (dims(2) - 1)/SZ + 1
+
+    ! OMP DIR_X ordering: group = n_y_blocks*(z - 1) + y_block. Each plane is
+    ! summed by one thread in a fixed order, so the result is reproducible.
+    !$omp parallel do private(y_block, i, k, plane_sum)
+    do j = 1, dims(2)
+      y_block = (j - 1)/SZ + 1
+      i = j - (y_block - 1)*SZ
+      plane_sum = 0._dp
+      do z = 1, dims(3)
+        do k = 1, dims(1)
+          plane_sum = plane_sum + f%data(i, k, n_y_blocks*(z - 1) + y_block)
+        end do
+      end do
+      sums(j) = plane_sum
+    end do
+    !$omp end parallel do
+
+  end subroutine field_plane_sums_omp
+
+  subroutine field_set_y_plane_omp(self, f, c, plane)
+    !! [[m_base_backend(module):field_set_y_plane(subroutine)]]
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c
+    integer, intent(in) :: plane
+
+    integer :: dims(3), k, j, n_y_blocks, y_block, i_in_block, group
+
+    if (f%dir /= DIR_X) &
+      error stop 'field_set_y_plane is only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_set_y_plane requires a valid data_loc.'
+
+    dims = self%mesh%get_dims(f%data_loc)
+    if (plane < 1 .or. plane > dims(2)) &
+      error stop 'field_set_y_plane: plane outside the domain.'
+
+    ! OMP DIR_X ordering: group = n_y_blocks*(z - 1) + y_block.
+    n_y_blocks = (dims(2) - 1)/SZ + 1
+    y_block = (plane - 1)/SZ + 1
+    i_in_block = mod(plane - 1, SZ) + 1
+
+    !$omp parallel do private(group)
+    do k = 1, dims(3)
+      group = n_y_blocks*(k - 1) + y_block
+      do j = 1, dims(1)
+        f%data(i_in_block, j, group) = c
+      end do
+    end do
+    !$omp end parallel do
+
+  end subroutine field_set_y_plane_omp
+
+  subroutine field_set_abl_wall_stress_omp( &
+    self, stress, u, w, sample_plane, stress_plane, drag_coeff, component)
+    !! [[m_base_backend(module):field_set_abl_wall_stress(subroutine)]]
+    implicit none
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: stress
+    class(field_t), intent(in) :: u, w
+    integer, intent(in) :: sample_plane, stress_plane, component
+    real(dp), intent(in) :: drag_coeff
+    integer :: dims(3), n_y_blocks, sample_block, stress_block
+    integer :: sample_i, stress_i, k, i, sample_group, stress_group
+    real(dp) :: us, ws, speed
+
+    if (stress%dir /= DIR_X .or. u%dir /= DIR_X .or. w%dir /= DIR_X) &
+      error stop 'ABL wall stress requires DIR_X fields.'
+    if (stress%data_loc /= VERT .or. u%data_loc /= VERT .or. &
+        w%data_loc /= VERT) &
+      error stop 'ABL wall stress requires vertex fields.'
+    dims = self%mesh%get_dims(VERT)
+    if (min(sample_plane, stress_plane) < 1 .or. &
+        max(sample_plane, stress_plane) > dims(2)) &
+      error stop 'ABL wall stress plane is outside the domain.'
+    if (component /= 1 .and. component /= 3) &
+      error stop 'Invalid ABL wall stress component.'
+
+    n_y_blocks = (dims(2) - 1)/SZ + 1
+    sample_block = (sample_plane - 1)/SZ + 1
+    stress_block = (stress_plane - 1)/SZ + 1
+    sample_i = mod(sample_plane - 1, SZ) + 1
+    stress_i = mod(stress_plane - 1, SZ) + 1
+
+    !$omp parallel do private(sample_group, stress_group, i, us, ws, speed)
+    do k = 1, dims(3)
+      sample_group = n_y_blocks*(k - 1) + sample_block
+      stress_group = n_y_blocks*(k - 1) + stress_block
+      do i = 1, dims(1)
+        us = u%data(sample_i, i, sample_group)
+        ws = w%data(sample_i, i, sample_group)
+        speed = sqrt(us**2 + ws**2)
+        if (component == 1) then
+          stress%data(stress_i, i, stress_group) = drag_coeff*us*speed
+        else
+          stress%data(stress_i, i, stress_group) = drag_coeff*ws*speed
+        end if
+      end do
+    end do
+    !$omp end parallel do
+  end subroutine field_set_abl_wall_stress_omp
+
   subroutine field_set_face_from_field_omp(self, f, f_start, c_end, face, &
                                            bc_start, bc_end, flow_rate_diff)
     implicit none
@@ -1203,6 +1352,65 @@ contains
     end select
 
   end subroutine field_set_face_from_field_omp
+
+  subroutine field_add_face_from_field_omp(self, f, g, face, bc_start, bc_end)
+    !! [[m_base_backend(module):field_add_face_from_field(subroutine)]]
+    implicit none
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    class(field_t), intent(in) :: g
+    integer, intent(in) :: face, bc_start, bc_end
+
+    integer :: dims(3), k, i, j, z, i_max, n_mod, n_y_blocks, k_start, k_end
+    logical :: set_start, set_end
+
+    if (f%dir /= DIR_X .or. g%dir /= DIR_X) &
+      error stop 'field_add_face_from_field: only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_add_face_from_field: requires a valid data_loc.'
+
+    set_start = (bc_start == BC_DIRICHLET)
+    set_end = (bc_end == BC_DIRICHLET)
+
+    dims = self%mesh%get_dims(f%data_loc)
+    n_mod = mod(dims(2) - 1, SZ) + 1
+    n_y_blocks = (dims(2) - 1)/SZ + 1
+
+    select case (face)
+    case (X_FACE)
+      !$omp parallel do private(i_max)
+      do k = 1, n_y_blocks*dims(3)
+        ! y-block is the fast-varying component of the group index
+        if (mod(k - 1, n_y_blocks) + 1 == n_y_blocks) then
+          i_max = n_mod
+        else
+          i_max = SZ
+        end if
+        do i = 1, i_max
+          if (set_start) f%data(i, 1, k) = f%data(i, 1, k) + g%data(i, 1, k)
+          if (set_end) f%data(i, dims(1), k) = f%data(i, dims(1), k) &
+                                               + g%data(i, dims(1), k)
+        end do
+      end do
+      !$omp end parallel do
+    case (Y_FACE)
+      !$omp parallel do private(k_start, k_end)
+      do z = 1, dims(3)
+        k_start = 1 + (z - 1)*n_y_blocks
+        k_end = z*n_y_blocks
+        do j = 1, dims(1)
+          if (set_start) f%data(1, j, k_start) = f%data(1, j, k_start) &
+                                                 + g%data(1, j, k_start)
+          if (set_end) f%data(n_mod, j, k_end) = f%data(n_mod, j, k_end) &
+                                                 + g%data(n_mod, j, k_end)
+        end do
+      end do
+      !$omp end parallel do
+    case default
+      error stop 'field_add_face_from_field: only X_FACE and Y_FACE supported.'
+    end select
+
+  end subroutine field_add_face_from_field_omp
 
   real(dp) function field_volume_integral_omp(self, f) result(s)
     !! volume integral of a field

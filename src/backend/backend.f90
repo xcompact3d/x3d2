@@ -47,11 +47,15 @@ module m_base_backend
     procedure(vector_norm_squared_op), deferred :: vector_norm_squared
     procedure(field_max_mean), deferred :: field_max_mean
     procedure(slice_max_sum), deferred :: slice_max_sum
+    procedure(field_plane_sums), deferred :: field_plane_sums
     procedure(field_ops), deferred :: field_scale
     procedure(field_ops), deferred :: field_shift
     procedure(field_reduce), deferred :: field_volume_integral
     procedure(field_set_face), deferred :: field_set_face
+    procedure(field_set_y_plane), deferred :: field_set_y_plane
+    procedure(field_set_abl_wall_stress), deferred :: field_set_abl_wall_stress
     procedure(field_set_face_from_field), deferred :: field_set_face_from_field
+    procedure(field_add_face_from_field), deferred :: field_add_face_from_field
     procedure(derive_field_from_gradients), deferred :: compute_vorticity
     procedure(derive_field_from_gradients), deferred :: compute_qcriterion
     procedure(smagorinsky_from_gradients), deferred :: compute_smagorinsky_nut
@@ -88,6 +92,9 @@ module m_base_backend
       real(dp), intent(in) :: nu
       type(dirps_t), intent(in) :: dirps
     end subroutine transeq_ders
+  end interface
+
+  abstract interface
   end interface
 
   abstract interface
@@ -312,6 +319,20 @@ module m_base_backend
   end interface
 
   abstract interface
+    subroutine field_plane_sums(self, sums, f)
+      !! Sum a DIR_X field over x and z on every local y-plane:
+      !! sums(j) is the sum over the plane of y index j. The order of
+      !! summation is fixed, so the result is reproducible.
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+
+      class(base_backend_t) :: self
+      real(dp), intent(out) :: sums(:)
+      class(field_t), intent(in) :: f
+    end subroutine field_plane_sums
+
     subroutine slice_max_sum(self, max_val, sum_val, f, &
                              i_slice, enforced_data_loc)
     !! Reduces a single slice of f at index i_slice along f's DIR axis.
@@ -348,6 +369,35 @@ module m_base_backend
       real(dp), optional, intent(in) :: flow_rate_diff
     end subroutine field_set_face
 
+    subroutine field_set_y_plane(self, f, c, plane)
+      !! Set one interior y-plane of a DIR_X field to a constant.
+      !!
+      !! field_set_face reaches only the two boundary planes. The neutral ABL
+      !! wall model needs the first plane above a no-slip floor, where the
+      !! resolved gradient would otherwise contribute a second, spurious
+      !! stress on top of the modelled one.
+      import :: base_backend_t
+      import :: dp
+      import :: field_t
+      implicit none
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: f
+      real(dp), intent(in) :: c
+      integer, intent(in) :: plane !! 1-based y-vertex index
+    end subroutine field_set_y_plane
+
+    subroutine field_set_abl_wall_stress(self, stress, u, w, sample_plane, &
+                                         stress_plane, drag_coeff, component)
+      !! Replace one SGS stress plane using the local sampled velocity.
+      import :: base_backend_t, field_t, dp
+      implicit none
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: stress
+      class(field_t), intent(in) :: u, w
+      integer, intent(in) :: sample_plane, stress_plane, component
+      real(dp), intent(in) :: drag_coeff
+    end subroutine field_set_abl_wall_stress
+
     subroutine field_set_face_from_field(self, f, f_start, c_end, face, &
                                          bc_start, bc_end, flow_rate_diff)
       !! As field_set_face but with a spatially-varying inlet face field
@@ -365,6 +415,18 @@ module m_base_backend
       integer, optional, intent(in) :: bc_end
       real(dp), optional, intent(in) :: flow_rate_diff
     end subroutine field_set_face_from_field
+
+    subroutine field_add_face_from_field(self, f, g, face, bc_start, bc_end)
+      !! Add the face planes of `g` onto those of `f`, on Dirichlet faces
+      !! only. Both fields are DIR_X; X_FACE and Y_FACE are supported.
+      import :: base_backend_t
+      import :: field_t
+      implicit none
+      class(base_backend_t) :: self
+      class(field_t), intent(inout) :: f
+      class(field_t), intent(in) :: g
+      integer, intent(in) :: face, bc_start, bc_end
+    end subroutine field_add_face_from_field
   end interface
 
   abstract interface
@@ -432,7 +494,8 @@ module m_base_backend
   abstract interface
     subroutine alloc_tdsops( &
       self, tdsops, n_tds, delta, operation, scheme, bc_start, bc_end, &
-      stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
+      stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu, &
+      filter_alpha &
       )
       import :: base_backend_t
       import :: dp
@@ -450,6 +513,7 @@ module m_base_backend
       character(*), optional, intent(in) :: from_to
       logical, optional, intent(in) :: sym
       real(dp), optional, intent(in) :: c_nu, nu0_nu
+      real(dp), optional, intent(in) :: filter_alpha
     end subroutine alloc_tdsops
   end interface
 

@@ -6,7 +6,9 @@ program test_les_field
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
   use m_config, only: les_config_t
   use m_field, only: field_t, flist_t
-  use m_les, only: les_t, filter_width, wall_damped_mixing_length
+  use m_les, only: les_t, filter_width, &
+                   neutral_wall_stress, &
+                   wall_damped_mixing_length
   use m_mesh, only: mesh_t
   use m_solver, only: solver_t, allocate_tdsops, transeq_default
   use m_tdsops, only: dirps_t
@@ -38,6 +40,7 @@ program test_les_field
   type(solver_t) :: solver
   type(flist_t) :: rhs(3), variables(3)
   class(field_t), pointer :: u, v, w, rhs_u, rhs_v, rhs_w
+  class(field_t), pointer :: wall_nut
 
   integer, parameter :: dims_global(3) = [32, 33, 32]
   integer, parameter :: nproc_dir(3) = [1, 1, 1]
@@ -51,6 +54,8 @@ program test_les_field
 
   real(dp), allocatable :: u_data(:, :, :), nut_data(:, :, :)
   real(dp) :: delta, expected, length, max_error, spacing(3), tolerance
+  real(dp) :: sampling_height, roughness, kappa, drag_coeff
+  real(dp) :: tau_x, tau_z
   integer :: dims(3), dims_padded(3), i, j, k, ierr
   logical :: all_pass
 
@@ -116,9 +121,10 @@ program test_les_field
                          expected))
   call check_error('constant-shear nut', max_error, tolerance, all_pass)
 
+  ! Wall damping measures from a wall the case supplies: here a smooth one.
   config%wall_damping = .true.
-  config%roughness_length = 0._dp
   les_wall = les_t(config)
+  call les_wall%configure_wall_damping(0.4_dp, 0._dp)
   call les_wall%compute_nut(backend, mesh, u, v, w, &
                             xdirps, ydirps, zdirps)
   call backend%get_field_data(nut_data, les_wall%nut)
@@ -128,8 +134,8 @@ program test_les_field
     do j = 1, dims(2)
       length = wall_damped_mixing_length( &
         delta, mesh%geo%vert_coords(j, 2), &
-        config%smagorinsky_constant, config%von_karman_constant, &
-        config%wall_damping_n, config%roughness_length)
+        config%smagorinsky_constant, 0.4_dp, config%wall_damping_n, &
+        0._dp)
       expected = length**2*abs(shear)
       do i = 1, dims(1)
         max_error = max(max_error, abs(nut_data(i, j, k) - expected))
@@ -199,6 +205,70 @@ program test_les_field
                    maxval(abs(nut_data(1:dims(1), 1:dims(2), 1:dims(3)))), &
                    10._dp*tolerance, all_pass)
 
+  ! ABL rough-wall stress: the neutral drag law, and the per-column stress
+  ! the backend writes into the SGS stress plane.
+  wall_nut => allocator%get_block(DIR_X, VERT)
+
+  ! Nonuniform columns for the local wall stress checks below; the field is
+  ! constant in y, so the result does not depend on which plane is sampled.
+  do k = 1, dims(3)
+    do j = 1, dims(2)
+      do i = 1, dims(1)
+        u_data(i, j, k) = real(i, dp)
+        nut_data(i, j, k) = 2._dp*real(i, dp)
+      end do
+    end do
+  end do
+  call backend%set_field_data(u, u_data)
+  call backend%set_field_data(w, nut_data)
+
+  ! The wall stress now enters the SGS stress field rather than overwriting
+  ! the stress divergence, so what is worth pinning here is the drag law:
+  ! tau = (kappa/log(h/z0))^2 * u * |u|, signed positive for positive u so
+  ! that differentiating it removes momentum.
+  sampling_height = 3._dp*mesh%geo%d(2)
+  roughness = 0.001_dp
+  kappa = 0.4_dp
+  drag_coeff = (kappa/log(sampling_height/roughness))**2
+  call neutral_wall_stress(4._dp, 3._dp, kappa, roughness, sampling_height, &
+                           tau_x, tau_z)
+  call check_error('neutral wall stress x', &
+                   abs(tau_x - drag_coeff*4._dp*5._dp), tolerance, all_pass)
+  call check_error('neutral wall stress z', &
+                   abs(tau_z - drag_coeff*3._dp*5._dp), tolerance, all_pass)
+  ! The active ABL wall stress must use each column's own velocity.
+  ! A plane-mean drag would be constant in i and fail this check.
+  call wall_nut%fill(0._dp)
+  call backend%field_set_abl_wall_stress( &
+    wall_nut, u, w, 4, 2, drag_coeff, 1)
+  call backend%get_field_data(nut_data, wall_nut)
+  max_error = 0._dp
+  do k = 1, dims(3)
+    do i = 1, dims(1)
+      expected = drag_coeff*real(i, dp)**2*sqrt(5._dp)
+      max_error = max(max_error, abs(nut_data(i, 2, k) - expected))
+    end do
+  end do
+  call check_error('local ABL tau_xy', max_error, tolerance, all_pass)
+
+  call backend%field_set_abl_wall_stress( &
+    wall_nut, u, w, 4, 2, drag_coeff, 3)
+  call backend%get_field_data(nut_data, wall_nut)
+  max_error = 0._dp
+  do k = 1, dims(3)
+    do i = 1, dims(1)
+      expected = 2._dp*drag_coeff*real(i, dp)**2*sqrt(5._dp)
+      max_error = max(max_error, abs(nut_data(i, 2, k) - expected))
+    end do
+  end do
+  call check_error('local ABL tau_yz', max_error, tolerance, all_pass)
+
+  ! A wall at rest exerts no stress.
+  call neutral_wall_stress(0._dp, 0._dp, kappa, roughness, sampling_height, &
+                           tau_x, tau_z)
+  call check_error('no stress at zero velocity', &
+                   abs(tau_x) + abs(tau_z), tolerance, all_pass)
+
   call les%finalise(backend)
   call les_wall%finalise(backend)
   call solver%finalise()
@@ -208,6 +278,7 @@ program test_les_field
   call allocator%release_block(rhs_u)
   call allocator%release_block(rhs_v)
   call allocator%release_block(rhs_w)
+  call allocator%release_block(wall_nut)
   deallocate (u_data, nut_data)
 
   if (.not. all_pass) error stop 'FAIL'
