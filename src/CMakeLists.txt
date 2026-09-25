@@ -156,7 +156,7 @@ endif()
 
 # 4. Set backend specific flags and options
 if (${ENABLE_BACKEND} STREQUAL "CUDA")
-  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cuda -gpu=cc${CUDA_ARCH}")
+  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cuda -gpu=${BACKEND_ARCH}")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds")
   # Opt-in: -Ktrap=fp traps FP exceptions process-wide, turning benign FP ops in
   # linked libs (cuFFTMp PTX-JIT, HPC-X/UCX at MPI_Init) into fatal SIGFPEs.
@@ -165,7 +165,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     set(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG} -Ktrap=fp")
   endif()
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
-  target_link_options(x3d2 INTERFACE "-cuda" "-gpu=cc${CUDA_ARCH}")
+  target_link_options(x3d2 INTERFACE "-cuda" "-gpu=${BACKEND_ARCH}")
   # cuFFTMp distributes a transform over MPI ranks and its nvfortran wrapper
   # calls MPI_Comm_f2c, so it cannot link into a build without MPI.  A serial
   # build is one rank and links plain cuFFT instead: see create_fft_plan in
@@ -194,7 +194,7 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
          ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
          ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
-    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp --offload-arch=${OMP_TGT_ARCH}")
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp --offload-arch=${BACKEND_ARCH}")
     add_definitions("-DOMP_TGT_AMD") # Assume AMD GPU
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
     add_definitions("-DOMP_TGT_AMD") # Assume AMD GPU

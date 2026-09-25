@@ -17,6 +17,10 @@ Selecting a Backend
    -DENABLE_BACKEND=CUDA      # CUDA Fortran, NVHPC/PGI only
    -DENABLE_BACKEND=OMP_TGT   # OpenMP target offload
 
+Both GPU backends additionally require the target architecture in
+``BACKEND_ARCH`` (see the per-backend sections below); only the default ``OFF``
+builds without it.
+
 The setting decides which allocator and backend sources are compiled, which
 compiler and linker flags are applied, and which tests are registered. Building
 more than one GPU backend at a time is not supported.
@@ -24,8 +28,11 @@ more than one GPU backend at a time is not supported.
 CUDA Backend
 ~~~~~~~~~~~~
 
-Requires NVHPC or PGI; configuring fails with any other compiler. The build adds
-``-cuda``, and links the Poisson solver against ``cuFFTMp``
+Requires NVHPC or PGI; configuring fails with any other compiler. The compute
+capability is required and comes from ``BACKEND_ARCH``, given in nvfortran's
+``ccXX`` form (``cc80`` for an A100); configuring fails if it is unset or has
+any other form. The build adds ``-cuda -gpu=<arch>`` when compiling and linking,
+and links the Poisson solver against ``cuFFTMp``
 (``-cudalib=cufftmp``) in an MPI build or against plain ``cuFFT``
 (``-cudalib=cufft``) without one. cuFFTMp distributes a single transform across
 ranks and its nvfortran wrapper calls ``MPI_Comm_f2c``, so it cannot be linked
@@ -46,29 +53,31 @@ required with any of them.
 
    * - Compiler
      - Flags applied by the build
-     - ``OMP_TGT_ARCH``
+     - ``BACKEND_ARCH``
    * - Cray
      - ``-eF`` when compiling and ``-h omp`` when linking.
-     - Not used. The offload target is selected by the Cray programming
-       environment rather than by CMake.
+     - Must be set, but is not passed on: the offload target is selected by the
+       Cray programming environment rather than by CMake.
    * - GNU
      - ``-fopenmp`` and ``--offload-arch=<arch>``.
-     - Required. Configuring fails if it is unset.
+     - ``gfx<model>``. Configuring fails on any other form.
    * - NVHPC, PGI
-     - ``-mp=gpu``, replacing the host-only ``-mp`` that CMake's ``FindOpenMP``
-       supplies. Without that substitution the target regions compile but run
-       on the host against device pointers.
-     - Optional. When unset, the compiler targets the GPU of the build machine.
+     - ``-mp=gpu -gpu=<arch>``, replacing the host-only ``-mp`` that CMake's
+       ``FindOpenMP`` supplies. Without that substitution the target regions
+       compile but run on the host against device pointers.
+     - ``ccXX``, nvfortran's compute-capability name. Configuring fails on
+       any other form.
    * - Flang
      - ``-fopenmp --offload-arch=<arch>``, plus ``-fopenmp-version=50`` (see
        `Building with Flang`_ below).
-     - Required. Configuring fails if it is unset.
+     - ``gfx<model>``. Configuring fails on any other form.
 
-Where the compiler needs the architecture, set it at configure time:
+``BACKEND_ARCH`` is required for every GPU build, whatever the compiler, and is
+set at configure time:
 
 .. code-block:: bash
 
-   -DENABLE_BACKEND=OMP_TGT -DOMP_TGT_ARCH=gfx942
+   -DENABLE_BACKEND=OMP_TGT -DBACKEND_ARCH=gfx942
 
 Vendor selection is automatic: the build defines ``OMP_TGT_NVIDIA`` for
 NVHPC/PGI and ``OMP_TGT_AMD`` for Cray, GNU and Flang, which selects the
@@ -145,7 +154,7 @@ CPU build with GNU:
 .. code-block:: bash
 
    cmake -S . -B build -DWITH_MPI=OFF \
-     -DCMAKE_Fortran_COMPILER=nvfortran -DENABLE_BACKEND=CUDA
+     -DCMAKE_Fortran_COMPILER=nvfortran -DENABLE_BACKEND=CUDA -DBACKEND_ARCH=cc80
 
 The code still calls MPI unconditionally; ``src/mpi.f90`` supplies serial
 stand-ins for the MPI entities x3d2 uses, under which every collective is the
@@ -235,6 +244,11 @@ For custom installation locations, provide the path to CMake:
 
    -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DADIOS2_ROOT_DIR=/path/to/adios2/installation
 
+Nothing is probed from the installation to tell whether it was built with CUDA,
+so say so with ``-DADIOS2_WITH_CUDA=ON``. This registers the ADIOS2 tests on a
+GPU build; it is ignored when ADIOS2 is built from source, where the build
+decides for itself.
+
 .. _adios2-and-mpi:
 
 ADIOS2 and MPI
@@ -271,19 +285,19 @@ To use the built-in ADIOS2 (default behaviour):
 
    -DWITH_ADIOS2=ON
 
-CUDA Architecture
-~~~~~~~~~~~~~~~~~
+CUDA Architecture for the ADIOS2 Build
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-With ``ENABLE_BACKEND=CUDA``, ``CUDA_ARCH`` (default ``80``, A100) sets the
-compute capability for both the CUDA Fortran build (``-gpu=cc<arch>``) and the
-built-in ADIOS2 build (``CMAKE_CUDA_ARCHITECTURES``). Use ``90`` for an H100,
-or ``native`` to target the GPU visible at configure time, which fails on a
-GPU-less login or build node:
+The built-in ADIOS2 is compiled with CUDA support for either GPU backend
+(``ENABLE_BACKEND=CUDA`` or ``ENABLE_BACKEND=OMP_TGT``) when the Fortran
+compiler is NVHPC or PGI, since both offload through CUDA. The AMD/Cray
+``OMP_TGT`` paths use another compiler and get the plain CPU build.
 
-.. code-block:: bash
-
-   -DCUDA_ARCH=80   # A100 (default)
-   -DCUDA_ARCH=90   # H100
+It reuses ``BACKEND_ARCH``, stripped to the bare compute
+capability that ``CMAKE_CUDA_ARCHITECTURES`` expects, so ``-DBACKEND_ARCH=cc80``
+builds ADIOS2's CUDA sources for ``80``. There is no separate option to set, and
+nothing is probed from the build machine, so a GPU-less login or build node
+configures the same way as a compute node.
 
 Library Path Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -296,10 +310,12 @@ If you have ParaView installed, it often includes its own version of ADIOS2 whic
 .. note::
 
    The built-in ADIOS2 is installed into ``adios2-<config>-<version>`` inside
-   the build directory, where ``<config>`` is ``cuda`` for a
-   ``ENABLE_BACKEND=CUDA`` build and ``cpu`` otherwise. A CUDA-enabled ADIOS2
-   cannot be reused by a CPU build, which is why the two are kept apart. Adjust
-   the paths below to match your build.
+   the build directory, where ``<config>`` is ``cuda`` for a CUDA-enabled build
+   (see `CUDA Architecture for the ADIOS2 Build`_) and ``cpu`` otherwise, with
+   ``-serial`` appended in a ``WITH_MPI=OFF`` build. A CUDA-enabled ADIOS2
+   cannot be reused by a CPU build, and a serial one exports different Fortran
+   bindings, which is why each combination is kept apart. Adjust the paths below
+   to match your build.
 
 Prepending to LD_LIBRARY_PATH
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -394,10 +410,13 @@ Requirements
 
 GPU-aware ADIOS2 I/O requires:
 
+- ``ENABLE_BACKEND=CUDA``; configuring fails with any other backend, including
+  ``OMP_TGT``, which reaches ADIOS2 through the host-staged path even when
+  linked against a CUDA-enabled ADIOS2
 - The NVHPC (or PGI) Fortran compiler
 - ADIOS2 built with CUDA support (``-DADIOS2_USE_CUDA=ON``)
 
-When using the built-in ADIOS2 (default), the build system builds ADIOS2 with CUDA support when ``ENABLE_BACKEND=CUDA`` is selected.
+When using the built-in ADIOS2 (default), the build system builds ADIOS2 with CUDA support for any NVHPC/PGI GPU build.
 
 Build Configuration
 ~~~~~~~~~~~~~~~~~~~

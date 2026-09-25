@@ -180,15 +180,19 @@ Each supported compiler enables offload in its own way. The build detects the
 compiler and supplies the flags it needs, so no manual offload flags are
 required with any of them.
 
-Where the offload architecture has to be given explicitly, it is set with
-``OMP_TGT_ARCH``:
+Both GPU backends need the target architecture, given with ``BACKEND_ARCH``.
+Configuring a GPU build fails if it is unset. NVIDIA targets are named by their
+compute capability as ``ccXX``, the convention nvfortran uses, and AMD targets
+as ``gfx<model>``:
 
 .. code-block:: bash
 
-   -DENABLE_BACKEND=OMP_TGT -DOMP_TGT_ARCH=gfx942
+   -DENABLE_BACKEND=OMP_TGT -DBACKEND_ARCH=gfx942   # AMD MI300X
+   -DENABLE_BACKEND=CUDA -DBACKEND_ARCH=cc80        # NVIDIA A100
 
-Whether that variable is required, optional or unused depends on the compiler.
-See :doc:`user/advanced_build` for the per-compiler details.
+The build passes the name to the selected compiler in the form it expects, for
+example ``-gpu=cc80`` for NVHPC and ``--offload-arch=gfx942`` for GNU and
+Flang. See :doc:`user/advanced_build` for the per-compiler details.
 
 Build options
 ~~~~~~~~~~~~~
@@ -208,16 +212,13 @@ Build options
      - The MPI Fortran wrapper to build with, normally ``mpif90``. With
        ``WITH_MPI=OFF``, the compiler itself instead (``gfortran``,
        ``nvfortran``, ``ftn``, ``flang``) rather than a wrapper.
-   * - ``CUDA_ARCH``
-     - ``80``
-     - CUDA compute capability for ``ENABLE_BACKEND=CUDA`` and the bundled
-       ADIOS2 build: ``80`` (A100), ``90`` (H100) or ``native``.
    * - ``ENABLE_BACKEND``
      - ``OFF``
      - GPU backend to build: ``OFF``, ``CUDA`` or ``OMP_TGT``.
-   * - ``OMP_TGT_ARCH``
+   * - ``BACKEND_ARCH``
      - --
-     - Offload architecture for ``ENABLE_BACKEND=OMP_TGT``, e.g. ``gfx942``.
+     - Target GPU architecture, required whenever ``ENABLE_BACKEND`` is not
+       ``OFF``: ``cc80`` (A100), ``cc90`` (H100), ``gfx942`` (MI300X).
    * - ``SINGLE_PREC``
      - ``OFF``
      - Build in single precision.

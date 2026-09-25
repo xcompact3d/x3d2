@@ -68,9 +68,9 @@ function(define_test_backend_runtime backend)
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
         target_compile_options(${runtime_target} PRIVATE
-          "--offload-arch=${OMP_TGT_ARCH}")
+          "--offload-arch=${BACKEND_ARCH}")
         target_link_options(${runtime_target} INTERFACE
-          "--offload-arch=${OMP_TGT_ARCH}")
+	  "--offload-arch=${BACKEND_ARCH}")
       endif()
     endif()
   endif()
@@ -134,8 +134,8 @@ function(define_test testfile np backend)
       if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray" AND
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
-        target_compile_options(${test_name} PRIVATE "--offload-arch=${OMP_TGT_ARCH}")
-        target_link_options(${test_name} PRIVATE "--offload-arch=${OMP_TGT_ARCH}")
+        target_compile_options(${test_name} PRIVATE "--offload-arch=${BACKEND_ARCH}")
+        target_link_options(${test_name} PRIVATE "--offload-arch=${BACKEND_ARCH}")
       endif()
     endif()
   endif()
@@ -357,7 +357,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   define_performance_test(performance/perf_cuda_penta.f90 ${CMAKE_CTEST_NPROCS} cuda)
   define_performance_test(performance/perf_cuda_transeq.f90 ${CMAKE_CTEST_NPROCS} cuda)
 
-  if(WITH_ADIOS2)
+  if(ADIOS2_WITH_CUDA)
     define_test(unit/test_adios2_read_write.f90 4 cuda)
     define_test(unit/test_io_session.f90 4 cuda)
     define_test(unit/test_ab_checkpoint.f90 1 cuda)
@@ -376,6 +376,12 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
 
   # OMP TGT verification tests
   define_verification_test(verification/test_time_integrator.f90 1 omp_tgt)
+
+  if(ADIOS2_WITH_CUDA)
+    define_test(unit/test_adios2_read_write.f90 4 omp_tgt)
+    define_test(unit/test_io_session.f90 4 omp_tgt)
+    define_test(unit/test_ab_checkpoint.f90 1 omp_tgt)
+  endif()
 endif()
 
 set(EXECUTABLE_OUTPUT_PATH "bin")
