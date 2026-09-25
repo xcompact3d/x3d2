@@ -172,7 +172,12 @@ function(define_test testfile np backend)
   if(NOT WITH_MPI)
     add_test(NAME ${test_name} COMMAND sh -c "bin/${test_name} ${extra_args_str}")
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
-    add_test(NAME ${test_name} COMMAND "srun bin/${test_name} ${extra_args_str}")
+    # A quoted COMMAND is one argv[0], so ctest looks for a program literally
+    # named "srun bin/<test> ..." and reports every test as Not Run.  Go through
+    # a shell, as the other two branches do, and pass the rank count on: Cray
+    # machines are Slurm-driven and srun otherwise takes it from the allocation.
+    add_test(NAME ${test_name}
+      COMMAND sh -c "srun -n ${np} bin/${test_name} ${extra_args_str}")
   else()
     add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} bin/${test_name} ${extra_args_str}")
   endif()
