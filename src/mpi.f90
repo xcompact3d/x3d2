@@ -35,7 +35,7 @@ module m_mpi
   public :: MPI_Init, MPI_Finalize, MPI_Initialized, MPI_Abort
   public :: MPI_Comm_rank, MPI_Comm_size, MPI_Barrier, MPI_Wtime
   public :: MPI_Bcast, MPI_Allreduce, MPI_Reduce
-  public :: MPI_Isend, MPI_Irecv, MPI_Waitall, MPI_Sendrecv
+  public :: MPI_Isend, MPI_Irecv, MPI_Waitall, MPI_Sendrecv, MPI_Alltoall
 
   !> Handles are opaque in MPI, so the values only have to be distinct.
   integer, parameter :: MPI_COMM_NULL = 0
@@ -271,5 +271,20 @@ contains
 
     error stop 'MPI_Sendrecv called, but this build was configured without MPI'
   end subroutine MPI_Sendrecv
+
+  subroutine MPI_Alltoall(sendbuf, sendcount, sendtype, recvbuf, recvcount, &
+                          recvtype, comm, ierror)
+    !! Reachable only where a call site has already branched on a rank count
+    !! above one, as the 110 slab redistribution in the CUDA Poisson solver
+    !! does. It exists so that callers can name it in a `use m_mpi, only:`
+    !! list that has to compile in both builds.
+    type(*), dimension(..), intent(in) :: sendbuf
+    type(*), dimension(..), intent(inout) :: recvbuf
+    integer, intent(in) :: sendcount, sendtype
+    integer, intent(in) :: recvcount, recvtype, comm
+    integer, intent(out) :: ierror
+
+    error stop 'MPI_Alltoall called, but this build was configured without MPI'
+  end subroutine MPI_Alltoall
 #endif
 end module m_mpi
