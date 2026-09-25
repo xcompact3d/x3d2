@@ -172,6 +172,9 @@ contains
                               poisson_fft%sp)
       end if
     else if (poisson_fft%is_110_case) then
+      if (poisson_fft%nx_loc /= poisson_fft%nx_glob .or. &
+          poisson_fft%ny_loc /= poisson_fft%ny_glob) &
+        error stop 'OpenMP 110 Poisson case supports a single rank only'
       allocate (poisson_fft%r_tr(poisson_fft%nz_loc, poisson_fft%nx_loc, &
                                  poisson_fft%ny_loc))
     end if
@@ -578,9 +581,12 @@ contains
     n2x = self%nx_glob/2
     n2y = self%ny_glob/2
 
+    ! The gather arithmetic (n2x, n2y and the src_i/src_j mapping below)
+    ! stays in global terms: it is a property of the global line, and the
+    ! init guard for the 110 case makes nx_loc == nx_glob, ny_loc == ny_glob.
     !$omp parallel do private(src_i, src_j) collapse(2)
     do k = 1, self%nz_loc
-      do j = 1, self%ny_glob
+      do j = 1, self%ny_loc
         if (j <= n2y) then
           src_j = 2*j - 1
         else if (mod(self%ny_glob, 2) == 1 .and. j == n2y + 1) then
@@ -589,7 +595,7 @@ contains
           src_j = 2*self%ny_glob - 2*j + 2
         end if
 
-        do i = 1, self%nx_glob
+        do i = 1, self%nx_loc
           if (i <= n2x) then
             src_i = 2*i - 1
           else if (mod(self%nx_glob, 2) == 1 .and. i == n2x + 1) then
@@ -628,9 +634,12 @@ contains
     ! whatever the recycled block came with.
     f_out%data = 0._dp
 
+    ! The gather arithmetic (n2x, n2y and the src_i/src_j mapping below)
+    ! stays in global terms: it is a property of the global line, and the
+    ! init guard for the 110 case makes nx_loc == nx_glob, ny_loc == ny_glob.
     !$omp parallel do private(src_i, src_j) collapse(2)
     do k = 1, self%nz_loc
-      do j = 1, self%ny_glob
+      do j = 1, self%ny_loc
         if (mod(self%ny_glob, 2) == 1 .and. j == self%ny_glob) then
           src_j = n2y + 1
         else if (mod(j, 2) == 1) then
@@ -639,7 +648,7 @@ contains
           src_j = self%ny_glob - j/2 + 1
         end if
 
-        do i = 1, self%nx_glob
+        do i = 1, self%nx_loc
           if (mod(self%nx_glob, 2) == 1 .and. i == self%nx_glob) then
             src_i = n2x + 1
           else if (mod(i, 2) == 1) then
