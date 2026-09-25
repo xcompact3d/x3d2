@@ -14,6 +14,7 @@ mark_as_advanced(WITH_NIGHTLY_REGRESSION)
 # Shared test utilities library
 add_library(x3d2_test_utils STATIC common/test_utils.f90)
 target_link_libraries(x3d2_test_utils PRIVATE x3d2)
+target_link_libraries(x3d2_test_utils PRIVATE OpenMP::OpenMP_Fortran)
 # test_utils.f90 reaches MPI through m_mpi, so with MPI enabled it needs the
 # MPI module path itself: x3d2 links MPI privately and does not pass it on.
 if(WITH_MPI)
@@ -76,6 +77,12 @@ function(define_test_backend_runtime backend)
   endif()
 
   target_link_libraries(${runtime_target} PRIVATE x3d2_backends x3d2)
+  # Match the OpenMP flags of the executables using this module (see
+  # x3d2_test_utils above).  The CUDA tests build without OpenMP, so this
+  # runtime does too.
+  if(NOT ${backend} STREQUAL cuda)
+    target_link_libraries(${runtime_target} PRIVATE OpenMP::OpenMP_Fortran)
+  endif()
   # backend_runtime.f90 reaches MPI through m_mpi (see x3d2_test_utils above).
   if(WITH_MPI)
     target_link_libraries(${runtime_target} PRIVATE MPI::MPI_Fortran)
@@ -109,7 +116,13 @@ function(define_test testfile np backend)
   else()
     if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
       target_compile_options(${test_name} PRIVATE "-eF")
-      target_link_options(${test_name} INTERFACE -h omp)
+      target_link_options(${test_name} PRIVATE -h omp)
+      # Some CCE version define its internal $host_init$<proc>$<module>_ record both in
+      # the object of the module owning the procedure and in every object that
+      # uses it, and ld rejects the pair.  The records are zero-initialised .bss
+      # data, so letting ld keep one is benign.
+      target_link_options(${test_name} PRIVATE
+        "-Wl,--allow-multiple-definition")
     else()
       target_compile_options(${test_name} PRIVATE "-cpp")
       if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
@@ -124,7 +137,6 @@ function(define_test testfile np backend)
     target_link_libraries(${test_name} PRIVATE OpenMP::OpenMP_Fortran)
 
     if(${backend} STREQUAL omp_tgt)
-      # Note this is somewhat of a hack - hardcoded to build against MI300A
       target_compile_options(${test_name} PRIVATE "-DOMP_TGT")
       if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
@@ -159,7 +171,12 @@ function(define_test testfile np backend)
   if(NOT WITH_MPI)
     add_test(NAME ${test_name} COMMAND sh -c "bin/${test_name} ${extra_args_str}")
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
-    add_test(NAME ${test_name} COMMAND "srun bin/${test_name} ${extra_args_str}")
+    # A quoted COMMAND is one argv[0], so ctest looks for a program literally
+    # named "srun bin/<test> ..." and reports every test as Not Run.  Go through
+    # a shell, as the other two branches do, and pass the rank count on: Cray
+    # machines are Slurm-driven and srun otherwise takes it from the allocation.
+    add_test(NAME ${test_name}
+      COMMAND sh -c "srun -n ${np} bin/${test_name} ${extra_args_str}")
   else()
     add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} bin/${test_name} ${extra_args_str}")
   endif()
