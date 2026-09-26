@@ -2,6 +2,7 @@ name: Run unit tests
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'CMakeLists.txt'
       - 'cmake/**'
@@ -11,6 +12,9 @@ on:
 
 jobs:
   unit-tests:
+    # Skip draft pull requests; the workflow runs again once one is marked
+    # ready for review.
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-22.04
     env:
       OMPI_VERSION: 4.1.5
