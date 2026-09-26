@@ -13,6 +13,11 @@ option(WITH_MPI "Enable MPI" ON)
 if(WITH_MPI)
   find_package(MPI REQUIRED)
   add_definitions("-DMPI")
+  if(CMAKE_Fortran_COMPILER_ID STREQUAL "Cray")
+    # CCE drops part of the `mpi` module when another module re-exports it, so
+    # src/mpi.f90 has to declare the MPI procedures itself there.
+    add_definitions("-DMPI_NO_MODULE_REEXPORT")
+  endif()
 endif()
 
 # Toggleable build type (default Release)

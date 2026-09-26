@@ -3,7 +3,8 @@ module m_mpi
 !!
 !! When the build enables MPI (-DMPI, set by the WITH_MPI option, on by
 !! default) this module is a thin re-export of the `mpi` module, so `use m_mpi`
-!! is exactly `use mpi`.
+!! is exactly `use mpi`. The Cray compiler needs a hand with that re-export;
+!! the MPI_NO_MODULE_REEXPORT branch below says why.
 !!
 !! When MPI is disabled the module supplies serial stand-ins for the MPI
 !! entities x3d2 uses. A build without MPI is a single rank, so every
@@ -17,9 +18,43 @@ module m_mpi
 !! calls appear. The only guards left in the tree are around communication on
 !! device buffers, which cannot be typed generically here.
 #ifdef MPI
+#ifdef MPI_NO_MODULE_REEXPORT
+  ! The Cray compiler (CCE 16) does not carry every entity of the `mpi` module
+  ! through a second module. The parameters arrive, and so do the procedures
+  ! whose arguments are all scalars, but those with an array dummy argument --
+  ! MPI_Bcast, MPI_Allreduce, MPI_Reduce, MPI_Cart_coords, MPI_Isend,
+  ! MPI_Irecv, MPI_Waitall, MPI_Sendrecv -- are left out of this module's
+  ! information file, and a call site's `use m_mpi, only: MPI_Isend` then fails
+  ! with "MPI_ISEND is not in module M_MPI".
+  !
+  ! On CCE the procedures are therefore declared external here rather than
+  ! taken from `mpi`. That makes them local entities of this module, so they
+  ! reach the module information file and the call sites keep working
+  ! unchanged. All of them are declared this way, not only the eight that fail,
+  ! so the set does not have to track a compiler version. The cost is MPI's own
+  ! argument checking in Cray builds, which is what a pre-F90 `mpif.h` include
+  ! gives up too; the constants still come from `mpi`, so handle values remain
+  ! the library's own.
+  use mpi, only: MPI_COMM_WORLD, MPI_COMM_SELF, MPI_COMM_NULL, MPI_SUCCESS, &
+                 MPI_SUM, MPI_MAX, MPI_MIN, MPI_LAND, &
+                 MPI_INTEGER, MPI_LOGICAL, MPI_REAL, MPI_DOUBLE_PRECISION, &
+                 MPI_COMPLEX, MPI_DOUBLE_COMPLEX, MPI_STATUS_SIZE, &
+                 MPI_STATUS_IGNORE, MPI_STATUSES_IGNORE, MPI_IN_PLACE
+
+  implicit none
+
+  external :: MPI_Init, MPI_Finalize, MPI_Initialized, MPI_Abort, &
+              MPI_Comm_rank, MPI_Comm_size, MPI_Barrier, &
+              MPI_Bcast, MPI_Allreduce, MPI_Reduce, MPI_Cart_coords, &
+              MPI_Isend, MPI_Irecv, MPI_Waitall, MPI_Sendrecv
+
+  !> Wall-clock seconds are a C double whatever x3d2's working precision is.
+  double precision, external :: MPI_Wtime
+#else
   use mpi
 
   implicit none
+#endif
 #else
   use iso_fortran_env, only: int64, real32, real64, stderr => error_unit
 

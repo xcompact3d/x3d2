@@ -14,6 +14,14 @@ mark_as_advanced(WITH_NIGHTLY_REGRESSION)
 # Shared test utilities library
 add_library(x3d2_test_utils STATIC common/test_utils.f90)
 target_link_libraries(x3d2_test_utils PRIVATE x3d2)
+<<<<<<< Updated upstream
+=======
+# Every executable that uses m_test_utils is compiled with OpenMP enabled, so
+# this module has to be too.  x3d2 links OpenMP privately and does not pass the
+# flag on, and a module compiled without it while its callers have it makes Cray
+# ftn emit conflicting definitions of its internal $host_init$ records, which
+# the linker then rejects as multiple definitions.
+>>>>>>> Stashed changes
 target_link_libraries(x3d2_test_utils PRIVATE OpenMP::OpenMP_Fortran)
 # test_utils.f90 reaches MPI through m_mpi, so with MPI enabled it needs the
 # MPI module path itself: x3d2 links MPI privately and does not pass it on.
@@ -117,12 +125,15 @@ function(define_test testfile np backend)
     if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
       target_compile_options(${test_name} PRIVATE "-eF")
       target_link_options(${test_name} PRIVATE -h omp)
+<<<<<<< Updated upstream
       # Some CCE version define its internal $host_init$<proc>$<module>_ record both in
       # the object of the module owning the procedure and in every object that
       # uses it, and ld rejects the pair.  The records are zero-initialised .bss
       # data, so letting ld keep one is benign.
       target_link_options(${test_name} PRIVATE
         "-Wl,--allow-multiple-definition")
+=======
+>>>>>>> Stashed changes
     else()
       target_compile_options(${test_name} PRIVATE "-cpp")
       if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
