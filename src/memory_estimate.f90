@@ -246,12 +246,15 @@ contains
     !            ibm_on delta below exactly) - a built-in ADIOS2 build
     !            (deps/adios2-install-cuda-v2.12.1) was needed since
     !            cylinder's mask file is ADIOS2 .bp format
-    ! foil is TODO: not yet calibrated. Its case module now exists (built by
-    ! both xcompact.f90 and x3d2-memcheck's own dispatch) so
-    ! `x3d2-memcheck examples/foil/input.x3d --build` can measure a real
-    ! number - just not yet done. Falls back to channel's base (the
-    ! largest measured, i.e. safest over-estimate) rather than
-    ! under-estimating with tgv/generic's base.
+    ! foil is TODO: not yet calibrated, and has no case module anywhere in
+    ! this tree (no m_case_foil, no case ('foil') dispatch in xcompact.f90
+    ! or in memcheck.f90's build_and_measure) - `x3d2-memcheck
+    ! examples/foil/input.x3d --build` cannot measure a real number until
+    ! one is added, and enter_build_scratch's flow_case_supported check
+    ! skips the real build for it by name rather than attempting it. Falls
+    ! back here to channel's base (the largest measured, i.e. safest
+    ! over-estimate) so the static (Tier 1) estimate over- rather than
+    ! under-estimates in the meantime.
     select case (trim(flow_case_name))
     case ('tgv')
       base = 20

@@ -807,21 +807,85 @@ contains
     !! Sets ok=.false. (and the estimate above stands, like the other
     !! run_tier3 skips) on any failure; leave_build_scratch removes the
     !! scratch directory once the build finishes.
+    !!
+    !! Validates the known failure causes up front, before touching the
+    !! filesystem: the input file must exist, domain_cfg%flow_case_name
+    !! must be one this tool (and build_and_measure's own select case) can
+    !! dispatch, and (ibm_on=T) the matching ibm_<BC-suffix>.bp mask file
+    !! must already be present in the invoking directory. If an unexpected
+    !! error stop happens after the chdir below regardless - a failure mode
+    !! this pre-validation does not cover - the scratch directory is left
+    !! behind under the invoking directory; the next run with the same pid
+    !! in the same directory removes it as a stale leftover before
+    !! creating its own.
     logical, intent(out) :: ok
 
     integer(c_int) :: pid, rc
     integer :: st, slash_pos
     character(len=32) :: pid_str
     character(len=16) :: ibm_file
-    logical :: ibm_file_exists
+    logical :: ibm_file_exists, input_exists, flow_case_supported
 
     ok = .true.
     orig_dir = current_dir()
+
+    inquire (file=trim(input_path), exist=input_exists)
+    if (.not. input_exists) then
+      print '(a,a)', 'Real build skipped: input file not found: ', &
+        trim(input_path)
+      ok = .false.
+      return
+    end if
+
+    select case (trim(domain_cfg%flow_case_name))
+    case ('tgv', 'generic', 'channel', 'cylinder')
+      flow_case_supported = .true.
+    case default
+      flow_case_supported = .false.
+    end select
+    if (.not. flow_case_supported) then
+      print '(a,a,a)', "Real build skipped: flow case '", &
+        trim(domain_cfg%flow_case_name), &
+        "' has no dispatch in x3d2-memcheck"
+      ok = .false.
+      return
+    end if
+
+    if (solver_cfg%ibm_on) then
+      ibm_file = ibm_mask_filename(periodic_x, periodic_y, periodic_z)
+      inquire (file=trim(orig_dir)//'/'//trim(ibm_file), &
+              exist=ibm_file_exists)
+      if (.not. ibm_file_exists) then
+        print '(a)', 'Real build skipped: ibm_on=T but the matching &
+          &ibm_<BC-suffix>.bp mask file was not found in the working &
+          &directory; the estimate above stands.'
+        ok = .false.
+        return
+      end if
+    end if
+
     pid = c_getpid()
     write (pid_str, '(i0)') pid
     scratch_dir = trim(orig_dir)//'/x3d2-memcheck-build.'//trim(pid_str)
 
-    call execute_command_line("mkdir -p '"//trim(scratch_dir)//"'", &
+    ! A stale scratch directory from an earlier run's unexpected error stop
+    ! after the chdir below (see this subroutine's docstring) would make a
+    ! plain mkdir fail - remove it first, if present.
+    call execute_command_line("test -d '"//trim(scratch_dir)//"'", &
+                              exitstat=st)
+    if (st == 0) then
+      call execute_command_line("rm -rf '"//trim(scratch_dir)//"'", &
+                                exitstat=st)
+      if (st /= 0) then
+        print '(a,a)', 'Real build skipped: could not remove stale &
+          &scratch directory ', trim(scratch_dir)
+        ok = .false.
+        return
+      end if
+      print '(a,a)', 'Removed stale scratch directory ', trim(scratch_dir)
+    end if
+
+    call execute_command_line("mkdir '"//trim(scratch_dir)//"'", &
                               exitstat=st)
     if (st /= 0) then
       print '(a,a)', 'Real build skipped: could not create scratch &
@@ -835,27 +899,56 @@ contains
           index(trim(input_path), "'") > 0) then
         print '(a)', "Real build skipped: relative input path with '..' &
           &cannot be mirrored; pass an absolute path"
-        call execute_command_line("rmdir '"//trim(scratch_dir)//"'")
+        call execute_command_line("rm -rf '"//trim(scratch_dir)//"'")
         ok = .false.
         return
       end if
       slash_pos = index(trim(input_path), '/', back=.true.)
-      if (slash_pos > 0) &
+      if (slash_pos > 0) then
         call execute_command_line("mkdir -p '"//trim(scratch_dir)//'/'// &
-                                  trim(input_path(1:slash_pos - 1))//"'")
+                                  trim(input_path(1:slash_pos - 1))//"'", &
+                                  exitstat=st)
+        if (st /= 0) then
+          print '(a)', 'Real build skipped: could not prepare scratch &
+            &directory (mkdir of the input''s parent failed)'
+          call execute_command_line("rm -rf '"//trim(scratch_dir)//"'")
+          ok = .false.
+          return
+        end if
+      end if
       call execute_command_line("ln -s '"//trim(orig_dir)//'/'// &
                                 trim(input_path)//"' '"//trim(scratch_dir)// &
-                                '/'//trim(input_path)//"'")
+                                '/'//trim(input_path)//"'", exitstat=st)
+      if (st /= 0) then
+        print '(a)', 'Real build skipped: could not prepare scratch &
+          &directory (input symlink failed)'
+        call execute_command_line("rm -rf '"//trim(scratch_dir)//"'")
+        ok = .false.
+        return
+      end if
+      inquire (file=trim(scratch_dir)//'/'//trim(input_path), &
+              exist=input_exists)
+      if (.not. input_exists) then
+        print '(a)', 'Real build skipped: could not prepare scratch &
+          &directory (input symlink failed)'
+        call execute_command_line("rm -rf '"//trim(scratch_dir)//"'")
+        ok = .false.
+        return
+      end if
     end if
 
     if (solver_cfg%ibm_on) then
       ibm_file = ibm_mask_filename(periodic_x, periodic_y, periodic_z)
-      inquire (file=trim(orig_dir)//'/'//trim(ibm_file), &
-              exist=ibm_file_exists)
-      if (ibm_file_exists) &
-        call execute_command_line("ln -s '"//trim(orig_dir)//'/'// &
-                                  trim(ibm_file)//"' '"//trim(scratch_dir)// &
-                                  '/'//trim(ibm_file)//"'")
+      call execute_command_line("ln -s '"//trim(orig_dir)//'/'// &
+                                trim(ibm_file)//"' '"//trim(scratch_dir)// &
+                                '/'//trim(ibm_file)//"'", exitstat=st)
+      if (st /= 0) then
+        print '(a)', 'Real build skipped: could not prepare scratch &
+          &directory (ibm mask symlink failed)'
+        call execute_command_line("rm -rf '"//trim(scratch_dir)//"'")
+        ok = .false.
+        return
+      end if
     end if
 
     rc = c_chdir(trim(scratch_dir)//c_null_char)
@@ -915,6 +1008,12 @@ contains
     !! enter_build_scratch also skips the build
     !! (ok=.false.) if the scratch directory cannot be created or entered,
     !! or if input_path is relative with a '..' component it cannot mirror.
+    !! enter_build_scratch pre-validates the known causes up front - a
+    !! missing input file, an unsupported flow case, or (ibm_on=T) a
+    !! missing mask file - before touching the filesystem; see its own
+    !! docstring for what happens if an unexpected error stop occurs after
+    !! its chdir regardless (a scratch directory left behind under the
+    !! invoking directory, cleaned up by the next run with the same pid).
     real(dp) :: ws_guess, used_gib, workspace_gib_measured, pct_error, &
                estimate_ng1_excl_io_gib
     integer :: measured_peak_fields
