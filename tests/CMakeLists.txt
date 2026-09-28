@@ -431,7 +431,8 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
        ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d --build; \
      if grep -q marker monitoring.csv && \
         ! ls -d x3d2-memcheck-build.* >/dev/null 2>&1; then \
-       echo SCRATCH_OK; else echo MISMATCH; fi")
+       echo SCRATCH_OK; else echo MISMATCH; fi; \
+     rm -rf \"$tmp\"")
   set_tests_properties(memcheck_build_scratch_protects_cwd PROPERTIES
     LABELS "verification;cuda"
     PASS_REGULAR_EXPRESSION "SCRATCH_OK"
@@ -448,7 +449,8 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
        input.x3d --build; \
      if [ ! -e monitoring.csv ] && \
         ! ls -d x3d2-memcheck-build.* >/dev/null 2>&1; then \
-       echo RELATIVE_OK; else echo MISMATCH; fi")
+       echo RELATIVE_OK; else echo MISMATCH; fi; \
+     rm -rf \"$tmp\"")
   set_tests_properties(memcheck_build_relative_input PROPERTIES
     LABELS "verification;cuda"
     PASS_REGULAR_EXPRESSION "RELATIVE_OK"
@@ -460,10 +462,17 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   # the device path compiled in.
   if(WITH_ADIOS2_GPU_AWARE)
     set(memcheck_gpuio_input ${CMAKE_SOURCE_DIR}/tests/memcheck/tgv_snapshot_stride1.x3d)
+    # One unpadded 256^3 field is 128 MiB in double precision, 64 MiB in
+    # single precision.
+    if(SINGLE_PREC)
+      set(_gpuio_mib "64.0")
+    else()
+      set(_gpuio_mib "128.0")
+    endif()
     add_test(NAME memcheck_gpuio_static_TGV COMMAND sh -c
       "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${memcheck_gpuio_input} --static")
     set_tests_properties(memcheck_gpuio_static_TGV PROPERTIES LABELS "verification;cuda"
-      PASS_REGULAR_EXPRESSION "GPU-aware IO staging: 128.0 MiB/GPU")
+      PASS_REGULAR_EXPRESSION "GPU-aware IO staging: ${_gpuio_mib} MiB/GPU")
     add_test(NAME memcheck_gpuio_static_TGV_hostmode COMMAND sh -c
       "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${memcheck_gpuio_input} --static")
     set_tests_properties(memcheck_gpuio_static_TGV_hostmode PROPERTIES LABELS "verification;cuda"
