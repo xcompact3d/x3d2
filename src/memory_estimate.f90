@@ -68,7 +68,10 @@ contains
     !! ng is the number of ranks the z-direction is split over
     !! (mesh%par%nproc_dir(3)); note this differs from the physical
     !! decomposition axis (z), which is why ng divides cx or cy here, not
-    !! cz.
+    !! cz. Whether cy (000/010) or cx (100) actually divides by ng is not
+    !! checked here - src/memcheck.f90's ng_unsupported_reason is where
+    !! that divisibility is validated before a decomposition is reported
+    !! as supported.
     logical, intent(in) :: bc_is_100, bc_is_110
     integer, intent(in) :: cdims(3)
     integer, intent(in) :: ng

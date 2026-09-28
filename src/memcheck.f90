@@ -242,7 +242,9 @@ program x3d2_memcheck
   call MPI_Finalize(ierr)
 
   ! Exit code mirrors the final verdict: 0=FITS, 1=BORDERLINE,
-  ! 2=DOES_NOT_FIT.
+  ! 2=DOES_NOT_FIT (also covers UNSUPPORTED - an unsupported nproc_dir
+  ! request, via the default case below, since neither fits nor merely
+  ! borderline is the right signal for it).
   select case (trim(final_verdict))
   case ('FITS')
     call exit(0)
@@ -470,6 +472,37 @@ contains
     end if
   end function classify
 
+  function ng_unsupported_reason(ng) result(reason)
+    !! Whether GPU count ng is a decomposition this tool/solver actually
+    !! supports - blank when it is. Shared by report()'s per-ng table,
+    !! report_measured_table()'s per-ng table, and report()'s requested
+    !! nproc_dir line, so the three can never silently diverge on what
+    !! counts as unsupported. Checked in this order: ng itself must be a
+    !! positive count; ng>1 needs BC_y periodic (multi_gpu_supported);
+    !! gdims(3) must divide by ng (the physical Z decomposition); and, for
+    !! whichever BC actually decomposes the spectral slab along dim2 (000/
+    !! 010: cy: 100: cx - see spectral_slab_bytes), that dimension must
+    !! also divide by ng, or the solver would truncate or error-stop.
+    integer, intent(in) :: ng
+    character(len=96) :: reason
+
+    reason = ''
+    if (ng < 1) then
+      reason = 'nproc_dir(3) must be >= 1'
+    else if (ng > 1 .and. .not. multi_gpu_supported) then
+      reason = 'not supported: BC_y is non-periodic - &
+               &src/poisson_fft.f90 error-stops at nproc>1'
+    else if (mod(gdims(3), ng) /= 0) then
+      write (reason, '(a,i0,a)') 'z=', gdims(3), ' not divisible'
+    else if ((bc_is_000 .or. bc_is_010) .and. mod(cdims(2), ng) /= 0) then
+      write (reason, '(a,i0,a)') 'y cells=', cdims(2), ' not divisible &
+        &by ng, the solver would truncate the spectral slab'
+    else if (bc_is_100 .and. mod(cdims(1), ng) /= 0) then
+      write (reason, '(a,i0,a)') 'x cells=', cdims(1), ' not divisible &
+        &by ng, src/backend/cuda/poisson_fft.f90 error-stops'
+    end if
+  end function ng_unsupported_reason
+
   subroutine print_table_header()
     character(len=14) :: hdr_grid
 
@@ -681,6 +714,7 @@ contains
     logical :: exact, unit_stride, snapshot_active, checkpoint_active
     character(len=12) :: verdict
     character(len=64) :: what, io_none_reason
+    character(len=96) :: reason
     integer(i8) :: io_ng1_bytes
 
     print '(a)', '============================================================'
@@ -741,17 +775,27 @@ contains
     print '(a)', '============================================================'
 
     requested_ng = domain_cfg%nproc_dir(3)
-    call estimate_for_ng(requested_ng, requested_gib, exact, final_verdict)
-    print '(a,i0,a,f0.2,a,f0.1,a,a)', 'Requested nproc_dir gives ng=', &
-      requested_ng, ': ', requested_gib, ' GiB/GPU (', &
-      100._dp*requested_gib/card_gib, '% of card) - ', trim(final_verdict)
-    if (.not. exact) then
-      if (trim(run_mode) == 'STATIC') then
-        print '(a)', '  (Tier 1 estimate only: --static skips the GPU FFT &
-          &plan query.)'
-      else
-        print '(a)', '  (Tier 1 floor only: this input is well over the &
-          &limit, no GPU plan probe was attempted.)'
+    reason = ng_unsupported_reason(requested_ng)
+    if (domain_cfg%nproc_dir(1) /= 1 .or. domain_cfg%nproc_dir(2) /= 1) &
+      reason = 'only nproc_dir = [1,1,ng] is supported by the CUDA backend'
+    if (len_trim(reason) > 0) then
+      print '(a,i0,a,i0,a,i0,a,a,a)', 'Requested nproc_dir [', &
+        domain_cfg%nproc_dir(1), ',', domain_cfg%nproc_dir(2), ',', &
+        domain_cfg%nproc_dir(3), ']: not supported (', trim(reason), ')'
+      final_verdict = 'UNSUPPORTED'
+    else
+      call estimate_for_ng(requested_ng, requested_gib, exact, final_verdict)
+      print '(a,i0,a,f0.2,a,f0.1,a,a)', 'Requested nproc_dir gives ng=', &
+        requested_ng, ': ', requested_gib, ' GiB/GPU (', &
+        100._dp*requested_gib/card_gib, '% of card) - ', trim(final_verdict)
+      if (.not. exact) then
+        if (trim(run_mode) == 'STATIC') then
+          print '(a)', '  (Tier 1 estimate only: --static skips the GPU &
+            &FFT plan query.)'
+        else
+          print '(a)', '  (Tier 1 floor only: this input is well over &
+            &the limit, no GPU plan probe was attempted.)'
+        end if
       end if
     end if
 
@@ -760,14 +804,9 @@ contains
     smallest_fits = 0
     do k = 1, size(n_gpu_list)
       ng = n_gpu_list(k)
-      if (ng > 1 .and. .not. multi_gpu_supported) then
-        print '(a,i0,a)', ' ', ng, '     (not supported: BC_y is &
-          &non-periodic - src/poisson_fft.f90 error-stops at nproc>1)'
-        cycle
-      end if
-      if (mod(gdims(3), ng) /= 0) then
-        print '(a,i0,a,i0,a)', ' ', ng, '     (skipped: z=', gdims(3), &
-          ' not divisible)'
+      reason = ng_unsupported_reason(ng)
+      if (len_trim(reason) > 0) then
+        print '(a,i0,a,a,a)', ' ', ng, '     (skipped: ', trim(reason), ')'
         cycle
       end if
       call estimate_for_ng(ng, per_gpu_gib, exact, verdict, workspace_gib, &
@@ -1146,6 +1185,7 @@ contains
     integer(i8) :: spec_bytes_1
     logical :: multi_gpu_supported_measured
     character(len=12) :: verdict
+    character(len=96) :: reason
 
     spec_bytes_1 = spectral_slab_bytes(bc_is_100, bc_is_110, cdims, 1)
     overhead = used_gib - workspace_gib_measured
@@ -1186,14 +1226,18 @@ contains
 
     do k = 1, size(n_gpu_list)
       ng = n_gpu_list(k)
-      if (ng > 1 .and. .not. multi_gpu_supported_measured) then
-        print '(a,i0,a)', ' ', ng, '     (skipped: not supported for this &
-          &BC/environment)'
-        cycle
-      end if
-      if (mod(gdims(3), ng) /= 0) then
-        print '(a,i0,a,i0,a)', ' ', ng, '     (skipped: z=', gdims(3), &
-          ' not divisible)'
+      ! ng_unsupported_reason covers the base checks (ng<1, the static
+      ! BC_y multi-gpu rule, z/cy/cx divisibility) shared with report()'s
+      ! table; multi_gpu_supported_measured on top of that additionally
+      ! excludes ng>1 when the real build just fell back from cuFFTMp to
+      ! plain cuFFT for a BC that needs it, a signal only this real-build
+      ! path has (see its own derivation above).
+      reason = ng_unsupported_reason(ng)
+      if (ng > 1 .and. multi_gpu_supported .and. &
+          .not. multi_gpu_supported_measured) &
+        reason = 'not supported for this BC/environment'
+      if (len_trim(reason) > 0) then
+        print '(a,i0,a,a,a)', ' ', ng, '     (skipped: ', trim(reason), ')'
         cycle
       end if
       local_dims = [gdims(1), gdims(2), gdims(3)/ng]

@@ -400,6 +400,25 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     ENVIRONMENT "CUDA_VISIBLE_DEVICES="
     PASS_REGULAR_EXPRESSION "no usable CUDA device")
 
+  # An nproc_dir that does not divide the grid must be reported as
+  # UNSUPPORTED (exit code 2), not silently estimated: TGV's z=256 does not
+  # divide by 3.
+  add_test(NAME memcheck_static_unsupported_ng COMMAND sh -c
+    "d=$(mktemp -d); \
+     sed 's/^nproc_dir *=.*/nproc_dir = 1, 1, 3/' \
+       ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d > $d/input.x3d; \
+     mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck \
+       $d/input.x3d --static > $d/out.log 2>&1; \
+     rc=$?; cat $d/out.log; \
+     if [ $rc -eq 2 ] && \
+        grep -q 'not supported (z=256 not divisible' $d/out.log; then \
+       echo UNSUPPORTED_OK; \
+     fi; \
+     rm -rf $d")
+  set_tests_properties(memcheck_static_unsupported_ng PROPERTIES
+    LABELS "verification;cuda"
+    PASS_REGULAR_EXPRESSION "UNSUPPORTED_OK")
+
   # A real --build run must not clobber whatever CWD it was launched from,
   # nor leave its scratch directory behind: enter_build_scratch/
   # leave_build_scratch (src/memcheck.f90) exist because the real case build
