@@ -1,0 +1,170 @@
+name: GitLab CI
+
+# Bridges GitHub pull requests to the GitLab mirror, which hosts the GPU
+# runners.
+#
+# GitLab's own "CI/CD for external repositories" trigger is deliberately not
+# relied on here. On a pull_request webhook GitLab only creates a pipeline if
+# the mirror has *already* fetched the PR head SHA; the push webhook merely
+# enqueues an asynchronous mirror fetch, so that check races the fetch and
+# loses most of the time, returning HTTP 200 and creating nothing. The
+# fallback path (pipelines created when the mirror lands the branch) is gated
+# behind several silent conditions, including a default limit of four branches
+# per mirror update. Instead of depending on any of that, this workflow pushes
+# the PR head into the mirror itself and starts the pipeline explicitly.
+#
+# pull_request_target runs the copy of this file from the base branch and has
+# access to secrets. Nothing from the pull request is executed in this job: the
+# checkout is only a source of git objects to push. The code does run on the
+# GitLab runners, so pull requests from forks are gated behind the `ci:gpu`
+# label, which a maintainer applies after reading the diff.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, closed]
+
+permissions:
+  contents: read
+
+env:
+  GITLAB_HOST: ${{ vars.GITLAB_HOST }}
+  GITLAB_PROJECT_ID: ${{ vars.GITLAB_PROJECT_ID }}
+  GITLAB_BRANCH: github-pr-${{ github.event.pull_request.number }}
+
+jobs:
+  pipeline:
+    name: pipeline
+    if: >-
+      github.event.action != 'closed'
+      && github.event.pull_request.draft == false
+      && (github.event.action != 'labeled' || github.event.label.name == 'ci:gpu')
+      && (
+           github.event.pull_request.head.repo.full_name == github.repository
+           || contains(github.event.pull_request.labels.*.name, 'ci:gpu')
+         )
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    concurrency:
+      # A force-push supersedes the pipeline already running for this PR.
+      group: gitlab-ci-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - name: Check out the pull request head
+        uses: actions/checkout@v4
+        with:
+          # Full history: GitLab rejects a shallow push.
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Push the pull request head to the mirror
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITLAB_PROJECT_PATH: ${{ vars.GITLAB_PROJECT_PATH }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          remote="https://oauth2:${GITLAB_TOKEN}@${GITLAB_HOST}/${GITLAB_PROJECT_PATH}.git"
+          # The project is briefly read-only while a mirror update runs, which
+          # rejects the push; retry rather than failing the pull request.
+          for attempt in 1 2 3; do
+            if git push --force "$remote" "${HEAD_SHA}:refs/heads/${GITLAB_BRANCH}"; then
+              exit 0
+            fi
+            echo "push attempt ${attempt} failed, retrying in 30s"
+            sleep 30
+          done
+          echo "::error::Could not push ${HEAD_SHA} to the GitLab mirror"
+          exit 1
+
+      - name: Start the pipeline
+        id: start
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          SOURCE_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          set -euo pipefail
+          # jq builds the body so that branch names and repository names are
+          # never interpolated into the shell or into raw JSON.
+          body=$(jq -n \
+            --arg ref  "$GITLAB_BRANCH" \
+            --arg pr   "$PR_NUMBER" \
+            --arg sha  "$HEAD_SHA" \
+            --arg base "$BASE_REF" \
+            --arg repo "$SOURCE_REPO" \
+            '{ref: $ref, variables: [
+               {key: "GH_PR_NUMBER",   value: $pr},
+               {key: "GH_PR_HEAD_SHA", value: $sha},
+               {key: "GH_PR_BASE_REF", value: $base},
+               {key: "GH_PR_REPO",     value: $repo}
+             ]}')
+          response=$(curl -sS --fail-with-body --retry 3 --retry-connrefused -X POST \
+            -H "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$body" \
+            "https://${GITLAB_HOST}/api/v4/projects/${GITLAB_PROJECT_ID}/pipeline")
+          id=$(jq -r '.id' <<<"$response")
+          url=$(jq -r '.web_url' <<<"$response")
+          echo "id=${id}"   >> "$GITHUB_OUTPUT"
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+          echo "Pipeline [#${id}](${url}) for \`${HEAD_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice::GitLab pipeline ${url}"
+
+      - name: Wait for the pipeline
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          PIPELINE_ID: ${{ steps.start.outputs.id }}
+          PIPELINE_URL: ${{ steps.start.outputs.url }}
+        run: |
+          set -euo pipefail
+          api="https://${GITLAB_HOST}/api/v4/projects/${GITLAB_PROJECT_ID}/pipelines/${PIPELINE_ID}"
+          previous=""
+          while true; do
+            status=$(curl -sS --fail-with-body --retry 3 --retry-connrefused \
+              -H "PRIVATE-TOKEN: ${GITLAB_TOKEN}" "$api" | jq -r '.status')
+            if [ "$status" != "$previous" ]; then
+              echo "pipeline ${PIPELINE_ID}: ${status}"
+              previous="$status"
+            fi
+            case "$status" in
+              success|skipped)
+                echo "::notice::GitLab pipeline succeeded: ${PIPELINE_URL}"
+                exit 0 ;;
+              failed|canceled)
+                echo "::error::GitLab pipeline ${status}: ${PIPELINE_URL}"
+                exit 1 ;;
+              manual)
+                echo "::error::GitLab pipeline is blocked on a manual job: ${PIPELINE_URL}"
+                exit 1 ;;
+            esac
+            sleep 20
+          done
+
+      - name: Cancel the pipeline if this job was cancelled
+        if: cancelled() && steps.start.outputs.id != ''
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          PIPELINE_ID: ${{ steps.start.outputs.id }}
+        run: |
+          # Do not leave GPU runners working on a superseded commit.
+          curl -sS -o /dev/null -X POST \
+            -H "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+            "https://${GITLAB_HOST}/api/v4/projects/${GITLAB_PROJECT_ID}/pipelines/${PIPELINE_ID}/cancel" || true
+
+  cleanup:
+    name: cleanup
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete the mirror branch
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          # 404 is expected when the pull request never ran a pipeline.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE \
+            -H "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+            "https://${GITLAB_HOST}/api/v4/projects/${GITLAB_PROJECT_ID}/repository/branches/${GITLAB_BRANCH}")
+          echo "delete ${GITLAB_BRANCH}: HTTP ${code}"

@@ -6,6 +6,11 @@ workflow:
     - if: $CI_COMMIT_BRANCH == "main" && $CI_PROJECT_PATH == "xcompact3d/x3d2"
     # Run pipeline on pull requests
     - if: $CI_PIPELINE_SOURCE == "external_pull_request_event"
+    # Pipelines started by the GitHub Actions bridge
+    # (.github/workflows/gitlab-ci-bridge.yml). It pushes the pull request head
+    # to github-pr-<n> and starts the pipeline through the API, so the trigger
+    # does not race the mirror update the way external_pull_request_event does.
+    - if: $CI_PIPELINE_SOURCE == "api" && $GH_PR_NUMBER
     # Manual runs
     - if: $CI_PIPELINE_SOURCE == "web"
 
