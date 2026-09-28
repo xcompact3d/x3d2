@@ -35,7 +35,9 @@ contains
 
   function field_init(ngrid, next, id) result(f)
     integer, intent(in) :: ngrid, id
-    type(field_t), pointer, intent(in) :: next
+    !! `next` matches the polymorphic `next` component it is assigned to, so
+    !! the caller hands over the list head as-is (see omptgt_field_init).
+    class(field_t), pointer, intent(in) :: next
     type(field_t) :: f
 
     allocate (f%p_data(ngrid))

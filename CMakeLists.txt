@@ -73,6 +73,14 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     message(FATAL_ERROR "For Nvidia GPU, BACKEND_ARCH must be specified as ccXX")
   endif()
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
+  # The Intel compilers build the CPU backend only for now: the offload flags
+  # and the OMP_TGT_INTEL vendor selection are not wired up yet.
+  if(CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM" OR
+     CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
+    message(FATAL_ERROR
+      "The OMP_TGT backend is not supported with the Intel compilers yet. "
+      "Build the CPU backend with ENABLE_BACKEND=OFF.")
+  endif()
   if("${OpenMP_Fortran_VERSION}" VERSION_LESS "4.5")
     message(FATAL_ERROR "OpenMP Fortran version ${OpenMP_Fortran_VERSION} is detected, but at least 4.5 is required with OMP_TGT.")
   endif()
