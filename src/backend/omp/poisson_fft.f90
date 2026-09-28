@@ -1,7 +1,7 @@
 module m_omp_poisson_fft
 
   use decomp_2d_constants, only: PHYSICAL_IN_X
-  use decomp_2d, only: decomp_info, get_decomp_dims, &
+  use decomp_2d, only: decomp_info, decomp_info_init, get_decomp_dims, &
                        transpose_x_to_y, transpose_y_to_x, &
                        transpose_z_to_y, transpose_y_to_z
   use decomp_2d_fft, only: decomp_2d_fft_init, decomp_2d_fft_3d, &
@@ -56,6 +56,17 @@ module m_omp_poisson_fft
     !! multiple of SZ, because 2decomp plans its FFTW transforms over the
     !! flat array and a padded one would be read with the wrong stride.
     real(dp), allocatable, dimension(:, :, :) :: r_tr
+    !> Cell-dims decomposition for the 110 case, built separately because
+    !! decomp_main is on vertex dims. Its x-pencil is the solver field
+    !! layout (x whole, y split by p_row, z split by p_col); its z-pencil
+    !! is, after a local (i,j,k)->(k,i,j) transpose, the x-pencil of ph.
+    !! r_xp/r_yp2/r_zp are its x-, y2- and z-pencil staging buffers, only
+    !! allocated on multiple ranks; r_yp and r_tr above are reused for the
+    !! y- and transposed-z-pencils. r_yp2 is only needed when y is split
+    !! (p_row > 1), since that is when the xy-periodicity fold needs a
+    !! second y-pencil buffer alongside r_yp.
+    type(decomp_info) :: dc
+    real(dp), allocatable, dimension(:, :, :) :: r_xp, r_yp2, r_zp
   contains
     procedure :: fft_forward => fft_forward_omp
     procedure :: fft_forward_010 => fft_forward_omp
@@ -124,6 +135,9 @@ contains
       poisson_fft%p_col = grid_dims(2)
       call decomp_2d_fft_init(PHYSICAL_IN_X, dims(2), dims(1), dims(3))
     else if (poisson_fft%is_110_case) then
+      grid_dims = get_decomp_dims()
+      poisson_fft%p_row = grid_dims(1)
+      poisson_fft%p_col = grid_dims(2)
       call decomp_2d_fft_init(PHYSICAL_IN_X, dims(3), dims(1), dims(2))
     else
       call decomp_2d_fft_init(PHYSICAL_IN_X, dims(1), dims(2), dims(3))
@@ -175,8 +189,49 @@ contains
       if (poisson_fft%nx_loc /= poisson_fft%nx_glob .or. &
           poisson_fft%ny_loc /= poisson_fft%ny_glob) &
         error stop 'OpenMP 110 Poisson case supports a single rank only'
-      allocate (poisson_fft%r_tr(poisson_fft%nz_loc, poisson_fft%nx_loc, &
-                                 poisson_fft%ny_loc))
+      ! ph%xsz is exactly (nz, nx_loc, ny_loc) for the 110 fft plan, on one
+      ! rank as much as many, so this single allocation replaces the plain
+      ! nz_loc/nx_loc/ny_loc one that only worked for one rank.
+      poisson_fft%ph => decomp_2d_fft_get_ph()
+      allocate (poisson_fft%r_tr(poisson_fft%ph%xsz(1), &
+                                 poisson_fft%ph%xsz(2), &
+                                 poisson_fft%ph%xsz(3)))
+
+      if (mesh%par%nproc > 1) then
+        ! Cell-dims decomposition of the solver field (x whole, y split by
+        ! p_row, z split by p_col). decomp_main cannot serve here because
+        ! it is built on vertex dims. Its z-pencil, after a local
+        ! (i,j,k)->(k,i,j) transpose, is exactly the x-pencil of ph.
+        call decomp_info_init(dims(1), dims(2), dims(3), poisson_fft%dc)
+        if (.not. all(poisson_fft%dc%zsz == [poisson_fft%ph%xsz(2), &
+                                             poisson_fft%ph%xsz(3), &
+                                             poisson_fft%ph%xsz(1)])) then
+          error stop 'The 110 case cell-dims decomposition does not match &
+                      &the FFT physical decomposition.'
+        end if
+
+        allocate (poisson_fft%r_xp(poisson_fft%dc%xsz(1), &
+                                   poisson_fft%dc%xsz(2), &
+                                   poisson_fft%dc%xsz(3)))
+        allocate (poisson_fft%r_yp(poisson_fft%dc%ysz(1), &
+                                   poisson_fft%dc%ysz(2), &
+                                   poisson_fft%dc%ysz(3)))
+        allocate (poisson_fft%r_zp(poisson_fft%dc%zsz(1), &
+                                   poisson_fft%dc%zsz(2), &
+                                   poisson_fft%dc%zsz(3)))
+
+        if (poisson_fft%p_row > 1) then
+          allocate (poisson_fft%r_yp2(poisson_fft%dc%ysz(1), &
+                                      poisson_fft%dc%ysz(2), &
+                                      poisson_fft%dc%ysz(3)))
+        end if
+
+        if (poisson_fft%p_col > 1) then
+          allocate (poisson_fft%c_pair(poisson_fft%sp%ysz(1), &
+                                       poisson_fft%sp%ysz(2), &
+                                       poisson_fft%sp%ysz(3)))
+        end if
+      end if
     end if
 
   end function init
