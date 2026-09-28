@@ -20,14 +20,7 @@ name: GitLab CI
 # label, which a maintainer applies after reading the diff.
 
 on:
-  # TEMPORARY -- revert to `pull_request_target` before merging.
-  #
-  # `pull_request` reads this file from the pull request branch instead of from
-  # the base branch, which is what lets the bridge be tested by the very pull
-  # request that introduces it. The cost is that fork pull requests are never
-  # given secrets under `pull_request`, so the `ci:gpu` gate in the job below
-  # cannot work while this is in place.
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review, labeled, closed]
 
 permissions:
