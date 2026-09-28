@@ -10,9 +10,9 @@ module m_base_backend
 
   implicit none
 
-  type, abstract :: base_backend_t
-      !! base_backend class defines all the abstract operations that the
-      !! solver class requires.
+  type :: base_backend_t
+      !! base_backend class defines all the operations that the solver
+      !! class requires.
       !!
       !! For example, transport equation in solver class evaluates the
       !! derivatives in x, y, and z directions, and reorders the input
@@ -20,10 +20,21 @@ module m_base_backend
       !! derivatives to obtain the divergence of U*.
       !!
       !! All these high level operations solver class executes are
-      !! defined here using the abstract interfaces. Every backend
-      !! implementation extends the present abstract backend class to
-      !! define the specifics of these operations based on the target
-      !! architecture.
+      !! defined here. Every backend implementation extends the present
+      !! backend class to define the specifics of these operations based
+      !! on the target architecture.
+      !!
+      !! None of the operations is deferred: each one defaults to
+      !! `not_implemented`, which stops the run naming the operation. A
+      !! backend therefore overrides only what it actually implements, and
+      !! an operation added for one backend does not force a stub into
+      !! every other backend. A backend reaching an operation it does not
+      !! override fails loudly at the call site instead of silently doing
+      !! nothing.
+      !!
+      !! The few operations with a genuinely correct do-nothing answer
+      !! (`sync`, `get_device_bw_info`, `supports_device_field_export`)
+      !! default to that answer rather than to an error; see each one.
 
     !> DistD2 implementation is hardcoded for 4 halo layers for all backends
     integer :: n_halo = 4
@@ -31,37 +42,37 @@ module m_base_backend
     class(allocator_t), pointer :: allocator
     class(poisson_fft_t), pointer :: poisson_fft
   contains
-    procedure(transeq_ders), deferred :: transeq_x
-    procedure(transeq_ders), deferred :: transeq_y
-    procedure(transeq_ders), deferred :: transeq_z
-    procedure(transeq_ders_spec), deferred :: transeq_species
-    procedure(tds_solve), deferred :: tds_solve
-    procedure(tds_solve), deferred :: thom_solve
-    procedure(reorder), deferred :: reorder
-    procedure(sum_intox), deferred :: sum_yintox
-    procedure(sum_intox), deferred :: sum_zintox
-    procedure(veccopy), deferred :: veccopy
-    procedure(vecadd), deferred :: vecadd
-    procedure(vecmult), deferred :: vecmult
-    procedure(scalar_product), deferred :: scalar_product
-    procedure(vector_norm_squared_op), deferred :: vector_norm_squared
-    procedure(field_max_mean), deferred :: field_max_mean
-    procedure(slice_max_sum), deferred :: slice_max_sum
-    procedure(field_ops), deferred :: field_scale
-    procedure(field_ops), deferred :: field_shift
-    procedure(field_reduce), deferred :: field_volume_integral
-    procedure(field_set_face), deferred :: field_set_face
-    procedure(field_set_face_from_field), deferred :: field_set_face_from_field
-    procedure(derive_field_from_gradients), deferred :: compute_vorticity
-    procedure(derive_field_from_gradients), deferred :: compute_qcriterion
-    procedure(smagorinsky_from_gradients), deferred :: compute_smagorinsky_nut
-    procedure(sgs_stress_from_gradients), deferred :: compute_sgs_stress
-    procedure(copy_data_to_f), deferred :: copy_data_to_f
-    procedure(copy_f_to_data), deferred :: copy_f_to_data
-    procedure(alloc_tdsops), deferred :: alloc_tdsops
-    procedure(init_poisson_fft), deferred :: init_poisson_fft
-    procedure(sync_backend), deferred :: sync
-    procedure(device_bw_info), deferred :: get_device_bw_info
+    procedure :: transeq_x => transeq_x_base
+    procedure :: transeq_y => transeq_y_base
+    procedure :: transeq_z => transeq_z_base
+    procedure :: transeq_species => transeq_species_base
+    procedure :: tds_solve => tds_solve_base
+    procedure :: thom_solve => thom_solve_base
+    procedure :: reorder => reorder_base
+    procedure :: sum_yintox => sum_yintox_base
+    procedure :: sum_zintox => sum_zintox_base
+    procedure :: veccopy => veccopy_base
+    procedure :: vecadd => vecadd_base
+    procedure :: vecmult => vecmult_base
+    procedure :: scalar_product => scalar_product_base
+    procedure :: vector_norm_squared => vector_norm_squared_base
+    procedure :: field_max_mean => field_max_mean_base
+    procedure :: slice_max_sum => slice_max_sum_base
+    procedure :: field_scale => field_scale_base
+    procedure :: field_shift => field_shift_base
+    procedure :: field_volume_integral => field_volume_integral_base
+    procedure :: field_set_face => field_set_face_base
+    procedure :: field_set_face_from_field => field_set_face_from_field_base
+    procedure :: compute_vorticity => compute_vorticity_base
+    procedure :: compute_qcriterion => compute_qcriterion_base
+    procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_base
+    procedure :: compute_sgs_stress => compute_sgs_stress_base
+    procedure :: copy_data_to_f => copy_data_to_f_base
+    procedure :: copy_f_to_data => copy_f_to_data_base
+    procedure :: alloc_tdsops => alloc_tdsops_base
+    procedure :: init_poisson_fft => init_poisson_fft_base
+    procedure :: sync => sync_base
+    procedure :: get_device_bw_info => get_device_bw_info_base
     procedure :: base_init
     procedure :: get_field_data
     procedure :: set_field_data
@@ -69,405 +80,22 @@ module m_base_backend
     procedure :: export_field_to_device
   end type base_backend_t
 
-  abstract interface
-    subroutine transeq_ders(self, du, dv, dw, u, v, w, nu, dirps)
-         !! transeq equation obtains the derivatives direction by
-         !! direction, and the exact algorithm used to obtain these
-         !! derivatives are decided at runtime. Backend implementations
-         !! are responsible from directing calls to transeq_ders into
-         !! the correct algorithm.
-      import :: base_backend_t
-      import :: field_t
-      import :: dirps_t
-      import :: dp
-      implicit none
-
-      class(base_backend_t) :: self
-      class(field_t), intent(inout) :: du, dv, dw
-      class(field_t), intent(in) :: u, v, w
-      real(dp), intent(in) :: nu
-      type(dirps_t), intent(in) :: dirps
-    end subroutine transeq_ders
-  end interface
-
-  abstract interface
-    subroutine sgs_stress_from_gradients( &
-      self, stress, nut, gradient_a, gradient_b, scale_a, scale_b)
-      !! Forms nut*(scale_a*gradient_a + scale_b*gradient_b).
-      import :: base_backend_t
-      import :: dp
-      import :: field_t
-      implicit none
-
-      class(base_backend_t) :: self
-      class(field_t), intent(inout) :: stress
-      class(field_t), intent(in) :: nut, gradient_a, gradient_b
-      real(dp), intent(in) :: scale_a, scale_b
-    end subroutine sgs_stress_from_gradients
-  end interface
-
-  abstract interface
-    subroutine transeq_ders_spec(self, dspec, uvw, spec, nu, dirps, sync)
-         !! transeq equation obtains the derivatives direction by
-         !! direction, and the exact algorithm used to obtain these
-         !! derivatives are decided at runtime. Backend implementations
-         !! are responsible from directing calls to transeq_ders into
-         !! the correct algorithm.
-      import :: base_backend_t
-      import :: field_t
-      import :: dirps_t
-      import :: dp
-      implicit none
-
-      class(base_backend_t) :: self
-      class(field_t), intent(inout) :: dspec
-      class(field_t), intent(in) :: uvw, spec
-      real(dp), intent(in) :: nu
-      type(dirps_t), intent(in) :: dirps
-      logical, intent(in) :: sync
-    end subroutine transeq_ders_spec
-  end interface
-
-  abstract interface
-    subroutine tds_solve(self, du, u, tdsops)
-      !! transeq equation obtains the derivatives direction by
-      !! direction, and the exact algorithm used to obtain these
-      !! derivatives are decided at runtime. Backend implementations
-      !! are responsible from directing calls to tds_solve to the
-      !! correct algorithm.
-      import :: base_backend_t
-      import :: field_t
-      import :: tdsops_t
-      implicit none
-
-      class(base_backend_t) :: self
-      class(field_t), intent(inout) :: du
-      class(field_t), intent(in) :: u
-      class(tdsops_t), intent(in) :: tdsops
-    end subroutine tds_solve
-  end interface
-
-  abstract interface
-    subroutine sync_backend(self)
-      import :: base_backend_t
-      implicit none
-
-      class(base_backend_t) :: self
-    end subroutine sync_backend
-  end interface
-
-  abstract interface
-    subroutine device_bw_info(self, mem_clock_rt, mem_bus_width, available)
-      import :: base_backend_t
-      implicit none
-
-      class(base_backend_t) :: self
-      integer, intent(out) :: mem_clock_rt
-      integer, intent(out) :: mem_bus_width
-      logical, intent(out) :: available
-    end subroutine device_bw_info
-  end interface
-
-  abstract interface
-    subroutine reorder(self, u_, u, direction)
-         !! reorder subroutines are straightforward, they rearrange
-         !! data into our specialist data structure so that regardless
-         !! of the direction tridiagonal systems are solved efficiently
-         !! and fast.
-      import :: base_backend_t
-      import :: field_t
-      implicit none
-
-      class(base_backend_t) :: self
-      class(field_t), intent(inout) :: u_
-      class(field_t), intent(in) :: u
-      integer, intent(in) :: direction
-    end subroutine reorder
-  end interface
-
-  abstract interface
-    subroutine sum_intox(self, u, u_)
-         !! sum9into3 subroutine combines all the directional velocity
-         !! derivatives into the corresponding x directional fields.
-      import :: base_backend_t
-      import :: field_t
-      implicit none
-
-      class(base_backend_t) :: self
-      class(field_t), intent(inout) :: u
-      class(field_t), intent(in) :: u_
-    end subroutine sum_intox
-  end interface
-
-  abstract interface
-    subroutine veccopy(self, dst, src)
-         !! copy vectors: y = x
-      import :: base_backend_t
-      import :: field_t
-      implicit none
-
-      class(base_backend_t) :: self
-      class(field_t), intent(inout) :: dst
-      class(field_t), intent(in) :: src
-    end subroutine veccopy
-  end interface
-
-  abstract interface
-    subroutine vecadd(self, a, x, b, y)
-         !! adds two vectors together: y = a*x + b*y
-      import :: base_backend_t
-      import :: dp
-      import :: field_t
-      implicit none
-
-      class(base_backend_t) :: self
-      real(dp), intent(in) :: a
-      class(field_t), intent(in) :: x
-      real(dp), intent(in) :: b
-      class(field_t), intent(inout) :: y
-    end subroutine vecadd
-  end interface
-
-  abstract interface
-    subroutine vecmult(self, y, x)
-        !! pointwise multiplication between two vectors: y(:) = y(:) * x(:)
-      import :: base_backend_t
-      import :: dp
-      import :: field_t
-      implicit none
-
-      class(base_backend_t) :: self
-      class(field_t), intent(inout) :: y
-      class(field_t), intent(in) :: x
-    end subroutine vecmult
-  end interface
-
-  abstract interface
-    real(dp) function scalar_product(self, x, y) result(s)
-         !! Calculates the scalar product of two input fields
-      import :: base_backend_t
-      import :: dp
-      import :: field_t
-      implicit none
-
-      class(base_backend_t) :: self
-      class(field_t), intent(in) :: x, y
-    end function scalar_product
-  end interface
-
-  abstract interface
-    real(dp) function vector_norm_squared_op(self, a, b, c) &
-      result(norm_squared)
-      !! Computes the global discrete squared norm of a three-component field.
-      import :: base_backend_t
-      import :: dp
-      import :: field_t
-      implicit none
-
-      class(base_backend_t) :: self
-      class(field_t), intent(in) :: a, b, c
-    end function vector_norm_squared_op
-  end interface
-
-  abstract interface
-    subroutine field_ops(self, f, a)
-      !! Scales or shifts a field by a
-      import :: base_backend_t
-      import :: dp
-      import :: field_t
-      implicit none
-
-      class(base_backend_t) :: self
-      class(field_t), intent(in) :: f
-      real(dp), intent(in) :: a
-    end subroutine field_ops
-  end interface
-
-  abstract interface
-    real(dp) function field_reduce(self, f) result(s)
-      !! Reduces field to a scalar, example: volume integral
-      import :: base_backend_t
-      import :: dp
-      import :: field_t
-      implicit none
-
-      class(base_backend_t) :: self
-      class(field_t), intent(in) :: f
-    end function field_reduce
-  end interface
-
-  abstract interface
-    subroutine field_max_mean(self, max_val, mean_val, f, enforced_data_loc)
-      !! Obtains maximum and mean values in a field
-      import :: base_backend_t
-      import :: dp
-      import :: field_t
-      implicit none
-
-      class(base_backend_t) :: self
-      real(dp), intent(out) :: max_val, mean_val
-      class(field_t), intent(in) :: f
-      integer, optional, intent(in) :: enforced_data_loc
-    end subroutine field_max_mean
-  end interface
-
-  abstract interface
-    subroutine slice_max_sum(self, max_val, sum_val, f, &
-                             i_slice, enforced_data_loc)
-    !! Reduces a single slice of f at index i_slice along f's DIR axis.
-    !! Returns signed max (not abs) and signed sum. No division by count.
-    !! Caller is responsible for MPI_Allreduce across ranks.
-      import :: base_backend_t, field_t, dp
-      class(base_backend_t) :: self
-      real(dp), intent(out) :: max_val, sum_val
-      class(field_t), intent(in) :: f
-      integer, intent(in) :: i_slice
-      integer, optional, intent(in) :: enforced_data_loc
-    end subroutine slice_max_sum
-  end interface
-  abstract interface
-    subroutine field_set_face(self, f, c_start, c_end, face, &
-                              bc_start, bc_end, flow_rate_diff)
-      !! A field is a subdomain with a rectangular cuboid shape.
-      !! It has 6 faces, and these faces are either a subdomain boundary
-      !! or a global domain boundary based on the location of the subdomain.
-      !! This subroutine allows us to set any of these faces to a value,
-      !! 'c_start' and 'c_end' for faces at opposite sides.
-      !! 'face' is one of X_FACE, Y_FACE, Z_FACE from common.f90
-      !! Optionally, bc_start/bc_end select the BC type (default BC_DIRICHLET).
-      import :: base_backend_t
-      import :: dp
-      import :: field_t
-      implicit none
-      class(base_backend_t) :: self
-      class(field_t), intent(inout) :: f
-      real(dp), intent(in) :: c_start, c_end
-      integer, intent(in) :: face
-      integer, optional, intent(in) :: bc_start
-      integer, optional, intent(in) :: bc_end
-      real(dp), optional, intent(in) :: flow_rate_diff
-    end subroutine field_set_face
-
-    subroutine field_set_face_from_field(self, f, f_start, c_end, face, &
-                                         bc_start, bc_end, flow_rate_diff)
-      !! As field_set_face but with a spatially-varying inlet face field
-      !! instead of a scalar c_start.
-      import :: base_backend_t
-      import :: dp
-      import :: field_t
-      implicit none
-      class(base_backend_t) :: self
-      class(field_t), intent(inout) :: f
-      class(field_t), intent(in) :: f_start
-      real(dp), intent(in) :: c_end
-      integer, intent(in) :: face
-      integer, optional, intent(in) :: bc_start
-      integer, optional, intent(in) :: bc_end
-      real(dp), optional, intent(in) :: flow_rate_diff
-    end subroutine field_set_face_from_field
-  end interface
-
-  abstract interface
-    subroutine derive_field_from_gradients( &
-      self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
-      !! Computes derived fields (vorticity, qcriterion) from velocity gradients
-      import :: base_backend_t
-      import :: field_t
-      implicit none
-
-      class(base_backend_t) :: self
-      class(field_t), intent(inout) :: field_out
-      class(field_t), intent(in) :: dudx, dudy, dudz
-      class(field_t), intent(in) :: dvdx, dvdy, dvdz
-      class(field_t), intent(in) :: dwdx, dwdy, dwdz
-    end subroutine derive_field_from_gradients
-  end interface
-
-  abstract interface
-    subroutine smagorinsky_from_gradients( &
-      self, nut, mixing_length_sq, dudx, dudy, dudz, dvdx, dvdy, dvdz, &
-      dwdx, dwdy, dwdz)
-      !! Computes nut=l_s^2*sqrt(2*S_ij*S_ij) from velocity gradients.
-      import :: base_backend_t
-      import :: field_t
-      implicit none
-
-      class(base_backend_t) :: self
-      class(field_t), intent(inout) :: nut
-      class(field_t), intent(in) :: mixing_length_sq
-      class(field_t), intent(in) :: dudx, dudy, dudz
-      class(field_t), intent(in) :: dvdx, dvdy, dvdz
-      class(field_t), intent(in) :: dwdx, dwdy, dwdz
-    end subroutine smagorinsky_from_gradients
-  end interface
-
-  abstract interface
-    subroutine copy_data_to_f(self, f, data)
-         !! Copy the specialist data structure from device or host back
-         !! to a regular 3D data array in host memory.
-      import :: base_backend_t
-      import :: dp
-      import :: field_t
-      implicit none
-
-      class(base_backend_t), intent(inout) :: self
-      class(field_t), intent(inout) :: f
-      real(dp), dimension(:, :, :), intent(in) :: data
-    end subroutine copy_data_to_f
-
-    subroutine copy_f_to_data(self, data, f)
-         !! Copy a regular 3D array in host memory into the specialist
-         !! data structure field that lives on device or host
-      import :: base_backend_t
-      import :: dp
-      import :: field_t
-      implicit none
-
-      class(base_backend_t), intent(inout) :: self
-      real(dp), dimension(:, :, :), intent(out) :: data
-      class(field_t), intent(in) :: f
-    end subroutine copy_f_to_data
-  end interface
-
-  abstract interface
-    subroutine alloc_tdsops( &
-      self, tdsops, n_tds, delta, operation, scheme, bc_start, bc_end, &
-      stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
-      )
-      import :: base_backend_t
-      import :: dp
-      import :: tdsops_t
-      implicit none
-
-      class(base_backend_t) :: self
-      class(tdsops_t), allocatable, intent(inout) :: tdsops
-      integer, intent(in) :: n_tds
-      real(dp), intent(in) :: delta
-      character(*), intent(in) :: operation, scheme
-      integer, intent(in) :: bc_start, bc_end
-      real(dp), optional, intent(in) :: stretch(:), stretch_correct(:)
-      integer, optional, intent(in) :: n_halo
-      character(*), optional, intent(in) :: from_to
-      logical, optional, intent(in) :: sym
-      real(dp), optional, intent(in) :: c_nu, nu0_nu
-    end subroutine alloc_tdsops
-  end interface
-
-  abstract interface
-    subroutine init_poisson_fft(self, mesh, xdirps, ydirps, zdirps, lowmem)
-      import :: base_backend_t
-      import :: dirps_t
-      import :: mesh_t
-      implicit none
-
-      class(base_backend_t) :: self
-      type(mesh_t), target, intent(in) :: mesh
-      type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
-      logical, optional, intent(in) :: lowmem
-    end subroutine init_poisson_fft
-  end interface
+  private :: not_implemented
 
 contains
+
+  subroutine not_implemented(operation)
+    !! Stops the run, naming the backend operation that has no
+    !! implementation. The name is printed rather than passed as the stop
+    !! code because not every compiler here accepts a variable stop code.
+    implicit none
+
+    character(*), intent(in) :: operation
+
+    print *, trim(operation)//': not implemented by the active backend'
+    error stop 'Backend operation not implemented'
+
+  end subroutine not_implemented
 
   subroutine base_init(self)
     implicit none
@@ -571,7 +199,472 @@ contains
     integer, intent(in) :: dims(3)
     logical, intent(in) :: to_sp
 
-    error stop "export_field_to_device is not supported by this backend"
+    call not_implemented('export_field_to_device')
   end subroutine export_field_to_device
+
+  subroutine sync_base(self)
+    !! Waits for outstanding device work.
+    !!
+    !! Defaults to a no-op, which is the correct answer for a backend whose
+    !! operations all return with their work complete: a host backend, or a
+    !! device backend whose offloaded regions are all synchronous. Only a
+    !! backend that issues asynchronous work needs to override this.
+    implicit none
+
+    class(base_backend_t) :: self
+
+  end subroutine sync_base
+
+  subroutine get_device_bw_info_base(self, mem_clock_rt, mem_bus_width, &
+                                     available)
+    !! Reports the memory clock rate and bus width of the target device,
+    !! used to work out a theoretical peak bandwidth.
+    !!
+    !! Defaults to reporting no figures, which is the correct answer for a
+    !! backend with no device and for one with no portable way to query it.
+    implicit none
+
+    class(base_backend_t) :: self
+    integer, intent(out) :: mem_clock_rt
+    integer, intent(out) :: mem_bus_width
+    logical, intent(out) :: available
+
+    mem_clock_rt = 0
+    mem_bus_width = 0
+    available = .false.
+
+  end subroutine get_device_bw_info_base
+
+  subroutine transeq_x_base(self, du, dv, dw, u, v, w, nu, dirps)
+       !! transeq equation obtains the derivatives direction by
+       !! direction, and the exact algorithm used to obtain these
+       !! derivatives are decided at runtime. Backend implementations
+       !! are responsible from directing calls to transeq_x into
+       !! the correct algorithm.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: du, dv, dw
+    class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
+    type(dirps_t), intent(in) :: dirps
+
+    call not_implemented('transeq_x')
+
+  end subroutine transeq_x_base
+
+  subroutine transeq_y_base(self, du, dv, dw, u, v, w, nu, dirps)
+       !! As transeq_x, for the y direction.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: du, dv, dw
+    class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
+    type(dirps_t), intent(in) :: dirps
+
+    call not_implemented('transeq_y')
+
+  end subroutine transeq_y_base
+
+  subroutine transeq_z_base(self, du, dv, dw, u, v, w, nu, dirps)
+       !! As transeq_x, for the z direction.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: du, dv, dw
+    class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
+    type(dirps_t), intent(in) :: dirps
+
+    call not_implemented('transeq_z')
+
+  end subroutine transeq_z_base
+
+  subroutine transeq_species_base(self, dspec, uvw, spec, nu, dirps, sync)
+       !! As transeq_x, for a scalar species transported by uvw.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: dspec
+    class(field_t), intent(in) :: uvw, spec
+    real(dp), intent(in) :: nu
+    type(dirps_t), intent(in) :: dirps
+    logical, intent(in) :: sync
+
+    call not_implemented('transeq_species')
+
+  end subroutine transeq_species_base
+
+  subroutine tds_solve_base(self, du, u, tdsops)
+    !! Applies a tridiagonal operator to u, the exact algorithm used
+    !! being decided at runtime. Backend implementations are responsible
+    !! from directing calls to tds_solve to the correct algorithm.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: du
+    class(field_t), intent(in) :: u
+    class(tdsops_t), intent(in) :: tdsops
+
+    call not_implemented('tds_solve')
+
+  end subroutine tds_solve_base
+
+  subroutine thom_solve_base(self, du, u, tdsops)
+    !! As tds_solve, solving the tridiagonal system with the Thomas
+    !! algorithm.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: du
+    class(field_t), intent(in) :: u
+    class(tdsops_t), intent(in) :: tdsops
+
+    call not_implemented('thom_solve')
+
+  end subroutine thom_solve_base
+
+  subroutine reorder_base(self, u_, u, direction)
+       !! reorder subroutines are straightforward, they rearrange
+       !! data into our specialist data structure so that regardless
+       !! of the direction tridiagonal systems are solved efficiently
+       !! and fast.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: u_
+    class(field_t), intent(in) :: u
+    integer, intent(in) :: direction
+
+    call not_implemented('reorder')
+
+  end subroutine reorder_base
+
+  subroutine sum_yintox_base(self, u, u_)
+       !! sum_yintox combines a y directional field into the
+       !! corresponding x directional field.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: u
+    class(field_t), intent(in) :: u_
+
+    call not_implemented('sum_yintox')
+
+  end subroutine sum_yintox_base
+
+  subroutine sum_zintox_base(self, u, u_)
+       !! As sum_yintox, for a z directional field.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: u
+    class(field_t), intent(in) :: u_
+
+    call not_implemented('sum_zintox')
+
+  end subroutine sum_zintox_base
+
+  subroutine veccopy_base(self, dst, src)
+       !! copy vectors: y = x
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: dst
+    class(field_t), intent(in) :: src
+
+    call not_implemented('veccopy')
+
+  end subroutine veccopy_base
+
+  subroutine vecadd_base(self, a, x, b, y)
+       !! adds two vectors together: y = a*x + b*y
+    implicit none
+
+    class(base_backend_t) :: self
+    real(dp), intent(in) :: a
+    class(field_t), intent(in) :: x
+    real(dp), intent(in) :: b
+    class(field_t), intent(inout) :: y
+
+    call not_implemented('vecadd')
+
+  end subroutine vecadd_base
+
+  subroutine vecmult_base(self, y, x)
+      !! pointwise multiplication between two vectors: y(:) = y(:) * x(:)
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: y
+    class(field_t), intent(in) :: x
+
+    call not_implemented('vecmult')
+
+  end subroutine vecmult_base
+
+  real(dp) function scalar_product_base(self, x, y) result(s)
+       !! Calculates the scalar product of two input fields
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(in) :: x, y
+
+    s = 0._dp
+    call not_implemented('scalar_product')
+
+  end function scalar_product_base
+
+  real(dp) function vector_norm_squared_base(self, a, b, c) &
+    result(norm_squared)
+    !! Computes the global discrete squared norm of a three-component field.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(in) :: a, b, c
+
+    norm_squared = 0._dp
+    call not_implemented('vector_norm_squared')
+
+  end function vector_norm_squared_base
+
+  subroutine field_max_mean_base(self, max_val, mean_val, f, &
+                                 enforced_data_loc)
+    !! Obtains maximum and mean values in a field
+    implicit none
+
+    class(base_backend_t) :: self
+    real(dp), intent(out) :: max_val, mean_val
+    class(field_t), intent(in) :: f
+    integer, optional, intent(in) :: enforced_data_loc
+
+    max_val = 0._dp
+    mean_val = 0._dp
+    call not_implemented('field_max_mean')
+
+  end subroutine field_max_mean_base
+
+  subroutine slice_max_sum_base(self, max_val, sum_val, f, &
+                                i_slice, enforced_data_loc)
+  !! Reduces a single slice of f at index i_slice along f's DIR axis.
+  !! Returns signed max (not abs) and signed sum. No division by count.
+  !! Caller is responsible for MPI_Allreduce across ranks.
+    implicit none
+
+    class(base_backend_t) :: self
+    real(dp), intent(out) :: max_val, sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    integer, optional, intent(in) :: enforced_data_loc
+
+    max_val = 0._dp
+    sum_val = 0._dp
+    call not_implemented('slice_max_sum')
+
+  end subroutine slice_max_sum_base
+
+  subroutine field_scale_base(self, f, a)
+    !! Scales a field by a
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(in) :: f
+    real(dp), intent(in) :: a
+
+    call not_implemented('field_scale')
+
+  end subroutine field_scale_base
+
+  subroutine field_shift_base(self, f, a)
+    !! Shifts a field by a
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(in) :: f
+    real(dp), intent(in) :: a
+
+    call not_implemented('field_shift')
+
+  end subroutine field_shift_base
+
+  real(dp) function field_volume_integral_base(self, f) result(s)
+    !! Reduces field to a scalar by integrating over the volume
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(in) :: f
+
+    s = 0._dp
+    call not_implemented('field_volume_integral')
+
+  end function field_volume_integral_base
+
+  subroutine field_set_face_base(self, f, c_start, c_end, face, &
+                                 bc_start, bc_end, flow_rate_diff)
+    !! A field is a subdomain with a rectangular cuboid shape.
+    !! It has 6 faces, and these faces are either a subdomain boundary
+    !! or a global domain boundary based on the location of the subdomain.
+    !! This subroutine allows us to set any of these faces to a value,
+    !! 'c_start' and 'c_end' for faces at opposite sides.
+    !! 'face' is one of X_FACE, Y_FACE, Z_FACE from common.f90
+    !! Optionally, bc_start/bc_end select the BC type (default BC_DIRICHLET).
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c_start, c_end
+    integer, intent(in) :: face
+    integer, optional, intent(in) :: bc_start
+    integer, optional, intent(in) :: bc_end
+    real(dp), optional, intent(in) :: flow_rate_diff
+
+    call not_implemented('field_set_face')
+
+  end subroutine field_set_face_base
+
+  subroutine field_set_face_from_field_base(self, f, f_start, c_end, face, &
+                                            bc_start, bc_end, flow_rate_diff)
+    !! As field_set_face but with a spatially-varying inlet face field
+    !! instead of a scalar c_start.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    class(field_t), intent(in) :: f_start
+    real(dp), intent(in) :: c_end
+    integer, intent(in) :: face
+    integer, optional, intent(in) :: bc_start
+    integer, optional, intent(in) :: bc_end
+    real(dp), optional, intent(in) :: flow_rate_diff
+
+    call not_implemented('field_set_face_from_field')
+
+  end subroutine field_set_face_from_field_base
+
+  subroutine compute_vorticity_base( &
+    self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    !! Computes the vorticity magnitude from velocity gradients
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: field_out
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    call not_implemented('compute_vorticity')
+
+  end subroutine compute_vorticity_base
+
+  subroutine compute_qcriterion_base( &
+    self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    !! Computes the Q-criterion from velocity gradients
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: field_out
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    call not_implemented('compute_qcriterion')
+
+  end subroutine compute_qcriterion_base
+
+  subroutine compute_smagorinsky_nut_base( &
+    self, nut, mixing_length_sq, dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+    dwdx, dwdy, dwdz)
+    !! Computes nut=l_s^2*sqrt(2*S_ij*S_ij) from velocity gradients.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: nut
+    class(field_t), intent(in) :: mixing_length_sq
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    call not_implemented('compute_smagorinsky_nut')
+
+  end subroutine compute_smagorinsky_nut_base
+
+  subroutine compute_sgs_stress_base( &
+    self, stress, nut, gradient_a, gradient_b, scale_a, scale_b)
+    !! Forms nut*(scale_a*gradient_a + scale_b*gradient_b).
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: stress
+    class(field_t), intent(in) :: nut, gradient_a, gradient_b
+    real(dp), intent(in) :: scale_a, scale_b
+
+    call not_implemented('compute_sgs_stress')
+
+  end subroutine compute_sgs_stress_base
+
+  subroutine copy_data_to_f_base(self, f, data)
+       !! Copy a regular 3D array in host memory into the specialist
+       !! data structure field that lives on device or host
+    implicit none
+
+    class(base_backend_t), intent(inout) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), dimension(:, :, :), intent(in) :: data
+
+    call not_implemented('copy_data_to_f')
+
+  end subroutine copy_data_to_f_base
+
+  subroutine copy_f_to_data_base(self, data, f)
+       !! Copy the specialist data structure from device or host back
+       !! to a regular 3D data array in host memory.
+    implicit none
+
+    class(base_backend_t), intent(inout) :: self
+    real(dp), dimension(:, :, :), intent(out) :: data
+    class(field_t), intent(in) :: f
+
+    data = 0._dp
+    call not_implemented('copy_f_to_data')
+
+  end subroutine copy_f_to_data_base
+
+  subroutine alloc_tdsops_base( &
+    self, tdsops, n_tds, delta, operation, scheme, bc_start, bc_end, &
+    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
+    )
+    !! Allocates the backend's own tdsops type and fills in the
+    !! coefficients of the requested operation.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(tdsops_t), allocatable, intent(inout) :: tdsops
+    integer, intent(in) :: n_tds
+    real(dp), intent(in) :: delta
+    character(*), intent(in) :: operation, scheme
+    integer, intent(in) :: bc_start, bc_end
+    real(dp), optional, intent(in) :: stretch(:), stretch_correct(:)
+    integer, optional, intent(in) :: n_halo
+    character(*), optional, intent(in) :: from_to
+    logical, optional, intent(in) :: sym
+    real(dp), optional, intent(in) :: c_nu, nu0_nu
+
+    call not_implemented('alloc_tdsops')
+
+  end subroutine alloc_tdsops_base
+
+  subroutine init_poisson_fft_base(self, mesh, xdirps, ydirps, zdirps, lowmem)
+    !! Allocates and initialises the backend's FFT based Poisson solver.
+    implicit none
+
+    class(base_backend_t) :: self
+    type(mesh_t), target, intent(in) :: mesh
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    logical, optional, intent(in) :: lowmem
+
+    call not_implemented('init_poisson_fft')
+
+  end subroutine init_poisson_fft_base
 
 end module m_base_backend
