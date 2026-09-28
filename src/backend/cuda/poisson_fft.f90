@@ -399,6 +399,10 @@ contains
 
     if (poisson_fft%is_110_case) then
       ! 110: R2C with Z-transpose, no cuFFTMp for non-periodic BCs
+      if (mesh%par%nproc > 1) then
+        error stop 'Multiple ranks are not yet supported for the 110 case &
+                    &in the CUDA backend!'
+      end if
       poisson_fft%use_cufftmp = .false.
 
       call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
