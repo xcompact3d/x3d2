@@ -14,7 +14,7 @@ module m_backend_runtime
 #elif defined(OMP_TGT)
   use omp_lib, only: omp_get_num_devices, omp_set_default_device, &
                      omp_get_default_device
-  use m_omp_common, only: SZ
+  use m_omptgt_common, only: SZ
   use m_omptgt_allocator, only: omptgt_allocator_t
   use m_omptgt_backend, only: omptgt_backend_t
 #else

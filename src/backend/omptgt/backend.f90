@@ -1,8 +1,16 @@
-!!! src/backend/omp/target/backend.f90
+!!! src/backend/omptgt/backend.f90
 !!
 !! OpenMP target offload backend implementation.
 !!
-!! Note this extends the CPU (host) OpenMP backend with the intention of being able to use fallback implementations where necessary.
+!! Fields are device-resident: `omptgt_allocator_t` hands out
+!! `omptgt_field_t`, whose storage is a raw `omp_target_alloc` pointer with no
+!! host array behind it. Each operation therefore takes the field's
+!! `get_dev_ptr()`, casts it to an array pointer with `c_f_pointer`, and drives
+!! its loop nest inside a target region that names the pointer in an
+!! `is_device_ptr` clause.
+!!
+!! Operations with no offloaded implementation yet call `not_implemented`,
+!! which stops the run naming the operation.
 
 module m_omptgt_backend
 
@@ -14,25 +22,53 @@ module m_omptgt_backend
                       get_dirs_from_rdr
 
   use m_allocator, only: allocator_t
+  use m_base_backend, only: base_backend_t
   use m_mesh, only: mesh_t
   use m_field, only: field_t
   use m_ordering, only: get_index_reordering
+  use m_tdsops, only: tdsops_t, dirps_t
 
-  use m_omp_common, only: SZ
-  use m_omp_backend, only: omp_backend_t
-
+  use m_omptgt_common, only: SZ
   use m_omptgt_allocator, only: omptgt_field_t
 
   implicit none
 
-  type, extends(omp_backend_t) :: omptgt_backend_t
+  type, extends(base_backend_t) :: omptgt_backend_t
   contains
+    ! Offloaded operations
     procedure :: copy_f_to_data => copy_f_to_data_omptgt
     procedure :: copy_data_to_f => copy_data_to_f_omptgt
     procedure :: reorder => reorder_omptgt
     procedure :: vecadd => vecadd_omptgt
     procedure :: veccopy => veccopy_omptgt
     procedure :: vector_norm_squared => vector_norm_squared_omptgt
+    procedure :: sync => sync_omptgt
+    procedure :: get_device_bw_info => get_device_bw_info_omptgt
+    ! Not offloaded yet
+    procedure :: alloc_tdsops => alloc_tdsops_omptgt
+    procedure :: transeq_x => transeq_x_omptgt
+    procedure :: transeq_y => transeq_y_omptgt
+    procedure :: transeq_z => transeq_z_omptgt
+    procedure :: transeq_species => transeq_species_omptgt
+    procedure :: tds_solve => tds_solve_omptgt
+    procedure :: thom_solve => thom_solve_omptgt
+    procedure :: sum_yintox => sum_yintox_omptgt
+    procedure :: sum_zintox => sum_zintox_omptgt
+    procedure :: vecmult => vecmult_omptgt
+    procedure :: scalar_product => scalar_product_omptgt
+    procedure :: field_max_mean => field_max_mean_omptgt
+    procedure :: slice_max_sum => slice_max_sum_omptgt
+    procedure :: field_scale => field_scale_omptgt
+    procedure :: field_shift => field_shift_omptgt
+    procedure :: field_volume_integral => field_volume_integral_omptgt
+    procedure :: field_set_face => field_set_face_omptgt
+    procedure :: field_set_face_from_field => &
+      field_set_face_from_field_omptgt
+    procedure :: compute_vorticity => compute_vorticity_omptgt
+    procedure :: compute_qcriterion => compute_qcriterion_omptgt
+    procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_omptgt
+    procedure :: compute_sgs_stress => compute_sgs_stress_omptgt
+    procedure :: init_poisson_fft => init_poisson_fft_omptgt
   end type
 
   interface omptgt_backend_t
@@ -46,14 +82,46 @@ contains
 
   type(omptgt_backend_t) function omptgt_backend_init(mesh, allocator) &
     result(backend)
-    !! Constructs the backend on top of a host OpenMP backend, which supplies
-    !! the fallback implementations for anything not offloaded here.
+    !! Constructs the backend over a device-resident allocator.
 
     type(mesh_t), target, intent(inout) :: mesh
     class(allocator_t), target, intent(inout) :: allocator
 
-    backend%omp_backend_t = omp_backend_t(mesh, allocator)
+    call backend%base_init()
+
+    backend%allocator => allocator
+    backend%mesh => mesh
   end function
+
+  subroutine sync_omptgt(self)
+    !! Waits for outstanding device work.
+    !!
+    !! Every target region in this backend is synchronous: none carries a
+    !! `nowait` clause, so the host has already waited for the device by the
+    !! time the region's enclosing call returns. That makes this a no-op
+    !! rather than something unimplemented. It stops being one the moment an
+    !! offloaded region here is made asynchronous.
+
+    class(omptgt_backend_t) :: self
+
+  end subroutine
+
+  subroutine get_device_bw_info_omptgt(self, mem_clock_rt, mem_bus_width, &
+                                       available)
+    !! Reports no memory bandwidth figures: OpenMP offers no portable query
+    !! for the memory clock or bus width of the target device, and this
+    !! backend deliberately does not reach past OpenMP to a vendor runtime.
+
+    class(omptgt_backend_t) :: self
+    integer, intent(out) :: mem_clock_rt
+    integer, intent(out) :: mem_bus_width
+    logical, intent(out) :: available
+
+    mem_clock_rt = 0
+    mem_bus_width = 0
+    available = .false.
+
+  end subroutine
 
   subroutine veccopy_omptgt(self, dst, src)
     !! Copies `src` into `dst`. Both fields must be device-resident and share
@@ -113,8 +181,7 @@ contains
   end subroutine
 
   subroutine vecadd_omptgt(self, a, x, b, y)
-    !! Computes y = a*x + b*y, falling back to the host backend when the
-    !! fields are not device-resident.
+    !! Computes y = a*x + b*y. Both fields must be device-resident.
 
     class(omptgt_backend_t) :: self
     real(dp), intent(in) :: a
@@ -132,10 +199,10 @@ contains
       type is (omptgt_field_t)
         call vecadd_offload(self, a, x, b, y)
       class default
-        error stop "Device/host fallback not yet implemented"
+        error stop "Called omptgt vector add with unsupported result vector"
       end select
     class default
-      call self%omp_backend_t%vecadd(a, x, b, y)
+      error stop "Called omptgt vector add with unsupported source vector"
     end select
 
   end subroutine
@@ -220,13 +287,13 @@ contains
             local_sum, a%get_dev_ptr(), b%get_dev_ptr(), c%get_dev_ptr(), &
             a%get_shape(), dims)
         class default
-          error stop "Called omptgt vector copy with unsupported source vector"
+          error stop "Called omptgt vector norm with unsupported vector"
         end select
       class default
-        error stop "Called omptgt vector copy with unsupported source vector"
+        error stop "Called omptgt vector norm with unsupported vector"
       end select
     class default
-      error stop "Called omptgt vector copy with unsupported source vector"
+      error stop "Called omptgt vector norm with unsupported vector"
     end select
 
     call MPI_Allreduce(local_sum, norm_squared, 1, MPI_X3D2_DP, MPI_SUM, &
@@ -370,8 +437,7 @@ contains
 
   subroutine reorder_omptgt(self, u_, u, direction)
     !! Reorders `u` into `u_` between the two data layouts encoded in
-    !! `direction`, offloading either a device-to-device or, when the source
-    !! is a host field, a host-to-device reordering.
+    !! `direction`. Both fields are device-resident.
     class(omptgt_backend_t) :: self
     class(field_t), intent(inout) :: u_
     class(field_t), intent(in) :: u
@@ -392,8 +458,7 @@ contains
                                u%get_dev_ptr(), u%get_shape(), dims, &
                                dir_from, dir_to, cart_padded)
       class default
-        call reorder_omptgt_dh(u_%get_dev_ptr(), u_%get_shape(), u%data, &
-                               dims, dir_from, dir_to, cart_padded)
+        error stop "Called omptgt reorder with unsupported source field"
       end select
     class default
       error stop "Unsupported"
@@ -456,32 +521,279 @@ contains
 
   end subroutine
 
-  subroutine reorder_omptgt_dh(u_ptr, n_u_, u, dims, dir_from, dir_to, &
-                               cart_padded)
-    !! Offloaded reordering of a host field into a device-resident one; the
-    !! source array is mapped into the target region.
-    type(c_ptr), intent(in) :: u_ptr
-    integer, dimension(3), intent(in) :: n_u_
-    real(dp), dimension(:, :, :), pointer, intent(in) :: u
-    integer, dimension(3), intent(in) :: dims
-    integer, intent(in) :: dir_from, dir_to
-    integer, dimension(3), intent(in) :: cart_padded
+  subroutine not_implemented(operation)
+    !! Stops the run, naming the operation that has no offloaded
+    !! implementation yet. The name is printed rather than passed as the stop
+    !! code because not every compiler here accepts a variable stop code.
+    character(*), intent(in) :: operation
 
-    real(dp), dimension(:, :, :), pointer :: u_
-    integer :: i, j, k
+    print *, trim(operation)//': not implemented in the OMP_TGT backend yet'
+    error stop 'not implemented in the OMP_TGT backend yet'
 
-    call c_f_pointer(u_ptr, u_, shape=n_u_)
-    !$omp target map(to:u) is_device_ptr(u_ptr)
-    !$omp teams loop collapse(3)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          call reorder_point(u_, u, i, j, k, dir_from, dir_to, cart_padded)
-        end do
-      end do
-    end do
-    !$omp end teams loop
-    !$omp end target
+  end subroutine
+
+  subroutine alloc_tdsops_omptgt( &
+    self, tdsops, n_tds, delta, operation, scheme, bc_start, bc_end, &
+    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
+    )
+    class(omptgt_backend_t) :: self
+    class(tdsops_t), allocatable, intent(inout) :: tdsops
+    integer, intent(in) :: n_tds
+    real(dp), intent(in) :: delta
+    character(*), intent(in) :: operation, scheme
+    integer, intent(in) :: bc_start, bc_end
+    real(dp), optional, intent(in) :: stretch(:), stretch_correct(:)
+    integer, optional, intent(in) :: n_halo
+    character(*), optional, intent(in) :: from_to
+    logical, optional, intent(in) :: sym
+    real(dp), optional, intent(in) :: c_nu, nu0_nu
+
+    call not_implemented('alloc_tdsops')
+
+  end subroutine
+
+  subroutine transeq_x_omptgt(self, du, dv, dw, u, v, w, nu, dirps)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: du, dv, dw
+    class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
+    type(dirps_t), intent(in) :: dirps
+
+    call not_implemented('transeq_x')
+
+  end subroutine
+
+  subroutine transeq_y_omptgt(self, du, dv, dw, u, v, w, nu, dirps)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: du, dv, dw
+    class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
+    type(dirps_t), intent(in) :: dirps
+
+    call not_implemented('transeq_y')
+
+  end subroutine
+
+  subroutine transeq_z_omptgt(self, du, dv, dw, u, v, w, nu, dirps)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: du, dv, dw
+    class(field_t), intent(in) :: u, v, w
+    real(dp), intent(in) :: nu
+    type(dirps_t), intent(in) :: dirps
+
+    call not_implemented('transeq_z')
+
+  end subroutine
+
+  subroutine transeq_species_omptgt(self, dspec, uvw, spec, nu, dirps, sync)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: dspec
+    class(field_t), intent(in) :: uvw, spec
+    real(dp), intent(in) :: nu
+    type(dirps_t), intent(in) :: dirps
+    logical, intent(in) :: sync
+
+    call not_implemented('transeq_species')
+
+  end subroutine
+
+  subroutine tds_solve_omptgt(self, du, u, tdsops)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: du
+    class(field_t), intent(in) :: u
+    class(tdsops_t), intent(in) :: tdsops
+
+    call not_implemented('tds_solve')
+
+  end subroutine
+
+  subroutine thom_solve_omptgt(self, du, u, tdsops)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: du
+    class(field_t), intent(in) :: u
+    class(tdsops_t), intent(in) :: tdsops
+
+    call not_implemented('thom_solve')
+
+  end subroutine
+
+  subroutine sum_yintox_omptgt(self, u, u_)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: u
+    class(field_t), intent(in) :: u_
+
+    call not_implemented('sum_yintox')
+
+  end subroutine
+
+  subroutine sum_zintox_omptgt(self, u, u_)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: u
+    class(field_t), intent(in) :: u_
+
+    call not_implemented('sum_zintox')
+
+  end subroutine
+
+  subroutine vecmult_omptgt(self, y, x)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: y
+    class(field_t), intent(in) :: x
+
+    call not_implemented('vecmult')
+
+  end subroutine
+
+  real(dp) function scalar_product_omptgt(self, x, y) result(s)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(in) :: x, y
+
+    s = 0._dp
+    call not_implemented('scalar_product')
+
+  end function
+
+  subroutine field_max_mean_omptgt(self, max_val, mean_val, f, &
+                                   enforced_data_loc)
+    class(omptgt_backend_t) :: self
+    real(dp), intent(out) :: max_val, mean_val
+    class(field_t), intent(in) :: f
+    integer, optional, intent(in) :: enforced_data_loc
+
+    max_val = 0._dp
+    mean_val = 0._dp
+    call not_implemented('field_max_mean')
+
+  end subroutine
+
+  subroutine slice_max_sum_omptgt(self, max_val, sum_val, f, i_slice, &
+                                  enforced_data_loc)
+    class(omptgt_backend_t) :: self
+    real(dp), intent(out) :: max_val, sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    integer, optional, intent(in) :: enforced_data_loc
+
+    max_val = 0._dp
+    sum_val = 0._dp
+    call not_implemented('slice_max_sum')
+
+  end subroutine
+
+  subroutine field_scale_omptgt(self, f, a)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(in) :: f
+    real(dp), intent(in) :: a
+
+    call not_implemented('field_scale')
+
+  end subroutine
+
+  subroutine field_shift_omptgt(self, f, a)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(in) :: f
+    real(dp), intent(in) :: a
+
+    call not_implemented('field_shift')
+
+  end subroutine
+
+  real(dp) function field_volume_integral_omptgt(self, f) result(s)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(in) :: f
+
+    s = 0._dp
+    call not_implemented('field_volume_integral')
+
+  end function
+
+  subroutine field_set_face_omptgt(self, f, c_start, c_end, face, &
+                                   bc_start, bc_end, flow_rate_diff)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c_start, c_end
+    integer, intent(in) :: face
+    integer, optional, intent(in) :: bc_start
+    integer, optional, intent(in) :: bc_end
+    real(dp), optional, intent(in) :: flow_rate_diff
+
+    call not_implemented('field_set_face')
+
+  end subroutine
+
+  subroutine field_set_face_from_field_omptgt(self, f, f_start, c_end, face, &
+                                              bc_start, bc_end, &
+                                              flow_rate_diff)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    class(field_t), intent(in) :: f_start
+    real(dp), intent(in) :: c_end
+    integer, intent(in) :: face
+    integer, optional, intent(in) :: bc_start
+    integer, optional, intent(in) :: bc_end
+    real(dp), optional, intent(in) :: flow_rate_diff
+
+    call not_implemented('field_set_face_from_field')
+
+  end subroutine
+
+  subroutine compute_vorticity_omptgt( &
+    self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: field_out
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    call not_implemented('compute_vorticity')
+
+  end subroutine
+
+  subroutine compute_qcriterion_omptgt( &
+    self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: field_out
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    call not_implemented('compute_qcriterion')
+
+  end subroutine
+
+  subroutine compute_smagorinsky_nut_omptgt( &
+    self, nut, mixing_length_sq, dudx, dudy, dudz, dvdx, dvdy, dvdz, &
+    dwdx, dwdy, dwdz)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: nut
+    class(field_t), intent(in) :: mixing_length_sq
+    class(field_t), intent(in) :: dudx, dudy, dudz
+    class(field_t), intent(in) :: dvdx, dvdy, dvdz
+    class(field_t), intent(in) :: dwdx, dwdy, dwdz
+
+    call not_implemented('compute_smagorinsky_nut')
+
+  end subroutine
+
+  subroutine compute_sgs_stress_omptgt( &
+    self, stress, nut, gradient_a, gradient_b, scale_a, scale_b)
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: stress
+    class(field_t), intent(in) :: nut, gradient_a, gradient_b
+    real(dp), intent(in) :: scale_a, scale_b
+
+    call not_implemented('compute_sgs_stress')
+
+  end subroutine
+
+  subroutine init_poisson_fft_omptgt(self, mesh, xdirps, ydirps, zdirps, &
+                                     lowmem)
+    class(omptgt_backend_t) :: self
+    type(mesh_t), target, intent(in) :: mesh
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    logical, optional, intent(in) :: lowmem
+
+    call not_implemented('init_poisson_fft')
 
   end subroutine
 
