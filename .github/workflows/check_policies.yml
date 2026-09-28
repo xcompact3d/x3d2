@@ -1,9 +1,14 @@
 name: check-policies
 
-on: [pull_request]
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   check-formatting:
+    # Skip draft pull requests; the workflow runs again once one is marked
+    # ready for review.
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
