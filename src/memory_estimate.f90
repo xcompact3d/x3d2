@@ -15,8 +15,9 @@ module m_memory_estimate
 
   private
   public :: padded_dim, padded_cells, cell_dims, spectral_slab_bytes, &
-            mirror_buffer_bytes_100, output_field_active, &
-            peak_fields_lookup, halo_bytes, gpu_io_staging_bytes
+            mirror_buffer_bytes_100, stretched_y_matrix_bytes, &
+            output_field_active, peak_fields_lookup, halo_bytes, &
+            gpu_io_staging_bytes
 
 contains
 
@@ -117,6 +118,43 @@ contains
     nbytes8 = 2_i8*nx_spec*ny_spec*nz_spec*2_i8*int(nbytes, i8) + &
               2_i8*nx_spec*nz_spec*2_i8*int(nbytes, i8)
   end function mirror_buffer_bytes_100
+
+  pure function stretched_y_matrix_bytes(bc_is_010, stretching_y, lowmem_fft, &
+                                          cdims, ng) result(nbytes8)
+    !! 010-case, non-uniform y-stretching Poisson coefficient matrices,
+    !! src/poisson_fft.f90:176-186 (only 010 sets stretched_y, and only at
+    !! ng=1 since 010 error-stops at nproc>1) and :320-323,424-428
+    !! (allocation shapes), copied to the device at
+    !! src/backend/cuda/poisson_fft.f90:390-411:
+    !!   'bottom': a_re, a_im, shape (nx_spec, ny_spec, nz_spec, 5), real(dp)
+    !!   otherwise ('centred', 'top-bottom'): a_odd_re/im, a_even_re/im,
+    !!     shape (nx_spec, ny_spec/2, nz_spec, 5), real(dp)
+    !! doubled by the store_a_*_dev copies when lowmem_fft is .false.
+    !! (the default).
+    logical, intent(in) :: bc_is_010, lowmem_fft
+    character(len=*), intent(in) :: stretching_y
+    integer, intent(in) :: cdims(3)
+    integer, intent(in) :: ng
+    integer(i8) :: nbytes8
+    integer(i8) :: nx_spec, ny_spec, nz_spec
+
+    if ((.not. bc_is_010) .or. trim(stretching_y) == 'uniform') then
+      nbytes8 = 0_i8
+      return
+    end if
+
+    nx_spec = cdims(1)/2 + 1
+    ny_spec = cdims(2)/ng
+    nz_spec = cdims(3)
+
+    if (trim(stretching_y) == 'bottom') then
+      nbytes8 = 2_i8*nx_spec*ny_spec*nz_spec*5_i8*int(nbytes, i8)
+    else
+      nbytes8 = 4_i8*nx_spec*(ny_spec/2_i8)*nz_spec*5_i8*int(nbytes, i8)
+    end if
+
+    if (.not. lowmem_fft) nbytes8 = 2_i8*nbytes8
+  end function stretched_y_matrix_bytes
 
   pure function halo_bytes(padded_dims, sz, n_halo) result(nbytes8)
     !! CUDA-backend halo-exchange buffer bytes. Mirrors the 24 allocate

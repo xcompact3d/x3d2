@@ -46,8 +46,9 @@ program x3d2_memcheck
   use m_cuda_common, only: SZ
   use m_memory_estimate, only: padded_dim, padded_cells, cell_dims, &
                                spectral_slab_bytes, mirror_buffer_bytes_100, &
-                               output_field_active, peak_fields_lookup, &
-                               halo_bytes, gpu_io_staging_bytes
+                               stretched_y_matrix_bytes, output_field_active, &
+                               peak_fields_lookup, halo_bytes, &
+                               gpu_io_staging_bytes
   use m_cuda_memory_estimate, only: fft_workspace_bytes_query, &
                                     context_floor_bytes, check_status
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
@@ -569,6 +570,9 @@ contains
     !!     ny_glob) (:414) - i.e. the same total element count as cdims,
     !!     just permuted. Missing this term underestimated the 110 case by
     !!     ~14% (0.98 vs 1.134 GiB measured) during this feature's design.
+    !!   010, non-uniform y-stretching (never ng>1 - 010 error-stops at
+    !!     nproc>1): the a_*_dev Poisson coefficient matrices, see
+    !!     stretched_y_matrix_bytes.
     integer, intent(in) :: ng
     integer(i8) :: nbytes8
 
@@ -579,6 +583,10 @@ contains
       nbytes8 = nbytes8 + spectral_slab_bytes(bc_is_100, bc_is_110, cdims, ng) &
                + int(cdims(1), i8)*int(cdims(2), i8)*int(cdims(3), i8) &
                 *int(nbytes, i8)
+    else if (bc_is_010) then
+      nbytes8 = nbytes8 + stretched_y_matrix_bytes(bc_is_010, &
+                          domain_cfg%stretching(2), solver_cfg%lowmem_fft, &
+                          cdims, ng)
     end if
   end function spectral_plus_mirror_bytes
 

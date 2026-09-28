@@ -280,6 +280,7 @@ define_test(unit/test_statistics.f90 1 omp)
 define_test(unit/test_output_scalars.f90 1 omp)
 define_test(unit/test_les.f90 1 omp)
 define_test(unit/test_gpu_io_staging.f90 1 omp)
+define_test(unit/test_memcheck_stretched_y.f90 1 omp)
 
 if(WITH_ADIOS2)
   define_test(unit/test_adios2_read_write.f90 4 omp)
