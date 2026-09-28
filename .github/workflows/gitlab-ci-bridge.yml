@@ -49,6 +49,21 @@ jobs:
       group: gitlab-ci-${{ github.event.pull_request.number }}
       cancel-in-progress: true
     steps:
+      - name: Resolve the GitLab URL
+        run: |
+          set -euo pipefail
+          # Tolerate GITLAB_HOST given as a bare hostname or as a full URL
+          # with or without a trailing slash.
+          host="${GITLAB_HOST#http://}"
+          host="${host#https://}"
+          host="${host%/}"
+          if [ -z "$host" ]; then
+            echo "::error::The GITLAB_HOST repository variable is not set"
+            exit 1
+          fi
+          echo "GITLAB_HOSTNAME=${host}"    >> "$GITHUB_ENV"
+          echo "GITLAB_BASE=https://${host}" >> "$GITHUB_ENV"
+
       - name: Check out the pull request head
         uses: actions/checkout@v4
         with:
@@ -64,7 +79,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          remote="https://oauth2:${GITLAB_TOKEN}@${GITLAB_HOST}/${GITLAB_PROJECT_PATH}.git"
+          remote="https://oauth2:${GITLAB_TOKEN}@${GITLAB_HOSTNAME}/${GITLAB_PROJECT_PATH}.git"
           # The project is briefly read-only while a mirror update runs, which
           # rejects the push; retry rather than failing the pull request.
           for attempt in 1 2 3; do
@@ -105,7 +120,7 @@ jobs:
             -H "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
             -H "Content-Type: application/json" \
             -d "$body" \
-            "https://${GITLAB_HOST}/api/v4/projects/${GITLAB_PROJECT_ID}/pipeline")
+            "${GITLAB_BASE}/api/v4/projects/${GITLAB_PROJECT_ID}/pipeline")
           id=$(jq -r '.id' <<<"$response")
           url=$(jq -r '.web_url' <<<"$response")
           echo "id=${id}"   >> "$GITHUB_OUTPUT"
@@ -120,7 +135,7 @@ jobs:
           PIPELINE_URL: ${{ steps.start.outputs.url }}
         run: |
           set -euo pipefail
-          api="https://${GITLAB_HOST}/api/v4/projects/${GITLAB_PROJECT_ID}/pipelines/${PIPELINE_ID}"
+          api="${GITLAB_BASE}/api/v4/projects/${GITLAB_PROJECT_ID}/pipelines/${PIPELINE_ID}"
           previous=""
           while true; do
             status=$(curl -sS --fail-with-body --retry 3 --retry-connrefused \
@@ -152,13 +167,28 @@ jobs:
           # Do not leave GPU runners working on a superseded commit.
           curl -sS -o /dev/null -X POST \
             -H "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
-            "https://${GITLAB_HOST}/api/v4/projects/${GITLAB_PROJECT_ID}/pipelines/${PIPELINE_ID}/cancel" || true
+            "${GITLAB_BASE}/api/v4/projects/${GITLAB_PROJECT_ID}/pipelines/${PIPELINE_ID}/cancel" || true
 
   cleanup:
     name: cleanup
     if: github.event.action == 'closed'
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve the GitLab URL
+        run: |
+          set -euo pipefail
+          # Tolerate GITLAB_HOST given as a bare hostname or as a full URL
+          # with or without a trailing slash.
+          host="${GITLAB_HOST#http://}"
+          host="${host#https://}"
+          host="${host%/}"
+          if [ -z "$host" ]; then
+            echo "::error::The GITLAB_HOST repository variable is not set"
+            exit 1
+          fi
+          echo "GITLAB_HOSTNAME=${host}"    >> "$GITHUB_ENV"
+          echo "GITLAB_BASE=https://${host}" >> "$GITHUB_ENV"
+
       - name: Delete the mirror branch
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
@@ -166,5 +196,5 @@ jobs:
           # 404 is expected when the pull request never ran a pipeline.
           code=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE \
             -H "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
-            "https://${GITLAB_HOST}/api/v4/projects/${GITLAB_PROJECT_ID}/repository/branches/${GITLAB_BRANCH}")
+            "${GITLAB_BASE}/api/v4/projects/${GITLAB_PROJECT_ID}/repository/branches/${GITLAB_BRANCH}")
           echo "delete ${GITLAB_BRANCH}: HTTP ${code}"
