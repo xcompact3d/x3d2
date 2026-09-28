@@ -69,9 +69,10 @@ program x3d2_memcheck
   real(dp), parameter :: FITS_FRACTION = 0.80_dp
   real(dp), parameter :: DOES_NOT_FIT_FRACTION = 0.95_dp
   !> --build: do not attempt a real build whose fields only workspace alone
-  !> exceeds this fraction of the card - leaves headroom for context + FFT
-  !> scratch so the build never OOMs. Same value and role this tool's real
-  !> build probe has always used.
+  !> exceeds this fraction of the FREE card memory (card_free_gib, not the
+  !> card's full capacity) - leaves headroom for context + FFT scratch so
+  !> the build never OOMs. Same value and role this tool's real build probe
+  !> has always used.
   real(dp), parameter :: BUILD_FRACTION = 0.55_dp
   !> --build's CHECK line: how far the static estimate may be from the real
   !> measurement before it is flagged MISMATCH rather than OK. Justified by
@@ -101,6 +102,12 @@ program x3d2_memcheck
   logical :: multi_gpu_supported
   integer :: peak_fields
   real(dp) :: card_gib
+  !> Free memory on the card right now (query_card_gib), i.e. card_gib minus
+  !> whatever other processes already hold - used by report()'s header
+  !> WARNING line and by run_tier3's BUILD_FRACTION gate, both of which must
+  !> judge headroom against what is actually free, not the card's full
+  !> capacity.
+  real(dp) :: card_free_gib = 0._dp
   !> Set by parse_args() from --extensive <n> (0 = not requested, the
   !> normal --build path of exactly 1 substep). build_and_measure() reads
   !> this to decide how many RK sub-stages to drive before measuring;
@@ -443,6 +450,7 @@ contains
     ierr = cudaMemGetInfo(free_b, total_b)
     call check_status(ierr, 'cudaMemGetInfo (card total)')
     card_gib = real(total_b, dp)/1024._dp**3
+    card_free_gib = real(free_b, dp)/1024._dp**3
   end subroutine query_card_gib
 
   pure function classify(per_gpu_gib, total_gib) result(verdict)
@@ -678,7 +686,13 @@ contains
     print '(a)', '============================================================'
     print '(a,i0,a,i0,a,i0,a)', 'Input grid: ', gdims(1), 'x', gdims(2), &
       'x', gdims(3)
-    print '(a,f0.2,a)', 'Card memory: ', card_gib, ' GiB'
+    print '(a,f0.2,a,f0.2,a)', 'Card memory: ', card_gib, ' GiB (', &
+      card_free_gib, ' GiB free now)'
+    if (card_gib - card_free_gib > 0.5_dp) &
+      print '(a,f0.2,a)', 'WARNING: ', card_gib - card_free_gib, ' GiB of &
+        &this card is in use by other processes; verdicts are against the &
+        &full card, and the real build only proceeds if it fits in what is &
+        &free.'
     print '(a,i0)', 'peak_fields (static estimate): ', peak_fields
 
     ! GPU-aware IO staging: computed directly at ng=1 (local_dims == gdims
@@ -890,13 +904,15 @@ contains
     !! (see the top-of-file note on why this removes the old nested mpirun
     !! limitation). Skips the build entirely (the estimate above stands)
     !! if the fields only workspace alone already exceeds BUILD_FRACTION of
-    !! the card, exactly as this tool's real build probe always has, or if
-    !! ibm_on=T and the matching mask file is not present in the working
-    !! directory. The real build itself runs inside a throwaway
-    !! x3d2-memcheck-build.<pid> scratch directory (enter_build_scratch/
-    !! leave_build_scratch above), because it initialises monitoring
-    !! (writes monitoring.csv) and calls postprocess(0), which clobbered run
-    !! directories on 2026-09-15; enter_build_scratch also skips the build
+    !! what is currently FREE on the card (card_free_gib, not the card's
+    !! full capacity - see its declaration), matching this tool's real
+    !! build probe, or if ibm_on=T and the matching mask file is not
+    !! present in the working directory. The real build itself runs inside
+    !! a throwaway x3d2-memcheck-build.<pid> scratch directory
+    !! (enter_build_scratch/leave_build_scratch above), because it
+    !! initialises monitoring (writes monitoring.csv) and calls
+    !! postprocess(0), which clobbered run directories on 2026-09-15;
+    !! enter_build_scratch also skips the build
     !! (ok=.false.) if the scratch directory cannot be created or entered,
     !! or if input_path is relative with a '..' component it cannot mirror.
     real(dp) :: ws_guess, used_gib, workspace_gib_measured, pct_error, &
@@ -915,11 +931,12 @@ contains
                                            padded_dim(gdims(2), SZ), &
                                            gdims(3)], SZ, n_halo), dp) &
                          /1024._dp**3
-    if (ws_guess >= BUILD_FRACTION*card_gib) then
+    if (ws_guess >= BUILD_FRACTION*card_free_gib) then
       print '(a)', '------------------------------------------------------------'
-      print '(a,f0.2,a,f0.1,a)', 'Real build skipped: fields only workspace &
-        &', ws_guess, ' GiB exceeds ', 100._dp*BUILD_FRACTION, &
-        '% of the card; the estimate above stands.'
+      print '(a,f0.2,a,f0.1,a,f0.2,a)', 'Real build skipped: fields only &
+        &workspace ', ws_guess, ' GiB exceeds ', 100._dp*BUILD_FRACTION, &
+        '% of the FREE card memory (', card_free_gib, ' GiB free); the &
+        &estimate above stands.'
       return
     end if
 
