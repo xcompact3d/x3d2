@@ -85,14 +85,16 @@ cases. The ``010`` case is not yet supported on OpenMP (the CUDA backend
 supports all four). The ``110`` case on the OpenMP backend runs on a
 single rank only.
 
-The driver solves with a fixed default right-hand side,
-``cos(2 pi x) cos(2 pi y) cos(2 pi z)``; support for a user-supplied
-right-hand side is planned. It reports the grid size, boundary
-conditions, rank count, backend, and the minimum and mean solve time over
-the requested number of repeats. It does not check correctness: that is
-covered separately by ``tests/verification/test_poisson_bc.f90``, which
-verifies the Poisson solve against an analytical solution across all four
-boundary condition configurations. For example:
+The driver solves with a default right-hand side, ``cos(2 pi x)``. To use
+your own, edit ``fill_rhs`` in ``src/poisson_solver.f90`` and rebuild; the
+right-hand side must have zero mean, since every supported boundary
+condition combination solves the pressure with periodic or homogeneous
+Neumann conditions. It reports the grid size, boundary conditions, rank
+count, backend, and the minimum and mean solve time over the requested
+number of repeats. It does not check correctness: that is covered
+separately by ``tests/verification/test_poisson_bc.f90``, which verifies
+the Poisson solve against an analytical solution across all four boundary
+condition configurations. For example:
 
 .. code-block:: console
 

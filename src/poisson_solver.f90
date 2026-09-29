@@ -2,12 +2,12 @@ program x3d2_poisson_solver
   !! Standalone driver for the Poisson solver, built and linked against only
   !! the modules the Poisson solve actually needs (see the x3d2_poisson
   !! CMake target). It builds the mesh and FFT Poisson solver for the given
-  !! grid and boundary conditions, fills a fixed default right-hand side
-  !! (cos(2 pi x) cos(2 pi y) cos(2 pi z): zero mean, zero normal derivative
-  !! at any non-periodic wall, so valid for every supported boundary
-  !! condition combination), solves it the requested number of times, and
-  !! reports timing. Support for a user-supplied right-hand side is
-  !! planned. Note that 'dirichlet' here is the velocity boundary
+  !! grid and boundary conditions, fills the right-hand side (default
+  !! cos(2 pi x): zero mean, zero normal derivative at any non-periodic
+  !! wall, so valid for every supported boundary condition combination),
+  !! solves it the requested number of times, and reports timing. Users
+  !! provide their own right-hand side by editing fill_rhs below and
+  !! rebuilding. Note that 'dirichlet' here is the velocity boundary
   !! condition; the pressure is solved with homogeneous Neumann walls in
   !! that direction. Correctness of the solve itself is checked separately
   !! by tests/verification/test_poisson_bc.f90 across all four boundary
@@ -285,9 +285,14 @@ contains
   end subroutine usage_error
 
   subroutine fill_rhs(host_field)
-    !! Fills host_field with the default right-hand side, using the
-    !! host-associated mesh, dims and n_pi. This is the single place a
-    !! user-supplied right-hand side will replace.
+    !! Fills host_field with the right-hand side of the Poisson equation,
+    !! using the host-associated mesh, dims and n_pi. This is the routine
+    !! to edit to supply your own right-hand side: coordinates are cell
+    !! centres from mesh%get_coordinates(i, j, k, CELL). The right-hand
+    !! side must have zero mean, since every supported boundary condition
+    !! combination solves the pressure with periodic or homogeneous
+    !! Neumann conditions. Rebuild after editing. The default here is
+    !! cos(2 pi x).
     class(field_t), intent(inout) :: host_field
 
     integer :: i, j, k
@@ -297,9 +302,7 @@ contains
       do j = 1, dims(2)
         do i = 1, dims(1)
           coords = mesh%get_coordinates(i, j, k, CELL)
-          host_field%data(i, j, k) = cos(n_pi*coords(1)) &
-                                     *cos(n_pi*coords(2)) &
-                                     *cos(n_pi*coords(3))
+          host_field%data(i, j, k) = cos(n_pi*coords(1))
         end do
       end do
     end do
