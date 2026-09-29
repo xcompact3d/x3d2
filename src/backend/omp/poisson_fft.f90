@@ -14,7 +14,10 @@ module m_omp_poisson_fft
   use m_tdsops, only: dirps_t
 
   use m_omp_spectral, only: process_spectral_000, process_spectral_010, &
-                            process_spectral_100, process_spectral_110
+                            process_spectral_100, process_spectral_110, &
+                            process_spectral_110_fw, &
+                            process_spectral_110_solve, &
+                            process_spectral_110_bw
 
   implicit none
 
@@ -588,18 +591,53 @@ contains
     !! case. After the (nx, ny, nz) -> (nz, nx, ny) transpose applied by
     !! fft_forward_110_omp, dim1 holds the periodic z r2c modes, dim2
     !! holds the non-periodic x modes and dim3 holds the non-periodic y
-    !! modes, which process_spectral_110 handles directly.
+    !! modes.
+    !!
+    !! The z-pencil of sp (which c_x is) splits dim2 (x modes) across
+    !! p_col, so the X paired split and recombine, which each couple a
+    !! mode with its mirror in dim2, hop to the y-pencil of sp (where
+    !! dim2 is whole) and back, the same way fft_postprocess_100_omp does.
+    !! The Y paired split/solve/recombine run directly on the z-pencil,
+    !! where dim3 (Y modes) is always whole.
     implicit none
 
     class(omp_poisson_fft_t) :: self
 
-    call process_spectral_110( &
-      div_u=self%c_x, waves=self%waves, &
-      n1=self%nx_spec, n2=self%ny_spec, n3=self%nz_spec, &
-      st1=self%sp_st(1), st2=self%sp_st(2), st3=self%sp_st(3), &
-      nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
-      ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, az=self%az, bz=self%bz &
-      )
+    if (self%p_col == 1) then
+      call process_spectral_110( &
+        div_u=self%c_x, waves=self%waves, &
+        n1=self%nx_spec, n2=self%ny_spec, n3=self%nz_spec, &
+        st1=self%sp_st(1), st2=self%sp_st(2), st3=self%sp_st(3), &
+        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+        ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, az=self%az, bz=self%bz &
+        )
+    else
+      call transpose_z_to_y(self%c_x, self%c_pair, self%sp)
+      call process_spectral_110_fw( &
+        div_u=self%c_pair, n1=self%sp%ysz(1), n2=self%sp%ysz(2), &
+        n3=self%sp%ysz(3), st1=self%sp%yst(1) - 1, st2=self%sp%yst(2) - 1, &
+        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+        ax=self%ax, bx=self%bx, az=self%az, bz=self%bz &
+        )
+      call transpose_y_to_z(self%c_pair, self%c_x, self%sp)
+
+      call process_spectral_110_solve( &
+        div_u=self%c_x, waves=self%waves, &
+        n1=self%nx_spec, n2=self%ny_spec, n3=self%nz_spec, &
+        st1=self%sp_st(1), st2=self%sp_st(2), st3=self%sp_st(3), &
+        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+        ay=self%ay, by=self%by &
+        )
+
+      call transpose_z_to_y(self%c_x, self%c_pair, self%sp)
+      call process_spectral_110_bw( &
+        div_u=self%c_pair, n1=self%sp%ysz(1), n2=self%sp%ysz(2), &
+        n3=self%sp%ysz(3), st1=self%sp%yst(1) - 1, st2=self%sp%yst(2) - 1, &
+        nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
+        ax=self%ax, bx=self%bx, az=self%az, bz=self%bz &
+        )
+      call transpose_y_to_z(self%c_pair, self%c_x, self%sp)
+    end if
 
   end subroutine fft_postprocess_110_omp
 
