@@ -139,7 +139,7 @@ target_link_libraries(xcompact PRIVATE x3d2)
 
 add_executable(x3d2_poisson_solver poisson_solver.f90)
 target_link_libraries(x3d2_poisson_solver PRIVATE x3d2_backends x3d2_poisson
-                      OpenMP::OpenMP_Fortran MPI::MPI_Fortran)
+                      OpenMP::OpenMP_Fortran)
 
 # 3. Set compiler specific flags and options
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
@@ -233,6 +233,7 @@ if(WITH_MPI)
   target_link_libraries(x3d2_poisson PRIVATE MPI::MPI_Fortran)
   target_link_libraries(x3d2_backends PRIVATE MPI::MPI_Fortran)
   target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
+  target_link_libraries(x3d2_poisson_solver PRIVATE MPI::MPI_Fortran)
 endif()
 
 # 5. Set thirdparty libary dependencies
