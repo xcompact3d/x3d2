@@ -80,9 +80,9 @@ solved with homogeneous Neumann conditions in that direction.
 ``--repeat N`` sets how many times the solve is repeated (default 1). The
 backend used (OpenMP, CUDA or OpenMP target offload) follows whichever
 ``ENABLE_BACKEND`` the build was configured with. The OpenMP backend
-currently supports only the ``000`` and ``100`` boundary condition cases.
-The ``010`` and ``110`` cases are not yet supported on OpenMP (the CUDA
-backend supports all four).
+currently supports the ``000``, ``100`` and ``110`` boundary condition
+cases. The ``010`` case is not yet supported on OpenMP (the CUDA backend
+supports all four).
 
 The driver solves with a fixed default right-hand side,
 ``cos(2 pi x) cos(2 pi y) cos(2 pi z)``; support for a user-supplied
