@@ -94,7 +94,8 @@ count, backend, and the minimum and mean solve time over the requested
 number of repeats. It does not check correctness: that is covered
 separately by ``tests/verification/test_poisson_bc.f90``, which verifies
 the Poisson solve against an analytical solution across all four boundary
-condition configurations. For example:
+condition configurations. The driver prints a warning if the right-hand
+side does not have zero mean. For example:
 
 .. code-block:: console
 
