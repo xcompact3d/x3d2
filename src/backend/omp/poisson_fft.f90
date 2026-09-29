@@ -606,7 +606,8 @@ contains
         n1=self%nx_spec, n2=self%ny_spec, n3=self%nz_spec, &
         st1=self%sp_st(1), st2=self%sp_st(2), st3=self%sp_st(3), &
         nx=self%nx_glob, ny=self%ny_glob, nz=self%nz_glob, &
-        ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, az=self%az, bz=self%bz &
+        ax=self%ax, bx=self%bx, ay=self%ay, by=self%by, &
+        az=self%az, bz=self%bz &
         )
     else
       call transpose_z_to_y(self%c_x, self%c_pair, self%sp)
