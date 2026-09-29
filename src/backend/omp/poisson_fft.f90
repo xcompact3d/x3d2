@@ -189,9 +189,6 @@ contains
                               poisson_fft%sp)
       end if
     else if (poisson_fft%is_110_case) then
-      if (poisson_fft%nx_loc /= poisson_fft%nx_glob .or. &
-          poisson_fft%ny_loc /= poisson_fft%ny_glob) &
-        error stop 'OpenMP 110 Poisson case supports a single rank only'
       ! ph%xsz is exactly (nz, nx_loc, ny_loc) for the 110 fft plan, on one
       ! rank as much as many, so this single allocation replaces the plain
       ! nz_loc/nx_loc/ny_loc one that only worked for one rank.
