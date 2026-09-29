@@ -82,7 +82,8 @@ backend used (OpenMP, CUDA or OpenMP target offload) follows whichever
 ``ENABLE_BACKEND`` the build was configured with. The OpenMP backend
 currently supports the ``000``, ``100`` and ``110`` boundary condition
 cases. The ``010`` case is not yet supported on OpenMP (the CUDA backend
-supports all four).
+supports all four). The ``110`` case on the OpenMP backend runs on a
+single rank only.
 
 The driver solves with a fixed default right-hand side,
 ``cos(2 pi x) cos(2 pi y) cos(2 pi z)``; support for a user-supplied
