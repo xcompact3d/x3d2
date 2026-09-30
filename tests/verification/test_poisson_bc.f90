@@ -49,6 +49,31 @@ program test_poisson
   integer, parameter :: NUM_CONFIGS = 4
   integer, parameter :: TOTAL_TESTS = NUM_CONFIGS*NUM_TESTS
 
+  ! One BC configuration: the grid and the BC of each direction (the same at
+  ! both ends of a direction)
+  type :: bc_case_t
+    character(len=3) :: label
+    character(len=20) :: title
+    integer :: dims(3)
+    character(len=9) :: bc(3)
+  end type bc_case_t
+
+  type(bc_case_t), parameter :: cases(NUM_CONFIGS) = [ &
+    bc_case_t('000', 'all periodic', [128, 64, 32], &
+              [character(len=9) :: 'periodic', 'periodic', 'periodic']), &
+    bc_case_t('010', 'y-dirichlet', [128, 65, 32], &
+              [character(len=9) :: 'periodic', 'dirichlet', 'periodic']), &
+    ! z carries the decomposition, so it needs enough cells per subdomain
+    ! for the distributed compact operators. At 32 cells over 2 ranks the
+    ! discarded coupling in "interpolate" is 6.2e-08, which puts a 8.7e-11
+    ! floor under the div(grad(p)) check against a 1e-11 tolerance. 128
+    ! keeps 64 cells per rank at 2 ranks, matching the >=64 rule of thumb
+    ! used elsewhere.
+    bc_case_t('100', 'x-dirichlet', [129, 64, 128], &
+              [character(len=9) :: 'dirichlet', 'periodic', 'periodic']), &
+    bc_case_t('110', 'x,y-dirichlet', [129, 257, 64], &
+              [character(len=9) :: 'dirichlet', 'dirichlet', 'periodic'])]
+
   ! The single precision tolerance must sit between the roundoff floor of
   ! the passing cases (~3e-7 in this normalised norm, norm2/N) and the
   ! n=3 periodic aliasing error (~2.4e-6) that the XFAIL logic relies on
@@ -93,10 +118,6 @@ program test_poisson
   real(dp) :: all_divgrad_errs(NUM_TESTS, NUM_CONFIGS)
   character(len=3) :: config_labels(NUM_CONFIGS)
 
-  ! BC configuration arrays
-  integer :: dims_global(3)
-  character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
-
   ! Initialise MPI
   call initialise_mpi(nrank, nproc)
 
@@ -128,43 +149,9 @@ program test_poisson
   all_poisson_errs = 0.0_dp
   all_divgrad_errs = 0.0_dp
 
-  ! ---- Config 000: all periodic (128 x 64 x 32) ----
-  dims_global = [128, 64, 32]
-  BC_x = ['periodic', 'periodic']
-  BC_y = ['periodic', 'periodic']
-  BC_z = ['periodic', 'periodic']
-  if (config_run(1)) call run_config(1, '000 (all periodic)', dims_global, &
-                  BC_x, BC_y, BC_z)
-
-  ! ---- Config 010: y-dirichlet (128 x 65 x 32) ----
-  dims_global = [128, 65, 32]
-  BC_x = ['periodic ', 'periodic ']
-  BC_y = ['dirichlet', 'dirichlet']
-  BC_z = ['periodic ', 'periodic ']
-  if (config_run(2)) call run_config(2, '010 (y-dirichlet)', dims_global, &
-                  BC_x, BC_y, BC_z)
-
-  ! ---- Config 100: x-dirichlet (129 x 64 x 128) ----
-  !
-  ! z carries the decomposition, so it needs enough cells per subdomain for
-  ! the distributed compact operators. At 32 cells over 2 ranks the discarded
-  ! coupling in "interpolate" is 6.2e-08, which puts a 8.7e-11 floor under the
-  ! div(grad(p)) check against a 1e-11 tolerance. 128 keeps 64 cells per rank
-  ! at 2 ranks, matching the >=64 rule of thumb used elsewhere.
-  dims_global = [129, 64, 128]
-  BC_x = ['dirichlet', 'dirichlet']
-  BC_y = ['periodic ', 'periodic ']
-  BC_z = ['periodic ', 'periodic ']
-  if (config_run(3)) call run_config(3, '100 (x-dirichlet)', dims_global, &
-                  BC_x, BC_y, BC_z)
-
-  ! ---- Config 110: x,y-dirichlet (129 x 257 x 64) ----
-  dims_global = [129, 257, 64]
-  BC_x = ['dirichlet', 'dirichlet']
-  BC_y = ['dirichlet', 'dirichlet']
-  BC_z = ['periodic ', 'periodic ']
-  if (config_run(4)) call run_config(4, '110 (x,y-dirichlet)', dims_global, &
-                  BC_x, BC_y, BC_z)
+  do ic = 1, NUM_CONFIGS
+    if (config_run(ic)) call run_config(ic, cases(ic))
+  end do
 
   ! ---- Grand summary ----
   if (nrank == 0) then
@@ -208,12 +195,9 @@ contains
   ! ================================================================
   ! Run all 8 cosine tests for one BC configuration
   ! ================================================================
-  subroutine run_config(config_id, config_name, dims_global, &
-                        BC_x, BC_y, BC_z)
+  subroutine run_config(config_id, cfg)
     integer, intent(in) :: config_id
-    character(len=*), intent(in) :: config_name
-    integer, intent(in) :: dims_global(3)
-    character(len=*), intent(in) :: BC_x(2), BC_y(2), BC_z(2)
+    type(bc_case_t), intent(in) :: cfg
 
     type(backend_runtime_t), target :: runtime
     class(base_backend_t), pointer :: backend
@@ -222,6 +206,8 @@ contains
     type(dirps_t), pointer :: xdirps, ydirps, zdirps
     type(vector_calculus_t) :: vector_calculus
 
+    integer :: dims_global(3)
+    character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
     integer :: nproc_dir(3)
     real(dp) :: L_global(3)
     logical :: use_2decomp
@@ -231,9 +217,15 @@ contains
     logical :: x_periodic, y_periodic, z_periodic
     integer :: test_types(NUM_TYPES), test_ns(NUM_NS)
 
+    dims_global = cfg%dims
+    BC_x = [cfg%bc(1), cfg%bc(1)]
+    BC_y = [cfg%bc(2), cfg%bc(2)]
+    BC_z = [cfg%bc(3), cfg%bc(3)]
+
     if (nrank == 0) then
       write (stderr, '(A)') ''
-      write (stderr, '(A,A)') '  === Config ', config_name
+      write (stderr, '(A,A)') '  === Config ', &
+        trim(cfg%label)//' ('//trim(cfg%title)//')'
       write (stderr, '(4X,A,I0,A,I0,A,I0)') &
         'Grid: ', dims_global(1), ' x ', dims_global(2), &
         ' x ', dims_global(3)
