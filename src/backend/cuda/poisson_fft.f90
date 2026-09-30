@@ -118,10 +118,6 @@ module m_cuda_poisson_fft
     procedure :: exchange_mirror_100
   end type cuda_poisson_fft_t
 
-  interface cuda_poisson_fft_t
-    module procedure init
-  end interface cuda_poisson_fft_t
-
   ! Explicit C interfaces for cuFFT functions that nvfortran has trouble with
   interface
     integer(c_int) function cufftExecR2C_C(plan, idata, odata) &
@@ -141,7 +137,7 @@ module m_cuda_poisson_fft
     end function cufftExecC2R_C
   end interface
 
-  private :: init, create_fft_plan
+  private :: create_fft_plan
 
 contains
 
@@ -214,15 +210,14 @@ contains
 
   end subroutine create_fft_plan
 
-  function init(mesh, xdirps, ydirps, zdirps, lowmem) &
-    result(poisson_fft)
+  subroutine init_cuda_poisson_fft_t(poisson_fft, mesh, xdirps, ydirps, &
+                                     zdirps, lowmem)
     implicit none
 
+    type(cuda_poisson_fft_t), intent(out) :: poisson_fft
     type(mesh_t), target, intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
-
-    type(cuda_poisson_fft_t) :: poisson_fft
 
     integer :: nx, ny, nz
 
@@ -478,7 +473,7 @@ contains
                   &cuFFT cannot decompose the transform.'
     end if
 
-  end function init
+  end subroutine init_cuda_poisson_fft_t
 
   subroutine fft_forward_110_cuda(self, f)
     !! Forward FFT for 110 case: transpose (nx,ny,nz)->(nz,nx,ny) then R2C
