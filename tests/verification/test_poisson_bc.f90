@@ -116,14 +116,11 @@ program test_poisson
   logical :: all_xfail(NUM_TESTS, NUM_CONFIGS)
   real(dp) :: all_poisson_errs(NUM_TESTS, NUM_CONFIGS)
   real(dp) :: all_divgrad_errs(NUM_TESTS, NUM_CONFIGS)
-  character(len=3) :: config_labels(NUM_CONFIGS)
 
   ! Initialise MPI
   call initialise_mpi(nrank, nproc)
 
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
-
-  config_labels = ['000', '010', '100', '110']
 
   ! Optional --config <label> restricts the run to one configuration. This
   ! is what lets a multi rank run exercise 100 without tripping the single
@@ -140,7 +137,7 @@ program test_poisson
 
   do ic = 1, NUM_CONFIGS
     config_run(ic) = (only_config == 'all' &
-                      .or. only_config == config_labels(ic))
+                      .or. only_config == cases(ic)%label)
   end do
 
   ! A skipped configuration must not register as a failure in the verdict
@@ -324,7 +321,7 @@ contains
         end if
 
         write (stderr, '(2X,A5,2X,A10,I4,ES14.4,ES14.4,2X,A4,4X,A4,4X,A)') &
-          config_labels(config_id), &
+          cases(config_id)%label, &
           test_type_name(test_types(t)), test_ns(n), &
           all_poisson_errs(idx, config_id), &
           all_divgrad_errs(idx, config_id), &
