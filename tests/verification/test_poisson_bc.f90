@@ -37,15 +37,7 @@ program test_poisson
 
   implicit none
 
-  ! Test type identifiers
-  integer, parameter :: TEST_COS_X = 1
-  integer, parameter :: TEST_COS_Y = 2
-  integer, parameter :: TEST_COS_XY = 3
-  integer, parameter :: TEST_COS_XYZ = 4
-
-  integer, parameter :: NUM_TYPES = 4
-  integer, parameter :: NUM_NS = 2
-  integer, parameter :: NUM_TESTS = NUM_TYPES*NUM_NS
+  integer, parameter :: NUM_TESTS = 8
 
   ! One BC configuration: the grid and the BC of each direction (the same at
   ! both ends of a direction)
@@ -225,10 +217,9 @@ contains
     real(dp) :: L_global(3)
     logical :: use_2decomp
 
-    integer :: n, t, idx
+    integer :: idx
     logical :: passed
     logical :: periodic(3)
-    integer :: test_types(NUM_TYPES), test_ns(NUM_NS)
 
     dims_global = cfg%dims
     BC_x = [cfg%bc(1), cfg%bc(1)]
@@ -283,24 +274,15 @@ contains
     periodic = (cfg%bc == 'periodic')
 
     ! Run all 8 cosine tests
-    test_types = [TEST_COS_X, TEST_COS_Y, TEST_COS_XY, TEST_COS_XYZ]
-    test_ns = [2, 3]
-    idx = 0
+    do idx = 1, NUM_TESTS
+      all_xfail(idx, config_id) = is_expected_fail(tests(idx), periodic)
 
-    do n = 1, NUM_NS
-      do t = 1, NUM_TYPES
-        idx = idx + 1
-
-        all_xfail(idx, config_id) = is_expected_fail( &
-                 test_ns(n), test_types(t), periodic)
-
-        call run_single_test(backend, host_allocator, mesh, &
-                             xdirps, ydirps, zdirps, vector_calculus, &
-                             test_ns(n), test_types(t), passed, &
-                             all_poisson_errs(idx, config_id), &
-                             all_divgrad_errs(idx, config_id))
-        all_results(idx, config_id) = passed
-      end do
+      call run_single_test(backend, host_allocator, mesh, &
+                           xdirps, ydirps, zdirps, vector_calculus, &
+                           tests(idx), passed, &
+                           all_poisson_errs(idx, config_id), &
+                           all_divgrad_errs(idx, config_id))
+      all_results(idx, config_id) = passed
     end do
 
   end subroutine run_config
@@ -337,80 +319,42 @@ contains
     end do
   end subroutine print_config_results
 
-  ! ================================================================
-  ! Helper: test type name
-  ! ================================================================
-  pure function test_type_name(test_type) result(name)
-    integer, intent(in) :: test_type
-    character(len=10) :: name
-
-    select case (test_type)
-    case (TEST_COS_X); name = 'COS_X     '
-    case (TEST_COS_Y); name = 'COS_Y     '
-    case (TEST_COS_XY); name = 'COS_XY    '
-    case (TEST_COS_XYZ); name = 'COS_XYZ   '
-    case default; name = 'UNKNOWN   '
-    end select
-  end function test_type_name
-
-  pure function is_expected_fail(n_wave, test_type, periodic) &
-    result(xfail)
+  pure function is_expected_fail(test, periodic) result(xfail)
     !! Determine if a test is expected to fail.
     !!
     !! n=3 on even-sized periodic grids (64 cells) does not resolve
     !! cos(3*pi*x) cleanly due to aliasing. A test is XFAIL when n=3
     !! AND any direction involved in the test function uses periodic BCs.
-    integer, intent(in) :: n_wave, test_type
+    type(cosine_test_t), intent(in) :: test
     logical, intent(in) :: periodic(3)
     logical :: xfail
 
-    xfail = .false.
-    if (n_wave /= 3) return
-
-    select case (test_type)
-    case (TEST_COS_X)
-      xfail = periodic(1)
-    case (TEST_COS_Y)
-      xfail = periodic(2)
-    case (TEST_COS_XY)
-      xfail = periodic(1) .or. periodic(2)
-    case (TEST_COS_XYZ)
-      xfail = periodic(1) .or. periodic(2) .or. periodic(3)
-    end select
+    xfail = test%n == 3 .and. any(test%uses .and. periodic)
   end function is_expected_fail
 
   ! ================================================================
   ! Create cosine test field
   ! ================================================================
-  subroutine create_cosine_field(mesh, host_field, n_wave, test_type)
+  subroutine create_cosine_field(mesh, host_field, test)
     type(mesh_t), intent(in) :: mesh
     class(field_t), intent(inout) :: host_field
-    integer, intent(in) :: n_wave
-    integer, intent(in) :: test_type
+    type(cosine_test_t), intent(in) :: test
 
-    integer :: i, j, k, dims(3)
-    real(dp) :: coords(3), n_pi
+    integer :: i, j, k, d, dims(3)
+    real(dp) :: coords(3), n_pi, val
 
     dims = mesh%get_dims(CELL)
-    n_pi = real(n_wave, dp)*pi
+    n_pi = real(test%n, dp)*pi
 
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
           coords = mesh%get_coordinates(i, j, k, CELL)
-          select case (test_type)
-          case (TEST_COS_X)
-            host_field%data(i, j, k) = cos(n_pi*coords(1))
-          case (TEST_COS_Y)
-            host_field%data(i, j, k) = cos(n_pi*coords(2))
-          case (TEST_COS_XY)
-            host_field%data(i, j, k) = cos(n_pi*coords(1)) &
-                                       *cos(n_pi*coords(2))
-          case (TEST_COS_XYZ)
-            host_field%data(i, j, k) = cos(n_pi*coords(1)) &
-                                       *cos(n_pi*coords(2)) &
-                                       *cos(n_pi*coords(3))
-          end select
+          val = 1.0_dp
+          do d = 1, 3
+            if (test%uses(d)) val = val*cos(n_pi*coords(d))
+          end do
+          host_field%data(i, j, k) = val
         end do
       end do
     end do
@@ -419,38 +363,28 @@ contains
   ! ================================================================
   ! Create analytical Poisson solution
   ! ================================================================
-  subroutine create_analytical_solution(mesh, host_field, n_wave, test_type)
+  subroutine create_analytical_solution(mesh, host_field, test)
     type(mesh_t), intent(in) :: mesh
     class(field_t), intent(inout) :: host_field
-    integer, intent(in) :: n_wave
-    integer, intent(in) :: test_type
+    type(cosine_test_t), intent(in) :: test
 
-    integer :: i, j, k, dims(3)
-    real(dp) :: coords(3), n_pi, n_pi_sq
+    integer :: i, j, k, d, dims(3)
+    real(dp) :: coords(3), n_pi, n_pi_sq, val
 
     dims = mesh%get_dims(CELL)
-    n_pi = real(n_wave, dp)*pi
+    n_pi = real(test%n, dp)*pi
     n_pi_sq = n_pi*n_pi
 
     do k = 1, dims(3)
       do j = 1, dims(2)
         do i = 1, dims(1)
           coords = mesh%get_coordinates(i, j, k, CELL)
-          select case (test_type)
-          case (TEST_COS_X)
-            host_field%data(i, j, k) = -cos(n_pi*coords(1))/n_pi_sq
-          case (TEST_COS_Y)
-            host_field%data(i, j, k) = -cos(n_pi*coords(2))/n_pi_sq
-          case (TEST_COS_XY)
-            host_field%data(i, j, k) = -cos(n_pi*coords(1)) &
-                                       *cos(n_pi*coords(2)) &
-                                       /(2.0_dp*n_pi_sq)
-          case (TEST_COS_XYZ)
-            host_field%data(i, j, k) = -cos(n_pi*coords(1)) &
-                                       *cos(n_pi*coords(2)) &
-                                       *cos(n_pi*coords(3)) &
-                                       /(3.0_dp*n_pi_sq)
-          end select
+          val = 1.0_dp
+          do d = 1, 3
+            if (test%uses(d)) val = val*cos(n_pi*coords(d))
+          end do
+          host_field%data(i, j, k) = &
+            -val/(real(count(test%uses), dp)*n_pi_sq)
         end do
       end do
     end do
@@ -475,15 +409,14 @@ contains
   ! ================================================================
   subroutine run_single_test(backend, host_allocator, mesh, &
                              xdirps, ydirps, zdirps, vector_calculus, &
-                             n_wave, test_type, test_passed, &
+                             test, test_passed, &
                              poisson_err_out, divgrad_err_out)
     class(base_backend_t), pointer, intent(in) :: backend
     type(allocator_t), pointer, intent(in) :: host_allocator
     type(mesh_t), intent(in) :: mesh
     type(dirps_t), pointer, intent(in) :: xdirps, ydirps, zdirps
     type(vector_calculus_t), intent(in) :: vector_calculus
-    integer, intent(in) :: n_wave
-    integer, intent(in) :: test_type
+    type(cosine_test_t), intent(in) :: test
     logical, intent(out) :: test_passed
     real(dp), intent(out) :: poisson_err_out, divgrad_err_out
 
@@ -498,7 +431,7 @@ contains
 
     if (mesh%par%is_root()) then
       write (stderr, '(4X,A,A,A,I1)') &
-        'Running: ', trim(test_type_name(test_type)), '  n = ', n_wave
+        'Running: ', trim(test%name), '  n = ', test%n
     end if
 
     ! Allocate fields
@@ -507,7 +440,7 @@ contains
     host_field => host_allocator%get_block(DIR_C)
 
     ! Create test function on host and transfer to device
-    call create_cosine_field(mesh, host_field, n_wave, test_type)
+    call create_cosine_field(mesh, host_field, test)
     call backend%set_field_data(f_device, host_field%data, DIR_C)
     call f_device%set_data_loc(CELL)
     call host_allocator%release_block(host_field)
@@ -530,7 +463,7 @@ contains
       - host_field%data(1, 1, 1)
 
     host_analytical => host_allocator%get_block(DIR_C)
-    call create_analytical_solution(mesh, host_analytical, n_wave, test_type)
+    call create_analytical_solution(mesh, host_analytical, test)
 
     ! Remove same constant from analytical
     host_analytical%data(1:dims(1), 1:dims(2), 1:dims(3)) = &
