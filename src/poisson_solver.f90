@@ -320,8 +320,8 @@ contains
     !! runs either way.
     class(field_t), intent(in) :: host_field
 
-    real(dp) :: local_sum, local_max, global_mean
-    integer :: n_cells_global, ierr
+    real(dp) :: local_sum, local_max, global_mean, n_cells_global
+    integer :: global_dims(3), ierr
 
     local_sum = sum(host_field%data(1:dims(1), 1:dims(2), 1:dims(3)))
     local_max = maxval(abs(host_field%data(1:dims(1), 1:dims(2), 1:dims(3))))
@@ -331,10 +331,21 @@ contains
     call MPI_Allreduce(MPI_IN_PLACE, local_max, 1, MPI_X3D2_DP, MPI_MAX, &
                        MPI_COMM_WORLD, ierr)
 
-    n_cells_global = product(mesh%get_global_dims(CELL))
-    global_mean = local_sum/real(n_cells_global, dp)
+    ! Computed in real(dp) rather than default integer: product() of a
+    ! default integer array overflows above ~2^31 cells.
+    global_dims = mesh%get_global_dims(CELL)
+    n_cells_global = real(global_dims(1), dp)*real(global_dims(2), dp) &
+                      *real(global_dims(3), dp)
+    global_mean = local_sum/n_cells_global
 
-    if (abs(global_mean) > 1.0e-10_dp*max(local_max, tiny(1.0_dp))) then
+    ! Tolerance scales with the build's own precision (epsilon(1.0_dp)):
+    ! a fixed 1e-10 sits below single-precision epsilon (~1.19e-7), so a
+    ! SINGLE_PREC build's rounding of the discrete mean of cos(2 pi x)
+    ! (~1e-9..1e-8) would trip a false warning. 100*epsilon(1.0_dp) stays
+    ! far above that single-precision rounding while remaining far below
+    ! the double-precision rounding of the same discrete mean.
+    if (abs(global_mean) > &
+        100.0_dp*epsilon(1.0_dp)*max(local_max, tiny(1.0_dp))) then
       if (nrank == 0) then
         write (stderr, '(A,ES12.4,A)') &
           'Warning: right-hand side mean is ', global_mean, &
