@@ -40,16 +40,15 @@ program test_poisson
   ! One BC configuration: the grid and the BC of each direction (the same at
   ! both ends of a direction)
   type :: bc_case_t
-    character(len=3) :: label
     character(len=20) :: title
     integer :: dims(3)
     character(len=9) :: bc(3)
   end type bc_case_t
 
   type(bc_case_t), parameter :: cases(*) = [ &
-    bc_case_t('ppp', 'all periodic', [128, 64, 32], &
+    bc_case_t('all periodic', [128, 64, 32], &
               [character(len=9) :: 'periodic', 'periodic', 'periodic']), &
-    bc_case_t('pdp', 'y-dirichlet', [128, 65, 32], &
+    bc_case_t('y-dirichlet', [128, 65, 32], &
               [character(len=9) :: 'periodic', 'dirichlet', 'periodic']), &
     ! z carries the decomposition, so it needs enough cells per subdomain
     ! for the distributed compact operators. At 32 cells over 2 ranks the
@@ -57,9 +56,9 @@ program test_poisson
     ! floor under the div(grad(p)) check against a 1e-11 tolerance. 128
     ! keeps 64 cells per rank at 2 ranks, matching the >=64 rule of thumb
     ! used elsewhere.
-    bc_case_t('dpp', 'x-dirichlet', [129, 64, 128], &
+    bc_case_t('x-dirichlet', [129, 64, 128], &
               [character(len=9) :: 'dirichlet', 'periodic', 'periodic']), &
-    bc_case_t('ddp', 'x,y-dirichlet', [129, 257, 64], &
+    bc_case_t('x,y-dirichlet', [129, 257, 64], &
               [character(len=9) :: 'dirichlet', 'dirichlet', 'periodic'])]
 
   ! One cosine test: the directions that carry cos(n*pi*x_d) and the wavenumber
@@ -151,7 +150,7 @@ program test_poisson
 
   do ic = 1, size(cases)
     config_run(ic) = (only_bc == 'all' &
-                      .or. only_bc == cases(ic)%label)
+                      .or. only_bc == bc_code(cases(ic)))
   end do
 
   do ic = 1, size(cases)
@@ -229,7 +228,7 @@ contains
     if (nrank == 0) then
       write (stderr, '(A)') ''
       write (stderr, '(A,A)') '  === BC ', &
-        trim(cfg%label)//' ('//trim(cfg%title)//')'
+        bc_code(cfg)//' ('//trim(cfg%title)//')'
       write (stderr, '(4X,A,I0,A,I0,A,I0)') &
         'Grid: ', dims_global(1), ' x ', dims_global(2), &
         ' x ', dims_global(3)
@@ -288,6 +287,16 @@ contains
   end subroutine run_config
 
   ! ================================================================
+  ! The --bc code of a case: the first letter of the BC of x, y and z
+  ! ================================================================
+  pure function bc_code(c) result(code)
+    type(bc_case_t), intent(in) :: c
+    character(len=3) :: code
+
+    code = c%bc(1)(1:1)//c%bc(2)(1:1)//c%bc(3)(1:1)
+  end function bc_code
+
+  ! ================================================================
   ! Print results for one config in the grand summary
   ! ================================================================
   subroutine print_config_results(config_id)
@@ -311,7 +320,7 @@ contains
       end if
 
       write (stderr, '(2X,A5,2X,A10,I4,ES14.4,ES14.4,2X,A4,4X,A4,4X,A)') &
-        cases(config_id)%label, &
+        bc_code(cases(config_id)), &
         tests(idx)%name, tests(idx)%n, &
         results(idx, config_id)%poisson_err, &
         results(idx, config_id)%divgrad_err, &
