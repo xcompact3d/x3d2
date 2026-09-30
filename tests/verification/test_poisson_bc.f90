@@ -119,7 +119,8 @@ program test_poisson
 #endif
 
   integer :: nrank, nproc
-  integer :: ic, idx, iarg
+  integer :: ic, idx, iarg, ios
+  integer :: nproc_dir(3)
   character(len=32) :: arg
   character(len=len(arg)) :: only_bc
   character(len=4*size(cases)) :: codes
@@ -141,11 +142,22 @@ program test_poisson
   ! and ddp in src/poisson_fft.f90. With no argument every configuration runs,
   ! as before.
   only_bc = 'all'
+  nproc_dir = [1, 1, nproc]
   do iarg = 1, command_argument_count() - 1
     call get_command_argument(iarg, arg)
     if (trim(arg) == '--bc') then
       call get_command_argument(iarg + 1, arg)
       only_bc = trim(arg)
+    else if (trim(arg) == '--nproc_dir') then
+      ! --nproc_dir <px>,<py>,<pz> sets the decomposition, as nproc_dir does
+      ! in the domain_settings namelist; the default is all ranks along z
+      call get_command_argument(iarg + 1, arg)
+      read (arg, *, iostat=ios) nproc_dir
+      if (ios /= 0) then
+        if (nrank == 0) write (stderr, '(A)') &
+          'test_poisson_bc: --nproc_dir needs three integers, <px>,<py>,<pz>'
+        error stop 1
+      end if
     end if
   end do
 
@@ -167,7 +179,7 @@ program test_poisson
   end if
 
   do ic = 1, size(cases)
-    if (config_run(ic)) call run_config(ic, cases(ic))
+    if (config_run(ic)) call run_config(ic, cases(ic), nproc_dir)
   end do
 
   ! ---- Grand summary ----
@@ -212,9 +224,10 @@ contains
   ! ================================================================
   ! Run all 8 cosine tests for one BC configuration
   ! ================================================================
-  subroutine run_config(config_id, cfg)
+  subroutine run_config(config_id, cfg, nproc_dir)
     integer, intent(in) :: config_id
     type(bc_case_t), intent(in) :: cfg
+    integer, intent(in) :: nproc_dir(3)
 
     type(backend_runtime_t), target :: runtime
     class(base_backend_t), pointer :: backend
@@ -225,7 +238,6 @@ contains
 
     integer :: dims_global(3)
     character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
-    integer :: nproc_dir(3)
     real(dp) :: L_global(3)
     logical :: use_2decomp
 
@@ -245,6 +257,8 @@ contains
       write (stderr, '(4X,A,I0,A,I0,A,I0)') &
         'Grid: ', dims_global(1), ' x ', dims_global(2), &
         ' x ', dims_global(3)
+      write (stderr, '(4X,A,I0,A,I0,A,I0)') &
+        'nproc_dir: ', nproc_dir(1), ', ', nproc_dir(2), ', ', nproc_dir(3)
       write (stderr, '(4X,A,A,A,A,A,A,A,A,A,A)') &
         'BC: x=[', trim(BC_x(1)), ',', trim(BC_x(2)), &
         '] y=[', trim(BC_y(1)), ',', trim(BC_y(2)), &
@@ -252,7 +266,6 @@ contains
     end if
 
     ! Setup domain decomposition
-    nproc_dir = [1, 1, nproc]
     L_global = [1.0_dp, 1.0_dp, 1.0_dp]
 
     ! Decide whether 2decomp is used
