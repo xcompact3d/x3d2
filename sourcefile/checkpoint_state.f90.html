@@ -1,0 +1,889 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>checkpoint_state.f90 &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../program/xcompact.html">Program</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>checkpoint_state.f90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for source files.">21 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/checkpoint_state.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">checkpoint_state.f90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/m_checkpoint_state.html">m_checkpoint_state</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/checkpoint_state.f90.html#src">checkpoint_state.f90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~checkpoint_state.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilecheckpoint_statef90EfferentGraph" width="641pt" height="200pt"
+ viewBox="0.00 0.00 641.00 199.70" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph" class="graph" transform="scale(0.49 0.49) rotate(0) translate(4 406)">
+<title>sourcefile~~checkpoint_state.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-406 1312,-406 1312,4 -4,4"/>
+<!-- sourcefile~checkpoint_state.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~checkpoint_state.f90</title>
+<polygon fill="none" stroke="black" points="1308,-220 1185,-220 1185,-196 1308,-196 1308,-220"/>
+<text text-anchor="middle" x="1246.5" y="-205.6" font-family="Helvetica,sans-Serif" font-size="10.50">checkpoint_state.f90</text>
+</g>
+<!-- sourcefile~io_session.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~io_session.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/io_session.f90.html" xlink:title="io_session.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1149,-220 1062,-220 1062,-196 1149,-196 1149,-220"/>
+<text text-anchor="middle" x="1105.5" y="-205.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io_session.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~checkpoint_state.f90&#45;&gt;sourcefile~io_session.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~checkpoint_state.f90&#45;&gt;sourcefile~io_session.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1184.94,-208C1176.41,-208 1167.69,-208 1159.32,-208"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1159.32,-204.5 1149.32,-208 1159.32,-211.5 1159.32,-204.5"/>
+</g>
+<!-- sourcefile~backend.f90~4 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_node3" class="node">
+<title>sourcefile~backend.f90~4</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~EfferentGraph_node3"><a xlink:href="../sourcefile/backend.f90~4.html" xlink:title="backend.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="827,-140 748,-140 748,-116 827,-116 827,-140"/>
+<text text-anchor="middle" x="787.5" y="-125.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">backend.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~backend.f90~4 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~backend.f90~4</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1094.9,-195.76C1078.22,-175.78 1041.67,-137.45 1000,-128"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M998,-128C955.74,-118.42 943.04,-136.23 900.5,-128"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M898.5,-128C878.63,-124.16 856.37,-123.49 837.09,-124.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="836.88,-120.54 827.02,-124.44 837.15,-127.54 836.88,-120.54"/>
+</g>
+<!-- sourcefile~common.f90~2 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_node4" class="node">
+<title>sourcefile~common.f90~2</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~EfferentGraph_node4"><a xlink:href="../sourcefile/common.f90~2.html" xlink:title="common.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="170,-224 90,-224 90,-200 170,-200 170,-224"/>
+<text text-anchor="middle" x="130" y="-209.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">common.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M998,-364C970.18,-381.76 845.22,-402 788.5,-402 788.5,-402 788.5,-402 409.5,-402 289.96,-402 183.9,-281.07 145.89,-232.16"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="148.64,-230 139.79,-224.17 143.08,-234.25 148.64,-230"/>
+</g>
+<!-- sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_node5" class="node">
+<title>sourcefile~field.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~EfferentGraph_node5"><a xlink:href="../sourcefile/field.f90.html" xlink:title="field.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="438.5,-224 382.5,-224 382.5,-200 438.5,-200 438.5,-224"/>
+<text text-anchor="middle" x="410.5" y="-209.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">field.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge4" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1100.75,-220.39C1090.56,-251.53 1059.09,-332.79 1000,-364"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M998,-364C914.32,-408.19 883.13,-326 788.5,-326 788.5,-326 788.5,-326 666,-326 573.6,-326 477.52,-262.64 434.61,-230.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="436.58,-227.5 426.51,-224.2 432.33,-233.06 436.58,-227.5"/>
+</g>
+<!-- sourcefile~io.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_node6" class="node">
+<title>sourcefile~io.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~EfferentGraph_node6"><a xlink:href="../sourcefile/io.f90.html" xlink:title="io.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1026,-220 972,-220 972,-196 1026,-196 1026,-220"/>
+<text text-anchor="middle" x="999" y="-205.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~io.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge5" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~io.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1062,-208C1053.49,-208 1044.63,-208 1036.36,-208"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1036.27,-204.5 1026.27,-208 1036.27,-211.5 1036.27,-204.5"/>
+</g>
+<!-- sourcefile~io_base.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_node7" class="node">
+<title>sourcefile~io_base.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~EfferentGraph_node7"><a xlink:href="../sourcefile/io_base.f90.html" xlink:title="io_base.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="936,-180 863,-180 863,-156 936,-156 936,-180"/>
+<text text-anchor="middle" x="899.5" y="-165.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io_base.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_session.f90&#45;&gt;sourcefile~io_base.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge6" class="edge">
+<title>sourcefile~io_session.f90&#45;&gt;sourcefile~io_base.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M998,-128C984.77,-125 954.14,-138.9 930.72,-151.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="929.01,-148.07 921.83,-155.87 932.3,-154.25 929.01,-148.07"/>
+</g>
+<!-- sourcefile~backend.f90~4&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge8" class="edge">
+<title>sourcefile~backend.f90~4&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M666,-212C613.41,-214.83 599.65,-219.33 547.5,-212"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M545.5,-212C477.26,-202.41 476.27,-110.48 411.5,-134"/>
+</g>
+<!-- sourcefile~backend.f90~4&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge9" class="edge">
+<title>sourcefile~backend.f90~4&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M545.5,-212C513.06,-207.44 475.77,-207.9 448.77,-209.23"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="448.39,-205.75 438.6,-209.8 448.78,-212.74 448.39,-205.75"/>
+</g>
+<!-- sourcefile~allocator.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_node8" class="node">
+<title>sourcefile~allocator.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~EfferentGraph_node8"><a xlink:href="../sourcefile/allocator.f90.html" xlink:title="allocator.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="586,-146 507,-146 507,-122 586,-122 586,-146"/>
+<text text-anchor="middle" x="546.5" y="-131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allocator.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~4&#45;&gt;sourcefile~allocator.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge7" class="edge">
+<title>sourcefile~backend.f90~4&#45;&gt;sourcefile~allocator.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M666,-212C623.54,-214.29 584.45,-178.02 563.5,-154.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="566,-151.69 556.87,-146.31 560.66,-156.21 566,-151.69"/>
+</g>
+<!-- sourcefile~mesh.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_node9" class="node">
+<title>sourcefile~mesh.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~EfferentGraph_node9"><a xlink:href="../sourcefile/mesh.f90.html" xlink:title="mesh.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="577.5,-24 515.5,-24 515.5,0 577.5,0 577.5,-24"/>
+<text text-anchor="middle" x="546.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mesh.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~4&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge10" class="edge">
+<title>sourcefile~backend.f90~4&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M773.38,-115.93C759.14,-103.33 735.31,-83.7 712,-71 671.74,-49.07 621.71,-32.48 587.46,-22.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="588.37,-19.18 577.8,-19.82 586.46,-25.91 588.37,-19.18"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_node12" class="node">
+<title>sourcefile~poisson_fft.f90~2</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~EfferentGraph_node12"><a xlink:href="../sourcefile/poisson_fft.f90~2.html" xlink:title="poisson_fft.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="712,-104 622,-104 622,-80 712,-80 712,-104"/>
+<text text-anchor="middle" x="667" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">poisson_fft.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~4&#45;&gt;sourcefile~poisson_fft.f90~2 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge11" class="edge">
+<title>sourcefile~backend.f90~4&#45;&gt;sourcefile~poisson_fft.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M747.7,-116.21C737.98,-113.26 727.42,-110.05 717.27,-106.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="718.29,-103.62 707.7,-104.06 716.25,-110.32 718.29,-103.62"/>
+</g>
+<!-- sourcefile~tdsops.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_node13" class="node">
+<title>sourcefile~tdsops.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~EfferentGraph_node13"><a xlink:href="../sourcefile/tdsops.f90.html" xlink:title="tdsops.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="580,-104 513,-104 513,-80 580,-80 580,-104"/>
+<text text-anchor="middle" x="546.5" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tdsops.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~backend.f90~4&#45;&gt;sourcefile~tdsops.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge12" class="edge">
+<title>sourcefile~backend.f90~4&#45;&gt;sourcefile~tdsops.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M777.33,-140.28C759.27,-162.97 716.6,-209.38 668,-212"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M666,-212C609.51,-215.04 629.44,-149.24 586,-113 584.67,-111.89 583.28,-110.82 581.84,-109.78"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="583.56,-106.72 573.27,-104.21 579.75,-112.59 583.56,-106.72"/>
+</g>
+<!-- sourcefile~mpi.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_node10" class="node">
+<title>sourcefile~mpi.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~EfferentGraph_node10"><a xlink:href="../sourcefile/mpi.f90.html" xlink:title="mpi.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="54,-224 0,-224 0,-200 54,-200 54,-224"/>
+<text text-anchor="middle" x="27" y="-209.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~common.f90~2&#45;&gt;sourcefile~mpi.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge13" class="edge">
+<title>sourcefile~common.f90~2&#45;&gt;sourcefile~mpi.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M89.95,-212C81.52,-212 72.64,-212 64.32,-212"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="64.15,-208.5 54.15,-212 64.15,-215.5 64.15,-208.5"/>
+</g>
+<!-- sourcefile~field.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge14" class="edge">
+<title>sourcefile~field.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M382.39,-211.32C352.61,-210.73 303.37,-210.22 261,-212"/>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~backend.f90~4 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge15" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~backend.f90~4</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M989.57,-195.72C974.55,-175.3 940.91,-135.82 900.5,-128"/>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge16" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M989.53,-220.23C978.85,-234.56 959.08,-257.77 936,-269 876.56,-297.91 851.49,-267.97 788.5,-288"/>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge17" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M971.95,-205.12C932.08,-201.35 853.69,-196.5 788.5,-208"/>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~io_base.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge18" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~io_base.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M971.87,-197.28C961.84,-193.16 950.16,-188.37 939.19,-183.87"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="940.38,-180.58 929.8,-180.02 937.72,-187.05 940.38,-180.58"/>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~mpi.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge19" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~mpi.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M991.16,-220.07C980.97,-237.2 960.37,-268.73 936,-289 879.47,-336.04 862.04,-364 788.5,-364 788.5,-364 788.5,-364 259,-364 164.01,-364 77.86,-273.19 43.63,-231.95"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="46.33,-229.73 37.31,-224.18 40.9,-234.15 46.33,-229.73"/>
+</g>
+<!-- sourcefile~nvtx.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_node11" class="node">
+<title>sourcefile~nvtx.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~EfferentGraph_node11"><a xlink:href="../sourcefile/nvtx.f90.html" xlink:title="nvtx.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="927,-260 872,-260 872,-236 927,-236 927,-260"/>
+<text text-anchor="middle" x="899.5" y="-245.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nvtx.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io.f90&#45;&gt;sourcefile~nvtx.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge20" class="edge">
+<title>sourcefile~io.f90&#45;&gt;sourcefile~nvtx.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M971.87,-218.72C961.03,-223.17 948.27,-228.4 936.56,-233.2"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="934.96,-230.08 927.04,-237.11 937.62,-236.55 934.96,-230.08"/>
+</g>
+<!-- sourcefile~io_base.f90&#45;&gt;sourcefile~backend.f90~4 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge21" class="edge">
+<title>sourcefile~io_base.f90&#45;&gt;sourcefile~backend.f90~4</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M865.5,-156C854.83,-152.12 842.83,-147.76 831.55,-143.65"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="832.45,-140.26 821.86,-140.13 830.06,-146.84 832.45,-140.26"/>
+</g>
+<!-- sourcefile~io_base.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge22" class="edge">
+<title>sourcefile~io_base.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M889.89,-180.4C869.19,-209.65 816.32,-281.02 788.5,-288"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M786.5,-288C596.85,-335.6 542.43,-267.72 350,-233 310,-225.78 301.61,-210.29 261,-212"/>
+</g>
+<!-- sourcefile~io_base.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge23" class="edge">
+<title>sourcefile~io_base.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M870.01,-180.01C848.07,-188.86 816.81,-200.59 788.5,-208"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M786.5,-208C753.55,-216.63 745.82,-221.97 712,-226 621.53,-236.77 597.87,-232.63 507,-226 487.58,-224.58 466.12,-221.57 448.46,-218.7"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="448.99,-215.24 438.55,-217.04 447.84,-222.14 448.99,-215.24"/>
+</g>
+<!-- sourcefile~allocator.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge24" class="edge">
+<title>sourcefile~allocator.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M506.96,-126.97C479.46,-123.61 442.09,-122.48 411.5,-134"/>
+</g>
+<!-- sourcefile~allocator.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge25" class="edge">
+<title>sourcefile~allocator.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M524.86,-146.02C502.49,-159.03 466.62,-179.91 441.23,-194.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="439.27,-191.79 432.39,-199.84 442.79,-197.84 439.27,-191.79"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge26" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M524.33,-24.07C518.34,-28.05 512.07,-32.81 507,-38 486.32,-59.16 491.71,-72.86 471,-94 448.7,-116.76 441.32,-122.77 411.5,-134"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M409.5,-134C339.73,-160.28 335.48,-208.87 261,-212"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M259,-212C233.08,-213.09 204.19,-213.18 180.42,-212.97"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="180.27,-209.46 170.23,-212.85 180.19,-216.46 180.27,-209.46"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge28" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M536.71,-24.34C528.54,-36.07 516.28,-54.33 507,-71 488.63,-104.01 492.12,-116.68 471,-148 460.01,-164.3 444.9,-180.5 432.65,-192.53"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="429.88,-190.33 425.09,-199.78 434.73,-195.38 429.88,-190.33"/>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~mpi.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge30" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~mpi.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M515.46,-16.93C488.33,-21.33 447.28,-27.86 411.5,-33"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M409.5,-33C319.58,-45.91 289.21,-15.57 206,-52 134.06,-83.49 71.33,-155.68 43.42,-191.32"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="40.41,-189.49 37.09,-199.55 45.96,-193.76 40.41,-189.49"/>
+</g>
+<!-- sourcefile~decomp_dummy.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_node14" class="node">
+<title>sourcefile~decomp_dummy.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~EfferentGraph_node14"><a xlink:href="../sourcefile/decomp_dummy.f90.html" xlink:title="decomp_dummy.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="471,-85 350,-85 350,-61 471,-61 471,-85"/>
+<text text-anchor="middle" x="410.5" y="-70.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">decomp_dummy.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~decomp_dummy.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge27" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~decomp_dummy.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M520.06,-24.16C505.7,-30.97 487.4,-39.57 471,-47 463.78,-50.27 456.04,-53.71 448.61,-56.97"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="447.18,-53.78 439.42,-60.99 449.98,-60.19 447.18,-53.78"/>
+</g>
+<!-- sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_node15" class="node">
+<title>sourcefile~mesh_content.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~EfferentGraph_node15"><a xlink:href="../sourcefile/mesh_content.f90.html" xlink:title="mesh_content.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="314,-85 206,-85 206,-61 314,-61 314,-85"/>
+<text text-anchor="middle" x="260" y="-70.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mesh_content.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~mesh.f90&#45;&gt;sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge29" class="edge">
+<title>sourcefile~mesh.f90&#45;&gt;sourcefile~mesh_content.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M409.5,-33C374.16,-38.08 335.21,-48.77 306.08,-57.82"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="304.68,-54.59 296.2,-60.94 306.79,-61.26 304.68,-54.59"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge31" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M633.69,-79.95C601.11,-69.6 549.67,-58.19 507,-71 500.91,-72.83 417.45,-131.76 411.5,-134"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~field.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge32" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~field.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M653.42,-104.25C638.46,-118.23 612.19,-140.99 586,-155 541.5,-178.82 485.28,-194.98 448.87,-203.84"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="447.62,-200.54 438.69,-206.26 449.23,-207.35 447.62,-200.54"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~mesh.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge33" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~mesh.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M648,-79.85C628.23,-66.5 596.28,-44.93 573.72,-29.7"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="575.53,-26.7 565.28,-24 571.61,-32.5 575.53,-26.7"/>
+</g>
+<!-- sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~tdsops.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge34" class="edge">
+<title>sourcefile~poisson_fft.f90~2&#45;&gt;sourcefile~tdsops.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M621.87,-92C611.51,-92 600.49,-92 590.19,-92"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="590.18,-88.5 580.18,-92 590.18,-95.5 590.18,-88.5"/>
+</g>
+<!-- sourcefile~tdsops.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge35" class="edge">
+<title>sourcefile~tdsops.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M512.93,-101.09C485.58,-108.99 445.61,-121.15 411.5,-134"/>
+</g>
+<!-- sourcefile~decomp_dummy.f90&#45;&gt;sourcefile~mesh_content.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge36" class="edge">
+<title>sourcefile~decomp_dummy.f90&#45;&gt;sourcefile~mesh_content.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M349.96,-73C341.58,-73 332.94,-73 324.5,-73"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="324.32,-69.5 314.32,-73 324.32,-76.5 324.32,-69.5"/>
+</g>
+<!-- sourcefile~mesh_content.f90&#45;&gt;sourcefile~common.f90~2 -->
+<g id="sourcefile~~checkpoint_state.f90~~EfferentGraph_edge37" class="edge">
+<title>sourcefile~mesh_content.f90&#45;&gt;sourcefile~common.f90~2</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M247.64,-85.34C225.38,-109.51 175.87,-163.28 149.07,-192.38"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="146.35,-190.16 142.15,-199.89 151.5,-194.91 146.35,-190.16"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilecheckpoint_statef90EfferentGraph = svgPanZoom('#sourcefilecheckpoint_statef90EfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~checkpoint_state.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilecheckpoint_statef90AfferentGraph" width="641pt" height="141pt"
+ viewBox="0.00 0.00 641.00 140.74" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph" class="graph" transform="scale(0.8 0.8) rotate(0) translate(4 171.43)">
+<title>sourcefile~~checkpoint_state.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-171.43 795,-171.43 795,4 -4,4"/>
+<!-- sourcefile~checkpoint_state.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~checkpoint_state.f90</title>
+<polygon fill="none" stroke="black" points="123,-108 0,-108 0,-84 123,-84 123,-108"/>
+<text text-anchor="middle" x="61.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50">checkpoint_state.f90</text>
+</g>
+<!-- sourcefile~checkpoint_manager.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~checkpoint_manager.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/checkpoint_manager.f90.html" xlink:title="checkpoint_manager.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="303,-88 159,-88 159,-64 303,-64 303,-88"/>
+<text text-anchor="middle" x="231" y="-73.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">checkpoint_manager.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~checkpoint_state.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~checkpoint_manager.f90&#45;&gt;sourcefile~checkpoint_state.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M158.96,-84.48C150.38,-85.51 141.61,-86.55 133.03,-87.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="132.58,-84.11 123.06,-88.77 133.41,-91.06 132.58,-84.11"/>
+</g>
+<!-- sourcefile~io_manager.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~io_manager.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/io_manager.f90.html" xlink:title="io_manager.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="434,-108 339,-108 339,-84 434,-84 434,-108"/>
+<text text-anchor="middle" x="386.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">io_manager.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~io_manager.f90&#45;&gt;sourcefile~checkpoint_state.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~io_manager.f90&#45;&gt;sourcefile~checkpoint_state.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M338.82,-96.66C327.12,-96.8 314.6,-96.93 303,-97 239,-97.39 223,-97.33 159,-97 150.69,-96.96 141.98,-96.89 133.33,-96.82"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="133.27,-93.32 123.24,-96.73 133.21,-100.32 133.27,-93.32"/>
+</g>
+<!-- sourcefile~io_manager.f90&#45;&gt;sourcefile~checkpoint_manager.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~io_manager.f90&#45;&gt;sourcefile~checkpoint_manager.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M338.61,-89.89C330.56,-88.84 322,-87.73 313.35,-86.6"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="313.56,-83.1 303.19,-85.28 312.66,-90.04 313.56,-83.1"/>
+</g>
+<!-- sourcefile~base_case.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~base_case.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/base_case.f90.html" xlink:title="base_case.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="558,-108 470,-108 470,-84 558,-84 558,-108"/>
+<text text-anchor="middle" x="514" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">base_case.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~base_case.f90&#45;&gt;sourcefile~io_manager.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~base_case.f90&#45;&gt;sourcefile~io_manager.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M469.81,-96C461.64,-96 452.99,-96 444.47,-96"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="444.2,-92.5 434.2,-96 444.2,-99.5 444.2,-92.5"/>
+</g>
+<!-- sourcefile~channel.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~channel.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/channel.f90.html" xlink:title="channel.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="670,-150 594,-150 594,-126 670,-126 670,-150"/>
+<text text-anchor="middle" x="632" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">channel.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~channel.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~channel.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M597.76,-125.96C585.38,-121.48 571.15,-116.33 558.02,-111.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="558.84,-108.15 548.25,-108.04 556.46,-114.73 558.84,-108.15"/>
+</g>
+<!-- sourcefile~cylinder.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~cylinder.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/cylinder.f90.html" xlink:title="cylinder.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="669,-108 595,-108 595,-84 669,-84 669,-108"/>
+<text text-anchor="middle" x="632" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cylinder.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~cylinder.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~cylinder.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M594.93,-96C586.52,-96 577.4,-96 568.41,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="568.38,-92.5 558.38,-96 568.38,-99.5 568.38,-92.5"/>
+</g>
+<!-- sourcefile~generic.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~generic.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/generic.f90.html" xlink:title="generic.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="668.5,-66 595.5,-66 595.5,-42 668.5,-42 668.5,-66"/>
+<text text-anchor="middle" x="632" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">generic.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~generic.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~generic.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M597.76,-66.04C585.38,-70.52 571.15,-75.67 558.02,-80.42"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="556.46,-77.27 548.25,-83.96 558.84,-83.85 556.46,-77.27"/>
+</g>
+<!-- sourcefile~tgv.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~tgv.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/tgv.f90.html" xlink:title="tgv.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="659,-24 605,-24 605,0 659,0 659,-24"/>
+<text text-anchor="middle" x="632" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tgv.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~tgv.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~tgv.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M608.35,-24.11C603.53,-26.89 598.53,-29.94 594,-33 573.77,-46.68 552.18,-64.12 536.69,-77.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="534.11,-74.78 528.76,-83.93 538.64,-80.11 534.11,-74.78"/>
+</g>
+<!-- sourcefile~xcompact.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~xcompact.f90</title>
+<g id="a_sourcefile~~checkpoint_state.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/xcompact.f90.html" xlink:title="xcompact.f90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="791,-108 706,-108 706,-84 791,-84 791,-108"/>
+<text text-anchor="middle" x="748.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">xcompact.f90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~base_case.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~base_case.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M737.49,-108.14C724.02,-123.43 698.43,-148.9 670,-159 638.17,-170.31 625.88,-170.16 594,-159 569.47,-150.42 546.87,-130.66 532.18,-115.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="534.64,-113.06 525.26,-108.15 529.53,-117.84 534.64,-113.06"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~channel.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~channel.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M714.69,-108.04C702.47,-112.52 688.43,-117.67 675.47,-122.42"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="674,-119.23 665.82,-125.96 676.41,-125.8 674,-119.23"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~cylinder.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~cylinder.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M705.84,-96C697.2,-96 688.05,-96 679.25,-96"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="679.15,-92.5 669.15,-96 679.15,-99.5 679.15,-92.5"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~generic.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~generic.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M714.69,-83.96C702.47,-79.48 688.43,-74.33 675.47,-69.58"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="676.41,-66.2 665.82,-66.04 674,-72.77 676.41,-66.2"/>
+</g>
+<!-- sourcefile~xcompact.f90&#45;&gt;sourcefile~tgv.f90 -->
+<g id="sourcefile~~checkpoint_state.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~xcompact.f90&#45;&gt;sourcefile~tgv.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M734.04,-83.9C718.99,-70.65 693.62,-49.14 670,-33 668.17,-31.75 666.25,-30.5 664.3,-29.27"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="666.04,-26.23 655.67,-24.07 662.43,-32.23 666.04,-26.23"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilecheckpoint_statef90AfferentGraph = svgPanZoom('#sourcefilecheckpoint_statef90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="k">module </span><span class="n">m_checkpoint_state</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="w">  </span><span class="c">!! Interface for case- or model-specific state stored in solver checkpoints.</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="w">  </span><span class="k">use </span><span class="n">m_io_session</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">reader_session_t</span><span class="p">,</span><span class="w"> </span><span class="n">writer_session_t</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">  </span><span class="k">implicit none</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="k">  type</span><span class="p">,</span><span class="w"> </span><span class="k">abstract</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">checkpoint_state_t</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="w">  </span><span class="k">contains</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="k">    procedure</span><span class="p">(</span><span class="n">write_checkpoint_iface</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">write_checkpoint</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="w">    </span><span class="k">procedure</span><span class="p">(</span><span class="n">read_checkpoint_iface</span><span class="p">),</span><span class="w"> </span><span class="k">deferred</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">read_checkpoint</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">  </span><span class="k">end type </span><span class="n">checkpoint_state_t</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">  </span><span class="k">abstract interface</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="k">    subroutine </span><span class="n">write_checkpoint_iface</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">writer</span><span class="p">)</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">checkpoint_state_t</span><span class="p">,</span><span class="w"> </span><span class="n">writer_session_t</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">checkpoint_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">writer_session_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">writer</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">write_checkpoint_iface</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">    </span><span class="k">subroutine </span><span class="n">read_checkpoint_iface</span><span class="p">(</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">reader</span><span class="p">)</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">      </span><span class="k">import</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">checkpoint_state_t</span><span class="p">,</span><span class="w"> </span><span class="n">reader_session_t</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">checkpoint_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">reader_session_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">reader</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">    </span><span class="k">end subroutine </span><span class="n">read_checkpoint_iface</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">  </span><span class="k">end interface</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="k">end module </span><span class="n">m_checkpoint_state</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
