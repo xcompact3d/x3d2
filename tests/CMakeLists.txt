@@ -299,6 +299,7 @@ define_verification_test(verification/test_les_field.f90 1 omp)
 if(WITH_2DECOMPFFT)
   define_verification_test(verification/test_fft.f90 4 omp)
   define_verification_test(verification/test_poisson_bc.f90 1 omp --bc ddp)
+  define_verification_test(verification/test_poisson_bc.f90 2 omp --bc dpp --nproc_dir 1,2,1)
 endif()
 
 # Regression smoke test: fast full-solver TGV vs golden monitoring.csv.
