@@ -19,11 +19,12 @@ program x3d2_poisson_solver
   !!                     require an odd grid size.
   !!   --repeat N:       number of times to solve (default 1).
 
-  use iso_fortran_env, only: stderr => error_unit
+  use iso_fortran_env, only: stderr => error_unit, real64
 
   use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Comm_size, &
                    MPI_Finalize, MPI_Init, MPI_Barrier, MPI_Wtime, &
-                   MPI_Allreduce, MPI_IN_PLACE, MPI_SUM, MPI_MAX
+                   MPI_Allreduce, MPI_IN_PLACE, MPI_SUM, MPI_MAX, &
+                   MPI_DOUBLE_PRECISION
 
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
@@ -323,29 +324,34 @@ contains
     !! runs either way.
     class(field_t), intent(in) :: host_field
 
-    real(dp) :: local_sum, local_max, global_mean, n_cells_global
+    real(dp) :: local_max
+    real(real64) :: local_sum, global_mean, n_cells_global
     integer :: global_dims(3), ierr
 
-    local_sum = sum(host_field%data(1:dims(1), 1:dims(2), 1:dims(3)))
+    ! Accumulated in double precision regardless of dp: a per-rank real32
+    ! sum of a valid zero-mean field can stall past 2^24 terms and give a
+    ! false warning under SINGLE_PREC.
+    local_sum = sum(real(host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), &
+                         real64))
     local_max = maxval(abs(host_field%data(1:dims(1), 1:dims(2), 1:dims(3))))
 
-    call MPI_Allreduce(MPI_IN_PLACE, local_sum, 1, MPI_X3D2_DP, MPI_SUM, &
-                       MPI_COMM_WORLD, ierr)
+    call MPI_Allreduce(MPI_IN_PLACE, local_sum, 1, MPI_DOUBLE_PRECISION, &
+                       MPI_SUM, MPI_COMM_WORLD, ierr)
     call MPI_Allreduce(MPI_IN_PLACE, local_max, 1, MPI_X3D2_DP, MPI_MAX, &
                        MPI_COMM_WORLD, ierr)
 
-    ! Computed in real(dp) rather than default integer: product() of a
+    ! Computed in real64 rather than default integer: product() of a
     ! default integer array overflows above ~2^31 cells.
     global_dims = mesh%get_global_dims(CELL)
-    n_cells_global = real(global_dims(1), dp)*real(global_dims(2), dp) &
-                      *real(global_dims(3), dp)
+    n_cells_global = real(global_dims(1), real64)*real(global_dims(2), real64) &
+                      *real(global_dims(3), real64)
     global_mean = local_sum/n_cells_global
 
     ! Tolerance scales with the build's own precision (epsilon(1.0_dp)):
     ! a fixed 1e-10 sits below single-precision epsilon (~1.19e-7), so a
     ! SINGLE_PREC build's rounding of the discrete mean of cos(2 pi x)
     ! (~1e-9..1e-8) would trip a false warning. 100*epsilon(1.0_dp) stays
-    ! far above that single-precision rounding while remaining far below
+    ! far above that single-precision rounding while remaining far above
     ! the double-precision rounding of the same discrete mean.
     if (abs(global_mean) > &
         100.0_dp*epsilon(1.0_dp)*max(local_max, tiny(1.0_dp))) then
