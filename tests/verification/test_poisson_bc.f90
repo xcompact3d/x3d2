@@ -46,8 +46,6 @@ program test_poisson
   integer, parameter :: NUM_TYPES = 4
   integer, parameter :: NUM_NS = 2
   integer, parameter :: NUM_TESTS = NUM_TYPES*NUM_NS
-  integer, parameter :: NUM_CONFIGS = 4
-  integer, parameter :: TOTAL_TESTS = NUM_CONFIGS*NUM_TESTS
 
   ! One BC configuration: the grid and the BC of each direction (the same at
   ! both ends of a direction)
@@ -58,7 +56,7 @@ program test_poisson
     character(len=9) :: bc(3)
   end type bc_case_t
 
-  type(bc_case_t), parameter :: cases(NUM_CONFIGS) = [ &
+  type(bc_case_t), parameter :: cases(*) = [ &
     bc_case_t('000', 'all periodic', [128, 64, 32], &
               [character(len=9) :: 'periodic', 'periodic', 'periodic']), &
     bc_case_t('010', 'y-dirichlet', [128, 65, 32], &
@@ -108,14 +106,14 @@ program test_poisson
   integer :: ic, idx, iarg
   character(len=32) :: arg
   character(len=3) :: only_config
-  logical :: config_run(NUM_CONFIGS)
+  logical :: config_run(size(cases))
   logical :: allpass
 
   ! Per-config results for final summary
-  logical :: all_results(NUM_TESTS, NUM_CONFIGS)
-  logical :: all_xfail(NUM_TESTS, NUM_CONFIGS)
-  real(dp) :: all_poisson_errs(NUM_TESTS, NUM_CONFIGS)
-  real(dp) :: all_divgrad_errs(NUM_TESTS, NUM_CONFIGS)
+  logical :: all_results(NUM_TESTS, size(cases))
+  logical :: all_xfail(NUM_TESTS, size(cases))
+  real(dp) :: all_poisson_errs(NUM_TESTS, size(cases))
+  real(dp) :: all_divgrad_errs(NUM_TESTS, size(cases))
 
   ! Initialise MPI
   call initialise_mpi(nrank, nproc)
@@ -135,7 +133,7 @@ program test_poisson
     end if
   end do
 
-  do ic = 1, NUM_CONFIGS
+  do ic = 1, size(cases)
     config_run(ic) = (only_config == 'all' &
                       .or. only_config == cases(ic)%label)
   end do
@@ -146,7 +144,7 @@ program test_poisson
   all_poisson_errs = 0.0_dp
   all_divgrad_errs = 0.0_dp
 
-  do ic = 1, NUM_CONFIGS
+  do ic = 1, size(cases)
     if (config_run(ic)) call run_config(ic, cases(ic))
   end do
 
@@ -164,10 +162,10 @@ program test_poisson
       'Conf', 'Type      ', '  n ', '  Poisson L2  ', &
       '  DivGrad L2  ', 'Result', 'Expected', ''
     write (stderr, '(A)') ''
-    do ic = 1, NUM_CONFIGS
+    do ic = 1, size(cases)
       if (.not. config_run(ic)) cycle
       call print_config_results(ic)
-      if (ic < NUM_CONFIGS) write (stderr, '(A)') ''
+      if (ic < size(cases)) write (stderr, '(A)') ''
     end do
     write (stderr, '(A)') ''
   end if
@@ -177,7 +175,7 @@ program test_poisson
   !   - it failed AND was not expected to fail (unexpected failure)
   !   - it passed AND was expected to fail (unexpected pass / XPASS)
   allpass = .true.
-  do ic = 1, NUM_CONFIGS
+  do ic = 1, size(cases)
     do idx = 1, NUM_TESTS
       if (all_results(idx, ic) .neqv. (.not. all_xfail(idx, ic))) then
         allpass = .false.
