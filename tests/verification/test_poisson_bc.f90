@@ -1,24 +1,43 @@
 program test_poisson
   !! Poisson Solver Validation Test (self-contained, no input files)
   !!
-  !! Validates the Poisson solver across 4 boundary condition configurations:
-  !!   Config 000 : all periodic          (128 x 64 x 32)
-  !!   Config 010 : y-dirichlet           (128 x 65 x 32)
-  !!   Config 100 : x-dirichlet           (129 x 64 x 128)
-  !!   Config 110 : x,y-dirichlet         (129 x 257 x 64)
+  !! Validates the Poisson solver across the boundary condition
+  !! configurations listed in the table cases (4 at the moment):
+  !!   ppp : all periodic          (128 x 64 x 32)
+  !!   pdp : y-dirichlet           (128 x 65 x 32)
+  !!   dpp : x-dirichlet           (129 x 64 x 128)
+  !!   ddp : x,y-dirichlet         (129 x 257 x 64)
+  !! The code is one letter per direction in x,y,z order: d = dirichlet,
+  !! n = neumann, p = periodic.
   !!
-  !! For each configuration, runs 8 cosine test cases (n=2,3):
+  !! For each configuration, runs the cosine tests listed in the table tests
+  !! (8 at the moment, n=2,3):
   !!   COS_X, COS_Y, COS_XY, COS_XYZ
   !!
   !! Each test performs two checks:
   !!   Check 1: Poisson solution vs analytical (L2 norm)
   !!   Check 2: div(grad(p)) recovers original RHS f (round-trip L2 norm)
   !!
-  !! Total: 4 configs x 8 cases = 32 tests
-  !!
   !! Self-contained: bypasses solver_t entirely; sets up mesh, backend,
   !! allocator, tdsops, vector_calculus and poisson_fft directly.
-  !! No input files or command-line arguments required.
+  !! No input files required.
+  !!
+  !! Command-line arguments, both optional:
+  !!   --bc <code>                  run only the case with that BC code
+  !!                                (default: every case)
+  !!   --nproc_dir <px>,<py>,<pz>   decomposition, as nproc_dir in the
+  !!                                domain_settings namelist
+  !!                                (default: 1,1,nproc)
+  !! A run with one case per process is what a multi rank ctest entry needs,
+  !! because with the OpenMP backend 2decomp can be initialised only once per
+  !! process and some cases still stop on more than one rank. What the solver
+  !! accepts is left to its own checks. Grids stay per case, so keep at least
+  !! 32 cells per rank in a split direction (see the warning in
+  !! src/tdsops.f90); the dpp case (129 x 64 x 128) carries a y split on 2
+  !! ranks, not on 4.
+  !!
+  !! Adding a BC scenario is one row in cases, and a new run is one
+  !! define_verification_test line in tests/CMakeLists.txt.
   !!
   !! NOTE: Dirichlet directions require odd dims_global (e.g. 65)
 
