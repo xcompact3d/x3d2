@@ -331,12 +331,13 @@ contains
   end function is_expected_fail
 
   ! ================================================================
-  ! Create cosine test field
+  ! Fill a field with the cosine test function divided by a constant
   ! ================================================================
-  subroutine create_cosine_field(mesh, host_field, test)
+  subroutine fill_cosine_field(mesh, host_field, test, divisor)
     type(mesh_t), intent(in) :: mesh
     class(field_t), intent(inout) :: host_field
     type(cosine_test_t), intent(in) :: test
+    real(dp), intent(in) :: divisor
 
     integer :: i, j, k, d, dims(3)
     real(dp) :: coords(3), n_pi, val
@@ -352,41 +353,11 @@ contains
           do d = 1, 3
             if (test%uses(d)) val = val*cos(n_pi*coords(d))
           end do
-          host_field%data(i, j, k) = val
+          host_field%data(i, j, k) = val/divisor
         end do
       end do
     end do
-  end subroutine create_cosine_field
-
-  ! ================================================================
-  ! Create analytical Poisson solution
-  ! ================================================================
-  subroutine create_analytical_solution(mesh, host_field, test)
-    type(mesh_t), intent(in) :: mesh
-    class(field_t), intent(inout) :: host_field
-    type(cosine_test_t), intent(in) :: test
-
-    integer :: i, j, k, d, dims(3)
-    real(dp) :: coords(3), n_pi, n_pi_sq, val
-
-    dims = mesh%get_dims(CELL)
-    n_pi = real(test%n, dp)*pi
-    n_pi_sq = n_pi*n_pi
-
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          coords = mesh%get_coordinates(i, j, k, CELL)
-          val = 1.0_dp
-          do d = 1, 3
-            if (test%uses(d)) val = val*cos(n_pi*coords(d))
-          end do
-          host_field%data(i, j, k) = &
-            -val/(real(count(test%uses), dp)*n_pi_sq)
-        end do
-      end do
-    end do
-  end subroutine create_analytical_solution
+  end subroutine fill_cosine_field
 
   ! ================================================================
   ! Compute normalized L2 error norm
@@ -422,10 +393,11 @@ contains
     class(field_t), pointer :: host_field, host_analytical, temp
     class(field_t), pointer :: dpdx, dpdy, dpdz, gradient_input
     integer :: dims(3)
-    real(dp) :: poisson_error_norm, div_grad_error_norm
+    real(dp) :: poisson_error_norm, div_grad_error_norm, n_pi_sq
     logical :: poisson_passed, div_grad_passed
 
     dims = mesh%get_dims(CELL)
+    n_pi_sq = (real(test%n, dp)*pi)**2
 
     if (mesh%par%is_root()) then
       write (stderr, '(4X,A,A,A,I1)') &
@@ -438,7 +410,7 @@ contains
     host_field => host_allocator%get_block(DIR_C)
 
     ! Create test function on host and transfer to device
-    call create_cosine_field(mesh, host_field, test)
+    call fill_cosine_field(mesh, host_field, test, 1.0_dp)
     call backend%set_field_data(f_device, host_field%data, DIR_C)
     call f_device%set_data_loc(CELL)
     call host_allocator%release_block(host_field)
@@ -461,7 +433,8 @@ contains
       - host_field%data(1, 1, 1)
 
     host_analytical => host_allocator%get_block(DIR_C)
-    call create_analytical_solution(mesh, host_analytical, test)
+    call fill_cosine_field(mesh, host_analytical, test, &
+                           -(real(count(test%uses), dp)*n_pi_sq))
 
     ! Remove same constant from analytical
     host_analytical%data(1:dims(1), 1:dims(2), 1:dims(3)) = &
