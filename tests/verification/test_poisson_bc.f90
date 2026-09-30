@@ -227,7 +227,7 @@ contains
 
     integer :: n, t, idx
     logical :: passed
-    logical :: x_periodic, y_periodic, z_periodic
+    logical :: periodic(3)
     integer :: test_types(NUM_TYPES), test_ns(NUM_NS)
 
     dims_global = cfg%dims
@@ -280,9 +280,7 @@ contains
     call backend%init_poisson_fft(mesh, xdirps, ydirps, zdirps)
 
     ! Determine which directions are periodic
-    x_periodic = (trim(BC_x(1)) == 'periodic')
-    y_periodic = (trim(BC_y(1)) == 'periodic')
-    z_periodic = (trim(BC_z(1)) == 'periodic')
+    periodic = (cfg%bc == 'periodic')
 
     ! Run all 8 cosine tests
     test_types = [TEST_COS_X, TEST_COS_Y, TEST_COS_XY, TEST_COS_XYZ]
@@ -294,7 +292,7 @@ contains
         idx = idx + 1
 
         all_xfail(idx, config_id) = is_expected_fail( &
-                 test_ns(n), test_types(t), x_periodic, y_periodic, z_periodic)
+                 test_ns(n), test_types(t), periodic)
 
         call run_single_test(backend, host_allocator, mesh, &
                              xdirps, ydirps, zdirps, vector_calculus, &
@@ -355,8 +353,7 @@ contains
     end select
   end function test_type_name
 
-  pure function is_expected_fail(n_wave, test_type, &
-                                 x_periodic, y_periodic, z_periodic) &
+  pure function is_expected_fail(n_wave, test_type, periodic) &
     result(xfail)
     !! Determine if a test is expected to fail.
     !!
@@ -364,7 +361,7 @@ contains
     !! cos(3*pi*x) cleanly due to aliasing. A test is XFAIL when n=3
     !! AND any direction involved in the test function uses periodic BCs.
     integer, intent(in) :: n_wave, test_type
-    logical, intent(in) :: x_periodic, y_periodic, z_periodic
+    logical, intent(in) :: periodic(3)
     logical :: xfail
 
     xfail = .false.
@@ -372,13 +369,13 @@ contains
 
     select case (test_type)
     case (TEST_COS_X)
-      xfail = x_periodic
+      xfail = periodic(1)
     case (TEST_COS_Y)
-      xfail = y_periodic
+      xfail = periodic(2)
     case (TEST_COS_XY)
-      xfail = x_periodic .or. y_periodic
+      xfail = periodic(1) .or. periodic(2)
     case (TEST_COS_XYZ)
-      xfail = x_periodic .or. y_periodic .or. z_periodic
+      xfail = periodic(1) .or. periodic(2) .or. periodic(3)
     end select
   end function is_expected_fail
 
