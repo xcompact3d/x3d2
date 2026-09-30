@@ -47,9 +47,9 @@ program test_poisson
   end type bc_case_t
 
   type(bc_case_t), parameter :: cases(*) = [ &
-    bc_case_t('000', 'all periodic', [128, 64, 32], &
+    bc_case_t('ppp', 'all periodic', [128, 64, 32], &
               [character(len=9) :: 'periodic', 'periodic', 'periodic']), &
-    bc_case_t('010', 'y-dirichlet', [128, 65, 32], &
+    bc_case_t('pdp', 'y-dirichlet', [128, 65, 32], &
               [character(len=9) :: 'periodic', 'dirichlet', 'periodic']), &
     ! z carries the decomposition, so it needs enough cells per subdomain
     ! for the distributed compact operators. At 32 cells over 2 ranks the
@@ -57,9 +57,9 @@ program test_poisson
     ! floor under the div(grad(p)) check against a 1e-11 tolerance. 128
     ! keeps 64 cells per rank at 2 ranks, matching the >=64 rule of thumb
     ! used elsewhere.
-    bc_case_t('100', 'x-dirichlet', [129, 64, 128], &
+    bc_case_t('dpp', 'x-dirichlet', [129, 64, 128], &
               [character(len=9) :: 'dirichlet', 'periodic', 'periodic']), &
-    bc_case_t('110', 'x,y-dirichlet', [129, 257, 64], &
+    bc_case_t('ddp', 'x,y-dirichlet', [129, 257, 64], &
               [character(len=9) :: 'dirichlet', 'dirichlet', 'periodic'])]
 
   ! One cosine test: the directions that carry cos(n*pi*x_d) and the wavenumber
@@ -122,7 +122,7 @@ program test_poisson
   integer :: nrank, nproc
   integer :: ic, idx, iarg
   character(len=32) :: arg
-  character(len=3) :: only_config
+  character(len=3) :: only_bc
   logical :: config_run(size(cases))
   logical :: allpass
 
@@ -134,22 +134,24 @@ program test_poisson
 
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
-  ! Optional --config <label> restricts the run to one configuration. This
-  ! is what lets a multi rank run exercise 100 without tripping the single
-  ! rank stops still in place for 010 and 110 in src/poisson_fft.f90. With
-  ! no argument every configuration runs, as before.
-  only_config = 'all'
+  ! Optional --bc <code> restricts the run to the one configuration with that
+  ! code: one letter per direction in x,y,z order, d = dirichlet, n = neumann,
+  ! p = periodic (ppp, pdp, dpp, ddp). This is what lets a multi rank run
+  ! exercise dpp without tripping the single rank stops still in place for pdp
+  ! and ddp in src/poisson_fft.f90. With no argument every configuration runs,
+  ! as before.
+  only_bc = 'all'
   do iarg = 1, command_argument_count() - 1
     call get_command_argument(iarg, arg)
-    if (trim(arg) == '--config') then
+    if (trim(arg) == '--bc') then
       call get_command_argument(iarg + 1, arg)
-      only_config = trim(arg)
+      only_bc = trim(arg)
     end if
   end do
 
   do ic = 1, size(cases)
-    config_run(ic) = (only_config == 'all' &
-                      .or. only_config == cases(ic)%label)
+    config_run(ic) = (only_bc == 'all' &
+                      .or. only_bc == cases(ic)%label)
   end do
 
   do ic = 1, size(cases)
@@ -167,7 +169,7 @@ program test_poisson
       '  ======================================================='
     write (stderr, '(A)') ''
     write (stderr, '(2X,A5,2X,A10,A4,A14,A14,2X,A6,2X,A8,2X,A)') &
-      'Conf', 'Type      ', '  n ', '  Poisson L2  ', &
+      'BC', 'Type      ', '  n ', '  Poisson L2  ', &
       '  DivGrad L2  ', 'Result', 'Expected', ''
     write (stderr, '(A)') ''
     do ic = 1, size(cases)
@@ -226,7 +228,7 @@ contains
 
     if (nrank == 0) then
       write (stderr, '(A)') ''
-      write (stderr, '(A,A)') '  === Config ', &
+      write (stderr, '(A,A)') '  === BC ', &
         trim(cfg%label)//' ('//trim(cfg%title)//')'
       write (stderr, '(4X,A,I0,A,I0,A,I0)') &
         'Grid: ', dims_global(1), ' x ', dims_global(2), &
