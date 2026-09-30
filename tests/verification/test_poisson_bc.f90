@@ -161,6 +161,13 @@ program test_poisson
     end if
   end do
 
+  if (product(nproc_dir) /= nproc) then
+    if (nrank == 0) write (stderr, '(A,I0,A,I0,A)') &
+      'test_poisson_bc: --nproc_dir asks for ', product(nproc_dir), &
+      ' ranks but the run has ', nproc, ' ranks'
+    error stop 1
+  end if
+
   do ic = 1, size(cases)
     config_run(ic) = (only_bc == 'all' &
                       .or. only_bc == bc_code(cases(ic)))
