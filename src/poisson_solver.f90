@@ -80,7 +80,10 @@ program x3d2_poisson_solver
   character(len=9) :: bc_x_name, bc_y_name, bc_z_name
   character(len=9) :: BC_x(2), BC_y(2), BC_z(2)
   integer :: repeat_count, irep
-  real(dp) :: t0, t1, elapsed, min_time, sum_time
+  ! t0/t1 hold raw MPI_Wtime readings, which are double precision;
+  ! subtract in double, then convert.
+  double precision :: t0, t1
+  real(dp) :: elapsed, min_time, sum_time
   real(dp) :: n_pi
 
   class(field_t), pointer :: f_device, temp
@@ -188,7 +191,7 @@ program x3d2_poisson_solver
     call backend%poisson_fft%solve_poisson(f_device, temp)
     t1 = MPI_Wtime()
 
-    elapsed = t1 - t0
+    elapsed = real(t1 - t0, dp)
     min_time = min(min_time, elapsed)
     sum_time = sum_time + elapsed
   end do
