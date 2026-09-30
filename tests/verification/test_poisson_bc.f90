@@ -72,6 +72,24 @@ program test_poisson
     bc_case_t('110', 'x,y-dirichlet', [129, 257, 64], &
               [character(len=9) :: 'dirichlet', 'dirichlet', 'periodic'])]
 
+  ! One cosine test: the directions that carry cos(n*pi*x_d) and the wavenumber
+  type :: cosine_test_t
+    character(len=10) :: name
+    logical :: uses(3)
+    integer :: n
+  end type cosine_test_t
+
+  ! The n=2 block first, then the n=3 block, as the summary lists them
+  type(cosine_test_t), parameter :: tests(NUM_TESTS) = [ &
+    cosine_test_t('COS_X', [.true., .false., .false.], 2), &
+    cosine_test_t('COS_Y', [.false., .true., .false.], 2), &
+    cosine_test_t('COS_XY', [.true., .true., .false.], 2), &
+    cosine_test_t('COS_XYZ', [.true., .true., .true.], 2), &
+    cosine_test_t('COS_X', [.true., .false., .false.], 3), &
+    cosine_test_t('COS_Y', [.false., .true., .false.], 3), &
+    cosine_test_t('COS_XY', [.true., .true., .false.], 3), &
+    cosine_test_t('COS_XYZ', [.true., .true., .true.], 3)]
+
   ! The single precision tolerance must sit between the roundoff floor of
   ! the passing cases (~3e-7 in this normalised norm, norm2/N) and the
   ! n=3 periodic aliasing error (~2.4e-6) that the XFAIL logic relies on
@@ -294,37 +312,30 @@ contains
   ! ================================================================
   subroutine print_config_results(config_id)
     integer, intent(in) :: config_id
-    integer :: n, t, idx
-    integer :: test_types(NUM_TYPES), test_ns(NUM_NS)
+    integer :: idx
     character(len=4) :: result_str, expected_str
     character(len=2) :: verdict_str
     logical :: passed, xfail
 
-    test_types = [TEST_COS_X, TEST_COS_Y, TEST_COS_XY, TEST_COS_XYZ]
-    test_ns = [2, 3]
-    idx = 0
-    do n = 1, NUM_NS
-      do t = 1, NUM_TYPES
-        idx = idx + 1
-        passed = all_results(idx, config_id)
-        xfail = all_xfail(idx, config_id)
+    do idx = 1, NUM_TESTS
+      passed = all_results(idx, config_id)
+      xfail = all_xfail(idx, config_id)
 
-        result_str = merge('PASS', 'FAIL', passed)
-        expected_str = merge('FAIL', 'PASS', xfail)
+      result_str = merge('PASS', 'FAIL', passed)
+      expected_str = merge('FAIL', 'PASS', xfail)
 
-        if (passed .neqv. xfail) then
-          verdict_str = 'OK'
-        else
-          verdict_str = '!!'
-        end if
+      if (passed .neqv. xfail) then
+        verdict_str = 'OK'
+      else
+        verdict_str = '!!'
+      end if
 
-        write (stderr, '(2X,A5,2X,A10,I4,ES14.4,ES14.4,2X,A4,4X,A4,4X,A)') &
-          cases(config_id)%label, &
-          test_type_name(test_types(t)), test_ns(n), &
-          all_poisson_errs(idx, config_id), &
-          all_divgrad_errs(idx, config_id), &
-          result_str, expected_str, trim(verdict_str)
-      end do
+      write (stderr, '(2X,A5,2X,A10,I4,ES14.4,ES14.4,2X,A4,4X,A4,4X,A)') &
+        cases(config_id)%label, &
+        tests(idx)%name, tests(idx)%n, &
+        all_poisson_errs(idx, config_id), &
+        all_divgrad_errs(idx, config_id), &
+        result_str, expected_str, trim(verdict_str)
     end do
   end subroutine print_config_results
 
