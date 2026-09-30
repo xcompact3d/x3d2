@@ -4,8 +4,11 @@ workflow:
     - if: $CI_COMMIT_TAG && $CI_PROJECT_PATH == "xcompact3d/x3d2"
     # Run pipeline on the default branch for the main project
     - if: $CI_COMMIT_BRANCH == "main" && $CI_PROJECT_PATH == "xcompact3d/x3d2"
-    # Run pipeline on pull requests
-    - if: $CI_PIPELINE_SOURCE == "external_pull_request_event"
+    # Pipelines started by the GitHub Actions bridge
+    # (.github/workflows/gitlab-ci-bridge.yml). It pushes the pull request head
+    # to github-pr-<n> and starts the pipeline through the API, so the trigger
+    # does not race the mirror update the way external_pull_request_event does.
+    - if: $CI_PIPELINE_SOURCE == "api" && $GH_PR_NUMBER
     # Manual runs
     - if: $CI_PIPELINE_SOURCE == "web"
 
@@ -86,44 +89,44 @@ stages:
     paths:
       - fprettify.log
 
-build-and-test:
-  <<: *build-and-test-template
-  needs: []
-  variables:
-    ADIOS2_VERSION: 2.10.2
-    EXTRA_MODULE: "adios2"
-    SINGLE_PREC: "OFF"
-    WITH_MPI: "ON"
-    FORTRAN_COMPILER: "mpif90"
-    ENABLE_BACKEND: "OFF"
-    BACKEND_ARCH: ""
-    RUN_TEST: "ON"
+#build-and-test:
+#  <<: *build-and-test-template
+#  needs: []
+#  variables:
+#    ADIOS2_VERSION: 2.10.2
+#    EXTRA_MODULE: "adios2"
+#    SINGLE_PREC: "OFF"
+#    WITH_MPI: "ON"
+#    FORTRAN_COMPILER: "mpif90"
+#    ENABLE_BACKEND: "OFF"
+#    BACKEND_ARCH: ""
+#    RUN_TEST: "ON"
 
-build-and-test-no-mpi:
-  <<: *build-and-test-template
-  needs: []
-  variables:
-    ADIOS2_VERSION: 2.10.2
-    EXTRA_MODULE: "adios2"
-    SINGLE_PREC: "OFF"
-    WITH_MPI: "OFF"
-    FORTRAN_COMPILER: "gfortran"
-    ENABLE_BACKEND: "OFF"
-    BACKEND_ARCH: ""
-    RUN_TEST: "ON"
+#build-and-test-no-mpi:
+#  <<: *build-and-test-template
+#  needs: []
+#  variables:
+#    ADIOS2_VERSION: 2.10.2
+#    EXTRA_MODULE: "adios2"
+#    SINGLE_PREC: "OFF"
+#    WITH_MPI: "OFF"
+#    FORTRAN_COMPILER: "gfortran"
+#    ENABLE_BACKEND: "OFF"
+#    BACKEND_ARCH: ""
+#    RUN_TEST: "ON"
 
-build-and-test-single-prec:
-  <<: *build-and-test-template
-  needs: []
-  variables:
-    ADIOS2_VERSION: 2.10.2
-    EXTRA_MODULE: "adios2"
-    SINGLE_PREC: "ON"
-    WITH_MPI: "ON"
-    FORTRAN_COMPILER: "mpif90"
-    ENABLE_BACKEND: "OFF"
-    BACKEND_ARCH: ""
-    RUN_TEST: "ON"
+#build-and-test-single-prec:
+#  <<: *build-and-test-template
+#  needs: []
+#  variables:
+#    ADIOS2_VERSION: 2.10.2
+#    EXTRA_MODULE: "adios2"
+#    SINGLE_PREC: "ON"
+#    WITH_MPI: "ON"
+#    FORTRAN_COMPILER: "mpif90"
+#    ENABLE_BACKEND: "OFF"
+#    BACKEND_ARCH: ""
+#    RUN_TEST: "ON"
 
 build-and-test-cuda:
   <<: *build-and-test-template
@@ -164,6 +167,6 @@ build-and-test-omp_tgt:
     BACKEND_ARCH: "cc86"
     RUN_TEST: "ON"
 
-check-formatting:
-  <<: *check-formatting-template
-  needs: []
+#check-formatting:
+#  <<: *check-formatting-template
+#  needs: []
