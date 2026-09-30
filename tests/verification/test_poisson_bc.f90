@@ -121,7 +121,8 @@ program test_poisson
   integer :: nrank, nproc
   integer :: ic, idx, iarg
   character(len=32) :: arg
-  character(len=3) :: only_bc
+  character(len=len(arg)) :: only_bc
+  character(len=4*size(cases)) :: codes
   logical :: config_run(size(cases))
   logical :: allpass
 
@@ -152,6 +153,18 @@ program test_poisson
     config_run(ic) = (only_bc == 'all' &
                       .or. only_bc == bc_code(cases(ic)))
   end do
+
+  ! An unknown code would otherwise run nothing and pass
+  if (.not. any(config_run)) then
+    codes = ''
+    do ic = 1, size(cases)
+      codes = trim(codes)//' '//bc_code(cases(ic))
+    end do
+    if (nrank == 0) write (stderr, '(A)') &
+      'test_poisson_bc: unknown --bc code '''//trim(only_bc)// &
+      ''', the codes are:'//trim(codes)
+    error stop 1
+  end if
 
   do ic = 1, size(cases)
     if (config_run(ic)) call run_config(ic, cases(ic))
