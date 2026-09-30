@@ -30,7 +30,8 @@ program test_poisson
   use m_common, only: dp, pi, MPI_X3D2_DP, DIR_C, DIR_X, DIR_Y, DIR_Z, &
                       CELL, RDR_C2Z, RDR_C2X, RDR_Z2X
   use m_mesh, only: mesh_t
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
+  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce, &
+                   MPI_Bcast
   use m_solver, only: allocate_tdsops
   use m_tdsops, only: dirps_t
   use m_vector_calculus, only: vector_calculus_t
@@ -489,11 +490,10 @@ contains
     real(dp) :: first_value
     integer :: ierr
 
-    ! Only the rank that owns the global (1,1,1) point contributes
+    ! Rank 0 owns the global (1,1,1) point and broadcasts its value
     first_value = 0.0_dp
-    if (all(mesh%par%n_offset == 0)) first_value = host_field%data(1, 1, 1)
-    call MPI_Allreduce(MPI_IN_PLACE, first_value, 1, MPI_X3D2_DP, MPI_SUM, &
-                       MPI_COMM_WORLD, ierr)
+    if (mesh%par%is_root()) first_value = host_field%data(1, 1, 1)
+    call MPI_Bcast(first_value, 1, MPI_X3D2_DP, 0, MPI_COMM_WORLD, ierr)
   end function global_first_value
 
   ! ================================================================
