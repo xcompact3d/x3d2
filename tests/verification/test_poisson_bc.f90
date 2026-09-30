@@ -37,8 +37,6 @@ program test_poisson
 
   implicit none
 
-  integer, parameter :: NUM_TESTS = 8
-
   ! One BC configuration: the grid and the BC of each direction (the same at
   ! both ends of a direction)
   type :: bc_case_t
@@ -72,7 +70,7 @@ program test_poisson
   end type cosine_test_t
 
   ! The n=2 block first, then the n=3 block, as the summary lists them
-  type(cosine_test_t), parameter :: tests(NUM_TESTS) = [ &
+  type(cosine_test_t), parameter :: tests(*) = [ &
     cosine_test_t('COS_X', [.true., .false., .false.], 2), &
     cosine_test_t('COS_Y', [.false., .true., .false.], 2), &
     cosine_test_t('COS_XY', [.true., .true., .false.], 2), &
@@ -81,6 +79,15 @@ program test_poisson
     cosine_test_t('COS_Y', [.false., .true., .false.], 3), &
     cosine_test_t('COS_XY', [.true., .true., .false.], 3), &
     cosine_test_t('COS_XYZ', [.true., .true., .true.], 3)]
+
+  ! The outcome of one cosine test on one BC configuration. The defaults are
+  ! what a skipped configuration keeps: it must not register as a failure in
+  ! the verdict
+  type :: test_result_t
+    logical :: passed = .true.
+    logical :: xfail = .false.
+    real(dp) :: poisson_err = 0.0_dp, divgrad_err = 0.0_dp
+  end type test_result_t
 
   ! The single precision tolerance must sit between the roundoff floor of
   ! the passing cases (~3e-7 in this normalised norm, norm2/N) and the
@@ -120,10 +127,7 @@ program test_poisson
   logical :: allpass
 
   ! Per-config results for final summary
-  logical :: all_results(NUM_TESTS, size(cases))
-  logical :: all_xfail(NUM_TESTS, size(cases))
-  real(dp) :: all_poisson_errs(NUM_TESTS, size(cases))
-  real(dp) :: all_divgrad_errs(NUM_TESTS, size(cases))
+  type(test_result_t) :: results(size(tests), size(cases))
 
   ! Initialise MPI
   call initialise_mpi(nrank, nproc)
@@ -147,12 +151,6 @@ program test_poisson
     config_run(ic) = (only_config == 'all' &
                       .or. only_config == cases(ic)%label)
   end do
-
-  ! A skipped configuration must not register as a failure in the verdict
-  all_results = .true.
-  all_xfail = .false.
-  all_poisson_errs = 0.0_dp
-  all_divgrad_errs = 0.0_dp
 
   do ic = 1, size(cases)
     if (config_run(ic)) call run_config(ic, cases(ic))
@@ -186,8 +184,8 @@ program test_poisson
   !   - it passed AND was expected to fail (unexpected pass / XPASS)
   allpass = .true.
   do ic = 1, size(cases)
-    do idx = 1, NUM_TESTS
-      if (all_results(idx, ic) .neqv. (.not. all_xfail(idx, ic))) then
+    do idx = 1, size(tests)
+      if (results(idx, ic)%passed .neqv. (.not. results(idx, ic)%xfail)) then
         allpass = .false.
       end if
     end do
@@ -274,15 +272,15 @@ contains
     periodic = (cfg%bc == 'periodic')
 
     ! Run all 8 cosine tests
-    do idx = 1, NUM_TESTS
-      all_xfail(idx, config_id) = is_expected_fail(tests(idx), periodic)
+    do idx = 1, size(tests)
+      results(idx, config_id)%xfail = is_expected_fail(tests(idx), periodic)
 
       call run_single_test(backend, host_allocator, mesh, &
                            xdirps, ydirps, zdirps, vector_calculus, &
                            tests(idx), passed, &
-                           all_poisson_errs(idx, config_id), &
-                           all_divgrad_errs(idx, config_id))
-      all_results(idx, config_id) = passed
+                           results(idx, config_id)%poisson_err, &
+                           results(idx, config_id)%divgrad_err)
+      results(idx, config_id)%passed = passed
     end do
 
   end subroutine run_config
@@ -297,9 +295,9 @@ contains
     character(len=2) :: verdict_str
     logical :: passed, xfail
 
-    do idx = 1, NUM_TESTS
-      passed = all_results(idx, config_id)
-      xfail = all_xfail(idx, config_id)
+    do idx = 1, size(tests)
+      passed = results(idx, config_id)%passed
+      xfail = results(idx, config_id)%xfail
 
       result_str = merge('PASS', 'FAIL', passed)
       expected_str = merge('FAIL', 'PASS', xfail)
@@ -313,8 +311,8 @@ contains
       write (stderr, '(2X,A5,2X,A10,I4,ES14.4,ES14.4,2X,A4,4X,A4,4X,A)') &
         cases(config_id)%label, &
         tests(idx)%name, tests(idx)%n, &
-        all_poisson_errs(idx, config_id), &
-        all_divgrad_errs(idx, config_id), &
+        results(idx, config_id)%poisson_err, &
+        results(idx, config_id)%divgrad_err, &
         result_str, expected_str, trim(verdict_str)
     end do
   end subroutine print_config_results
