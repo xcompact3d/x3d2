@@ -271,12 +271,31 @@ contains
 
     type(poisson_ctx_t), target :: ctx
 
+    integer :: idx
+
+    call setup_case(ctx, cfg, nproc_dir)
+
+    ! Run all 8 cosine tests
+    do idx = 1, size(tests)
+      call run_single_test(ctx, tests(idx), results(idx, config_id))
+      results(idx, config_id)%xfail = &
+        is_expected_fail(tests(idx), ctx%periodic)
+    end do
+
+  end subroutine run_config
+
+  ! ================================================================
+  ! Set up the context of one BC configuration, once for all its tests
+  ! ================================================================
+  subroutine setup_case(ctx, cfg, nproc_dir)
+    type(poisson_ctx_t), target, intent(inout) :: ctx
+    type(bc_case_t), intent(in) :: cfg
+    integer, intent(in) :: nproc_dir(3)
+
     integer :: dims_global(3)
     character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
     real(dp) :: L_global(3)
     logical :: use_2decomp
-
-    integer :: idx
 
     dims_global = cfg%dims
     BC_x = [cfg%bc(1), cfg%bc(1)]
@@ -331,15 +350,7 @@ contains
 
     ! Determine which directions are periodic
     ctx%periodic = (cfg%bc == 'periodic')
-
-    ! Run all 8 cosine tests
-    do idx = 1, size(tests)
-      call run_single_test(ctx, tests(idx), results(idx, config_id))
-      results(idx, config_id)%xfail = &
-        is_expected_fail(tests(idx), ctx%periodic)
-    end do
-
-  end subroutine run_config
+  end subroutine setup_case
 
   ! ================================================================
   ! The --bc code of a case: the first letter of the BC of x, y and z
