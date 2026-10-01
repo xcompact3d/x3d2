@@ -18,6 +18,14 @@ program test_poisson
   !!   Check 1: Poisson solution vs analytical (L2 norm)
   !!   Check 2: div(grad(p)) recovers original RHS f (round-trip L2 norm)
   !!
+  !! Layout: setup_case builds one poisson_ctx_t for each configuration
+  !! (mesh, backend, allocators, tdsops, vector_calculus, poisson_fft) and
+  !! every test of that configuration reuses it. run_single_test(ctx, test)
+  !! runs one row of the table tests and returns a test_result_t. It uploads
+  !! the right hand side with upload_cosine, then Check 1 is solution_error
+  !! and Check 2 is divgrad_error. A new check is one function plus one line
+  !! in run_single_test.
+  !!
   !! Self-contained: bypasses solver_t entirely; sets up mesh, backend,
   !! allocator, tdsops, vector_calculus and poisson_fft directly.
   !! No input files required.
