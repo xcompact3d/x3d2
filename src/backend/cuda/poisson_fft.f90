@@ -118,10 +118,6 @@ module m_cuda_poisson_fft
     procedure :: exchange_mirror_100
   end type cuda_poisson_fft_t
 
-  interface cuda_poisson_fft_t
-    module procedure init
-  end interface cuda_poisson_fft_t
-
   ! Explicit C interfaces for cuFFT functions that nvfortran has trouble with
   interface
     integer(c_int) function cufftExecR2C_C(plan, idata, odata) &
@@ -141,13 +137,7 @@ module m_cuda_poisson_fft
     end function cufftExecC2R_C
   end interface
 
-  private :: init
-
-  !> create_fft_plan is deliberately public: the static memory estimator
-  !> (m_cuda_memory_estimate, src/backend/cuda/memory_estimate_cuda.f90)
-  !> calls it standalone (plan only, no mesh/case/fields) to capture the
-  !> real cuFFT/cuFFTMp workspace size via its worksize out-argument,
-  !> instead of duplicating cufftMakePlan3D's call sequence a second time.
+  private :: create_fft_plan
 
 contains
 
@@ -227,15 +217,14 @@ contains
 
   end subroutine create_fft_plan
 
-  function init(mesh, xdirps, ydirps, zdirps, lowmem) &
-    result(poisson_fft)
+  subroutine init_cuda_poisson_fft_t(poisson_fft, mesh, xdirps, ydirps, &
+                                     zdirps, lowmem)
     implicit none
 
+    type(cuda_poisson_fft_t), intent(out) :: poisson_fft
     type(mesh_t), target, intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
-
-    type(cuda_poisson_fft_t) :: poisson_fft
 
     integer :: nx, ny, nz
 
@@ -412,6 +401,10 @@ contains
 
     if (poisson_fft%is_110_case) then
       ! 110: R2C with Z-transpose, no cuFFTMp for non-periodic BCs
+      if (mesh%par%nproc > 1) then
+        error stop 'Multiple ranks are not yet supported for the 110 case &
+                    &in the CUDA backend!'
+      end if
       poisson_fft%use_cufftmp = .false.
 
       call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
@@ -487,7 +480,7 @@ contains
                   &cuFFT cannot decompose the transform.'
     end if
 
-  end function init
+  end subroutine init_cuda_poisson_fft_t
 
   subroutine fft_forward_110_cuda(self, f)
     !! Forward FFT for 110 case: transpose (nx,ny,nz)->(nz,nx,ny) then R2C
