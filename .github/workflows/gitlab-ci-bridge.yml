@@ -18,6 +18,13 @@ name: GitLab CI
 # checkout is only a source of git objects to push. The code does run on the
 # GitLab runners, so pull requests from forks are gated behind the `ci:gpu`
 # label, which a maintainer applies after reading the diff.
+#
+# The GPU pipeline is also gated behind the CPU unit tests: the `unit-tests`
+# job below waits for the `unit-tests` check run on the pull request head and
+# only then starts the GitLab pipeline. Chaining the two workflows with
+# `workflow_run` instead is deliberately avoided: a `workflow_run` job does
+# not appear in the pull request's check list, and it would never fire for
+# the `labeled` and `closed` actions this workflow also handles.
 
 on:
   pull_request_target:
@@ -25,6 +32,8 @@ on:
 
 permissions:
   contents: read
+  # Read the conclusion of the CPU unit tests for this pull request head.
+  checks: read
 
 env:
   GITLAB_HOST: ${{ vars.GITLAB_HOST }}
@@ -32,8 +41,12 @@ env:
   GITLAB_BRANCH: github-pr-${{ github.event.pull_request.number }}
 
 jobs:
-  pipeline:
-    name: pipeline
+  # Wait for the CPU unit tests before spending time on a GPU runner. The
+  # whole event-level gating lives on this job: `pipeline` needs it, and a
+  # skipped dependency skips the dependent job, so the condition is not
+  # repeated below.
+  unit-tests:
+    name: wait for unit tests
     if: >-
       github.event.action != 'closed'
       && github.event.pull_request.draft == false
@@ -42,6 +55,69 @@ jobs:
            github.event.pull_request.head.repo.full_name == github.repository
            || contains(github.event.pull_request.labels.*.name, 'ci:gpu')
          )
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    concurrency:
+      # A force-push supersedes a gate still waiting on the previous head.
+      # This is a separate group from the one `pipeline` uses; sharing a group
+      # between two jobs of the same run would have them cancel each other.
+      group: gitlab-ci-gate-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    outputs:
+      proceed: ${{ steps.wait.outputs.proceed }}
+    steps:
+      - name: Wait for the unit-tests check run
+        id: wait
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # The name of the check run produced by build_and_test.yml, which
+          # pins it with an explicit `name:` on its job.
+          CHECK_NAME: unit-tests
+          # build_and_test.yml carries a `paths:` filter, so for a pull
+          # request that touches none of those paths the check run never
+          # appears at all. That is indistinguishable from "has not been
+          # queued yet", so give it a grace period and then proceed.
+          APPEAR_GRACE_SECONDS: 300
+        run: |
+          set -euo pipefail
+          api="repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?check_name=${CHECK_NAME}"
+          appear_deadline=$(( $(date +%s) + APPEAR_GRACE_SECONDS ))
+          previous=""
+          while true; do
+            state=$(gh api "$api" --jq \
+              '.check_runs | sort_by(.started_at) | last // {}
+               | "\(.status // "none"):\(.conclusion // "none")"')
+            if [ "$state" != "$previous" ]; then
+              echo "${CHECK_NAME} on ${HEAD_SHA}: ${state}"
+              previous="$state"
+            fi
+            case "$state" in
+              none:*)
+                if [ "$(date +%s)" -ge "$appear_deadline" ]; then
+                  echo "::notice::No ${CHECK_NAME} check run on ${HEAD_SHA};" \
+                       "assuming build_and_test.yml was filtered out by paths"
+                  echo "proceed=true" >> "$GITHUB_OUTPUT"
+                  exit 0
+                fi
+                ;;
+              completed:success|completed:skipped|completed:neutral)
+                echo "proceed=true" >> "$GITHUB_OUTPUT"
+                exit 0 ;;
+              completed:*)
+                conclusion="${state#completed:}"
+                echo "::warning::Unit tests ${conclusion}; not starting the" \
+                     "GitLab pipeline for ${HEAD_SHA}"
+                echo "proceed=false" >> "$GITHUB_OUTPUT"
+                exit 0 ;;
+            esac
+            sleep 20
+          done
+
+  pipeline:
+    name: pipeline
+    needs: unit-tests
+    if: needs.unit-tests.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     concurrency:
