@@ -466,44 +466,21 @@ contains
   end subroutine upload_cosine
 
   ! ================================================================
-  ! Run a single Poisson test (2 checks)
+  ! Compare the Poisson solution on a device field with the analytical one
   ! ================================================================
-  function run_single_test(ctx, test) result(res)
+  function solution_error(ctx, test, f_device) result(err)
     type(poisson_ctx_t), target, intent(in) :: ctx
     type(cosine_test_t), intent(in) :: test
-    type(test_result_t) :: res
+    class(field_t), intent(in) :: f_device
+    real(dp) :: err
 
-    class(field_t), pointer :: f_device, f_reference, f_result
-    class(field_t), pointer :: host_field, host_analytical, temp
-    class(field_t), pointer :: dpdx, dpdy, dpdz, gradient_input
+    class(field_t), pointer :: host_field, host_analytical
     integer :: dims(3)
-    real(dp) :: poisson_error_norm, div_grad_error_norm, n_pi_sq
-    logical :: poisson_passed, div_grad_passed
+    real(dp) :: n_pi_sq
 
     dims = ctx%mesh%get_dims(CELL)
     n_pi_sq = (real(test%n, dp)*pi)**2
 
-    if (ctx%mesh%par%is_root()) then
-      write (stderr, '(4X,A,A,A,I1)') &
-        'Running: ', trim(test%name), '  n = ', test%n
-    end if
-
-    ! Allocate fields
-    f_device => ctx%backend%allocator%get_block(DIR_C, CELL)
-    f_reference => ctx%backend%allocator%get_block(DIR_X)
-
-    ! Create test function on host and transfer to device
-    call upload_cosine(ctx, test, f_device)
-
-    ! Store reference copy (in DIR_X layout) for div-grad check later
-    call ctx%backend%reorder(f_reference, f_device, RDR_C2X)
-
-    ! ---- Solve Poisson equation ----
-    temp => ctx%backend%allocator%get_block(DIR_C)
-    call ctx%backend%poisson_fft%solve_poisson(f_device, temp)
-    call ctx%backend%allocator%release_block(temp)
-
-    ! ---- Check 1: Poisson solution vs analytical ----
     host_field => ctx%host_allocator%get_block(DIR_C)
     call ctx%backend%get_field_data(host_field%data, f_device)
 
@@ -526,10 +503,48 @@ contains
       host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) &
       - host_analytical%data(1:dims(1), 1:dims(2), 1:dims(3))
 
-    poisson_error_norm = compute_error_norm(ctx%mesh, host_field)
+    err = compute_error_norm(ctx%mesh, host_field)
 
     call ctx%host_allocator%release_block(host_analytical)
     call ctx%host_allocator%release_block(host_field)
+  end function solution_error
+
+  ! ================================================================
+  ! Run a single Poisson test (2 checks)
+  ! ================================================================
+  function run_single_test(ctx, test) result(res)
+    type(poisson_ctx_t), target, intent(in) :: ctx
+    type(cosine_test_t), intent(in) :: test
+    type(test_result_t) :: res
+
+    class(field_t), pointer :: f_device, f_reference, f_result
+    class(field_t), pointer :: host_field, temp
+    class(field_t), pointer :: dpdx, dpdy, dpdz, gradient_input
+    real(dp) :: poisson_error_norm, div_grad_error_norm
+    logical :: poisson_passed, div_grad_passed
+
+    if (ctx%mesh%par%is_root()) then
+      write (stderr, '(4X,A,A,A,I1)') &
+        'Running: ', trim(test%name), '  n = ', test%n
+    end if
+
+    ! Allocate fields
+    f_device => ctx%backend%allocator%get_block(DIR_C, CELL)
+    f_reference => ctx%backend%allocator%get_block(DIR_X)
+
+    ! Create test function on host and transfer to device
+    call upload_cosine(ctx, test, f_device)
+
+    ! Store reference copy (in DIR_X layout) for div-grad check later
+    call ctx%backend%reorder(f_reference, f_device, RDR_C2X)
+
+    ! ---- Solve Poisson equation ----
+    temp => ctx%backend%allocator%get_block(DIR_C)
+    call ctx%backend%poisson_fft%solve_poisson(f_device, temp)
+    call ctx%backend%allocator%release_block(temp)
+
+    ! ---- Check 1: Poisson solution vs analytical ----
+    poisson_error_norm = solution_error(ctx, test, f_device)
 
     poisson_passed = (poisson_error_norm <= ERROR_TOLERANCE)
 
