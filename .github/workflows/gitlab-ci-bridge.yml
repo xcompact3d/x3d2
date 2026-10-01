@@ -38,6 +38,7 @@ permissions:
   contents: read
   # Read the conclusion of build_and_test.yml for this pull request head.
   actions: read
+  checks: read
 
 env:
   GITLAB_HOST: ${{ vars.GITLAB_HOST }}
@@ -75,6 +76,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           WORKFLOW_FILE: build_and_test.yml
+          # Only used for the sanity check below, never for gating: the gate
+          # itself reads the run conclusion, which covers every job.
+          SENTINEL_JOB: unit-tests
           # build_and_test.yml carries a `paths:` filter, so for a pull
           # request that touches none of those paths no run is ever created.
           # That is indistinguishable from "has not been queued yet", so give
@@ -101,6 +105,23 @@ jobs:
               none:*)
                 # No run at all yet.
                 if [ "$(date +%s)" -ge "$appear_deadline" ]; then
+                  # Before concluding "paths filtered it out", sanity-check
+                  # against a check run we know build_and_test.yml produces.
+                  # If that check run exists on this SHA but the query above
+                  # found no run, then the query is wrong (the API is not
+                  # keying runs off the pull request head SHA as assumed) and
+                  # proceeding would silently defeat the whole gate. Fail
+                  # closed instead of starting a GPU pipeline unguarded.
+                  n=$(gh api \
+                    "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?check_name=${SENTINEL_JOB}" \
+                    --jq '.total_count')
+                  if [ "${n:-0}" -gt 0 ]; then
+                    echo "::error::Found ${n} '${SENTINEL_JOB}' check run(s)" \
+                         "on ${HEAD_SHA} but no ${WORKFLOW_FILE} run matched" \
+                         "the head_sha query; refusing to start the pipeline"
+                    echo "proceed=false" >> "$GITHUB_OUTPUT"
+                    exit 0
+                  fi
                   echo "::notice::No ${WORKFLOW_FILE} run for ${HEAD_SHA};" \
                        "assuming it was filtered out by paths"
                   echo "proceed=true" >> "$GITHUB_OUTPUT"
