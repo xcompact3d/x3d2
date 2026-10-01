@@ -300,6 +300,17 @@ if(WITH_2DECOMPFFT)
   define_verification_test(verification/test_fft.f90 4 omp)
   define_verification_test(verification/test_poisson_bc.f90 1 omp --config 110)
   define_verification_test(verification/test_poisson_bc.f90 2 omp --config 110)
+  # second config of the same executable; define_test would re-create the target
+  if(NOT WITH_MPI)
+    add_test(NAME test_poisson_bc_omp_1_010
+      COMMAND sh -c "bin/test_poisson_bc_omp_1 --config 010")
+  elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "Cray")
+    add_test(NAME test_poisson_bc_omp_1_010
+      COMMAND sh -c "srun -n 1 bin/test_poisson_bc_omp_1 --config 010")
+  else()
+    add_test(NAME test_poisson_bc_omp_1_010
+      COMMAND sh -c "mpirun --oversubscribe -np 1 bin/test_poisson_bc_omp_1 --config 010")
+  endif()
 endif()
 
 # Regression smoke test: fast full-solver TGV vs golden monitoring.csv.
