@@ -473,6 +473,16 @@ contains
     end if
   end function classify
 
+  pure function to_gib(n_bytes) result(gib)
+    !! Bytes to GiB, the one conversion every figure this tool prints goes
+    !! through, so the expression (and so the printed digits) cannot drift
+    !! between call sites.
+    integer(i8), intent(in) :: n_bytes
+    real(dp) :: gib
+
+    gib = real(n_bytes, dp)/1024._dp**3
+  end function to_gib
+
   function ng_unsupported_reason(ng) result(reason)
     !! Whether GPU count ng is a decomposition this tool/solver actually
     !! supports - blank when it is. Shared by report()'s per-ng table,
