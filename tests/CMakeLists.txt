@@ -311,6 +311,7 @@ if(WITH_2DECOMPFFT)
     add_test(NAME test_poisson_bc_omp_1_010
       COMMAND sh -c "mpirun --oversubscribe -np 1 bin/test_poisson_bc_omp_1 --config 010")
   endif()
+  set_tests_properties(test_poisson_bc_omp_1_010 PROPERTIES LABELS "verification;omp")
 endif()
 
 # Regression smoke test: fast full-solver TGV vs golden monitoring.csv.
