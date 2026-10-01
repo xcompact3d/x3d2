@@ -757,7 +757,7 @@ contains
     snapshot_active = checkpoint_cfg%snapshot_freq > 0 .and. unit_stride
     checkpoint_active = checkpoint_cfg%checkpoint_freq > 0
     if (io_ng1_bytes > 0_i8) then
-      mib = real(io_ng1_bytes, dp)/1048576._dp
+      mib = to_gib(io_ng1_bytes)*1024._dp
       if (snapshot_active .and. checkpoint_active) then
         what = 'snapshot at unit stride + checkpoint'
       else if (checkpoint_active) then
