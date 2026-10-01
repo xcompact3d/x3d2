@@ -19,12 +19,16 @@ name: GitLab CI
 # GitLab runners, so pull requests from forks are gated behind the `ci:gpu`
 # label, which a maintainer applies after reading the diff.
 #
-# The GPU pipeline is also gated behind the CPU unit tests: the `unit-tests`
-# job below waits for the `unit-tests` check run on the pull request head and
-# only then starts the GitLab pipeline. Chaining the two workflows with
-# `workflow_run` instead is deliberately avoided: a `workflow_run` job does
-# not appear in the pull request's check list, and it would never fire for
-# the `labeled` and `closed` actions this workflow also handles.
+# The GPU pipeline is also gated behind the CPU build: the `build-and-test`
+# job below waits for build_and_test.yml to finish on the pull request head
+# and starts the GitLab pipeline only if it succeeded. It reads the *run*
+# conclusion rather than any individual job, so the gate holds if any job in
+# that workflow fails, including jobs added to it later.
+#
+# Chaining the two workflows with `workflow_run` instead is deliberately
+# avoided: a `workflow_run` job does not appear in the pull request's check
+# list, and it would never fire for the `labeled` and `closed` actions this
+# workflow also handles.
 
 on:
   pull_request_target:
@@ -32,8 +36,8 @@ on:
 
 permissions:
   contents: read
-  # Read the conclusion of the CPU unit tests for this pull request head.
-  checks: read
+  # Read the conclusion of build_and_test.yml for this pull request head.
+  actions: read
 
 env:
   GITLAB_HOST: ${{ vars.GITLAB_HOST }}
@@ -41,12 +45,11 @@ env:
   GITLAB_BRANCH: github-pr-${{ github.event.pull_request.number }}
 
 jobs:
-  # Wait for the CPU unit tests before spending time on a GPU runner. The
-  # whole event-level gating lives on this job: `pipeline` needs it, and a
-  # skipped dependency skips the dependent job, so the condition is not
-  # repeated below.
-  unit-tests:
-    name: wait for unit tests
+  # Wait for the CPU build before spending time on a GPU runner. The whole
+  # event-level gating lives on this job: `pipeline` needs it, and a skipped
+  # dependency skips the dependent job, so the condition is not repeated below.
+  build-and-test:
+    name: wait for build_and_test
     if: >-
       github.event.action != 'closed'
       && github.event.pull_request.draft == false
@@ -66,37 +69,40 @@ jobs:
     outputs:
       proceed: ${{ steps.wait.outputs.proceed }}
     steps:
-      - name: Wait for the unit-tests check run
+      - name: Wait for build_and_test.yml on the pull request head
         id: wait
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          # The name of the check run produced by build_and_test.yml, which
-          # pins it with an explicit `name:` on its job.
-          CHECK_NAME: unit-tests
+          WORKFLOW_FILE: build_and_test.yml
           # build_and_test.yml carries a `paths:` filter, so for a pull
-          # request that touches none of those paths the check run never
-          # appears at all. That is indistinguishable from "has not been
-          # queued yet", so give it a grace period and then proceed.
+          # request that touches none of those paths no run is ever created.
+          # That is indistinguishable from "has not been queued yet", so give
+          # it a grace period and then proceed.
           APPEAR_GRACE_SECONDS: 300
         run: |
           set -euo pipefail
-          api="repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?check_name=${CHECK_NAME}"
+          api="repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs"
+          api="${api}?event=pull_request&head_sha=${HEAD_SHA}"
           appear_deadline=$(( $(date +%s) + APPEAR_GRACE_SECONDS ))
           previous=""
           while true; do
+            # The run conclusion aggregates every job in the workflow: it is
+            # `failure` if any one of them failed, so this needs no list of
+            # job names to keep in step with build_and_test.yml.
             state=$(gh api "$api" --jq \
-              '.check_runs | sort_by(.started_at) | last // {}
+              '.workflow_runs | sort_by(.created_at) | last // {}
                | "\(.status // "none"):\(.conclusion // "none")"')
             if [ "$state" != "$previous" ]; then
-              echo "${CHECK_NAME} on ${HEAD_SHA}: ${state}"
+              echo "${WORKFLOW_FILE} on ${HEAD_SHA}: ${state}"
               previous="$state"
             fi
             case "$state" in
               none:*)
+                # No run at all yet.
                 if [ "$(date +%s)" -ge "$appear_deadline" ]; then
-                  echo "::notice::No ${CHECK_NAME} check run on ${HEAD_SHA};" \
-                       "assuming build_and_test.yml was filtered out by paths"
+                  echo "::notice::No ${WORKFLOW_FILE} run for ${HEAD_SHA};" \
+                       "assuming it was filtered out by paths"
                   echo "proceed=true" >> "$GITHUB_OUTPUT"
                   exit 0
                 fi
@@ -105,19 +111,23 @@ jobs:
                 echo "proceed=true" >> "$GITHUB_OUTPUT"
                 exit 0 ;;
               completed:*)
-                conclusion="${state#completed:}"
-                echo "::warning::Unit tests ${conclusion}; not starting the" \
-                     "GitLab pipeline for ${HEAD_SHA}"
+                # failure, cancelled, timed_out, action_required, stale,
+                # startup_failure -- none of them is a green CPU build.
+                echo "::warning::${WORKFLOW_FILE} ${state#completed:}; not" \
+                     "starting the GitLab pipeline for ${HEAD_SHA}"
                 echo "proceed=false" >> "$GITHUB_OUTPUT"
                 exit 0 ;;
+              *)
+                # queued, requested, waiting, pending, in_progress.
+                ;;
             esac
             sleep 20
           done
 
   pipeline:
     name: pipeline
-    needs: unit-tests
-    if: needs.unit-tests.outputs.proceed == 'true'
+    needs: build-and-test
+    if: needs.build-and-test.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     concurrency:
