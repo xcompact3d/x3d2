@@ -449,6 +449,23 @@ contains
   end function compute_error_norm
 
   ! ================================================================
+  ! Create the cosine test function on host and transfer it to a device field
+  ! ================================================================
+  subroutine upload_cosine(ctx, test, f)
+    type(poisson_ctx_t), target, intent(in) :: ctx
+    type(cosine_test_t), intent(in) :: test
+    class(field_t), intent(inout) :: f
+
+    class(field_t), pointer :: host_field
+
+    host_field => ctx%host_allocator%get_block(DIR_C)
+    call fill_cosine_field(ctx%mesh, host_field, test, 1.0_dp)
+    call ctx%backend%set_field_data(f, host_field%data, DIR_C)
+    call f%set_data_loc(CELL)
+    call ctx%host_allocator%release_block(host_field)
+  end subroutine upload_cosine
+
+  ! ================================================================
   ! Run a single Poisson test (2 checks)
   ! ================================================================
   function run_single_test(ctx, test) result(res)
@@ -474,13 +491,9 @@ contains
     ! Allocate fields
     f_device => ctx%backend%allocator%get_block(DIR_C, CELL)
     f_reference => ctx%backend%allocator%get_block(DIR_X)
-    host_field => ctx%host_allocator%get_block(DIR_C)
 
     ! Create test function on host and transfer to device
-    call fill_cosine_field(ctx%mesh, host_field, test, 1.0_dp)
-    call ctx%backend%set_field_data(f_device, host_field%data, DIR_C)
-    call f_device%set_data_loc(CELL)
-    call ctx%host_allocator%release_block(host_field)
+    call upload_cosine(ctx, test, f_device)
 
     ! Store reference copy (in DIR_X layout) for div-grad check later
     call ctx%backend%reorder(f_reference, f_device, RDR_C2X)
