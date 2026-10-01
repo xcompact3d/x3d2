@@ -1096,7 +1096,7 @@ contains
                                              padded_dim(gdims(2), SZ), &
                                              gdims(3)], SZ, n_halo))
     if (ws_guess >= BUILD_FRACTION*card_free_gib) then
-      print '(a)', '------------------------------------------------------------'
+      call print_rule('-')
       print '(a,f0.2,a,f0.1,a,f0.2,a)', 'Real build skipped: fields only &
         &workspace ', ws_guess, ' GiB exceeds ', 100._dp*BUILD_FRACTION, &
         '% of the FREE card memory (', card_free_gib, ' GiB free); the &
@@ -1105,7 +1105,7 @@ contains
     end if
 
     if (ng1_query_ran) then
-      print '(a)', '------------------------------------------------------------'
+      call print_rule('-')
       print '(a,f0.2,a)', 'Residual after plan query: ', &
         ng1_query_residual_gib, ' GiB (should be ~0 if cufftDestroy &
         &released it; if not, the real build below may double-reserve the &
@@ -1119,7 +1119,7 @@ contains
                            ibm_missing)
     call leave_build_scratch()
     if (ibm_missing) then
-      print '(a)', '------------------------------------------------------------'
+      call print_rule('-')
       print '(a)', 'Real build skipped: ibm_on=T but the matching &
         &ibm_<BC-suffix>.bp mask file was not found in the working &
         &directory; the estimate above stands.'
@@ -1234,7 +1234,7 @@ contains
       multi_gpu_supported_measured = .false.
     end if
 
-    print '(a)', '------------------------------------------------------------'
+    call print_rule('-')
     print '(a,i0,a,i0,a,f0.2,a,f0.2,a)', 'Real build (1 GPU, ', &
       measured_n_substeps, ' substep(s)): peak_fields measured ', &
       measured_peak_fields, ', workspace ', workspace_gib_measured, &
@@ -1290,7 +1290,7 @@ contains
                            card_gib, verdict)
       if (ng == requested_ng) requested_verdict = verdict
     end do
-    print '(a)', '------------------------------------------------------------'
+    call print_rule('-')
   end subroutine report_measured_table
 
   subroutine build_and_measure(dims_in, npeak, dev_used, ibm_missing)
