@@ -510,45 +510,17 @@ contains
   end function solution_error
 
   ! ================================================================
-  ! Run a single Poisson test (2 checks)
+  ! Recover the RHS from div(grad(p)) and return its L2 error. Releases both
+  ! fields it is given
   ! ================================================================
-  function run_single_test(ctx, test) result(res)
+  function divgrad_error(ctx, f_device, f_reference) result(err)
     type(poisson_ctx_t), target, intent(in) :: ctx
-    type(cosine_test_t), intent(in) :: test
-    type(test_result_t) :: res
+    class(field_t), pointer :: f_device, f_reference
+    real(dp) :: err
 
-    class(field_t), pointer :: f_device, f_reference, f_result
-    class(field_t), pointer :: host_field, temp
+    class(field_t), pointer :: f_result, host_field
     class(field_t), pointer :: dpdx, dpdy, dpdz, gradient_input
-    real(dp) :: poisson_error_norm, div_grad_error_norm
-    logical :: poisson_passed, div_grad_passed
 
-    if (ctx%mesh%par%is_root()) then
-      write (stderr, '(4X,A,A,A,I1)') &
-        'Running: ', trim(test%name), '  n = ', test%n
-    end if
-
-    ! Allocate fields
-    f_device => ctx%backend%allocator%get_block(DIR_C, CELL)
-    f_reference => ctx%backend%allocator%get_block(DIR_X)
-
-    ! Create test function on host and transfer to device
-    call upload_cosine(ctx, test, f_device)
-
-    ! Store reference copy (in DIR_X layout) for div-grad check later
-    call ctx%backend%reorder(f_reference, f_device, RDR_C2X)
-
-    ! ---- Solve Poisson equation ----
-    temp => ctx%backend%allocator%get_block(DIR_C)
-    call ctx%backend%poisson_fft%solve_poisson(f_device, temp)
-    call ctx%backend%allocator%release_block(temp)
-
-    ! ---- Check 1: Poisson solution vs analytical ----
-    poisson_error_norm = solution_error(ctx, test, f_device)
-
-    poisson_passed = (poisson_error_norm <= ERROR_TOLERANCE)
-
-    ! ---- Check 2: div(grad(p)) vs original RHS ----
     gradient_input => ctx%backend%allocator%get_block(DIR_Z)
     call ctx%backend%reorder(gradient_input, f_device, RDR_C2Z)
     call ctx%backend%allocator%release_block(f_device)
@@ -589,12 +561,54 @@ contains
 
     host_field => ctx%host_allocator%get_block(DIR_C)
     call ctx%backend%get_field_data(host_field%data, f_device)
-    div_grad_error_norm = compute_error_norm(ctx%mesh, host_field)
+    err = compute_error_norm(ctx%mesh, host_field)
 
     ! Cleanup
     call ctx%backend%allocator%release_block(f_device)
     call ctx%backend%allocator%release_block(f_reference)
     call ctx%host_allocator%release_block(host_field)
+  end function divgrad_error
+
+  ! ================================================================
+  ! Run a single Poisson test (2 checks)
+  ! ================================================================
+  function run_single_test(ctx, test) result(res)
+    type(poisson_ctx_t), target, intent(in) :: ctx
+    type(cosine_test_t), intent(in) :: test
+    type(test_result_t) :: res
+
+    class(field_t), pointer :: f_device, f_reference
+    class(field_t), pointer :: temp
+    real(dp) :: poisson_error_norm, div_grad_error_norm
+    logical :: poisson_passed, div_grad_passed
+
+    if (ctx%mesh%par%is_root()) then
+      write (stderr, '(4X,A,A,A,I1)') &
+        'Running: ', trim(test%name), '  n = ', test%n
+    end if
+
+    ! Allocate fields
+    f_device => ctx%backend%allocator%get_block(DIR_C, CELL)
+    f_reference => ctx%backend%allocator%get_block(DIR_X)
+
+    ! Create test function on host and transfer to device
+    call upload_cosine(ctx, test, f_device)
+
+    ! Store reference copy (in DIR_X layout) for div-grad check later
+    call ctx%backend%reorder(f_reference, f_device, RDR_C2X)
+
+    ! ---- Solve Poisson equation ----
+    temp => ctx%backend%allocator%get_block(DIR_C)
+    call ctx%backend%poisson_fft%solve_poisson(f_device, temp)
+    call ctx%backend%allocator%release_block(temp)
+
+    ! ---- Check 1: Poisson solution vs analytical ----
+    poisson_error_norm = solution_error(ctx, test, f_device)
+
+    poisson_passed = (poisson_error_norm <= ERROR_TOLERANCE)
+
+    ! ---- Check 2: div(grad(p)) vs original RHS ----
+    div_grad_error_norm = divgrad_error(ctx, f_device, f_reference)
 
     div_grad_passed = (div_grad_error_norm <= DIVGRAD_TOLERANCE)
 
