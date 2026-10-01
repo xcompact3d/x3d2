@@ -745,7 +745,7 @@ contains
     character(len=96) :: reason
     integer(i8) :: io_ng1_bytes
 
-    print '(a)', '============================================================'
+    call print_rule('=')
     print '(a,i0,a,i0,a,i0,a)', 'Input grid: ', gdims(1), 'x', gdims(2), &
       'x', gdims(3)
     print '(a,f0.2,a,f0.2,a)', 'Card memory: ', card_gib, ' GiB (', &
@@ -800,7 +800,7 @@ contains
     case default
       print '(a)', 'Mode: default (Tier 1 + Tier 2 FFT plan query)'
     end select
-    print '(a)', '============================================================'
+    call print_rule('=')
 
     requested_ng = domain_cfg%nproc_dir(3)
     reason = ng_unsupported_reason(requested_ng)
@@ -827,7 +827,7 @@ contains
       end if
     end if
 
-    print '(a)', '------------------------------------------------------------'
+    call print_rule('-')
     call print_table_header()
     smallest_fits = 0
     do k = 1, size(n_gpu_list)
@@ -848,7 +848,7 @@ contains
       end if
       if (smallest_fits == 0 .and. trim(verdict) == 'FITS') smallest_fits = ng
     end do
-    print '(a)', '------------------------------------------------------------'
+    call print_rule('-')
     print '(a)', 'Notes: workspace + overhead = per-GPU. % is per-GPU &
       &against this card''s total memory.'
 
