@@ -268,7 +268,6 @@ contains
     logical :: use_2decomp
 
     integer :: idx
-    logical :: passed
     logical :: periodic(3)
 
     dims_global = cfg%dims
@@ -326,14 +325,10 @@ contains
 
     ! Run all 8 cosine tests
     do idx = 1, size(tests)
-      results(idx, config_id)%xfail = is_expected_fail(tests(idx), periodic)
-
       call run_single_test(backend, host_allocator, mesh, &
                            xdirps, ydirps, zdirps, vector_calculus, &
-                           tests(idx), passed, &
-                           results(idx, config_id)%poisson_err, &
-                           results(idx, config_id)%divgrad_err)
-      results(idx, config_id)%passed = passed
+                           tests(idx), results(idx, config_id))
+      results(idx, config_id)%xfail = is_expected_fail(tests(idx), periodic)
     end do
 
   end subroutine run_config
@@ -441,16 +436,14 @@ contains
   ! ================================================================
   subroutine run_single_test(backend, host_allocator, mesh, &
                              xdirps, ydirps, zdirps, vector_calculus, &
-                             test, test_passed, &
-                             poisson_err_out, divgrad_err_out)
+                             test, res)
     class(base_backend_t), pointer, intent(in) :: backend
     type(allocator_t), pointer, intent(in) :: host_allocator
     type(mesh_t), intent(in) :: mesh
     type(dirps_t), pointer, intent(in) :: xdirps, ydirps, zdirps
     type(vector_calculus_t), intent(in) :: vector_calculus
     type(cosine_test_t), intent(in) :: test
-    logical, intent(out) :: test_passed
-    real(dp), intent(out) :: poisson_err_out, divgrad_err_out
+    type(test_result_t), intent(out) :: res
 
     class(field_t), pointer :: f_device, f_reference, f_result
     class(field_t), pointer :: host_field, host_analytical, temp
@@ -576,9 +569,9 @@ contains
         merge('PASS', 'FAIL', div_grad_passed)
     end if
 
-    test_passed = poisson_passed .and. div_grad_passed
-    poisson_err_out = poisson_error_norm
-    divgrad_err_out = div_grad_error_norm
+    res%passed = poisson_passed .and. div_grad_passed
+    res%poisson_err = poisson_error_norm
+    res%divgrad_err = div_grad_error_norm
 
   end subroutine run_single_test
 
