@@ -334,10 +334,7 @@ contains
 
     ! Run all 8 cosine tests
     do idx = 1, size(tests)
-      call run_single_test(ctx%backend, ctx%host_allocator, ctx%mesh, &
-                           ctx%xdirps, ctx%ydirps, ctx%zdirps, &
-                           ctx%vector_calculus, tests(idx), &
-                           results(idx, config_id))
+      call run_single_test(ctx, tests(idx), results(idx, config_id))
       results(idx, config_id)%xfail = &
         is_expected_fail(tests(idx), ctx%periodic)
     end do
@@ -445,14 +442,8 @@ contains
   ! ================================================================
   ! Run a single Poisson test (2 checks)
   ! ================================================================
-  subroutine run_single_test(backend, host_allocator, mesh, &
-                             xdirps, ydirps, zdirps, vector_calculus, &
-                             test, res)
-    class(base_backend_t), pointer, intent(in) :: backend
-    type(allocator_t), pointer, intent(in) :: host_allocator
-    type(mesh_t), intent(in) :: mesh
-    type(dirps_t), pointer, intent(in) :: xdirps, ydirps, zdirps
-    type(vector_calculus_t), intent(in) :: vector_calculus
+  subroutine run_single_test(ctx, test, res)
+    type(poisson_ctx_t), target, intent(in) :: ctx
     type(cosine_test_t), intent(in) :: test
     type(test_result_t), intent(out) :: res
 
@@ -463,44 +454,44 @@ contains
     real(dp) :: poisson_error_norm, div_grad_error_norm, n_pi_sq
     logical :: poisson_passed, div_grad_passed
 
-    dims = mesh%get_dims(CELL)
+    dims = ctx%mesh%get_dims(CELL)
     n_pi_sq = (real(test%n, dp)*pi)**2
 
-    if (mesh%par%is_root()) then
+    if (ctx%mesh%par%is_root()) then
       write (stderr, '(4X,A,A,A,I1)') &
         'Running: ', trim(test%name), '  n = ', test%n
     end if
 
     ! Allocate fields
-    f_device => backend%allocator%get_block(DIR_C, CELL)
-    f_reference => backend%allocator%get_block(DIR_X)
-    host_field => host_allocator%get_block(DIR_C)
+    f_device => ctx%backend%allocator%get_block(DIR_C, CELL)
+    f_reference => ctx%backend%allocator%get_block(DIR_X)
+    host_field => ctx%host_allocator%get_block(DIR_C)
 
     ! Create test function on host and transfer to device
-    call fill_cosine_field(mesh, host_field, test, 1.0_dp)
-    call backend%set_field_data(f_device, host_field%data, DIR_C)
+    call fill_cosine_field(ctx%mesh, host_field, test, 1.0_dp)
+    call ctx%backend%set_field_data(f_device, host_field%data, DIR_C)
     call f_device%set_data_loc(CELL)
-    call host_allocator%release_block(host_field)
+    call ctx%host_allocator%release_block(host_field)
 
     ! Store reference copy (in DIR_X layout) for div-grad check later
-    call backend%reorder(f_reference, f_device, RDR_C2X)
+    call ctx%backend%reorder(f_reference, f_device, RDR_C2X)
 
     ! ---- Solve Poisson equation ----
-    temp => backend%allocator%get_block(DIR_C)
-    call backend%poisson_fft%solve_poisson(f_device, temp)
-    call backend%allocator%release_block(temp)
+    temp => ctx%backend%allocator%get_block(DIR_C)
+    call ctx%backend%poisson_fft%solve_poisson(f_device, temp)
+    call ctx%backend%allocator%release_block(temp)
 
     ! ---- Check 1: Poisson solution vs analytical ----
-    host_field => host_allocator%get_block(DIR_C)
-    call backend%get_field_data(host_field%data, f_device)
+    host_field => ctx%host_allocator%get_block(DIR_C)
+    call ctx%backend%get_field_data(host_field%data, f_device)
 
     ! Remove arbitrary constant (Poisson solution unique up to a constant)
     host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) = &
       host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) &
       - host_field%data(1, 1, 1)
 
-    host_analytical => host_allocator%get_block(DIR_C)
-    call fill_cosine_field(mesh, host_analytical, test, &
+    host_analytical => ctx%host_allocator%get_block(DIR_C)
+    call fill_cosine_field(ctx%mesh, host_analytical, test, &
                            -(real(count(test%uses), dp)*n_pi_sq))
 
     ! Remove same constant from analytical
@@ -513,65 +504,65 @@ contains
       host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) &
       - host_analytical%data(1:dims(1), 1:dims(2), 1:dims(3))
 
-    poisson_error_norm = compute_error_norm(mesh, host_field)
+    poisson_error_norm = compute_error_norm(ctx%mesh, host_field)
 
-    call host_allocator%release_block(host_analytical)
-    call host_allocator%release_block(host_field)
+    call ctx%host_allocator%release_block(host_analytical)
+    call ctx%host_allocator%release_block(host_field)
 
     poisson_passed = (poisson_error_norm <= ERROR_TOLERANCE)
 
     ! ---- Check 2: div(grad(p)) vs original RHS ----
-    gradient_input => backend%allocator%get_block(DIR_Z)
-    call backend%reorder(gradient_input, f_device, RDR_C2Z)
-    call backend%allocator%release_block(f_device)
+    gradient_input => ctx%backend%allocator%get_block(DIR_Z)
+    call ctx%backend%reorder(gradient_input, f_device, RDR_C2Z)
+    call ctx%backend%allocator%release_block(f_device)
 
-    dpdx => backend%allocator%get_block(DIR_X)
-    dpdy => backend%allocator%get_block(DIR_X)
-    dpdz => backend%allocator%get_block(DIR_X)
+    dpdx => ctx%backend%allocator%get_block(DIR_X)
+    dpdy => ctx%backend%allocator%get_block(DIR_X)
+    dpdz => ctx%backend%allocator%get_block(DIR_X)
 
     ! gradient_p2v: pressure (cell) -> velocity (vert) gradient
-    call vector_calculus%gradient_c2v( &
+    call ctx%vector_calculus%gradient_c2v( &
       dpdx, dpdy, dpdz, gradient_input, &
-      xdirps%stagder_p2v, xdirps%interpl_p2v, &
-      ydirps%stagder_p2v, ydirps%interpl_p2v, &
-      zdirps%stagder_p2v, zdirps%interpl_p2v &
+      ctx%xdirps%stagder_p2v, ctx%xdirps%interpl_p2v, &
+      ctx%ydirps%stagder_p2v, ctx%ydirps%interpl_p2v, &
+      ctx%zdirps%stagder_p2v, ctx%zdirps%interpl_p2v &
       )
-    call backend%allocator%release_block(gradient_input)
+    call ctx%backend%allocator%release_block(gradient_input)
 
-    f_result => backend%allocator%get_block(DIR_Z)
+    f_result => ctx%backend%allocator%get_block(DIR_Z)
 
     ! divergence_v2p: velocity (vert) -> cell divergence
-    call vector_calculus%divergence_v2c( &
+    call ctx%vector_calculus%divergence_v2c( &
       f_result, dpdx, dpdy, dpdz, &
-      xdirps%stagder_v2p, xdirps%interpl_v2p, &
-      ydirps%stagder_v2p, ydirps%interpl_v2p, &
-      zdirps%stagder_v2p, zdirps%interpl_v2p &
+      ctx%xdirps%stagder_v2p, ctx%xdirps%interpl_v2p, &
+      ctx%ydirps%stagder_v2p, ctx%ydirps%interpl_v2p, &
+      ctx%zdirps%stagder_v2p, ctx%zdirps%interpl_v2p &
       )
 
-    call backend%allocator%release_block(dpdx)
-    call backend%allocator%release_block(dpdy)
-    call backend%allocator%release_block(dpdz)
+    call ctx%backend%allocator%release_block(dpdx)
+    call ctx%backend%allocator%release_block(dpdy)
+    call ctx%backend%allocator%release_block(dpdz)
 
-    f_device => backend%allocator%get_block(DIR_X)
-    call backend%reorder(f_device, f_result, RDR_Z2X)
-    call backend%allocator%release_block(f_result)
+    f_device => ctx%backend%allocator%get_block(DIR_X)
+    call ctx%backend%reorder(f_device, f_result, RDR_Z2X)
+    call ctx%backend%allocator%release_block(f_result)
 
     ! Compute error: div(grad(p)) - f_original
-    call backend%vecadd(-1.0_dp, f_reference, 1.0_dp, f_device)
+    call ctx%backend%vecadd(-1.0_dp, f_reference, 1.0_dp, f_device)
 
-    host_field => host_allocator%get_block(DIR_C)
-    call backend%get_field_data(host_field%data, f_device)
-    div_grad_error_norm = compute_error_norm(mesh, host_field)
+    host_field => ctx%host_allocator%get_block(DIR_C)
+    call ctx%backend%get_field_data(host_field%data, f_device)
+    div_grad_error_norm = compute_error_norm(ctx%mesh, host_field)
 
     ! Cleanup
-    call backend%allocator%release_block(f_device)
-    call backend%allocator%release_block(f_reference)
-    call host_allocator%release_block(host_field)
+    call ctx%backend%allocator%release_block(f_device)
+    call ctx%backend%allocator%release_block(f_reference)
+    call ctx%host_allocator%release_block(host_field)
 
     div_grad_passed = (div_grad_error_norm <= DIVGRAD_TOLERANCE)
 
     ! Report per-test result
-    if (mesh%par%is_root()) then
+    if (ctx%mesh%par%is_root()) then
       write (stderr, '(6X,A,ES12.4,A,A)') &
         'Poisson L2: ', poisson_error_norm, '  ', &
         merge('PASS', 'FAIL', poisson_passed)
