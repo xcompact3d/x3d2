@@ -101,7 +101,8 @@ function(define_test testfile np backend)
   string(REPLACE ";" " " extra_args_str "${extra_args}")
 
   get_filename_component(test_name ${testfile} NAME_WE)
-  string(CONCAT test_name ${test_name} _ ${backend} _ ${np})
+  string(CONCAT test_name ${test_name} _ ${backend} _ ${np}
+    "${X3D2_TEST_NAME_SUFFIX}")
 
   define_test_backend_runtime(${backend})
   add_executable(${test_name} ${testfile})
@@ -194,7 +195,8 @@ function(define_verification_test testfile np backend)
 
   define_test(${testfile} ${np} ${backend} ${ARGN})
   get_filename_component(test_name ${testfile} NAME_WE)
-  string(CONCAT test_name ${test_name} _ ${backend} _ ${np})
+  string(CONCAT test_name ${test_name} _ ${backend} _ ${np}
+    "${X3D2_TEST_NAME_SUFFIX}")
   set_tests_properties(${test_name} PROPERTIES LABELS "verification;${backend}")
 endfunction()
 
@@ -299,8 +301,12 @@ define_verification_test(verification/test_les_field.f90 1 omp)
 if(WITH_2DECOMPFFT)
   define_verification_test(verification/test_fft.f90 4 omp)
   define_verification_test(verification/test_poisson_bc.f90 1 omp --bc ddp)
+  # Two 2 rank runs of the same test: the suffix keeps their names apart
+  set(X3D2_TEST_NAME_SUFFIX _ddp)
   define_verification_test(verification/test_poisson_bc.f90 2 omp --bc ddp)
+  set(X3D2_TEST_NAME_SUFFIX _dpp)
   define_verification_test(verification/test_poisson_bc.f90 2 omp --bc dpp --nproc_dir 1,2,1)
+  unset(X3D2_TEST_NAME_SUFFIX)
 endif()
 
 # Regression smoke test: fast full-solver TGV vs golden monitoring.csv.
