@@ -277,9 +277,7 @@ contains
 
     ! Run all 8 cosine tests
     do idx = 1, size(tests)
-      call run_single_test(ctx, tests(idx), results(idx, config_id))
-      results(idx, config_id)%xfail = &
-        is_expected_fail(tests(idx), ctx%periodic)
+      results(idx, config_id) = run_single_test(ctx, tests(idx))
     end do
 
   end subroutine run_config
@@ -453,10 +451,10 @@ contains
   ! ================================================================
   ! Run a single Poisson test (2 checks)
   ! ================================================================
-  subroutine run_single_test(ctx, test, res)
+  function run_single_test(ctx, test) result(res)
     type(poisson_ctx_t), target, intent(in) :: ctx
     type(cosine_test_t), intent(in) :: test
-    type(test_result_t), intent(out) :: res
+    type(test_result_t) :: res
 
     class(field_t), pointer :: f_device, f_reference, f_result
     class(field_t), pointer :: host_field, host_analytical, temp
@@ -585,7 +583,8 @@ contains
     res%passed = poisson_passed .and. div_grad_passed
     res%poisson_err = poisson_error_norm
     res%divgrad_err = div_grad_error_norm
+    res%xfail = is_expected_fail(test, ctx%periodic)
 
-  end subroutine run_single_test
+  end function run_single_test
 
 end program test_poisson
