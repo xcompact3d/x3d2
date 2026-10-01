@@ -107,6 +107,20 @@ program test_poisson
     real(dp) :: poisson_err = 0.0_dp, divgrad_err = 0.0_dp
   end type test_result_t
 
+  ! What one BC case sets up once and every test of that case reuses. The
+  ! runtime holds pointers to its own members and the backend points at the
+  ! mesh, so a context is declared target and is never copied
+  type :: poisson_ctx_t
+    type(backend_runtime_t) :: runtime
+    class(base_backend_t), pointer :: backend => null()
+    type(allocator_t), pointer :: host_allocator => null()
+    type(mesh_t) :: mesh
+    type(dirps_t), pointer :: xdirps => null(), ydirps => null(), &
+                              zdirps => null()
+    type(vector_calculus_t) :: vector_calculus
+    logical :: periodic(3)
+  end type poisson_ctx_t
+
   ! The single precision tolerance must sit between the roundoff floor of
   ! the passing cases (~3e-7 in this normalised norm, norm2/N) and the
   ! n=3 periodic aliasing error (~2.4e-6) that the XFAIL logic relies on
@@ -255,12 +269,7 @@ contains
     type(bc_case_t), intent(in) :: cfg
     integer, intent(in) :: nproc_dir(3)
 
-    type(backend_runtime_t), target :: runtime
-    class(base_backend_t), pointer :: backend
-    type(allocator_t), pointer :: host_allocator
-    type(mesh_t), target :: mesh
-    type(dirps_t), pointer :: xdirps, ydirps, zdirps
-    type(vector_calculus_t) :: vector_calculus
+    type(poisson_ctx_t), target :: ctx
 
     integer :: dims_global(3)
     character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
@@ -268,7 +277,6 @@ contains
     logical :: use_2decomp
 
     integer :: idx
-    logical :: periodic(3)
 
     dims_global = cfg%dims
     BC_x = [cfg%bc(1), cfg%bc(1)]
@@ -296,39 +304,42 @@ contains
     ! Decide whether 2decomp is used
     use_2decomp = .not. backend_is_cuda
 
-    mesh = mesh_t(dims_global, nproc_dir, L_global, &
-                  BC_x, BC_y, BC_z, &
-                  use_2decomp=use_2decomp)
+    ctx%mesh = mesh_t(dims_global, nproc_dir, L_global, &
+                      BC_x, BC_y, BC_z, &
+                      use_2decomp=use_2decomp)
 
-    call runtime%init(mesh)
-    backend => runtime%backend
-    host_allocator => runtime%host_allocator
+    call ctx%runtime%init(ctx%mesh)
+    ctx%backend => ctx%runtime%backend
+    ctx%host_allocator => ctx%runtime%host_allocator
 
     ! Setup tdsops directly (like test_fft.f90)
-    allocate (xdirps, ydirps, zdirps)
-    xdirps%dir = DIR_X
-    ydirps%dir = DIR_Y
-    zdirps%dir = DIR_Z
-    call allocate_tdsops(xdirps, backend, mesh, 'compact6', 'compact6', &
-                         'classic', 'compact6')
-    call allocate_tdsops(ydirps, backend, mesh, 'compact6', 'compact6', &
-                         'classic', 'compact6')
-    call allocate_tdsops(zdirps, backend, mesh, 'compact6', 'compact6', &
-                         'classic', 'compact6')
+    allocate (ctx%xdirps, ctx%ydirps, ctx%zdirps)
+    ctx%xdirps%dir = DIR_X
+    ctx%ydirps%dir = DIR_Y
+    ctx%zdirps%dir = DIR_Z
+    call allocate_tdsops(ctx%xdirps, ctx%backend, ctx%mesh, 'compact6', &
+                         'compact6', 'classic', 'compact6')
+    call allocate_tdsops(ctx%ydirps, ctx%backend, ctx%mesh, 'compact6', &
+                         'compact6', 'classic', 'compact6')
+    call allocate_tdsops(ctx%zdirps, ctx%backend, ctx%mesh, 'compact6', &
+                         'compact6', 'classic', 'compact6')
 
     ! Setup vector calculus and Poisson FFT directly
-    vector_calculus = vector_calculus_t(backend)
-    call backend%init_poisson_fft(mesh, xdirps, ydirps, zdirps)
+    ctx%vector_calculus = vector_calculus_t(ctx%backend)
+    call ctx%backend%init_poisson_fft(ctx%mesh, ctx%xdirps, ctx%ydirps, &
+                                      ctx%zdirps)
 
     ! Determine which directions are periodic
-    periodic = (cfg%bc == 'periodic')
+    ctx%periodic = (cfg%bc == 'periodic')
 
     ! Run all 8 cosine tests
     do idx = 1, size(tests)
-      call run_single_test(backend, host_allocator, mesh, &
-                           xdirps, ydirps, zdirps, vector_calculus, &
-                           tests(idx), results(idx, config_id))
-      results(idx, config_id)%xfail = is_expected_fail(tests(idx), periodic)
+      call run_single_test(ctx%backend, ctx%host_allocator, ctx%mesh, &
+                           ctx%xdirps, ctx%ydirps, ctx%zdirps, &
+                           ctx%vector_calculus, tests(idx), &
+                           results(idx, config_id))
+      results(idx, config_id)%xfail = &
+        is_expected_fail(tests(idx), ctx%periodic)
     end do
 
   end subroutine run_config
