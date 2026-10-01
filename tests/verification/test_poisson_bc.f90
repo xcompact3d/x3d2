@@ -54,9 +54,11 @@ program test_poisson
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_backend_runtime, only: backend_runtime_t, backend_is_cuda
-  use m_common, only: dp, pi, DIR_C, DIR_X, DIR_Y, DIR_Z, CELL, &
-                      RDR_C2Z, RDR_C2X, RDR_Z2X
+  use m_common, only: dp, pi, MPI_X3D2_DP, DIR_C, DIR_X, DIR_Y, DIR_Z, &
+                      CELL, RDR_C2Z, RDR_C2X, RDR_Z2X
   use m_mesh, only: mesh_t
+  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce, &
+                   MPI_Bcast
   use m_solver, only: allocate_tdsops
   use m_tdsops, only: dirps_t
   use m_vector_calculus, only: vector_calculus_t
@@ -449,15 +451,35 @@ contains
     type(mesh_t), intent(in) :: mesh
     class(field_t), intent(in) :: host_field
     real(dp) :: error_norm
-    integer :: dims(3)
+    integer :: dims(3), ierr
 
     dims = mesh%get_dims(CELL)
-    error_norm = norm2(host_field%data(1:dims(1), 1:dims(2), 1:dims(3))) &
-                 /product(dims)
+    ! Sum the squares over all ranks so that every rank judges the same
+    ! global norm, norm2(global)/product(global dims).
+    error_norm = norm2(host_field%data(1:dims(1), 1:dims(2), 1:dims(3)))**2
+    call MPI_Allreduce(MPI_IN_PLACE, error_norm, 1, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+    error_norm = sqrt(error_norm)/product(mesh%get_global_dims(CELL))
   end function compute_error_norm
 
   ! ================================================================
+  ! Value of the global (1,1,1) point, known on every rank
+  ! ================================================================
+  function global_first_value(mesh, host_field) result(first_value)
+    type(mesh_t), intent(in) :: mesh
+    class(field_t), intent(in) :: host_field
+    real(dp) :: first_value
+    integer :: ierr
+
+    ! Rank 0 owns the global (1,1,1) point and broadcasts its value
+    first_value = 0.0_dp
+    if (mesh%par%is_root()) first_value = host_field%data(1, 1, 1)
+    call MPI_Bcast(first_value, 1, MPI_X3D2_DP, 0, MPI_COMM_WORLD, ierr)
+  end function global_first_value
+
+  ! ================================================================
   ! Create the cosine test function on host and transfer it to a device field
+  ! ================================================================
   ! ================================================================
   subroutine upload_cosine(ctx, test, f)
     type(poisson_ctx_t), target, intent(in) :: ctx
@@ -484,7 +506,7 @@ contains
 
     class(field_t), pointer :: host_field, host_analytical
     integer :: dims(3)
-    real(dp) :: n_pi_sq
+    real(dp) :: n_pi_sq, first_value
 
     dims = ctx%mesh%get_dims(CELL)
     n_pi_sq = (real(test%n, dp)*pi)**2
@@ -493,18 +515,18 @@ contains
     call ctx%backend%get_field_data(host_field%data, f_device)
 
     ! Remove arbitrary constant (Poisson solution unique up to a constant)
+    first_value = global_first_value(ctx%mesh, host_field)
     host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) = &
-      host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) &
-      - host_field%data(1, 1, 1)
+      host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) - first_value
 
     host_analytical => ctx%host_allocator%get_block(DIR_C)
     call fill_cosine_field(ctx%mesh, host_analytical, test, &
                            -(real(count(test%uses), dp)*n_pi_sq))
 
     ! Remove same constant from analytical
+    first_value = global_first_value(ctx%mesh, host_analytical)
     host_analytical%data(1:dims(1), 1:dims(2), 1:dims(3)) = &
-      host_analytical%data(1:dims(1), 1:dims(2), 1:dims(3)) &
-      - host_analytical%data(1, 1, 1)
+      host_analytical%data(1:dims(1), 1:dims(2), 1:dims(3)) - first_value
 
     ! Compute pointwise difference
     host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) = &
