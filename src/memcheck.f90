@@ -653,16 +653,16 @@ contains
     spec_bytes = spectral_plus_mirror_bytes(ng)
     io_bytes = gpu_io_staging_bytes([gdims(1), gdims(2), gdims(3)/ng], &
                                     checkpoint_cfg, gpu_io_device_write)
-    io_gib_local = real(io_bytes, dp)/1024._dp**3
+    io_gib_local = to_gib(io_bytes)
     if (present(io_gib)) io_gib = io_gib_local
     if (present(workspace_gib)) &
-      workspace_gib = real(base_bytes + spec_bytes, dp)/1024._dp**3
+      workspace_gib = to_gib(base_bytes + spec_bytes)
     ! Floor: assume cuFFTMp is used (the realistic case for every BC this
     ! solver ever attempts it for - see m_cuda_memory_estimate's 110 guard)
     ! since that gives the larger, safer lower bound.
     floor_bytes = base_bytes + spec_bytes + io_bytes + &
                   context_floor_bytes(ng, .not. bc_is_110)
-    floor_gib = real(floor_bytes, dp)/1024._dp**3
+    floor_gib = to_gib(floor_bytes)
 
     if (trim(run_mode) == 'STATIC') then
       ! --static: Tier 1 only, never queries the GPU FFT plan. floor_gib
@@ -671,8 +671,9 @@ contains
       per_gpu_gib = floor_gib
       exact = .false.
       if (present(overhead_gib)) &
-        overhead_gib = real(context_floor_bytes(ng, .not. bc_is_110), dp) &
-                       /1024._dp**3 + io_gib_local
+        overhead_gib = to_gib(context_floor_bytes(ng, &
+                                                  .not. bc_is_110)) &
+                       + io_gib_local
       verdict = classify(per_gpu_gib, card_gib)
       return
     end if
@@ -682,8 +683,9 @@ contains
       exact = .false.
       verdict = 'DOES_NOT_FIT'
       if (present(overhead_gib)) &
-        overhead_gib = real(context_floor_bytes(ng, .not. bc_is_110), dp) &
-                       /1024._dp**3 + io_gib_local
+        overhead_gib = to_gib(context_floor_bytes(ng, &
+                                                  .not. bc_is_110)) &
+                       + io_gib_local
       return
     end if
 
@@ -714,13 +716,13 @@ contains
       heap_bytes = 0_i8
       xtdesc_bytes = 0_i8
     end if
-    per_gpu_gib = real(base_bytes + spec_bytes + worksize_bytes + &
-                       xtdesc_bytes + heap_bytes + context_bytes + &
-                       io_bytes, dp)/1024._dp**3
+    per_gpu_gib = to_gib(base_bytes + spec_bytes + worksize_bytes + &
+                         xtdesc_bytes + heap_bytes + context_bytes + &
+                         io_bytes)
     exact = .true.
     if (present(overhead_gib)) &
-      overhead_gib = real(worksize_bytes + xtdesc_bytes + heap_bytes + &
-                          context_bytes, dp)/1024._dp**3 + io_gib_local
+      overhead_gib = to_gib(worksize_bytes + xtdesc_bytes + heap_bytes + &
+                            context_bytes) + io_gib_local
 
     verdict = classify(per_gpu_gib, card_gib)
   end subroutine estimate_for_ng
