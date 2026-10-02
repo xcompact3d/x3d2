@@ -166,7 +166,7 @@ used.
      - OpenMP target offload backend. Requires an OpenMP 4.5 or newer
        compiler. Still under construction: it offloads field copies,
        reordering and the vector operations, and reports
-       ``not implemented in the OMP_TGT backend yet`` for anything else, so
+       ``<operation>: not implemented by the active backend`` for anything else, so
        it cannot run a flow case. ``xcompact`` in an ``OMP_TGT`` build is
        the CPU solver.
 
