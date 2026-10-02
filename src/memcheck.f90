@@ -869,6 +869,15 @@ contains
       print '(a)', 'To confirm with a real measurement, re-run with --build.'
   end subroutine report
 
+  subroutine run_sh(cmd, status)
+    !! Run cmd through the shell. status (optional) receives its exit
+    !! status, 0 on success; leave it out for a best effort cleanup command.
+    character(len=*), intent(in) :: cmd
+    integer, intent(out), optional :: status
+
+    call execute_command_line(cmd, exitstat=status)
+  end subroutine run_sh
+
   subroutine enter_build_scratch(ok)
     !! Real build runs inside a throwaway x3d2-memcheck-build.<pid>
     !! subdirectory of the invoking directory, because a case build
