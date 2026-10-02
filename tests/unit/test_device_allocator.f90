@@ -23,9 +23,9 @@ program test_allocator_device
   call select_device(nrank)
 
 #ifdef CUDA
-  allocator = cuda_allocator_t([8, 8, 8], 8)
+  allocate (allocator, source=cuda_allocator_t([8, 8, 8], 8))
 #elif defined(OMP_TGT)
-  allocator = omptgt_allocator_t([8, 8, 8], 8)
+  allocate (allocator, source=omptgt_allocator_t([8, 8, 8], 8))
 #endif
 
   allpass = .true.
