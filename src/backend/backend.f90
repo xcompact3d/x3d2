@@ -204,15 +204,11 @@ contains
 
   subroutine sync_base(self)
     !! Waits for outstanding device work.
-    !!
-    !! Defaults to a no-op, which is the correct answer for a backend whose
-    !! operations all return with their work complete: a host backend, or a
-    !! device backend whose offloaded regions are all synchronous. Only a
-    !! backend that issues asynchronous work needs to override this.
     implicit none
 
     class(base_backend_t) :: self
 
+    call not_implemented('sync')
   end subroutine sync_base
 
   subroutine get_device_bw_info_base(self, mem_clock_rt, mem_bus_width, &
