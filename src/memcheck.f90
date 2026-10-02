@@ -869,6 +869,21 @@ contains
       print '(a)', 'To confirm with a real measurement, re-run with --build.'
   end subroutine report
 
+  function scratch_name(parent) result(path)
+    !! <parent>/x3d2-memcheck-build.<pid>, the scratch directory of this
+    !! process. enter_build_scratch creates it and leave_build_scratch
+    !! re-derives it before removing anything, so both must get the name
+    !! from here.
+    character(len=*), intent(in) :: parent
+    character(len=4096) :: path
+    integer(c_int) :: pid
+    character(len=32) :: pid_str
+
+    pid = c_getpid()
+    write (pid_str, '(i0)') pid
+    path = trim(parent)//'/x3d2-memcheck-build.'//trim(pid_str)
+  end function scratch_name
+
   subroutine run_sh(cmd, status)
     !! Run cmd through the shell. status (optional) receives its exit
     !! status, 0 on success; leave it out for a best effort cleanup command.
@@ -903,9 +918,8 @@ contains
     !! creating its own.
     logical, intent(out) :: ok
 
-    integer(c_int) :: pid, rc
+    integer(c_int) :: rc
     integer :: st, slash_pos
-    character(len=32) :: pid_str
     character(len=16) :: ibm_file
     logical :: ibm_file_exists, input_exists, flow_case_supported
 
@@ -947,9 +961,7 @@ contains
       end if
     end if
 
-    pid = c_getpid()
-    write (pid_str, '(i0)') pid
-    scratch_dir = trim(orig_dir)//'/x3d2-memcheck-build.'//trim(pid_str)
+    scratch_dir = scratch_name(orig_dir)
 
     ! A stale scratch directory from an earlier run's unexpected error stop
     ! after the chdir below (see this subroutine's docstring) would make a
@@ -1047,8 +1059,7 @@ contains
     !! Restore the invoking directory and remove the scratch directory
     !! enter_build_scratch created. Called after build_and_measure returns,
     !! on both the normal path and the ibm_missing early return.
-    integer(c_int) :: pid, rc
-    character(len=32) :: pid_str
+    integer(c_int) :: rc
     character(len=4096) :: expected_scratch_dir
 
     rc = c_chdir(trim(orig_dir)//c_null_char)
@@ -1059,10 +1070,7 @@ contains
 
     ! Never remove anything other than the exact scratch directory
     ! enter_build_scratch created and chdir'd into.
-    pid = c_getpid()
-    write (pid_str, '(i0)') pid
-    expected_scratch_dir = trim(orig_dir)//'/x3d2-memcheck-build.'// &
-                           trim(pid_str)
+    expected_scratch_dir = scratch_name(orig_dir)
     if (trim(scratch_dir) == trim(expected_scratch_dir)) &
       call run_sh("rm -rf '"//trim(scratch_dir)//"'")
 
