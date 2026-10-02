@@ -215,9 +215,6 @@ contains
                                      available)
     !! Reports the memory clock rate and bus width of the target device,
     !! used to work out a theoretical peak bandwidth.
-    !!
-    !! Defaults to reporting no figures, which is the correct answer for a
-    !! backend with no device and for one with no portable way to query it.
     implicit none
 
     class(base_backend_t) :: self
@@ -225,10 +222,7 @@ contains
     integer, intent(out) :: mem_bus_width
     logical, intent(out) :: available
 
-    mem_clock_rt = 0
-    mem_bus_width = 0
-    available = .false.
-
+    call not_implemented('get_device_bw_info')
   end subroutine get_device_bw_info_base
 
   subroutine transeq_x_base(self, du, dv, dw, u, v, w, nu, dirps)
