@@ -208,15 +208,13 @@ program x3d2_memcheck
   if (ierr /= 0 .or. ndevs < 1) then
     print '(a,i0,a,i0,a)', 'x3d2-memcheck: no usable CUDA device &
       &(cudaGetDeviceCount code ', ierr, ', devices ', ndevs, ')'
-    call MPI_Finalize(ierr)
-    error stop 'x3d2-memcheck: no usable CUDA device'
+    call no_device_exit()
   end if
   ierr = cudaSetDevice(0)
   if (ierr /= 0) then
     print '(a,i0,a)', 'x3d2-memcheck: no usable CUDA device (cudaSetDevice &
       &failed, code ', ierr, ')'
-    call MPI_Finalize(ierr)
-    error stop 'x3d2-memcheck: no usable CUDA device'
+    call no_device_exit()
   end if
 
   call parse_args()
@@ -256,6 +254,15 @@ program x3d2_memcheck
   end select
 
 contains
+
+  subroutine no_device_exit()
+    !! Common tail of both no-device exits above (which print their own
+    !! reason first): shut MPI down cleanly, then error stop.
+    integer :: ierr_finalize
+
+    call MPI_Finalize(ierr_finalize)
+    error stop 'x3d2-memcheck: no usable CUDA device'
+  end subroutine no_device_exit
 
   subroutine parse_args()
     integer :: i, nargs, iostat_n
