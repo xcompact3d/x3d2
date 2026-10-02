@@ -1064,7 +1064,7 @@ contains
     expected_scratch_dir = trim(orig_dir)//'/x3d2-memcheck-build.'// &
                            trim(pid_str)
     if (trim(scratch_dir) == trim(expected_scratch_dir)) &
-      call execute_command_line("rm -rf '"//trim(scratch_dir)//"'")
+      call run_sh("rm -rf '"//trim(scratch_dir)//"'")
 
     orig_dir = ''
     scratch_dir = ''
