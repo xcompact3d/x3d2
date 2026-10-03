@@ -904,7 +904,7 @@ contains
   end subroutine vecadd_cuda
 
   subroutine vecmult_cuda(self, y, x)
-    !! [[m_base_backend(module):vecmult(interface)]]
+    !! [[m_base_backend(module):vecmult_base(subroutine)]]
     implicit none
 
     class(cuda_backend_t) :: self
@@ -1058,7 +1058,7 @@ contains
   end subroutine compute_sgs_stress_cuda
 
   real(dp) function scalar_product_cuda(self, x, y) result(s)
-    !! [[m_base_backend(module):scalar_product(interface)]]
+    !! [[m_base_backend(module):scalar_product_base(function)]]
     implicit none
 
     class(cuda_backend_t) :: self
@@ -1171,7 +1171,7 @@ contains
   end subroutine copy_into_buffers
 
   subroutine field_max_mean_cuda(self, max_val, mean_val, f, enforced_data_loc)
-    !! [[m_base_backend(module):field_max_mean(interface)]]
+    !! [[m_base_backend(module):field_max_mean_base(subroutine)]]
     implicit none
 
     class(cuda_backend_t) :: self
@@ -1257,7 +1257,7 @@ contains
 
   subroutine slice_max_sum_cuda(self, max_val, sum_val, f, i_slice, &
                                 enforced_data_loc)
-    !! [[m_base_backend(module):slice_max_sum(interface)]]
+    !! [[m_base_backend(module):slice_max_sum_base(subroutine)]]
     implicit none
     class(cuda_backend_t) :: self
     real(dp), intent(out) :: max_val, sum_val
