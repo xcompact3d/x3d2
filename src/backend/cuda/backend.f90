@@ -20,7 +20,7 @@ module m_cuda_backend
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused, exec_dist_tds_compact
   use m_cuda_exec_thom, only: exec_thom_tds_compact
-  use m_cuda_poisson_fft, only: cuda_poisson_fft_t
+  use m_cuda_poisson_fft, only: cuda_poisson_fft_t, init_cuda_poisson_fft_t
   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
   use m_cuda_tdsops, only: cuda_tdsops_t
   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
@@ -1557,7 +1557,8 @@ contains
 
     select type (poisson_fft => self%poisson_fft)
     type is (cuda_poisson_fft_t)
-      poisson_fft = cuda_poisson_fft_t(mesh, xdirps, ydirps, zdirps, lowmem)
+      call init_cuda_poisson_fft_t(poisson_fft, mesh, xdirps, ydirps, &
+                                   zdirps, lowmem)
     end select
 
   end subroutine init_cuda_poisson_fft
