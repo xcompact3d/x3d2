@@ -40,10 +40,10 @@ program x3d2_memcheck
   use cudafor, only: cudaMemGetInfo, cuda_count_kind, &
                      cudaGetDeviceCount, cudaSetDevice
   use m_common, only: dp, i8, nbytes, VERT, is_sp
-  use m_mesh, only: mesh_t, periodic_dir
+  use m_mesh, only: mesh_t
   use m_cuda_common, only: SZ
-  use m_memory_estimate, only: padded_cells, cell_dims, &
-                               spectral_slab_bytes, mirror_buffer_bytes_100, &
+  use m_memory_estimate, only: padded_cells, spectral_slab_bytes, &
+                               mirror_buffer_bytes_100, &
                                spectral_extra_bytes_110, &
                                stretched_y_matrix_bytes, output_field_active, &
                                peak_fields_lookup, padded_halo_bytes, &
@@ -62,7 +62,8 @@ program x3d2_memcheck
   use m_cuda_allocator, only: cuda_allocator_t
   use m_cuda_backend, only: cuda_backend_t
   use m_cuda_poisson_fft, only: cuda_poisson_fft_t
-  use m_memcheck_context, only: memcheck_ctx_t, parse_args, read_config
+  use m_memcheck_context, only: memcheck_ctx_t, parse_args, read_config, &
+                                classify_bc, resolve_gpu_io_mode
 
   implicit none
 
@@ -129,8 +130,8 @@ program x3d2_memcheck
 
   call parse_args(ctx)
   call read_config(ctx)
-  call resolve_gpu_io_mode()
-  call classify_bc()
+  call resolve_gpu_io_mode(ctx)
+  call classify_bc(ctx)
   call query_card_gib()
 
   ctx%peak_fields = peak_fields_lookup(trim(ctx%domain_cfg%flow_case_name), &
@@ -173,76 +174,6 @@ contains
     call MPI_Finalize(ierr_finalize)
     error stop 'x3d2-memcheck: no usable CUDA device'
   end subroutine no_device_exit
-
-  subroutine resolve_gpu_io_mode()
-    !! Resolve whether this run's snapshot/checkpoint writes would stage
-    !! through a device buffer. Mirrors init_runtime_options in
-    !! src/io/adios2/io.f90:296-313, which is private to the ADIOS2 writer
-    !! and belongs to PR 277, so it is not shared here - keep the two in
-    !! sync by hand if the env var contract changes.
-#ifdef X3D2_ADIOS2_CUDA
-    character(len=64) :: raw_value, mode_value
-    integer :: status, value_length
-
-    call get_environment_variable('X3D2_ADIOS2_GPU_WRITE_MODE', raw_value, &
-                                  length=value_length, status=status)
-    if (status /= 0 .or. value_length == 0) then
-      mode_value = 'auto'
-    else
-      mode_value = to_lower(adjustl(raw_value(1:min(value_length, &
-                                                     len(raw_value)))))
-    end if
-
-    select case (trim(mode_value))
-    case ('host', 'd2h', 'staged')
-      ctx%gpu_io_device_write = .false.
-      ctx%gpu_io_mode_name = 'host'
-      ctx%gpu_io_reason = 'write mode host'
-    case default
-      ctx%gpu_io_device_write = .true.
-      ctx%gpu_io_mode_name = trim(mode_value)
-    end select
-#else
-    ctx%gpu_io_device_write = .false.
-    ctx%gpu_io_mode_name = 'host'
-    ctx%gpu_io_reason = 'build lacks X3D2_ADIOS2_CUDA'
-#endif
-  end subroutine resolve_gpu_io_mode
-
-#ifdef X3D2_ADIOS2_CUDA
-  pure function to_lower(text) result(lowered)
-    !! Small private ASCII lower-caser for resolve_gpu_io_mode - not shared
-    !! with src/io/adios2/io.f90's to_lower_ascii, which is private to that
-    !! module (see resolve_gpu_io_mode's comment).
-    character(len=*), intent(in) :: text
-    character(len=len(text)) :: lowered
-    integer :: i, code
-
-    lowered = text
-    do i = 1, len(text)
-      code = iachar(lowered(i:i))
-      if (code >= iachar('A') .and. code <= iachar('Z')) then
-        lowered(i:i) = achar(code + 32)
-      end if
-    end do
-  end function to_lower
-#endif
-
-  subroutine classify_bc()
-    !! Mirrors src/backend/cuda/poisson_fft.f90:227-239's four-way split.
-    ctx%periodic_x = periodic_dir(ctx%domain_cfg%BC_x)
-    ctx%periodic_y = periodic_dir(ctx%domain_cfg%BC_y)
-    ctx%periodic_z = periodic_dir(ctx%domain_cfg%BC_z)
-    ctx%bc_is_000 = ctx%periodic_x .and. ctx%periodic_y .and. ctx%periodic_z
-    ctx%bc_is_010 = ctx%periodic_x .and. (.not. ctx%periodic_y) .and. &
-                    ctx%periodic_z
-    ctx%bc_is_100 = (.not. ctx%periodic_x) .and. ctx%periodic_y .and. &
-                    ctx%periodic_z
-    ctx%bc_is_110 = (.not. ctx%periodic_x) .and. &
-                    (.not. ctx%periodic_y) .and. ctx%periodic_z
-    ctx%cdims = cell_dims(ctx%gdims, [ctx%periodic_x, ctx%periodic_y, &
-                                      ctx%periodic_z])
-  end subroutine classify_bc
 
   function current_dir() result(path)
     !! Working directory via libc getcwd, trimmed at the first embedded NUL

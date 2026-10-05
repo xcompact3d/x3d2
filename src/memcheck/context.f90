@@ -3,6 +3,8 @@ module m_memcheck_context
   use m_common, only: dp, i8
   use m_config, only: domain_config_t, solver_config_t, les_config_t, &
                       checkpoint_config_t
+  use m_mesh, only: periodic_dir
+  use m_memory_estimate, only: cell_dims
   implicit none
 
   type :: memcheck_ctx_t
@@ -160,11 +162,85 @@ contains
 
   subroutine read_config(ctx)
     type(memcheck_ctx_t), intent(inout) :: ctx
+
     call ctx%domain_cfg%read(nml_file=trim(ctx%input_path))
     call ctx%solver_cfg%read(nml_file=trim(ctx%input_path))
     call ctx%les_cfg%read(nml_file=trim(ctx%input_path))
     call ctx%checkpoint_cfg%read(nml_file=trim(ctx%input_path))
     ctx%gdims = ctx%domain_cfg%dims_global
   end subroutine read_config
+
+  subroutine classify_bc(ctx)
+    !! Mirrors src/backend/cuda/poisson_fft.f90:227-239's four-way split.
+    type(memcheck_ctx_t), intent(inout) :: ctx
+
+    ctx%periodic_x = periodic_dir(ctx%domain_cfg%BC_x)
+    ctx%periodic_y = periodic_dir(ctx%domain_cfg%BC_y)
+    ctx%periodic_z = periodic_dir(ctx%domain_cfg%BC_z)
+    ctx%bc_is_000 = ctx%periodic_x .and. ctx%periodic_y .and. ctx%periodic_z
+    ctx%bc_is_010 = ctx%periodic_x .and. (.not. ctx%periodic_y) .and. &
+                    ctx%periodic_z
+    ctx%bc_is_100 = (.not. ctx%periodic_x) .and. ctx%periodic_y .and. &
+                    ctx%periodic_z
+    ctx%bc_is_110 = (.not. ctx%periodic_x) .and. &
+                    (.not. ctx%periodic_y) .and. ctx%periodic_z
+    ctx%cdims = cell_dims(ctx%gdims, [ctx%periodic_x, ctx%periodic_y, &
+                                      ctx%periodic_z])
+  end subroutine classify_bc
+
+#ifdef X3D2_ADIOS2_CUDA
+  pure function to_lower(text) result(lowered)
+    !! Small private ASCII lower-caser for resolve_gpu_io_mode - not shared
+    !! with src/io/adios2/io.f90's to_lower_ascii, which is private to that
+    !! module (see resolve_gpu_io_mode's comment).
+    character(len=*), intent(in) :: text
+    character(len=len(text)) :: lowered
+    integer :: i, code
+
+    lowered = text
+    do i = 1, len(text)
+      code = iachar(lowered(i:i))
+      if (code >= iachar('A') .and. code <= iachar('Z')) then
+        lowered(i:i) = achar(code + 32)
+      end if
+    end do
+  end function to_lower
+#endif
+
+  subroutine resolve_gpu_io_mode(ctx)
+    !! Resolve whether this run's snapshot/checkpoint writes would stage
+    !! through a device buffer. Mirrors init_runtime_options in
+    !! src/io/adios2/io.f90:296-313, which is private to the ADIOS2 writer
+    !! and belongs to PR 277, so it is not shared here - keep the two in
+    !! sync by hand if the env var contract changes.
+    type(memcheck_ctx_t), intent(inout) :: ctx
+#ifdef X3D2_ADIOS2_CUDA
+    character(len=64) :: raw_value, mode_value
+    integer :: status, value_length
+
+    call get_environment_variable('X3D2_ADIOS2_GPU_WRITE_MODE', raw_value, &
+                                  length=value_length, status=status)
+    if (status /= 0 .or. value_length == 0) then
+      mode_value = 'auto'
+    else
+      mode_value = to_lower(adjustl(raw_value(1:min(value_length, &
+                                                    len(raw_value)))))
+    end if
+
+    select case (trim(mode_value))
+    case ('host', 'd2h', 'staged')
+      ctx%gpu_io_device_write = .false.
+      ctx%gpu_io_mode_name = 'host'
+      ctx%gpu_io_reason = 'write mode host'
+    case default
+      ctx%gpu_io_device_write = .true.
+      ctx%gpu_io_mode_name = trim(mode_value)
+    end select
+#else
+    ctx%gpu_io_device_write = .false.
+    ctx%gpu_io_mode_name = 'host'
+    ctx%gpu_io_reason = 'build lacks X3D2_ADIOS2_CUDA'
+#endif
+  end subroutine resolve_gpu_io_mode
 
 end module m_memcheck_context
