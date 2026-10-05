@@ -451,7 +451,8 @@ contains
     ! BUILD_FRACTION guard was calibrated against fields alone, so subtract
     ! it back out here rather than changing the (already-validated)
     ! threshold itself.
-    ws_guess = ws_guess - to_gib(padded_halo_bytes(ctx%gdims, SZ, n_halo))
+    ws_guess = ws_guess - &
+               to_gib(padded_halo_bytes(ctx%gdims, ctx%device%sz(), n_halo))
     if (ws_guess >= BUILD_FRACTION*ctx%card_free_gib) then
       call print_rule('-')
       print '(a,f0.2,a,f0.1,a,f0.2,a)', 'Real build skipped: fields only &

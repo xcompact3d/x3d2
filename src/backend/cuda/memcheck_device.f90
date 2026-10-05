@@ -4,6 +4,7 @@ module m_cuda_memcheck_device
   use cudafor, only: cudaGetDeviceCount, cudaSetDevice, cudaMemGetInfo, &
                      cuda_count_kind
   use m_common, only: i8
+  use m_cuda_common, only: SZ
   use m_cuda_memory_estimate, only: check_status
   use m_memcheck_device, only: memcheck_device_t
   implicit none
@@ -15,6 +16,7 @@ module m_cuda_memcheck_device
   contains
     procedure :: init
     procedure :: mem_info
+    procedure :: sz => pencil_size
   end type cuda_memcheck_device_t
 
 contains
@@ -52,5 +54,12 @@ contains
     total_bytes = int(total_b, i8)
     free_bytes = int(free_b, i8)
   end subroutine mem_info
+
+  function pencil_size(self) result(n)
+    class(cuda_memcheck_device_t), intent(in) :: self
+    integer :: n
+
+    n = SZ
+  end function pencil_size
 
 end module m_cuda_memcheck_device
