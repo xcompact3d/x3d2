@@ -64,7 +64,8 @@ program x3d2_memcheck
   use m_cuda_poisson_fft, only: cuda_poisson_fft_t
   use m_memcheck_context, only: memcheck_ctx_t, parse_args, read_config, &
                                 classify_bc, resolve_gpu_io_mode
-  use m_memcheck_estimate, only: DOES_NOT_FIT_FRACTION, to_gib, classify
+  use m_memcheck_estimate, only: DOES_NOT_FIT_FRACTION, to_gib, classify, &
+                                 ng_unsupported_reason
 
   implicit none
 
@@ -244,38 +245,6 @@ contains
     ctx%card_gib = to_gib(int(total_b, i8))
     ctx%card_free_gib = to_gib(int(free_b, i8))
   end subroutine query_card_gib
-
-  function ng_unsupported_reason(ng) result(reason)
-    !! Whether GPU count ng is a decomposition this tool/solver actually
-    !! supports - blank when it is. Shared by report()'s per-ng table,
-    !! report_measured_table()'s per-ng table, and report()'s requested
-    !! nproc_dir line, so the three can never silently diverge on what
-    !! counts as unsupported. Checked in this order: ng itself must be a
-    !! positive count; ng>1 needs BC_y periodic (multi_gpu_supported);
-    !! gdims(3) must divide by ng (the physical Z decomposition); and, for
-    !! whichever BC actually decomposes the spectral slab along dim2 (000/
-    !! 010: cy: 100: cx - see spectral_slab_bytes), that dimension must
-    !! also divide by ng, or the solver would truncate or error-stop.
-    integer, intent(in) :: ng
-    character(len=96) :: reason
-
-    reason = ''
-    if (ng < 1) then
-      reason = 'nproc_dir(3) must be >= 1'
-    else if (ng > 1 .and. .not. ctx%multi_gpu_supported) then
-      reason = 'not supported: BC_y is non-periodic - &
-               &src/poisson_fft.f90 error-stops at nproc>1'
-    else if (mod(ctx%gdims(3), ng) /= 0) then
-      write (reason, '(a,i0,a)') 'z=', ctx%gdims(3), ' not divisible'
-    else if ((ctx%bc_is_000 .or. ctx%bc_is_010) .and. &
-             mod(ctx%cdims(2), ng) /= 0) then
-      write (reason, '(a,i0,a)') 'y cells=', ctx%cdims(2), ' not divisible &
-        &by ng, the solver would truncate the spectral slab'
-    else if (ctx%bc_is_100 .and. mod(ctx%cdims(1), ng) /= 0) then
-      write (reason, '(a,i0,a)') 'x cells=', ctx%cdims(1), ' not divisible &
-        &by ng, src/backend/cuda/poisson_fft.f90 error-stops'
-    end if
-  end function ng_unsupported_reason
 
   subroutine print_rule(fill)
     !! One 60 character separator line: '=' around the report header, '-'
@@ -543,7 +512,7 @@ contains
     character(len=96) :: reason
 
     requested_ng = ctx%domain_cfg%nproc_dir(3)
-    reason = ng_unsupported_reason(requested_ng)
+    reason = ng_unsupported_reason(ctx, requested_ng)
     if (ctx%domain_cfg%nproc_dir(1) /= 1 .or. &
         ctx%domain_cfg%nproc_dir(2) /= 1) &
       reason = 'only nproc_dir = [1,1,ng] is supported by the CUDA backend'
@@ -586,7 +555,7 @@ contains
     smallest_fits = 0
     do k = 1, size(n_gpu_list)
       ng = n_gpu_list(k)
-      reason = ng_unsupported_reason(ng)
+      reason = ng_unsupported_reason(ctx, ng)
       if (len_trim(reason) > 0) then
         print '(a,i0,a,a,a)', ' ', ng, '     (skipped: ', trim(reason), ')'
         cycle
@@ -1072,7 +1041,7 @@ contains
       ! excludes ng>1 when the real build just fell back from cuFFTMp to
       ! plain cuFFT for a BC that needs it, a signal only this real-build
       ! path has (see its own derivation above).
-      reason = ng_unsupported_reason(ng)
+      reason = ng_unsupported_reason(ctx, ng)
       if (ng > 1 .and. ctx%multi_gpu_supported .and. &
           .not. multi_gpu_supported_measured) &
         reason = 'not supported for this BC/environment'
