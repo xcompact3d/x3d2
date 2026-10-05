@@ -126,9 +126,9 @@ contains
     else if (ctx%bc_is_110) then
       nbytes8 = nbytes8 + spectral_extra_bytes_110(ctx%cdims, ng)
     else if (ctx%bc_is_010) then
-      nbytes8 = nbytes8 + stretched_y_matrix_bytes(ctx%bc_is_010, &
-                                                ctx%domain_cfg%stretching(2), &
-                                      ctx%solver_cfg%lowmem_fft, ctx%cdims, ng)
+      nbytes8 = nbytes8 + stretched_y_matrix_bytes( &
+                ctx%bc_is_010, ctx%domain_cfg%stretching(2), &
+                ctx%solver_cfg%lowmem_fft, ctx%cdims, ng)
     end if
   end function spectral_plus_mirror_bytes
 
