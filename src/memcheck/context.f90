@@ -8,6 +8,10 @@ module m_memcheck_context
   use m_memcheck_device, only: memcheck_device_t
   implicit none
 
+  private
+  public :: memcheck_ctx_t, parse_args, read_config, classify_bc, &
+            resolve_gpu_io_mode
+
   type :: memcheck_ctx_t
     !> The compute backend, allocated by the program before anything else.
     class(memcheck_device_t), allocatable :: device
