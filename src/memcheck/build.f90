@@ -2,7 +2,6 @@ module m_memcheck_build
   !! Tier 3 of x3d2-memcheck: the real case build, its measurement and the
   !! measured report.
   use m_common, only: dp, i8, VERT
-  use cudafor, only: cudaMemGetInfo, cuda_count_kind
   use m_mesh, only: mesh_t
   use m_cuda_common, only: SZ
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
@@ -380,8 +379,7 @@ contains
     type(cuda_allocator_t), target :: cuda_allocator
     type(cuda_backend_t), target :: cuda_backend
     type(allocator_t), target :: host_allocator
-    integer :: ierr
-    integer(kind=cuda_count_kind) :: free_b, total_b
+    integer(i8) :: free_b, total_b
 
     npeak = 0
     dev_used = 0._dp
@@ -409,8 +407,8 @@ contains
     call drive_case(ctx, flow_case)
 
     npeak = allocator%next_id
-    ierr = cudaMemGetInfo(free_b, total_b)
-    dev_used = to_gib(int(total_b - free_b, i8))
+    call ctx%device%mem_info(total_b, free_b)
+    dev_used = to_gib(total_b - free_b)
   end subroutine build_and_measure
 
   subroutine run_tier3(ctx)
