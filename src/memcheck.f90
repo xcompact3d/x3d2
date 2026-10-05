@@ -65,7 +65,7 @@ program x3d2_memcheck
   use m_memcheck_report, only: print_rule, print_table_header, &
                                print_table_row, n_gpu_list, report
   use m_memcheck_scratch, only: c_chdir, current_dir, has_dotdot_component, &
-                                run_sh, scratch_name
+                                run_sh, scratch_name, skip_build
 
   implicit none
 
@@ -183,18 +183,6 @@ contains
     ctx%card_free_gib = to_gib(int(free_b, i8))
   end subroutine query_card_gib
 
-  subroutine skip_build(msg, cleanup, ok)
-    !! Tail of every "Real build skipped" exit: print msg, remove the
-    !! scratch directory if cleanup is set, and flag ok=.false.
-    character(len=*), intent(in) :: msg
-    logical, intent(in) :: cleanup
-    logical, intent(out) :: ok
-
-    print '(a)', msg
-    if (cleanup) call run_sh("rm -rf '"//trim(ctx%scratch_dir)//"'")
-    ok = .false.
-  end subroutine skip_build
-
   subroutine validate_build_inputs(ok)
     !! Validates the known failure causes of a real build up front, before
     !! touching the filesystem: the input file must exist,
@@ -214,7 +202,7 @@ contains
 
     inquire (file=trim(ctx%input_path), exist=input_exists)
     if (.not. input_exists) then
-      call skip_build('Real build skipped: input file not found: '// &
+      call skip_build(ctx, 'Real build skipped: input file not found: '// &
                       trim(ctx%input_path), .false., ok)
       return
     end if
@@ -226,7 +214,7 @@ contains
       flow_case_supported = .false.
     end select
     if (.not. flow_case_supported) then
-      call skip_build("Real build skipped: flow case '"// &
+      call skip_build(ctx, "Real build skipped: flow case '"// &
                       trim(ctx%domain_cfg%flow_case_name)// &
                       "' has no dispatch in x3d2-memcheck", .false., ok)
       return
@@ -238,7 +226,7 @@ contains
       inquire (file=trim(ctx%orig_dir)//'/'//trim(ibm_file), &
               exist=ibm_file_exists)
       if (.not. ibm_file_exists) then
-        call skip_build('Real build skipped: ibm_on=T but the matching &
+        call skip_build(ctx, 'Real build skipped: ibm_on=T but the matching &
                         &ibm_<BC-suffix>.bp mask file was not found in the &
                         &working directory; the estimate above stands.', &
                         .false., ok)
@@ -281,7 +269,7 @@ contains
     if (st == 0) then
       call run_sh("rm -rf '"//trim(ctx%scratch_dir)//"'", st)
       if (st /= 0) then
-        call skip_build('Real build skipped: could not remove stale &
+        call skip_build(ctx, 'Real build skipped: could not remove stale &
                         &scratch directory '//trim(ctx%scratch_dir), &
                         .false., ok)
         return
@@ -291,7 +279,7 @@ contains
 
     call run_sh("mkdir '"//trim(ctx%scratch_dir)//"'", st)
     if (st /= 0) then
-      call skip_build('Real build skipped: could not create scratch &
+      call skip_build(ctx, 'Real build skipped: could not create scratch &
                       &directory '//trim(ctx%scratch_dir), .false., ok)
       return
     end if
@@ -299,8 +287,8 @@ contains
     if (ctx%input_path(1:1) /= '/') then
       if (has_dotdot_component(trim(ctx%input_path)) .or. &
           index(trim(ctx%input_path), "'") > 0) then
-        call skip_build("Real build skipped: relative input path with '..' &
-                        &cannot be mirrored; pass an absolute path", &
+        call skip_build(ctx, "Real build skipped: relative input path with &
+                        &'..' cannot be mirrored; pass an absolute path", &
                         .true., ok)
         return
       end if
@@ -309,7 +297,7 @@ contains
         call run_sh("mkdir -p '"//trim(ctx%scratch_dir)//'/'// &
                     trim(ctx%input_path(1:slash_pos - 1))//"'", st)
         if (st /= 0) then
-          call skip_build('Real build skipped: could not prepare scratch &
+          call skip_build(ctx, 'Real build skipped: could not prepare scratch &
                           &directory (mkdir of the input''s parent failed)', &
                           .true., ok)
           return
@@ -319,14 +307,14 @@ contains
                   trim(ctx%input_path)//"' '"//trim(ctx%scratch_dir)// &
                   '/'//trim(ctx%input_path)//"'", st)
       if (st /= 0) then
-        call skip_build('Real build skipped: could not prepare scratch &
+        call skip_build(ctx, 'Real build skipped: could not prepare scratch &
                         &directory (input symlink failed)', .true., ok)
         return
       end if
       inquire (file=trim(ctx%scratch_dir)//'/'//trim(ctx%input_path), &
               exist=input_exists)
       if (.not. input_exists) then
-        call skip_build('Real build skipped: could not prepare scratch &
+        call skip_build(ctx, 'Real build skipped: could not prepare scratch &
                         &directory (input symlink failed)', .true., ok)
         return
       end if
@@ -339,7 +327,7 @@ contains
                   trim(ibm_file)//"' '"//trim(ctx%scratch_dir)// &
                   '/'//trim(ibm_file)//"'", st)
       if (st /= 0) then
-        call skip_build('Real build skipped: could not prepare scratch &
+        call skip_build(ctx, 'Real build skipped: could not prepare scratch &
                         &directory (ibm mask symlink failed)', .true., ok)
         return
       end if
@@ -347,7 +335,7 @@ contains
 
     rc = c_chdir(trim(ctx%scratch_dir)//c_null_char)
     if (rc /= 0) then
-      call skip_build('Real build skipped: could not chdir into scratch &
+      call skip_build(ctx, 'Real build skipped: could not chdir into scratch &
                       &directory '//trim(ctx%scratch_dir), .true., ok)
       return
     end if

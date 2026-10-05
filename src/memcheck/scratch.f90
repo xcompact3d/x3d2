@@ -1,6 +1,7 @@
 module m_memcheck_scratch
   !! Scratch directory handling of the x3d2-memcheck --build path.
   use iso_c_binding, only: c_char, c_int, c_size_t, c_ptr, c_null_char
+  use m_memcheck_context, only: memcheck_ctx_t
   implicit none
 
   interface
@@ -84,5 +85,18 @@ contains
     write (pid_str, '(i0)') pid
     path = trim(parent)//'/x3d2-memcheck-build.'//trim(pid_str)
   end function scratch_name
+
+  subroutine skip_build(ctx, msg, cleanup, ok)
+    !! Tail of every "Real build skipped" exit: print msg, remove the
+    !! scratch directory if cleanup is set, and flag ok=.false.
+    type(memcheck_ctx_t), intent(in) :: ctx
+    character(len=*), intent(in) :: msg
+    logical, intent(in) :: cleanup
+    logical, intent(out) :: ok
+
+    print '(a)', msg
+    if (cleanup) call run_sh("rm -rf '"//trim(ctx%scratch_dir)//"'")
+    ok = .false.
+  end subroutine skip_build
 
 end module m_memcheck_scratch
