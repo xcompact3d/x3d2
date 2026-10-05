@@ -17,12 +17,9 @@ program x3d2_memcheck
   !!              by hand to confirm a BORDERLINE result).
   !!              The real build itself runs inside a throwaway
   !!              x3d2-memcheck-build.<pid> subdirectory of the invoking
-  !!              directory, because a case build initialises monitoring
-  !!              (writes monitoring.csv) and calls postprocess(0), which
-  !!              clobbered run directories on 2026-09-15; a relative
-  !!              input path is mirrored in by symlink, one containing
-  !!              '..' must be passed as absolute instead; the scratch
-  !!              directory is removed once the build finishes.
+  !!              directory, removed once the build finishes (make_scratch
+  !!              in m_memcheck_scratch says why, and how a relative input
+  !!              path is handled).
   !!
   !! Also estimates the GPU-aware ADIOS2 I/O staging buffer (one extra
   !! unpadded local field held on the device while a snapshot/checkpoint
@@ -32,7 +29,7 @@ program x3d2_memcheck
   !! never performs a snapshot/checkpoint write. Which mode is in play
   !! follows the X3D2_ADIOS2_GPU_WRITE_MODE environment variable, resolved
   !! the same way src/io/adios2/io.f90's own runtime option does (see
-  !! resolve_gpu_io_mode below).
+  !! resolve_gpu_io_mode in m_memcheck_context).
   !!
   !! Usage: x3d2-memcheck <input.x3d> [--static | --build]
   use mpi
