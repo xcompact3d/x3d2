@@ -2,6 +2,7 @@ module m_memcheck_build
   !! Tier 3 of x3d2-memcheck: the real case build, its measurement and the
   !! measured report.
   use m_common, only: dp, i8, VERT
+  use cudafor, only: cudaMemGetInfo, cuda_count_kind
   use m_mesh, only: mesh_t
   use m_cuda_common, only: SZ
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
@@ -15,6 +16,7 @@ module m_memcheck_build
   use m_field, only: flist_t
   use m_cuda_allocator, only: cuda_allocator_t
   use m_cuda_backend, only: cuda_backend_t
+  use m_cuda_poisson_fft, only: cuda_poisson_fft_t
   use m_memcheck_scratch, only: ibm_mask_filename
   use m_memcheck_context, only: memcheck_ctx_t
   use m_memcheck_report, only: n_gpu_list, print_rule, print_table_header, &
@@ -308,5 +310,92 @@ contains
       call compute_derived_fields(flow_case%solver, ctx%output_vorticity, &
                                   ctx%output_qcriterion)
   end subroutine drive_case
+
+  subroutine build_and_measure(ctx, dims_in, npeak, dev_used, ibm_missing)
+    !! Build the real flow case at dims_in on this single GPU (via the same
+    !! case-dispatch select case xcompact.f90 uses), run one (or, under
+    !! --extensive <n>, n) substep(s) to drive the allocator to its
+    !! work-field high-water mark, and return that mark (npeak) plus the
+    !! absolute device memory in use (dev_used).
+    !!
+    !! --extensive re-checks this same high-water mark against more RK
+    !! sub-stages, but only re-exercises the allocator's own pool - it does
+    !! NOT repeat the per-iteration I/O paths (compute_pressure_vert,
+    !! compute_derived_fields, io_mgr%update_stats, snapshot/checkpoint
+    !! writes) that a real xcompact run hits every iteration, so it cannot
+    !! catch a leak in those paths. The GPU-aware ADIOS2 staging buffer is
+    !! therefore added analytically (gpu_io_staging_bytes) rather than
+    !! measured here. See scripts/memcheck_extensive_sweep.sh
+    !! (this tool's own sweep, allocator-path regression guard only) vs.
+    !! scripts/memcheck_extensive_xcompact.sh (a real xcompact run polled
+    !! externally via nvidia-smi, which CAN catch an I/O-path leak).
+    !!
+    !! Driving the real flow_case_t (case_init, one postprocess(0,.) call,
+    !! one substep) rather than a bespoke transeq/step/pressure_correction
+    !! sequence means case-specific persistent allocations are captured the
+    !! same way a real xcompact run captures them: channel/cylinder's
+    !! lazily-allocated BC ghost blocks (define_BC_channel/cylinder), and
+    !! anything gated by the input's I/O config (keep_pressure,
+    !! vorticity/Q-criterion derived fields via the per-iteration
+    !! compute_pressure_vert/compute_derived_fields calls mirrored below,
+    !! immediately after substep - these are NOT part of postprocess()).
+    !!
+    !! The real case constructors re-read get_argument(1) (this process's
+    !! own CLI argument) rather than taking domain_cfg as a parameter; this
+    !! already resolves to the same input file read_config() parsed above -
+    !! see parse_args' comment on why the input path must stay positional
+    !! argument 1.
+    !!
+    !! case_init also runs the input's own restart logic (io_mgr%is_restart)
+    !! before this subroutine gets control: if a checkpoint file matching
+    !! the input's restart path already exists in the CWD, this will
+    !! measure a restarted state instead of the input's initial conditions.
+    !! This mirrors production behaviour, not a tool-specific choice.
+    type(memcheck_ctx_t), intent(inout) :: ctx
+    integer, intent(in) :: dims_in(3)
+    integer, intent(out) :: npeak
+    real(dp), intent(out) :: dev_used
+    logical, intent(out) :: ibm_missing
+
+    type(mesh_t), target :: mesh
+    class(allocator_t), pointer :: allocator
+    class(base_backend_t), pointer :: backend
+    class(base_case_t), allocatable :: flow_case
+    integer :: dims(3)
+    type(cuda_allocator_t), target :: cuda_allocator
+    type(cuda_backend_t), target :: cuda_backend
+    type(allocator_t), target :: host_allocator
+    integer :: ierr
+    integer(kind=cuda_count_kind) :: free_b, total_b
+
+    npeak = 0
+    dev_used = 0._dp
+    ctx%output_vorticity = .false.
+    ctx%output_qcriterion = .false.
+
+    call build_mesh(ctx, dims_in, mesh, dims, ibm_missing)
+    if (ibm_missing) return
+
+    call make_cuda_backend(mesh, dims, cuda_allocator, host_allocator, &
+                           cuda_backend, allocator, backend)
+
+    call make_flow_case(ctx, backend, mesh, host_allocator, flow_case)
+
+    ! Solver construction (inside case_init, above) already ran
+    ! init_poisson_fft, so the plan's actual cuFFTMp/cuFFT fallback outcome
+    ! is settled - capture it for report_measured_table's safety gating on
+    ! the 100 case, since there is no static "is cuFFTMp available" query.
+    select type (pf => flow_case%solver%backend%poisson_fft)
+    type is (cuda_poisson_fft_t)
+      ctx%use_cufftmp = pf%use_cufftmp
+      ctx%use_cufftmp_known = .true.
+    end select
+
+    call drive_case(ctx, flow_case)
+
+    npeak = allocator%next_id
+    ierr = cudaMemGetInfo(free_b, total_b)
+    dev_used = to_gib(int(total_b - free_b, i8))
+  end subroutine build_and_measure
 
 end module m_memcheck_build
