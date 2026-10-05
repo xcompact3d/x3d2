@@ -36,10 +36,8 @@ program x3d2_memcheck
   !!
   !! Usage: x3d2-memcheck <input.x3d> [--static | --build]
   use mpi
-  use cudafor, only: cudaMemGetInfo, cuda_count_kind
   use m_common, only: i8
   use m_memory_estimate, only: output_field_active, peak_fields_lookup
-  use m_cuda_memory_estimate, only: check_status
   use m_memcheck_context, only: memcheck_ctx_t, parse_args, read_config, &
                                 classify_bc, resolve_gpu_io_mode
   use m_memcheck_estimate, only: to_gib
@@ -117,13 +115,11 @@ contains
   end subroutine no_device_exit
 
   subroutine query_card_gib()
-    integer :: ierr
-    integer(kind=cuda_count_kind) :: free_b, total_b
+    integer(i8) :: free_b, total_b
 
-    ierr = cudaMemGetInfo(free_b, total_b)
-    call check_status(ierr, 'cudaMemGetInfo (card total)')
-    ctx%card_gib = to_gib(int(total_b, i8))
-    ctx%card_free_gib = to_gib(int(free_b, i8))
+    call ctx%device%mem_info(total_b, free_b)
+    ctx%card_gib = to_gib(total_b)
+    ctx%card_free_gib = to_gib(free_b)
   end subroutine query_card_gib
 
 end program x3d2_memcheck
