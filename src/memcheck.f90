@@ -90,10 +90,6 @@ program x3d2_memcheck
 
   type(memcheck_ctx_t) :: ctx
   integer :: ierr, irank, nproc, ndevs
-  integer :: cdims(3)
-  logical :: periodic_x, periodic_y, periodic_z
-  logical :: bc_is_000, bc_is_010, bc_is_100, bc_is_110
-  logical :: multi_gpu_supported
   integer :: peak_fields
   real(dp) :: card_gib
   !> Free memory on the card right now (query_card_gib), i.e. card_gib minus
@@ -220,7 +216,7 @@ program x3d2_memcheck
                                                        'qcriterion'), &
                                    ctx%solver_cfg%lowmem_transeq)
 
-  multi_gpu_supported = .not. (bc_is_010 .or. bc_is_110)
+  ctx%multi_gpu_supported = .not. (ctx%bc_is_010 .or. ctx%bc_is_110)
 
   call report()
   if (trim(ctx%run_mode) == 'BUILD') call run_tier3()
@@ -369,14 +365,18 @@ contains
 
   subroutine classify_bc()
     !! Mirrors src/backend/cuda/poisson_fft.f90:227-239's four-way split.
-    periodic_x = periodic_dir(ctx%domain_cfg%BC_x)
-    periodic_y = periodic_dir(ctx%domain_cfg%BC_y)
-    periodic_z = periodic_dir(ctx%domain_cfg%BC_z)
-    bc_is_000 = periodic_x .and. periodic_y .and. periodic_z
-    bc_is_010 = periodic_x .and. (.not. periodic_y) .and. periodic_z
-    bc_is_100 = (.not. periodic_x) .and. periodic_y .and. periodic_z
-    bc_is_110 = (.not. periodic_x) .and. (.not. periodic_y) .and. periodic_z
-    cdims = cell_dims(ctx%gdims, [periodic_x, periodic_y, periodic_z])
+    ctx%periodic_x = periodic_dir(ctx%domain_cfg%BC_x)
+    ctx%periodic_y = periodic_dir(ctx%domain_cfg%BC_y)
+    ctx%periodic_z = periodic_dir(ctx%domain_cfg%BC_z)
+    ctx%bc_is_000 = ctx%periodic_x .and. ctx%periodic_y .and. ctx%periodic_z
+    ctx%bc_is_010 = ctx%periodic_x .and. (.not. ctx%periodic_y) .and. &
+                    ctx%periodic_z
+    ctx%bc_is_100 = (.not. ctx%periodic_x) .and. ctx%periodic_y .and. &
+                    ctx%periodic_z
+    ctx%bc_is_110 = (.not. ctx%periodic_x) .and. &
+                    (.not. ctx%periodic_y) .and. ctx%periodic_z
+    ctx%cdims = cell_dims(ctx%gdims, [ctx%periodic_x, ctx%periodic_y, &
+                                      ctx%periodic_z])
   end subroutine classify_bc
 
   function current_dir() result(path)
@@ -493,16 +493,17 @@ contains
     reason = ''
     if (ng < 1) then
       reason = 'nproc_dir(3) must be >= 1'
-    else if (ng > 1 .and. .not. multi_gpu_supported) then
+    else if (ng > 1 .and. .not. ctx%multi_gpu_supported) then
       reason = 'not supported: BC_y is non-periodic - &
                &src/poisson_fft.f90 error-stops at nproc>1'
     else if (mod(ctx%gdims(3), ng) /= 0) then
       write (reason, '(a,i0,a)') 'z=', ctx%gdims(3), ' not divisible'
-    else if ((bc_is_000 .or. bc_is_010) .and. mod(cdims(2), ng) /= 0) then
-      write (reason, '(a,i0,a)') 'y cells=', cdims(2), ' not divisible &
+    else if ((ctx%bc_is_000 .or. ctx%bc_is_010) .and. &
+             mod(ctx%cdims(2), ng) /= 0) then
+      write (reason, '(a,i0,a)') 'y cells=', ctx%cdims(2), ' not divisible &
         &by ng, the solver would truncate the spectral slab'
-    else if (bc_is_100 .and. mod(cdims(1), ng) /= 0) then
-      write (reason, '(a,i0,a)') 'x cells=', cdims(1), ' not divisible &
+    else if (ctx%bc_is_100 .and. mod(ctx%cdims(1), ng) /= 0) then
+      write (reason, '(a,i0,a)') 'x cells=', ctx%cdims(1), ' not divisible &
         &by ng, src/backend/cuda/poisson_fft.f90 error-stops'
     end if
   end function ng_unsupported_reason
@@ -585,15 +586,15 @@ contains
     integer, intent(in) :: ng
     integer(i8) :: nbytes8
 
-    nbytes8 = spectral_slab_bytes(bc_is_100, bc_is_110, cdims, ng)
-    if (bc_is_100) then
-      nbytes8 = nbytes8 + mirror_buffer_bytes_100(cdims, ng)
-    else if (bc_is_110) then
-      nbytes8 = nbytes8 + spectral_extra_bytes_110(cdims, ng)
-    else if (bc_is_010) then
-      nbytes8 = nbytes8 + stretched_y_matrix_bytes(bc_is_010, &
+    nbytes8 = spectral_slab_bytes(ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, ng)
+    if (ctx%bc_is_100) then
+      nbytes8 = nbytes8 + mirror_buffer_bytes_100(ctx%cdims, ng)
+    else if (ctx%bc_is_110) then
+      nbytes8 = nbytes8 + spectral_extra_bytes_110(ctx%cdims, ng)
+    else if (ctx%bc_is_010) then
+      nbytes8 = nbytes8 + stretched_y_matrix_bytes(ctx%bc_is_010, &
                           ctx%domain_cfg%stretching(2), &
-                          ctx%solver_cfg%lowmem_fft, cdims, ng)
+                          ctx%solver_cfg%lowmem_fft, ctx%cdims, ng)
     end if
   end function spectral_plus_mirror_bytes
 
@@ -609,8 +610,8 @@ contains
     if (done) return
     ierr = cudaMemGetInfo(free_before, total_b)
     call check_status(ierr, 'cudaMemGetInfo (before FFT probe)')
-    call fft_workspace_bytes_query(bc_is_100, bc_is_110, cdims, .true., &
-                                   irank == 0, ng1_worksize_bytes, &
+    call fft_workspace_bytes_query(ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, &
+                                   .true., irank == 0, ng1_worksize_bytes, &
                                    ng1_heap_bytes, ng1_xtdesc_bytes, &
                                    ng1_used_cufftmp)
     ierr = cudaMemGetInfo(free_after, total_b)
@@ -659,7 +660,7 @@ contains
     ! solver ever attempts it for - see m_cuda_memory_estimate's 110 guard)
     ! since that gives the larger, safer lower bound.
     floor_bytes = base_bytes + spec_bytes + io_bytes + &
-                  context_floor_bytes(ng, .not. bc_is_110)
+                  context_floor_bytes(ng, .not. ctx%bc_is_110)
     floor_gib = to_gib(floor_bytes)
 
     if (trim(ctx%run_mode) == 'STATIC' .or. &
@@ -668,7 +669,7 @@ contains
       exact = .false.
       if (present(overhead_gib)) &
         overhead_gib = to_gib(context_floor_bytes(ng, &
-                                                  .not. bc_is_110)) &
+                                                  .not. ctx%bc_is_110)) &
                        + io_gib_local
       if (trim(ctx%run_mode) == 'STATIC') then
         ! --static: Tier 1 only, never queries the GPU FFT plan. floor_gib
@@ -946,7 +947,8 @@ contains
     end if
 
     if (ctx%solver_cfg%ibm_on) then
-      ibm_file = ibm_mask_filename(periodic_x, periodic_y, periodic_z)
+      ibm_file = ibm_mask_filename(ctx%periodic_x, ctx%periodic_y, &
+                                   ctx%periodic_z)
       inquire (file=trim(orig_dir)//'/'//trim(ibm_file), &
               exist=ibm_file_exists)
       if (.not. ibm_file_exists) then
@@ -1044,7 +1046,8 @@ contains
     end if
 
     if (ctx%solver_cfg%ibm_on) then
-      ibm_file = ibm_mask_filename(periodic_x, periodic_y, periodic_z)
+      ibm_file = ibm_mask_filename(ctx%periodic_x, ctx%periodic_y, &
+                                   ctx%periodic_z)
       call run_sh("ln -s '"//trim(orig_dir)//'/'// &
                   trim(ibm_file)//"' '"//trim(scratch_dir)// &
                   '/'//trim(ibm_file)//"'", st)
@@ -1249,16 +1252,17 @@ contains
     character(len=12) :: verdict
     character(len=96) :: reason
 
-    spec_bytes_1 = spectral_slab_bytes(bc_is_100, bc_is_110, cdims, 1)
+    spec_bytes_1 = spectral_slab_bytes(ctx%bc_is_100, ctx%bc_is_110, &
+                                       ctx%cdims, 1)
     overhead = used_gib - workspace_gib_measured
     requested_verdict = 'DOES_NOT_FIT'
 
     multi_gpu_supported_measured = .true.
-    if (bc_is_010 .or. bc_is_110) then
+    if (ctx%bc_is_010 .or. ctx%bc_is_110) then
       ! BC_y non-periodic: no nproc>1 support for this BC
       ! (src/poisson_fft.f90:178-180,196-198).
       multi_gpu_supported_measured = .false.
-    else if ((bc_is_100 .or. bc_is_000) .and. use_cufftmp_known .and. &
+    else if ((ctx%bc_is_100 .or. ctx%bc_is_000) .and. use_cufftmp_known .and. &
             (.not. use_cufftmp)) then
       ! Covers the 100 case (needs cuFFTMp to decompose at all) and the
       ! fully-periodic 000 case (the plain-cuFFT fallback performs a purely
@@ -1293,7 +1297,7 @@ contains
       ! plain cuFFT for a BC that needs it, a signal only this real-build
       ! path has (see its own derivation above).
       reason = ng_unsupported_reason(ng)
-      if (ng > 1 .and. multi_gpu_supported .and. &
+      if (ng > 1 .and. ctx%multi_gpu_supported .and. &
           .not. multi_gpu_supported_measured) &
         reason = 'not supported for this BC/environment'
       if (len_trim(reason) > 0) then
@@ -1304,12 +1308,12 @@ contains
       w_local = to_gib(fields_plus_halo_bytes_n(ng, measured_peak_fields))
 
       mirror_gib = 0._dp
-      if (bc_is_100) &
-        mirror_gib = to_gib(mirror_buffer_bytes_100(cdims, ng))
+      if (ctx%bc_is_100) &
+        mirror_gib = to_gib(mirror_buffer_bytes_100(ctx%cdims, ng))
 
       overhead_term = overhead + &
-                      to_gib(spectral_slab_bytes(bc_is_100, bc_is_110, &
-                                                 cdims, ng) - spec_bytes_1) &
+                      to_gib(spectral_slab_bytes(ctx%bc_is_100, &
+                                ctx%bc_is_110, ctx%cdims, ng) - spec_bytes_1) &
                       + mirror_gib
       if (use_cufftmp_known .and. use_cufftmp) &
         overhead_term = overhead_term + &

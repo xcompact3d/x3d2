@@ -20,5 +20,9 @@ module m_memcheck_context
     type(les_config_t) :: les_cfg
     type(checkpoint_config_t) :: checkpoint_cfg
     integer :: gdims(3)
+    integer :: cdims(3)
+    logical :: periodic_x, periodic_y, periodic_z
+    logical :: bc_is_000, bc_is_010, bc_is_100, bc_is_110
+    logical :: multi_gpu_supported
   end type memcheck_ctx_t
 end module m_memcheck_context
