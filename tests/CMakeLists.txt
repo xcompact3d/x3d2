@@ -423,9 +423,10 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
 
   # A real --build run must not clobber whatever CWD it was launched from,
   # nor leave its scratch directory behind: validate_build_inputs/
-  # make_scratch/leave_build_scratch (src/memcheck.f90) exist because the
-  # real case build initialises monitoring (writes monitoring.csv) and calls
-  # postprocess(0), which clobbered a user's run directory on 2026-09-15.
+  # make_scratch/leave_build_scratch (src/memcheck/scratch.f90) exist
+  # because the real case build initialises monitoring (writes
+  # monitoring.csv) and calls postprocess(0), which clobbered a user's run
+  # directory on 2026-09-15.
   add_test(NAME memcheck_build_scratch_protects_cwd COMMAND sh -c
     "tmp=$(mktemp -d) && echo marker > \"$tmp/monitoring.csv\" && \
      cd \"$tmp\" && \
