@@ -733,27 +733,14 @@ contains
     verdict = classify(per_gpu_gib, card_gib)
   end subroutine estimate_for_ng
 
-  subroutine report()
-    integer :: k, ng, requested_ng, smallest_fits, local_dims(3)
-    real(dp) :: per_gpu_gib, requested_gib, workspace_gib, overhead_gib, &
-               io_gib, mib
-    logical :: exact, unit_stride, snapshot_active, checkpoint_active
-    character(len=12) :: verdict
+  subroutine print_io_staging_line()
+    !! The GPU-aware IO staging line of the report header: the term at ng=1
+    !! with the snapshot/checkpoint kind that causes it, or why there is
+    !! none.
+    real(dp) :: mib
+    logical :: unit_stride, snapshot_active, checkpoint_active
     character(len=64) :: what, io_none_reason
-    character(len=96) :: reason
     integer(i8) :: io_ng1_bytes
-
-    call print_rule('=')
-    print '(a,i0,a,i0,a,i0,a)', 'Input grid: ', gdims(1), 'x', gdims(2), &
-      'x', gdims(3)
-    print '(a,f0.2,a,f0.2,a)', 'Card memory: ', card_gib, ' GiB (', &
-      card_free_gib, ' GiB free now)'
-    if (card_gib - card_free_gib > 0.5_dp) &
-      print '(a,f0.2,a)', 'WARNING: ', card_gib - card_free_gib, ' GiB of &
-        &this card is in use by other processes; verdicts are against the &
-        &full card, and the real build only proceeds if it fits in what is &
-        &free.'
-    print '(a,i0)', 'peak_fields (static estimate): ', peak_fields
 
     ! GPU-aware IO staging: computed directly at ng=1 (local_dims == gdims
     ! there) so it is available here, ahead of the per-ng table below.
@@ -788,6 +775,29 @@ contains
       print '(a,a,a)', 'GPU-aware IO staging: none (', trim(io_none_reason), &
         ')'
     end if
+  end subroutine print_io_staging_line
+
+  subroutine report()
+    integer :: k, ng, requested_ng, smallest_fits, local_dims(3)
+    real(dp) :: per_gpu_gib, requested_gib, workspace_gib, overhead_gib, &
+                io_gib
+    logical :: exact
+    character(len=12) :: verdict
+    character(len=96) :: reason
+
+    call print_rule('=')
+    print '(a,i0,a,i0,a,i0,a)', 'Input grid: ', gdims(1), 'x', gdims(2), &
+      'x', gdims(3)
+    print '(a,f0.2,a,f0.2,a)', 'Card memory: ', card_gib, ' GiB (', &
+      card_free_gib, ' GiB free now)'
+    if (card_gib - card_free_gib > 0.5_dp) &
+      print '(a,f0.2,a)', 'WARNING: ', card_gib - card_free_gib, ' GiB of &
+        &this card is in use by other processes; verdicts are against the &
+        &full card, and the real build only proceeds if it fits in what is &
+        &free.'
+    print '(a,i0)', 'peak_fields (static estimate): ', peak_fields
+
+    call print_io_staging_line()
 
     select case (trim(run_mode))
     case ('STATIC')
