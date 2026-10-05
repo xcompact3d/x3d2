@@ -942,9 +942,8 @@ contains
 
     inquire (file=trim(input_path), exist=input_exists)
     if (.not. input_exists) then
-      print '(a,a)', 'Real build skipped: input file not found: ', &
-        trim(input_path)
-      ok = .false.
+      call skip_build('Real build skipped: input file not found: '// &
+                      trim(input_path), .false., ok)
       return
     end if
 
@@ -955,10 +954,9 @@ contains
       flow_case_supported = .false.
     end select
     if (.not. flow_case_supported) then
-      print '(a,a,a)', "Real build skipped: flow case '", &
-        trim(domain_cfg%flow_case_name), &
-        "' has no dispatch in x3d2-memcheck"
-      ok = .false.
+      call skip_build("Real build skipped: flow case '"// &
+                      trim(domain_cfg%flow_case_name)// &
+                      "' has no dispatch in x3d2-memcheck", .false., ok)
       return
     end if
 
@@ -967,10 +965,10 @@ contains
       inquire (file=trim(orig_dir)//'/'//trim(ibm_file), &
               exist=ibm_file_exists)
       if (.not. ibm_file_exists) then
-        print '(a)', 'Real build skipped: ibm_on=T but the matching &
-          &ibm_<BC-suffix>.bp mask file was not found in the working &
-          &directory; the estimate above stands.'
-        ok = .false.
+        call skip_build('Real build skipped: ibm_on=T but the matching &
+                        &ibm_<BC-suffix>.bp mask file was not found in the &
+                        &working directory; the estimate above stands.', &
+                        .false., ok)
         return
       end if
     end if
@@ -984,9 +982,8 @@ contains
     if (st == 0) then
       call run_sh("rm -rf '"//trim(scratch_dir)//"'", st)
       if (st /= 0) then
-        print '(a,a)', 'Real build skipped: could not remove stale &
-          &scratch directory ', trim(scratch_dir)
-        ok = .false.
+        call skip_build('Real build skipped: could not remove stale &
+                        &scratch directory '//trim(scratch_dir), .false., ok)
         return
       end if
       print '(a,a)', 'Removed stale scratch directory ', trim(scratch_dir)
@@ -994,9 +991,8 @@ contains
 
     call run_sh("mkdir '"//trim(scratch_dir)//"'", st)
     if (st /= 0) then
-      print '(a,a)', 'Real build skipped: could not create scratch &
-        &directory ', trim(scratch_dir)
-      ok = .false.
+      call skip_build('Real build skipped: could not create scratch &
+                      &directory '//trim(scratch_dir), .false., ok)
       return
     end if
 
