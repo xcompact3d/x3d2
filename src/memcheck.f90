@@ -39,7 +39,7 @@ program x3d2_memcheck
   use iso_c_binding, only: c_char, c_int, c_size_t, c_ptr, c_null_char
   use cudafor, only: cudaMemGetInfo, cuda_count_kind, &
                      cudaGetDeviceCount, cudaSetDevice
-  use m_common, only: dp, i8, VERT, is_sp
+  use m_common, only: dp, i8, VERT
   use m_mesh, only: mesh_t
   use m_cuda_common, only: SZ
   use m_memory_estimate, only: spectral_slab_bytes, mirror_buffer_bytes_100, &
@@ -63,7 +63,9 @@ program x3d2_memcheck
   use m_memcheck_estimate, only: to_gib, classify, ng_unsupported_reason, &
                                  n_halo, fields_plus_halo_bytes_n, &
                                  estimate_for_ng
-  use m_memcheck_report, only: print_rule, print_table_header, print_table_row
+  use m_memcheck_report, only: print_rule, print_table_header, &
+                               print_table_row, print_io_staging_line, &
+                               print_requested_line
 
   implicit none
 
@@ -243,86 +245,6 @@ contains
     ctx%card_free_gib = to_gib(int(free_b, i8))
   end subroutine query_card_gib
 
-  subroutine print_io_staging_line()
-    !! The GPU-aware IO staging line of the report header: the term at ng=1
-    !! and what causes it, or why there is none.
-    real(dp) :: mib
-    logical :: unit_stride, snapshot_active, checkpoint_active
-    character(len=64) :: what, io_none_reason
-    integer(i8) :: io_ng1_bytes
-
-    ! GPU-aware IO staging: computed directly at ng=1 (local_dims == gdims
-    ! there) so it is available here, ahead of the per-ng table below.
-    io_ng1_bytes = gpu_io_staging_bytes(ctx%gdims, ctx%checkpoint_cfg, &
-                                        ctx%gpu_io_device_write)
-    unit_stride = all(ctx%checkpoint_cfg%output_stride == 1)
-    snapshot_active = ctx%checkpoint_cfg%snapshot_freq > 0 .and. unit_stride
-    checkpoint_active = ctx%checkpoint_cfg%checkpoint_freq > 0
-    if (io_ng1_bytes > 0_i8) then
-      mib = to_gib(io_ng1_bytes)*1024._dp
-      if (snapshot_active .and. checkpoint_active) then
-        what = 'snapshot at unit stride + checkpoint'
-      else if (checkpoint_active) then
-        what = 'checkpoint'
-      else
-        what = 'snapshot at unit stride'
-      end if
-      if (.not. checkpoint_active .and. ctx%checkpoint_cfg%snapshot_sp .and. &
-          .not. is_sp .and. snapshot_active) what = trim(what)//' (sp)'
-      print '(a,f0.1,a,a,a,a,a)', 'GPU-aware IO staging: ', mib, &
-        ' MiB/GPU at ng=1 (write mode ', trim(ctx%gpu_io_mode_name), ', ', &
-        trim(what), ')'
-    else
-      if (.not. ctx%gpu_io_device_write) then
-        io_none_reason = trim(ctx%gpu_io_reason)
-      else if (ctx%checkpoint_cfg%snapshot_freq > 0 .and. .not. unit_stride &
-               .and. ctx%checkpoint_cfg%checkpoint_freq == 0) then
-        io_none_reason = 'snapshot striding falls back to host path'
-      else
-        io_none_reason = 'no unit-stride snapshot and no checkpoint enabled'
-      end if
-      print '(a,a,a)', 'GPU-aware IO staging: none (', trim(io_none_reason), &
-        ')'
-    end if
-  end subroutine print_io_staging_line
-
-  subroutine print_requested_line()
-    !! The verdict line for the nproc_dir the input file asks for (or why
-    !! that decomposition is not supported); sets final_verdict.
-    integer :: requested_ng
-    real(dp) :: requested_gib
-    logical :: exact
-    character(len=96) :: reason
-
-    requested_ng = ctx%domain_cfg%nproc_dir(3)
-    reason = ng_unsupported_reason(ctx, requested_ng)
-    if (ctx%domain_cfg%nproc_dir(1) /= 1 .or. &
-        ctx%domain_cfg%nproc_dir(2) /= 1) &
-      reason = 'only nproc_dir = [1,1,ng] is supported by the CUDA backend'
-    if (len_trim(reason) > 0) then
-      print '(a,i0,a,i0,a,i0,a,a,a)', 'Requested nproc_dir [', &
-        ctx%domain_cfg%nproc_dir(1), ',', ctx%domain_cfg%nproc_dir(2), ',', &
-        ctx%domain_cfg%nproc_dir(3), ']: not supported (', trim(reason), ')'
-      ctx%final_verdict = 'UNSUPPORTED'
-    else
-      call estimate_for_ng(ctx, requested_ng, requested_gib, exact, &
-                           ctx%final_verdict)
-      print '(a,i0,a,f0.2,a,f0.1,a,a)', 'Requested nproc_dir gives ng=', &
-        requested_ng, ': ', requested_gib, ' GiB/GPU (', &
-        100._dp*requested_gib/ctx%card_gib, '% of card) - ', &
-        trim(ctx%final_verdict)
-      if (.not. exact) then
-        if (trim(ctx%run_mode) == 'STATIC') then
-          print '(a)', '  (Tier 1 estimate only: --static skips the GPU &
-            &FFT plan query.)'
-        else
-          print '(a)', '  (Tier 1 floor only: this input is well over &
-            &the limit, no GPU plan probe was attempted.)'
-        end if
-      end if
-    end if
-  end subroutine print_requested_line
-
   subroutine print_ng_table(smallest_fits)
     !! The estimate table, one row per scanned GPU count (the ng=1 row also
     !! feeds run_tier3's CHECK line); smallest_fits is 0 if none FITS.
@@ -372,7 +294,7 @@ contains
         &full card, and the real build only proceeds if it fits in what is &
         &free.'
     print '(a,i0)', 'peak_fields (static estimate): ', ctx%peak_fields
-    call print_io_staging_line()
+    call print_io_staging_line(ctx)
     select case (trim(ctx%run_mode))
     case ('STATIC')
       print '(a)', 'Mode: static (Tier 1 only, no FFT plan query)'
@@ -383,7 +305,7 @@ contains
       print '(a)', 'Mode: default (Tier 1 + Tier 2 FFT plan query)'
     end select
     call print_rule('=')
-    call print_requested_line()
+    call print_requested_line(ctx)
 
     call print_rule('-')
     call print_ng_table(smallest_fits)
