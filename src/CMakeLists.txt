@@ -185,6 +185,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     memcheck/context.f90
     memcheck/estimate.f90
     memcheck/report.f90
+    memcheck/scratch.f90
   )
   set_target_properties(x3d2_memcheck PROPERTIES
     Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_memcheck")
