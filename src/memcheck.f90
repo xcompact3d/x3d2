@@ -64,6 +64,7 @@ program x3d2_memcheck
   use m_cuda_allocator, only: cuda_allocator_t
   use m_cuda_backend, only: cuda_backend_t
   use m_cuda_poisson_fft, only: cuda_poisson_fft_t
+  use m_memcheck_context, only: memcheck_ctx_t
 
   implicit none
 
@@ -89,10 +90,7 @@ program x3d2_memcheck
   !> [1,1,ng]) today.
   integer, parameter :: n_gpu_list(4) = [1, 2, 4, 8]
 
-  character(len=256) :: input_path
-  !> STATIC = --static (Tier 1 only), DEFAULT = no flag (Tier 1+2, today's
-  !> behaviour), BUILD = --build (adds Tier 3).
-  character(len=7) :: run_mode
+  type(memcheck_ctx_t) :: ctx
   integer :: ierr, irank, nproc, ndevs
   type(domain_config_t) :: domain_cfg
   type(solver_config_t) :: solver_cfg
@@ -110,12 +108,6 @@ program x3d2_memcheck
   !> judge headroom against what is actually free, not the card's full
   !> capacity.
   real(dp) :: card_free_gib = 0._dp
-  !> Set by parse_args() from --extensive <n> (0 = not requested, the
-  !> normal --build path of exactly 1 substep). build_and_measure() reads
-  !> this to decide how many RK sub-stages to drive before measuring;
-  !> report_measured_table()'s banner line and EXTENSIVE result line both
-  !> read measured_n_substeps afterwards to state the real count.
-  integer :: extensive_substeps = 0
   integer :: measured_n_substeps
   !> Set by report()'s ng=1 row, used by run_tier3()'s CHECK line to
   !> compare the static estimate against the real --build measurement.
@@ -237,7 +229,7 @@ program x3d2_memcheck
   multi_gpu_supported = .not. (bc_is_010 .or. bc_is_110)
 
   call report()
-  if (trim(run_mode) == 'BUILD') call run_tier3()
+  if (trim(ctx%run_mode) == 'BUILD') call run_tier3()
 
   call MPI_Finalize(ierr)
 
@@ -278,7 +270,7 @@ contains
     ! case_cylinder_init, solver_init) independently re-read
     ! get_argument(1) themselves rather than taking the path as a
     ! parameter, so flags must only ever appear after it.
-    call get_command_argument(1, input_path)
+    call get_command_argument(1, ctx%input_path)
 
     static_flag = .false.
     build_flag = .false.
@@ -295,8 +287,8 @@ contains
           &positive integer substep count, e.g. --extensive 1000'
         i = i + 1
         call get_command_argument(i, arg)
-        read (arg, *, iostat=iostat_n) extensive_substeps
-        if (iostat_n /= 0 .or. extensive_substeps < 1) &
+        read (arg, *, iostat=iostat_n) ctx%extensive_substeps
+        if (iostat_n /= 0 .or. ctx%extensive_substeps < 1) &
           error stop 'x3d2-memcheck: --extensive needs a positive &
             &integer substep count'
         build_flag = .true.
@@ -311,19 +303,19 @@ contains
         &mutually exclusive (--static stops at Tier 1).'
 
     if (static_flag) then
-      run_mode = 'STATIC'
+      ctx%run_mode = 'STATIC'
     else if (build_flag) then
-      run_mode = 'BUILD'
+      ctx%run_mode = 'BUILD'
     else
-      run_mode = 'DEFAULT'
+      ctx%run_mode = 'DEFAULT'
     end if
   end subroutine parse_args
 
   subroutine read_config()
-    call domain_cfg%read(nml_file=trim(input_path))
-    call solver_cfg%read(nml_file=trim(input_path))
-    call les_cfg%read(nml_file=trim(input_path))
-    call checkpoint_cfg%read(nml_file=trim(input_path))
+    call domain_cfg%read(nml_file=trim(ctx%input_path))
+    call solver_cfg%read(nml_file=trim(ctx%input_path))
+    call les_cfg%read(nml_file=trim(ctx%input_path))
+    call checkpoint_cfg%read(nml_file=trim(ctx%input_path))
     gdims = domain_cfg%dims_global
   end subroutine read_config
 
@@ -675,7 +667,7 @@ contains
                   context_floor_bytes(ng, .not. bc_is_110)
     floor_gib = to_gib(floor_bytes)
 
-    if (trim(run_mode) == 'STATIC' .or. &
+    if (trim(ctx%run_mode) == 'STATIC' .or. &
         floor_gib > DOES_NOT_FIT_FRACTION*card_gib) then
       per_gpu_gib = floor_gib
       exact = .false.
@@ -683,7 +675,7 @@ contains
         overhead_gib = to_gib(context_floor_bytes(ng, &
                                                   .not. bc_is_110)) &
                        + io_gib_local
-      if (trim(run_mode) == 'STATIC') then
+      if (trim(ctx%run_mode) == 'STATIC') then
         ! --static: Tier 1 only, never queries the GPU FFT plan. floor_gib
         ! IS the estimate here - not just a DOES_NOT_FIT early-return floor
         ! - so classify it with the full three-way verdict.
@@ -798,7 +790,7 @@ contains
         requested_ng, ': ', requested_gib, ' GiB/GPU (', &
         100._dp*requested_gib/card_gib, '% of card) - ', trim(final_verdict)
       if (.not. exact) then
-        if (trim(run_mode) == 'STATIC') then
+        if (trim(ctx%run_mode) == 'STATIC') then
           print '(a)', '  (Tier 1 estimate only: --static skips the GPU &
             &FFT plan query.)'
         else
@@ -858,7 +850,7 @@ contains
         &free.'
     print '(a,i0)', 'peak_fields (static estimate): ', peak_fields
     call print_io_staging_line()
-    select case (trim(run_mode))
+    select case (trim(ctx%run_mode))
     case ('STATIC')
       print '(a)', 'Mode: static (Tier 1 only, no FFT plan query)'
     case ('BUILD')
@@ -881,7 +873,8 @@ contains
       print '(a)', 'No scanned GPU count fits with headroom to spare.'
     end if
 
-    if (trim(final_verdict) == 'BORDERLINE' .and. trim(run_mode) /= 'BUILD') &
+    if (trim(final_verdict) == 'BORDERLINE' .and. &
+        trim(ctx%run_mode) /= 'BUILD') &
       print '(a)', 'To confirm with a real measurement, re-run with --build.'
   end subroutine report
 
@@ -936,10 +929,10 @@ contains
     ok = .true.
     orig_dir = current_dir()
 
-    inquire (file=trim(input_path), exist=input_exists)
+    inquire (file=trim(ctx%input_path), exist=input_exists)
     if (.not. input_exists) then
       call skip_build('Real build skipped: input file not found: '// &
-                      trim(input_path), .false., ok)
+                      trim(ctx%input_path), .false., ok)
       return
     end if
 
@@ -1018,18 +1011,18 @@ contains
       return
     end if
 
-    if (input_path(1:1) /= '/') then
-      if (has_dotdot_component(trim(input_path)) .or. &
-          index(trim(input_path), "'") > 0) then
+    if (ctx%input_path(1:1) /= '/') then
+      if (has_dotdot_component(trim(ctx%input_path)) .or. &
+          index(trim(ctx%input_path), "'") > 0) then
         call skip_build("Real build skipped: relative input path with '..' &
                         &cannot be mirrored; pass an absolute path", &
                         .true., ok)
         return
       end if
-      slash_pos = index(trim(input_path), '/', back=.true.)
+      slash_pos = index(trim(ctx%input_path), '/', back=.true.)
       if (slash_pos > 0) then
         call run_sh("mkdir -p '"//trim(scratch_dir)//'/'// &
-                    trim(input_path(1:slash_pos - 1))//"'", st)
+                    trim(ctx%input_path(1:slash_pos - 1))//"'", st)
         if (st /= 0) then
           call skip_build('Real build skipped: could not prepare scratch &
                           &directory (mkdir of the input''s parent failed)', &
@@ -1038,14 +1031,14 @@ contains
         end if
       end if
       call run_sh("ln -s '"//trim(orig_dir)//'/'// &
-                  trim(input_path)//"' '"//trim(scratch_dir)// &
-                  '/'//trim(input_path)//"'", st)
+                  trim(ctx%input_path)//"' '"//trim(scratch_dir)// &
+                  '/'//trim(ctx%input_path)//"'", st)
       if (st /= 0) then
         call skip_build('Real build skipped: could not prepare scratch &
                         &directory (input symlink failed)', .true., ok)
         return
       end if
-      inquire (file=trim(scratch_dir)//'/'//trim(input_path), &
+      inquire (file=trim(scratch_dir)//'/'//trim(ctx%input_path), &
               exist=input_exists)
       if (.not. input_exists) then
         call skip_build('Real build skipped: could not prepare scratch &
@@ -1290,7 +1283,7 @@ contains
     ! scripts/memcheck_extensive_sweep.sh), so a wrapper script comparing
     ! several substep counts can grep one line per run instead of parsing
     ! the whole table.
-    if (extensive_substeps > 0) &
+    if (ctx%extensive_substeps > 0) &
       print '(a,i0,a,i0,a,f0.3,a,f0.3)', 'EXTENSIVE result: substeps=', &
         measured_n_substeps, ' peak_fields=', measured_peak_fields, &
         ' used_gib=', used_gib, ' pct_card=', 100._dp*used_gib/card_gib
@@ -1453,7 +1446,7 @@ contains
     ! writes) that a real xcompact run would hit on every iteration and
     ! where an actual leak is far more likely to live.
     n_substeps = 1
-    if (extensive_substeps > 0) n_substeps = extensive_substeps
+    if (ctx%extensive_substeps > 0) n_substeps = ctx%extensive_substeps
     do i_substep = 1, n_substeps
       call flow_case%substep(curr, deriv, i_substep)
     end do

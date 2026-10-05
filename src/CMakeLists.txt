@@ -181,7 +181,18 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
 
   # x3d2-memcheck (the static memory estimator) needs m_cuda_memory_estimate
   # and m_cuda_common, so only exists for the CUDA backend.
+  add_library(x3d2_memcheck STATIC
+    memcheck/context.f90
+  )
+  set_target_properties(x3d2_memcheck PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_memcheck")
+  target_include_directories(x3d2_memcheck INTERFACE
+    ${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_memcheck)
+  target_link_libraries(x3d2_memcheck PRIVATE x3d2_backends x3d2)
+  target_compile_options(x3d2_memcheck PRIVATE "-DCUDA")
+
   add_executable(x3d2-memcheck memcheck.f90)
+  target_link_libraries(x3d2-memcheck PRIVATE x3d2_memcheck)
   target_link_libraries(x3d2-memcheck PRIVATE x3d2_backends)
   target_link_libraries(x3d2-memcheck PRIVATE x3d2)
   target_compile_options(x3d2-memcheck PRIVATE "-DCUDA")
@@ -218,6 +229,7 @@ target_link_libraries(x3d2_backends PRIVATE OpenMP::OpenMP_Fortran)
 target_link_libraries(xcompact PRIVATE OpenMP::OpenMP_Fortran)
 if(TARGET x3d2-memcheck)
   target_link_libraries(x3d2-memcheck PRIVATE OpenMP::OpenMP_Fortran)
+  target_link_libraries(x3d2_memcheck PRIVATE OpenMP::OpenMP_Fortran)
 endif()
 
 if(WITH_MPI)
@@ -237,6 +249,7 @@ endif()
 
 if(TARGET x3d2-memcheck)
   target_link_libraries(x3d2-memcheck PRIVATE MPI::MPI_Fortran)
+  target_link_libraries(x3d2_memcheck PRIVATE MPI::MPI_Fortran)
 endif()
 
 if(WITH_ADIOS2)
@@ -248,6 +261,7 @@ if(WITH_ADIOS2)
   # needs ADIOS2 the same way xcompact does.
   if(TARGET x3d2-memcheck)
     target_link_libraries(x3d2-memcheck PRIVATE ${ADIOS2_FORTRAN_TARGET})
+    target_link_libraries(x3d2_memcheck PRIVATE ${ADIOS2_FORTRAN_TARGET})
   endif()
 
   # GPU-aware I/O requires C API (called via iso_c_binding)
@@ -256,6 +270,7 @@ if(WITH_ADIOS2)
     target_link_libraries(xcompact PRIVATE ${ADIOS2_C_TARGET})
     if(TARGET x3d2-memcheck)
       target_link_libraries(x3d2-memcheck PRIVATE ${ADIOS2_C_TARGET})
+      target_link_libraries(x3d2_memcheck PRIVATE ${ADIOS2_C_TARGET})
     endif()
   endif()
 endif()
