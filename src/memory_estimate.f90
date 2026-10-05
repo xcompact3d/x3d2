@@ -15,9 +15,9 @@ module m_memory_estimate
 
   private
   public :: padded_dim, padded_cells, cell_dims, spectral_slab_bytes, &
-            mirror_buffer_bytes_100, stretched_y_matrix_bytes, &
-            output_field_active, peak_fields_lookup, halo_bytes, &
-            gpu_io_staging_bytes
+            mirror_buffer_bytes_100, spectral_extra_bytes_110, &
+            stretched_y_matrix_bytes, output_field_active, &
+            peak_fields_lookup, halo_bytes, gpu_io_staging_bytes
 
 contains
 
@@ -118,6 +118,21 @@ contains
     nbytes8 = 2_i8*nx_spec*ny_spec*nz_spec*2_i8*int(nbytes, i8) + &
               2_i8*nx_spec*nz_spec*2_i8*int(nbytes, i8)
   end function mirror_buffer_bytes_100
+
+  pure function spectral_extra_bytes_110(cdims, ng) result(nbytes8)
+    !! 110-case bytes on top of the waves_dev slab (never runs at ng>1 in
+    !! this solver): a SECOND complex array of the same spectral shape,
+    !! c_dev (src/backend/cuda/poisson_fft.f90:416-418), plus a real,
+    !! globally-shaped transposed workspace r_dev_110 (:414), which has the
+    !! same total element count as cdims, just permuted.
+    integer, intent(in) :: cdims(3)
+    integer, intent(in) :: ng
+    integer(i8) :: nbytes8
+
+    nbytes8 = spectral_slab_bytes(.false., .true., cdims, ng) &
+              + int(cdims(1), i8)*int(cdims(2), i8)*int(cdims(3), i8) &
+              *int(nbytes, i8)
+  end function spectral_extra_bytes_110
 
   pure function stretched_y_matrix_bytes(bc_is_010, stretching_y, lowmem_fft, &
                                           cdims, ng) result(nbytes8)

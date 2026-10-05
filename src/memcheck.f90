@@ -46,6 +46,7 @@ program x3d2_memcheck
   use m_cuda_common, only: SZ
   use m_memory_estimate, only: padded_dim, padded_cells, cell_dims, &
                                spectral_slab_bytes, mirror_buffer_bytes_100, &
+                               spectral_extra_bytes_110, &
                                stretched_y_matrix_bytes, output_field_active, &
                                peak_fields_lookup, halo_bytes, &
                                gpu_io_staging_bytes
@@ -605,9 +606,7 @@ contains
     if (bc_is_100) then
       nbytes8 = nbytes8 + mirror_buffer_bytes_100(cdims, ng)
     else if (bc_is_110) then
-      nbytes8 = nbytes8 + spectral_slab_bytes(bc_is_100, bc_is_110, cdims, ng) &
-               + int(cdims(1), i8)*int(cdims(2), i8)*int(cdims(3), i8) &
-                *int(nbytes, i8)
+      nbytes8 = nbytes8 + spectral_extra_bytes_110(cdims, ng)
     else if (bc_is_010) then
       nbytes8 = nbytes8 + stretched_y_matrix_bytes(bc_is_010, &
                           domain_cfg%stretching(2), solver_cfg%lowmem_fft, &
