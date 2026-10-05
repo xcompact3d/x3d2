@@ -38,7 +38,7 @@ contains
     integer(i8) :: n
 
     n = int(padded_dim(dims(1), sz), i8)*int(padded_dim(dims(2), sz), i8) &
-       *int(dims(3), i8)
+        *int(dims(3), i8)
   end function padded_cells
 
   pure function cell_dims(vert_dims, periodic) result(c)
