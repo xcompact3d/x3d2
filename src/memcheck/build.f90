@@ -476,8 +476,8 @@ contains
     call make_scratch(ctx, build_scratch_ok)
     if (.not. build_scratch_ok) return
 
-    call build_and_measure(ctx, ctx%gdims, measured_peak_fields, used_gib, &
-                           ibm_missing)
+    call build_and_measure(ctx, [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)], &
+                           measured_peak_fields, used_gib, ibm_missing)
     call leave_build_scratch(ctx)
     if (ibm_missing) then
       call print_rule('-')
