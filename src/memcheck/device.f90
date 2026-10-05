@@ -15,6 +15,9 @@ module m_memcheck_device
     procedure(mem_info_iface), deferred :: mem_info
     !> Pencil size (the SZ of the backend's field layout).
     procedure(sz_iface), deferred :: sz
+    !> Tier 1 floor of the per-GPU overhead at ng GPUs, in bytes: the
+    !> device context plus (unless bc_is_110) the distributed FFT heap.
+    procedure(overhead_floor_bytes_iface), deferred :: overhead_floor_bytes
   end type memcheck_device_t
 
   abstract interface
@@ -36,6 +39,14 @@ module m_memcheck_device
       class(memcheck_device_t), intent(in) :: self
       integer :: pencil_size
     end function sz_iface
+
+    function overhead_floor_bytes_iface(self, ng, bc_is_110) result(nbytes8)
+      import :: memcheck_device_t, i8
+      class(memcheck_device_t), intent(in) :: self
+      integer, intent(in) :: ng
+      logical, intent(in) :: bc_is_110
+      integer(i8) :: nbytes8
+    end function overhead_floor_bytes_iface
   end interface
 
 end module m_memcheck_device

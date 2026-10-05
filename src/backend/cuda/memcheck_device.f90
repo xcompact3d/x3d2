@@ -5,7 +5,7 @@ module m_cuda_memcheck_device
                      cuda_count_kind
   use m_common, only: i8
   use m_cuda_common, only: SZ
-  use m_cuda_memory_estimate, only: check_status
+  use m_cuda_memory_estimate, only: check_status, context_floor_bytes
   use m_memcheck_device, only: memcheck_device_t
   implicit none
 
@@ -17,6 +17,7 @@ module m_cuda_memcheck_device
     procedure :: init
     procedure :: mem_info
     procedure :: sz => pencil_size
+    procedure :: overhead_floor_bytes
   end type cuda_memcheck_device_t
 
 contains
@@ -61,5 +62,18 @@ contains
 
     n = SZ
   end function pencil_size
+
+  function overhead_floor_bytes(self, ng, bc_is_110) result(nbytes8)
+    !! Assumes cuFFTMp (the realistic case for every BC the solver attempts
+    !! it for) except for 110, which always uses plain cuFFT.
+    class(cuda_memcheck_device_t), intent(in) :: self
+    integer, intent(in) :: ng
+    logical, intent(in) :: bc_is_110
+    integer(i8) :: nbytes8
+    logical :: uses_cufftmp
+
+    uses_cufftmp = .not. bc_is_110
+    nbytes8 = context_floor_bytes(ng, uses_cufftmp)
+  end function overhead_floor_bytes
 
 end module m_cuda_memcheck_device
