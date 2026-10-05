@@ -91,16 +91,6 @@ program x3d2_memcheck
   type(memcheck_ctx_t) :: ctx
   integer :: ierr, irank, nproc, ndevs
   integer :: measured_n_substeps
-  !> Set by report()'s ng=1 row, used by run_tier3()'s CHECK line to
-  !> compare the static estimate against the real --build measurement.
-  real(dp) :: estimate_ng1_gib
-  !> The requested configuration's verdict - set by report() from the
-  !> estimate, and (--build only) overwritten by run_tier3() with the more
-  !> authoritative measured verdict if a real build actually ran. Used
-  !> after MPI_Finalize to set the process exit code: 0=FITS, 1=BORDERLINE,
-  !> 2=DOES_NOT_FIT, so a calling script can check $? instead of scraping
-  !> stdout.
-  character(len=12) :: final_verdict
   !> Queried once, at this process's own rank count (always 1 - see
   !> ensure_fft_query). These are real, live cudaMemGetInfo measurements
   !> for a SINGLE-RANK communicator; there is no way to measure the true
@@ -135,16 +125,6 @@ program x3d2_memcheck
   !> peak_fields against m_memory_estimate's static peak_fields_lookup (see
   !> check_peak_fields_table).
   logical :: output_vorticity = .false., output_qcriterion = .false.
-  !> GPU-aware IO staging term (GiB) at ng=1, captured by report()'s table
-  !> loop and consumed by run_tier3()'s CHECK line, which must exclude it -
-  !> the real --build never performs a snapshot/checkpoint write.
-  real(dp) :: io_staging_ng1_gib = 0._dp
-  !> orig_dir/scratch_dir: set by validate_build_inputs and make_scratch,
-  !> used by leave_build_scratch to chdir back and remove the scratch
-  !> directory - see their docstrings and run_tier3's docstring for why a
-  !> real --build runs inside a throwaway subdirectory rather than the
-  !> invoking directory.
-  character(len=4096) :: orig_dir = '', scratch_dir = ''
 
   interface
     function c_chdir(path) bind(C, name='chdir') result(rc)
@@ -209,7 +189,7 @@ program x3d2_memcheck
   ! 2=DOES_NOT_FIT (also covers UNSUPPORTED - an unsupported nproc_dir
   ! request, via the default case below, since neither fits nor merely
   ! borderline is the right signal for it).
-  select case (trim(final_verdict))
+  select case (trim(ctx%final_verdict))
   case ('FITS')
     call exit(0)
   case ('BORDERLINE')
@@ -763,13 +743,14 @@ contains
       print '(a,i0,a,i0,a,i0,a,a,a)', 'Requested nproc_dir [', &
         ctx%domain_cfg%nproc_dir(1), ',', ctx%domain_cfg%nproc_dir(2), ',', &
         ctx%domain_cfg%nproc_dir(3), ']: not supported (', trim(reason), ')'
-      final_verdict = 'UNSUPPORTED'
+      ctx%final_verdict = 'UNSUPPORTED'
     else
-      call estimate_for_ng(requested_ng, requested_gib, exact, final_verdict)
+      call estimate_for_ng(requested_ng, requested_gib, exact, &
+                           ctx%final_verdict)
       print '(a,i0,a,f0.2,a,f0.1,a,a)', 'Requested nproc_dir gives ng=', &
         requested_ng, ': ', requested_gib, ' GiB/GPU (', &
         100._dp*requested_gib/ctx%card_gib, '% of card) - ', &
-        trim(final_verdict)
+        trim(ctx%final_verdict)
       if (.not. exact) then
         if (trim(ctx%run_mode) == 'STATIC') then
           print '(a)', '  (Tier 1 estimate only: --static skips the GPU &
@@ -806,8 +787,8 @@ contains
       call estimate_for_ng(ng, per_gpu_gib, exact, verdict, workspace_gib, &
                            overhead_gib, io_gib)
       if (ng == 1) then
-        estimate_ng1_gib = per_gpu_gib
-        io_staging_ng1_gib = io_gib
+        ctx%estimate_ng1_gib = per_gpu_gib
+        ctx%io_staging_ng1_gib = io_gib
       end if
       call print_table_row(ng, local_dims, workspace_gib, overhead_gib, &
                            per_gpu_gib, ctx%card_gib, verdict)
@@ -855,7 +836,7 @@ contains
       print '(a)', 'No scanned GPU count fits with headroom to spare.'
     end if
 
-    if (trim(final_verdict) == 'BORDERLINE' .and. &
+    if (trim(ctx%final_verdict) == 'BORDERLINE' .and. &
         trim(ctx%run_mode) /= 'BUILD') &
       print '(a)', 'To confirm with a real measurement, re-run with --build.'
   end subroutine report
@@ -890,7 +871,7 @@ contains
     logical, intent(out) :: ok
 
     print '(a)', msg
-    if (cleanup) call run_sh("rm -rf '"//trim(scratch_dir)//"'")
+    if (cleanup) call run_sh("rm -rf '"//trim(ctx%scratch_dir)//"'")
     ok = .false.
   end subroutine skip_build
 
@@ -909,7 +890,7 @@ contains
     logical :: ibm_file_exists, input_exists, flow_case_supported
 
     ok = .true.
-    orig_dir = current_dir()
+    ctx%orig_dir = current_dir()
 
     inquire (file=trim(ctx%input_path), exist=input_exists)
     if (.not. input_exists) then
@@ -934,7 +915,7 @@ contains
     if (ctx%solver_cfg%ibm_on) then
       ibm_file = ibm_mask_filename(ctx%periodic_x, ctx%periodic_y, &
                                    ctx%periodic_z)
-      inquire (file=trim(orig_dir)//'/'//trim(ibm_file), &
+      inquire (file=trim(ctx%orig_dir)//'/'//trim(ibm_file), &
               exist=ibm_file_exists)
       if (.not. ibm_file_exists) then
         call skip_build('Real build skipped: ibm_on=T but the matching &
@@ -971,26 +952,27 @@ contains
     logical :: input_exists
 
     ok = .true.
-    scratch_dir = scratch_name(orig_dir)
+    ctx%scratch_dir = scratch_name(ctx%orig_dir)
 
     ! A stale scratch directory from an earlier run's unexpected error stop
     ! after the chdir below (see this subroutine's docstring) would make a
     ! plain mkdir fail - remove it first, if present.
-    call run_sh("test -d '"//trim(scratch_dir)//"'", st)
+    call run_sh("test -d '"//trim(ctx%scratch_dir)//"'", st)
     if (st == 0) then
-      call run_sh("rm -rf '"//trim(scratch_dir)//"'", st)
+      call run_sh("rm -rf '"//trim(ctx%scratch_dir)//"'", st)
       if (st /= 0) then
         call skip_build('Real build skipped: could not remove stale &
-                        &scratch directory '//trim(scratch_dir), .false., ok)
+                        &scratch directory '//trim(ctx%scratch_dir), &
+                        .false., ok)
         return
       end if
-      print '(a,a)', 'Removed stale scratch directory ', trim(scratch_dir)
+      print '(a,a)', 'Removed stale scratch directory ', trim(ctx%scratch_dir)
     end if
 
-    call run_sh("mkdir '"//trim(scratch_dir)//"'", st)
+    call run_sh("mkdir '"//trim(ctx%scratch_dir)//"'", st)
     if (st /= 0) then
       call skip_build('Real build skipped: could not create scratch &
-                      &directory '//trim(scratch_dir), .false., ok)
+                      &directory '//trim(ctx%scratch_dir), .false., ok)
       return
     end if
 
@@ -1004,7 +986,7 @@ contains
       end if
       slash_pos = index(trim(ctx%input_path), '/', back=.true.)
       if (slash_pos > 0) then
-        call run_sh("mkdir -p '"//trim(scratch_dir)//'/'// &
+        call run_sh("mkdir -p '"//trim(ctx%scratch_dir)//'/'// &
                     trim(ctx%input_path(1:slash_pos - 1))//"'", st)
         if (st /= 0) then
           call skip_build('Real build skipped: could not prepare scratch &
@@ -1013,15 +995,15 @@ contains
           return
         end if
       end if
-      call run_sh("ln -s '"//trim(orig_dir)//'/'// &
-                  trim(ctx%input_path)//"' '"//trim(scratch_dir)// &
+      call run_sh("ln -s '"//trim(ctx%orig_dir)//'/'// &
+                  trim(ctx%input_path)//"' '"//trim(ctx%scratch_dir)// &
                   '/'//trim(ctx%input_path)//"'", st)
       if (st /= 0) then
         call skip_build('Real build skipped: could not prepare scratch &
                         &directory (input symlink failed)', .true., ok)
         return
       end if
-      inquire (file=trim(scratch_dir)//'/'//trim(ctx%input_path), &
+      inquire (file=trim(ctx%scratch_dir)//'/'//trim(ctx%input_path), &
               exist=input_exists)
       if (.not. input_exists) then
         call skip_build('Real build skipped: could not prepare scratch &
@@ -1033,8 +1015,8 @@ contains
     if (ctx%solver_cfg%ibm_on) then
       ibm_file = ibm_mask_filename(ctx%periodic_x, ctx%periodic_y, &
                                    ctx%periodic_z)
-      call run_sh("ln -s '"//trim(orig_dir)//'/'// &
-                  trim(ibm_file)//"' '"//trim(scratch_dir)// &
+      call run_sh("ln -s '"//trim(ctx%orig_dir)//'/'// &
+                  trim(ibm_file)//"' '"//trim(ctx%scratch_dir)// &
                   '/'//trim(ibm_file)//"'", st)
       if (st /= 0) then
         call skip_build('Real build skipped: could not prepare scratch &
@@ -1043,14 +1025,14 @@ contains
       end if
     end if
 
-    rc = c_chdir(trim(scratch_dir)//c_null_char)
+    rc = c_chdir(trim(ctx%scratch_dir)//c_null_char)
     if (rc /= 0) then
       call skip_build('Real build skipped: could not chdir into scratch &
-                      &directory '//trim(scratch_dir), .true., ok)
+                      &directory '//trim(ctx%scratch_dir), .true., ok)
       return
     end if
 
-    print '(a,a,a)', 'Real build scratch directory: ', trim(scratch_dir), &
+    print '(a,a,a)', 'Real build scratch directory: ', trim(ctx%scratch_dir), &
       ' (removed after the build)'
   end subroutine make_scratch
 
@@ -1061,7 +1043,7 @@ contains
     integer(c_int) :: rc
     character(len=4096) :: expected_scratch_dir
 
-    rc = c_chdir(trim(orig_dir)//c_null_char)
+    rc = c_chdir(trim(ctx%orig_dir)//c_null_char)
     if (rc /= 0) &
       error stop 'x3d2-memcheck: could not chdir back to the invoking &
         &directory after the real build; state is unknown, not removing &
@@ -1069,12 +1051,12 @@ contains
 
     ! Never remove anything other than the exact scratch directory
     ! make_scratch created and chdir'd into.
-    expected_scratch_dir = scratch_name(orig_dir)
-    if (trim(scratch_dir) == trim(expected_scratch_dir)) &
-      call run_sh("rm -rf '"//trim(scratch_dir)//"'")
+    expected_scratch_dir = scratch_name(ctx%orig_dir)
+    if (trim(ctx%scratch_dir) == trim(expected_scratch_dir)) &
+      call run_sh("rm -rf '"//trim(ctx%scratch_dir)//"'")
 
-    orig_dir = ''
-    scratch_dir = ''
+    ctx%orig_dir = ''
+    ctx%scratch_dir = ''
   end subroutine leave_build_scratch
 
   subroutine run_tier3()
@@ -1157,14 +1139,14 @@ contains
 
     call report_measured_table(measured_peak_fields, used_gib, &
                                workspace_gib_measured, measured_verdict)
-    final_verdict = measured_verdict
+    ctx%final_verdict = measured_verdict
 
     ! --build's CHECK line: the static ng=1 estimate against the measured
     ! device memory in use, OK within CHECK_TOLERANCE and MISMATCH beyond it.
     ! The real build above performs no snapshot/checkpoint write, so the
     ! GPU-aware IO staging term (analytical only, never measured here) is
     ! excluded from both the estimate compared and the printed CHECK line.
-    estimate_ng1_excl_io_gib = estimate_ng1_gib - io_staging_ng1_gib
+    estimate_ng1_excl_io_gib = ctx%estimate_ng1_gib - ctx%io_staging_ng1_gib
     pct_error = 100._dp*(estimate_ng1_excl_io_gib - used_gib)/used_gib
     if (abs(estimate_ng1_excl_io_gib - used_gib) <= &
         CHECK_TOLERANCE*used_gib) then
@@ -1175,9 +1157,9 @@ contains
     print '(a,f0.2,a,f0.2,a,sp,f0.1,ss,a,a,a)', 'CHECK ng=1: estimated ', &
       estimate_ng1_excl_io_gib, ' GiB, measured ', used_gib, ' GiB (', &
       pct_error, '%) - ', trim(check_word), ' (tolerance 5%)'
-    if (io_staging_ng1_gib > 0._dp) &
+    if (ctx%io_staging_ng1_gib > 0._dp) &
       print '(a,f0.1,a)', '  (GPU-aware IO staging ', &
-        io_staging_ng1_gib*1024._dp, ' MiB excluded from CHECK: the real &
+        ctx%io_staging_ng1_gib*1024._dp, ' MiB excluded from CHECK: the real &
         &build performs no snapshot/checkpoint write.)'
   end subroutine run_tier3
 
