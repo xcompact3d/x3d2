@@ -39,15 +39,12 @@ program x3d2_memcheck
   use iso_c_binding, only: c_char, c_int, c_size_t, c_ptr, c_null_char
   use cudafor, only: cudaMemGetInfo, cuda_count_kind, &
                      cudaGetDeviceCount, cudaSetDevice
-  use m_common, only: dp, i8, nbytes, VERT, is_sp
+  use m_common, only: dp, i8, VERT, is_sp
   use m_mesh, only: mesh_t
   use m_cuda_common, only: SZ
-  use m_memory_estimate, only: padded_cells, spectral_slab_bytes, &
-                               mirror_buffer_bytes_100, &
-                               spectral_extra_bytes_110, &
-                               stretched_y_matrix_bytes, output_field_active, &
-                               peak_fields_lookup, padded_halo_bytes, &
-                               gpu_io_staging_bytes
+  use m_memory_estimate, only: spectral_slab_bytes, mirror_buffer_bytes_100, &
+                               output_field_active, peak_fields_lookup, &
+                               padded_halo_bytes, gpu_io_staging_bytes
   use m_cuda_memory_estimate, only: fft_workspace_bytes_query, &
                                     context_floor_bytes, check_status
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
@@ -65,7 +62,10 @@ program x3d2_memcheck
   use m_memcheck_context, only: memcheck_ctx_t, parse_args, read_config, &
                                 classify_bc, resolve_gpu_io_mode
   use m_memcheck_estimate, only: DOES_NOT_FIT_FRACTION, to_gib, classify, &
-                                 ng_unsupported_reason
+                                 ng_unsupported_reason, n_halo, &
+                                 fields_plus_halo_bytes_n, &
+                                 fields_plus_halo_bytes, &
+                                 spectral_plus_mirror_bytes
 
   implicit none
 
@@ -82,7 +82,6 @@ program x3d2_memcheck
   !> ~8% byte mismatch, well outside this tolerance - and is separately,
   !> exactly caught by the drift check below regardless of byte tolerance.
   real(dp), parameter :: CHECK_TOLERANCE = 0.05_dp
-  integer, parameter :: n_halo = 4
   !> Candidate GPU counts to scan for "smallest ng that fits". The CUDA
   !> backend only supports a Z-only pencil decomposition (nproc_dir=
   !> [1,1,ng]) today.
@@ -286,56 +285,6 @@ contains
       '% | ', trim(verdict)
   end subroutine print_table_row
 
-  function fields_plus_halo_bytes_n(ng, npeak) result(nbytes8)
-    !! Same formula as fields_plus_halo_bytes, but for an explicit npeak
-    !! rather than the module's static peak_fields - used by the --build
-    !! measured table, which has its own real measured field count.
-    integer, intent(in) :: ng, npeak
-    integer(i8) :: nbytes8
-    integer :: local_dims(3)
-
-    local_dims = [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)/ng]
-    nbytes8 = int(npeak, i8)*padded_cells(local_dims, SZ) &
-              *int(nbytes, i8) + padded_halo_bytes(local_dims, SZ, n_halo)
-  end function fields_plus_halo_bytes_n
-
-  function fields_plus_halo_bytes(ng) result(nbytes8)
-    !! Exact, ng dependent field+halo term (Tier 1, no GPU/plan needed),
-    !! using the static peak_fields_lookup value.
-    integer, intent(in) :: ng
-    integer(i8) :: nbytes8
-
-    nbytes8 = fields_plus_halo_bytes_n(ng, ctx%peak_fields)
-  end function fields_plus_halo_bytes
-
-  function spectral_plus_mirror_bytes(ng) result(nbytes8)
-    !! waves_dev (all cases, src/backend/cuda/poisson_fft.f90:322-324) is
-    !! exactly spectral_slab_bytes. Two BC-specific extra terms:
-    !!   100, ng>1: mirror/exchange buffers (:339-347), zero at ng<=1.
-    !!   110 (never ng>1 - see multi_gpu_supported): a SECOND complex array
-    !!     of the same spectral shape, c_dev (:416-418), plus a real,
-    !!     globally-shaped transposed workspace r_dev_110(nz_glob,nx_glob,
-    !!     ny_glob) (:414) - i.e. the same total element count as cdims,
-    !!     just permuted. Missing this term underestimated the 110 case by
-    !!     ~14% (0.98 vs 1.134 GiB measured) during this feature's design.
-    !!   010, non-uniform y-stretching (never ng>1 - 010 error-stops at
-    !!     nproc>1): the a_*_dev Poisson coefficient matrices, see
-    !!     stretched_y_matrix_bytes.
-    integer, intent(in) :: ng
-    integer(i8) :: nbytes8
-
-    nbytes8 = spectral_slab_bytes(ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, ng)
-    if (ctx%bc_is_100) then
-      nbytes8 = nbytes8 + mirror_buffer_bytes_100(ctx%cdims, ng)
-    else if (ctx%bc_is_110) then
-      nbytes8 = nbytes8 + spectral_extra_bytes_110(ctx%cdims, ng)
-    else if (ctx%bc_is_010) then
-      nbytes8 = nbytes8 + stretched_y_matrix_bytes(ctx%bc_is_010, &
-                          ctx%domain_cfg%stretching(2), &
-                          ctx%solver_cfg%lowmem_fft, ctx%cdims, ng)
-    end if
-  end function spectral_plus_mirror_bytes
-
   subroutine ensure_fft_query()
     !! Runs the real (single-rank) Tier 2 plan query at most once per
     !! process and caches the result in ng1_worksize_bytes/ng1_heap_bytes/
@@ -386,8 +335,8 @@ contains
     logical :: used_cufftmp
     real(dp) :: floor_gib, io_gib_local
 
-    base_bytes = fields_plus_halo_bytes(ng)
-    spec_bytes = spectral_plus_mirror_bytes(ng)
+    base_bytes = fields_plus_halo_bytes(ctx, ng)
+    spec_bytes = spectral_plus_mirror_bytes(ctx, ng)
     io_bytes = gpu_io_staging_bytes([ctx%gdims(1), ctx%gdims(2), &
                                      ctx%gdims(3)/ng], &
                                     ctx%checkpoint_cfg, &
@@ -870,7 +819,7 @@ contains
     ! --build gate: skip the real build (after printing why) when the fields
     ! only workspace alone already exceeds BUILD_FRACTION of the FREE card
     ! memory.
-    ws_guess = to_gib(fields_plus_halo_bytes_n(1, ctx%peak_fields))
+    ws_guess = to_gib(fields_plus_halo_bytes_n(ctx, 1, ctx%peak_fields))
     ! fields_plus_halo_bytes_n includes the halo term; the historical
     ! BUILD_FRACTION guard was calibrated against fields alone, so subtract
     ! it back out here rather than changing the (already-validated)
@@ -912,7 +861,7 @@ contains
     call check_peak_fields_table(measured_peak_fields)
 
     workspace_gib_measured = &
-      to_gib(fields_plus_halo_bytes_n(1, measured_peak_fields))
+      to_gib(fields_plus_halo_bytes_n(ctx, 1, measured_peak_fields))
 
     call report_measured_table(measured_peak_fields, used_gib, &
                                workspace_gib_measured, measured_verdict)
@@ -1050,7 +999,7 @@ contains
         cycle
       end if
       local_dims = [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)/ng]
-      w_local = to_gib(fields_plus_halo_bytes_n(ng, measured_peak_fields))
+      w_local = to_gib(fields_plus_halo_bytes_n(ctx, ng, measured_peak_fields))
 
       mirror_gib = 0._dp
       if (ctx%bc_is_100) &
