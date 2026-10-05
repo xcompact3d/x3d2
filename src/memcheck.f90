@@ -62,7 +62,7 @@ program x3d2_memcheck
   use m_cuda_allocator, only: cuda_allocator_t
   use m_cuda_backend, only: cuda_backend_t
   use m_cuda_poisson_fft, only: cuda_poisson_fft_t
-  use m_memcheck_context, only: memcheck_ctx_t
+  use m_memcheck_context, only: memcheck_ctx_t, parse_args, read_config
 
   implicit none
 
@@ -127,8 +127,8 @@ program x3d2_memcheck
     call no_device_exit()
   end if
 
-  call parse_args()
-  call read_config()
+  call parse_args(ctx)
+  call read_config(ctx)
   call resolve_gpu_io_mode()
   call classify_bc()
   call query_card_gib()
@@ -173,68 +173,6 @@ contains
     call MPI_Finalize(ierr_finalize)
     error stop 'x3d2-memcheck: no usable CUDA device'
   end subroutine no_device_exit
-
-  subroutine parse_args()
-    integer :: i, nargs, iostat_n
-    character(len=256) :: arg
-    logical :: static_flag, build_flag
-
-    nargs = command_argument_count()
-    if (nargs < 1) error stop 'usage: x3d2-memcheck <input.x3d> &
-      &[--static | --build [--extensive <n_substeps>]]'
-    ! The input file must stay positional argument 1: the real case
-    ! constructors this tool calls under --build (case_channel_init,
-    ! case_cylinder_init, solver_init) independently re-read
-    ! get_argument(1) themselves rather than taking the path as a
-    ! parameter, so flags must only ever appear after it.
-    call get_command_argument(1, ctx%input_path)
-
-    static_flag = .false.
-    build_flag = .false.
-    i = 2
-    do while (i <= nargs)
-      call get_command_argument(i, arg)
-      select case (trim(arg))
-      case ('--static')
-        static_flag = .true.
-      case ('--build')
-        build_flag = .true.
-      case ('--extensive')
-        if (i == nargs) error stop 'x3d2-memcheck: --extensive needs a &
-          &positive integer substep count, e.g. --extensive 1000'
-        i = i + 1
-        call get_command_argument(i, arg)
-        read (arg, *, iostat=iostat_n) ctx%extensive_substeps
-        if (iostat_n /= 0 .or. ctx%extensive_substeps < 1) &
-          error stop 'x3d2-memcheck: --extensive needs a positive &
-            &integer substep count'
-        build_flag = .true.
-      case default
-        error stop 'x3d2-memcheck: unknown flag '//trim(arg)// &
-          ' (expected --static, --build, or --extensive <n>)'
-      end select
-      i = i + 1
-    end do
-    if (static_flag .and. build_flag) &
-      error stop 'x3d2-memcheck: --static and --build/--extensive are &
-        &mutually exclusive (--static stops at Tier 1).'
-
-    if (static_flag) then
-      ctx%run_mode = 'STATIC'
-    else if (build_flag) then
-      ctx%run_mode = 'BUILD'
-    else
-      ctx%run_mode = 'DEFAULT'
-    end if
-  end subroutine parse_args
-
-  subroutine read_config()
-    call ctx%domain_cfg%read(nml_file=trim(ctx%input_path))
-    call ctx%solver_cfg%read(nml_file=trim(ctx%input_path))
-    call ctx%les_cfg%read(nml_file=trim(ctx%input_path))
-    call ctx%checkpoint_cfg%read(nml_file=trim(ctx%input_path))
-    ctx%gdims = ctx%domain_cfg%dims_global
-  end subroutine read_config
 
   subroutine resolve_gpu_io_mode()
     !! Resolve whether this run's snapshot/checkpoint writes would stage
