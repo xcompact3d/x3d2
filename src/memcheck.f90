@@ -482,9 +482,8 @@ contains
   end function classify
 
   pure function to_gib(n_bytes) result(gib)
-    !! Bytes to GiB, the one conversion every figure this tool prints goes
-    !! through, so the expression (and so the printed digits) cannot drift
-    !! between call sites.
+    !! Bytes to GiB, the one conversion every printed figure goes through
+    !! so the digits cannot drift between call sites.
     integer(i8), intent(in) :: n_bytes
     real(dp) :: gib
 
@@ -735,8 +734,7 @@ contains
 
   subroutine print_io_staging_line()
     !! The GPU-aware IO staging line of the report header: the term at ng=1
-    !! with the snapshot/checkpoint kind that causes it, or why there is
-    !! none.
+    !! and what causes it, or why there is none.
     real(dp) :: mib
     logical :: unit_stride, snapshot_active, checkpoint_active
     character(len=64) :: what, io_none_reason
@@ -812,10 +810,8 @@ contains
   end subroutine print_requested_line
 
   subroutine print_ng_table(smallest_fits)
-    !! Table header and one row per scanned GPU count (an unsupported count
-    !! prints why it is skipped), then a closing rule. The ng=1 row also
-    !! records the estimate and its IO staging term for run_tier3's CHECK
-    !! line. smallest_fits is the first scanned count that FITS, 0 if none.
+    !! The estimate table, one row per scanned GPU count (the ng=1 row also
+    !! feeds run_tier3's CHECK line); smallest_fits is 0 if none FITS.
     integer, intent(out) :: smallest_fits
 
     integer :: k, ng, local_dims(3)
@@ -891,9 +887,7 @@ contains
 
   function scratch_name(parent) result(path)
     !! <parent>/x3d2-memcheck-build.<pid>, the scratch directory of this
-    !! process. make_scratch creates it and leave_build_scratch
-    !! re-derives it before removing anything, so both must get the name
-    !! from here.
+    !! process, shared by make_scratch and leave_build_scratch.
     character(len=*), intent(in) :: parent
     character(len=4096) :: path
     integer(c_int) :: pid
@@ -905,8 +899,8 @@ contains
   end function scratch_name
 
   subroutine run_sh(cmd, status)
-    !! Run cmd through the shell. status (optional) receives its exit
-    !! status, 0 on success; leave it out for a best effort cleanup command.
+    !! Run cmd through the shell; status (optional) receives its exit
+    !! status, leave it out for a best effort cleanup command.
     character(len=*), intent(in) :: cmd
     integer, intent(out), optional :: status
 
@@ -914,10 +908,8 @@ contains
   end subroutine run_sh
 
   subroutine skip_build(msg, cleanup, ok)
-    !! Common tail of every "Real build skipped" exit of the scratch setup:
-    !! print msg, remove the scratch directory made so far if cleanup is
-    !! set, and flag ok=.false. so run_tier3 stops (the estimate above
-    !! stands).
+    !! Tail of every "Real build skipped" exit: print msg, remove the
+    !! scratch directory if cleanup is set, and flag ok=.false.
     character(len=*), intent(in) :: msg
     logical, intent(in) :: cleanup
     logical, intent(out) :: ok
@@ -1348,9 +1340,8 @@ contains
   end subroutine report_measured_table
 
   subroutine build_mesh(dims_in, mesh, dims, ibm_missing)
-    !! Mesh of the real build at dims_in, its vertex dims, and the ibm_on
-    !! mask pre-check. ibm_missing=.true. tells build_and_measure to stop
-    !! before building anything.
+    !! Mesh of the real build at dims_in plus the ibm_on mask pre-check;
+    !! ibm_missing=.true. tells build_and_measure to stop.
     integer, intent(in) :: dims_in(3)
     type(mesh_t), intent(out) :: mesh
     integer, intent(out) :: dims(3)
@@ -1387,11 +1378,8 @@ contains
 
   subroutine make_cuda_backend(mesh, dims, cuda_allocator, host_allocator, &
                                cuda_backend, allocator, backend)
-    !! Build the device allocator, the host allocator and the CUDA backend
-    !! of the real build, and point allocator/backend at them. The three
-    !! objects belong to the caller (build_and_measure) because the
-    !! pointers, the backend and the case built on it must not outlive
-    !! them.
+    !! Build the device and host allocators and the CUDA backend; the
+    !! caller owns all three so the pointers cannot outlive them.
     type(mesh_t), target, intent(inout) :: mesh
     integer, intent(in) :: dims(3)
     type(cuda_allocator_t), target, intent(inout) :: cuda_allocator
@@ -1434,12 +1422,8 @@ contains
   end subroutine make_flow_case
 
   subroutine drive_case(flow_case)
-    !! Drive the freshly built flow case the way run() does so the
-    !! allocator reaches its work-field high-water mark: the pre-loop
-    !! postprocess hook, one (or --extensive <n>) substep(s), then the
-    !! per-iteration pressure and derived-field calls. Records the substep
-    !! count in measured_n_substeps and the derived-field gating in
-    !! output_vorticity/output_qcriterion.
+    !! Drive the built flow case the way run() does so the allocator reaches
+    !! its high-water mark; records measured_n_substeps and the output flags.
     class(base_case_t), intent(inout) :: flow_case
 
     type(flist_t), allocatable :: curr(:), deriv(:)
