@@ -99,4 +99,79 @@ contains
     ok = .false.
   end subroutine skip_build
 
+  pure function ibm_mask_filename(px, py, pz) result(fname)
+    !! Build the ibm_<BC-suffix>.bp mask filename from the three periodic_BC
+    !! flags, e.g. mesh%grid%periodic_BC(1:3) in build_and_measure or the
+    !! module periodic_x/y/z classify_bc sets - both carry the same
+    !! information since both derive from domain_cfg%BC_x/y/z via
+    !! periodic_dir. Shared by build_and_measure's ibm_on pre-check and
+    !! make_scratch's mask mirroring so the suffix logic can never
+    !! diverge between the two (src/module/ibm.f90:70-75 is the third,
+    !! authoritative copy this mirrors).
+    logical, intent(in) :: px, py, pz
+    character(len=16) :: fname
+    character(len=3) :: bc_suffix
+
+    bc_suffix(1:1) = '0'
+    if (.not. px) bc_suffix(1:1) = '1'
+    bc_suffix(2:2) = '0'
+    if (.not. py) bc_suffix(2:2) = '1'
+    bc_suffix(3:3) = '0'
+    if (.not. pz) bc_suffix(3:3) = '1'
+    fname = "ibm_"//bc_suffix//".bp"
+  end function ibm_mask_filename
+
+  subroutine validate_build_inputs(ctx, ok)
+    !! Validates the known failure causes of a real build up front, before
+    !! touching the filesystem: the input file must exist,
+    !! domain_cfg%flow_case_name must be one this tool (and
+    !! build_and_measure's own select case) can dispatch, and (ibm_on=T) the
+    !! matching ibm_<BC-suffix>.bp mask file must already be present in the
+    !! invoking directory. Records the invoking directory in orig_dir for
+    !! make_scratch. Sets ok=.false. (and the estimate above stands, like
+    !! the other run_tier3 skips) on any failure.
+    type(memcheck_ctx_t), intent(inout) :: ctx
+    logical, intent(out) :: ok
+
+    character(len=16) :: ibm_file
+    logical :: ibm_file_exists, input_exists, flow_case_supported
+
+    ok = .true.
+    ctx%orig_dir = current_dir()
+
+    inquire (file=trim(ctx%input_path), exist=input_exists)
+    if (.not. input_exists) then
+      call skip_build(ctx, 'Real build skipped: input file not found: '// &
+                      trim(ctx%input_path), .false., ok)
+      return
+    end if
+
+    select case (trim(ctx%domain_cfg%flow_case_name))
+    case ('tgv', 'generic', 'channel', 'cylinder')
+      flow_case_supported = .true.
+    case default
+      flow_case_supported = .false.
+    end select
+    if (.not. flow_case_supported) then
+      call skip_build(ctx, "Real build skipped: flow case '"// &
+                      trim(ctx%domain_cfg%flow_case_name)// &
+                      "' has no dispatch in x3d2-memcheck", .false., ok)
+      return
+    end if
+
+    if (ctx%solver_cfg%ibm_on) then
+      ibm_file = ibm_mask_filename(ctx%periodic_x, ctx%periodic_y, &
+                                   ctx%periodic_z)
+      inquire (file=trim(ctx%orig_dir)//'/'//trim(ibm_file), &
+               exist=ibm_file_exists)
+      if (.not. ibm_file_exists) then
+        call skip_build(ctx, 'Real build skipped: ibm_on=T but the matching &
+                        &ibm_<BC-suffix>.bp mask file was not found in the &
+                        &working directory; the estimate above stands.', &
+                        .false., ok)
+        return
+      end if
+    end if
+  end subroutine validate_build_inputs
+
 end module m_memcheck_scratch
