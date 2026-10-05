@@ -7,6 +7,11 @@ module m_cuda_memcheck_device
   use m_cuda_common, only: SZ
   use m_cuda_memory_estimate, only: check_status, context_floor_bytes, &
                                     fft_workspace_bytes_query
+  use m_mesh, only: mesh_t
+  use m_allocator, only: allocator_t
+  use m_base_backend, only: base_backend_t
+  use m_cuda_allocator, only: cuda_allocator_t
+  use m_cuda_backend, only: cuda_backend_t
   use m_memcheck_device, only: memcheck_device_t
   use m_memcheck_estimate, only: to_gib
   implicit none
@@ -35,12 +40,15 @@ module m_cuda_memcheck_device
     !> the NVSHMEM heap this reserved, this should read ~0.
     real(dp) :: ng1_query_residual_gib
     logical :: ng1_query_ran = .false.
+    type(cuda_allocator_t) :: cuda_allocator
+    type(cuda_backend_t) :: cuda_backend
   contains
     procedure :: init
     procedure :: mem_info
     procedure :: sz => pencil_size
     procedure :: overhead_floor_bytes
     procedure :: overhead_query_bytes
+    procedure :: make_backend
   end type cuda_memcheck_device_t
 
 contains
@@ -166,5 +174,18 @@ contains
     end if
     nbytes8 = worksize_bytes + xtdesc_bytes + heap_bytes + context_bytes
   end function overhead_query_bytes
+
+  subroutine make_backend(self, mesh, dims, allocator, backend)
+    class(cuda_memcheck_device_t), target, intent(inout) :: self
+    type(mesh_t), target, intent(inout) :: mesh
+    integer, intent(in) :: dims(3)
+    class(allocator_t), pointer, intent(out) :: allocator
+    class(base_backend_t), pointer, intent(out) :: backend
+
+    self%cuda_allocator = cuda_allocator_t(dims, SZ)
+    allocator => self%cuda_allocator
+    self%cuda_backend = cuda_backend_t(mesh, allocator)
+    backend => self%cuda_backend
+  end subroutine make_backend
 
 end module m_cuda_memcheck_device

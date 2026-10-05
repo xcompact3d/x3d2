@@ -3,7 +3,6 @@ module m_memcheck_build
   !! measured report.
   use m_common, only: dp, i8, VERT
   use m_mesh, only: mesh_t
-  use m_cuda_common, only: SZ
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
@@ -13,8 +12,6 @@ module m_memcheck_build
   use m_case_generic, only: case_generic_t
   use m_case_tgv, only: case_tgv_t
   use m_field, only: flist_t
-  use m_cuda_allocator, only: cuda_allocator_t
-  use m_cuda_backend, only: cuda_backend_t
   use m_cuda_poisson_fft, only: cuda_poisson_fft_t
   use m_memcheck_scratch, only: ibm_mask_filename, validate_build_inputs, &
                                 make_scratch, leave_build_scratch
@@ -225,25 +222,6 @@ contains
     end if
   end subroutine build_mesh
 
-  subroutine make_cuda_backend(mesh, dims, cuda_allocator, host_allocator, &
-                               cuda_backend, allocator, backend)
-    !! Build the device and host allocators and the CUDA backend; the
-    !! caller owns all three so the pointers cannot outlive them.
-    type(mesh_t), target, intent(inout) :: mesh
-    integer, intent(in) :: dims(3)
-    type(cuda_allocator_t), target, intent(inout) :: cuda_allocator
-    type(allocator_t), target, intent(inout) :: host_allocator
-    type(cuda_backend_t), target, intent(inout) :: cuda_backend
-    class(allocator_t), pointer, intent(out) :: allocator
-    class(base_backend_t), pointer, intent(out) :: backend
-
-    cuda_allocator = cuda_allocator_t(dims, SZ)
-    allocator => cuda_allocator
-    host_allocator = allocator_t(dims, SZ)
-    cuda_backend = cuda_backend_t(mesh, allocator)
-    backend => cuda_backend
-  end subroutine make_cuda_backend
-
   subroutine make_flow_case(ctx, backend, mesh, host_allocator, flow_case)
     !! Build the flow case named in the input through the same case
     !! dispatch select case xcompact.f90 uses.
@@ -366,7 +344,7 @@ contains
     !! the input's restart path already exists in the CWD, this will
     !! measure a restarted state instead of the input's initial conditions.
     !! This mirrors production behaviour, not a tool-specific choice.
-    type(memcheck_ctx_t), intent(inout) :: ctx
+    type(memcheck_ctx_t), target, intent(inout) :: ctx
     integer, intent(in) :: dims_in(3)
     integer, intent(out) :: npeak
     real(dp), intent(out) :: dev_used
@@ -377,8 +355,6 @@ contains
     class(base_backend_t), pointer :: backend
     class(base_case_t), allocatable :: flow_case
     integer :: dims(3)
-    type(cuda_allocator_t), target :: cuda_allocator
-    type(cuda_backend_t), target :: cuda_backend
     type(allocator_t), target :: host_allocator
     integer(i8) :: free_b, total_b
 
@@ -390,8 +366,8 @@ contains
     call build_mesh(ctx, dims_in, mesh, dims, ibm_missing)
     if (ibm_missing) return
 
-    call make_cuda_backend(mesh, dims, cuda_allocator, host_allocator, &
-                           cuda_backend, allocator, backend)
+    call ctx%device%make_backend(mesh, dims, allocator, backend)
+    host_allocator = allocator_t(dims, ctx%device%sz())
 
     call make_flow_case(ctx, backend, mesh, host_allocator, flow_case)
 
