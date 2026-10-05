@@ -787,37 +787,6 @@ contains
     end if
   end subroutine print_io_staging_line
 
-  subroutine print_header_lines()
-    !! Top of the report: input grid, card memory (with the in-use WARNING
-    !! when other processes hold it) and the static peak_fields count.
-    call print_rule('=')
-    print '(a,i0,a,i0,a,i0,a)', 'Input grid: ', gdims(1), 'x', gdims(2), &
-      'x', gdims(3)
-    print '(a,f0.2,a,f0.2,a)', 'Card memory: ', card_gib, ' GiB (', &
-      card_free_gib, ' GiB free now)'
-    if (card_gib - card_free_gib > 0.5_dp) &
-      print '(a,f0.2,a)', 'WARNING: ', card_gib - card_free_gib, ' GiB of &
-        &this card is in use by other processes; verdicts are against the &
-        &full card, and the real build only proceeds if it fits in what is &
-        &free.'
-    print '(a,i0)', 'peak_fields (static estimate): ', peak_fields
-  end subroutine print_header_lines
-
-  subroutine print_mode_lines()
-    !! Bottom of the report header: which tiers this run mode covers, then
-    !! the closing rule.
-    select case (trim(run_mode))
-    case ('STATIC')
-      print '(a)', 'Mode: static (Tier 1 only, no FFT plan query)'
-    case ('BUILD')
-      print '(a)', 'Mode: build (Tier 1 + Tier 2, then a real Tier 3 &
-        &build/measure)'
-    case default
-      print '(a)', 'Mode: default (Tier 1 + Tier 2 FFT plan query)'
-    end select
-    call print_rule('=')
-  end subroutine print_mode_lines
-
   subroutine print_requested_line()
     !! The verdict line for the nproc_dir the input file asks for (or why
     !! that decomposition is not supported); sets final_verdict.
@@ -918,9 +887,28 @@ contains
   subroutine report()
     integer :: smallest_fits
 
-    call print_header_lines()
+    call print_rule('=')
+    print '(a,i0,a,i0,a,i0,a)', 'Input grid: ', gdims(1), 'x', gdims(2), &
+      'x', gdims(3)
+    print '(a,f0.2,a,f0.2,a)', 'Card memory: ', card_gib, ' GiB (', &
+      card_free_gib, ' GiB free now)'
+    if (card_gib - card_free_gib > 0.5_dp) &
+      print '(a,f0.2,a)', 'WARNING: ', card_gib - card_free_gib, ' GiB of &
+        &this card is in use by other processes; verdicts are against the &
+        &full card, and the real build only proceeds if it fits in what is &
+        &free.'
+    print '(a,i0)', 'peak_fields (static estimate): ', peak_fields
     call print_io_staging_line()
-    call print_mode_lines()
+    select case (trim(run_mode))
+    case ('STATIC')
+      print '(a)', 'Mode: static (Tier 1 only, no FFT plan query)'
+    case ('BUILD')
+      print '(a)', 'Mode: build (Tier 1 + Tier 2, then a real Tier 3 &
+        &build/measure)'
+    case default
+      print '(a)', 'Mode: default (Tier 1 + Tier 2 FFT plan query)'
+    end select
+    call print_rule('=')
     call print_requested_line()
 
     call print_rule('-')
