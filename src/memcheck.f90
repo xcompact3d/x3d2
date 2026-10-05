@@ -91,29 +91,6 @@ program x3d2_memcheck
   type(memcheck_ctx_t) :: ctx
   integer :: ierr, irank, nproc, ndevs
   integer :: measured_n_substeps
-  !> Queried once, at this process's own rank count (always 1 - see
-  !> ensure_fft_query). These are real, live cudaMemGetInfo measurements
-  !> for a SINGLE-RANK communicator; there is no way to measure the true
-  !> ng>1 cost without actually running under mpirun -n ng, which this
-  !> single-process estimator does not do. estimate_for_ng instead
-  !> extrapolates ng>1 by the 1/ng law confirmed by a real mpirun -n 2
-  !> xcompact run on examples/TGV/input.x3d (2026-09-10: 3339 MiB/GPU
-  !> measured vs 3.21 GiB predicted this way) - ng1_worksize_bytes (plain
-  !> cuFFT path only) and ng1_heap_bytes (cuFFTMp's NVSHMEM heap) both
-  !> scale this way; ng1_xtdesc_bytes (cuFFTMp's distributed data buffer)
-  !> does not - it is added only at ng=1, since it was measured to cost
-  !> 0 extra at ng=2 (drawn from heap space the plan already reserved).
-  integer(i8) :: ng1_worksize_bytes, ng1_heap_bytes, ng1_xtdesc_bytes
-  logical :: ng1_used_cufftmp
-  !> Set by ensure_fft_query, the cudaMemGetInfo delta across the whole
-  !> throwaway plan query (create+destroy) - if cufftDestroy fully released
-  !> the NVSHMEM heap this reserved, this should read ~0. Printed under
-  !> --build only, right before the real build, since that is the only
-  !> mode where a second cuFFTMp plan lifecycle follows in the same
-  !> process and a non-zero residual would mean the real build's own
-  !> measurement is inflated by whatever Tier 2 left behind.
-  real(dp) :: ng1_query_residual_gib
-  logical :: ng1_query_ran = .false.
   !> Whether a --build's real build actually used cuFFTMp (only known once
   !> the real solver is constructed) - the only real "cuFFTMp available"
   !> signal in this codebase, more authoritative than Tier 2's throwaway
@@ -566,22 +543,22 @@ contains
     !! ng1_xtdesc_bytes/ng1_used_cufftmp, plus the cudaMemGetInfo delta
     !! across the whole call in ng1_query_residual_gib (see its
     !! declaration).
-    logical, save :: done = .false.
     integer(kind=cuda_count_kind) :: free_before, free_after, total_b
 
-    if (done) return
+    if (ctx%ng1_query_ran) return
     ierr = cudaMemGetInfo(free_before, total_b)
     call check_status(ierr, 'cudaMemGetInfo (before FFT probe)')
     call fft_workspace_bytes_query(ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, &
-                                   .true., irank == 0, ng1_worksize_bytes, &
-                                   ng1_heap_bytes, ng1_xtdesc_bytes, &
-                                   ng1_used_cufftmp)
+                                   .true., irank == 0, &
+                                   ctx%ng1_worksize_bytes, &
+                                   ctx%ng1_heap_bytes, &
+                                   ctx%ng1_xtdesc_bytes, &
+                                   ctx%ng1_used_cufftmp)
     ierr = cudaMemGetInfo(free_after, total_b)
     call check_status(ierr, 'cudaMemGetInfo (after FFT probe)')
-    ng1_query_residual_gib = to_gib(int(free_before, i8) - &
-                                    int(free_after, i8))
-    ng1_query_ran = .true.
-    done = .true.
+    ctx%ng1_query_residual_gib = to_gib(int(free_before, i8) - &
+                                        int(free_after, i8))
+    ctx%ng1_query_ran = .true.
   end subroutine ensure_fft_query
 
   subroutine estimate_for_ng(ng, per_gpu_gib, exact, verdict, workspace_gib, &
@@ -646,7 +623,7 @@ contains
     end if
 
     call ensure_fft_query()
-    used_cufftmp = ng1_used_cufftmp
+    used_cufftmp = ctx%ng1_used_cufftmp
     ! context_bytes: the CUDA-context-alone baseline (no ng argument
     ! matters here - context_floor_bytes only adds its hardcoded NVSHMEM
     ! heap when uses_cufftmp=.true., so passing .false. always yields just
@@ -658,17 +635,17 @@ contains
       ! of the NVSHMEM heap for cuFFTMp, not a separate allocation - do
       ! not add it on top of heap_bytes (see that function's docstring).
       worksize_bytes = 0_i8
-      heap_bytes = int(real(ng1_heap_bytes, dp)/real(ng, dp), i8)
+      heap_bytes = int(real(ctx%ng1_heap_bytes, dp)/real(ng, dp), i8)
       ! xtdesc cost was measured to be 0 extra at ng=2 (drawn from heap
       ! space the plan already reserved) - add the ng=1 value only there.
-      xtdesc_bytes = merge(ng1_xtdesc_bytes, 0_i8, ng == 1)
+      xtdesc_bytes = merge(ctx%ng1_xtdesc_bytes, 0_i8, ng == 1)
     else
       ! See ng1_worksize_bytes' declaration: this is an extrapolation for
       ! ng>1, not an independent per-ng measurement (though in practice
       ! this branch only ever runs at ng=1 - plain cuFFT is only reached
       ! by the 110 BC or a cuFFTMp fallback, neither of which supports
       ! nproc>1 in this solver).
-      worksize_bytes = int(real(ng1_worksize_bytes, dp)/real(ng, dp), i8)
+      worksize_bytes = int(real(ctx%ng1_worksize_bytes, dp)/real(ng, dp), i8)
       heap_bytes = 0_i8
       xtdesc_bytes = 0_i8
     end if
@@ -1108,10 +1085,10 @@ contains
       return
     end if
 
-    if (ng1_query_ran) then
+    if (ctx%ng1_query_ran) then
       call print_rule('-')
       print '(a,f0.2,a)', 'Residual after plan query: ', &
-        ng1_query_residual_gib, ' GiB (should be ~0 if cufftDestroy &
+        ctx%ng1_query_residual_gib, ' GiB (should be ~0 if cufftDestroy &
         &released it; if not, the real build below may double-reserve the &
         &NVSHMEM heap).'
     end if
