@@ -1261,6 +1261,128 @@ contains
 
   end subroutine process_spectral_110_z_bw
 
+  ! ------------------------------------------------------------------
+  ! 110 MULTI-RANK SLAB REDISTRIBUTION
+  !
+  ! The 110 physical domain is split along Z (nz_l = nz/nproc per rank),
+  ! but the cuFFTMp input slab for the (nz, nx, ny) plan is split along Y
+  ! (ny_l = ny/nproc per rank). These four kernels pack and unpack the
+  ! MPI_Alltoall buffer (nz_l, nx, ny_l, nproc) that carries a rank's data
+  ! between the two layouts; rank index s (0-based) is stored as dim4.
+  !
+  ! Launch config for all four: blocks = dim3(nz_l, (ny_l-1)/tpb+1, 1),
+  ! threads = dim3(min(ny_l, tpb), 1, 1), modelled on transpose_xyz_to_zxy.
+  ! ------------------------------------------------------------------
+
+  attributes(global) subroutine pack_110_xyz_to_yslab( &
+    sendbuf, src, nx, ny_l, nz_l, nproc &
+    )
+    !! Packs the physical Z-slab field block (nx, ny, nz_l) into the
+    !! MPI_Alltoall send buffer, selecting for each destination rank s the
+    !! Y range [s*ny_l+1, (s+1)*ny_l] it owns in the Y-slab layout.
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :, :) :: sendbuf ! (nz_l, nx, ny_l, nproc)
+    real(dp), device, intent(in), dimension(:, :, :) :: src ! (nx, ny, nz_l)
+    integer, value, intent(in) :: nx, ny_l, nz_l, nproc
+
+    integer :: i, j, k, s
+
+    k = blockIdx%x                                  ! nz_l
+    j = (blockIdx%y - 1)*blockDim%x + threadIdx%x    ! ny_l
+
+    if (j <= ny_l) then
+      do s = 0, nproc - 1
+        do i = 1, nx
+          sendbuf(k, i, j, s + 1) = src(i, s*ny_l + j, k)
+        end do
+      end do
+    end if
+
+  end subroutine pack_110_xyz_to_yslab
+
+  attributes(global) subroutine unpack_110_yslab( &
+    dst, recvbuf, nx, ny_l, nz_l, nproc &
+    )
+    !! Unpacks the MPI_Alltoall receive buffer into the padded real view
+    !! (2*(nz/2+1), nx, ny_l) of the cuFFTMp Y-slab descriptor: data
+    !! received from source rank s reconstructs the global Z range
+    !! [s*nz_l+1, (s+1)*nz_l].
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: dst ! (2*(nz/2+1), nx, ny_l)
+    real(dp), device, intent(in), dimension(:, :, :, :) :: recvbuf ! (nz_l, nx, ny_l, nproc)
+    integer, value, intent(in) :: nx, ny_l, nz_l, nproc
+
+    integer :: i, j, k, s
+
+    k = blockIdx%x                                  ! nz_l
+    j = (blockIdx%y - 1)*blockDim%x + threadIdx%x    ! ny_l
+
+    if (j <= ny_l) then
+      do s = 0, nproc - 1
+        do i = 1, nx
+          dst(s*nz_l + k, i, j) = recvbuf(k, i, j, s + 1)
+        end do
+      end do
+    end if
+
+  end subroutine unpack_110_yslab
+
+  attributes(global) subroutine pack_110_yslab( &
+    sendbuf, src, nx, ny_l, nz_l, nproc &
+    )
+    !! Inverse of unpack_110_yslab: packs the Y-slab real view into the
+    !! MPI_Alltoall send buffer, selecting for each destination rank s the
+    !! Z range it originally owned in the physical Z-slab layout.
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :, :) :: sendbuf ! (nz_l, nx, ny_l, nproc)
+    real(dp), device, intent(in), dimension(:, :, :) :: src ! (2*(nz/2+1), nx, ny_l)
+    integer, value, intent(in) :: nx, ny_l, nz_l, nproc
+
+    integer :: i, j, k, s
+
+    k = blockIdx%x                                  ! nz_l
+    j = (blockIdx%y - 1)*blockDim%x + threadIdx%x    ! ny_l
+
+    if (j <= ny_l) then
+      do s = 0, nproc - 1
+        do i = 1, nx
+          sendbuf(k, i, j, s + 1) = src(s*nz_l + k, i, j)
+        end do
+      end do
+    end if
+
+  end subroutine pack_110_yslab
+
+  attributes(global) subroutine unpack_110_yslab_to_xyz( &
+    dst, recvbuf, nx, ny_l, nz_l, nproc &
+    )
+    !! Inverse of pack_110_xyz_to_yslab: unpacks into the physical Z-slab
+    !! field block (nx, ny, nz_l). dst must be zeroed by the caller first,
+    !! as fft_backward_110_cuda already does for the single rank path.
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: dst ! (nx, ny, nz_l)
+    real(dp), device, intent(in), dimension(:, :, :, :) :: recvbuf ! (nz_l, nx, ny_l, nproc)
+    integer, value, intent(in) :: nx, ny_l, nz_l, nproc
+
+    integer :: i, j, k, s
+
+    k = blockIdx%x                                  ! nz_l
+    j = (blockIdx%y - 1)*blockDim%x + threadIdx%x    ! ny_l
+
+    if (j <= ny_l) then
+      do s = 0, nproc - 1
+        do i = 1, nx
+          dst(i, s*ny_l + j, k) = recvbuf(k, i, j, s + 1)
+        end do
+      end do
+    end if
+
+  end subroutine unpack_110_yslab_to_xyz
+
   attributes(global) subroutine enforce_periodicity_x(f_out, f_in, nx)
     implicit none
 

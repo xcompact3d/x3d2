@@ -6,7 +6,9 @@ module m_cuda_poisson_fft
   use cufftXt
   use cufft
   use m_mpi, only: MPI_COMM_WORLD, MPI_COMPLEX, MPI_DOUBLE_COMPLEX, &
-                   MPI_STATUS_IGNORE, MPI_SUCCESS, MPI_Abort, MPI_Sendrecv
+                   MPI_REAL, MPI_DOUBLE_PRECISION, &
+                   MPI_STATUS_IGNORE, MPI_SUCCESS, MPI_Abort, MPI_Sendrecv, &
+                   MPI_Alltoall
 
   use m_common, only: dp, CELL, is_sp
   use m_field, only: field_t
@@ -36,7 +38,9 @@ module m_cuda_poisson_fft
                              process_spectral_100_fw, &
                              process_spectral_100_pair_fw, &
                              process_spectral_100_pair_bw, &
-                             pack_spectral_plane
+                             pack_spectral_plane, &
+                             pack_110_xyz_to_yslab, unpack_110_yslab, &
+                             pack_110_yslab, unpack_110_yslab_to_xyz
 
   implicit none
 
@@ -96,6 +100,12 @@ module m_cuda_poisson_fft
                                                          c_plane_recv_dev
     !> Ranks holding the mirror slab and the extra mirror plane
     integer :: mirror_slab_rank = 0, mirror_plane_rank = 0
+    !> All-to-all buffers redistributing the 110 field between the physical
+    !> Z-slab (nx, ny, nz_l) and the cuFFTMp Y-slab (2*(nz/2+1), nx, ny_l),
+    !> sized (nz_l, nx, ny_l, nproc). Ordinary device memory, for the same
+    !> reason as c_slab_send_dev.
+    real(dp), device, allocatable, dimension(:, :, :, :) :: r_a2a_send_dev, &
+                                                             r_a2a_recv_dev
   contains
     procedure :: fft_forward => fft_forward_cuda
     procedure :: fft_forward_010 => fft_forward_cuda
@@ -116,6 +126,8 @@ module m_cuda_poisson_fft
     procedure :: enforce_periodicity_xy => enforce_periodicity_xy_cuda
     procedure :: undo_periodicity_xy => undo_periodicity_xy_cuda
     procedure :: exchange_mirror_100
+    procedure :: redistribute_110_to_yslab
+    procedure :: redistribute_110_to_zslab
   end type cuda_poisson_fft_t
 
   ! Explicit C interfaces for cuFFT functions that nvfortran has trouble with
@@ -555,6 +567,134 @@ contains
       padded_dev, self%r_dev_110, self%nx_loc, self%ny_loc, self%nz_loc &
       )
   end subroutine fft_backward_110_cuda
+
+  subroutine redistribute_110_to_yslab(self, zslab, yslab)
+    !! Redistributes the 110 field from the physical Z-slab (nx, ny, nz_l)
+    !! to the cuFFTMp Y-slab real view (2*(nz/2+1), nx, ny_l), ahead of the
+    !! forward transform. See the comment above pack_110_xyz_to_yslab.
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    real(dp), device, dimension(:, :, :), intent(in) :: zslab
+    real(dp), device, dimension(:, :, :), intent(inout) :: yslab
+
+    type(dim3) :: blocks, threads
+    integer :: nx, ny_l, nz_l, nproc, tpb, count, mpi_real_t
+    integer :: ierr, ierr_mpi, ierr_abort
+
+    nx = self%nx_glob
+    nz_l = self%nz_loc
+    nproc = self%mesh%par%nproc_dir(3)
+    ny_l = self%ny_glob/nproc
+
+    tpb = min(ny_l, 256)
+    blocks = dim3(nz_l, (ny_l - 1)/tpb + 1, 1)
+    threads = dim3(tpb, 1, 1)
+
+    call pack_110_xyz_to_yslab<<<blocks, threads>>>( & !&
+      self%r_a2a_send_dev, zslab, nx, ny_l, nz_l, nproc &
+      )
+
+    ! Ordinary device memory, but still owed a sync before MPI reads it, for
+    ! the same reason as the 100 mirror exchange (see exchange_mirror_100).
+    ierr = cudaStreamSynchronize(default_stream)
+    if (ierr /= cudaSuccess) then
+      write (stderr, '(a,i0)') &
+        'CUDA synchronisation before the 110 slab redistribution failed: ', &
+        ierr
+      flush (stderr)
+      call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
+    end if
+
+    if (is_sp) then
+      mpi_real_t = MPI_REAL
+    else
+      mpi_real_t = MPI_DOUBLE_PRECISION
+    end if
+    count = nz_l*nx*ny_l
+
+#ifdef MPI
+    call MPI_Alltoall(self%r_a2a_send_dev, count, mpi_real_t, &
+                      self%r_a2a_recv_dev, count, mpi_real_t, &
+                      MPI_COMM_WORLD, ierr_mpi)
+#else
+    error stop 'The 110 slab redistribution needs more than one rank, but &
+                &this build was configured without MPI'
+#endif
+    if (ierr_mpi /= MPI_SUCCESS) then
+      write (stderr, '(a,i0)') &
+        'The 110 slab redistribution to the Y-slab failed: ', ierr_mpi
+      flush (stderr)
+      call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
+    end if
+
+    call unpack_110_yslab<<<blocks, threads>>>( & !&
+      yslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc &
+      )
+
+  end subroutine redistribute_110_to_yslab
+
+  subroutine redistribute_110_to_zslab(self, yslab, zslab)
+    !! Inverse of redistribute_110_to_yslab, after the backward transform.
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    real(dp), device, dimension(:, :, :), intent(in) :: yslab
+    real(dp), device, dimension(:, :, :), intent(inout) :: zslab
+
+    type(dim3) :: blocks, threads
+    integer :: nx, ny_l, nz_l, nproc, tpb, count, mpi_real_t
+    integer :: ierr, ierr_mpi, ierr_abort
+
+    nx = self%nx_glob
+    nz_l = self%nz_loc
+    nproc = self%mesh%par%nproc_dir(3)
+    ny_l = self%ny_glob/nproc
+
+    tpb = min(ny_l, 256)
+    blocks = dim3(nz_l, (ny_l - 1)/tpb + 1, 1)
+    threads = dim3(tpb, 1, 1)
+
+    call pack_110_yslab<<<blocks, threads>>>( & !&
+      self%r_a2a_send_dev, yslab, nx, ny_l, nz_l, nproc &
+      )
+
+    ierr = cudaStreamSynchronize(default_stream)
+    if (ierr /= cudaSuccess) then
+      write (stderr, '(a,i0)') &
+        'CUDA synchronisation before the 110 slab redistribution failed: ', &
+        ierr
+      flush (stderr)
+      call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
+    end if
+
+    if (is_sp) then
+      mpi_real_t = MPI_REAL
+    else
+      mpi_real_t = MPI_DOUBLE_PRECISION
+    end if
+    count = nz_l*nx*ny_l
+
+#ifdef MPI
+    call MPI_Alltoall(self%r_a2a_send_dev, count, mpi_real_t, &
+                      self%r_a2a_recv_dev, count, mpi_real_t, &
+                      MPI_COMM_WORLD, ierr_mpi)
+#else
+    error stop 'The 110 slab redistribution needs more than one rank, but &
+                &this build was configured without MPI'
+#endif
+    if (ierr_mpi /= MPI_SUCCESS) then
+      write (stderr, '(a,i0)') &
+        'The 110 slab redistribution to the Z-slab failed: ', ierr_mpi
+      flush (stderr)
+      call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
+    end if
+
+    call unpack_110_yslab_to_xyz<<<blocks, threads>>>( & !&
+      zslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc &
+      )
+
+  end subroutine redistribute_110_to_zslab
 
   subroutine fft_forward_100_cuda(self, f)
   !! Forward FFT for non-periodic-X case
