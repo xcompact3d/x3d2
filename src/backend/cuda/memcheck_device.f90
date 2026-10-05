@@ -56,6 +56,7 @@ module m_cuda_memcheck_device
     procedure :: sz => pencil_size
     procedure :: overhead_floor_bytes
     procedure :: overhead_query_bytes
+    procedure :: query_residual_gib
     procedure :: make_backend
     procedure :: capture_solver_info
     procedure :: fft_path_known
@@ -146,17 +147,15 @@ contains
   end subroutine ensure_fft_query
 
   function overhead_query_bytes(self, ng, bc_is_100, bc_is_110, cdims, &
-                                is_root, residual_gib) result(nbytes8)
+                                is_root) result(nbytes8)
     class(cuda_memcheck_device_t), intent(inout) :: self
     integer, intent(in) :: ng, cdims(3)
     logical, intent(in) :: bc_is_100, bc_is_110, is_root
-    real(dp), intent(out) :: residual_gib
     integer(i8) :: nbytes8
 
     integer(i8) :: worksize_bytes, xtdesc_bytes, heap_bytes, context_bytes
 
     call ensure_fft_query(self, bc_is_100, bc_is_110, cdims, is_root)
-    residual_gib = self%ng1_query_residual_gib
     ! context_bytes: the CUDA-context-alone baseline (no ng argument
     ! matters here - context_floor_bytes only adds its hardcoded NVSHMEM
     ! heap when uses_cufftmp=.true., so passing .false. always yields just
@@ -216,6 +215,16 @@ contains
 
     known = self%use_cufftmp_known
   end function fft_path_known
+
+  function query_residual_gib(self, residual_gib) result(ran)
+    class(cuda_memcheck_device_t), intent(in) :: self
+    real(dp), intent(out) :: residual_gib
+    logical :: ran
+
+    ran = self%ng1_query_ran
+    residual_gib = 0._dp
+    if (ran) residual_gib = self%ng1_query_residual_gib
+  end function query_residual_gib
 
   function uses_distributed_fft(self) result(distributed)
     class(cuda_memcheck_device_t), intent(in) :: self
