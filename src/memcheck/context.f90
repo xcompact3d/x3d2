@@ -5,9 +5,12 @@ module m_memcheck_context
                       checkpoint_config_t
   use m_mesh, only: periodic_dir
   use m_memory_estimate, only: cell_dims
+  use m_memcheck_device, only: memcheck_device_t
   implicit none
 
   type :: memcheck_ctx_t
+    !> The compute backend, allocated by the program before anything else.
+    class(memcheck_device_t), allocatable :: device
     character(len=256) :: input_path
     !> STATIC = --static (Tier 1 only), DEFAULT = no flag (Tier 1+2, today's
     !> behaviour), BUILD = --build (adds Tier 3).

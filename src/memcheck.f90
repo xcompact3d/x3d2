@@ -36,8 +36,7 @@ program x3d2_memcheck
   !!
   !! Usage: x3d2-memcheck <input.x3d> [--static | --build]
   use mpi
-  use cudafor, only: cudaMemGetInfo, cuda_count_kind, &
-                     cudaGetDeviceCount, cudaSetDevice
+  use cudafor, only: cudaMemGetInfo, cuda_count_kind
   use m_common, only: i8
   use m_memory_estimate, only: output_field_active, peak_fields_lookup
   use m_cuda_memory_estimate, only: check_status
@@ -46,27 +45,28 @@ program x3d2_memcheck
   use m_memcheck_estimate, only: to_gib
   use m_memcheck_report, only: report
   use m_memcheck_build, only: run_tier3
+#ifdef CUDA
+  use m_cuda_memcheck_device, only: cuda_memcheck_device_t
+#endif
 
   implicit none
 
   type(memcheck_ctx_t) :: ctx
-  integer :: ierr, nproc, ndevs
+  integer :: ierr, nproc
+  logical :: device_ok
+  character(len=128) :: device_msg
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, ctx%irank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
   if (nproc /= 1) error stop 'x3d2-memcheck: run single-rank (mpirun -n 1).'
 
-  ierr = cudaGetDeviceCount(ndevs)
-  if (ierr /= 0 .or. ndevs < 1) then
-    print '(a,i0,a,i0,a)', 'x3d2-memcheck: no usable CUDA device &
-      &(cudaGetDeviceCount code ', ierr, ', devices ', ndevs, ')'
-    call no_device_exit()
-  end if
-  ierr = cudaSetDevice(0)
-  if (ierr /= 0) then
-    print '(a,i0,a)', 'x3d2-memcheck: no usable CUDA device (cudaSetDevice &
-      &failed, code ', ierr, ')'
+#ifdef CUDA
+  allocate (cuda_memcheck_device_t :: ctx%device)
+#endif
+  call ctx%device%init(device_ok, device_msg)
+  if (.not. device_ok) then
+    print '(a)', trim(device_msg)
     call no_device_exit()
   end if
 
