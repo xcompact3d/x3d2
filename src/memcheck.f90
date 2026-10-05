@@ -40,8 +40,6 @@ program x3d2_memcheck
   use cudafor, only: cudaMemGetInfo, cuda_count_kind, &
                      cudaGetDeviceCount, cudaSetDevice
   use m_common, only: dp, i8, nbytes, VERT, is_sp
-  use m_config, only: domain_config_t, solver_config_t, les_config_t, &
-                      checkpoint_config_t
   use m_mesh, only: mesh_t, periodic_dir
   use m_cuda_common, only: SZ
   use m_memory_estimate, only: padded_cells, cell_dims, &
@@ -92,11 +90,7 @@ program x3d2_memcheck
 
   type(memcheck_ctx_t) :: ctx
   integer :: ierr, irank, nproc, ndevs
-  type(domain_config_t) :: domain_cfg
-  type(solver_config_t) :: solver_cfg
-  type(les_config_t) :: les_cfg
-  type(checkpoint_config_t) :: checkpoint_cfg
-  integer :: gdims(3), cdims(3)
+  integer :: cdims(3)
   logical :: periodic_x, periodic_y, periodic_z
   logical :: bc_is_000, bc_is_010, bc_is_100, bc_is_110
   logical :: multi_gpu_supported
@@ -216,15 +210,15 @@ program x3d2_memcheck
   call classify_bc()
   call query_card_gib()
 
-  peak_fields = peak_fields_lookup(trim(domain_cfg%flow_case_name), &
-                                   solver_cfg%n_species, &
-                                   trim(les_cfg%model) /= 'none', &
-                                   solver_cfg%ibm_on, &
-                                   output_field_active(checkpoint_cfg, &
+  peak_fields = peak_fields_lookup(trim(ctx%domain_cfg%flow_case_name), &
+                                   ctx%solver_cfg%n_species, &
+                                   trim(ctx%les_cfg%model) /= 'none', &
+                                   ctx%solver_cfg%ibm_on, &
+                                   output_field_active(ctx%checkpoint_cfg, &
                                                        'vorticity'), &
-                                   output_field_active(checkpoint_cfg, &
+                                   output_field_active(ctx%checkpoint_cfg, &
                                                        'qcriterion'), &
-                                   solver_cfg%lowmem_transeq)
+                                   ctx%solver_cfg%lowmem_transeq)
 
   multi_gpu_supported = .not. (bc_is_010 .or. bc_is_110)
 
@@ -312,11 +306,11 @@ contains
   end subroutine parse_args
 
   subroutine read_config()
-    call domain_cfg%read(nml_file=trim(ctx%input_path))
-    call solver_cfg%read(nml_file=trim(ctx%input_path))
-    call les_cfg%read(nml_file=trim(ctx%input_path))
-    call checkpoint_cfg%read(nml_file=trim(ctx%input_path))
-    gdims = domain_cfg%dims_global
+    call ctx%domain_cfg%read(nml_file=trim(ctx%input_path))
+    call ctx%solver_cfg%read(nml_file=trim(ctx%input_path))
+    call ctx%les_cfg%read(nml_file=trim(ctx%input_path))
+    call ctx%checkpoint_cfg%read(nml_file=trim(ctx%input_path))
+    ctx%gdims = ctx%domain_cfg%dims_global
   end subroutine read_config
 
   subroutine resolve_gpu_io_mode()
@@ -375,14 +369,14 @@ contains
 
   subroutine classify_bc()
     !! Mirrors src/backend/cuda/poisson_fft.f90:227-239's four-way split.
-    periodic_x = periodic_dir(domain_cfg%BC_x)
-    periodic_y = periodic_dir(domain_cfg%BC_y)
-    periodic_z = periodic_dir(domain_cfg%BC_z)
+    periodic_x = periodic_dir(ctx%domain_cfg%BC_x)
+    periodic_y = periodic_dir(ctx%domain_cfg%BC_y)
+    periodic_z = periodic_dir(ctx%domain_cfg%BC_z)
     bc_is_000 = periodic_x .and. periodic_y .and. periodic_z
     bc_is_010 = periodic_x .and. (.not. periodic_y) .and. periodic_z
     bc_is_100 = (.not. periodic_x) .and. periodic_y .and. periodic_z
     bc_is_110 = (.not. periodic_x) .and. (.not. periodic_y) .and. periodic_z
-    cdims = cell_dims(gdims, [periodic_x, periodic_y, periodic_z])
+    cdims = cell_dims(ctx%gdims, [periodic_x, periodic_y, periodic_z])
   end subroutine classify_bc
 
   function current_dir() result(path)
@@ -502,8 +496,8 @@ contains
     else if (ng > 1 .and. .not. multi_gpu_supported) then
       reason = 'not supported: BC_y is non-periodic - &
                &src/poisson_fft.f90 error-stops at nproc>1'
-    else if (mod(gdims(3), ng) /= 0) then
-      write (reason, '(a,i0,a)') 'z=', gdims(3), ' not divisible'
+    else if (mod(ctx%gdims(3), ng) /= 0) then
+      write (reason, '(a,i0,a)') 'z=', ctx%gdims(3), ' not divisible'
     else if ((bc_is_000 .or. bc_is_010) .and. mod(cdims(2), ng) /= 0) then
       write (reason, '(a,i0,a)') 'y cells=', cdims(2), ' not divisible &
         &by ng, the solver would truncate the spectral slab'
@@ -561,7 +555,7 @@ contains
     integer(i8) :: nbytes8
     integer :: local_dims(3)
 
-    local_dims = [gdims(1), gdims(2), gdims(3)/ng]
+    local_dims = [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)/ng]
     nbytes8 = int(npeak, i8)*padded_cells(local_dims, SZ) &
               *int(nbytes, i8) + padded_halo_bytes(local_dims, SZ, n_halo)
   end function fields_plus_halo_bytes_n
@@ -598,8 +592,8 @@ contains
       nbytes8 = nbytes8 + spectral_extra_bytes_110(cdims, ng)
     else if (bc_is_010) then
       nbytes8 = nbytes8 + stretched_y_matrix_bytes(bc_is_010, &
-                          domain_cfg%stretching(2), solver_cfg%lowmem_fft, &
-                          cdims, ng)
+                          ctx%domain_cfg%stretching(2), &
+                          ctx%solver_cfg%lowmem_fft, cdims, ng)
     end if
   end function spectral_plus_mirror_bytes
 
@@ -654,8 +648,9 @@ contains
 
     base_bytes = fields_plus_halo_bytes(ng)
     spec_bytes = spectral_plus_mirror_bytes(ng)
-    io_bytes = gpu_io_staging_bytes([gdims(1), gdims(2), gdims(3)/ng], &
-                                    checkpoint_cfg, gpu_io_device_write)
+    io_bytes = gpu_io_staging_bytes([ctx%gdims(1), ctx%gdims(2), &
+                                     ctx%gdims(3)/ng], &
+                                    ctx%checkpoint_cfg, gpu_io_device_write)
     io_gib_local = to_gib(io_bytes)
     if (present(io_gib)) io_gib = io_gib_local
     if (present(workspace_gib)) &
@@ -734,11 +729,11 @@ contains
 
     ! GPU-aware IO staging: computed directly at ng=1 (local_dims == gdims
     ! there) so it is available here, ahead of the per-ng table below.
-    io_ng1_bytes = gpu_io_staging_bytes(gdims, checkpoint_cfg, &
+    io_ng1_bytes = gpu_io_staging_bytes(ctx%gdims, ctx%checkpoint_cfg, &
                                         gpu_io_device_write)
-    unit_stride = all(checkpoint_cfg%output_stride == 1)
-    snapshot_active = checkpoint_cfg%snapshot_freq > 0 .and. unit_stride
-    checkpoint_active = checkpoint_cfg%checkpoint_freq > 0
+    unit_stride = all(ctx%checkpoint_cfg%output_stride == 1)
+    snapshot_active = ctx%checkpoint_cfg%snapshot_freq > 0 .and. unit_stride
+    checkpoint_active = ctx%checkpoint_cfg%checkpoint_freq > 0
     if (io_ng1_bytes > 0_i8) then
       mib = to_gib(io_ng1_bytes)*1024._dp
       if (snapshot_active .and. checkpoint_active) then
@@ -748,7 +743,7 @@ contains
       else
         what = 'snapshot at unit stride'
       end if
-      if (.not. checkpoint_active .and. checkpoint_cfg%snapshot_sp .and. &
+      if (.not. checkpoint_active .and. ctx%checkpoint_cfg%snapshot_sp .and. &
           .not. is_sp .and. snapshot_active) what = trim(what)//' (sp)'
       print '(a,f0.1,a,a,a,a,a)', 'GPU-aware IO staging: ', mib, &
         ' MiB/GPU at ng=1 (write mode ', trim(gpu_io_mode_name), ', ', &
@@ -756,8 +751,8 @@ contains
     else
       if (.not. gpu_io_device_write) then
         io_none_reason = trim(gpu_io_reason)
-      else if (checkpoint_cfg%snapshot_freq > 0 .and. .not. unit_stride &
-              .and. checkpoint_cfg%checkpoint_freq == 0) then
+      else if (ctx%checkpoint_cfg%snapshot_freq > 0 .and. .not. unit_stride &
+               .and. ctx%checkpoint_cfg%checkpoint_freq == 0) then
         io_none_reason = 'snapshot striding falls back to host path'
       else
         io_none_reason = 'no unit-stride snapshot and no checkpoint enabled'
@@ -775,14 +770,15 @@ contains
     logical :: exact
     character(len=96) :: reason
 
-    requested_ng = domain_cfg%nproc_dir(3)
+    requested_ng = ctx%domain_cfg%nproc_dir(3)
     reason = ng_unsupported_reason(requested_ng)
-    if (domain_cfg%nproc_dir(1) /= 1 .or. domain_cfg%nproc_dir(2) /= 1) &
+    if (ctx%domain_cfg%nproc_dir(1) /= 1 .or. &
+        ctx%domain_cfg%nproc_dir(2) /= 1) &
       reason = 'only nproc_dir = [1,1,ng] is supported by the CUDA backend'
     if (len_trim(reason) > 0) then
       print '(a,i0,a,i0,a,i0,a,a,a)', 'Requested nproc_dir [', &
-        domain_cfg%nproc_dir(1), ',', domain_cfg%nproc_dir(2), ',', &
-        domain_cfg%nproc_dir(3), ']: not supported (', trim(reason), ')'
+        ctx%domain_cfg%nproc_dir(1), ',', ctx%domain_cfg%nproc_dir(2), ',', &
+        ctx%domain_cfg%nproc_dir(3), ']: not supported (', trim(reason), ')'
       final_verdict = 'UNSUPPORTED'
     else
       call estimate_for_ng(requested_ng, requested_gib, exact, final_verdict)
@@ -821,7 +817,7 @@ contains
         print '(a,i0,a,a,a)', ' ', ng, '     (skipped: ', trim(reason), ')'
         cycle
       end if
-      local_dims = [gdims(1), gdims(2), gdims(3)/ng]
+      local_dims = [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)/ng]
       call estimate_for_ng(ng, per_gpu_gib, exact, verdict, workspace_gib, &
                            overhead_gib, io_gib)
       if (ng == 1) then
@@ -839,8 +835,8 @@ contains
     integer :: smallest_fits
 
     call print_rule('=')
-    print '(a,i0,a,i0,a,i0,a)', 'Input grid: ', gdims(1), 'x', gdims(2), &
-      'x', gdims(3)
+    print '(a,i0,a,i0,a,i0,a)', 'Input grid: ', ctx%gdims(1), 'x', &
+      ctx%gdims(2), 'x', ctx%gdims(3)
     print '(a,f0.2,a,f0.2,a)', 'Card memory: ', card_gib, ' GiB (', &
       card_free_gib, ' GiB free now)'
     if (card_gib - card_free_gib > 0.5_dp) &
@@ -936,7 +932,7 @@ contains
       return
     end if
 
-    select case (trim(domain_cfg%flow_case_name))
+    select case (trim(ctx%domain_cfg%flow_case_name))
     case ('tgv', 'generic', 'channel', 'cylinder')
       flow_case_supported = .true.
     case default
@@ -944,12 +940,12 @@ contains
     end select
     if (.not. flow_case_supported) then
       call skip_build("Real build skipped: flow case '"// &
-                      trim(domain_cfg%flow_case_name)// &
+                      trim(ctx%domain_cfg%flow_case_name)// &
                       "' has no dispatch in x3d2-memcheck", .false., ok)
       return
     end if
 
-    if (solver_cfg%ibm_on) then
+    if (ctx%solver_cfg%ibm_on) then
       ibm_file = ibm_mask_filename(periodic_x, periodic_y, periodic_z)
       inquire (file=trim(orig_dir)//'/'//trim(ibm_file), &
               exist=ibm_file_exists)
@@ -1047,7 +1043,7 @@ contains
       end if
     end if
 
-    if (solver_cfg%ibm_on) then
+    if (ctx%solver_cfg%ibm_on) then
       ibm_file = ibm_mask_filename(periodic_x, periodic_y, periodic_z)
       call run_sh("ln -s '"//trim(orig_dir)//'/'// &
                   trim(ibm_file)//"' '"//trim(scratch_dir)// &
@@ -1132,7 +1128,7 @@ contains
     ! BUILD_FRACTION guard was calibrated against fields alone, so subtract
     ! it back out here rather than changing the (already-validated)
     ! threshold itself.
-    ws_guess = ws_guess - to_gib(padded_halo_bytes(gdims, SZ, n_halo))
+    ws_guess = ws_guess - to_gib(padded_halo_bytes(ctx%gdims, SZ, n_halo))
     if (ws_guess >= BUILD_FRACTION*card_free_gib) then
       call print_rule('-')
       print '(a,f0.2,a,f0.1,a,f0.2,a)', 'Real build skipped: fields only &
@@ -1155,7 +1151,7 @@ contains
     call make_scratch(build_scratch_ok)
     if (.not. build_scratch_ok) return
 
-    call build_and_measure(gdims, measured_peak_fields, used_gib, &
+    call build_and_measure(ctx%gdims, measured_peak_fields, used_gib, &
                            ibm_missing)
     call leave_build_scratch()
     if (ibm_missing) then
@@ -1210,12 +1206,12 @@ contains
 
     if (irank /= 0) return
 
-    predicted = peak_fields_lookup(trim(domain_cfg%flow_case_name), &
-                                   solver_cfg%n_species, &
-                                   trim(les_cfg%model) /= 'none', &
-                                   solver_cfg%ibm_on, output_vorticity, &
+    predicted = peak_fields_lookup(trim(ctx%domain_cfg%flow_case_name), &
+                                   ctx%solver_cfg%n_species, &
+                                   trim(ctx%les_cfg%model) /= 'none', &
+                                   ctx%solver_cfg%ibm_on, output_vorticity, &
                                    output_qcriterion, &
-                                   solver_cfg%lowmem_transeq)
+                                   ctx%solver_cfg%lowmem_transeq)
     if (predicted /= measured) then
       print '(a,i0,a,i0,a)', &
         'WARNING: peak_fields_lookup predicted ', predicted, &
@@ -1304,7 +1300,7 @@ contains
         print '(a,i0,a,a,a)', ' ', ng, '     (skipped: ', trim(reason), ')'
         cycle
       end if
-      local_dims = [gdims(1), gdims(2), gdims(3)/ng]
+      local_dims = [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)/ng]
       w_local = to_gib(fields_plus_halo_bytes_n(ng, measured_peak_fields))
 
       mirror_gib = 0._dp
@@ -1320,14 +1316,15 @@ contains
                         to_gib(context_floor_bytes(ng, .true.) - &
                                context_floor_bytes(1, .true.))
       overhead_term = overhead_term + &
-                      to_gib(gpu_io_staging_bytes(local_dims, checkpoint_cfg, &
+                      to_gib(gpu_io_staging_bytes(local_dims, &
+                                                  ctx%checkpoint_cfg, &
                                                   gpu_io_device_write))
 
       per_gpu = w_local + overhead_term
       verdict = classify(per_gpu, card_gib)
       call print_table_row(ng, local_dims, w_local, overhead_term, per_gpu, &
                            card_gib, verdict)
-      if (ng == domain_cfg%nproc_dir(3)) requested_verdict = verdict
+      if (ng == ctx%domain_cfg%nproc_dir(3)) requested_verdict = verdict
     end do
     call print_rule('-')
   end subroutine report_measured_table
@@ -1344,9 +1341,10 @@ contains
     logical :: ibm_file_exists
 
     ibm_missing = .false.
-    mesh = mesh_t(dims_in, [1, 1, 1], domain_cfg%L_global, &
-                  domain_cfg%BC_x, domain_cfg%BC_y, domain_cfg%BC_z, &
-                  domain_cfg%stretching, domain_cfg%beta, use_2decomp=.false.)
+    mesh = mesh_t(dims_in, [1, 1, 1], ctx%domain_cfg%L_global, &
+                  ctx%domain_cfg%BC_x, ctx%domain_cfg%BC_y, &
+                  ctx%domain_cfg%BC_z, ctx%domain_cfg%stretching, &
+                  ctx%domain_cfg%beta, use_2decomp=.false.)
     dims = mesh%get_dims(VERT)
 
     ! ibm_on triggers reading an external ibm_<BC-suffix>.bp mask file
@@ -1357,7 +1355,7 @@ contains
     ! ibm_mask_filename, also used by make_scratch to mirror the
     ! mask into the build scratch directory), and bail out before
     ! triggering the case/solver construction that would abort.
-    if (solver_cfg%ibm_on) then
+    if (ctx%solver_cfg%ibm_on) then
       ibm_file = ibm_mask_filename(mesh%grid%periodic_BC(1), &
                                    mesh%grid%periodic_BC(2), &
                                    mesh%grid%periodic_BC(3))
@@ -1396,7 +1394,7 @@ contains
     type(allocator_t), target, intent(inout) :: host_allocator
     class(base_case_t), allocatable, intent(out) :: flow_case
 
-    select case (trim(domain_cfg%flow_case_name))
+    select case (trim(ctx%domain_cfg%flow_case_name))
     case ('channel')
       allocate (case_channel_t :: flow_case)
       flow_case = case_channel_t(backend, mesh, host_allocator)
