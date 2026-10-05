@@ -44,11 +44,11 @@ program x3d2_memcheck
                       checkpoint_config_t
   use m_mesh, only: mesh_t, periodic_dir
   use m_cuda_common, only: SZ
-  use m_memory_estimate, only: padded_dim, padded_cells, cell_dims, &
+  use m_memory_estimate, only: padded_cells, cell_dims, &
                                spectral_slab_bytes, mirror_buffer_bytes_100, &
                                spectral_extra_bytes_110, &
                                stretched_y_matrix_bytes, output_field_active, &
-                               peak_fields_lookup, halo_bytes, &
+                               peak_fields_lookup, padded_halo_bytes, &
                                gpu_io_staging_bytes
   use m_cuda_memory_estimate, only: fft_workspace_bytes_query, &
                                     context_floor_bytes, check_status
@@ -568,13 +568,11 @@ contains
     !! measured table, which has its own real measured field count.
     integer, intent(in) :: ng, npeak
     integer(i8) :: nbytes8
-    integer :: local_dims(3), padded_dims(3)
+    integer :: local_dims(3)
 
     local_dims = [gdims(1), gdims(2), gdims(3)/ng]
-    padded_dims = [padded_dim(local_dims(1), SZ), &
-                   padded_dim(local_dims(2), SZ), local_dims(3)]
     nbytes8 = int(npeak, i8)*padded_cells(local_dims, SZ) &
-             *int(nbytes, i8) + halo_bytes(padded_dims, SZ, n_halo)
+              *int(nbytes, i8) + padded_halo_bytes(local_dims, SZ, n_halo)
   end function fields_plus_halo_bytes_n
 
   function fields_plus_halo_bytes(ng) result(nbytes8)
@@ -1117,9 +1115,7 @@ contains
     ! BUILD_FRACTION guard was calibrated against fields alone, so subtract
     ! it back out here rather than changing the (already-validated)
     ! threshold itself.
-    ws_guess = ws_guess - to_gib(halo_bytes([padded_dim(gdims(1), SZ), &
-                                             padded_dim(gdims(2), SZ), &
-                                             gdims(3)], SZ, n_halo))
+    ws_guess = ws_guess - to_gib(padded_halo_bytes(gdims, SZ, n_halo))
     if (ws_guess >= BUILD_FRACTION*card_free_gib) then
       call print_rule('-')
       print '(a,f0.2,a,f0.1,a,f0.2,a)', 'Real build skipped: fields only &
