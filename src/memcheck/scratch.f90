@@ -206,9 +206,7 @@ contains
     ok = .true.
     ctx%scratch_dir = scratch_name(ctx%orig_dir)
 
-    ! A stale scratch directory from an earlier run's unexpected error stop
-    ! after the chdir below (see this subroutine's docstring) would make a
-    ! plain mkdir fail - remove it first, if present.
+    ! Stale leftover (see the docstring) would make a plain mkdir fail.
     call run_sh("test -d '"//trim(ctx%scratch_dir)//"'", st)
     if (st == 0) then
       call run_sh("rm -rf '"//trim(ctx%scratch_dir)//"'", st)
