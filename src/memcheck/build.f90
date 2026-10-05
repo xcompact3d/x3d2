@@ -12,7 +12,6 @@ module m_memcheck_build
   use m_case_generic, only: case_generic_t
   use m_case_tgv, only: case_tgv_t
   use m_field, only: flist_t
-  use m_cuda_poisson_fft, only: cuda_poisson_fft_t
   use m_memcheck_scratch, only: ibm_mask_filename, validate_build_inputs, &
                                 make_scratch, leave_build_scratch
   use m_memcheck_context, only: memcheck_ctx_t
@@ -111,7 +110,8 @@ contains
       ! (src/poisson_fft.f90:178-180,196-198).
       multi_gpu_supported_measured = .false.
     else if ((ctx%bc_is_100 .or. ctx%bc_is_000) .and. &
-             ctx%use_cufftmp_known .and. (.not. ctx%use_cufftmp)) then
+             ctx%device%fft_path_known() .and. &
+             (.not. ctx%device%uses_distributed_fft())) then
       ! Covers the 100 case (needs cuFFTMp to decompose at all) and the
       ! fully-periodic 000 case (the plain-cuFFT fallback performs a purely
       ! local per-rank transform with no cross-rank exchange -
@@ -163,7 +163,8 @@ contains
                       to_gib(spectral_slab_bytes(ctx%bc_is_100, &
                                 ctx%bc_is_110, ctx%cdims, ng) - spec_bytes_1) &
                       + mirror_gib
-      if (ctx%use_cufftmp_known .and. ctx%use_cufftmp) &
+      if (ctx%device%fft_path_known() .and. &
+          ctx%device%uses_distributed_fft()) &
         overhead_term = overhead_term + &
                         to_gib(ctx%device%overhead_floor_bytes( &
                                ng, ctx%bc_is_110) - &
@@ -375,11 +376,7 @@ contains
     ! init_poisson_fft, so the plan's actual cuFFTMp/cuFFT fallback outcome
     ! is settled - capture it for report_measured_table's safety gating on
     ! the 100 case, since there is no static "is cuFFTMp available" query.
-    select type (pf => flow_case%solver%backend%poisson_fft)
-    type is (cuda_poisson_fft_t)
-      ctx%use_cufftmp = pf%use_cufftmp
-      ctx%use_cufftmp_known = .true.
-    end select
+    call ctx%device%capture_solver_info(flow_case)
 
     call drive_case(ctx, flow_case)
 

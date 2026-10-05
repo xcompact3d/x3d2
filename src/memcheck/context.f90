@@ -78,12 +78,6 @@ module m_memcheck_context
     !> measurement is inflated by whatever Tier 2 left behind.
     real(dp) :: ng1_query_residual_gib
     logical :: ng1_query_ran = .false.
-    !> Whether a --build's real build actually used cuFFTMp (only known once
-    !> the real solver is constructed) - the only real "cuFFTMp available"
-    !> signal in this codebase, more authoritative than Tier 2's throwaway
-    !> plan query (the device's ng1_used_cufftmp) for gating the measured
-    !> table's ng>1 rows.
-    logical :: use_cufftmp = .false., use_cufftmp_known = .false.
     !> Set inside build_and_measure, once the real config driven output
     !> gating is known - needed after it returns to cross-check the measured
     !> peak_fields against m_memory_estimate's static peak_fields_lookup (see

@@ -10,8 +10,10 @@ module m_cuda_memcheck_device
   use m_mesh, only: mesh_t
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
+  use m_base_case, only: base_case_t
   use m_cuda_allocator, only: cuda_allocator_t
   use m_cuda_backend, only: cuda_backend_t
+  use m_cuda_poisson_fft, only: cuda_poisson_fft_t
   use m_memcheck_device, only: memcheck_device_t
   use m_memcheck_estimate, only: to_gib
   implicit none
@@ -40,6 +42,12 @@ module m_cuda_memcheck_device
     !> the NVSHMEM heap this reserved, this should read ~0.
     real(dp) :: ng1_query_residual_gib
     logical :: ng1_query_ran = .false.
+    !> Whether a --build's real build actually used cuFFTMp (only known
+    !> once the real solver is constructed) - the only real "cuFFTMp
+    !> available" signal in this codebase, more authoritative than Tier 2's
+    !> throwaway plan query (ng1_used_cufftmp above) for gating the
+    !> measured table's ng>1 rows.
+    logical :: use_cufftmp = .false., use_cufftmp_known = .false.
     type(cuda_allocator_t) :: cuda_allocator
     type(cuda_backend_t) :: cuda_backend
   contains
@@ -49,6 +57,9 @@ module m_cuda_memcheck_device
     procedure :: overhead_floor_bytes
     procedure :: overhead_query_bytes
     procedure :: make_backend
+    procedure :: capture_solver_info
+    procedure :: fft_path_known
+    procedure :: uses_distributed_fft
   end type cuda_memcheck_device_t
 
 contains
@@ -187,5 +198,30 @@ contains
     self%cuda_backend = cuda_backend_t(mesh, allocator)
     backend => self%cuda_backend
   end subroutine make_backend
+
+  subroutine capture_solver_info(self, flow_case)
+    class(cuda_memcheck_device_t), intent(inout) :: self
+    class(base_case_t), intent(in) :: flow_case
+
+    select type (pf => flow_case%solver%backend%poisson_fft)
+    type is (cuda_poisson_fft_t)
+      self%use_cufftmp = pf%use_cufftmp
+      self%use_cufftmp_known = .true.
+    end select
+  end subroutine capture_solver_info
+
+  function fft_path_known(self) result(known)
+    class(cuda_memcheck_device_t), intent(in) :: self
+    logical :: known
+
+    known = self%use_cufftmp_known
+  end function fft_path_known
+
+  function uses_distributed_fft(self) result(distributed)
+    class(cuda_memcheck_device_t), intent(in) :: self
+    logical :: distributed
+
+    distributed = self%use_cufftmp
+  end function uses_distributed_fft
 
 end module m_cuda_memcheck_device
