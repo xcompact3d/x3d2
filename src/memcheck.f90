@@ -1157,6 +1157,29 @@ contains
     scratch_dir = ''
   end subroutine leave_build_scratch
 
+  subroutine free_memory_gate(skip)
+    !! --build gate: skip is .true. (after printing why) when the fields
+    !! only workspace alone already exceeds BUILD_FRACTION of the FREE card
+    !! memory, so the real build is not attempted.
+    logical, intent(out) :: skip
+    real(dp) :: ws_guess
+
+    ws_guess = to_gib(fields_plus_halo_bytes_n(1, peak_fields))
+    ! fields_plus_halo_bytes_n includes the halo term; the historical
+    ! BUILD_FRACTION guard was calibrated against fields alone, so subtract
+    ! it back out here rather than changing the (already-validated)
+    ! threshold itself.
+    ws_guess = ws_guess - to_gib(padded_halo_bytes(gdims, SZ, n_halo))
+    skip = ws_guess >= BUILD_FRACTION*card_free_gib
+    if (skip) then
+      call print_rule('-')
+      print '(a,f0.2,a,f0.1,a,f0.2,a)', 'Real build skipped: fields only &
+        &workspace ', ws_guess, ' GiB exceeds ', 100._dp*BUILD_FRACTION, &
+        '% of the FREE card memory (', card_free_gib, ' GiB free); the &
+        &estimate above stands.'
+    end if
+  end subroutine free_memory_gate
+
   subroutine run_tier3()
     !! Tier 3: a REAL case build + one substep on 1 GPU, measured with
     !! cudaMemGetInfo - the last-resort ground truth, now run in-process
@@ -1181,27 +1204,15 @@ contains
     !! occurs after its chdir regardless (a scratch directory left behind
     !! under the invoking directory, cleaned up by the next run with the
     !! same pid).
-    real(dp) :: ws_guess, used_gib, workspace_gib_measured, pct_error, &
+    real(dp) :: used_gib, workspace_gib_measured, pct_error, &
                estimate_ng1_excl_io_gib
     integer :: measured_peak_fields
-    logical :: ibm_missing, build_scratch_ok
+    logical :: ibm_missing, build_scratch_ok, skip
     character(len=12) :: measured_verdict
     character(len=8) :: check_word
 
-    ws_guess = to_gib(fields_plus_halo_bytes_n(1, peak_fields))
-    ! fields_plus_halo_bytes_n includes the halo term; the historical
-    ! BUILD_FRACTION guard was calibrated against fields alone, so subtract
-    ! it back out here rather than changing the (already-validated)
-    ! threshold itself.
-    ws_guess = ws_guess - to_gib(padded_halo_bytes(gdims, SZ, n_halo))
-    if (ws_guess >= BUILD_FRACTION*card_free_gib) then
-      call print_rule('-')
-      print '(a,f0.2,a,f0.1,a,f0.2,a)', 'Real build skipped: fields only &
-        &workspace ', ws_guess, ' GiB exceeds ', 100._dp*BUILD_FRACTION, &
-        '% of the FREE card memory (', card_free_gib, ' GiB free); the &
-        &estimate above stands.'
-      return
-    end if
+    call free_memory_gate(skip)
+    if (skip) return
 
     if (ng1_query_ran) then
       call print_rule('-')
