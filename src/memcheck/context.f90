@@ -1,6 +1,6 @@
 module m_memcheck_context
   !! Run state of x3d2-memcheck, passed explicitly to every routine.
-  use m_common, only: dp, i8
+  use m_common, only: dp
   use m_config, only: domain_config_t, solver_config_t, les_config_t, &
                       checkpoint_config_t
   use m_mesh, only: periodic_dir
@@ -68,23 +68,10 @@ module m_memcheck_context
     !> real --build runs inside a throwaway subdirectory rather than the
     !> invoking directory.
     character(len=4096) :: orig_dir = '', scratch_dir = ''
-    !> Queried once, at this process's own rank count (always 1 - see
-    !> ensure_fft_query). These are real, live cudaMemGetInfo measurements
-    !> for a SINGLE-RANK communicator; there is no way to measure the true
-    !> ng>1 cost without actually running under mpirun -n ng, which this
-    !> single-process estimator does not do. estimate_for_ng instead
-    !> extrapolates ng>1 by the 1/ng law confirmed by a real mpirun -n 2
-    !> xcompact run on examples/TGV/input.x3d (2026-09-10: 3339 MiB/GPU
-    !> measured vs 3.21 GiB predicted this way) - ng1_worksize_bytes (plain
-    !> cuFFT path only) and ng1_heap_bytes (cuFFTMp's NVSHMEM heap) both
-    !> scale this way; ng1_xtdesc_bytes (cuFFTMp's distributed data buffer)
-    !> does not - it is added only at ng=1, since it was measured to cost
-    !> 0 extra at ng=2 (drawn from heap space the plan already reserved).
-    integer(i8) :: ng1_worksize_bytes, ng1_heap_bytes, ng1_xtdesc_bytes
-    logical :: ng1_used_cufftmp
-    !> Set by ensure_fft_query, the cudaMemGetInfo delta across the whole
-    !> throwaway plan query (create+destroy) - if cufftDestroy fully released
-    !> the NVSHMEM heap this reserved, this should read ~0. Printed under
+    !> Set by estimate_for_ng from the device's overhead_query_bytes, the
+    !> cudaMemGetInfo delta across the whole throwaway plan query
+    !> (create+destroy) - if cufftDestroy fully released the NVSHMEM heap
+    !> this reserved, this should read ~0. Printed under
     !> --build only, right before the real build, since that is the only
     !> mode where a second cuFFTMp plan lifecycle follows in the same
     !> process and a non-zero residual would mean the real build's own
@@ -94,8 +81,8 @@ module m_memcheck_context
     !> Whether a --build's real build actually used cuFFTMp (only known once
     !> the real solver is constructed) - the only real "cuFFTMp available"
     !> signal in this codebase, more authoritative than Tier 2's throwaway
-    !> plan query (ng1_used_cufftmp above) for gating the measured table's
-    !> ng>1 rows.
+    !> plan query (the device's ng1_used_cufftmp) for gating the measured
+    !> table's ng>1 rows.
     logical :: use_cufftmp = .false., use_cufftmp_known = .false.
     !> Set inside build_and_measure, once the real config driven output
     !> gating is known - needed after it returns to cross-check the measured
