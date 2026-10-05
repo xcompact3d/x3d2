@@ -1468,6 +1468,64 @@ contains
     end select
   end subroutine make_flow_case
 
+  subroutine drive_case(flow_case)
+    !! Drive the freshly built flow case the way run() does so the
+    !! allocator reaches its work-field high-water mark: the pre-loop
+    !! postprocess hook, one (or --extensive <n>) substep(s), then the
+    !! per-iteration pressure and derived-field calls. Records the substep
+    !! count in measured_n_substeps and the derived-field gating in
+    !! output_vorticity/output_qcriterion.
+    class(base_case_t), intent(inout) :: flow_case
+
+    type(flist_t), allocatable :: curr(:), deriv(:)
+    integer :: i, n_substeps, i_substep
+
+    allocate (curr(flow_case%solver%time_integrator%nvars))
+    allocate (deriv(flow_case%solver%time_integrator%nvars))
+    curr(1)%ptr => flow_case%solver%u
+    curr(2)%ptr => flow_case%solver%v
+    curr(3)%ptr => flow_case%solver%w
+    do i = 1, flow_case%solver%nspecies
+      curr(3 + i)%ptr => flow_case%solver%species(i)%ptr
+    end do
+
+    ! Mirrors run()'s pre-loop call to the case-specific postprocess hook.
+    call flow_case%postprocess(0, 0._dp)
+
+    ! One real sub-stage drives the allocator to the same high-water mark a
+    ! full time step would reach; field values are irrelevant to memory.
+    ! --extensive <n> overrides the count (default 1) so the peak can be
+    ! re-checked against more sub-stages, e.g. to confirm no later-only
+    ! allocation path changes it. This only re-checks the allocator's own
+    ! pool (structurally leak-free - next_id is monotonic, get_block/
+    ! release_block just recycle a free list, see src/allocator.f90): it
+    ! never repeats the per-iteration I/O paths (compute_pressure_vert,
+    ! compute_derived_fields, io_mgr%update_stats, snapshot/checkpoint
+    ! writes) that a real xcompact run would hit on every iteration and
+    ! where an actual leak is far more likely to live.
+    n_substeps = 1
+    if (extensive_substeps > 0) n_substeps = extensive_substeps
+    do i_substep = 1, n_substeps
+      call flow_case%substep(curr, deriv, i_substep)
+    end do
+    measured_n_substeps = n_substeps
+
+    ! Mirrors run()'s per-iteration postprocessing calls (base_case.f90,
+    ! immediately after the sub-stage loop): keep_pressure and
+    ! vorticity/Q-criterion allocations are gated HERE, not inside
+    ! postprocess() above, so they must be driven separately to be
+    ! captured - postprocess(0,.) alone does not reach them.
+    if (flow_case%solver%keep_pressure) &
+      call compute_pressure_vert(flow_case%solver)
+    output_vorticity = output_field_active(flow_case%io_mgr%snapshot_mgr% &
+                                           config, 'vorticity')
+    output_qcriterion = output_field_active(flow_case%io_mgr%snapshot_mgr% &
+                                            config, 'qcriterion')
+    if (output_vorticity .or. output_qcriterion) &
+      call compute_derived_fields(flow_case%solver, output_vorticity, &
+                                  output_qcriterion)
+  end subroutine drive_case
+
   subroutine build_and_measure(dims_in, npeak, dev_used, ibm_missing)
     !! Build the real flow case at dims_in on this single GPU (via the same
     !! case-dispatch select case xcompact.f90 uses), run one (or, under
@@ -1517,9 +1575,7 @@ contains
     class(allocator_t), pointer :: allocator
     class(base_backend_t), pointer :: backend
     class(base_case_t), allocatable :: flow_case
-    type(flist_t), allocatable :: curr(:), deriv(:)
-    integer :: dims(3), i
-    integer :: n_substeps, i_substep
+    integer :: dims(3)
     type(cuda_allocator_t), target :: cuda_allocator
     type(cuda_backend_t), target :: cuda_backend
     type(allocator_t), target :: host_allocator
@@ -1548,50 +1604,7 @@ contains
       use_cufftmp_known = .true.
     end select
 
-    allocate (curr(flow_case%solver%time_integrator%nvars))
-    allocate (deriv(flow_case%solver%time_integrator%nvars))
-    curr(1)%ptr => flow_case%solver%u
-    curr(2)%ptr => flow_case%solver%v
-    curr(3)%ptr => flow_case%solver%w
-    do i = 1, flow_case%solver%nspecies
-      curr(3 + i)%ptr => flow_case%solver%species(i)%ptr
-    end do
-
-    ! Mirrors run()'s pre-loop call to the case-specific postprocess hook.
-    call flow_case%postprocess(0, 0._dp)
-
-    ! One real sub-stage drives the allocator to the same high-water mark a
-    ! full time step would reach; field values are irrelevant to memory.
-    ! --extensive <n> overrides the count (default 1) so the peak can be
-    ! re-checked against more sub-stages, e.g. to confirm no later-only
-    ! allocation path changes it. This only re-checks the allocator's own
-    ! pool (structurally leak-free - next_id is monotonic, get_block/
-    ! release_block just recycle a free list, see src/allocator.f90): it
-    ! never repeats the per-iteration I/O paths (compute_pressure_vert,
-    ! compute_derived_fields, io_mgr%update_stats, snapshot/checkpoint
-    ! writes) that a real xcompact run would hit on every iteration and
-    ! where an actual leak is far more likely to live.
-    n_substeps = 1
-    if (extensive_substeps > 0) n_substeps = extensive_substeps
-    do i_substep = 1, n_substeps
-      call flow_case%substep(curr, deriv, i_substep)
-    end do
-    measured_n_substeps = n_substeps
-
-    ! Mirrors run()'s per-iteration postprocessing calls (base_case.f90,
-    ! immediately after the sub-stage loop): keep_pressure and
-    ! vorticity/Q-criterion allocations are gated HERE, not inside
-    ! postprocess() above, so they must be driven separately to be
-    ! captured - postprocess(0,.) alone does not reach them.
-    if (flow_case%solver%keep_pressure) &
-      call compute_pressure_vert(flow_case%solver)
-    output_vorticity = output_field_active(flow_case%io_mgr%snapshot_mgr% &
-                                           config, 'vorticity')
-    output_qcriterion = output_field_active(flow_case%io_mgr%snapshot_mgr% &
-                                            config, 'qcriterion')
-    if (output_vorticity .or. output_qcriterion) &
-      call compute_derived_fields(flow_case%solver, output_vorticity, &
-                                  output_qcriterion)
+    call drive_case(flow_case)
 
     npeak = allocator%next_id
     ierr = cudaMemGetInfo(free_b, total_b)
