@@ -24,6 +24,9 @@ module m_memcheck_build
                                output_field_active, padded_halo_bytes
   implicit none
 
+  private
+  public :: run_tier3
+
   !> --build: do not attempt a real build whose fields only workspace alone
   !> exceeds this fraction of the FREE card memory (card_free_gib, not the
   !> card's full capacity) - leaves headroom for context + FFT scratch so
