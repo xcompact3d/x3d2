@@ -8,6 +8,10 @@ module m_memcheck_estimate
                                stretched_y_matrix_bytes, gpu_io_staging_bytes
   implicit none
 
+  private
+  public :: to_gib, classify, ng_unsupported_reason, estimate_for_ng, &
+            fields_plus_halo_bytes_n, n_halo
+
   !> <80% of card memory: FITS. 80-95%: BORDERLINE. >95%: DOES_NOT_FIT.
   real(dp), parameter :: FITS_FRACTION = 0.80_dp
   real(dp), parameter :: DOES_NOT_FIT_FRACTION = 0.95_dp
