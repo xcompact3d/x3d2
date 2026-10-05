@@ -183,6 +183,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   # and m_cuda_common, so only exists for the CUDA backend.
   add_library(x3d2_memcheck STATIC
     memcheck/context.f90
+    memcheck/estimate.f90
   )
   set_target_properties(x3d2_memcheck PROPERTIES
     Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_memcheck")
