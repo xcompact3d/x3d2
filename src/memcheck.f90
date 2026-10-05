@@ -999,10 +999,9 @@ contains
     if (input_path(1:1) /= '/') then
       if (has_dotdot_component(trim(input_path)) .or. &
           index(trim(input_path), "'") > 0) then
-        print '(a)', "Real build skipped: relative input path with '..' &
-          &cannot be mirrored; pass an absolute path"
-        call run_sh("rm -rf '"//trim(scratch_dir)//"'")
-        ok = .false.
+        call skip_build("Real build skipped: relative input path with '..' &
+                        &cannot be mirrored; pass an absolute path", &
+                        .true., ok)
         return
       end if
       slash_pos = index(trim(input_path), '/', back=.true.)
@@ -1010,10 +1009,9 @@ contains
         call run_sh("mkdir -p '"//trim(scratch_dir)//'/'// &
                     trim(input_path(1:slash_pos - 1))//"'", st)
         if (st /= 0) then
-          print '(a)', 'Real build skipped: could not prepare scratch &
-            &directory (mkdir of the input''s parent failed)'
-          call run_sh("rm -rf '"//trim(scratch_dir)//"'")
-          ok = .false.
+          call skip_build('Real build skipped: could not prepare scratch &
+                          &directory (mkdir of the input''s parent failed)', &
+                          .true., ok)
           return
         end if
       end if
@@ -1021,19 +1019,15 @@ contains
                   trim(input_path)//"' '"//trim(scratch_dir)// &
                   '/'//trim(input_path)//"'", st)
       if (st /= 0) then
-        print '(a)', 'Real build skipped: could not prepare scratch &
-          &directory (input symlink failed)'
-        call run_sh("rm -rf '"//trim(scratch_dir)//"'")
-        ok = .false.
+        call skip_build('Real build skipped: could not prepare scratch &
+                        &directory (input symlink failed)', .true., ok)
         return
       end if
       inquire (file=trim(scratch_dir)//'/'//trim(input_path), &
               exist=input_exists)
       if (.not. input_exists) then
-        print '(a)', 'Real build skipped: could not prepare scratch &
-          &directory (input symlink failed)'
-        call run_sh("rm -rf '"//trim(scratch_dir)//"'")
-        ok = .false.
+        call skip_build('Real build skipped: could not prepare scratch &
+                        &directory (input symlink failed)', .true., ok)
         return
       end if
     end if
@@ -1044,20 +1038,16 @@ contains
                   trim(ibm_file)//"' '"//trim(scratch_dir)// &
                   '/'//trim(ibm_file)//"'", st)
       if (st /= 0) then
-        print '(a)', 'Real build skipped: could not prepare scratch &
-          &directory (ibm mask symlink failed)'
-        call run_sh("rm -rf '"//trim(scratch_dir)//"'")
-        ok = .false.
+        call skip_build('Real build skipped: could not prepare scratch &
+                        &directory (ibm mask symlink failed)', .true., ok)
         return
       end if
     end if
 
     rc = c_chdir(trim(scratch_dir)//c_null_char)
     if (rc /= 0) then
-      print '(a,a)', 'Real build skipped: could not chdir into scratch &
-        &directory ', trim(scratch_dir)
-      call run_sh("rm -rf '"//trim(scratch_dir)//"'")
-      ok = .false.
+      call skip_build('Real build skipped: could not chdir into scratch &
+                      &directory '//trim(scratch_dir), .true., ok)
       return
     end if
 
