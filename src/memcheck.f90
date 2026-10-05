@@ -38,21 +38,15 @@ program x3d2_memcheck
   use mpi
   use cudafor, only: cudaMemGetInfo, cuda_count_kind, &
                      cudaGetDeviceCount, cudaSetDevice
-  use m_common, only: dp, i8, VERT
+  use m_common, only: dp, i8
   use m_mesh, only: mesh_t
   use m_cuda_common, only: SZ
   use m_memory_estimate, only: output_field_active, peak_fields_lookup, &
                                padded_halo_bytes
   use m_cuda_memory_estimate, only: check_status
-  use m_postprocess, only: compute_derived_fields, compute_pressure_vert
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
-  use m_case_channel, only: case_channel_t
-  use m_case_cylinder, only: case_cylinder_t
-  use m_case_generic, only: case_generic_t
-  use m_case_tgv, only: case_tgv_t
-  use m_field, only: flist_t
   use m_cuda_allocator, only: cuda_allocator_t
   use m_cuda_backend, only: cuda_backend_t
   use m_cuda_poisson_fft, only: cuda_poisson_fft_t
@@ -60,9 +54,11 @@ program x3d2_memcheck
                                 classify_bc, resolve_gpu_io_mode
   use m_memcheck_estimate, only: to_gib, n_halo, fields_plus_halo_bytes_n
   use m_memcheck_report, only: print_rule, report
-  use m_memcheck_scratch, only: ibm_mask_filename, validate_build_inputs, &
-                                make_scratch, leave_build_scratch
-  use m_memcheck_build, only: check_peak_fields_table, report_measured_table
+  use m_memcheck_scratch, only: validate_build_inputs, make_scratch, &
+                                leave_build_scratch
+  use m_memcheck_build, only: check_peak_fields_table, report_measured_table, &
+                              build_mesh, make_cuda_backend, make_flow_case, &
+                              drive_case
 
   implicit none
 
@@ -262,143 +258,6 @@ contains
         &build performs no snapshot/checkpoint write.)'
   end subroutine run_tier3
 
-  subroutine build_mesh(dims_in, mesh, dims, ibm_missing)
-    !! Mesh of the real build at dims_in plus the ibm_on mask pre-check;
-    !! ibm_missing=.true. tells build_and_measure to stop.
-    integer, intent(in) :: dims_in(3)
-    type(mesh_t), intent(out) :: mesh
-    integer, intent(out) :: dims(3)
-    logical, intent(out) :: ibm_missing
-
-    character(len=16) :: ibm_file
-    logical :: ibm_file_exists
-
-    ibm_missing = .false.
-    mesh = mesh_t(dims_in, [1, 1, 1], ctx%domain_cfg%L_global, &
-                  ctx%domain_cfg%BC_x, ctx%domain_cfg%BC_y, &
-                  ctx%domain_cfg%BC_z, ctx%domain_cfg%stretching, &
-                  ctx%domain_cfg%beta, use_2decomp=.false.)
-    dims = mesh%get_dims(VERT)
-
-    ! ibm_on triggers reading an external ibm_<BC-suffix>.bp mask file
-    ! inside solver init (src/module/ibm.f90), which MPI_Aborts if that
-    ! file is missing. That is correct for production xcompact, but not
-    ! for a tool that should degrade gracefully - check for it here, using
-    ! the same suffix construction as src/module/ibm.f90:70-75 (shared via
-    ! ibm_mask_filename, also used by make_scratch to mirror the
-    ! mask into the build scratch directory), and bail out before
-    ! triggering the case/solver construction that would abort.
-    if (ctx%solver_cfg%ibm_on) then
-      ibm_file = ibm_mask_filename(mesh%grid%periodic_BC(1), &
-                                   mesh%grid%periodic_BC(2), &
-                                   mesh%grid%periodic_BC(3))
-      inquire (file=ibm_file, exist=ibm_file_exists)
-      if (.not. ibm_file_exists) then
-        ibm_missing = .true.
-        return
-      end if
-    end if
-  end subroutine build_mesh
-
-  subroutine make_cuda_backend(mesh, dims, cuda_allocator, host_allocator, &
-                               cuda_backend, allocator, backend)
-    !! Build the device and host allocators and the CUDA backend; the
-    !! caller owns all three so the pointers cannot outlive them.
-    type(mesh_t), target, intent(inout) :: mesh
-    integer, intent(in) :: dims(3)
-    type(cuda_allocator_t), target, intent(inout) :: cuda_allocator
-    type(allocator_t), target, intent(inout) :: host_allocator
-    type(cuda_backend_t), target, intent(inout) :: cuda_backend
-    class(allocator_t), pointer, intent(out) :: allocator
-    class(base_backend_t), pointer, intent(out) :: backend
-
-    cuda_allocator = cuda_allocator_t(dims, SZ)
-    allocator => cuda_allocator
-    host_allocator = allocator_t(dims, SZ)
-    cuda_backend = cuda_backend_t(mesh, allocator)
-    backend => cuda_backend
-  end subroutine make_cuda_backend
-
-  subroutine make_flow_case(backend, mesh, host_allocator, flow_case)
-    !! Build the flow case named in the input through the same case
-    !! dispatch select case xcompact.f90 uses.
-    class(base_backend_t), pointer, intent(in) :: backend
-    type(mesh_t), target, intent(inout) :: mesh
-    type(allocator_t), target, intent(inout) :: host_allocator
-    class(base_case_t), allocatable, intent(out) :: flow_case
-
-    select case (trim(ctx%domain_cfg%flow_case_name))
-    case ('channel')
-      allocate (case_channel_t :: flow_case)
-      flow_case = case_channel_t(backend, mesh, host_allocator)
-    case ('cylinder')
-      allocate (case_cylinder_t :: flow_case)
-      flow_case = case_cylinder_t(backend, mesh, host_allocator)
-    case ('generic')
-      allocate (case_generic_t :: flow_case)
-      flow_case = case_generic_t(backend, mesh, host_allocator)
-    case ('tgv')
-      allocate (case_tgv_t :: flow_case)
-      flow_case = case_tgv_t(backend, mesh, host_allocator)
-    case default
-      error stop 'Undefined flow_case.'
-    end select
-  end subroutine make_flow_case
-
-  subroutine drive_case(flow_case)
-    !! Drive the built flow case the way run() does so the allocator reaches
-    !! its high-water mark; records measured_n_substeps and the output flags.
-    class(base_case_t), intent(inout) :: flow_case
-
-    type(flist_t), allocatable :: curr(:), deriv(:)
-    integer :: i, n_substeps, i_substep
-
-    allocate (curr(flow_case%solver%time_integrator%nvars))
-    allocate (deriv(flow_case%solver%time_integrator%nvars))
-    curr(1)%ptr => flow_case%solver%u
-    curr(2)%ptr => flow_case%solver%v
-    curr(3)%ptr => flow_case%solver%w
-    do i = 1, flow_case%solver%nspecies
-      curr(3 + i)%ptr => flow_case%solver%species(i)%ptr
-    end do
-
-    ! Mirrors run()'s pre-loop call to the case-specific postprocess hook.
-    call flow_case%postprocess(0, 0._dp)
-
-    ! One real sub-stage drives the allocator to the same high-water mark a
-    ! full time step would reach; field values are irrelevant to memory.
-    ! --extensive <n> overrides the count (default 1) so the peak can be
-    ! re-checked against more sub-stages, e.g. to confirm no later-only
-    ! allocation path changes it. This only re-checks the allocator's own
-    ! pool (structurally leak-free - next_id is monotonic, get_block/
-    ! release_block just recycle a free list, see src/allocator.f90): it
-    ! never repeats the per-iteration I/O paths (compute_pressure_vert,
-    ! compute_derived_fields, io_mgr%update_stats, snapshot/checkpoint
-    ! writes) that a real xcompact run would hit on every iteration and
-    ! where an actual leak is far more likely to live.
-    n_substeps = 1
-    if (ctx%extensive_substeps > 0) n_substeps = ctx%extensive_substeps
-    do i_substep = 1, n_substeps
-      call flow_case%substep(curr, deriv, i_substep)
-    end do
-    ctx%measured_n_substeps = n_substeps
-
-    ! Mirrors run()'s per-iteration postprocessing calls (base_case.f90,
-    ! immediately after the sub-stage loop): keep_pressure and
-    ! vorticity/Q-criterion allocations are gated HERE, not inside
-    ! postprocess() above, so they must be driven separately to be
-    ! captured - postprocess(0,.) alone does not reach them.
-    if (flow_case%solver%keep_pressure) &
-      call compute_pressure_vert(flow_case%solver)
-    ctx%output_vorticity = output_field_active( &
-                           flow_case%io_mgr%snapshot_mgr%config, 'vorticity')
-    ctx%output_qcriterion = output_field_active( &
-                            flow_case%io_mgr%snapshot_mgr%config, 'qcriterion')
-    if (ctx%output_vorticity .or. ctx%output_qcriterion) &
-      call compute_derived_fields(flow_case%solver, ctx%output_vorticity, &
-                                  ctx%output_qcriterion)
-  end subroutine drive_case
-
   subroutine build_and_measure(dims_in, npeak, dev_used, ibm_missing)
     !! Build the real flow case at dims_in on this single GPU (via the same
     !! case-dispatch select case xcompact.f90 uses), run one (or, under
@@ -460,13 +319,13 @@ contains
     ctx%output_vorticity = .false.
     ctx%output_qcriterion = .false.
 
-    call build_mesh(dims_in, mesh, dims, ibm_missing)
+    call build_mesh(ctx, dims_in, mesh, dims, ibm_missing)
     if (ibm_missing) return
 
     call make_cuda_backend(mesh, dims, cuda_allocator, host_allocator, &
                            cuda_backend, allocator, backend)
 
-    call make_flow_case(backend, mesh, host_allocator, flow_case)
+    call make_flow_case(ctx, backend, mesh, host_allocator, flow_case)
 
     ! Solver construction (inside case_init, above) already ran
     ! init_poisson_fft, so the plan's actual cuFFTMp/cuFFT fallback outcome
@@ -478,7 +337,7 @@ contains
       ctx%use_cufftmp_known = .true.
     end select
 
-    call drive_case(flow_case)
+    call drive_case(ctx, flow_case)
 
     npeak = allocator%next_id
     ierr = cudaMemGetInfo(free_b, total_b)
