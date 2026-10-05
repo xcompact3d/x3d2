@@ -103,7 +103,7 @@ program x3d2_memcheck
 contains
 
   subroutine no_device_exit()
-    !! Common tail of both no-device exits above (which print their own
+    !! Common tail of the no-device exit above (which prints its own
     !! reason first): shut MPI down cleanly, then error stop.
     integer :: ierr_finalize
 
