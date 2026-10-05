@@ -143,9 +143,7 @@ contains
     !! hardware constants (worksize/xtdesc/heap/context), and the
     !! GPU-aware IO staging term (also broken out on its own via the
     !! optional io_gib, in GiB, for callers that need to track it apart
-    !! from context/FFT overhead - e.g. run_tier3()'s CHECK line, which
-    !! must exclude it since the real --build never performs a
-    !! snapshot/checkpoint write).
+    !! from context/FFT overhead - e.g. run_tier3()'s CHECK line).
     type(memcheck_ctx_t), intent(inout) :: ctx
     integer, intent(in) :: ng
     real(dp), intent(out) :: per_gpu_gib
