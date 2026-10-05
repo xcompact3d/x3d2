@@ -179,8 +179,9 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   endif()
   target_compile_options(xcompact PRIVATE "-DCUDA")
 
-  # x3d2-memcheck (the static memory estimator) needs m_cuda_memory_estimate
-  # and m_cuda_common, so only exists for the CUDA backend.
+  # x3d2-memcheck (the static memory estimator) only exists for the CUDA
+  # backend because its only device implementation is the CUDA one
+  # (backend/cuda/memcheck_device.f90).
   add_library(x3d2_memcheck STATIC
     memcheck/device.f90
     memcheck/context.f90
