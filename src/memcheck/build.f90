@@ -316,13 +316,11 @@ contains
     !! absolute device memory in use (dev_used).
     !!
     !! --extensive re-checks this same high-water mark against more RK
-    !! sub-stages, but only re-exercises the allocator's own pool - it does
-    !! NOT repeat the per-iteration I/O paths (compute_pressure_vert,
-    !! compute_derived_fields, io_mgr%update_stats, snapshot/checkpoint
-    !! writes) that a real xcompact run hits every iteration, so it cannot
-    !! catch a leak in those paths. The GPU-aware ADIOS2 staging buffer is
-    !! therefore added analytically (gpu_io_staging_bytes) rather than
-    !! measured here. See scripts/memcheck_extensive_sweep.sh
+    !! sub-stages (drive_case says what that does and does not cover, in
+    !! particular that it cannot catch a leak in the per-iteration I/O
+    !! paths). The GPU-aware ADIOS2 staging buffer is therefore added
+    !! analytically (gpu_io_staging_bytes) rather than measured here. See
+    !! scripts/memcheck_extensive_sweep.sh
     !! (this tool's own sweep, allocator-path regression guard only) vs.
     !! scripts/memcheck_extensive_xcompact.sh (a real xcompact run polled
     !! externally via nvidia-smi, which CAN catch an I/O-path leak).
@@ -334,8 +332,8 @@ contains
     !! lazily-allocated BC ghost blocks (define_BC_channel/cylinder), and
     !! anything gated by the input's I/O config (keep_pressure,
     !! vorticity/Q-criterion derived fields via the per-iteration
-    !! compute_pressure_vert/compute_derived_fields calls mirrored below,
-    !! immediately after substep - these are NOT part of postprocess()).
+    !! compute_pressure_vert/compute_derived_fields calls drive_case
+    !! mirrors - these are NOT part of postprocess()).
     !!
     !! The real case constructors re-read get_argument(1) (this process's
     !! own CLI argument) rather than taking domain_cfg as a parameter; this
@@ -399,19 +397,11 @@ contains
     !! build probe, or if ibm_on=T and the matching mask file is not
     !! present in the working directory. The real build itself runs inside
     !! a throwaway x3d2-memcheck-build.<pid> scratch directory
-    !! (make_scratch/leave_build_scratch above), because it
-    !! initialises monitoring (writes monitoring.csv) and calls
-    !! postprocess(0), which clobbered run directories on 2026-09-15;
-    !! make_scratch also skips the build
-    !! (ok=.false.) if the scratch directory cannot be created or entered,
-    !! or if input_path is relative with a '..' component it cannot mirror.
-    !! validate_build_inputs pre-validates the known causes up front - a
-    !! missing input file, an unsupported flow case, or (ibm_on=T) a
-    !! missing mask file - before touching the filesystem; see
-    !! make_scratch's docstring for what happens if an unexpected error stop
-    !! occurs after its chdir regardless (a scratch directory left behind
-    !! under the invoking directory, cleaned up by the next run with the
-    !! same pid).
+    !! (make_scratch/leave_build_scratch; make_scratch's docstring says why,
+    !! when it skips the build, and what an unexpected error stop after its
+    !! chdir leaves behind). validate_build_inputs pre-validates the known
+    !! causes up front - a missing input file, an unsupported flow case, or
+    !! (ibm_on=T) a missing mask file - before touching the filesystem.
     type(memcheck_ctx_t), intent(inout) :: ctx
     real(dp) :: used_gib, workspace_gib_measured, ws_guess
     real(dp) :: pct_error, estimate_ng1_excl_io_gib
