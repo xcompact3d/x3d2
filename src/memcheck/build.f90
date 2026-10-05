@@ -166,6 +166,10 @@ contains
                       to_gib(spectral_slab_bytes(ctx%bc_is_100, &
                                 ctx%bc_is_110, ctx%cdims, ng) - spec_bytes_1) &
                       + mirror_gib
+      ! The floor takes bc_is_110 where the pre-refactor code hard-coded
+      ! uses_cufftmp=.true.: equal here because the 110 case never uses the
+      ! distributed FFT and its ng>1 rows are skipped above, so this term
+      ! is never evaluated for it.
       if (ctx%device%fft_path_known() .and. &
           ctx%device%uses_distributed_fft()) &
         overhead_term = overhead_term + &
