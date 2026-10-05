@@ -182,6 +182,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   # x3d2-memcheck (the static memory estimator) needs m_cuda_memory_estimate
   # and m_cuda_common, so only exists for the CUDA backend.
   add_library(x3d2_memcheck STATIC
+    memcheck/device.f90
     memcheck/context.f90
     memcheck/estimate.f90
     memcheck/report.f90
