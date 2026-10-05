@@ -842,19 +842,19 @@ contains
     end if
   end subroutine print_requested_line
 
-  subroutine report()
-    integer :: k, ng, smallest_fits, local_dims(3)
+  subroutine print_ng_table(smallest_fits)
+    !! Table header and one row per scanned GPU count (an unsupported count
+    !! prints why it is skipped), then a closing rule. smallest_fits is the
+    !! first scanned count that FITS, 0 if none. The ng=1 row also records
+    !! the estimate and its IO staging term for run_tier3's CHECK line.
+    integer, intent(out) :: smallest_fits
+
+    integer :: k, ng, local_dims(3)
     real(dp) :: per_gpu_gib, workspace_gib, overhead_gib, io_gib
     logical :: exact
     character(len=12) :: verdict
     character(len=96) :: reason
 
-    call print_header_lines()
-    call print_io_staging_line()
-    call print_mode_lines()
-    call print_requested_line()
-
-    call print_rule('-')
     call print_table_header()
     smallest_fits = 0
     do k = 1, size(n_gpu_list)
@@ -876,6 +876,18 @@ contains
       if (smallest_fits == 0 .and. trim(verdict) == 'FITS') smallest_fits = ng
     end do
     call print_rule('-')
+  end subroutine print_ng_table
+
+  subroutine report()
+    integer :: smallest_fits
+
+    call print_header_lines()
+    call print_io_staging_line()
+    call print_mode_lines()
+    call print_requested_line()
+
+    call print_rule('-')
+    call print_ng_table(smallest_fits)
     print '(a)', 'Notes: workspace + overhead = per-GPU. % is per-GPU &
       &against this card''s total memory.'
 
