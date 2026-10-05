@@ -174,4 +174,138 @@ contains
     end if
   end subroutine validate_build_inputs
 
+  subroutine make_scratch(ctx, ok)
+    !! Real build runs inside a throwaway x3d2-memcheck-build.<pid>
+    !! subdirectory of the invoking directory, because a case build
+    !! initialises monitoring (writes monitoring.csv) and calls
+    !! postprocess(0), which clobbered run directories on 2026-09-15. A
+    !! relative input path is mirrored into the scratch directory by
+    !! symlink; a relative path containing a '..' component (or a single
+    !! quote, which the shell quoting below cannot handle) cannot be
+    !! mirrored this way and is rejected - pass an absolute path instead.
+    !! Sets ok=.false. (and the estimate above stands, like the other
+    !! run_tier3 skips) on any failure; leave_build_scratch removes the
+    !! scratch directory once the build finishes. validate_build_inputs
+    !! must have run first. If an unexpected error stop happens after the
+    !! chdir below regardless - a failure mode the pre-validation does not
+    !! cover - the scratch directory is left behind under the invoking
+    !! directory; the next run with the same pid in the same directory
+    !! removes it as a stale leftover before creating its own.
+    type(memcheck_ctx_t), intent(inout) :: ctx
+    logical, intent(out) :: ok
+
+    integer(c_int) :: rc
+    integer :: st, slash_pos
+    character(len=16) :: ibm_file
+    logical :: input_exists
+
+    ok = .true.
+    ctx%scratch_dir = scratch_name(ctx%orig_dir)
+
+    ! A stale scratch directory from an earlier run's unexpected error stop
+    ! after the chdir below (see this subroutine's docstring) would make a
+    ! plain mkdir fail - remove it first, if present.
+    call run_sh("test -d '"//trim(ctx%scratch_dir)//"'", st)
+    if (st == 0) then
+      call run_sh("rm -rf '"//trim(ctx%scratch_dir)//"'", st)
+      if (st /= 0) then
+        call skip_build(ctx, 'Real build skipped: could not remove stale &
+                        &scratch directory '//trim(ctx%scratch_dir), &
+                        .false., ok)
+        return
+      end if
+      print '(a,a)', 'Removed stale scratch directory ', trim(ctx%scratch_dir)
+    end if
+
+    call run_sh("mkdir '"//trim(ctx%scratch_dir)//"'", st)
+    if (st /= 0) then
+      call skip_build(ctx, 'Real build skipped: could not create scratch &
+                      &directory '//trim(ctx%scratch_dir), .false., ok)
+      return
+    end if
+
+    if (ctx%input_path(1:1) /= '/') then
+      if (has_dotdot_component(trim(ctx%input_path)) .or. &
+          index(trim(ctx%input_path), "'") > 0) then
+        call skip_build(ctx, "Real build skipped: relative input path with &
+                        &'..' cannot be mirrored; pass an absolute path", &
+                        .true., ok)
+        return
+      end if
+      slash_pos = index(trim(ctx%input_path), '/', back=.true.)
+      if (slash_pos > 0) then
+        call run_sh("mkdir -p '"//trim(ctx%scratch_dir)//'/'// &
+                    trim(ctx%input_path(1:slash_pos - 1))//"'", st)
+        if (st /= 0) then
+          call skip_build(ctx, 'Real build skipped: could not prepare scratch &
+                          &directory (mkdir of the input''s parent failed)', &
+                          .true., ok)
+          return
+        end if
+      end if
+      call run_sh("ln -s '"//trim(ctx%orig_dir)//'/'// &
+                  trim(ctx%input_path)//"' '"//trim(ctx%scratch_dir)// &
+                  '/'//trim(ctx%input_path)//"'", st)
+      if (st /= 0) then
+        call skip_build(ctx, 'Real build skipped: could not prepare scratch &
+                        &directory (input symlink failed)', .true., ok)
+        return
+      end if
+      inquire (file=trim(ctx%scratch_dir)//'/'//trim(ctx%input_path), &
+               exist=input_exists)
+      if (.not. input_exists) then
+        call skip_build(ctx, 'Real build skipped: could not prepare scratch &
+                        &directory (input symlink failed)', .true., ok)
+        return
+      end if
+    end if
+
+    if (ctx%solver_cfg%ibm_on) then
+      ibm_file = ibm_mask_filename(ctx%periodic_x, ctx%periodic_y, &
+                                   ctx%periodic_z)
+      call run_sh("ln -s '"//trim(ctx%orig_dir)//'/'// &
+                  trim(ibm_file)//"' '"//trim(ctx%scratch_dir)// &
+                  '/'//trim(ibm_file)//"'", st)
+      if (st /= 0) then
+        call skip_build(ctx, 'Real build skipped: could not prepare scratch &
+                        &directory (ibm mask symlink failed)', .true., ok)
+        return
+      end if
+    end if
+
+    rc = c_chdir(trim(ctx%scratch_dir)//c_null_char)
+    if (rc /= 0) then
+      call skip_build(ctx, 'Real build skipped: could not chdir into scratch &
+                      &directory '//trim(ctx%scratch_dir), .true., ok)
+      return
+    end if
+
+    print '(a,a,a)', 'Real build scratch directory: ', trim(ctx%scratch_dir), &
+      ' (removed after the build)'
+  end subroutine make_scratch
+
+  subroutine leave_build_scratch(ctx)
+    !! Restore the invoking directory and remove the scratch directory
+    !! make_scratch created. Called after build_and_measure returns,
+    !! on both the normal path and the ibm_missing early return.
+    type(memcheck_ctx_t), intent(inout) :: ctx
+    integer(c_int) :: rc
+    character(len=4096) :: expected_scratch_dir
+
+    rc = c_chdir(trim(ctx%orig_dir)//c_null_char)
+    if (rc /= 0) &
+      error stop 'x3d2-memcheck: could not chdir back to the invoking &
+        &directory after the real build; state is unknown, not removing &
+        &the scratch directory.'
+
+    ! Never remove anything other than the exact scratch directory
+    ! make_scratch created and chdir'd into.
+    expected_scratch_dir = scratch_name(ctx%orig_dir)
+    if (trim(ctx%scratch_dir) == trim(expected_scratch_dir)) &
+      call run_sh("rm -rf '"//trim(ctx%scratch_dir)//"'")
+
+    ctx%orig_dir = ''
+    ctx%scratch_dir = ''
+  end subroutine leave_build_scratch
+
 end module m_memcheck_scratch

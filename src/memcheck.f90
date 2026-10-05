@@ -36,7 +36,6 @@ program x3d2_memcheck
   !!
   !! Usage: x3d2-memcheck <input.x3d> [--static | --build]
   use mpi
-  use iso_c_binding, only: c_int, c_null_char
   use cudafor, only: cudaMemGetInfo, cuda_count_kind, &
                      cudaGetDeviceCount, cudaSetDevice
   use m_common, only: dp, i8, VERT
@@ -64,9 +63,8 @@ program x3d2_memcheck
                                  n_halo, fields_plus_halo_bytes_n
   use m_memcheck_report, only: print_rule, print_table_header, &
                                print_table_row, n_gpu_list, report
-  use m_memcheck_scratch, only: c_chdir, current_dir, has_dotdot_component, &
-                                run_sh, scratch_name, skip_build, &
-                                ibm_mask_filename, validate_build_inputs
+  use m_memcheck_scratch, only: ibm_mask_filename, validate_build_inputs, &
+                                make_scratch, leave_build_scratch
 
   implicit none
 
@@ -162,138 +160,6 @@ contains
     ctx%card_free_gib = to_gib(int(free_b, i8))
   end subroutine query_card_gib
 
-  subroutine make_scratch(ok)
-    !! Real build runs inside a throwaway x3d2-memcheck-build.<pid>
-    !! subdirectory of the invoking directory, because a case build
-    !! initialises monitoring (writes monitoring.csv) and calls
-    !! postprocess(0), which clobbered run directories on 2026-09-15. A
-    !! relative input path is mirrored into the scratch directory by
-    !! symlink; a relative path containing a '..' component (or a single
-    !! quote, which the shell quoting below cannot handle) cannot be
-    !! mirrored this way and is rejected - pass an absolute path instead.
-    !! Sets ok=.false. (and the estimate above stands, like the other
-    !! run_tier3 skips) on any failure; leave_build_scratch removes the
-    !! scratch directory once the build finishes. validate_build_inputs
-    !! must have run first. If an unexpected error stop happens after the
-    !! chdir below regardless - a failure mode the pre-validation does not
-    !! cover - the scratch directory is left behind under the invoking
-    !! directory; the next run with the same pid in the same directory
-    !! removes it as a stale leftover before creating its own.
-    logical, intent(out) :: ok
-
-    integer(c_int) :: rc
-    integer :: st, slash_pos
-    character(len=16) :: ibm_file
-    logical :: input_exists
-
-    ok = .true.
-    ctx%scratch_dir = scratch_name(ctx%orig_dir)
-
-    ! A stale scratch directory from an earlier run's unexpected error stop
-    ! after the chdir below (see this subroutine's docstring) would make a
-    ! plain mkdir fail - remove it first, if present.
-    call run_sh("test -d '"//trim(ctx%scratch_dir)//"'", st)
-    if (st == 0) then
-      call run_sh("rm -rf '"//trim(ctx%scratch_dir)//"'", st)
-      if (st /= 0) then
-        call skip_build(ctx, 'Real build skipped: could not remove stale &
-                        &scratch directory '//trim(ctx%scratch_dir), &
-                        .false., ok)
-        return
-      end if
-      print '(a,a)', 'Removed stale scratch directory ', trim(ctx%scratch_dir)
-    end if
-
-    call run_sh("mkdir '"//trim(ctx%scratch_dir)//"'", st)
-    if (st /= 0) then
-      call skip_build(ctx, 'Real build skipped: could not create scratch &
-                      &directory '//trim(ctx%scratch_dir), .false., ok)
-      return
-    end if
-
-    if (ctx%input_path(1:1) /= '/') then
-      if (has_dotdot_component(trim(ctx%input_path)) .or. &
-          index(trim(ctx%input_path), "'") > 0) then
-        call skip_build(ctx, "Real build skipped: relative input path with &
-                        &'..' cannot be mirrored; pass an absolute path", &
-                        .true., ok)
-        return
-      end if
-      slash_pos = index(trim(ctx%input_path), '/', back=.true.)
-      if (slash_pos > 0) then
-        call run_sh("mkdir -p '"//trim(ctx%scratch_dir)//'/'// &
-                    trim(ctx%input_path(1:slash_pos - 1))//"'", st)
-        if (st /= 0) then
-          call skip_build(ctx, 'Real build skipped: could not prepare scratch &
-                          &directory (mkdir of the input''s parent failed)', &
-                          .true., ok)
-          return
-        end if
-      end if
-      call run_sh("ln -s '"//trim(ctx%orig_dir)//'/'// &
-                  trim(ctx%input_path)//"' '"//trim(ctx%scratch_dir)// &
-                  '/'//trim(ctx%input_path)//"'", st)
-      if (st /= 0) then
-        call skip_build(ctx, 'Real build skipped: could not prepare scratch &
-                        &directory (input symlink failed)', .true., ok)
-        return
-      end if
-      inquire (file=trim(ctx%scratch_dir)//'/'//trim(ctx%input_path), &
-              exist=input_exists)
-      if (.not. input_exists) then
-        call skip_build(ctx, 'Real build skipped: could not prepare scratch &
-                        &directory (input symlink failed)', .true., ok)
-        return
-      end if
-    end if
-
-    if (ctx%solver_cfg%ibm_on) then
-      ibm_file = ibm_mask_filename(ctx%periodic_x, ctx%periodic_y, &
-                                   ctx%periodic_z)
-      call run_sh("ln -s '"//trim(ctx%orig_dir)//'/'// &
-                  trim(ibm_file)//"' '"//trim(ctx%scratch_dir)// &
-                  '/'//trim(ibm_file)//"'", st)
-      if (st /= 0) then
-        call skip_build(ctx, 'Real build skipped: could not prepare scratch &
-                        &directory (ibm mask symlink failed)', .true., ok)
-        return
-      end if
-    end if
-
-    rc = c_chdir(trim(ctx%scratch_dir)//c_null_char)
-    if (rc /= 0) then
-      call skip_build(ctx, 'Real build skipped: could not chdir into scratch &
-                      &directory '//trim(ctx%scratch_dir), .true., ok)
-      return
-    end if
-
-    print '(a,a,a)', 'Real build scratch directory: ', trim(ctx%scratch_dir), &
-      ' (removed after the build)'
-  end subroutine make_scratch
-
-  subroutine leave_build_scratch()
-    !! Restore the invoking directory and remove the scratch directory
-    !! make_scratch created. Called after build_and_measure returns,
-    !! on both the normal path and the ibm_missing early return.
-    integer(c_int) :: rc
-    character(len=4096) :: expected_scratch_dir
-
-    rc = c_chdir(trim(ctx%orig_dir)//c_null_char)
-    if (rc /= 0) &
-      error stop 'x3d2-memcheck: could not chdir back to the invoking &
-        &directory after the real build; state is unknown, not removing &
-        &the scratch directory.'
-
-    ! Never remove anything other than the exact scratch directory
-    ! make_scratch created and chdir'd into.
-    expected_scratch_dir = scratch_name(ctx%orig_dir)
-    if (trim(ctx%scratch_dir) == trim(expected_scratch_dir)) &
-      call run_sh("rm -rf '"//trim(ctx%scratch_dir)//"'")
-
-    ctx%orig_dir = ''
-    ctx%scratch_dir = ''
-  end subroutine leave_build_scratch
-
   subroutine run_tier3()
     !! Tier 3: a REAL case build + one substep on 1 GPU, measured with
     !! cudaMemGetInfo - the last-resort ground truth, now run in-process
@@ -353,12 +219,12 @@ contains
 
     call validate_build_inputs(ctx, build_scratch_ok)
     if (.not. build_scratch_ok) return
-    call make_scratch(build_scratch_ok)
+    call make_scratch(ctx, build_scratch_ok)
     if (.not. build_scratch_ok) return
 
     call build_and_measure(ctx%gdims, measured_peak_fields, used_gib, &
                            ibm_missing)
-    call leave_build_scratch()
+    call leave_build_scratch(ctx)
     if (ibm_missing) then
       call print_rule('-')
       print '(a)', 'Real build skipped: ibm_on=T but the matching &
