@@ -1,12 +1,10 @@
 module m_case_abl
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
-
   use m_allocator, only: allocator_t
   use m_abl, only: abl_t
   use m_abl_diagnostics, only: abl_diagnostics_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
-  use m_common, only: dp, get_argument, MPI_X3D2_DP, CELL, Y_FACE, &
+  use m_common, only: dp, get_argument, CELL, Y_FACE, &
                       BC_DIRICHLET, BC_NEUMANN
   use m_config, only: abl_config_t, solver_config_t
   use m_field, only: field_t
@@ -49,6 +47,7 @@ contains
                           flow_case%abl_cfg, solver_cfg%dt)
 
     call flow_case%case_init(backend, mesh, host_allocator)
+    flow_case%solver%keep_wall_correction = .true.
     call flow_case%abl%configure_wall_boundary_correction(flow_case%solver%les)
     flow_case%diagnostics = abl_diagnostics_t(backend, mesh, &
                                               flow_case%abl_cfg)
@@ -70,17 +69,15 @@ contains
     class(case_abl_t) :: self
 
     real(dp) :: ub, target_mean, can, ly
-    integer :: ierr
 
     ! Constant-flow-rate correction (Incompact3d forceabl); mirrors the channel
     ! bulk-velocity shift, targeting the log-law flow rate. The wall stress
     ! is not applied here: the wall model supplies it to the SGS stress.
     if (self%abl_cfg%mass_conserve) then
       ly = self%solver%mesh%geo%L(2)
+      ! field_volume_integral is already reduced over all ranks.
       ub = self%solver%backend%field_volume_integral(self%solver%u)
       ub = ub/product(self%solver%mesh%get_global_dims(CELL))
-      call MPI_Allreduce(MPI_IN_PLACE, ub, 1, MPI_X3D2_DP, &
-                         MPI_SUM, MPI_COMM_WORLD, ierr)
       if (self%abl_cfg%u_bulk > 0._dp) then
         target_mean = self%abl_cfg%u_bulk
       else

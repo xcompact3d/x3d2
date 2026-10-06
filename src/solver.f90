@@ -59,8 +59,10 @@ module m_solver
     class(field_t), pointer :: pressure => null()      !! Pressure on CELL grid (DIR_Z)
     class(field_t), pointer :: pressure_vert => null() !! Pressure on VERT grid (DIR_X)
     logical :: keep_pressure = .false.                 !! If true, persist pressure for output
+    logical :: keep_wall_correction = .false.         !! If true, persist the last pressure gradient for precorrect_walls
     !> Last projection's velocity correction, kept when the mesh has a
-    !> Dirichlet face so precorrect_walls can reuse it
+    !> Dirichlet face so precorrect_walls can reuse it. Only kept when
+    !> keep_wall_correction is set, as it costs three extra fields.
     class(field_t), pointer :: dpdx_last => null()
     class(field_t), pointer :: dpdy_last => null()
     class(field_t), pointer :: dpdz_last => null()
@@ -334,6 +336,10 @@ contains
       if (mesh%par%nproc_dir(dir) == 1) then
         dirps%lowpass%prefer_thomas = .true.
         dirps%lowpass_sym%prefer_thomas = .true.
+      else if (mesh%par%is_root()) then
+        print *, 'WARNING: the low-pass filter is decomposed in direction ', &
+          dir, '; it does not exactly preserve the mean and its result &
+          &depends on the decomposition.'
       end if
     end if
 
@@ -893,7 +899,8 @@ contains
     call self%backend%vecadd(-1._dp, dpdy, 1._dp, v)
     call self%backend%vecadd(-1._dp, dpdz, 1._dp, w)
 
-    if (any(self%mesh%grid%BCs_global == BC_DIRICHLET)) then
+    if (self%keep_wall_correction .and. &
+        any(self%mesh%grid%BCs_global == BC_DIRICHLET)) then
       ! Keep this correction for the next precorrect_walls
       if (associated(self%dpdx_last)) then
         call self%backend%allocator%release_block(self%dpdx_last)

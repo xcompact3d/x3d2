@@ -292,6 +292,11 @@ contains
     real(dp) :: dy, sampling_height
     integer :: dims(3), sample_plane
 
+    ! The wall stress is written at local y-plane 2 and sampled at a local
+    ! plane, so the wall must sit on the first plane of every rank.
+    if (self%mesh%par%nproc_dir(2) /= 1) &
+      error stop 'ABL wall model does not support a decomposed y direction.'
+
     dims = self%mesh%get_dims(VERT)
     if (dims(2) < 3) &
       error stop 'ABL wall model requires at least 3 y vertices.'
