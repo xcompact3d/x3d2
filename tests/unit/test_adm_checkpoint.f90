@@ -1,7 +1,7 @@
 program test_adm_checkpoint
   !! Tests the ADIOS2 round-trip of restart-critical ADM scalar state.
   use iso_fortran_env, only: stderr => error_unit
-  use mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Init, MPI_Finalize, MPI_Comm_rank
 
   use m_adm, only: adm_t
   use m_common, only: dp

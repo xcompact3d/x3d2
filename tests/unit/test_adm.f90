@@ -1,7 +1,8 @@
 program test_adm
   !! Tests ADM velocity sampling, filtering, force projection, running means,
   !! and scalar-output columns independently of the checkpoint backend.
-  use mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Init, MPI_Finalize, MPI_Comm_rank, &
+                   MPI_Barrier
 
   use m_adm, only: adm_t
   use m_allocator, only: allocator_t

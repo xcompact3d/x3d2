@@ -12,7 +12,8 @@ module m_case_wind_turbine
   !! non-periodic directions. The two_turbines case uses free-slip walls
   !! in y and z (wind-tunnel walls), which the FFT solver cannot currently do.
   use iso_fortran_env, only: stderr => error_unit
-  use mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_MAX, MPI_MIN, &
+                   MPI_Allreduce
 
   use m_allocator, only: allocator_t
   use m_adm, only: adm_t
