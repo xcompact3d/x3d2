@@ -975,17 +975,20 @@ contains
   ! ------------------------------------------------------------------
 
   attributes(global) subroutine process_spectral_110_norm_z( &
-    div_u, nz_h, nx, ny, nz, az, bz &
+    div_u, nz_h, nx, ny, nz, nx_glob, ny_glob, az, bz &
     )
     !! Step 1 (forward): normalise + Z periodic post-process
     !! Z is dim1 (serial j loop), periodic R2C — no sign flip needed
     !! since j only goes to nz/2+1.
+    !! nx, ny are the local loop bounds (equal to nx_glob, ny_glob on a
+    !! single rank); the normalisation divisor always needs the globals.
     implicit none
 
     complex(dp), device, intent(inout), dimension(:, :, :) :: div_u ! (nz/2+1, nx, ny)
     real(dp), device, intent(in), dimension(:) :: az, bz
     integer, value, intent(in) :: nz_h  ! nz/2+1
     integer, value, intent(in) :: nx, ny, nz
+    integer, value, intent(in) :: nx_glob, ny_glob
 
     integer :: i, j, k
     real(dp) :: tmp_r, tmp_c, div_r, div_c
@@ -995,8 +998,8 @@ contains
 
     if (i <= nx .and. k <= ny) then
       do j = 1, nz_h
-        div_r = real(div_u(j, i, k), kind=dp)/(nx*ny*nz)
-        div_c = aimag(div_u(j, i, k))/(nx*ny*nz)
+        div_r = real(div_u(j, i, k), kind=dp)/(nx_glob*ny_glob*nz)
+        div_c = aimag(div_u(j, i, k))/(nx_glob*ny_glob*nz)
 
         ! Z periodic post-process (forward)
         tmp_r = div_r
@@ -1101,15 +1104,16 @@ contains
   end subroutine process_spectral_110_y_pair_fw
 
   attributes(global) subroutine process_spectral_110_poisson( &
-    div_u, waves, nz_h, nx, ny, nz, x_sp_st &
+    div_u, waves, nz_h, nx, ny, nz, x_sp_st, nx_glob &
     )
     !! Step 4: Poisson solve — divide by waves
+    !! nx is the local loop bound; the Nyquist test always needs nx_glob.
     implicit none
 
     complex(dp), device, intent(inout), dimension(:, :, :) :: div_u ! (nz/2+1, nx, ny)
     complex(dp), device, intent(in), dimension(:, :, :) :: waves    ! (nz/2+1, nx, ny)
     integer, value, intent(in) :: nz_h, nx, ny, nz
-    integer, value, intent(in) :: x_sp_st
+    integer, value, intent(in) :: x_sp_st, nx_glob
 
     integer :: i, j, k, ix
     real(dp) :: div_r, div_c, tmp_r, tmp_c
@@ -1138,7 +1142,7 @@ contains
 
         div_u(j, i, k) = cmplx(div_r, div_c, kind=dp)
         ! Zero Nyquist modes
-        if (ix == nx/2 + 1 .and. j == nz/2 + 1) div_u(j, i, k) = 0._dp
+        if (ix == nx_glob/2 + 1 .and. j == nz/2 + 1) div_u(j, i, k) = 0._dp
       end do
     end if
 
@@ -1227,6 +1231,107 @@ contains
     end if
 
   end subroutine process_spectral_110_x_pair_bw
+
+  attributes(global) subroutine process_spectral_110_x_pair_fw_mirror( &
+    div_u, mirror, plane, nz_h, nx_l, ny, x_sp_st, nx_glob, ax, bx &
+    )
+    !! Multi-rank counterpart of process_spectral_110_x_pair_fw: the X
+    !! paired split, but the partner mode lives on another rank, reached
+    !! through the dim2 mirror exchange (see exchange_mirror_100). Unlike
+    !! the single-rank kernel this only updates this rank's own modes;
+    !! the partner rank updates its own copy the same way.
+    !! At the Nyquist mode (ix == nx_glob/2 + 1, even nx_glob) the mirror
+    !! partner is this rank's own pre-update value, so the formula below
+    !! self-pairs it exactly as the single-rank kernel does.
+    implicit none
+
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u ! (nz/2+1, nx_l, ny)
+    complex(dp), device, intent(in), dimension(:, :, :) :: mirror ! dim2 mirror of div_u
+    complex(dp), device, intent(in), dimension(:, :) :: plane ! extra mirror plane
+    real(dp), device, intent(in), dimension(:) :: ax, bx
+    integer, value, intent(in) :: nz_h, nx_l, ny
+    integer, value, intent(in) :: x_sp_st, nx_glob
+
+    integer :: i, j, k, ix
+    real(dp) :: l_r, l_c, r_r, r_c
+    complex(dp) :: partner
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! local X index
+    k = blockIdx%y                                   ! Y index
+
+    if (i <= nx_l .and. k <= ny) then
+      ix = i + x_sp_st
+
+      ! global mode 1 is self paired, never touched here
+      if (ix /= 1) then
+        do j = 1, nz_h
+          if (i == 1) then
+            partner = plane(j, k)
+          else
+            partner = mirror(j, nx_l - i + 2, k)
+          end if
+
+          l_r = real(div_u(j, i, k), kind=dp)
+          l_c = aimag(div_u(j, i, k))
+          r_r = real(partner, kind=dp)
+          r_c = aimag(partner)
+
+          div_u(j, i, k) = 0.5_dp*cmplx( & !&
+            l_r*bx(ix) + l_c*ax(ix) + r_r*bx(ix) - r_c*ax(ix), &
+            -l_r*ax(ix) + l_c*bx(ix) + r_r*ax(ix) + r_c*bx(ix), kind=dp &
+            )
+        end do
+      end if
+    end if
+
+  end subroutine process_spectral_110_x_pair_fw_mirror
+
+  attributes(global) subroutine process_spectral_110_x_pair_bw_mirror( &
+    div_u, mirror, plane, nz_h, nx_l, ny, x_sp_st, nx_glob, ax, bx &
+    )
+    !! Multi-rank counterpart of process_spectral_110_x_pair_bw, see
+    !! process_spectral_110_x_pair_fw_mirror.
+    implicit none
+
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u ! (nz/2+1, nx_l, ny)
+    complex(dp), device, intent(in), dimension(:, :, :) :: mirror ! dim2 mirror of div_u
+    complex(dp), device, intent(in), dimension(:, :) :: plane ! extra mirror plane
+    real(dp), device, intent(in), dimension(:) :: ax, bx
+    integer, value, intent(in) :: nz_h, nx_l, ny
+    integer, value, intent(in) :: x_sp_st, nx_glob
+
+    integer :: i, j, k, ix
+    real(dp) :: l_r, l_c, r_r, r_c
+    complex(dp) :: partner
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    k = blockIdx%y
+
+    if (i <= nx_l .and. k <= ny) then
+      ix = i + x_sp_st
+
+      if (ix /= 1) then
+        do j = 1, nz_h
+          if (i == 1) then
+            partner = plane(j, k)
+          else
+            partner = mirror(j, nx_l - i + 2, k)
+          end if
+
+          l_r = real(div_u(j, i, k), kind=dp)
+          l_c = aimag(div_u(j, i, k))
+          r_r = real(partner, kind=dp)
+          r_c = aimag(partner)
+
+          div_u(j, i, k) = cmplx( & !&
+            l_r*bx(ix) - l_c*ax(ix) + r_r*ax(ix) + r_c*bx(ix), &
+            l_r*ax(ix) + l_c*bx(ix) - r_r*bx(ix) + r_c*ax(ix), kind=dp &
+            )
+        end do
+      end if
+    end if
+
+  end subroutine process_spectral_110_x_pair_bw_mirror
 
   attributes(global) subroutine process_spectral_110_z_bw( &
     div_u, nz_h, nx, ny, az, bz &

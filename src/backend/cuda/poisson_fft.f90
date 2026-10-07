@@ -28,6 +28,8 @@ module m_cuda_poisson_fft
                              process_spectral_110_poisson, &
                              process_spectral_110_y_pair_bw, &
                              process_spectral_110_x_pair_bw, &
+                             process_spectral_110_x_pair_fw_mirror, &
+                             process_spectral_110_x_pair_bw_mirror, &
                              process_spectral_110_z_bw, &
                              enforce_periodicity_x, undo_periodicity_x, &
                              enforce_periodicity_y, undo_periodicity_y, &
@@ -264,6 +266,12 @@ contains
                     &decomposition, nproc_dir must be [1, 1, nproc].'
       end if
     end if
+    if (poisson_fft%is_110_case .and. mesh%par%nproc > 1) then
+      if (mesh%par%nproc_dir(1) /= 1 .or. mesh%par%nproc_dir(2) /= 1) then
+        error stop 'The 110 case on multiple ranks needs a 1D z &
+                    &decomposition, nproc_dir must be [1, 1, nproc].'
+      end if
+    end if
 
     ! Work out the spectral dimensions in the permuted state
     dims_glob = mesh%get_global_dims(CELL)
@@ -274,6 +282,13 @@ contains
                     &cells to divide by the number of ranks.'
       end if
     end if
+    if (poisson_fft%is_110_case .and. mesh%par%nproc > 1) then
+      if (mod(dims_loc(1), mesh%par%nproc_dir(3)) /= 0 .or. &
+          mod(dims_loc(2), mesh%par%nproc_dir(3)) /= 0) then
+        error stop 'The 110 case on multiple ranks needs the number of x &
+                    &and y cells to divide by the number of ranks.'
+      end if
+    end if
     if (poisson_fft%is_100_case) then
       n_spec(1) = dims_loc(2)/2 + 1
       n_spec(2) = dims_loc(1)/mesh%par%nproc_dir(3)
@@ -282,14 +297,22 @@ contains
       n_sp_st(2) = dims_loc(1)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
 
     else if (poisson_fft%is_110_case) then
-      ! R2C Z-transpose: spectral array is (nz/2+1, nx, ny)
-      ! dim1 = Z R2C modes, dim2 = X full spectrum, dim3 = Y full spectrum
+      ! R2C Z-transpose: spectral array is (nz/2+1, nx, ny) on 1 rank.
+      ! dim1 = Z R2C modes, dim2 = X spectrum, dim3 = Y full spectrum.
+      ! On P ranks the cuFFTMp Y-slab transform shuffles the spectral
+      ! output to split dim2 (X) instead of leaving it whole, same as the
+      ! 100 case's dim2 split.
       n_spec(1) = dims_glob(3)/2 + 1
-      n_spec(2) = dims_loc(1)
+      if (mesh%par%nproc > 1) then
+        n_spec(2) = dims_loc(1)/mesh%par%nproc_dir(3)
+        n_sp_st(2) = dims_loc(1)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
+      else
+        n_spec(2) = dims_loc(1)
+        n_sp_st(2) = 0
+      end if
       n_spec(3) = dims_loc(2)
 
       n_sp_st(1) = 0
-      n_sp_st(2) = 0
       n_sp_st(3) = 0
 
     else if (poisson_fft%is_010_case .or. poisson_fft%is_000_case) then
@@ -347,7 +370,8 @@ contains
     ! dim2 modes [r*m + 1, (r + 1)*m] with m = ny_spec, and the mirror of
     ! that range is slab P - 1 - r shifted up by one plane, so the extra
     ! plane comes from slab P - r. Both partners are symmetric.
-    if (poisson_fft%is_100_case .and. mesh%par%nproc > 1) then
+    if ((poisson_fft%is_100_case .or. poisson_fft%is_110_case) &
+        .and. mesh%par%nproc > 1) then
       poisson_fft%mirror_slab_rank = mesh%par%nproc_dir(3) - 1 &
                                      - mesh%par%nrank_dir(3)
       poisson_fft%mirror_plane_rank = mod(mesh%par%nproc_dir(3) &
@@ -405,12 +429,11 @@ contains
     end if
 
     if (poisson_fft%is_110_case) then
-      ! 110: R2C with Z-transpose, no cuFFTMp for non-periodic BCs
-      if (mesh%par%nproc > 1) then
-        error stop 'Multiple ranks are not yet supported for the 110 case &
-                    &in the CUDA backend!'
-      end if
-      poisson_fft%use_cufftmp = .false.
+      ! 110: R2C with Z-transpose. A single rank keeps the plain cuFFT path
+      ! below unchanged; on multiple ranks cuFFTMp distributes the (nz, nx,
+      ! ny) transform, and the physical Z-slab is redistributed into its
+      ! Y-slab input through an MPI_Alltoall (see redistribute_110_to_yslab).
+      poisson_fft%use_cufftmp = mesh%par%nproc > 1
 
       call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
                            fft_n1, fft_n2, fft_n3, fw_plan_type, &
@@ -419,15 +442,37 @@ contains
                            fft_n1, fft_n2, fft_n3, bw_plan_type, &
                            mesh%par%is_root(), 'Backward 110')
 
-      ! Transposed real workspace (nz, nx, ny)
-      allocate (poisson_fft%r_dev_110(nz, nx, ny))
-      ! Spectral complex workspace (nz/2+1, nx, ny)
-      allocate (poisson_fft%c_dev(poisson_fft%nx_spec, &
-                                  poisson_fft%ny_spec, &
-                                  poisson_fft%nz_spec))
+      if (poisson_fft%use_cufftmp) then
+        ierr = cufftXtMalloc(poisson_fft%plan3D_fw, poisson_fft%xtdesc, &
+                             CUFFT_XT_FORMAT_INPLACE)
+        if (ierr /= 0) then
+          write (stderr, *), 'cuFFT Error Code: ', ierr
+          error stop 'cufftXtMalloc failed'
+        end if
 
-      if (mesh%par%is_root()) then
-        print *, 'Using cuFFT R2C (Z-transpose) for FFT (110 case)'
+        ! All-to-all buffers between the physical Z-slab (nx, ny, nz_l) and
+        ! the cuFFTMp Y-slab (nz, nx, ny_l), sized (nz_l, nx, ny_l, nproc).
+        allocate (poisson_fft%r_a2a_send_dev( &
+                  poisson_fft%nz_loc, nx, ny/mesh%par%nproc_dir(3), &
+                  mesh%par%nproc_dir(3)))
+        allocate (poisson_fft%r_a2a_recv_dev( &
+                  poisson_fft%nz_loc, nx, ny/mesh%par%nproc_dir(3), &
+                  mesh%par%nproc_dir(3)))
+
+        if (mesh%par%is_root()) then
+          print *, 'Using cuFFTMp R2C (Z-transpose) for FFT (110 case)'
+        end if
+      else
+        ! Transposed real workspace (nz, nx, ny)
+        allocate (poisson_fft%r_dev_110(nz, nx, ny))
+        ! Spectral complex workspace (nz/2+1, nx, ny)
+        allocate (poisson_fft%c_dev(poisson_fft%nx_spec, &
+                                    poisson_fft%ny_spec, &
+                                    poisson_fft%nz_spec))
+
+        if (mesh%par%is_root()) then
+          print *, 'Using cuFFT R2C (Z-transpose) for FFT (110 case)'
+        end if
       end if
 
     else
@@ -484,6 +529,11 @@ contains
       error stop 'The 100 case on multiple ranks needs cuFFTMp, plain &
                   &cuFFT cannot decompose the transform.'
     end if
+    if (poisson_fft%is_110_case .and. mesh%par%nproc > 1 &
+        .and. (.not. poisson_fft%use_cufftmp)) then
+      error stop 'The 110 case on multiple ranks needs cuFFTMp, plain &
+                  &cuFFT cannot decompose the transform.'
+    end if
 
   end subroutine init_cuda_poisson_fft_t
 
@@ -494,8 +544,9 @@ contains
     class(cuda_poisson_fft_t) :: self
     class(field_t), intent(in) :: f
 
-    real(dp), device, pointer :: padded_dev(:, :, :)
-    integer :: ierr, tpb
+    real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
+    type(cudaXtDesc), pointer :: descriptor
+    integer :: ierr, tpb, ny_l
     type(dim3) :: blocks, threads
 
     select type (f)
@@ -503,22 +554,37 @@ contains
       padded_dev => f%data_d
     end select
 
-    ! Transpose (nx, ny, nz) -> (nz, nx, ny)
-    tpb = min(self%ny_loc, 256)
-    blocks = dim3(self%nz_loc, (self%ny_loc - 1)/tpb + 1, 1)
-    threads = dim3(tpb, 1, 1)
+    if (self%use_cufftmp) then
+      ! Redistribute the physical Z-slab (nx, ny, nz_l) into the cuFFTMp
+      ! Y-slab (2*(nz/2+1), nx, ny_l) through an MPI_Alltoall, in place of
+      ! the local transpose the single rank path uses.
+      ny_l = self%ny_glob/self%mesh%par%nproc_dir(3)
+      call c_f_pointer(self%xtdesc%descriptor, descriptor)
+      call c_f_pointer(descriptor%data(1), d_dev, &
+                       [2*(self%nz_glob/2 + 1), self%nx_glob, ny_l])
 
-    call transpose_xyz_to_zxy<<<blocks, threads>>>( & !&
-      self%r_dev_110, padded_dev, self%nx_loc, self%ny_loc, self%nz_loc &
-      )
+      call self%redistribute_110_to_yslab(padded_dev, d_dev)
 
-    ! R2C FFT on transposed data
+      ierr = cufftXtExecDescriptor(self%plan3D_fw, self%xtdesc, self%xtdesc, &
+                                   CUFFT_FORWARD)
+    else
+      ! Transpose (nx, ny, nz) -> (nz, nx, ny)
+      tpb = min(self%ny_loc, 256)
+      blocks = dim3(self%nz_loc, (self%ny_loc - 1)/tpb + 1, 1)
+      threads = dim3(tpb, 1, 1)
+
+      call transpose_xyz_to_zxy<<<blocks, threads>>>( & !&
+        self%r_dev_110, padded_dev, self%nx_loc, self%ny_loc, self%nz_loc &
+        )
+
+      ! R2C FFT on transposed data
 #ifdef SINGLE_PREC
-    ierr = cufftExecR2C_C(self%plan3D_fw, c_loc(self%r_dev_110), &
-                          c_loc(self%c_dev))
+      ierr = cufftExecR2C_C(self%plan3D_fw, c_loc(self%r_dev_110), &
+                            c_loc(self%c_dev))
 #else
-    ierr = cufftExecD2Z(self%plan3D_fw, self%r_dev_110, self%c_dev)
+      ierr = cufftExecD2Z(self%plan3D_fw, self%r_dev_110, self%c_dev)
 #endif
+    end if
 
     if (ierr /= 0) then
       write (stderr, *), 'cuFFT Error Code: ', ierr
@@ -534,8 +600,9 @@ contains
     class(cuda_poisson_fft_t) :: self
     class(field_t), intent(inout) :: f
 
-    real(dp), device, pointer :: padded_dev(:, :, :)
-    integer :: ierr, tpb
+    real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
+    type(cudaXtDesc), pointer :: descriptor
+    integer :: ierr, tpb, ny_l
     type(dim3) :: blocks, threads
 
     select type (f)
@@ -543,29 +610,47 @@ contains
       padded_dev => f%data_d
     end select
 
-    ! C2R FFT
+    if (self%use_cufftmp) then
+      ierr = cufftXtExecDescriptor(self%plan3D_bw, self%xtdesc, self%xtdesc, &
+                                   CUFFT_INVERSE)
+    else
+      ! C2R FFT
 #ifdef SINGLE_PREC
-    ierr = cufftExecC2R_C(self%plan3D_bw, c_loc(self%c_dev), &
-                          c_loc(self%r_dev_110))
+      ierr = cufftExecC2R_C(self%plan3D_bw, c_loc(self%c_dev), &
+                            c_loc(self%r_dev_110))
 #else
-    ierr = cufftExecZ2D(self%plan3D_bw, self%c_dev, self%r_dev_110)
+      ierr = cufftExecZ2D(self%plan3D_bw, self%c_dev, self%r_dev_110)
 #endif
+    end if
 
     if (ierr /= 0) then
       write (stderr, *), 'cuFFT Error Code: ', ierr
       error stop 'Backward C2R FFT failed (110 Z-transpose case)'
     end if
 
-    ! Transpose (nz, nx, ny) -> (nx, ny, nz)
+    ! ensure untouched padded/halo entries are deterministic
     padded_dev = 0._dp
 
-    tpb = min(self%ny_loc, 256)
-    blocks = dim3(self%nz_loc, (self%ny_loc - 1)/tpb + 1, 1)
-    threads = dim3(tpb, 1, 1)
+    if (self%use_cufftmp) then
+      ! Redistribute the cuFFTMp Y-slab back into the physical Z-slab
+      ! (nx, ny, nz_l) through an MPI_Alltoall, in place of the local
+      ! transpose the single rank path uses.
+      ny_l = self%ny_glob/self%mesh%par%nproc_dir(3)
+      call c_f_pointer(self%xtdesc%descriptor, descriptor)
+      call c_f_pointer(descriptor%data(1), d_dev, &
+                       [2*(self%nz_glob/2 + 1), self%nx_glob, ny_l])
 
-    call transpose_zxy_to_xyz<<<blocks, threads>>>( & !&
-      padded_dev, self%r_dev_110, self%nx_loc, self%ny_loc, self%nz_loc &
-      )
+      call self%redistribute_110_to_zslab(d_dev, padded_dev)
+    else
+      ! Transpose (nz, nx, ny) -> (nx, ny, nz)
+      tpb = min(self%ny_loc, 256)
+      blocks = dim3(self%nz_loc, (self%ny_loc - 1)/tpb + 1, 1)
+      threads = dim3(tpb, 1, 1)
+
+      call transpose_zxy_to_xyz<<<blocks, threads>>>( & !&
+        padded_dev, self%r_dev_110, self%nx_loc, self%ny_loc, self%nz_loc &
+        )
+    end if
   end subroutine fft_backward_110_cuda
 
   subroutine redistribute_110_to_yslab(self, zslab, yslab)
@@ -1294,68 +1379,149 @@ contains
   end subroutine fft_postprocess_010_cuda
 
   subroutine fft_postprocess_110_cuda(self)
-    !! Spectral post-processing for 110 case (R2C Z-transpose)
-    !! 7 separate kernel launches to avoid cross-block race conditions.
+    !! Spectral post-processing for 110 case (R2C Z-transpose).
     !! Spectral array is (nz/2+1, nx, ny) = (nx_spec, ny_spec, nz_spec).
     !! Thread i->X (ny_spec), blockIdx%y k->Y (nz_spec), serial j->Z (nx_spec).
+    !! On a single rank X and Y are both whole, so 7 kernel launches avoid
+    !! cross-block race conditions. On multiple ranks cuFFTMp splits X
+    !! across ranks, so the X pairing reaches its partner through the
+    !! dim2 mirror exchange (see exchange_mirror_100) instead, adding two
+    !! more launches.
     implicit none
 
     class(cuda_poisson_fft_t) :: self
 
+    type(cudaXtDesc), pointer :: descriptor
+    complex(dp), device, dimension(:, :, :), pointer :: c_dev
     type(dim3) :: blocks, threads
     integer :: tsize, nz_h
+
+    ! Get pointer to the appropriate FFT data storage
+    if (self%use_cufftmp) then
+      call c_f_pointer(self%xtdesc%descriptor, descriptor)
+      call c_f_pointer(descriptor%data(1), c_dev, &
+                       [self%nx_spec, self%ny_spec, self%nz_spec])
+    else
+      call c_f_pointer(c_loc(self%c_dev), c_dev, &
+                       [self%nx_spec, self%ny_spec, self%nz_spec])
+    end if
 
     nz_h = self%nx_spec  ! = nz/2+1 (1st dim of spectral array)
 
     tsize = 16
-    ! threads over X (ny_spec = nx), blocks over Y (nz_spec = ny)
+    ! threads over X (ny_spec = local nx), blocks over Y (nz_spec = ny)
     blocks = dim3((self%ny_spec - 1)/tsize + 1, self%nz_spec, 1)
     threads = dim3(tsize, 1, 1)
 
+    if (self%mesh%par%nproc == 1) then
+      ! Step 1: normalise + Z periodic forward
+      call process_spectral_110_norm_z<<<blocks, threads>>>( & !&
+        c_dev, nz_h, &
+        self%ny_spec, self%nz_spec, self%nz_glob, &
+        self%nx_glob, self%ny_glob, &
+        self%az_dev, self%bz_dev &
+        )
+
+      ! Step 2: X paired split (forward)
+      call process_spectral_110_x_pair_fw<<<blocks, threads>>>( & !&
+        c_dev, nz_h, &
+        self%ny_spec, self%nz_spec, self%sp_st(2), &
+        self%ax_dev, self%bx_dev &
+        )
+
+      ! Step 3: Y paired split (forward)
+      call process_spectral_110_y_pair_fw<<<blocks, threads>>>( & !&
+        c_dev, nz_h, &
+        self%ny_spec, self%nz_spec, self%sp_st(3), &
+        self%ay_dev, self%by_dev &
+        )
+
+      ! Step 4: Poisson solve
+      call process_spectral_110_poisson<<<blocks, threads>>>( & !&
+        c_dev, self%waves_dev, nz_h, &
+        self%ny_spec, self%nz_spec, self%nz_glob, self%sp_st(2), &
+        self%nx_glob &
+        )
+
+      ! Step 5: Y paired recombine (backward)
+      call process_spectral_110_y_pair_bw<<<blocks, threads>>>( & !&
+        c_dev, nz_h, &
+        self%ny_spec, self%nz_spec, self%sp_st(3), &
+        self%ay_dev, self%by_dev &
+        )
+
+      ! Step 6: X paired recombine (backward)
+      call process_spectral_110_x_pair_bw<<<blocks, threads>>>( & !&
+        c_dev, nz_h, &
+        self%ny_spec, self%nz_spec, self%sp_st(2), &
+        self%ax_dev, self%bx_dev &
+        )
+
+      ! Step 7: Z periodic undo (backward)
+      call process_spectral_110_z_bw<<<blocks, threads>>>( & !&
+        c_dev, nz_h, &
+        self%ny_spec, self%nz_spec, &
+        self%az_dev, self%bz_dev &
+        )
+      return
+    end if
+
+    ! Multi-rank: X is split across ranks by cuFFTMp, reached through the
+    ! dim2 mirror. Y stays whole (self%sp_st(3) is always 0), so its pair
+    ! kernels are unchanged.
+
     ! Step 1: normalise + Z periodic forward
     call process_spectral_110_norm_z<<<blocks, threads>>>( & !&
-      self%c_dev, nz_h, &
+      c_dev, nz_h, &
       self%ny_spec, self%nz_spec, self%nz_glob, &
+      self%nx_glob, self%ny_glob, &
       self%az_dev, self%bz_dev &
       )
 
-    ! Step 2: X paired split (forward)
-    call process_spectral_110_x_pair_fw<<<blocks, threads>>>( & !&
-      self%c_dev, nz_h, &
-      self%ny_spec, self%nz_spec, self%sp_st(2), &
+    ! Fetch the X pairing partners that live on other ranks
+    call self%exchange_mirror_100(c_dev)
+
+    ! Step 2: X paired split (forward), mirror-aware
+    call process_spectral_110_x_pair_fw_mirror<<<blocks, threads>>>( & !&
+      c_dev, self%c_mirror_dev, self%c_plane_recv_dev, nz_h, &
+      self%ny_spec, self%nz_spec, self%sp_st(2), self%nx_glob, &
       self%ax_dev, self%bx_dev &
       )
 
     ! Step 3: Y paired split (forward)
     call process_spectral_110_y_pair_fw<<<blocks, threads>>>( & !&
-      self%c_dev, nz_h, &
+      c_dev, nz_h, &
       self%ny_spec, self%nz_spec, self%sp_st(3), &
       self%ay_dev, self%by_dev &
       )
 
     ! Step 4: Poisson solve
     call process_spectral_110_poisson<<<blocks, threads>>>( & !&
-      self%c_dev, self%waves_dev, nz_h, &
-      self%ny_spec, self%nz_spec, self%nz_glob, self%sp_st(2) &
+      c_dev, self%waves_dev, nz_h, &
+      self%ny_spec, self%nz_spec, self%nz_glob, self%sp_st(2), &
+      self%nx_glob &
       )
 
     ! Step 5: Y paired recombine (backward)
     call process_spectral_110_y_pair_bw<<<blocks, threads>>>( & !&
-      self%c_dev, nz_h, &
+      c_dev, nz_h, &
       self%ny_spec, self%nz_spec, self%sp_st(3), &
       self%ay_dev, self%by_dev &
       )
 
-    ! Step 6: X paired recombine (backward)
-    call process_spectral_110_x_pair_bw<<<blocks, threads>>>( & !&
-      self%c_dev, nz_h, &
-      self%ny_spec, self%nz_spec, self%sp_st(2), &
+    ! Steps 2 and 4 rewrote every mode, so the mirror is stale
+    call self%exchange_mirror_100(c_dev)
+
+    ! Step 6: X paired recombine (backward), mirror-aware
+    call process_spectral_110_x_pair_bw_mirror<<<blocks, threads>>>( & !&
+      c_dev, self%c_mirror_dev, self%c_plane_recv_dev, nz_h, &
+      self%ny_spec, self%nz_spec, self%sp_st(2), self%nx_glob, &
       self%ax_dev, self%bx_dev &
       )
 
     ! Step 7: Z periodic undo (backward)
     call process_spectral_110_z_bw<<<blocks, threads>>>( & !&
-      self%c_dev, nz_h, &
+      c_dev, nz_h, &
       self%ny_spec, self%nz_spec, &
       self%az_dev, self%bz_dev &
       )
