@@ -1,7 +1,7 @@
 module m_cuda_kernels_reorder
   use cudafor
 
-  use m_common, only: dp
+  use m_common, only: dp, sp
   use m_cuda_common, only: SZ
 
 contains
@@ -75,6 +75,111 @@ contains
     end if
 
   end subroutine reorder_x2c
+
+  attributes(global) subroutine pack_x2c_dp(u_c, u_x, nx, ny, nz_padded)
+    !! Reorder a DIR_X field into an unpadded (nx, ny, nz) Cartesian
+    !! buffer in one pass: reorder_x2c followed by dropping the padding.
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: u_c
+    real(dp), device, intent(in), dimension(:, :, :) :: u_x
+    integer, value, intent(in) :: nx, ny, nz_padded
+
+    real(dp), shared :: tile(SZ, SZ)
+    integer :: i, j, b_i, b_j, b_k, ii, jj, ic, jc
+
+    i = threadIdx%x; j = threadIdx%y
+    b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
+
+    ! Padded storage is always in range, so only the stores are guarded
+    do jj = 0, SZ - 1, blockDim%y
+      do ii = 0, SZ - 1, blockDim%x
+        tile(i + ii, j + jj) = &
+          u_x(i + ii, j + jj + (b_i - 1)*SZ, b_k + (b_j - 1)*nz_padded)
+      end do
+    end do
+
+    call syncthreads()
+
+    do jj = 0, SZ - 1, blockDim%y
+      do ii = 0, SZ - 1, blockDim%x
+        ic = i + ii + (b_i - 1)*SZ
+        jc = j + jj + (b_j - 1)*SZ
+        if (ic <= nx .and. jc <= ny) u_c(ic, jc, b_k) = tile(j + jj, i + ii)
+      end do
+    end do
+
+  end subroutine pack_x2c_dp
+
+  attributes(global) subroutine pack_x2c_sp(u_c, u_x, nx, ny, nz_padded)
+    !! Single precision output variant of pack_x2c_dp
+    implicit none
+
+    real(sp), device, intent(out), dimension(:, :, :) :: u_c
+    real(dp), device, intent(in), dimension(:, :, :) :: u_x
+    integer, value, intent(in) :: nx, ny, nz_padded
+
+    real(dp), shared :: tile(SZ, SZ)
+    integer :: i, j, b_i, b_j, b_k, ii, jj, ic, jc
+
+    i = threadIdx%x; j = threadIdx%y
+    b_i = blockIdx%x; b_j = blockIdx%y; b_k = blockIdx%z
+
+    do jj = 0, SZ - 1, blockDim%y
+      do ii = 0, SZ - 1, blockDim%x
+        tile(i + ii, j + jj) = &
+          u_x(i + ii, j + jj + (b_i - 1)*SZ, b_k + (b_j - 1)*nz_padded)
+      end do
+    end do
+
+    call syncthreads()
+
+    do jj = 0, SZ - 1, blockDim%y
+      do ii = 0, SZ - 1, blockDim%x
+        ic = i + ii + (b_i - 1)*SZ
+        jc = j + jj + (b_j - 1)*SZ
+        if (ic <= nx .and. jc <= ny) &
+          u_c(ic, jc, b_k) = real(tile(j + jj, i + ii), sp)
+      end do
+    end do
+
+  end subroutine pack_x2c_sp
+
+  attributes(global) subroutine pack_c_dp(u_o, u_c, nx, ny)
+    !! Copy the unpadded (nx, ny, nz) part of a DIR_C field
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :) :: u_o
+    real(dp), device, intent(in), dimension(:, :, :) :: u_c
+    integer, value, intent(in) :: nx, ny
+
+    integer :: i, j, k
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    j = blockIdx%y
+    k = blockIdx%z
+
+    if (i <= nx .and. j <= ny) u_o(i, j, k) = u_c(i, j, k)
+
+  end subroutine pack_c_dp
+
+  attributes(global) subroutine pack_c_sp(u_o, u_c, nx, ny)
+    !! Single precision output variant of pack_c_dp
+    implicit none
+
+    real(sp), device, intent(out), dimension(:, :, :) :: u_o
+    real(dp), device, intent(in), dimension(:, :, :) :: u_c
+    integer, value, intent(in) :: nx, ny
+
+    integer :: i, j, k
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    j = blockIdx%y
+    k = blockIdx%z
+
+    if (i <= nx .and. j <= ny) u_o(i, j, k) = real(u_c(i, j, k), sp)
+
+  end subroutine pack_c_sp
 
   attributes(global) subroutine reorder_x2y(u_y, u_x, nz)
     implicit none

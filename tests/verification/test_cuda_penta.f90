@@ -19,40 +19,30 @@ program test_cuda_penta
   !!                 sym=F: odd  ghost  u_s(4)=-u(2), u_e(1)=-u(N-1), etc.
   use iso_fortran_env, only: stderr => error_unit
   use cudafor
-  use mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_SUM, MPI_Allreduce
 
   use m_common, only: dp, pi, MPI_X3D2_DP, BC_DIRICHLET, BC_NEUMANN, BC_PERIODIC
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_penta_compact, exec_dist_penta_periodic
   use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
+  use m_backend_runtime, only: select_device
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
   logical :: allpass = .true.
-  integer :: nrank, nproc, ierr, ndevs, devnum
+  integer :: nrank, nproc, ierr
 
-  call initialise_mpi()
-  call select_device()
+  call initialise_mpi(nrank, nproc)
+  if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
+  call select_device(nrank)
   call run_dirichlet_test()
   call run_neumann_sym_true()
   call run_neumann_sym_false()
   call run_periodic_test()
-  call finalise()
+  call finalise_test(allpass, nrank)
 
 contains
-
-  subroutine initialise_mpi()
-    call MPI_Init(ierr)
-    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-    call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-    if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
-  end subroutine initialise_mpi
-
-  subroutine select_device()
-    ierr = cudaGetDeviceCount(ndevs)
-    ierr = cudaSetDevice(mod(nrank, ndevs))
-    ierr = cudaGetDevice(devnum)
-  end subroutine select_device
 
   ! ─────────────────────────────────────────────────────────────────────────────
   ! BC_DIRICHLET: f = sin(pi*x), f' = pi*cos(pi*x).
@@ -446,19 +436,18 @@ contains
     !! Error level below which the truncation error is hidden by roundoff
     !! and a convergence rate can no longer be measured.  The roundoff
     !! floor of a first-derivative L2 error at resolution n is ~eps*n
-    !! (roundoff eps amplified by 1/dx = n), with a 20x safety margin.
+    !! (roundoff eps amplified by 1/dx = n), with a safety margin.
+    !!
+    !! The margin has to cover how far the floor moves between compilers: the
+    !! N=256 BC_NEUMANN errors land at ~2e-13 under gfortran but at 1.2e-12
+    !! (sym=T) and 6.1e-12 (sym=F) under Cray ftn -O3, i.e. ~110*eps*n, while
+    !! the rates at the resolutions below are 10.2 either way.  20x let the
+    !! saturated Cray rows through and the measured "rate" of noise then failed
+    !! the check.  200x skips them and still leaves the N=128 rows, whose errors
+    !! are ~6x the threshold, checked.
     integer, intent(in) :: n_glob
     converged_tol = max(1e-12_dp, &
-                        20._dp*epsilon(1._dp)*real(n_glob, dp))
+                        200._dp*epsilon(1._dp)*real(n_glob, dp))
   end function converged_tol
-
-  subroutine finalise()
-    if (allpass) then
-      if (nrank == 0) write (stderr, '(a)') 'ALL TESTS PASSED SUCCESSFULLY.'
-    else
-      error stop 'SOME TESTS FAILED.'
-    end if
-    call MPI_Finalize(ierr)
-  end subroutine finalise
 
 end program test_cuda_penta

@@ -45,6 +45,8 @@ module m_io_session
 !! modules like `m_io_base` and `m_io_backend` are internal components and should
 !! never be used directly in user code.
   use m_common, only: dp, i8
+  use m_field, only: field_t
+  use m_base_backend, only: base_backend_t
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
                        io_mode_read, io_mode_write
   use m_io_backend, only: allocate_io_reader, allocate_io_writer
@@ -121,6 +123,10 @@ module m_io_session
     procedure, private :: write_data_integer
     procedure, private :: write_data_real
     procedure, private :: write_data_array_3d
+    ! Field-from-solver interface (GPU-aware when available)
+    procedure :: write_field_from_solver => session_write_field_from_solver
+    procedure :: supports_device_field_write => &
+      session_supports_device_field_write
     ! Write attribute interface
     procedure :: write_attribute => session_write_attribute
     final :: writer_session_finaliser
@@ -280,6 +286,37 @@ contains
       attribute_name, attribute_value, self%file &
       )
   end subroutine session_write_attribute
+
+  subroutine session_write_field_from_solver( &
+    self, variable_name, field, backend, &
+    shape_dims, start_dims, count_dims, use_sp &
+    )
+    !! Write field data with backend-specific optimisations
+    class(writer_session_t), intent(inout) :: self
+    character(len=*), intent(in) :: variable_name
+    class(field_t), intent(in) :: field
+    class(base_backend_t), intent(inout) :: backend
+    integer(i8), intent(in) :: shape_dims(3)
+    integer(i8), intent(in) :: start_dims(3)
+    integer(i8), intent(in) :: count_dims(3)
+    logical, intent(in), optional :: use_sp
+
+    if (.not. self%is_open) error stop "IO session not open"
+    call self%writer%write_field_from_solver( &
+      variable_name, field, self%file, backend, &
+      shape_dims, start_dims, count_dims, use_sp &
+      )
+  end subroutine session_write_field_from_solver
+
+  logical function session_supports_device_field_write(self, field, backend)
+    !! Whether write_field_from_solver writes `field` straight from device
+    !! memory, without a device-to-host copy.
+    class(writer_session_t), intent(in) :: self
+    class(field_t), intent(in) :: field
+    class(base_backend_t), intent(in) :: backend
+    session_supports_device_field_write = &
+      self%writer%supports_device_field_write(field, backend)
+  end function session_supports_device_field_write
 
   subroutine writer_session_begin_step(self)
     !! Begin a new timestep for writing (used for time-series in single file)

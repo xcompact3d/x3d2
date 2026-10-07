@@ -4,30 +4,23 @@ program test_scalar_product
   !! Given two fields, a and b, computes s = a_i * b_i where repeated indices
   !! imply summation.
 
-  use m_common, only: DIR_X, DIR_Y, DIR_Z, DIR_C
+  use m_common, only: DIR_X, DIR_Y, DIR_Z, DIR_C, VERT
 
   use m_allocator
   use m_base_backend
-#ifdef CUDA
-#else
-  use m_omp_backend
-  use m_omp_common, only: SZ
-#endif
+  use m_backend_runtime, only: backend_runtime_t
+  use m_test_utils, only: initialise_mpi, finalise_test, &
+                          global_all, global_sum
 
   implicit none
 
   integer, parameter :: nx = 17, ny = 32, nz = 59
   real(dp), parameter :: lx = 1.618, ly = 3.141529, lz = 1.729
 
+  type(backend_runtime_t), target :: runtime
   class(base_backend_t), pointer :: backend
-  class(allocator_t), pointer :: allocator
-#ifdef CUDA
-#else
-  type(omp_backend_t), target :: omp_backend
-  type(allocator_t), target :: omp_allocator
-#endif
 
-  type(mesh_t) :: mesh
+  type(mesh_t), target :: mesh
 
   character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
 
@@ -39,13 +32,10 @@ program test_scalar_product
   integer :: i
 
   integer :: nrank, nproc
-  integer :: ierr
 
   logical :: test_pass = .true.
 
-  call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
-  call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
+  call initialise_mpi(nrank, nproc)
 
   BC_x = ['periodic', 'periodic']
   BC_y = ['periodic', 'periodic']
@@ -56,26 +46,14 @@ program test_scalar_product
                 [lx, ly, lz], &
                 BC_x, BC_y, BC_z)
 
-#ifdef CUDA
-#else
-  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => omp_allocator
-  omp_backend = omp_backend_t(mesh, allocator)
-  backend => omp_backend
-#endif
+  call runtime%init(mesh)
+  backend => runtime%backend
 
   do i = 1, 4
     call runtest(test(i), dir(i))
   end do
 
-  if (nrank == 0) then
-    if (.not. test_pass) then
-      error stop "Test failed"
-    end if
-  end if
-  call MPI_Barrier(MPI_COMM_WORLD, ierr)
-
-  call MPI_Finalize(ierr)
+  call finalise_test(test_pass, nrank)
 
 contains
 
@@ -109,9 +87,7 @@ contains
     else
       check_pass = .true.
     end if
-    call MPI_Allreduce(MPI_IN_PLACE, check_pass, 1, &
-                       MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
-                       ierr)
+    call global_all(check_pass)
     if (nrank == 0) then
       print *, "- Got: ", s
       print *, "- Expected: ", 0
@@ -136,17 +112,13 @@ contains
     call backend%allocator%release_block(c)
 
     expt = n*(nrank + 1)**2
-    call MPI_Allreduce(MPI_IN_PLACE, expt, 1, &
-                       MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, &
-                       ierr)
+    call global_sum(expt)
     if (s /= real(expt, kind(s))) then
       check_pass = .false.
     else
       check_pass = .true.
     end if
-    call MPI_Allreduce(MPI_IN_PLACE, check_pass, 1, &
-                       MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, &
-                       ierr)
+    call global_all(check_pass)
     if (nrank == 0) then
       print *, "- Got: ", s
       print *, "- Expected: ", expt

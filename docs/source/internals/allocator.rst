@@ -103,7 +103,7 @@ Memory block allocation
 -----------------------
 
 If a request is made to an allocator whose free block list is empty, a
-new block is allocated before it is immediately dispacted to the
+new block is allocated before it is immediately dispatched to the
 requesting object.  As a consequence the memory footprint of a program
 is expected to grow in early stages of a program's lifetime, before
 reaching maximum where enough memory has been allocated and some can

@@ -14,7 +14,7 @@ module m_stats
   !!
   !! Note: velocity fields must be at `VERT` data location when `update`
   !! is called (i.e. after `pressure_correction`).
-  use mpi, only: MPI_COMM_WORLD, MPI_Comm_rank
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank
   use m_common, only: dp, i8, DIR_C, DIR_X, VERT, get_argument
   use m_config, only: stats_config_t
   use m_field, only: field_t

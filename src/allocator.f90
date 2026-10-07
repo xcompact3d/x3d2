@@ -180,7 +180,7 @@ contains
   end subroutine destroy
 
   function get_block_ids(self)
-    !! Utility function that returns a array made of the `id` of the
+    !! Utility function that returns an array made of the `id` of the
     !! block currently in the block list.  Return the array [0] if
     !! block list is empty.
     ! TODO: Block indices should start at 1 or return [-1] in case of

@@ -72,14 +72,14 @@ contains
     !! 'stretch' is for obtaining the correct derivations in a stretched mesh
     !! 'stretch_correct' is for correcting the second derivative with the first
     !!
-    !! 'from_to' is necessary for interpolation and staggared derivative, and
+    !! 'from_to' is necessary for interpolation and staggered derivative, and
     !! it can be 'v2p' or 'p2v'.
     !! If the specific region the instance is operating is not a boundary
     !! region, then 'bc_start' and 'bc_end' are BC_HALO.
     !!
     !! 'sym' is relevant when the BC is free-slip. If sym is .true. then it
     !! means the field we operate on is assumed to be an even function
-    !! (symmetric, cos type) accross the boundary. If it is .false. it means
+    !! (symmetric, cos type) across the boundary. If it is .false. it means
     !! the field is assumed to be an odd function (anti-symmetric, sin type).
     !!
     !! 'c_nu', 'nu0_nu' are relevant when operation is second order

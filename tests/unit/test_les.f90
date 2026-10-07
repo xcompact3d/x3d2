@@ -42,7 +42,7 @@ program test_les
   length = wall_damped_mixing_length(1._dp, 1.0e6_dp, 0.2_dp, &
                                       0.4_dp, 3._dp, 0._dp)
   call check_close('wall damping far from wall', length, 0.2_dp, &
-                   1.0e-14_dp, all_pass)
+                   tol, all_pass)
 
   if (.not. all_pass) error stop 'FAIL'
   print *, 'PASS'

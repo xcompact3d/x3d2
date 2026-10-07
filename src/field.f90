@@ -4,7 +4,7 @@ module m_field
 
   type :: field_t
      !! Memory block type holding both a data field and a pointer
-     !! to the next block.  The `field_t` type also holds a integer
+     !! to the next block.  The `field_t` type also holds an integer
      !! `refcount` that counts the number of references to this
      !! field.  User code is currently responsible for incrementing
      !! the reference count.

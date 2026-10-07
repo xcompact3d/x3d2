@@ -13,7 +13,7 @@ module m_base_case
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
   use m_config, only: has_output_field
   use m_io_manager, only: io_manager_t
-  use mpi, only: MPI_COMM_WORLD, MPI_Wtime, MPI_Reduce, MPI_MAX
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Wtime, MPI_Reduce, MPI_MAX
 
   implicit none
 
@@ -53,7 +53,7 @@ module m_base_case
 
   abstract interface
     subroutine define_BC(self)
-      !! Applies case-specific boundary coinditions
+      !! Applies case-specific boundary conditions
       import :: base_case_t
       implicit none
 
@@ -69,7 +69,7 @@ module m_base_case
     end subroutine initial_conditions
 
     subroutine forcings(self, du, dv, dw, iter)
-      !! Applies case-specific or model realated forcings after transeq
+      !! Applies case-specific or model related forcings after transeq
       import :: base_case_t
       import :: field_t
       implicit none

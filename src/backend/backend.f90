@@ -1,5 +1,5 @@
 module m_base_backend
-  use mpi
+  use iso_c_binding, only: c_ptr
 
   use m_allocator, only: allocator_t
   use m_common, only: dp, DIR_C, get_rdr_from_dirs
@@ -21,7 +21,7 @@ module m_base_backend
       !!
       !! All these high level operations solver class executes are
       !! defined here using the abstract interfaces. Every backend
-      !! implementation extends the present abstact backend class to
+      !! implementation extends the present abstract backend class to
       !! define the specifics of these operations based on the target
       !! architecture.
 
@@ -36,6 +36,7 @@ module m_base_backend
     procedure(transeq_ders), deferred :: transeq_z
     procedure(transeq_ders_spec), deferred :: transeq_species
     procedure(tds_solve), deferred :: tds_solve
+    procedure(tds_solve), deferred :: thom_solve
     procedure(reorder), deferred :: reorder
     procedure(sum_intox), deferred :: sum_yintox
     procedure(sum_intox), deferred :: sum_zintox
@@ -60,9 +61,13 @@ module m_base_backend
     procedure(copy_f_to_data), deferred :: copy_f_to_data
     procedure(alloc_tdsops), deferred :: alloc_tdsops
     procedure(init_poisson_fft), deferred :: init_poisson_fft
+    procedure(sync_backend), deferred :: sync
+    procedure(device_bw_info), deferred :: get_device_bw_info
     procedure :: base_init
     procedure :: get_field_data
     procedure :: set_field_data
+    procedure :: supports_device_field_export
+    procedure :: export_field_to_device
   end type base_backend_t
 
   abstract interface
@@ -141,6 +146,27 @@ module m_base_backend
       class(field_t), intent(in) :: u
       class(tdsops_t), intent(in) :: tdsops
     end subroutine tds_solve
+  end interface
+
+  abstract interface
+    subroutine sync_backend(self)
+      import :: base_backend_t
+      implicit none
+
+      class(base_backend_t) :: self
+    end subroutine sync_backend
+  end interface
+
+  abstract interface
+    subroutine device_bw_info(self, mem_clock_rt, mem_bus_width, available)
+      import :: base_backend_t
+      implicit none
+
+      class(base_backend_t) :: self
+      integer, intent(out) :: mem_clock_rt
+      integer, intent(out) :: mem_bus_width
+      logical, intent(out) :: available
+    end subroutine device_bw_info
   end interface
 
   abstract interface
@@ -536,5 +562,37 @@ contains
     end if
 
   end subroutine set_field_data
+
+  logical function supports_device_field_export(self, f)
+    !! Whether `export_field_to_device` can pack field `f` without staging
+    !! it through host memory. Backends without device memory keep this
+    !! default and report no support.
+    implicit none
+
+    class(base_backend_t), intent(in) :: self
+    class(field_t), intent(in) :: f
+
+    supports_device_field_export = .false.
+  end function supports_device_field_export
+
+  subroutine export_field_to_device(self, buffer, f, dims, to_sp)
+    !! Pack the first `dims` Cartesian points of field `f` into a
+    !! contiguous device buffer, in (i, j, k) order without padding.
+    !!
+    !! `buffer` is the device address of product(dims) elements, of kind
+    !! `sp` when `to_sp` is true and `dp` otherwise. The buffer holds the
+    !! complete result when this returns, so a library that reads device
+    !! memory outside the backend's stream can consume it directly.
+    !! Only called when `supports_device_field_export(f)` is true.
+    implicit none
+
+    class(base_backend_t) :: self
+    type(c_ptr), intent(in) :: buffer
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: dims(3)
+    logical, intent(in) :: to_sp
+
+    error stop "export_field_to_device is not supported by this backend"
+  end subroutine export_field_to_device
 
 end module m_base_backend

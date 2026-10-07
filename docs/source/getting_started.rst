@@ -29,6 +29,10 @@ You can install Open MPI using your package manager. For Ubuntu, this can be obt
 
    sudo apt install openmpi-bin libopenmpi-dev
 
+MPI is optional. Configuring with ``-DWITH_MPI=OFF`` builds a serial,
+single-rank executable that needs no MPI installation at all; see
+:doc:`user/advanced_build`.
+
 CMake
 ^^^^^
 
@@ -79,37 +83,184 @@ To compile x3d2 from source, follow these steps:
    git clone https://github.com/xcompact3d/x3d2.git
    cd x3d2
 
-
-4. Set Fortran Compiler flag to use ``mpif90``
-
-.. code-block:: bash
-
-   export FC=mpif90
-
-5. Create the build system using CMake
+2. Configure the build
 
 .. code-block:: bash
 
-   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+   cmake -S . -B build -DCMAKE_Fortran_COMPILER=mpif90 -DCMAKE_BUILD_TYPE=Release
 
-where ``build`` specifies the directory to which we write the build configuration files and ``DCMAKE_BUILD_TYPE=Release`` specifies the build type (in this case we are using Release build; if you want to install the debug please use ``Debug`` instead).
+``build`` is the directory the build configuration is written to, and
+``CMAKE_BUILD_TYPE`` selects the build type (use ``Debug`` instead of
+``Release`` for a debug build).
 
-6. Change into the build directory and create the build
+A default build uses MPI, so point ``CMAKE_Fortran_COMPILER`` at an MPI compiler
+wrapper such as ``mpif90``. With ``-DWITH_MPI=OFF`` point it at the compiler
+itself instead of a wrapper: ``gfortran`` for GNU, ``nvfortran`` for the NVIDIA
+HPC SDK and therefore for ``ENABLE_BACKEND=CUDA``, or ``ftn`` on a Cray machine.
+If you give a bare name rather than an absolute path, it has to be on your
+``PATH``.
+
+.. note::
+
+   Pass the compiler as a ``-D`` cache variable rather than through the ``FC``
+   environment variable. CMake only reads ``FC`` on the first configure of a
+   fresh build directory, so ``export FC=...`` silently does nothing when
+   re-configuring an existing one. ``-DCMAKE_Fortran_COMPILER=...`` is recorded
+   in the cache and is what the third-party dependencies are forwarded.
+
+3. Compile
+
+.. code-block:: bash
+
+   cmake --build build -j
+
+This creates the ``xcompact`` binary in ``build/bin/``. Test executables are
+placed in ``build/tests/bin/``.
+
+4. Verify the installation by running the test suite
 
 .. code-block:: bash
 
    cd build
-   make
+   ctest
 
-This should create a binary file called ``xcompact`` within ``build/src/`` directory.
+A successful installation should indicate 100% tests passed. ``ctest
+--output-on-failure`` prints the output of any test that fails.
 
-7. Verify the installation by running the test suite
+
+How the build is configured
+---------------------------
+
+The build is driven entirely by CMake cache variables passed at configure time.
+There is a single configure step followed by a build step:
 
 .. code-block:: bash
 
-   make test
+   cmake -S . -B build -DCMAKE_Fortran_COMPILER=mpif90 <options>
+   cmake --build build -j
 
-A successful installation should indicate 100% tests passed.
+Choosing a backend
+~~~~~~~~~~~~~~~~~~
+
+x3d2 has one CPU backend and two GPU backends, selected with ``ENABLE_BACKEND``.
+The CPU (host OpenMP) backend is always built; ``ENABLE_BACKEND`` adds a GPU one
+on top of it and decides which allocator, backend module and compiler flags are
+used.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 25 55
+
+   * - ``ENABLE_BACKEND``
+     - Compilers
+     - Description
+   * - ``OFF`` (default)
+     - Cray, GNU, NVHPC, Flang
+     - CPU only, using host OpenMP threading.
+   * - ``CUDA``
+     - NVHPC or PGI only
+     - CUDA Fortran backend for NVIDIA GPUs. Configuring fails with any other
+       compiler.
+   * - ``OMP_TGT``
+     - Cray, GNU, NVHPC, Flang
+     - OpenMP target offload backend. Requires an OpenMP 4.5 or newer compiler.
+
+"Flang" covers both upstream LLVM Flang and AMD's ROCm ``amdflang``; CMake
+reports either as a ``CMAKE_Fortran_COMPILER_ID`` of ``LLVMFlang`` or
+``Flang``, and the build treats the two identically. See :doc:`user/advanced_build`
+for version requirements and Flang-specific notes.
+
+For example, to build the OpenMP target offload backend:
+
+.. code-block:: bash
+
+   cmake -S . -B build -DCMAKE_Fortran_COMPILER=mpif90 -DENABLE_BACKEND=OMP_TGT
+
+Each supported compiler enables offload in its own way. The build detects the
+compiler and supplies the flags it needs, so no manual offload flags are
+required with any of them.
+
+Both GPU backends need the target architecture, given with ``BACKEND_ARCH``.
+Configuring a GPU build fails if it is unset. NVIDIA targets are named by their
+compute capability as ``ccXX``, the convention nvfortran uses, and AMD targets
+as ``gfx<model>``:
+
+.. code-block:: bash
+
+   -DENABLE_BACKEND=OMP_TGT -DBACKEND_ARCH=gfx942   # AMD MI300X
+   -DENABLE_BACKEND=CUDA -DBACKEND_ARCH=cc80        # NVIDIA A100
+
+The build passes the name to the selected compiler in the form it expects, for
+example ``-gpu=cc80`` for NVHPC and ``--offload-arch=gfx942`` for GNU and
+Flang. See :doc:`user/advanced_build` for the per-compiler details.
+
+Build options
+~~~~~~~~~~~~~
+
+.. list-table::
+   :header-rows: 1
+   :widths: 27 13 60
+
+   * - Option
+     - Default
+     - Description
+   * - ``CMAKE_BUILD_TYPE``
+     - ``Release``
+     - ``Release`` or ``Debug``.
+   * - ``CMAKE_Fortran_COMPILER``
+     - --
+     - The MPI Fortran wrapper to build with, normally ``mpif90``. With
+       ``WITH_MPI=OFF``, the compiler itself instead (``gfortran``,
+       ``nvfortran``, ``ftn``, ``flang``) rather than a wrapper.
+   * - ``ENABLE_BACKEND``
+     - ``OFF``
+     - GPU backend to build: ``OFF``, ``CUDA`` or ``OMP_TGT``.
+   * - ``BACKEND_ARCH``
+     - --
+     - Target GPU architecture, required whenever ``ENABLE_BACKEND`` is not
+       ``OFF``: ``cc80`` (A100), ``cc90`` (H100), ``gfx942`` (MI300X).
+   * - ``SINGLE_PREC``
+     - ``OFF``
+     - Build in single precision.
+   * - ``WITH_MPI``
+     - ``ON``
+     - Build against MPI. ``OFF`` builds a serial, single-rank executable.
+   * - ``WITH_2DECOMPFFT``
+     - ``ON``
+     - Build the FFT-based Poisson solver against 2decomp-fft.
+   * - ``WITH_ADIOS2``
+     - ``OFF``
+     - Enable ADIOS2 for checkpoint and snapshot I/O.
+
+See :doc:`user/advanced_build` for the MPI, ADIOS2, 2decomp-fft, single
+precision and CUDA debugging options in detail.
+
+Third-party dependencies
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+2decomp-fft (when ``WITH_2DECOMPFFT=ON``) and ADIOS2 (when ``WITH_ADIOS2=ON``)
+are downloaded and built into the build tree automatically. They are built
+*during the build*, not during configuration, so configuring is quick and the
+first ``cmake --build`` is what fetches and compiles them. Each is installed
+into its own directory under ``build/`` keyed by version and configuration, and
+is reused on later builds rather than rebuilt. Both can be pointed at an
+existing installation instead; see :doc:`user/advanced_build`.
+
+Build outputs
+~~~~~~~~~~~~~
+
+.. list-table::
+   :header-rows: 1
+   :widths: 35 65
+
+   * - Path
+     - Contents
+   * - ``build/bin/xcompact``
+     - The solver executable.
+   * - ``build/lib/``
+     - The ``x3d2`` and ``x3d2_backends`` static libraries.
+   * - ``build/tests/bin/``
+     - Test executables, run via ``ctest``.
 
 
 Installing on macOS
@@ -166,36 +317,36 @@ To install x3d2 from source, follow these steps:
 
    git clone https://github.com/xcompact3d/x3d2.git
 
-2. Configure compilers
-macOS users must explicitly set GNU compilers for C/C++ to ensure OpenMP support is detected correctly. Export the compilers (replace ``15`` with your installed version if different):
+2. Configure the build
+
+macOS users must explicitly select the GNU compilers for C and C++ so that
+OpenMP support is detected correctly. Replace ``15`` with your installed GCC
+version if it differs:
 
 .. code-block:: bash
 
-   export FC=mpif90
-   export CC=gcc-15
-   export CXX=g++-15
+   cmake -S . -B build \
+     -DCMAKE_Fortran_COMPILER=mpif90 \
+     -DCMAKE_C_COMPILER=gcc-15 \
+     -DCMAKE_CXX_COMPILER=g++-15 \
+     -DCMAKE_BUILD_TYPE=Release
 
-3. Create the build system using CMake
+``build`` is the directory the build configuration is written to, and
+``CMAKE_BUILD_TYPE`` selects the build type (use ``Debug`` for a debug build).
+
+3. Compile
 
 .. code-block:: bash
 
-   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+   cmake --build build -j
 
-where ``build`` specifies the directory to which we write the build configuration files and ``DCMAKE_BUILD_TYPE=Release`` specifies the build type (in this case we are using Release build; if you want to install the debug please use ``Debug`` instead).
+This creates the ``xcompact`` binary in ``build/bin/``.
 
-4. Change into the build directory and create the build
+4. Verify the installation by running the test suite
 
 .. code-block:: bash
 
    cd build
-   make
-
-This should create a binary file called ``xcompact`` within ``build/src/`` directory.
-
-5. Verify the installation by running the test suite
-
-.. code-block:: bash
-
-   make test
+   ctest
 
 A successful installation should indicate 100% tests passed.

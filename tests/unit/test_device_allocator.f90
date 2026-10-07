@@ -1,34 +1,23 @@
-program test_allocator_omptgt
+program test_allocator_device
   use iso_fortran_env, only: stderr => error_unit
 
   use m_allocator, only: allocator_t, field_t
-  use m_common, only: dp, pi, DIR_X
-
-  use m_omptgt_allocator, only: omptgt_allocator_t
+  use m_common, only: DIR_X
+  use m_backend_runtime, only: select_device
+  use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
 
   logical :: allpass
-  integer, dimension(3) :: dims, nproc_dir
-  real(dp) :: L_global(3)
-  character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
   class(allocator_t), allocatable :: allocator
   class(field_t), pointer :: ptr1, ptr2, ptr3
   integer, allocatable :: l(:)
-  integer :: ierr
+  integer :: nrank, nproc
 
-  call MPI_Init(ierr)
+  call initialise_mpi(nrank, nproc)
+  call select_device(nrank)
 
-  dims = [8, 8, 8]
-  nproc_dir = [1, 1, 1]
-  L_global = [2*pi, 2*pi, 2*pi]
-
-  BC_x = ['periodic', 'periodic']
-  BC_y = ['periodic', 'periodic']
-  BC_z = ['periodic', 'periodic']
-
-
-  allocator = omptgt_allocator_t(dims, 8)
+  allocator = allocator_t([8, 8, 8], 8)
 
   allpass = .true.
 
@@ -83,10 +72,7 @@ program test_allocator_omptgt
     write (stderr, '(a)') 'Block is correctly allocated... passed'
   end if
 
-  ! TODO: Check that data is resident on device
-  ! TODO: Check that data is freed from device
-
   call allocator%destroy()
 
-  call MPI_Finalize(ierr)
-end program test_allocator_omptgt
+  call finalise_test(allpass, nrank)
+end program test_allocator_device

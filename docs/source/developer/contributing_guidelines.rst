@@ -55,7 +55,7 @@ Pull requests and code review
 
 
 * PRs must be small and focused (one PR per feature/bug fix).
-* Write meaningful PR desriptions to help reviewers. This should include:
+* Write meaningful PR descriptions to help reviewers. This should include:
 
   * Summary of changes
   * Technical explanation of key modifications

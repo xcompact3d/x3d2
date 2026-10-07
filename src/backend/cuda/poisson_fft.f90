@@ -5,7 +5,8 @@ module m_cuda_poisson_fft
   use cudafor
   use cufftXt
   use cufft
-  use mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_COMPLEX, MPI_DOUBLE_COMPLEX, &
+                   MPI_STATUS_IGNORE, MPI_SUCCESS, MPI_Abort, MPI_Sendrecv
 
   use m_common, only: dp, CELL, is_sp
   use m_field, only: field_t
@@ -81,6 +82,15 @@ module m_cuda_poisson_fft
     !> dim2 mirror of the local spectral slab, used by the 100 case to
     !> reach the paired split partner that lives on another rank
     complex(dp), device, allocatable, dimension(:, :, :) :: c_mirror_dev
+    !> Staging copy of the local slab, sent in place of c_dev itself.
+    !> In the cuFFTMp path c_dev is a c_f_pointer onto descriptor%data(1),
+    !> which is cufftXtMalloc memory and therefore lives in the NVSHMEM
+    !> symmetric heap. UCX does not reliably classify such a pointer as
+    !> device memory: when it falls back to the host CMA transport it calls
+    !> process_vm_readv on it and the job aborts with EFAULT. Copying into
+    !> ordinary device memory first makes the exchange independent of which
+    !> transport UCX happens to select.
+    complex(dp), device, allocatable, dimension(:, :, :) :: c_slab_send_dev
     !> The single dim2 plane that falls outside the mirrored slab
     complex(dp), device, allocatable, dimension(:, :) :: c_plane_send_dev, &
                                                          c_plane_recv_dev
@@ -108,10 +118,6 @@ module m_cuda_poisson_fft
     procedure :: exchange_mirror_100
   end type cuda_poisson_fft_t
 
-  interface cuda_poisson_fft_t
-    module procedure init
-  end interface cuda_poisson_fft_t
-
   ! Explicit C interfaces for cuFFT functions that nvfortran has trouble with
   interface
     integer(c_int) function cufftExecR2C_C(plan, idata, odata) &
@@ -131,7 +137,7 @@ module m_cuda_poisson_fft
     end function cufftExecC2R_C
   end interface
 
-  private :: init, create_fft_plan
+  private :: create_fft_plan
 
 contains
 
@@ -153,6 +159,15 @@ contains
     cufftmp_failed = .false.
     ierr = cufftCreate(plan)
 
+#ifndef MPI
+    ! cuFFTMp distributes a transform over MPI ranks, so a build without MPI
+    ! links plain cuFFT instead (see src/CMakeLists.txt) and has no cuFFTMp
+    ! entry points to call.  A serial build is one rank, which plain cuFFT
+    ! handles on its own.
+    use_cufftmp = .false.
+#endif
+
+#ifdef MPI
     if (use_cufftmp) then
       ! Try to attach MPI communicator for cuFFTMp
       ierr = cufftMpAttachComm(plan, CUFFT_COMM_MPI, MPI_COMM_WORLD)
@@ -182,6 +197,7 @@ contains
         ierr = cufftCreate(plan)
       end if
     end if
+#endif
 
     ! create plan with cuFFT
     if (.not. use_cufftmp) then
@@ -194,15 +210,14 @@ contains
 
   end subroutine create_fft_plan
 
-  function init(mesh, xdirps, ydirps, zdirps, lowmem) &
-    result(poisson_fft)
+  subroutine init_cuda_poisson_fft_t(poisson_fft, mesh, xdirps, ydirps, &
+                                     zdirps, lowmem)
     implicit none
 
+    type(cuda_poisson_fft_t), intent(out) :: poisson_fft
     type(mesh_t), target, intent(in) :: mesh
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
-
-    type(cuda_poisson_fft_t) :: poisson_fft
 
     integer :: nx, ny, nz
 
@@ -330,6 +345,9 @@ contains
       allocate (poisson_fft%c_mirror_dev(poisson_fft%nx_spec, &
                                          poisson_fft%ny_spec, &
                                          poisson_fft%nz_spec))
+      allocate (poisson_fft%c_slab_send_dev(poisson_fft%nx_spec, &
+                                            poisson_fft%ny_spec, &
+                                            poisson_fft%nz_spec))
       allocate (poisson_fft%c_plane_send_dev(poisson_fft%nx_spec, &
                                              poisson_fft%nz_spec))
       allocate (poisson_fft%c_plane_recv_dev(poisson_fft%nx_spec, &
@@ -376,6 +394,10 @@ contains
 
     if (poisson_fft%is_110_case) then
       ! 110: R2C with Z-transpose, no cuFFTMp for non-periodic BCs
+      if (mesh%par%nproc > 1) then
+        error stop 'Multiple ranks are not yet supported for the 110 case &
+                    &in the CUDA backend!'
+      end if
       poisson_fft%use_cufftmp = .false.
 
       call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
@@ -451,7 +473,7 @@ contains
                   &cuFFT cannot decompose the transform.'
     end if
 
-  end function init
+  end subroutine init_cuda_poisson_fft_t
 
   subroutine fft_forward_110_cuda(self, f)
     !! Forward FFT for 110 case: transpose (nx,ny,nz)->(nz,nx,ny) then R2C
@@ -945,10 +967,17 @@ contains
     blocks = dim3((self%nx_spec - 1)/tsize + 1, self%nz_spec, 1)
     threads = dim3(tsize, 1, 1)
     call pack_spectral_plane<<<blocks, threads>>>( & !&
-      self%c_plane_send_dev, c_dev, self%nx_spec, self%nz_spec &
-      )
+  self%c_plane_send_dev, c_dev, self%nx_spec, self%nz_spec &
+  )
 
     nrank = self%mesh%par%nrank
+
+    ! Copy the slab out of the descriptor allocation before MPI sees it, see
+    ! the comment on c_slab_send_dev. Done ahead of the synchronisation below
+    ! so that one sync covers the packing kernel and this copy together.
+    if (self%mirror_slab_rank /= nrank) then
+      self%c_slab_send_dev = c_dev
+    end if
 
     if (is_sp) then
       mpi_cplx = MPI_COMPLEX
@@ -979,11 +1008,16 @@ contains
     if (self%mirror_slab_rank == nrank) then
       self%c_mirror_dev = c_dev
     else
-      call MPI_Sendrecv(c_dev, n_slab, mpi_cplx, &
+#ifdef MPI
+      call MPI_Sendrecv(self%c_slab_send_dev, n_slab, mpi_cplx, &
                         self%mirror_slab_rank, tag_slab, &
                         self%c_mirror_dev, n_slab, mpi_cplx, &
                         self%mirror_slab_rank, tag_slab, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr_mpi)
+#else
+      error stop 'The 100 mirror slab exchange needs more than one rank, &
+                  &but this build was configured without MPI'
+#endif
       if (ierr_mpi /= MPI_SUCCESS) then
         write (stderr, '(a,i0)') &
           'The 100 mirror slab exchange failed: ', ierr_mpi
@@ -995,11 +1029,16 @@ contains
     if (self%mirror_plane_rank == nrank) then
       self%c_plane_recv_dev = self%c_plane_send_dev
     else
+#ifdef MPI
       call MPI_Sendrecv(self%c_plane_send_dev, n_plane, mpi_cplx, &
                         self%mirror_plane_rank, tag_plane, &
                         self%c_plane_recv_dev, n_plane, mpi_cplx, &
                         self%mirror_plane_rank, tag_plane, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr_mpi)
+#else
+      error stop 'The 100 mirror plane exchange needs more than one rank, &
+                  &but this build was configured without MPI'
+#endif
       if (ierr_mpi /= MPI_SUCCESS) then
         write (stderr, '(a,i0)') &
           'The 100 mirror plane exchange failed: ', ierr_mpi

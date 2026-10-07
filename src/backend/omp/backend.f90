@@ -1,5 +1,6 @@
 module m_omp_backend
-  use mpi
+  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_MAX, MPI_SUM, &
+                   MPI_Allreduce
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
@@ -13,6 +14,7 @@ module m_omp_backend
 
   use m_omp_common, only: SZ
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
+  use m_exec_thom, only: exec_thom_tds_compact
   use m_omp_sendrecv, only: sendrecv_fields
 
   implicit none
@@ -35,6 +37,7 @@ module m_omp_backend
     procedure :: transeq_z => transeq_z_omp
     procedure :: transeq_species => transeq_species_omp
     procedure :: tds_solve => tds_solve_omp
+    procedure :: thom_solve => thom_solve_omp
     procedure :: reorder => reorder_omp
     procedure :: sum_yintox => sum_yintox_omp
     procedure :: sum_zintox => sum_zintox_omp
@@ -58,6 +61,8 @@ module m_omp_backend
     procedure :: copy_data_to_f => copy_data_to_f_omp
     procedure :: copy_f_to_data => copy_f_to_data_omp
     procedure :: init_poisson_fft => init_omp_poisson_fft
+    procedure :: sync => sync_omp
+    procedure :: get_device_bw_info => get_device_bw_info_omp
     procedure :: transeq_omp_dist
   end type omp_backend_t
 
@@ -145,6 +150,28 @@ contains
     end select
 
   end subroutine alloc_omp_tdsops
+
+  subroutine sync_omp(self)
+    implicit none
+
+    class(omp_backend_t) :: self
+
+  end subroutine sync_omp
+
+  subroutine get_device_bw_info_omp(self, mem_clock_rt, mem_bus_width, &
+                                    available)
+    implicit none
+
+    class(omp_backend_t) :: self
+    integer, intent(out) :: mem_clock_rt
+    integer, intent(out) :: mem_bus_width
+    logical, intent(out) :: available
+
+    mem_clock_rt = 0
+    mem_bus_width = 0
+    available = .false.
+
+  end subroutine get_device_bw_info_omp
 
   subroutine transeq_x_omp(self, du, dv, dw, u, v, w, nu, dirps)
     implicit none
@@ -361,6 +388,27 @@ contains
     call tds_solve_dist(self, du, u, tdsops)
 
   end subroutine tds_solve_omp
+
+  subroutine thom_solve_omp(self, du, u, tdsops)
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: du
+    class(field_t), intent(in) :: u
+    class(tdsops_t), intent(in) :: tdsops
+
+    if (u%dir /= du%dir) then
+      error stop 'DIR mismatch between fields in thom_solve.'
+    end if
+
+    if (u%data_loc /= NULL_LOC) then
+      call du%set_data_loc(move_data_loc(u%data_loc, u%dir, tdsops%move))
+    end if
+
+    call exec_thom_tds_compact(du%data, u%data, tdsops, &
+                               self%allocator%get_n_groups(u%dir))
+
+  end subroutine thom_solve_omp
 
   subroutine tds_solve_dist(self, du, u, tdsops)
     implicit none
@@ -873,7 +921,7 @@ contains
     integer, optional, intent(in) :: enforced_data_loc
 
     real(dp) :: val, max_p, sum_p, max_pncl, sum_pncl
-    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j
+    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_groups_pad, n_j
     integer :: i, j, k, k_i, k_j, ierr
 
     if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
@@ -891,12 +939,20 @@ contains
     dims = self%mesh%get_dims(data_loc)
     dims_padded = self%allocator%get_padded_dims(DIR_C)
 
+    ! n_groups_pad is the stride between successive outer entries in the
+    ! group index, and it comes from the padded extent of the grouped
+    ! dimension, not the unpadded one (see get_index_dir in m_ordering).
+    ! The two agree only when that dimension needs no padding, so using the
+    ! unpadded count walks into other groups as soon as it does.
     if (f%dir == DIR_X) then
-      n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
+      n = dims(1); n_j = dims(2); n_i = dims(3)
+      n_groups_pad = dims_padded(2)/SZ
     else if (f%dir == DIR_Y) then
-      n = dims(2); n_j = dims(1); n_i = dims(3); n_i_pad = dims_padded(3)
+      n = dims(2); n_j = dims(1); n_i = dims(3)
+      n_groups_pad = dims_padded(1)/SZ
     else if (f%dir == DIR_Z) then
-      n = dims(3); n_j = dims(1); n_i = dims(2); n_i_pad = dims_padded(2)
+      n = dims(3); n_j = dims(1); n_i = dims(2)
+      n_groups_pad = dims_padded(1)/SZ
     else
       error stop 'field_max_mean does not support DIR_C fields!'
     end if
@@ -907,7 +963,7 @@ contains
     !$omp private(k, val, sum_pncl, max_pncl)
     do k_j = 1, (n_j - 1)/SZ + 1 ! loop over stacked groups
       do k_i = 1, n_i
-        k = k_j + (k_i - 1)*((n_j - 1)/SZ + 1)
+        k = k_j + (k_i - 1)*n_groups_pad
         sum_pncl = 0._dp
         max_pncl = 0._dp
         do j = 1, n
@@ -952,7 +1008,7 @@ contains
     real(dp), optional, intent(out) :: min_val
 
     real(dp) :: val, max_p, sum_p, min_p
-    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j
+    integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_groups_pad, n_j
     integer :: i, j, k, k_i, k_j
 
     if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
@@ -970,12 +1026,16 @@ contains
     dims = self%mesh%get_dims(data_loc)
     dims_padded = self%allocator%get_padded_dims(DIR_C)
 
+    ! See the note on n_groups_pad in field_max_mean_omp above.
     if (f%dir == DIR_X) then
-      n = dims(1); n_j = dims(2); n_i = dims(3); n_i_pad = dims_padded(3)
+      n = dims(1); n_j = dims(2); n_i = dims(3)
+      n_groups_pad = dims_padded(2)/SZ
     else if (f%dir == DIR_Y) then
-      n = dims(2); n_j = dims(1); n_i = dims(3); n_i_pad = dims_padded(3)
+      n = dims(2); n_j = dims(1); n_i = dims(3)
+      n_groups_pad = dims_padded(1)/SZ
     else if (f%dir == DIR_Z) then
-      n = dims(3); n_j = dims(1); n_i = dims(2); n_i_pad = dims_padded(2)
+      n = dims(3); n_j = dims(1); n_i = dims(2)
+      n_groups_pad = dims_padded(1)/SZ
     else
       error stop 'slice_max_sum does not support DIR_C fields!'
     end if
@@ -993,7 +1053,7 @@ contains
     !$omp reduction(min:min_p) private(k, val)
     do k_j = 1, (n_j - 1)/SZ + 1
       do k_i = 1, n_i
-        k = k_j + (k_i - 1)*((n_j - 1)/SZ + 1)
+        k = k_j + (k_i - 1)*n_groups_pad
         do i = 1, min(SZ, n_j - (k_j - 1)*SZ)
           val = f%data(i, j, k)
           sum_p = sum_p + val
