@@ -10,7 +10,7 @@ module m_base_backend
 
   implicit none
 
-  type :: base_backend_t
+  type, abstract :: base_backend_t
       !! base_backend class defines all the operations that the solver
       !! class requires.
       !!
