@@ -1,18 +1,17 @@
 program test_transeq
   use iso_fortran_env, only: stderr => error_unit
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
-  use m_common, only: dp, pi, MPI_X3D2_DP, BC_PERIODIC
+  use m_common, only: dp, pi, BC_PERIODIC
   use m_omp_common, only: SZ
   use m_omp_exec_dist, only: exec_dist_transeq_compact
   use m_omp_sendrecv, only: sendrecv_fields
   use m_tdsops, only: tdsops_t
-  use m_test_utils, only: initialise_mpi, finalise_test
+  use m_test_utils, only: initialise_mpi, finalise_test, relative_l2_error
 
   implicit none
 
   logical :: allpass = .true.
-  real(dp), allocatable, dimension(:, :, :) :: u, v, r_u
+  real(dp), allocatable, dimension(:, :, :) :: u, v, r_u, ref
   real(dp), allocatable, dimension(:, :, :) :: dud, d2u ! intermediate solution arrays
   real(dp), allocatable, dimension(:, :, :) :: &
     du_recv_s, du_recv_e, du_send_s, du_send_e, &
@@ -27,15 +26,21 @@ program test_transeq
 
   integer :: n, n_block, n_halo, n_glob
   integer :: nrank, nproc, pprev, pnext
-  integer :: ierr
 
   real(dp) :: dx_per, nu, norm_du
-  ! Roundoff floor of the second-derivative term is ~eps/dx^2, which at
-  ! 96^3 cells is ~1e-4 in single precision.
+  ! The tolerance bounds the relative L2 error of the transport equation
+  ! right hand side. Roundoff floor of the second-derivative term is
+  ! ~eps/dx^2, which at 96^3 cells is ~1e-4 in single precision. Largest
+  ! value measured, over the OpenMP backend binary of the OpenMP and CUDA
+  ! builds:
+  !   double precision: 1.6562e-10
+  !   single precision: 1.1935e-04
+  ! The tolerance is the smallest {1,2,5}x10^k value at least 10x these, a
+  ! margin of about 12 in double precision and 17 in single precision.
 #ifdef SINGLE_PREC
-  real(dp) :: tol = 5e-3
+  real(dp) :: tol = 2e-3
 #else
-  real(dp) :: tol = 1d-8
+  real(dp) :: tol = 2d-9
 #endif
 
   call initialise_mpi(nrank, nproc, pprev, pnext)
@@ -61,7 +66,8 @@ contains
   end subroutine setup_geometry
 
   subroutine allocate_fields()
-    allocate (u(SZ, n, n_block), v(SZ, n, n_block), r_u(SZ, n, n_block))
+    allocate (u(SZ, n, n_block), v(SZ, n, n_block), r_u(SZ, n, n_block), &
+              ref(SZ, n, n_block))
 
     ! main input fields
     ! field for storing the result
@@ -136,12 +142,9 @@ contains
 
   subroutine check_result()
     ! check error
-    r_u = r_u - (-v*v + 0.5_dp*u*u - nu*u)
-    norm_du = norm2(r_u)
-    norm_du = norm_du*norm_du/n_glob/n_block/SZ
-    call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_X3D2_DP, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
-    norm_du = sqrt(norm_du)
+    ref = -v*v + 0.5_dp*u*u - nu*u
+    r_u = r_u - ref
+    norm_du = relative_l2_error(r_u, ref)
 
     if (nrank == 0) print *, 'error norm', norm_du
 
