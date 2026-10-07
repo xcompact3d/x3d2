@@ -145,8 +145,7 @@ contains
 
     real(dp) :: norm_residual
 
-    norm_residual = sum((u + du)**2)/real(size(u), dp)
-    norm_residual = sqrt(norm_residual)
+    norm_residual = relative_l2_error(u + du, u)
 
     print *, "Check error:"
     print *, "min:", minval(u + du), "max: ", maxval(u + du)
