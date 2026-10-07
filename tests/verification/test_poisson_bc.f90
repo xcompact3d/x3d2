@@ -15,8 +15,9 @@ program test_poisson
   !!   COS_X, COS_Y, COS_XY, COS_XYZ
   !!
   !! Each test performs two checks:
-  !!   Check 1: Poisson solution vs analytical (L2 norm)
-  !!   Check 2: div(grad(p)) recovers original RHS f (round-trip L2 norm)
+  !!   Check 1: Poisson solution vs analytical (relative L2 error)
+  !!   Check 2: div(grad(p)) recovers original RHS f (round-trip relative L2
+  !!            error)
   !!
   !! Layout: setup_case builds one poisson_ctx_t for each configuration
   !! (mesh, backend, allocators, tdsops, vector_calculus, poisson_fft) and
@@ -57,12 +58,11 @@ program test_poisson
   use m_common, only: dp, pi, MPI_X3D2_DP, DIR_C, DIR_X, DIR_Y, DIR_Z, &
                       CELL, RDR_C2Z, RDR_C2X, RDR_Z2X
   use m_mesh, only: mesh_t
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce, &
-                   MPI_Bcast
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Bcast
   use m_solver, only: allocate_tdsops
   use m_tdsops, only: dirps_t
   use m_vector_calculus, only: vector_calculus_t
-  use m_test_utils, only: initialise_mpi, finalise_test
+  use m_test_utils, only: initialise_mpi, finalise_test, relative_l2_error
 
   implicit none
 
@@ -131,34 +131,53 @@ program test_poisson
     logical :: periodic(3)
   end type poisson_ctx_t
 
-  ! The single precision tolerance must sit between the roundoff floor of
-  ! the passing cases (~3e-7 in this normalised norm, norm2/N) and the
-  ! n=3 periodic aliasing error (~2.4e-6) that the XFAIL logic relies on
-  ! detecting; a looser tolerance turns XFAILs into unexpected passes.
+  ! ERROR_TOLERANCE bounds the relative L2 error ||p - p_ref|| / ||p_ref|| of
+  ! the Poisson solution (Check 1). It must sit above the error of the
+  ! passing cases and below the n=3 periodic aliasing error that the XFAIL
+  ! logic relies on detecting; a looser tolerance turns XFAILs into
+  ! unexpected passes. Measured over the passing cases of every BC case, at 1
+  ! and 2 ranks:
+  !   double precision, OpenMP backend: 4.4699e-08
+  !   double precision, CUDA backend:   4.4699e-08
+  !   single precision, OpenMP backend, nvfortran build: 1.9487e-06
+  !   single precision, OpenMP backend, gfortran build:  1.5340e-06
+  !   single precision, CUDA backend:                    2.7265e-07
+  ! The XFAIL rows measure at least 8.5654e-01 in double precision and
+  ! 8.5640e-01 in single precision. The tolerance is the {1,2,5}x10^k value
+  ! closest to the geometric mean of the largest passing error and the
+  ! smallest XFAIL error: a margin of about 4.5e3 above the passing cases and
+  ! 4.3e3 below the XFAIL rows in double precision, and about 5.1e2 and 8.6e2
+  ! in single precision.
 #ifdef SINGLE_PREC
-  real(dp), parameter :: ERROR_TOLERANCE = 1.0e-6_dp
+  real(dp), parameter :: ERROR_TOLERANCE = 1.0e-3_dp
 #else
-  real(dp), parameter :: ERROR_TOLERANCE = 1.0e-11_dp
+  real(dp), parameter :: ERROR_TOLERANCE = 2.0e-4_dp
 #endif
 
-  ! The div(grad(p)) round trip (Check 2) goes through the staggered
-  ! gradient and divergence operators, which carry their own single
-  ! precision roundoff on top of the Poisson solve; on the OpenMP backend
-  ! that reaches 5.0e-6 on config 110 (COS_Y n=2) and 1.2e-6 on config 100
-  ! (COS_X n=2), while the CUDA backend stays below 3.5e-7 on the same
-  ! grids. A looser tolerance here, about 2x the observed OpenMP maximum,
-  ! keeps Check 2 meaningful without disturbing the Poisson tolerance
-  ! above, which the n=3 aliasing (XFAIL) detection depends on.
+  ! DIVGRAD_TOLERANCE bounds the relative L2 error of the div(grad(p)) round
+  ! trip (Check 2) against the original right hand side. It goes through the
+  ! staggered gradient and divergence operators, which carry their own
+  ! roundoff on top of the Poisson solve. Largest value measured over the
+  ! passing cases:
+  !   double precision, OpenMP backend: 9.7767e-11
+  !   double precision, CUDA backend:   9.3749e-13
+  !   single precision, OpenMP backend, nvfortran build: 8.4237e-03
+  !   single precision, OpenMP backend, gfortran build:  4.9875e-03
+  !   single precision, CUDA backend:                    5.9888e-04
+  ! The tolerance is the smallest {1,2,5}x10^k value at least 10x the largest
+  ! of these, a margin of about 10 in double precision and 12 in single
+  ! precision. It is independent of ERROR_TOLERANCE, on which the n=3
+  ! aliasing (XFAIL) detection depends.
   !
-  ! The higher OpenMP roundoff traces to the FFT engine: this build uses
-  ! 2decomp's generic FFT engine (the build does not forward FFT_Choice to
-  ! the 2decomp sub-build), whose single precision roundoff on config 110
-  ! is about 10x FFTW's (Check 2 measured at 2.4e-6 with the generic
-  ! engine vs 2.2e-7 with FFTW, both below the tolerance above).
+  ! The OpenMP backend sits above the CUDA backend, by about 8x (gfortran
+  ! build) to 14x (nvfortran build) in single precision and about 100x in
+  ! double precision. The gfortran OpenMP builds were configured with
+  ! 2decomp's FFT_Choice=generic. No other FFT engine was measured, so the
+  ! gap is not attributed to one.
 #ifdef SINGLE_PREC
-  real(dp), parameter :: DIVGRAD_TOLERANCE = 1.0e-5_dp
+  real(dp), parameter :: DIVGRAD_TOLERANCE = 1.0e-1_dp
 #else
-  real(dp), parameter :: DIVGRAD_TOLERANCE = 1.0e-11_dp
+  real(dp), parameter :: DIVGRAD_TOLERANCE = 1.0e-9_dp
 #endif
 
   integer :: nrank, nproc
@@ -242,9 +261,9 @@ program test_poisson
     write (stderr, '(A)') &
       '  ======================================================='
     write (stderr, '(A)') ''
-    write (stderr, '(2X,A5,2X,A10,A4,A14,A14,2X,A6,2X,A8,2X,A)') &
-      'BC', 'Type      ', '  n ', '  Poisson L2  ', &
-      '  DivGrad L2  ', 'Result', 'Expected', ''
+    write (stderr, '(2X,A5,2X,A10,A4,A16,A16,2X,A6,2X,A8,2X,A)') &
+      'BC', 'Type      ', '  n ', 'Poisson rel L2', &
+      'DivGrad rel L2', 'Result', 'Expected', ''
     write (stderr, '(A)') ''
     do ic = 1, size(cases)
       if (.not. config_run(ic)) cycle
@@ -393,7 +412,7 @@ contains
         verdict_str = '!!'
       end if
 
-      write (stderr, '(2X,A5,2X,A10,I4,ES14.4,ES14.4,2X,A4,4X,A4,4X,A)') &
+      write (stderr, '(2X,A5,2X,A10,I4,ES16.4,ES16.4,2X,A4,4X,A4,4X,A)') &
         bc_code(cases(config_id)), &
         tests(idx)%name, tests(idx)%n, &
         results(idx, config_id)%poisson_err, &
@@ -443,24 +462,6 @@ contains
       end do
     end do
   end subroutine fill_cosine_field
-
-  ! ================================================================
-  ! Compute normalized L2 error norm
-  ! ================================================================
-  function compute_error_norm(mesh, host_field) result(error_norm)
-    type(mesh_t), intent(in) :: mesh
-    class(field_t), intent(in) :: host_field
-    real(dp) :: error_norm
-    integer :: dims(3), ierr
-
-    dims = mesh%get_dims(CELL)
-    ! Sum the squares over all ranks so that every rank judges the same
-    ! global norm, norm2(global)/product(global dims).
-    error_norm = norm2(host_field%data(1:dims(1), 1:dims(2), 1:dims(3)))**2
-    call MPI_Allreduce(MPI_IN_PLACE, error_norm, 1, MPI_X3D2_DP, MPI_SUM, &
-                       MPI_COMM_WORLD, ierr)
-    error_norm = sqrt(error_norm)/product(mesh%get_global_dims(CELL))
-  end function compute_error_norm
 
   ! ================================================================
   ! Value of the global (1,1,1) point, known on every rank
@@ -532,7 +533,9 @@ contains
       host_field%data(1:dims(1), 1:dims(2), 1:dims(3)) &
       - host_analytical%data(1:dims(1), 1:dims(2), 1:dims(3))
 
-    err = compute_error_norm(ctx%mesh, host_field)
+    err = relative_l2_error( &
+          host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), &
+          host_analytical%data(1:dims(1), 1:dims(2), 1:dims(3)))
 
     call ctx%host_allocator%release_block(host_analytical)
     call ctx%host_allocator%release_block(host_field)
@@ -547,7 +550,8 @@ contains
     class(field_t), intent(in) :: f_device, f_reference
     real(dp) :: err
 
-    class(field_t), pointer :: f_result, f_diff, host_field
+    integer :: dims(3)
+    class(field_t), pointer :: f_result, f_diff, host_field, host_ref
     class(field_t), pointer :: dpdx, dpdy, dpdz, gradient_input
 
     gradient_input => ctx%backend%allocator%get_block(DIR_Z)
@@ -589,10 +593,18 @@ contains
 
     host_field => ctx%host_allocator%get_block(DIR_C)
     call ctx%backend%get_field_data(host_field%data, f_diff)
-    err = compute_error_norm(ctx%mesh, host_field)
+
+    host_ref => ctx%host_allocator%get_block(DIR_C)
+    call ctx%backend%get_field_data(host_ref%data, f_reference)
+
+    dims = ctx%mesh%get_dims(CELL)
+    err = relative_l2_error( &
+          host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), &
+          host_ref%data(1:dims(1), 1:dims(2), 1:dims(3)))
 
     ! Cleanup
     call ctx%backend%allocator%release_block(f_diff)
+    call ctx%host_allocator%release_block(host_ref)
     call ctx%host_allocator%release_block(host_field)
   end function divgrad_error
 
@@ -645,10 +657,10 @@ contains
     ! Report per-test result
     if (ctx%mesh%par%is_root()) then
       write (stderr, '(6X,A,ES12.4,A,A)') &
-        'Poisson L2: ', poisson_error_norm, '  ', &
+        'Poisson rel L2: ', poisson_error_norm, '  ', &
         merge('PASS', 'FAIL', poisson_passed)
       write (stderr, '(6X,A,ES12.4,A,A)') &
-        'DivGrad L2: ', div_grad_error_norm, '  ', &
+        'DivGrad rel L2: ', div_grad_error_norm, '  ', &
         merge('PASS', 'FAIL', div_grad_passed)
     end if
 
