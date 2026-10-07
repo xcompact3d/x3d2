@@ -540,20 +540,19 @@ contains
   end function solution_error
 
   ! ================================================================
-  ! Recover the RHS from div(grad(p)) and return its L2 error. Releases both
-  ! fields it is given
+  ! Recover the RHS from div(grad(p)) and return its L2 error. Only reads the
+  ! fields it is given; the caller keeps them and releases them
   ! ================================================================
   function divgrad_error(ctx, f_device, f_reference) result(err)
     type(poisson_ctx_t), target, intent(in) :: ctx
-    class(field_t), pointer :: f_device, f_reference
+    class(field_t), intent(in) :: f_device, f_reference
     real(dp) :: err
 
-    class(field_t), pointer :: f_result, host_field
+    class(field_t), pointer :: f_result, f_diff, host_field
     class(field_t), pointer :: dpdx, dpdy, dpdz, gradient_input
 
     gradient_input => ctx%backend%allocator%get_block(DIR_Z)
     call ctx%backend%reorder(gradient_input, f_device, RDR_C2Z)
-    call ctx%backend%allocator%release_block(f_device)
 
     dpdx => ctx%backend%allocator%get_block(DIR_X)
     dpdy => ctx%backend%allocator%get_block(DIR_X)
@@ -582,20 +581,19 @@ contains
     call ctx%backend%allocator%release_block(dpdy)
     call ctx%backend%allocator%release_block(dpdz)
 
-    f_device => ctx%backend%allocator%get_block(DIR_X)
-    call ctx%backend%reorder(f_device, f_result, RDR_Z2X)
+    f_diff => ctx%backend%allocator%get_block(DIR_X)
+    call ctx%backend%reorder(f_diff, f_result, RDR_Z2X)
     call ctx%backend%allocator%release_block(f_result)
 
     ! Compute error: div(grad(p)) - f_original
-    call ctx%backend%vecadd(-1.0_dp, f_reference, 1.0_dp, f_device)
+    call ctx%backend%vecadd(-1.0_dp, f_reference, 1.0_dp, f_diff)
 
     host_field => ctx%host_allocator%get_block(DIR_C)
-    call ctx%backend%get_field_data(host_field%data, f_device)
+    call ctx%backend%get_field_data(host_field%data, f_diff)
     err = compute_error_norm(ctx%mesh, host_field)
 
     ! Cleanup
-    call ctx%backend%allocator%release_block(f_device)
-    call ctx%backend%allocator%release_block(f_reference)
+    call ctx%backend%allocator%release_block(f_diff)
     call ctx%host_allocator%release_block(host_field)
   end function divgrad_error
 
@@ -641,6 +639,9 @@ contains
     div_grad_error_norm = divgrad_error(ctx, f_device, f_reference)
 
     div_grad_passed = (div_grad_error_norm <= DIVGRAD_TOLERANCE)
+
+    call ctx%backend%allocator%release_block(f_device)
+    call ctx%backend%allocator%release_block(f_reference)
 
     ! Report per-test result
     if (ctx%mesh%par%is_root()) then
