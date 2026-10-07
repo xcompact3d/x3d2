@@ -14,7 +14,7 @@ module m_cuda_memcheck_device
   use m_cuda_allocator, only: cuda_allocator_t
   use m_cuda_backend, only: cuda_backend_t
   use m_cuda_poisson_fft, only: cuda_poisson_fft_t
-  use m_memcheck_device, only: memcheck_device_t
+  use m_memcheck_device, only: memcheck_device_t, busy_card_gib
   use m_memcheck_estimate, only: to_gib
   implicit none
 
@@ -57,6 +57,7 @@ module m_cuda_memcheck_device
     procedure :: init
     procedure :: mem_info
     procedure :: context_bytes
+    procedure :: context_term_bytes
     procedure :: sz => pencil_size
     procedure :: overhead_floor_bytes
     procedure :: overhead_query_bytes
@@ -114,6 +115,20 @@ contains
     nbytes8 = self%start_used_bytes
   end function context_bytes
 
+  function context_term_bytes(self) result(nbytes8)
+    !! The live context size (context_bytes) when the card was otherwise
+    !! idle at start, else the A100 constant (context_floor_bytes without
+    !! the heap).
+    class(cuda_memcheck_device_t), intent(in) :: self
+    integer(i8) :: nbytes8
+
+    if (to_gib(self%start_used_bytes) <= busy_card_gib) then
+      nbytes8 = self%start_used_bytes
+    else
+      nbytes8 = context_floor_bytes(1, .false.)
+    end if
+  end function context_term_bytes
+
   function pencil_size(self) result(n)
     class(cuda_memcheck_device_t), intent(in) :: self
     integer :: n
@@ -124,6 +139,10 @@ contains
   function overhead_floor_bytes(self, ng, bc_is_110) result(nbytes8)
     !! Assumes cuFFTMp (the realistic case for every BC the solver attempts
     !! it for) except for 110, which always uses plain cuFFT.
+    !! Formula: context_floor_bytes(ng, uses_cufftmp) with its context
+    !! constant swapped for context_term_bytes, i.e.
+    !! context_floor_bytes(ng, uses_cufftmp) - context_floor_bytes(ng,
+    !! .false.) + context_term_bytes (the heap part is unchanged).
     class(cuda_memcheck_device_t), intent(in) :: self
     integer, intent(in) :: ng
     logical, intent(in) :: bc_is_110
@@ -131,7 +150,8 @@ contains
     logical :: uses_cufftmp
 
     uses_cufftmp = .not. bc_is_110
-    nbytes8 = context_floor_bytes(ng, uses_cufftmp)
+    nbytes8 = context_floor_bytes(ng, uses_cufftmp) - &
+              context_floor_bytes(ng, .false.) + self%context_term_bytes()
   end function overhead_floor_bytes
 
   subroutine ensure_fft_query(self, bc_is_100, bc_is_110, cdims, is_root)
@@ -171,12 +191,11 @@ contains
     integer(i8) :: worksize_bytes, xtdesc_bytes, heap_bytes, context_bytes
 
     call ensure_fft_query(self, bc_is_100, bc_is_110, cdims, is_root)
-    ! context_bytes: the CUDA-context-alone baseline (no ng argument
-    ! matters here - context_floor_bytes only adds its hardcoded NVSHMEM
-    ! heap when uses_cufftmp=.true., so passing .false. always yields just
-    ! the context). The cuFFTMp heap itself now comes from the live
-    ! ng1_heap_bytes measurement below instead of that hardcoded constant.
-    context_bytes = context_floor_bytes(ng, .false.)
+    ! context_bytes: the CUDA-context-alone baseline, the live start-of-run
+    ! measurement when the card was idle (see context_term_bytes). The
+    ! cuFFTMp heap itself now comes from the live ng1_heap_bytes
+    ! measurement below instead of that hardcoded constant.
+    context_bytes = self%context_term_bytes()
     if (self%ng1_used_cufftmp) then
       ! Live-measured (fft_workspace_bytes_query): worksize is carved out
       ! of the NVSHMEM heap for cuFFTMp, not a separate allocation - do
