@@ -20,6 +20,9 @@ module m_memcheck_device
     procedure(init_iface), deferred :: init
     !> Total and currently free device memory.
     procedure(mem_info_iface), deferred :: mem_info
+    !> Card memory used at start, in bytes: this process's device context,
+    !> plus any other process already on the card.
+    procedure(context_bytes_iface), deferred :: context_bytes
     !> Pencil size (the SZ of the backend's field layout).
     procedure(sz_iface), deferred :: sz
     !> Tier 1 floor of the per-GPU overhead at ng GPUs, in bytes: the
@@ -59,6 +62,12 @@ module m_memcheck_device
       class(memcheck_device_t), intent(in) :: self
       integer(i8), intent(out) :: total_bytes, free_bytes
     end subroutine mem_info_iface
+
+    function context_bytes_iface(self) result(nbytes8)
+      import :: memcheck_device_t, i8
+      class(memcheck_device_t), intent(in) :: self
+      integer(i8) :: nbytes8
+    end function context_bytes_iface
 
     function sz_iface(self) result(pencil_size)
       import :: memcheck_device_t
