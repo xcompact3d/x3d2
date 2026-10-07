@@ -32,9 +32,9 @@ module m_base_backend
       !! override fails loudly at the call site instead of silently doing
       !! nothing.
       !!
-      !! The few operations with a genuinely correct do-nothing answer
-      !! (`sync`, `get_device_bw_info`, `supports_device_field_export`)
-      !! default to that answer rather than to an error; see each one.
+      !! `supports_device_field_export` has a genuinely correct answer for
+      !! a backend that does not override it (`.false.`), so it defaults to
+      !! that rather than to an error.
 
     !> DistD2 implementation is hardcoded for 4 halo layers for all backends
     integer :: n_halo = 4
