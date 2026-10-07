@@ -1,14 +1,13 @@
 program test_omp_tridiag
   use iso_fortran_env, only: stderr => error_unit
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
-  use m_common, only: dp, pi, MPI_X3D2_DP, &
+  use m_common, only: dp, pi, &
                       BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
   use m_omp_common, only: SZ
   use m_omp_sendrecv, only: sendrecv_fields
   use m_omp_exec_dist, only: exec_dist_tds_compact
   use m_tdsops, only: tdsops_t, tdsops_init
-  use m_test_utils, only: initialise_mpi, finalise_test
+  use m_test_utils, only: initialise_mpi, finalise_test, relative_l2_error
 
   implicit none
 
@@ -34,16 +33,28 @@ program test_omp_tridiag
   integer :: n, n_groups, n_halo, n_iters, n_loc
   integer :: n_glob
   integer :: nrank, nproc, pprev, pnext
-  integer :: ierr
 
   real(dp) :: dx, dx_per, dx_pi, norm_du
-  ! Single precision roundoff floors at n_glob=1024: ~eps/dx (~2e-5) for
-  ! first derivatives/interpolation, ~eps/dx^2 (~3e-3) for second
-  ! derivatives, and ~63x more for the hyperviscous operator (nu0_nu=63).
+  ! The tolerances bound the relative L2 error of each operator. Single
+  ! precision roundoff floors at n_glob=1024: ~eps/dx (~2e-5) for first
+  ! derivatives/interpolation, ~eps/dx^2 (~3e-3) for second derivatives, and
+  ! ~63x more for the hyperviscous operator (nu0_nu=63). Largest value
+  ! measured, over the OpenMP backend binary of the OpenMP and CUDA builds:
+  !   tol (first derivatives, interpolation, staggered derivatives):
+  !     double precision 1.2678e-11, single precision 3.8568e-05
+  !   tol_2nd (second derivative):
+  !     double precision 1.9506e-11, single precision 4.5822e-03
+  !   tol_hyper (hyperviscous operator):
+  !     double precision 8.3635e-10, single precision 8.1507e-01
+  ! Each tolerance is the smallest {1,2,5}x10^k value at least 10x these, a
+  ! margin of 13 to 16 for tol, about 10 for tol_2nd and about 12 for
+  ! tol_hyper. In single precision the hyperviscous result is dominated by
+  ! roundoff (eps/dx^2, x63), so its relative error is of order one and the
+  ! check there only catches a blow-up.
 #ifdef SINGLE_PREC
-  real(dp) :: tol = 1e-4, tol_2nd = 2e-2, tol_hyper = 2.0
+  real(dp) :: tol = 5e-4, tol_2nd = 5e-2, tol_hyper = 10.0
 #else
-  real(dp) :: tol = 1d-8, tol_2nd = 1d-8, tol_hyper = 1d-8
+  real(dp) :: tol = 2d-10, tol_2nd = 2d-10, tol_hyper = 1d-8
 #endif
 
   call initialise_mpi(nrank, nproc, pprev, pnext)
@@ -120,7 +131,7 @@ contains
                     nproc, pprev, pnext &
                     )
 
-    call check_error_norm(du, sin_0_2pi_per, n, n_glob, n_groups, 1, norm_du)
+    call check_error_norm(du, sin_0_2pi_per, n, n_groups, 1, norm_du)
     if (nrank == 0) print *, 'error norm second-deriv periodic', norm_du
 
     if (nrank == 0) then
@@ -146,7 +157,7 @@ contains
                     nproc, pprev, pnext &
                     )
 
-    call check_error_norm(du, cos_0_2pi_per, n, n_glob, n_groups, -1, norm_du)
+    call check_error_norm(du, cos_0_2pi_per, n, n_groups, -1, norm_du)
     if (nrank == 0) print *, 'error norm first-deriv periodic', norm_du
 
     if (nrank == 0) then
@@ -183,7 +194,7 @@ contains
                     nproc, pprev, pnext &
                     )
 
-    call check_error_norm(du, cos_0_2pi, n, n_glob, n_groups, -1, norm_du)
+    call check_error_norm(du, cos_0_2pi, n, n_groups, -1, norm_du)
     if (nrank == 0) print *, 'error norm first deriv dir-neu', norm_du
 
     if (nrank == 0) then
@@ -218,7 +229,7 @@ contains
                     nproc, pprev, pnext &
                     )
 
-    call check_error_norm(du, cos_0_pi_stag, n_loc, n_glob, n_groups, &
+    call check_error_norm(du, cos_0_pi_stag, n_loc, n_groups, &
                           -1, norm_du)
     if (nrank == 0) print *, 'error norm interpolate v2p', norm_du
 
@@ -248,7 +259,7 @@ contains
                     nproc, pprev, pnext &
                     )
 
-    call check_error_norm(du, cos_0_pi, n, n_glob, n_groups, -1, norm_du)
+    call check_error_norm(du, cos_0_pi, n, n_groups, -1, norm_du)
     if (nrank == 0) print *, 'error norm interpolate p2v', norm_du
 
     if (nrank == 0) then
@@ -278,7 +289,7 @@ contains
                     nproc, pprev, pnext &
                     )
 
-    call check_error_norm(du, cos_0_pi_stag, n_loc, n_glob, n_groups, &
+    call check_error_norm(du, cos_0_pi_stag, n_loc, n_groups, &
                           -1, norm_du)
     if (nrank == 0) print *, 'error norm stag derivative v2p', norm_du
 
@@ -308,7 +319,7 @@ contains
                     nproc, pprev, pnext &
                     )
 
-    call check_error_norm(du, sin_0_pi, n_loc, n_glob, n_groups, 1, norm_du)
+    call check_error_norm(du, sin_0_pi, n_loc, n_groups, 1, norm_du)
     if (nrank == 0) print *, 'error norm stag derivative p2v', norm_du
 
     if (nrank == 0) then
@@ -336,7 +347,7 @@ contains
                     nproc, pprev, pnext &
                     )
 
-    call check_error_norm(du, sin_0_2pi, n, n_glob, n_groups, 1, norm_du)
+    call check_error_norm(du, sin_0_2pi, n, n_groups, 1, norm_du)
     if (nrank == 0) print *, 'error norm hyperviscous', norm_du
 
     if (nrank == 0) then
@@ -413,29 +424,29 @@ contains
 
   end subroutine set_u
 
-  subroutine check_error_norm(du, line, n, n_glob, n_groups, c, norm)
+  subroutine check_error_norm(du, line, n, n_groups, c, norm)
     implicit none
 
     real(dp), intent(inout), dimension(:, :, :) :: du
     real(dp), intent(in), dimension(:) :: line
-    integer, intent(in) :: n, n_glob, n_groups, c
+    integer, intent(in) :: n, n_groups, c
     real(dp), intent(out) :: norm
 
+    real(dp), allocatable :: ref(:, :, :)
     integer :: i, j, k
+
+    allocate (ref(SZ, n, n_groups))
 
     do k = 1, n_groups
       do j = 1, n
         do i = 1, SZ
           du(i, j, k) = du(i, j, k) + c*line(j)
+          ref(i, j, k) = line(j)
         end do
       end do
     end do
 
-    norm = norm2(du(:, 1:n, :))
-    norm = norm*norm/n_glob/n_groups/SZ
-    call MPI_Allreduce(MPI_IN_PLACE, norm, 1, MPI_X3D2_DP, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
-    norm = sqrt(norm)
+    norm = relative_l2_error(du(:, 1:n, :), ref)
 
   end subroutine check_error_norm
 
