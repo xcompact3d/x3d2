@@ -480,7 +480,6 @@ contains
   ! ================================================================
   ! Create the cosine test function on host and transfer it to a device field
   ! ================================================================
-  ! ================================================================
   subroutine upload_cosine(ctx, test, f)
     type(poisson_ctx_t), target, intent(in) :: ctx
     type(cosine_test_t), intent(in) :: test
