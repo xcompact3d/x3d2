@@ -66,6 +66,9 @@ module m_solver
     class(field_t), pointer :: dpdx_last => null()
     class(field_t), pointer :: dpdy_last => null()
     class(field_t), pointer :: dpdz_last => null()
+    !> Substep timestep (time_intg_t%stage_dt) the kept correction was made
+    !> with, so precorrect_walls can rescale it to the current substep.
+    real(dp) :: dp_last_dt = 0._dp
     class(field_t), pointer :: vort => null()  !! Vorticity magnitude on VERT grid
     class(field_t), pointer :: qcrit => null() !! Q-criterion on VERT grid
     type(flist_t), dimension(:), pointer :: species => null()
@@ -910,6 +913,7 @@ contains
       self%dpdx_last => dpdx
       self%dpdy_last => dpdy
       self%dpdz_last => dpdz
+      self%dp_last_dt = self%time_integrator%stage_dt
     else
       call self%backend%allocator%release_block(dpdx)
       call self%backend%allocator%release_block(dpdy)
@@ -923,17 +927,33 @@ contains
     !! projection's tangential correction to the value set by the case. The
     !! projection that follows then leaves the face at its prescribed value
     !! plus dt*(grad p_old - grad p_new), instead of -dt*grad p_new.
-    !! Exact for AB, where every step uses the same dt; RK stages would need
-    !! Incompact3d's gdt ratio. Before the first projection (or after a
-    !! restart, as in Incompact3d) there is no correction to add.
+    !! The kept correction is dt_last*grad p_old, so it is rescaled by
+    !! dt_now/dt_last first, as Incompact3d does with gdt(itr). The timestep
+    !! is time_intg_t%stage_dt, the time the substep has advanced from the
+    !! divergence-free start of the step, which is what the projection
+    !! scales its correction by. For AB this ratio is always 1; for RK it
+    !! changes between stages (1/2, 3/4, 1 for RK3). Before the first
+    !! projection (or after a restart, as in Incompact3d) there is no
+    !! correction to add.
     implicit none
 
     class(solver_t) :: self
     class(field_t), intent(inout) :: u, v, w
 
     integer :: bcs(3, 2)
+    real(dp) :: ratio
 
     if (.not. associated(self%dpdx_last)) return
+
+    ! The kept fields are released at the next projection, so they can be
+    ! scaled in place. Skipped when the ratio is 1 (always for AB).
+    ratio = self%time_integrator%stage_dt/self%dp_last_dt
+    if (ratio /= 1._dp) then
+      call self%backend%field_scale(self%dpdx_last, ratio)
+      call self%backend%field_scale(self%dpdy_last, ratio)
+      call self%backend%field_scale(self%dpdz_last, ratio)
+      self%dp_last_dt = self%time_integrator%stage_dt
+    end if
 
     ! Local BCs, so only the ranks that own a face touch it
     bcs = self%mesh%grid%BCs
