@@ -1,5 +1,6 @@
 module m_case_channel
   use iso_fortran_env, only: stderr => error_unit
+
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
