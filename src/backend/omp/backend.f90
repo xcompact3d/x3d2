@@ -1110,6 +1110,7 @@ contains
     real(dp), optional, intent(in) :: flow_rate_diff
 
     integer :: dims(3), k, j, i_mod, k_start, k_end, bc_s, bc_e
+    integer :: n_y_blocks, y_stride
     real(dp) :: fl_corr
     logical :: set_start, set_end
 
@@ -1141,12 +1142,16 @@ contains
     case (X_FACE)
       error stop 'Setting X_FACE is not yet supported.'
     case (Y_FACE)
-      ! DIR_X groups are ordered y-block fastest: b = (z-1)*n_y_blocks + yb.
+      ! DIR_X groups are ordered y-block fastest: b = (z-1)*y_stride + yb.
+      ! The stride is the padded y-block count (see get_index_dir), which
+      ! is larger than n_y_blocks for a cell field on a non-periodic y.
       i_mod = mod(dims(2) - 1, SZ) + 1
+      n_y_blocks = (dims(2) - 1)/SZ + 1
+      y_stride = y_group_stride(self)
       !$omp parallel do private(k_start, k_end)
       do k = 1, dims(3)
-        k_start = 1 + (k - 1)*((dims(2) - 1)/SZ + 1)
-        k_end = k*((dims(2) - 1)/SZ + 1)
+        k_start = 1 + (k - 1)*y_stride
+        k_end = (k - 1)*y_stride + n_y_blocks
         do j = 1, dims(1)
           if (set_start) f%data(1, j, k_start) = c_start
           if (set_end) f%data(i_mod, j, k_end) = c_end
@@ -1160,6 +1165,22 @@ contains
     end select
 
   end subroutine field_set_face_omp
+
+  integer function y_group_stride(self) result(stride)
+    !! Groups between successive z in the OMP DIR_X ordering,
+    !! group = stride*(z - 1) + y_block. It is the padded y-block count
+    !! (see get_index_dir in m_ordering), so it can exceed the number of
+    !! y-blocks a field uses, e.g. a cell field on a non-periodic y.
+    implicit none
+
+    class(omp_backend_t), intent(in) :: self
+
+    integer :: dims_padded(3)
+
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+    stride = dims_padded(2)/SZ
+  end function y_group_stride
+
   subroutine field_plane_sums_omp(self, sums, f)
     !! [[m_base_backend(module):field_plane_sums(subroutine)]]
     implicit none
@@ -1168,7 +1189,7 @@ contains
     real(dp), intent(out) :: sums(:)
     class(field_t), intent(in) :: f
 
-    integer :: dims(3), n_y_blocks, y_block, i, j, k, z
+    integer :: dims(3), y_stride, y_block, i, j, k, z
     real(dp) :: plane_sum
 
     if (f%dir /= DIR_X) &
@@ -1179,9 +1200,9 @@ contains
     dims = self%mesh%get_dims(f%data_loc)
     if (size(sums) < dims(2)) &
       error stop 'field_plane_sums: sums is smaller than the y extent.'
-    n_y_blocks = (dims(2) - 1)/SZ + 1
+    y_stride = y_group_stride(self)
 
-    ! OMP DIR_X ordering: group = n_y_blocks*(z - 1) + y_block. Each plane is
+    ! OMP DIR_X ordering: group = y_stride*(z - 1) + y_block. Each plane is
     ! summed by one thread in a fixed order, so the result is reproducible.
     !$omp parallel do private(y_block, i, k, plane_sum)
     do j = 1, dims(2)
@@ -1190,7 +1211,7 @@ contains
       plane_sum = 0._dp
       do z = 1, dims(3)
         do k = 1, dims(1)
-          plane_sum = plane_sum + f%data(i, k, n_y_blocks*(z - 1) + y_block)
+          plane_sum = plane_sum + f%data(i, k, y_stride*(z - 1) + y_block)
         end do
       end do
       sums(j) = plane_sum
@@ -1208,7 +1229,7 @@ contains
     real(dp), intent(in) :: c
     integer, intent(in) :: plane
 
-    integer :: dims(3), k, j, n_y_blocks, y_block, i_in_block, group
+    integer :: dims(3), k, j, y_stride, y_block, i_in_block, group
 
     if (f%dir /= DIR_X) &
       error stop 'field_set_y_plane is only supported for DIR_X fields.'
@@ -1219,14 +1240,14 @@ contains
     if (plane < 1 .or. plane > dims(2)) &
       error stop 'field_set_y_plane: plane outside the domain.'
 
-    ! OMP DIR_X ordering: group = n_y_blocks*(z - 1) + y_block.
-    n_y_blocks = (dims(2) - 1)/SZ + 1
+    ! OMP DIR_X ordering: group = y_stride*(z - 1) + y_block.
+    y_stride = y_group_stride(self)
     y_block = (plane - 1)/SZ + 1
     i_in_block = mod(plane - 1, SZ) + 1
 
     !$omp parallel do private(group)
     do k = 1, dims(3)
-      group = n_y_blocks*(k - 1) + y_block
+      group = y_stride*(k - 1) + y_block
       do j = 1, dims(1)
         f%data(i_in_block, j, group) = c
       end do
@@ -1244,7 +1265,7 @@ contains
     class(field_t), intent(in) :: u, w
     integer, intent(in) :: sample_plane, stress_plane, component
     real(dp), intent(in) :: drag_coeff
-    integer :: dims(3), n_y_blocks, sample_block, stress_block
+    integer :: dims(3), y_stride, sample_block, stress_block
     integer :: sample_i, stress_i, k, i, sample_group, stress_group
     real(dp) :: us, ws, speed
 
@@ -1260,7 +1281,7 @@ contains
     if (component /= 1 .and. component /= 3) &
       error stop 'Invalid ABL wall stress component.'
 
-    n_y_blocks = (dims(2) - 1)/SZ + 1
+    y_stride = y_group_stride(self)
     sample_block = (sample_plane - 1)/SZ + 1
     stress_block = (stress_plane - 1)/SZ + 1
     sample_i = mod(sample_plane - 1, SZ) + 1
@@ -1268,8 +1289,8 @@ contains
 
     !$omp parallel do private(sample_group, stress_group, i, us, ws, speed)
     do k = 1, dims(3)
-      sample_group = n_y_blocks*(k - 1) + sample_block
-      stress_group = n_y_blocks*(k - 1) + stress_block
+      sample_group = y_stride*(k - 1) + sample_block
+      stress_group = y_stride*(k - 1) + stress_block
       do i = 1, dims(1)
         us = u%data(sample_i, i, sample_group)
         ws = w%data(sample_i, i, sample_group)
@@ -1361,7 +1382,8 @@ contains
     class(field_t), intent(in) :: g
     integer, intent(in) :: face, bc_start, bc_end
 
-    integer :: dims(3), k, i, j, z, i_max, n_mod, n_y_blocks, k_start, k_end
+    integer :: dims(3), k, i, j, z, i_max, n_mod, n_y_blocks, y_stride
+    integer :: y_block, k_start, k_end
     logical :: set_start, set_end
 
     if (f%dir /= DIR_X .or. g%dir /= DIR_X) &
@@ -1375,29 +1397,33 @@ contains
     dims = self%mesh%get_dims(f%data_loc)
     n_mod = mod(dims(2) - 1, SZ) + 1
     n_y_blocks = (dims(2) - 1)/SZ + 1
+    y_stride = y_group_stride(self)
 
     select case (face)
     case (X_FACE)
-      !$omp parallel do private(i_max)
-      do k = 1, n_y_blocks*dims(3)
-        ! y-block is the fast-varying component of the group index
-        if (mod(k - 1, n_y_blocks) + 1 == n_y_blocks) then
-          i_max = n_mod
-        else
-          i_max = SZ
-        end if
-        do i = 1, i_max
-          if (set_start) f%data(i, 1, k) = f%data(i, 1, k) + g%data(i, 1, k)
-          if (set_end) f%data(i, dims(1), k) = f%data(i, dims(1), k) &
-                                               + g%data(i, dims(1), k)
+      !$omp parallel do collapse(2) private(k, i, i_max)
+      do z = 1, dims(3)
+        do y_block = 1, n_y_blocks
+          ! y-block is the fast-varying component of the group index
+          k = y_stride*(z - 1) + y_block
+          if (y_block == n_y_blocks) then
+            i_max = n_mod
+          else
+            i_max = SZ
+          end if
+          do i = 1, i_max
+            if (set_start) f%data(i, 1, k) = f%data(i, 1, k) + g%data(i, 1, k)
+            if (set_end) f%data(i, dims(1), k) = f%data(i, dims(1), k) &
+                                                 + g%data(i, dims(1), k)
+          end do
         end do
       end do
       !$omp end parallel do
     case (Y_FACE)
       !$omp parallel do private(k_start, k_end)
       do z = 1, dims(3)
-        k_start = 1 + (z - 1)*n_y_blocks
-        k_end = z*n_y_blocks
+        k_start = 1 + (z - 1)*y_stride
+        k_end = (z - 1)*y_stride + n_y_blocks
         do j = 1, dims(1)
           if (set_start) f%data(1, j, k_start) = f%data(1, j, k_start) &
                                                  + g%data(1, j, k_start)

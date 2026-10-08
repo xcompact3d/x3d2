@@ -129,9 +129,6 @@ contains
     delta = filter_width(spacing)
     length = self%smagorinsky_constant*delta
     if (self%wall_damping) then
-      if (.not. self%wall_supplied) &
-        error stop 'LES wall damping needs a case that supplies the wall &
-                   &(currently only abl).'
       if (.not. present(wall_distance)) then
         length = 0._dp
         return
@@ -376,9 +373,16 @@ contains
     class(field_t), pointer, intent(out) :: dvdx, dvdy, dvdz
     class(field_t), pointer, intent(out) :: dwdx, dwdy, dwdz
 
-    ! The wall-normal component is odd across a free-slip (Neumann) boundary
-    ! while the tangential components are even, so the along-direction
-    ! derivative uses the plain operator and the cross ones the sym variant.
+    ! The sym flag only matters at a free-slip (Neumann) boundary, which the
+    ! compact schemes close by mirroring the field across it. There the
+    ! component normal to the boundary is odd (it vanishes on it) and the
+    ! tangential ones are even (zero normal gradient). So du_i/dx_j takes
+    ! the odd operator when i = j (u_i is normal to a j-boundary) and the
+    ! even one when i /= j (u_i is tangential to it). For the ABL this
+    ! selects, at the free-slip lid, the odd closure for dv/dy and the even
+    ! one for du/dy and dw/dy; x and z are periodic, where the flag has no
+    ! effect, and they follow the same rule for consistency. This matches
+    ! Incompact3d's npaire choice for the same derivatives.
     call derivative_to_x(backend, dudx, u, xdirps, sym=.false.)
     call derivative_to_x(backend, dvdx, v, xdirps, sym=.true.)
     call derivative_to_x(backend, dwdx, w, xdirps, sym=.true.)
@@ -542,6 +546,12 @@ contains
     real(dp), allocatable :: mixing_data(:, :, :)
     real(dp) :: spacing(3), wall_distance, y_lower
     integer :: dims(3), dims_padded(3), i, j, k
+
+    ! The case supplies the wall after the solver (and so this les_t) is
+    ! built, so this one-off setup is the first point where it can be checked.
+    if (self%wall_damping .and. .not. self%wall_supplied) &
+      error stop 'LES wall damping needs a case that supplies the wall &
+                 &(currently only abl).'
 
     dims = mesh%get_dims(VERT)
     dims_padded = backend%allocator%get_padded_dims(DIR_C)

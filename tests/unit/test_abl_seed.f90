@@ -113,7 +113,7 @@ contains
       &init_noise = 3*0.5, pressure_gradient = .true., seed = ', seed, ' /'
     call cfg%read(nml_string=nml)
 
-    abl = abl_t(backend, mesh, host_allocator, cfg, 1._dp)
+    abl = abl_t(backend, mesh, host_allocator, cfg)
     call abl%initialise(u, v, w)
     call backend%get_field_data(fields(:, :, :, 1), u)
     call backend%get_field_data(fields(:, :, :, 2), v)

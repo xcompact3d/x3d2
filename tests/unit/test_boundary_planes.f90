@@ -17,7 +17,7 @@ program test_boundary_planes
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, DIR_X, DIR_C, VERT, X_FACE, Y_FACE, &
+  use m_common, only: dp, DIR_X, DIR_C, VERT, CELL, X_FACE, Y_FACE, &
                       BC_DIRICHLET, BC_NEUMANN
   use m_field, only: field_t
   use m_mesh, only: mesh_t
@@ -193,6 +193,27 @@ program test_boundary_planes
     write (label, '(a,i0)') 'field_set_y_plane at y-plane ', plane
     call check_planes(trim(label), data, expected, dims, tolerance, all_pass)
   end do
+
+  ! --- field_set_face on a cell field ----------------------------------------
+  ! A cell field has one y-point fewer than the vertices the allocator pads
+  ! for, so here it fills 64/SZ y-blocks while the OMP group stride is still
+  ! the padded 80/SZ. Indexing by the field's own block count would put
+  ! every z > 1 face on the wrong groups.
+  block
+    integer :: cell_dims(3)
+
+    cell_dims = mesh%get_dims(CELL)
+    call f%set_data_loc(CELL)
+    call f%fill(sentinel)
+    call backend%field_set_face(f, bottom, top, Y_FACE)
+    call backend%get_field_data(data, f)
+    expected = sentinel
+    expected(:, 1, :) = bottom
+    expected(:, cell_dims(2), :) = top
+    call check_planes('field_set_face on a cell field', data, expected, &
+                      cell_dims, tolerance, all_pass)
+    call f%set_data_loc(VERT)
+  end block
 
   call allocator%release_block(f)
   call allocator%release_block(f_start)

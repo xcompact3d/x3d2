@@ -28,7 +28,6 @@ module m_abl
     class(mesh_t), pointer :: mesh => null()
     type(allocator_t), pointer :: host_allocator => null()
     type(abl_config_t) :: cfg
-    real(dp) :: dt = 0._dp
     ! Cached Rayleigh damping coefficient field (coeff*lambda(y)), built once.
     class(field_t), pointer :: damp_coeff => null()
   contains
@@ -45,21 +44,19 @@ module m_abl
 
 contains
 
-  function init(backend, mesh, host_allocator, cfg, dt) result(abl)
+  function init(backend, mesh, host_allocator, cfg) result(abl)
     implicit none
 
     class(base_backend_t), target, intent(inout) :: backend
     type(mesh_t), target, intent(inout) :: mesh
     type(allocator_t), target, intent(inout) :: host_allocator
     type(abl_config_t), intent(in) :: cfg
-    real(dp), intent(in) :: dt
     type(abl_t) :: abl
 
     abl%backend => backend
     abl%mesh => mesh
     abl%host_allocator => host_allocator
     abl%cfg = cfg
-    abl%dt = dt
 
   end function init
 
@@ -202,6 +199,14 @@ contains
   subroutine apply_damping(self, du, dv, dw, u, v, w)
     !! Rayleigh sponge relaxing the flow toward the reference profile over the
     !! top damping layer (Incompact3d damping_zone, neutral branch).
+    !!
+    !! As in Incompact3d, the target is the same whatever drives the flow:
+    !! u relaxes to the log-law value at delta, and v, w to u_geo(2), u_geo(3).
+    !! That suits the pressure-gradient and mass-conserve drives, whose
+    !! profile is the log law. With only the Coriolis drive the free stream
+    !! is u_geo, so the sponge pulls u toward a different value than the
+    !! drive does. The layer is centred on delta and 0.1*delta thick, so it
+    !! acts only when the domain extends above delta - 0.05*delta.
     implicit none
 
     class(abl_t) :: self
@@ -245,6 +250,11 @@ contains
     class(field_t), pointer :: h
     integer :: i, j, k, dims(3)
     real(dp) :: coords(3), y, coeff, dheight, ylo, yhi, lambda
+    ! Nondimensional relaxation rate, as hard-coded in Incompact3d's
+    ! damping_zone (wvar = fifteen). It is empirical: there it replaced a
+    ! commented-out formula that is singular when the domain height equals
+    ! delta. The sponge rate is then 15*u_star/delta, i.e. a timescale of
+    ! delta/(15*u_star), about 150 s for the Deskos (2019) case.
     real(dp), parameter :: wvar = 15._dp
 
     self%damp_coeff => self%backend%allocator%get_block(DIR_X, VERT)

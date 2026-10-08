@@ -4,11 +4,12 @@ module m_case_abl
   use m_abl_diagnostics, only: abl_diagnostics_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
-  use m_common, only: dp, get_argument, CELL, Y_FACE, &
-                      BC_DIRICHLET, BC_NEUMANN
-  use m_config, only: abl_config_t, solver_config_t
+  use m_common, only: dp, get_argument, MPI_X3D2_DP, VERT, Y_FACE, &
+                      BC_DIRICHLET, BC_NEUMANN, BC_PERIODIC
+  use m_config, only: abl_config_t
   use m_field, only: field_t
   use m_mesh, only: mesh_t
+  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
   implicit none
 
@@ -38,13 +39,18 @@ contains
     type(allocator_t), target, intent(inout) :: host_allocator
     type(case_abl_t) :: flow_case
 
-    type(solver_config_t) :: solver_cfg
+    integer :: bcs(3, 2)
+
+    ! apply_BC_abl and the wall model hard-code these boundaries, so the
+    ! mesh must agree with them for the pressure solve and precorrect_walls.
+    bcs = mesh%grid%BCs_global
+    if (any(bcs(1, :) /= BC_PERIODIC) .or. any(bcs(3, :) /= BC_PERIODIC) &
+        .or. bcs(2, 1) /= BC_DIRICHLET .or. bcs(2, 2) /= BC_NEUMANN) &
+      error stop 'ABL requires periodic BC_x and BC_z, and &
+                 &BC_y = ''dirichlet'', ''neumann''.'
 
     call flow_case%abl_cfg%read(nml_file=get_argument(1))
-    ! dt is needed by the driver but only known via the solver namelist.
-    call solver_cfg%read(nml_file=get_argument(1))
-    flow_case%abl = abl_t(backend, mesh, host_allocator, &
-                          flow_case%abl_cfg, solver_cfg%dt)
+    flow_case%abl = abl_t(backend, mesh, host_allocator, flow_case%abl_cfg)
 
     call flow_case%case_init(backend, mesh, host_allocator)
     flow_case%solver%keep_wall_correction = .true.
@@ -69,15 +75,32 @@ contains
     class(case_abl_t) :: self
 
     real(dp) :: ub, target_mean, can, ly
+    real(dp), allocatable :: sums(:)
+    integer :: dims(3), global_dims(3), j, ierr
 
     ! Constant-flow-rate correction (Incompact3d forceabl); mirrors the channel
     ! bulk-velocity shift, targeting the log-law flow rate. The wall stress
     ! is not applied here: the wall model supplies it to the SGS stress.
     if (self%abl_cfg%mass_conserve) then
       ly = self%solver%mesh%geo%L(2)
-      ! field_volume_integral is already reduced over all ranks.
-      ub = self%solver%backend%field_volume_integral(self%solver%u)
-      ub = ub/product(self%solver%mesh%get_global_dims(CELL))
+      ! Bulk velocity as forceabl computes it: the plane mean of u, integrated
+      ! over y with the trapezoidal rule on the vertices. A plain vertex sum
+      ! would give the free-slip lid full weight. y is not decomposed (see
+      ! configure_wall_boundary_correction), so each rank holds every plane.
+      dims = self%solver%mesh%get_dims(VERT)
+      global_dims = self%solver%mesh%get_global_dims(VERT)
+      allocate (sums(dims(2)))
+      call self%solver%backend%field_plane_sums(sums, self%solver%u)
+      call MPI_Allreduce(MPI_IN_PLACE, sums, dims(2), MPI_X3D2_DP, &
+                         MPI_SUM, MPI_COMM_WORLD, ierr)
+      sums = sums/real(global_dims(1)*global_dims(3), dp)
+      ub = 0._dp
+      do j = 1, dims(2) - 1
+        ub = ub + 0.5_dp*(sums(j) + sums(j + 1)) &
+             *(self%solver%mesh%geo%vert_coords(j + 1, 2) &
+               - self%solver%mesh%geo%vert_coords(j, 2))
+      end do
+      ub = ub/ly
       if (self%abl_cfg%u_bulk > 0._dp) then
         target_mean = self%abl_cfg%u_bulk
       else
