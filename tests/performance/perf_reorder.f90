@@ -4,7 +4,8 @@ program perf_reorder
   use m_mpi, only: MPI_Wtime
 
   use m_allocator, only: allocator_t, field_t
-  use m_backend_runtime, only: backend_runtime_t, backend_is_cuda
+  use m_backend_runtime, only: backend_runtime_t, backend_is_device, &
+                               backend_label
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
@@ -21,7 +22,6 @@ program perf_reorder
   integer :: n_glob, ndof, nrank, nproc
   integer :: mem_clock_rt, mem_bus_width
   logical :: has_device_bw_info
-  character(len=4) :: backend_label
 
   type(backend_runtime_t), target :: runtime
   type(mesh_t), target :: mesh
@@ -33,11 +33,9 @@ program perf_reorder
 
   call initialise_mpi(nrank, nproc)
 
-  if (backend_is_cuda) then
-    backend_label = 'cuda'
+  if (backend_is_device) then
     n_glob = 512
   else
-    backend_label = 'omp'
     n_glob = 256
   end if
   ndof = n_glob**3

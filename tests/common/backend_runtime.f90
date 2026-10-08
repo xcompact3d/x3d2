@@ -38,6 +38,17 @@ module m_backend_runtime
   logical, parameter :: backend_is_cuda = .false.
 #endif
 
+  !! Backend name as registered in tests/CMakeLists.txt, for labelling output
+#ifdef CUDA
+  character(len=*), parameter :: backend_label = 'cuda'
+#elif defined(OMP_TGT)
+  character(len=*), parameter :: backend_label = 'omp_tgt'
+#else
+  character(len=*), parameter :: backend_label = 'omp'
+#endif
+  !! Whether the backend runs on a device (GPU) rather than the host CPU
+  logical, parameter :: backend_is_device = backend_label /= 'omp'
+
   type :: backend_runtime_t
     !! Test helper that creates the correct backend and allocator
     !! for the current build.  The pointer components (backend, allocator,

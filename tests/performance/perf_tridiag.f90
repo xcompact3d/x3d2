@@ -4,7 +4,8 @@ program perf_tridiag
   use m_mpi, only: MPI_COMM_WORLD, MPI_Barrier, MPI_Wtime
 
   use m_allocator, only: allocator_t, field_t
-  use m_backend_runtime, only: backend_runtime_t, backend_is_cuda, backend_sz
+  use m_backend_runtime, only: backend_runtime_t, backend_is_device, &
+                               backend_label, backend_sz
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, pi, BC_PERIODIC, DIR_X, VERT
   use m_mesh, only: mesh_t
@@ -19,7 +20,6 @@ program perf_tridiag
   integer :: mem_clock_rt, mem_bus_width
   logical :: has_device_bw_info
   real(dp) :: periodic_bw
-  character(len=4) :: backend_label
 
   type(backend_runtime_t), target :: runtime
   type(mesh_t), target :: mesh
@@ -34,12 +34,10 @@ program perf_tridiag
   call initialise_mpi(nrank, nproc)
   if (nrank == 0) print *, 'Performance benchmark with', nproc, 'ranks'
 
-  if (backend_is_cuda) then
-    backend_label = 'cuda'
+  if (backend_is_device) then
     n_groups = 512*512/backend_sz
     n_iters = 100
   else
-    backend_label = 'omp'
     n_groups = 64*64/backend_sz
     n_iters = 1000
   end if

@@ -2,8 +2,8 @@ program perf_penta
   !! Benchmark of the compact10_penta (Lele 10th-order pentadiagonal)
   !! first-derivative solve: alpha=0.5, beta=0.05, non-periodic, each rank
   !! solving its own lines with zero halos.
-  use m_backend_runtime, only: backend_runtime_t, backend_is_cuda, &
-                               backend_sz, penta_benchmark
+  use m_backend_runtime, only: backend_runtime_t, backend_is_device, &
+                               backend_label, backend_sz, penta_benchmark
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, pi, BC_PERIODIC
   use m_mesh, only: mesh_t
@@ -19,7 +19,6 @@ program perf_penta
   integer :: mem_clock_rt, mem_bus_width
   logical :: has_device_bw_info
   real(dp) :: dx, elapsed
-  character(len=4) :: backend_label
   character(len=:), allocatable :: label
 
   type(backend_runtime_t), target :: runtime
@@ -34,12 +33,10 @@ program perf_penta
     print *, 'Ranks:', nproc
   end if
 
-  if (backend_is_cuda) then
-    backend_label = 'cuda'
+  if (backend_is_device) then
     n_groups = 512*512/backend_sz
     n_iters = 100
   else
-    backend_label = 'omp'
     n_groups = 64*64/backend_sz
     n_iters = 100
   end if

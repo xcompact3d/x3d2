@@ -1,6 +1,6 @@
 program test_thom
   use m_allocator, only: allocator_t, field_t
-  use m_backend_runtime, only: backend_runtime_t, backend_is_cuda, backend_sz
+  use m_backend_runtime, only: backend_runtime_t, backend_is_device, backend_sz
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, pi, BC_PERIODIC, BC_DIRICHLET, DIR_X, VERT
   use m_mesh, only: mesh_t
@@ -31,7 +31,7 @@ program test_thom
   call initialise_mpi(nrank, nproc)
 
   n_glob = 1024
-  if (backend_is_cuda) then
+  if (backend_is_device) then
     n_groups = 128*128/backend_sz
   else
     n_groups = 64*64/backend_sz
