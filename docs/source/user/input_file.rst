@@ -179,8 +179,8 @@ of ``pressure_gradient``, ``coriolis`` and ``mass_conserve`` must be on.
   **Default:** ``0.0, 0.0, 0.0``
 
 ``mass_conserve``
-  Shifts ``u`` uniformly before every step so that the bulk velocity stays at
-  its target, as the channel case does.
+  Shifts ``u`` uniformly at the start of every substep so that the bulk
+  velocity, the trapezoidal mean over the height, stays at its target.
 
   **Default:** ``.false.``
 

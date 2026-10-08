@@ -877,6 +877,121 @@ The second approach is often preferred due to its simplicity. Many applications 
 
 x3d2 uses the `2DECOMP&FFT <https://2decomp-fft.github.io/>`_ library for 2D decomposition and FFT (see :cite:`li_cray_10` for more details) when using OpenMP as a backend (for NVIDIA GPUs it uses `cuFFT <https://developer.nvidia.com/cufft>`_). One of the key advantages of using the 2DECOMP&FFT library is that it does not require modifications to the existing derivative and interpolation subroutines, making it easier to implement. Additionally, this approach utilises customised global `MPI_ALLTOALL(V)` transpositions to redistribute data among processors. Although communication overhead can range from 30% to 80% of the total computational time, with up to 70 transpositions per time step, the overall efficiency and scalability of the simulations are greatly enhanced.
 
+Atmospheric boundary layer
+--------------------------
+
+.. _abl-theory:
+
+The ``abl`` case simulates a neutral, rough-wall atmospheric boundary layer
+with :math:`y` vertical, periodic in :math:`x` and :math:`z`, a no-slip floor
+and a free-slip lid. The model and its neutral validation case follow
+:cite:`deskos_phd_19` (Ch. 5). Parameter names and defaults are listed in
+:doc:`input_file`.
+
+Governing equations
+~~~~~~~~~~~~~~~~~~~
+
+Eq. :eq:`incomp-ns` gains the divergence of a Smagorinsky SGS stress
+:cite:`smagorinsky_mwr_63` and the ABL forcing:
+
+.. math::
+   :label: abl-momentum
+
+   \frac{\partial\mathbf{u}}{\partial t} = \mathbf{F}(\mathbf{u}) - \nabla p
+   + \nabla\cdot\boldsymbol{\tau} + \mathbf{f}_{\mathrm{ABL}}, \qquad
+   \tau_{ij} = 2\nu_t S_{ij}, \qquad \nu_t = \ell^2\sqrt{2S_{ij}S_{ij}},
+
+with the Mason--Thomson wall-damped mixing length :cite:`mason_jfm_92`,
+
+.. math::
+   :label: abl-mixing-length
+
+   \ell = \Delta\left[C_s^{-n} + \left(\frac{\kappa(y + z_0)}{\Delta}\right)^{-n}\right]^{-1/n},
+   \qquad \Delta = (\Delta x\,\Delta y\,\Delta z)^{1/3}.
+
+Each term of the forcing is switched on separately:
+
+.. math::
+   :label: abl-forcing
+
+   \mathbf{f}_{\mathrm{ABL}} =
+   \underbrace{\frac{u_*^2}{\delta}\,\mathbf{e}_x}_{\text{pressure gradient}}
+   + \underbrace{f\,(w,\,0,\,-u)}_{\text{Coriolis}}
+   - \underbrace{\lambda(y)\,(\mathbf{u} - \mathbf{u}_{\mathrm{ref}})}_{\text{damping}},
+
+where :math:`\mathbf{u}_{\mathrm{ref}} = \left((u_*/\kappa)\ln(\delta/z_0),\,
+U_{g,y},\,U_{g,z}\right)`. :math:`\lambda` rises as a cosine ramp from 0 at
+:math:`0.95\,\delta` to :math:`15\,u_*/\delta` at :math:`1.05\,\delta`. Without
+the pressure gradient, the Coriolis drive also adds
+:math:`f\,(-U_{g,z},\,0,\,U_{g,x})`.
+
+Wall model
+~~~~~~~~~~
+
+The resolved gradient across the no-slip floor does not give the wall stress.
+On the first vertex above the floor, :math:`j = 2`, the SGS stress is
+replaced by the neutral log law, evaluated column by column from the velocity
+at height :math:`h`:
+
+.. math::
+   :label: abl-wall-stress
+
+   \tau_{xy}\big|_{j=2} = C_d\,u_h\,|\mathbf{u}_h|, \qquad
+   \tau_{yz}\big|_{j=2} = C_d\,w_h\,|\mathbf{u}_h|, \qquad
+   C_d = \left(\frac{\kappa}{\ln(h/z_0)}\right)^2,
+
+with :math:`|\mathbf{u}_h| = \sqrt{u_h^2 + w_h^2}`. The other four components
+are set to zero there. The wall flux then enters through the same
+:math:`\nabla\cdot\boldsymbol{\tau}` operator as the interior SGS stress.
+
+Wall pre-correction
+~~~~~~~~~~~~~~~~~~~
+
+The tangential velocity on the floor is pre-corrected as in Eqs.
+:eq:`first_vel`--:eq:`wall_vel2`. The previous substep's correction is
+stored and rescaled to the current substep:
+
+.. math::
+   :label: abl-precorrection
+
+   \mathbf{u}_t^{**}\big|_w = \mathbf{u}_{t,D}
+   + \frac{\Delta t_k}{\Delta t_{k-1}}\left(\Delta t_{k-1}\,\nabla_t\tilde{p}^{k}\right)
+   \quad\Rightarrow\quad
+   \mathbf{u}_t^{k+1}\big|_w = \mathbf{u}_{t,D}
+   + \Delta t_k\left(\nabla_t\tilde{p}^{k} - \nabla_t\tilde{p}^{k+1}\right).
+
+Here :math:`\Delta t_k` is the time substep :math:`k` advances the solution
+from the start of the step, which is the factor the projection scales its
+correction by. It is :math:`\Delta t` for Adams--Bashforth, so the ratio is 1.
+For the Runge--Kutta schemes it is :math:`c_k\Delta t` with
+:math:`c_k = \sum_j a_{kj}`, e.g. :math:`(1/2,\,3/4,\,1)\,\Delta t` for RK3.
+
+Mass conservation and filtering
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+With ``mass_conserve``, :math:`u` is shifted at the start of every substep so
+that its bulk value matches the target :math:`U_b`:
+
+.. math::
+   :label: abl-bulk
+
+   u \leftarrow u + U_b - \frac{1}{L_y}\int_0^{L_y}\langle u\rangle_{xz}\,\mathrm{d}y,
+
+where the integral uses the trapezoidal rule on the vertices. Before every
+step, the velocity is passed through the tridiagonal low-pass filter
+(``spatial_filter``) in each direction,
+
+.. math::
+   :label: abl-filter
+
+   \alpha\hat{f}_{i-1} + \hat{f}_i + \alpha\hat{f}_{i+1}
+   = a f_i + b\,(f_{i+1} + f_{i-1}) + c\,(f_{i+2} + f_{i-2}) + d\,(f_{i+3} + f_{i-3}),
+
+with the sixth-order Gaitonde--Visbal coefficients :math:`a, b, c, d` as
+functions of :math:`\alpha`. Its transfer function is zero at :math:`k\Delta x = \pi`,
+so it removes the :math:`2\Delta x` mode, which the compact schemes do not
+dissipate and the staggered projection does not see.
+
 References
 ----------
 
