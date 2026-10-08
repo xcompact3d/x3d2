@@ -21,8 +21,10 @@ program test_tridiag
   logical :: allpass = .true.
   integer :: nrank, nproc, ierr
 
-  integer, parameter :: n_glob = 1024
-  ! Single precision roundoff floors at n_glob=1024: ~eps/dx (~2e-5) for
+  ! The generic decomposition splits x evenly, so n_glob is rounded down to a
+  ! multiple of the rank count (1024 on a power-of-two count).
+  integer :: n_glob
+  ! Single precision roundoff floors at n_glob~1024: ~eps/dx (~2e-5) for
   ! first derivatives/interpolation, ~eps/dx^2 (~3e-3) for second
   ! derivatives, and ~63x more for the hyperviscous operator (nu0_nu=63).
 #ifdef SINGLE_PREC
@@ -57,6 +59,7 @@ program test_tridiag
   call initialise_mpi(nrank, nproc)
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
+  n_glob = (1024/nproc)*nproc
   n_groups = 64*64/backend_sz
   mesh = mesh_t([n_glob, backend_sz, n_groups], [nproc, 1, 1], &
                 [2*pi, 1._dp, 1._dp], &

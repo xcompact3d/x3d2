@@ -109,19 +109,24 @@ using the function matching your category:
 
 .. code-block:: cmake
 
-   # Unit test, 1 MPI rank
-   define_test(unit/test_example.f90 1 ${backend})
+   # Unit test on a single-rank ([1, 1, 1]) decomposition
+   define_test(unit/test_example.f90 ${serial} ${backend})
 
-   # Verification test, CMAKE_CTEST_NPROCS MPI ranks
+   # Verification test decomposed over CMAKE_CTEST_NPROCS MPI ranks
    define_verification_test(verification/test_example.f90 ${np} ${backend})
 
-   # Performance test, 1 MPI rank
-   define_performance_test(performance/perf_example.f90 1 ${backend})
+   # Performance test on a single-rank decomposition
+   define_performance_test(performance/perf_example.f90 ${serial} ${backend})
 
 ``define_backend_tests`` is called once for every backend in the build: always
 ``omp`` (CPU), plus ``cuda`` or ``omp_tgt`` when ``ENABLE_BACKEND`` selects one.
 A test that cannot run on some backend because of a known feature gap goes
 inside an ``if`` on ``${backend}`` with a comment saying why.
+
+A test that decomposes the domain should use ``${np}`` and pass on any rank
+count, so ``-DCMAKE_CTEST_NPROCS=<N>`` can change it. Use ``${serial}`` only for a
+test built on a single-rank decomposition, where extra ranks would repeat the
+same work. A fixed rank count needs a comment saying why.
 
 Tests of host-side code that never touches a backend (mesh, statistics, ...) are
 registered once, with ``omp``, above that function.

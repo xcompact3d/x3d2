@@ -265,16 +265,24 @@ function(define_regression_case_test case_name input_file golden_file np backend
   set_tests_properties(${test_name} PROPERTIES LABELS "regression;${backend}")
 endfunction()
 
+# Rank counts. Tests that decompose the domain over every rank run on np
+# (CMAKE_CTEST_NPROCS) and must pass on any count. Tests built on a single-rank
+# ([1, 1, 1]) decomposition, or on host code with no decomposition at all, run
+# serially: extra ranks would only repeat the same work.
+set(np ${CMAKE_CTEST_NPROCS})
+set(serial 1)
+
 # Tests of host-side code that never touches a backend: built once, under the
 # CPU OpenMP backend runtime.
-define_test(unit/test_allocator.f90 1 omp)
-define_test(unit/test_reorder_map.f90 1 omp)
+define_test(unit/test_allocator.f90 ${serial} omp)
+define_test(unit/test_reorder_map.f90 ${serial} omp)
+# Checks the exact per-rank split of a fixed grid, written for 4 ranks.
 define_test(unit/test_mesh.f90 4 omp)
-define_test(unit/test_statistics.f90 1 omp)
-define_test(unit/test_output_scalars.f90 1 omp)
-define_test(unit/test_les.f90 1 omp)
+define_test(unit/test_statistics.f90 ${serial} omp)
+define_test(unit/test_output_scalars.f90 ${serial} omp)
+define_test(unit/test_les.f90 ${serial} omp)
 if(WITH_ADIOS2)
-  define_test(unit/test_adios2_mixed_precision.f90 1 omp)
+  define_test(unit/test_adios2_mixed_precision.f90 ${serial} omp)
 endif()
 
 # Backend tests. Every test below is written against base_backend_t through
@@ -289,7 +297,6 @@ elseif(${ENABLE_BACKEND} STREQUAL "OMP_TGT")
 endif()
 
 function(define_backend_tests backend)
-  set(np ${CMAKE_CTEST_NPROCS})
   set(is_omp FALSE)
   set(is_device TRUE)
   if(${backend} STREQUAL omp)
@@ -298,38 +305,39 @@ function(define_backend_tests backend)
   endif()
 
   # Unit tests (fast, isolated component tests)
-  define_test(unit/test_reordering.f90 1 ${backend})
-  define_test(unit/test_vecadd.f90 1 ${backend})
-  define_test(unit/test_setget_field.f90 1 ${backend})
+  define_test(unit/test_reordering.f90 ${serial} ${backend})
+  define_test(unit/test_vecadd.f90 ${serial} ${backend})
+  define_test(unit/test_setget_field.f90 ${serial} ${backend})
   define_test(unit/test_kinetic_energy.f90 ${np} ${backend})
   define_test(unit/test_scalar_product.f90 ${np} ${backend})
   define_test(unit/test_sum_intox.f90 ${np} ${backend})
-  define_test(unit/test_snapshot_species_fields.f90 1 ${backend})
-  if(is_omp)
-    define_test(unit/test_reordering.f90 2 ${backend})
-    define_test(unit/test_reordering.f90 4 ${backend})
+  define_test(unit/test_snapshot_species_fields.f90 ${serial} ${backend})
+  if(is_omp AND NOT np EQUAL serial)
+    # Reordering is checked both without and with a decomposition.
+    define_test(unit/test_reordering.f90 ${np} ${backend})
   endif()
   if(is_device)
     # Checks the allocator on a device selected per rank.
-    define_test(unit/test_device_allocator.f90 1 ${backend})
+    define_test(unit/test_device_allocator.f90 ${serial} ${backend})
   endif()
 
   # Verification tests (numerical correctness vs analytical solutions)
-  define_verification_test(verification/test_time_integrator.f90 1 ${backend})
+  define_verification_test(verification/test_time_integrator.f90 ${serial} ${backend})
   define_verification_test(verification/test_tridiag.f90 ${np} ${backend})
   define_verification_test(verification/test_penta.f90 ${np} ${backend})
   define_verification_test(verification/test_transeq.f90 ${np} ${backend})
-  define_verification_test(verification/test_les_field.f90 1 ${backend})
+  define_verification_test(verification/test_les_field.f90 ${serial} ${backend})
   # Not yet validated on the OpenMP-target backend.
   if(NOT ${backend} STREQUAL omp_tgt)
-    define_verification_test(verification/test_thom.f90 1 ${backend})
+    define_verification_test(verification/test_thom.f90 ${serial} ${backend})
   endif()
 
   # The FFT Poisson solvers (2DECOMP&FFT on CPU, cuFFTMp on CUDA) are not at
-  # feature parity, so these keep the rank counts and BC configurations each
-  # backend has been validated with.
+  # feature parity, so the CUDA FFT test and the Poisson BC tests keep the rank
+  # counts and BC configurations each backend has been validated with: several
+  # BC combinations are not yet supported, or not yet accurate, on other counts.
   if(is_omp AND WITH_2DECOMPFFT)
-    define_verification_test(verification/test_fft.f90 4 ${backend})
+    define_verification_test(verification/test_fft.f90 ${np} ${backend})
   elseif(${backend} STREQUAL cuda)
     define_verification_test(verification/test_fft.f90 1 ${backend})
   endif()
@@ -338,7 +346,7 @@ function(define_backend_tests backend)
       set(X3D2_TEST_NAME_SUFFIX _${bc})
       define_verification_test(verification/test_poisson_bc.f90 1 ${backend} --bc ${bc})
     endforeach()
-    # Multi-rank runs of the same test: the suffix keeps their names apart
+    # Validated 2 rank runs of the same test: the suffix keeps their names apart
     set(X3D2_TEST_NAME_SUFFIX _dpp)
     if(is_omp)
       define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc dpp --nproc_dir 1,2,1)
@@ -352,21 +360,21 @@ function(define_backend_tests backend)
 
   # I/O tests. A device backend needs an ADIOS2 that can stage device data.
   if(WITH_ADIOS2 AND (is_omp OR ADIOS2_WITH_CUDA))
-    define_test(unit/test_adios2_read_write.f90 4 ${backend})
-    define_test(unit/test_io_session.f90 4 ${backend})
-    define_test(unit/test_ab_checkpoint.f90 1 ${backend})
+    define_test(unit/test_adios2_read_write.f90 ${np} ${backend})
+    define_test(unit/test_io_session.f90 ${np} ${backend})
+    define_test(unit/test_ab_checkpoint.f90 ${serial} ${backend})
   endif()
   if(${backend} STREQUAL cuda AND ADIOS2_WITH_CUDA AND WITH_ADIOS2_GPU_AWARE)
-    define_test(unit/test_cuda_gpu_aware_io.f90 4 ${backend})
-    define_test(unit/test_cuda_gpu_aware_io_padded.f90 4 ${backend})
+    define_test(unit/test_cuda_gpu_aware_io.f90 ${np} ${backend})
+    define_test(unit/test_cuda_gpu_aware_io_padded.f90 ${np} ${backend})
   endif()
 
   # Performance tests (benchmarks, excluded from CI)
-  define_performance_test(performance/perf_thom.f90 1 ${backend})
+  define_performance_test(performance/perf_thom.f90 ${serial} ${backend})
   define_performance_test(performance/perf_tridiag.f90 ${np} ${backend})
   define_performance_test(performance/perf_penta.f90 ${np} ${backend})
   define_performance_test(performance/perf_transeq.f90 ${np} ${backend})
-  define_performance_test(performance/perf_reorder.f90 1 ${backend})
+  define_performance_test(performance/perf_reorder.f90 ${serial} ${backend})
 endfunction()
 
 foreach(backend IN LISTS X3D2_TEST_BACKENDS)
