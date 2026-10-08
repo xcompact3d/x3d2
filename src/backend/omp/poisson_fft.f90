@@ -131,16 +131,13 @@ contains
     ! The 100 case initialises the transform with x and y swapped, so the
     ! spectral slab comes back as (ny/2 + 1, nx, nz). That is the layout
     ! waves_set builds for this case, so the base class needs no changes.
+    ! get_decomp_dims returns the 2decomp processor grid (p_row, p_col).
+    grid_dims = get_decomp_dims()
+    poisson_fft%p_row = grid_dims(1)
+    poisson_fft%p_col = grid_dims(2)
     if (poisson_fft%is_100_case) then
-      ! get_decomp_dims returns the 2decomp processor grid (p_row, p_col).
-      grid_dims = get_decomp_dims()
-      poisson_fft%p_row = grid_dims(1)
-      poisson_fft%p_col = grid_dims(2)
       call decomp_2d_fft_init(PHYSICAL_IN_X, dims(2), dims(1), dims(3))
     else if (poisson_fft%is_110_case) then
-      grid_dims = get_decomp_dims()
-      poisson_fft%p_row = grid_dims(1)
-      poisson_fft%p_col = grid_dims(2)
       call decomp_2d_fft_init(PHYSICAL_IN_X, dims(3), dims(1), dims(2))
     else
       call decomp_2d_fft_init(PHYSICAL_IN_X, dims(1), dims(2), dims(3))
