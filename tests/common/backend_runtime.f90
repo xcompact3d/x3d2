@@ -1,7 +1,7 @@
 module m_backend_runtime
   use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Wtime
 
-  use m_allocator, only: allocator_t
+  use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, VERT
   use m_mesh, only: mesh_t
@@ -9,7 +9,7 @@ module m_backend_runtime
 
 #ifdef CUDA
   use cudafor
-  use m_cuda_allocator, only: cuda_allocator_t
+  use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
   use m_cuda_backend, only: cuda_backend_t
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: cuda_penta_compact => exec_dist_penta_compact, &
@@ -19,7 +19,7 @@ module m_backend_runtime
   use omp_lib, only: omp_get_num_devices, omp_set_default_device, &
                      omp_get_default_device
   use m_omptgt_common, only: SZ
-  use m_omptgt_allocator, only: omptgt_allocator_t
+  use m_omptgt_allocator, only: omptgt_allocator_t, omptgt_field_t
   use m_omptgt_backend, only: omptgt_backend_t
   use m_omp_exec_dist, only: exec_dist_penta_compact, exec_dist_penta_periodic
 #else
@@ -173,6 +173,39 @@ contains
 #endif
 
   end subroutine init
+
+  subroutine create_allocator(allocator, dims, sz)
+    !! Allocate a standalone allocator of the build's backend type, for
+    !! tests of the allocator itself that need no backend or mesh.
+    class(allocator_t), allocatable, intent(out) :: allocator
+    integer, intent(in) :: dims(3), sz
+
+#ifdef CUDA
+    allocate (allocator, source=cuda_allocator_t(dims, sz))
+#elif defined(OMP_TGT)
+    allocate (allocator, source=omptgt_allocator_t(dims, sz))
+#else
+    allocate (allocator, source=allocator_t(dims, sz))
+#endif
+  end subroutine create_allocator
+
+  logical function is_device_field(f)
+    !! Whether f is the device-resident field type of the build's backend.
+    !! Always false on the CPU OpenMP backend, whose fields live on the host.
+    class(field_t), intent(in) :: f
+
+    is_device_field = .false.
+#if defined(CUDA) || defined(OMP_TGT)
+    select type (f)
+#ifdef CUDA
+    type is (cuda_field_t)
+#else
+    type is (omptgt_field_t)
+#endif
+      is_device_field = .true.
+    end select
+#endif
+  end function is_device_field
 
   subroutine penta_solve(du, u, u_recv_s, u_recv_e, tdsops, periodic)
     !! Run the single-subdomain pentadiagonal compact solve on host arrays of
