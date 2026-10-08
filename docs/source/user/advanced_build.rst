@@ -81,8 +81,8 @@ set at configure time:
 
 Vendor selection is automatic: the build defines ``OMP_TGT_NVIDIA`` for
 NVHPC/PGI and ``OMP_TGT_AMD`` for Cray, GNU and Flang, which selects the
-vendor-appropriate ``SZ`` parameter. Note that the GNU and Flang paths assume
-an AMD target.
+vendor-appropriate ``SZ`` parameter in ``src/backend/omptgt/common.f90``. Note
+that the GNU and Flang paths assume an AMD target.
 
 Building with Flang
 --------------------

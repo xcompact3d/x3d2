@@ -1,8 +1,18 @@
-!!! src/backend/omp/target/backend.f90
+!!! src/backend/omptgt/backend.f90
 !!
 !! OpenMP target offload backend implementation.
 !!
-!! Note this extends the CPU (host) OpenMP backend with the intention of being able to use fallback implementations where necessary.
+!! Fields are device-resident: `omptgt_allocator_t` hands out
+!! `omptgt_field_t`, whose storage is a raw `omp_target_alloc` pointer with no
+!! host array behind it. Each operation therefore takes the field's
+!! `get_dev_ptr()`, casts it to an array pointer with `c_f_pointer`, and drives
+!! its loop nest inside a target region that names the pointer in an
+!! `is_device_ptr` clause.
+!!
+!! Only the operations offloaded so far are defined here. The rest are
+!! inherited from `base_backend_t`, whose defaults stop the run naming the
+!! operation, so this backend grows by adding an override rather than by
+!! keeping a stub for every operation it does not implement yet.
 
 module m_omptgt_backend
 
@@ -14,25 +24,27 @@ module m_omptgt_backend
                       get_dirs_from_rdr
 
   use m_allocator, only: allocator_t
+  use m_base_backend, only: base_backend_t
   use m_mesh, only: mesh_t
   use m_field, only: field_t
   use m_ordering, only: get_index_reordering
 
-  use m_omp_common, only: SZ
-  use m_omp_backend, only: omp_backend_t
-
+  use m_omptgt_common, only: SZ
   use m_omptgt_allocator, only: omptgt_field_t
 
   implicit none
 
-  type, extends(omp_backend_t) :: omptgt_backend_t
+  type, extends(base_backend_t) :: omptgt_backend_t
   contains
+    ! Offloaded operations
     procedure :: copy_f_to_data => copy_f_to_data_omptgt
     procedure :: copy_data_to_f => copy_data_to_f_omptgt
     procedure :: reorder => reorder_omptgt
     procedure :: vecadd => vecadd_omptgt
     procedure :: veccopy => veccopy_omptgt
     procedure :: vector_norm_squared => vector_norm_squared_omptgt
+    procedure :: sync => sync_omptgt
+    procedure :: get_device_bw_info => get_device_bw_info_omptgt
   end type
 
   interface omptgt_backend_t
@@ -46,14 +58,46 @@ contains
 
   type(omptgt_backend_t) function omptgt_backend_init(mesh, allocator) &
     result(backend)
-    !! Constructs the backend on top of a host OpenMP backend, which supplies
-    !! the fallback implementations for anything not offloaded here.
+    !! Constructs the backend over a device-resident allocator.
 
     type(mesh_t), target, intent(inout) :: mesh
     class(allocator_t), target, intent(inout) :: allocator
 
-    backend%omp_backend_t = omp_backend_t(mesh, allocator)
+    call backend%base_init()
+
+    backend%allocator => allocator
+    backend%mesh => mesh
   end function
+
+  subroutine sync_omptgt(self)
+    !! Waits for outstanding device work.
+    !!
+    !! Every target region in this backend is synchronous: none carries a
+    !! `nowait` clause, so the host has already waited for the device by the
+    !! time the region's enclosing call returns. That makes this a no-op
+    !! rather than something unimplemented. It stops being one the moment an
+    !! offloaded region here is made asynchronous.
+
+    class(omptgt_backend_t) :: self
+
+  end subroutine
+
+  subroutine get_device_bw_info_omptgt(self, mem_clock_rt, mem_bus_width, &
+                                       available)
+    !! Reports no memory bandwidth figures: OpenMP offers no portable query
+    !! for the memory clock or bus width of the target device, and this
+    !! backend deliberately does not reach past OpenMP to a vendor runtime.
+
+    class(omptgt_backend_t) :: self
+    integer, intent(out) :: mem_clock_rt
+    integer, intent(out) :: mem_bus_width
+    logical, intent(out) :: available
+
+    mem_clock_rt = 0
+    mem_bus_width = 0
+    available = .false.
+
+  end subroutine
 
   subroutine veccopy_omptgt(self, dst, src)
     !! Copies `src` into `dst`. Both fields must be device-resident and share
@@ -113,8 +157,7 @@ contains
   end subroutine
 
   subroutine vecadd_omptgt(self, a, x, b, y)
-    !! Computes y = a*x + b*y, falling back to the host backend when the
-    !! fields are not device-resident.
+    !! Computes y = a*x + b*y. Both fields must be device-resident.
 
     class(omptgt_backend_t) :: self
     real(dp), intent(in) :: a
@@ -132,10 +175,10 @@ contains
       type is (omptgt_field_t)
         call vecadd_offload(self, a, x, b, y)
       class default
-        error stop "Device/host fallback not yet implemented"
+        error stop "Called omptgt vector add with unsupported result vector"
       end select
     class default
-      call self%omp_backend_t%vecadd(a, x, b, y)
+      error stop "Called omptgt vector add with unsupported source vector"
     end select
 
   end subroutine
@@ -220,13 +263,13 @@ contains
             local_sum, a%get_dev_ptr(), b%get_dev_ptr(), c%get_dev_ptr(), &
             a%get_shape(), dims)
         class default
-          error stop "Called omptgt vector copy with unsupported source vector"
+          error stop "Called omptgt vector norm with unsupported vector"
         end select
       class default
-        error stop "Called omptgt vector copy with unsupported source vector"
+        error stop "Called omptgt vector norm with unsupported vector"
       end select
     class default
-      error stop "Called omptgt vector copy with unsupported source vector"
+      error stop "Called omptgt vector norm with unsupported vector"
     end select
 
     call MPI_Allreduce(local_sum, norm_squared, 1, MPI_X3D2_DP, MPI_SUM, &
@@ -370,8 +413,7 @@ contains
 
   subroutine reorder_omptgt(self, u_, u, direction)
     !! Reorders `u` into `u_` between the two data layouts encoded in
-    !! `direction`, offloading either a device-to-device or, when the source
-    !! is a host field, a host-to-device reordering.
+    !! `direction`. Both fields are device-resident.
     class(omptgt_backend_t) :: self
     class(field_t), intent(inout) :: u_
     class(field_t), intent(in) :: u
@@ -392,8 +434,7 @@ contains
                                u%get_dev_ptr(), u%get_shape(), dims, &
                                dir_from, dir_to, cart_padded)
       class default
-        call reorder_omptgt_dh(u_%get_dev_ptr(), u_%get_shape(), u%data, &
-                               dims, dir_from, dir_to, cart_padded)
+        error stop "Called omptgt reorder with unsupported source field"
       end select
     class default
       error stop "Unsupported"
@@ -443,35 +484,6 @@ contains
     call c_f_pointer(u_ptr, u_, shape=n_u_)
     call c_f_pointer(u_in_ptr, u, shape=n_u)
     !$omp target is_device_ptr(u_ptr, u_in_ptr)
-    !$omp teams loop collapse(3)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        do i = 1, dims(1)
-          call reorder_point(u_, u, i, j, k, dir_from, dir_to, cart_padded)
-        end do
-      end do
-    end do
-    !$omp end teams loop
-    !$omp end target
-
-  end subroutine
-
-  subroutine reorder_omptgt_dh(u_ptr, n_u_, u, dims, dir_from, dir_to, &
-                               cart_padded)
-    !! Offloaded reordering of a host field into a device-resident one; the
-    !! source array is mapped into the target region.
-    type(c_ptr), intent(in) :: u_ptr
-    integer, dimension(3), intent(in) :: n_u_
-    real(dp), dimension(:, :, :), pointer, intent(in) :: u
-    integer, dimension(3), intent(in) :: dims
-    integer, intent(in) :: dir_from, dir_to
-    integer, dimension(3), intent(in) :: cart_padded
-
-    real(dp), dimension(:, :, :), pointer :: u_
-    integer :: i, j, k
-
-    call c_f_pointer(u_ptr, u_, shape=n_u_)
-    !$omp target map(to:u) is_device_ptr(u_ptr)
     !$omp teams loop collapse(3)
     do k = 1, dims(3)
       do j = 1, dims(2)

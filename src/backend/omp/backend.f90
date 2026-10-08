@@ -648,7 +648,7 @@ contains
   end subroutine vecadd_omp
 
   subroutine vecmult_omp(self, y, x)
-    !! [[m_base_backend(module):vecmult(interface)]]
+    !! [[m_base_backend(module):vecmult_base(subroutine)]]
     implicit none
 
     class(omp_backend_t) :: self
@@ -784,7 +784,7 @@ contains
   end subroutine compute_sgs_stress_omp
 
   real(dp) function scalar_product_omp(self, x, y) result(s)
-    !! [[m_base_backend(module):scalar_product(interface)]]
+    !! [[m_base_backend(module):scalar_product_base(function)]]
     implicit none
 
     class(omp_backend_t) :: self
@@ -921,7 +921,7 @@ contains
   end subroutine copy_into_buffers
 
   subroutine field_max_mean_omp(self, max_val, mean_val, f, enforced_data_loc)
-    !! [[m_base_backend(module):field_max_mean(interface)]]
+    !! [[m_base_backend(module):field_max_mean_base(subroutine)]]
     implicit none
 
     class(omp_backend_t) :: self
@@ -1007,7 +1007,7 @@ contains
 
   subroutine slice_max_sum_omp(self, max_val, sum_val, f, i_slice, &
                                enforced_data_loc)
-    !! [[m_base_backend(module):slice_max_sum(interface)]]
+    !! [[m_base_backend(module):slice_max_sum_base(subroutine)]]
     implicit none
     class(omp_backend_t) :: self
     real(dp), intent(out) :: max_val, sum_val
@@ -1098,7 +1098,7 @@ contains
 
   subroutine field_set_face_omp(self, f, c_start, c_end, face, &
                                 bc_start, bc_end, flow_rate_diff)
-    !! [[m_base_backend(module):field_set_face(subroutine)]]
+    !! [[m_base_backend(module):field_set_face_base(subroutine)]]
     implicit none
 
     class(omp_backend_t) :: self

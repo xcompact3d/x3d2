@@ -248,16 +248,6 @@ contains
 
   end subroutine fft_forward_omp
 
-  subroutine fft_forward_010_omp(self, f_in)
-    implicit none
-
-    class(omp_poisson_fft_t) :: self
-    class(field_t), intent(in) :: f_in
-
-    error stop 'OpenMP backend does not support fft_forward_010 yet!'
-
-  end subroutine fft_forward_010_omp
-
   subroutine fft_forward_100_omp(self, f_in)
     !! Forward FFT for the non-periodic x case.
     !! Transposes x and y so that the non-periodic direction sits in dim2,
@@ -396,16 +386,6 @@ contains
       )
 
   end subroutine fft_backward_omp
-
-  subroutine fft_backward_010_omp(self, f_out)
-    implicit none
-
-    class(omp_poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f_out
-
-    error stop 'OpenMP backend does not support fft_backward_010 yet!'
-
-  end subroutine fft_backward_010_omp
 
   subroutine fft_backward_100_omp(self, f_out)
     !! Backward FFT for the non-periodic x case, undoing the x-y transpose

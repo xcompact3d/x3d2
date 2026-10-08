@@ -61,10 +61,11 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
 # OMP TGT specific
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   list(APPEND SRC
-    backend/omp/target/allocator.f90
+    backend/omptgt/common.f90
+    backend/omptgt/allocator.f90
   )
   list(APPEND BACKENDSRC
-    backend/omp/target/backend.f90)
+    backend/omptgt/backend.f90)
 endif()
 
 # 2Decomp
