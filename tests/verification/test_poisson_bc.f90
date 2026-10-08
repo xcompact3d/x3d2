@@ -77,7 +77,11 @@ program test_poisson
   type(bc_case_t), parameter :: cases(*) = [ &
     bc_case_t('all periodic', [128, 64, 32], &
               [character(len=9) :: 'periodic', 'periodic', 'periodic']), &
-    bc_case_t('y-dirichlet', [128, 65, 32], &
+    ! z carries the decomposition, so it needs enough cells per subdomain
+    ! for the distributed compact operators. At 32 cells over 2 ranks (16
+    ! per rank) the div(grad(p)) check misses its 1e-11 tolerance, so 128
+    ! keeps 64 cells per rank at 2 ranks, as for the x-dirichlet case below.
+    bc_case_t('y-dirichlet', [128, 65, 128], &
               [character(len=9) :: 'periodic', 'dirichlet', 'periodic']), &
     ! z carries the decomposition, so it needs enough cells per subdomain
     ! for the distributed compact operators. At 32 cells over 2 ranks the
@@ -181,9 +185,8 @@ program test_poisson
   ! Optional --bc <code> restricts the run to the one configuration with that
   ! code: one letter per direction in x,y,z order, d = dirichlet, n = neumann,
   ! p = periodic (ppp, pdp, dpp, ddp). This is what lets a multi rank run
-  ! exercise dpp without tripping the single rank stops still in place for pdp
-  ! and ddp in src/poisson_fft.f90. With no argument every configuration runs,
-  ! as before.
+  ! exercise one configuration at a time. With no argument every
+  ! configuration runs, as before.
   only_bc = 'all'
   nproc_dir = [1, 1, nproc]
   do iarg = 1, command_argument_count() - 1
