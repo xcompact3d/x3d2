@@ -1,12 +1,8 @@
 module m_omp_common
   implicit none
 
-#if defined(OMP_TGT_AMD)
-  integer, parameter :: SZ = 64
-#elif defined(OMP_TGT_NVIDIA)
-  integer, parameter :: SZ = 32
-#else
+  !> Number of points a pencil group stacks together in the leading
+  !! dimension, sized so that a group's working set stays in cache.
   integer, parameter :: SZ = 16
-#endif
 
 end module m_omp_common
