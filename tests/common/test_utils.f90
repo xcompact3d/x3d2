@@ -3,12 +3,13 @@ module m_test_utils
                    MPI_LOGICAL, MPI_SUM, MPI_Allreduce, MPI_Comm_rank, &
                    MPI_Comm_size, MPI_Finalize, MPI_Init
   use iso_fortran_env, only: stderr => error_unit
-  use m_common, only: dp, nbytes
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+  use m_common, only: dp, nbytes, MPI_X3D2_DP
   implicit none
 
   private
   public :: initialise_mpi, finalise_test, global_all, global_sum, &
-            check_status, checkerr, &
+            check_status, checkerr, relative_l2_error, &
             write_perf_metric, write_perf_minmax_metrics, &
             write_perf_summary, write_perf_minmax_summary, &
             write_device_bw_metric
@@ -111,6 +112,30 @@ contains
     end if
   end subroutine check_norm
 
+  function relative_l2_error(err, ref) result(rel)
+    !! Global relative L2 error ||err|| / ||ref||, with both sums taken over
+    !! every rank. The ratio is scale free, so one tolerance applies whatever
+    !! the grid size or the amplitude of the reference field. Stops on a zero
+    !! reference or a non-finite result, which a tolerance check would miss.
+    real(dp), intent(in) :: err(:, :, :), ref(:, :, :)
+    real(dp) :: rel
+
+    real(dp) :: sums(2)
+    integer :: ierr
+
+    sums(1) = norm2(err)**2
+    sums(2) = norm2(ref)**2
+    call MPI_Allreduce(MPI_IN_PLACE, sums, 2, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+    if (sums(2) == 0.0_dp) then
+      error stop 'relative_l2_error: reference norm is zero'
+    end if
+    rel = sqrt(sums(1))/sqrt(sums(2))
+    if (.not. ieee_is_finite(rel)) then
+      error stop 'relative_l2_error: norm is not finite'
+    end if
+  end function relative_l2_error
+
   subroutine checkerr(u, du, tol, label, allpass)
     real(dp), intent(in) :: u(:, :, :)
     real(dp), intent(in) :: du(:, :, :)
@@ -120,8 +145,7 @@ contains
 
     real(dp) :: norm_residual
 
-    norm_residual = sum((u + du)**2)/real(size(u), dp)
-    norm_residual = sqrt(norm_residual)
+    norm_residual = relative_l2_error(u + du, u)
 
     print *, "Check error:"
     print *, "min:", minval(u + du), "max: ", maxval(u + du)

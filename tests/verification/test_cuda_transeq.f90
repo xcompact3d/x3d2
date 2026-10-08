@@ -1,20 +1,19 @@
 program test_cuda_transeq
   use iso_fortran_env, only: stderr => error_unit
   use cudafor
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
-  use m_common, only: dp, pi, MPI_X3D2_DP, BC_PERIODIC
+  use m_common, only: dp, pi, BC_PERIODIC
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused
   use m_cuda_sendrecv, only: sendrecv_fields
   use m_cuda_tdsops, only: cuda_tdsops_t
   use m_backend_runtime, only: select_device
-  use m_test_utils, only: initialise_mpi, finalise_test
+  use m_test_utils, only: initialise_mpi, finalise_test, relative_l2_error
 
   implicit none
 
   logical :: allpass = .true.
-  real(dp), allocatable, dimension(:, :, :) :: u, v, r_u
+  real(dp), allocatable, dimension(:, :, :) :: u, v, r_u, ref
   real(dp), device, allocatable, dimension(:, :, :) :: &
     u_dev, v_dev, r_u_dev, & ! main fields u, v and result r_u
     dud_dev, d2u_dev ! intermediate solution arrays
@@ -31,15 +30,20 @@ program test_cuda_transeq
 
   integer :: n, n_block, n_halo, n_glob
   integer :: nrank, nproc, pprev, pnext
-  integer :: ierr
 
   type(dim3) :: blocks, threads
-  ! The diffusion term's roundoff floor is ~eps/dx^2: at n=512 this is
-  ! ~8e-4 in single precision, so the tolerance must account for it.
+  ! The tolerance bounds the relative L2 error of the transport equation
+  ! right hand side. The diffusion term's roundoff floor is ~eps/dx^2: at
+  ! n=512 this is ~8e-4 in single precision, so the tolerance must account
+  ! for it. Largest value measured on the CUDA backend:
+  !   double precision: 4.0869e-12
+  !   single precision: 1.1078e-03
+  ! The tolerance is the smallest {1,2,5}x10^k value at least 10x these, a
+  ! margin of about 12 in double precision and 18 in single precision.
 #ifdef SINGLE_PREC
   real(dp), parameter :: residual_tol = 2.0e-2_dp
 #else
-  real(dp), parameter :: residual_tol = 1.0e-8_dp
+  real(dp), parameter :: residual_tol = 5.0e-11_dp
 #endif
   real(dp) :: dx_per, nu, norm_du
 
@@ -66,7 +70,8 @@ contains
   end subroutine setup_geometry
 
   subroutine allocate_fields()
-    allocate (u(SZ, n, n_block), v(SZ, n, n_block), r_u(SZ, n, n_block))
+    allocate (u(SZ, n, n_block), v(SZ, n, n_block), r_u(SZ, n, n_block), &
+              ref(SZ, n, n_block))
 
     ! main input fields
     allocate (u_dev(SZ, n, n_block), v_dev(SZ, n, n_block))
@@ -155,12 +160,9 @@ contains
   subroutine check_result()
     ! check error
     r_u = r_u_dev
-    r_u = r_u - (-v*v + 0.5_dp*u*u - nu*u)
-    norm_du = norm2(r_u)
-    norm_du = norm_du*norm_du/real(n_glob*n_block*SZ, dp)
-    call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_X3D2_DP, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
-    norm_du = sqrt(norm_du)
+    ref = -v*v + 0.5_dp*u*u - nu*u
+    r_u = r_u - ref
+    norm_du = relative_l2_error(r_u, ref)
 
     if (nrank == 0) print *, 'error norm', norm_du
 

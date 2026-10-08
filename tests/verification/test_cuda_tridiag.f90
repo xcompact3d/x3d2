@@ -1,15 +1,14 @@
 program test_cuda_tridiag
   use iso_fortran_env, only: stderr => error_unit
   use cudafor
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
-  use m_common, only: dp, pi, MPI_X3D2_DP, BC_PERIODIC
+  use m_common, only: dp, pi, BC_PERIODIC
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_tds_compact
   use m_cuda_sendrecv, only: sendrecv_fields
   use m_cuda_tdsops, only: cuda_tdsops_t, cuda_tdsops_init
   use m_backend_runtime, only: select_device
-  use m_test_utils, only: initialise_mpi, finalise_test
+  use m_test_utils, only: initialise_mpi, finalise_test, relative_l2_error
 
   implicit none
 
@@ -26,16 +25,20 @@ program test_cuda_tridiag
 
   integer :: n, n_block, n_halo, n_glob
   integer :: nrank, nproc, pprev, pnext
-  integer :: ierr
 
   type(dim3) :: blocks, threads
-  ! The second-derivative roundoff floor is ~eps/dx^2: at n=1024 this is
-  ! ~3e-3 in single precision (~6e-12 in double), so the tolerance must
-  ! account for it.
+  ! The tolerance bounds the relative L2 error of the second derivative. Its
+  ! roundoff floor is ~eps/dx^2: at n=1024 this is ~3e-3 in single precision
+  ! (~6e-12 in double), so the tolerance must account for it. Largest value
+  ! measured on the CUDA backend:
+  !   double precision: 1.9422e-11
+  !   single precision: 4.5822e-03
+  ! The tolerance is the smallest {1,2,5}x10^k value at least 10x these, a
+  ! margin of about 10 in double precision and 11 in single precision.
 #ifdef SINGLE_PREC
-  real(dp), parameter :: residual_tol = 2.0e-2_dp
+  real(dp), parameter :: residual_tol = 5.0e-2_dp
 #else
-  real(dp), parameter :: residual_tol = 1.0e-8_dp
+  real(dp), parameter :: residual_tol = 2.0e-10_dp
 #endif
   real(dp) :: dx_per, norm_du
 
@@ -112,11 +115,7 @@ contains
 
   subroutine check_result()
     du = du_dev
-    norm_du = norm2(u + du)
-    norm_du = norm_du*norm_du/real(n_glob*n_block*SZ, dp)
-    call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_X3D2_DP, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
-    norm_du = sqrt(norm_du)
+    norm_du = relative_l2_error(u + du, u)
 
     if (nrank == 0) print *, 'error norm', norm_du
 

@@ -1,32 +1,37 @@
 program test_omp_transeq_species
   use iso_fortran_env, only: stderr => error_unit
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
   use m_allocator, only: allocator_t, field_t
-  use m_common, only: dp, pi, MPI_X3D2_DP, DIR_X, DIR_Y, DIR_Z, VERT
+  use m_common, only: dp, pi, DIR_X, DIR_Y, DIR_Z, VERT
   use m_omp_common, only: SZ
   use m_omp_backend, only: omp_backend_t
   use m_tdsops, only: dirps_t
   use m_solver, only: allocate_tdsops
   use m_mesh, only: mesh_t
-  use m_test_utils, only: initialise_mpi, finalise_test
+  use m_test_utils, only: initialise_mpi, finalise_test, relative_l2_error
 
   implicit none
 
   logical :: allpass = .true.
   class(field_t), pointer :: u, v, w, spec
   class(field_t), pointer :: dspec
-  real(dp), dimension(:, :, :), allocatable :: r_u
+  real(dp), dimension(:, :, :), allocatable :: r_u, ref
   class(mesh_t), allocatable :: mesh
 
   integer, dimension(3) :: dims_global
   integer :: n, n_groups
   integer :: nrank, nproc
-  integer :: ierr
 
   real(dp) :: dx_per, nu, norm_du
-  ! Roundoff floor of the second-derivative term is ~eps/dx^2, which at
-  ! 96^3 cells is ~1e-4 in single precision.
+  ! The tolerance bounds the relative L2 error of the transport equation
+  ! right hand side. Roundoff floor of the second-derivative term is
+  ! ~eps/dx^2, which at 96^3 cells is ~1e-4 in single precision. Largest
+  ! value measured, over the OpenMP backend binary of the OpenMP and CUDA
+  ! builds:
+  !   double precision: 9.3135e-10
+  !   single precision: 3.2575e-04
+  ! The tolerance is the smallest {1,2,5}x10^k value at least 10x these, a
+  ! margin of about 11 in double precision and 15 in single precision.
 #ifdef SINGLE_PREC
   real(dp) :: tol = 5e-3
 #else
@@ -120,20 +125,16 @@ contains
   end subroutine run_kernel
 
   subroutine check_result()
-    allocate (r_u(SZ, n, n_groups))
+    allocate (r_u(SZ, n, n_groups), ref(SZ, n, n_groups))
 
     ! check error
     ! dspec = -1/2*(u*dspec/dx + d(u*spec)/dx) + nu*d2spec/dx2
     ! u is sin(x), v is cos(x), spec is cos(x);
     ! dspec = -1/2*(u*(-u) + spec*spec + u*(-u)) + nu*(-spec)
     !       = u*u - 1/2*spec*spec - nu*spec
-    r_u = dspec%data &
-          - (u%data*u%data - 0.5_dp*spec%data*spec%data - nu*spec%data)
-    norm_du = norm2(r_u)
-    norm_du = norm_du*norm_du/dims_global(DIR_X)/n_groups/SZ
-    call MPI_Allreduce(MPI_IN_PLACE, norm_du, 1, MPI_X3D2_DP, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
-    norm_du = sqrt(norm_du)
+    ref = u%data*u%data - 0.5_dp*spec%data*spec%data - nu*spec%data
+    r_u = dspec%data - ref
+    norm_du = relative_l2_error(r_u, ref)
 
     if (nrank == 0) print *, 'error norm', norm_du
     if (nrank == 0) then
