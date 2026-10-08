@@ -252,6 +252,10 @@ contains
                     &decomposition, nproc_dir must be [1, 1, nproc].'
       end if
     end if
+    if (poisson_fft%is_010_case .and. mesh%par%nproc > 1) then
+      error stop 'Multiple ranks are not yet supported for the 010 case in &
+                  &the CUDA backend!'
+    end if
 
     ! Work out the spectral dimensions in the permuted state
     dims_glob = mesh%get_global_dims(CELL)

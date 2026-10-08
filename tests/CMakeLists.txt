@@ -309,7 +309,9 @@ if(WITH_2DECOMPFFT)
   set(X3D2_TEST_NAME_SUFFIX _ddp)
   define_verification_test(verification/test_poisson_bc.f90 1 omp --bc ddp)
   unset(X3D2_TEST_NAME_SUFFIX)
-  # Two 2 rank runs of the same test: the suffix keeps their names apart
+  # Three 2 rank runs of the same test: the suffix keeps their names apart
+  set(X3D2_TEST_NAME_SUFFIX _pdp)
+  define_verification_test(verification/test_poisson_bc.f90 2 omp --bc pdp)
   set(X3D2_TEST_NAME_SUFFIX _ddp)
   define_verification_test(verification/test_poisson_bc.f90 2 omp --bc ddp)
   set(X3D2_TEST_NAME_SUFFIX _dpp)

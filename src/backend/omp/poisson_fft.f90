@@ -24,6 +24,8 @@ module m_omp_poisson_fft
   type, extends(poisson_fft_t) :: omp_poisson_fft_t
       !! FFT based Poisson solver
     complex(dp), allocatable, dimension(:, :, :) :: c_x, c_y, c_z
+    !> Periodic in x and z, non-periodic in y
+    logical :: is_010_case = .false.
     !> Non-periodic in x, periodic in y and z
     logical :: is_100_case = .false.
     !> Non-periodic in x and y, periodic in z
@@ -39,15 +41,19 @@ module m_omp_poisson_fft
     !> Y-pencil staging buffer of ph, only needed when y is decomposed.
     real(dp), allocatable, dimension(:, :, :) :: r_yp
     !> Spectral decomposition, and its y-pencil staging buffers. The FFT
-    !! leaves the spectral slab in a z-pencil, where dim2 (the x modes) is
-    !! split across p_col. The paired split in the postprocess couples a
-    !! mode with its mirror in that same direction, so it needs dim2 whole.
+    !! leaves the spectral slab in a z-pencil, which p_col splits along its
+    !! dim2. In the 100 case that is the x modes, in the 010 case the y
+    !! modes. The paired split in the postprocess couples a mode with its
+    !! mirror in that same direction, so it needs that dimension whole.
     !! The y-pencil of the very same decomposition has dim2 complete for any
     !! processor grid, so 2decomp's own transpose delivers exactly the
-    !! layout the pairing wants. waves is redistributed once, at init.
+    !! layout the pairing wants. In the 100 case and in the 010 case with a
+    !! z split (p_col > 1), c_pair and waves_pair hold that y-pencil, and
+    !! waves is redistributed once, at init.
     !! sp is associated for every case, since init also reads the spectral
     !! slab extents from it, but c_pair and waves_pair exist only when the
-    !! pairing actually needs the hop.
+    !! pairing actually needs the hop. The 110 case also keeps a c_pair for
+    !! its own hop, without a waves_pair.
     type(decomp_info), pointer :: sp => null()
     complex(dp), allocatable, dimension(:, :, :) :: c_pair, waves_pair
     !> Exact sized, x-y transposed real work buffer for the 100 case.
@@ -120,6 +126,9 @@ contains
     ! Get global cell dims
     dims = mesh%get_global_dims(CELL)
 
+    poisson_fft%is_010_case = mesh%grid%periodic_BC(1) &
+                              .and. (.not. mesh%grid%periodic_BC(2)) &
+                              .and. mesh%grid%periodic_BC(3)
     poisson_fft%is_100_case = (.not. mesh%grid%periodic_BC(1)) &
                               .and. mesh%grid%periodic_BC(2) &
                               .and. mesh%grid%periodic_BC(3)
@@ -127,20 +136,18 @@ contains
                               .and. (.not. mesh%grid%periodic_BC(2)) &
                               .and. mesh%grid%periodic_BC(3)
 
+    ! Read the 2decomp processor grid (p_row, p_col), which the 100, 110 and
+    ! 010 cases all use.
+    grid_dims = get_decomp_dims()
+    poisson_fft%p_row = grid_dims(1)
+    poisson_fft%p_col = grid_dims(2)
     ! Work out the spectral dimensions in the permuted state.
-    ! The 100 case initialises the transform with x and y swapped, so the
-    ! spectral slab comes back as (ny/2 + 1, nx, nz). That is the layout
-    ! waves_set builds for this case, so the base class needs no changes.
     if (poisson_fft%is_100_case) then
-      ! get_decomp_dims returns the 2decomp processor grid (p_row, p_col).
-      grid_dims = get_decomp_dims()
-      poisson_fft%p_row = grid_dims(1)
-      poisson_fft%p_col = grid_dims(2)
+      ! The 100 case initialises the transform with x and y swapped, so the
+      ! spectral slab comes back as (ny/2 + 1, nx, nz). That is the layout
+      ! waves_set builds for this case, so the base class needs no changes.
       call decomp_2d_fft_init(PHYSICAL_IN_X, dims(2), dims(1), dims(3))
     else if (poisson_fft%is_110_case) then
-      grid_dims = get_decomp_dims()
-      poisson_fft%p_row = grid_dims(1)
-      poisson_fft%p_col = grid_dims(2)
       call decomp_2d_fft_init(PHYSICAL_IN_X, dims(3), dims(1), dims(2))
     else
       call decomp_2d_fft_init(PHYSICAL_IN_X, dims(1), dims(2), dims(3))
@@ -152,6 +159,12 @@ contains
     call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps, &
                                poisson_fft%sp%zsz, poisson_fft%sp%zst - 1)
 
+    if (poisson_fft%is_010_case .and. poisson_fft%p_row > 1) then
+      ! The periodicity reorder of the 010 case needs the y line whole.
+      error stop 'The OpenMP 010 Poisson solver does not support a y &
+                  &decomposition, split along z instead.'
+    end if
+
     if (mesh%geo%stretched(2)) then
       error stop 'OpenMP backends FFT based Poisson solver does not support&
                   & stretching in y-direction yet!'
@@ -159,6 +172,19 @@ contains
 
     allocate (poisson_fft%c_x(poisson_fft%nx_spec, poisson_fft%ny_spec, &
                               poisson_fft%nz_spec))
+
+    if (poisson_fft%is_010_case .and. poisson_fft%p_col > 1) then
+      ! The 010 pairing of mode j with ny - j + 2 needs y whole, which the
+      ! y-pencil of sp provides. waves is redistributed once, here.
+      allocate (poisson_fft%c_pair(poisson_fft%sp%ysz(1), &
+                                   poisson_fft%sp%ysz(2), &
+                                   poisson_fft%sp%ysz(3)))
+      allocate (poisson_fft%waves_pair(poisson_fft%sp%ysz(1), &
+                                       poisson_fft%sp%ysz(2), &
+                                       poisson_fft%sp%ysz(3)))
+      call transpose_z_to_y(poisson_fft%waves, poisson_fft%waves_pair, &
+                            poisson_fft%sp)
+    end if
 
     if (poisson_fft%is_100_case) then
       poisson_fft%ph => decomp_2d_fft_get_ph()
@@ -521,12 +547,26 @@ contains
 
     class(omp_poisson_fft_t) :: self
 
-    call process_spectral_010( &
-      self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
-      self%sp_st(1), self%sp_st(2), self%sp_st(3), &
-      self%nx_glob, self%ny_glob, self%nz_glob, &
-      self%ax, self%bx, self%ay, self%by, self%az, self%bz &
-      )
+    if (self%p_col > 1) then
+      ! The FFT leaves y split across p_col in the z-pencil. Hop to the
+      ! y-pencil, where y is whole, pair there, and hop back.
+      call transpose_z_to_y(self%c_x, self%c_pair, self%sp)
+      call process_spectral_010( &
+        self%c_pair, self%waves_pair, self%sp%ysz(1), self%sp%ysz(2), &
+        self%sp%ysz(3), self%sp%yst(1) - 1, self%sp%yst(2) - 1, &
+        self%sp%yst(3) - 1, &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax, self%bx, self%ay, self%by, self%az, self%bz &
+        )
+      call transpose_y_to_z(self%c_pair, self%c_x, self%sp)
+    else
+      call process_spectral_010( &
+        self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
+        self%sp_st(1), self%sp_st(2), self%sp_st(3), &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax, self%bx, self%ay, self%by, self%az, self%bz &
+        )
+    end if
 
   end subroutine fft_postprocess_010_omp
 
