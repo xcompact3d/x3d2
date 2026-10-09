@@ -28,10 +28,13 @@ set(SRC
   backend/omp/exec_dist.f90
   backend/omp/exec_thom.f90
   case/base_case.f90
+  case/abl.f90
   case/channel.f90
   case/cylinder.f90
   case/generic.f90
   case/tgv.f90
+  abl/abl.f90
+  abl/diagnostics.f90
   module/ibm.f90
 )
 set(BACKENDSRC

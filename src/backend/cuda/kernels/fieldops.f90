@@ -306,14 +306,17 @@ contains
   end subroutine field_max_sum
 
   attributes(global) subroutine field_set_y_face( &
-    f, c_start, c_end, flow_rate_diff, nx, ny, nz)
+    f, c_start, c_end, set_start, set_end, flow_rate_diff, nx, ny, nz)
   !! Set domain Y_FACE boundary values.
   !! c_start: Dirichlet value applied at the bottom face (j = 1)
   !! c_end:   Dirichlet value applied at the top face (j = ny)
+  !! set_start/set_end: whether that face carries a prescribed value at all,
+  !! so the two y-faces can differ (ABL: no-slip floor, free-slip lid).
     implicit none
 
     real(dp), device, intent(inout), dimension(:, :, :) :: f
     real(dp), value, intent(in) :: c_start, c_end, flow_rate_diff
+    logical, value, intent(in) :: set_start, set_end
     integer, value, intent(in) :: nx, ny, nz
 
     integer :: i, j, b, n_mod, b_end
@@ -321,15 +324,116 @@ contains
     j = threadIdx%x + (blockIdx%x - 1)*blockDim%x ! from 1 to nx
     b = blockIdx%y ! from 1 to nz
 
+    ! DIR_X groups are ordered z fastest: b = (y_block - 1)*nz + z, so the
+    ! bottom face lives in groups 1..nz and the top face nz*(n_y_blocks-1)+z.
     n_mod = mod(ny - 1, SZ) + 1
     b_end = b + (ny - 1)/SZ*nz
 
     if (j <= nx) then
-      f(1, j, b) = c_start
-      f(n_mod, j, b_end) = c_end
+      if (set_start) f(1, j, b) = c_start
+      if (set_end) f(n_mod, j, b_end) = c_end
     end if
 
   end subroutine field_set_y_face
+  attributes(global) subroutine field_plane_partial_sums( &
+    partial, f, nx, ny, nz)
+  !! First pass of field_plane_sums: partial(j, z) is the sum over x of
+  !! y index j at z. Launch with threads = dim3(SZ, 1, 1) and
+  !! blocks = dim3(n_y_blocks, nz, 1).
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :) :: partial
+    real(dp), device, intent(in), dimension(:, :, :) :: f
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, j, k, b
+    real(dp) :: line_sum
+
+    i = threadIdx%x
+    j = i + (blockIdx%x - 1)*SZ
+    if (j > ny) return
+
+    ! DIR_X groups are ordered z fastest: b = (y_block - 1)*nz + z
+    b = (blockIdx%x - 1)*nz + blockIdx%y
+    line_sum = 0._dp
+    do k = 1, nx
+      line_sum = line_sum + f(i, k, b)
+    end do
+    partial(j, blockIdx%y) = line_sum
+
+  end subroutine field_plane_partial_sums
+
+  attributes(global) subroutine field_plane_sums_reduce(sums, partial, ny, nz)
+  !! Second pass of field_plane_sums: sums(j) = sum over z of partial(j, z),
+  !! in a fixed order. Launch with one thread per y index.
+    implicit none
+
+    real(dp), device, intent(out), dimension(:) :: sums
+    real(dp), device, intent(in), dimension(:, :) :: partial
+    integer, value, intent(in) :: ny, nz
+
+    integer :: j, z
+    real(dp) :: plane_sum
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    if (j > ny) return
+
+    plane_sum = 0._dp
+    do z = 1, nz
+      plane_sum = plane_sum + partial(j, z)
+    end do
+    sums(j) = plane_sum
+
+  end subroutine field_plane_sums_reduce
+
+  attributes(global) subroutine field_set_y_plane(f, c, i_in_block, &
+                                                  group_offset, nx)
+  !! Set one interior y-plane to a constant. The caller resolves the plane
+  !! into its position within a y-block and the group offset for that block,
+  !! so this kernel stays free of layout arithmetic.
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), value, intent(in) :: c
+    integer, value, intent(in) :: i_in_block, group_offset, nx
+
+    integer :: j, b
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x ! from 1 to nx
+    b = group_offset + blockIdx%y ! z fastest within the y-block
+
+    if (j <= nx) f(i_in_block, j, b) = c
+
+  end subroutine field_set_y_plane
+
+  attributes(global) subroutine field_set_abl_wall_stress( &
+    stress, u, w, drag_coeff, sample_i, stress_i, sample_offset, &
+    stress_offset, nx, component)
+  !! Drag law tau = drag_coeff*u_c*|u_h| from each column's own sampled
+  !! velocity, written into one stress plane (component 1: x, 3: z).
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: stress
+    real(dp), device, intent(in), dimension(:, :, :) :: u, w
+    real(dp), value, intent(in) :: drag_coeff
+    integer, value, intent(in) :: sample_i, stress_i, sample_offset
+    integer, value, intent(in) :: stress_offset, nx, component
+    integer :: i, sample_group, stress_group
+    real(dp) :: us, ws, speed
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    sample_group = sample_offset + blockIdx%y
+    stress_group = stress_offset + blockIdx%y
+    if (i > nx) return
+    us = u(sample_i, i, sample_group)
+    ws = w(sample_i, i, sample_group)
+    speed = sqrt(us**2 + ws**2)
+    if (component == 1) then
+      stress(stress_i, i, stress_group) = drag_coeff*us*speed
+    else
+      stress(stress_i, i, stress_group) = drag_coeff*ws*speed
+    end if
+  end subroutine field_set_abl_wall_stress
+
   attributes(global) subroutine field_set_y_face_from_field( &
     f, f_start, nx, ny, nz)
 !! Set domain Y_FACE boundary values from another field.
@@ -467,6 +571,59 @@ contains
       end select
     end if
   end subroutine field_set_x_face_from_field
+
+  attributes(global) subroutine field_add_x_face_from_field( &
+    f, g, set_start, set_end, nx, ny, nz)
+  !! f += g on the x-faces (pencil index 1 and nx) flagged by
+  !! set_start/set_end. Launch as field_set_x_face_from_field.
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:, :, :) :: g
+    logical, value, intent(in) :: set_start, set_end
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, b, n_mod, i_max
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    b = blockIdx%y
+
+    ! Groups are z fast, so the last y-block is b > nz*(n_y_blocks - 1)
+    n_mod = mod(ny - 1, SZ) + 1
+    if ((b - 1)/nz + 1 == (ny - 1)/SZ + 1) then
+      i_max = n_mod
+    else
+      i_max = SZ
+    end if
+
+    if (i <= i_max) then
+      if (set_start) f(i, 1, b) = f(i, 1, b) + g(i, 1, b)
+      if (set_end) f(i, nx, b) = f(i, nx, b) + g(i, nx, b)
+    end if
+  end subroutine field_add_x_face_from_field
+
+  attributes(global) subroutine field_add_y_face_from_field( &
+    f, g, set_start, set_end, nx, ny, nz)
+  !! f += g on the y-faces (j = 1 and ny) flagged by set_start/set_end.
+  !! Launch as field_set_y_face.
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:, :, :) :: g
+    logical, value, intent(in) :: set_start, set_end
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: j, b, n_mod, b_end
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    b = blockIdx%y
+
+    n_mod = mod(ny - 1, SZ) + 1
+    b_end = b + (ny - 1)/SZ*nz
+
+    if (j <= nx) then
+      if (set_start) f(1, j, b) = f(1, j, b) + g(1, j, b)
+      if (set_end) f(n_mod, j, b_end) = f(n_mod, j, b_end) + g(n_mod, j, b_end)
+    end if
+  end subroutine field_add_y_face_from_field
 
   attributes(global) subroutine volume_integral(s, f, n, n_i_pad, n_j)
     implicit none

@@ -58,11 +58,15 @@ module m_base_backend
     procedure :: vector_norm_squared => vector_norm_squared_base
     procedure :: field_max_mean => field_max_mean_base
     procedure :: slice_max_sum => slice_max_sum_base
+    procedure :: field_plane_sums => field_plane_sums_base
     procedure :: field_scale => field_scale_base
     procedure :: field_shift => field_shift_base
     procedure :: field_volume_integral => field_volume_integral_base
     procedure :: field_set_face => field_set_face_base
+    procedure :: field_set_y_plane => field_set_y_plane_base
+    procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_base
     procedure :: field_set_face_from_field => field_set_face_from_field_base
+    procedure :: field_add_face_from_field => field_add_face_from_field_base
     procedure :: compute_vorticity => compute_vorticity_base
     procedure :: compute_qcriterion => compute_qcriterion_base
     procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_base
@@ -454,6 +458,21 @@ contains
 
   end subroutine slice_max_sum_base
 
+  subroutine field_plane_sums_base(self, sums, f)
+    !! Sum a DIR_X field over x and z on every local y-plane:
+    !! sums(j) is the sum over the plane of y index j. The order of
+    !! summation is fixed, so the result is reproducible.
+    implicit none
+
+    class(base_backend_t) :: self
+    real(dp), intent(out) :: sums(:)
+    class(field_t), intent(in) :: f
+
+    sums = 0._dp
+    call not_implemented('field_plane_sums')
+
+  end subroutine field_plane_sums_base
+
   subroutine field_scale_base(self, f, a)
     !! Scales a field by a
     implicit none
@@ -513,6 +532,40 @@ contains
 
   end subroutine field_set_face_base
 
+  subroutine field_set_y_plane_base(self, f, c, plane)
+    !! Set one interior y-plane of a DIR_X field to a constant.
+    !!
+    !! field_set_face reaches only the two boundary planes. The neutral ABL
+    !! wall model needs the first plane above a no-slip floor, where the
+    !! resolved gradient would otherwise contribute a second, spurious
+    !! stress on top of the modelled one.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c
+    integer, intent(in) :: plane !! 1-based y-vertex index
+
+    call not_implemented('field_set_y_plane')
+
+  end subroutine field_set_y_plane_base
+
+  subroutine field_set_abl_wall_stress_base(self, stress, u, w, &
+                                            sample_plane, stress_plane, &
+                                            drag_coeff, component)
+    !! Replace one SGS stress plane using the local sampled velocity.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: stress
+    class(field_t), intent(in) :: u, w
+    integer, intent(in) :: sample_plane, stress_plane, component
+    real(dp), intent(in) :: drag_coeff
+
+    call not_implemented('field_set_abl_wall_stress')
+
+  end subroutine field_set_abl_wall_stress_base
+
   subroutine field_set_face_from_field_base(self, f, f_start, c_end, face, &
                                             bc_start, bc_end, flow_rate_diff)
     !! As field_set_face but with a spatially-varying inlet face field
@@ -531,6 +584,20 @@ contains
     call not_implemented('field_set_face_from_field')
 
   end subroutine field_set_face_from_field_base
+
+  subroutine field_add_face_from_field_base(self, f, g, face, bc_start, bc_end)
+    !! Add the face planes of `g` onto those of `f`, on Dirichlet faces
+    !! only. Both fields are DIR_X; X_FACE and Y_FACE are supported.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    class(field_t), intent(in) :: g
+    integer, intent(in) :: face, bc_start, bc_end
+
+    call not_implemented('field_add_face_from_field')
+
+  end subroutine field_add_face_from_field_base
 
   subroutine compute_vorticity_base( &
     self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
@@ -622,7 +689,8 @@ contains
 
   subroutine alloc_tdsops_base( &
     self, tdsops, n_tds, delta, operation, scheme, bc_start, bc_end, &
-    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
+    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu, &
+    filter_alpha &
     )
     !! Allocates the backend's own tdsops type and fills in the
     !! coefficients of the requested operation.
@@ -639,6 +707,7 @@ contains
     character(*), optional, intent(in) :: from_to
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
+    real(dp), optional, intent(in) :: filter_alpha
 
     call not_implemented('alloc_tdsops')
 

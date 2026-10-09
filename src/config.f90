@@ -36,6 +36,8 @@ module m_config
     real(dp), dimension(:), allocatable :: pr_species
     integer :: n_iters, n_output, n_species
     logical :: lowmem_transeq, lowmem_fft
+    logical :: spatial_filter          !! explicit low-pass filter on velocity
+    real(dp) :: filter_alpha           !! filter parameter, -0.5 < alpha < 0.5
     character(3) :: poisson_solver_type, time_intg
     character(30) :: der1st_scheme, der2nd_scheme, &
                      interpl_scheme, stagder_scheme
@@ -49,8 +51,6 @@ module m_config
     real(dp) :: smagorinsky_constant = 0.14_dp
     logical :: wall_damping = .false.
     real(dp) :: wall_damping_n = 3._dp
-    real(dp) :: von_karman_constant = 0.4_dp
-    real(dp) :: roughness_length = 0._dp
   contains
     procedure :: read => read_les_nml
   end type les_config_t
@@ -71,6 +71,28 @@ module m_config
   contains
     procedure :: read => read_cylinder_nml
   end type cylinder_config_t
+
+  type, extends(base_config_t) :: abl_config_t
+    real(dp) :: z0 = 0.1_dp            !! aerodynamic roughness length
+    real(dp) :: u_star = 0._dp         !! friction velocity
+    real(dp) :: delta = 1._dp          !! boundary-layer depth
+    real(dp) :: kappa = 0.41_dp        !! von Karman constant
+    real(dp) :: dsampling = 3._dp      !! wall-model sampling height, in dy
+    real(dp) :: u_geo(3) = 0._dp       !! geostrophic wind UG
+    real(dp) :: coriolis_freq = 0._dp  !! Coriolis frequency f
+    real(dp) :: init_noise(3) = 0._dp
+    !> Seed for the initial noise; 0 draws one from the clock
+    integer :: seed = 0
+    real(dp) :: u_bulk = 0._dp         !! target bulk velocity (mass_conserve)
+    integer :: profile_start_iter = -1 !! first profile sample (-1 = disabled)
+    character(len=256) :: profile_file = 'abl_profile.csv'
+    logical :: pressure_gradient = .false.
+    logical :: coriolis = .false.
+    logical :: mass_conserve = .false.
+    logical :: damping = .false.
+  contains
+    procedure :: read => read_abl_nml
+  end type abl_config_t
 
   type, extends(base_config_t) :: stats_config_t
     integer :: initstat = 0          !! iteration to start accumulating (0 = disabled)
@@ -174,12 +196,24 @@ contains
     integer :: n_iters, n_output, n_species = 0
     !> triggers the low memory implementations
     logical :: lowmem_transeq = .false., lowmem_fft = .false.
+    !! Explicit low-pass filter on the velocity, off by default. Needed by
+    !! wall-modelled ABL runs, where the 2*dx mode the compact schemes cannot
+    !! dissipate otherwise breaks momentum conservation in the convection.
+    logical :: spatial_filter = .false.
+    !! Incompact3d's value. Smaller alpha is far more dissipative: at 0.40 the
+    !! filter damps every resolved wavenumber about ten times harder per
+    !! application than at 0.49, which over a long run scrubs out the smallest
+    !! resolved eddies. The filter's system is only marginally diagonally
+    !! dominant here, so it is solved with Thomas rather than the distributed
+    !! algorithm wherever the direction is not decomposed.
+    real(dp) :: filter_alpha = 0.49_dp
     character(3) :: time_intg
     character(3) :: poisson_solver_type = 'FFT'
     character(30) :: der1st_scheme = 'compact6', der2nd_scheme = 'compact6', &
                      interpl_scheme = 'classic', stagder_scheme = 'compact6'
 
     namelist /solver_params/ Re, dt, n_iters, n_output, poisson_solver_type, &
+      spatial_filter, filter_alpha, &
       n_species, pr_species, lowmem_transeq, lowmem_fft, &
       time_intg, der1st_scheme, der2nd_scheme, interpl_scheme, &
       stagder_scheme, ibm_on
@@ -202,6 +236,8 @@ contains
     self%dt = dt
     self%n_iters = n_iters
     self%n_output = n_output
+    self%spatial_filter = spatial_filter
+    self%filter_alpha = filter_alpha
     self%ibm_on = ibm_on
     self%n_species = n_species
     if (n_species > 0) self%pr_species = pr_species(1:n_species)
@@ -223,19 +259,16 @@ contains
 
     integer :: unit, ierr
     character(len=20) :: model
-    real(dp) :: smagorinsky_constant, wall_damping_n, von_karman_constant
-    real(dp) :: roughness_length
+    real(dp) :: smagorinsky_constant, wall_damping_n
     logical :: wall_damping
 
     namelist /les_params/ model, smagorinsky_constant, wall_damping, &
-      wall_damping_n, von_karman_constant, roughness_length
+      wall_damping_n
 
     model = self%model
     smagorinsky_constant = self%smagorinsky_constant
     wall_damping = self%wall_damping
     wall_damping_n = self%wall_damping_n
-    von_karman_constant = self%von_karman_constant
-    roughness_length = self%roughness_length
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading LES config failed! &
@@ -261,17 +294,13 @@ contains
     end select
     if (smagorinsky_constant <= 0._dp) &
       error stop 'smagorinsky_constant must be positive.'
-    if (von_karman_constant <= 0._dp .or. wall_damping_n <= 0._dp) &
-      error stop 'LES wall-damping constants must be positive.'
-    if (roughness_length < 0._dp) &
-      error stop 'roughness_length must not be negative.'
+    if (wall_damping_n <= 0._dp) &
+      error stop 'wall_damping_n must be positive.'
 
     self%model = trim(model)
     self%smagorinsky_constant = smagorinsky_constant
     self%wall_damping = wall_damping
     self%wall_damping_n = wall_damping_n
-    self%von_karman_constant = von_karman_constant
-    self%roughness_length = roughness_length
   end subroutine read_les_nml
 
   subroutine read_channel_nml(self, nml_file, nml_string)
@@ -354,6 +383,105 @@ contains
     self%inlet_noise = inlet_noise
 
   end subroutine read_cylinder_nml
+
+  subroutine read_abl_nml(self, nml_file, nml_string)
+    implicit none
+
+    class(abl_config_t) :: self
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
+
+    integer :: unit
+
+    real(dp) :: z0, u_star, delta, kappa, dsampling
+    real(dp) :: u_geo(3), coriolis_freq, init_noise(3), u_bulk
+    integer :: profile_start_iter, seed
+    character(len=256) :: profile_file
+    logical :: pressure_gradient, coriolis, mass_conserve, damping
+
+    namelist /abl_nml/ z0, u_star, delta, kappa, dsampling, &
+      u_geo, coriolis_freq, &
+      init_noise, seed, u_bulk, profile_start_iter, profile_file, &
+      pressure_gradient, coriolis, mass_conserve, damping
+
+    ! Defaults
+    z0 = 0.1_dp
+    u_star = 0._dp
+    delta = 1._dp
+    kappa = 0.41_dp
+    dsampling = 3._dp
+    u_geo = 0._dp
+    coriolis_freq = 0._dp
+    init_noise = 0._dp
+    seed = 0
+    u_bulk = 0._dp
+    profile_start_iter = -1
+    profile_file = 'abl_profile.csv'
+    pressure_gradient = .false.
+    coriolis = .false.
+    mass_conserve = .false.
+    damping = .false.
+
+    if (present(nml_file) .and. present(nml_string)) then
+      error stop 'Reading ABL config failed! &
+                 &Provide only a file name or source, not both.'
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file)
+      read (unit, nml=abl_nml)
+      close (unit)
+    else if (present(nml_string)) then
+      read (nml_string, nml=abl_nml)
+    else
+      error stop 'Reading ABL config failed! &
+                 &Provide at least one of the following: file name or source'
+    end if
+
+    self%z0 = z0
+    self%u_star = u_star
+    self%delta = delta
+    self%kappa = kappa
+    self%dsampling = dsampling
+    self%u_geo = u_geo
+    self%coriolis_freq = coriolis_freq
+    self%init_noise = init_noise
+    self%seed = seed
+    self%u_bulk = u_bulk
+    self%profile_start_iter = profile_start_iter
+    self%profile_file = trim(profile_file)
+    self%pressure_gradient = pressure_gradient
+    self%coriolis = coriolis
+    self%mass_conserve = mass_conserve
+    self%damping = damping
+
+    call validate_abl_config(self)
+
+  end subroutine read_abl_nml
+
+  subroutine validate_abl_config(config)
+    !! Validate relationships between ABL namelist values in one place.
+    type(abl_config_t), intent(in) :: config
+
+    ! Damping is a sponge rather than a driving mechanism.
+    if (.not. (config%pressure_gradient .or. config%coriolis .or. &
+               config%mass_conserve)) &
+      error stop 'ABL config error: enable pressure_gradient, coriolis, &
+                 &or mass_conserve.'
+
+    if (config%z0 <= 0._dp .or. config%delta <= config%z0 .or. &
+        config%kappa <= 0._dp) &
+      error stop 'ABL config error: require delta > z0 > 0 and kappa > 0.'
+
+    if (any(config%init_noise < 0._dp)) &
+      error stop 'ABL config error: init_noise must not be negative.'
+    if (config%seed < 0) &
+      error stop 'ABL config error: seed must not be negative.'
+
+    if (config%profile_start_iter < -1) &
+      error stop 'ABL config error: profile_start_iter must be -1 or greater.'
+    if (config%profile_start_iter >= 0 .and. &
+        len_trim(config%profile_file) == 0) &
+      error stop 'ABL config error: profile_file must not be empty.'
+  end subroutine validate_abl_config
 
   subroutine read_checkpoint_nml(self, nml_file, nml_string)
     implicit none
