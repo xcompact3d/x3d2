@@ -321,6 +321,8 @@ function(define_backend_tests backend)
   if(is_full_backend)
     define_test(unit/test_scalar_product.f90 ${np} ${backend})
     define_test(unit/test_sum_intox.f90 ${np} ${backend})
+    define_test(unit/test_boundary_planes.f90 ${serial} ${backend})
+    define_test(unit/test_abl_seed.f90 ${serial} ${backend})
   endif()
   if(is_omp AND NOT np EQUAL serial)
     # Reordering is checked both without and with a decomposition.
@@ -329,12 +331,6 @@ function(define_backend_tests backend)
   if(is_device)
     # Checks the allocator on a device selected per rank.
     define_test(unit/test_device_allocator.f90 ${serial} ${backend})
-  endif()
-  if(is_omp OR ${backend} STREQUAL cuda)
-    # Still select their backend with #ifdef CUDA rather than through
-    # m_backend_runtime, so they are only valid for the omp and cuda builds.
-    define_test(unit/test_boundary_planes.f90 ${serial} ${backend})
-    define_test(unit/test_abl_seed.f90 ${serial} ${backend})
   endif()
 
   # Verification tests (numerical correctness vs analytical solutions)
@@ -345,8 +341,6 @@ function(define_backend_tests backend)
     define_verification_test(verification/test_transeq.f90 ${np} ${backend})
     define_verification_test(verification/test_les_field.f90 ${serial} ${backend})
     define_verification_test(verification/test_thom.f90 ${serial} ${backend})
-  endif()
-  if(is_omp OR ${backend} STREQUAL cuda)
     define_verification_test(verification/test_filter.f90 ${serial} ${backend})
   endif()
 
