@@ -1484,7 +1484,7 @@ contains
     ! Step 2: X paired split (forward), mirror-aware
     call process_spectral_110_x_pair_fw_mirror<<<blocks, threads>>>( & !&
       c_dev, self%c_mirror_dev, self%c_plane_recv_dev, nz_h, &
-      self%ny_spec, self%nz_spec, self%sp_st(2), self%nx_glob, &
+      self%ny_spec, self%nz_spec, self%sp_st(2), &
       self%ax_dev, self%bx_dev &
       )
 
@@ -1515,7 +1515,7 @@ contains
     ! Step 6: X paired recombine (backward), mirror-aware
     call process_spectral_110_x_pair_bw_mirror<<<blocks, threads>>>( & !&
       c_dev, self%c_mirror_dev, self%c_plane_recv_dev, nz_h, &
-      self%ny_spec, self%nz_spec, self%sp_st(2), self%nx_glob, &
+      self%ny_spec, self%nz_spec, self%sp_st(2), &
       self%ax_dev, self%bx_dev &
       )
 

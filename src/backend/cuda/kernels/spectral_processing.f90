@@ -1233,14 +1233,14 @@ contains
   end subroutine process_spectral_110_x_pair_bw
 
   attributes(global) subroutine process_spectral_110_x_pair_fw_mirror( &
-    div_u, mirror, plane, nz_h, nx_l, ny, x_sp_st, nx_glob, ax, bx &
+    div_u, mirror, plane, nz_h, nx_l, ny, x_sp_st, ax, bx &
     )
     !! Multi-rank counterpart of process_spectral_110_x_pair_fw: the X
     !! paired split, but the partner mode lives on another rank, reached
     !! through the dim2 mirror exchange (see exchange_mirror_100). Unlike
     !! the single-rank kernel this only updates this rank's own modes;
     !! the partner rank updates its own copy the same way.
-    !! At the Nyquist mode (ix == nx_glob/2 + 1, even nx_glob) the mirror
+    !! At the global Nyquist mode (even grid size) the mirror
     !! partner is this rank's own pre-update value, so the formula below
     !! self-pairs it exactly as the single-rank kernel does.
     implicit none
@@ -1250,7 +1250,7 @@ contains
     complex(dp), device, intent(in), dimension(:, :) :: plane ! extra mirror plane
     real(dp), device, intent(in), dimension(:) :: ax, bx
     integer, value, intent(in) :: nz_h, nx_l, ny
-    integer, value, intent(in) :: x_sp_st, nx_glob
+    integer, value, intent(in) :: x_sp_st
 
     integer :: i, j, k, ix
     complex(dp) :: partner
@@ -1278,7 +1278,7 @@ contains
   end subroutine process_spectral_110_x_pair_fw_mirror
 
   attributes(global) subroutine process_spectral_110_x_pair_bw_mirror( &
-    div_u, mirror, plane, nz_h, nx_l, ny, x_sp_st, nx_glob, ax, bx &
+    div_u, mirror, plane, nz_h, nx_l, ny, x_sp_st, ax, bx &
     )
     !! Multi-rank counterpart of process_spectral_110_x_pair_bw, see
     !! process_spectral_110_x_pair_fw_mirror.
@@ -1289,7 +1289,7 @@ contains
     complex(dp), device, intent(in), dimension(:, :) :: plane ! extra mirror plane
     real(dp), device, intent(in), dimension(:) :: ax, bx
     integer, value, intent(in) :: nz_h, nx_l, ny
-    integer, value, intent(in) :: x_sp_st, nx_glob
+    integer, value, intent(in) :: x_sp_st
 
     integer :: i, j, k, ix
     complex(dp) :: partner
