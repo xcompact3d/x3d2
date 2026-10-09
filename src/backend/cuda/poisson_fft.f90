@@ -548,6 +548,24 @@ contains
 
   end subroutine init_cuda_poisson_fft_t
 
+  subroutine yslab_view_110(self, d_dev)
+    !! Points d_dev at the cuFFTMp Y-slab real view (2*(nz/2+1), nx, ny_l)
+    !! of the descriptor allocation.
+    implicit none
+
+    class(cuda_poisson_fft_t), intent(in) :: self
+    real(dp), device, pointer, dimension(:, :, :), intent(out) :: d_dev
+
+    type(cudaXtDesc), pointer :: descriptor
+    integer :: ny_l
+
+    ny_l = self%ny_glob/self%mesh%par%nproc_dir(3)
+    call c_f_pointer(self%xtdesc%descriptor, descriptor)
+    call c_f_pointer(descriptor%data(1), d_dev, &
+                     [2*(self%nz_glob/2 + 1), self%nx_glob, ny_l])
+
+  end subroutine yslab_view_110
+
   subroutine fft_forward_110_cuda(self, f)
     !! Forward FFT for 110 case: transpose (nx,ny,nz)->(nz,nx,ny) then R2C
     implicit none
@@ -556,8 +574,7 @@ contains
     class(field_t), intent(in) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
-    type(cudaXtDesc), pointer :: descriptor
-    integer :: ierr, tpb, ny_l
+    integer :: ierr, tpb
     type(dim3) :: blocks, threads
 
     select type (f)
@@ -569,10 +586,7 @@ contains
       ! Redistribute the physical Z-slab (nx, ny, nz_l) into the cuFFTMp
       ! Y-slab (2*(nz/2+1), nx, ny_l) through an MPI_Alltoall, in place of
       ! the local transpose the single rank path uses.
-      ny_l = self%ny_glob/self%mesh%par%nproc_dir(3)
-      call c_f_pointer(self%xtdesc%descriptor, descriptor)
-      call c_f_pointer(descriptor%data(1), d_dev, &
-                       [2*(self%nz_glob/2 + 1), self%nx_glob, ny_l])
+      call yslab_view_110(self, d_dev)
 
       call self%redistribute_110_to_yslab(padded_dev, d_dev)
 
@@ -612,8 +626,7 @@ contains
     class(field_t), intent(inout) :: f
 
     real(dp), device, pointer :: padded_dev(:, :, :), d_dev(:, :, :)
-    type(cudaXtDesc), pointer :: descriptor
-    integer :: ierr, tpb, ny_l
+    integer :: ierr, tpb
     type(dim3) :: blocks, threads
 
     select type (f)
@@ -646,10 +659,7 @@ contains
       ! Redistribute the cuFFTMp Y-slab back into the physical Z-slab
       ! (nx, ny, nz_l) through an MPI_Alltoall, in place of the local
       ! transpose the single rank path uses.
-      ny_l = self%ny_glob/self%mesh%par%nproc_dir(3)
-      call c_f_pointer(self%xtdesc%descriptor, descriptor)
-      call c_f_pointer(descriptor%data(1), d_dev, &
-                       [2*(self%nz_glob/2 + 1), self%nx_glob, ny_l])
+      call yslab_view_110(self, d_dev)
 
       call self%redistribute_110_to_zslab(d_dev, padded_dev)
     else
