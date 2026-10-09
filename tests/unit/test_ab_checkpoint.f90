@@ -9,8 +9,7 @@ program test_ab_checkpoint
   use m_time_integrator, only: time_intg_t, init
   use m_checkpoint_manager, only: checkpoint_manager_t
   use m_solver, only: solver_t
-  use m_omp_backend, only: omp_backend_t
-  use m_omp_common, only: SZ
+  use m_backend_runtime, only: backend_runtime_t
   use m_test_utils, only: initialise_mpi, finalise_test, global_all
 
   implicit none
@@ -20,9 +19,9 @@ program test_ab_checkpoint
   end type old_history_t
 
   type(mesh_t), allocatable :: mesh
-  type(allocator_t), target :: host_allocator
+  type(backend_runtime_t), target :: runtime
   class(allocator_t), pointer :: allocator
-  type(omp_backend_t), target :: omp_backend
+  type(allocator_t), pointer :: host_allocator
   class(base_backend_t), pointer :: backend
   type(solver_t) :: solver_cont, solver_restart
   type(checkpoint_manager_t) :: chk_mgr_write, chk_mgr_restart
@@ -39,6 +38,7 @@ program test_ab_checkpoint
   character(len=*), parameter :: ckpt_prefix = 'ab3_test_checkpoint'
   logical :: allpass
   real(dp) :: diff
+  real(dp), allocatable :: old_data(:, :, :)
 
   call initialise_mpi(irank, nproc)
 
@@ -53,13 +53,13 @@ program test_ab_checkpoint
 
   mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z)
 
-  host_allocator = allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => host_allocator
-  omp_backend = omp_backend_t(mesh, allocator)
-  backend => omp_backend
+  call runtime%init(mesh)
+  allocator => runtime%allocator
+  host_allocator => runtime%host_allocator
+  backend => runtime%backend
 
   checkpoint_freq = 5
-  call init_solver(solver_cont, backend, mesh, allocator, dt)
+  call init_solver(solver_cont, backend, mesh, allocator, host_allocator, dt)
   call init_checkpoint_config(chk_mgr_write, ckpt_prefix, checkpoint_freq)
 
   call setup_curr(curr, solver_cont)
@@ -67,7 +67,7 @@ program test_ab_checkpoint
 
   checkpoint_iter = 5
   do iter = 1, checkpoint_iter
-    call fill_derivs(deriv, iter)
+    call fill_derivs(backend, deriv, iter)
     call solver_cont%time_integrator%step(curr, deriv, solver_cont%dt)
     solver_cont%current_iter = iter
     if (iter == checkpoint_iter) then
@@ -84,7 +84,8 @@ program test_ab_checkpoint
   call solver_cont%time_integrator%finalize()
   call release_solver_fields(solver_cont)
 
-  call init_solver(solver_restart, backend, mesh, allocator, dt)
+  call init_solver(solver_restart, backend, mesh, allocator, host_allocator, &
+                   dt)
   call init_checkpoint_config(chk_mgr_restart, ckpt_prefix, checkpoint_freq)
   chk_mgr_restart%config%restart_from_checkpoint = .true.
   chk_mgr_restart%config%restart_file = trim(ckpt_prefix)//'_000005.bp'
@@ -97,9 +98,8 @@ program test_ab_checkpoint
     do checkpoint_iter = 1, solver_restart%time_integrator%nolds
       idx = idx + 1
       ! Each olds(i,j) must match bit-for-bit - this is the regression guard
-      diff = maxval(abs( &
-                    solver_restart%time_integrator%olds( &
-                    iter, checkpoint_iter)%ptr%data - olds_ref(idx)%data))
+      call get_old_data(solver_restart, iter, checkpoint_iter, old_data)
+      diff = maxval(abs(old_data - olds_ref(idx)%data))
       if (diff > tol .and. irank == 0) then
         write (stderr, '(a,i0,a,i0,a,es12.5)') 'Mismatch in olds(', iter, &
           ',', checkpoint_iter, ') diff=', diff
@@ -124,16 +124,17 @@ program test_ab_checkpoint
 
 contains
 
-  subroutine init_solver(solver, backend, mesh, allocator, dt)
+  subroutine init_solver(solver, backend, mesh, allocator, host_allocator, dt)
     type(solver_t), intent(inout) :: solver
     class(base_backend_t), pointer, intent(inout) :: backend
     type(mesh_t), target, intent(inout) :: mesh
     class(allocator_t), pointer, intent(inout) :: allocator
+    type(allocator_t), pointer, intent(inout) :: host_allocator
     real(dp), intent(in) :: dt
 
     solver%backend => backend
     solver%mesh => mesh
-    solver%host_allocator => allocator
+    solver%host_allocator => host_allocator
     solver%nvars = 3
     solver%nspecies = 0
     solver%dt = dt
@@ -218,22 +219,43 @@ contains
     deallocate (deriv)
   end subroutine release_derivs
 
-  subroutine fill_derivs(deriv, istep)
+  subroutine fill_derivs(backend, deriv, istep)
+    class(base_backend_t), pointer, intent(inout) :: backend
     type(flist_t), intent(inout) :: deriv(:)
     integer, intent(in) :: istep
     integer :: i
+    integer :: dims(3)
     real(dp) :: base
+    real(dp), allocatable :: data(:, :, :)
     do i = 1, size(deriv)
       base = real(istep, dp) + 0.1_dp*real(i - 1, dp)
-      deriv(i)%ptr%data = base
+      dims = deriv(i)%ptr%get_shape()
+      allocate (data(dims(1), dims(2), dims(3)))
+      data = base
+      call backend%set_field_data(deriv(i)%ptr, data, deriv(i)%ptr%dir)
+      deallocate (data)
     end do
   end subroutine fill_derivs
+
+  subroutine get_old_data(solver, ivar, iold, data)
+    !! Copies olds(ivar, iold) to a host array in the field's own
+    !! orientation, so it can be read on any backend.
+    type(solver_t), intent(in) :: solver
+    integer, intent(in) :: ivar, iold
+    real(dp), allocatable, intent(out) :: data(:, :, :)
+    integer :: dims(3)
+
+    associate (old => solver%time_integrator%olds(ivar, iold)%ptr)
+      dims = old%get_shape()
+      allocate (data(dims(1), dims(2), dims(3)))
+      call solver%backend%get_field_data(data, old, old%dir)
+    end associate
+  end subroutine get_old_data
 
   subroutine capture_old_history(solver, olds_ref)
     type(solver_t), intent(in) :: solver
     type(old_history_t), allocatable, intent(out) :: olds_ref(:)
     integer :: nolds_total, i, j, idx
-    integer :: old_dims(3)
 
     nolds_total = solver%time_integrator%nolds*solver%nvars
     allocate (olds_ref(nolds_total))
@@ -241,9 +263,7 @@ contains
     do i = 1, solver%nvars
       do j = 1, solver%time_integrator%nolds
         idx = idx + 1
-        old_dims = shape(solver%time_integrator%olds(i, j)%ptr%data)
-        allocate (olds_ref(idx)%data(old_dims(1), old_dims(2), old_dims(3)))
-        olds_ref(idx)%data = solver%time_integrator%olds(i, j)%ptr%data
+        call get_old_data(solver, i, j, olds_ref(idx)%data)
       end do
     end do
   end subroutine capture_old_history

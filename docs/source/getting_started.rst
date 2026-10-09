@@ -163,7 +163,12 @@ used.
        compiler.
    * - ``OMP_TGT``
      - Cray, GNU, NVHPC, Flang
-     - OpenMP target offload backend. Requires an OpenMP 4.5 or newer compiler.
+     - OpenMP target offload backend. Requires an OpenMP 4.5 or newer
+       compiler. Still under construction: it offloads field copies,
+       reordering and the vector operations, and reports
+       ``<operation>: not implemented by the active backend`` for anything else, so
+       it cannot run a flow case. ``xcompact`` in an ``OMP_TGT`` build is
+       the CPU solver.
 
 "Flang" covers both upstream LLVM Flang and AMD's ROCm ``amdflang``; CMake
 reports either as a ``CMAKE_Fortran_COMPILER_ID`` of ``LLVMFlang`` or

@@ -14,6 +14,11 @@ module m_time_integrator
     real(dp) :: rk_b(4, 4)
     real(dp) :: rk_a(3, 3, 4)
     real(dp) :: gdt  !! Effective timestep for the current substep
+    !> Time the current substep has advanced the solution from the start of
+    !> the step, c_i*dt for RK stage i and dt for AB. Each substep starts from
+    !> the divergence-free start-of-step field, so this is the timestep the
+    !> pressure correction that follows the substep is scaled by.
+    real(dp) :: stage_dt
     character(len=3) :: sname
     type(flist_t), allocatable :: olds(:, :)
     class(base_backend_t), pointer :: backend
@@ -124,6 +129,7 @@ contains
 
     ! initialise gdt to zero; it will be set properly in step routines
     init%gdt = 0._dp
+    init%stage_dt = 0._dp
 
     if (init%sname(1:2) == 'AB') then
       read (init%sname(3:3), *, iostat=stat) init%order
@@ -180,6 +186,12 @@ contains
     ! Each RK sub-timestep advances the solution by b(istage) * dt,
     ! and sum(b) = 1 so that sum(gdt) = dt over a full step.
     self%gdt = self%rk_b(self%istage, self%nstage)*dt
+    if (self%istage == self%nstage) then
+      self%stage_dt = dt
+    else
+      self%stage_dt = sum(self%rk_a(1:self%istage, self%istage, &
+                                    self%nstage))*dt
+    end if
 
     ! update solution
     if (self%istage == self%nstage) then
@@ -244,6 +256,7 @@ contains
     ! For Adams-Bashforth, there is only one stage per step,
     ! so gdt is always the full dt.
     self%gdt = dt
+    self%stage_dt = dt
 
     nstep = min(self%istep, self%nstep)
     do i = 1, self%nvars
