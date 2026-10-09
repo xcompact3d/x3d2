@@ -1211,8 +1211,9 @@ contains
     n_plane = self%nx_spec*self%nz_spec
 
     ! Make sure the staged kernel and the packing above have landed before
-    ! MPI reads the device buffers. This is only reached on multiple ranks,
-    ! the postprocess routines return early for the single rank path.
+    ! MPI reads the device buffers. This is only reached on multiple ranks.
+    ! fft_postprocess_100_cuda returns early for the single rank path, and
+    ! fft_postprocess_110_cuda only gets here inside its use_cufftmp branch.
     call sync_or_abort('dim2 mirror exchange')
 
     ! On the middle rank when P is odd the mirror is the local slab itself.
