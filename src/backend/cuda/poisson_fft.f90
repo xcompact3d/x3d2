@@ -1401,63 +1401,6 @@ contains
     blocks = dim3((self%ny_spec - 1)/tsize + 1, self%nz_spec, 1)
     threads = dim3(tsize, 1, 1)
 
-    if (self%mesh%par%nproc == 1) then
-      ! Step 1: normalise + Z periodic forward
-      call process_spectral_110_norm_z<<<blocks, threads>>>( & !&
-        c_dev, nz_h, &
-        self%ny_spec, self%nz_spec, self%nz_glob, &
-        self%nx_glob, self%ny_glob, &
-        self%az_dev, self%bz_dev &
-        )
-
-      ! Step 2: X paired split (forward)
-      call process_spectral_110_x_pair_fw<<<blocks, threads>>>( & !&
-        c_dev, nz_h, &
-        self%ny_spec, self%nz_spec, self%sp_st(2), &
-        self%ax_dev, self%bx_dev &
-        )
-
-      ! Step 3: Y paired split (forward)
-      call process_spectral_110_y_pair_fw<<<blocks, threads>>>( & !&
-        c_dev, nz_h, &
-        self%ny_spec, self%nz_spec, self%sp_st(3), &
-        self%ay_dev, self%by_dev &
-        )
-
-      ! Step 4: Poisson solve
-      call process_spectral_110_poisson<<<blocks, threads>>>( & !&
-        c_dev, self%waves_dev, nz_h, &
-        self%ny_spec, self%nz_spec, self%nz_glob, self%sp_st(2), &
-        self%nx_glob &
-        )
-
-      ! Step 5: Y paired recombine (backward)
-      call process_spectral_110_y_pair_bw<<<blocks, threads>>>( & !&
-        c_dev, nz_h, &
-        self%ny_spec, self%nz_spec, self%sp_st(3), &
-        self%ay_dev, self%by_dev &
-        )
-
-      ! Step 6: X paired recombine (backward)
-      call process_spectral_110_x_pair_bw<<<blocks, threads>>>( & !&
-        c_dev, nz_h, &
-        self%ny_spec, self%nz_spec, self%sp_st(2), &
-        self%ax_dev, self%bx_dev &
-        )
-
-      ! Step 7: Z periodic undo (backward)
-      call process_spectral_110_z_bw<<<blocks, threads>>>( & !&
-        c_dev, nz_h, &
-        self%ny_spec, self%nz_spec, &
-        self%az_dev, self%bz_dev &
-        )
-      return
-    end if
-
-    ! Multi-rank: X is split across ranks by cuFFTMp, reached through the
-    ! dim2 mirror. Y stays whole (self%sp_st(3) is always 0), so its pair
-    ! kernels are unchanged.
-
     ! Step 1: normalise + Z periodic forward
     call process_spectral_110_norm_z<<<blocks, threads>>>( & !&
       c_dev, nz_h, &
@@ -1466,15 +1409,27 @@ contains
       self%az_dev, self%bz_dev &
       )
 
-    ! Fetch the X pairing partners that live on other ranks
-    call self%exchange_dim2_mirror(c_dev)
+    ! On multiple ranks X is split across ranks by cuFFTMp, reached through
+    ! the dim2 mirror. Y stays whole (self%sp_st(3) is always 0), so its
+    ! pair kernels are the same on one rank and on several.
+    if (self%mesh%par%nproc == 1) then
+      ! Step 2: X paired split (forward)
+      call process_spectral_110_x_pair_fw<<<blocks, threads>>>( & !&
+        c_dev, nz_h, &
+        self%ny_spec, self%nz_spec, self%sp_st(2), &
+        self%ax_dev, self%bx_dev &
+        )
+    else
+      ! Fetch the X pairing partners that live on other ranks
+      call self%exchange_dim2_mirror(c_dev)
 
-    ! Step 2: X paired split (forward), mirror-aware
-    call process_spectral_110_x_pair_fw_mirror<<<blocks, threads>>>( & !&
-      c_dev, self%c_mirror_dev, self%c_plane_recv_dev, nz_h, &
-      self%ny_spec, self%nz_spec, self%sp_st(2), &
-      self%ax_dev, self%bx_dev &
-      )
+      ! Step 2: X paired split (forward), mirror-aware
+      call process_spectral_110_x_pair_fw_mirror<<<blocks, threads>>>( & !&
+        c_dev, self%c_mirror_dev, self%c_plane_recv_dev, nz_h, &
+        self%ny_spec, self%nz_spec, self%sp_st(2), &
+        self%ax_dev, self%bx_dev &
+        )
+    end if
 
     ! Step 3: Y paired split (forward)
     call process_spectral_110_y_pair_fw<<<blocks, threads>>>( & !&
@@ -1497,15 +1452,24 @@ contains
       self%ay_dev, self%by_dev &
       )
 
-    ! Steps 2 and 4 rewrote every mode, so the mirror is stale
-    call self%exchange_dim2_mirror(c_dev)
+    if (self%mesh%par%nproc == 1) then
+      ! Step 6: X paired recombine (backward)
+      call process_spectral_110_x_pair_bw<<<blocks, threads>>>( & !&
+        c_dev, nz_h, &
+        self%ny_spec, self%nz_spec, self%sp_st(2), &
+        self%ax_dev, self%bx_dev &
+        )
+    else
+      ! Steps 2 to 5 rewrote every mode, so the mirror is stale
+      call self%exchange_dim2_mirror(c_dev)
 
-    ! Step 6: X paired recombine (backward), mirror-aware
-    call process_spectral_110_x_pair_bw_mirror<<<blocks, threads>>>( & !&
-      c_dev, self%c_mirror_dev, self%c_plane_recv_dev, nz_h, &
-      self%ny_spec, self%nz_spec, self%sp_st(2), &
-      self%ax_dev, self%bx_dev &
-      )
+      ! Step 6: X paired recombine (backward), mirror-aware
+      call process_spectral_110_x_pair_bw_mirror<<<blocks, threads>>>( & !&
+        c_dev, self%c_mirror_dev, self%c_plane_recv_dev, nz_h, &
+        self%ny_spec, self%nz_spec, self%sp_st(2), &
+        self%ax_dev, self%bx_dev &
+        )
+    end if
 
     ! Step 7: Z periodic undo (backward)
     call process_spectral_110_z_bw<<<blocks, threads>>>( & !&
