@@ -1316,7 +1316,7 @@ contains
     integer, optional, intent(in) :: bc_start, bc_end
     real(dp), optional, intent(in) :: flow_rate_diff
     integer :: dims(3), k, i, j, z, i_max, n_mod, n_y_blocks, y_block, &
-               k_start, k_end
+               y_stride, k_start, k_end
     real(dp) :: flow_rate_diff_val
 
     if (f%dir /= DIR_X) &
@@ -1329,29 +1329,29 @@ contains
     dims = self%mesh%get_dims(f%data_loc)
     n_mod = mod(dims(2) - 1, SZ) + 1
     n_y_blocks = (dims(2) - 1)/SZ + 1
+    y_stride = y_group_stride(self)
 
     select case (face)
     case (X_FACE)
-
-      !$omp parallel do private(k_end, y_block, i_max)
-      do k = 1, n_y_blocks*dims(3)
-        ! OMP DIR_X ordering: dir_k = n_y_blocks*(z - 1) + y_block,
-        ! so the y-block is the fast-varying component (see get_index_dir)
-        y_block = mod(k - 1, n_y_blocks) + 1
-        k_end = k
-        if (y_block == n_y_blocks) then
-          i_max = n_mod
-        else
-          i_max = SZ
-        end if
-        do i = 1, i_max
-          ! left face: spatially-varying Dirichlet from f_start at i=1
-          f%data(i, 1, k) = f_start%data(i, 1, k)
-          ! right face: convective outflow
-          associate (fd => f%data(i, dims(1), k_end), &
-                     fd1 => f%data(i, dims(1) - 1, k_end))
-            fd = fd - c_end*(fd - fd1) + flow_rate_diff_val
-          end associate
+      !$omp parallel do collapse(2) private(k, i, i_max)
+      do z = 1, dims(3)
+        do y_block = 1, n_y_blocks
+          ! y-block is the fast-varying component of the group index
+          k = y_stride*(z - 1) + y_block
+          if (y_block == n_y_blocks) then
+            i_max = n_mod
+          else
+            i_max = SZ
+          end if
+          do i = 1, i_max
+            ! left face: spatially-varying Dirichlet from f_start at i=1
+            f%data(i, 1, k) = f_start%data(i, 1, k)
+            ! right face: convective outflow
+            associate (fd => f%data(i, dims(1), k), &
+                       fd1 => f%data(i, dims(1) - 1, k))
+              fd = fd - c_end*(fd - fd1) + flow_rate_diff_val
+            end associate
+          end do
         end do
       end do
       !$omp end parallel do
@@ -1359,8 +1359,8 @@ contains
       !$omp parallel do private(k_start, k_end)
       do z = 1, dims(3)
         ! bottom wall (y = 1) and top wall (y = ny) in OMP DIR_X ordering
-        k_start = 1 + (z - 1)*n_y_blocks
-        k_end = n_y_blocks + (z - 1)*n_y_blocks
+        k_start = 1 + (z - 1)*y_stride
+        k_end = (z - 1)*y_stride + n_y_blocks
         do j = 1, dims(1)
           f%data(1, j, k_start) = f_start%data(1, j, k_start)
           f%data(n_mod, j, k_end) = f_start%data(n_mod, j, k_end)

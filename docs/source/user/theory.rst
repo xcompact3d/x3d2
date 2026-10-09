@@ -877,10 +877,10 @@ The second approach is often preferred due to its simplicity. Many applications 
 
 x3d2 uses the `2DECOMP&FFT <https://2decomp-fft.github.io/>`_ library for 2D decomposition and FFT (see :cite:`li_cray_10` for more details) when using OpenMP as a backend (for NVIDIA GPUs it uses `cuFFT <https://developer.nvidia.com/cufft>`_). One of the key advantages of using the 2DECOMP&FFT library is that it does not require modifications to the existing derivative and interpolation subroutines, making it easier to implement. Additionally, this approach utilises customised global `MPI_ALLTOALL(V)` transpositions to redistribute data among processors. Although communication overhead can range from 30% to 80% of the total computational time, with up to 70 transpositions per time step, the overall efficiency and scalability of the simulations are greatly enhanced.
 
+.. _abl-theory:
+
 Atmospheric boundary layer
 --------------------------
-
-.. _abl-theory:
 
 The ``abl`` case simulates a neutral, rough-wall atmospheric boundary layer
 with :math:`y` vertical, periodic in :math:`x` and :math:`z`, a no-slip floor
