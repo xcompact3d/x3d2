@@ -1,0 +1,3999 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>m_poisson_fft &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../program/xcompact.html">Program</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>m_poisson_fft
+      <small>Module</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 3.7% of total for modules and submodules.">611 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/poisson_fft.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/poisson_fft.f90~2.html'>poisson_fft.f90</a></li>
+            <li class="breadcrumb-item active" aria-current="page">m_poisson_fft</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+
+  <div class="row">
+    <div class="col-md-3">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#absints-0"
+         aria-expanded="false" aria-controls="absints-0">
+         <h4 class="card-header bg-primary text-white">Abstract Interfaces</h4>
+      </a>
+      <div id="absints-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/m_poisson_fft.html#interface-fft_forward">fft_forward</a>
+            <a class="list-group-item" href="../module/m_poisson_fft.html#interface-fft_backward">fft_backward</a>
+            <a class="list-group-item" href="../module/m_poisson_fft.html#interface-fft_postprocess">fft_postprocess</a>
+            <a class="list-group-item" href="../module/m_poisson_fft.html#interface-poisson_xxx">poisson_xxx</a>
+            <a class="list-group-item" href="../module/m_poisson_fft.html#interface-field_process">field_process</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#types-0"
+         aria-expanded="false" aria-controls="types-0">
+         <h4 class="card-header bg-primary text-white">Derived Types</h4>
+      </a>
+      <div id="types-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/m_poisson_fft.html#type-poisson_fft_t">poisson_fft_t</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#funcs-0"
+         aria-expanded="false" aria-controls="funcs-0">
+         <h4 class="card-header bg-primary text-white">Functions</h4>
+      </a>
+      <div id="funcs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/m_poisson_fft.html#proc-get_km_re">get_km_re</a>
+            <a class="list-group-item" href="../module/m_poisson_fft.html#proc-get_km_im">get_km_im</a>
+            <a class="list-group-item" href="../module/m_poisson_fft.html#proc-get_km">get_km</a>
+            <a class="list-group-item" href="../module/m_poisson_fft.html#proc-get_real">get_real</a>
+            <a class="list-group-item" href="../module/m_poisson_fft.html#proc-get_imag">get_imag</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#subs-0"
+         aria-expanded="false" aria-controls="subs-0">
+         <h4 class="card-header bg-primary text-white">Subroutines</h4>
+      </a>
+      <div id="subs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/m_poisson_fft.html#proc-base_init~2">base_init</a>
+            <a class="list-group-item" href="../module/m_poisson_fft.html#proc-solve_poisson">solve_poisson</a>
+            <a class="list-group-item" href="../module/m_poisson_fft.html#proc-poisson_000">poisson_000</a>
+            <a class="list-group-item" href="../module/m_poisson_fft.html#proc-poisson_010">poisson_010</a>
+            <a class="list-group-item" href="../module/m_poisson_fft.html#proc-poisson_100">poisson_100</a>
+            <a class="list-group-item" href="../module/m_poisson_fft.html#proc-poisson_110">poisson_110</a>
+            <a class="list-group-item" href="../module/m_poisson_fft.html#proc-stretching_matrix">stretching_matrix</a>
+            <a class="list-group-item" href="../module/m_poisson_fft.html#proc-waves_set">waves_set</a>
+            <a class="list-group-item" href="../module/m_poisson_fft.html#proc-wave_numbers">wave_numbers</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+
+    <div class="col-md-9" id='text'>
+      
+<br>          <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item"><a href='m_mesh.html'>m_mesh</a></li>
+                  <li class="list-inline-item"><a href='m_field.html'>m_field</a></li>
+                  <li class="list-inline-item"><a href='m_tdsops.html'>m_tdsops</a></li>
+                  <li class="list-inline-item"><a href='m_common.html'>m_common</a></li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~m_poisson_fft~~UsesGraph Pages: 1 -->
+<svg id="modulem_poisson_fftUsesGraph" width="641pt" height="230pt"
+ viewBox="0.00 0.00 641.00 229.90" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~m_poisson_fft~~UsesGraph" class="graph" transform="scale(0.97 0.97) rotate(0) translate(4 232)">
+<title>module~~m_poisson_fft~~UsesGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-232 654,-232 654,4 -4,4"/>
+<!-- module~m_poisson_fft -->
+<g id="module~~m_poisson_fft~~UsesGraph_node1" class="node">
+<title>module~m_poisson_fft</title>
+<polygon fill="none" stroke="black" points="650,-147 565,-147 565,-123 650,-123 650,-147"/>
+<text text-anchor="middle" x="607.5" y="-132.6" font-family="Helvetica,sans-Serif" font-size="10.50">m_poisson_fft</text>
+</g>
+<!-- module~m_common -->
+<g id="module~~m_poisson_fft~~UsesGraph_node2" class="node">
+<title>module~m_common</title>
+<g id="a_module~~m_poisson_fft~~UsesGraph_node2"><a xlink:href="../module/m_common.html" xlink:title="m_common">
+<polygon fill="#337ab7" stroke="#337ab7" points="296,-106 220,-106 220,-82 296,-82 296,-106"/>
+<text text-anchor="middle" x="258" y="-91.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_common</text>
+</a>
+</g>
+</g>
+<!-- module~m_poisson_fft&#45;&gt;module~m_common -->
+<g id="module~~m_poisson_fft~~UsesGraph_edge1" class="edge">
+<title>module~m_poisson_fft&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M499,-176C425.54,-189.53 399.06,-189.91 332,-157 311.4,-146.89 313.46,-134.88 296,-120 292.77,-117.25 289.26,-114.5 285.73,-111.88"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="287.74,-109.02 277.57,-106.04 283.67,-114.71 287.74,-109.02"/>
+</g>
+<!-- module~m_field -->
+<g id="module~~m_poisson_fft~~UsesGraph_node3" class="node">
+<title>module~m_field</title>
+<g id="a_module~~m_poisson_fft~~UsesGraph_node3"><a xlink:href="../module/m_field.html" xlink:title="m_field">
+<polygon fill="#337ab7" stroke="#337ab7" points="410.5,-148 356.5,-148 356.5,-124 410.5,-124 410.5,-148"/>
+<text text-anchor="middle" x="383.5" y="-133.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_field</text>
+</a>
+</g>
+</g>
+<!-- module~m_poisson_fft&#45;&gt;module~m_field -->
+<g id="module~~m_poisson_fft~~UsesGraph_edge2" class="edge">
+<title>module~m_poisson_fft&#45;&gt;module~m_field</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M582.96,-147.12C562.06,-157.15 530.37,-170.59 501,-176"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M499,-176C483.44,-178.87 446.69,-164.58 418.99,-152.3"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="420.18,-148.99 409.62,-148.07 417.29,-155.37 420.18,-148.99"/>
+</g>
+<!-- module~m_mesh -->
+<g id="module~~m_poisson_fft~~UsesGraph_node4" class="node">
+<title>module~m_mesh</title>
+<g id="a_module~~m_poisson_fft~~UsesGraph_node4"><a xlink:href="../module/m_mesh.html" xlink:title="m_mesh">
+<polygon fill="#337ab7" stroke="#337ab7" points="529,-127 471,-127 471,-103 529,-103 529,-127"/>
+<text text-anchor="middle" x="500" y="-112.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_mesh</text>
+</a>
+</g>
+</g>
+<!-- module~m_poisson_fft&#45;&gt;module~m_mesh -->
+<g id="module~~m_poisson_fft~~UsesGraph_edge3" class="edge">
+<title>module~m_poisson_fft&#45;&gt;module~m_mesh</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M564.8,-127.1C556.29,-125.48 547.37,-123.79 538.99,-122.2"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="539.58,-118.75 529.1,-120.33 538.27,-125.63 539.58,-118.75"/>
+</g>
+<!-- module~m_tdsops -->
+<g id="module~~m_poisson_fft~~UsesGraph_node5" class="node">
+<title>module~m_tdsops</title>
+<g id="a_module~~m_poisson_fft~~UsesGraph_node5"><a xlink:href="../module/m_tdsops.html" xlink:title="m_tdsops">
+<polygon fill="#337ab7" stroke="#337ab7" points="415,-228 352,-228 352,-204 415,-204 415,-228"/>
+<text text-anchor="middle" x="383.5" y="-213.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_tdsops</text>
+</a>
+</g>
+</g>
+<!-- module~m_poisson_fft&#45;&gt;module~m_tdsops -->
+<g id="module~~m_poisson_fft~~UsesGraph_edge4" class="edge">
+<title>module~m_poisson_fft&#45;&gt;module~m_tdsops</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M499,-176C472.12,-180.95 443.07,-191.16 420.95,-200.03"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="419.54,-196.83 411.62,-203.86 422.2,-203.3 419.54,-196.83"/>
+</g>
+<!-- module~m_mpi -->
+<g id="module~~m_poisson_fft~~UsesGraph_node8" class="node">
+<title>module~m_mpi</title>
+<g id="a_module~~m_poisson_fft~~UsesGraph_node8"><a xlink:href="../module/m_mpi.html" xlink:title="m_mpi">
+<polygon fill="#337ab7" stroke="#337ab7" points="184,-26 130,-26 130,-2 184,-2 184,-26"/>
+<text text-anchor="middle" x="157" y="-11.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_mpi</text>
+</a>
+</g>
+</g>
+<!-- module~m_common&#45;&gt;module~m_mpi -->
+<g id="module~~m_poisson_fft~~UsesGraph_edge5" class="edge">
+<title>module~m_common&#45;&gt;module~m_mpi</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M239.04,-81.94C232.9,-77.67 226.06,-72.74 220,-68 205.94,-56.99 190.81,-43.84 179.02,-33.27"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="181.21,-30.54 171.44,-26.43 176.52,-35.73 181.21,-30.54"/>
+</g>
+<!-- module~m_field&#45;&gt;module~m_common -->
+<g id="module~~m_poisson_fft~~UsesGraph_edge6" class="edge">
+<title>module~m_field&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M356.31,-127.09C341.13,-121.93 321.61,-115.29 304.04,-109.32"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="305.12,-105.99 294.52,-106.08 302.87,-112.61 305.12,-105.99"/>
+</g>
+<!-- module~m_mesh&#45;&gt;module~m_common -->
+<g id="module~~m_poisson_fft~~UsesGraph_edge8" class="edge">
+<title>module~m_mesh&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M382.5,-54C348.58,-48.45 311.24,-63.71 286.6,-76.96"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="284.82,-73.94 277.81,-81.88 288.24,-80.05 284.82,-73.94"/>
+</g>
+<!-- module~m_mesh&#45;&gt;module~m_field -->
+<g id="module~~m_poisson_fft~~UsesGraph_edge9" class="edge">
+<title>module~m_mesh&#45;&gt;module~m_field</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M470.99,-120.14C455.89,-122.91 437.09,-126.36 420.87,-129.33"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="419.86,-125.96 410.65,-131.2 421.12,-132.84 419.86,-125.96"/>
+</g>
+<!-- iso_fortran_env -->
+<g id="module~~m_poisson_fft~~UsesGraph_node6" class="node">
+<title>iso_fortran_env</title>
+<g id="a_module~~m_poisson_fft~~UsesGraph_node6"><a xlink:href="http://fortranwiki.org/fortran/show/iso_fortran_env" xlink:title="iso_fortran_env">
+<polygon fill="#337ab7" stroke="#337ab7" points="94,-66 0,-66 0,-42 94,-42 94,-66"/>
+<text text-anchor="middle" x="47" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">iso_fortran_env</text>
+</a>
+</g>
+</g>
+<!-- module~m_mesh&#45;&gt;iso_fortran_env -->
+<g id="module~~m_poisson_fft~~UsesGraph_edge7" class="edge">
+<title>module~m_mesh&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M257,-54C213.21,-49.71 201.11,-62.8 158,-54"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M156,-54C139.42,-50.62 121.1,-49.62 104.34,-49.75"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="104.05,-46.25 94.13,-49.96 104.2,-53.25 104.05,-46.25"/>
+</g>
+<!-- module~m_mesh_content -->
+<g id="module~~m_poisson_fft~~UsesGraph_node7" class="node">
+<title>module~m_mesh_content</title>
+<g id="a_module~~m_poisson_fft~~UsesGraph_node7"><a xlink:href="../module/m_mesh_content.html" xlink:title="m_mesh_content">
+<polygon fill="#337ab7" stroke="#337ab7" points="435,-106 332,-106 332,-82 435,-82 435,-106"/>
+<text text-anchor="middle" x="383.5" y="-91.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_mesh_content</text>
+</a>
+</g>
+</g>
+<!-- module~m_mesh&#45;&gt;module~m_mesh_content -->
+<g id="module~~m_poisson_fft~~UsesGraph_edge10" class="edge">
+<title>module~m_mesh&#45;&gt;module~m_mesh_content</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M470.99,-109.86C463.02,-108.4 454.01,-106.75 444.89,-105.08"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="445.47,-101.62 435.01,-103.26 444.21,-108.51 445.47,-101.62"/>
+</g>
+<!-- module~m_mesh&#45;&gt;module~m_mpi -->
+<g id="module~~m_poisson_fft~~UsesGraph_edge11" class="edge">
+<title>module~m_mesh&#45;&gt;module~m_mpi</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M484.26,-103C463.52,-87.13 423.84,-60.44 384.5,-54"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M382.5,-54C328.33,-45.14 313.63,-59.36 259,-54"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M257,-54C232.22,-51.57 206.19,-40.68 187.05,-30.88"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="188.44,-27.65 177.97,-26.05 185.15,-33.83 188.44,-27.65"/>
+</g>
+<!-- module~m_tdsops&#45;&gt;module~m_common -->
+<g id="module~~m_poisson_fft~~UsesGraph_edge13" class="edge">
+<title>module~m_tdsops&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M351.88,-204.08C344.78,-200.33 337.65,-195.65 332,-190 307.27,-165.26 318.98,-146.38 296,-120 293.66,-117.31 290.99,-114.76 288.17,-112.38"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="290.1,-109.45 280.03,-106.16 285.85,-115.01 290.1,-109.45"/>
+</g>
+<!-- module~m_tdsops&#45;&gt;iso_fortran_env -->
+<g id="module~~m_poisson_fft~~UsesGraph_edge12" class="edge">
+<title>module~m_tdsops&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M359.65,-203.92C327.22,-186.3 266.6,-151.67 220,-115 189.62,-91.1 195.97,-61.25 158,-54"/>
+</g>
+<!-- module~m_mesh_content&#45;&gt;module~m_common -->
+<g id="module~~m_poisson_fft~~UsesGraph_edge14" class="edge">
+<title>module~m_mesh_content&#45;&gt;module~m_common</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M331.91,-94C323.39,-94 314.57,-94 306.14,-94"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="306.09,-90.5 296.09,-94 306.09,-97.5 306.09,-90.5"/>
+</g>
+<!-- module~m_mpi&#45;&gt;iso_fortran_env -->
+<g id="module~~m_poisson_fft~~UsesGraph_edge15" class="edge">
+<title>module~m_mpi&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M129.86,-23.68C117.9,-28.11 103.44,-33.47 90.01,-38.44"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="88.63,-35.22 80.47,-41.97 91.07,-41.78 88.63,-35.22"/>
+</g>
+<!-- mpi -->
+<g id="module~~m_poisson_fft~~UsesGraph_node9" class="node">
+<title>mpi</title>
+<g id="a_module~~m_poisson_fft~~UsesGraph_node9"><a xlink:href="http://www.mpi-forum.org/docs/mpi-3.1/mpi31-report/node410.htm" xlink:title="mpi">
+<polygon fill="#337ab7" stroke="#337ab7" points="74,-24 20,-24 20,0 74,0 74,-24"/>
+<text text-anchor="middle" x="47" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi</text>
+</a>
+</g>
+</g>
+<!-- module~m_mpi&#45;&gt;mpi -->
+<g id="module~~m_poisson_fft~~UsesGraph_edge16" class="edge">
+<title>module~m_mpi&#45;&gt;mpi</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M129.86,-13.52C116.29,-13.26 99.5,-12.95 84.66,-12.68"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="84.34,-9.17 74.28,-12.49 84.21,-16.17 84.34,-9.17"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulem_poisson_fftUsesGraph = svgPanZoom('#modulem_poisson_fftUsesGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+          <div class="card">
+      <h3 class="card-header card-title bg-light">Used by</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~m_poisson_fft~~UsedByGraph Pages: 1 -->
+<svg id="modulem_poisson_fftUsedByGraph" width="641pt" height="177pt"
+ viewBox="0.00 0.00 641.00 177.19" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~m_poisson_fft~~UsedByGraph" class="graph" transform="scale(0.33 0.33) rotate(0) translate(4 532)">
+<title>module~~m_poisson_fft~~UsedByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-532 1935,-532 1935,4 -4,4"/>
+<!-- module~m_poisson_fft -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node1" class="node">
+<title>module~m_poisson_fft</title>
+<polygon fill="none" stroke="black" points="85,-70 0,-70 0,-46 85,-46 85,-70"/>
+<text text-anchor="middle" x="42.5" y="-55.6" font-family="Helvetica,sans-Serif" font-size="10.50">m_poisson_fft</text>
+</g>
+<!-- module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node2" class="node">
+<title>module~m_base_backend</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node2"><a xlink:href="../module/m_base_backend.html" xlink:title="m_base_backend">
+<polygon fill="#337ab7" stroke="#337ab7" points="232,-170 127,-170 127,-146 232,-146 232,-170"/>
+<text text-anchor="middle" x="179.5" y="-155.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_base_backend</text>
+</a>
+</g>
+</g>
+<!-- module~m_base_backend&#45;&gt;module~m_poisson_fft -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge1" class="edge">
+<title>module~m_base_backend&#45;&gt;module~m_poisson_fft</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M162.22,-145.94C138.8,-128.59 95.44,-96.48 68.11,-76.23"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="69.96,-73.24 59.84,-70.11 65.79,-78.87 69.96,-73.24"/>
+</g>
+<!-- module~m_cuda_poisson_fft -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node3" class="node">
+<title>module~m_cuda_poisson_fft</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node3"><a xlink:href="../module/m_cuda_poisson_fft.html" xlink:title="m_cuda_poisson_fft">
+<polygon fill="#337ab7" stroke="#337ab7" points="238,-70 121,-70 121,-46 238,-46 238,-70"/>
+<text text-anchor="middle" x="179.5" y="-55.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_poisson_fft</text>
+</a>
+</g>
+</g>
+<!-- module~m_cuda_poisson_fft&#45;&gt;module~m_poisson_fft -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge2" class="edge">
+<title>module~m_cuda_poisson_fft&#45;&gt;module~m_poisson_fft</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M120.86,-58C112.3,-58 103.52,-58 95.1,-58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="95.03,-54.5 85.03,-58 95.03,-61.5 95.03,-54.5"/>
+</g>
+<!-- module~m_omp_poisson_fft -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node4" class="node">
+<title>module~m_omp_poisson_fft</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node4"><a xlink:href="../module/m_omp_poisson_fft.html" xlink:title="m_omp_poisson_fft">
+<polygon fill="#337ab7" stroke="#337ab7" points="237,-28 122,-28 122,-4 237,-4 237,-28"/>
+<text text-anchor="middle" x="179.5" y="-13.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_omp_poisson_fft</text>
+</a>
+</g>
+</g>
+<!-- module~m_omp_poisson_fft&#45;&gt;module~m_poisson_fft -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge3" class="edge">
+<title>module~m_omp_poisson_fft&#45;&gt;module~m_poisson_fft</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M139.81,-28.04C124.85,-32.69 107.55,-38.07 91.78,-42.98"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="90.7,-39.65 82.19,-45.96 92.78,-46.33 90.7,-39.65"/>
+</g>
+<!-- module~m_abl -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node5" class="node">
+<title>module~m_abl</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node5"><a xlink:href="../module/m_abl.html" xlink:title="m_abl">
+<polygon fill="#337ab7" stroke="#337ab7" points="1067,-488 1013,-488 1013,-464 1067,-464 1067,-488"/>
+<text text-anchor="middle" x="1040" y="-473.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_abl</text>
+</a>
+</g>
+</g>
+<!-- module~m_abl&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge4" class="edge">
+<title>module~m_abl&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1012.86,-487.76C984.43,-500.06 940.68,-517.4 923,-516"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M921,-516C866.43,-511.69 859.24,-475.85 804.5,-476"/>
+</g>
+<!-- module~m_les -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node19" class="node">
+<title>module~m_les</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node19"><a xlink:href="../module/m_les.html" xlink:title="m_les">
+<polygon fill="#337ab7" stroke="#337ab7" points="949,-488 895,-488 895,-464 949,-464 949,-488"/>
+<text text-anchor="middle" x="922" y="-473.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_les</text>
+</a>
+</g>
+</g>
+<!-- module~m_abl&#45;&gt;module~m_les -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge52" class="edge">
+<title>module~m_abl&#45;&gt;module~m_les</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1012.97,-476C997.26,-476 977,-476 959.68,-476"/>
+<polygon fill="#002eff" stroke="#002eff" points="959.35,-472.5 949.35,-476 959.35,-479.5 959.35,-472.5"/>
+</g>
+<!-- module~m_abl_diagnostics -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node6" class="node">
+<title>module~m_abl_diagnostics</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node6"><a xlink:href="../module/m_abl_diagnostics.html" xlink:title="m_abl_diagnostics">
+<polygon fill="#337ab7" stroke="#337ab7" points="1095,-446 985,-446 985,-422 1095,-422 1095,-446"/>
+<text text-anchor="middle" x="1040" y="-431.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_abl_diagnostics</text>
+</a>
+</g>
+</g>
+<!-- module~m_abl_diagnostics&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge5" class="edge">
+<title>module~m_abl_diagnostics&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M984.86,-428.38C965.11,-427.79 942.78,-428.86 923,-434"/>
+</g>
+<!-- module~m_abl_diagnostics&#45;&gt;module~m_les -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge53" class="edge">
+<title>module~m_abl_diagnostics&#45;&gt;module~m_les</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1005.76,-446.04C991.04,-451.36 973.7,-457.64 958.71,-463.07"/>
+<polygon fill="#002eff" stroke="#002eff" points="957.46,-459.8 949.25,-466.5 959.84,-466.38 957.46,-459.8"/>
+</g>
+<!-- module~m_base_case -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node7" class="node">
+<title>module~m_base_case</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node7"><a xlink:href="../module/m_base_case.html" xlink:title="m_base_case">
+<polygon fill="#337ab7" stroke="#337ab7" points="1683.5,-210 1599.5,-210 1599.5,-186 1683.5,-186 1683.5,-210"/>
+<text text-anchor="middle" x="1641.5" y="-195.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_base_case</text>
+</a>
+</g>
+</g>
+<!-- module~m_base_case&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge6" class="edge">
+<title>module~m_base_case&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1599.37,-186.37C1573.31,-178.79 1538.99,-168.4 1509,-158"/>
+</g>
+<!-- module~m_solver -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node22" class="node">
+<title>module~m_solver</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node22"><a xlink:href="../module/m_solver.html" xlink:title="m_solver">
+<polygon fill="#337ab7" stroke="#337ab7" points="1070.5,-250 1009.5,-250 1009.5,-226 1070.5,-226 1070.5,-250"/>
+<text text-anchor="middle" x="1040" y="-235.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_solver</text>
+</a>
+</g>
+</g>
+<!-- module~m_base_case&#45;&gt;module~m_solver -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge56" class="edge">
+<title>module~m_base_case&#45;&gt;module~m_solver</title>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1507,-318C1443.12,-337.82 1422.84,-326.55 1356.5,-318"/>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1354.5,-318C1282.42,-308.71 1263.49,-321.17 1191,-316"/>
+</g>
+<!-- module~m_io_manager -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node30" class="node">
+<title>module~m_io_manager</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node30"><a xlink:href="../module/m_io_manager.html" xlink:title="m_io_manager">
+<polygon fill="#337ab7" stroke="#337ab7" points="1554,-210 1462,-210 1462,-186 1554,-186 1554,-210"/>
+<text text-anchor="middle" x="1508" y="-195.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_io_manager</text>
+</a>
+</g>
+</g>
+<!-- module~m_base_case&#45;&gt;module~m_io_manager -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge75" class="edge">
+<title>module~m_base_case&#45;&gt;module~m_io_manager</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M1599.25,-198C1588.18,-198 1576.03,-198 1564.34,-198"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="1564.21,-194.5 1554.21,-198 1564.21,-201.5 1564.21,-194.5"/>
+</g>
+<!-- module~m_monitoring -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node31" class="node">
+<title>module~m_monitoring</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node31"><a xlink:href="../module/m_monitoring.html" xlink:title="m_monitoring">
+<polygon fill="#337ab7" stroke="#337ab7" points="1399,-290 1312,-290 1312,-266 1399,-266 1399,-290"/>
+<text text-anchor="middle" x="1355.5" y="-275.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_monitoring</text>
+</a>
+</g>
+</g>
+<!-- module~m_base_case&#45;&gt;module~m_monitoring -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge76" class="edge">
+<title>module~m_base_case&#45;&gt;module~m_monitoring</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1632.85,-210.17C1619.27,-230.93 1589.04,-273.39 1554,-299 1536.47,-311.81 1529.73,-311.57 1509,-318"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1507,-318C1496.95,-321.12 1443.48,-305.65 1403.1,-293.05"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1404,-289.67 1393.42,-290.01 1401.9,-296.35 1404,-289.67"/>
+</g>
+<!-- module~m_postprocess -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node32" class="node">
+<title>module~m_postprocess</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node32"><a xlink:href="../module/m_postprocess.html" xlink:title="m_postprocess">
+<polygon fill="#337ab7" stroke="#337ab7" points="1553.5,-290 1462.5,-290 1462.5,-266 1553.5,-266 1553.5,-290"/>
+<text text-anchor="middle" x="1508" y="-275.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_postprocess</text>
+</a>
+</g>
+</g>
+<!-- module~m_base_case&#45;&gt;module~m_postprocess -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge77" class="edge">
+<title>module~m_base_case&#45;&gt;module~m_postprocess</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1621.38,-210.2C1603.93,-221.27 1577.37,-237.96 1554,-252 1549.17,-254.9 1544.01,-257.94 1538.98,-260.87"/>
+<polygon fill="#003fff" stroke="#003fff" points="1537.05,-257.94 1530.15,-265.98 1540.56,-264 1537.05,-257.94"/>
+</g>
+<!-- module~m_case_abl -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node8" class="node">
+<title>module~m_case_abl</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node8"><a xlink:href="../module/m_case_abl.html" xlink:title="m_case_abl">
+<polygon fill="#337ab7" stroke="#337ab7" points="1817,-338 1742,-338 1742,-314 1817,-314 1817,-338"/>
+<text text-anchor="middle" x="1779.5" y="-323.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_case_abl</text>
+</a>
+</g>
+</g>
+<!-- module~m_case_abl&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge7" class="edge">
+<title>module~m_case_abl&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1189,-476C1120.99,-480.15 1108.99,-511.49 1041,-516"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1039,-516C987.56,-519.41 974.4,-520.06 923,-516"/>
+</g>
+<!-- module~m_case_abl&#45;&gt;module~m_abl -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge27" class="edge">
+<title>module~m_case_abl&#45;&gt;module~m_abl</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1189,-476C1150.92,-478.32 1107.22,-477.95 1077.23,-477.23"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1077.32,-473.73 1067.23,-476.96 1077.13,-480.73 1077.32,-473.73"/>
+</g>
+<!-- module~m_case_abl&#45;&gt;module~m_abl_diagnostics -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge28" class="edge">
+<title>module~m_case_abl&#45;&gt;module~m_abl_diagnostics</title>
+<path fill="none" stroke="#ff4500" stroke-dasharray="5,2" d="M1750.28,-338.02C1708.21,-355.55 1626.23,-388.19 1554,-408 1395.71,-451.42 1354.89,-466.99 1191,-476"/>
+<path fill="none" stroke="#ff4500" stroke-dasharray="5,2" d="M1189,-476C1168.59,-477.24 1119.66,-461.98 1083.62,-449.5"/>
+<polygon fill="#ff4500" stroke="#ff4500" points="1084.42,-446.08 1073.83,-446.08 1082.11,-452.68 1084.42,-446.08"/>
+</g>
+<!-- module~m_case_abl&#45;&gt;module~m_base_case -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge29" class="edge">
+<title>module~m_case_abl&#45;&gt;module~m_base_case</title>
+<path fill="none" stroke="#ff8b00" stroke-dasharray="5,2" d="M1744.01,-313.98C1738.74,-311.42 1733.55,-308.43 1729,-305 1697.01,-280.88 1669.8,-242.43 1654.85,-218.79"/>
+<polygon fill="#ff8b00" stroke="#ff8b00" points="1657.79,-216.89 1649.56,-210.22 1651.84,-220.57 1657.79,-216.89"/>
+</g>
+<!-- module~m_case_channel -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node9" class="node">
+<title>module~m_case_channel</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node9"><a xlink:href="../module/m_case_channel.html" xlink:title="m_case_channel">
+<polygon fill="#337ab7" stroke="#337ab7" points="1830,-132 1729,-132 1729,-108 1830,-108 1830,-132"/>
+<text text-anchor="middle" x="1779.5" y="-117.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_case_channel</text>
+</a>
+</g>
+</g>
+<!-- module~m_case_channel&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge8" class="edge">
+<title>module~m_case_channel&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1728.9,-113.83C1702.76,-112.12 1670.42,-112.44 1642.5,-120"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1640.5,-120C1581.78,-135.9 1566.48,-177.93 1509,-158"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1507,-158C1453.61,-139.49 1476.42,-85.52 1426,-60 1273.08,17.4 1212.39,-38 1041,-38 1041,-38 1041,-38 921,-38 843.65,-38 824.05,-42.86 748,-57 712.07,-63.68 704.8,-73.8 668.5,-78"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M666.5,-78C562.17,-88.15 535.6,-85.73 431.5,-98"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M429.5,-98C358.23,-106.4 277.87,-128.05 228.19,-142.91"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="226.94,-139.64 218.38,-145.88 228.96,-146.34 226.94,-139.64"/>
+</g>
+<!-- module~m_case_channel&#45;&gt;module~m_base_case -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge30" class="edge">
+<title>module~m_case_channel&#45;&gt;module~m_base_case</title>
+<path fill="none" stroke="#ff8b00" stroke-dasharray="5,2" d="M1746.08,-132.04C1740.23,-134.69 1734.31,-137.7 1729,-141 1711.07,-152.15 1710.51,-160.2 1693,-172 1688.3,-175.17 1683.16,-178.23 1678.02,-181.06"/>
+<polygon fill="#ff8b00" stroke="#ff8b00" points="1676.07,-178.14 1668.86,-185.9 1679.34,-184.33 1676.07,-178.14"/>
+</g>
+<!-- module~m_case_channel&#45;&gt;module~m_solver -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge57" class="edge">
+<title>module~m_case_channel&#45;&gt;module~m_solver</title>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1640.5,-120C1616.51,-126.49 1607.61,-126.46 1590,-144 1563.8,-170.09 1580.76,-193.49 1554,-219 1538.28,-233.98 1529.61,-231.19 1509,-238"/>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1507,-238C1443.49,-258.98 1421.77,-223.39 1356.5,-238"/>
+</g>
+<!-- module~m_case_cylinder -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node10" class="node">
+<title>module~m_case_cylinder</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node10"><a xlink:href="../module/m_case_cylinder.html" xlink:title="m_case_cylinder">
+<polygon fill="#337ab7" stroke="#337ab7" points="1830,-254 1729,-254 1729,-230 1830,-230 1830,-254"/>
+<text text-anchor="middle" x="1779.5" y="-239.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_case_cylinder</text>
+</a>
+</g>
+</g>
+<!-- module~m_case_cylinder&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge9" class="edge">
+<title>module~m_case_cylinder&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1507,-356C1339.95,-379.51 915.07,-364.37 748,-341 711.81,-335.94 704.94,-317.2 668.5,-320"/>
+</g>
+<!-- module~m_case_cylinder&#45;&gt;module~m_base_case -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge31" class="edge">
+<title>module~m_case_cylinder&#45;&gt;module~m_base_case</title>
+<path fill="none" stroke="#ff8b00" stroke-dasharray="5,2" d="M1741.34,-229.98C1725.3,-224.79 1706.35,-218.66 1689.36,-213.16"/>
+<polygon fill="#ff8b00" stroke="#ff8b00" points="1690.21,-209.76 1679.62,-210.01 1688.05,-216.42 1690.21,-209.76"/>
+</g>
+<!-- module~m_case_cylinder&#45;&gt;module~m_solver -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge58" class="edge">
+<title>module~m_case_cylinder&#45;&gt;module~m_solver</title>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1749.96,-254.1C1680.72,-283.44 1509.4,-356.03 1509,-356"/>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1507,-356C1438.68,-365.61 1424.92,-326.82 1356.5,-318"/>
+</g>
+<!-- module~m_case_generic -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node11" class="node">
+<title>module~m_case_generic</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node11"><a xlink:href="../module/m_case_generic.html" xlink:title="m_case_generic">
+<polygon fill="#337ab7" stroke="#337ab7" points="1829,-296 1730,-296 1730,-272 1829,-272 1829,-296"/>
+<text text-anchor="middle" x="1779.5" y="-281.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_case_generic</text>
+</a>
+</g>
+</g>
+<!-- module~m_case_generic&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge10" class="edge">
+<title>module~m_case_generic&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1507,-394C1275.32,-408.76 1213.34,-371.1 985,-413 956.38,-418.25 951.16,-426.68 923,-434"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M921,-434C867.43,-446.63 859.54,-475.85 804.5,-476"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M802.5,-476C563.85,-476.67 460.2,-530.29 274,-381 209.55,-329.33 188.94,-225.34 182.85,-179.99"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="186.32,-179.52 181.62,-170.03 179.37,-180.38 186.32,-179.52"/>
+</g>
+<!-- module~m_case_generic&#45;&gt;module~m_base_case -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge32" class="edge">
+<title>module~m_case_generic&#45;&gt;module~m_base_case</title>
+<path fill="none" stroke="#ff8b00" stroke-dasharray="5,2" d="M1746.78,-271.9C1740.75,-269.22 1734.58,-266.22 1729,-263 1705.72,-249.58 1681.44,-230.86 1664.56,-216.95"/>
+<polygon fill="#ff8b00" stroke="#ff8b00" points="1666.36,-213.9 1656.44,-210.18 1661.87,-219.27 1666.36,-213.9"/>
+</g>
+<!-- module~m_case_generic&#45;&gt;module~m_solver -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge59" class="edge">
+<title>module~m_case_generic&#45;&gt;module~m_solver</title>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1749.95,-296.08C1681.91,-324.81 1515.38,-394.78 1509,-394"/>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1507,-394C1432.22,-398.76 1430.82,-327.58 1356.5,-318"/>
+</g>
+<!-- module~m_case_tgv -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node12" class="node">
+<title>module~m_case_tgv</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node12"><a xlink:href="../module/m_case_tgv.html" xlink:title="m_case_tgv">
+<polygon fill="#337ab7" stroke="#337ab7" points="1817,-174 1742,-174 1742,-150 1817,-150 1817,-174"/>
+<text text-anchor="middle" x="1779.5" y="-159.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_case_tgv</text>
+</a>
+</g>
+</g>
+<!-- module~m_case_tgv&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge11" class="edge">
+<title>module~m_case_tgv&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1741.97,-157.77C1714.5,-155.35 1675.99,-153.59 1642.5,-158"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1640.5,-158C1582.56,-165.64 1564.22,-177.15 1509,-158"/>
+</g>
+<!-- module~m_case_tgv&#45;&gt;module~m_base_case -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge33" class="edge">
+<title>module~m_case_tgv&#45;&gt;module~m_base_case</title>
+<path fill="none" stroke="#ff8b00" stroke-dasharray="5,2" d="M1741.7,-171.74C1726.84,-175.67 1709.45,-180.28 1693.42,-184.52"/>
+<polygon fill="#ff8b00" stroke="#ff8b00" points="1692.42,-181.17 1683.65,-187.11 1694.21,-187.93 1692.42,-181.17"/>
+</g>
+<!-- module~m_case_tgv&#45;&gt;module~m_solver -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge60" class="edge">
+<title>module~m_case_tgv&#45;&gt;module~m_solver</title>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1640.5,-158C1616.73,-161.13 1609.64,-163.24 1590,-177 1569.86,-191.1 1573.85,-204.5 1554,-219 1536.47,-231.8 1529.61,-231.19 1509,-238"/>
+</g>
+<!-- module~m_cuda_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node13" class="node">
+<title>module~m_cuda_backend</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node13"><a xlink:href="../module/m_cuda_backend.html" xlink:title="m_cuda_backend">
+<polygon fill="#337ab7" stroke="#337ab7" points="483.5,-70 377.5,-70 377.5,-46 483.5,-46 483.5,-70"/>
+<text text-anchor="middle" x="430.5" y="-55.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_backend</text>
+</a>
+</g>
+</g>
+<!-- module~m_cuda_backend&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge12" class="edge">
+<title>module~m_cuda_backend&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M377.21,-60.21C346.12,-63.09 306.53,-69.57 274,-84 244.79,-96.96 216.81,-121.19 199.2,-138.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.46,-136.19 191.87,-145.74 201.41,-141.13 196.46,-136.19"/>
+</g>
+<!-- module~m_cuda_backend&#45;&gt;module~m_cuda_poisson_fft -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge25" class="edge">
+<title>module~m_cuda_backend&#45;&gt;module~m_cuda_poisson_fft</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M377.3,-58C339.83,-58 289,-58 248.38,-58"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="248.28,-54.5 238.28,-58 248.28,-61.5 248.28,-54.5"/>
+</g>
+<!-- module~m_ibm -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node14" class="node">
+<title>module~m_ibm</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node14"><a xlink:href="../module/m_ibm.html" xlink:title="m_ibm">
+<polygon fill="#337ab7" stroke="#337ab7" points="949,-210 895,-210 895,-186 949,-186 949,-210"/>
+<text text-anchor="middle" x="922" y="-195.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_ibm</text>
+</a>
+</g>
+</g>
+<!-- module~m_ibm&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge13" class="edge">
+<title>module~m_ibm&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M894.96,-206.54C871.27,-214.41 835.38,-226.56 804.5,-238"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M802.5,-238C778.45,-246.91 770.48,-244.64 748,-257 708.5,-278.72 713.45,-316.55 668.5,-320"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M666.5,-320C562.36,-327.99 533.82,-340.95 431.5,-320"/>
+</g>
+<!-- module~m_io_session -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node18" class="node">
+<title>module~m_io_session</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node18"><a xlink:href="../module/m_io_session.html" xlink:title="m_io_session">
+<polygon fill="#337ab7" stroke="#337ab7" points="844.5,-90 762.5,-90 762.5,-66 844.5,-66 844.5,-90"/>
+<text text-anchor="middle" x="803.5" y="-75.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_io_session</text>
+</a>
+</g>
+</g>
+<!-- module~m_ibm&#45;&gt;module~m_io_session -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge49" class="edge">
+<title>module~m_ibm&#45;&gt;module~m_io_session</title>
+<path fill="none" stroke="#0073ff" stroke-dasharray="5,2" d="M908.97,-185.61C888.72,-164.75 847.68,-122.47 823.5,-97.57"/>
+<polygon fill="#0073ff" stroke="#0073ff" points="825.77,-94.88 816.29,-90.14 820.74,-99.76 825.77,-94.88"/>
+</g>
+<!-- module~m_io_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node15" class="node">
+<title>module~m_io_backend</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node15"><a xlink:href="../module/m_io_backend.html" xlink:title="m_io_backend">
+<polygon fill="#337ab7" stroke="#337ab7" points="712,-130 623,-130 623,-106 712,-106 712,-130"/>
+<text text-anchor="middle" x="667.5" y="-115.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_io_backend</text>
+</a>
+</g>
+</g>
+<!-- module~m_io_backend&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge14" class="edge">
+<title>module~m_io_backend&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M622.67,-108.98C575.4,-100.5 497.99,-90.16 431.5,-98"/>
+</g>
+<!-- module~m_io_base -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node17" class="node">
+<title>module~m_io_base</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node17"><a xlink:href="../module/m_io_base.html" xlink:title="m_io_base">
+<polygon fill="#337ab7" stroke="#337ab7" points="465,-170 396,-170 396,-146 465,-146 465,-170"/>
+<text text-anchor="middle" x="430.5" y="-155.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_io_base</text>
+</a>
+</g>
+</g>
+<!-- module~m_io_backend&#45;&gt;module~m_io_base -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge43" class="edge">
+<title>module~m_io_backend&#45;&gt;module~m_io_base</title>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M622.85,-125.43C580.67,-132.61 517.13,-143.42 475,-150.6"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="474.31,-147.16 465.04,-152.29 475.48,-154.06 474.31,-147.16"/>
+</g>
+<!-- module~m_io_backend~2 -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node16" class="node">
+<title>module~m_io_backend~2</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node16"><a xlink:href="../module/m_io_backend~2.html" xlink:title="m_io_backend">
+<polygon fill="#337ab7" stroke="#337ab7" points="712,-251 623,-251 623,-227 712,-227 712,-251"/>
+<text text-anchor="middle" x="667.5" y="-236.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_io_backend</text>
+</a>
+</g>
+</g>
+<!-- module~m_io_backend~2&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge15" class="edge">
+<title>module~m_io_backend~2&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M650.39,-251.02C612.88,-277.54 516.48,-337.4 431.5,-320"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M429.5,-320C330.92,-299.82 237.96,-216.29 199.32,-177.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="201.43,-174.86 191.92,-170.19 196.44,-179.77 201.43,-174.86"/>
+</g>
+<!-- module~m_io_backend~2&#45;&gt;module~m_io_base -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge44" class="edge">
+<title>module~m_io_backend~2&#45;&gt;module~m_io_base</title>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M631.57,-226.96C589.76,-212.55 519.75,-188.42 474.61,-172.86"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="475.69,-169.53 465.1,-169.58 473.41,-176.15 475.69,-169.53"/>
+</g>
+<!-- module~m_io_base&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge16" class="edge">
+<title>module~m_io_base&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M395.92,-158C356.63,-158 290.79,-158 242.22,-158"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="242.13,-154.5 232.13,-158 242.13,-161.5 242.13,-154.5"/>
+</g>
+<!-- module~m_io_session&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge17" class="edge">
+<title>module~m_io_session&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M762.49,-75.6C735.78,-74.59 699.93,-74.37 668.5,-78"/>
+</g>
+<!-- module~m_io_session&#45;&gt;module~m_io_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge42" class="edge">
+<title>module~m_io_session&#45;&gt;module~m_io_backend</title>
+<path fill="none" stroke="#00ffb9" stroke-dasharray="5,2" d="M762.3,-90C748.64,-94.08 733.21,-98.68 718.86,-102.97"/>
+<polygon fill="#00ffb9" stroke="#00ffb9" points="717.72,-99.65 709.14,-105.87 719.72,-106.36 717.72,-99.65"/>
+</g>
+<!-- module~m_io_session&#45;&gt;module~m_io_base -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge46" class="edge">
+<title>module~m_io_session&#45;&gt;module~m_io_base</title>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M790.18,-90.07C768.07,-110.57 719.19,-150.7 668.5,-158"/>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M666.5,-158C600.42,-167.52 522.81,-164.87 475.4,-161.72"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="475.4,-158.21 465.18,-161 474.91,-165.19 475.4,-158.21"/>
+</g>
+<!-- module~m_les&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge18" class="edge">
+<title>module~m_les&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M894.63,-475.96C871.01,-475.93 835.45,-475.91 804.5,-476"/>
+</g>
+<!-- module~m_omp_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node20" class="node">
+<title>module~m_omp_backend</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node20"><a xlink:href="../module/m_omp_backend.html" xlink:title="m_omp_backend">
+<polygon fill="#337ab7" stroke="#337ab7" points="1693,-528 1590,-528 1590,-504 1693,-504 1693,-528"/>
+<text text-anchor="middle" x="1641.5" y="-513.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_omp_backend</text>
+</a>
+</g>
+</g>
+<!-- module~m_omp_backend&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge19" class="edge">
+<title>module~m_omp_backend&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1589.85,-514.25C1565.39,-513.85 1535.64,-514.02 1509,-516"/>
+</g>
+<!-- module~m_omptgt_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node21" class="node">
+<title>module~m_omptgt_backend</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node21"><a xlink:href="../module/m_omptgt_backend.html" xlink:title="m_omptgt_backend">
+<polygon fill="#337ab7" stroke="#337ab7" points="489.5,-372 371.5,-372 371.5,-348 489.5,-348 489.5,-372"/>
+<text text-anchor="middle" x="430.5" y="-357.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_omptgt_backend</text>
+</a>
+</g>
+</g>
+<!-- module~m_omptgt_backend&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge20" class="edge">
+<title>module~m_omptgt_backend&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M371.2,-362.27C339.79,-360.71 301.88,-354.07 274,-334 221.1,-295.91 195.42,-218.56 185.55,-180.37"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="188.86,-179.16 183.08,-170.28 182.06,-180.82 188.86,-179.16"/>
+</g>
+<!-- module~m_solver&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge21" class="edge">
+<title>module~m_solver&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1009.22,-235.32C985.65,-233.84 952,-233.16 923,-238"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M921,-238C869.93,-246.52 853.05,-220.01 804.5,-238"/>
+</g>
+<!-- module~m_solver&#45;&gt;module~m_ibm -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge41" class="edge">
+<title>module~m_solver&#45;&gt;module~m_ibm</title>
+<path fill="none" stroke="#00ff73" stroke-dasharray="5,2" d="M1009.43,-227.8C994.09,-222.51 975.22,-216.01 959.03,-210.42"/>
+<polygon fill="#00ff73" stroke="#00ff73" points="959.95,-207.04 949.35,-207.09 957.66,-213.66 959.95,-207.04"/>
+</g>
+<!-- module~m_solver&#45;&gt;module~m_les -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge54" class="edge">
+<title>module~m_solver&#45;&gt;module~m_les</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1035.44,-250.09C1025.28,-283.43 993.98,-378.84 949,-448 947.16,-450.84 945.01,-453.65 942.77,-456.35"/>
+<polygon fill="#002eff" stroke="#002eff" points="940.01,-454.18 935.9,-463.95 945.2,-458.87 940.01,-454.18"/>
+</g>
+<!-- module~m_time_integrator -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node23" class="node">
+<title>module~m_time_integrator</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node23"><a xlink:href="../module/m_time_integrator.html" xlink:title="m_time_integrator">
+<polygon fill="#337ab7" stroke="#337ab7" points="859,-290 748,-290 748,-266 859,-266 859,-290"/>
+<text text-anchor="middle" x="803.5" y="-275.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_time_integrator</text>
+</a>
+</g>
+</g>
+<!-- module~m_solver&#45;&gt;module~m_time_integrator -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge68" class="edge">
+<title>module~m_solver&#45;&gt;module~m_time_integrator</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M921,-238C893.44,-242.6 863.66,-252.92 841.11,-261.93"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="839.54,-258.79 831.61,-265.82 842.19,-265.27 839.54,-258.79"/>
+</g>
+<!-- module~m_vector_calculus -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node24" class="node">
+<title>module~m_vector_calculus</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node24"><a xlink:href="../module/m_vector_calculus.html" xlink:title="m_vector_calculus">
+<polygon fill="#337ab7" stroke="#337ab7" points="859,-332 748,-332 748,-308 859,-308 859,-332"/>
+<text text-anchor="middle" x="803.5" y="-317.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_vector_calculus</text>
+</a>
+</g>
+</g>
+<!-- module~m_solver&#45;&gt;module~m_vector_calculus -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge69" class="edge">
+<title>module~m_solver&#45;&gt;module~m_vector_calculus</title>
+<path fill="none" stroke="#ff00d0" stroke-dasharray="5,2" d="M921,-238C882.87,-244.36 891.49,-278.06 859,-299 856.44,-300.65 853.73,-302.2 850.94,-303.66"/>
+<polygon fill="#ff00d0" stroke="#ff00d0" points="849.39,-300.52 841.85,-307.97 852.39,-306.84 849.39,-300.52"/>
+</g>
+<!-- module~m_time_integrator&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge22" class="edge">
+<title>module~m_time_integrator&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M769.84,-290.11C736.92,-301.97 688.25,-318.48 668.5,-320"/>
+</g>
+<!-- module~m_vector_calculus&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge23" class="edge">
+<title>module~m_vector_calculus&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M747.99,-318.11C723.63,-317.75 694.6,-318 668.5,-320"/>
+</g>
+<!-- proc~init_omp_poisson_fft -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node25" class="node">
+<title>proc~init_omp_poisson_fft</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node25"><a xlink:href="../proc/init_omp_poisson_fft.html" xlink:title="m_omp_backend::omp_backend_t%init_omp_poisson_fft">
+<polygon fill="#d9534f" stroke="#d9534f" points="587,-28 274,-28 274,-4 587,-4 587,-28"/>
+<text text-anchor="middle" x="430.5" y="-13.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_omp_backend::omp_backend_t%init_omp_poisson_fft</text>
+</a>
+</g>
+</g>
+<!-- proc~init_omp_poisson_fft&#45;&gt;module~m_omp_poisson_fft -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge26" class="edge">
+<title>proc~init_omp_poisson_fft&#45;&gt;module~m_omp_poisson_fft</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M273.93,-16C264.7,-16 255.72,-16 247.2,-16"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="247.06,-12.5 237.06,-16 247.06,-19.5 247.06,-12.5"/>
+</g>
+<!-- program~xcompact -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node26" class="node">
+<title>program~xcompact</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node26"><a xlink:href="../program/xcompact.html" xlink:title="xcompact">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1931,-234 1866,-234 1866,-210 1931,-210 1931,-234"/>
+<text text-anchor="middle" x="1898.5" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">xcompact</text>
+</a>
+</g>
+</g>
+<!-- program~xcompact&#45;&gt;module~m_base_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge24" class="edge">
+<title>program~xcompact&#45;&gt;module~m_base_backend</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1895.99,-234.09C1890.11,-275.65 1864.72,-413.52 1780.5,-476"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1778.5,-476C1744.69,-501.08 1631.44,-487.58 1590,-495 1553.39,-501.55 1546.09,-513.24 1509,-516"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1507,-516C1300.08,-524.9 1247.66,-502.28 1041,-516"/>
+</g>
+<!-- program~xcompact&#45;&gt;module~m_base_case -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge34" class="edge">
+<title>program~xcompact&#45;&gt;module~m_base_case</title>
+<path fill="none" stroke="#ff8b00" stroke-dasharray="5,2" d="M1865.98,-219.03C1822.97,-214.99 1745.37,-207.68 1693.89,-202.84"/>
+<polygon fill="#ff8b00" stroke="#ff8b00" points="1693.93,-199.32 1683.64,-201.87 1693.27,-206.29 1693.93,-199.32"/>
+</g>
+<!-- program~xcompact&#45;&gt;module~m_case_abl -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge35" class="edge">
+<title>program~xcompact&#45;&gt;module~m_case_abl</title>
+<path fill="none" stroke="#ffd000" stroke-dasharray="5,2" d="M1890.25,-234.29C1879.24,-252.04 1856.72,-284.91 1830,-305 1828.15,-306.39 1826.2,-307.71 1824.17,-308.95"/>
+<polygon fill="#ffd000" stroke="#ffd000" points="1822.09,-306.1 1814.98,-313.96 1825.44,-312.25 1822.09,-306.1"/>
+</g>
+<!-- program~xcompact&#45;&gt;module~m_case_channel -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge36" class="edge">
+<title>program~xcompact&#45;&gt;module~m_case_channel</title>
+<path fill="none" stroke="#e7ff00" stroke-dasharray="5,2" d="M1889.99,-209.73C1878.83,-192.35 1856.31,-160.53 1830,-141 1828.14,-139.62 1826.18,-138.31 1824.15,-137.07"/>
+<polygon fill="#e7ff00" stroke="#e7ff00" points="1825.41,-133.77 1814.95,-132.08 1822.07,-139.93 1825.41,-133.77"/>
+</g>
+<!-- program~xcompact&#45;&gt;module~m_case_cylinder -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge37" class="edge">
+<title>program~xcompact&#45;&gt;module~m_case_cylinder</title>
+<path fill="none" stroke="#a2ff00" stroke-dasharray="5,2" d="M1865.84,-227.41C1857.87,-228.77 1849.06,-230.28 1840.21,-231.79"/>
+<polygon fill="#a2ff00" stroke="#a2ff00" points="1839.51,-228.36 1830.24,-233.5 1840.69,-235.26 1839.51,-228.36"/>
+</g>
+<!-- program~xcompact&#45;&gt;module~m_case_generic -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge38" class="edge">
+<title>program~xcompact&#45;&gt;module~m_case_generic</title>
+<path fill="none" stroke="#5cff00" stroke-dasharray="5,2" d="M1879.29,-234.05C1865.93,-242.64 1847.21,-254.18 1830,-263 1826.87,-264.6 1823.6,-266.19 1820.28,-267.73"/>
+<polygon fill="#5cff00" stroke="#5cff00" points="1818.62,-264.63 1810.92,-271.91 1821.48,-271.02 1818.62,-264.63"/>
+</g>
+<!-- program~xcompact&#45;&gt;module~m_case_tgv -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge39" class="edge">
+<title>program~xcompact&#45;&gt;module~m_case_tgv</title>
+<path fill="none" stroke="#17ff00" stroke-dasharray="5,2" d="M1873.82,-209.86C1856.38,-200.91 1832.44,-188.64 1813.17,-178.76"/>
+<polygon fill="#17ff00" stroke="#17ff00" points="1814.64,-175.57 1804.14,-174.12 1811.44,-181.8 1814.64,-175.57"/>
+</g>
+<!-- program~xcompact&#45;&gt;module~m_cuda_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge40" class="edge">
+<title>program~xcompact&#45;&gt;module~m_cuda_backend</title>
+<path fill="none" stroke="#00ff2e" stroke-dasharray="5,2" d="M1893.47,-209.68C1885.08,-185.69 1863.68,-132.14 1830,-99 1762.83,-32.9 1736.74,0 1642.5,0 1642.5,0 1642.5,0 802.5,0 705.32,0 683.06,-22.27 587,-37 556.42,-41.69 522.38,-46.35 493.95,-50.08"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="493.22,-46.65 483.76,-51.42 494.12,-53.59 493.22,-46.65"/>
+</g>
+<!-- program~xcompact&#45;&gt;module~m_omp_backend -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge55" class="edge">
+<title>program~xcompact&#45;&gt;module~m_omp_backend</title>
+<path fill="none" stroke="#1700ff" stroke-dasharray="5,2" d="M1778.5,-476C1756.6,-492.25 1728.18,-501.92 1702.99,-507.67"/>
+<polygon fill="#1700ff" stroke="#1700ff" points="1702.21,-504.26 1693.15,-509.76 1703.66,-511.11 1702.21,-504.26"/>
+</g>
+<!-- module~m_checkpoint_manager -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node27" class="node">
+<title>module~m_checkpoint_manager</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node27"><a xlink:href="../module/m_checkpoint_manager.html" xlink:title="m_checkpoint_manager">
+<polygon fill="#337ab7" stroke="#337ab7" points="1426,-130 1285,-130 1285,-106 1426,-106 1426,-130"/>
+<text text-anchor="middle" x="1355.5" y="-115.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_checkpoint_manager</text>
+</a>
+</g>
+</g>
+<!-- module~m_checkpoint_manager&#45;&gt;module~m_io_session -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge47" class="edge">
+<title>module~m_checkpoint_manager&#45;&gt;module~m_io_session</title>
+<path fill="none" stroke="#0073ff" stroke-dasharray="5,2" d="M1284.76,-123.74C1221.02,-127.73 1124.28,-130.64 1041,-120"/>
+</g>
+<!-- module~m_checkpoint_manager&#45;&gt;module~m_solver -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge61" class="edge">
+<title>module~m_checkpoint_manager&#45;&gt;module~m_solver</title>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1336.54,-130.24C1316.1,-143.73 1281.34,-165.31 1249,-179 1192.48,-202.92 1123.3,-220.35 1080.69,-229.83"/>
+<polygon fill="#a200ff" stroke="#a200ff" points="1079.74,-226.45 1070.72,-232.01 1081.24,-233.29 1079.74,-226.45"/>
+</g>
+<!-- module~m_checkpoint_state -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node28" class="node">
+<title>module~m_checkpoint_state</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node28"><a xlink:href="../module/m_checkpoint_state.html" xlink:title="m_checkpoint_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="1249,-90 1131,-90 1131,-66 1249,-66 1249,-90"/>
+<text text-anchor="middle" x="1190" y="-75.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_checkpoint_state</text>
+</a>
+</g>
+</g>
+<!-- module~m_checkpoint_manager&#45;&gt;module~m_checkpoint_state -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge71" class="edge">
+<title>module~m_checkpoint_manager&#45;&gt;module~m_checkpoint_state</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M1305.44,-106C1288.06,-101.75 1268.32,-96.92 1250.19,-92.48"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="1250.85,-89.04 1240.3,-90.06 1249.18,-95.84 1250.85,-89.04"/>
+</g>
+<!-- module~m_io_field_utils -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node29" class="node">
+<title>module~m_io_field_utils</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node29"><a xlink:href="../module/m_io_field_utils.html" xlink:title="m_io_field_utils">
+<polygon fill="#337ab7" stroke="#337ab7" points="1237,-288 1143,-288 1143,-264 1237,-264 1237,-288"/>
+<text text-anchor="middle" x="1190" y="-273.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_io_field_utils</text>
+</a>
+</g>
+</g>
+<!-- module~m_checkpoint_manager&#45;&gt;module~m_io_field_utils -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge73" class="edge">
+<title>module~m_checkpoint_manager&#45;&gt;module~m_io_field_utils</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1336.43,-130.12C1321.24,-141.02 1299.7,-158.16 1285,-177 1262.75,-205.52 1275.05,-224.89 1249,-250 1245.51,-253.36 1241.51,-256.34 1237.27,-258.96"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1235.44,-255.98 1228.35,-263.85 1238.8,-262.12 1235.44,-255.98"/>
+</g>
+<!-- module~m_stats -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node34" class="node">
+<title>module~m_stats</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node34"><a xlink:href="../module/m_stats.html" xlink:title="m_stats">
+<polygon fill="#337ab7" stroke="#337ab7" points="1217,-170 1163,-170 1163,-146 1217,-146 1217,-170"/>
+<text text-anchor="middle" x="1190" y="-155.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_stats</text>
+</a>
+</g>
+</g>
+<!-- module~m_checkpoint_manager&#45;&gt;module~m_stats -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge79" class="edge">
+<title>module~m_checkpoint_manager&#45;&gt;module~m_stats</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1305.44,-130C1280.21,-136.18 1249.99,-143.57 1226.95,-149.2"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1226.11,-145.81 1217.23,-151.58 1227.77,-152.61 1226.11,-145.81"/>
+</g>
+<!-- module~m_checkpoint_state&#45;&gt;module~m_io_session -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge48" class="edge">
+<title>module~m_checkpoint_state&#45;&gt;module~m_io_session</title>
+<path fill="none" stroke="#0073ff" stroke-dasharray="5,2" d="M1156.17,-90.07C1119.8,-102.94 1063.33,-121.33 1041,-120"/>
+<path fill="none" stroke="#0073ff" stroke-dasharray="5,2" d="M1039,-120C974.77,-116.16 901.99,-101.47 854.79,-90.54"/>
+<polygon fill="#0073ff" stroke="#0073ff" points="855.36,-87.08 844.82,-88.2 853.76,-93.9 855.36,-87.08"/>
+</g>
+<!-- module~m_io_field_utils&#45;&gt;module~m_io_base -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge45" class="edge">
+<title>module~m_io_field_utils&#45;&gt;module~m_io_base</title>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M1172.84,-263.78C1154.74,-250.6 1124.11,-229.79 1095,-217 919.8,-140.03 857.91,-130.72 668.5,-158"/>
+</g>
+<!-- module~m_io_field_utils&#45;&gt;module~m_solver -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge62" class="edge">
+<title>module~m_io_field_utils&#45;&gt;module~m_solver</title>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1142.98,-264.18C1122.99,-259.05 1099.79,-253.1 1080.58,-248.16"/>
+<polygon fill="#a200ff" stroke="#a200ff" points="1081.21,-244.71 1070.65,-245.61 1079.47,-251.49 1081.21,-244.71"/>
+</g>
+<!-- module~m_io_manager&#45;&gt;module~m_solver -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge63" class="edge">
+<title>module~m_io_manager&#45;&gt;module~m_solver</title>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1465.37,-210.01C1435.28,-218.46 1393.57,-229.7 1356.5,-238"/>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1354.5,-238C1323.25,-244.99 1312.26,-240.2 1285,-257 1264.64,-269.55 1269.04,-283.95 1249,-297 1226.27,-311.8 1218.06,-317.93 1191,-316"/>
+</g>
+<!-- module~m_io_manager&#45;&gt;module~m_checkpoint_manager -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge70" class="edge">
+<title>module~m_io_manager&#45;&gt;module~m_checkpoint_manager</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1484.66,-185.89C1477.31,-181.7 1469.19,-176.84 1462,-172 1445.19,-160.68 1443.7,-153.89 1426,-144 1419.2,-140.2 1411.73,-136.75 1404.3,-133.68"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1405.53,-130.41 1394.94,-130.02 1402.98,-136.93 1405.53,-130.41"/>
+</g>
+<!-- module~m_io_manager&#45;&gt;module~m_checkpoint_state -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge72" class="edge">
+<title>module~m_io_manager&#45;&gt;module~m_checkpoint_state</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M1479.86,-185.82C1473.45,-182.05 1467.03,-177.43 1462,-172 1436.87,-144.88 1456.48,-117.94 1426,-97 1377.63,-63.77 1309.73,-61.8 1259.35,-66.5"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="1258.78,-63.04 1249.2,-67.56 1259.51,-70 1258.78,-63.04"/>
+</g>
+<!-- module~m_snapshot_manager -->
+<g id="module~~m_poisson_fft~~UsedByGraph_node33" class="node">
+<title>module~m_snapshot_manager</title>
+<g id="a_module~~m_poisson_fft~~UsedByGraph_node33"><a xlink:href="../module/m_snapshot_manager.html" xlink:title="m_snapshot_manager">
+<polygon fill="#337ab7" stroke="#337ab7" points="1420.5,-210 1290.5,-210 1290.5,-186 1420.5,-186 1420.5,-210"/>
+<text text-anchor="middle" x="1355.5" y="-195.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_snapshot_manager</text>
+</a>
+</g>
+</g>
+<!-- module~m_io_manager&#45;&gt;module~m_snapshot_manager -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge78" class="edge">
+<title>module~m_io_manager&#45;&gt;module~m_snapshot_manager</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1461.85,-198C1452,-198 1441.34,-198 1430.7,-198"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1430.54,-194.5 1420.54,-198 1430.54,-201.5 1430.54,-194.5"/>
+</g>
+<!-- module~m_io_manager&#45;&gt;module~m_stats -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge80" class="edge">
+<title>module~m_io_manager&#45;&gt;module~m_stats</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1466.09,-185.93C1453.35,-182.56 1439.18,-179.22 1426,-177 1356.35,-165.25 1273.83,-160.71 1227.43,-158.99"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1227.38,-155.49 1217.26,-158.64 1227.14,-162.49 1227.38,-155.49"/>
+</g>
+<!-- module~m_monitoring&#45;&gt;module~m_solver -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge64" class="edge">
+<title>module~m_monitoring&#45;&gt;module~m_solver</title>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1325.98,-290.06C1293.67,-302.44 1239.25,-319.44 1191,-316"/>
+</g>
+<!-- module~m_postprocess&#45;&gt;module~m_solver -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge65" class="edge">
+<title>module~m_postprocess&#45;&gt;module~m_solver</title>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1486.19,-265.94C1457.27,-250.67 1403.2,-227.55 1356.5,-238"/>
+</g>
+<!-- module~m_snapshot_manager&#45;&gt;module~m_io_session -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge50" class="edge">
+<title>module~m_snapshot_manager&#45;&gt;module~m_io_session</title>
+<path fill="none" stroke="#0073ff" stroke-dasharray="5,2" d="M1290.45,-203.72C1244.13,-205.27 1181.13,-201.87 1131,-179 1110.7,-169.74 1113.48,-156.5 1095,-144 1073.25,-129.28 1067.03,-123.5 1041,-120"/>
+</g>
+<!-- module~m_snapshot_manager&#45;&gt;module~m_solver -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge66" class="edge">
+<title>module~m_snapshot_manager&#45;&gt;module~m_solver</title>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1307.26,-210.12C1299.21,-213.67 1291.4,-218.21 1285,-224 1258.17,-248.27 1276.32,-273.29 1249,-297 1228.51,-314.78 1218.06,-317.93 1191,-316"/>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1189,-316C1139.33,-312.46 1089.81,-278.68 1062.52,-256.75"/>
+<polygon fill="#a200ff" stroke="#a200ff" points="1064.4,-253.77 1054.46,-250.1 1059.95,-259.16 1064.4,-253.77"/>
+</g>
+<!-- module~m_snapshot_manager&#45;&gt;module~m_io_field_utils -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge74" class="edge">
+<title>module~m_snapshot_manager&#45;&gt;module~m_io_field_utils</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1316.54,-210.11C1306.07,-214.01 1294.88,-218.71 1285,-224 1267.6,-233.32 1266.09,-240.13 1249,-250 1243.09,-253.41 1236.66,-256.69 1230.29,-259.7"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1228.73,-256.57 1221.09,-263.91 1231.64,-262.93 1228.73,-256.57"/>
+</g>
+<!-- module~m_stats&#45;&gt;module~m_io_session -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge51" class="edge">
+<title>module~m_stats&#45;&gt;module~m_io_session</title>
+<path fill="none" stroke="#0073ff" stroke-dasharray="5,2" d="M1162.92,-149.2C1133.65,-139.82 1084.55,-125.57 1041,-120"/>
+</g>
+<!-- module~m_stats&#45;&gt;module~m_solver -->
+<g id="module~~m_poisson_fft~~UsedByGraph_edge67" class="edge">
+<title>module~m_stats&#45;&gt;module~m_solver</title>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M1166.52,-170.15C1141.38,-183.74 1100.5,-205.84 1072.26,-221.1"/>
+<polygon fill="#a200ff" stroke="#a200ff" points="1070.34,-218.16 1063.2,-226 1073.67,-224.32 1070.34,-218.16"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulem_poisson_fftUsedByGraph = svgPanZoom('#modulem_poisson_fftUsedByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsedByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsedByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+      <br>
+
+
+
+
+
+        <section>
+          <h2>Abstract Interfaces</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="interface-fft_forward"></span><h3>abstract interface
+        
+    </h3></div>
+    <ul class="list-group">
+      <li class="list-group-item">
+            <h3>
+    public  subroutine fft_forward(self, f_in)  
+
+    </h3>
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~154"></span>
+              class(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_in~16"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_in</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+      </li>
+    </ul>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="interface-fft_backward"></span><h3>abstract interface
+        
+    </h3></div>
+    <ul class="list-group">
+      <li class="list-group-item">
+            <h3>
+    public  subroutine fft_backward(self, f_out)  
+
+    </h3>
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~155"></span>
+              class(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_out~16"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_out</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+      </li>
+    </ul>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="interface-fft_postprocess"></span><h3>abstract interface
+        
+    </h3></div>
+    <ul class="list-group">
+      <li class="list-group-item">
+            <h3>
+    public  subroutine fft_postprocess(self)  
+
+    </h3>
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~156"></span>
+              class(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+      </li>
+    </ul>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="interface-poisson_xxx"></span><h3>abstract interface
+        
+    </h3></div>
+    <ul class="list-group">
+      <li class="list-group-item">
+            <h3>
+    public  subroutine poisson_xxx(self, f, temp)  
+
+    </h3>
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~157"></span>
+              class(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~29"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-temp"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>temp</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+      </li>
+    </ul>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="interface-field_process"></span><h3>abstract interface
+        
+    </h3></div>
+    <ul class="list-group">
+      <li class="list-group-item">
+            <h3>
+    public  subroutine field_process(self, f_out, f_in)  
+
+    </h3>
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~158"></span>
+              class(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_out~17"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_out</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_in~17"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_in</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+      </li>
+    </ul>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Derived Types</h2>
+              <div class="card">
+    <div class="card-header codesum">
+      <span class="anchor" id="type-poisson_fft_t"></span>
+      <h3>
+        type, public, abstract&nbsp;::&nbsp;
+        <a href='../type/poisson_fft_t.html'>poisson_fft_t</a>
+        
+      </h3>
+    </div>
+    <div class="card-body">
+      <p>FFT based Poisson solver</p>
+
+        <h4>Components</h4>
+          <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mesh~8"></span>
+              type(<a href='../type/mesh_t.html'>mesh_t</a>),
+            </td>
+              <td>public,</td>
+            <td>
+              pointer
+            </td>
+            <td>::</td>
+            <td><strong>mesh</strong></td>
+<td>=&gt; </td>
+                <td>null()</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_glob"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_glob</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Global dimensions</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_glob"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_glob</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Global dimensions</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz_glob"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz_glob</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Global dimensions</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_loc"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_loc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_loc"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_loc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz_loc"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz_loc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_perm"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_perm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions in the permuted slabs</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_perm"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_perm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions in the permuted slabs</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz_perm"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz_perm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions in the permuted slabs</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_spec~10"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_spec</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions in the permuted slabs in spectral space</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_spec~8"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_spec</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions in the permuted slabs in spectral space</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz_spec~2"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz_spec</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local dimensions in the permuted slabs in spectral space</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sp_st"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sp_st</strong>(3)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Offset per spectral dimension (dim1, dim2, dim3) in spectral space</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-waves~5"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>waves</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Local domain sized array storing the spectral equivalence constants</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ax~9"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>ax</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bx~9"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>bx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ay~9"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>ay</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-by~9"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>by</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-az~9"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>az</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bz~9"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>bz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kx"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>kx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ky"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>ky</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kz"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>kz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-exs"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>exs</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eys"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>eys</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ezs"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>ezs</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k2x"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>k2x</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k2y"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>k2y</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k2z"></span>
+              complex(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>k2z</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Wave numbers in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-trans_x_re"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>trans_x_re</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Staggered grid transformation</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-trans_x_im"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>trans_x_im</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Staggered grid transformation</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-trans_y_re"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>trans_y_re</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Staggered grid transformation</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-trans_y_im"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>trans_y_im</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Staggered grid transformation</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-trans_z_re"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>trans_z_re</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Staggered grid transformation</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-trans_z_im"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>trans_z_im</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Staggered grid transformation</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-periodic_x"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>periodic_x</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Periodicity in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-periodic_y"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>periodic_y</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Periodicity in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-periodic_z"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>periodic_z</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Periodicity in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stretched_y"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>stretched_y</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p>Periodicity in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stretched_y_sym"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>stretched_y_sym</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Periodicity in x, y, and z</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_odd_re"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_odd_re</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_odd_im"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_odd_im</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_even_re"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_even_re</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_even_im"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_even_im</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_re~2"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_re</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_im~2"></span>
+              real(kind=dp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable, dimension(:, :, :, :)
+            </td>
+            <td>::</td>
+            <td><strong>a_im</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Stretching operator matrices</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lowmem~4"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lowmem</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p>lowmem option, only used in CUDA backend</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-poisson"></span>
+              procedure(<a href='../interface/poisson_xxx.html'>poisson_xxx</a>),
+            </td>
+              <td>public,</td>
+            <td>
+              pointer
+            </td>
+            <td>::</td>
+            <td><strong>poisson</strong></td>
+<td>=&gt; </td>
+                <td>null()</td>
+            <td>
+<p>Procedure pointer to BC specific poisson solvers</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+
+
+        <h4>Type-Bound Procedures</h4>
+        <table class="table table-striped varlist">
+          <tbody>
+              <tr>
+                <td>  procedure(<a href='../interface/fft_forward.html'>fft_forward</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-fft_forward_010~2'>fft_forward_010</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/fft_forward.html'>fft_forward</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-fft_forward_100~2'>fft_forward_100</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/fft_forward.html'>fft_forward</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-fft_forward_110~2'>fft_forward_110</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/fft_forward.html'>fft_forward</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-fft_forward~2'>fft_forward</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/fft_backward.html'>fft_backward</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-fft_backward_010~2'>fft_backward_010</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/fft_backward.html'>fft_backward</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-fft_backward_100~2'>fft_backward_100</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/fft_backward.html'>fft_backward</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-fft_backward_110~2'>fft_backward_110</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/fft_backward.html'>fft_backward</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-fft_backward~2'>fft_backward</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/fft_postprocess.html'>fft_postprocess</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-fft_postprocess_000~2'>fft_postprocess_000</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/fft_postprocess.html'>fft_postprocess</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-fft_postprocess_010~2'>fft_postprocess_010</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/fft_postprocess.html'>fft_postprocess</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-fft_postprocess_100~2'>fft_postprocess_100</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/fft_postprocess.html'>fft_postprocess</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-fft_postprocess_110~2'>fft_postprocess_110</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/field_process.html'>field_process</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-enforce_periodicity_x~2'>enforce_periodicity_x</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/field_process.html'>field_process</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-undo_periodicity_x~2'>undo_periodicity_x</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/field_process.html'>field_process</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-enforce_periodicity_y~2'>enforce_periodicity_y</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/field_process.html'>field_process</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-undo_periodicity_y~2'>undo_periodicity_y</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/field_process.html'>field_process</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-enforce_periodicity_xy~2'>enforce_periodicity_xy</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure(<a href='../interface/field_process.html'>field_process</a>), public, deferred ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-undo_periodicity_xy~2'>undo_periodicity_xy</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-base_init~2'>base_init</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-solve_poisson'>solve_poisson</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-stretching_matrix'>stretching_matrix</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-waves_set'>waves_set</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-get_km'>get_km</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-get_km_re'>get_km_re</a></strong></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public ::
+  <strong><a href='../type/poisson_fft_t.html#boundprocedure-get_km_im'>get_km_im</a></strong></td>
+                  <td></td>
+              </tr>
+          </tbody>
+        </table>
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Functions</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-get_km_re"></span> <h3>public  function <a href='../proc/get_km_re.html'>get_km_re</a>(self, i, j, k) result(re)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~167"></span>
+              class(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~65"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~59"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~60"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>real(kind=dp)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-get_km_im"></span> <h3>public  function <a href='../proc/get_km_im.html'>get_km_im</a>(self, i, j, k) result(re)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~168"></span>
+              class(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~66"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~60"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~61"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>real(kind=dp)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-get_km"></span> <h3>public  function <a href='../proc/get_km.html'>get_km</a>(self, i, j, k) result(km)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~169"></span>
+              class(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~67"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~61"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~62"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>complex(kind=dp)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-get_real"></span> <h3>public  function <a href='../proc/get_real.html'>get_real</a>(complx) result(re)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-complx"></span>
+              complex(kind=dp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>complx</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>real(kind=dp)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-get_imag"></span> <h3>public  function <a href='../proc/get_imag.html'>get_imag</a>(complx) result(im)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-complx~2"></span>
+              complex(kind=dp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>complx</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>real(kind=dp)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Subroutines</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-base_init~2"></span> <h3>public  subroutine <a href='../proc/base_init~2.html'>base_init</a>(self, mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~159"></span>
+              class(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mesh~9"></span>
+              type(<a href='../type/mesh_t.html'>mesh_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              target
+            </td>
+            <td>::</td>
+            <td><strong>mesh</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-xdirps~4"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>xdirps</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ydirps~4"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ydirps</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zdirps~4"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zdirps</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_spec"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              dimension(3)
+            </td>
+            <td>::</td>
+            <td><strong>n_spec</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_sp_st"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              dimension(3)
+            </td>
+            <td>::</td>
+            <td><strong>n_sp_st</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-solve_poisson"></span> <h3>public  subroutine <a href='../proc/solve_poisson.html'>solve_poisson</a>(self, f, temp)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~160"></span>
+              class(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~30"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-temp~2"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>temp</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-poisson_000"></span> <h3>public  subroutine <a href='../proc/poisson_000.html'>poisson_000</a>(self, f, temp)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~161"></span>
+              class(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~31"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-temp~3"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>temp</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-poisson_010"></span> <h3>public  subroutine <a href='../proc/poisson_010.html'>poisson_010</a>(self, f, temp)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~162"></span>
+              class(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~32"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-temp~4"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>temp</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-poisson_100"></span> <h3>public  subroutine <a href='../proc/poisson_100.html'>poisson_100</a>(self, f, temp)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~163"></span>
+              class(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~33"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-temp~5"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>temp</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-poisson_110"></span> <h3>public  subroutine <a href='../proc/poisson_110.html'>poisson_110</a>(self, f, temp)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~164"></span>
+              class(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~34"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-temp~6"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>temp</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-stretching_matrix"></span> <h3>public  subroutine <a href='../proc/stretching_matrix.html'>stretching_matrix</a>(self, geo, xdirps, ydirps, zdirps)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Stretching necessitates a special operation in spectral space.
+The coefficients for the operation are stored in matrix form.</p><a href="../proc/stretching_matrix.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~165"></span>
+              class(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-geo"></span>
+              type(<a href='../type/geo_t.html'>geo_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>geo</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-xdirps~5"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>xdirps</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ydirps~5"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ydirps</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zdirps~5"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zdirps</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-waves_set"></span> <h3>public  subroutine <a href='../proc/waves_set.html'>waves_set</a>(self, geo, xdirps, ydirps, zdirps)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Spectral equivalence constants</p><a href="../proc/waves_set.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~166"></span>
+              class(<a href='../type/poisson_fft_t.html'>poisson_fft_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-geo~2"></span>
+              type(<a href='../type/geo_t.html'>geo_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>geo</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-xdirps~6"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>xdirps</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ydirps~6"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ydirps</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zdirps~6"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zdirps</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-wave_numbers"></span> <h3>public  subroutine <a href='../proc/wave_numbers.html'>wave_numbers</a>(a, b, k, e, k2, n, L, d, periodic, c_a, c_b, c_alpha)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a~9"></span>
+              real(kind=dp),
+            </td>
+<td>intent(out),</td>
+              <td></td>            <td>
+              dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>a</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-b~5"></span>
+              real(kind=dp),
+            </td>
+<td>intent(out),</td>
+              <td></td>            <td>
+              dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>b</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~59"></span>
+              complex(kind=dp),
+            </td>
+<td>intent(out),</td>
+              <td></td>            <td>
+              dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e"></span>
+              complex(kind=dp),
+            </td>
+<td>intent(out),</td>
+              <td></td>            <td>
+              dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>e</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k2"></span>
+              complex(kind=dp),
+            </td>
+<td>intent(out),</td>
+              <td></td>            <td>
+              dimension(:)
+            </td>
+            <td>::</td>
+            <td><strong>k2</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n~9"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-l"></span>
+              real(kind=dp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>L</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-d"></span>
+              real(kind=dp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>d</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-periodic"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>periodic</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_a"></span>
+              real(kind=dp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c_a</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_b"></span>
+              real(kind=dp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c_b</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_alpha"></span>
+              real(kind=dp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c_alpha</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
