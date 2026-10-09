@@ -691,7 +691,7 @@ contains
     nx = self%nx_glob
     nz_l = self%nz_loc
     nproc = self%mesh%par%nproc_dir(3)
-    ny_l = self%ny_glob/nproc
+    ny_l = size(yslab, 3)
 
     tpb = min(ny_l, 256)
     blocks = dim3(nz_l, (ny_l - 1)/tpb + 1, 1)
@@ -743,7 +743,7 @@ contains
     nx = self%nx_glob
     nz_l = self%nz_loc
     nproc = self%mesh%par%nproc_dir(3)
-    ny_l = self%ny_glob/nproc
+    ny_l = size(yslab, 3)
 
     tpb = min(ny_l, 256)
     blocks = dim3(nz_l, (ny_l - 1)/tpb + 1, 1)
