@@ -1253,7 +1253,6 @@ contains
     integer, value, intent(in) :: x_sp_st, nx_glob
 
     integer :: i, j, k, ix
-    real(dp) :: l_r, l_c, r_r, r_c
     complex(dp) :: partner
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! local X index
@@ -1271,15 +1270,7 @@ contains
             partner = mirror(j, nx_l - i + 2, k)
           end if
 
-          l_r = real(div_u(j, i, k), kind=dp)
-          l_c = aimag(div_u(j, i, k))
-          r_r = real(partner, kind=dp)
-          r_c = aimag(partner)
-
-          div_u(j, i, k) = 0.5_dp*cmplx( & !&
-            l_r*bx(ix) + l_c*ax(ix) + r_r*bx(ix) - r_c*ax(ix), &
-            -l_r*ax(ix) + l_c*bx(ix) + r_r*ax(ix) + r_c*bx(ix), kind=dp &
-            )
+          div_u(j, i, k) = pair_fw(div_u(j, i, k), partner, ix, ax, bx)
         end do
       end if
     end if
@@ -1301,7 +1292,6 @@ contains
     integer, value, intent(in) :: x_sp_st, nx_glob
 
     integer :: i, j, k, ix
-    real(dp) :: l_r, l_c, r_r, r_c
     complex(dp) :: partner
 
     i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
@@ -1318,15 +1308,7 @@ contains
             partner = mirror(j, nx_l - i + 2, k)
           end if
 
-          l_r = real(div_u(j, i, k), kind=dp)
-          l_c = aimag(div_u(j, i, k))
-          r_r = real(partner, kind=dp)
-          r_c = aimag(partner)
-
-          div_u(j, i, k) = cmplx( & !&
-            l_r*bx(ix) - l_c*ax(ix) + r_r*ax(ix) + r_c*bx(ix), &
-            l_r*ax(ix) + l_c*bx(ix) - r_r*bx(ix) + r_c*ax(ix), kind=dp &
-            )
+          div_u(j, i, k) = pair_bw(div_u(j, i, k), partner, ix, ax, bx)
         end do
       end if
     end if
