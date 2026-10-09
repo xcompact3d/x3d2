@@ -975,17 +975,20 @@ contains
   ! ------------------------------------------------------------------
 
   attributes(global) subroutine process_spectral_110_norm_z( &
-    div_u, nz_h, nx, ny, nz, az, bz &
+    div_u, nz_h, nx, ny, nz, nx_glob, ny_glob, az, bz &
     )
     !! Step 1 (forward): normalise + Z periodic post-process
     !! Z is dim1 (serial j loop), periodic R2C — no sign flip needed
     !! since j only goes to nz/2+1.
+    !! nx, ny are the local loop bounds (equal to nx_glob, ny_glob on a
+    !! single rank); the normalisation divisor always needs the globals.
     implicit none
 
     complex(dp), device, intent(inout), dimension(:, :, :) :: div_u ! (nz/2+1, nx, ny)
     real(dp), device, intent(in), dimension(:) :: az, bz
     integer, value, intent(in) :: nz_h  ! nz/2+1
     integer, value, intent(in) :: nx, ny, nz
+    integer, value, intent(in) :: nx_glob, ny_glob
 
     integer :: i, j, k
     real(dp) :: tmp_r, tmp_c, div_r, div_c
@@ -995,8 +998,8 @@ contains
 
     if (i <= nx .and. k <= ny) then
       do j = 1, nz_h
-        div_r = real(div_u(j, i, k), kind=dp)/(nx*ny*nz)
-        div_c = aimag(div_u(j, i, k))/(nx*ny*nz)
+        div_r = real(div_u(j, i, k), kind=dp)/nx_glob/ny_glob/nz
+        div_c = aimag(div_u(j, i, k))/nx_glob/ny_glob/nz
 
         ! Z periodic post-process (forward)
         tmp_r = div_r
@@ -1101,15 +1104,16 @@ contains
   end subroutine process_spectral_110_y_pair_fw
 
   attributes(global) subroutine process_spectral_110_poisson( &
-    div_u, waves, nz_h, nx, ny, nz, x_sp_st &
+    div_u, waves, nz_h, nx, ny, nz, x_sp_st, nx_glob &
     )
     !! Step 4: Poisson solve — divide by waves
+    !! nx is the local loop bound; the Nyquist test always needs nx_glob.
     implicit none
 
     complex(dp), device, intent(inout), dimension(:, :, :) :: div_u ! (nz/2+1, nx, ny)
     complex(dp), device, intent(in), dimension(:, :, :) :: waves    ! (nz/2+1, nx, ny)
     integer, value, intent(in) :: nz_h, nx, ny, nz
-    integer, value, intent(in) :: x_sp_st
+    integer, value, intent(in) :: x_sp_st, nx_glob
 
     integer :: i, j, k, ix
     real(dp) :: div_r, div_c, tmp_r, tmp_c
@@ -1138,7 +1142,7 @@ contains
 
         div_u(j, i, k) = cmplx(div_r, div_c, kind=dp)
         ! Zero Nyquist modes
-        if (ix == nx/2 + 1 .and. j == nz/2 + 1) div_u(j, i, k) = 0._dp
+        if (ix == nx_glob/2 + 1 .and. j == nz/2 + 1) div_u(j, i, k) = 0._dp
       end do
     end if
 
@@ -1228,6 +1232,89 @@ contains
 
   end subroutine process_spectral_110_x_pair_bw
 
+  attributes(global) subroutine process_spectral_110_x_pair_fw_mirror( &
+    div_u, mirror, plane, nz_h, nx_l, ny, x_sp_st, ax, bx &
+    )
+    !! Multi-rank counterpart of process_spectral_110_x_pair_fw: the X
+    !! paired split, but the partner mode lives on another rank, reached
+    !! through the dim2 mirror exchange (see exchange_dim2_mirror). Unlike
+    !! the single-rank kernel this only updates this rank's own modes;
+    !! the partner rank updates its own copy the same way.
+    !! At the global Nyquist mode (even grid size) the mirror
+    !! partner is this rank's own pre-update value, so the formula below
+    !! self-pairs it exactly as the single-rank kernel does.
+    implicit none
+
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u ! (nz/2+1, nx_l, ny)
+    complex(dp), device, intent(in), dimension(:, :, :) :: mirror ! dim2 mirror of div_u
+    complex(dp), device, intent(in), dimension(:, :) :: plane ! extra mirror plane
+    real(dp), device, intent(in), dimension(:) :: ax, bx
+    integer, value, intent(in) :: nz_h, nx_l, ny
+    integer, value, intent(in) :: x_sp_st
+
+    integer :: i, j, k, ix
+    complex(dp) :: partner
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! local X index
+    k = blockIdx%y                                   ! Y index
+
+    if (i <= nx_l .and. k <= ny) then
+      ix = i + x_sp_st
+
+      ! global mode 1 is self paired, never touched here
+      if (ix /= 1) then
+        do j = 1, nz_h
+          if (i == 1) then
+            partner = plane(j, k)
+          else
+            partner = mirror(j, nx_l - i + 2, k)
+          end if
+
+          div_u(j, i, k) = pair_fw(div_u(j, i, k), partner, ix, ax, bx)
+        end do
+      end if
+    end if
+
+  end subroutine process_spectral_110_x_pair_fw_mirror
+
+  attributes(global) subroutine process_spectral_110_x_pair_bw_mirror( &
+    div_u, mirror, plane, nz_h, nx_l, ny, x_sp_st, ax, bx &
+    )
+    !! Multi-rank counterpart of process_spectral_110_x_pair_bw, see
+    !! process_spectral_110_x_pair_fw_mirror.
+    implicit none
+
+    complex(dp), device, intent(inout), dimension(:, :, :) :: div_u ! (nz/2+1, nx_l, ny)
+    complex(dp), device, intent(in), dimension(:, :, :) :: mirror ! dim2 mirror of div_u
+    complex(dp), device, intent(in), dimension(:, :) :: plane ! extra mirror plane
+    real(dp), device, intent(in), dimension(:) :: ax, bx
+    integer, value, intent(in) :: nz_h, nx_l, ny
+    integer, value, intent(in) :: x_sp_st
+
+    integer :: i, j, k, ix
+    complex(dp) :: partner
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x
+    k = blockIdx%y
+
+    if (i <= nx_l .and. k <= ny) then
+      ix = i + x_sp_st
+
+      if (ix /= 1) then
+        do j = 1, nz_h
+          if (i == 1) then
+            partner = plane(j, k)
+          else
+            partner = mirror(j, nx_l - i + 2, k)
+          end if
+
+          div_u(j, i, k) = pair_bw(div_u(j, i, k), partner, ix, ax, bx)
+        end do
+      end if
+    end if
+
+  end subroutine process_spectral_110_x_pair_bw_mirror
+
   attributes(global) subroutine process_spectral_110_z_bw( &
     div_u, nz_h, nx, ny, az, bz &
     )
@@ -1260,6 +1347,128 @@ contains
     end if
 
   end subroutine process_spectral_110_z_bw
+
+  ! ------------------------------------------------------------------
+  ! 110 MULTI-RANK SLAB REDISTRIBUTION
+  !
+  ! The 110 physical domain is split along Z (nz_l = nz/nproc per rank),
+  ! but the cuFFTMp input slab for the (nz, nx, ny) plan is split along Y
+  ! (ny_l = ny/nproc per rank). These four kernels pack and unpack the
+  ! MPI_Alltoall buffer (nz_l, nx, ny_l, nproc) that carries a rank's data
+  ! between the two layouts; rank index s (0-based) is stored as dim4.
+  !
+  ! Launch config for all four: blocks = dim3(nz_l, (ny_l-1)/tpb+1, 1),
+  ! threads = dim3(min(ny_l, tpb), 1, 1), modelled on transpose_xyz_to_zxy.
+  ! ------------------------------------------------------------------
+
+  attributes(global) subroutine pack_110_xyz_to_yslab( &
+    sendbuf, src, nx, ny_l, nz_l, nproc &
+    )
+    !! Packs the physical Z-slab field block (nx, ny, nz_l) into the
+    !! MPI_Alltoall send buffer, selecting for each destination rank s the
+    !! Y range [s*ny_l+1, (s+1)*ny_l] it owns in the Y-slab layout.
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :, :) :: sendbuf ! (nz_l, nx, ny_l, nproc)
+    real(dp), device, intent(in), dimension(:, :, :) :: src ! (nx, ny, nz_l)
+    integer, value, intent(in) :: nx, ny_l, nz_l, nproc
+
+    integer :: i, j, k, s
+
+    k = blockIdx%x                                  ! nz_l
+    j = (blockIdx%y - 1)*blockDim%x + threadIdx%x    ! ny_l
+
+    if (j <= ny_l) then
+      do s = 0, nproc - 1
+        do i = 1, nx
+          sendbuf(k, i, j, s + 1) = src(i, s*ny_l + j, k)
+        end do
+      end do
+    end if
+
+  end subroutine pack_110_xyz_to_yslab
+
+  attributes(global) subroutine unpack_110_yslab( &
+    dst, recvbuf, nx, ny_l, nz_l, nproc &
+    )
+    !! Unpacks the MPI_Alltoall receive buffer into the padded real view
+    !! (2*(nz/2+1), nx, ny_l) of the cuFFTMp Y-slab descriptor: data
+    !! received from source rank s reconstructs the global Z range
+    !! [s*nz_l+1, (s+1)*nz_l].
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: dst ! (2*(nz/2+1), nx, ny_l)
+    real(dp), device, intent(in), dimension(:, :, :, :) :: recvbuf ! (nz_l, nx, ny_l, nproc)
+    integer, value, intent(in) :: nx, ny_l, nz_l, nproc
+
+    integer :: i, j, k, s
+
+    k = blockIdx%x                                  ! nz_l
+    j = (blockIdx%y - 1)*blockDim%x + threadIdx%x    ! ny_l
+
+    if (j <= ny_l) then
+      do s = 0, nproc - 1
+        do i = 1, nx
+          dst(s*nz_l + k, i, j) = recvbuf(k, i, j, s + 1)
+        end do
+      end do
+    end if
+
+  end subroutine unpack_110_yslab
+
+  attributes(global) subroutine pack_110_yslab( &
+    sendbuf, src, nx, ny_l, nz_l, nproc &
+    )
+    !! Inverse of unpack_110_yslab: packs the Y-slab real view into the
+    !! MPI_Alltoall send buffer, selecting for each destination rank s the
+    !! Z range it originally owned in the physical Z-slab layout.
+    implicit none
+
+    real(dp), device, intent(out), dimension(:, :, :, :) :: sendbuf ! (nz_l, nx, ny_l, nproc)
+    real(dp), device, intent(in), dimension(:, :, :) :: src ! (2*(nz/2+1), nx, ny_l)
+    integer, value, intent(in) :: nx, ny_l, nz_l, nproc
+
+    integer :: i, j, k, s
+
+    k = blockIdx%x                                  ! nz_l
+    j = (blockIdx%y - 1)*blockDim%x + threadIdx%x    ! ny_l
+
+    if (j <= ny_l) then
+      do s = 0, nproc - 1
+        do i = 1, nx
+          sendbuf(k, i, j, s + 1) = src(s*nz_l + k, i, j)
+        end do
+      end do
+    end if
+
+  end subroutine pack_110_yslab
+
+  attributes(global) subroutine unpack_110_yslab_to_xyz( &
+    dst, recvbuf, nx, ny_l, nz_l, nproc &
+    )
+    !! Inverse of pack_110_xyz_to_yslab: unpacks into the physical Z-slab
+    !! field block (nx, ny, nz_l). dst must be zeroed by the caller first,
+    !! as fft_backward_110_cuda already does for the single rank path.
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: dst ! (nx, ny, nz_l)
+    real(dp), device, intent(in), dimension(:, :, :, :) :: recvbuf ! (nz_l, nx, ny_l, nproc)
+    integer, value, intent(in) :: nx, ny_l, nz_l, nproc
+
+    integer :: i, j, k, s
+
+    k = blockIdx%x                                  ! nz_l
+    j = (blockIdx%y - 1)*blockDim%x + threadIdx%x    ! ny_l
+
+    if (j <= ny_l) then
+      do s = 0, nproc - 1
+        do i = 1, nx
+          dst(i, s*ny_l + j, k) = recvbuf(k, i, j, s + 1)
+        end do
+      end do
+    end if
+
+  end subroutine unpack_110_yslab_to_xyz
 
   attributes(global) subroutine enforce_periodicity_x(f_out, f_in, nx)
     implicit none
