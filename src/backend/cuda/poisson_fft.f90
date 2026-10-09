@@ -6,11 +6,10 @@ module m_cuda_poisson_fft
   use cufftXt
   use cufft
   use m_mpi, only: MPI_COMM_WORLD, MPI_COMPLEX, MPI_DOUBLE_COMPLEX, &
-                   MPI_REAL, MPI_DOUBLE_PRECISION, &
                    MPI_STATUS_IGNORE, MPI_SUCCESS, MPI_Abort, MPI_Sendrecv, &
                    MPI_Alltoall
 
-  use m_common, only: dp, CELL, is_sp
+  use m_common, only: dp, CELL, is_sp, MPI_X3D2_DP
   use m_field, only: field_t
   use m_mesh
   use m_poisson_fft, only: poisson_fft_t
@@ -676,7 +675,7 @@ contains
     real(dp), device, dimension(:, :, :), intent(inout) :: yslab
 
     type(dim3) :: blocks, threads
-    integer :: nx, ny_l, nz_l, nproc, tpb, count, mpi_real_t
+    integer :: nx, ny_l, nz_l, nproc, tpb, count
     integer :: ierr_mpi, ierr_abort
 
     nx = self%nx_glob
@@ -696,16 +695,11 @@ contains
     ! the same reason as the dim2 mirror exchange (see exchange_dim2_mirror).
     call sync_or_abort('110 slab redistribution')
 
-    if (is_sp) then
-      mpi_real_t = MPI_REAL
-    else
-      mpi_real_t = MPI_DOUBLE_PRECISION
-    end if
     count = nz_l*nx*ny_l
 
 #ifdef MPI
-    call MPI_Alltoall(self%r_a2a_send_dev, count, mpi_real_t, &
-                      self%r_a2a_recv_dev, count, mpi_real_t, &
+    call MPI_Alltoall(self%r_a2a_send_dev, count, MPI_X3D2_DP, &
+                      self%r_a2a_recv_dev, count, MPI_X3D2_DP, &
                       MPI_COMM_WORLD, ierr_mpi)
 #else
     error stop 'The 110 slab redistribution needs more than one rank, but &
@@ -733,7 +727,7 @@ contains
     real(dp), device, dimension(:, :, :), intent(inout) :: zslab
 
     type(dim3) :: blocks, threads
-    integer :: nx, ny_l, nz_l, nproc, tpb, count, mpi_real_t
+    integer :: nx, ny_l, nz_l, nproc, tpb, count
     integer :: ierr_mpi, ierr_abort
 
     nx = self%nx_glob
@@ -751,16 +745,11 @@ contains
 
     call sync_or_abort('110 slab redistribution')
 
-    if (is_sp) then
-      mpi_real_t = MPI_REAL
-    else
-      mpi_real_t = MPI_DOUBLE_PRECISION
-    end if
     count = nz_l*nx*ny_l
 
 #ifdef MPI
-    call MPI_Alltoall(self%r_a2a_send_dev, count, mpi_real_t, &
-                      self%r_a2a_recv_dev, count, mpi_real_t, &
+    call MPI_Alltoall(self%r_a2a_send_dev, count, MPI_X3D2_DP, &
+                      self%r_a2a_recv_dev, count, MPI_X3D2_DP, &
                       MPI_COMM_WORLD, ierr_mpi)
 #else
     error stop 'The 110 slab redistribution needs more than one rank, but &
