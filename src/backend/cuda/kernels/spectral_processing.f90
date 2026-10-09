@@ -998,8 +998,8 @@ contains
 
     if (i <= nx .and. k <= ny) then
       do j = 1, nz_h
-        div_r = real(div_u(j, i, k), kind=dp)/(nx_glob*ny_glob*nz)
-        div_c = aimag(div_u(j, i, k))/(nx_glob*ny_glob*nz)
+        div_r = real(div_u(j, i, k), kind=dp)/nx_glob/ny_glob/nz
+        div_c = aimag(div_u(j, i, k))/nx_glob/ny_glob/nz
 
         ! Z periodic post-process (forward)
         tmp_r = div_r
