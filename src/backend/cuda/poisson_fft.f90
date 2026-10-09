@@ -151,9 +151,31 @@ module m_cuda_poisson_fft
     end function cufftExecC2R_C
   end interface
 
-  private :: create_fft_plan
+  private :: create_fft_plan, sync_or_abort
 
 contains
+
+  subroutine sync_or_abort(context)
+    !! Waits for the default stream so that MPI can read the device buffers.
+    !! `context` names the caller in the message printed on failure.
+    implicit none
+
+    character(len=*), intent(in) :: context
+
+    integer :: ierr, ierr_abort
+
+    ierr = cudaStreamSynchronize(default_stream)
+    if (ierr /= cudaSuccess) then
+      ! This failure is per rank, and the partners are about to block in
+      ! MPI waiting for a rank that is on its way out, so tear the job down
+      ! rather than leaving them there.
+      write (stderr, '(a,i0)') &
+        'CUDA synchronisation before the '//context//' failed: ', ierr
+      flush (stderr)
+      call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
+    end if
+
+  end subroutine sync_or_abort
 
   subroutine create_fft_plan(plan, use_cufftmp, nx, ny, nz, &
                              plan_type, is_root, plan_name)
@@ -655,7 +677,7 @@ contains
 
     type(dim3) :: blocks, threads
     integer :: nx, ny_l, nz_l, nproc, tpb, count, mpi_real_t
-    integer :: ierr, ierr_mpi, ierr_abort
+    integer :: ierr_mpi, ierr_abort
 
     nx = self%nx_glob
     nz_l = self%nz_loc
@@ -672,14 +694,7 @@ contains
 
     ! Ordinary device memory, but still owed a sync before MPI reads it, for
     ! the same reason as the dim2 mirror exchange (see exchange_dim2_mirror).
-    ierr = cudaStreamSynchronize(default_stream)
-    if (ierr /= cudaSuccess) then
-      write (stderr, '(a,i0)') &
-        'CUDA synchronisation before the 110 slab redistribution failed: ', &
-        ierr
-      flush (stderr)
-      call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
-    end if
+    call sync_or_abort('110 slab redistribution')
 
     if (is_sp) then
       mpi_real_t = MPI_REAL
@@ -719,7 +734,7 @@ contains
 
     type(dim3) :: blocks, threads
     integer :: nx, ny_l, nz_l, nproc, tpb, count, mpi_real_t
-    integer :: ierr, ierr_mpi, ierr_abort
+    integer :: ierr_mpi, ierr_abort
 
     nx = self%nx_glob
     nz_l = self%nz_loc
@@ -734,14 +749,7 @@ contains
       self%r_a2a_send_dev, yslab, nx, ny_l, nz_l, nproc &
       )
 
-    ierr = cudaStreamSynchronize(default_stream)
-    if (ierr /= cudaSuccess) then
-      write (stderr, '(a,i0)') &
-        'CUDA synchronisation before the 110 slab redistribution failed: ', &
-        ierr
-      flush (stderr)
-      call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
-    end if
+    call sync_or_abort('110 slab redistribution')
 
     if (is_sp) then
       mpi_real_t = MPI_REAL
@@ -1173,7 +1181,7 @@ contains
     complex(dp), device, dimension(:, :, :), intent(in) :: c_dev
 
     type(dim3) :: blocks, threads
-    integer :: tsize, n_slab, n_plane, mpi_cplx, nrank, ierr, ierr_mpi
+    integer :: tsize, n_slab, n_plane, mpi_cplx, nrank, ierr_mpi
     integer :: ierr_abort
     integer :: tag_slab = 2345, tag_plane = 2346
 
@@ -1206,16 +1214,7 @@ contains
     ! Make sure the staged kernel and the packing above have landed before
     ! MPI reads the device buffers. This is only reached on multiple ranks,
     ! the postprocess routines return early for the single rank path.
-    ierr = cudaStreamSynchronize(default_stream)
-    if (ierr /= cudaSuccess) then
-      ! This failure is per rank, and the partners are about to block in
-      ! MPI_Sendrecv waiting for a rank that is on its way out, so tear the
-      ! job down rather than leaving them there.
-      write (stderr, '(a,i0)') &
-        'CUDA synchronisation before the dim2 mirror exchange failed: ', ierr
-      flush (stderr)
-      call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
-    end if
+    call sync_or_abort('dim2 mirror exchange')
 
     ! On the middle rank when P is odd the mirror is the local slab itself.
     ! It is still copied out rather than read in place, so that the pairing
