@@ -65,6 +65,15 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA" OR ${ENABLE_BACKEND} STREQUAL "OMP_TGT")
        "CUDA and OMP_TGT backends require BACKEND_ARCH=<arch> (replaces CUDA_ARCH / OMP_TGT_ARCH), e.g. cc80 or gfx942")
   endif()
 endif()
+# NVHPC picks the CUDA toolkit matching the installed driver. On a node without
+# a GPU (driver version 0) it falls back to its configured default, which may
+# not be bundled with the SDK. Naming a bundled version (e.g. 12.6) lets the
+# code compile without a GPU.
+set(BACKEND_CUDA_VERSION "" CACHE STRING "CUDA toolkit version for NVHPC -gpu=cudaX.Y (empty: compiler default)")
+set(NVHPC_GPU_FLAG "-gpu=${BACKEND_ARCH}")
+if (NOT "${BACKEND_CUDA_VERSION}" STREQUAL "")
+  set(NVHPC_GPU_FLAG "${NVHPC_GPU_FLAG},cuda${BACKEND_CUDA_VERSION}")
+endif()
 if (${ENABLE_BACKEND} STREQUAL "CUDA")
   if(NOT (CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI"))
     message(FATAL_ERROR "CUDA backend require NVHPC and PGI compiler")
@@ -90,8 +99,8 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
     # FindOpenMP supplies -mp, which targets the CPU with NVHPC.  Compile and
     # link target regions for the GPU when this backend is selected.
     set_target_properties(OpenMP::OpenMP_Fortran PROPERTIES
-      INTERFACE_COMPILE_OPTIONS "-mp=gpu;-gpu=${BACKEND_ARCH}"
-      INTERFACE_LINK_OPTIONS "-mp=gpu;-gpu=${BACKEND_ARCH}")
+      INTERFACE_COMPILE_OPTIONS "-mp=gpu;${NVHPC_GPU_FLAG}"
+      INTERFACE_LINK_OPTIONS "-mp=gpu;${NVHPC_GPU_FLAG}")
     # FindOpenMP can pull CUDA runtime libraries into the target in an order
     # that nvlink rejects.  Let -mp=gpu add them in the correct order.
     get_target_property(_omp_fortran_libs OpenMP::OpenMP_Fortran INTERFACE_LINK_LIBRARIES)
