@@ -85,8 +85,8 @@ module m_cuda_poisson_fft
     real(dp), device, allocatable, dimension(:, :, :) :: r_dev
     !> Transposed real workspace for 110 case (nz, nx, ny)
     real(dp), device, allocatable, dimension(:, :, :) :: r_dev_110
-    !> dim2 mirror of the local spectral slab, used by the 100 case to
-    !> reach the paired split partner that lives on another rank
+    !> dim2 mirror of the local spectral slab, used by the 100 and 110 cases
+    !> to reach the paired split partner that lives on another rank
     complex(dp), device, allocatable, dimension(:, :, :) :: c_mirror_dev
     !> Staging copy of the local slab, sent in place of c_dev itself.
     !> In the cuFFTMp path c_dev is a c_f_pointer onto descriptor%data(1),
@@ -127,7 +127,7 @@ module m_cuda_poisson_fft
     procedure :: undo_periodicity_y => undo_periodicity_y_cuda
     procedure :: enforce_periodicity_xy => enforce_periodicity_xy_cuda
     procedure :: undo_periodicity_xy => undo_periodicity_xy_cuda
-    procedure :: exchange_mirror_100
+    procedure :: exchange_dim2_mirror
     procedure :: redistribute_110_to_yslab
     procedure :: redistribute_110_to_zslab
   end type cuda_poisson_fft_t
@@ -360,8 +360,8 @@ contains
                                     poisson_fft%nz_spec))
     poisson_fft%waves_dev = poisson_fft%waves
 
-    ! The 100 case pairs each dim2 spectral mode with its mirror, which
-    ! cuFFTMp may place on another rank. Slab index r of P owns global
+    ! The 100 and 110 cases pair each dim2 spectral mode with its mirror,
+    ! which cuFFTMp may place on another rank. Slab index r of P owns global
     ! dim2 modes [r*m + 1, (r + 1)*m] with m = ny_spec, and the mirror of
     ! that range is slab P - 1 - r shifted up by one plane, so the extra
     ! plane comes from slab P - r. Both partners are symmetric.
@@ -671,7 +671,7 @@ contains
       )
 
     ! Ordinary device memory, but still owed a sync before MPI reads it, for
-    ! the same reason as the 100 mirror exchange (see exchange_mirror_100).
+    ! the same reason as the dim2 mirror exchange (see exchange_dim2_mirror).
     ierr = cudaStreamSynchronize(default_stream)
     if (ierr /= cudaSuccess) then
       write (stderr, '(a,i0)') &
@@ -1130,7 +1130,7 @@ contains
       )
 
     ! Fetch the X pairing partners that live on other ranks
-    call self%exchange_mirror_100(c_dev)
+    call self%exchange_dim2_mirror(c_dev)
 
     ! Stage 2: X paired split (forward), then the Poisson solve
     call process_spectral_100_pair_fw<<<blocks, threads>>>( & !&
@@ -1141,7 +1141,7 @@ contains
       )
 
     ! Stage 2 rewrote every mode, so the mirror is stale and is refreshed
-    call self%exchange_mirror_100(c_dev)
+    call self%exchange_dim2_mirror(c_dev)
 
     ! Stage 3: X paired recombination (backward), then the Y and Z
     ! postprocess
@@ -1155,9 +1155,9 @@ contains
       )
   end subroutine fft_postprocess_100_cuda
 
-  subroutine exchange_mirror_100(self, c_dev)
+  subroutine exchange_dim2_mirror(self, c_dev)
     !! Fills c_mirror_dev and c_plane_recv_dev with the dim2 mirror of the
-    !! local spectral slab, so that the 100 paired split can read its
+    !! local spectral slab, so that the paired split can read its
     !! partner mode without going looking for it in another rank's memory.
     !!
     !! Slab index r of P owns global dim2 modes [r*m + 1, (r + 1)*m], with
@@ -1205,14 +1205,14 @@ contains
 
     ! Make sure the staged kernel and the packing above have landed before
     ! MPI reads the device buffers. This is only reached on multiple ranks,
-    ! fft_postprocess_100_cuda returns early for the single rank path.
+    ! the postprocess routines return early for the single rank path.
     ierr = cudaStreamSynchronize(default_stream)
     if (ierr /= cudaSuccess) then
       ! This failure is per rank, and the partners are about to block in
       ! MPI_Sendrecv waiting for a rank that is on its way out, so tear the
       ! job down rather than leaving them there.
       write (stderr, '(a,i0)') &
-        'CUDA synchronisation before the 100 mirror exchange failed: ', ierr
+        'CUDA synchronisation before the dim2 mirror exchange failed: ', ierr
       flush (stderr)
       call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
     end if
@@ -1230,12 +1230,12 @@ contains
                         self%mirror_slab_rank, tag_slab, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr_mpi)
 #else
-      error stop 'The 100 mirror slab exchange needs more than one rank, &
+      error stop 'The dim2 mirror slab exchange needs more than one rank, &
                   &but this build was configured without MPI'
 #endif
       if (ierr_mpi /= MPI_SUCCESS) then
         write (stderr, '(a,i0)') &
-          'The 100 mirror slab exchange failed: ', ierr_mpi
+          'The dim2 mirror slab exchange failed: ', ierr_mpi
         flush (stderr)
         call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
       end if
@@ -1251,18 +1251,18 @@ contains
                         self%mirror_plane_rank, tag_plane, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr_mpi)
 #else
-      error stop 'The 100 mirror plane exchange needs more than one rank, &
+      error stop 'The dim2 mirror plane exchange needs more than one rank, &
                   &but this build was configured without MPI'
 #endif
       if (ierr_mpi /= MPI_SUCCESS) then
         write (stderr, '(a,i0)') &
-          'The 100 mirror plane exchange failed: ', ierr_mpi
+          'The dim2 mirror plane exchange failed: ', ierr_mpi
         flush (stderr)
         call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
       end if
     end if
 
-  end subroutine exchange_mirror_100
+  end subroutine exchange_dim2_mirror
 
   subroutine fft_postprocess_010_cuda(self)
     implicit none
@@ -1375,7 +1375,7 @@ contains
     !! On a single rank X and Y are both whole, so 7 kernel launches avoid
     !! cross-block race conditions. On multiple ranks cuFFTMp splits X
     !! across ranks, so the X pairing reaches its partner through the
-    !! dim2 mirror exchange (see exchange_mirror_100) instead, adding two
+    !! dim2 mirror exchange (see exchange_dim2_mirror) instead, adding two
     !! more launches.
     implicit none
 
@@ -1469,7 +1469,7 @@ contains
       )
 
     ! Fetch the X pairing partners that live on other ranks
-    call self%exchange_mirror_100(c_dev)
+    call self%exchange_dim2_mirror(c_dev)
 
     ! Step 2: X paired split (forward), mirror-aware
     call process_spectral_110_x_pair_fw_mirror<<<blocks, threads>>>( & !&
@@ -1500,7 +1500,7 @@ contains
       )
 
     ! Steps 2 and 4 rewrote every mode, so the mirror is stale
-    call self%exchange_mirror_100(c_dev)
+    call self%exchange_dim2_mirror(c_dev)
 
     ! Step 6: X paired recombine (backward), mirror-aware
     call process_spectral_110_x_pair_bw_mirror<<<blocks, threads>>>( & !&

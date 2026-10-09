@@ -1237,7 +1237,7 @@ contains
     )
     !! Multi-rank counterpart of process_spectral_110_x_pair_fw: the X
     !! paired split, but the partner mode lives on another rank, reached
-    !! through the dim2 mirror exchange (see exchange_mirror_100). Unlike
+    !! through the dim2 mirror exchange (see exchange_dim2_mirror). Unlike
     !! the single-rank kernel this only updates this rank's own modes;
     !! the partner rank updates its own copy the same way.
     !! At the global Nyquist mode (even grid size) the mirror
