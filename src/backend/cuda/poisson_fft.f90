@@ -1412,7 +1412,7 @@ contains
     ! On multiple ranks X is split across ranks by cuFFTMp, reached through
     ! the dim2 mirror. Y stays whole (self%sp_st(3) is always 0), so its
     ! pair kernels are the same on one rank and on several.
-    if (self%mesh%par%nproc == 1) then
+    if (.not. self%use_cufftmp) then
       ! Step 2: X paired split (forward)
       call process_spectral_110_x_pair_fw<<<blocks, threads>>>( & !&
         c_dev, nz_h, &
@@ -1452,7 +1452,7 @@ contains
       self%ay_dev, self%by_dev &
       )
 
-    if (self%mesh%par%nproc == 1) then
+    if (.not. self%use_cufftmp) then
       ! Step 6: X paired recombine (backward)
       call process_spectral_110_x_pair_bw<<<blocks, threads>>>( & !&
         c_dev, nz_h, &
