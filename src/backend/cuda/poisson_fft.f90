@@ -107,7 +107,7 @@ module m_cuda_poisson_fft
     !> sized (nz_l, nx, ny_l, nproc). Ordinary device memory, for the same
     !> reason as c_slab_send_dev.
     real(dp), device, allocatable, dimension(:, :, :, :) :: r_a2a_send_dev, &
-                                                             r_a2a_recv_dev
+                                                            r_a2a_recv_dev
   contains
     procedure :: fft_forward => fft_forward_cuda
     procedure :: fft_forward_010 => fft_forward_cuda
