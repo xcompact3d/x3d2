@@ -281,6 +281,7 @@ define_test(unit/test_mesh.f90 4 omp)
 define_test(unit/test_statistics.f90 ${serial} omp)
 define_test(unit/test_output_scalars.f90 ${serial} omp)
 define_test(unit/test_les.f90 ${serial} omp)
+define_test(unit/test_abl_diagnostics.f90 ${serial} omp)
 if(WITH_ADIOS2)
   define_test(unit/test_adios2_mixed_precision.f90 ${serial} omp)
 endif()
@@ -329,6 +330,12 @@ function(define_backend_tests backend)
     # Checks the allocator on a device selected per rank.
     define_test(unit/test_device_allocator.f90 ${serial} ${backend})
   endif()
+  if(is_omp OR ${backend} STREQUAL cuda)
+    # Still select their backend with #ifdef CUDA rather than through
+    # m_backend_runtime, so they are only valid for the omp and cuda builds.
+    define_test(unit/test_boundary_planes.f90 ${serial} ${backend})
+    define_test(unit/test_abl_seed.f90 ${serial} ${backend})
+  endif()
 
   # Verification tests (numerical correctness vs analytical solutions)
   define_verification_test(verification/test_time_integrator.f90 ${serial} ${backend})
@@ -338,6 +345,9 @@ function(define_backend_tests backend)
     define_verification_test(verification/test_transeq.f90 ${np} ${backend})
     define_verification_test(verification/test_les_field.f90 ${serial} ${backend})
     define_verification_test(verification/test_thom.f90 ${serial} ${backend})
+  endif()
+  if(is_omp OR ${backend} STREQUAL cuda)
+    define_verification_test(verification/test_filter.f90 ${serial} ${backend})
   endif()
 
   # The FFT Poisson solvers (2DECOMP&FFT on CPU, cuFFTMp on CUDA) are not at

@@ -28,9 +28,14 @@ module m_cuda_backend
                                      field_shift, scalar_product, &
                                      vector_norm_squared, &
                                      field_max_sum, field_set_y_face, &
-                                     field_set_x_face, &
+                                     field_set_x_face, field_set_y_plane, &
+                                     field_set_abl_wall_stress, &
                                      field_set_x_face_from_field, &
                                      field_set_y_face_from_field, &
+                                     field_add_x_face_from_field, &
+                                     field_plane_partial_sums, &
+                                     field_plane_sums_reduce, &
+                                     field_add_y_face_from_field, &
                                      pwmul, volume_integral, &
                                      vorticity_from_gradients, &
                                      qcriterion_from_gradients, &
@@ -78,7 +83,11 @@ module m_cuda_backend
     procedure :: field_scale => field_scale_cuda
     procedure :: field_shift => field_shift_cuda
     procedure :: field_set_face => field_set_face_cuda
+    procedure :: field_set_y_plane => field_set_y_plane_cuda
+    procedure :: field_plane_sums => field_plane_sums_cuda
+    procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_cuda
     procedure :: field_set_face_from_field => field_set_face_from_field_cuda
+    procedure :: field_add_face_from_field => field_add_face_from_field_cuda
     procedure :: compute_vorticity => compute_vorticity_cuda
     procedure :: compute_qcriterion => compute_qcriterion_cuda
     procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_cuda
@@ -164,7 +173,8 @@ contains
 
   subroutine alloc_cuda_tdsops( &
     self, tdsops, n_tds, delta, operation, scheme, bc_start, bc_end, &
-    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu &
+    stretch, stretch_correct, n_halo, from_to, sym, c_nu, nu0_nu, &
+    filter_alpha &
     )
     implicit none
 
@@ -179,6 +189,7 @@ contains
     character(*), optional, intent(in) :: from_to
     logical, optional, intent(in) :: sym
     real(dp), optional, intent(in) :: c_nu, nu0_nu
+    real(dp), optional, intent(in) :: filter_alpha
 
     allocate (cuda_tdsops_t :: tdsops)
 
@@ -186,7 +197,7 @@ contains
     type is (cuda_tdsops_t)
       tdsops = cuda_tdsops_t(n_tds, delta, operation, scheme, bc_start, &
                              bc_end, stretch, stretch_correct, n_halo, &
-                             from_to, sym, c_nu, nu0_nu)
+                             from_to, sym, c_nu, nu0_nu, filter_alpha)
     end select
 
   end subroutine alloc_cuda_tdsops
@@ -593,6 +604,12 @@ contains
     class(tdsops_t), intent(in) :: tdsops
 
     type(dim3) :: blocks, threads
+
+    ! Thomas is exact along an undecomposed line (see tdsops%prefer_thomas)
+    if (tdsops%prefer_thomas) then
+      call self%thom_solve(du, u, tdsops)
+      return
+    end if
 
     ! Check if direction matches for both in/out fields and dirps
     if (u%dir /= du%dir) then
@@ -1052,7 +1069,7 @@ contains
     n = size(stress_d, dim=2)
     blocks = dim3(size(stress_d, dim=3), 1, 1)
     threads = dim3(SZ, 1, 1)
-    call sgs_stress_from_gradients<<<blocks, threads>>>( &
+    call sgs_stress_from_gradients<<<blocks, threads>>>( & !&
       stress_d, nut_d, gradient_a_d, gradient_b_d, &
       scale_a, scale_b, n) !&
   end subroutine compute_sgs_stress_cuda
@@ -1399,15 +1416,16 @@ contains
           dims(1), dims(2), dims(3))
 
     case (Y_FACE)
-      if (present(bc_start) .or. present(bc_end)) then
-        if (bc_s /= BC_DIRICHLET .or. bc_e /= BC_DIRICHLET) then
-          error stop 'field_set_face: Y_FACE only supports BC_DIRICHLET.'
-        end if
-      end if
+      ! Only Dirichlet faces carry a prescribed value; a non-Dirichlet face
+      ! is left untouched so the two y-faces can differ (ABL: no-slip floor,
+      ! free-slip lid). Both default to Dirichlet, preserving the historical
+      ! behaviour of writing both faces.
       blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
       threads = dim3(64, 1, 1)
       call field_set_y_face<<<blocks, threads>>>( &              !&
-          f_d, c_start, c_end, flow_rate_diff_val, dims(1), dims(2), dims(3))
+          f_d, c_start, c_end, bc_s == BC_DIRICHLET, &
+          bc_e == BC_DIRICHLET, flow_rate_diff_val, &
+          dims(1), dims(2), dims(3))
 
     case (Z_FACE)
       error stop 'Setting Z_FACE is not yet supported.'
@@ -1417,6 +1435,121 @@ contains
     end select
 
   end subroutine field_set_face_cuda
+
+  subroutine field_set_y_plane_cuda(self, f, c, plane)
+    !! [[m_base_backend(module):field_set_y_plane(subroutine)]]
+    implicit none
+
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c
+    integer, intent(in) :: plane
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    type(dim3) :: blocks, threads
+    integer :: dims(3), y_block, i_in_block, group_offset
+
+    if (f%dir /= DIR_X) &
+      error stop 'field_set_y_plane is only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_set_y_plane requires a valid data_loc.'
+
+    call resolve_field_t(f_d, f)
+    dims = self%mesh%get_dims(f%data_loc)
+    if (plane < 1 .or. plane > dims(2)) &
+      error stop 'field_set_y_plane: plane outside the domain.'
+
+    ! CUDA DIR_X ordering: group = nz*(y_block - 1) + z.
+    y_block = (plane - 1)/SZ + 1
+    i_in_block = mod(plane - 1, SZ) + 1
+    group_offset = dims(3)*(y_block - 1)
+
+    blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
+    threads = dim3(64, 1, 1)
+    call field_set_y_plane<<<blocks, threads>>>( &                !&
+        f_d, c, i_in_block, group_offset, dims(1))
+
+  end subroutine field_set_y_plane_cuda
+
+  subroutine field_plane_sums_cuda(self, sums, f)
+    !! [[m_base_backend(module):field_plane_sums(subroutine)]]
+    implicit none
+
+    class(cuda_backend_t) :: self
+    real(dp), intent(out) :: sums(:)
+    class(field_t), intent(in) :: f
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    real(dp), device, allocatable :: partial_d(:, :), sums_d(:)
+    type(dim3) :: blocks, threads
+    integer :: dims(3)
+
+    if (f%dir /= DIR_X) &
+      error stop 'field_plane_sums is only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_plane_sums requires a valid data_loc.'
+
+    dims = self%mesh%get_dims(f%data_loc)
+    if (size(sums) < dims(2)) &
+      error stop 'field_plane_sums: sums is smaller than the y extent.'
+
+    call resolve_field_t(f_d, f)
+    allocate (partial_d(dims(2), dims(3)), sums_d(dims(2)))
+
+    ! Sum along x for every (y, z) line, then over z for every y, each in a
+    ! fixed order so the result is reproducible.
+    blocks = dim3((dims(2) - 1)/SZ + 1, dims(3), 1)
+    threads = dim3(SZ, 1, 1)
+    call field_plane_partial_sums<<<blocks, threads>>>( &          !&
+      partial_d, f_d, dims(1), dims(2), dims(3))
+    blocks = dim3((dims(2) - 1)/64 + 1, 1, 1)
+    threads = dim3(64, 1, 1)
+    call field_plane_sums_reduce<<<blocks, threads>>>( &           !&
+      sums_d, partial_d, dims(2), dims(3))
+
+    sums(1:dims(2)) = sums_d
+    deallocate (partial_d, sums_d)
+
+  end subroutine field_plane_sums_cuda
+
+  subroutine field_set_abl_wall_stress_cuda( &
+    self, stress, u, w, sample_plane, stress_plane, drag_coeff, component)
+    !! [[m_base_backend(module):field_set_abl_wall_stress(subroutine)]]
+    implicit none
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: stress
+    class(field_t), intent(in) :: u, w
+    integer, intent(in) :: sample_plane, stress_plane, component
+    real(dp), intent(in) :: drag_coeff
+    real(dp), device, pointer, dimension(:, :, :) :: stress_d, u_d, w_d
+    type(dim3) :: blocks, threads
+    integer :: dims(3), sample_i, stress_i, sample_offset, stress_offset
+
+    if (stress%dir /= DIR_X .or. u%dir /= DIR_X .or. w%dir /= DIR_X) &
+      error stop 'ABL wall stress requires DIR_X fields.'
+    if (stress%data_loc /= VERT .or. u%data_loc /= VERT .or. &
+        w%data_loc /= VERT) &
+      error stop 'ABL wall stress requires vertex fields.'
+    dims = self%mesh%get_dims(VERT)
+    if (min(sample_plane, stress_plane) < 1 .or. &
+        max(sample_plane, stress_plane) > dims(2)) &
+      error stop 'ABL wall stress plane is outside the domain.'
+    if (component /= 1 .and. component /= 3) &
+      error stop 'Invalid ABL wall stress component.'
+
+    call resolve_field_t(stress_d, stress)
+    call resolve_field_t(u_d, u)
+    call resolve_field_t(w_d, w)
+    sample_i = mod(sample_plane - 1, SZ) + 1
+    stress_i = mod(stress_plane - 1, SZ) + 1
+    sample_offset = dims(3)*((sample_plane - 1)/SZ)
+    stress_offset = dims(3)*((stress_plane - 1)/SZ)
+    blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
+    threads = dim3(64, 1, 1)
+    call field_set_abl_wall_stress<<<blocks, threads>>>( &      !&
+      stress_d, u_d, w_d, drag_coeff, sample_i, stress_i, &
+      sample_offset, stress_offset, dims(1), component)
+  end subroutine field_set_abl_wall_stress_cuda
 
   subroutine field_set_face_from_field_cuda(self, f, f_start, c_end, face, &
                                             bc_start, bc_end, flow_rate_diff)
@@ -1489,6 +1622,48 @@ contains
     end select
 
   end subroutine field_set_face_from_field_cuda
+
+  subroutine field_add_face_from_field_cuda(self, f, g, face, bc_start, bc_end)
+    !! [[m_base_backend(module):field_add_face_from_field(subroutine)]]
+    implicit none
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    class(field_t), intent(in) :: g
+    integer, intent(in) :: face, bc_start, bc_end
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d, g_d
+    type(dim3) :: blocks, threads
+    integer :: dims(3)
+    logical :: set_start, set_end
+
+    if (f%dir /= DIR_X .or. g%dir /= DIR_X) &
+      error stop 'field_add_face_from_field: only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_add_face_from_field: requires a valid data_loc.'
+
+    set_start = (bc_start == BC_DIRICHLET)
+    set_end = (bc_end == BC_DIRICHLET)
+
+    call resolve_field_t(f_d, f)
+    call resolve_field_t(g_d, g)
+
+    dims = self%mesh%get_dims(f%data_loc)
+    threads = dim3(64, 1, 1)
+
+    select case (face)
+    case (X_FACE)
+      blocks = dim3((SZ - 1)/64 + 1, ((dims(2) - 1)/SZ + 1)*dims(3), 1)
+      call field_add_x_face_from_field<<<blocks, threads>>>( &      !&
+          f_d, g_d, set_start, set_end, dims(1), dims(2), dims(3))
+    case (Y_FACE)
+      blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
+      call field_add_y_face_from_field<<<blocks, threads>>>( &      !&
+          f_d, g_d, set_start, set_end, dims(1), dims(2), dims(3))
+    case default
+      error stop 'field_add_face_from_field: only X_FACE and Y_FACE supported.'
+    end select
+
+  end subroutine field_add_face_from_field_cuda
 
   real(dp) function field_volume_integral_cuda(self, f) result(s)
     !! volume integral of a field
