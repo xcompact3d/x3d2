@@ -1,0 +1,75 @@
+&domain_settings
+flow_case_name = 'wind_turbine'
+
+! Dimensional domain in metres; rotor diameter D = 126 m (see discs.ad).
+L_global = 2898.0d0, 500.0d0, 1008.0d0
+
+! dx~6.3m -> ~20 cells across the D=126m rotor. Resolves the wake so the
+! convective term stops piling energy at the grid scale.
+! y,z (periodic) sizes 80,160 = 2^n*5 (FFT-friendly).
+dims_global = 461, 80, 160
+
+nproc_dir = 1, 1, 1
+
+! x: inflow (dirichlet) / convective outflow (dirichlet); y,z periodic.
+! The two_turbines reference uses free-slip walls in y,z, but the FFT Poisson
+! solver requires z periodic and a single MPI rank in non-periodic directions.
+BC_x = 'dirichlet', 'dirichlet'
+BC_y = 'periodic', 'periodic'
+BC_z = 'periodic', 'periodic'
+/End
+
+&solver_params
+! Effective (LES) Reynolds number based on rotor diameter and inflow speed.
+! It is deliberately low so the ~6 m mesh resolves the energy-containing scales;
+! the compact6-hyperviscous scheme below supplies the sub-grid dissipation.
+Re = 450.0d0
+! RK3: larger stability region than AB3; damps marginally-resolved grid-scale
+! modes that otherwise drive exponential blow-up.
+time_intg = 'RK3'
+dt = 0.2d0
+! t=800s (~2.2 flow-through times, flow-through=362s) for a fully developed,
+! statistically steady turbulent wake.
+n_iters = 4000
+n_output = 50
+poisson_solver_type = 'FFT'
+der1st_scheme = 'compact6'
+! compact6-hyperviscous adds implicit-LES (iSVV) dissipation at the grid scale.
+der2nd_scheme = 'compact6-hyperviscous'
+c_nu = 0.44d0
+nu0_nu = 500.0d0
+interpl_scheme = 'classic'
+stagder_scheme = 'compact6'
+ibm_on = F
+/End
+
+&stats_params
+initstat = 1
+istatfreq = 1
+istatout = 50
+stats_prefix = 'statistics'
+/End
+
+&checkpoint_params
+snapshot_freq = 50
+snapshot_prefix = 'snapshot'
+output_fields = 'vorticity', 'qcriterion'
+/End
+
+&wind_turbine_nml
+! init_noise perturbs the whole field at t=0; on this mesh that injects energy
+! at the smallest resolved scales and can destabilise start-up. Keep it off and
+! seed turbulence at the inlet instead.
+init_noise = 0.0d0, 0.0d0, 0.0d0
+! Seed turbulence only at the inlet plane; it develops physically through the
+! shear layers.
+inlet_noise = 0.02d0, 0.0d0, 0.0d0
+bc_start_u = 8.0d0   ! uniform inflow velocity
+bc_start_v = 0.0d0
+bc_start_w = 0.0d0
+iturbine = 2          ! 1: actuator line, 2: disc
+iturboutput = 50
+adm_coords = 'discs.ad'
+rho_air = 1.2d0
+T_relax = 1.1291d0    ! ADM velocity-filter timescale
+/End
