@@ -150,7 +150,7 @@ module m_cuda_poisson_fft
     end function cufftExecC2R_C
   end interface
 
-  private :: create_fft_plan, sync_or_abort
+  private :: create_fft_plan, sync_or_abort, yslab_view_110
 
 contains
 
