@@ -260,15 +260,10 @@ contains
 
     ! 1D decomposition along Z in real domain, and along Y in spectral space
     if (mesh%par%nproc_dir(2) /= 1) print *, 'nproc_dir in y-dir must be 1'
-    if (poisson_fft%is_100_case .and. mesh%par%nproc > 1) then
+    if ((poisson_fft%is_100_case .or. poisson_fft%is_110_case) &
+        .and. mesh%par%nproc > 1) then
       if (mesh%par%nproc_dir(1) /= 1 .or. mesh%par%nproc_dir(2) /= 1) then
-        error stop 'The 100 case on multiple ranks needs a 1D z &
-                    &decomposition, nproc_dir must be [1, 1, nproc].'
-      end if
-    end if
-    if (poisson_fft%is_110_case .and. mesh%par%nproc > 1) then
-      if (mesh%par%nproc_dir(1) /= 1 .or. mesh%par%nproc_dir(2) /= 1) then
-        error stop 'The 110 case on multiple ranks needs a 1D z &
+        error stop 'The 100 and 110 cases on multiple ranks need a 1D z &
                     &decomposition, nproc_dir must be [1, 1, nproc].'
       end if
     end if
