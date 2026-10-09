@@ -519,15 +519,10 @@ contains
     ! use_cufftmp is only settled once create_fft_plan has run, because plain
     ! cuFFT is a fallback taken inside it, so unlike the decomposition checks
     ! above this one cannot move ahead of the plans.
-    if (poisson_fft%is_100_case .and. mesh%par%nproc > 1 &
-        .and. (.not. poisson_fft%use_cufftmp)) then
-      error stop 'The 100 case on multiple ranks needs cuFFTMp, plain &
-                  &cuFFT cannot decompose the transform.'
-    end if
-    if (poisson_fft%is_110_case .and. mesh%par%nproc > 1 &
-        .and. (.not. poisson_fft%use_cufftmp)) then
-      error stop 'The 110 case on multiple ranks needs cuFFTMp, plain &
-                  &cuFFT cannot decompose the transform.'
+    if ((poisson_fft%is_100_case .or. poisson_fft%is_110_case) &
+        .and. mesh%par%nproc > 1 .and. (.not. poisson_fft%use_cufftmp)) then
+      error stop 'The 100 and 110 cases on multiple ranks need cuFFTMp, &
+                  &plain cuFFT cannot decompose the transform.'
     end if
 
   end subroutine init_cuda_poisson_fft_t
