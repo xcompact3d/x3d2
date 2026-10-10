@@ -14,6 +14,7 @@ program test_filter
   use m_mpi, only: MPI_Init, MPI_Finalize
 
   use m_allocator, only: allocator_t
+  use m_backend_runtime, only: backend_runtime_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, pi, DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, &
                       RDR_X2Y, RDR_Y2X
@@ -22,27 +23,13 @@ program test_filter
   use m_solver, only: allocate_tdsops
   use m_tdsops, only: dirps_t
 
-#ifdef CUDA
-  use m_cuda_allocator, only: cuda_allocator_t
-  use m_cuda_backend, only: cuda_backend_t
-  use m_cuda_common, only: SZ
-#else
-  use m_omp_backend, only: omp_backend_t
-  use m_omp_common, only: SZ
-#endif
 
   implicit none
 
+  type(backend_runtime_t), target :: runtime
   type(mesh_t), target :: mesh
   class(allocator_t), pointer :: allocator
   class(base_backend_t), pointer :: backend
-#ifdef CUDA
-  type(cuda_allocator_t), target :: cuda_allocator
-  type(cuda_backend_t), target :: cuda_backend
-#else
-  type(allocator_t), target :: omp_allocator
-  type(omp_backend_t), target :: omp_backend
-#endif
   type(dirps_t), target :: xdirps, ydirps, zdirps
   class(field_t), pointer :: f, filtered
 
@@ -71,17 +58,9 @@ program test_filter
   mesh = mesh_t(dims_global, nproc_dir, lengths, bc_per, bc_slip, bc_per)
   dims = mesh%get_dims(VERT)
 
-#ifdef CUDA
-  cuda_allocator = cuda_allocator_t(dims, SZ)
-  allocator => cuda_allocator
-  cuda_backend = cuda_backend_t(mesh, allocator)
-  backend => cuda_backend
-#else
-  omp_allocator = allocator_t(dims, SZ)
-  allocator => omp_allocator
-  omp_backend = omp_backend_t(mesh, allocator)
-  backend => omp_backend
-#endif
+  call runtime%init(mesh)
+  allocator => runtime%allocator
+  backend => runtime%backend
 
   xdirps%dir = DIR_X; ydirps%dir = DIR_Y; zdirps%dir = DIR_Z
   call allocate_tdsops(xdirps, backend, mesh, 'compact6', 'compact6', &

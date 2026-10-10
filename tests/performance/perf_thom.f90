@@ -2,7 +2,8 @@ program perf_thom
   use m_mpi, only: MPI_Wtime
 
   use m_allocator, only: allocator_t, field_t
-  use m_backend_runtime, only: backend_runtime_t, backend_is_cuda, backend_sz
+  use m_backend_runtime, only: backend_runtime_t, backend_is_device, &
+                               backend_label, backend_sz
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, pi, BC_PERIODIC, BC_DIRICHLET, DIR_X, VERT
   use m_mesh, only: mesh_t
@@ -21,7 +22,6 @@ program perf_thom
   logical :: has_device_bw_info
   real(dp) :: dx_per, dx
   real(dp) :: periodic_bw, dirichlet_bw
-  character(len=4) :: backend_label
 
   type(backend_runtime_t), target :: runtime
   type(mesh_t), target :: mesh
@@ -71,14 +71,12 @@ contains
 
   subroutine configure_benchmark()
     n_glob = 512
-    if (backend_is_cuda) then
-      backend_label = 'cuda'
+    if (backend_is_device) then
       periodic_bw = 6.0_dp
       dirichlet_bw = 4.0_dp
       n_groups = 512*512/backend_sz
       n_iters = 1000
     else
-      backend_label = 'omp'
       periodic_bw = 3.0_dp
       dirichlet_bw = 3.0_dp
       n_groups = 128*128/backend_sz
