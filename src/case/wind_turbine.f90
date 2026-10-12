@@ -57,6 +57,11 @@ contains
     type(allocator_t), target, intent(inout) :: host_allocator
     type(case_wind_turbine_t) :: flow_case
 
+    ! The inflow, outflow and mass-correction BCs act on the x = 1 and x = nx
+    ! planes and assume every rank holds both, so x must not be decomposed.
+    if (mesh%par%nproc_dir(1) /= 1) &
+      error stop 'wind_turbine: x must not be decomposed (nproc_dir(1) = 1).'
+
     call flow_case%wt_cfg%read(nml_file=get_argument(1))
     call flow_case%case_init(backend, mesh, host_allocator)
 
