@@ -151,7 +151,7 @@ module m_cuda_poisson_fft
   end interface
 
   private :: create_fft_plan, sync_or_abort, yslab_view_110, &
-             redistribution_launch_config
+             redistribution_launch_config, redistribution_alltoall
 
 contains
 
@@ -690,30 +690,20 @@ contains
     threads = dim3(tpb, 1, 1)
   end subroutine redistribution_launch_config
 
-  subroutine redistribute_110_to_yslab(self, zslab, yslab)
-    !! Redistributes the 110 field from the physical Z-slab (nx, ny, nz_l)
-    !! to the cuFFTMp Y-slab real view (2*(nz/2+1), nx, ny_l), ahead of the
-    !! forward transform. See the comment above pack_110_xyz_to_yslab.
+  subroutine redistribution_alltoall(self, ny_l, slab)
+    !! Syncs the device, then swaps the packed 110 slab buffers between all
+    !! ranks. The slab text ('Y' or 'Z') names the target in the failure
+    !! message.
     implicit none
 
     class(cuda_poisson_fft_t) :: self
-    real(dp), device, dimension(:, :, :), intent(in) :: zslab
-    real(dp), device, dimension(:, :, :), intent(inout) :: yslab
+    integer, intent(in) :: ny_l
+    character(len=*), intent(in) :: slab
 
-    type(dim3) :: blocks, threads
-    integer :: nx, ny_l, nz_l, nproc, count
-    integer :: ierr_mpi, ierr_abort
+    integer :: nx, nz_l, count, ierr_mpi, ierr_abort
 
     nx = self%nx_glob
     nz_l = self%nz_loc
-    nproc = self%mesh%par%nproc_dir(3)
-    ny_l = size(yslab, 3)
-
-    call redistribution_launch_config(ny_l, nz_l, blocks, threads)
-
-    call pack_110_xyz_to_yslab<<<blocks, threads>>>( & !&
-      self%r_a2a_send_dev, zslab, nx, ny_l, nz_l, nproc &
-      )
 
     ! Ordinary device memory, but still owed a sync before MPI reads it, for
     ! the same reason as the dim2 mirror exchange (see exchange_dim2_mirror).
@@ -731,10 +721,37 @@ contains
 #endif
     if (ierr_mpi /= MPI_SUCCESS) then
       write (stderr, '(a,i0)') &
-        'The 110 slab redistribution to the Y-slab failed: ', ierr_mpi
+        'The 110 slab redistribution to the '//slab//'-slab failed: ', ierr_mpi
       flush (stderr)
       call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
     end if
+  end subroutine redistribution_alltoall
+
+  subroutine redistribute_110_to_yslab(self, zslab, yslab)
+    !! Redistributes the 110 field from the physical Z-slab (nx, ny, nz_l)
+    !! to the cuFFTMp Y-slab real view (2*(nz/2+1), nx, ny_l), ahead of the
+    !! forward transform. See the comment above pack_110_xyz_to_yslab.
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    real(dp), device, dimension(:, :, :), intent(in) :: zslab
+    real(dp), device, dimension(:, :, :), intent(inout) :: yslab
+
+    type(dim3) :: blocks, threads
+    integer :: nx, ny_l, nz_l, nproc
+
+    nx = self%nx_glob
+    nz_l = self%nz_loc
+    nproc = self%mesh%par%nproc_dir(3)
+    ny_l = size(yslab, 3)
+
+    call redistribution_launch_config(ny_l, nz_l, blocks, threads)
+
+    call pack_110_xyz_to_yslab<<<blocks, threads>>>( & !&
+      self%r_a2a_send_dev, zslab, nx, ny_l, nz_l, nproc &
+      )
+
+    call redistribution_alltoall(self, ny_l, 'Y')
 
     call unpack_110_yslab<<<blocks, threads>>>( & !&
       yslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc &
@@ -751,8 +768,7 @@ contains
     real(dp), device, dimension(:, :, :), intent(inout) :: zslab
 
     type(dim3) :: blocks, threads
-    integer :: nx, ny_l, nz_l, nproc, count
-    integer :: ierr_mpi, ierr_abort
+    integer :: nx, ny_l, nz_l, nproc
 
     nx = self%nx_glob
     nz_l = self%nz_loc
@@ -765,24 +781,7 @@ contains
       self%r_a2a_send_dev, yslab, nx, ny_l, nz_l, nproc &
       )
 
-    call sync_or_abort('110 slab redistribution')
-
-    count = nz_l*nx*ny_l
-
-#ifdef MPI
-    call MPI_Alltoall(self%r_a2a_send_dev, count, MPI_X3D2_DP, &
-                      self%r_a2a_recv_dev, count, MPI_X3D2_DP, &
-                      MPI_COMM_WORLD, ierr_mpi)
-#else
-    error stop 'The 110 slab redistribution needs more than one rank, but &
-                &this build was configured without MPI'
-#endif
-    if (ierr_mpi /= MPI_SUCCESS) then
-      write (stderr, '(a,i0)') &
-        'The 110 slab redistribution to the Z-slab failed: ', ierr_mpi
-      flush (stderr)
-      call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
-    end if
+    call redistribution_alltoall(self, ny_l, 'Z')
 
     call unpack_110_yslab_to_xyz<<<blocks, threads>>>( & !&
       zslab, self%r_a2a_recv_dev, nx, ny_l, nz_l, nproc &
