@@ -150,7 +150,8 @@ module m_cuda_poisson_fft
     end function cufftExecC2R_C
   end interface
 
-  private :: create_fft_plan, sync_or_abort, yslab_view_110
+  private :: create_fft_plan, sync_or_abort, yslab_view_110, &
+             redistribution_launch_config
 
 contains
 
@@ -674,6 +675,21 @@ contains
     end if
   end subroutine fft_backward_110_cuda
 
+  subroutine redistribution_launch_config(ny_l, nz_l, blocks, threads)
+    !! Launch configuration shared by the four pack and unpack kernels of the
+    !! 110 slab redistribution.
+    implicit none
+
+    integer, intent(in) :: ny_l, nz_l
+    type(dim3), intent(out) :: blocks, threads
+
+    integer :: tpb
+
+    tpb = min(ny_l, 256)
+    blocks = dim3(nz_l, (ny_l - 1)/tpb + 1, 1)
+    threads = dim3(tpb, 1, 1)
+  end subroutine redistribution_launch_config
+
   subroutine redistribute_110_to_yslab(self, zslab, yslab)
     !! Redistributes the 110 field from the physical Z-slab (nx, ny, nz_l)
     !! to the cuFFTMp Y-slab real view (2*(nz/2+1), nx, ny_l), ahead of the
@@ -685,7 +701,7 @@ contains
     real(dp), device, dimension(:, :, :), intent(inout) :: yslab
 
     type(dim3) :: blocks, threads
-    integer :: nx, ny_l, nz_l, nproc, tpb, count
+    integer :: nx, ny_l, nz_l, nproc, count
     integer :: ierr_mpi, ierr_abort
 
     nx = self%nx_glob
@@ -693,9 +709,7 @@ contains
     nproc = self%mesh%par%nproc_dir(3)
     ny_l = size(yslab, 3)
 
-    tpb = min(ny_l, 256)
-    blocks = dim3(nz_l, (ny_l - 1)/tpb + 1, 1)
-    threads = dim3(tpb, 1, 1)
+    call redistribution_launch_config(ny_l, nz_l, blocks, threads)
 
     call pack_110_xyz_to_yslab<<<blocks, threads>>>( & !&
       self%r_a2a_send_dev, zslab, nx, ny_l, nz_l, nproc &
@@ -737,7 +751,7 @@ contains
     real(dp), device, dimension(:, :, :), intent(inout) :: zslab
 
     type(dim3) :: blocks, threads
-    integer :: nx, ny_l, nz_l, nproc, tpb, count
+    integer :: nx, ny_l, nz_l, nproc, count
     integer :: ierr_mpi, ierr_abort
 
     nx = self%nx_glob
@@ -745,9 +759,7 @@ contains
     nproc = self%mesh%par%nproc_dir(3)
     ny_l = size(yslab, 3)
 
-    tpb = min(ny_l, 256)
-    blocks = dim3(nz_l, (ny_l - 1)/tpb + 1, 1)
-    threads = dim3(tpb, 1, 1)
+    call redistribution_launch_config(ny_l, nz_l, blocks, threads)
 
     call pack_110_yslab<<<blocks, threads>>>( & !&
       self%r_a2a_send_dev, yslab, nx, ny_l, nz_l, nproc &
