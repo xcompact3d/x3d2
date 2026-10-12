@@ -68,6 +68,7 @@ module m_base_backend
     procedure :: field_set_face_from_field => field_set_face_from_field_base
     procedure :: field_add_face_from_field => field_add_face_from_field_base
     procedure :: field_add_const_x_face => field_add_const_x_face_base
+    procedure :: field_set_x_inlet_plane => field_set_x_inlet_plane_base
     procedure :: compute_vorticity => compute_vorticity_base
     procedure :: compute_qcriterion => compute_qcriterion_base
     procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_base
@@ -621,6 +622,21 @@ contains
     call not_implemented('field_add_const_x_face')
 
   end subroutine field_add_const_x_face_base
+
+  subroutine field_set_x_inlet_plane_base(self, f, plane)
+    !! Overwrites the x = 1 plane (pencil index 1) of a DIR_X field with
+    !! the host array `plane(ny, nz)`, in local VERT dims. Only the plane
+    !! crosses to the device, so a time-varying inlet can be refreshed
+    !! without uploading and reordering a full 3D field.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), dimension(:, :), intent(in) :: plane
+
+    call not_implemented('field_set_x_inlet_plane')
+
+  end subroutine field_set_x_inlet_plane_base
 
   subroutine compute_vorticity_base( &
     self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)

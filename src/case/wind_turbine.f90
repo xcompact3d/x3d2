@@ -200,8 +200,8 @@ contains
     implicit none
     class(case_wind_turbine_t) :: self
 
-    class(field_t), pointer :: hu, hv, hw
-    integer :: j, k, dims(3)
+    real(dp), allocatable :: pu(:, :), pv(:, :), pw(:, :)
+    integer :: dims(3)
     real(dp) :: noise(3), um
     logical :: first_call
 
@@ -224,35 +224,28 @@ contains
     ! noisy inlet needs refreshing every substep.
     if (.not. first_call .and. all(noise == 0._dp)) return
 
-    ! Build the inflow profile in DIR_C host buffers, then upload
-    hu => self%solver%host_allocator%get_block(DIR_C)
-    hv => self%solver%host_allocator%get_block(DIR_C)
-    hw => self%solver%host_allocator%get_block(DIR_C)
+    ! Only the inlet plane is used by apply_BC, so build just that (ny, nz)
+    ! plane on the host and upload it; a full 3D upload and reorder per
+    ! substep dominated the step time on GPU.
+    allocate (pu(dims(2), dims(3)), pv(dims(2), dims(3)), pw(dims(2), dims(3)))
 
-    ! Fill the inlet plane with random numbers in [0, 1); the loop below
-    ! maps these onto noise in [-1, 1)
-    call random_number(hu%data(1, 1:dims(2), 1:dims(3)))
-    call random_number(hv%data(1, 1:dims(2), 1:dims(3)))
-    call random_number(hw%data(1, 1:dims(2), 1:dims(3)))
+    ! Fill the inlet plane with random numbers in [0, 1) and map them onto
+    ! noise in [-1, 1). All three are drawn even when a component has no
+    ! noise, so the random sequence does not depend on which are active.
+    call random_number(pu)
+    call random_number(pv)
+    call random_number(pw)
+    pu = self%wt_cfg%bc_start_u + noise(1)*um*(2._dp*pu - 1._dp)
+    pv = self%wt_cfg%bc_start_v + noise(2)*um*(2._dp*pv - 1._dp)
+    pw = self%wt_cfg%bc_start_w + noise(3)*um*(2._dp*pw - 1._dp)
 
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        hu%data(1, j, k) = self%wt_cfg%bc_start_u &
-                           + noise(1)*um*(2._dp*hu%data(1, j, k) - 1._dp)
-        hv%data(1, j, k) = self%wt_cfg%bc_start_v &
-                           + noise(2)*um*(2._dp*hv%data(1, j, k) - 1._dp)
-        hw%data(1, j, k) = self%wt_cfg%bc_start_w &
-                           + noise(3)*um*(2._dp*hw%data(1, j, k) - 1._dp)
-      end do
-    end do
-
-    call self%solver%backend%set_field_data(self%bc_start_u_x, hu%data)
-    call self%solver%backend%set_field_data(self%bc_start_v_x, hv%data)
-    call self%solver%backend%set_field_data(self%bc_start_w_x, hw%data)
-
-    call self%solver%host_allocator%release_block(hu)
-    call self%solver%host_allocator%release_block(hv)
-    call self%solver%host_allocator%release_block(hw)
+    ! Noise-free components are constant, so they need uploading only once
+    if (first_call .or. noise(1) /= 0._dp) &
+      call self%solver%backend%field_set_x_inlet_plane(self%bc_start_u_x, pu)
+    if (first_call .or. noise(2) /= 0._dp) &
+      call self%solver%backend%field_set_x_inlet_plane(self%bc_start_v_x, pv)
+    if (first_call .or. noise(3) /= 0._dp) &
+      call self%solver%backend%field_set_x_inlet_plane(self%bc_start_w_x, pw)
   end subroutine define_BC_wind_turbine
 
   subroutine apply_BC_wind_turbine(self, u, v, w)
