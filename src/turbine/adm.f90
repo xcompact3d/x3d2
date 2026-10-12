@@ -244,7 +244,7 @@ contains
       end do
 
       ! Normalise so the kernel sums to one across all ranks. The disc-averaged
-      ! velocity is then scalar_product(gamma_disc, u).
+      ! velocity is then the gamma_disc-weighted sum of u.
       call MPI_Allreduce(MPI_IN_PLACE, gamma_tot, 1, MPI_X3D2_DP, &
                          MPI_SUM, MPI_COMM_WORLD, ierr)
       if (gamma_tot <= tiny(1._dp)) then
@@ -281,8 +281,8 @@ contains
     class(field_t), intent(inout) :: du, dv, dw
     class(field_t), intent(in) :: u, v, w
 
-    integer :: t
-    real(dp) :: u_avg, v_avg, w_avg, rot_N(3), C_T_prime
+    integer :: t, ierr
+    real(dp) :: disc_avgs(3, self%n_turb), rot_N(3), C_T_prime
     real(dp) :: coeff_x, coeff_y, coeff_z, filter_weight, stat_inc, U_thrust
     logical :: accumulate_stats
 
@@ -295,16 +295,22 @@ contains
       stat_inc = 1._dp/real(self%sample_count, dp)
     end if
 
+    ! Always recompute U_disc from the current stage velocity so the force
+    ! is consistent with each RK substage. The disc-weighted u, v and w of
+    ! every disc are summed locally in one pass each, then reduced together
+    ! in a single MPI call.
+    do t = 1, self%n_turb
+      call self%backend%field_weighted_sums(disc_avgs(:, t), &
+                                            self%disc(t)%gamma_disc, u, v, w)
+    end do
+    call MPI_Allreduce(MPI_IN_PLACE, disc_avgs, size(disc_avgs), &
+                       MPI_X3D2_DP, MPI_SUM, MPI_COMM_WORLD, ierr)
+
     do t = 1, self%n_turb
       rot_N(:) = self%disc(t)%rot_N(:)
-
-      ! Always recompute U_disc from the current stage velocity so the force
-      ! is consistent with each RK substage.
-      u_avg = self%backend%scalar_product(self%disc(t)%gamma_disc, u)
-      v_avg = self%backend%scalar_product(self%disc(t)%gamma_disc, v)
-      w_avg = self%backend%scalar_product(self%disc(t)%gamma_disc, w)
-      self%disc(t)%U_disc = u_avg*rot_N(1) + v_avg*rot_N(2) &
-                            - w_avg*rot_N(3)
+      self%disc(t)%U_disc = disc_avgs(1, t)*rot_N(1) &
+                            + disc_avgs(2, t)*rot_N(2) &
+                            - disc_avgs(3, t)*rot_N(3)
 
       if (self%recompute_forces) then
         ! First substage: advance the time filter.

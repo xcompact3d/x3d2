@@ -26,7 +26,7 @@ module m_cuda_backend
   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
   use m_cuda_kernels_fieldops, only: axpby, buffer_copy, field_scale, &
                                      field_shift, scalar_product, &
-                                     vector_norm_squared, &
+                                     vector_norm_squared, weighted_sums, &
                                      field_max_sum, field_set_y_face, &
                                      field_set_x_face, field_set_y_plane, &
                                      field_set_abl_wall_stress, &
@@ -79,6 +79,7 @@ module m_cuda_backend
     procedure :: vecmult => vecmult_cuda
     procedure :: scalar_product => scalar_product_cuda
     procedure :: vector_norm_squared => vector_norm_squared_cuda
+    procedure :: field_weighted_sums => field_weighted_sums_cuda
     procedure :: field_max_mean => field_max_mean_cuda
     procedure :: slice_max_sum => slice_max_sum_cuda
     procedure :: field_scale => field_scale_cuda
@@ -1171,6 +1172,51 @@ contains
                        MPI_COMM_WORLD, ierr)
 
   end function vector_norm_squared_cuda
+
+  subroutine field_weighted_sums_cuda(self, sums, g, a, b, c)
+    !! [[m_base_backend(module):field_weighted_sums_base(subroutine)]]
+    implicit none
+
+    class(cuda_backend_t) :: self
+    real(dp), intent(out) :: sums(3)
+    class(field_t), intent(in) :: g, a, b, c
+
+    real(dp), device, pointer, dimension(:, :, :) :: g_d, a_d, b_d, c_d
+    real(dp), device, allocatable :: sums_d(:)
+    integer :: dims(3), dims_padded(3)
+    type(dim3) :: blocks, threads
+
+    if (g%data_loc == NULL_LOC .or. a%data_loc == NULL_LOC .or. &
+        b%data_loc == NULL_LOC .or. c%data_loc == NULL_LOC) then
+      error stop 'You must set data_loc before computing weighted sums.'
+    end if
+    if (a%data_loc /= g%data_loc .or. b%data_loc /= g%data_loc .or. &
+        c%data_loc /= g%data_loc) then
+      error stop 'Weighted-sum fields must use the same data location.'
+    end if
+    if (g%dir /= DIR_X .or. a%dir /= DIR_X .or. b%dir /= DIR_X .or. &
+        c%dir /= DIR_X) then
+      error stop 'Weighted-sum fields must use DIR_X layout.'
+    end if
+
+    call resolve_field_t(g_d, g)
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    allocate (sums_d(3))
+    sums_d = 0._dp
+    dims = self%mesh%get_dims(g%data_loc)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    blocks = dim3(dims(3), (dims(2) - 1)/SZ + 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call weighted_sums<<<blocks, threads>>>( & !&
+      sums_d, g_d, a_d, b_d, c_d, dims(1), dims_padded(3), dims(2))
+
+    sums = sums_d
+
+  end subroutine field_weighted_sums_cuda
 
   subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n)
     implicit none

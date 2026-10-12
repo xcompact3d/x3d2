@@ -279,6 +279,38 @@ contains
     ierr = atomicadd(s, pencil_sum)
   end subroutine vector_norm_squared
 
+  attributes(global) subroutine weighted_sums(s, g, a, b, c, &
+                                              n, n_i_pad, n_j)
+    !! s(1:3) += sums of g*a, g*b and g*c; launch as vector_norm_squared.
+    implicit none
+
+    real(dp), device, intent(inout) :: s(3)
+    real(dp), device, intent(in), dimension(:, :, :) :: g, a, b, c
+    integer, value, intent(in) :: n, n_i_pad, n_j
+
+    real(dp) :: sum_a, sum_b, sum_c
+    integer :: i, j, pencil, block_i, block_j, ierr
+
+    i = threadIdx%x
+    block_i = blockIdx%x
+    block_j = blockIdx%y
+    pencil = block_i + (block_j - 1)*n_i_pad
+
+    sum_a = 0._dp
+    sum_b = 0._dp
+    sum_c = 0._dp
+    if (i + (block_j - 1)*blockDim%x <= n_j) then
+      do j = 1, n
+        sum_a = sum_a + g(i, j, pencil)*a(i, j, pencil)
+        sum_b = sum_b + g(i, j, pencil)*b(i, j, pencil)
+        sum_c = sum_c + g(i, j, pencil)*c(i, j, pencil)
+      end do
+    end if
+    ierr = atomicadd(s(1), sum_a)
+    ierr = atomicadd(s(2), sum_b)
+    ierr = atomicadd(s(3), sum_c)
+  end subroutine weighted_sums
+
   attributes(global) subroutine field_max_sum(max_f, sum_f, f, n, n_i_pad, n_j)
     implicit none
 

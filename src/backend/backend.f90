@@ -56,6 +56,7 @@ module m_base_backend
     procedure :: vecmult => vecmult_base
     procedure :: scalar_product => scalar_product_base
     procedure :: vector_norm_squared => vector_norm_squared_base
+    procedure :: field_weighted_sums => field_weighted_sums_base
     procedure :: field_max_mean => field_max_mean_base
     procedure :: slice_max_sum => slice_max_sum_base
     procedure :: field_plane_sums => field_plane_sums_base
@@ -424,6 +425,21 @@ contains
     call not_implemented('vector_norm_squared')
 
   end function vector_norm_squared_base
+
+  subroutine field_weighted_sums_base(self, sums, g, a, b, c)
+    !! Computes this rank's sums of g*a, g*b and g*c in a single pass over
+    !! DIR_X fields. No MPI reduction is done, so callers needing several
+    !! such sums can reduce them together in one MPI call.
+    implicit none
+
+    class(base_backend_t) :: self
+    real(dp), intent(out) :: sums(3)
+    class(field_t), intent(in) :: g, a, b, c
+
+    sums = 0._dp
+    call not_implemented('field_weighted_sums')
+
+  end subroutine field_weighted_sums_base
 
   subroutine field_max_mean_base(self, max_val, mean_val, f, &
                                  enforced_data_loc)

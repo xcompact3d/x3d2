@@ -46,6 +46,7 @@ module m_omp_backend
     procedure :: vecmult => vecmult_omp
     procedure :: scalar_product => scalar_product_omp
     procedure :: vector_norm_squared => vector_norm_squared_omp
+    procedure :: field_weighted_sums => field_weighted_sums_omp
     procedure :: field_max_mean => field_max_mean_omp
     procedure :: slice_max_sum => slice_max_sum_omp
     procedure :: field_scale => field_scale_omp
@@ -898,6 +899,60 @@ contains
     call MPI_Allreduce(local_sum, norm_squared, 1, MPI_X3D2_DP, MPI_SUM, &
                        MPI_COMM_WORLD, ierr)
   end function vector_norm_squared_omp
+
+  subroutine field_weighted_sums_omp(self, sums, g, a, b, c)
+    !! [[m_base_backend(module):field_weighted_sums_base(subroutine)]]
+    implicit none
+
+    class(omp_backend_t) :: self
+    real(dp), intent(out) :: sums(3)
+    class(field_t), intent(in) :: g, a, b, c
+
+    real(dp) :: sum_a, sum_b, sum_c
+    integer :: dims(3), n_y_blocks, y_stride
+    integer :: i, j, k, k_i, k_j
+
+    if (g%data_loc == NULL_LOC .or. a%data_loc == NULL_LOC .or. &
+        b%data_loc == NULL_LOC .or. c%data_loc == NULL_LOC) then
+      error stop 'You must set data_loc before computing weighted sums.'
+    end if
+    if (a%data_loc /= g%data_loc .or. b%data_loc /= g%data_loc .or. &
+        c%data_loc /= g%data_loc) then
+      error stop 'Weighted-sum fields must use the same data location.'
+    end if
+    if (g%dir /= DIR_X .or. a%dir /= DIR_X .or. b%dir /= DIR_X .or. &
+        c%dir /= DIR_X) then
+      error stop 'Weighted-sum fields must use DIR_X layout.'
+    end if
+
+    dims = self%mesh%get_dims(g%data_loc)
+    n_y_blocks = (dims(2) - 1)/SZ + 1
+    y_stride = y_group_stride(self)
+
+    sum_a = 0._dp
+    sum_b = 0._dp
+    sum_c = 0._dp
+    !$omp parallel do collapse(2) private(k) &
+    !$omp reduction(+:sum_a, sum_b, sum_c)
+    do k_i = 1, dims(3)
+      do k_j = 1, n_y_blocks
+        ! y-block is the fast-varying component of the group index
+        k = k_j + (k_i - 1)*y_stride
+        do j = 1, dims(1)
+          !$omp simd reduction(+:sum_a, sum_b, sum_c)
+          do i = 1, min(SZ, dims(2) - (k_j - 1)*SZ)
+            sum_a = sum_a + g%data(i, j, k)*a%data(i, j, k)
+            sum_b = sum_b + g%data(i, j, k)*b%data(i, j, k)
+            sum_c = sum_c + g%data(i, j, k)*c%data(i, j, k)
+          end do
+          !$omp end simd
+        end do
+      end do
+    end do
+    !$omp end parallel do
+
+    sums = [sum_a, sum_b, sum_c]
+  end subroutine field_weighted_sums_omp
 
   subroutine copy_into_buffers(u_send_s, u_send_e, u, n, n_groups)
     implicit none
