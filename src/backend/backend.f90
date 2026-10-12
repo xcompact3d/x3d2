@@ -458,11 +458,10 @@ contains
   end subroutine field_max_mean_base
 
   subroutine slice_max_sum_base(self, max_val, sum_val, f, &
-                                i_slice, enforced_data_loc, min_val)
+                                i_slice, enforced_data_loc)
   !! Reduces a single slice of f at index i_slice along f's DIR axis.
   !! Returns signed max (not abs) and signed sum. No division by count.
-  !! If min_val is present, the signed minimum over the slice is also
-  !! returned. Caller is responsible for MPI_Allreduce across ranks.
+  !! Caller is responsible for MPI_Allreduce across ranks.
     implicit none
 
     class(base_backend_t) :: self
@@ -470,11 +469,9 @@ contains
     class(field_t), intent(in) :: f
     integer, intent(in) :: i_slice
     integer, optional, intent(in) :: enforced_data_loc
-    real(dp), optional, intent(out) :: min_val
 
     max_val = 0._dp
     sum_val = 0._dp
-    if (present(min_val)) min_val = 0._dp
     call not_implemented('slice_max_sum')
 
   end subroutine slice_max_sum_base

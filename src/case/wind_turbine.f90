@@ -12,7 +12,7 @@ module m_case_wind_turbine
   !! non-periodic directions. The two_turbines case uses free-slip walls
   !! in y and z (wind-tunnel walls), which the FFT solver cannot currently do.
   use iso_fortran_env, only: stderr => error_unit
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_MAX, MPI_MIN, &
+  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_MAX, &
                    MPI_Allreduce
 
   use m_allocator, only: allocator_t
@@ -165,17 +165,17 @@ contains
     call self%solver%w%set_data_loc(VERT)
   end subroutine initial_conditions_wind_turbine
 
-  ! Convective outflow velocity (identical treatment to Incompact3d's
-  ! outflow subroutine):  cx = 0.5*(uxmax + uxmin)*gdt/dx, where uxmax and
-  ! uxmin are the global max/min of the streamwise velocity on the x = nx-1
-  ! plane of the post-integration field.
+  ! Convective outflow velocity cx = uxmax*gdt/dx, where uxmax is the global
+  ! max of the streamwise velocity on the x = nx-1 plane of the
+  ! post-integration field. This matches the cylinder case rather than
+  ! Incompact3d's outflow, which uses 0.5*(uxmax + uxmin).
   subroutine compute_outflow_params(self, out_vel)
     implicit none
     class(case_wind_turbine_t) :: self
     real(dp), intent(out) :: out_vel
 
     integer :: dims(3), nx, ierr
-    real(dp) :: uxmax, uxmin, sum_discard
+    real(dp) :: uxmax, sum_discard
     real(dp) :: dx, gdt
 
     dims = self%solver%mesh%get_dims(VERT)
@@ -184,14 +184,12 @@ contains
     gdt = self%solver%time_integrator%gdt
 
     call self%solver%backend%slice_max_sum( &
-      uxmax, sum_discard, self%solver%u, nx - 1, min_val=uxmin)
+      uxmax, sum_discard, self%solver%u, nx - 1)
 
     call MPI_Allreduce(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, &
                        MPI_MAX, MPI_COMM_WORLD, ierr)
-    call MPI_Allreduce(MPI_IN_PLACE, uxmin, 1, MPI_X3D2_DP, &
-                       MPI_MIN, MPI_COMM_WORLD, ierr)
 
-    out_vel = 0.5_dp*(uxmax + uxmin)*gdt/dx
+    out_vel = uxmax*gdt/dx
 
   end subroutine compute_outflow_params
 
@@ -256,11 +254,11 @@ contains
   subroutine apply_BC_wind_turbine(self, u, v, w)
     !! Pre-correction (called per substep after the integrator step):
     !! enforce the inflow Dirichlet and convective outflow BCs, then apply
-    !! an exact uniform mass correction to the outlet, reproducing the
-    !! Incompact3d treatment (outflow + pre_correc).
+    !! an exact uniform mass correction to the outlet, following
+    !! Incompact3d's pre_correc.
     !!
-    !! Steps (mirroring Incompact3d exactly):
-    !!  1. cx = 0.5*(uxmax + uxmin)*gdt/dx from the post-integration field.
+    !! Steps:
+    !!  1. cx = uxmax*gdt/dx from the post-integration field.
     !!  2. Convective outflow at x=nx and Dirichlet inflow at x=1 for u,v,w
     !!     (no correction yet):  u(nx) = u(nx) - cx*(u(nx) - u(nx-1)).
     !!  3. Measure the inlet mean (from the prescribed Dirichlet plane) and

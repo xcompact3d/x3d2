@@ -1065,7 +1065,7 @@ contains
   ! =========================================================================
 
   subroutine slice_max_sum_omp(self, max_val, sum_val, f, i_slice, &
-                               enforced_data_loc, min_val)
+                               enforced_data_loc)
     !! [[m_base_backend(module):slice_max_sum_base(subroutine)]]
     implicit none
     class(omp_backend_t) :: self
@@ -1073,9 +1073,8 @@ contains
     class(field_t), intent(in) :: f
     integer, intent(in) :: i_slice
     integer, optional, intent(in) :: enforced_data_loc
-    real(dp), optional, intent(out) :: min_val
 
-    real(dp) :: val, max_p, sum_p, min_p
+    real(dp) :: val, max_p, sum_p
     integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_groups_pad, n_j
     integer :: i, j, k, k_i, k_j
 
@@ -1115,10 +1114,9 @@ contains
     j = i_slice
     sum_p = 0._dp
     max_p = -huge(1._dp)
-    min_p = huge(1._dp)
 
     !$omp parallel do collapse(2) reduction(+:sum_p) reduction(max:max_p) &
-    !$omp reduction(min:min_p) private(k, val)
+    !$omp private(k, val)
     do k_j = 1, (n_j - 1)/SZ + 1
       do k_i = 1, n_i
         k = k_j + (k_i - 1)*n_groups_pad
@@ -1126,7 +1124,6 @@ contains
           val = f%data(i, j, k)
           sum_p = sum_p + val
           max_p = max(max_p, val)
-          min_p = min(min_p, val)
         end do
       end do
     end do
@@ -1135,7 +1132,6 @@ contains
     ! Rank-local values; caller is responsible for MPI_Allreduce.
     max_val = max_p
     sum_val = sum_p
-    if (present(min_val)) min_val = min_p
 
   end subroutine slice_max_sum_omp
 

@@ -1298,12 +1298,12 @@ contains
 
   end subroutine field_max_mean_cuda
 
-  attributes(global) subroutine slice_max_sum_kernel(max_f, sum_f, min_f, f, &
+  attributes(global) subroutine slice_max_sum_kernel(max_f, sum_f, f, &
                                                      i_slice, n_i_pad, n_j)
     !! Reduces a single slice f(i_slice, :, :) (in the kernel's packed-pencil
-    !! indexing). Signed max/min/sum, no abs. One thread per (y, z) point.
+    !! indexing). Signed max/sum, no abs. One thread per (y, z) point.
     implicit none
-    real(dp), device, intent(inout) :: max_f, sum_f, min_f
+    real(dp), device, intent(inout) :: max_f, sum_f
     real(dp), device, intent(in), dimension(:, :, :) :: f
     integer, value, intent(in) :: i_slice, n_i_pad, n_j
     real(dp) :: val
@@ -1318,12 +1318,11 @@ contains
       val = f(i, i_slice, b)
       ierr = atomicadd(sum_f, val)
       ierr = atomicmax(max_f, val)
-      ierr = atomicmin(min_f, val)
     end if
   end subroutine slice_max_sum_kernel
 
   subroutine slice_max_sum_cuda(self, max_val, sum_val, f, i_slice, &
-                                enforced_data_loc, min_val)
+                                enforced_data_loc)
     !! [[m_base_backend(module):slice_max_sum_base(subroutine)]]
     implicit none
     class(cuda_backend_t) :: self
@@ -1331,10 +1330,9 @@ contains
     class(field_t), intent(in) :: f
     integer, intent(in) :: i_slice
     integer, optional, intent(in) :: enforced_data_loc
-    real(dp), optional, intent(out) :: min_val
 
     real(dp), device, pointer, dimension(:, :, :) :: f_d
-    real(dp), device, allocatable :: max_d, sum_d, min_d
+    real(dp), device, allocatable :: max_d, sum_d
     integer :: data_loc, dims(3), dims_padded(3), n, n_i, n_i_pad, n_j
     type(dim3) :: blocks, threads
 
@@ -1368,18 +1366,17 @@ contains
     end if
 
     call resolve_field_t(f_d, f)
-    allocate (max_d, sum_d, min_d)
-    max_d = -huge(1._dp); sum_d = 0._dp; min_d = huge(1._dp)
+    allocate (max_d, sum_d)
+    max_d = -huge(1._dp); sum_d = 0._dp
 
     blocks = dim3(n_i, (n_j - 1)/SZ + 1, 1)
     threads = dim3(SZ, 1, 1)
-    call slice_max_sum_kernel<<<blocks, threads>>>(max_d, sum_d, min_d, f_d, & !&
+    call slice_max_sum_kernel<<<blocks, threads>>>(max_d, sum_d, f_d, & !&
                                                    i_slice, n_i_pad, n_j)
 
     ! Rank-local values; caller is responsible for MPI_Allreduce.
     max_val = max_d
     sum_val = sum_d
-    if (present(min_val)) min_val = min_d
 
   end subroutine slice_max_sum_cuda
 
