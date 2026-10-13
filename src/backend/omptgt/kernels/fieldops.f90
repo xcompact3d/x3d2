@@ -11,7 +11,6 @@ module m_omptgt_kernels_fieldops
   !! DIR_X group index is b = y_block + (z - 1)*n_yb_pad, y-blocks fastest
   !! with n_yb_pad = ny_padded/SZ of them per z station.
   use m_common, only: dp
-  use m_ordering, only: get_index_reordering
   use m_omptgt_common, only: SZ
 
   implicit none
@@ -693,129 +692,180 @@ contains
   end subroutine field_plane_sums_reduce
 
   ! --------------------------------------------------------------------------
-  ! Reordering. Every point is moved to the slot get_index_reordering gives
-  ! it, which covers all twelve layout pairs in one kernel.
+  ! Reordering, in the layouts of m_ordering. With nx, ny, nz the padded
+  ! Cartesian extents and lane = mod(. - 1, SZ) + 1, block = (. - 1)/SZ + 1:
+  !   DIR_X: u(lane(y), x, block(y) + (z - 1)*ny/SZ)
+  !   DIR_Y: u(lane(x), y, block(x) + (z - 1)*nx/SZ)
+  !   DIR_Z: u(lane(x), z, block(x) + (y - 1)*nx/SZ)
+  !   DIR_C: u(x, y, z)
+  ! Each kernel walks its output in storage order, so the writes are
+  ! coalesced, and gathers the input through `offset`. The gather is strided
+  ! only where the fast index changes (to or from DIR_X), and those strides
+  ! stay within an SZ x SZ tile that L2 serves; staging that tile in team
+  ! shared memory measured slower under NVHPC than this direct form.
   ! --------------------------------------------------------------------------
 
-  subroutine reorder(u_o, n_o, u_i, n_i, dims, dir_from, dir_to, cart_padded)
-    !! Reorders u_i, whose layout dir_from has padded extents `dims`, into
-    !! u_o in layout dir_to. n_o and n_i are the storage shapes.
-    integer, intent(in) :: n_o(3), n_i(3), dims(3)
-    integer, intent(in) :: dir_from, dir_to
-    integer, intent(in) :: cart_padded(3)
+  pure integer function offset(dir, x, y, z, nx, ny, nz) result(l)
+    !$omp declare target
+    !! 1-based linear offset of Cartesian point (x, y, z) in layout `dir`.
+    use m_common, only: DIR_X, DIR_Y, DIR_Z
+
+    integer, intent(in) :: dir, x, y, z, nx, ny, nz
+
+    select case (dir)
+    case (DIR_X)
+      l = mod(y - 1, SZ) + 1 + SZ*(x - 1) &
+          + SZ*nx*((y - 1)/SZ + (z - 1)*(ny/SZ))
+    case (DIR_Y)
+      l = mod(x - 1, SZ) + 1 + SZ*(y - 1) &
+          + SZ*ny*((x - 1)/SZ + (z - 1)*(nx/SZ))
+    case (DIR_Z)
+      l = mod(x - 1, SZ) + 1 + SZ*(z - 1) &
+          + SZ*nz*((x - 1)/SZ + (y - 1)*(nx/SZ))
+    case default
+      l = x + nx*(y - 1) + nx*ny*(z - 1)
+    end select
+  end function offset
+
+  subroutine reorder(u_o, u_i, dir_from, dir_to, cart_padded)
+    !! Reorders u_i in layout dir_from into u_o in layout dir_to.
+    use m_common, only: DIR_X, DIR_Y, DIR_Z
+
     real(dp), intent(inout) :: u_o(*)
     real(dp), intent(in) :: u_i(*)
+    integer, intent(in) :: dir_from, dir_to
+    integer, intent(in) :: cart_padded(3)
 
-    ! Scalar copies enter the region as kernel arguments, where the arrays
-    ! would each be mapped with a blocking copy per launch.
-    call reorder_(u_o, n_o(1), n_o(2), u_i, n_i(1), n_i(2), &
-                  dims(1), dims(2), dims(3), dir_from, dir_to, &
-                  cart_padded(1), cart_padded(2), cart_padded(3))
+    integer :: nx, ny, nz
+
+    nx = cart_padded(1); ny = cart_padded(2); nz = cart_padded(3)
+
+    select case (dir_to)
+    case (DIR_X)
+      call gather_x(u_o, u_i, dir_from, .false., nx, ny, nz)
+    case (DIR_Y)
+      call gather_y(u_o, u_i, dir_from, nx, ny, nz)
+    case (DIR_Z)
+      call gather_z(u_o, u_i, dir_from, nx, ny, nz)
+    case default
+      call gather_c(u_o, u_i, dir_from, nx, ny, nz)
+    end select
 
   end subroutine reorder
 
-  subroutine reorder_(u_o, n_o1, n_o2, u_i, n_i1, n_i2, d1, d2, d3, &
-                      dir_from, dir_to, cp1, cp2, cp3)
-    integer, intent(in) :: n_o1, n_o2, n_i1, n_i2, d1, d2, d3
-    integer, intent(in) :: dir_from, dir_to, cp1, cp2, cp3
-    real(dp), intent(inout) :: u_o(n_o1, n_o2, *)
-    real(dp), intent(in) :: u_i(n_i1, n_i2, *)
-
-    integer :: i, j, k
-
-    !$omp target teams distribute parallel do collapse(3) &
-    !$omp is_device_ptr(u_o, u_i)
-    do k = 1, d3
-      do j = 1, d2
-        do i = 1, d1
-          call reorder_point(u_o, n_o1, n_o2, u_i, n_i1, n_i2, i, j, k, &
-                             dir_from, dir_to, cp1, cp2, cp3)
-        end do
-      end do
-    end do
-    !$omp end target teams distribute parallel do
-
-  end subroutine reorder_
-
-  subroutine reorder_point(u_o, n_o1, n_o2, u_i, n_i1, n_i2, i, j, k, &
-                           dir_from, dir_to, cp1, cp2, cp3)
-    !$omp declare target
-    !! Moves one point into its reordered slot.
-    !!
-    !! The reordered indices are locals of this routine rather than scalars
-    !! privatised on the loop: NVHPC miscompiles the private-clause spelling,
-    !! handing get_index_reordering an invalid address for its intent(out)
-    !! arguments.
-    integer, intent(in) :: n_o1, n_o2, n_i1, n_i2
-    real(dp), intent(inout) :: u_o(n_o1, n_o2, *)
-    real(dp), intent(in) :: u_i(n_i1, n_i2, *)
-    integer, intent(in) :: i, j, k
-    integer, intent(in) :: dir_from, dir_to, cp1, cp2, cp3
-
-    integer :: out_i, out_j, out_k
-
-    call get_index_reordering(out_i, out_j, out_k, i, j, k, &
-                              dir_from, dir_to, SZ, [cp1, cp2, cp3])
-    u_o(out_i, out_j, out_k) = u_i(i, j, k)
-
-  end subroutine reorder_point
-
-  subroutine sum_intox(u, n_u, u_d, n_d, dims, dir_to, cart_padded)
-    !! u += u_d, where u is DIR_X with padded extents `dims` and u_d is the
-    !! same field in layout dir_to (DIR_Y or DIR_Z).
-    integer, intent(in) :: n_u(3), n_d(3), dims(3)
-    integer, intent(in) :: dir_to
-    integer, intent(in) :: cart_padded(3)
+  subroutine sum_intox(u, u_d, dir_from, cart_padded)
+    !! u += u_d, where u is DIR_X and u_d the same field in layout dir_from.
     real(dp), intent(inout) :: u(*)
     real(dp), intent(in) :: u_d(*)
+    integer, intent(in) :: dir_from
+    integer, intent(in) :: cart_padded(3)
 
-    call sum_intox_(u, n_u(1), n_u(2), u_d, n_d(1), n_d(2), &
-                    dims(1), dims(2), dims(3), dir_to, &
-                    cart_padded(1), cart_padded(2), cart_padded(3))
+    call gather_x(u, u_d, dir_from, .true., cart_padded(1), &
+                  cart_padded(2), cart_padded(3))
 
   end subroutine sum_intox
 
-  subroutine sum_intox_(u, n_u1, n_u2, u_d, n_d1, n_d2, d1, d2, d3, &
-                        dir_to, cp1, cp2, cp3)
-    integer, intent(in) :: n_u1, n_u2, n_d1, n_d2, d1, d2, d3
-    integer, intent(in) :: dir_to, cp1, cp2, cp3
-    real(dp), intent(inout) :: u(n_u1, n_u2, *)
-    real(dp), intent(in) :: u_d(n_d1, n_d2, *)
+  subroutine gather_x(u_o, u_i, dir_from, accumulate, nx, ny, nz)
+    !! Writes (or with `accumulate` adds) u_i into the DIR_X field u_o.
+    integer, intent(in) :: dir_from, nx, ny, nz
+    logical, intent(in) :: accumulate
+    real(dp), intent(inout) :: u_o(SZ, nx, *)
+    real(dp), intent(in) :: u_i(*)
 
-    integer :: i, j, k
+    integer :: lane, x, yb, z
 
-    !$omp target teams distribute parallel do collapse(3) &
-    !$omp is_device_ptr(u, u_d)
-    do k = 1, d3
-      do j = 1, d2
-        do i = 1, d1
-          call sum_point(u, n_u1, n_u2, u_d, n_d1, n_d2, i, j, k, &
-                         dir_to, cp1, cp2, cp3)
+    !$omp target teams distribute parallel do collapse(4) &
+    !$omp is_device_ptr(u_o, u_i)
+    do z = 1, nz
+      do yb = 1, ny/SZ
+        do x = 1, nx
+          do lane = 1, SZ
+            if (accumulate) then
+              u_o(lane, x, yb + (z - 1)*(ny/SZ)) = &
+                u_o(lane, x, yb + (z - 1)*(ny/SZ)) &
+                + u_i(offset(dir_from, x, (yb - 1)*SZ + lane, z, nx, ny, nz))
+            else
+              u_o(lane, x, yb + (z - 1)*(ny/SZ)) = &
+                u_i(offset(dir_from, x, (yb - 1)*SZ + lane, z, nx, ny, nz))
+            end if
+          end do
         end do
       end do
     end do
     !$omp end target teams distribute parallel do
 
-  end subroutine sum_intox_
+  end subroutine gather_x
 
-  subroutine sum_point(u, n_u1, n_u2, u_d, n_d1, n_d2, i, j, k, dir_to, &
-                       cp1, cp2, cp3)
-    !$omp declare target
-    !! Adds to one DIR_X point its counterpart in layout dir_to.
-    use m_common, only: DIR_X
+  subroutine gather_y(u_o, u_i, dir_from, nx, ny, nz)
+    integer, intent(in) :: dir_from, nx, ny, nz
+    real(dp), intent(inout) :: u_o(SZ, ny, *)
+    real(dp), intent(in) :: u_i(*)
 
-    integer, intent(in) :: n_u1, n_u2, n_d1, n_d2
-    real(dp), intent(inout) :: u(n_u1, n_u2, *)
-    real(dp), intent(in) :: u_d(n_d1, n_d2, *)
-    integer, intent(in) :: i, j, k
-    integer, intent(in) :: dir_to, cp1, cp2, cp3
+    integer :: lane, xb, y, z
 
-    integer :: d_i, d_j, d_k
+    !$omp target teams distribute parallel do collapse(4) &
+    !$omp is_device_ptr(u_o, u_i)
+    do z = 1, nz
+      do xb = 1, nx/SZ
+        do y = 1, ny
+          do lane = 1, SZ
+            u_o(lane, y, xb + (z - 1)*(nx/SZ)) = &
+              u_i(offset(dir_from, (xb - 1)*SZ + lane, y, z, nx, ny, nz))
+          end do
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
 
-    call get_index_reordering(d_i, d_j, d_k, i, j, k, DIR_X, dir_to, SZ, &
-                              [cp1, cp2, cp3])
-    u(i, j, k) = u(i, j, k) + u_d(d_i, d_j, d_k)
+  end subroutine gather_y
 
-  end subroutine sum_point
+  subroutine gather_z(u_o, u_i, dir_from, nx, ny, nz)
+    !! The y lane runs just outside the x lane, rather than y outermost, so
+    !! the SZ x SZ tile a DIR_X input is gathered from is read by
+    !! neighbouring threads while it is still in cache.
+    integer, intent(in) :: dir_from, nx, ny, nz
+    real(dp), intent(inout) :: u_o(SZ, nz, *)
+    real(dp), intent(in) :: u_i(*)
+
+    integer :: lane, xb, y_lane, yb, z
+
+    !$omp target teams distribute parallel do collapse(5) &
+    !$omp is_device_ptr(u_o, u_i)
+    do yb = 1, ny/SZ
+      do z = 1, nz
+        do xb = 1, nx/SZ
+          do y_lane = 1, SZ
+            do lane = 1, SZ
+              u_o(lane, z, xb + ((yb - 1)*SZ + y_lane - 1)*(nx/SZ)) = &
+                u_i(offset(dir_from, (xb - 1)*SZ + lane, &
+                           (yb - 1)*SZ + y_lane, z, nx, ny, nz))
+            end do
+          end do
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine gather_z
+
+  subroutine gather_c(u_o, u_i, dir_from, nx, ny, nz)
+    integer, intent(in) :: dir_from, nx, ny, nz
+    real(dp), intent(inout) :: u_o(nx, ny, *)
+    real(dp), intent(in) :: u_i(*)
+
+    integer :: x, y, z
+
+    !$omp target teams distribute parallel do collapse(3) &
+    !$omp is_device_ptr(u_o, u_i)
+    do z = 1, nz
+      do y = 1, ny
+        do x = 1, nx
+          u_o(x, y, z) = u_i(offset(dir_from, x, y, z, nx, ny, nz))
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine gather_c
 
 end module m_omptgt_kernels_fieldops

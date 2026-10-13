@@ -566,7 +566,8 @@ contains
 
   subroutine reorder_omptgt(self, u_, u, direction)
     !! Reorders `u` into `u_` between the two data layouts encoded in
-    !! `direction`, in a single pass for every pair of layouts.
+    !! `direction`, in a single pass for every pair of layouts (the CUDA
+    !! backend goes through DIR_X for the pairs involving DIR_C).
     class(omptgt_backend_t) :: self
     class(field_t), intent(inout) :: u_
     class(field_t), intent(in) :: u
@@ -580,8 +581,7 @@ contains
     call resolve_field_t(u_o_d, u_)
     call resolve_field_t(u_i_d, u)
 
-    call reorder(u_o_d, shape(u_o_d), u_i_d, shape(u_i_d), &
-                 self%allocator%get_padded_dims(u%dir), dir_from, dir_to, &
+    call reorder(u_o_d, u_i_d, dir_from, dir_to, &
                  self%allocator%get_padded_dims(DIR_C))
 
     ! reorder keeps the data_loc the same
@@ -611,21 +611,19 @@ contains
 
   end subroutine sum_zintox_omptgt
 
-  subroutine sum_intox_omptgt(self, u, u_, dir_to)
-    !! u += u_, u a DIR_X field and u_ the same quantity in layout dir_to.
+  subroutine sum_intox_omptgt(self, u, u_, dir_from)
+    !! u += u_, u a DIR_X field and u_ the same quantity in layout dir_from.
     class(omptgt_backend_t) :: self
     class(field_t), intent(inout) :: u
     class(field_t), intent(in) :: u_
-    integer, intent(in) :: dir_to
+    integer, intent(in) :: dir_from
 
     real(dp), pointer, contiguous, dimension(:, :, :) :: u_d, u_d_
 
     call resolve_field_t(u_d, u)
     call resolve_field_t(u_d_, u_)
 
-    call sum_intox(u_d, shape(u_d), u_d_, shape(u_d_), &
-                   self%allocator%get_padded_dims(DIR_X), dir_to, &
-                   self%allocator%get_padded_dims(DIR_C))
+    call sum_intox(u_d, u_d_, dir_from, self%allocator%get_padded_dims(DIR_C))
 
   end subroutine sum_intox_omptgt
 
