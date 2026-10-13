@@ -1,9 +1,9 @@
 module m_test_utils
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_INTEGER, MPI_LAND, &
-                   MPI_LOGICAL, MPI_SUM, MPI_Allreduce, MPI_Comm_rank, &
-                   MPI_Comm_size, MPI_Finalize, MPI_Init
+                   MPI_LOGICAL, MPI_MAX, MPI_MIN, MPI_SUM, MPI_Allreduce, &
+                   MPI_Comm_rank, MPI_Comm_size, MPI_Finalize, MPI_Init
   use iso_fortran_env, only: stderr => error_unit
-  use m_common, only: dp, nbytes
+  use m_common, only: dp, nbytes, MPI_X3D2_DP
   implicit none
 
   private
@@ -11,7 +11,7 @@ module m_test_utils
             check_status, checkerr, &
             write_perf_metric, write_perf_minmax_metrics, &
             write_perf_summary, write_perf_minmax_summary, &
-            write_device_bw_metric
+            write_device_bw_metric, report_perf_minmax
 
 contains
 
@@ -228,6 +228,39 @@ contains
     print '(a, f10.3, a)', 'PERF_METRIC: device_bw ref=', &
       deviceBW/real(2**30, dp), ' GiB/s'
   end subroutine write_device_bw_metric
+
+  subroutine report_perf_minmax(label, time, n_iters, ndof, consumed_bw, &
+                                mem_clock_rt, mem_bus_width)
+    !! Reduce the per-rank achieved bandwidth to its min/max over all ranks
+    !! and print the metrics on rank 0, adding the device utilisation when
+    !! the device memory clock and bus width are given.
+    character(len=*), intent(in) :: label
+    real(dp), intent(in) :: time
+    integer, intent(in) :: n_iters
+    integer, intent(in) :: ndof
+    real(dp), intent(in) :: consumed_bw
+    integer, optional, intent(in) :: mem_clock_rt
+    integer, optional, intent(in) :: mem_bus_width
+
+    real(dp) :: achieved_bw, bw_min, bw_max
+    integer :: nrank, ierr
+
+    achieved_bw = compute_achieved_bw(time, n_iters, ndof, consumed_bw)
+    call MPI_Allreduce(achieved_bw, bw_max, 1, MPI_X3D2_DP, MPI_MAX, &
+                       MPI_COMM_WORLD, ierr)
+    call MPI_Allreduce(achieved_bw, bw_min, 1, MPI_X3D2_DP, MPI_MIN, &
+                       MPI_COMM_WORLD, ierr)
+    call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
+
+    if (nrank /= 0) return
+    call write_perf_minmax_metrics(label, time, trim(label)//'_bw', &
+                                   bw_min, bw_max)
+    if (present(mem_clock_rt) .and. present(mem_bus_width)) then
+      call write_perf_minmax_summary(bw_min, bw_max, mem_clock_rt, &
+                                     mem_bus_width)
+      call write_device_bw_metric(mem_clock_rt, mem_bus_width)
+    end if
+  end subroutine report_perf_minmax
 
   pure real(dp) function compute_achieved_bw(time, n_iters, ndof, &
                                              consumed_bw) result(achievedBW)
