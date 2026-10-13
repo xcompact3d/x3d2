@@ -5,11 +5,18 @@ module m_omptgt_common
   !! raw `omp_target_alloc` allocation. The host never dereferences them: they
   !! are only passed as actual arguments to the explicit-shape or assumed-size
   !! dummies of the offloaded kernels, which name those dummies in an
-  !! `is_device_ptr` clause. That is the OpenMP 4.5 spelling of "this array
-  !! already lives on the device", so the runtime neither maps nor copies it.
-  !! Referencing such a pointer directly inside a target region instead makes
-  !! the runtime map it implicitly, copying the whole array into a fresh
-  !! device buffer and back on every launch.
+  !! `OMP_DEVICE_ADDR` clause to say "this array already lives on the
+  !! device", so the runtime neither maps nor copies it. Referencing such a
+  !! pointer directly inside a target region instead makes the runtime map
+  !! it implicitly, copying the whole array into a fresh device buffer and
+  !! back on every launch.
+  !!
+  !! `OMP_DEVICE_ADDR` is a preprocessor macro set per compiler in
+  !! src/CMakeLists.txt, because no one spelling is accepted everywhere:
+  !! OpenMP 5.1 says `has_device_addr`, and its compilers (GNU, Flang, Cray)
+  !! allow `is_device_ptr` only on `type(c_ptr)`; NVHPC rejects
+  !! `has_device_addr` but takes the OpenMP 4.5 form, `is_device_ptr` on a
+  !! dummy array. The preprocessors expand macros in `!$omp` lines.
   use iso_c_binding, only: c_ptr, c_loc, c_f_pointer, c_associated, &
                            c_size_t, c_sizeof
   use omp_lib, only: omp_target_alloc, omp_target_free, omp_target_memcpy, &

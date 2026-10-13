@@ -4,9 +4,9 @@ module m_omptgt_kernels_fieldops
   !! cuda/kernels/reorder.f90.
   !!
   !! Arrays are explicit-shape or assumed-size dummies named in
-  !! `is_device_ptr` (see m_omptgt_common). Pointwise kernels see a field as
+  !! `OMP_DEVICE_ADDR` (see m_omptgt_common). Pointwise kernels see a field as
   !! a flat array of `n` points, as the CUDA ones sweep the whole block.
-  !! Kernels on the pencil layout index a DIR_X/Y/Z field as (SZ, n, *) in
+  !! Kernels on the pencil layout index a DIR_X/Y/Z field as (SZ, n, groups) in
   !! the layout of m_ordering, which is not the one the CUDA kernels use: a
   !! DIR_X group index is b = y_block + (z - 1)*n_yb_pad, y-blocks fastest
   !! with n_yb_pad = ny_padded/SZ of them per z station.
@@ -37,12 +37,12 @@ contains
 
   subroutine copy(n, dst, src)
     integer, intent(in) :: n
-    real(dp), intent(inout) :: dst(*)
-    real(dp), intent(in) :: src(*)
+    real(dp), intent(inout) :: dst(n)
+    real(dp), intent(in) :: src(n)
 
     integer :: i
 
-    !$omp target teams distribute parallel do is_device_ptr(dst, src)
+    !$omp target teams distribute parallel do OMP_DEVICE_ADDR(dst, src)
     do i = 1, n
       dst(i) = src(i)
     end do
@@ -53,12 +53,12 @@ contains
   subroutine axpby(n, alpha, x, beta, y)
     integer, intent(in) :: n
     real(dp), intent(in) :: alpha, beta
-    real(dp), intent(in) :: x(*)
-    real(dp), intent(inout) :: y(*)
+    real(dp), intent(in) :: x(n)
+    real(dp), intent(inout) :: y(n)
 
     integer :: i
 
-    !$omp target teams distribute parallel do is_device_ptr(x, y)
+    !$omp target teams distribute parallel do OMP_DEVICE_ADDR(x, y)
     do i = 1, n
       y(i) = alpha*x(i) + beta*y(i)
     end do
@@ -67,13 +67,13 @@ contains
   end subroutine axpby
 
   subroutine pwmul(y, x, n)
-    real(dp), intent(inout) :: y(*)
-    real(dp), intent(in) :: x(*)
     integer, intent(in) :: n
+    real(dp), intent(inout) :: y(n)
+    real(dp), intent(in) :: x(n)
 
     integer :: i
 
-    !$omp target teams distribute parallel do is_device_ptr(x, y)
+    !$omp target teams distribute parallel do OMP_DEVICE_ADDR(x, y)
     do i = 1, n
       y(i) = y(i)*x(i)
     end do
@@ -82,13 +82,13 @@ contains
   end subroutine pwmul
 
   subroutine field_scale(f, alpha, n)
-    real(dp), intent(inout) :: f(*)
-    real(dp), intent(in) :: alpha
     integer, intent(in) :: n
+    real(dp), intent(inout) :: f(n)
+    real(dp), intent(in) :: alpha
 
     integer :: i
 
-    !$omp target teams distribute parallel do is_device_ptr(f)
+    !$omp target teams distribute parallel do OMP_DEVICE_ADDR(f)
     do i = 1, n
       f(i) = alpha*f(i)
     end do
@@ -97,13 +97,13 @@ contains
   end subroutine field_scale
 
   subroutine field_shift(f, const, n)
-    real(dp), intent(inout) :: f(*)
-    real(dp), intent(in) :: const
     integer, intent(in) :: n
+    real(dp), intent(inout) :: f(n)
+    real(dp), intent(in) :: const
 
     integer :: i
 
-    !$omp target teams distribute parallel do is_device_ptr(f)
+    !$omp target teams distribute parallel do OMP_DEVICE_ADDR(f)
     do i = 1, n
       f(i) = f(i) + const
     end do
@@ -113,15 +113,15 @@ contains
 
   subroutine vorticity_from_gradients(vort, dudy, dudz, dvdx, dvdz, dwdx, &
                                       dwdy, n)
-    real(dp), intent(inout) :: vort(*)
-    real(dp), intent(in) :: dudy(*), dudz(*), dvdx(*), dvdz(*), dwdx(*), &
-                            dwdy(*)
     integer, intent(in) :: n
+    real(dp), intent(inout) :: vort(n)
+    real(dp), intent(in) :: dudy(n), dudz(n), dvdx(n), dvdz(n), dwdx(n), &
+                            dwdy(n)
 
     integer :: i
 
     !$omp target teams distribute parallel do &
-    !$omp is_device_ptr(vort, dudy, dudz, dvdx, dvdz, dwdx, dwdy)
+    !$omp OMP_DEVICE_ADDR(vort, dudy, dudz, dvdx, dvdz, dwdx, dwdy)
     do i = 1, n
       vort(i) = sqrt((dwdy(i) - dvdz(i))**2 + (dudz(i) - dwdx(i))**2 &
                      + (dvdx(i) - dudy(i))**2)
@@ -132,17 +132,17 @@ contains
 
   subroutine qcriterion_from_gradients(qcrit, dudx, dudy, dudz, dvdx, dvdy, &
                                        dvdz, dwdx, dwdy, dwdz, n)
-    real(dp), intent(inout) :: qcrit(*)
-    real(dp), intent(in) :: dudx(*), dudy(*), dudz(*)
-    real(dp), intent(in) :: dvdx(*), dvdy(*), dvdz(*)
-    real(dp), intent(in) :: dwdx(*), dwdy(*), dwdz(*)
     integer, intent(in) :: n
+    real(dp), intent(inout) :: qcrit(n)
+    real(dp), intent(in) :: dudx(n), dudy(n), dudz(n)
+    real(dp), intent(in) :: dvdx(n), dvdy(n), dvdz(n)
+    real(dp), intent(in) :: dwdx(n), dwdy(n), dwdz(n)
 
     integer :: i
 
     !$omp target teams distribute parallel do &
-    !$omp is_device_ptr(qcrit, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, &
-    !$omp               dwdy, dwdz)
+    !$omp OMP_DEVICE_ADDR(qcrit, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, &
+    !$omp                 dwdy, dwdz)
     do i = 1, n
       qcrit(i) = -0.5_dp*(dudx(i)*dudx(i) + dvdy(i)*dvdy(i) &
                           + dwdz(i)*dwdz(i)) &
@@ -155,18 +155,18 @@ contains
   subroutine smagorinsky_from_gradients(nut, mixing_length_sq, dudx, dudy, &
                                         dudz, dvdx, dvdy, dvdz, dwdx, dwdy, &
                                         dwdz, n)
-    real(dp), intent(inout) :: nut(*)
-    real(dp), intent(in) :: mixing_length_sq(*)
-    real(dp), intent(in) :: dudx(*), dudy(*), dudz(*)
-    real(dp), intent(in) :: dvdx(*), dvdy(*), dvdz(*)
-    real(dp), intent(in) :: dwdx(*), dwdy(*), dwdz(*)
     integer, intent(in) :: n
+    real(dp), intent(inout) :: nut(n)
+    real(dp), intent(in) :: mixing_length_sq(n)
+    real(dp), intent(in) :: dudx(n), dudy(n), dudz(n)
+    real(dp), intent(in) :: dvdx(n), dvdy(n), dvdz(n)
+    real(dp), intent(in) :: dwdx(n), dwdy(n), dwdz(n)
 
     integer :: i
 
     !$omp target teams distribute parallel do &
-    !$omp is_device_ptr(nut, mixing_length_sq, dudx, dudy, dudz, dvdx, dvdy, &
-    !$omp               dvdz, dwdx, dwdy, dwdz)
+    !$omp OMP_DEVICE_ADDR(nut, mixing_length_sq, dudx, dudy, dudz, dvdx, &
+    !$omp                 dvdy, dvdz, dwdx, dwdy, dwdz)
     do i = 1, n
       if (mixing_length_sq(i) > 0._dp) then
         ! nut = l^2*sqrt(2*S_ij*S_ij)
@@ -185,15 +185,15 @@ contains
 
   subroutine sgs_stress_from_gradients(stress, nut, gradient_a, gradient_b, &
                                        scale_a, scale_b, n)
-    real(dp), intent(inout) :: stress(*)
-    real(dp), intent(in) :: nut(*), gradient_a(*), gradient_b(*)
-    real(dp), intent(in) :: scale_a, scale_b
     integer, intent(in) :: n
+    real(dp), intent(inout) :: stress(n)
+    real(dp), intent(in) :: nut(n), gradient_a(n), gradient_b(n)
+    real(dp), intent(in) :: scale_a, scale_b
 
     integer :: i
 
     !$omp target teams distribute parallel do &
-    !$omp is_device_ptr(stress, nut, gradient_a, gradient_b)
+    !$omp OMP_DEVICE_ADDR(stress, nut, gradient_a, gradient_b)
     do i = 1, n
       if (nut(i) > 0._dp) then
         stress(i) = nut(i)*(scale_a*gradient_a(i) + scale_b*gradient_b(i))
@@ -213,13 +213,14 @@ contains
     !! Copies the first and last four points of every line into the start
     !! and end send buffers. `n` is the line length, `n_u` the padded extent.
     integer, intent(in) :: n_u, n, n_groups
-    real(dp), intent(inout) :: u_send_s(SZ, 4, *), u_send_e(SZ, 4, *)
-    real(dp), intent(in) :: u(SZ, n_u, *)
+    real(dp), intent(inout) :: u_send_s(SZ, 4, n_groups), &
+                               u_send_e(SZ, 4, n_groups)
+    real(dp), intent(in) :: u(SZ, n_u, n_groups)
 
     integer :: i, j, b
 
     !$omp target teams distribute parallel do collapse(3) &
-    !$omp is_device_ptr(u_send_s, u_send_e, u)
+    !$omp OMP_DEVICE_ADDR(u_send_s, u_send_e, u)
     do b = 1, n_groups
       do j = 1, 4
         do i = 1, SZ
@@ -242,13 +243,14 @@ contains
   real(dp) function scalar_product(x, y, n_f, n, n_i, n_groups_pad, n_j) &
     result(s)
     integer, intent(in) :: n_f, n, n_i, n_groups_pad, n_j
-    real(dp), intent(in) :: x(SZ, n_f, *), y(SZ, n_f, *)
+    real(dp), intent(in) :: x(SZ, n_f, n_groups_pad*n_i), &
+                            y(SZ, n_f, n_groups_pad*n_i)
 
     integer :: i, j, b_i, b_j
 
     s = 0._dp
     !$omp target teams distribute parallel do collapse(3) &
-    !$omp reduction(+:s) map(tofrom:s) is_device_ptr(x, y)
+    !$omp reduction(+:s) map(tofrom:s) OMP_DEVICE_ADDR(x, y)
     do b_j = 1, (n_j - 1)/SZ + 1
       do b_i = 1, n_i
         do i = 1, SZ
@@ -271,19 +273,21 @@ contains
     integer, intent(in) :: n_c(3), dims(3)
     real(dp), intent(in) :: x(*), y(*)
 
-    s = scalar_product_cart_(x, y, n_c(1), n_c(2), dims(1), dims(2), dims(3))
+    s = scalar_product_cart_(x, y, n_c(1), n_c(2), n_c(3), dims(1), dims(2), &
+                             dims(3))
 
   end function scalar_product_cart
 
-  real(dp) function scalar_product_cart_(x, y, n1, n2, d1, d2, d3) result(s)
-    integer, intent(in) :: n1, n2, d1, d2, d3
-    real(dp), intent(in) :: x(n1, n2, *), y(n1, n2, *)
+  real(dp) function scalar_product_cart_(x, y, n1, n2, n3, d1, d2, d3) &
+    result(s)
+    integer, intent(in) :: n1, n2, n3, d1, d2, d3
+    real(dp), intent(in) :: x(n1, n2, n3), y(n1, n2, n3)
 
     integer :: i, j, k
 
     s = 0._dp
     !$omp target teams distribute parallel do collapse(3) &
-    !$omp reduction(+:s) map(tofrom:s) is_device_ptr(x, y)
+    !$omp reduction(+:s) map(tofrom:s) OMP_DEVICE_ADDR(x, y)
     do k = 1, d3
       do j = 1, d2
         do i = 1, d1
@@ -298,13 +302,15 @@ contains
   real(dp) function vector_norm_squared(a, b, c, n_f, n, n_i, n_groups_pad, &
                                         n_j) result(s)
     integer, intent(in) :: n_f, n, n_i, n_groups_pad, n_j
-    real(dp), intent(in) :: a(SZ, n_f, *), b(SZ, n_f, *), c(SZ, n_f, *)
+    real(dp), intent(in) :: a(SZ, n_f, n_groups_pad*n_i), &
+                            b(SZ, n_f, n_groups_pad*n_i), &
+                            c(SZ, n_f, n_groups_pad*n_i)
 
     integer :: i, j, b_i, b_j
 
     s = 0._dp
     !$omp target teams distribute parallel do collapse(3) &
-    !$omp reduction(+:s) map(tofrom:s) is_device_ptr(a, b, c)
+    !$omp reduction(+:s) map(tofrom:s) OMP_DEVICE_ADDR(a, b, c)
     do b_j = 1, (n_j - 1)/SZ + 1
       do b_i = 1, n_i
         do i = 1, SZ
@@ -327,7 +333,7 @@ contains
     !! Maximum and sum of |f|.
     real(dp), intent(out) :: max_f, sum_f
     integer, intent(in) :: n_f, n, n_i, n_groups_pad, n_j
-    real(dp), intent(in) :: f(SZ, n_f, *)
+    real(dp), intent(in) :: f(SZ, n_f, n_groups_pad*n_i)
 
     integer :: i, j, b_i, b_j
 
@@ -335,7 +341,7 @@ contains
     sum_f = 0._dp
     !$omp target teams distribute parallel do collapse(3) &
     !$omp reduction(max:max_f) reduction(+:sum_f) map(tofrom:max_f, sum_f) &
-    !$omp is_device_ptr(f)
+    !$omp OMP_DEVICE_ADDR(f)
     do b_j = 1, (n_j - 1)/SZ + 1
       do b_i = 1, n_i
         do i = 1, SZ
@@ -356,13 +362,13 @@ contains
   real(dp) function volume_integral(f, n_f, n, n_i, n_groups_pad, n_j) &
     result(s)
     integer, intent(in) :: n_f, n, n_i, n_groups_pad, n_j
-    real(dp), intent(in) :: f(SZ, n_f, *)
+    real(dp), intent(in) :: f(SZ, n_f, n_groups_pad*n_i)
 
     integer :: i, j, b_i, b_j
 
     s = 0._dp
     !$omp target teams distribute parallel do collapse(3) &
-    !$omp reduction(+:s) map(tofrom:s) is_device_ptr(f)
+    !$omp reduction(+:s) map(tofrom:s) OMP_DEVICE_ADDR(f)
     do b_j = 1, (n_j - 1)/SZ + 1
       do b_i = 1, n_i
         do i = 1, SZ
@@ -383,7 +389,7 @@ contains
     !! Signed maximum and sum of the slice f(:, i_slice, :).
     real(dp), intent(out) :: max_f, sum_f
     integer, intent(in) :: n_f, i_slice, n_i, n_groups_pad, n_j
-    real(dp), intent(in) :: f(SZ, n_f, *)
+    real(dp), intent(in) :: f(SZ, n_f, n_groups_pad*n_i)
 
     integer :: i, b_i, b_j
 
@@ -391,7 +397,7 @@ contains
     sum_f = 0._dp
     !$omp target teams distribute parallel do collapse(3) &
     !$omp reduction(max:max_f) reduction(+:sum_f) map(tofrom:max_f, sum_f) &
-    !$omp is_device_ptr(f)
+    !$omp OMP_DEVICE_ADDR(f)
     do b_j = 1, (n_j - 1)/SZ + 1
       do b_i = 1, n_i
         do i = 1, SZ
@@ -418,13 +424,13 @@ contains
     !! 1) and the convective outflow du/dt + Uc*du/dx = 0, Uc = c_end, at
     !! the outlet (pencil index nx). BC_NEUMANN (1) leaves a face untouched.
     integer, intent(in) :: n_f, nx, ny, nz, n_yb_pad, bc_start, bc_end
-    real(dp), intent(inout) :: f(SZ, n_f, *)
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
     real(dp), intent(in) :: c_start, c_end, flow_rate_diff
 
     integer :: i, y_block, z, b
 
     !$omp target teams distribute parallel do collapse(3) private(b) &
-    !$omp is_device_ptr(f)
+    !$omp OMP_DEVICE_ADDR(f)
     do z = 1, nz
       do y_block = 1, (ny - 1)/SZ + 1
         do i = 1, SZ
@@ -451,14 +457,14 @@ contains
     !! As field_set_x_face, with the inlet taken from the inlet plane of
     !! f_start rather than a constant.
     integer, intent(in) :: n_f, nx, ny, nz, n_yb_pad, bc_start, bc_end
-    real(dp), intent(inout) :: f(SZ, n_f, *)
-    real(dp), intent(in) :: f_start(SZ, n_f, *)
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: f_start(SZ, n_f, n_yb_pad*nz)
     real(dp), intent(in) :: c_end, flow_rate_diff
 
     integer :: i, y_block, z, b
 
     !$omp target teams distribute parallel do collapse(3) private(b) &
-    !$omp is_device_ptr(f, f_start)
+    !$omp OMP_DEVICE_ADDR(f, f_start)
     do z = 1, nz
       do y_block = 1, (ny - 1)/SZ + 1
         do i = 1, SZ
@@ -482,14 +488,14 @@ contains
                                          ny, nz, n_yb_pad)
     !! f += g on the x faces flagged by set_start/set_end.
     integer, intent(in) :: n_f, nx, ny, nz, n_yb_pad
-    real(dp), intent(inout) :: f(SZ, n_f, *)
-    real(dp), intent(in) :: g(SZ, n_f, *)
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: g(SZ, n_f, n_yb_pad*nz)
     logical, intent(in) :: set_start, set_end
 
     integer :: i, y_block, z, b
 
     !$omp target teams distribute parallel do collapse(3) private(b) &
-    !$omp is_device_ptr(f, g)
+    !$omp OMP_DEVICE_ADDR(f, g)
     do z = 1, nz
       do y_block = 1, (ny - 1)/SZ + 1
         do i = 1, SZ
@@ -510,7 +516,7 @@ contains
     !! Sets the bottom (y = 1) and top (y = ny) faces where flagged, so the
     !! two y faces can differ (ABL: no-slip floor, free-slip lid).
     integer, intent(in) :: n_f, nx, ny, nz, n_yb_pad
-    real(dp), intent(inout) :: f(SZ, n_f, *)
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
     real(dp), intent(in) :: c_start, c_end
     logical, intent(in) :: set_start, set_end
 
@@ -519,7 +525,7 @@ contains
     i_top = mod(ny - 1, SZ) + 1
     yb_top = (ny - 1)/SZ + 1
 
-    !$omp target teams distribute parallel do collapse(2) is_device_ptr(f)
+    !$omp target teams distribute parallel do collapse(2) OMP_DEVICE_ADDR(f)
     do z = 1, nz
       do j = 1, nx
         if (set_start) f(1, j, 1 + (z - 1)*n_yb_pad) = c_start
@@ -534,8 +540,8 @@ contains
                                          n_yb_pad)
     !! Copies the bottom and top y planes of f_start onto those of f.
     integer, intent(in) :: n_f, nx, ny, nz, n_yb_pad
-    real(dp), intent(inout) :: f(SZ, n_f, *)
-    real(dp), intent(in) :: f_start(SZ, n_f, *)
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: f_start(SZ, n_f, n_yb_pad*nz)
 
     integer :: j, z, i_top, yb_top
 
@@ -543,7 +549,7 @@ contains
     yb_top = (ny - 1)/SZ + 1
 
     !$omp target teams distribute parallel do collapse(2) &
-    !$omp is_device_ptr(f, f_start)
+    !$omp OMP_DEVICE_ADDR(f, f_start)
     do z = 1, nz
       do j = 1, nx
         f(1, j, 1 + (z - 1)*n_yb_pad) = f_start(1, j, 1 + (z - 1)*n_yb_pad)
@@ -559,8 +565,8 @@ contains
                                          ny, nz, n_yb_pad)
     !! f += g on the y faces flagged by set_start/set_end.
     integer, intent(in) :: n_f, nx, ny, nz, n_yb_pad
-    real(dp), intent(inout) :: f(SZ, n_f, *)
-    real(dp), intent(in) :: g(SZ, n_f, *)
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: g(SZ, n_f, n_yb_pad*nz)
     logical, intent(in) :: set_start, set_end
 
     integer :: j, z, i_top, yb_top
@@ -568,7 +574,7 @@ contains
     i_top = mod(ny - 1, SZ) + 1
     yb_top = (ny - 1)/SZ + 1
 
-    !$omp target teams distribute parallel do collapse(2) is_device_ptr(f, g)
+    !$omp target teams distribute parallel do collapse(2) OMP_DEVICE_ADDR(f, g)
     do z = 1, nz
       do j = 1, nx
         if (set_start) then
@@ -589,7 +595,7 @@ contains
   subroutine field_set_y_plane(f, c, plane, n_f, nx, nz, n_yb_pad)
     !! Sets the y plane `plane` to c.
     integer, intent(in) :: plane, n_f, nx, nz, n_yb_pad
-    real(dp), intent(inout) :: f(SZ, n_f, *)
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
     real(dp), intent(in) :: c
 
     integer :: j, z, i_p, yb_p
@@ -597,7 +603,7 @@ contains
     i_p = mod(plane - 1, SZ) + 1
     yb_p = (plane - 1)/SZ + 1
 
-    !$omp target teams distribute parallel do collapse(2) is_device_ptr(f)
+    !$omp target teams distribute parallel do collapse(2) OMP_DEVICE_ADDR(f)
     do z = 1, nz
       do j = 1, nx
         f(i_p, j, yb_p + (z - 1)*n_yb_pad) = c
@@ -614,8 +620,8 @@ contains
     !! velocity, written into one stress plane (component 1: x, 3: z).
     integer, intent(in) :: sample_plane, stress_plane
     integer, intent(in) :: n_f, nx, nz, n_yb_pad, component
-    real(dp), intent(inout) :: stress(SZ, n_f, *)
-    real(dp), intent(in) :: u(SZ, n_f, *), w(SZ, n_f, *)
+    real(dp), intent(inout) :: stress(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: u(SZ, n_f, n_yb_pad*nz), w(SZ, n_f, n_yb_pad*nz)
     real(dp), intent(in) :: drag_coeff
 
     integer :: j, z, i_sa, yb_sa, i_st, yb_st
@@ -626,7 +632,7 @@ contains
     yb_st = (stress_plane - 1)/SZ + 1
 
     !$omp target teams distribute parallel do collapse(2) &
-    !$omp is_device_ptr(stress, u, w)
+    !$omp OMP_DEVICE_ADDR(stress, u, w)
     do z = 1, nz
       do j = 1, nx
         if (component == 1) then
@@ -650,13 +656,13 @@ contains
     !! First pass of field_plane_sums: partial(j, z) is the sum over x of y
     !! index j at z, summed in a fixed order.
     integer, intent(in) :: n_f, nx, ny, nz, n_yb_pad
-    real(dp), intent(inout) :: partial(ny, *)
-    real(dp), intent(in) :: f(SZ, n_f, *)
+    real(dp), intent(inout) :: partial(ny, nz)
+    real(dp), intent(in) :: f(SZ, n_f, n_yb_pad*nz)
 
     integer :: j, z, k
 
     !$omp target teams distribute parallel do collapse(2) &
-    !$omp is_device_ptr(partial, f)
+    !$omp OMP_DEVICE_ADDR(partial, f)
     do z = 1, nz
       do j = 1, ny
         partial(j, z) = 0._dp
@@ -675,12 +681,12 @@ contains
     !! Second pass of field_plane_sums: sums(j) is the sum over z of
     !! partial(j, z), in a fixed order.
     integer, intent(in) :: ny, nz
-    real(dp), intent(inout) :: sums(*)
-    real(dp), intent(in) :: partial(ny, *)
+    real(dp), intent(inout) :: sums(ny)
+    real(dp), intent(in) :: partial(ny, nz)
 
     integer :: j, z
 
-    !$omp target teams distribute parallel do is_device_ptr(sums, partial)
+    !$omp target teams distribute parallel do OMP_DEVICE_ADDR(sums, partial)
     do j = 1, ny
       sums(j) = 0._dp
       do z = 1, nz
@@ -769,13 +775,13 @@ contains
     !! Writes (or with `accumulate` adds) u_i into the DIR_X field u_o.
     integer, intent(in) :: dir_from, nx, ny, nz
     logical, intent(in) :: accumulate
-    real(dp), intent(inout) :: u_o(SZ, nx, *)
-    real(dp), intent(in) :: u_i(*)
+    real(dp), intent(inout) :: u_o(SZ, nx, ny/SZ*nz)
+    real(dp), intent(in) :: u_i(nx*ny*nz)
 
     integer :: lane, x, yb, z
 
     !$omp target teams distribute parallel do collapse(4) &
-    !$omp is_device_ptr(u_o, u_i)
+    !$omp OMP_DEVICE_ADDR(u_o, u_i)
     do z = 1, nz
       do yb = 1, ny/SZ
         do x = 1, nx
@@ -798,13 +804,13 @@ contains
 
   subroutine gather_y(u_o, u_i, dir_from, nx, ny, nz)
     integer, intent(in) :: dir_from, nx, ny, nz
-    real(dp), intent(inout) :: u_o(SZ, ny, *)
-    real(dp), intent(in) :: u_i(*)
+    real(dp), intent(inout) :: u_o(SZ, ny, nx/SZ*nz)
+    real(dp), intent(in) :: u_i(nx*ny*nz)
 
     integer :: lane, xb, y, z
 
     !$omp target teams distribute parallel do collapse(4) &
-    !$omp is_device_ptr(u_o, u_i)
+    !$omp OMP_DEVICE_ADDR(u_o, u_i)
     do z = 1, nz
       do xb = 1, nx/SZ
         do y = 1, ny
@@ -824,13 +830,13 @@ contains
     !! the SZ x SZ tile a DIR_X input is gathered from is read by
     !! neighbouring threads while it is still in cache.
     integer, intent(in) :: dir_from, nx, ny, nz
-    real(dp), intent(inout) :: u_o(SZ, nz, *)
-    real(dp), intent(in) :: u_i(*)
+    real(dp), intent(inout) :: u_o(SZ, nz, nx/SZ*ny)
+    real(dp), intent(in) :: u_i(nx*ny*nz)
 
     integer :: lane, xb, y_lane, yb, z
 
     !$omp target teams distribute parallel do collapse(5) &
-    !$omp is_device_ptr(u_o, u_i)
+    !$omp OMP_DEVICE_ADDR(u_o, u_i)
     do yb = 1, ny/SZ
       do z = 1, nz
         do xb = 1, nx/SZ
@@ -850,13 +856,13 @@ contains
 
   subroutine gather_c(u_o, u_i, dir_from, nx, ny, nz)
     integer, intent(in) :: dir_from, nx, ny, nz
-    real(dp), intent(inout) :: u_o(nx, ny, *)
-    real(dp), intent(in) :: u_i(*)
+    real(dp), intent(inout) :: u_o(nx, ny, nz)
+    real(dp), intent(in) :: u_i(nx*ny*nz)
 
     integer :: x, y, z
 
     !$omp target teams distribute parallel do collapse(3) &
-    !$omp is_device_ptr(u_o, u_i)
+    !$omp OMP_DEVICE_ADDR(u_o, u_i)
     do z = 1, nz
       do y = 1, ny
         do x = 1, nx

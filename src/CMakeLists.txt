@@ -203,13 +203,18 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
     set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
     add_definitions("-DOMP_TGT_NVIDIA")
+    # NVHPC rejects has_device_addr; the OpenMP 4.5 form of is_device_ptr on
+    # a dummy array says the same (see backend/omptgt/common.f90).
+    add_definitions("-DOMP_DEVICE_ADDR=is_device_ptr")
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
          ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
          ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp --offload-arch=${BACKEND_ARCH}")
     add_definitions("-DOMP_TGT_AMD") # Assume AMD GPU
+    add_definitions("-DOMP_DEVICE_ADDR=has_device_addr")
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
     add_definitions("-DOMP_TGT_AMD") # Assume AMD GPU
+    add_definitions("-DOMP_DEVICE_ADDR=has_device_addr")
   endif()
 endif()
 

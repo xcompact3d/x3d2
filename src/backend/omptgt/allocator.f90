@@ -139,14 +139,14 @@ contains
 
   subroutine fill_kernel(f, c, n)
     !! Offloaded kernel behind `fill_omptgt`. The array is a dummy named in
-    !! is_device_ptr, so the region needs no mapping (see m_omptgt_common).
+    !! OMP_DEVICE_ADDR, so the region needs no mapping (see m_omptgt_common).
     integer, intent(in) :: n
     real(dp), intent(inout) :: f(n)
     real(dp), intent(in) :: c
 
     integer :: i
 
-    !$omp target teams distribute parallel do is_device_ptr(f)
+    !$omp target teams distribute parallel do OMP_DEVICE_ADDR(f)
     do i = 1, n
       f(i) = c
     end do
@@ -178,8 +178,8 @@ contains
   end subroutine
 
   type(c_ptr) function get_dev_ptr(self) result(ptr)
-    !! Returns the device pointer to the field's storage, for use in the
-    !! `is_device_ptr` clause of an offloaded region.
+    !! Returns the device address of the field's storage, which the backend
+    !! views as a Fortran array to pass to its kernels.
     class(omptgt_field_t) :: self
 
     ptr = self%dev_ptr

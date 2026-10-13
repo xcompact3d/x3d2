@@ -16,16 +16,17 @@ contains
                            thom_f, thom_s, thom_w, strch, n, n_groups)
     !! Non-periodic Thomas solve along each line of a single subdomain.
     integer, intent(in) :: n_tds, n_rhs, n, n_groups
-    real(dp), intent(inout) :: du(SZ, n, *)
-    real(dp), intent(in) :: u(SZ, n, *)
-    real(dp), intent(in) :: coeffs_s(9, *), coeffs_e(9, *), coeffs(*)
-    real(dp), intent(in) :: thom_f(*), thom_s(*), thom_w(*), strch(*)
+    real(dp), intent(inout) :: du(SZ, n, n_groups)
+    real(dp), intent(in) :: u(SZ, n, n_groups)
+    real(dp), intent(in) :: coeffs_s(9, 4), coeffs_e(9, 4), coeffs(9)
+    real(dp), intent(in) :: thom_f(n_rhs), thom_s(n_rhs), thom_w(n_rhs), &
+                            strch(n_tds)
 
     integer :: i, b
 
     !$omp target teams distribute parallel do collapse(2) &
-    !$omp is_device_ptr(du, u, coeffs_s, coeffs_e, coeffs, thom_f, thom_s, &
-    !$omp               thom_w, strch)
+    !$omp OMP_DEVICE_ADDR(du, u, coeffs_s, coeffs_e, coeffs, thom_f, thom_s, &
+    !$omp                 thom_w, strch)
     do b = 1, n_groups
       do i = 1, SZ
         call der_univ_thom_line(i, b, n, du, u, n_tds, n_rhs, coeffs_s, &
@@ -101,17 +102,17 @@ contains
                                thom_w, thom_p, strch, n, n_groups)
     !! Periodic Thomas solve along each line of a single subdomain.
     integer, intent(in) :: n_tds, n, n_groups
-    real(dp), intent(inout) :: du(SZ, n, *)
-    real(dp), intent(in) :: u(SZ, n, *)
-    real(dp), intent(in) :: coeffs(*)
+    real(dp), intent(inout) :: du(SZ, n, n_groups)
+    real(dp), intent(in) :: u(SZ, n, n_groups)
+    real(dp), intent(in) :: coeffs(9)
     real(dp), intent(in) :: alpha
-    real(dp), intent(in) :: thom_f(*), thom_s(*), thom_w(*), thom_p(*), &
-                            strch(*)
+    real(dp), intent(in) :: thom_f(n_tds), thom_s(n_tds), thom_w(n_tds), &
+                            thom_p(n_tds), strch(n_tds)
 
     integer :: i, b
 
     !$omp target teams distribute parallel do collapse(2) &
-    !$omp is_device_ptr(du, u, coeffs, thom_f, thom_s, thom_w, thom_p, strch)
+    !$omp OMP_DEVICE_ADDR(du, u, coeffs, thom_f, thom_s, thom_w, thom_p, strch)
     do b = 1, n_groups
       do i = 1, SZ
         call der_univ_thom_per_line(i, b, n, du, u, n_tds, coeffs, alpha, &

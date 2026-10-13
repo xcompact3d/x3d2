@@ -12,7 +12,7 @@ module m_omptgt_kernels_dist
   !! `teams loop` meets a procedure call.
   !!
   !! Arrays are explicit-shape or assumed-size dummies named in
-  !! `is_device_ptr` (see m_omptgt_common). Fields are (SZ, n, n_groups),
+  !! `OMP_DEVICE_ADDR` (see m_omptgt_common). Fields are (SZ, n, n_groups),
   !! halo buffers (SZ, 4, n_groups) and the 2x2-system buffers
   !! (SZ, 1, n_groups). The boundary stencils are 9 wide (n_halo = 4).
   use m_common, only: dp
@@ -127,17 +127,19 @@ contains
     !! forward and backward hybrid sweeps, leaving the 2x2 boundary values in
     !! the send buffers.
     integer, intent(in) :: n_tds, n_rhs, n, n_groups
-    real(dp), intent(inout) :: du(SZ, n, *)
-    real(dp), intent(inout) :: send_u_s(SZ, 1, *), send_u_e(SZ, 1, *)
-    real(dp), intent(in) :: u(SZ, n, *), u_s(SZ, 4, *), u_e(SZ, 4, *)
-    real(dp), intent(in) :: coeffs_s(9, *), coeffs_e(9, *), coeffs(*)
-    real(dp), intent(in) :: ffr(*), fbc(*), faf(*)
+    real(dp), intent(inout) :: du(SZ, n, n_groups)
+    real(dp), intent(inout) :: send_u_s(SZ, 1, n_groups), &
+                               send_u_e(SZ, 1, n_groups)
+    real(dp), intent(in) :: u(SZ, n, n_groups), u_s(SZ, 4, n_groups), &
+                            u_e(SZ, 4, n_groups)
+    real(dp), intent(in) :: coeffs_s(9, 4), coeffs_e(9, 4), coeffs(9)
+    real(dp), intent(in) :: ffr(n_rhs), fbc(n_rhs), faf(n_rhs)
 
     integer :: i, b
 
     !$omp target teams distribute parallel do collapse(2) &
-    !$omp is_device_ptr(du, send_u_s, send_u_e, u, u_s, u_e, coeffs_s, &
-    !$omp               coeffs_e, coeffs, ffr, fbc, faf)
+    !$omp OMP_DEVICE_ADDR(du, send_u_s, send_u_e, u, u_s, u_e, coeffs_s, &
+    !$omp                 coeffs_e, coeffs, ffr, fbc, faf)
     do b = 1, n_groups
       do i = 1, SZ
         call der_univ_dist_line(i, b, n, du, send_u_s, send_u_e, u, u_s, &
@@ -208,14 +210,15 @@ contains
     !! Second phase of the distributed solve: resolves the 2x2 boundary
     !! systems with the neighbours' values and substitutes back.
     integer, intent(in) :: n_tds, n, n_groups
-    real(dp), intent(inout) :: du(SZ, n, *)
-    real(dp), intent(in) :: recv_u_s(SZ, 1, *), recv_u_e(SZ, 1, *)
-    real(dp), intent(in) :: dist_sa(*), dist_sc(*), strch(*)
+    real(dp), intent(inout) :: du(SZ, n, n_groups)
+    real(dp), intent(in) :: recv_u_s(SZ, 1, n_groups), &
+                            recv_u_e(SZ, 1, n_groups)
+    real(dp), intent(in) :: dist_sa(n_tds), dist_sc(n_tds), strch(n_tds)
 
     integer :: i, b
 
     !$omp target teams distribute parallel do collapse(2) &
-    !$omp is_device_ptr(du, recv_u_s, recv_u_e, dist_sa, dist_sc, strch)
+    !$omp OMP_DEVICE_ADDR(du, recv_u_s, recv_u_e, dist_sa, dist_sc, strch)
     do b = 1, n_groups
       do i = 1, SZ
         call der_univ_subs_line(i, b, n, du, recv_u_s, recv_u_e, n_tds, &
@@ -273,28 +276,35 @@ contains
     )
     !! First phase for du = d(u), dud = d(u*v) and d2u = d2(u) in one sweep.
     integer, intent(in) :: n_tds, n_rhs, n, n_groups
-    real(dp), intent(inout) :: du(SZ, n, *), dud(SZ, n, *), d2u(SZ, n, *)
-    real(dp), intent(inout) :: send_du_s(SZ, 1, *), send_du_e(SZ, 1, *), &
+    real(dp), intent(inout) :: du(SZ, n, n_groups), dud(SZ, n, n_groups), &
+                               d2u(SZ, n, n_groups)
+    real(dp), intent(inout) :: send_du_s(SZ, 1, n_groups), &
+                               send_du_e(SZ, 1, n_groups), &
                                send_dud_s(SZ, 1, *), send_dud_e(SZ, 1, *), &
                                send_d2u_s(SZ, 1, *), send_d2u_e(SZ, 1, *)
-    real(dp), intent(in) :: u(SZ, n, *), u_s(SZ, 4, *), u_e(SZ, 4, *)
-    real(dp), intent(in) :: v(SZ, n, *), v_s(SZ, 4, *), v_e(SZ, 4, *)
-    real(dp), intent(in) :: du_coeffs_s(9, *), du_coeffs_e(9, *), &
-                            du_coeffs(*), du_fw(*), du_bw(*), du_af(*)
-    real(dp), intent(in) :: dud_coeffs_s(9, *), dud_coeffs_e(9, *), &
-                            dud_coeffs(*), dud_fw(*), dud_bw(*), dud_af(*)
-    real(dp), intent(in) :: d2u_coeffs_s(9, *), d2u_coeffs_e(9, *), &
-                            d2u_coeffs(*), d2u_fw(*), d2u_bw(*), d2u_af(*)
+    real(dp), intent(in) :: u(SZ, n, n_groups), u_s(SZ, 4, n_groups), &
+                            u_e(SZ, 4, n_groups)
+    real(dp), intent(in) :: v(SZ, n, n_groups), v_s(SZ, 4, n_groups), &
+                            v_e(SZ, 4, n_groups)
+    real(dp), intent(in) :: du_coeffs_s(9, 4), du_coeffs_e(9, 4), &
+                            du_coeffs(9), du_fw(n_rhs), du_bw(n_rhs), &
+                            du_af(n_rhs)
+    real(dp), intent(in) :: dud_coeffs_s(9, 4), dud_coeffs_e(9, 4), &
+                            dud_coeffs(9), dud_fw(n_rhs), dud_bw(n_rhs), &
+                            dud_af(n_rhs)
+    real(dp), intent(in) :: d2u_coeffs_s(9, 4), d2u_coeffs_e(9, 4), &
+                            d2u_coeffs(9), d2u_fw(n_rhs), d2u_bw(n_rhs), &
+                            d2u_af(n_rhs)
 
     integer :: i, b
 
     !$omp target teams distribute parallel do collapse(2) &
-    !$omp is_device_ptr(du, dud, d2u, send_du_s, send_du_e, send_dud_s, &
-    !$omp               send_dud_e, send_d2u_s, send_d2u_e, u, u_s, u_e, &
-    !$omp               v, v_s, v_e, du_coeffs_s, du_coeffs_e, du_coeffs, &
-    !$omp               du_fw, du_bw, du_af, dud_coeffs_s, dud_coeffs_e, &
-    !$omp               dud_coeffs, dud_fw, dud_bw, dud_af, d2u_coeffs_s, &
-    !$omp               d2u_coeffs_e, d2u_coeffs, d2u_fw, d2u_bw, d2u_af)
+    !$omp OMP_DEVICE_ADDR(du, dud, d2u, send_du_s, send_du_e, send_dud_s, &
+    !$omp                 send_dud_e, send_d2u_s, send_d2u_e, u, u_s, u_e, &
+    !$omp                 v, v_s, v_e, du_coeffs_s, du_coeffs_e, du_coeffs, &
+    !$omp                 du_fw, du_bw, du_af, dud_coeffs_s, dud_coeffs_e, &
+    !$omp                 dud_coeffs, dud_fw, dud_bw, dud_af, d2u_coeffs_s, &
+    !$omp                 d2u_coeffs_e, d2u_coeffs, d2u_fw, d2u_bw, d2u_af)
     do b = 1, n_groups
       do i = 1, SZ
         call transeq_3fused_dist_line( &
@@ -473,23 +483,25 @@ contains
     integer, intent(in) :: n_tds, n, n_groups
     real(dp), intent(in) :: nu
     !> Holds du on entry and the result on exit
-    real(dp), intent(inout) :: r_du(SZ, n, *)
-    real(dp), intent(in) :: conv(SZ, n, *), dud(SZ, n, *), d2u(SZ, n, *)
-    real(dp), intent(in) :: recv_du_s(SZ, 1, *), recv_du_e(SZ, 1, *), &
-                            recv_dud_s(SZ, 1, *), recv_dud_e(SZ, 1, *), &
-                            recv_d2u_s(SZ, 1, *), recv_d2u_e(SZ, 1, *)
-    real(dp), intent(in) :: du_sa(*), du_sc(*), du_strch(*), &
-                            dud_sa(*), dud_sc(*), dud_strch(*), &
-                            d2u_sa(*), d2u_sc(*), d2u_strch(*), &
-                            d2u_strch_cor(*)
+    real(dp), intent(inout) :: r_du(SZ, n, n_groups)
+    real(dp), intent(in) :: conv(SZ, n, n_groups), dud(SZ, n, n_groups), &
+                            d2u(SZ, n, n_groups)
+    real(dp), intent(in) :: recv_du_s(SZ, 1, n_groups), &
+                            recv_du_e(SZ, 1, n_groups), recv_dud_s(SZ, 1, *), &
+                            recv_dud_e(SZ, 1, *), recv_d2u_s(SZ, 1, *), &
+                            recv_d2u_e(SZ, 1, *)
+    real(dp), intent(in) :: du_sa(n_tds), du_sc(n_tds), du_strch(n_tds), &
+                            dud_sa(n_tds), dud_sc(n_tds), dud_strch(n_tds), &
+                            d2u_sa(n_tds), d2u_sc(n_tds), d2u_strch(n_tds), &
+                            d2u_strch_cor(n_tds)
 
     integer :: i, b
 
     !$omp target teams distribute parallel do collapse(2) &
-    !$omp is_device_ptr(r_du, conv, dud, d2u, recv_du_s, recv_du_e, &
-    !$omp               recv_dud_s, recv_dud_e, recv_d2u_s, recv_d2u_e, &
-    !$omp               du_sa, du_sc, du_strch, dud_sa, dud_sc, dud_strch, &
-    !$omp               d2u_sa, d2u_sc, d2u_strch, d2u_strch_cor)
+    !$omp OMP_DEVICE_ADDR(r_du, conv, dud, d2u, recv_du_s, recv_du_e, &
+    !$omp                 recv_dud_s, recv_dud_e, recv_d2u_s, recv_d2u_e, &
+    !$omp                 du_sa, du_sc, du_strch, dud_sa, dud_sc, dud_strch, &
+    !$omp                 d2u_sa, d2u_sc, d2u_strch, d2u_strch_cor)
     do b = 1, n_groups
       do i = 1, SZ
         call transeq_3fused_subs_line( &
@@ -651,17 +663,18 @@ contains
     )
     !! Full non-periodic pentadiagonal solve on a single subdomain.
     integer, intent(in) :: n_tds, n_rhs, n, n_groups
-    real(dp), intent(inout) :: du(SZ, n, *)
-    real(dp), intent(in) :: u(SZ, n, *), u_s(SZ, 4, *), u_e(SZ, 4, *)
-    real(dp), intent(in) :: coeffs_s(9, *), coeffs_e(9, *), coeffs(*)
-    real(dp), intent(in) :: ffr(*), faf(*), fsa(*), fbw(*)
+    real(dp), intent(inout) :: du(SZ, n, n_groups)
+    real(dp), intent(in) :: u(SZ, n, n_groups), u_s(SZ, 4, n_groups), &
+                            u_e(SZ, 4, n_groups)
+    real(dp), intent(in) :: coeffs_s(9, 4), coeffs_e(9, 4), coeffs(9)
+    real(dp), intent(in) :: ffr(n_rhs), faf(n_rhs), fsa(n_rhs), fbw(n_rhs)
     real(dp), intent(in) :: beta_lhs, beta_lhs_s
 
     integer :: i, b
 
     !$omp target teams distribute parallel do collapse(2) &
-    !$omp is_device_ptr(du, u, u_s, u_e, coeffs_s, coeffs_e, coeffs, &
-    !$omp               ffr, faf, fsa, fbw)
+    !$omp OMP_DEVICE_ADDR(du, u, u_s, u_e, coeffs_s, coeffs_e, coeffs, &
+    !$omp                 ffr, faf, fsa, fbw)
     do b = 1, n_groups
       do i = 1, SZ
         call penta_rhs_and_solve_line(i, b, n, du, u, u_s, u_e, n_tds, &
@@ -683,18 +696,19 @@ contains
     !! A_np^{-1}*U (see omptgt_tdsops_t%penta_z_dev); each line forms
     !! M = I + C*Z, solves M*c = C*y and applies y -= Z*c.
     integer, intent(in) :: n_tds, n_rhs, n, n_groups
-    real(dp), intent(inout) :: du(SZ, n, *)
-    real(dp), intent(in) :: u(SZ, n, *), u_s(SZ, 4, *), u_e(SZ, 4, *)
-    real(dp), intent(in) :: coeffs_s(9, *), coeffs_e(9, *), coeffs(*)
-    real(dp), intent(in) :: ffr(*), faf(*), fsa(*), fbw(*)
+    real(dp), intent(inout) :: du(SZ, n, n_groups)
+    real(dp), intent(in) :: u(SZ, n, n_groups), u_s(SZ, 4, n_groups), &
+                            u_e(SZ, 4, n_groups)
+    real(dp), intent(in) :: coeffs_s(9, 4), coeffs_e(9, 4), coeffs(9)
+    real(dp), intent(in) :: ffr(n_rhs), faf(n_rhs), fsa(n_rhs), fbw(n_rhs)
     real(dp), intent(in) :: beta_lhs, beta_lhs_s, alp, bet
     real(dp), intent(in) :: z(n_tds, 4)
 
     integer :: i, b
 
     !$omp target teams distribute parallel do collapse(2) &
-    !$omp is_device_ptr(du, u, u_s, u_e, coeffs_s, coeffs_e, coeffs, &
-    !$omp               ffr, faf, fsa, fbw, z)
+    !$omp OMP_DEVICE_ADDR(du, u, u_s, u_e, coeffs_s, coeffs_e, coeffs, &
+    !$omp                 ffr, faf, fsa, fbw, z)
     do b = 1, n_groups
       do i = 1, SZ
         call penta_rhs_and_solve_line(i, b, n, du, u, u_s, u_e, n_tds, &

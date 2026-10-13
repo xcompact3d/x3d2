@@ -6,7 +6,7 @@
 !! `omptgt_field_t`, whose storage is a raw `omp_target_alloc` pointer with no
 !! host array behind it. `resolve_field_t` views that storage as a contiguous
 !! Fortran pointer, which is then passed to a kernel taking it as an
-!! explicit-shape dummy named in `is_device_ptr` (see m_omptgt_common), so a
+!! explicit-shape dummy named in `OMP_DEVICE_ADDR` (see m_omptgt_common), so a
 !! launch moves no field data between host and device.
 !!
 !! Not implemented, and so inherited from `base_backend_t` (whose defaults
