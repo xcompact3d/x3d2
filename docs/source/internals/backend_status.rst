@@ -176,7 +176,10 @@ behaviour.
 ``base_backend_t`` and shared by all backends; they work wherever
 ``reorder``, ``copy_data_to_f`` and ``copy_f_to_data`` are implemented.
 
-.. [#sync] No-op: every target region in ``omptgt`` is synchronous.
+.. [#sync] Runs an empty target region that maps a result back, which the
+   host must wait for: some runtimes (CCE) return from a target region
+   before its kernel completes, and OpenMP has no direct call to wait for
+   the device.
 .. [#bw] OpenMP has no query for the device memory clock or bus width, so
    ``omptgt`` reads them from the vendor runtime (CUDA driver on NVIDIA, HIP
    on AMD), opened at run time with ``dlopen``; it reports

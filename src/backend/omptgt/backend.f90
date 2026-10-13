@@ -32,7 +32,7 @@ module m_omptgt_backend
 
   use m_omptgt_device_info, only: query_device_memory
   use m_omptgt_common, only: SZ, dev_alloc, dev_free, dev_upload, &
-                             dev_download
+                             dev_download, device_sync
   use m_omptgt_exec_dist, only: exec_dist_transeq_3fused, &
                                 exec_dist_tds_compact
   use m_omptgt_exec_thom, only: exec_thom_tds_compact
@@ -205,15 +205,11 @@ contains
   end subroutine alloc_omptgt_tdsops
 
   subroutine sync_omptgt(self)
-    !! Waits for outstanding device work.
-    !!
-    !! Every target region in this backend is synchronous: none carries a
-    !! `nowait` clause, so the host has already waited for the device by the
-    !! time the region's enclosing call returns. That makes this a no-op
-    !! rather than something unimplemented. It stops being one the moment an
-    !! offloaded region here is made asynchronous.
+    !! Waits for outstanding device work (see device_sync).
 
     class(omptgt_backend_t) :: self
+
+    call device_sync()
 
   end subroutine sync_omptgt
 

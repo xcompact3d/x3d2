@@ -19,7 +19,7 @@ module m_backend_runtime
   use omp_lib, only: omp_get_num_devices, omp_set_default_device, &
                      omp_get_default_device
   use m_omptgt_common, only: SZ, dev_alloc, dev_free, dev_upload, &
-                             dev_download
+                             dev_download, device_sync
   use m_omptgt_allocator, only: omptgt_allocator_t, omptgt_field_t
   use m_omptgt_backend, only: omptgt_backend_t
   use m_omptgt_exec_dist, only: &
@@ -310,17 +310,19 @@ contains
     call dev_upload(u_recv_s_d, u_recv_s)
     call dev_upload(u_recv_e_d, u_recv_e)
 
-    ! Every omptgt target region is synchronous, so the wall clock brackets
-    ! completed device work without an explicit synchronisation.
+    ! The runtime may return before a kernel completes, so the timed loop
+    ! is bracketed by device synchronisations, as on CUDA.
     select type (tdsops)
     type is (omptgt_tdsops_t)
       do iter = 1, n_warmup
         call launch(tdsops)
       end do
+      call device_sync()
       tstart = MPI_Wtime()
       do iter = 1, n_iters
         call launch(tdsops)
       end do
+      call device_sync()
       elapsed = MPI_Wtime() - tstart
     class default
       error stop 'penta_solve: tdsops is not an omptgt_tdsops_t'

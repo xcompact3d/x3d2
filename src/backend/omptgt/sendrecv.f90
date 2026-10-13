@@ -9,14 +9,15 @@ module m_omptgt_sendrecv
   !! makes: it then reads the buffers as host memory, failing in
   !! process_vm_readv with "Bad address". Run with UCX_MEMTYPE_CACHE=n so UCX
   !! queries the driver for every buffer instead.
-  !! Every target region in this backend is synchronous, so the send buffers
-  !! are complete by the time MPI reads them.
+  !! The send buffers are filled by a kernel that the runtime may still have
+  !! queued (see device_sync), so the device is synchronised before MPI
+  !! reads them, as the CUDA backend synchronises its stream.
   use iso_c_binding, only: c_loc
   use m_mpi, only: MPI_COMM_WORLD, MPI_STATUSES_IGNORE, MPI_Irecv, MPI_Isend, &
                    MPI_Waitall
 
   use m_common, only: dp, MPI_X3D2_DP
-  use m_omptgt_common, only: memcpy_d2d
+  use m_omptgt_common, only: memcpy_d2d, device_sync
 
   implicit none
 
@@ -36,6 +37,7 @@ contains
       call memcpy_d2d(c_loc(f_recv_s), c_loc(f_send_e), n_data)
       call memcpy_d2d(c_loc(f_recv_e), c_loc(f_send_s), n_data)
     else
+      call device_sync()
 #ifdef MPI
       call MPI_Isend(f_send_s, n_data, MPI_X3D2_DP, &
                      prev, tag, MPI_COMM_WORLD, req(1), err(1))
@@ -74,6 +76,7 @@ contains
       call memcpy_d2d(c_loc(f3_recv_s), c_loc(f3_send_e), n_data)
       call memcpy_d2d(c_loc(f3_recv_e), c_loc(f3_send_s), n_data)
     else
+      call device_sync()
 #ifdef MPI
       call MPI_Isend(f1_send_s, n_data, MPI_X3D2_DP, &
                      prev, tag, MPI_COMM_WORLD, req(1), err(1))

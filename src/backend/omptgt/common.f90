@@ -232,6 +232,25 @@ contains
     end if
   end subroutine memcpy_d2h
 
+  subroutine device_sync()
+    !! Waits until the device work queued so far has completed.
+    !!
+    !! A target region without nowait should complete before the host
+    !! carries on, but CCE was seen to return as soon as the kernel is queued
+    !! (perf_penta timed 100 solves at 0.1 ms on an MI210, with correct
+    !! results). OpenMP has no call to wait for the device, so this queues a
+    !! region whose result the host must have: it runs after the work queued
+    !! before it, and the host cannot pass it until it has.
+    integer :: flag
+
+    flag = 0
+    !$omp target map(tofrom: flag)
+    flag = 1
+    !$omp end target
+    if (flag /= 1) error stop "device_sync: target region did not run"
+
+  end subroutine device_sync
+
   subroutine memcpy_d2d(dst, src, n)
     !! Copies `n` reals between two device addresses.
     type(c_ptr), intent(in) :: dst, src
