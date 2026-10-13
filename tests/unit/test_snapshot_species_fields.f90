@@ -5,8 +5,7 @@ program test_snapshot_species_fields
   use m_io_field_utils, only: field_ptr_t, setup_field_arrays, &
                               cleanup_field_arrays
   use m_mesh, only: mesh_t
-  use m_omp_backend, only: omp_backend_t
-  use m_omp_common, only: SZ
+  use m_backend_runtime, only: backend_runtime_t
   use m_solver, only: solver_t
   use m_test_utils, only: initialise_mpi, finalise_test, global_all
 
@@ -16,9 +15,8 @@ program test_snapshot_species_fields
   real(dp), parameter :: tol = 1.0e-12_dp
 
   type(mesh_t), target :: mesh
-  type(allocator_t), target :: omp_allocator
+  type(backend_runtime_t), target :: runtime
   class(allocator_t), pointer :: allocator
-  type(omp_backend_t), target :: omp_backend
   class(base_backend_t), pointer :: backend
   type(solver_t) :: solver
   type(field_ptr_t), allocatable :: field_ptrs(:), host_fields(:)
@@ -40,10 +38,9 @@ program test_snapshot_species_fields
                 ['periodic', 'periodic'], &
                 ['periodic', 'periodic'])
 
-  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => omp_allocator
-  omp_backend = omp_backend_t(mesh, allocator)
-  backend => omp_backend
+  call runtime%init(mesh)
+  allocator => runtime%allocator
+  backend => runtime%backend
 
   call init_solver_with_species(solver, backend, mesh, allocator)
 
@@ -83,7 +80,7 @@ contains
 
     solver%backend => backend
     solver%mesh => mesh
-    solver%host_allocator => allocator
+    solver%host_allocator => runtime%host_allocator
     solver%nvars = 3 + nspecies
     solver%nspecies = nspecies
     solver%ngrid = product(mesh%get_global_dims(VERT))

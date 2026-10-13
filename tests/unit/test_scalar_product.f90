@@ -8,7 +8,7 @@ program test_scalar_product
 
   use m_allocator
   use m_base_backend
-  use m_backend_runtime, only: backend_runtime_t
+  use m_backend_runtime, only: backend_runtime_t, backend_is_cuda
   use m_test_utils, only: initialise_mpi, finalise_test, &
                           global_all, global_sum
 
@@ -50,6 +50,11 @@ program test_scalar_product
   backend => runtime%backend
 
   do i = 1, 4
+    ! The CUDA backend does not implement the scalar product of DIR_C fields.
+    if (backend_is_cuda .and. dir(i) == DIR_C) then
+      if (nrank == 0) print *, "Skipping ", test(i), " (unsupported on CUDA)"
+      cycle
+    end if
     call runtest(test(i), dir(i))
   end do
 
@@ -79,8 +84,8 @@ contains
     if (nrank == 0) then
       print *, "Simplest check: dot(0, 0) = 0"
     end if
-    a%data = 0
-    b%data = 0
+    call a%fill(0._dp)
+    call b%fill(0._dp)
     s = backend%scalar_product(a, b)
     if (s /= 0) then
       check_pass = .false.
@@ -102,7 +107,7 @@ contains
     if (nrank == 0) then
       print *, "Check: dot(nrank, nrank) = sum^{nrank-1}_i=0 sum_n(i) i**2"
     end if
-    a%data = (nrank + 1)
+    call a%fill(real(nrank + 1, dp))
     s = backend%scalar_product(a, a)
 
     ! Determine number of interior points, using a temporary DIR_C field
