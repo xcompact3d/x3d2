@@ -1401,6 +1401,10 @@ contains
     type is (omptgt_field_t)
       call c_f_pointer_dev(u, u_dev)
     class default
+      ! Say what arrived: a block of another allocator, or a field whose
+      ! dynamic type was lost on the way here (id and dir survive that)
+      print '(a,i0,a,i0)', 'omptgt backend: field id ', u%id, ', dir ', &
+        u%dir
       error stop 'omptgt backend: field is not an omptgt_field_t.'
     end select
 
