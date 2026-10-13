@@ -61,13 +61,21 @@ contains
     ! planes and assume every rank holds both, so x must not be decomposed.
     if (mesh%par%nproc_dir(1) /= 1) &
       error stop 'wind_turbine: x must not be decomposed (nproc_dir(1) = 1).'
+    ! apply_BC overwrites both x planes as Dirichlet inflow and outflow, so the
+    ! mesh must agree for the derivatives and the pressure solve.
+    if (any(mesh%grid%BCs_global(1, :) /= BC_DIRICHLET)) &
+      error stop 'wind_turbine requires BC_x = ''dirichlet'', ''dirichlet''.'
 
     call flow_case%wt_cfg%read(nml_file=get_argument(1))
     call flow_case%case_init(backend, mesh, host_allocator)
 
     ! Seed the RNG deterministically, offset by rank, so inlet-noise runs are
     ! reproducible for a fixed decomposition while ranks stay decorrelated.
-    call seed_rng(flow_case%solver%mesh%par%nrank)
+    ! The RNG state is not checkpointed, so a restart also offsets the seed by
+    ! the restart iteration rather than replaying the noise from step 0.
+    call seed_rng(flow_case%solver%mesh%par%nrank, &
+                  flow_case%solver%mesh%par%nproc, &
+                  flow_case%solver%current_iter)
 
     ! Select and initialise the turbine forcing model. This is the only place
     ! the iturbine switch lives; downstream the case calls the polymorphic
@@ -104,9 +112,10 @@ contains
       )
   end function case_wind_turbine_init
 
-  subroutine seed_rng(nrank)
-    !! Deterministic, rank-offset seeding of the intrinsic RNG.
-    integer, intent(in) :: nrank
+  subroutine seed_rng(nrank, nproc, iter)
+    !! Deterministic seeding of the intrinsic RNG, distinct for every
+    !! (rank, start iteration) pair. A fresh run starts at iter = 0.
+    integer, intent(in) :: nrank, nproc, iter
     ! Odd multiplier that spreads the seed array over distinct values.
     integer, parameter :: seed_stride = 37
     integer :: seed_size, s
@@ -114,7 +123,7 @@ contains
 
     call random_seed(size=seed_size)
     allocate (seed(seed_size))
-    seed = [(seed_stride*s + 1, s=1, seed_size)] + nrank
+    seed = [(seed_stride*s + 1, s=1, seed_size)] + nrank + nproc*iter
     call random_seed(put=seed)
   end subroutine seed_rng
 
