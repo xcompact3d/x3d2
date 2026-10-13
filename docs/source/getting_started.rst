@@ -171,7 +171,10 @@ used.
        ``init_poisson_fft: not implemented by the active backend``, so it
        cannot run a flow case. ``xcompact`` in an ``OMP_TGT`` build is the
        CPU solver. With more than one rank it hands device buffers to MPI,
-       which must therefore be GPU-aware.
+       which must therefore be GPU-aware. With a UCX-based MPI (e.g. HPC-X)
+       also set ``UCX_MEMTYPE_CACHE=n``: UCX's memory type cache can miss
+       the OpenMP runtime's device allocations and treat them as host
+       memory, which fails with ``process_vm_readv ... Bad address``.
 
 "Flang" covers both upstream LLVM Flang and AMD's ROCm ``amdflang``; CMake
 reports either as a ``CMAKE_Fortran_COMPILER_ID`` of ``LLVMFlang`` or

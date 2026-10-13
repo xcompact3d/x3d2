@@ -4,6 +4,11 @@ module m_omptgt_sendrecv
   !!
   !! With more than one rank the device addresses go straight to MPI, which
   !! therefore has to be GPU-aware, as it has to be for the CUDA backend.
+  !! UCX tells device from host buffers with a memory type cache fed by
+  !! intercepting CUDA allocations, and it can miss those the OpenMP runtime
+  !! makes: it then reads the buffers as host memory, failing in
+  !! process_vm_readv with "Bad address". Run with UCX_MEMTYPE_CACHE=n so UCX
+  !! queries the driver for every buffer instead.
   !! Every target region in this backend is synchronous, so the send buffers
   !! are complete by the time MPI reads them.
   use iso_c_binding, only: c_loc
