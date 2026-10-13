@@ -75,10 +75,6 @@ contains
                flow_case%inflow_cfg%read_planes)) &
       error stop 'ABL config error: enable pressure_gradient, coriolis, &
                  &or mass_conserve, or read inflow planes.'
-    ! The bulk-velocity shift would fight the imposed inflow
-    if (flow_case%abl_cfg%mass_conserve .and. &
-        flow_case%inflow_cfg%read_planes) &
-      error stop 'ABL config error: mass_conserve needs a periodic x.'
     flow_case%abl = abl_t(backend, mesh, host_allocator, flow_case%abl_cfg)
 
     call flow_case%case_init(backend, mesh, host_allocator)

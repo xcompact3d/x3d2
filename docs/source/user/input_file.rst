@@ -422,8 +422,10 @@ A *successor* run imposes the planes of a precursor as a time-varying inflow
 The planes are stamped on the ``x = 0`` face and a convective outflow is
 applied at the last x plane, with the outflow corrected so the flow rate out
 matches the flow rate in. The driving switches above may all be off, as the
-inflow drives the flow; ``mass_conserve`` is not allowed, since it would shift
-the imposed inflow. The x direction must not be decomposed across MPI ranks.
+inflow drives the flow. With ``mass_conserve`` the bulk-velocity shift is
+applied over the whole domain, as in Incompact3d, and the inlet plane is then
+imposed on top of it. The x direction must not be decomposed across MPI
+ranks.
 
 ``read_planes``
   Impose the precursor planes at the inlet. Requires ``WITH_ADIOS2=ON``.
