@@ -61,6 +61,20 @@ jobs:
     - name: Build test
       run: make -C build-debug
 
+    # The standalone driver must build without the full solver.
+    # Fail if an object file appears in the x3d2 or xcompact object directories.
+    - name: Check the standalone Poisson build
+      run: |
+        cmake -S . -B build-poisson -DCMAKE_Fortran_COMPILER=mpif90 -DCMAKE_BUILD_TYPE=Debug
+        make -C build-poisson x3d2_poisson_solver
+        stray=$(find build-poisson \( -path '*CMakeFiles/x3d2.dir/*' -o -path '*CMakeFiles/xcompact.dir/*' \) -name '*.o')
+        if [ -n "$stray" ]; then
+          echo "The standalone build compiled the full solver:"
+          echo "$stray"
+          exit 1
+        fi
+        test -x build-poisson/bin/x3d2_poisson_solver
+
     - name: Run unit, verification and regression tests
       run:  ctest  --test-dir build-debug -L "unit|verification|regression" --output-on-failure
 
