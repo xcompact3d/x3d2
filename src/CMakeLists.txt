@@ -63,6 +63,13 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   list(APPEND SRC
     backend/omptgt/common.f90
     backend/omptgt/allocator.f90
+    backend/omptgt/exec_dist.f90
+    backend/omptgt/exec_thom.f90
+    backend/omptgt/kernels/distributed.f90
+    backend/omptgt/kernels/fieldops.f90
+    backend/omptgt/kernels/thomas.f90
+    backend/omptgt/sendrecv.f90
+    backend/omptgt/tdsops.f90
   )
   list(APPEND BACKENDSRC
     backend/omptgt/backend.f90)

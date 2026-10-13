@@ -18,10 +18,14 @@ module m_backend_runtime
 #elif defined(OMP_TGT)
   use omp_lib, only: omp_get_num_devices, omp_set_default_device, &
                      omp_get_default_device
-  use m_omptgt_common, only: SZ
+  use m_omptgt_common, only: SZ, dev_alloc, dev_free, dev_upload, &
+                             dev_download
   use m_omptgt_allocator, only: omptgt_allocator_t, omptgt_field_t
   use m_omptgt_backend, only: omptgt_backend_t
-  use m_omp_exec_dist, only: exec_dist_penta_compact, exec_dist_penta_periodic
+  use m_omptgt_exec_dist, only: &
+    omptgt_penta_compact => exec_dist_penta_compact, &
+    omptgt_penta_periodic => exec_dist_penta_periodic
+  use m_omptgt_tdsops, only: omptgt_tdsops_t
 #else
   use m_omp_backend, only: omp_backend_t
   use m_omp_common, only: SZ
@@ -222,7 +226,7 @@ contains
     !! Run the single-subdomain pentadiagonal compact solve on host arrays of
     !! shape (backend_sz, n, n_groups) with the halos supplied by the caller.
     !! The pentadiagonal kernels are not reachable through base_backend_t yet,
-    !! so this hides the backend-specific call (and, on CUDA, the device
+    !! so this hides the backend-specific call (and, on a device backend, the
     !! copies) from the tests.  tdsops must come from backend%alloc_tdsops.
     real(dp), dimension(:, :, :), intent(out) :: du
     real(dp), dimension(:, :, :), intent(in) :: u, u_recv_s, u_recv_e
@@ -292,6 +296,41 @@ contains
     end select
 
     du = du_d
+#elif defined(OMP_TGT)
+    real(dp), pointer, contiguous, dimension(:, :, :) :: du_d, u_d, &
+                                                         u_recv_s_d, u_recv_e_d
+
+    call dev_alloc(du_d, size(du, 1), size(du, 2), size(du, 3))
+    call dev_alloc(u_d, size(u, 1), size(u, 2), size(u, 3))
+    call dev_alloc(u_recv_s_d, size(u_recv_s, 1), size(u_recv_s, 2), &
+                   size(u_recv_s, 3))
+    call dev_alloc(u_recv_e_d, size(u_recv_e, 1), size(u_recv_e, 2), &
+                   size(u_recv_e, 3))
+    call dev_upload(u_d, u)
+    call dev_upload(u_recv_s_d, u_recv_s)
+    call dev_upload(u_recv_e_d, u_recv_e)
+
+    ! Every omptgt target region is synchronous, so the wall clock brackets
+    ! completed device work without an explicit synchronisation.
+    select type (tdsops)
+    type is (omptgt_tdsops_t)
+      do iter = 1, n_warmup
+        call launch(tdsops)
+      end do
+      tstart = MPI_Wtime()
+      do iter = 1, n_iters
+        call launch(tdsops)
+      end do
+      elapsed = MPI_Wtime() - tstart
+    class default
+      error stop 'penta_solve: tdsops is not an omptgt_tdsops_t'
+    end select
+
+    call dev_download(du, du_d)
+    call dev_free(du_d)
+    call dev_free(u_d)
+    call dev_free(u_recv_s_d)
+    call dev_free(u_recv_e_d)
 #else
     select type (tdsops)
     type is (tdsops_t)
@@ -320,6 +359,18 @@ contains
       else
         call cuda_penta_compact(du_d, u_d, u_recv_s_d, u_recv_e_d, &
                                 tdsops_dev, blocks, threads)
+      end if
+    end subroutine launch
+#elif defined(OMP_TGT)
+    subroutine launch(tdsops_dev)
+      type(omptgt_tdsops_t), intent(in) :: tdsops_dev
+
+      if (periodic) then
+        call omptgt_penta_periodic(du_d, u_d, u_recv_s_d, u_recv_e_d, &
+                                   tdsops_dev, size(u, 3))
+      else
+        call omptgt_penta_compact(du_d, u_d, u_recv_s_d, u_recv_e_d, &
+                                  tdsops_dev, size(u, 3))
       end if
     end subroutine launch
 #else
