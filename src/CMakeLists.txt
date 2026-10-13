@@ -145,7 +145,7 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
     # Flang assumes OpenMP 3.1, which rejects both `declare target` in a pure
     # procedure (4.5) and the `loop` construct (5.0) used by the sources.
-    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp-version=50")
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp-version=51")
     set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -march=native")
     set(CMAKE_Fortran_FLAGS_DEBUG "-g -Wall -Wno-ambiguous-structure-constructor -Werror")
   else()
