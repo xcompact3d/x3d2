@@ -10,7 +10,7 @@ module m_omptgt_kernels_fieldops
   !! the layout of m_ordering, which is not the one the CUDA kernels use: a
   !! DIR_X group index is b = y_block + (z - 1)*n_yb_pad, y-blocks fastest
   !! with n_yb_pad = ny_padded/SZ of them per z station.
-  use m_common, only: dp
+  use m_common, only: dp, DIR_X, DIR_Y, DIR_Z
   use m_omptgt_common, only: SZ
 
   implicit none
@@ -714,7 +714,6 @@ contains
   pure integer function offset(dir, x, y, z, nx, ny, nz) result(l)
     !$omp declare target
     !! 1-based linear offset of Cartesian point (x, y, z) in layout `dir`.
-    use m_common, only: DIR_X, DIR_Y, DIR_Z
 
     integer, intent(in) :: dir, x, y, z, nx, ny, nz
 
@@ -735,7 +734,6 @@ contains
 
   subroutine reorder(u_o, u_i, dir_from, dir_to, cart_padded)
     !! Reorders u_i in layout dir_from into u_o in layout dir_to.
-    use m_common, only: DIR_X, DIR_Y, DIR_Z
 
     real(dp), intent(inout) :: u_o(*)
     real(dp), intent(in) :: u_i(*)
