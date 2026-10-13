@@ -13,7 +13,8 @@ module m_base_case
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
   use m_config, only: has_output_field
   use m_io_manager, only: io_manager_t
-  use m_mpi, only: MPI_COMM_WORLD, MPI_Wtime, MPI_Reduce, MPI_MAX
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Wtime, MPI_Reduce, MPI_MAX, &
+                   MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
   implicit none
 
@@ -45,6 +46,7 @@ module m_base_case
     procedure(apply_BC), deferred :: apply_BC
     procedure(postprocess), deferred :: postprocess
     procedure :: post_step
+    procedure :: compute_outflow_params
     procedure :: case_init
     procedure :: case_finalise
     procedure :: set_init
@@ -150,6 +152,53 @@ contains
     integer, intent(in) :: iter
     real(dp), intent(in) :: t
   end subroutine post_step
+
+  subroutine compute_outflow_params(self, out_vel, flow_rate_diff)
+    !! Convective outflow number and inlet/outlet flow-rate imbalance for a
+    !! case with an x inflow and a convective x outflow (the X_FACE form of
+    !! field_set_face_from_field). Three slice reductions on the device and
+    !! two batched MPI_Allreduces; no D2H copy of the full field. Assumes x
+    !! is not decomposed, as the FFT Poisson solver requires.
+    implicit none
+    class(base_case_t) :: self
+    real(dp), intent(out) :: out_vel, flow_rate_diff
+
+    integer :: dims(3), dims_glob(3), nx, ierr
+    real(dp) :: uxmax, uxmax_discard
+    real(dp) :: flow_rate_in, flow_rate_out
+    real(dp) :: flow_rate_in_max_discard, flow_rate_out_max_discard
+    real(dp) :: fl_sums(2), ny_nz
+    real(dp) :: dx, gdt
+
+    dims = self%solver%mesh%get_dims(VERT)
+    nx = dims(1)
+    dx = self%solver%mesh%geo%d(1)
+    ! The slice sums are rank local and the Allreduce below adds them up
+    ! across the whole y-z plane, so the divisor is the global vertex count
+    ! in y and z rather than this rank's share of it.
+    dims_glob = self%solver%mesh%get_global_dims(VERT)
+    ny_nz = real(dims_glob(2)*dims_glob(3), dp)
+    gdt = self%solver%time_integrator%gdt
+
+    call self%solver%backend%slice_max_sum( &
+      uxmax, uxmax_discard, self%solver%u, nx - 1)
+    call self%solver%backend%slice_max_sum( &
+      flow_rate_in_max_discard, flow_rate_in, self%solver%u, 1)
+    call self%solver%backend%slice_max_sum( &
+      flow_rate_out_max_discard, flow_rate_out, self%solver%u, nx)
+
+    call MPI_Allreduce(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, &
+                       MPI_MAX, MPI_COMM_WORLD, ierr)
+    fl_sums(1) = flow_rate_in
+    fl_sums(2) = flow_rate_out
+    call MPI_Allreduce(MPI_IN_PLACE, fl_sums, 2, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+    flow_rate_in = fl_sums(1)/ny_nz
+    flow_rate_out = fl_sums(2)/ny_nz
+
+    out_vel = uxmax*gdt/dx
+    flow_rate_diff = flow_rate_in - flow_rate_out
+  end subroutine compute_outflow_params
 
   subroutine set_init(self, field, field_func)
     implicit none

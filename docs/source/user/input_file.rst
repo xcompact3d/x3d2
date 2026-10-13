@@ -149,7 +149,8 @@ Driving mechanisms
 ^^^^^^^^^^^^^^^^^^
 
 The flow is driven by any combination of the following switches. At least one
-of ``pressure_gradient``, ``coriolis`` and ``mass_conserve`` must be on.
+of ``pressure_gradient``, ``coriolis`` and ``mass_conserve`` must be on, unless
+the run is a successor driven by precursor inflow planes (see below).
 
 ``pressure_gradient``
   Adds a uniform streamwise body force :math:`u_*^2/\delta`. In a steady state
@@ -395,10 +396,66 @@ block.
 
 The dimensions above are in Fortran order. Tools that use C order, such as
 ``bpls`` and the ADIOS2 Python API, show them reversed, for example ``u`` as
-``{nz, ny, ntimesteps}``. A successor reads the blocks with
-``read_inflow_block`` in ``m_inflow_planes``. It may use a different MPI
-decomposition, but its global y and z vertex counts must match ``ny`` and
-``nz``.
+``{nz, ny, ntimesteps}``.
+
+Successor inflow from precursor planes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A *successor* run imposes the planes of a precursor as a time-varying inflow
+(Incompact3d ``iin = 3``). It is an ``abl`` case with an x inflow and outflow,
+
+.. code-block:: fortran
+
+   &domain_settings
+     BC_x = 'dirichlet', 'dirichlet'
+     BC_y = 'dirichlet', 'neumann'
+     BC_z = 'periodic', 'periodic'
+     ...
+   /
+
+   &inflow_nml
+     read_planes = .true.
+     inflow_read_prefix = '../precursor/inflow'
+     ninflows = 2
+   /
+
+The planes are stamped on the ``x = 0`` face and a convective outflow is
+applied at the last x plane, with the outflow corrected so the flow rate out
+matches the flow rate in. The driving switches above may all be off, as the
+inflow drives the flow; ``mass_conserve`` is not allowed, since it would shift
+the imposed inflow. The x direction must not be decomposed across MPI ranks.
+
+``read_planes``
+  Impose the precursor planes at the inlet. Requires ``WITH_ADIOS2=ON``.
+
+  **Default:** ``.false.``
+
+``inflow_read_prefix``
+  Prefix of the precursor files, ``<inflow_read_prefix>_<b>.bp`` for
+  ``b = 1, ..., ninflows``. It must differ from ``inflow_prefix`` when the
+  run also writes planes.
+
+  **Default:** ``'inflow'``
+
+``ninflows``
+  Number of precursor files to replay.
+
+  **Default:** ``1``
+
+Plane ``n``, counted across the files in order, is the inflow at time
+``n * sample_every * dt`` of the precursor, so with equal time steps and
+``sample_every = 1`` iteration ``n`` uses plane ``n`` as in Incompact3d. At
+other times the inflow is interpolated linearly between the two nearest
+planes, so the successor's ``dt`` need not match the precursor's. After the
+last plane the series starts again from the first. Each iteration uses one
+plane for all its substeps.
+
+The successor may use a different MPI decomposition and x extent from the
+precursor, but its global y and z vertex counts must match ``ny`` and ``nz``.
+All files must hold the same number of planes at the same spacing.
+
+Set ``start_iter`` in the precursor after its turbulence has developed, so the
+planes carry turbulence rather than the decaying initial noise.
 
 Checkpoint Parameters
 ~~~~~~~~~~~~~~~~~~~~~

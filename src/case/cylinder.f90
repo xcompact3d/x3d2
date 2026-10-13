@@ -1,11 +1,9 @@
 module m_case_cylinder
   use iso_fortran_env, only: stderr => error_unit
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_MAX, MPI_SUM, &
-                   MPI_Allreduce
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
-  use m_common, only: dp, MPI_X3D2_DP, get_argument, DIR_C, DIR_X, &
+  use m_common, only: dp, get_argument, DIR_C, DIR_X, &
                       VERT, X_FACE, BC_DIRICHLET
   use m_field, only: field_t
   use m_config, only: cylinder_config_t
@@ -28,7 +26,6 @@ module m_case_cylinder
     procedure :: forcings => forcings_cylinder
     procedure :: apply_BC => apply_BC_cylinder
     procedure :: postprocess => postprocess_cylinder
-    procedure :: compute_outflow_params
   end type case_cylinder_t
 
   interface case_cylinder_t
@@ -101,53 +98,6 @@ contains
     call self%solver%v%set_data_loc(VERT)
     call self%solver%w%set_data_loc(VERT)
   end subroutine initial_conditions_cylinder
-
-  ! ==========================================================================
-  ! Compute outflow velocity number and inlet/outlet flow-rate imbalance.
-  ! Three slice reductions on the GPU, two batched MPI_Allreduces (MAX
-  ! scalar, SUM 2-vector). No D2H copy of the full field.
-  ! ==========================================================================
-  subroutine compute_outflow_params(self, out_vel, flow_rate_diff)
-    implicit none
-    class(case_cylinder_t) :: self
-    real(dp), intent(out) :: out_vel, flow_rate_diff
-
-    integer :: dims(3), dims_glob(3), nx, ierr
-    real(dp) :: uxmax, uxmax_discard
-    real(dp) :: flow_rate_in, flow_rate_out
-    real(dp) :: flow_rate_in_max_discard, flow_rate_out_max_discard
-    real(dp) :: fl_sums(2), ny_nz
-    real(dp) :: dx, gdt
-
-    dims = self%solver%mesh%get_dims(VERT)
-    nx = dims(1)
-    dx = self%solver%mesh%geo%d(1)
-    ! The slice sums are rank local and the Allreduce below adds them up
-    ! across the whole y-z plane, so the divisor is the global vertex count
-    ! in y and z rather than this rank's share of it.
-    dims_glob = self%solver%mesh%get_global_dims(VERT)
-    ny_nz = real(dims_glob(2)*dims_glob(3), dp)
-    gdt = self%solver%time_integrator%gdt
-
-    call self%solver%backend%slice_max_sum( &
-      uxmax, uxmax_discard, self%solver%u, nx - 1)
-    call self%solver%backend%slice_max_sum( &
-      flow_rate_in_max_discard, flow_rate_in, self%solver%u, 1)
-    call self%solver%backend%slice_max_sum( &
-      flow_rate_out_max_discard, flow_rate_out, self%solver%u, nx)
-
-    call MPI_Allreduce(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, &
-                       MPI_MAX, MPI_COMM_WORLD, ierr)
-    fl_sums(1) = flow_rate_in
-    fl_sums(2) = flow_rate_out
-    call MPI_Allreduce(MPI_IN_PLACE, fl_sums, 2, MPI_X3D2_DP, MPI_SUM, &
-                       MPI_COMM_WORLD, ierr)
-    flow_rate_in = fl_sums(1)/ny_nz
-    flow_rate_out = fl_sums(2)/ny_nz
-
-    out_vel = uxmax*gdt/dx
-    flow_rate_diff = flow_rate_in - flow_rate_out
-  end subroutine compute_outflow_params
 
   ! ==========================================================================
   ! Boundary Conditions hook (called per substep before transeq).

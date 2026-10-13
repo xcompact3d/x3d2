@@ -103,6 +103,10 @@ module m_config
     integer :: sample_every = 1        !! iterations between samples
     integer :: start_iter = 0          !! first sample at start_iter + sample_every
     character(len=256) :: inflow_prefix = 'inflow'
+    !> Successor: impose planes read from inflow_read_prefix at the x inlet
+    logical :: read_planes = .false.
+    integer :: ninflows = 1            !! files cycled through by a successor
+    character(len=256) :: inflow_read_prefix = 'inflow'
   contains
     procedure :: read => read_inflow_nml
   end type inflow_config_t
@@ -474,11 +478,8 @@ contains
     !! Validate relationships between ABL namelist values in one place.
     type(abl_config_t), intent(in) :: config
 
-    ! Damping is a sponge rather than a driving mechanism.
-    if (.not. (config%pressure_gradient .or. config%coriolis .or. &
-               config%mass_conserve)) &
-      error stop 'ABL config error: enable pressure_gradient, coriolis, &
-                 &or mass_conserve.'
+    ! The driving mechanism is checked by the case, which may instead be
+    ! driven by a precursor inflow.
 
     if (config%z0 <= 0._dp .or. config%delta <= config%z0 .or. &
         config%kappa <= 0._dp) &
@@ -562,12 +563,13 @@ contains
 
     integer :: unit, ierr
 
-    logical :: write_planes
-    integer :: plane_x_index, ntimesteps, sample_every, start_iter
-    character(len=256) :: inflow_prefix
+    logical :: write_planes, read_planes
+    integer :: plane_x_index, ntimesteps, sample_every, start_iter, ninflows
+    character(len=256) :: inflow_prefix, inflow_read_prefix
 
     namelist /inflow_nml/ write_planes, plane_x_index, ntimesteps, &
-      sample_every, start_iter, inflow_prefix
+      sample_every, start_iter, inflow_prefix, read_planes, ninflows, &
+      inflow_read_prefix
 
     write_planes = .false.
     plane_x_index = 0
@@ -575,6 +577,9 @@ contains
     sample_every = 1
     start_iter = 0
     inflow_prefix = 'inflow'
+    read_planes = .false.
+    ninflows = 1
+    inflow_read_prefix = 'inflow'
 
     if (present(nml_file) .and. present(nml_string)) then
       error stop 'Reading inflow config failed! &
@@ -601,6 +606,9 @@ contains
     self%sample_every = sample_every
     self%start_iter = start_iter
     self%inflow_prefix = trim(inflow_prefix)
+    self%read_planes = read_planes
+    self%ninflows = ninflows
+    self%inflow_read_prefix = trim(inflow_read_prefix)
 
     if (self%ntimesteps < 1) &
       error stop 'inflow_nml: ntimesteps must be at least 1.'
@@ -610,6 +618,12 @@ contains
       error stop 'inflow_nml: start_iter must be non-negative.'
     if (self%plane_x_index < 0) &
       error stop 'inflow_nml: plane_x_index must be non-negative.'
+    if (self%ninflows < 1) &
+      error stop 'inflow_nml: ninflows must be at least 1.'
+    if (self%write_planes .and. self%read_planes .and. &
+        self%inflow_prefix == self%inflow_read_prefix) &
+      error stop 'inflow_nml: inflow_prefix and inflow_read_prefix must &
+                 &differ, or the run overwrites the planes it reads.'
   end subroutine read_inflow_nml
 
   subroutine read_stats_nml(self, nml_file, nml_string)

@@ -2,7 +2,9 @@ program test_inflow_planes
   !! Precursor inflow planes: sample a known field, write blocks, read them
   !! back on a different rank layout and check every value and time stamp.
   !! The writer decomposes x, so only some ranks own the sampling plane. A
-  !! run restarted inside a block must skip that block.
+  !! run restarted inside a block must skip that block. The successor reader
+  !! must then replay the planes in time: exact on the planes, linear between
+  !! them (also across files), and cyclic after the last one.
   use m_mpi, only: MPI_COMM_WORLD, MPI_Barrier
 
   use m_allocator, only: allocator_t
@@ -10,8 +12,8 @@ program test_inflow_planes
   use m_common, only: dp, DIR_X, DIR_C, VERT
   use m_config, only: inflow_config_t
   use m_field, only: field_t
-  use m_inflow_planes, only: inflow_plane_writer_t, inflow_file_name, &
-                             read_inflow_block
+  use m_inflow_planes, only: inflow_plane_writer_t, inflow_plane_reader_t, &
+                             inflow_file_name, read_inflow_block
   use m_mesh, only: mesh_t
   use m_test_utils, only: initialise_mpi, finalise_test, global_all
 
@@ -50,7 +52,8 @@ program test_inflow_planes
 
   type(inflow_config_t) :: cfg
   type(inflow_plane_writer_t) :: writer
-  integer :: dims(3), irank, nproc, ierr
+  type(inflow_plane_reader_t) :: reader
+  integer :: dims(3), irank, nproc, ierr, n
   logical :: allpass, exists
 
   call initialise_mpi(irank, nproc)
@@ -107,6 +110,25 @@ program test_inflow_planes
     print *, 'A partly sampled block was written'
   end if
 
+  ! Successor: replay both files. Plane n is the sample at iteration
+  ! start_iter + n*sample_every and is the inflow at time n*plane_dt.
+  cfg%inflow_read_prefix = prefix
+  cfg%read_planes = .true.
+  cfg%ninflows = 2
+  reader = inflow_plane_reader_t(read_mesh, cfg)
+  if (abs(reader%plane_dt - sample_every*dt) > 1e-14_dp) then
+    allpass = .false.
+    print *, 'Wrong plane spacing', reader%plane_dt
+  end if
+  do n = 1, 2*ntimesteps
+    call check_replay('on a plane', n*reader%plane_dt, n, n + 1, 0._dp)
+  end do
+  call check_replay('between planes', 1.25_dp*reader%plane_dt, 1, 2, 0.25_dp)
+  call check_replay('across files', 3.5_dp*reader%plane_dt, 3, 4, 0.5_dp)
+  call check_replay('wrapped past the last plane', 6.5_dp*reader%plane_dt, &
+                    6, 1, 0.5_dp)
+  call check_replay('second cycle', 8._dp*reader%plane_dt, 2, 3, 0._dp)
+
   call allocator%release_block(u)
   call allocator%release_block(v)
   call allocator%release_block(w)
@@ -161,6 +183,46 @@ contains
       call plane_writer%sample(iter, iter*dt, u, v, w)
     end do
   end subroutine advance
+
+  subroutine check_replay(label, t, n0, n1, frac)
+    !! The replayed inflow at time t must be (1 - frac)*plane n0 +
+    !! frac*plane n1
+    character(*), intent(in) :: label
+    real(dp), intent(in) :: t, frac
+    integer, intent(in) :: n0, n1
+
+    real(dp), allocatable :: pu(:, :), pv(:, :), pw(:, :)
+    integer :: rdims(3), off(3), it0, it1, j, k, c
+    real(dp) :: err, want(3)
+
+    rdims = read_mesh%get_dims(VERT)
+    off = read_mesh%par%n_offset
+    allocate (pu(rdims(2), rdims(3)), pv(rdims(2), rdims(3)), &
+              pw(rdims(2), rdims(3)))
+    call reader%planes_at(t, pu, pv, pw)
+
+    it0 = start_iter + n0*sample_every
+    it1 = start_iter + n1*sample_every
+    err = 0._dp
+    do k = 1, rdims(3)
+      do j = 1, rdims(2)
+        do c = 1, 3
+          want(c) = (1._dp - frac) &
+                    *expected(c, it0, x_index, j + off(2), k + off(3)) &
+                    + frac*expected(c, it1, x_index, j + off(2), k + off(3))
+        end do
+        err = max(err, abs(pu(j, k) - want(1)))
+        err = max(err, abs(pv(j, k) - want(2)))
+        err = max(err, abs(pw(j, k) - want(3)))
+      end do
+    end do
+
+    ! Values are ~1e7, and t/plane_dt is only exact to rounding
+    if (err > 1e-6_dp) then
+      allpass = .false.
+      print *, 'Rank', irank, ' replay ', label, ' t =', t, ': error', err
+    end if
+  end subroutine check_replay
 
   subroutine check_block(filename, first_iter)
     !! The block must hold the planes sampled from first_iter onward

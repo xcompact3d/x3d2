@@ -20,8 +20,8 @@ module m_inflow_planes
   implicit none
 
   private
-  public :: inflow_plane_writer_t, inflow_file_name, read_inflow_block, &
-            INFLOW_FORMAT_VERSION
+  public :: inflow_plane_writer_t, inflow_plane_reader_t, inflow_file_name, &
+            read_inflow_block, INFLOW_FORMAT_VERSION
 
   integer, parameter :: INFLOW_FORMAT_VERSION = 1
 
@@ -47,6 +47,31 @@ module m_inflow_planes
   interface inflow_plane_writer_t
     module procedure init
   end interface inflow_plane_writer_t
+
+  type :: plane_block_t
+    integer :: id = 0            !! file index held, 0 if empty
+    real(dp), allocatable :: u(:, :, :), v(:, :, :), w(:, :, :)
+  end type plane_block_t
+
+  type :: inflow_plane_reader_t
+    !! Replays the planes of `ninflows` files as a time-varying inflow.
+    !! Plane n (1-based, counted across the files) is the inflow at time
+    !! n*plane_dt; between planes it is interpolated linearly, and after
+    !! the last plane the series repeats from the first.
+    type(mesh_t), pointer :: mesh => null()
+    type(inflow_config_t) :: cfg
+    integer :: ntimesteps = 0    !! planes per file
+    real(dp) :: plane_dt = 0._dp !! time between planes
+    !> Two files are enough to interpolate across a file boundary
+    type(plane_block_t) :: blocks(2)
+  contains
+    procedure :: planes_at
+    procedure, private :: block_slot
+  end type inflow_plane_reader_t
+
+  interface inflow_plane_reader_t
+    module procedure init_reader
+  end interface inflow_plane_reader_t
 
 contains
 
@@ -216,7 +241,7 @@ contains
     call writer%close()
   end subroutine write_block
 
-  subroutine read_inflow_block(filename, mesh, u, v, w, times)
+  subroutine read_inflow_block(filename, mesh, u, v, w, times, plane_dt)
     !! Read one block on this rank's y-z subdomain. The arrays are allocated
     !! here as (ntimesteps, ny, nz) on the local VERT dims, and `times` as
     !! (ntimesteps). The rank layout may differ from the precursor's, but the
@@ -225,11 +250,14 @@ contains
     type(mesh_t), intent(in) :: mesh
     real(dp), allocatable, intent(out) :: u(:, :, :), v(:, :, :), w(:, :, :)
     real(dp), allocatable, intent(out) :: times(:)
+    !> Time between planes, sample_every*dt of the precursor
+    real(dp), optional, intent(out) :: plane_dt
 
     type(reader_session_t) :: reader
     integer(i8) :: start_dims(3), count_dims(3)
     integer :: dims(3), global_dims(3)
-    integer :: format_version, ntimesteps, ny, nz
+    integer :: format_version, ntimesteps, ny, nz, sample_every
+    real(dp) :: dt
     real(dp), allocatable :: times_3d(:, :, :)
 
     dims = mesh%get_dims(VERT)
@@ -244,9 +272,14 @@ contains
     call reader%read_data('nz', nz)
     if (ny /= global_dims(2) .or. nz /= global_dims(3)) &
       error stop 'Inflow planes: y-z grid does not match the mesh.'
+    if (present(plane_dt)) then
+      call reader%read_data('sample_every', sample_every)
+      call reader%read_data('dt', dt)
+      plane_dt = sample_every*dt
+    end if
 
     allocate (u(ntimesteps, dims(2), dims(3)))
-    allocate (v, w, mold=u)
+    allocate (v(ntimesteps, dims(2), dims(3)), w(ntimesteps, dims(2), dims(3)))
     allocate (times_3d(ntimesteps, 1, 1))
 
     call reader%read_data('time', times_3d, [0_i8, 0_i8, 0_i8], &
@@ -261,5 +294,111 @@ contains
 
     times = times_3d(:, 1, 1)
   end subroutine read_inflow_block
+
+  function init_reader(mesh, cfg) result(reader)
+    !! Opens the first file to learn the plane count and spacing
+    type(mesh_t), target, intent(inout) :: mesh
+    type(inflow_config_t), intent(in) :: cfg
+    type(inflow_plane_reader_t) :: reader
+
+    type(reader_session_t) :: session
+    integer :: format_version, sample_every
+    real(dp) :: dt
+
+    reader%mesh => mesh
+    reader%cfg = cfg
+    if (.not. cfg%read_planes) return
+
+#ifndef WITH_ADIOS2
+    error stop 'inflow_nml: read_planes requires a build WITH_ADIOS2.'
+#endif
+
+    ! Only the metadata here; the planes are read on first use, so the
+    ! constructed reader carries no plane arrays through the copies into
+    ! its owner (nvfortran mis-copies them).
+    call session%open(inflow_file_name(cfg%inflow_read_prefix, 1), &
+                      MPI_COMM_WORLD)
+    call session%read_data('format_version', format_version)
+    if (format_version /= INFLOW_FORMAT_VERSION) &
+      error stop 'Inflow planes: unsupported format_version.'
+    call session%read_data('ntimesteps', reader%ntimesteps)
+    call session%read_data('sample_every', sample_every)
+    call session%read_data('dt', dt)
+    call session%close()
+    reader%plane_dt = sample_every*dt
+    if (reader%plane_dt <= 0._dp) &
+      error stop 'Inflow planes: the plane spacing must be positive.'
+
+    if (mesh%par%is_root()) &
+      print '(A,I0,A,I0,A,ES12.5)', 'Inflow planes: ', cfg%ninflows, &
+      ' file(s) of ', reader%ntimesteps, ' planes, plane spacing ', &
+      reader%plane_dt
+  end function init_reader
+
+  subroutine planes_at(self, t, u, v, w)
+    !! Inflow plane at time `t` on this rank's local (ny, nz)
+    class(inflow_plane_reader_t), intent(inout) :: self
+    real(dp), intent(in) :: t
+    real(dp), intent(out) :: u(:, :), v(:, :), w(:, :)
+
+    integer :: n_planes, n0, n1, slot0, slot1, i0, i1, j, k
+    real(dp) :: position, frac
+
+    n_planes = self%ntimesteps*self%cfg%ninflows
+
+    ! Fractional plane number, wrapped into [1, n_planes + 1). Planes
+    ! n_planes and 1 are neighbours when the series repeats.
+    position = modulo(t/self%plane_dt - 1._dp, real(n_planes, dp)) + 1._dp
+    n0 = min(int(position), n_planes)
+    frac = position - n0
+    n1 = mod(n0, n_planes) + 1
+
+    slot0 = self%block_slot((n0 - 1)/self%ntimesteps + 1, 0)
+    slot1 = self%block_slot((n1 - 1)/self%ntimesteps + 1, slot0)
+    i0 = mod(n0 - 1, self%ntimesteps) + 1
+    i1 = mod(n1 - 1, self%ntimesteps) + 1
+
+    ! Plane i of each block is a strided section; loop rather than form
+    ! array temporaries
+    do k = 1, size(u, 2)
+      do j = 1, size(u, 1)
+        u(j, k) = (1._dp - frac)*self%blocks(slot0)%u(i0, j, k) &
+                  + frac*self%blocks(slot1)%u(i1, j, k)
+        v(j, k) = (1._dp - frac)*self%blocks(slot0)%v(i0, j, k) &
+                  + frac*self%blocks(slot1)%v(i1, j, k)
+        w(j, k) = (1._dp - frac)*self%blocks(slot0)%w(i0, j, k) &
+                  + frac*self%blocks(slot1)%w(i1, j, k)
+      end do
+    end do
+  end subroutine planes_at
+
+  integer function block_slot(self, id, keep) result(slot)
+    !! Slot holding file `id`, reading it into the slot other than `keep`
+    !! if it is not loaded yet
+    class(inflow_plane_reader_t), intent(inout) :: self
+    integer, intent(in) :: id, keep
+
+    real(dp), allocatable :: times(:)
+    real(dp) :: plane_dt
+
+    do slot = 1, 2
+      if (self%blocks(slot)%id == id) return
+    end do
+
+    slot = 1
+    if (keep == 1) slot = 2
+
+    call read_inflow_block( &
+      inflow_file_name(self%cfg%inflow_read_prefix, id), self%mesh, &
+      self%blocks(slot)%u, self%blocks(slot)%v, self%blocks(slot)%w, &
+      times, plane_dt)
+    self%blocks(slot)%id = id
+
+    if (size(times) /= self%ntimesteps .or. &
+        abs(plane_dt - self%plane_dt) > 1e-12_dp*self%plane_dt) then
+      error stop 'Inflow planes: all files need the same plane count &
+                 &and spacing.'
+    end if
+  end function block_slot
 
 end module m_inflow_planes
