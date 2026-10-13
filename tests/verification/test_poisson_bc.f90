@@ -181,8 +181,8 @@ program test_poisson
   ! Optional --bc <code> restricts the run to the one configuration with that
   ! code: one letter per direction in x,y,z order, d = dirichlet, n = neumann,
   ! p = periodic (ppp, pdp, dpp, ddp). This is what lets a multi rank run
-  ! exercise dpp without tripping the single rank stops still in place for pdp
-  ! and ddp in src/poisson_fft.f90. With no argument every configuration runs,
+  ! exercise dpp or ddp without tripping the multi rank stop still in place for
+  ! pdp in src/poisson_fft.f90. With no argument every configuration runs,
   ! as before.
   only_bc = 'all'
   nproc_dir = [1, 1, nproc]
