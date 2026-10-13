@@ -28,7 +28,6 @@ module m_omptgt_backend
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t, tdsops_t
 
-  use m_omptgt_allocator, only: omptgt_field_t
   use m_omptgt_common, only: SZ, dev_alloc, dev_free, dev_upload, &
                              dev_download
   use m_omptgt_exec_dist, only: exec_dist_transeq_3fused, &
@@ -1394,26 +1393,28 @@ contains
     !! Views the device storage of `u` as an array of its current shape. The
     !! pointer holds a device address: pass it to a kernel, never index it on
     !! the host.
+    !!
+    !! The storage is reached through the type-bound get_dev_ptr, which
+    !! omptgt_field_t overrides, rather than a select type: CCE was seen to
+    !! take the class default branch of a select type here for a field that
+    !! was an omptgt_field_t (perf_transeq, whose fields are host associated
+    !! into an internal procedure), while dispatching on the same field
+    !! worked.
+    use iso_c_binding, only: c_ptr, c_associated, c_f_pointer
+
     real(dp), pointer, contiguous, dimension(:, :, :), intent(out) :: u_dev
     class(field_t), intent(in) :: u
 
-    select type (u)
-    type is (omptgt_field_t)
-      call c_f_pointer_dev(u, u_dev)
-    class default
-      error stop 'omptgt backend: field is not an omptgt_field_t.'
-    end select
+    type(c_ptr) :: ptr
+
+    ptr = u%get_dev_ptr()
+    if (.not. c_associated(ptr)) then
+      print '(a,i0,a,i0)', 'omptgt backend: field id ', u%id, ', dir ', &
+        u%dir
+      error stop 'omptgt backend: field has no device storage.'
+    end if
+    call c_f_pointer(ptr, u_dev, u%get_shape())
 
   end subroutine resolve_field_t
-
-  subroutine c_f_pointer_dev(u, u_dev)
-    use iso_c_binding, only: c_f_pointer
-
-    type(omptgt_field_t), intent(in) :: u
-    real(dp), pointer, contiguous, dimension(:, :, :), intent(out) :: u_dev
-
-    call c_f_pointer(u%get_dev_ptr(), u_dev, u%get_shape())
-
-  end subroutine c_f_pointer_dev
 
 end module m_omptgt_backend
