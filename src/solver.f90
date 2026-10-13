@@ -7,13 +7,14 @@ module m_solver
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_Z2C, RDR_C2Z, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL, &
-                      X_FACE, Y_FACE, BC_NEUMANN, BC_DIRICHLET
+                      X_FACE, Y_FACE, BC_DIRICHLET
   use m_config, only: solver_config_t, les_config_t
   use m_field, only: field_t, flist_t
   use m_ibm, only: ibm_t
   use m_les, only: les_t
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t, tdsops_t
+  use m_tdsops_setup, only: allocate_tdsops
   use m_time_integrator, only: time_intg_t
   use m_vector_calculus, only: vector_calculus_t
 
@@ -243,117 +244,6 @@ contains
     end if
 
   end function init
-
-  subroutine allocate_tdsops(dirps, backend, mesh, der1st_scheme, &
-                             der2nd_scheme, interpl_scheme, stagder_scheme, &
-                             c_nu, nu0_nu, filter_alpha)
-    type(dirps_t), intent(inout) :: dirps
-    class(base_backend_t), intent(in) :: backend
-    type(mesh_t), intent(in) :: mesh
-    character(*), intent(in) :: der1st_scheme, der2nd_scheme, &
-                                interpl_scheme, stagder_scheme
-    !! hyperviscous (iSVV) der2nd params; only required when der2nd_scheme is
-    !! 'compact6-hyperviscous'.
-    real(dp), optional, intent(in) :: c_nu, nu0_nu
-    !! When present, also build the low-pass filter operators for this
-    !! direction. Absent means the case does not filter.
-    real(dp), optional, intent(in) :: filter_alpha
-
-    integer :: dir, bc_start, bc_end, bc_mp_start, bc_mp_end, n_vert, n_cell, i
-    real(dp) :: d
-
-    dir = dirps%dir
-    d = mesh%geo%d(dir)
-
-    bc_start = mesh%grid%BCs(dir, 1)
-    bc_end = mesh%grid%BCs(dir, 2)
-
-    ! For the FFT based poisson solver, the BC for the pressure has to be
-    ! Neumann. This is not strictly compatible with Navier-Stokes equations,
-    ! but it does not affect the quality of the simulation.
-    ! Thus, if the BC is Dirichlet, we enforce Neumann for the midpoint &
-    ! operators. (It could be BC_HALO too, if so we just keep it as is)
-    if (bc_start == BC_DIRICHLET) then
-      bc_mp_start = BC_NEUMANN
-    else
-      bc_mp_start = bc_start
-    end if
-    if (bc_end == BC_DIRICHLET) then
-      bc_mp_end = BC_NEUMANN
-    else
-      bc_mp_end = bc_end
-    end if
-
-    n_vert = mesh%get_n(dir, VERT)
-    n_cell = mesh%get_n(dir, CELL)
-
-    call backend%alloc_tdsops( &
-      dirps%der1st, n_vert, d, 'first-deriv', der1st_scheme, &
-      bc_start, bc_end, stretch=mesh%geo%vert_ds(1:n_vert, dir) &
-      )
-    call backend%alloc_tdsops( &
-      dirps%der1st_sym, n_vert, d, 'first-deriv', der1st_scheme, &
-      bc_start, bc_end, stretch=mesh%geo%vert_ds(1:n_vert, dir), &
-      sym=.true. &
-      )
-    call backend%alloc_tdsops( &
-      dirps%der2nd, n_vert, d, 'second-deriv', der2nd_scheme, &
-      bc_start, bc_end, stretch=mesh%geo%vert_ds2(1:n_vert, dir), &
-      stretch_correct=mesh%geo%vert_d2s(1:n_vert, dir), &
-      c_nu=c_nu, nu0_nu=nu0_nu &
-      )
-    call backend%alloc_tdsops( &
-      dirps%der2nd_sym, n_vert, d, 'second-deriv', der2nd_scheme, &
-      bc_start, bc_end, stretch=mesh%geo%vert_ds2(1:n_vert, dir), &
-      stretch_correct=mesh%geo%vert_d2s(1:n_vert, dir), &
-      sym=.true., c_nu=c_nu, nu0_nu=nu0_nu &
-      )
-    call backend%alloc_tdsops( &
-      dirps%stagder_v2p, n_cell, d, 'stag-deriv', stagder_scheme, &
-      bc_mp_start, bc_mp_end, from_to='v2p', &
-      stretch=mesh%geo%midp_ds(1:n_cell, dir) &
-      )
-    call backend%alloc_tdsops( &
-      dirps%stagder_p2v, n_vert, d, 'stag-deriv', stagder_scheme, &
-      bc_mp_start, bc_mp_end, from_to='p2v', &
-      stretch=mesh%geo%vert_ds(1:n_vert, dir) &
-      )
-    call backend%alloc_tdsops( &
-      dirps%interpl_v2p, n_cell, d, 'interpolate', interpl_scheme, &
-      bc_mp_start, bc_mp_end, from_to='v2p', stretch=[(1._dp, i=1, n_cell)] &
-      )
-    call backend%alloc_tdsops( &
-      dirps%interpl_p2v, n_vert, d, 'interpolate', interpl_scheme, &
-      bc_mp_start, bc_mp_end, from_to='p2v', stretch=[(1._dp, i=1, n_vert)] &
-      )
-
-    if (present(filter_alpha)) then
-      ! Same parity split as the first derivatives: the component along this
-      ! direction is odd across a free-slip boundary, the other two even.
-      call backend%alloc_tdsops( &
-        dirps%lowpass, n_vert, d, 'filter', der1st_scheme, &
-        bc_start, bc_end, filter_alpha=filter_alpha &
-        )
-      call backend%alloc_tdsops( &
-        dirps%lowpass_sym, n_vert, d, 'filter', der1st_scheme, &
-        bc_start, bc_end, sym=.true., filter_alpha=filter_alpha &
-        )
-      ! The filter's system is only marginally diagonally dominant as
-      ! filter_alpha approaches 0.5, so the distributed solver's truncation
-      ! is no longer negligible: at Incompact3d's 0.49 it leaves a 1e-3 error
-      ! at zero wavenumber on 64 points. Solve it exactly with Thomas where
-      ! the direction is not decomposed; Thomas is serial along the line.
-      if (mesh%par%nproc_dir(dir) == 1) then
-        dirps%lowpass%prefer_thomas = .true.
-        dirps%lowpass_sym%prefer_thomas = .true.
-      else if (mesh%par%is_root()) then
-        print *, 'WARNING: the low-pass filter is decomposed in direction ', &
-          dir, '; it does not exactly preserve the mean and its result &
-          &depends on the decomposition.'
-      end if
-    end if
-
-  end subroutine
 
   subroutine transeq_default(self, rhs, variables)
     !! Skew-symmetric form of convection-diffusion terms in the
