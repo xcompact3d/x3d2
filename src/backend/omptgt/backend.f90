@@ -28,6 +28,9 @@ module m_omptgt_backend
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t, tdsops_t
 
+  use omp_lib, only: omp_get_default_device
+
+  use m_omptgt_device_info, only: query_device_memory
   use m_omptgt_common, only: SZ, dev_alloc, dev_free, dev_upload, &
                              dev_download
   use m_omptgt_exec_dist, only: exec_dist_transeq_3fused, &
@@ -216,18 +219,18 @@ contains
 
   subroutine get_device_bw_info_omptgt(self, mem_clock_rt, mem_bus_width, &
                                        available)
-    !! Reports no memory bandwidth figures: OpenMP offers no portable query
-    !! for the memory clock or bus width of the target device, and this
-    !! backend deliberately does not reach past OpenMP to a vendor runtime.
+    !! Reports the memory clock rate (kHz) and bus width (bits) of the
+    !! default device. OpenMP has no query for them, so they come from the
+    !! vendor runtime (see m_omptgt_device_info); available is false when
+    !! that runtime cannot be found.
 
     class(omptgt_backend_t) :: self
     integer, intent(out) :: mem_clock_rt
     integer, intent(out) :: mem_bus_width
     logical, intent(out) :: available
 
-    mem_clock_rt = 0
-    mem_bus_width = 0
-    available = .false.
+    call query_device_memory(omp_get_default_device(), mem_clock_rt, &
+                             mem_bus_width, available)
 
   end subroutine get_device_bw_info_omptgt
 

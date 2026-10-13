@@ -63,6 +63,7 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   list(APPEND SRC
     backend/omptgt/common.f90
     backend/omptgt/allocator.f90
+    backend/omptgt/device_info.f90
     backend/omptgt/exec_dist.f90
     backend/omptgt/exec_thom.f90
     backend/omptgt/kernels/distributed.f90
@@ -200,6 +201,8 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   endif()
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   add_definitions("-DOMP_TGT")
+  # backend/omptgt/device_info.f90 opens the vendor runtime with dlopen
+  target_link_libraries(x3d2 PUBLIC ${CMAKE_DL_LIBS})
   if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
     set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
     add_definitions("-DOMP_TGT_NVIDIA")
