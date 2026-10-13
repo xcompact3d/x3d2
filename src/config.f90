@@ -94,6 +94,19 @@ module m_config
     procedure :: read => read_abl_nml
   end type abl_config_t
 
+  type, extends(base_config_t) :: inflow_config_t
+    !! Precursor inflow planes (docs/source/user/input_file.rst)
+    logical :: write_planes = .false.  !! sample and write y-z planes
+    !> Global x vertex index of the sampling plane; 0 selects the last one
+    integer :: plane_x_index = 0
+    integer :: ntimesteps = 100        !! planes per file
+    integer :: sample_every = 1        !! iterations between samples
+    integer :: start_iter = 0          !! first sample at start_iter + sample_every
+    character(len=256) :: inflow_prefix = 'inflow'
+  contains
+    procedure :: read => read_inflow_nml
+  end type inflow_config_t
+
   type, extends(base_config_t) :: stats_config_t
     integer :: initstat = 0          !! iteration to start accumulating (0 = disabled)
     integer :: istatfreq = 1         !! accumulate every N steps
@@ -538,6 +551,66 @@ contains
     self%snapshot_sp = snapshot_sp
     self%output_fields = output_fields
   end subroutine read_checkpoint_nml
+
+  subroutine read_inflow_nml(self, nml_file, nml_string)
+    !! The namelist is optional: a missing inflow_nml keeps the defaults.
+    implicit none
+
+    class(inflow_config_t) :: self
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
+
+    integer :: unit, ierr
+
+    logical :: write_planes
+    integer :: plane_x_index, ntimesteps, sample_every, start_iter
+    character(len=256) :: inflow_prefix
+
+    namelist /inflow_nml/ write_planes, plane_x_index, ntimesteps, &
+      sample_every, start_iter, inflow_prefix
+
+    write_planes = .false.
+    plane_x_index = 0
+    ntimesteps = 100
+    sample_every = 1
+    start_iter = 0
+    inflow_prefix = 'inflow'
+
+    if (present(nml_file) .and. present(nml_string)) then
+      error stop 'Reading inflow config failed! &
+                 &Provide only a file name or source, not both.'
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file, iostat=ierr)
+      if (ierr == 0) then
+        read (unit, nml=inflow_nml, iostat=ierr)
+        ! -1 is end of file: the namelist is absent
+        if (ierr /= 0 .and. ierr /= -1) &
+          error stop 'Reading inflow config failed! Error in inflow_nml.'
+      end if
+      close (unit)
+    else if (present(nml_string)) then
+      read (nml_string, nml=inflow_nml)
+    else
+      error stop 'Reading inflow config failed! &
+                 &Provide at least one of the following: file name or source'
+    end if
+
+    self%write_planes = write_planes
+    self%plane_x_index = plane_x_index
+    self%ntimesteps = ntimesteps
+    self%sample_every = sample_every
+    self%start_iter = start_iter
+    self%inflow_prefix = trim(inflow_prefix)
+
+    if (self%ntimesteps < 1) &
+      error stop 'inflow_nml: ntimesteps must be at least 1.'
+    if (self%sample_every < 1) &
+      error stop 'inflow_nml: sample_every must be at least 1.'
+    if (self%start_iter < 0) &
+      error stop 'inflow_nml: start_iter must be non-negative.'
+    if (self%plane_x_index < 0) &
+      error stop 'inflow_nml: plane_x_index must be non-negative.'
+  end subroutine read_inflow_nml
 
   subroutine read_stats_nml(self, nml_file, nml_string)
     implicit none

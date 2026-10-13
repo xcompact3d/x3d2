@@ -44,6 +44,7 @@ module m_base_case
     procedure(forcings), deferred :: forcings
     procedure(apply_BC), deferred :: apply_BC
     procedure(postprocess), deferred :: postprocess
+    procedure :: post_step
     procedure :: case_init
     procedure :: case_finalise
     procedure :: set_init
@@ -139,6 +140,16 @@ contains
     call self%io_mgr%finalise()
     call self%solver%finalise()
   end subroutine case_finalise
+
+  subroutine post_step(self, iter, t)
+    !! Called after every completed time step, unlike postprocess which runs
+    !! only every n_output steps. No-op unless a case overrides it.
+    implicit none
+
+    class(base_case_t) :: self
+    integer, intent(in) :: iter
+    real(dp), intent(in) :: t
+  end subroutine post_step
 
   subroutine set_init(self, field, field_func)
     implicit none
@@ -322,6 +333,8 @@ contains
       end if
 
       call self%io_mgr%update_stats(self%solver, iter)
+
+      call self%post_step(iter, iter*self%solver%dt)
 
       if (self%solver%n_output > 0) then
         if (mod(iter, self%solver%n_output) == 0) then

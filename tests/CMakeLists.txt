@@ -290,6 +290,7 @@ if(WITH_ADIOS2)
   define_test(unit/test_adios2_mixed_precision.f90 1 omp)
   define_test(unit/test_io_session.f90 4 omp)
   define_test(unit/test_ab_checkpoint.f90 1 omp)
+  define_test(unit/test_inflow_planes.f90 4 omp)
 endif()
 
 # Verification tests (numerical correctness vs analytical solutions)
@@ -378,6 +379,9 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   define_test(unit/test_device_allocator.f90 1 cuda)
   define_test(unit/test_boundary_planes.f90 1 cuda)
   define_test(unit/test_abl_seed.f90 1 cuda)
+  if(WITH_ADIOS2)
+    define_test(unit/test_inflow_planes.f90 4 cuda)
+  endif()
 
   # CUDA verification tests
   define_verification_test(verification/test_thom.f90 1 cuda)

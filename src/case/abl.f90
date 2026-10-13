@@ -6,8 +6,9 @@ module m_case_abl
   use m_base_case, only: base_case_t
   use m_common, only: dp, get_argument, MPI_X3D2_DP, VERT, Y_FACE, &
                       BC_DIRICHLET, BC_NEUMANN, BC_PERIODIC
-  use m_config, only: abl_config_t
+  use m_config, only: abl_config_t, inflow_config_t
   use m_field, only: field_t
+  use m_inflow_planes, only: inflow_plane_writer_t
   use m_mesh, only: mesh_t
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
@@ -17,12 +18,15 @@ module m_case_abl
     type(abl_config_t) :: abl_cfg
     type(abl_t) :: abl
     type(abl_diagnostics_t) :: diagnostics
+    !> Precursor output: inflow planes for a successor run
+    type(inflow_plane_writer_t) :: inflow_writer
   contains
     procedure :: define_BC => define_BC_abl
     procedure :: initial_conditions => initial_conditions_abl
     procedure :: forcings => forcings_abl
     procedure :: apply_BC => apply_BC_abl
     procedure :: postprocess => postprocess_abl
+    procedure :: post_step => post_step_abl
   end type case_abl_t
 
   interface case_abl_t
@@ -39,6 +43,7 @@ contains
     type(allocator_t), target, intent(inout) :: host_allocator
     type(case_abl_t) :: flow_case
 
+    type(inflow_config_t) :: inflow_cfg
     integer :: bcs(3, 2)
 
     ! apply_BC_abl and the wall model hard-code these boundaries, so the
@@ -57,6 +62,9 @@ contains
     call flow_case%abl%configure_wall_boundary_correction(flow_case%solver%les)
     flow_case%diagnostics = abl_diagnostics_t(backend, mesh, &
                                               flow_case%abl_cfg)
+    call inflow_cfg%read(nml_file=get_argument(1))
+    flow_case%inflow_writer = inflow_plane_writer_t( &
+                              backend, mesh, inflow_cfg, flow_case%solver%dt)
 
   end function case_abl_init
 
@@ -166,5 +174,17 @@ contains
       iter, t, self%solver%u, self%solver%v, self%solver%w)
 
   end subroutine postprocess_abl
+
+  subroutine post_step_abl(self, iter, t)
+    implicit none
+
+    class(case_abl_t) :: self
+    integer, intent(in) :: iter
+    real(dp), intent(in) :: t
+
+    call self%inflow_writer%sample( &
+      iter, t, self%solver%u, self%solver%v, self%solver%w)
+
+  end subroutine post_step_abl
 
 end module m_case_abl
