@@ -22,8 +22,8 @@ contains
     integer :: req(4), err(4), ierr, tag = 1234
 
     if (nproc == 1) then
-      f_recv_s = f_send_e
-      f_recv_e = f_send_s
+      call copy_halo(f_recv_s, f_send_e, n_data)
+      call copy_halo(f_recv_e, f_send_s, n_data)
     else
       ! Ensure the send buffers are ready before MPI touches device memory.
       ierr = cudaStreamSynchronize(default_stream)
@@ -60,12 +60,12 @@ contains
     integer :: req(12), err(12), ierr, tag = 1234
 
     if (nproc == 1) then
-      f1_recv_s = f1_send_e
-      f1_recv_e = f1_send_s
-      f2_recv_s = f2_send_e
-      f2_recv_e = f2_send_s
-      f3_recv_s = f3_send_e
-      f3_recv_e = f3_send_s
+      call copy_halo(f1_recv_s, f1_send_e, n_data)
+      call copy_halo(f1_recv_e, f1_send_s, n_data)
+      call copy_halo(f2_recv_s, f2_send_e, n_data)
+      call copy_halo(f2_recv_e, f2_send_s, n_data)
+      call copy_halo(f3_recv_s, f3_send_e, n_data)
+      call copy_halo(f3_recv_e, f3_send_s, n_data)
     else
       ! Ensure the send buffers are ready before MPI touches device memory.
       ierr = cudaStreamSynchronize(default_stream)
@@ -103,5 +103,32 @@ contains
     end if
 
   end subroutine sendrecv_3fields
+
+  subroutine copy_halo(dst, src, n_data)
+    !! Periodic wrap-around on a single rank: copies the first n_data
+    !! elements of a halo buffer, the groups of the direction being
+    !! exchanged. The buffers are sized for the direction with the most
+    !! groups, so a whole-array assignment would copy that maximum on every
+    !! exchange (16 times the data in use on an elongated mesh).
+    implicit none
+
+    real(dp), device, contiguous, dimension(:, :, :), intent(inout) :: dst
+    real(dp), device, contiguous, dimension(:, :, :), intent(in) :: src
+    integer, intent(in) :: n_data
+
+    integer :: ierr
+
+    if (n_data > size(src) .or. n_data > size(dst)) then
+      error stop 'copy_halo: n_data exceeds the halo buffer.'
+    end if
+
+    ! Default stream, so it stays ordered with the kernels around it
+    ierr = cudaMemcpyAsync(dst, src, n_data, default_stream)
+    if (ierr /= cudaSuccess) then
+      print *, 'CUDA error: ', trim(cudaGetErrorString(ierr))
+      error stop 'copy_halo: device to device copy failed.'
+    end if
+
+  end subroutine copy_halo
 
 end module m_cuda_sendrecv
