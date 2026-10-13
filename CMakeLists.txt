@@ -67,9 +67,9 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA" OR ${ENABLE_BACKEND} STREQUAL "OMP_TGT")
 endif()
 # NVHPC picks the CUDA toolkit matching the installed driver. On a node without
 # a GPU (driver version 0) it falls back to its configured default, which may
-# not be bundled with the SDK. Naming a bundled version (e.g. 12.6) lets the
-# code compile without a GPU.
-set(BACKEND_CUDA_VERSION "" CACHE STRING "CUDA toolkit version for NVHPC -gpu=cudaX.Y (empty: compiler default)")
+# not be bundled with the SDK. Naming a bundled version (e.g. 12.6) is a
+# fallback for that case and lets the code compile without a GPU.
+set(BACKEND_CUDA_VERSION "" CACHE STRING "Fallback CUDA toolkit version for NVHPC -gpu=cudaX.Y (empty: compiler default)")
 set(NVHPC_GPU_FLAG "-gpu=${BACKEND_ARCH}")
 if (NOT "${BACKEND_CUDA_VERSION}" STREQUAL "")
   set(NVHPC_GPU_FLAG "${NVHPC_GPU_FLAG},cuda${BACKEND_CUDA_VERSION}")
@@ -90,6 +90,9 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
      ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
     if(NOT BACKEND_ARCH MATCHES "^gfx[0-9]+[a-f]?$")
       message(FATAL_ERROR "For AMD GPU, BACKEND_ARCH must be specified as gfxXXX")
+    endif()
+    if(NOT "${BACKEND_CUDA_VERSION}" STREQUAL "")
+      message(WARNING "BACKEND_CUDA_VERSION applies to NVHPC only and is ignored with ${CMAKE_Fortran_COMPILER_ID}")
     endif()
   endif()
   if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
