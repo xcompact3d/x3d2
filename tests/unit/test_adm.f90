@@ -6,32 +6,19 @@ program test_adm
 
   use m_adm, only: adm_t
   use m_allocator, only: allocator_t
+  use m_backend_runtime, only: backend_runtime_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, pi, DIR_C, DIR_X, VERT
   use m_field, only: field_t
   use m_mesh, only: mesh_t
-#ifdef CUDA
-  use m_cuda_allocator, only: cuda_allocator_t
-  use m_cuda_backend, only: cuda_backend_t
-  use m_cuda_common, only: SZ
-#else
-  use m_omp_backend, only: omp_backend_t
-  use m_omp_common, only: SZ
-#endif
 
   implicit none
 
   class(base_backend_t), pointer :: backend
   class(allocator_t), pointer :: allocator
-  type(allocator_t), target :: host_allocator
-  class(mesh_t), allocatable, target :: mesh
-#ifdef CUDA
-  type(cuda_allocator_t), target :: cuda_allocator
-  type(cuda_backend_t), target :: cuda_backend
-#else
-  type(allocator_t), target :: omp_allocator
-  type(omp_backend_t), target :: omp_backend
-#endif
+  class(allocator_t), pointer :: host_allocator
+  type(mesh_t), target :: mesh
+  type(backend_runtime_t), target :: runtime
   type(adm_t) :: adm
   class(field_t), pointer :: u, v, w, du, dv, dw, host_data
   character(len=8) :: periodic_bcs(2)
@@ -48,19 +35,10 @@ program test_adm
                 [1._dp, 1._dp, 1._dp], &
                 periodic_bcs, periodic_bcs, periodic_bcs)
 
-#ifdef CUDA
-  cuda_allocator = cuda_allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => cuda_allocator
-  host_allocator = allocator_t(mesh%get_dims(VERT), SZ)
-  cuda_backend = cuda_backend_t(mesh, allocator)
-  backend => cuda_backend
-#else
-  omp_allocator = allocator_t(mesh%get_dims(VERT), SZ)
-  allocator => omp_allocator
-  host_allocator = allocator_t(mesh%get_dims(VERT), SZ)
-  omp_backend = omp_backend_t(mesh, allocator)
-  backend => omp_backend
-#endif
+  call runtime%init(mesh, separate_host_allocator=.true.)
+  backend => runtime%backend
+  allocator => runtime%allocator
+  host_allocator => runtime%host_allocator
 
   if (nrank == 0) then
     open (unit=10, file='test_adm.ad', status='replace', action='write')

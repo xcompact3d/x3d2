@@ -3,12 +3,8 @@ program test_allocator_device
 
   use m_allocator, only: allocator_t, field_t
   use m_common, only: DIR_X
-#ifdef CUDA
-  use m_cuda_allocator, only: cuda_allocator_t, cuda_field_t
-#elif defined(OMP_TGT)
-  use m_omptgt_allocator, only: omptgt_allocator_t, omptgt_field_t
-#endif
-  use m_backend_runtime, only: select_device
+  use m_backend_runtime, only: select_device, create_allocator, &
+                               is_device_field
   use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
@@ -22,11 +18,7 @@ program test_allocator_device
   call initialise_mpi(nrank, nproc)
   call select_device(nrank)
 
-#ifdef CUDA
-  allocate (allocator, source=cuda_allocator_t([8, 8, 8], 8))
-#elif defined(OMP_TGT)
-  allocate (allocator, source=omptgt_allocator_t([8, 8, 8], 8))
-#endif
+  call create_allocator(allocator, [8, 8, 8], 8)
 
   allpass = .true.
 
@@ -42,17 +34,12 @@ program test_allocator_device
 
   ! The allocator must hand out device-resident fields, not host ones.
   ptr1 => allocator%get_block(DIR_X)
-  select type (ptr1)
-#ifdef CUDA
-  type is (cuda_field_t)
-#elif defined(OMP_TGT)
-  type is (omptgt_field_t)
-#endif
+  if (is_device_field(ptr1)) then
     write (stderr, '(a)') 'Blocks are device fields... passed'
-  class default
+  else
     allpass = .false.
     write (stderr, '(a)') 'Blocks are device fields... failed'
-  end select
+  end if
   call allocator%release_block(ptr1)
   call allocator%destroy()
 

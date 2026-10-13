@@ -199,6 +199,21 @@ The build passes the name to the selected compiler in the form it expects, for
 example ``-gpu=cc80`` for NVHPC and ``--offload-arch=gfx942`` for GNU and
 Flang. See :doc:`user/advanced_build` for the per-compiler details.
 
+NVHPC compiles against the CUDA toolkit that matches the installed driver. On a
+node without a GPU, such as a login node, there is no driver and nvfortran
+falls back to the default version configured for the SDK, which may not be
+bundled with it. The build then fails with ``CUDA version X.Y is not available
+in this installation``. As a fallback, name a toolkit bundled with the SDK
+(listed under ``<nvhpc>/cuda/``) with ``BACKEND_CUDA_VERSION``:
+
+.. code-block:: bash
+
+   -DENABLE_BACKEND=CUDA -DBACKEND_ARCH=cc70 -DBACKEND_CUDA_VERSION=12.6
+
+The build then passes ``-gpu=cc70,cuda12.6``. Pick a version the driver on the
+GPU nodes supports; ``nvidia-smi`` on a GPU node shows the newest one. The
+option applies to the CUDA backend and to OMP_TGT with NVHPC only.
+
 Build options
 ~~~~~~~~~~~~~
 
@@ -224,6 +239,11 @@ Build options
      - --
      - Target GPU architecture, required whenever ``ENABLE_BACKEND`` is not
        ``OFF``: ``cc80`` (A100), ``cc90`` (H100), ``gfx942`` (MI300X).
+   * - ``BACKEND_CUDA_VERSION``
+     - --
+     - NVHPC only. CUDA toolkit to compile against, e.g. ``12.6``, as a
+       fallback when the default one is not found, such as when building on a
+       node without a GPU. Empty uses the compiler's choice.
    * - ``SINGLE_PREC``
      - ``OFF``
      - Build in single precision.

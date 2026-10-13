@@ -16,33 +16,20 @@ program test_boundary_planes
   use m_mpi, only: MPI_Init, MPI_Finalize
 
   use m_allocator, only: allocator_t
+  use m_backend_runtime, only: backend_runtime_t, SZ => backend_sz
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X, DIR_C, VERT, CELL, X_FACE, Y_FACE, &
                       BC_DIRICHLET, BC_NEUMANN
   use m_field, only: field_t
   use m_mesh, only: mesh_t
 
-#ifdef CUDA
-  use m_cuda_allocator, only: cuda_allocator_t
-  use m_cuda_backend, only: cuda_backend_t
-  use m_cuda_common, only: SZ
-#else
-  use m_omp_backend, only: omp_backend_t
-  use m_omp_common, only: SZ
-#endif
 
   implicit none
 
+  type(backend_runtime_t), target :: runtime
   type(mesh_t), target :: mesh
   class(allocator_t), pointer :: allocator
   class(base_backend_t), pointer :: backend
-#ifdef CUDA
-  type(cuda_allocator_t), target :: cuda_allocator
-  type(cuda_backend_t), target :: cuda_backend
-#else
-  type(allocator_t), target :: omp_allocator
-  type(omp_backend_t), target :: omp_backend
-#endif
   class(field_t), pointer :: f, f_start
 
   ! ny is not a multiple of either backend's SZ, so the last y-block is
@@ -69,17 +56,9 @@ program test_boundary_planes
                 bc_periodic, bc_slip, bc_periodic)
   dims = mesh%get_dims(VERT)
 
-#ifdef CUDA
-  cuda_allocator = cuda_allocator_t(dims, SZ)
-  allocator => cuda_allocator
-  cuda_backend = cuda_backend_t(mesh, allocator)
-  backend => cuda_backend
-#else
-  omp_allocator = allocator_t(dims, SZ)
-  allocator => omp_allocator
-  omp_backend = omp_backend_t(mesh, allocator)
-  backend => omp_backend
-#endif
+  call runtime%init(mesh)
+  allocator => runtime%allocator
+  backend => runtime%backend
 
   if (dims(2) <= SZ) error stop &
     'test_boundary_planes needs ny > SZ to distinguish the group orderings.'

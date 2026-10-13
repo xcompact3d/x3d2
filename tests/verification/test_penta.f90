@@ -1,6 +1,5 @@
-program test_omp_penta
-  !! Verification test for the compact10_penta pentadiagonal first-derivative
-  !! on the CPU/OMP backend.
+program test_penta
+  !! Verification test for the compact10_penta pentadiagonal first-derivative.
   !!
   !! Runs four grid-refinement convergence studies:
   !!   1. BC_DIRICHLET: f = sin^3(pi*x),    require rate >= 4.
@@ -14,10 +13,11 @@ program test_omp_penta
   use iso_fortran_env, only: stderr => error_unit
   use m_mpi, only: MPI_COMM_WORLD, MPI_SUM, MPI_Allreduce
 
+  use m_backend_runtime, only: backend_runtime_t, penta_solve, SZ => backend_sz
+  use m_base_backend, only: base_backend_t
   use m_common, only: dp, pi, MPI_X3D2_DP, BC_PERIODIC, BC_DIRICHLET, BC_NEUMANN
-  use m_omp_common, only: SZ
-  use m_omp_exec_dist, only: exec_dist_penta_compact, exec_dist_penta_periodic
-  use m_tdsops, only: tdsops_t, tdsops_init
+  use m_mesh, only: mesh_t
+  use m_tdsops, only: tdsops_t
   use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
@@ -25,8 +25,29 @@ program test_omp_penta
   logical :: allpass = .true.
   integer :: nrank, nproc, ierr
 
+  type(backend_runtime_t), target :: runtime
+  type(mesh_t), target :: mesh
+  class(base_backend_t), pointer :: backend
+
+  ! One operator per solve, never deallocated: NVHPC (25.3) crashes in
+  ! pgf90_dealloc_poly03 when a class(tdsops_t) holding a cuda_tdsops_t is
+  ! deallocated.
+  type :: tdsops_slot_t
+    class(tdsops_t), allocatable :: op
+  end type tdsops_slot_t
+  type(tdsops_slot_t) :: ops(32)
+  integer :: n_ops = 0
+
   call initialise_mpi(nrank, nproc)
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
+
+  ! The backend is only needed to build backend-specific tdsops; every rank
+  ! solves the whole line on its own.
+  mesh = mesh_t([SZ, SZ, SZ], [1, 1, 1], [1._dp, 1._dp, 1._dp], &
+                ['periodic', 'periodic'], ['periodic', 'periodic'], &
+                ['periodic', 'periodic'])
+  call runtime%init(mesh)
+  backend => runtime%backend
 
   call run_dirichlet_test()
   call run_neumann_sym_true()
@@ -49,7 +70,6 @@ contains
     integer :: isize, n_glob, n, n_block, n_halo
     real(dp) :: dx, l2_err, l2_prev, l2_int, l2_int_prev
     real(dp), allocatable, dimension(:, :, :) :: u, du, u_s, u_e
-    type(tdsops_t) :: tdsops
 
     n_block = 1; n_halo = 4; l2_prev = 0._dp; l2_int_prev = 0._dp
 
@@ -68,10 +88,12 @@ contains
       call fill_interior(u, n, n_block, dx, 0, 'sin3')
       u_s(:, :, :) = 0._dp
       u_e(:, :, :) = 0._dp
-      tdsops = tdsops_init(n, dx, operation='first-deriv', &
+      n_ops = n_ops + 1
+      call backend%alloc_tdsops(ops(n_ops)%op, n, dx, &
+                                operation='first-deriv', &
                            scheme='compact10_penta', &
                            bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET)
-      call exec_dist_penta_compact(du, u, u_s, u_e, tdsops, n_block)
+      call penta_solve(du, u, u_s, u_e, ops(n_ops)%op, periodic=.false.)
       l2_err = l2_norm(du, n, n_block, dx, 0, nproc, '3pi_sin2cos')
       call report_rate(l2_err, l2_prev, n_glob, isize, real(min_rate_tol, dp), &
                        'BC_DIRICHLET')
@@ -98,10 +120,12 @@ contains
       call fill_interior(u, n, n_block, dx, 0, 'sin3')
       u_s(:, :, :) = 0._dp
       u_e(:, :, :) = 0._dp
-      tdsops = tdsops_init(n, dx, operation='first-deriv', &
+      n_ops = n_ops + 1
+      call backend%alloc_tdsops(ops(n_ops)%op, n, dx, &
+                                operation='first-deriv', &
                            scheme='compact10_penta', &
                            bc_start=BC_DIRICHLET, bc_end=BC_DIRICHLET)
-      call exec_dist_penta_compact(du, u, u_s, u_e, tdsops, n_block)
+      call penta_solve(du, u, u_s, u_e, ops(n_ops)%op, periodic=.false.)
       l2_int = l2_norm_interior(du, n, n_block, dx, 0, nproc, '3pi_sin2cos', n_skip)
       if (nrank == 0) then
         if (isize == 1) then
@@ -128,7 +152,6 @@ contains
     integer :: isize, n_glob, n, n_block, n_halo
     real(dp) :: dx, l2_err, l2_prev
     real(dp), allocatable, dimension(:, :, :) :: u, du, u_s, u_e
-    type(tdsops_t) :: tdsops
 
     n_block = 1; n_halo = 4; l2_prev = 0._dp
 
@@ -155,11 +178,13 @@ contains
       u_e(:, 2, :) = u(:, n - 2, :) ! f(1+2h) = f(1-2h) = u_{N-2}
       u_e(:, 3, :) = u(:, n - 3, :) ! f(1+3h) = f(1-3h) = u_{N-3}
       u_e(:, 4, :) = u(:, n - 4, :) ! (coeff=0, fill anyway)
-      tdsops = tdsops_init(n, dx, operation='first-deriv', &
+      n_ops = n_ops + 1
+      call backend%alloc_tdsops(ops(n_ops)%op, n, dx, &
+                                operation='first-deriv', &
                            scheme='compact10_penta', &
                            bc_start=BC_NEUMANN, bc_end=BC_NEUMANN, &
                            sym=.true.)
-      call exec_dist_penta_compact(du, u, u_s, u_e, tdsops, n_block)
+      call penta_solve(du, u, u_s, u_e, ops(n_ops)%op, periodic=.false.)
       l2_err = l2_norm_wall(du, n, n_block, dx, 0, nproc, 'neg10pi_sin10')
       call report_rate(l2_err, l2_prev, n_glob, isize, min_rate_tol, &
                        'BC_NEUMANN sym=T')
@@ -180,7 +205,6 @@ contains
     integer :: isize, n_glob, n, n_block, n_halo
     real(dp) :: dx, l2_err, l2_prev
     real(dp), allocatable, dimension(:, :, :) :: u, du, u_s, u_e
-    type(tdsops_t) :: tdsops
 
     n_block = 1; n_halo = 4; l2_prev = 0._dp
 
@@ -207,11 +231,13 @@ contains
       u_e(:, 2, :) = -u(:, n - 2, :) ! f(1+2h) = -f(1-2h) = -u_{N-2}
       u_e(:, 3, :) = -u(:, n - 3, :) ! f(1+3h) = -f(1-3h) = -u_{N-3}
       u_e(:, 4, :) = -u(:, n - 4, :) ! (coeff=0, fill anyway)
-      tdsops = tdsops_init(n, dx, operation='first-deriv', &
+      n_ops = n_ops + 1
+      call backend%alloc_tdsops(ops(n_ops)%op, n, dx, &
+                                operation='first-deriv', &
                            scheme='compact10_penta', &
                            bc_start=BC_NEUMANN, bc_end=BC_NEUMANN, &
                            sym=.false.)
-      call exec_dist_penta_compact(du, u, u_s, u_e, tdsops, n_block)
+      call penta_solve(du, u, u_s, u_e, ops(n_ops)%op, periodic=.false.)
       l2_err = l2_norm_wall(du, n, n_block, dx, 0, nproc, '10pi_cos10')
       call report_rate(l2_err, l2_prev, n_glob, isize, min_rate_tol, &
                        'BC_NEUMANN sym=F')
@@ -360,7 +386,6 @@ contains
     integer :: isize, n_glob, n, n_block, n_halo
     real(dp) :: dx, l2_err, l2_prev, rate
     real(dp), allocatable, dimension(:, :, :) :: u, du, u_s, u_e
-    type(tdsops_t) :: tdsops
 
     n_block = 1; n_halo = 4; l2_prev = 0._dp
 
@@ -386,10 +411,12 @@ contains
       u_e(:, 2, :) = u(:, 2, :)       ! x_{j+2} for j=n: x_2
       u_e(:, 3, :) = u(:, 3, :)       ! x_{j+3} for j=n: x_3
       u_e(:, 4, :) = u(:, 4, :)       ! x_{j+4} for j=n: x_4
-      tdsops = tdsops_init(n, dx, operation='first-deriv', &
+      n_ops = n_ops + 1
+      call backend%alloc_tdsops(ops(n_ops)%op, n, dx, &
+                                operation='first-deriv', &
                            scheme='compact10_penta', &
                            bc_start=BC_PERIODIC, bc_end=BC_PERIODIC)
-      call exec_dist_penta_periodic(du, u, u_s, u_e, tdsops, n_block)
+      call penta_solve(du, u, u_s, u_e, ops(n_ops)%op, periodic=.true.)
       l2_err = l2_norm(du, n, n_block, dx, 0, nproc, 'per_deriv')
       if (nrank == 0) then
         if (isize == 1) then
@@ -455,4 +482,4 @@ contains
                         200._dp*epsilon(1._dp)*real(n_glob, dp))
   end function converged_tol
 
-end program test_omp_penta
+end program test_penta

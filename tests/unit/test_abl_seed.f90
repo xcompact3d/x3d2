@@ -5,33 +5,21 @@ program test_abl_seed
 
   use m_abl, only: abl_t
   use m_allocator, only: allocator_t
+  use m_backend_runtime, only: backend_runtime_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X, DIR_C, VERT
   use m_config, only: abl_config_t
   use m_field, only: field_t
   use m_mesh, only: mesh_t
 
-#ifdef CUDA
-  use m_cuda_allocator, only: cuda_allocator_t
-  use m_cuda_backend, only: cuda_backend_t
-  use m_cuda_common, only: SZ
-#else
-  use m_omp_backend, only: omp_backend_t
-  use m_omp_common, only: SZ
-#endif
 
   implicit none
 
+  type(backend_runtime_t), target :: runtime
   type(mesh_t), target :: mesh
   class(allocator_t), pointer :: allocator
   class(base_backend_t), pointer :: backend
-  type(allocator_t), target :: host_allocator
-#ifdef CUDA
-  type(cuda_allocator_t), target :: cuda_allocator
-  type(cuda_backend_t), target :: cuda_backend
-#else
-  type(omp_backend_t), target :: omp_backend
-#endif
+  type(allocator_t), pointer :: host_allocator
   class(field_t), pointer :: u, v, w
 
   integer, parameter :: dims_global(3) = [16, 17, 8]
@@ -52,17 +40,10 @@ program test_abl_seed
                 bc_periodic, bc_wall, bc_periodic)
   dims = mesh%get_dims(VERT)
 
-  host_allocator = allocator_t(dims, SZ)
-#ifdef CUDA
-  cuda_allocator = cuda_allocator_t(dims, SZ)
-  allocator => cuda_allocator
-  cuda_backend = cuda_backend_t(mesh, allocator)
-  backend => cuda_backend
-#else
-  allocator => host_allocator
-  omp_backend = omp_backend_t(mesh, allocator)
-  backend => omp_backend
-#endif
+  call runtime%init(mesh)
+  allocator => runtime%allocator
+  backend => runtime%backend
+  host_allocator => runtime%host_allocator
 
   dims_padded = allocator%get_padded_dims(DIR_C)
   allocate (first(dims_padded(1), dims_padded(2), dims_padded(3), 3))
