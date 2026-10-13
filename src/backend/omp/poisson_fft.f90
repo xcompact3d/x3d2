@@ -242,19 +242,11 @@ contains
     class(omp_poisson_fft_t) :: self
     class(field_t), intent(in) :: f_in
 
-    call decomp_2d_fft_3d(f_in%data, self%c_x)
+    call decomp_2d_fft_3d( &
+      f_in%data(1:self%nx_loc, 1:self%ny_loc, 1:self%nz_loc), self%c_x &
+      )
 
   end subroutine fft_forward_omp
-
-  subroutine fft_forward_010_omp(self, f_in)
-    implicit none
-
-    class(omp_poisson_fft_t) :: self
-    class(field_t), intent(in) :: f_in
-
-    error stop 'OpenMP backend does not support fft_forward_010 yet!'
-
-  end subroutine fft_forward_010_omp
 
   subroutine fft_forward_100_omp(self, f_in)
     !! Forward FFT for the non-periodic x case.
@@ -389,19 +381,11 @@ contains
     class(omp_poisson_fft_t) :: self
     class(field_t), intent(inout) :: f_out
 
-    call decomp_2d_fft_3d(self%c_x, f_out%data)
+    call decomp_2d_fft_3d( &
+      self%c_x, f_out%data(1:self%nx_loc, 1:self%ny_loc, 1:self%nz_loc) &
+      )
 
   end subroutine fft_backward_omp
-
-  subroutine fft_backward_010_omp(self, f_out)
-    implicit none
-
-    class(omp_poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f_out
-
-    error stop 'OpenMP backend does not support fft_backward_010 yet!'
-
-  end subroutine fft_backward_010_omp
 
   subroutine fft_backward_100_omp(self, f_out)
     !! Backward FFT for the non-periodic x case, undoing the x-y transpose

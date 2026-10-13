@@ -1,4 +1,4 @@
-!!! backends/omp/target/allocator.f90
+!!! src/backend/omptgt/allocator.f90
 !!
 !! Implements an allocator specialised to OMP target offloading
 

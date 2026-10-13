@@ -3,7 +3,8 @@ program test_allocator_device
 
   use m_allocator, only: allocator_t, field_t
   use m_common, only: DIR_X
-  use m_backend_runtime, only: select_device
+  use m_backend_runtime, only: select_device, create_allocator, &
+                               is_device_field
   use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
@@ -17,7 +18,7 @@ program test_allocator_device
   call initialise_mpi(nrank, nproc)
   call select_device(nrank)
 
-  allocator = allocator_t([8, 8, 8], 8)
+  call create_allocator(allocator, [8, 8, 8], 8)
 
   allpass = .true.
 
@@ -30,6 +31,17 @@ program test_allocator_device
   else
     write (stderr, '(a)') 'Free list is initialised empty... passed'
   end if
+
+  ! The allocator must hand out device-resident fields, not host ones.
+  ptr1 => allocator%get_block(DIR_X)
+  if (is_device_field(ptr1)) then
+    write (stderr, '(a)') 'Blocks are device fields... passed'
+  else
+    allpass = .false.
+    write (stderr, '(a)') 'Blocks are device fields... failed'
+  end if
+  call allocator%release_block(ptr1)
+  call allocator%destroy()
 
   ! Request two blocks and release them in reverse order.  List should
   ! contain two free blocks. (1 -> 2)

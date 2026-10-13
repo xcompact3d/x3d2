@@ -1,11 +1,10 @@
 module m_case_channel
   use iso_fortran_env, only: stderr => error_unit
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
-  use m_common, only: dp, MPI_X3D2_DP, get_argument, DIR_C, DIR_X, &
+  use m_common, only: dp, get_argument, DIR_C, DIR_X, &
                       VERT, CELL, Y_FACE, BC_DIRICHLET
   use m_config, only: channel_config_t
   use m_field, only: field_t
@@ -65,13 +64,11 @@ contains
     real(dp) :: can, ub
     real(dp) :: noise(3)
     integer :: i, k, dims(3)
-    integer :: ierr
 
+    ! field_volume_integral is already reduced over all ranks.
     ub = self%solver%backend%field_volume_integral(self%solver%u)
 
     ub = ub/(product(self%solver%mesh%get_global_dims(CELL)))
-    call MPI_Allreduce(MPI_IN_PLACE, ub, 1, MPI_X3D2_DP, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
 
     can = 2._dp/3._dp - ub
 

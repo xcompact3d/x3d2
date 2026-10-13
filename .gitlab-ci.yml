@@ -46,13 +46,13 @@ stages:
     - echo "Configure Debug build"
     - cmake -S . -B build-debug -DCMAKE_Fortran_COMPILER=${FORTRAN_COMPILER} -DCMAKE_BUILD_TYPE=Debug -DENABLE_BACKEND=${ENABLE_BACKEND} -DBACKEND_ARCH=${BACKEND_ARCH} -DWITH_MPI=${WITH_MPI} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
     - echo "Build tests"
-    - make -C build-debug
+    - make -j12 -C build-debug
     - echo "Run the tests"
     - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build-debug -L "unit|verification" --output-on-failure --output-junit ctest-junit.xml; fi
     - echo "Configure Release build"
     - cmake -S . -B build -DCMAKE_Fortran_COMPILER=${FORTRAN_COMPILER} -DCMAKE_BUILD_TYPE=Release -DENABLE_BACKEND=${ENABLE_BACKEND} -DBACKEND_ARCH=${BACKEND_ARCH} -DWITH_MPI=${WITH_MPI} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
     - echo "Build tests"
-    - make -C build
+    - make -j12 -C build
     - echo "Run the tests"
     - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build -L "unit|verification" --output-on-failure --output-junit ctest-junit.xml; fi
   # Surface individual test results in the pipeline's Tests tab. Without a

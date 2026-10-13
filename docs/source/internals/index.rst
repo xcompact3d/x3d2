@@ -11,3 +11,4 @@ implemented.
 
    allocator.rst
    data_structure.rst
+   backend_status.rst

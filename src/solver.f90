@@ -7,13 +7,13 @@ module m_solver
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_Z2C, RDR_C2Z, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL, &
-                      BC_NEUMANN, BC_DIRICHLET
+                      X_FACE, Y_FACE, BC_NEUMANN, BC_DIRICHLET
   use m_config, only: solver_config_t, les_config_t
   use m_field, only: field_t, flist_t
   use m_ibm, only: ibm_t
   use m_les, only: les_t
   use m_mesh, only: mesh_t
-  use m_tdsops, only: dirps_t
+  use m_tdsops, only: dirps_t, tdsops_t
   use m_time_integrator, only: time_intg_t
   use m_vector_calculus, only: vector_calculus_t
 
@@ -59,6 +59,16 @@ module m_solver
     class(field_t), pointer :: pressure => null()      !! Pressure on CELL grid (DIR_Z)
     class(field_t), pointer :: pressure_vert => null() !! Pressure on VERT grid (DIR_X)
     logical :: keep_pressure = .false.                 !! If true, persist pressure for output
+    logical :: keep_wall_correction = .false.         !! If true, persist the last pressure gradient for precorrect_walls
+    !> Last projection's velocity correction, kept when the mesh has a
+    !> Dirichlet face so precorrect_walls can reuse it. Only kept when
+    !> keep_wall_correction is set, as it costs three extra fields.
+    class(field_t), pointer :: dpdx_last => null()
+    class(field_t), pointer :: dpdy_last => null()
+    class(field_t), pointer :: dpdz_last => null()
+    !> Substep timestep (time_intg_t%stage_dt) the kept correction was made
+    !> with, so precorrect_walls can rescale it to the current substep.
+    real(dp) :: dp_last_dt = 0._dp
     class(field_t), pointer :: vort => null()  !! Vorticity magnitude on VERT grid
     class(field_t), pointer :: qcrit => null() !! Q-criterion on VERT grid
     type(flist_t), dimension(:), pointer :: species => null()
@@ -72,13 +82,16 @@ module m_solver
     type(ibm_t) :: ibm
     type(les_t) :: les
     logical :: ibm_on
+    logical :: spatial_filter = .false. !! explicit low-pass filter on velocity
     procedure(poisson_solver), pointer :: poisson => null()
     procedure(transport_equation), pointer :: transeq => null()
   contains
     procedure :: transeq_species
     procedure :: apply_les
+    procedure :: apply_spatial_filter
     procedure :: finalise
     procedure :: pressure_correction
+    procedure :: precorrect_walls
     procedure :: divergence_v2p
     procedure :: gradient_p2v
     procedure :: curl
@@ -121,6 +134,7 @@ contains
 
     type(solver_config_t) :: solver_cfg
     type(les_config_t) :: les_cfg
+    real(dp), allocatable :: filter_alpha
     integer :: i
 
     solver%backend => backend
@@ -174,21 +188,29 @@ contains
     solver%n_output = solver_cfg%n_output
     solver%ngrid = product(solver%mesh%get_global_dims(VERT))
 
-    ! Allocate and set the tdsops
+    ! Allocate and set the tdsops. The filter operators are only built when
+    ! the case asks for them, so cases that do not filter carry no extra state:
+    ! an unallocated filter_alpha is passed as an absent optional argument.
+    solver%spatial_filter = solver_cfg%spatial_filter
+    if (solver%spatial_filter) then
+      filter_alpha = solver_cfg%filter_alpha
+      if (solver%mesh%par%is_root()) &
+        print *, 'Spatial filter on, alpha =', filter_alpha
+    end if
     call allocate_tdsops( &
       solver%xdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
       solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
-      solver_cfg%stagder_scheme &
+      solver_cfg%stagder_scheme, filter_alpha=filter_alpha &
       )
     call allocate_tdsops( &
       solver%ydirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
       solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
-      solver_cfg%stagder_scheme &
+      solver_cfg%stagder_scheme, filter_alpha=filter_alpha &
       )
     call allocate_tdsops( &
       solver%zdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
       solver_cfg%der2nd_scheme, solver_cfg%interpl_scheme, &
-      solver_cfg%stagder_scheme &
+      solver_cfg%stagder_scheme, filter_alpha=filter_alpha &
       )
 
     select case (trim(solver_cfg%poisson_solver_type))
@@ -220,12 +242,16 @@ contains
   end function init
 
   subroutine allocate_tdsops(dirps, backend, mesh, der1st_scheme, &
-                             der2nd_scheme, interpl_scheme, stagder_scheme)
+                             der2nd_scheme, interpl_scheme, stagder_scheme, &
+                             filter_alpha)
     type(dirps_t), intent(inout) :: dirps
     class(base_backend_t), intent(in) :: backend
     type(mesh_t), intent(in) :: mesh
     character(*), intent(in) :: der1st_scheme, der2nd_scheme, &
                                 interpl_scheme, stagder_scheme
+    !! When present, also build the low-pass filter operators for this
+    !! direction. Absent means the case does not filter.
+    real(dp), optional, intent(in) :: filter_alpha
 
     integer :: dir, bc_start, bc_end, bc_mp_start, bc_mp_end, n_vert, n_cell, i
     real(dp) :: d
@@ -293,6 +319,32 @@ contains
       dirps%interpl_p2v, n_vert, d, 'interpolate', interpl_scheme, &
       bc_mp_start, bc_mp_end, from_to='p2v', stretch=[(1._dp, i=1, n_vert)] &
       )
+
+    if (present(filter_alpha)) then
+      ! Same parity split as the first derivatives: the component along this
+      ! direction is odd across a free-slip boundary, the other two even.
+      call backend%alloc_tdsops( &
+        dirps%lowpass, n_vert, d, 'filter', der1st_scheme, &
+        bc_start, bc_end, filter_alpha=filter_alpha &
+        )
+      call backend%alloc_tdsops( &
+        dirps%lowpass_sym, n_vert, d, 'filter', der1st_scheme, &
+        bc_start, bc_end, sym=.true., filter_alpha=filter_alpha &
+        )
+      ! The filter's system is only marginally diagonally dominant as
+      ! filter_alpha approaches 0.5, so the distributed solver's truncation
+      ! is no longer negligible: at Incompact3d's 0.49 it leaves a 1e-3 error
+      ! at zero wavenumber on 64 points. Solve it exactly with Thomas where
+      ! the direction is not decomposed; Thomas is serial along the line.
+      if (mesh%par%nproc_dir(dir) == 1) then
+        dirps%lowpass%prefer_thomas = .true.
+        dirps%lowpass_sym%prefer_thomas = .true.
+      else if (mesh%par%is_root()) then
+        print *, 'WARNING: the low-pass filter is decomposed in direction ', &
+          dir, '; it does not exactly preserve the mean and its result &
+          &depends on the decomposition.'
+      end if
+    end if
 
   end subroutine
 
@@ -516,6 +568,87 @@ contains
 
   end subroutine transeq_lowmem
 
+  subroutine apply_spatial_filter(self)
+    !! Apply the explicit low-pass filter to the velocity, as Incompact3d does
+    !! for wall-modelled ABL runs (ifilter=1, C_filter).
+    !!
+    !! Compact schemes cannot dissipate the 2*dx mode and the staggered
+    !! pressure projection cannot see it, yet the collocated derivatives in
+    !! the skew-symmetric convection do. Left alone that mode drives the
+    !! collocated divergence away from zero, and the u*div(u) half of the
+    !! convection then acts as a spurious momentum source.
+    class(solver_t), intent(inout) :: self
+
+    if (.not. self%spatial_filter) return
+
+    call filter_field(self, self%u, self%xdirps, self%ydirps, self%zdirps, 1)
+    call filter_field(self, self%v, self%xdirps, self%ydirps, self%zdirps, 2)
+    call filter_field(self, self%w, self%xdirps, self%ydirps, self%zdirps, 3)
+
+  end subroutine apply_spatial_filter
+
+  subroutine filter_field(self, f, xdirps, ydirps, zdirps, component)
+    !! Filter one velocity component in all three directions, in place.
+    !!
+    !! Across a free-slip boundary the component along that direction is odd
+    !! and the other two are even, the same parity split the first derivatives
+    !! use, so `component` selects which operator each direction applies.
+    class(solver_t), intent(inout) :: self
+    class(field_t), intent(inout) :: f
+    type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
+    integer, intent(in) :: component
+
+    call filter_in_dir(self, f, xdirps, component == 1)
+    call filter_in_dir(self, f, ydirps, component == 2)
+    call filter_in_dir(self, f, zdirps, component == 3)
+
+  end subroutine filter_field
+
+  subroutine filter_in_dir(self, f, dirps, is_normal)
+    !! Filter a DIR_X field along one direction, in place.
+    class(solver_t), intent(inout) :: self
+    class(field_t), intent(inout) :: f
+    type(dirps_t), target, intent(in) :: dirps
+    !! .true. when f is the component along dirps%dir, which is the odd one
+    !! across a free-slip boundary.
+    logical, intent(in) :: is_normal
+
+    class(field_t), pointer :: f_dir, filtered_dir, filtered
+    class(tdsops_t), pointer :: op
+    integer :: to_dir, from_dir
+
+    if (is_normal) then
+      op => dirps%lowpass
+    else
+      op => dirps%lowpass_sym
+    end if
+
+    select case (dirps%dir)
+    case (DIR_X)
+      filtered => self%backend%allocator%get_block(DIR_X, f%data_loc)
+      call self%backend%tds_solve(filtered, f, op)
+      call self%backend%veccopy(f, filtered)
+      call self%backend%allocator%release_block(filtered)
+    case (DIR_Y, DIR_Z)
+      if (dirps%dir == DIR_Y) then
+        to_dir = RDR_X2Y; from_dir = RDR_Y2X
+      else
+        to_dir = RDR_X2Z; from_dir = RDR_Z2X
+      end if
+      f_dir => self%backend%allocator%get_block(dirps%dir)
+      filtered_dir => self%backend%allocator%get_block(dirps%dir)
+      call self%backend%reorder(f_dir, f, to_dir)
+      call self%backend%tds_solve(filtered_dir, f_dir, op)
+      ! f is no longer needed, so the result goes straight back into it
+      call self%backend%reorder(f, filtered_dir, from_dir)
+      call self%backend%allocator%release_block(f_dir)
+      call self%backend%allocator%release_block(filtered_dir)
+    case default
+      error stop 'Invalid direction in spatial filter.'
+    end select
+
+  end subroutine filter_in_dir
+
   subroutine apply_les(self, rhs, variables)
     !! Add the configured explicit SGS closure to the momentum RHS.
     class(solver_t), intent(inout) :: self
@@ -534,6 +667,11 @@ contains
     class(solver_t), intent(inout) :: self
 
     call self%les%finalise(self%backend)
+    if (associated(self%dpdx_last)) then
+      call self%backend%allocator%release_block(self%dpdx_last)
+      call self%backend%allocator%release_block(self%dpdy_last)
+      call self%backend%allocator%release_block(self%dpdz_last)
+    end if
   end subroutine finalise
 
   subroutine transeq_species(self, rhs, variables)
@@ -764,10 +902,76 @@ contains
     call self%backend%vecadd(-1._dp, dpdy, 1._dp, v)
     call self%backend%vecadd(-1._dp, dpdz, 1._dp, w)
 
-    call self%backend%allocator%release_block(dpdx)
-    call self%backend%allocator%release_block(dpdy)
-    call self%backend%allocator%release_block(dpdz)
+    if (self%keep_wall_correction .and. &
+        any(self%mesh%grid%BCs_global == BC_DIRICHLET)) then
+      ! Keep this correction for the next precorrect_walls
+      if (associated(self%dpdx_last)) then
+        call self%backend%allocator%release_block(self%dpdx_last)
+        call self%backend%allocator%release_block(self%dpdy_last)
+        call self%backend%allocator%release_block(self%dpdz_last)
+      end if
+      self%dpdx_last => dpdx
+      self%dpdy_last => dpdy
+      self%dpdz_last => dpdz
+      self%dp_last_dt = self%time_integrator%stage_dt
+    else
+      call self%backend%allocator%release_block(dpdx)
+      call self%backend%allocator%release_block(dpdy)
+      call self%backend%allocator%release_block(dpdz)
+    end if
 
   end subroutine pressure_correction
+
+  subroutine precorrect_walls(self, u, v, w)
+    !! Incompact3d's pre_correc: on each Dirichlet face, add the previous
+    !! projection's tangential correction to the value set by the case. The
+    !! projection that follows then leaves the face at its prescribed value
+    !! plus dt*(grad p_old - grad p_new), instead of -dt*grad p_new.
+    !! The kept correction is dt_last*grad p_old, so it is rescaled by
+    !! dt_now/dt_last first, as Incompact3d does with gdt(itr). The timestep
+    !! is time_intg_t%stage_dt, the time the substep has advanced from the
+    !! divergence-free start of the step, which is what the projection
+    !! scales its correction by. For AB this ratio is always 1; for RK it
+    !! changes between stages (1/2, 3/4, 1 for RK3). Before the first
+    !! projection (or after a restart, as in Incompact3d) there is no
+    !! correction to add.
+    implicit none
+
+    class(solver_t) :: self
+    class(field_t), intent(inout) :: u, v, w
+
+    integer :: bcs(3, 2)
+    real(dp) :: ratio
+
+    if (.not. associated(self%dpdx_last)) return
+
+    ! The kept fields are released at the next projection, so they can be
+    ! scaled in place. Skipped when the ratio is 1 (always for AB).
+    ratio = self%time_integrator%stage_dt/self%dp_last_dt
+    if (ratio /= 1._dp) then
+      call self%backend%field_scale(self%dpdx_last, ratio)
+      call self%backend%field_scale(self%dpdy_last, ratio)
+      call self%backend%field_scale(self%dpdz_last, ratio)
+      self%dp_last_dt = self%time_integrator%stage_dt
+    end if
+
+    ! Local BCs, so only the ranks that own a face touch it
+    bcs = self%mesh%grid%BCs
+    if (any(bcs(1, :) == BC_DIRICHLET)) then
+      call self%backend%field_add_face_from_field( &
+        v, self%dpdy_last, X_FACE, bcs(1, 1), bcs(1, 2))
+      call self%backend%field_add_face_from_field( &
+        w, self%dpdz_last, X_FACE, bcs(1, 1), bcs(1, 2))
+    end if
+    if (any(bcs(2, :) == BC_DIRICHLET)) then
+      call self%backend%field_add_face_from_field( &
+        u, self%dpdx_last, Y_FACE, bcs(2, 1), bcs(2, 2))
+      call self%backend%field_add_face_from_field( &
+        w, self%dpdz_last, Y_FACE, bcs(2, 1), bcs(2, 2))
+    end if
+    if (any(bcs(3, :) == BC_DIRICHLET)) &
+      error stop 'precorrect_walls: Dirichlet z-faces are not supported.'
+
+  end subroutine precorrect_walls
 
 end module m_solver

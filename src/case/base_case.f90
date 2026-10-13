@@ -245,6 +245,8 @@ contains
     t_start = MPI_Wtime()
 
     do iter = start_iter, self%solver%n_iters
+      ! Filter before the substeps, matching Incompact3d's placement.
+      call self%solver%apply_spatial_filter()
       ! Report per-step timing on the final step and on every n_output-th
       ! step. This is computed identically on every rank so that the
       ! reduction below stays collective; the nested guard keeps mod()
@@ -280,6 +282,8 @@ contains
         end do
 
         call self%apply_BC(self%solver%u, self%solver%v, self%solver%w)
+        call self%solver%precorrect_walls(self%solver%u, self%solver%v, &
+                                          self%solver%w)
         if (self%solver%ibm_on) then
           call self%solver%ibm%body(self%solver%u, self%solver%v, &
                                     self%solver%w)

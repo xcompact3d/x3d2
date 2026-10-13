@@ -28,10 +28,13 @@ set(SRC
   backend/omp/exec_dist.f90
   backend/omp/exec_thom.f90
   case/base_case.f90
+  case/abl.f90
   case/channel.f90
   case/cylinder.f90
   case/generic.f90
   case/tgv.f90
+  abl/abl.f90
+  abl/diagnostics.f90
   module/ibm.f90
 )
 set(BACKENDSRC
@@ -58,10 +61,11 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
 # OMP TGT specific
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   list(APPEND SRC
-    backend/omp/target/allocator.f90
+    backend/omptgt/common.f90
+    backend/omptgt/allocator.f90
   )
   list(APPEND BACKENDSRC
-    backend/omp/target/backend.f90)
+    backend/omptgt/backend.f90)
 endif()
 
 # 2Decomp
@@ -168,7 +172,7 @@ endif()
 
 # 4. Set backend specific flags and options
 if (${ENABLE_BACKEND} STREQUAL "CUDA")
-  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cuda -gpu=${BACKEND_ARCH}")
+  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cuda ${NVHPC_GPU_FLAG}")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -Mbounds")
   # Opt-in: -Ktrap=fp traps FP exceptions process-wide, turning benign FP ops in
   # linked libs (cuFFTMp PTX-JIT, HPC-X/UCX at MPI_Init) into fatal SIGFPEs.
@@ -177,7 +181,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     set(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG} -Ktrap=fp")
   endif()
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
-  target_link_options(x3d2 INTERFACE "-cuda" "-gpu=${BACKEND_ARCH}")
+  target_link_options(x3d2 INTERFACE "-cuda" "${NVHPC_GPU_FLAG}")
   # cuFFTMp distributes a transform over MPI ranks and its nvfortran wrapper
   # calls MPI_Comm_f2c, so it cannot link into a build without MPI.  A serial
   # build is one rank and links plain cuFFT instead: see create_fft_plan in
