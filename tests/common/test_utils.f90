@@ -8,7 +8,7 @@ module m_test_utils
 
   private
   public :: initialise_mpi, finalise_test, global_all, global_sum, &
-            check_status, checkerr, &
+            check_status, checkerr, check_norm, &
             write_perf_metric, write_perf_minmax_metrics, &
             write_perf_summary, write_perf_minmax_summary, &
             write_device_bw_metric, report_perf_minmax

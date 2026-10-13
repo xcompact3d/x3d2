@@ -3,12 +3,14 @@ program perf_penta
   !! first-derivative solve: alpha=0.5, beta=0.05, non-periodic, each rank
   !! solving its own lines with zero halos.
   use m_backend_runtime, only: backend_runtime_t, backend_is_device, &
-                               backend_label, backend_sz, penta_benchmark
+                               backend_label, backend_sz, penta_benchmark, &
+                               penta_solve
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, pi, BC_PERIODIC
   use m_mesh, only: mesh_t
   use m_tdsops, only: tdsops_t
-  use m_test_utils, only: initialise_mpi, finalise_test, report_perf_minmax
+  use m_test_utils, only: initialise_mpi, finalise_test, report_perf_minmax, &
+                          check_norm
 
   implicit none
 
@@ -18,7 +20,8 @@ program perf_penta
   integer :: n, n_groups, n_iters, ndof, nrank, nproc, j
   integer :: mem_clock_rt, mem_bus_width
   logical :: has_device_bw_info
-  real(dp) :: dx, elapsed
+  real(dp) :: dx, elapsed, max_err
+  logical :: allpass
   character(len=:), allocatable :: label
 
   type(backend_runtime_t), target :: runtime
@@ -26,6 +29,7 @@ program perf_penta
   class(base_backend_t), pointer :: backend
   class(tdsops_t), allocatable :: tdsops
   real(dp), allocatable :: u(:, :, :), u_recv_s(:, :, :), u_recv_e(:, :, :)
+  real(dp), allocatable :: du(:, :, :)
 
   call initialise_mpi(nrank, nproc)
   if (nrank == 0) then
@@ -80,6 +84,19 @@ program perf_penta
     call report_perf_minmax(label, elapsed, n_iters, ndof, penta_bw)
   end if
 
-  call finalise_test(.true., nrank)
+  ! A timing is only meaningful for work that was done: check one more solve
+  ! against the exact derivative, on the middle half of each line where the
+  ! zero-halo closure error has died away.
+  allocate (du, mold=u)
+  call penta_solve(du, u, u_recv_s, u_recv_e, tdsops, periodic=.false.)
+  max_err = 0._dp
+  do j = n/4, 3*n/4
+    max_err = max(max_err, &
+                  maxval(abs(du(:, j, :) - cos((j - 1 + nrank*n)*dx))))
+  end do
+  allpass = .true.
+  call check_norm(max_err, 1e-8_dp, 'penta result', allpass)
+
+  call finalise_test(allpass, nrank)
 
 end program perf_penta
