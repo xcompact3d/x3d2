@@ -11,8 +11,39 @@ find_package(OpenMP REQUIRED)
 # src/mpi.f90, which stands in for the MPI entities the code uses.
 option(WITH_MPI "Enable MPI" ON)
 if(WITH_MPI)
+  # The version string tells the implementations apart below.
+  set(MPI_DETERMINE_LIBRARY_VERSION TRUE)
   find_package(MPI REQUIRED)
   add_definitions("-DMPI")
+
+  # Only Open MPI needs --oversubscribe, and only it accepts the flag: it
+  # refuses to start more ranks than the node has slots, where the Hydra
+  # launchers of Intel MPI and MPICH oversubscribe unasked and reject the
+  # option outright.  The multi-rank tests ask for up to 4 ranks, so the
+  # launcher in tests/CMakeLists.txt takes the flag from here.
+  set(MPIEXEC_OVERSUBSCRIBE_FLAG "")
+  if(MPI_Fortran_LIBRARY_VERSION_STRING MATCHES "Open MPI")
+    set(MPIEXEC_OVERSUBSCRIBE_FLAG "--oversubscribe")
+  endif()
+
+  # An implementation is free to leave routines out of the `mpi` module: Intel
+  # MPI gives no explicit interface to the ones taking a choice buffer, nor to
+  # MPI_Cart_coords, so those names cannot be re-exported from m_mpi by use
+  # association.  Ask this MPI whether it has them and let src/mpi.f90 declare
+  # them external where it does not, rather than guessing from the compiler.
+  include(CheckFortranSourceCompiles)
+  set(CMAKE_REQUIRED_LIBRARIES MPI::MPI_Fortran)
+  check_fortran_source_compiles("
+program main
+  use mpi, only: MPI_Allreduce, MPI_Bcast, MPI_Cart_coords, MPI_Irecv, &
+                 MPI_Isend, MPI_Reduce, MPI_Sendrecv, MPI_Waitall
+  implicit none
+end program main"
+    MPI_MODULE_HAS_INTERFACES SRC_EXT f90)
+  unset(CMAKE_REQUIRED_LIBRARIES)
+  if(NOT MPI_MODULE_HAS_INTERFACES)
+    add_definitions("-DMPI_MODULE_LACKS_INTERFACES")
+  endif()
 endif()
 
 # Toggleable build type (default Release)

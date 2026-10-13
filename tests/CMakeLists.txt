@@ -178,7 +178,7 @@ function(define_test testfile np backend)
     add_test(NAME ${test_name}
       COMMAND sh -c "srun -n ${np} bin/${test_name} ${extra_args_str}")
   else()
-    add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} bin/${test_name} ${extra_args_str}")
+    add_test(NAME ${test_name} COMMAND sh -c "mpirun ${MPIEXEC_OVERSUBSCRIBE_FLAG} -np ${np} bin/${test_name} ${extra_args_str}")
   endif()
 
   # default label includes backend
@@ -251,7 +251,7 @@ function(define_regression_case_test case_name input_file golden_file np backend
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
     set(launcher "srun -n ${np}")
   else()
-    set(launcher "mpirun --oversubscribe -np ${np}")
+    set(launcher "mpirun ${MPIEXEC_OVERSUBSCRIBE_FLAG} -np ${np}")
   endif()
   add_test(
     NAME ${test_name}

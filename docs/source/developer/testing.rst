@@ -148,6 +148,9 @@ Conventions
 - Exit code: Call ``error stop 1`` on failure so CTest detects it.
 - Backend guards: Use ``#ifdef CUDA`` / ``#elif defined(OMP_TGT)`` / ``#else`` / ``#endif`` for backend-specific code.
 - MPI: All tests call ``MPI_Init``/``MPI_Finalize``, even single-rank tests. Tests are
-  launched with ``mpirun --oversubscribe -np <N>``, or with ``srun -n <N>`` when building
+  launched with ``mpirun -np <N>``, or with ``srun -n <N>`` when building
   with the Cray compiler, since Cray machines are Slurm-driven and have no ``mpirun``.
+  Under Open MPI the launcher also gets ``--oversubscribe``, without which it
+  refuses to run 4 ranks on a smaller machine; the Hydra launchers of Intel MPI
+  and MPICH oversubscribe on their own and reject the flag.
 - Shared utilities: All tests automatically link against ``x3d2_test_utils`` (provides ``check_norm`` and ``report_perf``).
