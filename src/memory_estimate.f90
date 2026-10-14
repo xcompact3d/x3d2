@@ -332,9 +332,10 @@ contains
     ! examples/foil/input.x3d --build` cannot measure a real number until
     ! one is added, and validate_build_inputs' flow_case_supported check
     ! skips the real build for it by name rather than attempting it. Falls
-    ! back here to channel's base (the largest measured, i.e. safest
-    ! over-estimate) so the static (Tier 1) estimate over- rather than
-    ! under-estimates in the meantime.
+    ! back here to channel's base (17, the largest calibrated base) plus the
+    ! history blocks of the selected integrator, 17 + 3*nolds: 26 with RK3
+    ! and 23 with AB3.  The static (Tier 1) estimate stays on the high side
+    ! in the meantime.
     select case (trim(flow_case_name))
     case ('tgv')
       base = 14
