@@ -23,6 +23,9 @@ module m_cuda_memcheck_device
 
   type, extends(memcheck_device_t) :: cuda_memcheck_device_t
     private
+    !> Card used right after cudaSetDevice (total - free): this process's
+    !> context, plus any other process on the card. Set by init.
+    integer(i8) :: start_used_bytes = 0_i8
     !> Queried once, at this process's own rank count (always 1 - see
     !> ensure_fft_query). These are real, live cudaMemGetInfo measurements
     !> for a SINGLE-RANK communicator; there is no way to measure the true
@@ -53,6 +56,7 @@ module m_cuda_memcheck_device
   contains
     procedure :: init
     procedure :: mem_info
+    procedure :: context_bytes
     procedure :: sz => pencil_size
     procedure :: overhead_floor_bytes
     procedure :: overhead_query_bytes
@@ -70,6 +74,7 @@ contains
     logical, intent(out) :: ok
     character(len=*), intent(out) :: msg
     integer :: ierr, ndevs
+    integer(kind=cuda_count_kind) :: free_b, total_b
 
     ok = .false.
     ierr = cudaGetDeviceCount(ndevs)
@@ -84,6 +89,9 @@ contains
         &(cudaSetDevice failed, code ', ierr, ')'
       return
     end if
+    ierr = cudaMemGetInfo(free_b, total_b)
+    call check_status(ierr, 'cudaMemGetInfo (context size)')
+    self%start_used_bytes = int(total_b, i8) - int(free_b, i8)
     ok = .true.
   end subroutine init
 
@@ -98,6 +106,13 @@ contains
     total_bytes = int(total_b, i8)
     free_bytes = int(free_b, i8)
   end subroutine mem_info
+
+  function context_bytes(self) result(nbytes8)
+    class(cuda_memcheck_device_t), intent(in) :: self
+    integer(i8) :: nbytes8
+
+    nbytes8 = self%start_used_bytes
+  end function context_bytes
 
   function pencil_size(self) result(n)
     class(cuda_memcheck_device_t), intent(in) :: self
