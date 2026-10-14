@@ -186,7 +186,8 @@ program test_adm
   allpass = allpass &
             .and. close_enough(adm_pair%disc(1)%U_disc, 10._dp, tol) &
             .and. close_enough(adm_pair%disc(2)%U_disc, 20._dp, tol) &
-            .and. close_enough(sum_du, -expected_thrust/adm_pair%rho_air, tol) &
+            .and. close_enough(sum_du, &
+                               -expected_thrust/adm_pair%rho_air, tol) &
             .and. close_enough(sum_dv, 0._dp, tol)
   call adm_pair%finalise()
 

@@ -264,7 +264,8 @@ contains
           > overlap_tol*kernel_sums(1, t)) then
         if (mesh%par%is_root()) then
           write (stderr, '(A,I0,A,ES10.3,A)') ' ADM: disc ', t, &
-            ' loses a fraction ', 1._dp - kernel_sums(2, t)/kernel_sums(1, t), &
+            ' loses a fraction ', &
+            1._dp - kernel_sums(2, t)/kernel_sums(1, t), &
             ' of its kernel to neighbouring discs.'
         end if
         error stop 'ADM: disc kernels overlap; move the discs further apart.'
