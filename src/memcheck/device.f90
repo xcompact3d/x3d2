@@ -4,6 +4,9 @@ module m_memcheck_device
   !! implementation (src/backend/cuda/memcheck_device.f90 for CUDA) touches
   !! backend-specific libraries.
   use m_common, only: dp, i8
+  use m_mesh, only: mesh_t
+  use m_allocator, only: allocator_t
+  use m_base_backend, only: base_backend_t
   implicit none
 
   type, abstract :: memcheck_device_t
@@ -23,6 +26,9 @@ module m_memcheck_device
     !> FFT workspace/heap/data buffer plus the device context.
     !> residual_gib is what the query left allocated on the device.
     procedure(overhead_query_bytes_iface), deferred :: overhead_query_bytes
+    !> Build the device allocator and the backend on mesh; the device owns
+    !> both, so the returned pointers stay valid for as long as it does.
+    procedure(make_backend_iface), deferred :: make_backend
   end type memcheck_device_t
 
   abstract interface
@@ -63,6 +69,15 @@ module m_memcheck_device
       real(dp), intent(out) :: residual_gib
       integer(i8) :: nbytes8
     end function overhead_query_bytes_iface
+
+    subroutine make_backend_iface(self, mesh, dims, allocator, backend)
+      import :: memcheck_device_t, mesh_t, allocator_t, base_backend_t
+      class(memcheck_device_t), target, intent(inout) :: self
+      type(mesh_t), target, intent(inout) :: mesh
+      integer, intent(in) :: dims(3)
+      class(allocator_t), pointer, intent(out) :: allocator
+      class(base_backend_t), pointer, intent(out) :: backend
+    end subroutine make_backend_iface
   end interface
 
 end module m_memcheck_device
