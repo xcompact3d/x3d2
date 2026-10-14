@@ -166,54 +166,37 @@ contains
                                       ctx%periodic_z])
   end subroutine classify_bc
 
-#ifdef X3D2_ADIOS2_CUDA
-  pure function to_lower(text) result(lowered)
-    !! Small private ASCII lower-caser for resolve_gpu_io_mode - not shared
-    !! with src/io/adios2/io.f90's to_lower_ascii, which is private to that
-    !! module (see resolve_gpu_io_mode's comment).
-    character(len=*), intent(in) :: text
-    character(len=len(text)) :: lowered
-    integer :: i, code
-
-    lowered = text
-    do i = 1, len(text)
-      code = iachar(lowered(i:i))
-      if (code >= iachar('A') .and. code <= iachar('Z')) then
-        lowered(i:i) = achar(code + 32)
-      end if
-    end do
-  end function to_lower
-#endif
-
   subroutine resolve_gpu_io_mode(ctx)
+#ifdef X3D2_ADIOS2_CUDA
+    use m_io_backend, only: parse_gpu_write_mode, gpu_write_mode_names, &
+                            gpu_write_mode_force_host
+#endif
     !! Resolve whether this run's snapshot/checkpoint writes would stage
-    !! through a device buffer. Mirrors init_runtime_options in
-    !! src/io/adios2/io.f90:296-313, which is private to the ADIOS2 writer
-    !! and belongs to PR 277, so it is not shared here - keep the two in
-    !! sync by hand if the env var contract changes.
+    !! through a device buffer. The write mode comes from
+    !! parse_gpu_write_mode, the same function init_runtime_options in
+    !! src/io/adios2/io.f90 calls, so an unknown value resolves as in the
+    !! solver.
     type(memcheck_ctx_t), intent(inout) :: ctx
 #ifdef X3D2_ADIOS2_CUDA
-    character(len=64) :: raw_value, mode_value
-    integer :: status, value_length
+    character(len=64) :: raw_value
+    integer :: status, value_length, mode
 
     call get_environment_variable('X3D2_ADIOS2_GPU_WRITE_MODE', raw_value, &
                                   length=value_length, status=status)
     if (status /= 0 .or. value_length == 0) then
-      mode_value = 'auto'
+      mode = parse_gpu_write_mode('')
     else
-      mode_value = to_lower(adjustl(raw_value(1:min(value_length, &
-                                                    len(raw_value)))))
+      mode = parse_gpu_write_mode(raw_value(1:min(value_length, &
+                                                  len(raw_value))))
     end if
 
-    select case (trim(mode_value))
-    case ('host', 'd2h', 'staged')
+    ctx%gpu_io_mode_name = trim(gpu_write_mode_names(mode))
+    if (mode == gpu_write_mode_force_host) then
       ctx%gpu_io_device_write = .false.
-      ctx%gpu_io_mode_name = 'host'
       ctx%gpu_io_reason = 'write mode host'
-    case default
+    else
       ctx%gpu_io_device_write = .true.
-      ctx%gpu_io_mode_name = trim(mode_value)
-    end select
+    end if
 #else
     ctx%gpu_io_device_write = .false.
     ctx%gpu_io_mode_name = 'host'
