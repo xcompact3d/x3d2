@@ -217,10 +217,10 @@ contains
       xtdesc_bytes = merge(self%ng1_xtdesc_bytes, 0_i8, ng == 1)
     else
       ! Plain cuFFT is only reached by the 110 BC or a cuFFTMp fallback.
-      ! Neither supports nproc>1 (ng_unsupported_reason), so ng is 1 here
-      ! in every row that is printed. The requested line can reach this
-      ! with ng>1 once, before this probe settles the FFT path, and
-      ! print_requested_line then drops the value.
+      ! Neither supports nproc>1 (ng_unsupported_reason). The first probe
+      ! can run inside an estimate for ng>1, so this branch can see ng>1
+      ! once. The callers ask ng_unsupported_reason again after the
+      ! estimate and drop that value.
       worksize_bytes = self%ng1_worksize_bytes
       heap_bytes = 0_i8
       xtdesc_bytes = 0_i8

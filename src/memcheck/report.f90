@@ -186,6 +186,13 @@ contains
       local_dims = [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)/ng]
       call estimate_for_ng(ctx, ng, per_gpu_gib, basis, verdict, &
                            workspace_gib, overhead_gib, io_gib)
+      ! The estimate can run the FFT probe, which settles whether the FFT
+      ! is distributed: ask again and drop the row if it is not.
+      reason = ng_unsupported_reason(ctx, ng)
+      if (len_trim(reason) > 0) then
+        print '(a,i0,a,a,a)', ' ', ng, '     (skipped: ', trim(reason), ')'
+        cycle
+      end if
       if (ng == 1) then
         ctx%estimate_ng1_gib = per_gpu_gib
         ctx%io_staging_ng1_gib = io_gib
