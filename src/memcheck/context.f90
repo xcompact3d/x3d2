@@ -58,13 +58,13 @@ module m_memcheck_context
     !> The requested configuration's verdict - set by report() from the
     !> estimate, and (--build only) overwritten by run_tier3() with the more
     !> authoritative measured verdict if a real build actually ran. Used
-    !> after MPI_Finalize to set the process exit code: 0=FITS, 1=BORDERLINE,
-    !> 2=DOES_NOT_FIT, so a calling script can check $? instead of scraping
+    !> after MPI_Finalize to set the process exit code (mapping in the
+    !> program), so a calling script can check $? instead of scraping
     !> stdout.
     character(len=12) :: final_verdict
     !> GPU-aware IO staging term (GiB) at ng=1, captured by report()'s table
-    !> loop and consumed by run_tier3()'s CHECK line, which must exclude it -
-    !> the real --build never performs a snapshot/checkpoint write.
+    !> loop and consumed by run_tier3()'s CHECK line (which says why it is
+    !> excluded there).
     real(dp) :: io_staging_ng1_gib = 0._dp
     !> orig_dir/scratch_dir: set by validate_build_inputs and make_scratch,
     !> used by leave_build_scratch to chdir back and remove the scratch
