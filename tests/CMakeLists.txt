@@ -470,10 +470,16 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
   # <name>_OK printed by that shell snippet instead of on the CHECK line.
   # The snippet runs after the --build, with $d the directory, $rc the
   # exit code and $d/build.log the output of the --build.
+  # With the optional fourth argument the run uses that option instead of
+  # --build; an empty string runs the default mode.
   function(define_memcheck_build_edit_test name sed_expr)
     set(base ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d)
     set(pass_regex "CHECK ng=1: .* - OK")
     set(snippet "true")
+    set(mode_flag "--build")
+    if(ARGC GREATER 3)
+      set(mode_flag "${ARGV3}")
+    endif()
     if(ARGC GREATER 2)
       set(pass_regex "${name}_OK")
       set(snippet "${ARGV2}")
@@ -483,7 +489,7 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
        sed '${sed_expr}' ${base} > $d/input.x3d; \
        if cmp -s ${base} $d/input.x3d; then echo SED_NOOP; fi; \
        mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck \
-         $d/input.x3d --build > $d/build.log 2>&1; \
+         $d/input.x3d ${mode_flag} > $d/build.log 2>&1; \
        rc=$?; cat $d/build.log; \
        ${snippet}; \
        rm -rf $d")
@@ -511,6 +517,15 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
   define_memcheck_build_edit_test(memcheck_build_x_split_exit2
     "s/^nproc_dir *=.*/nproc_dir = 2, 1, 1/"
     "if test $rc -eq 2 && grep -qF 'only nproc_dir = [1,1,ng] is supported by the CUDA backend' $d/build.log; then echo memcheck_build_x_split_exit2_OK; fi")
+
+  # A 2048^3 grid split over 64 GPUs fits the card per GPU, but the
+  # single-GPU FFT probe on the whole grid does not. The default mode must
+  # skip the probe, print the formula-only note and exit 0 or 2 without
+  # an error stop or an NVSHMEM abort.
+  define_memcheck_build_edit_test(memcheck_default_TGV_probe_skipped
+    "s/^dims_global *=.*/dims_global = 2048, 2048, 2048/;s/^nproc_dir *=.*/nproc_dir = 1, 1, 64/"
+    "if test $rc -le 2 && grep -qF 'FFT workspace is formula-only' $d/build.log && grep -q 'Requested nproc_dir gives ng=64' $d/build.log && ! grep -qi 'error stop\\|nvshmem' $d/build.log; then echo memcheck_default_TGV_probe_skipped_OK; fi"
+    "")
 
   # A real --build run must not clobber whatever CWD it was launched from,
   # nor leave its scratch directory behind: validate_build_inputs/
