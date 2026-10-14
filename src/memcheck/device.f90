@@ -7,6 +7,7 @@ module m_memcheck_device
   use m_mesh, only: mesh_t
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
+  use m_base_case, only: base_case_t
   implicit none
 
   type, abstract :: memcheck_device_t
@@ -29,6 +30,15 @@ module m_memcheck_device
     !> Build the device allocator and the backend on mesh; the device owns
     !> both, so the returned pointers stay valid for as long as it does.
     procedure(make_backend_iface), deferred :: make_backend
+    !> Record what the real solver of flow_case settled on (called once it
+    !> is constructed), for fft_path_known and uses_distributed_fft.
+    procedure(capture_solver_info_iface), deferred :: capture_solver_info
+    !> Whether capture_solver_info has seen the real solver's FFT path.
+    procedure(fft_path_known_iface), deferred :: fft_path_known
+    !> Whether the real solver's FFT is distributed across ranks (cuFFTMp
+    !> on CUDA) rather than a plain per-rank transform; only meaningful
+    !> once fft_path_known.
+    procedure(uses_distributed_fft_iface), deferred :: uses_distributed_fft
   end type memcheck_device_t
 
   abstract interface
@@ -78,6 +88,24 @@ module m_memcheck_device
       class(allocator_t), pointer, intent(out) :: allocator
       class(base_backend_t), pointer, intent(out) :: backend
     end subroutine make_backend_iface
+
+    subroutine capture_solver_info_iface(self, flow_case)
+      import :: memcheck_device_t, base_case_t
+      class(memcheck_device_t), intent(inout) :: self
+      class(base_case_t), intent(in) :: flow_case
+    end subroutine capture_solver_info_iface
+
+    function fft_path_known_iface(self) result(known)
+      import :: memcheck_device_t
+      class(memcheck_device_t), intent(in) :: self
+      logical :: known
+    end function fft_path_known_iface
+
+    function uses_distributed_fft_iface(self) result(distributed)
+      import :: memcheck_device_t
+      class(memcheck_device_t), intent(in) :: self
+      logical :: distributed
+    end function uses_distributed_fft_iface
   end interface
 
 end module m_memcheck_device
