@@ -369,6 +369,7 @@ contains
   end function has_dotdot_component
 
   subroutine query_card_gib()
+    integer :: ierr
     integer(kind=cuda_count_kind) :: free_b, total_b
 
     ierr = cudaMemGetInfo(free_b, total_b)
@@ -531,6 +532,7 @@ contains
     !! ng1_xtdesc_bytes/ng1_used_cufftmp, plus the cudaMemGetInfo delta
     !! across the whole call in ng1_query_residual_gib (see its
     !! declaration).
+    integer :: ierr
     integer(kind=cuda_count_kind) :: free_before, free_after, total_b
 
     if (ctx%ng1_query_ran) return
@@ -1456,6 +1458,7 @@ contains
     type(cuda_allocator_t), target :: cuda_allocator
     type(cuda_backend_t), target :: cuda_backend
     type(allocator_t), target :: host_allocator
+    integer :: ierr
     integer(kind=cuda_count_kind) :: free_b, total_b
 
     npeak = 0
