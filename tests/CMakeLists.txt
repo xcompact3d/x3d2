@@ -464,19 +464,33 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
   # peak_fields_lookup must follow the time integrator and the species
   # count: a --build of the TGV input with the edit applied must show no
   # calibration drift (no WARNING line) and a CHECK line that is OK. The
-  # sed edit goes to a copy of the input in a mktemp directory.
+  # sed edit goes to a copy of the input in a mktemp directory. A sed
+  # expression that leaves the input unchanged fails the test (SED_NOOP).
+  # With the optional third argument the test passes on the token
+  # <name>_OK printed by that shell snippet instead of on the CHECK line.
+  # The snippet runs after the --build, with $d the directory, $rc the
+  # exit code and $d/build.log the output of the --build.
   function(define_memcheck_build_edit_test name sed_expr)
+    set(base ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d)
+    set(pass_regex "CHECK ng=1: .* - OK")
+    set(snippet "true")
+    if(ARGC GREATER 2)
+      set(pass_regex "${name}_OK")
+      set(snippet "${ARGV2}")
+    endif()
     add_test(NAME ${name} COMMAND sh -c
       "d=$(mktemp -d); \
-       sed '${sed_expr}' ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d \
-         > $d/input.x3d; \
+       sed '${sed_expr}' ${base} > $d/input.x3d; \
+       if cmp -s ${base} $d/input.x3d; then echo SED_NOOP; fi; \
        mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck \
-         $d/input.x3d --build; \
+         $d/input.x3d --build > $d/build.log 2>&1; \
+       rc=$?; cat $d/build.log; \
+       ${snippet}; \
        rm -rf $d")
     set_tests_properties(${name} PROPERTIES
       LABELS "verification;cuda"
-      PASS_REGULAR_EXPRESSION "CHECK ng=1: .* - OK"
-      FAIL_REGULAR_EXPRESSION "WARNING: peak_fields_lookup|MISMATCH")
+      PASS_REGULAR_EXPRESSION "${pass_regex}"
+      FAIL_REGULAR_EXPRESSION "SED_NOOP|WARNING: peak_fields_lookup|MISMATCH")
   endfunction()
   define_memcheck_build_edit_test(memcheck_build_TGV_rk4
     "s/^time_intg *=.*/time_intg = \"RK4\"/")
@@ -484,6 +498,19 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
     "s/^time_intg *=.*/time_intg = \"AB2\"/")
   define_memcheck_build_edit_test(memcheck_build_TGV_species2
     "s/^time_intg *=.*/&\\nn_species = 2/")
+
+  # A requested nproc_dir outside the GPU count list [1,2,4,8] must get the
+  # same verdict in the initial report, in the measured table (its own row)
+  # and in --static, with the same exit code. TGV's z=256 divides by 16.
+  define_memcheck_build_edit_test(memcheck_build_ng16_matches_static
+    "s/^nproc_dir *=.*/nproc_dir = 1, 1, 16/"
+    "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck $d/input.x3d --static > $d/static.log 2>&1; rc_s=$?; v_s=$(sed -n 's/^Requested nproc_dir gives ng=16: .* - //p' $d/static.log); v_i=$(sed -n 's/^Requested nproc_dir gives ng=16: .* - //p' $d/build.log); v_r=$(sed -n 's/^ *16 |.*% | //p' $d/build.log); if test x$v_s != x && test x$v_s = x$v_i && test x$v_s = x$v_r && test $rc_s -eq $rc; then echo memcheck_build_ng16_matches_static_OK; fi")
+
+  # A requested nproc_dir that splits x must stay UNSUPPORTED after the real
+  # build: exit code 2, never the FITS of the 1 GPU measurement.
+  define_memcheck_build_edit_test(memcheck_build_x_split_exit2
+    "s/^nproc_dir *=.*/nproc_dir = 2, 1, 1/"
+    "if test $rc -eq 2 && grep -qF 'only nproc_dir = [1,1,ng] is supported by the CUDA backend' $d/build.log; then echo memcheck_build_x_split_exit2_OK; fi")
 
   # A real --build run must not clobber whatever CWD it was launched from,
   # nor leave its scratch directory behind: validate_build_inputs/
