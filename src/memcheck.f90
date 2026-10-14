@@ -893,6 +893,20 @@ contains
     call execute_command_line(cmd, exitstat=status)
   end subroutine run_sh
 
+  subroutine skip_build(msg, cleanup, ok)
+    !! Common tail of every "Real build skipped" exit of the scratch setup:
+    !! print msg, remove the scratch directory made so far if cleanup is
+    !! set, and flag ok=.false. so run_tier3 stops (the estimate above
+    !! stands).
+    character(len=*), intent(in) :: msg
+    logical, intent(in) :: cleanup
+    logical, intent(out) :: ok
+
+    print '(a)', msg
+    if (cleanup) call run_sh("rm -rf '"//trim(scratch_dir)//"'")
+    ok = .false.
+  end subroutine skip_build
+
   subroutine enter_build_scratch(ok)
     !! Real build runs inside a throwaway x3d2-memcheck-build.<pid>
     !! subdirectory of the invoking directory, because a case build
