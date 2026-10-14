@@ -808,19 +808,13 @@ contains
     call print_rule('=')
   end subroutine print_mode_lines
 
-  subroutine report()
-    integer :: k, ng, requested_ng, smallest_fits, local_dims(3)
-    real(dp) :: per_gpu_gib, requested_gib, workspace_gib, overhead_gib, &
-                io_gib
+  subroutine print_requested_line()
+    !! The verdict line for the nproc_dir the input file asks for (or why
+    !! that decomposition is not supported); sets final_verdict.
+    integer :: requested_ng
+    real(dp) :: requested_gib
     logical :: exact
-    character(len=12) :: verdict
     character(len=96) :: reason
-
-    call print_header_lines()
-
-    call print_io_staging_line()
-
-    call print_mode_lines()
 
     requested_ng = domain_cfg%nproc_dir(3)
     reason = ng_unsupported_reason(requested_ng)
@@ -846,6 +840,19 @@ contains
         end if
       end if
     end if
+  end subroutine print_requested_line
+
+  subroutine report()
+    integer :: k, ng, smallest_fits, local_dims(3)
+    real(dp) :: per_gpu_gib, workspace_gib, overhead_gib, io_gib
+    logical :: exact
+    character(len=12) :: verdict
+    character(len=96) :: reason
+
+    call print_header_lines()
+    call print_io_staging_line()
+    call print_mode_lines()
+    call print_requested_line()
 
     call print_rule('-')
     call print_table_header()
