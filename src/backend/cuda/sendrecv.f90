@@ -110,24 +110,28 @@ contains
     !! exchanged. The buffers are sized for the direction with the most
     !! groups, so a whole-array assignment would copy that maximum on every
     !! exchange (16 times the data in use on an elongated mesh).
+    !!
+    !! The copy is a device array section assignment, which CUDA Fortran runs
+    !! on the device in the default stream like the kernels around it. The
+    !! dummies are plain assumed shape: declaring them contiguous made the
+    !! caller copy its arguments through a host temporary in a debug build,
+    !! touching device memory from the host.
     implicit none
 
-    real(dp), device, contiguous, dimension(:, :, :), intent(inout) :: dst
-    real(dp), device, contiguous, dimension(:, :, :), intent(in) :: src
+    real(dp), device, dimension(:, :, :), intent(inout) :: dst
+    real(dp), device, dimension(:, :, :), intent(in) :: src
     integer, intent(in) :: n_data
 
-    integer :: ierr
+    integer :: n_groups
 
-    if (n_data > size(src) .or. n_data > size(dst)) then
-      error stop 'copy_halo: n_data exceeds the halo buffer.'
+    ! n_data is SZ*n_halo (or SZ for the 2x2 systems) per group
+    n_groups = n_data/(size(src, 1)*size(src, 2))
+    if (n_groups*size(src, 1)*size(src, 2) /= n_data .or. &
+        n_groups > size(src, 3) .or. n_groups > size(dst, 3)) then
+      error stop 'copy_halo: n_data does not match the halo buffer.'
     end if
 
-    ! Default stream, so it stays ordered with the kernels around it
-    ierr = cudaMemcpyAsync(dst, src, n_data, default_stream)
-    if (ierr /= cudaSuccess) then
-      print *, 'CUDA error: ', trim(cudaGetErrorString(ierr))
-      error stop 'copy_halo: device to device copy failed.'
-    end if
+    dst(:, :, 1:n_groups) = src(:, :, 1:n_groups)
 
   end subroutine copy_halo
 
