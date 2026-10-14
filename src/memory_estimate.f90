@@ -377,12 +377,14 @@ contains
       derived_fields_delta = 0
     end if
 
-    ! n_species: +(1 + nolds) per species by construction - each species
-    ! gets exactly one persistent block, same pattern as u/v/w
-    ! (src/solver.f90:159-165: `solver%species(i)%ptr =>
-    ! backend%allocator%get_block(DIR_X)` in a loop over 1..nspecies, never
-    ! released), plus its nolds history blocks (nvars = 3 + n_species in
-    ! time_intg_t%init).
+    ! n_species: +(2 + nolds) per species - each species gets exactly one
+    ! persistent block, same pattern as u/v/w (src/solver.f90:159-165:
+    ! `solver%species(i)%ptr => backend%allocator%get_block(DIR_X)` in a
+    ! loop over 1..nspecies, never released), plus its nolds history blocks
+    ! (nvars = 3 + n_species in time_intg_t%init), plus one transient
+    ! derivative block (base_case.f90 takes one per variable, 1..nvars, for
+    ! each substep). Measured 2026-10-13 (PR 326 review, S1e) on the tgv
+    ! input with AB3 and n_species = 2: 28 = 14 + 3*2 + 2*(2 + 2).
     !
     ! ibm_on: +1, exact by construction, not measured - ibm_t%init
     ! (src/module/ibm.f90) gets exactly one device block for ep1
@@ -408,7 +410,7 @@ contains
     ! output_fields='pressure', snapshot_freq=1 -> still 20) - the pressure
     ! block persisting rather than being released does not raise the
     ! high-water mark for this case, so no term is added for it.
-    n = base + 3*nolds + derived_fields_delta + n_species*(1 + nolds) + &
+    n = base + 3*nolds + derived_fields_delta + n_species*(2 + nolds) + &
         merge(1, 0, ibm_on) + merge(7, 0, les_on)
   end function peak_fields_lookup
 
