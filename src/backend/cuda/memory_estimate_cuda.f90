@@ -23,9 +23,24 @@ module m_cuda_memory_estimate
   implicit none
 
   private
-  public :: fft_workspace_bytes_query, context_floor_bytes
+  public :: fft_workspace_bytes_query, context_floor_bytes, check_status
 
 contains
+
+  subroutine check_status(ierr, what)
+    !! Abort with a labelled message if a CUDA/cuFFT return code is
+    !! non-zero (0 = success) - used after every raw cudaMemGetInfo,
+    !! cufftXtMalloc, cufftXtFree and cufftDestroy call in
+    !! fft_workspace_bytes_query, none of which check their own ierr.
+    integer, intent(in) :: ierr
+    character(*), intent(in) :: what
+    character(len=128) :: msg
+
+    if (ierr == 0) return
+    write (msg, '(a,a,a,i0,a)') 'x3d2-memcheck: ', trim(what), &
+      ' failed (code ', ierr, ')'
+    error stop trim(msg)
+  end subroutine check_status
 
   pure function context_floor_bytes(ng, uses_cufftmp) result(nbytes8)
     !! Grid-independent memory reserved before any field/FFT-data bytes:
@@ -187,6 +202,7 @@ contains
     used_cufftmp = try_cufftmp .and. (.not. bc_is_110)
 
     ierr = cudaMemGetInfo(free_before, total_b)
+    call check_status(ierr, 'cudaMemGetInfo (before plans)')
     call create_fft_plan(plan_fw, used_cufftmp, fft_n1, fft_n2, fft_n3, &
                          fw_plan_type, is_root, 'memcheck probe fwd', &
                          worksize_fw)
@@ -204,26 +220,34 @@ contains
                          worksize_bw)
     if (fw_was_cufftmp .and. (.not. used_cufftmp)) then
       ierr = cufftDestroy(plan_fw)
+      call check_status(ierr, 'cufftDestroy (fwd, cuFFTMp fallback rebuild)')
       call create_fft_plan(plan_fw, used_cufftmp, fft_n1, fft_n2, fft_n3, &
                            fw_plan_type, is_root, &
                            'memcheck probe fwd (cuFFT rebuild)', worksize_fw)
     end if
     ierr = cudaMemGetInfo(free_after, total_b)
+    call check_status(ierr, 'cudaMemGetInfo (after plans)')
     worksize_bytes = int(worksize_fw, i8) + int(worksize_bw, i8)
     heap_bytes = int(free_before, i8) - int(free_after, i8)
 
     if (used_cufftmp) then
       ierr = cudaMemGetInfo(free_before, total_b)
+      call check_status(ierr, 'cudaMemGetInfo (before xtdesc)')
       ierr = cufftXtMalloc(plan_fw, xtdesc, CUFFT_XT_FORMAT_INPLACE)
+      call check_status(ierr, 'cufftXtMalloc')
       ierr = cudaMemGetInfo(free_after, total_b)
+      call check_status(ierr, 'cudaMemGetInfo (after xtdesc)')
       xtdesc_bytes = int(free_before, i8) - int(free_after, i8)
       ierr = cufftXtFree(xtdesc)
+      call check_status(ierr, 'cufftXtFree')
     else
       xtdesc_bytes = 0_i8
     end if
 
     ierr = cufftDestroy(plan_fw)
+    call check_status(ierr, 'cufftDestroy (fwd)')
     ierr = cufftDestroy(plan_bw)
+    call check_status(ierr, 'cufftDestroy (bwd)')
   end subroutine fft_workspace_bytes_query
 
 end module m_cuda_memory_estimate

@@ -49,7 +49,7 @@ program x3d2_memcheck
                                output_field_active, peak_fields_lookup, &
                                halo_bytes, gpu_io_staging_bytes
   use m_cuda_memory_estimate, only: fft_workspace_bytes_query, &
-                                    context_floor_bytes
+                                    context_floor_bytes, check_status
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
@@ -197,7 +197,19 @@ program x3d2_memcheck
   if (nproc /= 1) error stop 'x3d2-memcheck: run single-rank (mpirun -n 1).'
 
   ierr = cudaGetDeviceCount(ndevs)
+  if (ierr /= 0 .or. ndevs < 1) then
+    print '(a,i0,a,i0,a)', 'x3d2-memcheck: no usable CUDA device &
+      &(cudaGetDeviceCount code ', ierr, ', devices ', ndevs, ')'
+    call MPI_Finalize(ierr)
+    error stop 'x3d2-memcheck: no usable CUDA device'
+  end if
   ierr = cudaSetDevice(0)
+  if (ierr /= 0) then
+    print '(a,i0,a)', 'x3d2-memcheck: no usable CUDA device (cudaSetDevice &
+      &failed, code ', ierr, ')'
+    call MPI_Finalize(ierr)
+    error stop 'x3d2-memcheck: no usable CUDA device'
+  end if
 
   call parse_args()
   call read_config()
@@ -429,6 +441,7 @@ contains
     integer(kind=cuda_count_kind) :: free_b, total_b
 
     ierr = cudaMemGetInfo(free_b, total_b)
+    call check_status(ierr, 'cudaMemGetInfo (card total)')
     card_gib = real(total_b, dp)/1024._dp**3
   end subroutine query_card_gib
 
@@ -539,11 +552,13 @@ contains
 
     if (done) return
     ierr = cudaMemGetInfo(free_before, total_b)
+    call check_status(ierr, 'cudaMemGetInfo (before FFT probe)')
     call fft_workspace_bytes_query(bc_is_100, bc_is_110, cdims, .true., &
                                    irank == 0, ng1_worksize_bytes, &
                                    ng1_heap_bytes, ng1_xtdesc_bytes, &
                                    ng1_used_cufftmp)
     ierr = cudaMemGetInfo(free_after, total_b)
+    call check_status(ierr, 'cudaMemGetInfo (after FFT probe)')
     ng1_query_residual_gib = real(int(free_before, i8) - &
                                   int(free_after, i8), dp)/1024._dp**3
     ng1_query_ran = .true.
