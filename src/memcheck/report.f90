@@ -7,6 +7,10 @@ module m_memcheck_report
                                  estimate_for_ng
   implicit none
 
+  private
+  public :: report, n_gpu_list, print_rule, print_table_header, &
+            print_table_row
+
   !> Candidate GPU counts to scan for "smallest ng that fits". The CUDA
   !> backend only supports a Z-only pencil decomposition (nproc_dir=
   !> [1,1,ng]) today.
