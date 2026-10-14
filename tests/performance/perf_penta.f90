@@ -16,6 +16,14 @@ program perf_penta
 
   ! Lele 10 penta 1st-deriv: reads 7 values, writes 1 -> bandwidth factor 8
   real(dp), parameter :: penta_bw = 8.0_dp
+  ! The result check only has to catch a solve that did not happen (an
+  ! error of order one), so roundoff sets the tolerance, as for first
+  ! derivatives in test_tridiag.
+#ifdef SINGLE_PREC
+  real(dp), parameter :: tol = 2e-4_dp
+#else
+  real(dp), parameter :: tol = 1e-8_dp
+#endif
   integer, parameter :: n_glob = 1024, n_halo = 4, n_warmup = 10
   integer :: n, n_groups, n_iters, ndof, nrank, nproc, j
   integer :: mem_clock_rt, mem_bus_width
@@ -95,7 +103,7 @@ program perf_penta
                   maxval(abs(du(:, j, :) - cos((j - 1 + nrank*n)*dx))))
   end do
   allpass = .true.
-  call check_norm(max_err, 1e-8_dp, 'penta result', allpass)
+  call check_norm(max_err, tol, 'penta result', allpass)
 
   call finalise_test(allpass, nrank)
 
