@@ -4,6 +4,10 @@ module m_memcheck_scratch
   use m_memcheck_context, only: memcheck_ctx_t
   implicit none
 
+  private
+  public :: ibm_mask_filename, validate_build_inputs, make_scratch, &
+            leave_build_scratch
+
   interface
     function c_chdir(path) bind(C, name='chdir') result(rc)
       import :: c_char, c_int
