@@ -1,5 +1,7 @@
 module m_memcheck_context
   !! Run state of x3d2-memcheck, passed explicitly to every routine.
+  use m_config, only: domain_config_t, solver_config_t, les_config_t, &
+                      checkpoint_config_t
   implicit none
 
   type :: memcheck_ctx_t
@@ -13,5 +15,10 @@ module m_memcheck_context
     !> report_measured_table()'s banner line and EXTENSIVE result line both
     !> read measured_n_substeps afterwards to state the real count.
     integer :: extensive_substeps = 0
+    type(domain_config_t) :: domain_cfg
+    type(solver_config_t) :: solver_cfg
+    type(les_config_t) :: les_cfg
+    type(checkpoint_config_t) :: checkpoint_cfg
+    integer :: gdims(3)
   end type memcheck_ctx_t
 end module m_memcheck_context
