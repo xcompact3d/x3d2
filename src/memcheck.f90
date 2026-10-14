@@ -777,14 +777,9 @@ contains
     end if
   end subroutine print_io_staging_line
 
-  subroutine report()
-    integer :: k, ng, requested_ng, smallest_fits, local_dims(3)
-    real(dp) :: per_gpu_gib, requested_gib, workspace_gib, overhead_gib, &
-                io_gib
-    logical :: exact
-    character(len=12) :: verdict
-    character(len=96) :: reason
-
+  subroutine print_header_lines()
+    !! Top of the report: input grid, card memory (with the in-use WARNING
+    !! when other processes hold it) and the static peak_fields count.
     call print_rule('=')
     print '(a,i0,a,i0,a,i0,a)', 'Input grid: ', gdims(1), 'x', gdims(2), &
       'x', gdims(3)
@@ -796,6 +791,17 @@ contains
         &full card, and the real build only proceeds if it fits in what is &
         &free.'
     print '(a,i0)', 'peak_fields (static estimate): ', peak_fields
+  end subroutine print_header_lines
+
+  subroutine report()
+    integer :: k, ng, requested_ng, smallest_fits, local_dims(3)
+    real(dp) :: per_gpu_gib, requested_gib, workspace_gib, overhead_gib, &
+                io_gib
+    logical :: exact
+    character(len=12) :: verdict
+    character(len=96) :: reason
+
+    call print_header_lines()
 
     call print_io_staging_line()
 
