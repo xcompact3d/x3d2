@@ -168,7 +168,7 @@ contains
     real(dp), intent(out), optional :: workspace_gib, overhead_gib, io_gib
 
     integer(i8) :: base_bytes, spec_bytes, floor_bytes, overhead_bytes, &
-                   io_bytes, total_b, free_b
+                   io_bytes, total_b, free_b, probe_bytes
     real(dp) :: floor_gib, io_gib_local, residual_gib
     logical :: probe_skipped
 
@@ -201,7 +201,9 @@ contains
         floor_gib <= DOES_NOT_FIT_FRACTION*ctx%card_gib) then
       if (.not. ctx%device%query_residual_gib(residual_gib)) then
         call ctx%device%mem_info(total_b, free_b)
-        probe_skipped = free_b < 7_i8*spectral_plus_mirror_bytes(ctx, 1) + &
+        probe_bytes = spectral_slab_bytes(ctx%bc_is_100, ctx%bc_is_110, &
+                                          ctx%cdims, 1)
+        probe_skipped = free_b < 7_i8*probe_bytes + &
                         ctx%device%overhead_floor_bytes(1, ctx%bc_is_110)
       end if
     end if
