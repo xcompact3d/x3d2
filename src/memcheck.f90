@@ -15,6 +15,14 @@ program x3d2_memcheck
   !!              from a process it already launched, which used to mean a
   !!              separate test_memory_estimate_cuda_1 binary had to be run
   !!              by hand to confirm a BORDERLINE result).
+  !!              The real build itself runs inside a throwaway
+  !!              x3d2-memcheck-build.<pid> subdirectory of the invoking
+  !!              directory, because a case build initialises monitoring
+  !!              (writes monitoring.csv) and calls postprocess(0), which
+  !!              clobbered run directories on 2026-09-15; a relative
+  !!              input path is mirrored in by symlink, one containing
+  !!              '..' must be passed as absolute instead; the scratch
+  !!              directory is removed once the build finishes.
   !!
   !! Also estimates the GPU-aware ADIOS2 I/O staging buffer (one extra
   !! unpadded local field held on the device while a snapshot/checkpoint
@@ -28,6 +36,7 @@ program x3d2_memcheck
   !!
   !! Usage: x3d2-memcheck <input.x3d> [--static | --build]
   use mpi
+  use iso_c_binding, only: c_char, c_int, c_size_t, c_ptr, c_null_char
   use cudafor, only: cudaMemGetInfo, cuda_count_kind, &
                      cudaGetDeviceCount, cudaSetDevice
   use m_common, only: dp, i8, nbytes, VERT, is_sp
@@ -157,6 +166,30 @@ program x3d2_memcheck
   !> loop and consumed by run_tier3()'s CHECK line, which must exclude it -
   !> the real --build never performs a snapshot/checkpoint write.
   real(dp) :: io_staging_ng1_gib = 0._dp
+  !> orig_dir/scratch_dir: set by enter_build_scratch, used by
+  !> leave_build_scratch to chdir back and remove the scratch directory -
+  !> see both subroutines' docstrings and run_tier3's docstring for why a
+  !> real --build runs inside a throwaway subdirectory rather than the
+  !> invoking directory.
+  character(len=4096) :: orig_dir = '', scratch_dir = ''
+
+  interface
+    function c_chdir(path) bind(C, name='chdir') result(rc)
+      import :: c_char, c_int
+      character(kind=c_char), dimension(*), intent(in) :: path
+      integer(c_int) :: rc
+    end function c_chdir
+    function c_getcwd(buf, size) bind(C, name='getcwd') result(ptr)
+      import :: c_char, c_size_t, c_ptr
+      character(kind=c_char), dimension(*), intent(inout) :: buf
+      integer(c_size_t), value :: size
+      type(c_ptr) :: ptr
+    end function c_getcwd
+    function c_getpid() bind(C, name='getpid') result(pid)
+      import :: c_int
+      integer(c_int) :: pid
+    end function c_getpid
+  end interface
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
@@ -329,6 +362,68 @@ contains
     bc_is_110 = (.not. periodic_x) .and. (.not. periodic_y) .and. periodic_z
     cdims = cell_dims(gdims, [periodic_x, periodic_y, periodic_z])
   end subroutine classify_bc
+
+  function current_dir() result(path)
+    !! Working directory via libc getcwd, trimmed at the first embedded NUL
+    !! (the C string terminator - Fortran character variables are not
+    !! themselves NUL-terminated, so the raw buffer must be cut there before
+    !! use). Used by enter_build_scratch to record the invoking directory.
+    character(len=4096) :: path
+    character(kind=c_char, len=4096) :: buf
+    type(c_ptr) :: ptr
+    integer :: nul_pos
+
+    ptr = c_getcwd(buf, 4096_c_size_t)
+    nul_pos = index(buf, c_null_char)
+    if (nul_pos > 0) then
+      path = buf(1:nul_pos - 1)
+    else
+      path = buf
+    end if
+  end function current_dir
+
+  pure function ibm_mask_filename(px, py, pz) result(fname)
+    !! Build the ibm_<BC-suffix>.bp mask filename from the three periodic_BC
+    !! flags, e.g. mesh%grid%periodic_BC(1:3) in build_and_measure or the
+    !! module periodic_x/y/z classify_bc sets - both carry the same
+    !! information since both derive from domain_cfg%BC_x/y/z via
+    !! periodic_dir. Shared by build_and_measure's ibm_on pre-check and
+    !! enter_build_scratch's mask mirroring so the suffix logic can never
+    !! diverge between the two (src/module/ibm.f90:70-75 is the third,
+    !! authoritative copy this mirrors).
+    logical, intent(in) :: px, py, pz
+    character(len=16) :: fname
+    character(len=3) :: bc_suffix
+
+    bc_suffix(1:1) = '0'
+    if (.not. px) bc_suffix(1:1) = '1'
+    bc_suffix(2:2) = '0'
+    if (.not. py) bc_suffix(2:2) = '1'
+    bc_suffix(3:3) = '0'
+    if (.not. pz) bc_suffix(3:3) = '1'
+    fname = "ibm_"//bc_suffix//".bp"
+  end function ibm_mask_filename
+
+  pure function has_dotdot_component(path) result(found)
+    !! True if any '/'-separated component of path is exactly '..' - used
+    !! by enter_build_scratch to reject a relative input path it cannot
+    !! safely mirror by symlink.
+    character(len=*), intent(in) :: path
+    logical :: found
+    integer :: start, slash_pos
+
+    found = .false.
+    start = 1
+    do
+      slash_pos = index(path(start:), '/')
+      if (slash_pos == 0) then
+        if (path(start:) == '..') found = .true.
+        exit
+      end if
+      if (path(start:start + slash_pos - 2) == '..') found = .true.
+      start = start + slash_pos
+    end do
+  end function has_dotdot_component
 
   subroutine query_card_gib()
     integer(kind=cuda_count_kind) :: free_b, total_b
@@ -671,6 +766,109 @@ contains
       print '(a)', 'To confirm with a real measurement, re-run with --build.'
   end subroutine report
 
+  subroutine enter_build_scratch(ok)
+    !! Real build runs inside a throwaway x3d2-memcheck-build.<pid>
+    !! subdirectory of the invoking directory, because a case build
+    !! initialises monitoring (writes monitoring.csv) and calls
+    !! postprocess(0), which clobbered run directories on 2026-09-15. A
+    !! relative input path is mirrored into the scratch directory by
+    !! symlink; a relative path containing a '..' component (or a single
+    !! quote, which the shell quoting below cannot handle) cannot be
+    !! mirrored this way and is rejected - pass an absolute path instead.
+    !! Sets ok=.false. (and the estimate above stands, like the other
+    !! run_tier3 skips) on any failure; leave_build_scratch removes the
+    !! scratch directory once the build finishes.
+    logical, intent(out) :: ok
+
+    integer(c_int) :: pid, rc
+    integer :: st, slash_pos
+    character(len=32) :: pid_str
+    character(len=16) :: ibm_file
+    logical :: ibm_file_exists
+
+    ok = .true.
+    orig_dir = current_dir()
+    pid = c_getpid()
+    write (pid_str, '(i0)') pid
+    scratch_dir = trim(orig_dir)//'/x3d2-memcheck-build.'//trim(pid_str)
+
+    call execute_command_line("mkdir -p '"//trim(scratch_dir)//"'", &
+                              exitstat=st)
+    if (st /= 0) then
+      print '(a,a)', 'Real build skipped: could not create scratch &
+        &directory ', trim(scratch_dir)
+      ok = .false.
+      return
+    end if
+
+    if (input_path(1:1) /= '/') then
+      if (has_dotdot_component(trim(input_path)) .or. &
+          index(trim(input_path), "'") > 0) then
+        print '(a)', "Real build skipped: relative input path with '..' &
+          &cannot be mirrored; pass an absolute path"
+        call execute_command_line("rmdir '"//trim(scratch_dir)//"'")
+        ok = .false.
+        return
+      end if
+      slash_pos = index(trim(input_path), '/', back=.true.)
+      if (slash_pos > 0) &
+        call execute_command_line("mkdir -p '"//trim(scratch_dir)//'/'// &
+                                  trim(input_path(1:slash_pos - 1))//"'")
+      call execute_command_line("ln -s '"//trim(orig_dir)//'/'// &
+                                trim(input_path)//"' '"//trim(scratch_dir)// &
+                                '/'//trim(input_path)//"'")
+    end if
+
+    if (solver_cfg%ibm_on) then
+      ibm_file = ibm_mask_filename(periodic_x, periodic_y, periodic_z)
+      inquire (file=trim(orig_dir)//'/'//trim(ibm_file), &
+              exist=ibm_file_exists)
+      if (ibm_file_exists) &
+        call execute_command_line("ln -s '"//trim(orig_dir)//'/'// &
+                                  trim(ibm_file)//"' '"//trim(scratch_dir)// &
+                                  '/'//trim(ibm_file)//"'")
+    end if
+
+    rc = c_chdir(trim(scratch_dir)//c_null_char)
+    if (rc /= 0) then
+      print '(a,a)', 'Real build skipped: could not chdir into scratch &
+        &directory ', trim(scratch_dir)
+      call execute_command_line("rm -rf '"//trim(scratch_dir)//"'")
+      ok = .false.
+      return
+    end if
+
+    print '(a,a,a)', 'Real build scratch directory: ', trim(scratch_dir), &
+      ' (removed after the build)'
+  end subroutine enter_build_scratch
+
+  subroutine leave_build_scratch()
+    !! Restore the invoking directory and remove the scratch directory
+    !! enter_build_scratch created. Called after build_and_measure returns,
+    !! on both the normal path and the ibm_missing early return.
+    integer(c_int) :: pid, rc
+    character(len=32) :: pid_str
+    character(len=4096) :: expected_scratch_dir
+
+    rc = c_chdir(trim(orig_dir)//c_null_char)
+    if (rc /= 0) &
+      error stop 'x3d2-memcheck: could not chdir back to the invoking &
+        &directory after the real build; state is unknown, not removing &
+        &the scratch directory.'
+
+    ! Never remove anything other than the exact scratch directory
+    ! enter_build_scratch created and chdir'd into.
+    pid = c_getpid()
+    write (pid_str, '(i0)') pid
+    expected_scratch_dir = trim(orig_dir)//'/x3d2-memcheck-build.'// &
+                           trim(pid_str)
+    if (trim(scratch_dir) == trim(expected_scratch_dir)) &
+      call execute_command_line("rm -rf '"//trim(scratch_dir)//"'")
+
+    orig_dir = ''
+    scratch_dir = ''
+  end subroutine leave_build_scratch
+
   subroutine run_tier3()
     !! Tier 3: a REAL case build + one substep on 1 GPU, measured with
     !! cudaMemGetInfo - the last-resort ground truth, now run in-process
@@ -679,11 +877,17 @@ contains
     !! if the fields only workspace alone already exceeds BUILD_FRACTION of
     !! the card, exactly as this tool's real build probe always has, or if
     !! ibm_on=T and the matching mask file is not present in the working
-    !! directory.
+    !! directory. The real build itself runs inside a throwaway
+    !! x3d2-memcheck-build.<pid> scratch directory (enter_build_scratch/
+    !! leave_build_scratch above), because it initialises monitoring
+    !! (writes monitoring.csv) and calls postprocess(0), which clobbered run
+    !! directories on 2026-09-15; enter_build_scratch also skips the build
+    !! (ok=.false.) if the scratch directory cannot be created or entered,
+    !! or if input_path is relative with a '..' component it cannot mirror.
     real(dp) :: ws_guess, used_gib, workspace_gib_measured, pct_error, &
                estimate_ng1_excl_io_gib
     integer :: measured_peak_fields
-    logical :: ibm_missing
+    logical :: ibm_missing, build_scratch_ok
     character(len=12) :: measured_verdict
 
     ws_guess = real(fields_plus_halo_bytes_n(1, peak_fields), dp) &
@@ -712,8 +916,12 @@ contains
         &NVSHMEM heap).'
     end if
 
+    call enter_build_scratch(build_scratch_ok)
+    if (.not. build_scratch_ok) return
+
     call build_and_measure(gdims, measured_peak_fields, used_gib, &
                            ibm_missing)
+    call leave_build_scratch()
     if (ibm_missing) then
       print '(a)', '------------------------------------------------------------'
       print '(a)', 'Real build skipped: ibm_on=T but the matching &
@@ -944,7 +1152,6 @@ contains
     type(cuda_backend_t), target :: cuda_backend
     type(allocator_t), target :: host_allocator
     character(len=16) :: ibm_file
-    character(len=3) :: bc_suffix
     logical :: ibm_file_exists
     integer(kind=cuda_count_kind) :: free_b, total_b
 
@@ -963,16 +1170,14 @@ contains
     ! inside solver init (src/module/ibm.f90), which MPI_Aborts if that
     ! file is missing. That is correct for production xcompact, but not
     ! for a tool that should degrade gracefully - check for it here, using
-    ! the same suffix construction as src/module/ibm.f90:70-75, and bail
-    ! out before triggering the case/solver construction that would abort.
+    ! the same suffix construction as src/module/ibm.f90:70-75 (shared via
+    ! ibm_mask_filename, also used by enter_build_scratch to mirror the
+    ! mask into the build scratch directory), and bail out before
+    ! triggering the case/solver construction that would abort.
     if (solver_cfg%ibm_on) then
-      bc_suffix(1:1) = '0'
-      if (.not. mesh%grid%periodic_BC(1)) bc_suffix(1:1) = '1'
-      bc_suffix(2:2) = '0'
-      if (.not. mesh%grid%periodic_BC(2)) bc_suffix(2:2) = '1'
-      bc_suffix(3:3) = '0'
-      if (.not. mesh%grid%periodic_BC(3)) bc_suffix(3:3) = '1'
-      ibm_file = "ibm_"//bc_suffix//".bp"
+      ibm_file = ibm_mask_filename(mesh%grid%periodic_BC(1), &
+                                   mesh%grid%periodic_BC(2), &
+                                   mesh%grid%periodic_BC(3))
       inquire (file=ibm_file, exist=ibm_file_exists)
       if (.not. ibm_file_exists) then
         ibm_missing = .true.
