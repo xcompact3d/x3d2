@@ -514,6 +514,14 @@ contains
     end if
   end function ng_unsupported_reason
 
+  subroutine print_rule(fill)
+    !! One 60 character separator line: '=' around the report header, '-'
+    !! between its sections.
+    character(len=1), intent(in) :: fill
+
+    print '(a)', repeat(fill, 60)
+  end subroutine print_rule
+
   subroutine print_table_header()
     character(len=14) :: hdr_grid
 
