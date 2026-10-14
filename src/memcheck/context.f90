@@ -43,5 +43,25 @@ module m_memcheck_context
     !> Human-readable reason gpu_io_device_write is false, used by report()'s
     !> GPU-aware IO staging line when there is no term to report.
     character(len=64) :: gpu_io_reason = ''
+    !> Set by report()'s ng=1 row, used by run_tier3()'s CHECK line to
+    !> compare the static estimate against the real --build measurement.
+    real(dp) :: estimate_ng1_gib
+    !> The requested configuration's verdict - set by report() from the
+    !> estimate, and (--build only) overwritten by run_tier3() with the more
+    !> authoritative measured verdict if a real build actually ran. Used
+    !> after MPI_Finalize to set the process exit code: 0=FITS, 1=BORDERLINE,
+    !> 2=DOES_NOT_FIT, so a calling script can check $? instead of scraping
+    !> stdout.
+    character(len=12) :: final_verdict
+    !> GPU-aware IO staging term (GiB) at ng=1, captured by report()'s table
+    !> loop and consumed by run_tier3()'s CHECK line, which must exclude it -
+    !> the real --build never performs a snapshot/checkpoint write.
+    real(dp) :: io_staging_ng1_gib = 0._dp
+    !> orig_dir/scratch_dir: set by validate_build_inputs and make_scratch,
+    !> used by leave_build_scratch to chdir back and remove the scratch
+    !> directory - see their docstrings and run_tier3's docstring for why a
+    !> real --build runs inside a throwaway subdirectory rather than the
+    !> invoking directory.
+    character(len=4096) :: orig_dir = '', scratch_dir = ''
   end type memcheck_ctx_t
 end module m_memcheck_context
