@@ -90,14 +90,6 @@ program x3d2_memcheck
 
   type(memcheck_ctx_t) :: ctx
   integer :: ierr, irank, nproc, ndevs
-  integer :: peak_fields
-  real(dp) :: card_gib
-  !> Free memory on the card right now (query_card_gib), i.e. card_gib minus
-  !> whatever other processes already hold - used by report()'s header
-  !> WARNING line and by run_tier3's BUILD_FRACTION gate, both of which must
-  !> judge headroom against what is actually free, not the card's full
-  !> capacity.
-  real(dp) :: card_free_gib = 0._dp
   integer :: measured_n_substeps
   !> Set by report()'s ng=1 row, used by run_tier3()'s CHECK line to
   !> compare the static estimate against the real --build measurement.
@@ -143,16 +135,6 @@ program x3d2_memcheck
   !> peak_fields against m_memory_estimate's static peak_fields_lookup (see
   !> check_peak_fields_table).
   logical :: output_vorticity = .false., output_qcriterion = .false.
-  !> Set by resolve_gpu_io_mode() - whether this run's snapshot/checkpoint
-  !> writes would stage through a device buffer (true) or fall back to a
-  !> host copy (false) before reaching disk.
-  logical :: gpu_io_device_write = .false.
-  !> Resolved write mode name (mirrors runtime_gpu_write_mode_name in
-  !> src/io/adios2/io.f90): 'auto', 'gpu', or 'host'.
-  character(len=16) :: gpu_io_mode_name = 'auto'
-  !> Human-readable reason gpu_io_device_write is false, used by report()'s
-  !> GPU-aware IO staging line when there is no term to report.
-  character(len=64) :: gpu_io_reason = ''
   !> GPU-aware IO staging term (GiB) at ng=1, captured by report()'s table
   !> loop and consumed by run_tier3()'s CHECK line, which must exclude it -
   !> the real --build never performs a snapshot/checkpoint write.
@@ -206,7 +188,7 @@ program x3d2_memcheck
   call classify_bc()
   call query_card_gib()
 
-  peak_fields = peak_fields_lookup(trim(ctx%domain_cfg%flow_case_name), &
+  ctx%peak_fields = peak_fields_lookup(trim(ctx%domain_cfg%flow_case_name), &
                                    ctx%solver_cfg%n_species, &
                                    trim(ctx%les_cfg%model) /= 'none', &
                                    ctx%solver_cfg%ibm_on, &
@@ -330,17 +312,17 @@ contains
 
     select case (trim(mode_value))
     case ('host', 'd2h', 'staged')
-      gpu_io_device_write = .false.
-      gpu_io_mode_name = 'host'
-      gpu_io_reason = 'write mode host'
+      ctx%gpu_io_device_write = .false.
+      ctx%gpu_io_mode_name = 'host'
+      ctx%gpu_io_reason = 'write mode host'
     case default
-      gpu_io_device_write = .true.
-      gpu_io_mode_name = trim(mode_value)
+      ctx%gpu_io_device_write = .true.
+      ctx%gpu_io_mode_name = trim(mode_value)
     end select
 #else
-    gpu_io_device_write = .false.
-    gpu_io_mode_name = 'host'
-    gpu_io_reason = 'build lacks X3D2_ADIOS2_CUDA'
+    ctx%gpu_io_device_write = .false.
+    ctx%gpu_io_mode_name = 'host'
+    ctx%gpu_io_reason = 'build lacks X3D2_ADIOS2_CUDA'
 #endif
   end subroutine resolve_gpu_io_mode
 
@@ -446,8 +428,8 @@ contains
 
     ierr = cudaMemGetInfo(free_b, total_b)
     call check_status(ierr, 'cudaMemGetInfo (card total)')
-    card_gib = to_gib(int(total_b, i8))
-    card_free_gib = to_gib(int(free_b, i8))
+    ctx%card_gib = to_gib(int(total_b, i8))
+    ctx%card_free_gib = to_gib(int(free_b, i8))
   end subroutine query_card_gib
 
   pure function classify(per_gpu_gib, total_gib) result(verdict)
@@ -567,7 +549,7 @@ contains
     integer, intent(in) :: ng
     integer(i8) :: nbytes8
 
-    nbytes8 = fields_plus_halo_bytes_n(ng, peak_fields)
+    nbytes8 = fields_plus_halo_bytes_n(ng, ctx%peak_fields)
   end function fields_plus_halo_bytes
 
   function spectral_plus_mirror_bytes(ng) result(nbytes8)
@@ -651,7 +633,8 @@ contains
     spec_bytes = spectral_plus_mirror_bytes(ng)
     io_bytes = gpu_io_staging_bytes([ctx%gdims(1), ctx%gdims(2), &
                                      ctx%gdims(3)/ng], &
-                                    ctx%checkpoint_cfg, gpu_io_device_write)
+                                    ctx%checkpoint_cfg, &
+                                    ctx%gpu_io_device_write)
     io_gib_local = to_gib(io_bytes)
     if (present(io_gib)) io_gib = io_gib_local
     if (present(workspace_gib)) &
@@ -664,7 +647,7 @@ contains
     floor_gib = to_gib(floor_bytes)
 
     if (trim(ctx%run_mode) == 'STATIC' .or. &
-        floor_gib > DOES_NOT_FIT_FRACTION*card_gib) then
+        floor_gib > DOES_NOT_FIT_FRACTION*ctx%card_gib) then
       per_gpu_gib = floor_gib
       exact = .false.
       if (present(overhead_gib)) &
@@ -675,7 +658,7 @@ contains
         ! --static: Tier 1 only, never queries the GPU FFT plan. floor_gib
         ! IS the estimate here - not just a DOES_NOT_FIT early-return floor
         ! - so classify it with the full three-way verdict.
-        verdict = classify(per_gpu_gib, card_gib)
+        verdict = classify(per_gpu_gib, ctx%card_gib)
       else
         verdict = 'DOES_NOT_FIT'
       end if
@@ -717,7 +700,7 @@ contains
       overhead_gib = to_gib(worksize_bytes + xtdesc_bytes + heap_bytes + &
                             context_bytes) + io_gib_local
 
-    verdict = classify(per_gpu_gib, card_gib)
+    verdict = classify(per_gpu_gib, ctx%card_gib)
   end subroutine estimate_for_ng
 
   subroutine print_io_staging_line()
@@ -731,7 +714,7 @@ contains
     ! GPU-aware IO staging: computed directly at ng=1 (local_dims == gdims
     ! there) so it is available here, ahead of the per-ng table below.
     io_ng1_bytes = gpu_io_staging_bytes(ctx%gdims, ctx%checkpoint_cfg, &
-                                        gpu_io_device_write)
+                                        ctx%gpu_io_device_write)
     unit_stride = all(ctx%checkpoint_cfg%output_stride == 1)
     snapshot_active = ctx%checkpoint_cfg%snapshot_freq > 0 .and. unit_stride
     checkpoint_active = ctx%checkpoint_cfg%checkpoint_freq > 0
@@ -747,11 +730,11 @@ contains
       if (.not. checkpoint_active .and. ctx%checkpoint_cfg%snapshot_sp .and. &
           .not. is_sp .and. snapshot_active) what = trim(what)//' (sp)'
       print '(a,f0.1,a,a,a,a,a)', 'GPU-aware IO staging: ', mib, &
-        ' MiB/GPU at ng=1 (write mode ', trim(gpu_io_mode_name), ', ', &
+        ' MiB/GPU at ng=1 (write mode ', trim(ctx%gpu_io_mode_name), ', ', &
         trim(what), ')'
     else
-      if (.not. gpu_io_device_write) then
-        io_none_reason = trim(gpu_io_reason)
+      if (.not. ctx%gpu_io_device_write) then
+        io_none_reason = trim(ctx%gpu_io_reason)
       else if (ctx%checkpoint_cfg%snapshot_freq > 0 .and. .not. unit_stride &
                .and. ctx%checkpoint_cfg%checkpoint_freq == 0) then
         io_none_reason = 'snapshot striding falls back to host path'
@@ -785,7 +768,8 @@ contains
       call estimate_for_ng(requested_ng, requested_gib, exact, final_verdict)
       print '(a,i0,a,f0.2,a,f0.1,a,a)', 'Requested nproc_dir gives ng=', &
         requested_ng, ': ', requested_gib, ' GiB/GPU (', &
-        100._dp*requested_gib/card_gib, '% of card) - ', trim(final_verdict)
+        100._dp*requested_gib/ctx%card_gib, '% of card) - ', &
+        trim(final_verdict)
       if (.not. exact) then
         if (trim(ctx%run_mode) == 'STATIC') then
           print '(a)', '  (Tier 1 estimate only: --static skips the GPU &
@@ -826,7 +810,7 @@ contains
         io_staging_ng1_gib = io_gib
       end if
       call print_table_row(ng, local_dims, workspace_gib, overhead_gib, &
-                           per_gpu_gib, card_gib, verdict)
+                           per_gpu_gib, ctx%card_gib, verdict)
       if (smallest_fits == 0 .and. trim(verdict) == 'FITS') smallest_fits = ng
     end do
     call print_rule('-')
@@ -838,14 +822,15 @@ contains
     call print_rule('=')
     print '(a,i0,a,i0,a,i0,a)', 'Input grid: ', ctx%gdims(1), 'x', &
       ctx%gdims(2), 'x', ctx%gdims(3)
-    print '(a,f0.2,a,f0.2,a)', 'Card memory: ', card_gib, ' GiB (', &
-      card_free_gib, ' GiB free now)'
-    if (card_gib - card_free_gib > 0.5_dp) &
-      print '(a,f0.2,a)', 'WARNING: ', card_gib - card_free_gib, ' GiB of &
+    print '(a,f0.2,a,f0.2,a)', 'Card memory: ', ctx%card_gib, ' GiB (', &
+      ctx%card_free_gib, ' GiB free now)'
+    if (ctx%card_gib - ctx%card_free_gib > 0.5_dp) &
+      print '(a,f0.2,a)', 'WARNING: ', ctx%card_gib - ctx%card_free_gib, &
+        ' GiB of &
         &this card is in use by other processes; verdicts are against the &
         &full card, and the real build only proceeds if it fits in what is &
         &free.'
-    print '(a,i0)', 'peak_fields (static estimate): ', peak_fields
+    print '(a,i0)', 'peak_fields (static estimate): ', ctx%peak_fields
     call print_io_staging_line()
     select case (trim(ctx%run_mode))
     case ('STATIC')
@@ -1126,17 +1111,17 @@ contains
     ! --build gate: skip the real build (after printing why) when the fields
     ! only workspace alone already exceeds BUILD_FRACTION of the FREE card
     ! memory.
-    ws_guess = to_gib(fields_plus_halo_bytes_n(1, peak_fields))
+    ws_guess = to_gib(fields_plus_halo_bytes_n(1, ctx%peak_fields))
     ! fields_plus_halo_bytes_n includes the halo term; the historical
     ! BUILD_FRACTION guard was calibrated against fields alone, so subtract
     ! it back out here rather than changing the (already-validated)
     ! threshold itself.
     ws_guess = ws_guess - to_gib(padded_halo_bytes(ctx%gdims, SZ, n_halo))
-    if (ws_guess >= BUILD_FRACTION*card_free_gib) then
+    if (ws_guess >= BUILD_FRACTION*ctx%card_free_gib) then
       call print_rule('-')
       print '(a,f0.2,a,f0.1,a,f0.2,a)', 'Real build skipped: fields only &
         &workspace ', ws_guess, ' GiB exceeds ', 100._dp*BUILD_FRACTION, &
-        '% of the FREE card memory (', card_free_gib, ' GiB free); the &
+        '% of the FREE card memory (', ctx%card_free_gib, ' GiB free); the &
         &estimate above stands.'
       return
     end if
@@ -1286,7 +1271,7 @@ contains
     if (ctx%extensive_substeps > 0) &
       print '(a,i0,a,i0,a,f0.3,a,f0.3)', 'EXTENSIVE result: substeps=', &
         measured_n_substeps, ' peak_fields=', measured_peak_fields, &
-        ' used_gib=', used_gib, ' pct_card=', 100._dp*used_gib/card_gib
+        ' used_gib=', used_gib, ' pct_card=', 100._dp*used_gib/ctx%card_gib
     call print_table_header()
 
     do k = 1, size(n_gpu_list)
@@ -1322,12 +1307,12 @@ contains
       overhead_term = overhead_term + &
                       to_gib(gpu_io_staging_bytes(local_dims, &
                                                   ctx%checkpoint_cfg, &
-                                                  gpu_io_device_write))
+                                                  ctx%gpu_io_device_write))
 
       per_gpu = w_local + overhead_term
-      verdict = classify(per_gpu, card_gib)
+      verdict = classify(per_gpu, ctx%card_gib)
       call print_table_row(ng, local_dims, w_local, overhead_term, per_gpu, &
-                           card_gib, verdict)
+                           ctx%card_gib, verdict)
       if (ng == ctx%domain_cfg%nproc_dir(3)) requested_verdict = verdict
     end do
     call print_rule('-')
