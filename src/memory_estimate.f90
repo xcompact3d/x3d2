@@ -186,9 +186,10 @@ contains
     integer(i8) :: nbytes8
     integer(i8) :: n_groups
 
-    n_groups = max(int(padded_dims(2), i8)*int(padded_dims(3), i8)/int(sz, i8), &
-                   int(padded_dims(1), i8)*int(padded_dims(3), i8)/int(sz, i8), &
-                   int(padded_dims(1), i8)*int(padded_dims(2), i8)/int(sz, i8))
+    n_groups = max( &
+               int(padded_dims(2), i8)*int(padded_dims(3), i8)/int(sz, i8), &
+               int(padded_dims(1), i8)*int(padded_dims(3), i8)/int(sz, i8), &
+               int(padded_dims(1), i8)*int(padded_dims(2), i8)/int(sz, i8))
     nbytes8 = int(sz, i8)*n_groups*int(nbytes, i8)*12_i8*int(n_halo + 1, i8)
   end function halo_bytes
 
