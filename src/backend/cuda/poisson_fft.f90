@@ -257,6 +257,7 @@ contains
       if (ierr /= 0) then
         if (present(stat)) then
           stat = ierr
+          ierr = cufftDestroy(plan)
           return
         end if
         write (stderr, *), 'cuFFT Error Code: ', ierr
