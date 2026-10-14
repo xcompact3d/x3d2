@@ -793,6 +793,21 @@ contains
     print '(a,i0)', 'peak_fields (static estimate): ', peak_fields
   end subroutine print_header_lines
 
+  subroutine print_mode_lines()
+    !! Bottom of the report header: which tiers this run mode covers, then
+    !! the closing rule.
+    select case (trim(run_mode))
+    case ('STATIC')
+      print '(a)', 'Mode: static (Tier 1 only, no FFT plan query)'
+    case ('BUILD')
+      print '(a)', 'Mode: build (Tier 1 + Tier 2, then a real Tier 3 &
+        &build/measure)'
+    case default
+      print '(a)', 'Mode: default (Tier 1 + Tier 2 FFT plan query)'
+    end select
+    call print_rule('=')
+  end subroutine print_mode_lines
+
   subroutine report()
     integer :: k, ng, requested_ng, smallest_fits, local_dims(3)
     real(dp) :: per_gpu_gib, requested_gib, workspace_gib, overhead_gib, &
@@ -805,16 +820,7 @@ contains
 
     call print_io_staging_line()
 
-    select case (trim(run_mode))
-    case ('STATIC')
-      print '(a)', 'Mode: static (Tier 1 only, no FFT plan query)'
-    case ('BUILD')
-      print '(a)', 'Mode: build (Tier 1 + Tier 2, then a real Tier 3 &
-        &build/measure)'
-    case default
-      print '(a)', 'Mode: default (Tier 1 + Tier 2 FFT plan query)'
-    end select
-    call print_rule('=')
+    call print_mode_lines()
 
     requested_ng = domain_cfg%nproc_dir(3)
     reason = ng_unsupported_reason(requested_ng)
