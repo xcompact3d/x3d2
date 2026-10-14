@@ -1,8 +1,10 @@
 module m_memcheck_estimate
   !! Static (Tier 1) and Tier 2 per-GPU memory estimate of x3d2-memcheck.
   use m_common, only: dp, i8, nbytes
+  use cudafor, only: cudaMemGetInfo, cuda_count_kind
   use m_memcheck_context, only: memcheck_ctx_t
   use m_cuda_common, only: SZ
+  use m_cuda_memory_estimate, only: fft_workspace_bytes_query, check_status
   use m_memory_estimate, only: padded_cells, padded_halo_bytes, &
                                spectral_slab_bytes, mirror_buffer_bytes_100, &
                                spectral_extra_bytes_110, &
@@ -127,5 +129,31 @@ contains
                                       ctx%solver_cfg%lowmem_fft, ctx%cdims, ng)
     end if
   end function spectral_plus_mirror_bytes
+
+  subroutine ensure_fft_query(ctx)
+    !! Runs the real (single-rank) Tier 2 plan query at most once per
+    !! process and caches the result in ng1_worksize_bytes/ng1_heap_bytes/
+    !! ng1_xtdesc_bytes/ng1_used_cufftmp, plus the cudaMemGetInfo delta
+    !! across the whole call in ng1_query_residual_gib (see its
+    !! declaration).
+    type(memcheck_ctx_t), intent(inout) :: ctx
+    integer :: ierr
+    integer(kind=cuda_count_kind) :: free_before, free_after, total_b
+
+    if (ctx%ng1_query_ran) return
+    ierr = cudaMemGetInfo(free_before, total_b)
+    call check_status(ierr, 'cudaMemGetInfo (before FFT probe)')
+    call fft_workspace_bytes_query(ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, &
+                                   .true., ctx%irank == 0, &
+                                   ctx%ng1_worksize_bytes, &
+                                   ctx%ng1_heap_bytes, &
+                                   ctx%ng1_xtdesc_bytes, &
+                                   ctx%ng1_used_cufftmp)
+    ierr = cudaMemGetInfo(free_after, total_b)
+    call check_status(ierr, 'cudaMemGetInfo (after FFT probe)')
+    ctx%ng1_query_residual_gib = to_gib(int(free_before, i8) - &
+                                        int(free_after, i8))
+    ctx%ng1_query_ran = .true.
+  end subroutine ensure_fft_query
 
 end module m_memcheck_estimate

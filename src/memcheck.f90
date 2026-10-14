@@ -45,8 +45,7 @@ program x3d2_memcheck
   use m_memory_estimate, only: spectral_slab_bytes, mirror_buffer_bytes_100, &
                                output_field_active, peak_fields_lookup, &
                                padded_halo_bytes, gpu_io_staging_bytes
-  use m_cuda_memory_estimate, only: fft_workspace_bytes_query, &
-                                    context_floor_bytes, check_status
+  use m_cuda_memory_estimate, only: context_floor_bytes, check_status
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
@@ -65,7 +64,7 @@ program x3d2_memcheck
                                  ng_unsupported_reason, n_halo, &
                                  fields_plus_halo_bytes_n, &
                                  fields_plus_halo_bytes, &
-                                 spectral_plus_mirror_bytes
+                                 spectral_plus_mirror_bytes, ensure_fft_query
 
   implicit none
 
@@ -285,31 +284,6 @@ contains
       '% | ', trim(verdict)
   end subroutine print_table_row
 
-  subroutine ensure_fft_query()
-    !! Runs the real (single-rank) Tier 2 plan query at most once per
-    !! process and caches the result in ng1_worksize_bytes/ng1_heap_bytes/
-    !! ng1_xtdesc_bytes/ng1_used_cufftmp, plus the cudaMemGetInfo delta
-    !! across the whole call in ng1_query_residual_gib (see its
-    !! declaration).
-    integer :: ierr
-    integer(kind=cuda_count_kind) :: free_before, free_after, total_b
-
-    if (ctx%ng1_query_ran) return
-    ierr = cudaMemGetInfo(free_before, total_b)
-    call check_status(ierr, 'cudaMemGetInfo (before FFT probe)')
-    call fft_workspace_bytes_query(ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, &
-                                   .true., ctx%irank == 0, &
-                                   ctx%ng1_worksize_bytes, &
-                                   ctx%ng1_heap_bytes, &
-                                   ctx%ng1_xtdesc_bytes, &
-                                   ctx%ng1_used_cufftmp)
-    ierr = cudaMemGetInfo(free_after, total_b)
-    call check_status(ierr, 'cudaMemGetInfo (after FFT probe)')
-    ctx%ng1_query_residual_gib = to_gib(int(free_before, i8) - &
-                                        int(free_after, i8))
-    ctx%ng1_query_ran = .true.
-  end subroutine ensure_fft_query
-
   subroutine estimate_for_ng(ng, per_gpu_gib, exact, verdict, workspace_gib, &
                              overhead_gib, io_gib)
     !! Tier 1 floor first; only calls into Tier 2 (a real, throwaway GPU
@@ -371,7 +345,7 @@ contains
       return
     end if
 
-    call ensure_fft_query()
+    call ensure_fft_query(ctx)
     used_cufftmp = ctx%ng1_used_cufftmp
     ! context_bytes: the CUDA-context-alone baseline (no ng argument
     ! matters here - context_floor_bytes only adds its hardcoded NVSHMEM
