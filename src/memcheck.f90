@@ -76,15 +76,14 @@ program x3d2_memcheck
   call classify_bc(ctx)
   call query_card_gib()
 
-  ctx%peak_fields = peak_fields_lookup(trim(ctx%domain_cfg%flow_case_name), &
-                                   ctx%solver_cfg%n_species, &
-                                   trim(ctx%les_cfg%model) /= 'none', &
-                                   ctx%solver_cfg%ibm_on, &
-                                   output_field_active(ctx%checkpoint_cfg, &
-                                                       'vorticity'), &
-                                   output_field_active(ctx%checkpoint_cfg, &
-                                                       'qcriterion'), &
-                                   ctx%solver_cfg%lowmem_transeq)
+  ctx%peak_fields = peak_fields_lookup( &
+                    trim(ctx%domain_cfg%flow_case_name), &
+                    ctx%solver_cfg%n_species, &
+                    trim(ctx%les_cfg%model) /= 'none', &
+                    ctx%solver_cfg%ibm_on, &
+                    output_field_active(ctx%checkpoint_cfg, 'vorticity'), &
+                    output_field_active(ctx%checkpoint_cfg, 'qcriterion'), &
+                    ctx%solver_cfg%lowmem_transeq)
 
   ctx%multi_gpu_supported = .not. (ctx%bc_is_010 .or. ctx%bc_is_110)
 
