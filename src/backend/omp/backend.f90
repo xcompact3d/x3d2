@@ -46,7 +46,8 @@ module m_omp_backend
     procedure :: vecmult => vecmult_omp
     procedure :: scalar_product => scalar_product_omp
     procedure :: vector_norm_squared => vector_norm_squared_omp
-    procedure :: field_weighted_sums => field_weighted_sums_omp
+    procedure :: field_labelled_sums => field_labelled_sums_omp
+    procedure :: field_labelled_axpy => field_labelled_axpy_omp
     procedure :: field_max_mean => field_max_mean_omp
     procedure :: slice_max_sum => slice_max_sum_omp
     procedure :: field_scale => field_scale_omp
@@ -900,59 +901,109 @@ contains
                        MPI_COMM_WORLD, ierr)
   end function vector_norm_squared_omp
 
-  subroutine field_weighted_sums_omp(self, sums, g, a, b, c)
-    !! [[m_base_backend(module):field_weighted_sums_base(subroutine)]]
+  subroutine field_labelled_sums_omp(self, sums, g, label, a, b, c)
+    !! [[m_base_backend(module):field_labelled_sums_base(subroutine)]]
     implicit none
 
     class(omp_backend_t) :: self
-    real(dp), intent(out) :: sums(3)
-    class(field_t), intent(in) :: g, a, b, c
+    real(dp), intent(out) :: sums(:, :)
+    class(field_t), intent(in) :: g, label, a, b, c
 
-    real(dp) :: sum_a, sum_b, sum_c
-    integer :: dims(3), n_y_blocks, y_stride
-    integer :: i, j, k, k_i, k_j
+    real(dp) :: local_sums(3, size(sums, 2))
+    integer :: dims(3), n_y_blocks, y_stride, n_label
+    integer :: i, j, k, k_i, k_j, l
 
-    if (g%data_loc == NULL_LOC .or. a%data_loc == NULL_LOC .or. &
-        b%data_loc == NULL_LOC .or. c%data_loc == NULL_LOC) then
-      error stop 'You must set data_loc before computing weighted sums.'
-    end if
-    if (a%data_loc /= g%data_loc .or. b%data_loc /= g%data_loc .or. &
-        c%data_loc /= g%data_loc) then
-      error stop 'Weighted-sum fields must use the same data location.'
-    end if
-    if (g%dir /= DIR_X .or. a%dir /= DIR_X .or. b%dir /= DIR_X .or. &
-        c%dir /= DIR_X) then
-      error stop 'Weighted-sum fields must use DIR_X layout.'
-    end if
+    call check_labelled_fields(g, label, a, b, c)
 
     dims = self%mesh%get_dims(g%data_loc)
     n_y_blocks = (dims(2) - 1)/SZ + 1
     y_stride = y_group_stride(self)
+    n_label = size(sums, 2)
 
-    sum_a = 0._dp
-    sum_b = 0._dp
-    sum_c = 0._dp
-    !$omp parallel do collapse(2) private(k) &
-    !$omp reduction(+:sum_a, sum_b, sum_c)
+    local_sums = 0._dp
+    !$omp parallel do collapse(2) private(k, l) reduction(+:local_sums)
     do k_i = 1, dims(3)
       do k_j = 1, n_y_blocks
         ! y-block is the fast-varying component of the group index
         k = k_j + (k_i - 1)*y_stride
         do j = 1, dims(1)
-          !$omp simd reduction(+:sum_a, sum_b, sum_c)
           do i = 1, min(SZ, dims(2) - (k_j - 1)*SZ)
-            sum_a = sum_a + g%data(i, j, k)*a%data(i, j, k)
-            sum_b = sum_b + g%data(i, j, k)*b%data(i, j, k)
-            sum_c = sum_c + g%data(i, j, k)*c%data(i, j, k)
+            l = nint(label%data(i, j, k))
+            if (l < 1 .or. l > n_label) cycle
+            local_sums(1, l) = local_sums(1, l) &
+                               + g%data(i, j, k)*a%data(i, j, k)
+            local_sums(2, l) = local_sums(2, l) &
+                               + g%data(i, j, k)*b%data(i, j, k)
+            local_sums(3, l) = local_sums(3, l) &
+                               + g%data(i, j, k)*c%data(i, j, k)
           end do
-          !$omp end simd
         end do
       end do
     end do
     !$omp end parallel do
 
-    sums = [sum_a, sum_b, sum_c]
-  end subroutine field_weighted_sums_omp
+    sums = local_sums
+  end subroutine field_labelled_sums_omp
+
+  subroutine field_labelled_axpy_omp(self, coeffs, g, label, a, b, c)
+    !! [[m_base_backend(module):field_labelled_axpy_base(subroutine)]]
+    implicit none
+
+    class(omp_backend_t) :: self
+    real(dp), intent(in) :: coeffs(:, :)
+    class(field_t), intent(in) :: g, label
+    class(field_t), intent(inout) :: a, b, c
+
+    integer :: dims(3), n_y_blocks, y_stride, n_label
+    integer :: i, j, k, k_i, k_j, l
+
+    call check_labelled_fields(g, label, a, b, c)
+
+    dims = self%mesh%get_dims(g%data_loc)
+    n_y_blocks = (dims(2) - 1)/SZ + 1
+    y_stride = y_group_stride(self)
+    n_label = size(coeffs, 2)
+
+    !$omp parallel do collapse(2) private(k, l)
+    do k_i = 1, dims(3)
+      do k_j = 1, n_y_blocks
+        ! y-block is the fast-varying component of the group index
+        k = k_j + (k_i - 1)*y_stride
+        do j = 1, dims(1)
+          do i = 1, min(SZ, dims(2) - (k_j - 1)*SZ)
+            l = nint(label%data(i, j, k))
+            if (l < 1 .or. l > n_label) cycle
+            a%data(i, j, k) = a%data(i, j, k) + coeffs(1, l)*g%data(i, j, k)
+            b%data(i, j, k) = b%data(i, j, k) + coeffs(2, l)*g%data(i, j, k)
+            c%data(i, j, k) = c%data(i, j, k) + coeffs(3, l)*g%data(i, j, k)
+          end do
+        end do
+      end do
+    end do
+    !$omp end parallel do
+  end subroutine field_labelled_axpy_omp
+
+  subroutine check_labelled_fields(g, label, a, b, c)
+    !! Checks the fields passed to the labelled field operations share a
+    !! valid data location and the DIR_X layout.
+    implicit none
+
+    class(field_t), intent(in) :: g, label, a, b, c
+
+    if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
+        a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
+        c%data_loc == NULL_LOC) then
+      error stop 'You must set data_loc before labelled field operations.'
+    end if
+    if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
+        b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
+      error stop 'Labelled field operations need one data location.'
+    end if
+    if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
+        b%dir /= DIR_X .or. c%dir /= DIR_X) then
+      error stop 'Labelled field operations need DIR_X layout.'
+    end if
+  end subroutine check_labelled_fields
 
   subroutine copy_into_buffers(u_send_s, u_send_e, u, n, n_groups)
     implicit none

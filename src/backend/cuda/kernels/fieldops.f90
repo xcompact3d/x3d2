@@ -279,37 +279,87 @@ contains
     ierr = atomicadd(s, pencil_sum)
   end subroutine vector_norm_squared
 
-  attributes(global) subroutine weighted_sums(s, g, a, b, c, &
-                                              n, n_i_pad, n_j)
-    !! s(1:3) += sums of g*a, g*b and g*c; launch as vector_norm_squared.
+  attributes(global) subroutine labelled_sums(s, g, label, a, b, c, &
+                                              n_label, n, n_i_pad, n_j)
+    !! s(1:3, l) += sums of g*a, g*b and g*c over the points labelled l;
+    !! launch as vector_norm_squared. Each thread accumulates runs of equal
+    !! labels along its pencil and flushes a run when the label changes, so
+    !! the atomics scale with the label changes rather than the points.
     implicit none
 
-    real(dp), device, intent(inout) :: s(3)
-    real(dp), device, intent(in), dimension(:, :, :) :: g, a, b, c
-    integer, value, intent(in) :: n, n_i_pad, n_j
+    real(dp), device, intent(inout) :: s(3, n_label)
+    real(dp), device, intent(in), dimension(:, :, :) :: g, label, a, b, c
+    integer, value, intent(in) :: n_label, n, n_i_pad, n_j
 
     real(dp) :: sum_a, sum_b, sum_c
-    integer :: i, j, pencil, block_i, block_j, ierr
+    integer :: i, j, l, l_run, pencil, block_i, block_j, ierr
 
     i = threadIdx%x
     block_i = blockIdx%x
     block_j = blockIdx%y
     pencil = block_i + (block_j - 1)*n_i_pad
 
+    if (i + (block_j - 1)*blockDim%x > n_j) return
+
+    l_run = 0
     sum_a = 0._dp
     sum_b = 0._dp
     sum_c = 0._dp
-    if (i + (block_j - 1)*blockDim%x <= n_j) then
-      do j = 1, n
+    do j = 1, n
+      l = nint(label(i, j, pencil))
+      if (l < 1 .or. l > n_label) l = 0
+      if (l /= l_run) then
+        if (l_run /= 0) then
+          ierr = atomicadd(s(1, l_run), sum_a)
+          ierr = atomicadd(s(2, l_run), sum_b)
+          ierr = atomicadd(s(3, l_run), sum_c)
+        end if
+        l_run = l
+        sum_a = 0._dp
+        sum_b = 0._dp
+        sum_c = 0._dp
+      end if
+      if (l /= 0) then
         sum_a = sum_a + g(i, j, pencil)*a(i, j, pencil)
         sum_b = sum_b + g(i, j, pencil)*b(i, j, pencil)
         sum_c = sum_c + g(i, j, pencil)*c(i, j, pencil)
-      end do
+      end if
+    end do
+    if (l_run /= 0) then
+      ierr = atomicadd(s(1, l_run), sum_a)
+      ierr = atomicadd(s(2, l_run), sum_b)
+      ierr = atomicadd(s(3, l_run), sum_c)
     end if
-    ierr = atomicadd(s(1), sum_a)
-    ierr = atomicadd(s(2), sum_b)
-    ierr = atomicadd(s(3), sum_c)
-  end subroutine weighted_sums
+  end subroutine labelled_sums
+
+  attributes(global) subroutine labelled_axpy(coeffs, g, label, a, b, c, &
+                                              n_label, n, n_i_pad, n_j)
+    !! a, b, c += coeffs(1:3, l)*g at the points labelled l; launch as
+    !! vector_norm_squared.
+    implicit none
+
+    real(dp), device, intent(in) :: coeffs(3, n_label)
+    real(dp), device, intent(in), dimension(:, :, :) :: g, label
+    real(dp), device, intent(inout), dimension(:, :, :) :: a, b, c
+    integer, value, intent(in) :: n_label, n, n_i_pad, n_j
+
+    integer :: i, j, l, pencil, block_i, block_j
+
+    i = threadIdx%x
+    block_i = blockIdx%x
+    block_j = blockIdx%y
+    pencil = block_i + (block_j - 1)*n_i_pad
+
+    if (i + (block_j - 1)*blockDim%x > n_j) return
+
+    do j = 1, n
+      l = nint(label(i, j, pencil))
+      if (l < 1 .or. l > n_label) cycle
+      a(i, j, pencil) = a(i, j, pencil) + coeffs(1, l)*g(i, j, pencil)
+      b(i, j, pencil) = b(i, j, pencil) + coeffs(2, l)*g(i, j, pencil)
+      c(i, j, pencil) = c(i, j, pencil) + coeffs(3, l)*g(i, j, pencil)
+    end do
+  end subroutine labelled_axpy
 
   attributes(global) subroutine field_max_sum(max_f, sum_f, f, n, n_i_pad, n_j)
     implicit none

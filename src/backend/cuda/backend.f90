@@ -26,7 +26,8 @@ module m_cuda_backend
   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
   use m_cuda_kernels_fieldops, only: axpby, buffer_copy, field_scale, &
                                      field_shift, scalar_product, &
-                                     vector_norm_squared, weighted_sums, &
+                                     vector_norm_squared, labelled_sums, &
+                                     labelled_axpy, &
                                      field_max_sum, field_set_y_face, &
                                      field_set_x_face, field_set_y_plane, &
                                      field_set_abl_wall_stress, &
@@ -79,7 +80,8 @@ module m_cuda_backend
     procedure :: vecmult => vecmult_cuda
     procedure :: scalar_product => scalar_product_cuda
     procedure :: vector_norm_squared => vector_norm_squared_cuda
-    procedure :: field_weighted_sums => field_weighted_sums_cuda
+    procedure :: field_labelled_sums => field_labelled_sums_cuda
+    procedure :: field_labelled_axpy => field_labelled_axpy_cuda
     procedure :: field_max_mean => field_max_mean_cuda
     procedure :: slice_max_sum => slice_max_sum_cuda
     procedure :: field_scale => field_scale_cuda
@@ -1173,50 +1175,99 @@ contains
 
   end function vector_norm_squared_cuda
 
-  subroutine field_weighted_sums_cuda(self, sums, g, a, b, c)
-    !! [[m_base_backend(module):field_weighted_sums_base(subroutine)]]
+  subroutine field_labelled_sums_cuda(self, sums, g, label, a, b, c)
+    !! [[m_base_backend(module):field_labelled_sums_base(subroutine)]]
     implicit none
 
     class(cuda_backend_t) :: self
-    real(dp), intent(out) :: sums(3)
-    class(field_t), intent(in) :: g, a, b, c
+    real(dp), intent(out) :: sums(:, :)
+    class(field_t), intent(in) :: g, label, a, b, c
 
-    real(dp), device, pointer, dimension(:, :, :) :: g_d, a_d, b_d, c_d
-    real(dp), device, allocatable :: sums_d(:)
+    real(dp), device, pointer, dimension(:, :, :) :: g_d, label_d, a_d, &
+                                                     b_d, c_d
+    real(dp), device, allocatable :: sums_d(:, :)
     integer :: dims(3), dims_padded(3)
     type(dim3) :: blocks, threads
 
-    if (g%data_loc == NULL_LOC .or. a%data_loc == NULL_LOC .or. &
-        b%data_loc == NULL_LOC .or. c%data_loc == NULL_LOC) then
-      error stop 'You must set data_loc before computing weighted sums.'
-    end if
-    if (a%data_loc /= g%data_loc .or. b%data_loc /= g%data_loc .or. &
-        c%data_loc /= g%data_loc) then
-      error stop 'Weighted-sum fields must use the same data location.'
-    end if
-    if (g%dir /= DIR_X .or. a%dir /= DIR_X .or. b%dir /= DIR_X .or. &
-        c%dir /= DIR_X) then
-      error stop 'Weighted-sum fields must use DIR_X layout.'
-    end if
+    call check_labelled_fields(g, label, a, b, c)
 
     call resolve_field_t(g_d, g)
+    call resolve_field_t(label_d, label)
     call resolve_field_t(a_d, a)
     call resolve_field_t(b_d, b)
     call resolve_field_t(c_d, c)
 
-    allocate (sums_d(3))
+    allocate (sums_d(3, size(sums, 2)))
     sums_d = 0._dp
     dims = self%mesh%get_dims(g%data_loc)
     dims_padded = self%allocator%get_padded_dims(DIR_C)
 
     blocks = dim3(dims(3), (dims(2) - 1)/SZ + 1, 1)
     threads = dim3(SZ, 1, 1)
-    call weighted_sums<<<blocks, threads>>>( & !&
-      sums_d, g_d, a_d, b_d, c_d, dims(1), dims_padded(3), dims(2))
+    call labelled_sums<<<blocks, threads>>>( & !&
+      sums_d, g_d, label_d, a_d, b_d, c_d, size(sums, 2), &
+      dims(1), dims_padded(3), dims(2))
 
     sums = sums_d
 
-  end subroutine field_weighted_sums_cuda
+  end subroutine field_labelled_sums_cuda
+
+  subroutine field_labelled_axpy_cuda(self, coeffs, g, label, a, b, c)
+    !! [[m_base_backend(module):field_labelled_axpy_base(subroutine)]]
+    implicit none
+
+    class(cuda_backend_t) :: self
+    real(dp), intent(in) :: coeffs(:, :)
+    class(field_t), intent(in) :: g, label
+    class(field_t), intent(inout) :: a, b, c
+
+    real(dp), device, pointer, dimension(:, :, :) :: g_d, label_d, a_d, &
+                                                     b_d, c_d
+    real(dp), device, allocatable :: coeffs_d(:, :)
+    integer :: dims(3), dims_padded(3)
+    type(dim3) :: blocks, threads
+
+    call check_labelled_fields(g, label, a, b, c)
+
+    call resolve_field_t(g_d, g)
+    call resolve_field_t(label_d, label)
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    coeffs_d = coeffs
+    dims = self%mesh%get_dims(g%data_loc)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    blocks = dim3(dims(3), (dims(2) - 1)/SZ + 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call labelled_axpy<<<blocks, threads>>>( & !&
+      coeffs_d, g_d, label_d, a_d, b_d, c_d, size(coeffs, 2), &
+      dims(1), dims_padded(3), dims(2))
+
+  end subroutine field_labelled_axpy_cuda
+
+  subroutine check_labelled_fields(g, label, a, b, c)
+    !! Checks the fields passed to the labelled field operations share a
+    !! valid data location and the DIR_X layout.
+    implicit none
+
+    class(field_t), intent(in) :: g, label, a, b, c
+
+    if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
+        a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
+        c%data_loc == NULL_LOC) then
+      error stop 'You must set data_loc before labelled field operations.'
+    end if
+    if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
+        b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
+      error stop 'Labelled field operations need one data location.'
+    end if
+    if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
+        b%dir /= DIR_X .or. c%dir /= DIR_X) then
+      error stop 'Labelled field operations need DIR_X layout.'
+    end if
+  end subroutine check_labelled_fields
 
   subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n)
     implicit none

@@ -6,10 +6,17 @@ module m_adm
   !! regularised and projected onto the Eulerian grid with a per-disc kernel
   !! \(\gamma\),
   !! built once at init and normalised to sum to one. This operation is also
-  !! commonly called force spreading or smearing. The disc-averaged velocity is
-  !! the backend scalar product of \(\gamma\) with the velocity field (which
-  !! already performs the global MPI reduction), and the projected force is
-  !! accumulated into the momentum RHS with one vecadd per component.
+  !! commonly called force spreading or smearing.
+  !!
+  !! The kernels of all discs share two fields, so device memory does not grow
+  !! with the number of discs: `gamma` holds the kernel values and `disc_id`
+  !! labels each grid point with the disc whose kernel is largest there (zero
+  !! where every kernel vanishes). Kernels of separate discs must therefore
+  !! not overlap; init stops if a significant part of any kernel lies where
+  !! another disc's kernel is larger. The disc-averaged velocities of all
+  !! discs come from one labelled weighted sum and one MPI reduction, and the
+  !! projected forces of all discs are added to the momentum RHS in one
+  !! labelled axpy.
   !!
   !! For yaw angle \(\psi\) and tilt angle \(\theta\), the rotor-normal vector
   !! used by the model is
@@ -102,6 +109,7 @@ module m_adm
     real(dp) :: coords(3)         !! disc centre
     real(dp) :: yaw, tilt         !! rotor yaw/tilt angles [rad]
     real(dp) :: D, area           !! diameter and swept area
+    real(dp) :: thick             !! kernel thickness h along rot_N
     real(dp) :: C_T, alpha        !! thrust and induction coefficients
     real(dp) :: rot_N(3)          !! unit rotor-axis vector
     real(dp) :: U_disc = 0._dp       !! instantaneous disc-averaged speed
@@ -111,7 +119,6 @@ module m_adm
     real(dp) :: U_disc_mean = 0._dp
     real(dp) :: thrust_mean = 0._dp
     real(dp) :: power_mean = 0._dp
-    class(field_t), pointer :: gamma_disc => null() !! smearing kernel (DIR_X)
   end type actuator_disc_t
 
   type, extends(turbine_model_t) :: adm_t
@@ -129,6 +136,8 @@ module m_adm
     logical :: recompute_forces = .true.
     character(len=256) :: coords_file = ''
     type(actuator_disc_t), allocatable :: disc(:)
+    class(field_t), pointer :: gamma => null()   !! smearing kernels (DIR_X)
+    class(field_t), pointer :: disc_id => null() !! disc label (DIR_X)
     type(scalar_series_t), allocatable :: output(:)
     class(base_backend_t), pointer :: backend => null()
     type(mesh_t), pointer :: mesh => null()
@@ -154,11 +163,11 @@ contains
     type(allocator_t), target, intent(in) :: host_allocator
     real(dp), intent(in) :: dt
 
-    real(dp), allocatable :: disc_params(:, :)
-    class(field_t), pointer :: gamma_host
-    integer :: t, i, j, k, dims(3), ierr
-    real(dp) :: coords(3), delta, delta_N, delta_R, disc_thick
-    real(dp) :: dx, dy, dz, gamma_val, gamma_tot
+    real(dp), parameter :: overlap_tol = 1.e-6_dp
+    real(dp), allocatable :: disc_params(:, :), kernel_sums(:, :)
+    class(field_t), pointer :: gamma_host, disc_id_host
+    integer :: t, t_max, i, j, k, dims(3), ierr
+    real(dp) :: coords(3), delta, gamma_val, gamma_max
     real(dp) :: yaw, tilt, D, rot_N(3)
 
     self%backend => backend
@@ -186,9 +195,6 @@ contains
       print *, 'Number of actuator discs:', self%n_turb
     end if
 
-    dims = mesh%get_dims(VERT)
-    gamma_host => self%host_allocator%get_block(DIR_C)
-
     do t = 1, self%n_turb
       yaw = disc_params(t, 4)*pi/180._dp
       tilt = disc_params(t, 5)*pi/180._dp
@@ -209,56 +215,84 @@ contains
       self%disc(t)%alpha = disc_params(t, 8)
       self%disc(t)%rot_N(:) = rot_N(:)
       self%disc(t)%area = pi*(D**2)/4._dp
-
-      ! Build Gamma using the super-Gaussian smearing function:
-      ! Gaussian in the rotor-normal direction (delta_N), super-Gaussian (^8)
-      ! in the radial direction (delta_R) to give a flat-topped disc.
-      gamma_host%data(:, :, :) = 0._dp
-      gamma_tot = 0._dp
       delta = sqrt((mesh%geo%d(1)*rot_N(1))**2 &
                    + (mesh%geo%d(2)*rot_N(2))**2 &
                    + (mesh%geo%d(3)*rot_N(3))**2)
-      disc_thick = max(D/8._dp, delta*1.5_dp)
-      do k = 1, dims(3)
-        do j = 1, dims(2)
-          do i = 1, dims(1)
-            coords = mesh%get_coordinates(i, j, k)
-            dx = coords(1) - self%disc(t)%coords(1)
-            dy = coords(2) - self%disc(t)%coords(2)
-            dz = coords(3) - self%disc(t)%coords(3)
-            delta_N = dx*rot_N(1) + dy*rot_N(2) - dz*rot_N(3)
-
-            dx = coords(1) - delta_N*rot_N(1)
-            dy = coords(2) - delta_N*rot_N(2)
-            dz = coords(3) + delta_N*rot_N(3)
-            delta_R = sqrt((dx - self%disc(t)%coords(1))**2 &
-                           + (dy - self%disc(t)%coords(2))**2 &
-                           + (dz - self%disc(t)%coords(3))**2)
-
-            gamma_val = exp(-((delta_N/(disc_thick/2._dp))**2 &
-                              + (delta_R/(D/2._dp))**8))
-            gamma_host%data(i, j, k) = gamma_val
-            gamma_tot = gamma_tot + gamma_val
-          end do
-        end do
-      end do
-
-      ! Normalise so the kernel sums to one across all ranks. The disc-averaged
-      ! velocity is then the gamma_disc-weighted sum of u.
-      call MPI_Allreduce(MPI_IN_PLACE, gamma_tot, 1, MPI_X3D2_DP, &
-                         MPI_SUM, MPI_COMM_WORLD, ierr)
-      if (gamma_tot <= tiny(1._dp)) then
-        error stop 'ADM: disc kernel does not overlap the computational mesh.'
-      end if
-      gamma_host%data(:, :, :) = gamma_host%data(:, :, :)/gamma_tot
-
-      self%disc(t)%gamma_disc => &
-        self%backend%allocator%get_block(DIR_X, VERT)
-      call self%backend%set_field_data(self%disc(t)%gamma_disc, &
-                                       gamma_host%data)
+      self%disc(t)%thick = max(D/8._dp, delta*1.5_dp)
     end do
 
+    ! Label every grid point with the disc whose kernel is largest there and
+    ! keep that kernel value. kernel_sums(1, t) sums the full kernel of disc t
+    ! and kernel_sums(2, t) only the part kept where disc t is the largest.
+    dims = mesh%get_dims(VERT)
+    gamma_host => self%host_allocator%get_block(DIR_C)
+    disc_id_host => self%host_allocator%get_block(DIR_C)
+    gamma_host%data(:, :, :) = 0._dp
+    disc_id_host%data(:, :, :) = 0._dp
+    allocate (kernel_sums(2, self%n_turb))
+    kernel_sums = 0._dp
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          coords = mesh%get_coordinates(i, j, k)
+          gamma_max = 0._dp
+          t_max = 0
+          do t = 1, self%n_turb
+            gamma_val = disc_kernel(self%disc(t), coords)
+            kernel_sums(1, t) = kernel_sums(1, t) + gamma_val
+            if (gamma_val > gamma_max) then
+              gamma_max = gamma_val
+              t_max = t
+            end if
+          end do
+          gamma_host%data(i, j, k) = gamma_max
+          disc_id_host%data(i, j, k) = real(t_max, dp)
+          if (t_max > 0) then
+            kernel_sums(2, t_max) = kernel_sums(2, t_max) + gamma_max
+          end if
+        end do
+      end do
+    end do
+
+    call MPI_Allreduce(MPI_IN_PLACE, kernel_sums, size(kernel_sums), &
+                       MPI_X3D2_DP, MPI_SUM, MPI_COMM_WORLD, ierr)
+    do t = 1, self%n_turb
+      if (kernel_sums(1, t) <= tiny(1._dp)) then
+        error stop 'ADM: disc kernel does not overlap the computational mesh.'
+      end if
+      if (kernel_sums(1, t) - kernel_sums(2, t) &
+          > overlap_tol*kernel_sums(1, t)) then
+        if (mesh%par%is_root()) then
+          write (stderr, '(A,I0,A,ES10.3,A)') ' ADM: disc ', t, &
+            ' loses a fraction ', 1._dp - kernel_sums(2, t)/kernel_sums(1, t), &
+            ' of its kernel to neighbouring discs.'
+        end if
+        error stop 'ADM: disc kernels overlap; move the discs further apart.'
+      end if
+    end do
+
+    ! Normalise each disc's kernel to sum to one across all ranks. The
+    ! disc-averaged velocity is then the gamma-weighted sum of u over the
+    ! points labelled with that disc.
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          t = nint(disc_id_host%data(i, j, k))
+          if (t > 0) then
+            gamma_host%data(i, j, k) = gamma_host%data(i, j, k) &
+                                       /kernel_sums(2, t)
+          end if
+        end do
+      end do
+    end do
+
+    self%gamma => self%backend%allocator%get_block(DIR_X, VERT)
+    self%disc_id => self%backend%allocator%get_block(DIR_X, VERT)
+    call self%backend%set_field_data(self%gamma, gamma_host%data)
+    call self%backend%set_field_data(self%disc_id, disc_id_host%data)
+
     call self%host_allocator%release_block(gamma_host)
+    call self%host_allocator%release_block(disc_id_host)
   end subroutine init_adm
 
   subroutine update_adm(self, t, dt)
@@ -282,8 +316,8 @@ contains
     class(field_t), intent(in) :: u, v, w
 
     integer :: t, ierr
-    real(dp) :: disc_avgs(3, self%n_turb), rot_N(3), C_T_prime
-    real(dp) :: coeff_x, coeff_y, coeff_z, filter_weight, stat_inc, U_thrust
+    real(dp) :: disc_avgs(3, self%n_turb), coeffs(3, self%n_turb)
+    real(dp) :: rot_N(3), C_T_prime, filter_weight, stat_inc, U_thrust
     logical :: accumulate_stats
 
     accumulate_stats = self%recompute_forces &
@@ -297,12 +331,10 @@ contains
 
     ! Always recompute U_disc from the current stage velocity so the force
     ! is consistent with each RK substage. The disc-weighted u, v and w of
-    ! every disc are summed locally in one pass each, then reduced together
-    ! in a single MPI call.
-    do t = 1, self%n_turb
-      call self%backend%field_weighted_sums(disc_avgs(:, t), &
-                                            self%disc(t)%gamma_disc, u, v, w)
-    end do
+    ! every disc are summed locally in one pass, then reduced together in a
+    ! single MPI call.
+    call self%backend%field_labelled_sums(disc_avgs, self%gamma, &
+                                          self%disc_id, u, v, w)
     call MPI_Allreduce(MPI_IN_PLACE, disc_avgs, size(disc_avgs), &
                        MPI_X3D2_DP, MPI_SUM, MPI_COMM_WORLD, ierr)
 
@@ -348,18 +380,17 @@ contains
                                               - self%disc(t)%power_mean)
       end if
 
-      ! Project the thrust acceleration (opposing the inflow) onto the momentum
-      ! RHS. Density remains in the thrust/power diagnostics and cancels here.
-      coeff_x = -self%disc(t)%thrust*rot_N(1) &
-                /(self%rho_air*self%cell_vol)
-      coeff_y = -self%disc(t)%thrust*rot_N(2) &
-                /(self%rho_air*self%cell_vol)
-      coeff_z = self%disc(t)%thrust*rot_N(3) &
-                /(self%rho_air*self%cell_vol)
-      call self%backend%vecadd(coeff_x, self%disc(t)%gamma_disc, 1._dp, du)
-      call self%backend%vecadd(coeff_y, self%disc(t)%gamma_disc, 1._dp, dv)
-      call self%backend%vecadd(coeff_z, self%disc(t)%gamma_disc, 1._dp, dw)
+      ! Thrust acceleration (opposing the inflow) for the momentum RHS.
+      ! Density remains in the thrust/power diagnostics and cancels here.
+      coeffs(1, t) = -self%disc(t)%thrust*rot_N(1) &
+                     /(self%rho_air*self%cell_vol)
+      coeffs(2, t) = -self%disc(t)%thrust*rot_N(2) &
+                     /(self%rho_air*self%cell_vol)
+      coeffs(3, t) = self%disc(t)%thrust*rot_N(3) &
+                     /(self%rho_air*self%cell_vol)
     end do
+    call self%backend%field_labelled_axpy(coeffs, self%gamma, self%disc_id, &
+                                          du, dv, dw)
     if (self%recompute_forces) self%filter_initialized = .true.
     self%recompute_forces = .false.
   end subroutine project_forces_adm
@@ -479,15 +510,42 @@ contains
       end do
       deallocate (self%output)
     end if
-    if (allocated(self%disc)) then
-      do t = 1, size(self%disc)
-        if (associated(self%disc(t)%gamma_disc)) then
-          call self%backend%allocator%release_block(self%disc(t)%gamma_disc)
-        end if
-      end do
-      deallocate (self%disc)
+    if (associated(self%gamma)) then
+      call self%backend%allocator%release_block(self%gamma)
+      nullify (self%gamma)
     end if
+    if (associated(self%disc_id)) then
+      call self%backend%allocator%release_block(self%disc_id)
+      nullify (self%disc_id)
+    end if
+    if (allocated(self%disc)) deallocate (self%disc)
   end subroutine finalise_adm
+
+  pure real(dp) function disc_kernel(disc, coords) result(gamma_val)
+    !! Unnormalised smearing kernel of `disc` at `coords`: Gaussian in the
+    !! rotor-normal direction (delta_N), super-Gaussian (^8) in the radial
+    !! direction (delta_R) to give a flat-topped disc.
+    implicit none
+    type(actuator_disc_t), intent(in) :: disc
+    real(dp), intent(in) :: coords(3)
+
+    real(dp) :: dx, dy, dz, delta_N, delta_R
+
+    dx = coords(1) - disc%coords(1)
+    dy = coords(2) - disc%coords(2)
+    dz = coords(3) - disc%coords(3)
+    delta_N = dx*disc%rot_N(1) + dy*disc%rot_N(2) - dz*disc%rot_N(3)
+
+    dx = coords(1) - delta_N*disc%rot_N(1)
+    dy = coords(2) - delta_N*disc%rot_N(2)
+    dz = coords(3) + delta_N*disc%rot_N(3)
+    delta_R = sqrt((dx - disc%coords(1))**2 &
+                   + (dy - disc%coords(2))**2 &
+                   + (dz - disc%coords(3))**2)
+
+    gamma_val = exp(-((delta_N/(disc%thick/2._dp))**2 &
+                      + (delta_R/(disc%D/2._dp))**8))
+  end function disc_kernel
 
   subroutine read_ad_file(filename, disc_params)
     !! Read turbine disc parameters from a `.ad` file. Format: one header line

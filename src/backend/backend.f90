@@ -56,7 +56,8 @@ module m_base_backend
     procedure :: vecmult => vecmult_base
     procedure :: scalar_product => scalar_product_base
     procedure :: vector_norm_squared => vector_norm_squared_base
-    procedure :: field_weighted_sums => field_weighted_sums_base
+    procedure :: field_labelled_sums => field_labelled_sums_base
+    procedure :: field_labelled_axpy => field_labelled_axpy_base
     procedure :: field_max_mean => field_max_mean_base
     procedure :: slice_max_sum => slice_max_sum_base
     procedure :: field_plane_sums => field_plane_sums_base
@@ -426,20 +427,37 @@ contains
 
   end function vector_norm_squared_base
 
-  subroutine field_weighted_sums_base(self, sums, g, a, b, c)
-    !! Computes this rank's sums of g*a, g*b and g*c in a single pass over
-    !! DIR_X fields. No MPI reduction is done, so callers needing several
-    !! such sums can reduce them together in one MPI call.
+  subroutine field_labelled_sums_base(self, sums, g, label, a, b, c)
+    !! Computes this rank's sums of g*a, g*b and g*c separately for each
+    !! label in a single pass over DIR_X fields. `label` holds integer values
+    !! stored as reals; points labelled l in 1..size(sums, 2) add to
+    !! sums(:, l) and all other points are skipped. No MPI reduction is done,
+    !! so the caller can reduce all labels together in one MPI call.
     implicit none
 
     class(base_backend_t) :: self
-    real(dp), intent(out) :: sums(3)
-    class(field_t), intent(in) :: g, a, b, c
+    real(dp), intent(out) :: sums(:, :)
+    class(field_t), intent(in) :: g, label, a, b, c
 
     sums = 0._dp
-    call not_implemented('field_weighted_sums')
+    call not_implemented('field_labelled_sums')
 
-  end subroutine field_weighted_sums_base
+  end subroutine field_labelled_sums_base
+
+  subroutine field_labelled_axpy_base(self, coeffs, g, label, a, b, c)
+    !! Adds coeffs(1, l)*g, coeffs(2, l)*g and coeffs(3, l)*g to a, b and c
+    !! at every point of the DIR_X fields labelled l in 1..size(coeffs, 2).
+    !! Points with any other label are left unchanged.
+    implicit none
+
+    class(base_backend_t) :: self
+    real(dp), intent(in) :: coeffs(:, :)
+    class(field_t), intent(in) :: g, label
+    class(field_t), intent(inout) :: a, b, c
+
+    call not_implemented('field_labelled_axpy')
+
+  end subroutine field_labelled_axpy_base
 
   subroutine field_max_mean_base(self, max_val, mean_val, f, &
                                  enforced_data_loc)

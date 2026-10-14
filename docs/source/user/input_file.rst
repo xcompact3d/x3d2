@@ -501,3 +501,9 @@ The columns are the disc centre (``CoR_x``, ``CoR_y``, ``CoR_z``), the yaw and
 tilt angles in degrees, the rotor diameter, the thrust coefficient ``C_T``, and
 the induction factor ``alpha``.
 
+All discs share one kernel field and one disc-label field, so device memory
+does not grow with the number of discs. Each grid point therefore belongs to
+at most one disc, and the run stops at start-up if the smearing kernels of two
+discs overlap; this only happens for discs closer than about one rotor
+diameter.
+
