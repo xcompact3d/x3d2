@@ -45,6 +45,10 @@ module m_cuda_memcheck_device
     !> the NVSHMEM heap this reserved, this should read ~0.
     real(dp) :: ng1_query_residual_gib
     logical :: ng1_query_ran = .false.
+    !> Set by ensure_fft_query when the throwaway plan query returned a
+    !> failure status; the ng1_* values are then not valid and
+    !> overhead_query_bytes uses the formula (overhead_floor_bytes).
+    logical :: ng1_query_failed = .false.
     !> Whether a --build's real build actually used cuFFTMp (only known
     !> once the real solver is constructed) - the only real "cuFFTMp
     !> available" signal in this codebase, more authoritative than Tier 2's
@@ -163,7 +167,7 @@ contains
     class(cuda_memcheck_device_t), intent(inout) :: self
     logical, intent(in) :: bc_is_100, bc_is_110, is_root
     integer, intent(in) :: cdims(3)
-    integer :: ierr
+    integer :: ierr, stat
     integer(kind=cuda_count_kind) :: free_before, free_after, total_b
 
     if (self%ng1_query_ran) return
@@ -173,7 +177,8 @@ contains
                                    is_root, self%ng1_worksize_bytes, &
                                    self%ng1_heap_bytes, &
                                    self%ng1_xtdesc_bytes, &
-                                   self%ng1_used_cufftmp)
+                                   self%ng1_used_cufftmp, stat)
+    self%ng1_query_failed = stat /= 0
     ierr = cudaMemGetInfo(free_after, total_b)
     call check_status(ierr, 'cudaMemGetInfo (after FFT probe)')
     self%ng1_query_residual_gib = to_gib(int(free_before, i8) - &
@@ -191,6 +196,10 @@ contains
     integer(i8) :: worksize_bytes, xtdesc_bytes, heap_bytes, context_bytes
 
     call ensure_fft_query(self, bc_is_100, bc_is_110, cdims, is_root)
+    if (self%ng1_query_failed) then
+      nbytes8 = self%overhead_floor_bytes(ng, bc_is_110)
+      return
+    end if
     ! context_bytes: the CUDA-context-alone baseline, the live start-of-run
     ! measurement when the card was idle (see context_term_bytes). The
     ! cuFFTMp heap itself now comes from the live ng1_heap_bytes
@@ -255,7 +264,7 @@ contains
     real(dp), intent(out) :: residual_gib
     logical :: ran
 
-    ran = self%ng1_query_ran
+    ran = self%ng1_query_ran .and. .not. self%ng1_query_failed
     residual_gib = 0._dp
     if (ran) residual_gib = self%ng1_query_residual_gib
   end function query_residual_gib

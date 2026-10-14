@@ -227,7 +227,8 @@ contains
                      ng, ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, &
                      ctx%irank == 0)
     per_gpu_gib = to_gib(base_bytes + spec_bytes + overhead_bytes + io_bytes)
-    exact = .true.
+    ! A probe that returned a failure status leaves the formula, not exact.
+    exact = ctx%device%query_residual_gib(residual_gib)
     if (present(overhead_gib)) &
       overhead_gib = to_gib(overhead_bytes) + io_gib_local
 

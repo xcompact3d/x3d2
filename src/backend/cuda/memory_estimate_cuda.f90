@@ -27,16 +27,20 @@ module m_cuda_memory_estimate
 
 contains
 
-  subroutine check_status(ierr, what)
+  subroutine check_status(ierr, what, stat)
     !! Abort with a labelled message if a CUDA/cuFFT return code is
     !! non-zero (0 = success) - used after every raw cudaMemGetInfo,
     !! cufftXtMalloc, cufftXtFree and cufftDestroy call in
     !! fft_workspace_bytes_query, none of which check their own ierr.
+    !! When stat is present the code is returned in it instead and the
+    !! program does not stop.
     integer, intent(in) :: ierr
     character(*), intent(in) :: what
+    integer, optional, intent(out) :: stat
     character(len=128) :: msg
 
-    if (ierr == 0) return
+    if (present(stat)) stat = ierr
+    if (ierr == 0 .or. present(stat)) return
     write (msg, '(a,a,a,i0,a)') 'x3d2-memcheck: ', trim(what), &
       ' failed (code ', ierr, ')'
     error stop trim(msg)
@@ -116,7 +120,7 @@ contains
   subroutine fft_workspace_bytes_query(bc_is_100, bc_is_110, cdims, &
                                        try_cufftmp, is_root, &
                                        worksize_bytes, heap_bytes, &
-                                       xtdesc_bytes, used_cufftmp)
+                                       xtdesc_bytes, used_cufftmp, stat)
     !! Standalone plan-only probe for the FFT term of the static estimator.
     !! Creates+destroys the real forward+backward plans (mirroring init()),
     !! and for cuFFTMp also creates+frees the real xtdesc data buffer
@@ -176,12 +180,20 @@ contains
     !! non-periodic BCs" - src/backend/cuda/poisson_fft.f90:389-391): this
     !! is enforced here too, regardless of try_cufftmp, so the query can't
     !! silently diverge from what init() actually does.
+    !!
+    !! stat is the first non-zero cuFFT/CUDA code, or 0. A failure then
+    !! returns instead of stopping, with the plans and buffers made so far
+    !! destroyed, and the other outputs are not valid. The caller falls
+    !! back to the formula. A plan that aborts inside the library (cuFFTMp
+    !! on NVSHMEM) never returns, so the caller must not start a probe
+    !! that cannot fit (see estimate_for_ng).
     logical, intent(in) :: bc_is_100, bc_is_110
     integer, intent(in) :: cdims(3)
     logical, intent(in) :: try_cufftmp
     logical, intent(in) :: is_root
     integer(i8), intent(out) :: worksize_bytes, heap_bytes, xtdesc_bytes
     logical, intent(out) :: used_cufftmp
+    integer, intent(out) :: stat
 
     integer :: plan_fw, plan_bw, fft_n1, fft_n2, fft_n3
     integer :: fw_plan_type, bw_plan_type, ierr
@@ -202,12 +214,14 @@ contains
     bw_plan_type = merge(CUFFT_C2R, CUFFT_Z2D, is_sp)
 
     used_cufftmp = try_cufftmp .and. (.not. bc_is_110)
+    stat = 0
 
     ierr = cudaMemGetInfo(free_before, total_b)
     call check_status(ierr, 'cudaMemGetInfo (before plans)')
     call create_fft_plan(plan_fw, used_cufftmp, fft_n1, fft_n2, fft_n3, &
                          fw_plan_type, is_root, 'memcheck probe fwd', &
-                         worksize_fw)
+                         worksize_fw, stat)
+    if (stat /= 0) return
     fw_was_cufftmp = used_cufftmp
     ! If the forward plan fell back from cuFFTMp to plain cuFFT,
     ! used_cufftmp is now .false. - match it for the backward plan too, the
@@ -219,13 +233,22 @@ contains
     ! plain cuFFT below, mirroring init()'s own fw_was_cufftmp rebuild.
     call create_fft_plan(plan_bw, used_cufftmp, fft_n1, fft_n2, fft_n3, &
                          bw_plan_type, is_root, 'memcheck probe bwd', &
-                         worksize_bw)
+                         worksize_bw, stat)
+    if (stat /= 0) then
+      ierr = cufftDestroy(plan_fw)
+      return
+    end if
     if (fw_was_cufftmp .and. (.not. used_cufftmp)) then
       ierr = cufftDestroy(plan_fw)
       call check_status(ierr, 'cufftDestroy (fwd, cuFFTMp fallback rebuild)')
       call create_fft_plan(plan_fw, used_cufftmp, fft_n1, fft_n2, fft_n3, &
                            fw_plan_type, is_root, &
-                           'memcheck probe fwd (cuFFT rebuild)', worksize_fw)
+                           'memcheck probe fwd (cuFFT rebuild)', worksize_fw, &
+                           stat)
+      if (stat /= 0) then
+        ierr = cufftDestroy(plan_bw)
+        return
+      end if
     end if
     ierr = cudaMemGetInfo(free_after, total_b)
     call check_status(ierr, 'cudaMemGetInfo (after plans)')
@@ -236,7 +259,12 @@ contains
       ierr = cudaMemGetInfo(free_before, total_b)
       call check_status(ierr, 'cudaMemGetInfo (before xtdesc)')
       ierr = cufftXtMalloc(plan_fw, xtdesc, CUFFT_XT_FORMAT_INPLACE)
-      call check_status(ierr, 'cufftXtMalloc')
+      call check_status(ierr, 'cufftXtMalloc', stat)
+      if (stat /= 0) then
+        ierr = cufftDestroy(plan_fw)
+        ierr = cufftDestroy(plan_bw)
+        return
+      end if
       ierr = cudaMemGetInfo(free_after, total_b)
       call check_status(ierr, 'cudaMemGetInfo (after xtdesc)')
       xtdesc_bytes = int(free_before, i8) - int(free_after, i8)
