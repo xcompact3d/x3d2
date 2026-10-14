@@ -954,11 +954,9 @@ contains
     ! A stale scratch directory from an earlier run's unexpected error stop
     ! after the chdir below (see this subroutine's docstring) would make a
     ! plain mkdir fail - remove it first, if present.
-    call execute_command_line("test -d '"//trim(scratch_dir)//"'", &
-                              exitstat=st)
+    call run_sh("test -d '"//trim(scratch_dir)//"'", st)
     if (st == 0) then
-      call execute_command_line("rm -rf '"//trim(scratch_dir)//"'", &
-                                exitstat=st)
+      call run_sh("rm -rf '"//trim(scratch_dir)//"'", st)
       if (st /= 0) then
         print '(a,a)', 'Real build skipped: could not remove stale &
           &scratch directory ', trim(scratch_dir)
@@ -968,8 +966,7 @@ contains
       print '(a,a)', 'Removed stale scratch directory ', trim(scratch_dir)
     end if
 
-    call execute_command_line("mkdir '"//trim(scratch_dir)//"'", &
-                              exitstat=st)
+    call run_sh("mkdir '"//trim(scratch_dir)//"'", st)
     if (st /= 0) then
       print '(a,a)', 'Real build skipped: could not create scratch &
         &directory ', trim(scratch_dir)
@@ -982,30 +979,29 @@ contains
           index(trim(input_path), "'") > 0) then
         print '(a)', "Real build skipped: relative input path with '..' &
           &cannot be mirrored; pass an absolute path"
-        call execute_command_line("rm -rf '"//trim(scratch_dir)//"'")
+        call run_sh("rm -rf '"//trim(scratch_dir)//"'")
         ok = .false.
         return
       end if
       slash_pos = index(trim(input_path), '/', back=.true.)
       if (slash_pos > 0) then
-        call execute_command_line("mkdir -p '"//trim(scratch_dir)//'/'// &
-                                  trim(input_path(1:slash_pos - 1))//"'", &
-                                  exitstat=st)
+        call run_sh("mkdir -p '"//trim(scratch_dir)//'/'// &
+                    trim(input_path(1:slash_pos - 1))//"'", st)
         if (st /= 0) then
           print '(a)', 'Real build skipped: could not prepare scratch &
             &directory (mkdir of the input''s parent failed)'
-          call execute_command_line("rm -rf '"//trim(scratch_dir)//"'")
+          call run_sh("rm -rf '"//trim(scratch_dir)//"'")
           ok = .false.
           return
         end if
       end if
-      call execute_command_line("ln -s '"//trim(orig_dir)//'/'// &
-                                trim(input_path)//"' '"//trim(scratch_dir)// &
-                                '/'//trim(input_path)//"'", exitstat=st)
+      call run_sh("ln -s '"//trim(orig_dir)//'/'// &
+                  trim(input_path)//"' '"//trim(scratch_dir)// &
+                  '/'//trim(input_path)//"'", st)
       if (st /= 0) then
         print '(a)', 'Real build skipped: could not prepare scratch &
           &directory (input symlink failed)'
-        call execute_command_line("rm -rf '"//trim(scratch_dir)//"'")
+        call run_sh("rm -rf '"//trim(scratch_dir)//"'")
         ok = .false.
         return
       end if
@@ -1014,7 +1010,7 @@ contains
       if (.not. input_exists) then
         print '(a)', 'Real build skipped: could not prepare scratch &
           &directory (input symlink failed)'
-        call execute_command_line("rm -rf '"//trim(scratch_dir)//"'")
+        call run_sh("rm -rf '"//trim(scratch_dir)//"'")
         ok = .false.
         return
       end if
@@ -1022,13 +1018,13 @@ contains
 
     if (solver_cfg%ibm_on) then
       ibm_file = ibm_mask_filename(periodic_x, periodic_y, periodic_z)
-      call execute_command_line("ln -s '"//trim(orig_dir)//'/'// &
-                                trim(ibm_file)//"' '"//trim(scratch_dir)// &
-                                '/'//trim(ibm_file)//"'", exitstat=st)
+      call run_sh("ln -s '"//trim(orig_dir)//'/'// &
+                  trim(ibm_file)//"' '"//trim(scratch_dir)// &
+                  '/'//trim(ibm_file)//"'", st)
       if (st /= 0) then
         print '(a)', 'Real build skipped: could not prepare scratch &
           &directory (ibm mask symlink failed)'
-        call execute_command_line("rm -rf '"//trim(scratch_dir)//"'")
+        call run_sh("rm -rf '"//trim(scratch_dir)//"'")
         ok = .false.
         return
       end if
@@ -1038,7 +1034,7 @@ contains
     if (rc /= 0) then
       print '(a,a)', 'Real build skipped: could not chdir into scratch &
         &directory ', trim(scratch_dir)
-      call execute_command_line("rm -rf '"//trim(scratch_dir)//"'")
+      call run_sh("rm -rf '"//trim(scratch_dir)//"'")
       ok = .false.
       return
     end if
