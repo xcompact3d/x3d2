@@ -90,18 +90,6 @@ program x3d2_memcheck
 
   type(memcheck_ctx_t) :: ctx
   integer :: ierr, irank, nproc, ndevs
-  integer :: measured_n_substeps
-  !> Whether a --build's real build actually used cuFFTMp (only known once
-  !> the real solver is constructed) - the only real "cuFFTMp available"
-  !> signal in this codebase, more authoritative than Tier 2's throwaway
-  !> plan query (ng1_used_cufftmp above) for gating the measured table's
-  !> ng>1 rows.
-  logical :: use_cufftmp = .false., use_cufftmp_known = .false.
-  !> Set inside build_and_measure, once the real config driven output
-  !> gating is known - needed after it returns to cross-check the measured
-  !> peak_fields against m_memory_estimate's static peak_fields_lookup (see
-  !> check_peak_fields_table).
-  logical :: output_vorticity = .false., output_qcriterion = .false.
 
   interface
     function c_chdir(path) bind(C, name='chdir') result(rc)
@@ -1156,8 +1144,9 @@ contains
     predicted = peak_fields_lookup(trim(ctx%domain_cfg%flow_case_name), &
                                    ctx%solver_cfg%n_species, &
                                    trim(ctx%les_cfg%model) /= 'none', &
-                                   ctx%solver_cfg%ibm_on, output_vorticity, &
-                                   output_qcriterion, &
+                                   ctx%solver_cfg%ibm_on, &
+                                   ctx%output_vorticity, &
+                                   ctx%output_qcriterion, &
                                    ctx%solver_cfg%lowmem_transeq)
     if (predicted /= measured) then
       print '(a,i0,a,i0,a)', &
@@ -1206,8 +1195,8 @@ contains
       ! BC_y non-periodic: no nproc>1 support for this BC
       ! (src/poisson_fft.f90:178-180,196-198).
       multi_gpu_supported_measured = .false.
-    else if ((ctx%bc_is_100 .or. ctx%bc_is_000) .and. use_cufftmp_known .and. &
-            (.not. use_cufftmp)) then
+    else if ((ctx%bc_is_100 .or. ctx%bc_is_000) .and. &
+             ctx%use_cufftmp_known .and. (.not. ctx%use_cufftmp)) then
       ! Covers the 100 case (needs cuFFTMp to decompose at all) and the
       ! fully-periodic 000 case (the plain-cuFFT fallback performs a purely
       ! local per-rank transform with no cross-rank exchange -
@@ -1220,7 +1209,7 @@ contains
 
     call print_rule('-')
     print '(a,i0,a,i0,a,f0.2,a,f0.2,a)', 'Real build (1 GPU, ', &
-      measured_n_substeps, ' substep(s)): peak_fields measured ', &
+      ctx%measured_n_substeps, ' substep(s)): peak_fields measured ', &
       measured_peak_fields, ', workspace ', workspace_gib_measured, &
       ' GiB, used ', used_gib, ' GiB'
     ! Single machine-parseable line for --extensive sweeps (see
@@ -1229,7 +1218,7 @@ contains
     ! the whole table.
     if (ctx%extensive_substeps > 0) &
       print '(a,i0,a,i0,a,f0.3,a,f0.3)', 'EXTENSIVE result: substeps=', &
-        measured_n_substeps, ' peak_fields=', measured_peak_fields, &
+        ctx%measured_n_substeps, ' peak_fields=', measured_peak_fields, &
         ' used_gib=', used_gib, ' pct_card=', 100._dp*used_gib/ctx%card_gib
     call print_table_header()
 
@@ -1259,7 +1248,7 @@ contains
                       to_gib(spectral_slab_bytes(ctx%bc_is_100, &
                                 ctx%bc_is_110, ctx%cdims, ng) - spec_bytes_1) &
                       + mirror_gib
-      if (use_cufftmp_known .and. use_cufftmp) &
+      if (ctx%use_cufftmp_known .and. ctx%use_cufftmp) &
         overhead_term = overhead_term + &
                         to_gib(context_floor_bytes(ng, .true.) - &
                                context_floor_bytes(1, .true.))
@@ -1396,7 +1385,7 @@ contains
     do i_substep = 1, n_substeps
       call flow_case%substep(curr, deriv, i_substep)
     end do
-    measured_n_substeps = n_substeps
+    ctx%measured_n_substeps = n_substeps
 
     ! Mirrors run()'s per-iteration postprocessing calls (base_case.f90,
     ! immediately after the sub-stage loop): keep_pressure and
@@ -1405,13 +1394,13 @@ contains
     ! captured - postprocess(0,.) alone does not reach them.
     if (flow_case%solver%keep_pressure) &
       call compute_pressure_vert(flow_case%solver)
-    output_vorticity = output_field_active(flow_case%io_mgr%snapshot_mgr% &
-                                           config, 'vorticity')
-    output_qcriterion = output_field_active(flow_case%io_mgr%snapshot_mgr% &
-                                            config, 'qcriterion')
-    if (output_vorticity .or. output_qcriterion) &
-      call compute_derived_fields(flow_case%solver, output_vorticity, &
-                                  output_qcriterion)
+    ctx%output_vorticity = output_field_active( &
+                           flow_case%io_mgr%snapshot_mgr%config, 'vorticity')
+    ctx%output_qcriterion = output_field_active( &
+                            flow_case%io_mgr%snapshot_mgr%config, 'qcriterion')
+    if (ctx%output_vorticity .or. ctx%output_qcriterion) &
+      call compute_derived_fields(flow_case%solver, ctx%output_vorticity, &
+                                  ctx%output_qcriterion)
   end subroutine drive_case
 
   subroutine build_and_measure(dims_in, npeak, dev_used, ibm_missing)
@@ -1471,8 +1460,8 @@ contains
 
     npeak = 0
     dev_used = 0._dp
-    output_vorticity = .false.
-    output_qcriterion = .false.
+    ctx%output_vorticity = .false.
+    ctx%output_qcriterion = .false.
 
     call build_mesh(dims_in, mesh, dims, ibm_missing)
     if (ibm_missing) return
@@ -1488,8 +1477,8 @@ contains
     ! the 100 case, since there is no static "is cuFFTMp available" query.
     select type (pf => flow_case%solver%backend%poisson_fft)
     type is (cuda_poisson_fft_t)
-      use_cufftmp = pf%use_cufftmp
-      use_cufftmp_known = .true.
+      ctx%use_cufftmp = pf%use_cufftmp
+      ctx%use_cufftmp_known = .true.
     end select
 
     call drive_case(flow_case)
