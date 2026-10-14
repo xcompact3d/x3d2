@@ -12,7 +12,8 @@ option(WITH_NIGHTLY_REGRESSION
 mark_as_advanced(WITH_NIGHTLY_REGRESSION)
 
 # Shared test utilities library
-add_library(x3d2_test_utils STATIC common/test_utils.f90)
+add_library(x3d2_test_utils STATIC common/test_utils.f90
+                                    common/test_memory_sizing.f90)
 target_link_libraries(x3d2_test_utils PRIVATE x3d2)
 target_link_libraries(x3d2_test_utils PRIVATE OpenMP::OpenMP_Fortran)
 # test_utils.f90 reaches MPI through m_mpi, so with MPI enabled it needs the
