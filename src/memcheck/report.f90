@@ -202,15 +202,6 @@ contains
         ' GiB - card busy, using the ', &
         to_gib(ctx%device%context_term_bytes()), ' GiB A100 constant'
     end if
-    if (to_gib(ctx%device%context_bytes()) <= busy_card_gib) then
-      print '(a,f0.2,a)', 'CUDA context (used at start): ', &
-        to_gib(ctx%device%context_bytes()), ' GiB - used as the context term'
-    else
-      print '(a,f0.2,a,f0.2,a)', 'CUDA context (used at start): ', &
-        to_gib(ctx%device%context_bytes()), &
-        ' GiB - card busy, using the ', &
-        to_gib(ctx%device%context_term_bytes()), ' GiB A100 constant'
-    end if
     print '(a,i0)', 'peak_fields (static estimate): ', ctx%peak_fields
     call print_io_staging_line(ctx)
     select case (trim(ctx%run_mode))
