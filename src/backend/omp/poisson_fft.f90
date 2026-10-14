@@ -24,6 +24,8 @@ module m_omp_poisson_fft
   type, extends(poisson_fft_t) :: omp_poisson_fft_t
       !! FFT based Poisson solver
     complex(dp), allocatable, dimension(:, :, :) :: c_x, c_y, c_z
+    !> Periodic in x and z, non-periodic in y
+    logical :: is_010_case = .false.
     !> Non-periodic in x, periodic in y and z
     logical :: is_100_case = .false.
     !> Non-periodic in x and y, periodic in z
@@ -120,6 +122,9 @@ contains
     ! Get global cell dims
     dims = mesh%get_global_dims(CELL)
 
+    poisson_fft%is_010_case = mesh%grid%periodic_BC(1) &
+                              .and. (.not. mesh%grid%periodic_BC(2)) &
+                              .and. mesh%grid%periodic_BC(3)
     poisson_fft%is_100_case = (.not. mesh%grid%periodic_BC(1)) &
                               .and. mesh%grid%periodic_BC(2) &
                               .and. mesh%grid%periodic_BC(3)
@@ -148,6 +153,12 @@ contains
     poisson_fft%sp => decomp_2d_fft_get_sp()
     call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps, &
                                poisson_fft%sp%zsz, poisson_fft%sp%zst - 1)
+
+    if (poisson_fft%is_010_case .and. poisson_fft%p_row > 1) then
+      ! The periodicity reorder of the 010 case needs the y line whole.
+      error stop 'The OpenMP 010 Poisson solver does not support a y &
+                  &decomposition, split along z instead.'
+    end if
 
     if (mesh%geo%stretched(2)) then
       error stop 'OpenMP backends FFT based Poisson solver does not support&
