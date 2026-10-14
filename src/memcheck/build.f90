@@ -75,6 +75,74 @@ contains
     end if
   end subroutine check_peak_fields_table
 
+  subroutine report_measured_row(ctx, ng, measured_peak_fields, overhead, &
+                                 spec_bytes_1, multi_gpu_supported_measured, &
+                                 verdict)
+    !! One row of the real, per-GPU-measured table for GPU count ng: the
+    !! "skipped" line when ng is unsupported (verdict stays blank), else the
+    !! measured peak_fields workspace plus the ng-scaled overhead, as
+    !! report_measured_table's docstring describes. overhead and spec_bytes_1
+    !! are its ng=1 overhead and spectral slab; multi_gpu_supported_measured
+    !! is its REAL-build multi GPU signal.
+    type(memcheck_ctx_t), intent(in) :: ctx
+    integer, intent(in) :: ng, measured_peak_fields
+    real(dp), intent(in) :: overhead
+    integer(i8), intent(in) :: spec_bytes_1
+    logical, intent(in) :: multi_gpu_supported_measured
+    character(len=12), intent(out) :: verdict
+
+    integer :: local_dims(3)
+    real(dp) :: per_gpu, overhead_term, mirror_gib, w_local
+    character(len=96) :: reason
+
+    ! ng_unsupported_reason covers the base checks shared with report()'s
+    ! table; multi_gpu_supported_measured on top of that additionally
+    ! excludes ng>1 when the real build just fell back from cuFFTMp to
+    ! plain cuFFT for a BC that needs it, a signal only this real-build
+    ! path has (derived in report_measured_table).
+    verdict = ''
+    reason = ng_unsupported_reason(ctx, ng)
+    if (ng > 1 .and. ctx%multi_gpu_supported .and. &
+        .not. multi_gpu_supported_measured) &
+      reason = 'not supported for this BC/environment'
+    if (len_trim(reason) > 0) then
+      print '(a,i0,a,a,a)', ' ', ng, '     (skipped: ', trim(reason), ')'
+      return
+    end if
+    local_dims = [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)/ng]
+    w_local = to_gib(fields_plus_halo_bytes_n(ctx, ng, measured_peak_fields))
+
+    mirror_gib = 0._dp
+    if (ctx%bc_is_100) &
+      mirror_gib = to_gib(mirror_buffer_bytes_100(ctx%cdims, ng))
+
+    overhead_term = overhead + &
+                    to_gib(spectral_slab_bytes( &
+                           ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, ng) &
+                           - spec_bytes_1) &
+                    + mirror_gib
+    ! The floor takes bc_is_110 where the pre-refactor code hard-coded
+    ! uses_cufftmp=.true.: equal here because the 110 case never uses the
+    ! distributed FFT and its ng>1 rows are skipped above, so this term
+    ! is never evaluated for it.
+    if (ctx%device%fft_path_known() .and. &
+        ctx%device%uses_distributed_fft()) &
+      overhead_term = overhead_term + &
+                      to_gib(ctx%device%overhead_floor_bytes( &
+                             ng, ctx%bc_is_110) - &
+                             ctx%device%overhead_floor_bytes( &
+                             1, ctx%bc_is_110))
+    overhead_term = overhead_term + &
+                    to_gib(gpu_io_staging_bytes(local_dims, &
+                                                ctx%checkpoint_cfg, &
+                                                ctx%gpu_io_device_write))
+
+    per_gpu = w_local + overhead_term
+    verdict = classify(per_gpu, ctx%card_gib)
+    call print_table_row(ng, local_dims, w_local, overhead_term, per_gpu, &
+                         ctx%card_gib, verdict)
+  end subroutine report_measured_row
+
   subroutine report_measured_table(ctx, measured_peak_fields, used_gib, &
                                    workspace_gib_measured, requested_verdict)
     !! Print the real, per-GPU-measured table. "workspace" at ng=1 is the
@@ -97,12 +165,11 @@ contains
     real(dp), intent(in) :: used_gib, workspace_gib_measured
     character(len=12), intent(out) :: requested_verdict
 
-    integer :: k, ng, local_dims(3)
-    real(dp) :: overhead, per_gpu, overhead_term, mirror_gib, w_local
+    integer :: k, ng
+    real(dp) :: overhead
     integer(i8) :: spec_bytes_1
     logical :: multi_gpu_supported_measured
     character(len=12) :: verdict
-    character(len=96) :: reason
 
     spec_bytes_1 = spectral_slab_bytes(ctx%bc_is_100, ctx%bc_is_110, &
                                        ctx%cdims, 1)
@@ -144,53 +211,22 @@ contains
 
     do k = 1, size(n_gpu_list)
       ng = n_gpu_list(k)
-      ! ng_unsupported_reason covers the base checks shared with report()'s
-      ! table; multi_gpu_supported_measured on top of that additionally
-      ! excludes ng>1 when the real build just fell back from cuFFTMp to
-      ! plain cuFFT for a BC that needs it, a signal only this real-build
-      ! path has (see its own derivation above).
-      reason = ng_unsupported_reason(ctx, ng)
-      if (ng > 1 .and. ctx%multi_gpu_supported .and. &
-          .not. multi_gpu_supported_measured) &
-        reason = 'not supported for this BC/environment'
-      if (len_trim(reason) > 0) then
-        print '(a,i0,a,a,a)', ' ', ng, '     (skipped: ', trim(reason), ')'
-        cycle
-      end if
-      local_dims = [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)/ng]
-      w_local = to_gib(fields_plus_halo_bytes_n(ctx, ng, measured_peak_fields))
-
-      mirror_gib = 0._dp
-      if (ctx%bc_is_100) &
-        mirror_gib = to_gib(mirror_buffer_bytes_100(ctx%cdims, ng))
-
-      overhead_term = overhead + &
-                      to_gib(spectral_slab_bytes( &
-                             ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, ng) &
-                             - spec_bytes_1) &
-                      + mirror_gib
-      ! The floor takes bc_is_110 where the pre-refactor code hard-coded
-      ! uses_cufftmp=.true.: equal here because the 110 case never uses the
-      ! distributed FFT and its ng>1 rows are skipped above, so this term
-      ! is never evaluated for it.
-      if (ctx%device%fft_path_known() .and. &
-          ctx%device%uses_distributed_fft()) &
-        overhead_term = overhead_term + &
-                        to_gib(ctx%device%overhead_floor_bytes( &
-                               ng, ctx%bc_is_110) - &
-                               ctx%device%overhead_floor_bytes( &
-                               1, ctx%bc_is_110))
-      overhead_term = overhead_term + &
-                      to_gib(gpu_io_staging_bytes(local_dims, &
-                                                  ctx%checkpoint_cfg, &
-                                                  ctx%gpu_io_device_write))
-
-      per_gpu = w_local + overhead_term
-      verdict = classify(per_gpu, ctx%card_gib)
-      call print_table_row(ng, local_dims, w_local, overhead_term, per_gpu, &
-                           ctx%card_gib, verdict)
-      if (ng == ctx%domain_cfg%nproc_dir(3)) requested_verdict = verdict
+      call report_measured_row(ctx, ng, measured_peak_fields, overhead, &
+                               spec_bytes_1, multi_gpu_supported_measured, &
+                               verdict)
+      if (ng == ctx%domain_cfg%nproc_dir(3) .and. len_trim(verdict) > 0) &
+        requested_verdict = verdict
     end do
+    ! A supported requested ng outside n_gpu_list gets its own row, so the
+    ! measured verdict covers the decomposition the input file asks for.
+    ng = ctx%domain_cfg%nproc_dir(3)
+    if (all(n_gpu_list /= ng) .and. &
+        len_trim(requested_unsupported_reason(ctx)) == 0) then
+      call report_measured_row(ctx, ng, measured_peak_fields, overhead, &
+                               spec_bytes_1, multi_gpu_supported_measured, &
+                               verdict)
+      if (len_trim(verdict) > 0) requested_verdict = verdict
+    end if
     call print_rule('-')
   end subroutine report_measured_table
 
