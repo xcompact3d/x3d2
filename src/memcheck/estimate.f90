@@ -3,7 +3,6 @@ module m_memcheck_estimate
   use m_common, only: dp, i8, nbytes
   use cudafor, only: cudaMemGetInfo, cuda_count_kind
   use m_memcheck_context, only: memcheck_ctx_t
-  use m_cuda_common, only: SZ
   use m_cuda_memory_estimate, only: fft_workspace_bytes_query, check_status, &
                                     context_floor_bytes
   use m_memory_estimate, only: padded_cells, padded_halo_bytes, &
@@ -88,8 +87,9 @@ contains
     integer :: local_dims(3)
 
     local_dims = [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)/ng]
-    nbytes8 = int(npeak, i8)*padded_cells(local_dims, SZ) &
-              *int(nbytes, i8) + padded_halo_bytes(local_dims, SZ, n_halo)
+    nbytes8 = int(npeak, i8)*padded_cells(local_dims, ctx%device%sz()) &
+              *int(nbytes, i8) + &
+              padded_halo_bytes(local_dims, ctx%device%sz(), n_halo)
   end function fields_plus_halo_bytes_n
 
   function fields_plus_halo_bytes(ctx, ng) result(nbytes8)

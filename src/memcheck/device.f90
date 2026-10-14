@@ -13,6 +13,8 @@ module m_memcheck_device
     procedure(init_iface), deferred :: init
     !> Total and currently free device memory.
     procedure(mem_info_iface), deferred :: mem_info
+    !> Pencil size (the SZ of the backend's field layout).
+    procedure(sz_iface), deferred :: sz
   end type memcheck_device_t
 
   abstract interface
@@ -28,6 +30,12 @@ module m_memcheck_device
       class(memcheck_device_t), intent(in) :: self
       integer(i8), intent(out) :: total_bytes, free_bytes
     end subroutine mem_info_iface
+
+    function sz_iface(self) result(pencil_size)
+      import :: memcheck_device_t
+      class(memcheck_device_t), intent(in) :: self
+      integer :: pencil_size
+    end function sz_iface
   end interface
 
 end module m_memcheck_device
