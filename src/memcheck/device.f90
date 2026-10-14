@@ -10,6 +10,9 @@ module m_memcheck_device
   use m_base_case, only: base_case_t
   implicit none
 
+  private
+  public :: memcheck_device_t
+
   type, abstract :: memcheck_device_t
   contains
     !> Select the device. ok=.false. and the line to print in msg if there
