@@ -150,8 +150,14 @@ module m_cuda_poisson_fft
     end function cufftExecC2R_C
   end interface
 
-  private :: create_fft_plan, sync_or_abort, yslab_view_110, &
+  private :: sync_or_abort, yslab_view_110, &
              redistribution_launch_config, redistribution_alltoall
+
+  !> create_fft_plan is deliberately public: the static memory estimator
+  !> (m_cuda_memory_estimate, src/backend/cuda/memory_estimate_cuda.f90)
+  !> calls it standalone (plan only, no mesh/case/fields) to capture the
+  !> real cuFFT/cuFFTMp workspace size via its worksize out-argument,
+  !> instead of duplicating cufftMakePlan3D's call sequence a second time.
 
 contains
 
@@ -178,7 +184,7 @@ contains
   end subroutine sync_or_abort
 
   subroutine create_fft_plan(plan, use_cufftmp, nx, ny, nz, &
-                             plan_type, is_root, plan_name)
+                             plan_type, is_root, plan_name, worksize_out)
     !! Helper subroutine to create FFT plan with automatic cuFFTMp fallback
     implicit none
 
@@ -187,6 +193,11 @@ contains
     integer, intent(in) :: nx, ny, nz, plan_type
     logical, intent(in) :: is_root
     character(*), intent(in) :: plan_name
+    !> Set to cufftMakePlan3D's reported workspace size (bytes) when
+    !> present. Optional and unused by every real solver call site (init,
+    !> below); added only so the static memory estimator can read the exact
+    !> FFT workspace size without a second, duplicate cufftMakePlan3D call.
+    integer(int_ptr_kind()), optional, intent(out) :: worksize_out
 
     integer :: ierr
     integer(int_ptr_kind()) :: worksize
@@ -243,6 +254,8 @@ contains
         error stop trim(plan_name)//' 3D FFT plan generation failed'
       end if
     end if
+
+    if (present(worksize_out)) worksize_out = worksize
 
   end subroutine create_fft_plan
 
