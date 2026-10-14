@@ -5,7 +5,9 @@ module m_memcheck_report
   use m_memcheck_device, only: busy_card_gib
   use m_memory_estimate, only: gpu_io_staging_bytes
   use m_memcheck_estimate, only: to_gib, ng_unsupported_reason, &
-                                 requested_unsupported_reason, estimate_for_ng
+                                 requested_unsupported_reason, &
+                                 estimate_for_ng, basis_extrapolated, &
+                                 basis_formula, basis_name
   implicit none
 
   private
@@ -36,27 +38,31 @@ contains
     ! literal would instead be right-justified by the a14 edit descriptor,
     ! misaligning the column under the data rows.
     hdr_grid = 'local grid'
-    print '(a,a4,a,a14,a,a9,a,a8,a,a8,a,a6,a,a)', ' ', 'GPUs', ' | ', &
-      hdr_grid, ' | ', 'workspace', ' | ', 'overhead', ' | ', 'per-GPU', &
-      ' | ', '%', ' | ', 'verdict'
+    print '(a,a4,a,a14,a,a9,a,a8,a,a8,a,a6,a,a12,a,a)', ' ', 'GPUs', &
+      ' | ', hdr_grid, ' | ', 'workspace', ' | ', 'overhead', ' | ', &
+      'per-GPU', ' | ', '%', ' | ', 'basis', ' | ', 'verdict'
   end subroutine print_table_header
 
   subroutine print_table_row(ng, local_dims, workspace_gib, overhead_gib, &
-                             per_gpu_gib, pct_denominator_gib, verdict)
+                             per_gpu_gib, pct_denominator_gib, basis, &
+                             verdict)
+    !! basis is the row's mark: how its overhead was obtained (measured,
+    !! extrapolated or formula-only, see basis_name).
     integer, intent(in) :: ng, local_dims(3)
     real(dp), intent(in) :: workspace_gib, overhead_gib, per_gpu_gib, &
                             pct_denominator_gib
-    character(*), intent(in) :: verdict
+    character(*), intent(in) :: basis, verdict
 
     character(len=14) :: local_grid_str
 
     local_grid_str = ''
     write (local_grid_str, '(i0,a,i0,a,i0)') local_dims(1), 'x', &
       local_dims(2), 'x', local_dims(3)
-    print '(a,i4,a,a,a,f9.2,a,f8.2,a,f8.2,a,f5.1,a,a)', ' ', ng, ' | ', &
-      adjustl(local_grid_str), ' | ', workspace_gib, ' | ', overhead_gib, &
-      ' | ', per_gpu_gib, ' | ', 100._dp*per_gpu_gib/pct_denominator_gib, &
-      '% | ', trim(verdict)
+    print '(a,i4,a,a,a,f9.2,a,f8.2,a,f8.2,a,f5.1,a,a12,a,a)', ' ', ng, &
+      ' | ', adjustl(local_grid_str), ' | ', workspace_gib, ' | ', &
+      overhead_gib, ' | ', per_gpu_gib, ' | ', &
+      100._dp*per_gpu_gib/pct_denominator_gib, '% | ', basis, ' | ', &
+      trim(verdict)
   end subroutine print_table_row
 
   subroutine print_io_staging_line(ctx)
@@ -109,7 +115,7 @@ contains
     type(memcheck_ctx_t), intent(inout) :: ctx
     integer :: requested_ng
     real(dp) :: requested_gib
-    logical :: exact
+    integer :: basis
     character(len=12) :: requested_verdict
     character(len=96) :: reason
 
@@ -121,14 +127,16 @@ contains
         ctx%domain_cfg%nproc_dir(3), ']: not supported (', trim(reason), ')'
       ctx%final_verdict = 'UNSUPPORTED'
     else
-      call estimate_for_ng(ctx, requested_ng, requested_gib, exact, &
+      call estimate_for_ng(ctx, requested_ng, requested_gib, basis, &
                            requested_verdict)
       ctx%final_verdict = requested_verdict
       print '(a,i0,a,f0.2,a,f0.1,a,a)', 'Requested nproc_dir gives ng=', &
         requested_ng, ': ', requested_gib, ' GiB/GPU (', &
         100._dp*requested_gib/ctx%card_gib, '% of card) - ', &
         trim(ctx%final_verdict)
-      if (.not. exact) then
+      if (basis == basis_extrapolated) then
+        print '(a)', '  (ng>1 rows extrapolate the single-GPU probe by 1/ng.)'
+      else if (basis == basis_formula) then
         if (trim(ctx%run_mode) == 'STATIC') then
           print '(a)', '  (Tier 1 estimate only: --static skips the GPU &
             &FFT plan query.)'
@@ -151,12 +159,15 @@ contains
 
     integer :: k, ng, local_dims(3)
     real(dp) :: per_gpu_gib, workspace_gib, overhead_gib, io_gib
-    logical :: exact
+    integer :: basis
+    logical :: any_extrapolated, any_formula
     character(len=12) :: verdict
     character(len=96) :: reason
 
     call print_table_header()
     smallest_fits = 0
+    any_extrapolated = .false.
+    any_formula = .false.
     do k = 1, size(n_gpu_list)
       ng = n_gpu_list(k)
       reason = ng_unsupported_reason(ctx, ng)
@@ -165,17 +176,25 @@ contains
         cycle
       end if
       local_dims = [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)/ng]
-      call estimate_for_ng(ctx, ng, per_gpu_gib, exact, verdict, &
+      call estimate_for_ng(ctx, ng, per_gpu_gib, basis, verdict, &
                            workspace_gib, overhead_gib, io_gib)
       if (ng == 1) then
         ctx%estimate_ng1_gib = per_gpu_gib
         ctx%io_staging_ng1_gib = io_gib
       end if
       call print_table_row(ng, local_dims, workspace_gib, overhead_gib, &
-                           per_gpu_gib, ctx%card_gib, verdict)
+                           per_gpu_gib, ctx%card_gib, basis_name(basis), &
+                           verdict)
+      if (basis == basis_extrapolated) any_extrapolated = .true.
+      if (basis == basis_formula) any_formula = .true.
       if (smallest_fits == 0 .and. trim(verdict) == 'FITS') smallest_fits = ng
     end do
     call print_rule('-')
+    if (any_extrapolated) &
+      print '(a)', '(ng>1 rows extrapolate the single-GPU probe by 1/ng.)'
+    if (any_formula) &
+      print '(a)', '(formula-only rows use the Tier 1 formula for the FFT &
+        &overhead: no single-GPU probe ran.)'
   end subroutine print_ng_table
 
   subroutine report(ctx)

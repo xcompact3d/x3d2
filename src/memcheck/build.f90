@@ -19,7 +19,9 @@ module m_memcheck_build
                                print_table_row
   use m_memcheck_estimate, only: to_gib, classify, ng_unsupported_reason, &
                                  requested_unsupported_reason, &
-                                 fields_plus_halo_bytes_n, n_halo
+                                 fields_plus_halo_bytes_n, n_halo, &
+                                 basis_measured, basis_extrapolated, &
+                                 basis_name
   use m_memory_estimate, only: spectral_slab_bytes, mirror_buffer_bytes_100, &
                                peak_fields_lookup, gpu_io_staging_bytes, &
                                output_field_active, padded_halo_bytes
@@ -140,7 +142,9 @@ contains
     per_gpu = w_local + overhead_term
     verdict = classify(per_gpu, ctx%card_gib)
     call print_table_row(ng, local_dims, w_local, overhead_term, per_gpu, &
-                         ctx%card_gib, verdict)
+                         ctx%card_gib, &
+                         basis_name(merge(basis_measured, basis_extrapolated, &
+                                          ng == 1)), verdict)
   end subroutine report_measured_row
 
   subroutine report_measured_table(ctx, measured_peak_fields, used_gib, &
@@ -168,7 +172,7 @@ contains
     integer :: k, ng
     real(dp) :: overhead
     integer(i8) :: spec_bytes_1
-    logical :: multi_gpu_supported_measured
+    logical :: multi_gpu_supported_measured, any_extrapolated
     character(len=12) :: verdict
 
     spec_bytes_1 = spectral_slab_bytes(ctx%bc_is_100, ctx%bc_is_110, &
@@ -209,6 +213,7 @@ contains
       ' used_gib=', used_gib, ' pct_card=', 100._dp*used_gib/ctx%card_gib
     call print_table_header()
 
+    any_extrapolated = .false.
     do k = 1, size(n_gpu_list)
       ng = n_gpu_list(k)
       call report_measured_row(ctx, ng, measured_peak_fields, overhead, &
@@ -216,6 +221,7 @@ contains
                                verdict)
       if (ng == ctx%domain_cfg%nproc_dir(3) .and. len_trim(verdict) > 0) &
         requested_verdict = verdict
+      if (ng > 1 .and. len_trim(verdict) > 0) any_extrapolated = .true.
     end do
     ! A supported requested ng outside n_gpu_list gets its own row, so the
     ! measured verdict covers the decomposition the input file asks for.
@@ -226,8 +232,12 @@ contains
                                spec_bytes_1, multi_gpu_supported_measured, &
                                verdict)
       if (len_trim(verdict) > 0) requested_verdict = verdict
+      if (ng > 1 .and. len_trim(verdict) > 0) any_extrapolated = .true.
     end if
     call print_rule('-')
+    if (any_extrapolated) &
+      print '(a)', '(ng>1 rows extrapolate the single-GPU measurement by &
+        &1/ng.)'
   end subroutine report_measured_table
 
   subroutine build_mesh(ctx, dims_in, mesh, dims, ibm_missing)

@@ -11,12 +11,23 @@ module m_memcheck_estimate
   private
   public :: to_gib, classify, ng_unsupported_reason, &
             requested_unsupported_reason, estimate_for_ng, &
-            fields_plus_halo_bytes_n, n_halo
+            fields_plus_halo_bytes_n, n_halo, basis_measured, &
+            basis_extrapolated, basis_formula, basis_name
 
   !> <80% of card memory: FITS. 80-95%: BORDERLINE. >95%: DOES_NOT_FIT.
   real(dp), parameter :: FITS_FRACTION = 0.80_dp
   real(dp), parameter :: DOES_NOT_FIT_FRACTION = 0.95_dp
   integer, parameter :: n_halo = 4
+
+  !> How the overhead of an estimate was obtained. measured: the ng=1 GPU
+  !> FFT plan query. extrapolated: that query scaled to ng>1. formula: the
+  !> Tier 1 formula only, no plan query ran or it returned a failure.
+  integer, parameter :: basis_measured = 1, basis_extrapolated = 2, &
+                        basis_formula = 3
+  character(len=12), parameter :: basis_name(3) = [character(len=12) :: &
+                                                   'measured', &
+                                                   'extrapolated', &
+                                                   'formula-only']
 
 contains
 
@@ -148,7 +159,7 @@ contains
     end if
   end function spectral_plus_mirror_bytes
 
-  subroutine estimate_for_ng(ctx, ng, per_gpu_gib, exact, verdict, &
+  subroutine estimate_for_ng(ctx, ng, per_gpu_gib, basis, verdict, &
                              workspace_gib, overhead_gib, io_gib)
     !! Tier 1 floor first; only calls into Tier 2 (a real, throwaway GPU
     !! FFT plan) when Tier 1 alone cannot already answer DOES_NOT_FIT, and
@@ -163,7 +174,7 @@ contains
     type(memcheck_ctx_t), intent(inout) :: ctx
     integer, intent(in) :: ng
     real(dp), intent(out) :: per_gpu_gib
-    logical, intent(out) :: exact
+    integer, intent(out) :: basis
     character(len=12), intent(out) :: verdict
     real(dp), intent(out), optional :: workspace_gib, overhead_gib, io_gib
 
@@ -211,7 +222,7 @@ contains
     if (trim(ctx%run_mode) == 'STATIC' .or. probe_skipped .or. &
         floor_gib > DOES_NOT_FIT_FRACTION*ctx%card_gib) then
       per_gpu_gib = floor_gib
-      exact = .false.
+      basis = basis_formula
       if (present(overhead_gib)) &
         overhead_gib = to_gib(ctx%device%overhead_floor_bytes( &
                               ng, ctx%bc_is_110)) + io_gib_local
@@ -231,8 +242,13 @@ contains
                      ng, ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, &
                      ctx%irank == 0)
     per_gpu_gib = to_gib(base_bytes + spec_bytes + overhead_bytes + io_bytes)
-    ! A probe that returned a failure status leaves the formula, not exact.
-    exact = ctx%device%query_residual_gib(residual_gib)
+    ! A probe that returned a failure status leaves the formula. A probe at
+    ! ng>1 is the single-GPU probe scaled by 1/ng, not a measurement.
+    if (ctx%device%query_residual_gib(residual_gib)) then
+      basis = merge(basis_measured, basis_extrapolated, ng == 1)
+    else
+      basis = basis_formula
+    end if
     if (present(overhead_gib)) &
       overhead_gib = to_gib(overhead_bytes) + io_gib_local
 
