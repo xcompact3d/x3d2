@@ -461,6 +461,30 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
     LABELS "verification;cuda"
     PASS_REGULAR_EXPRESSION "UNSUPPORTED_OK")
 
+  # peak_fields_lookup must follow the time integrator and the species
+  # count: a --build of the TGV input with the edit applied must show no
+  # calibration drift (no WARNING line) and a CHECK line that is OK. The
+  # sed edit goes to a copy of the input in a mktemp directory.
+  function(define_memcheck_build_edit_test name sed_expr)
+    add_test(NAME ${name} COMMAND sh -c
+      "d=$(mktemp -d); \
+       sed '${sed_expr}' ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d \
+         > $d/input.x3d; \
+       mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck \
+         $d/input.x3d --build; \
+       rm -rf $d")
+    set_tests_properties(${name} PROPERTIES
+      LABELS "verification;cuda"
+      PASS_REGULAR_EXPRESSION "CHECK ng=1: .* - OK"
+      FAIL_REGULAR_EXPRESSION "WARNING: peak_fields_lookup|MISMATCH")
+  endfunction()
+  define_memcheck_build_edit_test(memcheck_build_TGV_rk4
+    "s/^time_intg *=.*/time_intg = \"RK4\"/")
+  define_memcheck_build_edit_test(memcheck_build_TGV_ab2
+    "s/^time_intg *=.*/time_intg = \"AB2\"/")
+  define_memcheck_build_edit_test(memcheck_build_TGV_species2
+    "s/^time_intg *=.*/&\\nn_species = 2/")
+
   # A real --build run must not clobber whatever CWD it was launched from,
   # nor leave its scratch directory behind: validate_build_inputs/
   # make_scratch/leave_build_scratch (src/memcheck/scratch.f90) exist
