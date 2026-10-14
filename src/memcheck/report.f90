@@ -31,16 +31,19 @@ contains
 
   subroutine print_table_header()
     character(len=14) :: hdr_grid
+    character(len=12) :: hdr_basis
 
     ! hdr_grid is a fixed-length variable (not a literal passed straight to
     ! a14) so the assignment's right-hand-side blank-padding left-justifies
     ! it, matching adjustl(local_grid_str) in print_table_row below - a
     ! literal would instead be right-justified by the a14 edit descriptor,
-    ! misaligning the column under the data rows.
+    ! misaligning the column under the data rows.  hdr_basis follows the
+    ! same rule.
     hdr_grid = 'local grid'
+    hdr_basis = 'basis'
     print '(a,a4,a,a14,a,a9,a,a8,a,a8,a,a6,a,a12,a,a)', ' ', 'GPUs', &
       ' | ', hdr_grid, ' | ', 'workspace', ' | ', 'overhead', ' | ', &
-      'per-GPU', ' | ', '%', ' | ', 'basis', ' | ', 'verdict'
+      'per-GPU', ' | ', '%', ' | ', hdr_basis, ' | ', 'verdict'
   end subroutine print_table_header
 
   subroutine print_table_row(ng, local_dims, workspace_gib, overhead_gib, &
