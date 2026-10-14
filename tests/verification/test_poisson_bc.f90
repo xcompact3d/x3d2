@@ -4,7 +4,7 @@ program test_poisson
   !! Validates the Poisson solver across the boundary condition
   !! configurations listed in the table cases (4 at the moment):
   !!   ppp : all periodic          (128 x 64 x 32)
-  !!   pdp : y-dirichlet           (128 x 65 x 32)
+  !!   pdp : y-dirichlet           (128 x 65 x 128)
   !!   dpp : x-dirichlet           (129 x 64 x 128)
   !!   ddp : x,y-dirichlet         (129 x 257 x 64)
   !! The code is one letter per direction in x,y,z order: d = dirichlet,
