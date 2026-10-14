@@ -61,11 +61,9 @@ program x3d2_memcheck
   use m_memcheck_context, only: memcheck_ctx_t, parse_args, read_config, &
                                 classify_bc, resolve_gpu_io_mode
   use m_memcheck_estimate, only: to_gib, classify, ng_unsupported_reason, &
-                                 n_halo, fields_plus_halo_bytes_n, &
-                                 estimate_for_ng
+                                 n_halo, fields_plus_halo_bytes_n
   use m_memcheck_report, only: print_rule, print_table_header, &
-                               print_table_row, print_io_staging_line, &
-                               print_requested_line
+                               print_table_row, n_gpu_list, report
 
   implicit none
 
@@ -82,10 +80,6 @@ program x3d2_memcheck
   !> ~8% byte mismatch, well outside this tolerance - and is separately,
   !> exactly caught by the drift check below regardless of byte tolerance.
   real(dp), parameter :: CHECK_TOLERANCE = 0.05_dp
-  !> Candidate GPU counts to scan for "smallest ng that fits". The CUDA
-  !> backend only supports a Z-only pencil decomposition (nproc_dir=
-  !> [1,1,ng]) today.
-  integer, parameter :: n_gpu_list(4) = [1, 2, 4, 8]
 
   type(memcheck_ctx_t) :: ctx
   integer :: ierr, nproc, ndevs
@@ -144,7 +138,7 @@ program x3d2_memcheck
 
   ctx%multi_gpu_supported = .not. (ctx%bc_is_010 .or. ctx%bc_is_110)
 
-  call report()
+  call report(ctx)
   if (trim(ctx%run_mode) == 'BUILD') call run_tier3()
 
   call MPI_Finalize(ierr)
@@ -244,84 +238,6 @@ contains
     ctx%card_gib = to_gib(int(total_b, i8))
     ctx%card_free_gib = to_gib(int(free_b, i8))
   end subroutine query_card_gib
-
-  subroutine print_ng_table(smallest_fits)
-    !! The estimate table, one row per scanned GPU count (the ng=1 row also
-    !! feeds run_tier3's CHECK line); smallest_fits is 0 if none FITS.
-    integer, intent(out) :: smallest_fits
-
-    integer :: k, ng, local_dims(3)
-    real(dp) :: per_gpu_gib, workspace_gib, overhead_gib, io_gib
-    logical :: exact
-    character(len=12) :: verdict
-    character(len=96) :: reason
-
-    call print_table_header()
-    smallest_fits = 0
-    do k = 1, size(n_gpu_list)
-      ng = n_gpu_list(k)
-      reason = ng_unsupported_reason(ctx, ng)
-      if (len_trim(reason) > 0) then
-        print '(a,i0,a,a,a)', ' ', ng, '     (skipped: ', trim(reason), ')'
-        cycle
-      end if
-      local_dims = [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)/ng]
-      call estimate_for_ng(ctx, ng, per_gpu_gib, exact, verdict, &
-                           workspace_gib, overhead_gib, io_gib)
-      if (ng == 1) then
-        ctx%estimate_ng1_gib = per_gpu_gib
-        ctx%io_staging_ng1_gib = io_gib
-      end if
-      call print_table_row(ng, local_dims, workspace_gib, overhead_gib, &
-                           per_gpu_gib, ctx%card_gib, verdict)
-      if (smallest_fits == 0 .and. trim(verdict) == 'FITS') smallest_fits = ng
-    end do
-    call print_rule('-')
-  end subroutine print_ng_table
-
-  subroutine report()
-    integer :: smallest_fits
-
-    call print_rule('=')
-    print '(a,i0,a,i0,a,i0,a)', 'Input grid: ', ctx%gdims(1), 'x', &
-      ctx%gdims(2), 'x', ctx%gdims(3)
-    print '(a,f0.2,a,f0.2,a)', 'Card memory: ', ctx%card_gib, ' GiB (', &
-      ctx%card_free_gib, ' GiB free now)'
-    if (ctx%card_gib - ctx%card_free_gib > 0.5_dp) &
-      print '(a,f0.2,a)', 'WARNING: ', ctx%card_gib - ctx%card_free_gib, &
-        ' GiB of &
-        &this card is in use by other processes; verdicts are against the &
-        &full card, and the real build only proceeds if it fits in what is &
-        &free.'
-    print '(a,i0)', 'peak_fields (static estimate): ', ctx%peak_fields
-    call print_io_staging_line(ctx)
-    select case (trim(ctx%run_mode))
-    case ('STATIC')
-      print '(a)', 'Mode: static (Tier 1 only, no FFT plan query)'
-    case ('BUILD')
-      print '(a)', 'Mode: build (Tier 1 + Tier 2, then a real Tier 3 &
-        &build/measure)'
-    case default
-      print '(a)', 'Mode: default (Tier 1 + Tier 2 FFT plan query)'
-    end select
-    call print_rule('=')
-    call print_requested_line(ctx)
-
-    call print_rule('-')
-    call print_ng_table(smallest_fits)
-    print '(a)', 'Notes: workspace + overhead = per-GPU. % is per-GPU &
-      &against this card''s total memory.'
-
-    if (smallest_fits > 0) then
-      print '(a,i0,a)', 'Smallest GPU count that fits: ', smallest_fits, '.'
-    else
-      print '(a)', 'No scanned GPU count fits with headroom to spare.'
-    end if
-
-    if (trim(ctx%final_verdict) == 'BORDERLINE' .and. &
-        trim(ctx%run_mode) /= 'BUILD') &
-      print '(a)', 'To confirm with a real measurement, re-run with --build.'
-  end subroutine report
 
   function scratch_name(parent) result(path)
     !! <parent>/x3d2-memcheck-build.<pid>, the scratch directory of this
