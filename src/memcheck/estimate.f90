@@ -190,16 +190,17 @@ contains
     floor_gib = to_gib(floor_bytes)
 
     ! The Tier 2 probe builds the FFT plans on the whole global grid, one
-    ! GPU, whatever ng is. Skip it when free memory cannot hold that: the
-    ! spectral data (heap and the xtdesc buffer are each about one
-    ! spectral copy, hence twice) plus the fixed overhead. cuFFTMp aborts
-    ! inside NVSHMEM on a plan that does not fit and returns no status.
+    ! GPU, whatever ng is. Skip it when free memory cannot hold that:
+    ! four spectral copies plus the fixed overhead. cuFFTMp aborts inside
+    ! NVSHMEM on a plan that does not fit and returns no status. A
+    ! 1024^3 probe (heap about 2.5 and xtdesc 1 copy) ran on a 40 GB card,
+    ! a 1280^3 probe aborted with the earlier guess of two copies.
     probe_skipped = .false.
     if (trim(ctx%run_mode) /= 'STATIC' .and. &
         floor_gib <= DOES_NOT_FIT_FRACTION*ctx%card_gib) then
       if (.not. ctx%device%query_residual_gib(residual_gib)) then
         call ctx%device%mem_info(total_b, free_b)
-        probe_skipped = free_b < 2_i8*spectral_plus_mirror_bytes(ctx, 1) + &
+        probe_skipped = free_b < 4_i8*spectral_plus_mirror_bytes(ctx, 1) + &
                         ctx%device%overhead_floor_bytes(1, ctx%bc_is_110)
       end if
     end if
