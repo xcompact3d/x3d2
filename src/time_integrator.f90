@@ -50,6 +50,31 @@ module m_time_integrator
 
 contains
 
+  pure integer function nolds_of(time_intg) result(nolds)
+    !! Number of old-step blocks per variable that a time_intg_t keeps:
+    !! k - 1 for ABk (nstep - 1) and k for RKk (nstage). Static, so that
+    !! x3d2-memcheck can size the history blocks without allocating them.
+    implicit none
+
+    character(len=3), intent(in) :: time_intg
+
+    integer :: order, stat
+
+    if (time_intg(1:2) == 'AB') then
+      read (time_intg(3:3), *, iostat=stat) order
+      if (stat /= 0) error stop 'Error reading AB integration order'
+      if (order >= 5) error stop 'Integration order >4 is not supported'
+      nolds = order - 1
+    else if (time_intg(1:2) == 'RK') then
+      read (time_intg(3:3), *, iostat=stat) order
+      if (stat /= 0) error stop 'Error reading RK integration order'
+      if (order >= 5) error stop 'Integration order >4 is not supported'
+      nolds = order
+    else
+      error stop 'Integration method '//time_intg//' is not defined'
+    end if
+  end function nolds_of
+
   subroutine finalize(self)
     implicit none
 
@@ -81,7 +106,7 @@ contains
     character(3), intent(in) :: method
     integer, intent(in) :: nvars
 
-    integer :: i, j, stat
+    integer :: i, j
 
     ! initialize Runge-Kutta coefficients
     ! rk1
@@ -131,25 +156,18 @@ contains
     init%gdt = 0._dp
     init%stage_dt = 0._dp
 
+    init%nolds = nolds_of(init%sname)
+
     if (init%sname(1:2) == 'AB') then
-      read (init%sname(3:3), *, iostat=stat) init%order
-      if (stat /= 0) error stop 'Error reading AB integration order'
-      if (init%order >= 5) error stop 'Integration order >4 is not supported'
+      init%order = init%nolds + 1
       init%nstep = init%order
       init%nstage = 1
-      init%nolds = init%nstep - 1
       init%step => adams_bashforth
-    else if (init%sname(1:2) == 'RK') then
-      read (init%sname(3:3), *, iostat=stat) init%order
-      if (stat /= 0) error stop 'Error reading RK integration order'
-      if (init%order >= 5) error stop 'Integration order >4 is not supported'
+    else
+      init%order = init%nolds
       init%nstep = 1
       init%nstage = init%order
-      init%nolds = init%nstage
       init%step => runge_kutta
-    else
-      print *, 'Integration method '//init%sname//' is not defined'
-      error stop
     end if
 
     init%nvars = nvars
