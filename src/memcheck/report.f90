@@ -105,6 +105,7 @@ contains
     integer :: requested_ng
     real(dp) :: requested_gib
     logical :: exact
+    character(len=12) :: requested_verdict
     character(len=96) :: reason
 
     requested_ng = ctx%domain_cfg%nproc_dir(3)
@@ -119,7 +120,8 @@ contains
       ctx%final_verdict = 'UNSUPPORTED'
     else
       call estimate_for_ng(ctx, requested_ng, requested_gib, exact, &
-                           ctx%final_verdict)
+                           requested_verdict)
+      ctx%final_verdict = requested_verdict
       print '(a,i0,a,f0.2,a,f0.1,a,a)', 'Requested nproc_dir gives ng=', &
         requested_ng, ': ', requested_gib, ' GiB/GPU (', &
         100._dp*requested_gib/ctx%card_gib, '% of card) - ', &
