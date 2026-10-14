@@ -174,9 +174,9 @@ program x3d2_memcheck
   !> loop and consumed by run_tier3()'s CHECK line, which must exclude it -
   !> the real --build never performs a snapshot/checkpoint write.
   real(dp) :: io_staging_ng1_gib = 0._dp
-  !> orig_dir/scratch_dir: set by enter_build_scratch, used by
-  !> leave_build_scratch to chdir back and remove the scratch directory -
-  !> see both subroutines' docstrings and run_tier3's docstring for why a
+  !> orig_dir/scratch_dir: set by validate_build_inputs and make_scratch,
+  !> used by leave_build_scratch to chdir back and remove the scratch
+  !> directory - see their docstrings and run_tier3's docstring for why a
   !> real --build runs inside a throwaway subdirectory rather than the
   !> invoking directory.
   character(len=4096) :: orig_dir = '', scratch_dir = ''
@@ -396,7 +396,7 @@ contains
     !! Working directory via libc getcwd, trimmed at the first embedded NUL
     !! (the C string terminator - Fortran character variables are not
     !! themselves NUL-terminated, so the raw buffer must be cut there before
-    !! use). Used by enter_build_scratch to record the invoking directory.
+    !! use). Used by validate_build_inputs to record the invoking directory.
     character(len=4096) :: path
     character(kind=c_char, len=4096) :: buf
     type(c_ptr) :: ptr
@@ -417,7 +417,7 @@ contains
     !! module periodic_x/y/z classify_bc sets - both carry the same
     !! information since both derive from domain_cfg%BC_x/y/z via
     !! periodic_dir. Shared by build_and_measure's ibm_on pre-check and
-    !! enter_build_scratch's mask mirroring so the suffix logic can never
+    !! make_scratch's mask mirroring so the suffix logic can never
     !! diverge between the two (src/module/ibm.f90:70-75 is the third,
     !! authoritative copy this mirrors).
     logical, intent(in) :: px, py, pz
@@ -435,7 +435,7 @@ contains
 
   pure function has_dotdot_component(path) result(found)
     !! True if any '/'-separated component of path is exactly '..' - used
-    !! by enter_build_scratch to reject a relative input path it cannot
+    !! by make_scratch to reject a relative input path it cannot
     !! safely mirror by symlink.
     character(len=*), intent(in) :: path
     logical :: found
@@ -871,7 +871,7 @@ contains
 
   function scratch_name(parent) result(path)
     !! <parent>/x3d2-memcheck-build.<pid>, the scratch directory of this
-    !! process. enter_build_scratch creates it and leave_build_scratch
+    !! process. make_scratch creates it and leave_build_scratch
     !! re-derives it before removing anything, so both must get the name
     !! from here.
     character(len=*), intent(in) :: parent
@@ -907,33 +907,17 @@ contains
     ok = .false.
   end subroutine skip_build
 
-  subroutine enter_build_scratch(ok)
-    !! Real build runs inside a throwaway x3d2-memcheck-build.<pid>
-    !! subdirectory of the invoking directory, because a case build
-    !! initialises monitoring (writes monitoring.csv) and calls
-    !! postprocess(0), which clobbered run directories on 2026-09-15. A
-    !! relative input path is mirrored into the scratch directory by
-    !! symlink; a relative path containing a '..' component (or a single
-    !! quote, which the shell quoting below cannot handle) cannot be
-    !! mirrored this way and is rejected - pass an absolute path instead.
-    !! Sets ok=.false. (and the estimate above stands, like the other
-    !! run_tier3 skips) on any failure; leave_build_scratch removes the
-    !! scratch directory once the build finishes.
-    !!
-    !! Validates the known failure causes up front, before touching the
-    !! filesystem: the input file must exist, domain_cfg%flow_case_name
-    !! must be one this tool (and build_and_measure's own select case) can
-    !! dispatch, and (ibm_on=T) the matching ibm_<BC-suffix>.bp mask file
-    !! must already be present in the invoking directory. If an unexpected
-    !! error stop happens after the chdir below regardless - a failure mode
-    !! this pre-validation does not cover - the scratch directory is left
-    !! behind under the invoking directory; the next run with the same pid
-    !! in the same directory removes it as a stale leftover before
-    !! creating its own.
+  subroutine validate_build_inputs(ok)
+    !! Validates the known failure causes of a real build up front, before
+    !! touching the filesystem: the input file must exist,
+    !! domain_cfg%flow_case_name must be one this tool (and
+    !! build_and_measure's own select case) can dispatch, and (ibm_on=T) the
+    !! matching ibm_<BC-suffix>.bp mask file must already be present in the
+    !! invoking directory. Records the invoking directory in orig_dir for
+    !! make_scratch. Sets ok=.false. (and the estimate above stands, like
+    !! the other run_tier3 skips) on any failure.
     logical, intent(out) :: ok
 
-    integer(c_int) :: rc
-    integer :: st, slash_pos
     character(len=16) :: ibm_file
     logical :: ibm_file_exists, input_exists, flow_case_supported
 
@@ -972,7 +956,33 @@ contains
         return
       end if
     end if
+  end subroutine validate_build_inputs
 
+  subroutine make_scratch(ok)
+    !! Real build runs inside a throwaway x3d2-memcheck-build.<pid>
+    !! subdirectory of the invoking directory, because a case build
+    !! initialises monitoring (writes monitoring.csv) and calls
+    !! postprocess(0), which clobbered run directories on 2026-09-15. A
+    !! relative input path is mirrored into the scratch directory by
+    !! symlink; a relative path containing a '..' component (or a single
+    !! quote, which the shell quoting below cannot handle) cannot be
+    !! mirrored this way and is rejected - pass an absolute path instead.
+    !! Sets ok=.false. (and the estimate above stands, like the other
+    !! run_tier3 skips) on any failure; leave_build_scratch removes the
+    !! scratch directory once the build finishes. validate_build_inputs
+    !! must have run first. If an unexpected error stop happens after the
+    !! chdir below regardless - a failure mode the pre-validation does not
+    !! cover - the scratch directory is left behind under the invoking
+    !! directory; the next run with the same pid in the same directory
+    !! removes it as a stale leftover before creating its own.
+    logical, intent(out) :: ok
+
+    integer(c_int) :: rc
+    integer :: st, slash_pos
+    character(len=16) :: ibm_file
+    logical :: input_exists
+
+    ok = .true.
     scratch_dir = scratch_name(orig_dir)
 
     ! A stale scratch directory from an earlier run's unexpected error stop
@@ -1053,11 +1063,11 @@ contains
 
     print '(a,a,a)', 'Real build scratch directory: ', trim(scratch_dir), &
       ' (removed after the build)'
-  end subroutine enter_build_scratch
+  end subroutine make_scratch
 
   subroutine leave_build_scratch()
     !! Restore the invoking directory and remove the scratch directory
-    !! enter_build_scratch created. Called after build_and_measure returns,
+    !! make_scratch created. Called after build_and_measure returns,
     !! on both the normal path and the ibm_missing early return.
     integer(c_int) :: rc
     character(len=4096) :: expected_scratch_dir
@@ -1069,7 +1079,7 @@ contains
         &the scratch directory.'
 
     ! Never remove anything other than the exact scratch directory
-    ! enter_build_scratch created and chdir'd into.
+    ! make_scratch created and chdir'd into.
     expected_scratch_dir = scratch_name(orig_dir)
     if (trim(scratch_dir) == trim(expected_scratch_dir)) &
       call run_sh("rm -rf '"//trim(scratch_dir)//"'")
@@ -1089,18 +1099,19 @@ contains
     !! build probe, or if ibm_on=T and the matching mask file is not
     !! present in the working directory. The real build itself runs inside
     !! a throwaway x3d2-memcheck-build.<pid> scratch directory
-    !! (enter_build_scratch/leave_build_scratch above), because it
+    !! (make_scratch/leave_build_scratch above), because it
     !! initialises monitoring (writes monitoring.csv) and calls
     !! postprocess(0), which clobbered run directories on 2026-09-15;
-    !! enter_build_scratch also skips the build
+    !! make_scratch also skips the build
     !! (ok=.false.) if the scratch directory cannot be created or entered,
     !! or if input_path is relative with a '..' component it cannot mirror.
-    !! enter_build_scratch pre-validates the known causes up front - a
+    !! validate_build_inputs pre-validates the known causes up front - a
     !! missing input file, an unsupported flow case, or (ibm_on=T) a
-    !! missing mask file - before touching the filesystem; see its own
-    !! docstring for what happens if an unexpected error stop occurs after
-    !! its chdir regardless (a scratch directory left behind under the
-    !! invoking directory, cleaned up by the next run with the same pid).
+    !! missing mask file - before touching the filesystem; see
+    !! make_scratch's docstring for what happens if an unexpected error stop
+    !! occurs after its chdir regardless (a scratch directory left behind
+    !! under the invoking directory, cleaned up by the next run with the
+    !! same pid).
     real(dp) :: ws_guess, used_gib, workspace_gib_measured, pct_error, &
                estimate_ng1_excl_io_gib
     integer :: measured_peak_fields
@@ -1133,7 +1144,9 @@ contains
         &NVSHMEM heap).'
     end if
 
-    call enter_build_scratch(build_scratch_ok)
+    call validate_build_inputs(build_scratch_ok)
+    if (.not. build_scratch_ok) return
+    call make_scratch(build_scratch_ok)
     if (.not. build_scratch_ok) return
 
     call build_and_measure(gdims, measured_peak_fields, used_gib, &
@@ -1388,7 +1401,7 @@ contains
     ! file is missing. That is correct for production xcompact, but not
     ! for a tool that should degrade gracefully - check for it here, using
     ! the same suffix construction as src/module/ibm.f90:70-75 (shared via
-    ! ibm_mask_filename, also used by enter_build_scratch to mirror the
+    ! ibm_mask_filename, also used by make_scratch to mirror the
     ! mask into the build scratch directory), and bail out before
     ! triggering the case/solver construction that would abort.
     if (solver_cfg%ibm_on) then

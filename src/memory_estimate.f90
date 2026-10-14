@@ -291,7 +291,7 @@ contains
     ! this tree (no m_case_foil, no case ('foil') dispatch in xcompact.f90
     ! or in memcheck.f90's build_and_measure) - `x3d2-memcheck
     ! examples/foil/input.x3d --build` cannot measure a real number until
-    ! one is added, and enter_build_scratch's flow_case_supported check
+    ! one is added, and validate_build_inputs' flow_case_supported check
     ! skips the real build for it by name rather than attempting it. Falls
     ! back here to channel's base (the largest measured, i.e. safest
     ! over-estimate) so the static (Tier 1) estimate over- rather than
