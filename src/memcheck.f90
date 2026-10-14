@@ -60,11 +60,9 @@ program x3d2_memcheck
   use m_cuda_poisson_fft, only: cuda_poisson_fft_t
   use m_memcheck_context, only: memcheck_ctx_t, parse_args, read_config, &
                                 classify_bc, resolve_gpu_io_mode
-  use m_memcheck_estimate, only: DOES_NOT_FIT_FRACTION, to_gib, classify, &
-                                 ng_unsupported_reason, n_halo, &
-                                 fields_plus_halo_bytes_n, &
-                                 fields_plus_halo_bytes, &
-                                 spectral_plus_mirror_bytes, ensure_fft_query
+  use m_memcheck_estimate, only: to_gib, classify, ng_unsupported_reason, &
+                                 n_halo, fields_plus_halo_bytes_n, &
+                                 estimate_for_ng
 
   implicit none
 
@@ -284,105 +282,6 @@ contains
       '% | ', trim(verdict)
   end subroutine print_table_row
 
-  subroutine estimate_for_ng(ng, per_gpu_gib, exact, verdict, workspace_gib, &
-                             overhead_gib, io_gib)
-    !! Tier 1 floor first; only calls into Tier 2 (a real, throwaway GPU
-    !! FFT plan) when Tier 1 alone cannot already answer DOES_NOT_FIT, and
-    !! never under --static. workspace_gib/overhead_gib (optional) are the
-    !! same two-term breakdown the --build measured table reports:
-    !! workspace = exact fields+halo+spectral+mirror (Tier 1, no GPU
-    !! needed); overhead = everything from the Tier 2 GPU query, the
-    !! hardware constants (worksize/xtdesc/heap/context), and the
-    !! GPU-aware IO staging term (also broken out on its own via the
-    !! optional io_gib, in GiB, for callers that need to track it apart
-    !! from context/FFT overhead - e.g. run_tier3()'s CHECK line, which
-    !! must exclude it since the real --build never performs a
-    !! snapshot/checkpoint write).
-    integer, intent(in) :: ng
-    real(dp), intent(out) :: per_gpu_gib
-    logical, intent(out) :: exact
-    character(len=12), intent(out) :: verdict
-    real(dp), intent(out), optional :: workspace_gib, overhead_gib, io_gib
-
-    integer(i8) :: base_bytes, spec_bytes, worksize_bytes, floor_bytes, &
-                  xtdesc_bytes, heap_bytes, context_bytes, io_bytes
-    logical :: used_cufftmp
-    real(dp) :: floor_gib, io_gib_local
-
-    base_bytes = fields_plus_halo_bytes(ctx, ng)
-    spec_bytes = spectral_plus_mirror_bytes(ctx, ng)
-    io_bytes = gpu_io_staging_bytes([ctx%gdims(1), ctx%gdims(2), &
-                                     ctx%gdims(3)/ng], &
-                                    ctx%checkpoint_cfg, &
-                                    ctx%gpu_io_device_write)
-    io_gib_local = to_gib(io_bytes)
-    if (present(io_gib)) io_gib = io_gib_local
-    if (present(workspace_gib)) &
-      workspace_gib = to_gib(base_bytes + spec_bytes)
-    ! Floor: assume cuFFTMp is used (the realistic case for every BC this
-    ! solver ever attempts it for - see m_cuda_memory_estimate's 110 guard)
-    ! since that gives the larger, safer lower bound.
-    floor_bytes = base_bytes + spec_bytes + io_bytes + &
-                  context_floor_bytes(ng, .not. ctx%bc_is_110)
-    floor_gib = to_gib(floor_bytes)
-
-    if (trim(ctx%run_mode) == 'STATIC' .or. &
-        floor_gib > DOES_NOT_FIT_FRACTION*ctx%card_gib) then
-      per_gpu_gib = floor_gib
-      exact = .false.
-      if (present(overhead_gib)) &
-        overhead_gib = to_gib(context_floor_bytes(ng, &
-                                                  .not. ctx%bc_is_110)) &
-                       + io_gib_local
-      if (trim(ctx%run_mode) == 'STATIC') then
-        ! --static: Tier 1 only, never queries the GPU FFT plan. floor_gib
-        ! IS the estimate here - not just a DOES_NOT_FIT early-return floor
-        ! - so classify it with the full three-way verdict.
-        verdict = classify(per_gpu_gib, ctx%card_gib)
-      else
-        verdict = 'DOES_NOT_FIT'
-      end if
-      return
-    end if
-
-    call ensure_fft_query(ctx)
-    used_cufftmp = ctx%ng1_used_cufftmp
-    ! context_bytes: the CUDA-context-alone baseline (no ng argument
-    ! matters here - context_floor_bytes only adds its hardcoded NVSHMEM
-    ! heap when uses_cufftmp=.true., so passing .false. always yields just
-    ! the context). The cuFFTMp heap itself now comes from the live
-    ! ng1_heap_bytes measurement below instead of that hardcoded constant.
-    context_bytes = context_floor_bytes(ng, .false.)
-    if (used_cufftmp) then
-      ! Live-measured (fft_workspace_bytes_query): worksize is carved out
-      ! of the NVSHMEM heap for cuFFTMp, not a separate allocation - do
-      ! not add it on top of heap_bytes (see that function's docstring).
-      worksize_bytes = 0_i8
-      heap_bytes = int(real(ctx%ng1_heap_bytes, dp)/real(ng, dp), i8)
-      ! xtdesc cost was measured to be 0 extra at ng=2 (drawn from heap
-      ! space the plan already reserved) - add the ng=1 value only there.
-      xtdesc_bytes = merge(ctx%ng1_xtdesc_bytes, 0_i8, ng == 1)
-    else
-      ! See ng1_worksize_bytes' declaration: this is an extrapolation for
-      ! ng>1, not an independent per-ng measurement (though in practice
-      ! this branch only ever runs at ng=1 - plain cuFFT is only reached
-      ! by the 110 BC or a cuFFTMp fallback, neither of which supports
-      ! nproc>1 in this solver).
-      worksize_bytes = int(real(ctx%ng1_worksize_bytes, dp)/real(ng, dp), i8)
-      heap_bytes = 0_i8
-      xtdesc_bytes = 0_i8
-    end if
-    per_gpu_gib = to_gib(base_bytes + spec_bytes + worksize_bytes + &
-                         xtdesc_bytes + heap_bytes + context_bytes + &
-                         io_bytes)
-    exact = .true.
-    if (present(overhead_gib)) &
-      overhead_gib = to_gib(worksize_bytes + xtdesc_bytes + heap_bytes + &
-                            context_bytes) + io_gib_local
-
-    verdict = classify(per_gpu_gib, ctx%card_gib)
-  end subroutine estimate_for_ng
-
   subroutine print_io_staging_line()
     !! The GPU-aware IO staging line of the report header: the term at ng=1
     !! and what causes it, or why there is none.
@@ -445,7 +344,7 @@ contains
         ctx%domain_cfg%nproc_dir(3), ']: not supported (', trim(reason), ')'
       ctx%final_verdict = 'UNSUPPORTED'
     else
-      call estimate_for_ng(requested_ng, requested_gib, exact, &
+      call estimate_for_ng(ctx, requested_ng, requested_gib, exact, &
                            ctx%final_verdict)
       print '(a,i0,a,f0.2,a,f0.1,a,a)', 'Requested nproc_dir gives ng=', &
         requested_ng, ': ', requested_gib, ' GiB/GPU (', &
@@ -484,8 +383,8 @@ contains
         cycle
       end if
       local_dims = [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)/ng]
-      call estimate_for_ng(ng, per_gpu_gib, exact, verdict, workspace_gib, &
-                           overhead_gib, io_gib)
+      call estimate_for_ng(ctx, ng, per_gpu_gib, exact, verdict, &
+                           workspace_gib, overhead_gib, io_gib)
       if (ng == 1) then
         ctx%estimate_ng1_gib = per_gpu_gib
         ctx%io_staging_ng1_gib = io_gib
