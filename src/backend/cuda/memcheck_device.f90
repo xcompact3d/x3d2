@@ -39,12 +39,13 @@ module m_cuda_memcheck_device
     !> data buffer) does not either - it is added only at ng=1, since it was
     !> measured to cost 0 extra at ng=2 (drawn from heap space the plan
     !> already reserved).
-    integer(i8) :: ng1_worksize_bytes, ng1_heap_bytes, ng1_xtdesc_bytes
-    logical :: ng1_used_cufftmp
+    integer(i8) :: ng1_worksize_bytes = 0_i8, ng1_heap_bytes = 0_i8, &
+                   ng1_xtdesc_bytes = 0_i8
+    logical :: ng1_used_cufftmp = .false.
     !> Set by ensure_fft_query, the cudaMemGetInfo delta across the whole
     !> throwaway plan query (create+destroy) - if cufftDestroy fully released
     !> the NVSHMEM heap this reserved, this should read ~0.
-    real(dp) :: ng1_query_residual_gib
+    real(dp) :: ng1_query_residual_gib = 0._dp
     logical :: ng1_query_ran = .false.
     !> Set by ensure_fft_query when the throwaway plan query returned a
     !> failure status; the ng1_* values are then not valid and
