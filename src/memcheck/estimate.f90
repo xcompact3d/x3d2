@@ -168,8 +168,9 @@ contains
     real(dp), intent(out), optional :: workspace_gib, overhead_gib, io_gib
 
     integer(i8) :: base_bytes, spec_bytes, floor_bytes, overhead_bytes, &
-                   io_bytes
-    real(dp) :: floor_gib, io_gib_local
+                   io_bytes, total_b, free_b
+    real(dp) :: floor_gib, io_gib_local, residual_gib
+    logical :: probe_skipped
 
     base_bytes = fields_plus_halo_bytes(ctx, ng)
     spec_bytes = spectral_plus_mirror_bytes(ctx, ng)
@@ -188,17 +189,33 @@ contains
                   ctx%device%overhead_floor_bytes(ng, ctx%bc_is_110)
     floor_gib = to_gib(floor_bytes)
 
-    if (trim(ctx%run_mode) == 'STATIC' .or. &
+    ! The Tier 2 probe builds the FFT plans on the whole global grid, one
+    ! GPU, whatever ng is. Skip it when free memory cannot hold that: the
+    ! spectral data (heap and the xtdesc buffer are each about one
+    ! spectral copy, hence twice) plus the fixed overhead. cuFFTMp aborts
+    ! inside NVSHMEM on a plan that does not fit and returns no status.
+    probe_skipped = .false.
+    if (trim(ctx%run_mode) /= 'STATIC' .and. &
+        floor_gib <= DOES_NOT_FIT_FRACTION*ctx%card_gib) then
+      if (.not. ctx%device%query_residual_gib(residual_gib)) then
+        call ctx%device%mem_info(total_b, free_b)
+        probe_skipped = free_b < 2_i8*spectral_plus_mirror_bytes(ctx, 1) + &
+                        ctx%device%overhead_floor_bytes(1, ctx%bc_is_110)
+      end if
+    end if
+
+    if (trim(ctx%run_mode) == 'STATIC' .or. probe_skipped .or. &
         floor_gib > DOES_NOT_FIT_FRACTION*ctx%card_gib) then
       per_gpu_gib = floor_gib
       exact = .false.
       if (present(overhead_gib)) &
         overhead_gib = to_gib(ctx%device%overhead_floor_bytes( &
                               ng, ctx%bc_is_110)) + io_gib_local
-      if (trim(ctx%run_mode) == 'STATIC') then
+      if (trim(ctx%run_mode) == 'STATIC' .or. probe_skipped) then
         ! --static: Tier 1 only, never queries the GPU FFT plan. floor_gib
         ! IS the estimate here - not just a DOES_NOT_FIT early-return floor
-        ! - so classify it with the full three-way verdict.
+        ! - so classify it with the full three-way verdict. A skipped probe
+        ! is the same case.
         verdict = classify(per_gpu_gib, ctx%card_gib)
       else
         verdict = 'DOES_NOT_FIT'

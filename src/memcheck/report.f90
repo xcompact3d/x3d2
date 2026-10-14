@@ -132,6 +132,9 @@ contains
         if (trim(ctx%run_mode) == 'STATIC') then
           print '(a)', '  (Tier 1 estimate only: --static skips the GPU &
             &FFT plan query.)'
+        else if (trim(requested_verdict) /= 'DOES_NOT_FIT') then
+          print '(a)', '  (FFT workspace is formula-only: the single-GPU &
+            &probe would not fit in free memory.)'
         else
           print '(a)', '  (Tier 1 floor only: this input is well over &
             &the limit, no GPU plan probe was attempted.)'
