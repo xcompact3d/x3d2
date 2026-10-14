@@ -72,6 +72,8 @@ contains
     !! Constants below measured directly with cudaMemGetInfo on kolmogorov
     !! (A100-PCIE-40GB, NVHPC 25.3/CUDA 12.8, NVSHMEM_SYMMETRIC_SIZE unset
     !! i.e. NVSHMEM's built-in default), 2026-09-09:
+    !!   (memcheck now uses the live context size on an idle card; this
+    !!   constant is its shared-card fallback and the --static floor.)
     !!   CUDA context alone: ~0.42 GiB (39.493 GiB card total - 39.078 GiB
     !!     free immediately after cudaSetDevice, before any cuFFT/cuFFTMp
     !!     call - see memcheck.f90's own "Card memory: 39.49 GiB" line,
