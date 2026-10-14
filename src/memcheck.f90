@@ -1442,6 +1442,32 @@ contains
     backend => cuda_backend
   end subroutine make_cuda_backend
 
+  subroutine make_flow_case(backend, mesh, host_allocator, flow_case)
+    !! Build the flow case named in the input through the same case
+    !! dispatch select case xcompact.f90 uses.
+    class(base_backend_t), pointer, intent(in) :: backend
+    type(mesh_t), target, intent(inout) :: mesh
+    type(allocator_t), target, intent(inout) :: host_allocator
+    class(base_case_t), allocatable, intent(out) :: flow_case
+
+    select case (trim(domain_cfg%flow_case_name))
+    case ('channel')
+      allocate (case_channel_t :: flow_case)
+      flow_case = case_channel_t(backend, mesh, host_allocator)
+    case ('cylinder')
+      allocate (case_cylinder_t :: flow_case)
+      flow_case = case_cylinder_t(backend, mesh, host_allocator)
+    case ('generic')
+      allocate (case_generic_t :: flow_case)
+      flow_case = case_generic_t(backend, mesh, host_allocator)
+    case ('tgv')
+      allocate (case_tgv_t :: flow_case)
+      flow_case = case_tgv_t(backend, mesh, host_allocator)
+    case default
+      error stop 'Undefined flow_case.'
+    end select
+  end subroutine make_flow_case
+
   subroutine build_and_measure(dims_in, npeak, dev_used, ibm_missing)
     !! Build the real flow case at dims_in on this single GPU (via the same
     !! case-dispatch select case xcompact.f90 uses), run one (or, under
@@ -1510,22 +1536,7 @@ contains
     call make_cuda_backend(mesh, dims, cuda_allocator, host_allocator, &
                            cuda_backend, allocator, backend)
 
-    select case (trim(domain_cfg%flow_case_name))
-    case ('channel')
-      allocate (case_channel_t :: flow_case)
-      flow_case = case_channel_t(backend, mesh, host_allocator)
-    case ('cylinder')
-      allocate (case_cylinder_t :: flow_case)
-      flow_case = case_cylinder_t(backend, mesh, host_allocator)
-    case ('generic')
-      allocate (case_generic_t :: flow_case)
-      flow_case = case_generic_t(backend, mesh, host_allocator)
-    case ('tgv')
-      allocate (case_tgv_t :: flow_case)
-      flow_case = case_tgv_t(backend, mesh, host_allocator)
-    case default
-      error stop 'Undefined flow_case.'
-    end select
+    call make_flow_case(backend, mesh, host_allocator, flow_case)
 
     ! Solver construction (inside case_init, above) already ran
     ! init_poisson_fft, so the plan's actual cuFFTMp/cuFFT fallback outcome
