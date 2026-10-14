@@ -3,7 +3,7 @@ module m_memcheck_device
   !! report and build modules need from a compute backend, so that only one
   !! implementation (src/backend/cuda/memcheck_device.f90 for CUDA) touches
   !! backend-specific libraries.
-  use m_common, only: i8
+  use m_common, only: dp, i8
   implicit none
 
   type, abstract :: memcheck_device_t
@@ -18,6 +18,11 @@ module m_memcheck_device
     !> Tier 1 floor of the per-GPU overhead at ng GPUs, in bytes: the
     !> device context plus (unless bc_is_110) the distributed FFT heap.
     procedure(overhead_floor_bytes_iface), deferred :: overhead_floor_bytes
+    !> Tier 2 per-GPU overhead at ng GPUs, in bytes, from a one-shot
+    !> throwaway FFT plan query (run on the first call, cached after):
+    !> FFT workspace/heap/data buffer plus the device context.
+    !> residual_gib is what the query left allocated on the device.
+    procedure(overhead_query_bytes_iface), deferred :: overhead_query_bytes
   end type memcheck_device_t
 
   abstract interface
@@ -47,6 +52,17 @@ module m_memcheck_device
       logical, intent(in) :: bc_is_110
       integer(i8) :: nbytes8
     end function overhead_floor_bytes_iface
+
+    function overhead_query_bytes_iface(self, ng, bc_is_100, bc_is_110, &
+                                        cdims, is_root, residual_gib) &
+      result(nbytes8)
+      import :: memcheck_device_t, dp, i8
+      class(memcheck_device_t), intent(inout) :: self
+      integer, intent(in) :: ng, cdims(3)
+      logical, intent(in) :: bc_is_100, bc_is_110, is_root
+      real(dp), intent(out) :: residual_gib
+      integer(i8) :: nbytes8
+    end function overhead_query_bytes_iface
   end interface
 
 end module m_memcheck_device
