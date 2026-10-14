@@ -4,7 +4,7 @@ module m_memcheck_report
   use m_memcheck_context, only: memcheck_ctx_t
   use m_memory_estimate, only: gpu_io_staging_bytes
   use m_memcheck_estimate, only: to_gib, ng_unsupported_reason, &
-                                 estimate_for_ng, classify
+                                 estimate_for_ng
   implicit none
 
   !> Candidate GPU counts to scan for "smallest ng that fits". The CUDA
