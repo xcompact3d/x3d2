@@ -64,12 +64,10 @@ program x3d2_memcheck
   use m_cuda_poisson_fft, only: cuda_poisson_fft_t
   use m_memcheck_context, only: memcheck_ctx_t, parse_args, read_config, &
                                 classify_bc, resolve_gpu_io_mode
+  use m_memcheck_estimate, only: DOES_NOT_FIT_FRACTION, to_gib, classify
 
   implicit none
 
-  !> <80% of card memory: FITS. 80-95%: BORDERLINE. >95%: DOES_NOT_FIT.
-  real(dp), parameter :: FITS_FRACTION = 0.80_dp
-  real(dp), parameter :: DOES_NOT_FIT_FRACTION = 0.95_dp
   !> --build: do not attempt a real build whose fields only workspace alone
   !> exceeds this fraction of the FREE card memory (card_free_gib, not the
   !> card's full capacity) - leaves headroom for context + FFT scratch so
@@ -246,32 +244,6 @@ contains
     ctx%card_gib = to_gib(int(total_b, i8))
     ctx%card_free_gib = to_gib(int(free_b, i8))
   end subroutine query_card_gib
-
-  pure function classify(per_gpu_gib, total_gib) result(verdict)
-    !! Shared three-way verdict classification, used by both the static
-    !! estimate (estimate_for_ng) and the real --build measurement
-    !! (report_measured_table) so the two paths can never silently diverge
-    !! on what counts as FITS/BORDERLINE/DOES_NOT_FIT.
-    real(dp), intent(in) :: per_gpu_gib, total_gib
-    character(len=12) :: verdict
-
-    if (per_gpu_gib < FITS_FRACTION*total_gib) then
-      verdict = 'FITS'
-    else if (per_gpu_gib <= DOES_NOT_FIT_FRACTION*total_gib) then
-      verdict = 'BORDERLINE'
-    else
-      verdict = 'DOES_NOT_FIT'
-    end if
-  end function classify
-
-  pure function to_gib(n_bytes) result(gib)
-    !! Bytes to GiB, the one conversion every printed figure goes through
-    !! so the digits cannot drift between call sites.
-    integer(i8), intent(in) :: n_bytes
-    real(dp) :: gib
-
-    gib = real(n_bytes, dp)/1024._dp**3
-  end function to_gib
 
   function ng_unsupported_reason(ng) result(reason)
     !! Whether GPU count ng is a decomposition this tool/solver actually
