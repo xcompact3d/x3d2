@@ -23,7 +23,6 @@ module m_memcheck_build
                                print_table_row
   use m_memcheck_estimate, only: to_gib, classify, ng_unsupported_reason, &
                                  fields_plus_halo_bytes_n, n_halo
-  use m_cuda_memory_estimate, only: context_floor_bytes
   use m_memory_estimate, only: spectral_slab_bytes, mirror_buffer_bytes_100, &
                                peak_fields_lookup, gpu_io_staging_bytes, &
                                output_field_active, padded_halo_bytes
@@ -169,8 +168,10 @@ contains
                       + mirror_gib
       if (ctx%use_cufftmp_known .and. ctx%use_cufftmp) &
         overhead_term = overhead_term + &
-                        to_gib(context_floor_bytes(ng, .true.) - &
-                               context_floor_bytes(1, .true.))
+                        to_gib(ctx%device%overhead_floor_bytes( &
+                               ng, ctx%bc_is_110) - &
+                               ctx%device%overhead_floor_bytes( &
+                               1, ctx%bc_is_110))
       overhead_term = overhead_term + &
                       to_gib(gpu_io_staging_bytes(local_dims, &
                                                   ctx%checkpoint_cfg, &
