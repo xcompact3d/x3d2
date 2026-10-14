@@ -206,7 +206,8 @@ contains
                          sz, n_halo)
   end function padded_halo_bytes
 
-  pure logical function output_field_active(checkpoint_cfg, name) result(active)
+  pure logical function output_field_active(checkpoint_cfg, name) &
+    result(active)
     !! Whether a snapshot output field is actually driven at runtime - a
     !! field only triggers its associated allocations if BOTH it is listed
     !! in output_fields AND snapshotting is enabled. Mirrors the pattern
