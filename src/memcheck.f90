@@ -1258,26 +1258,23 @@ contains
         cycle
       end if
       local_dims = [gdims(1), gdims(2), gdims(3)/ng]
-      w_local = real(fields_plus_halo_bytes_n(ng, measured_peak_fields), dp) &
-               /1024._dp**3
+      w_local = to_gib(fields_plus_halo_bytes_n(ng, measured_peak_fields))
 
       mirror_gib = 0._dp
       if (bc_is_100) &
-        mirror_gib = real(mirror_buffer_bytes_100(cdims, ng), dp) &
-                    /1024._dp**3
+        mirror_gib = to_gib(mirror_buffer_bytes_100(cdims, ng))
 
       overhead_term = overhead + &
-                      real(spectral_slab_bytes(bc_is_100, bc_is_110, cdims, &
-                                               ng) - spec_bytes_1, dp) &
-                      /1024._dp**3 + mirror_gib
+                      to_gib(spectral_slab_bytes(bc_is_100, bc_is_110, cdims, &
+                                                 ng) - spec_bytes_1) &
+                      + mirror_gib
       if (use_cufftmp_known .and. use_cufftmp) &
         overhead_term = overhead_term + &
-                        real(context_floor_bytes(ng, .true.) - &
-                            context_floor_bytes(1, .true.), dp)/1024._dp**3
+                        to_gib(context_floor_bytes(ng, .true.) - &
+                               context_floor_bytes(1, .true.))
       overhead_term = overhead_term + &
-                      real(gpu_io_staging_bytes(local_dims, checkpoint_cfg, &
-                                                gpu_io_device_write), dp) &
-                      /1024._dp**3
+                      to_gib(gpu_io_staging_bytes(local_dims, checkpoint_cfg, &
+                                                  gpu_io_device_write))
 
       per_gpu = w_local + overhead_term
       verdict = classify(per_gpu, card_gib)
@@ -1457,7 +1454,7 @@ contains
 
     npeak = allocator%next_id
     ierr = cudaMemGetInfo(free_b, total_b)
-    dev_used = real(total_b - free_b, dp)/1024._dp**3
+    dev_used = to_gib(int(total_b - free_b, i8))
   end subroutine build_and_measure
 
 end program x3d2_memcheck
