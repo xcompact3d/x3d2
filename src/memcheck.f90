@@ -1086,6 +1086,7 @@ contains
     integer :: measured_peak_fields
     logical :: ibm_missing, build_scratch_ok
     character(len=12) :: measured_verdict
+    character(len=8) :: check_word
 
     ws_guess = to_gib(fields_plus_halo_bytes_n(1, peak_fields))
     ! fields_plus_halo_bytes_n includes the halo term; the historical
@@ -1142,14 +1143,13 @@ contains
     pct_error = 100._dp*(estimate_ng1_excl_io_gib - used_gib)/used_gib
     if (abs(estimate_ng1_excl_io_gib - used_gib) <= &
         CHECK_TOLERANCE*used_gib) then
-      print '(a,f0.2,a,f0.2,a,sp,f0.1,ss,a)', 'CHECK ng=1: estimated ', &
-        estimate_ng1_excl_io_gib, ' GiB, measured ', used_gib, ' GiB (', &
-        pct_error, '%) - OK (tolerance 5%)'
+      check_word = 'OK'
     else
-      print '(a,f0.2,a,f0.2,a,sp,f0.1,ss,a)', 'CHECK ng=1: estimated ', &
-        estimate_ng1_excl_io_gib, ' GiB, measured ', used_gib, ' GiB (', &
-        pct_error, '%) - MISMATCH (tolerance 5%)'
+      check_word = 'MISMATCH'
     end if
+    print '(a,f0.2,a,f0.2,a,sp,f0.1,ss,a,a,a)', 'CHECK ng=1: estimated ', &
+      estimate_ng1_excl_io_gib, ' GiB, measured ', used_gib, ' GiB (', &
+      pct_error, '%) - ', trim(check_word), ' (tolerance 5%)'
     if (io_staging_ng1_gib > 0._dp) &
       print '(a,f0.1,a)', '  (GPU-aware IO staging ', &
         io_staging_ng1_gib*1024._dp, ' MiB excluded from CHECK: the real &
