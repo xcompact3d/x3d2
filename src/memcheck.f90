@@ -852,40 +852,67 @@ contains
     end if
   end subroutine print_requested_line
 
-  subroutine print_ng_table(smallest_fits)
+  subroutine print_ng_table(smallest_fits, basis, requested_verdict)
     !! Table header and one row per scanned GPU count (an unsupported count
-    !! prints why it is skipped), then a closing rule. smallest_fits is the
-    !! first scanned count that FITS, 0 if none. The ng=1 row also records
-    !! the estimate and its IO staging term for run_tier3's CHECK line.
-    integer, intent(out) :: smallest_fits
+    !! prints why it is skipped), then a closing rule. Shared by report()
+    !! and report_measured_table(): rows come from estimate_for_ng, or from
+    !! measured_row when basis (the --build measurement) is given.
+    !! smallest_fits (optional) is the first scanned count that FITS, 0 if
+    !! none. requested_verdict (optional) is set to the verdict of the
+    !! requested nproc_dir(3) row when that row is printed. The estimate
+    !! ng=1 row also records the estimate and its IO staging term for
+    !! run_tier3's CHECK line.
+    integer, intent(out), optional :: smallest_fits
+    type(measured_basis_t), intent(in), optional :: basis
+    character(len=12), intent(inout), optional :: requested_verdict
 
-    integer :: k, ng, local_dims(3)
+    integer :: k, ng, local_dims(3), first_fit
     real(dp) :: per_gpu_gib, workspace_gib, overhead_gib, io_gib
     logical :: exact
     character(len=12) :: verdict
     character(len=96) :: reason
 
     call print_table_header()
-    smallest_fits = 0
+    first_fit = 0
     do k = 1, size(n_gpu_list)
       ng = n_gpu_list(k)
+      ! ng_unsupported_reason covers the base checks (ng<1, the static
+      ! BC_y multi-gpu rule, z/cy/cx divisibility) shared by both tables;
+      ! basis%multi_gpu_ok on top of that additionally excludes ng>1 when
+      ! the real build just fell back from cuFFTMp to plain cuFFT for a BC
+      ! that needs it, a signal only the real-build path has (see
+      ! report_measured_table).
       reason = ng_unsupported_reason(ng)
+      if (present(basis)) then
+        if (ng > 1 .and. multi_gpu_supported .and. &
+            .not. basis%multi_gpu_ok) &
+          reason = 'not supported for this BC/environment'
+      end if
       if (len_trim(reason) > 0) then
         print '(a,i0,a,a,a)', ' ', ng, '     (skipped: ', trim(reason), ')'
         cycle
       end if
-      call estimate_for_ng(ng, per_gpu_gib, exact, verdict, workspace_gib, &
-                           overhead_gib, io_gib)
       local_dims = [gdims(1), gdims(2), gdims(3)/ng]
+      if (present(basis)) then
+        call measured_row(ng, basis, workspace_gib, overhead_gib)
+        per_gpu_gib = workspace_gib + overhead_gib
+        verdict = classify(per_gpu_gib, card_gib)
+      else
+        call estimate_for_ng(ng, per_gpu_gib, exact, verdict, workspace_gib, &
+                             overhead_gib, io_gib)
+        if (ng == 1) then
+          estimate_ng1_gib = per_gpu_gib
+          io_staging_ng1_gib = io_gib
+        end if
+      end if
       call print_table_row(ng, local_dims, workspace_gib, overhead_gib, &
                            per_gpu_gib, card_gib, verdict)
-      if (ng == 1) then
-        estimate_ng1_gib = per_gpu_gib
-        io_staging_ng1_gib = io_gib
-      end if
-      if (smallest_fits == 0 .and. trim(verdict) == 'FITS') smallest_fits = ng
+      if (first_fit == 0 .and. trim(verdict) == 'FITS') first_fit = ng
+      if (present(requested_verdict) .and. ng == domain_cfg%nproc_dir(3)) &
+        requested_verdict = verdict
     end do
     call print_rule('-')
+    if (present(smallest_fits)) smallest_fits = first_fit
   end subroutine print_ng_table
 
   subroutine report()
@@ -1313,14 +1340,9 @@ contains
     real(dp), intent(in) :: used_gib, workspace_gib_measured
     character(len=12), intent(out) :: requested_verdict
 
-    integer :: k, ng, local_dims(3), requested_ng
-    real(dp) :: per_gpu, overhead_term, w_local
     logical :: multi_gpu_supported_measured
-    character(len=12) :: verdict
-    character(len=96) :: reason
     type(measured_basis_t) :: basis
 
-    requested_ng = domain_cfg%nproc_dir(3)
     requested_verdict = 'DOES_NOT_FIT'
 
     multi_gpu_supported_measured = .true.
@@ -1357,33 +1379,7 @@ contains
       print '(a,i0,a,i0,a,f0.3,a,f0.3)', 'EXTENSIVE result: substeps=', &
         measured_n_substeps, ' peak_fields=', measured_peak_fields, &
         ' used_gib=', used_gib, ' pct_card=', 100._dp*used_gib/card_gib
-    call print_table_header()
-
-    do k = 1, size(n_gpu_list)
-      ng = n_gpu_list(k)
-      ! ng_unsupported_reason covers the base checks (ng<1, the static
-      ! BC_y multi-gpu rule, z/cy/cx divisibility) shared with report()'s
-      ! table; multi_gpu_supported_measured on top of that additionally
-      ! excludes ng>1 when the real build just fell back from cuFFTMp to
-      ! plain cuFFT for a BC that needs it, a signal only this real-build
-      ! path has (see its own derivation above).
-      reason = ng_unsupported_reason(ng)
-      if (ng > 1 .and. multi_gpu_supported .and. &
-          .not. multi_gpu_supported_measured) &
-        reason = 'not supported for this BC/environment'
-      if (len_trim(reason) > 0) then
-        print '(a,i0,a,a,a)', ' ', ng, '     (skipped: ', trim(reason), ')'
-        cycle
-      end if
-      local_dims = [gdims(1), gdims(2), gdims(3)/ng]
-      call measured_row(ng, basis, w_local, overhead_term)
-      per_gpu = w_local + overhead_term
-      verdict = classify(per_gpu, card_gib)
-      call print_table_row(ng, local_dims, w_local, overhead_term, per_gpu, &
-                           card_gib, verdict)
-      if (ng == requested_ng) requested_verdict = verdict
-    end do
-    call print_rule('-')
+    call print_ng_table(basis=basis, requested_verdict=requested_verdict)
   end subroutine report_measured_table
 
   subroutine build_and_measure(dims_in, npeak, dev_used, ibm_missing)
