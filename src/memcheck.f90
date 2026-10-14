@@ -1382,6 +1382,44 @@ contains
     call print_ng_table(basis=basis, requested_verdict=requested_verdict)
   end subroutine report_measured_table
 
+  subroutine build_mesh(dims_in, mesh, dims, ibm_missing)
+    !! Mesh of the real build at dims_in, its vertex dims, and the ibm_on
+    !! mask pre-check. ibm_missing=.true. tells build_and_measure to stop
+    !! before building anything.
+    integer, intent(in) :: dims_in(3)
+    type(mesh_t), intent(out) :: mesh
+    integer, intent(out) :: dims(3)
+    logical, intent(out) :: ibm_missing
+
+    character(len=16) :: ibm_file
+    logical :: ibm_file_exists
+
+    ibm_missing = .false.
+    mesh = mesh_t(dims_in, [1, 1, 1], domain_cfg%L_global, &
+                  domain_cfg%BC_x, domain_cfg%BC_y, domain_cfg%BC_z, &
+                  domain_cfg%stretching, domain_cfg%beta, use_2decomp=.false.)
+    dims = mesh%get_dims(VERT)
+
+    ! ibm_on triggers reading an external ibm_<BC-suffix>.bp mask file
+    ! inside solver init (src/module/ibm.f90), which MPI_Aborts if that
+    ! file is missing. That is correct for production xcompact, but not
+    ! for a tool that should degrade gracefully - check for it here, using
+    ! the same suffix construction as src/module/ibm.f90:70-75 (shared via
+    ! ibm_mask_filename, also used by make_scratch to mirror the
+    ! mask into the build scratch directory), and bail out before
+    ! triggering the case/solver construction that would abort.
+    if (solver_cfg%ibm_on) then
+      ibm_file = ibm_mask_filename(mesh%grid%periodic_BC(1), &
+                                   mesh%grid%periodic_BC(2), &
+                                   mesh%grid%periodic_BC(3))
+      inquire (file=ibm_file, exist=ibm_file_exists)
+      if (.not. ibm_file_exists) then
+        ibm_missing = .true.
+        return
+      end if
+    end if
+  end subroutine build_mesh
+
   subroutine build_and_measure(dims_in, npeak, dev_used, ibm_missing)
     !! Build the real flow case at dims_in on this single GPU (via the same
     !! case-dispatch select case xcompact.f90 uses), run one (or, under
@@ -1437,39 +1475,15 @@ contains
     type(cuda_allocator_t), target :: cuda_allocator
     type(cuda_backend_t), target :: cuda_backend
     type(allocator_t), target :: host_allocator
-    character(len=16) :: ibm_file
-    logical :: ibm_file_exists
     integer(kind=cuda_count_kind) :: free_b, total_b
 
-    ibm_missing = .false.
     npeak = 0
     dev_used = 0._dp
     output_vorticity = .false.
     output_qcriterion = .false.
 
-    mesh = mesh_t(dims_in, [1, 1, 1], domain_cfg%L_global, &
-                  domain_cfg%BC_x, domain_cfg%BC_y, domain_cfg%BC_z, &
-                  domain_cfg%stretching, domain_cfg%beta, use_2decomp=.false.)
-    dims = mesh%get_dims(VERT)
-
-    ! ibm_on triggers reading an external ibm_<BC-suffix>.bp mask file
-    ! inside solver init (src/module/ibm.f90), which MPI_Aborts if that
-    ! file is missing. That is correct for production xcompact, but not
-    ! for a tool that should degrade gracefully - check for it here, using
-    ! the same suffix construction as src/module/ibm.f90:70-75 (shared via
-    ! ibm_mask_filename, also used by make_scratch to mirror the
-    ! mask into the build scratch directory), and bail out before
-    ! triggering the case/solver construction that would abort.
-    if (solver_cfg%ibm_on) then
-      ibm_file = ibm_mask_filename(mesh%grid%periodic_BC(1), &
-                                   mesh%grid%periodic_BC(2), &
-                                   mesh%grid%periodic_BC(3))
-      inquire (file=ibm_file, exist=ibm_file_exists)
-      if (.not. ibm_file_exists) then
-        ibm_missing = .true.
-        return
-      end if
-    end if
+    call build_mesh(dims_in, mesh, dims, ibm_missing)
+    if (ibm_missing) return
 
     cuda_allocator = cuda_allocator_t(dims, SZ)
     allocator => cuda_allocator
