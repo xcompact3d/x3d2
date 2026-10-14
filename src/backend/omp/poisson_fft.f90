@@ -41,15 +41,19 @@ module m_omp_poisson_fft
     !> Y-pencil staging buffer of ph, only needed when y is decomposed.
     real(dp), allocatable, dimension(:, :, :) :: r_yp
     !> Spectral decomposition, and its y-pencil staging buffers. The FFT
-    !! leaves the spectral slab in a z-pencil, where dim2 (the x modes) is
-    !! split across p_col. The paired split in the postprocess couples a
-    !! mode with its mirror in that same direction, so it needs dim2 whole.
+    !! leaves the spectral slab in a z-pencil, which p_col splits along its
+    !! dim2. In the 100 case that is the x modes, in the 010 case the y
+    !! modes. The paired split in the postprocess couples a mode with its
+    !! mirror in that same direction, so it needs that dimension whole.
     !! The y-pencil of the very same decomposition has dim2 complete for any
     !! processor grid, so 2decomp's own transpose delivers exactly the
-    !! layout the pairing wants. waves is redistributed once, at init.
+    !! layout the pairing wants. In the 100 case and in the 010 case with a
+    !! z split (p_col > 1), c_pair and waves_pair hold that y-pencil, and
+    !! waves is redistributed once, at init.
     !! sp is associated for every case, since init also reads the spectral
     !! slab extents from it, but c_pair and waves_pair exist only when the
-    !! pairing actually needs the hop.
+    !! pairing actually needs the hop. The 110 case also keeps a c_pair for
+    !! its own hop, without a waves_pair.
     type(decomp_info), pointer :: sp => null()
     complex(dp), allocatable, dimension(:, :, :) :: c_pair, waves_pair
     !> Exact sized, x-y transposed real work buffer for the 100 case.
@@ -132,15 +136,16 @@ contains
                               .and. (.not. mesh%grid%periodic_BC(2)) &
                               .and. mesh%grid%periodic_BC(3)
 
-    ! Work out the spectral dimensions in the permuted state.
-    ! The 100 case initialises the transform with x and y swapped, so the
-    ! spectral slab comes back as (ny/2 + 1, nx, nz). That is the layout
-    ! waves_set builds for this case, so the base class needs no changes.
-    ! get_decomp_dims returns the 2decomp processor grid (p_row, p_col).
+    ! Read the 2decomp processor grid (p_row, p_col), which the 100, 110 and
+    ! 010 cases all use.
     grid_dims = get_decomp_dims()
     poisson_fft%p_row = grid_dims(1)
     poisson_fft%p_col = grid_dims(2)
+    ! Work out the spectral dimensions in the permuted state.
     if (poisson_fft%is_100_case) then
+      ! The 100 case initialises the transform with x and y swapped, so the
+      ! spectral slab comes back as (ny/2 + 1, nx, nz). That is the layout
+      ! waves_set builds for this case, so the base class needs no changes.
       call decomp_2d_fft_init(PHYSICAL_IN_X, dims(2), dims(1), dims(3))
     else if (poisson_fft%is_110_case) then
       call decomp_2d_fft_init(PHYSICAL_IN_X, dims(3), dims(1), dims(2))
