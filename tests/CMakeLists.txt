@@ -609,6 +609,14 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
     set_tests_properties(memcheck_gpuio_static_TGV_hostmode PROPERTIES LABELS "verification;cuda"
       ENVIRONMENT "X3D2_ADIOS2_GPU_WRITE_MODE=host"
       PASS_REGULAR_EXPRESSION "GPU-aware IO staging: none \\(write mode host\\)")
+    # An unknown write mode must resolve as in the solver (auto), not print
+    # the raw text.
+    add_test(NAME memcheck_gpuio_static_TGV_unknown_mode COMMAND sh -c
+      "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${memcheck_gpuio_input} --static")
+    set_tests_properties(memcheck_gpuio_static_TGV_unknown_mode PROPERTIES LABELS "verification;cuda"
+      ENVIRONMENT "X3D2_ADIOS2_GPU_WRITE_MODE=bogus"
+      PASS_REGULAR_EXPRESSION "MiB/GPU at ng=1 \\(write mode auto, "
+      FAIL_REGULAR_EXPRESSION "write mode bogus")
   endif()
 endif()
 
