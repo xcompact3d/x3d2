@@ -38,36 +38,16 @@ program x3d2_memcheck
   use mpi
   use cudafor, only: cudaMemGetInfo, cuda_count_kind, &
                      cudaGetDeviceCount, cudaSetDevice
-  use m_common, only: dp, i8
-  use m_cuda_common, only: SZ
-  use m_memory_estimate, only: output_field_active, peak_fields_lookup, &
-                               padded_halo_bytes
+  use m_common, only: i8
+  use m_memory_estimate, only: output_field_active, peak_fields_lookup
   use m_cuda_memory_estimate, only: check_status
   use m_memcheck_context, only: memcheck_ctx_t, parse_args, read_config, &
                                 classify_bc, resolve_gpu_io_mode
-  use m_memcheck_estimate, only: to_gib, n_halo, fields_plus_halo_bytes_n
-  use m_memcheck_report, only: print_rule, report
-  use m_memcheck_scratch, only: validate_build_inputs, make_scratch, &
-                                leave_build_scratch
-  use m_memcheck_build, only: check_peak_fields_table, report_measured_table, &
-                              build_mesh, make_cuda_backend, make_flow_case, &
-                              drive_case, build_and_measure
+  use m_memcheck_estimate, only: to_gib
+  use m_memcheck_report, only: report
+  use m_memcheck_build, only: run_tier3
 
   implicit none
-
-  !> --build: do not attempt a real build whose fields only workspace alone
-  !> exceeds this fraction of the FREE card memory (card_free_gib, not the
-  !> card's full capacity) - leaves headroom for context + FFT scratch so
-  !> the build never OOMs. Same value and role this tool's real build probe
-  !> has always used.
-  real(dp), parameter :: BUILD_FRACTION = 0.55_dp
-  !> --build's CHECK line: how far the static estimate may be from the real
-  !> measurement before it is flagged MISMATCH rather than OK. Justified by
-  !> this tool's own calibration record: TGV matched to 1.5%; a real
-  !> calibration bug (an LES peak_fields delta wrong by 8) showed up as an
-  !> ~8% byte mismatch, well outside this tolerance - and is separately,
-  !> exactly caught by the drift check below regardless of byte tolerance.
-  real(dp), parameter :: CHECK_TOLERANCE = 0.05_dp
 
   type(memcheck_ctx_t) :: ctx
   integer :: ierr, nproc, ndevs
@@ -109,7 +89,7 @@ program x3d2_memcheck
   ctx%multi_gpu_supported = .not. (ctx%bc_is_010 .or. ctx%bc_is_110)
 
   call report(ctx)
-  if (trim(ctx%run_mode) == 'BUILD') call run_tier3()
+  if (trim(ctx%run_mode) == 'BUILD') call run_tier3(ctx)
 
   call MPI_Finalize(ierr)
 
@@ -146,109 +126,5 @@ contains
     ctx%card_gib = to_gib(int(total_b, i8))
     ctx%card_free_gib = to_gib(int(free_b, i8))
   end subroutine query_card_gib
-
-  subroutine run_tier3()
-    !! Tier 3: a REAL case build + one substep on 1 GPU, measured with
-    !! cudaMemGetInfo - the last-resort ground truth, now run in-process
-    !! (see the top-of-file note on why this removes the old nested mpirun
-    !! limitation). Skips the build entirely (the estimate above stands)
-    !! if the fields only workspace alone already exceeds BUILD_FRACTION of
-    !! what is currently FREE on the card (card_free_gib, not the card's
-    !! full capacity - see its declaration), matching this tool's real
-    !! build probe, or if ibm_on=T and the matching mask file is not
-    !! present in the working directory. The real build itself runs inside
-    !! a throwaway x3d2-memcheck-build.<pid> scratch directory
-    !! (make_scratch/leave_build_scratch above), because it
-    !! initialises monitoring (writes monitoring.csv) and calls
-    !! postprocess(0), which clobbered run directories on 2026-09-15;
-    !! make_scratch also skips the build
-    !! (ok=.false.) if the scratch directory cannot be created or entered,
-    !! or if input_path is relative with a '..' component it cannot mirror.
-    !! validate_build_inputs pre-validates the known causes up front - a
-    !! missing input file, an unsupported flow case, or (ibm_on=T) a
-    !! missing mask file - before touching the filesystem; see
-    !! make_scratch's docstring for what happens if an unexpected error stop
-    !! occurs after its chdir regardless (a scratch directory left behind
-    !! under the invoking directory, cleaned up by the next run with the
-    !! same pid).
-    real(dp) :: used_gib, workspace_gib_measured, ws_guess
-    real(dp) :: pct_error, estimate_ng1_excl_io_gib
-    character(len=8) :: check_word
-    integer :: measured_peak_fields
-    logical :: ibm_missing, build_scratch_ok
-    character(len=12) :: measured_verdict
-
-    ! --build gate: skip the real build (after printing why) when the fields
-    ! only workspace alone already exceeds BUILD_FRACTION of the FREE card
-    ! memory.
-    ws_guess = to_gib(fields_plus_halo_bytes_n(ctx, 1, ctx%peak_fields))
-    ! fields_plus_halo_bytes_n includes the halo term; the historical
-    ! BUILD_FRACTION guard was calibrated against fields alone, so subtract
-    ! it back out here rather than changing the (already-validated)
-    ! threshold itself.
-    ws_guess = ws_guess - to_gib(padded_halo_bytes(ctx%gdims, SZ, n_halo))
-    if (ws_guess >= BUILD_FRACTION*ctx%card_free_gib) then
-      call print_rule('-')
-      print '(a,f0.2,a,f0.1,a,f0.2,a)', 'Real build skipped: fields only &
-        &workspace ', ws_guess, ' GiB exceeds ', 100._dp*BUILD_FRACTION, &
-        '% of the FREE card memory (', ctx%card_free_gib, ' GiB free); the &
-        &estimate above stands.'
-      return
-    end if
-
-    if (ctx%ng1_query_ran) then
-      call print_rule('-')
-      print '(a,f0.2,a)', 'Residual after plan query: ', &
-        ctx%ng1_query_residual_gib, ' GiB (should be ~0 if cufftDestroy &
-        &released it; if not, the real build below may double-reserve the &
-        &NVSHMEM heap).'
-    end if
-
-    call validate_build_inputs(ctx, build_scratch_ok)
-    if (.not. build_scratch_ok) return
-    call make_scratch(ctx, build_scratch_ok)
-    if (.not. build_scratch_ok) return
-
-    call build_and_measure(ctx, ctx%gdims, measured_peak_fields, used_gib, &
-                           ibm_missing)
-    call leave_build_scratch(ctx)
-    if (ibm_missing) then
-      call print_rule('-')
-      print '(a)', 'Real build skipped: ibm_on=T but the matching &
-        &ibm_<BC-suffix>.bp mask file was not found in the working &
-        &directory; the estimate above stands.'
-      return
-    end if
-
-    call check_peak_fields_table(ctx, measured_peak_fields)
-
-    workspace_gib_measured = &
-      to_gib(fields_plus_halo_bytes_n(ctx, 1, measured_peak_fields))
-
-    call report_measured_table(ctx, measured_peak_fields, used_gib, &
-                               workspace_gib_measured, measured_verdict)
-    ctx%final_verdict = measured_verdict
-
-    ! --build's CHECK line: the static ng=1 estimate against the measured
-    ! device memory in use, OK within CHECK_TOLERANCE and MISMATCH beyond it.
-    ! The real build above performs no snapshot/checkpoint write, so the
-    ! GPU-aware IO staging term (analytical only, never measured here) is
-    ! excluded from both the estimate compared and the printed CHECK line.
-    estimate_ng1_excl_io_gib = ctx%estimate_ng1_gib - ctx%io_staging_ng1_gib
-    pct_error = 100._dp*(estimate_ng1_excl_io_gib - used_gib)/used_gib
-    if (abs(estimate_ng1_excl_io_gib - used_gib) <= &
-        CHECK_TOLERANCE*used_gib) then
-      check_word = 'OK'
-    else
-      check_word = 'MISMATCH'
-    end if
-    print '(a,f0.2,a,f0.2,a,sp,f0.1,ss,a,a,a)', 'CHECK ng=1: estimated ', &
-      estimate_ng1_excl_io_gib, ' GiB, measured ', used_gib, ' GiB (', &
-      pct_error, '%) - ', trim(check_word), ' (tolerance 5%)'
-    if (ctx%io_staging_ng1_gib > 0._dp) &
-      print '(a,f0.1,a)', '  (GPU-aware IO staging ', &
-        ctx%io_staging_ng1_gib*1024._dp, ' MiB excluded from CHECK: the real &
-        &build performs no snapshot/checkpoint write.)'
-  end subroutine run_tier3
 
 end program x3d2_memcheck
