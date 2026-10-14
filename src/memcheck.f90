@@ -1079,16 +1079,14 @@ contains
     logical :: ibm_missing, build_scratch_ok
     character(len=12) :: measured_verdict
 
-    ws_guess = real(fields_plus_halo_bytes_n(1, peak_fields), dp) &
-              /1024._dp**3
+    ws_guess = to_gib(fields_plus_halo_bytes_n(1, peak_fields))
     ! fields_plus_halo_bytes_n includes the halo term; the historical
     ! BUILD_FRACTION guard was calibrated against fields alone, so subtract
     ! it back out here rather than changing the (already-validated)
     ! threshold itself.
-    ws_guess = ws_guess - real(halo_bytes([padded_dim(gdims(1), SZ), &
-                                           padded_dim(gdims(2), SZ), &
-                                           gdims(3)], SZ, n_halo), dp) &
-                         /1024._dp**3
+    ws_guess = ws_guess - to_gib(halo_bytes([padded_dim(gdims(1), SZ), &
+                                             padded_dim(gdims(2), SZ), &
+                                             gdims(3)], SZ, n_halo))
     if (ws_guess >= BUILD_FRACTION*card_free_gib) then
       print '(a)', '------------------------------------------------------------'
       print '(a,f0.2,a,f0.1,a,f0.2,a)', 'Real build skipped: fields only &
@@ -1122,9 +1120,8 @@ contains
 
     call check_peak_fields_table(measured_peak_fields)
 
-    workspace_gib_measured = real(fields_plus_halo_bytes_n(1, &
-                                                            measured_peak_fields), &
-                                  dp)/1024._dp**3
+    workspace_gib_measured = &
+      to_gib(fields_plus_halo_bytes_n(1, measured_peak_fields))
 
     call report_measured_table(measured_peak_fields, used_gib, &
                                workspace_gib_measured, measured_verdict)
