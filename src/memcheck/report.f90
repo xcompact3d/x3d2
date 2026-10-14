@@ -5,7 +5,7 @@ module m_memcheck_report
   use m_memcheck_device, only: busy_card_gib
   use m_memory_estimate, only: gpu_io_staging_bytes
   use m_memcheck_estimate, only: to_gib, ng_unsupported_reason, &
-                                 estimate_for_ng
+                                 requested_unsupported_reason, estimate_for_ng
   implicit none
 
   private
@@ -114,10 +114,7 @@ contains
     character(len=96) :: reason
 
     requested_ng = ctx%domain_cfg%nproc_dir(3)
-    reason = ng_unsupported_reason(ctx, requested_ng)
-    if (ctx%domain_cfg%nproc_dir(1) /= 1 .or. &
-        ctx%domain_cfg%nproc_dir(2) /= 1) &
-      reason = 'only nproc_dir = [1,1,ng] is supported by the CUDA backend'
+    reason = requested_unsupported_reason(ctx)
     if (len_trim(reason) > 0) then
       print '(a,i0,a,i0,a,i0,a,a,a)', 'Requested nproc_dir [', &
         ctx%domain_cfg%nproc_dir(1), ',', ctx%domain_cfg%nproc_dir(2), ',', &

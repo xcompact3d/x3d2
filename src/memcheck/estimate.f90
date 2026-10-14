@@ -9,7 +9,8 @@ module m_memcheck_estimate
   implicit none
 
   private
-  public :: to_gib, classify, ng_unsupported_reason, estimate_for_ng, &
+  public :: to_gib, classify, ng_unsupported_reason, &
+            requested_unsupported_reason, estimate_for_ng, &
             fields_plus_halo_bytes_n, n_halo
 
   !> <80% of card memory: FITS. 80-95%: BORDERLINE. >95%: DOES_NOT_FIT.
@@ -77,6 +78,21 @@ contains
         &by ng, src/backend/cuda/poisson_fft.f90 error-stops'
     end if
   end function ng_unsupported_reason
+
+  function requested_unsupported_reason(ctx) result(reason)
+    !! Whether the nproc_dir the input file asks for is supported - blank
+    !! when it is. ng_unsupported_reason judges the Z count nproc_dir(3);
+    !! on top of that the CUDA backend only supports nproc_dir = [1,1,ng].
+    !! Shared by report()'s requested line and run_tier3, so the initial
+    !! report and the --build verdict cannot disagree on it.
+    type(memcheck_ctx_t), intent(in) :: ctx
+    character(len=96) :: reason
+
+    reason = ng_unsupported_reason(ctx, ctx%domain_cfg%nproc_dir(3))
+    if (ctx%domain_cfg%nproc_dir(1) /= 1 .or. &
+        ctx%domain_cfg%nproc_dir(2) /= 1) &
+      reason = 'only nproc_dir = [1,1,ng] is supported by the CUDA backend'
+  end function requested_unsupported_reason
 
   function fields_plus_halo_bytes_n(ctx, ng, npeak) result(nbytes8)
     !! Same formula as fields_plus_halo_bytes, but for an explicit npeak
