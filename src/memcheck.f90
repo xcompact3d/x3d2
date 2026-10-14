@@ -89,6 +89,16 @@ program x3d2_memcheck
   !> [1,1,ng]) today.
   integer, parameter :: n_gpu_list(4) = [1, 2, 4, 8]
 
+  !> What a --build measurement fixes for the per-ng table rows: the
+  !> measured peak_fields, the measured per-GPU overhead at ng=1 (used GiB
+  !> minus the exact workspace), and whether ng>1 is usable given the FFT
+  !> path the real build took.
+  type :: measured_basis_t
+    integer :: peak_fields
+    real(dp) :: overhead_gib
+    logical :: multi_gpu_ok
+  end type measured_basis_t
+
   character(len=256) :: input_path
   !> STATIC = --static (Tier 1 only), DEFAULT = no flag (Tier 1+2, today's
   !> behaviour), BUILD = --build (adds Tier 3).
@@ -1247,6 +1257,41 @@ contains
     end if
   end subroutine check_peak_fields_table
 
+  subroutine measured_row(ng, basis, w_local, overhead_term)
+    !! Workspace and overhead (GiB) of one per-ng row of the --build
+    !! measured table. "workspace" is the exact fields+halo term with the
+    !! MEASURED peak_fields; "overhead" starts from the measured ng=1
+    !! overhead and applies the same exact ng-scaling corrections
+    !! estimate_for_ng encodes (see report_measured_table).
+    integer, intent(in) :: ng
+    type(measured_basis_t), intent(in) :: basis
+    real(dp), intent(out) :: w_local, overhead_term
+
+    real(dp) :: mirror_gib
+    integer(i8) :: spec_bytes_1
+
+    spec_bytes_1 = spectral_slab_bytes(bc_is_100, bc_is_110, cdims, 1)
+    w_local = to_gib(fields_plus_halo_bytes_n(ng, basis%peak_fields))
+
+    mirror_gib = 0._dp
+    if (bc_is_100) &
+      mirror_gib = to_gib(mirror_buffer_bytes_100(cdims, ng))
+
+    overhead_term = basis%overhead_gib + &
+                    to_gib(spectral_slab_bytes(bc_is_100, bc_is_110, cdims, &
+                                               ng) - spec_bytes_1) &
+                    + mirror_gib
+    if (use_cufftmp_known .and. use_cufftmp) &
+      overhead_term = overhead_term + &
+                      to_gib(context_floor_bytes(ng, .true.) - &
+                             context_floor_bytes(1, .true.))
+    overhead_term = overhead_term + &
+                    to_gib(gpu_io_staging_bytes([gdims(1), gdims(2), &
+                                                 gdims(3)/ng], &
+                                                checkpoint_cfg, &
+                                                gpu_io_device_write))
+  end subroutine measured_row
+
   subroutine report_measured_table(measured_peak_fields, used_gib, &
                                    workspace_gib_measured, requested_verdict)
     !! Print the real, per-GPU-measured table. "workspace" at ng=1 is the
@@ -1269,14 +1314,12 @@ contains
     character(len=12), intent(out) :: requested_verdict
 
     integer :: k, ng, local_dims(3), requested_ng
-    real(dp) :: overhead, per_gpu, overhead_term, mirror_gib, w_local
-    integer(i8) :: spec_bytes_1
+    real(dp) :: per_gpu, overhead_term, w_local
     logical :: multi_gpu_supported_measured
     character(len=12) :: verdict
     character(len=96) :: reason
+    type(measured_basis_t) :: basis
 
-    spec_bytes_1 = spectral_slab_bytes(bc_is_100, bc_is_110, cdims, 1)
-    overhead = used_gib - workspace_gib_measured
     requested_ng = domain_cfg%nproc_dir(3)
     requested_verdict = 'DOES_NOT_FIT'
 
@@ -1296,6 +1339,10 @@ contains
       ! cuFFT.
       multi_gpu_supported_measured = .false.
     end if
+
+    basis = measured_basis_t(measured_peak_fields, &
+                             used_gib - workspace_gib_measured, &
+                             multi_gpu_supported_measured)
 
     call print_rule('-')
     print '(a,i0,a,i0,a,f0.2,a,f0.2,a)', 'Real build (1 GPU, ', &
@@ -1329,24 +1376,7 @@ contains
         cycle
       end if
       local_dims = [gdims(1), gdims(2), gdims(3)/ng]
-      w_local = to_gib(fields_plus_halo_bytes_n(ng, measured_peak_fields))
-
-      mirror_gib = 0._dp
-      if (bc_is_100) &
-        mirror_gib = to_gib(mirror_buffer_bytes_100(cdims, ng))
-
-      overhead_term = overhead + &
-                      to_gib(spectral_slab_bytes(bc_is_100, bc_is_110, cdims, &
-                                                 ng) - spec_bytes_1) &
-                      + mirror_gib
-      if (use_cufftmp_known .and. use_cufftmp) &
-        overhead_term = overhead_term + &
-                        to_gib(context_floor_bytes(ng, .true.) - &
-                               context_floor_bytes(1, .true.))
-      overhead_term = overhead_term + &
-                      to_gib(gpu_io_staging_bytes(local_dims, checkpoint_cfg, &
-                                                  gpu_io_device_write))
-
+      call measured_row(ng, basis, w_local, overhead_term)
       per_gpu = w_local + overhead_term
       verdict = classify(per_gpu, card_gib)
       call print_table_row(ng, local_dims, w_local, overhead_term, per_gpu, &
