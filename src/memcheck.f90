@@ -679,28 +679,22 @@ contains
                   context_floor_bytes(ng, .not. bc_is_110)
     floor_gib = to_gib(floor_bytes)
 
-    if (trim(run_mode) == 'STATIC') then
-      ! --static: Tier 1 only, never queries the GPU FFT plan. floor_gib
-      ! IS the estimate here - not just a DOES_NOT_FIT early-return floor
-      ! - so classify it with the full three-way verdict.
+    if (trim(run_mode) == 'STATIC' .or. &
+        floor_gib > DOES_NOT_FIT_FRACTION*card_gib) then
       per_gpu_gib = floor_gib
       exact = .false.
       if (present(overhead_gib)) &
         overhead_gib = to_gib(context_floor_bytes(ng, &
                                                   .not. bc_is_110)) &
                        + io_gib_local
-      verdict = classify(per_gpu_gib, card_gib)
-      return
-    end if
-
-    if (floor_gib > DOES_NOT_FIT_FRACTION*card_gib) then
-      per_gpu_gib = floor_gib
-      exact = .false.
-      verdict = 'DOES_NOT_FIT'
-      if (present(overhead_gib)) &
-        overhead_gib = to_gib(context_floor_bytes(ng, &
-                                                  .not. bc_is_110)) &
-                       + io_gib_local
+      if (trim(run_mode) == 'STATIC') then
+        ! --static: Tier 1 only, never queries the GPU FFT plan. floor_gib
+        ! IS the estimate here - not just a DOES_NOT_FIT early-return floor
+        ! - so classify it with the full three-way verdict.
+        verdict = classify(per_gpu_gib, card_gib)
+      else
+        verdict = 'DOES_NOT_FIT'
+      end if
       return
     end if
 
