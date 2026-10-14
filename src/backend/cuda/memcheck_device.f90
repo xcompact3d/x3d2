@@ -33,11 +33,12 @@ module m_cuda_memcheck_device
     !> single-process estimator does not do. overhead_query_bytes instead
     !> extrapolates ng>1 by the 1/ng law confirmed by a real mpirun -n 2
     !> xcompact run on examples/TGV/input.x3d (2026-09-10: 3339 MiB/GPU
-    !> measured vs 3.21 GiB predicted this way) - ng1_worksize_bytes (plain
-    !> cuFFT path only) and ng1_heap_bytes (cuFFTMp's NVSHMEM heap) both
-    !> scale this way; ng1_xtdesc_bytes (cuFFTMp's distributed data buffer)
-    !> does not - it is added only at ng=1, since it was measured to cost
-    !> 0 extra at ng=2 (drawn from heap space the plan already reserved).
+    !> measured vs 3.21 GiB predicted this way) - ng1_heap_bytes (cuFFTMp's
+    !> NVSHMEM heap) scales this way, ng1_worksize_bytes (plain cuFFT path
+    !> only, ng=1 only) does not; ng1_xtdesc_bytes (cuFFTMp's distributed
+    !> data buffer) does not either - it is added only at ng=1, since it was
+    !> measured to cost 0 extra at ng=2 (drawn from heap space the plan
+    !> already reserved).
     integer(i8) :: ng1_worksize_bytes, ng1_heap_bytes, ng1_xtdesc_bytes
     logical :: ng1_used_cufftmp
     !> Set by ensure_fft_query, the cudaMemGetInfo delta across the whole
@@ -215,13 +216,12 @@ contains
       ! space the plan already reserved) - add the ng=1 value only there.
       xtdesc_bytes = merge(self%ng1_xtdesc_bytes, 0_i8, ng == 1)
     else
-      ! See ng1_worksize_bytes' declaration: this is an extrapolation for
-      ! ng>1, not an independent per-ng measurement (though in practice
-      ! this branch only ever runs at ng=1 - plain cuFFT is only reached
-      ! by the 110 BC or a cuFFTMp fallback, neither of which supports
-      ! nproc>1 in this solver).
-      worksize_bytes = int(real(self%ng1_worksize_bytes, dp)/real(ng, dp), &
-                           i8)
+      ! Plain cuFFT is only reached by the 110 BC or a cuFFTMp fallback.
+      ! Neither supports nproc>1 (ng_unsupported_reason), so ng is 1 here
+      ! in every row that is printed. The requested line can reach this
+      ! with ng>1 once, before this probe settles the FFT path, and
+      ! print_requested_line then drops the value.
+      worksize_bytes = self%ng1_worksize_bytes
       heap_bytes = 0_i8
       xtdesc_bytes = 0_i8
     end if
