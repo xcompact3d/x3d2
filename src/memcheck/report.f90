@@ -197,7 +197,7 @@ contains
       print '(a)', '(ng>1 rows extrapolate the single-GPU probe by 1/ng.)'
     if (any_formula) &
       print '(a)', '(formula-only rows use the Tier 1 formula for the FFT &
-        &overhead: no single-GPU probe ran.)'
+        &overhead.)'
   end subroutine print_ng_table
 
   subroutine report(ctx)
