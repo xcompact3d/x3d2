@@ -256,7 +256,8 @@ contains
     class(cuda_memcheck_device_t), intent(in) :: self
     logical :: known
 
-    known = self%use_cufftmp_known
+    known = self%use_cufftmp_known .or. &
+            (self%ng1_query_ran .and. .not. self%ng1_query_failed)
   end function fft_path_known
 
   function query_residual_gib(self, residual_gib) result(ran)
@@ -273,7 +274,11 @@ contains
     class(cuda_memcheck_device_t), intent(in) :: self
     logical :: distributed
 
-    distributed = self%use_cufftmp
+    if (self%use_cufftmp_known) then
+      distributed = self%use_cufftmp
+    else
+      distributed = self%ng1_used_cufftmp
+    end if
   end function uses_distributed_fft
 
 end module m_cuda_memcheck_device

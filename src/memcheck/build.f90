@@ -16,7 +16,7 @@ module m_memcheck_build
                                 make_scratch, leave_build_scratch
   use m_memcheck_context, only: memcheck_ctx_t
   use m_memcheck_report, only: n_gpu_list, print_rule, print_table_header, &
-                               print_table_row
+                               print_table_row, print_requested_line
   use m_memcheck_estimate, only: to_gib, classify, ng_unsupported_reason, &
                                  requested_unsupported_reason, &
                                  fields_plus_halo_bytes_n, n_halo, &
@@ -78,35 +78,24 @@ contains
   end subroutine check_peak_fields_table
 
   subroutine report_measured_row(ctx, ng, measured_peak_fields, overhead, &
-                                 spec_bytes_1, multi_gpu_supported_measured, &
-                                 verdict)
+                                 spec_bytes_1, verdict)
     !! One row of the real, per-GPU-measured table for GPU count ng: the
     !! "skipped" line when ng is unsupported (verdict stays blank), else the
     !! measured peak_fields workspace plus the ng-scaled overhead, as
     !! report_measured_table's docstring describes. overhead and spec_bytes_1
-    !! are its ng=1 overhead and spectral slab; multi_gpu_supported_measured
-    !! is its REAL-build multi GPU signal.
+    !! are its ng=1 overhead and spectral slab.
     type(memcheck_ctx_t), intent(in) :: ctx
     integer, intent(in) :: ng, measured_peak_fields
     real(dp), intent(in) :: overhead
     integer(i8), intent(in) :: spec_bytes_1
-    logical, intent(in) :: multi_gpu_supported_measured
     character(len=12), intent(out) :: verdict
 
     integer :: local_dims(3)
     real(dp) :: per_gpu, overhead_term, mirror_gib, w_local
     character(len=96) :: reason
 
-    ! ng_unsupported_reason covers the base checks shared with report()'s
-    ! table; multi_gpu_supported_measured on top of that additionally
-    ! excludes ng>1 when the real build just fell back from cuFFTMp to
-    ! plain cuFFT for a BC that needs it, a signal only this real-build
-    ! path has (derived in report_measured_table).
     verdict = ''
     reason = ng_unsupported_reason(ctx, ng)
-    if (ng > 1 .and. ctx%multi_gpu_supported .and. &
-        .not. multi_gpu_supported_measured) &
-      reason = 'not supported for this BC/environment'
     if (len_trim(reason) > 0) then
       print '(a,i0,a,a,a)', ' ', ng, '     (skipped: ', trim(reason), ')'
       return
@@ -158,9 +147,9 @@ contains
     !! the measurement already includes), the 100 case's multi rank only
     !! mirror buffers, and (cuFFTMp cases) the NVSHMEM heap's 1/ng shrink
     !! (confirmed by a real mpirun -n 2 xcompact run on
-    !! examples/TGV/input.x3d, 2026-09-10). multi_gpu_supported here uses
-    !! the REAL use_cufftmp from the build just performed, more
-    !! authoritative than the static table's Tier 2 plan-query signal.
+    !! examples/TGV/input.x3d, 2026-09-10). ng_unsupported_reason uses the
+    !! REAL use_cufftmp from the build just performed, more authoritative
+    !! than the static table's Tier 2 plan-query signal.
     !! The GPU-aware IO staging term (gpu_io_staging_bytes) is added the
     !! same way, since the real build performs no snapshot/checkpoint write
     !! and so never measures it directly.
@@ -172,31 +161,13 @@ contains
     integer :: k, ng
     real(dp) :: overhead
     integer(i8) :: spec_bytes_1
-    logical :: multi_gpu_supported_measured, any_extrapolated
+    logical :: any_extrapolated
     character(len=12) :: verdict
 
     spec_bytes_1 = spectral_slab_bytes(ctx%bc_is_100, ctx%bc_is_110, &
                                        ctx%cdims, 1)
     overhead = used_gib - workspace_gib_measured
     requested_verdict = 'DOES_NOT_FIT'
-
-    multi_gpu_supported_measured = .true.
-    if (ctx%bc_is_010 .or. ctx%bc_is_110) then
-      ! BC_y non-periodic: no nproc>1 support for this BC
-      ! (src/poisson_fft.f90:178-180,196-198).
-      multi_gpu_supported_measured = .false.
-    else if ((ctx%bc_is_100 .or. ctx%bc_is_000) .and. &
-             ctx%device%fft_path_known() .and. &
-             (.not. ctx%device%uses_distributed_fft())) then
-      ! Covers the 100 case (needs cuFFTMp to decompose at all) and the
-      ! fully-periodic 000 case (the plain-cuFFT fallback performs a purely
-      ! local per-rank transform with no cross-rank exchange -
-      ! src/backend/cuda/poisson_fft.f90:721-740 - so at nproc>1 it would
-      ! run without erroring but compute invalid results). cuFFTMp
-      ! unavailable here means the build just performed fell back to plain
-      ! cuFFT.
-      multi_gpu_supported_measured = .false.
-    end if
 
     call print_rule('-')
     print '(a,i0,a,i0,a,f0.2,a,f0.2,a)', 'Real build (1 GPU, ', &
@@ -217,8 +188,7 @@ contains
     do k = 1, size(n_gpu_list)
       ng = n_gpu_list(k)
       call report_measured_row(ctx, ng, measured_peak_fields, overhead, &
-                               spec_bytes_1, multi_gpu_supported_measured, &
-                               verdict)
+                               spec_bytes_1, verdict)
       if (ng == ctx%domain_cfg%nproc_dir(3) .and. len_trim(verdict) > 0) &
         requested_verdict = verdict
       if (ng > 1 .and. len_trim(verdict) > 0) any_extrapolated = .true.
@@ -229,8 +199,7 @@ contains
     if (all(n_gpu_list /= ng) .and. &
         len_trim(requested_unsupported_reason(ctx)) == 0) then
       call report_measured_row(ctx, ng, measured_peak_fields, overhead, &
-                               spec_bytes_1, multi_gpu_supported_measured, &
-                               verdict)
+                               spec_bytes_1, verdict)
       if (len_trim(verdict) > 0) requested_verdict = verdict
       if (ng > 1 .and. len_trim(verdict) > 0) any_extrapolated = .true.
     end if
@@ -519,8 +488,13 @@ contains
                                workspace_gib_measured, measured_verdict)
     ! An unsupported requested nproc_dir stays UNSUPPORTED: the 1 GPU
     ! measurement says nothing about a decomposition the solver rejects.
-    if (len_trim(requested_unsupported_reason(ctx)) == 0) &
+    ! The real build can make a request unsupported that the estimate
+    ! accepted (cuFFTMp fell back to plain cuFFT): print that line now.
+    if (len_trim(requested_unsupported_reason(ctx)) == 0) then
       ctx%final_verdict = measured_verdict
+    else if (trim(ctx%final_verdict) /= 'UNSUPPORTED') then
+      call print_requested_line(ctx)
+    end if
 
     ! --build's CHECK line: the static ng=1 estimate against the measured
     ! device memory in use, OK within CHECK_TOLERANCE and MISMATCH beyond it.

@@ -63,7 +63,9 @@ contains
     !! report_measured_table()'s per-ng table, and report()'s requested
     !! nproc_dir line, so the three can never silently diverge on what
     !! counts as unsupported. Checked in this order: ng itself must be a
-    !! positive count; ng>1 needs BC_y periodic (multi_gpu_supported);
+    !! positive count; ng>1 needs BC_y periodic (multi_gpu_supported); for
+    !! 000 and 100, ng>1 also needs the distributed FFT (cuFFTMp), checked
+    !! once the FFT path is known (a probe or the real build has run);
     !! gdims(3) must divide by ng (the physical Z decomposition); and, for
     !! whichever BC actually decomposes the spectral slab along dim2 (000/
     !! 010: cy: 100: cx - see spectral_slab_bytes), that dimension must
@@ -78,6 +80,15 @@ contains
     else if (ng > 1 .and. .not. ctx%multi_gpu_supported) then
       reason = 'not supported: BC_y is non-periodic - &
                &src/poisson_fft.f90 error-stops at nproc>1'
+    else if (ng > 1 .and. (ctx%bc_is_000 .or. ctx%bc_is_100) .and. &
+             ctx%device%fft_path_known() .and. &
+             (.not. ctx%device%uses_distributed_fft())) then
+      ! Plain cuFFT cannot decompose 100 at all, and for 000 it runs a
+      ! local per-rank transform with no exchange
+      ! (src/backend/cuda/poisson_fft.f90:721-740), so the result would be
+      ! wrong.
+      reason = 'not supported: the FFT fell back to plain cuFFT, no &
+               &multi-GPU transform'
     else if (mod(ctx%gdims(3), ng) /= 0) then
       write (reason, '(a,i0,a)') 'z=', ctx%gdims(3), ' not divisible'
     else if ((ctx%bc_is_000 .or. ctx%bc_is_010) .and. &

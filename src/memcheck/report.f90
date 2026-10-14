@@ -12,7 +12,7 @@ module m_memcheck_report
 
   private
   public :: report, n_gpu_list, print_rule, print_table_header, &
-            print_table_row
+            print_table_row, print_requested_line
 
   !> Candidate GPU counts to scan for "smallest ng that fits". The CUDA
   !> backend only supports a Z-only pencil decomposition (nproc_dir=
@@ -124,14 +124,19 @@ contains
 
     requested_ng = ctx%domain_cfg%nproc_dir(3)
     reason = requested_unsupported_reason(ctx)
+    if (len_trim(reason) == 0) then
+      call estimate_for_ng(ctx, requested_ng, requested_gib, basis, &
+                           requested_verdict)
+      ! The estimate can run the FFT probe, which settles whether the FFT
+      ! is distributed: ask again.
+      reason = requested_unsupported_reason(ctx)
+    end if
     if (len_trim(reason) > 0) then
       print '(a,i0,a,i0,a,i0,a,a,a)', 'Requested nproc_dir [', &
         ctx%domain_cfg%nproc_dir(1), ',', ctx%domain_cfg%nproc_dir(2), ',', &
         ctx%domain_cfg%nproc_dir(3), ']: not supported (', trim(reason), ')'
       ctx%final_verdict = 'UNSUPPORTED'
     else
-      call estimate_for_ng(ctx, requested_ng, requested_gib, basis, &
-                           requested_verdict)
       ctx%final_verdict = requested_verdict
       print '(a,i0,a,f0.2,a,f0.1,a,a)', 'Requested nproc_dir gives ng=', &
         requested_ng, ': ', requested_gib, ' GiB/GPU (', &

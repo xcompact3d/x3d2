@@ -49,11 +49,12 @@ module m_memcheck_device
     !> Record what the real solver of flow_case settled on (called once it
     !> is constructed), for fft_path_known and uses_distributed_fft.
     procedure(capture_solver_info_iface), deferred :: capture_solver_info
-    !> Whether capture_solver_info has seen the real solver's FFT path.
+    !> Whether the FFT path is known: capture_solver_info has seen the real
+    !> solver's, or the single-GPU FFT probe ran and returned no failure.
     procedure(fft_path_known_iface), deferred :: fft_path_known
     !> Whether the real solver's FFT is distributed across ranks (cuFFTMp
     !> on CUDA) rather than a plain per-rank transform; only meaningful
-    !> once fft_path_known.
+    !> once fft_path_known. The real solver's path wins over the probe's.
     procedure(uses_distributed_fft_iface), deferred :: uses_distributed_fft
   end type memcheck_device_t
 
