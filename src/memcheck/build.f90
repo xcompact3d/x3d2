@@ -163,8 +163,9 @@ contains
         mirror_gib = to_gib(mirror_buffer_bytes_100(ctx%cdims, ng))
 
       overhead_term = overhead + &
-                      to_gib(spectral_slab_bytes(ctx%bc_is_100, &
-                                ctx%bc_is_110, ctx%cdims, ng) - spec_bytes_1) &
+                      to_gib(spectral_slab_bytes( &
+                             ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, ng) &
+                             - spec_bytes_1) &
                       + mirror_gib
       ! The floor takes bc_is_110 where the pre-refactor code hard-coded
       ! uses_cufftmp=.true.: equal here because the 110 case never uses the
