@@ -18,6 +18,7 @@ module m_memcheck_build
   use m_memcheck_report, only: n_gpu_list, print_rule, print_table_header, &
                                print_table_row
   use m_memcheck_estimate, only: to_gib, classify, ng_unsupported_reason, &
+                                 requested_unsupported_reason, &
                                  fields_plus_halo_bytes_n, n_halo
   use m_memory_estimate, only: spectral_slab_bytes, mirror_buffer_bytes_100, &
                                peak_fields_lookup, gpu_io_staging_bytes, &
@@ -470,7 +471,10 @@ contains
 
     call report_measured_table(ctx, measured_peak_fields, used_gib, &
                                workspace_gib_measured, measured_verdict)
-    ctx%final_verdict = measured_verdict
+    ! An unsupported requested nproc_dir stays UNSUPPORTED: the 1 GPU
+    ! measurement says nothing about a decomposition the solver rejects.
+    if (len_trim(requested_unsupported_reason(ctx)) == 0) &
+      ctx%final_verdict = measured_verdict
 
     ! --build's CHECK line: the static ng=1 estimate against the measured
     ! device memory in use, OK within CHECK_TOLERANCE and MISMATCH beyond it.
