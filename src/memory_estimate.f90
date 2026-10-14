@@ -198,11 +198,12 @@ contains
     !            ibm_on delta below exactly) - a built-in ADIOS2 build
     !            (deps/adios2-install-cuda-v2.12.1) was needed since
     !            cylinder's mask file is ADIOS2 .bp format
-    ! foil is not a supported flow case on this branch (xcompact.f90 has no
-    ! 'foil' dispatch), so the default branch below only needs to cover
-    ! genuinely unknown/future flow_case_name values. Falls back to
-    ! channel's base (the largest measured, i.e. safest over-estimate)
-    ! rather than under-estimating with tgv/generic's base.
+    ! foil is TODO: not yet calibrated. Its case module now exists (built by
+    ! both xcompact.f90 and x3d2-memcheck's own dispatch) so
+    ! `x3d2-memcheck examples/foil/input.x3d --build` can measure a real
+    ! number - just not yet done. Falls back to channel's base (the
+    ! largest measured, i.e. safest over-estimate) rather than
+    ! under-estimating with tgv/generic's base.
     select case (trim(flow_case_name))
     case ('tgv')
       base = 20
@@ -213,7 +214,7 @@ contains
     case ('cylinder')
       base = 23
     case default
-      ! Covers any unrecognised flow_case_name: see note above.
+      ! Covers 'foil' and anything else: see TODO above.
       base = 26
     end select
 
