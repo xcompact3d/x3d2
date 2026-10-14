@@ -197,7 +197,7 @@ contains
     ! solver ever attempts it for - see m_cuda_memory_estimate's 110 guard)
     ! since that gives the larger, safer lower bound.
     floor_bytes = base_bytes + spec_bytes + io_bytes + &
-                  context_floor_bytes(ng,.not. ctx%bc_is_110)
+                  ctx%device%overhead_floor_bytes(ng, ctx%bc_is_110)
     floor_gib = to_gib(floor_bytes)
 
     if (trim(ctx%run_mode) == 'STATIC' .or. &
@@ -205,9 +205,8 @@ contains
       per_gpu_gib = floor_gib
       exact = .false.
       if (present(overhead_gib)) &
-        overhead_gib = to_gib(context_floor_bytes(ng, &
-                                                  .not. ctx%bc_is_110)) &
-                       + io_gib_local
+        overhead_gib = to_gib(ctx%device%overhead_floor_bytes( &
+                              ng, ctx%bc_is_110)) + io_gib_local
       if (trim(ctx%run_mode) == 'STATIC') then
         ! --static: Tier 1 only, never queries the GPU FFT plan. floor_gib
         ! IS the estimate here - not just a DOES_NOT_FIT early-return floor
