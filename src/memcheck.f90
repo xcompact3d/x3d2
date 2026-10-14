@@ -73,6 +73,7 @@ program x3d2_memcheck
 
   ctx%peak_fields = peak_fields_lookup( &
                     trim(ctx%domain_cfg%flow_case_name), &
+                    ctx%solver_cfg%time_intg, &
                     ctx%solver_cfg%n_species, &
                     trim(ctx%les_cfg%model) /= 'none', &
                     ctx%solver_cfg%ibm_on, &

@@ -11,6 +11,7 @@ module m_memory_estimate
   !! duplicating them.
   use m_common, only: i8, nbytes, is_sp, sp
   use m_config, only: checkpoint_config_t, has_output_field
+  use m_time_integrator, only: nolds_of
   implicit none
 
   private
@@ -269,8 +270,8 @@ contains
     bytes = n*element_bytes
   end function gpu_io_staging_bytes
 
-  pure integer function peak_fields_lookup(flow_case_name, n_species, &
-                                           les_on, ibm_on, &
+  pure integer function peak_fields_lookup(flow_case_name, time_intg, &
+                                           n_species, les_on, ibm_on, &
                                            output_vorticity, &
                                            output_qcriterion, &
                                            lowmem_transeq) result(n)
@@ -295,29 +296,36 @@ contains
     !! this table is expected to be corrected/extended over time rather
     !! than treated as final.
     character(*), intent(in) :: flow_case_name
+    character(len=3), intent(in) :: time_intg
     integer, intent(in) :: n_species
     logical, intent(in) :: les_on, ibm_on
     logical, intent(in) :: output_vorticity, output_qcriterion
     logical, intent(in) :: lowmem_transeq
 
-    integer :: base, derived_fields_delta
+    integer :: base, derived_fields_delta, nolds
 
     ! Base count for the regular (non-lowmem) transeq path, ibm_on=F,
-    ! n_species=0, les_on=F, no derived-field output. Measured 2026-09-09,
-    ! NVHPC 25.3, CUDA backend, one substep:
-    !   tgv      examples/TGV/input.x3d                (256^3, ng=1) -> 20
-    !   generic  examples/generic/input.x3d                          -> 20
-    !   channel  examples/channel/input.x3d  (128x65x64)             -> 26
+    ! n_species=0, les_on=F, no derived-field output, WITHOUT the history
+    ! blocks of the time integrator (3*nolds, added below). Measured
+    ! 2026-09-09 with each example's own integrator, NVHPC 25.3, CUDA
+    ! backend, one substep, then re-expressed on 2026-10-13 by taking the
+    ! history blocks out (nolds = 2 for AB3, 3 for RK3):
+    !   tgv      examples/TGV/input.x3d  (256^3, ng=1, AB3)  -> 20, base 14
+    !   generic  examples/generic/input.x3d (AB3)            -> 20, base 14
+    !   channel  examples/channel/input.x3d  (128x65x64, RK3) -> 26, base 17
     !            (channel's lazily-allocated BC ghost blocks, per
-    !            define_BC_channel, account for the +6 over tgv/generic)
+    !            define_BC_channel, account for the +3 over tgv/generic)
     !   cylinder examples/cylinder/input_ibm_100_LR-64.x3d with
-    !            ibm_on=F (257x130x64)                               -> 23
+    !            ibm_on=F (257x130x64, AB3)                   -> 23, base 17
     !            confirmed by the self-check (see check_peak_fields_table
     !            in src/memcheck.f90) against BOTH the 100 and 110 BC
     !            variants with ibm_on=T (measured 24 = 23+1, matching the
     !            ibm_on delta below exactly) - a built-in ADIOS2 build
     !            (deps/adios2-install-cuda-v2.12.1) was needed since
     !            cylinder's mask file is ADIOS2 .bp format
+    ! Measured 2026-10-13 (PR 326 review, S1a-S1d, S1g) on the tgv input
+    ! with the integrator changed: AB3 20, RK3 23, RK4 26, AB2 17, i.e.
+    ! 14 + 3*nolds; and on channel with AB3: 23 = 17 + 3*2.
     ! foil is TODO: not yet calibrated, and has no case module anywhere in
     ! this tree (no m_case_foil, no case ('foil') dispatch in xcompact.f90
     ! or in memcheck.f90's build_and_measure) - `x3d2-memcheck
@@ -329,17 +337,21 @@ contains
     ! under-estimates in the meantime.
     select case (trim(flow_case_name))
     case ('tgv')
-      base = 20
+      base = 14
     case ('generic')
-      base = 20
+      base = 14
     case ('channel')
-      base = 26
+      base = 17
     case ('cylinder')
-      base = 23
+      base = 17
     case default
       ! Covers 'foil' and anything else: see TODO above.
-      base = 26
+      base = 17
     end select
+
+    ! time_intg: time_intg_t%init allocates nolds history blocks for each of
+    ! the 3 velocity components and for each species, held for the whole run.
+    nolds = nolds_of(time_intg)
 
     ! lowmem_transeq: TODO, not yet calibrated - it dispatches to a distinct
     ! code path (transeq_lowmem, src/solver.f90:223-224,410-526) with a
@@ -365,19 +377,22 @@ contains
       derived_fields_delta = 0
     end if
 
-    ! n_species: +1 per species, exact by construction, not measured - each
-    ! species gets exactly one persistent block, same pattern as u/v/w
+    ! n_species: +(1 + nolds) per species by construction - each species
+    ! gets exactly one persistent block, same pattern as u/v/w
     ! (src/solver.f90:159-165: `solver%species(i)%ptr =>
     ! backend%allocator%get_block(DIR_X)` in a loop over 1..nspecies, never
-    ! released).
+    ! released), plus its nolds history blocks (nvars = 3 + n_species in
+    ! time_intg_t%init).
     !
     ! ibm_on: +1, exact by construction, not measured - ibm_t%init
     ! (src/module/ibm.f90) gets exactly one device block for ep1
     ! (get_block(DIR_X)), regardless of grid size.
     !
-    ! les_on: +10, measured 2026-09-09 on
+    ! les_on: +7, measured 2026-09-09 on
     ! examples/TGV/input_static_smagorinsky.x3d (160^3, model='smagorinsky',
-    ! ng=1): base tgv=20 -> 30 with LES on. Caught by
+    ! ng=1): base tgv=20 -> 30 with LES on with RK3 (+10 including the
+    ! history blocks; 7 once the 3 RK3 history blocks are taken out, and
+    ! 2026-10-13 S1f: AB3 -> 27 = 14 + 6 + 7). Caught by
     ! check_peak_fields_table's self-verification warning (src/memcheck.f90
     ! --build): an initial guess of +2
     ! (from reading only les.f90's two persistent blocks, nut and
@@ -393,8 +408,8 @@ contains
     ! output_fields='pressure', snapshot_freq=1 -> still 20) - the pressure
     ! block persisting rather than being released does not raise the
     ! high-water mark for this case, so no term is added for it.
-    n = base + derived_fields_delta + n_species + merge(1, 0, ibm_on) + &
-        merge(10, 0, les_on)
+    n = base + 3*nolds + derived_fields_delta + n_species*(1 + nolds) + &
+        merge(1, 0, ibm_on) + merge(7, 0, les_on)
   end function peak_fields_lookup
 
 end module m_memory_estimate
