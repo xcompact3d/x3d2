@@ -89,7 +89,7 @@ program x3d2_memcheck
   integer, parameter :: n_gpu_list(4) = [1, 2, 4, 8]
 
   type(memcheck_ctx_t) :: ctx
-  integer :: ierr, irank, nproc, ndevs
+  integer :: ierr, nproc, ndevs
 
   interface
     function c_chdir(path) bind(C, name='chdir') result(rc)
@@ -110,7 +110,7 @@ program x3d2_memcheck
   end interface
 
   call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, irank, ierr)
+  call MPI_Comm_rank(MPI_COMM_WORLD, ctx%irank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
   if (nproc /= 1) error stop 'x3d2-memcheck: run single-rank (mpirun -n 1).'
 
@@ -537,7 +537,7 @@ contains
     ierr = cudaMemGetInfo(free_before, total_b)
     call check_status(ierr, 'cudaMemGetInfo (before FFT probe)')
     call fft_workspace_bytes_query(ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, &
-                                   .true., irank == 0, &
+                                   .true., ctx%irank == 0, &
                                    ctx%ng1_worksize_bytes, &
                                    ctx%ng1_heap_bytes, &
                                    ctx%ng1_xtdesc_bytes, &
@@ -1139,7 +1139,7 @@ contains
     integer, intent(in) :: measured
     integer :: predicted
 
-    if (irank /= 0) return
+    if (ctx%irank /= 0) return
 
     predicted = peak_fields_lookup(trim(ctx%domain_cfg%flow_case_name), &
                                    ctx%solver_cfg%n_species, &

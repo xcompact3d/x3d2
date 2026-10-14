@@ -98,5 +98,6 @@ module m_memcheck_context
     !> check_peak_fields_table).
     logical :: output_vorticity = .false., output_qcriterion = .false.
     integer :: measured_n_substeps
+    integer :: irank
   end type memcheck_ctx_t
 end module m_memcheck_context
