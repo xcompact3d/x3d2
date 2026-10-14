@@ -2,6 +2,7 @@ module m_memcheck_report
   !! Printed report of x3d2-memcheck: header, tables and verdict lines.
   use m_common, only: dp, i8, is_sp
   use m_memcheck_context, only: memcheck_ctx_t
+  use m_memcheck_device, only: busy_card_gib
   use m_memory_estimate, only: gpu_io_staging_bytes
   use m_memcheck_estimate, only: to_gib, ng_unsupported_reason, &
                                  estimate_for_ng
@@ -186,12 +187,30 @@ contains
       ctx%gdims(2), 'x', ctx%gdims(3)
     print '(a,f0.2,a,f0.2,a)', 'Card memory: ', ctx%card_gib, ' GiB (', &
       ctx%card_free_gib, ' GiB free now)'
-    if (ctx%card_gib - ctx%card_free_gib > 0.5_dp) &
+    if (ctx%card_gib - ctx%card_free_gib > busy_card_gib) &
       print '(a,f0.2,a)', 'WARNING: ', ctx%card_gib - ctx%card_free_gib, &
         ' GiB of &
         &this card is in use by other processes; verdicts are against the &
         &full card, and the real build only proceeds if it fits in what is &
         &free.'
+    if (to_gib(ctx%device%context_bytes()) <= busy_card_gib) then
+      print '(a,f0.2,a)', 'CUDA context (used at start): ', &
+        to_gib(ctx%device%context_bytes()), ' GiB - used as the context term'
+    else
+      print '(a,f0.2,a,f0.2,a)', 'CUDA context (used at start): ', &
+        to_gib(ctx%device%context_bytes()), &
+        ' GiB - card busy, using the ', &
+        to_gib(ctx%device%context_term_bytes()), ' GiB A100 constant'
+    end if
+    if (to_gib(ctx%device%context_bytes()) <= busy_card_gib) then
+      print '(a,f0.2,a)', 'CUDA context (used at start): ', &
+        to_gib(ctx%device%context_bytes()), ' GiB - used as the context term'
+    else
+      print '(a,f0.2,a,f0.2,a)', 'CUDA context (used at start): ', &
+        to_gib(ctx%device%context_bytes()), &
+        ' GiB - card busy, using the ', &
+        to_gib(ctx%device%context_term_bytes()), ' GiB A100 constant'
+    end if
     print '(a,i0)', 'peak_fields (static estimate): ', ctx%peak_fields
     call print_io_staging_line(ctx)
     select case (trim(ctx%run_mode))
