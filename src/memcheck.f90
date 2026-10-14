@@ -1420,6 +1420,28 @@ contains
     end if
   end subroutine build_mesh
 
+  subroutine make_cuda_backend(mesh, dims, cuda_allocator, host_allocator, &
+                               cuda_backend, allocator, backend)
+    !! Build the device allocator, the host allocator and the CUDA backend
+    !! of the real build, and point allocator/backend at them. The three
+    !! objects belong to the caller (build_and_measure) because the
+    !! pointers, the backend and the case built on it must not outlive
+    !! them.
+    type(mesh_t), target, intent(inout) :: mesh
+    integer, intent(in) :: dims(3)
+    type(cuda_allocator_t), target, intent(inout) :: cuda_allocator
+    type(allocator_t), target, intent(inout) :: host_allocator
+    type(cuda_backend_t), target, intent(inout) :: cuda_backend
+    class(allocator_t), pointer, intent(out) :: allocator
+    class(base_backend_t), pointer, intent(out) :: backend
+
+    cuda_allocator = cuda_allocator_t(dims, SZ)
+    allocator => cuda_allocator
+    host_allocator = allocator_t(dims, SZ)
+    cuda_backend = cuda_backend_t(mesh, allocator)
+    backend => cuda_backend
+  end subroutine make_cuda_backend
+
   subroutine build_and_measure(dims_in, npeak, dev_used, ibm_missing)
     !! Build the real flow case at dims_in on this single GPU (via the same
     !! case-dispatch select case xcompact.f90 uses), run one (or, under
@@ -1485,11 +1507,8 @@ contains
     call build_mesh(dims_in, mesh, dims, ibm_missing)
     if (ibm_missing) return
 
-    cuda_allocator = cuda_allocator_t(dims, SZ)
-    allocator => cuda_allocator
-    host_allocator = allocator_t(dims, SZ)
-    cuda_backend = cuda_backend_t(mesh, allocator)
-    backend => cuda_backend
+    call make_cuda_backend(mesh, dims, cuda_allocator, host_allocator, &
+                           cuda_backend, allocator, backend)
 
     select case (trim(domain_cfg%flow_case_name))
     case ('channel')
