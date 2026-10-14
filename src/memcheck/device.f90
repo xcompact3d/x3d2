@@ -28,8 +28,10 @@ module m_memcheck_device
     !> Tier 2 per-GPU overhead at ng GPUs, in bytes, from a one-shot
     !> throwaway FFT plan query (run on the first call, cached after):
     !> FFT workspace/heap/data buffer plus the device context.
-    !> residual_gib is what the query left allocated on the device.
     procedure(overhead_query_bytes_iface), deferred :: overhead_query_bytes
+    !> Whether the Tier 2 query has run and, if so, residual_gib: what it
+    !> left allocated on the device (~0 if the plan was fully released).
+    procedure(query_residual_gib_iface), deferred :: query_residual_gib
     !> Build the device allocator and the backend on mesh; the device owns
     !> both, so the returned pointers stay valid for as long as it does.
     procedure(make_backend_iface), deferred :: make_backend
@@ -73,15 +75,20 @@ module m_memcheck_device
     end function overhead_floor_bytes_iface
 
     function overhead_query_bytes_iface(self, ng, bc_is_100, bc_is_110, &
-                                        cdims, is_root, residual_gib) &
-      result(nbytes8)
-      import :: memcheck_device_t, dp, i8
+                                        cdims, is_root) result(nbytes8)
+      import :: memcheck_device_t, i8
       class(memcheck_device_t), intent(inout) :: self
       integer, intent(in) :: ng, cdims(3)
       logical, intent(in) :: bc_is_100, bc_is_110, is_root
-      real(dp), intent(out) :: residual_gib
       integer(i8) :: nbytes8
     end function overhead_query_bytes_iface
+
+    function query_residual_gib_iface(self, residual_gib) result(ran)
+      import :: memcheck_device_t, dp
+      class(memcheck_device_t), intent(in) :: self
+      real(dp), intent(out) :: residual_gib
+      logical :: ran
+    end function query_residual_gib_iface
 
     subroutine make_backend_iface(self, mesh, dims, allocator, backend)
       import :: memcheck_device_t, mesh_t, allocator_t, base_backend_t

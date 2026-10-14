@@ -72,16 +72,6 @@ module m_memcheck_context
     !> real --build runs inside a throwaway subdirectory rather than the
     !> invoking directory.
     character(len=4096) :: orig_dir = '', scratch_dir = ''
-    !> Set by estimate_for_ng from the device's overhead_query_bytes, the
-    !> cudaMemGetInfo delta across the whole throwaway plan query
-    !> (create+destroy) - if cufftDestroy fully released the NVSHMEM heap
-    !> this reserved, this should read ~0. Printed under
-    !> --build only, right before the real build, since that is the only
-    !> mode where a second cuFFTMp plan lifecycle follows in the same
-    !> process and a non-zero residual would mean the real build's own
-    !> measurement is inflated by whatever Tier 2 left behind.
-    real(dp) :: ng1_query_residual_gib
-    logical :: ng1_query_ran = .false.
     !> Set inside build_and_measure, once the real config driven output
     !> gating is known - needed after it returns to cross-check the measured
     !> peak_fields against m_memory_estimate's static peak_fields_lookup (see

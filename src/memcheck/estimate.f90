@@ -153,7 +153,7 @@ contains
 
     integer(i8) :: base_bytes, spec_bytes, floor_bytes, overhead_bytes, &
                    io_bytes
-    real(dp) :: floor_gib, io_gib_local, residual_gib
+    real(dp) :: floor_gib, io_gib_local
 
     base_bytes = fields_plus_halo_bytes(ctx, ng)
     spec_bytes = spectral_plus_mirror_bytes(ctx, ng)
@@ -192,9 +192,7 @@ contains
 
     overhead_bytes = ctx%device%overhead_query_bytes( &
                      ng, ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, &
-                     ctx%irank == 0, residual_gib)
-    ctx%ng1_query_residual_gib = residual_gib
-    ctx%ng1_query_ran = .true.
+                     ctx%irank == 0)
     per_gpu_gib = to_gib(base_bytes + spec_bytes + overhead_bytes + io_bytes)
     exact = .true.
     if (present(overhead_gib)) &

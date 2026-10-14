@@ -408,7 +408,7 @@ contains
     !! (ibm_on=T) a missing mask file - before touching the filesystem.
     type(memcheck_ctx_t), intent(inout) :: ctx
     real(dp) :: used_gib, workspace_gib_measured, ws_guess
-    real(dp) :: pct_error, estimate_ng1_excl_io_gib
+    real(dp) :: pct_error, estimate_ng1_excl_io_gib, residual_gib
     character(len=8) :: check_word
     integer :: measured_peak_fields
     logical :: ibm_missing, build_scratch_ok
@@ -433,10 +433,14 @@ contains
       return
     end if
 
-    if (ctx%ng1_query_ran) then
+    ! Printed under --build only, right before the real build: the only mode
+    ! where a second cuFFTMp plan lifecycle follows in the same process, so
+    ! a non-zero residual would mean the real build's own measurement is
+    ! inflated by whatever Tier 2 left behind.
+    if (ctx%device%query_residual_gib(residual_gib)) then
       call print_rule('-')
       print '(a,f0.2,a)', 'Residual after plan query: ', &
-        ctx%ng1_query_residual_gib, ' GiB (should be ~0 if cufftDestroy &
+        residual_gib, ' GiB (should be ~0 if cufftDestroy &
         &released it; if not, the real build below may double-reserve the &
         &NVSHMEM heap).'
     end if
