@@ -1180,6 +1180,35 @@ contains
     end if
   end subroutine free_memory_gate
 
+  subroutine print_check_line(used_gib)
+    !! --build's CHECK line: the static ng=1 estimate (without the IO
+    !! staging term) against the measured device memory in use, OK within
+    !! CHECK_TOLERANCE and MISMATCH beyond it.
+    real(dp), intent(in) :: used_gib
+
+    real(dp) :: pct_error, estimate_ng1_excl_io_gib
+    character(len=8) :: check_word
+
+    ! The real build above performs no snapshot/checkpoint write, so the
+    ! GPU-aware IO staging term (analytical only, never measured here) is
+    ! excluded from both the estimate compared and the printed CHECK line.
+    estimate_ng1_excl_io_gib = estimate_ng1_gib - io_staging_ng1_gib
+    pct_error = 100._dp*(estimate_ng1_excl_io_gib - used_gib)/used_gib
+    if (abs(estimate_ng1_excl_io_gib - used_gib) <= &
+        CHECK_TOLERANCE*used_gib) then
+      check_word = 'OK'
+    else
+      check_word = 'MISMATCH'
+    end if
+    print '(a,f0.2,a,f0.2,a,sp,f0.1,ss,a,a,a)', 'CHECK ng=1: estimated ', &
+      estimate_ng1_excl_io_gib, ' GiB, measured ', used_gib, ' GiB (', &
+      pct_error, '%) - ', trim(check_word), ' (tolerance 5%)'
+    if (io_staging_ng1_gib > 0._dp) &
+      print '(a,f0.1,a)', '  (GPU-aware IO staging ', &
+        io_staging_ng1_gib*1024._dp, ' MiB excluded from CHECK: the real &
+        &build performs no snapshot/checkpoint write.)'
+  end subroutine print_check_line
+
   subroutine run_tier3()
     !! Tier 3: a REAL case build + one substep on 1 GPU, measured with
     !! cudaMemGetInfo - the last-resort ground truth, now run in-process
@@ -1204,12 +1233,10 @@ contains
     !! occurs after its chdir regardless (a scratch directory left behind
     !! under the invoking directory, cleaned up by the next run with the
     !! same pid).
-    real(dp) :: used_gib, workspace_gib_measured, pct_error, &
-               estimate_ng1_excl_io_gib
+    real(dp) :: used_gib, workspace_gib_measured
     integer :: measured_peak_fields
     logical :: ibm_missing, build_scratch_ok, skip
     character(len=12) :: measured_verdict
-    character(len=8) :: check_word
 
     call free_memory_gate(skip)
     if (skip) return
@@ -1247,24 +1274,7 @@ contains
                                workspace_gib_measured, measured_verdict)
     final_verdict = measured_verdict
 
-    ! The real build above performs no snapshot/checkpoint write, so the
-    ! GPU-aware IO staging term (analytical only, never measured here) is
-    ! excluded from both the estimate compared and the printed CHECK line.
-    estimate_ng1_excl_io_gib = estimate_ng1_gib - io_staging_ng1_gib
-    pct_error = 100._dp*(estimate_ng1_excl_io_gib - used_gib)/used_gib
-    if (abs(estimate_ng1_excl_io_gib - used_gib) <= &
-        CHECK_TOLERANCE*used_gib) then
-      check_word = 'OK'
-    else
-      check_word = 'MISMATCH'
-    end if
-    print '(a,f0.2,a,f0.2,a,sp,f0.1,ss,a,a,a)', 'CHECK ng=1: estimated ', &
-      estimate_ng1_excl_io_gib, ' GiB, measured ', used_gib, ' GiB (', &
-      pct_error, '%) - ', trim(check_word), ' (tolerance 5%)'
-    if (io_staging_ng1_gib > 0._dp) &
-      print '(a,f0.1,a)', '  (GPU-aware IO staging ', &
-        io_staging_ng1_gib*1024._dp, ' MiB excluded from CHECK: the real &
-        &build performs no snapshot/checkpoint write.)'
+    call print_check_line(used_gib)
   end subroutine run_tier3
 
   subroutine check_peak_fields_table(measured)
