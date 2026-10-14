@@ -17,7 +17,8 @@ module m_memory_estimate
   public :: padded_dim, padded_cells, cell_dims, spectral_slab_bytes, &
             mirror_buffer_bytes_100, spectral_extra_bytes_110, &
             stretched_y_matrix_bytes, output_field_active, &
-            peak_fields_lookup, halo_bytes, gpu_io_staging_bytes
+            peak_fields_lookup, halo_bytes, padded_halo_bytes, &
+            gpu_io_staging_bytes
 
 contains
 
@@ -190,6 +191,19 @@ contains
                    int(padded_dims(1), i8)*int(padded_dims(2), i8)/int(sz, i8))
     nbytes8 = int(sz, i8)*n_groups*int(nbytes, i8)*12_i8*int(n_halo + 1, i8)
   end function halo_bytes
+
+  pure function padded_halo_bytes(local_dims, sz, n_halo) result(nbytes8)
+    !! halo_bytes for a local block of local_dims cells: pads x and y to sz
+    !! (z untouched) the way the allocator does, then sizes the halo-exchange
+    !! buffers of those padded dims.
+    integer, intent(in) :: local_dims(3)
+    integer, intent(in) :: sz, n_halo
+    integer(i8) :: nbytes8
+
+    nbytes8 = halo_bytes([padded_dim(local_dims(1), sz), &
+                          padded_dim(local_dims(2), sz), local_dims(3)], &
+                         sz, n_halo)
+  end function padded_halo_bytes
 
   pure logical function output_field_active(checkpoint_cfg, name) result(active)
     !! Whether a snapshot output field is actually driven at runtime - a
