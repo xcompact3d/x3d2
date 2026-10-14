@@ -136,7 +136,7 @@ contains
   end function spectral_extra_bytes_110
 
   pure function stretched_y_matrix_bytes(bc_is_010, stretching_y, lowmem_fft, &
-                                          cdims, ng) result(nbytes8)
+                                         cdims, ng) result(nbytes8)
     !! 010-case, non-uniform y-stretching Poisson coefficient matrices,
     !! src/poisson_fft.f90:176-186 (only 010 sets stretched_y, and only at
     !! ng=1 since 010 error-stops at nproc>1) and :320-323,424-428
