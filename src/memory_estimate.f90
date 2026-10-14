@@ -220,8 +220,8 @@ contains
              checkpoint_cfg%snapshot_freq > 0
   end function output_field_active
 
-  pure function gpu_io_staging_bytes(local_dims, checkpoint_cfg, device_write) &
-    result(bytes)
+  pure function gpu_io_staging_bytes(local_dims, checkpoint_cfg, &
+                                     device_write) result(bytes)
     !! Device memory the GPU-aware ADIOS2 write path (src/io/adios2/io.f90,
     !! write_device_field_adios2) holds on top of the solver's own peak: a
     !! single reused staging buffer (file_handle%device_staging), sized to
