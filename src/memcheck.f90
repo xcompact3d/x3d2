@@ -452,8 +452,8 @@ contains
 
     ierr = cudaMemGetInfo(free_b, total_b)
     call check_status(ierr, 'cudaMemGetInfo (card total)')
-    card_gib = real(total_b, dp)/1024._dp**3
-    card_free_gib = real(free_b, dp)/1024._dp**3
+    card_gib = to_gib(int(total_b, i8))
+    card_free_gib = to_gib(int(free_b, i8))
   end subroutine query_card_gib
 
   pure function classify(per_gpu_gib, total_gib) result(verdict)
@@ -618,8 +618,8 @@ contains
                                    ng1_used_cufftmp)
     ierr = cudaMemGetInfo(free_after, total_b)
     call check_status(ierr, 'cudaMemGetInfo (after FFT probe)')
-    ng1_query_residual_gib = real(int(free_before, i8) - &
-                                  int(free_after, i8), dp)/1024._dp**3
+    ng1_query_residual_gib = to_gib(int(free_before, i8) - &
+                                    int(free_after, i8))
     ng1_query_ran = .true.
     done = .true.
   end subroutine ensure_fft_query
