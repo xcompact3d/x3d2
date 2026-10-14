@@ -184,6 +184,16 @@ function(define_test testfile np backend)
 
   # default label includes backend
   set_tests_properties(${test_name} PROPERTIES LABELS "unit;${backend}")
+
+  # The omp_tgt backend hands omp_target_alloc buffers to MPI. UCX tells
+  # device from host buffers with a memory type cache fed by intercepting
+  # CUDA allocations, which misses the OpenMP runtime's, so it reads them as
+  # host memory and crashes in its CMA transport. Without the cache it asks
+  # the driver about every buffer. MPIs not built on UCX ignore the variable.
+  if(WITH_MPI AND ${backend} STREQUAL omp_tgt)
+    set_property(TEST ${test_name} APPEND PROPERTY
+      ENVIRONMENT "UCX_MEMTYPE_CACHE=n")
+  endif()
 endfunction()
 
 # Specialised test definition functions with category labels
