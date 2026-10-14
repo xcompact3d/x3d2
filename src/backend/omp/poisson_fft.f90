@@ -542,12 +542,26 @@ contains
 
     class(omp_poisson_fft_t) :: self
 
-    call process_spectral_010( &
-      self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
-      self%sp_st(1), self%sp_st(2), self%sp_st(3), &
-      self%nx_glob, self%ny_glob, self%nz_glob, &
-      self%ax, self%bx, self%ay, self%by, self%az, self%bz &
-      )
+    if (self%p_col > 1) then
+      ! The FFT leaves y split across p_col in the z-pencil. Hop to the
+      ! y-pencil, where y is whole, pair there, and hop back.
+      call transpose_z_to_y(self%c_x, self%c_pair, self%sp)
+      call process_spectral_010( &
+        self%c_pair, self%waves_pair, self%sp%ysz(1), self%sp%ysz(2), &
+        self%sp%ysz(3), self%sp%yst(1) - 1, self%sp%yst(2) - 1, &
+        self%sp%yst(3) - 1, &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax, self%bx, self%ay, self%by, self%az, self%bz &
+        )
+      call transpose_y_to_z(self%c_pair, self%c_x, self%sp)
+    else
+      call process_spectral_010( &
+        self%c_x, self%waves, self%nx_spec, self%ny_spec, self%nz_spec, &
+        self%sp_st(1), self%sp_st(2), self%sp_st(3), &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax, self%bx, self%ay, self%by, self%az, self%bz &
+        )
+    end if
 
   end subroutine fft_postprocess_010_omp
 
