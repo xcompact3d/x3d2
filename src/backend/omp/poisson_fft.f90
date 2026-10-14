@@ -168,6 +168,19 @@ contains
     allocate (poisson_fft%c_x(poisson_fft%nx_spec, poisson_fft%ny_spec, &
                               poisson_fft%nz_spec))
 
+    if (poisson_fft%is_010_case .and. poisson_fft%p_col > 1) then
+      ! The 010 pairing of mode j with ny - j + 2 needs y whole, which the
+      ! y-pencil of sp provides. waves is redistributed once, here.
+      allocate (poisson_fft%c_pair(poisson_fft%sp%ysz(1), &
+                                   poisson_fft%sp%ysz(2), &
+                                   poisson_fft%sp%ysz(3)))
+      allocate (poisson_fft%waves_pair(poisson_fft%sp%ysz(1), &
+                                       poisson_fft%sp%ysz(2), &
+                                       poisson_fft%sp%ysz(3)))
+      call transpose_z_to_y(poisson_fft%waves, poisson_fft%waves_pair, &
+                            poisson_fft%sp)
+    end if
+
     if (poisson_fft%is_100_case) then
       poisson_fft%ph => decomp_2d_fft_get_ph()
       if (poisson_fft%p_row > 1) then
