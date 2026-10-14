@@ -1,12 +1,18 @@
 module m_memcheck_estimate
   !! Static (Tier 1) and Tier 2 per-GPU memory estimate of x3d2-memcheck.
-  use m_common, only: dp, i8
+  use m_common, only: dp, i8, nbytes
   use m_memcheck_context, only: memcheck_ctx_t
+  use m_cuda_common, only: SZ
+  use m_memory_estimate, only: padded_cells, padded_halo_bytes, &
+                               spectral_slab_bytes, mirror_buffer_bytes_100, &
+                               spectral_extra_bytes_110, &
+                               stretched_y_matrix_bytes
   implicit none
 
   !> <80% of card memory: FITS. 80-95%: BORDERLINE. >95%: DOES_NOT_FIT.
   real(dp), parameter :: FITS_FRACTION = 0.80_dp
   real(dp), parameter :: DOES_NOT_FIT_FRACTION = 0.95_dp
+  integer, parameter :: n_halo = 4
 
 contains
 
@@ -68,5 +74,58 @@ contains
         &by ng, src/backend/cuda/poisson_fft.f90 error-stops'
     end if
   end function ng_unsupported_reason
+
+  function fields_plus_halo_bytes_n(ctx, ng, npeak) result(nbytes8)
+    !! Same formula as fields_plus_halo_bytes, but for an explicit npeak
+    !! rather than the module's static peak_fields - used by the --build
+    !! measured table, which has its own real measured field count.
+    type(memcheck_ctx_t), intent(in) :: ctx
+    integer, intent(in) :: ng, npeak
+    integer(i8) :: nbytes8
+    integer :: local_dims(3)
+
+    local_dims = [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)/ng]
+    nbytes8 = int(npeak, i8)*padded_cells(local_dims, SZ) &
+              *int(nbytes, i8) + padded_halo_bytes(local_dims, SZ, n_halo)
+  end function fields_plus_halo_bytes_n
+
+  function fields_plus_halo_bytes(ctx, ng) result(nbytes8)
+    !! Exact, ng dependent field+halo term (Tier 1, no GPU/plan needed),
+    !! using the static peak_fields_lookup value.
+    type(memcheck_ctx_t), intent(in) :: ctx
+    integer, intent(in) :: ng
+    integer(i8) :: nbytes8
+
+    nbytes8 = fields_plus_halo_bytes_n(ctx, ng, ctx%peak_fields)
+  end function fields_plus_halo_bytes
+
+  function spectral_plus_mirror_bytes(ctx, ng) result(nbytes8)
+    !! waves_dev (all cases, src/backend/cuda/poisson_fft.f90:322-324) is
+    !! exactly spectral_slab_bytes. Two BC-specific extra terms:
+    !!   100, ng>1: mirror/exchange buffers (:339-347), zero at ng<=1.
+    !!   110 (never ng>1 - see multi_gpu_supported): a SECOND complex array
+    !!     of the same spectral shape, c_dev (:416-418), plus a real,
+    !!     globally-shaped transposed workspace r_dev_110(nz_glob,nx_glob,
+    !!     ny_glob) (:414) - i.e. the same total element count as cdims,
+    !!     just permuted. Missing this term underestimated the 110 case by
+    !!     ~14% (0.98 vs 1.134 GiB measured) during this feature's design.
+    !!   010, non-uniform y-stretching (never ng>1 - 010 error-stops at
+    !!     nproc>1): the a_*_dev Poisson coefficient matrices, see
+    !!     stretched_y_matrix_bytes.
+    type(memcheck_ctx_t), intent(in) :: ctx
+    integer, intent(in) :: ng
+    integer(i8) :: nbytes8
+
+    nbytes8 = spectral_slab_bytes(ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, ng)
+    if (ctx%bc_is_100) then
+      nbytes8 = nbytes8 + mirror_buffer_bytes_100(ctx%cdims, ng)
+    else if (ctx%bc_is_110) then
+      nbytes8 = nbytes8 + spectral_extra_bytes_110(ctx%cdims, ng)
+    else if (ctx%bc_is_010) then
+      nbytes8 = nbytes8 + stretched_y_matrix_bytes(ctx%bc_is_010, &
+                                                ctx%domain_cfg%stretching(2), &
+                                      ctx%solver_cfg%lowmem_fft, ctx%cdims, ng)
+    end if
+  end function spectral_plus_mirror_bytes
 
 end module m_memcheck_estimate
