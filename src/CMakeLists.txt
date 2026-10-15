@@ -43,6 +43,7 @@ set(SRC
 )
 set(BACKENDSRC
   backend/omp/backend.f90
+  backend/setup.f90
 )
 # CUDA specific
 if (${ENABLE_BACKEND} STREQUAL "CUDA")
@@ -183,7 +184,8 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   else()
     target_link_options(x3d2 INTERFACE "-cudalib=cufft")
   endif()
-  target_compile_options(xcompact PRIVATE "-DCUDA")
+  # Selects the CUDA backend in backend/setup.f90
+  target_compile_options(x3d2_backends PRIVATE "-DCUDA")
   # NVTX ranges label the ADIOS2 write paths in Nsight Systems (see
   # io/nvtx.f90). Without ADIOS2 there is no output to label.
   if(WITH_ADIOS2)
