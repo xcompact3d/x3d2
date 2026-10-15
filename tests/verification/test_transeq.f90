@@ -30,12 +30,19 @@ program test_transeq
   ! The tolerance bounds the relative L2 error. Roundoff floor of the
   ! second-derivative term is ~eps/dx^2, which at 96 points per period is
   ! ~1e-4 in single precision. The dw residual is measured against the du
-  ! analytical field, since the dw reference is zero. Largest values
-  ! measured: TO BE FILLED BY THE MEASUREMENT CHUNK.
+  ! analytical field, since the dw reference is zero. Largest value measured
+  ! over du, dv, dw and the species check:
+  !   double precision, OpenMP backend (nvfortran build; gfortran):
+  !     9.6863e-10 (gfortran 9.6863e-10)
+  !   double precision, CUDA backend: 9.6863e-10
+  !   single precision, OpenMP backend (nvfortran build; gfortran):
+  !     7.5421e-05 (gfortran 7.9120e-05)
+  !   single precision, CUDA backend: 7.5409e-05
   ! The tolerance is the smallest {1,2,5}x10^k value at least 10x the
-  ! largest measured relative error.
+  ! largest of these, a margin of about 10 in double precision and 13 in
+  ! single precision.
 #ifdef SINGLE_PREC
-  real(dp), parameter :: tol = 5e-3_dp
+  real(dp), parameter :: tol = 1e-3_dp
 #else
   real(dp), parameter :: tol = 1e-8_dp
 #endif
