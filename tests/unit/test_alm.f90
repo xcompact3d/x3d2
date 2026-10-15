@@ -29,16 +29,20 @@ program test_alm
   class(field_t), pointer :: u, v, w, du, dv, dw, host_data
   character(len=9) :: dirichlet_bcs(2), periodic_bcs(2)
   integer :: ierr, nrank, nproc, i, j, k, dims(3), gdims(3), s, t, ib, ie
-  real(dp) :: cl, cd, cm, tol, coords(3), d(3), cell_vol, eps, expected
+  real(dp) :: cl, cd, cm, tol, proj_tol, coords(3), d(3), cell_vol, eps, expected
   real(dp) :: points(3, 3), vals(3, 3), coeffs(3, 1), src(3, 1), f_tot(3)
   real(dp) :: sums(3)
-  logical :: allpass
+  logical :: allpass, ok
 
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
   allpass = .true.
-  tol = 1.e-10_dp
+  ! Scaled with the working precision, so the test also holds for a
+  ! single-precision build
+  tol = 1000._dp*epsilon(1._dp)
+  proj_tol = max(1.e-8_dp, 100._dp*epsilon(1._dp))
+  ok = .true.
 
   ! Polars: two Re tables, CL linear in alpha, CD and CM constant per table
   if (nrank == 0) then
@@ -64,26 +68,26 @@ program test_alm
   call MPI_Barrier(MPI_COMM_WORLD, ierr)
 
   call read_airfoil(airfoil, 'test_alm.air')
-  allpass = allpass .and. airfoil%n_re == 2 &
+  ok = ok .and. airfoil%n_re == 2 &
             .and. close_enough(airfoil%tc, 0.2_dp, tol)
   ! Midway in Re, a quarter of the way up in alpha
   call eval_static_coeffs(airfoil, 1.5e4_dp, 45._dp, cl, cd, cm)
-  allpass = allpass .and. close_enough(cl, 0.75_dp, tol) &
+  ok = ok .and. close_enough(cl, 0.75_dp, tol) &
             .and. close_enough(cd, 0.2_dp, tol) &
             .and. close_enough(cm, 0.1_dp, tol)
   ! Outside the tabulated Re range the nearest table is used
   call eval_static_coeffs(airfoil, 1.e3_dp, -90._dp, cl, cd, cm)
-  allpass = allpass .and. close_enough(cl, -1._dp, tol)
+  ok = ok .and. close_enough(cl, -1._dp, tol)
   call eval_static_coeffs(airfoil, 1.e6_dp, 90._dp, cl, cd, cm)
-  allpass = allpass .and. close_enough(cl, 2._dp, tol) &
+  ok = ok .and. close_enough(cl, 2._dp, tol) &
             .and. close_enough(cd, 0.3_dp, tol)
-  if (.not. allpass .and. nrank == 0) print *, 'airfoil checks failed'
 
   ! Right-handed rotation: z rotated a quarter turn about x goes to -y
-  allpass = allpass .and. &
-            all(abs(quat_rot([1._dp, 2._dp, 3._dp], pi/2._dp, &
-                             [2._dp, 0._dp, 0._dp], [1._dp, 2._dp, 2._dp]) &
-                    - [1._dp, 1._dp, 2._dp]) < tol)
+  ok = ok .and. &
+       all(abs(quat_rot([1._dp, 2._dp, 3._dp], pi/2._dp, &
+                        [2._dp, 0._dp, 0._dp], [1._dp, 2._dp, 2._dp]) &
+               - [1._dp, 1._dp, 2._dp]) < tol)
+  call report('airfoil and rotation')
 
   ! Inflow/outflow in x, periodic y and z, decomposed in z so sampling and
   ! sources straddle rank boundaries
@@ -141,13 +145,13 @@ program test_alm
   do s = 1, 2
     expected = 1._dp + 2._dp*points(1, s) - 3._dp*points(2, s) &
                + 0.5_dp*points(3, s) + product(points(:, s))
-    allpass = allpass .and. close_enough(vals(1, s), expected, tol) &
+    ok = ok .and. close_enough(vals(1, s), expected, tol) &
               .and. close_enough(vals(2, s), 2._dp, tol)
   end do
   ! Between the last y node and the first (wrapped) one
   expected = 0.25_dp*cos(2._dp*pi*(1._dp - d(2))) + 0.75_dp
-  allpass = allpass .and. close_enough(vals(3, 3), expected, tol)
-  if (.not. allpass .and. nrank == 0) print *, 'sampling checks failed'
+  ok = ok .and. close_enough(vals(3, 3), expected, tol)
+  call report('sampling')
 
   ! Gaussian source: the kernel sums to eps^3 pi^(3/2) over the grid
   host_data%data = 0._dp
@@ -162,8 +166,9 @@ program test_alm
   sums = [backend%field_volume_integral(du), &
           backend%field_volume_integral(dv), &
           backend%field_volume_integral(dw)]*cell_vol/(eps**3*pi**1.5_dp)
-  allpass = allpass .and. all(abs(sums - coeffs(:, 1)) < 1.e-8_dp)
-  if (.not. allpass .and. nrank == 0) print *, 'projection checks failed', sums
+  ok = ok .and. all(abs(sums - coeffs(:, 1)) < proj_tol*abs(coeffs(:, 1)))
+  if (.not. ok .and. nrank == 0) print *, 'projected integrals', sums
+  call report('projection')
 
   ! Full ALM step: one non-rotating 2-bladed rotor in uniform flow. The
   ! projected momentum source must integrate to -sum(F)/rho.
@@ -226,7 +231,7 @@ program test_alm
           backend%field_volume_integral(dw)]*cell_vol
   ! The kernels are cut off at 10 eps but the rotor lies 6 eps from the
   ! nearest boundary, so a small share is lost there
-  allpass = allpass &
+  ok = ok &
             .and. all(abs(sums + f_tot/alm%rho_air) &
                       < 1.e-3_dp*norm2(f_tot)/alm%rho_air) &
             .and. norm2(f_tot) > 0._dp &
@@ -239,12 +244,13 @@ program test_alm
   sums = [backend%field_volume_integral(du), &
           backend%field_volume_integral(dv), &
           backend%field_volume_integral(dw)]*cell_vol
-  allpass = allpass &
+  ok = ok &
             .and. all(abs(sums + 2._dp*f_tot/alm%rho_air) &
                       < 2.e-3_dp*norm2(f_tot)/alm%rho_air) &
             .and. close_enough(alm%turbine(1)%azim_angle, 0.1_dp, tol)
-  if (.not. allpass .and. nrank == 0) print *, 'ALM step checks failed', &
-    sums, -f_tot/alm%rho_air
+  if (.not. ok .and. nrank == 0) print *, 'projected and expected', &
+    sums, -2._dp*f_tot/alm%rho_air
+  call report('ALM step')
 
   call alm%write_output(1, nrank == 0)
   call alm%finalise()
@@ -274,6 +280,15 @@ program test_alm
   call MPI_Finalize(ierr)
 
 contains
+
+  subroutine report(section)
+    !! Fold the checks of one section into allpass, naming it on failure.
+    character(len=*), intent(in) :: section
+
+    if (.not. ok .and. nrank == 0) print *, trim(section)//' checks failed'
+    allpass = allpass .and. ok
+    ok = .true.
+  end subroutine report
 
   logical function close_enough(actual, expected, relative_tol)
     real(dp), intent(in) :: actual, expected, relative_tol
