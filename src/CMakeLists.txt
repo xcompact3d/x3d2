@@ -20,6 +20,9 @@ set(SRC
   field.f90
   vector_calculus.f90
   backend/backend.f90
+  turbine/turbine_model.f90
+  turbine/turbine_dummy.f90
+  turbine/adm.f90
   backend/omp/common.f90
   backend/omp/kernels/distributed.f90
   backend/omp/kernels/spectral_processing.f90
@@ -33,12 +36,14 @@ set(SRC
   case/cylinder.f90
   case/generic.f90
   case/tgv.f90
+  case/wind_turbine.f90
   abl/abl.f90
   abl/diagnostics.f90
   module/ibm.f90
 )
 set(BACKENDSRC
   backend/omp/backend.f90
+  backend/setup.f90
 )
 # CUDA specific
 if (${ENABLE_BACKEND} STREQUAL "CUDA")
@@ -187,7 +192,8 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   else()
     target_link_options(x3d2 INTERFACE "-cudalib=cufft")
   endif()
-  target_compile_options(xcompact PRIVATE "-DCUDA")
+  # Selects the CUDA backend in backend/setup.f90
+  target_compile_options(x3d2_backends PRIVATE "-DCUDA")
   # NVTX ranges label the ADIOS2 write paths in Nsight Systems (see
   # io/nvtx.f90). Without ADIOS2 there is no output to label.
   if(WITH_ADIOS2)
