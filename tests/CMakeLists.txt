@@ -342,6 +342,7 @@ function(define_backend_tests backend)
     define_test(unit/test_boundary_planes.f90 ${serial} ${backend})
     define_test(unit/test_abl_seed.f90 ${serial} ${backend})
     define_test(unit/test_adm.f90 ${serial} ${backend})
+    define_test(unit/test_alm.f90 ${np} ${backend})
   endif()
   if(is_omp AND NOT np EQUAL serial)
     # Reordering is checked both without and with a decomposition.

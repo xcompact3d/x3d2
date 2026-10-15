@@ -1,0 +1,65 @@
+&domain_settings
+flow_case_name = 'wind_turbine'
+
+! Two NTNU model turbines (R = 0.447 m) in line, 6 diameters apart: the
+! Incompact3d examples/Wind-Turbine/two_turbines case, run with the actuator
+! line model. Dimensional units: metres, m/s.
+L_global = 8.8d0, 1.8d0, 3.4d0
+
+! Same spacing as Incompact3d (nx = 641, ny = 129, nz = 321), with y and z
+! periodic.
+dims_global = 641, 128, 320
+
+nproc_dir = 1, 1, 1
+
+! x: inflow (dirichlet) / convective outflow (dirichlet); y,z periodic.
+! Incompact3d uses free-slip walls in y and z, but the FFT Poisson solver
+! requires z periodic and a single MPI rank in non-periodic directions.
+BC_x = 'dirichlet', 'dirichlet'
+BC_y = 'periodic', 'periodic'
+BC_z = 'periodic', 'periodic'
+/End
+
+&solver_params
+! nu = 1/Re in m^2/s, as Incompact3d's re = 45000
+Re = 45000.0d0
+time_intg = 'AB3'
+dt = 0.0002d0
+n_iters = 10000
+n_output = 100
+poisson_solver_type = 'FFT'
+der1st_scheme = 'compact6'
+! compact6-hyperviscous adds implicit-LES (iSVV) dissipation at the grid scale
+der2nd_scheme = 'compact6-hyperviscous'
+c_nu = 0.44d0
+nu0_nu = 500.0d0
+interpl_scheme = 'optimised'
+stagder_scheme = 'compact6'
+ibm_on = F
+/End
+
+&stats_params
+initstat = 5000
+istatfreq = 1
+istatout = 1000
+stats_prefix = 'statistics'
+/End
+
+&checkpoint_params
+snapshot_freq = 1000
+snapshot_prefix = 'snapshot'
+output_fields = 'vorticity', 'qcriterion'
+/End
+
+&wind_turbine_nml
+init_noise = 0.0d0, 0.0d0, 0.0d0
+inlet_noise = 0.0d0, 0.0d0, 0.0d0
+bc_start_u = 10.0d0   ! uniform inflow velocity [m/s]
+bc_start_v = 0.0d0
+bc_start_w = 0.0d0
+iturbine = 1          ! 1: actuator line, 2: disc
+iturboutput = 20
+alm_turbines = 'BT2_1.turb', 'BT2_2.turb'
+eps_factor = 2.5d0    ! Gaussian kernel width in cell sizes
+rho_air = 1.2d0
+/End

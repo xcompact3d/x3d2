@@ -16,6 +16,7 @@ module m_case_wind_turbine
 
   use m_allocator, only: allocator_t
   use m_adm, only: adm_t
+  use m_alm, only: alm_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
   use m_common, only: dp, MPI_X3D2_DP, get_argument, DIR_C, DIR_X, &
@@ -84,8 +85,19 @@ contains
     ! turbine object with no branching.
     select case (flow_case%wt_cfg%iturbine)
     case (1)
-      ! Actuator line model - falls back to dummy until landed.
-      allocate (turbine_dummy_t :: flow_case%turbine)
+      allocate (alm_t :: flow_case%turbine)
+      select type (turbine => flow_case%turbine)
+      type is (alm_t)
+        turbine%turbine_files = flow_case%wt_cfg%alm_turbines
+        turbine%rho_air = flow_case%wt_cfg%rho_air
+        turbine%eps_factor = flow_case%wt_cfg%eps_factor
+        turbine%nu = flow_case%solver%nu
+        turbine%u_inflow = flow_case%wt_cfg%bc_start_u
+        turbine%stats_start = &
+          max(1, flow_case%io_mgr%stats_mgr%config%initstat)
+        turbine%stats_freq = &
+          max(1, flow_case%io_mgr%stats_mgr%config%istatfreq)
+      end select
     case (2)
       allocate (adm_t :: flow_case%turbine)
       select type (turbine => flow_case%turbine)
