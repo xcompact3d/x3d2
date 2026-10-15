@@ -56,6 +56,8 @@ module m_base_backend
     procedure :: vecmult => vecmult_base
     procedure :: scalar_product => scalar_product_base
     procedure :: vector_norm_squared => vector_norm_squared_base
+    procedure :: field_labelled_sums => field_labelled_sums_base
+    procedure :: field_labelled_axpy => field_labelled_axpy_base
     procedure :: field_max_mean => field_max_mean_base
     procedure :: slice_max_sum => slice_max_sum_base
     procedure :: field_plane_sums => field_plane_sums_base
@@ -67,6 +69,8 @@ module m_base_backend
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_base
     procedure :: field_set_face_from_field => field_set_face_from_field_base
     procedure :: field_add_face_from_field => field_add_face_from_field_base
+    procedure :: field_add_const_x_face => field_add_const_x_face_base
+    procedure :: field_set_x_inlet_plane => field_set_x_inlet_plane_base
     procedure :: compute_vorticity => compute_vorticity_base
     procedure :: compute_qcriterion => compute_qcriterion_base
     procedure :: compute_smagorinsky_nut => compute_smagorinsky_nut_base
@@ -423,6 +427,38 @@ contains
 
   end function vector_norm_squared_base
 
+  subroutine field_labelled_sums_base(self, sums, g, label, a, b, c)
+    !! Computes this rank's sums of g*a, g*b and g*c separately for each
+    !! label in a single pass over DIR_X fields. `label` holds integer values
+    !! stored as reals; points labelled l in 1..size(sums, 2) add to
+    !! sums(:, l) and all other points are skipped. No MPI reduction is done,
+    !! so the caller can reduce all labels together in one MPI call.
+    implicit none
+
+    class(base_backend_t) :: self
+    real(dp), intent(out) :: sums(:, :)
+    class(field_t), intent(in) :: g, label, a, b, c
+
+    sums = 0._dp
+    call not_implemented('field_labelled_sums')
+
+  end subroutine field_labelled_sums_base
+
+  subroutine field_labelled_axpy_base(self, coeffs, g, label, a, b, c)
+    !! Adds coeffs(1, l)*g, coeffs(2, l)*g and coeffs(3, l)*g to a, b and c
+    !! at every point of the DIR_X fields labelled l in 1..size(coeffs, 2).
+    !! Points with any other label are left unchanged.
+    implicit none
+
+    class(base_backend_t) :: self
+    real(dp), intent(in) :: coeffs(:, :)
+    class(field_t), intent(in) :: g, label
+    class(field_t), intent(inout) :: a, b, c
+
+    call not_implemented('field_labelled_axpy')
+
+  end subroutine field_labelled_axpy_base
+
   subroutine field_max_mean_base(self, max_val, mean_val, f, &
                                  enforced_data_loc)
     !! Obtains maximum and mean values in a field
@@ -598,6 +634,40 @@ contains
     call not_implemented('field_add_face_from_field')
 
   end subroutine field_add_face_from_field_base
+
+  subroutine field_add_const_x_face_base(self, f, c, at_end)
+    !! Adds a uniform constant `c` to one x-normal face plane of a DIR_X
+    !! field, in place. Used to enforce exact outlet mass conservation:
+    !! after the convective outflow update, the outlet-plane mean is
+    !! shifted uniformly so that it matches the prescribed inlet mean
+    !! (mirrors Incompact3d's `bxxn = bxxn - ut + ut1`).
+    !! at_end = .true.  -> the x = nx plane (outlet)
+    !! at_end = .false. -> the x = 1  plane (inlet)
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c
+    logical, intent(in) :: at_end
+
+    call not_implemented('field_add_const_x_face')
+
+  end subroutine field_add_const_x_face_base
+
+  subroutine field_set_x_inlet_plane_base(self, f, plane)
+    !! Overwrites the x = 1 plane (pencil index 1) of a DIR_X field with
+    !! the host array `plane(ny, nz)`, in local VERT dims. Only the plane
+    !! crosses to the device, so a time-varying inlet can be refreshed
+    !! without uploading and reordering a full 3D field.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), dimension(:, :), intent(in) :: plane
+
+    call not_implemented('field_set_x_inlet_plane')
+
+  end subroutine field_set_x_inlet_plane_base
 
   subroutine compute_vorticity_base( &
     self, field_out, dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)

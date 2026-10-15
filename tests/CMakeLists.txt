@@ -284,6 +284,7 @@ define_test(unit/test_les.f90 ${serial} omp)
 define_test(unit/test_abl_diagnostics.f90 ${serial} omp)
 if(WITH_ADIOS2)
   define_test(unit/test_adios2_mixed_precision.f90 ${serial} omp)
+  define_test(unit/test_adm_checkpoint.f90 ${serial} omp)
 endif()
 
 # Backend tests. Every test below is written against base_backend_t through
@@ -323,6 +324,7 @@ function(define_backend_tests backend)
     define_test(unit/test_sum_intox.f90 ${np} ${backend})
     define_test(unit/test_boundary_planes.f90 ${serial} ${backend})
     define_test(unit/test_abl_seed.f90 ${serial} ${backend})
+    define_test(unit/test_adm.f90 ${serial} ${backend})
   endif()
   if(is_omp AND NOT np EQUAL serial)
     # Reordering is checked both without and with a decomposition.

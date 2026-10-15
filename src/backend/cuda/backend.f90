@@ -26,12 +26,14 @@ module m_cuda_backend
   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
   use m_cuda_kernels_fieldops, only: axpby, buffer_copy, field_scale, &
                                      field_shift, scalar_product, &
-                                     vector_norm_squared, &
+                                     vector_norm_squared, labelled_sums, &
+                                     labelled_axpy, &
                                      field_max_sum, field_set_y_face, &
                                      field_set_x_face, field_set_y_plane, &
                                      field_set_abl_wall_stress, &
                                      field_set_x_face_from_field, &
                                      field_set_y_face_from_field, &
+                                     add_scalar_x_face, set_x_inlet_plane, &
                                      field_add_x_face_from_field, &
                                      field_plane_partial_sums, &
                                      field_plane_sums_reduce, &
@@ -78,6 +80,8 @@ module m_cuda_backend
     procedure :: vecmult => vecmult_cuda
     procedure :: scalar_product => scalar_product_cuda
     procedure :: vector_norm_squared => vector_norm_squared_cuda
+    procedure :: field_labelled_sums => field_labelled_sums_cuda
+    procedure :: field_labelled_axpy => field_labelled_axpy_cuda
     procedure :: field_max_mean => field_max_mean_cuda
     procedure :: slice_max_sum => slice_max_sum_cuda
     procedure :: field_scale => field_scale_cuda
@@ -87,6 +91,8 @@ module m_cuda_backend
     procedure :: field_plane_sums => field_plane_sums_cuda
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_cuda
     procedure :: field_set_face_from_field => field_set_face_from_field_cuda
+    procedure :: field_add_const_x_face => field_add_const_x_face_cuda
+    procedure :: field_set_x_inlet_plane => field_set_x_inlet_plane_cuda
     procedure :: field_add_face_from_field => field_add_face_from_field_cuda
     procedure :: compute_vorticity => compute_vorticity_cuda
     procedure :: compute_qcriterion => compute_qcriterion_cuda
@@ -1169,6 +1175,100 @@ contains
 
   end function vector_norm_squared_cuda
 
+  subroutine field_labelled_sums_cuda(self, sums, g, label, a, b, c)
+    !! [[m_base_backend(module):field_labelled_sums_base(subroutine)]]
+    implicit none
+
+    class(cuda_backend_t) :: self
+    real(dp), intent(out) :: sums(:, :)
+    class(field_t), intent(in) :: g, label, a, b, c
+
+    real(dp), device, pointer, dimension(:, :, :) :: g_d, label_d, a_d, &
+                                                     b_d, c_d
+    real(dp), device, allocatable :: sums_d(:, :)
+    integer :: dims(3), dims_padded(3)
+    type(dim3) :: blocks, threads
+
+    call check_labelled_fields(g, label, a, b, c)
+
+    call resolve_field_t(g_d, g)
+    call resolve_field_t(label_d, label)
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    allocate (sums_d(3, size(sums, 2)))
+    sums_d = 0._dp
+    dims = self%mesh%get_dims(g%data_loc)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    blocks = dim3(dims(3), (dims(2) - 1)/SZ + 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call labelled_sums<<<blocks, threads>>>( & !&
+      sums_d, g_d, label_d, a_d, b_d, c_d, size(sums, 2), &
+      dims(1), dims_padded(3), dims(2))
+
+    sums = sums_d
+
+  end subroutine field_labelled_sums_cuda
+
+  subroutine field_labelled_axpy_cuda(self, coeffs, g, label, a, b, c)
+    !! [[m_base_backend(module):field_labelled_axpy_base(subroutine)]]
+    implicit none
+
+    class(cuda_backend_t) :: self
+    real(dp), intent(in) :: coeffs(:, :)
+    class(field_t), intent(in) :: g, label
+    class(field_t), intent(inout) :: a, b, c
+
+    real(dp), device, pointer, dimension(:, :, :) :: g_d, label_d, a_d, &
+                                                     b_d, c_d
+    real(dp), device, allocatable :: coeffs_d(:, :)
+    integer :: dims(3), dims_padded(3)
+    type(dim3) :: blocks, threads
+
+    call check_labelled_fields(g, label, a, b, c)
+
+    call resolve_field_t(g_d, g)
+    call resolve_field_t(label_d, label)
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    coeffs_d = coeffs
+    dims = self%mesh%get_dims(g%data_loc)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    blocks = dim3(dims(3), (dims(2) - 1)/SZ + 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call labelled_axpy<<<blocks, threads>>>( & !&
+      coeffs_d, g_d, label_d, a_d, b_d, c_d, size(coeffs, 2), &
+      dims(1), dims_padded(3), dims(2))
+
+  end subroutine field_labelled_axpy_cuda
+
+  subroutine check_labelled_fields(g, label, a, b, c)
+    !! Checks the fields passed to the labelled field operations share a
+    !! valid data location and the DIR_X layout.
+    implicit none
+
+    class(field_t), intent(in) :: g, label, a, b, c
+
+    if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
+        a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
+        c%data_loc == NULL_LOC) then
+      error stop 'You must set data_loc before labelled field operations.'
+    end if
+    if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
+        b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
+      error stop 'Labelled field operations need one data location.'
+    end if
+    if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
+        b%dir /= DIR_X .or. c%dir /= DIR_X) then
+      error stop 'Labelled field operations need DIR_X layout.'
+    end if
+  end subroutine check_labelled_fields
+
   subroutine copy_into_buffers(u_send_s_dev, u_send_e_dev, u_dev, n)
     implicit none
 
@@ -1622,6 +1722,72 @@ contains
     end select
 
   end subroutine field_set_face_from_field_cuda
+
+  subroutine field_add_const_x_face_cuda(self, f, c, at_end)
+    !! [[m_base_backend(module):field_add_const_x_face_base(subroutine)]]
+    implicit none
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c
+    logical, intent(in) :: at_end
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    type(dim3) :: blocks, threads
+    integer :: dims(3), i_plane
+
+    if (f%dir /= DIR_X) &
+      error stop 'field_add_const_x_face: only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_add_const_x_face: requires a valid data_loc.'
+
+    call resolve_field_t(f_d, f)
+    dims = self%mesh%get_dims(f%data_loc)
+
+    if (at_end) then
+      i_plane = dims(1)   ! global x = nx (outlet)
+    else
+      i_plane = 1         ! global x = 1  (inlet)
+    end if
+
+    ! Same launch shape as field_set_x_face - one thread per (i, b).
+    blocks = dim3((SZ - 1)/64 + 1, ((dims(2) - 1)/SZ + 1)*dims(3), 1)
+    threads = dim3(64, 1, 1)
+    call add_scalar_x_face<<<blocks, threads>>>( &      !&
+        f_d, c, i_plane, dims(1), dims(2), dims(3))
+
+  end subroutine field_add_const_x_face_cuda
+
+  subroutine field_set_x_inlet_plane_cuda(self, f, plane)
+    !! [[m_base_backend(module):field_set_x_inlet_plane_base(subroutine)]]
+    implicit none
+    class(cuda_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), dimension(:, :), intent(in) :: plane
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    real(dp), device, allocatable, dimension(:, :) :: plane_d
+    type(dim3) :: blocks, threads
+    integer :: dims(3)
+
+    if (f%dir /= DIR_X) &
+      error stop 'field_set_x_inlet_plane: only supported for DIR_X fields.'
+    if (f%data_loc == NULL_LOC) &
+      error stop 'field_set_x_inlet_plane: requires a valid data_loc.'
+
+    call resolve_field_t(f_d, f)
+    dims = self%mesh%get_dims(f%data_loc)
+    if (size(plane, 1) /= dims(2) .or. size(plane, 2) /= dims(3)) &
+      error stop 'field_set_x_inlet_plane: plane must be (ny, nz).'
+
+    plane_d = plane
+
+    ! Same launch shape as field_set_x_face - one thread per (i, b).
+    blocks = dim3((SZ - 1)/64 + 1, ((dims(2) - 1)/SZ + 1)*dims(3), 1)
+    threads = dim3(64, 1, 1)
+    call set_x_inlet_plane<<<blocks, threads>>>( &      !&
+        f_d, plane_d, dims(1), dims(2), dims(3))
+
+  end subroutine field_set_x_inlet_plane_cuda
 
   subroutine field_add_face_from_field_cuda(self, f, g, face, bc_start, bc_end)
     !! [[m_base_backend(module):field_add_face_from_field(subroutine)]]

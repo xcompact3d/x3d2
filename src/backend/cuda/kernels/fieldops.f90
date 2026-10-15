@@ -151,14 +151,17 @@ contains
     integer, value, intent(in) :: n
 
     integer :: i, j, b
+    real(dp) :: divu
 
     i = threadIdx%x
     b = blockIdx%x
 
     do j = 1, n
-      qcrit(i, j, b) = -0.5_dp*(dudx(i, j, b)*dudx(i, j, b) + &
-                                dvdy(i, j, b)*dvdy(i, j, b) + &
-                                dwdz(i, j, b)*dwdz(i, j, b)) - &
+      divu = dudx(i, j, b) + dvdy(i, j, b) + dwdz(i, j, b)
+      qcrit(i, j, b) = 0.5_dp*divu*divu - &
+                       0.5_dp*(dudx(i, j, b)*dudx(i, j, b) + &
+                               dvdy(i, j, b)*dvdy(i, j, b) + &
+                               dwdz(i, j, b)*dwdz(i, j, b)) - &
                        dudy(i, j, b)*dvdx(i, j, b) - &
                        dudz(i, j, b)*dwdx(i, j, b) - &
                        dvdz(i, j, b)*dwdy(i, j, b)
@@ -275,6 +278,88 @@ contains
     end if
     ierr = atomicadd(s, pencil_sum)
   end subroutine vector_norm_squared
+
+  attributes(global) subroutine labelled_sums(s, g, label, a, b, c, &
+                                              n_label, n, n_i_pad, n_j)
+    !! s(1:3, l) += sums of g*a, g*b and g*c over the points labelled l;
+    !! launch as vector_norm_squared. Each thread accumulates runs of equal
+    !! labels along its pencil and flushes a run when the label changes, so
+    !! the atomics scale with the label changes rather than the points.
+    implicit none
+
+    real(dp), device, intent(inout) :: s(3, n_label)
+    real(dp), device, intent(in), dimension(:, :, :) :: g, label, a, b, c
+    integer, value, intent(in) :: n_label, n, n_i_pad, n_j
+
+    real(dp) :: sum_a, sum_b, sum_c
+    integer :: i, j, l, l_run, pencil, block_i, block_j, ierr
+
+    i = threadIdx%x
+    block_i = blockIdx%x
+    block_j = blockIdx%y
+    pencil = block_i + (block_j - 1)*n_i_pad
+
+    if (i + (block_j - 1)*blockDim%x > n_j) return
+
+    l_run = 0
+    sum_a = 0._dp
+    sum_b = 0._dp
+    sum_c = 0._dp
+    do j = 1, n
+      l = nint(label(i, j, pencil))
+      if (l < 1 .or. l > n_label) l = 0
+      if (l /= l_run) then
+        if (l_run /= 0) then
+          ierr = atomicadd(s(1, l_run), sum_a)
+          ierr = atomicadd(s(2, l_run), sum_b)
+          ierr = atomicadd(s(3, l_run), sum_c)
+        end if
+        l_run = l
+        sum_a = 0._dp
+        sum_b = 0._dp
+        sum_c = 0._dp
+      end if
+      if (l /= 0) then
+        sum_a = sum_a + g(i, j, pencil)*a(i, j, pencil)
+        sum_b = sum_b + g(i, j, pencil)*b(i, j, pencil)
+        sum_c = sum_c + g(i, j, pencil)*c(i, j, pencil)
+      end if
+    end do
+    if (l_run /= 0) then
+      ierr = atomicadd(s(1, l_run), sum_a)
+      ierr = atomicadd(s(2, l_run), sum_b)
+      ierr = atomicadd(s(3, l_run), sum_c)
+    end if
+  end subroutine labelled_sums
+
+  attributes(global) subroutine labelled_axpy(coeffs, g, label, a, b, c, &
+                                              n_label, n, n_i_pad, n_j)
+    !! a, b, c += coeffs(1:3, l)*g at the points labelled l; launch as
+    !! vector_norm_squared.
+    implicit none
+
+    real(dp), device, intent(in) :: coeffs(3, n_label)
+    real(dp), device, intent(in), dimension(:, :, :) :: g, label
+    real(dp), device, intent(inout), dimension(:, :, :) :: a, b, c
+    integer, value, intent(in) :: n_label, n, n_i_pad, n_j
+
+    integer :: i, j, l, pencil, block_i, block_j
+
+    i = threadIdx%x
+    block_i = blockIdx%x
+    block_j = blockIdx%y
+    pencil = block_i + (block_j - 1)*n_i_pad
+
+    if (i + (block_j - 1)*blockDim%x > n_j) return
+
+    do j = 1, n
+      l = nint(label(i, j, pencil))
+      if (l < 1 .or. l > n_label) cycle
+      a(i, j, pencil) = a(i, j, pencil) + coeffs(1, l)*g(i, j, pencil)
+      b(i, j, pencil) = b(i, j, pencil) + coeffs(2, l)*g(i, j, pencil)
+      c(i, j, pencil) = c(i, j, pencil) + coeffs(3, l)*g(i, j, pencil)
+    end do
+  end subroutine labelled_axpy
 
   attributes(global) subroutine field_max_sum(max_f, sum_f, f, n, n_i_pad, n_j)
     implicit none
@@ -571,6 +656,70 @@ contains
       end select
     end if
   end subroutine field_set_x_face_from_field
+
+  attributes(global) subroutine add_scalar_x_face( &
+    f, c, i_plane, nx, ny, nz)
+  !! Adds a uniform constant `c` to a single x-normal plane (pencil index
+  !! i_plane) of a DIR_X VERT field, in place.
+  !!
+  !! Launch convention (matches field_set_x_face exactly):
+  !!   threads = dim3(64, 1, 1)
+  !!   blocks  = dim3((SZ-1)/64 + 1, n_y_blocks*nz, 1)
+  !! Threads beyond the real pencil width (SZ in interior y-blocks,
+  !! n_mod in the last y-block) are masked out by the i_max guard.
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), value, intent(in) :: c
+    integer, value, intent(in) :: i_plane, nx, ny, nz
+
+    integer :: i, b, n_mod, n_y_blocks, y_block, i_max
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! 1..SZ (or n_mod)
+    b = blockIdx%y                                 ! 1..n_y_blocks*nz
+
+    n_mod = mod(ny - 1, SZ) + 1
+    n_y_blocks = (ny - 1)/SZ + 1
+    y_block = (b - 1)/nz + 1
+
+    if (y_block == n_y_blocks) then
+      i_max = n_mod    ! last y-block: only i in [1, n_mod] are real
+    else
+      i_max = SZ       ! interior y-blocks: all i in [1, SZ] are real
+    end if
+
+    if (i <= i_max) then
+      f(i, i_plane, b) = f(i, i_plane, b) + c
+    end if
+  end subroutine add_scalar_x_face
+
+  attributes(global) subroutine set_x_inlet_plane(f, plane, nx, ny, nz)
+  !! Copies plane(y, z) into the x = 1 plane (pencil index 1) of a DIR_X
+  !! VERT field, where f(i, 1, b) holds y = (y_block - 1)*SZ + i and
+  !! z = b - (y_block - 1)*nz. Launch as add_scalar_x_face.
+    implicit none
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:, :) :: plane
+    integer, value, intent(in) :: nx, ny, nz
+
+    integer :: i, b, n_mod, n_y_blocks, y_block, i_max
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! 1..SZ (or n_mod)
+    b = blockIdx%y                                 ! 1..n_y_blocks*nz
+
+    n_mod = mod(ny - 1, SZ) + 1
+    n_y_blocks = (ny - 1)/SZ + 1
+    y_block = (b - 1)/nz + 1
+
+    if (y_block == n_y_blocks) then
+      i_max = n_mod    ! last y-block: only i in [1, n_mod] are real
+    else
+      i_max = SZ       ! interior y-blocks: all i in [1, SZ] are real
+    end if
+
+    if (i <= i_max) then
+      f(i, 1, b) = plane((y_block - 1)*SZ + i, b - (y_block - 1)*nz)
+    end if
+  end subroutine set_x_inlet_plane
 
   attributes(global) subroutine field_add_x_face_from_field( &
     f, g, set_start, set_end, nx, ny, nz)
