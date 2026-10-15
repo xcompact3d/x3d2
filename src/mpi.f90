@@ -32,7 +32,8 @@ module m_mpi
             MPI_COMPLEX, MPI_DOUBLE_COMPLEX
   public :: MPI_STATUS_SIZE, MPI_STATUS_IGNORE, MPI_STATUSES_IGNORE
   public :: mpi_in_place_t, MPI_IN_PLACE
-  public :: MPI_Init, MPI_Finalize, MPI_Initialized, MPI_Abort
+  public :: MPI_Init, MPI_Finalize, MPI_Initialized, MPI_Finalized, MPI_Abort
+  public :: MPI_MAX_ERROR_STRING, MPI_Error_string
   public :: MPI_Comm_rank, MPI_Comm_size, MPI_Barrier, MPI_Wtime
   public :: MPI_Bcast, MPI_Allreduce, MPI_Reduce
   public :: MPI_Isend, MPI_Irecv, MPI_Waitall, MPI_Sendrecv, MPI_Alltoall
@@ -43,6 +44,7 @@ module m_mpi
   integer, parameter :: MPI_COMM_SELF = 2
 
   integer, parameter :: MPI_SUCCESS = 0
+  integer, parameter :: MPI_MAX_ERROR_STRING = 64
 
   integer, parameter :: MPI_SUM = 1
   integer, parameter :: MPI_MAX = 2
@@ -107,6 +109,26 @@ contains
     flag = .true.
     ierror = MPI_SUCCESS
   end subroutine MPI_Initialized
+
+  subroutine MPI_Finalized(flag, ierror)
+    !! Never finalised, to match MPI_Initialized always reporting .true.
+    logical, intent(out) :: flag
+    integer, intent(out) :: ierror
+
+    flag = .false.
+    ierror = MPI_SUCCESS
+  end subroutine MPI_Finalized
+
+  subroutine MPI_Error_string(errorcode, string, resultlen, ierror)
+    !! Nothing here returns an error, so any code is a stranger.
+    integer, intent(in) :: errorcode
+    character(len=*), intent(out) :: string
+    integer, intent(out) :: resultlen, ierror
+
+    string = 'unknown error'
+    resultlen = len_trim(string)
+    ierror = MPI_SUCCESS
+  end subroutine MPI_Error_string
 
   subroutine MPI_Abort(comm, errorcode, ierror)
     integer, intent(in) :: comm, errorcode

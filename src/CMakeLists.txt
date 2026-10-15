@@ -4,6 +4,7 @@ set(SRC
   common.f90
   config.f90
   mpi.f90
+  logger.f90
   field.f90
   mesh.f90
   ordering.f90
@@ -49,6 +50,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   list(APPEND SRC
     backend/cuda/allocator.f90
     backend/cuda/common.f90
+    backend/cuda/errors.f90
     backend/cuda/exec_dist.f90
     backend/cuda/exec_thom.f90
     backend/cuda/kernels/distributed.f90
