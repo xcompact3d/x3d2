@@ -173,8 +173,10 @@ contains
     allocate (poisson_fft%c_x(poisson_fft%nx_spec, poisson_fft%ny_spec, &
                               poisson_fft%nz_spec))
 
-    if (poisson_fft%is_010_case .and. poisson_fft%p_col > 1) then
-      ! The 010 pairing of mode j with ny - j + 2 needs y whole, which the
+    if ((poisson_fft%is_010_case .or. poisson_fft%is_100_case) &
+        .and. poisson_fft%p_col > 1) then
+      ! Pairing a mode with its mirror in dim2 (x modes in the 100 case, y
+      ! modes in the 010 case) needs that dimension whole, which the
       ! y-pencil of sp provides. waves is redistributed once, here.
       allocate (poisson_fft%c_pair(poisson_fft%sp%ysz(1), &
                                    poisson_fft%sp%ysz(2), &
@@ -202,17 +204,6 @@ contains
         ! swap alone reaches the transposed x-pencil with no communication.
         allocate (poisson_fft%r_tr(poisson_fft%ny_loc, poisson_fft%nx_loc, &
                                    poisson_fft%nz_loc))
-      end if
-
-      if (poisson_fft%p_col > 1) then
-        allocate (poisson_fft%c_pair(poisson_fft%sp%ysz(1), &
-                                     poisson_fft%sp%ysz(2), &
-                                     poisson_fft%sp%ysz(3)))
-        allocate (poisson_fft%waves_pair(poisson_fft%sp%ysz(1), &
-                                         poisson_fft%sp%ysz(2), &
-                                         poisson_fft%sp%ysz(3)))
-        call transpose_z_to_y(poisson_fft%waves, poisson_fft%waves_pair, &
-                              poisson_fft%sp)
       end if
     else if (poisson_fft%is_110_case) then
       ! ph%xsz is exactly (nz, nx_loc, ny_loc) for the 110 fft plan, on one
