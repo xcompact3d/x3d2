@@ -7,7 +7,7 @@ module m_snapshot_manager
 !! Unlike checkpoints, which are always full-resolution for exact restarts,
 !! snapshots can be strided to reduce file size.
   use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Allreduce, &
-                   MPI_IN_PLACE, MPI_MIN, MPI_SUCCESS
+                   MPI_IN_PLACE, MPI_MIN, MPI_SUCCESS, MPI_Bcast, MPI_LOGICAL
   use m_common, only: dp, i8, MPI_X3D2_DP, DIR_C, VERT, get_argument
   use m_field, only: field_t
   use m_solver, only: solver_t
@@ -35,8 +35,11 @@ module m_snapshot_manager
     logical :: is_snapshot_file_open = .false.
     type(writer_session_t) :: snapshot_writer
     logical :: convert_to_sp = .false.              !! Flag for single precision snapshots
+    !! Steps of an existing file kept on restart; negative starts a new file
+    integer :: append_after_steps = -1
   contains
     procedure :: init
+    procedure :: handle_restart
     procedure :: handle_snapshot_step
     procedure :: finalise
     procedure, private :: write_snapshot
@@ -87,6 +90,34 @@ contains
       end if
     end if
   end subroutine configure_output
+
+  subroutine handle_restart(self, restart_time, dt, comm)
+    !! Prepare to continue the snapshot file of the run being restarted.
+    !! Steps up to the restart time are kept and later ones (written past
+    !! the checkpoint) are dropped, so the restarted run appends without
+    !! duplicating them, whatever snapshot frequency wrote the file.
+    use m_io_backend, only: count_steps_up_to
+    class(snapshot_manager_t), intent(inout) :: self
+    real(dp), intent(in) :: restart_time, dt
+    integer, intent(in) :: comm
+
+    character(len=256) :: filename
+    logical :: file_exists
+    integer :: myrank, ierr
+
+    if (self%config%snapshot_freq <= 0) return
+
+    call MPI_Comm_rank(comm, myrank, ierr)
+    write (filename, '(A,A)') trim(self%config%snapshot_prefix), '.bp'
+    if (myrank == 0) inquire (file=trim(filename), exist=file_exists)
+    call MPI_Bcast(file_exists, 1, MPI_LOGICAL, 0, comm, ierr)
+    if (.not. file_exists) return
+
+    ! Half a time step of slack absorbs rounding in the stored times
+    self%append_after_steps = count_steps_up_to( &
+                              filename, "time", restart_time + 0.5_dp*dt, comm &
+                              )
+  end subroutine handle_restart
 
   subroutine handle_snapshot_step(self, solver, timestep, comm)
     !! Handle snapshot writing at a given timestep
@@ -425,8 +456,9 @@ contains
   end subroutine finalise
 
   subroutine open_snapshot_file(self, filename, comm)
-    !! Open a persistent snapshot file
-    !! ADIOS2 handles both creating new files and appending to existing ones
+    !! Open a persistent snapshot file. A restart appends to the file of the
+    !! run it continues; otherwise a new file is created, replacing any old
+    !! one.
     class(snapshot_manager_t), intent(inout) :: self
     character(len=*), intent(in) :: filename
     integer, intent(in) :: comm
@@ -436,16 +468,25 @@ contains
 
     call MPI_Comm_rank(comm, myrank, ierr)
 
-    if (myrank == 0) then
-      inquire (file=trim(filename), exist=file_exists)
-      if (file_exists) then
-        print *, 'Appending to existing snapshot file: ', trim(filename)
-      else
-        print *, 'Creating new snapshot file: ', trim(filename)
+    if (self%append_after_steps >= 0) then
+      if (myrank == 0) then
+        print *, 'Appending to existing snapshot file: ', trim(filename), &
+          ' after step ', self%append_after_steps
       end if
+      call self%snapshot_writer%open( &
+        filename, comm, append_after_steps=self%append_after_steps &
+        )
+    else
+      if (myrank == 0) then
+        inquire (file=trim(filename), exist=file_exists)
+        if (file_exists) then
+          print *, 'Overwriting existing snapshot file: ', trim(filename)
+        else
+          print *, 'Creating new snapshot file: ', trim(filename)
+        end if
+      end if
+      call self%snapshot_writer%open(filename, comm)
     end if
-
-    call self%snapshot_writer%open(filename, comm)
 
     self%is_snapshot_file_open = .true.
   end subroutine open_snapshot_file

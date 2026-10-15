@@ -25,7 +25,7 @@ module m_io_backend
   implicit none
 
   private
-  public :: allocate_io_reader, allocate_io_writer
+  public :: allocate_io_reader, allocate_io_writer, count_steps_up_to
   public :: get_default_backend, IO_BACKEND_DUMMY, IO_BACKEND_ADIOS2
 
   logical, save :: write_warning_shown = .false.
@@ -200,11 +200,14 @@ contains
     self%initialised = .true.
   end subroutine writer_init_dummy
 
-  function writer_open_dummy(self, filename, mode, comm) result(file_handle)
+  function writer_open_dummy( &
+    self, filename, mode, comm, append_after_steps &
+    ) result(file_handle)
     class(io_dummy_writer_t), intent(inout) :: self
     character(len=*), intent(in) :: filename
     integer, intent(in) :: mode
     integer, intent(in) :: comm
+    integer, intent(in), optional :: append_after_steps
     class(io_file_t), allocatable :: file_handle
 
     ! Show warning for write operations (once)
@@ -222,6 +225,16 @@ contains
       file_handle%is_open = .false.
     end select
   end function writer_open_dummy
+
+  function count_steps_up_to(filename, variable_name, limit, comm) result(n)
+    !! No file can be read without ADIOS2, so there are no steps to keep
+    character(len=*), intent(in) :: filename, variable_name
+    real(dp), intent(in) :: limit
+    integer, intent(in) :: comm
+    integer :: n
+
+    n = 0
+  end function count_steps_up_to
 
   subroutine write_data_i8_dummy(self, variable_name, value, file_handle)
     class(io_dummy_writer_t), intent(inout) :: self
