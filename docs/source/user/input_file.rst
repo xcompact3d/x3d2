@@ -455,7 +455,7 @@ only read when ``flow_case_name = 'wind_turbine'``.
 
   **Default:** ``0``
 
-``iturboutput``: Frequency (in timesteps) at which turbine diagnostics are written. Set to ``0`` to disable.
+``iturboutput``: Frequency (in timesteps) at which turbine diagnostics are written, independently of ``n_output``. Set to ``0`` to disable.
   **Default:** ``1``
 
 ``adm_coords``: Path to the actuator-disc coordinates file (``.ad``) read when ``iturbine = 2``. See `Actuator disc file`_.
