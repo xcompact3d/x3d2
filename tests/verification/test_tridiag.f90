@@ -25,11 +25,24 @@ program test_tridiag
   ! The tolerances bound the relative L2 error. Single precision roundoff
   ! floors at n_glob~1024: ~eps/dx (~2e-5) for first derivatives/interpolation,
   ! ~eps/dx^2 (~3e-3) for second derivatives, and ~63x more for the
-  ! hyperviscous operator (nu0_nu=63).
+  ! hyperviscous operator (nu0_nu=63). Largest values measured, per tolerance:
+  !   double precision, OpenMP backend (nvfortran build; gfortran):
+  !     tol 1.2678e-11 (gfortran 1.2678e-11),
+  !     tol_2nd 1.9422e-11 (gfortran 1.9512e-11),
+  !     tol_hyper 8.2700e-10 (gfortran 8.7497e-10)
+  !   double precision, CUDA backend:
+  !     tol 1.2678e-11, tol_2nd 1.9422e-11, tol_hyper 8.2379e-10
+  !   single precision, OpenMP backend (nvfortran build; gfortran):
+  !     tol 3.8401e-05 (gfortran 3.9027e-05),
+  !     tol_2nd 4.5822e-03 (gfortran 4.7899e-03; 1.1822e-02 at 3 ranks,
+  !       n_glob = 1023),
+  !     tol_hyper 8.1507e-01 (gfortran 8.0145e-01)
+  !   single precision, CUDA backend:
+  !     tol 3.8401e-05, tol_2nd 4.5822e-03, tol_hyper 8.1737e-01
   ! Each tolerance is the smallest {1,2,5}x10^k value at least 10x the
-  ! largest measured relative error.
+  ! largest of these, a margin of 10 or more in every case.
 #ifdef SINGLE_PREC
-  real(dp), parameter :: tol = 5e-4_dp, tol_2nd = 5e-2_dp, tol_hyper = 10.0_dp
+  real(dp), parameter :: tol = 5e-4_dp, tol_2nd = 2e-1_dp, tol_hyper = 10.0_dp
 #else
   real(dp), parameter :: tol = 2e-10_dp, tol_2nd = 2e-10_dp, &
                          tol_hyper = 1e-8_dp
