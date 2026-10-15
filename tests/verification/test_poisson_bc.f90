@@ -59,7 +59,7 @@ program test_poisson
   use m_mesh, only: mesh_t
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce, &
                    MPI_Bcast
-  use m_solver, only: allocate_tdsops
+  use m_tdsops_setup, only: allocate_tdsops
   use m_tdsops, only: dirps_t
   use m_vector_calculus, only: vector_calculus_t
   use m_test_utils, only: initialise_mpi, finalise_test

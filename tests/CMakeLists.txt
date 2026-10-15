@@ -200,6 +200,31 @@ function(define_verification_test testfile np backend)
   set_tests_properties(${test_name} PROPERTIES LABELS "verification;${backend}")
 endfunction()
 
+# Register a test for an executable that another target builds.
+function(define_command_test test_name np labels pass_regex exe)
+  # Nothing can launch more than one rank without MPI.
+  if(NOT WITH_MPI AND NOT ${np} EQUAL 1)
+    return()
+  endif()
+
+  set(extra_args "${ARGN}")
+  string(REPLACE ";" " " extra_args_str "${extra_args}")
+
+  if(NOT WITH_MPI)
+    add_test(NAME ${test_name} COMMAND sh -c "${exe} ${extra_args_str}")
+  elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+    add_test(NAME ${test_name}
+      COMMAND sh -c "srun -n ${np} ${exe} ${extra_args_str}")
+  else()
+    add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} ${exe} ${extra_args_str}")
+  endif()
+
+  set_tests_properties(${test_name} PROPERTIES LABELS "${labels}")
+  if(pass_regex)
+    set_tests_properties(${test_name} PROPERTIES PASS_REGULAR_EXPRESSION "${pass_regex}")
+  endif()
+endfunction()
+
 function(define_performance_test testfile np backend)
   # define_test() registers nothing for a multi-rank test in a serial build.
   if(NOT WITH_MPI AND NOT ${np} EQUAL 1)
@@ -370,6 +395,11 @@ function(define_backend_tests backend)
     set(X3D2_TEST_NAME_SUFFIX _ddp)
     define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc ddp)
     unset(X3D2_TEST_NAME_SUFFIX)
+    # The driver has its backend fixed at compile time, so register it for
+    # the CUDA build only here; the CPU OMP registration is further down.
+    if(${backend} STREQUAL cuda)
+      define_command_test(poisson_solver_standalone_000_cuda 2 "unit;standalone" "Solve time \\(min\\):" ../bin/x3d2_poisson_solver 128 64 32)
+    endif()
   endif()
 
   # I/O tests. A device backend needs an ADIOS2 that can stage device data.
@@ -429,6 +459,12 @@ endif()
 if(WITH_2DECOMPFFT AND _cpu_omp_backend)
   define_regression_case_test(tgv_smoke tgv_smoke.x3d tgv_smoke_golden_omp.csv 2 omp
     ${_smoke_cmp_args})
+endif()
+
+# The driver has its backend fixed at compile time, so register it as OMP only
+# for a CPU OMP build.
+if(WITH_2DECOMPFFT AND _cpu_omp_backend)
+  define_command_test(poisson_solver_standalone_000_omp 2 "unit;standalone" "Solve time \\(min\\):" ../bin/x3d2_poisson_solver 128 64 32)
 endif()
 
 # Heavier nightly regression case (opt-in; kept out of PR CI to stay fast).

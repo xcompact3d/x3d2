@@ -19,7 +19,7 @@ program test_transeq
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, pi, MPI_X3D2_DP, DIR_X, DIR_Y, DIR_Z, VERT
   use m_mesh, only: mesh_t
-  use m_solver, only: allocate_tdsops
+  use m_tdsops_setup, only: allocate_tdsops
   use m_tdsops, only: dirps_t
   use m_test_utils, only: initialise_mpi, finalise_test
 
