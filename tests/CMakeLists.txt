@@ -283,7 +283,10 @@ define_test(unit/test_output_scalars.f90 ${serial} omp)
 define_test(unit/test_les.f90 ${serial} omp)
 define_test(unit/test_abl_diagnostics.f90 ${serial} omp)
 define_test(unit/test_logger.f90 ${serial} omp)
-define_test(unit/test_logger.f90 ${np} omp)
+# A serial build sets np to 1, which would register the same test twice.
+if(NOT np EQUAL serial)
+  define_test(unit/test_logger.f90 ${np} omp)
+endif()
 # abort_run must stop every rank and report the error, whether one rank fails
 # or all of them do. ctest checks the output rather than the exit code: a hang
 # times out, and a run that returns from abort_run prints the FAIL line.
