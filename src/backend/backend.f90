@@ -2,7 +2,7 @@ module m_base_backend
   use iso_c_binding, only: c_ptr
 
   use m_allocator, only: allocator_t
-  use m_common, only: dp, DIR_C, get_rdr_from_dirs
+  use m_common, only: dp, DIR_C, VERT, get_rdr_from_dirs
   use m_field, only: field_t
   use m_logger, only: abort_run
   use m_mesh, only: mesh_t
@@ -59,6 +59,9 @@ module m_base_backend
     procedure :: vector_norm_squared => vector_norm_squared_base
     procedure :: field_labelled_sums => field_labelled_sums_base
     procedure :: field_labelled_axpy => field_labelled_axpy_base
+    procedure :: field_sample_points => field_sample_points_base
+    procedure :: field_add_gaussian_sources => &
+      field_add_gaussian_sources_base
     procedure :: field_max_mean => field_max_mean_base
     procedure :: slice_max_sum => slice_max_sum_base
     procedure :: field_plane_sums => field_plane_sums_base
@@ -457,6 +460,72 @@ contains
     call not_implemented('field_labelled_axpy')
 
   end subroutine field_labelled_axpy_base
+
+  subroutine field_sample_points_base(self, vals, points, a, b, c)
+    !! Computes this rank's part of the trilinear interpolation of the DIR_X
+    !! VERT fields a, b and c at `points(1:3, p)`: vals(1:3, p) sums the
+    !! interpolation weight times a, b and c over the corners of the cell
+    !! holding point p that this rank owns. Every grid point is owned by one
+    !! rank, so an MPI sum over ranks gives the full interpolation without a
+    !! halo exchange. Corners beyond a periodic boundary wrap around; corners
+    !! outside a non-periodic boundary are skipped. Needs a uniform grid.
+    !! No MPI reduction is done, so the caller can reduce once for all points.
+    implicit none
+
+    class(base_backend_t) :: self
+    real(dp), intent(out) :: vals(:, :)
+    real(dp), intent(in) :: points(:, :)
+    class(field_t), intent(in) :: a, b, c
+
+    vals = 0._dp
+    call not_implemented('field_sample_points')
+
+  end subroutine field_sample_points_base
+
+  subroutine field_add_gaussian_sources_base(self, a, b, c, points, coeffs, &
+                                             eps, r_cut)
+    !! Adds isotropic Gaussian sources to the DIR_X VERT fields a, b and c:
+    !! at every grid point x within distance r_cut of points(1:3, s),
+    !! a += coeffs(1, s)*exp(-|x - points(:, s)|^2/eps^2), and likewise b
+    !! and c with coeffs(2, s) and coeffs(3, s). Sources are not wrapped
+    !! across periodic boundaries. Needs a uniform grid.
+    implicit none
+
+    class(base_backend_t) :: self
+    class(field_t), intent(inout) :: a, b, c
+    real(dp), intent(in) :: points(:, :), coeffs(:, :)
+    real(dp), intent(in) :: eps, r_cut
+
+    call not_implemented('field_add_gaussian_sources')
+
+  end subroutine field_add_gaussian_sources_base
+
+  subroutine source_index_boxes(mesh, points, r_cut, lo, hi)
+    !! Local VERT index box [lo, hi] of the grid points of this rank within
+    !! r_cut of each point, on a uniform grid; lo > hi in some direction when
+    !! the box misses this rank.
+    implicit none
+
+    type(mesh_t), intent(in) :: mesh
+    real(dp), intent(in) :: points(:, :), r_cut
+    integer, intent(out) :: lo(:, :), hi(:, :)
+
+    integer :: dims(3), dir, s
+
+    dims = mesh%get_dims(VERT)
+    do s = 1, size(points, 2)
+      do dir = 1, 3
+        ! Global zero-based indices, shifted to local one-based ones
+        lo(dir, s) = ceiling((points(dir, s) - r_cut)/mesh%geo%d(dir)) &
+                     - mesh%par%n_offset(dir) + 1
+        hi(dir, s) = floor((points(dir, s) + r_cut)/mesh%geo%d(dir)) &
+                     - mesh%par%n_offset(dir) + 1
+        lo(dir, s) = max(lo(dir, s), 1)
+        hi(dir, s) = min(hi(dir, s), dims(dir))
+      end do
+    end do
+
+  end subroutine source_index_boxes
 
   subroutine field_max_mean_base(self, max_val, mean_val, f, &
                                  enforced_data_loc)
