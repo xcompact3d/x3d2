@@ -6,7 +6,7 @@ program xcompact
   use m_base_case, only: base_case_t
   use m_common, only: dp, get_argument
   use m_config, only: domain_config_t, solver_config_t
-  use m_mesh
+  use m_mesh, only: mesh_t
   use m_case_abl, only: case_abl_t
   use m_case_channel, only: case_channel_t
   use m_case_cylinder, only: case_cylinder_t
