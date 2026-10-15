@@ -91,7 +91,6 @@ module m_adm
   !! -\frac{T}{\rho\,\Delta V}\,\gamma_i\,\mathbf{n}.
   !! \]
   !!
-  use iso_fortran_env, only: stderr => error_unit
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
   use m_allocator, only: allocator_t
@@ -99,6 +98,7 @@ module m_adm
   use m_common, only: dp, pi, MPI_X3D2_DP, DIR_X, DIR_C, VERT
   use m_field, only: field_t
   use m_io_session, only: reader_session_t, writer_session_t
+  use m_logger, only: log_info, abort_run, str
   use m_mesh, only: mesh_t
   use m_scalar_series, only: scalar_series_t
   use m_turbine_model, only: turbine_model_t
@@ -177,31 +177,34 @@ contains
     self%cell_vol = product(mesh%geo%d)
 
     if (self%rho_air <= 0._dp) then
-      error stop 'ADM: rho_air must be positive.'
+      call abort_run('ADM: rho_air must be positive.', collective=.true.)
     end if
     if (self%T_relax == 0._dp) then
-      error stop 'ADM: T_relax must be positive or negative to disable.'
+      call abort_run('ADM: T_relax must be positive or negative to disable.', &
+                     collective=.true.)
     end if
     if (any(mesh%geo%stretching /= 'uniform')) then
-      error stop 'ADM: stretched grids are not supported.'
+      call abort_run('ADM: stretched grids are not supported.', &
+                     collective=.true.)
     end if
 
     call read_ad_file(self%coords_file, disc_params)
     self%n_turb = size(disc_params, dim=1)
     allocate (self%disc(self%n_turb))
 
-    if (mesh%par%is_root()) then
-      print *, 'Actuator disc model enabled'
-      print *, 'Number of actuator discs:', self%n_turb
-    end if
+    call log_info('Actuator disc model enabled')
+    call log_info('Number of actuator discs: '//str(self%n_turb))
 
     do t = 1, self%n_turb
       yaw = disc_params(t, 4)*pi/180._dp
       tilt = disc_params(t, 5)*pi/180._dp
       D = disc_params(t, 6)
-      if (D <= 0._dp) error stop 'ADM: rotor diameter must be positive.'
+      if (D <= 0._dp) &
+        call abort_run('ADM: rotor diameter must be positive.', &
+                       collective=.true.)
       if (abs(1._dp - disc_params(t, 8)) <= epsilon(1._dp)) then
-        error stop 'ADM: induction coefficient alpha must not equal one.'
+        call abort_run('ADM: induction coefficient alpha must not equal &
+                       &one.', collective=.true.)
       end if
       rot_N(1) = cos(yaw)*cos(tilt)
       rot_N(2) = sin(tilt)
@@ -258,17 +261,16 @@ contains
                        MPI_X3D2_DP, MPI_SUM, MPI_COMM_WORLD, ierr)
     do t = 1, self%n_turb
       if (kernel_sums(1, t) <= tiny(1._dp)) then
-        error stop 'ADM: disc kernel does not overlap the computational mesh.'
+        call abort_run('ADM: disc '//str(t)//' kernel does not overlap the &
+                       &computational mesh.', collective=.true.)
       end if
       if (kernel_sums(1, t) - kernel_sums(2, t) &
           > overlap_tol*kernel_sums(1, t)) then
-        if (mesh%par%is_root()) then
-          write (stderr, '(A,I0,A,ES10.3,A)') ' ADM: disc ', t, &
-            ' loses a fraction ', &
-            1._dp - kernel_sums(2, t)/kernel_sums(1, t), &
-            ' of its kernel to neighbouring discs.'
-        end if
-        error stop 'ADM: disc kernels overlap; move the discs further apart.'
+        call abort_run('ADM: disc '//str(t)//' loses a fraction ' &
+                       //str(1._dp - kernel_sums(2, t)/kernel_sums(1, t), &
+                             '(es10.3)') &
+                       //' of its kernel to neighbouring discs; move the &
+                       &discs further apart.', collective=.true.)
       end if
     end do
 
@@ -406,10 +408,11 @@ contains
 
     if (.not. is_root) return
     do t = 1, self%n_turb
-      print '(A,I0,A,I0,3(A,ES12.5))', ' ADM disc ', t, ' iter ', iter, &
-        ': U_disc_filt = ', self%disc(t)%U_disc_filt, &
-        '  thrust = ', self%disc(t)%thrust, &
-        '  power = ', self%disc(t)%power
+      call log_info('ADM disc '//str(t)//' iter '//str(iter) &
+                    //': U_disc_filt = ' &
+                    //str(self%disc(t)%U_disc_filt, '(es12.5)') &
+                    //'  thrust = '//str(self%disc(t)%thrust, '(es12.5)') &
+                    //'  power = '//str(self%disc(t)%power, '(es12.5)'))
       if (allocated(self%output)) then
         values = [self%disc(t)%U_disc, self%disc(t)%U_disc_filt, &
                   self%disc(t)%power, self%disc(t)%thrust, &
@@ -478,7 +481,8 @@ contains
 
     call reader%read_data('adm_n_turb', checkpoint_n_turb)
     if (checkpoint_n_turb /= self%n_turb) then
-      error stop 'ADM: checkpoint turbine count does not match configuration.'
+      call abort_run('ADM: checkpoint turbine count does not match &
+                     &configuration.')
     end if
     call reader%read_data('adm_sample_count', self%sample_count)
     do t = 1, self%n_turb
@@ -560,15 +564,14 @@ contains
     character(len=512) :: line
 
     if (len_trim(filename) == 0) then
-      error stop 'ADM: no disc coordinates file specified (adm_coords).'
+      call abort_run('ADM: no disc coordinates file specified (adm_coords).')
     end if
 
     open (newunit=unit, file=trim(filename), status='old', action='read', &
           iostat=ios)
     if (ios /= 0) then
-      write (stderr, *) 'ADM: cannot open disc coordinates file: ', &
-        trim(filename)
-      error stop
+      call abort_run('ADM: cannot open disc coordinates file: ' &
+                     //trim(filename))
     end if
 
     ! Count data rows (skip the header line).
@@ -581,14 +584,14 @@ contains
       n_turb = n_turb + 1
     end do
 
-    if (n_turb == 0) error stop 'ADM: no discs found in coordinates file.'
+    if (n_turb == 0) call abort_run('ADM: no discs found in coordinates file.')
 
     allocate (disc_params(n_turb, 8))
     rewind (unit)
     read (unit, '(A)', iostat=ios) line  ! header again
     do t = 1, n_turb
       read (unit, *, iostat=ios) disc_params(t, :)
-      if (ios /= 0) error stop 'ADM: error reading disc coordinates row.'
+      if (ios /= 0) call abort_run('ADM: error reading disc coordinates row.')
     end do
     close (unit)
   end subroutine read_ad_file

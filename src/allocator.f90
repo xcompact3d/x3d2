@@ -1,8 +1,7 @@
 module m_allocator
-  use iso_fortran_env, only: stderr => error_unit
-
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC
   use m_field, only: field_t
+  use m_logger, only: abort_run
 
   implicit none
 
@@ -105,7 +104,7 @@ contains
     type is (field_t)
       newblock = field_t(self%ngrid, next, id=self%next_id)
     class default
-      error stop "Incorrect overloading for create_block"
+      call abort_run("Incorrect overloading for create_block")
     end select
     ptr => newblock
   end function create_block

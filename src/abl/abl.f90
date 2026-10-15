@@ -14,6 +14,7 @@ module m_abl
   use m_common, only: dp, pi, DIR_C, DIR_X, VERT
   use m_config, only: abl_config_t
   use m_field, only: field_t
+  use m_logger, only: log_info, abort_run, str
   use m_mesh, only: mesh_t
   use m_mpi, only: MPI_COMM_WORLD, MPI_INTEGER, MPI_Bcast
   use m_les, only: les_t
@@ -103,7 +104,7 @@ contains
       end if
       call MPI_Bcast(base_seed, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
     end if
-    if (self%mesh%par%is_root()) print *, 'ABL noise seed:', base_seed
+    call log_info('ABL noise seed: '//str(base_seed))
 
     ! Spread the base seed and rank over the processor's seed with a MINSTD
     ! generator. The integer arithmetic is done in int64 and every word lies
@@ -305,22 +306,24 @@ contains
     ! The wall stress is written at local y-plane 2 and sampled at a local
     ! plane, so the wall must sit on the first plane of every rank.
     if (self%mesh%par%nproc_dir(2) /= 1) &
-      error stop 'ABL wall model does not support a decomposed y direction.'
+      call abort_run('ABL wall model does not support a decomposed y &
+                     &direction.')
 
     dims = self%mesh%get_dims(VERT)
     if (dims(2) < 3) &
-      error stop 'ABL wall model requires at least 3 y vertices.'
+      call abort_run('ABL wall model requires at least 3 y vertices.')
 
     dy = abs(self%mesh%geo%vert_coords(2, 2) &
              - self%mesh%geo%vert_coords(1, 2))
     ! Vertex 1 is the wall, so a sampling height of n*dy is vertex n+1.
     sample_plane = nint(self%cfg%dsampling) + 1
     if (sample_plane < 2 .or. sample_plane > dims(2)) &
-      error stop 'ABL dsampling puts the wall-model sample outside the domain.'
+      call abort_run('ABL dsampling puts the wall-model sample outside the &
+                     &domain.')
     sampling_height = self%mesh%geo%vert_coords(sample_plane, 2) &
                       - self%mesh%geo%vert_coords(1, 2)
     if (sampling_height <= self%cfg%z0) &
-      error stop 'ABL wall-model sampling height must exceed z0.'
+      call abort_run('ABL wall-model sampling height must exceed z0.')
 
     call les%configure_abl_wall_boundary( &
       self%cfg%kappa, self%cfg%z0, sampling_height, sample_plane)

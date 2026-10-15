@@ -1,5 +1,6 @@
 module m_decomp
   !! Dummy implementation of the decomposition to be linked against when 2decomp&fft isn't available.
+  use m_logger, only: abort_run
 
   implicit none
 
@@ -16,7 +17,8 @@ contains
     class(grid_t), intent(inout) :: grid
     class(par_t), intent(inout) :: par
 
-    error stop "This build doesn't support 2decomp decomposition"
+    call abort_run("This build doesn't support 2decomp decomposition", &
+                   collective=.true.)
   end subroutine decomposition_2decomp
 
 end module

@@ -50,6 +50,7 @@ module m_io_session
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, &
                        io_mode_read, io_mode_write
   use m_io_backend, only: allocate_io_reader, allocate_io_writer
+  use m_logger, only: abort_run
 
   implicit none
 
@@ -158,7 +159,7 @@ contains
     character(len=*), intent(in) :: filename
     integer, intent(in) :: comm
 
-    if (self%is_open) error stop "IO session already open"
+    if (self%is_open) call abort_run("IO session already open")
 
     call allocate_io_reader(self%reader)
     call self%reader%init(comm, "session_reader")
@@ -172,7 +173,7 @@ contains
     character(len=*), intent(in) :: variable_name
     integer(i8), intent(out) :: value
 
-    if (.not. self%is_open) error stop "IO session not open"
+    if (.not. self%is_open) call abort_run("IO session not open")
     call self%reader%read_data(variable_name, value, self%file)
   end subroutine read_data_i8
 
@@ -181,7 +182,7 @@ contains
     character(len=*), intent(in) :: variable_name
     integer, intent(out) :: value
 
-    if (.not. self%is_open) error stop "IO session not open"
+    if (.not. self%is_open) call abort_run("IO session not open")
     call self%reader%read_data(variable_name, value, self%file)
   end subroutine read_data_integer
 
@@ -190,7 +191,7 @@ contains
     character(len=*), intent(in) :: variable_name
     real(dp), intent(out) :: value
 
-    if (.not. self%is_open) error stop "IO session not open"
+    if (.not. self%is_open) call abort_run("IO session not open")
     call self%reader%read_data(variable_name, value, self%file)
   end subroutine read_data_real
 
@@ -204,7 +205,7 @@ contains
     integer(i8), intent(in), optional :: count_dims(3)
     integer(i8), intent(in), optional :: shape_dims(3)
 
-    if (.not. self%is_open) error stop "IO session not open"
+    if (.not. self%is_open) call abort_run("IO session not open")
     call self%reader%read_data( &
       variable_name, array, self%file, &
       start_dims=start_dims, count_dims=count_dims, shape_dims=shape_dims &
@@ -217,7 +218,7 @@ contains
     character(len=*), intent(in) :: filename
     integer, intent(in) :: comm
 
-    if (self%is_open) error stop "IO session already open"
+    if (self%is_open) call abort_run("IO session already open")
 
     call allocate_io_writer(self%writer)
     call self%writer%init(comm, "session_writer")
@@ -235,7 +236,7 @@ contains
     character(len=*), intent(in) :: variable_name
     integer(i8), intent(in) :: value
 
-    if (.not. self%is_open) error stop "IO session not open"
+    if (.not. self%is_open) call abort_run("IO session not open")
     call self%writer%write_data(variable_name, value, self%file)
   end subroutine write_data_i8
 
@@ -244,7 +245,7 @@ contains
     character(len=*), intent(in) :: variable_name
     integer, intent(in) :: value
 
-    if (.not. self%is_open) error stop "IO session not open"
+    if (.not. self%is_open) call abort_run("IO session not open")
     call self%writer%write_data(variable_name, value, self%file)
   end subroutine write_data_integer
 
@@ -254,7 +255,7 @@ contains
     real(dp), intent(in) :: value
     logical, intent(in), optional :: use_sp
 
-    if (.not. self%is_open) error stop "IO session not open"
+    if (.not. self%is_open) call abort_run("IO session not open")
     call self%writer%write_data(variable_name, value, self%file, use_sp)
   end subroutine write_data_real
 
@@ -269,7 +270,7 @@ contains
     integer(i8), intent(in) :: count_dims(3)
     logical, intent(in), optional :: use_sp
 
-    if (.not. self%is_open) error stop "IO session not open"
+    if (.not. self%is_open) call abort_run("IO session not open")
     call self%writer%write_data( &
       variable_name, array, self%file, &
       shape_dims, start_dims, count_dims, use_sp &
@@ -281,7 +282,7 @@ contains
     character(len=*), intent(in) :: attribute_name
     character(len=*), intent(in) :: attribute_value
 
-    if (.not. self%is_open) error stop "IO session not open"
+    if (.not. self%is_open) call abort_run("IO session not open")
     call self%writer%write_attribute( &
       attribute_name, attribute_value, self%file &
       )
@@ -301,7 +302,7 @@ contains
     integer(i8), intent(in) :: count_dims(3)
     logical, intent(in), optional :: use_sp
 
-    if (.not. self%is_open) error stop "IO session not open"
+    if (.not. self%is_open) call abort_run("IO session not open")
     call self%writer%write_field_from_solver( &
       variable_name, field, self%file, backend, &
       shape_dims, start_dims, count_dims, use_sp &
@@ -322,7 +323,7 @@ contains
     !! Begin a new timestep for writing (used for time-series in single file)
     class(writer_session_t), intent(inout) :: self
 
-    if (.not. self%is_open) error stop "IO session not open"
+    if (.not. self%is_open) call abort_run("IO session not open")
     call self%file%begin_step()
   end subroutine writer_session_begin_step
 
@@ -330,7 +331,7 @@ contains
     !! End the current timestep for writing
     class(writer_session_t), intent(inout) :: self
 
-    if (.not. self%is_open) error stop "IO session not open"
+    if (.not. self%is_open) call abort_run("IO session not open")
     call self%file%end_step()
   end subroutine writer_session_end_step
 

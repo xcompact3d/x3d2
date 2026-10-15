@@ -7,6 +7,7 @@ program xcompact
   use m_base_case, only: base_case_t
   use m_common, only: pi, get_argument, VERT
   use m_config, only: domain_config_t, solver_config_t
+  use m_logger, only: log_info, log_warn, abort_run, str
   use m_mesh
   use m_case_abl, only: case_abl_t
   use m_case_channel, only: case_channel_t
@@ -19,6 +20,7 @@ program xcompact
   use m_cuda_allocator
   use m_cuda_backend
   use m_cuda_common, only: SZ
+  use m_cuda_errors, only: check_cuda
 #else
   use m_omp_backend
   use m_omp_common, only: SZ
@@ -52,15 +54,16 @@ program xcompact
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
 
-  if (nrank == 0) then
-    print *, 'Parallel run with', nproc, 'ranks'
-    print *, 'Data precision is', dp
-  end if
+  call log_info('Parallel run with '//str(nproc)//' ranks')
+  call log_info('Data precision is '//str(dp))
 
 #ifdef CUDA
   ierr = cudaGetDeviceCount(ndevs)
+  call check_cuda(ierr, 'cudaGetDeviceCount')
   ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robin
+  call check_cuda(ierr, 'cudaSetDevice')
   ierr = cudaGetDevice(devnum)
+  call check_cuda(ierr, 'cudaGetDevice')
   backend_name = "CUDA"
 #else
   backend_name = "OMP"
@@ -70,9 +73,9 @@ program xcompact
   call solver_cfg%read(nml_file=get_argument(1))
 
   if (product(domain_cfg%nproc_dir) /= nproc) then
-    if (nrank == 0) print *, 'nproc_dir specified in the input file does &
-                              &not match the total number of ranks, falling &
-                              &back to a 1D decomposition along Z-dir instead.'
+    call log_warn('nproc_dir specified in the input file does not match the &
+                  &total number of ranks, falling back to a 1D decomposition &
+                  &along Z-dir instead.')
     domain_cfg%nproc_dir = [1, 1, nproc]
   end if
 
@@ -90,26 +93,26 @@ program xcompact
 #ifdef CUDA
   cuda_allocator = cuda_allocator_t(dims, SZ)
   allocator => cuda_allocator
-  if (nrank == 0) print *, 'CUDA allocator instantiated'
+  call log_info('CUDA allocator instantiated')
 
   omp_allocator = allocator_t(dims, SZ)
   host_allocator => omp_allocator
 
   cuda_backend = cuda_backend_t(mesh, allocator)
   backend => cuda_backend
-  if (nrank == 0) print *, 'CUDA backend instantiated'
+  call log_info('CUDA backend instantiated')
 #else
   omp_allocator = allocator_t(dims, SZ)
   allocator => omp_allocator
   host_allocator => omp_allocator
-  if (nrank == 0) print *, 'OpenMP allocator instantiated'
+  call log_info('OpenMP allocator instantiated')
 
   omp_backend = omp_backend_t(mesh, allocator)
   backend => omp_backend
-  if (nrank == 0) print *, 'OpenMP backend instantiated'
+  call log_info('OpenMP backend instantiated')
 #endif
 
-  if (nrank == 0) print *, 'Flow case: ', domain_cfg%flow_case_name
+  call log_info('Flow case: '//trim(domain_cfg%flow_case_name))
 
   select case (trim(domain_cfg%flow_case_name))
   case ('abl')
@@ -131,9 +134,10 @@ program xcompact
     allocate (case_wind_turbine_t :: flow_case)
     flow_case = case_wind_turbine_t(backend, mesh, host_allocator)
   case default
-    error stop 'Undefined flow_case.'
+    call abort_run('Undefined flow_case: ' &
+                   //trim(domain_cfg%flow_case_name), collective=.true.)
   end select
-  if (nrank == 0) print *, 'solver instantiated'
+  call log_info('solver instantiated')
 
   call flow_case%run()
 

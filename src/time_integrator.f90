@@ -3,6 +3,7 @@ module m_time_integrator
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X
   use m_field, only: field_t, flist_t
+  use m_logger, only: log_info, abort_run
 
   implicit none
 
@@ -68,7 +69,7 @@ contains
     ! deallocate memory
     deallocate (self%olds)
 
-    print *, self%sname, ' time integrator deallocated'
+    call log_info(self%sname//' time integrator deallocated')
 
   end subroutine finalize
 
@@ -133,23 +134,29 @@ contains
 
     if (init%sname(1:2) == 'AB') then
       read (init%sname(3:3), *, iostat=stat) init%order
-      if (stat /= 0) error stop 'Error reading AB integration order'
-      if (init%order >= 5) error stop 'Integration order >4 is not supported'
+      if (stat /= 0) &
+        call abort_run('Error reading AB integration order', collective=.true.)
+      if (init%order >= 5) &
+        call abort_run('Integration order >4 is not supported', &
+                       collective=.true.)
       init%nstep = init%order
       init%nstage = 1
       init%nolds = init%nstep - 1
       init%step => adams_bashforth
     else if (init%sname(1:2) == 'RK') then
       read (init%sname(3:3), *, iostat=stat) init%order
-      if (stat /= 0) error stop 'Error reading RK integration order'
-      if (init%order >= 5) error stop 'Integration order >4 is not supported'
+      if (stat /= 0) &
+        call abort_run('Error reading RK integration order', collective=.true.)
+      if (init%order >= 5) &
+        call abort_run('Integration order >4 is not supported', &
+                       collective=.true.)
       init%nstep = 1
       init%nstage = init%order
       init%nolds = init%nstage
       init%step => runge_kutta
     else
-      print *, 'Integration method '//init%sname//' is not defined'
-      error stop
+      call abort_run('Integration method '//init%sname//' is not defined', &
+                     collective=.true.)
     end if
 
     init%nvars = nvars

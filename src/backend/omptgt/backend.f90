@@ -31,6 +31,7 @@ module m_omptgt_backend
 
   use m_omptgt_common, only: SZ
   use m_omptgt_allocator, only: omptgt_field_t
+  use m_logger, only: abort_run
 
   implicit none
 
@@ -108,7 +109,7 @@ contains
     class(field_t), intent(in) :: src
 
     if (src%dir /= dst%dir) then
-      error stop "Called vector copy with incompatible fields"
+      call abort_run("Called vector copy with incompatible fields")
     end if
 
     select type (dst)
@@ -118,11 +119,12 @@ contains
         call veccopy_offload_(dst%get_dev_ptr(), dst%get_shape(), &
                               src%get_dev_ptr(), src%get_shape())
       class default
-        error stop "Called omptgt vector copy with unsupported source vector"
+        call abort_run("Called omptgt vector copy with unsupported source &
+                       &vector")
       end select
     class default
-      error stop &
-        "Called omptgt vector copy with unsupported destination vector"
+      call abort_run( &
+        "Called omptgt vector copy with unsupported destination vector")
     end select
   end subroutine
 
@@ -137,7 +139,7 @@ contains
     integer :: i, j, k
 
     if (any(n_src < n_dst)) then
-      error stop "Source field is smaller than the destination"
+      call abort_run("Source field is smaller than the destination")
     end if
 
     call c_f_pointer(dst_ptr, dst, shape=n_dst)
@@ -166,7 +168,7 @@ contains
     class(field_t), intent(inout) :: y
 
     if (x%dir /= y%dir) then
-      error stop "Called vector add with incompatible fields"
+      call abort_run("Called vector add with incompatible fields")
     end if
 
     select type (x)
@@ -175,10 +177,11 @@ contains
       type is (omptgt_field_t)
         call vecadd_offload(self, a, x, b, y)
       class default
-        error stop "Called omptgt vector add with unsupported result vector"
+        call abort_run("Called omptgt vector add with unsupported result &
+                       &vector")
       end select
     class default
-      error stop "Called omptgt vector add with unsupported source vector"
+      call abort_run("Called omptgt vector add with unsupported source vector")
     end select
 
   end subroutine
@@ -242,13 +245,13 @@ contains
 
     if (a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
         c%data_loc == NULL_LOC) then
-      error stop 'You must set data_loc before computing a vector norm.'
+      call abort_run('You must set data_loc before computing a vector norm.')
     end if
     if (a%data_loc /= b%data_loc .or. a%data_loc /= c%data_loc) then
-      error stop 'Vector-norm fields must use the same data location.'
+      call abort_run('Vector-norm fields must use the same data location.')
     end if
     if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) then
-      error stop 'Vector-norm fields must use DIR_X layout.'
+      call abort_run('Vector-norm fields must use DIR_X layout.')
     end if
 
     dims = self%mesh%get_dims(a%data_loc)
@@ -263,13 +266,13 @@ contains
             local_sum, a%get_dev_ptr(), b%get_dev_ptr(), c%get_dev_ptr(), &
             a%get_shape(), dims)
         class default
-          error stop "Called omptgt vector norm with unsupported vector"
+          call abort_run("Called omptgt vector norm with unsupported vector")
         end select
       class default
-        error stop "Called omptgt vector norm with unsupported vector"
+        call abort_run("Called omptgt vector norm with unsupported vector")
       end select
     class default
-      error stop "Called omptgt vector norm with unsupported vector"
+      call abort_run("Called omptgt vector norm with unsupported vector")
     end select
 
     call MPI_Allreduce(local_sum, norm_squared, 1, MPI_X3D2_DP, MPI_SUM, &
@@ -334,7 +337,7 @@ contains
     type is (omptgt_field_t)
       call copy_data_to_f_omptgt_(f%get_dev_ptr(), f%get_shape(), data, dims)
     class default
-      error stop "Unsupported"
+      call abort_run("Unsupported")
     end select
 
   end subroutine copy_data_to_f_omptgt
@@ -380,7 +383,7 @@ contains
     type is (omptgt_field_t)
       call copy_f_to_data_omptgt_(data, f%get_dev_ptr(), f%get_shape(), dims)
     class default
-      error stop "Unsupported"
+      call abort_run("Unsupported")
     end select
 
   end subroutine copy_f_to_data_omptgt
@@ -434,10 +437,10 @@ contains
                                u%get_dev_ptr(), u%get_shape(), dims, &
                                dir_from, dir_to, cart_padded)
       class default
-        error stop "Called omptgt reorder with unsupported source field"
+        call abort_run("Called omptgt reorder with unsupported source field")
       end select
     class default
-      error stop "Unsupported"
+      call abort_run("Unsupported")
     end select
 
     ! reorder keeps the data_loc the same
