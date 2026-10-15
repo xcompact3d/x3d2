@@ -244,6 +244,28 @@ contains
     call self%postprocess(self%solver%current_iter, t)
     start_iter = self%solver%current_iter + 1
 
+    ! Write the initial conditions as step 0 of the snapshot file. Restarts
+    ! skip this: their starting state belongs to the previous run.
+    if (.not. self%io_mgr%is_restart() &
+        .and. self%io_mgr%snapshot_mgr%config%snapshot_freq > 0) then
+      ! No pressure solve has happened yet, so output a zero pressure field
+      if (self%solver%keep_pressure) then
+        if (.not. associated(self%solver%pressure_vert)) then
+          self%solver%pressure_vert => &
+            self%solver%backend%allocator%get_block(DIR_X, VERT)
+        end if
+        call self%solver%pressure_vert%fill(0._dp)
+      end if
+
+      if (output_vorticity .or. output_qcriterion) then
+        call compute_derived_fields(self%solver, &
+                                    output_vorticity, &
+                                    output_qcriterion)
+      end if
+
+      call self%io_mgr%write_initial_snapshot(self%solver, MPI_COMM_WORLD)
+    end if
+
     if (self%solver%mesh%par%is_root()) print *, 'start run'
 
     allocate (curr(self%solver%time_integrator%nvars))

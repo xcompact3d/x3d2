@@ -28,6 +28,7 @@ module m_io_manager
     procedure :: init => io_init
     procedure :: handle_restart => io_handle_restart
     procedure :: handle_io_step => io_handle_step
+    procedure :: write_initial_snapshot => io_write_initial_snapshot
     procedure :: update_stats => io_update_stats
     procedure :: register_checkpoint_state
     procedure :: unregister_checkpoint_state
@@ -106,6 +107,15 @@ contains
     call self%snapshot_mgr%handle_snapshot_step(solver, timestep, comm_to_use)
     call self%stats_mgr%write_stats(solver, timestep, comm_to_use)
   end subroutine io_handle_step
+
+  subroutine io_write_initial_snapshot(self, solver, comm)
+    !! Write the initial conditions as the first snapshot of a fresh run
+    class(io_manager_t), intent(inout) :: self
+    class(solver_t), intent(in) :: solver
+    integer, intent(in), optional :: comm
+
+    call self%snapshot_mgr%handle_snapshot_step(solver, 0, comm)
+  end subroutine io_write_initial_snapshot
 
   function io_is_restart(self) result(is_restart)
     class(io_manager_t), intent(in) :: self
