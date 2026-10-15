@@ -12,24 +12,27 @@ program test_transeq
   !!   dw   = 0
   !!   dphi = u*u - 1/2*phi*phi - nu*phi
   use iso_fortran_env, only: stderr => error_unit
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
   use m_allocator, only: allocator_t, field_t
   use m_backend_runtime, only: backend_runtime_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, pi, MPI_X3D2_DP, DIR_X, DIR_Y, DIR_Z, VERT
+  use m_common, only: dp, pi, DIR_X, DIR_Y, DIR_Z, VERT
   use m_mesh, only: mesh_t
   use m_tdsops_setup, only: allocate_tdsops
   use m_tdsops, only: dirps_t
-  use m_test_utils, only: initialise_mpi, finalise_test
+  use m_test_utils, only: initialise_mpi, finalise_test, relative_l2_error
 
   implicit none
 
   logical :: allpass = .true.
-  integer :: nrank, nproc, ierr
+  integer :: nrank, nproc
 
-  ! Roundoff floor of the second-derivative term is ~eps/dx^2, which at
-  ! 96 points per period is ~1e-4 in single precision.
+  ! The tolerance bounds the relative L2 error. Roundoff floor of the
+  ! second-derivative term is ~eps/dx^2, which at 96 points per period is
+  ! ~1e-4 in single precision. The dw residual is measured against the du
+  ! analytical field, since the dw reference is zero.
+  ! The tolerance is the smallest {1,2,5}x10^k value at least 10x the
+  ! largest measured relative error.
 #ifdef SINGLE_PREC
   real(dp), parameter :: tol = 5e-3_dp
 #else
@@ -96,7 +99,8 @@ program test_transeq
   call check('transeq_x dv', du_data, &
              u_data*u_data - 0.5_dp*v_data*v_data - nu*v_data)
   call backend%get_field_data(du_data, dw, DIR_X)
-  call check('transeq_x dw', du_data, 0._dp*u_data)
+  call check('transeq_x dw', du_data, 0._dp*u_data, &
+             -1.5_dp*u_data*v_data - nu*u_data)
 
   ! Passive scalar phi = cos(x), transported by u; v holds phi
   call backend%transeq_species(dv, u, v, nu, xdirps, .true.)
@@ -138,18 +142,25 @@ contains
     end do
   end subroutine fill_line
 
-  subroutine check(label, computed, expected)
+  subroutine check(label, computed, expected, ref)
+    !! Relative L2 error of computed against expected.  The reference norm
+    !! is that of expected unless ref is given, which is needed when expected
+    !! is zero.
     character(*), intent(in) :: label
     real(dp), intent(in) :: computed(:, :, :), expected(:, :, :)
+    real(dp), intent(in), optional :: ref(:, :, :)
 
     real(dp) :: norm
 
-    norm = sum((computed(:, 1:n, 1:n_groups) &
-                - expected(:, 1:n, 1:n_groups))**2)
-    norm = norm/real(n_glob, dp)/real(n_groups*size(computed, 1), dp)
-    call MPI_Allreduce(MPI_IN_PLACE, norm, 1, MPI_X3D2_DP, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
-    norm = sqrt(norm)
+    if (present(ref)) then
+      norm = relative_l2_error(computed(:, 1:n, 1:n_groups) &
+                               - expected(:, 1:n, 1:n_groups), &
+                               ref(:, 1:n, 1:n_groups))
+    else
+      norm = relative_l2_error(computed(:, 1:n, 1:n_groups) &
+                               - expected(:, 1:n, 1:n_groups), &
+                               expected(:, 1:n, 1:n_groups))
+    end if
 
     if (nrank == 0) then
       print *, 'error norm ', label, norm
