@@ -102,6 +102,7 @@ contains
     integer, intent(in) :: comm
 
     character(len=256) :: filename
+    real(dp) :: limit
     logical :: file_exists
     integer :: myrank, ierr
 
@@ -114,9 +115,8 @@ contains
     if (.not. file_exists) return
 
     ! Half a time step of slack absorbs rounding in the stored times
-    self%append_after_steps = count_steps_up_to( &
-                              filename, "time", restart_time + 0.5_dp*dt, comm &
-                              )
+    limit = restart_time + 0.5_dp*dt
+    self%append_after_steps = count_steps_up_to(filename, "time", limit, comm)
   end subroutine handle_restart
 
   subroutine handle_snapshot_step(self, solver, timestep, comm)
