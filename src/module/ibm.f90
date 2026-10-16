@@ -7,14 +7,14 @@ module m_ibm
 !! It only requires ep1, a 3D field, as input.
 !! This field should be one (zero) in the fluid (solid)
 !! domain.
-  use iso_fortran_env, only: stderr => error_unit
-  use m_mpi, only: MPI_COMM_WORLD, MPI_LOGICAL, MPI_Abort, MPI_Bcast
+  use m_mpi, only: MPI_COMM_WORLD, MPI_LOGICAL, MPI_Bcast
 
   use m_io_session, only: reader_session_t
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, i8, pi, DIR_X, DIR_C, VERT
   use m_field, only: field_t
+  use m_logger, only: log_info, abort_run, check_mpi
   use m_mesh, only: mesh_t
 
   implicit none
@@ -75,26 +75,15 @@ contains
     ibm_file = "ibm_"//case_suffix//".bp"
 
     ! Print which file is being read
-    if (mesh%par%is_root()) then
-      print *, 'IBM: reading ', trim(ibm_file)
-    end if
+    call log_info('IBM: reading '//trim(ibm_file))
 
     ! Stop if the file is missing
     if (mesh%par%is_root()) inquire (file=ibm_file, exist=file_exists)
     call MPI_Bcast(file_exists, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
-    if (ierr /= 0) then
-      if (mesh%par%is_root()) then
-        print *, 'ERROR: MPI_Bcast ', ierr
-      end if
-      call MPI_Abort(MPI_COMM_WORLD, 1, ierr)
-      return
-    end if
+    call check_mpi(ierr, 'MPI_Bcast of the IBM file check')
     if (.not. file_exists) then
-      if (mesh%par%is_root()) then
-        print *, 'ERROR: IBM file not found: ', trim(ibm_file), ierr
-      end if
-      call MPI_Abort(MPI_COMM_WORLD, 1, ierr)
-      return
+      call abort_run('IBM file not found: '//trim(ibm_file), &
+                     collective=.true.)
     end if
 
     ! Open a session to read the IBM configuration file

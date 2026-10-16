@@ -292,6 +292,23 @@ define_test(unit/test_statistics.f90 ${serial} omp)
 define_test(unit/test_output_scalars.f90 ${serial} omp)
 define_test(unit/test_les.f90 ${serial} omp)
 define_test(unit/test_abl_diagnostics.f90 ${serial} omp)
+define_test(unit/test_logger.f90 ${serial} omp)
+# A serial build sets np to 1, which would register the same test twice.
+if(NOT np EQUAL serial)
+  define_test(unit/test_logger.f90 ${np} omp)
+endif()
+# abort_run must stop every rank and report the error, whether one rank fails
+# or all of them do. ctest checks the output rather than the exit code: a hang
+# times out, and a run that returns from abort_run prints the FAIL line.
+foreach(mode one_rank collective)
+  set(X3D2_TEST_NAME_SUFFIX _${mode})
+  define_test(unit/test_logger_abort.f90 ${np} omp ${mode})
+  set_tests_properties(test_logger_abort_omp_${np}_${mode} PROPERTIES
+    PASS_REGULAR_EXPRESSION "ERROR: deliberate"
+    FAIL_REGULAR_EXPRESSION "must never be reached"
+    TIMEOUT 60)
+endforeach()
+unset(X3D2_TEST_NAME_SUFFIX)
 if(WITH_ADIOS2)
   define_test(unit/test_adios2_mixed_precision.f90 ${serial} omp)
   define_test(unit/test_adm_checkpoint.f90 ${serial} omp)

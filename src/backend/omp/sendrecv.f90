@@ -3,6 +3,7 @@ module m_omp_sendrecv
                    MPI_Waitall
 
   use m_common, only: dp, MPI_X3D2_DP
+  use m_logger, only: check_mpi
 
   implicit none
 
@@ -16,7 +17,7 @@ contains
     real(dp), dimension(:, :, :), intent(in) :: f_send_s, f_send_e
     integer, intent(in) :: n_data, nproc, prev, next
 
-    integer :: req(4), err(4), ierr, tag = 1234
+    integer :: req(4), err(4), ierr, i, tag = 1234
 
     if (nproc == 1) then
       f_recv_s = f_send_e
@@ -31,7 +32,12 @@ contains
       call MPI_Irecv(f_recv_s, n_data, MPI_X3D2_DP, &
                      prev, tag, MPI_COMM_WORLD, req(4), err(4))
 
+      do i = 1, 4
+        call check_mpi(err(i), 'MPI_Isend/MPI_Irecv in sendrecv_fields')
+      end do
+
       call MPI_Waitall(4, req, MPI_STATUSES_IGNORE, ierr)
+      call check_mpi(ierr, 'MPI_Waitall in sendrecv_fields')
     end if
 
   end subroutine sendrecv_fields

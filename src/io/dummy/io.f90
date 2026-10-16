@@ -15,12 +15,12 @@ module m_io_backend
 !!
 !! @note If you require file I/O, you must recompile the code with a functional
 !! backend
-  use iso_fortran_env, only: stderr => error_unit
   use m_io_base, only: io_reader_t, io_writer_t, io_file_t, io_mode_read, &
                        io_mode_write
   use m_common, only: dp, i8
   use m_field, only: field_t
   use m_base_backend, only: base_backend_t
+  use m_logger, only: log_warn, log_error, abort_run
 
   implicit none
 
@@ -89,8 +89,8 @@ contains
 
   subroutine report_read_error(variable_name)
     character(len=*), intent(in) :: variable_name
-    error stop "ERROR: Cannot read '"//trim(variable_name)// &
-      "' - recompile with -DWITH_ADIOS2=ON"
+    call abort_run("Cannot read '"//trim(variable_name)// &
+                   "' - recompile with -DWITH_ADIOS2=ON")
   end subroutine report_read_error
 
   subroutine file_close_dummy(self)
@@ -123,10 +123,9 @@ contains
     integer, intent(in) :: comm
     class(io_file_t), allocatable :: file_handle
 
-    write (stderr, '(A)') "ERROR: Cannot open file '"//trim(filename)// &
-      "' for reading - ADIOS2 not available"
-    write (stderr, '(A)') "File reading requires ADIOS2 support"
-    write (stderr, '(A)') "Please recompile with -DWITH_ADIOS2=ON"
+    call log_error("Cannot open file '"//trim(filename)// &
+                   "' for reading - ADIOS2 not available. File reading &
+                   &requires ADIOS2 support; recompile with -DWITH_ADIOS2=ON")
 
     allocate (io_dummy_file_t :: file_handle)
     select type (file_handle)
@@ -209,9 +208,9 @@ contains
 
     ! Show warning for write operations (once)
     if (.not. write_warning_shown) then
-      write (stderr, '(A)') "WARNING: Cannot save file '"//trim(filename)// &
-        "' - ADIOS2 not available"
-      write (stderr, '(A)') "Checkpoints and snapshots will not be written"
+      call log_warn("Cannot save file '"//trim(filename)// &
+                    "' - ADIOS2 not available. Checkpoints and snapshots &
+                    &will not be written")
       write_warning_shown = .true.
     end if
 

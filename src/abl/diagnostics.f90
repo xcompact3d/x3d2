@@ -10,6 +10,7 @@ module m_abl_diagnostics
   use m_common, only: dp, DIR_X, MPI_X3D2_DP, VERT
   use m_config, only: abl_config_t
   use m_field, only: field_t
+  use m_logger, only: abort_run
   use m_les, only: neutral_drag_coefficient
   use m_mesh, only: mesh_t
 
@@ -51,7 +52,8 @@ contains
 
     if (cfg%profile_start_iter < 0) return
     if (mesh%par%nproc_dir(2) /= 1) &
-      error stop 'ABL profile diagnostics require an undecomposed y direction.'
+      call abort_run('ABL profile diagnostics require an undecomposed y &
+                     &direction.')
     dims = mesh%get_global_dims(VERT)
     allocate (diagnostics%profile_sum(3, dims(2)), source=0._dp)
   end function init

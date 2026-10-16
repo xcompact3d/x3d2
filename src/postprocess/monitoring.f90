@@ -9,6 +9,7 @@ module m_monitoring
 
   use m_common, only: dp, DIR_X, DIR_Z, VERT
   use m_field, only: field_t
+  use m_logger, only: log_info, str
   use m_scalar_series, only: scalar_series_t
   use m_solver, only: solver_t
 
@@ -85,9 +86,10 @@ contains
 
     ! Print to stdout and write to file (root only)
     if (self%is_root) then
-      print *, 'kinetic energy:', kinetic_energy
-      print *, 'enstrophy:', enstrophy
-      print *, 'div u max mean:', div_u_max, div_u_mean
+      call log_info('kinetic energy: '//str(kinetic_energy))
+      call log_info('enstrophy: '//str(enstrophy))
+      call log_info('div u max mean: '//str(div_u_max)//' ' &
+                    //str(div_u_mean))
 
       call self%series%write_step(t, &
                                   [kinetic_energy, enstrophy, &
