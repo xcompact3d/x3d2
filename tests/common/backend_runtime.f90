@@ -53,6 +53,15 @@ module m_backend_runtime
   !! Whether the backend runs on a device (GPU) rather than the host CPU
   logical, parameter :: backend_is_device = backend_label /= 'omp'
 
+  type :: tdsops_slot_t
+    !! Holds one operator, so a test can keep an array of them.  Tests never
+    !! deallocate these: NVHPC (25.3) crashes in pgf90_dealloc_poly03 when a
+    !! class(tdsops_t) holding a cuda_tdsops_t is deallocated.  The type lives
+    !! here rather than in the test programs because CCE miscompiles a main
+    !! program that defines it: the mesh_t BC strings arrive as garbage.
+    class(tdsops_t), allocatable :: op
+  end type tdsops_slot_t
+
   type :: backend_runtime_t
     !! Test helper that creates the correct backend and allocator
     !! for the current build.  The pointer components (backend, allocator,
