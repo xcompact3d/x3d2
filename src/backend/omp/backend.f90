@@ -911,7 +911,7 @@ contains
     real(dp), intent(out) :: sums(:, :)
     class(field_t), intent(in) :: g, label, a, b, c
 
-    real(dp) :: local_sums(3, size(sums, 2))
+    real(dp) :: local_sums(3, size(sums, 2)), thread_sums(3, size(sums, 2))
     integer :: dims(3), n_y_blocks, y_stride, n_label
     integer :: i, j, k, k_i, k_j, l
 
@@ -922,8 +922,13 @@ contains
     y_stride = y_group_stride(self)
     n_label = size(sums, 2)
 
+    ! Each thread accumulates into its own copy, merged at the end, instead
+    ! of reduction(+:local_sums): flang's device pass rejects reductions on
+    ! dynamically-shaped arrays even outside target regions.
     local_sums = 0._dp
-    !$omp parallel do collapse(2) private(k, l) reduction(+:local_sums)
+    !$omp parallel private(thread_sums)
+    thread_sums = 0._dp
+    !$omp do collapse(2) private(k, l)
     do k_i = 1, dims(3)
       do k_j = 1, n_y_blocks
         ! y-block is the fast-varying component of the group index
@@ -932,17 +937,21 @@ contains
           do i = 1, min(SZ, dims(2) - (k_j - 1)*SZ)
             l = nint(label%data(i, j, k))
             if (l < 1 .or. l > n_label) cycle
-            local_sums(1, l) = local_sums(1, l) &
-                               + g%data(i, j, k)*a%data(i, j, k)
-            local_sums(2, l) = local_sums(2, l) &
-                               + g%data(i, j, k)*b%data(i, j, k)
-            local_sums(3, l) = local_sums(3, l) &
-                               + g%data(i, j, k)*c%data(i, j, k)
+            thread_sums(1, l) = thread_sums(1, l) &
+                                + g%data(i, j, k)*a%data(i, j, k)
+            thread_sums(2, l) = thread_sums(2, l) &
+                                + g%data(i, j, k)*b%data(i, j, k)
+            thread_sums(3, l) = thread_sums(3, l) &
+                                + g%data(i, j, k)*c%data(i, j, k)
           end do
         end do
       end do
     end do
-    !$omp end parallel do
+    !$omp end do
+    !$omp critical
+    local_sums = local_sums + thread_sums
+    !$omp end critical
+    !$omp end parallel
 
     sums = local_sums
   end subroutine field_labelled_sums_omp

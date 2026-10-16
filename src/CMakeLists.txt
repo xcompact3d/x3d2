@@ -70,6 +70,14 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   list(APPEND SRC
     backend/omptgt/common.f90
     backend/omptgt/allocator.f90
+    backend/omptgt/device_info.f90
+    backend/omptgt/exec_dist.f90
+    backend/omptgt/exec_thom.f90
+    backend/omptgt/kernels/distributed.f90
+    backend/omptgt/kernels/fieldops.f90
+    backend/omptgt/kernels/thomas.f90
+    backend/omptgt/sendrecv.f90
+    backend/omptgt/tdsops.f90
   )
   list(APPEND BACKENDSRC
     backend/omptgt/backend.f90)
@@ -145,7 +153,7 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
     # Flang assumes OpenMP 3.1, which rejects both `declare target` in a pure
     # procedure (4.5) and the `loop` construct (5.0) used by the sources.
-    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp-version=50")
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp-version=51")
     set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -march=native")
     set(CMAKE_Fortran_FLAGS_DEBUG "-g -Wall -Wno-ambiguous-structure-constructor -Werror")
   else()
@@ -201,16 +209,23 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   endif()
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   add_definitions("-DOMP_TGT")
+  # backend/omptgt/device_info.f90 opens the vendor runtime with dlopen
+  target_link_libraries(x3d2 PUBLIC ${CMAKE_DL_LIBS})
   if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
     set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
     add_definitions("-DOMP_TGT_NVIDIA")
+    # NVHPC rejects has_device_addr; the OpenMP 4.5 form of is_device_ptr on
+    # a dummy array says the same (see backend/omptgt/common.f90).
+    add_definitions("-DOMP_DEVICE_ADDR=is_device_ptr")
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
          ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
          ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp --offload-arch=${BACKEND_ARCH}")
     add_definitions("-DOMP_TGT_AMD") # Assume AMD GPU
+    add_definitions("-DOMP_DEVICE_ADDR=has_device_addr")
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
     add_definitions("-DOMP_TGT_AMD") # Assume AMD GPU
+    add_definitions("-DOMP_DEVICE_ADDR=has_device_addr")
   endif()
 endif()
 

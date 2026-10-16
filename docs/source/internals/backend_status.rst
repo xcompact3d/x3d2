@@ -22,27 +22,27 @@ backends override it.
    * - ``transeq_x``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``transeq_y``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``transeq_z``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``transeq_species``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``tds_solve``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``thom_solve``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``reorder``
      - ✅
      - ✅
@@ -50,11 +50,11 @@ backends override it.
    * - ``sum_yintox``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``sum_zintox``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``veccopy``
      - ✅
      - ✅
@@ -66,11 +66,11 @@ backends override it.
    * - ``vecmult``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``scalar_product``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``vector_norm_squared``
      - ✅
      - ✅
@@ -78,47 +78,63 @@ backends override it.
    * - ``field_max_mean``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``slice_max_sum``
      - ✅
      - ✅
-     - ❌
+     - ✅
+   * - ``field_plane_sums``
+     - ✅
+     - ✅
+     - ✅
    * - ``field_scale``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``field_shift``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``field_volume_integral``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``field_set_face``
      - ✅
      - ✅
-     - ❌
+     - ✅
+   * - ``field_set_y_plane``
+     - ✅
+     - ✅
+     - ✅
+   * - ``field_set_abl_wall_stress``
+     - ✅
+     - ✅
+     - ✅
    * - ``field_set_face_from_field``
      - ✅
      - ✅
-     - ❌
+     - ✅
+   * - ``field_add_face_from_field``
+     - ✅
+     - ✅
+     - ✅
    * - ``compute_vorticity``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``compute_qcriterion``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``compute_smagorinsky_nut``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``compute_sgs_stress``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``copy_data_to_f``
      - ✅
      - ✅
@@ -130,11 +146,11 @@ backends override it.
    * - ``alloc_tdsops``
      - ✅
      - ✅
-     - ❌
+     - ✅
    * - ``init_poisson_fft``
      - ✅
      - ✅
-     - ❌
+     - ❌ [#fft]_
    * - ``sync``
      - ✅
      - ✅
@@ -160,8 +176,17 @@ behaviour.
 ``base_backend_t`` and shared by all backends; they work wherever
 ``reorder``, ``copy_data_to_f`` and ``copy_f_to_data`` are implemented.
 
-.. [#sync] No-op: every target region in ``omptgt`` is synchronous.
-.. [#bw] Always reports ``available = .false.``: OpenMP has no portable
-   query for the device memory clock or bus width.
+.. [#sync] Runs an empty target region that maps a result back, which the
+   host must wait for: some runtimes (CCE) return from a target region
+   before its kernel completes, and OpenMP has no direct call to wait for
+   the device.
+.. [#bw] OpenMP has no query for the device memory clock or bus width, so
+   ``omptgt`` reads them from the vendor runtime (CUDA driver on NVIDIA, HIP
+   on AMD), opened at run time with ``dlopen``; it reports
+   ``available = .false.`` when that runtime is not found. See
+   ``src/backend/omptgt/device_info.f90``.
+.. [#fft] Not yet implemented: the CUDA backend builds its Poisson solver
+   on cuFFT/cuFFTMp, and ``omptgt`` has no FFT library behind it yet. Until
+   it does, ``omptgt`` cannot run a flow case.
 .. [#export] Not overridden. The default ``supports_device_field_export``
    returns ``.false.``, so ``export_field_to_device`` is never called.
