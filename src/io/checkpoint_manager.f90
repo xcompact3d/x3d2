@@ -15,7 +15,7 @@ module m_checkpoint_manager
   !!   then atomically renames it to the final filename to
   !! prevent corrupted checkpoints.
   !! - Optional cleanup of old checkpoint files to conserve disk space.
-  use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Abort
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank
   use m_common, only: dp, i8, DIR_X, get_argument
   use m_field, only: field_t
   use m_solver, only: solver_t
@@ -28,6 +28,7 @@ module m_checkpoint_manager
                               stride_data_to_buffer, get_output_dimensions, &
                               prepare_field_buffers, cleanup_field_buffers, &
                               write_single_field_to_buffer, get_field_ptr
+  use m_logger, only: log_info, log_warn, log_error, abort_run, str
 
   implicit none
 
@@ -80,14 +81,13 @@ contains
     class(checkpoint_manager_t), intent(inout) :: self
     integer, intent(in) :: comm
 
-    integer :: myrank, ierr
-
-    call MPI_Comm_rank(comm, myrank, ierr)
-
-    if (myrank == 0 .and. get_default_backend() /= IO_BACKEND_DUMMY) then
-      print *, 'Checkpoint frequency: ', self%config%checkpoint_freq
-      print *, 'Keep all checkpoints: ', self%config%keep_checkpoint
-      print *, 'Checkpoint prefix: ', trim(self%config%checkpoint_prefix)
+    if (get_default_backend() /= IO_BACKEND_DUMMY) then
+      call log_info('Checkpoint frequency: ' &
+                    //str(self%config%checkpoint_freq))
+      call log_info('Keep all checkpoints: ' &
+                    //str(self%config%keep_checkpoint))
+      call log_info('Checkpoint prefix: ' &
+                    //trim(self%config%checkpoint_prefix))
     end if
   end subroutine configure_output
 
@@ -111,19 +111,15 @@ contains
     real(dp) :: restart_time
 
     restart_file = trim(self%config%restart_file)
-    if (solver%mesh%par%is_root()) then
-      print *, 'Restarting from checkpoint: ', restart_file
-    end if
+    call log_info('Restarting from checkpoint: '//trim(restart_file))
 
     call self%restart_checkpoint(solver, restart_file, restart_timestep, &
                                  restart_time, comm, stats_mgr)
 
     solver%current_iter = restart_timestep
 
-    if (solver%mesh%par%is_root()) then
-      print *, 'Successfully restarted from checkpoint at iteration ', &
-        restart_timestep, ' with time ', restart_time
-    end if
+    call log_info('Successfully restarted from checkpoint at iteration ' &
+                  //str(restart_timestep)//' with time '//str(restart_time))
   end subroutine handle_restart
 
   subroutine handle_checkpoint_step( &
@@ -181,8 +177,8 @@ contains
       trim(self%config%checkpoint_prefix), '_temp.bp'
 
     call writer_session%open(temp_filename, comm)
-    if (writer_session%is_session_functional() .and. myrank == 0) then
-      print *, 'Writing checkpoint: ', trim(filename)
+    if (writer_session%is_session_functional()) then
+      call log_info('Writing checkpoint: '//trim(filename))
     end if
 
     simulation_time = timestep*solver%dt
@@ -310,7 +306,7 @@ contains
 
         inquire (file=trim(filename), exist=file_exists)
         if (.not. file_exists) then
-          print *, 'ERROR: Checkpoint file not created: ', trim(filename)
+          call log_error('Checkpoint file not created: '//trim(filename))
         end if
       else
         ! temp file doesn't exist - skip file operations silently
@@ -327,8 +323,8 @@ contains
           call execute_command_line('rm -rf '//trim(old_filename), &
                                     exitstat=ierr)
           if (ierr /= 0) then
-            print *, 'WARNING: failed to remove old checkpoint: ', &
-              trim(old_filename)
+            call log_warn('failed to remove old checkpoint: ' &
+                          //trim(old_filename))
           end if
         end if
       end if
@@ -380,11 +376,7 @@ contains
 
     inquire (file=filename, exist=file_exists)
     if (.not. file_exists) then
-      if (solver%mesh%par%is_root()) then
-        print *, 'ERROR: Checkpoint file not found: ', trim(filename)
-      end if
-      call MPI_Abort(comm, 1, ierr)
-      return
+      call abort_run('Checkpoint file not found: '//trim(filename))
     end if
 
     call reader_session%open(filename, comm)
@@ -445,10 +437,8 @@ contains
         solver%time_integrator%istep = ti_istep
         solver%time_integrator%nstep = ti_nstep
         if (solver%time_integrator%order /= ti_order) then
-          if (solver%mesh%par%is_root()) then
-            print *, 'WARNING: checkpoint AB order differs from current &
-                  & solver config; using checkpoint order'
-          end if
+          call log_warn('checkpoint AB order differs from current solver &
+                        &config; using checkpoint order')
           solver%time_integrator%order = ti_order
         end if
         if (ti_order > 1) then
@@ -551,8 +541,8 @@ contains
     ! before handing it to ADIOS2, via the same buffer path the strided
     ! snapshot writer uses.
     if (.not. present(host_fields)) then
-      error stop "write_fields(checkpoint): host_fields required &
-        &when GPU-aware I/O is not available"
+      call abort_run("write_fields(checkpoint): host_fields required when &
+                     &GPU-aware I/O is not available")
     end if
 
     no_stride = [1, 1, 1]

@@ -1,5 +1,6 @@
 module m_common
   use m_mpi, only: MPI_DOUBLE_PRECISION, MPI_REAL
+  use m_logger, only: abort_run
 
   implicit none
 
@@ -73,9 +74,9 @@ contains
     call get_command_argument(pos, temp, status=stat)
 
     if (stat > 0) then
-      error stop 'Argument retrieval failed!'
+      call abort_run('Argument retrieval failed!', collective=.true.)
     else if (stat == -1) then
-      error stop 'Argument is truncated!'
+      call abort_run('Argument is truncated!', collective=.true.)
     end if
 
     arg = trim(temp)

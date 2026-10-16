@@ -3,6 +3,7 @@ module m_poisson_fft
   use m_field, only: field_t
   use m_mesh, only: mesh_t, geo_t
   use m_tdsops, only: dirps_t
+  use m_logger, only: log_warn, abort_run
 
   implicit none
 
@@ -139,7 +140,8 @@ contains
     integer :: dims(3)
     self%mesh => mesh
     ! Decomposition is in y- and z-directions
-    if (mesh%par%nproc_dir(1) /= 1) print *, 'nproc_dir in x-dir must be 1'
+    if (mesh%par%nproc_dir(1) /= 1) &
+      call log_warn('nproc_dir in x-dir must be 1')
 
     dims = mesh%get_global_dims(CELL)
     self%nx_glob = dims(1); self%ny_glob = dims(2); self%nz_glob = dims(3)
@@ -157,7 +159,8 @@ contains
     select case (self%bc_code)
     case ('000', '010', '100', '110')
     case default
-      error stop 'Requested BCs are not supported in FFT-based Poisson solver!'
+      call abort_run('Requested BCs are not supported in FFT-based Poisson &
+                     &solver!')
     end select
 
     self%sp_st = n_sp_st
@@ -183,8 +186,8 @@ contains
     call self%waves_set(mesh%geo, xdirps, ydirps, zdirps)
 
     if (mesh%geo%stretched(1) .or. mesh%geo%stretched(3)) then
-      error stop 'FFT based Poisson solver does not support stretching in x-&
-                  & or z-directions!'
+      call abort_run('FFT based Poisson solver does not support stretching in &
+                     &x- or z-directions!')
     end if
 
     ! stretching requires some coefficients matrices, which only the 010
@@ -224,7 +227,8 @@ contains
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
-    error stop 'enforce_periodicity is not used by this Poisson BC case.'
+    call abort_run('enforce_periodicity is not used by this Poisson BC &
+                   &case.')
   end subroutine enforce_periodicity
 
   subroutine undo_periodicity(self, f_out, f_in)
@@ -235,7 +239,7 @@ contains
     class(field_t), intent(inout) :: f_out
     class(field_t), intent(in) :: f_in
 
-    error stop 'undo_periodicity is not used by this Poisson BC case.'
+    call abort_run('undo_periodicity is not used by this Poisson BC case.')
   end subroutine undo_periodicity
 
   subroutine stretching_matrix(self, geo, xdirps, ydirps, zdirps)

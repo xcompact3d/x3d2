@@ -3,7 +3,8 @@ module m_mpi
 !!
 !! When the build enables MPI (-DMPI, set by the WITH_MPI option, on by
 !! default) this module is a thin re-export of the `mpi` module, so `use m_mpi`
-!! is exactly `use mpi`.
+!! is exactly `use mpi`, give or take the routines an implementation leaves
+!! out of that module (see MPI_MODULE_LACKS_INTERFACES below).
 !!
 !! When MPI is disabled the module supplies serial stand-ins for the MPI
 !! entities x3d2 uses. A build without MPI is a single rank, so every
@@ -17,9 +18,38 @@ module m_mpi
 !! calls appear. The only guards left in the tree are around communication on
 !! device buffers, which cannot be typed generically here.
 #ifdef MPI
+#ifdef MPI_MODULE_LACKS_INTERFACES
+  ! Intel MPI's `mpi` module carries explicit interfaces for only part of the
+  ! standard: the routines taking a choice buffer have none, and neither does
+  ! MPI_Cart_coords. Those names are not entities of the module there, so they
+  ! cannot be named in a `use mpi, only:` list, cannot be re-exported from here
+  ! by use association, and the only-lists at the call sites fail to compile.
+  ! Declaring them external makes them entities of m_mpi instead, so the call
+  ! sites stay as they are; the calls then go through an implicit interface,
+  ! which is what the mpif.h bindings have always given them.
+  !
+  ! Only a build whose `mpi` module the top-level CMakeLists found incomplete
+  ! takes this branch. Everywhere else the plain re-export below keeps the
+  ! vendor's own interfaces, and with them their argument checking.
+  use mpi, only: MPI_COMM_WORLD, MPI_COMM_SELF, MPI_COMM_NULL, MPI_SUCCESS, &
+                 MPI_SUM, MPI_MAX, MPI_MIN, MPI_LAND, &
+                 MPI_INTEGER, MPI_LOGICAL, MPI_REAL, MPI_DOUBLE_PRECISION, &
+                 MPI_COMPLEX, MPI_DOUBLE_COMPLEX, &
+                 MPI_STATUS_SIZE, MPI_STATUS_IGNORE, MPI_STATUSES_IGNORE, &
+                 MPI_IN_PLACE, &
+                 MPI_Init, MPI_Finalize, MPI_Initialized, MPI_Finalized, &
+                 MPI_Abort, MPI_MAX_ERROR_STRING, MPI_Error_string, &
+                 MPI_Comm_rank, MPI_Comm_size, MPI_Barrier, MPI_Wtime
+
+  implicit none
+
+  external :: MPI_Allreduce, MPI_Alltoall, MPI_Bcast, MPI_Cart_coords, &
+    MPI_Irecv, MPI_Isend, MPI_Reduce, MPI_Sendrecv, MPI_Waitall
+#else
   use mpi
 
   implicit none
+#endif
 #else
   use iso_fortran_env, only: int64, real32, real64, stderr => error_unit
 
@@ -32,7 +62,8 @@ module m_mpi
             MPI_COMPLEX, MPI_DOUBLE_COMPLEX
   public :: MPI_STATUS_SIZE, MPI_STATUS_IGNORE, MPI_STATUSES_IGNORE
   public :: mpi_in_place_t, MPI_IN_PLACE
-  public :: MPI_Init, MPI_Finalize, MPI_Initialized, MPI_Abort
+  public :: MPI_Init, MPI_Finalize, MPI_Initialized, MPI_Finalized, MPI_Abort
+  public :: MPI_MAX_ERROR_STRING, MPI_Error_string
   public :: MPI_Comm_rank, MPI_Comm_size, MPI_Barrier, MPI_Wtime
   public :: MPI_Bcast, MPI_Allreduce, MPI_Reduce
   public :: MPI_Isend, MPI_Irecv, MPI_Waitall, MPI_Sendrecv, MPI_Alltoall
@@ -43,6 +74,7 @@ module m_mpi
   integer, parameter :: MPI_COMM_SELF = 2
 
   integer, parameter :: MPI_SUCCESS = 0
+  integer, parameter :: MPI_MAX_ERROR_STRING = 64
 
   integer, parameter :: MPI_SUM = 1
   integer, parameter :: MPI_MAX = 2
@@ -107,6 +139,26 @@ contains
     flag = .true.
     ierror = MPI_SUCCESS
   end subroutine MPI_Initialized
+
+  subroutine MPI_Finalized(flag, ierror)
+    !! Never finalised, to match MPI_Initialized always reporting .true.
+    logical, intent(out) :: flag
+    integer, intent(out) :: ierror
+
+    flag = .false.
+    ierror = MPI_SUCCESS
+  end subroutine MPI_Finalized
+
+  subroutine MPI_Error_string(errorcode, string, resultlen, ierror)
+    !! Nothing here returns an error, so any code is a stranger.
+    integer, intent(in) :: errorcode
+    character(len=*), intent(out) :: string
+    integer, intent(out) :: resultlen, ierror
+
+    string = 'unknown error'
+    resultlen = len_trim(string)
+    ierror = MPI_SUCCESS
+  end subroutine MPI_Error_string
 
   subroutine MPI_Abort(comm, errorcode, ierror)
     integer, intent(in) :: comm, errorcode

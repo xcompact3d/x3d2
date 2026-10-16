@@ -18,6 +18,7 @@ module m_omp_poisson_fft
                             process_spectral_110_fw, &
                             process_spectral_110_solve, &
                             process_spectral_110_bw
+  use m_logger, only: log_info, abort_run
 
   implicit none
 
@@ -148,7 +149,8 @@ contains
     case ('110')
       allocate (omp_poisson_110_t :: poisson_fft)
     case default
-      error stop 'Requested BCs are not supported in FFT-based Poisson solver!'
+      call abort_run('Requested BCs are not supported in FFT-based Poisson &
+                     &solver!')
     end select
 
     select type (poisson_fft)
@@ -167,12 +169,10 @@ contains
     logical, optional, intent(in) :: lowmem
     integer :: dims(3), grid_dims(2), fft_dims(3)
 
-    if (mesh%par%is_root()) then
-      print *, "Initialising 2decomp&fft"
-    end if
+    call log_info("Initialising 2decomp&fft")
 
     if (present(lowmem)) then
-      print *, 'lowmem_fft has no impact in the OpenMP backend.'
+      call log_info('lowmem_fft has no impact in the OpenMP backend.')
     end if
 
     ! Get global cell dims
@@ -198,8 +198,8 @@ contains
                         self%sp%zsz, self%sp%zst - 1)
 
     if (mesh%geo%stretched(2)) then
-      error stop 'OpenMP backends FFT based Poisson solver does not support&
-                  & stretching in y-direction yet!'
+      call abort_run('OpenMP backends FFT based Poisson solver does not &
+                     &support stretching in y-direction yet!')
     end if
 
     allocate (self%c_x(self%nx_spec, self%ny_spec, self%nz_spec))
@@ -244,8 +244,8 @@ contains
 
     if (self%p_row > 1) then
       ! The periodicity reorder of the 010 case needs the y line whole.
-      error stop 'The OpenMP 010 Poisson solver does not support a y &
-                  &decomposition, split along z instead.'
+      call abort_run('The OpenMP 010 Poisson solver does not support a y &
+                     &decomposition, split along z instead.')
     end if
 
     ! Pairing a mode with its mirror in dim2 (the y modes) needs that
@@ -299,8 +299,8 @@ contains
       call decomp_info_init(dims(1), dims(2), dims(3), self%dc)
       if (.not. all(self%dc%zsz == [self%ph%xsz(2), self%ph%xsz(3), &
                                     self%ph%xsz(1)])) then
-        error stop 'The 110 case cell-dims decomposition does not match &
-                    &the FFT physical decomposition.'
+        call abort_run('The 110 case cell-dims decomposition does not match &
+                       &the FFT physical decomposition.')
       end if
 
       allocate (self%r_xp(self%dc%xsz(1), self%dc%xsz(2), self%dc%xsz(3)))

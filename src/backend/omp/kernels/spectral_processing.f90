@@ -1,5 +1,6 @@
 module m_omp_spectral
   use m_common, only: dp
+  use m_logger, only: abort_run
   implicit none
 
   ! Threshold below which a spectral coefficient is treated as zero. Must
@@ -624,7 +625,8 @@ contains
     ! The paired x/y splits index the mirror mode globally, so dims 2 and 3
     ! must hold the full x and y mode ranges (single rank only for now).
     if (n2 /= nx .or. n3 /= ny .or. st2 /= 0 .or. st3 /= 0) &
-      error stop 'process_spectral_110: dims 2 and 3 must span full nx, ny'
+      call abort_run('process_spectral_110: dims 2 and 3 must span full nx, &
+                     &ny')
 
     call process_spectral_110_fw(div_u=div_u, n1=n1, n2=n2, n3=n3, &
                                  st1=st1, st2=st2, nx=nx, ny=ny, nz=nz, &

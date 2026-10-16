@@ -9,6 +9,7 @@ module m_postprocess
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, VERT, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Z2X
   use m_field, only: field_t
+  use m_logger, only: abort_run
   use m_solver, only: solver_t
 
   implicit none
@@ -172,7 +173,7 @@ contains
     class(solver_t), intent(inout) :: solver
 
     if (.not. associated(solver%pressure)) then
-      error stop 'compute_pressure_vert: pressure not yet computed'
+      call abort_run('compute_pressure_vert: pressure not yet computed')
     end if
 
     ! Allocate pressure_vert on first use

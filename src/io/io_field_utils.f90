@@ -16,6 +16,7 @@ module m_io_field_utils
   use m_solver, only: solver_t
   use m_io_base, only: io_file_t, io_writer_t
   use m_nvtx, only: nvtx_push, nvtx_pop
+  use m_logger, only: abort_run
 
   implicit none
 
@@ -432,8 +433,8 @@ contains
         )
       call nvtx_pop()
     else
-      print *, 'INTERNAL ERROR: No buffer found for field: ', trim(field_name)
-      error stop 'Missing field buffer'
+      call abort_run('Internal error: no buffer found for field: ' &
+                     //trim(field_name))
     end if
   end subroutine write_single_field_to_buffer
 
@@ -464,17 +465,12 @@ contains
     if (parse_species_snapshot_field(field_name, species_index)) then
       if (species_index > solver%nspecies .or. &
           .not. associated(solver%species)) then
-        if (solver%mesh%par%is_root()) then
-          print *, 'ERROR: Species snapshot field out of range: ', &
-            trim(field_name)
-        end if
-        error stop 1
+        call abort_run('Species snapshot field out of range: ' &
+                       //trim(field_name), collective=.true.)
       end if
       if (.not. associated(solver%species(species_index)%ptr)) then
-        if (solver%mesh%par%is_root()) then
-          print *, 'ERROR: Species field not available: ', trim(field_name)
-        end if
-        error stop 1
+        call abort_run('Species field not available: '//trim(field_name), &
+                       collective=.true.)
       end if
       ptr => solver%species(species_index)%ptr
       return
@@ -489,45 +485,32 @@ contains
       ptr => solver%w
     case ("p")
       if (.not. associated(solver%pressure_vert)) then
-        if (solver%mesh%par%is_root()) then
-          print *, 'ERROR: pressure_vert not computed. &
-                   &Call compute_pressure_vert before writing snapshots.'
-        end if
-        error stop 1
+        call abort_run('pressure_vert not computed. Call &
+                       &compute_pressure_vert before writing snapshots.', &
+                       collective=.true.)
       end if
       ptr => solver%pressure_vert
     case ("vort")
       if (.not. associated(solver%vort)) then
-        if (solver%mesh%par%is_root()) then
-          print *, 'ERROR: vorticity not computed. &
-                   &Enable output_vorticity and ensure snapshot_freq > 0.'
-        end if
-        error stop 1
+        call abort_run('vorticity not computed. Enable output_vorticity and &
+                       &ensure snapshot_freq > 0.', collective=.true.)
       end if
       ptr => solver%vort
     case ("qcrit")
       if (.not. associated(solver%qcrit)) then
-        if (solver%mesh%par%is_root()) then
-          print *, 'ERROR: Q-criterion not computed. &
-                   &Enable output_qcriterion and ensure snapshot_freq > 0.'
-        end if
-        error stop 1
+        call abort_run('Q-criterion not computed. Enable output_qcriterion &
+                       &and ensure snapshot_freq > 0.', collective=.true.)
       end if
       ptr => solver%qcrit
     case ("ibm")
       if (.not. solver%ibm_on .or. .not. associated(solver%ibm%ep1)) then
-        if (solver%mesh%par%is_root()) then
-          print *, 'ERROR: IBM mask not available. &
-                   &Enable ibm_on in the input file.'
-        end if
-        error stop 1
+        call abort_run('IBM mask not available. Enable ibm_on in the input &
+                       &file.', collective=.true.)
       end if
       ptr => solver%ibm%ep1
     case default
-      if (solver%mesh%par%is_root()) then
-        print *, 'ERROR: Unknown field name: ', trim(field_name)
-      end if
-      error stop 1
+      call abort_run('Unknown field name: '//trim(field_name), &
+                     collective=.true.)
     end select
   end function get_field_ptr
 

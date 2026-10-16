@@ -4,6 +4,7 @@ set(SRC
   common.f90
   config.f90
   mpi.f90
+  logger.f90
   field.f90
   mesh.f90
   ordering.f90
@@ -50,6 +51,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   list(APPEND SRC
     backend/cuda/allocator.f90
     backend/cuda/common.f90
+    backend/cuda/errors.f90
     backend/cuda/exec_dist.f90
     backend/cuda/exec_thom.f90
     backend/cuda/kernels/distributed.f90
@@ -158,6 +160,18 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
     set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -floop-optimize -march=native")
     set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
   endif()
+elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" OR
+       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
+  # ifx (IntelLLVM) and classic ifort (Intel) spell these differently from the
+  # GNU drivers: neither preprocesses .f90 unless asked, and the standard is
+  # selected by name rather than by -std=.  `nounused` stands in for GNU's
+  # -Wno-unused-dummy-argument, which the unused stubs in mpi.f90 need; ifx has
+  # no finer-grained switch, so it silences unused locals as well.  -check
+  # uninit is deliberately absent: ifx implements it with MemorySanitizer,
+  # which needs the whole program instrumented and fails to link otherwise.
+  set(CMAKE_Fortran_FLAGS "-fpp -stand f18")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -xHost -fp-model=fast")
+  set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -check bounds,pointers -warn all,nounused")
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
   set(CMAKE_Fortran_FLAGS "-cpp")

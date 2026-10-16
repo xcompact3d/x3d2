@@ -1,11 +1,10 @@
 module m_vector_calculus
-  use iso_fortran_env, only: stderr => error_unit
-
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y
   use m_field, only: field_t
+  use m_logger, only: abort_run
   use m_tdsops, only: tdsops_t
 
   implicit none
@@ -58,8 +57,8 @@ contains
     if (o_i_hat%dir /= DIR_X .or. o_j_hat%dir /= DIR_X &
         .or. o_k_hat%dir /= DIR_X .or. u%dir /= DIR_X .or. v%dir /= DIR_X &
         .or. w%dir /= DIR_X) then
-      error stop 'Error in curl input/output field %dirs: &
-                  &outputs and inputs must be in DIR_X layout.'
+      call abort_run('Error in curl input/output field %dirs: outputs and &
+                     &inputs must be in DIR_X layout.')
     end if
 
     ! omega_i_hat = dw/dy - dv/dz
@@ -165,8 +164,8 @@ contains
 
     if (div_u%dir /= DIR_Z .or. u%dir /= DIR_X .or. v%dir /= DIR_X &
         .or. w%dir /= DIR_X) then
-      error stop 'Error in divergence_v2c input/output field dirs: &
-                  &output must be in DIR_Z, inputs must be in DIR_X layout.'
+      call abort_run('Error in divergence_v2c input/output field dirs: output &
+                     &must be in DIR_Z, inputs must be in DIR_X layout.')
     end if
 
     du_x => self%backend%allocator%get_block(DIR_X)
@@ -272,8 +271,8 @@ contains
 
     if (dpdx%dir /= DIR_X .or. dpdy%dir /= DIR_X .or. dpdz%dir /= DIR_X &
         .or. p%dir /= DIR_Z) then
-      error stop 'Error in gradient_c2v input/output field dirs: &
-                  &outputs must be in DIR_X, input must be in DIR_Z layout.'
+      call abort_run('Error in gradient_c2v input/output field dirs: outputs &
+                     &must be in DIR_X, input must be in DIR_Z layout.')
     end if
 
     p_sxy_z => self%backend%allocator%get_block(DIR_Z)
@@ -348,8 +347,8 @@ contains
     class(field_t), pointer :: p_sy_z, p_sy_y, p_out_y, p_out_x
 
     if (p_out%dir /= DIR_X .or. p%dir /= DIR_Z) then
-      error stop 'Error in interpl_c2v input/output field dirs: &
-                  &output must be in DIR_X, input must be in DIR_Z layout.'
+      call abort_run('Error in interpl_c2v input/output field dirs: output &
+                     &must be in DIR_X, input must be in DIR_Z layout.')
     end if
 
     ! z-direction interpolation
@@ -394,8 +393,8 @@ contains
     class(field_t), pointer :: u_y, d2u_y, u_z, d2u_z
 
     if (u%dir /= DIR_X .or. lapl_u%dir /= DIR_X) then
-      error stop 'Error in laplacian input/output field %dirs: &
-                  &outputs and inputs must be in DIR_X layout.'
+      call abort_run('Error in laplacian input/output field %dirs: outputs &
+                     &and inputs must be in DIR_X layout.')
     end if
 
     ! d2u/dx2

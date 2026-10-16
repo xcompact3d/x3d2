@@ -18,6 +18,7 @@ module m_snapshot_manager
                               stride_data_to_buffer, get_output_dimensions, &
                               prepare_field_buffers, cleanup_field_buffers, &
                               write_single_field_to_buffer, get_field_ptr
+  use m_logger, only: log_info, abort_run, str
 
   implicit none
 
@@ -68,22 +69,21 @@ contains
     class(snapshot_manager_t), intent(inout) :: self
     integer, intent(in) :: comm
 
-    integer :: myrank, ierr
-
-    call MPI_Comm_rank(comm, myrank, ierr)
-
     self%output_stride = self%config%output_stride
     self%convert_to_sp = self%config%snapshot_sp
 
-    if (myrank == 0 .and. get_default_backend() /= IO_BACKEND_DUMMY) then
-      print *, 'Snapshot frequency: ', self%config%snapshot_freq
-      print *, 'Snapshot prefix: ', trim(self%config%snapshot_prefix)
-      print *, 'Output stride: ', self%output_stride
-      print *, 'Snapshot precision: ', merge('Single', 'Double', &
-                                             self%config%snapshot_sp)
+    if (get_default_backend() /= IO_BACKEND_DUMMY) then
+      call log_info('Snapshot frequency: '//str(self%config%snapshot_freq))
+      call log_info('Snapshot prefix: '//trim(self%config%snapshot_prefix))
+      call log_info('Output stride: '//str(self%output_stride(1))//' ' &
+                    //str(self%output_stride(2))//' ' &
+                    //str(self%output_stride(3)))
+      call log_info('Snapshot precision: ' &
+                    //merge('Single', 'Double', self%config%snapshot_sp))
       if (any(self%config%output_fields /= '')) then
-        print *, 'Additional output fields: ', &
-          trim(adjustl(join_output_fields(self%config%output_fields)))
+        call log_info('Additional output fields: ' &
+                      //trim(adjustl(join_output_fields( &
+                                     self%config%output_fields))))
       end if
     end if
   end subroutine configure_output
@@ -113,7 +113,7 @@ contains
     integer, intent(in) :: comm
 
     character(len=32), allocatable :: field_names(:)
-    integer :: myrank, ierr
+    integer :: ierr
     character(len=256) :: filename
     integer(i8), dimension(3) :: output_shape_dims
     integer, dimension(3) :: global_dims, output_dims
@@ -127,15 +127,10 @@ contains
     if (self%config%snapshot_freq <= 0) return
     if (mod(timestep, self%config%snapshot_freq) /= 0) return
 
-    call MPI_Comm_rank(comm, myrank, ierr)
-
     if (has_output_field(self%config, 'species')) then
       if (solver%nspecies <= 0) then
-        if (myrank == 0) then
-          print *, 'ERROR: species snapshot output requested, &
-                   &but no transported species are configured.'
-        end if
-        error stop 1
+        call abort_run('species snapshot output requested, but no transported &
+                       &species are configured.', collective=.true.)
       end if
     end if
 
@@ -153,9 +148,9 @@ contains
     end if
 
     simulation_time = timestep*solver%dt
-    if (self%snapshot_writer%is_session_functional() .and. myrank == 0) then
-      print *, 'Writing snapshot for time =', simulation_time, &
-        ' iteration =', timestep
+    if (self%snapshot_writer%is_session_functional()) then
+      call log_info('Writing snapshot for time = '//str(simulation_time) &
+                    //' iteration = '//str(timestep))
     end if
 
     ! Embed identical VTK XML metadata on every rank when the dataset opens.
@@ -168,7 +163,7 @@ contains
         MPI_IN_PLACE, origin, size(origin), MPI_X3D2_DP, MPI_MIN, comm, ierr &
         )
       if (ierr /= MPI_SUCCESS) &
-        error stop "Failed to determine global snapshot origin"
+        call abort_run("Failed to determine global snapshot origin")
       original_spacing = solver%mesh%geo%d
 
       if (snapshot_uses_stride) then
@@ -351,8 +346,8 @@ contains
 
     ! Fallback: host-staged path with striding (requires host_fields)
     if (.not. present(host_fields)) then
-      error stop "write_fields(snapshot): &
-          &host_fields required for strided output"
+      call abort_run("write_fields(snapshot): host_fields required for &
+                     &strided output")
     end if
     ! Prepare buffers with striding for snapshots
     call prepare_field_buffers( &
@@ -439,9 +434,9 @@ contains
     if (myrank == 0) then
       inquire (file=trim(filename), exist=file_exists)
       if (file_exists) then
-        print *, 'Appending to existing snapshot file: ', trim(filename)
+        call log_info('Appending to existing snapshot file: '//trim(filename))
       else
-        print *, 'Creating new snapshot file: ', trim(filename)
+        call log_info('Creating new snapshot file: '//trim(filename))
       end if
     end if
 

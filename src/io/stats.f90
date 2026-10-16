@@ -14,12 +14,12 @@ module m_stats
   !!
   !! Note: velocity fields must be at `VERT` data location when `update`
   !! is called (i.e. after `pressure_correction`).
-  use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank
   use m_common, only: dp, i8, DIR_C, DIR_X, VERT, get_argument
   use m_config, only: stats_config_t
   use m_field, only: field_t
   use m_solver, only: solver_t
   use m_io_session, only: writer_session_t, reader_session_t
+  use m_logger, only: log_info, str
 
   implicit none
 
@@ -75,7 +75,7 @@ contains
     class(solver_t), intent(in) :: solver
     integer, intent(in) :: comm
 
-    integer :: dims(3), myrank, ierr
+    integer :: dims(3)
 
     self%config = stats_config_t()
     call self%config%read(nml_file=get_argument(1))
@@ -107,12 +107,9 @@ contains
                 source=0.0_dp)
     end if
 
-    call MPI_Comm_rank(comm, myrank, ierr)
-    if (myrank == 0) then
-      print *, 'Statistics: initstat=', self%config%initstat, &
-        ' istatfreq=', self%config%istatfreq, &
-        ' istatout=', self%config%istatout
-    end if
+    call log_info('Statistics: initstat='//str(self%config%initstat) &
+                  //' istatfreq='//str(self%config%istatfreq) &
+                  //' istatout='//str(self%config%istatout))
   end subroutine init
 
   subroutine update(self, solver, iter)
@@ -198,7 +195,7 @@ contains
     type(writer_session_t) :: writer_session
     character(len=256) :: filename
     integer(i8), dimension(3) :: shape_dims, start_dims, count_dims
-    integer :: dims(3), myrank, ierr, is
+    integer :: dims(3), is
     real(dp), allocatable :: uprime(:, :, :)
     real(dp), allocatable :: vprime(:, :, :)
     real(dp), allocatable :: wprime(:, :, :)
@@ -211,8 +208,6 @@ contains
     if (.not. self%is_active) return
     if (self%config%istatout <= 0) return
     if (mod(timestep, self%config%istatout) /= 0) return
-
-    call MPI_Comm_rank(comm, myrank, ierr)
 
     write (filename, '(A,A,I0.6,A)') &
       trim(self%config%stats_prefix), '_', timestep, '.bp'
@@ -237,9 +232,9 @@ contains
     vw = self%vwmean - self%vmean*self%wmean
 
     call writer_session%open(filename, comm)
-    if (writer_session%is_session_functional() .and. myrank == 0) then
-      print *, 'Writing statistics: ', trim(filename), &
-        ' (samples=', self%sample_count, ')'
+    if (writer_session%is_session_functional()) then
+      call log_info('Writing statistics: '//trim(filename) &
+                    //' (samples='//str(self%sample_count)//')')
     end if
 
     call writer_session%write_data("sample_count", self%sample_count)
@@ -365,12 +360,10 @@ contains
     type(reader_session_t), intent(inout) :: reader_session
 
     integer(i8), dimension(3) :: start_dims, count_dims
-    integer :: dims(3), myrank, ierr, is
+    integer :: dims(3), is
     character(len=64) :: field_name
 
     if (.not. self%is_active) return
-
-    call MPI_Comm_rank(MPI_COMM_WORLD, myrank, ierr)
 
     dims = solver%mesh%get_dims(VERT)
     start_dims = int(solver%mesh%par%n_offset, i8)
@@ -430,9 +423,8 @@ contains
         )
     end do
 
-    if (myrank == 0) then
-      print *, 'Stats checkpoint restored: sample_count=', self%sample_count
-    end if
+    call log_info('Stats checkpoint restored: sample_count=' &
+                  //str(self%sample_count))
   end subroutine read_checkpoint
 
   subroutine finalise(self)

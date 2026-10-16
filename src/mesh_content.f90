@@ -1,6 +1,7 @@
 module m_mesh_content
 
   use m_common, only: dp, pi
+  use m_logger, only: abort_run
   implicit none
 
   type :: geo_t
@@ -179,7 +180,7 @@ contains
         L_inf = self%L(dir)/2
         beta = self%beta(dir)
         if (beta <= beta_tolerance) then
-          error stop 'Invalid beta in domain_settings'
+          call abort_run('Invalid beta in domain_settings', collective=.true.)
         end if
         alpha = abs((L_inf - sqrt((pi*beta)**2 + L_inf**2))/(2*beta*L_inf))
         self%alpha(dir) = alpha
@@ -190,6 +191,7 @@ contains
 
         do i = 1, vert_dims(dir)
           i_glob = i + n_offset(dir)
+          yeta_vt = 0._dp ! set below; abort_run stops an invalid type
           select case (trim(self%stretching(dir)))
           case ('centred')
             yeta_vt = (i_glob - 1)*s
@@ -198,7 +200,7 @@ contains
           case ('bottom')
             yeta_vt = (i_glob - 1)*s/2 - 0.5_dp
           case default
-            error stop 'Invalid stretching type'
+            call abort_run('Invalid stretching type', collective=.true.)
           end select
 
           ! vertex coordinates
@@ -214,6 +216,7 @@ contains
 
         do i = 1, cell_dims(dir)
           i_glob = i + n_offset(dir)
+          yeta_mp = 0._dp ! set below; abort_run stops an invalid type
           select case (trim(self%stretching(dir)))
           case ('centred')
             yeta_mp = (i_glob - 0.5_dp)*s
@@ -222,7 +225,7 @@ contains
           case ('bottom')
             yeta_mp = (i_glob - 0.5_dp)*s/2 - 0.5_dp
           case default
-            error stop 'Invalid stretching type'
+            call abort_run('Invalid stretching type', collective=.true.)
           end select
 
           ! midpoint coordinates

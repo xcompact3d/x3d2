@@ -1,12 +1,11 @@
 module m_cuda_poisson_fft
   use iso_c_binding, only: c_loc, c_ptr, c_f_pointer, c_int, c_float, &
                            c_double_complex, c_float_complex
-  use iso_fortran_env, only: stderr => error_unit
   use cudafor
   use cufftXt
   use cufft
   use m_mpi, only: MPI_COMM_WORLD, MPI_COMPLEX, MPI_DOUBLE_COMPLEX, &
-                   MPI_STATUS_IGNORE, MPI_SUCCESS, MPI_Abort, MPI_Sendrecv, &
+                   MPI_STATUS_IGNORE, MPI_Sendrecv, &
                    MPI_Alltoall
 
   use m_common, only: dp, CELL, is_sp, MPI_X3D2_DP
@@ -42,6 +41,8 @@ module m_cuda_poisson_fft
                              pack_spectral_plane, &
                              pack_110_xyz_to_yslab, unpack_110_yslab, &
                              pack_110_yslab, unpack_110_yslab_to_xyz
+  use m_logger, only: log_info, log_warn, abort_run, check_mpi, str
+  use m_cuda_errors, only: check_cuda, check_cufft
 
   implicit none
 
@@ -193,30 +194,21 @@ contains
 
     character(len=*), intent(in) :: context
 
-    integer :: ierr, ierr_abort
+    integer :: ierr
 
     ierr = cudaStreamSynchronize(default_stream)
-    if (ierr /= cudaSuccess) then
-      ! This failure is per rank, and the partners are about to block in
-      ! MPI waiting for a rank that is on its way out, so tear the job down
-      ! rather than leaving them there.
-      write (stderr, '(a,i0)') &
-        'CUDA synchronisation before the '//context//' failed: ', ierr
-      flush (stderr)
-      call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
-    end if
+    call check_cuda(ierr, 'CUDA synchronisation before the '//context)
 
   end subroutine sync_or_abort
 
   subroutine create_fft_plan(plan, use_cufftmp, nx, ny, nz, &
-                             plan_type, is_root, plan_name)
+                             plan_type, plan_name)
     !! Helper subroutine to create FFT plan with automatic cuFFTMp fallback
     implicit none
 
     integer, intent(inout) :: plan
     logical, intent(inout) :: use_cufftmp
     integer, intent(in) :: nx, ny, nz, plan_type
-    logical, intent(in) :: is_root
     character(*), intent(in) :: plan_name
 
     integer :: ierr
@@ -239,26 +231,21 @@ contains
       ! Try to attach MPI communicator for cuFFTMp
       ierr = cufftMpAttachComm(plan, CUFFT_COMM_MPI, MPI_COMM_WORLD)
       if (ierr /= 0) then
-        if (is_root) then
-          print *, 'cuFFTMp: MPI attach failed (error ', ierr, ')'
-        end if
+        call log_warn('cuFFTMp: MPI attach failed (error '//str(ierr)//')')
         cufftmp_failed = .true.
       else
         ! MPI attach succeeded, create the plan
         ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
         if (ierr /= 0) then
-          if (is_root) then
-            print *, 'cuFFTMp: Plan creation failed (error ', ierr, ')'
-          end if
+          call log_warn('cuFFTMp: Plan creation failed (error ' &
+                        //str(ierr)//')')
           cufftmp_failed = .true.
         end if
       end if
 
       ! if cuFFTMp failed at any stage, fall back to cuFFT
       if (cufftmp_failed) then
-        if (is_root) then
-          print *, 'Falling back to cuFFT'
-        end if
+        call log_warn('Falling back to cuFFT')
         use_cufftmp = .false.
         ierr = cufftDestroy(plan)
         ierr = cufftCreate(plan)
@@ -269,10 +256,7 @@ contains
     ! create plan with cuFFT
     if (.not. use_cufftmp) then
       ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
-      if (ierr /= 0) then
-        write (stderr, *), 'cuFFT Error Code: ', ierr
-        error stop trim(plan_name)//' 3D FFT plan generation failed'
-      end if
+      call check_cufft(ierr, trim(plan_name)//' 3D FFT plan generation')
     end if
 
   end subroutine create_fft_plan
@@ -298,7 +282,7 @@ contains
     case ('110')
       allocate (cuda_poisson_110_t :: poisson_fft)
     case default
-      error stop "Unsupported periodicity combination!!"
+      call abort_run("Unsupported periodicity combination!!")
     end select
 
     select type (poisson_fft)
@@ -323,7 +307,8 @@ contains
     integer :: fw_plan_type, bw_plan_type
 
     ! 1D decomposition along Z in real domain, and along Y in spectral space
-    if (mesh%par%nproc_dir(2) /= 1) print *, 'nproc_dir in y-dir must be 1'
+    if (mesh%par%nproc_dir(2) /= 1) &
+      call log_warn('nproc_dir in y-dir must be 1')
     call self%check_decomposition(mesh)
 
     ! Work out the spectral dimensions in the permuted state
@@ -372,8 +357,8 @@ contains
     ! above this one cannot move ahead of the plans. The dim2 mirror exists
     ! exactly on the multi-rank paths of the 100 and 110 cases.
     if (allocated(self%c_mirror_dev) .and. (.not. self%use_cufftmp)) then
-      error stop 'The 100 and 110 cases on multiple ranks need cuFFTMp, &
-                  &plain cuFFT cannot decompose the transform.'
+      call abort_run('The 100 and 110 cases on multiple ranks need cuFFTMp, &
+                     &plain cuFFT cannot decompose the transform.')
     end if
 
   end subroutine init_cuda
@@ -396,8 +381,8 @@ contains
 
     if (mesh%par%nproc > 1) then
       if (mesh%par%nproc_dir(1) /= 1 .or. mesh%par%nproc_dir(2) /= 1) then
-        error stop 'The 100 and 110 cases on multiple ranks need a 1D z &
-                    &decomposition, nproc_dir must be [1, 1, nproc].'
+        call abort_run('The 100 and 110 cases on multiple ranks need a 1D z &
+                       &decomposition, nproc_dir must be [1, 1, nproc].')
       end if
     end if
 
@@ -410,8 +395,8 @@ contains
     type(mesh_t), intent(in) :: mesh
 
     if (mesh%par%nproc > 1) then
-      error stop 'Multiple ranks are not yet supported for the 010 case in &
-                  &the CUDA backend!'
+      call abort_run('Multiple ranks are not yet supported for the 010 case &
+                     &in the CUDA backend!')
     end if
 
   end subroutine check_decomposition_010
@@ -429,8 +414,8 @@ contains
     dims_loc = mesh%get_dims(CELL)
     if (mesh%par%nproc > 1) then
       if (mod(dims_loc(1), mesh%par%nproc_dir(3)) /= 0) then
-        error stop 'The 100 case on multiple ranks needs the number of x &
-                    &cells to divide by the number of ranks.'
+        call abort_run('The 100 case on multiple ranks needs the number of x &
+                       &cells to divide by the number of ranks.')
       end if
     end if
 
@@ -450,8 +435,8 @@ contains
     if (mesh%par%nproc > 1) then
       if (mod(dims_loc(1), mesh%par%nproc_dir(3)) /= 0 .or. &
           mod(dims_loc(2), mesh%par%nproc_dir(3)) /= 0) then
-        error stop 'The 110 case on multiple ranks needs the number of x &
-                    &and y cells to divide by the number of ranks.'
+        call abort_run('The 110 case on multiple ranks needs the number of x &
+                       &and y cells to divide by the number of ranks.')
       end if
     end if
 
@@ -621,43 +606,35 @@ contains
     fft_n1_loc = dims_loc(dirs(1)); fft_n2_loc = dims_loc(dirs(2))
 
     call create_fft_plan(self%plan3D_fw, self%use_cufftmp, &
-                         fft_n1, fft_n2, fft_n3, fw_plan_type, &
-                         mesh%par%is_root(), 'Forward')
+                         fft_n1, fft_n2, fft_n3, fw_plan_type, 'Forward')
     fw_was_cufftmp = self%use_cufftmp
 
     ! Create backward FFT plan with automatic cuFFTMp detection/fallback
     call create_fft_plan(self%plan3D_bw, self%use_cufftmp, &
-                         fft_n1, fft_n2, fft_n3, bw_plan_type, &
-                         mesh%par%is_root(), 'Backward')
+                         fft_n1, fft_n2, fft_n3, bw_plan_type, 'Backward')
 
     ! If backward plan forced fallback, rebuild forward plan too
     if (fw_was_cufftmp .and. (.not. self%use_cufftmp)) then
       ierr = cufftDestroy(self%plan3D_fw)
       call create_fft_plan(self%plan3D_fw, self%use_cufftmp, &
-                           fft_n1, fft_n2, fft_n3, fw_plan_type, &
-                           mesh%par%is_root(), 'Forward')
+                           fft_n1, fft_n2, fft_n3, fw_plan_type, 'Forward')
     end if
 
     ! Allocate storage - cuFFTMp uses xtdesc, cuFFT uses c_dev
     if (self%use_cufftmp) then
       ierr = cufftXtMalloc(self%plan3D_fw, self%xtdesc, &
                            CUFFT_XT_FORMAT_INPLACE)
-      if (ierr /= 0) then
-        write (stderr, *), 'cuFFT Error Code: ', ierr
-        error stop 'cufftXtMalloc failed'
-      end if
+      call check_cufft(ierr, 'cufftXtMalloc')
     else
       ! For R2C: nx_spec is nx/2+1 (or ny/2+1 for 100 case)
       allocate (self%c_dev(self%nx_spec, self%ny_spec, self%nz_spec))
       allocate (self%r_dev(fft_n1_loc, fft_n2_loc, self%nz_loc))
     end if
 
-    if (mesh%par%is_root()) then
-      if (self%use_cufftmp) then
-        print *, 'Using cuFFTMp for FFT'
-      else
-        print *, 'Using cuFFT for FFT'
-      end if
+    if (self%use_cufftmp) then
+      call log_info('Using cuFFTMp for FFT')
+    else
+      call log_info('Using cuFFT for FFT')
     end if
 
   end subroutine create_plans
@@ -683,19 +660,14 @@ contains
     self%use_cufftmp = mesh%par%nproc > 1
 
     call create_fft_plan(self%plan3D_fw, self%use_cufftmp, &
-                         nz, nx, ny, fw_plan_type, &
-                         mesh%par%is_root(), 'Forward 110')
+                         nz, nx, ny, fw_plan_type, 'Forward 110')
     call create_fft_plan(self%plan3D_bw, self%use_cufftmp, &
-                         nz, nx, ny, bw_plan_type, &
-                         mesh%par%is_root(), 'Backward 110')
+                         nz, nx, ny, bw_plan_type, 'Backward 110')
 
     if (self%use_cufftmp) then
       ierr = cufftXtMalloc(self%plan3D_fw, self%xtdesc, &
                            CUFFT_XT_FORMAT_INPLACE)
-      if (ierr /= 0) then
-        write (stderr, *), 'cuFFT Error Code: ', ierr
-        error stop 'cufftXtMalloc failed'
-      end if
+      call check_cufft(ierr, 'cufftXtMalloc')
 
       ! All-to-all buffers between the physical Z-slab (nx, ny, nz_l) and
       ! the cuFFTMp Y-slab (nz, nx, ny_l), sized (nz_l, nx, ny_l, nproc).
@@ -706,18 +678,14 @@ contains
                                     ny/mesh%par%nproc_dir(3), &
                                     mesh%par%nproc_dir(3)))
 
-      if (mesh%par%is_root()) then
-        print *, 'Using cuFFTMp R2C (Z-transpose) for FFT (110 case)'
-      end if
+      call log_info('Using cuFFTMp R2C (Z-transpose) for FFT (110 case)')
     else
       ! Transposed real workspace (nz, nx, ny)
       allocate (self%r_dev_110(nz, nx, ny))
       ! Spectral complex workspace (nz/2+1, nx, ny)
       allocate (self%c_dev(self%nx_spec, self%ny_spec, self%nz_spec))
 
-      if (mesh%par%is_root()) then
-        print *, 'Using cuFFT R2C (Z-transpose) for FFT (110 case)'
-      end if
+      call log_info('Using cuFFT R2C (Z-transpose) for FFT (110 case)')
     end if
 
   end subroutine create_plans_110
@@ -798,10 +766,7 @@ contains
 #endif
     end if
 
-    if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Forward R2C FFT failed (110 Z-transpose case)'
-    end if
+    call check_cufft(ierr, 'Forward R2C FFT (110 Z-transpose case)')
 
   end subroutine fft_forward_110_cuda
 
@@ -834,10 +799,7 @@ contains
 #endif
     end if
 
-    if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Backward C2R FFT failed (110 Z-transpose case)'
-    end if
+    call check_cufft(ierr, 'Backward C2R FFT (110 Z-transpose case)')
 
     ! ensure untouched padded/halo entries are deterministic
     padded_dev = 0._dp
@@ -886,7 +848,7 @@ contains
     integer, intent(in) :: ny_l
     character(len=*), intent(in) :: slab
 
-    integer :: nx, nz_l, count, ierr_mpi, ierr_abort
+    integer :: nx, nz_l, count, ierr_mpi
 
     nx = self%nx_glob
     nz_l = self%nz_loc
@@ -902,15 +864,11 @@ contains
                       self%r_a2a_recv_dev, count, MPI_X3D2_DP, &
                       MPI_COMM_WORLD, ierr_mpi)
 #else
-    error stop 'The 110 slab redistribution needs more than one rank, but &
-                &this build was configured without MPI'
+    call abort_run('The 110 slab redistribution needs more than one rank, but &
+                   &this build was configured without MPI')
 #endif
-    if (ierr_mpi /= MPI_SUCCESS) then
-      write (stderr, '(a,i0)') &
-        'The 110 slab redistribution to the '//slab//'-slab failed: ', ierr_mpi
-      flush (stderr)
-      call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
-    end if
+    call check_mpi(ierr_mpi, 'The 110 slab redistribution to the ' &
+                   //slab//'-slab')
   end subroutine redistribution_alltoall
 
   subroutine redistribute_110_to_yslab(self, zslab, yslab)
@@ -1036,10 +994,7 @@ contains
 #endif
     end if
 
-    if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Forward 3D FFT execution failed (100 case)'
-    end if
+    call check_cufft(ierr, 'Forward 3D FFT execution (100 case)')
 
   end subroutine fft_forward_100_cuda
 
@@ -1073,10 +1028,7 @@ contains
 #endif
     end if
 
-    if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Backward 3D FFT execution failed (100 case)'
-    end if
+    call check_cufft(ierr, 'Backward 3D FFT execution (100 case)')
 
     if (self%use_cufftmp) then
       call c_f_pointer(self%xtdesc%descriptor, descriptor)
@@ -1168,10 +1120,7 @@ contains
 #endif
     end if
 
-    if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Forward 3D FFT execution failed'
-    end if
+    call check_cufft(ierr, 'Forward 3D FFT execution')
 
   end subroutine fft_forward_cuda
 
@@ -1207,10 +1156,7 @@ contains
 #endif
     end if
 
-    if (ierr /= 0) then
-      write (stderr, *), 'cuFFT Error Code: ', ierr
-      error stop 'Backward 3D FFT execution failed'
-    end if
+    call check_cufft(ierr, 'Backward 3D FFT execution')
 
     if (self%use_cufftmp) then
       ! cuFFTMp path: cast xtdesc as (nx+2, ny, nz) real buffer
@@ -1378,7 +1324,6 @@ contains
 
     type(dim3) :: blocks, threads
     integer :: tsize, n_slab, n_plane, mpi_cplx, nrank, ierr_mpi
-    integer :: ierr_abort
     integer :: tag_slab = 2345, tag_plane = 2346
 
     ! MPI cannot take the first dim2 plane strided out of c_dev, so pack it
@@ -1426,15 +1371,10 @@ contains
                         self%mirror_slab_rank, tag_slab, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr_mpi)
 #else
-      error stop 'The dim2 mirror slab exchange needs more than one rank, &
-                  &but this build was configured without MPI'
+      call abort_run('The dim2 mirror slab exchange needs more than one rank, &
+                     &but this build was configured without MPI')
 #endif
-      if (ierr_mpi /= MPI_SUCCESS) then
-        write (stderr, '(a,i0)') &
-          'The dim2 mirror slab exchange failed: ', ierr_mpi
-        flush (stderr)
-        call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
-      end if
+      call check_mpi(ierr_mpi, 'The dim2 mirror slab exchange')
     end if
 
     if (self%mirror_plane_rank == nrank) then
@@ -1447,15 +1387,10 @@ contains
                         self%mirror_plane_rank, tag_plane, &
                         MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr_mpi)
 #else
-      error stop 'The dim2 mirror plane exchange needs more than one rank, &
-                  &but this build was configured without MPI'
+      call abort_run('The dim2 mirror plane exchange needs more than one &
+                     &rank, but this build was configured without MPI')
 #endif
-      if (ierr_mpi /= MPI_SUCCESS) then
-        write (stderr, '(a,i0)') &
-          'The dim2 mirror plane exchange failed: ', ierr_mpi
-        flush (stderr)
-        call MPI_Abort(MPI_COMM_WORLD, 1, ierr_abort)
-      end if
+      call check_mpi(ierr_mpi, 'The dim2 mirror plane exchange')
     end if
 
   end subroutine exchange_dim2_mirror

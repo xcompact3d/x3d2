@@ -22,6 +22,7 @@ module m_omptgt_common
   use omp_lib, only: omp_target_alloc, omp_target_free, omp_target_memcpy, &
                      omp_get_default_device, omp_get_initial_device
 
+  use m_logger, only: abort_run
   use m_common, only: dp
 
   implicit none
@@ -78,7 +79,7 @@ contains
 
     ptr = omp_target_alloc(max(n, 1)*c_sizeof(0._dp), &
                            omp_get_default_device())
-    if (.not. c_associated(ptr)) error stop "omp_target_alloc failed"
+    if (.not. c_associated(ptr)) call abort_run("omp_target_alloc failed")
   end function dev_alloc_raw
 
   subroutine dev_free_raw(ptr)
@@ -149,7 +150,9 @@ contains
     real(dp), pointer, contiguous, intent(in) :: a_dev(:)
     real(dp), intent(in) :: a_host(:)
 
-    if (size(a_dev) /= size(a_host)) error stop "dev_upload: size mismatch"
+    if (size(a_dev) /= size(a_host)) then
+      call abort_run("dev_upload: size mismatch")
+    end if
     call dev_upload_(c_loc(a_dev), a_host, size(a_host))
   end subroutine dev_upload_1d
 
@@ -157,7 +160,9 @@ contains
     real(dp), pointer, contiguous, intent(in) :: a_dev(:, :)
     real(dp), intent(in) :: a_host(:, :)
 
-    if (size(a_dev) /= size(a_host)) error stop "dev_upload: size mismatch"
+    if (size(a_dev) /= size(a_host)) then
+      call abort_run("dev_upload: size mismatch")
+    end if
     call dev_upload_(c_loc(a_dev), a_host, size(a_host))
   end subroutine dev_upload_2d
 
@@ -165,7 +170,9 @@ contains
     real(dp), pointer, contiguous, intent(in) :: a_dev(:, :, :)
     real(dp), intent(in) :: a_host(:, :, :)
 
-    if (size(a_dev) /= size(a_host)) error stop "dev_upload: size mismatch"
+    if (size(a_dev) /= size(a_host)) then
+      call abort_run("dev_upload: size mismatch")
+    end if
     call dev_upload_(c_loc(a_dev), a_host, size(a_host))
   end subroutine dev_upload_3d
 
@@ -173,7 +180,9 @@ contains
     real(dp), intent(inout) :: a_host(:)
     real(dp), pointer, contiguous, intent(in) :: a_dev(:)
 
-    if (size(a_dev) /= size(a_host)) error stop "dev_download: size mismatch"
+    if (size(a_dev) /= size(a_host)) then
+      call abort_run("dev_download: size mismatch")
+    end if
     call dev_download_(a_host, c_loc(a_dev), size(a_host))
   end subroutine dev_download_1d
 
@@ -181,7 +190,9 @@ contains
     real(dp), intent(inout) :: a_host(:, :, :)
     real(dp), pointer, contiguous, intent(in) :: a_dev(:, :, :)
 
-    if (size(a_dev) /= size(a_host)) error stop "dev_download: size mismatch"
+    if (size(a_dev) /= size(a_host)) then
+      call abort_run("dev_download: size mismatch")
+    end if
     call dev_download_(a_host, c_loc(a_dev), size(a_host))
   end subroutine dev_download_3d
 
@@ -215,7 +226,7 @@ contains
     if (omp_target_memcpy(dst, src, n*c_sizeof(0._dp), 0_c_size_t, &
                           0_c_size_t, omp_get_default_device(), &
                           omp_get_initial_device()) /= 0) then
-      error stop "omp_target_memcpy host to device failed"
+      call abort_run("omp_target_memcpy host to device failed")
     end if
   end subroutine memcpy_h2d
 
@@ -228,7 +239,7 @@ contains
     if (omp_target_memcpy(dst, src, n*c_sizeof(0._dp), 0_c_size_t, &
                           0_c_size_t, omp_get_initial_device(), &
                           omp_get_default_device()) /= 0) then
-      error stop "omp_target_memcpy device to host failed"
+      call abort_run("omp_target_memcpy device to host failed")
     end if
   end subroutine memcpy_d2h
 
@@ -247,7 +258,7 @@ contains
     !$omp target map(tofrom: flag)
     flag = 1
     !$omp end target
-    if (flag /= 1) error stop "device_sync: target region did not run"
+    if (flag /= 1) call abort_run("device_sync: target region did not run")
 
   end subroutine device_sync
 
@@ -260,7 +271,7 @@ contains
     if (omp_target_memcpy(dst, src, n*c_sizeof(0._dp), 0_c_size_t, &
                           0_c_size_t, omp_get_default_device(), &
                           omp_get_default_device()) /= 0) then
-      error stop "omp_target_memcpy device to device failed"
+      call abort_run("omp_target_memcpy device to device failed")
     end if
   end subroutine memcpy_d2d
 

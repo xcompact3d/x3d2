@@ -4,6 +4,8 @@ module m_cuda_sendrecv
                    MPI_Waitall
 
   use m_common, only: dp, MPI_X3D2_DP
+  use m_logger, only: check_mpi, abort_run
+  use m_cuda_errors, only: check_cuda
 
   implicit none
 
@@ -19,7 +21,7 @@ contains
     real(dp), device, dimension(:, :, :), intent(in) :: f_send_s, f_send_e
     integer, intent(in) :: n_data, nproc, prev, next
 
-    integer :: req(4), err(4), ierr, tag = 1234
+    integer :: req(4), err(4), ierr, i, tag = 1234
 
     if (nproc == 1) then
       call copy_halo(f_recv_s, f_send_e, n_data)
@@ -27,6 +29,7 @@ contains
     else
       ! Ensure the send buffers are ready before MPI touches device memory.
       ierr = cudaStreamSynchronize(default_stream)
+      call check_cuda(ierr, 'cudaStreamSynchronize in sendrecv_fields')
 
 #ifdef MPI
       call MPI_Isend(f_send_s, n_data, MPI_X3D2_DP, &
@@ -38,7 +41,12 @@ contains
       call MPI_Irecv(f_recv_s, n_data, MPI_X3D2_DP, &
                      prev, tag, MPI_COMM_WORLD, req(4), err(4))
 
+      do i = 1, 4
+        call check_mpi(err(i), 'MPI_Isend/MPI_Irecv in sendrecv_fields')
+      end do
+
       call MPI_Waitall(4, req, MPI_STATUSES_IGNORE, ierr)
+      call check_mpi(ierr, 'MPI_Waitall in sendrecv_fields')
 #endif
     end if
 
@@ -57,7 +65,7 @@ contains
       f1_send_s, f1_send_e, f2_send_s, f2_send_e, f3_send_s, f3_send_e
     integer, intent(in) :: n_data, nproc, prev, next
 
-    integer :: req(12), err(12), ierr, tag = 1234
+    integer :: req(12), err(12), ierr, i, tag = 1234
 
     if (nproc == 1) then
       call copy_halo(f1_recv_s, f1_send_e, n_data)
@@ -69,6 +77,7 @@ contains
     else
       ! Ensure the send buffers are ready before MPI touches device memory.
       ierr = cudaStreamSynchronize(default_stream)
+      call check_cuda(ierr, 'cudaStreamSynchronize in sendrecv_3fields')
 
 #ifdef MPI
       call MPI_Isend(f1_send_s, n_data, MPI_X3D2_DP, &
@@ -98,7 +107,12 @@ contains
       call MPI_Irecv(f3_recv_s, n_data, MPI_X3D2_DP, &
                      prev, tag, MPI_COMM_WORLD, req(12), err(12))
 
+      do i = 1, 12
+        call check_mpi(err(i), 'MPI_Isend/MPI_Irecv in sendrecv_3fields')
+      end do
+
       call MPI_Waitall(12, req, MPI_STATUSES_IGNORE, ierr)
+      call check_mpi(ierr, 'MPI_Waitall in sendrecv_3fields')
 #endif
     end if
 
@@ -128,7 +142,7 @@ contains
     n_groups = n_data/(size(src, 1)*size(src, 2))
     if (n_groups*size(src, 1)*size(src, 2) /= n_data .or. &
         n_groups > size(src, 3) .or. n_groups > size(dst, 3)) then
-      error stop 'copy_halo: n_data does not match the halo buffer.'
+      call abort_run('copy_halo: n_data does not match the halo buffer.')
     end if
 
     dst(:, :, 1:n_groups) = src(:, :, 1:n_groups)
