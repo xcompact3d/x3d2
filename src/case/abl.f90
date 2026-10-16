@@ -11,6 +11,7 @@ module m_case_abl
   use m_inflow_planes, only: inflow_plane_writer_t, inflow_plane_reader_t
   use m_mesh, only: mesh_t
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
+  use m_logger, only: log_info, abort_run, str
 
   implicit none
 
@@ -64,8 +65,9 @@ contains
     bcs = mesh%grid%BCs_global
     if (any(bcs(1, :) /= bc_x) .or. any(bcs(3, :) /= BC_PERIODIC) &
         .or. bcs(2, 1) /= BC_DIRICHLET .or. bcs(2, 2) /= BC_NEUMANN) &
-      error stop 'ABL requires BC_x periodic (dirichlet when read_planes), &
-                 &periodic BC_z, and BC_y = ''dirichlet'', ''neumann''.'
+      call abort_run('ABL requires BC_x periodic (dirichlet when read_planes), &
+                     &periodic BC_z, and BC_y = ''dirichlet'', ''neumann''.', &
+                     collective=.true.)
 
     ! Damping is a sponge rather than a driving mechanism; a successor is
     ! driven by its inflow.
@@ -73,8 +75,9 @@ contains
                flow_case%abl_cfg%coriolis .or. &
                flow_case%abl_cfg%mass_conserve .or. &
                flow_case%inflow_cfg%read_planes)) &
-      error stop 'ABL config error: enable pressure_gradient, coriolis, &
-                 &or mass_conserve, or read inflow planes.'
+      call abort_run('ABL config error: enable pressure_gradient, coriolis, &
+                     &or mass_conserve, or read inflow planes.', &
+                     collective=.true.)
     flow_case%abl = abl_t(backend, mesh, host_allocator, flow_case%abl_cfg)
 
     call flow_case%case_init(backend, mesh, host_allocator)
@@ -255,9 +258,7 @@ contains
     integer, intent(in) :: iter
     real(dp), intent(in) :: t
 
-    if (self%solver%mesh%par%is_root()) then
-      print *, 'time =', t, 'iteration =', iter
-    end if
+    call log_info('time = '//str(t)//' iteration = '//str(iter))
 
     call self%monitoring%write_step( &
       self%solver, t, self%solver%u, self%solver%v, self%solver%w)

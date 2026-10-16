@@ -7,6 +7,17 @@
 * formatting
 - line length 79
 - lowercase snake_case throughout and uppercase for parameters.
+* output and errors
+- report through m_logger (src/logger.f90), never print, write to the
+  terminal or error stop directly; CI rejects new ones in src/
+- log_info/log_warn/log_debug/log_error write once from rank 0; pass
+  all_ranks=.true. for something only some ranks know about
+- stop on an error with abort_run, which takes down every rank; pass
+  collective=.true. only when every rank is certain to reach the call
+- check return codes with check_mpi, and check_cuda/check_cufft
+  (m_cuda_errors) in the CUDA backend
+- a pure procedure cannot call abort_run: keep its error stop and mark the
+  line with ! logger-exempt
 * module names
 - 
 * use statements

@@ -33,3 +33,22 @@ jobs:
         with:
           script: |
             core.setFailed('Code formatting issues found. Please run fprettify locally and commit the changes.')
+
+  check-logging:
+    # Terminal output and run-ending errors go through m_logger
+    # (src/logger.f90) so they behave the same on one rank or many.
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Look for print, error stop and terminal writes outside m_logger
+        run: |
+          matches=$(grep -rnIiE --include='*.f90' \
+            '^[^!]*(\bprint\b|\berror +stop\b|\bwrite *\( *(\*|stdout|stderr|error_unit|output_unit|0|6) *[,)])' \
+            src | grep -vE '^src/(logger|mpi)\.f90:' \
+            | grep -v '! *logger-exempt' || true)
+          if [ -n "$matches" ]; then
+            echo "$matches"
+            echo "::error::Report through m_logger (log_info, log_warn, abort_run, ...) instead; see style.org."
+            exit 1
+          fi

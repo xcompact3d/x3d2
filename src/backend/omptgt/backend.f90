@@ -24,6 +24,7 @@ module m_omptgt_backend
   use m_common, only: dp, MPI_X3D2_DP, move_data_loc, get_dirs_from_rdr, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC, &
                       X_FACE, Y_FACE, Z_FACE, BC_DIRICHLET
+  use m_logger, only: abort_run, str
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t, tdsops_t
@@ -476,7 +477,7 @@ contains
     end if
 
     if (u%dir /= du%dir) then
-      error stop 'DIR mismatch between fields in tds_solve.'
+      call abort_run('DIR mismatch between fields in tds_solve.')
     end if
 
     if (u%data_loc /= NULL_LOC) then
@@ -498,7 +499,7 @@ contains
     real(dp), pointer, contiguous, dimension(:, :, :) :: du_dev, u_dev
 
     if (u%dir /= du%dir) then
-      error stop 'DIR mismatch between fields in thom_solve.'
+      call abort_run('DIR mismatch between fields in thom_solve.')
     end if
 
     if (u%data_loc /= NULL_LOC) then
@@ -513,7 +514,7 @@ contains
       call exec_thom_tds_compact(du_dev, u_dev, tdsops, &
                                  self%allocator%get_n_groups(u%dir))
     class default
-      error stop 'Expected omptgt_tdsops_t in thom_solve_omptgt.'
+      call abort_run('Expected omptgt_tdsops_t in thom_solve_omptgt.')
     end select
 
   end subroutine thom_solve_omptgt
@@ -556,7 +557,7 @@ contains
         self%mesh%par%pprev(dir), self%mesh%par%pnext(dir), n_groups &
         )
     class default
-      error stop 'Expected omptgt_tdsops_t in tds_solve_dist.'
+      call abort_run('Expected omptgt_tdsops_t in tds_solve_dist.')
     end select
 
   end subroutine tds_solve_dist
@@ -641,13 +642,13 @@ contains
     real(dp), pointer, contiguous, dimension(:, :, :) :: dst_d, src_d
 
     if (src%dir /= dst%dir) then
-      error stop "Called vector copy with incompatible fields"
+      call abort_run("Called vector copy with incompatible fields")
     end if
 
     call resolve_field_t(dst_d, dst)
     call resolve_field_t(src_d, src)
     if (size(dst_d) < size(src_d)) then
-      error stop "Destination field is smaller than the source"
+      call abort_run("Destination field is smaller than the source")
     end if
 
     call copy(size(src_d), dst_d, src_d)
@@ -665,7 +666,7 @@ contains
     real(dp), pointer, contiguous, dimension(:, :, :) :: x_d, y_d
 
     if (x%dir /= y%dir) then
-      error stop "Called vector add with incompatible fields"
+      call abort_run("Called vector add with incompatible fields")
     end if
 
     call resolve_field_t(x_d, x)
@@ -861,7 +862,7 @@ contains
       n = dims(3); n_j = dims(1); n_i = dims(2)
       n_groups_pad = dims_padded(1)/SZ
     else
-      error stop 'pencil_extents: DIR_C has no pencil layout.'
+      call abort_run('pencil_extents: DIR_C has no pencil layout.')
     end if
 
   end subroutine pencil_extents
@@ -877,10 +878,10 @@ contains
     integer :: n, n_i, n_groups_pad, n_j, ierr
 
     if ((x%data_loc == NULL_LOC) .or. (y%data_loc == NULL_LOC)) then
-      error stop "You must set the data_loc before calling scalar product"
+      call abort_run("You must set the data_loc before calling scalar product")
     end if
     if ((x%data_loc /= y%data_loc) .or. (x%dir /= y%dir)) then
-      error stop "Called scalar product with incompatible fields"
+      call abort_run("Called scalar product with incompatible fields")
     end if
 
     call resolve_field_t(x_d, x)
@@ -913,13 +914,13 @@ contains
 
     if (a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
         c%data_loc == NULL_LOC) then
-      error stop 'You must set data_loc before computing a vector norm.'
+      call abort_run('You must set data_loc before computing a vector norm.')
     end if
     if (a%data_loc /= b%data_loc .or. a%data_loc /= c%data_loc) then
-      error stop 'Vector-norm fields must use the same data location.'
+      call abort_run('Vector-norm fields must use the same data location.')
     end if
     if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) then
-      error stop 'Vector-norm fields must use DIR_X layout.'
+      call abort_run('Vector-norm fields must use DIR_X layout.')
     end if
 
     call resolve_field_t(a_d, a)
@@ -1019,15 +1020,15 @@ contains
     if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
         a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
         c%data_loc == NULL_LOC) then
-      error stop 'You must set data_loc before labelled field operations.'
+      call abort_run('You must set data_loc before labelled field operations.')
     end if
     if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
         b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
-      error stop 'Labelled field operations need one data location.'
+      call abort_run('Labelled field operations need one data location.')
     end if
     if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
         b%dir /= DIR_X .or. c%dir /= DIR_X) then
-      error stop 'Labelled field operations need DIR_X layout.'
+      call abort_run('Labelled field operations need DIR_X layout.')
     end if
   end subroutine check_labelled_fields
 
@@ -1045,9 +1046,10 @@ contains
     integer :: data_loc, n, n_i, n_groups_pad, n_j, ierr
 
     if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
-      error stop 'The input field to omptgt::field_max_mean does not have a &
+      call abort_run('The input field to omptgt::field_max_mean does &
+                     &not have a &
                   &valid f%data_loc. You may enforce a data_loc of your &
-                  &choice as last argument to carry on at your own risk!'
+                  &choice as last argument to carry on at your own risk!')
     end if
 
     if (present(enforced_data_loc)) then
@@ -1057,7 +1059,7 @@ contains
     end if
 
     if (f%dir == DIR_C) then
-      error stop 'field_max_mean does not support DIR_C fields!'
+      call abort_run('field_max_mean does not support DIR_C fields!')
     end if
     call pencil_extents(self, f%dir, data_loc, n, n_i, n_groups_pad, n_j)
 
@@ -1088,9 +1090,10 @@ contains
     integer :: data_loc, n, n_i, n_groups_pad, n_j
 
     if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
-      error stop 'The input field to omptgt::slice_max_sum does not have a &
+      call abort_run('The input field to omptgt::slice_max_sum does not &
+                     &have a &
                   &valid f%data_loc. You may enforce a data_loc of your &
-                  &choice as last argument to carry on at your own risk!'
+                  &choice as last argument to carry on at your own risk!')
     end if
 
     if (present(enforced_data_loc)) then
@@ -1100,12 +1103,12 @@ contains
     end if
 
     if (f%dir == DIR_C) then
-      error stop 'slice_max_sum does not support DIR_C fields!'
+      call abort_run('slice_max_sum does not support DIR_C fields!')
     end if
     call pencil_extents(self, f%dir, data_loc, n, n_i, n_groups_pad, n_j)
 
     if (i_slice < 1 .or. i_slice > n) then
-      error stop 'slice_max_sum: i_slice out of range'
+      call abort_run('slice_max_sum: i_slice out of range')
     end if
 
     ! Rank-local values; caller is responsible for MPI_Allreduce.
@@ -1126,10 +1129,11 @@ contains
     integer :: n, n_i, n_groups_pad, n_j, ierr
 
     if (f%data_loc == NULL_LOC) then
-      error stop 'You must set the data_loc before calling volume integral.'
+      call abort_run('You must set the data_loc before calling volume &
+                     &integral.')
     end if
     if (f%dir /= DIR_X) then
-      error stop 'Volume integral can only be called on DIR_X fields.'
+      call abort_run('Volume integral can only be called on DIR_X fields.')
     end if
 
     call resolve_field_t(f_d, f)
@@ -1154,13 +1158,13 @@ contains
     integer :: dims(3)
 
     if (f%dir /= DIR_X) &
-      error stop 'field_plane_sums is only supported for DIR_X fields.'
+      call abort_run('field_plane_sums is only supported for DIR_X fields.')
     if (f%data_loc == NULL_LOC) &
-      error stop 'field_plane_sums requires a valid data_loc.'
+      call abort_run('field_plane_sums requires a valid data_loc.')
 
     dims = self%mesh%get_dims(f%data_loc)
     if (size(sums) < dims(2)) &
-      error stop 'field_plane_sums: sums is smaller than the y extent.'
+      call abort_run('field_plane_sums: sums is smaller than the y extent.')
 
     call resolve_field_t(f_d, f)
     call dev_alloc(partial_d, dims(2), dims(3))
@@ -1199,10 +1203,11 @@ contains
     real(dp) :: flow_rate_diff_val
 
     if (f%dir /= DIR_X) then
-      error stop 'Setting a field face is only supported for DIR_X fields.'
+      call abort_run('Setting a field face is only supported for DIR_X &
+                     &fields.')
     end if
     if (f%data_loc == NULL_LOC) then
-      error stop 'field_set_face requires a valid data_loc.'
+      call abort_run('field_set_face requires a valid data_loc.')
     end if
 
     bc_s = BC_DIRICHLET
@@ -1228,9 +1233,9 @@ contains
                             bc_e == BC_DIRICHLET, size(f_d, 2), &
                             dims(1), dims(2), dims(3), n_yb_pad(self))
     case (Z_FACE)
-      error stop 'Setting Z_FACE is not yet supported.'
+      call abort_run('Setting Z_FACE is not yet supported.')
     case default
-      error stop 'face is undefined.'
+      call abort_run('face is undefined.')
     end select
 
   end subroutine field_set_face_omptgt
@@ -1248,14 +1253,14 @@ contains
     integer :: dims(3)
 
     if (f%dir /= DIR_X) &
-      error stop 'field_set_y_plane is only supported for DIR_X fields.'
+      call abort_run('field_set_y_plane is only supported for DIR_X fields.')
     if (f%data_loc == NULL_LOC) &
-      error stop 'field_set_y_plane requires a valid data_loc.'
+      call abort_run('field_set_y_plane requires a valid data_loc.')
 
     call resolve_field_t(f_d, f)
     dims = self%mesh%get_dims(f%data_loc)
     if (plane < 1 .or. plane > dims(2)) &
-      error stop 'field_set_y_plane: plane outside the domain.'
+      call abort_run('field_set_y_plane: plane outside the domain.')
 
     call field_set_y_plane(f_d, c, plane, size(f_d, 2), dims(1), dims(3), &
                            n_yb_pad(self))
@@ -1277,16 +1282,16 @@ contains
     integer :: dims(3)
 
     if (stress%dir /= DIR_X .or. u%dir /= DIR_X .or. w%dir /= DIR_X) &
-      error stop 'ABL wall stress requires DIR_X fields.'
+      call abort_run('ABL wall stress requires DIR_X fields.')
     if (stress%data_loc /= VERT .or. u%data_loc /= VERT .or. &
         w%data_loc /= VERT) &
-      error stop 'ABL wall stress requires vertex fields.'
+      call abort_run('ABL wall stress requires vertex fields.')
     dims = self%mesh%get_dims(VERT)
     if (min(sample_plane, stress_plane) < 1 .or. &
         max(sample_plane, stress_plane) > dims(2)) &
-      error stop 'ABL wall stress plane is outside the domain.'
+      call abort_run('ABL wall stress plane is outside the domain.')
     if (component /= 1 .and. component /= 3) &
-      error stop 'Invalid ABL wall stress component.'
+      call abort_run('Invalid ABL wall stress component.')
 
     call resolve_field_t(stress_d, stress)
     call resolve_field_t(u_d, u)
@@ -1323,9 +1328,10 @@ contains
     real(dp) :: flow_rate_diff_val
 
     if (f%dir /= DIR_X) &
-      error stop 'field_set_face_from_field: only supported for DIR_X fields.'
+      call abort_run('field_set_face_from_field: only supported for &
+                     &DIR_X fields.')
     if (f_start%dir /= DIR_X) &
-      error stop 'field_set_face_from_field: f_start must be DIR_X.'
+      call abort_run('field_set_face_from_field: f_start must be DIR_X.')
 
     bc_s = BC_DIRICHLET
     bc_e = BC_DIRICHLET
@@ -1348,16 +1354,16 @@ contains
                                        n_yb_pad(self))
     case (Y_FACE)
       if (bc_s /= BC_DIRICHLET .or. bc_e /= BC_DIRICHLET) then
-        error stop &
-          'field_set_face_from_field: Y_FACE only supports BC_DIRICHLET.'
+        call abort_run( &
+          'field_set_face_from_field: Y_FACE only supports BC_DIRICHLET.')
       end if
       call field_set_y_face_from_field(f_d, f_start_d, size(f_d, 2), &
                                        dims(1), dims(2), dims(3), &
                                        n_yb_pad(self))
     case (Z_FACE)
-      error stop 'field_set_face_from_field: Z_FACE is not yet supported.'
+      call abort_run('field_set_face_from_field: Z_FACE is not yet supported.')
     case default
-      error stop 'field_set_face_from_field: face is undefined.'
+      call abort_run('field_set_face_from_field: face is undefined.')
     end select
 
   end subroutine field_set_face_from_field_omptgt
@@ -1377,9 +1383,10 @@ contains
     logical :: set_start, set_end
 
     if (f%dir /= DIR_X .or. g%dir /= DIR_X) &
-      error stop 'field_add_face_from_field: only supported for DIR_X fields.'
+      call abort_run('field_add_face_from_field: only supported for &
+                     &DIR_X fields.')
     if (f%data_loc == NULL_LOC) &
-      error stop 'field_add_face_from_field: requires a valid data_loc.'
+      call abort_run('field_add_face_from_field: requires a valid data_loc.')
 
     set_start = (bc_start == BC_DIRICHLET)
     set_end = (bc_end == BC_DIRICHLET)
@@ -1398,7 +1405,8 @@ contains
                                        size(f_d, 2), dims(1), dims(2), &
                                        dims(3), n_yb_pad(self))
     case default
-      error stop 'field_add_face_from_field: only X_FACE and Y_FACE supported.'
+      call abort_run('field_add_face_from_field: only X_FACE and Y_FACE &
+                     &supported.')
     end select
 
   end subroutine field_add_face_from_field_omptgt
@@ -1470,19 +1478,19 @@ contains
 
     select type (tdsops => dirps%der1st)
     type is (omptgt_tdsops_t); der1st => tdsops
-    class default; error stop 'Expected omptgt_tdsops_t for der1st.'
+    class default; call abort_run('Expected omptgt_tdsops_t for der1st.')
     end select
     select type (tdsops => dirps%der1st_sym)
     type is (omptgt_tdsops_t); der1st_sym => tdsops
-    class default; error stop 'Expected omptgt_tdsops_t for der1st_sym.'
+    class default; call abort_run('Expected omptgt_tdsops_t for der1st_sym.')
     end select
     select type (tdsops => dirps%der2nd)
     type is (omptgt_tdsops_t); der2nd => tdsops
-    class default; error stop 'Expected omptgt_tdsops_t for der2nd.'
+    class default; call abort_run('Expected omptgt_tdsops_t for der2nd.')
     end select
     select type (tdsops => dirps%der2nd_sym)
     type is (omptgt_tdsops_t); der2nd_sym => tdsops
-    class default; error stop 'Expected omptgt_tdsops_t for der2nd_sym.'
+    class default; call abort_run('Expected omptgt_tdsops_t for der2nd_sym.')
     end select
 
   end subroutine resolve_dirps
@@ -1507,9 +1515,8 @@ contains
 
     ptr = u%get_dev_ptr()
     if (.not. c_associated(ptr)) then
-      print '(a,i0,a,i0)', 'omptgt backend: field id ', u%id, ', dir ', &
-        u%dir
-      error stop 'omptgt backend: field has no device storage.'
+      call abort_run('omptgt backend: field id '//str(u%id)// &
+                     ', dir '//str(u%dir)//' has no device storage.')
     end if
     call c_f_pointer(ptr, u_dev, u%get_shape())
 

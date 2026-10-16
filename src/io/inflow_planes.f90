@@ -15,6 +15,7 @@ module m_inflow_planes
   use m_config, only: inflow_config_t
   use m_field, only: field_t
   use m_io_session, only: writer_session_t, reader_session_t
+  use m_logger, only: log_info, log_warn, abort_run, str
   use m_mesh, only: mesh_t
 
   implicit none
@@ -92,7 +93,8 @@ contains
     if (.not. cfg%write_planes) return
 
 #ifndef WITH_ADIOS2
-    error stop 'inflow_nml: write_planes requires a build WITH_ADIOS2.'
+    call abort_run('inflow_nml: write_planes requires a build WITH_ADIOS2.', &
+                   collective=.true.)
 #endif
 
     dims = mesh%get_dims(VERT)
@@ -101,7 +103,8 @@ contains
     writer%x_index = cfg%plane_x_index
     if (writer%x_index == 0) writer%x_index = global_dims(1)
     if (writer%x_index > global_dims(1)) &
-      error stop 'inflow_nml: plane_x_index exceeds the x vertex count.'
+      call abort_run('inflow_nml: plane_x_index exceeds the x vertex &
+                     &count.', collective=.true.)
 
     writer%i_local = writer%x_index - mesh%par%n_offset(1)
     if (writer%i_local < 1 .or. writer%i_local > dims(1)) writer%i_local = 0
@@ -162,9 +165,9 @@ contains
     block = isample/nt
     if (self%n_filled == nt) then
       call self%write_block(block, iter)
-    else if (self%mesh%par%is_root()) then
-      print '(A,I0,A)', 'WARNING: inflow block ', block, &
-        ' was only partly sampled by this run and is not written'
+    else
+      call log_warn('inflow block '//str(block)//' was only partly sampled &
+                    &by this run and is not written')
     end if
   end subroutine sample
 
@@ -205,12 +208,12 @@ contains
     x = self%mesh%geo%origin(1) + (x_index - 1)*self%mesh%geo%d(1)
 
     filename = inflow_file_name(self%cfg%inflow_prefix, block)
-    if (self%mesh%par%is_root()) &
-      print '(A,A)', 'Writing inflow planes to ', filename
+    call log_info('Writing inflow planes to '//filename)
 
     call writer%open(filename, MPI_COMM_WORLD)
     if (.not. writer%is_session_functional()) &
-      error stop 'Writing inflow planes needs a functional ADIOS2 session.'
+      call abort_run('Writing inflow planes needs a functional ADIOS2 &
+                     &session.')
 
     if (self%mesh%par%is_root()) then
       call writer%write_data('format_version', format_version)
@@ -266,12 +269,14 @@ contains
     call reader%open(filename, MPI_COMM_WORLD)
     call reader%read_data('format_version', format_version)
     if (format_version /= INFLOW_FORMAT_VERSION) &
-      error stop 'Inflow planes: unsupported format_version.'
+      call abort_run('Inflow planes: unsupported format_version.', &
+                     collective=.true.)
     call reader%read_data('ntimesteps', ntimesteps)
     call reader%read_data('ny', ny)
     call reader%read_data('nz', nz)
     if (ny /= global_dims(2) .or. nz /= global_dims(3)) &
-      error stop 'Inflow planes: y-z grid does not match the mesh.'
+      call abort_run('Inflow planes: y-z grid does not match the mesh.', &
+                     collective=.true.)
     if (present(plane_dt)) then
       call reader%read_data('sample_every', sample_every)
       call reader%read_data('dt', dt)
@@ -310,7 +315,8 @@ contains
     if (.not. cfg%read_planes) return
 
 #ifndef WITH_ADIOS2
-    error stop 'inflow_nml: read_planes requires a build WITH_ADIOS2.'
+    call abort_run('inflow_nml: read_planes requires a build WITH_ADIOS2.', &
+                   collective=.true.)
 #endif
 
     ! Only the metadata here; the planes are read on first use, so the
@@ -320,19 +326,20 @@ contains
                       MPI_COMM_WORLD)
     call session%read_data('format_version', format_version)
     if (format_version /= INFLOW_FORMAT_VERSION) &
-      error stop 'Inflow planes: unsupported format_version.'
+      call abort_run('Inflow planes: unsupported format_version.', &
+                     collective=.true.)
     call session%read_data('ntimesteps', reader%ntimesteps)
     call session%read_data('sample_every', sample_every)
     call session%read_data('dt', dt)
     call session%close()
     reader%plane_dt = sample_every*dt
     if (reader%plane_dt <= 0._dp) &
-      error stop 'Inflow planes: the plane spacing must be positive.'
+      call abort_run('Inflow planes: the plane spacing must be positive.', &
+                     collective=.true.)
 
-    if (mesh%par%is_root()) &
-      print '(A,I0,A,I0,A,ES12.5)', 'Inflow planes: ', cfg%ninflows, &
-      ' file(s) of ', reader%ntimesteps, ' planes, plane spacing ', &
-      reader%plane_dt
+    call log_info('Inflow planes: '//str(cfg%ninflows)//' file(s) of ' &
+                  //str(reader%ntimesteps)//' planes, plane spacing ' &
+                  //str(reader%plane_dt, '(es12.5)'))
   end function init_reader
 
   subroutine planes_at(self, t, u, v, w)
@@ -396,8 +403,8 @@ contains
 
     if (size(times) /= self%ntimesteps .or. &
         abs(plane_dt - self%plane_dt) > 1e-12_dp*self%plane_dt) then
-      error stop 'Inflow planes: all files need the same plane count &
-                 &and spacing.'
+      call abort_run('Inflow planes: all files need the same plane count &
+                     &and spacing.', collective=.true.)
     end if
   end function block_slot
 

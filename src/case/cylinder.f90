@@ -1,5 +1,4 @@
 module m_case_cylinder
-  use iso_fortran_env, only: stderr => error_unit
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
@@ -9,6 +8,7 @@ module m_case_cylinder
   use m_config, only: cylinder_config_t
   use m_mesh, only: mesh_t
   use m_solver, only: init
+  use m_logger, only: log_info, str
   implicit none
 
   type, extends(base_case_t) :: case_cylinder_t
@@ -214,12 +214,10 @@ contains
     integer, intent(in) :: iter
     real(dp), intent(in) :: t
 
-    if (self%solver%mesh%par%is_root()) then
-      print *, 'time =', t, 'iteration =', iter
-      print '(A, ES12.5, A, ES12.5)', &
-        ' out_vel = ', self%out_vel, &
-        '  flow_rate_diff = ', self%flow_rate_diff
-    end if
+    call log_info('time = '//str(t)//' iteration = '//str(iter))
+    call log_info('out_vel = '//str(self%out_vel, '(es12.5)') &
+                  //'  flow_rate_diff = ' &
+                  //str(self%flow_rate_diff, '(es12.5)'))
 
     call self%monitoring%write_step( &
       self%solver, t, self%solver%u, self%solver%v, self%solver%w)

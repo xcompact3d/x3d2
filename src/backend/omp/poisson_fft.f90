@@ -18,6 +18,7 @@ module m_omp_poisson_fft
                             process_spectral_110_fw, &
                             process_spectral_110_solve, &
                             process_spectral_110_bw
+  use m_logger, only: log_info, abort_run
 
   implicit none
 
@@ -115,12 +116,10 @@ contains
 
     type(omp_poisson_fft_t) :: poisson_fft
 
-    if (mesh%par%is_root()) then
-      print *, "Initialising 2decomp&fft"
-    end if
+    call log_info("Initialising 2decomp&fft")
 
     if (present(lowmem)) then
-      print *, 'lowmem_fft has no impact in the OpenMP backend.'
+      call log_info('lowmem_fft has no impact in the OpenMP backend.')
     end if
 
     ! Get global cell dims
@@ -161,13 +160,13 @@ contains
 
     if (poisson_fft%is_010_case .and. poisson_fft%p_row > 1) then
       ! The periodicity reorder of the 010 case needs the y line whole.
-      error stop 'The OpenMP 010 Poisson solver does not support a y &
-                  &decomposition, split along z instead.'
+      call abort_run('The OpenMP 010 Poisson solver does not support a y &
+                     &decomposition, split along z instead.')
     end if
 
     if (mesh%geo%stretched(2)) then
-      error stop 'OpenMP backends FFT based Poisson solver does not support&
-                  & stretching in y-direction yet!'
+      call abort_run('OpenMP backends FFT based Poisson solver does not &
+                     &support stretching in y-direction yet!')
     end if
 
     allocate (poisson_fft%c_x(poisson_fft%nx_spec, poisson_fft%ny_spec, &
@@ -223,8 +222,8 @@ contains
         if (.not. all(poisson_fft%dc%zsz == [poisson_fft%ph%xsz(2), &
                                              poisson_fft%ph%xsz(3), &
                                              poisson_fft%ph%xsz(1)])) then
-          error stop 'The 110 case cell-dims decomposition does not match &
-                      &the FFT physical decomposition.'
+          call abort_run('The 110 case cell-dims decomposition does not match &
+                         &the FFT physical decomposition.')
         end if
 
         allocate (poisson_fft%r_xp(poisson_fft%dc%xsz(1), &

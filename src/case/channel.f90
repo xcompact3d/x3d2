@@ -1,5 +1,4 @@
 module m_case_channel
-  use iso_fortran_env, only: stderr => error_unit
 
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
@@ -10,6 +9,7 @@ module m_case_channel
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_solver, only: init
+  use m_logger, only: log_info, str
 
   implicit none
 
@@ -231,9 +231,7 @@ contains
     integer, intent(in) :: iter
     real(dp), intent(in) :: t
 
-    if (self%solver%mesh%par%is_root()) then
-      print *, 'time =', t, 'iteration =', iter
-    end if
+    call log_info('time = '//str(t)//' iteration = '//str(iter))
 
     call self%monitoring%write_step( &
       self%solver, t, self%solver%u, self%solver%v, self%solver%w)

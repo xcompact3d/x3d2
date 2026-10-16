@@ -179,7 +179,7 @@ function(define_test testfile np backend)
     add_test(NAME ${test_name}
       COMMAND sh -c "srun -n ${np} bin/${test_name} ${extra_args_str}")
   else()
-    add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} bin/${test_name} ${extra_args_str}")
+    add_test(NAME ${test_name} COMMAND sh -c "mpirun ${MPIEXEC_OVERSUBSCRIBE_FLAG} -np ${np} bin/${test_name} ${extra_args_str}")
   endif()
 
   # default label includes backend
@@ -263,7 +263,7 @@ function(define_regression_case_test case_name input_file golden_file np backend
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
     set(launcher "srun -n ${np}")
   else()
-    set(launcher "mpirun --oversubscribe -np ${np}")
+    set(launcher "mpirun ${MPIEXEC_OVERSUBSCRIBE_FLAG} -np ${np}")
   endif()
   add_test(
     NAME ${test_name}
@@ -292,6 +292,23 @@ define_test(unit/test_statistics.f90 ${serial} omp)
 define_test(unit/test_output_scalars.f90 ${serial} omp)
 define_test(unit/test_les.f90 ${serial} omp)
 define_test(unit/test_abl_diagnostics.f90 ${serial} omp)
+define_test(unit/test_logger.f90 ${serial} omp)
+# A serial build sets np to 1, which would register the same test twice.
+if(NOT np EQUAL serial)
+  define_test(unit/test_logger.f90 ${np} omp)
+endif()
+# abort_run must stop every rank and report the error, whether one rank fails
+# or all of them do. ctest checks the output rather than the exit code: a hang
+# times out, and a run that returns from abort_run prints the FAIL line.
+foreach(mode one_rank collective)
+  set(X3D2_TEST_NAME_SUFFIX _${mode})
+  define_test(unit/test_logger_abort.f90 ${np} omp ${mode})
+  set_tests_properties(test_logger_abort_omp_${np}_${mode} PROPERTIES
+    PASS_REGULAR_EXPRESSION "ERROR: deliberate"
+    FAIL_REGULAR_EXPRESSION "must never be reached"
+    TIMEOUT 60)
+endforeach()
+unset(X3D2_TEST_NAME_SUFFIX)
 if(WITH_ADIOS2)
   define_test(unit/test_adios2_mixed_precision.f90 ${serial} omp)
   define_test(unit/test_adm_checkpoint.f90 ${serial} omp)

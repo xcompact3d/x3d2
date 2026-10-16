@@ -1,12 +1,11 @@
 module m_mesh
-  use iso_fortran_env, only: stderr => error_unit
-
   use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Comm_size
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, &
                       CELL, VERT, X_FACE, Y_FACE, Z_FACE, &
                       X_EDGE, Y_EDGE, Z_EDGE, &
                       BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
   use m_field, only: field_t
+  use m_logger, only: log_info, abort_run
   use m_mesh_content
 
   implicit none
@@ -72,7 +71,8 @@ contains
         case ('dirichlet')
           mesh%grid%BCs_global(dir, j) = BC_DIRICHLET
         case default
-          error stop 'Unknown BC'
+          call abort_run('Unknown BC: '//trim(BC_all(dir, j)), &
+                         collective=.true.)
         end select
       end do
     end do
@@ -80,8 +80,9 @@ contains
     do dir = 1, 3
       if (any(mesh%grid%BCs_global(dir, :) == BC_PERIODIC) .and. &
           (.not. all(mesh%grid%BCs_global(dir, :) == BC_PERIODIC))) then
-        error stop 'BCs are incompatible: in a direction make sure to have &
-                    &either both sides periodic or none.'
+        call abort_run('BCs are incompatible: in a direction make sure to &
+                       &have either both sides periodic or none.', &
+                       collective=.true.)
       end if
       mesh%grid%periodic_BC(dir) = all(mesh%grid%BCs_global(dir, :) &
                                        == BC_PERIODIC)
@@ -167,9 +168,7 @@ contains
     integer, allocatable, dimension(:, :, :) :: global_ranks
     integer :: i, nproc_x, nproc_y, nproc_z
 
-    if (par%is_root()) then
-      print *, "Domain decomposition by x3d2 (generic)"
-    end if
+    call log_info("Domain decomposition by x3d2 (generic)")
 
     ! Number of processes on a direction basis
     nproc_x = par%nproc_dir(1)
@@ -244,7 +243,7 @@ contains
       dims(1:2) = vert_dims(1:2)
       dims(3) = cell_dims(3)
     case default
-      error stop "Unknown location in get_dims_dataloc"
+      error stop "Unknown location in get_dims_dataloc" ! logger-exempt: pure
     end select
   end function get_dims_dataloc
 
@@ -301,7 +300,7 @@ contains
         n = n_cell
       end if
     case default
-      error stop "Unknown direction in get_n_dir"
+      error stop "Unknown direction in get_n_dir" ! logger-exempt: pure
     end select
   end function get_n_dir
 
@@ -354,7 +353,7 @@ contains
       coords(2) = self%geo%vert_coords(j, 2)
       coords(3) = self%geo%midp_coords(k, 3)
     case default
-      error stop "Unknown data_loc in get_coordinates"
+      error stop "Unknown data_loc in get_coordinates" ! logger-exempt: pure
     end select
   end function
 

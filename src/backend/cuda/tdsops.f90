@@ -1,5 +1,4 @@
 module m_cuda_tdsops
-  use iso_fortran_env, only: stderr => error_unit
 
   use m_common, only: dp
   use m_tdsops, only: tdsops_t, tdsops_init

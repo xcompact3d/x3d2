@@ -171,6 +171,9 @@ Conventions
   of a feature that exists on one backend alone, such as GPU-aware I/O
   (``test_cuda_gpu_aware_io*``), which are registered for that backend only.
 - MPI: All tests call ``MPI_Init``/``MPI_Finalize``, even single-rank tests. Tests are
-  launched with ``mpirun --oversubscribe -np <N>``, or with ``srun -n <N>`` when building
+  launched with ``mpirun -np <N>``, or with ``srun -n <N>`` when building
   with the Cray compiler, since Cray machines are Slurm-driven and have no ``mpirun``.
+  Under Open MPI the launcher also gets ``--oversubscribe``, without which it
+  refuses to run 4 ranks on a smaller machine; the Hydra launchers of Intel MPI
+  and MPICH oversubscribe on their own and reject the flag.
 - Shared utilities: All tests automatically link against ``x3d2_test_utils`` (provides ``check_norm`` and ``report_perf``).

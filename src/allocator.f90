@@ -1,6 +1,4 @@
 module m_allocator
-  use iso_fortran_env, only: stderr => error_unit
-
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC
   use m_field, only: field_t
 
@@ -101,12 +99,10 @@ contains
     class(field_t), pointer :: ptr
     self%next_id = self%next_id + 1
     allocate (newblock)
-    select type (next)
-    type is (field_t)
-      newblock = field_t(self%ngrid, next, id=self%next_id)
-    class default
-      error stop "Incorrect overloading for create_block"
-    end select
+    ! `next` is passed on as the polymorphic pointer it is, the way
+    ! create_block_omptgt does.  It is the head of the block list, so it is
+    ! null for the very first block, which SELECT TYPE cannot be given.
+    newblock = field_t(self%ngrid, next, id=self%next_id)
     ptr => newblock
   end function create_block
 

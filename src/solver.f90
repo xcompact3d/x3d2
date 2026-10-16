@@ -1,6 +1,4 @@
 module m_solver
-  use iso_fortran_env, only: stderr => error_unit
-
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, get_argument, &
@@ -12,6 +10,7 @@ module m_solver
   use m_field, only: field_t, flist_t
   use m_ibm, only: ibm_t
   use m_les, only: les_t
+  use m_logger, only: log_info, log_warn, abort_run, str
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t, tdsops_t
   use m_time_integrator, only: time_intg_t
@@ -155,8 +154,7 @@ contains
     call solver_cfg%read(nml_file=get_argument(1))
     call les_cfg%read(nml_file=get_argument(1))
     solver%les = les_t(les_cfg)
-    if (solver%mesh%par%is_root()) &
-      print *, 'LES model: ', trim(solver%les%model)
+    call log_info('LES model: '//trim(solver%les%model))
 
     ! Add transported species
     solver%nspecies = solver_cfg%n_species
@@ -178,9 +176,7 @@ contains
     solver%time_integrator = time_intg_t(solver%backend, &
                                          solver%backend%allocator, &
                                          solver_cfg%time_intg, solver%nvars)
-    if (solver%mesh%par%is_root()) then
-      print *, solver_cfg%time_intg//' time integrator instantiated'
-    end if
+    call log_info(solver_cfg%time_intg//' time integrator instantiated')
 
     solver%dt = solver_cfg%dt
     solver%nu = 1._dp/solver_cfg%Re
@@ -194,8 +190,7 @@ contains
     solver%spatial_filter = solver_cfg%spatial_filter
     if (solver%spatial_filter) then
       filter_alpha = solver_cfg%filter_alpha
-      if (solver%mesh%par%is_root()) &
-        print *, 'Spatial filter on, alpha =', filter_alpha
+      call log_info('Spatial filter on, alpha = '//str(filter_alpha))
     end if
     call allocate_tdsops( &
       solver%xdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
@@ -218,17 +213,17 @@ contains
 
     select case (trim(solver_cfg%poisson_solver_type))
     case ('FFT')
-      if (solver%mesh%par%is_root()) print *, 'Poisson solver: FFT'
+      call log_info('Poisson solver: FFT')
       call solver%backend%init_poisson_fft(solver%mesh, solver%xdirps, &
                                            solver%ydirps, solver%zdirps, &
                                            solver_cfg%lowmem_fft)
       solver%poisson => poisson_fft
     case ('CG')
-      if (solver%mesh%par%is_root()) &
-        print *, 'Poisson solver: CG, not yet implemented'
+      call log_warn('Poisson solver: CG, not yet implemented')
       solver%poisson => poisson_cg
     case default
-      error stop 'poisson_solver_type is not valid. Use "FFT" or "CG".'
+      call abort_run('poisson_solver_type is not valid. Use "FFT" or "CG".', &
+                     collective=.true.)
     end select
 
     ! Initialize the IBM module
@@ -346,10 +341,10 @@ contains
       if (mesh%par%nproc_dir(dir) == 1) then
         dirps%lowpass%prefer_thomas = .true.
         dirps%lowpass_sym%prefer_thomas = .true.
-      else if (mesh%par%is_root()) then
-        print *, 'WARNING: the low-pass filter is decomposed in direction ', &
-          dir, '; it does not exactly preserve the mean and its result &
-          &depends on the decomposition.'
+      else
+        call log_warn('the low-pass filter is decomposed in direction ' &
+                      //str(dir)//'; it does not exactly preserve the mean &
+                      &and its result depends on the decomposition.')
       end if
     end if
 
@@ -651,7 +646,7 @@ contains
       call self%backend%allocator%release_block(f_dir)
       call self%backend%allocator%release_block(filtered_dir)
     case default
-      error stop 'Invalid direction in spatial filter.'
+      call abort_run('Invalid direction in spatial filter.')
     end select
 
   end subroutine filter_in_dir
@@ -992,7 +987,7 @@ contains
         w, self%dpdz_last, X_FACE, bcs(1, 1), bcs(1, 2))
     end if
     if (any(bcs(3, :) == BC_DIRICHLET)) &
-      error stop 'precorrect_walls: Dirichlet z-faces are not supported.'
+      call abort_run('precorrect_walls: Dirichlet z-faces are not supported.')
 
   end subroutine precorrect_walls
 

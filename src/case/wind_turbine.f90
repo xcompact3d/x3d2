@@ -11,7 +11,6 @@ module m_case_wind_turbine
   !! Poisson solver requires z periodic and only supports a single rank for
   !! non-periodic directions. The two_turbines case uses free-slip walls
   !! in y and z (wind-tunnel walls), which the FFT solver cannot currently do.
-  use iso_fortran_env, only: stderr => error_unit
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, &
                    MPI_Allreduce
 
@@ -27,6 +26,7 @@ module m_case_wind_turbine
   use m_solver, only: init
   use m_turbine_model, only: turbine_model_t
   use m_turbine_dummy, only: turbine_dummy_t
+  use m_logger, only: log_info, abort_run, str
 
   implicit none
 
@@ -59,11 +59,13 @@ contains
     ! The inflow, outflow and mass-correction BCs act on the x = 1 and x = nx
     ! planes and assume every rank holds both, so x must not be decomposed.
     if (mesh%par%nproc_dir(1) /= 1) &
-      error stop 'wind_turbine: x must not be decomposed (nproc_dir(1) = 1).'
+      call abort_run('wind_turbine: x must not be decomposed (nproc_dir(1) = &
+                     &1).', collective=.true.)
     ! apply_BC overwrites both x planes as Dirichlet inflow and outflow, so the
     ! mesh must agree for the derivatives and the pressure solve.
     if (any(mesh%grid%BCs_global(1, :) /= BC_DIRICHLET)) &
-      error stop 'wind_turbine requires BC_x = ''dirichlet'', ''dirichlet''.'
+      call abort_run('wind_turbine requires BC_x = ''dirichlet'', &
+                     &''dirichlet''.', collective=.true.)
 
     call flow_case%wt_cfg%read(nml_file=get_argument(1))
     call flow_case%case_init(backend, mesh, host_allocator)
@@ -98,7 +100,8 @@ contains
     case (0)
       allocate (turbine_dummy_t :: flow_case%turbine)
     case default
-      error stop 'Unsupported wind turbine model selected.'
+      call abort_run('Unsupported wind turbine model selected.', &
+                     collective=.true.)
     end select
 
     call flow_case%turbine%init(flow_case%solver%backend, &
@@ -320,9 +323,7 @@ contains
       end if
     end if
 
-    if (self%solver%mesh%par%is_root()) then
-      print *, 'time =', t, 'iteration =', iter
-    end if
+    call log_info('time = '//str(t)//' iteration = '//str(iter))
     call self%monitoring%write_step( &
       self%solver, t, self%solver%u, self%solver%v, self%solver%w)
   end subroutine postprocess_wind_turbine
