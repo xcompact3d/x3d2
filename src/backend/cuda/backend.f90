@@ -20,7 +20,7 @@ module m_cuda_backend
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused, exec_dist_tds_compact
   use m_cuda_exec_thom, only: exec_thom_tds_compact
-  use m_cuda_poisson_fft, only: cuda_poisson_fft_t, init_cuda_poisson_fft_t
+  use m_cuda_poisson_fft, only: create_cuda_poisson_fft
   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
   use m_cuda_tdsops, only: cuda_tdsops_t
   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
@@ -125,7 +125,6 @@ contains
     class(allocator_t), target, intent(inout) :: allocator
     type(cuda_backend_t) :: backend
 
-    type(cuda_poisson_fft_t) :: cuda_poisson_fft
     integer :: n_groups
 
     call backend%base_init()
@@ -1894,13 +1893,8 @@ contains
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
 
-    allocate (cuda_poisson_fft_t :: self%poisson_fft)
-
-    select type (poisson_fft => self%poisson_fft)
-    type is (cuda_poisson_fft_t)
-      call init_cuda_poisson_fft_t(poisson_fft, mesh, xdirps, ydirps, &
-                                   zdirps, lowmem)
-    end select
+    call create_cuda_poisson_fft(self%poisson_fft, mesh, xdirps, ydirps, &
+                                 zdirps, lowmem)
 
   end subroutine init_cuda_poisson_fft
 

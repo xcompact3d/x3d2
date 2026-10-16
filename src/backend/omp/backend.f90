@@ -1704,7 +1704,7 @@ contains
 
   subroutine init_omp_poisson_fft(self, mesh, xdirps, ydirps, zdirps, lowmem)
 #ifdef WITH_2DECOMPFFT
-    use m_omp_poisson_fft, only: omp_poisson_fft_t
+    use m_omp_poisson_fft, only: create_omp_poisson_fft
 #endif
 
     implicit none
@@ -1715,12 +1715,8 @@ contains
     logical, optional, intent(in) :: lowmem
 
 #ifdef WITH_2DECOMPFFT
-    allocate (omp_poisson_fft_t :: self%poisson_fft)
-
-    select type (poisson_fft => self%poisson_fft)
-    type is (omp_poisson_fft_t)
-      poisson_fft = omp_poisson_fft_t(mesh, xdirps, ydirps, zdirps, lowmem)
-    end select
+    call create_omp_poisson_fft(self%poisson_fft, mesh, xdirps, ydirps, &
+                                zdirps, lowmem)
 #else
     error stop 'This build does not support FFT based Poisson solver &
                 &on the OpenMP backend!'

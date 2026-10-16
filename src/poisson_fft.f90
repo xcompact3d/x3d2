@@ -33,33 +33,23 @@ module m_poisson_fft
     !> Periodicity in x, y, and z
     logical :: periodic_x, periodic_y, periodic_z, &
                stretched_y = .false., stretched_y_sym
+    !> Boundary condition case, see poisson_bc_code
+    character(len=3) :: bc_code
     !> Stretching operator matrices
     real(dp), allocatable, dimension(:, :, :, :) :: a_odd_re, a_odd_im, &
                                                     a_even_re, a_even_im, &
                                                     a_re, a_im
     !> lowmem option, only used in CUDA backend
     logical :: lowmem = .false.
-    !> Procedure pointer to BC specific poisson solvers
-    procedure(poisson_xxx), pointer :: poisson => null()
   contains
-    procedure(fft_forward), deferred :: fft_forward_010
-    procedure(fft_forward), deferred :: fft_forward_100
-    procedure(fft_forward), deferred :: fft_forward_110
+    !! Each backend extends this type once per boundary condition case
+    !! (000, 010, 100, 110), and each case type supplies its own transforms,
+    !! spectral postprocess and periodicity reorder.
     procedure(fft_forward), deferred :: fft_forward
-    procedure(fft_backward), deferred :: fft_backward_010
-    procedure(fft_backward), deferred :: fft_backward_100
-    procedure(fft_backward), deferred :: fft_backward_110
     procedure(fft_backward), deferred :: fft_backward
-    procedure(fft_postprocess), deferred :: fft_postprocess_000
-    procedure(fft_postprocess), deferred :: fft_postprocess_010
-    procedure(fft_postprocess), deferred :: fft_postprocess_100
-    procedure(fft_postprocess), deferred :: fft_postprocess_110
-    procedure(field_process), deferred :: enforce_periodicity_x
-    procedure(field_process), deferred :: undo_periodicity_x
-    procedure(field_process), deferred :: enforce_periodicity_y
-    procedure(field_process), deferred :: undo_periodicity_y
-    procedure(field_process), deferred :: enforce_periodicity_xy
-    procedure(field_process), deferred :: undo_periodicity_xy
+    procedure(fft_postprocess), deferred :: fft_postprocess
+    procedure :: enforce_periodicity
+    procedure :: undo_periodicity
     procedure :: base_init
     procedure :: solve_poisson
     procedure :: stretching_matrix
@@ -96,26 +86,47 @@ module m_poisson_fft
     end subroutine fft_postprocess
   end interface
 
-  abstract interface
-    subroutine poisson_xxx(self, f, temp)
-      import :: poisson_fft_t
-      import :: field_t
-
-      class(poisson_fft_t) :: self
-      class(field_t), intent(inout) :: f, temp
-    end subroutine poisson_xxx
-
-    subroutine field_process(self, f_out, f_in)
-      import :: poisson_fft_t
-      import :: field_t
-
-      class(poisson_fft_t) :: self
-      class(field_t), intent(inout) :: f_out
-      class(field_t), intent(in) :: f_in
-    end subroutine field_process
-  end interface
-
 contains
+
+  pure function poisson_bc_code(periodic) result(bc_code)
+    !! Names the boundary condition case of the FFT Poisson solver, one
+    !! digit per direction in x, y, z order: 0 for periodic, 1 otherwise.
+    !! The 000 case is periodic everywhere, 110 is non-periodic in x and y.
+    implicit none
+
+    logical, intent(in) :: periodic(3)
+    character(len=3) :: bc_code
+
+    integer :: dir
+
+    do dir = 1, 3
+      if (periodic(dir)) then
+        bc_code(dir:dir) = '0'
+      else
+        bc_code(dir:dir) = '1'
+      end if
+    end do
+  end function poisson_bc_code
+
+  pure function spectral_dirs(bc_code) result(dirs)
+    !! The physical direction held in each dimension of the spectral array.
+    !! The r2c transform runs along dim1, so a case with x non-periodic
+    !! permutes a periodic direction into dim1 ahead of the FFT: 100 swaps
+    !! x and y, 110 brings z to the front.
+    implicit none
+
+    character(len=3), intent(in) :: bc_code
+    integer :: dirs(3)
+
+    select case (bc_code)
+    case ('100')
+      dirs = [2, 1, 3]
+    case ('110')
+      dirs = [3, 1, 2]
+    case default
+      dirs = [1, 2, 3]
+    end select
+  end function spectral_dirs
 
   subroutine base_init(self, mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
     implicit none
@@ -142,6 +153,12 @@ contains
     self%periodic_x = mesh%grid%periodic_BC(1)
     self%periodic_y = mesh%grid%periodic_BC(2)
     self%periodic_z = mesh%grid%periodic_BC(3)
+    self%bc_code = poisson_bc_code(mesh%grid%periodic_BC)
+    select case (self%bc_code)
+    case ('000', '010', '100', '110')
+    case default
+      error stop 'Requested BCs are not supported in FFT-based Poisson solver!'
+    end select
 
     self%sp_st = n_sp_st
 
@@ -170,101 +187,56 @@ contains
                   & or z-directions!'
     end if
 
-    ! use correct procedure based on BCs
-    if (self%periodic_x .and. self%periodic_y .and. self%periodic_z) then
-      self%poisson => poisson_000
-    else if (self%periodic_x .and. (.not. self%periodic_y) &
-             .and. (self%periodic_z)) then
-      self%poisson => poisson_010
-      ! stretching requires some coefficients matrices
-      if (mesh%geo%stretched(2)) then
-        self%stretched_y = .true.
-        call self%stretching_matrix(mesh%geo, xdirps, ydirps, zdirps)
-      end if
-    else if ((.not. self%periodic_x) .and. (self%periodic_y) &
-             .and. (self%periodic_z)) then
-      ! The OpenMP backend runs the 010, 100 and 110 cases on multiple ranks.
-      ! The CUDA backend runs the 100 and 110 cases on multiple ranks with a
-      ! 1D z decomposition and cuFFTMp, and guards its own 010 rank limit
-      ! where the case is initialised.
-      self%poisson => poisson_100
-    else if ((.not. self%periodic_x) .and. (.not. self%periodic_y) &
-             .and. (self%periodic_z)) then
-      self%poisson => poisson_110
-
-    else
-      error stop 'Requested BCs are not supported in FFT-based Poisson solver!'
+    ! stretching requires some coefficients matrices, which only the 010
+    ! case supports
+    if (self%bc_code == '010' .and. mesh%geo%stretched(2)) then
+      self%stretched_y = .true.
+      call self%stretching_matrix(mesh%geo, xdirps, ydirps, zdirps)
     end if
   end subroutine base_init
 
   subroutine solve_poisson(self, f, temp)
+    !! Gathers each non-periodic line into a periodic one, so that a plain
+    !! FFT can stand in for the cosine transform, solves in spectral space,
+    !! and scatters the result back. The 000 case has nothing to reorder and
+    !! overrides this to transform f in place.
     implicit none
 
     class(poisson_fft_t) :: self
     class(field_t), intent(inout) :: f, temp
 
-    call self%poisson(f, temp)
+    call self%enforce_periodicity(temp, f)
+
+    call self%fft_forward(temp)
+    call self%fft_postprocess
+    call self%fft_backward(temp)
+
+    call self%undo_periodicity(f, temp)
 
   end subroutine solve_poisson
 
-  subroutine poisson_000(self, f, temp)
+  subroutine enforce_periodicity(self, f_out, f_in)
+    !! Reorder hook of solve_poisson, overridden by every case that has a
+    !! non-periodic direction.
     implicit none
 
     class(poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f, temp
+    class(field_t), intent(inout) :: f_out
+    class(field_t), intent(in) :: f_in
 
-    call self%fft_forward(f)
-    call self%fft_postprocess_000
-    call self%fft_backward(f)
+    error stop 'enforce_periodicity is not used by this Poisson BC case.'
+  end subroutine enforce_periodicity
 
-  end subroutine poisson_000
-
-  subroutine poisson_010(self, f, temp)
+  subroutine undo_periodicity(self, f_out, f_in)
+    !! Inverse of enforce_periodicity.
     implicit none
 
     class(poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f, temp
+    class(field_t), intent(inout) :: f_out
+    class(field_t), intent(in) :: f_in
 
-    call self%enforce_periodicity_y(temp, f)
-
-    call self%fft_forward_010(temp)
-    call self%fft_postprocess_010
-    call self%fft_backward_010(temp)
-
-    call self%undo_periodicity_y(f, temp)
-
-  end subroutine poisson_010
-
-  subroutine poisson_100(self, f, temp)
-    implicit none
-    class(poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f, temp
-
-    call self%enforce_periodicity_x(temp, f)
-
-    call self%fft_forward_100(temp)
-    call self%fft_postprocess_100
-    call self%fft_backward_100(temp)
-
-    call self%undo_periodicity_x(f, temp)
-
-  end subroutine poisson_100
-
-  subroutine poisson_110(self, f, temp)
-    implicit none
-
-    class(poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f, temp
-
-    call self%enforce_periodicity_xy(temp, f)
-
-    call self%fft_forward_110(temp)
-    call self%fft_postprocess_110
-    call self%fft_backward_110(temp)
-
-    call self%undo_periodicity_xy(f, temp)
-
-  end subroutine poisson_110
+    error stop 'undo_periodicity is not used by this Poisson BC case.'
+  end subroutine undo_periodicity
 
   subroutine stretching_matrix(self, geo, xdirps, ydirps, zdirps)
     !! Stretching necessitates a special operation in spectral space.
@@ -655,7 +627,7 @@ contains
     type(geo_t), intent(in) :: geo
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
-    integer :: i, j, k, ix, iy, iz
+    integer :: i, j, k, ix, iy, iz, ixyz(3), dirs(3)
     real(dp) :: rlexs, rleys, rlezs, xtt, ytt, ztt, xt1, yt1, zt1
     complex(dp) :: xt2, yt2, zt2, xyzk
 
@@ -677,150 +649,49 @@ contains
       zdirps%stagder_v2p%a, zdirps%stagder_v2p%b, zdirps%stagder_v2p%alpha &
       )
 
-    if ((.not. self%periodic_x) .and. (.not. self%periodic_y) .and. &
-        self%periodic_z) then
-      ! =========================================================================
-      ! 110 case: Non-periodic X, Non-periodic Y, Periodic Z
-      ! Uses Z-TRANSPOSED layout: spectral array is (nz/2+1, nx, ny)
-      !   dim1 (i) indexes Z R2C modes  -> use kz, ez
-      !   dim2 (j) indexes X modes      -> use kx, ex
-      !   dim3 (k) indexes Y modes      -> use ky, ey
-      ! =========================================================================
-      do k = 1, self%nz_spec     ! Y modes
-        do j = 1, self%ny_spec   ! X modes
-          do i = 1, self%nx_spec ! Z R2C modes
-            iz = i + self%sp_st(1)
-            ix = j + self%sp_st(2)
-            iy = k + self%sp_st(3)
+    ! The spectral array is laid out as spectral_dirs gives, e.g. for 110
+    ! it is (nz/2 + 1, nx, ny): dim1 indexes the z r2c modes, dim2 the x
+    ! modes and dim3 the y modes. ixyz maps a spectral index back to the
+    ! x, y and z mode numbers.
+    dirs = spectral_dirs(self%bc_code)
+    do k = 1, self%nz_spec
+      do j = 1, self%ny_spec
+        do i = 1, self%nx_spec
+          ixyz(dirs(1)) = i + self%sp_st(1)
+          ixyz(dirs(2)) = j + self%sp_st(2)
+          ixyz(dirs(3)) = k + self%sp_st(3)
+          ix = ixyz(1); iy = ixyz(2); iz = ixyz(3)
 
-            rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
-            rleys = real(self%eys(iy), kind=dp)*geo%d(2)
-            rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
+          rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
+          rleys = real(self%eys(iy), kind=dp)*geo%d(2)
+          rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
 
-            xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
-                     + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
-                     + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
-                     + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
-            ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
-                     + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
-                     + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
-                     + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
-            ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
-                     + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
-                     + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
-                     + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
+          xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
+                   + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
+                   + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
+                   + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
+          ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
+                   + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
+                   + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
+                   + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
+          ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
+                   + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
+                   + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
+                   + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
 
-            xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
-            yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
-            zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
+          xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
+          yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
+          zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
 
-            xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
-            yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
-            zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
+          xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
+          yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
+          zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
 
-            xyzk = xt2 + yt2 + zt2
-            self%waves(i, j, k) = xyzk
-          end do
+          xyzk = xt2 + yt2 + zt2
+          self%waves(i, j, k) = xyzk
         end do
       end do
-
-    else if ((.not. self%periodic_x) .and. self%periodic_y .and. &
-             self%periodic_z) then
-      ! =========================================================================
-      ! 100 case: Non-periodic X, Periodic Y, Periodic Z
-      ! Uses TRANSPOSED indexing because data is transposed before FFT
-      ! =========================================================================
-      do k = 1, self%nz_spec
-        do j = 1, self%ny_spec  ! This iterates over X (Dirichlet) after transpose
-          do i = 1, self%nx_spec  ! This iterates over Y (periodic, R2C) after transpose
-            iy = i + self%sp_st(1)
-            ix = j + self%sp_st(2)
-            iz = k + self%sp_st(3)
-
-            rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
-            rleys = real(self%eys(iy), kind=dp)*geo%d(2)
-            rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
-
-            xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
-                     + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
-                     + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
-                     + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
-            ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
-                     + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
-                     + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
-                     + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
-            ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
-                     + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
-                     + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
-                     + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
-
-            xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
-            yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
-            zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
-
-            xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
-            yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
-            zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
-
-            xyzk = xt2 + yt2 + zt2
-            self%waves(i, j, k) = xyzk
-          end do
-        end do
-      end do
-
-    else if (self%periodic_z) then
-      ! =========================================================================
-      ! 000, 010 cases: Periodic Z (standard indexing, no transpose)
-      ! 000: Periodic X, Periodic Y, Periodic Z
-      ! 010: Periodic X, Non-Periodic Y, Periodic Z
-      ! =========================================================================
-      do k = 1, self%nz_spec
-        do j = 1, self%ny_spec
-          do i = 1, self%nx_spec
-            ix = i + self%sp_st(1)
-            iy = j + self%sp_st(2)
-            iz = k + self%sp_st(3)
-
-            rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
-            rleys = real(self%eys(iy), kind=dp)*geo%d(2)
-            rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
-
-            xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
-                     + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
-                     + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
-                     + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
-            ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
-                     + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
-                     + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
-                     + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
-            ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
-                     + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
-                     + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
-                     + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
-
-            xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
-            yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
-            zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
-
-            xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
-            yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
-            zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
-
-            xyzk = xt2 + yt2 + zt2
-            self%waves(i, j, k) = xyzk
-          end do
-        end do
-      end do
-
-    else if (.not. (self%periodic_x .and. self%periodic_y &
-                    .and. self%periodic_z)) then
-      ! poisson 111
-      error stop 'No support for all non-periodic BCs yet!'
-
-    else
-      ! poisson 001, 011, 101
-      error stop 'FFT Poisson solver does not support specified BCs!'
-    end if
+    end do
 
   end subroutine waves_set
 
