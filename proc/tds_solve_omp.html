@@ -1,0 +1,793 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>tds_solve_omp &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../program/xcompact.html">Program</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>tds_solve_omp
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">18 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/backend.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/backend.f90.html'>backend.f90</a></li>
+                <li class="breadcrumb-item"><a href='../module/m_omp_backend.html'>m_omp_backend</a></li>
+            <li class="breadcrumb-item active" aria-current="page">tds_solve_omp</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine tds_solve_omp(self, du, u, tdsops)  
+</h2>
+    
+
+
+    <h3>Type Bound</h3>
+    <p><a href='../type/omp_backend_t.html'>omp_backend_t</a></p>
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~70"></span>
+              class(<a href='../type/omp_backend_t.html'>omp_backend_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-du~6"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>du</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u~11"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tdsops~2"></span>
+              class(<a href='../type/tdsops_t.html'>tdsops_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tdsops</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~tds_solve_omp~~CallsGraph Pages: 1 -->
+<svg id="proctds_solve_ompCallsGraph" width="641pt" height="160pt"
+ viewBox="0.00 0.00 641.00 160.45" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~tds_solve_omp~~CallsGraph" class="graph" transform="scale(0.39 0.39) rotate(0) translate(4 403)">
+<title>proc~~tds_solve_omp~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-403 1622,-403 1622,4 -4,4"/>
+<!-- proc~tds_solve_omp -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node1" class="node">
+<title>proc~tds_solve_omp</title>
+<polygon fill="none" stroke="black" points="283,-106 0,-106 0,-82 283,-82 283,-106"/>
+<text text-anchor="middle" x="141.5" y="-91.6" font-family="Helvetica,sans-Serif" font-size="10.50">m_omp_backend::omp_backend_t%tds_solve_omp</text>
+</g>
+<!-- proc~abort_run -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node2" class="node">
+<title>proc~abort_run</title>
+<g id="a_proc~~tds_solve_omp~~CallsGraph_node2"><a xlink:href="../proc/abort_run.html" xlink:title="m_logger::abort_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="1481,-206 1359,-206 1359,-182 1481,-182 1481,-206"/>
+<text text-anchor="middle" x="1420" y="-191.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::abort_run</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_omp&#45;&gt;proc~abort_run -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge1" class="edge">
+<title>proc~tds_solve_omp&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#ff0000" d="M178.24,-106.03C272.98,-136.81 538.83,-216 766.5,-216 766.5,-216 766.5,-216 1041.5,-216 1148.72,-216 1272.77,-207.05 1348.55,-200.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1349.25,-204.02 1358.91,-199.67 1348.65,-197.04 1349.25,-204.02"/>
+</g>
+<!-- proc~move_data_loc -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node3" class="node">
+<title>proc~move_data_loc</title>
+<g id="a_proc~~tds_solve_omp~~CallsGraph_node3"><a xlink:href="../proc/move_data_loc.html" xlink:title="m_common::move_data_loc">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="849,-66 686,-66 686,-42 849,-42 849,-66"/>
+<text text-anchor="middle" x="767.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_common::move_data_loc</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_omp&#45;&gt;proc~move_data_loc -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge2" class="edge">
+<title>proc~tds_solve_omp&#45;&gt;proc~move_data_loc</title>
+<path fill="none" stroke="#ff0000" d="M232.16,-82C259.95,-78.63 290.7,-75.28 319,-73 442.33,-63.06 585.23,-58.14 675.73,-55.83"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="676.04,-59.33 685.95,-55.58 675.87,-52.33 676.04,-59.33"/>
+</g>
+<!-- proc~set_data_loc -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node4" class="node">
+<title>proc~set_data_loc</title>
+<g id="a_proc~~tds_solve_omp~~CallsGraph_node4"><a xlink:href="../proc/set_data_loc.html" xlink:title="m_field::field_t%set_data_loc">
+<polygon fill="#d9534f" stroke="#d9534f" points="851,-24 684,-24 684,0 851,0 851,-24"/>
+<text text-anchor="middle" x="767.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_field::field_t%set_data_loc</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_omp&#45;&gt;proc~set_data_loc -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge3" class="edge">
+<title>proc~tds_solve_omp&#45;&gt;proc~set_data_loc</title>
+<path fill="none" stroke="#ff0000" d="M186.78,-81.94C222.28,-72.7 273.5,-60.33 319,-53 440.75,-33.38 582.77,-22.35 673.6,-16.79"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="673.83,-20.29 683.6,-16.19 673.4,-13.3 673.83,-20.29"/>
+</g>
+<!-- proc~tds_solve_dist -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node5" class="node">
+<title>proc~tds_solve_dist</title>
+<g id="a_proc~~tds_solve_omp~~CallsGraph_node5"><a xlink:href="../proc/tds_solve_dist.html" xlink:title="m_omp_backend::tds_solve_dist">
+<polygon fill="#d9534f" stroke="#d9534f" points="558.5,-268 374.5,-268 374.5,-244 558.5,-244 558.5,-268"/>
+<text text-anchor="middle" x="466.5" y="-253.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_omp_backend::tds_solve_dist</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_omp&#45;&gt;proc~tds_solve_dist -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge4" class="edge">
+<title>proc~tds_solve_omp&#45;&gt;proc~tds_solve_dist</title>
+<path fill="none" stroke="#ff0000" d="M153.98,-106.19C180.31,-133.31 248.23,-198.73 319,-230 333.15,-236.25 348.69,-241 364.21,-244.61"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="363.87,-248.12 374.39,-246.82 365.36,-241.28 363.87,-248.12"/>
+</g>
+<!-- proc~thom_solve_omp -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node6" class="node">
+<title>proc~thom_solve_omp</title>
+<g id="a_proc~~tds_solve_omp~~CallsGraph_node6"><a xlink:href="../proc/thom_solve_omp.html" xlink:title="m_omp_backend::omp_backend_t%thom_solve_omp">
+<polygon fill="#d9534f" stroke="#d9534f" points="614,-106 319,-106 319,-82 614,-82 614,-106"/>
+<text text-anchor="middle" x="466.5" y="-91.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_omp_backend::omp_backend_t%thom_solve_omp</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_omp&#45;&gt;proc~thom_solve_omp -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge5" class="edge">
+<title>proc~tds_solve_omp&#45;&gt;proc~thom_solve_omp</title>
+<path fill="none" stroke="#ff0000" d="M283.23,-94C291.73,-94 300.3,-94 308.85,-94"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="308.87,-97.5 318.87,-94 308.87,-90.5 308.87,-97.5"/>
+</g>
+<!-- interface~str -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node7" class="node">
+<title>interface~str</title>
+<g id="a_proc~~tds_solve_omp~~CallsGraph_node7"><a xlink:href="../interface/str.html" xlink:title="m_logger::str">
+<polygon fill="#a7506f" stroke="#a7506f" points="1609.5,-321 1525.5,-321 1525.5,-297 1609.5,-297 1609.5,-321"/>
+<text text-anchor="middle" x="1567.5" y="-306.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::str</text>
+</a>
+</g>
+</g>
+<!-- proc~abort_run&#45;&gt;interface~str -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge6" class="edge">
+<title>proc~abort_run&#45;&gt;interface~str</title>
+<path fill="none" stroke="#ff0000" d="M1430.77,-206.16C1446.95,-225.63 1481.1,-264.06 1517,-288 1519.37,-289.58 1521.87,-291.08 1524.45,-292.5"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1522.88,-295.62 1533.38,-297 1526.03,-289.37 1522.88,-295.62"/>
+</g>
+<!-- mpi_abort -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node8" class="node">
+<title>mpi_abort</title>
+<polygon fill="#777777" stroke="#777777" points="1601,-153 1534,-153 1534,-129 1601,-129 1601,-153"/>
+<text text-anchor="middle" x="1567.5" y="-138.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_abort</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_abort -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge7" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_abort</title>
+<path fill="none" stroke="#ff0000" d="M1454.02,-181.97C1474.83,-174.39 1501.91,-164.53 1524.28,-156.38"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1525.67,-159.6 1533.87,-152.89 1523.27,-153.02 1525.67,-159.6"/>
+</g>
+<!-- mpi_barrier -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node9" class="node">
+<title>mpi_barrier</title>
+<polygon fill="#777777" stroke="#777777" points="1605,-111 1530,-111 1530,-87 1605,-87 1605,-111"/>
+<text text-anchor="middle" x="1567.5" y="-96.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_barrier</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_barrier -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge8" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_barrier</title>
+<path fill="none" stroke="#ff0000" d="M1434.51,-181.77C1452.4,-166.02 1485.39,-138.48 1517,-120 1519.78,-118.37 1522.71,-116.81 1525.7,-115.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1527.2,-118.47 1534.75,-111.04 1524.21,-112.14 1527.2,-118.47"/>
+</g>
+<!-- mpi_comm_rank -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node10" class="node">
+<title>mpi_comm_rank</title>
+<polygon fill="#777777" stroke="#777777" points="1618,-69 1517,-69 1517,-45 1618,-45 1618,-69"/>
+<text text-anchor="middle" x="1567.5" y="-54.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_comm_rank</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_comm_rank -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge9" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_comm_rank</title>
+<path fill="none" stroke="#ff0000" d="M1428.23,-181.86C1442.52,-158.77 1476.54,-108.14 1517,-78 1518.86,-76.62 1520.81,-75.31 1522.84,-74.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1524.92,-76.92 1532.04,-69.07 1521.58,-70.77 1524.92,-76.92"/>
+</g>
+<!-- mpi_comm_size -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node11" class="node">
+<title>mpi_comm_size</title>
+<polygon fill="#777777" stroke="#777777" points="1616,-279 1519,-279 1519,-255 1616,-255 1616,-279"/>
+<text text-anchor="middle" x="1567.5" y="-264.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_comm_size</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_comm_size -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge10" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_comm_size</title>
+<path fill="none" stroke="#ff0000" d="M1442.05,-206.15C1461.3,-217.09 1490.7,-233.33 1517,-246 1520.35,-247.61 1523.86,-249.23 1527.39,-250.82"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1526.15,-254.1 1536.72,-254.91 1528.96,-247.69 1526.15,-254.1"/>
+</g>
+<!-- mpi_finalized -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node12" class="node">
+<title>mpi_finalized</title>
+<polygon fill="#777777" stroke="#777777" points="1609,-237 1526,-237 1526,-213 1609,-213 1609,-237"/>
+<text text-anchor="middle" x="1567.5" y="-222.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_finalized</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_finalized -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge11" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_finalized</title>
+<path fill="none" stroke="#ff0000" d="M1477.67,-206.07C1490.26,-208.76 1503.53,-211.58 1515.86,-214.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1515.46,-217.7 1525.97,-216.36 1516.92,-210.86 1515.46,-217.7"/>
+</g>
+<!-- mpi_initialized -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node13" class="node">
+<title>mpi_initialized</title>
+<polygon fill="#777777" stroke="#777777" points="1612,-195 1523,-195 1523,-171 1612,-171 1612,-195"/>
+<text text-anchor="middle" x="1567.5" y="-180.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_initialized</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_initialized -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge12" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_initialized</title>
+<path fill="none" stroke="#ff0000" d="M1481.02,-189.46C1491.47,-188.67 1502.28,-187.85 1512.56,-187.08"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1512.91,-190.56 1522.62,-186.32 1512.38,-183.58 1512.91,-190.56"/>
+</g>
+<!-- proc~copy_into_buffers -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node14" class="node">
+<title>proc~copy_into_buffers</title>
+<g id="a_proc~~tds_solve_omp~~CallsGraph_node14"><a xlink:href="../proc/copy_into_buffers.html" xlink:title="m_omp_backend::copy_into_buffers">
+<polygon fill="#d9534f" stroke="#d9534f" points="870,-268 665,-268 665,-244 870,-244 870,-268"/>
+<text text-anchor="middle" x="767.5" y="-253.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_omp_backend::copy_into_buffers</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_dist&#45;&gt;proc~copy_into_buffers -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge13" class="edge">
+<title>proc~tds_solve_dist&#45;&gt;proc~copy_into_buffers</title>
+<path fill="none" stroke="#0066ff" d="M558.83,-256C589.05,-256 623.03,-256 654.61,-256"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="654.77,-259.5 664.77,-256 654.77,-252.5 654.77,-259.5"/>
+</g>
+<!-- proc~exec_dist_tds_compact~3 -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node15" class="node">
+<title>proc~exec_dist_tds_compact~3</title>
+<g id="a_proc~~tds_solve_omp~~CallsGraph_node15"><a xlink:href="../proc/exec_dist_tds_compact~3.html" xlink:title="m_omp_exec_dist::exec_dist_tds_compact">
+<polygon fill="#d9534f" stroke="#d9534f" points="885,-310 650,-310 650,-286 885,-286 885,-310"/>
+<text text-anchor="middle" x="767.5" y="-295.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_omp_exec_dist::exec_dist_tds_compact</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_dist&#45;&gt;proc~exec_dist_tds_compact~3 -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge14" class="edge">
+<title>proc~tds_solve_dist&#45;&gt;proc~exec_dist_tds_compact~3</title>
+<path fill="none" stroke="#0066ff" d="M553.18,-268.04C590.01,-273.21 633.2,-279.28 671.05,-284.59"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="670.68,-288.07 681.06,-286 671.65,-281.14 670.68,-288.07"/>
+</g>
+<!-- proc~get_n_groups -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node17" class="node">
+<title>proc~get_n_groups</title>
+<g id="a_proc~~tds_solve_omp~~CallsGraph_node17"><a xlink:href="../proc/get_n_groups.html" xlink:title="m_allocator::allocator_t%get_n_groups">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="877.5,-188 657.5,-188 657.5,-164 877.5,-164 877.5,-188"/>
+<text text-anchor="middle" x="767.5" y="-173.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_allocator::allocator_t%get_n_groups</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_dist&#45;&gt;proc~get_n_groups -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge15" class="edge">
+<title>proc~tds_solve_dist&#45;&gt;proc~get_n_groups</title>
+<path fill="none" stroke="#0066ff" d="M512.59,-243.94C565.84,-229.69 654.39,-206 711.59,-190.69"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="712.78,-194 721.54,-188.03 710.97,-187.23 712.78,-194"/>
+</g>
+<!-- proc~sendrecv_fields~2 -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node18" class="node">
+<title>proc~sendrecv_fields~2</title>
+<g id="a_proc~~tds_solve_omp~~CallsGraph_node18"><a xlink:href="../proc/sendrecv_fields~2.html" xlink:title="m_omp_sendrecv::sendrecv_fields">
+<polygon fill="#d9534f" stroke="#d9534f" points="1138,-352 943,-352 943,-328 1138,-328 1138,-352"/>
+<text text-anchor="middle" x="1040.5" y="-337.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_omp_sendrecv::sendrecv_fields</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_dist&#45;&gt;proc~sendrecv_fields~2 -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge16" class="edge">
+<title>proc~tds_solve_dist&#45;&gt;proc~sendrecv_fields~2</title>
+<path fill="none" stroke="#0066ff" d="M494.67,-268.06C529.75,-283.01 593.09,-307.87 650,-319 744.29,-337.44 853.71,-341.89 932.52,-342.2"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="932.94,-345.7 942.94,-342.21 932.95,-338.7 932.94,-345.7"/>
+</g>
+<!-- proc~thom_solve_omp&#45;&gt;proc~abort_run -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge17" class="edge">
+<title>proc~thom_solve_omp&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#cc00ff" d="M614.19,-86.4C755.14,-81.83 973.6,-81.91 1160,-113 1240.38,-126.41 1330.38,-158.67 1380.3,-178.2"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1379.15,-181.5 1389.74,-181.92 1381.72,-174.99 1379.15,-181.5"/>
+</g>
+<!-- proc~thom_solve_omp&#45;&gt;proc~move_data_loc -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge20" class="edge">
+<title>proc~thom_solve_omp&#45;&gt;proc~move_data_loc</title>
+<path fill="none" stroke="#cc00ff" d="M557.21,-82C594.71,-76.98 638.22,-71.16 675.83,-66.13"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="676.31,-69.6 685.76,-64.8 675.38,-62.66 676.31,-69.6"/>
+</g>
+<!-- proc~thom_solve_omp&#45;&gt;proc~set_data_loc -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge21" class="edge">
+<title>proc~thom_solve_omp&#45;&gt;proc~set_data_loc</title>
+<path fill="none" stroke="#cc00ff" d="M499.06,-81.9C535.12,-68.44 596.11,-46.79 650,-33 659.88,-30.47 670.31,-28.13 680.71,-26.01"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="681.51,-29.42 690.64,-24.04 680.15,-22.55 681.51,-29.42"/>
+</g>
+<!-- proc~exec_thom_tds_compact~3 -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node16" class="node">
+<title>proc~exec_thom_tds_compact~3</title>
+<g id="a_proc~~tds_solve_omp~~CallsGraph_node16"><a xlink:href="../proc/exec_thom_tds_compact~3.html" xlink:title="m_exec_thom::exec_thom_tds_compact">
+<polygon fill="#d9534f" stroke="#d9534f" points="879.5,-146 655.5,-146 655.5,-122 879.5,-122 879.5,-146"/>
+<text text-anchor="middle" x="767.5" y="-131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_exec_thom::exec_thom_tds_compact</text>
+</a>
+</g>
+</g>
+<!-- proc~thom_solve_omp&#45;&gt;proc~exec_thom_tds_compact~3 -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge18" class="edge">
+<title>proc~thom_solve_omp&#45;&gt;proc~exec_thom_tds_compact~3</title>
+<path fill="none" stroke="#cc00ff" d="M557.21,-106C591.58,-110.6 630.99,-115.87 666.27,-120.59"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="666.22,-124.12 676.6,-121.97 667.15,-117.18 666.22,-124.12"/>
+</g>
+<!-- proc~thom_solve_omp&#45;&gt;proc~get_n_groups -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge19" class="edge">
+<title>proc~thom_solve_omp&#45;&gt;proc~get_n_groups</title>
+<path fill="none" stroke="#cc00ff" d="M499.06,-106.1C535.12,-119.56 596.11,-141.21 650,-155 659.88,-157.53 670.31,-159.87 680.71,-161.99"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="680.15,-165.45 690.64,-163.96 681.51,-158.58 680.15,-165.45"/>
+</g>
+<!-- proc~exec_dist_tds_compact~3&#45;&gt;proc~sendrecv_fields~2 -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge24" class="edge">
+<title>proc~exec_dist_tds_compact~3&#45;&gt;proc~sendrecv_fields~2</title>
+<path fill="none" stroke="#0000ff" d="M846.16,-310.04C879.18,-315.15 917.85,-321.15 951.9,-326.42"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="951.41,-329.89 961.83,-327.96 952.48,-322.97 951.41,-329.89"/>
+</g>
+<!-- proc~der_univ_dist~2 -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node23" class="node">
+<title>proc~der_univ_dist~2</title>
+<g id="a_proc~~tds_solve_omp~~CallsGraph_node23"><a xlink:href="../proc/der_univ_dist~2.html" xlink:title="m_omp_kernels_dist::der_univ_dist">
+<polygon fill="#d9534f" stroke="#d9534f" points="1139.5,-268 941.5,-268 941.5,-244 1139.5,-244 1139.5,-268"/>
+<text text-anchor="middle" x="1040.5" y="-253.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_omp_kernels_dist::der_univ_dist</text>
+</a>
+</g>
+</g>
+<!-- proc~exec_dist_tds_compact~3&#45;&gt;proc~der_univ_dist~2 -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge22" class="edge">
+<title>proc~exec_dist_tds_compact~3&#45;&gt;proc~der_univ_dist~2</title>
+<path fill="none" stroke="#0000ff" d="M846.16,-285.96C879.18,-280.85 917.85,-274.85 951.9,-269.58"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="952.48,-273.03 961.83,-268.04 951.41,-266.11 952.48,-273.03"/>
+</g>
+<!-- proc~der_univ_subs~2 -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node24" class="node">
+<title>proc~der_univ_subs~2</title>
+<g id="a_proc~~tds_solve_omp~~CallsGraph_node24"><a xlink:href="../proc/der_univ_subs~2.html" xlink:title="m_omp_kernels_dist::der_univ_subs">
+<polygon fill="#d9534f" stroke="#d9534f" points="1142,-310 939,-310 939,-286 1142,-286 1142,-310"/>
+<text text-anchor="middle" x="1040.5" y="-295.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_omp_kernels_dist::der_univ_subs</text>
+</a>
+</g>
+</g>
+<!-- proc~exec_dist_tds_compact~3&#45;&gt;proc~der_univ_subs~2 -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge23" class="edge">
+<title>proc~exec_dist_tds_compact~3&#45;&gt;proc~der_univ_subs~2</title>
+<path fill="none" stroke="#0000ff" d="M885,-298C899.43,-298 914.15,-298 928.5,-298"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="928.87,-301.5 938.87,-298 928.87,-294.5 928.87,-301.5"/>
+</g>
+<!-- proc~der_univ_thom_per~3 -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node25" class="node">
+<title>proc~der_univ_thom_per~3</title>
+<g id="a_proc~~tds_solve_omp~~CallsGraph_node25"><a xlink:href="../proc/der_univ_thom_per~3.html" xlink:title="m_omp_kernels_thom::der_univ_thom_per">
+<polygon fill="#d9534f" stroke="#d9534f" points="1160,-188 921,-188 921,-164 1160,-164 1160,-188"/>
+<text text-anchor="middle" x="1040.5" y="-173.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_omp_kernels_thom::der_univ_thom_per</text>
+</a>
+</g>
+</g>
+<!-- proc~exec_thom_tds_compact~3&#45;&gt;proc~der_univ_thom_per~3 -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge25" class="edge">
+<title>proc~exec_thom_tds_compact~3&#45;&gt;proc~der_univ_thom_per~3</title>
+<path fill="none" stroke="#7f00ff" d="M846.16,-146.04C879.18,-151.15 917.85,-157.15 951.9,-162.42"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="951.41,-165.89 961.83,-163.96 952.48,-158.97 951.41,-165.89"/>
+</g>
+<!-- proc~der_univ_thom~3 -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node26" class="node">
+<title>proc~der_univ_thom~3</title>
+<g id="a_proc~~tds_solve_omp~~CallsGraph_node26"><a xlink:href="../proc/der_univ_thom~3.html" xlink:title="m_omp_kernels_thom::der_univ_thom">
+<polygon fill="#d9534f" stroke="#d9534f" points="1148.5,-146 932.5,-146 932.5,-122 1148.5,-122 1148.5,-146"/>
+<text text-anchor="middle" x="1040.5" y="-131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_omp_kernels_thom::der_univ_thom</text>
+</a>
+</g>
+</g>
+<!-- proc~exec_thom_tds_compact~3&#45;&gt;proc~der_univ_thom~3 -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge26" class="edge">
+<title>proc~exec_thom_tds_compact~3&#45;&gt;proc~der_univ_thom~3</title>
+<path fill="none" stroke="#7f00ff" d="M879.51,-134C893.51,-134 907.86,-134 921.96,-134"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="922.16,-137.5 932.16,-134 922.16,-130.5 922.16,-137.5"/>
+</g>
+<!-- mpi_irecv -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node19" class="node">
+<title>mpi_irecv</title>
+<polygon fill="#777777" stroke="#777777" points="1291.5,-399 1227.5,-399 1227.5,-375 1291.5,-375 1291.5,-399"/>
+<text text-anchor="middle" x="1259.5" y="-384.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_irecv</text>
+</g>
+<!-- proc~sendrecv_fields~2&#45;&gt;mpi_irecv -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge27" class="edge">
+<title>proc~sendrecv_fields~2&#45;&gt;mpi_irecv</title>
+<path fill="none" stroke="#ff007f" d="M1097.1,-352.04C1134.54,-360.15 1183.11,-370.67 1217.15,-378.04"/>
+<polygon fill="#ff007f" stroke="#ff007f" points="1216.7,-381.53 1227.22,-380.22 1218.18,-374.69 1216.7,-381.53"/>
+</g>
+<!-- mpi_isend -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node20" class="node">
+<title>mpi_isend</title>
+<polygon fill="#777777" stroke="#777777" points="1293,-357 1226,-357 1226,-333 1293,-333 1293,-357"/>
+<text text-anchor="middle" x="1259.5" y="-342.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_isend</text>
+</g>
+<!-- proc~sendrecv_fields~2&#45;&gt;mpi_isend -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge28" class="edge">
+<title>proc~sendrecv_fields~2&#45;&gt;mpi_isend</title>
+<path fill="none" stroke="#ff007f" d="M1138.26,-342.23C1165.38,-342.85 1193.5,-343.5 1215.71,-344.01"/>
+<polygon fill="#ff007f" stroke="#ff007f" points="1215.72,-347.52 1225.8,-344.25 1215.88,-340.52 1215.72,-347.52"/>
+</g>
+<!-- mpi_waitall -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node21" class="node">
+<title>mpi_waitall</title>
+<polygon fill="#777777" stroke="#777777" points="1296,-273 1223,-273 1223,-249 1296,-249 1296,-273"/>
+<text text-anchor="middle" x="1259.5" y="-258.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_waitall</text>
+</g>
+<!-- proc~sendrecv_fields~2&#45;&gt;mpi_waitall -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge29" class="edge">
+<title>proc~sendrecv_fields~2&#45;&gt;mpi_waitall</title>
+<path fill="none" stroke="#ff007f" d="M1138.29,-328.14C1145.84,-325.63 1153.17,-322.62 1160,-319 1180.27,-308.26 1176.58,-294.22 1196,-282 1201.34,-278.64 1207.28,-275.75 1213.31,-273.29"/>
+<polygon fill="#ff007f" stroke="#ff007f" points="1214.64,-276.53 1222.79,-269.77 1212.2,-269.97 1214.64,-276.53"/>
+</g>
+<!-- proc~check_mpi -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node22" class="node">
+<title>proc~check_mpi</title>
+<g id="a_proc~~tds_solve_omp~~CallsGraph_node22"><a xlink:href="../proc/check_mpi.html" xlink:title="m_logger::check_mpi">
+<polygon fill="#d9534f" stroke="#d9534f" points="1323,-315 1196,-315 1196,-291 1323,-291 1323,-315"/>
+<text text-anchor="middle" x="1259.5" y="-300.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::check_mpi</text>
+</a>
+</g>
+</g>
+<!-- proc~sendrecv_fields~2&#45;&gt;proc~check_mpi -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge30" class="edge">
+<title>proc~sendrecv_fields~2&#45;&gt;proc~check_mpi</title>
+<path fill="none" stroke="#ff007f" d="M1111.95,-327.99C1135.56,-323.96 1161.92,-319.47 1185.7,-315.41"/>
+<polygon fill="#ff007f" stroke="#ff007f" points="1186.45,-318.84 1195.72,-313.7 1185.27,-311.94 1186.45,-318.84"/>
+</g>
+<!-- proc~check_mpi&#45;&gt;proc~abort_run -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge33" class="edge">
+<title>proc~check_mpi&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#00ff3f" d="M1304.24,-290.93C1310.73,-288.4 1317.18,-285.43 1323,-282 1354.32,-263.52 1384.18,-233.52 1402.05,-213.78"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="1404.71,-216.06 1408.73,-206.26 1399.47,-211.41 1404.71,-216.06"/>
+</g>
+<!-- proc~check_mpi&#45;&gt;interface~str -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge31" class="edge">
+<title>proc~check_mpi&#45;&gt;interface~str</title>
+<path fill="none" stroke="#00ff3f" d="M1323.16,-304.23C1379.88,-305.34 1462.4,-306.96 1515.27,-308"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="1515.36,-311.5 1525.43,-308.19 1515.5,-304.5 1515.36,-311.5"/>
+</g>
+<!-- mpi_error_string -->
+<g id="proc~~tds_solve_omp~~CallsGraph_node27" class="node">
+<title>mpi_error_string</title>
+<polygon fill="#777777" stroke="#777777" points="1470,-355 1370,-355 1370,-331 1470,-331 1470,-355"/>
+<text text-anchor="middle" x="1420" y="-340.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_error_string</text>
+</g>
+<!-- proc~check_mpi&#45;&gt;mpi_error_string -->
+<g id="proc~~tds_solve_omp~~CallsGraph_edge32" class="edge">
+<title>proc~check_mpi&#45;&gt;mpi_error_string</title>
+<path fill="none" stroke="#00ff3f" d="M1308.06,-315C1324.75,-319.21 1343.69,-323.99 1361.13,-328.4"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="1360.65,-331.88 1371.2,-330.94 1362.37,-325.1 1360.65,-331.88"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panproctds_solve_ompCallsGraph = svgPanZoom('#proctds_solve_ompCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

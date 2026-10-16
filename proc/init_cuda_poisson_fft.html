@@ -1,0 +1,973 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>init_cuda_poisson_fft &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../program/xcompact.html">Program</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>init_cuda_poisson_fft
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">12 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/backend.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/backend.f90~4.html'>backend.f90</a></li>
+                <li class="breadcrumb-item"><a href='../module/m_cuda_backend.html'>m_cuda_backend</a></li>
+            <li class="breadcrumb-item active" aria-current="page">init_cuda_poisson_fft</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine init_cuda_poisson_fft(self, mesh, xdirps, ydirps, zdirps, lowmem)  
+</h2>
+    
+
+
+    <h3>Type Bound</h3>
+    <p><a href='../type/cuda_backend_t.html'>cuda_backend_t</a></p>
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~516"></span>
+              class(<a href='../type/cuda_backend_t.html'>cuda_backend_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mesh~36"></span>
+              type(<a href='../type/mesh_t.html'>mesh_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              target
+            </td>
+            <td>::</td>
+            <td><strong>mesh</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-xdirps~14"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>xdirps</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ydirps~14"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ydirps</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zdirps~14"></span>
+              type(<a href='../type/dirps_t.html'>dirps_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zdirps</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lowmem~6"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lowmem</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~init_cuda_poisson_fft~~CallsGraph Pages: 1 -->
+<svg id="procinit_cuda_poisson_fftCallsGraph" width="641pt" height="238pt"
+ viewBox="0.00 0.00 641.00 237.59" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph" class="graph" transform="scale(0.35 0.35) rotate(0) translate(4 678)">
+<title>proc~~init_cuda_poisson_fft~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-678 1836,-678 1836,4 -4,4"/>
+<!-- proc~init_cuda_poisson_fft -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node1" class="node">
+<title>proc~init_cuda_poisson_fft</title>
+<polygon fill="none" stroke="black" points="319,-428 0,-428 0,-404 319,-404 319,-428"/>
+<text text-anchor="middle" x="159.5" y="-413.6" font-family="Helvetica,sans-Serif" font-size="10.50">m_cuda_backend::cuda_backend_t%init_cuda_poisson_fft</text>
+</g>
+<!-- proc~init_cuda_poisson_fft_t -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node2" class="node">
+<title>proc~init_cuda_poisson_fft_t</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node2"><a xlink:href="../proc/init_cuda_poisson_fft_t.html" xlink:title="m_cuda_poisson_fft::init_cuda_poisson_fft_t">
+<polygon fill="#d9534f" stroke="#d9534f" points="599,-428 355,-428 355,-404 599,-404 599,-428"/>
+<text text-anchor="middle" x="477" y="-413.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_poisson_fft::init_cuda_poisson_fft_t</text>
+</a>
+</g>
+</g>
+<!-- proc~init_cuda_poisson_fft&#45;&gt;proc~init_cuda_poisson_fft_t -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge1" class="edge">
+<title>proc~init_cuda_poisson_fft&#45;&gt;proc~init_cuda_poisson_fft_t</title>
+<path fill="none" stroke="#ff0000" d="M319.17,-416C327.68,-416 336.19,-416 344.59,-416"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="344.78,-419.5 354.78,-416 344.78,-412.5 344.78,-419.5"/>
+</g>
+<!-- cufftcreate -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node3" class="node">
+<title>cufftcreate</title>
+<polygon fill="#777777" stroke="#777777" points="778,-674 708,-674 708,-650 778,-650 778,-674"/>
+<text text-anchor="middle" x="743" y="-659.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cufftcreate</text>
+</g>
+<!-- proc~init_cuda_poisson_fft_t&#45;&gt;cufftcreate -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge2" class="edge">
+<title>proc~init_cuda_poisson_fft_t&#45;&gt;cufftcreate</title>
+<path fill="none" stroke="#ff0000" d="M482.61,-428.22C497.76,-466.63 550.01,-585.6 635,-641 653.45,-653.03 677.23,-658.46 697.69,-660.81"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="697.44,-664.3 707.73,-661.75 698.1,-657.33 697.44,-664.3"/>
+</g>
+<!-- cufftdestroy -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node4" class="node">
+<title>cufftdestroy</title>
+<polygon fill="#777777" stroke="#777777" points="781,-632 705,-632 705,-608 781,-608 781,-632"/>
+<text text-anchor="middle" x="743" y="-617.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cufftdestroy</text>
+</g>
+<!-- proc~init_cuda_poisson_fft_t&#45;&gt;cufftdestroy -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge3" class="edge">
+<title>proc~init_cuda_poisson_fft_t&#45;&gt;cufftdestroy</title>
+<path fill="none" stroke="#ff0000" d="M484.56,-428.26C503.15,-461.75 559.78,-555.15 635,-599 653.04,-609.51 675.39,-614.87 694.99,-617.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="694.61,-621.03 704.96,-618.73 695.43,-614.08 694.61,-621.03"/>
+</g>
+<!-- cufftmakeplan3d -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node5" class="node">
+<title>cufftmakeplan3d</title>
+<polygon fill="#777777" stroke="#777777" points="794.5,-590 691.5,-590 691.5,-566 794.5,-566 794.5,-590"/>
+<text text-anchor="middle" x="743" y="-575.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cufftmakeplan3d</text>
+</g>
+<!-- proc~init_cuda_poisson_fft_t&#45;&gt;cufftmakeplan3d -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge4" class="edge">
+<title>proc~init_cuda_poisson_fft_t&#45;&gt;cufftmakeplan3d</title>
+<path fill="none" stroke="#ff0000" d="M487.5,-428.18C509.9,-455.95 569.11,-524.13 635,-557 649.24,-564.11 665.67,-568.81 681.32,-571.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="680.99,-575.42 691.45,-573.75 682.23,-568.53 680.99,-575.42"/>
+</g>
+<!-- cufftmpattachcomm -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node6" class="node">
+<title>cufftmpattachcomm</title>
+<polygon fill="#777777" stroke="#777777" points="803.5,-548 682.5,-548 682.5,-524 803.5,-524 803.5,-548"/>
+<text text-anchor="middle" x="743" y="-533.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cufftmpattachcomm</text>
+</g>
+<!-- proc~init_cuda_poisson_fft_t&#45;&gt;cufftmpattachcomm -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge5" class="edge">
+<title>proc~init_cuda_poisson_fft_t&#45;&gt;cufftmpattachcomm</title>
+<path fill="none" stroke="#ff0000" d="M493,-428.17C519.8,-449.27 578.4,-492.51 635,-515 646.73,-519.66 659.61,-523.32 672.24,-526.18"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="671.78,-529.66 682.29,-528.31 673.23,-522.81 671.78,-529.66"/>
+</g>
+<!-- cufftxtmalloc -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node7" class="node">
+<title>cufftxtmalloc</title>
+<polygon fill="#777777" stroke="#777777" points="784,-506 702,-506 702,-482 784,-482 784,-506"/>
+<text text-anchor="middle" x="743" y="-491.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cufftxtmalloc</text>
+</g>
+<!-- proc~init_cuda_poisson_fft_t&#45;&gt;cufftxtmalloc -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge6" class="edge">
+<title>proc~init_cuda_poisson_fft_t&#45;&gt;cufftxtmalloc</title>
+<path fill="none" stroke="#ff0000" d="M511.75,-428.06C543.37,-439.16 592.08,-455.7 635,-468 653.53,-473.31 674.06,-478.47 692.14,-482.78"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="691.37,-486.19 701.91,-485.07 692.98,-479.38 691.37,-486.19"/>
+</g>
+<!-- interface~str -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node8" class="node">
+<title>interface~str</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node8"><a xlink:href="../interface/str.html" xlink:title="m_logger::str">
+<polygon fill="#a7506f" stroke="#a7506f" points="1592,-432 1508,-432 1508,-408 1592,-408 1592,-432"/>
+<text text-anchor="middle" x="1550" y="-417.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::str</text>
+</a>
+</g>
+</g>
+<!-- proc~init_cuda_poisson_fft_t&#45;&gt;interface~str -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge7" class="edge">
+<title>proc~init_cuda_poisson_fft_t&#45;&gt;interface~str</title>
+<path fill="none" stroke="#ff0000" d="M599.24,-427.46C611.31,-428.41 623.39,-429.28 635,-430 978.78,-451.45 1066.13,-452.99 1410,-433 1439.05,-431.31 1471.43,-428.35 1497.62,-425.68"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1498.11,-429.14 1507.7,-424.63 1497.39,-422.18 1498.11,-429.14"/>
+</g>
+<!-- proc~abort_run -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node9" class="node">
+<title>proc~abort_run</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node9"><a xlink:href="../proc/abort_run.html" xlink:title="m_logger::abort_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="1358,-390 1236,-390 1236,-366 1358,-366 1358,-390"/>
+<text text-anchor="middle" x="1297" y="-375.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::abort_run</text>
+</a>
+</g>
+</g>
+<!-- proc~init_cuda_poisson_fft_t&#45;&gt;proc~abort_run -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge8" class="edge">
+<title>proc~init_cuda_poisson_fft_t&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#ff0000" d="M599.14,-410.37C772.58,-402.32 1086.11,-387.75 1225.69,-381.27"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1226.01,-384.76 1235.84,-380.79 1225.69,-377.76 1226.01,-384.76"/>
+</g>
+<!-- proc~base_init -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node10" class="node">
+<title>proc~base_init</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node10"><a xlink:href="../proc/base_init.html" xlink:title="m_poisson_fft::poisson_fft_t%base_init">
+<polygon fill="#d9534f" stroke="#d9534f" points="851,-194 635,-194 635,-170 851,-170 851,-194"/>
+<text text-anchor="middle" x="743" y="-179.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_poisson_fft::poisson_fft_t%base_init</text>
+</a>
+</g>
+</g>
+<!-- proc~init_cuda_poisson_fft_t&#45;&gt;proc~base_init -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge9" class="edge">
+<title>proc~init_cuda_poisson_fft_t&#45;&gt;proc~base_init</title>
+<path fill="none" stroke="#ff0000" d="M483.45,-403.84C500.3,-367.73 555.22,-260.42 635,-208 641.15,-203.96 647.87,-200.54 654.85,-197.66"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="656.36,-200.83 664.5,-194.05 653.91,-194.28 656.36,-200.83"/>
+</g>
+<!-- proc~check_cufft -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node11" class="node">
+<title>proc~check_cufft</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node11"><a xlink:href="../proc/check_cufft.html" xlink:title="m_cuda_errors::check_cufft">
+<polygon fill="#d9534f" stroke="#d9534f" points="1097.5,-430 937.5,-430 937.5,-406 1097.5,-406 1097.5,-430"/>
+<text text-anchor="middle" x="1017.5" y="-415.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_errors::check_cufft</text>
+</a>
+</g>
+</g>
+<!-- proc~init_cuda_poisson_fft_t&#45;&gt;proc~check_cufft -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge10" class="edge">
+<title>proc~init_cuda_poisson_fft_t&#45;&gt;proc~check_cufft</title>
+<path fill="none" stroke="#ff0000" d="M599.19,-416.45C698.78,-416.82 837.61,-417.34 927.27,-417.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="927.4,-421.17 937.42,-417.71 927.43,-414.17 927.4,-421.17"/>
+</g>
+<!-- proc~get_dims -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node12" class="node">
+<title>proc~get_dims</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node12"><a xlink:href="../proc/get_dims.html" xlink:title="m_mesh::mesh_t%get_dims">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1098,-72 937,-72 937,-48 1098,-48 1098,-72"/>
+<text text-anchor="middle" x="1017.5" y="-57.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_mesh::mesh_t%get_dims</text>
+</a>
+</g>
+</g>
+<!-- proc~init_cuda_poisson_fft_t&#45;&gt;proc~get_dims -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge11" class="edge">
+<title>proc~init_cuda_poisson_fft_t&#45;&gt;proc~get_dims</title>
+<path fill="none" stroke="#ff0000" d="M479.65,-403.96C487.04,-355.29 521.79,-171.95 635,-94 726.35,-31.1 860.61,-35.73 943.09,-46.6"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="942.75,-50.08 953.13,-47.98 943.7,-43.15 942.75,-50.08"/>
+</g>
+<!-- proc~get_global_dims -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node13" class="node">
+<title>proc~get_global_dims</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node13"><a xlink:href="../proc/get_global_dims.html" xlink:title="m_mesh::mesh_t%get_global_dims">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1117,-114 918,-114 918,-90 1117,-90 1117,-114"/>
+<text text-anchor="middle" x="1017.5" y="-99.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_mesh::mesh_t%get_global_dims</text>
+</a>
+</g>
+</g>
+<!-- proc~init_cuda_poisson_fft_t&#45;&gt;proc~get_global_dims -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge12" class="edge">
+<title>proc~init_cuda_poisson_fft_t&#45;&gt;proc~get_global_dims</title>
+<path fill="none" stroke="#ff0000" d="M481.45,-403.82C494,-361.95 541.45,-223.12 635,-161 715.45,-107.58 826.19,-95.6 907.64,-95.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="907.92,-98.84 917.93,-95.37 907.94,-91.84 907.92,-98.84"/>
+</g>
+<!-- proc~log_info -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node14" class="node">
+<title>proc~log_info</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node14"><a xlink:href="../proc/log_info.html" xlink:title="m_logger::log_info">
+<polygon fill="#d9534f" stroke="#d9534f" points="1353,-348 1241,-348 1241,-324 1353,-324 1353,-348"/>
+<text text-anchor="middle" x="1297" y="-333.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::log_info</text>
+</a>
+</g>
+</g>
+<!-- proc~init_cuda_poisson_fft_t&#45;&gt;proc~log_info -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge13" class="edge">
+<title>proc~init_cuda_poisson_fft_t&#45;&gt;proc~log_info</title>
+<path fill="none" stroke="#ff0000" d="M562.66,-403.98C586.07,-400.85 611.5,-397.62 635,-395 852.79,-370.73 1111.85,-349.95 1230.62,-340.88"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1230.94,-344.36 1240.64,-340.11 1230.4,-337.38 1230.94,-344.36"/>
+</g>
+<!-- proc~log_warn -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node15" class="node">
+<title>proc~log_warn</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node15"><a xlink:href="../proc/log_warn.html" xlink:title="m_logger::log_warn">
+<polygon fill="#d9534f" stroke="#d9534f" points="1356,-264 1238,-264 1238,-240 1356,-240 1356,-264"/>
+<text text-anchor="middle" x="1297" y="-249.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::log_warn</text>
+</a>
+</g>
+</g>
+<!-- proc~init_cuda_poisson_fft_t&#45;&gt;proc~log_warn -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge14" class="edge">
+<title>proc~init_cuda_poisson_fft_t&#45;&gt;proc~log_warn</title>
+<path fill="none" stroke="#ff0000" d="M497.89,-403.99C555.5,-370 728.49,-273.49 887,-241 1004.9,-216.84 1145.9,-229.48 1227.77,-240.79"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1227.31,-244.26 1237.7,-242.19 1228.29,-237.33 1227.31,-244.26"/>
+</g>
+<!-- proc~abort_run&#45;&gt;interface~str -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge15" class="edge">
+<title>proc~abort_run&#45;&gt;interface~str</title>
+<path fill="none" stroke="#00ffc4" d="M1358.12,-388.06C1400.77,-395.2 1457.4,-404.67 1497.88,-411.45"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="1497.36,-414.91 1507.8,-413.11 1498.52,-408 1497.36,-414.91"/>
+</g>
+<!-- mpi_abort -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node16" class="node">
+<title>mpi_abort</title>
+<polygon fill="#777777" stroke="#777777" points="1583.5,-474 1516.5,-474 1516.5,-450 1583.5,-450 1583.5,-474"/>
+<text text-anchor="middle" x="1550" y="-459.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_abort</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_abort -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge16" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_abort</title>
+<path fill="none" stroke="#00ffc4" d="M1322.05,-390.02C1350.87,-404.01 1400.94,-426.97 1446,-441 1465.41,-447.04 1487.42,-451.8 1506.1,-455.25"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="1505.64,-458.72 1516.1,-457.03 1506.87,-451.83 1505.64,-458.72"/>
+</g>
+<!-- mpi_barrier -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node17" class="node">
+<title>mpi_barrier</title>
+<polygon fill="#777777" stroke="#777777" points="1587.5,-516 1512.5,-516 1512.5,-492 1587.5,-492 1587.5,-516"/>
+<text text-anchor="middle" x="1550" y="-501.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_barrier</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_barrier -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge17" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_barrier</title>
+<path fill="none" stroke="#00ffc4" d="M1311.1,-390.24C1335.58,-412.4 1390.79,-459.06 1446,-483 1463.58,-490.62 1484.06,-495.52 1502.11,-498.65"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="1501.7,-502.13 1512.13,-500.26 1502.81,-495.22 1501.7,-502.13"/>
+</g>
+<!-- mpi_comm_rank -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node18" class="node">
+<title>mpi_comm_rank</title>
+<polygon fill="#777777" stroke="#777777" points="1600.5,-306 1499.5,-306 1499.5,-282 1600.5,-282 1600.5,-306"/>
+<text text-anchor="middle" x="1550" y="-291.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_comm_rank</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_comm_rank -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge18" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_comm_rank</title>
+<path fill="none" stroke="#00ffc4" d="M1358.18,-374.3C1375.75,-371.26 1394.41,-366 1410,-357 1431.29,-344.7 1424.81,-327.46 1446,-315 1459.04,-307.33 1474.43,-302.43 1489.28,-299.3"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="1490.25,-302.68 1499.44,-297.41 1488.97,-295.8 1490.25,-302.68"/>
+</g>
+<!-- mpi_comm_size -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node19" class="node">
+<title>mpi_comm_size</title>
+<polygon fill="#777777" stroke="#777777" points="1598.5,-264 1501.5,-264 1501.5,-240 1598.5,-240 1598.5,-264"/>
+<text text-anchor="middle" x="1550" y="-249.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_comm_size</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_comm_size -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge19" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_comm_size</title>
+<path fill="none" stroke="#00ffc4" d="M1358.06,-377.43C1376.33,-374.61 1395.41,-368.69 1410,-357 1441.69,-331.6 1414.51,-298.65 1446,-273 1458.77,-262.6 1475.34,-256.92 1491.45,-253.93"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="1492.03,-257.38 1501.37,-252.39 1490.96,-250.46 1492.03,-257.38"/>
+</g>
+<!-- mpi_finalized -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node20" class="node">
+<title>mpi_finalized</title>
+<polygon fill="#777777" stroke="#777777" points="1591.5,-390 1508.5,-390 1508.5,-366 1591.5,-366 1591.5,-390"/>
+<text text-anchor="middle" x="1550" y="-375.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_finalized</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_finalized -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge20" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_finalized</title>
+<path fill="none" stroke="#00ffc4" d="M1358.12,-378C1400.81,-378 1457.51,-378 1498,-378"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="1498.18,-381.5 1508.18,-378 1498.18,-374.5 1498.18,-381.5"/>
+</g>
+<!-- mpi_initialized -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node21" class="node">
+<title>mpi_initialized</title>
+<polygon fill="#777777" stroke="#777777" points="1594.5,-348 1505.5,-348 1505.5,-324 1594.5,-324 1594.5,-348"/>
+<text text-anchor="middle" x="1550" y="-333.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_initialized</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_initialized -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge21" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_initialized</title>
+<path fill="none" stroke="#00ffc4" d="M1358.12,-367.94C1399.97,-360.94 1455.27,-351.68 1495.58,-344.94"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="1496.2,-348.38 1505.48,-343.28 1495.04,-341.48 1496.2,-348.38"/>
+</g>
+<!-- proc~base_init&#45;&gt;proc~abort_run -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge22" class="edge">
+<title>proc~base_init&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#00c4ff" d="M757.53,-194.22C781.72,-215.43 834.77,-259.08 887,-283 999.13,-334.37 1141.7,-359.33 1225.49,-370.36"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="1225.3,-373.86 1235.66,-371.66 1226.19,-366.92 1225.3,-373.86"/>
+</g>
+<!-- proc~base_init&#45;&gt;proc~get_dims -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge23" class="edge">
+<title>proc~base_init&#45;&gt;proc~get_dims</title>
+<path fill="none" stroke="#00c4ff" d="M756.95,-169.68C780.66,-147.9 833.54,-102.84 887,-81 899.56,-75.87 913.28,-71.99 926.94,-69.06"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="927.74,-72.47 936.86,-67.08 926.37,-65.6 927.74,-72.47"/>
+</g>
+<!-- proc~base_init&#45;&gt;proc~get_global_dims -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge24" class="edge">
+<title>proc~base_init&#45;&gt;proc~get_global_dims</title>
+<path fill="none" stroke="#00c4ff" d="M771.1,-169.94C805.87,-154.62 864.39,-129.4 887,-123 896.11,-120.42 905.67,-118.12 915.3,-116.09"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="916.24,-119.47 925.35,-114.06 914.85,-112.61 916.24,-119.47"/>
+</g>
+<!-- proc~base_init&#45;&gt;proc~log_warn -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge25" class="edge">
+<title>proc~base_init&#45;&gt;proc~log_warn</title>
+<path fill="none" stroke="#00c4ff" d="M851.36,-177.42C933.88,-176.63 1049.96,-181.5 1148,-208 1165.27,-212.67 1167.17,-219.94 1184,-226 1197.96,-231.03 1213.26,-235.33 1227.94,-238.9"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="1227.45,-242.38 1237.98,-241.26 1229.05,-235.57 1227.45,-242.38"/>
+</g>
+<!-- proc~stretching_matrix -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node23" class="node">
+<title>proc~stretching_matrix</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node23"><a xlink:href="../proc/stretching_matrix.html" xlink:title="m_poisson_fft::poisson_fft_t%stretching_matrix">
+<polygon fill="#d9534f" stroke="#d9534f" points="1148,-156 887,-156 887,-132 1148,-132 1148,-156"/>
+<text text-anchor="middle" x="1017.5" y="-141.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_poisson_fft::poisson_fft_t%stretching_matrix</text>
+</a>
+</g>
+</g>
+<!-- proc~base_init&#45;&gt;proc~stretching_matrix -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge26" class="edge">
+<title>proc~base_init&#45;&gt;proc~stretching_matrix</title>
+<path fill="none" stroke="#00c4ff" d="M830.22,-169.98C858.81,-165.99 890.82,-161.53 920.13,-157.44"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="920.95,-160.86 930.37,-156.01 919.99,-153.93 920.95,-160.86"/>
+</g>
+<!-- proc~waves_set -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node24" class="node">
+<title>proc~waves_set</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node24"><a xlink:href="../proc/waves_set.html" xlink:title="m_poisson_fft::poisson_fft_t%waves_set">
+<polygon fill="#d9534f" stroke="#d9534f" points="1129,-274 906,-274 906,-250 1129,-250 1129,-274"/>
+<text text-anchor="middle" x="1017.5" y="-259.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_poisson_fft::poisson_fft_t%waves_set</text>
+</a>
+</g>
+</g>
+<!-- proc~base_init&#45;&gt;proc~waves_set -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge27" class="edge">
+<title>proc~base_init&#45;&gt;proc~waves_set</title>
+<path fill="none" stroke="#00c4ff" d="M785.09,-194.06C833.42,-208.25 913.65,-231.81 965.8,-247.12"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="964.94,-250.51 975.52,-249.97 966.91,-243.79 964.94,-250.51"/>
+</g>
+<!-- proc~check_cufft&#45;&gt;interface~str -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge28" class="edge">
+<title>proc~check_cufft&#45;&gt;interface~str</title>
+<path fill="none" stroke="#004eff" d="M1097.63,-418.3C1207.91,-418.71 1404.7,-419.46 1497.66,-419.81"/>
+<polygon fill="#004eff" stroke="#004eff" points="1497.93,-423.31 1507.94,-419.85 1497.95,-416.31 1497.93,-423.31"/>
+</g>
+<!-- proc~check_cufft&#45;&gt;proc~abort_run -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge29" class="edge">
+<title>proc~check_cufft&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#004eff" d="M1097.65,-406.59C1137.94,-400.78 1186.52,-393.78 1225.51,-388.16"/>
+<polygon fill="#004eff" stroke="#004eff" points="1226.32,-391.58 1235.72,-386.69 1225.32,-384.65 1226.32,-391.58"/>
+</g>
+<!-- proc~get_dims_dataloc -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node22" class="node">
+<title>proc~get_dims_dataloc</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node22"><a xlink:href="../proc/get_dims_dataloc.html" xlink:title="m_mesh::get_dims_dataloc">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1376,-24 1218,-24 1218,0 1376,0 1376,-24"/>
+<text text-anchor="middle" x="1297" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_mesh::get_dims_dataloc</text>
+</a>
+</g>
+</g>
+<!-- proc~get_dims&#45;&gt;proc~get_dims_dataloc -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge30" class="edge">
+<title>proc~get_dims&#45;&gt;proc~get_dims_dataloc</title>
+<path fill="none" stroke="#2700ff" d="M1088.17,-47.95C1127.09,-41.22 1175.76,-32.8 1216.21,-25.8"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="1217.05,-29.21 1226.3,-24.06 1215.85,-22.31 1217.05,-29.21"/>
+</g>
+<!-- proc~get_global_dims&#45;&gt;proc~get_dims_dataloc -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge31" class="edge">
+<title>proc~get_global_dims&#45;&gt;proc~get_dims_dataloc</title>
+<path fill="none" stroke="#9c00ff" d="M1117.23,-93.64C1128.01,-90.52 1138.5,-86.41 1148,-81 1169.66,-68.67 1162.76,-51.05 1184,-38 1191.48,-33.41 1199.69,-29.62 1208.16,-26.51"/>
+<polygon fill="#9c00ff" stroke="#9c00ff" points="1209.45,-29.77 1217.81,-23.27 1207.22,-23.13 1209.45,-29.77"/>
+</g>
+<!-- proc~log_info&#45;&gt;interface~str -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge32" class="edge">
+<title>proc~log_info&#45;&gt;interface~str</title>
+<path fill="none" stroke="#ff00eb" d="M1353.28,-338.91C1372.24,-341.79 1392.95,-347.16 1410,-357 1431.29,-369.3 1424.81,-386.54 1446,-399 1461.58,-408.16 1480.53,-413.38 1497.9,-416.33"/>
+<polygon fill="#ff00eb" stroke="#ff00eb" points="1497.5,-419.81 1507.91,-417.82 1498.53,-412.89 1497.5,-419.81"/>
+</g>
+<!-- proc~log_info&#45;&gt;mpi_comm_rank -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge33" class="edge">
+<title>proc~log_info&#45;&gt;mpi_comm_rank</title>
+<path fill="none" stroke="#ff00eb" d="M1353.08,-326.78C1393.34,-320.05 1447.9,-310.92 1489.22,-304"/>
+<polygon fill="#ff00eb" stroke="#ff00eb" points="1489.87,-307.44 1499.15,-302.34 1488.71,-300.54 1489.87,-307.44"/>
+</g>
+<!-- proc~log_info&#45;&gt;mpi_comm_size -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge34" class="edge">
+<title>proc~log_info&#45;&gt;mpi_comm_size</title>
+<path fill="none" stroke="#ff00eb" d="M1353.28,-333.09C1372.24,-330.21 1392.95,-324.84 1410,-315 1431.29,-302.7 1424.81,-285.46 1446,-273 1459.61,-264.99 1475.79,-260 1491.25,-256.9"/>
+<polygon fill="#ff00eb" stroke="#ff00eb" points="1492.03,-260.31 1501.27,-255.12 1490.81,-253.42 1492.03,-260.31"/>
+</g>
+<!-- proc~log_info&#45;&gt;mpi_finalized -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge35" class="edge">
+<title>proc~log_info&#45;&gt;mpi_finalized</title>
+<path fill="none" stroke="#ff00eb" d="M1353.08,-345.22C1396.41,-352.47 1456.29,-362.49 1498.42,-369.54"/>
+<polygon fill="#ff00eb" stroke="#ff00eb" points="1498.02,-373.02 1508.46,-371.22 1499.17,-366.11 1498.02,-373.02"/>
+</g>
+<!-- proc~log_info&#45;&gt;mpi_initialized -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge36" class="edge">
+<title>proc~log_info&#45;&gt;mpi_initialized</title>
+<path fill="none" stroke="#ff00eb" d="M1353.08,-336C1395.34,-336 1453.36,-336 1495.28,-336"/>
+<polygon fill="#ff00eb" stroke="#ff00eb" points="1495.3,-339.5 1505.3,-336 1495.3,-332.5 1495.3,-339.5"/>
+</g>
+<!-- proc~log_warn&#45;&gt;interface~str -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge37" class="edge">
+<title>proc~log_warn&#45;&gt;interface~str</title>
+<path fill="none" stroke="#ff0075" d="M1356.08,-251.09C1375.29,-253.62 1395.45,-259.74 1410,-273 1453.05,-312.22 1403.26,-359.44 1446,-399 1459.9,-411.87 1479.46,-417.75 1497.8,-420.2"/>
+<polygon fill="#ff0075" stroke="#ff0075" points="1497.52,-423.69 1507.82,-421.23 1498.23,-416.73 1497.52,-423.69"/>
+</g>
+<!-- proc~log_warn&#45;&gt;mpi_comm_rank -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge38" class="edge">
+<title>proc~log_warn&#45;&gt;mpi_comm_rank</title>
+<path fill="none" stroke="#ff0075" d="M1356.22,-261.74C1396.13,-268.42 1448.95,-277.26 1489.2,-283.99"/>
+<polygon fill="#ff0075" stroke="#ff0075" points="1488.71,-287.46 1499.15,-285.66 1489.86,-280.56 1488.71,-287.46"/>
+</g>
+<!-- proc~log_warn&#45;&gt;mpi_comm_size -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge39" class="edge">
+<title>proc~log_warn&#45;&gt;mpi_comm_size</title>
+<path fill="none" stroke="#ff0075" d="M1356.22,-252C1396.72,-252 1450.49,-252 1490.95,-252"/>
+<polygon fill="#ff0075" stroke="#ff0075" points="1491.2,-255.5 1501.2,-252 1491.2,-248.5 1491.2,-255.5"/>
+</g>
+<!-- proc~log_warn&#45;&gt;mpi_finalized -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge40" class="edge">
+<title>proc~log_warn&#45;&gt;mpi_finalized</title>
+<path fill="none" stroke="#ff0075" d="M1356.04,-252.27C1374.91,-254.96 1394.87,-260.88 1410,-273 1441.69,-298.4 1414.51,-331.35 1446,-357 1460.56,-368.86 1480.05,-374.58 1498.16,-377.17"/>
+<polygon fill="#ff0075" stroke="#ff0075" points="1497.99,-380.68 1508.32,-378.34 1498.79,-373.72 1497.99,-380.68"/>
+</g>
+<!-- proc~log_warn&#45;&gt;mpi_initialized -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge41" class="edge">
+<title>proc~log_warn&#45;&gt;mpi_initialized</title>
+<path fill="none" stroke="#ff0075" d="M1356.15,-255.36C1374.31,-258.34 1393.81,-263.65 1410,-273 1431.29,-285.3 1424.81,-302.54 1446,-315 1460.79,-323.7 1478.6,-328.84 1495.22,-331.86"/>
+<polygon fill="#ff0075" stroke="#ff0075" points="1494.96,-335.36 1505.38,-333.48 1496.06,-328.45 1494.96,-335.36"/>
+</g>
+<!-- proc~get_imag -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node25" class="node">
+<title>proc~get_imag</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node25"><a xlink:href="../proc/get_imag.html" xlink:title="m_poisson_fft::get_imag">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1832,-184 1690,-184 1690,-160 1832,-160 1832,-184"/>
+<text text-anchor="middle" x="1761" y="-169.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_poisson_fft::get_imag</text>
+</a>
+</g>
+</g>
+<!-- proc~stretching_matrix&#45;&gt;proc~get_imag -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge42" class="edge">
+<title>proc~stretching_matrix&#45;&gt;proc~get_imag</title>
+<path fill="none" stroke="#aa00ff" d="M1085.35,-156.04C1105.78,-160.63 1128.1,-166.59 1148,-174 1164.95,-180.32 1166.44,-188.65 1184,-193 1364.43,-237.69 1586.29,-206.47 1694.45,-185.97"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="1695.4,-189.35 1704.56,-184.02 1694.08,-182.48 1695.4,-189.35"/>
+</g>
+<!-- proc~get_km -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node26" class="node">
+<title>proc~get_km</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node26"><a xlink:href="../proc/get_km.html" xlink:title="m_poisson_fft::poisson_fft_t%get_km">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1654,-144 1446,-144 1446,-120 1654,-120 1654,-144"/>
+<text text-anchor="middle" x="1550" y="-129.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_poisson_fft::poisson_fft_t%get_km</text>
+</a>
+</g>
+</g>
+<!-- proc~stretching_matrix&#45;&gt;proc~get_km -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge43" class="edge">
+<title>proc~stretching_matrix&#45;&gt;proc~get_km</title>
+<path fill="none" stroke="#aa00ff" d="M1148.27,-141.06C1236.26,-139.07 1351.43,-136.47 1435.72,-134.56"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="1435.92,-138.06 1445.84,-134.33 1435.76,-131.06 1435.92,-138.06"/>
+</g>
+<!-- proc~get_km_im -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node27" class="node">
+<title>proc~get_km_im</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node27"><a xlink:href="../proc/get_km_im.html" xlink:title="m_poisson_fft::poisson_fft_t%get_km_im">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1410,-184 1184,-184 1184,-160 1410,-160 1410,-184"/>
+<text text-anchor="middle" x="1297" y="-169.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_poisson_fft::poisson_fft_t%get_km_im</text>
+</a>
+</g>
+</g>
+<!-- proc~stretching_matrix&#45;&gt;proc~get_km_im -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge44" class="edge">
+<title>proc~stretching_matrix&#45;&gt;proc~get_km_im</title>
+<path fill="none" stroke="#aa00ff" d="M1137.8,-156.04C1149.73,-157.24 1161.86,-158.47 1173.83,-159.67"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="1173.53,-163.16 1183.83,-160.68 1174.23,-156.2 1173.53,-163.16"/>
+</g>
+<!-- proc~get_km_re -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node28" class="node">
+<title>proc~get_km_re</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node28"><a xlink:href="../proc/get_km_re.html" xlink:title="m_poisson_fft::poisson_fft_t%get_km_re">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1408.5,-104 1185.5,-104 1185.5,-80 1408.5,-80 1408.5,-104"/>
+<text text-anchor="middle" x="1297" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_poisson_fft::poisson_fft_t%get_km_re</text>
+</a>
+</g>
+</g>
+<!-- proc~stretching_matrix&#45;&gt;proc~get_km_re -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge45" class="edge">
+<title>proc~stretching_matrix&#45;&gt;proc~get_km_re</title>
+<path fill="none" stroke="#aa00ff" d="M1096.32,-131.97C1113.38,-129.17 1131.32,-126.1 1148,-123 1175.46,-117.9 1205.65,-111.69 1231.57,-106.16"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="1232.6,-109.52 1241.64,-104.01 1231.13,-102.68 1232.6,-109.52"/>
+</g>
+<!-- proc~get_real -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node29" class="node">
+<title>proc~get_real</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node29"><a xlink:href="../proc/get_real.html" xlink:title="m_poisson_fft::get_real">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1829,-104 1693,-104 1693,-80 1829,-80 1829,-104"/>
+<text text-anchor="middle" x="1761" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_poisson_fft::get_real</text>
+</a>
+</g>
+</g>
+<!-- proc~stretching_matrix&#45;&gt;proc~get_real -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge46" class="edge">
+<title>proc~stretching_matrix&#45;&gt;proc~get_real</title>
+<path fill="none" stroke="#aa00ff" d="M1130.54,-131.93C1136.64,-129.42 1142.51,-126.46 1148,-123 1171.77,-108 1159.1,-84.05 1184,-71 1268.47,-26.74 1546.47,-60.03 1682.98,-79.92"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="1682.56,-83.4 1692.96,-81.39 1683.57,-76.47 1682.56,-83.4"/>
+</g>
+<!-- proc~waves_set&#45;&gt;proc~abort_run -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge47" class="edge">
+<title>proc~waves_set&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#ff00aa" d="M1122.54,-274.01C1131.64,-277.63 1140.3,-282.22 1148,-288 1175.66,-308.77 1156.21,-336.41 1184,-357 1196.08,-365.95 1210.85,-371.43 1225.65,-374.72"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="1225.4,-378.24 1235.87,-376.67 1226.7,-371.36 1225.4,-378.24"/>
+</g>
+<!-- proc~wave_numbers -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_node30" class="node">
+<title>proc~wave_numbers</title>
+<g id="a_proc~~init_cuda_poisson_fft~~CallsGraph_node30"><a xlink:href="../proc/wave_numbers.html" xlink:title="m_poisson_fft::wave_numbers">
+<polygon fill="#d9534f" stroke="#d9534f" points="1383.5,-306 1210.5,-306 1210.5,-282 1383.5,-282 1383.5,-306"/>
+<text text-anchor="middle" x="1297" y="-291.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_poisson_fft::wave_numbers</text>
+</a>
+</g>
+</g>
+<!-- proc~waves_set&#45;&gt;proc~wave_numbers -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge48" class="edge">
+<title>proc~waves_set&#45;&gt;proc~wave_numbers</title>
+<path fill="none" stroke="#ff00aa" d="M1122.62,-274.01C1148.03,-276.94 1175.1,-280.06 1200.11,-282.94"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="1199.98,-286.45 1210.32,-284.12 1200.78,-279.5 1199.98,-286.45"/>
+</g>
+<!-- proc~get_km&#45;&gt;proc~get_imag -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge49" class="edge">
+<title>proc~get_km&#45;&gt;proc~get_imag</title>
+<path fill="none" stroke="#ffff00" d="M1613.71,-144C1636.75,-148.41 1663.03,-153.44 1686.91,-158.01"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1686.5,-161.5 1696.98,-159.94 1687.81,-154.62 1686.5,-161.5"/>
+</g>
+<!-- proc~get_km&#45;&gt;proc~get_real -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge50" class="edge">
+<title>proc~get_km&#45;&gt;proc~get_real</title>
+<path fill="none" stroke="#ffff00" d="M1613.71,-120C1636.75,-115.59 1663.03,-110.56 1686.91,-105.99"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1687.81,-109.38 1696.98,-104.06 1686.5,-102.5 1687.81,-109.38"/>
+</g>
+<!-- proc~get_km_im&#45;&gt;proc~get_imag -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge51" class="edge">
+<title>proc~get_km_im&#45;&gt;proc~get_imag</title>
+<path fill="none" stroke="#00ff00" d="M1410.13,-172C1493.41,-172 1605.03,-172 1679.58,-172"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1679.84,-175.5 1689.84,-172 1679.84,-168.5 1679.84,-175.5"/>
+</g>
+<!-- proc~get_km_im&#45;&gt;proc~get_km -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge52" class="edge">
+<title>proc~get_km_im&#45;&gt;proc~get_km</title>
+<path fill="none" stroke="#00ff00" d="M1373.31,-160C1401.6,-155.49 1433.96,-150.33 1463.14,-145.68"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1463.99,-149.09 1473.31,-144.06 1462.89,-142.18 1463.99,-149.09"/>
+</g>
+<!-- proc~get_km_re&#45;&gt;proc~get_km -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge53" class="edge">
+<title>proc~get_km_re&#45;&gt;proc~get_km</title>
+<path fill="none" stroke="#00ffff" d="M1373.31,-104C1401.6,-108.51 1433.96,-113.67 1463.14,-118.32"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1462.89,-121.82 1473.31,-119.94 1463.99,-114.91 1462.89,-121.82"/>
+</g>
+<!-- proc~get_km_re&#45;&gt;proc~get_real -->
+<g id="proc~~init_cuda_poisson_fft~~CallsGraph_edge54" class="edge">
+<title>proc~get_km_re&#45;&gt;proc~get_real</title>
+<path fill="none" stroke="#00ffff" d="M1408.66,-92C1493.18,-92 1607.52,-92 1682.48,-92"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1682.79,-95.5 1692.79,-92 1682.79,-88.5 1682.79,-95.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocinit_cuda_poisson_fftCallsGraph = svgPanZoom('#procinit_cuda_poisson_fftCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

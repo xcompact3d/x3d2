@@ -1,0 +1,931 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>tds_solve_cuda &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../program/xcompact.html">Program</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>tds_solve_cuda
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for procedures.">21 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/backend.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/backend.f90~4.html'>backend.f90</a></li>
+                <li class="breadcrumb-item"><a href='../module/m_cuda_backend.html'>m_cuda_backend</a></li>
+            <li class="breadcrumb-item active" aria-current="page">tds_solve_cuda</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine tds_solve_cuda(self, du, u, tdsops)  
+</h2>
+    
+
+
+    <h3>Type Bound</h3>
+    <p><a href='../type/cuda_backend_t.html'>cuda_backend_t</a></p>
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~484"></span>
+              class(<a href='../type/cuda_backend_t.html'>cuda_backend_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-du~74"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>du</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u~113"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tdsops~28"></span>
+              class(<a href='../type/tdsops_t.html'>tdsops_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tdsops</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~tds_solve_cuda~~CallsGraph Pages: 1 -->
+<svg id="proctds_solve_cudaCallsGraph" width="641pt" height="207pt"
+ viewBox="0.00 0.00 641.00 207.39" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~tds_solve_cuda~~CallsGraph" class="graph" transform="scale(0.38 0.38) rotate(0) translate(4 547)">
+<title>proc~~tds_solve_cuda~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-547 1699,-547 1699,4 -4,4"/>
+<!-- proc~tds_solve_cuda -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node1" class="node">
+<title>proc~tds_solve_cuda</title>
+<polygon fill="none" stroke="black" points="289,-355 0,-355 0,-331 289,-331 289,-355"/>
+<text text-anchor="middle" x="144.5" y="-340.6" font-family="Helvetica,sans-Serif" font-size="10.50">m_cuda_backend::cuda_backend_t%tds_solve_cuda</text>
+</g>
+<!-- dim3 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node2" class="node">
+<title>dim3</title>
+<polygon fill="#777777" stroke="#777777" points="1101.5,-276 1047.5,-276 1047.5,-252 1101.5,-252 1101.5,-276"/>
+<text text-anchor="middle" x="1074.5" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">dim3</text>
+</g>
+<!-- proc~tds_solve_cuda&#45;&gt;dim3 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge1" class="edge">
+<title>proc~tds_solve_cuda&#45;&gt;dim3</title>
+<path fill="none" stroke="#ff0000" d="M189.26,-331C277.71,-307.44 484.46,-255.86 662,-238 775.21,-226.61 804.61,-228.59 918,-238 929.69,-238.97 995.41,-250.29 1037.59,-257.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1037.04,-261.13 1047.49,-259.41 1038.25,-254.24 1037.04,-261.13"/>
+</g>
+<!-- proc~abort_run -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node3" class="node">
+<title>proc~abort_run</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node3"><a xlink:href="../proc/abort_run.html" xlink:title="m_logger::abort_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="1558,-276 1436,-276 1436,-252 1558,-252 1558,-276"/>
+<text text-anchor="middle" x="1497" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::abort_run</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_cuda&#45;&gt;proc~abort_run -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge2" class="edge">
+<title>proc~tds_solve_cuda&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#ff0000" d="M161.88,-355.26C192.36,-377.49 260.57,-424.5 325,-450 520.56,-527.4 578.68,-543 789,-543 789,-543 789,-543 1075.5,-543 1233.28,-543 1277.82,-498.84 1400,-399 1439.44,-366.77 1470.26,-314.51 1485.51,-285.37"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1488.81,-286.6 1490.24,-276.1 1482.58,-283.42 1488.81,-286.6"/>
+</g>
+<!-- proc~get_n_groups -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node4" class="node">
+<title>proc~get_n_groups</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node4"><a xlink:href="../proc/get_n_groups.html" xlink:title="m_allocator::allocator_t%get_n_groups">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="900,-313 680,-313 680,-289 900,-289 900,-313"/>
+<text text-anchor="middle" x="790" y="-298.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_allocator::allocator_t%get_n_groups</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_cuda&#45;&gt;proc~get_n_groups -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge3" class="edge">
+<title>proc~tds_solve_cuda&#45;&gt;proc~get_n_groups</title>
+<path fill="none" stroke="#ff0000" d="M289.11,-333.63C403.58,-326.16 561.98,-315.82 669.58,-308.79"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="670.08,-312.27 679.83,-308.13 669.62,-305.28 670.08,-312.27"/>
+</g>
+<!-- proc~move_data_loc -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node5" class="node">
+<title>proc~move_data_loc</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node5"><a xlink:href="../proc/move_data_loc.html" xlink:title="m_common::move_data_loc">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="871.5,-515 708.5,-515 708.5,-491 871.5,-491 871.5,-515"/>
+<text text-anchor="middle" x="790" y="-500.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_common::move_data_loc</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_cuda&#45;&gt;proc~move_data_loc -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge4" class="edge">
+<title>proc~tds_solve_cuda&#45;&gt;proc~move_data_loc</title>
+<path fill="none" stroke="#ff0000" d="M177.26,-355.02C212.87,-368.22 272.51,-389.45 325,-404 472.68,-444.94 512.04,-445.41 662,-477 680.67,-480.93 700.9,-485.11 719.61,-488.94"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="719.03,-492.4 729.53,-490.97 720.43,-485.54 719.03,-492.4"/>
+</g>
+<!-- proc~set_data_loc -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node6" class="node">
+<title>proc~set_data_loc</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node6"><a xlink:href="../proc/set_data_loc.html" xlink:title="m_field::field_t%set_data_loc">
+<polygon fill="#d9534f" stroke="#d9534f" points="873.5,-355 706.5,-355 706.5,-331 873.5,-331 873.5,-355"/>
+<text text-anchor="middle" x="790" y="-340.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_field::field_t%set_data_loc</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_cuda&#45;&gt;proc~set_data_loc -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge5" class="edge">
+<title>proc~tds_solve_cuda&#45;&gt;proc~set_data_loc</title>
+<path fill="none" stroke="#ff0000" d="M289.11,-343C413.45,-343 589.62,-343 696.21,-343"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="696.31,-346.5 706.31,-343 696.31,-339.5 696.31,-346.5"/>
+</g>
+<!-- proc~tds_solve_dist~3 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node7" class="node">
+<title>proc~tds_solve_dist~3</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node7"><a xlink:href="../proc/tds_solve_dist~3.html" xlink:title="m_cuda_backend::cuda_backend_t%tds_solve_dist">
+<polygon fill="#d9534f" stroke="#d9534f" points="616.5,-191 334.5,-191 334.5,-167 616.5,-167 616.5,-191"/>
+<text text-anchor="middle" x="475.5" y="-176.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_backend::cuda_backend_t%tds_solve_dist</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_cuda&#45;&gt;proc~tds_solve_dist~3 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge6" class="edge">
+<title>proc~tds_solve_cuda&#45;&gt;proc~tds_solve_dist~3</title>
+<path fill="none" stroke="#ff0000" d="M157.18,-330.62C183.95,-303.06 253.02,-236.61 325,-205 335.35,-200.45 346.44,-196.7 357.72,-193.6"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="358.85,-196.92 367.67,-191.04 357.11,-190.14 358.85,-196.92"/>
+</g>
+<!-- proc~thom_solve_cuda -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node8" class="node">
+<title>proc~thom_solve_cuda</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node8"><a xlink:href="../proc/thom_solve_cuda.html" xlink:title="m_cuda_backend::cuda_backend_t%thom_solve_cuda">
+<polygon fill="#d9534f" stroke="#d9534f" points="626,-395 325,-395 325,-371 626,-371 626,-395"/>
+<text text-anchor="middle" x="475.5" y="-380.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_backend::cuda_backend_t%thom_solve_cuda</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_cuda&#45;&gt;proc~thom_solve_cuda -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge7" class="edge">
+<title>proc~tds_solve_cuda&#45;&gt;proc~thom_solve_cuda</title>
+<path fill="none" stroke="#ff0000" d="M244.21,-355C282.35,-359.64 326.14,-364.96 365.22,-369.71"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="365.23,-373.24 375.57,-370.97 366.07,-366.29 365.23,-373.24"/>
+</g>
+<!-- interface~str -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node9" class="node">
+<title>interface~str</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node9"><a xlink:href="../interface/str.html" xlink:title="m_logger::str">
+<polygon fill="#a7506f" stroke="#a7506f" points="1686.5,-150 1602.5,-150 1602.5,-126 1686.5,-126 1686.5,-150"/>
+<text text-anchor="middle" x="1644.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::str</text>
+</a>
+</g>
+</g>
+<!-- proc~abort_run&#45;&gt;interface~str -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge8" class="edge">
+<title>proc~abort_run&#45;&gt;interface~str</title>
+<path fill="none" stroke="#ffda00" d="M1545.1,-251.94C1549.79,-249.49 1554.21,-246.54 1558,-243 1587.68,-215.28 1565.23,-187.67 1594,-159 1595.1,-157.91 1596.26,-156.87 1597.47,-155.88"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="1599.75,-158.57 1606.1,-150.08 1595.85,-152.76 1599.75,-158.57"/>
+</g>
+<!-- mpi_abort -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node10" class="node">
+<title>mpi_abort</title>
+<polygon fill="#777777" stroke="#777777" points="1678,-276 1611,-276 1611,-252 1678,-252 1678,-276"/>
+<text text-anchor="middle" x="1644.5" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_abort</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_abort -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge9" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_abort</title>
+<path fill="none" stroke="#ffda00" d="M1558.02,-264C1572.23,-264 1587.1,-264 1600.39,-264"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="1600.66,-267.5 1610.66,-264 1600.66,-260.5 1600.66,-267.5"/>
+</g>
+<!-- mpi_barrier -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node11" class="node">
+<title>mpi_barrier</title>
+<polygon fill="#777777" stroke="#777777" points="1682,-234 1607,-234 1607,-210 1682,-210 1682,-234"/>
+<text text-anchor="middle" x="1644.5" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_barrier</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_barrier -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge10" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_barrier</title>
+<path fill="none" stroke="#ffda00" d="M1539.69,-251.96C1557.63,-246.79 1578.67,-240.71 1597.1,-235.39"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="1598.11,-238.74 1606.75,-232.61 1596.17,-232.02 1598.11,-238.74"/>
+</g>
+<!-- mpi_comm_rank -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node12" class="node">
+<title>mpi_comm_rank</title>
+<polygon fill="#777777" stroke="#777777" points="1695,-192 1594,-192 1594,-168 1695,-168 1695,-192"/>
+<text text-anchor="middle" x="1644.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_comm_rank</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_comm_rank -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge11" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_comm_rank</title>
+<path fill="none" stroke="#ffda00" d="M1541.3,-251.96C1547.16,-249.45 1552.9,-246.49 1558,-243 1578.3,-229.13 1574.16,-215.52 1594,-201 1596.04,-199.5 1598.21,-198.09 1600.45,-196.76"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="1602.17,-199.81 1609.35,-192.01 1598.88,-193.63 1602.17,-199.81"/>
+</g>
+<!-- mpi_comm_size -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node13" class="node">
+<title>mpi_comm_size</title>
+<polygon fill="#777777" stroke="#777777" points="1693,-402 1596,-402 1596,-378 1693,-378 1693,-402"/>
+<text text-anchor="middle" x="1644.5" y="-387.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_comm_size</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_comm_size -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge12" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_comm_size</title>
+<path fill="none" stroke="#ffda00" d="M1506.45,-276.27C1521.73,-297.66 1555.89,-342.04 1594,-369 1596.1,-370.49 1598.32,-371.9 1600.62,-373.23"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="1599.22,-376.45 1609.7,-377.98 1602.47,-370.25 1599.22,-376.45"/>
+</g>
+<!-- mpi_finalized -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node14" class="node">
+<title>mpi_finalized</title>
+<polygon fill="#777777" stroke="#777777" points="1686,-360 1603,-360 1603,-336 1686,-336 1686,-360"/>
+<text text-anchor="middle" x="1644.5" y="-345.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_finalized</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_finalized -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge13" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_finalized</title>
+<path fill="none" stroke="#ffda00" d="M1514.43,-276.1C1533.12,-289.54 1564.82,-311.4 1594,-327 1597.06,-328.63 1600.27,-330.24 1603.52,-331.78"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="1602.18,-335.01 1612.73,-335.96 1605.07,-328.64 1602.18,-335.01"/>
+</g>
+<!-- mpi_initialized -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node15" class="node">
+<title>mpi_initialized</title>
+<polygon fill="#777777" stroke="#777777" points="1689,-318 1600,-318 1600,-294 1689,-294 1689,-318"/>
+<text text-anchor="middle" x="1644.5" y="-303.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_initialized</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_initialized -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge14" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_initialized</title>
+<path fill="none" stroke="#ffda00" d="M1539.69,-276.04C1555.98,-280.74 1574.82,-286.18 1591.95,-291.12"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="1591.22,-294.55 1601.8,-293.96 1593.16,-287.83 1591.22,-294.55"/>
+</g>
+<!-- proc~tds_solve_dist~3&#45;&gt;proc~get_n_groups -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge17" class="edge">
+<title>proc~tds_solve_dist~3&#45;&gt;proc~get_n_groups</title>
+<path fill="none" stroke="#4800ff" d="M493.99,-191.16C525.85,-212.68 596.12,-257.34 662,-280 669.28,-282.5 676.9,-284.71 684.64,-286.66"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="683.95,-290.1 694.49,-289 685.57,-283.29 683.95,-290.1"/>
+</g>
+<!-- proc~copy_into_buffers~3 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node16" class="node">
+<title>proc~copy_into_buffers~3</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node16"><a xlink:href="../proc/copy_into_buffers~3.html" xlink:title="m_cuda_backend::copy_into_buffers">
+<polygon fill="#d9534f" stroke="#d9534f" points="893.5,-191 686.5,-191 686.5,-167 893.5,-167 893.5,-191"/>
+<text text-anchor="middle" x="790" y="-176.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_backend::copy_into_buffers</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_dist~3&#45;&gt;proc~copy_into_buffers~3 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge15" class="edge">
+<title>proc~tds_solve_dist~3&#45;&gt;proc~copy_into_buffers~3</title>
+<path fill="none" stroke="#4800ff" d="M616.75,-179C636.56,-179 656.71,-179 675.92,-179"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="676.18,-182.5 686.18,-179 676.18,-175.5 676.18,-182.5"/>
+</g>
+<!-- proc~exec_dist_tds_compact~2 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node17" class="node">
+<title>proc~exec_dist_tds_compact~2</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node17"><a xlink:href="../proc/exec_dist_tds_compact~2.html" xlink:title="m_cuda_exec_dist::exec_dist_tds_compact">
+<polygon fill="#d9534f" stroke="#d9534f" points="909,-149 671,-149 671,-125 909,-125 909,-149"/>
+<text text-anchor="middle" x="790" y="-134.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_exec_dist::exec_dist_tds_compact</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_dist~3&#45;&gt;proc~exec_dist_tds_compact~2 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge16" class="edge">
+<title>proc~tds_solve_dist~3&#45;&gt;proc~exec_dist_tds_compact~2</title>
+<path fill="none" stroke="#4800ff" d="M566.05,-166.96C604.71,-161.77 650.07,-155.67 689.75,-150.34"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="690.26,-153.8 699.71,-149 689.33,-146.86 690.26,-153.8"/>
+</g>
+<!-- proc~resolve_field_t~2 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node19" class="node">
+<title>proc~resolve_field_t~2</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node19"><a xlink:href="../proc/resolve_field_t~2.html" xlink:title="m_cuda_backend::resolve_field_t">
+<polygon fill="#d9534f" stroke="#d9534f" points="884.5,-271 695.5,-271 695.5,-247 884.5,-247 884.5,-271"/>
+<text text-anchor="middle" x="790" y="-256.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_backend::resolve_field_t</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_dist~3&#45;&gt;proc~resolve_field_t~2 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge18" class="edge">
+<title>proc~tds_solve_dist~3&#45;&gt;proc~resolve_field_t~2</title>
+<path fill="none" stroke="#4800ff" d="M523.62,-191.06C579.39,-205.34 672.21,-229.1 731.98,-244.4"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="731.45,-247.88 742.01,-246.97 733.19,-241.1 731.45,-247.88"/>
+</g>
+<!-- proc~sendrecv_fields~3 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node20" class="node">
+<title>proc~sendrecv_fields~3</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node20"><a xlink:href="../proc/sendrecv_fields~3.html" xlink:title="m_cuda_sendrecv::sendrecv_fields">
+<polygon fill="#d9534f" stroke="#d9534f" points="1173,-108 976,-108 976,-84 1173,-84 1173,-108"/>
+<text text-anchor="middle" x="1074.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_sendrecv::sendrecv_fields</text>
+</a>
+</g>
+</g>
+<!-- proc~tds_solve_dist~3&#45;&gt;proc~sendrecv_fields~3 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge19" class="edge">
+<title>proc~tds_solve_dist~3&#45;&gt;proc~sendrecv_fields~3</title>
+<path fill="none" stroke="#4800ff" d="M504.13,-166.89C539.8,-151.9 604.2,-127 662,-116 763.79,-96.64 882.14,-92.78 965.72,-93.09"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="965.72,-96.59 975.74,-93.14 965.76,-89.59 965.72,-96.59"/>
+</g>
+<!-- proc~thom_solve_cuda&#45;&gt;dim3 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge20" class="edge">
+<title>proc~thom_solve_cuda&#45;&gt;dim3</title>
+<path fill="none" stroke="#ff00da" d="M607.11,-395.02C696.67,-399.04 817.08,-396.02 918,-364 971.46,-347.04 1024.39,-306.64 1052.61,-282.7"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="1054.93,-285.31 1060.22,-276.13 1050.36,-280.02 1054.93,-285.31"/>
+</g>
+<!-- proc~thom_solve_cuda&#45;&gt;proc~abort_run -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge21" class="edge">
+<title>proc~thom_solve_cuda&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#ff00da" d="M615.74,-395C619.25,-396.52 622.67,-398.19 626,-400 648.18,-412.09 639.17,-433.18 662,-444 769.03,-494.72 1080.83,-475.53 1195,-444 1311.27,-411.89 1427.84,-321.68 1474.62,-282.53"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="1476.9,-285.18 1482.28,-276.05 1472.38,-279.84 1476.9,-285.18"/>
+</g>
+<!-- proc~thom_solve_cuda&#45;&gt;proc~get_n_groups -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge23" class="edge">
+<title>proc~thom_solve_cuda&#45;&gt;proc~get_n_groups</title>
+<path fill="none" stroke="#ff00da" d="M508.24,-370.9C544.83,-357.35 607.02,-335.5 662,-322 672.55,-319.41 683.68,-317.04 694.77,-314.91"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="695.75,-318.29 704.94,-313.02 694.47,-311.41 695.75,-318.29"/>
+</g>
+<!-- proc~thom_solve_cuda&#45;&gt;proc~move_data_loc -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge24" class="edge">
+<title>proc~thom_solve_cuda&#45;&gt;proc~move_data_loc</title>
+<path fill="none" stroke="#ff00da" d="M510.02,-395.07C541.1,-406.89 588.12,-426.38 626,-449 643.4,-459.39 643.59,-468.52 662,-477 673.37,-482.24 685.8,-486.42 698.28,-489.77"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="697.74,-493.24 708.29,-492.28 699.44,-486.45 697.74,-493.24"/>
+</g>
+<!-- proc~thom_solve_cuda&#45;&gt;proc~set_data_loc -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge26" class="edge">
+<title>proc~thom_solve_cuda&#45;&gt;proc~set_data_loc</title>
+<path fill="none" stroke="#ff00da" d="M570.26,-371C610.2,-365.89 656.67,-359.94 696.48,-354.84"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="696.97,-358.31 706.44,-353.57 696.08,-351.37 696.97,-358.31"/>
+</g>
+<!-- proc~exec_thom_tds_compact -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node18" class="node">
+<title>proc~exec_thom_tds_compact</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node18"><a xlink:href="../proc/exec_thom_tds_compact.html" xlink:title="m_cuda_exec_thom::exec_thom_tds_compact">
+<polygon fill="#d9534f" stroke="#d9534f" points="918,-435 662,-435 662,-411 918,-411 918,-435"/>
+<text text-anchor="middle" x="790" y="-420.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_exec_thom::exec_thom_tds_compact</text>
+</a>
+</g>
+</g>
+<!-- proc~thom_solve_cuda&#45;&gt;proc~exec_thom_tds_compact -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge22" class="edge">
+<title>proc~thom_solve_cuda&#45;&gt;proc~exec_thom_tds_compact</title>
+<path fill="none" stroke="#ff00da" d="M570.26,-395C606.33,-399.62 647.72,-404.92 684.72,-409.65"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="684.67,-413.17 695.04,-410.97 685.56,-406.23 684.67,-413.17"/>
+</g>
+<!-- proc~thom_solve_cuda&#45;&gt;proc~resolve_field_t~2 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge25" class="edge">
+<title>proc~thom_solve_cuda&#45;&gt;proc~resolve_field_t~2</title>
+<path fill="none" stroke="#ff00da" d="M493.45,-370.93C525,-349.09 595.56,-303.16 662,-280 669.58,-277.36 677.53,-275.05 685.59,-273.02"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="686.55,-276.39 695.48,-270.69 684.94,-269.58 686.55,-276.39"/>
+</g>
+<!-- proc~copy_into_buffers~3&#45;&gt;dim3 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge27" class="edge">
+<title>proc~copy_into_buffers~3&#45;&gt;dim3</title>
+<path fill="none" stroke="#007fff" d="M883.92,-191.09C895.8,-194.61 907.48,-199.15 918,-205 938.34,-216.3 933.51,-231.99 954,-243 979.65,-256.79 1012.45,-261.81 1037.19,-263.51"/>
+<polygon fill="#007fff" stroke="#007fff" points="1037.09,-267.01 1047.26,-264.05 1037.46,-260.02 1037.09,-267.01"/>
+</g>
+<!-- proc~buffer_copy -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node25" class="node">
+<title>proc~buffer_copy</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node25"><a xlink:href="../proc/buffer_copy.html" xlink:title="m_cuda_kernels_fieldops::buffer_copy">
+<polygon fill="#d9534f" stroke="#d9534f" points="1183,-234 966,-234 966,-210 1183,-210 1183,-234"/>
+<text text-anchor="middle" x="1074.5" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_kernels_fieldops::buffer_copy</text>
+</a>
+</g>
+</g>
+<!-- proc~copy_into_buffers~3&#45;&gt;proc~buffer_copy -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge28" class="edge">
+<title>proc~copy_into_buffers~3&#45;&gt;proc~buffer_copy</title>
+<path fill="none" stroke="#007fff" d="M870.07,-191.04C905.58,-196.44 947.64,-202.84 984.27,-208.42"/>
+<polygon fill="#007fff" stroke="#007fff" points="984.04,-211.92 994.45,-209.97 985.09,-205 984.04,-211.92"/>
+</g>
+<!-- proc~exec_dist_tds_compact~2&#45;&gt;proc~sendrecv_fields~3 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge31" class="edge">
+<title>proc~exec_dist_tds_compact~2&#45;&gt;proc~sendrecv_fields~3</title>
+<path fill="none" stroke="#0000ff" d="M873.85,-124.98C907.34,-120.12 946.14,-114.48 980.59,-109.48"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="981.26,-112.92 990.65,-108.02 980.25,-106 981.26,-112.92"/>
+</g>
+<!-- proc~der_univ_dist~3 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node29" class="node">
+<title>proc~der_univ_dist~3</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node29"><a xlink:href="../proc/der_univ_dist~3.html" xlink:title="m_cuda_kernels_dist::der_univ_dist">
+<polygon fill="#d9534f" stroke="#d9534f" points="1174.5,-150 974.5,-150 974.5,-126 1174.5,-126 1174.5,-150"/>
+<text text-anchor="middle" x="1074.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_kernels_dist::der_univ_dist</text>
+</a>
+</g>
+</g>
+<!-- proc~exec_dist_tds_compact~2&#45;&gt;proc~der_univ_dist~3 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge29" class="edge">
+<title>proc~exec_dist_tds_compact~2&#45;&gt;proc~der_univ_dist~3</title>
+<path fill="none" stroke="#0000ff" d="M909.17,-137.42C927.33,-137.48 946.01,-137.55 963.97,-137.61"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="964.14,-141.11 974.16,-137.65 964.17,-134.11 964.14,-141.11"/>
+</g>
+<!-- proc~der_univ_subs~3 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node30" class="node">
+<title>proc~der_univ_subs~3</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node30"><a xlink:href="../proc/der_univ_subs~3.html" xlink:title="m_cuda_kernels_dist::der_univ_subs">
+<polygon fill="#d9534f" stroke="#d9534f" points="1177,-192 972,-192 972,-168 1177,-168 1177,-192"/>
+<text text-anchor="middle" x="1074.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_kernels_dist::der_univ_subs</text>
+</a>
+</g>
+</g>
+<!-- proc~exec_dist_tds_compact~2&#45;&gt;proc~der_univ_subs~3 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge30" class="edge">
+<title>proc~exec_dist_tds_compact~2&#45;&gt;proc~der_univ_subs~3</title>
+<path fill="none" stroke="#0000ff" d="M870.07,-149.04C905.58,-154.44 947.64,-160.84 984.27,-166.42"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="984.04,-169.92 994.45,-167.97 985.09,-163 984.04,-169.92"/>
+</g>
+<!-- proc~der_univ_thom_per~2 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node31" class="node">
+<title>proc~der_univ_thom_per~2</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node31"><a xlink:href="../proc/der_univ_thom_per~2.html" xlink:title="m_cuda_kernels_thom::der_univ_thom_per">
+<polygon fill="#d9534f" stroke="#d9534f" points="1195,-393 954,-393 954,-369 1195,-369 1195,-393"/>
+<text text-anchor="middle" x="1074.5" y="-378.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_kernels_thom::der_univ_thom_per</text>
+</a>
+</g>
+</g>
+<!-- proc~exec_thom_tds_compact&#45;&gt;proc~der_univ_thom_per~2 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge32" class="edge">
+<title>proc~exec_thom_tds_compact&#45;&gt;proc~der_univ_thom_per~2</title>
+<path fill="none" stroke="#7f00ff" d="M871.95,-410.96C906.53,-405.82 947.04,-399.8 982.63,-394.51"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="983.16,-397.97 992.54,-393.04 982.13,-391.05 983.16,-397.97"/>
+</g>
+<!-- proc~der_univ_thom~2 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node32" class="node">
+<title>proc~der_univ_thom~2</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node32"><a xlink:href="../proc/der_univ_thom~2.html" xlink:title="m_cuda_kernels_thom::der_univ_thom">
+<polygon fill="#d9534f" stroke="#d9534f" points="1183.5,-435 965.5,-435 965.5,-411 1183.5,-411 1183.5,-435"/>
+<text text-anchor="middle" x="1074.5" y="-420.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_kernels_thom::der_univ_thom</text>
+</a>
+</g>
+</g>
+<!-- proc~exec_thom_tds_compact&#45;&gt;proc~der_univ_thom~2 -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge33" class="edge">
+<title>proc~exec_thom_tds_compact&#45;&gt;proc~der_univ_thom~2</title>
+<path fill="none" stroke="#7f00ff" d="M918.2,-423C930.44,-423 942.83,-423 954.98,-423"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="955.13,-426.5 965.13,-423 955.13,-419.5 955.13,-426.5"/>
+</g>
+<!-- cudastreamsynchronize -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node21" class="node">
+<title>cudastreamsynchronize</title>
+<polygon fill="#777777" stroke="#777777" points="1385,-192 1246,-192 1246,-168 1385,-168 1385,-192"/>
+<text text-anchor="middle" x="1315.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cudastreamsynchronize</text>
+</g>
+<!-- proc~sendrecv_fields~3&#45;&gt;cudastreamsynchronize -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge34" class="edge">
+<title>proc~sendrecv_fields~3&#45;&gt;cudastreamsynchronize</title>
+<path fill="none" stroke="#ff007f" d="M1173.06,-107.23C1180.72,-109.87 1188.14,-113.09 1195,-117 1216.36,-129.17 1210.1,-146.06 1231,-159 1233.95,-160.83 1237.05,-162.49 1240.25,-164.02"/>
+<polygon fill="#ff007f" stroke="#ff007f" points="1238.92,-167.25 1249.49,-167.93 1241.65,-160.81 1238.92,-167.25"/>
+</g>
+<!-- mpi_irecv -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node22" class="node">
+<title>mpi_irecv</title>
+<polygon fill="#777777" stroke="#777777" points="1347.5,-150 1283.5,-150 1283.5,-126 1347.5,-126 1347.5,-150"/>
+<text text-anchor="middle" x="1315.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_irecv</text>
+</g>
+<!-- proc~sendrecv_fields~3&#45;&gt;mpi_irecv -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge35" class="edge">
+<title>proc~sendrecv_fields~3&#45;&gt;mpi_irecv</title>
+<path fill="none" stroke="#ff007f" d="M1143.99,-108.04C1185.79,-115.38 1237.86,-124.53 1273.38,-130.77"/>
+<polygon fill="#ff007f" stroke="#ff007f" points="1272.94,-134.25 1283.39,-132.53 1274.15,-127.36 1272.94,-134.25"/>
+</g>
+<!-- mpi_isend -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node23" class="node">
+<title>mpi_isend</title>
+<polygon fill="#777777" stroke="#777777" points="1349,-66 1282,-66 1282,-42 1349,-42 1349,-66"/>
+<text text-anchor="middle" x="1315.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_isend</text>
+</g>
+<!-- proc~sendrecv_fields~3&#45;&gt;mpi_isend -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge36" class="edge">
+<title>proc~sendrecv_fields~3&#45;&gt;mpi_isend</title>
+<path fill="none" stroke="#ff007f" d="M1143.99,-83.96C1185.17,-76.73 1236.29,-67.74 1271.77,-61.51"/>
+<polygon fill="#ff007f" stroke="#ff007f" points="1272.55,-64.93 1281.79,-59.75 1271.34,-58.03 1272.55,-64.93"/>
+</g>
+<!-- mpi_waitall -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node24" class="node">
+<title>mpi_waitall</title>
+<polygon fill="#777777" stroke="#777777" points="1352,-24 1279,-24 1279,0 1352,0 1352,-24"/>
+<text text-anchor="middle" x="1315.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_waitall</text>
+</g>
+<!-- proc~sendrecv_fields~3&#45;&gt;mpi_waitall -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge37" class="edge">
+<title>proc~sendrecv_fields~3&#45;&gt;mpi_waitall</title>
+<path fill="none" stroke="#ff007f" d="M1102.05,-83.93C1132.68,-70.31 1184.76,-48.1 1231,-33 1243.22,-29.01 1256.66,-25.33 1269.11,-22.2"/>
+<polygon fill="#ff007f" stroke="#ff007f" points="1269.96,-25.6 1278.84,-19.82 1268.3,-18.8 1269.96,-25.6"/>
+</g>
+<!-- proc~check_cuda -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node26" class="node">
+<title>proc~check_cuda</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node26"><a xlink:href="../proc/check_cuda.html" xlink:title="m_cuda_errors::check_cuda">
+<polygon fill="#d9534f" stroke="#d9534f" points="1396.5,-108 1234.5,-108 1234.5,-84 1396.5,-84 1396.5,-108"/>
+<text text-anchor="middle" x="1315.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_errors::check_cuda</text>
+</a>
+</g>
+</g>
+<!-- proc~sendrecv_fields~3&#45;&gt;proc~check_cuda -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge38" class="edge">
+<title>proc~sendrecv_fields~3&#45;&gt;proc~check_cuda</title>
+<path fill="none" stroke="#ff007f" d="M1173.06,-96C1189.94,-96 1207.44,-96 1224.13,-96"/>
+<polygon fill="#ff007f" stroke="#ff007f" points="1224.4,-99.5 1234.4,-96 1224.4,-92.5 1224.4,-99.5"/>
+</g>
+<!-- proc~check_mpi -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node27" class="node">
+<title>proc~check_mpi</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node27"><a xlink:href="../proc/check_mpi.html" xlink:title="m_logger::check_mpi">
+<polygon fill="#d9534f" stroke="#d9534f" points="1379,-234 1252,-234 1252,-210 1379,-210 1379,-234"/>
+<text text-anchor="middle" x="1315.5" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::check_mpi</text>
+</a>
+</g>
+</g>
+<!-- proc~sendrecv_fields~3&#45;&gt;proc~check_mpi -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge39" class="edge">
+<title>proc~sendrecv_fields~3&#45;&gt;proc~check_mpi</title>
+<path fill="none" stroke="#ff007f" d="M1173.05,-104.45C1180.94,-107.66 1188.4,-111.77 1195,-117 1226.84,-142.22 1200.1,-174.64 1231,-201 1234.48,-203.97 1238.33,-206.53 1242.4,-208.74"/>
+<polygon fill="#ff007f" stroke="#ff007f" points="1241.08,-211.99 1251.63,-213.03 1244.03,-205.64 1241.08,-211.99"/>
+</g>
+<!-- proc~copy_halo -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node28" class="node">
+<title>proc~copy_halo</title>
+<g id="a_proc~~tds_solve_cuda~~CallsGraph_node28"><a xlink:href="../proc/copy_halo.html" xlink:title="m_cuda_sendrecv::copy_halo">
+<polygon fill="#d9534f" stroke="#d9534f" points="1400,-276 1231,-276 1231,-252 1400,-252 1400,-276"/>
+<text text-anchor="middle" x="1315.5" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_sendrecv::copy_halo</text>
+</a>
+</g>
+</g>
+<!-- proc~sendrecv_fields~3&#45;&gt;proc~copy_halo -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge40" class="edge">
+<title>proc~sendrecv_fields~3&#45;&gt;proc~copy_halo</title>
+<path fill="none" stroke="#ff007f" d="M1173.21,-103.33C1181.16,-106.75 1188.58,-111.22 1195,-117 1238.27,-155.98 1189.17,-202.48 1231,-243 1232.25,-244.22 1233.57,-245.36 1234.94,-246.45"/>
+<polygon fill="#ff007f" stroke="#ff007f" points="1233,-249.36 1243.26,-251.99 1236.88,-243.54 1233,-249.36"/>
+</g>
+<!-- proc~check_cuda&#45;&gt;proc~abort_run -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge43" class="edge">
+<title>proc~check_cuda&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#00ff7f" d="M1387.74,-108.01C1392.2,-110.5 1396.35,-113.46 1400,-117 1441.83,-157.52 1396.04,-200.63 1436,-243 1437.04,-244.1 1438.14,-245.15 1439.3,-246.14"/>
+<polygon fill="#00ff7f" stroke="#00ff7f" points="1437.36,-249.06 1447.56,-251.92 1441.37,-243.32 1437.36,-249.06"/>
+</g>
+<!-- proc~check_cuda&#45;&gt;interface~str -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge42" class="edge">
+<title>proc~check_cuda&#45;&gt;interface~str</title>
+<path fill="none" stroke="#00ff7f" d="M1379.93,-108.04C1398,-111.22 1417.74,-114.48 1436,-117 1489.18,-124.35 1550.37,-130.23 1592.45,-133.88"/>
+<polygon fill="#00ff7f" stroke="#00ff7f" points="1592.19,-137.37 1602.45,-134.74 1592.78,-130.4 1592.19,-137.37"/>
+</g>
+<!-- cudageterrorstring -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node33" class="node">
+<title>cudageterrorstring</title>
+<polygon fill="#777777" stroke="#777777" points="1553,-108 1441,-108 1441,-84 1553,-84 1553,-108"/>
+<text text-anchor="middle" x="1497" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cudageterrorstring</text>
+</g>
+<!-- proc~check_cuda&#45;&gt;cudageterrorstring -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge41" class="edge">
+<title>proc~check_cuda&#45;&gt;cudageterrorstring</title>
+<path fill="none" stroke="#00ff7f" d="M1396.54,-96C1407.99,-96 1419.66,-96 1430.78,-96"/>
+<polygon fill="#00ff7f" stroke="#00ff7f" points="1430.82,-99.5 1440.82,-96 1430.82,-92.5 1430.82,-99.5"/>
+</g>
+<!-- proc~check_mpi&#45;&gt;proc~abort_run -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge46" class="edge">
+<title>proc~check_mpi&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#00ffff" d="M1367.94,-234.04C1388.78,-238.91 1413.02,-244.58 1434.76,-249.67"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1434.02,-253.09 1444.55,-251.96 1435.62,-246.28 1434.02,-253.09"/>
+</g>
+<!-- proc~check_mpi&#45;&gt;interface~str -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge44" class="edge">
+<title>proc~check_mpi&#45;&gt;interface~str</title>
+<path fill="none" stroke="#00ffff" d="M1364.64,-209.95C1376.23,-207.04 1388.56,-203.92 1400,-201 1466.5,-184.03 1543.13,-164.15 1592.38,-151.33"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1593.37,-154.69 1602.16,-148.79 1591.6,-147.92 1593.37,-154.69"/>
+</g>
+<!-- mpi_error_string -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_node34" class="node">
+<title>mpi_error_string</title>
+<polygon fill="#777777" stroke="#777777" points="1547,-234 1447,-234 1447,-210 1547,-210 1547,-234"/>
+<text text-anchor="middle" x="1497" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_error_string</text>
+</g>
+<!-- proc~check_mpi&#45;&gt;mpi_error_string -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge45" class="edge">
+<title>proc~check_mpi&#45;&gt;mpi_error_string</title>
+<path fill="none" stroke="#00ffff" d="M1379.03,-222C1397.81,-222 1418.35,-222 1436.9,-222"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1436.98,-225.5 1446.98,-222 1436.98,-218.5 1436.98,-225.5"/>
+</g>
+<!-- proc~copy_halo&#45;&gt;proc~abort_run -->
+<g id="proc~~tds_solve_cuda~~CallsGraph_edge47" class="edge">
+<title>proc~copy_halo&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#007fff" d="M1400.21,-264C1408.78,-264 1417.43,-264 1425.84,-264"/>
+<polygon fill="#007fff" stroke="#007fff" points="1425.96,-267.5 1435.96,-264 1425.96,-260.5 1425.96,-267.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panproctds_solve_cudaCallsGraph = svgPanZoom('#proctds_solve_cudaCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

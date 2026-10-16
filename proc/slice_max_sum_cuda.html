@@ -1,0 +1,635 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>slice_max_sum_cuda &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../program/xcompact.html">Program</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>slice_max_sum_cuda
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.4% of total for procedures.">52 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/backend.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/backend.f90~4.html'>backend.f90</a></li>
+                <li class="breadcrumb-item"><a href='../module/m_cuda_backend.html'>m_cuda_backend</a></li>
+            <li class="breadcrumb-item active" aria-current="page">slice_max_sum_cuda</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine slice_max_sum_cuda(self, max_val, sum_val, f, i_slice, enforced_data_loc)  
+</h2>
+    
+
+    <p><a href="../proc/slice_max_sum_base.html">slice_max_sum_base</a></p>
+
+    <h3>Type Bound</h3>
+    <p><a href='../type/cuda_backend_t.html'>cuda_backend_t</a></p>
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~502"></span>
+              class(<a href='../type/cuda_backend_t.html'>cuda_backend_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-max_val~8"></span>
+              real(kind=dp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>max_val</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sum_val~4"></span>
+              real(kind=dp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sum_val</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~95"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_slice~6"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_slice</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enforced_data_loc~8"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enforced_data_loc</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~slice_max_sum_cuda~~CallsGraph Pages: 1 -->
+<svg id="procslice_max_sum_cudaCallsGraph" width="641pt" height="328pt"
+ viewBox="0.00 0.00 641.00 327.69" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~slice_max_sum_cuda~~CallsGraph" class="graph" transform="scale(0.8 0.8) rotate(0) translate(4 406)">
+<title>proc~~slice_max_sum_cuda~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-406 798,-406 798,4 -4,4"/>
+<!-- proc~slice_max_sum_cuda -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node1" class="node">
+<title>proc~slice_max_sum_cuda</title>
+<polygon fill="none" stroke="black" points="321,-171 0,-171 0,-147 321,-147 321,-171"/>
+<text text-anchor="middle" x="160.5" y="-156.6" font-family="Helvetica,sans-Serif" font-size="10.50">m_cuda_backend::cuda_backend_t%slice_max_sum_cuda</text>
+</g>
+<!-- dim3 -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node2" class="node">
+<title>dim3</title>
+<polygon fill="#777777" stroke="#777777" points="505.5,-276 451.5,-276 451.5,-252 505.5,-252 505.5,-276"/>
+<text text-anchor="middle" x="478.5" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">dim3</text>
+</g>
+<!-- proc~slice_max_sum_cuda&#45;&gt;dim3 -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_edge1" class="edge">
+<title>proc~slice_max_sum_cuda&#45;&gt;dim3</title>
+<path fill="none" stroke="#ff0000" d="M184.61,-171.04C220.54,-189.27 292.38,-223.77 357,-243 384.66,-251.23 416.91,-256.64 441.08,-259.9"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="440.87,-263.41 451.24,-261.21 441.77,-256.46 440.87,-263.41"/>
+</g>
+<!-- proc~abort_run -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node3" class="node">
+<title>proc~abort_run</title>
+<g id="a_proc~~slice_max_sum_cuda~~CallsGraph_node3"><a xlink:href="../proc/abort_run.html" xlink:title="m_logger::abort_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="539.5,-234 417.5,-234 417.5,-210 539.5,-210 539.5,-234"/>
+<text text-anchor="middle" x="478.5" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::abort_run</text>
+</a>
+</g>
+</g>
+<!-- proc~slice_max_sum_cuda&#45;&gt;proc~abort_run -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_edge2" class="edge">
+<title>proc~slice_max_sum_cuda&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#ff0000" d="M214.9,-171.06C254.14,-179.78 308.78,-191.62 357,-201 373.23,-204.16 390.73,-207.33 407.23,-210.23"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="406.9,-213.72 417.35,-211.99 408.1,-206.83 406.9,-213.72"/>
+</g>
+<!-- proc~get_dims -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node4" class="node">
+<title>proc~get_dims</title>
+<g id="a_proc~~slice_max_sum_cuda~~CallsGraph_node4"><a xlink:href="../proc/get_dims.html" xlink:title="m_mesh::mesh_t%get_dims">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="559,-192 398,-192 398,-168 559,-168 559,-192"/>
+<text text-anchor="middle" x="478.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_mesh::mesh_t%get_dims</text>
+</a>
+</g>
+</g>
+<!-- proc~slice_max_sum_cuda&#45;&gt;proc~get_dims -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_edge3" class="edge">
+<title>proc~slice_max_sum_cuda&#45;&gt;proc~get_dims</title>
+<path fill="none" stroke="#ff0000" d="M321.35,-169.62C344.11,-171.14 366.82,-172.64 387.59,-174.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="387.41,-177.52 397.62,-174.69 387.87,-170.54 387.41,-177.52"/>
+</g>
+<!-- proc~get_padded_dims -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node5" class="node">
+<title>proc~get_padded_dims</title>
+<g id="a_proc~~slice_max_sum_cuda~~CallsGraph_node5"><a xlink:href="../proc/get_padded_dims.html" xlink:title="m_allocator::allocator_t%get_padded_dims">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="600,-150 357,-150 357,-126 600,-126 600,-150"/>
+<text text-anchor="middle" x="478.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_allocator::allocator_t%get_padded_dims</text>
+</a>
+</g>
+</g>
+<!-- proc~slice_max_sum_cuda&#45;&gt;proc~get_padded_dims -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_edge4" class="edge">
+<title>proc~slice_max_sum_cuda&#45;&gt;proc~get_padded_dims</title>
+<path fill="none" stroke="#ff0000" d="M321.35,-148.38C329.84,-147.81 338.32,-147.25 346.7,-146.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="347.11,-150.17 356.86,-146.02 346.65,-143.19 347.11,-150.17"/>
+</g>
+<!-- proc~resolve_field_t~2 -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node6" class="node">
+<title>proc~resolve_field_t~2</title>
+<g id="a_proc~~slice_max_sum_cuda~~CallsGraph_node6"><a xlink:href="../proc/resolve_field_t~2.html" xlink:title="m_cuda_backend::resolve_field_t">
+<polygon fill="#d9534f" stroke="#d9534f" points="573,-108 384,-108 384,-84 573,-84 573,-108"/>
+<text text-anchor="middle" x="478.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_backend::resolve_field_t</text>
+</a>
+</g>
+</g>
+<!-- proc~slice_max_sum_cuda&#45;&gt;proc~resolve_field_t~2 -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_edge5" class="edge">
+<title>proc~slice_max_sum_cuda&#45;&gt;proc~resolve_field_t~2</title>
+<path fill="none" stroke="#ff0000" d="M214.9,-146.94C254.14,-138.22 308.78,-126.38 357,-117 369.54,-114.56 382.84,-112.11 395.86,-109.78"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="396.5,-113.22 405.73,-108.03 395.27,-106.33 396.5,-113.22"/>
+</g>
+<!-- proc~slice_max_sum_kernel -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node7" class="node">
+<title>proc~slice_max_sum_kernel</title>
+<g id="a_proc~~slice_max_sum_cuda~~CallsGraph_node7"><a xlink:href="../proc/slice_max_sum_kernel.html" xlink:title="m_cuda_backend::slice_max_sum_kernel">
+<polygon fill="#d9534f" stroke="#d9534f" points="594.5,-66 362.5,-66 362.5,-42 594.5,-42 594.5,-66"/>
+<text text-anchor="middle" x="478.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_backend::slice_max_sum_kernel</text>
+</a>
+</g>
+</g>
+<!-- proc~slice_max_sum_cuda&#45;&gt;proc~slice_max_sum_kernel -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_edge6" class="edge">
+<title>proc~slice_max_sum_cuda&#45;&gt;proc~slice_max_sum_kernel</title>
+<path fill="none" stroke="#ff0000" d="M184.61,-146.96C220.54,-128.73 292.38,-94.23 357,-75 365.59,-72.44 374.63,-70.16 383.73,-68.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="384.57,-71.53 393.62,-66.02 383.11,-64.68 384.57,-71.53"/>
+</g>
+<!-- interface~str -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node10" class="node">
+<title>interface~str</title>
+<g id="a_proc~~slice_max_sum_cuda~~CallsGraph_node10"><a xlink:href="../interface/str.html" xlink:title="m_logger::str">
+<polygon fill="#a7506f" stroke="#a7506f" points="757,-402 673,-402 673,-378 757,-378 757,-402"/>
+<text text-anchor="middle" x="715" y="-387.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::str</text>
+</a>
+</g>
+</g>
+<!-- proc~abort_run&#45;&gt;interface~str -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_edge7" class="edge">
+<title>proc~abort_run&#45;&gt;interface~str</title>
+<path fill="none" stroke="#ffff00" d="M539.75,-219.86C561.06,-222.12 583.74,-228.37 600,-243 643.3,-281.95 594.5,-328.13 636,-369 643.34,-376.23 652.9,-381.04 662.79,-384.23"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="662.16,-387.68 672.73,-386.9 663.98,-380.92 662.16,-387.68"/>
+</g>
+<!-- mpi_abort -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node11" class="node">
+<title>mpi_abort</title>
+<polygon fill="#777777" stroke="#777777" points="748.5,-360 681.5,-360 681.5,-336 748.5,-336 748.5,-360"/>
+<text text-anchor="middle" x="715" y="-345.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_abort</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_abort -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_edge8" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_abort</title>
+<path fill="none" stroke="#ffff00" d="M539.72,-221.1C560.65,-223.56 583.1,-229.63 600,-243 631.86,-268.2 605.32,-300.39 636,-327 645.86,-335.56 658.87,-340.67 671.43,-343.7"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="670.84,-347.16 681.34,-345.72 672.24,-340.3 670.84,-347.16"/>
+</g>
+<!-- mpi_barrier -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node12" class="node">
+<title>mpi_barrier</title>
+<polygon fill="#777777" stroke="#777777" points="752.5,-318 677.5,-318 677.5,-294 752.5,-294 752.5,-318"/>
+<text text-anchor="middle" x="715" y="-303.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_barrier</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_barrier -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_edge9" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_barrier</title>
+<path fill="none" stroke="#ffff00" d="M539.57,-224.32C559.79,-227.16 581.82,-232.65 600,-243 621.37,-255.16 615.2,-271.89 636,-285 645.45,-290.96 656.56,-295.24 667.39,-298.31"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="666.65,-301.74 677.21,-300.81 668.38,-294.95 666.65,-301.74"/>
+</g>
+<!-- mpi_comm_rank -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node13" class="node">
+<title>mpi_comm_rank</title>
+<polygon fill="#777777" stroke="#777777" points="765.5,-276 664.5,-276 664.5,-252 765.5,-252 765.5,-276"/>
+<text text-anchor="middle" x="715" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_comm_rank</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_comm_rank -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_edge10" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_comm_rank</title>
+<path fill="none" stroke="#ffff00" d="M539.59,-232.35C558.89,-235.71 580.35,-239.48 600,-243 617.64,-246.16 636.79,-249.66 654.28,-252.89"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="653.89,-256.37 664.36,-254.75 655.16,-249.49 653.89,-256.37"/>
+</g>
+<!-- mpi_comm_size -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node14" class="node">
+<title>mpi_comm_size</title>
+<polygon fill="#777777" stroke="#777777" points="763.5,-234 666.5,-234 666.5,-210 763.5,-210 763.5,-234"/>
+<text text-anchor="middle" x="715" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_comm_size</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_comm_size -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_edge11" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_comm_size</title>
+<path fill="none" stroke="#ffff00" d="M539.59,-222C575.4,-222 620.64,-222 656.07,-222"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="656.26,-225.5 666.26,-222 656.26,-218.5 656.26,-225.5"/>
+</g>
+<!-- mpi_finalized -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node15" class="node">
+<title>mpi_finalized</title>
+<polygon fill="#777777" stroke="#777777" points="756.5,-192 673.5,-192 673.5,-168 756.5,-168 756.5,-192"/>
+<text text-anchor="middle" x="715" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_finalized</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_finalized -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_edge12" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_finalized</title>
+<path fill="none" stroke="#ffff00" d="M539.59,-211.65C558.89,-208.29 580.35,-204.52 600,-201 620.75,-197.28 643.6,-193.09 663.37,-189.44"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="664.2,-192.84 673.39,-187.58 662.92,-185.96 664.2,-192.84"/>
+</g>
+<!-- mpi_initialized -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node16" class="node">
+<title>mpi_initialized</title>
+<polygon fill="#777777" stroke="#777777" points="759.5,-150 670.5,-150 670.5,-126 759.5,-126 759.5,-150"/>
+<text text-anchor="middle" x="715" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_initialized</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_initialized -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_edge13" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_initialized</title>
+<path fill="none" stroke="#ffff00" d="M539.57,-219.68C559.79,-216.84 581.82,-211.35 600,-201 621.37,-188.84 615.2,-172.11 636,-159 643.5,-154.27 652.05,-150.6 660.68,-147.75"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="661.8,-151.06 670.4,-144.86 659.81,-144.35 661.8,-151.06"/>
+</g>
+<!-- proc~get_dims_dataloc -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node17" class="node">
+<title>proc~get_dims_dataloc</title>
+<g id="a_proc~~slice_max_sum_cuda~~CallsGraph_node17"><a xlink:href="../proc/get_dims_dataloc.html" xlink:title="m_mesh::get_dims_dataloc">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="794,-108 636,-108 636,-84 794,-84 794,-108"/>
+<text text-anchor="middle" x="715" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_mesh::get_dims_dataloc</text>
+</a>
+</g>
+</g>
+<!-- proc~get_dims&#45;&gt;proc~get_dims_dataloc -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_edge14" class="edge">
+<title>proc~get_dims&#45;&gt;proc~get_dims_dataloc</title>
+<path fill="none" stroke="#00ff00" d="M559.02,-174.14C573.28,-170.9 587.54,-166.09 600,-159 621.37,-146.84 615.2,-130.11 636,-117 638.79,-115.24 641.72,-113.63 644.75,-112.15"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="646.29,-115.3 654.07,-108.11 643.5,-108.88 646.29,-115.3"/>
+</g>
+<!-- atomicadd -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node8" class="node">
+<title>atomicadd</title>
+<polygon fill="#777777" stroke="#777777" points="750,-66 680,-66 680,-42 750,-42 750,-66"/>
+<text text-anchor="middle" x="715" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atomicadd</text>
+</g>
+<!-- proc~slice_max_sum_kernel&#45;&gt;atomicadd -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_edge15" class="edge">
+<title>proc~slice_max_sum_kernel&#45;&gt;atomicadd</title>
+<path fill="none" stroke="#ff00ff" d="M594.69,-54C621.47,-54 648.38,-54 669.86,-54"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="669.94,-57.5 679.94,-54 669.94,-50.5 669.94,-57.5"/>
+</g>
+<!-- atomicmax -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_node9" class="node">
+<title>atomicmax</title>
+<polygon fill="#777777" stroke="#777777" points="751.5,-24 678.5,-24 678.5,0 751.5,0 751.5,-24"/>
+<text text-anchor="middle" x="715" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atomicmax</text>
+</g>
+<!-- proc~slice_max_sum_kernel&#45;&gt;atomicmax -->
+<g id="proc~~slice_max_sum_cuda~~CallsGraph_edge16" class="edge">
+<title>proc~slice_max_sum_kernel&#45;&gt;atomicmax</title>
+<path fill="none" stroke="#ff00ff" d="M546.7,-41.96C585.58,-35 633.5,-26.42 668.07,-20.23"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="669.13,-23.59 678.35,-18.38 667.89,-16.7 669.13,-23.59"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocslice_max_sum_cudaCallsGraph = svgPanZoom('#procslice_max_sum_cudaCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
