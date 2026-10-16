@@ -175,9 +175,6 @@ contains
       self%poisson => poisson_000
     else if (self%periodic_x .and. (.not. self%periodic_y) &
              .and. (self%periodic_z)) then
-      if (mesh%par%nproc > 1) then
-        error stop 'Multiple ranks are not yet supported for non-periodic BCs!'
-      end if
       self%poisson => poisson_010
       ! stretching requires some coefficients matrices
       if (mesh%geo%stretched(2)) then
@@ -186,9 +183,10 @@ contains
       end if
     else if ((.not. self%periodic_x) .and. (self%periodic_y) &
              .and. (self%periodic_z)) then
-      ! The OpenMP and CUDA backends both run the 100 and 110 cases on
-      ! multiple ranks. The CUDA backend needs a 1D z decomposition and
-      ! cuFFTMp for that.
+      ! The OpenMP backend runs the 010, 100 and 110 cases on multiple ranks.
+      ! The CUDA backend runs the 100 and 110 cases on multiple ranks with a
+      ! 1D z decomposition and cuFFTMp, and guards its own 010 rank limit
+      ! where the case is initialised.
       self%poisson => poisson_100
     else if ((.not. self%periodic_x) .and. (.not. self%periodic_y) &
              .and. (self%periodic_z)) then
