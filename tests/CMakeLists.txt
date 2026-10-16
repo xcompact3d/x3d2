@@ -292,6 +292,8 @@ define_test(unit/test_statistics.f90 ${serial} omp)
 define_test(unit/test_output_scalars.f90 ${serial} omp)
 define_test(unit/test_les.f90 ${serial} omp)
 define_test(unit/test_abl_diagnostics.f90 ${serial} omp)
+define_test(unit/test_memcheck_stretched_y.f90 ${serial} omp)
+define_test(unit/test_gpu_io_staging.f90 ${serial} omp)
 if(WITH_ADIOS2)
   define_test(unit/test_adios2_mixed_precision.f90 ${serial} omp)
   define_test(unit/test_adm_checkpoint.f90 ${serial} omp)
@@ -395,6 +397,228 @@ endfunction()
 foreach(backend IN LISTS X3D2_TEST_BACKENDS)
   define_backend_tests(${backend})
 endforeach()
+
+# CUDA-only x3d2-memcheck tests, registered after the per-backend tests
+if(${ENABLE_BACKEND} STREQUAL "CUDA")
+  # x3d2-memcheck regression tests: run the already-built binary against a
+  # few example inputs and check its printed output, rather than compiling
+  # a bespoke Fortran test program. "static" checks the tool runs and
+  # prints a verdict with no GPU FFT plan query; "build" additionally
+  # checks its real --build measurement (Tier 3) completes and the static
+  # estimate is close to it (the CHECK line) with no calibration drift (no
+  # WARNING line) - this is the "is the guess close to the actual run"
+  # check. PASS_REGULAR_EXPRESSION makes ctest ignore the process exit
+  # code (x3d2-memcheck's own exit code is the verdict: 0/1/2 for
+  # FITS/BORDERLINE/DOES_NOT_FIT, none of which should fail a correctly-
+  # working test run). TGV/generic/channel are the three example inputs
+  # that build unattended - cylinder needs an external IBM mask file not
+  # in the repo, foil is not tracked here.
+  function(define_memcheck_test case mode)
+    set(name memcheck_${mode}_${case})
+    set(input ${CMAKE_SOURCE_DIR}/examples/${case}/input.x3d)
+    add_test(NAME ${name} COMMAND sh -c
+      "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${input} --${mode}")
+    set_tests_properties(${name} PROPERTIES LABELS "verification;cuda")
+    if(${mode} STREQUAL build)
+      set_tests_properties(${name} PROPERTIES
+        PASS_REGULAR_EXPRESSION "CHECK ng=1: .* - OK"
+        FAIL_REGULAR_EXPRESSION "WARNING: peak_fields_lookup|MISMATCH")
+    else()
+      set_tests_properties(${name} PROPERTIES
+        PASS_REGULAR_EXPRESSION "Requested nproc_dir gives ng=")
+    endif()
+  endfunction()
+  foreach(memcheck_case TGV generic channel)
+    define_memcheck_test(${memcheck_case} static)
+    define_memcheck_test(${memcheck_case} build)
+  endforeach()
+
+  # Hiding every GPU from the process (CUDA_VISIBLE_DEVICES=) must be caught
+  # cleanly by the device checks in memcheck.f90's main program, not crash.
+  add_test(NAME memcheck_static_no_gpu COMMAND sh -c
+    "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d --static")
+  set_tests_properties(memcheck_static_no_gpu PROPERTIES
+    LABELS "verification;cuda"
+    ENVIRONMENT "CUDA_VISIBLE_DEVICES="
+    PASS_REGULAR_EXPRESSION "no usable CUDA device")
+
+  # An nproc_dir that does not divide the grid must be reported as
+  # UNSUPPORTED (exit code 2), not silently estimated: TGV's z=256 does not
+  # divide by 3.
+  add_test(NAME memcheck_static_unsupported_ng COMMAND sh -c
+    "d=$(mktemp -d); \
+     sed 's/^nproc_dir *=.*/nproc_dir = 1, 1, 3/' \
+       ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d > $d/input.x3d; \
+     mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck \
+       $d/input.x3d --static > $d/out.log 2>&1; \
+     rc=$?; cat $d/out.log; \
+     if [ $rc -eq 2 ] && \
+        grep -q 'not supported (z=256 not divisible' $d/out.log; then \
+       echo UNSUPPORTED_OK; \
+     fi; \
+     rm -rf $d")
+  set_tests_properties(memcheck_static_unsupported_ng PROPERTIES
+    LABELS "verification;cuda"
+    PASS_REGULAR_EXPRESSION "UNSUPPORTED_OK")
+
+  # peak_fields_lookup must follow the time integrator and the species
+  # count: a --build of the TGV input with the edit applied must show no
+  # calibration drift (no WARNING line) and a CHECK line that is OK. The
+  # sed edit goes to a copy of the input in a mktemp directory. A sed
+  # expression that leaves the input unchanged fails the test (SED_NOOP).
+  # With the optional third argument the test passes on the token
+  # <name>_OK printed by that shell snippet instead of on the CHECK line.
+  # The snippet runs after the --build, with $d the directory, $rc the
+  # exit code and $d/build.log the output of the --build.
+  # With the optional fourth argument the run uses that option instead of
+  # --build; an empty string runs the default mode.
+  function(define_memcheck_build_edit_test name sed_expr)
+    set(base ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d)
+    set(pass_regex "CHECK ng=1: .* - OK")
+    set(snippet "true")
+    set(mode_flag "--build")
+    if(ARGC GREATER 3)
+      set(mode_flag "${ARGV3}")
+    endif()
+    if(ARGC GREATER 2)
+      set(pass_regex "${name}_OK")
+      set(snippet "${ARGV2}")
+    endif()
+    add_test(NAME ${name} COMMAND sh -c
+      "d=$(mktemp -d); \
+       sed '${sed_expr}' ${base} > $d/input.x3d; \
+       if cmp -s ${base} $d/input.x3d; then echo SED_NOOP; fi; \
+       mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck \
+         $d/input.x3d ${mode_flag} > $d/build.log 2>&1; \
+       rc=$?; cat $d/build.log; \
+       ${snippet}; \
+       rm -rf $d")
+    set_tests_properties(${name} PROPERTIES
+      LABELS "verification;cuda"
+      PASS_REGULAR_EXPRESSION "${pass_regex}"
+      FAIL_REGULAR_EXPRESSION "SED_NOOP|WARNING: peak_fields_lookup|MISMATCH")
+  endfunction()
+  define_memcheck_build_edit_test(memcheck_build_TGV_rk4
+    "s/^time_intg *=.*/time_intg = \"RK4\"/")
+  define_memcheck_build_edit_test(memcheck_build_TGV_ab2
+    "s/^time_intg *=.*/time_intg = \"AB2\"/")
+  define_memcheck_build_edit_test(memcheck_build_TGV_species2
+    "s/^time_intg *=.*/&\\nn_species = 2/")
+
+  # A requested nproc_dir outside the GPU count list [1,2,4,8] must get the
+  # same verdict in the initial report, in the measured table (its own row)
+  # and in --static, with the same exit code. TGV's z=256 divides by 16.
+  define_memcheck_build_edit_test(memcheck_build_ng16_matches_static
+    "s/^nproc_dir *=.*/nproc_dir = 1, 1, 16/"
+    "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck $d/input.x3d --static > $d/static.log 2>&1; rc_s=$?; v_s=$(sed -n 's/^Requested nproc_dir gives ng=16: .* - //p' $d/static.log); v_i=$(sed -n 's/^Requested nproc_dir gives ng=16: .* - //p' $d/build.log); v_r=$(sed -n 's/^ *16 |.*| //p' $d/build.log); if test x$v_s != x && test x$v_s = x$v_i && test x$v_s = x$v_r && test $rc_s -eq $rc; then echo memcheck_build_ng16_matches_static_OK; fi")
+
+  # A requested nproc_dir that splits x must stay UNSUPPORTED after the real
+  # build: exit code 2, never the FITS of the 1 GPU measurement.
+  define_memcheck_build_edit_test(memcheck_build_x_split_exit2
+    "s/^nproc_dir *=.*/nproc_dir = 2, 1, 1/"
+    "if test $rc -eq 2 && grep -qF 'only nproc_dir = [1,1,ng] is supported by the CUDA backend' $d/build.log; then echo memcheck_build_x_split_exit2_OK; fi")
+
+  # A 2048^3 grid split over 64 GPUs fits the card per GPU, but the
+  # single-GPU FFT probe on the whole grid does not. The default mode must
+  # skip the probe, print the formula-only note and exit 0 or 2 without
+  # an error stop or an NVSHMEM abort.
+  define_memcheck_build_edit_test(memcheck_default_TGV_probe_skipped
+    "s/^dims_global *=.*/dims_global = 2048, 2048, 2048/;s/^nproc_dir *=.*/nproc_dir = 1, 1, 64/"
+    "if test $rc -le 2 && grep -qF 'FFT workspace is formula-only' $d/build.log && grep -q 'Requested nproc_dir gives ng=64' $d/build.log && ! grep -qi 'error stop\\|nvshmem' $d/build.log; then echo memcheck_default_TGV_probe_skipped_OK; fi"
+    "")
+
+  # The report prints the CUDA context line once, and in the default mode it
+  # marks each table row with how its overhead was obtained: the ng=1 row
+  # measured, the ng>1 rows extrapolated by 1/ng, with the note printed. The
+  # sed edit only changes a comment line, so the input stays the TGV as is.
+  define_memcheck_build_edit_test(memcheck_default_TGV_context_line_once
+    "s/^! Flow case$/! Flow case, test copy/"
+    "if test $(grep -c 'CUDA context (used at start)' $d/build.log) -eq 1; then echo memcheck_default_TGV_context_line_once_OK; fi"
+    "")
+  define_memcheck_build_edit_test(memcheck_default_TGV_extrapolation_note
+    "s/^! Flow case$/! Flow case, test copy/"
+    "if grep -qF '(ng>1 rows extrapolate the single-GPU probe by 1/ng.)' $d/build.log && grep -q '^ *1 | .*| measured *| ' $d/build.log && grep -q '^ *2 | .*| extrapolated *| ' $d/build.log; then echo memcheck_default_TGV_extrapolation_note_OK; fi"
+    "")
+
+  # A 1024^3 grid on the requested nproc_dir 1,1,2 is over the limit, and
+  # the single-GPU probe on the whole grid does not fit in free memory, so
+  # it is skipped. The ng=8 row still fits the card on the formula alone:
+  # that row carries the formula-only mark and the table prints its note.
+  define_memcheck_build_edit_test(memcheck_default_TGV_formula_only_row
+    "s/^dims_global *=.*/dims_global = 1024, 1024, 1024/"
+    "if grep -q 'Requested nproc_dir gives ng=2: .* - DOES_NOT_FIT' $d/build.log && grep -q '^ *8 | .*| formula-only *| FITS' $d/build.log && grep -qF '(formula-only rows use the Tier 1 formula' $d/build.log; then echo memcheck_default_TGV_formula_only_row_OK; fi"
+    "")
+
+  # A real --build run must not clobber whatever CWD it was launched from,
+  # nor leave its scratch directory behind: validate_build_inputs/
+  # make_scratch/leave_build_scratch (src/memcheck/scratch.f90) exist
+  # because the real case build initialises monitoring (writes
+  # monitoring.csv) and calls postprocess(0), which clobbered a user's run
+  # directory on 2026-09-15.
+  add_test(NAME memcheck_build_scratch_protects_cwd COMMAND sh -c
+    "tmp=$(mktemp -d) && echo marker > \"$tmp/monitoring.csv\" && \
+     cd \"$tmp\" && \
+     mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck \
+       ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d --build; \
+     if grep -q marker monitoring.csv && \
+        ! ls -d x3d2-memcheck-build.* >/dev/null 2>&1; then \
+       echo SCRATCH_OK; else echo MISMATCH; fi; \
+     rm -rf \"$tmp\"")
+  set_tests_properties(memcheck_build_scratch_protects_cwd PROPERTIES
+    LABELS "verification;cuda"
+    PASS_REGULAR_EXPRESSION "SCRATCH_OK"
+    FAIL_REGULAR_EXPRESSION "MISMATCH")
+
+  # A relative input path must be mirrored into the scratch directory by
+  # symlink, rather than read from the CWD where monitoring.csv would
+  # otherwise land.
+  add_test(NAME memcheck_build_relative_input COMMAND sh -c
+    "tmp=$(mktemp -d) && \
+     cp ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d \"$tmp/input.x3d\" && \
+     cd \"$tmp\" && \
+     mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck \
+       input.x3d --build; \
+     if [ ! -e monitoring.csv ] && \
+        ! ls -d x3d2-memcheck-build.* >/dev/null 2>&1; then \
+       echo RELATIVE_OK; else echo MISMATCH; fi; \
+     rm -rf \"$tmp\"")
+  set_tests_properties(memcheck_build_relative_input PROPERTIES
+    LABELS "verification;cuda"
+    PASS_REGULAR_EXPRESSION "RELATIVE_OK"
+    FAIL_REGULAR_EXPRESSION "MISMATCH")
+
+  # GPU-aware ADIOS2 device writes hold one extra unpadded local field on the
+  # device while a snapshot/checkpoint field is packed (src/io/adios2/io.f90);
+  # x3d2-memcheck adds that analytically. Only meaningful when the build has
+  # the device path compiled in.
+  if(WITH_ADIOS2_GPU_AWARE)
+    set(memcheck_gpuio_input ${CMAKE_SOURCE_DIR}/tests/memcheck/tgv_snapshot_stride1.x3d)
+    # One unpadded 256^3 field is 128 MiB in double precision, 64 MiB in
+    # single precision.
+    if(SINGLE_PREC)
+      set(_gpuio_mib "64.0")
+    else()
+      set(_gpuio_mib "128.0")
+    endif()
+    add_test(NAME memcheck_gpuio_static_TGV COMMAND sh -c
+      "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${memcheck_gpuio_input} --static")
+    set_tests_properties(memcheck_gpuio_static_TGV PROPERTIES LABELS "verification;cuda"
+      PASS_REGULAR_EXPRESSION "GPU-aware IO staging: ${_gpuio_mib} MiB/GPU")
+    add_test(NAME memcheck_gpuio_static_TGV_hostmode COMMAND sh -c
+      "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${memcheck_gpuio_input} --static")
+    set_tests_properties(memcheck_gpuio_static_TGV_hostmode PROPERTIES LABELS "verification;cuda"
+      ENVIRONMENT "X3D2_ADIOS2_GPU_WRITE_MODE=host"
+      PASS_REGULAR_EXPRESSION "GPU-aware IO staging: none \\(write mode host\\)")
+    # An unknown write mode must resolve as in the solver (auto), not print
+    # the raw text.
+    add_test(NAME memcheck_gpuio_static_TGV_unknown_mode COMMAND sh -c
+      "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${memcheck_gpuio_input} --static")
+    set_tests_properties(memcheck_gpuio_static_TGV_unknown_mode PROPERTIES LABELS "verification;cuda"
+      ENVIRONMENT "X3D2_ADIOS2_GPU_WRITE_MODE=bogus"
+      PASS_REGULAR_EXPRESSION "MiB/GPU at ng=1 \\(write mode auto, "
+      FAIL_REGULAR_EXPRESSION "write mode bogus")
+  endif()
+endif()
 
 # Regression smoke test: fast full-solver TGV vs golden monitoring.csv.
 # These reuse the main xcompact binary, whose backend follows the compiler
