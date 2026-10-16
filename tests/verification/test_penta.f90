@@ -31,13 +31,16 @@ program test_penta
 
   ! One operator per solve, never deallocated: NVHPC (25.3) crashes in
   ! pgf90_dealloc_poly03 when a class(tdsops_t) holding a cuda_tdsops_t is
-  ! deallocated.
+  ! deallocated.  The array is allocatable rather than static: CCE corrupts
+  ! the main program's static data (the mesh_t BC strings arrive as garbage)
+  ! when it holds a static array of this type.
   type :: tdsops_slot_t
     class(tdsops_t), allocatable :: op
   end type tdsops_slot_t
-  type(tdsops_slot_t) :: ops(32)
+  type(tdsops_slot_t), allocatable :: ops(:)
   integer :: n_ops = 0
 
+  allocate (ops(32))
   call initialise_mpi(nrank, nproc)
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 

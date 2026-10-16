@@ -40,11 +40,13 @@ program test_tridiag
   class(allocator_t), pointer :: allocator
   ! One operator per case, never deallocated: NVHPC (25.3) crashes in
   ! pgf90_dealloc_poly03 when a class(tdsops_t) holding a cuda_tdsops_t is
-  ! deallocated.
+  ! deallocated.  The array is allocatable rather than static: CCE corrupts
+  ! the main program's static data (the mesh_t BC strings arrive as garbage)
+  ! when it holds a static array of this type.
   type :: tdsops_slot_t
     class(tdsops_t), allocatable :: op
   end type tdsops_slot_t
-  type(tdsops_slot_t) :: ops(8)
+  type(tdsops_slot_t), allocatable :: ops(:)
   integer :: icase = 0
   class(field_t), pointer :: u_field, du_field
 
@@ -56,6 +58,7 @@ program test_tridiag
   real(dp) :: dx, dx_per, dx_pi
   integer :: n, n_loc, n_groups, bc_start, bc_end, dims(3), j, offset
 
+  allocate (ops(8))
   call initialise_mpi(nrank, nproc)
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
