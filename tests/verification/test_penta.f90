@@ -13,11 +13,11 @@ program test_penta
   use iso_fortran_env, only: stderr => error_unit
   use m_mpi, only: MPI_COMM_WORLD, MPI_SUM, MPI_Allreduce
 
-  use m_backend_runtime, only: backend_runtime_t, penta_solve, SZ => backend_sz
+  use m_backend_runtime, only: backend_runtime_t, penta_solve, SZ => backend_sz, &
+                               tdsops_slot_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, pi, MPI_X3D2_DP, BC_PERIODIC, BC_DIRICHLET, BC_NEUMANN
   use m_mesh, only: mesh_t
-  use m_tdsops, only: tdsops_t
   use m_test_utils, only: initialise_mpi, finalise_test
 
   implicit none
@@ -29,12 +29,7 @@ program test_penta
   type(mesh_t), target :: mesh
   class(base_backend_t), pointer :: backend
 
-  ! One operator per solve, never deallocated: NVHPC (25.3) crashes in
-  ! pgf90_dealloc_poly03 when a class(tdsops_t) holding a cuda_tdsops_t is
-  ! deallocated.
-  type :: tdsops_slot_t
-    class(tdsops_t), allocatable :: op
-  end type tdsops_slot_t
+  ! One operator per solve, never deallocated (see tdsops_slot_t)
   type(tdsops_slot_t) :: ops(32)
   integer :: n_ops = 0
 
