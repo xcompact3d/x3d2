@@ -49,8 +49,10 @@ module m_logger
   !> Exit code of a run stopped by abort_run.
   integer, parameter :: abort_code = 1
 
-  !> Default edit descriptor `str` uses for reals.
-  character(len=*), parameter :: real_fmt = '(es14.6)'
+  !> Default edit descriptors `str` uses for reals: enough significant digits
+  !> (9 and 17) that no value loses precision when printed.
+  character(len=*), parameter :: real32_fmt = '(es15.8)'
+  character(len=*), parameter :: real64_fmt = '(es24.16e3)'
 
   interface str
     module procedure str_int32
@@ -255,7 +257,7 @@ contains
 
   function str_real32(value, fmt) result(text)
     !! `fmt` is a format string such as '(f8.3)'; the default is scientific
-    !! notation with seven significant digits.
+    !! notation with nine significant digits.
     real(real32), intent(in) :: value
     character(len=*), intent(in), optional :: fmt
     character(len=:), allocatable :: text
@@ -265,14 +267,14 @@ contains
     if (present(fmt)) then
       write (buffer, fmt) value
     else
-      write (buffer, real_fmt) value
+      write (buffer, real32_fmt) value
     end if
     text = trim(adjustl(buffer))
   end function str_real32
 
   function str_real64(value, fmt) result(text)
     !! `fmt` is a format string such as '(f8.3)'; the default is scientific
-    !! notation with seven significant digits.
+    !! notation with seventeen significant digits.
     real(real64), intent(in) :: value
     character(len=*), intent(in), optional :: fmt
     character(len=:), allocatable :: text
@@ -282,7 +284,7 @@ contains
     if (present(fmt)) then
       write (buffer, fmt) value
     else
-      write (buffer, real_fmt) value
+      write (buffer, real64_fmt) value
     end if
     text = trim(adjustl(buffer))
   end function str_real64

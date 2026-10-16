@@ -22,8 +22,8 @@ program test_logger
   call check_text('int32', str(42), '42')
   call check_text('negative int32', str(-7), '-7')
   call check_text('int64', str(9000000000_int64), '9000000000')
-  call check_text('real64 default', str(0.5_real64), '5.000000E-01')
-  call check_text('real32 default', str(-1.25_real32), '-1.250000E+00')
+  call check_text('real64 default', str(0.5_real64), '5.0000000000000000E-001')
+  call check_text('real32 default', str(-1.25_real32), '-1.25000000E+00')
   call check_text('real64 with format', str(3.14159_real64, '(f6.3)'), &
                   '3.142')
   call check_text('logical', str(.true.)//str(.false.), 'TF')
