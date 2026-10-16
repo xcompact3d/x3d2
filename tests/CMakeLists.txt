@@ -179,11 +179,21 @@ function(define_test testfile np backend)
     add_test(NAME ${test_name}
       COMMAND sh -c "srun -n ${np} bin/${test_name} ${extra_args_str}")
   else()
-    add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} bin/${test_name} ${extra_args_str}")
+    add_test(NAME ${test_name} COMMAND sh -c "mpirun ${MPIEXEC_OVERSUBSCRIBE_FLAG} -np ${np} bin/${test_name} ${extra_args_str}")
   endif()
 
   # default label includes backend
   set_tests_properties(${test_name} PROPERTIES LABELS "unit;${backend}")
+
+  # The omp_tgt backend hands omp_target_alloc buffers to MPI. UCX tells
+  # device from host buffers with a memory type cache fed by intercepting
+  # CUDA allocations, which misses the OpenMP runtime's, so it reads them as
+  # host memory and crashes in its CMA transport. Without the cache it asks
+  # the driver about every buffer. MPIs not built on UCX ignore the variable.
+  if(WITH_MPI AND ${backend} STREQUAL omp_tgt)
+    set_property(TEST ${test_name} APPEND PROPERTY
+      ENVIRONMENT "UCX_MEMTYPE_CACHE=n")
+  endif()
 endfunction()
 
 # Specialised test definition functions with category labels
@@ -253,7 +263,7 @@ function(define_regression_case_test case_name input_file golden_file np backend
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
     set(launcher "srun -n ${np}")
   else()
-    set(launcher "mpirun --oversubscribe -np ${np}")
+    set(launcher "mpirun ${MPIEXEC_OVERSUBSCRIBE_FLAG} -np ${np}")
   endif()
   add_test(
     NAME ${test_name}
@@ -282,6 +292,23 @@ define_test(unit/test_statistics.f90 ${serial} omp)
 define_test(unit/test_output_scalars.f90 ${serial} omp)
 define_test(unit/test_les.f90 ${serial} omp)
 define_test(unit/test_abl_diagnostics.f90 ${serial} omp)
+define_test(unit/test_logger.f90 ${serial} omp)
+# A serial build sets np to 1, which would register the same test twice.
+if(NOT np EQUAL serial)
+  define_test(unit/test_logger.f90 ${np} omp)
+endif()
+# abort_run must stop every rank and report the error, whether one rank fails
+# or all of them do. ctest checks the output rather than the exit code: a hang
+# times out, and a run that returns from abort_run prints the FAIL line.
+foreach(mode one_rank collective)
+  set(X3D2_TEST_NAME_SUFFIX _${mode})
+  define_test(unit/test_logger_abort.f90 ${np} omp ${mode})
+  set_tests_properties(test_logger_abort_omp_${np}_${mode} PROPERTIES
+    PASS_REGULAR_EXPRESSION "ERROR: deliberate"
+    FAIL_REGULAR_EXPRESSION "must never be reached"
+    TIMEOUT 60)
+endforeach()
+unset(X3D2_TEST_NAME_SUFFIX)
 if(WITH_ADIOS2)
   define_test(unit/test_adios2_mixed_precision.f90 ${serial} omp)
   define_test(unit/test_adm_checkpoint.f90 ${serial} omp)
@@ -301,16 +328,9 @@ endif()
 function(define_backend_tests backend)
   set(is_omp FALSE)
   set(is_device TRUE)
-  set(is_full_backend TRUE)
   if(${backend} STREQUAL omp)
     set(is_omp TRUE)
     set(is_device FALSE)
-  elseif(${backend} STREQUAL omp_tgt)
-    # The OpenMP-target backend implements only field copies, reorder,
-    # vecadd/veccopy and vector_norm_squared so far; every other operation
-    # stops with "not implemented". Tests needing the rest are registered
-    # under is_full_backend below.
-    set(is_full_backend FALSE)
   endif()
 
   # Unit tests (fast, isolated component tests)
@@ -319,13 +339,11 @@ function(define_backend_tests backend)
   define_test(unit/test_setget_field.f90 ${serial} ${backend})
   define_test(unit/test_kinetic_energy.f90 ${np} ${backend})
   define_test(unit/test_snapshot_species_fields.f90 ${serial} ${backend})
-  if(is_full_backend)
-    define_test(unit/test_scalar_product.f90 ${np} ${backend})
-    define_test(unit/test_sum_intox.f90 ${np} ${backend})
-    define_test(unit/test_boundary_planes.f90 ${serial} ${backend})
-    define_test(unit/test_abl_seed.f90 ${serial} ${backend})
-    define_test(unit/test_adm.f90 ${serial} ${backend})
-  endif()
+  define_test(unit/test_scalar_product.f90 ${np} ${backend})
+  define_test(unit/test_sum_intox.f90 ${np} ${backend})
+  define_test(unit/test_boundary_planes.f90 ${serial} ${backend})
+  define_test(unit/test_abl_seed.f90 ${serial} ${backend})
+  define_test(unit/test_adm.f90 ${serial} ${backend})
   if(is_omp AND NOT np EQUAL serial)
     # Reordering is checked both without and with a decomposition.
     define_test(unit/test_reordering.f90 ${np} ${backend})
@@ -337,14 +355,12 @@ function(define_backend_tests backend)
 
   # Verification tests (numerical correctness vs analytical solutions)
   define_verification_test(verification/test_time_integrator.f90 ${serial} ${backend})
-  if(is_full_backend)
-    define_verification_test(verification/test_tridiag.f90 ${np} ${backend})
-    define_verification_test(verification/test_penta.f90 ${np} ${backend})
-    define_verification_test(verification/test_transeq.f90 ${np} ${backend})
-    define_verification_test(verification/test_les_field.f90 ${serial} ${backend})
-    define_verification_test(verification/test_thom.f90 ${serial} ${backend})
-    define_verification_test(verification/test_filter.f90 ${serial} ${backend})
-  endif()
+  define_verification_test(verification/test_tridiag.f90 ${np} ${backend})
+  define_verification_test(verification/test_penta.f90 ${np} ${backend})
+  define_verification_test(verification/test_transeq.f90 ${np} ${backend})
+  define_verification_test(verification/test_les_field.f90 ${serial} ${backend})
+  define_verification_test(verification/test_thom.f90 ${serial} ${backend})
+  define_verification_test(verification/test_filter.f90 ${serial} ${backend})
 
   # The FFT Poisson solvers (2DECOMP&FFT on CPU, cuFFTMp on CUDA) are not at
   # feature parity, so the CUDA FFT test and the Poisson BC tests keep the rank
@@ -364,6 +380,8 @@ function(define_backend_tests backend)
     set(X3D2_TEST_NAME_SUFFIX _dpp)
     if(is_omp)
       define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc dpp --nproc_dir 1,2,1)
+      set(X3D2_TEST_NAME_SUFFIX _pdp)
+      define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc pdp)
     else()
       define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc dpp)
     endif()
@@ -385,12 +403,10 @@ function(define_backend_tests backend)
 
   # Performance tests (benchmarks, excluded from CI)
   define_performance_test(performance/perf_reorder.f90 ${serial} ${backend})
-  if(is_full_backend)
-    define_performance_test(performance/perf_thom.f90 ${serial} ${backend})
-    define_performance_test(performance/perf_tridiag.f90 ${np} ${backend})
-    define_performance_test(performance/perf_penta.f90 ${np} ${backend})
-    define_performance_test(performance/perf_transeq.f90 ${np} ${backend})
-  endif()
+  define_performance_test(performance/perf_thom.f90 ${serial} ${backend})
+  define_performance_test(performance/perf_tridiag.f90 ${np} ${backend})
+  define_performance_test(performance/perf_penta.f90 ${np} ${backend})
+  define_performance_test(performance/perf_transeq.f90 ${np} ${backend})
 endfunction()
 
 foreach(backend IN LISTS X3D2_TEST_BACKENDS)

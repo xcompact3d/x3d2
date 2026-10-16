@@ -9,6 +9,7 @@ module m_les
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Z2X
   use m_config, only: les_config_t
   use m_field, only: field_t
+  use m_logger, only: abort_run
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t, tdsops_t
 
@@ -164,11 +165,11 @@ contains
     real(dp), intent(in) :: kappa, roughness_length
 
     if (associated(self%mixing_length_sq)) &
-      error stop 'Configure the LES wall before applying LES.'
+      call abort_run('Configure the LES wall before applying LES.')
     if (kappa <= 0._dp) &
-      error stop 'LES wall damping needs a positive von Karman constant.'
+      call abort_run('LES wall damping needs a positive von Karman constant.')
     if (roughness_length < 0._dp) &
-      error stop 'LES wall damping needs a non-negative roughness length.'
+      call abort_run('LES wall damping needs a non-negative roughness length.')
 
     self%von_karman_constant = kappa
     self%roughness_length = roughness_length
@@ -182,11 +183,11 @@ contains
     integer, intent(in) :: sample_plane
 
     if (trim(self%model) /= 'smagorinsky') &
-      error stop 'The neutral ABL wall model requires Smagorinsky LES.'
+      call abort_run('The neutral ABL wall model requires Smagorinsky LES.')
     if (.not. self%wall_damping) &
-      error stop 'The neutral ABL wall model requires LES wall damping.'
+      call abort_run('The neutral ABL wall model requires LES wall damping.')
     if (sample_plane < 2) &
-      error stop 'The ABL wall model must sample above the no-slip floor.'
+      call abort_run('The ABL wall model must sample above the no-slip floor.')
 
     ! ABL owns the wall properties. LES consumes the same values for its
     ! Mason-Thomson damping and for the wall stress.
@@ -210,7 +211,7 @@ contains
     class(field_t), pointer :: dwdx, dwdy, dwdz
 
     if (u%dir /= DIR_X .or. v%dir /= DIR_X .or. w%dir /= DIR_X) then
-      error stop 'LES velocity fields must use DIR_X layout.'
+      call abort_run('LES velocity fields must use DIR_X layout.')
     end if
 
     if (.not. associated(self%nut)) then
@@ -223,7 +224,7 @@ contains
       return
     case ('smagorinsky')
     case default
-      error stop 'Unsupported LES model in compute_nut.'
+      call abort_run('Unsupported LES model in compute_nut.')
     end select
 
     if (.not. associated(self%mixing_length_sq)) then
@@ -260,12 +261,12 @@ contains
 
     if (trim(self%model) == 'none') return
     if (trim(self%model) /= 'smagorinsky') &
-      error stop 'Unsupported LES model in apply_sgs_stress.'
+      call abort_run('Unsupported LES model in apply_sgs_stress.')
     if (du%dir /= DIR_X .or. dv%dir /= DIR_X .or. dw%dir /= DIR_X) then
-      error stop 'LES momentum RHS fields must use DIR_X layout.'
+      call abort_run('LES momentum RHS fields must use DIR_X layout.')
     end if
     if (u%dir /= DIR_X .or. v%dir /= DIR_X .or. w%dir /= DIR_X) then
-      error stop 'LES velocity fields must use DIR_X layout.'
+      call abort_run('LES velocity fields must use DIR_X layout.')
     end if
 
     if (.not. associated(self%nut)) &
@@ -534,7 +535,7 @@ contains
       call backend%allocator%release_block(velocity_dir)
       call backend%allocator%release_block(derivative_dir)
     case default
-      error stop 'Invalid derivative direction in LES.'
+      call abort_run('Invalid derivative direction in LES.')
     end select
   end subroutine derivative_to_x
 
@@ -550,8 +551,8 @@ contains
     ! The case supplies the wall after the solver (and so this les_t) is
     ! built, so this one-off setup is the first point where it can be checked.
     if (self%wall_damping .and. .not. self%wall_supplied) &
-      error stop 'LES wall damping needs a case that supplies the wall &
-                 &(currently only abl).'
+      call abort_run('LES wall damping needs a case that supplies the wall &
+                     &(currently only abl).')
 
     dims = mesh%get_dims(VERT)
     dims_padded = backend%allocator%get_padded_dims(DIR_C)

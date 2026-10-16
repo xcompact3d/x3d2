@@ -4,6 +4,7 @@ set(SRC
   common.f90
   config.f90
   mpi.f90
+  logger.f90
   field.f90
   mesh.f90
   ordering.f90
@@ -43,12 +44,14 @@ set(SRC
 )
 set(BACKENDSRC
   backend/omp/backend.f90
+  backend/setup.f90
 )
 # CUDA specific
 if (${ENABLE_BACKEND} STREQUAL "CUDA")
   list(APPEND SRC
     backend/cuda/allocator.f90
     backend/cuda/common.f90
+    backend/cuda/errors.f90
     backend/cuda/exec_dist.f90
     backend/cuda/exec_thom.f90
     backend/cuda/kernels/distributed.f90
@@ -67,6 +70,14 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   list(APPEND SRC
     backend/omptgt/common.f90
     backend/omptgt/allocator.f90
+    backend/omptgt/device_info.f90
+    backend/omptgt/exec_dist.f90
+    backend/omptgt/exec_thom.f90
+    backend/omptgt/kernels/distributed.f90
+    backend/omptgt/kernels/fieldops.f90
+    backend/omptgt/kernels/thomas.f90
+    backend/omptgt/sendrecv.f90
+    backend/omptgt/tdsops.f90
   )
   list(APPEND BACKENDSRC
     backend/omptgt/backend.f90)
@@ -142,13 +153,25 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
     # Flang assumes OpenMP 3.1, which rejects both `declare target` in a pure
     # procedure (4.5) and the `loop` construct (5.0) used by the sources.
-    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp-version=50")
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp-version=51")
     set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -march=native")
     set(CMAKE_Fortran_FLAGS_DEBUG "-g -Wall -Wno-ambiguous-structure-constructor -Werror")
   else()
     set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math -funroll-loops -floop-optimize -march=native")
     set(CMAKE_Fortran_FLAGS_DEBUG "-g -Og -Wall -Wpedantic -Werror -Wimplicit-interface -Wimplicit-procedure -Wno-unused-dummy-argument")
   endif()
+elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" OR
+       ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
+  # ifx (IntelLLVM) and classic ifort (Intel) spell these differently from the
+  # GNU drivers: neither preprocesses .f90 unless asked, and the standard is
+  # selected by name rather than by -std=.  `nounused` stands in for GNU's
+  # -Wno-unused-dummy-argument, which the unused stubs in mpi.f90 need; ifx has
+  # no finer-grained switch, so it silences unused locals as well.  -check
+  # uninit is deliberately absent: ifx implements it with MemorySanitizer,
+  # which needs the whole program instrumented and fails to link otherwise.
+  set(CMAKE_Fortran_FLAGS "-fpp -stand f18")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -xHost -fp-model=fast")
+  set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -check bounds,pointers -warn all,nounused")
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" OR
        ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
   set(CMAKE_Fortran_FLAGS "-cpp")
@@ -183,7 +206,8 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   else()
     target_link_options(x3d2 INTERFACE "-cudalib=cufft")
   endif()
-  target_compile_options(xcompact PRIVATE "-DCUDA")
+  # Selects the CUDA backend in backend/setup.f90
+  target_compile_options(x3d2_backends PRIVATE "-DCUDA")
   # NVTX ranges label the ADIOS2 write paths in Nsight Systems (see
   # io/nvtx.f90). Without ADIOS2 there is no output to label.
   if(WITH_ADIOS2)
@@ -197,16 +221,23 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   endif()
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   add_definitions("-DOMP_TGT")
+  # backend/omptgt/device_info.f90 opens the vendor runtime with dlopen
+  target_link_libraries(x3d2 PUBLIC ${CMAKE_DL_LIBS})
   if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
     set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fast")
     add_definitions("-DOMP_TGT_NVIDIA")
+    # NVHPC rejects has_device_addr; the OpenMP 4.5 form of is_device_ptr on
+    # a dummy array says the same (see backend/omptgt/common.f90).
+    add_definitions("-DOMP_DEVICE_ADDR=is_device_ptr")
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
          ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
          ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Flang")
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp --offload-arch=${BACKEND_ARCH}")
     add_definitions("-DOMP_TGT_AMD") # Assume AMD GPU
+    add_definitions("-DOMP_DEVICE_ADDR=has_device_addr")
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
     add_definitions("-DOMP_TGT_AMD") # Assume AMD GPU
+    add_definitions("-DOMP_DEVICE_ADDR=has_device_addr")
   endif()
 endif()
 

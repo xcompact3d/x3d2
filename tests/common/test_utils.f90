@@ -8,7 +8,7 @@ module m_test_utils
 
   private
   public :: initialise_mpi, finalise_test, global_all, global_sum, &
-            check_status, checkerr, &
+            check_status, checkerr, check_norm, &
             write_perf_metric, write_perf_minmax_metrics, &
             write_perf_summary, write_perf_minmax_summary, &
             write_device_bw_metric, report_perf_minmax
@@ -173,26 +173,22 @@ contains
     integer, optional, intent(in) :: mem_bus_width
 
     real(dp) :: achievedBW, deviceBW, utilisation
-    integer :: resolved_mem_clock_rt, resolved_mem_bus_width
-
-    if (present(mem_clock_rt)) then
-      resolved_mem_clock_rt = mem_clock_rt
-    else
-      resolved_mem_clock_rt = 3200000
-    end if
-
-    if (present(mem_bus_width)) then
-      resolved_mem_bus_width = mem_bus_width
-    else
-      resolved_mem_bus_width = 64
-    end if
 
     achievedBW = compute_achieved_bw(time, n_iters, ndof, consumed_bw)
-    deviceBW = compute_device_bw(resolved_mem_clock_rt, resolved_mem_bus_width)
-    utilisation = achievedBW/deviceBW*100
 
     print *, "Check performance:"
     print '(a, f8.3, a)', 'Achieved BW: ', achievedBW/2**30, ' GiB/s'
+
+    ! A backend that cannot query its memory clock and bus width reports
+    ! none, so no reference figure is invented for it
+    if (.not. (present(mem_clock_rt) .and. present(mem_bus_width))) then
+      print '(a)', 'Device BW:   unavailable (not reported by the backend)'
+      return
+    end if
+
+    deviceBW = compute_device_bw(mem_clock_rt, mem_bus_width)
+    utilisation = achievedBW/deviceBW*100
+
     print '(a, f8.3, a)', 'Device BW:   ', deviceBW/2**30, ' GiB/s'
     print '(a, f5.2)', 'Effective BW util: %', utilisation
   end subroutine write_perf_summary

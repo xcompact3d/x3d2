@@ -1,6 +1,5 @@
 module m_cuda_backend
   use iso_c_binding, only: c_ptr
-  use iso_fortran_env, only: stderr => error_unit
   use cudafor
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_MAX, MPI_SUM, &
                    MPI_Allreduce
@@ -49,6 +48,8 @@ module m_cuda_backend
                                     pack_x2c_dp, pack_x2c_sp, &
                                     pack_c_dp, pack_c_sp, &
                                     sum_yintox, sum_zintox
+  use m_logger, only: abort_run
+  use m_cuda_errors, only: check_cuda
 
   implicit none
 
@@ -215,6 +216,7 @@ contains
     integer :: ierr
 
     ierr = cudaDeviceSynchronize()
+    call check_cuda(ierr, 'cudaDeviceSynchronize')
 
   end subroutine sync_cuda
 
@@ -253,7 +255,7 @@ contains
 
     dims_padded = self%allocator%get_padded_dims(DIR_C)
     if (any(dims < 1) .or. any(dims > dims_padded)) then
-      error stop "export_field_to_device: dims exceed the field extent"
+      call abort_run("export_field_to_device: dims exceed the field extent")
     end if
 
     if (to_sp) then
@@ -295,16 +297,11 @@ contains
     end if
 
     ierr = cudaGetLastError()
-    if (ierr /= cudaSuccess) then
-      print *, "CUDA error: ", trim(cudaGetErrorString(ierr))
-      error stop "export_field_to_device: kernel launch failed"
-    end if
+    call check_cuda(ierr, "export_field_to_device: kernel launch")
 
     ! Complete the pack before a consumer on another stream reads it.
     ierr = cudaStreamSynchronize(cudaforGetDefaultStream())
-    if (ierr /= cudaSuccess) then
-      error stop "export_field_to_device: stream synchronisation failed"
-    end if
+    call check_cuda(ierr, "export_field_to_device: stream synchronisation")
 
     if (associated(f_c)) call self%allocator%release_block(f_c)
 
@@ -619,7 +616,7 @@ contains
 
     ! Check if direction matches for both in/out fields and dirps
     if (u%dir /= du%dir) then
-      error stop 'DIR mismatch between fields in tds_solve.'
+      call abort_run('DIR mismatch between fields in tds_solve.')
     end if
 
     blocks = dim3(self%allocator%get_n_groups(u%dir), 1, 1)
@@ -646,7 +643,7 @@ contains
     type(dim3) :: blocks, threads
 
     if (u%dir /= du%dir) then
-      error stop 'DIR mismatch between fields in thom_solve.'
+      call abort_run('DIR mismatch between fields in thom_solve.')
     end if
 
     blocks = dim3(self%allocator%get_n_groups(u%dir), 1, 1)
@@ -663,7 +660,7 @@ contains
     type is (cuda_tdsops_t)
       tdsops_dev => tdsops
     class default
-      error stop 'Expected cuda_tdsops_t in thom_solve_cuda.'
+      call abort_run('Expected cuda_tdsops_t in thom_solve_cuda.')
     end select
 
     call exec_thom_tds_compact(du_dev, u_dev, tdsops_dev, blocks, threads)
@@ -830,7 +827,7 @@ contains
 
       call self%allocator%release_block(u_temp)
     case default
-      error stop 'Reorder direction is undefined.'
+      call abort_run('Reorder direction is undefined.')
     end select
 
     ! reorder keeps the data_loc the same
@@ -1093,10 +1090,10 @@ contains
     type(dim3) :: blocks, threads
 
     if ((x%data_loc == NULL_LOC) .or. (y%data_loc == NULL_LOC)) then
-      error stop "You must set the data_loc before calling scalar product"
+      call abort_run("You must set the data_loc before calling scalar product")
     end if
     if ((x%data_loc /= y%data_loc) .or. (x%dir /= y%dir)) then
-      error stop "Called scalar product with incompatible fields"
+      call abort_run("Called scalar product with incompatible fields")
     end if
 
     call resolve_field_t(x_d, x)
@@ -1115,7 +1112,7 @@ contains
     else if (x%dir == DIR_Z) then
       n = dims(3); n_j = dims(2); n_i = dims(1); n_i_pad = dims_padded(1)
     else
-      error stop 'scalar_product_cuda does not support DIR_C fields!'
+      call abort_run('scalar_product_cuda does not support DIR_C fields!')
     end if
 
     blocks = dim3(n_i, (n_j - 1)/SZ + 1, 1)
@@ -1146,13 +1143,13 @@ contains
 
     if (a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
         c%data_loc == NULL_LOC) then
-      error stop 'You must set data_loc before computing a vector norm.'
+      call abort_run('You must set data_loc before computing a vector norm.')
     end if
     if (a%data_loc /= b%data_loc .or. a%data_loc /= c%data_loc) then
-      error stop 'Vector-norm fields must use the same data location.'
+      call abort_run('Vector-norm fields must use the same data location.')
     end if
     if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) then
-      error stop 'Vector-norm fields must use DIR_X layout.'
+      call abort_run('Vector-norm fields must use DIR_X layout.')
     end if
 
     call resolve_field_t(a_d, a)
@@ -1257,15 +1254,15 @@ contains
     if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
         a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
         c%data_loc == NULL_LOC) then
-      error stop 'You must set data_loc before labelled field operations.'
+      call abort_run('You must set data_loc before labelled field operations.')
     end if
     if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
         b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
-      error stop 'Labelled field operations need one data location.'
+      call abort_run('Labelled field operations need one data location.')
     end if
     if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
         b%dir /= DIR_X .or. c%dir /= DIR_X) then
-      error stop 'Labelled field operations need DIR_X layout.'
+      call abort_run('Labelled field operations need DIR_X layout.')
     end if
   end subroutine check_labelled_fields
 
@@ -1302,9 +1299,9 @@ contains
     type(dim3) :: blocks, threads
 
     if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
-      error stop 'The input field to cuda::field_max_mean does not have a &
-                  &valid f%data_loc. You may enforce a data_loc of your &
-                  &choice as last argument to carry on at your own risk!'
+      call abort_run('The input field to cuda::field_max_mean does not have a &
+                     &valid f%data_loc. You may enforce a data_loc of your &
+                     &choice as last argument to carry on at your own risk!')
     end if
 
     if (present(enforced_data_loc)) then
@@ -1328,7 +1325,7 @@ contains
     else if (f%dir == DIR_Z) then
       n = dims(3); n_j = dims(2); n_i = dims(1); n_i_pad = dims_padded(1)
     else
-      error stop 'field_max_mean does not support DIR_C fields!'
+      call abort_run('field_max_mean does not support DIR_C fields!')
     end if
 
     blocks = dim3(n_i, (n_j - 1)/SZ + 1, 1)
@@ -1388,9 +1385,9 @@ contains
     type(dim3) :: blocks, threads
 
     if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
-      error stop 'The input field to cuda::slice_max_sum does not have a &
-                  &valid f%data_loc. You may enforce a data_loc of your &
-                  &choice as last argument to carry on at your own risk!'
+      call abort_run('The input field to cuda::slice_max_sum does not have a &
+                     &valid f%data_loc. You may enforce a data_loc of your &
+                     &choice as last argument to carry on at your own risk!')
     end if
 
     if (present(enforced_data_loc)) then
@@ -1409,11 +1406,11 @@ contains
     else if (f%dir == DIR_Z) then
       n = dims(3); n_j = dims(2); n_i = dims(1); n_i_pad = dims_padded(1)
     else
-      error stop 'slice_max_sum does not support DIR_C fields!'
+      call abort_run('slice_max_sum does not support DIR_C fields!')
     end if
 
     if (i_slice < 1 .or. i_slice > n) then
-      error stop 'slice_max_sum: i_slice out of range'
+      call abort_run('slice_max_sum: i_slice out of range')
     end if
 
     call resolve_field_t(f_d, f)
@@ -1489,10 +1486,11 @@ contains
     real(dp) :: flow_rate_diff_val
 
     if (f%dir /= DIR_X) then
-      error stop 'Setting a field face is only supported for DIR_X fields.'
+      call abort_run('Setting a field face is only supported for DIR_X &
+                     &fields.')
     end if
     if (f%data_loc == NULL_LOC) then
-      error stop 'field_set_face requires a valid data_loc.'
+      call abort_run('field_set_face requires a valid data_loc.')
     end if
 
     ! --- Resolve optional arguments with safe defaults ---
@@ -1528,10 +1526,10 @@ contains
           dims(1), dims(2), dims(3))
 
     case (Z_FACE)
-      error stop 'Setting Z_FACE is not yet supported.'
+      call abort_run('Setting Z_FACE is not yet supported.')
 
     case default
-      error stop 'face is undefined.'
+      call abort_run('face is undefined.')
     end select
 
   end subroutine field_set_face_cuda
@@ -1550,14 +1548,14 @@ contains
     integer :: dims(3), y_block, i_in_block, group_offset
 
     if (f%dir /= DIR_X) &
-      error stop 'field_set_y_plane is only supported for DIR_X fields.'
+      call abort_run('field_set_y_plane is only supported for DIR_X fields.')
     if (f%data_loc == NULL_LOC) &
-      error stop 'field_set_y_plane requires a valid data_loc.'
+      call abort_run('field_set_y_plane requires a valid data_loc.')
 
     call resolve_field_t(f_d, f)
     dims = self%mesh%get_dims(f%data_loc)
     if (plane < 1 .or. plane > dims(2)) &
-      error stop 'field_set_y_plane: plane outside the domain.'
+      call abort_run('field_set_y_plane: plane outside the domain.')
 
     ! CUDA DIR_X ordering: group = nz*(y_block - 1) + z.
     y_block = (plane - 1)/SZ + 1
@@ -1585,13 +1583,13 @@ contains
     integer :: dims(3)
 
     if (f%dir /= DIR_X) &
-      error stop 'field_plane_sums is only supported for DIR_X fields.'
+      call abort_run('field_plane_sums is only supported for DIR_X fields.')
     if (f%data_loc == NULL_LOC) &
-      error stop 'field_plane_sums requires a valid data_loc.'
+      call abort_run('field_plane_sums requires a valid data_loc.')
 
     dims = self%mesh%get_dims(f%data_loc)
     if (size(sums) < dims(2)) &
-      error stop 'field_plane_sums: sums is smaller than the y extent.'
+      call abort_run('field_plane_sums: sums is smaller than the y extent.')
 
     call resolve_field_t(f_d, f)
     allocate (partial_d(dims(2), dims(3)), sums_d(dims(2)))
@@ -1626,16 +1624,16 @@ contains
     integer :: dims(3), sample_i, stress_i, sample_offset, stress_offset
 
     if (stress%dir /= DIR_X .or. u%dir /= DIR_X .or. w%dir /= DIR_X) &
-      error stop 'ABL wall stress requires DIR_X fields.'
+      call abort_run('ABL wall stress requires DIR_X fields.')
     if (stress%data_loc /= VERT .or. u%data_loc /= VERT .or. &
         w%data_loc /= VERT) &
-      error stop 'ABL wall stress requires vertex fields.'
+      call abort_run('ABL wall stress requires vertex fields.')
     dims = self%mesh%get_dims(VERT)
     if (min(sample_plane, stress_plane) < 1 .or. &
         max(sample_plane, stress_plane) > dims(2)) &
-      error stop 'ABL wall stress plane is outside the domain.'
+      call abort_run('ABL wall stress plane is outside the domain.')
     if (component /= 1 .and. component /= 3) &
-      error stop 'Invalid ABL wall stress component.'
+      call abort_run('Invalid ABL wall stress component.')
 
     call resolve_field_t(stress_d, stress)
     call resolve_field_t(u_d, u)
@@ -1674,9 +1672,10 @@ contains
     real(dp) :: flow_rate_diff_val
 
     if (f%dir /= DIR_X) &
-      error stop 'field_set_face_from_field: only supported for DIR_X fields.'
+      call abort_run('field_set_face_from_field: only supported for DIR_X &
+                     &fields.')
     if (f_start%dir /= DIR_X) &
-      error stop 'field_set_face_from_field: f_start must be DIR_X.'
+      call abort_run('field_set_face_from_field: f_start must be DIR_X.')
 
     ! Defaults - same convention as field_set_face_cuda
     bc_s = BC_DIRICHLET
@@ -1706,8 +1705,8 @@ contains
 
     case (Y_FACE)
       if (bc_s /= BC_DIRICHLET .or. bc_e /= BC_DIRICHLET) then
-        error stop &
-          'field_set_face_from_field: Y_FACE only supports BC_DIRICHLET.'
+        call abort_run( &
+          'field_set_face_from_field: Y_FACE only supports BC_DIRICHLET.')
       end if
       blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
       threads = dim3(64, 1, 1)
@@ -1715,10 +1714,10 @@ contains
           f_d, f_start_d, dims(1), dims(2), dims(3))
 
     case (Z_FACE)
-      error stop 'field_set_face_from_field: Z_FACE is not yet supported.'
+      call abort_run('field_set_face_from_field: Z_FACE is not yet supported.')
 
     case default
-      error stop 'field_set_face_from_field: face is undefined.'
+      call abort_run('field_set_face_from_field: face is undefined.')
     end select
 
   end subroutine field_set_face_from_field_cuda
@@ -1736,9 +1735,10 @@ contains
     integer :: dims(3), i_plane
 
     if (f%dir /= DIR_X) &
-      error stop 'field_add_const_x_face: only supported for DIR_X fields.'
+      call abort_run('field_add_const_x_face: only supported for DIR_X &
+                     &fields.')
     if (f%data_loc == NULL_LOC) &
-      error stop 'field_add_const_x_face: requires a valid data_loc.'
+      call abort_run('field_add_const_x_face: requires a valid data_loc.')
 
     call resolve_field_t(f_d, f)
     dims = self%mesh%get_dims(f%data_loc)
@@ -1770,14 +1770,15 @@ contains
     integer :: dims(3)
 
     if (f%dir /= DIR_X) &
-      error stop 'field_set_x_inlet_plane: only supported for DIR_X fields.'
+      call abort_run('field_set_x_inlet_plane: only supported for DIR_X &
+                     &fields.')
     if (f%data_loc == NULL_LOC) &
-      error stop 'field_set_x_inlet_plane: requires a valid data_loc.'
+      call abort_run('field_set_x_inlet_plane: requires a valid data_loc.')
 
     call resolve_field_t(f_d, f)
     dims = self%mesh%get_dims(f%data_loc)
     if (size(plane, 1) /= dims(2) .or. size(plane, 2) /= dims(3)) &
-      error stop 'field_set_x_inlet_plane: plane must be (ny, nz).'
+      call abort_run('field_set_x_inlet_plane: plane must be (ny, nz).')
 
     plane_d = plane
 
@@ -1803,9 +1804,10 @@ contains
     logical :: set_start, set_end
 
     if (f%dir /= DIR_X .or. g%dir /= DIR_X) &
-      error stop 'field_add_face_from_field: only supported for DIR_X fields.'
+      call abort_run('field_add_face_from_field: only supported for DIR_X &
+                     &fields.')
     if (f%data_loc == NULL_LOC) &
-      error stop 'field_add_face_from_field: requires a valid data_loc.'
+      call abort_run('field_add_face_from_field: requires a valid data_loc.')
 
     set_start = (bc_start == BC_DIRICHLET)
     set_end = (bc_end == BC_DIRICHLET)
@@ -1826,7 +1828,8 @@ contains
       call field_add_y_face_from_field<<<blocks, threads>>>( &      !&
           f_d, g_d, set_start, set_end, dims(1), dims(2), dims(3))
     case default
-      error stop 'field_add_face_from_field: only X_FACE and Y_FACE supported.'
+      call abort_run('field_add_face_from_field: only X_FACE and Y_FACE &
+                     &supported.')
     end select
 
   end subroutine field_add_face_from_field_cuda
@@ -1844,10 +1847,11 @@ contains
     type(dim3) :: blocks, threads
 
     if (f%data_loc == NULL_LOC) then
-      error stop 'You must set the data_loc before calling volume integral.'
+      call abort_run('You must set the data_loc before calling volume &
+                     &integral.')
     end if
     if (f%dir /= DIR_X) then
-      error stop 'Volume integral can only be called on DIR_X fields.'
+      call abort_run('Volume integral can only be called on DIR_X fields.')
     end if
 
     call resolve_field_t(f_d, f)

@@ -3,6 +3,7 @@ module m_poisson_fft
   use m_field, only: field_t
   use m_mesh, only: mesh_t, geo_t
   use m_tdsops, only: dirps_t
+  use m_logger, only: log_warn, abort_run
 
   implicit none
 
@@ -128,7 +129,8 @@ contains
     integer :: dims(3)
     self%mesh => mesh
     ! Decomposition is in y- and z-directions
-    if (mesh%par%nproc_dir(1) /= 1) print *, 'nproc_dir in x-dir must be 1'
+    if (mesh%par%nproc_dir(1) /= 1) &
+      call log_warn('nproc_dir in x-dir must be 1')
 
     dims = mesh%get_global_dims(CELL)
     self%nx_glob = dims(1); self%ny_glob = dims(2); self%nz_glob = dims(3)
@@ -166,8 +168,8 @@ contains
     call self%waves_set(mesh%geo, xdirps, ydirps, zdirps)
 
     if (mesh%geo%stretched(1) .or. mesh%geo%stretched(3)) then
-      error stop 'FFT based Poisson solver does not support stretching in x-&
-                  & or z-directions!'
+      call abort_run('FFT based Poisson solver does not support stretching in &
+                     &x- or z-directions!')
     end if
 
     ! use correct procedure based on BCs
@@ -175,9 +177,6 @@ contains
       self%poisson => poisson_000
     else if (self%periodic_x .and. (.not. self%periodic_y) &
              .and. (self%periodic_z)) then
-      if (mesh%par%nproc > 1) then
-        error stop 'Multiple ranks are not yet supported for non-periodic BCs!'
-      end if
       self%poisson => poisson_010
       ! stretching requires some coefficients matrices
       if (mesh%geo%stretched(2)) then
@@ -186,16 +185,18 @@ contains
       end if
     else if ((.not. self%periodic_x) .and. (self%periodic_y) &
              .and. (self%periodic_z)) then
-      ! The OpenMP and CUDA backends both run the 100 and 110 cases on
-      ! multiple ranks. The CUDA backend needs a 1D z decomposition and
-      ! cuFFTMp for that.
+      ! The OpenMP backend runs the 010, 100 and 110 cases on multiple ranks.
+      ! The CUDA backend runs the 100 and 110 cases on multiple ranks with a
+      ! 1D z decomposition and cuFFTMp, and guards its own 010 rank limit
+      ! where the case is initialised.
       self%poisson => poisson_100
     else if ((.not. self%periodic_x) .and. (.not. self%periodic_y) &
              .and. (self%periodic_z)) then
       self%poisson => poisson_110
 
     else
-      error stop 'Requested BCs are not supported in FFT-based Poisson solver!'
+      call abort_run('Requested BCs are not supported in FFT-based Poisson &
+                     &solver!')
     end if
   end subroutine base_init
 
@@ -817,11 +818,11 @@ contains
     else if (.not. (self%periodic_x .and. self%periodic_y &
                     .and. self%periodic_z)) then
       ! poisson 111
-      error stop 'No support for all non-periodic BCs yet!'
+      call abort_run('No support for all non-periodic BCs yet!')
 
     else
       ! poisson 001, 011, 101
-      error stop 'FFT Poisson solver does not support specified BCs!'
+      call abort_run('FFT Poisson solver does not support specified BCs!')
     end if
 
   end subroutine waves_set

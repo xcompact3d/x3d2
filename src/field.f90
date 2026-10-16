@@ -1,5 +1,7 @@
 module m_field
 
+  use iso_c_binding, only: c_ptr, c_null_ptr
+
   use m_common, only: dp, DIR_X, DIR_Y, DIR_Z, DIR_C
 
   type :: field_t
@@ -20,6 +22,7 @@ module m_field
     procedure :: get_shape
     procedure :: set_shape
     procedure :: set_data_loc
+    procedure :: get_dev_ptr
   end type field_t
 
   interface field_t
@@ -35,7 +38,9 @@ contains
 
   function field_init(ngrid, next, id) result(f)
     integer, intent(in) :: ngrid, id
-    type(field_t), pointer, intent(in) :: next
+    !! `next` matches the polymorphic `next` component it is assigned to, so
+    !! the caller hands over the list head as-is (see omptgt_field_init).
+    class(field_t), pointer, intent(in) :: next
     type(field_t) :: f
 
     allocate (f%p_data(ngrid))
@@ -61,6 +66,19 @@ contains
     self%data_loc = data_loc
 
   end subroutine
+
+  type(c_ptr) function get_dev_ptr(self) result(ptr)
+    !! Address of the block's storage in a separate device allocation, null
+    !! for a host block. A device field type that keeps its storage behind a
+    !! raw device pointer overrides this, letting its backend reach the
+    !! storage by dynamic dispatch rather than by a type query.
+    implicit none
+
+    class(field_t) :: self
+
+    ptr = c_null_ptr
+
+  end function get_dev_ptr
 
   function get_shape(self) result(dims)
     implicit none
