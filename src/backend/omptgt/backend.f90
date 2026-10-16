@@ -56,6 +56,7 @@ module m_omptgt_backend
                                        field_add_y_face_from_field, &
                                        field_plane_partial_sums, &
                                        field_plane_sums_reduce, &
+                                       labelled_sums, labelled_axpy, &
                                        reorder, sum_intox
 
   implicit none
@@ -91,6 +92,8 @@ module m_omptgt_backend
     procedure :: vecmult => vecmult_omptgt
     procedure :: scalar_product => scalar_product_omptgt
     procedure :: vector_norm_squared => vector_norm_squared_omptgt
+    procedure :: field_labelled_sums => field_labelled_sums_omptgt
+    procedure :: field_labelled_axpy => field_labelled_axpy_omptgt
     procedure :: field_max_mean => field_max_mean_omptgt
     procedure :: slice_max_sum => slice_max_sum_omptgt
     procedure :: field_scale => field_scale_omptgt
@@ -931,6 +934,102 @@ contains
                        MPI_COMM_WORLD, ierr)
 
   end function vector_norm_squared_omptgt
+
+  subroutine field_labelled_sums_omptgt(self, sums, g, label, a, b, c)
+    !! [[m_base_backend(module):field_labelled_sums_base(subroutine)]]
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    real(dp), intent(out) :: sums(:, :)
+    class(field_t), intent(in) :: g, label, a, b, c
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: g_d, label_d, a_d, &
+                                                         b_d, c_d
+    real(dp), pointer, contiguous :: sums_d(:)
+    real(dp), allocatable :: sums_flat(:)
+    integer :: n, n_i, n_groups_pad, n_j
+
+    call check_labelled_fields(g, label, a, b, c)
+
+    call resolve_field_t(g_d, g)
+    call resolve_field_t(label_d, label)
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    ! sums is passed flat: the device helpers have no 2D download
+    allocate (sums_flat(size(sums)))
+    sums_flat = 0._dp
+    call dev_alloc(sums_d, size(sums))
+    call dev_upload(sums_d, sums_flat)
+
+    call pencil_extents(self, DIR_X, g%data_loc, n, n_i, n_groups_pad, n_j)
+    call labelled_sums(sums_d, g_d, label_d, a_d, b_d, c_d, size(sums, 2), &
+                       size(g_d, 2), n, n_i, n_groups_pad, n_j)
+
+    call dev_download(sums_flat, sums_d)
+    call dev_free(sums_d)
+    sums = reshape(sums_flat, shape(sums))
+
+  end subroutine field_labelled_sums_omptgt
+
+  subroutine field_labelled_axpy_omptgt(self, coeffs, g, label, a, b, c)
+    !! [[m_base_backend(module):field_labelled_axpy_base(subroutine)]]
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    real(dp), intent(in) :: coeffs(:, :)
+    class(field_t), intent(in) :: g, label
+    class(field_t), intent(inout) :: a, b, c
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: g_d, label_d, a_d, &
+                                                         b_d, c_d
+    real(dp), pointer, contiguous :: coeffs_d(:, :)
+    integer :: n, n_i, n_groups_pad, n_j
+
+    call check_labelled_fields(g, label, a, b, c)
+
+    call resolve_field_t(g_d, g)
+    call resolve_field_t(label_d, label)
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    call dev_alloc(coeffs_d, size(coeffs, 1), size(coeffs, 2))
+    call dev_upload(coeffs_d, coeffs)
+
+    call pencil_extents(self, DIR_X, g%data_loc, n, n_i, n_groups_pad, n_j)
+    call labelled_axpy(coeffs_d, g_d, label_d, a_d, b_d, c_d, &
+                       size(coeffs, 2), size(g_d, 2), n, n_i, n_groups_pad, &
+                       n_j)
+
+    ! The kernel may still be reading coeffs_d (see device_sync)
+    call device_sync()
+    call dev_free(coeffs_d)
+
+  end subroutine field_labelled_axpy_omptgt
+
+  subroutine check_labelled_fields(g, label, a, b, c)
+    !! Checks the fields passed to the labelled field operations share a
+    !! valid data location and the DIR_X layout.
+    implicit none
+
+    class(field_t), intent(in) :: g, label, a, b, c
+
+    if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
+        a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
+        c%data_loc == NULL_LOC) then
+      error stop 'You must set data_loc before labelled field operations.'
+    end if
+    if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
+        b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
+      error stop 'Labelled field operations need one data location.'
+    end if
+    if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
+        b%dir /= DIR_X .or. c%dir /= DIR_X) then
+      error stop 'Labelled field operations need DIR_X layout.'
+    end if
+  end subroutine check_labelled_fields
 
   subroutine field_max_mean_omptgt(self, max_val, mean_val, f, &
                                    enforced_data_loc)

@@ -22,6 +22,7 @@ module m_omptgt_kernels_fieldops
   public :: buffer_copy
   public :: scalar_product, scalar_product_cart, vector_norm_squared, &
             field_max_sum, volume_integral, slice_max_sum
+  public :: labelled_sums, labelled_axpy
   public :: field_set_x_face, field_set_y_face, field_set_y_plane, &
             field_set_abl_wall_stress, field_set_x_face_from_field, &
             field_set_y_face_from_field, field_add_x_face_from_field, &
@@ -327,6 +328,111 @@ contains
     !$omp end target teams distribute parallel do
 
   end function vector_norm_squared
+
+  subroutine labelled_sums(s, g, label, a, b, c, n_label, n_f, n, n_i, &
+                           n_groups_pad, n_j)
+    !! s(1:3, l) += sums of g*a, g*b and g*c over the points labelled l, as
+    !! cuda/kernels/fieldops.f90: each thread accumulates runs of equal labels
+    !! along its pencil and flushes a run when the label changes, so the
+    !! atomics scale with the label changes rather than the points. Atomics
+    !! instead of reduction(+:s), which flang cannot do on the GPU for an
+    !! array whose shape is only known at run time.
+    integer, intent(in) :: n_label, n_f, n, n_i, n_groups_pad, n_j
+    real(dp), intent(inout) :: s(3, n_label)
+    real(dp), intent(in) :: g(SZ, n_f, n_groups_pad*n_i), &
+                            label(SZ, n_f, n_groups_pad*n_i), &
+                            a(SZ, n_f, n_groups_pad*n_i), &
+                            b(SZ, n_f, n_groups_pad*n_i), &
+                            c(SZ, n_f, n_groups_pad*n_i)
+
+    real(dp) :: sum_a, sum_b, sum_c
+    integer :: i, j, k, l, l_run, b_i, b_j
+
+    !$omp target teams distribute parallel do collapse(3) &
+    !$omp private(k, l, l_run, sum_a, sum_b, sum_c) &
+    !$omp OMP_DEVICE_ADDR(s, g, label, a, b, c)
+    do b_j = 1, (n_j - 1)/SZ + 1
+      do b_i = 1, n_i
+        do i = 1, SZ
+          if (i + (b_j - 1)*SZ <= n_j) then
+            k = b_j + (b_i - 1)*n_groups_pad
+            l_run = 0
+            sum_a = 0._dp
+            sum_b = 0._dp
+            sum_c = 0._dp
+            do j = 1, n
+              l = nint(label(i, j, k))
+              if (l < 1 .or. l > n_label) l = 0
+              if (l /= l_run) then
+                if (l_run /= 0) then
+                  !$omp atomic update
+                  s(1, l_run) = s(1, l_run) + sum_a
+                  !$omp atomic update
+                  s(2, l_run) = s(2, l_run) + sum_b
+                  !$omp atomic update
+                  s(3, l_run) = s(3, l_run) + sum_c
+                end if
+                l_run = l
+                sum_a = 0._dp
+                sum_b = 0._dp
+                sum_c = 0._dp
+              end if
+              if (l /= 0) then
+                sum_a = sum_a + g(i, j, k)*a(i, j, k)
+                sum_b = sum_b + g(i, j, k)*b(i, j, k)
+                sum_c = sum_c + g(i, j, k)*c(i, j, k)
+              end if
+            end do
+            if (l_run /= 0) then
+              !$omp atomic update
+              s(1, l_run) = s(1, l_run) + sum_a
+              !$omp atomic update
+              s(2, l_run) = s(2, l_run) + sum_b
+              !$omp atomic update
+              s(3, l_run) = s(3, l_run) + sum_c
+            end if
+          end if
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine labelled_sums
+
+  subroutine labelled_axpy(coeffs, g, label, a, b, c, n_label, n_f, n, n_i, &
+                           n_groups_pad, n_j)
+    !! a, b, c += coeffs(1:3, l)*g at the points labelled l.
+    integer, intent(in) :: n_label, n_f, n, n_i, n_groups_pad, n_j
+    real(dp), intent(in) :: coeffs(3, n_label)
+    real(dp), intent(in) :: g(SZ, n_f, n_groups_pad*n_i), &
+                            label(SZ, n_f, n_groups_pad*n_i)
+    real(dp), intent(inout) :: a(SZ, n_f, n_groups_pad*n_i), &
+                               b(SZ, n_f, n_groups_pad*n_i), &
+                               c(SZ, n_f, n_groups_pad*n_i)
+
+    integer :: i, j, k, l, b_i, b_j
+
+    !$omp target teams distribute parallel do collapse(3) private(k, l) &
+    !$omp OMP_DEVICE_ADDR(coeffs, g, label, a, b, c)
+    do b_j = 1, (n_j - 1)/SZ + 1
+      do b_i = 1, n_i
+        do i = 1, SZ
+          if (i + (b_j - 1)*SZ <= n_j) then
+            k = b_j + (b_i - 1)*n_groups_pad
+            do j = 1, n
+              l = nint(label(i, j, k))
+              if (l < 1 .or. l > n_label) cycle
+              a(i, j, k) = a(i, j, k) + coeffs(1, l)*g(i, j, k)
+              b(i, j, k) = b(i, j, k) + coeffs(2, l)*g(i, j, k)
+              c(i, j, k) = c(i, j, k) + coeffs(3, l)*g(i, j, k)
+            end do
+          end if
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine labelled_axpy
 
   subroutine field_max_sum(max_f, sum_f, f, n_f, n, n_i, n_groups_pad, &
                            n_j)
