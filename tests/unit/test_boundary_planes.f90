@@ -102,6 +102,40 @@ program test_boundary_planes
   call check_planes('field_set_face_from_field', data, expected, dims, &
                     tolerance, all_pass)
 
+  ! --- field_set_face_from_field X_FACE: inflow plane + convective outflow --
+  ! The inlet plane is copied from f_start; the outlet gets
+  ! f - c_end*(f(nx) - f(nx-1)) + flow_rate_diff; interior planes are kept.
+  ! f varies along x so the outflow update is not a no-op.
+  block
+    real(dp), parameter :: c_end = 0.3_dp, flow_rate_diff = 0.05_dp
+    real(dp), allocatable :: start(:, :, :)
+
+    call backend%get_field_data(data, f_start)
+    start = data
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          data(i, j, k) = 3._dp*real(i, dp) - 0.25_dp*real(j, dp) &
+                          + 0.1_dp*real(k, dp)
+        end do
+      end do
+    end do
+    call backend%set_field_data(f, data)
+
+    expected = data
+    expected(1, :, :) = start(1, :, :)
+    expected(dims(1), :, :) = data(dims(1), :, :) &
+                              - c_end*(data(dims(1), :, :) &
+                                       - data(dims(1) - 1, :, :)) &
+                              + flow_rate_diff
+
+    call backend%field_set_face_from_field(f, f_start, c_end, X_FACE, &
+                                           flow_rate_diff=flow_rate_diff)
+    call backend%get_field_data(data, f)
+    call check_planes('field_set_face_from_field X_FACE', data, expected, &
+                      dims, tolerance, all_pass)
+  end block
+
   ! --- field_add_face_from_field: plane values added on Dirichlet faces -----
   ! The wall pre-correction adds onto the value the case has already set,
   ! and must leave a non-Dirichlet face (the ABL's free-slip lid) alone.
