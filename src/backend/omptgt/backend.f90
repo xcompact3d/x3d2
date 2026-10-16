@@ -24,7 +24,7 @@ module m_omptgt_backend
   use m_common, only: dp, MPI_X3D2_DP, move_data_loc, get_dirs_from_rdr, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC, &
                       X_FACE, Y_FACE, Z_FACE, BC_DIRICHLET
-  use m_logger, only: abort_run
+  use m_logger, only: abort_run, str
   use m_field, only: field_t
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t, tdsops_t
@@ -1515,9 +1515,8 @@ contains
 
     ptr = u%get_dev_ptr()
     if (.not. c_associated(ptr)) then
-      print '(a,i0,a,i0)', 'omptgt backend: field id ', u%id, ', dir ', &
-        u%dir
-      call abort_run('omptgt backend: field has no device storage.')
+      call abort_run('omptgt backend: field id '//str(u%id)// &
+                     ', dir '//str(u%dir)//' has no device storage.')
     end if
     call c_f_pointer(ptr, u_dev, u%get_shape())
 

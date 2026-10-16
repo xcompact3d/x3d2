@@ -4,7 +4,7 @@ module m_cuda_sendrecv
                    MPI_Waitall
 
   use m_common, only: dp, MPI_X3D2_DP
-  use m_logger, only: check_mpi
+  use m_logger, only: check_mpi, abort_run
   use m_cuda_errors, only: check_cuda
 
   implicit none
@@ -142,7 +142,7 @@ contains
     n_groups = n_data/(size(src, 1)*size(src, 2))
     if (n_groups*size(src, 1)*size(src, 2) /= n_data .or. &
         n_groups > size(src, 3) .or. n_groups > size(dst, 3)) then
-      error stop 'copy_halo: n_data does not match the halo buffer.'
+      call abort_run('copy_halo: n_data does not match the halo buffer.')
     end if
 
     dst(:, :, 1:n_groups) = src(:, :, 1:n_groups)
