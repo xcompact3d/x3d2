@@ -35,8 +35,8 @@ if(WITH_MPI)
   set(CMAKE_REQUIRED_LIBRARIES MPI::MPI_Fortran)
   check_fortran_source_compiles("
 program main
-  use mpi, only: MPI_Allreduce, MPI_Bcast, MPI_Cart_coords, MPI_Irecv, &
-                 MPI_Isend, MPI_Reduce, MPI_Sendrecv, MPI_Waitall
+  use mpi, only: MPI_Allreduce, MPI_Alltoall, MPI_Bcast, MPI_Cart_coords, &
+                 MPI_Irecv, MPI_Isend, MPI_Reduce, MPI_Sendrecv, MPI_Waitall
   implicit none
 end program main"
     MPI_MODULE_HAS_INTERFACES SRC_EXT f90)

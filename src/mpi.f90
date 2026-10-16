@@ -42,8 +42,8 @@ module m_mpi
 
   implicit none
 
-  external :: MPI_Allreduce, MPI_Bcast, MPI_Cart_coords, MPI_Irecv, &
-    MPI_Isend, MPI_Reduce, MPI_Sendrecv, MPI_Waitall
+  external :: MPI_Allreduce, MPI_Alltoall, MPI_Bcast, MPI_Cart_coords, &
+    MPI_Irecv, MPI_Isend, MPI_Reduce, MPI_Sendrecv, MPI_Waitall
 #else
   use mpi
 
