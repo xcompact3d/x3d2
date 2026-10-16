@@ -5,32 +5,46 @@ program test_tridiag
   !! domain is decomposed in x, so with more than one rank the boundary
   !! conditions at interior subdomain edges are BC_HALO.
   use iso_fortran_env, only: stderr => error_unit
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
   use m_allocator, only: allocator_t, field_t
   use m_backend_runtime, only: backend_runtime_t, backend_sz
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, pi, MPI_X3D2_DP, DIR_X, VERT, &
+  use m_common, only: dp, pi, DIR_X, VERT, &
                       BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
   use m_mesh, only: mesh_t
   use m_tdsops, only: tdsops_t
-  use m_test_utils, only: initialise_mpi, finalise_test
+  use m_test_utils, only: initialise_mpi, finalise_test, relative_l2_error
 
   implicit none
 
   logical :: allpass = .true.
-  integer :: nrank, nproc, ierr
+  integer :: nrank, nproc
 
   ! The generic decomposition splits x evenly, so n_glob is rounded down to a
   ! multiple of the rank count (1024 on a power-of-two count).
   integer :: n_glob
-  ! Single precision roundoff floors at n_glob~1024: ~eps/dx (~2e-5) for
-  ! first derivatives/interpolation, ~eps/dx^2 (~3e-3) for second
-  ! derivatives, and ~63x more for the hyperviscous operator (nu0_nu=63).
+  ! The tolerances bound the relative L2 error. Single precision roundoff
+  ! floors at n_glob~1024: ~eps/dx (~2e-5) for first derivatives/interpolation,
+  ! ~eps/dx^2 (~3e-3) for second derivatives, and ~63x more for the
+  ! hyperviscous operator (nu0_nu=63). Largest values measured, per tolerance:
+  !   double precision, OpenMP backend (nvfortran build; gfortran):
+  !     tol 1.2678e-11 (gfortran 1.2678e-11),
+  !     tol_2nd 1.9422e-11 (gfortran 1.9512e-11),
+  !     tol_hyper 8.2700e-10 (gfortran 8.7497e-10)
+  !   double precision, CUDA backend:
+  !     tol 1.2678e-11, tol_2nd 1.9422e-11, tol_hyper 8.2379e-10
+  !   single precision, OpenMP backend (nvfortran build; gfortran):
+  !     tol 3.8401e-05 (gfortran 3.9027e-05),
+  !     tol_2nd 4.5822e-03 (gfortran 4.7899e-03),
+  !     tol_hyper 8.1507e-01 (gfortran 8.0145e-01)
+  !   single precision, CUDA backend:
+  !     tol 3.8401e-05, tol_2nd 4.5822e-03, tol_hyper 8.1737e-01
+  ! Each tolerance is the smallest {1,2,5}x10^k value at least 10x the
+  ! largest of these, a margin of 10 or more in every case.
 #ifdef SINGLE_PREC
-  real(dp), parameter :: tol = 1e-4_dp, tol_2nd = 2e-2_dp, tol_hyper = 2.0_dp
+  real(dp), parameter :: tol = 5e-4_dp, tol_2nd = 5e-2_dp, tol_hyper = 10.0_dp
 #else
-  real(dp), parameter :: tol = 1e-8_dp, tol_2nd = 1e-8_dp, &
+  real(dp), parameter :: tol = 2e-10_dp, tol_2nd = 2e-10_dp, &
                          tol_hyper = 1e-8_dp
 #endif
 
@@ -48,7 +62,7 @@ program test_tridiag
   integer :: icase = 0
   class(field_t), pointer :: u_field, du_field
 
-  real(dp), allocatable, dimension(:, :, :) :: u, du
+  real(dp), allocatable, dimension(:, :, :) :: u, du, ref
   real(dp), allocatable, dimension(:) :: sin_0_2pi_per, cos_0_2pi_per, &
                                          sin_0_2pi, cos_0_2pi, &
                                          cos_0_pi, cos_0_pi_stag, &
@@ -77,7 +91,8 @@ program test_tridiag
   u_field => allocator%get_block(DIR_X)
   du_field => allocator%get_block(DIR_X)
   dims = u_field%get_shape()
-  allocate (u(dims(1), dims(2), dims(3)), du(dims(1), dims(2), dims(3)))
+  allocate (u(dims(1), dims(2), dims(3)), du(dims(1), dims(2), dims(3)), &
+            ref(dims(1), dims(2), dims(3)))
   u = 0._dp
 
   dx_per = 2*pi/n_glob
@@ -204,13 +219,11 @@ contains
 
     do jj = 1, n_out
       du(:, jj, 1:n_groups) = du(:, jj, 1:n_groups) + c*expected(jj)
+      ref(:, jj, 1:n_groups) = expected(jj)
     end do
 
-    norm = sum(du(:, 1:n_out, 1:n_groups)**2)
-    norm = norm/real(n_glob, dp)/real(n_groups*backend_sz, dp)
-    call MPI_Allreduce(MPI_IN_PLACE, norm, 1, MPI_X3D2_DP, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
-    norm = sqrt(norm)
+    norm = relative_l2_error(du(:, 1:n_out, 1:n_groups), &
+                             ref(:, 1:n_out, 1:n_groups))
 
     if (nrank == 0) then
       print *, 'error norm ', label, norm

@@ -1,5 +1,4 @@
 program test_fft
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
@@ -7,11 +6,11 @@ program test_fft
   use m_tdsops, only: dirps_t
   use m_solver, only: allocate_tdsops
 
-  use m_common, only: dp, pi, MPI_X3D2_DP, &
+  use m_common, only: dp, pi, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, CELL
 
   use m_mesh, only: mesh_t
-  use m_test_utils, only: initialise_mpi, finalise_test
+  use m_test_utils, only: initialise_mpi, finalise_test, relative_l2_error
 
   implicit none
 
@@ -20,7 +19,7 @@ program test_fft
   integer :: dims(3)
 
   integer :: nrank, nproc
-  integer :: ierr, i, j, k
+  integer :: i, j, k
 
   type(backend_runtime_t), target :: runtime
   class(base_backend_t), pointer :: backend
@@ -33,10 +32,21 @@ program test_fft
   real(dp) :: x, y, z
   real(dp) :: error_norm
   real(dp), dimension(3) :: xloc
+  ! The tolerance bounds the relative L2 error of the forward and backward
+  ! transform round trip, which is FFT roundoff. Largest value measured, by
+  ! the backend of the binary that the tolerance judges:
+  !   double precision, OpenMP backend: 7.9674e-15
+  !   double precision, CUDA backend:   1.8802e-16
+  !   single precision, OpenMP backend: 7.8339e-07
+  !   single precision, CUDA backend:   1.2231e-07
+  ! The tolerance is the smallest {1,2,5}x10^k value at least 10x the largest
+  ! of these. The double precision value is shared by both backends, so its
+  ! margin is about 13 over the OpenMP backend. The single precision margins
+  ! are about 13 (OpenMP backend) and 16 (CUDA backend).
 #ifdef SINGLE_PREC
-  real(dp), parameter :: tol = merge(1e-6_dp, 1e-5_dp, backend_is_cuda)
+  real(dp), parameter :: tol = merge(2e-6_dp, 1e-5_dp, backend_is_cuda)
 #else
-  real(dp), parameter :: tol = 1e-10_dp
+  real(dp), parameter :: tol = 1e-13_dp
 #endif
   logical :: use_2decomp
   logical :: allpass
@@ -114,13 +124,12 @@ program test_fft
   allocate (output_data(dims(1), dims(2), dims(3)))
   call backend%get_field_data(output_data, output_field, DIR_C)
   ! The output scaled with number of cells in domain, hence the first '/product(dims_global)'.
-  ! RMS value is used for the norm, hence the second '/product(dims_global)'
-  error_norm = norm2( &
-               input_data - output_data/product(dims_global) &
-               )**2/product(dims_global)
-  call MPI_Allreduce(MPI_IN_PLACE, error_norm, 1, MPI_X3D2_DP, MPI_SUM, &
-                     MPI_COMM_WORLD, ierr)
-  error_norm = sqrt(error_norm)
+  error_norm = relative_l2_error( &
+               input_data - output_data/product(dims_global), input_data)
+
+  if (mesh%par%is_root()) then
+    print *, "FFT roundtrip rel L2 error=", error_norm
+  end if
 
   allpass = (error_norm <= tol)
   if (.not. allpass) then
