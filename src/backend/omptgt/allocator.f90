@@ -125,23 +125,32 @@ contains
   end subroutine fill_omptgt
 
   subroutine fill_omptgt_(dev_ptr, c, n)
-    !! Offloaded kernel behind `fill_omptgt`. Takes the device pointer rather
-    !! than the field so the target region needs no mapping.
+    !! Views the device pointer as the explicit-shape dummy of the kernel.
     type(c_ptr), intent(in) :: dev_ptr
     real(dp), intent(in) :: c
     integer, intent(in) :: n
 
-    real(dp), dimension(:), pointer :: p_data_tgt
-    integer :: i
+    real(dp), dimension(:), pointer, contiguous :: p_data_tgt
 
     call c_f_pointer(dev_ptr, p_data_tgt, shape=[n])
-    !$omp target is_device_ptr(dev_ptr)
-    !$omp teams loop
+    call fill_kernel(p_data_tgt, c, n)
+
+  end subroutine
+
+  subroutine fill_kernel(f, c, n)
+    !! Offloaded kernel behind `fill_omptgt`. The array is a dummy named in
+    !! OMP_DEVICE_ADDR, so the region needs no mapping (see m_omptgt_common).
+    integer, intent(in) :: n
+    real(dp), intent(inout) :: f(n)
+    real(dp), intent(in) :: c
+
+    integer :: i
+
+    !$omp target teams distribute parallel do OMP_DEVICE_ADDR(f)
     do i = 1, n
-      p_data_tgt(i) = c
+      f(i) = c
     end do
-    !$omp end teams loop
-    !$omp end target
+    !$omp end target teams distribute parallel do
 
   end subroutine
 
@@ -169,8 +178,8 @@ contains
   end subroutine
 
   type(c_ptr) function get_dev_ptr(self) result(ptr)
-    !! Returns the device pointer to the field's storage, for use in the
-    !! `is_device_ptr` clause of an offloaded region.
+    !! Returns the device address of the field's storage, which the backend
+    !! views as a Fortran array to pass to its kernels.
     class(omptgt_field_t) :: self
 
     ptr = self%dev_ptr

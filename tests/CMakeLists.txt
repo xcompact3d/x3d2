@@ -184,6 +184,16 @@ function(define_test testfile np backend)
 
   # default label includes backend
   set_tests_properties(${test_name} PROPERTIES LABELS "unit;${backend}")
+
+  # The omp_tgt backend hands omp_target_alloc buffers to MPI. UCX tells
+  # device from host buffers with a memory type cache fed by intercepting
+  # CUDA allocations, which misses the OpenMP runtime's, so it reads them as
+  # host memory and crashes in its CMA transport. Without the cache it asks
+  # the driver about every buffer. MPIs not built on UCX ignore the variable.
+  if(WITH_MPI AND ${backend} STREQUAL omp_tgt)
+    set_property(TEST ${test_name} APPEND PROPERTY
+      ENVIRONMENT "UCX_MEMTYPE_CACHE=n")
+  endif()
 endfunction()
 
 # Specialised test definition functions with category labels
@@ -301,16 +311,9 @@ endif()
 function(define_backend_tests backend)
   set(is_omp FALSE)
   set(is_device TRUE)
-  set(is_full_backend TRUE)
   if(${backend} STREQUAL omp)
     set(is_omp TRUE)
     set(is_device FALSE)
-  elseif(${backend} STREQUAL omp_tgt)
-    # The OpenMP-target backend implements only field copies, reorder,
-    # vecadd/veccopy and vector_norm_squared so far; every other operation
-    # stops with "not implemented". Tests needing the rest are registered
-    # under is_full_backend below.
-    set(is_full_backend FALSE)
   endif()
 
   # Unit tests (fast, isolated component tests)
@@ -319,14 +322,12 @@ function(define_backend_tests backend)
   define_test(unit/test_setget_field.f90 ${serial} ${backend})
   define_test(unit/test_kinetic_energy.f90 ${np} ${backend})
   define_test(unit/test_snapshot_species_fields.f90 ${serial} ${backend})
-  if(is_full_backend)
-    define_test(unit/test_scalar_product.f90 ${np} ${backend})
-    define_test(unit/test_sum_intox.f90 ${np} ${backend})
-    define_test(unit/test_boundary_planes.f90 ${serial} ${backend})
-    define_test(unit/test_abl_seed.f90 ${serial} ${backend})
-    define_test(unit/test_precorrect_walls.f90 ${serial} ${backend})
-    define_test(unit/test_adm.f90 ${serial} ${backend})
-  endif()
+  define_test(unit/test_scalar_product.f90 ${np} ${backend})
+  define_test(unit/test_sum_intox.f90 ${np} ${backend})
+  define_test(unit/test_boundary_planes.f90 ${serial} ${backend})
+  define_test(unit/test_abl_seed.f90 ${serial} ${backend})
+  define_test(unit/test_precorrect_walls.f90 ${serial} ${backend})
+  define_test(unit/test_adm.f90 ${serial} ${backend})
   if(is_omp AND NOT np EQUAL serial)
     # Reordering is checked both without and with a decomposition.
     define_test(unit/test_reordering.f90 ${np} ${backend})
@@ -338,14 +339,12 @@ function(define_backend_tests backend)
 
   # Verification tests (numerical correctness vs analytical solutions)
   define_verification_test(verification/test_time_integrator.f90 ${serial} ${backend})
-  if(is_full_backend)
-    define_verification_test(verification/test_tridiag.f90 ${np} ${backend})
-    define_verification_test(verification/test_penta.f90 ${np} ${backend})
-    define_verification_test(verification/test_transeq.f90 ${np} ${backend})
-    define_verification_test(verification/test_les_field.f90 ${serial} ${backend})
-    define_verification_test(verification/test_thom.f90 ${serial} ${backend})
-    define_verification_test(verification/test_filter.f90 ${serial} ${backend})
-  endif()
+  define_verification_test(verification/test_tridiag.f90 ${np} ${backend})
+  define_verification_test(verification/test_penta.f90 ${np} ${backend})
+  define_verification_test(verification/test_transeq.f90 ${np} ${backend})
+  define_verification_test(verification/test_les_field.f90 ${serial} ${backend})
+  define_verification_test(verification/test_thom.f90 ${serial} ${backend})
+  define_verification_test(verification/test_filter.f90 ${serial} ${backend})
 
   # The FFT Poisson solvers (2DECOMP&FFT on CPU, cuFFTMp on CUDA) are not at
   # feature parity, so the CUDA FFT test and the Poisson BC tests keep the rank
@@ -365,6 +364,8 @@ function(define_backend_tests backend)
     set(X3D2_TEST_NAME_SUFFIX _dpp)
     if(is_omp)
       define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc dpp --nproc_dir 1,2,1)
+      set(X3D2_TEST_NAME_SUFFIX _pdp)
+      define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc pdp)
     else()
       define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc dpp)
     endif()
@@ -390,12 +391,10 @@ function(define_backend_tests backend)
 
   # Performance tests (benchmarks, excluded from CI)
   define_performance_test(performance/perf_reorder.f90 ${serial} ${backend})
-  if(is_full_backend)
-    define_performance_test(performance/perf_thom.f90 ${serial} ${backend})
-    define_performance_test(performance/perf_tridiag.f90 ${np} ${backend})
-    define_performance_test(performance/perf_penta.f90 ${np} ${backend})
-    define_performance_test(performance/perf_transeq.f90 ${np} ${backend})
-  endif()
+  define_performance_test(performance/perf_thom.f90 ${serial} ${backend})
+  define_performance_test(performance/perf_tridiag.f90 ${np} ${backend})
+  define_performance_test(performance/perf_penta.f90 ${np} ${backend})
+  define_performance_test(performance/perf_transeq.f90 ${np} ${backend})
 endfunction()
 
 foreach(backend IN LISTS X3D2_TEST_BACKENDS)
