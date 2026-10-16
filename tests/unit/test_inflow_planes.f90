@@ -43,6 +43,7 @@ program test_inflow_planes
   integer, parameter :: dims_global(3) = [16, 8, 8]
   real(dp), parameter :: lengths(3) = [4._dp, 1._dp, 2._dp]
   real(dp), parameter :: dt = 0.01_dp
+  real(dp), parameter :: time_tol = 100._dp*epsilon(1._dp)
   integer, parameter :: x_index = 5, ntimesteps = 3, sample_every = 2, &
                         start_iter = 1
   character(len=*), parameter :: prefix = 'test_inflow', &
@@ -116,7 +117,7 @@ program test_inflow_planes
   cfg%read_planes = .true.
   cfg%ninflows = 2
   reader = inflow_plane_reader_t(read_mesh, cfg)
-  if (abs(reader%plane_dt - sample_every*dt) > 1e-14_dp) then
+  if (abs(reader%plane_dt - sample_every*dt) > time_tol) then
     allpass = .false.
     print *, 'Wrong plane spacing', reader%plane_dt
   end if
@@ -266,7 +267,7 @@ contains
       end do
     end do
 
-    if (err > 0._dp .or. time_err > 1e-12_dp) then
+    if (err > 0._dp .or. time_err > time_tol) then
       allpass = .false.
       print *, 'Rank', irank, trim(filename), ': max errors', err, time_err
     end if
