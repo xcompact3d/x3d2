@@ -2,6 +2,7 @@ module m_omptgt_exec_dist
   !! Drivers of the distributed compact solves for the OpenMP target backend,
   !! following cuda/exec_dist.f90. Fields are (SZ, n, n_groups) device arrays
   !! and only the first n_groups groups are processed.
+  use m_logger, only: abort_run
   use m_common, only: dp
   use m_omptgt_common, only: SZ
   use m_omptgt_kernels_dist, only: der_univ_dist, der_univ_subs, &
@@ -154,8 +155,8 @@ contains
     integer, intent(in) :: n_groups
 
     if (.not. associated(tdsops%penta_z_dev)) then
-      error stop 'exec_dist_penta_periodic: not a periodic pentadiagonal &
-                  &operator.'
+      call abort_run('exec_dist_penta_periodic: not a periodic pentadiagonal &
+                  &operator.')
     end if
 
     call der_penta_periodic( &

@@ -14,6 +14,7 @@ module m_base_case
   use m_config, only: has_output_field
   use m_io_manager, only: io_manager_t
   use m_mpi, only: MPI_COMM_WORLD, MPI_Wtime, MPI_Reduce, MPI_MAX
+  use m_logger, only: log_info, abort_run, str
 
   implicit none
 
@@ -135,7 +136,7 @@ contains
     class(base_case_t) :: self
 
     call self%finalise_case_specific()
-    if (self%solver%mesh%par%is_root()) print *, 'run end'
+    call log_info('run end')
 
     ! release the persistent inflow-BC planes allocated by cases that use
     ! them
@@ -212,7 +213,7 @@ contains
     ! it to the working precision.
     double precision :: t_start, t_end, t_step0, t_step1
     real(dp) :: t_total_local, t_total, t_step_local, t_step
-    logical :: do_timing_report, is_root
+    logical :: do_timing_report
     integer :: ierr
 
     ! Error: ‘t_step0’ may be used uninitialized in this function [-Werror=maybe-uninitialized]
@@ -227,24 +228,24 @@ contains
 
     if (self%io_mgr%is_restart()) then
       t = self%solver%current_iter*self%solver%dt
-      if (self%solver%mesh%par%is_root()) &
-        ! for restarts current_iter is read from the checkpoint file
-        print *, 'Continuing from iteration:', &
-        self%solver%current_iter, 'at time ', t
+      ! for restarts current_iter is read from the checkpoint file
+      call log_info('Continuing from iteration: ' &
+                    //str(self%solver%current_iter)//' at time '//str(t))
       if (self%solver%n_iters <= self%solver%current_iter) then
-        error stop &
-          'Restart requires n_iters greater than the restart iteration.'
+        call abort_run( &
+          'Restart requires n_iters greater than the restart iteration.', &
+          collective=.true.)
       end if
     else
       self%solver%current_iter = 0
-      if (self%solver%mesh%par%is_root()) print *, 'initial conditions'
+      call log_info('initial conditions')
       t = 0._dp
     end if
 
     call self%postprocess(self%solver%current_iter, t)
     start_iter = self%solver%current_iter + 1
 
-    if (self%solver%mesh%par%is_root()) print *, 'start run'
+    call log_info('start run')
 
     allocate (curr(self%solver%time_integrator%nvars))
     allocate (deriv(self%solver%time_integrator%nvars))
@@ -256,7 +257,6 @@ contains
       curr(3 + i)%ptr => self%solver%species(i)%ptr
     end do
 
-    is_root = self%solver%mesh%par%is_root()
     t_start = MPI_Wtime()
 
     do iter = start_iter, self%solver%n_iters
@@ -308,8 +308,7 @@ contains
                                              self%solver%w)
       end do
 
-      ! All ranks measure and reduce; only root prints. Gating the
-      ! measurement on is_root would break the collective MPI_Reduce.
+      ! All ranks measure and reduce; only root prints.
       if (do_timing_report .and. iter > start_iter) then
         t_step1 = MPI_Wtime()
         t_step_local = real(t_step1 - t_step0, 4)
@@ -317,9 +316,7 @@ contains
         call MPI_Reduce(t_step_local, t_step, 1, MPI_X3D2_DP, MPI_MAX, &
                         0, MPI_COMM_WORLD, ierr)
 
-        if (is_root) then
-          print *, 'Time for this time step (s):', real(t_step, 4)
-        end if
+        call log_info('Time for this time step (s): '//str(t_step))
       end if
 
       self%solver%current_iter = iter
@@ -356,14 +353,12 @@ contains
     call MPI_Reduce(t_total_local, t_total, 1, MPI_X3D2_DP, MPI_MAX, &
                     0, MPI_COMM_WORLD, ierr)
 
-    if (is_root) then
-      print *, '==========================================================='
-      print *, 'Averaged time per step (s):', &
-        real(t_total/(self%solver%n_iters - (start_iter - 1)), 4)
-      print *, 'Total wallclock (s):', real(t_total, 4)
-      print *, 'Total wallclock (m):', real(t_total/60.0_dp, 4)
-      print *, 'Total wallclock (h):', real(t_total/3600.0_dp, 4)
-    end if
+    call log_info(repeat('=', 59))
+    call log_info('Averaged time per step (s): ' &
+                  //str(t_total/(self%solver%n_iters - (start_iter - 1))))
+    call log_info('Total wallclock (s): '//str(t_total))
+    call log_info('Total wallclock (m): '//str(t_total/60.0_dp))
+    call log_info('Total wallclock (h): '//str(t_total/3600.0_dp))
     call self%case_finalise
 
     ! deallocate memory

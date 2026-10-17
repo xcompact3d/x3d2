@@ -4,6 +4,7 @@ module m_base_backend
   use m_allocator, only: allocator_t
   use m_common, only: dp, DIR_C, get_rdr_from_dirs
   use m_field, only: field_t
+  use m_logger, only: abort_run
   use m_mesh, only: mesh_t
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: tdsops_t, dirps_t
@@ -94,14 +95,12 @@ contains
 
   subroutine not_implemented(operation)
     !! Stops the run, naming the backend operation that has no
-    !! implementation. The name is printed rather than passed as the stop
-    !! code because not every compiler here accepts a variable stop code.
+    !! implementation.
     implicit none
 
     character(*), intent(in) :: operation
 
-    print *, trim(operation)//': not implemented by the active backend'
-    error stop 'Backend operation not implemented'
+    call abort_run(trim(operation)//': not implemented by the active backend')
 
   end subroutine not_implemented
 

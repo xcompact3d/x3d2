@@ -6,6 +6,7 @@ module m_backend_setup
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_common, only: VERT
+  use m_logger, only: log_info, abort_run
   use m_mesh, only: mesh_t
 
 #ifdef CUDA
@@ -13,6 +14,7 @@ module m_backend_setup
   use m_cuda_allocator, only: cuda_allocator_t
   use m_cuda_backend, only: cuda_backend_t
   use m_cuda_common, only: SZ
+  use m_cuda_errors, only: check_cuda
 #elif defined(OMP_TGT)
   use omp_lib, only: omp_get_num_devices, omp_set_default_device
   use m_omptgt_allocator, only: omptgt_allocator_t
@@ -73,34 +75,34 @@ contains
 #ifdef CUDA
     self%cuda_allocator = cuda_allocator_t(dims, SZ)
     self%allocator => self%cuda_allocator
-    if (nrank == 0) print *, 'CUDA allocator instantiated'
+    call log_info('CUDA allocator instantiated')
 
     self%omp_allocator = allocator_t(dims, SZ)
     self%host_allocator => self%omp_allocator
 
     self%cuda_backend = cuda_backend_t(mesh, self%allocator)
     self%backend => self%cuda_backend
-    if (nrank == 0) print *, 'CUDA backend instantiated'
+    call log_info('CUDA backend instantiated')
 #elif defined(OMP_TGT)
     self%omptgt_allocator = omptgt_allocator_t(dims, SZ)
     self%allocator => self%omptgt_allocator
-    if (nrank == 0) print *, 'OpenMP target allocator instantiated'
+    call log_info('OpenMP target allocator instantiated')
 
     self%omp_allocator = allocator_t(dims, SZ)
     self%host_allocator => self%omp_allocator
 
     self%omptgt_backend = omptgt_backend_t(mesh, self%allocator)
     self%backend => self%omptgt_backend
-    if (nrank == 0) print *, 'OpenMP target backend instantiated'
+    call log_info('OpenMP target backend instantiated')
 #else
     self%omp_allocator = allocator_t(dims, SZ)
     self%allocator => self%omp_allocator
     self%host_allocator => self%omp_allocator
-    if (nrank == 0) print *, 'OpenMP allocator instantiated'
+    call log_info('OpenMP allocator instantiated')
 
     self%omp_backend = omp_backend_t(mesh, self%allocator)
     self%backend => self%omp_backend
-    if (nrank == 0) print *, 'OpenMP backend instantiated'
+    call log_info('OpenMP backend instantiated')
 #endif
   end subroutine init
 
@@ -112,14 +114,16 @@ contains
     integer :: ierr, ndevs
 
     ierr = cudaGetDeviceCount(ndevs)
-    if (ndevs < 1) error stop 'select_device: no CUDA devices available'
+    call check_cuda(ierr, 'cudaGetDeviceCount')
+    if (ndevs < 1) call abort_run('select_device: no CUDA devices available')
     ierr = cudaSetDevice(mod(nrank, ndevs))
+    call check_cuda(ierr, 'cudaSetDevice')
 #elif defined(OMP_TGT)
     integer :: ndevs
 
     ndevs = omp_get_num_devices()
-    if (ndevs < 1) error stop 'select_device: no OpenMP target devices &
-                              &available'
+    if (ndevs < 1) call abort_run('select_device: no OpenMP target devices &
+                                  &available')
     call omp_set_default_device(mod(nrank, ndevs))
 #endif
   end subroutine select_device
