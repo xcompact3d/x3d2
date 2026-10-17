@@ -90,10 +90,10 @@ set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/include)
 
 # Backend specific checks
 if (${ENABLE_BACKEND} STREQUAL "CUDA" OR ${ENABLE_BACKEND} STREQUAL "OMP_TGT")
-  set(BACKEND_ARCH "" CACHE STRING "Target GPU architecture, e.g. cc80 for NVIDIA or gfx942 for AMD")
+  set(BACKEND_ARCH "" CACHE STRING "Target GPU architecture, e.g. cc80 for NVIDIA, gfx942 for AMD, or pvc / spir64 for Intel")
   if ("${BACKEND_ARCH}" STREQUAL "")
     message(FATAL_ERROR
-       "CUDA and OMP_TGT backends require BACKEND_ARCH=<arch> (replaces CUDA_ARCH / OMP_TGT_ARCH), e.g. cc80 or gfx942")
+       "CUDA and OMP_TGT backends require BACKEND_ARCH=<arch> (replaces CUDA_ARCH / OMP_TGT_ARCH), e.g. cc80, gfx942 or pvc")
   endif()
 endif()
 # NVHPC picks the CUDA toolkit matching the installed driver. On a node without
@@ -113,15 +113,18 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     message(FATAL_ERROR "For Nvidia GPU, BACKEND_ARCH must be specified as ccXX")
   endif()
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
-  # The Intel compilers build the CPU backend only for now: the offload flags
-  # and the OMP_TGT_INTEL vendor selection are not wired up yet.
-  if(CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM" OR
-     CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
+  # Classic ifort has no device offload; ifx (IntelLLVM) does, see below.
+  if(CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
     message(FATAL_ERROR
-      "The OMP_TGT backend is not supported with the Intel compilers yet. "
+      "The OMP_TGT backend needs ifx (IntelLLVM): classic ifort cannot offload. "
       "Build the CPU backend with ENABLE_BACKEND=OFF.")
   endif()
-  if("${OpenMP_Fortran_VERSION}" VERSION_LESS "4.5")
+  # FindOpenMP's version probe fails to compile with ifx (OpenMP_Fortran_VERSION
+  # comes back empty), and every ifx that offloads implements OpenMP 5.x.
+  if("${OpenMP_Fortran_VERSION}" STREQUAL "" AND
+     CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
+    message(STATUS "OpenMP Fortran version not detected with ifx: assuming 5.x")
+  elseif("${OpenMP_Fortran_VERSION}" VERSION_LESS "4.5")
     message(FATAL_ERROR "OpenMP Fortran version ${OpenMP_Fortran_VERSION} is detected, but at least 4.5 is required with OMP_TGT.")
   endif()
   if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
@@ -133,6 +136,32 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
     if(NOT "${BACKEND_CUDA_VERSION}" STREQUAL "")
       message(WARNING "BACKEND_CUDA_VERSION applies to NVHPC only and is ignored with ${CMAKE_Fortran_COMPILER_ID}")
     endif()
+  endif()
+  if(CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
+    # BACKEND_ARCH=spir64 builds SPIR-V that the GPU driver compiles at first
+    # launch (JIT) and runs on any Intel GPU.  Any other value names the device
+    # to compile for ahead of time with ocloc, e.g. pvc (Data Center GPU Max)
+    # or bmg (Arc B-series); `ocloc compile --help` lists the names.
+    if(NOT BACKEND_ARCH MATCHES "^[A-Za-z0-9_.-]+$")
+      message(FATAL_ERROR
+        "For Intel GPU, BACKEND_ARCH must be spir64 (JIT) or an ocloc device name, e.g. pvc")
+    endif()
+    if(NOT "${BACKEND_CUDA_VERSION}" STREQUAL "")
+      message(WARNING "BACKEND_CUDA_VERSION applies to NVHPC only and is ignored with ${CMAKE_Fortran_COMPILER_ID}")
+    endif()
+    if(BACKEND_ARCH STREQUAL "spir64")
+      set(_intel_offload_flags "-fopenmp-targets=spir64")
+    else()
+      set(_intel_offload_flags
+        "-fopenmp-targets=spir64_gen"
+        "SHELL:-Xopenmp-target-backend \"-device ${BACKEND_ARCH}\"")
+    endif()
+    # The offload targets must reach every compile and the final link, so hang
+    # them on the imported target as the NVHPC branch below does.
+    set_property(TARGET OpenMP::OpenMP_Fortran APPEND PROPERTY
+      INTERFACE_COMPILE_OPTIONS ${_intel_offload_flags})
+    set_property(TARGET OpenMP::OpenMP_Fortran APPEND PROPERTY
+      INTERFACE_LINK_OPTIONS ${_intel_offload_flags})
   endif()
   if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
     if(NOT BACKEND_ARCH MATCHES "^cc[0-9]+$")

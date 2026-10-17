@@ -13,8 +13,8 @@ module m_omptgt_common
   !!
   !! `OMP_DEVICE_ADDR` is a preprocessor macro set per compiler in
   !! src/CMakeLists.txt, because no one spelling is accepted everywhere:
-  !! OpenMP 5.1 says `has_device_addr`, and its compilers (GNU, Flang, Cray)
-  !! allow `is_device_ptr` only on `type(c_ptr)`; NVHPC rejects
+  !! OpenMP 5.1 says `has_device_addr`, and its compilers (GNU, Flang, Cray,
+  !! ifx) allow `is_device_ptr` only on `type(c_ptr)`; NVHPC rejects
   !! `has_device_addr` but takes the OpenMP 4.5 form, `is_device_ptr` on a
   !! dummy array. The preprocessors expand macros in `!$omp` lines.
   use iso_c_binding, only: c_ptr, c_loc, c_f_pointer, c_associated, &
@@ -35,6 +35,8 @@ module m_omptgt_common
   integer, parameter :: SZ = 64
 #elif defined(OMP_TGT_NVIDIA)
   integer, parameter :: SZ = 32
+#elif defined(OMP_TGT_INTEL)
+  integer, parameter :: SZ = 16
 #else
   integer, parameter :: SZ = 16
 #endif
