@@ -58,6 +58,7 @@ module m_omptgt_backend
                                        field_plane_partial_sums, &
                                        field_plane_sums_reduce, &
                                        labelled_sums, labelled_axpy, &
+                                       sample_points, add_gaussian_sources, &
                                        reorder, sum_intox
 
   implicit none
@@ -95,6 +96,9 @@ module m_omptgt_backend
     procedure :: vector_norm_squared => vector_norm_squared_omptgt
     procedure :: field_labelled_sums => field_labelled_sums_omptgt
     procedure :: field_labelled_axpy => field_labelled_axpy_omptgt
+    procedure :: field_sample_points => field_sample_points_omptgt
+    procedure :: field_add_gaussian_sources => &
+      field_add_gaussian_sources_omptgt
     procedure :: field_max_mean => field_max_mean_omptgt
     procedure :: slice_max_sum => slice_max_sum_omptgt
     procedure :: field_scale => field_scale_omptgt
@@ -1009,6 +1013,89 @@ contains
     call dev_free(coeffs_d)
 
   end subroutine field_labelled_axpy_omptgt
+
+  subroutine field_sample_points_omptgt(self, vals, points, a, b, c)
+    !! [[m_base_backend(module):field_sample_points_base(subroutine)]]
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    real(dp), intent(out) :: vals(:, :)
+    real(dp), intent(in) :: points(:, :)
+    class(field_t), intent(in) :: a, b, c
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: a_d, b_d, c_d
+    real(dp) :: d(3)
+    integer :: grid(13), dims_padded(3), n
+
+    call check_point_fields(a, b, c)
+
+    vals = 0._dp
+    n = size(points, 2)
+    if (n == 0) return
+
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    d = self%mesh%geo%d
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+    grid = [self%mesh%get_dims(VERT), self%mesh%get_global_dims(VERT), &
+            self%mesh%par%n_offset, &
+            merge(1, 0, self%mesh%grid%periodic_BC), dims_padded(2)/SZ]
+    call sample_points(vals, points, a_d, b_d, c_d, n, size(a_d, 2), &
+                       size(a_d, 3), d, grid)
+
+  end subroutine field_sample_points_omptgt
+
+  subroutine field_add_gaussian_sources_omptgt(self, a, b, c, points, &
+                                               coeffs, eps, r_cut)
+    !! [[m_base_backend(module):field_add_gaussian_sources_base(subroutine)]]
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: a, b, c
+    real(dp), intent(in) :: points(:, :), coeffs(:, :)
+    real(dp), intent(in) :: eps, r_cut
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: a_d, b_d, c_d
+    real(dp) :: src(6, size(points, 2)), d(3)
+    integer :: grid(7), dims_padded(3), n
+
+    call check_point_fields(a, b, c)
+
+    n = size(points, 2)
+    if (n == 0) return
+
+    call resolve_field_t(a_d, a)
+    call resolve_field_t(b_d, b)
+    call resolve_field_t(c_d, c)
+
+    src(1:3, :) = points
+    src(4:6, :) = coeffs
+    d = self%mesh%geo%d
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+    grid = [self%mesh%get_dims(VERT), self%mesh%par%n_offset, &
+            dims_padded(2)/SZ]
+    ! Index extent of a source's box in y and z: points within r_cut
+    call add_gaussian_sources(a_d, b_d, c_d, src, n, &
+                              floor(2*r_cut/d(2)) + 2, &
+                              floor(2*r_cut/d(3)) + 2, 1._dp/eps**2, &
+                              r_cut, size(a_d, 2), size(a_d, 3), d, grid)
+
+  end subroutine field_add_gaussian_sources_omptgt
+
+  subroutine check_point_fields(a, b, c)
+    !! Checks the fields passed to the point sampling and source operations
+    !! are DIR_X VERT fields.
+    implicit none
+
+    class(field_t), intent(in) :: a, b, c
+
+    if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) &
+      call abort_run('Point sampling and sources need DIR_X fields.')
+    if (a%data_loc /= VERT .or. b%data_loc /= VERT .or. c%data_loc /= VERT) &
+      call abort_run('Point sampling and sources need VERT fields.')
+  end subroutine check_point_fields
 
   subroutine check_labelled_fields(g, label, a, b, c)
     !! Checks the fields passed to the labelled field operations share a
