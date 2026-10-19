@@ -24,9 +24,9 @@ program x3d2_poisson_solver
   !!                     A Dirichlet direction needs an odd grid size.
   !!   --repeat N:       number of times to solve (default 1).
 
-  use iso_fortran_env, only: stderr => error_unit, real64
+  use iso_fortran_env, only: real64
 
-  use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Comm_size, &
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_size, &
                    MPI_Finalize, MPI_Init, MPI_Barrier, MPI_Wtime, &
                    MPI_Allreduce, MPI_IN_PLACE, MPI_SUM, MPI_MAX, &
                    MPI_DOUBLE_PRECISION
@@ -34,6 +34,7 @@ program x3d2_poisson_solver
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, pi, DIR_C, DIR_X, DIR_Y, DIR_Z, CELL, MPI_X3D2_DP
+  use m_logger, only: log_info, log_warn, abort_run, str
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t
   use m_tdsops_setup, only: allocate_tdsops
@@ -54,7 +55,7 @@ program x3d2_poisson_solver
   type(backend_setup_t), target :: setup
 
   integer :: dims_global(3), nproc_dir(3), dims(3)
-  integer :: nrank, nproc, ierr
+  integer :: nproc, ierr
   real(dp) :: L_global(3)
   character(len=9) :: bc_x_name, bc_y_name, bc_z_name
   character(len=9) :: BC_x(2), BC_y(2), BC_z(2)
@@ -71,7 +72,6 @@ program x3d2_poisson_solver
 
   ! ---- MPI init ----
   call MPI_Init(ierr)
-  call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
 
   ! ---- Argument parsing ----
@@ -143,19 +143,16 @@ program x3d2_poisson_solver
   call backend%allocator%release_block(f_device)
 
   ! ---- Report ----
-  if (nrank == 0) then
-    write (stderr, '(A)') ''
-    write (stderr, '(A,I0,A,I0,A,I0)') &
-      'Grid: ', dims_global(1), ' x ', dims_global(2), ' x ', dims_global(3)
-    write (stderr, '(A,A,A,A,A,A)') &
-      'BC: x=', trim(bc_x_name), ' y=', trim(bc_y_name), &
-      ' z=', trim(bc_z_name)
-    write (stderr, '(A,I0)') 'Ranks: ', nproc
-    write (stderr, '(A,A)') 'Backend: ', trim(backend_name)
-    write (stderr, '(A,ES12.4,A)') 'Solve time (min):  ', min_time, ' s'
-    write (stderr, '(A,ES12.4,A)') 'Solve time (mean): ', &
-      sum_time/real(repeat_count, dp), ' s'
-  end if
+  call log_info('')
+  call log_info('Grid: '//str(dims_global(1))//' x '//str(dims_global(2)) &
+                //' x '//str(dims_global(3)))
+  call log_info('BC: x='//trim(bc_x_name)//' y='//trim(bc_y_name) &
+                //' z='//trim(bc_z_name))
+  call log_info('Ranks: '//str(nproc))
+  call log_info('Backend: '//trim(backend_name))
+  call log_info('Solve time (min):  '//str(min_time, '(ES12.4)')//' s')
+  call log_info('Solve time (mean): ' &
+                //str(sum_time/real(repeat_count, dp), '(ES12.4)')//' s')
 
   call MPI_Finalize(ierr)
 
@@ -228,13 +225,11 @@ contains
   end subroutine parse_arguments
 
   subroutine usage_error()
-    if (nrank == 0) then
-      write (stderr, '(A)') &
-        'Usage: x3d2_poisson_solver nx ny nz [bc_x bc_y bc_z] &
-        &[--repeat N]  (bc in {periodic,dirichlet}, dirichlet dims odd)'
-    end if
-    call MPI_Finalize(ierr)
-    error stop 'invalid arguments'
+    ! Every rank parses the same arguments, so all of them reach this call.
+    call abort_run( &
+      'Usage: x3d2_poisson_solver nx ny nz [bc_x bc_y bc_z] &
+      &[--repeat N]  (bc in {periodic,dirichlet}, dirichlet dims odd)', &
+      collective=.true.)
   end subroutine usage_error
 
   subroutine fill_rhs(host_field)
@@ -304,12 +299,10 @@ contains
     ! It is also far above the double-precision rounding of the same mean.
     if (abs(global_mean) > &
         100.0_dp*epsilon(1.0_dp)*max(local_max, tiny(1.0_dp))) then
-      if (nrank == 0) then
-        write (stderr, '(A,ES12.4,A)') &
-          'Warning: right-hand side mean is ', global_mean, &
-          '; the solver needs a zero-mean right-hand side for these &
-          &boundary conditions, and the mean component is discarded.'
-      end if
+      call log_warn('Right-hand side mean is '//str(global_mean, '(ES12.4)') &
+                    //'; the solver needs a zero-mean right-hand side for &
+                    &these boundary conditions, and the mean component is &
+                    &discarded.')
     end if
   end subroutine warn_if_rhs_mean_nonzero
 
