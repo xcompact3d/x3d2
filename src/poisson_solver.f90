@@ -123,9 +123,11 @@ program x3d2_poisson_solver
     call backend%set_field_data(f_device, host_field%data, DIR_C)
     call f_device%set_data_loc(CELL)
 
+    call backend%sync()
     call MPI_Barrier(MPI_COMM_WORLD, ierr)
     t0 = MPI_Wtime()
     call backend%poisson_fft%solve_poisson(f_device, temp)
+    call backend%sync()
     t1 = MPI_Wtime()
 
     elapsed = real(t1 - t0, dp)
