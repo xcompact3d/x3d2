@@ -2,7 +2,7 @@ module m_memcheck_report
   !! Printed report of x3d2-memcheck: header, tables and verdict lines.
   use m_common, only: dp, i8, is_sp
   use m_memcheck_context, only: memcheck_ctx_t
-  use m_memcheck_device, only: busy_card_gib
+  use m_cuda_memcheck_device, only: busy_card_gib
   use m_memory_estimate, only: gpu_io_staging_bytes
   use m_memcheck_estimate, only: to_gib, ng_unsupported_reason, &
                                  requested_unsupported_reason, &

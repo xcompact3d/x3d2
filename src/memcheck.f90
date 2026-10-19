@@ -43,9 +43,6 @@ program x3d2_memcheck
   use m_memcheck_estimate, only: to_gib
   use m_memcheck_report, only: report
   use m_memcheck_build, only: run_build_mode
-#ifdef CUDA
-  use m_cuda_memcheck_device, only: cuda_memcheck_device_t
-#endif
 
   implicit none
 
@@ -59,9 +56,6 @@ program x3d2_memcheck
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
   if (nproc /= 1) error stop 'x3d2-memcheck: run single-rank (mpirun -n 1).'
 
-#ifdef CUDA
-  allocate (cuda_memcheck_device_t :: ctx%device)
-#endif
   call ctx%device%init(device_ok, device_msg)
   if (.not. device_ok) then
     print '(a)', trim(device_msg)

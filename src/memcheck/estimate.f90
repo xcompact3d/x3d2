@@ -172,7 +172,8 @@ contains
   end function spectral_plus_mirror_bytes
 
   subroutine estimate_for_ng(ctx, ng, per_gpu_gib, basis, verdict, &
-                             workspace_gib, overhead_gib, io_gib)
+                             workspace_gib, overhead_gib, io_gib, used_gib, &
+                             npeak)
     !! Formula floor first; only calls into the cuFFTMp probe (a real,
     !! throwaway GPU FFT plan) when the floor alone cannot already answer
     !! DOES_NOT_FIT, and
@@ -184,19 +185,30 @@ contains
     !! GPU-aware IO staging term (also broken out on its own via the
     !! optional io_gib, in GiB, for callers that need to track it apart
     !! from context/FFT overhead - e.g. run_build_mode()'s CHECK line).
+    !! used_gib and npeak (optional) are the ng=1 measurement of the real
+    !! build and its measured peak_fields. The estimate is then that
+    !! measurement scaled to ng GPUs by the same terms (spectral slab, mirror
+    !! buffers, the NVSHMEM heap over ng when the real solver's FFT is
+    !! distributed, IO staging), and workspace_gib holds the fields+halo
+    !! alone.
     type(memcheck_ctx_t), intent(inout) :: ctx
     integer, intent(in) :: ng
     real(dp), intent(out) :: per_gpu_gib
     integer, intent(out) :: basis
     character(len=12), intent(out) :: verdict
     real(dp), intent(out), optional :: workspace_gib, overhead_gib, io_gib
+    real(dp), intent(in), optional :: used_gib
+    integer, intent(in), optional :: npeak
 
     integer(i8) :: base_bytes, spec_bytes, floor_bytes, overhead_bytes, &
                    io_bytes, total_b, free_b, probe_bytes
     real(dp) :: floor_gib, io_gib_local, residual_gib
     logical :: probe_skipped
+    integer :: peak
 
-    base_bytes = fields_plus_halo_bytes(ctx, ng)
+    peak = ctx%peak_fields
+    if (present(npeak)) peak = npeak
+    base_bytes = fields_plus_halo_bytes_n(ctx, ng, peak)
     spec_bytes = spectral_plus_mirror_bytes(ctx, ng)
     io_bytes = gpu_io_staging_bytes([ctx%gdims(1), ctx%gdims(2), &
                                      ctx%gdims(3)/ng], &
@@ -206,9 +218,28 @@ contains
     if (present(io_gib)) io_gib = io_gib_local
     if (present(workspace_gib)) &
       workspace_gib = to_gib(base_bytes + spec_bytes)
+    if (present(used_gib)) then
+      per_gpu_gib = used_gib + to_gib(base_bytes + spec_bytes + io_bytes - &
+                                      fields_plus_halo_bytes_n(ctx, 1, peak) &
+                                      - spectral_plus_mirror_bytes(ctx, 1))
+      if (ctx%device%fft_path_known() .and. &
+          ctx%device%uses_distributed_fft()) &
+        per_gpu_gib = per_gpu_gib + &
+                      to_gib(ctx%device%overhead_floor_bytes( &
+                             ng, ctx%bc_is_110) - &
+                             ctx%device%overhead_floor_bytes( &
+                             1, ctx%bc_is_110))
+      basis = merge(basis_measured, basis_extrapolated, ng == 1)
+      if (present(workspace_gib)) workspace_gib = to_gib(base_bytes)
+      if (present(overhead_gib)) &
+        overhead_gib = per_gpu_gib - to_gib(base_bytes)
+      verdict = classify(per_gpu_gib, ctx%card_gib)
+      return
+    end if
     ! Floor: assume cuFFTMp is used (the realistic case for every BC this
-    ! solver ever attempts it for - see m_cuda_memory_estimate's 110 guard)
-    ! since that gives the larger, safer lower bound.
+    ! solver ever attempts it for - see the 110 guard of
+    ! fft_workspace_bytes_query) since that gives the larger, safer lower
+    ! bound.
     floor_bytes = base_bytes + spec_bytes + io_bytes + &
                   ctx%device%overhead_floor_bytes(ng, ctx%bc_is_110)
     floor_gib = to_gib(floor_bytes)

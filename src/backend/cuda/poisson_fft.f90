@@ -154,7 +154,7 @@ module m_cuda_poisson_fft
              redistribution_launch_config, redistribution_alltoall
 
   !> create_fft_plan is deliberately public: the static memory estimator
-  !> (m_cuda_memory_estimate, src/backend/cuda/memory_estimate_cuda.f90)
+  !> (m_cuda_memcheck_device, src/backend/cuda/memcheck_device.f90)
   !> calls it standalone (plan only, no mesh/case/fields) to capture the
   !> real cuFFT/cuFFTMp workspace size via its worksize out-argument,
   !> instead of duplicating cufftMakePlan3D's call sequence a second time.

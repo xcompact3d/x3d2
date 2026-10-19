@@ -5,7 +5,7 @@ module m_memcheck_context
                       checkpoint_config_t
   use m_mesh, only: periodic_dir
   use m_memory_estimate, only: cell_dims
-  use m_memcheck_device, only: memcheck_device_t
+  use m_cuda_memcheck_device, only: cuda_memcheck_device_t
   implicit none
 
   private
@@ -13,8 +13,8 @@ module m_memcheck_context
             resolve_gpu_io_mode
 
   type :: memcheck_ctx_t
-    !> The compute backend, allocated by the program before anything else.
-    class(memcheck_device_t), allocatable :: device
+    !> The compute backend.
+    type(cuda_memcheck_device_t) :: device
     character(len=256) :: input_path
     !> STATIC = --static (the formula estimate only), DEFAULT = no flag (the
     !> formula estimate and the cuFFTMp probe), BUILD = --build (adds the

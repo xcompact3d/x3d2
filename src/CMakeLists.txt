@@ -58,7 +58,6 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     backend/cuda/kernels/reorder.f90
     backend/cuda/kernels/spectral_processing.f90
     backend/cuda/kernels/thomas.f90
-    backend/cuda/memory_estimate_cuda.f90
     backend/cuda/poisson_fft.f90
     backend/cuda/sendrecv.f90
     backend/cuda/tdsops.f90
@@ -210,10 +209,9 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   target_compile_options(x3d2_backends PRIVATE "-DCUDA")
 
   # x3d2-memcheck (the static memory estimator) only exists for the CUDA
-  # backend because its only device implementation is the CUDA one
+  # backend because its device is the CUDA one
   # (backend/cuda/memcheck_device.f90).
   add_library(x3d2_memcheck STATIC
-    memcheck/device.f90
     memcheck/context.f90
     memcheck/estimate.f90
     memcheck/report.f90
