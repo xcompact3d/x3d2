@@ -24,14 +24,17 @@ program x3d2_poisson_solver
   !!                     A Dirichlet direction needs an odd grid size.
   !!   --repeat N:       number of times to solve (default 1).
 
-  use iso_fortran_env, only: stderr => error_unit
+  use iso_fortran_env, only: stderr => error_unit, real64
 
   use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Comm_size, &
-                   MPI_Finalize, MPI_Init, MPI_Barrier, MPI_Wtime
+                   MPI_Finalize, MPI_Init, MPI_Barrier, MPI_Wtime, &
+                   MPI_Allreduce, MPI_IN_PLACE, MPI_SUM, MPI_MAX, &
+                   MPI_DOUBLE_PRECISION
 
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, pi, DIR_C, DIR_X, DIR_Y, DIR_Z, CELL, VERT
+  use m_common, only: dp, pi, DIR_C, DIR_X, DIR_Y, DIR_Z, CELL, VERT, &
+                      MPI_X3D2_DP
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t
   use m_tdsops_setup, only: allocate_tdsops
@@ -181,6 +184,7 @@ program x3d2_poisson_solver
   host_field => host_allocator%get_block(DIR_C)
 
   call fill_rhs(host_field)
+  call warn_if_rhs_mean_nonzero(host_field)
 
   min_time = huge(1.0_dp)
   sum_time = 0.0_dp
@@ -323,5 +327,56 @@ contains
       end do
     end do
   end subroutine fill_rhs
+
+  subroutine warn_if_rhs_mean_nonzero(host_field)
+    !! Warn on rank 0 if the right-hand side does not have zero mean.
+    !! The solver needs a zero-mean right-hand side for these boundary
+    !! conditions.
+    !! It discards the mean component.
+    !! The solve runs in both cases.
+    class(field_t), intent(in) :: host_field
+
+    real(dp) :: local_max
+    real(real64) :: local_sum, global_mean, n_cells_global
+    integer :: global_dims(3), ierr
+
+    ! The sum uses double precision for every `dp`.
+    ! A `real32` sum of a valid zero-mean field can stall past 2^24 terms.
+    ! This gives a false warning in a `SINGLE_PREC` build.
+    local_sum = sum(real(host_field%data(1:dims(1), 1:dims(2), 1:dims(3)), &
+                         real64))
+    local_max = maxval(abs(host_field%data(1:dims(1), 1:dims(2), 1:dims(3))))
+
+    call MPI_Allreduce(MPI_IN_PLACE, local_sum, 1, MPI_DOUBLE_PRECISION, &
+                       MPI_SUM, MPI_COMM_WORLD, ierr)
+    call MPI_Allreduce(MPI_IN_PLACE, local_max, 1, MPI_X3D2_DP, MPI_MAX, &
+                       MPI_COMM_WORLD, ierr)
+
+    ! The cell count uses `real64`.
+    ! The `product()` of a default integer array overflows above 2^31 cells.
+    global_dims = mesh%get_global_dims(CELL)
+    n_cells_global = real(global_dims(1), real64) &
+                     *real(global_dims(2), real64) &
+                     *real(global_dims(3), real64)
+    global_mean = local_sum/n_cells_global
+
+    ! The tolerance scales with the precision of the build through
+    ! `epsilon(1.0_dp)`.
+    ! A fixed 1e-10 is below the single-precision epsilon of about 1.19e-7.
+    ! A `SINGLE_PREC` build rounds the discrete mean of `cos(2 pi x)` to about
+    ! 1e-9 to 1e-8.
+    ! The fixed tolerance gives a false warning for that rounding.
+    ! The tolerance `100*epsilon(1.0_dp)` is far above that rounding.
+    ! It is also far above the double-precision rounding of the same mean.
+    if (abs(global_mean) > &
+        100.0_dp*epsilon(1.0_dp)*max(local_max, tiny(1.0_dp))) then
+      if (nrank == 0) then
+        write (stderr, '(A,ES12.4,A)') &
+          'Warning: right-hand side mean is ', global_mean, &
+          '; the solver needs a zero-mean right-hand side for these &
+          &boundary conditions, and the mean component is discarded.'
+      end if
+    end if
+  end subroutine warn_if_rhs_mean_nonzero
 
 end program x3d2_poisson_solver
