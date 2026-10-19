@@ -65,7 +65,9 @@ function(define_test_backend_runtime backend)
         target_compile_options(${runtime_target} PRIVATE "-fopenmp")
         target_link_options(${runtime_target} INTERFACE "-fopenmp")
       endif()
+      # ifx takes its offload flags from OpenMP::OpenMP_Fortran instead
       if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray" AND
+         NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" AND
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
         target_compile_options(${runtime_target} PRIVATE
@@ -145,6 +147,7 @@ function(define_test testfile np backend)
         target_link_options(${test_name} PRIVATE "-fopenmp")
       endif()
       if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray" AND
+         NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" AND
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
         target_compile_options(${test_name} PRIVATE "--offload-arch=${BACKEND_ARCH}")
@@ -193,6 +196,12 @@ function(define_test testfile np backend)
   if(WITH_MPI AND ${backend} STREQUAL omp_tgt)
     set_property(TEST ${test_name} APPEND PROPERTY
       ENVIRONMENT "UCX_MEMTYPE_CACHE=n")
+    # Intel MPI reads every buffer as host memory unless told to look for
+    # device ones, and then faults in MPI_Isend on the first halo exchange.
+    if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM")
+      set_property(TEST ${test_name} APPEND PROPERTY
+        ENVIRONMENT "I_MPI_OFFLOAD=1")
+    endif()
   endif()
 endfunction()
 

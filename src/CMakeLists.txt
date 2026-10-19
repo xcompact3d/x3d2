@@ -238,6 +238,10 @@ elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
     add_definitions("-DOMP_TGT_AMD") # Assume AMD GPU
     add_definitions("-DOMP_DEVICE_ADDR=has_device_addr")
+  elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM")
+    # The offload flags ride on OpenMP::OpenMP_Fortran (root CMakeLists.txt)
+    add_definitions("-DOMP_TGT_INTEL")
+    add_definitions("-DOMP_DEVICE_ADDR=has_device_addr")
   endif()
 endif()
 

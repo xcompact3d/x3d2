@@ -63,8 +63,8 @@ if(WITH_ADIOS2)
     endif()
 
     # Both GPU backends offload to the device through CUDA when built with
-    # NVHPC, so both want a CUDA-enabled ADIOS2.  The AMD/Cray OMP_TGT paths use
-    # another compiler and get the plain CPU build.
+    # NVHPC, so both want a CUDA-enabled ADIOS2.  The AMD/Cray/Intel OMP_TGT
+    # paths use another compiler and get the plain CPU build.
     if((${ENABLE_BACKEND} STREQUAL "CUDA" OR ${ENABLE_BACKEND} STREQUAL "OMP_TGT")
        AND (CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC" OR CMAKE_Fortran_COMPILER_ID STREQUAL "PGI"))
       set(ADIOS2_WITH_CUDA TRUE)
