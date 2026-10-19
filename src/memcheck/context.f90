@@ -16,8 +16,9 @@ module m_memcheck_context
     !> The compute backend, allocated by the program before anything else.
     class(memcheck_device_t), allocatable :: device
     character(len=256) :: input_path
-    !> STATIC = --static (Tier 1 only), DEFAULT = no flag (Tier 1+2, today's
-    !> behaviour), BUILD = --build (adds Tier 3).
+    !> STATIC = --static (the formula estimate only), DEFAULT = no flag (the
+    !> formula estimate and the cuFFTMp probe), BUILD = --build (adds the
+    !> real build).
     character(len=7) :: run_mode
     !> Set by parse_args() from --extensive <n> (0 = not requested, the
     !> normal --build path of exactly 1 substep). build_and_measure() reads
@@ -38,9 +39,9 @@ module m_memcheck_context
     real(dp) :: card_gib
     !> Free memory on the card right now (query_card_gib), i.e. card_gib minus
     !> whatever other processes already hold - used by report()'s header
-    !> WARNING line and by run_tier3's BUILD_FRACTION gate, both of which must
-    !> judge headroom against what is actually free, not the card's full
-    !> capacity.
+    !> WARNING line and by run_build_mode's BUILD_FRACTION gate, both of
+    !> which must judge headroom against what is actually free, not the
+    !> card's full capacity.
     real(dp) :: card_free_gib = 0._dp
     !> Set by resolve_gpu_io_mode() - whether this run's snapshot/checkpoint
     !> writes would stage through a device buffer (true) or fall back to a
@@ -52,24 +53,24 @@ module m_memcheck_context
     !> Human-readable reason gpu_io_device_write is false, used by report()'s
     !> GPU-aware IO staging line when there is no term to report.
     character(len=64) :: gpu_io_reason = ''
-    !> Set by report()'s ng=1 row, used by run_tier3()'s CHECK line to
+    !> Set by report()'s ng=1 row, used by run_build_mode()'s CHECK line to
     !> compare the static estimate against the real --build measurement.
     real(dp) :: estimate_ng1_gib
     !> The requested configuration's verdict - set by report() from the
-    !> estimate, and (--build only) overwritten by run_tier3() with the more
-    !> authoritative measured verdict if a real build actually ran. Used
+    !> estimate, and (--build only) overwritten by run_build_mode() with the
+    !> more authoritative measured verdict if a real build actually ran. Used
     !> after MPI_Finalize to set the process exit code (mapping in the
     !> program), so a calling script can check $? instead of scraping
     !> stdout.
     character(len=12) :: final_verdict
     !> GPU-aware IO staging term (GiB) at ng=1, captured by report()'s table
-    !> loop and consumed by run_tier3()'s CHECK line (which says why it is
+    !> loop and consumed by run_build_mode()'s CHECK line (which says why it is
     !> excluded there).
     real(dp) :: io_staging_ng1_gib = 0._dp
     !> orig_dir/scratch_dir: set by validate_build_inputs and make_scratch,
     !> used by leave_build_scratch to chdir back and remove the scratch
-    !> directory - see their docstrings and run_tier3's docstring for why a
-    !> real --build runs inside a throwaway subdirectory rather than the
+    !> directory - see their docstrings and run_build_mode's docstring for why
+    !> a real --build runs inside a throwaway subdirectory rather than the
     !> invoking directory.
     character(len=4096) :: orig_dir = '', scratch_dir = ''
     !> Set inside build_and_measure, once the real config driven output
@@ -127,7 +128,7 @@ contains
     end do
     if (static_flag .and. build_flag) &
       error stop 'x3d2-memcheck: --static and --build/--extensive are &
-        &mutually exclusive (--static stops at Tier 1).'
+        &mutually exclusive (--static stops at the formula estimate).'
 
     if (static_flag) then
       ctx%run_mode = 'STATIC'

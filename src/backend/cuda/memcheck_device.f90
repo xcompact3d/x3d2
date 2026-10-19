@@ -53,8 +53,8 @@ module m_cuda_memcheck_device
     logical :: ng1_query_failed = .false.
     !> Whether a --build's real build actually used cuFFTMp (only known
     !> once the real solver is constructed) - the only real "cuFFTMp
-    !> available" signal in this codebase, more authoritative than Tier 2's
-    !> throwaway plan query (ng1_used_cufftmp above) for gating the
+    !> available" signal in this codebase, more authoritative than the cuFFTMp
+    !> probe's throwaway plan query (ng1_used_cufftmp above) for gating the
     !> measured table's ng>1 rows.
     logical :: use_cufftmp = .false., use_cufftmp_known = .false.
     type(cuda_allocator_t) :: cuda_allocator
@@ -161,7 +161,7 @@ contains
   end function overhead_floor_bytes
 
   subroutine ensure_fft_query(self, bc_is_100, bc_is_110, cdims, is_root)
-    !! Runs the real (single-rank) Tier 2 plan query at most once per
+    !! Runs the real (single-rank) cuFFTMp probe plan query at most once per
     !! process and caches the result in ng1_worksize_bytes/ng1_heap_bytes/
     !! ng1_xtdesc_bytes/ng1_used_cufftmp, plus the cudaMemGetInfo delta
     !! across the whole call in ng1_query_residual_gib (see its

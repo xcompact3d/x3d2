@@ -403,8 +403,8 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
   # x3d2-memcheck regression tests: run the already-built binary against a
   # few example inputs and check its printed output, rather than compiling
   # a bespoke Fortran test program. "static" checks the tool runs and
-  # prints a verdict with no GPU FFT plan query; "build" additionally
-  # checks its real --build measurement (Tier 3) completes and the static
+  # prints a verdict with no cuFFTMp probe; "build" additionally
+  # checks its real --build measurement completes and the static
   # estimate is close to it (the CHECK line) with no calibration drift (no
   # WARNING line) - this is the "is the guess close to the actual run"
   # check. PASS_REGULAR_EXPRESSION makes ctest ignore the process exit
@@ -546,7 +546,7 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
   # that row carries the formula-only mark and the table prints its note.
   define_memcheck_build_edit_test(memcheck_default_TGV_formula_only_row
     "s/^dims_global *=.*/dims_global = 1024, 1024, 1024/"
-    "if grep -q 'Requested nproc_dir gives ng=2: .* - DOES_NOT_FIT' $d/build.log && grep -q '^ *8 | .*| formula-only *| FITS' $d/build.log && grep -qF '(formula-only rows use the Tier 1 formula' $d/build.log; then echo memcheck_default_TGV_formula_only_row_OK; fi"
+    "if grep -q 'Requested nproc_dir gives ng=2: .* - DOES_NOT_FIT' $d/build.log && grep -q '^ *8 | .*| formula-only *| FITS' $d/build.log && grep -qF '(formula-only rows use the formula estimate' $d/build.log; then echo memcheck_default_TGV_formula_only_row_OK; fi"
     "")
 
   # A real --build run must not clobber whatever CWD it was launched from,

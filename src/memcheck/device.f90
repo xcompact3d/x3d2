@@ -33,14 +33,14 @@ module m_memcheck_device
     procedure(context_term_bytes_iface), deferred :: context_term_bytes
     !> Pencil size (the SZ of the backend's field layout).
     procedure(sz_iface), deferred :: sz
-    !> Tier 1 floor of the per-GPU overhead at ng GPUs, in bytes: the
+    !> Formula estimate of the per-GPU overhead at ng GPUs, in bytes: the
     !> device context plus (unless bc_is_110) the distributed FFT heap.
     procedure(overhead_floor_bytes_iface), deferred :: overhead_floor_bytes
-    !> Tier 2 per-GPU overhead at ng GPUs, in bytes, from a one-shot
-    !> throwaway FFT plan query (run on the first call, cached after):
-    !> FFT workspace/heap/data buffer plus the device context.
+    !> cuFFTMp probe per-GPU overhead at ng GPUs, in bytes, from a one-shot
+    !> throwaway FFT plan query (run on the first call, cached after): FFT
+    !> workspace/heap/data buffer plus the device context.
     procedure(overhead_query_bytes_iface), deferred :: overhead_query_bytes
-    !> Whether the Tier 2 query has run and, if so, residual_gib: what it
+    !> Whether the cuFFTMp probe has run and, if so, residual_gib: what it
     !> left allocated on the device (~0 if the plan was fully released).
     procedure(query_residual_gib_iface), deferred :: query_residual_gib
     !> Build the device allocator and the backend on mesh; the device owns

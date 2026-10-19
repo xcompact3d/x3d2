@@ -1,5 +1,6 @@
 module m_memcheck_estimate
-  !! Static (Tier 1) and Tier 2 per-GPU memory estimate of x3d2-memcheck.
+  !! Formula estimate and cuFFTMp probe per-GPU memory estimate of
+  !! x3d2-memcheck.
   use m_common, only: dp, i8, nbytes
   use m_memcheck_context, only: memcheck_ctx_t
   use m_memory_estimate, only: padded_cells, padded_halo_bytes, &
@@ -21,7 +22,7 @@ module m_memcheck_estimate
 
   !> How the overhead of an estimate was obtained. measured: the ng=1 GPU
   !> FFT plan query. extrapolated: that query scaled to ng>1. formula: the
-  !> Tier 1 formula only, no plan query ran or it returned a failure.
+  !> formula estimate only, no plan query ran or it returned a failure.
   integer, parameter :: basis_measured = 1, basis_extrapolated = 2, &
                         basis_formula = 3
   character(len=12), parameter :: basis_name(3) = [character(len=12) :: &
@@ -105,7 +106,7 @@ contains
     !! Whether the nproc_dir the input file asks for is supported - blank
     !! when it is. ng_unsupported_reason judges the Z count nproc_dir(3);
     !! on top of that the CUDA backend only supports nproc_dir = [1,1,ng].
-    !! Shared by report()'s requested line and run_tier3, so the initial
+    !! Shared by report()'s requested line and run_build_mode, so the initial
     !! report and the --build verdict cannot disagree on it.
     type(memcheck_ctx_t), intent(in) :: ctx
     character(len=96) :: reason
@@ -132,8 +133,8 @@ contains
   end function fields_plus_halo_bytes_n
 
   function fields_plus_halo_bytes(ctx, ng) result(nbytes8)
-    !! Exact, ng dependent field+halo term (Tier 1, no GPU/plan needed),
-    !! using the static peak_fields_lookup value.
+    !! Exact, ng dependent field+halo term (formula estimate, no GPU/plan
+    !! needed), using the static peak_fields_lookup value.
     type(memcheck_ctx_t), intent(in) :: ctx
     integer, intent(in) :: ng
     integer(i8) :: nbytes8
@@ -172,16 +173,17 @@ contains
 
   subroutine estimate_for_ng(ctx, ng, per_gpu_gib, basis, verdict, &
                              workspace_gib, overhead_gib, io_gib)
-    !! Tier 1 floor first; only calls into Tier 2 (a real, throwaway GPU
-    !! FFT plan) when Tier 1 alone cannot already answer DOES_NOT_FIT, and
+    !! Formula floor first; only calls into the cuFFTMp probe (a real,
+    !! throwaway GPU FFT plan) when the floor alone cannot already answer
+    !! DOES_NOT_FIT, and
     !! never under --static. workspace_gib/overhead_gib (optional) are the
     !! same two-term breakdown the --build measured table reports:
-    !! workspace = exact fields+halo+spectral+mirror (Tier 1, no GPU
-    !! needed); overhead = everything from the Tier 2 GPU query, the
-    !! hardware constants (worksize/xtdesc/heap/context), and the
+    !! workspace = exact fields+halo+spectral+mirror (formula estimate, no GPU
+    !! needed); overhead = everything from the cuFFTMp probe, the
+    !! measured values (worksize/xtdesc/heap/context), and the
     !! GPU-aware IO staging term (also broken out on its own via the
     !! optional io_gib, in GiB, for callers that need to track it apart
-    !! from context/FFT overhead - e.g. run_tier3()'s CHECK line).
+    !! from context/FFT overhead - e.g. run_build_mode()'s CHECK line).
     type(memcheck_ctx_t), intent(inout) :: ctx
     integer, intent(in) :: ng
     real(dp), intent(out) :: per_gpu_gib
@@ -211,7 +213,7 @@ contains
                   ctx%device%overhead_floor_bytes(ng, ctx%bc_is_110)
     floor_gib = to_gib(floor_bytes)
 
-    ! The Tier 2 probe builds the FFT plans on the whole global grid, one
+    ! The cuFFTMp probe builds the FFT plans on the whole global grid, one
     ! GPU, whatever ng is. Skip it when free memory cannot hold that:
     ! seven spectral copies plus the fixed overhead. cuFFTMp aborts inside
     ! NVSHMEM on a plan that does not fit and returns no status. On a 40 GB
@@ -238,7 +240,7 @@ contains
         overhead_gib = to_gib(ctx%device%overhead_floor_bytes( &
                               ng, ctx%bc_is_110)) + io_gib_local
       if (trim(ctx%run_mode) == 'STATIC' .or. probe_skipped) then
-        ! --static: Tier 1 only, never queries the GPU FFT plan. floor_gib
+        ! --static: formula estimate only, no cuFFTMp probe. floor_gib
         ! IS the estimate here - not just a DOES_NOT_FIT early-return floor
         ! - so classify it with the full three-way verdict. A skipped probe
         ! is the same case.

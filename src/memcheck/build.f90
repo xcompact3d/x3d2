@@ -1,6 +1,6 @@
 module m_memcheck_build
-  !! Tier 3 of x3d2-memcheck: the real case build, its measurement and the
-  !! measured report.
+  !! The real build of x3d2-memcheck (--build): the real case build, its
+  !! measurement and the measured report.
   use m_common, only: dp, i8, VERT
   use m_mesh, only: mesh_t
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
@@ -28,7 +28,7 @@ module m_memcheck_build
   implicit none
 
   private
-  public :: run_tier3
+  public :: run_build_mode
 
   !> --build: do not attempt a real build whose fields only workspace alone
   !> exceeds this fraction of the FREE card memory (card_free_gib, not the
@@ -149,7 +149,7 @@ contains
     !! (confirmed by a real mpirun -n 2 xcompact run on
     !! examples/TGV/input.x3d, 2026-09-10). ng_unsupported_reason uses the
     !! REAL use_cufftmp from the build just performed, more authoritative
-    !! than the static table's Tier 2 plan-query signal.
+    !! than the static table's cuFFTMp probe signal.
     !! The GPU-aware IO staging term (gpu_io_staging_bytes) is added the
     !! same way, since the real build performs no snapshot/checkpoint write
     !! and so never measures it directly.
@@ -408,8 +408,8 @@ contains
     dev_used = to_gib(total_b - free_b)
   end subroutine build_and_measure
 
-  subroutine run_tier3(ctx)
-    !! Tier 3: a REAL case build + one substep on 1 GPU, measured with
+  subroutine run_build_mode(ctx)
+    !! The real build: a REAL case build + one substep on 1 GPU, measured with
     !! cudaMemGetInfo - the last-resort ground truth, now run in-process
     !! (see the top-of-file note on why this removes the old nested mpirun
     !! limitation). Skips the build entirely (the estimate above stands)
@@ -454,7 +454,7 @@ contains
     ! Printed under --build only, right before the real build: the only mode
     ! where a second cuFFTMp plan lifecycle follows in the same process, so
     ! a non-zero residual would mean the real build's own measurement is
-    ! inflated by whatever Tier 2 left behind.
+    ! inflated by whatever the cuFFTMp probe left behind.
     if (ctx%device%query_residual_gib(residual_gib)) then
       call print_rule('-')
       print '(a,f0.2,a)', 'Residual after plan query: ', &
@@ -516,6 +516,6 @@ contains
       print '(a,f0.1,a)', '  (GPU-aware IO staging ', &
         ctx%io_staging_ng1_gib*1024._dp, ' MiB excluded from CHECK: the real &
         &build performs no snapshot/checkpoint write.)'
-  end subroutine run_tier3
+  end subroutine run_build_mode
 
 end module m_memcheck_build

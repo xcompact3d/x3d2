@@ -1,12 +1,14 @@
 program x3d2_memcheck
   !! Standalone GPU memory footprint estimator AND real build probe for an
   !! x3d2 .x3d input file, in one tool:
-  !!   (no flag)  Tier 1 (pure formula, no GPU build) + Tier 2 (a throwaway
-  !!              cuFFT/cuFFTMp plan query, needs a GPU but builds nothing
-  !!              else) unless Tier 1 already answers DOES_NOT_FIT.
-  !!   --static   Tier 1 only - never touches cuFFT, instant, deterministic.
-  !!   --build    the above, then Tier 3 - a REAL case build + one substep
-  !!              on 1 GPU, measured via cudaMemGetInfo, with a
+  !!   (no flag)  the formula estimate (pure formula, no GPU build) + the
+  !!              cuFFTMp probe (a throwaway cuFFT/cuFFTMp plan query, needs
+  !!              a GPU but builds nothing else) unless the formula estimate
+  !!              already answers DOES_NOT_FIT.
+  !!   --static   the formula estimate only - never touches cuFFT, instant,
+  !!              deterministic.
+  !!   --build    the above, then the real build - a REAL case build + one
+  !!              substep on 1 GPU, measured via cudaMemGetInfo, with a
   !!              self verifying drift check against the static
   !!              peak_fields_lookup table and a CHECK line comparing the
   !!              static estimate to the real measurement. Runs in the SAME
@@ -31,7 +33,8 @@ program x3d2_memcheck
   !! the same way src/io/adios2/io.f90's own runtime option does (see
   !! resolve_gpu_io_mode in m_memcheck_context).
   !!
-  !! Usage: x3d2-memcheck <input.x3d> [--static | --build]
+  !! Usage: x3d2-memcheck <input.x3d> [--static | --build [--extensive
+  !!        <n_substeps>]]
   use mpi
   use m_common, only: i8
   use m_memory_estimate, only: output_field_active, peak_fields_lookup
@@ -39,7 +42,7 @@ program x3d2_memcheck
                                 classify_bc, resolve_gpu_io_mode
   use m_memcheck_estimate, only: to_gib
   use m_memcheck_report, only: report
-  use m_memcheck_build, only: run_tier3
+  use m_memcheck_build, only: run_build_mode
 #ifdef CUDA
   use m_cuda_memcheck_device, only: cuda_memcheck_device_t
 #endif
@@ -84,7 +87,7 @@ program x3d2_memcheck
   ctx%multi_gpu_supported = .not. (ctx%bc_is_010 .or. ctx%bc_is_110)
 
   call report(ctx)
-  if (trim(ctx%run_mode) == 'BUILD') call run_tier3(ctx)
+  if (trim(ctx%run_mode) == 'BUILD') call run_build_mode(ctx)
 
   call MPI_Finalize(ierr)
 

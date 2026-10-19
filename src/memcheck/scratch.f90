@@ -133,7 +133,7 @@ contains
     !! matching ibm_<BC-suffix>.bp mask file must already be present in the
     !! invoking directory. Records the invoking directory in orig_dir for
     !! make_scratch. Sets ok=.false. (and the estimate above stands, like
-    !! the other run_tier3 skips) on any failure.
+    !! the other run_build_mode skips) on any failure.
     type(memcheck_ctx_t), intent(inout) :: ctx
     logical, intent(out) :: ok
 
@@ -188,7 +188,7 @@ contains
     !! quote, which the shell quoting below cannot handle) cannot be
     !! mirrored this way and is rejected - pass an absolute path instead.
     !! Sets ok=.false. (and the estimate above stands, like the other
-    !! run_tier3 skips) on any failure; leave_build_scratch removes the
+    !! run_build_mode skips) on any failure; leave_build_scratch removes the
     !! scratch directory once the build finishes. validate_build_inputs
     !! must have run first. If an unexpected error stop happens after the
     !! chdir below regardless - a failure mode the pre-validation does not

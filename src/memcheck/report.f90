@@ -146,14 +146,14 @@ contains
         print '(a)', '  (ng>1 rows extrapolate the single-GPU probe by 1/ng.)'
       else if (basis == basis_formula) then
         if (trim(ctx%run_mode) == 'STATIC') then
-          print '(a)', '  (Tier 1 estimate only: --static skips the GPU &
-            &FFT plan query.)'
+          print '(a)', '  (Formula estimate only: --static skips the &
+            &cuFFTMp probe.)'
         else if (trim(requested_verdict) /= 'DOES_NOT_FIT') then
           print '(a)', '  (FFT workspace is formula-only: the single-GPU &
             &probe would not fit in free memory.)'
         else
-          print '(a)', '  (Tier 1 floor only: this input is well over &
-            &the limit, no GPU plan probe was attempted.)'
+          print '(a)', '  (Formula floor only: this input is well over &
+            &the limit, no cuFFTMp probe was attempted.)'
         end if
       end if
     end if
@@ -161,7 +161,7 @@ contains
 
   subroutine print_ng_table(ctx, smallest_fits)
     !! The estimate table, one row per scanned GPU count (the ng=1 row also
-    !! feeds run_tier3's CHECK line); smallest_fits is 0 if none FITS.
+    !! feeds run_build_mode's CHECK line); smallest_fits is 0 if none FITS.
     type(memcheck_ctx_t), intent(inout) :: ctx
     integer, intent(out) :: smallest_fits
 
@@ -208,7 +208,7 @@ contains
     if (any_extrapolated) &
       print '(a)', '(ng>1 rows extrapolate the single-GPU probe by 1/ng.)'
     if (any_formula) &
-      print '(a)', '(formula-only rows use the Tier 1 formula for the FFT &
+      print '(a)', '(formula-only rows use the formula estimate for the FFT &
         &overhead.)'
   end subroutine print_ng_table
 
@@ -240,12 +240,12 @@ contains
     call print_io_staging_line(ctx)
     select case (trim(ctx%run_mode))
     case ('STATIC')
-      print '(a)', 'Mode: static (Tier 1 only, no FFT plan query)'
+      print '(a)', 'Mode: static (formula estimate only, no cuFFTMp probe)'
     case ('BUILD')
-      print '(a)', 'Mode: build (Tier 1 + Tier 2, then a real Tier 3 &
-        &build/measure)'
+      print '(a)', 'Mode: build (formula estimate + cuFFTMp probe, then a &
+        &real build)'
     case default
-      print '(a)', 'Mode: default (Tier 1 + Tier 2 FFT plan query)'
+      print '(a)', 'Mode: default (formula estimate + cuFFTMp probe)'
     end select
     call print_rule('=')
     call print_requested_line(ctx)
@@ -254,6 +254,8 @@ contains
     call print_ng_table(ctx, smallest_fits)
     print '(a)', 'Notes: workspace + overhead = per-GPU. % is per-GPU &
       &against this card''s total memory.'
+    print '(a)', 'The estimate is approximate. A run can still run out of &
+      &memory when the estimate is low.'
 
     if (smallest_fits > 0) then
       print '(a,i0,a)', 'Smallest GPU count that fits: ', smallest_fits, '.'

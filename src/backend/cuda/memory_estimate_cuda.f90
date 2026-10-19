@@ -1,12 +1,12 @@
 module m_cuda_memory_estimate
-  !! CUDA-only Tier 2 of the static memory estimator: create a throwaway
+  !! CUDA-only cuFFTMp probe of the memory estimator: create a throwaway
   !! FFT plan for the case's actual BC/dims/rank-count via the real
   !! solver's own create_fft_plan (src/backend/cuda/poisson_fft.f90),
   !! capture cuFFT/cuFFTMp's real reported workspace size, then destroy it
   !! - no mesh, no fields, no case object, no substep. This is what lets
   !! x3d2-memcheck report an exact FFT-workspace number for the one term
-  !! Tier 1 (m_memory_estimate, all-backend, no-GPU) cannot get from array
-  !! shapes alone.
+  !! the formula estimate (m_memory_estimate, all-backend, no-GPU) cannot
+  !! get from array shapes alone.
   !!
   !! This lives under backend/cuda (CUDASRC, not SRC) rather than inside
   !! m_memory_estimate because it depends on m_cuda_poisson_fft, cudafor,
@@ -51,7 +51,7 @@ contains
     !! the CUDA context itself, plus (when cuFFTMp is used) an estimate of
     !! the NVSHMEM symmetric heap. Two different callers use this function
     !! for two different purposes:
-    !!   - memcheck.f90's Tier 1 floor (before any GPU plan is queried) and
+    !!   - memcheck.f90's formula floor (before any GPU plan is queried) and
     !!     its final ng>1 estimate for the plain-cuFFT path (which never
     !!     runs cuFFTMp, so uses_cufftmp=.false. there and only the
     !!     grid-independent cuda_context_gib term applies).
@@ -64,7 +64,7 @@ contains
     !!     examples/TGV/input.x3d, 2026-09-10 (3339 MiB/GPU measured vs
     !!     3.24 GiB predicted using this ratio, vs the 4.69 GiB this table
     !!     used to report when it wrongly held the ng=1 overhead constant).
-    !! memcheck.f90's own Tier 2 cuFFTMp estimate does NOT use this
+    !! memcheck.f90's own cuFFTMp probe estimate does NOT use this
     !! function's heap constant any more - it live-measures the real
     !! ng=1 heap delta itself via fft_workspace_bytes_query (bracketing
     !! the real cufftMakePlan3D calls with cudaMemGetInfo, same as it
@@ -89,7 +89,7 @@ contains
     !!     worksize-independent. This means the worksize cufftMakePlan3D
     !!     reports for a cuFFTMp plan does NOT correspond to a separate,
     !!     additional allocation - it is carved out of this same heap, so
-    !!     the Tier 2 query's worksize must NOT be added on top of this
+    !!     the cuFFTMp probe's worksize must NOT be added on top of this
     !!     for the cuFFTMp path (see fft_workspace_bytes_query - worksize is
     !!     only added for .not. used_cufftmp). An earlier version of this
     !!     estimator added both and looked accurate on TGV by coincidence
