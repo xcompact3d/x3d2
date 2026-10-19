@@ -90,7 +90,7 @@ contains
     bytes = stretched_y_matrix_bytes(.true., 'top-bottom', .true., &
                                       [512, 256, 256], 2)
     expect = 4_i8*257_i8*64_i8*256_i8*5_i8*int(nbytes, i8)
-    call check("ng=2 halves ny_spec", bytes, expect)
+    call check("num_gpus=2 halves ny_spec", bytes, expect)
   end subroutine test_ng2_halves_ny_spec
 
   subroutine check(label, actual, expect)

@@ -13,18 +13,11 @@ module m_memcheck_context
             resolve_gpu_io_mode
 
   type :: memcheck_ctx_t
-    !> The compute backend.
     type(cuda_memcheck_device_t) :: device
     character(len=256) :: input_path
-    !> STATIC = --static (the formula estimate only), DEFAULT = no flag (the
-    !> formula estimate and the cuFFTMp probe), BUILD = --build (adds the
-    !> real build).
+    !> STATIC (--static), DEFAULT (no flag) or BUILD (--build).
     character(len=7) :: run_mode
-    !> Set by parse_args() from --extensive <n> (0 = not requested, the
-    !> normal --build path of exactly 1 substep). build_and_measure() reads
-    !> this to decide how many RK sub-stages to drive before measuring;
-    !> report_measured_table()'s banner line and EXTENSIVE result line both
-    !> read measured_n_substeps afterwards to state the real count.
+    !> The substep count of --extensive, 0 when it is not given.
     integer :: extensive_substeps = 0
     type(domain_config_t) :: domain_cfg
     type(solver_config_t) :: solver_cfg
@@ -37,46 +30,23 @@ module m_memcheck_context
     logical :: multi_gpu_supported
     integer :: peak_fields
     real(dp) :: card_gib
-    !> Free memory on the card right now (query_card_gib), i.e. card_gib minus
-    !> whatever other processes already hold - used by report()'s header
-    !> WARNING line and by run_build_mode's BUILD_FRACTION gate, both of
-    !> which must judge headroom against what is actually free, not the
-    !> card's full capacity.
+    !> Free memory on the card at the start.
     real(dp) :: card_free_gib = 0._dp
-    !> Set by resolve_gpu_io_mode() - whether this run's snapshot/checkpoint
-    !> writes would stage through a device buffer (true) or fall back to a
-    !> host copy (false) before reaching disk.
+    !> Whether snapshot and checkpoint writes stage through a device buffer,
+    !> the write mode name, and the reason when there is no staging.
     logical :: gpu_io_device_write = .false.
-    !> Resolved write mode name (mirrors runtime_gpu_write_mode_name in
-    !> src/io/adios2/io.f90): 'auto', 'gpu', or 'host'.
     character(len=16) :: gpu_io_mode_name = 'auto'
-    !> Human-readable reason gpu_io_device_write is false, used by report()'s
-    !> GPU-aware IO staging line when there is no term to report.
     character(len=64) :: gpu_io_reason = ''
-    !> Set by report()'s ng=1 row, used by run_build_mode()'s CHECK line to
-    !> compare the static estimate against the real --build measurement.
+    !> The num_gpus=1 row of the estimate: the CHECK line of --build
+    !> compares it with the measurement.
     real(dp) :: estimate_ng1_gib
-    !> The requested configuration's verdict - set by report() from the
-    !> estimate, and (--build only) overwritten by run_build_mode() with the
-    !> more authoritative measured verdict if a real build actually ran. Used
-    !> after MPI_Finalize to set the process exit code (mapping in the
-    !> program), so a calling script can check $? instead of scraping
-    !> stdout.
+    !> The verdict of the requested nproc_dir, which sets the exit code.
     character(len=12) :: final_verdict
-    !> GPU-aware IO staging term (GiB) at ng=1, captured by report()'s table
-    !> loop and consumed by run_build_mode()'s CHECK line (which says why it is
-    !> excluded there).
+    !> The IO staging term (GiB) at num_gpus=1.
     real(dp) :: io_staging_ng1_gib = 0._dp
-    !> orig_dir/scratch_dir: set by validate_build_inputs and make_scratch,
-    !> used by leave_build_scratch to chdir back and remove the scratch
-    !> directory - see their docstrings and run_build_mode's docstring for why
-    !> a real --build runs inside a throwaway subdirectory rather than the
-    !> invoking directory.
+    !> The invoking directory and the scratch directory of the real build.
     character(len=4096) :: orig_dir = '', scratch_dir = ''
-    !> Set inside build_and_measure, once the real config driven output
-    !> gating is known - needed after it returns to cross-check the measured
-    !> peak_fields against m_memory_estimate's static peak_fields_lookup (see
-    !> check_peak_fields_table).
+    !> The output fields and the substep count the real build measured.
     logical :: output_vorticity = .false., output_qcriterion = .false.
     integer :: measured_n_substeps
     integer :: irank
@@ -93,11 +63,7 @@ contains
     nargs = command_argument_count()
     if (nargs < 1) error stop 'usage: x3d2-memcheck <input.x3d> &
       &[--static | --build [--extensive <n_substeps>]]'
-    ! The input file must stay positional argument 1: the real case
-    ! constructors this tool calls under --build (case_channel_init,
-    ! case_cylinder_init, solver_init) independently re-read
-    ! get_argument(1) themselves rather than taking the path as a
-    ! parameter, so flags must only ever appear after it.
+    ! The input file stays argument 1: the real case constructors re-read it.
     call get_command_argument(1, ctx%input_path)
 
     static_flag = .false.
@@ -150,7 +116,7 @@ contains
   end subroutine read_config
 
   subroutine classify_bc(ctx)
-    !! Mirrors src/backend/cuda/poisson_fft.f90:227-239's four-way split.
+    !! The four-way BC split of src/backend/cuda/poisson_fft.f90.
     type(memcheck_ctx_t), intent(inout) :: ctx
 
     ctx%periodic_x = periodic_dir(ctx%domain_cfg%BC_x)
@@ -172,11 +138,8 @@ contains
     use m_io_backend, only: parse_gpu_write_mode, gpu_write_mode_names, &
                             gpu_write_mode_force_host
 #endif
-    !! Resolve whether this run's snapshot/checkpoint writes would stage
-    !! through a device buffer. The write mode comes from
-    !! parse_gpu_write_mode, the same function init_runtime_options in
-    !! src/io/adios2/io.f90 calls, so an unknown value resolves as in the
-    !! solver.
+    !! Resolves whether snapshot and checkpoint writes stage through a
+    !! device buffer, with the parser the solver uses for the write mode.
     type(memcheck_ctx_t), intent(inout) :: ctx
 #ifdef X3D2_ADIOS2_CUDA
     character(len=64) :: raw_value

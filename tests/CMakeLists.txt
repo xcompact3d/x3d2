@@ -421,11 +421,11 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
     set_tests_properties(${name} PROPERTIES LABELS "verification;cuda")
     if(${mode} STREQUAL build)
       set_tests_properties(${name} PROPERTIES
-        PASS_REGULAR_EXPRESSION "CHECK ng=1: .* - OK"
+        PASS_REGULAR_EXPRESSION "CHECK num_gpus=1: .* - OK"
         FAIL_REGULAR_EXPRESSION "WARNING: peak_fields_lookup|MISMATCH")
     else()
       set_tests_properties(${name} PROPERTIES
-        PASS_REGULAR_EXPRESSION "Requested nproc_dir gives ng=")
+        PASS_REGULAR_EXPRESSION "Requested nproc_dir gives num_gpus=")
     endif()
   endfunction()
   foreach(memcheck_case TGV generic channel)
@@ -474,7 +474,7 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
   # --build; an empty string runs the default mode.
   function(define_memcheck_build_edit_test name sed_expr)
     set(base ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d)
-    set(pass_regex "CHECK ng=1: .* - OK")
+    set(pass_regex "CHECK num_gpus=1: .* - OK")
     set(snippet "true")
     set(mode_flag "--build")
     if(ARGC GREATER 3)
@@ -510,13 +510,13 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
   # and in --static, with the same exit code. TGV's z=256 divides by 16.
   define_memcheck_build_edit_test(memcheck_build_ng16_matches_static
     "s/^nproc_dir *=.*/nproc_dir = 1, 1, 16/"
-    "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck $d/input.x3d --static > $d/static.log 2>&1; rc_s=$?; v_s=$(sed -n 's/^Requested nproc_dir gives ng=16: .* - //p' $d/static.log); v_i=$(sed -n 's/^Requested nproc_dir gives ng=16: .* - //p' $d/build.log); v_r=$(sed -n 's/^ *16 |.*| //p' $d/build.log); if test x$v_s != x && test x$v_s = x$v_i && test x$v_s = x$v_r && test $rc_s -eq $rc; then echo memcheck_build_ng16_matches_static_OK; fi")
+    "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck $d/input.x3d --static > $d/static.log 2>&1; rc_s=$?; v_s=$(sed -n 's/^Requested nproc_dir gives num_gpus=16: .* - //p' $d/static.log); v_i=$(sed -n 's/^Requested nproc_dir gives num_gpus=16: .* - //p' $d/build.log); v_r=$(sed -n 's/^ *16 |.*| //p' $d/build.log); if test x$v_s != x && test x$v_s = x$v_i && test x$v_s = x$v_r && test $rc_s -eq $rc; then echo memcheck_build_ng16_matches_static_OK; fi")
 
   # A requested nproc_dir that splits x must stay UNSUPPORTED after the real
   # build: exit code 2, never the FITS of the 1 GPU measurement.
   define_memcheck_build_edit_test(memcheck_build_x_split_exit2
     "s/^nproc_dir *=.*/nproc_dir = 2, 1, 1/"
-    "if test $rc -eq 2 && grep -qF 'only nproc_dir = [1,1,ng] is supported by the CUDA backend' $d/build.log; then echo memcheck_build_x_split_exit2_OK; fi")
+    "if test $rc -eq 2 && grep -qF 'only nproc_dir = [1,1,num_gpus] is supported by the CUDA backend' $d/build.log; then echo memcheck_build_x_split_exit2_OK; fi")
 
   # A 2048^3 grid split over 64 GPUs fits the card per GPU, but the
   # single-GPU FFT probe on the whole grid does not. The default mode must
@@ -524,12 +524,12 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
   # an error stop or an NVSHMEM abort.
   define_memcheck_build_edit_test(memcheck_default_TGV_probe_skipped
     "s/^dims_global *=.*/dims_global = 2048, 2048, 2048/;s/^nproc_dir *=.*/nproc_dir = 1, 1, 64/"
-    "if test $rc -le 2 && grep -qF 'FFT workspace is formula-only' $d/build.log && grep -q 'Requested nproc_dir gives ng=64' $d/build.log && ! grep -qi 'error stop\\|nvshmem' $d/build.log; then echo memcheck_default_TGV_probe_skipped_OK; fi"
+    "if test $rc -le 2 && grep -qF 'FFT workspace is formula-only' $d/build.log && grep -q 'Requested nproc_dir gives num_gpus=64' $d/build.log && ! grep -qi 'error stop\\|nvshmem' $d/build.log; then echo memcheck_default_TGV_probe_skipped_OK; fi"
     "")
 
   # The report prints the CUDA context line once, and in the default mode it
-  # marks each table row with how its overhead was obtained: the ng=1 row
-  # measured, the ng>1 rows extrapolated by 1/ng, with the note printed. The
+  # marks each table row with how its overhead was obtained: the num_gpus=1 row
+  # measured, the num_gpus>1 rows extrapolated by 1/num_gpus, with the note printed. The
   # sed edit only changes a comment line, so the input stays the TGV as is.
   define_memcheck_build_edit_test(memcheck_default_TGV_context_line_once
     "s/^! Flow case$/! Flow case, test copy/"
@@ -537,16 +537,16 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
     "")
   define_memcheck_build_edit_test(memcheck_default_TGV_extrapolation_note
     "s/^! Flow case$/! Flow case, test copy/"
-    "if grep -qF '(ng>1 rows extrapolate the single-GPU probe by 1/ng.)' $d/build.log && grep -q '^ *1 | .*| measured *| ' $d/build.log && grep -q '^ *2 | .*| extrapolated *| ' $d/build.log; then echo memcheck_default_TGV_extrapolation_note_OK; fi"
+    "if grep -qF '(num_gpus>1 rows extrapolate the single-GPU probe by 1/num_gpus.)' $d/build.log && grep -q '^ *1 | .*| measured *| ' $d/build.log && grep -q '^ *2 | .*| extrapolated *| ' $d/build.log; then echo memcheck_default_TGV_extrapolation_note_OK; fi"
     "")
 
   # A 1024^3 grid on the requested nproc_dir 1,1,2 is over the limit, and
   # the single-GPU probe on the whole grid does not fit in free memory, so
-  # it is skipped. The ng=8 row still fits the card on the formula alone:
+  # it is skipped. The num_gpus=8 row still fits the card on the formula alone:
   # that row carries the formula-only mark and the table prints its note.
   define_memcheck_build_edit_test(memcheck_default_TGV_formula_only_row
     "s/^dims_global *=.*/dims_global = 1024, 1024, 1024/"
-    "if grep -q 'Requested nproc_dir gives ng=2: .* - DOES_NOT_FIT' $d/build.log && grep -q '^ *8 | .*| formula-only *| FITS' $d/build.log && grep -qF '(formula-only rows use the formula estimate' $d/build.log; then echo memcheck_default_TGV_formula_only_row_OK; fi"
+    "if grep -q 'Requested nproc_dir gives num_gpus=2: .* - DOES_NOT_FIT' $d/build.log && grep -q '^ *8 | .*| formula-only *| FITS' $d/build.log && grep -qF '(formula-only rows use the formula estimate' $d/build.log; then echo memcheck_default_TGV_formula_only_row_OK; fi"
     "")
 
   # A real --build run must not clobber whatever CWD it was launched from,
@@ -615,7 +615,7 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
       "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${memcheck_gpuio_input} --static")
     set_tests_properties(memcheck_gpuio_static_TGV_unknown_mode PROPERTIES LABELS "verification;cuda"
       ENVIRONMENT "X3D2_ADIOS2_GPU_WRITE_MODE=bogus"
-      PASS_REGULAR_EXPRESSION "MiB/GPU at ng=1 \\(write mode auto, "
+      PASS_REGULAR_EXPRESSION "MiB/GPU at num_gpus=1 \\(write mode auto, "
       FAIL_REGULAR_EXPRESSION "write mode bogus")
   endif()
 endif()

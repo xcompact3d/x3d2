@@ -1,40 +1,15 @@
 program x3d2_memcheck
-  !! Standalone GPU memory footprint estimator AND real build probe for an
-  !! x3d2 .x3d input file, in one tool:
-  !!   (no flag)  the formula estimate (pure formula, no GPU build) + the
-  !!              cuFFTMp probe (a throwaway cuFFT/cuFFTMp plan query, needs
-  !!              a GPU but builds nothing else) unless the formula estimate
-  !!              already answers DOES_NOT_FIT.
-  !!   --static   the formula estimate only - never touches cuFFT, instant,
-  !!              deterministic.
-  !!   --build    the above, then the real build - a REAL case build + one
-  !!              substep on 1 GPU, measured via cudaMemGetInfo, with a
-  !!              self verifying drift check against the static
-  !!              peak_fields_lookup table and a CHECK line comparing the
-  !!              static estimate to the real measurement. Runs in the SAME
-  !!              process (unlike the two binary design this replaced): no
-  !!              nested mpirun limitation (mpirun refuses a second mpirun
-  !!              from a process it already launched, which used to mean a
-  !!              separate test_memory_estimate_cuda_1 binary had to be run
-  !!              by hand to confirm a BORDERLINE result).
-  !!              The real build itself runs inside a throwaway
-  !!              x3d2-memcheck-build.<pid> subdirectory of the invoking
-  !!              directory, removed once the build finishes (make_scratch
-  !!              in m_memcheck_scratch says why, and how a relative input
-  !!              path is handled).
-  !!
-  !! Also estimates the GPU-aware ADIOS2 I/O staging buffer (one extra
-  !! unpadded local field held on the device while a snapshot/checkpoint
-  !! field is packed - src/io/adios2/io.f90) whenever a device-side write is
-  !! in play, added analytically via m_memory_estimate's
-  !! gpu_io_staging_bytes rather than measured, since --build's real case
-  !! never performs a snapshot/checkpoint write. Which mode is in play
-  !! follows the X3D2_ADIOS2_GPU_WRITE_MODE environment variable, resolved
-  !! the same way src/io/adios2/io.f90's own runtime option does (see
-  !! resolve_gpu_io_mode in m_memcheck_context).
-  !!
-  !! Usage: x3d2-memcheck <input.x3d> [--static | --build [--extensive
-  !!        <n_substeps>]]
+  !! Standalone GPU memory estimator for an x3d2 .x3d input file.
+  !!   --static   The formula estimate only.
+  !!   (no flag)  The formula estimate, then an FFT plan probe on the whole
+  !!              grid.
+  !!   --build    The above, then a real case build and one substep on 1 GPU,
+  !!              measured with cudaMemGetInfo, and a CHECK line against the
+  !!              estimate.
+  !! The real build runs in the same process, in a scratch directory under
+  !! the invoking directory. The GPU-aware IO staging buffer is added by
+  !! formula.
+  !! Usage: x3d2-memcheck <input.x3d> [--static | --build [--extensive <n>]]
   use mpi
   use m_common, only: i8
   use m_memory_estimate, only: output_field_active, peak_fields_lookup
@@ -85,10 +60,7 @@ program x3d2_memcheck
 
   call MPI_Finalize(ierr)
 
-  ! Exit code mirrors the final verdict: 0=FITS, 1=BORDERLINE,
-  ! 2=DOES_NOT_FIT (also covers UNSUPPORTED - an unsupported nproc_dir
-  ! request, via the default case below, since neither fits nor merely
-  ! borderline is the right signal for it).
+  ! Exit code: 0 FITS, 1 BORDERLINE, 2 DOES_NOT_FIT or UNSUPPORTED.
   select case (trim(ctx%final_verdict))
   case ('FITS')
     call exit(0)
@@ -101,8 +73,7 @@ program x3d2_memcheck
 contains
 
   subroutine no_device_exit()
-    !! Common tail of the no-device exit above (which prints its own
-    !! reason first): shut MPI down cleanly, then error stop.
+    !! Shuts MPI down, then stops.
     integer :: ierr_finalize
 
     call MPI_Finalize(ierr_finalize)
