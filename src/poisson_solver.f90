@@ -49,7 +49,7 @@ program x3d2_poisson_solver
   class(allocator_t), pointer :: allocator
   type(allocator_t), pointer :: host_allocator
   type(mesh_t), target :: mesh
-  type(dirps_t), pointer :: xdirps, ydirps, zdirps
+  type(dirps_t) :: xdirps, ydirps, zdirps
 
   type(backend_setup_t), target :: setup
 
@@ -94,7 +94,6 @@ program x3d2_poisson_solver
   dims = mesh%get_dims(CELL)
 
   ! ---- tdsops and Poisson FFT setup ----
-  allocate (xdirps, ydirps, zdirps)
   xdirps%dir = DIR_X
   ydirps%dir = DIR_Y
   zdirps%dir = DIR_Z
