@@ -229,19 +229,23 @@ function(define_command_test test_name np labels pass_regex exe)
   set(extra_args "${ARGN}")
   string(REPLACE ";" " " extra_args_str "${extra_args}")
 
+  # A test with a pass_regex needs a clean exit and the fixed string in the
+  # output.  PASS_REGULAR_EXPRESSION alone accepts a failed run.
+  set(wrapper "")
+  if(pass_regex)
+    set(wrapper "${CMAKE_CURRENT_SOURCE_DIR}/run_expect_output.sh '${pass_regex}' ")
+  endif()
+
   if(NOT WITH_MPI)
-    add_test(NAME ${test_name} COMMAND sh -c "${exe} ${extra_args_str}")
+    add_test(NAME ${test_name} COMMAND sh -c "${wrapper}${exe} ${extra_args_str}")
   elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
     add_test(NAME ${test_name}
-      COMMAND sh -c "srun -n ${np} ${exe} ${extra_args_str}")
+      COMMAND sh -c "${wrapper}srun -n ${np} ${exe} ${extra_args_str}")
   else()
-    add_test(NAME ${test_name} COMMAND sh -c "mpirun --oversubscribe -np ${np} ${exe} ${extra_args_str}")
+    add_test(NAME ${test_name} COMMAND sh -c "${wrapper}mpirun --oversubscribe -np ${np} ${exe} ${extra_args_str}")
   endif()
 
   set_tests_properties(${test_name} PROPERTIES LABELS "${labels}")
-  if(pass_regex)
-    set_tests_properties(${test_name} PROPERTIES PASS_REGULAR_EXPRESSION "${pass_regex}")
-  endif()
 endfunction()
 
 function(define_performance_test testfile np backend)
@@ -425,7 +429,7 @@ function(define_backend_tests backend)
     # The driver has its backend fixed at compile time, so register it for
     # the CUDA build only here; the CPU OMP registration is further down.
     if(${backend} STREQUAL cuda)
-      define_command_test(poisson_solver_standalone_000_cuda 2 "unit;standalone" "Solve time \\(min\\):" ../bin/x3d2_poisson_solver 128 64 32)
+      define_command_test(poisson_solver_standalone_000_cuda 2 "unit;standalone" "Solve time (min):" ../bin/x3d2_poisson_solver 128 64 32)
     endif()
   endif()
 
@@ -489,7 +493,7 @@ endif()
 # The driver has its backend fixed at compile time, so register it as OMP only
 # for a CPU OMP build.
 if(WITH_2DECOMPFFT AND _cpu_omp_backend)
-  define_command_test(poisson_solver_standalone_000_omp 2 "unit;standalone" "Solve time \\(min\\):" ../bin/x3d2_poisson_solver 128 64 32)
+  define_command_test(poisson_solver_standalone_000_omp 2 "unit;standalone" "Solve time (min):" ../bin/x3d2_poisson_solver 128 64 32)
 endif()
 
 # Heavier nightly regression case (opt-in; kept out of PR CI to stay fast).
