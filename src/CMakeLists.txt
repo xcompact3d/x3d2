@@ -156,6 +156,10 @@ add_executable(xcompact xcompact.f90)
 target_link_libraries(xcompact PRIVATE x3d2_backends)
 target_link_libraries(xcompact PRIVATE x3d2)
 
+add_executable(x3d2_poisson_solver poisson_solver.f90)
+target_link_libraries(x3d2_poisson_solver PRIVATE x3d2_backends x3d2_poisson
+                      OpenMP::OpenMP_Fortran)
+
 # 3. Set compiler specific flags and options
 if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR
          ${CMAKE_Fortran_COMPILER_ID} STREQUAL "LLVMFlang" OR
@@ -222,6 +226,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   endif()
   # Selects the CUDA backend in backend/setup.f90
   target_compile_options(x3d2_backends PRIVATE "-DCUDA")
+  target_compile_options(x3d2_poisson_solver PRIVATE "-DCUDA")
   # NVTX ranges label the ADIOS2 write paths in Nsight Systems (see
   # io/nvtx.f90). Without ADIOS2 there is no output to label.
   if(WITH_ADIOS2)
@@ -234,6 +239,7 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     endif()
   endif()
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
+  target_compile_options(x3d2_poisson_solver PRIVATE "-DOMP_TGT")
   add_definitions("-DOMP_TGT")
   # backend/omptgt/device_info.f90 opens the vendor runtime with dlopen
   target_link_libraries(x3d2 PUBLIC ${CMAKE_DL_LIBS})
@@ -270,6 +276,7 @@ if(WITH_MPI)
   target_link_libraries(x3d2_poisson PRIVATE MPI::MPI_Fortran)
   target_link_libraries(x3d2_backends PRIVATE MPI::MPI_Fortran)
   target_link_libraries(xcompact PRIVATE MPI::MPI_Fortran)
+  target_link_libraries(x3d2_poisson_solver PRIVATE MPI::MPI_Fortran)
 endif()
 
 # 5. Set thirdparty libary dependencies
@@ -277,6 +284,7 @@ if(WITH_2DECOMPFFT)
   message(STATUS "Using the FFT poisson solver with 2decomp&fft support on the OpenMP backend")
   target_link_libraries(x3d2_poisson PRIVATE decomp2d)
   target_link_libraries(x3d2_backends PRIVATE decomp2d)
+  target_link_libraries(x3d2_poisson_solver PRIVATE decomp2d)
   target_compile_options(x3d2_poisson PRIVATE "-DWITH_2DECOMPFFT")
   target_compile_options(x3d2_backends PRIVATE "-DWITH_2DECOMPFFT")
 endif()
