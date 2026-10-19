@@ -120,7 +120,6 @@ program x3d2_poisson_solver
   sum_time = 0.0_dp
 
   do irep = 1, repeat_count
-    call fill_rhs(host_field)
     call backend%set_field_data(f_device, host_field%data, DIR_C)
     call f_device%set_data_loc(CELL)
 
