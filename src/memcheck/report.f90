@@ -7,7 +7,7 @@ module m_memcheck_report
                                  requested_unsupported_reason, &
                                  estimate_for_num_gpus, prepare_probe, &
                                  basis_extrapolated, &
-                                 basis_formula, basis_name
+                                 basis_formula, basis_predicted, basis_name
   implicit none
 
   private
@@ -134,6 +134,9 @@ contains
       if (basis == basis_extrapolated) then
         print '(a)', '  (num_gpus>1 rows extrapolate the single-GPU probe by &
           &1/num_gpus.)'
+      else if (basis == basis_predicted) then
+        print '(a)', '  (FFT heap is predicted: the full-grid probe did not &
+          &fit, the plan query gave the workspace size.)'
       else if (basis == basis_formula) then
         if (trim(ctx%run_mode) == 'STATIC') then
           print '(a)', '  (Formula estimate only: --static runs no &
@@ -158,7 +161,7 @@ contains
     integer :: k, num_gpus, local_dims(3)
     real(dp) :: per_gpu_gib, workspace_gib, overhead_gib, io_gib
     integer :: basis
-    logical :: any_extrapolated, any_formula
+    logical :: any_extrapolated, any_formula, any_predicted
     character(len=12) :: verdict
     character(len=96) :: reason
 
@@ -166,6 +169,7 @@ contains
     smallest_fits = 0
     any_extrapolated = .false.
     any_formula = .false.
+    any_predicted = .false.
     do k = 1, size(n_gpu_list)
       num_gpus = n_gpu_list(k)
       reason = num_gpus_unsupported_reason(ctx, num_gpus)
@@ -194,6 +198,7 @@ contains
                            verdict)
       if (basis == basis_extrapolated) any_extrapolated = .true.
       if (basis == basis_formula) any_formula = .true.
+      if (basis == basis_predicted) any_predicted = .true.
       if (smallest_fits == 0 .and. trim(verdict) == 'FITS') &
         smallest_fits = num_gpus
     end do
@@ -204,6 +209,9 @@ contains
     if (any_formula) &
       print '(a)', '(formula-only rows use the formula estimate for the FFT &
         &overhead.)'
+    if (any_predicted) &
+      print '(a)', '(predicted rows use the heap predicted by the plan query &
+        &for the FFT overhead.)'
   end subroutine print_num_gpus_table
 
   subroutine report(ctx)
@@ -218,9 +226,15 @@ contains
       ctx%card_free_gib, ' GiB free now)'
     print '(a,f0.2,a)', 'CUDA context (used at start): ', &
       to_gib(ctx%device%context_bytes()), ' GiB'
-    print '(a,f0.2,a,f0.2,a)', 'Calibration on this GPU: CUDA context ', &
-      to_gib(ctx%device%probe%context), ' GiB, NVSHMEM heap ', &
-      to_gib(ctx%device%probe%heap), ' GiB.'
+    if (ctx%device%heap_predicted) then
+      print '(a,f0.2,a,f0.2,a)', 'Calibration on this GPU: CUDA context ', &
+        to_gib(ctx%device%probe%context), ' GiB, NVSHMEM heap ', &
+        to_gib(ctx%device%heap_bytes()), ' GiB (predicted).'
+    else
+      print '(a,f0.2,a,f0.2,a)', 'Calibration on this GPU: CUDA context ', &
+        to_gib(ctx%device%probe%context), ' GiB, NVSHMEM heap ', &
+        to_gib(ctx%device%heap_bytes()), ' GiB.'
+    end if
     print '(a,i0)', 'peak_fields (static estimate): ', ctx%peak_fields
     call print_io_staging_line(ctx)
     select case (trim(ctx%run_mode))

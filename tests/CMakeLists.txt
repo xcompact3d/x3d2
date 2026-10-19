@@ -530,13 +530,14 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
   # A 2048^3 grid split over 64 GPUs fits the card per GPU, but the full-grid
   # probe on one GPU needs more than the free memory, so the tool runs no
   # full-grid probe: the plan would abort in NVSHMEM and end the tool. The
-  # default mode must print the "no full-grid probe" note and the num_gpus=64
-  # line, and exit with a verdict code (0 to 2, exit 0 is legitimate as the
-  # grid fits per GPU) without an error stop or an NVSHMEM abort. The
-  # calibration line is the only line that may name NVSHMEM.
+  # default mode must print the "no full-grid probe" note, mark the table
+  # rows predicted, print the num_gpus=64 line, and exit with a verdict code
+  # (0 to 2, exit 0 is legitimate as the grid fits per GPU) without an error
+  # stop or an NVSHMEM abort. The calibration line is the only line that may
+  # name NVSHMEM.
   define_memcheck_build_edit_test(memcheck_default_TGV_probe_skipped
     "s/^dims_global *=.*/dims_global = 2048, 2048, 2048/;s/^nproc_dir *=.*/nproc_dir = 1, 1, 64/"
-    "if test $rc -le 2 && grep -qF 'no full-grid probe: the plans need ' $d/build.log && grep -q 'Requested nproc_dir gives num_gpus=64' $d/build.log && ! grep -qi 'error stop' $d/build.log && ! grep -i nvshmem $d/build.log | grep -qv 'Calibration on this GPU'; then echo memcheck_default_TGV_probe_skipped_OK; fi"
+    "if test $rc -le 2 && grep -qF 'no full-grid probe: the plans need ' $d/build.log && grep -qF 'predicted rows follow' $d/build.log && grep -q '| predicted *| ' $d/build.log && grep -q 'Requested nproc_dir gives num_gpus=64' $d/build.log && ! grep -qi 'error stop' $d/build.log && ! grep -i nvshmem $d/build.log | grep -qv 'Calibration on this GPU'; then echo memcheck_default_TGV_probe_skipped_OK; fi"
     "")
 
   # The report prints the CUDA context line once, and in the default mode it

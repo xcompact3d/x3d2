@@ -13,7 +13,7 @@ module m_memcheck_estimate
   public :: to_gib, classify, num_gpus_unsupported_reason, &
             requested_unsupported_reason, estimate_for_num_gpus, &
             prepare_probe, fields_plus_halo_bytes_n, n_halo, basis_measured, &
-            basis_extrapolated, basis_formula, basis_name
+            basis_extrapolated, basis_formula, basis_predicted, basis_name
 
   !> <80% of card memory: FITS. 80-95%: BORDERLINE. >95%: DOES_NOT_FIT.
   real(dp), parameter :: FITS_FRACTION = 0.80_dp
@@ -21,13 +21,16 @@ module m_memcheck_estimate
   integer, parameter :: n_halo = 4
 
   !> How the overhead of an estimate was obtained: from the num_gpus=1 probe or
-  !> measurement, that scaled to num_gpus>1, or from the formula alone.
+  !> measurement, that scaled to num_gpus>1, from the formula alone, or from
+  !> the formula with the heap predicted by the plan query (the full-grid
+  !> probe did not fit).
   integer, parameter :: basis_measured = 1, basis_extrapolated = 2, &
-                        basis_formula = 3
-  character(len=12), parameter :: basis_name(3) = [character(len=12) :: &
+                        basis_formula = 3, basis_predicted = 4
+  character(len=12), parameter :: basis_name(4) = [character(len=12) :: &
                                                    'measured', &
                                                    'extrapolated', &
-                                                   'formula-only']
+                                                   'formula-only', &
+                                                   'predicted']
 
 contains
 
@@ -180,10 +183,12 @@ contains
       else
         try_full = free_b >= ctx%device%plan_need_bytes + &
                    fft_probe_margin_bytes
-        if (.not. try_full) &
+        if (.not. try_full) then
           write (ctx%probe_reason, '(a,f0.2,a,f0.2,a)') 'no full-grid probe: &
             &the plans need ', to_gib(ctx%device%plan_need_bytes), ' GiB, &
             &the card has ', to_gib(free_b), ' GiB free'
+          call ctx%device%use_predicted_heap()
+        end if
       end if
     end if
     ctx%probe_plan = merge('full ', 'small', try_full)
@@ -257,14 +262,18 @@ contains
 
     if (len_trim(ctx%probe_reason) > 0 .and. .not. ctx%probe_note_shown .and. &
         floor_gib <= DOES_NOT_FIT_FRACTION*ctx%card_gib) then
-      print '(a)', trim(ctx%probe_reason)//'; formula-only rows follow.'
+      if (ctx%device%heap_predicted) then
+        print '(a)', trim(ctx%probe_reason)//'; predicted rows follow.'
+      else
+        print '(a)', trim(ctx%probe_reason)//'; formula-only rows follow.'
+      end if
       ctx%probe_note_shown = .true.
     end if
 
     if (floor_gib > DOES_NOT_FIT_FRACTION*ctx%card_gib .or. &
         .not. ctx%device%probe_ran()) then
       per_gpu_gib = floor_gib
-      basis = basis_formula
+      basis = merge(basis_predicted, basis_formula, ctx%device%heap_predicted)
       if (present(overhead_gib)) &
         overhead_gib = to_gib(ctx%device%overhead_floor_bytes( &
                               num_gpus, ctx%bc_is_110)) + io_gib_local

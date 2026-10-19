@@ -39,9 +39,17 @@ module m_cuda_memcheck_device
     logical, public :: full_failed = .false.
     integer, public :: full_failed_stat = 0
     !> The memory the FFT plans of the full grid need, from the query-only
-    !> mode (see query_plan_need). For cuFFTMp it is the predicted heap with
-    !> the workspace and the xtdesc buffer.
+    !> mode (see query_plan_need). For cuFFTMp it is the predicted heap plus
+    !> the xtdesc buffer rounded up to 0.5 GiB.
     integer(i8), public :: plan_need_bytes = 0_i8
+    !> The query-only mode used cuFFTMp, so the two sizes below are valid.
+    logical :: plan_need_cufftmp = .false.
+    !> The predicted heap without the xtdesc buffer, the same definition as
+    !> probe%heap, and the xtdesc buffer apart, as probe%xtdesc.
+    integer(i8) :: plan_heap_bytes = 0_i8, plan_xtdesc_bytes = 0_i8
+    !> The estimate takes the heap and the xtdesc buffer from the two sizes
+    !> above instead of the probe that ran (see use_predicted_heap).
+    logical, public :: heap_predicted = .false.
     !> Card memory used and free right after cudaSetDevice.
     integer(i8) :: start_used_bytes = 0_i8, start_free_bytes = 0_i8
     !> The full-grid probe was tried, and it returned a result.
@@ -61,6 +69,8 @@ module m_cuda_memcheck_device
     procedure :: make_backend
     procedure :: ensure_probe
     procedure :: query_plan_need
+    procedure :: use_predicted_heap
+    procedure :: heap_bytes
     procedure :: capture_solver_info
     procedure :: footprint_bytes
     procedure :: fft_path_known
@@ -134,7 +144,12 @@ contains
     nbytes8 = self%probe%context
     ! The worksize of a cuFFTMp plan is carved out of the heap.
     if (.not. bc_is_110) &
-      nbytes8 = nbytes8 + int(real(self%probe%heap, dp)/real(num_gpus, dp), i8)
+      nbytes8 = nbytes8 + &
+                int(real(self%heap_bytes(), dp)/real(num_gpus, dp), i8)
+    ! The predicted xtdesc buffer counts at num_gpus=1 only, as in
+    ! overhead_query_bytes.
+    if (self%heap_predicted .and. num_gpus == 1) &
+      nbytes8 = nbytes8 + self%plan_xtdesc_bytes
   end function overhead_floor_bytes
 
   subroutine ensure_probe(self, bc_is_100, bc_is_110, cdims, try_full)
@@ -197,11 +212,34 @@ contains
     if (stat /= 0) return
     ! A plain cuFFT plan holds its workspace in the plan memory.
     self%plan_need_bytes = heap
-    if (used_cufftmp) &
-      self%plan_need_bytes = predicted_fft_heap_bytes(heap, worksize) + &
-                             round_up_bytes(xtdesc_bytes, &
-                                            fft_xtdesc_step_bytes)
+    self%plan_need_cufftmp = used_cufftmp
+    if (used_cufftmp) then
+      self%plan_heap_bytes = predicted_fft_heap_bytes(heap, worksize)
+      self%plan_xtdesc_bytes = round_up_bytes(xtdesc_bytes, &
+                                              fft_xtdesc_step_bytes)
+      self%plan_need_bytes = self%plan_heap_bytes + self%plan_xtdesc_bytes
+    end if
   end subroutine query_plan_need
+
+  subroutine use_predicted_heap(self)
+    !! Makes the estimate take the heap predicted by query_plan_need, for the
+    !! case that the full-grid probe does not run. A plain cuFFT plan has no
+    !! heap, so it stays as it is.
+    class(cuda_memcheck_device_t), intent(inout) :: self
+
+    self%heap_predicted = self%plan_need_cufftmp
+  end subroutine use_predicted_heap
+
+  function heap_bytes(self) result(nbytes8)
+    !! The NVSHMEM heap the estimate uses: the predicted heap when
+    !! heap_predicted is set, else the heap of the probe that ran. Both are
+    !! without the xtdesc buffer.
+    class(cuda_memcheck_device_t), intent(in) :: self
+    integer(i8) :: nbytes8
+
+    nbytes8 = self%probe%heap
+    if (self%heap_predicted) nbytes8 = self%plan_heap_bytes
+  end function heap_bytes
 
   subroutine run_probe(self, bc_is_100, bc_is_110, cdims, res, stat)
     !! The single-rank FFT probe on the cell dimensions cdims. The context
