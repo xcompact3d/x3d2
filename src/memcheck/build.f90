@@ -277,7 +277,7 @@ contains
     !! case build writes monitoring.csv in the working directory.
     type(memcheck_ctx_t), intent(inout) :: ctx
     real(dp) :: used_gib, workspace_gib_measured, ws_guess
-    real(dp) :: pct_error, estimate_ng1_excl_io_gib, residual_gib
+    real(dp) :: pct_error, estimate_ng1_excl_io_gib
     character(len=8) :: check_word
     integer :: measured_peak_fields
     logical :: ibm_missing, build_scratch_ok
@@ -300,18 +300,6 @@ contains
         '% of the FREE card memory (', ctx%card_free_gib, ' GiB free); the &
         &estimate above stands.'
       return
-    end if
-
-    ! Printed under --build only, right before the real build: the only mode
-    ! where a second cuFFTMp plan lifecycle follows in the same process, so
-    ! a non-zero residual would mean the real build's own measurement is
-    ! inflated by whatever the cuFFTMp probe left behind.
-    if (ctx%device%query_residual_gib(residual_gib)) then
-      call print_rule('-')
-      print '(a,f0.2,a)', 'Residual after plan query: ', &
-        residual_gib, ' GiB (should be ~0 if cufftDestroy &
-        &released it; if not, the real build below may double-reserve the &
-        &NVSHMEM heap).'
     end if
 
     call validate_build_inputs(ctx, build_scratch_ok)

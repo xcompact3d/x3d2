@@ -40,6 +40,13 @@ module m_memcheck_context
     !> The num_gpus=1 row of the estimate: the CHECK line of --build
     !> compares it with the measurement.
     real(dp) :: estimate_ng1_gib
+    !> The FFT probe plan: 'full' when the estimate uses the full-grid
+    !> probe's result, else 'small' (also when the full-grid probe failed).
+    !> probe_reason says why the full-grid probe has no result, and
+    !> probe_note_shown is set once estimate_for_num_gpus has printed it.
+    character(len=5) :: probe_plan = 'small'
+    character(len=96) :: probe_reason = ''
+    logical :: probe_note_shown = .false.
     !> The verdict of the requested nproc_dir, which sets the exit code.
     character(len=12) :: final_verdict
     !> The IO staging term (GiB) at num_gpus=1.

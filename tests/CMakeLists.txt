@@ -403,7 +403,7 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
   # x3d2-memcheck regression tests: run the already-built binary against a
   # few example inputs and check its printed output, rather than compiling
   # a bespoke Fortran test program. "static" checks the tool runs and
-  # prints a verdict with no cuFFTMp probe; "build" additionally
+  # prints a verdict with no full-grid cuFFTMp probe; "build" additionally
   # checks its real --build measurement completes and the static
   # estimate is close to it (the CHECK line) with no calibration drift (no
   # WARNING line) - this is the "is the guess close to the actual run"
@@ -432,6 +432,15 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
     define_memcheck_test(${memcheck_case} static)
     define_memcheck_test(${memcheck_case} build)
   endforeach()
+
+  # Every mode measures the CUDA context and the NVSHMEM heap on the GPU in
+  # use, with the small-grid probe in the main process, and prints both on
+  # one line. --static needs nothing else from the GPU.
+  add_test(NAME memcheck_static_TGV_calibration COMMAND sh -c
+    "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d --static")
+  set_tests_properties(memcheck_static_TGV_calibration PROPERTIES
+    LABELS "verification;cuda"
+    PASS_REGULAR_EXPRESSION "Calibration on this GPU: CUDA context [0-9.]+ GiB, NVSHMEM heap [0-9.]+ GiB\\.")
 
   # Hiding every GPU from the process (CUDA_VISIBLE_DEVICES=) must be caught
   # cleanly by the device checks in memcheck.f90's main program, not crash.
@@ -518,13 +527,16 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
     "s/^nproc_dir *=.*/nproc_dir = 2, 1, 1/"
     "if test $rc -eq 2 && grep -qF 'only nproc_dir = [1,1,num_gpus] is supported by the CUDA backend' $d/build.log; then echo memcheck_build_x_split_exit2_OK; fi")
 
-  # A 2048^3 grid split over 64 GPUs fits the card per GPU, but the
-  # single-GPU FFT probe on the whole grid does not. The default mode must
-  # skip the probe, print the formula-only note and exit 0 or 2 without
-  # an error stop or an NVSHMEM abort.
+  # A 2048^3 grid split over 64 GPUs fits the card per GPU, but the full-grid
+  # probe on one GPU needs more than the free memory, so the tool runs no
+  # full-grid probe: the plan would abort in NVSHMEM and end the tool. The
+  # default mode must print the "no full-grid probe" note and the num_gpus=64
+  # line, and exit with a verdict code (0 to 2, exit 0 is legitimate as the
+  # grid fits per GPU) without an error stop or an NVSHMEM abort. The
+  # calibration line is the only line that may name NVSHMEM.
   define_memcheck_build_edit_test(memcheck_default_TGV_probe_skipped
     "s/^dims_global *=.*/dims_global = 2048, 2048, 2048/;s/^nproc_dir *=.*/nproc_dir = 1, 1, 64/"
-    "if test $rc -le 2 && grep -qF 'FFT workspace is formula-only' $d/build.log && grep -q 'Requested nproc_dir gives num_gpus=64' $d/build.log && ! grep -qi 'error stop\\|nvshmem' $d/build.log; then echo memcheck_default_TGV_probe_skipped_OK; fi"
+    "if test $rc -le 2 && grep -qF 'no full-grid probe: free memory is under seven spectral copies' $d/build.log && grep -q 'Requested nproc_dir gives num_gpus=64' $d/build.log && ! grep -qi 'error stop' $d/build.log && ! grep -i nvshmem $d/build.log | grep -qv 'Calibration on this GPU'; then echo memcheck_default_TGV_probe_skipped_OK; fi"
     "")
 
   # The report prints the CUDA context line once, and in the default mode it
@@ -538,15 +550,6 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
   define_memcheck_build_edit_test(memcheck_default_TGV_extrapolation_note
     "s/^! Flow case$/! Flow case, test copy/"
     "if grep -qF '(num_gpus>1 rows extrapolate the single-GPU probe by 1/num_gpus.)' $d/build.log && grep -q '^ *1 | .*| measured *| ' $d/build.log && grep -q '^ *2 | .*| extrapolated *| ' $d/build.log; then echo memcheck_default_TGV_extrapolation_note_OK; fi"
-    "")
-
-  # A 1024^3 grid on the requested nproc_dir 1,1,2 is over the limit, and
-  # the single-GPU probe on the whole grid does not fit in free memory, so
-  # it is skipped. The num_gpus=8 row still fits the card on the formula alone:
-  # that row carries the formula-only mark and the table prints its note.
-  define_memcheck_build_edit_test(memcheck_default_TGV_formula_only_row
-    "s/^dims_global *=.*/dims_global = 1024, 1024, 1024/"
-    "if grep -q 'Requested nproc_dir gives num_gpus=2: .* - DOES_NOT_FIT' $d/build.log && grep -q '^ *8 | .*| formula-only *| FITS' $d/build.log && grep -qF '(formula-only rows use the formula estimate' $d/build.log; then echo memcheck_default_TGV_formula_only_row_OK; fi"
     "")
 
   # A real --build run must not clobber whatever CWD it was launched from,

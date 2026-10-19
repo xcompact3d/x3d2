@@ -2,11 +2,11 @@ module m_memcheck_report
   !! Printed report of x3d2-memcheck: header, tables and verdict lines.
   use m_common, only: dp, i8, is_sp
   use m_memcheck_context, only: memcheck_ctx_t
-  use m_cuda_memcheck_device, only: busy_card_gib
   use m_memory_estimate, only: gpu_io_staging_bytes
   use m_memcheck_estimate, only: to_gib, num_gpus_unsupported_reason, &
                                  requested_unsupported_reason, &
-                                 estimate_for_num_gpus, basis_extrapolated, &
+                                 estimate_for_num_gpus, prepare_probe, &
+                                 basis_extrapolated, &
                                  basis_formula, basis_name
   implicit none
 
@@ -136,11 +136,11 @@ contains
           &1/num_gpus.)'
       else if (basis == basis_formula) then
         if (trim(ctx%run_mode) == 'STATIC') then
-          print '(a)', '  (Formula estimate only: --static skips the &
-            &cuFFTMp probe.)'
+          print '(a)', '  (Formula estimate only: --static runs no &
+            &full-grid cuFFTMp probe, only a small calibration probe.)'
         else if (trim(requested_verdict) /= 'DOES_NOT_FIT') then
           print '(a)', '  (FFT workspace is formula-only: the single-GPU &
-            &probe would not fit in free memory.)'
+            &probe did not run or returned a failure status.)'
         else
           print '(a)', '  (Formula floor only: this input is well over &
             &the limit, no cuFFTMp probe was attempted.)'
@@ -209,31 +209,23 @@ contains
     type(memcheck_ctx_t), intent(inout) :: ctx
     integer :: smallest_fits
 
+    call prepare_probe(ctx)
     call print_rule('=')
     print '(a,i0,a,i0,a,i0,a)', 'Input grid: ', ctx%gdims(1), 'x', &
       ctx%gdims(2), 'x', ctx%gdims(3)
     print '(a,f0.2,a,f0.2,a)', 'Card memory: ', ctx%card_gib, ' GiB (', &
       ctx%card_free_gib, ' GiB free now)'
-    if (ctx%card_gib - ctx%card_free_gib > busy_card_gib) &
-      print '(a,f0.2,a)', 'WARNING: ', ctx%card_gib - ctx%card_free_gib, &
-        ' GiB of &
-        &this card is in use by other processes; verdicts are against the &
-        &full card, and the real build only proceeds if it fits in what is &
-        &free.'
-    if (to_gib(ctx%device%context_bytes()) <= busy_card_gib) then
-      print '(a,f0.2,a)', 'CUDA context (used at start): ', &
-        to_gib(ctx%device%context_bytes()), ' GiB - used as the context term'
-    else
-      print '(a,f0.2,a,f0.2,a)', 'CUDA context (used at start): ', &
-        to_gib(ctx%device%context_bytes()), &
-        ' GiB - card busy, using the ', &
-        to_gib(ctx%device%context_term_bytes()), ' GiB A100 constant'
-    end if
+    print '(a,f0.2,a)', 'CUDA context (used at start): ', &
+      to_gib(ctx%device%context_bytes()), ' GiB'
+    print '(a,f0.2,a,f0.2,a)', 'Calibration on this GPU: CUDA context ', &
+      to_gib(ctx%device%probe%context), ' GiB, NVSHMEM heap ', &
+      to_gib(ctx%device%probe%heap), ' GiB.'
     print '(a,i0)', 'peak_fields (static estimate): ', ctx%peak_fields
     call print_io_staging_line(ctx)
     select case (trim(ctx%run_mode))
     case ('STATIC')
-      print '(a)', 'Mode: static (formula estimate only, no cuFFTMp probe)'
+      print '(a)', 'Mode: static (formula estimate only, no full-grid cuFFTMp &
+        &probe, one small calibration probe)'
     case ('BUILD')
       print '(a)', 'Mode: build (formula estimate + cuFFTMp probe, then a &
         &real build)'

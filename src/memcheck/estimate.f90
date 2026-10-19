@@ -11,7 +11,7 @@ module m_memcheck_estimate
   private
   public :: to_gib, classify, num_gpus_unsupported_reason, &
             requested_unsupported_reason, estimate_for_num_gpus, &
-            fields_plus_halo_bytes_n, n_halo, basis_measured, &
+            prepare_probe, fields_plus_halo_bytes_n, n_halo, basis_measured, &
             basis_extrapolated, basis_formula, basis_name
 
   !> <80% of card memory: FITS. 80-95%: BORDERLINE. >95%: DOES_NOT_FIT.
@@ -139,12 +139,56 @@ contains
     end if
   end function spectral_plus_mirror_bytes
 
+  subroutine prepare_probe(ctx)
+    !! Decides the FFT probe once per run and runs it. The small-grid probe
+    !! gives the context and the heap. The full-grid probe follows when the
+    !! mode allows and the card has room for the probe's own size. The
+    !! decision is in ctx%probe_plan and ctx%probe_reason (see ensure_probe
+    !! in the device).
+    type(memcheck_ctx_t), intent(inout) :: ctx
+    logical :: try_full
+    character(len=32) :: status_text
+    integer(i8) :: total_b, free_b, probe_bytes
+
+    call ctx%device%ensure_probe(ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, &
+                                 .false.)
+    ! The full-grid probe builds the FFT plans on the whole global grid, one
+    ! GPU, whatever num_gpus is. Skip it when free memory cannot hold that:
+    ! seven spectral copies plus the fixed overhead. A cuFFTMp plan that does
+    ! not fit aborts inside NVSHMEM and kills this process. On a 40 GB card
+    ! the heap took 2.5 to 5 copies, depending on the grid size, and the
+    ! xtdesc buffer one. The 984^3 probe aborted with a guess of five copies,
+    ! the 1056^3 probe with four and the 1280^3 probe with two, so seven is
+    ! the margin. The gate is decided once per run and does not depend on
+    ! num_gpus.
+    try_full = .false.
+    ctx%probe_reason = ''
+    if (trim(ctx%run_mode) /= 'STATIC') then
+      call ctx%device%mem_info(total_b, free_b)
+      probe_bytes = spectral_slab_bytes(ctx%bc_is_100, ctx%bc_is_110, &
+                                        ctx%cdims, 1)
+      try_full = free_b >= 7_i8*probe_bytes + &
+                 ctx%device%overhead_floor_bytes(1, ctx%bc_is_110)
+      if (.not. try_full) &
+        ctx%probe_reason = 'no full-grid probe: free memory is under seven &
+                           &spectral copies plus the overhead'
+    end if
+    ctx%probe_plan = merge('full ', 'small', try_full)
+    call ctx%device%ensure_probe(ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, &
+                                 try_full)
+    if (ctx%device%full_failed) then
+      write (status_text, '(i0)') ctx%device%full_failed_stat
+      ctx%probe_plan = 'small'
+      ctx%probe_reason = 'full-grid probe returned status '// &
+                         trim(status_text)
+    end if
+  end subroutine prepare_probe
+
   subroutine estimate_for_num_gpus(ctx, num_gpus, per_gpu_gib, basis, &
                                    verdict, workspace_gib, overhead_gib, &
                                    io_gib, used_gib, npeak)
-    !! The per-GPU estimate at num_gpus GPUs. The formula floor comes first.
-    !! The cuFFTMp probe (a throwaway GPU FFT plan) runs only when the floor
-    !! is not over the limit, and never under --static.
+    !! The per-GPU estimate at num_gpus GPUs. The formula floor stands unless
+    !! the full-grid probe gave a result and the floor is not over the limit.
     !! workspace_gib, overhead_gib and io_gib (optional) split the result.
     !! used_gib and npeak (optional) are the num_gpus=1 measurement of the real
     !! build and its peak_fields: the estimate is then that measurement
@@ -159,9 +203,8 @@ contains
     integer, intent(in), optional :: npeak
 
     integer(i8) :: base_bytes, spec_bytes, floor_bytes, overhead_bytes, &
-                   io_bytes, total_b, free_b, probe_bytes
-    real(dp) :: floor_gib, io_gib_local, residual_gib
-    logical :: probe_skipped
+                   io_bytes
+    real(dp) :: floor_gib, io_gib_local
     integer :: peak
 
     peak = ctx%peak_fields
@@ -199,56 +242,26 @@ contains
                   ctx%device%overhead_floor_bytes(num_gpus, ctx%bc_is_110)
     floor_gib = to_gib(floor_bytes)
 
-    ! The cuFFTMp probe builds the FFT plans on the whole global grid, one
-    ! GPU, whatever num_gpus is. Skip it when free memory cannot hold that:
-    ! seven spectral copies plus the fixed overhead. cuFFTMp aborts inside
-    ! NVSHMEM on a plan that does not fit and returns no status. On a 40 GB
-    ! card the heap took 2.5 to 5 copies, depending on the grid size, and
-    ! the xtdesc buffer one. The 984^3 probe aborted with a guess of five
-    ! copies, the 1056^3 probe with four and the 1280^3 probe with two.
-    probe_skipped = .false.
-    if (trim(ctx%run_mode) /= 'STATIC' .and. &
+    if (len_trim(ctx%probe_reason) > 0 .and. .not. ctx%probe_note_shown .and. &
         floor_gib <= DOES_NOT_FIT_FRACTION*ctx%card_gib) then
-      if (.not. ctx%device%query_residual_gib(residual_gib)) then
-        call ctx%device%mem_info(total_b, free_b)
-        probe_bytes = spectral_slab_bytes(ctx%bc_is_100, ctx%bc_is_110, &
-                                          ctx%cdims, 1)
-        probe_skipped = free_b < 7_i8*probe_bytes + &
-                        ctx%device%overhead_floor_bytes(1, ctx%bc_is_110)
-      end if
+      print '(a)', trim(ctx%probe_reason)//'; formula-only rows follow.'
+      ctx%probe_note_shown = .true.
     end if
 
-    if (trim(ctx%run_mode) == 'STATIC' .or. probe_skipped .or. &
-        floor_gib > DOES_NOT_FIT_FRACTION*ctx%card_gib) then
+    if (floor_gib > DOES_NOT_FIT_FRACTION*ctx%card_gib .or. &
+        .not. ctx%device%probe_ran()) then
       per_gpu_gib = floor_gib
       basis = basis_formula
       if (present(overhead_gib)) &
         overhead_gib = to_gib(ctx%device%overhead_floor_bytes( &
                               num_gpus, ctx%bc_is_110)) + io_gib_local
-      if (trim(ctx%run_mode) == 'STATIC' .or. probe_skipped) then
-        ! --static: formula estimate only, no cuFFTMp probe. floor_gib
-        ! IS the estimate here - not just a DOES_NOT_FIT early-return floor
-        ! - so classify it with the full three-way verdict. A skipped probe
-        ! is the same case.
-        verdict = classify(per_gpu_gib, ctx%card_gib)
-      else
-        verdict = 'DOES_NOT_FIT'
-      end if
+      verdict = classify(per_gpu_gib, ctx%card_gib)
       return
     end if
 
-    overhead_bytes = ctx%device%overhead_query_bytes( &
-                     num_gpus, ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, &
-                     ctx%irank == 0)
+    overhead_bytes = ctx%device%overhead_query_bytes(num_gpus)
     per_gpu_gib = to_gib(base_bytes + spec_bytes + overhead_bytes + io_bytes)
-    ! A probe that returned a failure status leaves the formula. A probe at
-    ! num_gpus>1 is the single-GPU probe scaled by 1/num_gpus, not a
-    ! measurement.
-    if (ctx%device%query_residual_gib(residual_gib)) then
-      basis = merge(basis_measured, basis_extrapolated, num_gpus == 1)
-    else
-      basis = basis_formula
-    end if
+    basis = merge(basis_measured, basis_extrapolated, num_gpus == 1)
     if (present(overhead_gib)) &
       overhead_gib = to_gib(overhead_bytes) + io_gib_local
 

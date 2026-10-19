@@ -7,8 +7,9 @@ program x3d2_memcheck
   !!              measured with cudaMemGetInfo, and a CHECK line against the
   !!              estimate.
   !! The real build runs in the same process, in a scratch directory under
-  !! the invoking directory. The GPU-aware IO staging buffer is added by
-  !! formula.
+  !! the invoking directory. The probe gives the CUDA context and the
+  !! NVSHMEM heap of the GPU in use. The GPU-aware IO staging buffer is
+  !! added by formula.
   !! Usage: x3d2-memcheck <input.x3d> [--static | --build [--extensive <n>]]
   use mpi
   use m_common, only: i8
