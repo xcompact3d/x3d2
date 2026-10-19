@@ -226,7 +226,6 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   endif()
   # Selects the CUDA backend in backend/setup.f90
   target_compile_options(x3d2_backends PRIVATE "-DCUDA")
-  target_compile_options(x3d2_poisson_solver PRIVATE "-DCUDA")
   # NVTX ranges label the ADIOS2 write paths in Nsight Systems (see
   # io/nvtx.f90). Without ADIOS2 there is no output to label.
   if(WITH_ADIOS2)
@@ -239,7 +238,6 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     endif()
   endif()
 elseif (${ENABLE_BACKEND} STREQUAL "OMP_TGT")
-  target_compile_options(x3d2_poisson_solver PRIVATE "-DOMP_TGT")
   add_definitions("-DOMP_TGT")
   # backend/omptgt/device_info.f90 opens the vendor runtime with dlopen
   target_link_libraries(x3d2 PUBLIC ${CMAKE_DL_LIBS})

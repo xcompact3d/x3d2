@@ -33,27 +33,12 @@ program x3d2_poisson_solver
 
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, pi, DIR_C, DIR_X, DIR_Y, DIR_Z, CELL, VERT, &
-                      MPI_X3D2_DP
+  use m_common, only: dp, pi, DIR_C, DIR_X, DIR_Y, DIR_Z, CELL, MPI_X3D2_DP
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t
   use m_tdsops_setup, only: allocate_tdsops
 
-#ifdef CUDA
-  use cudafor
-  use m_cuda_allocator, only: cuda_allocator_t
-  use m_cuda_backend, only: cuda_backend_t
-  use m_cuda_common, only: SZ
-#elif defined(OMP_TGT)
-  use omp_lib, only: omp_get_num_devices, omp_set_default_device, &
-                     omp_get_default_device
-  use m_omptgt_common, only: SZ
-  use m_omptgt_allocator, only: omptgt_allocator_t
-  use m_omptgt_backend, only: omptgt_backend_t
-#else
-  use m_omp_backend, only: omp_backend_t
-  use m_omp_common, only: SZ
-#endif
+  use m_backend_setup, only: backend_setup_t, backend_name
 
   implicit none
 
@@ -66,21 +51,9 @@ program x3d2_poisson_solver
   type(mesh_t), target :: mesh
   type(dirps_t), pointer :: xdirps, ydirps, zdirps
 
-#ifdef CUDA
-  type(cuda_backend_t), target :: cuda_backend
-  type(cuda_allocator_t), target :: cuda_allocator
-  integer :: ndevs, devnum
-#elif defined(OMP_TGT)
-  type(omptgt_backend_t), target :: omptgt_backend
-  type(omptgt_allocator_t), target :: omptgt_allocator
-  integer :: ndevs, devnum
-#else
-  type(omp_backend_t), target :: omp_backend
-#endif
-  type(allocator_t), target :: omp_allocator
+  type(backend_setup_t), target :: setup
 
-  character(len=8) :: backend_name
-  integer :: dims_global(3), nproc_dir(3), vert_dims(3), dims(3)
+  integer :: dims_global(3), nproc_dir(3), dims(3)
   integer :: nrank, nproc, ierr
   real(dp) :: L_global(3)
   character(len=9) :: bc_x_name, bc_y_name, bc_z_name
@@ -108,55 +81,13 @@ program x3d2_poisson_solver
   nproc_dir = [1, 1, nproc]
   L_global = [1.0_dp, 1.0_dp, 1.0_dp]
 
-#ifdef CUDA
   mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, &
-                use_2decomp=.false.)
-#else
-  mesh = mesh_t(dims_global, nproc_dir, L_global, BC_x, BC_y, BC_z, &
-                use_2decomp=.true.)
-#endif
+                use_2decomp=(backend_name == 'OMP'))
 
-  ! Get the local vertex dimensions.
-  vert_dims = mesh%get_dims(VERT)
-
-#ifdef CUDA
-  ierr = cudaGetDeviceCount(ndevs)
-  ierr = cudaSetDevice(mod(nrank, ndevs)) ! round-robin
-  ierr = cudaGetDevice(devnum)
-  backend_name = "CUDA"
-
-  cuda_allocator = cuda_allocator_t(vert_dims, SZ)
-  allocator => cuda_allocator
-
-  omp_allocator = allocator_t(vert_dims, SZ)
-  host_allocator => omp_allocator
-
-  cuda_backend = cuda_backend_t(mesh, allocator)
-  backend => cuda_backend
-#elif defined(OMP_TGT)
-  ndevs = omp_get_num_devices()
-  call omp_set_default_device(mod(nrank, ndevs)) ! round-robin
-  devnum = omp_get_default_device()
-  backend_name = "OMP_TGT"
-
-  omptgt_allocator = omptgt_allocator_t(vert_dims, SZ)
-  allocator => omptgt_allocator
-
-  omp_allocator = allocator_t(vert_dims, SZ)
-  host_allocator => omp_allocator
-
-  omptgt_backend = omptgt_backend_t(mesh, allocator)
-  backend => omptgt_backend
-#else
-  backend_name = "OMP"
-
-  omp_allocator = allocator_t(vert_dims, SZ)
-  allocator => omp_allocator
-  host_allocator => omp_allocator
-
-  omp_backend = omp_backend_t(mesh, allocator)
-  backend => omp_backend
-#endif
+  call setup%init(mesh)
+  backend => setup%backend
+  allocator => setup%allocator
+  host_allocator => setup%host_allocator
 
   ! Get the local cell dimensions.
   ! The loops in `fill_rhs` use them.
