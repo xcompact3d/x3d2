@@ -3,6 +3,8 @@ module m_decomp
 
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_INTEGER, MPI_SUM, &
                    MPI_Allreduce, MPI_Cart_coords, MPI_Comm_rank
+  use m_logger, only: log_info, abort_run
+
   implicit none
 
 contains
@@ -30,9 +32,7 @@ contains
     integer :: cart_rank
     integer, dimension(2) :: coords
 
-    if (par%is_root()) then
-      print *, "Domain decomposition by 2decomp&fft"
-    end if
+    call log_info("Domain decomposition by 2decomp&fft")
     nrank = par%nrank
     nproc = par%nproc
 
@@ -43,7 +43,8 @@ contains
     p_row = par%nproc_dir(2)
     p_col = par%nproc_dir(3)
     if (p_row*p_col /= par%nproc) then
-      error stop "Decomposition in X not supported by 2decomp&fft backend"
+      call abort_run("Decomposition in X not supported by 2decomp&fft &
+                     &backend", collective=.true.)
     end if
     periodic_bc(:) = grid%periodic_BC(:)
     call decomp_2d_init(nx, ny, nz, p_row, p_col, periodic_bc)

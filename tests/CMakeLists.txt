@@ -65,7 +65,9 @@ function(define_test_backend_runtime backend)
         target_compile_options(${runtime_target} PRIVATE "-fopenmp")
         target_link_options(${runtime_target} INTERFACE "-fopenmp")
       endif()
+      # ifx takes its offload flags from OpenMP::OpenMP_Fortran instead
       if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray" AND
+         NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" AND
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
         target_compile_options(${runtime_target} PRIVATE
@@ -145,6 +147,7 @@ function(define_test testfile np backend)
         target_link_options(${test_name} PRIVATE "-fopenmp")
       endif()
       if(NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray" AND
+         NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM" AND
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "NVHPC" AND
          NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
         target_compile_options(${test_name} PRIVATE "--offload-arch=${BACKEND_ARCH}")
@@ -193,6 +196,12 @@ function(define_test testfile np backend)
   if(WITH_MPI AND ${backend} STREQUAL omp_tgt)
     set_property(TEST ${test_name} APPEND PROPERTY
       ENVIRONMENT "UCX_MEMTYPE_CACHE=n")
+    # Intel MPI reads every buffer as host memory unless told to look for
+    # device ones, and then faults in MPI_Isend on the first halo exchange.
+    if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "IntelLLVM")
+      set_property(TEST ${test_name} APPEND PROPERTY
+        ENVIRONMENT "I_MPI_OFFLOAD=1")
+    endif()
   endif()
 endfunction()
 
@@ -208,6 +217,35 @@ function(define_verification_test testfile np backend)
   string(CONCAT test_name ${test_name} _ ${backend} _ ${np}
     "${X3D2_TEST_NAME_SUFFIX}")
   set_tests_properties(${test_name} PROPERTIES LABELS "verification;${backend}")
+endfunction()
+
+# Register a test for an executable that another target builds.
+function(define_command_test test_name np labels pass_regex exe)
+  # Nothing can launch more than one rank without MPI.
+  if(NOT WITH_MPI AND NOT ${np} EQUAL 1)
+    return()
+  endif()
+
+  set(extra_args "${ARGN}")
+  string(REPLACE ";" " " extra_args_str "${extra_args}")
+
+  # A test with a pass_regex needs a clean exit and the fixed string in the
+  # output.  PASS_REGULAR_EXPRESSION alone accepts a failed run.
+  set(wrapper "")
+  if(pass_regex)
+    set(wrapper "${CMAKE_CURRENT_SOURCE_DIR}/run_expect_output.sh '${pass_regex}' ")
+  endif()
+
+  if(NOT WITH_MPI)
+    add_test(NAME ${test_name} COMMAND sh -c "${wrapper}${exe} ${extra_args_str}")
+  elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Cray")
+    add_test(NAME ${test_name}
+      COMMAND sh -c "${wrapper}srun -n ${np} ${exe} ${extra_args_str}")
+  else()
+    add_test(NAME ${test_name} COMMAND sh -c "${wrapper}mpirun --oversubscribe -np ${np} ${exe} ${extra_args_str}")
+  endif()
+
+  set_tests_properties(${test_name} PROPERTIES LABELS "${labels}")
 endfunction()
 
 function(define_performance_test testfile np backend)
@@ -294,6 +332,23 @@ define_test(unit/test_les.f90 ${serial} omp)
 define_test(unit/test_abl_diagnostics.f90 ${serial} omp)
 define_test(unit/test_memcheck_stretched_y.f90 ${serial} omp)
 define_test(unit/test_gpu_io_staging.f90 ${serial} omp)
+define_test(unit/test_logger.f90 ${serial} omp)
+# A serial build sets np to 1, which would register the same test twice.
+if(NOT np EQUAL serial)
+  define_test(unit/test_logger.f90 ${np} omp)
+endif()
+# abort_run must stop every rank and report the error, whether one rank fails
+# or all of them do. ctest checks the output rather than the exit code: a hang
+# times out, and a run that returns from abort_run prints the FAIL line.
+foreach(mode one_rank collective)
+  set(X3D2_TEST_NAME_SUFFIX _${mode})
+  define_test(unit/test_logger_abort.f90 ${np} omp ${mode})
+  set_tests_properties(test_logger_abort_omp_${np}_${mode} PROPERTIES
+    PASS_REGULAR_EXPRESSION "ERROR: deliberate"
+    FAIL_REGULAR_EXPRESSION "must never be reached"
+    TIMEOUT 60)
+endforeach()
+unset(X3D2_TEST_NAME_SUFFIX)
 if(WITH_ADIOS2)
   define_test(unit/test_adios2_mixed_precision.f90 ${serial} omp)
   define_test(unit/test_adm_checkpoint.f90 ${serial} omp)
@@ -373,6 +428,11 @@ function(define_backend_tests backend)
     set(X3D2_TEST_NAME_SUFFIX _ddp)
     define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc ddp)
     unset(X3D2_TEST_NAME_SUFFIX)
+    # The driver has its backend fixed at compile time, so register it for
+    # the CUDA build only here; the CPU OMP registration is further down.
+    if(${backend} STREQUAL cuda)
+      define_command_test(poisson_solver_standalone_000_cuda 2 "unit;standalone" "Solve time (min):" ../bin/x3d2_poisson_solver 128 64 32)
+    endif()
   endif()
 
   # I/O tests. A device backend needs an ADIOS2 that can stage device data.
@@ -655,6 +715,12 @@ endif()
 if(WITH_2DECOMPFFT AND _cpu_omp_backend)
   define_regression_case_test(tgv_smoke tgv_smoke.x3d tgv_smoke_golden_omp.csv 2 omp
     ${_smoke_cmp_args})
+endif()
+
+# The driver has its backend fixed at compile time, so register it as OMP only
+# for a CPU OMP build.
+if(WITH_2DECOMPFFT AND _cpu_omp_backend)
+  define_command_test(poisson_solver_standalone_000_omp 2 "unit;standalone" "Solve time (min):" ../bin/x3d2_poisson_solver 128 64 32)
 endif()
 
 # Heavier nightly regression case (opt-in; kept out of PR CI to stay fast).

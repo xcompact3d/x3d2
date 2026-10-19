@@ -407,14 +407,14 @@ contains
     ierr = cudaMemGetInfo(free_before, total_b)
     call check_status(ierr, 'cudaMemGetInfo (before plans)')
     call create_fft_plan(plan_fw, used_cufftmp, fft_n1, fft_n2, fft_n3, &
-                         fw_plan_type, is_root, 'memcheck probe fwd', &
+                         fw_plan_type, 'memcheck probe fwd', &
                          worksize_fw, stat, no_auto_alloc)
     if (stat /= 0) return
     fw_was_cufftmp = used_cufftmp
     ! A fallback to plain cuFFT sets used_cufftmp to false. A forward plan
     ! built on cuFFTMp is then rebuilt on plain cuFFT, as init() does.
     call create_fft_plan(plan_bw, used_cufftmp, fft_n1, fft_n2, fft_n3, &
-                         bw_plan_type, is_root, 'memcheck probe bwd', &
+                         bw_plan_type, 'memcheck probe bwd', &
                          worksize_bw, stat, no_auto_alloc)
     if (stat /= 0) then
       ierr = cufftDestroy(plan_fw)
@@ -424,7 +424,7 @@ contains
       ierr = cufftDestroy(plan_fw)
       call check_status(ierr, 'cufftDestroy (fwd, cuFFTMp fallback rebuild)')
       call create_fft_plan(plan_fw, used_cufftmp, fft_n1, fft_n2, fft_n3, &
-                           fw_plan_type, is_root, &
+                           fw_plan_type, &
                            'memcheck probe fwd (cuFFT rebuild)', worksize_fw, &
                            stat)
       if (stat /= 0) then

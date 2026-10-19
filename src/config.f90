@@ -1,8 +1,7 @@
 module m_config
   !! Contains all the namelist configurations used in x3d2
-  use iso_fortran_env, only: stderr => error_unit
-
   use m_common
+  use m_logger, only: log_warn, abort_run
 
   implicit none
 
@@ -175,8 +174,8 @@ contains
       nproc_dir, BC_x, BC_y, BC_z, stretching, beta
 
     if (present(nml_file) .and. present(nml_string)) then
-      error stop 'Reading domain config failed! &
-                 &Provide only a file name or source, not both.'
+      call abort_run('Reading domain config failed! Provide only a file name &
+                     &or source, not both.', collective=.true.)
     else if (present(nml_file)) then
       open (newunit=unit, file=nml_file)
       read (unit, nml=domain_settings)
@@ -184,8 +183,8 @@ contains
     else if (present(nml_string)) then
       read (nml_string, nml=domain_settings)
     else
-      error stop 'Reading domain config failed! &
-                 &Provide at least one of the following: file name or source'
+      call abort_run('Reading domain config failed! Provide at least one of &
+                     &the following: file name or source', collective=.true.)
     end if
 
     self%flow_case_name = flow_case_name
@@ -241,8 +240,8 @@ contains
       stagder_scheme, ibm_on, c_nu, nu0_nu
 
     if (present(nml_file) .and. present(nml_string)) then
-      error stop 'Reading solver config failed! &
-                 &Provide only a file name or source, not both.'
+      call abort_run('Reading solver config failed! Provide only a file name &
+                     &or source, not both.', collective=.true.)
     else if (present(nml_file)) then
       open (newunit=unit, file=nml_file)
       read (unit, nml=solver_params)
@@ -250,8 +249,8 @@ contains
     else if (present(nml_string)) then
       read (nml_string, nml=solver_params)
     else
-      error stop 'Reading solver config failed! &
-                 &Provide at least one of the following: file name or source'
+      call abort_run('Reading solver config failed! Provide at least one of &
+                     &the following: file name or source', collective=.true.)
     end if
 
     self%Re = Re
@@ -295,31 +294,36 @@ contains
     wall_damping_n = self%wall_damping_n
 
     if (present(nml_file) .and. present(nml_string)) then
-      error stop 'Reading LES config failed! &
-                 & Provide only a file name or source.'
+      call abort_run('Reading LES config failed!  Provide only a file name or &
+                     &source.', collective=.true.)
     else if (present(nml_file)) then
       open (newunit=unit, file=nml_file, iostat=ierr)
-      if (ierr /= 0) error stop 'Opening LES config file failed.'
+      if (ierr /= 0) &
+        call abort_run('Opening LES config file failed.', collective=.true.)
       read (unit, nml=les_params, iostat=ierr)
       close (unit)
       ! Existing input files may omit this optional namelist. End-of-file
       ! therefore selects the defaults, while a malformed block remains fatal.
-      if (ierr > 0) error stop 'Reading LES config failed.'
+      if (ierr > 0) &
+        call abort_run('Reading LES config failed.', collective=.true.)
     else if (present(nml_string)) then
       read (nml_string, nml=les_params)
     else
-      error stop 'Reading LES config failed! Provide a file name or source.'
+      call abort_run('Reading LES config failed! Provide a file name or &
+                     &source.', collective=.true.)
     end if
 
     select case (trim(model))
     case ('none', 'smagorinsky')
     case default
-      error stop 'Unknown LES model. Use "none" or "smagorinsky".'
+      call abort_run('Unknown LES model. Use "none" or "smagorinsky".', &
+                     collective=.true.)
     end select
     if (smagorinsky_constant <= 0._dp) &
-      error stop 'smagorinsky_constant must be positive.'
+      call abort_run('smagorinsky_constant must be positive.', &
+                     collective=.true.)
     if (wall_damping_n <= 0._dp) &
-      error stop 'wall_damping_n must be positive.'
+      call abort_run('wall_damping_n must be positive.', collective=.true.)
 
     self%model = trim(model)
     self%smagorinsky_constant = smagorinsky_constant
@@ -350,8 +354,8 @@ contains
     inlet_noise = 0._dp
 
     if (present(nml_file) .and. present(nml_string)) then
-      error stop 'Reading channel config failed! &
-                 &Provide only a file name or source, not both.'
+      call abort_run('Reading channel config failed! Provide only a file name &
+                     &or source, not both.', collective=.true.)
     else if (present(nml_file)) then
       open (newunit=unit, file=nml_file)
       read (unit, nml=channel_nml)
@@ -359,8 +363,8 @@ contains
     else if (present(nml_string)) then
       read (nml_string, nml=channel_nml)
     else
-      error stop 'Reading channel config failed! &
-                 &Provide at least one of the following: file name or source'
+      call abort_run('Reading channel config failed! Provide at least one of &
+                     &the following: file name or source', collective=.true.)
     end if
 
     self%init_noise = init_noise
@@ -390,8 +394,8 @@ contains
     inlet_noise = 0._dp
 
     if (present(nml_file) .and. present(nml_string)) then
-      error stop 'Reading cylinder config failed! &
-                 &Provide only a file name or source, not both.'
+      call abort_run('Reading cylinder config failed! Provide only a file &
+                     &name or source, not both.', collective=.true.)
     else if (present(nml_file)) then
       open (newunit=unit, file=nml_file)
       read (unit, nml=cylinder_nml)
@@ -399,8 +403,8 @@ contains
     else if (present(nml_string)) then
       read (nml_string, nml=cylinder_nml)
     else
-      error stop 'Reading cylinder config failed! &
-                 &Provide at least one of the following: file name or source'
+      call abort_run('Reading cylinder config failed! Provide at least one of &
+                     &the following: file name or source', collective=.true.)
     end if
 
     self%init_noise = init_noise
@@ -433,8 +437,8 @@ contains
       rho_air, T_relax
 
     if (present(nml_file) .and. present(nml_string)) then
-      error stop 'Reading wind_turbine config failed! &
-                 &Provide only a file name or source, not both.'
+      call abort_run('Reading wind_turbine config failed! Provide only a file &
+                     &name or source, not both.', collective=.true.)
     else if (present(nml_file)) then
       open (newunit=unit, file=nml_file)
       read (unit, nml=wind_turbine_nml)
@@ -442,8 +446,9 @@ contains
     else if (present(nml_string)) then
       read (nml_string, nml=wind_turbine_nml)
     else
-      error stop 'Reading wind_turbine config failed! &
-                 &Provide at least one of the following: file name or source'
+      call abort_run('Reading wind_turbine config failed! Provide at least &
+                     &one of the following: file name or source', &
+                     collective=.true.)
     end if
 
     self%init_noise = init_noise
@@ -498,8 +503,8 @@ contains
     damping = .false.
 
     if (present(nml_file) .and. present(nml_string)) then
-      error stop 'Reading ABL config failed! &
-                 &Provide only a file name or source, not both.'
+      call abort_run('Reading ABL config failed! Provide only a file name or &
+                     &source, not both.', collective=.true.)
     else if (present(nml_file)) then
       open (newunit=unit, file=nml_file)
       read (unit, nml=abl_nml)
@@ -507,8 +512,8 @@ contains
     else if (present(nml_string)) then
       read (nml_string, nml=abl_nml)
     else
-      error stop 'Reading ABL config failed! &
-                 &Provide at least one of the following: file name or source'
+      call abort_run('Reading ABL config failed! Provide at least one of the &
+                     &following: file name or source', collective=.true.)
     end if
 
     self%z0 = z0
@@ -539,23 +544,28 @@ contains
     ! Damping is a sponge rather than a driving mechanism.
     if (.not. (config%pressure_gradient .or. config%coriolis .or. &
                config%mass_conserve)) &
-      error stop 'ABL config error: enable pressure_gradient, coriolis, &
-                 &or mass_conserve.'
+      call abort_run('ABL config error: enable pressure_gradient, coriolis, &
+                     &or mass_conserve.', collective=.true.)
 
     if (config%z0 <= 0._dp .or. config%delta <= config%z0 .or. &
         config%kappa <= 0._dp) &
-      error stop 'ABL config error: require delta > z0 > 0 and kappa > 0.'
+      call abort_run('ABL config error: require delta > z0 > 0 and &
+                     &kappa > 0.', collective=.true.)
 
     if (any(config%init_noise < 0._dp)) &
-      error stop 'ABL config error: init_noise must not be negative.'
+      call abort_run('ABL config error: init_noise must not be negative.', &
+                     collective=.true.)
     if (config%seed < 0) &
-      error stop 'ABL config error: seed must not be negative.'
+      call abort_run('ABL config error: seed must not be negative.', &
+                     collective=.true.)
 
     if (config%profile_start_iter < -1) &
-      error stop 'ABL config error: profile_start_iter must be -1 or greater.'
+      call abort_run('ABL config error: profile_start_iter must be -1 or &
+                     &greater.', collective=.true.)
     if (config%profile_start_iter >= 0 .and. &
         len_trim(config%profile_file) == 0) &
-      error stop 'ABL config error: profile_file must not be empty.'
+      call abort_run('ABL config error: profile_file must not be empty.', &
+                     collective=.true.)
   end subroutine validate_abl_config
 
   subroutine read_checkpoint_nml(self, nml_file, nml_string)
@@ -583,23 +593,23 @@ contains
       restart_from_checkpoint, restart_file, output_stride, snapshot_sp, &
       output_fields
     if (present(nml_file) .and. present(nml_string)) then
-      error stop 'Reading checkpoint config failed! &
-                 &Provide only a file name or source, not both.'
+      call abort_run('Reading checkpoint config failed! Provide only a file &
+                     &name or source, not both.', collective=.true.)
     else if (present(nml_file)) then
       open (newunit=unit, file=nml_file, iostat=ierr)
       if (ierr == 0) then
         read (unit, nml=checkpoint_params, iostat=ierr)
 
         if (ierr /= 0 .and. ierr /= -1) &
-          print *, 'WARNING: Error in checkpoint_params namelist, &
-          & using defaults'
+          call log_warn('Error in checkpoint_params namelist, using defaults')
       end if
       close (unit)
     else if (present(nml_string)) then
       read (nml_string, nml=checkpoint_params)
     else
-      error stop 'Reading checkpoint config failed! &
-                 &Provide at least one of the following: file name or source'
+      call abort_run('Reading checkpoint config failed! Provide at least one &
+                     &of the following: file name or source', &
+                     collective=.true.)
     end if
 
     self%checkpoint_freq = checkpoint_freq
@@ -631,22 +641,21 @@ contains
     namelist /stats_params/ initstat, istatfreq, istatout, stats_prefix
 
     if (present(nml_file) .and. present(nml_string)) then
-      error stop 'Reading stats config failed! &
-                 &Provide only a file name or source, not both.'
+      call abort_run('Reading stats config failed! Provide only a file name &
+                     &or source, not both.', collective=.true.)
     else if (present(nml_file)) then
       open (newunit=unit, file=nml_file, iostat=ierr)
       if (ierr == 0) then
         read (unit, nml=stats_params, iostat=ierr)
         if (ierr /= 0 .and. ierr /= -1) &
-          print *, 'WARNING: Error in stats_params namelist, &
-          & using defaults'
+          call log_warn('Error in stats_params namelist, using defaults')
       end if
       close (unit)
     else if (present(nml_string)) then
       read (nml_string, nml=stats_params)
     else
-      error stop 'Reading stats config failed! &
-                 &Provide at least one of the following: file name or source'
+      call abort_run('Reading stats config failed! Provide at least one of &
+                     &the following: file name or source', collective=.true.)
     end if
 
     self%initstat = initstat

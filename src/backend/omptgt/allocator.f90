@@ -15,6 +15,7 @@ module m_omptgt_allocator
   use m_allocator, only: allocator_t
   use m_mesh, only: mesh_t
   use m_field, only: field_t
+  use m_logger, only: abort_run
 
   implicit none
 
@@ -70,7 +71,7 @@ contains
     type is (omptgt_field_t)
       call omptgt_field_init(self%ngrid, next, id=self%next_id, f=ptr)
     class default
-      error stop "Allocation failed to set type"
+      call abort_run("Allocation failed to set type")
     end select
 
   end function create_block_omptgt
@@ -89,18 +90,19 @@ contains
     f%id = id
 
     if (omp_get_num_devices() < 1) then
-      error stop "No OpenMP target device available, was offloading enabled?"
+      call abort_run("No OpenMP target device available, was offloading &
+                     &enabled?")
     end if
     f%dev_id = omp_get_default_device()
     if (f%dev_id == omp_get_initial_device()) then
-      error stop "Device ID is HOST"
+      call abort_run("Device ID is HOST")
     end if
 
     f%n = ngrid
     f%dims = -1
     f%dev_ptr = omp_target_alloc(f%n*c_sizeof(0.0_dp), f%dev_id)
     if (.not. c_associated(f%dev_ptr)) then
-      error stop "omp_target_alloc failed"
+      call abort_run("omp_target_alloc failed")
     end if
 
   end subroutine omptgt_field_init
@@ -171,7 +173,7 @@ contains
     integer, intent(in) :: dims(3)
 
     if (product(dims) > self%n) then
-      error stop "Trying to set shape of field greater than its capacity"
+      call abort_run("Trying to set shape of field greater than its capacity")
     end if
     self%dims = dims
 

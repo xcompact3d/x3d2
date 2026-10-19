@@ -16,6 +16,7 @@ module m_omp_backend
   use m_omp_exec_dist, only: exec_dist_tds_compact, exec_dist_transeq_compact
   use m_exec_thom, only: exec_thom_tds_compact
   use m_omp_sendrecv, only: sendrecv_fields
+  use m_logger, only: abort_run
 
   implicit none
 
@@ -393,7 +394,7 @@ contains
 
     ! Check if direction matches for both in/out fields
     if (u%dir /= du%dir) then
-      error stop 'DIR mismatch between fields in tds_solve.'
+      call abort_run('DIR mismatch between fields in tds_solve.')
     end if
 
     if (u%data_loc /= NULL_LOC) then
@@ -413,7 +414,7 @@ contains
     class(tdsops_t), intent(in) :: tdsops
 
     if (u%dir /= du%dir) then
-      error stop 'DIR mismatch between fields in thom_solve.'
+      call abort_run('DIR mismatch between fields in thom_solve.')
     end if
 
     if (u%data_loc /= NULL_LOC) then
@@ -602,10 +603,11 @@ contains
     integer :: i, j, k
 
     if (src%dir /= dst%dir) then
-      error stop "Called vector copy with incompatible fields"
+      call abort_run("Called vector copy with incompatible fields")
     end if
 
-    if (dst%dir == DIR_C) error stop 'veccopy does not support DIR_C fields'
+    if (dst%dir == DIR_C) &
+      call abort_run('veccopy does not support DIR_C fields')
 
     !$omp parallel do
     do k = 1, size(dst%data, 3)
@@ -632,10 +634,10 @@ contains
     integer :: i, j, k
 
     if (x%dir /= y%dir) then
-      error stop "Called vector add with incompatible fields"
+      call abort_run("Called vector add with incompatible fields")
     end if
 
-    if (y%dir == DIR_C) error stop 'vecadd does not support DIR_C fields'
+    if (y%dir == DIR_C) call abort_run('vecadd does not support DIR_C fields')
 
     !$omp parallel do
     do k = 1, size(y%data, 3)
@@ -661,10 +663,10 @@ contains
     integer :: i, j, k
 
     if (x%dir /= y%dir) then
-      error stop "Called vector multiply with incompatible fields"
+      call abort_run("Called vector multiply with incompatible fields")
     end if
 
-    if (y%dir == DIR_C) error stop 'vecmult does not support DIR_C fields'
+    if (y%dir == DIR_C) call abort_run('vecmult does not support DIR_C fields')
 
     !$omp parallel do
     do k = 1, size(y%data, 3)
@@ -802,10 +804,10 @@ contains
     integer :: ierr
 
     if ((x%data_loc == NULL_LOC) .or. (y%data_loc == NULL_LOC)) then
-      error stop "You must set the data_loc before calling scalar product"
+      call abort_run("You must set the data_loc before calling scalar product")
     end if
     if (x%data_loc /= y%data_loc) then
-      error stop "Called scalar product with incompatible fields"
+      call abort_run("Called scalar product with incompatible fields")
     end if
 
     ! Reorient data into temporary DIR_C storage
@@ -866,13 +868,13 @@ contains
 
     if (a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
         c%data_loc == NULL_LOC) then
-      error stop 'You must set data_loc before computing a vector norm.'
+      call abort_run('You must set data_loc before computing a vector norm.')
     end if
     if (a%data_loc /= b%data_loc .or. a%data_loc /= c%data_loc) then
-      error stop 'Vector-norm fields must use the same data location.'
+      call abort_run('Vector-norm fields must use the same data location.')
     end if
     if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) then
-      error stop 'Vector-norm fields must use DIR_X layout.'
+      call abort_run('Vector-norm fields must use DIR_X layout.')
     end if
 
     dims = self%mesh%get_dims(a%data_loc)
@@ -1002,15 +1004,15 @@ contains
     if (g%data_loc == NULL_LOC .or. label%data_loc == NULL_LOC .or. &
         a%data_loc == NULL_LOC .or. b%data_loc == NULL_LOC .or. &
         c%data_loc == NULL_LOC) then
-      error stop 'You must set data_loc before labelled field operations.'
+      call abort_run('You must set data_loc before labelled field operations.')
     end if
     if (label%data_loc /= g%data_loc .or. a%data_loc /= g%data_loc .or. &
         b%data_loc /= g%data_loc .or. c%data_loc /= g%data_loc) then
-      error stop 'Labelled field operations need one data location.'
+      call abort_run('Labelled field operations need one data location.')
     end if
     if (g%dir /= DIR_X .or. label%dir /= DIR_X .or. a%dir /= DIR_X .or. &
         b%dir /= DIR_X .or. c%dir /= DIR_X) then
-      error stop 'Labelled field operations need DIR_X layout.'
+      call abort_run('Labelled field operations need DIR_X layout.')
     end if
   end subroutine check_labelled_fields
 
@@ -1053,9 +1055,9 @@ contains
     integer :: i, j, k, k_i, k_j, ierr
 
     if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
-      error stop 'The input field to omp::field_max_mean does not have a &
-                  &valid f%data_loc. You may enforce a data_loc of your &
-                  &choice as last argument to carry on at your own risk!'
+      call abort_run('The input field to omp::field_max_mean does not have a &
+                     &valid f%data_loc. You may enforce a data_loc of your &
+                     &choice as last argument to carry on at your own risk!')
     end if
 
     if (present(enforced_data_loc)) then
@@ -1072,6 +1074,8 @@ contains
     ! dimension, not the unpadded one (see get_index_dir in m_ordering).
     ! The two agree only when that dimension needs no padding, so using the
     ! unpadded count walks into other groups as soon as it does.
+    ! Set for every supported direction; abort_run stops the others.
+    n = 0; n_i = 0; n_j = 0; n_groups_pad = 0
     if (f%dir == DIR_X) then
       n = dims(1); n_j = dims(2); n_i = dims(3)
       n_groups_pad = dims_padded(2)/SZ
@@ -1082,7 +1086,7 @@ contains
       n = dims(3); n_j = dims(1); n_i = dims(2)
       n_groups_pad = dims_padded(1)/SZ
     else
-      error stop 'field_max_mean does not support DIR_C fields!'
+      call abort_run('field_max_mean does not support DIR_C fields!')
     end if
 
     sum_p = 0._dp
@@ -1139,9 +1143,9 @@ contains
     integer :: i, j, k, k_i, k_j
 
     if (f%data_loc == NULL_LOC .and. (.not. present(enforced_data_loc))) then
-      error stop 'The input field to omp::slice_max_sum does not have a &
-                  &valid f%data_loc. You may enforce a data_loc of your &
-                  &choice as last argument to carry on at your own risk!'
+      call abort_run('The input field to omp::slice_max_sum does not have a &
+                     &valid f%data_loc. You may enforce a data_loc of your &
+                     &choice as last argument to carry on at your own risk!')
     end if
 
     if (present(enforced_data_loc)) then
@@ -1154,6 +1158,8 @@ contains
     dims_padded = self%allocator%get_padded_dims(DIR_C)
 
     ! See the note on n_groups_pad in field_max_mean_omp above.
+    ! Set for every supported direction; abort_run stops the others.
+    n = 0; n_i = 0; n_j = 0; n_groups_pad = 0
     if (f%dir == DIR_X) then
       n = dims(1); n_j = dims(2); n_i = dims(3)
       n_groups_pad = dims_padded(2)/SZ
@@ -1164,11 +1170,11 @@ contains
       n = dims(3); n_j = dims(1); n_i = dims(2)
       n_groups_pad = dims_padded(1)/SZ
     else
-      error stop 'slice_max_sum does not support DIR_C fields!'
+      call abort_run('slice_max_sum does not support DIR_C fields!')
     end if
 
     if (i_slice < 1 .or. i_slice > n) then
-      error stop 'slice_max_sum: i_slice out of range'
+      call abort_run('slice_max_sum: i_slice out of range')
     end if
 
     j = i_slice
@@ -1234,11 +1240,12 @@ contains
     logical :: set_start, set_end
 
     if (f%dir /= DIR_X) then
-      error stop 'Setting a field face is only supported for DIR_X fields.'
+      call abort_run('Setting a field face is only supported for DIR_X &
+                     &fields.')
     end if
 
     if (f%data_loc == NULL_LOC) then
-      error stop 'field_set_face require a valid data_loc.'
+      call abort_run('field_set_face require a valid data_loc.')
     end if
 
     fl_corr = 0._dp
@@ -1259,7 +1266,7 @@ contains
 
     select case (face)
     case (X_FACE)
-      error stop 'Setting X_FACE is not yet supported.'
+      call abort_run('Setting X_FACE is not yet supported.')
     case (Y_FACE)
       ! DIR_X groups are ordered y-block fastest: b = (z-1)*y_stride + yb.
       ! The stride is the padded y-block count (see get_index_dir), which
@@ -1278,9 +1285,9 @@ contains
       end do
       !$omp end parallel do
     case (Z_FACE)
-      error stop 'Setting Z_FACE is not yet supported.'
+      call abort_run('Setting Z_FACE is not yet supported.')
     case default
-      error stop 'face is undefined.'
+      call abort_run('face is undefined.')
     end select
 
   end subroutine field_set_face_omp
@@ -1312,13 +1319,13 @@ contains
     real(dp) :: plane_sum
 
     if (f%dir /= DIR_X) &
-      error stop 'field_plane_sums is only supported for DIR_X fields.'
+      call abort_run('field_plane_sums is only supported for DIR_X fields.')
     if (f%data_loc == NULL_LOC) &
-      error stop 'field_plane_sums requires a valid data_loc.'
+      call abort_run('field_plane_sums requires a valid data_loc.')
 
     dims = self%mesh%get_dims(f%data_loc)
     if (size(sums) < dims(2)) &
-      error stop 'field_plane_sums: sums is smaller than the y extent.'
+      call abort_run('field_plane_sums: sums is smaller than the y extent.')
     y_stride = y_group_stride(self)
 
     ! OMP DIR_X ordering: group = y_stride*(z - 1) + y_block. Each plane is
@@ -1351,13 +1358,13 @@ contains
     integer :: dims(3), k, j, y_stride, y_block, i_in_block, group
 
     if (f%dir /= DIR_X) &
-      error stop 'field_set_y_plane is only supported for DIR_X fields.'
+      call abort_run('field_set_y_plane is only supported for DIR_X fields.')
     if (f%data_loc == NULL_LOC) &
-      error stop 'field_set_y_plane requires a valid data_loc.'
+      call abort_run('field_set_y_plane requires a valid data_loc.')
 
     dims = self%mesh%get_dims(f%data_loc)
     if (plane < 1 .or. plane > dims(2)) &
-      error stop 'field_set_y_plane: plane outside the domain.'
+      call abort_run('field_set_y_plane: plane outside the domain.')
 
     ! OMP DIR_X ordering: group = y_stride*(z - 1) + y_block.
     y_stride = y_group_stride(self)
@@ -1389,16 +1396,16 @@ contains
     real(dp) :: us, ws, speed
 
     if (stress%dir /= DIR_X .or. u%dir /= DIR_X .or. w%dir /= DIR_X) &
-      error stop 'ABL wall stress requires DIR_X fields.'
+      call abort_run('ABL wall stress requires DIR_X fields.')
     if (stress%data_loc /= VERT .or. u%data_loc /= VERT .or. &
         w%data_loc /= VERT) &
-      error stop 'ABL wall stress requires vertex fields.'
+      call abort_run('ABL wall stress requires vertex fields.')
     dims = self%mesh%get_dims(VERT)
     if (min(sample_plane, stress_plane) < 1 .or. &
         max(sample_plane, stress_plane) > dims(2)) &
-      error stop 'ABL wall stress plane is outside the domain.'
+      call abort_run('ABL wall stress plane is outside the domain.')
     if (component /= 1 .and. component /= 3) &
-      error stop 'Invalid ABL wall stress component.'
+      call abort_run('Invalid ABL wall stress component.')
 
     y_stride = y_group_stride(self)
     sample_block = (sample_plane - 1)/SZ + 1
@@ -1439,9 +1446,10 @@ contains
     real(dp) :: flow_rate_diff_val
 
     if (f%dir /= DIR_X) &
-      error stop 'field_set_face_from_field: only supported for DIR_X fields.'
+      call abort_run('field_set_face_from_field: only supported for DIR_X &
+                     &fields.')
     if (f%data_loc == NULL_LOC) &
-      error stop 'field_set_face_from_field: requires a valid data_loc.'
+      call abort_run('field_set_face_from_field: requires a valid data_loc.')
     flow_rate_diff_val = 0._dp
     if (present(flow_rate_diff)) flow_rate_diff_val = flow_rate_diff
 
@@ -1488,7 +1496,8 @@ contains
       !$omp end parallel do
 
     case default
-      error stop 'field_set_face_from_field: only X_FACE and Y_FACE supported.'
+      call abort_run('field_set_face_from_field: only X_FACE and Y_FACE &
+                     &supported.')
     end select
 
   end subroutine field_set_face_from_field_omp
@@ -1504,9 +1513,10 @@ contains
                y_block, y_stride
 
     if (f%dir /= DIR_X) &
-      error stop 'field_add_const_x_face: only supported for DIR_X fields.'
+      call abort_run('field_add_const_x_face: only supported for DIR_X &
+                     &fields.')
     if (f%data_loc == NULL_LOC) &
-      error stop 'field_add_const_x_face: requires a valid data_loc.'
+      call abort_run('field_add_const_x_face: requires a valid data_loc.')
 
     dims = self%mesh%get_dims(f%data_loc)
     n_mod = mod(dims(2) - 1, SZ) + 1
@@ -1547,13 +1557,14 @@ contains
     integer :: dims(3), k, i, z, i_max, n_mod, n_y_blocks, y_block, y_stride
 
     if (f%dir /= DIR_X) &
-      error stop 'field_set_x_inlet_plane: only supported for DIR_X fields.'
+      call abort_run('field_set_x_inlet_plane: only supported for DIR_X &
+                     &fields.')
     if (f%data_loc == NULL_LOC) &
-      error stop 'field_set_x_inlet_plane: requires a valid data_loc.'
+      call abort_run('field_set_x_inlet_plane: requires a valid data_loc.')
 
     dims = self%mesh%get_dims(f%data_loc)
     if (size(plane, 1) /= dims(2) .or. size(plane, 2) /= dims(3)) &
-      error stop 'field_set_x_inlet_plane: plane must be (ny, nz).'
+      call abort_run('field_set_x_inlet_plane: plane must be (ny, nz).')
     n_mod = mod(dims(2) - 1, SZ) + 1
     n_y_blocks = (dims(2) - 1)/SZ + 1
     y_stride = y_group_stride(self)
@@ -1590,9 +1601,10 @@ contains
     logical :: set_start, set_end
 
     if (f%dir /= DIR_X .or. g%dir /= DIR_X) &
-      error stop 'field_add_face_from_field: only supported for DIR_X fields.'
+      call abort_run('field_add_face_from_field: only supported for DIR_X &
+                     &fields.')
     if (f%data_loc == NULL_LOC) &
-      error stop 'field_add_face_from_field: requires a valid data_loc.'
+      call abort_run('field_add_face_from_field: requires a valid data_loc.')
 
     set_start = (bc_start == BC_DIRICHLET)
     set_end = (bc_end == BC_DIRICHLET)
@@ -1636,7 +1648,8 @@ contains
       end do
       !$omp end parallel do
     case default
-      error stop 'field_add_face_from_field: only X_FACE and Y_FACE supported.'
+      call abort_run('field_add_face_from_field: only X_FACE and Y_FACE &
+                     &supported.')
     end select
 
   end subroutine field_add_face_from_field_omp
@@ -1652,10 +1665,11 @@ contains
     integer :: dims(3), stacked, i, j, k, k_i, k_j, ierr
 
     if (f%data_loc == NULL_LOC) then
-      error stop 'You must set the data_loc before calling volume integral.'
+      call abort_run('You must set the data_loc before calling volume &
+                     &integral.')
     end if
     if (f%dir /= DIR_X) then
-      error stop 'Volume integral can only be called on DIR_X fields.'
+      call abort_run('Volume integral can only be called on DIR_X fields.')
     end if
 
     dims = self%mesh%get_dims(f%data_loc)
@@ -1722,8 +1736,8 @@ contains
       poisson_fft = omp_poisson_fft_t(mesh, xdirps, ydirps, zdirps, lowmem)
     end select
 #else
-    error stop 'This build does not support FFT based Poisson solver &
-                &on the OpenMP backend!'
+    call abort_run('This build does not support FFT based Poisson solver on &
+                   &the OpenMP backend!')
 #endif
 
   end subroutine init_omp_poisson_fft

@@ -1,19 +1,19 @@
 module m_solver
-  use iso_fortran_env, only: stderr => error_unit
-
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, get_argument, &
                       RDR_X2Y, RDR_X2Z, RDR_Y2X, RDR_Y2Z, RDR_Z2X, RDR_Z2Y, &
                       RDR_Z2C, RDR_C2Z, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, CELL, &
-                      X_FACE, Y_FACE, BC_NEUMANN, BC_DIRICHLET
+                      X_FACE, Y_FACE, BC_DIRICHLET
   use m_config, only: solver_config_t, les_config_t
   use m_field, only: field_t, flist_t
   use m_ibm, only: ibm_t
   use m_les, only: les_t
+  use m_logger, only: log_info, log_warn, abort_run, str
   use m_mesh, only: mesh_t
   use m_tdsops, only: dirps_t, tdsops_t
+  use m_tdsops_setup, only: allocate_tdsops
   use m_time_integrator, only: time_intg_t
   use m_vector_calculus, only: vector_calculus_t
 
@@ -155,8 +155,7 @@ contains
     call solver_cfg%read(nml_file=get_argument(1))
     call les_cfg%read(nml_file=get_argument(1))
     solver%les = les_t(les_cfg)
-    if (solver%mesh%par%is_root()) &
-      print *, 'LES model: ', trim(solver%les%model)
+    call log_info('LES model: '//trim(solver%les%model))
 
     ! Add transported species
     solver%nspecies = solver_cfg%n_species
@@ -178,9 +177,7 @@ contains
     solver%time_integrator = time_intg_t(solver%backend, &
                                          solver%backend%allocator, &
                                          solver_cfg%time_intg, solver%nvars)
-    if (solver%mesh%par%is_root()) then
-      print *, solver_cfg%time_intg//' time integrator instantiated'
-    end if
+    call log_info(solver_cfg%time_intg//' time integrator instantiated')
 
     solver%dt = solver_cfg%dt
     solver%nu = 1._dp/solver_cfg%Re
@@ -194,8 +191,7 @@ contains
     solver%spatial_filter = solver_cfg%spatial_filter
     if (solver%spatial_filter) then
       filter_alpha = solver_cfg%filter_alpha
-      if (solver%mesh%par%is_root()) &
-        print *, 'Spatial filter on, alpha =', filter_alpha
+      call log_info('Spatial filter on, alpha = '//str(filter_alpha))
     end if
     call allocate_tdsops( &
       solver%xdirps, solver%backend, solver%mesh, solver_cfg%der1st_scheme, &
@@ -218,17 +214,17 @@ contains
 
     select case (trim(solver_cfg%poisson_solver_type))
     case ('FFT')
-      if (solver%mesh%par%is_root()) print *, 'Poisson solver: FFT'
+      call log_info('Poisson solver: FFT')
       call solver%backend%init_poisson_fft(solver%mesh, solver%xdirps, &
                                            solver%ydirps, solver%zdirps, &
                                            solver_cfg%lowmem_fft)
       solver%poisson => poisson_fft
     case ('CG')
-      if (solver%mesh%par%is_root()) &
-        print *, 'Poisson solver: CG, not yet implemented'
+      call log_warn('Poisson solver: CG, not yet implemented')
       solver%poisson => poisson_cg
     case default
-      error stop 'poisson_solver_type is not valid. Use "FFT" or "CG".'
+      call abort_run('poisson_solver_type is not valid. Use "FFT" or "CG".', &
+                     collective=.true.)
     end select
 
     ! Initialize the IBM module
@@ -243,117 +239,6 @@ contains
     end if
 
   end function init
-
-  subroutine allocate_tdsops(dirps, backend, mesh, der1st_scheme, &
-                             der2nd_scheme, interpl_scheme, stagder_scheme, &
-                             c_nu, nu0_nu, filter_alpha)
-    type(dirps_t), intent(inout) :: dirps
-    class(base_backend_t), intent(in) :: backend
-    type(mesh_t), intent(in) :: mesh
-    character(*), intent(in) :: der1st_scheme, der2nd_scheme, &
-                                interpl_scheme, stagder_scheme
-    !! hyperviscous (iSVV) der2nd params; only required when der2nd_scheme is
-    !! 'compact6-hyperviscous'.
-    real(dp), optional, intent(in) :: c_nu, nu0_nu
-    !! When present, also build the low-pass filter operators for this
-    !! direction. Absent means the case does not filter.
-    real(dp), optional, intent(in) :: filter_alpha
-
-    integer :: dir, bc_start, bc_end, bc_mp_start, bc_mp_end, n_vert, n_cell, i
-    real(dp) :: d
-
-    dir = dirps%dir
-    d = mesh%geo%d(dir)
-
-    bc_start = mesh%grid%BCs(dir, 1)
-    bc_end = mesh%grid%BCs(dir, 2)
-
-    ! For the FFT based poisson solver, the BC for the pressure has to be
-    ! Neumann. This is not strictly compatible with Navier-Stokes equations,
-    ! but it does not affect the quality of the simulation.
-    ! Thus, if the BC is Dirichlet, we enforce Neumann for the midpoint &
-    ! operators. (It could be BC_HALO too, if so we just keep it as is)
-    if (bc_start == BC_DIRICHLET) then
-      bc_mp_start = BC_NEUMANN
-    else
-      bc_mp_start = bc_start
-    end if
-    if (bc_end == BC_DIRICHLET) then
-      bc_mp_end = BC_NEUMANN
-    else
-      bc_mp_end = bc_end
-    end if
-
-    n_vert = mesh%get_n(dir, VERT)
-    n_cell = mesh%get_n(dir, CELL)
-
-    call backend%alloc_tdsops( &
-      dirps%der1st, n_vert, d, 'first-deriv', der1st_scheme, &
-      bc_start, bc_end, stretch=mesh%geo%vert_ds(1:n_vert, dir) &
-      )
-    call backend%alloc_tdsops( &
-      dirps%der1st_sym, n_vert, d, 'first-deriv', der1st_scheme, &
-      bc_start, bc_end, stretch=mesh%geo%vert_ds(1:n_vert, dir), &
-      sym=.true. &
-      )
-    call backend%alloc_tdsops( &
-      dirps%der2nd, n_vert, d, 'second-deriv', der2nd_scheme, &
-      bc_start, bc_end, stretch=mesh%geo%vert_ds2(1:n_vert, dir), &
-      stretch_correct=mesh%geo%vert_d2s(1:n_vert, dir), &
-      c_nu=c_nu, nu0_nu=nu0_nu &
-      )
-    call backend%alloc_tdsops( &
-      dirps%der2nd_sym, n_vert, d, 'second-deriv', der2nd_scheme, &
-      bc_start, bc_end, stretch=mesh%geo%vert_ds2(1:n_vert, dir), &
-      stretch_correct=mesh%geo%vert_d2s(1:n_vert, dir), &
-      sym=.true., c_nu=c_nu, nu0_nu=nu0_nu &
-      )
-    call backend%alloc_tdsops( &
-      dirps%stagder_v2p, n_cell, d, 'stag-deriv', stagder_scheme, &
-      bc_mp_start, bc_mp_end, from_to='v2p', &
-      stretch=mesh%geo%midp_ds(1:n_cell, dir) &
-      )
-    call backend%alloc_tdsops( &
-      dirps%stagder_p2v, n_vert, d, 'stag-deriv', stagder_scheme, &
-      bc_mp_start, bc_mp_end, from_to='p2v', &
-      stretch=mesh%geo%vert_ds(1:n_vert, dir) &
-      )
-    call backend%alloc_tdsops( &
-      dirps%interpl_v2p, n_cell, d, 'interpolate', interpl_scheme, &
-      bc_mp_start, bc_mp_end, from_to='v2p', stretch=[(1._dp, i=1, n_cell)] &
-      )
-    call backend%alloc_tdsops( &
-      dirps%interpl_p2v, n_vert, d, 'interpolate', interpl_scheme, &
-      bc_mp_start, bc_mp_end, from_to='p2v', stretch=[(1._dp, i=1, n_vert)] &
-      )
-
-    if (present(filter_alpha)) then
-      ! Same parity split as the first derivatives: the component along this
-      ! direction is odd across a free-slip boundary, the other two even.
-      call backend%alloc_tdsops( &
-        dirps%lowpass, n_vert, d, 'filter', der1st_scheme, &
-        bc_start, bc_end, filter_alpha=filter_alpha &
-        )
-      call backend%alloc_tdsops( &
-        dirps%lowpass_sym, n_vert, d, 'filter', der1st_scheme, &
-        bc_start, bc_end, sym=.true., filter_alpha=filter_alpha &
-        )
-      ! The filter's system is only marginally diagonally dominant as
-      ! filter_alpha approaches 0.5, so the distributed solver's truncation
-      ! is no longer negligible: at Incompact3d's 0.49 it leaves a 1e-3 error
-      ! at zero wavenumber on 64 points. Solve it exactly with Thomas where
-      ! the direction is not decomposed; Thomas is serial along the line.
-      if (mesh%par%nproc_dir(dir) == 1) then
-        dirps%lowpass%prefer_thomas = .true.
-        dirps%lowpass_sym%prefer_thomas = .true.
-      else if (mesh%par%is_root()) then
-        print *, 'WARNING: the low-pass filter is decomposed in direction ', &
-          dir, '; it does not exactly preserve the mean and its result &
-          &depends on the decomposition.'
-      end if
-    end if
-
-  end subroutine
 
   subroutine transeq_default(self, rhs, variables)
     !! Skew-symmetric form of convection-diffusion terms in the
@@ -651,7 +536,7 @@ contains
       call self%backend%allocator%release_block(f_dir)
       call self%backend%allocator%release_block(filtered_dir)
     case default
-      error stop 'Invalid direction in spatial filter.'
+      call abort_run('Invalid direction in spatial filter.')
     end select
 
   end subroutine filter_in_dir
@@ -977,7 +862,7 @@ contains
         w, self%dpdz_last, Y_FACE, bcs(2, 1), bcs(2, 2))
     end if
     if (any(bcs(3, :) == BC_DIRICHLET)) &
-      error stop 'precorrect_walls: Dirichlet z-faces are not supported.'
+      call abort_run('precorrect_walls: Dirichlet z-faces are not supported.')
 
   end subroutine precorrect_walls
 

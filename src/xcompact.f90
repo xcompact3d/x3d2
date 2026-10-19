@@ -6,6 +6,7 @@ program xcompact
   use m_base_case, only: base_case_t
   use m_common, only: dp, get_argument
   use m_config, only: domain_config_t, solver_config_t
+  use m_logger, only: log_info, log_warn, abort_run, str
   use m_mesh, only: mesh_t
   use m_case_abl, only: case_abl_t
   use m_case_channel, only: case_channel_t
@@ -29,18 +30,16 @@ program xcompact
   call MPI_Comm_rank(MPI_COMM_WORLD, nrank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
 
-  if (nrank == 0) then
-    print *, 'Parallel run with', nproc, 'ranks'
-    print *, 'Data precision is', dp
-  end if
+  call log_info('Parallel run with '//str(nproc)//' ranks')
+  call log_info('Data precision is '//str(dp))
 
   call domain_cfg%read(nml_file=get_argument(1))
   call solver_cfg%read(nml_file=get_argument(1))
 
   if (product(domain_cfg%nproc_dir) /= nproc) then
-    if (nrank == 0) print *, 'nproc_dir specified in the input file does &
-                              &not match the total number of ranks, falling &
-                              &back to a 1D decomposition along Z-dir instead.'
+    call log_warn('nproc_dir specified in the input file does not match the &
+                  &total number of ranks, falling back to a 1D decomposition &
+                  &along Z-dir instead.')
     domain_cfg%nproc_dir = [1, 1, nproc]
   end if
 
@@ -55,7 +54,7 @@ program xcompact
 
   call setup%init(mesh)
 
-  if (nrank == 0) print *, 'Flow case: ', domain_cfg%flow_case_name
+  call log_info('Flow case: '//trim(domain_cfg%flow_case_name))
 
   select case (trim(domain_cfg%flow_case_name))
   case ('abl')
@@ -78,9 +77,10 @@ program xcompact
     flow_case = case_wind_turbine_t(setup%backend, mesh, &
                                     setup%host_allocator)
   case default
-    error stop 'Undefined flow_case.'
+    call abort_run('Undefined flow_case: ' &
+                   //trim(domain_cfg%flow_case_name), collective=.true.)
   end select
-  if (nrank == 0) print *, 'solver instantiated'
+  call log_info('solver instantiated')
 
   call flow_case%run()
 

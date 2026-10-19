@@ -1,6 +1,7 @@
 module m_scalar_series
   !! Root-only writer for named scalar time series.
   use m_common, only: dp
+  use m_logger, only: abort_run
 
   implicit none
 
@@ -57,7 +58,7 @@ contains
 
     if (.not. self%is_root) return
     if (size(values) /= self%n_columns) then
-      error stop 'Scalar series value count does not match its header.'
+      call abort_run('Scalar series value count does not match its header.')
     end if
     write (self%file_unit, '(ES20.12)', advance='no') t
     do i = 1, size(values)

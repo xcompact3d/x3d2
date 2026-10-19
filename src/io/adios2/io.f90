@@ -68,6 +68,7 @@ module m_io_backend
                        io_mode_read, io_mode_write
   use iso_c_binding, only: c_double, c_int, c_int8_t, c_int64_t, c_char, &
                            c_null_char, c_ptr, c_loc
+  use m_logger, only: log_info, abort_run, str
 
   implicit none
 
@@ -322,16 +323,16 @@ contains
     if (comm_rank == 0 .and. .not. runtime_options_reported) then
       runtime_options_reported = .true.
 #ifdef X3D2_ADIOS2_CUDA
-      print '(A,A)', "ADIOS2 GPU write mode: ", &
-        trim(runtime_gpu_write_mode_name)
+      call log_info("ADIOS2 GPU write mode: " &
+                    //trim(runtime_gpu_write_mode_name))
 #else
-      print '(A)', "ADIOS2 GPU write mode: host (CUDA path unavailable)"
+      call log_info("ADIOS2 GPU write mode: host (CUDA path unavailable)")
 #endif
       if (runtime_bench_enabled) then
-        print '(A,I0)', "ADIOS2 I/O benchmark enabled; warm-up steps: ", &
-          bench_warmup_steps
+        call log_info("ADIOS2 I/O benchmark enabled; warm-up steps: " &
+                      //str(bench_warmup_steps))
       end if
-      print '(A,L1)', "NVTX markers enabled: ", nvtx_enabled()
+      call log_info("NVTX markers enabled: "//str(nvtx_enabled()))
     end if
   end subroutine init_runtime_options
 
@@ -461,18 +462,18 @@ contains
     call MPI_Comm_rank(self%comm, comm_rank, ierr)
     if (ierr /= 0 .or. comm_rank /= 0) return
 
-    print '(A)', "ADIOS2 I/O benchmark summary"
-    print '(A,A)', "  File: ", trim(self%bench_file_name)
-    print '(A,A)', "  GPU write mode: ", trim(runtime_gpu_write_mode_name)
-    print '(A,I0)', "  Steps seen: ", self%bench_step_counter
-    print '(A,I0)', "  Warm-up steps discarded: ", bench_warmup_steps
+    call log_info("ADIOS2 I/O benchmark summary")
+    call log_info("  File: "//trim(self%bench_file_name))
+    call log_info("  GPU write mode: "//trim(runtime_gpu_write_mode_name))
+    call log_info("  Steps seen: "//str(self%bench_step_counter))
+    call log_info("  Warm-up steps discarded: "//str(bench_warmup_steps))
 
     n = self%bench_measured_steps
     if (n <= 0) then
-      print '(A)', "  No measured steps after warm-up discard."
+      call log_info("  No measured steps after warm-up discard.")
       if (self%bench_close_time > 0.0_c_double) then
-        print '(A,ES11.3,A)', "  adios2_close time: ", &
-          self%bench_close_time, " s"
+        call log_info("  adios2_close time: " &
+                      //str(self%bench_close_time, '(es11.3)')//" s")
       end if
       return
     end if
@@ -494,22 +495,25 @@ contains
 
     total_gib = self%bench_sum_bytes/(1024.0_c_double**3)
 
-    print '(A,I0)', "  Measured steps: ", n
-    print '(A,ES11.3,A,ES11.3,A)', "  Put time (max rank): mean=", &
-      avg_put, " s std=", std_put, " s"
-    print '(A,ES11.3,A,ES11.3,A)', "  EndStep time (max rank): mean=", &
-      avg_end_step, " s std=", std_end_step, " s"
-    print '(A,ES11.3,A,ES11.3,A)', "  Put+EndStep (max rank): mean=", &
-      avg_total, " s std=", std_total, " s"
-    print '(A,F10.3,A,F10.3)', &
-      "  Put+EndStep throughput (GiB/s): mean=", &
-      avg_throughput, " std=", std_throughput
-    print '(A,F12.3,A)', "  Total data written (all ranks): ", total_gib, &
-      " GiB"
+    call log_info("  Measured steps: "//str(n))
+    call log_info("  Put time (max rank): mean=" &
+                  //str(avg_put, '(es11.3)')//" s std=" &
+                  //str(std_put, '(es11.3)')//" s")
+    call log_info("  EndStep time (max rank): mean=" &
+                  //str(avg_end_step, '(es11.3)')//" s std=" &
+                  //str(std_end_step, '(es11.3)')//" s")
+    call log_info("  Put+EndStep (max rank): mean=" &
+                  //str(avg_total, '(es11.3)')//" s std=" &
+                  //str(std_total, '(es11.3)')//" s")
+    call log_info("  Put+EndStep throughput (GiB/s): mean=" &
+                  //str(avg_throughput, '(f10.3)')//" std=" &
+                  //str(std_throughput, '(f10.3)'))
+    call log_info("  Total data written (all ranks): " &
+                  //str(total_gib, '(f12.3)')//" GiB")
 
     if (self%bench_close_time > 0.0_c_double) then
-      print '(A,ES11.3,A)', "  adios2_close time: ", &
-        self%bench_close_time, " s"
+      call log_info("  adios2_close time: " &
+                    //str(self%bench_close_time, '(es11.3)')//" s")
     end if
   end subroutine bench_print_summary
 
@@ -1261,9 +1265,8 @@ contains
     character(len=*), intent(in) :: message
 
     if (ierr /= 0) then
-      print *, "ADIOS2 Reader Error: ", message
-      print *, "Error code: ", ierr
-      error stop
+      call abort_run("ADIOS2 reader error: "//message &
+                     //" (error code "//str(ierr)//")")
     end if
   end subroutine handle_error_reader
 
@@ -1273,9 +1276,8 @@ contains
     character(len=*), intent(in) :: message
 
     if (ierr /= 0) then
-      print *, "ADIOS2 Writer Error: ", message
-      print *, "Error code: ", ierr
-      error stop
+      call abort_run("ADIOS2 writer error: "//message &
+                     //" (error code "//str(ierr)//")")
     end if
   end subroutine handle_error_writer
 
@@ -1285,9 +1287,8 @@ contains
     character(len=*), intent(in) :: message
 
     if (ierr /= 0) then
-      print *, "ADIOS2 File Error: ", message
-      print *, "Error code: ", ierr
-      error stop
+      call abort_run("ADIOS2 file error: "//message &
+                     //" (error code "//str(ierr)//")")
     end if
   end subroutine handle_error_file
 

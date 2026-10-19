@@ -3,6 +3,7 @@ module m_time_integrator
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X
   use m_field, only: field_t, flist_t
+  use m_logger, only: log_info
 
   implicit none
 
@@ -93,7 +94,7 @@ contains
     ! deallocate memory
     deallocate (self%olds)
 
-    print *, self%sname, ' time integrator deallocated'
+    call log_info(self%sname//' time integrator deallocated')
 
   end subroutine finalize
 
