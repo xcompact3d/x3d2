@@ -186,6 +186,7 @@ contains
       end if
       if (num_gpus == 1) then
         ctx%estimate_ng1_gib = per_gpu_gib
+        ctx%ng1_verdict = verdict
         ctx%io_staging_ng1_gib = io_gib
       end if
       call print_table_row(num_gpus, local_dims, workspace_gib, overhead_gib, &

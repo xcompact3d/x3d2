@@ -38,8 +38,10 @@ module m_memcheck_context
     character(len=16) :: gpu_io_mode_name = 'auto'
     character(len=64) :: gpu_io_reason = ''
     !> The num_gpus=1 row of the estimate: the CHECK line of --build
-    !> compares it with the measurement.
+    !> compares it with the measurement. The verdict is blank for an
+    !> unsupported row.
     real(dp) :: estimate_ng1_gib
+    character(len=12) :: ng1_verdict = ''
     !> The FFT probe plan: 'full' when the estimate uses the full-grid
     !> probe's result, else 'small' (also when the full-grid probe failed).
     !> probe_reason says why the full-grid probe has no result, and
@@ -51,8 +53,6 @@ module m_memcheck_context
     character(len=12) :: final_verdict
     !> The IO staging term (GiB) at num_gpus=1.
     real(dp) :: io_staging_ng1_gib = 0._dp
-    !> The invoking directory and the scratch directory of the real build.
-    character(len=4096) :: orig_dir = '', scratch_dir = ''
     !> The output fields and the substep count the real build measured.
     logical :: output_vorticity = .false., output_qcriterion = .false.
     integer :: measured_n_substeps

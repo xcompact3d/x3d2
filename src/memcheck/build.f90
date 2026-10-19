@@ -12,31 +12,82 @@ module m_memcheck_build
   use m_case_generic, only: case_generic_t
   use m_case_tgv, only: case_tgv_t
   use m_field, only: flist_t
-  use m_memcheck_scratch, only: ibm_mask_filename, validate_build_inputs, &
-                                make_scratch, leave_build_scratch
+  use m_monitoring, only: monitoring_default_enabled
   use m_memcheck_context, only: memcheck_ctx_t
   use m_memcheck_report, only: n_gpu_list, print_rule, print_table_header, &
                                print_table_row, print_requested_line
   use m_memcheck_estimate, only: to_gib, num_gpus_unsupported_reason, &
                                  requested_unsupported_reason, &
                                  estimate_for_num_gpus, &
-                                 fields_plus_halo_bytes_n, n_halo, basis_name
-  use m_memory_estimate, only: peak_fields_lookup, output_field_active, &
-                               padded_halo_bytes
+                                 fields_plus_halo_bytes_n, basis_name
+  use m_memory_estimate, only: peak_fields_lookup, output_field_active
   implicit none
 
   private
   public :: run_build_mode
 
-  !> --build skips the real build when the fields alone take more than this
-  !> fraction of the FREE card memory (card_free_gib), which leaves headroom
-  !> for the context and the FFT scratch.
-  real(dp), parameter :: BUILD_FRACTION = 0.55_dp
   !> The distance the static estimate may be from the measurement before the
   !> CHECK line of --build says MISMATCH.
   real(dp), parameter :: CHECK_TOLERANCE = 0.05_dp
 
 contains
+
+  pure function ibm_mask_filename(px, py, pz) result(fname)
+    !! The ibm_<BC-suffix>.bp mask filename for the periodic flags, as in
+    !! src/module/ibm.f90.
+    logical, intent(in) :: px, py, pz
+    character(len=16) :: fname
+    character(len=3) :: bc_suffix
+
+    bc_suffix(1:1) = '0'
+    if (.not. px) bc_suffix(1:1) = '1'
+    bc_suffix(2:2) = '0'
+    if (.not. py) bc_suffix(2:2) = '1'
+    bc_suffix(3:3) = '0'
+    if (.not. pz) bc_suffix(3:3) = '1'
+    fname = "ibm_"//bc_suffix//".bp"
+  end function ibm_mask_filename
+
+  subroutine validate_build_inputs(ctx, ok)
+    !! Checks the known causes of a failed real build: a missing input file,
+    !! a flow case without a dispatch, a missing ibm mask. ok is false and
+    !! the skip line is printed on a failure.
+    type(memcheck_ctx_t), intent(in) :: ctx
+    logical, intent(out) :: ok
+
+    character(len=16) :: ibm_file
+    logical :: ibm_file_exists, input_exists
+
+    ok = .false.
+    inquire (file=trim(ctx%input_path), exist=input_exists)
+    if (.not. input_exists) then
+      print '(a)', 'Real build skipped: input file not found: '// &
+        trim(ctx%input_path)
+      return
+    end if
+
+    select case (trim(ctx%domain_cfg%flow_case_name))
+    case ('tgv', 'generic', 'channel', 'cylinder')
+    case default
+      print '(a)', "Real build skipped: flow case '"// &
+        trim(ctx%domain_cfg%flow_case_name)// &
+        "' has no dispatch in x3d2-memcheck"
+      return
+    end select
+
+    if (ctx%solver_cfg%ibm_on) then
+      ibm_file = ibm_mask_filename(ctx%periodic_x, ctx%periodic_y, &
+                                   ctx%periodic_z)
+      inquire (file=trim(ibm_file), exist=ibm_file_exists)
+      if (.not. ibm_file_exists) then
+        print '(a)', 'Real build skipped: ibm_on=T but the matching &
+          &ibm_<BC-suffix>.bp mask file was not found in the &
+          &working directory; the estimate above stands.'
+        return
+      end if
+    end if
+    ok = .true.
+  end subroutine validate_build_inputs
 
   subroutine check_peak_fields_table(ctx, measured)
     !! Warns when peak_fields_lookup differs from the measured peak_fields.
@@ -226,16 +277,17 @@ contains
                                   ctx%output_qcriterion)
   end subroutine drive_case
 
-  subroutine build_and_measure(ctx, dims_in, npeak, dev_used, ibm_missing)
+  subroutine build_and_measure(ctx, dims_in, npeak, free_end_bytes, &
+                               ibm_missing)
     !! Builds the real flow case at dims_in on this GPU, drives one substep
     !! (n under --extensive) and returns the allocator mark npeak and the
-    !! device memory in use dev_used. The real case constructors re-read
-    !! argument 1 as the input file, and case_init runs the restart logic of
-    !! the input, as in production.
+    !! free device memory free_end_bytes at that point. The real case
+    !! constructors re-read argument 1 as the input file, and case_init
+    !! runs the restart logic of the input, as in production.
     type(memcheck_ctx_t), target, intent(inout) :: ctx
     integer, intent(in) :: dims_in(3)
     integer, intent(out) :: npeak
-    real(dp), intent(out) :: dev_used
+    integer(i8), intent(out) :: free_end_bytes
     logical, intent(out) :: ibm_missing
 
     type(mesh_t), target :: mesh
@@ -244,10 +296,10 @@ contains
     class(base_case_t), allocatable :: flow_case
     integer :: dims(3)
     type(allocator_t), target :: host_allocator
-    integer(i8) :: free_b, total_b
+    integer(i8) :: total_b
 
     npeak = 0
-    dev_used = 0._dp
+    free_end_bytes = 0_i8
     ctx%output_vorticity = .false.
     ctx%output_qcriterion = .false.
 
@@ -257,6 +309,8 @@ contains
     call ctx%device%make_backend(mesh, dims, allocator, backend)
     host_allocator = allocator_t(dims, ctx%device%sz())
 
+    ! The case build writes no monitoring.csv in the working directory.
+    monitoring_default_enabled = .false.
     call make_flow_case(ctx, backend, mesh, host_allocator, flow_case)
 
     ! The solver construction settled the FFT path: record it.
@@ -265,51 +319,50 @@ contains
     call drive_case(ctx, flow_case)
 
     npeak = allocator%next_id
-    call ctx%device%mem_info(total_b, free_b)
-    dev_used = to_gib(total_b - free_b)
+    call ctx%device%mem_info(total_b, free_end_bytes)
   end subroutine build_and_measure
+
+  subroutine run_real_build(ctx, measured_peak_fields, used_gib, ibm_missing)
+    !! Runs the real build in this process, after the FFT probe has destroyed
+    !! its plans. used_gib is the card memory the build holds: the context at
+    !! the start plus the fall of the free memory since then.
+    type(memcheck_ctx_t), target, intent(inout) :: ctx
+    integer, intent(out) :: measured_peak_fields
+    real(dp), intent(out) :: used_gib
+    logical, intent(out) :: ibm_missing
+
+    integer(i8) :: free_end_bytes
+
+    call build_and_measure(ctx, [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)], &
+                           measured_peak_fields, free_end_bytes, ibm_missing)
+    used_gib = 0._dp
+    if (.not. ibm_missing) &
+      used_gib = to_gib(ctx%device%footprint_bytes(free_end_bytes))
+  end subroutine run_real_build
 
   subroutine run_build_mode(ctx)
     !! The real build: a case build and one substep on 1 GPU in this process,
-    !! measured with cudaMemGetInfo. The estimate stands when the fields
-    !! alone take more than BUILD_FRACTION of the free card memory or the
-    !! inputs are not valid. The build runs in a scratch directory because a
-    !! case build writes monitoring.csv in the working directory.
+    !! measured with cudaMemGetInfo. The estimate stands when the
+    !! num_gpus=1 row is DOES_NOT_FIT or the inputs are not valid.
     type(memcheck_ctx_t), intent(inout) :: ctx
-    real(dp) :: used_gib, workspace_gib_measured, ws_guess
+    real(dp) :: used_gib, workspace_gib_measured
     real(dp) :: pct_error, estimate_ng1_excl_io_gib
     character(len=8) :: check_word
     integer :: measured_peak_fields
-    logical :: ibm_missing, build_scratch_ok
+    logical :: ibm_missing, inputs_ok
     character(len=12) :: measured_verdict
 
-    ! --build gate: skip the real build (after printing why) when the fields
-    ! only workspace alone already exceeds BUILD_FRACTION of the FREE card
-    ! memory.
-    ws_guess = to_gib(fields_plus_halo_bytes_n(ctx, 1, ctx%peak_fields))
-    ! fields_plus_halo_bytes_n includes the halo term; the historical
-    ! BUILD_FRACTION guard was calibrated against fields alone, so subtract
-    ! it back out here rather than changing the (already-validated)
-    ! threshold itself.
-    ws_guess = ws_guess - &
-               to_gib(padded_halo_bytes(ctx%gdims, ctx%device%sz(), n_halo))
-    if (ws_guess >= BUILD_FRACTION*ctx%card_free_gib) then
+    if (trim(ctx%ng1_verdict) == 'DOES_NOT_FIT') then
       call print_rule('-')
-      print '(a,f0.2,a,f0.1,a,f0.2,a)', 'Real build skipped: fields only &
-        &workspace ', ws_guess, ' GiB exceeds ', 100._dp*BUILD_FRACTION, &
-        '% of the FREE card memory (', ctx%card_free_gib, ' GiB free); the &
-        &estimate above stands.'
+      print '(a)', 'Real build skipped: the num_gpus=1 estimate is &
+        &DOES_NOT_FIT; the estimate above stands.'
       return
     end if
 
-    call validate_build_inputs(ctx, build_scratch_ok)
-    if (.not. build_scratch_ok) return
-    call make_scratch(ctx, build_scratch_ok)
-    if (.not. build_scratch_ok) return
+    call validate_build_inputs(ctx, inputs_ok)
+    if (.not. inputs_ok) return
 
-    call build_and_measure(ctx, [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)], &
-                           measured_peak_fields, used_gib, ibm_missing)
-    call leave_build_scratch(ctx)
+    call run_real_build(ctx, measured_peak_fields, used_gib, ibm_missing)
     if (ibm_missing) then
       call print_rule('-')
       print '(a)', 'Real build skipped: ibm_on=T but the matching &

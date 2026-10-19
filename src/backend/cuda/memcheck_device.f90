@@ -36,9 +36,8 @@ module m_cuda_memcheck_device
     !> small-grid result then stays in place.
     logical, public :: full_failed = .false.
     integer, public :: full_failed_stat = 0
-    !> Card memory used right after cudaSetDevice: this process's context,
-    !> plus any other process on the card.
-    integer(i8) :: start_used_bytes = 0_i8
+    !> Card memory used and free right after cudaSetDevice.
+    integer(i8) :: start_used_bytes = 0_i8, start_free_bytes = 0_i8
     !> The full-grid probe was tried, and it returned a result.
     logical :: full_tried = .false., full_ok = .false.
     !> Whether the real build used cuFFTMp, once it is known.
@@ -56,6 +55,7 @@ module m_cuda_memcheck_device
     procedure :: make_backend
     procedure :: ensure_probe
     procedure :: capture_solver_info
+    procedure :: footprint_bytes
     procedure :: fft_path_known
     procedure :: uses_distributed_fft
   end type cuda_memcheck_device_t
@@ -85,6 +85,7 @@ contains
     ierr = cudaMemGetInfo(free_b, total_b)
     call check_status(ierr, 'cudaMemGetInfo (context size)')
     self%start_used_bytes = int(total_b, i8) - int(free_b, i8)
+    self%start_free_bytes = int(free_b, i8)
     ok = .true.
   end subroutine init
 
@@ -230,6 +231,16 @@ contains
       self%use_cufftmp_known = .true.
     end select
   end subroutine capture_solver_info
+
+  function footprint_bytes(self, free_end_bytes) result(nbytes8)
+    !! The card memory held at the end of the real build: the context at the
+    !! start plus the fall of the free memory since then.
+    class(cuda_memcheck_device_t), intent(in) :: self
+    integer(i8), intent(in) :: free_end_bytes
+    integer(i8) :: nbytes8
+
+    nbytes8 = self%start_used_bytes + (self%start_free_bytes - free_end_bytes)
+  end function footprint_bytes
 
   function fft_path_known(self) result(known)
     class(cuda_memcheck_device_t), intent(in) :: self

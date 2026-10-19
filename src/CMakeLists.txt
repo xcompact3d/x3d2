@@ -215,7 +215,6 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
     memcheck/context.f90
     memcheck/estimate.f90
     memcheck/report.f90
-    memcheck/scratch.f90
     memcheck/build.f90
     backend/cuda/memcheck_device.f90
   )

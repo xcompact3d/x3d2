@@ -552,42 +552,36 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
     "if grep -qF '(num_gpus>1 rows extrapolate the single-GPU probe by 1/num_gpus.)' $d/build.log && grep -q '^ *1 | .*| measured *| ' $d/build.log && grep -q '^ *2 | .*| extrapolated *| ' $d/build.log; then echo memcheck_default_TGV_extrapolation_note_OK; fi"
     "")
 
-  # A real --build run must not clobber whatever CWD it was launched from,
-  # nor leave its scratch directory behind: validate_build_inputs/
-  # make_scratch/leave_build_scratch (src/memcheck/scratch.f90) exist
-  # because the real case build initialises monitoring (writes
-  # monitoring.csv) and calls postprocess(0), which clobbered a user's run
-  # directory on 2026-09-15.
-  add_test(NAME memcheck_build_scratch_protects_cwd COMMAND sh -c
-    "tmp=$(mktemp -d) && echo marker > \"$tmp/monitoring.csv\" && \
-     cd \"$tmp\" && \
-     mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck \
-       ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d --build; \
-     if grep -q marker monitoring.csv && \
-        ! ls -d x3d2-memcheck-build.* >/dev/null 2>&1; then \
-       echo SCRATCH_OK; else echo MISMATCH; fi; \
-     rm -rf \"$tmp\"")
-  set_tests_properties(memcheck_build_scratch_protects_cwd PROPERTIES
-    LABELS "verification;cuda"
-    PASS_REGULAR_EXPRESSION "SCRATCH_OK"
-    FAIL_REGULAR_EXPRESSION "MISMATCH")
-
-  # A relative input path must be mirrored into the scratch directory by
-  # symlink, rather than read from the CWD where monitoring.csv would
-  # otherwise land.
+  # A relative input path works: the real build re-reads argument 1 as the
+  # input file, and the CHECK line stays OK.
   add_test(NAME memcheck_build_relative_input COMMAND sh -c
     "tmp=$(mktemp -d) && \
      cp ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d \"$tmp/input.x3d\" && \
      cd \"$tmp\" && \
      mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck \
        input.x3d --build; \
-     if [ ! -e monitoring.csv ] && \
-        ! ls -d x3d2-memcheck-build.* >/dev/null 2>&1; then \
-       echo RELATIVE_OK; else echo MISMATCH; fi; \
      rm -rf \"$tmp\"")
   set_tests_properties(memcheck_build_relative_input PROPERTIES
     LABELS "verification;cuda"
-    PASS_REGULAR_EXPRESSION "RELATIVE_OK"
+    PASS_REGULAR_EXPRESSION "CHECK num_gpus=1: .* - OK"
+    FAIL_REGULAR_EXPRESSION "MISMATCH")
+
+  # A real --build run writes no file in the working directory: the case
+  # build writes no monitoring.csv. The directory holds only the input and
+  # the log afterwards.
+  add_test(NAME memcheck_build_leaves_no_files COMMAND sh -c
+    "tmp=$(mktemp -d) && \
+     cp ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d \"$tmp/input.x3d\" && \
+     cd \"$tmp\" && \
+     mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck \
+       input.x3d --build > build.log 2>&1; \
+     cat build.log; \
+     if [ \"$(ls -A | sort | tr '\\n' ' ')\" = 'build.log input.x3d ' ]; then \
+       echo NO_FILES_OK; else echo MISMATCH; ls -A; fi; \
+     rm -rf \"$tmp\"")
+  set_tests_properties(memcheck_build_leaves_no_files PROPERTIES
+    LABELS "verification;cuda"
+    PASS_REGULAR_EXPRESSION "NO_FILES_OK"
     FAIL_REGULAR_EXPRESSION "MISMATCH")
 
   # GPU-aware ADIOS2 device writes hold one extra unpadded local field on the

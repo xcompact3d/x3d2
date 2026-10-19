@@ -14,7 +14,13 @@ module m_monitoring
 
   implicit none
 
+  !> Whether a monitoring_t that init sees writes monitoring.csv. A tool that
+  !> builds a case and drives it, such as x3d2-memcheck, sets this to false
+  !> before the case constructor.
+  logical :: monitoring_default_enabled = .true.
+
   type :: monitoring_t
+    logical, private :: enabled = .true.
     logical, private :: is_root = .false.
     type(scalar_series_t), private :: series
   contains
@@ -37,6 +43,9 @@ contains
                                      'div_u_max      ', &
                                      'div_u_mean     ']
 
+    self%enabled = monitoring_default_enabled
+    if (.not. self%enabled) return
+
     self%is_root = solver%mesh%par%is_root()
     append_output = .false.
     if (present(append)) append_output = append
@@ -55,6 +64,8 @@ contains
 
     class(field_t), pointer :: du, dv, dw, div_u
     real(dp) :: kinetic_energy, enstrophy, div_u_max, div_u_mean
+
+    if (.not. self%enabled) return
 
     !! Kinetic energy: \( E_k = \frac{1}{2N} \sum |\mathbf{u}|^2 \)
     kinetic_energy = 0.5_dp*solver%backend%vector_norm_squared(u, v, w) &
@@ -98,6 +109,8 @@ contains
 
   subroutine finalise(self)
     class(monitoring_t), intent(inout) :: self
+
+    if (.not. self%enabled) return
 
     call self%series%finalise()
 
