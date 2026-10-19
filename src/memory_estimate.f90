@@ -19,7 +19,8 @@ module m_memory_estimate
             mirror_buffer_bytes_100, spectral_extra_bytes_110, &
             stretched_y_matrix_bytes, output_field_active, &
             peak_fields_lookup, halo_bytes, padded_halo_bytes, &
-            gpu_io_staging_bytes, predicted_fft_heap_bytes, round_up_bytes
+            gpu_io_staging_bytes, predicted_fft_heap_bytes, round_up_bytes, &
+            fft_xtdesc_step_bytes, fft_probe_margin_bytes
 
   !> The NVSHMEM heap of a cuFFTMp plan grows in whole GiB for the workspace.
   !> Measured on an A100 40 GB with 512^3, 640^3 and 1024^3 in double
@@ -28,6 +29,11 @@ module m_memory_estimate
   !> the memory of a plan with auto-allocation on to 0.001 GiB. Other cards
   !> can differ.
   integer(i8), parameter :: fft_workspace_step_bytes = 1024_i8**3
+  !> The xtdesc buffer grows the heap in steps of about 0.5 GiB.
+  integer(i8), parameter :: fft_xtdesc_step_bytes = 512_i8*1024_i8**2
+  !> The free memory the full-grid FFT probe keeps beyond the predicted heap.
+  !> The probe context and the libraries that stay after cufftDestroy use it.
+  integer(i8), parameter :: fft_probe_margin_bytes = 1024_i8**3
 
 contains
 

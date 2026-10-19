@@ -7,6 +7,8 @@ module m_cuda_memcheck_device
   use cufftXt, only: cufftXtMalloc, cufftXtFree, CUFFT_XT_FORMAT_INPLACE, &
                      cudaLibXtDesc
   use m_common, only: dp, i8, is_sp
+  use m_memory_estimate, only: predicted_fft_heap_bytes, round_up_bytes, &
+                               fft_xtdesc_step_bytes
   use m_cuda_common, only: SZ
   use m_mesh, only: mesh_t
   use m_allocator, only: allocator_t
@@ -36,6 +38,10 @@ module m_cuda_memcheck_device
     !> small-grid result then stays in place.
     logical, public :: full_failed = .false.
     integer, public :: full_failed_stat = 0
+    !> The memory the FFT plans of the full grid need, from the query-only
+    !> mode (see query_plan_need). For cuFFTMp it is the predicted heap with
+    !> the workspace and the xtdesc buffer.
+    integer(i8), public :: plan_need_bytes = 0_i8
     !> Card memory used and free right after cudaSetDevice.
     integer(i8) :: start_used_bytes = 0_i8, start_free_bytes = 0_i8
     !> The full-grid probe was tried, and it returned a result.
@@ -54,6 +60,7 @@ module m_cuda_memcheck_device
     procedure :: probe_ran
     procedure :: make_backend
     procedure :: ensure_probe
+    procedure :: query_plan_need
     procedure :: capture_solver_info
     procedure :: footprint_bytes
     procedure :: fft_path_known
@@ -168,6 +175,33 @@ contains
       end if
     end if
   end subroutine ensure_probe
+
+  subroutine query_plan_need(self, bc_is_100, bc_is_110, cdims, &
+                             xtdesc_bytes, stat)
+    !! Runs the query-only mode of the FFT workspace query on the cell
+    !! dimensions cdims. It allocates no workspace and no xtdesc buffer, so
+    !! the plan cannot abort for lack of memory. xtdesc_bytes is the size of
+    !! the xtdesc buffer, which the caller knows from the spectral slab.
+    !! Sets plan_need_bytes when stat is zero.
+    class(cuda_memcheck_device_t), intent(inout) :: self
+    logical, intent(in) :: bc_is_100, bc_is_110
+    integer, intent(in) :: cdims(3)
+    integer(i8), intent(in) :: xtdesc_bytes
+    integer, intent(out) :: stat
+    integer(i8) :: worksize, heap, xtdesc
+    logical :: used_cufftmp
+
+    call fft_workspace_bytes_query(bc_is_100, bc_is_110, cdims, .true., &
+                                   .true., worksize, heap, xtdesc, &
+                                   used_cufftmp, stat, query_only=.true.)
+    if (stat /= 0) return
+    ! A plain cuFFT plan holds its workspace in the plan memory.
+    self%plan_need_bytes = heap
+    if (used_cufftmp) &
+      self%plan_need_bytes = predicted_fft_heap_bytes(heap, worksize) + &
+                             round_up_bytes(xtdesc_bytes, &
+                                            fft_xtdesc_step_bytes)
+  end subroutine query_plan_need
 
   subroutine run_probe(self, bc_is_100, bc_is_110, cdims, res, stat)
     !! The single-rank FFT probe on the cell dimensions cdims. The context

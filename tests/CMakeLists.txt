@@ -536,7 +536,7 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
   # calibration line is the only line that may name NVSHMEM.
   define_memcheck_build_edit_test(memcheck_default_TGV_probe_skipped
     "s/^dims_global *=.*/dims_global = 2048, 2048, 2048/;s/^nproc_dir *=.*/nproc_dir = 1, 1, 64/"
-    "if test $rc -le 2 && grep -qF 'no full-grid probe: free memory is under seven spectral copies' $d/build.log && grep -q 'Requested nproc_dir gives num_gpus=64' $d/build.log && ! grep -qi 'error stop' $d/build.log && ! grep -i nvshmem $d/build.log | grep -qv 'Calibration on this GPU'; then echo memcheck_default_TGV_probe_skipped_OK; fi"
+    "if test $rc -le 2 && grep -qF 'no full-grid probe: the plans need ' $d/build.log && grep -q 'Requested nproc_dir gives num_gpus=64' $d/build.log && ! grep -qi 'error stop' $d/build.log && ! grep -i nvshmem $d/build.log | grep -qv 'Calibration on this GPU'; then echo memcheck_default_TGV_probe_skipped_OK; fi"
     "")
 
   # The report prints the CUDA context line once, and in the default mode it

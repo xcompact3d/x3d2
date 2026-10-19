@@ -5,7 +5,8 @@ module m_memcheck_estimate
   use m_memory_estimate, only: padded_cells, padded_halo_bytes, &
                                spectral_slab_bytes, mirror_buffer_bytes_100, &
                                spectral_extra_bytes_110, &
-                               stretched_y_matrix_bytes, gpu_io_staging_bytes
+                               stretched_y_matrix_bytes, &
+                               gpu_io_staging_bytes, fft_probe_margin_bytes
   implicit none
 
   private
@@ -142,36 +143,48 @@ contains
   subroutine prepare_probe(ctx)
     !! Decides the FFT probe once per run and runs it. The small-grid probe
     !! gives the context and the heap. The full-grid probe follows when the
-    !! mode allows and the card has room for the probe's own size. The
+    !! mode allows and the card has room for the memory the plans need. The
     !! decision is in ctx%probe_plan and ctx%probe_reason (see ensure_probe
     !! in the device).
     type(memcheck_ctx_t), intent(inout) :: ctx
     logical :: try_full
     character(len=32) :: status_text
-    integer(i8) :: total_b, free_b, probe_bytes
+    integer(i8) :: total_b, free_b
+    integer :: stat
 
     call ctx%device%ensure_probe(ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, &
                                  .false.)
     ! The full-grid probe builds the FFT plans on the whole global grid, one
-    ! GPU, whatever num_gpus is. Skip it when free memory cannot hold that:
-    ! seven spectral copies plus the fixed overhead. A cuFFTMp plan that does
-    ! not fit aborts inside NVSHMEM and kills this process. On a 40 GB card
-    ! the heap took 2.5 to 5 copies, depending on the grid size, and the
-    ! xtdesc buffer one. The 984^3 probe aborted with a guess of five copies,
-    ! the 1056^3 probe with four and the 1280^3 probe with two, so seven is
-    ! the margin. The gate is decided once per run and does not depend on
-    ! num_gpus.
+    ! GPU, whatever num_gpus is. A cuFFTMp plan that does not fit aborts
+    ! inside NVSHMEM and kills this process. The query-only mode makes the
+    ! same plans with auto-allocation off. It reports the workspace size and
+    ! allocates nothing, so it cannot abort. The probe runs when the free
+    ! memory holds the plan memory, the workspace rounded up to 1 GiB, the
+    ! xtdesc buffer rounded up to 0.5 GiB and a margin of 1 GiB. Measured on
+    ! an A100 40 GB: the 1024^3 probe needs 28.3 GiB and runs, the 1280^3
+    ! probe needs 42.78 GiB, 43.78 GiB with the margin, the card has 38.9 GiB
+    ! free, and the full plan aborts. The gate is decided once per run and
+    ! does not depend on num_gpus.
     try_full = .false.
     ctx%probe_reason = ''
     if (trim(ctx%run_mode) /= 'STATIC') then
+      call ctx%device%query_plan_need(ctx%bc_is_100, ctx%bc_is_110, &
+                                      ctx%cdims, spectral_slab_bytes( &
+                                      ctx%bc_is_100, ctx%bc_is_110, &
+                                      ctx%cdims, 1), stat)
       call ctx%device%mem_info(total_b, free_b)
-      probe_bytes = spectral_slab_bytes(ctx%bc_is_100, ctx%bc_is_110, &
-                                        ctx%cdims, 1)
-      try_full = free_b >= 7_i8*probe_bytes + &
-                 ctx%device%overhead_floor_bytes(1, ctx%bc_is_110)
-      if (.not. try_full) &
-        ctx%probe_reason = 'no full-grid probe: free memory is under seven &
-                           &spectral copies plus the overhead'
+      if (stat /= 0) then
+        write (status_text, '(i0)') stat
+        ctx%probe_reason = 'no full-grid probe: the plan query returned &
+                           &status '//trim(status_text)
+      else
+        try_full = free_b >= ctx%device%plan_need_bytes + &
+                   fft_probe_margin_bytes
+        if (.not. try_full) &
+          write (ctx%probe_reason, '(a,f0.2,a,f0.2,a)') 'no full-grid probe: &
+            &the plans need ', to_gib(ctx%device%plan_need_bytes), ' GiB, &
+            &the card has ', to_gib(free_b), ' GiB free'
+      end if
     end if
     ctx%probe_plan = merge('full ', 'small', try_full)
     call ctx%device%ensure_probe(ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, &
