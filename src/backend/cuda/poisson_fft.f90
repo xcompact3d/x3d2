@@ -184,7 +184,8 @@ contains
   end subroutine sync_or_abort
 
   subroutine create_fft_plan(plan, use_cufftmp, nx, ny, nz, &
-                             plan_type, is_root, plan_name, worksize_out, stat)
+                             plan_type, is_root, plan_name, worksize_out, &
+                             stat, auto_alloc_off)
     !! Helper subroutine to create FFT plan with automatic cuFFTMp fallback
     implicit none
 
@@ -202,6 +203,10 @@ contains
     !> error code here instead of stopping. Used only by the static memory
     !> estimator; the solver call sites leave it out and keep the stop.
     integer, optional, intent(out) :: stat
+    !> When present and true, a cuFFTMp plan is made with auto-allocation off.
+    !> The plan then reports its workspace size in worksize_out and does not
+    !> allocate the workspace. Used only by the static memory estimator.
+    logical, optional, intent(in) :: auto_alloc_off
 
     integer :: ierr
     integer(int_ptr_kind()) :: worksize
@@ -229,8 +234,12 @@ contains
         end if
         cufftmp_failed = .true.
       else
+        if (present(auto_alloc_off)) then
+          if (auto_alloc_off) ierr = cufftSetAutoAllocation(plan, 0)
+        end if
         ! MPI attach succeeded, create the plan
-        ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
+        if (ierr == 0) &
+          ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
         if (ierr /= 0) then
           if (is_root) then
             print *, 'cuFFTMp: Plan creation failed (error ', ierr, ')'

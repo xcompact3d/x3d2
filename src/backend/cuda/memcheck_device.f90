@@ -18,7 +18,7 @@ module m_cuda_memcheck_device
   implicit none
 
   private
-  public :: cuda_memcheck_device_t
+  public :: cuda_memcheck_device_t, fft_workspace_bytes_query
 
   !> What one FFT probe returned. ok is false when the probe returned a
   !> failure status.
@@ -285,7 +285,8 @@ contains
   subroutine fft_workspace_bytes_query(bc_is_100, bc_is_110, cdims, &
                                        try_cufftmp, is_root, &
                                        worksize_bytes, heap_bytes, &
-                                       xtdesc_bytes, used_cufftmp, stat)
+                                       xtdesc_bytes, used_cufftmp, stat, &
+                                       query_only)
     !! Creates and destroys the forward and backward FFT plans the way the
     !! solver does, for the cell dimensions cdims, and for cuFFTMp also the
     !! xtdesc buffer, each bracketed with cudaMemGetInfo. worksize_bytes is
@@ -294,6 +295,10 @@ contains
     !! xtdesc_bytes the xtdesc buffer. The 110 BC never uses cuFFTMp. stat is
     !! the first non-zero cuFFT/CUDA code, or 0, and the other outputs are
     !! then not valid. A plan that aborts inside the library never returns.
+    !! With query_only set, a cuFFTMp plan is made with auto-allocation off.
+    !! heap_bytes is then the plan memory without the workspace, worksize_bytes
+    !! the workspace of both plans (not allocated), xtdesc_bytes is zero and no
+    !! xtdesc buffer is allocated. A plain cuFFT plan is not changed by it.
     logical, intent(in) :: bc_is_100, bc_is_110
     integer, intent(in) :: cdims(3)
     logical, intent(in) :: try_cufftmp
@@ -301,13 +306,14 @@ contains
     integer(i8), intent(out) :: worksize_bytes, heap_bytes, xtdesc_bytes
     logical, intent(out) :: used_cufftmp
     integer, intent(out) :: stat
+    logical, optional, intent(in) :: query_only
 
     integer :: plan_fw, plan_bw, fft_n1, fft_n2, fft_n3
     integer :: fw_plan_type, bw_plan_type, ierr
     integer(int_ptr_kind()) :: worksize_fw, worksize_bw
     integer(kind=cuda_count_kind) :: free_before, free_after, total_b
     type(cudaLibXtDesc), pointer :: xtdesc
-    logical :: fw_was_cufftmp
+    logical :: fw_was_cufftmp, no_auto_alloc
 
     ! The plan dimensions follow the permutation of the solver's init().
     if (bc_is_100) then
@@ -323,19 +329,21 @@ contains
 
     used_cufftmp = try_cufftmp .and. (.not. bc_is_110)
     stat = 0
+    no_auto_alloc = .false.
+    if (present(query_only)) no_auto_alloc = query_only
 
     ierr = cudaMemGetInfo(free_before, total_b)
     call check_status(ierr, 'cudaMemGetInfo (before plans)')
     call create_fft_plan(plan_fw, used_cufftmp, fft_n1, fft_n2, fft_n3, &
                          fw_plan_type, is_root, 'memcheck probe fwd', &
-                         worksize_fw, stat)
+                         worksize_fw, stat, no_auto_alloc)
     if (stat /= 0) return
     fw_was_cufftmp = used_cufftmp
     ! A fallback to plain cuFFT sets used_cufftmp to false. A forward plan
     ! built on cuFFTMp is then rebuilt on plain cuFFT, as init() does.
     call create_fft_plan(plan_bw, used_cufftmp, fft_n1, fft_n2, fft_n3, &
                          bw_plan_type, is_root, 'memcheck probe bwd', &
-                         worksize_bw, stat)
+                         worksize_bw, stat, no_auto_alloc)
     if (stat /= 0) then
       ierr = cufftDestroy(plan_fw)
       return
@@ -357,7 +365,7 @@ contains
     worksize_bytes = int(worksize_fw, i8) + int(worksize_bw, i8)
     heap_bytes = int(free_before, i8) - int(free_after, i8)
 
-    if (used_cufftmp) then
+    if (used_cufftmp .and. (.not. no_auto_alloc)) then
       ierr = cudaMemGetInfo(free_before, total_b)
       call check_status(ierr, 'cudaMemGetInfo (before xtdesc)')
       ierr = cufftXtMalloc(plan_fw, xtdesc, CUFFT_XT_FORMAT_INPLACE)

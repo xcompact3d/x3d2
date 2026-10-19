@@ -584,6 +584,11 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA")
     PASS_REGULAR_EXPRESSION "NO_FILES_OK"
     FAIL_REGULAR_EXPRESSION "MISMATCH")
 
+  # The query-only mode of the memcheck FFT workspace query reports the plan
+  # memory and the workspace size without allocating the workspace.
+  define_verification_test(verification/test_fft_query_only.f90 1 cuda)
+  target_link_libraries(test_fft_query_only_cuda_1 PRIVATE x3d2_memcheck)
+
   # GPU-aware ADIOS2 device writes hold one extra unpadded local field on the
   # device while a snapshot/checkpoint field is packed (src/io/adios2/io.f90);
   # x3d2-memcheck adds that analytically. Only meaningful when the build has

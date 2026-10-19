@@ -19,7 +19,15 @@ module m_memory_estimate
             mirror_buffer_bytes_100, spectral_extra_bytes_110, &
             stretched_y_matrix_bytes, output_field_active, &
             peak_fields_lookup, halo_bytes, padded_halo_bytes, &
-            gpu_io_staging_bytes
+            gpu_io_staging_bytes, predicted_fft_heap_bytes, round_up_bytes
+
+  !> The NVSHMEM heap of a cuFFTMp plan grows in whole GiB for the workspace.
+  !> Measured on an A100 40 GB with 512^3, 640^3 and 1024^3 in double
+  !> precision and 704^3 and 1280^3 in single precision: the plan memory is
+  !> 2.775 GiB for all five grids, and plan memory plus workspace add up to
+  !> the memory of a plan with auto-allocation on to 0.001 GiB. Other cards
+  !> can differ.
+  integer(i8), parameter :: fft_workspace_step_bytes = 1024_i8**3
 
 contains
 
@@ -97,6 +105,27 @@ contains
     end if
     nbytes8 = nx_spec*ny_spec*nz_spec*2_i8*int(nbytes, i8)
   end function spectral_slab_bytes
+
+  pure function round_up_bytes(n_bytes, step_bytes) result(nbytes8)
+    !! The smallest multiple of step_bytes that is at least n_bytes.
+    integer(i8), intent(in) :: n_bytes, step_bytes
+    integer(i8) :: nbytes8
+
+    nbytes8 = ((n_bytes + step_bytes - 1_i8)/step_bytes)*step_bytes
+  end function round_up_bytes
+
+  pure function predicted_fft_heap_bytes(plan_bytes, worksize_bytes) &
+    result(nbytes8)
+    !! The NVSHMEM heap of the forward and backward cuFFTMp plans with the
+    !! workspace allocated and without the xtdesc buffer: the plan memory plus
+    !! the workspace rounded up to 1 GiB. This is the definition of the
+    !! measured heap of the normal FFT workspace query.
+    integer(i8), intent(in) :: plan_bytes, worksize_bytes
+    integer(i8) :: nbytes8
+
+    nbytes8 = plan_bytes + &
+              round_up_bytes(worksize_bytes, fft_workspace_step_bytes)
+  end function predicted_fft_heap_bytes
 
   pure function mirror_buffer_bytes_100(cdims, num_gpus) result(nbytes8)
     !! 100-case multi rank only mirror/exchange buffers, zero at num_gpus<=1 -
