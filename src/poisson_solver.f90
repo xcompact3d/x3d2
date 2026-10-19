@@ -131,6 +131,9 @@ program x3d2_poisson_solver
     t1 = MPI_Wtime()
 
     elapsed = real(t1 - t0, dp)
+    ! Report the slowest rank.
+    call MPI_Allreduce(MPI_IN_PLACE, elapsed, 1, MPI_X3D2_DP, MPI_MAX, &
+                       MPI_COMM_WORLD, ierr)
     min_time = min(min_time, elapsed)
     sum_time = sum_time + elapsed
   end do
