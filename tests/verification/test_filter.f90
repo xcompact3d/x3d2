@@ -20,7 +20,7 @@ program test_filter
                       RDR_X2Y, RDR_Y2X
   use m_field, only: field_t
   use m_mesh, only: mesh_t
-  use m_solver, only: allocate_tdsops
+  use m_tdsops_setup, only: allocate_tdsops
   use m_tdsops, only: dirps_t
 
 
