@@ -458,8 +458,9 @@ foreach(backend IN LISTS X3D2_TEST_BACKENDS)
   define_backend_tests(${backend})
 endforeach()
 
-# CUDA-only x3d2-memcheck tests, registered after the per-backend tests
-if(${ENABLE_BACKEND} STREQUAL "CUDA")
+# CUDA-only x3d2-memcheck tests, registered after the per-backend tests.
+# x3d2-memcheck is not built without MPI (see src/CMakeLists.txt).
+if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
   # x3d2-memcheck regression tests: run the already-built binary against a
   # few example inputs and check its printed output, rather than compiling
   # a bespoke Fortran test program. "static" checks the tool runs and

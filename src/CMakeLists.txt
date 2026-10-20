@@ -228,28 +228,33 @@ if (${ENABLE_BACKEND} STREQUAL "CUDA")
   # Selects the CUDA backend in backend/setup.f90
   target_compile_options(x3d2_backends PRIVATE "-DCUDA")
 
-  # x3d2-memcheck (the static memory estimator) only exists for the CUDA
-  # backend because its device is the CUDA one
-  # (backend/cuda/memcheck_device.f90).
-  add_library(x3d2_memcheck STATIC
-    memcheck/context.f90
-    memcheck/estimate.f90
-    memcheck/report.f90
-    memcheck/build.f90
-    backend/cuda/memcheck_device.f90
-  )
-  set_target_properties(x3d2_memcheck PROPERTIES
-    Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_memcheck")
-  target_include_directories(x3d2_memcheck INTERFACE
-    ${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_memcheck)
-  target_link_libraries(x3d2_memcheck PRIVATE x3d2_backends x3d2)
-  target_compile_options(x3d2_memcheck PRIVATE "-DCUDA")
+  if(WITH_MPI)
+    # x3d2-memcheck (the static memory estimator) only exists for the CUDA
+    # backend because its device is the CUDA one
+    # (backend/cuda/memcheck_device.f90).  It also needs cuFFTMp, which only
+    # links into an MPI build, so a WITH_MPI=OFF build skips it.
+    add_library(x3d2_memcheck STATIC
+      memcheck/context.f90
+      memcheck/estimate.f90
+      memcheck/report.f90
+      memcheck/build.f90
+      backend/cuda/memcheck_device.f90
+    )
+    set_target_properties(x3d2_memcheck PROPERTIES
+      Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_memcheck")
+    target_include_directories(x3d2_memcheck INTERFACE
+      ${CMAKE_CURRENT_BINARY_DIR}/modules/x3d2_memcheck)
+    target_link_libraries(x3d2_memcheck PRIVATE x3d2_backends x3d2)
+    target_compile_options(x3d2_memcheck PRIVATE "-DCUDA")
 
-  add_executable(x3d2-memcheck memcheck.f90)
-  target_link_libraries(x3d2-memcheck PRIVATE x3d2_memcheck)
-  target_link_libraries(x3d2-memcheck PRIVATE x3d2_backends)
-  target_link_libraries(x3d2-memcheck PRIVATE x3d2)
-  target_compile_options(x3d2-memcheck PRIVATE "-DCUDA")
+    add_executable(x3d2-memcheck memcheck.f90)
+    target_link_libraries(x3d2-memcheck PRIVATE x3d2_memcheck)
+    target_link_libraries(x3d2-memcheck PRIVATE x3d2_backends)
+    target_link_libraries(x3d2-memcheck PRIVATE x3d2)
+    target_compile_options(x3d2-memcheck PRIVATE "-DCUDA")
+  else()
+    message(STATUS "x3d2-memcheck needs an MPI build with cuFFTMp: skipping it because WITH_MPI is OFF")
+  endif()
 
   # NVTX ranges label the ADIOS2 write paths in Nsight Systems (see
   # io/nvtx.f90). Without ADIOS2 there is no output to label.
