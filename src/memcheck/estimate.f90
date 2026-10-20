@@ -70,12 +70,6 @@ contains
     else if (num_gpus > 1 .and. .not. ctx%multi_gpu_supported) then
       reason = 'not supported: BC_y is non-periodic - &
                &src/poisson_fft.f90 error-stops at nproc>1'
-    else if (num_gpus > 1 .and. (ctx%bc_is_000 .or. ctx%bc_is_100) .and. &
-             ctx%device%fft_path_known() .and. &
-             (.not. ctx%device%uses_distributed_fft())) then
-      ! Plain cuFFT would give a wrong result at num_gpus>1 for 000 and 100.
-      reason = 'not supported: the FFT fell back to plain cuFFT, no &
-               &multi-GPU transform'
     else if (mod(ctx%gdims(3), num_gpus) /= 0) then
       write (reason, '(a,i0,a)') 'z=', ctx%gdims(3), ' not divisible'
     else if ((ctx%bc_is_000 .or. ctx%bc_is_010) .and. &
