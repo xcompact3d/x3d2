@@ -266,6 +266,11 @@ contains
       afi = 17._dp/24._dp/delta   ! a/(2h): a=17/12
       bfi = 101._dp/600._dp/delta ! b/(4h): b=101/150
       cfi = 1._dp/600._dp/delta   ! c/(6h): c=1/100
+    case ('compact2')
+      alpha = 0._dp
+      afi = 1._dp/(2._dp * delta)
+      bfi = 0._dp
+      cfi = 0._dp
     case default
       call abort_run('scheme is not defined')
     end select
@@ -654,6 +659,12 @@ contains
       else
         call abort_run('compact6-hyperviscous requires c_nu and nu0_nu')
       end if
+    case ('compact2')
+      alpha = 0._dp
+      asi = 1._dp / d2
+      bsi = 0._dp
+      csi = 0._dp
+      dsi = 0._dp
     case default
       call abort_run('scheme is not defined')
     end select
@@ -850,6 +861,12 @@ contains
       bici = (-25._dp + 126._dp*alpha)/256._dp
       cici = (3._dp - 10._dp*alpha)/256._dp
       dici = 0._dp
+    case ('classic2')
+      alpha = 0._dp
+      aici = 0.5_dp
+      bici = 0._dp
+      cici = 0._dp
+      dici = 0._dp
     case default
       call abort_run('scheme is not defined')
     end select
@@ -987,6 +1004,10 @@ contains
       alpha = 9._dp/62._dp
       aci = 63._dp/62._dp/delta
       bci = 17._dp/62._dp/3._dp/delta
+    case ('compact2')
+      alpha = 0._dp
+      aci = 1._dp / delta
+      bci = 0._dp
     case default
       call abort_run('scheme is not defined')
     end select
