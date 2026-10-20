@@ -2,6 +2,7 @@ module m_memcheck_build
   !! The real build of x3d2-memcheck (--build): the real case build, its
   !! measurement and the measured report.
   use m_common, only: dp, i8, VERT
+  use m_logger, only: abort_run, log_info, log_warn
   use m_mesh, only: mesh_t
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
   use m_allocator, only: allocator_t
@@ -61,17 +62,17 @@ contains
     ok = .false.
     inquire (file=trim(ctx%input_path), exist=input_exists)
     if (.not. input_exists) then
-      print '(a)', 'Real build skipped: input file not found: '// &
-        trim(ctx%input_path)
+      call log_info('Real build skipped: input file not found: '// &
+                    trim(ctx%input_path))
       return
     end if
 
     select case (trim(ctx%domain_cfg%flow_case_name))
     case ('tgv', 'generic', 'channel', 'cylinder')
     case default
-      print '(a)', "Real build skipped: flow case '"// &
-        trim(ctx%domain_cfg%flow_case_name)// &
-        "' has no dispatch in x3d2-memcheck"
+      call log_info("Real build skipped: flow case '"// &
+                    trim(ctx%domain_cfg%flow_case_name)// &
+                    "' has no dispatch in x3d2-memcheck")
       return
     end select
 
@@ -80,9 +81,9 @@ contains
                                    ctx%periodic_z)
       inquire (file=trim(ibm_file), exist=ibm_file_exists)
       if (.not. ibm_file_exists) then
-        print '(a)', 'Real build skipped: ibm_on=T but the matching &
+        call log_info('Real build skipped: ibm_on=T but the matching &
           &ibm_<BC-suffix>.bp mask file was not found in the &
-          &working directory; the estimate above stands.'
+          &working directory; the estimate above stands.')
         return
       end if
     end if
@@ -94,6 +95,7 @@ contains
     type(memcheck_ctx_t), intent(in) :: ctx
     integer, intent(in) :: measured
     integer :: predicted
+    character(len=256) :: line_buf
 
     if (ctx%irank /= 0) return
 
@@ -106,11 +108,12 @@ contains
                                    ctx%output_qcriterion, &
                                    ctx%solver_cfg%lowmem_transeq)
     if (predicted /= measured) then
-      print '(a,i0,a,i0,a)', &
-        'WARNING: peak_fields_lookup predicted ', predicted, &
+      write (line_buf, '(a,i0,a,i0,a)') &
+        'peak_fields_lookup predicted ', predicted, &
         ' but the real build measured ', measured, &
         ' - m_memory_estimate''s table is stale for this config and &
         &should be recalibrated (see src/memory_estimate.f90).'
+      call log_warn(trim(line_buf))
     end if
   end subroutine check_peak_fields_table
 
@@ -130,19 +133,25 @@ contains
     logical :: any_extrapolated
     character(len=12) :: verdict
     character(len=96) :: reason
+    character(len=256) :: line_buf
 
     requested_verdict = 'DOES_NOT_FIT'
 
     call print_rule('-')
-    print '(a,i0,a,i0,a,f0.2,a,f0.2,a)', 'Real build (1 GPU, ', &
+    write (line_buf, '(a,i0,a,i0,a,f0.2,a,f0.2,a)') &
+      'Real build (1 GPU, ', &
       ctx%measured_n_substeps, ' substep(s)): peak_fields measured ', &
       measured_peak_fields, ', workspace ', workspace_gib_measured, &
       ' GiB, used ', used_gib, ' GiB'
+    call log_info(trim(line_buf))
     ! One line for scripts that compare --extensive runs.
-    if (ctx%extensive_substeps > 0) &
-      print '(a,i0,a,i0,a,f0.3,a,f0.3)', 'EXTENSIVE result: substeps=', &
-      ctx%measured_n_substeps, ' peak_fields=', measured_peak_fields, &
-      ' used_gib=', used_gib, ' pct_card=', 100._dp*used_gib/ctx%card_gib
+    if (ctx%extensive_substeps > 0) then
+      write (line_buf, '(a,i0,a,i0,a,f0.3,a,f0.3)') &
+        'EXTENSIVE result: substeps=', &
+        ctx%measured_n_substeps, ' peak_fields=', measured_peak_fields, &
+        ' used_gib=', used_gib, ' pct_card=', 100._dp*used_gib/ctx%card_gib
+      call log_info(trim(line_buf))
+    end if
     call print_table_header()
 
     any_extrapolated = .false.
@@ -154,8 +163,10 @@ contains
            len_trim(requested_unsupported_reason(ctx)) > 0)) exit
       reason = num_gpus_unsupported_reason(ctx, num_gpus)
       if (len_trim(reason) > 0) then
-        print '(a,i0,a,a,a)', ' ', num_gpus, '     (skipped: ', &
+        write (line_buf, '(a,i0,a,a,a)') &
+          ' ', num_gpus, '     (skipped: ', &
           trim(reason), ')'
+        call log_info(trim(line_buf))
         cycle
       end if
       call estimate_for_num_gpus(ctx, num_gpus, per_gpu_gib, basis, verdict, &
@@ -170,8 +181,8 @@ contains
     end do
     call print_rule('-')
     if (any_extrapolated) &
-      print '(a)', '(num_gpus>1 rows extrapolate the single-GPU measurement &
-        &by 1/num_gpus.)'
+      call log_info('(num_gpus>1 rows extrapolate the single-GPU measurement &
+        &by 1/num_gpus.)')
   end subroutine report_measured_table
 
   subroutine build_mesh(ctx, dims_in, mesh, dims, ibm_missing)
@@ -229,7 +240,7 @@ contains
       allocate (case_tgv_t :: flow_case)
       flow_case = case_tgv_t(backend, mesh, host_allocator)
     case default
-      error stop 'Undefined flow_case.'
+      call abort_run('Undefined flow_case.', collective=.true.)
     end select
   end subroutine make_flow_case
 
@@ -351,11 +362,12 @@ contains
     integer :: measured_peak_fields
     logical :: ibm_missing, inputs_ok
     character(len=12) :: measured_verdict
+    character(len=256) :: line_buf
 
     if (trim(ctx%ng1_verdict) == 'DOES_NOT_FIT') then
       call print_rule('-')
-      print '(a)', 'Real build skipped: the num_gpus=1 estimate is &
-        &DOES_NOT_FIT; the estimate above stands.'
+      call log_info('Real build skipped: the num_gpus=1 estimate is &
+        &DOES_NOT_FIT; the estimate above stands.')
       return
     end if
 
@@ -365,9 +377,9 @@ contains
     call run_real_build(ctx, measured_peak_fields, used_gib, ibm_missing)
     if (ibm_missing) then
       call print_rule('-')
-      print '(a)', 'Real build skipped: ibm_on=T but the matching &
+      call log_info('Real build skipped: ibm_on=T but the matching &
         &ibm_<BC-suffix>.bp mask file was not found in the working &
-        &directory; the estimate above stands.'
+        &directory; the estimate above stands.')
       return
     end if
 
@@ -396,14 +408,18 @@ contains
     else
       check_word = 'MISMATCH'
     end if
-    print '(a,f0.2,a,f0.2,a,sp,f0.1,ss,a,a,a)', &
+    write (line_buf, '(a,f0.2,a,f0.2,a,sp,f0.1,ss,a,a,a)') &
       'CHECK num_gpus=1: estimated ', &
       estimate_ng1_excl_io_gib, ' GiB, measured ', used_gib, ' GiB (', &
       pct_error, '%) - ', trim(check_word), ' (tolerance 5%)'
-    if (ctx%io_staging_ng1_gib > 0._dp) &
-      print '(a,f0.1,a)', '  (GPU-aware IO staging ', &
+    call log_info(trim(line_buf))
+    if (ctx%io_staging_ng1_gib > 0._dp) then
+      write (line_buf, '(a,f0.1,a)') &
+        '  (GPU-aware IO staging ', &
         ctx%io_staging_ng1_gib*1024._dp, ' MiB excluded from CHECK: the real &
         &build performs no snapshot/checkpoint write.)'
+      call log_info(trim(line_buf))
+    end if
   end subroutine run_build_mode
 
 end module m_memcheck_build
