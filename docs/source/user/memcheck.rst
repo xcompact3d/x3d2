@@ -19,6 +19,10 @@ Configure the build with ``-DENABLE_BACKEND=CUDA`` and build the target
    cmake -S . -B build -DENABLE_BACKEND=CUDA -DBACKEND_ARCH=cc80
    cmake --build build --target x3d2-memcheck
 
+``x3d2-memcheck`` needs an MPI build (``WITH_MPI=ON``) with cuFFTMp. A
+``WITH_MPI=OFF`` build does not make the target. CMake prints a message and
+skips it.
+
 The binary is ``build/bin/x3d2-memcheck``. See :doc:`advanced_build` for the
 CUDA backend options.
 
@@ -80,11 +84,14 @@ by 5 percent or less. Otherwise it shows ``MISMATCH``.
 The tool skips the real build, and prints no ``CHECK`` line, in these cases:
 
 * The estimate for ``num_gpus=1`` is ``DOES_NOT_FIT``.
-* The flow case has no dispatch in the tool.
+* The input names an unknown ``flow_case``. The run then stops with an error.
 * The input sets ``ibm_on=T`` and the ``ibm_<BC-suffix>.bp`` mask file is
   not in the working directory.
 
 The estimate then stands.
+
+The real build writes no case output files. It switches off ``monitoring.csv``,
+the turbine ``disc<t>.adm`` files and the ABL profile file.
 
 Reading the table
 -----------------
@@ -97,8 +104,9 @@ column tells how the tool obtained the FFT overhead of the row:
    build.
 
 ``extrapolated``
-   The row has ``num_gpus>1``. The tool scales the one-GPU result by
-   1/``num_gpus``.
+   The row has ``num_gpus>1`` and a one-GPU probe or measurement exists. The
+   tool scales the one-GPU result by 1/``num_gpus``. Without one, the row is
+   ``formula-only`` or ``predicted``.
 
 ``predicted``
    The full-grid probe did not fit on the card. The tool uses the heap size
@@ -106,8 +114,10 @@ column tells how the tool obtained the FFT overhead of the row:
    ``no full-grid probe: ...`` with the reason.
 
 ``formula-only``
-   The tool uses the formula alone. This happens in the static mode, or when
-   no probe ran.
+   The tool uses the formula alone. No full-grid probe or measurement backs
+   the row. The 32^3 calibration probe always runs. A row is also
+   ``formula-only`` when its formula floor is above 95 percent of the card,
+   even after a full-grid probe.
 
 Verdicts
 --------
@@ -174,12 +184,14 @@ Limitations
    The estimate is approximate. A job can still run out of memory after the
    check gives ``FITS``.
 
-* The rows for ``num_gpus>1`` are extrapolated. The tool scales the one-GPU
-  probe or measurement by 1/``num_gpus``. It does not measure them.
+* The rows for ``num_gpus>1`` are extrapolated when a one-GPU probe or
+  measurement exists. The tool scales it by 1/``num_gpus``. It does not
+  measure them.
 * The full-grid probe guard is approximate. The tool compares the free memory
   with the query-only plan size plus a margin of 1 GiB. The sizes come from
   measurements on an A100 40 GB, and other cards can differ. The guard can
   under-estimate the memory. The probe can then abort for lack of memory.
 * The tool needs cuFFTMp. It aborts in every mode when an FFT plan asks for
   cuFFTMp and gets plain cuFFT.
-* A flow case without a dispatch in the tool gets no real build.
+* ``x3d2-memcheck`` needs an MPI build (``WITH_MPI=ON``). A ``WITH_MPI=OFF``
+  build does not make the target.
