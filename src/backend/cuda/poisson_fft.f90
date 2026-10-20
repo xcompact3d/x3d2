@@ -276,25 +276,15 @@ contains
     integer :: ierr
 
     integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
-    logical :: periodic_x, periodic_y, periodic_z
     logical :: fw_was_cufftmp
 
     integer :: fft_n1, fft_n2, fft_n3, fft_n1_loc, fft_n2_loc
     integer :: fw_plan_type, bw_plan_type
 
-    periodic_x = mesh%grid%periodic_BC(1)
-    periodic_y = mesh%grid%periodic_BC(2)
-    periodic_z = mesh%grid%periodic_BC(3)
-
     ! Detect cases
-    poisson_fft%is_000_case = periodic_x .and. periodic_y &
-                              .and. periodic_z
-    poisson_fft%is_010_case = periodic_x .and. (.not. periodic_y) &
-                              .and. periodic_z
-    poisson_fft%is_100_case = (.not. periodic_x) .and. periodic_y &
-                              .and. periodic_z
-    poisson_fft%is_110_case = (.not. periodic_x) .and. (.not. periodic_y) &
-                              .and. periodic_z
+    call fft_bc_class(mesh%grid%periodic_BC, poisson_fft%is_000_case, &
+                      poisson_fft%is_010_case, poisson_fft%is_100_case, &
+                      poisson_fft%is_110_case)
 
     ! 1D decomposition along Z in real domain, and along Y in spectral space
     if (mesh%par%nproc_dir(2) /= 1) &
