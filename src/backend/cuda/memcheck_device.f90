@@ -197,7 +197,10 @@ contains
   subroutine require_cufftmp(bc_is_110, used_cufftmp, what)
     !! Aborts x3d2-memcheck when an FFT plan that asked for cuFFTMp got plain
     !! cuFFT. fft_workspace_bytes_query asks for cuFFTMp for every BC except
-    !! 110, so only a 110 plan is allowed to be plain cuFFT.
+    !! 110, so only a 110 plan is allowed to be plain cuFFT. This is the
+    !! 110 exception to the solver rule: the solver uses cuFFTMp for 110 on
+    !! nproc > 1, but x3d2-memcheck keeps 110 single GPU until the multi-rank
+    !! buffers of #417 are in the estimate.
     logical, intent(in) :: bc_is_110, used_cufftmp
     character(*), intent(in) :: what
 
