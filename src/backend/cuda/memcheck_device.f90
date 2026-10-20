@@ -177,6 +177,7 @@ contains
           &returned status ', stat, '.'
         call abort_run(trim(msg), collective=.true.)
       end if
+      call require_cufftmp(bc_is_110, res%used_cufftmp, 'calibration')
       self%probe = res
     end if
     if (try_full .and. .not. self%full_tried) then
@@ -184,6 +185,7 @@ contains
       call run_probe(self, bc_is_100, bc_is_110, cdims, res, stat)
       self%full_ok = res%ok
       if (res%ok) then
+        call require_cufftmp(bc_is_110, res%used_cufftmp, 'full-grid')
         self%probe = res
       else
         self%full_failed = .true.
@@ -191,6 +193,18 @@ contains
       end if
     end if
   end subroutine ensure_probe
+
+  subroutine require_cufftmp(bc_is_110, used_cufftmp, what)
+    !! Aborts x3d2-memcheck when an FFT plan that asked for cuFFTMp got plain
+    !! cuFFT. fft_workspace_bytes_query asks for cuFFTMp for every BC except
+    !! 110, so only a 110 plan is allowed to be plain cuFFT.
+    logical, intent(in) :: bc_is_110, used_cufftmp
+    character(*), intent(in) :: what
+
+    if (bc_is_110 .or. used_cufftmp) return
+    call abort_run('x3d2-memcheck needs cuFFTMp, but the '//what// &
+                   ' FFT plan fell back to plain cuFFT.', collective=.true.)
+  end subroutine require_cufftmp
 
   subroutine query_plan_need(self, bc_is_100, bc_is_110, cdims, &
                              xtdesc_bytes, stat)
@@ -211,6 +225,7 @@ contains
                                    .true., worksize, heap, xtdesc, &
                                    used_cufftmp, stat, query_only=.true.)
     if (stat /= 0) return
+    call require_cufftmp(bc_is_110, used_cufftmp, 'plan query')
     ! A plain cuFFT plan holds its workspace in the plan memory.
     self%plan_need_bytes = heap
     self%plan_need_cufftmp = used_cufftmp
