@@ -19,6 +19,7 @@ set(SRC
   case/generic.f90
   case/tgv.f90
   case/wind_turbine.f90
+  case/case_factory.f90
   abl/abl.f90
   abl/diagnostics.f90
   module/ibm.f90

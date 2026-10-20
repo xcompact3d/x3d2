@@ -6,14 +6,9 @@ program xcompact
   use m_base_case, only: base_case_t
   use m_common, only: dp, get_argument
   use m_config, only: domain_config_t, solver_config_t
-  use m_logger, only: log_info, log_warn, abort_run, str
+  use m_logger, only: log_info, log_warn, str
   use m_mesh, only: mesh_t
-  use m_case_abl, only: case_abl_t
-  use m_case_channel, only: case_channel_t
-  use m_case_cylinder, only: case_cylinder_t
-  use m_case_generic, only: case_generic_t
-  use m_case_tgv, only: case_tgv_t
-  use m_case_wind_turbine, only: case_wind_turbine_t
+  use m_case_factory, only: allocate_flow_case
 
   implicit none
 
@@ -56,30 +51,8 @@ program xcompact
 
   call log_info('Flow case: '//trim(domain_cfg%flow_case_name))
 
-  select case (trim(domain_cfg%flow_case_name))
-  case ('abl')
-    allocate (case_abl_t :: flow_case)
-    flow_case = case_abl_t(setup%backend, mesh, setup%host_allocator)
-  case ('channel')
-    allocate (case_channel_t :: flow_case)
-    flow_case = case_channel_t(setup%backend, mesh, setup%host_allocator)
-  case ('cylinder')
-    allocate (case_cylinder_t :: flow_case)
-    flow_case = case_cylinder_t(setup%backend, mesh, setup%host_allocator)
-  case ('generic')
-    allocate (case_generic_t :: flow_case)
-    flow_case = case_generic_t(setup%backend, mesh, setup%host_allocator)
-  case ('tgv')
-    allocate (case_tgv_t :: flow_case)
-    flow_case = case_tgv_t(setup%backend, mesh, setup%host_allocator)
-  case ('wind_turbine')
-    allocate (case_wind_turbine_t :: flow_case)
-    flow_case = case_wind_turbine_t(setup%backend, mesh, &
-                                    setup%host_allocator)
-  case default
-    call abort_run('Undefined flow_case: ' &
-                   //trim(domain_cfg%flow_case_name), collective=.true.)
-  end select
+  call allocate_flow_case(domain_cfg%flow_case_name, setup%backend, mesh, &
+                          setup%host_allocator, flow_case)
   call log_info('solver instantiated')
 
   call flow_case%run()
