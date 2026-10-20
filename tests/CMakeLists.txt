@@ -498,11 +498,16 @@ if(SINGLE_PREC)
       --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
   set(_nightly_cmp_args --rtol 1e-4
       --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
+  # The channel's enstrophy drifts up to 3.6e-5 from the double precision
+  # golden over its 50 noisy steps, past the smoke rtol.
+  set(_channel_cmp_args --rtol 1e-4
+      --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
 else()
   set(_smoke_cmp_args --rtol 1e-10
       --ceiling div_u_max=1e-8 --ceiling div_u_mean=1e-9)
   set(_nightly_cmp_args --rtol 1e-10
       --ceiling div_u_max=1e-12 --ceiling div_u_mean=1e-13)
+  set(_channel_cmp_args ${_smoke_cmp_args})
 endif()
 
 if(WITH_2DECOMPFFT AND _cpu_omp_backend)
@@ -510,15 +515,20 @@ if(WITH_2DECOMPFFT AND _cpu_omp_backend)
     ${_smoke_cmp_args})
 endif()
 
-# The 010 FFT Poisson solver with a stretched y grid, one case per stretching
-# operator. Only the CUDA backend supports y stretching in the FFT solver, and
-# only on one rank. The goldens are blessed from a double precision NVHPC
-# build.
+# CUDA regression cases. The channel cases run the 010 FFT Poisson solver with
+# a stretched y grid, one case per stretching operator. Only the CUDA backend
+# supports y stretching in the FFT solver, and only on one rank. Their goldens
+# are blessed from a double precision NVHPC build, and a single precision
+# build checks against them too.
 if(${ENABLE_BACKEND} STREQUAL "CUDA")
+  # The CUDA backend matches the OMP golden to the smoke rtol, so the TGV case
+  # shares it, which also checks that the two backends agree.
+  define_regression_case_test(tgv_smoke tgv_smoke.x3d tgv_smoke_golden_omp.csv 2 cuda
+    ${_smoke_cmp_args})
   define_regression_case_test(channel_smoke channel_smoke.x3d
-    channel_smoke_golden_cuda.csv 1 cuda ${_smoke_cmp_args})
+    channel_smoke_golden_cuda.csv 1 cuda ${_channel_cmp_args})
   define_regression_case_test(channel_bottom_smoke channel_bottom_smoke.x3d
-    channel_bottom_smoke_golden_cuda.csv 1 cuda ${_smoke_cmp_args})
+    channel_bottom_smoke_golden_cuda.csv 1 cuda ${_channel_cmp_args})
 endif()
 
 # The driver has its backend fixed at compile time, so register it as OMP only
@@ -534,6 +544,7 @@ if(WITH_2DECOMPFFT AND _cpu_omp_backend AND WITH_NIGHTLY_REGRESSION)
 endif()
 unset(_smoke_cmp_args)
 unset(_nightly_cmp_args)
+unset(_channel_cmp_args)
 unset(_cpu_omp_backend)
 
 set(EXECUTABLE_OUTPUT_PATH "bin")
