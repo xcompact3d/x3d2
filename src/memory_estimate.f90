@@ -305,11 +305,11 @@ contains
     bytes = n*element_bytes
   end function gpu_io_staging_bytes
 
-  pure integer function peak_fields_lookup(flow_case_name, time_intg, &
-                                           n_species, les_on, ibm_on, &
-                                           output_vorticity, &
-                                           output_qcriterion, &
-                                           lowmem_transeq) result(n)
+  integer function peak_fields_lookup(flow_case_name, time_intg, &
+                                      n_species, les_on, ibm_on, &
+                                      output_vorticity, &
+                                      output_qcriterion, &
+                                      lowmem_transeq) result(n)
     !! Static estimate of the allocator's work-field high-water mark
     !! (allocator_t%next_id after one substep - see src/allocator.f90),
     !! evaluated purely from config flags, no build/run required.

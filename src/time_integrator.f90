@@ -3,7 +3,7 @@ module m_time_integrator
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X
   use m_field, only: field_t, flist_t
-  use m_logger, only: log_info
+  use m_logger, only: abort_run, log_info
 
   implicit none
 
@@ -51,7 +51,7 @@ module m_time_integrator
 
 contains
 
-  pure integer function nolds_of(time_intg) result(nolds)
+  integer function nolds_of(time_intg) result(nolds)
     !! Number of old-step blocks per variable that a time_intg_t keeps:
     !! k - 1 for ABk (nstep - 1) and k for RKk (nstage). Static, so that
     !! x3d2-memcheck can size the history blocks without allocating them.
@@ -63,16 +63,21 @@ contains
 
     if (time_intg(1:2) == 'AB') then
       read (time_intg(3:3), *, iostat=stat) order
-      if (stat /= 0) error stop 'Error reading AB integration order'
-      if (order >= 5) error stop 'Integration order >4 is not supported'
+      if (stat /= 0) call abort_run('Error reading AB integration order', &
+                                    collective=.true.)
+      if (order >= 5) call abort_run('Integration order >4 is not supported', &
+                                     collective=.true.)
       nolds = order - 1
     else if (time_intg(1:2) == 'RK') then
       read (time_intg(3:3), *, iostat=stat) order
-      if (stat /= 0) error stop 'Error reading RK integration order'
-      if (order >= 5) error stop 'Integration order >4 is not supported'
+      if (stat /= 0) call abort_run('Error reading RK integration order', &
+                                    collective=.true.)
+      if (order >= 5) call abort_run('Integration order >4 is not supported', &
+                                     collective=.true.)
       nolds = order
     else
-      error stop 'Integration method '//time_intg//' is not defined'
+      call abort_run('Integration method '//time_intg//' is not defined', &
+                     collective=.true.)
     end if
   end function nolds_of
 
