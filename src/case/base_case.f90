@@ -50,6 +50,7 @@ module m_base_case
     procedure :: finalise_case_specific => finalise_case_specific_default
     procedure :: set_init
     procedure :: substep
+    procedure :: set_curr_fields
     procedure :: run
   end type base_case_t
 
@@ -242,6 +243,28 @@ contains
                                          self%solver%w)
   end subroutine substep
 
+  subroutine set_curr_fields(self, curr, deriv)
+    !! Allocates the time integrator field lists and points curr at the
+    !! solver velocity and species fields. Shared by run() and x3d2-memcheck.
+    implicit none
+
+    class(base_case_t), intent(inout) :: self
+    type(flist_t), allocatable, intent(out) :: curr(:)
+    type(flist_t), allocatable, intent(out) :: deriv(:)
+
+    integer :: i
+
+    allocate (curr(self%solver%time_integrator%nvars))
+    allocate (deriv(self%solver%time_integrator%nvars))
+
+    curr(1)%ptr => self%solver%u
+    curr(2)%ptr => self%solver%v
+    curr(3)%ptr => self%solver%w
+    do i = 1, self%solver%nspecies
+      curr(3 + i)%ptr => self%solver%species(i)%ptr
+    end do
+  end subroutine set_curr_fields
+
   subroutine run(self)
     !! Runs the solver forwards in time from t=t_0 to t=T, performing
     !! postprocessing/IO and reporting diagnostics.
@@ -253,7 +276,7 @@ contains
     type(flist_t), allocatable :: deriv(:)
 
     real(dp) :: t
-    integer :: i, iter, sub_iter, start_iter
+    integer :: iter, sub_iter, start_iter
     logical :: output_vorticity, output_qcriterion
     ! t_start/t_end/t_step0/t_step1 hold raw MPI_Wtime readings, which
     ! are double precision; subtract in double, then convert
@@ -292,15 +315,7 @@ contains
 
     call log_info('start run')
 
-    allocate (curr(self%solver%time_integrator%nvars))
-    allocate (deriv(self%solver%time_integrator%nvars))
-
-    curr(1)%ptr => self%solver%u
-    curr(2)%ptr => self%solver%v
-    curr(3)%ptr => self%solver%w
-    do i = 1, self%solver%nspecies
-      curr(3 + i)%ptr => self%solver%species(i)%ptr
-    end do
+    call self%set_curr_fields(curr, deriv)
 
     t_start = MPI_Wtime()
 

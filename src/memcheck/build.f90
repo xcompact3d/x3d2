@@ -221,16 +221,9 @@ contains
     class(base_case_t), intent(inout) :: flow_case
 
     type(flist_t), allocatable :: curr(:), deriv(:)
-    integer :: i, n_substeps, i_substep
+    integer :: n_substeps, i_substep
 
-    allocate (curr(flow_case%solver%time_integrator%nvars))
-    allocate (deriv(flow_case%solver%time_integrator%nvars))
-    curr(1)%ptr => flow_case%solver%u
-    curr(2)%ptr => flow_case%solver%v
-    curr(3)%ptr => flow_case%solver%w
-    do i = 1, flow_case%solver%nspecies
-      curr(3 + i)%ptr => flow_case%solver%species(i)%ptr
-    end do
+    call flow_case%set_curr_fields(curr, deriv)
 
     ! Mirrors run()'s pre-loop call to the case-specific postprocess hook.
     call flow_case%postprocess(0, 0._dp)
