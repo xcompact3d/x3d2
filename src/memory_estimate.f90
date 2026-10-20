@@ -17,7 +17,7 @@ module m_memory_estimate
   implicit none
 
   private
-  public :: padded_dim, padded_cells, cell_dims, spectral_slab_bytes, &
+  public :: padded_dim, padded_cells, spectral_slab_bytes, &
             mirror_buffer_bytes_100, spectral_extra_bytes_110, &
             stretched_y_matrix_bytes, output_field_active, &
             peak_fields_lookup, halo_bytes, padded_halo_bytes, &
@@ -50,24 +50,6 @@ contains
     n = int(padded_dim(dims(1), sz), i8)*int(padded_dim(dims(2), sz), i8) &
         *int(dims(3), i8)
   end function padded_cells
-
-  pure function cell_dims(vert_dims, periodic) result(c)
-    !! Global CELL dims from global VERT dims. Mirrors src/mesh.f90:90-100:
-    !! a periodic direction has as many cells as vertices, a non-periodic
-    !! direction has one fewer.
-    integer, intent(in) :: vert_dims(3)
-    logical, intent(in) :: periodic(3)
-    integer :: c(3)
-    integer :: dir
-
-    do dir = 1, 3
-      if (periodic(dir)) then
-        c(dir) = vert_dims(dir)
-      else
-        c(dir) = vert_dims(dir) - 1
-      end if
-    end do
-  end function cell_dims
 
   pure function spectral_slab_bytes(n_spec) result(nbytes8)
     !! Bytes of ONE complex spectral array (waves_dev, and c_dev on the

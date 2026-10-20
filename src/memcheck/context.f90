@@ -4,9 +4,8 @@ module m_memcheck_context
   use m_config, only: domain_config_t, solver_config_t, les_config_t, &
                       checkpoint_config_t
   use m_logger, only: abort_run
-  use m_mesh, only: classify_boundaries, FFT_BC_000, FFT_BC_010, &
-                    FFT_BC_100, FFT_BC_110
-  use m_memory_estimate, only: cell_dims
+  use m_mesh, only: classify_boundaries, global_cell_dims, FFT_BC_000, &
+                    FFT_BC_010, FFT_BC_100, FFT_BC_110
   use m_cuda_memcheck_device, only: cuda_memcheck_device_t
   implicit none
 
@@ -143,8 +142,7 @@ contains
     ctx%bc_is_010 = ctx%bc_code == FFT_BC_010
     ctx%bc_is_100 = ctx%bc_code == FFT_BC_100
     ctx%bc_is_110 = ctx%bc_code == FFT_BC_110
-    ctx%cdims = cell_dims(ctx%gdims, [ctx%periodic_x, ctx%periodic_y, &
-                                      ctx%periodic_z])
+    ctx%cdims = global_cell_dims(ctx%gdims, periodic)
   end subroutine classify_bc
 
   subroutine resolve_gpu_io_mode(ctx)
