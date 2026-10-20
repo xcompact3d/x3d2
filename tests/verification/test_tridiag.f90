@@ -22,6 +22,8 @@ program test_tridiag
   ! The generic decomposition splits x evenly, so n_glob is rounded down to a
   ! multiple of the rank count (1024 on a power-of-two count).
   integer :: n_glob
+  ! The hyperviscous case runs on a coarser grid.
+  integer :: n_hyper_glob
   ! The tolerances bound the relative L2 error. Single precision roundoff
   ! floors at n_glob~1024: ~eps/dx (~2e-5) for first derivatives/interpolation,
   ! ~eps/dx^2 (~3e-3) for second derivatives, and ~63x more for the
@@ -61,14 +63,16 @@ program test_tridiag
   real(dp), allocatable, dimension(:) :: sin_0_2pi_per, cos_0_2pi_per, &
                                          sin_0_2pi, cos_0_2pi, &
                                          cos_0_pi, cos_0_pi_stag, &
-                                         sin_0_pi
-  real(dp) :: dx, dx_per, dx_pi
-  integer :: n, n_loc, n_groups, bc_start, bc_end, dims(3), j, offset
+                                         sin_0_pi, sin_hyper
+  real(dp) :: dx, dx_per, dx_pi, dx_hyper
+  integer :: n, n_loc, n_hyper, n_groups, bc_start, bc_end, dims(3), j, &
+             offset, offset_hyper
 
   call initialise_mpi(nrank, nproc)
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
   n_glob = (1024/nproc)*nproc
+  n_hyper_glob = (256/nproc)*nproc
   n_groups = 64*64/backend_sz
   mesh = mesh_t([n_glob, backend_sz, n_groups], [nproc, 1, 1], &
                 [2*pi, 1._dp, 1._dp], &
@@ -82,6 +86,8 @@ program test_tridiag
 
   n = mesh%get_n(DIR_X, VERT)
   offset = mesh%par%nrank_dir(DIR_X)*n
+  n_hyper = n_hyper_glob/nproc
+  offset_hyper = mesh%par%nrank_dir(DIR_X)*n_hyper
 
   u_field => allocator%get_block(DIR_X)
   du_field => allocator%get_block(DIR_X)
@@ -93,9 +99,10 @@ program test_tridiag
   dx_per = 2*pi/n_glob
   dx = 2*pi/(n_glob - 1)
   dx_pi = pi/(n_glob - 1)
+  dx_hyper = 2*pi/(n_hyper_glob - 1)
 
   allocate (sin_0_2pi_per(n), cos_0_2pi_per(n), sin_0_2pi(n), cos_0_2pi(n))
-  allocate (cos_0_pi(n), cos_0_pi_stag(n), sin_0_pi(n))
+  allocate (cos_0_pi(n), cos_0_pi_stag(n), sin_0_pi(n), sin_hyper(n_hyper))
   do j = 1, n
     sin_0_2pi_per(j) = sin((j - 1 + offset)*dx_per)
     cos_0_2pi_per(j) = cos((j - 1 + offset)*dx_per)
@@ -104,6 +111,9 @@ program test_tridiag
     cos_0_pi(j) = cos((j - 1 + offset)*dx_pi)
     cos_0_pi_stag(j) = cos((j - 1 + offset)*dx_pi + dx_pi/2._dp)
     sin_0_pi(j) = sin((j - 1 + offset)*dx_pi)
+  end do
+  do j = 1, n_hyper
+    sin_hyper(j) = sin((j - 1 + offset_hyper)*dx_hyper)
   end do
 
   ! ===========================================================================
@@ -177,11 +187,12 @@ program test_tridiag
   ! ===========================================================================
   ! c_nu = 0.22 and nu0_nu = 63 results in alpha = 0.40869111947709036
   icase = icase + 1
-  call backend%alloc_tdsops(ops(icase)%op, n, dx, operation='second-deriv', &
+  call backend%alloc_tdsops(ops(icase)%op, n_hyper, dx_hyper, &
+                            operation='second-deriv', &
                             scheme='compact6-hyperviscous', &
                             bc_start=bc_start, bc_end=bc_end, &
                             sym=.false., c_nu=0.22_dp, nu0_nu=63._dp)
-  call run_case(sin_0_2pi, n, n, sin_0_2pi, 1, tol_hyper, &
+  call run_case(sin_hyper, n_hyper, n_hyper, sin_hyper, 1, tol_hyper, &
                 '2nd ders, hyperviscous, dir-neu')
 
   call allocator%release_block(u_field)
