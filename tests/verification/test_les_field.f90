@@ -11,7 +11,8 @@ program test_les_field
                    neutral_wall_stress, &
                    wall_damped_mixing_length
   use m_mesh, only: mesh_t
-  use m_solver, only: solver_t, allocate_tdsops, transeq_default
+  use m_solver, only: solver_t, transeq_default
+  use m_tdsops_setup, only: allocate_tdsops
   use m_tdsops, only: dirps_t
 
   implicit none

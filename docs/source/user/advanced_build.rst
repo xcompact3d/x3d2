@@ -42,8 +42,9 @@ its own.
 OpenMP Target Offload Backend
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Requires a compiler reporting OpenMP 4.5 or newer. Cray, GNU, NVHPC/PGI and
-Flang are all supported. Each enables offload differently, and the build
+Requires a compiler reporting OpenMP 4.5 or newer. Cray, GNU, NVHPC/PGI,
+Flang and Intel ifx are all supported; classic ifort cannot offload and is
+rejected at configure time. Each enables offload differently, and the build
 detects the compiler and applies what it needs, so no manual offload flags are
 required with any of them.
 
@@ -71,6 +72,14 @@ required with any of them.
      - ``-fopenmp --offload-arch=<arch>``, plus ``-fopenmp-version=50`` (see
        `Building with Flang`_ below).
      - ``gfx<model>``. Configuring fails on any other form.
+   * - Intel ifx
+     - ``-fopenmp-targets=spir64`` for ``BACKEND_ARCH=spir64``, otherwise
+       ``-fopenmp-targets=spir64_gen -Xopenmp-target-backend "-device <arch>"``,
+       on top of the ``-fiopenmp`` that ``FindOpenMP`` supplies.
+     - ``spir64`` builds SPIR-V that the driver compiles at first launch and
+       runs on any Intel GPU. Any other value is an ``ocloc`` device name
+       compiled ahead of time, e.g. ``pvc`` (Data Center GPU Max) or ``bmg``
+       (Arc B-series); ``ocloc compile --help`` lists them.
 
 ``BACKEND_ARCH`` is required for every GPU build, whatever the compiler, and is
 set at configure time:
@@ -80,9 +89,16 @@ set at configure time:
    -DENABLE_BACKEND=OMP_TGT -DBACKEND_ARCH=gfx942
 
 Vendor selection is automatic: the build defines ``OMP_TGT_NVIDIA`` for
-NVHPC/PGI and ``OMP_TGT_AMD`` for Cray, GNU and Flang, which selects the
-vendor-appropriate ``SZ`` parameter in ``src/backend/omptgt/common.f90``. Note
-that the GNU and Flang paths assume an AMD target.
+NVHPC/PGI, ``OMP_TGT_AMD`` for Cray, GNU and Flang, and ``OMP_TGT_INTEL`` for
+ifx, which selects the vendor-appropriate ``SZ`` parameter in
+``src/backend/omptgt/common.f90``. Note that the GNU and Flang paths assume an
+AMD target.
+
+The double-precision build needs FP64 on the device, which Intel's integrated
+and most Arc GPUs lack: kernels then fail to load with ``Double type is not
+supported on this platform``. Build with ``SINGLE_PREC=ON`` on those. With
+more than one rank, Intel MPI must be told to expect device buffers with
+``I_MPI_OFFLOAD=1``; the tests set it.
 
 Building with Flang
 --------------------
@@ -290,8 +306,8 @@ CUDA Architecture for the ADIOS2 Build
 
 The built-in ADIOS2 is compiled with CUDA support for either GPU backend
 (``ENABLE_BACKEND=CUDA`` or ``ENABLE_BACKEND=OMP_TGT``) when the Fortran
-compiler is NVHPC or PGI, since both offload through CUDA. The AMD/Cray
-``OMP_TGT`` paths use another compiler and get the plain CPU build.
+compiler is NVHPC or PGI, since both offload through CUDA. The AMD, Cray and
+Intel ``OMP_TGT`` paths use another compiler and get the plain CPU build.
 
 It reuses ``BACKEND_ARCH``, stripped to the bare compute
 capability that ``CMAKE_CUDA_ARCHITECTURES`` expects, so ``-DBACKEND_ARCH=cc80``
