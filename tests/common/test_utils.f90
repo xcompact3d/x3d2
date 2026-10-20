@@ -5,6 +5,7 @@ module m_test_utils
   use iso_fortran_env, only: stderr => error_unit
   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   use m_common, only: dp, nbytes, MPI_X3D2_DP
+  use m_logger, only: abort_run
   implicit none
 
   private
@@ -128,11 +129,13 @@ contains
     call MPI_Allreduce(MPI_IN_PLACE, sums, 2, MPI_X3D2_DP, MPI_SUM, &
                        MPI_COMM_WORLD, ierr)
     if (sums(2) == 0.0_dp) then
-      error stop 'relative_l2_error: reference norm is zero'
+      call abort_run('relative_l2_error: reference norm is zero', &
+                     collective=.true.)
     end if
     rel = sqrt(sums(1))/sqrt(sums(2))
     if (.not. ieee_is_finite(rel)) then
-      error stop 'relative_l2_error: norm is not finite'
+      call abort_run('relative_l2_error: norm is not finite', &
+                     collective=.true.)
     end if
   end function relative_l2_error
 
