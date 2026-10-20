@@ -1,6 +1,7 @@
 module m_memcheck_report
   !! Printed report of x3d2-memcheck: header, tables and verdict lines.
   use m_common, only: dp, i8, is_sp
+  use m_logger, only: log_info
   use m_memcheck_context, only: memcheck_ctx_t
   use m_memory_estimate, only: gpu_io_staging_bytes
   use m_memcheck_estimate, only: to_gib, num_gpus_unsupported_reason, &
@@ -24,19 +25,22 @@ contains
     !! A separator line of 60 characters.
     character(len=1), intent(in) :: fill
 
-    print '(a)', repeat(fill, 60)
+    call log_info(repeat(fill, 60))
   end subroutine print_rule
 
   subroutine print_table_header()
     character(len=14) :: hdr_grid
     character(len=12) :: hdr_basis
+    character(len=256) :: line_buf
 
     ! Fixed-length variables left-justify the headers, as the rows do.
     hdr_grid = 'local grid'
     hdr_basis = 'basis'
-    print '(a,a8,a,a14,a,a9,a,a8,a,a8,a,a6,a,a12,a,a)', ' ', 'num_gpus', &
+    write (line_buf, '(a,a8,a,a14,a,a9,a,a8,a,a8,a,a6,a,a12,a,a)') &
+      ' ', 'num_gpus', &
       ' | ', hdr_grid, ' | ', 'workspace', ' | ', 'overhead', ' | ', &
       'per-GPU', ' | ', '%', ' | ', hdr_basis, ' | ', 'verdict'
+    call log_info(trim(line_buf))
   end subroutine print_table_header
 
   subroutine print_table_row(num_gpus, local_dims, workspace_gib, &
@@ -49,15 +53,18 @@ contains
     character(*), intent(in) :: basis, verdict
 
     character(len=14) :: local_grid_str
+    character(len=256) :: line_buf
 
     local_grid_str = ''
     write (local_grid_str, '(i0,a,i0,a,i0)') local_dims(1), 'x', &
       local_dims(2), 'x', local_dims(3)
-    print '(a,i8,a,a,a,f9.2,a,f8.2,a,f8.2,a,f5.1,a,a12,a,a)', ' ', num_gpus, &
+    write (line_buf, '(a,i8,a,a,a,f9.2,a,f8.2,a,f8.2,a,f5.1,a,a12,a,a)') &
+      ' ', num_gpus, &
       ' | ', adjustl(local_grid_str), ' | ', workspace_gib, ' | ', &
       overhead_gib, ' | ', per_gpu_gib, ' | ', &
       100._dp*per_gpu_gib/pct_denominator_gib, '% | ', basis, ' | ', &
       trim(verdict)
+    call log_info(trim(line_buf))
   end subroutine print_table_row
 
   subroutine print_io_staging_line(ctx)
@@ -67,6 +74,7 @@ contains
     logical :: unit_stride, snapshot_active, checkpoint_active
     character(len=64) :: what, io_none_reason
     integer(i8) :: io_ng1_bytes
+    character(len=256) :: line_buf
 
     io_ng1_bytes = gpu_io_staging_bytes(ctx%gdims, ctx%checkpoint_cfg, &
                                         ctx%gpu_io_device_write)
@@ -84,9 +92,11 @@ contains
       end if
       if (.not. checkpoint_active .and. ctx%checkpoint_cfg%snapshot_sp .and. &
           .not. is_sp .and. snapshot_active) what = trim(what)//' (sp)'
-      print '(a,f0.1,a,a,a,a,a)', 'GPU-aware IO staging: ', mib, &
+      write (line_buf, '(a,f0.1,a,a,a,a,a)') &
+        'GPU-aware IO staging: ', mib, &
         ' MiB/GPU at num_gpus=1 (write mode ', &
         trim(ctx%gpu_io_mode_name), ', ', trim(what), ')'
+      call log_info(trim(line_buf))
     else
       if (.not. ctx%gpu_io_device_write) then
         io_none_reason = trim(ctx%gpu_io_reason)
@@ -96,8 +106,10 @@ contains
       else
         io_none_reason = 'no unit-stride snapshot and no checkpoint enabled'
       end if
-      print '(a,a,a)', 'GPU-aware IO staging: none (', trim(io_none_reason), &
+      write (line_buf, '(a,a,a)') &
+        'GPU-aware IO staging: none (', trim(io_none_reason), &
         ')'
+      call log_info(trim(line_buf))
     end if
   end subroutine print_io_staging_line
 
@@ -110,6 +122,7 @@ contains
     integer :: basis
     character(len=12) :: requested_verdict
     character(len=96) :: reason
+    character(len=256) :: line_buf
 
     requested_num_gpus = ctx%domain_cfg%nproc_dir(3)
     reason = requested_unsupported_reason(ctx)
@@ -120,33 +133,36 @@ contains
       reason = requested_unsupported_reason(ctx)
     end if
     if (len_trim(reason) > 0) then
-      print '(a,i0,a,i0,a,i0,a,a,a)', 'Requested nproc_dir [', &
+      write (line_buf, '(a,i0,a,i0,a,i0,a,a,a)') &
+        'Requested nproc_dir [', &
         ctx%domain_cfg%nproc_dir(1), ',', ctx%domain_cfg%nproc_dir(2), ',', &
         ctx%domain_cfg%nproc_dir(3), ']: not supported (', trim(reason), ')'
+      call log_info(trim(line_buf))
       ctx%final_verdict = 'UNSUPPORTED'
     else
       ctx%final_verdict = requested_verdict
-      print '(a,i0,a,f0.2,a,f0.1,a,a)', &
+      write (line_buf, '(a,i0,a,f0.2,a,f0.1,a,a)') &
         'Requested nproc_dir gives num_gpus=', requested_num_gpus, ': ', &
         requested_gib, ' GiB/GPU (', &
         100._dp*requested_gib/ctx%card_gib, '% of card) - ', &
         trim(ctx%final_verdict)
+      call log_info(trim(line_buf))
       if (basis == basis_extrapolated) then
-        print '(a)', '  (num_gpus>1 rows extrapolate the single-GPU probe by &
-          &1/num_gpus.)'
+        call log_info('  (num_gpus>1 rows extrapolate the single-GPU probe by &
+          &1/num_gpus.)')
       else if (basis == basis_predicted) then
-        print '(a)', '  (FFT heap is predicted: the full-grid probe did not &
-          &fit, the plan query gave the workspace size.)'
+        call log_info('  (FFT heap is predicted: the full-grid probe did not &
+          &fit, the plan query gave the workspace size.)')
       else if (basis == basis_formula) then
         if (trim(ctx%run_mode) == 'STATIC') then
-          print '(a)', '  (Formula estimate only: --static runs no &
-            &full-grid cuFFTMp probe, only a small calibration probe.)'
+          call log_info('  (Formula estimate only: --static runs no &
+            &full-grid cuFFTMp probe, only a small calibration probe.)')
         else if (trim(requested_verdict) /= 'DOES_NOT_FIT') then
-          print '(a)', '  (FFT workspace is formula-only: the single-GPU &
-            &probe did not run or returned a failure status.)'
+          call log_info('  (FFT workspace is formula-only: the single-GPU &
+            &probe did not run or returned a failure status.)')
         else
-          print '(a)', '  (Formula floor only: this input is well over &
-            &the limit, no cuFFTMp probe was attempted.)'
+          call log_info('  (Formula floor only: this input is well over &
+            &the limit, no cuFFTMp probe was attempted.)')
         end if
       end if
     end if
@@ -164,6 +180,7 @@ contains
     logical :: any_extrapolated, any_formula, any_predicted
     character(len=12) :: verdict
     character(len=96) :: reason
+    character(len=256) :: line_buf
 
     call print_table_header()
     smallest_fits = 0
@@ -174,8 +191,10 @@ contains
       num_gpus = n_gpu_list(k)
       reason = num_gpus_unsupported_reason(ctx, num_gpus)
       if (len_trim(reason) > 0) then
-        print '(a,i0,a,a,a)', ' ', num_gpus, '     (skipped: ', &
+        write (line_buf, '(a,i0,a,a,a)') &
+          ' ', num_gpus, '     (skipped: ', &
           trim(reason), ')'
+        call log_info(trim(line_buf))
         cycle
       end if
       local_dims = [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)/num_gpus]
@@ -184,8 +203,10 @@ contains
       ! The estimate can settle the FFT path: ask again.
       reason = num_gpus_unsupported_reason(ctx, num_gpus)
       if (len_trim(reason) > 0) then
-        print '(a,i0,a,a,a)', ' ', num_gpus, '     (skipped: ', &
+        write (line_buf, '(a,i0,a,a,a)') &
+          ' ', num_gpus, '     (skipped: ', &
           trim(reason), ')'
+        call log_info(trim(line_buf))
         cycle
       end if
       if (num_gpus == 1) then
@@ -204,68 +225,83 @@ contains
     end do
     call print_rule('-')
     if (any_extrapolated) &
-      print '(a)', '(num_gpus>1 rows extrapolate the single-GPU probe by &
-        &1/num_gpus.)'
+      call log_info('(num_gpus>1 rows extrapolate the single-GPU probe by &
+        &1/num_gpus.)')
     if (any_formula) &
-      print '(a)', '(formula-only rows use the formula estimate for the FFT &
-        &overhead.)'
+      call log_info('(formula-only rows use the formula estimate for the FFT &
+        &overhead.)')
     if (any_predicted) &
-      print '(a)', '(predicted rows use the heap predicted by the plan query &
-        &for the FFT overhead.)'
+      call log_info('(predicted rows use the heap predicted by the plan query &
+        &for the FFT overhead.)')
   end subroutine print_num_gpus_table
 
   subroutine report(ctx)
     type(memcheck_ctx_t), intent(inout) :: ctx
     integer :: smallest_fits
+    character(len=256) :: line_buf
 
     call prepare_probe(ctx)
     call print_rule('=')
-    print '(a,i0,a,i0,a,i0,a)', 'Input grid: ', ctx%gdims(1), 'x', &
+    write (line_buf, '(a,i0,a,i0,a,i0,a)') &
+      'Input grid: ', ctx%gdims(1), 'x', &
       ctx%gdims(2), 'x', ctx%gdims(3)
-    print '(a,f0.2,a,f0.2,a)', 'Card memory: ', ctx%card_gib, ' GiB (', &
+    call log_info(trim(line_buf))
+    write (line_buf, '(a,f0.2,a,f0.2,a)') &
+      'Card memory: ', ctx%card_gib, ' GiB (', &
       ctx%card_free_gib, ' GiB free now)'
-    print '(a,f0.2,a)', 'CUDA context (used at start): ', &
+    call log_info(trim(line_buf))
+    write (line_buf, '(a,f0.2,a)') &
+      'CUDA context (used at start): ', &
       to_gib(ctx%device%context_bytes()), ' GiB'
+    call log_info(trim(line_buf))
     if (ctx%device%heap_predicted) then
-      print '(a,f0.2,a,f0.2,a)', 'Calibration on this GPU: CUDA context ', &
+      write (line_buf, '(a,f0.2,a,f0.2,a)') &
+        'Calibration on this GPU: CUDA context ', &
         to_gib(ctx%device%probe%context), ' GiB, NVSHMEM heap ', &
         to_gib(ctx%device%heap_bytes()), ' GiB (predicted).'
+      call log_info(trim(line_buf))
     else
-      print '(a,f0.2,a,f0.2,a)', 'Calibration on this GPU: CUDA context ', &
+      write (line_buf, '(a,f0.2,a,f0.2,a)') &
+        'Calibration on this GPU: CUDA context ', &
         to_gib(ctx%device%probe%context), ' GiB, NVSHMEM heap ', &
         to_gib(ctx%device%heap_bytes()), ' GiB.'
+      call log_info(trim(line_buf))
     end if
-    print '(a,i0)', 'peak_fields (static estimate): ', ctx%peak_fields
+    write (line_buf, '(a,i0)') &
+      'peak_fields (static estimate): ', ctx%peak_fields
+    call log_info(trim(line_buf))
     call print_io_staging_line(ctx)
     select case (trim(ctx%run_mode))
     case ('STATIC')
-      print '(a)', 'Mode: static (formula estimate only, no full-grid cuFFTMp &
-        &probe, one small calibration probe)'
+      call log_info('Mode: static (formula estimate only, no full-grid &
+        &cuFFTMp probe, one small calibration probe)')
     case ('BUILD')
-      print '(a)', 'Mode: build (formula estimate + cuFFTMp probe, then a &
-        &real build)'
+      call log_info('Mode: build (formula estimate + cuFFTMp probe, then a &
+        &real build)')
     case default
-      print '(a)', 'Mode: default (formula estimate + cuFFTMp probe)'
+      call log_info('Mode: default (formula estimate + cuFFTMp probe)')
     end select
     call print_rule('=')
     call print_requested_line(ctx)
 
     call print_rule('-')
     call print_num_gpus_table(ctx, smallest_fits)
-    print '(a)', 'Notes: workspace + overhead = per-GPU. % is per-GPU &
-      &against this card''s total memory.'
-    print '(a)', 'The estimate is approximate. A run can still run out of &
-      &memory when the estimate is low.'
+    call log_info('Notes: workspace + overhead = per-GPU. % is per-GPU &
+      &against this card''s total memory.')
+    call log_info('The estimate is approximate. A run can still run out of &
+      &memory when the estimate is low.')
 
     if (smallest_fits > 0) then
-      print '(a,i0,a)', 'Smallest GPU count that fits: ', smallest_fits, '.'
+      write (line_buf, '(a,i0,a)') &
+        'Smallest GPU count that fits: ', smallest_fits, '.'
+      call log_info(trim(line_buf))
     else
-      print '(a)', 'No scanned GPU count fits with headroom to spare.'
+      call log_info('No scanned GPU count fits with headroom to spare.')
     end if
 
     if (trim(ctx%final_verdict) == 'BORDERLINE' .and. &
         trim(ctx%run_mode) /= 'BUILD') &
-      print '(a)', 'To confirm with a real measurement, re-run with --build.'
+      call log_info('To confirm with a real measurement, re-run with --build.')
   end subroutine report
 
 end module m_memcheck_report
