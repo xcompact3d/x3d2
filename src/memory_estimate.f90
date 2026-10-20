@@ -380,6 +380,9 @@ contains
       base = 17
     case ('cylinder')
       base = 17
+    case ('abl')
+      ! examples/abl/input.x3d, AB3 + smagorinsky: 14 + 6 + 7 = 27, measured 27.
+      base = 14
     case default
       ! Covers 'foil' and anything else: see TODO above.
       base = 17
