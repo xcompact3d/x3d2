@@ -71,7 +71,9 @@ module m_cuda_poisson_fft
     !> cuFFT real workspace (input/output of R2C/C2R)
     real(dp), device, allocatable, dimension(:, :, :) :: r_dev
     !> dim2 mirror of the local spectral slab, used by the 100 and 110 cases
-    !> to reach the paired split partner that lives on another rank
+    !> to reach the paired split partner that lives on another rank. Only
+    !> init_dim2_mirror allocates it, and init_cuda reads its allocation
+    !> status as "this case needs cuFFTMp".
     complex(dp), device, allocatable, dimension(:, :, :) :: c_mirror_dev
     !> Staging copy of the local slab, sent in place of c_dev itself.
     !> In the cuFFTMp path c_dev is a c_f_pointer onto descriptor%data(1),
@@ -282,7 +284,8 @@ contains
     case ('110')
       allocate (cuda_poisson_110_t :: poisson_fft)
     case default
-      call abort_run("Unsupported periodicity combination!!")
+      call abort_run('Requested BCs are not supported in FFT-based Poisson &
+                     &solver!')
     end select
 
     select type (poisson_fft)
@@ -305,6 +308,9 @@ contains
     integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
 
     integer :: fw_plan_type, bw_plan_type
+
+    ! Set ahead of everything else, spectral_extents and create_plans read it
+    self%bc_code = poisson_bc_code(mesh%grid%periodic_BC)
 
     ! 1D decomposition along Z in real domain, and along Y in spectral space
     if (mesh%par%nproc_dir(2) /= 1) &
@@ -348,14 +354,17 @@ contains
     ! Try cuFFTMp first, with automatic fallback to cuFFT if not supported
     self%use_cufftmp = .true.
 
+    ! init_case must run before create_plans: the 100 and 110 cases set up
+    ! the dim2 mirror there, and the cuFFTMp check below reads it.
     call self%init_case(mesh)
 
     call self%create_plans(mesh, dims_loc, fw_plan_type, bw_plan_type)
 
     ! use_cufftmp is only settled once create_fft_plan has run, because plain
     ! cuFFT is a fallback taken inside it, so unlike the decomposition checks
-    ! above this one cannot move ahead of the plans. The dim2 mirror exists
-    ! exactly on the multi-rank paths of the 100 and 110 cases.
+    ! above this one cannot move ahead of the plans. c_mirror_dev is
+    ! allocated only by init_dim2_mirror, so it is allocated exactly on the
+    ! multi-rank paths of the 100 and 110 cases.
     if (allocated(self%c_mirror_dev) .and. (.not. self%use_cufftmp)) then
       call abort_run('The 100 and 110 cases on multiple ranks need cuFFTMp, &
                      &plain cuFFT cannot decompose the transform.')
@@ -457,7 +466,7 @@ contains
 
     integer :: dirs(3)
 
-    dirs = spectral_dirs(poisson_bc_code(mesh%grid%periodic_BC))
+    dirs = spectral_dirs(self%bc_code)
 
     n_spec(1) = dims_loc(dirs(1))/2 + 1
     n_spec(2) = dims_loc(dirs(2))/mesh%par%nproc_dir(3)
@@ -564,7 +573,9 @@ contains
     !! dim2 modes [r*m + 1, (r + 1)*m] with m = ny_spec, and the mirror of
     !! that range is slab P - 1 - r shifted up by one plane, so the extra
     !! plane comes from slab P - r. Both partners are symmetric. A single
-    !! rank holds every partner itself and allocates nothing.
+    !! rank holds every partner itself and allocates nothing. This is the
+    !! only place c_mirror_dev is allocated, see the cuFFTMp check in
+    !! init_cuda.
     implicit none
 
     class(cuda_poisson_fft_t) :: self

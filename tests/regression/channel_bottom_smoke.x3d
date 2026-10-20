@@ -1,0 +1,40 @@
+&domain_settings
+! Fast channel smoke case for the regression suite: 64 x 65 x 32, 50 steps.
+! As channel_smoke.x3d, but stretched towards the bottom wall only, which
+! runs the 010 FFT Poisson solver with the non-symmetric stretching operator
+! (a_re/a_im) instead of the odd/even split. The CUDA backend runs the 010
+! case on one rank only.
+flow_case_name = 'channel'
+
+L_global = 4d0, 2d0, 2d0
+
+dims_global = 64, 65, 32
+
+nproc_dir = 1, 1, 1
+
+BC_x = 'periodic', 'periodic'
+BC_y = 'dirichlet', 'dirichlet'
+BC_z = 'periodic', 'periodic'
+
+stretching(2) = 'bottom'
+beta(2) = 0.259065151d0
+/End
+
+&solver_params
+Re = 4200d0
+time_intg = 'RK3'
+dt = 0.005d0
+n_iters = 50
+n_output = 5
+poisson_solver_type = 'FFT'
+der1st_scheme = 'compact6'
+der2nd_scheme = 'compact6'
+interpl_scheme = 'classic'
+stagder_scheme = 'compact6'
+/End
+
+&channel_nml
+init_noise = 0.125 0.125 0.125
+inlet_noise = 0. 0. 0.
+rotation = F
+/End

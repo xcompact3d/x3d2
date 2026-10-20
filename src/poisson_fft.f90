@@ -34,7 +34,8 @@ module m_poisson_fft
     !> Periodicity in x, y, and z
     logical :: periodic_x, periodic_y, periodic_z, &
                stretched_y = .false., stretched_y_sym
-    !> Boundary condition case, see poisson_bc_code
+    !> Boundary condition case, see poisson_bc_code. The backend's init sets
+    !> it first, ahead of base_init.
     character(len=3) :: bc_code
     !> Stretching operator matrices
     real(dp), allocatable, dimension(:, :, :, :) :: a_odd_re, a_odd_im, &
@@ -130,6 +131,10 @@ contains
   end function spectral_dirs
 
   subroutine base_init(self, mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
+    !! Sets up the state every case shares. The backend's init calls it
+    !! once it has set bc_code, which the spectral extents it passes in
+    !! already depend on. The supported BC codes are the cases of the
+    !! backend factories, create_omp_poisson_fft and create_cuda_poisson_fft.
     implicit none
     class(poisson_fft_t) :: self
     type(mesh_t), intent(in), target :: mesh
@@ -155,13 +160,6 @@ contains
     self%periodic_x = mesh%grid%periodic_BC(1)
     self%periodic_y = mesh%grid%periodic_BC(2)
     self%periodic_z = mesh%grid%periodic_BC(3)
-    self%bc_code = poisson_bc_code(mesh%grid%periodic_BC)
-    select case (self%bc_code)
-    case ('000', '010', '100', '110')
-    case default
-      call abort_run('Requested BCs are not supported in FFT-based Poisson &
-                     &solver!')
-    end select
 
     self%sp_st = n_sp_st
 
@@ -631,7 +629,7 @@ contains
     type(geo_t), intent(in) :: geo
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
 
-    integer :: i, j, k, ix, iy, iz, ixyz(3), dirs(3)
+    integer :: i, j, k, ix, iy, iz
     real(dp) :: rlexs, rleys, rlezs, xtt, ytt, ztt, xt1, yt1, zt1
     complex(dp) :: xt2, yt2, zt2, xyzk
 
@@ -655,47 +653,127 @@ contains
 
     ! The spectral array is laid out as spectral_dirs gives, e.g. for 110
     ! it is (nz/2 + 1, nx, ny): dim1 indexes the z r2c modes, dim2 the x
-    ! modes and dim3 the y modes. ixyz maps a spectral index back to the
-    ! x, y and z mode numbers.
-    dirs = spectral_dirs(self%bc_code)
-    do k = 1, self%nz_spec
-      do j = 1, self%ny_spec
-        do i = 1, self%nx_spec
-          ixyz(dirs(1)) = i + self%sp_st(1)
-          ixyz(dirs(2)) = j + self%sp_st(2)
-          ixyz(dirs(3)) = k + self%sp_st(3)
-          ix = ixyz(1); iy = ixyz(2); iz = ixyz(3)
+    ! modes and dim3 the y modes. Each layout keeps its own loop nest with
+    ! the mode numbers written out. Mapping the indices through
+    ! spectral_dirs in one shared loop stops the compiler from vectorising
+    ! the inner loop and hoisting the other two directions out of it, which
+    ! changes waves by a few ulp under -ffast-math.
+    select case (self%bc_code)
+    case ('110')
+      do k = 1, self%nz_spec
+        do j = 1, self%ny_spec
+          do i = 1, self%nx_spec
+            iz = i + self%sp_st(1)
+            ix = j + self%sp_st(2)
+            iy = k + self%sp_st(3)
 
-          rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
-          rleys = real(self%eys(iy), kind=dp)*geo%d(2)
-          rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
+            rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
+            rleys = real(self%eys(iy), kind=dp)*geo%d(2)
+            rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
 
-          xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
-                   + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
-                   + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
-                   + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
-          ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
-                   + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
-                   + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
-                   + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
-          ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
-                   + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
-                   + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
-                   + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
+            xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
+                     + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
+                     + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
+                     + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
+            ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
+                     + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
+                     + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
+                     + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
+            ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
+                     + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
+                     + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
+                     + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
 
-          xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
-          yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
-          zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
+            xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
+            yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
+            zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
 
-          xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
-          yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
-          zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
+            xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
+            yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
+            zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
 
-          xyzk = xt2 + yt2 + zt2
-          self%waves(i, j, k) = xyzk
+            xyzk = xt2 + yt2 + zt2
+            self%waves(i, j, k) = xyzk
+          end do
         end do
       end do
-    end do
+    case ('100')
+      do k = 1, self%nz_spec
+        do j = 1, self%ny_spec
+          do i = 1, self%nx_spec
+            iy = i + self%sp_st(1)
+            ix = j + self%sp_st(2)
+            iz = k + self%sp_st(3)
+
+            rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
+            rleys = real(self%eys(iy), kind=dp)*geo%d(2)
+            rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
+
+            xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
+                     + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
+                     + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
+                     + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
+            ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
+                     + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
+                     + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
+                     + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
+            ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
+                     + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
+                     + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
+                     + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
+
+            xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
+            yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
+            zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
+
+            xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
+            yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
+            zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
+
+            xyzk = xt2 + yt2 + zt2
+            self%waves(i, j, k) = xyzk
+          end do
+        end do
+      end do
+    case default
+      do k = 1, self%nz_spec
+        do j = 1, self%ny_spec
+          do i = 1, self%nx_spec
+            ix = i + self%sp_st(1)
+            iy = j + self%sp_st(2)
+            iz = k + self%sp_st(3)
+
+            rlexs = real(self%exs(ix), kind=dp)*geo%d(1)
+            rleys = real(self%eys(iy), kind=dp)*geo%d(2)
+            rlezs = real(self%ezs(iz), kind=dp)*geo%d(3)
+
+            xtt = 2*(xdirps%interpl_v2p%a*cos(rlexs*0.5_dp) &
+                     + xdirps%interpl_v2p%b*cos(rlexs*1.5_dp) &
+                     + xdirps%interpl_v2p%c*cos(rlexs*2.5_dp) &
+                     + xdirps%interpl_v2p%d*cos(rlexs*3.5_dp))
+            ytt = 2*(ydirps%interpl_v2p%a*cos(rleys*0.5_dp) &
+                     + ydirps%interpl_v2p%b*cos(rleys*1.5_dp) &
+                     + ydirps%interpl_v2p%c*cos(rleys*2.5_dp) &
+                     + ydirps%interpl_v2p%d*cos(rleys*3.5_dp))
+            ztt = 2*(zdirps%interpl_v2p%a*cos(rlezs*0.5_dp) &
+                     + zdirps%interpl_v2p%b*cos(rlezs*1.5_dp) &
+                     + zdirps%interpl_v2p%c*cos(rlezs*2.5_dp) &
+                     + zdirps%interpl_v2p%d*cos(rlezs*3.5_dp))
+
+            xt1 = 1._dp + 2*xdirps%interpl_v2p%alpha*cos(rlexs)
+            yt1 = 1._dp + 2*ydirps%interpl_v2p%alpha*cos(rleys)
+            zt1 = 1._dp + 2*zdirps%interpl_v2p%alpha*cos(rlezs)
+
+            xt2 = self%k2x(ix)*((ytt/yt1)*(ztt/zt1))**2
+            yt2 = self%k2y(iy)*((xtt/xt1)*(ztt/zt1))**2
+            zt2 = self%k2z(iz)*((xtt/xt1)*(ytt/yt1))**2
+
+            xyzk = xt2 + yt2 + zt2
+            self%waves(i, j, k) = xyzk
+          end do
+        end do
+      end do
+    end select
 
   end subroutine waves_set
 

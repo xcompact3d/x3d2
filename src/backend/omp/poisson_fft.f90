@@ -171,6 +171,8 @@ contains
 
     call log_info("Initialising 2decomp&fft")
 
+    self%bc_code = poisson_bc_code(mesh%grid%periodic_BC)
+
     if (present(lowmem)) then
       call log_info('lowmem_fft has no impact in the OpenMP backend.')
     end if
@@ -187,7 +189,7 @@ contains
     ! Build the transform on the cell grid permuted into the spectral
     ! layout of the case, so that the spectral slab comes back in the
     ! layout waves_set builds, e.g. (ny/2 + 1, nx, nz) for the 100 case.
-    fft_dims = dims(spectral_dirs(poisson_bc_code(mesh%grid%periodic_BC)))
+    fft_dims = dims(spectral_dirs(self%bc_code))
     call decomp_2d_fft_init(PHYSICAL_IN_X, fft_dims(1), fft_dims(2), &
                             fft_dims(3))
     ! For PHYSICAL_IN_X the spectral slab is a z-pencil of sp, which is all
