@@ -351,6 +351,17 @@ foreach(mode one_rank collective)
     TIMEOUT 60)
 endforeach()
 unset(X3D2_TEST_NAME_SUFFIX)
+# relative_l2_error must stop on a zero reference or a non-finite input. ctest
+# checks the output, not the exit code: MPI_Abort's depends on the launcher.
+foreach(mode zero_ref nonfinite)
+  set(X3D2_TEST_NAME_SUFFIX _${mode})
+  define_test(unit/test_relative_l2_error.f90 ${np} omp ${mode})
+  set_tests_properties(test_relative_l2_error_omp_${np}_${mode} PROPERTIES
+    PASS_REGULAR_EXPRESSION "ERROR: relative_l2_error"
+    FAIL_REGULAR_EXPRESSION "must never be reached"
+    TIMEOUT 60)
+endforeach()
+unset(X3D2_TEST_NAME_SUFFIX)
 if(WITH_ADIOS2)
   define_test(unit/test_adios2_mixed_precision.f90 ${serial} omp)
   define_test(unit/test_adm_checkpoint.f90 ${serial} omp)

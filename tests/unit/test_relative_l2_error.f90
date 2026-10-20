@@ -1,5 +1,10 @@
 program test_relative_l2_error
   !! Checks m_test_utils::relative_l2_error against values known in advance.
+  !!
+  !! The passing cases run with no argument. The argument `zero_ref` or
+  !! `nonfinite` makes the call abort, and ctest checks the error message in
+  !! the output rather than the exit code.
+  use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value
 
   use m_common, only: dp
   use m_test_utils, only: finalise_test, initialise_mpi, relative_l2_error
@@ -11,11 +16,33 @@ program test_relative_l2_error
 
   integer :: nrank, nproc, r, n_r
   logical :: allpass
+  character(len=32) :: mode
   real(dp), allocatable :: ref(:, :, :), err(:, :, :)
   real(dp) :: res, expected, num, den, a_r, c_r
 
   call initialise_mpi(nrank, nproc)
   allpass = .true.
+  mode = ''
+  if (command_argument_count() >= 1) call get_command_argument(1, mode)
+
+  if (trim(mode) == 'zero_ref') then
+    allocate (ref(3, 4, 5), err(3, 4, 5))
+    ref = 0.0_dp
+    err = 1.0_dp
+    res = relative_l2_error(err, ref)
+    print *, 'relative_l2_error returned: this line must never be reached'
+    stop
+  end if
+
+  if (trim(mode) == 'nonfinite') then
+    allocate (ref(3, 4, 5), err(3, 4, 5))
+    ref = 1.0_dp
+    err = 0.0_dp
+    err(2, 3, 4) = ieee_value(1.0_dp, ieee_quiet_nan)
+    res = relative_l2_error(err, ref)
+    print *, 'relative_l2_error returned: this line must never be reached'
+    stop
+  end if
 
   ! 1. Exact agreement gives exactly zero.
   allocate (ref(3, 4, 5), err(3, 4, 5))
