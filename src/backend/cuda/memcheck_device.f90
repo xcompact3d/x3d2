@@ -3,21 +3,22 @@ module m_cuda_memcheck_device
   !! readings and the backend of the real build.
   use cudafor, only: cudaGetDeviceCount, cudaSetDevice, cudaMemGetInfo, &
                      cuda_count_kind, int_ptr_kind
-  use cufft, only: cufftDestroy, CUFFT_D2Z, CUFFT_Z2D, CUFFT_R2C, CUFFT_C2R
+  use cufft, only: cufftDestroy
   use cufftXt, only: cufftXtMalloc, cufftXtFree, CUFFT_XT_FORMAT_INPLACE, &
                      cudaLibXtDesc
-  use m_common, only: dp, i8, is_sp
+  use m_common, only: dp, i8
   use m_logger, only: abort_run
   use m_memory_estimate, only: predicted_fft_heap_bytes, round_up_bytes, &
                                fft_xtdesc_step_bytes
   use m_cuda_common, only: SZ
-  use m_mesh, only: mesh_t
+  use m_mesh, only: mesh_t, FFT_BC_000, FFT_BC_100, FFT_BC_110
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
   use m_cuda_allocator, only: cuda_allocator_t
   use m_cuda_backend, only: cuda_backend_t
-  use m_cuda_poisson_fft, only: cuda_poisson_fft_t, create_fft_plan
+  use m_cuda_poisson_fft, only: cuda_poisson_fft_t, create_fft_plan, &
+                                cuda_fft_plan_setup
   implicit none
 
   private
@@ -400,24 +401,23 @@ contains
     integer, intent(out) :: stat
     logical, optional, intent(in) :: query_only
 
-    integer :: plan_fw, plan_bw, fft_n1, fft_n2, fft_n3
+    integer :: plan_fw, plan_bw, fft_n(3), fft_n_loc(2), bc_code
     integer :: fw_plan_type, bw_plan_type, ierr
     integer(int_ptr_kind()) :: worksize_fw, worksize_bw
     integer(kind=cuda_count_kind) :: free_before, free_after, total_b
     type(cudaLibXtDesc), pointer :: xtdesc
     logical :: fw_was_cufftmp, no_auto_alloc
 
-    ! The plan dimensions follow the permutation of the solver's init().
+    ! The plan dimensions and types are the solver's, one rank.
     if (bc_is_100) then
-      fft_n1 = cdims(2); fft_n2 = cdims(1); fft_n3 = cdims(3)
+      bc_code = FFT_BC_100
     else if (bc_is_110) then
-      fft_n1 = cdims(3); fft_n2 = cdims(1); fft_n3 = cdims(2)
+      bc_code = FFT_BC_110
     else
-      fft_n1 = cdims(1); fft_n2 = cdims(2); fft_n3 = cdims(3)
+      bc_code = FFT_BC_000
     end if
-
-    fw_plan_type = merge(CUFFT_R2C, CUFFT_D2Z, is_sp)
-    bw_plan_type = merge(CUFFT_C2R, CUFFT_Z2D, is_sp)
+    call cuda_fft_plan_setup(bc_code, cdims, cdims, fft_n, fft_n_loc, &
+                             fw_plan_type, bw_plan_type)
 
     used_cufftmp = try_cufftmp .and. (.not. bc_is_110)
     stat = 0
@@ -426,14 +426,14 @@ contains
 
     ierr = cudaMemGetInfo(free_before, total_b)
     call check_status(ierr, 'cudaMemGetInfo (before plans)')
-    call create_fft_plan(plan_fw, used_cufftmp, fft_n1, fft_n2, fft_n3, &
+    call create_fft_plan(plan_fw, used_cufftmp, fft_n(1), fft_n(2), fft_n(3), &
                          fw_plan_type, 'memcheck probe fwd', &
                          worksize_fw, stat, no_auto_alloc)
     if (stat /= 0) return
     fw_was_cufftmp = used_cufftmp
     ! A fallback to plain cuFFT sets used_cufftmp to false. A forward plan
     ! built on cuFFTMp is then rebuilt on plain cuFFT, as init() does.
-    call create_fft_plan(plan_bw, used_cufftmp, fft_n1, fft_n2, fft_n3, &
+    call create_fft_plan(plan_bw, used_cufftmp, fft_n(1), fft_n(2), fft_n(3), &
                          bw_plan_type, 'memcheck probe bwd', &
                          worksize_bw, stat, no_auto_alloc)
     if (stat /= 0) then
@@ -443,8 +443,8 @@ contains
     if (fw_was_cufftmp .and. (.not. used_cufftmp)) then
       ierr = cufftDestroy(plan_fw)
       call check_status(ierr, 'cufftDestroy (fwd, cuFFTMp fallback rebuild)')
-      call create_fft_plan(plan_fw, used_cufftmp, fft_n1, fft_n2, fft_n3, &
-                           fw_plan_type, &
+      call create_fft_plan(plan_fw, used_cufftmp, fft_n(1), fft_n(2), &
+                           fft_n(3), fw_plan_type, &
                            'memcheck probe fwd (cuFFT rebuild)', worksize_fw, &
                            stat)
       if (stat /= 0) then

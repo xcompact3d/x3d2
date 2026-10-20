@@ -262,6 +262,45 @@ contains
 
   end subroutine create_fft_plan
 
+  pure subroutine cuda_fft_plan_setup(bc_code, dims_glob, dims_loc, fft_n, &
+                                      fft_n_loc, fw_type, bw_type)
+    !! The cuFFT plan dimensions and types of a BC class. The 100 case
+    !! transposes X<->Y and runs the FFT on (ny, nx, nz), the 110 case
+    !! transposes to (nz, nx, ny) with R2C along Z, and the 000 and 010 cases
+    !! run it on (nx, ny, nz). fft_n holds the global plan dimensions and
+    !! fft_n_loc the local extents of the first two. Shared by the solver
+    !! init and the x3d2-memcheck probe.
+    implicit none
+
+    integer, intent(in) :: bc_code
+    integer, intent(in) :: dims_glob(3), dims_loc(3)
+    integer, intent(out) :: fft_n(3), fft_n_loc(2)
+    integer, intent(out) :: fw_type, bw_type
+
+    if (bc_code == FFT_BC_100) then
+      ! 100: transpose X<->Y, FFT on (ny, nx, nz)
+      fft_n = [dims_glob(2), dims_glob(1), dims_glob(3)]
+      fft_n_loc = [dims_loc(2), dims_loc(1)]
+    else if (bc_code == FFT_BC_110) then
+      ! 110: transpose to (nz, nx, ny), R2C along Z
+      fft_n = [dims_glob(3), dims_glob(1), dims_glob(2)]
+      fft_n_loc = [dims_glob(3), dims_loc(1)]
+    else
+      ! 000, 010: FFT on (nx, ny, nz)
+      fft_n = dims_glob
+      fft_n_loc = [dims_loc(1), dims_loc(2)]
+    end if
+
+    if (is_sp) then
+      fw_type = CUFFT_R2C
+      bw_type = CUFFT_C2R
+    else
+      fw_type = CUFFT_D2Z
+      bw_type = CUFFT_Z2D
+    end if
+
+  end subroutine cuda_fft_plan_setup
+
   subroutine init_cuda_poisson_fft_t(poisson_fft, mesh, xdirps, ydirps, &
                                      zdirps, lowmem)
     implicit none
@@ -278,7 +317,7 @@ contains
     integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
     logical :: fw_was_cufftmp
 
-    integer :: fft_n1, fft_n2, fft_n3, fft_n1_loc, fft_n2_loc
+    integer :: fft_n(3), fft_n_loc(2)
     integer :: fw_plan_type, bw_plan_type
 
     ! Detect cases
@@ -366,28 +405,9 @@ contains
     ny = poisson_fft%ny_glob
     nz = poisson_fft%nz_glob
 
-    ! Determine FFT plan dimensions
-    if (poisson_fft%is_100_case) then
-      ! 100: transpose X<->Y, FFT on (ny, nx, nz)
-      fft_n1 = ny; fft_n2 = nx; fft_n3 = nz
-      fft_n1_loc = dims_loc(2); fft_n2_loc = dims_loc(1)
-    else if (poisson_fft%is_110_case) then
-      ! 110: transpose to (nz, nx, ny), R2C along Z
-      fft_n1 = nz; fft_n2 = nx; fft_n3 = ny
-      fft_n1_loc = dims_glob(3); fft_n2_loc = dims_loc(1)
-    else
-      ! 000, 010: FFT on (nx, ny, nz)
-      fft_n1 = nx; fft_n2 = ny; fft_n3 = nz
-      fft_n1_loc = dims_loc(1); fft_n2_loc = dims_loc(2)
-    end if
-
-    if (is_sp) then
-      fw_plan_type = CUFFT_R2C
-      bw_plan_type = CUFFT_C2R
-    else
-      fw_plan_type = CUFFT_D2Z
-      bw_plan_type = CUFFT_Z2D
-    end if
+    ! Determine FFT plan dimensions and types
+    call cuda_fft_plan_setup(mesh%grid%bc_code, dims_glob, dims_loc, fft_n, &
+                             fft_n_loc, fw_plan_type, bw_plan_type)
 
     allocate (poisson_fft%waves_dev(poisson_fft%nx_spec, &
                                     poisson_fft%ny_spec, &
@@ -465,9 +485,10 @@ contains
       poisson_fft%use_cufftmp = mesh%par%nproc > 1
 
       call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
-                           fft_n1, fft_n2, fft_n3, fw_plan_type, 'Forward 110')
+                           fft_n(1), fft_n(2), fft_n(3), fw_plan_type, &
+                           'Forward 110')
       call create_fft_plan(poisson_fft%plan3D_bw, poisson_fft%use_cufftmp, &
-                           fft_n1, fft_n2, fft_n3, bw_plan_type, &
+                           fft_n(1), fft_n(2), fft_n(3), bw_plan_type, &
                            'Backward 110')
 
       if (poisson_fft%use_cufftmp) then
@@ -499,18 +520,21 @@ contains
     else
       ! All other cases: standard R2C/C2R with cuFFTMp fallback
       call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
-                           fft_n1, fft_n2, fft_n3, fw_plan_type, 'Forward')
+                           fft_n(1), fft_n(2), fft_n(3), fw_plan_type, &
+                           'Forward')
       fw_was_cufftmp = poisson_fft%use_cufftmp
 
       ! Create backward FFT plan with automatic cuFFTMp detection/fallback
       call create_fft_plan(poisson_fft%plan3D_bw, poisson_fft%use_cufftmp, &
-                           fft_n1, fft_n2, fft_n3, bw_plan_type, 'Backward')
+                           fft_n(1), fft_n(2), fft_n(3), bw_plan_type, &
+                           'Backward')
 
       ! If backward plan forced fallback, rebuild forward plan too
       if (fw_was_cufftmp .and. (.not. poisson_fft%use_cufftmp)) then
         ierr = cufftDestroy(poisson_fft%plan3D_fw)
         call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
-                             fft_n1, fft_n2, fft_n3, fw_plan_type, 'Forward')
+                             fft_n(1), fft_n(2), fft_n(3), fw_plan_type, &
+                             'Forward')
       end if
 
       ! Allocate storage - cuFFTMp uses xtdesc, cuFFT uses c_dev
@@ -523,7 +547,7 @@ contains
         allocate (poisson_fft%c_dev(poisson_fft%nx_spec, &
                                     poisson_fft%ny_spec, &
                                     poisson_fft%nz_spec))
-        allocate (poisson_fft%r_dev(fft_n1_loc, fft_n2_loc, &
+        allocate (poisson_fft%r_dev(fft_n_loc(1), fft_n_loc(2), &
                                     poisson_fft%nz_loc))
       end if
 
