@@ -1,6 +1,6 @@
 module m_cuda_memcheck_device
-  !! The CUDA device of x3d2-memcheck: the FFT plan probe, the memory
-  !! readings and the backend of the real build.
+  !! The CUDA device of x3d2-memcheck: the FFT plan probe and the memory
+  !! readings.
   use cudafor, only: cudaGetDeviceCount, cudaSetDevice, cudaMemGetInfo, &
                      cuda_count_kind, int_ptr_kind
   use cufft, only: cufftDestroy
@@ -11,12 +11,8 @@ module m_cuda_memcheck_device
   use m_memory_estimate, only: predicted_fft_heap_bytes, round_up_bytes, &
                                fft_xtdesc_step_bytes
   use m_cuda_common, only: SZ
-  use m_mesh, only: mesh_t, FFT_BC_000, FFT_BC_100, FFT_BC_110
-  use m_allocator, only: allocator_t
-  use m_base_backend, only: base_backend_t
+  use m_mesh, only: FFT_BC_000, FFT_BC_100, FFT_BC_110
   use m_base_case, only: base_case_t
-  use m_cuda_allocator, only: cuda_allocator_t
-  use m_cuda_backend, only: cuda_backend_t
   use m_cuda_poisson_fft, only: cuda_poisson_fft_t, create_fft_plan_pair, &
                                 cuda_fft_plan_setup
   implicit none
@@ -58,8 +54,6 @@ module m_cuda_memcheck_device
     logical :: full_tried = .false., full_ok = .false.
     !> Whether the real build used cuFFTMp, once it is known.
     logical :: use_cufftmp = .false., use_cufftmp_known = .false.
-    type(cuda_allocator_t) :: cuda_allocator
-    type(cuda_backend_t) :: cuda_backend
   contains
     procedure :: init
     procedure :: mem_info
@@ -68,7 +62,6 @@ module m_cuda_memcheck_device
     procedure :: overhead_floor_bytes
     procedure :: overhead_query_bytes
     procedure :: probe_ran
-    procedure :: make_backend
     procedure :: ensure_probe
     procedure :: query_plan_need
     procedure :: use_predicted_heap
@@ -299,19 +292,6 @@ contains
       nbytes8 = nbytes8 + self%probe%worksize
     end if
   end function overhead_query_bytes
-
-  subroutine make_backend(self, mesh, dims, allocator, backend)
-    class(cuda_memcheck_device_t), target, intent(inout) :: self
-    type(mesh_t), target, intent(inout) :: mesh
-    integer, intent(in) :: dims(3)
-    class(allocator_t), pointer, intent(out) :: allocator
-    class(base_backend_t), pointer, intent(out) :: backend
-
-    self%cuda_allocator = cuda_allocator_t(dims, SZ)
-    allocator => self%cuda_allocator
-    self%cuda_backend = cuda_backend_t(mesh, allocator)
-    backend => self%cuda_backend
-  end subroutine make_backend
 
   subroutine capture_solver_info(self, flow_case)
     class(cuda_memcheck_device_t), intent(inout) :: self

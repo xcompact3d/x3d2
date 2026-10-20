@@ -1,12 +1,10 @@
 module m_memcheck_build
   !! The real build of x3d2-memcheck (--build): the real case build, its
   !! measurement and the measured report.
-  use m_common, only: dp, i8, VERT
+  use m_common, only: dp, i8
   use m_logger, only: log_info, log_warn
   use m_mesh, only: mesh_t
-  use m_backend_setup, only: poisson_uses_2decomp
-  use m_allocator, only: allocator_t
-  use m_base_backend, only: base_backend_t
+  use m_backend_setup, only: backend_setup_t, poisson_uses_2decomp
   use m_base_case, only: base_case_t
   use m_case_factory, only: allocate_flow_case, is_supported_flow_case
   use m_field, only: flist_t
@@ -167,12 +165,11 @@ contains
         &by 1/num_gpus.)')
   end subroutine report_measured_table
 
-  subroutine build_mesh(ctx, dims_in, mesh, dims)
+  subroutine build_mesh(ctx, dims_in, mesh)
     !! Mesh of the real build at dims_in.
     type(memcheck_ctx_t), intent(in) :: ctx
     integer, intent(in) :: dims_in(3)
     type(mesh_t), intent(out) :: mesh
-    integer, intent(out) :: dims(3)
 
     mesh = mesh_t(dims_in, [1, 1, 1], ctx%domain_cfg%L_global, &
                   ctx%domain_cfg%BC_x, ctx%domain_cfg%BC_y, &
@@ -180,7 +177,6 @@ contains
                   ctx%domain_cfg%beta, &
                   use_2decomp=poisson_uses_2decomp( &
                   ctx%solver_cfg%poisson_solver_type))
-    dims = mesh%get_dims(VERT)
   end subroutine build_mesh
 
   subroutine drive_case(ctx, flow_case)
@@ -229,11 +225,8 @@ contains
     integer(i8), intent(out) :: free_end_bytes
 
     type(mesh_t), target :: mesh
-    class(allocator_t), pointer :: allocator
-    class(base_backend_t), pointer :: backend
+    type(backend_setup_t), target :: setup
     class(base_case_t), allocatable :: flow_case
-    integer :: dims(3)
-    type(allocator_t), target :: host_allocator
     integer(i8) :: total_b
 
     npeak = 0
@@ -241,17 +234,16 @@ contains
     ctx%output_vorticity = .false.
     ctx%output_qcriterion = .false.
 
-    call build_mesh(ctx, dims_in, mesh, dims)
+    call build_mesh(ctx, dims_in, mesh)
 
-    call ctx%device%make_backend(mesh, dims, allocator, backend)
-    host_allocator = allocator_t(dims, ctx%device%sz())
+    call setup%init(mesh)
 
     ! The case build writes no monitoring.csv or turbine disc<t>.adm in the
     ! working directory.
     monitoring_default_enabled = .false.
     scalar_series_default_enabled = .false.
-    call allocate_flow_case(ctx%domain_cfg%flow_case_name, backend, mesh, &
-                            host_allocator, flow_case)
+    call allocate_flow_case(ctx%domain_cfg%flow_case_name, setup%backend, &
+                            mesh, setup%host_allocator, flow_case)
 
     ! The ABL profile file is written by sample() only when the profile
     ! diagnostics are on: switch them off so postprocess(0) leaves it alone.
@@ -265,7 +257,7 @@ contains
 
     call drive_case(ctx, flow_case)
 
-    npeak = allocator%next_id
+    npeak = setup%allocator%next_id
     call ctx%device%mem_info(total_b, free_end_bytes)
   end subroutine build_and_measure
 
