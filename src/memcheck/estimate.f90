@@ -59,7 +59,7 @@ contains
 
   function num_gpus_unsupported_reason(ctx, num_gpus) result(reason)
     !! The reason GPU count num_gpus is not a supported decomposition, blank
-    !! when it is. The FFT check applies once the FFT path is known.
+    !! when it is.
     type(memcheck_ctx_t), intent(in) :: ctx
     integer, intent(in) :: num_gpus
     character(len=96) :: reason

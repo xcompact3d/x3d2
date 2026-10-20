@@ -129,8 +129,6 @@ contains
     if (len_trim(reason) == 0) then
       call estimate_for_num_gpus(ctx, requested_num_gpus, requested_gib, &
                                  basis, requested_verdict)
-      ! The estimate can settle the FFT path: ask again.
-      reason = requested_unsupported_reason(ctx)
     end if
     if (len_trim(reason) > 0) then
       write (line_buf, '(a,i0,a,i0,a,i0,a,a,a)') &

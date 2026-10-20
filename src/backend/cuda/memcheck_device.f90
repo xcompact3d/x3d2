@@ -291,7 +291,7 @@ contains
                 int(real(self%probe%heap, dp)/real(num_gpus, dp), i8) + &
                 merge(self%probe%xtdesc, 0_i8, num_gpus == 1)
     else
-      ! Plain cuFFT: the 110 BC or a cuFFTMp fallback, num_gpus=1 only.
+      ! Plain cuFFT: the 110 BC, num_gpus=1 only.
       nbytes8 = nbytes8 + self%probe%worksize
     end if
   end function overhead_query_bytes

@@ -16,7 +16,7 @@ module m_memcheck_build
   use m_monitoring, only: monitoring_default_enabled
   use m_memcheck_context, only: memcheck_ctx_t
   use m_memcheck_report, only: n_gpu_list, print_rule, print_table_header, &
-                               print_table_row, print_requested_line
+                               print_table_row
   use m_memcheck_estimate, only: to_gib, num_gpus_unsupported_reason, &
                                  requested_unsupported_reason, &
                                  estimate_for_num_gpus, &
@@ -390,13 +390,9 @@ contains
 
     call report_measured_table(ctx, measured_peak_fields, used_gib, &
                                workspace_gib_measured, measured_verdict)
-    ! An unsupported nproc_dir stays UNSUPPORTED. The real build can make a
-    ! request unsupported (cuFFTMp fell back): print that line now.
-    if (len_trim(requested_unsupported_reason(ctx)) == 0) then
+    ! An unsupported nproc_dir stays UNSUPPORTED.
+    if (len_trim(requested_unsupported_reason(ctx)) == 0) &
       ctx%final_verdict = measured_verdict
-    else if (trim(ctx%final_verdict) /= 'UNSUPPORTED') then
-      call print_requested_line(ctx)
-    end if
 
     ! The CHECK line compares the num_gpus=1 estimate without the IO staging
     ! term, which the real build never measures, with the measured memory.
