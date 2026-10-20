@@ -73,13 +73,8 @@ contains
     mesh%grid%global_vert_dims(:) = dims_global
 
     ! Set global cell dims
-    do dir = 1, 3
-      if (mesh%grid%periodic_BC(dir)) then
-        mesh%grid%global_cell_dims(dir) = mesh%grid%global_vert_dims(dir)
-      else
-        mesh%grid%global_cell_dims(dir) = mesh%grid%global_vert_dims(dir) - 1
-      end if
-    end do
+    mesh%grid%global_cell_dims = global_cell_dims(dims_global, &
+                                                  mesh%grid%periodic_BC)
 
     ! Parallel domain decomposition
     mesh%par%nproc_dir(:) = nproc_dir
@@ -337,6 +332,25 @@ contains
       error stop "Unknown data_loc in get_coordinates" ! logger-exempt: pure
     end select
   end function
+
+  pure function global_cell_dims(vert_dims, periodic) result(cell_dims)
+    !! Global number of cells per direction: a periodic direction has as many
+    !! cells as vertices, any other has one less. Shared by mesh_init and
+    !! callers with only the global vertex dims (no mesh_t).
+    integer, intent(in) :: vert_dims(3)
+    logical, intent(in) :: periodic(3)
+    integer :: cell_dims(3)
+
+    integer :: dir
+
+    do dir = 1, 3
+      if (periodic(dir)) then
+        cell_dims(dir) = vert_dims(dir)
+      else
+        cell_dims(dir) = vert_dims(dir) - 1
+      end if
+    end do
+  end function global_cell_dims
 
   subroutine classify_boundaries(bc_x, bc_y, bc_z, periodic, bc_code, &
                                  bcs_global)
