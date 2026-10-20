@@ -396,28 +396,4 @@ contains
     end if
   end subroutine classify_boundaries
 
-  pure logical function periodic_dir(bc_pair) result(is_periodic)
-    !! A direction is periodic only if BOTH ends are 'periodic' - mirrors
-    !! the classification done in mesh_init (lines 65-88), exposed as a
-    !! standalone pure function so callers with only BC strings (no mesh_t,
-    !! e.g. static memory estimation) don't have to duplicate this rule.
-    character(len=*), intent(in) :: bc_pair(2)
-
-    is_periodic = trim(bc_pair(1)) == 'periodic' .and. &
-                  trim(bc_pair(2)) == 'periodic'
-  end function periodic_dir
-
-  pure subroutine fft_bc_class(periodic, is_000, is_010, is_100, is_110)
-    !! Split the periodicity of the three directions into the four boundary
-    !! classes the Poisson FFT solver supports. Shared by poisson_fft and
-    !! the static memory estimation, which has no mesh_t.
-    logical, intent(in) :: periodic(3)
-    logical, intent(out) :: is_000, is_010, is_100, is_110
-
-    is_000 = periodic(1) .and. periodic(2) .and. periodic(3)
-    is_010 = periodic(1) .and. (.not. periodic(2)) .and. periodic(3)
-    is_100 = (.not. periodic(1)) .and. periodic(2) .and. periodic(3)
-    is_110 = (.not. periodic(1)) .and. (.not. periodic(2)) .and. periodic(3)
-  end subroutine fft_bc_class
-
 end module m_mesh

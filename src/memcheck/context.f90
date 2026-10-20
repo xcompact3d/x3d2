@@ -4,7 +4,8 @@ module m_memcheck_context
   use m_config, only: domain_config_t, solver_config_t, les_config_t, &
                       checkpoint_config_t
   use m_logger, only: abort_run
-  use m_mesh, only: periodic_dir, fft_bc_class
+  use m_mesh, only: classify_boundaries, FFT_BC_000, FFT_BC_010, &
+                    FFT_BC_100, FFT_BC_110
   use m_memory_estimate, only: cell_dims
   use m_cuda_memcheck_device, only: cuda_memcheck_device_t
   implicit none
@@ -27,6 +28,7 @@ module m_memcheck_context
     integer :: gdims(3)
     integer :: cdims(3)
     logical :: periodic_x, periodic_y, periodic_z
+    integer :: bc_code
     logical :: bc_is_000, bc_is_010, bc_is_100, bc_is_110
     logical :: multi_gpu_supported
     integer :: peak_fields
@@ -127,15 +129,20 @@ contains
   end subroutine read_config
 
   subroutine classify_bc(ctx)
-    !! The four-way BC split of fft_bc_class in m_mesh.
+    !! The BC parse and four-way split of classify_boundaries in m_mesh.
     type(memcheck_ctx_t), intent(inout) :: ctx
 
-    ctx%periodic_x = periodic_dir(ctx%domain_cfg%BC_x)
-    ctx%periodic_y = periodic_dir(ctx%domain_cfg%BC_y)
-    ctx%periodic_z = periodic_dir(ctx%domain_cfg%BC_z)
-    call fft_bc_class([ctx%periodic_x, ctx%periodic_y, ctx%periodic_z], &
-                      ctx%bc_is_000, ctx%bc_is_010, ctx%bc_is_100, &
-                      ctx%bc_is_110)
+    logical :: periodic(3)
+
+    call classify_boundaries(ctx%domain_cfg%BC_x, ctx%domain_cfg%BC_y, &
+                             ctx%domain_cfg%BC_z, periodic, ctx%bc_code)
+    ctx%periodic_x = periodic(1)
+    ctx%periodic_y = periodic(2)
+    ctx%periodic_z = periodic(3)
+    ctx%bc_is_000 = ctx%bc_code == FFT_BC_000
+    ctx%bc_is_010 = ctx%bc_code == FFT_BC_010
+    ctx%bc_is_100 = ctx%bc_code == FFT_BC_100
+    ctx%bc_is_110 = ctx%bc_code == FFT_BC_110
     ctx%cdims = cell_dims(ctx%gdims, [ctx%periodic_x, ctx%periodic_y, &
                                       ctx%periodic_z])
   end subroutine classify_bc
