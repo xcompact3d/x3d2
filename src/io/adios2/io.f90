@@ -75,8 +75,8 @@ module m_io_backend
   private
   public :: allocate_io_reader, allocate_io_writer
   public :: get_default_backend, IO_BACKEND_DUMMY, IO_BACKEND_ADIOS2
-  public :: parse_gpu_write_mode, gpu_write_mode_force_host, &
-            gpu_write_mode_names
+  public :: parse_gpu_write_mode, gpu_write_mode_from_env, &
+            gpu_write_mode_force_host, gpu_write_mode_names
 
   integer, parameter :: IO_BACKEND_DUMMY = 0
   integer, parameter :: IO_BACKEND_ADIOS2 = 1
@@ -259,6 +259,21 @@ contains
     end select
   end function parse_gpu_write_mode
 
+  function gpu_write_mode_from_env() result(mode)
+    !! The gpu_write_mode_* value of the environment variable
+    !! X3D2_ADIOS2_GPU_WRITE_MODE. An unset or empty variable gives auto.
+    integer :: mode
+
+    character(len=64) :: raw_value
+    integer :: status, value_length
+
+    mode = gpu_write_mode_auto
+    call get_environment_variable("X3D2_ADIOS2_GPU_WRITE_MODE", raw_value, &
+                                  length=value_length, status=status)
+    if (status == 0 .and. value_length > 0) &
+      mode = parse_gpu_write_mode(raw_value(1:value_length))
+  end function gpu_write_mode_from_env
+
   logical function env_to_logical(name, default_value) result(value)
     character(len=*), intent(in) :: name
     logical, intent(in) :: default_value
@@ -285,8 +300,6 @@ contains
   subroutine init_runtime_options(comm)
     integer, intent(in) :: comm
 
-    character(len=64) :: raw_value
-    integer :: status, value_length
     integer :: ierr, comm_rank
 
     if (.not. runtime_options_initialised) then
@@ -294,16 +307,9 @@ contains
 
       runtime_bench_enabled = env_to_logical("X3D2_ADIOS2_IO_BENCH", .false.)
 
-      runtime_gpu_write_mode = gpu_write_mode_auto
-      runtime_gpu_write_mode_name = "auto"
-      call get_environment_variable("X3D2_ADIOS2_GPU_WRITE_MODE", raw_value, &
-                                    length=value_length, status=status)
-      if (status == 0 .and. value_length > 0) then
-        runtime_gpu_write_mode = &
-          parse_gpu_write_mode(raw_value(1:value_length))
-        runtime_gpu_write_mode_name = &
-          gpu_write_mode_names(runtime_gpu_write_mode)
-      end if
+      runtime_gpu_write_mode = gpu_write_mode_from_env()
+      runtime_gpu_write_mode_name = &
+        gpu_write_mode_names(runtime_gpu_write_mode)
 
 #ifndef X3D2_ADIOS2_CUDA
       if (runtime_gpu_write_mode == gpu_write_mode_force_device) then

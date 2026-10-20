@@ -149,24 +149,17 @@ contains
 
   subroutine resolve_gpu_io_mode(ctx)
 #ifdef X3D2_ADIOS2_CUDA
-    use m_io_backend, only: parse_gpu_write_mode, gpu_write_mode_names, &
+    use m_io_backend, only: gpu_write_mode_from_env, gpu_write_mode_names, &
                             gpu_write_mode_force_host
 #endif
     !! Resolves whether snapshot and checkpoint writes stage through a
-    !! device buffer, with the parser the solver uses for the write mode.
+    !! device buffer, with the environment reader the solver uses for the
+    !! write mode.
     type(memcheck_ctx_t), intent(inout) :: ctx
 #ifdef X3D2_ADIOS2_CUDA
-    character(len=64) :: raw_value
-    integer :: status, value_length, mode
+    integer :: mode
 
-    call get_environment_variable('X3D2_ADIOS2_GPU_WRITE_MODE', raw_value, &
-                                  length=value_length, status=status)
-    if (status /= 0 .or. value_length == 0) then
-      mode = parse_gpu_write_mode('')
-    else
-      mode = parse_gpu_write_mode(raw_value(1:min(value_length, &
-                                                  len(raw_value))))
-    end if
+    mode = gpu_write_mode_from_env()
 
     ctx%gpu_io_mode_name = trim(gpu_write_mode_names(mode))
     if (mode == gpu_write_mode_force_host) then
