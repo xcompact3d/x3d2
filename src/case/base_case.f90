@@ -51,6 +51,7 @@ module m_base_case
     procedure :: set_init
     procedure :: substep
     procedure :: set_curr_fields
+    procedure :: finish_step
     procedure :: run
   end type base_case_t
 
@@ -265,6 +266,31 @@ contains
     end do
   end subroutine set_curr_fields
 
+  subroutine finish_step(self, iter, output_vorticity, output_qcriterion)
+    !! The per-iteration work after the substeps: sets current_iter and
+    !! computes the pressure and the derived fields. Shared by run() and
+    !! x3d2-memcheck.
+    implicit none
+
+    class(base_case_t), intent(inout) :: self
+    integer, intent(in) :: iter
+    logical, intent(in) :: output_vorticity, output_qcriterion
+
+    self%solver%current_iter = iter
+
+    ! Compute pressure on VERT grid if output_pressure is enabled
+    if (self%solver%keep_pressure) then
+      call compute_pressure_vert(self%solver)
+    end if
+
+    ! Compute postprocess fields (vorticity magnitude, Q-criterion)
+    if (output_vorticity .or. output_qcriterion) then
+      call compute_derived_fields(self%solver, &
+                                  output_vorticity, &
+                                  output_qcriterion)
+    end if
+  end subroutine finish_step
+
   subroutine run(self)
     !! Runs the solver forwards in time from t=t_0 to t=T, performing
     !! postprocessing/IO and reporting diagnostics.
@@ -351,19 +377,7 @@ contains
         call log_info('Time for this time step (s): '//str(t_step))
       end if
 
-      self%solver%current_iter = iter
-
-      ! Compute pressure on VERT grid if output_pressure is enabled
-      if (self%solver%keep_pressure) then
-        call compute_pressure_vert(self%solver)
-      end if
-
-      ! Compute postprocess fields (vorticity magnitude, Q-criterion)
-      if (output_vorticity .or. output_qcriterion) then
-        call compute_derived_fields(self%solver, &
-                                    output_vorticity, &
-                                    output_qcriterion)
-      end if
+      call self%finish_step(iter, output_vorticity, output_qcriterion)
 
       call self%io_mgr%update_stats(self%solver, iter)
 

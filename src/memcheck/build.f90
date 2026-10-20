@@ -4,7 +4,6 @@ module m_memcheck_build
   use m_common, only: dp, i8, VERT
   use m_logger, only: log_info, log_warn
   use m_mesh, only: mesh_t
-  use m_postprocess, only: compute_derived_fields, compute_pressure_vert
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
@@ -240,15 +239,12 @@ contains
 
     ! The per-iteration postprocessing of run(): keep_pressure and the
     ! derived fields are allocated here, not in postprocess().
-    if (flow_case%solver%keep_pressure) &
-      call compute_pressure_vert(flow_case%solver)
     ctx%output_vorticity = output_field_active( &
                            flow_case%io_mgr%snapshot_mgr%config, 'vorticity')
     ctx%output_qcriterion = output_field_active( &
                             flow_case%io_mgr%snapshot_mgr%config, 'qcriterion')
-    if (ctx%output_vorticity .or. ctx%output_qcriterion) &
-      call compute_derived_fields(flow_case%solver, ctx%output_vorticity, &
-                                  ctx%output_qcriterion)
+    call flow_case%finish_step(n_substeps, ctx%output_vorticity, &
+                               ctx%output_qcriterion)
   end subroutine drive_case
 
   subroutine build_and_measure(ctx, dims_in, npeak, free_end_bytes, &
