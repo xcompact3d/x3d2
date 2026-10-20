@@ -11,7 +11,7 @@ module m_base_case
   use m_mesh, only: mesh_t
   use m_solver, only: solver_t, init
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
-  use m_config, only: has_output_field
+  use m_config, only: has_output_field, output_field_active
   use m_io_manager, only: io_manager_t
   use m_mpi, only: MPI_COMM_WORLD, MPI_Wtime, MPI_Reduce, MPI_MAX
   use m_logger, only: log_info, abort_run, str
@@ -266,12 +266,10 @@ contains
     ! Error: ‘t_step0’ may be used uninitialized in this function [-Werror=maybe-uninitialized]
     t_step0 = 0.0_dp
 
-    output_vorticity = &
-      has_output_field(self%io_mgr%snapshot_mgr%config, 'vorticity') &
-      .and. self%io_mgr%snapshot_mgr%config%snapshot_freq > 0
-    output_qcriterion = &
-      has_output_field(self%io_mgr%snapshot_mgr%config, 'qcriterion') &
-      .and. self%io_mgr%snapshot_mgr%config%snapshot_freq > 0
+    output_vorticity = output_field_active( &
+                       self%io_mgr%snapshot_mgr%config, 'vorticity')
+    output_qcriterion = output_field_active( &
+                        self%io_mgr%snapshot_mgr%config, 'qcriterion')
 
     if (self%io_mgr%is_restart()) then
       t = self%solver%current_iter*self%solver%dt

@@ -11,7 +11,8 @@ module m_memory_estimate
   !! duplicating them.
   use m_allocator, only: padded_dim
   use m_common, only: i8, nbytes, is_sp, sp
-  use m_config, only: checkpoint_config_t, has_output_field
+  use m_config, only: checkpoint_config_t, has_output_field, &
+                      output_field_active
   use m_time_integrator, only: nolds_of
   implicit none
 
@@ -234,21 +235,6 @@ contains
                           padded_dim(local_dims(2), sz), local_dims(3)], &
                          sz, n_halo)
   end function padded_halo_bytes
-
-  pure logical function output_field_active(checkpoint_cfg, name) &
-    result(active)
-    !! Whether a snapshot output field is actually driven at runtime - a
-    !! field only triggers its associated allocations if BOTH it is listed
-    !! in output_fields AND snapshotting is enabled. Mirrors the pattern
-    !! used for keep_pressure (src/case/base_case.f90:120-122) and for
-    !! vorticity/qcriterion (src/memcheck.f90's build_and_measure),
-    !! consolidated here instead of duplicated a third time.
-    type(checkpoint_config_t), intent(in) :: checkpoint_cfg
-    character(*), intent(in) :: name
-
-    active = has_output_field(checkpoint_cfg, name) .and. &
-             checkpoint_cfg%snapshot_freq > 0
-  end function output_field_active
 
   pure function gpu_io_staging_bytes(local_dims, checkpoint_cfg, &
                                      device_write) result(bytes)

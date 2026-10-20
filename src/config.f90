@@ -672,4 +672,18 @@ contains
     has_output_field = any(config%output_fields == name)
   end function has_output_field
 
+  pure logical function output_field_active(checkpoint_cfg, name) &
+    result(active)
+    !! Whether a snapshot output field is actually driven at runtime - a
+    !! field only triggers its associated allocations if BOTH it is listed
+    !! in output_fields AND snapshotting is enabled. Mirrors the pattern
+    !! used for keep_pressure (src/case/base_case.f90:120-122), shared by
+    !! run() and x3d2-memcheck.
+    type(checkpoint_config_t), intent(in) :: checkpoint_cfg
+    character(*), intent(in) :: name
+
+    active = has_output_field(checkpoint_cfg, name) .and. &
+             checkpoint_cfg%snapshot_freq > 0
+  end function output_field_active
+
 end module m_config
