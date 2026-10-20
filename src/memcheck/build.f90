@@ -2,16 +2,13 @@ module m_memcheck_build
   !! The real build of x3d2-memcheck (--build): the real case build, its
   !! measurement and the measured report.
   use m_common, only: dp, i8, VERT
-  use m_logger, only: abort_run, log_info, log_warn
+  use m_logger, only: log_info, log_warn
   use m_mesh, only: mesh_t
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
-  use m_case_channel, only: case_channel_t
-  use m_case_cylinder, only: case_cylinder_t
-  use m_case_generic, only: case_generic_t
-  use m_case_tgv, only: case_tgv_t
+  use m_case_factory, only: allocate_flow_case, is_supported_flow_case
   use m_field, only: flist_t
   use m_monitoring, only: monitoring_default_enabled
   use m_memcheck_context, only: memcheck_ctx_t
@@ -67,14 +64,12 @@ contains
       return
     end if
 
-    select case (trim(ctx%domain_cfg%flow_case_name))
-    case ('tgv', 'generic', 'channel', 'cylinder')
-    case default
+    if (.not. is_supported_flow_case(ctx%domain_cfg%flow_case_name)) then
       call log_info("Real build skipped: flow case '"// &
                     trim(ctx%domain_cfg%flow_case_name)// &
                     "' has no dispatch in x3d2-memcheck")
       return
-    end select
+    end if
 
     if (ctx%solver_cfg%ibm_on) then
       ibm_file = ibm_mask_filename(ctx%periodic_x, ctx%periodic_y, &
@@ -217,33 +212,6 @@ contains
     end if
   end subroutine build_mesh
 
-  subroutine make_flow_case(ctx, backend, mesh, host_allocator, flow_case)
-    !! Build the flow case named in the input through the same case
-    !! dispatch select case xcompact.f90 uses.
-    type(memcheck_ctx_t), intent(in) :: ctx
-    class(base_backend_t), pointer, intent(in) :: backend
-    type(mesh_t), target, intent(inout) :: mesh
-    type(allocator_t), target, intent(inout) :: host_allocator
-    class(base_case_t), allocatable, intent(out) :: flow_case
-
-    select case (trim(ctx%domain_cfg%flow_case_name))
-    case ('channel')
-      allocate (case_channel_t :: flow_case)
-      flow_case = case_channel_t(backend, mesh, host_allocator)
-    case ('cylinder')
-      allocate (case_cylinder_t :: flow_case)
-      flow_case = case_cylinder_t(backend, mesh, host_allocator)
-    case ('generic')
-      allocate (case_generic_t :: flow_case)
-      flow_case = case_generic_t(backend, mesh, host_allocator)
-    case ('tgv')
-      allocate (case_tgv_t :: flow_case)
-      flow_case = case_tgv_t(backend, mesh, host_allocator)
-    case default
-      call abort_run('Undefined flow_case.', collective=.true.)
-    end select
-  end subroutine make_flow_case
-
   subroutine drive_case(ctx, flow_case)
     !! Drive the built flow case the way run() does so the allocator reaches
     !! its high-water mark; records measured_n_substeps and the output flags.
@@ -322,7 +290,8 @@ contains
 
     ! The case build writes no monitoring.csv in the working directory.
     monitoring_default_enabled = .false.
-    call make_flow_case(ctx, backend, mesh, host_allocator, flow_case)
+    call allocate_flow_case(ctx%domain_cfg%flow_case_name, backend, mesh, &
+                            host_allocator, flow_case)
 
     ! The solver construction settled the FFT path: record it.
     call ctx%device%capture_solver_info(flow_case)
