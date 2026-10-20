@@ -7,6 +7,7 @@ module m_cuda_memcheck_device
   use cufftXt, only: cufftXtMalloc, cufftXtFree, CUFFT_XT_FORMAT_INPLACE, &
                      cudaLibXtDesc
   use m_common, only: dp, i8, is_sp
+  use m_logger, only: abort_run
   use m_memory_estimate, only: predicted_fft_heap_bytes, round_up_bytes, &
                                fft_xtdesc_step_bytes
   use m_cuda_common, only: SZ
@@ -174,7 +175,7 @@ contains
       if (.not. res%ok) then
         write (msg, '(a,i0,a)') 'x3d2-memcheck: the calibration FFT probe &
           &returned status ', stat, '.'
-        error stop trim(msg)
+        call abort_run(trim(msg), collective=.true.)
       end if
       self%probe = res
     end if
@@ -351,7 +352,7 @@ contains
     if (ierr == 0 .or. present(stat)) return
     write (msg, '(a,a,a,i0,a)') 'x3d2-memcheck: ', trim(what), &
       ' failed (code ', ierr, ')'
-    error stop trim(msg)
+    call abort_run(trim(msg), collective=.true.)
   end subroutine check_status
 
   subroutine fft_workspace_bytes_query(bc_is_100, bc_is_110, cdims, &
