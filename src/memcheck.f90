@@ -11,6 +11,7 @@ program x3d2_memcheck
   !! Usage: x3d2-memcheck <input.x3d> [--static | --build [--extensive <n>]]
   use mpi
   use m_common, only: i8
+  use m_logger, only: abort_run, log_info
   use m_memory_estimate, only: output_field_active, peak_fields_lookup
   use m_memcheck_context, only: memcheck_ctx_t, parse_args, read_config, &
                                 classify_bc, resolve_gpu_io_mode
@@ -28,11 +29,12 @@ program x3d2_memcheck
   call MPI_Init(ierr)
   call MPI_Comm_rank(MPI_COMM_WORLD, ctx%irank, ierr)
   call MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
-  if (nproc /= 1) error stop 'x3d2-memcheck: run single-rank (mpirun -n 1).'
+  if (nproc /= 1) call abort_run( &
+    'x3d2-memcheck: run single-rank (mpirun -n 1).', collective=.true.)
 
   call ctx%device%init(device_ok, device_msg)
   if (.not. device_ok) then
-    print '(a)', trim(device_msg)
+    call log_info(trim(device_msg))
     call no_device_exit()
   end if
 
@@ -76,7 +78,7 @@ contains
     integer :: ierr_finalize
 
     call MPI_Finalize(ierr_finalize)
-    error stop 'x3d2-memcheck: no usable CUDA device'
+    call abort_run('x3d2-memcheck: no usable CUDA device', collective=.true.)
   end subroutine no_device_exit
 
   subroutine query_card_gib()
