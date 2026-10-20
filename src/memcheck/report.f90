@@ -3,7 +3,7 @@ module m_memcheck_report
   use m_common, only: dp, i8, is_sp
   use m_logger, only: log_info
   use m_memcheck_context, only: memcheck_ctx_t
-  use m_memory_estimate, only: gpu_io_staging_bytes
+  use m_memory_estimate, only: gpu_io_staging_bytes, gpu_io_staging_parts
   use m_memcheck_estimate, only: to_gib, num_gpus_unsupported_reason, &
                                  requested_unsupported_reason, &
                                  estimate_for_num_gpus, prepare_probe, &
@@ -71,16 +71,15 @@ contains
     !! The IO staging line of the header: the term at num_gpus=1, or why none.
     type(memcheck_ctx_t), intent(in) :: ctx
     real(dp) :: mib
-    logical :: unit_stride, snapshot_active, checkpoint_active
+    logical :: snapshot_active, checkpoint_active
     character(len=64) :: what, io_none_reason
     integer(i8) :: io_ng1_bytes
     character(len=256) :: line_buf
 
     io_ng1_bytes = gpu_io_staging_bytes(ctx%gdims, ctx%checkpoint_cfg, &
                                         ctx%gpu_io_device_write)
-    unit_stride = all(ctx%checkpoint_cfg%output_stride == 1)
-    snapshot_active = ctx%checkpoint_cfg%snapshot_freq > 0 .and. unit_stride
-    checkpoint_active = ctx%checkpoint_cfg%checkpoint_freq > 0
+    call gpu_io_staging_parts(ctx%checkpoint_cfg, snapshot_active, &
+                              checkpoint_active)
     if (io_ng1_bytes > 0_i8) then
       mib = to_gib(io_ng1_bytes)*1024._dp
       if (snapshot_active .and. checkpoint_active) then
@@ -100,8 +99,8 @@ contains
     else
       if (.not. ctx%gpu_io_device_write) then
         io_none_reason = trim(ctx%gpu_io_reason)
-      else if (ctx%checkpoint_cfg%snapshot_freq > 0 .and. .not. unit_stride &
-               .and. ctx%checkpoint_cfg%checkpoint_freq == 0) then
+      else if (ctx%checkpoint_cfg%snapshot_freq > 0 .and. &
+               .not. snapshot_active .and. .not. checkpoint_active) then
         io_none_reason = 'snapshot striding falls back to host path'
       else
         io_none_reason = 'no unit-stride snapshot and no checkpoint enabled'

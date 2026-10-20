@@ -21,7 +21,8 @@ module m_memory_estimate
             mirror_buffer_bytes_100, spectral_extra_bytes_110, &
             stretched_y_matrix_bytes, output_field_active, &
             peak_fields_lookup, halo_bytes, padded_halo_bytes, &
-            gpu_io_staging_bytes, predicted_fft_heap_bytes, round_up_bytes, &
+            gpu_io_staging_parts, gpu_io_staging_bytes, &
+            predicted_fft_heap_bytes, round_up_bytes, &
             fft_xtdesc_step_bytes, fft_probe_margin_bytes
 
   !> The NVSHMEM heap of a cuFFTMp plan grows in whole GiB for the workspace.
@@ -236,6 +237,20 @@ contains
                          sz, n_halo)
   end function padded_halo_bytes
 
+  pure subroutine gpu_io_staging_parts(checkpoint_cfg, snapshot_dev, &
+                                       checkpoint_dev)
+    !! Which writes can take the device path: a snapshot only at unit stride
+    !! (striding falls back to the host path in snapshot_manager.f90), a
+    !! checkpoint never strides. Shared by gpu_io_staging_bytes and the
+    !! x3d2-memcheck report.
+    type(checkpoint_config_t), intent(in) :: checkpoint_cfg
+    logical, intent(out) :: snapshot_dev, checkpoint_dev
+
+    snapshot_dev = checkpoint_cfg%snapshot_freq > 0 .and. &
+                   all(checkpoint_cfg%output_stride == 1)
+    checkpoint_dev = checkpoint_cfg%checkpoint_freq > 0
+  end subroutine gpu_io_staging_parts
+
   pure function gpu_io_staging_bytes(local_dims, checkpoint_cfg, &
                                      device_write) result(bytes)
     !! Device memory the GPU-aware ADIOS2 write path (src/io/adios2/io.f90,
@@ -268,9 +283,7 @@ contains
     integer(i8) :: n, element_bytes
     logical :: snapshot_dev, checkpoint_dev
 
-    snapshot_dev = checkpoint_cfg%snapshot_freq > 0 .and. &
-                   all(checkpoint_cfg%output_stride == 1)
-    checkpoint_dev = checkpoint_cfg%checkpoint_freq > 0
+    call gpu_io_staging_parts(checkpoint_cfg, snapshot_dev, checkpoint_dev)
 
     if (.not. device_write .or. .not. (snapshot_dev .or. checkpoint_dev)) then
       bytes = 0_i8
