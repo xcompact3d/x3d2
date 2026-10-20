@@ -127,7 +127,7 @@ contains
   end subroutine read_config
 
   subroutine classify_bc(ctx)
-    !! The four-way BC split of src/backend/cuda/poisson_fft.f90.
+    !! The four-way BC split of fft_bc_class in m_mesh.
     type(memcheck_ctx_t), intent(inout) :: ctx
 
     ctx%periodic_x = periodic_dir(ctx%domain_cfg%BC_x)
