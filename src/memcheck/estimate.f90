@@ -3,7 +3,8 @@ module m_memcheck_estimate
   use m_common, only: dp, i8, nbytes
   use m_logger, only: log_info
   use m_memcheck_context, only: memcheck_ctx_t
-  use m_cuda_poisson_fft, only: cuda_fft_decomp_reason
+  use m_cuda_poisson_fft, only: cuda_fft_decomp_reason, &
+                                cuda_fft_spectral_dims
   use m_memory_estimate, only: padded_cells, padded_halo_bytes, &
                                spectral_slab_bytes, mirror_buffer_bytes_100, &
                                spectral_extra_bytes_110, &
@@ -118,6 +119,20 @@ contains
     nbytes8 = fields_plus_halo_bytes_n(ctx, num_gpus, ctx%peak_fields)
   end function fields_plus_halo_bytes
 
+  function spectral_dims(ctx, num_gpus) result(n_spec)
+    !! The spectral pencil of one GPU at num_gpus GPUs, from the routine the
+    !! solver init calls, with the z-direction split over num_gpus ranks.
+    type(memcheck_ctx_t), intent(in) :: ctx
+    integer, intent(in) :: num_gpus
+    integer :: n_spec(3)
+    integer :: n_sp_st(3)
+
+    call cuda_fft_spectral_dims(ctx%bc_code, ctx%cdims, &
+                                [ctx%cdims(1), ctx%cdims(2), &
+                                 ctx%cdims(3)/num_gpus], [1, 1, num_gpus], &
+                                [0, 0, 0], n_spec, n_sp_st)
+  end function spectral_dims
+
   function spectral_plus_mirror_bytes(ctx, num_gpus) result(nbytes8)
     !! The spectral slab plus the BC specific extra terms: the mirror buffers
     !! of 100 at num_gpus>1, the second array and the transposed workspace of
@@ -125,17 +140,18 @@ contains
     type(memcheck_ctx_t), intent(in) :: ctx
     integer, intent(in) :: num_gpus
     integer(i8) :: nbytes8
+    integer :: n_spec(3)
 
-    nbytes8 = spectral_slab_bytes(ctx%bc_is_100, ctx%bc_is_110, ctx%cdims, &
-                                  num_gpus)
+    n_spec = spectral_dims(ctx, num_gpus)
+    nbytes8 = spectral_slab_bytes(n_spec)
     if (ctx%bc_is_100) then
-      nbytes8 = nbytes8 + mirror_buffer_bytes_100(ctx%cdims, num_gpus)
+      nbytes8 = nbytes8 + mirror_buffer_bytes_100(n_spec, num_gpus)
     else if (ctx%bc_is_110) then
-      nbytes8 = nbytes8 + spectral_extra_bytes_110(ctx%cdims, num_gpus)
+      nbytes8 = nbytes8 + spectral_extra_bytes_110(n_spec, ctx%cdims)
     else if (ctx%bc_is_010) then
       nbytes8 = nbytes8 + stretched_y_matrix_bytes( &
                 ctx%bc_is_010, ctx%domain_cfg%stretching(2), &
-                ctx%solver_cfg%lowmem_fft, ctx%cdims, num_gpus)
+                ctx%solver_cfg%lowmem_fft, n_spec)
     end if
   end function spectral_plus_mirror_bytes
 
@@ -169,8 +185,7 @@ contains
     if (trim(ctx%run_mode) /= 'STATIC') then
       call ctx%device%query_plan_need(ctx%bc_is_100, ctx%bc_is_110, &
                                       ctx%cdims, spectral_slab_bytes( &
-                                      ctx%bc_is_100, ctx%bc_is_110, &
-                                      ctx%cdims, 1), stat)
+                                      spectral_dims(ctx, 1)), stat)
       call ctx%device%mem_info(total_b, free_b)
       if (stat /= 0) then
         write (status_text, '(i0)') stat

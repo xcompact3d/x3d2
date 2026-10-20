@@ -358,6 +358,63 @@ contains
 
   end function cuda_fft_decomp_reason
 
+  pure subroutine cuda_fft_spectral_dims(bc_code, dims_glob, dims_loc, &
+                                         nproc_dir, nrank_dir, n_spec, n_sp_st)
+    !! The size n_spec and the offset n_sp_st of the local spectral pencil in
+    !! the permuted state, for the BC class bc_code on the cell dimensions
+    !! dims_glob and dims_loc, the decomposition nproc_dir and the rank
+    !! position nrank_dir. A BC class the solver does not support gives
+    !! zeros. Shared by the solver init and the x3d2-memcheck estimate.
+    implicit none
+
+    integer, intent(in) :: bc_code
+    integer, intent(in) :: dims_glob(3), dims_loc(3)
+    integer, intent(in) :: nproc_dir(3), nrank_dir(3)
+    integer, intent(out) :: n_spec(3), n_sp_st(3)
+
+    n_spec = 0
+    n_sp_st = 0
+
+    if (bc_code == FFT_BC_100) then
+      n_spec(1) = dims_loc(2)/2 + 1
+      n_spec(2) = dims_loc(1)/nproc_dir(3)
+      n_spec(3) = dims_glob(3)
+
+      n_sp_st(1) = 0
+      n_sp_st(2) = dims_loc(1)/nproc_dir(3)*nrank_dir(3)
+      n_sp_st(3) = 0
+
+    else if (bc_code == FFT_BC_110) then
+      ! R2C Z-transpose: spectral array is (nz/2+1, nx, ny) on 1 rank.
+      ! dim1 = Z R2C modes, dim2 = X spectrum, dim3 = Y full spectrum.
+      ! On P ranks the cuFFTMp Y-slab transform shuffles the spectral
+      ! output to split dim2 (X) instead of leaving it whole, same as the
+      ! 100 case's dim2 split.
+      n_spec(1) = dims_glob(3)/2 + 1
+      if (product(nproc_dir) > 1) then
+        n_spec(2) = dims_loc(1)/nproc_dir(3)
+        n_sp_st(2) = dims_loc(1)/nproc_dir(3)*nrank_dir(3)
+      else
+        n_spec(2) = dims_loc(1)
+        n_sp_st(2) = 0
+      end if
+      n_spec(3) = dims_loc(2)
+
+      n_sp_st(1) = 0
+      n_sp_st(3) = 0
+
+    else if (bc_code == FFT_BC_010 .or. bc_code == FFT_BC_000) then
+      n_spec(1) = dims_loc(1)/2 + 1
+      n_spec(2) = dims_loc(2)/nproc_dir(3)
+      n_spec(3) = dims_glob(3)
+
+      n_sp_st(1) = 0
+      n_sp_st(2) = dims_loc(2)/nproc_dir(3)*nrank_dir(3)
+      n_sp_st(3) = 0
+    end if
+
+  end subroutine cuda_fft_spectral_dims
+
   pure subroutine cuda_fft_plan_setup(bc_code, dims_glob, dims_loc, fft_n, &
                                       fft_n_loc, fw_type, bw_type)
     !! The cuFFT plan dimensions and types of a BC class. The 100 case
@@ -430,48 +487,13 @@ contains
                                     mesh%par%nproc_dir)
     if (len_trim(reason) > 0) call abort_run(trim(reason))
 
-    ! Work out the spectral dimensions in the permuted state
-    if (poisson_fft%is_100_case) then
-      n_spec(1) = dims_loc(2)/2 + 1
-      n_spec(2) = dims_loc(1)/mesh%par%nproc_dir(3)
-
-      n_sp_st(1) = 0
-      n_sp_st(2) = dims_loc(1)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
-
-    else if (poisson_fft%is_110_case) then
-      ! R2C Z-transpose: spectral array is (nz/2+1, nx, ny) on 1 rank.
-      ! dim1 = Z R2C modes, dim2 = X spectrum, dim3 = Y full spectrum.
-      ! On P ranks the cuFFTMp Y-slab transform shuffles the spectral
-      ! output to split dim2 (X) instead of leaving it whole, same as the
-      ! 100 case's dim2 split.
-      n_spec(1) = dims_glob(3)/2 + 1
-      if (mesh%par%nproc > 1) then
-        n_spec(2) = dims_loc(1)/mesh%par%nproc_dir(3)
-        n_sp_st(2) = dims_loc(1)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
-      else
-        n_spec(2) = dims_loc(1)
-        n_sp_st(2) = 0
-      end if
-      n_spec(3) = dims_loc(2)
-
-      n_sp_st(1) = 0
-      n_sp_st(3) = 0
-
-    else if (poisson_fft%is_010_case .or. poisson_fft%is_000_case) then
-      n_spec(1) = dims_loc(1)/2 + 1
-      n_spec(2) = dims_loc(2)/mesh%par%nproc_dir(3)
-
-      n_sp_st(1) = 0
-      n_sp_st(2) = dims_loc(2)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
-
-    else
+    if (mesh%grid%bc_code == FFT_BC_UNSUPPORTED) &
       call abort_run("Unsupported periodicity combination!!")
-    end if
 
-    if (.not. poisson_fft%is_110_case) then
-      n_spec(3) = dims_glob(3)
-      n_sp_st(3) = 0
-    end if
+    ! Work out the spectral dimensions in the permuted state
+    call cuda_fft_spectral_dims(mesh%grid%bc_code, dims_glob, dims_loc, &
+                                mesh%par%nproc_dir, mesh%par%nrank_dir, &
+                                n_spec, n_sp_st)
 
     call poisson_fft%base_init(mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
 

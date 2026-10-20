@@ -69,42 +69,18 @@ contains
     end do
   end function cell_dims
 
-  pure function spectral_slab_bytes(bc_is_100, bc_is_110, cdims, num_gpus) &
-    result(nbytes8)
+  pure function spectral_slab_bytes(n_spec) result(nbytes8)
     !! Bytes of ONE complex spectral array (waves_dev, and c_dev on the
-    !! plain-cuFFT fallback path), shape per
-    !! src/backend/cuda/poisson_fft.f90:259-291:
-    !!   100: (cy/2+1, cx/num_gpus, cz)  - decomposition axis maps to dim2
-    !!   110: (cz/2+1, cx, cy)    - never runs at num_gpus>1 in this solver
-    !!   000/010: (cx/2+1, cy/num_gpus, cz) - decomposition axis maps to dim2
-    !! num_gpus is the number of ranks the z-direction is split over
-    !! (mesh%par%nproc_dir(3)); note this differs from the physical
-    !! decomposition axis (z), which is why num_gpus divides cx or cy here, not
-    !! cz. Whether cy (000/010) or cx (100) actually divides by num_gpus is not
-    !! checked here - src/memcheck.f90's num_gpus_unsupported_reason is where
-    !! that divisibility is validated before a decomposition is reported
-    !! as supported.
-    logical, intent(in) :: bc_is_100, bc_is_110
-    integer, intent(in) :: cdims(3)
-    integer, intent(in) :: num_gpus
+    !! plain-cuFFT fallback path) of the shape n_spec. n_spec comes from
+    !! cuda_fft_spectral_dims in src/backend/cuda/poisson_fft.f90, the routine
+    !! the solver init calls, so the shape per BC class and per number of
+    !! ranks is the solver's. Whether a decomposition is valid is checked by
+    !! cuda_fft_decomp_reason, not here.
+    integer, intent(in) :: n_spec(3)
     integer(i8) :: nbytes8
-    integer(i8) :: nx_spec, ny_spec, nz_spec
 
-    if (bc_is_100) then
-      nx_spec = cdims(2)/2 + 1
-      ny_spec = cdims(1)/num_gpus
-      nz_spec = cdims(3)
-    else if (bc_is_110) then
-      nx_spec = cdims(3)/2 + 1
-      ny_spec = cdims(1)
-      nz_spec = cdims(2)
-    else
-      ! 000, 010
-      nx_spec = cdims(1)/2 + 1
-      ny_spec = cdims(2)/num_gpus
-      nz_spec = cdims(3)
-    end if
-    nbytes8 = nx_spec*ny_spec*nz_spec*2_i8*int(nbytes, i8)
+    nbytes8 = int(n_spec(1), i8)*int(n_spec(2), i8)*int(n_spec(3), i8) &
+              *2_i8*int(nbytes, i8)
   end function spectral_slab_bytes
 
   pure function round_up_bytes(n_bytes, step_bytes) result(nbytes8)
@@ -128,46 +104,42 @@ contains
               round_up_bytes(worksize_bytes, fft_workspace_step_bytes)
   end function predicted_fft_heap_bytes
 
-  pure function mirror_buffer_bytes_100(cdims, num_gpus) result(nbytes8)
+  pure function mirror_buffer_bytes_100(n_spec, num_gpus) result(nbytes8)
     !! 100-case multi rank only mirror/exchange buffers, zero at num_gpus<=1 -
     !! matches the nproc>1 guard at
     !! src/backend/cuda/poisson_fft.f90:332-349:
     !!   c_mirror_dev + c_slab_send_dev: (nx_spec, ny_spec, nz_spec) x2
     !!   c_plane_send_dev + c_plane_recv_dev: (nx_spec, nz_spec) x2
-    !! all complex(dp).
-    integer, intent(in) :: cdims(3)
+    !! all complex(dp). n_spec is the spectral shape of the 100 case.
+    integer, intent(in) :: n_spec(3)
     integer, intent(in) :: num_gpus
     integer(i8) :: nbytes8
-    integer(i8) :: nx_spec, ny_spec, nz_spec
 
     if (num_gpus <= 1) then
       nbytes8 = 0_i8
       return
     end if
-    nx_spec = cdims(2)/2 + 1
-    ny_spec = cdims(1)/num_gpus
-    nz_spec = cdims(3)
-    nbytes8 = 2_i8*nx_spec*ny_spec*nz_spec*2_i8*int(nbytes, i8) + &
-              2_i8*nx_spec*nz_spec*2_i8*int(nbytes, i8)
+    nbytes8 = 2_i8*int(n_spec(1), i8)*int(n_spec(2), i8)*int(n_spec(3), i8) &
+              *2_i8*int(nbytes, i8) + &
+              2_i8*int(n_spec(1), i8)*int(n_spec(3), i8)*2_i8*int(nbytes, i8)
   end function mirror_buffer_bytes_100
 
-  pure function spectral_extra_bytes_110(cdims, num_gpus) result(nbytes8)
+  pure function spectral_extra_bytes_110(n_spec, cdims) result(nbytes8)
     !! 110-case bytes on top of the waves_dev slab (never runs at num_gpus>1 in
-    !! this solver): a SECOND complex array of the same spectral shape,
+    !! this solver): a SECOND complex array of the same spectral shape n_spec,
     !! c_dev (src/backend/cuda/poisson_fft.f90:416-418), plus a real,
     !! globally-shaped transposed workspace r_dev_110 (:414), which has the
     !! same total element count as cdims, just permuted.
-    integer, intent(in) :: cdims(3)
-    integer, intent(in) :: num_gpus
+    integer, intent(in) :: n_spec(3), cdims(3)
     integer(i8) :: nbytes8
 
-    nbytes8 = spectral_slab_bytes(.false., .true., cdims, num_gpus) &
+    nbytes8 = spectral_slab_bytes(n_spec) &
               + int(cdims(1), i8)*int(cdims(2), i8)*int(cdims(3), i8) &
               *int(nbytes, i8)
   end function spectral_extra_bytes_110
 
   pure function stretched_y_matrix_bytes(bc_is_010, stretching_y, lowmem_fft, &
-                                         cdims, num_gpus) result(nbytes8)
+                                         n_spec) result(nbytes8)
     !! 010-case, non-uniform y-stretching Poisson coefficient matrices,
     !! src/poisson_fft.f90:176-186 (only 010 sets stretched_y, and only at
     !! num_gpus=1 since 010 error-stops at nproc>1) and :320-323,424-428
@@ -180,8 +152,7 @@ contains
     !! (the default).
     logical, intent(in) :: bc_is_010, lowmem_fft
     character(len=*), intent(in) :: stretching_y
-    integer, intent(in) :: cdims(3)
-    integer, intent(in) :: num_gpus
+    integer, intent(in) :: n_spec(3)
     integer(i8) :: nbytes8
     integer(i8) :: nx_spec, ny_spec, nz_spec
 
@@ -190,9 +161,9 @@ contains
       return
     end if
 
-    nx_spec = cdims(1)/2 + 1
-    ny_spec = cdims(2)/num_gpus
-    nz_spec = cdims(3)
+    nx_spec = n_spec(1)
+    ny_spec = n_spec(2)
+    nz_spec = n_spec(3)
 
     if (trim(stretching_y) == 'bottom') then
       nbytes8 = 2_i8*nx_spec*ny_spec*nz_spec*5_i8*int(nbytes, i8)

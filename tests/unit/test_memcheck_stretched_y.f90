@@ -29,7 +29,7 @@ contains
     integer(i8) :: bytes
 
     bytes = stretched_y_matrix_bytes(.true., 'uniform', .false., &
-                                      [512, 256, 256], 1)
+                                     [257, 256, 256])
     call check("uniform, 010, is zero", bytes, 0_i8)
   end subroutine test_uniform_is_zero
 
@@ -37,7 +37,7 @@ contains
     integer(i8) :: bytes
 
     bytes = stretched_y_matrix_bytes(.false., 'top-bottom', .false., &
-                                      [512, 256, 256], 1)
+                                     [257, 256, 256])
     call check("top-bottom, not 010, is zero", bytes, 0_i8)
   end subroutine test_non_010_is_zero
 
@@ -45,7 +45,7 @@ contains
     integer(i8) :: bytes, expect
 
     bytes = stretched_y_matrix_bytes(.true., 'top-bottom', .false., &
-                                      [512, 256, 256], 1)
+                                     [257, 256, 256])
     expect = 20_i8*257_i8*256_i8*256_i8*int(nbytes, i8)
     call check("top-bottom, lowmem_fft=F", bytes, expect)
   end subroutine test_top_bottom_not_lowmem
@@ -54,7 +54,7 @@ contains
     integer(i8) :: bytes, expect
 
     bytes = stretched_y_matrix_bytes(.true., 'top-bottom', .true., &
-                                      [512, 256, 256], 1)
+                                     [257, 256, 256])
     expect = 10_i8*257_i8*256_i8*256_i8*int(nbytes, i8)
     call check("top-bottom, lowmem_fft=T", bytes, expect)
   end subroutine test_top_bottom_lowmem
@@ -63,23 +63,23 @@ contains
     integer(i8) :: bytes_centred, bytes_top_bottom
 
     bytes_centred = stretched_y_matrix_bytes(.true., 'centred', .true., &
-                                              [512, 256, 256], 1)
+                                             [257, 256, 256])
     bytes_top_bottom = stretched_y_matrix_bytes(.true., 'top-bottom', .true., &
-                                                 [512, 256, 256], 1)
+                                                [257, 256, 256])
     call check("centred equals top-bottom", bytes_centred, bytes_top_bottom)
   end subroutine test_centred_equals_top_bottom
 
   subroutine test_odd_ny_spec()
-    !! cdims (16,9,8): nx_spec=9, ny_spec=9, nz_spec=8 - pins the symmetric
+    !! n_spec (9,9,8): nx_spec=9, ny_spec=9, nz_spec=8 - pins the symmetric
     !! integer division ny_spec/2=4.
     integer(i8) :: bytes, expect
 
-    bytes = stretched_y_matrix_bytes(.true., 'bottom', .true., [16, 9, 8], 1)
+    bytes = stretched_y_matrix_bytes(.true., 'bottom', .true., [9, 9, 8])
     expect = 2_i8*9_i8*9_i8*8_i8*5_i8*int(nbytes, i8)
     call check("odd ny_spec, bottom", bytes, expect)
 
     bytes = stretched_y_matrix_bytes(.true., 'top-bottom', .true., &
-                                      [16, 9, 8], 1)
+                                     [9, 9, 8])
     expect = 4_i8*9_i8*4_i8*8_i8*5_i8*int(nbytes, i8)
     call check("odd ny_spec, top-bottom", bytes, expect)
   end subroutine test_odd_ny_spec
@@ -88,9 +88,9 @@ contains
     integer(i8) :: bytes, expect
 
     bytes = stretched_y_matrix_bytes(.true., 'top-bottom', .true., &
-                                      [512, 256, 256], 2)
+                                     [257, 128, 256])
     expect = 4_i8*257_i8*64_i8*256_i8*5_i8*int(nbytes, i8)
-    call check("num_gpus=2 halves ny_spec", bytes, expect)
+    call check("num_gpus=2 slab, ny_spec=128", bytes, expect)
   end subroutine test_ng2_halves_ny_spec
 
   subroutine check(label, actual, expect)
