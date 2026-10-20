@@ -84,7 +84,8 @@ by 5 percent or less. Otherwise it shows ``MISMATCH``.
 The tool skips the real build, and prints no ``CHECK`` line, in these cases:
 
 * The estimate for ``num_gpus=1`` is ``DOES_NOT_FIT``.
-* The input names an unknown ``flow_case``. The run then stops with an error.
+* The input names a ``flow_case`` that the tool does not know. The tool logs
+  that the flow case has no dispatch.
 * The input sets ``ibm_on=T`` and the ``ibm_<BC-suffix>.bp`` mask file is
   not in the working directory.
 
@@ -104,7 +105,7 @@ column tells how the tool obtained the FFT overhead of the row:
    build.
 
 ``extrapolated``
-   The row has ``num_gpus>1`` and a one-GPU probe or measurement exists. The
+   The row has ``num_gpus>1`` and a full-grid probe or measurement exists. The
    tool scales the one-GPU result by 1/``num_gpus``. Without one, the row is
    ``formula-only`` or ``predicted``.
 
@@ -116,8 +117,9 @@ column tells how the tool obtained the FFT overhead of the row:
 ``formula-only``
    The tool uses the formula alone. No full-grid probe or measurement backs
    the row. The 32^3 calibration probe always runs. A row is also
-   ``formula-only`` when its formula floor is above 95 percent of the card,
-   even after a full-grid probe.
+   ``formula-only`` when its formula floor is above 95 percent of the card
+   and the tool has no predicted heap size. With a predicted heap size, such
+   a row is ``predicted``.
 
 Verdicts
 --------
@@ -184,7 +186,7 @@ Limitations
    The estimate is approximate. A job can still run out of memory after the
    check gives ``FITS``.
 
-* The rows for ``num_gpus>1`` are extrapolated when a one-GPU probe or
+* The rows for ``num_gpus>1`` are extrapolated when a full-grid probe or
   measurement exists. The tool scales it by 1/``num_gpus``. It does not
   measure them.
 * The full-grid probe guard is approximate. The tool compares the free memory
