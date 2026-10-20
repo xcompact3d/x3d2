@@ -17,7 +17,7 @@ module m_cuda_memcheck_device
   use m_base_case, only: base_case_t
   use m_cuda_allocator, only: cuda_allocator_t
   use m_cuda_backend, only: cuda_backend_t
-  use m_cuda_poisson_fft, only: cuda_poisson_fft_t, create_fft_plan, &
+  use m_cuda_poisson_fft, only: cuda_poisson_fft_t, create_fft_plan_pair, &
                                 cuda_fft_plan_setup
   implicit none
 
@@ -406,7 +406,7 @@ contains
     integer(int_ptr_kind()) :: worksize_fw, worksize_bw
     integer(kind=cuda_count_kind) :: free_before, free_after, total_b
     type(cudaLibXtDesc), pointer :: xtdesc
-    logical :: fw_was_cufftmp, no_auto_alloc
+    logical :: no_auto_alloc
 
     ! The plan dimensions and types are the solver's, one rank.
     if (bc_is_100) then
@@ -426,32 +426,10 @@ contains
 
     ierr = cudaMemGetInfo(free_before, total_b)
     call check_status(ierr, 'cudaMemGetInfo (before plans)')
-    call create_fft_plan(plan_fw, used_cufftmp, fft_n(1), fft_n(2), fft_n(3), &
-                         fw_plan_type, 'memcheck probe fwd', &
-                         worksize_fw, stat, no_auto_alloc)
+    call create_fft_plan_pair(plan_fw, plan_bw, used_cufftmp, fft_n, &
+                              fw_plan_type, bw_plan_type, ' memcheck probe', &
+                              worksize_fw, worksize_bw, stat, no_auto_alloc)
     if (stat /= 0) return
-    fw_was_cufftmp = used_cufftmp
-    ! A fallback to plain cuFFT sets used_cufftmp to false. A forward plan
-    ! built on cuFFTMp is then rebuilt on plain cuFFT, as init() does.
-    call create_fft_plan(plan_bw, used_cufftmp, fft_n(1), fft_n(2), fft_n(3), &
-                         bw_plan_type, 'memcheck probe bwd', &
-                         worksize_bw, stat, no_auto_alloc)
-    if (stat /= 0) then
-      ierr = cufftDestroy(plan_fw)
-      return
-    end if
-    if (fw_was_cufftmp .and. (.not. used_cufftmp)) then
-      ierr = cufftDestroy(plan_fw)
-      call check_status(ierr, 'cufftDestroy (fwd, cuFFTMp fallback rebuild)')
-      call create_fft_plan(plan_fw, used_cufftmp, fft_n(1), fft_n(2), &
-                           fft_n(3), fw_plan_type, &
-                           'memcheck probe fwd (cuFFT rebuild)', worksize_fw, &
-                           stat)
-      if (stat /= 0) then
-        ierr = cufftDestroy(plan_bw)
-        return
-      end if
-    end if
     ierr = cudaMemGetInfo(free_after, total_b)
     call check_status(ierr, 'cudaMemGetInfo (after plans)')
     worksize_bytes = int(worksize_fw, i8) + int(worksize_bw, i8)

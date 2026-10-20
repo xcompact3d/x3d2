@@ -262,6 +262,66 @@ contains
 
   end subroutine create_fft_plan
 
+  subroutine create_fft_plan_pair(plan_fw, plan_bw, use_cufftmp, fft_n, &
+                                  fw_type, bw_type, label, worksize_fw, &
+                                  worksize_bw, stat, no_auto_alloc)
+    !! Creates the forward and the backward FFT plan the way the solver does.
+    !! A backward plan that forces the fallback to plain cuFFT makes the
+    !! forward plan, built on cuFFTMp, get rebuilt on plain cuFFT, so both
+    !! plans end on the same library. Shared by the solver init and the
+    !! x3d2-memcheck probe. The optional arguments are the ones of
+    !! create_fft_plan. label is appended to the plan names in the messages.
+    !! When stat is present and not zero, the plans made so far are destroyed
+    !! and the other plan is left undefined.
+    implicit none
+
+    integer, intent(inout) :: plan_fw, plan_bw
+    logical, intent(inout) :: use_cufftmp
+    integer, intent(in) :: fft_n(3), fw_type, bw_type
+    character(*), intent(in) :: label
+    integer(int_ptr_kind()), optional, intent(out) :: worksize_fw, worksize_bw
+    integer, optional, intent(out) :: stat
+    logical, optional, intent(in) :: no_auto_alloc
+
+    integer :: ierr
+    logical :: fw_was_cufftmp
+
+    call create_fft_plan(plan_fw, use_cufftmp, fft_n(1), fft_n(2), fft_n(3), &
+                         fw_type, 'Forward'//label, worksize_fw, stat, &
+                         no_auto_alloc)
+    if (present(stat)) then
+      if (stat /= 0) return
+    end if
+    fw_was_cufftmp = use_cufftmp
+
+    ! Create the backward plan with automatic cuFFTMp detection/fallback
+    call create_fft_plan(plan_bw, use_cufftmp, fft_n(1), fft_n(2), fft_n(3), &
+                         bw_type, 'Backward'//label, worksize_bw, stat, &
+                         no_auto_alloc)
+    if (present(stat)) then
+      if (stat /= 0) then
+        ierr = cufftDestroy(plan_fw)
+        return
+      end if
+    end if
+
+    ! If the backward plan forced the fallback, rebuild the forward plan too
+    if (fw_was_cufftmp .and. (.not. use_cufftmp)) then
+      ierr = cufftDestroy(plan_fw)
+      call check_cufft(ierr, 'cufftDestroy (fwd, cuFFTMp fallback rebuild)')
+      call create_fft_plan(plan_fw, use_cufftmp, fft_n(1), fft_n(2), &
+                           fft_n(3), fw_type, 'Forward'//label, worksize_fw, &
+                           stat)
+      if (present(stat)) then
+        if (stat /= 0) then
+          ierr = cufftDestroy(plan_bw)
+          return
+        end if
+      end if
+    end if
+
+  end subroutine create_fft_plan_pair
+
   pure subroutine cuda_fft_plan_setup(bc_code, dims_glob, dims_loc, fft_n, &
                                       fft_n_loc, fw_type, bw_type)
     !! The cuFFT plan dimensions and types of a BC class. The 100 case
@@ -315,8 +375,6 @@ contains
     integer :: ierr
 
     integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
-    logical :: fw_was_cufftmp
-
     integer :: fft_n(3), fft_n_loc(2)
     integer :: fw_plan_type, bw_plan_type
 
@@ -484,12 +542,9 @@ contains
       ! Y-slab input through an MPI_Alltoall (see redistribute_110_to_yslab).
       poisson_fft%use_cufftmp = mesh%par%nproc > 1
 
-      call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
-                           fft_n(1), fft_n(2), fft_n(3), fw_plan_type, &
-                           'Forward 110')
-      call create_fft_plan(poisson_fft%plan3D_bw, poisson_fft%use_cufftmp, &
-                           fft_n(1), fft_n(2), fft_n(3), bw_plan_type, &
-                           'Backward 110')
+      call create_fft_plan_pair(poisson_fft%plan3D_fw, poisson_fft%plan3D_bw, &
+                                poisson_fft%use_cufftmp, fft_n, &
+                                fw_plan_type, bw_plan_type, ' 110')
 
       if (poisson_fft%use_cufftmp) then
         ierr = cufftXtMalloc(poisson_fft%plan3D_fw, poisson_fft%xtdesc, &
@@ -519,23 +574,9 @@ contains
 
     else
       ! All other cases: standard R2C/C2R with cuFFTMp fallback
-      call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
-                           fft_n(1), fft_n(2), fft_n(3), fw_plan_type, &
-                           'Forward')
-      fw_was_cufftmp = poisson_fft%use_cufftmp
-
-      ! Create backward FFT plan with automatic cuFFTMp detection/fallback
-      call create_fft_plan(poisson_fft%plan3D_bw, poisson_fft%use_cufftmp, &
-                           fft_n(1), fft_n(2), fft_n(3), bw_plan_type, &
-                           'Backward')
-
-      ! If backward plan forced fallback, rebuild forward plan too
-      if (fw_was_cufftmp .and. (.not. poisson_fft%use_cufftmp)) then
-        ierr = cufftDestroy(poisson_fft%plan3D_fw)
-        call create_fft_plan(poisson_fft%plan3D_fw, poisson_fft%use_cufftmp, &
-                             fft_n(1), fft_n(2), fft_n(3), fw_plan_type, &
-                             'Forward')
-      end if
+      call create_fft_plan_pair(poisson_fft%plan3D_fw, poisson_fft%plan3D_bw, &
+                                poisson_fft%use_cufftmp, fft_n, &
+                                fw_plan_type, bw_plan_type, '')
 
       ! Allocate storage - cuFFTMp uses xtdesc, cuFFT uses c_dev
       if (poisson_fft%use_cufftmp) then
