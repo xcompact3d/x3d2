@@ -22,32 +22,43 @@ program test_tridiag
   ! The generic decomposition splits x evenly, so n_glob is rounded down to a
   ! multiple of the rank count (1024 on a power-of-two count).
   integer :: n_glob
-  ! The hyperviscous case runs on a coarser grid.
+  ! The hyperviscous case runs on a coarser grid of (256/nproc)*nproc points,
+  ! see the tolerance comment.
   integer :: n_hyper_glob
   ! The tolerances bound the relative L2 error. Single precision roundoff
   ! floors at n_glob~1024: ~eps/dx (~2e-5) for first derivatives/interpolation,
   ! ~eps/dx^2 (~3e-3) for second derivatives, and ~63x more for the
-  ! hyperviscous operator (nu0_nu=63). Largest values measured, per tolerance:
-  !   double precision, OpenMP backend (nvfortran build; gfortran):
-  !     tol 1.2678e-11 (gfortran 1.2678e-11),
-  !     tol_2nd 1.9422e-11 (gfortran 1.9512e-11),
-  !     tol_hyper 8.2700e-10 (gfortran 8.7497e-10)
-  !   double precision, CUDA backend:
-  !     tol 1.2678e-11, tol_2nd 1.9422e-11, tol_hyper 8.2379e-10
-  !   single precision, OpenMP backend (nvfortran build; gfortran):
-  !     tol 3.8401e-05 (gfortran 3.9027e-05),
-  !     tol_2nd 4.5822e-03 (gfortran 4.7899e-03; 1.1822e-02 at 3 ranks,
-  !       n_glob = 1023),
-  !     tol_hyper 8.1507e-01 (gfortran 8.0145e-01)
-  !   single precision, CUDA backend:
-  !     tol 3.8401e-05, tol_2nd 4.5822e-03, tol_hyper 8.1737e-01
+  ! hyperviscous operator (nu0_nu=63). The hyperviscous case therefore runs on
+  ! a coarser grid of (256/nproc)*nproc points (255 on 3 ranks). Its single
+  ! precision error is roundoff dominated and grows ~4x per grid doubling
+  ! (7.2e-3 at 128 points, 2.7e-2 at 256, 0.117 at 512), which is why the
+  ! coarse grid is used.
+  ! Largest values measured over 1, 2, 3, 4 and 8 ranks (gfortran and
+  ! nvfortran, Release and Debug), with the rank count of the maximum
+  ! (tol_hyper at the coarse grid):
+  !   double precision, OpenMP backend:
+  !     tol 1.2734e-11 (3 ranks),
+  !     tol_2nd 1.9512e-11 (1 or 4 ranks, earlier runs),
+  !     tol_hyper 4.2499e-10 (8 ranks, 32 points per rank)
+  !   double precision, CUDA backend (1 and 4 ranks):
+  !     tol 1.2678e-11, tol_2nd 1.9422e-11, tol_hyper 6.47e-11
+  !   single precision, OpenMP backend:
+  !     tol 4.0779e-05 (8 ranks, Debug),
+  !     tol_2nd 1.1822e-02 (3 ranks, n_glob = 1023),
+  !     tol_hyper 2.7724e-02 (2 ranks, Debug)
+  !   single precision, CUDA backend (1 and 4 ranks):
+  !     tol 3.8401e-05, tol_2nd 4.5822e-03, tol_hyper 2.707e-02
+  ! The double precision tol_hyper error grows with the rank count: ~6.5e-11
+  ! on 2 ranks, 9.2e-11 on 3, 4.2499e-10 on 8.
   ! Each tolerance is the smallest {1,2,5}x10^k value at least 10x the
-  ! largest of these, a margin of 10 or more in every case.
+  ! largest of these, a margin of 10 or more in every case. The single
+  ! precision tol_hyper is below 1, so it rejects zero output (error 1) and a
+  ! sign flip (error 2).
 #ifdef SINGLE_PREC
-  real(dp), parameter :: tol = 5e-4_dp, tol_2nd = 2e-1_dp, tol_hyper = 10.0_dp
+  real(dp), parameter :: tol = 5e-4_dp, tol_2nd = 2e-1_dp, tol_hyper = 5e-1_dp
 #else
   real(dp), parameter :: tol = 2e-10_dp, tol_2nd = 2e-10_dp, &
-                         tol_hyper = 1e-8_dp
+                         tol_hyper = 5e-9_dp
 #endif
 
   type(backend_runtime_t), target :: runtime
