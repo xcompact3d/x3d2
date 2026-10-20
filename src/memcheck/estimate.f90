@@ -3,6 +3,7 @@ module m_memcheck_estimate
   use m_common, only: dp, i8, nbytes
   use m_logger, only: log_info
   use m_memcheck_context, only: memcheck_ctx_t
+  use m_cuda_poisson_fft, only: cuda_fft_decomp_reason
   use m_memory_estimate, only: padded_cells, padded_halo_bytes, &
                                spectral_slab_bytes, mirror_buffer_bytes_100, &
                                spectral_extra_bytes_110, &
@@ -76,9 +77,9 @@ contains
              mod(ctx%cdims(2), num_gpus) /= 0) then
       write (reason, '(a,i0,a)') 'y cells=', ctx%cdims(2), ' not divisible &
         &by num_gpus, the solver would truncate the spectral slab'
-    else if (ctx%bc_is_100 .and. mod(ctx%cdims(1), num_gpus) /= 0) then
-      write (reason, '(a,i0,a)') 'x cells=', ctx%cdims(1), ' not divisible &
-        &by num_gpus, src/backend/cuda/poisson_fft.f90 error-stops'
+    else
+      reason = cuda_fft_decomp_reason(ctx%bc_code, ctx%cdims, &
+                                      [1, 1, num_gpus])
     end if
   end function num_gpus_unsupported_reason
 

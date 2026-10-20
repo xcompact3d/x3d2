@@ -322,6 +322,42 @@ contains
 
   end subroutine create_fft_plan_pair
 
+  pure function cuda_fft_decomp_reason(bc_code, cdims, nproc_dir) &
+    result(reason)
+    !! The reason the solver cannot run the BC class bc_code on the cell
+    !! dimensions cdims and the decomposition nproc_dir, blank when it can.
+    !! The text is the message the solver init aborts with. Shared by the
+    !! solver init and x3d2-memcheck.
+    implicit none
+
+    integer, intent(in) :: bc_code
+    integer, intent(in) :: cdims(3), nproc_dir(3)
+    character(len=100) :: reason
+
+    integer :: nproc
+
+    reason = ''
+    nproc = product(nproc_dir)
+    if ((bc_code == FFT_BC_100 .or. bc_code == FFT_BC_110) &
+        .and. nproc > 1 .and. (nproc_dir(1) /= 1 .or. nproc_dir(2) /= 1)) then
+      reason = 'The 100 and 110 cases on multiple ranks need a 1D z &
+               &decomposition, nproc_dir must be [1, 1, nproc].'
+    else if (bc_code == FFT_BC_010 .and. nproc > 1) then
+      reason = 'Multiple ranks are not yet supported for the 010 case &
+               &in the CUDA backend!'
+    else if (bc_code == FFT_BC_100 .and. nproc > 1 &
+             .and. mod(cdims(1), nproc_dir(3)) /= 0) then
+      reason = 'The 100 case on multiple ranks needs the number of x &
+               &cells to divide by the number of ranks.'
+    else if (bc_code == FFT_BC_110 .and. nproc > 1 &
+             .and. (mod(cdims(1), nproc_dir(3)) /= 0 &
+                    .or. mod(cdims(2), nproc_dir(3)) /= 0)) then
+      reason = 'The 110 case on multiple ranks needs the number of x &
+               &and y cells to divide by the number of ranks.'
+    end if
+
+  end function cuda_fft_decomp_reason
+
   pure subroutine cuda_fft_plan_setup(bc_code, dims_glob, dims_loc, fft_n, &
                                       fft_n_loc, fw_type, bw_type)
     !! The cuFFT plan dimensions and types of a BC class. The 100 case
@@ -373,6 +409,7 @@ contains
     integer :: nx, ny, nz
 
     integer :: ierr
+    character(len=100) :: reason
 
     integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
     integer :: fft_n(3), fft_n_loc(2)
@@ -387,34 +424,13 @@ contains
     ! 1D decomposition along Z in real domain, and along Y in spectral space
     if (mesh%par%nproc_dir(2) /= 1) &
       call log_warn('nproc_dir in y-dir must be 1')
-    if ((poisson_fft%is_100_case .or. poisson_fft%is_110_case) &
-        .and. mesh%par%nproc > 1) then
-      if (mesh%par%nproc_dir(1) /= 1 .or. mesh%par%nproc_dir(2) /= 1) then
-        call abort_run('The 100 and 110 cases on multiple ranks need a 1D z &
-                       &decomposition, nproc_dir must be [1, 1, nproc].')
-      end if
-    end if
-    if (poisson_fft%is_010_case .and. mesh%par%nproc > 1) then
-      call abort_run('Multiple ranks are not yet supported for the 010 case &
-                     &in the CUDA backend!')
-    end if
-
-    ! Work out the spectral dimensions in the permuted state
     dims_glob = mesh%get_global_dims(CELL)
     dims_loc = mesh%get_dims(CELL)
-    if (poisson_fft%is_100_case .and. mesh%par%nproc > 1) then
-      if (mod(dims_loc(1), mesh%par%nproc_dir(3)) /= 0) then
-        call abort_run('The 100 case on multiple ranks needs the number of x &
-                       &cells to divide by the number of ranks.')
-      end if
-    end if
-    if (poisson_fft%is_110_case .and. mesh%par%nproc > 1) then
-      if (mod(dims_loc(1), mesh%par%nproc_dir(3)) /= 0 .or. &
-          mod(dims_loc(2), mesh%par%nproc_dir(3)) /= 0) then
-        call abort_run('The 110 case on multiple ranks needs the number of x &
-                       &and y cells to divide by the number of ranks.')
-      end if
-    end if
+    reason = cuda_fft_decomp_reason(mesh%grid%bc_code, dims_loc, &
+                                    mesh%par%nproc_dir)
+    if (len_trim(reason) > 0) call abort_run(trim(reason))
+
+    ! Work out the spectral dimensions in the permuted state
     if (poisson_fft%is_100_case) then
       n_spec(1) = dims_loc(2)/2 + 1
       n_spec(2) = dims_loc(1)/mesh%par%nproc_dir(3)
