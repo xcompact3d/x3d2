@@ -2,7 +2,7 @@ program xcompact
   use m_mpi, only: MPI_COMM_WORLD, MPI_Comm_rank, MPI_Comm_size, &
                    MPI_Finalize, MPI_Init
 
-  use m_backend_setup, only: backend_setup_t, backend_name
+  use m_backend_setup, only: backend_setup_t, poisson_uses_2decomp
   use m_base_case, only: base_case_t
   use m_common, only: dp, get_argument
   use m_config, only: domain_config_t, solver_config_t
@@ -39,8 +39,7 @@ program xcompact
   end if
 
   ! Decide whether 2decomp is used or not
-  use_2decomp = solver_cfg%poisson_solver_type == 'FFT' &
-                .and. backend_name == 'OMP'
+  use_2decomp = poisson_uses_2decomp(solver_cfg%poisson_solver_type)
 
   mesh = mesh_t(domain_cfg%dims_global, domain_cfg%nproc_dir, &
                 domain_cfg%L_global, domain_cfg%BC_x, domain_cfg%BC_y, &

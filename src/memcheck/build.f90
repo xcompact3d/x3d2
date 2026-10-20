@@ -4,6 +4,7 @@ module m_memcheck_build
   use m_common, only: dp, i8, VERT
   use m_logger, only: log_info, log_warn
   use m_mesh, only: mesh_t
+  use m_backend_setup, only: poisson_uses_2decomp
   use m_allocator, only: allocator_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
@@ -197,7 +198,9 @@ contains
     mesh = mesh_t(dims_in, [1, 1, 1], ctx%domain_cfg%L_global, &
                   ctx%domain_cfg%BC_x, ctx%domain_cfg%BC_y, &
                   ctx%domain_cfg%BC_z, ctx%domain_cfg%stretching, &
-                  ctx%domain_cfg%beta, use_2decomp=.false.)
+                  ctx%domain_cfg%beta, &
+                  use_2decomp=poisson_uses_2decomp( &
+                  ctx%solver_cfg%poisson_solver_type))
     dims = mesh%get_dims(VERT)
 
     ! A missing mask file makes the solver init abort: stop before it.
