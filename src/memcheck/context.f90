@@ -3,6 +3,7 @@ module m_memcheck_context
   use m_common, only: dp
   use m_config, only: domain_config_t, solver_config_t, les_config_t, &
                       checkpoint_config_t
+  use m_logger, only: abort_run
   use m_mesh, only: periodic_dir
   use m_memory_estimate, only: cell_dims
   use m_cuda_memcheck_device, only: cuda_memcheck_device_t
@@ -68,8 +69,8 @@ contains
     logical :: static_flag, build_flag
 
     nargs = command_argument_count()
-    if (nargs < 1) error stop 'usage: x3d2-memcheck <input.x3d> &
-      &[--static | --build [--extensive <n_substeps>]]'
+    if (nargs < 1) call abort_run('usage: x3d2-memcheck <input.x3d> &
+      &[--static | --build [--extensive <n_substeps>]]', collective=.true.)
     ! The input file stays argument 1: the real case constructors re-read it.
     call get_command_argument(1, ctx%input_path)
 
@@ -84,24 +85,27 @@ contains
       case ('--build')
         build_flag = .true.
       case ('--extensive')
-        if (i == nargs) error stop 'x3d2-memcheck: --extensive needs a &
-          &positive integer substep count, e.g. --extensive 1000'
+        if (i == nargs) call abort_run('x3d2-memcheck: --extensive needs a &
+          &positive integer substep count, e.g. --extensive 1000', &
+          collective=.true.)
         i = i + 1
         call get_command_argument(i, arg)
         read (arg, *, iostat=iostat_n) ctx%extensive_substeps
         if (iostat_n /= 0 .or. ctx%extensive_substeps < 1) &
-          error stop 'x3d2-memcheck: --extensive needs a positive &
-            &integer substep count'
+          call abort_run('x3d2-memcheck: --extensive needs a positive &
+            &integer substep count', collective=.true.)
         build_flag = .true.
       case default
-        error stop 'x3d2-memcheck: unknown flag '//trim(arg)// &
-          ' (expected --static, --build, or --extensive <n>)'
+        call abort_run('x3d2-memcheck: unknown flag '//trim(arg)// &
+                       ' (expected --static, --build, or --extensive <n>)', &
+                       collective=.true.)
       end select
       i = i + 1
     end do
     if (static_flag .and. build_flag) &
-      error stop 'x3d2-memcheck: --static and --build/--extensive are &
-        &mutually exclusive (--static stops at the formula estimate).'
+      call abort_run('x3d2-memcheck: --static and --build/--extensive are &
+        &mutually exclusive (--static stops at the formula estimate).', &
+        collective=.true.)
 
     if (static_flag) then
       ctx%run_mode = 'STATIC'
