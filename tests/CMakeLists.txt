@@ -409,6 +409,17 @@ function(define_backend_tests backend)
   # Verification tests (numerical correctness vs analytical solutions)
   define_verification_test(verification/test_time_integrator.f90 ${serial} ${backend})
   define_verification_test(verification/test_tridiag.f90 ${np} ${backend})
+  # tol_hyper must reject zero and sign-flipped output. The expected failure
+  # gives a non-zero exit, so ctest checks the output, not the exit code.
+  foreach(mode zero_output sign_flip)
+    set(X3D2_TEST_NAME_SUFFIX _${mode})
+    define_verification_test(verification/test_tridiag.f90 ${np} ${backend} ${mode})
+    set_tests_properties(test_tridiag_${backend}_${np}_${mode} PROPERTIES
+      PASS_REGULAR_EXPRESSION "Check 2nd ders, hyperviscous, dir-neu\\.\\.\\. failed"
+      FAIL_REGULAR_EXPRESSION "Check 2nd ders, hyperviscous, dir-neu\\.\\.\\. passed"
+      TIMEOUT 60)
+  endforeach()
+  unset(X3D2_TEST_NAME_SUFFIX)
   define_verification_test(verification/test_penta.f90 ${np} ${backend})
   define_verification_test(verification/test_transeq.f90 ${np} ${backend})
   define_verification_test(verification/test_les_field.f90 ${serial} ${backend})

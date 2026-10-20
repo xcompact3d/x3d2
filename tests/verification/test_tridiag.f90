@@ -11,6 +11,7 @@ program test_tridiag
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, pi, DIR_X, VERT, &
                       BC_PERIODIC, BC_NEUMANN, BC_DIRICHLET, BC_HALO
+  use m_logger, only: abort_run
   use m_mesh, only: mesh_t
   use m_test_utils, only: initialise_mpi, finalise_test, relative_l2_error
 
@@ -68,6 +69,9 @@ program test_tridiag
   ! One operator per case, never deallocated (see tdsops_slot_t)
   type(tdsops_slot_t) :: ops(8)
   integer :: icase = 0
+  ! Optional first command-line argument: 'zero_output' or 'sign_flip' damages
+  ! the hyperviscous result, so ctest can check that tol_hyper rejects it.
+  character(len=16) :: mode = ''
   class(field_t), pointer :: u_field, du_field
 
   real(dp), allocatable, dimension(:, :, :) :: u, du, ref
@@ -80,6 +84,12 @@ program test_tridiag
              offset, offset_hyper
 
   call initialise_mpi(nrank, nproc)
+  if (command_argument_count() >= 1) call get_command_argument(1, mode)
+  if (len_trim(mode) > 0 .and. trim(mode) /= 'zero_output' &
+      .and. trim(mode) /= 'sign_flip') then
+    call abort_run('test_tridiag: unknown mode '//trim(mode), &
+                   collective=.true.)
+  end if
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
   n_glob = (1024/nproc)*nproc
@@ -204,7 +214,7 @@ program test_tridiag
                             bc_start=bc_start, bc_end=bc_end, &
                             sym=.false., c_nu=0.22_dp, nu0_nu=63._dp)
   call run_case(sin_hyper, n_hyper, n_hyper, sin_hyper, 1, tol_hyper, &
-                '2nd ders, hyperviscous, dir-neu')
+                '2nd ders, hyperviscous, dir-neu', damage=.true.)
 
   call allocator%release_block(u_field)
   call allocator%release_block(du_field)
@@ -213,7 +223,7 @@ program test_tridiag
 
 contains
 
-  subroutine run_case(input, n_in, n_out, expected, c, tolerance, label)
+  subroutine run_case(input, n_in, n_out, expected, c, tolerance, label, damage)
     !! Solve with the latest operator and check du + c*expected ~ 0 over the
     !! first n_out points.  Only the first n_in points of u are overwritten,
     !! which leaves the rest from the previous case as the original
@@ -222,6 +232,7 @@ contains
     integer, intent(in) :: n_in, n_out, c
     real(dp), intent(in) :: tolerance
     character(*), intent(in) :: label
+    logical, optional, intent(in) :: damage
 
     real(dp) :: norm
     integer :: jj
@@ -233,6 +244,11 @@ contains
 
     call backend%tds_solve(du_field, u_field, ops(icase)%op)
     call backend%get_field_data(du, du_field, DIR_X)
+
+    if (present(damage)) then
+      if (damage .and. trim(mode) == 'zero_output') du = 0._dp
+      if (damage .and. trim(mode) == 'sign_flip') du = -du
+    end if
 
     do jj = 1, n_out
       du(:, jj, 1:n_groups) = du(:, jj, 1:n_groups) + c*expected(jj)
