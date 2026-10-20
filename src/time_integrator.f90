@@ -61,6 +61,8 @@ contains
 
     integer :: order, stat
 
+    nolds = 0
+
     if (time_intg(1:2) == 'AB') then
       read (time_intg(3:3), *, iostat=stat) order
       if (stat /= 0) call abort_run('Error reading AB integration order', &
