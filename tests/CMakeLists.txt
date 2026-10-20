@@ -335,6 +335,10 @@ define_test(unit/test_logger.f90 ${serial} omp)
 if(NOT np EQUAL serial)
   define_test(unit/test_logger.f90 ${np} omp)
 endif()
+define_test(unit/test_relative_l2_error.f90 ${serial} omp)
+if(NOT np EQUAL serial)
+  define_test(unit/test_relative_l2_error.f90 ${np} omp)
+endif()
 # abort_run must stop every rank and report the error, whether one rank fails
 # or all of them do. ctest checks the output rather than the exit code: a hang
 # times out, and a run that returns from abort_run prints the FAIL line.
