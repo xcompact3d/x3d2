@@ -147,14 +147,12 @@ program test_poisson
   !   single precision, CUDA backend:                    2.7265e-07
   ! The XFAIL rows measure at least 8.5654e-01 in double precision and
   ! 8.5640e-01 in single precision. The tolerance is the {1,2,5}x10^k value
-  ! closest to the geometric mean of the largest passing error and the
-  ! smallest XFAIL error: a margin of about 4.5e3 above the passing cases and
-  ! 4.3e3 below the XFAIL rows in double precision, and about 5.1e2 and 8.6e2
-  ! in single precision.
+  ! just above 10x the largest passing measurement: a margin of about 11 in
+  ! double precision and 10 in single precision. The XFAIL rows stay rejected.
 #ifdef SINGLE_PREC
-  real(dp), parameter :: ERROR_TOLERANCE = 1.0e-3_dp
+  real(dp), parameter :: ERROR_TOLERANCE = 2.0e-5_dp
 #else
-  real(dp), parameter :: ERROR_TOLERANCE = 2.0e-4_dp
+  real(dp), parameter :: ERROR_TOLERANCE = 5.0e-7_dp
 #endif
 
   ! DIVGRAD_TOLERANCE bounds the relative L2 error of the div(grad(p)) round
