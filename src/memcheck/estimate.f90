@@ -1,6 +1,7 @@
 module m_memcheck_estimate
   !! The per-GPU memory estimate of x3d2-memcheck.
   use m_common, only: dp, i8, nbytes
+  use m_logger, only: log_info
   use m_memcheck_context, only: memcheck_ctx_t
   use m_memory_estimate, only: padded_cells, padded_halo_bytes, &
                                spectral_slab_bytes, mirror_buffer_bytes_100, &
@@ -263,9 +264,9 @@ contains
     if (len_trim(ctx%probe_reason) > 0 .and. .not. ctx%probe_note_shown .and. &
         floor_gib <= DOES_NOT_FIT_FRACTION*ctx%card_gib) then
       if (ctx%device%heap_predicted) then
-        print '(a)', trim(ctx%probe_reason)//'; predicted rows follow.'
+        call log_info(trim(ctx%probe_reason)//'; predicted rows follow.')
       else
-        print '(a)', trim(ctx%probe_reason)//'; formula-only rows follow.'
+        call log_info(trim(ctx%probe_reason)//'; formula-only rows follow.')
       end if
       ctx%probe_note_shown = .true.
     end if
