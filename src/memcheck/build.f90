@@ -10,6 +10,7 @@ module m_memcheck_build
   use m_base_case, only: base_case_t
   use m_case_factory, only: allocate_flow_case, is_supported_flow_case
   use m_field, only: flist_t
+  use m_ibm, only: ibm_mask_filename
   use m_monitoring, only: monitoring_default_enabled
   use m_scalar_series, only: scalar_series_default_enabled
   use m_case_abl, only: case_abl_t
@@ -31,22 +32,6 @@ module m_memcheck_build
   real(dp), parameter :: CHECK_TOLERANCE = 0.05_dp
 
 contains
-
-  pure function ibm_mask_filename(px, py, pz) result(fname)
-    !! The ibm_<BC-suffix>.bp mask filename for the periodic flags, as in
-    !! src/module/ibm.f90.
-    logical, intent(in) :: px, py, pz
-    character(len=16) :: fname
-    character(len=3) :: bc_suffix
-
-    bc_suffix(1:1) = '0'
-    if (.not. px) bc_suffix(1:1) = '1'
-    bc_suffix(2:2) = '0'
-    if (.not. py) bc_suffix(2:2) = '1'
-    bc_suffix(3:3) = '0'
-    if (.not. pz) bc_suffix(3:3) = '1'
-    fname = "ibm_"//bc_suffix//".bp"
-  end function ibm_mask_filename
 
   subroutine validate_build_inputs(ctx, ok)
     !! Checks the known causes of a failed real build: a missing input file,
@@ -74,8 +59,8 @@ contains
     end if
 
     if (ctx%solver_cfg%ibm_on) then
-      ibm_file = ibm_mask_filename(ctx%periodic_x, ctx%periodic_y, &
-                                   ctx%periodic_z)
+      ibm_file = ibm_mask_filename([ctx%periodic_x, ctx%periodic_y, &
+                                    ctx%periodic_z])
       inquire (file=trim(ibm_file), exist=ibm_file_exists)
       if (.not. ibm_file_exists) then
         call log_info('Real build skipped: ibm_on=T but the matching &
@@ -182,19 +167,13 @@ contains
         &by 1/num_gpus.)')
   end subroutine report_measured_table
 
-  subroutine build_mesh(ctx, dims_in, mesh, dims, ibm_missing)
-    !! Mesh of the real build at dims_in plus the ibm_on mask pre-check;
-    !! ibm_missing=.true. tells build_and_measure to stop.
+  subroutine build_mesh(ctx, dims_in, mesh, dims)
+    !! Mesh of the real build at dims_in.
     type(memcheck_ctx_t), intent(in) :: ctx
     integer, intent(in) :: dims_in(3)
     type(mesh_t), intent(out) :: mesh
     integer, intent(out) :: dims(3)
-    logical, intent(out) :: ibm_missing
 
-    character(len=16) :: ibm_file
-    logical :: ibm_file_exists
-
-    ibm_missing = .false.
     mesh = mesh_t(dims_in, [1, 1, 1], ctx%domain_cfg%L_global, &
                   ctx%domain_cfg%BC_x, ctx%domain_cfg%BC_y, &
                   ctx%domain_cfg%BC_z, ctx%domain_cfg%stretching, &
@@ -202,18 +181,6 @@ contains
                   use_2decomp=poisson_uses_2decomp( &
                   ctx%solver_cfg%poisson_solver_type))
     dims = mesh%get_dims(VERT)
-
-    ! A missing mask file makes the solver init abort: stop before it.
-    if (ctx%solver_cfg%ibm_on) then
-      ibm_file = ibm_mask_filename(mesh%grid%periodic_BC(1), &
-                                   mesh%grid%periodic_BC(2), &
-                                   mesh%grid%periodic_BC(3))
-      inquire (file=ibm_file, exist=ibm_file_exists)
-      if (.not. ibm_file_exists) then
-        ibm_missing = .true.
-        return
-      end if
-    end if
   end subroutine build_mesh
 
   subroutine drive_case(ctx, flow_case)
@@ -250,8 +217,7 @@ contains
                                ctx%output_qcriterion)
   end subroutine drive_case
 
-  subroutine build_and_measure(ctx, dims_in, npeak, free_end_bytes, &
-                               ibm_missing)
+  subroutine build_and_measure(ctx, dims_in, npeak, free_end_bytes)
     !! Builds the real flow case at dims_in on this GPU, drives one substep
     !! (n under --extensive) and returns the allocator mark npeak and the
     !! free device memory free_end_bytes at that point. The real case
@@ -261,7 +227,6 @@ contains
     integer, intent(in) :: dims_in(3)
     integer, intent(out) :: npeak
     integer(i8), intent(out) :: free_end_bytes
-    logical, intent(out) :: ibm_missing
 
     type(mesh_t), target :: mesh
     class(allocator_t), pointer :: allocator
@@ -276,8 +241,7 @@ contains
     ctx%output_vorticity = .false.
     ctx%output_qcriterion = .false.
 
-    call build_mesh(ctx, dims_in, mesh, dims, ibm_missing)
-    if (ibm_missing) return
+    call build_mesh(ctx, dims_in, mesh, dims)
 
     call ctx%device%make_backend(mesh, dims, allocator, backend)
     host_allocator = allocator_t(dims, ctx%device%sz())
@@ -305,22 +269,19 @@ contains
     call ctx%device%mem_info(total_b, free_end_bytes)
   end subroutine build_and_measure
 
-  subroutine run_real_build(ctx, measured_peak_fields, used_gib, ibm_missing)
+  subroutine run_real_build(ctx, measured_peak_fields, used_gib)
     !! Runs the real build in this process, after the FFT probe has destroyed
     !! its plans. used_gib is the card memory the build holds: the context at
     !! the start plus the fall of the free memory since then.
     type(memcheck_ctx_t), target, intent(inout) :: ctx
     integer, intent(out) :: measured_peak_fields
     real(dp), intent(out) :: used_gib
-    logical, intent(out) :: ibm_missing
 
     integer(i8) :: free_end_bytes
 
     call build_and_measure(ctx, [ctx%gdims(1), ctx%gdims(2), ctx%gdims(3)], &
-                           measured_peak_fields, free_end_bytes, ibm_missing)
-    used_gib = 0._dp
-    if (.not. ibm_missing) &
-      used_gib = to_gib(ctx%device%footprint_bytes(free_end_bytes))
+                           measured_peak_fields, free_end_bytes)
+    used_gib = to_gib(ctx%device%footprint_bytes(free_end_bytes))
   end subroutine run_real_build
 
   subroutine run_build_mode(ctx)
@@ -332,7 +293,7 @@ contains
     real(dp) :: pct_error, estimate_ng1_excl_io_gib
     character(len=8) :: check_word
     integer :: measured_peak_fields
-    logical :: ibm_missing, inputs_ok
+    logical :: inputs_ok
     character(len=12) :: measured_verdict
     character(len=256) :: line_buf
 
@@ -346,14 +307,7 @@ contains
     call validate_build_inputs(ctx, inputs_ok)
     if (.not. inputs_ok) return
 
-    call run_real_build(ctx, measured_peak_fields, used_gib, ibm_missing)
-    if (ibm_missing) then
-      call print_rule('-')
-      call log_info('Real build skipped: ibm_on=T but the matching &
-        &ibm_<BC-suffix>.bp mask file was not found in the working &
-        &directory; the estimate above stands.')
-      return
-    end if
+    call run_real_build(ctx, measured_peak_fields, used_gib)
 
     call check_peak_fields_table(ctx, measured_peak_fields)
 
