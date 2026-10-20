@@ -9,7 +9,8 @@ module m_omp_poisson_fft
 
   use m_common, only: dp, CELL
   use m_field, only: field_t
-  use m_mesh, only: mesh_t, fft_bc_class
+  use m_mesh, only: mesh_t, FFT_BC_000, FFT_BC_010, FFT_BC_100, &
+                    FFT_BC_110
   use m_poisson_fft, only: poisson_fft_t
   use m_tdsops, only: dirps_t
 
@@ -127,9 +128,10 @@ contains
     dims = mesh%get_global_dims(CELL)
 
     ! The OpenMP backend does not store the 000 class.
-    call fft_bc_class(mesh%grid%periodic_BC, is_000_case, &
-                      poisson_fft%is_010_case, poisson_fft%is_100_case, &
-                      poisson_fft%is_110_case)
+    is_000_case = mesh%grid%bc_code == FFT_BC_000
+    poisson_fft%is_010_case = mesh%grid%bc_code == FFT_BC_010
+    poisson_fft%is_100_case = mesh%grid%bc_code == FFT_BC_100
+    poisson_fft%is_110_case = mesh%grid%bc_code == FFT_BC_110
 
     ! Read the 2decomp processor grid (p_row, p_col), which the 100, 110 and
     ! 010 cases all use.

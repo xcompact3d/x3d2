@@ -282,9 +282,10 @@ contains
     integer :: fw_plan_type, bw_plan_type
 
     ! Detect cases
-    call fft_bc_class(mesh%grid%periodic_BC, poisson_fft%is_000_case, &
-                      poisson_fft%is_010_case, poisson_fft%is_100_case, &
-                      poisson_fft%is_110_case)
+    poisson_fft%is_000_case = mesh%grid%bc_code == FFT_BC_000
+    poisson_fft%is_010_case = mesh%grid%bc_code == FFT_BC_010
+    poisson_fft%is_100_case = mesh%grid%bc_code == FFT_BC_100
+    poisson_fft%is_110_case = mesh%grid%bc_code == FFT_BC_110
 
     ! 1D decomposition along Z in real domain, and along Y in spectral space
     if (mesh%par%nproc_dir(2) /= 1) &
