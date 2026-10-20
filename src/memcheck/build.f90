@@ -11,6 +11,8 @@ module m_memcheck_build
   use m_case_factory, only: allocate_flow_case, is_supported_flow_case
   use m_field, only: flist_t
   use m_monitoring, only: monitoring_default_enabled
+  use m_scalar_series, only: scalar_series_default_enabled
+  use m_case_abl, only: case_abl_t
   use m_memcheck_context, only: memcheck_ctx_t
   use m_memcheck_report, only: n_gpu_list, print_rule, print_table_header, &
                                print_table_row
@@ -288,10 +290,19 @@ contains
     call ctx%device%make_backend(mesh, dims, allocator, backend)
     host_allocator = allocator_t(dims, ctx%device%sz())
 
-    ! The case build writes no monitoring.csv in the working directory.
+    ! The case build writes no monitoring.csv or turbine disc<t>.adm in the
+    ! working directory.
     monitoring_default_enabled = .false.
+    scalar_series_default_enabled = .false.
     call allocate_flow_case(ctx%domain_cfg%flow_case_name, backend, mesh, &
                             host_allocator, flow_case)
+
+    ! The ABL profile file is written by sample() only when the profile
+    ! diagnostics are on: switch them off so postprocess(0) leaves it alone.
+    select type (flow_case)
+    type is (case_abl_t)
+      flow_case%diagnostics%cfg%profile_start_iter = -1
+    end select
 
     ! The solver construction settled the FFT path: record it.
     call ctx%device%capture_solver_info(flow_case)
