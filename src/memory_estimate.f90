@@ -9,6 +9,7 @@ module m_memory_estimate
   !! --build Tier 3 path; they live here so both that real build measurement
   !! and the static, no build Tiers 1-2 estimate can share them instead of
   !! duplicating them.
+  use m_allocator, only: padded_dim
   use m_common, only: i8, nbytes, is_sp, sp
   use m_config, only: checkpoint_config_t, has_output_field
   use m_time_integrator, only: nolds_of
@@ -36,14 +37,6 @@ module m_memory_estimate
   integer(i8), parameter :: fft_probe_margin_bytes = 1024_i8**3
 
 contains
-
-  pure integer function padded_dim(n, sz) result(n_padded)
-    !! Smallest multiple of sz that is >= n. Mirrors the x/y padding in
-    !! allocator_init (m_allocator); z is never padded so is not covered here.
-    integer, intent(in) :: n, sz
-
-    n_padded = n - 1 + mod(-(n - 1), sz) + sz
-  end function padded_dim
 
   pure function padded_cells(dims, sz) result(n)
     !! Cell count of one padded field at dims (x, y padded to sz, z untouched).
