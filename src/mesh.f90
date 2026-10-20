@@ -10,6 +10,15 @@ module m_mesh
 
   implicit none
 
+  ! Class of the Poisson FFT boundary conditions, one code per periodicity
+  ! pattern (1 = periodic, 0 = not, in the order x, y, z) of the supported
+  ! cases.
+  integer, parameter :: FFT_BC_000 = 0
+  integer, parameter :: FFT_BC_010 = 10
+  integer, parameter :: FFT_BC_100 = 100
+  integer, parameter :: FFT_BC_110 = 110
+  integer, parameter :: FFT_BC_UNSUPPORTED = -1
+
   ! The mesh class stores all the information about the global and local (due to domain decomposition) mesh
   ! It also includes getter functions to access some of its parameters
   type :: mesh_t
@@ -48,9 +57,8 @@ contains
     logical, optional, intent(in) :: use_2decomp
     class(mesh_t), allocatable :: mesh
 
-    character(len=20), dimension(3, 2) :: BC_all
     logical :: is_first_domain, is_last_domain
-    integer :: dir, j
+    integer :: dir
     integer :: ierr
 
     allocate (mesh)
@@ -58,35 +66,8 @@ contains
     allocate (mesh%grid)
     allocate (mesh%par)
 
-    BC_all(1, 1) = BC_x(1); BC_all(1, 2) = BC_x(2)
-    BC_all(2, 1) = BC_y(1); BC_all(2, 2) = BC_y(2)
-    BC_all(3, 1) = BC_z(1); BC_all(3, 2) = BC_z(2)
-    do dir = 1, 3
-      do j = 1, 2
-        select case (trim(BC_all(dir, j)))
-        case ('periodic')
-          mesh%grid%BCs_global(dir, j) = BC_PERIODIC
-        case ('neumann')
-          mesh%grid%BCs_global(dir, j) = BC_NEUMANN
-        case ('dirichlet')
-          mesh%grid%BCs_global(dir, j) = BC_DIRICHLET
-        case default
-          call abort_run('Unknown BC: '//trim(BC_all(dir, j)), &
-                         collective=.true.)
-        end select
-      end do
-    end do
-
-    do dir = 1, 3
-      if (any(mesh%grid%BCs_global(dir, :) == BC_PERIODIC) .and. &
-          (.not. all(mesh%grid%BCs_global(dir, :) == BC_PERIODIC))) then
-        call abort_run('BCs are incompatible: in a direction make sure to &
-                       &have either both sides periodic or none.', &
-                       collective=.true.)
-      end if
-      mesh%grid%periodic_BC(dir) = all(mesh%grid%BCs_global(dir, :) &
-                                       == BC_PERIODIC)
-    end do
+    call classify_boundaries(BC_x, BC_y, BC_z, mesh%grid%periodic_BC, &
+                             mesh%grid%bc_code, mesh%grid%BCs_global)
 
     ! Set global vertex dims
     mesh%grid%global_vert_dims(:) = dims_global
@@ -356,6 +337,64 @@ contains
       error stop "Unknown data_loc in get_coordinates" ! logger-exempt: pure
     end select
   end function
+
+  subroutine classify_boundaries(bc_x, bc_y, bc_z, periodic, bc_code, &
+                                 bcs_global)
+    !! Parse the BC strings of the three directions. A direction is periodic
+    !! only if both ends are 'periodic'. bc_code is the FFT_BC_* class of the
+    !! resulting periodicity, or FFT_BC_UNSUPPORTED. Shared by mesh_init and
+    !! callers with only BC strings (no mesh_t, e.g. static memory estimation).
+    character(len=*), intent(in) :: bc_x(2), bc_y(2), bc_z(2)
+    logical, intent(out) :: periodic(3)
+    integer, intent(out) :: bc_code
+    integer, optional, intent(out) :: bcs_global(3, 2)
+
+    character(len=20) :: BC_all(3, 2)
+    integer :: codes(3, 2)
+    integer :: dir, j
+
+    ! abort_run does not end the run as far as the compiler can tell.
+    codes = BC_PERIODIC
+    BC_all(1, 1) = BC_x(1); BC_all(1, 2) = BC_x(2)
+    BC_all(2, 1) = BC_y(1); BC_all(2, 2) = BC_y(2)
+    BC_all(3, 1) = BC_z(1); BC_all(3, 2) = BC_z(2)
+    do dir = 1, 3
+      do j = 1, 2
+        select case (trim(BC_all(dir, j)))
+        case ('periodic')
+          codes(dir, j) = BC_PERIODIC
+        case ('neumann')
+          codes(dir, j) = BC_NEUMANN
+        case ('dirichlet')
+          codes(dir, j) = BC_DIRICHLET
+        case default
+          call abort_run('Unknown BC: '//trim(BC_all(dir, j)), &
+                         collective=.true.)
+        end select
+      end do
+    end do
+
+    do dir = 1, 3
+      if (any(codes(dir, :) == BC_PERIODIC) .and. &
+          (.not. all(codes(dir, :) == BC_PERIODIC))) then
+        call abort_run('BCs are incompatible: in a direction make sure to &
+                       &have either both sides periodic or none.', &
+                       collective=.true.)
+      end if
+      periodic(dir) = all(codes(dir, :) == BC_PERIODIC)
+    end do
+
+    if (present(bcs_global)) bcs_global = codes
+
+    ! The four classes the Poisson FFT solver supports, all periodic in z.
+    bc_code = FFT_BC_UNSUPPORTED
+    if (periodic(3)) then
+      if (periodic(1) .and. periodic(2)) bc_code = FFT_BC_000
+      if (periodic(1) .and. (.not. periodic(2))) bc_code = FFT_BC_010
+      if ((.not. periodic(1)) .and. periodic(2)) bc_code = FFT_BC_100
+      if ((.not. periodic(1)) .and. (.not. periodic(2))) bc_code = FFT_BC_110
+    end if
+  end subroutine classify_boundaries
 
   pure logical function periodic_dir(bc_pair) result(is_periodic)
     !! A direction is periodic only if BOTH ends are 'periodic' - mirrors
