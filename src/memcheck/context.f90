@@ -4,7 +4,7 @@ module m_memcheck_context
   use m_config, only: domain_config_t, solver_config_t, les_config_t, &
                       checkpoint_config_t
   use m_logger, only: abort_run
-  use m_mesh, only: periodic_dir
+  use m_mesh, only: periodic_dir, fft_bc_class
   use m_memory_estimate, only: cell_dims
   use m_cuda_memcheck_device, only: cuda_memcheck_device_t
   implicit none
@@ -133,13 +133,9 @@ contains
     ctx%periodic_x = periodic_dir(ctx%domain_cfg%BC_x)
     ctx%periodic_y = periodic_dir(ctx%domain_cfg%BC_y)
     ctx%periodic_z = periodic_dir(ctx%domain_cfg%BC_z)
-    ctx%bc_is_000 = ctx%periodic_x .and. ctx%periodic_y .and. ctx%periodic_z
-    ctx%bc_is_010 = ctx%periodic_x .and. (.not. ctx%periodic_y) .and. &
-                    ctx%periodic_z
-    ctx%bc_is_100 = (.not. ctx%periodic_x) .and. ctx%periodic_y .and. &
-                    ctx%periodic_z
-    ctx%bc_is_110 = (.not. ctx%periodic_x) .and. &
-                    (.not. ctx%periodic_y) .and. ctx%periodic_z
+    call fft_bc_class([ctx%periodic_x, ctx%periodic_y, ctx%periodic_z], &
+                      ctx%bc_is_000, ctx%bc_is_010, ctx%bc_is_100, &
+                      ctx%bc_is_110)
     ctx%cdims = cell_dims(ctx%gdims, [ctx%periodic_x, ctx%periodic_y, &
                                       ctx%periodic_z])
   end subroutine classify_bc

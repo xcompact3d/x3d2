@@ -368,4 +368,17 @@ contains
                   trim(bc_pair(2)) == 'periodic'
   end function periodic_dir
 
+  pure subroutine fft_bc_class(periodic, is_000, is_010, is_100, is_110)
+    !! Split the periodicity of the three directions into the four boundary
+    !! classes the Poisson FFT solver supports. Shared by poisson_fft and
+    !! the static memory estimation, which has no mesh_t.
+    logical, intent(in) :: periodic(3)
+    logical, intent(out) :: is_000, is_010, is_100, is_110
+
+    is_000 = periodic(1) .and. periodic(2) .and. periodic(3)
+    is_010 = periodic(1) .and. (.not. periodic(2)) .and. periodic(3)
+    is_100 = (.not. periodic(1)) .and. periodic(2) .and. periodic(3)
+    is_110 = (.not. periodic(1)) .and. (.not. periodic(2)) .and. periodic(3)
+  end subroutine fft_bc_class
+
 end module m_mesh
