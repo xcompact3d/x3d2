@@ -315,6 +315,7 @@ contains
 
     select type (pf => flow_case%solver%backend%poisson_fft)
     type is (cuda_poisson_fft_t)
+      call require_cufftmp(pf%is_110_case, pf%use_cufftmp, 'solver')
       self%use_cufftmp = pf%use_cufftmp
       self%use_cufftmp_known = .true.
     end select
