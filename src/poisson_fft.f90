@@ -186,9 +186,9 @@ contains
     else if ((.not. self%periodic_x) .and. (self%periodic_y) &
              .and. (self%periodic_z)) then
       ! The OpenMP backend runs the 010, 100 and 110 cases on multiple ranks.
-      ! The CUDA backend runs the 100 and 110 cases on multiple ranks with a
-      ! 1D z decomposition and cuFFTMp, and guards its own 010 rank limit
-      ! where the case is initialised.
+      ! The CUDA backend runs the 010, 100 and 110 cases on multiple ranks
+      ! with a 1D z decomposition and cuFFTMp, and guards its own rank
+      ! limits where the case is initialised.
       self%poisson => poisson_100
     else if ((.not. self%periodic_x) .and. (.not. self%periodic_y) &
              .and. (self%periodic_z)) then
