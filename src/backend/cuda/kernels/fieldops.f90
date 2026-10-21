@@ -657,6 +657,68 @@ contains
     end if
   end subroutine field_set_x_face_from_field
 
+  attributes(global) subroutine field_set_y_face_from_plane( &
+    f, p_start, p_end, apply_end, nx, ny, nz)
+    !! Write two (nx, nz) planes into the y = 1 and y = ny planes of a
+    !! DIR_X field. p_end is read only when apply_end = 1.
+    !! Launch convention matches field_set_y_face_from_field.
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:, :) :: p_start, p_end
+    integer, value, intent(in) :: apply_end, nx, ny, nz
+
+    integer :: j, b, n_mod, b_end
+
+    j = threadIdx%x + (blockIdx%x - 1)*blockDim%x ! from 1 to nx
+    b = blockIdx%y ! from 1 to nz
+
+    n_mod = mod(ny - 1, SZ) + 1
+    b_end = b + (ny - 1)/SZ*nz
+
+    if (j <= nx) then
+      f(1, j, b) = p_start(j, b)
+      if (apply_end == 1) f(n_mod, j, b_end) = p_end(j, b)
+    end if
+
+  end subroutine field_set_y_face_from_plane
+
+  attributes(global) subroutine field_set_x_face_from_plane( &
+    f, p_start, p_end, apply_end, nx, ny, nz)
+    !! Write two (ny, nz) planes into the x = 1 and x = nx planes of a
+    !! DIR_X field. p_end is read only when apply_end = 1.
+    !! Launch convention matches field_set_x_face_from_field.
+    implicit none
+
+    real(dp), device, intent(inout), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:, :) :: p_start, p_end
+    integer, value, intent(in) :: apply_end, nx, ny, nz
+
+    integer :: i, b, n_mod, n_y_blocks, y_block, i_max, y, z
+
+    i = threadIdx%x + (blockIdx%x - 1)*blockDim%x  ! 1..SZ
+    b = blockIdx%y                                 ! 1..n_y_blocks*nz
+
+    n_mod = mod(ny - 1, SZ) + 1
+    n_y_blocks = (ny - 1)/SZ + 1
+    ! CUDA DIR_X ordering: b = (y_block - 1)*nz + z
+    y_block = (b - 1)/nz + 1
+    z = b - (y_block - 1)*nz
+    y = (y_block - 1)*SZ + i
+
+    if (y_block == n_y_blocks) then
+      i_max = n_mod
+    else
+      i_max = SZ
+    end if
+
+    if (i <= i_max) then
+      f(i, 1, b) = p_start(y, z)
+      if (apply_end == 1) f(i, nx, b) = p_end(y, z)
+    end if
+
+  end subroutine field_set_x_face_from_plane
+
   attributes(global) subroutine add_scalar_x_face( &
     f, c, i_plane, nx, ny, nz)
   !! Adds a uniform constant `c` to a single x-normal plane (pencil index
