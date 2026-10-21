@@ -152,7 +152,8 @@ module m_cuda_poisson_fft
   end interface
 
   private :: create_fft_plan, sync_or_abort, yslab_view_110, &
-             redistribution_launch_config, redistribution_alltoall
+             redistribution_launch_config, redistribution_alltoall, &
+             postprocess_dim2_mirror
 
 contains
 
@@ -1099,39 +1100,63 @@ contains
     ! mirror exchange, so the same work is staged across three launches.
     ! The same argument swap as above applies.
 
-    ! Stage 1: normalisation, then the Y (R2C) and Z postprocess
+    call postprocess_dim2_mirror(self, c_dev, blocks, threads, &
+                                 self%ny_glob, self%nx_glob, self%nz_glob, &  ! SWAP nx <-> ny
+                                 self%ay_dev, self%by_dev, &  ! dim1, periodic Y
+                                 self%ax_dev, self%bx_dev, &  ! dim2, non-periodic X
+                                 self%az_dev, self%bz_dev)  ! dim3, Z
+  end subroutine fft_postprocess_100_cuda
+
+  subroutine postprocess_dim2_mirror(self, c_dev, blocks, threads, &
+                                     n1_glob, n2_glob, n3_glob, &
+                                     a1_dev, b1_dev, a2_dev, b2_dev, &
+                                     a3_dev, b3_dev)
+    !! Staged spectral postprocess for a paired split along dim2, which
+    !! reaches its partner modes through a mirror exchange. The dim1, dim2
+    !! and dim3 sizes and coefficients follow the staged kernels, so the 010
+    !! case passes x, y, z and the 100 case passes y, x, z.
+    implicit none
+
+    class(cuda_poisson_fft_t) :: self
+    complex(dp), device, dimension(:, :, :), pointer, intent(inout) :: c_dev
+    type(dim3), intent(in) :: blocks, threads
+    integer, intent(in) :: n1_glob, n2_glob, n3_glob
+    real(dp), device, dimension(:), intent(in) :: a1_dev, b1_dev, a2_dev, &
+                                                  b2_dev, a3_dev, b3_dev
+
+    ! Stage 1: normalisation, then the dim1 (R2C) and dim3 postprocess
     call process_spectral_fw<<<blocks, threads>>>( & !&
       c_dev, self%nx_spec, self%ny_spec, &
-      self%ny_glob, self%nx_glob, self%nz_glob, &  ! SWAP nx <-> ny
-      self%ay_dev, self%by_dev, &  ! dim1 uses Y coefficients
-      self%az_dev, self%bz_dev &   ! dim3 uses Z coefficients
+      n1_glob, n2_glob, n3_glob, &
+      a1_dev, b1_dev, &  ! dim1 coefficients
+      a3_dev, b3_dev &   ! dim3 coefficients
       )
 
-    ! Fetch the X pairing partners that live on other ranks
+    ! Fetch the dim2 pairing partners that live on other ranks
     call self%exchange_dim2_mirror(c_dev)
 
-    ! Stage 2: X paired split (forward), then the Poisson solve
+    ! Stage 2: dim2 paired split (forward), then the Poisson solve
     call process_spectral_pair_fw<<<blocks, threads>>>( & !&
       c_dev, self%c_mirror_dev, self%c_plane_recv_dev, self%waves_dev, &
       self%nx_spec, self%ny_spec, self%sp_st(2), &  ! dims and dim2 offset
-      self%ny_glob, self%nz_glob, &  ! SWAP nx <-> ny
-      self%ax_dev, self%bx_dev &  ! dim2 uses X coefficients
+      n1_glob, n3_glob, &
+      a2_dev, b2_dev &  ! dim2 coefficients
       )
 
     ! Stage 2 rewrote every mode, so the mirror is stale and is refreshed
     call self%exchange_dim2_mirror(c_dev)
 
-    ! Stage 3: X paired recombination (backward), then the Y and Z
+    ! Stage 3: dim2 paired recombination (backward), then the dim1 and dim3
     ! postprocess
     call process_spectral_pair_bw<<<blocks, threads>>>( & !&
       c_dev, self%c_mirror_dev, self%c_plane_recv_dev, &
       self%nx_spec, self%ny_spec, self%sp_st(2), &  ! dims and dim2 offset
-      self%ny_glob, self%nz_glob, &  ! SWAP nx <-> ny
-      self%ay_dev, self%by_dev, &  ! dim1 uses Y coefficients
-      self%ax_dev, self%bx_dev, &  ! dim2 uses X coefficients
-      self%az_dev, self%bz_dev &   ! dim3 uses Z coefficients
+      n1_glob, n3_glob, &
+      a1_dev, b1_dev, &  ! dim1 coefficients
+      a2_dev, b2_dev, &  ! dim2 coefficients
+      a3_dev, b3_dev &   ! dim3 coefficients
       )
-  end subroutine fft_postprocess_100_cuda
+  end subroutine postprocess_dim2_mirror
 
   subroutine exchange_dim2_mirror(self, c_dev)
     !! Fills c_mirror_dev and c_plane_recv_dev with the dim2 mirror of the
@@ -1265,39 +1290,11 @@ contains
       ! mirror exchange, so the same work is staged across three launches.
       ! The staged kernels take the dim1, dim2, dim3 order, which for the
       ! 010 case is x, y, z.
-
-      ! Stage 1: normalisation, then the X (R2C) and Z postprocess
-      call process_spectral_fw<<<blocks, threads>>>( & !&
-        c_dev, self%nx_spec, self%ny_spec, &
-        self%nx_glob, self%ny_glob, self%nz_glob, &
-        self%ax_dev, self%bx_dev, &  ! dim1 uses X coefficients
-        self%az_dev, self%bz_dev &   ! dim3 uses Z coefficients
-        )
-
-      ! Fetch the Y pairing partners that live on other ranks
-      call self%exchange_dim2_mirror(c_dev)
-
-      ! Stage 2: Y paired split (forward), then the Poisson solve
-      call process_spectral_pair_fw<<<blocks, threads>>>( & !&
-        c_dev, self%c_mirror_dev, self%c_plane_recv_dev, self%waves_dev, &
-        self%nx_spec, self%ny_spec, self%sp_st(2), &  ! dims and dim2 offset
-        self%nx_glob, self%nz_glob, &
-        self%ay_dev, self%by_dev &  ! dim2 uses Y coefficients
-        )
-
-      ! Stage 2 rewrote every mode, so the mirror is stale and is refreshed
-      call self%exchange_dim2_mirror(c_dev)
-
-      ! Stage 3: Y paired recombination (backward), then the Z and X
-      ! postprocess
-      call process_spectral_pair_bw<<<blocks, threads>>>( & !&
-        c_dev, self%c_mirror_dev, self%c_plane_recv_dev, &
-        self%nx_spec, self%ny_spec, self%sp_st(2), &  ! dims and dim2 offset
-        self%nx_glob, self%nz_glob, &
-        self%ax_dev, self%bx_dev, &  ! dim1 uses X coefficients
-        self%ay_dev, self%by_dev, &  ! dim2 uses Y coefficients
-        self%az_dev, self%bz_dev &   ! dim3 uses Z coefficients
-        )
+      call postprocess_dim2_mirror(self, c_dev, blocks, threads, &
+                                   self%nx_glob, self%ny_glob, self%nz_glob, &
+                                   self%ax_dev, self%bx_dev, &  ! dim1, X
+                                   self%ay_dev, self%by_dev, &  ! dim2, Y
+                                   self%az_dev, self%bz_dev)  ! dim3, Z
     else
       call process_spectral_010_fw<<<blocks, threads>>>( & !&
         c_dev, self%nx_spec, self%ny_spec, self%sp_st(2), &
