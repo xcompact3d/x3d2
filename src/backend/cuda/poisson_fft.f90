@@ -11,7 +11,7 @@ module m_cuda_poisson_fft
   use m_common, only: dp, CELL, is_sp, MPI_X3D2_DP
   use m_field, only: field_t
   use m_mesh
-  use m_poisson_fft, only: poisson_fft_t, poisson_bc_code, spectral_dirs
+  use m_poisson_fft, only: poisson_fft_t, poisson_bc_code
   use m_tdsops, only: dirps_t
 
   use m_cuda_allocator, only: cuda_field_t
@@ -91,8 +91,6 @@ module m_cuda_poisson_fft
     integer :: mirror_slab_rank = 0, mirror_plane_rank = 0
   contains
     procedure :: init => init_cuda
-    procedure :: check_decomposition
-    procedure :: spectral_extents
     procedure :: init_case
     procedure :: create_plans
     procedure :: init_dim2_mirror
@@ -121,7 +119,6 @@ module m_cuda_poisson_fft
       a_odd_re_dev, a_odd_im_dev, a_even_re_dev, a_even_im_dev, &
       a_re_dev, a_im_dev
   contains
-    procedure :: check_decomposition => check_decomposition_010
     procedure :: init_case => init_case_010
     procedure :: fft_postprocess => fft_postprocess_010_cuda
     procedure :: enforce_periodicity => enforce_periodicity_y_cuda
@@ -131,7 +128,6 @@ module m_cuda_poisson_fft
   type, extends(cuda_poisson_fft_t) :: cuda_poisson_100_t
     !! Non-periodic in x, periodic in y and z
   contains
-    procedure :: check_decomposition => check_decomposition_100
     procedure :: init_case => init_case_100
     procedure :: fft_forward => fft_forward_100_cuda
     procedure :: fft_backward => fft_backward_100_cuda
@@ -151,8 +147,6 @@ module m_cuda_poisson_fft
     real(dp), device, allocatable, dimension(:, :, :, :) :: r_a2a_send_dev, &
                                                             r_a2a_recv_dev
   contains
-    procedure :: check_decomposition => check_decomposition_110
-    procedure :: spectral_extents => spectral_extents_110
     procedure :: init_case => init_case_110
     procedure :: create_plans => create_plans_110
     procedure :: fft_forward => fft_forward_110_cuda
@@ -185,7 +179,7 @@ module m_cuda_poisson_fft
 
   private :: sync_or_abort, yslab_view_110, &
              redistribution_launch_config, redistribution_alltoall, &
-             init_cuda, require_z_decomposition
+             init_cuda
 
   !> create_fft_plan is deliberately public: the static memory estimator
   !> (m_cuda_memcheck_device, src/backend/cuda/memcheck_device.f90)
@@ -529,22 +523,31 @@ contains
 
     integer :: nx, ny, nz
 
-    integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
+    character(len=100) :: reason
 
+    integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
+    integer :: fft_n(3), fft_n_loc(2)
     integer :: fw_plan_type, bw_plan_type
 
-    ! Set ahead of everything else, spectral_extents and create_plans read it
+    ! Set ahead of everything else, base_init reads it
     self%bc_code = poisson_bc_code(mesh%grid%periodic_BC)
+
+    ! The decomposition checks, the spectral extents and the plan setup are
+    ! the helpers x3d2-memcheck shares, so the estimate follows the solver.
 
     ! 1D decomposition along Z in real domain, and along Y in spectral space
     if (mesh%par%nproc_dir(2) /= 1) &
       call log_warn('nproc_dir in y-dir must be 1')
-    call self%check_decomposition(mesh)
-
-    ! Work out the spectral dimensions in the permuted state
     dims_glob = mesh%get_global_dims(CELL)
     dims_loc = mesh%get_dims(CELL)
-    call self%spectral_extents(mesh, dims_glob, dims_loc, n_spec, n_sp_st)
+    reason = cuda_fft_decomp_reason(mesh%grid%bc_code, dims_loc, &
+                                    mesh%par%nproc_dir)
+    if (len_trim(reason) > 0) call abort_run(trim(reason))
+
+    ! Work out the spectral dimensions in the permuted state
+    call cuda_fft_spectral_dims(mesh%grid%bc_code, dims_glob, dims_loc, &
+                                mesh%par%nproc_dir, mesh%par%nrank_dir, &
+                                n_spec, n_sp_st)
 
     call self%base_init(mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
 
@@ -552,13 +555,9 @@ contains
     ny = self%ny_glob
     nz = self%nz_glob
 
-    if (is_sp) then
-      fw_plan_type = CUFFT_R2C
-      bw_plan_type = CUFFT_C2R
-    else
-      fw_plan_type = CUFFT_D2Z
-      bw_plan_type = CUFFT_Z2D
-    end if
+    ! Determine FFT plan dimensions and types
+    call cuda_fft_plan_setup(mesh%grid%bc_code, dims_glob, dims_loc, fft_n, &
+                             fft_n_loc, fw_plan_type, bw_plan_type)
 
     allocate (self%waves_dev(self%nx_spec, self%ny_spec, self%nz_spec))
     self%waves_dev = self%waves
@@ -582,7 +581,8 @@ contains
     ! the dim2 mirror there, and the cuFFTMp check below reads it.
     call self%init_case(mesh)
 
-    call self%create_plans(mesh, dims_loc, fw_plan_type, bw_plan_type)
+    call self%create_plans(mesh, fft_n, fft_n_loc, fw_plan_type, &
+                           bw_plan_type)
 
     ! use_cufftmp is only settled once create_fft_plan has run, because plain
     ! cuFFT is a fallback taken inside it, so unlike the decomposition checks
@@ -595,142 +595,6 @@ contains
     end if
 
   end subroutine init_cuda
-
-  subroutine check_decomposition(self, mesh)
-    !! Stops on a decomposition the case cannot run on. The 000 case runs on
-    !! any 1D z decomposition.
-    implicit none
-
-    class(cuda_poisson_fft_t) :: self
-    type(mesh_t), intent(in) :: mesh
-  end subroutine check_decomposition
-
-  subroutine require_z_decomposition(mesh)
-    !! The 100 and 110 cases on multiple ranks run cuFFTMp on a 1D z
-    !! decomposition.
-    implicit none
-
-    type(mesh_t), intent(in) :: mesh
-
-    if (mesh%par%nproc > 1) then
-      if (mesh%par%nproc_dir(1) /= 1 .or. mesh%par%nproc_dir(2) /= 1) then
-        call abort_run('The 100 and 110 cases on multiple ranks need a 1D z &
-                       &decomposition, nproc_dir must be [1, 1, nproc].')
-      end if
-    end if
-
-  end subroutine require_z_decomposition
-
-  subroutine check_decomposition_010(self, mesh)
-    implicit none
-
-    class(cuda_poisson_010_t) :: self
-    type(mesh_t), intent(in) :: mesh
-
-    if (mesh%par%nproc > 1) then
-      call abort_run('Multiple ranks are not yet supported for the 010 case &
-                     &in the CUDA backend!')
-    end if
-
-  end subroutine check_decomposition_010
-
-  subroutine check_decomposition_100(self, mesh)
-    implicit none
-
-    class(cuda_poisson_100_t) :: self
-    type(mesh_t), intent(in) :: mesh
-
-    integer :: dims_loc(3)
-
-    call require_z_decomposition(mesh)
-
-    dims_loc = mesh%get_dims(CELL)
-    if (mesh%par%nproc > 1) then
-      if (mod(dims_loc(1), mesh%par%nproc_dir(3)) /= 0) then
-        call abort_run('The 100 case on multiple ranks needs the number of x &
-                       &cells to divide by the number of ranks.')
-      end if
-    end if
-
-  end subroutine check_decomposition_100
-
-  subroutine check_decomposition_110(self, mesh)
-    implicit none
-
-    class(cuda_poisson_110_t) :: self
-    type(mesh_t), intent(in) :: mesh
-
-    integer :: dims_loc(3)
-
-    call require_z_decomposition(mesh)
-
-    dims_loc = mesh%get_dims(CELL)
-    if (mesh%par%nproc > 1) then
-      if (mod(dims_loc(1), mesh%par%nproc_dir(3)) /= 0 .or. &
-          mod(dims_loc(2), mesh%par%nproc_dir(3)) /= 0) then
-        call abort_run('The 110 case on multiple ranks needs the number of x &
-                       &and y cells to divide by the number of ranks.')
-      end if
-    end if
-
-  end subroutine check_decomposition_110
-
-  subroutine spectral_extents(self, mesh, dims_glob, dims_loc, n_spec, &
-                              n_sp_st)
-    !! Local extents and offsets of the spectral slab, whose dimensions are
-    !! laid out as spectral_dirs gives. dim1 holds the r2c modes and dim2 is
-    !! split across ranks, as cuFFTMp leaves it, while dim3 is z, whole.
-    !! This serves the 000, 010 and 100 cases.
-    implicit none
-
-    class(cuda_poisson_fft_t) :: self
-    type(mesh_t), intent(in) :: mesh
-    integer, intent(in) :: dims_glob(3), dims_loc(3)
-    integer, intent(out) :: n_spec(3), n_sp_st(3)
-
-    integer :: dirs(3)
-
-    dirs = spectral_dirs(self%bc_code)
-
-    n_spec(1) = dims_loc(dirs(1))/2 + 1
-    n_spec(2) = dims_loc(dirs(2))/mesh%par%nproc_dir(3)
-    n_spec(3) = dims_glob(3)
-
-    n_sp_st(1) = 0
-    n_sp_st(2) = dims_loc(dirs(2))/mesh%par%nproc_dir(3) &
-                 *mesh%par%nrank_dir(3)
-    n_sp_st(3) = 0
-
-  end subroutine spectral_extents
-
-  subroutine spectral_extents_110(self, mesh, dims_glob, dims_loc, n_spec, &
-                                  n_sp_st)
-    !! R2C Z-transpose: spectral array is (nz/2+1, nx, ny) on 1 rank.
-    !! dim1 = Z R2C modes, dim2 = X spectrum, dim3 = Y full spectrum.
-    !! On P ranks the cuFFTMp Y-slab transform shuffles the spectral
-    !! output to split dim2 (X) instead of leaving it whole, same as the
-    !! 100 case's dim2 split.
-    implicit none
-
-    class(cuda_poisson_110_t) :: self
-    type(mesh_t), intent(in) :: mesh
-    integer, intent(in) :: dims_glob(3), dims_loc(3)
-    integer, intent(out) :: n_spec(3), n_sp_st(3)
-
-    n_spec(1) = dims_glob(3)/2 + 1
-    if (mesh%par%nproc > 1) then
-      n_spec(2) = dims_loc(1)/mesh%par%nproc_dir(3)
-      n_sp_st(2) = dims_loc(1)/mesh%par%nproc_dir(3)*mesh%par%nrank_dir(3)
-    else
-      n_spec(2) = dims_loc(1)
-      n_sp_st(2) = 0
-    end if
-    n_spec(3) = dims_loc(2)
-
-    n_sp_st(1) = 0
-    n_sp_st(3) = 0
-
-  end subroutine spectral_extents_110
 
   subroutine init_case(self, mesh)
     !! Sets up the device state of the case ahead of the FFT plans. The 000
@@ -819,24 +683,19 @@ contains
 
   end subroutine init_dim2_mirror
 
-  subroutine create_plans(self, mesh, dims_loc, fw_plan_type, bw_plan_type)
+  subroutine create_plans(self, mesh, fft_n, fft_n_loc, fw_plan_type, &
+                          bw_plan_type)
     !! Standard R2C/C2R plans on the grid permuted into the spectral layout,
-    !! with cuFFTMp fallback. This serves the 000, 010 and 100 cases.
+    !! with cuFFTMp fallback. This serves the 000, 010 and 100 cases. fft_n
+    !! and fft_n_loc are the plan dimensions from cuda_fft_plan_setup.
     implicit none
 
     class(cuda_poisson_fft_t) :: self
     type(mesh_t), intent(in) :: mesh
-    integer, intent(in) :: dims_loc(3), fw_plan_type, bw_plan_type
+    integer, intent(in) :: fft_n(3), fft_n_loc(2)
+    integer, intent(in) :: fw_plan_type, bw_plan_type
 
-    integer :: ierr, dirs(3), n_glob(3)
-
-    integer :: fft_n(3), fft_n1_loc, fft_n2_loc
-
-    ! 000, 010: FFT on (nx, ny, nz); 100: transpose X<->Y, FFT on (ny, nx, nz)
-    dirs = spectral_dirs(self%bc_code)
-    n_glob = [self%nx_glob, self%ny_glob, self%nz_glob]
-    fft_n = n_glob(dirs)
-    fft_n1_loc = dims_loc(dirs(1)); fft_n2_loc = dims_loc(dirs(2))
+    integer :: ierr
 
     call create_fft_plan_pair(self%plan3D_fw, self%plan3D_bw, &
                               self%use_cufftmp, fft_n, &
@@ -850,7 +709,7 @@ contains
     else
       ! For R2C: nx_spec is nx/2+1 (or ny/2+1 for 100 case)
       allocate (self%c_dev(self%nx_spec, self%ny_spec, self%nz_spec))
-      allocate (self%r_dev(fft_n1_loc, fft_n2_loc, self%nz_loc))
+      allocate (self%r_dev(fft_n_loc(1), fft_n_loc(2), self%nz_loc))
     end if
 
     if (self%use_cufftmp) then
@@ -861,7 +720,7 @@ contains
 
   end subroutine create_plans
 
-  subroutine create_plans_110(self, mesh, dims_loc, fw_plan_type, &
+  subroutine create_plans_110(self, mesh, fft_n, fft_n_loc, fw_plan_type, &
                               bw_plan_type)
     !! R2C with Z-transpose, on (nz, nx, ny). A single rank keeps the plain
     !! cuFFT path; on multiple ranks cuFFTMp distributes the transform, and
@@ -871,7 +730,8 @@ contains
 
     class(cuda_poisson_110_t) :: self
     type(mesh_t), intent(in) :: mesh
-    integer, intent(in) :: dims_loc(3), fw_plan_type, bw_plan_type
+    integer, intent(in) :: fft_n(3), fft_n_loc(2)
+    integer, intent(in) :: fw_plan_type, bw_plan_type
 
     integer :: ierr, nx, ny, nz
 
@@ -882,7 +742,7 @@ contains
     self%use_cufftmp = mesh%par%nproc > 1
 
     call create_fft_plan_pair(self%plan3D_fw, self%plan3D_bw, &
-                              self%use_cufftmp, [nz, nx, ny], &
+                              self%use_cufftmp, fft_n, &
                               fw_plan_type, bw_plan_type, ' 110')
 
     if (self%use_cufftmp) then
