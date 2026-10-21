@@ -12,31 +12,59 @@ program test_transeq
   !!   dw   = 0
   !!   dphi = u*u - 1/2*phi*phi - nu*phi
   use iso_fortran_env, only: stderr => error_unit
-  use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
 
   use m_allocator, only: allocator_t, field_t
   use m_backend_runtime, only: backend_runtime_t
   use m_base_backend, only: base_backend_t
-  use m_common, only: dp, pi, MPI_X3D2_DP, DIR_X, DIR_Y, DIR_Z, VERT
+  use m_common, only: dp, pi, DIR_X, DIR_Y, DIR_Z, VERT
   use m_mesh, only: mesh_t
   use m_tdsops_setup, only: allocate_tdsops
   use m_tdsops, only: dirps_t
-  use m_test_utils, only: initialise_mpi, finalise_test
+  use m_test_utils, only: initialise_mpi, finalise_test, relative_l2_error
 
   implicit none
 
   logical :: allpass = .true.
-  integer :: nrank, nproc, ierr
+  integer :: nrank, nproc
 
-  ! Roundoff floor of the second-derivative term is ~eps/dx^2, which at
-  ! 96 points per period is ~1e-4 in single precision.
+  ! The tolerance bounds the relative L2 error. The dw residual is measured
+  ! against the du analytical field, since the dw reference is zero. Largest
+  ! value measured over du, dv, dw and the species check:
+  !   double precision, fixed tol 1e-8 (truncation dominated, the error
+  !   falls on the finer grid):
+  !     96 points: 9.6863e-10 (margin 10.3)
+  !     120 points, 5 ranks: 2.6e-10 (margin 38)
+  !     192 points, 8 ranks: 6.2e-11 (margin 160)
+  !     384 points, 16 ranks: 4.5e-11
+  !   single precision, OpenMP backend (gfortran), tol = K*eps/dx^2:
+  !     96 points: 8.3407e-05, 192 points: 2.4383e-04
+  ! The single precision error is roundoff dominated, ~eps/dx^2 from the
+  ! second-derivative term, so it grows with the grid. With dx = 2*pi/n_glob
+  ! the measured error is 3.0 eps/dx^2 at 96 points and 2.2 at 192. K is the
+  ! smallest {1,2,5}x10^k value at least 10x the largest ratio, so K = 50.
+  ! This gives tol = 1.39e-3 (margin 16.7) at 96 points and tol = 5.57e-3
+  ! (margin 22.8) at 192 points.
 #ifdef SINGLE_PREC
-  real(dp), parameter :: tol = 5e-3_dp
+  real(dp), parameter :: tol_k = 50._dp
+  real(dp) :: tol
 #else
   real(dp), parameter :: tol = 1e-8_dp
 #endif
   real(dp), parameter :: nu = 1._dp
-  integer, parameter :: n_glob = 96
+  ! The global grid on which the tolerances for 1 to 4 ranks were measured.
+  ! It divides by 1, 2, 3 and 4 ranks.
+  integer, parameter :: n_glob_min = 96
+  ! The distributed compact solve needs enough points per rank. No constant
+  ! in src sets this limit: tdsops_init only warns when the entry that the
+  ! distributed solver disregards exceeds a tolerance. The value is measured
+  ! at 8 ranks in double precision (tol 1e-8, du error): 12 points per rank
+  ! gives 8.9e-6 and 16 gives 1.6e-7, both fail. 20 gives 3.1e-9, which
+  ! passes with a margin of only 3.2. 24 gives 6.2e-11 (margin 160). From 5
+  ! ranks up the global grid is finer than 96, so the dp error is below the
+  ! 96 point value (see above). The sp error grows with the roundoff term
+  ! eps/dx^2, which the tolerance follows.
+  integer, parameter :: min_points_per_rank = 24
+  integer :: n_glob
 
   type(backend_runtime_t), target :: runtime
   type(mesh_t), target :: mesh
@@ -49,12 +77,16 @@ program test_transeq
   integer :: n, n_groups, dims(3)
 
   call initialise_mpi(nrank, nproc)
+  n_glob = max(n_glob_min, min_points_per_rank*nproc)
   if (nrank == 0) print *, 'Parallel run with', nproc, 'ranks'
 
   mesh = mesh_t([n_glob, n_glob, n_glob], [nproc, 1, 1], &
                 [2*pi, 2*pi, 2*pi], &
                 ['periodic', 'periodic'], ['periodic', 'periodic'], &
                 ['periodic', 'periodic'])
+#ifdef SINGLE_PREC
+  tol = tol_k*epsilon(1.0_dp)/mesh%geo%d(DIR_X)**2
+#endif
 
   call runtime%init(mesh)
   backend => runtime%backend
@@ -96,7 +128,8 @@ program test_transeq
   call check('transeq_x dv', du_data, &
              u_data*u_data - 0.5_dp*v_data*v_data - nu*v_data)
   call backend%get_field_data(du_data, dw, DIR_X)
-  call check('transeq_x dw', du_data, 0._dp*u_data)
+  call check('transeq_x dw', du_data, 0._dp*u_data, &
+             -1.5_dp*u_data*v_data - nu*u_data)
 
   ! Passive scalar phi = cos(x), transported by u; v holds phi
   call backend%transeq_species(dv, u, v, nu, xdirps, .true.)
@@ -138,18 +171,25 @@ contains
     end do
   end subroutine fill_line
 
-  subroutine check(label, computed, expected)
+  subroutine check(label, computed, expected, ref)
+    !! Relative L2 error of computed against expected.  The reference norm
+    !! is that of expected unless ref is given, which is needed when expected
+    !! is zero.
     character(*), intent(in) :: label
     real(dp), intent(in) :: computed(:, :, :), expected(:, :, :)
+    real(dp), intent(in), optional :: ref(:, :, :)
 
     real(dp) :: norm
 
-    norm = sum((computed(:, 1:n, 1:n_groups) &
-                - expected(:, 1:n, 1:n_groups))**2)
-    norm = norm/real(n_glob, dp)/real(n_groups*size(computed, 1), dp)
-    call MPI_Allreduce(MPI_IN_PLACE, norm, 1, MPI_X3D2_DP, &
-                       MPI_SUM, MPI_COMM_WORLD, ierr)
-    norm = sqrt(norm)
+    if (present(ref)) then
+      norm = relative_l2_error(computed(:, 1:n, 1:n_groups) &
+                               - expected(:, 1:n, 1:n_groups), &
+                               ref(:, 1:n, 1:n_groups))
+    else
+      norm = relative_l2_error(computed(:, 1:n, 1:n_groups) &
+                               - expected(:, 1:n, 1:n_groups), &
+                               expected(:, 1:n, 1:n_groups))
+    end if
 
     if (nrank == 0) then
       print *, 'error norm ', label, norm
