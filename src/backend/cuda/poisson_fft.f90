@@ -35,9 +35,9 @@ module m_cuda_poisson_fft
                              process_spectral_010_fw, &
                              process_spectral_010_poisson, &
                              process_spectral_010_bw, &
-                             process_spectral_100_fw, &
-                             process_spectral_100_pair_fw, &
-                             process_spectral_100_pair_bw, &
+                             process_spectral_fw, &
+                             process_spectral_pair_fw, &
+                             process_spectral_pair_bw, &
                              pack_spectral_plane, &
                              pack_110_xyz_to_yslab, unpack_110_yslab, &
                              pack_110_yslab, unpack_110_yslab_to_xyz
@@ -1368,7 +1368,7 @@ contains
     ! The same argument swap as above applies.
 
     ! Stage 1: normalisation, then the Y (R2C) and Z postprocess
-    call process_spectral_100_fw<<<blocks, threads>>>( & !&
+    call process_spectral_fw<<<blocks, threads>>>( & !&
       c_dev, self%nx_spec, self%ny_spec, &
       self%ny_glob, self%nx_glob, self%nz_glob, &  ! SWAP nx <-> ny
       self%ay_dev, self%by_dev, &  ! dim1 uses Y coefficients
@@ -1379,7 +1379,7 @@ contains
     call self%exchange_dim2_mirror(c_dev)
 
     ! Stage 2: X paired split (forward), then the Poisson solve
-    call process_spectral_100_pair_fw<<<blocks, threads>>>( & !&
+    call process_spectral_pair_fw<<<blocks, threads>>>( & !&
       c_dev, self%c_mirror_dev, self%c_plane_recv_dev, self%waves_dev, &
       self%nx_spec, self%ny_spec, self%sp_st(2), &  ! dims and dim2 offset
       self%ny_glob, self%nz_glob, &  ! SWAP nx <-> ny
@@ -1391,7 +1391,7 @@ contains
 
     ! Stage 3: X paired recombination (backward), then the Y and Z
     ! postprocess
-    call process_spectral_100_pair_bw<<<blocks, threads>>>( & !&
+    call process_spectral_pair_bw<<<blocks, threads>>>( & !&
       c_dev, self%c_mirror_dev, self%c_plane_recv_dev, &
       self%nx_spec, self%ny_spec, self%sp_st(2), &  ! dims and dim2 offset
       self%ny_glob, self%nz_glob, &  ! SWAP nx <-> ny
@@ -1535,7 +1535,7 @@ contains
       ! 010 case is x, y, z.
 
       ! Stage 1: normalisation, then the X (R2C) and Z postprocess
-      call process_spectral_100_fw<<<blocks, threads>>>( & !&
+      call process_spectral_fw<<<blocks, threads>>>( & !&
         c_dev, self%nx_spec, self%ny_spec, &
         self%nx_glob, self%ny_glob, self%nz_glob, &
         self%ax_dev, self%bx_dev, &  ! dim1 uses X coefficients
@@ -1546,7 +1546,7 @@ contains
       call self%exchange_dim2_mirror(c_dev)
 
       ! Stage 2: Y paired split (forward), then the Poisson solve
-      call process_spectral_100_pair_fw<<<blocks, threads>>>( & !&
+      call process_spectral_pair_fw<<<blocks, threads>>>( & !&
         c_dev, self%c_mirror_dev, self%c_plane_recv_dev, self%waves_dev, &
         self%nx_spec, self%ny_spec, self%sp_st(2), &  ! dims and dim2 offset
         self%nx_glob, self%nz_glob, &
@@ -1558,7 +1558,7 @@ contains
 
       ! Stage 3: Y paired recombination (backward), then the Z and X
       ! postprocess
-      call process_spectral_100_pair_bw<<<blocks, threads>>>( & !&
+      call process_spectral_pair_bw<<<blocks, threads>>>( & !&
         c_dev, self%c_mirror_dev, self%c_plane_recv_dev, &
         self%nx_spec, self%ny_spec, self%sp_st(2), &  ! dims and dim2 offset
         self%nx_glob, self%nz_glob, &
