@@ -335,6 +335,10 @@ define_test(unit/test_logger.f90 ${serial} omp)
 if(NOT np EQUAL serial)
   define_test(unit/test_logger.f90 ${np} omp)
 endif()
+define_test(unit/test_relative_l2_error.f90 ${serial} omp)
+if(NOT np EQUAL serial)
+  define_test(unit/test_relative_l2_error.f90 ${np} omp)
+endif()
 # abort_run must stop every rank and report the error, whether one rank fails
 # or all of them do. ctest checks the output rather than the exit code: a hang
 # times out, and a run that returns from abort_run prints the FAIL line.
@@ -343,6 +347,17 @@ foreach(mode one_rank collective)
   define_test(unit/test_logger_abort.f90 ${np} omp ${mode})
   set_tests_properties(test_logger_abort_omp_${np}_${mode} PROPERTIES
     PASS_REGULAR_EXPRESSION "ERROR: deliberate"
+    FAIL_REGULAR_EXPRESSION "must never be reached"
+    TIMEOUT 60)
+endforeach()
+unset(X3D2_TEST_NAME_SUFFIX)
+# relative_l2_error must stop on a zero reference or a non-finite input. ctest
+# checks the output, not the exit code: MPI_Abort's depends on the launcher.
+foreach(mode zero_ref nonfinite)
+  set(X3D2_TEST_NAME_SUFFIX _${mode})
+  define_test(unit/test_relative_l2_error.f90 ${np} omp ${mode})
+  set_tests_properties(test_relative_l2_error_omp_${np}_${mode} PROPERTIES
+    PASS_REGULAR_EXPRESSION "ERROR: relative_l2_error"
     FAIL_REGULAR_EXPRESSION "must never be reached"
     TIMEOUT 60)
 endforeach()
@@ -394,6 +409,17 @@ function(define_backend_tests backend)
   # Verification tests (numerical correctness vs analytical solutions)
   define_verification_test(verification/test_time_integrator.f90 ${serial} ${backend})
   define_verification_test(verification/test_tridiag.f90 ${np} ${backend})
+  # tol_hyper must reject zero and sign-flipped output. The expected failure
+  # gives a non-zero exit, so ctest checks the output, not the exit code.
+  foreach(mode zero_output sign_flip)
+    set(X3D2_TEST_NAME_SUFFIX _${mode})
+    define_verification_test(verification/test_tridiag.f90 ${np} ${backend} ${mode})
+    set_tests_properties(test_tridiag_${backend}_${np}_${mode} PROPERTIES
+      PASS_REGULAR_EXPRESSION "Check 2nd ders, hyperviscous, dir-neu\\.\\.\\. failed"
+      FAIL_REGULAR_EXPRESSION "Check 2nd ders, hyperviscous, dir-neu\\.\\.\\. passed"
+      TIMEOUT 60)
+  endforeach()
+  unset(X3D2_TEST_NAME_SUFFIX)
   define_verification_test(verification/test_penta.f90 ${np} ${backend})
   define_verification_test(verification/test_transeq.f90 ${np} ${backend})
   define_verification_test(verification/test_les_field.f90 ${serial} ${backend})
