@@ -28,7 +28,7 @@ module m_backend_setup
   implicit none
 
   private
-  public :: backend_setup_t, backend_name
+  public :: backend_setup_t, backend_name, poisson_uses_2decomp
 
 #ifdef CUDA
   character(len=*), parameter :: backend_name = 'CUDA'
@@ -60,6 +60,15 @@ module m_backend_setup
   end type backend_setup_t
 
 contains
+
+  pure logical function poisson_uses_2decomp(poisson_solver_type)
+    !! Whether the Poisson solver of this build runs on 2decomp: only the FFT
+    !! solver of the OMP backend does.
+    character(len=*), intent(in) :: poisson_solver_type
+
+    poisson_uses_2decomp = poisson_solver_type == 'FFT' &
+                           .and. backend_name == 'OMP'
+  end function poisson_uses_2decomp
 
   subroutine init(self, mesh)
     class(backend_setup_t), target, intent(inout) :: self

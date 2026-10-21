@@ -190,8 +190,8 @@ contains
       bw_max/real(2**30, dp), ' GiB/s'
   end subroutine write_perf_minmax_metrics
 
-  subroutine write_perf_summary(time, n_iters, ndof, consumed_bw, &
-                                mem_clock_rt, mem_bus_width)
+  subroutine write_perf_summary(time, n_iters, ndof, consumed_bw, mem_clock_rt, &
+                                mem_bus_width)
     real(dp), intent(in) :: time
     integer, intent(in) :: n_iters
     integer, intent(in) :: ndof

@@ -183,9 +183,15 @@ module m_cuda_poisson_fft
     end function cufftExecC2R_C
   end interface
 
-  private :: create_fft_plan, sync_or_abort, yslab_view_110, &
+  private :: sync_or_abort, yslab_view_110, &
              redistribution_launch_config, redistribution_alltoall, &
              init_cuda, require_z_decomposition
+
+  !> create_fft_plan is deliberately public: the static memory estimator
+  !> (m_cuda_memcheck_device, src/backend/cuda/memcheck_device.f90)
+  !> calls it standalone (plan only, no mesh/case/fields) to capture the
+  !> real cuFFT/cuFFTMp workspace size via its worksize out-argument,
+  !> instead of duplicating cufftMakePlan3D's call sequence a second time.
 
 contains
 
@@ -204,7 +210,8 @@ contains
   end subroutine sync_or_abort
 
   subroutine create_fft_plan(plan, use_cufftmp, nx, ny, nz, &
-                             plan_type, plan_name)
+                             plan_type, plan_name, worksize_out, &
+                             stat, auto_alloc_off)
     !! Helper subroutine to create FFT plan with automatic cuFFTMp fallback
     implicit none
 
@@ -212,12 +219,26 @@ contains
     logical, intent(inout) :: use_cufftmp
     integer, intent(in) :: nx, ny, nz, plan_type
     character(*), intent(in) :: plan_name
+    !> Set to cufftMakePlan3D's reported workspace size (bytes) when
+    !> present. Optional and unused by every real solver call site (init,
+    !> below); added only so the static memory estimator can read the exact
+    !> FFT workspace size without a second, duplicate cufftMakePlan3D call.
+    integer(int_ptr_kind()), optional, intent(out) :: worksize_out
+    !> When present, a failed plain cuFFT plan creation returns its cuFFT
+    !> error code here instead of stopping. Used only by the static memory
+    !> estimator; the solver call sites leave it out and keep the stop.
+    integer, optional, intent(out) :: stat
+    !> When present and true, a cuFFTMp plan is made with auto-allocation off.
+    !> The plan then reports its workspace size in worksize_out and does not
+    !> allocate the workspace. Used only by the static memory estimator.
+    logical, optional, intent(in) :: auto_alloc_off
 
     integer :: ierr
     integer(int_ptr_kind()) :: worksize
     logical :: cufftmp_failed
 
     cufftmp_failed = .false.
+    if (present(stat)) stat = 0
     ierr = cufftCreate(plan)
 
 #ifndef MPI
@@ -236,8 +257,12 @@ contains
         call log_warn('cuFFTMp: MPI attach failed (error '//str(ierr)//')')
         cufftmp_failed = .true.
       else
+        if (present(auto_alloc_off)) then
+          if (auto_alloc_off) ierr = cufftSetAutoAllocation(plan, 0)
+        end if
         ! MPI attach succeeded, create the plan
-        ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
+        if (ierr == 0) &
+          ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
         if (ierr /= 0) then
           call log_warn('cuFFTMp: Plan creation failed (error ' &
                         //str(ierr)//')')
@@ -258,10 +283,209 @@ contains
     ! create plan with cuFFT
     if (.not. use_cufftmp) then
       ierr = cufftMakePlan3D(plan, nz, ny, nx, plan_type, worksize)
+      if (present(stat) .and. ierr /= 0) then
+        stat = ierr
+        ierr = cufftDestroy(plan)
+        return
+      end if
       call check_cufft(ierr, trim(plan_name)//' 3D FFT plan generation')
     end if
 
+    if (present(worksize_out)) worksize_out = worksize
+
   end subroutine create_fft_plan
+
+  subroutine create_fft_plan_pair(plan_fw, plan_bw, use_cufftmp, fft_n, &
+                                  fw_type, bw_type, label, worksize_fw, &
+                                  worksize_bw, stat, no_auto_alloc)
+    !! Creates the forward and the backward FFT plan the way the solver does.
+    !! A backward plan that forces the fallback to plain cuFFT makes the
+    !! forward plan, built on cuFFTMp, get rebuilt on plain cuFFT, so both
+    !! plans end on the same library. Shared by the solver init and the
+    !! x3d2-memcheck probe. The optional arguments are the ones of
+    !! create_fft_plan. label is appended to the plan names in the messages.
+    !! When stat is present and not zero, the plans made so far are destroyed
+    !! and the other plan is left undefined.
+    implicit none
+
+    integer, intent(inout) :: plan_fw, plan_bw
+    logical, intent(inout) :: use_cufftmp
+    integer, intent(in) :: fft_n(3), fw_type, bw_type
+    character(*), intent(in) :: label
+    integer(int_ptr_kind()), optional, intent(out) :: worksize_fw, worksize_bw
+    integer, optional, intent(out) :: stat
+    logical, optional, intent(in) :: no_auto_alloc
+
+    integer :: ierr
+    logical :: fw_was_cufftmp
+
+    call create_fft_plan(plan_fw, use_cufftmp, fft_n(1), fft_n(2), fft_n(3), &
+                         fw_type, 'Forward'//label, worksize_fw, stat, &
+                         no_auto_alloc)
+    if (present(stat)) then
+      if (stat /= 0) return
+    end if
+    fw_was_cufftmp = use_cufftmp
+
+    ! Create the backward plan with automatic cuFFTMp detection/fallback
+    call create_fft_plan(plan_bw, use_cufftmp, fft_n(1), fft_n(2), fft_n(3), &
+                         bw_type, 'Backward'//label, worksize_bw, stat, &
+                         no_auto_alloc)
+    if (present(stat)) then
+      if (stat /= 0) then
+        ierr = cufftDestroy(plan_fw)
+        return
+      end if
+    end if
+
+    ! If the backward plan forced the fallback, rebuild the forward plan too
+    if (fw_was_cufftmp .and. (.not. use_cufftmp)) then
+      ierr = cufftDestroy(plan_fw)
+      call check_cufft(ierr, 'cufftDestroy (fwd, cuFFTMp fallback rebuild)')
+      call create_fft_plan(plan_fw, use_cufftmp, fft_n(1), fft_n(2), &
+                           fft_n(3), fw_type, 'Forward'//label, worksize_fw, &
+                           stat)
+      if (present(stat)) then
+        if (stat /= 0) then
+          ierr = cufftDestroy(plan_bw)
+          return
+        end if
+      end if
+    end if
+
+  end subroutine create_fft_plan_pair
+
+  pure function cuda_fft_decomp_reason(bc_code, cdims, nproc_dir) &
+    result(reason)
+    !! The reason the solver cannot run the BC class bc_code on the cell
+    !! dimensions cdims and the decomposition nproc_dir, blank when it can.
+    !! The text is the message the solver init aborts with. Shared by the
+    !! solver init and x3d2-memcheck.
+    implicit none
+
+    integer, intent(in) :: bc_code
+    integer, intent(in) :: cdims(3), nproc_dir(3)
+    character(len=100) :: reason
+
+    integer :: nproc
+
+    reason = ''
+    nproc = product(nproc_dir)
+    if ((bc_code == FFT_BC_100 .or. bc_code == FFT_BC_110) &
+        .and. nproc > 1 .and. (nproc_dir(1) /= 1 .or. nproc_dir(2) /= 1)) then
+      reason = 'The 100 and 110 cases on multiple ranks need a 1D z &
+               &decomposition, nproc_dir must be [1, 1, nproc].'
+    else if (bc_code == FFT_BC_010 .and. nproc > 1) then
+      reason = 'Multiple ranks are not yet supported for the 010 case &
+               &in the CUDA backend!'
+    else if (bc_code == FFT_BC_100 .and. nproc > 1 &
+             .and. mod(cdims(1), nproc_dir(3)) /= 0) then
+      reason = 'The 100 case on multiple ranks needs the number of x &
+               &cells to divide by the number of ranks.'
+    else if (bc_code == FFT_BC_110 .and. nproc > 1 &
+             .and. (mod(cdims(1), nproc_dir(3)) /= 0 &
+                    .or. mod(cdims(2), nproc_dir(3)) /= 0)) then
+      reason = 'The 110 case on multiple ranks needs the number of x &
+               &and y cells to divide by the number of ranks.'
+    end if
+
+  end function cuda_fft_decomp_reason
+
+  pure subroutine cuda_fft_spectral_dims(bc_code, dims_glob, dims_loc, &
+                                         nproc_dir, nrank_dir, n_spec, n_sp_st)
+    !! The size n_spec and the offset n_sp_st of the local spectral pencil in
+    !! the permuted state, for the BC class bc_code on the cell dimensions
+    !! dims_glob and dims_loc, the decomposition nproc_dir and the rank
+    !! position nrank_dir. A BC class the solver does not support gives
+    !! zeros. Shared by the solver init and the x3d2-memcheck estimate.
+    implicit none
+
+    integer, intent(in) :: bc_code
+    integer, intent(in) :: dims_glob(3), dims_loc(3)
+    integer, intent(in) :: nproc_dir(3), nrank_dir(3)
+    integer, intent(out) :: n_spec(3), n_sp_st(3)
+
+    n_spec = 0
+    n_sp_st = 0
+
+    if (bc_code == FFT_BC_100) then
+      n_spec(1) = dims_loc(2)/2 + 1
+      n_spec(2) = dims_loc(1)/nproc_dir(3)
+      n_spec(3) = dims_glob(3)
+
+      n_sp_st(1) = 0
+      n_sp_st(2) = dims_loc(1)/nproc_dir(3)*nrank_dir(3)
+      n_sp_st(3) = 0
+
+    else if (bc_code == FFT_BC_110) then
+      ! R2C Z-transpose: spectral array is (nz/2+1, nx, ny) on 1 rank.
+      ! dim1 = Z R2C modes, dim2 = X spectrum, dim3 = Y full spectrum.
+      ! On P ranks the cuFFTMp Y-slab transform shuffles the spectral
+      ! output to split dim2 (X) instead of leaving it whole, same as the
+      ! 100 case's dim2 split.
+      n_spec(1) = dims_glob(3)/2 + 1
+      if (product(nproc_dir) > 1) then
+        n_spec(2) = dims_loc(1)/nproc_dir(3)
+        n_sp_st(2) = dims_loc(1)/nproc_dir(3)*nrank_dir(3)
+      else
+        n_spec(2) = dims_loc(1)
+        n_sp_st(2) = 0
+      end if
+      n_spec(3) = dims_loc(2)
+
+      n_sp_st(1) = 0
+      n_sp_st(3) = 0
+
+    else if (bc_code == FFT_BC_010 .or. bc_code == FFT_BC_000) then
+      n_spec(1) = dims_loc(1)/2 + 1
+      n_spec(2) = dims_loc(2)/nproc_dir(3)
+      n_spec(3) = dims_glob(3)
+
+      n_sp_st(1) = 0
+      n_sp_st(2) = dims_loc(2)/nproc_dir(3)*nrank_dir(3)
+      n_sp_st(3) = 0
+    end if
+
+  end subroutine cuda_fft_spectral_dims
+
+  pure subroutine cuda_fft_plan_setup(bc_code, dims_glob, dims_loc, fft_n, &
+                                      fft_n_loc, fw_type, bw_type)
+    !! The cuFFT plan dimensions and types of a BC class. The 100 case
+    !! transposes X<->Y and runs the FFT on (ny, nx, nz), the 110 case
+    !! transposes to (nz, nx, ny) with R2C along Z, and the 000 and 010 cases
+    !! run it on (nx, ny, nz). fft_n holds the global plan dimensions and
+    !! fft_n_loc the local extents of the first two. Shared by the solver
+    !! init and the x3d2-memcheck probe.
+    implicit none
+
+    integer, intent(in) :: bc_code
+    integer, intent(in) :: dims_glob(3), dims_loc(3)
+    integer, intent(out) :: fft_n(3), fft_n_loc(2)
+    integer, intent(out) :: fw_type, bw_type
+
+    if (bc_code == FFT_BC_100) then
+      ! 100: transpose X<->Y, FFT on (ny, nx, nz)
+      fft_n = [dims_glob(2), dims_glob(1), dims_glob(3)]
+      fft_n_loc = [dims_loc(2), dims_loc(1)]
+    else if (bc_code == FFT_BC_110) then
+      ! 110: transpose to (nz, nx, ny), R2C along Z
+      fft_n = [dims_glob(3), dims_glob(1), dims_glob(2)]
+      fft_n_loc = [dims_glob(3), dims_loc(1)]
+    else
+      ! 000, 010: FFT on (nx, ny, nz)
+      fft_n = dims_glob
+      fft_n_loc = [dims_loc(1), dims_loc(2)]
+    end if
+
+    if (is_sp) then
+      fw_type = CUFFT_R2C
+      bw_type = CUFFT_C2R
+    else
+      fw_type = CUFFT_D2Z
+      bw_type = CUFFT_Z2D
+    end if
+
+  end subroutine cuda_fft_plan_setup
 
   subroutine create_cuda_poisson_fft(poisson_fft, mesh, xdirps, ydirps, &
                                      zdirps, lowmem)
@@ -605,31 +829,18 @@ contains
     integer, intent(in) :: dims_loc(3), fw_plan_type, bw_plan_type
 
     integer :: ierr, dirs(3), n_glob(3)
-    logical :: fw_was_cufftmp
 
-    integer :: fft_n1, fft_n2, fft_n3, fft_n1_loc, fft_n2_loc
+    integer :: fft_n(3), fft_n1_loc, fft_n2_loc
 
     ! 000, 010: FFT on (nx, ny, nz); 100: transpose X<->Y, FFT on (ny, nx, nz)
     dirs = spectral_dirs(self%bc_code)
     n_glob = [self%nx_glob, self%ny_glob, self%nz_glob]
-    fft_n1 = n_glob(dirs(1)); fft_n2 = n_glob(dirs(2))
-    fft_n3 = n_glob(dirs(3))
+    fft_n = n_glob(dirs)
     fft_n1_loc = dims_loc(dirs(1)); fft_n2_loc = dims_loc(dirs(2))
 
-    call create_fft_plan(self%plan3D_fw, self%use_cufftmp, &
-                         fft_n1, fft_n2, fft_n3, fw_plan_type, 'Forward')
-    fw_was_cufftmp = self%use_cufftmp
-
-    ! Create backward FFT plan with automatic cuFFTMp detection/fallback
-    call create_fft_plan(self%plan3D_bw, self%use_cufftmp, &
-                         fft_n1, fft_n2, fft_n3, bw_plan_type, 'Backward')
-
-    ! If backward plan forced fallback, rebuild forward plan too
-    if (fw_was_cufftmp .and. (.not. self%use_cufftmp)) then
-      ierr = cufftDestroy(self%plan3D_fw)
-      call create_fft_plan(self%plan3D_fw, self%use_cufftmp, &
-                           fft_n1, fft_n2, fft_n3, fw_plan_type, 'Forward')
-    end if
+    call create_fft_plan_pair(self%plan3D_fw, self%plan3D_bw, &
+                              self%use_cufftmp, fft_n, &
+                              fw_plan_type, bw_plan_type, '')
 
     ! Allocate storage - cuFFTMp uses xtdesc, cuFFT uses c_dev
     if (self%use_cufftmp) then
@@ -670,10 +881,9 @@ contains
 
     self%use_cufftmp = mesh%par%nproc > 1
 
-    call create_fft_plan(self%plan3D_fw, self%use_cufftmp, &
-                         nz, nx, ny, fw_plan_type, 'Forward 110')
-    call create_fft_plan(self%plan3D_bw, self%use_cufftmp, &
-                         nz, nx, ny, bw_plan_type, 'Backward 110')
+    call create_fft_plan_pair(self%plan3D_fw, self%plan3D_bw, &
+                              self%use_cufftmp, [nz, nx, ny], &
+                              fw_plan_type, bw_plan_type, ' 110')
 
     if (self%use_cufftmp) then
       ierr = cufftXtMalloc(self%plan3D_fw, self%xtdesc, &
