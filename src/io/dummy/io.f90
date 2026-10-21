@@ -52,6 +52,7 @@ module m_io_backend
     procedure :: read_data_integer => read_data_integer_dummy
     procedure :: read_data_real => read_data_real_dummy
     procedure :: read_data_array_3d => read_data_array_3d_dummy
+    procedure :: read_shape_3d => read_shape_3d_dummy
   end type io_dummy_reader_t
 
   type, extends(io_writer_t) :: io_dummy_writer_t
@@ -185,6 +186,16 @@ contains
     array = 0.0_dp
     call report_read_error(variable_name)
   end subroutine read_data_array_3d_dummy
+
+  subroutine read_shape_3d_dummy(self, variable_name, shape_dims, file_handle)
+    class(io_dummy_reader_t), intent(inout) :: self
+    character(len=*), intent(in) :: variable_name
+    integer(i8), intent(out) :: shape_dims(3)
+    class(io_file_t), intent(inout) :: file_handle
+
+    shape_dims = 0_i8
+    call report_read_error(variable_name)
+  end subroutine read_shape_3d_dummy
 
   subroutine reader_finalise_dummy(self)
     class(io_dummy_reader_t), intent(inout) :: self

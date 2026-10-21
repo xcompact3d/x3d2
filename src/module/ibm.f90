@@ -14,7 +14,7 @@ module m_ibm
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, i8, pi, DIR_X, DIR_C, VERT
   use m_field, only: field_t
-  use m_logger, only: log_info, abort_run, check_mpi
+  use m_logger, only: log_info, abort_run, check_mpi, str
   use m_mesh, only: mesh_t
 
   implicit none
@@ -40,45 +40,31 @@ module m_ibm
 
 contains
 
-  function init(backend, mesh, host_allocator) result(ibm)
+  function init(backend, mesh, host_allocator, ibm_file) result(ibm)
     implicit none
 
     class(base_backend_t), target, intent(inout) :: backend
     type(mesh_t), target, intent(inout) :: mesh
     type(allocator_t), target, intent(inout) :: host_allocator
+    character(len=*), intent(in) :: ibm_file
     type(ibm_t) :: ibm
 
     logical :: file_exists
-    integer :: ierr, dims(3)
+    integer :: ierr, dims(3), global_dims(3)
     real(dp), allocatable :: field_data(:, :, :)
     class(field_t), pointer :: ep1
     type(reader_session_t) :: reader_session
-    character(len=16) :: ibm_file
-    character(len=3) :: case_suffix
-    logical :: periodic_x, periodic_y, periodic_z
-    integer(i8) :: start_dims(3), count_dims(3), iibm_i8
+    integer(i8) :: start_dims(3), count_dims(3), file_dims(3), iibm_i8
 
     ibm%backend => backend
     ibm%mesh => mesh
     ibm%host_allocator => host_allocator
 
-    ! Derive periodicity case from mesh
-    periodic_x = mesh%grid%periodic_BC(1)
-    periodic_y = mesh%grid%periodic_BC(2)
-    periodic_z = mesh%grid%periodic_BC(3)
-
-    ! Build suffix like "000", "010", "100", "110"
-    case_suffix(1:1) = '0'; if (.not. periodic_x) case_suffix(1:1) = '1'
-    case_suffix(2:2) = '0'; if (.not. periodic_y) case_suffix(2:2) = '1'
-    case_suffix(3:3) = '0'; if (.not. periodic_z) case_suffix(3:3) = '1'
-
-    ibm_file = "ibm_"//case_suffix//".bp"
-
     ! Print which file is being read
     call log_info('IBM: reading '//trim(ibm_file))
 
     ! Stop if the file is missing
-    if (mesh%par%is_root()) inquire (file=ibm_file, exist=file_exists)
+    if (mesh%par%is_root()) inquire (file=trim(ibm_file), exist=file_exists)
     call MPI_Bcast(file_exists, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
     call check_mpi(ierr, 'MPI_Bcast of the IBM file check')
     if (.not. file_exists) then
@@ -95,6 +81,18 @@ contains
 
     ! Basic IBM only needs ep1 on the vertices
     if (ibm%iibm == iibm_basic) then
+
+      ! The mask must be sampled on this mesh's vertices, so a mask made
+      ! for another grid is rejected here rather than read partially
+      global_dims = mesh%get_global_dims(VERT)
+      call reader_session%read_shape("ep1", file_dims)
+      if (any(file_dims /= int(global_dims, i8))) then
+        call abort_run('IBM mask in '//trim(ibm_file)//' is ' &
+                       //dims_str(int(file_dims))//' but the mesh has ' &
+                       //dims_str(global_dims)//' vertices. Regenerate &
+                       &the mask for this grid.', &
+                       collective=.true.)
+      end if
 
       ! Read the vertex mask ep1
       !
@@ -162,5 +160,15 @@ contains
     end if
 
   end subroutine body
+
+  function dims_str(dims) result(s)
+    !! Formats 3D dimensions as "nx x ny x nz"
+    implicit none
+
+    integer, intent(in) :: dims(3)
+    character(len=:), allocatable :: s
+
+    s = str(dims(1))//' x '//str(dims(2))//' x '//str(dims(3))
+  end function dims_str
 
 end module m_ibm

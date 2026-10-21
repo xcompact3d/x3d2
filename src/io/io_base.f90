@@ -64,6 +64,7 @@ module m_io_base
     procedure(read_data_integer), deferred :: read_data_integer
     procedure(read_data_real), deferred :: read_data_real
     procedure(read_data_array_3d), deferred :: read_data_array_3d
+    procedure(read_shape_3d), deferred :: read_shape_3d
   end type io_reader_t
 
   !> Base I/O writer type for polymorphic usage
@@ -153,6 +154,14 @@ module m_io_base
       integer(i8), intent(in), optional :: start_dims(3)
       integer(i8), intent(in), optional :: count_dims(3)
     end subroutine read_data_array_3d
+
+    subroutine read_shape_3d(self, variable_name, shape_dims, file_handle)
+      import :: io_reader_t, io_file_t, i8
+      class(io_reader_t), intent(inout) :: self
+      character(len=*), intent(in) :: variable_name
+      integer(i8), intent(out) :: shape_dims(3)
+      class(io_file_t), intent(inout) :: file_handle
+    end subroutine read_shape_3d
 
     subroutine writer_init(self, comm, name)
       import :: io_writer_t

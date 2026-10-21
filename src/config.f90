@@ -32,6 +32,7 @@ module m_config
   type, extends(base_config_t) :: solver_config_t
     real(dp) :: Re, dt
     logical :: ibm_on
+    character(len=256) :: ibm_file !! IBM mask file, read when ibm_on
     real(dp), dimension(:), allocatable :: pr_species
     integer :: n_iters, n_output, n_species
     logical :: lowmem_transeq, lowmem_fft
@@ -210,6 +211,7 @@ contains
 
     real(dp) :: Re, dt
     logical :: ibm_on = .false.
+    character(len=256) :: ibm_file = 'ibm.bp'
     real(dp), dimension(n_species_max) :: pr_species = 1._dp
     integer :: n_iters, n_output, n_species = 0
     !> triggers the low memory implementations
@@ -237,7 +239,7 @@ contains
       spatial_filter, filter_alpha, &
       n_species, pr_species, lowmem_transeq, lowmem_fft, &
       time_intg, der1st_scheme, der2nd_scheme, interpl_scheme, &
-      stagder_scheme, ibm_on, c_nu, nu0_nu
+      stagder_scheme, ibm_on, ibm_file, c_nu, nu0_nu
 
     if (present(nml_file) .and. present(nml_string)) then
       call abort_run('Reading solver config failed! Provide only a file name &
@@ -260,6 +262,7 @@ contains
     self%spatial_filter = spatial_filter
     self%filter_alpha = filter_alpha
     self%ibm_on = ibm_on
+    self%ibm_file = ibm_file
     self%n_species = n_species
     if (n_species > 0) self%pr_species = pr_species(1:n_species)
     self%lowmem_transeq = lowmem_transeq

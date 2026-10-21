@@ -94,6 +94,7 @@ module m_io_session
     procedure, private :: read_data_integer
     procedure, private :: read_data_real
     procedure, private :: read_data_array_3d
+    procedure :: read_shape => read_shape_3d
     final :: reader_session_finaliser
   end type reader_session_t
 
@@ -211,6 +212,16 @@ contains
       start_dims=start_dims, count_dims=count_dims, shape_dims=shape_dims &
       )
   end subroutine read_data_array_3d
+
+  subroutine read_shape_3d(self, variable_name, shape_dims)
+    !! Returns the global shape of a 3D variable without reading its data
+    class(reader_session_t), intent(inout) :: self
+    character(len=*), intent(in) :: variable_name
+    integer(i8), intent(out) :: shape_dims(3)
+
+    if (.not. self%is_open) call abort_run("IO session not open")
+    call self%reader%read_shape_3d(variable_name, shape_dims, self%file)
+  end subroutine read_shape_3d
 
   ! Writer session procedures
   subroutine writer_session_open(self, filename, comm)

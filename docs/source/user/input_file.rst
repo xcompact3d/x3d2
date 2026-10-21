@@ -102,6 +102,33 @@ scales almost untouched. It is set in the ``solver_params`` namelist block.
 
   **Default:** ``0.49``
 
+Immersed Boundary
+~~~~~~~~~~~~~~~~~
+
+Solid bodies are imposed with a mask ``ep1`` read from an ADIOS2 file: ``1``
+in the fluid, ``0`` in the solid. It is set in the ``solver_params`` namelist
+block.
+
+.. code-block:: fortran
+
+   &solver_params
+     ...
+     ibm_on = .true.
+     ibm_file = 'cylinder.bp'
+   /
+
+``ibm_on``
+  Enables the immersed boundary method.
+
+  **Default:** ``.false.``
+
+``ibm_file``
+  ADIOS2 file holding the mask. ``ep1`` is sampled on the mesh vertices, so
+  its size must equal ``dims_global``; the run stops with an error if it does
+  not. Regenerate the mask whenever the grid changes.
+
+  **Default:** ``'ibm.bp'``
+
 Atmospheric Boundary Layer Parameters
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
