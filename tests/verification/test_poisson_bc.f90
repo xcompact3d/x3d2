@@ -66,6 +66,19 @@ program test_poisson
 
   implicit none
 
+  ! One Poisson scheme configuration: Contains the derivative schemes that may be chosen for the Poisson solver 
+  ! and associated components.
+
+  type :: poisson_deriv_case_t
+    integer :: order
+    character(30) :: deriv1_scheme, deriv2_scheme, interpl_scheme, stagder_scheme
+  end type poisson_deriv_case_t
+
+  type(poisson_deriv_case_t), parameter :: deriv_cases(*) = [ &
+    poisson_deriv_case_t(2, "compact2", "compact2", "classic2", "compact2"), &
+    poisson_deriv_case_t(6, "compact6", "compact6", "classic", "compact6") &
+    ]
+
   ! One BC configuration: the grid and the BC of each direction (the same at
   ! both ends of a direction)
   type :: bc_case_t
@@ -168,11 +181,14 @@ program test_poisson
   integer :: nrank, nproc
   integer :: ic, idx, iarg, ios
   integer :: nproc_dir(3)
+  integer :: scheme
   character(len=32) :: arg
   character(len=len(arg)) :: only_bc
   character(len=4*size(cases)) :: codes
   logical :: config_run(size(cases))
   logical :: allpass
+
+  type(poisson_deriv_case_t) :: deriv_cfg
 
   ! Per-config results for final summary
   type(test_result_t) :: results(size(tests), size(cases))
@@ -204,6 +220,18 @@ program test_poisson
           'test_poisson_bc: --nproc_dir needs three integers, <px>,<py>,<pz>'
         error stop 1
       end if
+    else if (trim(arg) == '--scheme') then
+      ! --scheme <scheme> sets the derivative schemes that are employed for the Poisson solver: "second" = second, "sixth" = sixth.
+      call get_command_argument(iarg + 1, arg)
+      read(arg, *) scheme
+      select case (scheme)
+        case (2)
+          deriv_cfg = deriv_cases(1)
+        case (6)
+          deriv_cfg = deriv_cases(2)
+        case default
+          error stop "Unexpected scheme selected."
+      end select
     end if
   end do
 
@@ -232,7 +260,7 @@ program test_poisson
   end if
 
   do ic = 1, size(cases)
-    if (config_run(ic)) call run_config(ic, cases(ic), nproc_dir)
+    if (config_run(ic)) call run_config(ic, cases(ic), deriv_cfg, nproc_dir)
   end do
 
   ! ---- Grand summary ----
@@ -245,6 +273,8 @@ program test_poisson
     write (stderr, '(A)') &
       '  ======================================================='
     write (stderr, '(A)') ''
+    write (stderr, '(A, I0)') &
+    'Poisson scheme order: ', scheme
     write (stderr, '(2X,A5,2X,A10,A4,A14,A14,2X,A6,2X,A8,2X,A)') &
       'BC', 'Type      ', '  n ', '  Poisson L2  ', &
       '  DivGrad L2  ', 'Result', 'Expected', ''
@@ -277,16 +307,17 @@ contains
   ! ================================================================
   ! Run all 8 cosine tests for one BC configuration
   ! ================================================================
-  subroutine run_config(config_id, cfg, nproc_dir)
+  subroutine run_config(config_id, cfg, deriv_cfg, nproc_dir)
     integer, intent(in) :: config_id
     type(bc_case_t), intent(in) :: cfg
+    type(poisson_deriv_case_t), intent(in) :: deriv_cfg
     integer, intent(in) :: nproc_dir(3)
 
     type(poisson_ctx_t), target :: ctx
 
     integer :: idx
 
-    call setup_case(ctx, cfg, nproc_dir)
+    call setup_case(ctx, cfg, deriv_cfg, nproc_dir)
 
     ! Run all 8 cosine tests
     do idx = 1, size(tests)
@@ -298,8 +329,9 @@ contains
   ! ================================================================
   ! Set up the context of one BC configuration, once for all its tests
   ! ================================================================
-  subroutine setup_case(ctx, cfg, nproc_dir)
+  subroutine setup_case(ctx, cfg, deriv_cfg, nproc_dir)
     type(poisson_ctx_t), target, intent(inout) :: ctx
+    type(poisson_deriv_case_t), intent(in) :: deriv_cfg
     type(bc_case_t), intent(in) :: cfg
     integer, intent(in) :: nproc_dir(3)
 
@@ -347,12 +379,12 @@ contains
     ctx%xdirps%dir = DIR_X
     ctx%ydirps%dir = DIR_Y
     ctx%zdirps%dir = DIR_Z
-    call allocate_tdsops(ctx%xdirps, ctx%backend, ctx%mesh, 'compact6', &
-                         'compact6', 'classic', 'compact6')
-    call allocate_tdsops(ctx%ydirps, ctx%backend, ctx%mesh, 'compact6', &
-                         'compact6', 'classic', 'compact6')
-    call allocate_tdsops(ctx%zdirps, ctx%backend, ctx%mesh, 'compact6', &
-                         'compact6', 'classic', 'compact6')
+    call allocate_tdsops(ctx%xdirps, ctx%backend, ctx%mesh, deriv_cfg%deriv1_scheme, &
+    deriv_cfg%deriv2_scheme, deriv_cfg%interpl_scheme, deriv_cfg%stagder_scheme)
+    call allocate_tdsops(ctx%ydirps, ctx%backend, ctx%mesh, deriv_cfg%deriv1_scheme, &
+    deriv_cfg%deriv2_scheme, deriv_cfg%interpl_scheme, deriv_cfg%stagder_scheme)
+    call allocate_tdsops(ctx%zdirps, ctx%backend, ctx%mesh, deriv_cfg%deriv1_scheme, &
+    deriv_cfg%deriv2_scheme, deriv_cfg%interpl_scheme, deriv_cfg%stagder_scheme)
 
     ! Setup vector calculus and Poisson FFT directly
     ctx%vector_calculus = vector_calculus_t(ctx%backend)
