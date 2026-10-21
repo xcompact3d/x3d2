@@ -1767,6 +1767,11 @@ contains
     case (X_FACE)
       if (size(data_start, 1) /= dims(2) .or. size(data_start, 2) /= dims(3)) &
         call abort_run('set_field_face_data: X_FACE planes must be (ny, nz).')
+      if (present(data_end)) then
+        if (size(data_end, 1) /= dims(2) .or. size(data_end, 2) /= dims(3)) &
+          call abort_run('set_field_face_data: X_FACE planes must be &
+                         &(ny, nz).')
+      end if
       blocks = dim3((SZ - 1)/64 + 1, ((dims(2) - 1)/SZ + 1)*dims(3), 1)
       threads = dim3(64, 1, 1)
       call field_set_x_face_from_plane<<<blocks, threads>>>( &      !&
@@ -1775,6 +1780,11 @@ contains
     case (Y_FACE)
       if (size(data_start, 1) /= dims(1) .or. size(data_start, 2) /= dims(3)) &
         call abort_run('set_field_face_data: Y_FACE planes must be (nx, nz).')
+      if (present(data_end)) then
+        if (size(data_end, 1) /= dims(1) .or. size(data_end, 2) /= dims(3)) &
+          call abort_run('set_field_face_data: Y_FACE planes must be &
+                         &(nx, nz).')
+      end if
       blocks = dim3((dims(1) - 1)/64 + 1, dims(3), 1)
       threads = dim3(64, 1, 1)
       call field_set_y_face_from_plane<<<blocks, threads>>>( &      !&
