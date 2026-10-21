@@ -595,10 +595,13 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
   # rows predicted, print the num_gpus=64 line, and exit with a verdict code
   # (0 to 2, exit 0 is legitimate as the grid fits per GPU) without an error
   # stop or an NVSHMEM abort. The calibration line is the only line that may
-  # name NVSHMEM.
+  # name NVSHMEM. On a card where every 2048^3/64 row exceeds 95% of the
+  # memory (for example 16 GB) the note is suppressed, and the correct outcome
+  # is exit 2 with DOES_NOT_FIT on the num_gpus=64 line, which the test also
+  # accepts.
   define_memcheck_build_edit_test(memcheck_default_TGV_probe_skipped
     "s/^dims_global *=.*/dims_global = 2048, 2048, 2048/;s/^nproc_dir *=.*/nproc_dir = 1, 1, 64/"
-    "if test $rc -le 2 && grep -qF 'no full-grid probe: the plans need ' $d/build.log && grep -qF 'predicted rows follow' $d/build.log && grep -q '| predicted *| ' $d/build.log && grep -q 'Requested nproc_dir gives num_gpus=64' $d/build.log && ! grep -qi 'error stop' $d/build.log && ! grep -i nvshmem $d/build.log | grep -qv 'Calibration on this GPU'; then echo memcheck_default_TGV_probe_skipped_OK; fi"
+    "if { test $rc -le 2 && grep -qF 'no full-grid probe: the plans need ' $d/build.log && grep -qF 'predicted rows follow' $d/build.log && grep -q '| predicted *| ' $d/build.log && grep -q 'Requested nproc_dir gives num_gpus=64' $d/build.log && ! grep -qi 'error stop' $d/build.log && ! grep -i nvshmem $d/build.log | grep -qv 'Calibration on this GPU'; } || { test $rc -eq 2 && grep -q 'Requested nproc_dir gives num_gpus=64: .* - DOES_NOT_FIT' $d/build.log && ! grep -qi 'error stop' $d/build.log && ! grep -i nvshmem $d/build.log | grep -qv 'Calibration on this GPU'; }; then echo memcheck_default_TGV_probe_skipped_OK; fi"
     "")
 
   # The report prints the CUDA context line once, and in the default mode it
