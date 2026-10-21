@@ -70,9 +70,9 @@ module m_cuda_poisson_fft
     complex(dp), device, allocatable, dimension(:, :, :) :: c_dev
     !> cuFFT real workspace (input/output of R2C/C2R)
     real(dp), device, allocatable, dimension(:, :, :) :: r_dev
-    !> dim2 mirror of the local spectral slab, used by the 100 and 110 cases
-    !> to reach the paired split partner that lives on another rank. Only
-    !> init_dim2_mirror allocates it, and init_cuda reads its allocation
+    !> dim2 mirror of the local spectral slab, used by the 010, 100 and 110
+    !> cases to reach the paired split partner that lives on another rank.
+    !> Only init_dim2_mirror allocates it, and init_cuda reads its allocation
     !> status as "this case needs cuFFTMp".
     complex(dp), device, allocatable, dimension(:, :, :) :: c_mirror_dev
     !> Staging copy of the local slab, sent in place of c_dev itself.
@@ -359,19 +359,21 @@ contains
 
     integer, intent(in) :: bc_code
     integer, intent(in) :: cdims(3), nproc_dir(3)
-    character(len=100) :: reason
+    character(len=110) :: reason
 
     integer :: nproc
 
     reason = ''
     nproc = product(nproc_dir)
-    if ((bc_code == FFT_BC_100 .or. bc_code == FFT_BC_110) &
+    if ((bc_code == FFT_BC_010 .or. bc_code == FFT_BC_100 &
+         .or. bc_code == FFT_BC_110) &
         .and. nproc > 1 .and. (nproc_dir(1) /= 1 .or. nproc_dir(2) /= 1)) then
-      reason = 'The 100 and 110 cases on multiple ranks need a 1D z &
+      reason = 'The 010, 100 and 110 cases on multiple ranks need a 1D z &
                &decomposition, nproc_dir must be [1, 1, nproc].'
-    else if (bc_code == FFT_BC_010 .and. nproc > 1) then
-      reason = 'Multiple ranks are not yet supported for the 010 case &
-               &in the CUDA backend!'
+    else if (bc_code == FFT_BC_010 .and. nproc > 1 &
+             .and. mod(cdims(2), nproc_dir(3)) /= 0) then
+      reason = 'The 010 case on multiple ranks needs the number of y &
+               &cells to divide by the number of ranks.'
     else if (bc_code == FFT_BC_100 .and. nproc > 1 &
              .and. mod(cdims(1), nproc_dir(3)) /= 0) then
       reason = 'The 100 case on multiple ranks needs the number of x &
@@ -523,7 +525,7 @@ contains
 
     integer :: nx, ny, nz
 
-    character(len=100) :: reason
+    character(len=110) :: reason
 
     integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
     integer :: fft_n(3), fft_n_loc(2)
@@ -555,6 +557,13 @@ contains
 
     call self%base_init(mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
 
+    ! The staged y pairing of the 010 case does not handle y stretching
+    if (self%bc_code == '010' .and. self%stretched_y &
+        .and. mesh%par%nproc > 1) then
+      call abort_run('The 010 case on multiple ranks does not yet support &
+                     &y stretching.')
+    end if
+
     nx = self%nx_glob
     ny = self%ny_glob
     nz = self%nz_glob
@@ -581,7 +590,7 @@ contains
     ! Try cuFFTMp first, with automatic fallback to cuFFT if not supported
     self%use_cufftmp = .true.
 
-    ! init_case must run before create_plans: the 100 and 110 cases set up
+    ! init_case must run before create_plans: the 010, 100 and 110 cases set up
     ! the dim2 mirror there, and the cuFFTMp check below reads it.
     call self%init_case(mesh)
 
@@ -592,10 +601,10 @@ contains
     ! cuFFT is a fallback taken inside it, so unlike the decomposition checks
     ! above this one cannot move ahead of the plans. c_mirror_dev is
     ! allocated only by init_dim2_mirror, so it is allocated exactly on the
-    ! multi-rank paths of the 100 and 110 cases.
+    ! multi-rank paths of the 010, 100 and 110 cases.
     if (allocated(self%c_mirror_dev) .and. (.not. self%use_cufftmp)) then
-      call abort_run('The 100 and 110 cases on multiple ranks need cuFFTMp, &
-                     &plain cuFFT cannot decompose the transform.')
+      call abort_run('The 010, 100 and 110 cases on multiple ranks need &
+                     &cuFFTMp, plain cuFFT cannot decompose the transform.')
     end if
 
   end subroutine init_cuda
@@ -614,6 +623,8 @@ contains
 
     class(cuda_poisson_010_t) :: self
     type(mesh_t), intent(in) :: mesh
+
+    call self%init_dim2_mirror(mesh)
 
     ! if stretching in y is 'centred' or 'top-bottom'
     if (self%stretched_y .and. self%stretched_y_sym) then
@@ -660,7 +671,7 @@ contains
   end subroutine init_case_110
 
   subroutine init_dim2_mirror(self, mesh)
-    !! The 100 and 110 cases pair each dim2 spectral mode with its mirror,
+    !! The 010, 100 and 110 cases pair each dim2 spectral mode with its mirror,
     !! which cuFFTMp may place on another rank. Slab index r of P owns global
     !! dim2 modes [r*m + 1, (r + 1)*m] with m = ny_spec, and the mirror of
     !! that range is slab P - 1 - r shifted up by one plane, so the extra
@@ -1510,12 +1521,50 @@ contains
     end if
 
     ! Postprocess div_u in spectral space
-    if (.not. self%stretched_y) then
+    if (.not. self%stretched_y .and. self%mesh%par%nproc == 1) then
       call process_spectral_010<<<blocks, threads>>>( & !&
         c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%sp_st(2), &
         self%nx_glob, self%ny_glob, self%nz_glob, &
         self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
         self%az_dev, self%bz_dev &
+        )
+    else if (.not. self%stretched_y) then
+      ! On multiple ranks the y paired split reaches its partner through a
+      ! mirror exchange, so the same work is staged across three launches.
+      ! The staged kernels take the dim1, dim2, dim3 order, which for the
+      ! 010 case is x, y, z.
+
+      ! Stage 1: normalisation, then the X (R2C) and Z postprocess
+      call process_spectral_100_fw<<<blocks, threads>>>( & !&
+        c_dev, self%nx_spec, self%ny_spec, &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax_dev, self%bx_dev, &  ! dim1 uses X coefficients
+        self%az_dev, self%bz_dev &   ! dim3 uses Z coefficients
+        )
+
+      ! Fetch the Y pairing partners that live on other ranks
+      call self%exchange_dim2_mirror(c_dev)
+
+      ! Stage 2: Y paired split (forward), then the Poisson solve
+      call process_spectral_100_pair_fw<<<blocks, threads>>>( & !&
+        c_dev, self%c_mirror_dev, self%c_plane_recv_dev, self%waves_dev, &
+        self%nx_spec, self%ny_spec, self%sp_st(2), &  ! dims and dim2 offset
+        self%nx_glob, self%nz_glob, &
+        self%ay_dev, self%by_dev &  ! dim2 uses Y coefficients
+        )
+
+      ! Stage 2 rewrote every mode, so the mirror is stale and is refreshed
+      call self%exchange_dim2_mirror(c_dev)
+
+      ! Stage 3: Y paired recombination (backward), then the Z and X
+      ! postprocess
+      call process_spectral_100_pair_bw<<<blocks, threads>>>( & !&
+        c_dev, self%c_mirror_dev, self%c_plane_recv_dev, &
+        self%nx_spec, self%ny_spec, self%sp_st(2), &  ! dims and dim2 offset
+        self%nx_glob, self%nz_glob, &
+        self%ax_dev, self%bx_dev, &  ! dim1 uses X coefficients
+        self%ay_dev, self%by_dev, &  ! dim2 uses Y coefficients
+        self%az_dev, self%bz_dev &   ! dim3 uses Z coefficients
         )
     else
       call process_spectral_010_fw<<<blocks, threads>>>( & !&
