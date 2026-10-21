@@ -3,7 +3,7 @@ module m_time_integrator
   use m_base_backend, only: base_backend_t
   use m_common, only: dp, DIR_X
   use m_field, only: field_t, flist_t
-  use m_logger, only: log_info, abort_run
+  use m_logger, only: abort_run, log_info
 
   implicit none
 
@@ -51,6 +51,38 @@ module m_time_integrator
 
 contains
 
+  integer function nolds_of(time_intg) result(nolds)
+    !! Number of old-step blocks per variable that a time_intg_t keeps:
+    !! k - 1 for ABk (nstep - 1) and k for RKk (nstage). Static, so that
+    !! x3d2-memcheck can size the history blocks without allocating them.
+    implicit none
+
+    character(len=3), intent(in) :: time_intg
+
+    integer :: order, stat
+
+    nolds = 0
+
+    if (time_intg(1:2) == 'AB') then
+      read (time_intg(3:3), *, iostat=stat) order
+      if (stat /= 0) call abort_run('Error reading AB integration order', &
+                                    collective=.true.)
+      if (order >= 5) call abort_run('Integration order >4 is not supported', &
+                                     collective=.true.)
+      nolds = order - 1
+    else if (time_intg(1:2) == 'RK') then
+      read (time_intg(3:3), *, iostat=stat) order
+      if (stat /= 0) call abort_run('Error reading RK integration order', &
+                                    collective=.true.)
+      if (order >= 5) call abort_run('Integration order >4 is not supported', &
+                                     collective=.true.)
+      nolds = order
+    else
+      call abort_run('Integration method '//time_intg//' is not defined', &
+                     collective=.true.)
+    end if
+  end function nolds_of
+
   subroutine finalize(self)
     implicit none
 
@@ -82,7 +114,7 @@ contains
     character(3), intent(in) :: method
     integer, intent(in) :: nvars
 
-    integer :: i, j, stat
+    integer :: i, j
 
     ! initialize Runge-Kutta coefficients
     ! rk1
@@ -132,31 +164,18 @@ contains
     init%gdt = 0._dp
     init%stage_dt = 0._dp
 
+    init%nolds = nolds_of(init%sname)
+
     if (init%sname(1:2) == 'AB') then
-      read (init%sname(3:3), *, iostat=stat) init%order
-      if (stat /= 0) &
-        call abort_run('Error reading AB integration order', collective=.true.)
-      if (init%order >= 5) &
-        call abort_run('Integration order >4 is not supported', &
-                       collective=.true.)
+      init%order = init%nolds + 1
       init%nstep = init%order
       init%nstage = 1
-      init%nolds = init%nstep - 1
       init%step => adams_bashforth
-    else if (init%sname(1:2) == 'RK') then
-      read (init%sname(3:3), *, iostat=stat) init%order
-      if (stat /= 0) &
-        call abort_run('Error reading RK integration order', collective=.true.)
-      if (init%order >= 5) &
-        call abort_run('Integration order >4 is not supported', &
-                       collective=.true.)
+    else
+      init%order = init%nolds
       init%nstep = 1
       init%nstage = init%order
-      init%nolds = init%nstage
       init%step => runge_kutta
-    else
-      call abort_run('Integration method '//init%sname//' is not defined', &
-                     collective=.true.)
     end if
 
     init%nvars = nvars

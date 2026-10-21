@@ -11,7 +11,7 @@ module m_base_case
   use m_mesh, only: mesh_t
   use m_solver, only: solver_t, init
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
-  use m_config, only: has_output_field
+  use m_config, only: has_output_field, output_field_active
   use m_io_manager, only: io_manager_t
   use m_mpi, only: MPI_COMM_WORLD, MPI_Wtime, MPI_Reduce, MPI_MAX
   use m_logger, only: log_info, abort_run, str
@@ -49,6 +49,9 @@ module m_base_case
     procedure :: case_finalise
     procedure :: finalise_case_specific => finalise_case_specific_default
     procedure :: set_init
+    procedure :: substep
+    procedure :: set_curr_fields
+    procedure :: finish_step
     procedure :: run
   end type base_case_t
 
@@ -195,6 +198,99 @@ contains
 
   end subroutine set_init
 
+  subroutine substep(self, curr, deriv, iter)
+    !! One time-integrator sub-stage: case-specific BCs, transeq, forcings,
+    !! time integration, case BC re-application, IBM body force, and
+    !! pressure correction. Extracted from run()'s per-sub-stage loop body
+    !! so the same allocation path can be driven directly (e.g. by the
+    !! memory-estimate probe) without going through the full time loop,
+    !! I/O cadence, or diagnostics.
+    implicit none
+
+    class(base_case_t), intent(inout) :: self
+    type(flist_t), intent(inout) :: curr(:), deriv(:)
+    integer, intent(in) :: iter
+
+    integer :: i
+
+    ! first apply case-specific BCs
+    call self%define_BC()
+
+    do i = 1, self%solver%nvars
+      deriv(i)%ptr => self%solver%backend%allocator%get_block(DIR_X)
+    end do
+
+    call self%solver%transeq(deriv, curr)
+
+    ! models that introduce source terms handled here
+    call self%forcings(deriv(1)%ptr, deriv(2)%ptr, deriv(3)%ptr, iter)
+
+    ! time integration
+    call self%solver%time_integrator%step(curr, deriv, self%solver%dt)
+
+    do i = 1, self%solver%nvars
+      call self%solver%backend%allocator%release_block(deriv(i)%ptr)
+    end do
+
+    call self%apply_BC(self%solver%u, self%solver%v, self%solver%w)
+    call self%solver%precorrect_walls(self%solver%u, self%solver%v, &
+                                      self%solver%w)
+    if (self%solver%ibm_on) then
+      call self%solver%ibm%body(self%solver%u, self%solver%v, &
+                                self%solver%w)
+    end if
+
+    call self%solver%pressure_correction(self%solver%u, self%solver%v, &
+                                         self%solver%w)
+  end subroutine substep
+
+  subroutine set_curr_fields(self, curr, deriv)
+    !! Allocates the time integrator field lists and points curr at the
+    !! solver velocity and species fields. Shared by run() and x3d2-memcheck.
+    implicit none
+
+    class(base_case_t), intent(inout) :: self
+    type(flist_t), allocatable, intent(out) :: curr(:)
+    type(flist_t), allocatable, intent(out) :: deriv(:)
+
+    integer :: i
+
+    allocate (curr(self%solver%time_integrator%nvars))
+    allocate (deriv(self%solver%time_integrator%nvars))
+
+    curr(1)%ptr => self%solver%u
+    curr(2)%ptr => self%solver%v
+    curr(3)%ptr => self%solver%w
+    do i = 1, self%solver%nspecies
+      curr(3 + i)%ptr => self%solver%species(i)%ptr
+    end do
+  end subroutine set_curr_fields
+
+  subroutine finish_step(self, iter, output_vorticity, output_qcriterion)
+    !! The per-iteration work after the substeps: sets current_iter and
+    !! computes the pressure and the derived fields. Shared by run() and
+    !! x3d2-memcheck.
+    implicit none
+
+    class(base_case_t), intent(inout) :: self
+    integer, intent(in) :: iter
+    logical, intent(in) :: output_vorticity, output_qcriterion
+
+    self%solver%current_iter = iter
+
+    ! Compute pressure on VERT grid if output_pressure is enabled
+    if (self%solver%keep_pressure) then
+      call compute_pressure_vert(self%solver)
+    end if
+
+    ! Compute postprocess fields (vorticity magnitude, Q-criterion)
+    if (output_vorticity .or. output_qcriterion) then
+      call compute_derived_fields(self%solver, &
+                                  output_vorticity, &
+                                  output_qcriterion)
+    end if
+  end subroutine finish_step
+
   subroutine run(self)
     !! Runs the solver forwards in time from t=t_0 to t=T, performing
     !! postprocessing/IO and reporting diagnostics.
@@ -206,7 +302,7 @@ contains
     type(flist_t), allocatable :: deriv(:)
 
     real(dp) :: t
-    integer :: i, iter, sub_iter, start_iter
+    integer :: iter, sub_iter, start_iter
     logical :: output_vorticity, output_qcriterion
     ! t_start/t_end/t_step0/t_step1 hold raw MPI_Wtime readings, which
     ! are double precision; subtract in double, then convert
@@ -219,12 +315,10 @@ contains
     ! Error: ‘t_step0’ may be used uninitialized in this function [-Werror=maybe-uninitialized]
     t_step0 = 0.0_dp
 
-    output_vorticity = &
-      has_output_field(self%io_mgr%snapshot_mgr%config, 'vorticity') &
-      .and. self%io_mgr%snapshot_mgr%config%snapshot_freq > 0
-    output_qcriterion = &
-      has_output_field(self%io_mgr%snapshot_mgr%config, 'qcriterion') &
-      .and. self%io_mgr%snapshot_mgr%config%snapshot_freq > 0
+    output_vorticity = output_field_active( &
+                       self%io_mgr%snapshot_mgr%config, 'vorticity')
+    output_qcriterion = output_field_active( &
+                        self%io_mgr%snapshot_mgr%config, 'qcriterion')
 
     if (self%io_mgr%is_restart()) then
       t = self%solver%current_iter*self%solver%dt
@@ -247,15 +341,7 @@ contains
 
     call log_info('start run')
 
-    allocate (curr(self%solver%time_integrator%nvars))
-    allocate (deriv(self%solver%time_integrator%nvars))
-
-    curr(1)%ptr => self%solver%u
-    curr(2)%ptr => self%solver%v
-    curr(3)%ptr => self%solver%w
-    do i = 1, self%solver%nspecies
-      curr(3 + i)%ptr => self%solver%species(i)%ptr
-    end do
+    call self%set_curr_fields(curr, deriv)
 
     t_start = MPI_Wtime()
 
@@ -277,35 +363,7 @@ contains
         t_step0 = MPI_Wtime()
       end if
       do sub_iter = 1, self%solver%time_integrator%nstage
-        ! first apply case-specific BCs
-        call self%define_BC()
-
-        do i = 1, self%solver%nvars
-          deriv(i)%ptr => self%solver%backend%allocator%get_block(DIR_X)
-        end do
-
-        call self%solver%transeq(deriv, curr)
-
-        ! models that introduce source terms handled here
-        call self%forcings(deriv(1)%ptr, deriv(2)%ptr, deriv(3)%ptr, iter)
-
-        ! time integration
-        call self%solver%time_integrator%step(curr, deriv, self%solver%dt)
-
-        do i = 1, self%solver%nvars
-          call self%solver%backend%allocator%release_block(deriv(i)%ptr)
-        end do
-
-        call self%apply_BC(self%solver%u, self%solver%v, self%solver%w)
-        call self%solver%precorrect_walls(self%solver%u, self%solver%v, &
-                                          self%solver%w)
-        if (self%solver%ibm_on) then
-          call self%solver%ibm%body(self%solver%u, self%solver%v, &
-                                    self%solver%w)
-        end if
-
-        call self%solver%pressure_correction(self%solver%u, self%solver%v, &
-                                             self%solver%w)
+        call self%substep(curr, deriv, iter)
       end do
 
       ! All ranks measure and reduce; only root prints.
@@ -319,19 +377,7 @@ contains
         call log_info('Time for this time step (s): '//str(t_step))
       end if
 
-      self%solver%current_iter = iter
-
-      ! Compute pressure on VERT grid if output_pressure is enabled
-      if (self%solver%keep_pressure) then
-        call compute_pressure_vert(self%solver)
-      end if
-
-      ! Compute postprocess fields (vorticity magnitude, Q-criterion)
-      if (output_vorticity .or. output_qcriterion) then
-        call compute_derived_fields(self%solver, &
-                                    output_vorticity, &
-                                    output_qcriterion)
-      end if
+      call self%finish_step(iter, output_vorticity, output_qcriterion)
 
       call self%io_mgr%update_stats(self%solver, iter)
 
