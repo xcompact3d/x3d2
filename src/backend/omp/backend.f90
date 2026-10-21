@@ -1572,6 +1572,11 @@ contains
     case (X_FACE)
       if (size(data_start, 1) /= dims(2) .or. size(data_start, 2) /= dims(3)) &
         call abort_run('set_field_face_data: X_FACE planes must be (ny, nz).')
+      if (present(data_end)) then
+        if (size(data_end, 1) /= dims(2) .or. size(data_end, 2) /= dims(3)) &
+          call abort_run('set_field_face_data: X_FACE planes must be &
+                         &(ny, nz).')
+      end if
       !$omp parallel do private(y_block, i_max, k, i)
       do z = 1, dims(3)
         do y_block = 1, n_y_blocks
@@ -1591,6 +1596,11 @@ contains
     case (Y_FACE)
       if (size(data_start, 1) /= dims(1) .or. size(data_start, 2) /= dims(3)) &
         call abort_run('set_field_face_data: Y_FACE planes must be (nx, nz).')
+      if (present(data_end)) then
+        if (size(data_end, 1) /= dims(1) .or. size(data_end, 2) /= dims(3)) &
+          call abort_run('set_field_face_data: Y_FACE planes must be &
+                         &(nx, nz).')
+      end if
       !$omp parallel do private(k_start, k_end, j)
       do z = 1, dims(3)
         k_start = 1 + (z - 1)*y_stride
