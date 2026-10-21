@@ -267,16 +267,18 @@ contains
     ! 1D decomposition along Z in real domain, and along Y in spectral space
     if (mesh%par%nproc_dir(2) /= 1) &
       call log_warn('nproc_dir in y-dir must be 1')
-    if ((poisson_fft%is_100_case .or. poisson_fft%is_110_case) &
-        .and. mesh%par%nproc > 1) then
+    if ((poisson_fft%is_010_case .or. poisson_fft%is_100_case &
+         .or. poisson_fft%is_110_case) .and. mesh%par%nproc > 1) then
       if (mesh%par%nproc_dir(1) /= 1 .or. mesh%par%nproc_dir(2) /= 1) then
-        call abort_run('The 100 and 110 cases on multiple ranks need a 1D z &
-                       &decomposition, nproc_dir must be [1, 1, nproc].')
+        call abort_run('The 010, 100 and 110 cases on multiple ranks need a &
+                       &1D z decomposition, nproc_dir must be [1, 1, nproc].')
       end if
     end if
     if (poisson_fft%is_010_case .and. mesh%par%nproc > 1) then
-      call abort_run('Multiple ranks are not yet supported for the 010 case &
-                     &in the CUDA backend!')
+      if (mesh%geo%stretched(2)) then
+        call abort_run('The 010 case on multiple ranks does not yet support &
+                       &y stretching.')
+      end if
     end if
 
     ! Work out the spectral dimensions in the permuted state
@@ -285,6 +287,12 @@ contains
     if (poisson_fft%is_100_case .and. mesh%par%nproc > 1) then
       if (mod(dims_loc(1), mesh%par%nproc_dir(3)) /= 0) then
         call abort_run('The 100 case on multiple ranks needs the number of x &
+                       &cells to divide by the number of ranks.')
+      end if
+    end if
+    if (poisson_fft%is_010_case .and. mesh%par%nproc > 1) then
+      if (mod(dims_loc(2), mesh%par%nproc_dir(3)) /= 0) then
+        call abort_run('The 010 case on multiple ranks needs the number of y &
                        &cells to divide by the number of ranks.')
       end if
     end if
@@ -371,13 +379,13 @@ contains
                                     poisson_fft%nz_spec))
     poisson_fft%waves_dev = poisson_fft%waves
 
-    ! The 100 and 110 cases pair each dim2 spectral mode with its mirror,
+    ! The 010, 100 and 110 cases pair each dim2 spectral mode with its mirror,
     ! which cuFFTMp may place on another rank. Slab index r of P owns global
     ! dim2 modes [r*m + 1, (r + 1)*m] with m = ny_spec, and the mirror of
     ! that range is slab P - 1 - r shifted up by one plane, so the extra
     ! plane comes from slab P - r. Both partners are symmetric.
-    if ((poisson_fft%is_100_case .or. poisson_fft%is_110_case) &
-        .and. mesh%par%nproc > 1) then
+    if ((poisson_fft%is_010_case .or. poisson_fft%is_100_case &
+         .or. poisson_fft%is_110_case) .and. mesh%par%nproc > 1) then
       poisson_fft%mirror_slab_rank = mesh%par%nproc_dir(3) - 1 &
                                      - mesh%par%nrank_dir(3)
       poisson_fft%mirror_plane_rank = mod(mesh%par%nproc_dir(3) &
@@ -514,10 +522,11 @@ contains
     ! use_cufftmp is only settled once create_fft_plan has run, because plain
     ! cuFFT is a fallback taken inside it, so unlike the decomposition checks
     ! above this one cannot move ahead of the plans.
-    if ((poisson_fft%is_100_case .or. poisson_fft%is_110_case) &
+    if ((poisson_fft%is_010_case .or. poisson_fft%is_100_case &
+         .or. poisson_fft%is_110_case) &
         .and. mesh%par%nproc > 1 .and. (.not. poisson_fft%use_cufftmp)) then
-      call abort_run('The 100 and 110 cases on multiple ranks need cuFFTMp, &
-                     &plain cuFFT cannot decompose the transform.')
+      call abort_run('The 010, 100 and 110 cases on multiple ranks need &
+                     &cuFFTMp, plain cuFFT cannot decompose the transform.')
     end if
 
   end subroutine init_cuda_poisson_fft_t
@@ -1244,12 +1253,50 @@ contains
     end if
 
     ! Postprocess div_u in spectral space
-    if (.not. self%stretched_y) then
+    if (.not. self%stretched_y .and. self%mesh%par%nproc == 1) then
       call process_spectral_010<<<blocks, threads>>>( & !&
         c_dev, self%waves_dev, self%nx_spec, self%ny_spec, self%sp_st(2), &
         self%nx_glob, self%ny_glob, self%nz_glob, &
         self%ax_dev, self%bx_dev, self%ay_dev, self%by_dev, &
         self%az_dev, self%bz_dev &
+        )
+    else if (.not. self%stretched_y) then
+      ! On multiple ranks the y paired split reaches its partner through a
+      ! mirror exchange, so the same work is staged across three launches.
+      ! The staged kernels take the dim1, dim2, dim3 order, which for the
+      ! 010 case is x, y, z.
+
+      ! Stage 1: normalisation, then the X (R2C) and Z postprocess
+      call process_spectral_100_fw<<<blocks, threads>>>( & !&
+        c_dev, self%nx_spec, self%ny_spec, &
+        self%nx_glob, self%ny_glob, self%nz_glob, &
+        self%ax_dev, self%bx_dev, &  ! dim1 uses X coefficients
+        self%az_dev, self%bz_dev &   ! dim3 uses Z coefficients
+        )
+
+      ! Fetch the Y pairing partners that live on other ranks
+      call self%exchange_dim2_mirror(c_dev)
+
+      ! Stage 2: Y paired split (forward), then the Poisson solve
+      call process_spectral_100_pair_fw<<<blocks, threads>>>( & !&
+        c_dev, self%c_mirror_dev, self%c_plane_recv_dev, self%waves_dev, &
+        self%nx_spec, self%ny_spec, self%sp_st(2), &  ! dims and dim2 offset
+        self%nx_glob, self%nz_glob, &
+        self%ay_dev, self%by_dev &  ! dim2 uses Y coefficients
+        )
+
+      ! Stage 2 rewrote every mode, so the mirror is stale and is refreshed
+      call self%exchange_dim2_mirror(c_dev)
+
+      ! Stage 3: Y paired recombination (backward), then the Z and X
+      ! postprocess
+      call process_spectral_100_pair_bw<<<blocks, threads>>>( & !&
+        c_dev, self%c_mirror_dev, self%c_plane_recv_dev, &
+        self%nx_spec, self%ny_spec, self%sp_st(2), &  ! dims and dim2 offset
+        self%nx_glob, self%nz_glob, &
+        self%ax_dev, self%bx_dev, &  ! dim1 uses X coefficients
+        self%ay_dev, self%by_dev, &  ! dim2 uses Y coefficients
+        self%az_dev, self%bz_dev &   ! dim3 uses Z coefficients
         )
     else
       call process_spectral_010_fw<<<blocks, threads>>>( & !&
