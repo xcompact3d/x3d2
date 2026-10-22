@@ -11,7 +11,7 @@ module m_cuda_poisson_fft
   use m_common, only: dp, CELL, is_sp, MPI_X3D2_DP
   use m_field, only: field_t
   use m_mesh
-  use m_poisson_fft, only: poisson_fft_t, poisson_bc_code
+  use m_poisson_fft, only: poisson_fft_t, poisson_bc_code, fft_bc_class
   use m_tdsops, only: dirps_t
 
   use m_cuda_allocator, only: cuda_field_t
@@ -528,24 +528,28 @@ contains
     integer :: dims_glob(3), dims_loc(3), n_spec(3), n_sp_st(3)
     integer :: fft_n(3), fft_n_loc(2)
     integer :: fw_plan_type, bw_plan_type
+    integer :: fft_bc
 
     ! Set ahead of everything else, base_init reads it
     self%bc_code = poisson_bc_code(mesh%grid%periodic_BC)
 
     ! The decomposition checks, the spectral extents and the plan setup are
     ! the helpers x3d2-memcheck shares, so the estimate follows the solver.
+    ! They take the case from self%bc_code, not from mesh%grid%bc_code, so
+    ! the solver classifies the BCs in one place.
+    fft_bc = fft_bc_class(self%bc_code)
 
     ! 1D decomposition along Z in real domain, and along Y in spectral space
     if (mesh%par%nproc_dir(2) /= 1) &
       call log_warn('nproc_dir in y-dir must be 1')
     dims_glob = mesh%get_global_dims(CELL)
     dims_loc = mesh%get_dims(CELL)
-    reason = cuda_fft_decomp_reason(mesh%grid%bc_code, dims_loc, &
+    reason = cuda_fft_decomp_reason(fft_bc, dims_loc, &
                                     mesh%par%nproc_dir)
     if (len_trim(reason) > 0) call abort_run(trim(reason))
 
     ! Work out the spectral dimensions in the permuted state
-    call cuda_fft_spectral_dims(mesh%grid%bc_code, dims_glob, dims_loc, &
+    call cuda_fft_spectral_dims(fft_bc, dims_glob, dims_loc, &
                                 mesh%par%nproc_dir, mesh%par%nrank_dir, &
                                 n_spec, n_sp_st)
 
@@ -556,7 +560,7 @@ contains
     nz = self%nz_glob
 
     ! Determine FFT plan dimensions and types
-    call cuda_fft_plan_setup(mesh%grid%bc_code, dims_glob, dims_loc, fft_n, &
+    call cuda_fft_plan_setup(fft_bc, dims_glob, dims_loc, fft_n, &
                              fft_n_loc, fw_plan_type, bw_plan_type)
 
     allocate (self%waves_dev(self%nx_spec, self%ny_spec, self%nz_spec))

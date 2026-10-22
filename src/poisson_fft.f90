@@ -1,7 +1,8 @@
 module m_poisson_fft
   use m_common, only: dp, pi, CELL
   use m_field, only: field_t
-  use m_mesh, only: mesh_t, geo_t
+  use m_mesh, only: mesh_t, geo_t, FFT_BC_000, FFT_BC_010, FFT_BC_100, &
+                    FFT_BC_110, FFT_BC_UNSUPPORTED
   use m_tdsops, only: dirps_t
   use m_logger, only: log_warn, abort_run
 
@@ -109,6 +110,31 @@ contains
       end if
     end do
   end function poisson_bc_code
+
+  pure function fft_bc_class(bc_code) result(fft_bc)
+    !! The FFT_BC_* class of a poisson_bc_code case, or FFT_BC_UNSUPPORTED.
+    !! The CUDA solver passes it to the helpers it shares with x3d2-memcheck,
+    !! so it classifies through poisson_bc_code alone. x3d2-memcheck has no
+    !! mesh and takes the class from m_mesh's classify_boundaries;
+    !! test_poisson_bc_code checks that the two agree.
+    implicit none
+
+    character(len=3), intent(in) :: bc_code
+    integer :: fft_bc
+
+    select case (bc_code)
+    case ('000')
+      fft_bc = FFT_BC_000
+    case ('010')
+      fft_bc = FFT_BC_010
+    case ('100')
+      fft_bc = FFT_BC_100
+    case ('110')
+      fft_bc = FFT_BC_110
+    case default
+      fft_bc = FFT_BC_UNSUPPORTED
+    end select
+  end function fft_bc_class
 
   pure function spectral_dirs(bc_code) result(dirs)
     !! The physical direction held in each dimension of the spectral array.
