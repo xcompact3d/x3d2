@@ -102,6 +102,11 @@ reads ``not checked (NVML gave no usable process list)`` when an NVML call
 fails or the list does not hold the PID of the tool. The tool then does not
 skip the ``CHECK`` line.
 
+The ``ctest`` label ``memcheck-accuracy`` selects strict copies of these
+tests, named ``<test>_accuracy``. They fail on a skipped ``CHECK`` line. Run
+them by hand on an exclusive GPU. The labels ``unit`` and ``verification``
+do not select them.
+
 The real build writes no case output files. It switches off ``monitoring.csv``,
 the turbine ``disc<t>.adm`` files and the ABL profile file.
 
