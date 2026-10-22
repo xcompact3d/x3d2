@@ -14,7 +14,7 @@ module m_memcheck_build
   use m_case_abl, only: case_abl_t
   use m_memcheck_context, only: memcheck_ctx_t
   use m_memcheck_report, only: n_gpu_list, print_rule, print_table_header, &
-                               print_table_row
+                               print_table_row, card_shared_skip
   use m_memcheck_estimate, only: to_gib, num_gpus_unsupported_reason, &
                                  requested_unsupported_reason, &
                                  estimate_for_num_gpus, &
@@ -311,6 +311,10 @@ contains
     ! An unsupported nproc_dir stays UNSUPPORTED.
     if (len_trim(requested_unsupported_reason(ctx)) == 0) &
       ctx%final_verdict = measured_verdict
+
+    ! Another process changed its card memory since the start, so the
+    ! measurement is not this build's alone: print no CHECK line.
+    if (card_shared_skip(ctx)) return
 
     ! The CHECK line compares the num_gpus=1 estimate without the IO staging
     ! term, which the real build never measures, with the measured memory.
