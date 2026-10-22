@@ -528,7 +528,8 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
     "mpirun --oversubscribe -np 1 ${PROJECT_BINARY_DIR}/bin/x3d2-memcheck ${CMAKE_SOURCE_DIR}/examples/TGV/input.x3d --static")
   set_tests_properties(memcheck_static_TGV_calibration PROPERTIES
     LABELS "verification;cuda"
-    PASS_REGULAR_EXPRESSION "Calibration on this GPU: CUDA context [0-9.]+ GiB, NVSHMEM heap [0-9.]+ GiB\\.")
+    PASS_REGULAR_EXPRESSION "Calibration on this GPU: CUDA context [0-9.]+ GiB, NVSHMEM heap [0-9.]+ GiB\\."
+    SKIP_REGULAR_EXPRESSION "CHECK skipped: card shared")
 
   # Hiding every GPU from the process (CUDA_VISIBLE_DEVICES=) must be caught
   # cleanly by the device checks in memcheck.f90's main program, not crash.

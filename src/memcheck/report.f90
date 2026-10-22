@@ -290,19 +290,13 @@ contains
                  &usable process list)'
     end if
     call log_info(trim(line_buf))
-    if (ctx%device%heap_predicted) then
-      write (line_buf, '(a,f0.2,a,f0.2,a)') &
-        'Calibration on this GPU: CUDA context ', &
-        to_gib(ctx%device%probe%context), ' GiB, NVSHMEM heap ', &
-        to_gib(ctx%device%heap_bytes()), ' GiB (predicted).'
-      call log_info(trim(line_buf))
-    else
-      write (line_buf, '(a,f0.2,a,f0.2,a)') &
-        'Calibration on this GPU: CUDA context ', &
-        to_gib(ctx%device%probe%context), ' GiB, NVSHMEM heap ', &
-        to_gib(ctx%device%heap_bytes()), ' GiB.'
-      call log_info(trim(line_buf))
-    end if
+    write (line_buf, '(a,f0.2,a,f0.2,a,a)') &
+      'Calibration on this GPU: CUDA context ', &
+      to_gib(ctx%device%probe%context), ' GiB, NVSHMEM heap ', &
+      to_gib(ctx%device%heap_bytes()), ' GiB', &
+      merge(' (predicted).', '.            ', ctx%device%heap_predicted)
+    ! A change of the other processes since the start shifts these readings.
+    if (.not. card_shared_skip(ctx)) call log_info(trim(line_buf))
     write (line_buf, '(a,i0)') &
       'peak_fields (static estimate): ', ctx%peak_fields
     call log_info(trim(line_buf))
