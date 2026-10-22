@@ -509,7 +509,8 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
     if(${mode} STREQUAL build)
       set_tests_properties(${name} PROPERTIES
         PASS_REGULAR_EXPRESSION "CHECK num_gpus=1: .* - OK"
-        FAIL_REGULAR_EXPRESSION "WARNING: peak_fields_lookup|MISMATCH")
+        FAIL_REGULAR_EXPRESSION "WARNING: peak_fields_lookup|MISMATCH"
+        SKIP_REGULAR_EXPRESSION "CHECK skipped: card shared")
     else()
       set_tests_properties(${name} PROPERTIES
         PASS_REGULAR_EXPRESSION "Requested nproc_dir gives num_gpus=")
@@ -592,7 +593,8 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
     set_tests_properties(${name} PROPERTIES
       LABELS "verification;cuda"
       PASS_REGULAR_EXPRESSION "${pass_regex}"
-      FAIL_REGULAR_EXPRESSION "SED_NOOP|WARNING: peak_fields_lookup|MISMATCH")
+      FAIL_REGULAR_EXPRESSION "SED_NOOP|WARNING: peak_fields_lookup|MISMATCH"
+      SKIP_REGULAR_EXPRESSION "CHECK skipped: card shared")
   endfunction()
   define_memcheck_build_edit_test(memcheck_build_TGV_rk4
     "s/^time_intg *=.*/time_intg = \"RK4\"/")
@@ -655,7 +657,8 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
   set_tests_properties(memcheck_build_relative_input PROPERTIES
     LABELS "verification;cuda"
     PASS_REGULAR_EXPRESSION "CHECK num_gpus=1: .* - OK"
-    FAIL_REGULAR_EXPRESSION "MISMATCH")
+    FAIL_REGULAR_EXPRESSION "MISMATCH"
+    SKIP_REGULAR_EXPRESSION "CHECK skipped: card shared")
 
   # A real --build run writes no file in the working directory: the case
   # build writes no monitoring.csv. The directory holds only the input and
@@ -673,7 +676,8 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
   set_tests_properties(memcheck_build_leaves_no_files PROPERTIES
     LABELS "verification;cuda"
     PASS_REGULAR_EXPRESSION "NO_FILES_OK"
-    FAIL_REGULAR_EXPRESSION "MISMATCH")
+    FAIL_REGULAR_EXPRESSION "MISMATCH"
+    SKIP_REGULAR_EXPRESSION "CHECK skipped: card shared")
 
   # The query-only mode of the memcheck FFT workspace query reports the plan
   # memory and the workspace size without allocating the workspace.

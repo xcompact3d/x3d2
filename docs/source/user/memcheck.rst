@@ -88,8 +88,19 @@ The tool skips the real build, and prints no ``CHECK`` line, in these cases:
   that the flow case has no dispatch.
 * The input sets ``ibm_on=T`` and the ``ibm_<BC-suffix>.bp`` mask file is
   not in the working directory.
+* Another process on the same card changed its GPU memory by more than 128 MiB
+  between the start and any later memory reading, in the calibration probe or
+  in the real build. The measurement then includes that memory, so the tool
+  logs ``CHECK skipped: card shared`` with the change and the process counts.
+  ``ctest`` reports the ``memcheck_build_*`` tests as skipped in this case.
 
 The estimate then stands.
+
+The report shows ``Other GPU processes at start``: the number of other
+processes on the card and the memory they hold, read through NVML. The line
+reads ``not checked (NVML gave no usable process list)`` when an NVML call
+fails or the list does not hold the PID of the tool. The tool then does not
+skip the ``CHECK`` line.
 
 The real build writes no case output files. It switches off ``monitoring.csv``,
 the turbine ``disc<t>.adm`` files and the ABL profile file.
