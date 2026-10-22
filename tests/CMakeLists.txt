@@ -715,6 +715,16 @@ if(${ENABLE_BACKEND} STREQUAL "CUDA" AND WITH_MPI)
       PASS_REGULAR_EXPRESSION "MiB/GPU at num_gpus=1 \\(write mode auto, "
       FAIL_REGULAR_EXPRESSION "write mode bogus")
   endif()
+
+  # gpu_churn allocates and frees device memory in a loop. Run it by hand
+  # beside x3d2-memcheck --build to check that the CHECK line is skipped on a
+  # shared card. It is not registered as a test.
+  add_executable(gpu_churn memcheck/gpu_churn.f90)
+  target_compile_options(gpu_churn PRIVATE "-cuda")
+  target_link_options(gpu_churn PRIVATE "-cuda")
+  set_target_properties(gpu_churn PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
+    Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules/gpu_churn")
 endif()
 
 # Regression smoke test: fast full-solver TGV vs golden monitoring.csv.
