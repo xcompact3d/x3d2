@@ -891,13 +891,15 @@ contains
 
     ! Printed and not judged on a stretched mesh
     poisson_passed = (poisson_error_norm <= ERROR_TOLERANCE) &
-                     .or. (ctx%stretched .and. .not. ieee_is_nan(poisson_error_norm))
+                     .or. (ctx%stretched &
+                           .and. .not. ieee_is_nan(poisson_error_norm))
 
     ! ---- Check 2: div(grad(p)) vs original RHS ----
     div_grad_error_norm = divgrad_error(ctx, f_device, f_reference)
 
     ! The n=3 periodic tests are XFAIL for the aliasing of Check 1. On a
-    ! stretched mesh Check 1 is not judged, so these tests are not judged at all
+    ! stretched mesh Check 1 is not judged, so these tests are not judged
+    ! at all
     aliased = ctx%stretched .and. is_expected_fail(test, ctx%periodic)
     div_grad_passed = (div_grad_error_norm <= DIVGRAD_TOLERANCE) .or. aliased
 
