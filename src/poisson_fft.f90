@@ -322,6 +322,9 @@ contains
       allocate (self%a_re(self%nx_spec, self%ny_spec, self%nz_spec, 5))
       allocate (self%a_im(self%nx_spec, self%ny_spec, self%nz_spec, 5))
 
+      self%a_re = 0._dp
+      self%a_im = 0._dp
+
       a0 = (geo%alpha(2)/pi + 1._dp/(2*pi*geo%beta(2)))*geo%L(2)
       a1 = -1._dp/(4*pi*geo%beta(2))*geo%L(2)
 
