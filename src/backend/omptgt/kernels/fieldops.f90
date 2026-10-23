@@ -21,11 +21,14 @@ module m_omptgt_kernels_fieldops
             smagorinsky_from_gradients, sgs_stress_from_gradients
   public :: buffer_copy
   public :: scalar_product, scalar_product_cart, vector_norm_squared, &
-            field_max_sum, volume_integral, slice_max_sum
+            field_max_sum, volume_integral, slice_max_sum, &
+            x_slice_weighted_sum
   public :: labelled_sums, labelled_axpy
   public :: field_set_x_face, field_set_y_face, field_set_y_plane, &
             field_set_abl_wall_stress, field_set_x_face_from_field, &
-            field_set_y_face_from_field, field_add_x_face_from_field, &
+            field_set_y_face_from_field, field_set_x_inlet_plane, &
+            field_add_const_x_face, &
+            field_add_x_face_from_field, &
             field_add_y_face_from_field
   public :: field_plane_partial_sums, field_plane_sums_reduce
   public :: reorder, sum_intox
@@ -518,6 +521,34 @@ contains
 
   end subroutine slice_max_sum
 
+  subroutine x_slice_weighted_sum(sum_f, f, w, n_f, i_slice, n_i, &
+                                  n_groups_pad, n_j)
+    !! Sum of the slice f(:, i_slice, :) with the weight w(j) on the points
+    !! of stacked index j.
+    real(dp), intent(out) :: sum_f
+    integer, intent(in) :: n_f, i_slice, n_i, n_groups_pad, n_j
+    real(dp), intent(in) :: f(SZ, n_f, n_groups_pad*n_i), w(n_j)
+
+    integer :: i, b_i, b_j
+
+    sum_f = 0._dp
+    !$omp target teams distribute parallel do collapse(3) &
+    !$omp reduction(+:sum_f) map(tofrom:sum_f) map(to:w) &
+    !$omp OMP_DEVICE_ADDR(f)
+    do b_j = 1, (n_j - 1)/SZ + 1
+      do b_i = 1, n_i
+        do i = 1, SZ
+          if (i + (b_j - 1)*SZ <= n_j) then
+            sum_f = sum_f + w(i + (b_j - 1)*SZ) &
+                    *f(i, i_slice, b_j + (b_i - 1)*n_groups_pad)
+          end if
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine x_slice_weighted_sum
+
   ! --------------------------------------------------------------------------
   ! Faces and planes of DIR_X fields. The y-block holding y is
   ! (y - 1)/SZ + 1, at lane mod(y - 1, SZ) + 1, and its group at z station z
@@ -589,6 +620,53 @@ contains
     !$omp end target teams distribute parallel do
 
   end subroutine field_set_x_face_from_field
+
+  subroutine field_set_x_inlet_plane(f, plane, n_f, ny, nz, n_yb_pad)
+    !! Overwrite the inlet plane (pencil index 1) of f with plane(ny, nz).
+    integer, intent(in) :: n_f, ny, nz, n_yb_pad
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: plane(ny, nz)
+
+    integer :: i, y_block, z
+
+    !$omp target teams distribute parallel do collapse(3) map(to:plane) &
+    !$omp OMP_DEVICE_ADDR(f)
+    do z = 1, nz
+      do y_block = 1, (ny - 1)/SZ + 1
+        do i = 1, SZ
+          if (i + (y_block - 1)*SZ <= ny) &
+            f(i, 1, y_block + (z - 1)*n_yb_pad) = &
+            plane(i + (y_block - 1)*SZ, z)
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine field_set_x_inlet_plane
+
+  subroutine field_add_const_x_face(f, c, i_plane, n_f, ny, nz, n_yb_pad)
+    !! Add the constant c to every point of the x plane i_plane of f.
+    integer, intent(in) :: i_plane, n_f, ny, nz, n_yb_pad
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: c
+
+    integer :: i, y_block, z, b
+
+    !$omp target teams distribute parallel do collapse(3) private(b) &
+    !$omp OMP_DEVICE_ADDR(f)
+    do z = 1, nz
+      do y_block = 1, (ny - 1)/SZ + 1
+        do i = 1, SZ
+          if (i + (y_block - 1)*SZ <= ny) then
+            b = y_block + (z - 1)*n_yb_pad
+            f(i, i_plane, b) = f(i, i_plane, b) + c
+          end if
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine field_add_const_x_face
 
   subroutine field_add_x_face_from_field(f, g, set_start, set_end, n_f, nx, &
                                          ny, nz, n_yb_pad)
