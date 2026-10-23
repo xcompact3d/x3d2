@@ -19,6 +19,12 @@ program test_poisson
   !!   Check 2: div(grad(p)) recovers original RHS f (round-trip relative L2
   !!            error)
   !!
+  !! Each case then performs one more check, with a smooth p that is not a
+  !! cosine mode:
+  !!   Check 3: discrete round trip. The RHS is div(grad(p)) with the discrete
+  !!            operators, and the solution must give p back up to a constant
+  !!            (relative L2 norm). This holds on a stretched mesh too.
+  !!
   !! Layout: setup_case builds one poisson_ctx_t for each configuration
   !! (mesh, backend, allocators, tdsops, vector_calculus, poisson_fft) and
   !! every test of that configuration reuses it. run_single_test(ctx, test)
@@ -61,6 +67,7 @@ program test_poisson
   !! NOTE: Dirichlet directions require odd dims_global (e.g. 65)
 
   use iso_fortran_env, only: stderr => error_unit
+  use ieee_arithmetic, only: ieee_is_nan
 
   use m_allocator, only: allocator_t, field_t
   use m_base_backend, only: base_backend_t
@@ -150,6 +157,13 @@ program test_poisson
     cosine_test_t('COS_XY', [.true., .true., .false.], 3), &
     cosine_test_t('COS_XYZ', [.true., .true., .true.], 3)]
 
+  ! The outcome of the checks that run once for each BC configuration. The
+  ! default is what a skipped configuration keeps
+  type :: case_result_t
+    logical :: passed = .true.
+    real(dp) :: roundtrip_err = 0.0_dp
+  end type case_result_t
+
   ! The outcome of one cosine test on one BC configuration. The defaults are
   ! what a skipped configuration keeps: it must not register as a failure in
   ! the verdict
@@ -221,6 +235,13 @@ program test_poisson
   real(dp), parameter :: DIVGRAD_TOLERANCE = 1.0e-9_dp
 #endif
 
+  ! Check 3, relative L2 norm of the solution against p
+#ifdef SINGLE_PREC
+  real(dp), parameter :: ROUNDTRIP_TOLERANCE = 1.0e-5_dp
+#else
+  real(dp), parameter :: ROUNDTRIP_TOLERANCE = 1.0e-10_dp
+#endif
+
   integer :: nrank, nproc
   integer :: ic, idx, iarg, ios
   integer :: nproc_dir(3)
@@ -234,6 +255,7 @@ program test_poisson
 
   ! Per-config results for final summary
   type(test_result_t) :: results(size(tests), size(cases))
+  type(case_result_t) :: case_results(size(cases))
 
   ! Initialise MPI
   call initialise_mpi(nrank, nproc)
@@ -342,6 +364,7 @@ program test_poisson
       end if
     end do
   end do
+  if (.not. all(case_results%passed)) allpass = .false.
 
   call finalise_test(allpass, nrank)
 
@@ -365,6 +388,8 @@ contains
     do idx = 1, size(tests)
       results(idx, config_id) = run_single_test(ctx, tests(idx))
     end do
+
+    case_results(config_id) = run_case_checks(ctx)
 
   end subroutine run_config
 
@@ -484,6 +509,10 @@ contains
         results(idx, config_id)%divgrad_err, &
         result_str, expected_str, trim(verdict_str)
     end do
+    write (stderr, '(4X,A,ES12.4,2X,A)') &
+      'Check 3 round trip, relative L2: ', &
+      case_results(config_id)%roundtrip_err, &
+      merge('PASS', 'FAIL', case_results(config_id)%passed)
   end subroutine print_config_results
 
   pure function is_expected_fail(test, periodic) result(xfail)
@@ -607,16 +636,51 @@ contains
   end function solution_error
 
   ! ================================================================
-  ! Recover the RHS from div(grad(p)) and return its L2 error. Only reads the
-  ! fields it is given; the caller keeps them and releases them
+  ! Gradient of a cell centred field at the vertices, with the operators of
+  ! the context. The input is in DIR_Z layout, the outputs in DIR_X layout
   ! ================================================================
-  function divgrad_error(ctx, f_device, f_reference) result(err)
+  subroutine ctx_gradient(ctx, dpdx, dpdy, dpdz, p_z)
     type(poisson_ctx_t), target, intent(in) :: ctx
-    class(field_t), intent(in) :: f_device, f_reference
-    real(dp) :: err
+    class(field_t), intent(inout) :: dpdx, dpdy, dpdz
+    class(field_t), intent(in) :: p_z
 
-    integer :: dims(3)
-    class(field_t), pointer :: f_result, f_diff, host_field, host_ref
+    ! gradient_p2v: pressure (cell) -> velocity (vert) gradient
+    call ctx%vector_calculus%gradient_c2v( &
+      dpdx, dpdy, dpdz, p_z, &
+      ctx%xdirps%stagder_p2v, ctx%xdirps%interpl_p2v, &
+      ctx%ydirps%stagder_p2v, ctx%ydirps%interpl_p2v, &
+      ctx%zdirps%stagder_p2v, ctx%zdirps%interpl_p2v &
+      )
+  end subroutine ctx_gradient
+
+  ! ================================================================
+  ! Divergence of a vertex field at the cell centres, with the operators of
+  ! the context. The inputs are in DIR_X layout, the output in DIR_Z layout
+  ! ================================================================
+  subroutine ctx_divergence(ctx, div_z, u, v, w)
+    type(poisson_ctx_t), target, intent(in) :: ctx
+    class(field_t), intent(inout) :: div_z
+    class(field_t), intent(in) :: u, v, w
+
+    ! divergence_v2p: velocity (vert) -> cell divergence
+    call ctx%vector_calculus%divergence_v2c( &
+      div_z, u, v, w, &
+      ctx%xdirps%stagder_v2p, ctx%xdirps%interpl_v2p, &
+      ctx%ydirps%stagder_v2p, ctx%ydirps%interpl_v2p, &
+      ctx%zdirps%stagder_v2p, ctx%zdirps%interpl_v2p &
+      )
+  end subroutine ctx_divergence
+
+  ! ================================================================
+  ! div(grad(p)) of a cell centred field in DIR_C layout. The result is a new
+  ! block in DIR_X layout, which the caller releases
+  ! ================================================================
+  subroutine divgrad_apply(ctx, f_device, f_out)
+    type(poisson_ctx_t), target, intent(in) :: ctx
+    class(field_t), intent(in) :: f_device
+    class(field_t), pointer, intent(out) :: f_out
+
+    class(field_t), pointer :: f_result
     class(field_t), pointer :: dpdx, dpdy, dpdz, gradient_input
 
     gradient_input => ctx%backend%allocator%get_block(DIR_Z)
@@ -626,32 +690,34 @@ contains
     dpdy => ctx%backend%allocator%get_block(DIR_X)
     dpdz => ctx%backend%allocator%get_block(DIR_X)
 
-    ! gradient_p2v: pressure (cell) -> velocity (vert) gradient
-    call ctx%vector_calculus%gradient_c2v( &
-      dpdx, dpdy, dpdz, gradient_input, &
-      ctx%xdirps%stagder_p2v, ctx%xdirps%interpl_p2v, &
-      ctx%ydirps%stagder_p2v, ctx%ydirps%interpl_p2v, &
-      ctx%zdirps%stagder_p2v, ctx%zdirps%interpl_p2v &
-      )
+    call ctx_gradient(ctx, dpdx, dpdy, dpdz, gradient_input)
     call ctx%backend%allocator%release_block(gradient_input)
 
     f_result => ctx%backend%allocator%get_block(DIR_Z)
-
-    ! divergence_v2p: velocity (vert) -> cell divergence
-    call ctx%vector_calculus%divergence_v2c( &
-      f_result, dpdx, dpdy, dpdz, &
-      ctx%xdirps%stagder_v2p, ctx%xdirps%interpl_v2p, &
-      ctx%ydirps%stagder_v2p, ctx%ydirps%interpl_v2p, &
-      ctx%zdirps%stagder_v2p, ctx%zdirps%interpl_v2p &
-      )
+    call ctx_divergence(ctx, f_result, dpdx, dpdy, dpdz)
 
     call ctx%backend%allocator%release_block(dpdx)
     call ctx%backend%allocator%release_block(dpdy)
     call ctx%backend%allocator%release_block(dpdz)
 
-    f_diff => ctx%backend%allocator%get_block(DIR_X)
-    call ctx%backend%reorder(f_diff, f_result, RDR_Z2X)
+    f_out => ctx%backend%allocator%get_block(DIR_X)
+    call ctx%backend%reorder(f_out, f_result, RDR_Z2X)
     call ctx%backend%allocator%release_block(f_result)
+  end subroutine divgrad_apply
+
+  ! ================================================================
+  ! Recover the RHS from div(grad(p)) and return its L2 error. Only reads the
+  ! fields it is given; the caller keeps them and releases them
+  ! ================================================================
+  function divgrad_error(ctx, f_device, f_reference) result(err)
+    type(poisson_ctx_t), target, intent(in) :: ctx
+    class(field_t), intent(in) :: f_device, f_reference
+    real(dp) :: err
+
+    integer :: dims(3)
+    class(field_t), pointer :: f_diff, host_field, host_ref
+
+    call divgrad_apply(ctx, f_device, f_diff)
 
     ! Compute error: div(grad(p)) - f_original
     call ctx%backend%vecadd(-1.0_dp, f_reference, 1.0_dp, f_diff)
@@ -672,6 +738,120 @@ contains
     call ctx%host_allocator%release_block(host_ref)
     call ctx%host_allocator%release_block(host_field)
   end function divgrad_error
+
+  ! ================================================================
+  ! The smooth p of Checks 3 and 5 sampled at the cell centres:
+  ! exp(cos(ky*y)) * cos(kx*x) * cos(kz*z), with k = 2 pi along a periodic
+  ! direction and k = pi along a wall, so that dp/dn = 0 at the walls
+  ! ================================================================
+  subroutine fill_smooth_p(ctx, host_field)
+    type(poisson_ctx_t), target, intent(in) :: ctx
+    class(field_t), intent(inout) :: host_field
+
+    integer :: i, j, k, dims(3)
+    real(dp) :: coords(3), kw(3)
+
+    dims = ctx%mesh%get_dims(CELL)
+    kw = pi
+    where (ctx%periodic) kw = 2.0_dp*pi
+
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          coords = ctx%mesh%get_coordinates(i, j, k, CELL)
+          host_field%data(i, j, k) = cos(kw(1)*coords(1)) &
+                                     *exp(cos(kw(2)*coords(2))) &
+                                     *cos(kw(3)*coords(3))
+        end do
+      end do
+    end do
+  end subroutine fill_smooth_p
+
+  ! ================================================================
+  ! Relative L2 norm of (solution - reference), both up to a constant: the
+  ! global (1,1,1) value is removed from each. Overwrites host_sol
+  ! ================================================================
+  function roundtrip_rel_l2(mesh, host_sol, host_ref) result(err)
+    type(mesh_t), intent(in) :: mesh
+    class(field_t), intent(inout) :: host_sol
+    class(field_t), intent(in) :: host_ref
+    real(dp) :: err
+
+    integer :: dims(3)
+    real(dp) :: first_sol, first_ref
+
+    dims = mesh%get_dims(CELL)
+    first_sol = global_first_value(mesh, host_sol)
+    first_ref = global_first_value(mesh, host_ref)
+    host_sol%data(1:dims(1), 1:dims(2), 1:dims(3)) = &
+      (host_sol%data(1:dims(1), 1:dims(2), 1:dims(3)) - first_sol) &
+      - (host_ref%data(1:dims(1), 1:dims(2), 1:dims(3)) - first_ref)
+
+    err = relative_l2_error( &
+          host_sol%data(1:dims(1), 1:dims(2), 1:dims(3)), &
+          host_ref%data(1:dims(1), 1:dims(2), 1:dims(3)))
+  end function roundtrip_rel_l2
+
+  ! ================================================================
+  ! Check 3, the discrete round trip. The RHS is div(grad(p)) with the
+  ! operators of ctx and the solve uses the solver of solve_ctx, which is ctx
+  ! itself unless a caller wants another solver on the same RHS
+  ! ================================================================
+  function roundtrip_error(ctx, solve_ctx) result(err)
+    type(poisson_ctx_t), target, intent(in) :: ctx, solve_ctx
+    real(dp) :: err
+
+    class(field_t), pointer :: p_host, p_device, rhs_x, rhs_host
+    class(field_t), pointer :: f_solve, temp, sol_host
+
+    p_host => ctx%host_allocator%get_block(DIR_C)
+    call fill_smooth_p(ctx, p_host)
+
+    p_device => ctx%backend%allocator%get_block(DIR_C, CELL)
+    call ctx%backend%set_field_data(p_device, p_host%data, DIR_C)
+    call p_device%set_data_loc(CELL)
+    call divgrad_apply(ctx, p_device, rhs_x)
+    call ctx%backend%allocator%release_block(p_device)
+
+    rhs_host => ctx%host_allocator%get_block(DIR_C)
+    call ctx%backend%get_field_data(rhs_host%data, rhs_x)
+    call ctx%backend%allocator%release_block(rhs_x)
+
+    f_solve => solve_ctx%backend%allocator%get_block(DIR_C, CELL)
+    call solve_ctx%backend%set_field_data(f_solve, rhs_host%data, DIR_C)
+    call f_solve%set_data_loc(CELL)
+    call ctx%host_allocator%release_block(rhs_host)
+
+    temp => solve_ctx%backend%allocator%get_block(DIR_C)
+    call solve_ctx%backend%poisson_fft%solve_poisson(f_solve, temp)
+    call solve_ctx%backend%allocator%release_block(temp)
+
+    sol_host => solve_ctx%host_allocator%get_block(DIR_C)
+    call solve_ctx%backend%get_field_data(sol_host%data, f_solve)
+    call solve_ctx%backend%allocator%release_block(f_solve)
+
+    err = roundtrip_rel_l2(ctx%mesh, sol_host, p_host)
+
+    call solve_ctx%host_allocator%release_block(sol_host)
+    call ctx%host_allocator%release_block(p_host)
+  end function roundtrip_error
+
+  ! ================================================================
+  ! The checks that run once for each BC configuration
+  ! ================================================================
+  function run_case_checks(ctx) result(res)
+    type(poisson_ctx_t), target, intent(in) :: ctx
+    type(case_result_t) :: res
+
+    res%roundtrip_err = roundtrip_error(ctx, ctx)
+    res%passed = (res%roundtrip_err <= ROUNDTRIP_TOLERANCE)
+
+    if (ctx%mesh%par%is_root()) then
+      write (stderr, '(4X,A,ES12.4,2X,A)') &
+        'Check 3 round trip, relative L2: ', res%roundtrip_err, &
+        merge('PASS', 'FAIL', res%passed)
+    end if
+  end function run_case_checks
 
   ! ================================================================
   ! Run a single Poisson test (2 checks)
@@ -710,7 +890,8 @@ contains
     poisson_error_norm = solution_error(ctx, test, f_device)
 
     ! Printed and not judged on a stretched mesh
-    poisson_passed = (poisson_error_norm <= ERROR_TOLERANCE) .or. ctx%stretched
+    poisson_passed = (poisson_error_norm <= ERROR_TOLERANCE) &
+                     .or. (ctx%stretched .and. .not. ieee_is_nan(poisson_error_norm))
 
     ! ---- Check 2: div(grad(p)) vs original RHS ----
     div_grad_error_norm = divgrad_error(ctx, f_device, f_reference)
