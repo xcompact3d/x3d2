@@ -1,7 +1,8 @@
 module m_poisson_fft
   use m_common, only: dp, pi, CELL
   use m_field, only: field_t
-  use m_mesh, only: mesh_t, geo_t
+  use m_mesh, only: mesh_t, geo_t, FFT_BC_000, FFT_BC_010, FFT_BC_100, &
+                    FFT_BC_110, FFT_BC_UNSUPPORTED
   use m_tdsops, only: dirps_t
   use m_logger, only: log_warn, abort_run
 
@@ -34,33 +35,24 @@ module m_poisson_fft
     !> Periodicity in x, y, and z
     logical :: periodic_x, periodic_y, periodic_z, &
                stretched_y = .false., stretched_y_sym
+    !> Boundary condition case, see poisson_bc_code. The backend's init sets
+    !> it first, ahead of base_init.
+    character(len=3) :: bc_code
     !> Stretching operator matrices
     real(dp), allocatable, dimension(:, :, :, :) :: a_odd_re, a_odd_im, &
                                                     a_even_re, a_even_im, &
                                                     a_re, a_im
     !> lowmem option, only used in CUDA backend
     logical :: lowmem = .false.
-    !> Procedure pointer to BC specific poisson solvers
-    procedure(poisson_xxx), pointer :: poisson => null()
   contains
-    procedure(fft_forward), deferred :: fft_forward_010
-    procedure(fft_forward), deferred :: fft_forward_100
-    procedure(fft_forward), deferred :: fft_forward_110
+    !! Each backend extends this type once per boundary condition case
+    !! (000, 010, 100, 110), and each case type supplies its own transforms,
+    !! spectral postprocess and periodicity reorder.
     procedure(fft_forward), deferred :: fft_forward
-    procedure(fft_backward), deferred :: fft_backward_010
-    procedure(fft_backward), deferred :: fft_backward_100
-    procedure(fft_backward), deferred :: fft_backward_110
     procedure(fft_backward), deferred :: fft_backward
-    procedure(fft_postprocess), deferred :: fft_postprocess_000
-    procedure(fft_postprocess), deferred :: fft_postprocess_010
-    procedure(fft_postprocess), deferred :: fft_postprocess_100
-    procedure(fft_postprocess), deferred :: fft_postprocess_110
-    procedure(field_process), deferred :: enforce_periodicity_x
-    procedure(field_process), deferred :: undo_periodicity_x
-    procedure(field_process), deferred :: enforce_periodicity_y
-    procedure(field_process), deferred :: undo_periodicity_y
-    procedure(field_process), deferred :: enforce_periodicity_xy
-    procedure(field_process), deferred :: undo_periodicity_xy
+    procedure(fft_postprocess), deferred :: fft_postprocess
+    procedure :: enforce_periodicity
+    procedure :: undo_periodicity
     procedure :: base_init
     procedure :: solve_poisson
     procedure :: stretching_matrix
@@ -97,28 +89,78 @@ module m_poisson_fft
     end subroutine fft_postprocess
   end interface
 
-  abstract interface
-    subroutine poisson_xxx(self, f, temp)
-      import :: poisson_fft_t
-      import :: field_t
-
-      class(poisson_fft_t) :: self
-      class(field_t), intent(inout) :: f, temp
-    end subroutine poisson_xxx
-
-    subroutine field_process(self, f_out, f_in)
-      import :: poisson_fft_t
-      import :: field_t
-
-      class(poisson_fft_t) :: self
-      class(field_t), intent(inout) :: f_out
-      class(field_t), intent(in) :: f_in
-    end subroutine field_process
-  end interface
-
 contains
 
+  pure function poisson_bc_code(periodic) result(bc_code)
+    !! Names the boundary condition case of the FFT Poisson solver, one
+    !! digit per direction in x, y, z order: 0 for periodic, 1 otherwise.
+    !! The 000 case is periodic everywhere, 110 is non-periodic in x and y.
+    implicit none
+
+    logical, intent(in) :: periodic(3)
+    character(len=3) :: bc_code
+
+    integer :: dir
+
+    do dir = 1, 3
+      if (periodic(dir)) then
+        bc_code(dir:dir) = '0'
+      else
+        bc_code(dir:dir) = '1'
+      end if
+    end do
+  end function poisson_bc_code
+
+  pure function fft_bc_class(bc_code) result(fft_bc)
+    !! The FFT_BC_* class of a poisson_bc_code case, or FFT_BC_UNSUPPORTED.
+    !! The CUDA solver passes it to the helpers it shares with x3d2-memcheck,
+    !! so it classifies through poisson_bc_code alone. x3d2-memcheck has no
+    !! mesh and takes the class from m_mesh's classify_boundaries;
+    !! test_poisson_bc_code checks that the two agree.
+    implicit none
+
+    character(len=3), intent(in) :: bc_code
+    integer :: fft_bc
+
+    select case (bc_code)
+    case ('000')
+      fft_bc = FFT_BC_000
+    case ('010')
+      fft_bc = FFT_BC_010
+    case ('100')
+      fft_bc = FFT_BC_100
+    case ('110')
+      fft_bc = FFT_BC_110
+    case default
+      fft_bc = FFT_BC_UNSUPPORTED
+    end select
+  end function fft_bc_class
+
+  pure function spectral_dirs(bc_code) result(dirs)
+    !! The physical direction held in each dimension of the spectral array.
+    !! The r2c transform runs along dim1, so a case with x non-periodic
+    !! permutes a periodic direction into dim1 ahead of the FFT: 100 swaps
+    !! x and y, 110 brings z to the front.
+    implicit none
+
+    character(len=3), intent(in) :: bc_code
+    integer :: dirs(3)
+
+    select case (bc_code)
+    case ('100')
+      dirs = [2, 1, 3]
+    case ('110')
+      dirs = [3, 1, 2]
+    case default
+      dirs = [1, 2, 3]
+    end select
+  end function spectral_dirs
+
   subroutine base_init(self, mesh, xdirps, ydirps, zdirps, n_spec, n_sp_st)
+    !! Sets up the state every case shares. The backend's init calls it
+    !! once it has set bc_code, which the spectral extents it passes in
+    !! already depend on. The supported BC codes are the cases of the
+    !! backend factories, create_omp_poisson_fft and create_cuda_poisson_fft.
     implicit none
     class(poisson_fft_t) :: self
     type(mesh_t), intent(in), target :: mesh
@@ -172,102 +214,57 @@ contains
                      &x- or z-directions!')
     end if
 
-    ! use correct procedure based on BCs
-    if (self%periodic_x .and. self%periodic_y .and. self%periodic_z) then
-      self%poisson => poisson_000
-    else if (self%periodic_x .and. (.not. self%periodic_y) &
-             .and. (self%periodic_z)) then
-      self%poisson => poisson_010
-      ! stretching requires some coefficients matrices
-      if (mesh%geo%stretched(2)) then
-        self%stretched_y = .true.
-        call self%stretching_matrix(mesh%geo, xdirps, ydirps, zdirps)
-      end if
-    else if ((.not. self%periodic_x) .and. (self%periodic_y) &
-             .and. (self%periodic_z)) then
-      ! The OpenMP backend runs the 010, 100 and 110 cases on multiple ranks.
-      ! The CUDA backend runs the 100 and 110 cases on multiple ranks with a
-      ! 1D z decomposition and cuFFTMp, and guards its own 010 rank limit
-      ! where the case is initialised.
-      self%poisson => poisson_100
-    else if ((.not. self%periodic_x) .and. (.not. self%periodic_y) &
-             .and. (self%periodic_z)) then
-      self%poisson => poisson_110
-
-    else
-      call abort_run('Requested BCs are not supported in FFT-based Poisson &
-                     &solver!')
+    ! stretching requires some coefficients matrices, which only the 010
+    ! case supports
+    if (self%bc_code == '010' .and. mesh%geo%stretched(2)) then
+      self%stretched_y = .true.
+      call self%stretching_matrix(mesh%geo, xdirps, ydirps, zdirps)
     end if
   end subroutine base_init
 
   subroutine solve_poisson(self, f, temp)
+    !! Gathers each non-periodic line into a periodic one, so that a plain
+    !! FFT can stand in for the cosine transform, solves in spectral space,
+    !! and scatters the result back. The 000 case has nothing to reorder and
+    !! overrides this to transform f in place.
     implicit none
 
     class(poisson_fft_t) :: self
     class(field_t), intent(inout) :: f, temp
 
-    call self%poisson(f, temp)
+    call self%enforce_periodicity(temp, f)
+
+    call self%fft_forward(temp)
+    call self%fft_postprocess
+    call self%fft_backward(temp)
+
+    call self%undo_periodicity(f, temp)
 
   end subroutine solve_poisson
 
-  subroutine poisson_000(self, f, temp)
+  subroutine enforce_periodicity(self, f_out, f_in)
+    !! Reorder hook of solve_poisson, overridden by every case that has a
+    !! non-periodic direction.
     implicit none
 
     class(poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f, temp
+    class(field_t), intent(inout) :: f_out
+    class(field_t), intent(in) :: f_in
 
-    call self%fft_forward(f)
-    call self%fft_postprocess_000
-    call self%fft_backward(f)
+    call abort_run('enforce_periodicity is not used by this Poisson BC &
+                   &case.')
+  end subroutine enforce_periodicity
 
-  end subroutine poisson_000
-
-  subroutine poisson_010(self, f, temp)
+  subroutine undo_periodicity(self, f_out, f_in)
+    !! Inverse of enforce_periodicity.
     implicit none
 
     class(poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f, temp
+    class(field_t), intent(inout) :: f_out
+    class(field_t), intent(in) :: f_in
 
-    call self%enforce_periodicity_y(temp, f)
-
-    call self%fft_forward_010(temp)
-    call self%fft_postprocess_010
-    call self%fft_backward_010(temp)
-
-    call self%undo_periodicity_y(f, temp)
-
-  end subroutine poisson_010
-
-  subroutine poisson_100(self, f, temp)
-    implicit none
-    class(poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f, temp
-
-    call self%enforce_periodicity_x(temp, f)
-
-    call self%fft_forward_100(temp)
-    call self%fft_postprocess_100
-    call self%fft_backward_100(temp)
-
-    call self%undo_periodicity_x(f, temp)
-
-  end subroutine poisson_100
-
-  subroutine poisson_110(self, f, temp)
-    implicit none
-
-    class(poisson_fft_t) :: self
-    class(field_t), intent(inout) :: f, temp
-
-    call self%enforce_periodicity_xy(temp, f)
-
-    call self%fft_forward_110(temp)
-    call self%fft_postprocess_110
-    call self%fft_backward_110(temp)
-
-    call self%undo_periodicity_xy(f, temp)
-
-  end subroutine poisson_110
+    call abort_run('undo_periodicity is not used by this Poisson BC case.')
+  end subroutine undo_periodicity
 
   subroutine stretching_matrix(self, geo, xdirps, ydirps, zdirps)
     !! Stretching necessitates a special operation in spectral space.
@@ -680,18 +677,18 @@ contains
       zdirps%stagder_v2p%a, zdirps%stagder_v2p%b, zdirps%stagder_v2p%alpha &
       )
 
-    if ((.not. self%periodic_x) .and. (.not. self%periodic_y) .and. &
-        self%periodic_z) then
-      ! =========================================================================
-      ! 110 case: Non-periodic X, Non-periodic Y, Periodic Z
-      ! Uses Z-TRANSPOSED layout: spectral array is (nz/2+1, nx, ny)
-      !   dim1 (i) indexes Z R2C modes  -> use kz, ez
-      !   dim2 (j) indexes X modes      -> use kx, ex
-      !   dim3 (k) indexes Y modes      -> use ky, ey
-      ! =========================================================================
-      do k = 1, self%nz_spec     ! Y modes
-        do j = 1, self%ny_spec   ! X modes
-          do i = 1, self%nx_spec ! Z R2C modes
+    ! The spectral array is laid out as spectral_dirs gives, e.g. for 110
+    ! it is (nz/2 + 1, nx, ny): dim1 indexes the z r2c modes, dim2 the x
+    ! modes and dim3 the y modes. Each layout keeps its own loop nest with
+    ! the mode numbers written out. Mapping the indices through
+    ! spectral_dirs in one shared loop stops the compiler from vectorising
+    ! the inner loop and hoisting the other two directions out of it, which
+    ! changes waves by a few ulp under -ffast-math.
+    select case (self%bc_code)
+    case ('110')
+      do k = 1, self%nz_spec
+        do j = 1, self%ny_spec
+          do i = 1, self%nx_spec
             iz = i + self%sp_st(1)
             ix = j + self%sp_st(2)
             iy = k + self%sp_st(3)
@@ -726,16 +723,10 @@ contains
           end do
         end do
       end do
-
-    else if ((.not. self%periodic_x) .and. self%periodic_y .and. &
-             self%periodic_z) then
-      ! =========================================================================
-      ! 100 case: Non-periodic X, Periodic Y, Periodic Z
-      ! Uses TRANSPOSED indexing because data is transposed before FFT
-      ! =========================================================================
+    case ('100')
       do k = 1, self%nz_spec
-        do j = 1, self%ny_spec  ! This iterates over X (Dirichlet) after transpose
-          do i = 1, self%nx_spec  ! This iterates over Y (periodic, R2C) after transpose
+        do j = 1, self%ny_spec
+          do i = 1, self%nx_spec
             iy = i + self%sp_st(1)
             ix = j + self%sp_st(2)
             iz = k + self%sp_st(3)
@@ -770,13 +761,7 @@ contains
           end do
         end do
       end do
-
-    else if (self%periodic_z) then
-      ! =========================================================================
-      ! 000, 010 cases: Periodic Z (standard indexing, no transpose)
-      ! 000: Periodic X, Periodic Y, Periodic Z
-      ! 010: Periodic X, Non-Periodic Y, Periodic Z
-      ! =========================================================================
+    case default
       do k = 1, self%nz_spec
         do j = 1, self%ny_spec
           do i = 1, self%nx_spec
@@ -814,16 +799,7 @@ contains
           end do
         end do
       end do
-
-    else if (.not. (self%periodic_x .and. self%periodic_y &
-                    .and. self%periodic_z)) then
-      ! poisson 111
-      call abort_run('No support for all non-periodic BCs yet!')
-
-    else
-      ! poisson 001, 011, 101
-      call abort_run('FFT Poisson solver does not support specified BCs!')
-    end if
+    end select
 
   end subroutine waves_set
 

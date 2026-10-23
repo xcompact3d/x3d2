@@ -54,7 +54,7 @@ program x3d2_memcheck
                     output_field_active(ctx%checkpoint_cfg, 'qcriterion'), &
                     ctx%solver_cfg%lowmem_transeq)
 
-  ! Exception to the solver rule: init_cuda_poisson_fft_t accepts 110 on
+  ! Exception to the solver rule: the CUDA solver accepts 110 on
   ! nproc > 1 through cuFFTMp, but x3d2-memcheck keeps 110 single GPU until
   ! the multi-rank buffers of #417 are in the estimate. Sharing the solver
   ! rule now would print supported rows with under-estimated figures.

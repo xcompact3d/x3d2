@@ -324,6 +324,7 @@ set(serial 1)
 # CPU OpenMP backend runtime.
 define_test(unit/test_allocator.f90 ${serial} omp)
 define_test(unit/test_reorder_map.f90 ${serial} omp)
+define_test(unit/test_poisson_bc_code.f90 ${serial} omp)
 # Checks the exact per-rank split of a fixed grid, written for 4 ranks.
 define_test(unit/test_mesh.f90 4 omp)
 define_test(unit/test_statistics.f90 ${serial} omp)
@@ -349,6 +350,17 @@ foreach(mode one_rank collective)
   define_test(unit/test_logger_abort.f90 ${np} omp ${mode})
   set_tests_properties(test_logger_abort_omp_${np}_${mode} PROPERTIES
     PASS_REGULAR_EXPRESSION "ERROR: deliberate"
+    FAIL_REGULAR_EXPRESSION "must never be reached"
+    TIMEOUT 60)
+endforeach()
+unset(X3D2_TEST_NAME_SUFFIX)
+# A Poisson case type that leaves the periodicity reorder to the default of
+# poisson_fft_t must stop, not fall through. Host code, so built once.
+foreach(mode enforce undo)
+  set(X3D2_TEST_NAME_SUFFIX _${mode})
+  define_test(unit/test_poisson_fft_abort.f90 ${serial} omp ${mode})
+  set_tests_properties(test_poisson_fft_abort_omp_${serial}_${mode} PROPERTIES
+    PASS_REGULAR_EXPRESSION "ERROR: ${mode}_periodicity is not used"
     FAIL_REGULAR_EXPRESSION "must never be reached"
     TIMEOUT 60)
 endforeach()
@@ -453,6 +465,14 @@ function(define_backend_tests backend)
     endif()
     set(X3D2_TEST_NAME_SUFFIX _ddp)
     define_verification_test(verification/test_poisson_bc.f90 2 ${backend} --bc ddp)
+    # The backend's factory must stop on a BC code it has no case type for
+    set(X3D2_TEST_NAME_SUFFIX _unsupported_bc)
+    define_test(unit/test_poisson_fft_abort.f90 ${serial} ${backend} unsupported_bc)
+    set_tests_properties(
+      test_poisson_fft_abort_${backend}_${serial}_unsupported_bc PROPERTIES
+      PASS_REGULAR_EXPRESSION "ERROR: Requested BCs are not supported"
+      FAIL_REGULAR_EXPRESSION "must never be reached"
+      TIMEOUT 60)
     unset(X3D2_TEST_NAME_SUFFIX)
     # The driver has its backend fixed at compile time, so register it for
     # the CUDA build only here; the CPU OMP registration is further down.
@@ -735,16 +755,37 @@ if(SINGLE_PREC)
       --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
   set(_nightly_cmp_args --rtol 1e-4
       --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
+  # The channel's enstrophy drifts up to 3.6e-5 from the double precision
+  # golden over its 50 noisy steps, past the smoke rtol.
+  set(_channel_cmp_args --rtol 1e-4
+      --ceiling div_u_max=1e-4 --ceiling div_u_mean=1e-5)
 else()
   set(_smoke_cmp_args --rtol 1e-10
       --ceiling div_u_max=1e-8 --ceiling div_u_mean=1e-9)
   set(_nightly_cmp_args --rtol 1e-10
       --ceiling div_u_max=1e-12 --ceiling div_u_mean=1e-13)
+  set(_channel_cmp_args ${_smoke_cmp_args})
 endif()
 
 if(WITH_2DECOMPFFT AND _cpu_omp_backend)
   define_regression_case_test(tgv_smoke tgv_smoke.x3d tgv_smoke_golden_omp.csv 2 omp
     ${_smoke_cmp_args})
+endif()
+
+# CUDA regression cases. The channel cases run the 010 FFT Poisson solver with
+# a stretched y grid, one case per stretching operator. Only the CUDA backend
+# supports y stretching in the FFT solver, and only on one rank. Their goldens
+# are blessed from a double precision NVHPC build, and a single precision
+# build checks against them too.
+if(${ENABLE_BACKEND} STREQUAL "CUDA")
+  # The CUDA backend matches the OMP golden to the smoke rtol, so the TGV case
+  # shares it, which also checks that the two backends agree.
+  define_regression_case_test(tgv_smoke tgv_smoke.x3d tgv_smoke_golden_omp.csv 2 cuda
+    ${_smoke_cmp_args})
+  define_regression_case_test(channel_smoke channel_smoke.x3d
+    channel_smoke_golden_cuda.csv 1 cuda ${_channel_cmp_args})
+  define_regression_case_test(channel_bottom_smoke channel_bottom_smoke.x3d
+    channel_bottom_smoke_golden_cuda.csv 1 cuda ${_channel_cmp_args})
 endif()
 
 # The driver has its backend fixed at compile time, so register it as OMP only
@@ -760,6 +801,7 @@ if(WITH_2DECOMPFFT AND _cpu_omp_backend AND WITH_NIGHTLY_REGRESSION)
 endif()
 unset(_smoke_cmp_args)
 unset(_nightly_cmp_args)
+unset(_channel_cmp_args)
 unset(_cpu_omp_backend)
 
 set(EXECUTABLE_OUTPUT_PATH "bin")

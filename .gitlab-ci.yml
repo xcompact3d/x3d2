@@ -48,13 +48,13 @@ stages:
     - echo "Build tests"
     - make -j12 -C build-debug
     - echo "Run the tests"
-    - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build-debug -L "unit|verification" --output-on-failure --output-junit ctest-junit.xml; fi
+    - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build-debug -L "unit|verification|regression" --output-on-failure --output-junit ctest-junit.xml; fi
     - echo "Configure Release build"
     - cmake -S . -B build -DCMAKE_Fortran_COMPILER=${FORTRAN_COMPILER} -DCMAKE_BUILD_TYPE=Release -DENABLE_BACKEND=${ENABLE_BACKEND} -DBACKEND_ARCH=${BACKEND_ARCH} -DWITH_MPI=${WITH_MPI} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
     - echo "Build tests"
     - make -j12 -C build
     - echo "Run the tests"
-    - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build -L "unit|verification" --output-on-failure --output-junit ctest-junit.xml; fi
+    - if [ "${RUN_TEST}" == "ON" ]; then ctest --test-dir build -L "unit|verification|regression" --output-on-failure --output-junit ctest-junit.xml; fi
   # Surface individual test results in the pipeline's Tests tab. Without a
   # report GitLab shows "Tests 0" and a failing test is only visible by
   # scrolling the raw job log. ctest still sets the job's exit status, so this
