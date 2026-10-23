@@ -159,6 +159,32 @@ program test_boundary_planes
                       tolerance, all_pass)
   end block
 
+  ! --- field_add_const_x_face: a constant added to one x plane only ---------
+  ! The outlet mass correction of the wind turbine case shifts x = nx;
+  ! at_end = .false. selects x = 1.
+  block
+    real(dp), parameter :: shift = 0.75_dp
+    logical :: at_end
+    integer :: i_plane
+
+    do i_plane = 1, 2
+      at_end = i_plane == 2
+      expected = sentinel
+      if (at_end) then
+        expected(dims(1), :, :) = sentinel + shift
+      else
+        expected(1, :, :) = sentinel + shift
+      end if
+
+      call f%fill(sentinel)
+      call backend%field_add_const_x_face(f, shift, at_end)
+      call backend%get_field_data(data, f)
+      write (label, '(a,l1)') 'field_add_const_x_face at_end=', at_end
+      call check_planes(trim(label), data, expected, dims, tolerance, &
+                        all_pass)
+    end do
+  end block
+
   ! --- field_add_face_from_field: plane values added on Dirichlet faces -----
   ! The wall pre-correction adds onto the value the case has already set,
   ! and must leave a non-Dirichlet face (the ABL's free-slip lid) alone.

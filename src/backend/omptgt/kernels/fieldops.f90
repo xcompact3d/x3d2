@@ -27,6 +27,7 @@ module m_omptgt_kernels_fieldops
   public :: field_set_x_face, field_set_y_face, field_set_y_plane, &
             field_set_abl_wall_stress, field_set_x_face_from_field, &
             field_set_y_face_from_field, field_set_x_inlet_plane, &
+            field_add_const_x_face, &
             field_add_x_face_from_field, &
             field_add_y_face_from_field
   public :: field_plane_partial_sums, field_plane_sums_reduce
@@ -642,6 +643,30 @@ contains
     !$omp end target teams distribute parallel do
 
   end subroutine field_set_x_inlet_plane
+
+  subroutine field_add_const_x_face(f, c, i_plane, n_f, ny, nz, n_yb_pad)
+    !! Add the constant c to every point of the x plane i_plane of f.
+    integer, intent(in) :: i_plane, n_f, ny, nz, n_yb_pad
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: c
+
+    integer :: i, y_block, z, b
+
+    !$omp target teams distribute parallel do collapse(3) private(b) &
+    !$omp OMP_DEVICE_ADDR(f)
+    do z = 1, nz
+      do y_block = 1, (ny - 1)/SZ + 1
+        do i = 1, SZ
+          if (i + (y_block - 1)*SZ <= ny) then
+            b = y_block + (z - 1)*n_yb_pad
+            f(i, i_plane, b) = f(i, i_plane, b) + c
+          end if
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine field_add_const_x_face
 
   subroutine field_add_x_face_from_field(f, g, set_start, set_end, n_f, nx, &
                                          ny, nz, n_yb_pad)

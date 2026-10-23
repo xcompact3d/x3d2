@@ -55,6 +55,7 @@ module m_omptgt_backend
                                        field_set_x_face_from_field, &
                                        field_set_y_face_from_field, &
                                        field_set_x_inlet_plane, &
+                                       field_add_const_x_face, &
                                        field_add_x_face_from_field, &
                                        field_add_y_face_from_field, &
                                        field_plane_partial_sums, &
@@ -108,6 +109,7 @@ module m_omptgt_backend
     procedure :: field_set_abl_wall_stress => field_set_abl_wall_stress_omptgt
     procedure :: field_set_face_from_field => field_set_face_from_field_omptgt
     procedure :: field_set_x_inlet_plane => field_set_x_inlet_plane_omptgt
+    procedure :: field_add_const_x_face => field_add_const_x_face_omptgt
     procedure :: field_add_face_from_field => field_add_face_from_field_omptgt
     procedure :: compute_vorticity => compute_vorticity_omptgt
     procedure :: compute_qcriterion => compute_qcriterion_omptgt
@@ -1430,6 +1432,37 @@ contains
                                  dims(3), n_yb_pad(self))
 
   end subroutine field_set_x_inlet_plane_omptgt
+
+  subroutine field_add_const_x_face_omptgt(self, f, c, at_end)
+    !! [[m_base_backend(module):field_add_const_x_face_base(subroutine)]]
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    class(field_t), intent(inout) :: f
+    real(dp), intent(in) :: c
+    logical, intent(in) :: at_end
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: f_d
+    integer :: dims(3), i_plane
+
+    if (f%dir /= DIR_X) &
+      call abort_run('field_add_const_x_face: only supported for DIR_X &
+                     &fields.')
+    if (f%data_loc == NULL_LOC) &
+      call abort_run('field_add_const_x_face: requires a valid data_loc.')
+
+    dims = self%mesh%get_dims(f%data_loc)
+    if (at_end) then
+      i_plane = dims(1)   ! global x = nx (outlet)
+    else
+      i_plane = 1         ! global x = 1  (inlet)
+    end if
+
+    call resolve_field_t(f_d, f)
+    call field_add_const_x_face(f_d, c, i_plane, size(f_d, 2), dims(2), &
+                                dims(3), n_yb_pad(self))
+
+  end subroutine field_add_const_x_face_omptgt
 
   subroutine field_add_face_from_field_omptgt(self, f, g, face, bc_start, &
                                               bc_end)
