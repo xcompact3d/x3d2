@@ -130,6 +130,8 @@ stages:
 
 build-and-test-cuda:
   <<: *build-and-test-template
+  rules:
+    - when: never
   needs: []
   variables:
     ADIOS2_VERSION: 2.10.2
@@ -153,9 +155,52 @@ build-and-test-cuda-single-prec:
     ENABLE_BACKEND: "CUDA"
     BACKEND_ARCH: "cc86"
     RUN_TEST: "ON"
+  script:
+    - echo "Setup environment"
+    - apt update
+    - apt install -y environment-modules
+    - echo "/apps/modules" >> /etc/environment-modules/modulespath
+    - apt-get update
+    - apt-get install -y ccache
+    - apt-get install -y cmake
+    - apt-get install -y gcc
+    - apt-get install -y gfortran
+    - apt-get install -y git
+    - apt-get install -y infiniband-diags ibverbs-utils
+    - apt-get install -y libibverbs-dev libfabric1 libfabric-dev libpsm2-dev
+    - apt-get install -y openmpi-bin openmpi-common libopenmpi-dev libgtk2.0-dev
+    - apt-get install -y librdmacm-dev libpsm2-dev
+    - . /etc/profile.d/modules.sh
+    - ccache -s && ccache -M 5G
+    - if [ "${EXTRA_MODULE}" != "" ]; then module load ${EXTRA_MODULE}; fi
+    - export OMPI_ALLOW_RUN_AS_ROOT=1
+    - export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+    # FORTRAN_COMPILER is the MPI wrapper for an MPI build and the compiler
+    # itself for a WITH_MPI=OFF one, where the wrapper would put MPI back on
+    # the compile and link lines. Each job sets it.
+    - echo "Configure Release build"
+    - cmake -S . -B build -DCMAKE_Fortran_COMPILER=${FORTRAN_COMPILER} -DCMAKE_BUILD_TYPE=Release -DENABLE_BACKEND=${ENABLE_BACKEND} -DBACKEND_ARCH=${BACKEND_ARCH} -DWITH_MPI=${WITH_MPI} -DWITH_ADIOS2=ON -DUSE_SYSTEM_ADIOS2=ON -DSINGLE_PREC=${SINGLE_PREC}
+    - echo "Build tests"
+    - make -j12 -C build
+    - |
+      nvidia-smi || true
+      grep -iE '^(Pid|PPid|NSpid)' /proc/self/status
+      ctest --test-dir build -R 'memcheck_build_TGV_(ab2|species2)' --output-on-failure &
+      ctest_pid=$!
+      for i in 1 2 3 4 5 6; do
+        echo "PROBE_SMI: sample $i"
+        nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader | sed 's/^/PROBE_SMI: /' || true
+        for p in $(pgrep -f x3d2-memcheck); do
+          echo "PROBE_PID: sample $i pid $p $(grep NSpid /proc/$p/status)"
+        done
+        sleep 1
+      done
+      wait $ctest_pid
 
 build-and-test-omp_tgt:
   <<: *build-and-test-template
+  rules:
+    - when: never
   needs: []
   variables:
     ADIOS2_VERSION: 2.10.2
