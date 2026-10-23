@@ -26,7 +26,8 @@ module m_omptgt_kernels_fieldops
   public :: field_set_x_face, field_set_y_face, field_set_y_plane, &
             field_set_abl_wall_stress, field_set_x_face_from_field, &
             field_set_y_face_from_field, field_add_x_face_from_field, &
-            field_add_y_face_from_field
+            field_add_y_face_from_field, field_set_x_face_from_plane, &
+            field_set_y_face_from_plane
   public :: field_plane_partial_sums, field_plane_sums_reduce
   public :: reorder, sum_intox
 
@@ -590,6 +591,35 @@ contains
 
   end subroutine field_set_x_face_from_field
 
+  subroutine field_set_x_face_from_plane(f, p_start, p_end, apply_end, n_f, &
+                                         nx, ny, nz, n_yb_pad)
+    !! Writes two (ny, nz) planes into the x = 1 and x = nx planes of f.
+    !! p_end is read only when apply_end is true.
+    integer, intent(in) :: n_f, nx, ny, nz, n_yb_pad
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: p_start(ny, nz), p_end(ny, nz)
+    logical, intent(in) :: apply_end
+
+    integer :: i, y_block, z, b
+
+    !$omp target teams distribute parallel do collapse(3) private(b) &
+    !$omp OMP_DEVICE_ADDR(f, p_start, p_end)
+    do z = 1, nz
+      do y_block = 1, (ny - 1)/SZ + 1
+        do i = 1, SZ
+          ! Lanes past ny in the last y-block are padding
+          if (i + (y_block - 1)*SZ <= ny) then
+            b = y_block + (z - 1)*n_yb_pad
+            f(i, 1, b) = p_start(i + (y_block - 1)*SZ, z)
+            if (apply_end) f(i, nx, b) = p_end(i + (y_block - 1)*SZ, z)
+          end if
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine field_set_x_face_from_plane
+
   subroutine field_add_x_face_from_field(f, g, set_start, set_end, n_f, nx, &
                                          ny, nz, n_yb_pad)
     !! f += g on the x faces flagged by set_start/set_end.
@@ -666,6 +696,32 @@ contains
     !$omp end target teams distribute parallel do
 
   end subroutine field_set_y_face_from_field
+
+  subroutine field_set_y_face_from_plane(f, p_start, p_end, apply_end, n_f, &
+                                         nx, ny, nz, n_yb_pad)
+    !! Writes two (nx, nz) planes into the y = 1 and y = ny planes of f.
+    !! p_end is read only when apply_end is true.
+    integer, intent(in) :: n_f, nx, ny, nz, n_yb_pad
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: p_start(nx, nz), p_end(nx, nz)
+    logical, intent(in) :: apply_end
+
+    integer :: j, z, i_top, yb_top
+
+    i_top = mod(ny - 1, SZ) + 1
+    yb_top = (ny - 1)/SZ + 1
+
+    !$omp target teams distribute parallel do collapse(2) &
+    !$omp OMP_DEVICE_ADDR(f, p_start, p_end)
+    do z = 1, nz
+      do j = 1, nx
+        f(1, j, 1 + (z - 1)*n_yb_pad) = p_start(j, z)
+        if (apply_end) f(i_top, j, yb_top + (z - 1)*n_yb_pad) = p_end(j, z)
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine field_set_y_face_from_plane
 
   subroutine field_add_y_face_from_field(f, g, set_start, set_end, n_f, nx, &
                                          ny, nz, n_yb_pad)
