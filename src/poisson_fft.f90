@@ -216,9 +216,15 @@ contains
 
     ! stretching requires some coefficients matrices, which only the 010
     ! case supports
-    if (self%bc_code == '010' .and. mesh%geo%stretched(2)) then
-      self%stretched_y = .true.
-      call self%stretching_matrix(mesh%geo, xdirps, ydirps, zdirps)
+    if (mesh%geo%stretched(2)) then
+      if (self%bc_code == '010') then
+        self%stretched_y = .true.
+        call self%stretching_matrix(mesh%geo, xdirps, ydirps, zdirps)
+      else
+        call abort_run('FFT based Poisson solver supports stretching in &
+                       &y-direction only with periodic x and z and &
+                       &non-periodic y!')
+      end if
     end if
   end subroutine base_init
 
