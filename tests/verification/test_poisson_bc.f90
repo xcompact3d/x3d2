@@ -11,8 +11,8 @@ program test_poisson
   !! n = neumann, p = periodic.
   !!
   !! For each configuration, runs the cosine tests listed in the table tests
-  !! (8 at the moment, n=2,3):
-  !!   COS_X, COS_Y, COS_XY, COS_XYZ
+  !! (14 at the moment, n=2,3):
+  !!   COS_X, COS_Y, COS_Z, COS_XY, COS_XZ, COS_YZ, COS_XYZ
   !!
   !! Each test performs two checks:
   !!   Check 1: Poisson solution vs analytical (relative L2 error)
@@ -150,11 +150,17 @@ program test_poisson
   type(cosine_test_t), parameter :: tests(*) = [ &
     cosine_test_t('COS_X', [.true., .false., .false.], 2), &
     cosine_test_t('COS_Y', [.false., .true., .false.], 2), &
+    cosine_test_t('COS_Z', [.false., .false., .true.], 2), &
     cosine_test_t('COS_XY', [.true., .true., .false.], 2), &
+    cosine_test_t('COS_XZ', [.true., .false., .true.], 2), &
+    cosine_test_t('COS_YZ', [.false., .true., .true.], 2), &
     cosine_test_t('COS_XYZ', [.true., .true., .true.], 2), &
     cosine_test_t('COS_X', [.true., .false., .false.], 3), &
     cosine_test_t('COS_Y', [.false., .true., .false.], 3), &
+    cosine_test_t('COS_Z', [.false., .false., .true.], 3), &
     cosine_test_t('COS_XY', [.true., .true., .false.], 3), &
+    cosine_test_t('COS_XZ', [.true., .false., .true.], 3), &
+    cosine_test_t('COS_YZ', [.false., .true., .true.], 3), &
     cosine_test_t('COS_XYZ', [.true., .true., .true.], 3)]
 
   ! The outcome of the checks that run once for each BC configuration. The
@@ -371,7 +377,7 @@ program test_poisson
 contains
 
   ! ================================================================
-  ! Run all 8 cosine tests for one BC configuration
+  ! Run all the cosine tests for one BC configuration
   ! ================================================================
   subroutine run_config(config_id, cfg, nproc_dir)
     integer, intent(in) :: config_id
@@ -384,7 +390,7 @@ contains
 
     call setup_case(ctx, cfg, nproc_dir)
 
-    ! Run all 8 cosine tests
+    ! Run all the cosine tests
     do idx = 1, size(tests)
       results(idx, config_id) = run_single_test(ctx, tests(idx))
     end do
