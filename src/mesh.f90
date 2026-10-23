@@ -11,8 +11,8 @@ module m_mesh
   implicit none
 
   ! Class of the Poisson FFT boundary conditions, one code per periodicity
-  ! pattern (1 = periodic, 0 = not, in the order x, y, z) of the supported
-  ! cases.
+  ! pattern (0 = periodic, 1 = not, in the order x, y, z, as Incompact3d's
+  ! poisson_xyz) of the supported cases.
   integer, parameter :: FFT_BC_000 = 0
   integer, parameter :: FFT_BC_010 = 10
   integer, parameter :: FFT_BC_100 = 100

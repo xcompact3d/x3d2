@@ -1658,9 +1658,7 @@ contains
 
     ! Step 4: Poisson solve
     call process_spectral_110_poisson<<<blocks, threads>>>( & !&
-      c_dev, self%waves_dev, nz_h, &
-      self%ny_spec, self%nz_spec, self%nz_glob, self%sp_st(2), &
-      self%nx_glob &
+      c_dev, self%waves_dev, nz_h, self%ny_spec, self%nz_spec &
       )
 
     ! Step 5: Y paired recombine (backward)
