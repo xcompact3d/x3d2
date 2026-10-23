@@ -361,7 +361,7 @@ contains
 
       ! diagonal + 1
       do k = 1, self%nz_spec
-        do j = 1, self%ny_spec
+        do j = 1, self%ny_spec - 1
           do i = 1, self%nx_spec
             ix = i + self%sp_st(1); iy = j + self%sp_st(2); iz = k + self%sp_st(3)
 
