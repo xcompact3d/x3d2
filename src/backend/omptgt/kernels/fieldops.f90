@@ -1049,40 +1049,55 @@ contains
 
   end subroutine sample_points
 
-  subroutine add_gaussian_sources(a, b, c, src, n_src, n_box_y, n_box_z, &
-                                  inv_eps2, r_cut, n_f, n_k, d, grid)
+  subroutine add_gaussian_sources(a, b, c, src, box, n_src, n_box_y, &
+                                  n_box_z, inv_eps2, r_cut, n_f, n_k, d, &
+                                  grid)
     !! a, b, c += src(4:6, s)*exp(-dist^2/eps^2) within r_cut of the point
-    !! src(1:3, s). One thread per (source, z, y) of the source's index box,
-    !! each sweeping x; sources overlap, so the adds are atomic. grid holds
-    !! the local VERT dims, rank offsets and the padded y-block count.
+    !! src(1:3, s), over the global index box box(1:3, s)..box(4:6, s); see
+    !! source_index_boxes. Box indices are wrapped across periodic
+    !! boundaries and skipped where this rank does not own them. One thread
+    !! per (source, z, y) of the box, each sweeping x; sources overlap, so
+    !! the adds are atomic. grid holds the local VERT dims, global VERT dims,
+    !! rank offsets and periodic flags (1/0), three entries each, then the
+    !! padded y-block count.
     integer, intent(in) :: n_src, n_box_y, n_box_z, n_f, n_k
     real(dp), intent(in) :: src(6, n_src), inv_eps2, r_cut, d(3)
-    integer, intent(in) :: grid(7)
+    integer, intent(in) :: box(6, n_src), grid(13)
     real(dp), intent(inout) :: a(SZ, n_f, n_k), b(SZ, n_f, n_k), &
                                c(SZ, n_f, n_k)
 
     real(dp) :: dz2, dyz2, dist2, kern
-    integer :: s, ky, kz, x, y, z, x_lo, x_hi, i, k
+    integer :: s, ky, kz, g_x, g_y, g_z, x, y, z, i, k
 
     !$omp target teams distribute parallel do collapse(3) &
-    !$omp private(dz2, dyz2, dist2, kern, x, y, z, x_lo, x_hi, i, k) &
-    !$omp map(to: src, d, grid) OMP_DEVICE_ADDR(a, b, c)
+    !$omp private(dz2, dyz2, dist2, kern, g_x, g_y, g_z, x, y, z, i, k) &
+    !$omp map(to: src, box, d, grid) OMP_DEVICE_ADDR(a, b, c)
     do s = 1, n_src
       do kz = 0, n_box_z - 1
         do ky = 0, n_box_y - 1
-          ! Local indices of this thread's (y, z) within the source's box
-          z = ceiling((src(3, s) - r_cut)/d(3)) + kz - grid(6) + 1
-          y = ceiling((src(2, s) - r_cut)/d(2)) + ky - grid(5) + 1
-          if (z < 1 .or. z > grid(3) .or. y < 1 .or. y > grid(2)) cycle
-          dz2 = (src(3, s) - (z - 1 + grid(6))*d(3))**2
-          dyz2 = dz2 + (src(2, s) - (y - 1 + grid(5))*d(2))**2
+          g_z = box(3, s) + kz
+          g_y = box(2, s) + ky
+          if (g_z > box(6, s) .or. g_y > box(5, s)) cycle
+          ! Wrap periodic indices; skip the ones this rank does not own
+          z = g_z
+          if (grid(12) /= 0) z = modulo(g_z, grid(6))
+          z = z - grid(9) + 1
+          if (z < 1 .or. z > grid(3)) cycle
+          y = g_y
+          if (grid(11) /= 0) y = modulo(g_y, grid(5))
+          y = y - grid(8) + 1
+          if (y < 1 .or. y > grid(2)) cycle
+          dz2 = (src(3, s) - g_z*d(3))**2
+          dyz2 = dz2 + (src(2, s) - g_y*d(2))**2
           if (dyz2 > r_cut**2) cycle
-          x_lo = max(ceiling((src(1, s) - r_cut)/d(1)) - grid(4) + 1, 1)
-          x_hi = min(floor((src(1, s) + r_cut)/d(1)) - grid(4) + 1, grid(1))
           i = mod(y - 1, SZ) + 1
-          k = (y - 1)/SZ + 1 + (z - 1)*grid(7)
-          do x = x_lo, x_hi
-            dist2 = dyz2 + (src(1, s) - (x - 1 + grid(4))*d(1))**2
+          k = (y - 1)/SZ + 1 + (z - 1)*grid(13)
+          do g_x = box(1, s), box(4, s)
+            x = g_x
+            if (grid(10) /= 0) x = modulo(g_x, grid(4))
+            x = x - grid(7) + 1
+            if (x < 1 .or. x > grid(1)) cycle
+            dist2 = dyz2 + (src(1, s) - g_x*d(1))**2
             if (dist2 > r_cut**2) cycle
             kern = exp(-dist2*inv_eps2)
             !$omp atomic update

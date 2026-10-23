@@ -169,6 +169,44 @@ program test_alm
           backend%field_volume_integral(dw)]*cell_vol/(eps**3*pi**1.5_dp)
   ok = ok .and. all(abs(sums - coeffs(:, 1)) < proj_tol*abs(coeffs(:, 1)))
   if (.not. ok .and. nrank == 0) print *, 'projected integrals', sums
+
+  ! A source straddling the periodic y and z boundaries keeps its whole
+  ! kernel: the part beyond y = 0 and z = 0 wraps to the far side, in z
+  ! onto another rank
+  host_data%data = 0._dp
+  call backend%set_field_data(du, host_data%data)
+  call backend%set_field_data(dv, host_data%data)
+  call backend%set_field_data(dw, host_data%data)
+  src(:, 1) = [0.5_dp, 0.01_dp, 0.02_dp]
+  call backend%field_add_gaussian_sources(du, dv, dw, src, coeffs, eps, &
+                                          6._dp*eps)
+  sums = [backend%field_volume_integral(du), &
+          backend%field_volume_integral(dv), &
+          backend%field_volume_integral(dw)]*cell_vol/(eps**3*pi**1.5_dp)
+  ok = ok .and. all(abs(sums - coeffs(:, 1)) < proj_tol*abs(coeffs(:, 1)))
+  if (.not. ok .and. nrank == 0) print *, 'wrapped integrals', sums
+
+  ! Next to the non-periodic x inflow the part beyond x = 0 is cut, as in
+  ! Incompact3d: only the in-domain share of the x kernel remains
+  host_data%data = 0._dp
+  call backend%set_field_data(du, host_data%data)
+  call backend%set_field_data(dv, host_data%data)
+  call backend%set_field_data(dw, host_data%data)
+  src(:, 1) = [0.02_dp, 0.45_dp, 0.55_dp]
+  call backend%field_add_gaussian_sources(du, dv, dw, src, coeffs, eps, &
+                                          6._dp*eps)
+  expected = 0._dp
+  do i = 0, gdims(1) - 1
+    expected = expected + exp(-((i*d(1) - src(1, 1))/eps)**2)
+  end do
+  expected = expected*d(1)/(eps*sqrt(pi))
+  sums = [backend%field_volume_integral(du), &
+          backend%field_volume_integral(dv), &
+          backend%field_volume_integral(dw)]*cell_vol/(eps**3*pi**1.5_dp)
+  ok = ok .and. expected < 0.9_dp &
+       .and. all(abs(sums - expected*coeffs(:, 1)) &
+                 < proj_tol*abs(coeffs(:, 1)))
+  if (.not. ok .and. nrank == 0) print *, 'cut integrals', sums, expected
   call report('projection')
 
   ! Full ALM step: one non-rotating 2-bladed rotor in uniform flow. The

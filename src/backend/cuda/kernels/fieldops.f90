@@ -881,38 +881,47 @@ contains
   end function local_index
 
   attributes(global) subroutine add_gaussian_sources( &
-    a, b, c, src, box, n_src, inv_eps2, r_cut2, dx, dy, dz, ox, oy, oz, &
-    n_i_pad &
+    a, b, c, src, box, n_src, inv_eps2, r_cut2, dx, dy, dz, nx, ny, nz, &
+    gx, gy, gz, ox, oy, oz, px, py, pz, n_i_pad &
     )
     !! a, b, c += src(4:6, s)*exp(-dist^2/eps^2) within r_cut of the point
-    !! src(1:3, s), over the local index box box(1:3, s)..box(4:6, s).
-    !! Launch with blocks (n_src, box extent in z) and threads striding y
-    !! within the box; sources overlap, so the adds are atomic.
+    !! src(1:3, s), over the global index box box(1:3, s)..box(4:6, s); see
+    !! source_index_boxes. Box indices are wrapped across periodic
+    !! boundaries and skipped where this rank does not own them. Launch
+    !! with blocks (n_src, box extent in z) and threads striding y within
+    !! the box; sources overlap, so the adds are atomic.
     implicit none
 
     real(dp), device, intent(inout), dimension(:, :, :) :: a, b, c
     real(dp), device, intent(in) :: src(6, n_src)
     integer, device, intent(in) :: box(6, n_src)
-    integer, value, intent(in) :: n_src, ox, oy, oz, n_i_pad
+    integer, value, intent(in) :: n_src, nx, ny, nz, gx, gy, gz, &
+                                  ox, oy, oz, n_i_pad
     real(dp), value, intent(in) :: inv_eps2, r_cut2, dx, dy, dz
+    logical, value, intent(in) :: px, py, pz
 
     real(dp) :: dz2, dyz2, dist2, kern, ierr
-    integer :: s, x, y, z, i, pencil
+    integer :: s, g_x, g_y, g_z, x, y, z, i, pencil
 
     s = blockIdx%x
-    z = box(3, s) + blockIdx%y - 1
-    if (z > box(6, s)) return
-    if (box(1, s) > box(4, s) .or. box(2, s) > box(5, s)) return
+    g_z = box(3, s) + blockIdx%y - 1
+    if (g_z > box(6, s)) return
+    z = local_index(g_z, gz, oz, nz, pz)
+    if (z < 1) return
 
-    dz2 = (src(3, s) - (z - 1 + oz)*dz)**2
+    dz2 = (src(3, s) - g_z*dz)**2
     if (dz2 > r_cut2) return
-    do y = box(2, s) + threadIdx%x - 1, box(5, s), blockDim%x
-      dyz2 = dz2 + (src(2, s) - (y - 1 + oy)*dy)**2
+    do g_y = box(2, s) + threadIdx%x - 1, box(5, s), blockDim%x
+      y = local_index(g_y, gy, oy, ny, py)
+      if (y < 1) cycle
+      dyz2 = dz2 + (src(2, s) - g_y*dy)**2
       if (dyz2 > r_cut2) cycle
       i = mod(y - 1, SZ) + 1
       pencil = z + ((y - 1)/SZ)*n_i_pad
-      do x = box(1, s), box(4, s)
-        dist2 = dyz2 + (src(1, s) - (x - 1 + ox)*dx)**2
+      do g_x = box(1, s), box(4, s)
+        x = local_index(g_x, gx, ox, nx, px)
+        if (x < 1) cycle
+        dist2 = dyz2 + (src(1, s) - g_x*dx)**2
         if (dist2 > r_cut2) cycle
         kern = exp(-dist2*inv_eps2)
         ierr = atomicadd(a(i, x, pencil), src(4, s)*kern)

@@ -1307,7 +1307,9 @@ contains
     real(dp), device, allocatable :: src_d(:, :)
     integer, device, allocatable :: box_d(:, :)
     integer :: box(6, size(points, 2)), offset(3), dims_padded(3), n, nz_box
+    integer :: dims(3), gdims(3)
     real(dp) :: src(6, size(points, 2)), d(3)
+    logical :: periodic(3)
     type(dim3) :: blocks, threads
 
     call check_point_fields(a, b, c)
@@ -1330,14 +1332,19 @@ contains
     src_d = src
     box_d = box
     d = self%mesh%geo%d
+    dims = self%mesh%get_dims(VERT)
+    gdims = self%mesh%get_global_dims(VERT)
     offset = self%mesh%par%n_offset
+    periodic = self%mesh%grid%periodic_BC
     dims_padded = self%allocator%get_padded_dims(DIR_C)
 
     threads = dim3(64, 1, 1)
     blocks = dim3(n, nz_box, 1)
     call add_gaussian_sources<<<blocks, threads>>>( & !&
       a_d, b_d, c_d, src_d, box_d, n, 1._dp/eps**2, r_cut**2, &
-      d(1), d(2), d(3), offset(1), offset(2), offset(3), dims_padded(3))
+      d(1), d(2), d(3), dims(1), dims(2), dims(3), &
+      gdims(1), gdims(2), gdims(3), offset(1), offset(2), offset(3), &
+      periodic(1), periodic(2), periodic(3), dims_padded(3))
 
   end subroutine field_add_gaussian_sources_cuda
 

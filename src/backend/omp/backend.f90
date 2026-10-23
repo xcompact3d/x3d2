@@ -1059,13 +1059,18 @@ contains
     real(dp), intent(in) :: eps, r_cut
 
     integer :: lo(3, size(points, 2)), hi(3, size(points, 2))
-    integer :: n_offset(3), y_stride, s, x, y, z, i, k
+    integer :: dims(3), gdims(3), n_offset(3), y_stride
+    integer :: s, gx, gy, gz, x, y, z, i, k
     real(dp) :: d(3), inv_eps2, r_cut2, dz2, dyz2, dist2, kern
+    logical :: periodic(3)
 
     call check_point_fields(a, b, c)
 
     d = self%mesh%geo%d
+    dims = self%mesh%get_dims(VERT)
+    gdims = self%mesh%get_global_dims(VERT)
     n_offset = self%mesh%par%n_offset
+    periodic = self%mesh%grid%periodic_BC
     y_stride = y_group_stride(self)
     inv_eps2 = 1._dp/eps**2
     r_cut2 = r_cut**2
@@ -1073,20 +1078,27 @@ contains
     call source_index_boxes(self%mesh, points, r_cut, lo, hi)
 
     ! Sources in order, so every point accumulates them in the same order
-    ! whatever the thread count
+    ! whatever the thread count. Distances use the unwrapped global index g;
+    ! the point it lands on is found by wrapping g.
     do s = 1, size(points, 2)
-      if (any(lo(:, s) > hi(:, s))) cycle
-      !$omp parallel do private(dz2, dyz2, dist2, kern, i, k, x, y)
-      do z = lo(3, s), hi(3, s)
-        dz2 = (points(3, s) - (z - 1 + n_offset(3))*d(3))**2
+      !$omp parallel do private(dz2, dyz2, dist2, kern, i, k, gx, gy, x, y, z)
+      do gz = lo(3, s), hi(3, s)
+        z = wrapped_local(gz, gdims(3), n_offset(3), dims(3), periodic(3))
+        if (z == 0) cycle
+        dz2 = (points(3, s) - gz*d(3))**2
         if (dz2 > r_cut2) cycle
-        do y = lo(2, s), hi(2, s)
-          dyz2 = dz2 + (points(2, s) - (y - 1 + n_offset(2))*d(2))**2
+        do gy = lo(2, s), hi(2, s)
+          y = wrapped_local(gy, gdims(2), n_offset(2), dims(2), periodic(2))
+          if (y == 0) cycle
+          dyz2 = dz2 + (points(2, s) - gy*d(2))**2
           if (dyz2 > r_cut2) cycle
           i = mod(y - 1, SZ) + 1
           k = (y - 1)/SZ + 1 + (z - 1)*y_stride
-          do x = lo(1, s), hi(1, s)
-            dist2 = dyz2 + (points(1, s) - (x - 1 + n_offset(1))*d(1))**2
+          do gx = lo(1, s), hi(1, s)
+            x = wrapped_local(gx, gdims(1), n_offset(1), dims(1), &
+                              periodic(1))
+            if (x == 0) cycle
+            dist2 = dyz2 + (points(1, s) - gx*d(1))**2
             if (dist2 > r_cut2) cycle
             kern = exp(-dist2*inv_eps2)
             a%data(i, x, k) = a%data(i, x, k) + coeffs(1, s)*kern
@@ -1098,6 +1110,23 @@ contains
       !$omp end parallel do
     end do
   end subroutine field_add_gaussian_sources_omp
+
+  pure integer function wrapped_local(g, n_glob, offset, n_loc, periodic)
+    !! Local one-based index of the zero-based global VERT index g, wrapped
+    !! when periodic; 0 when it is off this rank or outside the domain.
+    implicit none
+
+    integer, intent(in) :: g, n_glob, offset, n_loc
+    logical, intent(in) :: periodic
+
+    integer :: gw
+
+    gw = g
+    if (periodic) gw = modulo(g, n_glob)
+    wrapped_local = gw - offset + 1
+    if (gw < 0 .or. gw >= n_glob .or. wrapped_local < 1 &
+        .or. wrapped_local > n_loc) wrapped_local = 0
+  end function wrapped_local
 
   pure subroutine local_corner(g, gdims, n_offset, dims, periodic, loc, &
                                owned)

@@ -20,7 +20,7 @@ module m_omptgt_backend
                    MPI_Allreduce
 
   use m_allocator, only: allocator_t
-  use m_base_backend, only: base_backend_t
+  use m_base_backend, only: base_backend_t, source_index_boxes
   use m_common, only: dp, MPI_X3D2_DP, move_data_loc, get_dirs_from_rdr, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, VERT, NULL_LOC, &
                       X_FACE, Y_FACE, Z_FACE, BC_DIRICHLET
@@ -1059,12 +1059,14 @@ contains
 
     real(dp), pointer, contiguous, dimension(:, :, :) :: a_d, b_d, c_d
     real(dp) :: src(6, size(points, 2)), d(3)
-    integer :: grid(7), dims_padded(3), n
+    integer :: box(6, size(points, 2)), grid(13), dims_padded(3), n
 
     call check_point_fields(a, b, c)
 
     n = size(points, 2)
     if (n == 0) return
+    call source_index_boxes(self%mesh, points, r_cut, box(1:3, :), &
+                            box(4:6, :))
 
     call resolve_field_t(a_d, a)
     call resolve_field_t(b_d, b)
@@ -1074,13 +1076,14 @@ contains
     src(4:6, :) = coeffs
     d = self%mesh%geo%d
     dims_padded = self%allocator%get_padded_dims(DIR_C)
-    grid = [self%mesh%get_dims(VERT), self%mesh%par%n_offset, &
-            dims_padded(2)/SZ]
-    ! Index extent of a source's box in y and z: points within r_cut
-    call add_gaussian_sources(a_d, b_d, c_d, src, n, &
-                              floor(2*r_cut/d(2)) + 2, &
-                              floor(2*r_cut/d(3)) + 2, 1._dp/eps**2, &
-                              r_cut, size(a_d, 2), size(a_d, 3), d, grid)
+    grid = [self%mesh%get_dims(VERT), self%mesh%get_global_dims(VERT), &
+            self%mesh%par%n_offset, &
+            merge(1, 0, self%mesh%grid%periodic_BC), dims_padded(2)/SZ]
+    call add_gaussian_sources(a_d, b_d, c_d, src, box, n, &
+                              maxval(box(5, :) - box(2, :) + 1), &
+                              maxval(box(6, :) - box(3, :) + 1), &
+                              1._dp/eps**2, r_cut, size(a_d, 2), &
+                              size(a_d, 3), d, grid)
 
   end subroutine field_add_gaussian_sources_omptgt
 
