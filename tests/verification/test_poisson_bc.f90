@@ -48,6 +48,9 @@ program test_poisson
   !!                                (default: uniform)
   !!   --beta <real>                stretching parameter beta of the stretched
   !!                                cases (default: the beta of the case)
+  !!   --dump-matrix                rank 0 writes the stretching matrices of
+  !!                                each stretched case to x3d2_<stretch>.dump
+  !!                                (the format of the Incompact3d dumps)
   !! The stretched cases need the CUDA backend and 1 rank for BC code pdp. The
   !! other BC codes with stretching in y, and every stretched case on the
   !! OpenMP backend, end in the abort of the solver. On a stretched case Check
@@ -258,6 +261,7 @@ program test_poisson
   character(len=4*size(cases)) :: codes
   logical :: config_run(size(cases))
   logical :: allpass
+  logical :: dump_matrix
 
   ! Per-config results for final summary
   type(test_result_t) :: results(size(tests), size(cases))
@@ -276,8 +280,9 @@ program test_poisson
   only_bc = 'all'
   only_stretch = 'uniform'
   beta_override = -1.0_dp
+  dump_matrix = .false.
   nproc_dir = [1, 1, nproc]
-  do iarg = 1, command_argument_count() - 1
+  do iarg = 1, command_argument_count()
     call get_command_argument(iarg, arg)
     if (trim(arg) == '--bc') then
       call get_command_argument(iarg + 1, arg)
@@ -293,6 +298,8 @@ program test_poisson
           'test_poisson_bc: --beta needs a real number'
         error stop 1
       end if
+    else if (trim(arg) == '--dump-matrix') then
+      dump_matrix = .true.
     else if (trim(arg) == '--nproc_dir') then
       ! --nproc_dir <px>,<py>,<pz> sets the decomposition, as nproc_dir does
       ! in the domain_settings namelist; the default is all ranks along z
@@ -390,6 +397,9 @@ contains
 
     call setup_case(ctx, cfg, nproc_dir)
 
+    if (dump_matrix .and. ctx%stretched .and. nrank == 0) &
+      call dump_stretching_matrix(ctx, cfg)
+
     ! Run all the cosine tests
     do idx = 1, size(tests)
       results(idx, config_id) = run_single_test(ctx, tests(idx))
@@ -398,6 +408,71 @@ contains
     case_results(config_id) = run_case_checks(ctx)
 
   end subroutine run_config
+
+  ! ================================================================
+  ! Write the stretching matrices of one case, rank 0 only. The indices are
+  ! local, which are global on rank 0 (the supported run has one rank).
+  ! Entries the solver never writes are written as they are.
+  ! ================================================================
+  subroutine dump_stretching_matrix(ctx, cfg)
+    type(poisson_ctx_t), intent(in) :: ctx
+    type(bc_case_t), intent(in) :: cfg
+
+    integer :: unit
+
+    associate (fft => ctx%backend%poisson_fft)
+      open (newunit=unit, file='x3d2_'//trim(cfg%stretching)//'.dump', &
+            status='replace', action='write')
+      call write_dump_header(unit, cfg, fft%nx_spec, fft%nz_spec, &
+                             ctx%mesh%geo%beta(2), ctx%mesh%geo%alpha(2), &
+                             fft%ny_glob)
+      if (fft%stretched_y_sym) then
+        call write_dump_block(unit, 'odd', fft%a_odd_re, fft%a_odd_im)
+        call write_dump_block(unit, 'even', fft%a_even_re, fft%a_even_im)
+      else
+        call write_dump_block(unit, 'single', fft%a_re, fft%a_im)
+      end if
+      close (unit)
+    end associate
+  end subroutine dump_stretching_matrix
+
+  subroutine write_dump_header(unit, cfg, nx_spec, nz_spec, beta, alpha, ny)
+    integer, intent(in) :: unit, nx_spec, nz_spec, ny
+    type(bc_case_t), intent(in) :: cfg
+    real(dp), intent(in) :: beta, alpha
+
+    ! mode is the istret of Incompact3d: centred 1, top-bottom 2, bottom 3
+    write (unit, '(a,1x,i0)') 'mode', &
+      findloc([character(len=10) :: 'centred', 'top-bottom', 'bottom'], &
+              cfg%stretching, 1)
+    write (unit, '(a,1x,i0)') 'ny', ny
+    write (unit, '(a,1x,es24.16)') 'beta', beta
+    write (unit, '(a,1x,es24.16)') 'alpha', alpha
+    write (unit, '(a,2(1x,i0))') 'spec_x_range', 1, nx_spec
+    write (unit, '(a,2(1x,i0))') 'spec_z_range', 1, nz_spec
+  end subroutine write_dump_header
+
+  subroutine write_dump_block(unit, name, re, im)
+    integer, intent(in) :: unit
+    character(len=*), intent(in) :: name
+    real(dp), intent(in) :: re(:, :, :, :), im(:, :, :, :)
+
+    integer :: i, j, k, d
+
+    write (unit, '(a,1x,a)') 'array', name
+    write (unit, '(a,4(1x,i0))') 'lbound', lbound(re)
+    write (unit, '(a,4(1x,i0))') 'shape', shape(re)
+    do d = 1, size(re, 4)
+      do k = 1, size(re, 3)
+        do j = 1, size(re, 2)
+          do i = 1, size(re, 1)
+            write (unit, '(4(i0,1x),2es24.16)') i, j, k, d, &
+              re(i, j, k, d), im(i, j, k, d)
+          end do
+        end do
+      end do
+    end do
+  end subroutine write_dump_block
 
   ! ================================================================
   ! Set up the context of one BC configuration, once for all its tests
