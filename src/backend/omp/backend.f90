@@ -3,7 +3,7 @@ module m_omp_backend
                    MPI_Allreduce
 
   use m_allocator, only: allocator_t
-  use m_base_backend, only: base_backend_t
+  use m_base_backend, only: base_backend_t, source_index_boxes
   use m_common, only: dp, MPI_X3D2_DP, get_dirs_from_rdr, move_data_loc, &
                       DIR_X, DIR_Y, DIR_Z, DIR_C, NULL_LOC, &
                       X_FACE, Y_FACE, Z_FACE, VERT, BC_DIRICHLET
@@ -49,6 +49,8 @@ module m_omp_backend
     procedure :: vector_norm_squared => vector_norm_squared_omp
     procedure :: field_labelled_sums => field_labelled_sums_omp
     procedure :: field_labelled_axpy => field_labelled_axpy_omp
+    procedure :: field_sample_points => field_sample_points_omp
+    procedure :: field_add_gaussian_sources => field_add_gaussian_sources_omp
     procedure :: field_max_mean => field_max_mean_omp
     procedure :: slice_max_sum => slice_max_sum_omp
     procedure :: field_scale => field_scale_omp
@@ -993,6 +995,178 @@ contains
     end do
     !$omp end parallel do
   end subroutine field_labelled_axpy_omp
+
+  subroutine field_sample_points_omp(self, vals, points, a, b, c)
+    !! [[m_base_backend(module):field_sample_points_base(subroutine)]]
+    implicit none
+
+    class(omp_backend_t) :: self
+    real(dp), intent(out) :: vals(:, :)
+    real(dp), intent(in) :: points(:, :)
+    class(field_t), intent(in) :: a, b, c
+
+    integer :: dims(3), gdims(3), n_offset(3), y_stride
+    integer :: p, o1, o2, o3, dir, g0(3), loc(3), i, k
+    real(dp) :: frac(3), wgt(0:1, 3), w
+    logical :: periodic(3), owned
+
+    call check_point_fields(a, b, c)
+
+    dims = self%mesh%get_dims(VERT)
+    gdims = self%mesh%get_global_dims(VERT)
+    n_offset = self%mesh%par%n_offset
+    periodic = self%mesh%grid%periodic_BC
+    y_stride = y_group_stride(self)
+
+    vals = 0._dp
+    do p = 1, size(points, 2)
+      ! Zero-based global index of the lower corner and the weights
+      do dir = 1, 3
+        frac(dir) = points(dir, p)/self%mesh%geo%d(dir)
+        g0(dir) = floor(frac(dir))
+        frac(dir) = frac(dir) - g0(dir)
+        wgt(0, dir) = 1._dp - frac(dir)
+        wgt(1, dir) = frac(dir)
+      end do
+      do o3 = 0, 1
+        do o2 = 0, 1
+          do o1 = 0, 1
+            w = wgt(o1, 1)*wgt(o2, 2)*wgt(o3, 3)
+            if (w == 0._dp) cycle
+            call local_corner(g0 + [o1, o2, o3], gdims, n_offset, dims, &
+                              periodic, loc, owned)
+            if (.not. owned) cycle
+            ! DIR_X storage: x along j, y split into SZ-blocks
+            i = mod(loc(2) - 1, SZ) + 1
+            k = (loc(2) - 1)/SZ + 1 + (loc(3) - 1)*y_stride
+            vals(1, p) = vals(1, p) + w*a%data(i, loc(1), k)
+            vals(2, p) = vals(2, p) + w*b%data(i, loc(1), k)
+            vals(3, p) = vals(3, p) + w*c%data(i, loc(1), k)
+          end do
+        end do
+      end do
+    end do
+  end subroutine field_sample_points_omp
+
+  subroutine field_add_gaussian_sources_omp(self, a, b, c, points, coeffs, &
+                                            eps, r_cut)
+    !! [[m_base_backend(module):field_add_gaussian_sources_base(subroutine)]]
+    implicit none
+
+    class(omp_backend_t) :: self
+    class(field_t), intent(inout) :: a, b, c
+    real(dp), intent(in) :: points(:, :), coeffs(:, :)
+    real(dp), intent(in) :: eps, r_cut
+
+    integer :: lo(3, size(points, 2)), hi(3, size(points, 2))
+    integer :: dims(3), gdims(3), n_offset(3), y_stride
+    integer :: s, gx, gy, gz, x, y, z, i, k
+    real(dp) :: d(3), inv_eps2, r_cut2, dz2, dyz2, dist2, kern
+    logical :: periodic(3)
+
+    call check_point_fields(a, b, c)
+
+    d = self%mesh%geo%d
+    dims = self%mesh%get_dims(VERT)
+    gdims = self%mesh%get_global_dims(VERT)
+    n_offset = self%mesh%par%n_offset
+    periodic = self%mesh%grid%periodic_BC
+    y_stride = y_group_stride(self)
+    inv_eps2 = 1._dp/eps**2
+    r_cut2 = r_cut**2
+
+    call source_index_boxes(self%mesh, points, r_cut, lo, hi)
+
+    ! Sources in order, so every point accumulates them in the same order
+    ! whatever the thread count. Distances use the unwrapped global index g;
+    ! the point it lands on is found by wrapping g.
+    do s = 1, size(points, 2)
+      !$omp parallel do private(dz2, dyz2, dist2, kern, i, k, gx, gy, x, y, z)
+      do gz = lo(3, s), hi(3, s)
+        z = wrapped_local(gz, gdims(3), n_offset(3), dims(3), periodic(3))
+        if (z == 0) cycle
+        dz2 = (points(3, s) - gz*d(3))**2
+        if (dz2 > r_cut2) cycle
+        do gy = lo(2, s), hi(2, s)
+          y = wrapped_local(gy, gdims(2), n_offset(2), dims(2), periodic(2))
+          if (y == 0) cycle
+          dyz2 = dz2 + (points(2, s) - gy*d(2))**2
+          if (dyz2 > r_cut2) cycle
+          i = mod(y - 1, SZ) + 1
+          k = (y - 1)/SZ + 1 + (z - 1)*y_stride
+          do gx = lo(1, s), hi(1, s)
+            x = wrapped_local(gx, gdims(1), n_offset(1), dims(1), &
+                              periodic(1))
+            if (x == 0) cycle
+            dist2 = dyz2 + (points(1, s) - gx*d(1))**2
+            if (dist2 > r_cut2) cycle
+            kern = exp(-dist2*inv_eps2)
+            a%data(i, x, k) = a%data(i, x, k) + coeffs(1, s)*kern
+            b%data(i, x, k) = b%data(i, x, k) + coeffs(2, s)*kern
+            c%data(i, x, k) = c%data(i, x, k) + coeffs(3, s)*kern
+          end do
+        end do
+      end do
+      !$omp end parallel do
+    end do
+  end subroutine field_add_gaussian_sources_omp
+
+  pure integer function wrapped_local(g, n_glob, offset, n_loc, periodic)
+    !! Local one-based index of the zero-based global VERT index g, wrapped
+    !! when periodic; 0 when it is off this rank or outside the domain.
+    implicit none
+
+    integer, intent(in) :: g, n_glob, offset, n_loc
+    logical, intent(in) :: periodic
+
+    integer :: gw
+
+    gw = g
+    if (periodic) gw = modulo(g, n_glob)
+    wrapped_local = gw - offset + 1
+    if (gw < 0 .or. gw >= n_glob .or. wrapped_local < 1 &
+        .or. wrapped_local > n_loc) wrapped_local = 0
+  end function wrapped_local
+
+  pure subroutine local_corner(g, gdims, n_offset, dims, periodic, loc, &
+                               owned)
+    !! Local one-based index of the zero-based global VERT index g, wrapped
+    !! across periodic boundaries; owned is false off this rank or outside
+    !! a non-periodic boundary.
+    implicit none
+
+    integer, intent(in) :: g(3), gdims(3), n_offset(3), dims(3)
+    logical, intent(in) :: periodic(3)
+    integer, intent(out) :: loc(3)
+    logical, intent(out) :: owned
+
+    integer :: dir, gw
+
+    owned = .true.
+    do dir = 1, 3
+      gw = g(dir)
+      if (periodic(dir)) then
+        gw = modulo(gw, gdims(dir))
+      else if (gw < 0 .or. gw >= gdims(dir)) then
+        owned = .false.
+      end if
+      loc(dir) = gw - n_offset(dir) + 1
+      if (loc(dir) < 1 .or. loc(dir) > dims(dir)) owned = .false.
+    end do
+  end subroutine local_corner
+
+  subroutine check_point_fields(a, b, c)
+    !! Checks the fields passed to the point sampling and source operations
+    !! are DIR_X VERT fields.
+    implicit none
+
+    class(field_t), intent(in) :: a, b, c
+
+    if (a%dir /= DIR_X .or. b%dir /= DIR_X .or. c%dir /= DIR_X) &
+      call abort_run('Point sampling and sources need DIR_X fields.')
+    if (a%data_loc /= VERT .or. b%data_loc /= VERT .or. c%data_loc /= VERT) &
+      call abort_run('Point sampling and sources need VERT fields.')
+  end subroutine check_point_fields
 
   subroutine check_labelled_fields(g, label, a, b, c)
     !! Checks the fields passed to the labelled field operations share a

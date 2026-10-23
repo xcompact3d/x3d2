@@ -48,6 +48,7 @@ module m_base_case
     procedure :: case_init
     procedure :: case_finalise
     procedure :: finalise_case_specific => finalise_case_specific_default
+    procedure :: post_step
     procedure :: set_init
     procedure :: substep
     procedure :: set_curr_fields
@@ -158,6 +159,16 @@ contains
   subroutine finalise_case_specific_default(self)
     class(base_case_t) :: self
   end subroutine finalise_case_specific_default
+
+  subroutine post_step(self, iter, t)
+    !! Called after every completed time step, unlike postprocess which runs
+    !! only every n_output steps. No-op unless a case overrides it.
+    implicit none
+
+    class(base_case_t) :: self
+    integer, intent(in) :: iter
+    real(dp), intent(in) :: t
+  end subroutine post_step
 
   subroutine set_init(self, field, field_func)
     implicit none
@@ -380,6 +391,8 @@ contains
       call self%finish_step(iter, output_vorticity, output_qcriterion)
 
       call self%io_mgr%update_stats(self%solver, iter)
+
+      call self%post_step(iter, iter*self%solver%dt)
 
       if (self%solver%n_output > 0) then
         if (mod(iter, self%solver%n_output) == 0) then
