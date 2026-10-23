@@ -459,6 +459,52 @@ All files must hold the same number of planes at the same spacing.
 Set ``start_iter`` in the precursor after its turbulence has developed, so the
 planes carry turbulence rather than the decaying initial noise.
 
+Turbines in the boundary layer
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+An ``abl`` run can carry wind turbines, typically a successor driven by a
+precursor's inflow (Incompact3d ``iturbine`` with an ABL ``itype``). They are
+set in the optional ``turbine_nml`` namelist block; without it the run has no
+turbines.
+
+.. code-block:: fortran
+
+   &turbine_nml
+     iturbine = 2
+     iturboutput = 250
+     adm_coords = 'adm.ad'
+     rho_air = 1.2
+     T_relax = 1.1291
+   /
+
+``iturbine``
+  Turbine model: ``0`` for none, ``2`` for the actuator disc model.
+
+  **Default:** ``0``
+
+``iturboutput``
+  Iterations between turbine outputs, independent of ``n_output``. ``0``
+  disables them.
+
+  **Default:** ``1``
+
+``adm_coords``
+  Actuator disc file, in the format of the ``wind_turbine`` case (one header
+  line, then one disc per line). Required with ``iturbine = 2``.
+
+``rho_air``
+  Air density used for the disc forces and power.
+
+  **Default:** ``1.0``
+
+``T_relax``
+  Time constant of the disc velocity filter; a negative value disables it.
+
+  **Default:** ``-1.0``
+
+The disc statistics start at ``initstat`` of ``stats_params``, as in the
+``wind_turbine`` case.
+
 Checkpoint Parameters
 ~~~~~~~~~~~~~~~~~~~~~
 

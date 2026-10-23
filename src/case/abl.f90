@@ -1,17 +1,19 @@
 module m_case_abl
   use m_allocator, only: allocator_t
   use m_abl, only: abl_t
+  use m_adm, only: adm_t
   use m_abl_diagnostics, only: abl_diagnostics_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
   use m_common, only: dp, get_argument, MPI_X3D2_DP, DIR_X, VERT, &
                       X_FACE, Y_FACE, BC_DIRICHLET, BC_NEUMANN, BC_PERIODIC
-  use m_config, only: abl_config_t, inflow_config_t
+  use m_config, only: abl_config_t, inflow_config_t, turbine_config_t
   use m_field, only: field_t
   use m_inflow_planes, only: inflow_plane_writer_t, inflow_plane_reader_t
   use m_mesh, only: mesh_t
   use m_mpi, only: MPI_COMM_WORLD, MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
   use m_logger, only: log_info, abort_run, str
+  use m_turbine_model, only: turbine_model_t
 
   implicit none
 
@@ -29,6 +31,9 @@ module m_case_abl
     real(dp) :: out_vel = 0._dp
     !> y weights of the inlet and outlet flow rates (outflow correction)
     real(dp), allocatable :: flow_rate_y_weights(:)
+    type(turbine_config_t) :: turbine_cfg
+    !> Turbine forcing model; only allocated when turbine_nml asks for one
+    class(turbine_model_t), pointer :: turbine => null()
   contains
     procedure :: define_BC => define_BC_abl
     procedure :: initial_conditions => initial_conditions_abl
@@ -36,7 +41,9 @@ module m_case_abl
     procedure :: apply_BC => apply_BC_abl
     procedure :: postprocess => postprocess_abl
     procedure :: post_step => post_step_abl
+    procedure :: finalise_case_specific => finalise_abl
     procedure :: update_inflow_plane
+    procedure :: init_turbine
   end type case_abl_t
 
   interface case_abl_t
@@ -57,6 +64,7 @@ contains
 
     call flow_case%abl_cfg%read(nml_file=get_argument(1))
     call flow_case%inflow_cfg%read(nml_file=get_argument(1))
+    call flow_case%turbine_cfg%read(nml_file=get_argument(1))
 
     ! apply_BC_abl and the wall model hard-code these boundaries, so the
     ! mesh must agree with them for the pressure solve and precorrect_walls.
@@ -104,7 +112,39 @@ contains
       flow_case%flow_rate_y_weights(dims(2)) = 0.5_dp
     end if
 
+    if (flow_case%turbine_cfg%iturbine /= 0) call flow_case%init_turbine()
+
   end function case_abl_init
+
+  subroutine init_turbine(self)
+    !! Turbines in the boundary layer, typically in a successor driven by a
+    !! precursor's inflow (Incompact3d iturbine with an ABL itype).
+    implicit none
+
+    class(case_abl_t) :: self
+
+    select case (self%turbine_cfg%iturbine)
+    case (2)
+      allocate (adm_t :: self%turbine)
+      select type (turbine => self%turbine)
+      type is (adm_t)
+        turbine%coords_file = self%turbine_cfg%adm_coords
+        turbine%rho_air = self%turbine_cfg%rho_air
+        turbine%T_relax = self%turbine_cfg%T_relax
+        turbine%stats_start = max(1, self%io_mgr%stats_mgr%config%initstat)
+        turbine%stats_freq = max(1, self%io_mgr%stats_mgr%config%istatfreq)
+      end select
+    case default
+      call abort_run('ABL: turbine_nml iturbine must be 0 (none) or 2 &
+                     &(actuator disc).', collective=.true.)
+    end select
+
+    call self%turbine%init(self%solver%backend, self%solver%mesh, &
+                           self%solver%host_allocator, self%solver%dt)
+    call self%io_mgr%register_checkpoint_state(self%turbine)
+    call self%turbine%setup_output(self%solver%mesh%par%is_root(), &
+                                   self%io_mgr%is_restart())
+  end subroutine init_turbine
 
   subroutine initial_conditions_abl(self)
     implicit none
@@ -211,6 +251,12 @@ contains
     call self%abl%apply_forcing(du, dv, dw, &
                                 self%solver%u, self%solver%v, self%solver%w)
 
+    if (associated(self%turbine)) then
+      call self%turbine%update(real(iter, dp)*self%solver%dt, self%solver%dt)
+      call self%turbine%project_forces(du, dv, dw, self%solver%u, &
+                                       self%solver%v, self%solver%w)
+    end if
+
   end subroutine forcings_abl
 
   subroutine apply_BC_abl(self, u, v, w)
@@ -286,6 +332,23 @@ contains
     call self%inflow_writer%sample( &
       iter, t, self%solver%u, self%solver%v, self%solver%w)
 
+    ! Every iturboutput steps, independent of n_output, as in Incompact3d
+    if (associated(self%turbine) .and. self%turbine_cfg%iturboutput > 0) then
+      if (mod(iter, self%turbine_cfg%iturboutput) == 0) &
+        call self%turbine%write_output(iter, self%solver%mesh%par%is_root())
+    end if
+
   end subroutine post_step_abl
+
+  subroutine finalise_abl(self)
+    implicit none
+
+    class(case_abl_t) :: self
+
+    if (.not. associated(self%turbine)) return
+    call self%turbine%finalise()
+    call self%io_mgr%unregister_checkpoint_state()
+    deallocate (self%turbine)
+  end subroutine finalise_abl
 
 end module m_case_abl
