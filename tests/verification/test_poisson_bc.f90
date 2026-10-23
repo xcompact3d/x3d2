@@ -37,6 +37,16 @@ program test_poisson
   !!   --nproc_dir <px>,<py>,<pz>   decomposition, as nproc_dir in the
   !!                                domain_settings namelist
   !!                                (default: 1,1,nproc)
+  !!   --stretch <mode>             run only the cases with that stretching in
+  !!                                y: uniform, centred, top-bottom or bottom
+  !!                                (default: uniform)
+  !!   --beta <real>                stretching parameter beta of the stretched
+  !!                                cases (default: the beta of the case)
+  !! The stretched cases need the CUDA backend and 1 rank for BC code pdp. The
+  !! other BC codes with stretching in y, and every stretched case on the
+  !! OpenMP backend, end in the abort of the solver. On a stretched case Check
+  !! 1 is printed and not judged, because cos(n*pi*y) is not an eigenfunction
+  !! of the stretched discrete operator.
   !! A run with one case per process is what a multi rank ctest entry needs,
   !! because with the OpenMP backend 2decomp can be initialised only once per
   !! process and some cases still stop on more than one rank. What the solver
@@ -69,29 +79,58 @@ program test_poisson
   ! One BC configuration: the grid and the BC of each direction (the same at
   ! both ends of a direction)
   type :: bc_case_t
-    character(len=20) :: title
+    character(len=30) :: title
     integer :: dims(3)
     character(len=9) :: bc(3)
+    character(len=10) :: stretching ! in y: uniform|centred|top-bottom|bottom
+    real(dp) :: beta ! stretching parameter, not used when uniform
   end type bc_case_t
+
+  ! beta of examples/channel/input.x3d
+  real(dp), parameter :: stretch_beta = 0.259065151_dp
 
   type(bc_case_t), parameter :: cases(*) = [ &
     bc_case_t('all periodic', [128, 64, 32], &
-              [character(len=9) :: 'periodic', 'periodic', 'periodic']), &
+              [character(len=9) :: 'periodic', 'periodic', 'periodic'], &
+              'uniform', 0.0_dp), &
     ! z carries the decomposition, so it needs enough cells per subdomain
     ! for the distributed compact operators. At 32 cells over 2 ranks (16
     ! per rank) the relative div(grad(p)) error is too large, so 128 keeps
     ! 64 cells per rank at 2 ranks, as for the x-dirichlet case below.
     bc_case_t('y-dirichlet', [128, 65, 128], &
-              [character(len=9) :: 'periodic', 'dirichlet', 'periodic']), &
+              [character(len=9) :: 'periodic', 'dirichlet', 'periodic'], &
+              'uniform', 0.0_dp), &
     ! z carries the decomposition, so it needs enough cells per subdomain
     ! for the distributed compact operators. At 32 cells over 2 ranks the
     ! discarded coupling in "interpolate" is 6.2e-08, which puts a floor
     ! under the relative div(grad(p)) error. 128 keeps 64 cells per rank at
     ! 2 ranks, matching the >=64 rule of thumb used elsewhere.
     bc_case_t('x-dirichlet', [129, 64, 128], &
-              [character(len=9) :: 'dirichlet', 'periodic', 'periodic']), &
+              [character(len=9) :: 'dirichlet', 'periodic', 'periodic'], &
+              'uniform', 0.0_dp), &
     bc_case_t('x,y-dirichlet', [129, 257, 64], &
-              [character(len=9) :: 'dirichlet', 'dirichlet', 'periodic'])]
+              [character(len=9) :: 'dirichlet', 'dirichlet', 'periodic'], &
+              'uniform', 0.0_dp), &
+    ! Stretched in y. Only pdp is solved with the stretched operator, the
+    ! other BC codes end in the abort of the solver. 64 cells in x and z.
+    bc_case_t('y-dirichlet centred', [64, 65, 64], &
+              [character(len=9) :: 'periodic', 'dirichlet', 'periodic'], &
+              'centred', stretch_beta), &
+    bc_case_t('y-dirichlet top-bottom', [64, 65, 64], &
+              [character(len=9) :: 'periodic', 'dirichlet', 'periodic'], &
+              'top-bottom', stretch_beta), &
+    bc_case_t('y-dirichlet bottom', [64, 65, 64], &
+              [character(len=9) :: 'periodic', 'dirichlet', 'periodic'], &
+              'bottom', stretch_beta), &
+    bc_case_t('all periodic centred', [64, 64, 64], &
+              [character(len=9) :: 'periodic', 'periodic', 'periodic'], &
+              'centred', stretch_beta), &
+    bc_case_t('x-dirichlet centred', [65, 64, 64], &
+              [character(len=9) :: 'dirichlet', 'periodic', 'periodic'], &
+              'centred', stretch_beta), &
+    bc_case_t('x,y-dirichlet centred', [65, 65, 64], &
+              [character(len=9) :: 'dirichlet', 'dirichlet', 'periodic'], &
+              'centred', stretch_beta)]
 
   ! One cosine test: the directions that carry cos(n*pi*x_d) and the wavenumber
   type :: cosine_test_t
@@ -132,6 +171,7 @@ program test_poisson
                               zdirps => null()
     type(vector_calculus_t) :: vector_calculus
     logical :: periodic(3)
+    logical :: stretched ! stretching in y, Check 1 is not judged
   end type poisson_ctx_t
 
   ! ERROR_TOLERANCE bounds the relative L2 error ||p - p_ref|| / ||p_ref|| of
@@ -186,6 +226,8 @@ program test_poisson
   integer :: nproc_dir(3)
   character(len=32) :: arg
   character(len=len(arg)) :: only_bc
+  character(len=len(cases(1)%stretching)) :: only_stretch
+  real(dp) :: beta_override ! <= 0: use the beta of the case
   character(len=4*size(cases)) :: codes
   logical :: config_run(size(cases))
   logical :: allpass
@@ -204,12 +246,25 @@ program test_poisson
   ! exercise one configuration at a time. With no argument every
   ! configuration runs, as before.
   only_bc = 'all'
+  only_stretch = 'uniform'
+  beta_override = -1.0_dp
   nproc_dir = [1, 1, nproc]
   do iarg = 1, command_argument_count() - 1
     call get_command_argument(iarg, arg)
     if (trim(arg) == '--bc') then
       call get_command_argument(iarg + 1, arg)
       only_bc = trim(arg)
+    else if (trim(arg) == '--stretch') then
+      call get_command_argument(iarg + 1, arg)
+      only_stretch = trim(arg)
+    else if (trim(arg) == '--beta') then
+      call get_command_argument(iarg + 1, arg)
+      read (arg, *, iostat=ios) beta_override
+      if (ios /= 0) then
+        if (nrank == 0) write (stderr, '(A)') &
+          'test_poisson_bc: --beta needs a real number'
+        error stop 1
+      end if
     else if (trim(arg) == '--nproc_dir') then
       ! --nproc_dir <px>,<py>,<pz> sets the decomposition, as nproc_dir does
       ! in the domain_settings namelist; the default is all ranks along z
@@ -232,18 +287,20 @@ program test_poisson
 
   do ic = 1, size(cases)
     config_run(ic) = (only_bc == 'all' &
-                      .or. only_bc == bc_code(cases(ic)))
+                      .or. only_bc == bc_code(cases(ic))) &
+                     .and. only_stretch == cases(ic)%stretching
   end do
 
-  ! An unknown code would otherwise run nothing and pass
+  ! An unknown code or stretching would otherwise run nothing and pass
   if (.not. any(config_run)) then
     codes = ''
     do ic = 1, size(cases)
-      codes = trim(codes)//' '//bc_code(cases(ic))
+      if (only_stretch == cases(ic)%stretching) &
+        codes = trim(codes)//' '//bc_code(cases(ic))
     end do
     if (nrank == 0) write (stderr, '(A)') &
-      'test_poisson_bc: unknown --bc code '''//trim(only_bc)// &
-      ''', the codes are:'//trim(codes)
+      'test_poisson_bc: no case for --bc '''//trim(only_bc)// &
+      ''' --stretch '''//trim(only_stretch)//''', the codes are:'//trim(codes)
     error stop 1
   end if
 
@@ -261,7 +318,7 @@ program test_poisson
     write (stderr, '(A)') &
       '  ======================================================='
     write (stderr, '(A)') ''
-    write (stderr, '(2X,A5,2X,A10,A4,A16,A16,2X,A6,2X,A8,2X,A)') &
+    write (stderr, '(2X,A22,2X,A10,A4,A16,A16,2X,A6,2X,A8,2X,A)') &
       'BC', 'Type      ', '  n ', 'Poisson rel L2', &
       'DivGrad rel L2', 'Result', 'Expected', ''
     write (stderr, '(A)') ''
@@ -321,10 +378,13 @@ contains
 
     integer :: dims_global(3)
     character(len=20) :: BC_x(2), BC_y(2), BC_z(2)
-    real(dp) :: L_global(3)
+    real(dp) :: L_global(3), beta(3)
     logical :: use_2decomp
 
     dims_global = cfg%dims
+    beta = [0.0_dp, cfg%beta, 0.0_dp]
+    if (beta_override > 0.0_dp .and. cfg%stretching /= 'uniform') &
+      beta(2) = beta_override
     BC_x = [cfg%bc(1), cfg%bc(1)]
     BC_y = [cfg%bc(2), cfg%bc(2)]
     BC_z = [cfg%bc(3), cfg%bc(3)]
@@ -336,6 +396,8 @@ contains
       write (stderr, '(4X,A,I0,A,I0,A,I0)') &
         'Grid: ', dims_global(1), ' x ', dims_global(2), &
         ' x ', dims_global(3)
+      write (stderr, '(4X,A,A,A,F0.9)') &
+        'Stretching in y: ', trim(cfg%stretching), ', beta = ', beta(2)
       write (stderr, '(4X,A,I0,A,I0,A,I0)') &
         'nproc_dir: ', nproc_dir(1), ', ', nproc_dir(2), ', ', nproc_dir(3)
       write (stderr, '(4X,A,A,A,A,A,A,A,A,A,A)') &
@@ -352,7 +414,9 @@ contains
 
     ctx%mesh = mesh_t(dims_global, nproc_dir, L_global, &
                       BC_x, BC_y, BC_z, &
-                      use_2decomp=use_2decomp)
+                      stretching=[character(len=10) :: 'uniform', &
+                                  cfg%stretching, 'uniform'], &
+                      beta=beta, use_2decomp=use_2decomp)
 
     call ctx%runtime%init(ctx%mesh)
     ctx%backend => ctx%runtime%backend
@@ -377,6 +441,7 @@ contains
 
     ! Determine which directions are periodic
     ctx%periodic = (cfg%bc == 'periodic')
+    ctx%stretched = (cfg%stretching /= 'uniform')
   end subroutine setup_case
 
   ! ================================================================
@@ -412,8 +477,8 @@ contains
         verdict_str = '!!'
       end if
 
-      write (stderr, '(2X,A5,2X,A10,I4,ES16.4,ES16.4,2X,A4,4X,A4,4X,A)') &
-        bc_code(cases(config_id)), &
+      write (stderr, '(2X,A22,2X,A10,I4,ES16.4,ES16.4,2X,A4,4X,A4,4X,A)') &
+        bc_code(cases(config_id))//' '//cases(config_id)%stretching, &
         tests(idx)%name, tests(idx)%n, &
         results(idx, config_id)%poisson_err, &
         results(idx, config_id)%divgrad_err, &
@@ -644,7 +709,8 @@ contains
     ! ---- Check 1: Poisson solution vs analytical ----
     poisson_error_norm = solution_error(ctx, test, f_device)
 
-    poisson_passed = (poisson_error_norm <= ERROR_TOLERANCE)
+    ! Printed and not judged on a stretched mesh
+    poisson_passed = (poisson_error_norm <= ERROR_TOLERANCE) .or. ctx%stretched
 
     ! ---- Check 2: div(grad(p)) vs original RHS ----
     div_grad_error_norm = divgrad_error(ctx, f_device, f_reference)
@@ -658,7 +724,9 @@ contains
     if (ctx%mesh%par%is_root()) then
       write (stderr, '(6X,A,ES12.4,A,A)') &
         'Poisson rel L2: ', poisson_error_norm, '  ', &
-        merge('PASS', 'FAIL', poisson_passed)
+        merge('PASS', 'FAIL', poisson_passed)//merge(' (not judged)', &
+                                                     '             ', &
+                                                     ctx%stretched)
       write (stderr, '(6X,A,ES12.4,A,A)') &
         'DivGrad rel L2: ', div_grad_error_norm, '  ', &
         merge('PASS', 'FAIL', div_grad_passed)
@@ -667,7 +735,8 @@ contains
     res%passed = poisson_passed .and. div_grad_passed
     res%poisson_err = poisson_error_norm
     res%divgrad_err = div_grad_error_norm
-    res%xfail = is_expected_fail(test, ctx%periodic)
+    ! The aliasing XFAIL is a Check 1 outcome, which is not judged when stretched
+    res%xfail = is_expected_fail(test, ctx%periodic) .and. .not. ctx%stretched
 
   end function run_single_test
 
