@@ -389,6 +389,13 @@ contains
         end do
       end do
 
+      ! The ky=0 cosine mode has half the weight of the other modes. Double the
+      ! off-diagonals of the first row, as the odd system of the symmetric branch does.
+      if (self%sp_st(2) == 0) then
+        self%a_re(:, 1, :, 4:5) = 2*self%a_re(:, 1, :, 4:5)
+        self%a_im(:, 1, :, 4:5) = 2*self%a_im(:, 1, :, 4:5)
+      end if
+
       ! diagonal - 1
       do k = 1, self%nz_spec
         do j = 2, self%ny_spec
