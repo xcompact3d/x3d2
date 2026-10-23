@@ -19,6 +19,13 @@ program test_poisson
   !!   Check 2: div(grad(p)) recovers original RHS f (round-trip relative L2
   !!            error)
   !!
+  !! Configurations with a non-periodic x also run a mode test (#465): the
+  !! RHS is the x cosine mode N/2 times the z Nyquist mode, built from the
+  !! grid indices, and only Check 2 applies (the analytical solution uses the
+  !! exact wavenumber, which a mode this close to the grid scale cannot
+  !! match). That x index is the Nyquist mode only when x is periodic, so a
+  !! solver that zeroes it as if it were leaves the RHS unsolved.
+  !!
   !! Layout: setup_case builds one poisson_ctx_t for each configuration
   !! (mesh, backend, allocators, tdsops, vector_calculus, poisson_fft) and
   !! every test of that configuration reuses it. run_single_test(ctx, test)
@@ -192,6 +199,8 @@ program test_poisson
 
   ! Per-config results for final summary
   type(test_result_t) :: results(size(tests), size(cases))
+  !> Mode test per configuration; a skipped one keeps the passing default
+  type(test_result_t) :: mode_results(size(cases))
 
   ! Initialise MPI
   call initialise_mpi(nrank, nproc)
@@ -284,6 +293,7 @@ program test_poisson
         allpass = .false.
       end if
     end do
+    if (.not. mode_results(ic)%passed) allpass = .false.
   end do
 
   call finalise_test(allpass, nrank)
@@ -308,6 +318,8 @@ contains
     do idx = 1, size(tests)
       results(idx, config_id) = run_single_test(ctx, tests(idx))
     end do
+
+    if (.not. ctx%periodic(1)) mode_results(config_id) = run_mode_test(ctx)
 
   end subroutine run_config
 
@@ -670,5 +682,49 @@ contains
     res%xfail = is_expected_fail(test, ctx%periodic)
 
   end function run_single_test
+
+  function run_mode_test(ctx) result(res)
+    !! Round trip of the x cosine mode N/2 times the z Nyquist mode, constant
+    !! in y, on a configuration with a non-periodic x (see the header).
+    type(poisson_ctx_t), target, intent(in) :: ctx
+    type(test_result_t) :: res
+
+    class(field_t), pointer :: f_device, f_reference, host_field, temp
+    integer :: i, j, k, dims(3), offset(3)
+
+    dims = ctx%mesh%get_dims(CELL)
+    ! x is not decomposed, as the FFT solver requires
+    offset = ctx%mesh%par%n_offset
+    host_field => ctx%host_allocator%get_block(DIR_C)
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          ! cos(pi*(N/2)*(i - 1/2)/N) = cos(pi*(i - 1/2)/2): +, -, -, +
+          host_field%data(i, j, k) = cos(0.5_dp*pi*(real(i, dp) - 0.5_dp)) &
+                                     *real(1 - 2*mod(k + offset(3), 2), dp)
+        end do
+      end do
+    end do
+
+    f_device => ctx%backend%allocator%get_block(DIR_C, CELL)
+    f_reference => ctx%backend%allocator%get_block(DIR_X)
+    call ctx%backend%set_field_data(f_device, host_field%data, DIR_C)
+    call f_device%set_data_loc(CELL)
+    call ctx%host_allocator%release_block(host_field)
+    call ctx%backend%reorder(f_reference, f_device, RDR_C2X)
+
+    temp => ctx%backend%allocator%get_block(DIR_C)
+    call ctx%backend%poisson_fft%solve_poisson(f_device, temp)
+    call ctx%backend%allocator%release_block(temp)
+
+    res%divgrad_err = divgrad_error(ctx, f_device, f_reference)
+    res%passed = res%divgrad_err <= DIVGRAD_TOLERANCE
+    call ctx%backend%allocator%release_block(f_device)
+    call ctx%backend%allocator%release_block(f_reference)
+
+    if (ctx%mesh%par%is_root()) write (stderr, '(4X,A,ES12.4,A,A)') &
+      'Mode x N/2, z Nyquist: DivGrad rel L2: ', res%divgrad_err, '  ', &
+      merge('PASS', 'FAIL', res%passed)
+  end function run_mode_test
 
 end program test_poisson
