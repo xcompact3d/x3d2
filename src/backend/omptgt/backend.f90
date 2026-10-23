@@ -48,6 +48,7 @@ module m_omptgt_backend
                                        scalar_product, scalar_product_cart, &
                                        vector_norm_squared, field_max_sum, &
                                        volume_integral, slice_max_sum, &
+                                       x_slice_weighted_sum, &
                                        field_set_x_face, field_set_y_face, &
                                        field_set_y_plane, &
                                        field_set_abl_wall_stress, &
@@ -97,6 +98,7 @@ module m_omptgt_backend
     procedure :: field_labelled_axpy => field_labelled_axpy_omptgt
     procedure :: field_max_mean => field_max_mean_omptgt
     procedure :: slice_max_sum => slice_max_sum_omptgt
+    procedure :: x_slice_weighted_sum => x_slice_weighted_sum_omptgt
     procedure :: field_scale => field_scale_omptgt
     procedure :: field_shift => field_shift_omptgt
     procedure :: field_set_face => field_set_face_omptgt
@@ -1117,6 +1119,38 @@ contains
                        n_groups_pad, n_j)
 
   end subroutine slice_max_sum_omptgt
+
+  subroutine x_slice_weighted_sum_omptgt(self, sum_val, f, i_slice, &
+                                         y_weights)
+    !! [[m_base_backend(module):x_slice_weighted_sum_base(subroutine)]]
+    implicit none
+
+    class(omptgt_backend_t) :: self
+    real(dp), intent(out) :: sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    real(dp), intent(in) :: y_weights(:)
+
+    real(dp), pointer, contiguous, dimension(:, :, :) :: f_d
+    integer :: n, n_i, n_groups_pad, n_j
+
+    if (f%dir /= DIR_X) &
+      call abort_run('x_slice_weighted_sum: only supported for DIR_X fields.')
+    if (f%data_loc == NULL_LOC) &
+      call abort_run('x_slice_weighted_sum: requires a valid data_loc.')
+    call pencil_extents(self, f%dir, f%data_loc, n, n_i, n_groups_pad, n_j)
+
+    if (i_slice < 1 .or. i_slice > n) &
+      call abort_run('x_slice_weighted_sum: i_slice out of range')
+    if (size(y_weights) /= n_j) &
+      call abort_run('x_slice_weighted_sum: one weight per y point needed')
+
+    ! Rank-local value; caller is responsible for MPI_Allreduce.
+    call resolve_field_t(f_d, f)
+    call x_slice_weighted_sum(sum_val, f_d, y_weights, size(f_d, 2), &
+                              i_slice, n_i, n_groups_pad, n_j)
+
+  end subroutine x_slice_weighted_sum_omptgt
 
   real(dp) function field_volume_integral_omptgt(self, f) result(s)
     !! volume integral of a field

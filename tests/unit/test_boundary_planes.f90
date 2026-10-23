@@ -194,6 +194,49 @@ program test_boundary_planes
     end if
   end block
 
+  ! --- x_slice_weighted_sum: one x slice, weighted per y-plane --------------
+  ! The weights differ on every y-plane and the data on every x slice, so a
+  ! weight applied to the wrong plane, or a sum taken over the wrong slice,
+  ! cannot match. The face slices and an interior one are checked.
+  block
+    real(dp), allocatable :: weights(:)
+    real(dp) :: got, want, worst
+    integer :: slices(3), s
+
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        do i = 1, dims(1)
+          data(i, j, k) = 100._dp*real(i, dp) + real(k, dp) &
+                          + 0.5_dp*real(j, dp)
+        end do
+      end do
+    end do
+    call backend%set_field_data(f, data)
+    allocate (weights(dims(2)))
+    do j = 1, dims(2)
+      weights(j) = 1._dp + 0.01_dp*real(j*j, dp)
+    end do
+    weights(1) = 0._dp
+    weights(dims(2)) = 0.5_dp
+
+    slices = [1, dims(1)/2, dims(1)]
+    worst = 0._dp
+    do s = 1, size(slices)
+      call backend%x_slice_weighted_sum(got, f, slices(s), weights)
+      want = 0._dp
+      do j = 1, dims(2)
+        want = want + weights(j)*sum(data(slices(s), j, 1:dims(3)))
+      end do
+      worst = max(worst, abs(got - want)/abs(want))
+    end do
+    if (worst > tolerance) then
+      print *, 'FAIL: x_slice_weighted_sum relative error=', worst
+      all_pass = .false.
+    else
+      print *, 'PASS: x_slice_weighted_sum'
+    end if
+  end block
+
   ! --- field_set_y_plane: one interior plane, nothing else ------------------
   ! The wall model writes the first plane above the floor, so this must reach
   ! an interior plane with the same per-backend group ordering as the faces.

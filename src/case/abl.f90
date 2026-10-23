@@ -27,7 +27,8 @@ module m_case_abl
     !> Iteration the inlet plane in bc_start_*_x was built for
     integer :: inflow_iter = -1
     real(dp) :: out_vel = 0._dp
-    real(dp) :: flow_rate_diff = 0._dp
+    !> y weights of the inlet and outlet flow rates (outflow correction)
+    real(dp), allocatable :: flow_rate_y_weights(:)
   contains
     procedure :: define_BC => define_BC_abl
     procedure :: initial_conditions => initial_conditions_abl
@@ -52,7 +53,7 @@ contains
     type(allocator_t), target, intent(inout) :: host_allocator
     type(case_abl_t) :: flow_case
 
-    integer :: bcs(3, 2), bc_x
+    integer :: bcs(3, 2), bc_x, dims(3)
 
     call flow_case%abl_cfg%read(nml_file=get_argument(1))
     call flow_case%inflow_cfg%read(nml_file=get_argument(1))
@@ -89,6 +90,19 @@ contains
                               backend, mesh, flow_case%inflow_cfg, &
                               flow_case%solver%dt)
     flow_case%inflow_reader = inflow_plane_reader_t(mesh, flow_case%inflow_cfg)
+
+    ! Flow rate through an x face as the projection sees it: the y
+    ! interpolation gives the floor and lid planes half weight. The floor
+    ! is then left out, since apply_BC_abl stamps it to zero on both faces
+    ! after the outflow correction. y is not decomposed (the wall model
+    ! requires it), so the local planes are the global ones.
+    if (flow_case%inflow_cfg%read_planes) then
+      dims = mesh%get_dims(VERT)
+      allocate (flow_case%flow_rate_y_weights(dims(2)))
+      flow_case%flow_rate_y_weights = 1._dp
+      flow_case%flow_rate_y_weights(1) = 0._dp
+      flow_case%flow_rate_y_weights(dims(2)) = 0.5_dp
+    end if
 
   end function case_abl_init
 
@@ -144,8 +158,10 @@ contains
       call self%solver%backend%field_shift(self%solver%u, can)
     end if
 
+    ! The flow-rate correction is left to apply_BC, which sees the field
+    ! the stamp is applied to
     if (self%inflow_cfg%read_planes) then
-      call self%compute_outflow_params(self%out_vel, self%flow_rate_diff)
+      call self%compute_outflow_params(self%out_vel)
       call self%update_inflow_plane()
     end if
 
@@ -219,13 +235,22 @@ contains
     class(case_abl_t) :: self
     class(field_t), intent(inout) :: u, v, w
 
+    real(dp) :: flow_rate_diff
+
     ! Successor: precursor plane at the inlet, convective outflow at the
     ! outlet (Incompact3d inflow/outflow). The wall stamps below then win
     ! on the edges where the faces meet.
     if (self%inflow_cfg%read_planes) then
+      ! Measured on this u against the plane being imposed, so the flow
+      ! rate out matches the flow rate in exactly, whatever the
+      ! mass_conserve shift or the time step did to the boundary planes.
+      ! An imbalance is a uniform divergence the Neumann-x projection
+      ! cannot remove.
+      flow_rate_diff = self%outflow_flow_rate_correction( &
+                       u, self%out_vel, self%flow_rate_y_weights)
       call self%solver%backend%field_set_face_from_field( &
         u, self%bc_start_u_x, self%out_vel, X_FACE, &
-        flow_rate_diff=self%flow_rate_diff)
+        flow_rate_diff=flow_rate_diff)
       ! The flow-rate correction balances the streamwise flux, so only u
       ! takes it
       call self%solver%backend%field_set_face_from_field( &
