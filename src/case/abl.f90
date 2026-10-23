@@ -4,7 +4,7 @@ module m_case_abl
   use m_abl_diagnostics, only: abl_diagnostics_t
   use m_base_backend, only: base_backend_t
   use m_base_case, only: base_case_t
-  use m_common, only: dp, get_argument, MPI_X3D2_DP, DIR_C, DIR_X, VERT, &
+  use m_common, only: dp, get_argument, MPI_X3D2_DP, DIR_X, VERT, &
                       X_FACE, Y_FACE, BC_DIRICHLET, BC_NEUMANN, BC_PERIODIC
   use m_config, only: abl_config_t, inflow_config_t
   use m_field, only: field_t
@@ -175,9 +175,8 @@ contains
 
     class(case_abl_t) :: self
 
-    class(field_t), pointer :: hu, hv, hw
     real(dp), allocatable :: pu(:, :), pv(:, :), pw(:, :)
-    integer :: iter, dims(3), j, k
+    integer :: iter, dims(3)
 
     iter = self%solver%current_iter + 1
     if (iter == self%inflow_iter) return
@@ -192,29 +191,14 @@ contains
       call self%bc_start_w_x%set_data_loc(VERT)
     end if
 
+    ! Only the x = 1 plane of the BC fields is read, by the face stamp and
+    ! the outflow correction, so only that plane is uploaded
     dims = self%solver%mesh%get_dims(VERT)
-    hu => self%solver%host_allocator%get_block(DIR_C)
-    hv => self%solver%host_allocator%get_block(DIR_C)
-    hw => self%solver%host_allocator%get_block(DIR_C)
-
-    ! Only the x = 1 plane of the BC fields is read by the face stamp
     allocate (pu(dims(2), dims(3)), pv(dims(2), dims(3)), pw(dims(2), dims(3)))
     call self%inflow_reader%planes_at(iter*self%solver%dt, pu, pv, pw)
-    do k = 1, dims(3)
-      do j = 1, dims(2)
-        hu%data(1, j, k) = pu(j, k)
-        hv%data(1, j, k) = pv(j, k)
-        hw%data(1, j, k) = pw(j, k)
-      end do
-    end do
-
-    call self%solver%backend%set_field_data(self%bc_start_u_x, hu%data)
-    call self%solver%backend%set_field_data(self%bc_start_v_x, hv%data)
-    call self%solver%backend%set_field_data(self%bc_start_w_x, hw%data)
-
-    call self%solver%host_allocator%release_block(hu)
-    call self%solver%host_allocator%release_block(hv)
-    call self%solver%host_allocator%release_block(hw)
+    call self%solver%backend%field_set_x_inlet_plane(self%bc_start_u_x, pu)
+    call self%solver%backend%field_set_x_inlet_plane(self%bc_start_v_x, pv)
+    call self%solver%backend%field_set_x_inlet_plane(self%bc_start_w_x, pw)
   end subroutine update_inflow_plane
 
   subroutine forcings_abl(self, du, dv, dw, iter)

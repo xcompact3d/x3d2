@@ -26,7 +26,8 @@ module m_omptgt_kernels_fieldops
   public :: labelled_sums, labelled_axpy
   public :: field_set_x_face, field_set_y_face, field_set_y_plane, &
             field_set_abl_wall_stress, field_set_x_face_from_field, &
-            field_set_y_face_from_field, field_add_x_face_from_field, &
+            field_set_y_face_from_field, field_set_x_inlet_plane, &
+            field_add_x_face_from_field, &
             field_add_y_face_from_field
   public :: field_plane_partial_sums, field_plane_sums_reduce
   public :: reorder, sum_intox
@@ -618,6 +619,29 @@ contains
     !$omp end target teams distribute parallel do
 
   end subroutine field_set_x_face_from_field
+
+  subroutine field_set_x_inlet_plane(f, plane, n_f, ny, nz, n_yb_pad)
+    !! Overwrite the inlet plane (pencil index 1) of f with plane(ny, nz).
+    integer, intent(in) :: n_f, ny, nz, n_yb_pad
+    real(dp), intent(inout) :: f(SZ, n_f, n_yb_pad*nz)
+    real(dp), intent(in) :: plane(ny, nz)
+
+    integer :: i, y_block, z
+
+    !$omp target teams distribute parallel do collapse(3) map(to:plane) &
+    !$omp OMP_DEVICE_ADDR(f)
+    do z = 1, nz
+      do y_block = 1, (ny - 1)/SZ + 1
+        do i = 1, SZ
+          if (i + (y_block - 1)*SZ <= ny) &
+            f(i, 1, y_block + (z - 1)*n_yb_pad) = &
+            plane(i + (y_block - 1)*SZ, z)
+        end do
+      end do
+    end do
+    !$omp end target teams distribute parallel do
+
+  end subroutine field_set_x_inlet_plane
 
   subroutine field_add_x_face_from_field(f, g, set_start, set_end, n_f, nx, &
                                          ny, nz, n_yb_pad)

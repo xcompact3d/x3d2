@@ -123,6 +123,14 @@ backends override it.
      - ✅
      - ✅
      - ✅
+   * - ``field_add_const_x_face``
+     - ✅
+     - ✅
+     - ❌
+   * - ``field_set_x_inlet_plane``
+     - ✅
+     - ✅
+     - ✅
    * - ``compute_vorticity``
      - ✅
      - ✅

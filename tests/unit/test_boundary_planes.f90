@@ -136,6 +136,29 @@ program test_boundary_planes
                       dims, tolerance, all_pass)
   end block
 
+  ! --- field_set_x_inlet_plane: host (ny, nz) plane onto the x = 1 plane ----
+  ! Only the inlet plane changes; the plane varies in y and z so a wrong
+  ! group ordering cannot match.
+  block
+    real(dp), allocatable :: plane(:, :)
+
+    allocate (plane(dims(2), dims(3)))
+    do k = 1, dims(3)
+      do j = 1, dims(2)
+        plane(j, k) = 10._dp*real(k, dp) + 0.5_dp*real(j, dp)
+      end do
+    end do
+
+    expected = sentinel
+    expected(1, 1:dims(2), 1:dims(3)) = plane
+
+    call f%fill(sentinel)
+    call backend%field_set_x_inlet_plane(f, plane)
+    call backend%get_field_data(data, f)
+    call check_planes('field_set_x_inlet_plane', data, expected, dims, &
+                      tolerance, all_pass)
+  end block
+
   ! --- field_add_face_from_field: plane values added on Dirichlet faces -----
   ! The wall pre-correction adds onto the value the case has already set,
   ! and must leave a non-Dirichlet face (the ABL's free-slip lid) alone.
