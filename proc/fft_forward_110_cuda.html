@@ -1,0 +1,710 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>fft_forward_110_cuda &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/programs.html">Programs</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>fft_forward_110_cuda
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for procedures.">25 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/poisson_fft.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/poisson_fft.f90.html'>poisson_fft.f90</a></li>
+                <li class="breadcrumb-item"><a href='../module/m_cuda_poisson_fft.html'>m_cuda_poisson_fft</a></li>
+            <li class="breadcrumb-item active" aria-current="page">fft_forward_110_cuda</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine fft_forward_110_cuda(self, f)  
+</h2>
+    
+
+    <p>Forward FFT for 110 case: transpose (nx,ny,nz)-&gt;(nz,nx,ny) then R2C</p>
+
+    <h3>Type Bound</h3>
+    <p><a href='../type/cuda_poisson_110_t.html'>cuda_poisson_110_t</a></p>
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~137"></span>
+              class(<a href='../type/cuda_poisson_110_t.html'>cuda_poisson_110_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~17"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~fft_forward_110_cuda~~CallsGraph Pages: 1 -->
+<svg id="procfft_forward_110_cudaCallsGraph" width="641pt" height="224pt"
+ viewBox="0.00 0.00 641.00 224.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~fft_forward_110_cuda~~CallsGraph" class="graph" transform="scale(0.480834 0.480834) rotate(0) translate(4 461.27)">
+<title>proc~~fft_forward_110_cuda~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-461.27 1329.1,-461.27 1329.1,4 -4,4"/>
+<!-- proc~fft_forward_110_cuda -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node1" class="node">
+<title>proc~fft_forward_110_cuda</title>
+<polygon fill="none" stroke="black" points="354.27,-253.27 0,-253.27 0,-229 354.27,-229 354.27,-253.27"/>
+<text xml:space="preserve" text-anchor="middle" x="177.13" y="-237.53" font-family="Helvetica,sans-Serif" font-size="10.50">m_cuda_poisson_fft::cuda_poisson_110_t%fft_forward_110_cuda</text>
+</g>
+<!-- cufftexecd2z -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node2" class="node">
+<title>cufftexecd2z</title>
+<polygon fill="#777777" stroke="#777777" points="617.04,-373.27 538.02,-373.27 538.02,-349 617.04,-349 617.04,-373.27"/>
+<text xml:space="preserve" text-anchor="middle" x="577.53" y="-357.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cufftexecd2z</text>
+</g>
+<!-- proc~fft_forward_110_cuda&#45;&gt;cufftexecd2z -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge1" class="edge">
+<title>proc~fft_forward_110_cuda&#45;&gt;cufftexecd2z</title>
+<path fill="none" stroke="#ff0000" d="M198.93,-253.65C235.94,-275.28 316.33,-319.32 390.27,-340.13 435.26,-352.8 488.41,-357.87 526.39,-359.87"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="526,-363.36 536.15,-360.33 526.32,-356.36 526,-363.36"/>
+</g>
+<!-- cufftxtexecdescriptor -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node3" class="node">
+<title>cufftxtexecdescriptor</title>
+<polygon fill="#777777" stroke="#777777" points="639.54,-331.27 515.52,-331.27 515.52,-307 639.54,-307 639.54,-331.27"/>
+<text xml:space="preserve" text-anchor="middle" x="577.53" y="-315.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cufftxtexecdescriptor</text>
+</g>
+<!-- proc~fft_forward_110_cuda&#45;&gt;cufftxtexecdescriptor -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge2" class="edge">
+<title>proc~fft_forward_110_cuda&#45;&gt;cufftxtexecdescriptor</title>
+<path fill="none" stroke="#ff0000" d="M223.77,-253.75C266.53,-265.23 332.36,-282.03 390.27,-293.13 427.43,-300.26 469.12,-306.27 503.62,-310.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="503.17,-314.17 513.53,-311.96 504.05,-307.23 503.17,-314.17"/>
+</g>
+<!-- dim3 -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node4" class="node">
+<title>dim3</title>
+<polygon fill="#777777" stroke="#777777" points="943.42,-314.27 889.42,-314.27 889.42,-290 943.42,-290 943.42,-314.27"/>
+<text xml:space="preserve" text-anchor="middle" x="916.42" y="-298.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">dim3</text>
+</g>
+<!-- proc~fft_forward_110_cuda&#45;&gt;dim3 -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge3" class="edge">
+<title>proc~fft_forward_110_cuda&#45;&gt;dim3</title>
+<path fill="none" stroke="#ff0000" d="M354.56,-236.67C471.68,-236.56 628.38,-241.9 764.79,-265.13 781.28,-267.94 784.62,-271.84 800.79,-276.13 826.49,-282.97 855.72,-289.58 878.23,-294.42"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="877.35,-297.81 887.86,-296.47 878.81,-290.97 877.35,-297.81"/>
+</g>
+<!-- interface~cufftexecr2c_c -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node5" class="node">
+<title>interface~cufftexecr2c_c</title>
+<g id="a_proc~~fft_forward_110_cuda~~CallsGraph_node5"><a xlink:href="../interface/cufftexecr2c_c.html" xlink:title="m_cuda_poisson_fft::cufftExecR2C_C">
+<polygon fill="#a7506f" stroke="#a7506f" points="681.16,-171.27 473.89,-171.27 473.89,-147 681.16,-147 681.16,-171.27"/>
+<text xml:space="preserve" text-anchor="middle" x="577.53" y="-155.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_poisson_fft::cufftExecR2C_C</text>
+</a>
+</g>
+</g>
+<!-- proc~fft_forward_110_cuda&#45;&gt;interface~cufftexecr2c_c -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge4" class="edge">
+<title>proc~fft_forward_110_cuda&#45;&gt;interface~cufftexecr2c_c</title>
+<path fill="none" stroke="#ff0000" d="M214.84,-228.54C256.78,-214.63 327.69,-192.57 390.27,-180.13 413.42,-175.54 438.39,-171.86 462.31,-168.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="462.55,-172.44 472.08,-167.8 461.74,-165.49 462.55,-172.44"/>
+</g>
+<!-- proc~check_cufft -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node6" class="node">
+<title>proc~check_cufft</title>
+<g id="a_proc~~fft_forward_110_cuda~~CallsGraph_node6"><a xlink:href="../proc/check_cufft.html" xlink:title="m_cuda_errors::check_cufft">
+<polygon fill="#d9534f" stroke="#d9534f" points="995.68,-356.27 837.16,-356.27 837.16,-332 995.68,-332 995.68,-356.27"/>
+<text xml:space="preserve" text-anchor="middle" x="916.42" y="-340.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_errors::check_cufft</text>
+</a>
+</g>
+</g>
+<!-- proc~fft_forward_110_cuda&#45;&gt;proc~check_cufft -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge5" class="edge">
+<title>proc~fft_forward_110_cuda&#45;&gt;proc~check_cufft</title>
+<path fill="none" stroke="#ff0000" d="M285.18,-253.77C318.8,-257.6 356.07,-261.69 390.27,-265.13 556.53,-281.86 607.68,-241.24 764.79,-298.13 783.11,-304.77 782.8,-315.66 800.79,-323.13 808.74,-326.44 817.21,-329.23 825.81,-331.57"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="824.73,-334.91 835.28,-333.95 826.43,-328.12 824.73,-334.91"/>
+</g>
+<!-- proc~redistribute_110_to_yslab -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node7" class="node">
+<title>proc~redistribute_110_to_yslab</title>
+<g id="a_proc~~fft_forward_110_cuda~~CallsGraph_node7"><a xlink:href="../proc/redistribute_110_to_yslab.html" xlink:title="m_cuda_poisson_fft::cuda_poisson_110_t%redistribute_110_to_yslab">
+<polygon fill="#d9534f" stroke="#d9534f" points="764.79,-213.27 390.27,-213.27 390.27,-189 764.79,-189 764.79,-213.27"/>
+<text xml:space="preserve" text-anchor="middle" x="577.53" y="-197.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_poisson_fft::cuda_poisson_110_t%redistribute_110_to_yslab</text>
+</a>
+</g>
+</g>
+<!-- proc~fft_forward_110_cuda&#45;&gt;proc~redistribute_110_to_yslab -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge6" class="edge">
+<title>proc~fft_forward_110_cuda&#45;&gt;proc~redistribute_110_to_yslab</title>
+<path fill="none" stroke="#ff0000" d="M303.92,-228.51C347.02,-224.18 395.46,-219.31 439.42,-214.9"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="439.68,-218.39 449.28,-213.91 438.98,-211.43 439.68,-218.39"/>
+</g>
+<!-- proc~transpose_xyz_to_zxy -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node8" class="node">
+<title>proc~transpose_xyz_to_zxy</title>
+<g id="a_proc~~fft_forward_110_cuda~~CallsGraph_node8"><a xlink:href="../proc/transpose_xyz_to_zxy.html" xlink:title="m_cuda_spectral::transpose_xyz_to_zxy">
+<polygon fill="#d9534f" stroke="#d9534f" points="688.66,-129.27 466.39,-129.27 466.39,-105 688.66,-105 688.66,-129.27"/>
+<text xml:space="preserve" text-anchor="middle" x="577.53" y="-113.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_spectral::transpose_xyz_to_zxy</text>
+</a>
+</g>
+</g>
+<!-- proc~fft_forward_110_cuda&#45;&gt;proc~transpose_xyz_to_zxy -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge7" class="edge">
+<title>proc~fft_forward_110_cuda&#45;&gt;proc~transpose_xyz_to_zxy</title>
+<path fill="none" stroke="#ff0000" d="M197.98,-228.62C234.47,-206.28 315.36,-159.85 390.27,-138.13 410.76,-132.19 432.98,-127.92 454.69,-124.85"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="455.03,-128.33 464.48,-123.55 454.11,-121.39 455.03,-128.33"/>
+</g>
+<!-- interface~str -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node10" class="node">
+<title>interface~str</title>
+<g id="a_proc~~fft_forward_110_cuda~~CallsGraph_node10"><a xlink:href="../interface/str.html" xlink:title="m_logger::str">
+<polygon fill="#a7506f" stroke="#a7506f" points="1316.47,-205.27 1233.7,-205.27 1233.7,-181 1316.47,-181 1316.47,-205.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1275.09" y="-189.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::str</text>
+</a>
+</g>
+</g>
+<!-- proc~check_cufft&#45;&gt;interface~str -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge8" class="edge">
+<title>proc~check_cufft&#45;&gt;interface~str</title>
+<path fill="none" stroke="#0091ff" d="M996.05,-337.57C1008.67,-334.35 1021.15,-329.73 1032.06,-323.13 1054.27,-309.7 1047.34,-292.78 1068.06,-277.13 1114.7,-241.9 1178.19,-218.97 1222.32,-206.11"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="1223.25,-209.48 1231.92,-203.39 1221.34,-202.75 1223.25,-209.48"/>
+</g>
+<!-- proc~abort_run -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node12" class="node">
+<title>proc~abort_run</title>
+<g id="a_proc~~fft_forward_110_cuda~~CallsGraph_node12"><a xlink:href="../proc/abort_run.html" xlink:title="m_logger::abort_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="1189.08,-310.27 1068.06,-310.27 1068.06,-286 1189.08,-286 1189.08,-310.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1128.57" y="-294.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::abort_run</text>
+</a>
+</g>
+</g>
+<!-- proc~check_cufft&#45;&gt;proc~abort_run -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge9" class="edge">
+<title>proc~check_cufft&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#0091ff" d="M990.97,-331.5C1004.67,-328.91 1018.83,-326.07 1032.06,-323.13 1044.87,-320.29 1058.56,-316.91 1071.46,-313.57"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="1072.31,-316.97 1081.09,-311.04 1070.53,-310.2 1072.31,-316.97"/>
+</g>
+<!-- proc~redistribute_110_to_yslab&#45;&gt;dim3 -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge11" class="edge">
+<title>proc~redistribute_110_to_yslab&#45;&gt;dim3</title>
+<path fill="none" stroke="#4800ff" d="M736.18,-213.72C746.18,-217.36 755.82,-221.78 764.79,-227.13 788,-240.98 778.19,-261.32 800.79,-276.13 823.72,-291.16 854.14,-297.57 877.88,-300.28"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="877.48,-303.76 887.77,-301.21 878.14,-296.79 877.48,-303.76"/>
+</g>
+<!-- cudastreamsynchronize -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node9" class="node">
+<title>cudastreamsynchronize</title>
+<polygon fill="#777777" stroke="#777777" points="985.18,-24.27 847.66,-24.27 847.66,0 985.18,0 985.18,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="916.42" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cudastreamsynchronize</text>
+</g>
+<!-- proc~redistribute_110_to_yslab&#45;&gt;cudastreamsynchronize -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge10" class="edge">
+<title>proc~redistribute_110_to_yslab&#45;&gt;cudastreamsynchronize</title>
+<path fill="none" stroke="#4800ff" d="M753.61,-188.65C757.51,-186.08 761.25,-183.25 764.79,-180.13 815.3,-135.71 751.85,-79.27 800.79,-33.13 810.62,-23.86 823.13,-18 836.25,-14.4"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="836.91,-17.84 845.88,-12.22 835.36,-11.01 836.91,-17.84"/>
+</g>
+<!-- mpi_alltoall -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node11" class="node">
+<title>mpi_alltoall</title>
+<polygon fill="#777777" stroke="#777777" points="952.93,-234.27 879.91,-234.27 879.91,-210 952.93,-210 952.93,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="916.42" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_alltoall</text>
+</g>
+<!-- proc~redistribute_110_to_yslab&#45;&gt;mpi_alltoall -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge12" class="edge">
+<title>proc~redistribute_110_to_yslab&#45;&gt;mpi_alltoall</title>
+<path fill="none" stroke="#4800ff" d="M765.21,-212.77C803.46,-215.16 840.45,-217.46 868.15,-219.19"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="867.72,-222.67 877.92,-219.8 868.16,-215.68 867.72,-222.67"/>
+</g>
+<!-- proc~redistribute_110_to_yslab&#45;&gt;proc~abort_run -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge13" class="edge">
+<title>proc~redistribute_110_to_yslab&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#4800ff" d="M662.8,-213.76C694.87,-219.05 731.65,-225.71 764.79,-233.13 780.99,-236.77 784.57,-239.56 800.79,-243.13 902.51,-265.55 929.39,-263.56 1032.06,-281.13 1039.99,-282.49 1048.29,-283.94 1056.54,-285.38"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="1055.78,-288.8 1066.24,-287.09 1057,-281.91 1055.78,-288.8"/>
+</g>
+<!-- proc~check_cuda -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node13" class="node">
+<title>proc~check_cuda</title>
+<g id="a_proc~~fft_forward_110_cuda~~CallsGraph_node13"><a xlink:href="../proc/check_cuda.html" xlink:title="m_cuda_errors::check_cuda">
+<polygon fill="#d9534f" stroke="#d9534f" points="996.81,-192.27 836.04,-192.27 836.04,-168 996.81,-168 996.81,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="916.42" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_errors::check_cuda</text>
+</a>
+</g>
+</g>
+<!-- proc~redistribute_110_to_yslab&#45;&gt;proc~check_cuda -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge14" class="edge">
+<title>proc~redistribute_110_to_yslab&#45;&gt;proc~check_cuda</title>
+<path fill="none" stroke="#4800ff" d="M765.21,-189.5C785.7,-188.22 805.83,-186.97 824.36,-185.81"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="824.41,-189.32 834.17,-185.2 823.97,-182.33 824.41,-189.32"/>
+</g>
+<!-- proc~check_mpi -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node14" class="node">
+<title>proc~check_mpi</title>
+<g id="a_proc~~fft_forward_110_cuda~~CallsGraph_node14"><a xlink:href="../proc/check_mpi.html" xlink:title="m_logger::check_mpi">
+<polygon fill="#d9534f" stroke="#d9534f" points="979.56,-150.27 853.29,-150.27 853.29,-126 979.56,-126 979.56,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="916.42" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::check_mpi</text>
+</a>
+</g>
+</g>
+<!-- proc~redistribute_110_to_yslab&#45;&gt;proc~check_mpi -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge15" class="edge">
+<title>proc~redistribute_110_to_yslab&#45;&gt;proc~check_mpi</title>
+<path fill="none" stroke="#4800ff" d="M734.08,-188.57C744.58,-186.2 754.91,-183.41 764.79,-180.13 782.37,-174.31 783.42,-165.57 800.79,-159.13 813.74,-154.34 827.93,-150.61 841.79,-147.72"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="842.16,-151.21 851.31,-145.86 840.82,-144.34 842.16,-151.21"/>
+</g>
+<!-- proc~pack_110_xyz_to_yslab -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node15" class="node">
+<title>proc~pack_110_xyz_to_yslab</title>
+<g id="a_proc~~fft_forward_110_cuda~~CallsGraph_node15"><a xlink:href="../proc/pack_110_xyz_to_yslab.html" xlink:title="m_cuda_spectral::pack_110_xyz_to_yslab">
+<polygon fill="#d9534f" stroke="#d9534f" points="1032.06,-108.27 800.79,-108.27 800.79,-84 1032.06,-84 1032.06,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="916.42" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_spectral::pack_110_xyz_to_yslab</text>
+</a>
+</g>
+</g>
+<!-- proc~redistribute_110_to_yslab&#45;&gt;proc~pack_110_xyz_to_yslab -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge16" class="edge">
+<title>proc~redistribute_110_to_yslab&#45;&gt;proc~pack_110_xyz_to_yslab</title>
+<path fill="none" stroke="#4800ff" d="M749.91,-188.57C755.06,-186.07 760.03,-183.27 764.79,-180.13 791.73,-162.41 774.48,-135.78 800.79,-117.13 802.38,-116.01 804.01,-114.94 805.68,-113.92"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="807.08,-117.14 814.27,-109.35 803.8,-110.96 807.08,-117.14"/>
+</g>
+<!-- proc~unpack_110_yslab -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node16" class="node">
+<title>proc~unpack_110_yslab</title>
+<g id="a_proc~~fft_forward_110_cuda~~CallsGraph_node16"><a xlink:href="../proc/unpack_110_yslab.html" xlink:title="m_cuda_spectral::unpack_110_yslab">
+<polygon fill="#d9534f" stroke="#d9534f" points="1019.68,-66.27 813.16,-66.27 813.16,-42 1019.68,-42 1019.68,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="916.42" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_cuda_spectral::unpack_110_yslab</text>
+</a>
+</g>
+</g>
+<!-- proc~redistribute_110_to_yslab&#45;&gt;proc~unpack_110_yslab -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge17" class="edge">
+<title>proc~redistribute_110_to_yslab&#45;&gt;proc~unpack_110_yslab</title>
+<path fill="none" stroke="#4800ff" d="M752.41,-188.72C756.72,-186.14 760.86,-183.29 764.79,-180.13 803.26,-149.25 763.4,-107.32 800.79,-75.13 801.73,-74.33 802.69,-73.54 803.67,-72.79"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="805.27,-75.92 811.69,-67.49 801.42,-70.08 805.27,-75.92"/>
+</g>
+<!-- proc~abort_run&#45;&gt;interface~str -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge18" class="edge">
+<title>proc~abort_run&#45;&gt;interface~str</title>
+<path fill="none" stroke="#00ff3f" d="M1167.78,-285.53C1175.35,-281.95 1182.86,-277.52 1189.08,-272.13 1212.02,-252.28 1202.07,-233.91 1225.08,-214.13 1226.15,-213.22 1227.26,-212.34 1228.41,-211.49"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="1229.87,-214.7 1236.5,-206.44 1226.16,-208.76 1229.87,-214.7"/>
+</g>
+<!-- mpi_abort -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node18" class="node">
+<title>mpi_abort</title>
+<polygon fill="#777777" stroke="#777777" points="1307.85,-373.27 1242.33,-373.27 1242.33,-349 1307.85,-349 1307.85,-373.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1275.09" y="-357.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_abort</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_abort -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge19" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_abort</title>
+<path fill="none" stroke="#00ff3f" d="M1157.96,-310.7C1176.94,-319.08 1202.48,-330.33 1225.08,-340.13 1228.03,-341.41 1231.07,-342.73 1234.14,-344.05"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="1232.57,-347.19 1243.14,-347.92 1235.33,-340.76 1232.57,-347.19"/>
+</g>
+<!-- mpi_barrier -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node19" class="node">
+<title>mpi_barrier</title>
+<polygon fill="#777777" stroke="#777777" points="1311.97,-331.27 1238.2,-331.27 1238.2,-307 1311.97,-307 1311.97,-331.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1275.09" y="-315.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_barrier</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_barrier -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge20" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_barrier</title>
+<path fill="none" stroke="#00ff3f" d="M1189.19,-306.8C1201.68,-308.61 1214.69,-310.5 1226.67,-312.24"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="1225.88,-315.67 1236.28,-313.64 1226.89,-308.74 1225.88,-315.67"/>
+</g>
+<!-- mpi_comm_rank -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node20" class="node">
+<title>mpi_comm_rank</title>
+<polygon fill="#777777" stroke="#777777" points="1325.1,-289.27 1225.08,-289.27 1225.08,-265 1325.1,-265 1325.1,-289.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1275.09" y="-273.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_comm_rank</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_comm_rank -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge21" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_comm_rank</title>
+<path fill="none" stroke="#00ff3f" d="M1189.19,-289.47C1197.22,-288.31 1205.47,-287.11 1213.52,-285.94"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="1213.83,-289.43 1223.22,-284.53 1212.82,-282.5 1213.83,-289.43"/>
+</g>
+<!-- mpi_comm_size -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node21" class="node">
+<title>mpi_comm_size</title>
+<polygon fill="#777777" stroke="#777777" points="1323.22,-247.27 1226.95,-247.27 1226.95,-223 1323.22,-223 1323.22,-247.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1275.09" y="-231.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_comm_size</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_comm_size -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge22" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_comm_size</title>
+<path fill="none" stroke="#00ff3f" d="M1158.34,-285.61C1168.1,-281.35 1179.07,-276.55 1189.08,-272.13 1205.1,-265.07 1209.03,-263.14 1225.08,-256.13 1228.02,-254.85 1231.07,-253.53 1234.13,-252.2"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="1235.33,-255.5 1243.13,-248.33 1232.56,-249.07 1235.33,-255.5"/>
+</g>
+<!-- mpi_finalized -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node23" class="node">
+<title>mpi_finalized</title>
+<polygon fill="#777777" stroke="#777777" points="1316.1,-457.27 1234.08,-457.27 1234.08,-433 1316.1,-433 1316.1,-457.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1275.09" y="-441.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_finalized</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_finalized -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge23" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_finalized</title>
+<path fill="none" stroke="#00ff3f" d="M1136.07,-310.57C1149.57,-335.32 1182.91,-391.17 1225.08,-424.13 1226.23,-425.03 1227.42,-425.9 1228.65,-426.74"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="1226.87,-429.75 1237.26,-431.79 1230.41,-423.71 1226.87,-429.75"/>
+</g>
+<!-- mpi_initialized -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node24" class="node">
+<title>mpi_initialized</title>
+<polygon fill="#777777" stroke="#777777" points="1319.1,-415.27 1231.08,-415.27 1231.08,-391 1319.1,-391 1319.1,-415.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1275.09" y="-399.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_initialized</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_initialized -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge24" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_initialized</title>
+<path fill="none" stroke="#00ff3f" d="M1141.22,-310.64C1158.28,-328.37 1191.66,-361.04 1225.08,-382.13 1226.9,-383.28 1228.79,-384.4 1230.73,-385.47"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="1228.82,-388.43 1239.32,-389.83 1231.99,-382.18 1228.82,-388.43"/>
+</g>
+<!-- proc~check_cuda&#45;&gt;interface~str -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge26" class="edge">
+<title>proc~check_cuda&#45;&gt;interface~str</title>
+<path fill="none" stroke="#00ffff" d="M993.07,-192.77C1016.98,-196.2 1043.56,-199.44 1068.06,-201.13 1121.72,-204.86 1135.35,-203.66 1189.08,-201.13 1199.85,-200.63 1211.36,-199.77 1222.33,-198.79"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1222.36,-202.3 1231.99,-197.88 1221.71,-195.33 1222.36,-202.3"/>
+</g>
+<!-- proc~check_cuda&#45;&gt;proc~abort_run -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge27" class="edge">
+<title>proc~check_cuda&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#00ffff" d="M997.26,-188.22C1009.34,-191.28 1021.33,-195.45 1032.06,-201.13 1041.25,-206.01 1082.99,-250.07 1108.15,-277.11"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1105.58,-279.48 1114.95,-284.43 1110.71,-274.72 1105.58,-279.48"/>
+</g>
+<!-- cudageterrorstring -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node17" class="node">
+<title>cudageterrorstring</title>
+<polygon fill="#777777" stroke="#777777" points="1184.2,-192.27 1072.93,-192.27 1072.93,-168 1184.2,-168 1184.2,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1128.57" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cudageterrorstring</text>
+</g>
+<!-- proc~check_cuda&#45;&gt;cudageterrorstring -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge25" class="edge">
+<title>proc~check_cuda&#45;&gt;cudageterrorstring</title>
+<path fill="none" stroke="#00ffff" d="M997.17,-180.13C1018.33,-180.13 1040.95,-180.13 1061.31,-180.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1061.17,-183.64 1071.17,-180.14 1061.17,-176.64 1061.17,-183.64"/>
+</g>
+<!-- proc~check_mpi&#45;&gt;interface~str -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge28" class="edge">
+<title>proc~check_mpi&#45;&gt;interface~str</title>
+<path fill="none" stroke="#003fff" d="M980.02,-127.13C1048.13,-116.24 1152.24,-103.07 1189.08,-117.13 1217.59,-128.02 1242.58,-153.35 1257.96,-171.78"/>
+<polygon fill="#003fff" stroke="#003fff" points="1255.16,-173.89 1264.15,-179.5 1260.62,-169.51 1255.16,-173.89"/>
+</g>
+<!-- proc~check_mpi&#45;&gt;proc~abort_run -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge30" class="edge">
+<title>proc~check_mpi&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#003fff" d="M979.94,-140.63C997.87,-143.64 1016.69,-149.18 1032.06,-159.13 1043.68,-166.67 1090.3,-239 1113.83,-276.23"/>
+<polygon fill="#003fff" stroke="#003fff" points="1110.71,-277.84 1119,-284.43 1116.63,-274.11 1110.71,-277.84"/>
+</g>
+<!-- mpi_error_string -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_node22" class="node">
+<title>mpi_error_string</title>
+<polygon fill="#777777" stroke="#777777" points="1177.83,-150.27 1079.31,-150.27 1079.31,-126 1177.83,-126 1177.83,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1128.57" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_error_string</text>
+</g>
+<!-- proc~check_mpi&#45;&gt;mpi_error_string -->
+<g id="proc~~fft_forward_110_cuda~~CallsGraph_edge29" class="edge">
+<title>proc~check_mpi&#45;&gt;mpi_error_string</title>
+<path fill="none" stroke="#003fff" d="M979.91,-138.13C1007.64,-138.13 1040.14,-138.13 1067.58,-138.13"/>
+<polygon fill="#003fff" stroke="#003fff" points="1067.49,-141.64 1077.49,-138.14 1067.49,-134.64 1067.49,-141.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocfft_forward_110_cudaCallsGraph = svgPanZoom('#procfft_forward_110_cudaCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

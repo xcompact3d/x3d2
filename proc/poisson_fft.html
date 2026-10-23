@@ -1,0 +1,644 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="x3d2 is the current codename for what is to become Xcompact3d version 2.0.">
+    <meta name="author" content="Xcompact3d Team" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>poisson_fft &ndash; x3d2</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">x3d2 </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/namelists.html">Namelists</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/programs.html">Programs</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>poisson_fft
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">14 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/solver.f90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/solver.f90.html'>solver.f90</a></li>
+                <li class="breadcrumb-item"><a href='../module/m_solver.html'>m_solver</a></li>
+            <li class="breadcrumb-item active" aria-current="page">poisson_fft</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine poisson_fft(self, pressure, div_u)  
+</h2>
+    
+
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~437"></span>
+              class(<a href='../type/solver_t.html'>solver_t</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pressure~4"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>pressure</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-div_u~30"></span>
+              class(<a href='../type/field_t.html'>field_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>div_u</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~poisson_fft~~CallsGraph Pages: 1 -->
+<svg id="procpoisson_fftCallsGraph" width="641pt" height="253pt"
+ viewBox="0.00 0.00 641.00 253.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~poisson_fft~~CallsGraph" class="graph" transform="scale(0.61422 0.61422) rotate(0) translate(4 408.27)">
+<title>proc~~poisson_fft~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-408.27 1039.6,-408.27 1039.6,4 -4,4"/>
+<!-- proc~poisson_fft -->
+<g id="proc~~poisson_fft~~CallsGraph_node1" class="node">
+<title>proc~poisson_fft</title>
+<polygon fill="none" stroke="black" points="124.02,-310.27 0,-310.27 0,-286 124.02,-286 124.02,-310.27"/>
+<text xml:space="preserve" text-anchor="middle" x="62.01" y="-294.53" font-family="Helvetica,sans-Serif" font-size="10.50">m_solver::poisson_fft</text>
+</g>
+<!-- proc~get_block -->
+<g id="proc~~poisson_fft~~CallsGraph_node2" class="node">
+<title>proc~get_block</title>
+<g id="a_proc~~poisson_fft~~CallsGraph_node2"><a xlink:href="../proc/get_block.html" xlink:title="m_allocator::allocator_t%get_block">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="398.04,-373.27 199.02,-373.27 199.02,-349 398.04,-349 398.04,-373.27"/>
+<text xml:space="preserve" text-anchor="middle" x="298.53" y="-357.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_allocator::allocator_t%get_block</text>
+</a>
+</g>
+</g>
+<!-- proc~poisson_fft&#45;&gt;proc~get_block -->
+<g id="proc~~poisson_fft~~CallsGraph_edge1" class="edge">
+<title>proc~poisson_fft&#45;&gt;proc~get_block</title>
+<path fill="none" stroke="#ff0000" d="M87.09,-310.63C106.34,-320.11 134.27,-332.73 160.02,-340.13 168.94,-342.7 178.29,-344.97 187.73,-346.98"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="186.86,-350.37 197.35,-348.91 188.24,-343.51 186.86,-350.37"/>
+</g>
+<!-- proc~release_block -->
+<g id="proc~~poisson_fft~~CallsGraph_node3" class="node">
+<title>proc~release_block</title>
+<g id="a_proc~~poisson_fft~~CallsGraph_node3"><a xlink:href="../proc/release_block.html" xlink:title="m_allocator::allocator_t%release_block">
+<polygon fill="#d9534f" stroke="#d9534f" points="408.91,-331.27 188.14,-331.27 188.14,-307 408.91,-307 408.91,-331.27"/>
+<text xml:space="preserve" text-anchor="middle" x="298.53" y="-315.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_allocator::allocator_t%release_block</text>
+</a>
+</g>
+</g>
+<!-- proc~poisson_fft&#45;&gt;proc~release_block -->
+<g id="proc~~poisson_fft~~CallsGraph_edge2" class="edge">
+<title>proc~poisson_fft&#45;&gt;proc~release_block</title>
+<path fill="none" stroke="#ff0000" d="M124.32,-303.63C140.51,-305.07 158.55,-306.69 176.7,-308.32"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="176.23,-311.79 186.5,-309.19 176.85,-304.81 176.23,-311.79"/>
+</g>
+<!-- proc~reorder_base -->
+<g id="proc~~poisson_fft~~CallsGraph_node4" class="node">
+<title>proc~reorder_base</title>
+<g id="a_proc~~poisson_fft~~CallsGraph_node4"><a xlink:href="../proc/reorder_base.html" xlink:title="m_base_backend::base_backend_t%reorder_base">
+<polygon fill="#d9534f" stroke="#d9534f" points="437.04,-289.27 160.02,-289.27 160.02,-265 437.04,-265 437.04,-289.27"/>
+<text xml:space="preserve" text-anchor="middle" x="298.53" y="-273.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_base_backend::base_backend_t%reorder_base</text>
+</a>
+</g>
+</g>
+<!-- proc~poisson_fft&#45;&gt;proc~reorder_base -->
+<g id="proc~~poisson_fft~~CallsGraph_edge3" class="edge">
+<title>proc~poisson_fft&#45;&gt;proc~reorder_base</title>
+<path fill="none" stroke="#ff0000" d="M124.32,-292.64C131.97,-291.96 140.04,-291.24 148.33,-290.49"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="148.62,-293.98 158.27,-289.61 147.99,-287.01 148.62,-293.98"/>
+</g>
+<!-- proc~solve_poisson -->
+<g id="proc~~poisson_fft~~CallsGraph_node5" class="node">
+<title>proc~solve_poisson</title>
+<g id="a_proc~~poisson_fft~~CallsGraph_node5"><a xlink:href="../proc/solve_poisson.html" xlink:title="m_poisson_fft::poisson_fft_t%solve_poisson">
+<polygon fill="#d9534f" stroke="#d9534f" points="419.04,-228.27 178.02,-228.27 178.02,-204 419.04,-204 419.04,-228.27"/>
+<text xml:space="preserve" text-anchor="middle" x="298.53" y="-212.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_poisson_fft::poisson_fft_t%solve_poisson</text>
+</a>
+</g>
+</g>
+<!-- proc~poisson_fft&#45;&gt;proc~solve_poisson -->
+<g id="proc~~poisson_fft~~CallsGraph_edge4" class="edge">
+<title>proc~poisson_fft&#45;&gt;proc~solve_poisson</title>
+<path fill="none" stroke="#ff0000" d="M89.41,-285.63C108.72,-276.76 135.67,-264.91 160.02,-256.13 185.17,-247.07 213.46,-238.57 237.8,-231.75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="238.52,-235.18 247.23,-229.14 236.66,-228.43 238.52,-235.18"/>
+</g>
+<!-- proc~create_block -->
+<g id="proc~~poisson_fft~~CallsGraph_node10" class="node">
+<title>proc~create_block</title>
+<g id="a_proc~~poisson_fft~~CallsGraph_node10"><a xlink:href="../proc/create_block.html" xlink:title="m_allocator::allocator_t%create_block">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="715.56,-404.27 500.04,-404.27 500.04,-380 715.56,-380 715.56,-404.27"/>
+<text xml:space="preserve" text-anchor="middle" x="607.8" y="-388.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_allocator::allocator_t%create_block</text>
+</a>
+</g>
+</g>
+<!-- proc~get_block&#45;&gt;proc~create_block -->
+<g id="proc~~poisson_fft~~CallsGraph_edge5" class="edge">
+<title>proc~get_block&#45;&gt;proc~create_block</title>
+<path fill="none" stroke="#ff0000" d="M398.44,-371.11C427.07,-374 458.61,-377.18 488.3,-380.18"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="487.77,-383.64 498.07,-381.17 488.47,-376.68 487.77,-383.64"/>
+</g>
+<!-- proc~set_shape -->
+<g id="proc~~poisson_fft~~CallsGraph_node12" class="node">
+<title>proc~set_shape</title>
+<g id="a_proc~~poisson_fft~~CallsGraph_node12"><a xlink:href="../proc/set_shape.html" xlink:title="m_field::field_t%set_shape">
+<polygon fill="#d9534f" stroke="#d9534f" points="684.43,-362.27 531.16,-362.27 531.16,-338 684.43,-338 684.43,-362.27"/>
+<text xml:space="preserve" text-anchor="middle" x="607.8" y="-346.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_field::field_t%set_shape</text>
+</a>
+</g>
+</g>
+<!-- proc~get_block&#45;&gt;proc~set_shape -->
+<g id="proc~~poisson_fft~~CallsGraph_edge6" class="edge">
+<title>proc~get_block&#45;&gt;proc~set_shape</title>
+<path fill="none" stroke="#ff0000" d="M398.44,-357.59C437.4,-356.2 481.75,-354.61 519.49,-353.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="519.6,-356.76 529.47,-352.9 519.35,-349.76 519.6,-356.76"/>
+</g>
+<!-- proc~abort_run -->
+<g id="proc~~poisson_fft~~CallsGraph_node9" class="node">
+<title>proc~abort_run</title>
+<g id="a_proc~~poisson_fft~~CallsGraph_node9"><a xlink:href="../proc/abort_run.html" xlink:title="m_logger::abort_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="899.58,-150.27 778.56,-150.27 778.56,-126 899.58,-126 899.58,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="839.07" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::abort_run</text>
+</a>
+</g>
+</g>
+<!-- proc~reorder_base&#45;&gt;proc~abort_run -->
+<g id="proc~~poisson_fft~~CallsGraph_edge7" class="edge">
+<title>proc~reorder_base&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#00ffff" d="M395.98,-289.74C508.06,-302.53 685.01,-316.38 742.56,-285.13 791.13,-258.77 818.85,-195.84 830.86,-161.49"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="834.16,-162.67 833.99,-152.07 827.52,-160.46 834.16,-162.67"/>
+</g>
+<!-- fft_backward -->
+<g id="proc~~poisson_fft~~CallsGraph_node6" class="node">
+<title>fft_backward</title>
+<polygon fill="#777777" stroke="#777777" points="647.68,-276.27 567.91,-276.27 567.91,-252 647.68,-252 647.68,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="607.8" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fft_backward</text>
+</g>
+<!-- proc~solve_poisson&#45;&gt;fft_backward -->
+<g id="proc~~poisson_fft~~CallsGraph_edge8" class="edge">
+<title>proc~solve_poisson&#45;&gt;fft_backward</title>
+<path fill="none" stroke="#7f00ff" d="M380.26,-228.75C436.11,-237.47 508.7,-248.81 556.46,-256.27"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="555.83,-259.72 566.25,-257.8 556.91,-252.8 555.83,-259.72"/>
+</g>
+<!-- fft_forward -->
+<g id="proc~~poisson_fft~~CallsGraph_node7" class="node">
+<title>fft_forward</title>
+<polygon fill="#777777" stroke="#777777" points="642.43,-234.27 573.16,-234.27 573.16,-210 642.43,-210 642.43,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="607.8" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fft_forward</text>
+</g>
+<!-- proc~solve_poisson&#45;&gt;fft_forward -->
+<g id="proc~~poisson_fft~~CallsGraph_edge9" class="edge">
+<title>proc~solve_poisson&#45;&gt;fft_forward</title>
+<path fill="none" stroke="#7f00ff" d="M419.21,-218.47C469.3,-219.45 524.46,-220.53 561.91,-221.26"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="561.37,-224.75 571.43,-221.44 561.5,-217.75 561.37,-224.75"/>
+</g>
+<!-- fft_postprocess -->
+<g id="proc~~poisson_fft~~CallsGraph_node8" class="node">
+<title>fft_postprocess</title>
+<polygon fill="#777777" stroke="#777777" points="653.31,-192.27 562.29,-192.27 562.29,-168 653.31,-168 653.31,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="607.8" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fft_postprocess</text>
+</g>
+<!-- proc~solve_poisson&#45;&gt;fft_postprocess -->
+<g id="proc~~poisson_fft~~CallsGraph_edge10" class="edge">
+<title>proc~solve_poisson&#45;&gt;fft_postprocess</title>
+<path fill="none" stroke="#7f00ff" d="M407,-203.54C455.35,-197.88 510.44,-191.42 550.5,-186.73"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="550.88,-190.21 560.41,-185.57 550.07,-183.26 550.88,-190.21"/>
+</g>
+<!-- proc~enforce_periodicity -->
+<g id="proc~~poisson_fft~~CallsGraph_node11" class="node">
+<title>proc~enforce_periodicity</title>
+<g id="a_proc~~poisson_fft~~CallsGraph_node11"><a xlink:href="../proc/enforce_periodicity.html" xlink:title="m_poisson_fft::poisson_fft_t%enforce_periodicity">
+<polygon fill="#d9534f" stroke="#d9534f" points="742.56,-150.27 473.04,-150.27 473.04,-126 742.56,-126 742.56,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="607.8" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_poisson_fft::poisson_fft_t%enforce_periodicity</text>
+</a>
+</g>
+</g>
+<!-- proc~solve_poisson&#45;&gt;proc~enforce_periodicity -->
+<g id="proc~~poisson_fft~~CallsGraph_edge11" class="edge">
+<title>proc~solve_poisson&#45;&gt;proc~enforce_periodicity</title>
+<path fill="none" stroke="#7f00ff" d="M332.33,-203.59C366.89,-190.8 423.11,-171.17 473.04,-159.13 482.69,-156.81 492.8,-154.68 502.94,-152.74"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="503.26,-156.24 512.46,-150.99 502,-149.36 503.26,-156.24"/>
+</g>
+<!-- proc~undo_periodicity -->
+<g id="proc~~poisson_fft~~CallsGraph_node13" class="node">
+<title>proc~undo_periodicity</title>
+<g id="a_proc~~poisson_fft~~CallsGraph_node13"><a xlink:href="../proc/undo_periodicity.html" xlink:title="m_poisson_fft::poisson_fft_t%undo_periodicity">
+<polygon fill="#d9534f" stroke="#d9534f" points="735.81,-108.27 479.79,-108.27 479.79,-84 735.81,-84 735.81,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="607.8" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_poisson_fft::poisson_fft_t%undo_periodicity</text>
+</a>
+</g>
+</g>
+<!-- proc~solve_poisson&#45;&gt;proc~undo_periodicity -->
+<g id="proc~~poisson_fft~~CallsGraph_edge12" class="edge">
+<title>proc~solve_poisson&#45;&gt;proc~undo_periodicity</title>
+<path fill="none" stroke="#7f00ff" d="M316.25,-203.8C346.09,-182.44 411.18,-138.82 473.04,-117.14 479.08,-115.02 485.35,-113.11 491.73,-111.4"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="492.23,-114.88 501.08,-109.06 490.53,-108.09 492.23,-114.88"/>
+</g>
+<!-- interface~str -->
+<g id="proc~~poisson_fft~~CallsGraph_node14" class="node">
+<title>interface~str</title>
+<g id="a_proc~~poisson_fft~~CallsGraph_node14"><a xlink:href="../interface/str.html" xlink:title="m_logger::str">
+<polygon fill="#a7506f" stroke="#a7506f" points="1026.97,-276.27 944.2,-276.27 944.2,-252 1026.97,-252 1026.97,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="985.59" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">m_logger::str</text>
+</a>
+</g>
+</g>
+<!-- proc~abort_run&#45;&gt;interface~str -->
+<g id="proc~~poisson_fft~~CallsGraph_edge13" class="edge">
+<title>proc~abort_run&#45;&gt;interface~str</title>
+<path fill="none" stroke="#00ff3f" d="M848.72,-150.74C864.02,-172.23 897.84,-216.26 935.58,-243.13 937.11,-244.22 938.7,-245.27 940.34,-246.28"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="938.31,-249.16 948.76,-250.87 941.66,-243.01 938.31,-249.16"/>
+</g>
+<!-- mpi_abort -->
+<g id="proc~~poisson_fft~~CallsGraph_node15" class="node">
+<title>mpi_abort</title>
+<polygon fill="#777777" stroke="#777777" points="1018.35,-234.27 952.83,-234.27 952.83,-210 1018.35,-210 1018.35,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="985.59" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_abort</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_abort -->
+<g id="proc~~poisson_fft~~CallsGraph_edge14" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_abort</title>
+<path fill="none" stroke="#00ff3f" d="M857.1,-150.71C875.77,-164.18 906.9,-185.69 935.58,-201.13 937.8,-202.33 940.1,-203.51 942.44,-204.66"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="940.91,-207.81 951.45,-208.87 943.87,-201.46 940.91,-207.81"/>
+</g>
+<!-- mpi_barrier -->
+<g id="proc~~poisson_fft~~CallsGraph_node16" class="node">
+<title>mpi_barrier</title>
+<polygon fill="#777777" stroke="#777777" points="1022.47,-192.27 948.7,-192.27 948.7,-168 1022.47,-168 1022.47,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="985.59" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_barrier</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_barrier -->
+<g id="proc~~poisson_fft~~CallsGraph_edge15" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_barrier</title>
+<path fill="none" stroke="#00ff3f" d="M883.43,-150.74C900.64,-155.74 920.48,-161.5 938,-166.59"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="936.53,-169.81 947.11,-169.24 938.48,-163.09 936.53,-169.81"/>
+</g>
+<!-- mpi_comm_rank -->
+<g id="proc~~poisson_fft~~CallsGraph_node17" class="node">
+<title>mpi_comm_rank</title>
+<polygon fill="#777777" stroke="#777777" points="1035.6,-150.27 935.58,-150.27 935.58,-126 1035.6,-126 1035.6,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="985.59" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_comm_rank</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_comm_rank -->
+<g id="proc~~poisson_fft~~CallsGraph_edge16" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_comm_rank</title>
+<path fill="none" stroke="#00ff3f" d="M899.69,-138.13C907.63,-138.13 915.78,-138.13 923.74,-138.13"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="923.71,-141.64 933.71,-138.14 923.71,-134.64 923.71,-141.64"/>
+</g>
+<!-- mpi_comm_size -->
+<g id="proc~~poisson_fft~~CallsGraph_node18" class="node">
+<title>mpi_comm_size</title>
+<polygon fill="#777777" stroke="#777777" points="1033.72,-108.27 937.45,-108.27 937.45,-84 1033.72,-84 1033.72,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="985.59" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_comm_size</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_comm_size -->
+<g id="proc~~poisson_fft~~CallsGraph_edge17" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_comm_size</title>
+<path fill="none" stroke="#00ff3f" d="M883.43,-125.53C898.15,-121.26 914.78,-116.42 930.25,-111.93"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="931.18,-115.3 939.81,-109.15 929.23,-108.58 931.18,-115.3"/>
+</g>
+<!-- mpi_finalized -->
+<g id="proc~~poisson_fft~~CallsGraph_node19" class="node">
+<title>mpi_finalized</title>
+<polygon fill="#777777" stroke="#777777" points="1026.6,-66.27 944.58,-66.27 944.58,-42 1026.6,-42 1026.6,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="985.59" y="-50.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_finalized</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_finalized -->
+<g id="proc~~poisson_fft~~CallsGraph_edge18" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_finalized</title>
+<path fill="none" stroke="#00ff3f" d="M857.1,-125.56C875.77,-112.09 906.9,-90.58 935.58,-75.14 937.8,-73.94 940.1,-72.76 942.44,-71.61"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="943.87,-74.81 951.45,-67.4 940.91,-68.46 943.87,-74.81"/>
+</g>
+<!-- mpi_initialized -->
+<g id="proc~~poisson_fft~~CallsGraph_node20" class="node">
+<title>mpi_initialized</title>
+<polygon fill="#777777" stroke="#777777" points="1029.6,-24.27 941.58,-24.27 941.58,0 1029.6,0 1029.6,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="985.59" y="-8.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">mpi_initialized</text>
+</g>
+<!-- proc~abort_run&#45;&gt;mpi_initialized -->
+<g id="proc~~poisson_fft~~CallsGraph_edge19" class="edge">
+<title>proc~abort_run&#45;&gt;mpi_initialized</title>
+<path fill="none" stroke="#00ff3f" d="M848.72,-125.53C864.02,-104.04 897.84,-60.01 935.58,-33.14 937.11,-32.05 938.7,-31 940.34,-29.99"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="941.66,-33.26 948.76,-25.4 938.31,-27.11 941.66,-33.26"/>
+</g>
+<!-- proc~enforce_periodicity&#45;&gt;proc~abort_run -->
+<g id="proc~~poisson_fft~~CallsGraph_edge20" class="edge">
+<title>proc~enforce_periodicity&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#003fff" d="M742.83,-138.13C750.96,-138.13 758.96,-138.13 766.66,-138.13"/>
+<polygon fill="#003fff" stroke="#003fff" points="766.57,-141.64 776.57,-138.14 766.57,-134.64 766.57,-141.64"/>
+</g>
+<!-- proc~undo_periodicity&#45;&gt;proc~abort_run -->
+<g id="proc~~poisson_fft~~CallsGraph_edge21" class="edge">
+<title>proc~undo_periodicity&#45;&gt;proc~abort_run</title>
+<path fill="none" stroke="#ff00bf" d="M694.2,-108.75C710.3,-111.35 726.97,-114.2 742.56,-117.14 752.2,-118.95 762.35,-121.01 772.29,-123.12"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="771.39,-126.51 781.91,-125.2 772.87,-119.67 771.39,-126.51"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocpoisson_fftCallsGraph = svgPanZoom('#procpoisson_fftCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              x3d2
+ was developed by Xcompact3d Team<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+            </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
