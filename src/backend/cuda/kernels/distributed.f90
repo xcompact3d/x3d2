@@ -680,7 +680,7 @@ contains
     r_du(i, n, b) = -0.5_dp*(conv(i, n, b)*du_e*du_strch(n) &
                              + dud_e*dud_strch(n)) &
                     + nu*(d2u_e*d2u_strch(n) &
-                          + du_s*du_strch(n)*d2u_strch_cor(n))
+                          + du_e*du_strch(n)*d2u_strch_cor(n))
 
   end subroutine transeq_3fused_subs
 
