@@ -244,9 +244,14 @@ program test_poisson
   real(dp), parameter :: DIVGRAD_TOLERANCE = 1.0e-9_dp
 #endif
 
-  ! Check 3, relative L2 norm of the solution against p
+  ! Check 3, relative L2 norm of the solution against p. Largest single
+  ! precision value measured over the passing cases, with 1 and 2 ranks:
+  !   single precision, OpenMP backend, gfortran build: 1.2883e-05
+  !   single precision, CUDA backend:                   4.5532e-06
+  ! The single precision tolerance is the smallest {1,2,5}x10^k value at
+  ! least 10x the largest of these, a margin of about 16.
 #ifdef SINGLE_PREC
-  real(dp), parameter :: ROUNDTRIP_TOLERANCE = 1.0e-5_dp
+  real(dp), parameter :: ROUNDTRIP_TOLERANCE = 2.0e-4_dp
 #else
   real(dp), parameter :: ROUNDTRIP_TOLERANCE = 1.0e-10_dp
 #endif
