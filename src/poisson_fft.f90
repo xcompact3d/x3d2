@@ -379,8 +379,8 @@ contains
 
   end subroutine stretching_matrix
 
-  subroutine fill_stretched_diagonals(self, a_re, a_im, nrows, iy_scale, iy_off, &
-                                      shift, a0, a1, edge)
+  subroutine fill_stretched_diagonals(self, a_re, a_im, nrows, iy_scale, &
+                                      iy_off, shift, a0, a1, edge)
     !! Fill the five diagonals of one stretching matrix. Row j of the matrix
     !! couples the cosine modes iy_scale*iy + iy_off + (-2:2)*shift, with
     !! iy = j + sp_st(2). The caller zeroes a_re and a_im beforehand.
@@ -424,18 +424,25 @@ contains
             if (is_even) c1 = (a0 + a1)*(a0 + a1)
             km_a1 = self%get_km(ix, r - shift, iz)
           else
-        km_a1 = self%get_km(ix, r - shift, iz) + self%get_km(ix, r + shift, iz)
+            km_a1 = self%get_km(ix, r - shift, iz) &
+                    + self%get_km(ix, r + shift, iz)
           end if
           a_re(i, j, k, 3) = &
-           -(get_real(self%kx(ix))*self%trans_y_re(r)*self%trans_z_re(iz))**2 &
-          - (get_real(self%kz(iz))*self%trans_y_re(r)*self%trans_x_re(ix))**2 &
+            -(get_real(self%kx(ix))*self%trans_y_re(r) &
+              *self%trans_z_re(iz))**2 &
+            - (get_real(self%kz(iz))*self%trans_y_re(r) &
+               *self%trans_x_re(ix))**2 &
             - c1*self%get_km_re(ix, r, iz)**2 &
-            - c2*self%get_km_re(ix, r, iz)*get_real(km_a1)
+            - c2*self%get_km_re(ix, r, iz) &
+            *get_real(km_a1)
           a_im(i, j, k, 3) = &
-           -(get_imag(self%kx(ix))*self%trans_y_im(r)*self%trans_z_im(iz))**2 &
-          - (get_imag(self%kz(iz))*self%trans_y_im(r)*self%trans_x_im(ix))**2 &
+            -(get_imag(self%kx(ix))*self%trans_y_im(r) &
+              *self%trans_z_im(iz))**2 &
+            - (get_imag(self%kz(iz))*self%trans_y_im(r) &
+               *self%trans_x_im(ix))**2 &
             - c1*self%get_km_im(ix, r, iz)**2 &
-            - c2*self%get_km_im(ix, r, iz)*get_imag(km_a1)
+            - c2*self%get_km_im(ix, r, iz) &
+            *get_imag(km_a1)
 
           ! diagonal + 1
           if (j <= nup1) then
@@ -454,10 +461,12 @@ contains
               c1 = 0; c2 = 0
             end if
             a_re(i, j, k, 4) = &
-             c1*(self%get_km_re(ix, r, iz)*self%get_km_re(ix, r + shift, iz)) &
+              c1*(self%get_km_re(ix, r, iz) &
+                  *self%get_km_re(ix, r + shift, iz)) &
               + c2*self%get_km_re(ix, r + shift, iz)**2
             a_im(i, j, k, 4) = &
-             c1*(self%get_km_im(ix, r, iz)*self%get_km_im(ix, r + shift, iz)) &
+              c1*(self%get_km_im(ix, r, iz) &
+                  *self%get_km_im(ix, r + shift, iz)) &
               + c2*self%get_km_im(ix, r + shift, iz)**2
           end if
 
@@ -483,10 +492,12 @@ contains
               c1 = (a0 + a1)*a1
             end if
             a_re(i, j, k, 2) = &
-             c1*(self%get_km_re(ix, r, iz)*self%get_km_re(ix, r - shift, iz)) &
+              c1*(self%get_km_re(ix, r, iz) &
+                  *self%get_km_re(ix, r - shift, iz)) &
               + c2*self%get_km_re(ix, r - shift, iz)**2
             a_im(i, j, k, 2) = &
-             c1*(self%get_km_im(ix, r, iz)*self%get_km_im(ix, r - shift, iz)) &
+              c1*(self%get_km_im(ix, r, iz) &
+                  *self%get_km_im(ix, r - shift, iz)) &
               + c2*self%get_km_im(ix, r - shift, iz)**2
           end if
 
