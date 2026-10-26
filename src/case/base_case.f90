@@ -13,7 +13,8 @@ module m_base_case
   use m_postprocess, only: compute_derived_fields, compute_pressure_vert
   use m_config, only: has_output_field, output_field_active
   use m_io_manager, only: io_manager_t
-  use m_mpi, only: MPI_COMM_WORLD, MPI_Wtime, MPI_Reduce, MPI_MAX
+  use m_mpi, only: MPI_COMM_WORLD, MPI_Wtime, MPI_Reduce, MPI_MAX, &
+                   MPI_IN_PLACE, MPI_SUM, MPI_Allreduce
   use m_logger, only: log_info, abort_run, str
 
   implicit none
@@ -45,6 +46,9 @@ module m_base_case
     procedure(forcings), deferred :: forcings
     procedure(apply_BC), deferred :: apply_BC
     procedure(postprocess), deferred :: postprocess
+    procedure :: post_step
+    procedure :: compute_outflow_params
+    procedure :: outflow_flow_rate_correction
     procedure :: case_init
     procedure :: case_finalise
     procedure :: finalise_case_specific => finalise_case_specific_default
@@ -154,6 +158,109 @@ contains
     call self%io_mgr%finalise()
     call self%solver%finalise()
   end subroutine case_finalise
+
+  subroutine post_step(self, iter, t)
+    !! Called after every completed time step, unlike postprocess which runs
+    !! only every n_output steps. No-op unless a case overrides it.
+    implicit none
+
+    class(base_case_t) :: self
+    integer, intent(in) :: iter
+    real(dp), intent(in) :: t
+  end subroutine post_step
+
+  subroutine compute_outflow_params(self, out_vel, flow_rate_diff)
+    !! Convective outflow number and inlet/outlet flow-rate imbalance for a
+    !! case with an x inflow and a convective x outflow (the X_FACE form of
+    !! field_set_face_from_field). Three slice reductions on the device and
+    !! two batched MPI_Allreduces; no D2H copy of the full field. Assumes x
+    !! is not decomposed, as the FFT Poisson solver requires. Without
+    !! flow_rate_diff only the outflow number is computed.
+    implicit none
+    class(base_case_t) :: self
+    real(dp), intent(out) :: out_vel
+    real(dp), optional, intent(out) :: flow_rate_diff
+
+    integer :: dims(3), dims_glob(3), nx, ierr
+    real(dp) :: uxmax, uxmax_discard
+    real(dp) :: flow_rate_in, flow_rate_out
+    real(dp) :: flow_rate_in_max_discard, flow_rate_out_max_discard
+    real(dp) :: fl_sums(2), ny_nz
+    real(dp) :: dx, gdt
+
+    dims = self%solver%mesh%get_dims(VERT)
+    nx = dims(1)
+    dx = self%solver%mesh%geo%d(1)
+    ! The slice sums are rank local and the Allreduce below adds them up
+    ! across the whole y-z plane, so the divisor is the global vertex count
+    ! in y and z rather than this rank's share of it.
+    dims_glob = self%solver%mesh%get_global_dims(VERT)
+    ny_nz = real(dims_glob(2)*dims_glob(3), dp)
+    gdt = self%solver%time_integrator%gdt
+
+    call self%solver%backend%slice_max_sum( &
+      uxmax, uxmax_discard, self%solver%u, nx - 1)
+    call MPI_Allreduce(MPI_IN_PLACE, uxmax, 1, MPI_X3D2_DP, &
+                       MPI_MAX, MPI_COMM_WORLD, ierr)
+    out_vel = uxmax*gdt/dx
+    if (.not. present(flow_rate_diff)) return
+
+    call self%solver%backend%slice_max_sum( &
+      flow_rate_in_max_discard, flow_rate_in, self%solver%u, 1)
+    call self%solver%backend%slice_max_sum( &
+      flow_rate_out_max_discard, flow_rate_out, self%solver%u, nx)
+
+    fl_sums(1) = flow_rate_in
+    fl_sums(2) = flow_rate_out
+    call MPI_Allreduce(MPI_IN_PLACE, fl_sums, 2, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+    flow_rate_in = fl_sums(1)/ny_nz
+    flow_rate_out = fl_sums(2)/ny_nz
+
+    flow_rate_diff = flow_rate_in - flow_rate_out
+  end subroutine compute_outflow_params
+
+  function outflow_flow_rate_correction(self, u, out_vel, y_weights) &
+    result(flow_rate_diff)
+    !! The flow_rate_diff for the X_FACE stamp of field_set_face_from_field
+    !! that makes the flow rate out equal the flow rate in exactly, as the
+    !! pressure projection sees them. The x staggered derivative sums to
+    !! (u(nx) - u(1))/dx over the cells, so only the two face planes enter,
+    !! each weighted over y by y_weights: the case passes the weights of the
+    !! y interpolation (1/2 on a non-periodic boundary plane, 1 elsewhere),
+    !! with 0 on any plane it overwrites with the same value on both faces
+    !! after the stamp. The stamp is linear in u,
+    !! u(nx) <- (1 - c)*u(nx) + c*u(nx - 1) + flow_rate_diff, so the sums of
+    !! the planes before it give the outlet flow rate after it. Call it with
+    !! u as it is about to be stamped, once bc_start_u_x holds this substep's
+    !! inlet plane. Assumes x is not decomposed, as compute_outflow_params
+    !! does.
+    implicit none
+    class(base_case_t) :: self
+    class(field_t), intent(in) :: u
+    real(dp), intent(in) :: out_vel
+    real(dp), intent(in) :: y_weights(:)
+    real(dp) :: flow_rate_diff
+
+    integer :: dims(3), nx, ierr
+    real(dp) :: sums(4)
+
+    dims = self%solver%mesh%get_dims(VERT)
+    nx = dims(1)
+    call self%solver%backend%x_slice_weighted_sum( &
+      sums(1), self%bc_start_u_x, 1, y_weights)
+    call self%solver%backend%x_slice_weighted_sum(sums(2), u, nx, y_weights)
+    call self%solver%backend%x_slice_weighted_sum( &
+      sums(3), u, nx - 1, y_weights)
+    ! The correction is added to every point of the outlet plane, so it
+    ! moves the weighted flow rate by the total weight of the plane
+    sums(4) = sum(y_weights)*real(dims(3), dp)
+    call MPI_Allreduce(MPI_IN_PLACE, sums, 4, MPI_X3D2_DP, MPI_SUM, &
+                       MPI_COMM_WORLD, ierr)
+
+    flow_rate_diff = (sums(1) - (1._dp - out_vel)*sums(2) &
+                      - out_vel*sums(3))/sums(4)
+  end function outflow_flow_rate_correction
 
   subroutine finalise_case_specific_default(self)
     class(base_case_t) :: self
@@ -380,6 +487,8 @@ contains
       call self%finish_step(iter, output_vorticity, output_qcriterion)
 
       call self%io_mgr%update_stats(self%solver, iter)
+
+      call self%post_step(iter, iter*self%solver%dt)
 
       if (self%solver%n_output > 0) then
         if (mod(iter, self%solver%n_output) == 0) then

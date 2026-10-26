@@ -112,6 +112,23 @@ module m_config
     procedure :: read => read_abl_nml
   end type abl_config_t
 
+  type, extends(base_config_t) :: inflow_config_t
+    !! Precursor inflow planes (docs/source/user/input_file.rst)
+    logical :: write_planes = .false.  !! sample and write y-z planes
+    !> Global x vertex index of the sampling plane; 0 selects the last one
+    integer :: plane_x_index = 0
+    integer :: ntimesteps = 100        !! planes per file
+    integer :: sample_every = 1        !! iterations between samples
+    integer :: start_iter = 0          !! first sample at start_iter + sample_every
+    character(len=256) :: inflow_prefix = 'inflow'
+    !> Successor: impose planes read from inflow_read_prefix at the x inlet
+    logical :: read_planes = .false.
+    integer :: ninflows = 1            !! files cycled through by a successor
+    character(len=256) :: inflow_read_prefix = 'inflow'
+  contains
+    procedure :: read => read_inflow_nml
+  end type inflow_config_t
+
   type, extends(base_config_t) :: stats_config_t
     integer :: initstat = 0          !! iteration to start accumulating (0 = disabled)
     integer :: istatfreq = 1         !! accumulate every N steps
@@ -541,11 +558,8 @@ contains
     !! Validate relationships between ABL namelist values in one place.
     type(abl_config_t), intent(in) :: config
 
-    ! Damping is a sponge rather than a driving mechanism.
-    if (.not. (config%pressure_gradient .or. config%coriolis .or. &
-               config%mass_conserve)) &
-      call abort_run('ABL config error: enable pressure_gradient, coriolis, &
-                     &or mass_conserve.', collective=.true.)
+    ! The driving mechanism is checked by the case, which may instead be
+    ! driven by a precursor inflow.
 
     if (config%z0 <= 0._dp .or. config%delta <= config%z0 .or. &
         config%kappa <= 0._dp) &
@@ -623,6 +637,86 @@ contains
     self%snapshot_sp = snapshot_sp
     self%output_fields = output_fields
   end subroutine read_checkpoint_nml
+
+  subroutine read_inflow_nml(self, nml_file, nml_string)
+    !! The namelist is optional: a missing inflow_nml keeps the defaults.
+    implicit none
+
+    class(inflow_config_t) :: self
+    character(*), optional, intent(in) :: nml_file
+    character(*), optional, intent(in) :: nml_string
+
+    integer :: unit, ierr
+
+    logical :: write_planes, read_planes
+    integer :: plane_x_index, ntimesteps, sample_every, start_iter, ninflows
+    character(len=256) :: inflow_prefix, inflow_read_prefix
+
+    namelist /inflow_nml/ write_planes, plane_x_index, ntimesteps, &
+      sample_every, start_iter, inflow_prefix, read_planes, ninflows, &
+      inflow_read_prefix
+
+    write_planes = .false.
+    plane_x_index = 0
+    ntimesteps = 100
+    sample_every = 1
+    start_iter = 0
+    inflow_prefix = 'inflow'
+    read_planes = .false.
+    ninflows = 1
+    inflow_read_prefix = 'inflow'
+
+    if (present(nml_file) .and. present(nml_string)) then
+      call abort_run('Reading inflow config failed! Provide only a file name &
+                     &or source, not both.', collective=.true.)
+    else if (present(nml_file)) then
+      open (newunit=unit, file=nml_file, iostat=ierr)
+      if (ierr == 0) then
+        read (unit, nml=inflow_nml, iostat=ierr)
+        ! -1 is end of file: the namelist is absent
+        if (ierr /= 0 .and. ierr /= -1) &
+          call abort_run('Reading inflow config failed! Error in &
+                         &inflow_nml.', collective=.true.)
+      end if
+      close (unit)
+    else if (present(nml_string)) then
+      read (nml_string, nml=inflow_nml)
+    else
+      call abort_run('Reading inflow config failed! Provide at least one of &
+                     &the following: file name or source', collective=.true.)
+    end if
+
+    self%write_planes = write_planes
+    self%plane_x_index = plane_x_index
+    self%ntimesteps = ntimesteps
+    self%sample_every = sample_every
+    self%start_iter = start_iter
+    self%inflow_prefix = trim(inflow_prefix)
+    self%read_planes = read_planes
+    self%ninflows = ninflows
+    self%inflow_read_prefix = trim(inflow_read_prefix)
+
+    if (self%ntimesteps < 1) &
+      call abort_run('inflow_nml: ntimesteps must be at least 1.', &
+                     collective=.true.)
+    if (self%sample_every < 1) &
+      call abort_run('inflow_nml: sample_every must be at least 1.', &
+                     collective=.true.)
+    if (self%start_iter < 0) &
+      call abort_run('inflow_nml: start_iter must be non-negative.', &
+                     collective=.true.)
+    if (self%plane_x_index < 0) &
+      call abort_run('inflow_nml: plane_x_index must be non-negative.', &
+                     collective=.true.)
+    if (self%ninflows < 1) &
+      call abort_run('inflow_nml: ninflows must be at least 1.', &
+                     collective=.true.)
+    if (self%write_planes .and. self%read_planes .and. &
+        self%inflow_prefix == self%inflow_read_prefix) &
+      call abort_run('inflow_nml: inflow_prefix and inflow_read_prefix must &
+                     &differ, or the run overwrites the planes it reads.', &
+                     collective=.true.)
+  end subroutine read_inflow_nml
 
   subroutine read_stats_nml(self, nml_file, nml_string)
     implicit none

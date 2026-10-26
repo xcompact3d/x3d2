@@ -149,7 +149,8 @@ Driving mechanisms
 ^^^^^^^^^^^^^^^^^^
 
 The flow is driven by any combination of the following switches. At least one
-of ``pressure_gradient``, ``coriolis`` and ``mass_conserve`` must be on.
+of ``pressure_gradient``, ``coriolis`` and ``mass_conserve`` must be on, unless
+the run is a successor driven by precursor inflow planes (see below).
 
 ``pressure_gradient``
   Adds a uniform streamwise body force :math:`u_*^2/\delta`. In a steady state
@@ -292,6 +293,171 @@ direction must not be decomposed across MPI ranks.
 
 The averages are not stored in checkpoints: after a restart the file holds the
 average of the samples taken since the restart.
+
+Precursor inflow planes
+^^^^^^^^^^^^^^^^^^^^^^^
+
+A periodic ABL run can act as the *precursor* of a precursor-successor
+simulation: it samples ``u``, ``v`` and ``w`` on one y-z plane and writes them
+as a time series that a successor run imposes as its inflow. The planes are
+set in the optional ``inflow_nml`` namelist block and need a build with
+``WITH_ADIOS2=ON``.
+
+.. code-block:: fortran
+
+   &inflow_nml
+     write_planes = .true.
+     plane_x_index = 0
+     ntimesteps = 100
+     sample_every = 1
+     start_iter = 0
+     inflow_prefix = 'inflow'
+   /
+
+``write_planes``
+  Sample and write the planes.
+
+  **Default:** ``.false.``
+
+``plane_x_index``
+  Global x vertex index (1-based) of the sampled plane. ``0`` selects the last
+  vertex plane, as in Incompact3d.
+
+  **Default:** ``0``
+
+``ntimesteps``
+  Number of planes per file. Planes are buffered in memory and a file is
+  written each time a block of ``ntimesteps`` planes is complete.
+
+  **Default:** ``100``
+
+``sample_every``
+  Iterations between samples. The time between planes is
+  ``sample_every * dt``.
+
+  **Default:** ``1``
+
+``start_iter``
+  Sampling starts after this iteration, so a spin-up can be left out. Planes
+  are taken at iterations ``start_iter + n * sample_every`` for
+  ``n = 1, 2, ...``.
+
+  **Default:** ``0``
+
+``inflow_prefix``
+  File name prefix, which may include a directory. Block ``b`` (from 1) is
+  written to ``<inflow_prefix>_<b>.bp``.
+
+  **Default:** ``'inflow'``
+
+Block ``b`` holds samples ``n = (b - 1) * ntimesteps + 1`` to
+``b * ntimesteps``, so the block numbers are fixed by the iteration count and
+are the same with or without restarts. A run restarted part-way through a block
+does not hold that block's earlier planes, so it skips the block with a warning
+and continues from the next one. Restart on a block boundary to keep every
+block.
+
+**File format (version 1).** Each file is an ADIOS2 BP file with the variables
+
+.. list-table::
+   :header-rows: 1
+
+   * - Variable
+     - Type
+     - Content
+   * - ``u``, ``v``, ``w``
+     - ``double (ntimesteps, ny, nz)``
+     - Velocity on the plane. The first index is the plane in time, the
+       others the global y and z vertex indices.
+   * - ``time``
+     - ``double (ntimesteps, 1, 1)``
+     - Simulation time of each plane.
+   * - ``format_version``
+     - ``integer``
+     - ``1``
+   * - ``ntimesteps``, ``sample_every``
+     - ``integer``
+     - As in ``inflow_nml``.
+   * - ``block``
+     - ``integer``
+     - Block number ``b``.
+   * - ``first_iter``
+     - ``integer``
+     - Iteration of the first plane in the block.
+   * - ``dt``
+     - ``double``
+     - Solver time step.
+   * - ``x_index``, ``x``
+     - ``integer``, ``double``
+     - Global x vertex index and x coordinate of the plane.
+   * - ``ny``, ``nz``
+     - ``integer``
+     - Global y and z vertex counts.
+
+The dimensions above are in Fortran order. Tools that use C order, such as
+``bpls`` and the ADIOS2 Python API, show them reversed, for example ``u`` as
+``{nz, ny, ntimesteps}``.
+
+Successor inflow from precursor planes
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A *successor* run imposes the planes of a precursor as a time-varying inflow
+(Incompact3d ``iin = 3``). It is an ``abl`` case with an x inflow and outflow,
+
+.. code-block:: fortran
+
+   &domain_settings
+     BC_x = 'dirichlet', 'dirichlet'
+     BC_y = 'dirichlet', 'neumann'
+     BC_z = 'periodic', 'periodic'
+     ...
+   /
+
+   &inflow_nml
+     read_planes = .true.
+     inflow_read_prefix = '../precursor/inflow'
+     ninflows = 2
+   /
+
+The planes are stamped on the ``x = 0`` face and a convective outflow is
+applied at the last x plane, with the outflow corrected so the flow rate out
+matches the flow rate in. The driving switches above may all be off, as the
+inflow drives the flow. With ``mass_conserve`` the bulk-velocity shift is
+applied over the whole domain, as in Incompact3d, and the inlet plane is then
+imposed on top of it. The x direction must not be decomposed across MPI
+ranks.
+
+``read_planes``
+  Impose the precursor planes at the inlet. Requires ``WITH_ADIOS2=ON``.
+
+  **Default:** ``.false.``
+
+``inflow_read_prefix``
+  Prefix of the precursor files, ``<inflow_read_prefix>_<b>.bp`` for
+  ``b = 1, ..., ninflows``. It must differ from ``inflow_prefix`` when the
+  run also writes planes.
+
+  **Default:** ``'inflow'``
+
+``ninflows``
+  Number of precursor files to replay.
+
+  **Default:** ``1``
+
+Plane ``n``, counted across the files in order, is the inflow at time
+``n * sample_every * dt`` of the precursor, so with equal time steps and
+``sample_every = 1`` iteration ``n`` uses plane ``n`` as in Incompact3d. At
+other times the inflow is interpolated linearly between the two nearest
+planes, so the successor's ``dt`` need not match the precursor's. After the
+last plane the series starts again from the first. Each iteration uses one
+plane for all its substeps.
+
+The successor may use a different MPI decomposition and x extent from the
+precursor, but its global y and z vertex counts must match ``ny`` and ``nz``.
+All files must hold the same number of planes at the same spacing.
+
+Set ``start_iter`` in the precursor after its turbulence has developed, so the
+planes carry turbulence rather than the decaying initial noise.
 
 Checkpoint Parameters
 ~~~~~~~~~~~~~~~~~~~~~

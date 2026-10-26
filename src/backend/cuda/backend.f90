@@ -19,7 +19,7 @@ module m_cuda_backend
   use m_cuda_common, only: SZ
   use m_cuda_exec_dist, only: exec_dist_transeq_3fused, exec_dist_tds_compact
   use m_cuda_exec_thom, only: exec_thom_tds_compact
-  use m_cuda_poisson_fft, only: cuda_poisson_fft_t, init_cuda_poisson_fft_t
+  use m_cuda_poisson_fft, only: create_cuda_poisson_fft
   use m_cuda_sendrecv, only: sendrecv_fields, sendrecv_3fields
   use m_cuda_tdsops, only: cuda_tdsops_t
   use m_cuda_kernels_dist, only: transeq_3fused_dist, transeq_3fused_subs
@@ -85,6 +85,7 @@ module m_cuda_backend
     procedure :: field_labelled_axpy => field_labelled_axpy_cuda
     procedure :: field_max_mean => field_max_mean_cuda
     procedure :: slice_max_sum => slice_max_sum_cuda
+    procedure :: x_slice_weighted_sum => x_slice_weighted_sum_cuda
     procedure :: field_scale => field_scale_cuda
     procedure :: field_shift => field_shift_cuda
     procedure :: field_set_face => field_set_face_cuda
@@ -126,7 +127,6 @@ contains
     class(allocator_t), target, intent(inout) :: allocator
     type(cuda_backend_t) :: backend
 
-    type(cuda_poisson_fft_t) :: cuda_poisson_fft
     integer :: n_groups
 
     call backend%base_init()
@@ -1428,6 +1428,67 @@ contains
 
   end subroutine slice_max_sum_cuda
 
+  attributes(global) subroutine x_slice_weighted_sum_kernel( &
+    sum_f, f, w, i_slice, n_i_pad, n_j)
+    !! Weighted sum of the x slice f(:, i_slice, :) of a DIR_X field, w(j)
+    !! on the points of y index j. One thread per (y, z) point; z is the
+    !! fast-varying component of the group index.
+    implicit none
+    real(dp), device, intent(inout) :: sum_f
+    real(dp), device, intent(in), dimension(:, :, :) :: f
+    real(dp), device, intent(in), dimension(:) :: w
+    integer, value, intent(in) :: i_slice, n_i_pad, n_j
+    integer :: i, j, b, ierr
+
+    i = threadIdx%x
+    j = i + (blockIdx%y - 1)*blockDim%x
+    b = blockIdx%x + (blockIdx%y - 1)*n_i_pad
+
+    if (j <= n_j) ierr = atomicadd(sum_f, w(j)*f(i, i_slice, b))
+  end subroutine x_slice_weighted_sum_kernel
+
+  subroutine x_slice_weighted_sum_cuda(self, sum_val, f, i_slice, y_weights)
+    !! [[m_base_backend(module):x_slice_weighted_sum_base(subroutine)]]
+    implicit none
+    class(cuda_backend_t) :: self
+    real(dp), intent(out) :: sum_val
+    class(field_t), intent(in) :: f
+    integer, intent(in) :: i_slice
+    real(dp), intent(in) :: y_weights(:)
+
+    real(dp), device, pointer, dimension(:, :, :) :: f_d
+    real(dp), device, allocatable :: sum_d, w_d(:)
+    integer :: dims(3), dims_padded(3)
+    type(dim3) :: blocks, threads
+
+    if (f%dir /= DIR_X) &
+      call abort_run('x_slice_weighted_sum: only supported for DIR_X fields.')
+    if (f%data_loc == NULL_LOC) &
+      call abort_run('x_slice_weighted_sum: requires a valid data_loc.')
+
+    dims = self%mesh%get_dims(f%data_loc)
+    dims_padded = self%allocator%get_padded_dims(DIR_C)
+
+    if (i_slice < 1 .or. i_slice > dims(1)) &
+      call abort_run('x_slice_weighted_sum: i_slice out of range')
+    if (size(y_weights) /= dims(2)) &
+      call abort_run('x_slice_weighted_sum: one weight per y point needed')
+
+    call resolve_field_t(f_d, f)
+    allocate (sum_d, w_d(dims(2)))
+    sum_d = 0._dp
+    w_d = y_weights
+
+    blocks = dim3(dims(3), (dims(2) - 1)/SZ + 1, 1)
+    threads = dim3(SZ, 1, 1)
+    call x_slice_weighted_sum_kernel<<<blocks, threads>>>( & !&
+      sum_d, f_d, w_d, i_slice, dims_padded(3), dims(2))
+
+    ! Rank-local value; caller is responsible for MPI_Allreduce.
+    sum_val = sum_d
+
+  end subroutine x_slice_weighted_sum_cuda
+
   subroutine field_scale_cuda(self, f, a)
     implicit none
 
@@ -1898,13 +1959,8 @@ contains
     type(dirps_t), intent(in) :: xdirps, ydirps, zdirps
     logical, optional, intent(in) :: lowmem
 
-    allocate (cuda_poisson_fft_t :: self%poisson_fft)
-
-    select type (poisson_fft => self%poisson_fft)
-    type is (cuda_poisson_fft_t)
-      call init_cuda_poisson_fft_t(poisson_fft, mesh, xdirps, ydirps, &
-                                   zdirps, lowmem)
-    end select
+    call create_cuda_poisson_fft(self%poisson_fft, mesh, xdirps, ydirps, &
+                                 zdirps, lowmem)
 
   end subroutine init_cuda_poisson_fft
 

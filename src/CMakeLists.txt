@@ -111,6 +111,7 @@ list(APPEND SRC
   io/checkpoint_state.f90
   io/snapshot_manager.f90
   io/stats.f90
+  io/inflow_planes.f90
   io/io_manager.f90
 )
 
